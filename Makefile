@@ -16,7 +16,10 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o)
 
 # TODO: Probably want to use .d files generated from `splat` here
 build/$(TARGET): $(OFILES)
-	$(LD) --script=build/$(TARGET).ld -o build/$(TARGET).elf
+	$(LD) \
+		--script=build/$(TARGET).ld \
+		--script=splat/$(TARGET)_undefined_funcs_auto.txt \
+		--output=build/$(TARGET).elf
 	$(OBJCOPY) -O binary build/$(TARGET).elf build/$(TARGET)
 	@echo ""	
 	ls -la build/$(TARGET) data/$(TARGET)

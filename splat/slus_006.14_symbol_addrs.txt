@@ -1,1 +1,2 @@
+CdMix = 0x800611a8; // type:func
 CdPosToInt = 0x80061350; // type:func
