@@ -1,0 +1,46 @@
+name: slus_006.14
+sha1: e6bfbb95ff6676899e077481221d73ddd4d3bf52
+options:
+  basename: slus_006.14
+  target_path: data/slus_006.14
+  base_path: ..
+  platform: psx
+  compiler: GCC
+  
+  create_asm_dependencies: False
+
+  ld_script_path: build/slus_006.14.ld
+  ld_dependencies: False
+  # TODO: We may be able to turn this off once more of the binary is mapped
+  ld_legacy_generation: True
+
+  find_file_boundaries: False
+  gp_value: 0x80080994
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  symbol_addrs_path: splat/slus_006.14_symbol_addrs.txt
+  reloc_addrs_path: splat/slus_006.14_reloc_addrs.txt
+
+  undefined_funcs_auto_path: splat/slus_006.14_undefined_funcs_auto.txt
+  undefined_syms_auto_path: splat/slus_006.14_undefined_syms_auto.txt
+
+  subalign: 2
+
+  string_encoding: ASCII
+  data_string_encoding: ASCII
+  rodata_string_guesser_level: 2
+  data_string_guesser_level: 2
+segments:
+  - [0x0, header]
+  - [0x800, bin]
+  # NB: `splat` does not consider subsegments as unknown so we must break them
+  # out into top level segments if we want accurate statistics
+  - type: code
+    start: 0x34b50
+    vram: 0x8002D000
+    subsegments:
+      - [0x34b50, asm, psyq/libcd/sys]
+  - [0x34bd0, bin]
+  - [0x80000]
