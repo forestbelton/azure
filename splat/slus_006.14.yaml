@@ -40,7 +40,10 @@ segments:
     start: 0x800
     vram: 0x8002D000
     subsegments:
+      # NB: 0x800 was added to all the offsets here to account for start addr
       - [0x800, bin]
+      - [0x101f8, asm, main]
+      - [0x102a8, bin]
       - [0x349a8, asm, psyq/libcd/S_020]
       - [0x349c8, bin]
       - [0x34b50, asm, psyq/libcd/sys]

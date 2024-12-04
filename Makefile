@@ -19,6 +19,7 @@ build/$(TARGET): $(OFILES)
 	$(LD) \
 		--script=build/$(TARGET).ld \
 		--script=splat/$(TARGET)_undefined_funcs_auto.txt \
+		--script=splat/$(TARGET)_undefined_syms_auto.txt \
 		--output=build/$(TARGET).elf
 	$(OBJCOPY) -O binary build/$(TARGET).elf build/$(TARGET)
 	@echo ""	
