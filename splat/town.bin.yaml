@@ -1,0 +1,42 @@
+name: town.bin
+sha1: b946a57aa5fc8cec29db3ecabad6e6b76df418b7
+options:
+  basename: town.bin
+  target_path: data/town/town.bin
+  base_path: ..
+  platform: psx
+  compiler: GCC
+  extensions_path: splat/ext
+  
+  create_asm_dependencies: False
+
+  ld_align_segment_vram_end: False
+  ld_align_section_vram_end: False
+  ld_dependencies: False
+  # TODO: We may be able to turn this off once more of the binary is mapped
+  ld_legacy_generation: True
+  ld_script_path: build/town.bin.ld
+
+  subalign: 4
+
+  find_file_boundaries: False
+  gp_value: 0x80080994
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  symbol_addrs_path: splat/town.bin_symbol_addrs.txt
+  reloc_addrs_path: splat/town.bin_reloc_addrs.txt
+
+  undefined_funcs_auto_path: splat/town.bin_undefined_funcs_auto.txt
+  undefined_syms_auto_path: splat/town.bin_undefined_syms_auto.txt
+segments:
+  # - type: code
+    # start: 0x0
+    # vram: 0x8002D000
+    # subsegments:
+      # - [0x0, bin]
+      # - [0x6f681e, az_string, STR_ANGEL_GREETING]
+      # - [0x6f69fe, bin]
+  - [0x0, bin]
+  - [0x101b800]

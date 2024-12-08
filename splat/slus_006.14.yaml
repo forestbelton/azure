@@ -29,11 +29,6 @@ options:
 
   undefined_funcs_auto_path: splat/slus_006.14_undefined_funcs_auto.txt
   undefined_syms_auto_path: splat/slus_006.14_undefined_syms_auto.txt
-
-  string_encoding: ASCII
-  data_string_encoding: ASCII
-  rodata_string_guesser_level: 2
-  data_string_guesser_level: 2
 segments:
   - [0x0, header]
   - type: code
