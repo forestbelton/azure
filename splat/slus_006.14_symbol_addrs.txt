@@ -2,3 +2,15 @@ main = 0x8003c9f8; //type:func
 
 CdMix = 0x800611a8; // type:func
 CdPosToInt = 0x80061350; // type:func
+
+// libcard
+_card_info = 0x80069bf8; // type:func
+_card_load = 0x80069c08; // type:func
+_card_status = 0x80069c18; // type:func
+_card_wait = 0x80069c28; // type:func
+_card_clear = 0x80069c38; // type:func
+_card_write = 0x80069c70; // type:func
+_new_card = 0x80069c80; // type:func
+InitCARD2 = 0x80069d48; // type:func
+StartCARD2 = 0x80069d58; // type:func
+StopCARD2 = 0x80069d68; // type:func
