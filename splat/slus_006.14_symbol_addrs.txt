@@ -1,5 +1,6 @@
 main = 0x8003c9f8; //type:func
 
+// libcd
 CdMix = 0x800611a8; // type:func
 CdPosToInt = 0x80061350; // type:func
 
@@ -14,3 +15,34 @@ _new_card = 0x80069c80; // type:func
 InitCARD2 = 0x80069d48; // type:func
 StartCARD2 = 0x80069d58; // type:func
 StopCARD2 = 0x80069d68; // type:func
+
+// libapi
+InitHeap = 0x80069f94; // type:func
+FlushCache = 0x80069fa4; // type:func
+GPU_cw = 0x80069fb4; // type:func
+_96_remove = 0x80069fcc; // type:func
+DeliverEvent = 0x80069fe4; // type:func
+OpenEvent = 0x80069ff4; // type:func
+CloseEvent = 0x8006a004; // type:func
+WaitEvent = 0x8006a014; // type:func
+TestEvent = 0x8006a024; // type:func
+EnableEvent = 0x8006a034; // type:func
+DisableEvent = 0x8006a044; // type:func
+ReturnFromException = 0x8006a054; // type:func
+ResetEntryInt = 0x8006a064; // type:func
+HookEntryInt = 0x8006a074; // type:func
+// EnterCriticalSection?
+// ExitCriticalSection?
+open = 0x8006a0a4; // type:func
+lseek = 0x8006a0b4; // type:func
+read = 0x8006a0c4; // type:func
+write = 0x8006a0d4; // type:func
+close = 0x8006a0e4; // type:func
+format = 0x8006a0f4; // type:func
+firstfile2 = 0x8006a104; // type:func
+nextfile = 0x8006a114; // type:func
+rename = 0x8006a124; // type:func
+erase = 0x8006a134; // type:func
+Krom2RawAdd = 0x8006a144; // type:func
+ChangeClearPAD = 0x8006a154; // type:func
+ChangeClearRCnt = 0x8006a164; // type:func
