@@ -44,7 +44,7 @@ build/$(TOWN): $(OFILES)
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
-	$(AS) $(ASFLAGS) -o $@ $<
+	python tools/convert_shiftjis.py $< | $(AS) $(ASFLAGS) -o $@
 
 build/%.o: %.bin
 	@mkdir -p $(shell dirname $@)

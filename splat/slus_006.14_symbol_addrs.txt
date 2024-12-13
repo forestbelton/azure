@@ -16,6 +16,26 @@ InitCARD2 = 0x80069d48; // type:func
 StartCARD2 = 0x80069d58; // type:func
 StopCARD2 = 0x80069d68; // type:func
 
+// libc
+exit = 0x80069df8; // type:func
+puts = 0x80069e10; // type:func
+setjmp = 0x80069e28; // type:func
+strcat = 0x80069e38; // type:func
+strncat = 0x80069e48; // type:func
+strcmp = 0x80069e58; // type:func
+strncmp = 0x80069e68; // type:func
+strcpy = 0x80069e78; // type:func
+strncpy = 0x80069e88; // type:func
+strlen = 0x80069e98; // type:func
+rindex = 0x80069ea8; // type:func
+strrchr = 0x80069eb8; // type:func
+bzero = 0x80069ec8; // type:func
+memcpy = 0x80069ed8; // type:func
+memset = 0x80069ee8; // type:func
+rand = 0x80069ef8; // type:func
+srand = 0x80069f08; // type:func
+printf = 0x80069f18; // type:func
+
 // libapi
 InitHeap = 0x80069f94; // type:func
 FlushCache = 0x80069fa4; // type:func
@@ -31,8 +51,8 @@ DisableEvent = 0x8006a044; // type:func
 ReturnFromException = 0x8006a054; // type:func
 ResetEntryInt = 0x8006a064; // type:func
 HookEntryInt = 0x8006a074; // type:func
-// EnterCriticalSection?
-// ExitCriticalSection?
+EnterCriticalSection = 0x8006a084; // type:func
+ExitCriticalSection = 0x8006a094; // type:func
 open = 0x8006a0a4; // type:func
 lseek = 0x8006a0b4; // type:func
 read = 0x8006a0c4; // type:func
@@ -46,3 +66,6 @@ erase = 0x8006a134; // type:func
 Krom2RawAdd = 0x8006a144; // type:func
 ChangeClearPAD = 0x8006a154; // type:func
 ChangeClearRCnt = 0x8006a164; // type:func
+
+// libgpu
+ResetGraph = 0x80066b54; // type:func

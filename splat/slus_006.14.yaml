@@ -6,6 +6,7 @@ options:
   base_path: ..
   platform: psx
   compiler: GCC
+  extensions_path: splat/ext
   
   create_asm_dependencies: False
 
@@ -43,6 +44,8 @@ segments:
       - [0x349c8, bin]
       - [0x34b50, asm, psyq/libcd/sys]
       - [0x34bd0, bin]
+      - [0x3a354, asm, psyq/libgpu/SYS]
+      - [0x3a4d8, bin]
       - [0x3d3f8, asm, psyq/libcard/C171]
       - [0x3d408, asm, psyq/libcard/C172]
       - [0x3d418, asm, psyq/libcard/A92]
@@ -55,6 +58,12 @@ segments:
       - [0x3d558, asm, psyq/libcard/A75]
       - [0x3d568, asm, psyq/libcard/A76]
       - [0x3d578, bin]
+      - [0x3d6d8, asm, psyq/libc/C42]
+      - [0x3d6e8, asm, psyq/libc/C43]
+      - [0x3d6f8, asm, psyq/libc/C47]
+      - [0x3d708, asm, psyq/libc/C48]
+      - [0x3d718, asm, psyq/libc/C63]
+      - [0x3d728, bin]
       - [0x3d794, asm, psyq/libapi/C57]
       - [0x3d7a4, asm, psyq/libapi/C68]
       - [0x3d7b4, asm, psyq/libapi/C73]
@@ -69,7 +78,8 @@ segments:
       - [0x3d854, asm, psyq/libapi/A23]
       - [0x3d864, asm, psyq/libapi/A24]
       - [0x3d874, asm, psyq/libapi/A25]
-      - [0x3d884, bin]
+      - [0x3d884, asm, psyq/libapi/A36]
+      - [0x3d894, asm, psyq/libapi/A37]
       - [0x3d8a4, asm, psyq/libapi/A50]
       - [0x3d8b4, asm, psyq/libapi/A51]
       - [0x3d8c4, asm, psyq/libapi/A52]
@@ -84,5 +94,20 @@ segments:
       - [0x3d954, asm, psyq/libapi/A91]
       - [0x3d964, asm, psyq/libapi/L10]
       - [0x3d974, bin]
+      - [0x541d0, shiftjis, str/name/boy]
+      - [0x541d8, shiftjis, str/name/man]
+      - [0x541e0, shiftjis, str/name/cat]
+      - [0x541e8, shiftjis, str/name/dog]
+      - [0x541f0, shiftjis, str/name/pop]
+      - [0x541f8, shiftjis, str/name/see]
+      - [0x54200, shiftjis, str/name/bet]
+      - [0x54208, shiftjis, str/name/dar]
+      - [0x54210, shiftjis, str/name/kay]
+      - [0x54218, shiftjis, str/name/mee]
+      - [0x54220, shiftjis, str/name/dai]
+      - [0x54228, shiftjis, str/name/fon]
+      - [0x54230, shiftjis, str/name/pen]
+      - [0x54238, shiftjis, str/name/mia]
+      - [0x54240, bin]
 
   - [0x80000]
