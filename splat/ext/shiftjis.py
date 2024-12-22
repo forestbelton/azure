@@ -13,6 +13,21 @@ dlabel {name}
     .fill {trailing_zeros}, 1, 0
 """
 
+
+class ShiftJisException(Exception):
+    base_exception: Optional[Exception]
+
+    def __init__(self, start_addr: int, base_exception: Exception = None):
+        self.message = f"failed to parse Shift-JIS string at 0x{start_addr:08x}"
+        self.base_exception = base_exception
+        if base_exception is not None:
+            self.message = f"{self.message}: {str(base_exception)}"
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message
+
+
 # NB: Pretty sure the game uses some special byte sequences that aren't valid
 # Shift-JIS, will need to expand this (and rename) later when those arise.
 class PSXSegShiftjis(segment.Segment):
@@ -63,11 +78,15 @@ class PSXSegShiftjis(segment.Segment):
             encoded = encoded[:-trailing_zeros]
         self.out_path().parent.mkdir(parents=True, exist_ok=True)
         name = self.name.replace("/", "_").upper()
+        try:
+            data = encoded.decode("shift-jis")
+        except Exception as exc:
+            raise ShiftJisException(self.rom_start, exc)
         with open(self.out_path(), "w") as f:
             f.write(
                 FILE_TEMPLATE.format(
                     name=name,
-                    data=encoded.decode("shift-jis"),
+                    data=data,
                     trailing_zeros=trailing_zeros,
                 )
             )
