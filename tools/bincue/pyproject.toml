@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bincue"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Forest Belton", email = "65484+forestbelton@users.noreply.github.com" },
+]
+dependencies = []
+
+[tool.hatch.version]
+path = "src/bincue/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/bincue tests}"
+
+[tool.coverage.run]
+source_pkgs = ["bincue", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/bincue/__about__.py",
+]
+
+[tool.coverage.paths]
+bincue = ["src/bincue", "*/bincue/src/bincue"]
+tests = ["tests", "*/bincue/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
