@@ -69,3 +69,23 @@ ChangeClearRCnt = 0x8006a164; // type:func
 
 // libgpu
 ResetGraph = 0x80066b54; // type:func
+SetGraphReverse = 0x80066cd8; // type:func
+SetGraphDebug = 0x80066dec; // type:func
+SetGrapQue = 0x80066e50; // type:func
+GetGraphType = 0x80066efc; // type:func
+GetGraphDebug = 0x80066f0c; // type:func
+DrawSyncCallback = 0x80066f1c; // type:func
+SetDispMask = 0x80066f78; // type:func
+StoreImage = 0x8006733c; // type:func
+MoveImage = 0x800673a0; // type:func
+DrawSync = 0x80067014; // type:func
+__GPU_LogImageCall = 0x80067080; // type:func
+ClearImage = 0x800671a8; // type:func
+__GPU_ClearImage2 = 0x8006723c; // type:func
+LoadImage = 0x800672d8; // type:func
+ClearOTagR = 0x8006751c; // type:func
+DrawOTag = 0x80067614; // type:func
+PutDrawEnv = 0x80067688; // type:func
+DrawOTagEnv = 0x8006778c; // type:func
+__GPU_CopyDrawEnv = 0x800678a8; // type:func
+PutDispEnv = 0x800678e0; // type:func

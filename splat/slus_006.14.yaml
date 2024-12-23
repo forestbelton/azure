@@ -7,7 +7,7 @@ options:
   platform: psx
   compiler: GCC
   extensions_path: splat/ext
-  
+
   create_asm_dependencies: False
 
   ld_align_segment_vram_end: False
@@ -49,7 +49,8 @@ segments:
       - [0x34b50, asm, psyq/libcd/sys]
       - [0x34bd0, bin]
       - [0x3a354, asm, psyq/libgpu/SYS]
-      - [0x3a4d8, bin]
+      - [0x3b588, bin]
+      # - [0x3a4d8, bin]
       - [0x3d3f8, asm, psyq/libcard/C171]
       - [0x3d408, asm, psyq/libcard/C172]
       - [0x3d418, asm, psyq/libcard/A92]
