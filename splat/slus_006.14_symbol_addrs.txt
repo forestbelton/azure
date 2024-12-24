@@ -89,3 +89,23 @@ PutDrawEnv = 0x80067688; // type:func
 DrawOTagEnv = 0x8006778c; // type:func
 __GPU_CopyDrawEnv = 0x800678a8; // type:func
 PutDispEnv = 0x800678e0; // type:func
+
+// libgte
+CompMatrix = 0x80064840; // type:func
+PushMatrix = 0x800649a0; // type:func
+PopMatrix = 0x80064a40; // type:func
+ReadRotMatrix = 0x80064ae0; // type:func
+ApplyMatrixSV = 0x80064b30; // type:func
+TransMatrix = 0x80064b90; // type:func
+ScaleMatrix = 0x80064bc0; // type:func
+SetRotMatrix = 0x80064cf0; // type:func
+SetLightMatrix = 0x80064d20; // type:func
+SetColorMatrix = 0x80064d50; // type:func
+SetTransMatrix = 0x80064d80; // type:func
+ReadGeomScreen = 0x80064eb0; // type:func
+SetBackColor = 0x80064ec0; // type:func
+SetFarColor = 0x80064ee0; // type:func
+SetGeomOffset = 0x80064f00; // type:func
+SetGeomScreen = 0x80064f20; // type:func
+
+AverageZ3 = 0x80065210; // type:func
