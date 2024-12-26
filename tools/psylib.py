@@ -108,7 +108,7 @@ class CliAction(abc.ABC):
 
 class AddCliAction(CliAction):
     def __init__(self):
-        super().__init__("/a")
+        super().__init__("--a")
 
     @staticmethod
     def __call__(libraryfile: str, modules: list[str]) -> None:
@@ -117,7 +117,7 @@ class AddCliAction(CliAction):
 
 class DeleteCliAction(CliAction):
     def __init__(self):
-        super().__init__("/d")
+        super().__init__("--d")
 
     @staticmethod
     def __call__(libraryfile: str, modules: list[str]) -> None:
@@ -138,7 +138,7 @@ class DeleteCliAction(CliAction):
 
 class UpdateCliAction(CliAction):
     def __init__(self):
-        super().__init__("/u")
+        super().__init__("--u")
 
     @staticmethod
     def __call__(libraryfile: str, modules: list[str]) -> None:
@@ -147,7 +147,7 @@ class UpdateCliAction(CliAction):
 
 class ExtractCliAction(CliAction):
     def __init__(self):
-        super().__init__("/x")
+        super().__init__("--x")
 
     @staticmethod
     def __call__(libraryfile: str, modules: list[str]) -> None:
@@ -164,7 +164,7 @@ class ExtractCliAction(CliAction):
 
 class ListCliAction(CliAction):
     def __init__(self):
-        super().__init__("/l")
+        super().__init__("--l")
 
     @staticmethod
     def __call__(libraryfile: str, modules: list[str]) -> None:
@@ -217,13 +217,14 @@ ACTIONS_BY_FLAG = {action.flag: action for action in ALL_ACTIONS}
 
 def main() -> None:
     print("\nPsyLib version 4.20 😎\n")
-    parser = argparse.ArgumentParser(
-        allow_abbrev=False, prefix_chars="/", add_help=False
-    )
+    parser = argparse.ArgumentParser(allow_abbrev=False, add_help=False)
     flag_group = parser.add_mutually_exclusive_group(required=True)
     for action in ACTIONS_BY_FLAG.values():
         flag_group.add_argument(
-            action.flag, dest="action", action="store_const", const=action
+            action.flag,
+            dest="action",
+            action="store_const",
+            const=action,
         )
     parser.add_argument("libraryfile")
     parser.add_argument("modules", nargs="*")
