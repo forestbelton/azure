@@ -67,6 +67,39 @@ segments:
       - [0x38720, asm, psyq/libgte/REG13]
       # NB: More GTE stuff? SMP_XX / CMP_XX?
       - [0x38730, bin]
+      - [0x38b20, asm, psyq/libgte/SMP_01_1]
+      - [0x38b50, bin]
+      - [0x38bc0, asm, psyq/libgte/SMP_01_4]
+      - [0x38bf0, asm, psyq/libgte/SMP_01_5]
+      - [0x38c20, asm, psyq/libgte/SMP_02]
+      - [0x38c50, bin]
+      - [0x39d14, asm, psyq/libgpu/P03]
+      - [0x39d54, asm, psyq/libgpu/P04]
+      - [0x39d70, asm, psyq/libgpu/P05]
+      - [0x39d8c, asm, psyq/libgpu/P06]
+      - [0x39dc8, asm, psyq/libgpu/P07]
+      - [0x39e04, asm, psyq/libgpu/P08]
+      - [0x39e28, asm, psyq/libgpu/P09]
+      - [0x39e40, asm, psyq/libgpu/P10] # SetSemiTrans
+      - [0x39e68, asm, psyq/libgpu/P11] # SetShadeTex
+      - [0x39e90, asm, psyq/libgpu/P12] # SetPolyF3
+      - [0x39ea4, asm, psyq/libgpu/P13] # SetPolyFT3
+      - [0x39eb8, asm, psyq/libgpu/P14] # SetPolyG3
+      - [0x39ecc, asm, psyq/libgpu/P15] # SetPolyGT3
+      - [0x39ee0, asm, psyq/libgpu/P16] # SetPolyF4
+      - [0x39ef4, asm, psyq/libgpu/P17] # SetPolyFT4
+      - [0x39f08, asm, psyq/libgpu/P18] # SetPolyG4
+      - [0x39f1c, asm, psyq/libgpu/P19] # SetPolyGT4
+      - [0x39f30, asm, psyq/libgpu/P20] # SetSprt8
+      - [0x39f44, asm, psyq/libgpu/P21] # SetSprt16
+      - [0x39f58, asm, psyq/libgpu/P22] # SetSprt
+      - [0x39f6c, asm, psyq/libgpu/P23] # SetTile1
+      - [0x39f80, asm, psyq/libgpu/P24] # SetTile8
+      - [0x39f94, asm, psyq/libgpu/P25] # SetTile16
+      - [0x39fa8, asm, psyq/libgpu/P26] # SetTile
+      - [0x39fbc, asm, psyq/libgpu/P27] # SetLineF2
+      - [0x39fd0, asm, psyq/libgpu/P28] # SetLineG2
+      - [0x39fe4, bin]
       - [0x3a354, asm, psyq/libgpu/SYS]
       - [0x3b588, bin]
       - [0x3d3f8, asm, psyq/libcard/C171]

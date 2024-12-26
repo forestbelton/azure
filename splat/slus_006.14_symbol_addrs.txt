@@ -68,6 +68,35 @@ ChangeClearPAD = 0x8006a154; // type:func
 ChangeClearRCnt = 0x8006a164; // type:func
 
 // libgpu
+DumpClut = 0x80066514; // type:func
+NextPrim = 0x80066554; // type:func
+IsEndPrim = 0x80066570; // type:func
+AddPrim = 0x8006658c; // type:func
+AddPrims = 0x800665c8; // type:func
+CatPrim = 0x80066604; // type:func
+TermPrim = 0x80066628; // type:func
+SetSemiTrans = 0x80066640; // type:func
+SetShadeTex = 0x80066668; // type:func
+SetPolyF3 = 0x80066690; // type:func
+SetPolyFT3 = 0x800666a4; // type:func
+SetPolyG3 = 0x800666b8; // type:func
+SetPolyGT3 = 0x800666cc; // type:func
+SetPolyF4 = 0x800666e0; // type:func
+SetPolyFT4 = 0x800666f4; // type:func
+SetPolyG4 = 0x80066708; // type:func
+SetPolyGT4 = 0x8006671c; // type:func
+SetSprt8 = 0x80066730; // type:func
+SetSprt16 = 0x80066744; // type:func
+SetSprt = 0x80066758; // type:func
+SetTile1 = 0x8006676c; // type:func
+SetTile8 = 0x80066780; // type:func
+SetTile16 = 0x80066794; // type:func
+SetTile = 0x800667a8; // type:func
+SetLineF2 = 0x800667bc; // type:func
+SetLineG2 = 0x800667d0; // type:func
+// NB: Maybe? Not byte-for-byte identical...?
+SetLineF3 = 0x800667e4; // type:func
+
 ResetGraph = 0x80066b54; // type:func
 SetGraphReverse = 0x80066cd8; // type:func
 SetGraphDebug = 0x80066dec; // type:func
@@ -109,3 +138,20 @@ SetGeomOffset = 0x80064f00; // type:func
 SetGeomScreen = 0x80064f20; // type:func
 
 AverageZ3 = 0x80065210; // type:func
+
+RotTransSV = 0x80065320; // type:func
+SquareSL12 = 0x800653c0; // type:func
+SquareSL0 = 0x800653f0; // type:func
+RotTransPers = 0x80065420; // type:func
+RotTrans = 0x80065450; // type:func
+RotTransPers4 = 0x800654b0; // type:func
+RotAverage3 = 0x80065530; // type:func
+RotAverage4 = 0x80065590; // type:func
+RotNclip4 = 0x80065610; // type:func
+RotAverageNclip4 = 0x800656c0; // type:func
+RotTransPersN = 0x80065770; // type:func
+TransposeMatrix = 0x800657e0; // type:func
+RotMatrix = 0x80065820; // type:func
+RotMatrixX = 0x80065ab0; // type:func
+RotMatrixY = 0x80065c50; // type:func
+RotMatrixZ = 0x80065df0; // type:func
