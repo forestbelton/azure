@@ -1,6 +1,8 @@
 import argparse
 import dataclasses
+import json
 import os
+import sys
 from typing import BinaryIO, Optional
 
 MIN_LENGTH = 3
@@ -13,10 +15,8 @@ class DetectedString:
     raw: bytes
 
 
-# SB_CHARS = {i for i in range(0x80)}
 SB_CHARS = {0x3, 0x8, 0xA, 0x11}
 MB_CHARS = {0x81, 0x82, 0xFE}
-ALL_HEADER_CHARS = SB_CHARS | MB_CHARS
 
 
 def find_shiftjis(f: BinaryIO) -> list[DetectedString]:
@@ -66,9 +66,9 @@ def find_shiftjis_at(f: BinaryIO, offset: int) -> Optional[DetectedString]:
         return None
     b = f.read(1)
     while len(b) > 0:
+        if b[0] == 0:
+            break
         if b[0] in SB_CHARS:
-            if b[0] == 0:
-                break
             bs.extend(b)
         elif b[0] in MB_CHARS:
             bs.extend(b)
@@ -94,13 +94,11 @@ def main() -> None:
     args = parser.parse_args()
     with open(args.file, "rb") as f:
         strs = find_shiftjis(f)
-    print("[")
-    for i, loc in enumerate(strs):
-        trailing = ","
-        if i == len(strs) - 1:
-            trailing = ""
-        print(f'  {{ "offset": {loc.offset}, "len": {len(loc.raw)} }}{trailing}')
-    print("]")
+    json.dump(
+        [{"offset": loc.offset, "len": len(loc.raw)} for loc in strs],
+        sys.stdout,
+        indent=2,
+    )
 
 
 if __name__ == "__main__":
