@@ -1,4 +1,6 @@
 #!/bin/bash
+# Convert a PSY-Q library to the GNU AR format for easier introspection
+# TODO: Convert this to Python
 set -euo pipefail
 
 # Override these with the correct paths for your system

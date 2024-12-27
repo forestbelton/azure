@@ -73,13 +73,14 @@ segments:
       - [0x38bf0, asm, psyq/libgte/SMP_01_5]
       - [0x38c20, asm, psyq/libgte/SMP_02]
       - [0x38c50, bin]
-      - [0x39d14, asm, psyq/libgpu/P03]
-      - [0x39d54, asm, psyq/libgpu/P04]
-      - [0x39d70, asm, psyq/libgpu/P05]
-      - [0x39d8c, asm, psyq/libgpu/P06]
-      - [0x39dc8, asm, psyq/libgpu/P07]
-      - [0x39e04, asm, psyq/libgpu/P08]
-      - [0x39e28, asm, psyq/libgpu/P09]
+      - [0x39cb4, asm, psyq/libgpu/P02] # DumpTPage
+      - [0x39d14, asm, psyq/libgpu/P03] # DumpClut
+      - [0x39d54, asm, psyq/libgpu/P04] # NextPrim
+      - [0x39d70, asm, psyq/libgpu/P05] # IsEndPrim
+      - [0x39d8c, asm, psyq/libgpu/P06] # AddPrim
+      - [0x39dc8, asm, psyq/libgpu/P07] # AddPrims
+      - [0x39e04, asm, psyq/libgpu/P08] # CatPrim
+      - [0x39e28, asm, psyq/libgpu/P09] # TermPrim
       - [0x39e40, asm, psyq/libgpu/P10] # SetSemiTrans
       - [0x39e68, asm, psyq/libgpu/P11] # SetShadeTex
       - [0x39e90, asm, psyq/libgpu/P12] # SetPolyF3
@@ -100,6 +101,7 @@ segments:
       - [0x39fbc, asm, psyq/libgpu/P27] # SetLineF2
       - [0x39fd0, asm, psyq/libgpu/P28] # SetLineG2
       - [0x39fe4, bin]
+      - [0x3a194, asm, psyq/libgpu/P37] # DumpDrawEnv / DumpDispEnv
       - [0x3a354, asm, psyq/libgpu/SYS]
       - [0x3b588, bin]
       - [0x3d3f8, asm, psyq/libcard/C171]

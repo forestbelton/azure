@@ -1,3 +1,7 @@
+"""
+Attempt to identify AD Shift-JIS strings inside of a binary
+"""
+
 import argparse
 import dataclasses
 import json

@@ -1,9 +1,16 @@
+"""
+Convert the `.shiftjis` directive in an assembly file to the byte pattern it
+corresponds to. Necessary since GNU AS macros aren't expressive enough and
+doesn't support custom directives.
+"""
+
 import argparse
 import re
 import sys
 from typing import TextIO
 
 SHIFTJIS_DIRECTIVE_PATTERN = re.compile(r"^(\s*)\.shiftjis \"(.*?)\"(\s*)$")
+
 
 def convert_shiftjis(f: TextIO) -> None:
     for line in f:

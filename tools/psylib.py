@@ -1,3 +1,8 @@
+"""
+Recreation of PSYLIB.EXE in Python. The program is compatible with all PSY-Q
+libraries but differs slightly in how it accepts command-line arguments.
+"""
+
 import argparse
 import dataclasses
 import struct
