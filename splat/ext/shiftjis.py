@@ -41,6 +41,8 @@ class PSXSegShiftjis(segment.Segment):
         args: list,
         yaml,
     ):
+        if name == "" and rom_start is not None:
+            name = hex(rom_start)
         super().__init__(
             rom_start,
             rom_end,
