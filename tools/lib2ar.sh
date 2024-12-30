@@ -24,7 +24,7 @@ INPATH=$($REALPATH $($REALPATH --relative-to=$CWD $1))
 LIBDIR=$(mktemp -d)
 cd $LIBDIR
 
-python $AZURE_PATH/tools/psylib.py --x $INPATH >/dev/null
+python $AZURE_PATH/tools/psylib.py --extract $INPATH >/dev/null
 echo *.OBJ
 
 for OBJ in *.OBJ; do
