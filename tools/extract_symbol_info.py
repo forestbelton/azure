@@ -6,6 +6,8 @@ from typing import Optional
 
 import psylib
 
+SHOW_WARNINGS = False
+
 
 @dataclasses.dataclass
 class SymInfo:
@@ -26,9 +28,10 @@ def extract_lib(library_file: str, info: Optional[SymInfoMap] = None) -> SymInfo
             if external.name in info:
                 existing_lib = info[external.name].library
                 existing_mod = info[external.name].module
-                print(
-                    f"warning: symbol '{external.name}' redefined in {lib_name}.{module.name}! (previously: {existing_lib}.{existing_mod})"
-                )
+                if SHOW_WARNINGS:
+                    print(
+                        f"warning: symbol '{external.name}' redefined in {lib_name}.{module.name}! (previously: {existing_lib}.{existing_mod})"
+                    )
                 continue
             info[external.name] = SymInfo(library=lib_name, module=module.name)
     return info
@@ -45,9 +48,18 @@ def extract_dir(lib_dir: str) -> SymInfoMap:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("psyq_libs_dir")
+    parser.add_argument("--find", dest="symbol")
     args = parser.parse_args()
     info = extract_dir(args.psyq_libs_dir)
-    print(info)
+    if args.symbol:
+        if args.symbol in info:
+            print(f"Symbol:  {args.symbol}")
+            print(f"Library: {info[args.symbol].library.upper()}.LIB")
+            print(f"Module:  {info[args.symbol].module}")
+        else:
+            print(f"symbol '{args.symbol}' not found")
+    else:
+        print(info)
 
 
 if __name__ == "__main__":
