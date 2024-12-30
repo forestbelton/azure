@@ -1,8 +1,19 @@
 main = 0x8003c9f8; //type:func
 
+// libetc
+SetVideoMode = 0x80060adc; // type:func
+GetVideoMode = 0x80060af4; // type:func
+
 // libcd
+CdLastCom = 0x80060c64; // type:func
+CdLastPos = 0x80060c74; // type:func
+CdSetDebug = 0x80060d10; // type:func
+CdComstr = 0x80060d28; // type:func
 CdMix = 0x800611a8; // type:func
 CdPosToInt = 0x80061350; // type:func
+CD_getsector = 0x800628c4; // type:func
+CD_getsector2 = 0x800629c4; // type:func
+StClearRing = 0x800634d8; // type:func
 
 // libgte
 CompMatrix = 0x80064840; // type:func
@@ -29,6 +40,7 @@ SquareSL12 = 0x800653c0; // type:func
 SquareSL0 = 0x800653f0; // type:func
 RotTransPers = 0x80065420; // type:func
 RotTrans = 0x80065450; // type:func
+NormalClip = 0x80065480; // type:func
 RotTransPers4 = 0x800654b0; // type:func
 RotAverage3 = 0x80065530; // type:func
 RotAverage4 = 0x80065590; // type:func
@@ -42,6 +54,10 @@ RotMatrixY = 0x80065c50; // type:func
 RotMatrixZ = 0x80065df0; // type:func
 
 // libgpu
+SetDefDrawEnv = 0x8006636c; // type:func
+SetDefDispEnv = 0x80066424; // type:func
+GetTPage = 0x80066460; // type:func
+GetClut = 0x8006649c; // type:func
 DumpTPage = 0x800664b4; // type:func
 DumpClut = 0x80066514; // type:func
 NextPrim = 0x80066554; // type:func
