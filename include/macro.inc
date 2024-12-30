@@ -14,3 +14,5 @@
     .global \label
     \label:
 .endm
+
+.include "gte.inc"
