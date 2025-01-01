@@ -1,9 +1,3 @@
-"""
-Convert the `.shiftjis` directive in an assembly file to the byte pattern it
-corresponds to. Necessary since GNU AS macros aren't expressive enough and
-doesn't support custom directives.
-"""
-
 import argparse
 import re
 import sys
@@ -26,7 +20,14 @@ def convert_shiftjis(f: TextIO) -> None:
 
 
 def setup_parser(prog: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog)
+    parser = argparse.ArgumentParser(
+        prog,
+        description="""
+            Convert the `.shiftjis` directive in an assembly file to the byte
+            pattern it corresponds to. Necessary since GNU AS macros aren't
+            expressive enough and doesn't support custom directives.
+        """,
+    )
     parser.add_argument("input", nargs="?", default="-")
     parser.set_defaults(main=main)
     return parser
@@ -41,4 +42,5 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    main(setup_parser("convert_shiftjis"))
+    parser = setup_parser("convert_shiftjis")
+    main(parser.parse_args())

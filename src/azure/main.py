@@ -1,17 +1,21 @@
 import argparse
 
 from azure.commands import (
-    convert_shiftjis,
-    # create_string_yaml,
-    extract_symbol_info,
-    find_shiftjis_strings,
-    process_bincue,
-    process_symbol_addrs,
-    psylib,
+    bincue,
+    extract,
+    findstr,
+    lib,
+    shiftjis,
+    symbols,
 )
 
 ALL_PARSERS = {
-    "shiftjis": convert_shiftjis.setup_parser,
+    "bincue": bincue.setup_parser,
+    "extract": extract.setup_parser,
+    "findstr": findstr.setup_parser,
+    "lib": lib.setup_parser,
+    "shiftjis": shiftjis.setup_parser,
+    "symbols": symbols.setup_parser,
 }
 
 

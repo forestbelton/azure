@@ -1,7 +1,3 @@
-"""
-Attempt to identify AD Shift-JIS strings inside of a binary
-"""
-
 import argparse
 import dataclasses
 import json
@@ -92,10 +88,19 @@ def find_shiftjis_at(f: BinaryIO, offset: int) -> Optional[DetectedString]:
     )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def setup_parser(prog: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="""
+            Attempt to identify AD Shift-JIS strings inside of a binary
+        """,
+    )
     parser.add_argument("file")
-    args = parser.parse_args()
+    parser.set_defaults(main=main)
+    return parser
+
+
+def main(args: argparse.Namespace) -> None:
     with open(args.file, "rb") as f:
         strs = find_shiftjis(f)
     json.dump(
@@ -106,4 +111,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = setup_parser("find_shiftjis_strings")
+    main(parser.parse_args())

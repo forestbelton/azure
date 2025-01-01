@@ -4,7 +4,7 @@ import glob
 import pathlib
 from typing import Optional
 
-import azure.commands.psylib
+from azure import psylib
 
 SHOW_WARNINGS = False
 
@@ -45,11 +45,20 @@ def extract_dir(lib_dir: str) -> SymInfoMap:
     return info
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def setup_parser(prog: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="""
+            Extract symbols from every library in a given directory.
+        """,
+    )
     parser.add_argument("psyq_libs_dir")
     parser.add_argument("--find", dest="symbol")
-    args = parser.parse_args()
+    parser.set_defaults(main=main)
+    return parser
+
+
+def main(args: argparse.Namespace) -> None:
     info = extract_dir(args.psyq_libs_dir)
     if args.symbol:
         if args.symbol in info:
@@ -63,4 +72,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = setup_parser("extract_symbol_info")
+    main(parser.parse_args())

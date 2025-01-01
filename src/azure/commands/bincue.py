@@ -112,14 +112,19 @@ def extract_bin(f: BinaryIO) -> None:
         )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def setup_parser(prog: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("--extract", action="store_true", required=True)
     parser.add_argument("file")
-    args = parser.parse_args()
+    parser.set_defaults(main=main)
+    return parser
+
+
+def main(args: argparse.Namespace) -> None:
     with open(args.file, "rb") as f:
         extract_bin(f)
 
 
 if __name__ == "__main__":
-    main()
+    parser = setup_parser("bincue")
+    main(parser.parse_args())
