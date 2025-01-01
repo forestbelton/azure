@@ -5,6 +5,8 @@ AS 		= mipsel-linux-gnu-as
 LD 		= mipsel-linux-gnu-ld
 OBJCOPY = mipsel-linux-gnu-objcopy
 
+AZURE = python src/azure/main.py
+
 ASFLAGS += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 -G0
 
 SPLATFILES := $(shell find splat -type f -name '*.yaml')
@@ -44,7 +46,7 @@ build/$(TOWN): $(OFILES)
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
-	python tools/convert_shiftjis.py $< | $(AS) $(ASFLAGS) -o $@
+	$(AZURE) shiftjis $< | $(AS) $(ASFLAGS) -o $@
 
 build/%.o: %.bin
 	@mkdir -p $(shell dirname $@)

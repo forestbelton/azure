@@ -4,7 +4,7 @@ import glob
 import pathlib
 from typing import Optional
 
-import psylib
+import azure.commands.psylib
 
 SHOW_WARNINGS = False
 

@@ -25,10 +25,14 @@ def convert_shiftjis(f: TextIO) -> None:
         print(match.group(3), end="")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser("convert_shiftjis")
+def setup_parser(prog: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog)
     parser.add_argument("input", nargs="?", default="-")
-    args = parser.parse_args()
+    parser.set_defaults(main=main)
+    return parser
+
+
+def main(args: argparse.Namespace) -> None:
     if args.input != "-":
         with open(args.input, "r") as f:
             convert_shiftjis(f)
@@ -37,4 +41,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(setup_parser("convert_shiftjis"))

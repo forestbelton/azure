@@ -6,7 +6,9 @@ import argparse
 import re
 from typing import Optional
 
-import extract_symbol_info
+import yaml
+
+from azure.commands import extract_symbol_info
 
 SYMBOL_ADDR_PATTERN = re.compile(r"^(\w+)\s*=\s*0x([a-fA-F0-9]+);.*$")
 
@@ -50,10 +52,17 @@ def sort_file(filename: str) -> None:
         print(line.strip())
 
 
+def validate_file(addrs_filename: str) -> None:
+    with open(addrs_filename, "r") as f:
+        lines = [line for line in f if SYMBOL_ADDR_PATTERN.match(line)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lib_dir", default=None)
-    parser.add_argument("--action", default="yaml", choices=["yaml", "sort"])
+    parser.add_argument(
+        "--action", default="yaml", choices=["yaml", "sort", "validate"]
+    )
     parser.add_argument("file")
     args = parser.parse_args()
     info = {}
@@ -63,6 +72,8 @@ def main() -> None:
         convert_file(args.file, info)
     elif args.action == "sort":
         sort_file(args.file)
+    elif args.action == "validate":
+        validate_file(args.file)
 
 
 if __name__ == "__main__":
