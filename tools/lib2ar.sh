@@ -1,11 +1,11 @@
 #!/bin/bash
 # Convert a PSY-Q library to the GNU AR format for easier introspection
 # TODO: Convert this to Python
-set -euo pipefail
+set -euxo pipefail
 
 # Override these with the correct paths for your system
 AR=${AR:-$HOME/scratch/mipsel-linux-gnu/bin/mipsel-linux-gnu-ar}
-AZURE_PATH=${AZURE_PATH:-$HOME/projects/azure}
+AZURE_PATH=${AZURE_PATH:-$PWD/src/azure/main.py}
 PSYQ_OBJ_PARSER=${PSYQ_OBJ_PARSER:-$HOME/scratch/pcsx-redux/psyq-obj-parser}
 
 CWD=$PWD
@@ -24,7 +24,7 @@ INPATH=$($REALPATH $($REALPATH --relative-to=$CWD $1))
 LIBDIR=$(mktemp -d)
 cd $LIBDIR
 
-python $AZURE_PATH/tools/psylib.py --extract $INPATH >/dev/null
+python $AZURE_PATH lib --extract $INPATH >/dev/null
 echo *.OBJ
 
 for OBJ in *.OBJ; do

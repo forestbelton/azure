@@ -1,4 +1,9 @@
-main = 0x8003c9f8; //type:func
+// libsn
+__SN_ENTRY_POINT = 0x80033930; // type:func
+__main = 0x800339d0; // type:func
+__do_global_dtors = 0x80033a40; // type:func
+
+main = 0x8003c9f8; // type:func
 
 // libetc
 SetVideoMode = 0x80060adc; // type:func
