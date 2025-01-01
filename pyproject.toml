@@ -26,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
   "PyYAML>=6.0.2,<7.0.0",
+  "splat64[mips]>=0.32.2,<1.0.0",
 ]
 
 [project.urls]

@@ -38,6 +38,8 @@ segments:
     subsegments:
       # NB: 0x800 was added to all the offsets here to account for start addr
       - [0x800, bin]
+      - [0x6e44, data, psyq/libgpu/strings]
+      - [0x7130, bin]
       - [0x101f8, asm, main]
       - [0x102a8, bin]
       # - [0x2d848, shiftjis, str/name/3men]

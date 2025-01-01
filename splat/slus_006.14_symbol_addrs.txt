@@ -180,3 +180,21 @@ erase = 0x8006a134; // type:func
 Krom2RawAdd = 0x8006a144; // type:func
 ChangeClearPAD = 0x8006a154; // type:func
 ChangeClearRCnt = 0x8006a164; // type:func
+
+// Globals
+gGraphics_Str_DumpDrawEnv_Tpage = 0x8003362c; // type:asciz
+gGraphics_Str_DumpClut_Clut = 0x80033644; // type:asciz
+gGraphics_Str_DumpDrawEnv_Clip = 0x80033654; // type:asciz
+gGraphics_Str_DumpDrawEnv_Offset = 0x8003366c; // type:asciz
+gGraphics_Str_DumpDrawEnv_Tw = 0x8003367c; // type:asciz
+gGraphics_Str_DumpDrawEnv_Dtd = 0x80033694; // type:asciz
+gGraphics_Str_DumpDrawEnv_Dfe = 0x800336a0; // type:asciz
+gGraphics_Str_DumpDispEnv_Disp = 0x800336ac; // type:asciz
+gGraphics_Str_DrawSyncCallback = 0x800337bc; // type:asciz
+
+gGraphicsPrintf = 0x800807c0; // type:u32
+gGraphicsType = 0x800807c4; // type:u8
+gGraphicsDebugLevel = 0x800807c6; // type:u8
+gGraphicsReverse = 0x800807c7; // type:u8
+gGraphicsDrawSyncCallback = 0x800807d0; // type:u32
+gDrawEnv = 0x800807d4; // type:u8 size:0x5c
