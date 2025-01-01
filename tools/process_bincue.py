@@ -1,7 +1,8 @@
 import argparse
+import dataclasses
 import os
 import struct
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 SECTOR_SIZE = 2352
 
@@ -14,6 +15,26 @@ class ExtractException(Exception):
     pass
 
 
+@dataclasses.dataclass
+class SectorSubheader:
+    file: int
+    channel: int
+    submode: int
+    coding: int
+
+
+@dataclasses.dataclass
+class Sector:
+    minutes: int
+    seconds: int
+    frame: int
+    mode: int
+    subheader: Optional[SectorSubheader]
+    edc: Optional[int]
+    ecc: Optional[bytes]
+    data: bytes
+
+
 def from_bcd(bcd: int) -> int:
     hi = bcd >> 0x4
     assert hi < 0xA
@@ -22,18 +43,11 @@ def from_bcd(bcd: int) -> int:
     return hi * 10 + lo
 
 
-def extract_sector(sector_index: int, raw_sector: bytes) -> None:
-    #         0       12      Sync pattern (00 FF FF FF FF FF FF FF FF FF FF 00)
-    # 12      4       Sector header (minutes, seconds, sectors, mode)
-    # 16      8       Subheader (including Form 1/2 flags if used)
-    # 24      2324    Data field
-    # 2348    4       EDC (if Form 1 or Form 2)
+def extract_sector(sector_index: int, raw_sector: bytes) -> Sector:
+    assert len(raw_sector) == SECTOR_SIZE
     sync_pattern, minutes, seconds, frame, mode = struct.unpack(
         "12sBBBB", raw_sector[:16]
     )
-    minutes = from_bcd(minutes)
-    seconds = from_bcd(seconds)
-    frame = from_bcd(frame)
     if sync_pattern != SYNC_PATTERN:
         raise ExtractException(f"{sector_index=}: unexpected {sync_pattern=}")
     if mode != 2:
@@ -43,8 +57,31 @@ def extract_sector(sector_index: int, raw_sector: bytes) -> None:
     if subheader1 != subheader2:
         raise ExtractException(f"{sector_index=}: unexpected cd-da sector (mode 2)")
     file, channel, submode, coding = subheader1
-    print(
-        f"{sector_index=}: {minutes:02}:{seconds:02}:{frame:02} {mode=} {file=} {channel=} {submode=:02x} {coding=}"
+    # form 2
+    if submode & (1 << 5):
+        data = raw_sector[24 : 24 + 2324]
+        (edc,) = struct.unpack("<I", raw_sector[24 + 2324 :])
+        ecc = None
+    # form 1
+    else:
+        data = raw_sector[24 : 24 + 2048]
+        (edc,) = struct.unpack("<I", raw_sector[24 + 2048 : 24 + 2048 + 4])
+        ecc = raw_sector[24 + 2048 + 4 :]
+        assert len(ecc) == 276
+    return Sector(
+        minutes=from_bcd(minutes),
+        seconds=from_bcd(seconds),
+        frame=from_bcd(frame),
+        mode=mode,
+        subheader=SectorSubheader(
+            file=file,
+            channel=channel,
+            submode=submode,
+            coding=coding,
+        ),
+        edc=edc,
+        ecc=ecc,
+        data=data,
     )
 
 
@@ -64,7 +101,10 @@ def extract_bin(f: BinaryIO) -> None:
         sector_len = len(raw_sector)
         if sector_len != sector_size:
             raise ExtractException(f"{sector_len=} invalid (expected {sector_size=})")
-        extract_sector(sector_index, raw_sector)
+        sector = extract_sector(sector_index, raw_sector)
+        print(
+            f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
+        )
     offset = f.tell()
     if offset != file_size:
         raise ExtractException(
