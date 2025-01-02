@@ -32,6 +32,19 @@ SetRotMatrix = 0x80064cf0; // type:func
 SetLightMatrix = 0x80064d20; // type:func
 SetColorMatrix = 0x80064d50; // type:func
 SetTransMatrix = 0x80064d80; // type:func
+SetVertex0 = 0x80064da0; // type:func
+SetVertex1 = 0x80064db0; // type:func
+SetVertex2 = 0x80064dc0; // type:func
+SetVertexTri = 0x80064dd0; // type:func
+SetRGBfifo = 0x80064df0; // type:func
+SetIR123 = 0x80064e04; // type:func
+SetIR0 = 0x80064e18; // type:func
+SetSZfifo3 = 0x80064e24; // type:func
+SetSZfifo4 = 0x80064e38; // type:func
+SetSXSYfifo = 0x80064e50; // type:func
+SetRii = 0x80064e64; // type:func
+SetMAC123 = 0x80064e78; // type:func
+// ???
 ReadGeomScreen = 0x80064eb0; // type:func
 SetBackColor = 0x80064ec0; // type:func
 SetFarColor = 0x80064ee0; // type:func
@@ -39,7 +52,10 @@ SetGeomOffset = 0x80064f00; // type:func
 SetGeomScreen = 0x80064f20; // type:func
 // ???
 AverageZ3 = 0x80065210; // type:func
-// ???
+AverageZ4 = 0x80065230; // type:func
+OuterProduct12 = 0x80065254; // type:func
+OuterProduct0 = 0x800652ac; // type:func
+Lzc = 0x80065304; // type:func
 RotTransSV = 0x80065320; // type:func
 SquareSL12 = 0x800653c0; // type:func
 SquareSL0 = 0x800653f0; // type:func

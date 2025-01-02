@@ -61,25 +61,40 @@ segments:
       - [0x360c4, asm, psyq/libcd/BIOS_2] # CD_getsector
       - [0x361c4, asm, psyq/libcd/BIOS_3] # CD_getsector2
       - [0x362b4, bin]
-      - [0x38040, asm, psyq/libgte/MTX_003]
-      - [0x381a0, asm, psyq/libgte/MTX_006]
-      - [0x382e0, asm, psyq/libgte/MTX_009]
-      - [0x38330, asm, psyq/libgte/MTX_06]
-      - [0x38390, asm, psyq/libgte/MTX_07]
-      - [0x383c0, asm, psyq/libgte/MTX_08]
-      - [0x384f0, asm, psyq/libgte/MTX_09]
-      - [0x38520, asm, psyq/libgte/MTX_10]
-      - [0x38550, asm, psyq/libgte/MTX_11]
-      - [0x38580, asm, psyq/libgte/MTX_12]
-      # NB: Some stuff here from REGxx, need to identify
-      - [0x385a0, bin]
-      - [0x386b0, asm, psyq/libgte/REG09]
-      - [0x386c0, asm, psyq/libgte/REG10]
-      - [0x386e0, asm, psyq/libgte/REG11]
-      - [0x38700, asm, psyq/libgte/REG12]
-      - [0x38720, asm, psyq/libgte/REG13]
+      - [0x38040, asm, psyq/libgte/MTX_003] # CompMatrix
+      - [0x381a0, asm, psyq/libgte/MTX_006] # PushMatrix / PopMatrix
+      - [0x382e0, asm, psyq/libgte/MTX_009] # ReadRotMatrix
+      - [0x38330, asm, psyq/libgte/MTX_06] # ApplyMatrixSV
+      - [0x38390, asm, psyq/libgte/MTX_07] # TransMatrix
+      - [0x383c0, asm, psyq/libgte/MTX_08] # ScaleMatrix
+      - [0x384f0, asm, psyq/libgte/MTX_09] # SetRotMatrix
+      - [0x38520, asm, psyq/libgte/MTX_10] # SetLightMatrix
+      - [0x38550, asm, psyq/libgte/MTX_11] # SetColorMatrix
+      - [0x38580, asm, psyq/libgte/MTX_12] # SetTransMatrix
+      - [0x385a0, asm, psyq/libgte/REG03_1] # SetVertex0
+      - [0x385b0, asm, psyq/libgte/REG03_2] # SetVertex1
+      - [0x385c0, asm, psyq/libgte/REG03_3] # SetVertex2
+      - [0x385d0, asm, psyq/libgte/REG03_4] # SetVertexTri
+      - [0x385f0, asm, psyq/libgte/REG03_5] # SetRGBfifo
+      - [0x38604, asm, psyq/libgte/REG03_6] # SetIR123
+      - [0x38618, asm, psyq/libgte/REG03_7] # SetIR0
+      - [0x38624, asm, psyq/libgte/REG03_8] # SetSZfifo3
+      - [0x38638, asm, psyq/libgte/REG03_9] # SetSZfifo4
+      - [0x38650, asm, psyq/libgte/REG03_10] # SetSXSYfifo
+      - [0x38664, asm, psyq/libgte/REG03_11] # SetRii
+      - [0x38678, asm, psyq/libgte/REG03_12] # SetMAC123
+      - [0x3868c, bin]
+      - [0x386b0, asm, psyq/libgte/REG09] # ReadGeomScreen
+      - [0x386c0, asm, psyq/libgte/REG10] # SetBackColor
+      - [0x386e0, asm, psyq/libgte/REG11] # SetFarColor
+      - [0x38700, asm, psyq/libgte/REG12] # SetGeomOffset
+      - [0x38720, asm, psyq/libgte/REG13] # SetGeomScreen
       # NB: More GTE stuff? SMP_XX / CMP_XX?
       - [0x38730, bin]
+      - [0x38a10, asm, psyq/libgte/SMP_00_7] # AverageZ3
+      - [0x38a30, asm, psyq/libgte/SMP_00_8] # AverageZ4
+      - [0x38a54, asm, psyq/libgte/SMP_00_9] # OuterProduct12
+      - [0x38aac, asm, psyq/libgte/SMP_00_1] # OuterProduct0 / Lzc
       - [0x38b20, asm, psyq/libgte/SMP_01_1] # RotTransSV
       - [0x38bc0, asm, psyq/libgte/SMP_01_4] # SquareSL12
       - [0x38bf0, asm, psyq/libgte/SMP_01_5] # SquareSL0
