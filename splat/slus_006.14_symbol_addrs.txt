@@ -44,7 +44,9 @@ SetSZfifo4 = 0x80064e38; // type:func
 SetSXSYfifo = 0x80064e50; // type:func
 SetRii = 0x80064e64; // type:func
 SetMAC123 = 0x80064e78; // type:func
-// ???
+SetData32 = 0x80064e8c; // type:func
+SetDQA = 0x80064e98; // type:func
+SetDQB = 0x80064ea4; // type:func
 ReadGeomScreen = 0x80064eb0; // type:func
 SetBackColor = 0x80064ec0; // type:func
 SetFarColor = 0x80064ee0; // type:func

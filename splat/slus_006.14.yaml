@@ -83,7 +83,9 @@ segments:
       - [0x38650, asm, psyq/libgte/REG03_10] # SetSXSYfifo
       - [0x38664, asm, psyq/libgte/REG03_11] # SetRii
       - [0x38678, asm, psyq/libgte/REG03_12] # SetMAC123
-      - [0x3868c, bin]
+      - [0x3868c, asm, psyq/libgte/REG03_13] # SetData32
+      - [0x38698, asm, psyq/libgte/REG03_14] # SetDQA
+      - [0x386a4, asm, psyq/libgte/REG03_15] # SetDQB
       - [0x386b0, asm, psyq/libgte/REG09] # ReadGeomScreen
       - [0x386c0, asm, psyq/libgte/REG10] # SetBackColor
       - [0x386e0, asm, psyq/libgte/REG11] # SetFarColor
