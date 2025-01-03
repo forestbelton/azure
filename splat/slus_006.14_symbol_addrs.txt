@@ -6,19 +6,66 @@ __do_global_dtors = 0x80033a40; // type:func
 main = 0x8003c9f8; // type:func
 
 // libetc
+VSync = 0x8005fe18; // type:func
 SetVideoMode = 0x80060adc; // type:func
 GetVideoMode = 0x80060af4; // type:func
 
 // libcd
+CdInit = 0x80060b34; // type:func
+CdStatus = 0x80060c44; // type:func
+CdMode = 0x80060c54; // type:func
 CdLastCom = 0x80060c64; // type:func
 CdLastPos = 0x80060c74; // type:func
+CdReset = 0x80060c84; // type:func
+CdFlush = 0x80060cf0; // type:func
 CdSetDebug = 0x80060d10; // type:func
 CdComstr = 0x80060d28; // type:func
+CdIntstr = 0x80060d5c; // type:func
+CdSync = 0x80060d90; // type:func
+CdReady = 0x80060db0; // type:func
+CdSyncCallback = 0x80060dd0; // type:func
+CdReadyCallback = 0x80060de8; // type:func
+CdControl = 0x80060e00; // type:func
+CdControlF = 0x80060f38; // type:func
+CdControlB = 0x80061064; // type:func
 CdMix = 0x800611a8; // type:func
+CdGetSector = 0x800611c8; // type:func
+CdGetSector2 = 0x800611e8; // type:func
+CdDataCallback = 0x80061208; // type:func
+// ???
 CdPosToInt = 0x80061350; // type:func
+// ???
+CD_ready = 0x80061bd8; // type:func
+CD_cw = 0x80061ea4; // type:func
+// ???
+CD_flush = 0x80062348; // type:func
+CD_initvol = 0x80062428; // type:func
+CD_initintr = 0x8006251c; // type:func
+CD_init = 0x8006256c; // type:func
+CD_datasync = 0x80062758; // type:func
 CD_getsector = 0x800628c4; // type:func
 CD_getsector2 = 0x800629c4; // type:func
+// ???
+CdReadBreak = 0x80063188; // type:func
+CdRead = 0x80063224; // type:func
+CdReadSync = 0x80063328; // type:func
+CdReadCallback = 0x800633f4; // type:func
+// ??
+CdRead2 = 0x80063424; // type:func
 StClearRing = 0x800634d8; // type:func
+StUnSetRing = 0x80063538; // type:func
+data_ready_callback = 0x800635bc; // type:func
+StGetBackloc = 0x8006364c; // type:func
+StSetStream = 0x800636ac; // type:func
+StFreeRing = 0x80063734; // type:func
+init_ring_status = 0x800637ec; // type:func
+StGetNext = 0x80063828; // type:func
+StSetMask = 0x800638ec; // type:func
+StCdInterrupt = 0x8006390c; // type:func
+
+// libds
+DsReadyCallback = 0x80064480; // type:func
+DsDataCallback = 0x80064494; // type:func
 
 // libgte
 CompMatrix = 0x80064840; // type:func
@@ -142,6 +189,7 @@ __GPU_CopyDrawEnv = 0x800678a8; // type:func
 PutDispEnv = 0x800678e0; // type:func
 
 // libcard
+_bu_init = 0x80069be8; // type:func
 _card_info = 0x80069bf8; // type:func
 _card_load = 0x80069c08; // type:func
 _card_status = 0x80069c18; // type:func
@@ -203,8 +251,16 @@ erase = 0x8006a134; // type:func
 Krom2RawAdd = 0x8006a144; // type:func
 ChangeClearPAD = 0x8006a154; // type:func
 ChangeClearRCnt = 0x8006a164; // type:func
+SetRCnt = 0x8006a174; // type:func
+GetRCnt = 0x8006a210; // type:func
+StartRCnt = 0x8006a248; // type:func
+ResetRCnt = 0x8006a2b4; // type:func
 
 // Globals
+gCd_Str_None = 0x80033378; // type:asciz
+// ???
+gCd_Str_StatusNoIntr = 0x800334b4; // type:asciz
+
 gGraphics_Str_DumpDrawEnv_Tpage = 0x8003362c; // type:asciz
 gGraphics_Str_DumpClut_Clut = 0x80033644; // type:asciz
 gGraphics_Str_DumpDrawEnv_Clip = 0x80033654; // type:asciz
@@ -215,9 +271,33 @@ gGraphics_Str_DumpDrawEnv_Dfe = 0x800336a0; // type:asciz
 gGraphics_Str_DumpDispEnv_Disp = 0x800336ac; // type:asciz
 gGraphics_Str_DrawSyncCallback = 0x800337bc; // type:asciz
 
+gCdSyncCallback = 0x8007aeb0; // type:u32
+gCdReadyCallback = 0x8007aeb4; // type:u32
+gCdStatus = 0x8007aebc; // type:u32
+gCdMode = 0x8007aed0; // type:u8
+gCdLastCommand = 0x8007aed1; // type:u8
+DS_active = 0x8007aed4; // type:u32
+gCdCommandStringTable = 0x8007aed8; // type:u32 size:0x20
+gCdStatusStringTable = 0x8007af58; // type:u32 size:0x8
+
 gGraphicsPrintf = 0x800807c0; // type:u32
 gGraphicsType = 0x800807c4; // type:u8
 gGraphicsDebugLevel = 0x800807c6; // type:u8
 gGraphicsReverse = 0x800807c7; // type:u8
 gGraphicsDrawSyncCallback = 0x800807d0; // type:u32
 gDrawEnv = 0x800807d4; // type:u8 size:0x5c
+
+Stframe_no = 0x80086d78; // type:u32
+
+StCdIntrFlag = 0x80086d8c; // type:u32
+// ?? = 0x80086d90;
+// ?? = 0x80086d94;
+// ?? = 0x80086d98;
+StRingIdx1 = 0x80086d9c; // type:u32
+// ?? = 0x80086da0;
+StRingIdx2 = 0x80086da4; // type:u32
+StRingIdx3 = 0x80086da8; // type:u32
+StRingSize = 0x80086dac; // type:u32
+
+StRingAddr = 0x80086dc0; // type:u32
+StFinalSector = 0x80086dc4; // type:u32

@@ -47,20 +47,51 @@ segments:
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]
+      - [0x33618, asm, psyq/libetc/VSYNC] # VSync
+      - [0x337fc, bin]
       - [0x342dc, asm, psyq/libetc/VMODE] # SetVideoMode / GetVideoMode
+      - [0x34334, asm, psyq/libcd/EVENT] # CdInit
+      - [0x34444, asm, psyq/libcd/S_003] # CdStatus
+      - [0x34454, asm, psyq/libcd/S_004] # CdMode
       - [0x34464, asm, psyq/libcd/S_005] # CdLastCom
       - [0x34474, asm, psyq/libcd/S_006] # CdLastPos
-      - [0x34484, bin]
+      - [0x34484, asm, psyq/libcd/S_007] # CdReset
+      - [0x344f0, asm, psyq/libcd/S_008] # CdFlush
       - [0x34510, asm, psyq/libcd/S_009] # CdSetDebug
       - [0x34528, asm, psyq/libcd/S_010] # CdComstr
-      - [0x3455c, bin]
+      - [0x3455c, asm, psyq/libcd/S_011] # CdIntstr
+      - [0x34590, asm, psyq/libcd/S_012] # CdSync
+      - [0x345b0, asm, psyq/libcd/S_013] # CdReady
+      - [0x345d0, asm, psyq/libcd/S_014] # CdSyncCallback
+      - [0x345e8, asm, psyq/libcd/S_015] # CdReadyCallback
+      - [0x34600, asm, psyq/libcd/S_016] # CdControl / CdControlF / CdControlB
       - [0x349a8, asm, psyq/libcd/S_020] # CdMix
-      - [0x349c8, bin]
+      - [0x349c8, asm, psyq/libcd/S_021] # CdGetSector
+      - [0x349e8, asm, psyq/libcd/S_022] # CdGetSector2
+      - [0x34a08, asm, psyq/libcd/S_023] # CdDataCallback
+      - [0x34a2c, bin]
       - [0x34b50, asm, psyq/libcd/SYS] # CdPosToInt
       - [0x34bd0, bin]
+      - [0x353d8, asm, psyq/libcd/BIOS_1] # CD_ready / CD_cw / ??? / CD_initvol / CD_initintr / CD_init / CD_datasync
       - [0x360c4, asm, psyq/libcd/BIOS_2] # CD_getsector
       - [0x361c4, asm, psyq/libcd/BIOS_3] # CD_getsector2
       - [0x362b4, bin]
+      - [0x36988, asm, psyq/libcd/CDR_1] # CdReadBreak / CdRead / CdReadSync
+      - [0x36bf4, asm, psyq/libcd/CDR_2] # CdReadCallback
+      - [0x36c24, asm, psyq/libcd/CDREAD2] # CdRead2
+      - [0x36cd8, asm, psyq/libcd/C_002] # StClearRing
+      - [0x36d38, asm, psyq/libcd/C_003] # StUnSetRing
+      - [0x36dbc, asm, psyq/libcd/C_004] # data_ready_callback StGetBackloc
+      - [0x36eac, asm, psyq/libcd/C_005] # StSetStream
+      - [0x36f34, asm, psyq/libcd/C_007] # StFreeRing
+      - [0x36fec, asm, psyq/libcd/C_008] # init_ring_status
+      - [0x37028, asm, psyq/libcd/C_009] # StGetNext
+      - [0x370ec, asm, psyq/libcd/C_010] # StSetMask
+      - [0x3710c, asm, psyq/libcd/C_011] # StCdInterrupt
+      - [0x37a7c, bin]
+      - [0x37c80, asm, psyq/libds/DSCB_2] # DsReadyCallback
+      - [0x37c94, asm, psyq/libds/DSCB_4] # DsDataCallback
+      - [0x37cb8, bin]
       - [0x38040, asm, psyq/libgte/MTX_003] # CompMatrix
       - [0x381a0, asm, psyq/libgte/MTX_006] # PushMatrix / PopMatrix
       - [0x382e0, asm, psyq/libgte/MTX_009] # ReadRotMatrix
@@ -150,28 +181,43 @@ segments:
       - [0x3a194, asm, psyq/libgpu/P37] # DumpDrawEnv / DumpDispEnv
       - [0x3a354, asm, psyq/libgpu/SYS]
       - [0x3b588, bin]
-      - [0x3d3f8, asm, psyq/libcard/C171]
-      - [0x3d408, asm, psyq/libcard/C172]
-      - [0x3d418, asm, psyq/libcard/A92]
-      - [0x3d428, asm, psyq/libcard/A93]
-      - [0x3d438, asm, psyq/libcard/CARD]
-      - [0x3d470, asm, psyq/libcard/A78]
-      - [0x3d480, asm, psyq/libcard/A80]
+      - [0x3d3e8, asm, psyq/libapi/C112] # _bu_init
+      - [0x3d3f8, asm, psyq/libcard/C171] # _card_info
+      - [0x3d408, asm, psyq/libcard/C172] # _card_load
+      - [0x3d418, asm, psyq/libcard/A92] # _card_status
+      - [0x3d428, asm, psyq/libcard/A93] # _card_wait
+      - [0x3d438, asm, psyq/libcard/CARD] # _card_clear
+      - [0x3d470, asm, psyq/libcard/A78] # _card_write
+      - [0x3d480, asm, psyq/libcard/A80] # _new_card
       - [0x3d490, bin]
-      - [0x3d548, asm, psyq/libcard/A74]
-      - [0x3d558, asm, psyq/libcard/A75]
-      - [0x3d568, asm, psyq/libcard/A76]
+      - [0x3d548, asm, psyq/libcard/A74] # InitCARD2
+      - [0x3d558, asm, psyq/libcard/A75] # StartCARD2
+      - [0x3d568, asm, psyq/libcard/A76] # StopCARD2
       - [0x3d578, bin]
-      - [0x3d6d8, asm, psyq/libc/C42]
-      - [0x3d6e8, asm, psyq/libc/C43]
-      - [0x3d6f8, asm, psyq/libc/C47]
-      - [0x3d708, asm, psyq/libc/C48]
-      - [0x3d718, asm, psyq/libc/C63]
+      - [0x3d5f8, asm, psyq/libc/A56] # exit
+      - [0x3d608, bin]
+      - [0x3d610, asm, psyq/libc/A63] # puts
+      - [0x3d628, asm, psyq/libc/C19] # setjmp
+      - [0x3d638, asm, psyq/libc/C21] # strcat
+      - [0x3d648, asm, psyq/libc/C22] # strncat
+      - [0x3d658, asm, psyq/libc/C23] # strcmp
+      - [0x3d668, asm, psyq/libc/C24] # strncmp
+      - [0x3d678, asm, psyq/libc/C25] # strcpy
+      - [0x3d688, asm, psyq/libc/C26] # strncpy
+      - [0x3d698, asm, psyq/libc/C27] # strlen
+      - [0x3d6a8, asm, psyq/libc/C29] # rindex
+      - [0x3d6b8, asm, psyq/libc/C31] # strrchr
+      - [0x3d6c8, asm, psyq/libc/C40] # bzero
+      - [0x3d6d8, asm, psyq/libc/C42] # memcpy
+      - [0x3d6e8, asm, psyq/libc/C43] # memset
+      - [0x3d6f8, asm, psyq/libc/C47] # rand
+      - [0x3d708, asm, psyq/libc/C48] # srand
+      - [0x3d718, asm, psyq/libc/C63] # printf
       - [0x3d728, bin]
-      - [0x3d794, asm, psyq/libapi/C57]
-      - [0x3d7a4, asm, psyq/libapi/C68]
-      - [0x3d7b4, asm, psyq/libapi/C73]
-      - [0x3d7c4, bin]
+      - [0x3d794, asm, psyq/libapi/C57] # InitHeap
+      - [0x3d7a4, asm, psyq/libapi/C68] # FlushCache
+      - [0x3d7b4, asm, psyq/libapi/C73] # GPU_cw
+      - [0x3d7cc, asm, psyq/libapi/C114] # _96_remove
       - [0x3d7e4, asm, psyq/libapi/A07]
       - [0x3d7f4, asm, psyq/libapi/A08]
       - [0x3d804, asm, psyq/libapi/A09]
@@ -197,7 +243,8 @@ segments:
       - [0x3d944, asm, psyq/libapi/A81]
       - [0x3d954, asm, psyq/libapi/A91]
       - [0x3d964, asm, psyq/libapi/L10]
-      - [0x3d974, bin]
+      - [0x3d974, asm, psyq/libapi/COUNTER] # SetRCnt / GetRCnt / StartRCnt / StopRCnt / ResetRCnt
+      - [0x3daec, bin]
       - [0x541d0, shiftjis, str/name/boy]
       - [0x541d8, shiftjis, str/name/man]
       - [0x541e0, shiftjis, str/name/cat]
