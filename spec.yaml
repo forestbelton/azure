@@ -2,11 +2,23 @@ infile: az.bin
 shasum: fab68454be5e4e48f7a43ac797cc8c47325c6a20
 outdir: data
 files:
+  - name: system.cnf
+    shasum: a60bb34a165f9e1a1fceb3aa254475f9208efe77
+    sector: 23
+    size: 0x43
   - name: slus_006.14
     shasum: e6bfbb95ff6676899e077481221d73ddd4d3bf52
     sector: 24
     size: 0x80000
-  - name: town.bin
+  - name: main/main.bin
+    shasum: 69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d
+    sector: 1817
+    size: 0x275800
+  - name: town/town.bin
     shasum: b946a57aa5fc8cec29db3ecabad6e6b76df418b7
     sector: 3077
     size: 0x101b800
+  - name: dungeon/dungeon.bin
+    shasum: 27f9fcc384a570a991e349b920881e7070c0e13c
+    sector: 12310
+    size: 0x1a86800

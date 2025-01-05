@@ -69,10 +69,10 @@ def main():
         print(f"expected: {spec.shasum}", file=sys.stderr)
         sys.exit(1)
     outdir = pathlib.Path(spec.outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
     with open(spec.infile, "rb") as f:
         for spec_file in spec.files:
             spec_outfile = outdir / spec_file.name
+            spec_outfile.parent.mkdir(parents=True, exist_ok=True)
             extract_file_to(f, spec_outfile, spec_file.sector, spec_file.size)
             outfile_shasum = get_file_shasum(spec_outfile)
             if spec_file.shasum != outfile_shasum:
@@ -83,9 +83,6 @@ def main():
                 print(f"actual:   {outfile_shasum}", file=sys.stderr)
                 print(f"expected: {spec_file.shasum}", file=sys.stderr)
                 sys.exit(1)
-
-    # with open(args.binfile, "rb") as f:
-    # extract_file_to("slus_006.14", 24, 524288)
 
 
 if __name__ == "__main__":
