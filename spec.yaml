@@ -1,0 +1,12 @@
+infile: az.bin
+shasum: fab68454be5e4e48f7a43ac797cc8c47325c6a20
+outdir: data
+files:
+  - name: slus_006.14
+    shasum: e6bfbb95ff6676899e077481221d73ddd4d3bf52
+    sector: 24
+    size: 0x80000
+  - name: town.bin
+    shasum: b946a57aa5fc8cec29db3ecabad6e6b76df418b7
+    sector: 3077
+    size: 0x101b800

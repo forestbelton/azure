@@ -43,7 +43,7 @@ def from_bcd(bcd: int) -> int:
     return hi * 10 + lo
 
 
-def extract_sector(sector_index: int, raw_sector: bytes) -> Sector:
+def parse_sector_bytes(sector_index: int, raw_sector: bytes) -> Sector:
     assert len(raw_sector) == SECTOR_SIZE
     sync_pattern, minutes, seconds, frame, mode = struct.unpack(
         "12sBBBB", raw_sector[:16]
@@ -85,6 +85,15 @@ def extract_sector(sector_index: int, raw_sector: bytes) -> Sector:
     )
 
 
+def extract_sector(f: BinaryIO, sector_index: int) -> Sector:
+    sector_start_offset = sector_index * SECTOR_SIZE
+    f.seek(sector_start_offset, os.SEEK_SET)
+    assert f.tell() == sector_start_offset
+    raw_sector = f.read(SECTOR_SIZE)
+    assert len(raw_sector) == SECTOR_SIZE
+    return parse_sector_bytes(sector_index, raw_sector)
+
+
 def extract_bin(f: BinaryIO) -> None:
     f.seek(0, os.SEEK_END)
     file_size = f.tell()
@@ -101,7 +110,7 @@ def extract_bin(f: BinaryIO) -> None:
         sector_len = len(raw_sector)
         if sector_len != sector_size:
             raise ExtractException(f"{sector_len=} invalid (expected {sector_size=})")
-        sector = extract_sector(sector_index, raw_sector)
+        sector = parse_sector_bytes(sector_index, raw_sector)
         print(
             f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
         )

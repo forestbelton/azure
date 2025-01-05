@@ -255,6 +255,11 @@ SetRCnt = 0x8006a174; // type:func
 GetRCnt = 0x8006a210; // type:func
 StartRCnt = 0x8006a248; // type:func
 ResetRCnt = 0x8006a2b4; // type:func
+// ???
+PAD_init = 0x8006a30c; // type:func
+InitPAD = 0x8006a3a8; // type:func
+_remove_ChgclrPAD = 0x8006a7bc; // type:func
+_patch_pad = 0x8006a694; // type:func
 
 // Globals
 gCd_Str_None = 0x80033378; // type:asciz
