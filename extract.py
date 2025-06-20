@@ -2,7 +2,7 @@
 import argparse
 import pathlib
 import sys
-from typing import BinaryIO
+from typing import BinaryIO, Union
 
 import hashlib
 
@@ -40,14 +40,14 @@ def extract_file(f: BinaryIO, start_sector: int, file_size: int) -> bytes:
 
 
 def extract_file_to(
-    inf: BinaryIO, outfile: str, start_sector: int, file_size: int
+    inf: BinaryIO, outfile: Union[pathlib.Path, str], start_sector: int, file_size: int
 ) -> None:
     data = extract_file(inf, start_sector, file_size)
     with open(outfile, "wb") as f:
         f.write(data)
 
 
-def get_file_shasum(filename: str) -> str:
+def get_file_shasum(filename: Union[pathlib.Path, str]) -> str:
     hash = hashlib.sha1()
     with open(filename, "rb") as f:
         for chunk in iter(lambda: f.read(128 * hash.block_size), b""):
