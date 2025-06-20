@@ -7,7 +7,7 @@ options:
   platform: psx
   compiler: GCC
   extensions_path: splat/ext
-  
+
   create_asm_dependencies: False
 
   ld_align_segment_vram_end: False
@@ -32,11 +32,11 @@ options:
   undefined_syms_auto_path: splat/town.bin_undefined_syms_auto.txt
 segments:
   # - type: code
-    # start: 0x0
-    # vram: 0x8002D000
-    # subsegments:
-      # - [0x0, bin]
-      # - [0x6f681e, az_string, STR_ANGEL_GREETING]
-      # - [0x6f69fe, bin]
+  # start: 0x0
+  # vram: 0x8002D000
+  # subsegments:
+  # - [0x0, bin]
+  # - [0x6f681e, az_string, STR_ANGEL_GREETING]
+  # - [0x6f69fe, bin]
   - [0x0, bin]
   - [0x101b800]

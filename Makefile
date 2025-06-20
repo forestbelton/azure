@@ -1,5 +1,6 @@
 SLUS = slus_006.14
 TOWN = town.bin
+MAIN = main.bin
 
 AS 		= mipsel-linux-gnu-as
 LD 		= mipsel-linux-gnu-ld
@@ -43,6 +44,18 @@ build/$(TOWN): $(OFILES)
 	ls -la build/$(TOWN) data/town/$(TOWN)
 	@echo ""
 	shasum build/$(TOWN) data/town/$(TOWN)
+
+build/$(MAIN): $(OFILES)
+	$(LD) \
+		--script=build/$(MAIN).ld \
+		--script=splat/$(MAIN)_undefined_funcs_auto.txt \
+		--script=splat/$(MAIN)_undefined_syms_auto.txt \
+		--output=build/$(MAIN).elf
+	$(OBJCOPY) -O binary build/$(MAIN).elf build/$(MAIN)
+	@echo ""	
+	ls -la build/$(MAIN) data/main/$(MAIN)
+	@echo ""
+	shasum build/$(MAIN) data/main/$(MAIN)
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)

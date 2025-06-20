@@ -1,0 +1,39 @@
+name: main.bin
+sha1: 69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d
+options:
+  basename: main.bin
+  target_path: data/main/main.bin
+  base_path: ..
+  platform: psx
+  compiler: GCC
+  extensions_path: splat/ext
+
+  create_asm_dependencies: False
+
+  ld_align_segment_vram_end: False
+  ld_align_section_vram_end: False
+  ld_dependencies: False
+  # TODO: We may be able to turn this off once more of the binary is mapped
+  ld_legacy_generation: True
+  ld_script_path: build/main.bin.ld
+
+  subalign: 4
+
+  find_file_boundaries: False
+  gp_value: 0x80080994
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  asset_path: assets/main
+
+  symbol_addrs_path: splat/main.bin_symbol_addrs.txt
+  reloc_addrs_path: splat/main.bin_reloc_addrs.txt
+
+  undefined_funcs_auto_path: splat/main.bin_undefined_funcs_auto.txt
+  undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
+segments:
+  - [0x0, bin]
+  - [0x226800, bin, az_title_img]
+  - [0x257000, bin]
+  - [0x275800]
