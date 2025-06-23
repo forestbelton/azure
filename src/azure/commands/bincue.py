@@ -2,7 +2,7 @@ import argparse
 import dataclasses
 import os
 import struct
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Iterator, Optional
 
 SECTOR_SIZE = 2352
 
@@ -94,7 +94,7 @@ def extract_sector(f: BinaryIO, sector_index: int) -> Sector:
     return parse_sector_bytes(sector_index, raw_sector)
 
 
-def extract_bin(f: BinaryIO) -> None:
+def bin_sectors(f: BinaryIO) -> Iterator[tuple[int, Sector]]:
     f.seek(0, os.SEEK_END)
     file_size = f.tell()
     sector_size = SECTOR_SIZE
@@ -103,17 +103,13 @@ def extract_bin(f: BinaryIO) -> None:
             f"{file_size=} invalid (expected a multiple of {sector_size=})"
         )
     num_sectors = int(file_size / sector_size)
-    print(f"{num_sectors=}")
     f.seek(0, os.SEEK_SET)
     for sector_index in range(num_sectors):
         raw_sector = f.read(sector_size)
         sector_len = len(raw_sector)
         if sector_len != sector_size:
             raise ExtractException(f"{sector_len=} invalid (expected {sector_size=})")
-        sector = parse_sector_bytes(sector_index, raw_sector)
-        print(
-            f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
-        )
+        yield sector_index, parse_sector_bytes(sector_index, raw_sector)
     offset = f.tell()
     if offset != file_size:
         raise ExtractException(
@@ -121,17 +117,57 @@ def extract_bin(f: BinaryIO) -> None:
         )
 
 
+def extract_sectors(args: argparse.Namespace):
+    lba = int(args.lba, 16)
+    num = int(args.len, 16)
+    found = False
+    count = 0
+    with open(args.infile, "rb") as inf, open(args.outfile, "wb") as outf:
+        for sector_index, sector in bin_sectors(inf):
+            if sector_index == lba:
+                found = True
+            if found and count < num:
+                outf.write(sector.data)
+                count += 1
+                if count == num:
+                    return
+
+
+def find_sector(args: argparse.Namespace):
+    prefix = bytes.fromhex(args.hex)
+    with open(args.binfile, "rb") as f:
+        for sector_index, sector in bin_sectors(f):
+            if sector.data.startswith(prefix):
+                print("sector=" + hex(sector_index))
+                print("offset=" + hex(SECTOR_SIZE * sector_index + 24))
+
+
+def extract_bin(f: BinaryIO) -> None:
+    for _, sector in bin_sectors(f):
+        print(
+            f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
+        )
+
+
 def setup_parser(prog: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=prog)
-    parser.add_argument("--extract", action="store_true", required=True)
-    parser.add_argument("file")
+    subparsers = parser.add_subparsers(required=True)
+    get_sector = subparsers.add_parser("sector", conflict_handler="resolve")
+    get_sector.add_argument("--lba", required=True)
+    get_sector.add_argument("--len", default="0x01", required=True)
+    get_sector.add_argument("infile")
+    get_sector.add_argument("outfile")
+    get_sector.set_defaults(main=extract_sectors)
+    find_sector_p = subparsers.add_parser("find", conflict_handler="resolve")
+    find_sector_p.add_argument("--hex", required=True)
+    find_sector_p.add_argument("binfile")
+    find_sector_p.set_defaults(main=find_sector)
     parser.set_defaults(main=main)
     return parser
 
 
 def main(args: argparse.Namespace) -> None:
-    with open(args.file, "rb") as f:
-        extract_bin(f)
+    args.main(args)
 
 
 if __name__ == "__main__":
