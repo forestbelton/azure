@@ -33,7 +33,9 @@ options:
   undefined_funcs_auto_path: splat/main.bin_undefined_funcs_auto.txt
   undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
 segments:
-  - [0x0, bin]
+  - [0x0, bin, song1.kdt]
+  - [0x3000, bin]
+  - [0x221800, bin, unk_img_1]
   - [0x226800, bin, az_title_img]
   - [0x257000, bin]
   - [0x275800]

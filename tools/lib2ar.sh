@@ -4,7 +4,7 @@
 set -euxo pipefail
 
 # Override these with the correct paths for your system
-AR=${AR:-$HOME/scratch/mipsel-linux-gnu/bin/mipsel-linux-gnu-ar}
+AR=${AR:-$(which mipsel-none-elf-ar)}
 AZURE_PATH=${AZURE_PATH:-$PWD/src/azure/main.py}
 PSYQ_OBJ_PARSER=${PSYQ_OBJ_PARSER:-$HOME/scratch/pcsx-redux/psyq-obj-parser}
 

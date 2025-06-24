@@ -134,19 +134,28 @@ def extract_sectors(args: argparse.Namespace):
 
 
 def find_sector(args: argparse.Namespace):
-    prefix = bytes.fromhex(args.hex)
+    needle = bytes.fromhex(args.hex)
     with open(args.binfile, "rb") as f:
         for sector_index, sector in bin_sectors(f):
-            if sector.data.startswith(prefix):
-                print("sector=" + hex(sector_index))
-                print("offset=" + hex(SECTOR_SIZE * sector_index + 24))
+            try:
+                idx = sector.data.index(needle)
+            except ValueError:
+                continue
+            print("sector=" + hex(sector_index))
+            print("raw_offset=" + hex(SECTOR_SIZE * sector_index + 24))
+            print("sector_offset=" + hex(idx))
 
 
 def extract_bin(f: BinaryIO) -> None:
     for _, sector in bin_sectors(f):
-        print(
-            f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
-        )
+        if sector.subheader is not None:
+            print(
+                f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} form={((sector.subheader.submode>>5)&1) + 1} {sector.subheader}"
+            )
+        else:
+            print(
+                f"sector {sector.minutes}:{sector.seconds}:{sector.frame} mode={sector.mode} {sector.subheader}"
+            )
 
 
 def setup_parser(prog: str) -> argparse.ArgumentParser:
