@@ -34,8 +34,13 @@ options:
   undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
 segments:
   - [0x0, bin, song1.kdt]
-  - [0x3000, bin]
+  - [0x3000, bin, unk.vab]
+  - [0x3800, bin]
+  - [0x20000, bin, kewne_loading_img]
+  - [0x20800, bin]
   - [0x221800, bin, unk_img_1]
-  - [0x226800, bin, az_title_img]
-  - [0x257000, bin]
+  - [0x226800, bin, title_bg_img]
+  - [0x257000, bin, title_menu_img]
+  - [0x258800, bin, unk_img_2]
+  - [0x25d000, bin]
   - [0x275800]
