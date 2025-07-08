@@ -1,8 +1,7 @@
 import argparse
 import dataclasses
-import json
 import os
-import sys
+import re
 from typing import BinaryIO, Optional
 
 MIN_LENGTH = 3
@@ -48,12 +47,16 @@ def valid_second_byte(b1: int, b2: int) -> bool:
         return b2 >= 0x40 and b2 <= 0x9E and b2 != 0x7F
 
 
+def escape_surrogates(s: str) -> str:
+    return re.sub(r"[\udc80-\udcff]", lambda m: f"\\u{ord(m.group()):04x}", s)
+
+
 def find_shiftjis_at(f: BinaryIO, offset: int) -> Optional[DetectedString]:
     f.seek(offset, os.SEEK_SET)
     first_byte = f.read(1)
     if len(first_byte) == 0:
         return None
-    bs = []
+    bs: list[int] = []
     if first_byte[0] in MB_CHARS:
         bs.extend(first_byte)
         second_byte = f.read(1)
@@ -103,11 +106,14 @@ def setup_parser(prog: str) -> argparse.ArgumentParser:
 def main(args: argparse.Namespace) -> None:
     with open(args.file, "rb") as f:
         strs = find_shiftjis(f)
-    json.dump(
-        [{"offset": loc.offset, "len": len(loc.raw)} for loc in strs],
-        sys.stdout,
-        indent=2,
-    )
+    for loc in strs:
+        print(
+            f"""{{
+    "offset": {hex(loc.offset)},
+    "length": {len(loc.raw)},
+    "str": "{escape_surrogates(loc.s)}"
+}}"""
+        )
 
 
 if __name__ == "__main__":
