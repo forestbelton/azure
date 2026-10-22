@@ -254,7 +254,7 @@ extern u8  D_80080A84;
 extern u8  D_80080A85;
 extern u8  D_80080A86;
 extern u8  D_80080A87;
-extern u8  D_80080A88;
+extern s8  D_80080A88;  /* retyped: read with lb */
 extern s8  D_80080A89;  /* retyped: read with lb, not lbu */
 extern u8  D_80080A8A;
 extern u32 D_80080A8C;
@@ -491,6 +491,9 @@ void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
 void func_800407C0(u8 *, u32 *);
+void func_8004068C(u8 *, u32 *);
+void func_80043568(void);
+void func_800542BC(void);
 void func_80044B48(void);
 void func_80046884(u8 *, u8 *, s32);
 void func_8003BFE4(void);
