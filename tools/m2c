@@ -1,0 +1,26 @@
+#!/bin/sh
+# Run m2c against this project's conventions.
+#
+# Target is mips-gcc-c: the game was built with SN Systems' patched GCC 2.7.2,
+# so m2c must model gcc's calling convention and idioms, not IDO's (its
+# default, which targets the N64 SDK compiler).
+#
+# ctx.c carries the type and declaration context. Without it every field
+# access comes out as ->unkNN on a void *, which is correct but not something
+# you can turn into matching C. Regenerate it with tools/m2ctx.py (make ctx)
+# whenever a header changes.
+set -eu
+
+PROJ=$(cd "$(dirname "$0")/.." && pwd)
+M2C_DIR=${M2C_DIR:-$HOME/scratch/m2c}
+
+if [ ! -f "$M2C_DIR/m2c.py" ]; then
+    echo "tools/m2c: no m2c.py under $M2C_DIR" >&2
+    echo "  clone https://github.com/matt-kempster/m2c (set M2C_DIR to override)" >&2
+    exit 1
+fi
+
+CTX=""
+[ -f "$PROJ/ctx.c" ] && CTX="--context $PROJ/ctx.c"
+
+exec python3 "$M2C_DIR/m2c.py" -t mips-gcc-c $CTX "$@"

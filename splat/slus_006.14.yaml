@@ -45,14 +45,17 @@ segments:
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
       - [0x72a8, bin]
       - [0x101f8, asm, main]
-      - [0x102a8, asm]
+      - [0x102a8, c, unk_102A8]
       # Three consecutive leaf functions. Name is provisional: the first two
       # are word fill/copy helpers, the third is unrelated struct setup.
       - [0x1134c, c, mem]
-      - [0x113d0, asm]
+      - [0x113d0, c, unk_113D0]
       # First function converted to C. func_8003E12C is a 5-instruction leaf.
       - [0x1192c, c, swap]
-      - [0x11940, asm]
+      # Converted to C wholesale so splat emits per-function asm (which m2c
+      # consumes) and INCLUDE_ASM stubs to replace one function at a time.
+      # Name is the start offset until the original translation unit is known.
+      - [0x11940, c, unk_11940]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]

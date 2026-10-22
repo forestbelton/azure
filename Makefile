@@ -88,7 +88,7 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
-.PHONY: all clean splat check expected
+.PHONY: all clean splat check expected ctx
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -149,6 +149,11 @@ build/%.o: %.bin
 # owns that offset. A whole-file checksum cannot tell you that.
 check: build/$(SLUS)
 	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
+
+# Regenerate the m2c/decomp-permuter type context from include/*.h.
+ctx: ctx.c
+ctx.c: $(HEADERS)
+	python3 tools/m2ctx.py
 
 # asm-differ's -o mode diffs objects against a known-good copy under
 # expected/. Only ever populate it from a build that `make check` passes,

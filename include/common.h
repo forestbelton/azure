@@ -26,6 +26,7 @@
         );                                                         \
     }
 
+#include "types.h"
 #include "include_asm.h"
 
 #endif /* COMMON_H */
