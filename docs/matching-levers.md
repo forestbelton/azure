@@ -204,14 +204,28 @@ func_8003DBD0 and 262 in func_8003D0F0.
   drifts (func_80046884, 8 words).
 * A `u16` field read with `(s16)` casts yields a bare `lh`, because combine
   folds zero_extend-then-sign-extend-of-low (func_8004425C).
-* **A second use of a loaded byte blocks that fold.** `(s8) p[2]` is `lb`, and
-  so is the same thing through a `u8` or `s32` local -- but give the loaded
-  value any second use and combine can no longer substitute the load into the
-  sign extension, so you get the unsimplified `lbu` / `sll 24` / `sra 24`.
-  Measured: `u8 t = p[2]; *q = t; return (s8) t;` and `u8 t = p[2];
-  p[3] = t; return (s8) t;` both produce it; two casts of one load produce one
-  `lbu` and two shift pairs. This is the eight missing words in
-  func_8003D0F0, so look for what else reads that byte.
+* **A memory store between a byte load and its cast blocks that fold.**
+  `(s8) p[2]` is `lb`, and so is the same thing through a `u8` or `s32` local.
+  Put a store between them and `use_crosses_set_p` stops combine substituting
+  the load into the sign extension, so you get the unsimplified
+  `lbu` / `sll 24` / `sra 24` -- and cleanly, with no extra register:
+
+      s32 f(u8 *p, s32 *q) { u8 t = p[2]; *q = 5; return (s8) t; }
+                          -> lbu / sw / sll 24 / sra 24
+
+  Three things it is *not*, all measured, because the obvious reading of the
+  first probe is wrong: a second use of the **loaded pseudo** gives two loads
+  (`lb` plus `lbu`), not a blocked fold; a second use of the **cast** costs a
+  redundant `move`; and an intervening **load** does nothing at all, so a
+  neighbouring `lhu` in the listing between the `lbu` and the `sll` is
+  scheduling, not the cause. Note that
+  `u8 t = p[2]; *q = t; return (s8) t;` has both a store and a second use, so
+  it does not discriminate -- that conflation is how this entry was first
+  written down wrong.
+
+  This is still not enough for func_8003D0F0: its arm has neither a store in
+  the right place nor a spare register, so that one's shape remains unknown.
+  See its near-miss file.
 * **The same trick does NOT work on the `srl`/`sra` downgrade.** For
   `(s16) (x & 0x400)` combine proves bit 15 clear and emits `srl`, and a second
   use of either the masked value or the loaded halfword does not stop it -- it

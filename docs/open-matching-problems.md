@@ -14,7 +14,7 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
-| func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` byte conversions fold to `lb`; see below |
+| func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
 
@@ -45,9 +45,14 @@ Taking stock after a session that unparked five of the original eleven
 func_80041284): what is left divides into two kinds, and the division matters
 for where effort goes next.
 
-**Reachable, mechanism known.** `func_8003D0F0` -- eight of its ten words are
-the `(s8)` fold, and the fix is now measured: any second use of the loaded byte
-blocks it. The task is to find that second use in the original.
+**Mechanism still unknown.** `func_8003D0F0` -- eight of its ten words are the
+`(s8)` fold. Two ways to block that fold are now measured (a memory store
+between the load and the cast, via `use_crosses_set_p`; and a second use of the
+cast), but **both are excluded by the target's own instruction count**: its arm
+is seven insns with no store in the right place and no spare register, and every
+blocking spelling costs a `move` it does not have. So the arm's source structure
+is probably not what the near-miss assumes. An earlier version of this entry
+claimed the mechanism was settled; it was not.
 
 **Probably not reachable from C**, each for a reason now written down rather
 than guessed:

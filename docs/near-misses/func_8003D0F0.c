@@ -16,24 +16,54 @@
  * (sign_extend (subreg (zero_extend (mem:QI)))) to (sign_extend (mem:QI)) in
  * all of them.
  *
- * MEASURED SINCE (2026-10-22, four probe functions against the real ccpsx):
- * the guess above is right, and a second use is enough on its own -- no
- * intervening store is needed.
+ * MEASURED SINCE (2026-10-22). The mechanism is `use_crosses_set_p`: a memory
+ * STORE between the load and the cast blocks the fold, cleanly and with no
+ * extra register.
  *
- *   s32 pA(u8 *p)           { return (s8) p[2]; }              -> lb
- *   s32 pB(u8 *p)           { u8 t = p[2]; return (s8) t; }     -> lb
- *   s32 pC(u8 *p, s32 *q)   { u8 t = p[2]; *q = t; return (s8) t; }
- *                                       -> lbu / sw / sll 24 / sra 24
- *   s32 pF(u8 *p)           { u8 t = p[2]; p[3] = t; return (s8) t; }
- *                                       -> lbu / sb / sll 24 / sra 24
+ *   s32 iJ(u8 *p, s32 *q) { u8 t = p[2]; *q = 5; return (s8) t; }
+ *                        -> lbu / sw / sll 24 / sra 24
  *
- * So the fix is to find the SECOND USE of that byte in the original. Each of
- * the four flag arms has its own lbu, so the second use is inside the arm, not
- * shared between them. Two casts of one load give one lbu and two shift pairs,
- * which is NOT the target's shape, so it is not the four arms sharing a read.
- * Candidates to look for: the byte feeding the UV calculation as well as the
- * corner, or being written back somewhere, or the x and y bytes being read in
- * a way that makes each one live across the other's store.
+ * Three things it is NOT, and the first write-up of this got it wrong by
+ * conflating them:
+ *   - a second use of the LOADED PSEUDO gives two loads, `lb` plus `lbu`:
+ *       s32 iK(u8 *p, s32 *q) { u8 t = p[2]; *q = (s8) t; return t; }
+ *   - a second use of the CAST costs a redundant `move`;
+ *   - an intervening LOAD does nothing -- `a = p[2]; w = *q; a = -(s8) a;`
+ *     still folds. So the `lhu` sitting between the target's `lbu` and `sll`
+ *     is scheduling, not the cause.
+ *   - and `u8 t = p[2]; *q = t; return (s8) t;` has BOTH a store and a second
+ *     use, so it does not discriminate between them.
+ *
+ * AND NEITHER MECHANISM FITS THIS FUNCTION. The target's flag-clear arm is
+ * seven insns with no store between the load and the shifts and no spare
+ * register:
+ *
+ *     lbu $v0,-0x2($s2) / lhu $v1,0x10($s0) / sll $v0,$v0,24 / sra $v0,$v0,24
+ *     sh $v0,0x80($s0) / sh $v0,0x70($s0) / addu $v0,$v0,$v1
+ *
+ * One pseudo serves both stores and is then incremented in place -- which is
+ * the FOLDED dataflow, plus two words, with the fold nevertheless blocked.
+ * Every spelling that blocks it needs the cast to appear twice and therefore
+ * costs a third pseudo and a `move`. Measured, against a 212-word baseline and
+ * a 222-word target:
+ *
+ *   both stores from repeated `-(s8) x`, sum from a third   221
+ *   the same with a u8 local                                221
+ *   one store from a cast, the rest from a shared variable   219
+ *   sum first, then two stores from casts                    213
+ *   byte read before the `if`, both arms using it            212 (fold blocked,
+ *                       but the sll hoists into the delay slot and is shared)
+ *   any shape assigning the cast to a variable first         212 (folds to lb)
+ *
+ * A probe in the arm's exact shape confirms the floor:
+ * `s32 x = M; o[0] = (s8) x; o[1] = (s8) x; return (s8) x + w;` gives
+ * lbu/sll/sra/move/addu/sh/sh -- eight insns where the target has seven. The
+ * `move` is unavoidable in every two-use spelling.
+ *
+ * So this needs either a third blocking mechanism or, more likely, a different
+ * model of the arm's source: the statement structure is probably not "cast into
+ * a variable, store it twice, then add" at all. Do not spend more time on (b)
+ * or (c) until (a) is settled.
  *
  * (b) 2 words: the post-call block's copy. The target is addu/addu/sw 0x10/
  * `addu $v0,$a1,$zero`/sll/sll/sw 0x14/sw 0xC -- it copies the 0x0C value into
