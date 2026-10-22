@@ -17,6 +17,8 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
+| func_80044D24 | unk_14934 | 372 of 379: three single-use byte loads the fold keeps collapsing; two untried levers |
+| func_80045CC4 | unk_14934 | 429 of 437: four words are the `(s8)` fold (mechanism known), four a mask-hoisting shift |
 
 ## func_8003D0F0  (unk_102A8) -- partial, 10 words short
 
@@ -44,6 +46,14 @@ Taking stock after a session that unparked five of the original eleven
 (func_80043A68, func_80043B4C, func_8003F80C, func_80042640, func_8003F8F8 and
 func_80041284): what is left divides into two kinds, and the division matters
 for where effort goes next.
+
+**Reachable, mechanism known, not yet applied.** `func_80045CC4` -- four of its
+eight words are the `(s8)` fold and the two-sign-extension shape from
+`docs/matching-levers.md` section 7 is what it needs; the other four are a
+loop.c hoisting choice between its two masks, with a specific hypothesis in the
+near-miss file. `func_80044D24` -- seven words, all three byte conversions, with
+two untried levers named (a `volatile` lvalue, and a store between the load and
+the cast). Both are worth another pass before anything else here.
 
 **Mechanism still unknown.** `func_8003D0F0` -- eight of its ten words are the
 `(s8)` fold. Two ways to block that fold are now measured (a memory store
