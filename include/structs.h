@@ -417,6 +417,26 @@ extern Unk80083CE8 D_80083CE8;
    resolves each to the same address. */
 extern u8 D_80082E6A;
 
+/* Hand-added. func_8003DB94 indexes an array of these by a signed halfword
+   and stores the resulting pointer, so the element is 8 bytes. */
+typedef struct UnkElem {
+    u8  unk_00;
+    u8  pad_01[3];
+    u32 unk_04;
+} UnkElem;
+
+/* Hand-added. The destination func_8003DB94 fills in. Distinct from UnkNode:
+   its flag halfword is at +0x14, not +0x1e. */
+typedef struct UnkSlot {
+    UnkElem *unk_00;
+    s8       unk_04;
+    u8       unk_05;
+    u8       pad_06[2];
+    u32      unk_08;
+    u8       pad_0C[8];
+    u16      unk_14;
+} UnkSlot;
+
 /* Hand-added signatures for callees that live in another unit. */
 void func_80044A50(UnkNode *);
 

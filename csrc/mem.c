@@ -17,4 +17,10 @@ void func_8003DB6C(int *dst, int *src, int n) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/mem", func_8003DB94);
+void func_8003DB94(UnkSlot *slot, UnkElem *elems, s16 idx) {
+    slot->unk_00 = elems + idx;
+    slot->unk_04 = idx;
+    slot->unk_05 = elems->unk_00;
+    slot->unk_14 &= 0x9FFF;
+    slot->unk_08 = slot->unk_00->unk_04;
+}
