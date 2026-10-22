@@ -138,6 +138,49 @@ Beyond the four write-ups in `docs/open-matching-problems.md`:
   `extern` symbols get a `lui` each because gcc cannot know they share a
   64 KB page (func_800439F8).
 
+## The two tie-breaks that decide register choice and instruction order
+
+When the arithmetic is right and only the register numbers or the order of two
+adjacent instructions differ, it is one of these. Both were read out of gcc
+2.7.2's own sources and confirmed against cc1psx's RTL dumps.
+
+**The pre-reload scheduler (`sched.c`).** Every insn has priority 1, except
+one that *births* a single-set pseudo, which is bumped to maximum priority;
+`reg_n_sets == 1` is the test. So splitting a value's computation over two
+statements makes its pseudo multi-set, drops it back to priority 1, and leaves
+it in source order -- and that decides which insn `reorg` later finds nearest
+for a branch delay slot. func_8003E188 needs `sh = arg0 & 3; sh *= 2;` for
+exactly this reason: as one expression the shift is single-set and high
+priority, the `bits = 1` sinks below it, and reorg fills the delay slot with
+the shift instead of the `li`.
+
+**Local vs global allocnos (`local-alloc.c`, `global.c`).** A variable declared
+*inside a block* is a block-local quantity, and local-alloc assigns it before
+the block's other values -- by priority, so the one with the most references
+takes the lowest hard register. A variable declared at function scope and set
+in several blocks becomes a global allocno instead, allocated after local-alloc
+has already handed out the low registers, so it lands higher. func_800439F8
+needs a separate `base` local inside each arm for this: one function-scope base
+comes out in `$a1` where the target has `$v0`. As a bonus, two arms that then
+begin with the same `lui` let reorg hoist one copy into the branch delay slot
+and delete both, which is what the target shows.
+
+Raising a variable's reference count moves it down the register file too:
+func_80043868 needs `a = cur - a` and `d = (a * 20) / d` rather than fresh
+locals, and func_8003E240 needs `r &= 0xFFFF; r |= ...` rather than one
+expression.
+
+## Reading the compiler's own dumps
+
+`cc1psx` honours gcc's dump flags -- `-dS` (post-sched1), `-dR` (post-sched2),
+`-dl` (local-alloc), `-dg` (global-alloc), `-dr` (initial RTL). The files land
+in the wine temp directory,
+`~/.cache/azure-psyq/drive_c/users/case/AppData/Local/Temp/`, as `PQ*.sched`,
+`.sched2`, `.lreg`, `.greg` and so on. The `.sched` dump prints the ready list
+and each insn's priority per cycle, and `.greg` prints each allocno with the
+hard registers it conflicts with; between them they explain any ordering or
+register difference without guessing.
+
 ## Installing it
 
 The compiler is not in the repository (`psy-q/` is ignored). It comes from

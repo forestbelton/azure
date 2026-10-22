@@ -12,3 +12,6 @@ ctx.c
 ctx.c.m2c
 # decomp-permuter working directories
 nonmatchings/
+
+# subagent scratch files
+zz_*.c

@@ -25,7 +25,28 @@ s32 func_8003E14C(void) {
     return v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E188);
+void func_8003E188(s16 arg0, s16 arg1) {
+    /* Two details are load-bearing, both scheduler tie-breaks. `p` must be a
+     * two-set pointer so the `lui` lands first in RTL order and the `addu`
+     * writes back into the base register; and `sh` must be assigned in two
+     * statements, because gcc's pre-reload scheduler bumps an insn that
+     * births a *single*-set pseudo to maximum priority, which sinks the
+     * `bits = 1` past the shift and loses it the branch delay slot. */
+    u8 *p = (u8 *) 0x80010000;
+    s32 sh;
+    u8 v;
+    s32 bits;
+
+    p += arg0 >> 2;
+    sh = arg0 & 3;
+    sh *= 2;
+    v = p[0x3614];
+    bits = 1;
+    if (arg1 != 0) {
+        bits = 3;
+    }
+    p[0x3614] = v | (bits << sh);
+}
 
 void func_8003E1C4(s16 arg0) {
     func_80041284(D_8006CDC8[arg0]);
@@ -40,7 +61,22 @@ void func_8003E1FC(void) {
     func_8003E4FC(6, p, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E240);
+u32 func_8003E240(s32 arg0) {
+    u32 r = 0xFFFFFFFF;
+
+    if (D_800830C0[0] == 0 && (u32) (D_800830C0[1] - 0x20) < 0x51) {
+        /* Assigning the high half into `r` first and then or-ing the pad
+         * bytes *into* it is what puts the `lui` ahead of the two loads and
+         * in r's own register. */
+        r = 0xFFFF0000;
+        r = (D_800830C0[3] | (D_800830C0[2] << 8)) | r;
+    }
+    if (D_800830E8[0] == 0 && (u32) (D_800830E8[1] - 0x20) < 0x51) {
+        r &= 0xFFFF;
+        r |= (D_800830E8[3] | (D_800830E8[2] << 8)) << 16;
+    }
+    return ~r;
+}
 
 void func_8003E2D8(void) {
     /* The struct pointer must be the primary base and the word pointer

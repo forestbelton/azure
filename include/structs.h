@@ -32,7 +32,8 @@ typedef struct Unk8002D5B4 {
    follows the pointer at +0x04; only that field's own +0x08 is observed, so
    its element type is left as u32. */
 typedef struct Unk8006CE80 {
-    u32  unk_00;
+    u16  unk_00;  /* read as halfwords by func_80041818 */
+    u16  unk_02;
     u32 *unk_04;
     u32  unk_08;
 } Unk8006CE80;
@@ -125,22 +126,6 @@ typedef struct Unk80082E60 {
     u16 unk_16;
     u8  unk_18;
 } Unk80082E60;
-
-/* 0x800830c0..0x800830c3, 0x4 bytes, 4 field(s) */
-typedef struct Unk800830C0 {
-    u8  unk_00;
-    u8  unk_01;
-    u8  unk_02;
-    u8  unk_03;
-} Unk800830C0;
-
-/* 0x800830e8..0x800830eb, 0x4 bytes, 4 field(s) */
-typedef struct Unk800830E8 {
-    u8  unk_00;
-    u8  unk_01;
-    u8  unk_02;
-    u8  unk_03;
-} Unk800830E8;
 
 /* 0x80083120..0x8008315f, 8 entries of 0x8 bytes; labels: D_80083120 */
 /* Hand-corrected. fieldscan reported one 0x10-byte object based at
@@ -379,6 +364,9 @@ extern u8  D_800814D0[4];
 extern u8  D_800814D4;
 extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
+/* func_800437A4 fills the first two words through func_8003F6D4 and returns
+   its address; eight bytes, so the address comes out as an `la`. */
+extern s32 D_800814F8[2];
 extern u16 D_80081500;
 extern u32 D_80081508;
 extern u32 D_80081510;
@@ -390,6 +378,12 @@ extern u16 D_80081526;
    runs to D_800830C0, and func_8004383C indexes it. Must be declared as an
    array or the index folds into the %lo -- see
    docs/addressing-and-translation-units.md. */
+/* Retyped by hand from the four-byte structs fieldscan inferred: func_8003E240
+   reads four bytes of each through a materialised base with displacements,
+   which only happens for a symbol past the -G8 limit, so these are buffers of
+   unestablished length rather than 4-byte objects. */
+extern u8  D_800830C0[];
+extern u8  D_800830E8[];
 extern u32 D_80082EC0[0x80];
 extern u32 D_80083110[4];  /* zeroed by index in func_8003D8B0 */
 /* Retyped by hand from the two-field struct fieldscan inferred: func_80043674
@@ -419,8 +413,6 @@ extern Unk8008151A D_8008151A;
 extern Unk80081520 D_80081520;
 extern Unk80081522 D_80081522;
 extern Unk80082E60 D_80082E60;
-extern Unk800830C0 D_800830C0;
-extern Unk800830E8 D_800830E8;
 extern Unk80083120 D_80083120[8];
 extern Unk80083160 D_80083160;
 extern Unk80083360 D_80083360;
@@ -494,6 +486,7 @@ void func_800482C8(Unk800777AC *, u32 *);
 void func_8005FFFC(void);
 s32  func_80064584(s16);
 s32  func_800644B8(s16);
+void func_801768AC(void);
 void func_8004EB30(void);
 extern u8 D_80126804;
 

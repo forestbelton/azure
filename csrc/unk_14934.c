@@ -6,6 +6,8 @@ void func_80047338(Unk800777AC *, u32, u16);
 void func_80047468(Unk800777AC *, u32, u16);
 void func_800463EC(u8 *, UnkVec *, s16 *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
+void func_8003F6D4(s32, s32, s32 *, s32);
+void func_80040B88(void);
 void func_80042984(u8 *);
 void func_80041AE4(void);
 void func_80043D04(void);
@@ -47,7 +49,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041344);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041588);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041818);
+void func_80041818(void) {
+    Unk8006CE80 *e = &D_8006CE80[D_80082E60.unk_0B];
+
+    func_801768AC();
+    D_80082E60.unk_08.h = e->unk_02;
+    func_80040B88();
+    e = &D_8006CE80[D_80082E60.unk_0B];
+    if (e->unk_00 != 4) {
+        func_800411FC(0);
+        func_800499BC();
+    }
+}
 
 void func_800418B4(void) {
     if (D_80080A89 != 0) {
@@ -217,7 +230,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043674);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043704);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800437A4);
+s32 *func_800437A4(s16 arg0, s32 arg1) {
+    s32 n;
+
+    if (arg0 == 0x38) {
+        n = 0x426D;
+    } else if (arg0 >= 0x3A) {
+        n = (arg0 - 0x3A) * 43 + 0x1BA7;
+    } else {
+        n = (arg0 - 1) * 43 + 0x56F0;
+    }
+    func_8003F6D4(0x11, arg1, D_800814F8, n);
+    return D_800814F8;
+}
 
 u32 func_8004383C(u8 *arg0, s16 arg1) {
     return D_800835E8[arg0[0x11] + arg1];
@@ -291,7 +316,27 @@ s32 func_800439BC(s16 arg0) {
     return (((b >> 4) ^ b) & 3) == 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800439F8);
+void func_800439F8(void) {
+    /* A separate base local inside each arm, not one function-scope variable:
+     * a block-local base is allocated first and lands in $v0, and reorg then
+     * finds the two arms' leading `lui`s identical and hoists one copy into
+     * the branch delay slot. A function-scope base becomes a global allocno,
+     * conflicts with the values already in $v0..$a0, and ends up in $a1. */
+    if (D_80080A8A != 0) {
+        u8 *base = (u8 *) 0x80010000;
+
+        D_80080A8A = 0;
+        *(u32 *) (base + 0x3180) = D_80081494;
+        base[0x3184] = D_800814AC;
+        base[0x3186] = D_800814A4;
+    } else {
+        u8 *base = (u8 *) 0x80010000;
+
+        D_80081494 = *(u32 *) (base + 0x3180);
+        D_800814AC = base[0x3184];
+        D_800814A4 = base[0x3186];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043A68);
 
