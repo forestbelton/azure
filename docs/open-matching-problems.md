@@ -1,6 +1,55 @@
 # Open matching problems
 
-## func_8003E188  (unk_11940) -- open
+Eight functions are parked. Every one of them reproduces the original logic;
+what is left in each case is a register assignment, the order of two adjacent
+instructions, or one dead instruction. The two tie-break rules that explain
+most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
+decide register choice and instruction order"), and cc1psx's own dumps are the
+way to settle them -- see "Reading the compiler's own dumps" in the same file.
+
+| function      | unit    | what is left |
+|---------------|---------|--------------|
+| func_80043674 | unk_14934 | three registers permuted between two loop scalars and the write pointer |
+| func_8003F6F4 | unk_12DE0 | one `li 5` that loop-invariant motion hoists and the original did not |
+| func_80047200 | unk_14934 | one dead `addiu $a0,$a0,-0x2` the original kept in a delay slot |
+| func_80041284 | unk_14934 | the target copies each loaded global into its variable's register; gcc folds the copy away |
+| func_80042560 | unk_14934 | two of three accesses to D_80013714 are compiler-split, the third assembler-expanded |
+| func_80042640 | unk_14934 | gcc hoists each constant store into the preceding load's delay slot |
+| func_80046D64 | unk_14934 | the target copies the parameter out of `$a0` so the struct base can have it |
+| func_8003F8F8 | unk_12DE0 | the width/height pair wants one induction variable with a -2 displacement; gcc makes two |
+
+The near-miss source for each is in the git history of the commit that parked
+it, and the shapes already ruled out are in those commit messages. Do not start
+from scratch on one of these without reading its commit message first.
+
+`func_8003CAA8` is not a function. It is the unreachable epilogue of `main`,
+which splat split off because it follows `main`'s infinite loop, and it sits at
+the start of the `unk_102A8` subsegment. Fixing it means extending the `main`
+asm subsegment to 0x102c4 and starting the C unit there; it is a spec change,
+not a matching problem.
+
+## Functions blocked by the translation-unit problem
+
+32 of the remaining stubs cannot match in their current unit, because the
+addressing mode they need is per-compilation -- see
+`docs/addressing-and-translation-units.md`. Five reach their globals only
+`$gp`-relatively (func_8003E4FC, func_8003F5E0, func_80044618, func_80044698,
+func_800448BC) and 27 do both and so cannot match under either `-G`.
+
+Two of the five are cheap: `func_8003F5E0` is the first function of
+`unk_12DE0` and sits immediately after the carved-out `gprel_12DD4`, so
+extending that subsegment by one function picks it up; `func_80044618` and
+`func_80044698` are adjacent to each other inside `unk_14934` and could be
+carved out together. Both need a splat spec change, a re-extraction and a
+`MASPSXFLAGS_G8` line in the Makefile.
+
+The 27 mixed ones need the real fix from that document: each C file eventually
+has to *define* the globals its functions reach `$gp`-relatively, rather than
+declaring them `extern`, so maspsx can see the size. That means moving those
+objects out of the splat data segments and into C, which is a much larger
+change.
+
+## func_8003E188  (unk_11940) -- resolved, kept for the reasoning
 
 Sets a 2-bit field in a byte of the out-of-image table at 0x80013614. The
 *only* difference left is the order of two instruction pairs inside the first
