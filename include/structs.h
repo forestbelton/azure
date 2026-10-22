@@ -184,8 +184,10 @@ typedef struct Unk80083160 {
     u32 unk_C4;  /* also read as 2 */
     /* +0xc6  is a 2-byte access inside this field */
     /* +0xc7  is a 4-byte access inside this field */
-    u32 unk_C8;  /* also read as 2 */
-    /* +0xcb  is a 4-byte access inside this field */
+    /* Hand-split: func_8003E02C reads +0xC8 with lh. The 4-byte access
+       fieldscan reported at the misaligned +0xcb is an artifact. */
+    s16 unk_C8;
+    u16 unk_CA;
     u32 unk_CC;
     u8 pad_D0[0x40];
     u32 unk_110;
@@ -459,7 +461,7 @@ typedef struct UnkSlot {
     UnkElem *unk_00;
     s8       unk_04;
     u8       unk_05;
-    u8       pad_06[2];
+    s16      unk_06;
     u32      unk_08;
     u8       pad_0C[8];
     u16      unk_14;   /* flags */
@@ -490,6 +492,8 @@ void func_80067F20(u32 *, s32, s32, s32, s32);
 void func_80042BDC(s8 *, s8);
 void func_800482C8(Unk800777AC *, u32 *);
 void func_8005FFFC(void);
+s32  func_80064584(s16);
+s32  func_800644B8(s16);
 void func_8004EB30(void);
 extern u8 D_80126804;
 

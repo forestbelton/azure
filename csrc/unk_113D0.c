@@ -23,7 +23,11 @@ Unk800777AC *func_8003DF0C(Unk800777AC *p, s32 arg1, s16 *arg2) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_113D0", func_8003DF74);
 
-INCLUDE_ASM("asm/nonmatchings/unk_113D0", func_8003E02C);
+void func_8003E02C(s16 *arg0, s16 *out) {
+    out[0] = (func_80064584(D_80083160.unk_C8) * arg0[0]) >> 12;
+    out[1] = -(func_800644B8(D_80083160.unk_C8) * arg0[0]) >> 12;
+    out[2] = arg0[1] * 2;
+}
 
 void func_8003E0C4(void *m, void *arg1, void *arg2) {
     s32 flag;
