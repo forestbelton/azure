@@ -136,8 +136,20 @@ computes its size twice, once for the fit test and once for the accumulation).
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference
 does not. `true_dependence` returns "no dependence" when two MEMs' in-struct
-flags **differ** and the non-struct side's address does not vary -- which frees
+flags **differ** AND the non-struct side's address does not vary -- which frees
 sched1 to interleave things the target keeps sequential, and vice versa.
+
+**Both halves are required**; do not simplify this to "differing flags make
+them independent". Measured, each as `store; return load + 1;` so that sched1
+has a load-delay slot it would fill if it could:
+
+    s32 e1(S *p, s32 *q) { p->a = 5; return *q + 1; }       -> sw then lw: dependent
+    s32 e5(S *p)         { p->a = 5; return D_80081480 + 1; } -> lw MOVES AHEAD
+
+e1 differs in flags but the non-struct side is a register base, which varies,
+so the exception does not apply. e5's non-struct side is a symbol, which does
+not vary, so it does. Both-in-struct and both-non-struct are dependent as you
+would expect.
 
 * `*(u16 *) ((u8 *) p - 2)` keeps two read-modify-writes strictly sequential;
   every struct or array spelling of the same address lets sched1 interleave
@@ -148,6 +160,16 @@ sched1 to interleave things the target keeps sequential, and vice versa.
   lets sched1 hoist every unrelated load above the region's stores and shuffle
   the stores among themselves -- 123 of 162 words wrong in func_8003DBD0 with
   the word count unchanged.
+* **An unexplained case, flagged rather than papered over.** func_800463EC's
+  match turns on which of its scratchpad stores and table loads are casts and
+  which are struct fields -- four combinations measured at 294, 297, 293 and
+  286 words -- yet both sides are register bases throughout, so by the probes
+  above the in-struct exception should not apply to any of them. Something else
+  is feeding in (`memrefs_conflict_p` comparing constant offsets off the same
+  base is the obvious candidate). The measurements are solid and the function
+  matches; the mechanism is not established. Treat the flag as something to
+  *try* both ways when two MEMs are ordered wrongly, not as a rule you can
+  predict from.
 * **A parameter's type is the easiest way to set the flag.** func_80041284 was
   parked for four words on exactly this: as a `u32 *` both its loads and the
   `D_80081480` store are non-struct, the exception does not apply, and

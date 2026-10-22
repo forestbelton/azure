@@ -1239,10 +1239,15 @@ s32 func_80046398(u8 *p, UnkVec *v, UnkSlot *s) {
  *
  * The load-bearing shape is that the scratchpad vertex and the vertex table
  * are both 4-halfword SVECTORs, and the x/y pair is copied as one u32 through
- * a cast while vz is copied as a struct field. gcc 2.7.2's sched1 treats two
- * MEMs as independent when their MEM_IN_STRUCT_P flags DIFFER and dependent
- * when they agree, so that asymmetry pipelines the x/y group exactly one deep
- * and leaves the z group serial -- five stall nops, which is the target. It is
+ * a cast while vz is copied as a struct field. That asymmetry pipelines the
+ * x/y group exactly one deep and leaves the z group serial -- five stall nops,
+ * which is the target. Which MEMs are casts and which are struct fields is
+ * what decides it, and the four combinations are measured below; the mechanism
+ * is NOT established, though. The obvious reading is
+ * true_dependence's MEM_IN_STRUCT_P exception, but that needs the non-struct
+ * side's address not to vary and here every base is a register, so something
+ * else is feeding in -- most likely memrefs_conflict_p comparing constant
+ * offsets off a shared base. See docs/matching-levers.md section 5. It is
  * also what the original would naturally write, since the word store spans two
  * fields and needs a cast while the vz store does not. Measured alternatives:
  * both sides fields 297 words with no pipelining at all, both sides casts 293,
