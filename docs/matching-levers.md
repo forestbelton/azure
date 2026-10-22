@@ -202,6 +202,23 @@ Conversely, a value the target keeps in a register across a call wants a local;
 one it recomputes wants the expression written out twice (func_8003F8F8
 computes its size twice, once for the fit test and once for the accumulation).
 
+**And a re-read that cse turns into a register copy can be load-bearing in its
+own right.** When a redundant load's value is already in a pseudo, cse rewrites
+the load's SET_SRC to that pseudo; if the statement then writes the *same*
+pseudo in place, it has two sets, so combine will not substitute it away and
+flow will not delete it. That is how a `(set p2 p1)` + `(set p2 (op p2 ...))`
+pair survives into the output:
+
+    v = *(s32 *) X;                 /* p1 */
+    ...
+    *(s32 *) X = *(s32 *) X << 8;   /* -> addu p2,p1,zero ; sll p2,p2,8 */
+
+Taking the value from the local instead collapses it to a single `sll`. Worth 2
+words in func_8003D0F0 -- the copy, plus the `nop` that the freed `sll` would
+otherwise have filled in the next load's delay slot -- and it is sensitive to
+statement order: only one of the six permutations of its three stores produces
+the copy at all.
+
 ## 5. MEM_IN_STRUCT_P decides sched1's alias calls
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference
@@ -221,6 +238,20 @@ so the exception does not apply. e5's non-struct side is a symbol, which does
 not vary, so it does. Both-in-struct and both-non-struct are dependent as you
 would expect.
 
+**A register base does not always vary, and this is the half that was missing.**
+`sched.c`'s `init_alias_analysis` builds `reg_known_value`, which records a
+pseudo with a SINGLE set from a constant as equal to that constant. So a local
+like `u8 *sp = (u8 *) 0x1F800000;` is a constant address to
+`true_dependence`, not a register one, and every non-struct
+`*(T *) (sp + off)` store is independent of every *in-struct* read around it --
+sched1 will lift those reads up into the store group and fill their load-delay
+slots. That is why the scratchpad functions are so sensitive to which accesses
+are casts and which are struct fields, and it is **per-site, not blanket**:
+func_8003D0F0 needs `*(u16 *) ((u8 *) e + 6)` to keep one `lhu` last (2 words,
+and the target's `nop` only appears with the cast), while the neighbouring
+`e->unk_04` read does not need the cast at all, because by then nothing is left
+in the block to hoist it past.
+
 * `*(u16 *) ((u8 *) p - 2)` keeps two read-modify-writes strictly sequential;
   every struct or array spelling of the same address lets sched1 interleave
   them and fill both load-delay slots. func_80043FD0, 2 words.
@@ -229,17 +260,22 @@ would expect.
 * A whole region reached through `*(T *)(base + off)` instead of struct fields
   lets sched1 hoist every unrelated load above the region's stores and shuffle
   the stores among themselves -- 123 of 162 words wrong in func_8003DBD0 with
-  the word count unchanged.
-* **An unexplained case, flagged rather than papered over.** func_800463EC's
-  match turns on which of its scratchpad stores and table loads are casts and
-  which are struct fields -- four combinations measured at 294, 297, 293 and
-  286 words -- yet both sides are register bases throughout, so by the probes
-  above the in-struct exception should not apply to any of them. Something else
-  is feeding in (`memrefs_conflict_p` comparing constant offsets off the same
-  base is the obvious candidate). The measurements are solid and the function
-  matches; the mechanism is not established. Treat the flag as something to
-  *try* both ways when two MEMs are ordered wrongly, not as a rule you can
-  predict from.
+  the word count unchanged. The constant-base canonicalisation above is the
+  mechanism: the region's base is a pseudo set once from a constant, so the
+  cast accesses are non-struct references at a non-varying address and the
+  exception applies to every pairing with an in-struct read.
+* **The case that was flagged as unexplained is now explained, and it is the
+  rule above.** func_800463EC's match turns on which of its scratchpad stores
+  and table loads are casts and which are struct fields -- four combinations
+  measured at 294, 297, 293 and 286 words -- and this entry used to say that
+  since both sides are register bases throughout, the in-struct exception
+  should not apply to any of them. It does: the scratchpad base is a pseudo
+  with one set from `0x1F800000`, which `init_alias_analysis` canonicalises to
+  that constant, so those addresses do not vary. The measurements were always
+  solid; the reasoning about them was wrong, and the probes `e1`/`e5` above did
+  not discriminate because `e1`'s register base is a *parameter*, which really
+  does vary.
+
 * **A parameter's type is the easiest way to set the flag.** func_80041284 was
   parked for four words on exactly this: as a `u32 *` both its loads and the
   `D_80081480` store are non-struct, the exception does not apply, and
@@ -319,8 +355,10 @@ func_8003DBD0 and 262 in func_8003D0F0.
 
       This is also the reason the already-matching **func_8003DBD0** is right
       (`p->unk_70 = -(s8) r[2] - p->unk_108;`, a single HImode store), which
-      had been unexplained; and it is what reproduced func_80045CC4's four
-      arms. Declaring the accumulator `s32` and casting it `(s16)` at the store
+      had been unexplained; it is what reproduced func_80045CC4's four arms;
+      and it is what **matched func_8003D0F0**, which had been parked for two
+      sessions on the belief that no cost-free blocker existed. Worth 8 words
+      there. Declaring the accumulator `s32` and casting it `(s16)` at the store
       does **not** work -- the extensions stay eliminated and it costs 16 words.
     - **A memory store between the load and the cast.** `use_crosses_set_p`
       stops combine substituting the load into the sign extension. Also free of
@@ -342,6 +380,20 @@ func_8003DBD0 and 262 in func_8003D0F0.
           DEST_REG giv that `combine_givs` merges into the representative.
           Pointing it at the field and dereferencing directly costs 53 words,
           because cse eliminates the pointer.
+
+          And **point that pointer at the field the representative is derived
+          from, then index backwards** -- not at the field you want to read.
+          `combine_givs` only merges a DEST_REG giv for free when its base
+          offset equals the representative's, and the representative comes from
+          the LAST nonzero-offset access in the body (section 9). Measured on
+          func_8003D0F0, whose representative is at +4: pointers spelled
+          `&e->unk_02` and `&e->unk_03` gave one pair addressed off the **biv**
+          and the other its own induction register plus a `move`, even with
+          caveat 2 obeyed, while `(volatile u8 *) &e->unk_04` dereferenced
+          `[-2]` and `[-1]` merged cleanly into `lbu -0x2($s2)` /
+          `lbu -0x1($s2)` with no extra register. Both reached 220 words there,
+          against 222 for the `s16` route -- which is why the HImode consumer
+          is the first thing to reach for and this is the fallback.
         * **Assign the pointer in the ENCLOSING block, one per block.** In the
           same block as its use, cse folds it into the address before `loop`
           runs and no giv is formed. Shared across two blocks it is not
@@ -409,10 +461,13 @@ func_8003DBD0 and 262 in func_8003D0F0.
   `base` is masked, then copied back from the KSEG0 pointer, which is what puts
   the masked value in a callee-saved register instead of `$v0`.
 * `GetRCnt` has to return a signed type for `(x + 0xFF) >> 8` to be `sra`.
-* **A `u8` temp keeps `addiu 0xFF`; an `s32` one gives `addiu -0x1`.** With an
-  `s32` temp, combine narrows `t + 0xFF` to QImode for the byte store and
-  `trunc_int_for_mode` rewrites the constant as -1. A `u8` temp, or a separate
-  `s32 u = t + 0xFF;`, keeps 255 (func_80045CC4, 2 words).
+* **A byte decrement is `addiu 0xFF` only if the arithmetic happens in the
+  byte's own type.** For a `u8` lvalue, `x--` builds the constant in that type
+  and emits `addiu rd,rs,0xFF`; going through an int-promoted temporary gives
+  `addiu rd,rs,-1`, because combine narrows `t + 0xFF` to QImode for the byte
+  store and `trunc_int_for_mode` rewrites the constant. `p->f = p->g--;` is the
+  spelling that matches (func_8003D0F0, 2 words); a `u8` temp, or a separate
+  `s32 u = t + 0xFF;`, works too (func_80045CC4, 2 words).
 
 ## 8. Statement order and expression shape
 

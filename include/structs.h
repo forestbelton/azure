@@ -242,6 +242,46 @@ typedef struct Unk44D24E {
     u8  unk_0B;
 } Unk44D24E;
 
+/* Hand-added. The same 0x28-byte POLY_FT4 again, as func_8003D0F0 reaches it.
+   This is the third model of one object (see Unk463ECP and Unk44D24P), and it
+   is the one that says the most about the bytes: this function writes +0x03,
+   +0x04, +0x05, +0x06 and +0x07 as five separate `sb`, so +0x04 is four bytes
+   and not Unk44D24P's u32; it needs byte access at +0x14 and at +0x1D (the
+   companion byte of unk_1C) and at +0x24/+0x25 for the two clamps; and its
+   vertices are s16 pairs, agreeing with Unk44D24P against Unk463ECP's s32.
+
+   Merging all three means giving Unk463ECP s16 vertex pairs and byte members,
+   which changes func_800463EC's RotAverage4 argument types and
+   func_80044D24's +0x04 word copy -- both already matched. Held back for that
+   reason, as the other two entries say. Whoever does it should do all three at
+   once and re-verify those two functions. */
+typedef struct Unk3D0F0P {
+    u8  pad_00[0x3];
+    u8  unk_03;
+    u8  unk_04;
+    u8  unk_05;
+    u8  unk_06;
+    u8  unk_07;
+    s16 unk_08;
+    s16 unk_0A;
+    u16 unk_0C;
+    u16 unk_0E;
+    s16 unk_10;
+    s16 unk_12;
+    u8  unk_14;
+    u8  unk_15;
+    u16 unk_16;
+    s16 unk_18;
+    s16 unk_1A;
+    u16 unk_1C;
+    u16 unk_1E;
+    s16 unk_20;
+    s16 unk_22;
+    u8  unk_24;
+    u8  unk_25;
+    u16 unk_26;
+} Unk3D0F0P;
+
 /* Hand-added. The same 0x28-byte POLY_FT4 as Unk463ECP and
    docs/near-misses/func_8003D0F0.c's Unk3D0F0P, but modelled more precisely by
    func_80044D24, which is why it is separate for now: only the length byte at
@@ -1145,6 +1185,7 @@ s32  NormalClip(s32, s32, s32);
 void SetPolyFT4(void *);
 void ScaleMatrix(void *, void *);
 void RotTransSV(void *, void *, s32 *);
+void DrawPrim(void *);
 void RotTrans(void *, void *, s32 *);
 void ReadRotMatrix(void *);
 void *TransposeMatrix(void *, void *);

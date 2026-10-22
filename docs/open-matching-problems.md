@@ -12,30 +12,31 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
-| func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
 | func_80045CC4 | unk_14934 | 436 of 437: the `(s8)` fold and the mask hoisting are both solved; one register swap on a 0.9% gap remains |
 
-## func_8003D0F0  (unk_102A8) -- partial, 10 words short
+## func_8003D0F0  (unk_102A8) -- SOLVED 2026-10-22
 
-Eight of the ten are the four `(s8)` byte conversions in the flag arms. The
-target has `lbu` + `sll 24` + `sra 24` in each; every spelling collapses to a
-single `lb`, because combine reduces
-`(sign_extend (subreg (zero_extend (mem:QI))))` to `(sign_extend (mem:QI))`.
-For the target's form the zero-extended value would need a second use or an
-intervening memory *store*, and the target has neither. This is the byte-load
-counterpart of the `lh` fold recorded for func_8004425C, so whatever blocks it
-is worth more than this one function.
+Landed in `csrc/unk_102A8.c`, 222 of 222 words, with ten load-bearing shapes
+commented there.
 
-The other two are a copy-then-shift-in-place in the post-call block that
-combine folds away. The remaining 190 differing words are a single global
-`$s0`/`$s1` swap that should fall out once the byte conversions are right,
-since they change the reference counts in four basic blocks.
+Kept for the failure mode. This section, and the near-miss header, concluded
+that the four `(s8)` conversions needed "either a third blocking mechanism or,
+more likely, a different model of the arm's source", on the strength of a probe
+that hit an eight-insn floor against the target's seven: both known ways of
+blocking combine's refold to `lb` cost a `move` the arm has no room for. The
+reasoning was sound and the probe was run with an `s32` accumulator. **With an
+`s16` accumulator -- a HImode consumer -- the refold simply does not happen,
+for free**, and the statement structure was exactly what the near-miss assumed
+all along. Eight words, first try.
 
-`docs/near-misses/func_8003D0F0.c` has the source and the eleven shapes that
-are already established -- the scratchpad pointer local, the deliberately
-literal matrix arguments, the separate `sz` local, and the rest.
+The lesson is narrow and worth keeping: a probe that establishes a floor
+establishes it only for the types the probe used. Both earlier write-ups
+described the blocker in terms of what the source *does* (a store between, a
+second use) rather than what combine *needs* (a `memory_operand` in SImode),
+and that framing is what hid the third option. See
+`docs/matching-levers.md` section 7, which now leads with the mechanism.
 
 ## How much of this list is still reachable from C
 
@@ -44,15 +45,8 @@ Taking stock after a session that unparked five of the original eleven
 func_80041284): what is left divides into two kinds, and the division matters
 for where effort goes next.
 
-**Reachable, mechanism known, not yet applied.** `func_8003D0F0` -- eight of
-its ten words are the `(s8)` fold, and the mechanism is now settled: a **HImode
-consumer** blocks combine's refold to `lb` for free, with no extra pseudo and no
-`move`. That is exactly why this function looked unreachable -- both previously
-known blockers cost a `move` its seven-insn arm has no room for -- and its arm
-consumes the converted value with two `sh` stores, so an `s16` accumulator
-should do it. See matching-levers section 7.
-
-`func_80045CC4` is one word short with every instruction accounted for: both of
+**Reachable, mechanism known, not yet applied.** `func_80045CC4` is one word
+short with every instruction accounted for: both of
 the problems recorded here are solved (the `(s8)` fold by the same HImode
 consumer, and the mask hoisting by the first-set-invariant rule, whose
 cost-based hypothesis was backwards). What remains is a `$s0`/`$s1` swap on a

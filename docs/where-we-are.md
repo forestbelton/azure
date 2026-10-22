@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**148 of 191 game functions are C and the build is byte-identical.** `make
-check` is green at HEAD and the working tree is clean. The remaining 43 are
+**149 of 191 game functions are C and the build is byte-identical.** `make
+check` is green at HEAD and the working tree is clean. The remaining 42 are
 `INCLUDE_ASM` stubs in `csrc/`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
@@ -26,7 +26,7 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 43 remaining stubs, in four groups
+## The 42 remaining stubs, in four groups
 
 Run `tools/decomp/guard.py` for the stub count (`grep -cE '^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{' csrc/*.c` for the C count).
 The classification below is `grep -c '%gp_rel'` and `grep -c 'jtbl_'` against
@@ -34,13 +34,13 @@ each listing:
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked | 7 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
+| parked | 6 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
 | jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
 | gp-blocked | 31 | need `$gp`-relative and absolute addressing in one translation unit |
 | not a function | 1 | func_8003CAA8; see below |
 
 **There is no longer an "easy" group.** Every stub with nothing structural in
-its way has been decompiled. What is left is seven near-misses, two blocked
+its way has been decompiled. What is left is six near-misses, two blocked
 groups, and one splat artefact, so a fresh session's choice is: work a parked
 function with the mechanism named below, or make one of the two spec decisions.
 
@@ -49,7 +49,7 @@ unreachable epilogue, which splat split off because it follows `main`'s
 infinite loop. Fixing it is a spec change (extend the `main` asm subsegment to
 0x102c4), not a matching problem.
 
-### Parked (7)
+### Parked (6)
 
 All written up in `docs/open-matching-problems.md`, with the source that got
 each one close in `docs/near-misses/`. **Read the near-miss file before
@@ -58,13 +58,6 @@ word costs, and re-deriving those is where the time goes.
 
 Ordered by how reachable they look:
 
-- func_8003D0F0 -- 10 of 222, eight of them the four `(s8)` byte conversions.
-  Its near-miss header concluded this needed a mechanism that does not cost a
-  `move`, because its seven-insn arm has no room for one. That mechanism is
-  now known: a **HImode consumer** (an `s16` accumulator) blocks combine's
-  refold to `lb` for free -- section 7 of `docs/matching-levers.md`. This arm
-  stores the converted value with two `sh`, so it should fit. Best target in
-  the set.
 - func_80045CC4 -- 1 word of 437, with every instruction accounted for. Both
   mechanisms it was parked on are solved; what is left is a `$s0`/`$s1` swap on
   a 0.9% priority gap and a four-word tension between the mask hoisting and an
@@ -184,7 +177,7 @@ were explained rather than fought.
 
 `TODO.md` has the live queue. In short:
 
-1. The seven parked near-misses, best-first as ordered above. Two of them
+1. The six parked near-misses, best-first as ordered above. Two of them
    (func_8003D0F0 and func_80045CC4) have a mechanism named and not yet
    applied, which makes them the cheapest real progress available.
 2. The jump-table spec change, which unblocks about 1550 instructions. The
