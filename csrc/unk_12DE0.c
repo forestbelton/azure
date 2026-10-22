@@ -1,7 +1,8 @@
 #include "common.h"
 
 void func_80040BB4(void);
-void func_80040CBC(u8);
+void func_80040CBC(s16);
+void func_800418B4(void);
 void func_80040AA0(u16);
 void func_8003E1FC(void);
 u32 func_8003E240(s32);
@@ -772,7 +773,93 @@ void func_80040C08(void) {
     func_80040CBC(q->unk_0B);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040CBC);
+/* Loads a mode's image data: for kind 1/2/3 it streams the entry's VRAM blocks
+ * in 0x100-row pairs through func_8003F6D4/func_8003E4FC, flushes the tail
+ * partial block, and for kind == 4 instead publishes two pointers out of the
+ * entry. Either way it then selects one of two work buffers by kind == 2 and
+ * records the mode's handler in D_80082E60.unk_04.
+ *
+ * Load-bearing shapes, with the cost of reverting each:
+ *  - `kind` is s32, not u16 (146 words): as a u16 the pseudo stays in HImode
+ *    and every test needs its own andi, where the target compares the register
+ *    straight off the lhu.
+ *  - the dispatch is `if (kind != 4) { ... } else { arm4 }`, not
+ *    `if (kind == 4) { arm4 } else ...` (78 DIFF). The target branches TO the
+ *    kind == 4 arm, so that arm has to be the else, out of line, falling
+ *    through into the common tail.
+ *  - the tail block's height reuses the variable `n` that held the row count
+ *    (144 words). That pseudo is live across the loop's calls, so it is in a
+ *    callee-saved register and needs the explicit copy to become the argument;
+ *    a fresh variable is allocated $a0 directly and the copy coalesces away.
+ *    Harmless semantically -- the row count is dead by then -- but it is the
+ *    only spelling that reproduces the register.
+ *  - e->unk_08 is dereferenced twice rather than cached (144 words). cse
+ *    rewrites the second load as a copy of the first one's register, and that
+ *    copy is the target's `addu $v1,$v0,$zero`, needed because the first field
+ *    load clobbers the base.
+ *  - the second pointer hop is a struct field, not `*(u32 *) ...` (5 DIFF).
+ *    Via a plain dereference that MEM is not MEM_IN_STRUCT_P and neither are
+ *    the two scalar stores, so true_dependence's differing-flags exception
+ *    does not apply and sched1 cannot interleave the three loads the way the
+ *    target does.
+ *  - D_800E6000 is an incomplete array used as `(u32) D_800E6000` (3 DIFF as a
+ *    scalar): the compiler-split high/lo_sum pair is two insns, so reorg can
+ *    put the addiu in the `j`'s delay slot. D_80126804 deliberately stays a
+ *    scalar -- its lui/addiu are adjacent in the target, so the `la` macro is
+ *    right there. */
+void func_80040CBC(s16 arg0) {
+    s32 buf1[2];
+    s32 buf2[2];
+    Unk8006CE80 *e = &D_8006CE80[arg0];
+    s32 kind = e->unk_00;
+
+    D_80080A86 = 0;
+    D_8008333C[0] = 0;
+    if (kind != 0) {
+        if (kind != 4) {
+            if (D_80082E60.unk_0A != kind) {
+                s32 n;
+                Unk40CBCB *p;
+                s32 i;
+
+                D_80082E60.unk_0A = kind;
+                n = D_8006CE6C[kind];
+                p = D_8006CE44[kind].unk_04;
+                i = 0;
+                while (i < n - 0x200) {
+                    func_8003F6D4(0x100, (p->unk_00 & 0x7FFFFF) + (i << 11), buf1,
+                                  p->unk_04 + i);
+                    func_8003E4FC(6, (u8 *) buf1, 0);
+                    i += 0x100;
+                    func_8003F6D4(0x100, (p->unk_00 & 0x7FFFFF) + (i << 11), buf2,
+                                  p->unk_04 + i);
+                    func_8003E4FC(6, (u8 *) buf2, 0);
+                    i += 0x100;
+                    func_8003F320();
+                }
+                n = p->unk_00 >> 23;
+                if (n != 0) {
+                    func_8003F6D4(n, (p->unk_00 & 0x7FFFFF) + (i << 11), buf1,
+                                  p->unk_04 + i);
+                    func_8003E4FC(6, (u8 *) buf1, 0);
+                }
+                func_8003F320();
+            }
+        } else {
+            func_800418B4();
+            D_80189394 = ((Unk40CBCA *) e->unk_08)->unk_04;
+            D_801B8EB8 = ((Unk40CBCA *) e->unk_08)->unk_00->unk_00;
+        }
+    }
+    if (kind == 2) {
+        D_8008148C = (u32) D_800E6000;
+        D_80080A7C = 0x18800;
+    } else {
+        D_8008148C = (u32) &D_80126804;
+        D_80080A7C = 0x38000;
+    }
+    D_80082E60.unk_04 = (void (*)(void)) D_8006CE44[kind].unk_00;
+}
 
 s32 func_80040F00(s32 *arg0) {
     s32 count = 0;

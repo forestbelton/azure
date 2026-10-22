@@ -55,6 +55,37 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. Only its first word is read, by func_80040CBC; a struct rather
+   than a bare u32 for the MEM_IN_STRUCT_P reason on Unk40CBCA below. */
+typedef struct Unk40CBCC {
+    u32 unk_00;
+} Unk40CBCC;
+
+/* Hand-added. What Unk8006CE80's unk_08 points at for mode 4. Both fields have
+   to be struct members rather than a cast pointer dereference: that is what
+   sets MEM_IN_STRUCT_P and lets sched1 interleave the three loads against the
+   two scalar stores in func_80040CBC. */
+typedef struct Unk40CBCA {
+    Unk40CBCC *unk_00;
+    u32        unk_04;
+} Unk40CBCA;
+
+/* Hand-added. An image descriptor: unk_00 packs a VRAM address in its low 23
+   bits and a row count in the top 9, and unk_04 is the destination the row
+   index is added to. */
+typedef struct Unk40CBCB {
+    u32 unk_00;
+    s32 unk_04;
+} Unk40CBCB;
+
+/* Hand-added. The per-mode table func_80040CBC indexes by D_8006CE80[i].unk_00
+   with a stride of 8: unk_00 is the mode's handler, stored into
+   D_80082E60.unk_04, and unk_04 points at the image descriptor above. */
+typedef struct Unk8006CE44 {
+    u32        unk_00;
+    Unk40CBCB *unk_04;
+} Unk8006CE44;
+
 /* Hand-added. A 6-byte element: func_80043A68 and func_80043B4C index an
    array of these at D_8008333C[0] + 0x78 and flip bit 15 of the halfword at
    +0x04. Only that field is observed; the first four bytes are unexplored
@@ -532,6 +563,10 @@ extern Unk8002D5B4 D_8002D5B4;
 extern Unk8006CE34 D_8006CE34;
 extern Unk8006CE80 D_8006CE80[];
 extern Unk8006E61C D_8006E61C[];
+extern Unk8006CE44 D_8006CE44[];
+/* The row counts, one word per mode, immediately after D_8006CE44's five
+   entries; indexed with a variable, so an incomplete array. */
+extern s32 D_8006CE6C[];
 /* Walked as a 0-terminated word list by func_8004491C, with a variable
    index, so an incomplete array rather than the two-field struct fieldscan
    had inferred. */
@@ -769,6 +804,15 @@ extern u16 D_80013714;  /* read with lhu */
    the image that is *indexed* must be written as a constant address instead,
    see docs/addressing-and-translation-units.md. */
 extern u8  D_800E2968;
+/* Declared as an array of unestablished length, not a scalar: func_80040CBC
+   needs the compiler-split high/lo_sum pair so reorg can put the `addiu` in a
+   delay slot, where a scalar's single `la` macro cannot be split. */
+extern u8  D_800E6000[];
+/* Out-of-image scalars func_80040CBC stores two pointers into; the
+   assembler-expanded $at form the scalar spelling gives is what the target
+   has. */
+extern u32 D_80189394;
+extern u32 D_801B8EB8;
 /* 0x8008333c is Unk80083160's unk_1DC. func_80043A68 and func_80043B4C reach
    it as its own symbol -- the word and its own address sharing one `lui` --
    which the struct spelling cannot give, so it is declared both ways like
