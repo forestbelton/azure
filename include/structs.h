@@ -55,6 +55,51 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. +0x30 and +0x34 of the scratchpad below: func_8003DBD0 stores a
+   word there and reads the low halfword back, and the mode difference is what
+   makes the read a real `lhu` rather than a folded register reuse. */
+typedef union Unk3DBD0W {
+    s32 w;
+    u16 h;
+} Unk3DBD0W;
+
+/* Hand-added. The 0x1F800000 scratchpad as func_8003DBD0 lays it out: an
+   SVECTOR of results at +0x00, a flags halfword at +0x24, a VECTOR of
+   camera/scale values at +0x30, the RotTransSV input at +0x70 and its flag
+   word at +0x94, a MATRIX at +0xD0 (its translation being unk_E4/E8/EC), the
+   RotMatrix input SVECTOR at +0x100 and two more halfwords at +0x108. The pad_
+   ranges are unexplored space, not known filler. +0x00, +0x30, +0x70, +0xD0
+   and +0x100 are the libgte SVECTOR/VECTOR/MATRIX shapes, so if the project
+   ever models those types this should be rebuilt out of them. */
+typedef struct Unk3DBD0SP {
+    s16         unk_00;
+    s16         unk_02;
+    u8          pad_04[0x20];
+    u16         unk_24;
+    u8          pad_26[0xA];
+    Unk3DBD0W   unk_30;
+    Unk3DBD0W   unk_34;
+    s32         unk_38;
+    u8          pad_3C[0x34];
+    s16         unk_70;
+    s16         unk_72;
+    s16         unk_74;
+    u8          pad_76[0x1E];
+    s32         unk_94;
+    u8          pad_98[0x38];
+    u8          unk_D0[0x14];
+    s32         unk_E4;
+    s32         unk_E8;
+    s32         unk_EC;
+    u8          pad_F0[0x10];
+    s16         unk_100;
+    s16         unk_102;
+    s16         unk_104;
+    u8          pad_106[0x2];
+    u16         unk_108;
+    u16         unk_10A;
+} Unk3DBD0SP;
+
 /* Hand-added. A 3-byte element: func_80042710 copies +0x00 and +0x02 of each
    of three of these and deliberately leaves the middle byte alone, which is
    why that copy is field-by-field and not a whole-struct assignment. */
@@ -358,16 +403,21 @@ typedef struct Unk80083160 {
     u32 unk_B4;  /* also read as 2 */
     /* +0xb6  is a 2-byte access inside this field */
     /* +0xb7  is a 4-byte access inside this field */
-    u32 unk_B8;  /* also read as 2 */
-    /* +0xbb  is a 4-byte access inside this field */
+    /* Hand-split: func_8003DBD0 reads +0xB8 with lhu once and with lh once,
+       so it is a halfword, not the low half of a word. The 4-byte access
+       fieldscan reported at the misaligned +0xbb is an artifact. */
+    u16 unk_B8;
+    u16 unk_BA;
     u32 unk_BC;  /* also read as 2 */
     /* +0xbe  is a 2-byte access inside this field */
     /* +0xbf  is a 4-byte access inside this field */
     u32 unk_C0;  /* also read as 2 */
     /* +0xc3  is a 4-byte access inside this field */
-    u32 unk_C4;  /* also read as 2 */
-    /* +0xc6  is a 2-byte access inside this field */
-    /* +0xc7  is a 4-byte access inside this field */
+    /* Hand-split: func_8003DBD0 reads +0xC4 and +0xC6 with lh as the first two
+       components of the camera position, +0xC8 being the third. The 2-byte
+       access fieldscan reported at +0xc6 is exactly that. */
+    s16 unk_C4;
+    s16 unk_C6;
     /* Hand-split: func_8003E02C reads +0xC8 with lh. The 4-byte access
        fieldscan reported at the misaligned +0xcb is an artifact. */
     s16 unk_C8;
@@ -724,7 +774,17 @@ typedef struct UnkSlot {
     u32      unk_08;
     u8       pad_0C[8];
     u16      unk_14;   /* flags */
-    u8       pad_16[0x12];
+    /* Hand-split: func_8003DBD0 copies +0x16..+0x23 into the scratchpad as a
+       rotation (unk_16/unk_18/unk_1A), a scale (unk_1C/unk_1E) and a
+       translation (unk_20/unk_22), all read with lhu. */
+    u16      unk_16;
+    u16      unk_18;
+    u16      unk_1A;
+    u16      unk_1C;
+    u16      unk_1E;
+    u16      unk_20;
+    u16      unk_22;
+    u8       pad_24[0x4];
     u32      unk_28;   /* a pointer; left as u32 like unk_08 */
 } UnkSlot;
 
@@ -822,6 +882,9 @@ void PushMatrix(void);
 void PopMatrix(void);
 void SetTransMatrix(void *);
 void SetRotMatrix(void *);
+void RotMatrix(void *, void *);
+void ScaleMatrix(void *, void *);
+void RotTransSV(void *, void *, s32 *);
 void RotTrans(void *, void *, s32 *);
 void ReadRotMatrix(void *);
 void *TransposeMatrix(void *, void *);
