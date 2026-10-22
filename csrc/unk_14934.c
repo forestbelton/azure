@@ -291,7 +291,37 @@ void func_800434E4(void) {
     *(u16 *) (base + 0x20A4) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043568);
+void func_80043568(void) {
+    u8 *base;
+    u8 *base2;
+    s32 i;
+    s32 t;
+    s32 u;
+
+    i = 0x3F;
+    base = (u8 *) 0x80010000;
+    for (; i >= 0; i--) {
+        if (base[i * 4 + 0x981] == 0x13 && base[i * 4 + 0x980] == 0x39) {
+            t = base[i * 4 + 0x983];
+            base[i * 4 + 0x980] = 2;
+            u = t & 0x3F;
+            base[u * 84 + 0xA93] = 2;
+        }
+    }
+    i = 0x13;
+    base2 = (u8 *) 0x80010000;
+    for (; i >= 0; i--) {
+        if (base2[i * 4 + 0x249] == 0x13 && base2[i * 4 + 0x248] == 0x39) {
+            base2[i * 4 + 0x248] = 2;
+        }
+        if (base2[i * 4 + 0x21E9] == 0x13 && base2[i * 4 + 0x21E8] == 0x39) {
+            t = base2[i * 4 + 0x21EB];
+            base2[i * 4 + 0x21E8] = 2;
+            u = t & 0x1F;
+            base2[u * 140 + 0x2273] = 2;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043674);
 
