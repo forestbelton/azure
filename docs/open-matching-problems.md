@@ -1,6 +1,6 @@
 # Open matching problems
 
-Seven functions are parked. Every one of them reproduces the original logic;
+Ten functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -16,10 +16,15 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80043A68 | unk_14934 | two temporaries swapped: the target reuses the address chain's register for the element pointer |
 | func_80043B4C | unk_14934 | the same function with `\|= 0x8000` instead of `&= 0x7FFF`; same difference |
 | func_8003F80C | unk_12DE0 | two parameters swapped between `$s1` and `$s2`; everything else matches |
+| func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
+| func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
+| func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 
-The near-miss source for each is in the git history of the commit that parked
-it, and the shapes already ruled out are in those commit messages. Do not start
-from scratch on one of these without reading its commit message first.
+`docs/near-misses/` holds the source that got each one that close, with the
+shapes already ruled out in comments. Read that file before starting on one;
+the commit that parked it has the reasoning, but only the file has the source.
+Nothing in `docs/near-misses/` is compiled -- the functions there are still
+`INCLUDE_ASM` stubs and `make check` does not look at them.
 
 `func_8003CAA8` is not a function. It is the unreachable epilogue of `main`,
 which splat split off because it follows `main`'s infinite loop, and it sits at
@@ -98,6 +103,61 @@ were on. Second, the registers: the target has tmp-pointer `$s0`, counter
 `$s1`, walker `$s2`; this source gives the walker `$s0` and the counter `$s2`.
 The `.greg` priorities are loop-2-tmp 2.45, walker 1.80, loop-1-tmp 1.74,
 counter 1.24, so the walker giv has to drop below the counter.
+
+## func_80042900  (unk_14934) -- partial
+
+One instruction too many. The target's `arg1 == 0xD` arm is a single
+`lw $v1, 0x14($a0)` whose result is never used -- the function returns 0 on
+that path, from the `addu $v0, $zero, $zero` that reorg hoisted into the
+`bne`'s delay slot. So the original really did load a word and discard it.
+
+A non-volatile dead load is deleted outright by `flow.c`'s `insn_dead_p` (the
+whole arm disappears), so the read has to be volatile. gcc then keeps it but
+gives it `$v0`, the first register in `REG_ALLOC_ORDER` and free because the
+return value's `$v0 = 0` is only set afterwards, and re-emits `move $v0, zero`
+after the load. That move is the extra instruction. Matching it means making
+the return value live across the load; the shapes tried are listed in
+`docs/near-misses/func_80042900.c`.
+
+## func_80042A80  (unk_14934) -- partial
+
+One bit. Every instruction is identical except the last, where the target has
+`sra $v0, $v0, 16` and this has `srl $v0, $v0, 16`.
+
+gcc expands a cast to `s16` as `sll 16` + `sra 16`, and combine's
+`simplify_shift_const` downgrades the `sra` to `srl` whenever it can prove bit
+15 of the operand is clear. The `andi $v0, $v0, 0x400` immediately before it
+proves exactly that, so every spelling of the cast gets `srl`; `andi 0xC000`
+and `ori 0x400` both do give `sra`, which confirms it is the proof and not the
+spelling. The way out is in combine.c's `nonzero_bits` REG case: it consults
+the recorded bits only when `reg_last_set_mode == mode` and
+(`reg_n_sets == 1` or `reg_last_set_label == label_tick`), so the mask's set
+has to land in a different basic block from the extension, or under a different
+mode. No natural source shape found so far does that while still emitting the
+two adjacently, which is what the target shows.
+
+Two things here are settled and should not be re-derived: `D_80082E6A` has to
+be read as `D_80082E60.unk_0A`, and the dispatch has to be an if-chain -- a
+`switch` on 4/0xF/0x10/0x11 makes gcc build a balanced tree of `slti`s instead
+of the target's `== 4` followed by `addiu -0xF` / `sltiu 3`. `D_80073414` is a
+0x14-byte-stride table and `D_80073470` is `&D_80073414[4].unk_0C`, so the
+`case 4` arm needs no separate symbol.
+
+## func_80047054  (unk_14934) -- partial
+
+Every opcode, immediate, displacement and `nop` is identical; five registers
+are permuted. The target keeps the first parameter in `$a0` and puts the outer
+walker in `$v1`, while this source copies the parameter out (`move $t2, $a0`)
+and gives the walker `$a0`; the rest follows.
+
+The `.greg` dump explains it. Allocation order is the n+6 induction variable
+(26 refs / 22 insns), `n` (23/28), the outer induction variable (9/36), then
+`e` (9 refs / 40 insns) and only then `p` (6 refs / 88 insns), because
+`global.c` ranks by roughly `log2(refs) * refs / live_length`. `e` at ~0.68
+beats `p` at ~0.14, and `e` additionally carries a preference for `$a0` that
+`p` does not have. For the target's assignment `e` would have to be allocated
+after the n+6 induction variable -- 0.68 against 4.7, too wide to close by
+adjusting reference counts -- or else conflict with `$v1`.
 
 ## Functions blocked by the translation-unit problem
 
