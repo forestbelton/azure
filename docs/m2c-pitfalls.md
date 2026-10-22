@@ -33,6 +33,14 @@ and in its delay slot.
 
 `var += 4` on an `s32 *` means `var++`. Compiles either way, silently wrong.
 
+## It prints array indexing as pointer arithmetic
+
+`(&D_80083110)[i]` or `*(ptr + i)` where the original indexed a real array.
+Under this compiler the two are not equivalent: an array reference splits the
+symbol into `lui` + `%lo` displacement and keeps a strength-reduced offset as
+its own `addiu`, pointer arithmetic folds it. Declare the array
+(`extern u32 D_80083110[4];`) and index it; see `docs/compiler-version.md`.
+
 ## It flattens adjacent symbols into one
 
 Where several labels sit next to each other m2c may attribute accesses to the

@@ -4,6 +4,13 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
+# The per-unit MASPSXFLAGS override below is a target-specific variable
+# assignment, and make treats the first such target as the default goal. Pin
+# the goal explicitly so that a bare `make` (and decomp-permuter's import.py,
+# which runs `make --dry-run` to recover the compile command) builds
+# everything rather than just build/csrc/gprel_12DD4.o.
+.DEFAULT_GOAL := all
+
 SLUS = slus_006.14
 TOWN = town.bin
 MAIN = main.bin
@@ -33,9 +40,13 @@ endif
 AZURE = PYTHONPATH=src python3 src/azure/main.py
 CHECK = python tools/check.py
 
-# The game was built with PSY-Q 4.0: cc1psx reports "GNU C 2.7.2.SN32.3.7"
-# (SN Systems' patched GCC -- vanilla GNU 2.7.2 will NOT match) and aspsx
-# reports version 2.56. tools/ccpsx drives the shipped compiler under wine.
+# The game code was built with the cc1psx from the PSY-Q 4.1 runtime disc,
+# "cygnus-2.7.2-970404 SN32.3.7.0004" (a Cygnus 2.7.2 snapshot with split
+# addresses, patched by SN Systems). PSY-Q 4.0's "2.7.2.SN32.3.7" compiles the
+# simple functions identically but cannot emit the hoisted-lui global access
+# shape the game uses everywhere; see docs/compiler-version.md. The libraries
+# are still 4.0's. aspsx 2.56 and 2.67 emulations both match so far.
+# tools/ccpsx drives the compiler under wine.
 CC             = tools/ccpsx
 ASPSX_VERSION  = 2.56
 CFLAGS        += -O2 -G8 -Iinclude
@@ -78,9 +89,9 @@ MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                 --use-comm-section -G8
 
 # Per-file escape hatch. A translation unit whose functions reach their globals
-# absolutely rather than $gp-relatively needs gas left at -G0; see
-# docs/addressing-and-translation-units.md. Use as:
-#     build/csrc/some_unit.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+# $gp-relatively rather than absolutely needs gas left at -G8 instead of the
+# forced -G0 above; see docs/addressing-and-translation-units.md. Use as:
+#     build/csrc/some_unit.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
 MASPSXFLAGS_G8 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                   --run-assembler --gnu-as-path=$(AS) --use-comm-section \
                   --dont-force-G0 -G8

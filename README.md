@@ -7,6 +7,11 @@ WIP decompilation of Azure Dreams
 Copy the CD image to project directory and name it `az.bin`.
 
 ### Install toolchain
+The game's own C is compiled with the PSY-Q `cc1psx` from the 4.1 runtime
+disc, run under wine from `psy-q/` (not in the repo); see
+`docs/compiler-version.md` for which binary and how to extract it. GNU
+binutils handle assembly and linking:
+
 Ubuntu has a package for the `mipsel` (cross-)compiler. Otherwise, you will
 have to source the compiler yourself. This may require building the compiler
 from source.

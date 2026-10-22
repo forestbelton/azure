@@ -1,10 +1,13 @@
 #!/bin/sh
-# Drive the PSY-Q 4.0 compiler under wine.
+# Drive the PSY-Q compiler under wine.
 #
-# The toolchain is the one that ships in psy-q/: cc1psx reports
-# "GNU C 2.7.2.SN32.3.7", which is SN Systems' patched GCC. Vanilla GNU 2.7.2
-# does NOT produce matching code, so this wrapper is the only supported way to
-# compile -- do not substitute a modern mipsel-gcc.
+# psy-q/ holds the PSY-Q 4.0 tree with the compiler replaced by the one from
+# the 4.1 runtime disc: cc1psx must report "cygnus-2.7.2-970404
+# SN32.3.7.0004" (psy-q/compiler-4.0/ keeps 4.0's "2.7.2.SN32.3.7", which
+# cannot emit the game's split-address global accesses -- see
+# docs/compiler-version.md). Vanilla GNU 2.7.2 does NOT produce matching code,
+# so this wrapper is the only supported way to compile -- do not substitute a
+# modern mipsel-gcc.
 #
 # ccpsx shells out to cpppsx, cc1psx and aspsx by bare name, and they live in
 # two different directories, so both must be on the Windows PATH. Without that
