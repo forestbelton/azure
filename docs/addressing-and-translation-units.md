@@ -198,6 +198,33 @@ right relative offset (D_800814B0 at +0x60, D_800814C8 at +0x78, D_80081526 at
 `gp = 0x80080994`, so D_80081510 is at offset 0xB7C, which is what
 func_80045340's `sw $zero, %gp_rel(D_80081510)($gp)` encodes.
 
+### Window A, for later
+
+108 bytes at 0x80080AA4, with eighteen referenced symbols: halfwords at
++0xAA4, +0xAA6, +0xAA8, +0xAAC, +0xABC, +0xABE, +0xAD2, +0xAD4, +0xAFC,
++0xB00, +0xB08 and +0xB0A; bytes at +0xAAA, +0xAD0 and +0xAF3 (that one `lb`,
+so signed); and words at +0xAB0, +0xAD8 and +0xADC.
+
+25 of its 108 bytes are nonzero, and only ONE of them belongs to a referenced
+symbol: D_80080AF3 holds 0xFF, consistent with its signed `lb`. The other
+nonzero runs belong to objects in the same small-data region that these
+functions do not touch:
+
+    80080AB4  82 6a 82 8f 82 88 00 00          Shift-JIS "Koh"
+    80080AC0  00 c0 02 01  5a 07 00 00         0x0102C000, 0x75A
+    80080AC8  00 c0 02 01  51 3a 00 00         0x0102C000, 0x3A51
+    80080AE0  00 00 00 04  5c 39 00 00         0x04000000, 0x395C
+    80080AE8  00 00 00 04  64 39 00 00         0x04000000, 0x3964
+    80080B0C  20 00 80 00                      0x00800020
+
+"Koh" is the protagonist's default name, which is good evidence that this
+region is the game-state/save area rather than scratch. Carving window A means
+carrying those bytes across verbatim; they stay at the same addresses with the
+same values, so references to them -- whether by constant or by a symbol from
+splat's undefined list -- keep resolving. It is strictly more work than window
+B and it is not needed by the twenty functions window B unblocks, so do B
+first.
+
 Still unverified, and the next thing to do: the placement half. The instruction
 forms are proved; nothing yet confirms that a carved window plus linker
 placement reproduces the image byte-for-byte. Do that on one function --
