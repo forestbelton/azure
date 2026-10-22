@@ -75,7 +75,36 @@ void func_800418B4(void) {
     D_80080A89 = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041900);
+void func_80041900(u8 *arg0) {
+    Unk80083160 *s = &D_80083160;
+    Unk80083CA8 *sh = &D_80083CA8;
+    Unk80083CA8 *t;
+
+    if (sh->unk_08 == 0) {
+        return;
+    }
+    if (s->unk_04 & 2) {
+        *(s32 *) (arg0 + 0x18) += (s16) sh->unk_06 >> 1;
+    } else {
+        *(s32 *) (arg0 + 0x18) -= (s16) sh->unk_06 >> 1;
+    }
+    if (s->unk_04 & 1) {
+        *(s32 *) (arg0 + 0x14) += (s16) D_80083CAE[0] >> 2;
+    } else {
+        *(s32 *) (arg0 + 0x14) -= (s16) D_80083CAE[0] >> 2;
+    }
+    t = &D_80083CA8;
+    t->unk_08 = t->unk_08 - 1;
+    if (t->unk_08 != 0) {
+        s32 v = *(s32 *) &t->unk_04 - D_80083CA8.unk_00;
+
+        *(s32 *) &t->unk_04 = v;
+        if (v >= 0) {
+            return;
+        }
+    }
+    *(s32 *) &t->unk_04 = 0;
+}
 
 void func_800419EC(u16 arg0, u32 arg1) {
     D_80083CA8.unk_08 = arg0;

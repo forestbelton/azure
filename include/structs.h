@@ -216,7 +216,7 @@ typedef struct Unk80083958 {
 typedef struct Unk80083CA8 {
     u32 unk_00;
     u16 unk_04;
-    s16 unk_06;  /* sign-extended where it is read */
+    u16 unk_06;  /* read unsigned and sign-extended by func_80041900 */
     u16 unk_08;
 } Unk80083CA8;
 
@@ -583,6 +583,9 @@ extern u8  D_800E2968;
    which the struct spelling cannot give, so it is declared both ways like
    D_80082E6A. */
 extern u32 D_8008333C[];
+/* 0x80083cae is Unk80083CA8's unk_06; func_80041900 reaches it as its own
+   symbol rather than through the struct, so it is declared both ways. */
+extern u16 D_80083CAE[];  /* incomplete: the two arms share one `lui` */
 
 /* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
    at +0x48; outside the loaded image, like D_800E2968. */
