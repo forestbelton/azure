@@ -351,6 +351,7 @@ extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
 /* func_800437A4 fills the first two words through func_8003F6D4 and returns
    its address; eight bytes, so the address comes out as an `la`. */
+extern s32 D_800814F0[2];
 extern s32 D_800814F8[2];
 extern u16 D_80081500;
 extern u32 D_80081508;
@@ -474,6 +475,9 @@ void func_80040A88(void (*)(void));
 void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
+void func_800410FC(void);
+void func_8003FAD4(void);
+void func_8003F7E4(void);
 void func_8003F8F8(u32 *);
 void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
@@ -514,6 +518,8 @@ s32  DrawSync(s32);
 void ClearImage(void *, u8, u8, u8);
 void *SetDefDrawEnv(void *, s32, s32, s32, s32);
 void *SetDefDispEnv(void *, s32, s32, s32, s32);
+void *ClearOTagR(void *, s32);
+void SetDispMask(s32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
@@ -530,6 +536,7 @@ extern u8  D_801C9E40[];
    a run of 0x100 blocks of 0x124 bytes that func_8003FAD4 threads into a
    free list. */
 extern u32 D_801DA714;
+extern u32 D_801DA784;
 extern u32 D_801DA770;
 extern u32 D_801DA72C[];
 extern u8  D_801EAFE8[];

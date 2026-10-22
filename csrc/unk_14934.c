@@ -9,6 +9,7 @@ void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
 void func_8003F6D4(s32, s32, s32 *, s32);
 void func_80040B88(void);
 void func_80042984(u8 *);
+void func_80041AB0(void);
 void func_80041AE4(void);
 void func_80043D04(void);
 
@@ -79,7 +80,19 @@ void func_800419EC(u16 arg0, u32 arg1) {
     D_80083CA8.unk_00 = arg1 / arg0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041A10);
+void func_80041A10(void) {
+    D_80082E60.unk_00 |= 1;
+    D_80081480 = D_8008148C;
+    func_8003FAD4();
+    func_800410FC();
+    D_80083160.unk_00 = D_801C9E40;
+    ClearOTagR(D_801C9E40 + 0x70, 0x218);
+    ClearOTagR(&D_801DA784, 0x218);
+    *(u8 **) (D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
+    SetDispMask(1);
+    func_8003F7E4();
+    func_80040A88(func_80041AB0);
+}
 
 void func_80041AB0(void) {
     D_80081480 = D_8008148C;
@@ -250,7 +263,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043568);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043674);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043704);
+s32 *func_80043704(s16 arg0, s32 arg1) {
+    s32 n;
+    s32 k;
+
+    if (arg0 == 0x38) {
+        n = 0x421F;
+        k = 0x4E;
+    } else {
+        if (arg0 >= 0x3A) {
+            n = (arg0 - 0x3A) * 43 + 0x1B8D;
+        } else {
+            n = (arg0 - 1) * 43 + 0x56D6;
+        }
+        k = 0x1A;
+    }
+    func_8003F6D4(k, arg1, D_800814F0, n);
+    return D_800814F0;
+}
 
 s32 *func_800437A4(s16 arg0, s32 arg1) {
     s32 n;
