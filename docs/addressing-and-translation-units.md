@@ -101,6 +101,37 @@ encoding depends only on the final `$gp` offset, not on the symbol name, so the
 C side does not need the original names: one struct covering a window, with the
 fields at the right offsets, produces identical instructions.
 
+**Define them in `.sdata`, not as C tentative definitions.** A tentative
+definition becomes `.comm` and lands in `.sbss`, which is NOBITS: it occupies
+vram without occupying ROM, so splitting the bin blob around it would shorten
+the image by the window's size and shift everything after it. These windows are
+genuinely *in* the file -- 224 zero bytes at 0x54C50 -- so the section has to
+be PROGBITS. A top-level `__asm__` block does it, keeps the symbol small and
+defined, and needs nothing from the compiler:
+
+    __asm__(".sdata\n\t.globl D_800814E0\n\t.type D_800814E0,@object\n"
+            "\t.size D_800814E0,4\nD_800814E0:\n\t.word 0\n\t.text");
+
+Measured on func_800410FC: MATCH, 5 of 5, a 4-byte PROGBITS `.sdata`, and the
+same GPREL16-beside-HI16/LO16 relocations as above. Gaps between the window's
+objects are `.space`, and the whole window can go in one block in address
+order.
+
+**The placement step, concretely.** splat 0.50.1 has an `sdata` subsegment
+type (`splat/segtypes/common/sdata.py`), so the closing blob gets split around
+the window and the window named after the C file that defines it:
+
+      - [0x54240, bin]
+      - [0x54c50, sdata, <the C file>]     # vram 0x80081450, 224 bytes
+      - [0x54d30, bin]
+
+so splat emits `build/csrc/<file>.o(.sdata)` at that address. Note the
+generated script ends with `/DISCARD/ : { *(*) }`, so a section splat does not
+place is silently dropped -- which is why this needs the subsegment and not
+just a definition. Unresolved: whether that subsegment also makes splat try to
+*extract* the window into `asm/data/`, and if so how to suppress it. Settle
+that first; it is the only unknown left in the chain.
+
 ### The scope, measured
 
 The 31 `$gp`-blocked functions reference **38 unique symbols**, and they sit in
