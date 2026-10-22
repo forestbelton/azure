@@ -277,7 +277,19 @@ void func_80040490(void *arg0, s16 *rect) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800404F8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040574);
+u32 *func_80040574(s32 size) {
+    u32 *p;
+
+    /* The limit has to be the left operand: written the other way round gcc
+       loads D_80081480 first, where the target loads it last. */
+    if (D_8008148C + D_80080A7C <= D_80081480 + size) {
+        D_80081480 = D_8008148C;
+        DrawSync(0);
+    }
+    p = (u32 *) D_80081480;
+    D_80081480 = D_80081480 + size;
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800405E8);
 

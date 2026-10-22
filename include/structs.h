@@ -462,7 +462,9 @@ typedef struct UnkSlot {
     u8       pad_06[2];
     u32      unk_08;
     u8       pad_0C[8];
-    u16      unk_14;
+    u16      unk_14;   /* flags */
+    u8       pad_16[0x12];
+    u32      unk_28;   /* a pointer; left as u32 like unk_08 */
 } UnkSlot;
 
 /* Hand-added signatures for callees that live in another unit. */
@@ -486,6 +488,7 @@ void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
 void func_80042BDC(s8 *, s8);
+void func_800482C8(Unk800777AC *, u32 *);
 
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */
@@ -508,6 +511,7 @@ void RotTrans(void *, void *, s32 *);
    the same reason. */
 void LoadImage(void *, u32 *);
 void AddPrim(void *, void *);
+s32  DrawSync(s32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
