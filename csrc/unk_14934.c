@@ -382,7 +382,71 @@ s32 func_80042518(s8 *arg0, s8 arg1) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042560);
+/* Snapshots the four (code, value) status-effect pairs at +0x2C, cancels each
+ * one through func_80042518 with the 0x80013714 "no draw" bit forced on, then
+ * re-applies them through func_800A48F0 with the bit restored.
+ *
+ * Load-bearing shapes, with the cost of reverting each:
+ *
+ *  - `tmp[i] = *(Unk42710B *) (arg0 + i * 2 + 0x2C);` is a whole-struct
+ *    assignment on purpose, and it is what this function was parked on. A
+ *    small byte-aligned block copy is ONE RTL insn, `movstrsi_internal`, which
+ *    survives combine, sched1, global-alloc and sched2 intact; the lb/lb/sb/sb
+ *    only appear from its output template at final. So the two `sb`s cannot be
+ *    scheduled against the `lb` of the test that follows, and that load's
+ *    delay slot stays a nop. Copying the two members one at a time costs 44
+ *    words, and one extra word, because sched1 then steals the second `sb` for
+ *    the branch delay slot.
+ *  - the source address is written out as `arg0 + i * 2 + 0x2C` at each
+ *    access, as in func_80042518. A `Unk42710B *src = (Unk42710B *) (arg0 +
+ *    0x2C);` local costs 51 words: the giv's initial value becomes arg0+0x2C,
+ *    so the walker is `addiu $s2,$s3,0x2C` with 0/1 displacements where the
+ *    target has `addu $s2,$s3,$zero` with 0x2C/0x2D.
+ *  - both loops are `for` loops and both use the same `i`. A backward `goto`
+ *    loop costs 52 words, because the loop notes rescale every priority; a
+ *    separate counter for the second loop costs 9, because `i` is then two
+ *    allocnos of 7 references instead of one of 14.
+ *  - Unk42710B's members are `s8`; `u8` costs 36 words.
+ *  - the 0x80013714 flags are genuinely mixed within the one function: a
+ *    constant base pointer for the first two accesses and the `extern u16
+ *    D_80013714` scalar for the third. `*(u16 *) 0x80013714` gives lui+ori
+ *    plus a 0($v1) displacement, and `extern u16 D_80013714[]` splits all
+ *    three accesses and rematerialises the third into $v0.
+ *
+ * The block move is also what puts the three `$s` registers right, and it is
+ * the reference-count lever running downward: it removes one in-loop reference
+ * (weight 2 at loop_depth 2) from each address pseudo, taking the arg0 walker
+ * from 9 references to 7. That crosses the floor_log2 step at 8, which halves
+ * its priority from 1.80 to 1.17 and drops it below the counter; the tmp
+ * pointer's 11->9 crosses nothing and it stays above. The allocation order
+ * becomes loop-2-tmp, loop-1-tmp, counter, walker -- $s0, $s0, $s1, $s2, with
+ * the two tmp pointers sharing $s0 because their loops are disjoint.
+ *
+ * Not load-bearing, measured: caching the reload in an `s8` local, and
+ * `if (...) continue;` instead of the positive `if`. Both still match. */
+void func_80042560(s8 *arg0) {
+    u8 *base = (u8 *) 0x80010000;
+    Unk42710B tmp[4];
+    u16 saved;
+    s32 i;
+
+    saved = *(u16 *) (base + 0x3714);
+    *(u16 *) (base + 0x3714) = saved | 2;
+    func_80042518(arg0, 0x1B);
+
+    for (i = 0; i < 4; i++) {
+        tmp[i] = *(Unk42710B *) (arg0 + i * 2 + 0x2C);
+        if (tmp[i].unk_00 != 0) {
+            func_80042518(arg0, tmp[i].unk_00);
+        }
+    }
+    for (i = 0; i < 4; i++) {
+        if (tmp[i].unk_00 != 0) {
+            func_800A48F0(arg0, tmp[i].unk_00, tmp[i].unk_01);
+        }
+    }
+    D_80013714 = saved;
+}
 
 /* Initialises a record from template `idx`: a 0x14-byte block assignment, the
  * flag word merged in, then a handful of bytes picked back out of the same

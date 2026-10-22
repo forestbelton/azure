@@ -336,11 +336,16 @@ typedef struct Unk42710A {
 } Unk42710A;
 
 /* Hand-added. A 2-byte element, copied whole by func_80042710 -- that is what
-   makes it gcc's byte-aligned 2-byte block move, two lb then two sb. The block
-   move reveals nothing about the members' signedness. */
+   makes it gcc's byte-aligned 2-byte block move, two lb then two sb.
+
+   Both members are SIGNED, which func_80042560 settles: it snapshots the four
+   pairs, tests unk_00 and passes both members to func_80042518 and
+   func_800A48F0, and every one of those is a sign-extended byte load. Spelling
+   them u8 costs that function 36 words. (The block move itself still reveals
+   nothing -- it is the uses that do.) */
 typedef struct Unk42710B {
-    u8 unk_00;
-    u8 unk_01;
+    s8 unk_00;
+    s8 unk_01;
 } Unk42710B;
 
 /* Hand-added. The ~0x58-byte record func_80042710 copies field by field and
