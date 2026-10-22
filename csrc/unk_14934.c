@@ -749,7 +749,58 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044618);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044698);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044724);
+/* Compares four 3-halfword vectors against a cache and, if any component
+ * differs, copies all four over and returns 1; returns 0 if they already
+ * match.
+ *
+ * Load-bearing shapes, with the cost of reverting each:
+ *  - the source side goes through a pointer local (106 words otherwise). As a
+ *    direct symbol reference the comparisons still come out right, but
+ *    expand_block_move sees a `(const (plus symbol 0x94))` address, which is
+ *    not offsettable, so it force_regs a fresh source pointer per group: two
+ *    extra addiu plus two extra lui. Through the pointer local the MEMs are
+ *    already offsettable, so block_move_sequence just adjusts the displacement
+ *    and reuses the comparison chain's own $a3.
+ *  - but the destination stays a direct array reference (98 words the other
+ *    way). That asymmetry is what gives the %lo riding on element 0's load,
+ *    which is only possible at offset 0, followed by the addiu materialising
+ *    the base for the rest. Same deliberate mixing of the two spellings for
+ *    one object as in func_8003D5A4.
+ *  - the copies go through Unk44724Blk, whose alignment of 1 makes each
+ *    assignment the byte-aligned 8-byte block move; u32 members give plain
+ *    lw/sw and cost 86 words.
+ *  - four separate 8-byte assignments, not one 32-byte one: a single 32-byte
+ *    copy is emitted as 4 loads then 4 stores per 16-byte group, where the
+ *    target has 2 loads then 2 stores, four times.
+ *  - an `||` chain of `!=` with the copy in the body and `return 0` last. The
+ *    equivalent `&&` chain of `==` with `return 0` in the body has the same
+ *    word count but 49 differ: the `||` form is what puts eleven
+ *    `bne` to the copy and an inverted `beq` on the twelfth, and leaves the
+ *    `return 0` block physically between the copy and the epilogue.
+ *  - the components are s16; as u16 the comparisons become lhu. */
+s32 func_80044724(void) {
+    Unk80083178 *s = &D_80083178;
+
+    if (s->unk_94[0].unk_00 != D_80083CE8[0].unk_00 ||
+        s->unk_94[0].unk_02 != D_80083CE8[0].unk_02 ||
+        s->unk_94[0].unk_04 != D_80083CE8[0].unk_04 ||
+        s->unk_94[1].unk_00 != D_80083CE8[1].unk_00 ||
+        s->unk_94[1].unk_02 != D_80083CE8[1].unk_02 ||
+        s->unk_94[1].unk_04 != D_80083CE8[1].unk_04 ||
+        s->unk_94[2].unk_00 != D_80083CE8[2].unk_00 ||
+        s->unk_94[2].unk_02 != D_80083CE8[2].unk_02 ||
+        s->unk_94[2].unk_04 != D_80083CE8[2].unk_04 ||
+        s->unk_94[3].unk_00 != D_80083CE8[3].unk_00 ||
+        s->unk_94[3].unk_02 != D_80083CE8[3].unk_02 ||
+        s->unk_94[3].unk_04 != D_80083CE8[3].unk_04) {
+        *(Unk44724Blk *) &D_80083CE8[0] = *(Unk44724Blk *) &s->unk_94[0];
+        *(Unk44724Blk *) &D_80083CE8[1] = *(Unk44724Blk *) &s->unk_94[1];
+        *(Unk44724Blk *) &D_80083CE8[2] = *(Unk44724Blk *) &s->unk_94[2];
+        *(Unk44724Blk *) &D_80083CE8[3] = *(Unk44724Blk *) &s->unk_94[3];
+        return 1;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800448BC);
 

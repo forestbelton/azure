@@ -310,31 +310,35 @@ typedef struct Unk80083CA8 {
     u16 unk_08;
 } Unk80083CA8;
 
-/* 0x80083ce8..0x80083d0a, 0x23 bytes, 20 field(s) */
-typedef struct Unk80083CE8 {
-    /* the next 8 fields run at a constant 0x4 stride; this may be an array */
-    u32 unk_00;  /* also read as 2 */
-    /* +0x2   is a 2-byte access inside this field */
-    /* +0x3   is a 4-byte access inside this field */
-    u32 unk_04;  /* also read as 2 */
-    /* +0x7   is a 4-byte access inside this field */
-    u32 unk_08;  /* also read as 2 */
-    /* +0xa   is a 2-byte access inside this field */
-    /* +0xb   is a 4-byte access inside this field */
-    u32 unk_0C;  /* also read as 2 */
-    /* +0xf   is a 4-byte access inside this field */
-    u32 unk_10;  /* also read as 2 */
-    /* +0x12  is a 2-byte access inside this field */
-    /* +0x13  is a 4-byte access inside this field */
-    u32 unk_14;  /* also read as 2 */
-    /* +0x17  is a 4-byte access inside this field */
-    u32 unk_18;  /* also read as 2 */
-    /* +0x1a  is a 2-byte access inside this field */
-    /* +0x1b  is a 4-byte access inside this field */
-    u32 unk_1C;  /* also read as 2 */
-    /* +0x1f  is a 4-byte access inside this field */
-    u8 pad_20[0x3];
-} Unk80083CE8;
+/* Hand-added. Three halfwords and two bytes of padding: the shape
+   func_80044724 compares and copies the D_80083178+0x94 cache in. */
+typedef struct Unk44724Vec {
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8  pad_06[0x2];
+} Unk44724Vec;
+
+/* The same 8 bytes with alignment 1, so an assignment comes out as the
+   byte-aligned block move (two lwl/lwr plus two swl/swr pairs) rather than
+   plain lw/sw. Same reason as Unk3E39C. */
+typedef struct Unk44724Blk {
+    u8 unk_00[4];
+    u8 unk_04[4];
+} Unk44724Blk;
+
+/* Hand-added. func_80044724 reaches the four vectors at +0x94 through a
+   pointer to this symbol, with 0x94..0xB3 as load displacements, so the object
+   really is based at 0x80083178 and not at D_80083160. It overlaps
+   Unk80083160's unk_AC..unk_C4 run, and informatively so: every annotation
+   fieldscan left there is accounted for by these four vectors, including the
+   odd-offset "4-byte access inside this field" notes, which are the lwl/swl
+   halves of the block moves. The extent before +0x94 is unexplored space, not
+   known filler. */
+typedef struct Unk80083178 {
+    u8          pad_00[0x94];
+    Unk44724Vec unk_94[4];
+} Unk80083178;
 
 /* Objects with a single observed field: plain globals so far. */
 extern u32 D_8006CD30;
@@ -538,7 +542,11 @@ extern Unk80083160 D_80083160;
 extern Unk80083462 D_80083460;
 extern Unk80083958 D_80083958;
 extern Unk80083CA8 D_80083CA8;
-extern Unk80083CE8 D_80083CE8;
+extern Unk80083178 D_80083178;
+/* Retyped by hand from the eight-word struct fieldscan inferred: its only
+   user, func_80044724, compares and copies it as four 8-byte vectors of three
+   halfwords. */
+extern Unk44724Vec D_80083CE8[4];
 
 /* Hand-added. 0x80082e6a is inside the region fieldscan merged into
    Unk80082E60, but func_8003E14C reaches it as its own symbol rather than as
@@ -629,6 +637,7 @@ void func_8006A444(void);
 void func_80064688(void);
 void func_80046E38(s16, u8 *);
 s32  func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
+s32  func_80044724(void);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
