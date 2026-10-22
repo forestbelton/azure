@@ -380,7 +380,10 @@ extern u32 D_800835E8[];
    observed words are consecutive entries of a null-terminated table of
    callbacks that func_800411AC walks and calls. Extent not established. */
 extern void (*D_80083C68[])(void);
-extern u32 D_80083778;
+/* Declared as an array of unestablished length: func_80043674's single store
+   to it is compiler-split (lui %hi / sw %lo), which only happens past the
+   -G8 limit. The scalar declaration gives the assembler form via $at. */
+extern u32 D_80083778[];
 /* Retyped by hand from the three-field 0x80-byte structs fieldscan inferred:
    func_8003CAC4 fills both by index, 0x40 halfwords each. */
 /* Retyped by hand from the 0x80-byte structs fieldscan inferred: func_8003FAD4
@@ -516,6 +519,11 @@ s32  func_80053428(Unk80083120 *);
 s32  func_80053604(Unk80083120 *);
 void func_8004EB30(void);
 extern u8 D_80126804;
+
+/* Hand-added. gcc 2.7.2 only treats abs as a builtin once it is declared, and
+   the MIPS abssi2 pattern is the only way to get the target's
+   `bgez / addu / negu` shape (func_8003F6F4). */
+int abs(int);
 
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */

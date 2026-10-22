@@ -46,7 +46,34 @@ void func_8003F6D4(s32 arg0, s32 arg1, s32 *arg2, s32 arg3) {
     arg2[1] = arg3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F6F4);
+void func_8003F6F4(void) {
+    s32 i;
+
+    for (i = 7; i >= 0; i--) {
+        s32 r;
+
+        /* abs(): the target's `bgez / addu / negu` is the literal output
+         * template of the MIPS abssi2 pattern. Any C conditional leaves a copy
+         * visible to cse, which canonicalises either the compare or the
+         * negation to the other register. Indexing D_80083120[i] rather than
+         * walking a pointer gives the single giv decrement that reorg
+         * duplicates into the j's delay slot, and makes the loop large enough
+         * that move_movables leaves the `li 5` in place. */
+        switch (abs(D_80083120[i].unk_00)) {
+        case 5:
+            r = func_80053428(&D_80083120[i]);
+            break;
+        case 6:
+            r = func_80053604(&D_80083120[i]);
+            break;
+        default:
+            continue;
+        }
+        if ((s16) r != 0) {
+            D_80083120[i].unk_00 = 0;
+        }
+    }
+}
 
 s32 func_8003F794(s16 arg0, s16 arg1) {
     s32 i;

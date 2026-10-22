@@ -1,6 +1,6 @@
 # Open matching problems
 
-Eleven functions are parked. Every one of them reproduces the original logic;
+Seven functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -9,13 +9,9 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 
 | function      | unit    | what is left |
 |---------------|---------|--------------|
-| func_80043674 | unk_14934 | three registers permuted between two loop scalars and the write pointer |
-| func_8003F6F4 | unk_12DE0 | one `li 5` that loop-invariant motion hoists and the original did not |
-| func_80047200 | unk_14934 | one dead `addiu $a0,$a0,-0x2` the original kept in a delay slot |
-| func_80041284 | unk_14934 | the target copies each loaded global into its variable's register; gcc folds the copy away |
-| func_80042560 | unk_14934 | two of three accesses to D_80013714 are compiler-split, the third assembler-expanded |
+| func_80041284 | unk_14934 | arm 1 wants the `*p` reload *after* the store but the store between `lui` and `and`; see below |
+| func_80042560 | unk_14934 | addressing solved; loop 1's store/load order and three `$s` registers are not; see below |
 | func_80042640 | unk_14934 | gcc hoists each constant store into the preceding load's delay slot |
-| func_80046D64 | unk_14934 | the target copies the parameter out of `$a0` so the struct base can have it |
 | func_8003F8F8 | unk_12DE0 | the width/height pair wants one induction variable with a -2 displacement; gcc makes two |
 | func_80043A68 | unk_14934 | two temporaries swapped: the target reuses the address chain's register for the element pointer |
 | func_80043B4C | unk_14934 | the same function with `\|= 0x8000` instead of `&= 0x7FFF`; same difference |
@@ -30,6 +26,78 @@ which splat split off because it follows `main`'s infinite loop, and it sits at
 the start of the `unk_102A8` subsegment. Fixing it means extending the `main`
 asm subsegment to 0x102c4 and starting the C unit there; it is a spec change,
 not a matching problem.
+
+## func_80041284  (unk_14934) -- partial
+
+Both copies and the empty `jal func_8003F320` delay slot come out right with
+the assignment written as a chained store whose value is wanted:
+
+```c
+    if (x == 0) {
+        x = D_80081480 = D_8008148C;
+        y = x + ((*p & 0xFF800000) >> 12);
+    } else {
+        x |= 0x80000000;
+        y = D_80081480 = D_8008148C;
+    }
+```
+
+`store_expr` with a MEM target and `want_value` does `copy_to_reg`, so the RTL
+is load-to-temp / store / copy. combine cannot fold the load into the copy
+because the store sits between them (`use_crosses_set_p` via `mem_last_set`),
+sched1 then puts the copy before the store, and local-alloc rewrites the
+store's source. Arm 2 matches exactly.
+
+What is left is arm 1's order. The target has `lw $v0,0($s2); lui $v1,0xFF80;
+sw $s0` -- the `*p` reload before the store -- and this source emits the store
+first. The reload exists only because cse's NOT_TAKEN pass saw the store
+invalidate the block-0 load, so in RTL the load must follow the store, and
+store-before-load is a true dependence in sched1. Ruled out: every statement
+order of the two assignments and the `*p` expression, function- and
+block-scope temporaries, `volatile` aliases on `D_8008148C` and both globals,
+`volatile u32 *` for `p`, an array declaration for `D_8008148C`,
+`-fno-schedule-insns`, `-fno-schedule-insns2`, both, `-O1`, and
+`-mcpu=r3000/r4000/r4600/r6000`. Note `csrc/unk_14934.c` already uses
+`D_80081480 = D_8008148C;` in four matched places, so a declaration change for
+either symbol would risk those.
+
+## func_80042560  (unk_14934) -- partial
+
+The mixed addressing is solved, and it really is mixed within the one
+function: a constant base pointer for the first two accesses and the
+`extern u16 D_80013714` scalar for the third.
+
+```c
+    u8 *base = (u8 *) 0x80010000;
+    saved = *(u16 *) (base + 0x3714);
+    *(u16 *) (base + 0x3714) = saved | 2;
+    ...
+    D_80013714 = saved;
+```
+
+That gives `lui $v1,0x8001 / lhu $s4,0x3714($v1) / ... / sh $v0,0x3714($v1)`
+for the first two and the assembler-expanded `lui $at / sh $s4,0x3714($at)`
+for the third, matching all five instructions. (`*(u16 *) 0x80013714` gives
+`lui+ori` plus `0($v1)`; an `extern u16 D_80013714[]` declaration splits all
+three.)
+
+Two things are left. Loop 1's order: the target is `sb $v0,0($s0);
+sb $v1,1($s0); lb $a1,0($s0)`, and sched1 instead fills the load delay of
+`lb $a1` with the independent `sb $v1`. For the target's order the store would
+have to depend on the load, and gcc 2.7.2's `memrefs_conflict_p` never finds a
+dependence between offsets 0 and 1 off the same base pseudo (the
+`MEM_IN_STRUCT` exception in `true_dependence` needs one operand to be a
+non-struct, non-varying reference). Ruled out: `struct {s8 a,b;} tmp[4]`, a
+byte pointer into it, `s8 tmp[4][2]`, the stores swapped, no temporaries
+(which also turns the loads into `lbu`), an `s8` temporary, a `j = i * 2`
+index variable, `volatile s8` (which does create the dependence but turns the
+loads into `lbu/sll/sra`), the `-mcpu` set above, and `-mips2`.
+`-fno-schedule-insns -fno-schedule-insns2` does reproduce the loop exactly,
+but the target's prologue is visibly interleaved by sched2, so the schedulers
+were on. Second, the registers: the target has tmp-pointer `$s0`, counter
+`$s1`, walker `$s2`; this source gives the walker `$s0` and the counter `$s2`.
+The `.greg` priorities are loop-2-tmp 2.45, walker 1.80, loop-1-tmp 1.74,
+counter 1.24, so the walker giv has to drop below the counter.
 
 ## Functions blocked by the translation-unit problem
 

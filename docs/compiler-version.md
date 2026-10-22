@@ -138,6 +138,37 @@ Beyond the four write-ups in `docs/open-matching-problems.md`:
   `extern` symbols get a `lui` each because gcc cannot know they share a
   64 KB page (func_800439F8).
 
+* Writing a store's destination first in the statement decides which address
+  cse anchors on. `D[i] = f(...) + D[i-1];` expands the destination address
+  before the RHS, so `lo_sum(D)` enters cse's table first and `D-4` becomes its
+  related value; `v = f(...) + D[i-1]; D[i] = v;` anchors both induction
+  variables on `%hi(D-4)` and costs an extra `addu` (func_80043674).
+* Indexing a global array (`D[i]`) rather than walking a pointer changes the
+  register assignment: both become strength-reduced induction variables, but
+  their pseudos are born later and carry different reference counts
+  (func_80043674, func_8003F6F4, func_80046D64).
+* A loop increment placed *first* in the body is stolen by reorg's
+  `fill_slots_from_thread`: the back-edge branch finds it at its target, copies
+  it into its own delay slot, redirects past it, and emits a compensating
+  negated add on the fall-through path. That is where an apparently dead
+  `addiu $reg,$reg,-N` after a `j` comes from -- it is not a kept dead
+  instruction (func_80047200).
+* A copy out of an argument register survives only if the value is used twice
+  and its consumer is a loop variable: then combine cannot fold the copy and
+  local-alloc cannot tie the two (one is a global allocno), so the `addu`
+  remains and every allocno after it is renumbered (func_80046D64).
+* `abs()` is a gcc 2.7.2 builtin *once declared*, and its MIPS `abssi2` pattern
+  emits `bgez / addu / negu` -- a branch over a move-then-negate that no C
+  conditional can reproduce, because any visible copy lets cse canonicalise
+  either the compare or the negation to the other register (func_8003F6F4).
+* A chained store whose value is wanted (`x = G = H;`) goes through
+  `store_expr`'s `copy_to_reg`, giving load / store / copy. combine cannot fold
+  the load into the copy across the store (`use_crosses_set_p`), so the copy
+  survives and sched1 lifts it above the store (func_80041284).
+* `move_movables` hoists a loop-invariant `li` only while
+  `threshold * savings * lifetime >= insn_count`; making the loop body bigger
+  leaves the constant in place (func_8003F6F4).
+
 ## The two tie-breaks that decide register choice and instruction order
 
 When the arithmetic is right and only the register numbers or the order of two
@@ -180,6 +211,24 @@ in the wine temp directory,
 and each insn's priority per cycle, and `.greg` prints each allocno with the
 hard registers it conflicts with; between them they explain any ordering or
 register difference without guessing.
+
+## Scheduler aliasing, exactly
+
+gcc 2.7.2's `sched.c` decides memory dependence purely on offsets off the same
+base register. Two accesses at offsets 0 and 1 off one base pseudo are never
+dependent, so sched1 will fill a load's delay slot with a neighbouring store
+and no source shape prevents it; the `MEM_IN_STRUCT` exception in
+`true_dependence` is narrower than usually described -- it needs one operand to
+be a non-struct, non-varying reference. Symbol-versus-register addresses do
+conflict, so a store to a global before a load through a pointer is a real
+dependence.
+
+The `-G8` driver passes no `-mcpu`, so cc1psx uses r3000 timings (load latency
+2 in the `.sched` traces).
+
+When comparing built bytes against a listing, pass `objdump -z`: without it
+objdump elides runs of zero words as `...` and hides the hazard `nop`s maspsx
+inserts after `mflo`/`mult`.
 
 ## Installing it
 

@@ -323,7 +323,25 @@ void func_80043568(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043674);
+void func_80043674(void) {
+    s32 x = 4;
+    s32 y = -0x14;
+    s32 i;
+
+    /* The destination has to be written first in the statement: expand_assignment
+     * expands the store address before the RHS, so lo_sum(D_800835E8) enters
+     * cse's table first and D-4 becomes its related value. Written the other way
+     * round both givs anchor on %hi(D_800835E8-4) and cost an extra addu. */
+    D_800835E8[0] = 0;
+    for (i = 1; i < 0x64; i++, x++) {
+        D_800835E8[i] = ((u32) (x * x * x) >> 3) + D_800835E8[i - 1];
+        y++;
+        if (y > 0) {
+            D_800835E8[i] += (y * y) << 5;
+        }
+    }
+    D_80083778[0] = 0xFA56EA00;
+}
 
 s32 *func_80043704(s16 arg0, s32 arg1) {
     s32 n;
@@ -712,7 +730,28 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046AFC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046C20);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046D64);
+void func_80046D64(u8 *base, s16 arg1) {
+    Unk80083160 *s = &D_80083160;
+    u32 *p = &s->unk_1DC;
+    u32 *q;
+    u32 v;
+    s32 i;
+
+    /* v is used twice, so combine cannot fold the copy into q and q is a loop
+     * variable (a global allocno) so local-alloc cannot tie them: the
+     * `addu $a2,$v0,$zero` survives, which renumbers the allocnos enough that
+     * p takes $a0 and base is pushed to $t0. */
+    v = (u32) (base + D_8006E7F0[arg1][4] * 4);
+    p[1] = v;
+    q = (u32 *) v;
+    for (i = D_8006E7F0[arg1][3]; i > 0; i--) {
+        *q += (u32) base;
+        q++;
+    }
+    p[2] = (u32) (base + D_8006E7F0[arg1][5] * 4);
+    p[3] = (u32) (base + D_8006E7F0[arg1][6] * 4);
+    p[4] = (u32) (base + D_8006E7F0[arg1][7] * 4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046E38);
 
@@ -748,7 +787,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047054);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004713C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047200);
+void func_80047200(u16 *p, s32 rows, s32 flag) {
+    s32 i;
+    s32 j;
+
+    if (flag == 0) {
+        for (i = 0; i < rows; i++) {
+            /* p++ first in the body, not last: the back-edge bnez then finds
+             * `addiu $a0,$a0,2` at its target, and reorg's
+             * fill_slots_from_thread steals it into the delay slot, redirects
+             * the branch past it and emits the compensating addiu -2. */
+            p++;
+            for (j = 1; j < 0x10; j++) {
+                *p |= 0x8000;
+                p++;
+            }
+        }
+        return;
+    }
+    for (j = 1; j < 0x100; j++) {
+        *p |= 0x8000;
+        p++;
+    }
+}
 
 void func_80047270(u8 *arg0, s16 *rect) {
     s32 t = rect[3] * 2;
