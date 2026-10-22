@@ -821,7 +821,68 @@ void func_80046A5C(u16 *arg0, void *out) {
     PopMatrix();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046AFC);
+/* Interpolates a/b at height t into out, clamps both coordinates to
+ * +/-0x7FF0, and returns 1 if the result lies more than 0x1000 from a in
+ * either axis.
+ *
+ * Three shapes are load-bearing:
+ *  - `dx` is hoisted into its own local one statement before `f`. That costs
+ *    no instruction (sched1 still issues f's subtract first) but it pushes
+ *    the last use of the CSE'd b->unk_04 load one slot later, so its live
+ *    range grows from 11 insns to 12 and its global.c priority drops just
+ *    below b's own. b is then allocated first and takes $a0, the load is
+ *    pushed to $a1, and a/out/t slide down to $t1/$t2/$t3 as in the target.
+ *  - cx's clamp is the preset-then-nested form and cy's is the if/else form
+ *    with the -0x7FF0 arm in the else. They are not interchangeable: that
+ *    asymmetry is what makes both clamps' branch layout and delay slots come
+ *    out right.
+ *  - cx and cy have to be separate variables; one shared variable is
+ *    coalesced with nx and costs a `j`. */
+s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
+    s32 dz = b->unk_04 - a->unk_04;
+    s32 f;
+    s32 nx;
+    s32 ny;
+    s32 cx;
+    s32 cy;
+    s32 dx;
+
+    if (dz < 0x40) {
+        return 1;
+    }
+    dx = b->unk_00 - a->unk_00;
+    f = t - b->unk_04;
+    nx = dx * f / dz + b->unk_00;
+    ny = (b->unk_02 - a->unk_02) * f / dz + b->unk_02;
+    cx = -0x7FF0;
+    if (nx >= -0x7FF0) {
+        cx = 0x7FF0;
+        if (nx < 0x7FF1) {
+            cx = nx;
+        }
+    }
+    out->unk_00 = cx;
+    if (ny >= -0x7FF0) {
+        cy = 0x7FF0;
+        if (ny < 0x7FF1) {
+            cy = ny;
+        }
+    } else {
+        cy = -0x7FF0;
+    }
+    out->unk_02 = cy;
+    out->unk_04 = t;
+    if (out->unk_00 < a->unk_00 - 0x1000) {
+        return 1;
+    }
+    if (a->unk_00 + 0x1000 < out->unk_00) {
+        return 1;
+    }
+    if (out->unk_02 < a->unk_02 - 0x1000) {
+        return 1;
+    }
+    return a->unk_02 + 0x1000 < out->unk_02;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046C20);
 

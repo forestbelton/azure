@@ -55,6 +55,17 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. 0x8 bytes: three signed halfwords and two bytes of padding.
+   func_80046884 walks arrays of these by -8 and hands triples to
+   func_80046AFC, which treats +0x00/+0x02 as a pair interpolated against
+   +0x04. */
+typedef struct Unk46AFC {
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8  pad_06[0x2];
+} Unk46AFC;
+
 /* 0x8006e7b4..0x8006e7bb, 0x8 bytes, 2 field(s) */
 typedef struct Unk8006E7B4 {
     u32 unk_00;
@@ -522,6 +533,7 @@ void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
 void func_8003F5E0(u32);
+s16  func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
 
