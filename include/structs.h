@@ -336,9 +336,15 @@ extern u32 D_80081494;
    +0x00 and a flag halfword at +0x1e. Size is a floor: only those two fields
    have been observed, so the padding is unexplored space, not known filler. */
 typedef struct UnkNode {
-    struct UnkNode *unk_00;
-    u8              pad_04[0x1A];
-    u16             unk_1E;
+    struct UnkNode  *unk_00;   /* next */
+    struct UnkNode **unk_04;   /* points at whatever links to this node */
+    u32              unk_08;
+    u32              unk_0C;
+    u32              unk_10;   /* compared against a caller's argument, and
+                                  called through elsewhere, so a function
+                                  pointer -- left as u32 until that is used */
+    u8               pad_14[0xA];
+    u16              unk_1E;   /* flags */
 } UnkNode;
 
 extern UnkNode *D_80081498;

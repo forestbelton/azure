@@ -39,7 +39,27 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FE78);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FF2C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FFF0);
+void func_8003FFF0(UnkNode *n) {
+    UnkNode **link = n->unk_04;
+    UnkNode *next;
+
+    n->unk_1E &= 0xBFFF;
+    if (link != NULL) {
+        next = n->unk_00;
+        if (next != NULL) {
+            next->unk_04 = link;
+        }
+        *link = next;
+    } else {
+        next = n->unk_00;
+        D_80081498 = next;
+        if (next != NULL) {
+            next->unk_04 = NULL;
+        }
+    }
+    n->unk_00 = NULL;
+    n->unk_04 = NULL;
+}
 
 void func_80040044(u32 *arg0) {
     u32 temp = D_80081490;
@@ -49,7 +69,25 @@ void func_80040044(u32 *arg0) {
     arg0[0] = temp;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040060);
+void func_80040060(UnkNode **link, UnkNode *n) {
+    UnkNode *old;
+
+    n->unk_1E |= 0x4000;
+    old = *link;
+    *link = n;
+    if (old != NULL) {
+        old->unk_04 = &n->unk_00;
+        n->unk_00 = old;
+    } else {
+        n->unk_00 = NULL;
+    }
+    /* Compares against the head pointer's value, not its address. */
+    if (link == (UnkNode **) D_80081498) {
+        n->unk_04 = NULL;
+        return;
+    }
+    n->unk_04 = link;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800400B8);
 
@@ -61,7 +99,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8004027C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800402F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800403BC);
+void func_800403BC(s32 arg0) {
+    UnkNode *p = D_80081498;
+
+    if (p != NULL) {
+        do {
+            if (p->unk_10 == arg0) {
+                p->unk_1E |= 0x8000;
+                D_800814A0 |= 0x8000;
+            }
+            p = p->unk_00;
+        } while (p != NULL);
+    }
+}
 
 void func_80040418(void) {
     UnkNode *p = D_80081498;
