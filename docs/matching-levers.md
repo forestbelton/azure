@@ -324,3 +324,23 @@ func_8003DBD0 and 262 in func_8003D0F0.
   anything else is reading those listings.
 * **Do not pipe `make check` through `head` or `tail`** -- it masks make's exit
   code, and a broken state was committed that way once.
+
+## 12. Keeping an agent's run cheap
+
+A subagent working one function pays for its whole context on every turn, so
+tool output compounds. Two things dominate:
+
+* **`verify.py` output.** The full side-by-side of a 437-word function is about
+  10k tokens, and an iterating agent pays that again on every subsequent turn.
+  It is abbreviated by default now -- differing words plus two of context, runs
+  of matches collapsed -- and `--full` is there for when the word counts differ
+  and you need to see the whole structure. A MATCH prints four lines.
+* **Inherited context.** A `fork` subagent starts with the parent's entire
+  conversation and is charged for it every turn. Now that this document exists,
+  the compiler knowledge no longer has to come from the parent's context, so a
+  fresh agent told to read it is the cheaper dispatch. Reserve forks for cases
+  where the parent has state that is genuinely not written down.
+
+Also: grep the reference listing and the dumps rather than reading them whole
+(`grep 'Register 8' .../lreg`, `sed -n` a range of the `.s`), and do not re-read
+a file you have already seen.

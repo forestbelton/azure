@@ -9,13 +9,21 @@ resolves to the same bytes), so it is a warning rather than a diff.
 
 `make check` remains the only authority. In particular verify.py cannot see a
 jump table landing at the wrong address.
+
+Output is abbreviated by default: differing words, two words of context either
+side, and runs of matching words collapsed to one line. Pass --full for the
+whole side-by-side. The abbreviation matters -- the full form of a 437-word
+function is about 10k tokens, and an agent iterating on it pays that again on
+every subsequent turn.
 """
 import re, subprocess, sys, os
 SP = os.environ.get('AZURE_SCRATCH', '/tmp/azure-decomp')
 os.makedirs(SP, exist_ok=True)
 PROJ = os.environ.get('AZURE_ROOT',
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-src, unit, func = sys.argv[1:4]
+argv = [a for a in sys.argv[1:] if a != '--full']
+full = len(argv) != len(sys.argv) - 1
+src, unit, func = argv[0:3]
 base = os.path.splitext(os.path.basename(src))[0]
 s = f'{SP}/{base}.s'; o = f'{SP}/{base}.o'
 try:
@@ -69,7 +77,7 @@ def listing_addend(text):
     return v if a.group(1) == '+' else -v
 
 bad = 0; warn = 0
-print(f'built {len(words)} words, target {len(tgt)} words')
+rows = []
 for i in range(max(len(words), len(tgt))):
     if i < len(words) and i < len(tgt):
         a, w, txt = words[i]; t, ttxt = tgt[i]
@@ -87,9 +95,36 @@ for i in range(max(len(words), len(tgt))):
         else:
             ok = w == t; mark = ' ' if ok else 'X'
         if not ok: bad += 1
-        print(f'{mark} {w:08x} {txt:40s} | {t:08x} {ttxt}')
+        rows.append((mark, f'{mark} {w:08x} {txt:40s} | {t:08x} {ttxt}'))
     else:
         bad += 1
-        print('X', words[i][2] if i < len(words) else '<none>', '|', tgt[i][1] if i < len(tgt) else '<none>')
+        rows.append(('X', 'X ' + (words[i][2] if i < len(words) else '<none>')
+                     + ' | ' + (tgt[i][1] if i < len(tgt) else '<none>')))
+
+print(f'built {len(words)} words, target {len(tgt)} words')
+if full:
+    for _, line in rows:
+        print(line)
+else:
+    CTX = 2
+    keep = set()
+    for i, (mark, _) in enumerate(rows):
+        if mark != ' ':
+            for j in range(max(0, i - CTX), min(len(rows), i + CTX + 1)):
+                keep.add(j)
+    run = 0
+    for i, (_, line) in enumerate(rows):
+        if i in keep:
+            if run:
+                print(f'  ... {run} matching word(s) ...')
+                run = 0
+            print(line)
+        else:
+            run += 1
+    if run:
+        print(f'  ... {run} matching word(s) ...')
+    if len(keep) < len(rows):
+        print('  (--full for the whole side-by-side)')
+
 tail = '' if not warn else f' (+{warn} relocated word(s) whose addend differs from the listing, marked ?; run make check)'
 print('RESULT:', ('MATCH' if bad == 0 else f'{bad} DIFF') + tail)
