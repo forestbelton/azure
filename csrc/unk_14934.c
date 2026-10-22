@@ -19,7 +19,26 @@ void func_800411AC(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800411FC);
+void func_800411FC(u16 arg0) {
+    Unk8006CE80 *e = &D_8006CE80[arg0];
+    u32 *p = e->unk_04;
+    u32 **q;
+
+    if (p == NULL) {
+        return;
+    }
+    q = (u32 **) p[3];
+    if (q == NULL) {
+        return;
+    }
+    if (*q == NULL) {
+        return;
+    }
+    do {
+        func_80041284(*q);
+        q++;
+    } while (*q != NULL);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041284);
 
@@ -143,9 +162,53 @@ void func_80042B68(s8 *arg0, s8 arg1) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042BDC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043458);
+void func_80043458(void) {
+    u8 *base = (u8 *) 0x80010000;
+    u8 *base2;
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800434E4);
+    *(u32 *) (base + 0x208C) = 0;
+    *(u32 *) (base + 0x2090) = 0;
+    base[0x2D52] = 0xFF;
+    base[0x2D53] = 0xFF;
+    base[0x21E0] = 0xFF;
+    base[0x21E1] = 0xFF;
+    /* The 0x24B and 0x304 have to stay inside the index expressions, or they
+       become part of the materialised constant instead of the load's
+       displacement. The second loop needs its own base, assigned after the
+       first loop: reusing `base` copies the register where the target
+       re-materialises it, and folding the base into the address constant
+       loses the 0xA94 displacement. */
+    for (i = 0; i < 0x14; i++) {
+        base[i * 4 + 0x24B] &= 0x5F;
+        *(u32 *) (base + i * 0x54 + 0x304) &= ~0x4000;
+    }
+    base2 = (u8 *) 0x80010000;
+    for (i = 0; i < 0x40; i++) {
+        *(u32 *) (base2 + i * 0x54 + 0xA94) &= ~0x4000;
+    }
+}
+
+void func_800434E4(void) {
+    u8 *base = (u8 *) 0x80010000;
+
+    base[0x3185] = 1;
+    *(u32 *) (base + 0x2D5C) = 0;
+    *(u32 *) (base + 0x2D68) = 0;
+    *(u32 *) (base + 0x2D58) = 0;
+    *(u32 *) (base + 0x22C) = 0;
+    func_80043458();
+    *(u16 *) (base + 0x3630) = 0xD5;
+    *(u16 *) (base + 0x3632) = 0x38;
+    *(u16 *) (base + 0x3634) = 0x6B;
+    *(u16 *) (base + 0x3636) = 0x70;
+    *(u16 *) (base + 0x3638) = 0x100;
+    *(u16 *) (base + 0x363A) = 0x78;
+    *(u32 *) (base + 0x363C) = 0x4000;
+    *(u16 *) (base + 0x20A0) = 0;
+    *(u16 *) (base + 0x20A2) = 0;
+    *(u16 *) (base + 0x20A4) = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043568);
 

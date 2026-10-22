@@ -71,7 +71,33 @@ void func_8003F9E0(UnkEntry *e) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FA44);
+s32 func_8003FA44(s32 arg0) {
+    UnkNode *n = (UnkNode *) D_80081490;
+    s32 count = 0;
+
+    /* Plain `while` loops: gcc's rotation peels the first increment and puts
+       the back-edge one in the branch delay slot, which is where the target's
+       compensating `addiu -1` comes from. Writing that peeling out by hand
+       folds the peeled increment into a `li 1`. */
+    while (n != NULL) {
+        count++;
+        if (count >= arg0) {
+            return 1;
+        }
+        n = n->unk_00;
+    }
+    n = D_80081498;
+    while (n != NULL) {
+        if (n->unk_1E & 0x200) {
+            count++;
+            if (count >= arg0) {
+                return 1;
+            }
+        }
+        n = n->unk_00;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FAD4);
 
