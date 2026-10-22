@@ -1,6 +1,8 @@
 #include "common.h"
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E140);
+void func_8003E140(s8 *arg0) {
+    *arg0 = 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E14C);
 
@@ -34,7 +36,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F320);
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F368);
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F52C);
+s32 func_8003F52C(s32 arg0) {
+    return arg0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F534);
 
@@ -56,7 +60,10 @@ INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F624);
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F688);
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F6D4);
+void func_8003F6D4(s32 arg0, s32 arg1, s32 *arg2, s32 arg3) {
+    arg2[0] = (arg1 & 0x7FFFFF) | (arg0 << 23);
+    arg2[1] = arg3;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F6F4);
 
@@ -263,7 +270,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_11940", func_80043E60);
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_80043EB8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_80043FB8);
+s32 func_80043FB8(s32 arg0, ...) {
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_80043FD0);
 
