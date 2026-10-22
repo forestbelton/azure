@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**123 of 191 game functions are C and the build is byte-identical.** `make check`
-is green at HEAD and the working tree is clean. The remaining 68 are
+**143 of 191 game functions are C and the build is byte-identical.** `make
+check` is green at HEAD and the working tree is clean. The remaining 48 are
 `INCLUDE_ASM` stubs in `csrc/`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
@@ -14,46 +14,45 @@ once. Use
 
     make check > /tmp/check.log 2>&1; echo rc=$?
 
-`asm/` is generated and gitignored, and splat only emits a `nonmatchings`
-listing for a function that is *currently* a stub. So decompiling a function
-deletes its reference listing on the next build. **Read the listing before you
-replace the stub**, and if you need it back, revert the stub and rebuild.
+`asm/` is generated and gitignored, and splat only *adds* `nonmatchings`
+listings, so the reference listing for a function you have already decompiled
+stays until the next `make splat` (which does `rm -rf asm/nonmatchings` first).
+Do not run `make splat` while anything else is reading those listings.
 
-## The 68 remaining stubs, in three groups
+Before writing a function, read `docs/matching-levers.md`. It is the measured
+list of source shapes that move this compiler, with the word cost of reverting
+each, and it is where most of the search has already been done.
 
-Run `tools/decomp/guard.py` for the count and the classification below by hand
-(`grep -c '%gp_rel'` against each listing):
+## The 48 remaining stubs, in four groups
+
+Run `tools/decomp/guard.py` for the count. The classification below is
+`grep -c '%gp_rel'` and `grep -c 'jtbl_'` against each listing:
 
 | group | count | what it means |
 |-------|-------|---------------|
-| workable | 29 | nothing structural in the way; just decompile them |
-| parked | 11 | logic reproduced, within a few instructions; see below |
-| blocked | 32 | need `$gp`-relative and absolute addressing in one translation unit |
+| workable | 6 | nothing structural in the way; just decompile them |
+| parked | 7 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
+| jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
+| gp-blocked | 31 | need `$gp`-relative and absolute addressing in one translation unit |
 
-### Workable (29)
+### Workable (6)
 
-Smallest first, by instruction count: func_8004425C (72), func_80046AFC (73),
-func_8004068C (77), func_8004491C (77), func_80046C20 (81), func_80046E38 (84),
-func_8003E39C (88), func_80041CBC (91), func_80043FD0 (93), func_80044724 (102),
-func_8003D5A4 (111), func_80046884 (118), func_80042710 (124), func_80040CBC
-(145), func_80041344 (145), func_8003DBD0 (162), func_80041588 (164),
-func_800407C0 (178), func_8003D0F0 (222), func_80041E70 (270), func_800463EC
-(294), func_80044D24 (379), func_80045CC4 (437), func_80042BDC (543), plus the
-larger ones in `unk_11940` and `unk_102A8`.
+Smallest first, by instruction count: func_8003CAA8 (7, but see below -- not a
+function), func_800407C0 (178), func_80041E70 (270), func_800463EC (294),
+func_80044D24 (380), func_80045CC4 (437).
 
-func_8004425C is already analysed and ready to write: it indexes
-`D_8006E61C` with stride 0xC, derives `s3 = (s16) (e->unk_00 - 1)`, indexes
-`D_80080AF0` by that, returns early when the byte there already equals
-`arg0 + 1`, and otherwise runs a fixed call sequence ending in a
-`do { } while (func_8005405C(e->unk_00) != 1)` spin. Note it reuses `$s0` for
-the constant 1 after the pointer is dead.
+That is the whole unblocked queue. Everything smaller has been done; what is
+left after these six is the three blocked groups, so the next real decisions
+are the jump-table spec change (about 1550 instructions, and the analysis in
+`docs/open-matching-problems.md` is complete enough to act on) and then the
+translation-unit problem.
 
 `func_8003CAA8` is in the stub list but is **not a function**: it is `main`'s
 unreachable epilogue, which splat split off because it follows `main`'s
 infinite loop. Fixing it is a spec change (extend the `main` asm subsegment to
 0x102c4), not a matching problem.
 
-### Parked (11)
+### Parked (7)
 
 All in `docs/open-matching-problems.md`, with the source that got each one
 close in `docs/near-misses/`. Several are one instruction or one *bit* away:
@@ -63,14 +62,26 @@ close in `docs/near-misses/`. Several are one instruction or one *bit* away:
 - func_80047054 -- every instruction identical, five registers permuted.
 - func_800423C0 -- four instructions, all about how three `lui 0x8001`s are
   materialised.
+- func_8003D0F0 -- 10 of 222, eight of them the four `(s8)` byte conversions
+  that always fold to `lb`. That fold is the byte-load counterpart of the `lh`
+  fold in func_8004425C, so whatever blocks it is worth more than one function.
 
 Read the near-miss file before touching one. Each lists the shapes already
 measured and ruled out, and re-deriving those is where the time goes.
 
-### Blocked (32)
+### Blocked by jump-table placement (4)
+
+func_80041344, func_80041588 and func_80042BDC (unk_14934) and func_8003E758
+(unk_11940) dispatch through tables that live in the opening `[0x800, bin]`
+subsegment. `docs/open-matching-problems.md` has the full analysis, including
+what the pad word at 0x8002D654 says about where the original translation-unit
+boundary was. The four things it needs are listed there; the one that shapes
+the work is that all three unk_14934 functions have to land at once.
+
+### Blocked by addressing (31)
 
 The real obstacle, and the largest single group. `docs/addressing-and-translation-units.md`
-has the analysis. Five of the 32 need only `$gp`-relative addressing
+has the analysis. Five of the 31 need only `$gp`-relative addressing
 (func_8003E4FC, func_8003F5E0, func_80044618, func_80044698, func_800448BC) and
 the other 27 need both modes in one compilation, which no per-file `-G` can
 give.
@@ -160,6 +171,16 @@ were explained rather than fought.
 
 ## Open TODOs
 
-`TODO.md` still lists only the unused-symbol scanner. The real queue is the
-three groups above, in this order: the 29 workable ones, then a decision on the
-27 blocked ones, then the parked near-misses as a background activity.
+`TODO.md` still lists only the unused-symbol scanner. The real queue is:
+
+1. The six workable functions above.
+2. The jump-table spec change, which unblocks about 1550 instructions. The
+   analysis is complete; it needs `csrc/unk_14934.c` split in two at
+   func_80041588, the opening bin blob carved, linker-script placement of three
+   units' `.rodata`, and all three unk_14934 switch functions landed together.
+3. A decision on the 31 addressing-blocked ones -- still the owner's call,
+   since it is about where the project's data lives.
+4. The seven parked near-misses, as a background activity. Two of them
+   (func_80042A80's `srl`/`sra` and func_8003D0F0's `(s8)` folds) are the same
+   class of problem -- combine proving something about a value's bits -- and a
+   way to defeat `nonzero_bits` from C would settle several at once.
