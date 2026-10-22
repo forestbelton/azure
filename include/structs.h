@@ -327,7 +327,7 @@ typedef struct UnkNode {
        +0x18 depending on whether it lies inside D_800833E0. */
     struct UnkNode  *unk_14;
     struct UnkNode  *unk_18;
-    u8               pad_1C[0x2];
+    u16              unk_1C;   /* indexes D_800833E0 in func_80044AAC */
     u16              unk_1E;   /* flags */
 } UnkNode;
 
@@ -417,6 +417,15 @@ extern Unk80083CE8 D_80083CE8;
    resolves each to the same address. */
 extern u8 D_80082E6A;
 
+/* Hand-added. func_800429E4 indexes this with a 0x18 stride and reads the
+   word at +0x14. D_8006D160 is the eight bytes below it, indexed on its own. */
+typedef struct Unk8006D168 {
+    u8  pad_00[0x14];
+    u32 unk_14;
+} Unk8006D168;
+extern Unk8006D168 D_8006D168[];
+extern u8 D_8006D160[];
+
 /* Hand-added. A table func_8003F9E0 walks until the first word is zero,
    passing the word and the two halfwords to func_8003F80C. The 0xC stride is
    measured; +0x08 is never touched. Named positionally. */
@@ -475,6 +484,8 @@ void func_8005FFFC(void);
 s32  func_80064584(s16);
 s32  func_800644B8(s16);
 void func_801768AC(void);
+s32  func_80053428(Unk80083120 *);
+s32  func_80053604(Unk80083120 *);
 void func_8004EB30(void);
 extern u8 D_80126804;
 

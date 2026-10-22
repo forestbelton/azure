@@ -158,7 +158,29 @@ void func_80042984(u8 *arg0) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800429E4);
+s32 func_800429E4(u8 *arg0) {
+    u32 flags = *(u32 *) (arg0 + 0x14);
+    s32 r = 0;
+
+    if (flags & 0x2000) {
+        Unk8006D168 *e = &D_8006D168[arg0[0x13]];
+        u32 m = e->unk_14 & flags;
+
+        /* Single exit: an early `return` loads the byte straight into the
+         * return register, where the target puts it in r's register and
+         * reorg copies it into a delay slot. */
+        if ((m & 7) != 0) {
+            r = D_8006D160[m & 7];
+        } else if (flags & 1) {
+            r = 1;
+        } else if (flags & 2) {
+            r = 2;
+        } else if (flags & 4) {
+            r = 3;
+        }
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042A80);
 
@@ -416,7 +438,31 @@ void func_80044A50(UnkNode *n) {
     n->unk_14 = NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044AAC);
+void func_80044AAC(UnkNode *n, UnkNode *m) {
+    /* One function-scope local shared by both arms, not a block-local in
+     * each: set in two blocks it becomes a global allocno and lands in $a1,
+     * which is the register the target uses in both arms. */
+    UnkNode *p;
+
+    func_80044A50(m);
+    if (n != NULL) {
+        p = n->unk_18;
+        n->unk_18 = m;
+        m->unk_14 = n;
+        m->unk_18 = p;
+        if (p != NULL) {
+            p->unk_14 = m;
+        }
+    } else {
+        p = (UnkNode *) D_800833E0[m->unk_1C];
+        /* The store between the first two reads of unk_1C is what stops gcc
+         * sharing the index: it cannot prove the store does not alias. */
+        m->unk_18 = p;
+        m->unk_14 = (UnkNode *) &D_800833E0[m->unk_1C];
+        D_800833E0[m->unk_1C] = (u32) m;
+        p->unk_14 = m;
+    }
+}
 
 void func_80044B48(void) {
     u32 *p = *(u32 **) (D_80083160.unk_00 + 0x8D0);
