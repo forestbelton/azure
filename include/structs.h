@@ -65,6 +65,91 @@ typedef struct Unk3F8F8 {
     u8  pad_0C[0x4];
 } Unk3F8F8;
 
+/* Hand-added. A 4-halfword SVECTOR. func_800463EC copies the x/y pair as one
+   u32 through a cast and vz as a field, and that asymmetry is load-bearing:
+   the differing MEM_IN_STRUCT_P flags are what let sched1 pipeline the x/y
+   group one deep while leaving the vz group serial. Should be rebuilt out of
+   libgte's SVECTOR if the project ever models it. */
+typedef struct Unk463ECV {
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    s16 pad_06;
+} Unk463ECV;
+
+/* Hand-added. The 0x1F800000 scratchpad as func_800463EC lays it out: the OT
+   base at +0x20, the scale VECTOR at +0x30, the translation VECTOR at +0x40, a
+   MATRIX at +0x50, the four RotAverage4 input SVECTORs at +0x70, its two
+   outputs at +0x90, the averaged z at +0xC0, the composed MATRIX at +0xD0 and
+   NormalClip's result at +0x114. unk_114 is volatile because the target
+   reloads it immediately after storing it. The pad_ ranges are unexplored
+   space, not known filler, and this overlaps Unk3DBD0SP -- the two describe
+   the same region and should be merged once more of it is known. */
+typedef struct Unk463ECSP {
+    u8           pad_00[0x20];
+    u32          unk_20;
+    u8           pad_24[0xC];
+    s32          unk_30;
+    s32          unk_34;
+    s32          unk_38;
+    u8           pad_3C[0x4];
+    s32          unk_40;
+    s32          unk_44;
+    s32          unk_48;
+    u8           pad_4C[0x24];
+    Unk463ECV    unk_70[4];
+    s32          unk_90;
+    s32          unk_94;
+    u8           pad_98[0x28];
+    s32          unk_C0;
+    u8           pad_C4[0x50];
+    volatile s32 unk_114;
+} Unk463ECSP;
+
+/* Hand-added. A 0x18-byte face record: four vertex indices into the
+   D_80083160.unk_1E4 table, two packed UV words, a texture index scaled by 8
+   into D_80083160.unk_1E8, two more UV halfwords, and the two bytes at +0x16
+   that terminate the list when they read 1 and a negative value. */
+typedef struct Unk463ECF {
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+    u32 unk_08;
+    u32 unk_0C;
+    u16 unk_10;
+    u16 unk_12;
+    u16 unk_14;
+    u8  unk_16;
+    s8  unk_17;
+} Unk463ECF;
+
+/* Hand-added. The 0x28-byte primitive, libgpu's POLY_FT4: the tag at +0x00,
+   RGB and code at +0x04..+0x07, and four {xy word, uv halfword} vertices with
+   the CLUT at +0x0E and the tpage at +0x16. The +0x0C and +0x14 word stores
+   span the uv and clut/tpage halfwords, so they are casts. Same type as
+   docs/near-misses/func_8003D0F0.c's Unk3D0F0P; merge when one of those
+   lands. */
+typedef struct Unk463ECP {
+    u32 unk_00;
+    u8  unk_04;
+    u8  unk_05;
+    u8  unk_06;
+    u8  unk_07;
+    s32 unk_08;
+    u16 unk_0C;
+    u16 unk_0E;
+    s32 unk_10;
+    u16 unk_14;
+    u16 unk_16;
+    s32 unk_18;
+    u16 unk_1C;
+    u16 unk_1E;
+    s32 unk_20;
+    u16 unk_24;
+    u16 unk_26;
+} Unk463ECP;
+
 /* Hand-added. +0x30 and +0x34 of the scratchpad below: func_8003DBD0 stores a
    word there and reads the low halfword back, and the mode difference is what
    makes the read a real `lhu` rather than a folded register reuse. */
@@ -811,7 +896,14 @@ typedef struct UnkSlot {
     u8       unk_05;
     s16      unk_06;
     u32      unk_08;
-    u8       pad_0C[8];
+    /* Hand-split: func_800463EC hands the first four bytes to func_80065034
+       and reads +0x10 and +0x12 as halfwords (a palette index and a texture
+       page offset, both added into the primitive). func_80044D24 reads
+       +0x0C as a whole word and writes the byte at +0x0F on its own, so this
+       range may want further splitting when that one lands. */
+    u8       unk_0C[0x4];
+    u16      unk_10;
+    u16      unk_12;
     u16      unk_14;   /* flags */
     /* Hand-split: func_8003DBD0 copies +0x16..+0x23 into the scratchpad as a
        rotation (unk_16/unk_18/unk_1A), a scale (unk_1C/unk_1E) and a
@@ -922,6 +1014,11 @@ void PopMatrix(void);
 void SetTransMatrix(void *);
 void SetRotMatrix(void *);
 void RotMatrix(void *, void *);
+void TransMatrix(void *, void *);
+void CompMatrix(void *, void *, void *);
+s32  RotAverage4(void *, void *, void *, void *, s32 *, s32 *, s32 *, s32 *, s32 *, s32 *);
+s32  NormalClip(s32, s32, s32);
+void SetPolyFT4(void *);
 void ScaleMatrix(void *, void *);
 void RotTransSV(void *, void *, s32 *);
 void RotTrans(void *, void *, s32 *);
@@ -954,6 +1051,7 @@ void bzero(void *, s32);
 void func_80069C90(void);
 void func_80048B28(void);
 void func_800894A0(void);
+void func_80065034(u8 *, u8 *, u8 *);
 void func_80040418(void);
 void func_80069CE8(void);
 extern u32 *D_8006CDC8[];

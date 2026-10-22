@@ -4,7 +4,7 @@ void func_800423C0(u8 *, s32, u8 *);
 void func_80041E70(void *);
 void func_80047338(Unk800777AC *, u32, u16);
 void func_80047468(Unk800777AC *, u32, u16);
-void func_800463EC(u8 *, UnkVec *, s16 *, s16);
+void func_800463EC(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80044D24(u8 *, UnkSlot *, s16);
 void func_80041344(u32, u32);
@@ -1218,22 +1218,157 @@ s32 func_80045C34(u8 *p, UnkVec *v, UnkSlot *s) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80045CC4);
 
-s32 func_80046398(u8 *p, UnkVec *v, s16 *arg2) {
+s32 func_80046398(u8 *p, UnkVec *v, UnkSlot *s) {
     UnkNode *n;
 
     for (;;) {
-        func_800463EC(p, v, arg2, arg2[3]);
+        func_800463EC(p, v, s, s->unk_06);
         n = *(UnkNode **) (p - 8);
         if (n == NULL) {
             return 0;
         }
         p = (u8 *) n + 0x20;
         v = n->unk_08;
-        arg2 = (s16 *) n->unk_0C;
+        s = (UnkSlot *) n->unk_0C;
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800463EC);
+/* Transforms and emits one model's faces: builds the matrix, then per face
+ * loads four vertices into the scratchpad, projects them with RotAverage4,
+ * back-face-culls with NormalClip and adds the primitive.
+ *
+ * The load-bearing shape is that the scratchpad vertex and the vertex table
+ * are both 4-halfword SVECTORs, and the x/y pair is copied as one u32 through
+ * a cast while vz is copied as a struct field. gcc 2.7.2's sched1 treats two
+ * MEMs as independent when their MEM_IN_STRUCT_P flags DIFFER and dependent
+ * when they agree, so that asymmetry pipelines the x/y group exactly one deep
+ * and leaves the z group serial -- five stall nops, which is the target. It is
+ * also what the original would naturally write, since the word store spans two
+ * fields and needs a cast while the vz store does not. Measured alternatives:
+ * both sides fields 297 words with no pipelining at all, both sides casts 293,
+ * stores as casts with loads as fields 286, the reverse 300, and literal
+ * constant scratchpad addresses 294 words but 138 differing (every store
+ * rebuilds `lui $at, 0x1F80`, so the matching count is a coincidence).
+ *
+ * unk_114 is volatile: the target stores NormalClip's result and reloads it
+ * before the blez, and without volatile cse folds the reload away (3 words).
+ *
+ * Also established and worth not re-deriving: one pointer local for every
+ * scratchpad field access but literal `(void *) 0x1F8000XX` constants for the
+ * libgte calls, which is the mixing func_8003D0F0 and func_80044724 also need;
+ * RotAverage4's arguments through the pointer local instead; D_80083160
+ * reached both ways in one function, with the pointer local declared first so
+ * cse shares the one `lui` (the same ordering constraint as func_80043A68);
+ * tbl and tex read before PushMatrix; a three-case switch plus default, which
+ * is below gcc's jump-table threshold so it builds the decision tree the
+ * target has; and `break` out of `for (;;)` with the termination test at the
+ * bottom. */
+void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth) {
+    Unk80083160 *g = &D_80083160;
+    Unk463ECSP *sp = (Unk463ECSP *) 0x1F800000;
+    Unk463ECV *tbl = (Unk463ECV *) g->unk_1E4;
+    u8 *tex = (u8 *) g->unk_1E8;
+    u8 m[0x20];
+    Unk463ECF *f;
+    Unk463ECP *p;
+
+    PushMatrix();
+    sp->unk_30 = s->unk_1C;
+    sp->unk_34 = s->unk_1E;
+    sp->unk_38 = s->unk_20;
+    sp->unk_40 = ((s16 *) v)[1];
+    sp->unk_44 = ((s16 *) v)[3];
+    sp->unk_48 = ((s16 *) v)[5];
+    ReadRotMatrix(m);
+    TransMatrix((void *) 0x1F800050, (void *) 0x1F800040);
+    RotMatrix(&s->unk_16, (void *) 0x1F800050);
+    if (s->unk_14 & 1) {
+        sp->unk_30 = -sp->unk_30;
+    }
+    if (s->unk_14 & 2) {
+        sp->unk_34 = -sp->unk_34;
+    }
+    ScaleMatrix((void *) 0x1F800050, (void *) 0x1F800030);
+    CompMatrix(m, (void *) 0x1F800050, (void *) 0x1F8000D0);
+    SetTransMatrix((void *) 0x1F8000D0);
+    SetRotMatrix((void *) 0x1F8000D0);
+    sp->unk_20 = (u32) (D_80083160.unk_00 + 0xB0);
+    p = (Unk463ECP *) *(u32 *) (D_80083160.unk_00 + 0x8D0);
+    s->unk_14 |= 0x8000;
+    f = ((Unk463ECF **) g->unk_1E0)[s->unk_08];
+    for (;;) {
+        s32 x;
+        s32 y;
+        s32 z;
+
+        *(u32 *) &sp->unk_70[0] = *(u32 *) &tbl[f->unk_00];
+        *(u32 *) &sp->unk_70[1] = *(u32 *) &tbl[f->unk_02];
+        *(u32 *) &sp->unk_70[2] = *(u32 *) &tbl[f->unk_04];
+        *(u32 *) &sp->unk_70[3] = *(u32 *) &tbl[f->unk_06];
+        sp->unk_70[0].unk_04 = tbl[f->unk_00].unk_04;
+        sp->unk_70[1].unk_04 = tbl[f->unk_02].unk_04;
+        sp->unk_70[2].unk_04 = tbl[f->unk_04].unk_04;
+        sp->unk_70[3].unk_04 = tbl[f->unk_06].unk_04;
+        sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2],
+                                 &sp->unk_70[3], &p->unk_08, &p->unk_10,
+                                 &p->unk_18, &p->unk_20, &sp->unk_90, &sp->unk_94);
+        switch (s->unk_14 & 3) {
+        case 0:
+            x = p->unk_08;
+            y = p->unk_10;
+            z = p->unk_18;
+            break;
+        case 1:
+            x = p->unk_10;
+            y = p->unk_08;
+            z = p->unk_20;
+            break;
+        case 2:
+            x = p->unk_20;
+            y = p->unk_18;
+            z = p->unk_10;
+            break;
+        default:
+            x = p->unk_18;
+            y = p->unk_20;
+            z = p->unk_08;
+            break;
+        }
+        sp->unk_114 = NormalClip(x, y, z);
+        if (sp->unk_114 > 0) {
+            sp->unk_C0 = sp->unk_C0 - depth;
+            if ((u32) sp->unk_C0 < 0x1E0) {
+                u16 t;
+
+                func_80065034(tex + f->unk_10 * 8, s->unk_0C, (u8 *) &p->unk_04);
+                *(u32 *) &p->unk_0C = f->unk_08;
+                p->unk_0E = p->unk_0E + s->unk_12;
+                *(u32 *) &p->unk_14 = f->unk_0C;
+                t = s->unk_10;
+                if (t != 0) {
+                    p->unk_16 = t + (p->unk_16 & 0xFF9F);
+                }
+                p->unk_1C = f->unk_12;
+                p->unk_24 = f->unk_14;
+                SetPolyFT4(p);
+                if (s->unk_14 & 8) {
+                    if (s->unk_14 & 4) {
+                        p->unk_07 |= 2;
+                    }
+                }
+                AddPrim((void *) (sp->unk_20 + sp->unk_C0 * 4), p);
+                p++;
+                s->unk_14 &= 0x7FFF;
+            }
+        }
+        if (f->unk_16 == 1 && f->unk_17 < 0) {
+            break;
+        }
+        f++;
+    }
+    PopMatrix();
+    *(u32 *) (g->unk_00 + 0x8D0) = (u32) p;
+}
 
 /* Projects the four corners of a rect through func_80046A5C, clips each
  * against the reference point in out[5] with func_80046AFC, and if any corner

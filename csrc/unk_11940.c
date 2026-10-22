@@ -49,7 +49,7 @@ void func_8003E188(s16 arg0, s16 arg1) {
 }
 
 void func_8003E1C4(s16 arg0) {
-    func_80041284(D_8006CDC8[arg0]);
+    func_80041284((Unk41284 *) D_8006CDC8[arg0]);
 }
 
 void func_8003E1FC(void) {
