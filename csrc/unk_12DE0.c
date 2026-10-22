@@ -95,7 +95,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040C08);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040CBC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040F00);
+s32 func_80040F00(s32 *arg0) {
+    s32 count = 0;
+
+    if (*arg0 != 0) {
+        do {
+            arg0++;
+            count++;
+        } while (*arg0 != 0);
+    }
+    return count;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040F2C);
 
