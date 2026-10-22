@@ -18,14 +18,14 @@
  */
 
 /* 0x8002d5b4..0x8002d5be, 0xb bytes, 6 field(s) */
+/* Retyped by hand to 10 bytes with byte alignment, for the same reason as
+   Unk80080AB4: func_8003D468 assigns it and gcc emits two lwl/lwr pairs plus
+   two lb/sb. */
 typedef struct Unk8002D5B4 {
-    u32 unk_00;
-    /* +0x3   is a 4-byte access inside this field */
-    u32 unk_04;
-    /* +0x7   is a 4-byte access inside this field */
-    u8  unk_08;
-    u8  unk_09;
-    u8 pad_0A[0x1];
+    u8 unk_00[4];
+    u8 unk_04[4];
+    u8 unk_08;
+    u8 unk_09;
 } Unk8002D5B4;
 
 /* Hand-added. func_80040FDC scales an index by 12 into this table and
@@ -67,12 +67,15 @@ typedef struct Unk800777AC {
 } Unk800777AC;
 
 /* 0x80080ab4..0x80080aba, 0x7 bytes, 4 field(s) */
+/* Retyped by hand to 6 bytes with byte alignment. func_8003D468 assigns the
+   whole object and gcc emits lwl/lwr + two lb/sb, which is the block move for
+   an unaligned 6-byte type; the 4-byte-aligned spelling gives plain lw/sw.
+   The "4-byte access at +0x3" fieldscan reported is the lwl half, not a
+   field. */
 typedef struct Unk80080AB4 {
-    u32 unk_00;
-    /* +0x3   is a 4-byte access inside this field */
-    u8  unk_04;
-    u8  unk_05;
-    u8 pad_06[0x1];
+    u8 unk_00[4];
+    u8 unk_04;
+    u8 unk_05;
 } Unk80080AB4;
 
 /* 0x80081450..0x80081453, 0x4 bytes, 3 field(s); labels: D_80081450, D_80081451, D_80081452 */
@@ -331,6 +334,16 @@ typedef struct UnkNode {
     u16              unk_1E;   /* flags */
 } UnkNode;
 
+/* Hand-made. The 0x20 bytes immediately after an UnkNode: func_80044144
+   allocates a node and fills this payload through a pointer to n + 1. */
+typedef struct Unk44144 {
+    u32 unk_00;
+    u32 unk_04;
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+} Unk44144;
+
 extern UnkNode *D_80081498;
 extern u32 D_800814A0;
 extern u8  D_800814A4;
@@ -400,7 +413,12 @@ extern Unk8006CE34 D_8006CE34;
 extern Unk8006CE80 D_8006CE80[];
 extern Unk8006E7B4 D_8006E7B4;
 extern Unk800777AC D_800777AC;
-extern Unk80080AB4 D_80080AB4;
+/* Declared as an array of unestablished length, not as the struct: at 6 bytes
+   the struct spelling is inside the -G8 limit and the address comes out as an
+   assembler-expanded `la`, where func_8003D468 needs the compiler split
+   (`lui $v0, %hi` / `addiu $a1, $v0, %lo`). Cast at the use to get the
+   6-byte, byte-aligned block move. */
+extern u8 D_80080AB4[];
 extern Unk80081450 D_80081450;
 extern Unk80081518 D_80081518;
 extern Unk8008151A D_8008151A;
@@ -556,10 +574,16 @@ void *SetDefDrawEnv(void *, s32, s32, s32, s32);
 void *SetDefDispEnv(void *, s32, s32, s32, s32);
 void *ClearOTagR(void *, s32);
 void SetDispMask(s32);
+void PutDispEnv(void *);
+void PutDrawEnv(void *);
+void DrawOTag(void *);
+/* libc, from the PSY-Q runtime. */
+void bzero(void *, s32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
 void func_80069C90(void);
+void func_80048B28(void);
 void func_80069CE8(void);
 extern u32 *D_8006CDC8[];
 /* Declared as an array of unestablished length: func_8003D7DC derives

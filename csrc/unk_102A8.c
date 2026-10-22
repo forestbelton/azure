@@ -19,7 +19,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003CCB0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D0F0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D468);
+void func_8003D468(void) {
+    u8 *base = (u8 *) 0x80010000;
+    u8  a = base[0x3186];
+    u32 b = *(u32 *) (base + 0x3180);
+    u8  c = base[0x3184];
+    u8  d = base[0x2D6E];
+    u16 e = *(u16 *) (base + 0x2094);
+    u16 f = *(u16 *) (base + 0x2098);
+
+    bzero(base, 0x5C84);
+    /* Both assignments are byte-aligned block moves: 6 bytes comes out as one
+     * lwl/lwr pair plus two lb/sb, 10 bytes as two pairs plus two lb/sb. The
+     * cast supplies the size and the alignment; D_80080AB4's own declaration
+     * is an incomplete array so that its address is compiler-split. */
+    *(Unk80080AB4 *) 0x8001020C = *(Unk80080AB4 *) D_80080AB4;
+    *(Unk8002D5B4 *) 0x80010238 = D_8002D5B4;
+    base[0x3186] = a;
+    *(u32 *) (base + 0x3180) = b;
+    base[0x3184] = c;
+    base[0x2D6E] = d;
+    *(u16 *) (base + 0x2094) = e;
+    *(u16 *) (base + 0x2098) = f;
+}
 
 void func_8003D56C(void) {
     func_80069C90();

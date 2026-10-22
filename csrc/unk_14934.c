@@ -16,6 +16,14 @@ void func_80041AE4(void);
 void func_80043CD0(void);
 void func_80043D04(void);
 s32  func_80042518(s8 *, s8);
+UnkNode *func_8003FC64(s32);
+void func_80043FD0(void);
+s32  func_8003F794(s16, s16);
+void func_80040454(void);
+void func_800400B8(void);
+void func_8003F6F4(void);
+void func_8003E758(void);
+void func_8003E2D8(void);
 void func_80042B68(s8 *, s8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041134);
@@ -515,7 +523,34 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043E04);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043E60);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043EB8);
+void func_80043EB8(void) {
+    u8 *p;
+
+    PutDispEnv(D_80083160.unk_00 + 0x5C);
+    PutDrawEnv(D_80083160.unk_00);
+    DrawOTag(D_80083160.unk_00 + 0x8CC);
+    func_8003E758();
+    func_800542BC();
+    D_80081480 = D_8008148C;
+    func_800411AC();
+    func_8003E2D8();
+    /* One local for the buffer address: the two arms share the `lui` and
+     * reorg folds one copy into the branch delay slot. */
+    p = D_801C9E40;
+    if (D_80083160.unk_00 == p) {
+        p += 0x108D4;
+    }
+    D_80083160.unk_00 = p;
+    ClearOTagR(p + 0x70, 0x218);
+    *(u8 **) (D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
+    func_8003F6F4();
+    func_800400B8();
+    func_80048B28();
+    DrawSync(0);
+    if (D_80080A85 == 0) {
+        VSync((D_80080A84 != 1) << 1);
+    }
+}
 
 s32 func_80043FB8(s32 arg0, ...) {
     return 0;
@@ -523,7 +558,27 @@ s32 func_80043FB8(s32 arg0, ...) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043FD0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044144);
+UnkNode *func_80044144(s16 arg0, s16 arg1, u32 arg2, u32 arg3) {
+    UnkNode *n = func_8003FC64(0);
+
+    if (n != NULL) {
+        Unk44144 *e = (Unk44144 *) (n + 1);
+
+        n->unk_10 = (u32) func_80043FD0;
+        if (arg0 == 1) {
+            e->unk_08 = func_8003F794(6, arg1);
+        } else if (arg0 == 0) {
+            e->unk_08 = func_8003F794(5, arg1);
+            func_80040454();
+            D_80080A86 = 0;
+        }
+        e->unk_04 = arg3;
+        e->unk_0A = arg0;
+        e->unk_0C = arg1;
+        e->unk_00 = arg2;
+    }
+    return n;
+}
 
 void func_80044234(u32 arg0, u32 arg1, u32 arg2, u32 arg3) {
     func_8003F540(arg0, arg1, arg2, arg3);
