@@ -578,6 +578,11 @@ extern u16 D_80013714;  /* read with lhu */
    the image that is *indexed* must be written as a constant address instead,
    see docs/addressing-and-translation-units.md. */
 extern u8  D_800E2968;
+/* 0x8008333c is Unk80083160's unk_1DC. func_80043A68 and func_80043B4C reach
+   it as its own symbol -- the word and its own address sharing one `lui` --
+   which the struct spelling cannot give, so it is declared both ways like
+   D_80082E6A. */
+extern u32 D_8008333C[];
 
 /* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
    at +0x48; outside the loaded image, like D_800E2968. */
