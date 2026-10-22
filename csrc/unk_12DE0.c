@@ -412,7 +412,35 @@ s32 func_80040F00(s32 *arg0) {
     return count;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040F2C);
+s32 func_80040F2C(u16 arg0) {
+    Unk8006CE80 *e = &D_8006CE80[arg0];
+    u32 *p = e->unk_04;
+    void (**q)(void);
+
+    /* All three early exits go through one label at the end, which is what
+     * lets reorg steal the shared `v0 = 0` into one branch's delay slot and
+     * leaves the other two branching to the label itself. Written as three
+     * separate `return 0`s, gcc emits a trampoline for the shared pair. */
+    if (p == NULL) {
+        goto done;
+    }
+    q = (void (**)(void)) p[0];
+    if (q == NULL) {
+        goto done;
+    }
+    if (*q == NULL) {
+        goto done;
+    }
+    do {
+        (*q)();
+        if (D_80082E60.unk_0E != 0) {
+            return 1;
+        }
+        q++;
+    } while (*q != NULL);
+done:
+    return 0;
+}
 
 void func_80040FDC(u16 arg0) {
     /* The element pointer must be its own local: taking the field directly

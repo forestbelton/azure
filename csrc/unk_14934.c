@@ -6,6 +6,7 @@ void func_80047338(Unk800777AC *, u32, u16);
 void func_80047468(Unk800777AC *, u32, u16);
 void func_800463EC(u8 *, UnkVec *, s16 *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
+void func_80044D24(u8 *, UnkSlot *, s16);
 void func_8003F6D4(s32, s32, s32 *, s32);
 void func_80040B88(void);
 void func_80042984(u8 *);
@@ -515,7 +516,32 @@ void func_80044B48(void) {
     *(u32 **) (D_80083160.unk_00 + 0x8D0) = p + 3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044BB0);
+s32 func_80044BB0(u8 *p, UnkVec *v, UnkSlot *s) {
+    u16 *scratch = (u16 *) 0x1F800000;
+    /* One temporary for both halves: two separate single-set pseudos get
+     * maximum scheduler priority and both loads float above both stores,
+     * where the target pairs each load with its store. */
+    u16 t;
+
+    for (;;) {
+        UnkNode *n;
+
+        if (!(s->unk_14 & 0x80)) {
+            t = ((u16 *) v)[1];
+            scratch[0] = t;
+            t = ((u16 *) v)[3];
+            scratch[1] = t;
+            func_80044D24(p, s, ((u16 *) v)[5] + s->unk_06);
+        }
+        n = *(UnkNode **) (p - 8);
+        if (n == NULL) {
+            return 0;
+        }
+        p = (u8 *) n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *) n->unk_0C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044C54);
 
