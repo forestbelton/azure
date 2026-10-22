@@ -19,14 +19,35 @@
  * confirms the mechanism is the proof and not the spelling.
  *
  * So the mask cannot be visible to combine where the extension is expanded.
- * combine.c's nonzero_bits REG case (gcc 2.7.2, around line 6887) consults
- * reg_last_set_nonzero_bits only when `reg_last_set_mode == mode` and
- * (`reg_n_sets == 1` or `reg_last_set_label == label_tick`), so the way out is
- * a value with more than one set whose masking set is in a *different* basic
- * block from the extension, or a recorded mode that differs from the one
- * simplify_shift_const asks about. No natural source shape found yet puts a
- * block boundary between the `andi` and the shifts while still emitting them
- * adjacently, which is what the target shows.
+ * The obvious reading of combine.c's nonzero_bits REG case (gcc 2.7.2, around
+ * line 6887) is that it consults reg_last_set_nonzero_bits only when
+ * `reg_last_set_mode == mode` and (`reg_n_sets == 1` or
+ * `reg_last_set_label == label_tick`), which would make "the masking set in a
+ * different basic block from the extension" the way out.
+ *
+ * That reading is WRONG, and it has now been measured. Four probe functions
+ * compiled with the real ccpsx (2026-10-22):
+ *
+ *   s32 A(u16 *p)            { return (s16) (*p & 0x400); }
+ *   s32 B(u16 *p, s32 *q)    { s32 v = *p & 0x400; *q = v; return (s16) v; }
+ *   s32 C(u16 *p, s32 c)     { s32 v = 0; if (c) v = *p & 0x400; return (s16) v; }
+ *   s32 D(s32 v)             { return (s16) v; }
+ *
+ * A gives `andi 0x400; sll 16; srl 16`. B gives `andi 0x400; andi 0xffff; sw;
+ * sll 16; srl 16` -- a second use does not stop the downgrade, it just adds a
+ * truncation. C puts the mask in its own basic block, with the shifts in the
+ * join block and a `v = 0` predecessor, and STILL gives `srl`, with the same
+ * extra `andi 0xffff`. Only D, whose operand is wholly opaque, gives `sra`.
+ *
+ * So neither a second use nor a block boundary defeats the proof, and the
+ * extra `andi 0xffff` both of those introduce is not in the target anyway.
+ * Whatever the original wrote, the value reaching the extension was opaque to
+ * combine -- which is hard to square with the `andi 0x400` sitting immediately
+ * before it. The remaining possibilities are that the extension is not a cast
+ * of the masked value at all, or that something about the surrounding function
+ * (not this expression) changes what combine has recorded. The same question
+ * blocks func_8003D0F0's four `(s8)` conversions, so it is worth more than one
+ * function.
  *
  * Everything else here is settled and worth keeping: D_80082E6A has to be read
  * as D_80082E60.unk_0A (the scalar declaration gives the assembler's
