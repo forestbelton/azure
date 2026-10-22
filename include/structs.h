@@ -341,7 +341,7 @@ extern u32 D_800814B4;
 extern u32 D_800814C8;
 extern u32 D_800814CC;
 extern u8  D_800814D4;
-extern u32 D_800814E0;
+extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
 extern u16 D_80081500;
 extern u32 D_80081508;
