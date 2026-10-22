@@ -144,11 +144,40 @@ all three tables back to back with no pad at 0x8002D654.
 `func_8003E758` additionally needs the `$gp` work from
 `docs/addressing-and-translation-units.md`, so it comes last.
 
+### Case order, recovered from the table bytes
+
+The arms are not in numeric order in the source, and the table is the only
+record of what order they were in. Read out of `data/slus_006.14`:
+
+| table | file offset | source order of the cases |
+|-------|-------------|---------------------------|
+| jtbl_8002D630 (func_80041344) | 0xB30 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
+| jtbl_8002D658 (func_80041588) | 0xE58 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
+
+Identical, which is further evidence the two are siblings over one command
+format -- as are their shared `default: return;`, the `blez` on case 9, the
+`addu $t0, $s0, $zero` record copy, and the record type itself.
+
+### State of the four
+
+| function | words | DIFF | source |
+|----------|-------|------|--------|
+| func_80041344 | 145 of 145 | 67 | `docs/near-misses/func_80041344.c` |
+| func_80041588 | 164 of 164 | 21 | `docs/near-misses/func_80041588.c` |
+| func_80042BDC | not started | | |
+| func_8003E758 | not started, also `$gp`-blocked | | |
+
+func_80041588's 21 are one coupled three-register permutation with no
+instruction, immediate or ordering difference, and its near-miss file has the
+priorities, the conflict sets and the one remaining lever (stopping `flags`
+from taking `$a3`). It also **corrects func_80041344's note**: the switch index
+is not a block-local quantity assigned by local-alloc. `sltiu`/`beqz` end its
+block and the `sll` is in the next one, so it is an ordinary global allocno,
+and the numbers say it can never be allocated before the record pointer.
+
 Note that `verify.py` cannot see any of this -- it masks the relocated
 halfwords that reference the table -- so a MATCH there is not evidence and only
-`make check` is the authority. `docs/near-misses/func_80041344.c` has the
-source that reaches 145/145 words and 67 DIFF, and the register-allocation
-analysis of what would still be left.
+`make check` is the authority.
 
 ## func_80042560  (unk_14934) -- SOLVED 2026-10-22
 

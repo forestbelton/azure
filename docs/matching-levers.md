@@ -386,8 +386,28 @@ func_8003DBD0 and 262 in func_8003D0F0.
 * A local array zeroed by an aggregate initialiser calls `bzero`, which also
   forces a parameter out of its argument register; explicit word stores do not
   (func_80046884, 126 words).
-* A value with two sets defeats combine's `nonzero_bits`, so `i > 0` stays
-  `blez` instead of narrowing to `bnez` (func_80041344, func_800407C0).
+* **A value with more than one SET is opaque to combine, and that is a lever in
+  its own right, not just a trap.** `nonzero_bits` gives up, so `i > 0` stays
+  `blez` instead of narrowing to `bnez` (func_80041344, func_800407C0, and
+  func_80041588's case 9, whose `for (i = *(u16 *) (p + 8); i > 0; i--)` gets
+  `blez` while a sibling loop with a single set gets `beqz`).
+
+  More usefully, combine also stops reducing a `zero_extend` to a `subreg` and
+  stops substituting the following `ior`. So `flags = *(u16 *) (p + 0xC);` then
+  `flags |= 2;` -- the same value, loaded and updated IN PLACE -- keeps the
+  whole load/OR chain as one **global allocno** where the one-expression form
+  is a block-local temp. In func_80041588 that is worth 81 differing words: it
+  is what makes sched1 put the `lhu` first in two different blocks and what
+  stops jump2 cross-jumping one insn too deep. Spelling it as a single
+  statement, `flags = *(u16 *) (p + 0xC) | 2;`, already costs 3 words, so the
+  split is doing the work, not the variable.
+
+  **This is the lever to reach for when sched1 is wrong inside a block**, where
+  section 10 says statement order will not help: changing the number of sets
+  changes the dependency graph, which is the thing sched1 actually reads. Two
+  sets of one pointer does the same job for register class -- func_80041588's
+  `base` is masked, then copied back from the KSEG0 pointer, which is what puts
+  the masked value in a callee-saved register instead of `$v0`.
 * `GetRCnt` has to return a signed type for `(x + 0xFF) >> 8` to be `sra`.
 * **A `u8` temp keeps `addiu 0xFF`; an `s32` one gives `addiu -0x1`.** With an
   `s32` temp, combine narrows `t + 0xFF` to QImode for the byte store and
