@@ -25,6 +25,24 @@
  * would have to be allocated after the n+6 giv (a gap of 0.68 against 4.7, far
  * too wide to close by tweaking ref counts) or else conflict with $v1.
  *
+ * REASSESSED 2026-10-22: this is the shared-preference case, the same class as
+ * func_800407C0, and it is very likely unreachable from C. `p` and `e` BOTH
+ * prefer $a0 -- `p` because it is the incoming parameter, `e` because of its
+ * own recorded preference -- and their live ranges overlap, because the loop
+ * condition reads p[2] every iteration. So they conflict, both want $a0, and
+ * whichever is allocated first simply takes it. `e` wins at 0.675 against
+ * 0.136, a five-fold gap, and the numbers behind it are fixed by the target's
+ * own code: `e`'s nine references are its initialisation, the condition, the
+ * increment and its two loads, all inside the loop and so weighted by
+ * loop_depth, while `p`'s are two reads outside it and one inside. Making the
+ * loop a `goto` loop drops both weights but not their ratio (0.25 against
+ * 0.09). Closing a five-fold gap would need `e` down to about four references
+ * or `p` up to eight, and neither is available.
+ *
+ * So treat the remaining 30-register difference as a property of the
+ * allocator, not of the source, unless someone finds a way to remove `e`'s
+ * $a0 preference specifically. See docs/matching-levers.md section 10.
+ *
  * Ruled out, all giving the same 30-register-difference output: `u32 *p` with
  * `(u32) e < p[2]`; a struct pointer with `u8 *` fields and a pointer compare;
  * `while` instead of `for`; the walker initialised in two statements (worse --

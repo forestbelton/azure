@@ -38,6 +38,35 @@ since they change the reference counts in four basic blocks.
 are already established -- the scratchpad pointer local, the deliberately
 literal matrix arguments, the separate `sz` local, and the rest.
 
+## How much of this list is still reachable from C
+
+Taking stock after a session that unparked five of the original eleven
+(func_80043A68, func_80043B4C, func_8003F80C, func_80042640, func_8003F8F8 and
+func_80041284): what is left divides into two kinds, and the division matters
+for where effort goes next.
+
+**Reachable, mechanism known.** `func_8003D0F0` -- eight of its ten words are
+the `(s8)` fold, and the fix is now measured: any second use of the loaded byte
+blocks it. The task is to find that second use in the original.
+
+**Probably not reachable from C**, each for a reason now written down rather
+than guessed:
+
+| function | the pass that owns it |
+|----------|-----------------------|
+| func_80042A80 | `combine` proving bit 15 clear through `nonzero_bits`; twelve shapes measured against it |
+| func_80041E70 | `cse` folding a known constant, which `rtx_cost` guarantees it prefers; ten shapes measured |
+| func_800407C0 | a call's argument preferences pruning every other preference around it |
+| func_80047054 | two allocnos sharing a `$a0` preference with a five-fold priority gap |
+| func_80042560 | `sched1` would need a dependence between two disjoint byte offsets, which `memrefs_conflict_p` can never produce |
+| func_80042900 | the register for a dead volatile load, i.e. another allocation preference |
+| func_800423C0 | `cse` sharing one `lui` across an extended basic block |
+
+That is the honest reading: the parked list is close to exhausted as far as C
+can take it, and the remaining effort belongs on the jump-table spec change and
+the addressing decision rather than here. `docs/matching-levers.md` section 10
+collects the dead ends so they are not retried.
+
 `docs/near-misses/` holds the source that got each one that close, with the
 shapes already ruled out in comments. Read that file before starting on one;
 the commit that parked it has the reasoning, but only the file has the source.
@@ -131,7 +160,8 @@ for the third, matching all five instructions. (`*(u16 *) 0x80013714` gives
 `lui+ori` plus `0($v1)`; an `extern u16 D_80013714[]` declaration splits all
 three.)
 
-Two things are left. Loop 1's order: the target is `sb $v0,0($s0);
+Two things are left, and the first is now believed unreachable. Loop 1's
+order: the target is `sb $v0,0($s0);
 sb $v1,1($s0); lb $a1,0($s0)`, and sched1 instead fills the load delay of
 `lb $a1` with the independent `sb $v1`. For the target's order the store would
 have to depend on the load, and gcc 2.7.2's `memrefs_conflict_p` never finds a
@@ -144,7 +174,12 @@ index variable, `volatile s8` (which does create the dependence but turns the
 loads into `lbu/sll/sra`), the `-mcpu` set above, and `-mips2`.
 `-fno-schedule-insns -fno-schedule-insns2` does reproduce the loop exactly,
 but the target's prologue is visibly interleaved by sched2, so the schedulers
-were on. Second, the registers: the target has tmp-pointer `$s0`, counter
+were on. Reassessed: the target's order needs `sb 1` to be
+unable to move past `lb 0`, i.e. a dependence between two one-byte accesses at
+disjoint constant offsets off the same base. `memrefs_conflict_p` can always
+prove those disjoint, and `true_dependence`'s differing-flags exception only
+ever removes dependences, never adds one, so no spelling of the two statements
+can create it. See docs/matching-levers.md section 10. Second, the registers: the target has tmp-pointer `$s0`, counter
 `$s1`, walker `$s2`; this source gives the walker `$s0` and the counter `$s2`.
 The `.greg` priorities are loop-2-tmp 2.45, walker 1.80, loop-1-tmp 1.74,
 counter 1.24, so the walker giv has to drop below the counter.
