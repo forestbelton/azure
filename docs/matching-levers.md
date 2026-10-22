@@ -49,7 +49,7 @@ wrong place and no amount of statement reordering fixes it, the question is
 usually which basic block it is in, and the lever is the source's control flow,
 not its order.
 
-Two instances:
+Three instances:
 
 * `x = abs(x);` instead of `if (x < 0) { x = -x; }`. The MIPS `abssi2` pattern
   is a **single insn** whose output template contains its own `bgez`/`subu`, so
@@ -57,21 +57,41 @@ Two instances:
   `nop`. With the abs as one insn, a whole arm becomes one block and sched1 can
   then hoist a reload up to the store it follows. `int abs(int)` is declared in
   `structs.h` for exactly this; func_80046C20 and func_8003F6F4 use it.
+* **A small byte-aligned struct assignment is a single insn too.** `movstrsi`
+  for a small constant size does not expand to loads and stores; it stays as
+  one `movstrsi_internal` through combine, sched1, global-alloc and sched2, and
+  the `lb`/`lb`/`sb`/`sb` appear only from its output template at final. So
+  nothing can be scheduled between those bytes and the insn that follows them,
+  and combine never sees the loads as separate insns -- which is why they are
+  `lb` and not `lbu`. That is the whole of what func_80042560 was parked on:
+  copying the two members one at a time costs it 44 words, because sched1 then
+  steals the second `sb` for a branch delay slot. **Before concluding that a
+  pass cannot be steered, check that the instructions in question are separate
+  insns at all** -- that function was written off on a correct argument about
+  `memrefs_conflict_p` aimed at a dependence that never needed to exist.
 * Duplicating a store into **both** arms of an `if`, so it is in each arm's own
-  block rather than in the join block. This works for an **arithmetic** insn
-  too, not just a store: func_80044D24 negates inside both arms rather than at
-  the join, jump2 merges the two `negu`s back into one, the word count is
-  unchanged, and the sra's destination stays a block-local temp -- worth 8
-  words there.
-
-  Because the merge happens in jump2, **after** global-alloc, the duplicate is
-  also a way to buy a pseudo one extra *reference* at allocation time at no
-  cost in words. That is what closed func_800423C0; see section 3. `jump2`'s cross-jumping merges the two
+  block rather than in the join block. `jump2`'s cross-jumping merges the two
   copies back and plants the join label in front of the result, so the word
   count is unchanged -- but sched1 never saw the store and the constant in one
   ready list. That is how func_8004491C's last two words came right; the hazard
   heuristic that was reordering them is a pure function of the insn and cannot
   be steered from C.
+
+  This works for an **arithmetic** insn too, not just a store: func_80044D24
+  negates inside both arms rather than at the join, jump2 merges the two
+  `negu`s back into one, the word count is unchanged, and the sra's destination
+  stays a block-local temp -- worth 8 words there.
+
+  Because the merge happens in jump2, **after** global-alloc, the duplicate is
+  also a way to buy a pseudo one extra *reference* at allocation time at no
+  cost in words. That is what closed func_800423C0; see section 3.
+
+  And it can be used to **prevent** a merge. Duplicate a run of insns into both
+  arms whose *last* insn differs between them, and cross-jumping merges only
+  the common part, leaving the differing insn in the arm where sched1 put it.
+  func_80045CC4 needs its two halfword stores inside both arms so that each
+  arm's own `subu`/`addu` stays last and lands in the branch's delay slot;
+  without it, jump2 pulls all four stores into the join. Worth 4 words.
 
 ## 2. Loop notes change every reference weight in the function
 
@@ -88,6 +108,19 @@ took `len` from last of the three to first.
 
 But a loop whose invariants were hoisted must keep its note -- a hoisted base
 pointer in the preheader is proof that loop-invariant motion ran.
+
+**loop.c hoists the invariant constant that is SET FIRST in the body, not the
+cheapest one, and it hoists only one.** Measured on func_80045CC4, which has
+two invariant masks in one loop: with `(q->unk_00 & 0xFF000000) | (ot &
+0xFFFFFF)`, expand materialises 0xFF000000 first, so that is the one hoisted --
+as a single `lui` in the prologue -- and 0xFFFFFF stays inline as `lui` + `ori`
+every iteration. **Swapping the two operands of the `|` flips which one gets
+hoisted**, and the target's shape is the swapped one, down to the two prologue
+positions the `lui`/`ori` are scheduled into. Reasoning from cost is backwards
+here: the expensive constant is not the one preferred. Note also that the
+hoisted constant is placed in the function prologue, not in a loop preheader,
+so seeing it there is not evidence that the original declared a function-scope
+local.
 
 ## 3. Allocation priority is the commonest thing left
 
@@ -263,70 +296,89 @@ func_8003DBD0 and 262 in func_8003D0F0.
   drifts (func_80046884, 8 words).
 * A `u16` field read with `(s16)` casts yields a bare `lh`, because combine
   folds zero_extend-then-sign-extend-of-low (func_8004425C).
-* **`volatile` blocks that fold, and this is the one place it is a real
-  mechanism rather than a nudge.** `extendqisi2`'s expander does
-  `force_not_mem` under `-O`, so `lbu` / `sll 24` / `sra 24` is the **natural**
-  expansion of a byte-to-signed conversion; `combine` is what refolds it to
-  `lb`, via a 3-insn combine into `extendqisi2_internal`, which wants a
-  `memory_operand`. `gen_lowpart_for_combine` returns a CLOBBER for a volatile
-  MEM, so the refold cannot happen. It closed func_80044D24's last 7 words
-  first try, with no extra register.
+* **The byte-to-signed fold: `lbu`/`sll 24`/`sra 24` against a single `lb`.**
+  This has been written down wrong twice, so here is the whole mechanism
+  first. `extendqisi2`'s expander does `force_not_mem` under `-O`, which means
+  `lbu` / `sll 24` / `sra 24` is the **natural** expansion of `(s8) p[2]` and
+  `lb` is the optimised one: `combine` produces it with a 3-insn combine into
+  `extendqisi2_internal`, whose operand must satisfy `memory_operand`. So the
+  job is never to *find* a spelling that emits the shifts; it is to stop that
+  one combine. Three things stop it, and they differ in cost:
 
-  Two caveats, both of which cost real time:
-    - **Do not qualify the field.** loop.c's `find_mem_givs` skips volatile
-      MEMs, so a volatile field is addressed off the biv where the target reads
-      off the combined giv. Take the address through a `volatile u8 *` local
-      instead -- the *pointer* is an ordinary DEST_REG giv that `combine_givs`
-      merges into the representative. Pointing it at the field and
-      dereferencing directly costs 53 words, because cse eliminates the
-      pointer.
-    - **Assign the pointer in the ENCLOSING block, one per block.** In the same
-      block as its use, cse folds it into the address before `loop` runs and no
-      giv is formed. Shared across two blocks it is not `replaceable`
-      (loop.c's `last_use_this_basic_block`), so loop.c leaves a `move` copy
-      and cse2 only propagates that away inside its path-length window. Two
-      locals holding the same address, one per block, is what matched.
-* **A memory store between a byte load and its cast blocks that fold.**
-  `(s8) p[2]` is `lb`, and so is the same thing through a `u8` or `s32` local.
-  Put a store between them and `use_crosses_set_p` stops combine substituting
-  the load into the sign extension, so you get the unsimplified
-  `lbu` / `sll 24` / `sra 24` -- and cleanly, with no extra register:
+    - **A HImode consumer. Free, and the first thing to try.** If the result of
+      the chain is consumed in HImode -- an `s16` accumulator, a halfword store
+      -- combine runs `force_to_mode` with a 16-bit mask down the chain instead
+      and the refold never happens. No extra pseudo, no extra register, no
+      extra word:
 
-      s32 f(u8 *p, s32 *q) { u8 t = p[2]; *q = 5; return (s8) t; }
-                          -> lbu / sw / sll 24 / sra 24
+          typedef struct PB { s16 a; u16 c; s32 d; } PB;
+          void fh(u8 *r, PB *q, s32 c) { if (c) q->a = -(s8) r[2] - q->c;
+                                         else   q->a =  (s8) r[2] - q->c; }
+                              -> lbu / sll 24 / sra 24   in each arm
+          void fm(u8 *r, PB *q, s32 c) { ... q->d ... }   -> lb
 
-  **Two sign extensions of the same loaded value** block it too, and that is
-  the shape to reach for when there is no store available. Load the byte once
-  above an `if` and cast it in both arms: combine cannot absorb the
-  `zero_extend` into either `sign_extend`, so you get one shared `lbu` and a
-  `sll 24` / `sra 24` pair per arm.
+      This is also the reason the already-matching **func_8003DBD0** is right
+      (`p->unk_70 = -(s8) r[2] - p->unk_108;`, a single HImode store), which
+      had been unexplained; and it is what reproduced func_80045CC4's four
+      arms. Declaring the accumulator `s32` and casting it `(s16)` at the store
+      does **not** work -- the extensions stay eliminated and it costs 16 words.
+    - **A memory store between the load and the cast.** `use_crosses_set_p`
+      stops combine substituting the load into the sign extension. Also free of
+      registers, but it needs a store you actually want in that position:
 
-      s32 g(u8 *p, s32 c) { u8 t = p[2]; if (c) return -(s8) t; return (s8) t; }
-                          -> lbu / sll 24 / sra 24 / sll 24 / sra 24 / subu
+          s32 f(u8 *p, s32 *q) { u8 t = p[2]; *q = 5; return (s8) t; }
+                              -> lbu / sw / sll 24 / sra 24
 
-  What does **not** work: a second use that is not itself a sign extension
+    - **`volatile`.** `gen_lowpart_for_combine` returns a CLOBBER for a
+      volatile MEM, so the substitution cannot happen at all. This is the one
+      place `volatile` is a real mechanism rather than a nudge (contrast
+      section 10), and it closed func_80044D24's last 7 words first try with no
+      extra register, where the consumer is SImode and no store was available.
+      Two caveats, both of which cost real time:
+        * **Do not qualify the field.** loop.c's `find_mem_givs` skips volatile
+          MEMs, so a volatile field is addressed off the biv where the target
+          reads off the combined giv. Take the address through a
+          `volatile u8 *` local instead -- the *pointer* is an ordinary
+          DEST_REG giv that `combine_givs` merges into the representative.
+          Pointing it at the field and dereferencing directly costs 53 words,
+          because cse eliminates the pointer.
+        * **Assign the pointer in the ENCLOSING block, one per block.** In the
+          same block as its use, cse folds it into the address before `loop`
+          runs and no giv is formed. Shared across two blocks it is not
+          `replaceable` (loop.c's `last_use_this_basic_block`), so loop.c
+          leaves a `move` copy and cse2 only propagates that away inside its
+          path-length window. Two locals holding the same address, one per
+          block, is what matched.
+
+  **Two sign extensions of one loaded value is NOT a fourth mechanism**, and
+  believing it was cost two sessions. It does change the output -- one shared
+  `lbu` above the `if` and a shift pair per arm -- but that is a *different*
+  instruction sequence, not the target's, and it was measured as wrong in both
+  functions it was proposed for: 435 words against func_80045CC4's 437, whose
+  target has a separate `lbu` **in each arm**, and no gain at all in
+  func_8003D0F0, where the shared `sll` hoists into a delay slot. Reach for the
+  HImode consumer instead.
+
+  What also does not work: a second use that is not itself a sign extension
   (`*q = (s8) t; return t;`) gives two loads, `lb` plus `lbu`; one variable
   assigned in both arms dies at its own use and folds locally; a second use of
-  the cast costs a redundant `move`; and an intervening **load** does nothing at
-  all, so a neighbouring `lhu` between the `lbu` and the `sll` in a listing is
-  scheduling, not the cause.
-
-  Note that `u8 t = p[2]; *q = t; return (s8) t;` has both a store and a second
-  use, so it does not discriminate between the two mechanisms -- that
-  conflation is how this entry was first written down wrong.
-
-  Worth 4 of func_80045CC4's 8 missing words. Still not enough for
-  func_8003D0F0, whose arm has neither a store in the right place nor a spare
-  register, and where the shared `sll` hoists into a delay slot so the two-arm
-  shape gains nothing -- see its near-miss file.
+  the cast costs a redundant `move`; and an intervening **load** does nothing
+  at all, so a neighbouring `lhu` between the `lbu` and the `sll` in a listing
+  is scheduling, not the cause. Note that `u8 t = p[2]; *q = t; return (s8) t;`
+  has both a store and a second use, so it does not discriminate between the
+  mechanisms -- that conflation is how this entry was first written down wrong.
 * **The same trick does NOT work on the `srl`/`sra` downgrade.** For
   `(s16) (x & 0x400)` combine proves bit 15 clear and emits `srl`, and a second
   use of either the masked value or the loaded halfword does not stop it -- it
   only adds an `andi 0xffff` that the target does not have. Nor does putting
   the mask in a different basic block. Four shapes measured in
   `docs/near-misses/func_80042A80.c`; that one is still open.
-* A byte copy through an `s8` temporary gives `lb`; copying the field directly
-  gives `lbu` (func_80042710, func_80042560).
+* **A block move's bytes are `lb`; explicit `s8` temporaries give `lbu`** --
+  the opposite of what this line used to say. Copying a two-byte field through
+  `s8` locals lets combine fold the `sign_extend` load into the `(subreg:QI)`
+  store, so you get `lbu`; the whole-struct assignment is one insn whose bytes
+  combine never sees, so they stay `lb` (func_80042710, func_80042560, and
+  section 1).
 * An all-`u8` struct has alignment 1, which makes a whole-struct assignment the
   byte-aligned `lwl`/`lwr` + `swl`/`swr` block move instead of `lw`/`sw`
   (Unk3E39C, Unk44724Blk). Keep one `u32` member to force alignment 4
@@ -337,6 +389,10 @@ func_8003DBD0 and 262 in func_8003D0F0.
 * A value with two sets defeats combine's `nonzero_bits`, so `i > 0` stays
   `blez` instead of narrowing to `bnez` (func_80041344, func_800407C0).
 * `GetRCnt` has to return a signed type for `(x + 0xFF) >> 8` to be `sra`.
+* **A `u8` temp keeps `addiu 0xFF`; an `s32` one gives `addiu -0x1`.** With an
+  `s32` temp, combine narrows `t + 0xFF` to QImode for the byte store and
+  `trunc_int_for_mode` rewrites the constant as -1. A `u8` temp, or a separate
+  `s32 u = t + 0xFF;`, keeps 255 (func_80045CC4, 2 words).
 
 ## 8. Statement order and expression shape
 

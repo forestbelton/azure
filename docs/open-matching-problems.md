@@ -9,14 +9,13 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 
 | function      | unit    | what is left |
 |---------------|---------|--------------|
-| func_80042560 | unk_14934 | addressing solved; loop 1's store/load order and three `$s` registers are not; see below |
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
-| func_80045CC4 | unk_14934 | 429 of 437: four words are the `(s8)` fold (mechanism known), four a mask-hoisting shift |
+| func_80045CC4 | unk_14934 | 436 of 437: the `(s8)` fold and the mask hoisting are both solved; one register swap on a 0.9% gap remains |
 
 ## func_8003D0F0  (unk_102A8) -- partial, 10 words short
 
@@ -45,20 +44,22 @@ Taking stock after a session that unparked five of the original eleven
 func_80041284): what is left divides into two kinds, and the division matters
 for where effort goes next.
 
-**Reachable, mechanism known, not yet applied.** `func_80045CC4` -- four of its
-eight words are the `(s8)` fold, and the `volatile` mechanism that closed
-func_80044D24 (matching-levers section 7) should close it; the other four are a
-loop.c hoisting choice between its two masks, with a specific hypothesis in the
-near-miss file. Worth another pass before anything else here.
+**Reachable, mechanism known, not yet applied.** `func_8003D0F0` -- eight of
+its ten words are the `(s8)` fold, and the mechanism is now settled: a **HImode
+consumer** blocks combine's refold to `lb` for free, with no extra pseudo and no
+`move`. That is exactly why this function looked unreachable -- both previously
+known blockers cost a `move` its seven-insn arm has no room for -- and its arm
+consumes the converted value with two `sh` stores, so an `s16` accumulator
+should do it. See matching-levers section 7.
 
-**Mechanism still unknown.** `func_8003D0F0` -- eight of its ten words are the
-`(s8)` fold. Two ways to block that fold are now measured (a memory store
-between the load and the cast, via `use_crosses_set_p`; and a second use of the
-cast), but **both are excluded by the target's own instruction count**: its arm
-is seven insns with no store in the right place and no spare register, and every
-blocking spelling costs a `move` it does not have. So the arm's source structure
-is probably not what the near-miss assumes. An earlier version of this entry
-claimed the mechanism was settled; it was not.
+`func_80045CC4` is one word short with every instruction accounted for: both of
+the problems recorded here are solved (the `(s8)` fold by the same HImode
+consumer, and the mask hoisting by the first-set-invariant rule, whose
+cost-based hypothesis was backwards). What remains is a `$s0`/`$s1` swap on a
+**0.9% priority gap** -- 1.4309 against 1.4438 -- which is the sort of margin
+section 3's duplicate-an-insn lever closed in func_800423C0, plus a four-word
+tension between the mask hoisting and the `or`'s operand order. All measured in
+the near-miss file.
 
 **Probably not reachable from C**, each for a reason now written down rather
 than guessed:
@@ -69,8 +70,7 @@ than guessed:
 | func_80041E70 | `cse` folding a known constant, which `rtx_cost` guarantees it prefers; ten shapes measured |
 | func_800407C0 | a call's argument preferences pruning every other preference around it |
 | func_80047054 | two allocnos sharing a `$a0` preference with a five-fold priority gap |
-| func_80042560 | `sched1` would need a dependence between two disjoint byte offsets, which `memrefs_conflict_p` can never produce |
-| func_80042900 | the register for a dead volatile load, i.e. another allocation preference |
+| func_80042900 | one duplicated `move $v0,zero`: the join label is not an `own_thread_p`, so reorg copies its first insn into the delay slot and must leave the original. The register question that used to be here is SOLVED |
 
 That is the honest reading: the parked list is close to exhausted as far as C
 can take it, and the remaining effort belongs on the jump-table spec change and
@@ -150,49 +150,31 @@ halfwords that reference the table -- so a MATCH there is not evidence and only
 source that reaches 145/145 words and 67 DIFF, and the register-allocation
 analysis of what would still be left.
 
-## func_80042560  (unk_14934) -- partial
+## func_80042560  (unk_14934) -- SOLVED 2026-10-22
 
-The mixed addressing is solved, and it really is mixed within the one
-function: a constant base pointer for the first two accesses and the
-`extern u16 D_80013714` scalar for the third.
+Landed in `csrc/unk_14934.c`, 56 of 56 words, with the load-bearing shapes
+commented there.
 
-```c
-    u8 *base = (u8 *) 0x80010000;
-    saved = *(u16 *) (base + 0x3714);
-    *(u16 *) (base + 0x3714) = saved | 2;
-    ...
-    D_80013714 = saved;
-```
+Kept because of how it was wrong. This section argued that loop 1's order --
+`sb 0($s0)` / `sb 1($s0)` / `lb 0($s0)`, where sched1 instead fills the load
+delay with the independent second `sb` -- required a dependence between two
+one-byte accesses at disjoint constant offsets off one base pseudo, that
+`memrefs_conflict_p` can always prove those disjoint, and that
+`true_dependence`'s differing-flags exception only ever removes dependences.
+All of that is correct. The conclusion drawn from it was not, because **those
+four instructions were never four insns**: a small byte-aligned struct
+assignment stays a single `movstrsi_internal` through combine, sched1,
+global-alloc and sched2, and the `lb`/`lb`/`sb`/`sb` appear only from its output
+template at final. There was nothing to make dependent.
 
-That gives `lui $v1,0x8001 / lhu $s4,0x3714($v1) / ... / sh $v0,0x3714($v1)`
-for the first two and the assembler-expanded `lui $at / sh $s4,0x3714($at)`
-for the third, matching all five instructions. (`*(u16 *) 0x80013714` gives
-`lui+ori` plus `0($v1)`; an `extern u16 D_80013714[]` declaration splits all
-three.)
+The same insn is what fixed the three `$s` registers, by removing one in-loop
+reference from each address pseudo and taking the walker giv across the
+`floor_log2` step at 8 references -- the reference-count lever running downward.
 
-Two things are left, and the first is now believed unreachable. Loop 1's
-order: the target is `sb $v0,0($s0);
-sb $v1,1($s0); lb $a1,0($s0)`, and sched1 instead fills the load delay of
-`lb $a1` with the independent `sb $v1`. For the target's order the store would
-have to depend on the load, and gcc 2.7.2's `memrefs_conflict_p` never finds a
-dependence between offsets 0 and 1 off the same base pseudo (the
-`MEM_IN_STRUCT` exception in `true_dependence` needs one operand to be a
-non-struct, non-varying reference). Ruled out: `struct {s8 a,b;} tmp[4]`, a
-byte pointer into it, `s8 tmp[4][2]`, the stores swapped, no temporaries
-(which also turns the loads into `lbu`), an `s8` temporary, a `j = i * 2`
-index variable, `volatile s8` (which does create the dependence but turns the
-loads into `lbu/sll/sra`), the `-mcpu` set above, and `-mips2`.
-`-fno-schedule-insns -fno-schedule-insns2` does reproduce the loop exactly,
-but the target's prologue is visibly interleaved by sched2, so the schedulers
-were on. Reassessed: the target's order needs `sb 1` to be
-unable to move past `lb 0`, i.e. a dependence between two one-byte accesses at
-disjoint constant offsets off the same base. `memrefs_conflict_p` can always
-prove those disjoint, and `true_dependence`'s differing-flags exception only
-ever removes dependences, never adds one, so no spelling of the two statements
-can create it. See docs/matching-levers.md section 10. Second, the registers: the target has tmp-pointer `$s0`, counter
-`$s1`, walker `$s2`; this source gives the walker `$s0` and the counter `$s2`.
-The `.greg` priorities are loop-2-tmp 2.45, walker 1.80, loop-1-tmp 1.74,
-counter 1.24, so the walker giv has to drop below the counter.
+**The failure mode to carry forward: before concluding that a pass cannot be
+steered, check that the instructions in question are separate insns at all.**
+Everything ruled out here was ruled out against the field-by-field spelling,
+which was the wrong question.
 
 ## func_80042900  (unk_14934) -- partial
 

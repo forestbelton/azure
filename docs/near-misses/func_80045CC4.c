@@ -1,30 +1,100 @@
-/* func_80045CC4 (unk_14934) -- 429 of 437 words, 364 DIFF. Not compiled; see
- * docs/open-matching-problems.md. Eight words short, and the structure -- all
- * basic blocks, all call sequences, all addressing -- is right.
+/* func_80045CC4 (unk_14934) -- 436 of 437 words, 167 DIFF. Not compiled; see
+ * docs/open-matching-problems.md.
  *
- * FOUR OF THE EIGHT are the `(s8)` byte conversion, and the mechanism is
- * known: load the byte ONCE above the `if` and sign-extend it in BOTH arms, so
- * combine cannot absorb the zero_extend into either sign_extend and each arm
- * gets its own `sll 24` / `sra 24` off one shared `lbu`. See
- * docs/matching-levers.md section 7. The source below still emits `lb`; the
- * fix is to hoist the byte read above the `if` at both sites (2 sites x 2 arms
- * x 1 word). One variable assigned in BOTH arms does not work -- each set dies
- * at its own use and folds locally -- but that spelling does reproduce the
- * whole arm structure, including the shared sh/sh tail and the `j` with the
- * subtraction in the delay slot, so build on it.
+ * It emits one slot's elements: builds the matrix in the scratchpad, then per
+ * 0xC-byte element either calls the element's own callback or clips, projects
+ * and links one 0x28-byte primitive into the OT.
  *
- * Ruled out for the conversion: `-(s8) e->b2`; via s8, u8 and s32 locals; the
- * bare pointer `e[2]`; the hand-written `(x << 24) >> 24`; and signed 8-bit
- * bitfields, both `signed int b : 8` and `s8 b : 8`.
+ * Every instruction is accounted for and the word count is one short. What is
+ * left is ONE register swap (about 160 of the 167 differing words), a
+ * four-word tension in the mask block, five words of local-alloc, and one word
+ * in the tail. All four are measured below.
  *
- * THE OTHER FOUR are a global register shift with a specific hypothesis.
- * This source has the scratchpad in $s1, `v` in $s6 and 0xFF000000 hoisted
- * into $s7; the target has the scratchpad in $s0, `v` in $s7, and 0xFFFFFF
- * hoisted into $s6 with 0xFF000000 materialised inside the loop as a single
- * `lui`. The target's choice is the natural one -- 0xFFFFFF costs lui+ori so
- * loop.c hoists it, while 0xFF000000 is one lui so it does not -- so the
- * spelling of the two masks here is making gcc hoist the wrong one. Not
- * isolated, and there is no greg dump for this version.
+ * SOLVED, 2026-10-22: the `(s8)` conversions, and the earlier mechanism
+ * recorded here was wrong. This header used to say the fix was to load the
+ * byte ONCE above the `if` and sign-extend it in both arms. That gives 435
+ * words, not 437, because the target has a separate `lbu` IN EACH ARM:
+ *
+ *   lbu $v0,-0x6($s2) / lhu / lhu / sll 24 / sra 24 / negu / subu / sh / sh / j / subu
+ *   lbu $v0,-0x6($s2) / lhu / lhu / sll 24 / sra 24 /        subu / sh / sh /     addu
+ *
+ * What works is a **HImode consumer**: declare the accumulator `s16` rather
+ * than `s32` and the `lbu` / `sll 24` / `sra 24` survives in each arm, first
+ * try, with no extra register. combine then runs `force_to_mode` with a 16-bit
+ * mask down the chain instead of refolding to `lb`. The same fact explains why
+ * the already-matching func_8003DBD0 is right. Full mechanism in
+ * docs/matching-levers.md section 7; the `volatile` route that closed
+ * func_80044D24 was tried here and gives 438 words / 382 DIFF, so it is not a
+ * drop-in.
+ *
+ * Also solved: the mask hoisting. The hypothesis recorded here -- that 0xFFFFFF
+ * costs lui+ori so loop.c hoists it while 0xFF000000 is one lui so it does not
+ * -- is BACKWARDS. loop.c hoists whichever invariant is SET FIRST in the body,
+ * regardless of cost, and hoists only one. Swapping the two operands of the `|`
+ * in the first OT statement flips both, and then the hoisted `lui`/`ori`, the
+ * inline `lui`, the `and` and their two prologue positions all match the target
+ * exactly, at the right addresses.
+ *
+ * THE TENSION, worth 4 words and still open. The target's `or $v1,$v1,$v0` has
+ * `q->unk_00 & 0xFF000000` as operand 0, which needs the NATURAL operand order
+ * -- but the natural order hoists the wrong constant. With the swap, `or` and
+ * `sw` match and only the two `lw`s and two `and`s have $v0/$v1 exchanged.
+ * Ruled out: the masked OT value hoisted into a temp one statement earlier
+ * (436/169 -- operand order right, registers still swapped); `(u32) q &
+ * 0xFFFFFF` hoisted a statement earlier (438/425, BOTH constants then
+ * hoisted); `q->unk_00` pre-loaded into a temp (436/167, cse folds it); a
+ * function-scope `u32 m = 0xFFFFFF` (438/425); the same with `~m` for the other
+ * mask (438/425). The open question is whether 0xFFFFFF's pseudo can be made
+ * the first-set invariant without moving its first USE.
+ *
+ * THE REGISTER SWAP, about 160 words, and measured to within 1%. $s0 and $s1
+ * are exchanged: the scratchpad pointer is mine $s1 / target $s0, and the q+4
+ * giv mine $s0 / target $s1. Everything else is right ($s2 = e+8, $s3 = s,
+ * $s4 = q, $s5 = e, $s6 = 0xFFFFFF, $s7 = v, $fp = arg3). From the dumps the
+ * scratchpad pseudo has 148 refs / 724 insns = 1.4309 and the q+4 giv 77 / 320
+ * = 1.4438, and `;; 22 regs to allocate:` lists the giv first, so it takes
+ * $s0. A 0.9% gap: three more insns of live length on the giv, seven fewer on
+ * the scratchpad, or two more scratchpad references inside the loop (148 -> 150
+ * gives 1.4503) flips it. The STATIC reference counts already match the target
+ * exactly ($s0 89, $s1 40), so the difference is purely pre-allocation live
+ * length, i.e. in the RTL -- most likely the extra HImode pseudo the `s16`
+ * accumulator introduces, which the original source did not have. Section 3's
+ * duplicate-an-insn lever is the thing to try here, in the upward direction on
+ * the scratchpad pointer.
+ *
+ * FIVE WORDS: in the flag-merge block, `t` and `p->unk_24` have $v1/$a0
+ * exchanged (`lbu $v1,-0x7($s2)` / `lhu $a0,0x24($s0)` against the target's
+ * $a0/$v1). Same insns, same order. These are block-local quantities, so this
+ * is local-alloc -- but see func_80042900's near-miss file before giving up:
+ * a block-local value is only out of local-alloc's reach while it owns its own
+ * pseudo.
+ *
+ * ONE WORD: the tail takes the ADDRESS of D_80083160 into a register (`lui` /
+ * `addiu %lo` / `lw 0x0` / `sw 0x8D0`) where this emits `lui` / `lw %lo` /
+ * `sw`. The same symbol gets the `%lo` form at the top of the function in both,
+ * so the function genuinely mixes the two spellings (section 6). Tried, all
+ * 436: a block-local `Unk80083160 *g = &D_80083160;`, `*(u8 **)((u8 *)
+ * &D_80083160)`, and the constant address `((Unk80083160 *) 0x80083160)
+ * ->unk_00`, which makes cc1psx emit an absolute `lw $2,-2146946720` that the
+ * assembler still expands to two words.
+ *
+ * THREE MORE LOAD-BEARING SHAPES found with the above, each measured:
+ *  - the four clip tests must be ONE expression, not four `s32` locals.
+ *    Through locals, all four are computed and then three `or`s run at the
+ *    end; inline, each partial `or` is emitted in the preceding block and
+ *    reorg puts it in that block's branch delay slot, which is the target.
+ *    Worth 27 DIFF.
+ *  - `t` must be `u8`, not `s32`: with `s32`, combine narrows `t + 0xFF` to
+ *    QImode for the byte store and trunc_int_for_mode rewrites the constant as
+ *    -1, giving `addiu $v0,$v1,-0x1` where the target has `0xFF`. A separate
+ *    `s32 u = t + 0xFF;` also works. Worth 2 words, at both clamp pairs.
+ *  - the two min tests are `>`, not `<`: `if ((s16) q->unk_08 > (s16)
+ *    q->unk_20)`, not `q->unk_20 < q->unk_08`. Same `slt`, but it swaps which
+ *    field is loaded first, and the target loads 0x4($s1) then 0x1C($s1).
+ *  - the join stores are duplicated into BOTH arms so that each arm's own
+ *    `subu`/`addu` stays last and lands in the `j`'s delay slot; without it
+ *    jump2 cross-jumps all four stores into the join. Worth 4 words. This is
+ *    section 1's cross-jump lever used to PREVENT a merge.
  *
  * LOAD-BEARING, each measured by reverting it:
  *  - one scratchpad struct through one pointer local at 0x1F800000, but the
@@ -58,19 +128,38 @@
  * costs 80 words (509 against 429). A field-by-field OT update without the
  * second statement is 10 words short.
  *
- * structs.h, when this lands: Unk3DBD0SP needs extending with unk_08/0C/10/14
- * as Unk3DBD0W unions, `u8 *unk_20`, `u16 unk_50`, `u16 unk_58`, the
- * unk_78..unk_8C SVECTORs, `s32 unk_90`, `s32 unk_C0` and `u8 unk_11C[0x14]`,
- * all inside existing pads -- and it, Unk463ECSP and func_80044D24's
- * Unk44D24SP all describe the same region and want merging. UnkSlot's unk_0C
- * range wants resolving the same way func_80044D24 needs. New types:
- * Unk45CC4E (0xC bytes: four bytes, two halfwords, then a word that is a
- * function pointer in one arm and four bytes in the other) and Unk45CC4P
- * (another POLY_FT4, with unions of `u16 h` / `u8 b[2]` at +0x0C/14/1C/24).
- * Prototypes: CompMatrix (now added by func_800463EC) and
- * `s32 RotAverage4(void *, void *, void *, void *, u32 *, u32 *, u32 *, u32 *,
- * s32 *, s32 *)` -- note the u32* argument types differ from the s32* form
- * func_800463EC landed, so one of the two is imprecise.
+ * TYPES this needs, all confirmed against the match (2026-10-22):
+ *  - Unk45CC4E (0xC bytes: u8 unk_00..unk_03, u16 unk_04, u16 unk_06, then
+ *    u8 unk_08..unk_0B, which the callback arm reads as one function pointer
+ *    through a cast) and Unk45CC4P (0x28 POLY_FT4 with a
+ *    `union { u16 h; u8 b[2]; }` at +0x0C/+0x14/+0x1C/+0x24). The vertex
+ *    halfwords at +0x08/0A/10/12/18/1A/20/22 must be u16, read as
+ *    `(u16) (x + 0x20) < 0x181` for the clip tests (lhu/addiu/andi/sltiu) and
+ *    with `(s16)` casts for the min tests (lh).
+ *  - Unk3DBD0SP needs unk_08/unk_0C/unk_10/unk_14 as the word/halfword union
+ *    (stored `sw`, read back `lhu` -- the union is what makes that a real
+ *    `lhu`), `u8 *unk_20` (byte-scaled OT base, `p->unk_20 + p->unk_C0 * 4`),
+ *    u16 unk_50 and u16 unk_58 (read `lhu` then `(s16)` cast, so u16-with-cast
+ *    is right and s16 is wrong), the unk_78/7A/7C, unk_80/82/84 and
+ *    unk_88/8A/8C SVECTOR halfwords, s32 unk_90 beside the existing unk_94,
+ *    and s32 unk_C0 (written `sw` and read back twice as `lw` -- the recompute
+ *    is load-bearing). All fit inside existing pad_ ranges. `u8 unk_11C[0x14]`
+ *    is NOT needed: 0x1F80011C and the other scratchpad addresses are reached
+ *    as literal constants for the libgte calls, which is the load-bearing
+ *    spelling.
+ *  - UnkSlot needs u32 unk_08 (the element-list pointer, read as a word and
+ *    cast), u32 unk_0C (written as a word to q->unk_04 and byte-patched at
+ *    [3]) and the u16 run unk_10..unk_22.
+ *  - CompMatrix and RotAverage4 are already prototyped in include/structs.h by
+ *    func_800463EC, with `s32 *` primitive arguments. The local copies this
+ *    file used to carry are DELETED: they are a hard compile error now
+ *    (`conflicting types for 'RotAverage4'`). There is no s32*/u32*
+ *    disagreement to resolve -- the s32* form is byte-identical here, and the
+ *    u32* spelling recorded earlier was simply obsolete.
+ *
+ * The shimmed typedefs below are layout-identical to what the real names must
+ * become, so the codegen is unaffected, but this was never re-verified under
+ * the real names in include/structs.h -- that check is still owed.
  */
 
 #define Unk3DBD0SP Unk3DBD0SP_orig
@@ -199,9 +288,6 @@ typedef struct Unk45CC4P {
     u16         unk_26;
 } Unk45CC4P;
 
-void CompMatrix(void *, void *, void *);
-s32  RotAverage4(void *, void *, void *, void *, u32 *, u32 *, u32 *, u32 *,
-                 s32 *, s32 *);
 
 void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
     Unk3DBD0SP *p = (Unk3DBD0SP *) 0x1F800000;
@@ -239,7 +325,7 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
         if ((e->unk_00 & 0x20) == 0) {
             s32 u;
             s32 w;
-            s32 a;
+            s16 a;
             s32 otz;
 
             u = e->unk_08;
@@ -261,48 +347,47 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                 p->unk_80 = a;
                 p->unk_70 = a;
                 a = a - p->unk_10.h;
+                p->unk_88 = a;
+                p->unk_78 = a;
             } else {
                 a = (s8) ((u8 *) e)[2] - p->unk_108;
                 p->unk_80 = a;
                 p->unk_70 = a;
                 a = a + p->unk_10.h;
+                p->unk_88 = a;
+                p->unk_78 = a;
             }
-            p->unk_88 = a;
-            p->unk_78 = a;
             if ((e->unk_00 ^ p->unk_24) & 2) {
                 a = -(s8) ((u8 *) e)[3] - p->unk_10A;
                 p->unk_7A = a;
                 p->unk_72 = a;
                 a = a - p->unk_14.h;
+                p->unk_8A = a;
+                p->unk_82 = a;
             } else {
                 a = (s8) ((u8 *) e)[3] - p->unk_10A;
                 p->unk_7A = a;
                 p->unk_72 = a;
                 a = a + p->unk_14.h;
+                p->unk_8A = a;
+                p->unk_82 = a;
             }
-            p->unk_8A = a;
-            p->unk_82 = a;
             otz = RotAverage4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
-                              (u32 *) &q->unk_08, (u32 *) &q->unk_10,
-                              (u32 *) &q->unk_18, (u32 *) &q->unk_20,
+                              (s32 *) &q->unk_08, (s32 *) &q->unk_10,
+                              (s32 *) &q->unk_18, (s32 *) &q->unk_20,
                               &p->unk_90, &p->unk_94) - arg3 - 8;
             p->unk_C0 = otz;
             if ((u32) otz < 0x1E0) {
-                s32 c0;
-                s32 c1;
-                s32 c2;
-                s32 c3;
-                s32 t;
+                u8 t;
 
-                c0 = (u16) (q->unk_08 + 0x20) < 0x181 &&
-                     (u16) (q->unk_0A + 0x20) < 0x121;
-                c1 = (u16) (q->unk_10 + 0x20) < 0x181 &&
-                     (u16) (q->unk_12 + 0x20) < 0x121;
-                c2 = (u16) (q->unk_18 + 0x20) < 0x181 &&
-                     (u16) (q->unk_1A + 0x20) < 0x121;
-                c3 = (u16) (q->unk_20 + 0x20) < 0x181 &&
-                     (u16) (q->unk_22 + 0x20) < 0x121;
-                if ((c0 | c1 | c2 | c3) != 0) {
+                if ((((u16) (q->unk_08 + 0x20) < 0x181 &&
+                      (u16) (q->unk_0A + 0x20) < 0x121) |
+                     ((u16) (q->unk_10 + 0x20) < 0x181 &&
+                      (u16) (q->unk_12 + 0x20) < 0x121) |
+                     ((u16) (q->unk_18 + 0x20) < 0x181 &&
+                      (u16) (q->unk_1A + 0x20) < 0x121) |
+                     ((u16) (q->unk_20 + 0x20) < 0x181 &&
+                      (u16) (q->unk_22 + 0x20) < 0x121)) != 0) {
                     ((u8 *) &q->unk_00)[3] = 9;
                     s->unk_14 &= 0x7FFF;
                     p->unk_10.w = p->unk_10.w + p->unk_08.w;
@@ -333,11 +418,11 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                         q->unk_24.b[1] = t + 0xFF;
                         q->unk_1C.b[1] = t;
                     }
-                    if ((s16) q->unk_20 < (s16) q->unk_08) {
+                    if ((s16) q->unk_08 > (s16) q->unk_20) {
                         q->unk_14.b[0] = q->unk_14.b[0] - 1;
                         q->unk_24.b[0] = q->unk_24.b[0] - 1;
                     }
-                    if ((s16) q->unk_22 < (s16) q->unk_0A) {
+                    if ((s16) q->unk_0A > (s16) q->unk_22) {
                         q->unk_1C.b[1] = q->unk_1C.b[1] - 1;
                         q->unk_24.b[1] = q->unk_24.b[1] - 1;
                     }
@@ -351,8 +436,8 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                         }
                     }
                     q->unk_04 = s->unk_0C;
-                    q->unk_00 = (q->unk_00 & 0xFF000000) |
-                        (*(u32 *) (p->unk_20 + p->unk_C0 * 4) & 0xFFFFFF);
+                    q->unk_00 = (*(u32 *) (p->unk_20 + p->unk_C0 * 4) & 0xFFFFFF) |
+                        (q->unk_00 & 0xFF000000);
                     *(u32 *) (p->unk_20 + p->unk_C0 * 4) =
                         (*(u32 *) (p->unk_20 + p->unk_C0 * 4) & 0xFF000000) |
                         ((u32) q & 0xFFFFFF);
