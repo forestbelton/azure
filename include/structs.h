@@ -435,6 +435,16 @@ extern Unk80083CE8 D_80083CE8;
    resolves each to the same address. */
 extern u8 D_80082E6A;
 
+/* Hand-added. A table func_8003F9E0 walks until the first word is zero,
+   passing the word and the two halfwords to func_8003F80C. The 0xC stride is
+   measured; +0x08 is never touched. Named positionally. */
+typedef struct UnkEntry {
+    u32 unk_00;
+    u16 unk_04;
+    u16 unk_06;
+    u32 unk_08;
+} UnkEntry;
+
 /* Hand-added. func_8003DB94 indexes an array of these by a signed halfword
    and stores the resulting pointer, so the element is 8 bytes. */
 typedef struct UnkElem {
@@ -472,9 +482,10 @@ void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
 void func_8003F8F8(u32 *);
-void func_8003F9E0(u32 *);
+void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
+void func_80042BDC(s8 *, s8);
 
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */

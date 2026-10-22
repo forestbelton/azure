@@ -2,6 +2,7 @@
 
 s32 func_8003F270(void);
 void func_8003E758(void);
+u32 func_8003E240(s32);
 
 void func_8003E140(s8 *arg0) {
     *arg0 = 1;
@@ -41,7 +42,20 @@ void func_8003E1FC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E240);
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E2D8);
+void func_8003E2D8(void) {
+    /* The struct pointer must be the primary base and the word pointer
+       derived from it: deriving the other way round gives `addu $s0,$s1,-8`
+       where the target has `addiu $s1,$s0,8`. */
+    Unk80083160 *s = &D_80083160;
+    u32 *q = &s->unk_08;
+
+    q[1] = s->unk_08;
+    s->unk_08 = func_8003E240(0);
+    if ((s->unk_08 & 0xF000) == 0xF000) {
+        s->unk_08 = 0;
+    }
+    q[2] = (s->unk_08 ^ q[1]) & s->unk_08;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E34C);
 

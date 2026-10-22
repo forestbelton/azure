@@ -126,7 +126,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800429E4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042A80);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042B68);
+void func_80042B68(s8 *arg0, s8 arg1) {
+    s32 i;
+
+    for (i = 3; i >= 0; i--) {
+        if (arg0[i * 2 + 0x2C] == arg1) {
+            arg0[i * 2 + 0x2C] = 0;
+            arg0[i * 2 + 0x2D] = 0;
+            func_80042BDC(arg0, arg1);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042BDC);
 

@@ -4,6 +4,7 @@ void func_80040BB4(void);
 void func_80040CBC(u8);
 void func_80040AA0(u16);
 u32 *func_80040574(s32);
+void func_8003F80C(u32, u16, u16, s32);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
 
@@ -63,7 +64,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F80C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F8F8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F9E0);
+void func_8003F9E0(UnkEntry *e) {
+    while (e->unk_00 != 0) {
+        func_8003F80C(e->unk_00, e->unk_04, e->unk_06, 0);
+        e++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FA44);
 
@@ -351,7 +357,7 @@ void func_80041038(u16 arg0) {
         u32 *q = (u32 *) p[1];
 
         if (q != NULL) {
-            func_8003F9E0(q);
+            func_8003F9E0((UnkEntry *) q);
         }
     }
 }
