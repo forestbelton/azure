@@ -83,26 +83,42 @@ see it (145/145, with the caveat below about relocated words).
 
 ### Blocked by addressing (31)
 
-The real obstacle, and the largest single group.
-`docs/addressing-and-translation-units.md` has the analysis. Five of the 31
-need only `$gp`-relative addressing (func_8003E4FC, func_8003F5E0,
-func_80044618, func_80044698, func_800448BC) and the other 26 need both modes
-in one compilation, which no per-file `-G` can give.
+The largest single group, and **no longer the wall it was written up as**.
+`docs/addressing-and-translation-units.md` has the analysis; read its "Proved:
+one unit CAN mix both modes" section first. (That document counts 32 rather
+than 31, because it includes func_8003E758, which is counted under the
+jump-table group here.)
 
-Two of the five are cheap: `func_8003F5E0` sits immediately after the
+Five need only `$gp`-relative addressing -- func_8003E4FC, func_8003F5E0,
+func_80044618, func_80044698, func_800448BC -- and want the carve-out the
+project already has working: their own unit built with `MASPSXFLAGS_G8`, like
+`gprel_12DD4` and `gprel_14910`. `func_8003F5E0` sits immediately after the
 carved-out `gprel_12DD4`, so extending that subsegment by one function picks it
-up (it needs renaming `unk_12DE0` to `unk_12DEC` and re-extracting), and
-`func_80044618`/`func_80044698` are adjacent inside `unk_14934` and could be
-carved out together. Both want a splat spec change, a re-extraction and a
-`MASPSXFLAGS_G8` line in the Makefile. Both also mean `make splat`, so they
-cannot be done while anything else is reading `asm/nonmatchings`.
+up (renaming `unk_12DE0` to `unk_12DEC` and re-extracting), and func_80044618
+and func_80044698 are adjacent inside `unk_14934` and can be carved together.
+That is the cheapest landing in the group.
 
-The 26 need the documented long-term fix: each C file must *define* the globals
-its functions reach `$gp`-relatively, rather than declaring them `extern`, so
-maspsx can see the size. That means moving those objects out of the splat data
-segments and into C. **This is a structural decision about where the project's
-data lives and it has not been made** -- it was deliberately left for the
-owner rather than started.
+The other 26 need both modes in one compilation, which no per-file `-G` can
+give -- but **a symbol the unit DEFINES gets `%gp_rel` even at the forced
+`-G0`**, while undefined symbols in the same unit stay absolute. That is
+measured, with the relocations checked by hand, on func_800410FC at 5 of 5
+words. The whole group touches only 38 symbols, in two windows, and the window
+20 of them need is 224 bytes of zeros -- so no initial values have to be
+recovered. Both windows' layouts are derived, and the `.sdata` block for the
+all-zero one already assembles to the right size with every symbol at the right
+offset.
+
+So the structural decision this was waiting on is smaller than it looked: not
+"move the project's data into C", but "carve two small windows out of one bin
+blob and define their objects". Window B is 224 zero bytes and unblocks 20
+functions; window A is 108 bytes with 25 initialised ones to carry across, and
+unblocks 10 more.
+
+What is left untested is linker placement -- carving the window out of the
+closing `[0x54240, bin]` blob and placing it from the generated script, whose
+`/DISCARD/ : { *(*) }` silently drops any section splat does not place. That
+needs `make splat`, so like the carve-outs above it cannot be done while
+anything else is reading `asm/nonmatchings`.
 
 ## How to work a function
 
