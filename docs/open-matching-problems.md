@@ -37,29 +37,6 @@ since they change the reference counts in four basic blocks.
 are already established -- the scratchpad pointer local, the deliberately
 literal matrix arguments, the separate `sz` local, and the rest.
 
-## Functions blocked by jump-table placement
-
-`func_80041344` (unk_14934) is a 9-case dense switch whose target dispatches
-through `jtbl_8002D630`, and that symbol lives inside the **opening**
-`[0x800, bin]` subsegment (vram 0x8002D000..0x80032E60) -- data that sits
-before all the code in the image. Compiling a switch does emit gcc's own table
-into `.rdata`, with exactly nine `.word`s in exactly the target's order, but
-`build/slus_006.14.ld` collects every `.rodata` at `_800_RODATA_START`, far
-past `.text`, so the table lands nowhere near 0x8002D630 and the image shifts.
-
-Landing it needs the table carved out of the opening bin blob as a `.rodata`
-subsegment belonging to `unk_14934`, and the rodata collection moved to the
-front of the linker script -- the same class of spec change as the
-`func_8003CAA8` and `gprel_12DD4` items in `docs/where-we-are.md`.
-`jtbl_8002D5C0`, `jtbl_8002D658` and `jtbl_8002D67C` sit in the same blob, so
-the change unblocks more than one function.
-
-Note that `verify.py` cannot see this problem -- it masks the two relocated
-halfwords that reference the table -- so a MATCH there would be misleading and
-only `make check` is the authority. `docs/near-misses/func_80041344.c` has the
-source that reaches 145/145 words and 67 DIFF, and the register-allocation
-analysis of what would still be left.
-
 `docs/near-misses/` holds the source that got each one that close, with the
 shapes already ruled out in comments. Read that file before starting on one;
 the commit that parked it has the reasoning, but only the file has the source.
@@ -71,6 +48,67 @@ which splat split off because it follows `main`'s infinite loop, and it sits at
 the start of the `unk_102A8` subsegment. Fixing it means extending the `main`
 asm subsegment to 0x102c4 and starting the C unit there; it is a spec change,
 not a matching problem.
+
+## Functions blocked by jump-table placement
+
+Four functions dispatch through a jump table, and all four are blocked:
+`func_80041344` and `func_80041588` (unk_14934, 145 and 164 instructions),
+`func_80042BDC` (unk_14934, 543) and `func_8003E758` (unk_11940, 698 -- also
+in the `$gp` group). That is about 1550 instructions, the largest blocked
+group after the translation-unit problem.
+
+The tables live inside the **opening** `[0x800, bin]` subsegment (vram
+0x8002D000..0x80032E60), data that sits before all the code in the image.
+Compiling a switch does emit gcc's own table into `.rdata`, with the right
+entries in the right order, but `build/slus_006.14.ld` collects every
+`.rodata` at `_800_RODATA_START`, far past `.text`, so the table lands nowhere
+near the right address and the image shifts.
+
+### What the table bytes say about the original translation units
+
+Reading the region out of `data/slus_006.14` pins the layout down exactly:
+
+| symbol | vram | entries | targets | owner |
+|--------|------|---------|---------|-------|
+| jtbl_8002D5C0 | 0x8002D5C0..0x8002D62F | 28 | 0x8003EE60..0x8003F1F8 | func_8003E758 |
+| jtbl_8002D630 | 0x8002D630..0x8002D653 | 9 | 0x800413A0..0x80041528 | func_80041344 |
+| *(pad)* | 0x8002D654 | 1 zero word | | |
+| jtbl_8002D658 | 0x8002D658..0x8002D67B | 9 | 0x8004164C..0x800417B0 | func_80041588 |
+| jtbl_8002D67C | 0x8002D67C.. | 13+ | 0x80042C2C..0x80043430 | func_80042BDC |
+
+The tables are contiguous except for that one zero word, and its position is
+informative. 0x8002D5C0, 0x8002D630 and 0x8002D658 are all 8-byte aligned
+while 0x8002D654 and 0x8002D67C are not, so `.rdata` was aligned to 8 per
+translation unit. func_80041344's table therefore **ends a translation unit**
+and func_80041588's **begins the next one**, while func_80041588's and
+func_80042BDC's are contiguous and so belong to the same unit.
+
+So `unk_14934` as currently split lumps at least two original units together,
+with a boundary at func_80041588 -- and that boundary has to exist in the C
+before the tables can land, because one unit's `.rdata` would otherwise emit
+all three tables back to back with no pad at 0x8002D654.
+
+### What landing them needs
+
+1. `csrc/unk_14934.c` split in two at func_80041588, with matching splat
+   subsegments, so each original unit gets its own `.rdata`.
+2. The opening bin blob carved so 0x8002D5C0..(end of jtbl_8002D67C) is not
+   also emitted as raw data.
+3. Linker-script placement of those three units' `.rodata` at 0x8002D5C0,
+   0x8002D630 and 0x8002D658, with 8-byte alignment between sections so the
+   pad word falls out on its own.
+4. All three unk_14934 functions decompiled **at once**: a missing one leaves
+   its unit's `.rodata` short and everything after it shifts, so they cannot be
+   landed one at a time.
+
+`func_8003E758` additionally needs the `$gp` work from
+`docs/addressing-and-translation-units.md`, so it comes last.
+
+Note that `verify.py` cannot see any of this -- it masks the relocated
+halfwords that reference the table -- so a MATCH there is not evidence and only
+`make check` is the authority. `docs/near-misses/func_80041344.c` has the
+source that reaches 145/145 words and 67 DIFF, and the register-allocation
+analysis of what would still be left.
 
 ## func_80041284  (unk_14934) -- partial
 

@@ -147,6 +147,16 @@ were explained rather than fought.
   are the authority.
 - cc1psx runs under wine and its asm output has CRLF line endings. Strip the
   CR before matching labels.
+- **`verify.py` compares only the upper 16 bits of any relocated word.** A
+  `%lo(SYM)+N` where the target has `%lo(SYM)` passes, and so does a jump-table
+  reference that points at the wrong place. It bit func_8003F80C and it is why
+  a MATCH on any of the four switch functions would be misleading. `make check`
+  is the only authority; treat a verify MATCH as "worth running make check on".
+- **wine's filesystem is case-insensitive, so two scratch files whose names
+  differ only in case are the same file to `ccpsx`.** With `zz_gA.s` already in
+  the scratch directory, `ccpsx -o .../zz_ga.s` writes `zz_gA.s`, exits 0, and
+  `verify.py` then dies with FileNotFoundError on a file the compiler "wrote".
+  Name scratch variants so they differ by more than case.
 
 ## Open TODOs
 
