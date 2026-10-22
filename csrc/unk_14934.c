@@ -271,7 +271,78 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042560);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042640);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042710);
+/* Copies one record over another field by field, merging the two flag words
+ * rather than replacing them, then hands the destination to func_80041E70.
+ *
+ * The asymmetry between the three loops is load-bearing, and loop 1's is
+ * semantic as well:
+ *  - loop 1 copies +0x00 and +0x02 of each 3-byte element and deliberately
+ *    leaves the middle byte alone. A whole-struct assignment copies all three
+ *    and costs 2 words.
+ *  - loop 2 IS a whole-struct assignment. move_by_pieces emits the 2-byte copy
+ *    as two QImode loads then two QImode stores in one straight-line group,
+ *    which is both the lb/lb/sb/sb the target has and the stores-before-
+ *    increments order. Field by field gives lbu/sb/lbu/sb; through s32
+ *    temporaries it gives lb/lb but with the pointer increments hoisted
+ *    between the loads and the stores, and that is forced -- with two loads,
+ *    two stores and three increments the dependence graph gives the stores
+ *    scheduling depth 2 against the increments' 1, so gcc always picks a store
+ *    at T-3. The extra register pressure the block-move group creates is also
+ *    what forces the second parameter out of $a1 into $t2, the word that
+ *    spelling was short.
+ *  - loop 3 is the direct array copy; routing it through a temporary costs 4
+ *    words.
+ *
+ * The 0x49 tag byte lies inside the unk_48 word, so it needs its own spelling;
+ * the byte-pointer form, `((u8 *) p)[0x49]` and a union member all match. */
+void func_80042710(Unk42710 *d, Unk42710 *s) {
+    s32 i;
+
+    d->unk_00 = s->unk_00;
+    d->unk_01 = s->unk_01;
+    d->unk_02 = s->unk_02;
+    d->unk_03 = s->unk_03;
+    d->unk_04 = s->unk_04;
+    d->unk_05 = s->unk_05;
+    d->unk_06 = s->unk_06;
+    for (i = 2; i >= 0; i--) {
+        d->unk_08[i].unk_00 = s->unk_08[i].unk_00;
+        d->unk_08[i].unk_02 = s->unk_08[i].unk_02;
+    }
+    d->unk_11 = s->unk_11;
+    d->unk_12 = s->unk_12;
+    d->unk_13 = s->unk_13;
+    d->unk_14 = (d->unk_14 | s->unk_14) & 0xFFEFFFFF;
+    d->unk_18 = s->unk_18;
+    d->unk_1C = (d->unk_1C | s->unk_1C) & 0xEFF6FEFF;
+    d->unk_20 = s->unk_20;
+    d->unk_22 = s->unk_22;
+    d->unk_24 = s->unk_24;
+    d->unk_26 = s->unk_26;
+    d->unk_27 = s->unk_27;
+    d->unk_28 = s->unk_28;
+    d->unk_2A = s->unk_2A;
+    for (i = 3; i >= 0; i--) {
+        d->unk_2C[i] = s->unk_2C[i];
+    }
+    for (i = 0xC; i >= 0; i--) {
+        d->unk_34[i] = s->unk_34[i];
+    }
+    d->unk_43 = s->unk_43;
+    d->unk_44 = s->unk_44;
+    if (((u8 *) &d->unk_48)[1] == 0) {
+        d->unk_48 = s->unk_48;
+    }
+    if (((u8 *) &s->unk_48)[1] == 0xF) {
+        d->unk_48 = s->unk_48;
+        if (s->unk_4C != 0) {
+            d->unk_4C = (u32) &d->unk_48;
+        }
+    }
+    d->unk_45 = s->unk_45;
+    d->unk_54 = s->unk_54;
+    func_80041E70(d);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042900);
 

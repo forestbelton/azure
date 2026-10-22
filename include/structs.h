@@ -55,6 +55,67 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. A 3-byte element: func_80042710 copies +0x00 and +0x02 of each
+   of three of these and deliberately leaves the middle byte alone, which is
+   why that copy is field-by-field and not a whole-struct assignment. */
+typedef struct Unk42710A {
+    u8 unk_00;
+    u8 pad_01[0x1];
+    u8 unk_02;
+} Unk42710A;
+
+/* Hand-added. A 2-byte element, copied whole by func_80042710 -- that is what
+   makes it gcc's byte-aligned 2-byte block move, two lb then two sb. The block
+   move reveals nothing about the members' signedness. */
+typedef struct Unk42710B {
+    u8 unk_00;
+    u8 unk_01;
+} Unk42710B;
+
+/* Hand-added. The ~0x58-byte record func_80042710 copies field by field and
+   func_80042640 initialises from a template. unk_14 and unk_1C are merged into
+   the destination with `|` and then masked (0xFFEFFFFF and 0xEFF6FEFF), so
+   they are flag words. The byte at +0x49 lies inside the unk_48 word: it is a
+   tag, 0 meaning "destination unset" and 0xF in the source meaning "relink",
+   and unk_4C is a self-pointer set to &unk_48. Every pad_ range is unexplored
+   space, not known filler, and the size is a floor: both of func_80042710's
+   callers are still stubs, and the stride they index will pin it down. */
+typedef struct Unk42710 {
+    u8          unk_00;
+    u8          unk_01;
+    u8          unk_02;
+    u8          unk_03;
+    u8          unk_04;
+    u8          unk_05;
+    u16         unk_06;
+    Unk42710A   unk_08[3];
+    u8          unk_11;
+    u8          unk_12;
+    u8          unk_13;
+    u32         unk_14;
+    u32         unk_18;
+    u32         unk_1C;
+    u16         unk_20;
+    u16         unk_22;
+    u16         unk_24;
+    u8          unk_26;
+    u8          unk_27;
+    u8          unk_28;
+    u8          pad_29[0x1];
+    u16         unk_2A;
+    Unk42710B   unk_2C[4];
+    u8          unk_34[0xD];
+    u8          pad_41[0x2];
+    u8          unk_43;
+    u8          unk_44;
+    u8          unk_45;
+    u8          pad_46[0x2];
+    u32         unk_48;
+    u32         unk_4C;
+    u8          pad_50[0x4];
+    u32         unk_54;
+} Unk42710;
+
 /* Hand-added. Only its first word is read, by func_80040CBC; a struct rather
    than a bare u32 for the MEM_IN_STRUCT_P reason on Unk40CBCA below. */
 typedef struct Unk40CBCC {
@@ -687,6 +748,7 @@ s32  func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
 s32  func_80044724(void);
 void func_80043A68(void);
 void func_80043B4C(void);
+void func_80042710(Unk42710 *, Unk42710 *);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
