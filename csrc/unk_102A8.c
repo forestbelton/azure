@@ -1,5 +1,7 @@
 #include "common.h"
 
+void func_8003D7DC(void);
+
 INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003CAA8);
 
 void func_8003CAC4(void) {
@@ -28,7 +30,22 @@ void func_8003D56C(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D5A4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D760);
+void func_8003D760(void) {
+    /* The rect goes out as two words: four halfword field assignments would
+       give four `sh`s, and an aggregate initializer lands in .sdata, which
+       this unit's linker script discards. */
+    u32 r[2];
+
+    func_8005FFFC();
+    func_8004EB30();
+    func_8003D7DC();
+    r[0] = 0;
+    r[1] = 0x2000400;
+    ClearImage(r, 0, 0, 0);
+    D_8008148C = (u32) &D_80126804;
+    D_80081480 = (u32) &D_80126804;
+    D_80080A7C = 0x38000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D7DC);
 

@@ -489,6 +489,9 @@ s32  func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
 void func_80042BDC(s8 *, s8);
 void func_800482C8(Unk800777AC *, u32 *);
+void func_8005FFFC(void);
+void func_8004EB30(void);
+extern u8 D_80126804;
 
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */
@@ -512,6 +515,7 @@ void RotTrans(void *, void *, s32 *);
 void LoadImage(void *, u32 *);
 void AddPrim(void *, void *);
 s32  DrawSync(s32);
+void ClearImage(void *, u8, u8, u8);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */

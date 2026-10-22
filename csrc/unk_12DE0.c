@@ -275,7 +275,12 @@ void func_80040490(void *arg0, s16 *rect) {
     LoadImage(rect, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800404F8);
+void func_800404F8(u16 *rect) {
+    u32 *p = func_80040574(((s16) rect[2] >> 1) * *(s16 *) (rect + 3));
+
+    func_8003DB4C((int *) p, ((s16) rect[2] >> 1) * *(s16 *) (rect + 3));
+    LoadImage(rect, p);
+}
 
 u32 *func_80040574(s32 size) {
     u32 *p;
@@ -291,7 +296,17 @@ u32 *func_80040574(s32 size) {
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800405E8);
+u32 *func_800405E8(s32 size) {
+    u32 *p;
+
+    if (D_8008148C + D_80080A7C <= D_80081480 + size) {
+        D_80081480 = D_8008148C;
+        DrawSync(0);
+    }
+    p = (u32 *) (D_8008148C + D_80080A7C - size);
+    D_80080A7C = D_80080A7C - size;
+    return p;
+}
 
 void func_8004066C(s32 arg0) {
     D_80080A7C += arg0;
