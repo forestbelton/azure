@@ -99,7 +99,35 @@ s32 func_8003FA44(s32 arg0) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FAD4);
+void func_8003FAD4(void) {
+    u8 *q = D_801EAFE8;
+    s32 i;
+    u8 *p;
+
+    /* The counter has to be initialised before the walking pointer: a `for`
+     * header puts `i = 0` after `p = q`, and the two callee-saved registers
+     * come out saved in that order. */
+    i = 0;
+    p = q;
+    do {
+        func_8003DB4C((int *) p, 0x49);
+        i++;
+        p += 0x124;
+    } while (i < 0x100);
+    for (i = 0xFE; i >= 0; i--) {
+        u8 *next = q + 0x124;
+
+        *(u8 **) q = next;
+        q = next;
+    }
+    *(u32 *) q = 0;
+    D_80081498 = NULL;
+    D_80081490 = (u32) D_801EAFE8;
+    for (i = 0x1F; i >= 0; i--) {
+        D_80083360[i] = 0;
+        D_800833E0[i] = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FB98);
 

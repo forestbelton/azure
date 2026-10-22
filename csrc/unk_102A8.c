@@ -47,7 +47,23 @@ void func_8003D760(void) {
     D_80080A7C = 0x38000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D7DC);
+void func_8003D7DC(void) {
+    /* The base has to come out as a lo_sum in a register: a constant address
+     * or a scalar's `&` folds the +0x5C into a second `la` instead of the
+     * target's single `addiu` off the base. */
+    u8 *p = D_801C9E40;
+
+    SetDefDrawEnv(p, 0, 0, 0x140, 0xE0);
+    SetDefDrawEnv(&D_801DA714, 0, 0xE0, 0x140, 0xE0);
+    SetDefDispEnv(p + 0x5C, 0, 0xE0, 0x140, 0xF0);
+    SetDefDispEnv(&D_801DA770, 0, 0, 0x140, 0xF0);
+    *(s16 *) (p + 0x1093A) = 0xC;
+    *(s16 *) (p + 0x66) = 0xC;
+    *(s16 *) (p + 0x1093E) = 0xE0;
+    *(s16 *) (p + 0x6A) = 0xE0;
+    D_801DA72C[0] = 1;
+    *(u32 *) (p + 0x18) = 1;
+}
 
 void func_8003D8B0(void) {
     s32 i;

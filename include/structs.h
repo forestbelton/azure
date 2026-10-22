@@ -189,21 +189,6 @@ typedef struct Unk80083160 {
     u16 unk_1F0;
 } Unk80083160;
 
-/* 0x80083360..0x800833df, 0x80 bytes, 3 field(s) */
-typedef struct Unk80083360 {
-    void (*unk_00)(void);  /* called through */
-    u32 unk_04;
-    u8 pad_08[0x74];
-    u32 unk_7C;
-} Unk80083360;
-
-/* 0x800833e0..0x8008345f, 0x80 bytes, 2 field(s) */
-typedef struct Unk800833E0 {
-    u32 unk_00;
-    u8 pad_04[0x78];
-    u32 unk_7C;
-} Unk800833E0;
-
 /* 0x80083462..0x8008346b, 0xa bytes, 3 field(s) */
 typedef struct Unk80083462 {
     u16 unk_00;
@@ -397,6 +382,11 @@ extern void (*D_80083C68[])(void);
 extern u32 D_80083778;
 /* Retyped by hand from the three-field 0x80-byte structs fieldscan inferred:
    func_8003CAC4 fills both by index, 0x40 halfwords each. */
+/* Retyped by hand from the 0x80-byte structs fieldscan inferred: func_8003FAD4
+   zeroes both as 0x20 words from the top down, so the three reported fields
+   are elements 0, 1 and 31. */
+extern u32 D_80083360[0x20];
+extern u32 D_800833E0[0x20];
 extern u16 D_80083858[0x40];
 extern u16 D_800838D8[0x40];
 
@@ -415,8 +405,6 @@ extern Unk80081522 D_80081522;
 extern Unk80082E60 D_80082E60;
 extern Unk80083120 D_80083120[8];
 extern Unk80083160 D_80083160;
-extern Unk80083360 D_80083360;
-extern Unk800833E0 D_800833E0;
 extern Unk80083462 D_80083460;
 extern Unk80083958 D_80083958;
 extern Unk80083CA8 D_80083CA8;
@@ -513,13 +501,27 @@ void LoadImage(void *, u32 *);
 void AddPrim(void *, void *);
 s32  DrawSync(s32);
 void ClearImage(void *, u8, u8, u8);
+void *SetDefDrawEnv(void *, s32, s32, s32, s32);
+void *SetDefDispEnv(void *, s32, s32, s32, s32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
 void func_80069C90(void);
 void func_80069CE8(void);
 extern u32 *D_8006CDC8[];
-extern u32 D_801C9E40;
+/* Declared as an array of unestablished length: func_8003D7DC derives
+   addresses inside it with `addiu`, which only happens when the base is a
+   lo_sum in a register, and nothing can fold a constant into a lo_sum. */
+extern u8  D_801C9E40[];
+/* Out-of-image neighbours of D_801C9E40: the two whose addresses are only
+   taken stay scalars so they come out as an `la`, D_801DA72C is reached with
+   a compiler-split store so it must be past the -G8 limit, and D_801EAFE8 is
+   a run of 0x100 blocks of 0x124 bytes that func_8003FAD4 threads into a
+   free list. */
+extern u32 D_801DA714;
+extern u32 D_801DA770;
+extern u32 D_801DA72C[];
+extern u8  D_801EAFE8[];
 
 /* Hand-added. Outside the loaded image, so fieldscan excludes it; splat's
    undefined_syms_auto resolves it for the linker. */

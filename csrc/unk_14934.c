@@ -438,7 +438,7 @@ s32 func_80045310(u32 arg0) {
      * folds the +4 into it, where the target bumps a register. */
     u32 *p = D_80081478;
 
-    if (D_80083160.unk_00 != (u8 *) &D_801C9E40) {
+    if (D_80083160.unk_00 != D_801C9E40) {
         p++;
     }
     return *p < arg0;
