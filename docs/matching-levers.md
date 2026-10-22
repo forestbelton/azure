@@ -605,3 +605,32 @@ tool output compounds. Two things dominate:
 Also: grep the reference listing and the dumps rather than reading them whole
 (`grep 'Register 8' .../lreg`, `sed -n` a range of the `.s`), and do not re-read
 a file you have already seen.
+
+**Measured costs, so a dispatch can be budgeted rather than guessed** (one
+function each, fresh general-purpose agents told to read this document):
+
+| function | outcome | tokens | tool calls |
+|----------|---------|--------|------------|
+| func_80042560 | MATCH | 130K | 25 |
+| func_80044D24 | MATCH | 212K | 47 |
+| func_8003D0F0 | MATCH | 230K | 57 |
+| func_80045CC4 | 436 of 437 | 316K | 85 |
+| func_80041588 | 164 of 164, 21 DIFF | 316K | 82 |
+| a fork of the main session | one function | ~890K | 326 |
+
+The pattern: a function whose mechanism is already named costs 130-230K and
+lands; an open-ended one costs about 315K and comes back short but with
+measurements. Either is far cheaper than a fork, which pays for the parent's
+whole conversation on every turn.
+
+Two things that make the difference between those columns:
+
+* **Tell the agent the mechanism you think it needs, in full, in the prompt.**
+  func_8003D0F0 had been parked for two sessions; the agent that landed it was
+  sent one paragraph naming the HImode consumer and closed the gap first try.
+  A brief that just says "finish this function" buys the 315K column.
+* **Resume an agent with `SendMessage` instead of spawning a fresh one.**
+  Everything it measured is in its context, and a new agent re-derives it.
+  Killing a long-running agent throws all of it away for nothing -- asking it
+  to report what it has now caps its remaining turns and keeps the
+  measurements.

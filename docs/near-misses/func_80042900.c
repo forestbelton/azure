@@ -64,6 +64,13 @@
  *   - an explicit `return 0;` inside the arm (5 DIFF, identical output).
  *   - no final return at all, falling off the end of the 0xD arm: 11 DIFF, gcc
  *     emits a second `jr` and reorders the tail.
+ *   - the arm owning the ONLY `return 0` and the not-0xD path falling off the
+ *     end of the function -- the shape the paragraph above argues for -- in
+ *     both spellings: `s32 r = 0;` first with `return r;` last, and a plain
+ *     `return 0;` after the read. Both 8 DIFF. The duplicate does go away, but
+ *     gcc pays for the undefined path elsewhere in the tail, so this is worse
+ *     than the 5 DIFF source below, not better. If the shape is right, the
+ *     cost has to come off somewhere else.
  *   - `volatile s32 *` instead of `volatile u32 *`; assigning the read to a
  *     dead local of its own (both pre-date the `t` reuse and are now moot).
  *
