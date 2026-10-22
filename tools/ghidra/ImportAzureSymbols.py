@@ -1,0 +1,95 @@
+# Import Azure Dreams symbols and fix up $gp.
+#
+# Run from Ghidra's Script Manager after importing data/slus_006.14 with the
+# ghidra_psx_ldr loader. Generate the input first with:
+#
+#     python3 tools/ghidra_syms.py      # -> build/ghidra_symbols.tsv
+#
+# Two jobs. First, apply the 460 known symbols, 426 of which are functions, so
+# the listing arrives named instead of blank. Second, set $gp to 0x80080994.
+# That one matters: the PS-EXE header's gp0 field is 0x00000000, so Ghidra
+# assumes there is no $gp and leaves every $gp-relative access unresolved --
+# and there are 245 of them in the game's own code. crt0 sets the real value
+# at runtime (lui/addiu at 0x800339ac), which a static load cannot see.
+#
+# @category Azure
+# @runtime PyGhidra
+
+from java.math import BigInteger
+
+GP_VALUE = 0x80080994
+
+
+def read_table(path):
+    rows = []
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 3:
+                continue
+            rows.append((parts[0], int(parts[1], 16), parts[2]))
+    return rows
+
+
+def apply_symbols(rows):
+    made_fn = renamed_fn = labelled = skipped = 0
+    for name, value, kind in rows:
+        if name == "_gp":
+            continue
+        addr = toAddr(value)
+        if getMemoryBlock(addr) is None:
+            skipped += 1          # outside the loaded image
+            continue
+        if kind == "func":
+            fn = getFunctionAt(addr)
+            if fn is None:
+                if createFunction(addr, name) is not None:
+                    made_fn += 1
+                else:
+                    # Undefined or mid-instruction: fall back to a label so
+                    # the address is still annotated rather than silently lost.
+                    createLabel(addr, name, True)
+                    labelled += 1
+            else:
+                fn.setName(name, ghidra.program.model.symbol.SourceType.USER_DEFINED)
+                renamed_fn += 1
+        else:
+            createLabel(addr, name, True)
+            labelled += 1
+    return made_fn, renamed_fn, labelled, skipped
+
+
+def set_gp():
+    gp = currentProgram.getRegister("gp")
+    if gp is None:
+        print("warning: no $gp register for this language; skipping")
+        return 0
+    ctx = currentProgram.getProgramContext()
+    n = 0
+    for block in currentProgram.getMemory().getBlocks():
+        if not block.isInitialized():
+            continue
+        ctx.setValue(gp, block.getStart(), block.getEnd(),
+                     BigInteger.valueOf(GP_VALUE))
+        n += 1
+    createLabel(toAddr(GP_VALUE), "_gp", True)
+    return n
+
+
+tsv = askFile("Azure symbol table (build/ghidra_symbols.tsv)", "Import")
+rows = read_table(tsv.getAbsolutePath())
+print("read %d symbols" % len(rows))
+
+made, renamed, labelled, skipped = apply_symbols(rows)
+print("functions created: %d" % made)
+print("functions renamed: %d" % renamed)
+print("labels applied:    %d" % labelled)
+if skipped:
+    print("skipped (outside loaded memory): %d" % skipped)
+
+blocks = set_gp()
+print("$gp = 0x%08x set over %d initialized block(s)" % (GP_VALUE, blocks))
+print("done -- re-run Auto Analyze so $gp-relative references resolve")
