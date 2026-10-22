@@ -68,14 +68,22 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 # so nothing is lost.
 MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                 --run-assembler --gnu-as-path=$(AS) \
-                --use-comm-section --dont-force-G0 -G8
+                --use-comm-section -G8
 
 # Per-file escape hatch. A translation unit whose functions reach their globals
 # absolutely rather than $gp-relatively needs gas left at -G0; see
 # docs/addressing-and-translation-units.md. Use as:
 #     build/csrc/some_unit.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
-MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
-                  --run-assembler --gnu-as-path=$(AS) --use-comm-section -G8
+MASPSXFLAGS_G8 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
+                  --run-assembler --gnu-as-path=$(AS) --use-comm-section \
+                  --dont-force-G0 -G8
+
+# Units whose functions reach their globals $gp-relatively rather than
+# absolutely. Measured over the game code: 109 functions need the -G0 default,
+# 7 need -G8, 48 touch no globals symbolically and do not care, and 27 need
+# both and cannot match under either. See
+# docs/addressing-and-translation-units.md.
+build/csrc/gprel_12DD4.o build/csrc/gprel_14910.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
@@ -186,7 +194,11 @@ expected: check
 clean:
 	rm -rf asm assets build
 
+# asm/nonmatchings is cleared first: splat only adds files, so shrinking or
+# re-carving a `c` subsegment otherwise leaves per-function asm behind in the
+# old unit's directory, and the same function ends up owned by two units.
 splat: $(SPLATFILES)
+	rm -rf asm/nonmatchings
 	@for SPLATFILE in $(SPLATFILES); do \
 		echo "=== $$SPLATFILE === "; \
 		splat split $$SPLATFILE; \

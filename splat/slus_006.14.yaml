@@ -56,6 +56,12 @@ segments:
       # consumes) and INCLUDE_ASM stubs to replace one function at a time.
       # Name is the start offset until the original translation unit is known.
       - [0x11940, c, unk_11940]
+      # Carved out: these reach their globals $gp-relatively, so they must be
+      # assembled with gas at -G8 while everything else uses -G0.
+      - [0x12dd4, c, gprel_12DD4]
+      - [0x12de0, c, unk_12DE0]
+      - [0x14910, c, gprel_14910]
+      - [0x14934, c, unk_14934]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]
