@@ -558,7 +558,7 @@ void func_80040490(void *arg0, s16 *rect) {
     s32 n = rect[3] * 2;
     u32 *p = func_80040574(rect[2] * n);
 
-    func_8004068C(arg0, p);
+    func_8004068C(arg0, (u8 *) p);
     LoadImage(rect, p);
 }
 
@@ -599,7 +599,95 @@ void func_8004066C(s32 arg0) {
     D_80080A7C += arg0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8004068C);
+/* LZSS-style unpacker: a bit stream of flags interleaved with literals, a
+ * 2-byte long match (12-bit offset, 4-bit length with an escape to a
+ * following byte) and a 1-byte short match (2 flag bits of length, offset
+ * byte where 0 means 0x100). Returns the end of the output.
+ *
+ * The outer loop has to be a `goto` loop. A `for`/`while` emits
+ * NOTE_INSN_LOOP_BEG, which puts the whole body at loop_depth 2, and
+ * reg_n_refs is incremented by loop_depth per reference. The backward goto
+ * gets no loop note, so every reference outside the copy loop drops from
+ * weight 2 to weight 1 -- and because len's references are split across the
+ * two depths while off's and p's each sit at one, that rescales the three
+ * contested allocnos unequally: len goes from 31 refs (priority 4.00, last of
+ * the three) to 17 (2.19, first). len then takes $v1 and off and p, which
+ * conflict with len but not with each other, both land in $a2, as in the
+ * target. No live range changes; only the weighting does.
+ *
+ * `goto done` for the end-of-stream case is also load-bearing: an inline
+ * `return dst` there costs 49 words. And the length test in the long arm has
+ * to put the nonzero arm first, or the wrong arm goes out of line. */
+u8 *func_8004068C(u8 *src, u8 *dst) {
+    u32 c = 0;
+    s32 n = 1;
+
+top:
+    if (--n == 0) {
+        c = *src++;
+        n = 8;
+    }
+    if ((c & 1) == 0) {
+        c >>= 1;
+        *dst++ = *src++;
+        goto top;
+    }
+    {
+        u32 off;
+        s32 len;
+        u8 *p;
+
+        c >>= 1;
+        if (--n == 0) {
+            c = *src++;
+            n = 8;
+        }
+        if ((c & 1) == 0) {
+            off = (src[0] << 8) | src[1];
+            c >>= 1;
+            if (off == 0) {
+                goto done;
+            }
+            len = off & 0xF;
+            src += 2;
+            if (len != 0) {
+                len += 2;
+            } else {
+                len = *src++ + 1;
+            }
+            off >>= 4;
+        } else {
+            c >>= 1;
+            if (--n == 0) {
+                c = *src++;
+                n = 8;
+            }
+            len = (c & 1) << 1;
+            c >>= 1;
+            if (--n == 0) {
+                c = *src++;
+                n = 8;
+            }
+            len += 2;
+            len += c & 1;
+            c >>= 1;
+            off = *src++;
+            if (off == 0) {
+                off = 0x100;
+            }
+        }
+        p = dst - off;
+        if (len != 0) {
+            do {
+                *dst++ = *p++;
+                len--;
+            } while (len != 0);
+        }
+    }
+    goto top;
+done:
+    return dst;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800407C0);
 
