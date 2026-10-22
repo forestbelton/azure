@@ -43,14 +43,88 @@ void func_8003D468(void) {
     *(u16 *) (base + 0x2098) = f;
 }
 
-void func_8003D56C(void) {
+/* arg0 is unused; it exists because func_8003D5A4's call site passes 1 and an
+   unused register parameter generates no code. */
+void func_8003D56C(s32 arg0) {
     func_80069C90();
     func_80069CE8();
     _bu_init();
     ChangeClearPAD(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_102A8", func_8003D5A4);
+/* Boot-time graphics/pad/CD setup.
+ *
+ * Load-bearing shapes:
+ *  - `Unk80083160 *s = &D_80083160;` as the first statement. The whole address
+ *    is materialised up front into a callee-saved register and carried across
+ *    every call, even though its first use is 30 instructions from the end.
+ *    Reaching the fields as `D_80083160.unk_00` instead costs 105 words: it
+ *    rebuilds a lui/%lo pair per access.
+ *  - but D_80083160.unk_A8 stays a plain symbol reference. Through the pointer
+ *    it becomes 0xA8($s0); the target has its own compiler-split lui/%lo pair,
+ *    which splat renders as the known label D_80083208 at that address. So the
+ *    function really does mix the two spellings for one object, which is
+ *    evidence D_80083208 was a separate global in the original. `s->unk_A8`
+ *    costs 16 words.
+ *  - the two buffer addresses go in as `(u32) D_801D8D7A`, with those symbols
+ *    declared as incomplete arrays. The scalar-plus-& spelling emits the same
+ *    eight instructions in the same order but with $v0 and $v1 swapped: a
+ *    scalar is one `(set reg (symbol_ref))` the assembler expands to `la`,
+ *    while the array gives the compiler-split high/lo_sum pair, which adds a
+ *    pseudo per value and reshuffles local-alloc.
+ *  - D_80082E60.unk_0B, not a scalar D_80082E6B: the struct is 0x19 bytes,
+ *    past -G8, so the store is compiler-split where a scalar gets the
+ *    assembler-expanded $at form.
+ *  - the 0x80010000 accesses use the out-of-image constant-base-pointer idiom,
+ *    as func_8003D468 does three functions earlier. */
+void func_8003D5A4(void) {
+    Unk80083160 *s = &D_80083160;
+    u8 *base;
+    u8 *p;
+    s32 i;
+
+    SetVideoMode(0);
+    CdInit();
+    func_8003E34C();
+    ResetGraph(0);
+    func_80053F98();
+    func_80053DCC(D_80080A94);
+    func_80053DF0(D_80080A98);
+    func_80053E14(D_80080A9C);
+    for (i = 0; i < 0x22; i++) {
+        D_800830C0[i] = 0xFF;
+        D_800830E8[i] = 0xFF;
+    }
+    InitPAD(D_800830C0, 0x22, D_800830E8, 0x22);
+    func_8006A444();
+    func_8003D56C(1);
+    SetGraphDebug(0);
+    func_80064688();
+    D_80082E60.unk_0B = 0;
+    bzero(D_80081468, 8);
+    func_8003D468();
+    base = (u8 *) 0x80010000;
+    *(u32 *) (base + 0x3180) = 0x2A080808;
+    D_80081494 = 0x2A080808;
+    base[0x3184] = 0x20;
+    D_800814AC = 0x20;
+    base[0x3186] = 3;
+    D_800814A4 = 3;
+    *(u16 *) (base + 0x2094) = 5;
+    base[0x2D6E] = 0;
+    *(u16 *) (base + 0x2098) = 2;
+    func_80043674();
+    p = D_801C9E40;
+    if (s->unk_00 == p) {
+        p += 0x108D4;
+    }
+    s->unk_00 = p;
+    *(u8 **) (p + 0x8D0) = p + 0x8D4;
+    D_80083160.unk_A8 = 0x2C808080;
+    func_8003CAC4();
+    D_80081478[0] = (u32) D_801D8D7A;
+    D_80081478[1] = (u32) D_801E964E;
+}
 
 void func_8003D760(void) {
     /* The rect goes out as two words: four halfword field assignments would

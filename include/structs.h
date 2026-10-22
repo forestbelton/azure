@@ -426,6 +426,17 @@ extern u16 D_80081526;
    which only happens for a symbol past the -G8 limit, so these are buffers of
    unestablished length rather than 4-byte objects. */
 extern u8  D_800830C0[];
+/* Hand-added. func_8003D5A4 bzeroes 8 bytes here. An array, so the address
+   comes out as a single `la`. */
+extern u32 D_80081468[2];
+/* The two buffer addresses func_8003D5A4 stores into D_80081478. Arrays of
+   unestablished length, not scalars: the compiler split is what puts the
+   D_80081478 base chain in $v1 and these two values in $v0, and declaring
+   them as scalars swaps those two registers. They are symbol addresses, not
+   integer constants -- the target materialises them with lui + addiu, where
+   a constant would be lui + ori. */
+extern u8  D_801D8D7A[];
+extern u8  D_801E964E[];
 extern u8  D_800830E8[];
 extern u32 D_80082EC0[0x80];
 extern u32 D_80083110[4];  /* zeroed by index in func_8003D8B0 */
@@ -563,6 +574,14 @@ void func_8003F5E0(u32);
 s16  func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
 s32  func_8004491C(UnkNode *, u32);
 Unk80083968 *func_8003E39C(u8, s32, void *);
+void func_8003E34C(void);
+void func_80053F98(void);
+void func_80053DCC(s16);
+void func_80053DF0(s16);
+void func_80053E14(s16);
+void func_8006A444(void);
+void func_80064688(void);
+void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
 
@@ -604,12 +623,17 @@ int abs(int);
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */
 void _bu_init(void);
+void InitPAD(u8 *, s32, u8 *, s32);
 void ChangeClearPAD(s32);
 s32  VSync(s32);
 s32  CdInit(void);
 s32  CdSync(s32, u8 *);
 s32  CdControl(u8, u8 *, u8 *);
 s32  CdPosToInt(u8 *);
+/* libgpu/libetc graphics setup. */
+void SetVideoMode(s32);
+void ResetGraph(s32);
+void SetGraphDebug(s32);
 /* libgte. The MATRIX / SVECTOR / VECTOR parameters are left as void * until
    the project models those types; only the pointer-ness matters to the
    generated code. */
