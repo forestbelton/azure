@@ -158,6 +158,122 @@ typedef union Unk3DBD0W {
     u16 h;
 } Unk3DBD0W;
 
+/* Hand-added. A halfword that is also byte-patched: func_80044D24 stores each
+   of the primitive's UV pairs with `sh` and then patches one byte of it in the
+   clamps, so both views are needed. */
+typedef union Unk44D24UV {
+    u16 h;
+    u8  b[2];
+} Unk44D24UV;
+
+/* Hand-added. The 0x1F800000 scratchpad as func_80044D24 lays it out.
+   unk_08/0C/10/14 are four more word/halfword unions -- each stored with `sw`
+   and read back with `lhu`, the same mode asymmetry Unk3DBD0W exists for --
+   and unk_70..unk_8F is exactly Unk463ECSP's `Unk463ECV unk_70[4]`: this
+   function writes .unk_00/.unk_02 of each of the four and never touches +0x06,
+   which independently confirms Unk463ECV's pad_06.
+
+   This, Unk3DBD0SP and Unk463ECSP all describe the same region and should be
+   merged. Field-for-field agreement is confirmed where they overlap: unk_00
+   and unk_02 as s16, unk_24 as the u16 flags, unk_30/unk_34 as Unk3DBD0W,
+   unk_38, unk_40/44/48, and unk_70/72/74. unk_20 is the OT base, s32 here and
+   u32 in Unk463ECSP; either works. The merge is held back only because
+   func_800463EC's match turns on which of its accesses are casts and which
+   are struct fields, so changing its field types is a real risk for a
+   cosmetic gain. */
+typedef struct Unk44D24SP {
+    s16        unk_00;
+    u16        unk_02;
+    u8         pad_04[0x4];
+    Unk3DBD0W  unk_08;
+    Unk3DBD0W  unk_0C;
+    Unk3DBD0W  unk_10;
+    Unk3DBD0W  unk_14;
+    u8         pad_18[0x8];
+    s32        unk_20;
+    u16        unk_24;
+    u8         pad_26[0xA];
+    s32        unk_30;
+    s32        unk_34;
+    s32        unk_38;
+    u8         pad_3C[0x4];
+    s32        unk_40;
+    s32        unk_44;
+    s32        unk_48;
+    u8         pad_4C[0x4];
+    u16        unk_50;
+    u8         pad_52[0x6];
+    u16        unk_58;
+    u8         pad_5A[0x16];
+    s16        unk_70;
+    s16        unk_72;
+    s16        unk_74;
+    u8         pad_76[0x2];
+    s16        unk_78;
+    s16        unk_7A;
+    s16        unk_7C;
+    u8         pad_7E[0x2];
+    s16        unk_80;
+    s16        unk_82;
+    s16        unk_84;
+    u8         pad_86[0x2];
+    s16        unk_88;
+    s16        unk_8A;
+    s16        unk_8C;
+} Unk44D24SP;
+
+/* Hand-added. A 0xC-byte sprite-piece record, the stride coming from the two
+   `addiu ..., 0xC` in func_80044D24's loop. unk_00 is flags (bit 0x20 skips
+   the piece, and `(s8) unk_00 < 0` terminates the list); unk_01 is copied to
+   the slot's +0x0F and OR/AND-patched there; unk_02 and unk_03 are signed byte
+   offsets; unk_04 is masked with 0xFF9F and added to the slot's +0x10 (tpage)
+   and unk_06 added to its +0x12 (CLUT); unk_08..unk_0B are UV coordinates,
+   tested in pairs against 0x100. */
+typedef struct Unk44D24E {
+    u8  unk_00;
+    u8  unk_01;
+    u8  unk_02;
+    u8  unk_03;
+    u16 unk_04;
+    u16 unk_06;
+    u8  unk_08;
+    u8  unk_09;
+    u8  unk_0A;
+    u8  unk_0B;
+} Unk44D24E;
+
+/* Hand-added. The same 0x28-byte POLY_FT4 as Unk463ECP and
+   docs/near-misses/func_8003D0F0.c's Unk3D0F0P, but modelled more precisely by
+   func_80044D24, which is why it is separate for now: only the length byte at
+   +0x03 is written (never the word at +0x00); +0x04 is a whole u32, copied
+   from the slot's +0x0C; each vertex is an s16 PAIR, because gte_stsv writes
+   three `sh` at +0/+2/+4 and the clamps read +0x08/+0x0A and +0x20/+0x22 with
+   `lh`, which an s32 field cannot produce; and +0x14/+0x1C/+0x24 are
+   Unk44D24UV unions. Merging the three means applying all of that to
+   Unk463ECP, which would change func_800463EC's RotAverage4 argument types --
+   held back for the same reason as the scratchpad merge. */
+typedef struct Unk44D24P {
+    u8         pad_00[0x3];
+    u8         unk_03;
+    u32        unk_04;
+    s16        unk_08;
+    s16        unk_0A;
+    u16        unk_0C;
+    u16        unk_0E;
+    s16        unk_10;
+    s16        unk_12;
+    Unk44D24UV unk_14;
+    u16        unk_16;
+    s16        unk_18;
+    s16        unk_1A;
+    Unk44D24UV unk_1C;
+    u16        unk_1E;
+    s16        unk_20;
+    s16        unk_22;
+    Unk44D24UV unk_24;
+    u16        unk_26;
+} Unk44D24P;
+
 /* Hand-added. The 0x1F800000 scratchpad as func_8003DBD0 lays it out: an
    SVECTOR of results at +0x00, a flags halfword at +0x24, a VECTOR of
    camera/scale values at +0x30, the RotTransSV input at +0x70 and its flag

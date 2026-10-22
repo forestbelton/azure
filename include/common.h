@@ -35,6 +35,7 @@
 
 #include "types.h"
 #include "structs.h"
+#include "gte_inline.h"
 #include "include_asm.h"
 
 #endif /* COMMON_H */
