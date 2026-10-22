@@ -56,7 +56,91 @@ That has three consequences.
 3. Eventually each C file should *define* the globals its functions reach
    `$gp`-relatively, rather than declaring them `extern`. At that point
    maspsx can see the size and will emit `%gp_rel` itself, and gas can be
-   left at its default `-G0`, which is what maspsx recommends.
+   left at its default `-G0`, which is what maspsx recommends. **This is now
+   proved on a real function rather than inferred -- see the next section.**
+
+## Proved: one unit CAN mix both modes, and the scope is small
+
+Measured 2026-10-22. This supersedes the statement that 27 functions "need both
+modes and cannot match under either" -- they need both, and both are available.
+
+**The mechanism.** A tentative definition in C (`s32 *D_800814E0;`, no
+`extern`) makes cc1psx emit `.comm D_800814E0,4`; maspsx's
+`--use-comm-section` turns a small `.comm` into `.sbss`; and gas addresses a
+symbol it can see in `.sbss` `$gp`-relatively **even at the forced `-G0`**,
+while every *undefined* symbol in the same unit still gets the absolute
+`lui %hi` / `%lo` pair. So the mode is chosen per symbol, by whether the unit
+defines it, instead of per compilation.
+
+**The proof.** `func_800410FC` is five instructions and is exactly the
+supposedly impossible case -- one `%gp_rel` store and one absolute
+`%hi`/`%lo` pair:
+
+    s32 *D_800814E0;                      /* definition, not extern */
+
+    void func_800410FC(void) {
+        D_800814E0 = (s32 *) D_80083C68;
+        D_80083C68[0] = NULL;
+    }
+
+`verify.py` reports MATCH, 5 of 5 words, and the relocations confirm it is not
+a coincidence of the masking:
+
+    lui   v1,0x0      R_MIPS_HI16    D_80083C68
+    addiu v0,v1,0     R_MIPS_LO16    D_80083C68
+    sw    v0,0(gp)    R_MIPS_GPREL16 D_800814E0
+    jr    ra
+    sw    zero,0(v1)  R_MIPS_LO16    D_80083C68
+
+**What it costs.** A defined object is allocated by the linker, and the
+GPREL16 addend is computed from its final address, so each one has to be
+*placed* at its original address: linker-script placement plus carving those
+bytes out of the final `[0x54240, bin]` blob so they are not emitted twice.
+That is the whole remaining cost, and it is bounded -- see below. Note the
+encoding depends only on the final `$gp` offset, not on the symbol name, so the
+C side does not need the original names: one struct covering a window, with the
+fields at the right offsets, produces identical instructions.
+
+### The scope, measured
+
+The 31 `$gp`-blocked functions reference **38 unique symbols**, and they sit in
+two narrow windows:
+
+| window | vram | file offset | symbols | bytes | nonzero |
+|--------|------|-------------|---------|-------|---------|
+| A | 0x80080AA4..0x80080B0A | 0x542A4 | 18 | 108 | 25 |
+| B | 0x80081450..0x80081526 | 0x54C50 | 20 | 224 | **0** |
+
+**Window B is entirely zeros**, so those twenty objects need no initial values
+recovered at all -- a zero-filled window and `.sbss` agree by construction.
+And window B is where the demand is:
+
+* **20 of the 31 functions touch only window B**, most of them exactly one
+  symbol: func_8003F240, func_8003F2A4, func_8003F368, func_8003F5E0,
+  func_8003F624, func_800410FC, func_80041134, func_80041AE4, func_80041B98,
+  func_80041BE4, func_80041C64, func_80043D04, func_80043DB8, func_80043E04,
+  func_80043E60, func_800448BC, func_80045340, func_800453E0, func_80047338,
+  func_80047468.
+* 9 touch only window A: func_8003CB08, func_8003CCB0, func_8003D92C,
+  func_8003E4FC, func_8003F5AC, func_8004437C, func_8004450C, func_80044698,
+  func_8004713C.
+* 2 touch both: func_8003E34C, func_8003E758.
+
+Only 4 of the 31 have no absolute reference at all, so the mixing really is
+needed by 27 of them -- which is why this mechanism, rather than a per-file
+`-G`, is the way in.
+
+**So the decision is smaller than it was framed as.** It is not "move the
+project's data into C". It is: carve one 224-byte all-zero window out of the
+closing bin blob, place it from the linker script, and define its twenty
+objects in C. That unblocks 20 functions. Window A is a second, slightly harder
+step, because 25 of its 108 bytes are initialised and those values have to be
+carried across.
+
+Still unverified, and the next thing to do: the placement half. The instruction
+forms are proved; nothing yet confirms that a carved window plus linker
+placement reproduces the image byte-for-byte. Do that on one function --
+func_800410FC is the smallest -- before touching the rest.
 
 ## Per-file override
 
@@ -132,7 +216,11 @@ Two consequences:
   adds a stack frame.
 * `-mno-gas` is rejected by cc1psx. `-mno-gpopt`, `-mmemcpy`, `-fforce-addr`
   and `-fforce-mem` have no effect.
-* `.extern SYM, 16` does not stop gas choosing GPREL16.
+* `.extern SYM, 16` does not stop gas choosing GPREL16 at `-G8`; and in the
+  other direction, a top-level `__asm__(".extern D_800814E0,4");` does **not**
+  make gas choose GPREL16 at `-G0` either. gas's small-data decision for an
+  undefined symbol follows `-G` alone, which is why the fix is to define the
+  object rather than to describe it.
 * Declaring the symbol as an array, or as a struct padded past the `-G`
   limit, makes gcc copy the address into a register and use displacements.
   That was recorded here as the opposite problem; it is in fact the lever for
