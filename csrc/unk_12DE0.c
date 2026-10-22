@@ -63,9 +63,27 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800402F4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800403BC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040418);
+void func_80040418(void) {
+    UnkNode *p = D_80081498;
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040454);
+    if (p != NULL) {
+        do {
+            p->unk_1E |= 0xC00;
+            p = p->unk_00;
+        } while (p != NULL);
+    }
+}
+
+void func_80040454(void) {
+    UnkNode *p = D_80081498;
+
+    if (p != NULL) {
+        do {
+            p->unk_1E &= 0xF3FF;
+            p = p->unk_00;
+        } while (p != NULL);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040490);
 

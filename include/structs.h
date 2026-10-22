@@ -332,7 +332,16 @@ extern u32 D_80081480;
 extern u32 D_8008148C;
 extern u32 D_80081490;
 extern u32 D_80081494;
-extern u32 D_80081498;
+/* Hand-added. A singly-linked list walked from D_80081498; the link is at
+   +0x00 and a flag halfword at +0x1e. Size is a floor: only those two fields
+   have been observed, so the padding is unexplored space, not known filler. */
+typedef struct UnkNode {
+    struct UnkNode *unk_00;
+    u8              pad_04[0x1A];
+    u16             unk_1E;
+} UnkNode;
+
+extern UnkNode *D_80081498;
 extern u32 D_800814A0;
 extern u8  D_800814A4;
 extern u8  D_800814AC;
