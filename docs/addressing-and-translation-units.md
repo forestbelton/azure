@@ -134,8 +134,11 @@ that first; it is the only unknown left in the chain.
 
 ### The scope, measured
 
-The 31 `$gp`-blocked functions reference **38 unique symbols**, and they sit in
-two narrow windows:
+The `$gp`-blocked functions reference **38 unique symbols**, and they sit in
+two narrow windows. (There are **32** such functions, not 31: the earlier count
+missed func_80044618, whose only symbolic references are
+`%gp_rel(D_80080AFC + 0x2)` -- an addend form that a naive grep for
+`%gp_rel(SYM)` skips. Grep `%gp_rel([^)]*)` instead.)
 
 | window | vram | file offset | symbols | bytes | nonzero |
 |--------|------|-------------|---------|-------|---------|
@@ -152,14 +155,20 @@ And window B is where the demand is:
   func_80041BE4, func_80041C64, func_80043D04, func_80043DB8, func_80043E04,
   func_80043E60, func_800448BC, func_80045340, func_800453E0, func_80047338,
   func_80047468.
-* 9 touch only window A: func_8003CB08, func_8003CCB0, func_8003D92C,
-  func_8003E4FC, func_8003F5AC, func_8004437C, func_8004450C, func_80044698,
-  func_8004713C.
+* 10 touch only window A: func_8003CB08, func_8003CCB0, func_8003D92C,
+  func_8003E4FC, func_8003F5AC, func_8004437C, func_8004450C, func_80044618,
+  func_80044698, func_8004713C.
 * 2 touch both: func_8003E34C, func_8003E758.
 
-Only 4 of the 31 have no absolute reference at all, so the mixing really is
-needed by 27 of them -- which is why this mechanism, rather than a per-file
-`-G`, is the way in.
+Only **5** of the 32 have no absolute reference at all -- func_8003E4FC (132
+instructions), func_8003F5E0 (3), func_80044618 (35), func_80044698 (35) and
+func_800448BC (24) -- so the mixing really is needed by 27 of them, which is
+why this mechanism rather than a per-file `-G` is the way in. Those five are
+the exception and want the **existing** carve-out instead: put them in their
+own unit with `MASPSXFLAGS_G8`, exactly as `gprel_12DD4` and `gprel_14910`
+already are, with no window definition and no linker placement. That is the
+cheapest landing available in this whole group, and the five are the same five
+this document named before my own first pass miscounted them.
 
 **So the decision is smaller than it was framed as.** It is not "move the
 project's data into C". It is: carve one 224-byte all-zero window out of the
