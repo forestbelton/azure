@@ -632,7 +632,79 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044724);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800448BC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004491C);
+/* Links the node into one of the 0x20 tag slots at D_80083360/D_800833E0,
+ * pushing any existing head down, or claims a free slot. Returns 0 only when
+ * every slot is taken.
+ *
+ * Three shapes are load-bearing:
+ *  - `D_800833E0[i] = (u32) n;` is duplicated into both arms of the null
+ *    check. That gives the store its own basic block instead of putting it in
+ *    the join block, so sched1 never has it and the `return 1` constant in one
+ *    ready list, where the hazard heuristic always hoists the constant past
+ *    it. jump2's cross-jumping then merges the two copies back and plants the
+ *    join label in front of the store, which is why .L80044964 sits before it
+ *    and the word count is unchanged.
+ *  - the free-slot bookkeeping is `if (first == -1) { first = i; } last = i;`
+ *    in that order. With `last = i` first, cse folds the second assignment to
+ *    a copy of last's register; in this order the `last = i` insn is instead
+ *    stolen into the bne's delay slot. The test has to be against -1, not
+ *    `< 0`: the target compares against a loop-hoisted -1 in a register.
+ *  - `return 0` is the last statement, so its block lands just before the
+ *    epilogue and the test is a single bltz. An early return costs a bgez, a
+ *    `j` and a move.
+ *
+ * The two tails of the D_8006E7B4 walk are genuinely duplicated in the target
+ * -- they differ only in which index they use -- so they are written out
+ * twice here as well. */
+s32 func_8004491C(UnkNode *n, u32 tag) {
+    s32 first = -1;
+    s32 last = 0;
+    s32 i;
+    s32 j;
+
+    for (i = 0; i < 0x20; i++) {
+        if (D_80083360[i] == tag) {
+            UnkNode *h = (UnkNode *) D_800833E0[i];
+
+            n->unk_18 = h;
+            if (h != NULL) {
+                h->unk_14 = n;
+                D_800833E0[i] = (u32) n;
+            } else {
+                D_800833E0[i] = (u32) n;
+            }
+            n->unk_14 = (UnkNode *) &D_800833E0[i];
+            n->unk_1C = i;
+            return 1;
+        }
+        if (D_80083360[i] == 0) {
+            if (first == -1) {
+                first = i;
+            }
+            last = i;
+        }
+    }
+    if (first >= 0) {
+        n->unk_18 = NULL;
+        j = 0;
+        while (D_8006E7B4[j] != 0) {
+            if (D_8006E7B4[j] == tag) {
+                D_80083360[first] = tag;
+                D_800833E0[first] = (u32) n;
+                n->unk_14 = (UnkNode *) &D_800833E0[first];
+                n->unk_1C = first;
+                return 1;
+            }
+            j++;
+        }
+        D_80083360[last] = tag;
+        D_800833E0[last] = (u32) n;
+        n->unk_14 = (UnkNode *) &D_800833E0[last];
+        n->unk_1C = last;
+        return 1;
+    }
+    return 0;
+}
 
 void func_80044A50(UnkNode *n) {
     UnkNode *a = n->unk_14;

@@ -66,12 +66,6 @@ typedef struct Unk46AFC {
     u8  pad_06[0x2];
 } Unk46AFC;
 
-/* 0x8006e7b4..0x8006e7bb, 0x8 bytes, 2 field(s) */
-typedef struct Unk8006E7B4 {
-    u32 unk_00;
-    u32 unk_04;
-} Unk8006E7B4;
-
 /* 0x800777ac..0x800777b7, 0xc bytes, 9 field(s) */
 typedef struct Unk800777AC {
     u8  unk_00;
@@ -435,7 +429,10 @@ extern Unk8002D5B4 D_8002D5B4;
 extern Unk8006CE34 D_8006CE34;
 extern Unk8006CE80 D_8006CE80[];
 extern Unk8006E61C D_8006E61C[];
-extern Unk8006E7B4 D_8006E7B4;
+/* Walked as a 0-terminated word list by func_8004491C, with a variable
+   index, so an incomplete array rather than the two-field struct fieldscan
+   had inferred. */
+extern u32 D_8006E7B4[];
 extern Unk800777AC D_800777AC;
 /* Declared as an array of unestablished length, not as the struct: at 6 bytes
    the struct spelling is inside the -G8 limit and the address comes out as an
@@ -534,6 +531,7 @@ void func_80044618(s32);
 void func_8003F320(void);
 void func_8003F5E0(u32);
 s16  func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
+s32  func_8004491C(UnkNode *, u32);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
 
