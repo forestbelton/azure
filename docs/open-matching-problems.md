@@ -1,6 +1,6 @@
 # Open matching problems
 
-Nine functions are parked. Every one of them reproduces the original logic;
+Eight functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -9,7 +9,6 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 
 | function      | unit    | what is left |
 |---------------|---------|--------------|
-| func_80041284 | unk_14934 | arm 1 wants the `*p` reload *after* the store but the store between `lui` and `and`; see below |
 | func_80042560 | unk_14934 | addressing solved; loop 1's store/load order and three `$s` registers are not; see below |
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
@@ -111,40 +110,6 @@ halfwords that reference the table -- so a MATCH there is not evidence and only
 `make check` is the authority. `docs/near-misses/func_80041344.c` has the
 source that reaches 145/145 words and 67 DIFF, and the register-allocation
 analysis of what would still be left.
-
-## func_80041284  (unk_14934) -- partial
-
-Both copies and the empty `jal func_8003F320` delay slot come out right with
-the assignment written as a chained store whose value is wanted:
-
-```c
-    if (x == 0) {
-        x = D_80081480 = D_8008148C;
-        y = x + ((*p & 0xFF800000) >> 12);
-    } else {
-        x |= 0x80000000;
-        y = D_80081480 = D_8008148C;
-    }
-```
-
-`store_expr` with a MEM target and `want_value` does `copy_to_reg`, so the RTL
-is load-to-temp / store / copy. combine cannot fold the load into the copy
-because the store sits between them (`use_crosses_set_p` via `mem_last_set`),
-sched1 then puts the copy before the store, and local-alloc rewrites the
-store's source. Arm 2 matches exactly.
-
-What is left is arm 1's order. The target has `lw $v0,0($s2); lui $v1,0xFF80;
-sw $s0` -- the `*p` reload before the store -- and this source emits the store
-first. The reload exists only because cse's NOT_TAKEN pass saw the store
-invalidate the block-0 load, so in RTL the load must follow the store, and
-store-before-load is a true dependence in sched1. Ruled out: every statement
-order of the two assignments and the `*p` expression, function- and
-block-scope temporaries, `volatile` aliases on `D_8008148C` and both globals,
-`volatile u32 *` for `p`, an array declaration for `D_8008148C`,
-`-fno-schedule-insns`, `-fno-schedule-insns2`, both, `-O1`, and
-`-mcpu=r3000/r4000/r4600/r6000`. Note `csrc/unk_14934.c` already uses
-`D_80081480 = D_8008148C;` in four matched places, so a declaration change for
-either symbol would risk those.
 
 ## func_80042560  (unk_14934) -- partial
 

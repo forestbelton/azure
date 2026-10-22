@@ -148,6 +148,14 @@ sched1 to interleave things the target keeps sequential, and vice versa.
   lets sched1 hoist every unrelated load above the region's stores and shuffle
   the stores among themselves -- 123 of 162 words wrong in func_8003DBD0 with
   the word count unchanged.
+* **A parameter's type is the easiest way to set the flag.** func_80041284 was
+  parked for four words on exactly this: as a `u32 *` both its loads and the
+  `D_80081480` store are non-struct, the exception does not apply, and
+  store-before-load is a true dependence that pins the store first. Declaring
+  the parameter a one-field struct makes the loads in-struct, the symbol store
+  stays non-struct with a non-varying address, the exception applies, and
+  sched1 hoists the load above the store as the target has it. Nothing else
+  about the function changed.
 
 ## 6. Declaration decides addressing
 

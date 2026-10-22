@@ -110,6 +110,17 @@ typedef struct Unk3DBD0SP {
     u16         unk_10A;
 } Unk3DBD0SP;
 
+/* Hand-added. Only the word at +0x00 is observed, by func_80041284, which
+   reads it twice. It is a struct rather than a bare u32 * for a codegen
+   reason: that makes its loads MEM_IN_STRUCT_P while the D_80081480 store is
+   not, so true_dependence's differing-flags exception applies and sched1 is
+   free to hoist the second load above the store, which is what the target
+   does. Through a plain `u32 *` both MEMs are non-struct, the exception does
+   not apply, and the store comes first. */
+typedef struct Unk41284 {
+    u32 unk_00;
+} Unk41284;
+
 /* Hand-added. A 3-byte element: func_80042710 copies +0x00 and +0x02 of each
    of three of these and deliberately leaves the middle byte alone, which is
    why that copy is field-by-field and not a whole-struct assignment. */
@@ -826,7 +837,7 @@ void func_8004425C(s16);
 Unk8006CE34 *func_8003F534(void);
 void func_8003F540(u32, u32, u32, u32);
 void func_80053DA8(s32);
-void func_80041284(u32 *);
+void func_80041284(Unk41284 *);
 void func_8003E4FC(u8, u8 *, s32);
 void func_80040A88(void (*)(void));
 void func_8003CB08(void);

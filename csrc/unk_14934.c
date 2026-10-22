@@ -52,12 +52,48 @@ void func_800411FC(u16 arg0) {
         return;
     }
     do {
-        func_80041284(*q);
+        func_80041284((Unk41284 *) *q);
         q++;
     } while (*q != NULL);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041284);
+/* Splits a word into a 23-bit value and its top bits, publishes D_8008148C as
+ * the current buffer pointer, and hands both halves to func_80041344.
+ *
+ * Two shapes are load-bearing, and together they are what this function was
+ * parked for:
+ *  - the parameter is a struct pointer, not a `u32 *`. That makes its two
+ *    loads MEM_IN_STRUCT_P while the D_80081480 store is not, so
+ *    true_dependence's differing-flags exception applies (the non-struct side
+ *    is a symbol, so its address does not vary) and sched1 is free to hoist
+ *    the second load above the store. Through a plain `u32 *` both MEMs are
+ *    non-struct, the exception does not apply, store-before-load is a true
+ *    dependence, and arm 1 comes out with the store first -- the four words
+ *    this was parked on.
+ *  - the assignment is a chained store whose value is wanted, which sends it
+ *    through store_expr's copy_to_reg: the RTL is load-to-temp / store / copy.
+ *    combine cannot fold the load into the copy because the store sits between
+ *    them (use_crosses_set_p via mem_last_set), sched1 then lifts the copy
+ *    above the store, and local-alloc rewrites the store's source. That is
+ *    what gives arm 2 its `lw`/`or`/`addu`/`lui`/`sw` and the empty
+ *    func_8003F320 delay slot. */
+void func_80041284(Unk41284 *p) {
+    u32 x;
+    u32 y;
+
+    DrawSync(0);
+    x = p->unk_00 & 0x7FFFFF;
+    if (x == 0) {
+        x = D_80081480 = D_8008148C;
+        y = x + ((p->unk_00 & 0xFF800000) >> 12);
+    } else {
+        x |= 0x80000000;
+        y = D_80081480 = D_8008148C;
+    }
+    func_8003E4FC(6, (u8 *) p, 0);
+    func_8003F320();
+    func_80041344(x, y);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041344);
 
