@@ -139,7 +139,43 @@ void func_8003F80C(u32 arg0, s32 arg1, s32 arg2, s16 arg3) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F8F8);
+/* Walks a table of image entries, unpacking each into the work buffer and
+ * loading it to VRAM, resetting the buffer pointer when the next image would
+ * not fit.
+ *
+ * The parked symptom was "the width/height pair wants one induction variable
+ * with a -2 displacement; gcc makes two". Two source facts fix it:
+ *  - the width goes through a local read BEFORE the height's. gcc builds the
+ *    giv list by prepending as it discovers them, so the LAST access in the
+ *    loop body becomes combine_givs' representative and sets the surviving
+ *    pointer's base offset. With the height read last the base is +0x0A and
+ *    the width rides it at -0x2, which is the target; with the width last the
+ *    base comes out +0x08. sched1 then swaps the two loads back so the height
+ *    is loaded first, which is why the emitted order looks like the opposite.
+ *  - the size is computed twice, once for the fit test and once for the
+ *    accumulation, rather than kept in one variable. The two calls in between
+ *    invalidate cse, so the target genuinely recomputes it.
+ *
+ * `w` and `n` are separate locals for the same reason func_80040490 needs its
+ * temporary: written as one expression gcc groups the doubling onto the wrong
+ * halfword. */
+void func_8003F8F8(Unk3F8F8 *e) {
+    while (e->unk_00 != 0) {
+        s32 w = e->rect[2];
+        s32 n = e->rect[3] * 2;
+
+        if (D_8008148C + D_80080A7C >= D_80081480 + w * n) {
+            D_80081480 = D_8008148C;
+            DrawSync(0);
+        }
+        func_8004068C((u8 *) e->unk_00, (u8 *) D_80081480);
+        LoadImage(e->rect, (u32 *) D_80081480);
+        w = e->rect[2];
+        n = e->rect[3] * 2;
+        D_80081480 = D_80081480 + w * n;
+        e++;
+    }
+}
 
 void func_8003F9E0(UnkEntry *e) {
     while (e->unk_00 != 0) {

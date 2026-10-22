@@ -55,6 +55,16 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. A 0x10-byte entry: func_8003F8F8 walks a table of these until
+   unk_00 is zero, unpacks the image it points at and loads it through the
+   four-halfword x/y/w/h rect at +0x04. The last four bytes are unexplored
+   space, not known filler. */
+typedef struct Unk3F8F8 {
+    u32 unk_00;
+    s16 rect[4];
+    u8  pad_0C[0x4];
+} Unk3F8F8;
+
 /* Hand-added. +0x30 and +0x34 of the scratchpad below: func_8003DBD0 stores a
    word there and reads the low halfword back, and the mode difference is what
    makes the read a real `lhu` rather than a folded register reuse. */
@@ -822,6 +832,7 @@ void func_80043A68(void);
 void func_80043B4C(void);
 void func_80042710(Unk42710 *, Unk42710 *);
 void func_80042640(Unk42710 *, s16);
+void func_8003F8F8(Unk3F8F8 *);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
@@ -840,7 +851,6 @@ void func_8004D70C(void);
 void func_800AC3EC(void);
 void func_800A48F0(s8 *, s8, s8);
 void func_800AC4C4(void);
-void func_8003F8F8(u32 *);
 void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
