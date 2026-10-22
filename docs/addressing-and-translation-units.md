@@ -64,13 +64,38 @@ That has three consequences.
 Measured 2026-10-22. This supersedes the statement that 27 functions "need both
 modes and cannot match under either" -- they need both, and both are available.
 
-**The mechanism.** A tentative definition in C (`s32 *D_800814E0;`, no
-`extern`) makes cc1psx emit `.comm D_800814E0,4`; maspsx's
-`--use-comm-section` turns a small `.comm` into `.sbss`; and gas addresses a
-symbol it can see in `.sbss` `$gp`-relatively **even at the forced `-G0`**,
-while every *undefined* symbol in the same unit still gets the absolute
-`lui %hi` / `%lo` pair. So the mode is chosen per symbol, by whether the unit
-defines it, instead of per compilation.
+**The mechanism, and it is maspsx's rather than gas's.** cc1psx emits the same
+bare-symbol load or store either way (`sw $4,D_800814C8`). **maspsx rewrites it
+to `%gp_rel(...)($gp)` itself, before gas ever sees it**, and gas's `-G` never
+enters into the decision. From `maspsx/__init__.py`: while scanning its input
+maspsx collects `sdata_entries` and `sbss_entries` -- a `.size SYM,N` line
+*inside a `.sdata` section* registers `SYM`, and `.comm`/`.lcomm` feed
+`sbss_entries` -- and then, for a load or store whose operand is a bare symbol,
+
+    if gp_allowed and (symbol in self.sbss_entries or symbol in self.sdata_entries):
+        res.append(f"{op}\t{r_dest},{gp_rel}")
+    else:
+        res.append(line)
+
+So the mode is chosen per symbol, by whether **maspsx saw a definition in this
+unit**, instead of per compilation. Verified by running maspsx on the two
+cc1psx outputs by hand: identical input instruction, `%gp_rel` out with the
+definition present and unchanged without it, with `-G8` passed both times.
+
+Three consequences the "gas decides" wording hid:
+
+* **The `.size` line is the load-bearing one**, not `.globl` or `.type`. That
+  is what puts the symbol in `sdata_entries`.
+* **The object's size does not gate the choice.** The size-versus-`-G`
+  comparison applies to `.comm`/`.lcomm`, not to symbols defined in an explicit
+  `.sdata` section, so a window object larger than 8 bytes still gets
+  `%gp_rel`.
+* **`.extern SYM, N` cannot do it**, and now for a concrete reason: `.extern`
+  is a *terminator* of maspsx's `in_sdata` scan, never a producer of an entry.
+
+**A C tentative definition also works**, by the `.comm` route: cc1psx emits
+`.comm D_800814E0,4` and maspsx's `--use-comm-section` puts a small `.comm`
+into `.sbss`, which is the other half of the same predicate.
 
 **The proof.** `func_800410FC` is five instructions and is exactly the
 supposedly impossible case -- one `%gp_rel` store and one absolute
@@ -115,7 +140,28 @@ defined, and needs nothing from the compiler:
 Measured on func_800410FC: MATCH, 5 of 5, a 4-byte PROGBITS `.sdata`, and the
 same GPREL16-beside-HI16/LO16 relocations as above. Gaps between the window's
 objects are `.space`, and the whole window can go in one block in address
-order.
+order -- **measured, not inferred**: a probe with 120 bytes of `.space` filler
+ahead of three objects still matches, so an object's position inside the block
+does not affect the rewrite, several `.size` directives in one block all
+register, and `.space` between them is skipped harmlessly.
+
+**But the C declarations must stay small scalars.** maspsx's rewrite only fires
+on a load or store whose operand is a *bare symbol*. Declare a window object as
+a struct or array bigger than `-G8` and reach a field through it, and cc1psx
+emits the compiler-split `lui %hi` / `%lo` pair instead -- no bare-symbol
+candidate, no rewrite, absolute addressing. So "one struct covering a window"
+is advice for the **assembly definition and the linker script only**; on the C
+side, one small scalar declaration per object, which is what `include/structs.h`
+already has.
+
+**One symbol can take both modes inside one function, free.** func_8003F624
+stores through `%gp_rel(D_800814D4)($gp)` and then passes `&D_800814D4` to
+`CdControlB`, which comes out `lui %hi` / `addiu %lo` -- confirmed in the
+relocations as GPREL16 at one site and HI16/LO16 at the other, for the same
+symbol. It follows from the predicate: an address materialisation is `la`,
+which is neither a load nor a store, so maspsx leaves it alone and gas's `la`
+macro expands it absolutely. Nothing in the source chooses this, but the
+placement work has to get both forms right for the same object.
 
 **The placement step, concretely.** splat 0.50.1 has an `sdata` subsegment
 type (`splat/segtypes/common/sdata.py`), so the closing blob gets split around

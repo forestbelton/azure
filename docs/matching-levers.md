@@ -29,7 +29,8 @@ whether source can reach it at all.
 | pass | what it decides | how it bites |
 |------|-----------------|--------------|
 | `jump` | block layout, which arm goes out of line, label deletion | an `if`/`else`'s arms are not interchangeable; see section 8 |
-| `cse` | substitutes the cheapest equivalent per operand, then constant-folds | `rtx_cost` of a `CONST_INT` is ~0, so a known constant always beats an insn -- that is why `0x10 * 2` becomes `li 32` and cannot be talked out of it |
+| `cse` | substitutes the cheapest equivalent per operand, then constant-folds | `rtx_cost` of a `CONST_INT` is ~0, so a known constant always beats an insn -- that is why `0x10 * 2` becomes `li 32`. Cost decides *which* equivalent wins; what decides whether cse knows the constant at all is its **run boundary**, below |
+| | the extent of one run | a run is a maximal **linear** insn range that stops only at a `CODE_LABEL` with `LABEL_NUSES != 1`. It does **not** stop at a conditional jump, a barrier, or a single-use label -- so an `if` body inherits the test's table whether it is the fall-through or the branch target |
 | | memory equivalences | invalidation is **coarse**: a store through a register base kills entries at other offsets off the same base, which is why the target reloads a neighbouring field |
 | `loop` | invariant motion | hoists a constant's set into the preheader, where `combine` can no longer fold it into an immediate (section 3) |
 | | strength reduction | builds the giv list by **prepending**, so the *last* access in the body becomes `combine_givs`' representative (section 9) |
@@ -39,8 +40,9 @@ whether source can reach it at all.
 | `sched1` | insn order **within one basic block** | ties break by `LUID`, i.e. source order; alias calls go through `MEM_IN_STRUCT_P` (section 5); a hazard heuristic reorders stores and cannot be steered |
 | `local-alloc` | registers for block-local quantities, **before** `global-alloc` | a value live in one block only is out of reach; it also takes the register `global-alloc` would have wanted |
 | `global-alloc` | everything else, by `floor_log2(refs)*refs/live_length` | section 3; `find_reg` also avoids registers that *conflicting* allocnos prefer, and a call's argument preferences propagate |
-| `jump2` | cross-jumping | merges identical tails, so duplicating a store into two arms costs nothing (section 1) |
-| `sched2`, `reorg` | delay slots | `reorg` can steal the insn at a branch target and redirect the branch past it, which looks like a duplicated instruction in the listing but comes from one statement |
+| `sched2` | insn order again, after allocation | sees the code **before** cross-jumping, so a duplicate put in both arms is still two insns here |
+| `jump2` | cross-jumping | merges identical tails, so duplicating a store into two arms costs nothing (section 1). **It runs after both schedulers and after allocation** -- measured, not assumed: the twin branch and its label are present in the `.sched2` dump and gone in `.jump2` |
+| `shorten`, `reorg` | delay slots | `reorg` can steal the insn at a branch target and redirect the branch past it, which looks like a duplicated instruction in the listing but comes from one statement. It is the only pass that sees the merged block |
 
 ## 1. Block membership beats scheduling
 
@@ -88,6 +90,23 @@ Three instances:
 
   **jump2 does not cross-jump a call**, so a duplicated call stays duplicated:
   func_80045CC4's RotAverage4 in both arms came out 15 words longer.
+
+  **An `if`/`else` whose two arms are IDENTICAL costs zero words, and buys a
+  basic-block boundary.** jump2 merges the arms, the now-pointless conditional
+  branch becomes a jump-to-next and is deleted, and `delete_computation`
+  removes the condition's own insns with it -- even a load:
+
+      void ra(PX *p, s32 c) { if (c) { p->f6E = 0x100; } else { p->f6E = 0x100; } p->f87 = 1; }
+          -> li $2,256 / sh / li $2,1 / j $31 / sb      (no branch, `c` never read)
+
+  That makes it the one way to put a **cse run boundary** in the middle of a
+  straight-line stretch for free, which is what defeated func_80041E70's
+  constant fold at an unchanged 270 words. The caveat is the price: it is free
+  in words but it is a real **sched1 and sched2 block split**, so it only helps
+  where the surrounding schedule can tolerate one. In func_80041E70 the body
+  came out byte-exact and the first block then lost two words to scheduling.
+  Arms holding a different insn, or placed a statement earlier or later, cost
+  1-3 words -- the placement sweep is in its near-miss file.
 
   And it can be used to **prevent** a merge. Duplicate a run of insns into both
   arms whose *last* insn differs between them, and cross-jumping merges only
@@ -392,7 +411,14 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   (func_8004425C). It also splits the parameter copy, which is schedulable and
   drifts (func_80046884, 8 words).
 * A `u16` field read with `(s16)` casts yields a bare `lh`, because combine
-  folds zero_extend-then-sign-extend-of-low (func_8004425C).
+  folds zero_extend-then-sign-extend-of-low (func_8004425C). **It works the
+  same way on a `u16` GLOBAL**, which makes it the cheap way to take a signed
+  read off a declaration you do not want to retype: `D_80083120[(s16) D_800814E8]`
+  gives `lh` and dropping the cast gives `lhu`, one differing word with the
+  count unchanged (func_80041B98, and three others in that batch).
+* **A narrow local is still an SImode pseudo** (`PROMOTE_MODE`), so there is no
+  paradoxical-subreg escape from cse's `equiv_constant`: `u16 n`, `s16 n` and
+  `u16 n <<= 1` all fold to `li 32` exactly as `s32` does (func_80041E70).
 * **The byte-to-signed fold: `lbu`/`sll 24`/`sra 24` against a single `lb`.**
   This has been written down wrong twice, so here is the whole mechanism
   first. `extendqisi2`'s expander does `force_not_mem` under `-O`, which means
@@ -654,14 +680,46 @@ into a shared tail differ by a word between the two spellings.
   those also add an `andi 0xffff` the target does not have. `andi 0xC000` and
   `ori 0x400` do give `sra`, which confirms it is the proof and not the
   spelling. This blocks func_80042A80 and is the one difference in it.
-* **`cse` folding a known constant.** `p->field = 0x10;` then `field * 2` in a
-  following block is always `li 32`, never `sll`. Measured against: the field
-  read back, an `s32` local, a `u8` local, the local given a second use, the
-  value derived as `other >> 4`, the local also feeding another field, a `(u8)`
-  cast on the product, `<<= 1`, the `if` inverted, and the two entry stores
-  swapped. `rtx_cost` is why: a `CONST_INT` costs ~0 and MIPS cannot store an
-  immediate, so expand always materialises the constant into a register before
-  the store and hands `cse` the equivalence. This blocks func_80041E70.
+* **`cse` folding a known constant, inside one run.** `p->field = 0x10;` then
+  `field * 2` in a following block is always `li 32`, never `sll`. Measured
+  against: the field read back, an `s32` local, a `u8` local, a `u16`/`s16`
+  local (PROMOTE_MODE -- see section 7), the local given a second use or a real
+  second set, the value derived as `other >> 4`, the local also feeding another
+  field, a `(u8)` cast on the product, `<<= 1`, the `if` inverted, and the two
+  entry stores swapped. `rtx_cost` is why the constant *wins* -- a `CONST_INT`
+  costs ~0 and MIPS cannot store an immediate, so expand always materialises it
+  into a register before the store and hands cse the equivalence.
+
+  **But the thing to attack is the run, not the cost**, and that is now proved
+  rather than guessed. cse's run ends only at a `CODE_LABEL` with
+  `LABEL_NUSES != 1`; it follows a conditional jump's fall-through *and* its
+  target, and it crosses a barrier and a single-use label. Four probes: body as
+  fall-through, body as a `bne` target, body behind an unconditional jump plus
+  barrier -- all fold; a body label with **two** uses -- the `sll` survives.
+  `-fno-cse-follow-jumps`, `-fno-cse-skip-blocks`, `-fno-thread-jumps` and
+  `-fno-rerun-cse-after-loop` change nothing, so this is not a flag question.
+
+  Three further walls found while trying to buy that two-use label, each worth
+  knowing in its own right:
+    - **`thread_jumps` runs inside jump1, before cse**, so a *provably*
+      redundant second predecessor is already gone: three equivalent tests
+      OR-ed together compile to one `beqz` with the body as fall-through, and
+      still `li 32`.
+    - **jump1 also does dead-pseudo-set DCE**, so a dead assignment cannot hold
+      an arm open -- the set, the jump and the label are all in `.rtl` and all
+      gone in `.jump`.
+    - **cse deletes a redundant store of the same value to the same address**,
+      so a duplicated store cannot hold an arm open either.
+
+  So func_80041E70 is blocked, and the honest reason is a chain rather than a
+  cost: cse's boundary is a two-use label; a two-use label is also a scheduler
+  block boundary; the target's first block provably has none (its prologue is
+  interleaved with a store and a constant fills a load-delay slot, both of
+  which only a scheduler does, and schedulers do not cross labels); and the one
+  zero-word way to make a run boundary -- identical `if`/`else` arms, section 1
+  -- is a scheduler boundary too. A shape with an opaque third test does
+  reproduce the body byte-for-byte at +2 words, which is the proof that the
+  rest of the function is right.
 * **`sched1`'s hazard heuristic.** It is a pure function of the insn and the
   unit state; no statement order changes it. Move the basic-block boundary
   instead (section 1).
@@ -731,6 +789,14 @@ The pattern: a function whose mechanism is already named costs 130-230K and
 lands; an open-ended one costs about 315K and comes back short but with
 measurements. Either is far cheaper than a fork, which pays for the parent's
 whole conversation on every turn.
+
+**Batch functions that share a mechanism.** Ten of the `$gp`-blocked functions,
+all needing the same `.sdata` definition recipe, came back all-MATCH in one run
+of 152K tokens and 52 tool calls -- about 15K per function, an order of
+magnitude under the per-function column. Eight matched on the first compile,
+and the second instance of each shape cost one tool call. The recipe was handed
+over verbatim in the brief, which is the same lesson as below, applied to a
+group.
 
 Two things that make the difference between those columns:
 
