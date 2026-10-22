@@ -350,6 +350,20 @@ low half is zero so the materialisation is a single `lui` and everything else
 is a displacement. Literal constants per access cost 194 words in
 func_8003DBD0 and 262 in func_8003D0F0.
 
+**An out-of-image global is NOT always a constant address, and the second
+instruction tells you which.** This project's rule of thumb -- that a global
+outside 0x8002d000..0x8008875f was a constant address reached through a
+constant base pointer -- is wrong at the opcode level whenever the symbol's low
+half is nonzero and below 0x8000: a **constant** gives `lui` + **`ori`**, a
+**symbol** gives `lui` + **`addiu`**. func_80042BDC references 15 string
+symbols at 0x800E1D55..0x800E1F41 plus D_800E3D7C and D_800E3DF0; spelling them
+as `(u8 *) 0x800E1D55` constants left 15 words differing with the word count
+unchanged, and `extern u8 D_800E1D55[];` fixed all 15 at once. The symbols are
+real -- `build/slus_006.14.map` has them -- they were simply missing from
+`include/structs.h`. The constant-address rule still holds for a base whose low
+half is zero (the 0x1F800000 scratchpad) and for offsets folded into an index
+expression; it does not hold for a plain two-instruction address.
+
 **A pointer-to-symbol local with TWO SETS selects the compiler-split form.**
 This is the first spelling found that chooses `lui %hi` + `addiu %lo` + a `0x0`
 displacement over `lui` + `lw %lo` for a symbol inside the loaded image, and it
@@ -485,13 +499,39 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
 * A local array zeroed by an aggregate initialiser calls `bzero`, which also
   forces a parameter out of its argument register; explicit word stores do not
   (func_80046884, 126 words).
-* **A value with more than one SET is opaque to combine, and that is a lever in
-  its own right, not just a trap.** `nonzero_bits` gives up, so `i > 0` stays
-  `blez` instead of narrowing to `bnez` (func_80041344, func_800407C0, and
-  func_80041588's case 9, whose `for (i = *(u16 *) (p + 8); i > 0; i--)` gets
-  `blez` while a sibling loop with a single set gets `beqz`).
+* **A value with more than one SET cannot be SUBSTITUTED by combine, and that
+  is a lever in its own right. It is not "opaque" -- that wording was too
+  strong and is corrected below.** Two things follow from multiple sets and
+  they have different predicates, so keep them apart:
 
-  More usefully, combine also stops reducing a `zero_extend` to a `subreg` and
+  **(a) Substitution stops.** `can_combine_p` will not substitute a def into a
+  use when the def's register has more than one set, so a multi-set value
+  survives as its own pseudo. This is the half that acts as a lever.
+
+  **(b) `nonzero_bits` does NOT give up -- it ACCUMULATES.**
+  `set_nonzero_bits_and_sign_copies` ORs `nonzero_bits` and takes the MIN of
+  `sign_bit_copies` over **every** set in the function, so two sets of small
+  constants prove just as much as one: `k = 1; if (c) k = 3; f((s16) k);`
+  folds the cast away exactly as a single set would. To defeat a bit proof the
+  variable must receive, *somewhere in the function*, a value with few sign-bit
+  copies -- and **a call's return value is the cheapest such source**, since
+  `nonzero_bits` of a call result is the full mode mask.
+
+  That is measured twice, from both directions. func_80042BDC shares one
+  function-scope `s32` between a 1/3 constant (passed as an `s16` argument) and
+  `func_800A1BD0`'s return value (also cast `(s16)`), and **both** casts then
+  survive; giving each its own local collapses both `sll 16`/`sra 16` pairs and
+  costs 542 words against 543 with 351 differing. And func_80042A80's probes
+  agree: a second set of `0` leaves the bit proved (`srl`), while `0x8000`, a
+  parameter or a load all defeat it (`sra`) -- see section 10.
+
+  So `i > 0` staying `blez` instead of narrowing to `bnez` (func_80041344,
+  func_800407C0, func_80041588's case 9) is **not** because two sets blind
+  `nonzero_bits`; it is because the accumulated value of those particular sets
+  does not prove the bit.
+
+  Beyond substitution, combine also stops reducing a `zero_extend` to a
+  `subreg` and stops substituting the following `ior`. So `flags = *(u16 *) (p + 0xC);` then
   stops substituting the following `ior`. So `flags = *(u16 *) (p + 0xC);` then
   `flags |= 2;` -- the same value, loaded and updated IN PLACE -- keeps the
   whole load/OR chain as one **global allocno** where the one-expression form
@@ -542,6 +582,28 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   optimizer hoists the assignment above the comparison and the pseudo's live
   range changes class.
 
+**A switch on a narrow expression subtracts the minimum BEFORE extending, and
+the prologue therefore tells you the switch variable's declared width.**
+`c_expand_start_case` calls `get_unwidened` after `default_conversion`, so an
+`s16`/`u16`/`s8` switch expression keeps its narrow type and gcc emits
+`addiu -min` first and the `sll`/`sra` for the range check second -- the
+opposite order from an `int` index, which extends first or not at all. Read
+func_80042BDC's prologue, `addiu $a1,$a1,-1` / `sll $a1,$a1,16` /
+`sra $v1,$a1,16`, and it says "the second parameter is `s16`" directly.
+Measured: `s16` 200 DIFF, `s8` gives `sll 24`/`sra 24` at 202, `s32` emits no
+extension at all.
+
+**`cond ? A : B` as a call argument puts the branch AFTER the earlier
+arguments; an `if` statement puts it before.** `expand_call` expands arguments
+left to right, and a COND_EXPR's jump is emitted only when its own argument is
+reached, so the earlier arguments' loads sit above the branch. Written as
+`m = B; if (cond) m = A; f(a, b, m);` they sit below it. func_80042BDC selects
+between two constants at seven call sites and needs the ternary at two of them
+and the `if` form at the other five; all-ternary costs it a word and 105 extra
+differing words. The two forms are not always the same length, so this is a
+word-count lever as well as an ordering one -- the sites whose call cross-jumps
+into a shared tail differ by a word between the two spellings.
+
 ## 9. Induction variables
 
 * gcc builds the giv list by **prepending** as it discovers them, so the LAST
@@ -565,14 +627,14 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   `combine`'s byte-to-signed refold it is the answer, and it matched
   func_80044D24. See section 7. The distinction worth carrying is whether you
   can name the pass and the predicate it defeats.
-* **`combine` proving a bit, when the value is single-set.** `(s16) (x & 0x400)`
-  comes out `srl`, never `sra`, because the mask proves bit 15 clear through
-  `nonzero_bits`.
+* **`combine` proving a bit.** `(s16) (x & 0x400)` comes out `srl`, never
+  `sra`, because the mask proves bit 15 clear through `nonzero_bits`.
 
-  **One thing does defeat it, and it costs a word.** `nonzero_bits` gives up on
-  a value with more than one set unless every set is a known constant with the
-  bit clear, so a second set that is *opaque* -- or a constant with bit 15 set
-  -- preserves the `sra` (measured, 2026-10-22):
+  **One thing does defeat it, and it costs a word.** `nonzero_bits` ORs its
+  value and MINs `sign_bit_copies` over **every** set of the pseudo
+  (`set_nonzero_bits_and_sign_copies`), so more sets do not help by themselves
+  -- what helps is a set the accumulation cannot prove anything about: an
+  opaque one, or a constant with bit 15 set (measured, 2026-10-22):
 
       s32 G(u16 *p, s32 c)         { s32 v = 0;      if (c) v = *p & 0x400; return (s16) v; }  /* srl */
       s32 E(u16 *p, s32 c, s32 w)  { s32 v = w;      if (c) v = *p & 0x400; return (s16) v; }  /* sra */
