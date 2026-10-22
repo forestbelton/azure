@@ -160,10 +160,21 @@ func_8003DBD0 and 262 in func_8003D0F0.
   (func_8004425C). It also splits the parameter copy, which is schedulable and
   drifts (func_80046884, 8 words).
 * A `u16` field read with `(s16)` casts yields a bare `lh`, because combine
-  folds zero_extend-then-sign-extend-of-low (func_8004425C). The byte-load
-  counterpart of that fold is what blocks func_8003D0F0: `(s8)` on a `u8` field
-  always collapses to `lb`, and no spelling found so far keeps the target's
-  `lbu`/`sll 24`/`sra 24`.
+  folds zero_extend-then-sign-extend-of-low (func_8004425C).
+* **A second use of a loaded byte blocks that fold.** `(s8) p[2]` is `lb`, and
+  so is the same thing through a `u8` or `s32` local -- but give the loaded
+  value any second use and combine can no longer substitute the load into the
+  sign extension, so you get the unsimplified `lbu` / `sll 24` / `sra 24`.
+  Measured: `u8 t = p[2]; *q = t; return (s8) t;` and `u8 t = p[2];
+  p[3] = t; return (s8) t;` both produce it; two casts of one load produce one
+  `lbu` and two shift pairs. This is the eight missing words in
+  func_8003D0F0, so look for what else reads that byte.
+* **The same trick does NOT work on the `srl`/`sra` downgrade.** For
+  `(s16) (x & 0x400)` combine proves bit 15 clear and emits `srl`, and a second
+  use of either the masked value or the loaded halfword does not stop it -- it
+  only adds an `andi 0xffff` that the target does not have. Nor does putting
+  the mask in a different basic block. Four shapes measured in
+  `docs/near-misses/func_80042A80.c`; that one is still open.
 * A byte copy through an `s8` temporary gives `lb`; copying the field directly
   gives `lbu` (func_80042710, func_80042560).
 * An all-`u8` struct has alignment 1, which makes a whole-struct assignment the

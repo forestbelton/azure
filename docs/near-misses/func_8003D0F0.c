@@ -14,10 +14,26 @@
  * directly; via an s32 local in two statements; with an `& 0xFF` in between;
  * with explicit `a = e->unk_02 << 24; a = -(a >> 24);`. combine reduces
  * (sign_extend (subreg (zero_extend (mem:QI)))) to (sign_extend (mem:QI)) in
- * all of them. For the target's form the zero-extended value would need a
- * second use or an intervening memory STORE, and the target has neither --
- * between its lbu and sll sits only an independent lhu. This is the byte-load
- * counterpart of the lh fold recorded for func_8004425C.
+ * all of them.
+ *
+ * MEASURED SINCE (2026-10-22, four probe functions against the real ccpsx):
+ * the guess above is right, and a second use is enough on its own -- no
+ * intervening store is needed.
+ *
+ *   s32 pA(u8 *p)           { return (s8) p[2]; }              -> lb
+ *   s32 pB(u8 *p)           { u8 t = p[2]; return (s8) t; }     -> lb
+ *   s32 pC(u8 *p, s32 *q)   { u8 t = p[2]; *q = t; return (s8) t; }
+ *                                       -> lbu / sw / sll 24 / sra 24
+ *   s32 pF(u8 *p)           { u8 t = p[2]; p[3] = t; return (s8) t; }
+ *                                       -> lbu / sb / sll 24 / sra 24
+ *
+ * So the fix is to find the SECOND USE of that byte in the original. Each of
+ * the four flag arms has its own lbu, so the second use is inside the arm, not
+ * shared between them. Two casts of one load give one lbu and two shift pairs,
+ * which is NOT the target's shape, so it is not the four arms sharing a read.
+ * Candidates to look for: the byte feeding the UV calculation as well as the
+ * corner, or being written back somewhere, or the x and y bytes being read in
+ * a way that makes each one live across the other's store.
  *
  * (b) 2 words: the post-call block's copy. The target is addu/addu/sw 0x10/
  * `addu $v0,$a1,$zero`/sll/sll/sw 0x14/sw 0xC -- it copies the 0x0C value into

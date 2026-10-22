@@ -39,6 +39,16 @@
  * join block and a `v = 0` predecessor, and STILL gives `srl`, with the same
  * extra `andi 0xffff`. Only D, whose operand is wholly opaque, gives `sra`.
  *
+ * Four more probes (same day) confirm it from the other direction: the masked
+ * value returned on one path and cast on another; the loaded halfword stored
+ * before the mask; and the masked value tested against 0 before the cast --
+ * all still `srl`, and the last two also carry the spurious `andi 0xffff`.
+ * Worth noting because the matching trick for the BYTE case is exactly this
+ * one: a second use of a loaded byte does block the `lb` fold (see
+ * docs/near-misses/func_8003D0F0.c). It does not transfer here, so the two
+ * are separate mechanisms -- combine substituting an insn versus combine
+ * proving a bit -- and only the first is reachable from C.
+ *
  * So neither a second use nor a block boundary defeats the proof, and the
  * extra `andi 0xffff` both of those introduce is not in the target anyway.
  * Whatever the original wrote, the value reaching the extension was opaque to
