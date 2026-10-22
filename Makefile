@@ -1,69 +1,142 @@
+# Fail on the first error in a pipeline. Without this, `azure shiftjis ... | as`
+# reports only the assembler's status, so a crash in the first stage silently
+# yields an object assembled from empty input.
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
 SLUS = slus_006.14
 TOWN = town.bin
 MAIN = main.bin
 
-AS 		= mipsel-linux-gnu-as
-LD 		= mipsel-linux-gnu-ld
-OBJCOPY = mipsel-linux-gnu-objcopy
+# GNU binutils handles the assemble/link stage: splat emits GNU-syntax asm
+# (see include/macro.inc) and a GNU ld script, neither of which ASPSX or
+# psylink can consume. Debian/Ubuntu ship binutils-mipsel-linux-gnu; Fedora
+# ships binutils-mips64-linux-gnu, which defaults to big-endian mips64 and so
+# needs an explicit little-endian/o32 selection.
+MIPS_PREFIX ?= $(shell command -v mipsel-linux-gnu-as >/dev/null 2>&1 \
+                 && echo mipsel-linux-gnu- || echo mips64-linux-gnu-)
+AS      = $(MIPS_PREFIX)as
+LD      = $(MIPS_PREFIX)ld
+OBJCOPY = $(MIPS_PREFIX)objcopy
 
-AZURE = python src/azure/main.py
+ifeq ($(MIPS_PREFIX),mips64-linux-gnu-)
+# Verified with binutils 2.46.1: as emits elf32-tradlittlemips/mips:3000 and
+# ld supports the elf32ltsmip emulation.
+ASFLAGS   += -EL -32
+ASFLAGS_C += -EL -32
+LDFLAGS   += -m elf32ltsmip
+endif
 
-ASFLAGS += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 -G0
+# Run the project's own tool with src/ on the path. `python src/azure/main.py`
+# only works inside `hatch shell`: invoked directly it puts src/azure on
+# sys.path rather than src, so `from azure.commands import ...` fails.
+AZURE = PYTHONPATH=src python3 src/azure/main.py
+CHECK = python tools/check.py
+
+# The game was built with PSY-Q 4.0: cc1psx reports "GNU C 2.7.2.SN32.3.7"
+# (SN Systems' patched GCC -- vanilla GNU 2.7.2 will NOT match) and aspsx
+# reports version 2.56. tools/ccpsx drives the shipped compiler under wine.
+CC             = tools/ccpsx
+ASPSX_VERSION  = 2.56
+CFLAGS        += -O2 -G8
+# -G8 is ccpsx's default and the game uses small-data addressing: there are 245
+# genuine $gp-relative loads/stores in the game's own code, against
+# $gp = 0x80080994 (set by crt0 at 0x800339ac, not by the PS-EXE header, whose
+# gp0 field is 0). Getting -G wrong mismatches every small-data access.
+
+# maspsx emulates aspsx's behaviour (nop placement, div/rem expansion, the
+# mflo/mfhi gap, small-.comm-to-.sbss, $gp small-data access) on top of modern
+# binutils. ASPSX 2.56 is one of the versions it models explicitly.
+#
+# maspsx is a checkout, not a pip package: https://github.com/mkst/maspsx
+MASPSX_DIR   ?= $(HOME)/scratch/maspsx
+MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
+#
+# It reads the assembly on stdin, forwards any flags it does not recognise to
+# GNU as, and with --run-assembler invokes as itself (reading from "-").
+#   --force-stdin      fail loudly instead of silently falling back to a file
+#   -G8                read by maspsx for its small-data limit AND forwarded
+#   --dont-force-G0    maspsx passes -G0 to as by default; we need -G8
+#   --use-comm-section put common symbols in .comm, which is ccpsx's behaviour
+MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
+                --run-assembler --gnu-as-path=$(AS) \
+                --use-comm-section --dont-force-G0 -G8
+
+# Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
+# explicitly, so the assembler must not make its own small-data decisions.
+# This is independent of the -G8 used for C above.
+ASFLAGS  += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 -G0
+# For C, maspsx supplies the -G value, so leave -G off here.
+ASFLAGS_C += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1
 
 SPLATFILES := $(shell find splat -type f -name '*.yaml')
 
-BINFILES := $(shell find assets -type f -name '*.bin')
-SFILES := $(shell find asm -type f -name '*.s')
-OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o)
+BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
+SFILES := $(shell find asm -type f -name '*.s' 2>/dev/null)
+CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
+OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
+          $(CFILES:%.c=build/%.o)
 
-.PHONY: all clean splat
+.PHONY: all clean splat check
 
 all: build/$(SLUS) build/$(TOWN)
 
 # TODO: Probably want to use .d files generated from `splat` here
-build/$(SLUS): $(OFILES)
-	$(LD) \
+# splat generates the linker script into build/, so it is a real prerequisite
+# of the link: `rm -rf build` otherwise leaves the project unlinkable until
+# `make splat` is run again.
+build/%.ld: splat/%.yaml
+	splat split $<
+
+build/$(SLUS): $(OFILES) build/$(SLUS).ld
+	$(LD) $(LDFLAGS) \
 		--script=build/$(SLUS).ld \
 		--script=splat/$(SLUS)_undefined_funcs_auto.txt \
 		--script=splat/$(SLUS)_undefined_syms_auto.txt \
 		--output=build/$(SLUS).elf
 	$(OBJCOPY) -O binary build/$(SLUS).elf build/$(SLUS)
-	@echo ""	
-	ls -la build/$(SLUS) data/$(SLUS)
 	@echo ""
-	shasum build/$(SLUS) data/$(SLUS)
+	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
 
 build/$(TOWN): $(OFILES)
-	$(LD) \
+	$(LD) $(LDFLAGS) \
 		--script=build/$(TOWN).ld \
 		--script=splat/$(TOWN)_undefined_funcs_auto.txt \
 		--script=splat/$(TOWN)_undefined_syms_auto.txt \
 		--output=build/$(TOWN).elf
 	$(OBJCOPY) -O binary build/$(TOWN).elf build/$(TOWN)
-	@echo ""	
-	ls -la build/$(TOWN) data/town/$(TOWN)
 	@echo ""
-	shasum build/$(TOWN) data/town/$(TOWN)
+	@$(CHECK) build/$(TOWN) data/town/$(TOWN) --yaml splat/$(SLUS).yaml
 
 build/$(MAIN): $(OFILES)
-	$(LD) \
+	$(LD) $(LDFLAGS) \
 		--script=build/$(MAIN).ld \
 		--script=splat/$(MAIN)_undefined_funcs_auto.txt \
 		--script=splat/$(MAIN)_undefined_syms_auto.txt \
 		--output=build/$(MAIN).elf
 	$(OBJCOPY) -O binary build/$(MAIN).elf build/$(MAIN)
-	@echo ""	
-	ls -la build/$(MAIN) data/main/$(MAIN)
 	@echo ""
-	shasum build/$(MAIN) data/main/$(MAIN)
+	@$(CHECK) build/$(MAIN) data/main/$(MAIN) --yaml splat/$(SLUS).yaml
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
 	$(AZURE) shiftjis $< | $(AS) $(ASFLAGS) -o $@
 
+# C goes ccpsx -S -> maspsx -> GNU as, so that aspsx's quirks are reproduced
+# while still using modern binutils for the actual assembly.
+build/%.o: %.c
+	@mkdir -p $(shell dirname $@)
+	$(CC) $(CFLAGS) -S -o $(@:.o=.s) $<
+	$(MASPSX) $(MASPSXFLAGS) $(ASFLAGS_C) -o $@ < $(@:.o=.s)
+
 build/%.o: %.bin
 	@mkdir -p $(shell dirname $@)
-	$(LD) --relocatable --format=binary -o $@ $<
+	$(LD) $(LDFLAGS) --relocatable --format=binary -o $@ $<
+
+# Report where the build diverges from the original, and which subsegment
+# owns that offset. A whole-file checksum cannot tell you that.
+check: build/$(SLUS)
+	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
 
 clean:
 	rm -rf asm assets build

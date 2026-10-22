@@ -1,0 +1,32 @@
+#!/bin/sh
+# Drive the PSY-Q 4.0 compiler under wine.
+#
+# The toolchain is the one that ships in psy-q/: cc1psx reports
+# "GNU C 2.7.2.SN32.3.7", which is SN Systems' patched GCC. Vanilla GNU 2.7.2
+# does NOT produce matching code, so this wrapper is the only supported way to
+# compile -- do not substitute a modern mipsel-gcc.
+#
+# ccpsx shells out to cpppsx, cc1psx and aspsx by bare name, and they live in
+# two different directories, so both must be on the Windows PATH. Without that
+# it fails with "Error : could not execute cpppsx".
+set -eu
+
+PROJ=$(cd "$(dirname "$0")/.." && pwd)
+PSYQ=${PSYQ_DIR:-$PROJ/psy-q}
+
+if [ ! -f "$PSYQ/psyq/ccpsx.exe" ]; then
+    echo "tools/ccpsx: no ccpsx.exe under $PSYQ" >&2
+    echo "  expected $PSYQ/psyq/ccpsx.exe (set PSYQ_DIR to override)" >&2
+    exit 1
+fi
+
+# Keep the wine prefix out of the repo so it is never committed or splatted.
+export WINEPREFIX=${AZURE_WINEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/azure-psyq}
+export WINEDEBUG=${WINEDEBUG:--all}
+mkdir -p "$WINEPREFIX"
+
+bin_win=$(winepath -w "$PSYQ/psyq")
+cc_win=$(winepath -w "$PSYQ/compiler")
+export WINEPATH="$bin_win;$cc_win"
+
+exec wine "$PSYQ/psyq/ccpsx.exe" "$@"
