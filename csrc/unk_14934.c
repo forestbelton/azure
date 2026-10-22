@@ -981,7 +981,71 @@ void func_80046D64(u8 *base, s16 arg1) {
     p[4] = (u32) (base + D_8006E7F0[arg1][7] * 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046E38);
+/* Streams a run of compressed blocks through the unpacker, then hands the
+ * result to func_80046D64.
+ *
+ * Load-bearing shapes, each measured by reverting it:
+ *  - D_80080A7C is written by two separate stores in an if/else, not from a
+ *    variable. Every single-store spelling costs 30 words: with one store the
+ *    jump optimizer hoists the 0x8000 assignment above the lbu, so the pseudo
+ *    is live across the comparison, conflicts with $v0/$v1 and lands in $a0,
+ *    and sched2 is then free to hoist the (base+3)&~3 chain in front of the
+ *    store. As two stores, cross-jumping merges the common `sw` and leaves
+ *    each arm's constant in its own block, so the value is defined after the
+ *    comparison, takes $v0, and the anti-dependence pins the store ahead of
+ *    the addiu. It also recovers the word that the duplicated
+ *    `addiu $a0,$zero,0x6` costs, which reorg steals from the loop top into
+ *    the bgtz's delay slot.
+ *  - `base = D_80081480 = D_8008148C;` as a chained store (78 words
+ *    otherwise). Same store_expr-with-want_value pattern as func_80041284:
+ *    load to temp, store, copy -- and the copy fills DrawSync's delay slot.
+ *  - `n--` after the func_8004068C call, not before it (4 words otherwise):
+ *    it has to be the insn immediately before the jal so reorg takes it for
+ *    the delay slot instead of the $a1 argument setup.
+ *  - the table entry is re-dereferenced at each use rather than cached in a
+ *    local (55 words otherwise). The two stores to the stack local invalidate
+ *    cse's memory table, so those loads are genuinely reloaded; only the
+ *    address arithmetic survives in a register.
+ *  - `buf = *...->unk_00;` as a whole-struct assignment, which is gcc's
+ *    8-byte movstrsi (lw/lw/sw/sw); two field copies cost 6 words.
+ *  - arg0 is s16 (76 words otherwise): the raw parameter stays in $s0 and each
+ *    use sign-extends it separately, once by 14 for the *4 index and once by
+ *    16 for the func_80046D64 argument.
+ *  - the parameter arg1 is what the loop walks and a separate `orig` keeps the
+ *    original (12 words the other way round).
+ *  - D_80082E60.unk_0A, not a scalar at D_80082E6A -- the struct-field read is
+ *    what puts the %hi in a different register from the lbu, as recorded for
+ *    func_8003E14C.
+ *  - `while (n > 0)`, not `!= 0`, with n a plain s32 holding the lhu-loaded
+ *    count, so the test is blez/bgtz and the decrement needs no masking. */
+void func_80046E38(s16 arg0, u8 *arg1) {
+    Unk46E38A buf;
+    u8 *orig = arg1;
+    u32 base;
+    s32 n;
+    s32 addr;
+
+    base = D_80081480 = D_8008148C;
+    DrawSync(0);
+    buf = *((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_00;
+    n = ((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_04;
+    addr = ((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_00->unk_04;
+    while (n > 0) {
+        func_8003E4FC(6, (u8 *) &buf, 0);
+        addr += 0x10;
+        func_8003F320();
+        arg1 = func_8004068C((u8 *) D_80081480, arg1);
+        n--;
+        func_8003F6D4(0x10, 0, (s32 *) &buf, addr);
+    }
+    func_80046D64(orig, arg0);
+    if (D_80082E60.unk_0A == 2) {
+        D_80080A7C = 0x4000;
+    } else {
+        D_80080A7C = 0x8000;
+    }
+    D_80081480 = (base + 3) & ~3;
+}
 
 s32 func_80046F88(u32 *p) {
     s32 delta = 0;

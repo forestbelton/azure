@@ -55,6 +55,23 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. The 8-byte block D_8006E7F0[i]->unk_00 points at, which
+   func_80046E38 copies onto its stack and hands to func_8003E4FC and
+   func_8003F6D4; +0x04 doubles as the address the loop advances by 0x10. */
+typedef struct Unk46E38A {
+    u32 unk_00;
+    u32 unk_04;
+} Unk46E38A;
+
+/* Hand-added. What each D_8006E7F0 slot points at. Declared separately from
+   the array, which stays `u16 *` because func_80046D64 reaches +0x06..+0x0E as
+   u16 indices and depends on that spelling; func_80046E38 casts the element to
+   get at the pointer at +0x00 and the count at +0x04. */
+typedef struct Unk8006E7F0 {
+    Unk46E38A *unk_00;
+    u16        unk_04;   /* iteration count, read with lhu */
+} Unk8006E7F0;
+
 /* Hand-added. A 16-byte payload with byte alignment: func_8003E39C assigns it
    whole and gcc emits four lwl/lwr plus four swl/swr pairs, which is the block
    move for an unaligned 16-byte type. The 4-byte-aligned spelling gives plain
@@ -581,6 +598,7 @@ void func_80053DF0(s16);
 void func_80053E14(s16);
 void func_8006A444(void);
 void func_80064688(void);
+void func_80046E38(s16, u8 *);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
