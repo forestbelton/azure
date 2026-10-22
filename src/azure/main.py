@@ -5,6 +5,8 @@ from azure.commands import (
     extract,
     findstr,
     lib,
+    libmatch,
+    libscan,
     shiftjis,
     symbols,
 )
@@ -14,6 +16,8 @@ ALL_PARSERS = {
     "extract": extract.setup_parser,
     "findstr": findstr.setup_parser,
     "lib": lib.setup_parser,
+    "libmatch": libmatch.setup_parser,
+    "libscan": libscan.setup_parser,
     "shiftjis": shiftjis.setup_parser,
     "symbols": symbols.setup_parser,
 }
