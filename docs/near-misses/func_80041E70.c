@@ -21,7 +21,59 @@
  * constant is always cheaper. For the target's shape cse would have to not
  * know the register holds 16 at all -- and MIPS cannot store an immediate, so
  * expand always emits `(set (reg) (const_int 16))` before the `sb`, which is
- * exactly what gives cse the equivalence. That is the wall.
+ * exactly what gives cse the equivalence.
+ *
+ * CLOSED WITH A PROOF 2026-10-22, and the wall is not the cost. Cost decides
+ * which equivalent wins once cse knows the constant; what decides whether it
+ * knows it is the RUN BOUNDARY. A cse run is a maximal linear insn range that
+ * ends only at a CODE_LABEL with LABEL_NUSES != 1 -- it follows a conditional
+ * jump's fall-through AND its target, and crosses barriers and single-use
+ * labels. Four probes: body as fall-through, body as a `bne` target, body
+ * behind an unconditional jump plus barrier -- all fold; a body label with TWO
+ * uses -- the `sll` survives. No `-fno-cse-follow-jumps`,
+ * `-fno-cse-skip-blocks`, `-fno-thread-jumps` or `-fno-rerun-cse-after-loop`
+ * changes any of it, so this was never a flag question.
+ *
+ * Three things block buying that two-use label, each worth knowing:
+ *   - `thread_jumps` runs in jump1, BEFORE cse, so a provably redundant second
+ *     predecessor is already gone: three equivalent OR-ed tests compile to one
+ *     `beqz` with the body as fall-through, 270 words, still `li 32`.
+ *   - jump1 also does dead-pseudo-set DCE, so a dead assignment cannot hold an
+ *     arm open -- the set, the jump and the label are all in `.rtl` and all
+ *     gone in `.jump`.
+ *   - cse deletes a redundant store of the same value to the same address, so a
+ *     duplicated store cannot hold one open either.
+ *
+ * And the target's first block provably has no label in it: its prologue is
+ * interleaved with a store, and the constant materialisation fills the
+ * load-delay slot between a load and its consumer. Only a scheduler does
+ * either, and schedulers do not cross labels. So the only boundary available
+ * is the body's own entry label, which is the case that folds.
+ *
+ * The one zero-word way to make a run boundary is an `if`/`else` with IDENTICAL
+ * arms (now matching-levers section 1): jump2 merges them, the branch becomes a
+ * jump-to-next and is deleted, and delete_computation removes the condition's
+ * insns too -- even a load. Used here it gives 270 words with the whole body
+ * byte-exact and two words lost in the first block instead, because it is also
+ * a sched1/sched2 boundary. Placement sweep, all worse: arms holding the `sb`,
+ * or the boundary before the `lw`, give 271 and an unfillable load-delay nop;
+ * arms holding `n = 0x10` give 270 but the fold returns, because identical
+ * single-insn arms are collapsed before cse runs.
+ *
+ * A shape with an opaque third test (`|| p->unk_11 || p->unk_25`) reproduces
+ * the body byte-for-byte at +2 words, which is the proof that the rest of this
+ * function is right.
+ *
+ * ALSO CORRECTED: the claim below that the three register words are DOWNSTREAM
+ * of the fold. They are not. With the fold defeated and the body byte-exact,
+ * the call result still comes out `sll`/`sra` coalesced onto $v0, so that is an
+ * independent allocation problem -- and in every shape where the 16 became a
+ * global allocno it took $a0, never the target's $v1. Worth its own small
+ * dispatch.
+ *
+ * One more: a narrow local is still an SImode pseudo (PROMOTE_MODE), so `u16`,
+ * `s16` and `u16 n <<= 1` all fold to `li 32` exactly as `s32` does -- there is
+ * no paradoxical-subreg escape from cse's equiv_constant.
  *
  * The three register fields are downstream of the fold, not independent: with
  * it, the 0x10 pseudo dies at the `sb` before the branch and is block-local, so

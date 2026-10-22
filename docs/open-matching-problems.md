@@ -61,7 +61,7 @@ than guessed:
 | function | the pass that owns it |
 |----------|-----------------------|
 | func_80042A80 | `combine` proving bit 15 clear through `nonzero_bits`; twelve shapes measured against it |
-| func_80041E70 | `cse` folding a known constant, which `rtx_cost` guarantees it prefers; ten shapes measured |
+| func_80041E70 | `cse`'s run boundary: it ends only at a label with `LABEL_NUSES != 1`, which is also a scheduler block boundary, and the target's first block provably has none. Proved, not assumed -- see below |
 | func_800407C0 | a call's argument preferences pruning every other preference around it |
 | func_80047054 | two allocnos sharing a `$a0` preference with a five-fold priority gap |
 | func_80042900 | one duplicated `move $v0,zero`: the join label is not an `own_thread_p`, so reorg copies its first insn into the delay slot and must leave the original. The register question that used to be here is SOLVED |
@@ -299,6 +299,79 @@ whose reference count is just under a power of two, and an `if` in its live
 range to duplicate into. It does **not** rescue func_80047054 or func_800407C0,
 whose gaps are five-fold and which are blocked on a shared `$a0` preference
 rather than on priority. Now in `docs/matching-levers.md` section 3.
+
+## func_80041E70  (unk_14934) -- closed with a proof, still 4 words short
+
+Kept at 270 of 270 words and 4 DIFF, and the reason is now a chain of measured
+facts rather than "cse prefers the constant".
+
+`rtx_cost` explains why the constant *wins* once cse knows it. What decides
+whether cse knows it is the **run boundary**: a cse run is a maximal linear
+insn range that ends only at a `CODE_LABEL` with `LABEL_NUSES != 1`. It
+follows a conditional jump's fall-through *and* its target, and crosses
+barriers and single-use labels. Four probes: body as fall-through, body as a
+`bne` target, body behind an unconditional jump plus a barrier -- all fold; a
+body label with **two** uses -- the `sll` survives. No `-fno-cse-*` flag
+changes any of it.
+
+Three things then block buying that two-use label, each a useful fact on its
+own: `thread_jumps` runs inside jump1 before cse, so a provably redundant
+second predecessor is already gone (three equivalent OR-ed tests compile to one
+`beqz` with the body as fall-through, still `li 32`); jump1 also does
+dead-pseudo-set DCE, so a dead assignment cannot hold an arm open; and cse
+deletes a redundant store of the same value to the same address, so a
+duplicated store cannot either.
+
+And the target's first block provably contains no label: its prologue is
+interleaved with a store, and a constant materialisation fills the load-delay
+slot between a load and its consumer. Only a scheduler does either, and
+schedulers do not cross labels. So the only available boundary is the body's
+own entry label, which is the case that folds.
+
+The one zero-word way to make a run boundary -- an `if`/`else` with identical
+arms, now in matching-levers section 1 -- is also a scheduler boundary, and
+using it here gives 270 words with the body byte-exact and two words lost in
+the first block instead. A shape with an opaque third test reproduces the body
+byte-for-byte at +2 words, which is the proof that the rest of the function is
+right.
+
+Also corrected: the near-miss header's hypothesis that the three
+sign-extend/register words are **downstream** of the fold. They are not --
+with the fold defeated and the body byte-exact, the call result still comes out
+`sll`/`sra` coalesced onto `$v0`. That is an independent allocation problem and
+wants its own small dispatch.
+
+## The real remaining blocker: splitting csrc/unk_14934.c
+
+Two of the three big items on this list have turned out to need the same
+structural change, and it is worth stating once rather than twice.
+
+**The jump-table group** needs `csrc/unk_14934.c` split at func_80041588,
+because the pad word at 0x8002D654 proves func_80041344's table ends one
+original translation unit and func_80041588's begins the next, and a single
+unit would emit all three tables back to back with no pad.
+
+**The addressing group** needs it too, for a different reason. The mechanism is
+solved (a unit that *defines* a small object gets `%gp_rel` for it while
+undefined symbols stay absolute -- see
+`docs/addressing-and-translation-units.md`), and eleven functions are already
+verified against it in `docs/near-misses/gp-window-batch.c`. But the definition
+must sit in the same object file as the code, so each unit has to define the
+objects its own functions reach. The objects do cluster by unit, exactly as the
+addressing analysis predicts, which is further evidence for the split. The
+obstacles are that a unit's `.sdata` is one contiguous block while the objects'
+addresses are scattered through the window, and that the two functions which
+would otherwise be a cheap `-G8` carve-out -- func_80044618 and func_80044698,
+consecutive and with no absolute references -- sit in the **middle** of
+`csrc/unk_14934.c`, so carving them means splitting it in three and renaming
+the tail.
+
+So the next real decision is not "where does the project's data live" but
+**where are unk_14934's original translation-unit boundaries, and split it
+there**. The jump tables give one boundary (func_80041588) and the
+`$gp`-relative clustering gives independent evidence for others. Doing it once
+unblocks about 1550 instructions of switch functions and most of the addressing
+group together.
 
 ## Functions blocked by the translation-unit problem
 
