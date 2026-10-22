@@ -1,4 +1,4 @@
-/* func_80045CC4 (unk_14934) -- 436 of 437 words, 167 DIFF. Not compiled; see
+/* func_80045CC4 (unk_14934) -- 436 of 437 words, 47 DIFF. Not compiled; see
  * docs/open-matching-problems.md.
  *
  * It emits one slot's elements: builds the matrix in the scratchpad, then per
@@ -47,36 +47,98 @@
  * mask (438/425). The open question is whether 0xFFFFFF's pseudo can be made
  * the first-set invariant without moving its first USE.
  *
- * THE REGISTER SWAP, about 160 words, and measured to within 1%. $s0 and $s1
- * are exchanged: the scratchpad pointer is mine $s1 / target $s0, and the q+4
- * giv mine $s0 / target $s1. Everything else is right ($s2 = e+8, $s3 = s,
- * $s4 = q, $s5 = e, $s6 = 0xFFFFFF, $s7 = v, $fp = arg3). From the dumps the
- * scratchpad pseudo has 148 refs / 724 insns = 1.4309 and the q+4 giv 77 / 320
- * = 1.4438, and `;; 22 regs to allocate:` lists the giv first, so it takes
- * $s0. A 0.9% gap: three more insns of live length on the giv, seven fewer on
- * the scratchpad, or two more scratchpad references inside the loop (148 -> 150
- * gives 1.4503) flips it. The STATIC reference counts already match the target
- * exactly ($s0 89, $s1 40), so the difference is purely pre-allocation live
- * length, i.e. in the RTL -- most likely the extra HImode pseudo the `s16`
- * accumulator introduces, which the original source did not have. Section 3's
- * duplicate-an-insn lever is the thing to try here, in the upward direction on
- * the scratchpad pointer.
+ * THE REGISTER SWAP IS SOLVED, 2026-10-22: 167 DIFF -> 47. All eight
+ * callee-saved registers and $fp now match ($s0 scratchpad, $s1 q+4, $s2 e+8,
+ * $s3 s, $s4 q, $s5 e, $s6 0xFFFFFF, $s7 v, $fp arg3). The gap was 0.9% --
+ * scratchpad 148 refs / 724 insns = 1.4309 against the q+4 giv's 77 / 320 =
+ * 1.4438 -- and section 3's duplicate-an-insn lever closed it. The whole
+ * change is `s16 *p70;` declared beside the other block locals and
+ * `p70 = &p->unk_70;` duplicated into BOTH arms of the second sign site, with
+ * `RotAverage4(p70, ...)` taking it. Word count unchanged: jump2 merges the
+ * duplicate back out.
  *
- * FIVE WORDS: in the flag-merge block, `t` and `p->unk_24` have $v1/$a0
- * exchanged (`lbu $v1,-0x7($s2)` / `lhu $a0,0x24($s0)` against the target's
- * $a0/$v1). Same insns, same order. These are block-local quantities, so this
- * is local-alloc -- but see func_80042900's near-miss file before giving up:
- * a block-local value is only out of local-alloc's reach while it owns its own
- * pseudo.
+ * Four things that cost real time to learn, all of which generalise and are
+ * now in docs/matching-levers.md sections 1 and 3:
+ *   - The ratio converges slowly, so count the live-length cost. Each
+ *     duplicated 4-insn statement gave the scratchpad +4 refs and +8 live
+ *     length and the giv +2 and +4 -- the duplicate costs the longer-lived
+ *     pseudo twice as much live length. The obvious candidate (the
+ *     unk_1C/unk_24 pair, appended to both arms of `if (s->unk_10 != 0)`,
+ *     whose tail the target already cross-jumps) moved the gap only from
+ *     -0.90% to -0.41%, and four such statements would have been needed where
+ *     only two exist.
+ *   - jump2 does NOT cross-jump a call. Duplicating the RotAverage4 call into
+ *     both arms kept both copies: 451 words.
+ *   - The duplicate must mention ONLY the pseudo you are raising. Hoisting the
+ *     site-2 condition into a `c2` variable fixed $s0/$s1 (62 DIFF) but its
+ *     extra `e->unk_00` read took `e` from 16 to 18 refs and flipped `e`
+ *     against `q` -- 0.2400 against 0.2366, a 1.4% gap in the wrong direction.
+ *   - cse can spoil a duplicate asymmetrically. `f2 = p->unk_24;` in both arms
+ *     is one `lhu`, but the site-1 condition had already loaded that field, so
+ *     cse turned the fall-through copy into `move $a1,$v1` while the other arm
+ *     kept the `lhu`; the copies then differ, jump2 cannot merge them, and it
+ *     cost a real word (59 DIFF). So duplicate an ADDRESS COMPUTATION that is
+ *     not already live, not a reload of a field the enclosing block just read.
+ *     `p70 = &p->unk_70;` works because nothing nearby computes that address.
  *
- * ONE WORD: the tail takes the ADDRESS of D_80083160 into a register (`lui` /
- * `addiu %lo` / `lw 0x0` / `sw 0x8D0`) where this emits `lui` / `lw %lo` /
- * `sw`. The same symbol gets the `%lo` form at the top of the function in both,
- * so the function genuinely mixes the two spellings (section 6). Tried, all
- * 436: a block-local `Unk80083160 *g = &D_80083160;`, `*(u8 **)((u8 *)
- * &D_80083160)`, and the constant address `((Unk80083160 *) 0x80083160)
- * ->unk_00`, which makes cc1psx emit an absolute `lw $2,-2146946720` that the
- * assembler still expands to two words.
+ * It must also be argument 0: `&p->unk_78`/`unk_80`/`unk_88` all give 435
+ * words and 273-275 DIFF, because only argument 0's allocno carries the $a0
+ * preference that keeps the duplicate from being folded differently. Even so
+ * it lands in $a1, so 2 of the remaining 47 words are a `move $a0,$a1` that is
+ * the lever's own cost. Declaring `p70` at function scope makes no difference.
+ *
+ * THE 47 REMAINING WORDS: 4 are the mask tension above, 2 the lever's cost,
+ * 23 local-alloc, and 18 are one word in the tail whose mechanism is now known
+ * but is not reachable from this function's control flow.
+ *
+ * THE TAIL WORD, and a new mechanism worth more than this function. The target
+ * reads D_80083160 through the compiler-split form (`lui %hi` / `addiu %lo` /
+ * `lw 0x0`) where this emits `lui` / `lw %lo`, and that one word shifts the
+ * whole epilogue, hence 18. **A pointer-to-symbol local with TWO SETS selects
+ * the split form:**
+ *
+ *     void b3(u32 x, s32 c) { Unk80083160 *g;
+ *         if (c) { g = &D_80083160; } else { g = &D_80083160; }
+ *         *(u32 *) (g->unk_00 + 0x8D0) = x; }
+ *     ->  lui %hi / addiu %lo / lw 0($2) / sw
+ *
+ * With one set it folds back to `lui` / `lw %lo`. A CONST_INT folds through two
+ * sets -- a two-set `(u8 **) 0x80083160` still folds -- so it is specifically a
+ * SYMBOL_REF that two sets block. This is the first spelling found that picks
+ * the split form for an in-image symbol, and it explains how one function can
+ * mix both spellings of one object. It does NOT apply here: the tail block's
+ * only predecessor is the loop's `break`, so there is no join where two sets
+ * both reach the use, and putting the sets in the two arms of the `& 0x20` if
+ * costs 2 words inside the loop plus a ninth callee-saved register. Also
+ * measured as folding: the plain expression, a `u8 *o =` local, a block-local
+ * `Unk80083160 *g = &D_80083160;`, `*(u8 **) &D_80083160`,
+ * `((u32 *) ...)[0x234]`, a `volatile u8 **` local, a
+ * `(volatile Unk80083160 *)` cast, and the constant address
+ * `((Unk80083160 *) 0x80083160)->unk_00` (which makes cc1psx emit an absolute
+ * `lw $2,-2146946720` that the assembler still expands to two words).
+ *
+ * SIXTEEN WORDS: the prologue order. Every save is in the right slot and
+ * order; the difference is that this source's `%hi` scratch for the first
+ * D_80083160 read gets $v0 where the target's gets $a0, which forces the
+ * target to emit the `sw $a0,0x50($sp)` parameter spill before it -- an
+ * anti-dependence sched2 can only see after allocation -- rotating 16 words.
+ * That pseudo is born and dies in the entry block, so it is local-alloc;
+ * promoting it to a global allocno would push it to a callee-saved register,
+ * not to $a0.
+ *
+ * THE MASK TENSION, 4 words, still open. The two-set lever was probed for it
+ * and does not separate: two sets of the 0xFF000000 pseudo would stop loop.c
+ * hoisting it, but the only word-neutral place for them lands the merged `lui`
+ * about 80 words earlier than the target's .L800462AC, and two sets in the
+ * same block as the use are collapsed by cse.
+ *
+ * SEVEN WORDS: in the flag-merge block, `t` and `p->unk_24` are exchanged
+ * between $v1 and $a0. Note this is the OPPOSITE of func_80042900's case: here
+ * the target gives the block-local value (`p->unk_24`) the low register $v1
+ * and the cross-block `u8 t` the higher $a0, where this source does the
+ * reverse. `t` is already a global allocno (three sets in three blocks), so
+ * there is nothing to promote, and promoting `p->unk_24` would push it off
+ * $v1, which is where the target wants it.
  *
  * THREE MORE LOAD-BEARING SHAPES found with the above, each measured:
  *  - the four clip tests must be ONE expression, not four `s32` locals.
@@ -327,6 +389,7 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
             s32 w;
             s16 a;
             s32 otz;
+            s16 *p70;
 
             u = e->unk_08;
             p->unk_08.w = u;
@@ -364,6 +427,7 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                 a = a - p->unk_14.h;
                 p->unk_8A = a;
                 p->unk_82 = a;
+                p70 = &p->unk_70;
             } else {
                 a = (s8) ((u8 *) e)[3] - p->unk_10A;
                 p->unk_7A = a;
@@ -371,8 +435,9 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                 a = a + p->unk_14.h;
                 p->unk_8A = a;
                 p->unk_82 = a;
+                p70 = &p->unk_70;
             }
-            otz = RotAverage4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
+            otz = RotAverage4(p70, &p->unk_78, &p->unk_80, &p->unk_88,
                               (s32 *) &q->unk_08, (s32 *) &q->unk_10,
                               (s32 *) &q->unk_18, (s32 *) &q->unk_20,
                               &p->unk_90, &p->unk_94) - arg3 - 8;

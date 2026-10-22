@@ -86,6 +86,9 @@ Three instances:
   also a way to buy a pseudo one extra *reference* at allocation time at no
   cost in words. That is what closed func_800423C0; see section 3.
 
+  **jump2 does not cross-jump a call**, so a duplicated call stays duplicated:
+  func_80045CC4's RotAverage4 in both arms came out 15 words longer.
+
   And it can be used to **prevent** a merge. Duplicate a run of insns into both
   arms whose *last* insn differs between them, and cross-jumping merges only
   the common part, leaving the differing insn in the arm where sched1 put it.
@@ -167,6 +170,30 @@ Levers that move them, all with no change to the emitted code:
   different store in the same block worked identically. **Crossing a power of
   two in the reference count is the whole move**; adding a reference without
   crossing one lengthens live_length as well and usually makes things worse.
+
+  **Aiming the duplicate took four tries on func_80045CC4, and each failure is
+  a rule.** It closed a 0.9% gap there -- `s16 *p70;` with
+  `p70 = &p->unk_70;` duplicated into both arms and passed as RotAverage4's
+  first argument, 167 differing words down to 47 with the word count unchanged:
+
+  * **Count the live-length cost, not just the references.** A duplicated
+    4-insn statement gave the pseudo being raised +4 refs and +8 live length
+    while giving its rival +2 and +4 -- the duplicate costs the longer-lived
+    pseudo twice as much live length -- so the ratio converges slowly. The
+    obvious word-neutral candidate there moved the gap from -0.90% to only
+    -0.41%, and four such statements would have been needed where two existed.
+  * **The duplicate must mention ONLY the pseudo you are raising.** Hoisting a
+    condition into a variable fixed the pair being aimed at and flipped an
+    adjacent pair nobody was watching, because its extra field read took a
+    third allocno from 16 references to 18.
+  * **Duplicate an address computation that is not already live**, not a reload
+    of a field the enclosing block just read. cse rewrote one arm's copy of a
+    reload as a `move` while the other kept its `lhu`; the copies then differ,
+    jump2 cannot merge them, and it costs a real word.
+  * **For a call argument, it must be argument 0.** Duplicating the address of
+    arguments 1-3 gave 435 words and 273+ differing, because only argument 0's
+    allocno carries the `$a0` preference that stops the duplicate being folded
+    differently. Even then it can land in `$a1` and cost a `move`.
 
 Two things that cannot be steered from C:
 
@@ -322,6 +349,26 @@ An address that is neither a symbol nor in the image behaves the same way: the
 low half is zero so the materialisation is a single `lui` and everything else
 is a displacement. Literal constants per access cost 194 words in
 func_8003DBD0 and 262 in func_8003D0F0.
+
+**A pointer-to-symbol local with TWO SETS selects the compiler-split form.**
+This is the first spelling found that chooses `lui %hi` + `addiu %lo` + a `0x0`
+displacement over `lui` + `lw %lo` for a symbol inside the loaded image, and it
+is what lets one function mix both spellings of one object:
+
+    void b3(u32 x, s32 c) { Unk80083160 *g;
+        if (c) { g = &D_80083160; } else { g = &D_80083160; }
+        *(u32 *) (g->unk_00 + 0x8D0) = x; }
+    ->  lui %hi / addiu %lo / lw 0x0($2) / sw
+
+With one set it folds back to `lui` + `lw %lo`. A CONST_INT folds through two
+sets -- a two-set `(u8 **) 0x80083160` still folds -- so it is specifically a
+SYMBOL_REF that two sets block, the same combine-opacity rule as section 7's
+multi-set entry. It needs a real join, with both sets reaching the use.
+Measured as folding, so do not retry: the plain expression, a `u8 *` local, a
+block-local initialised pointer, `*(u8 **) &SYM`, an index expression, a
+`volatile u8 **` local, a `volatile`-qualified struct pointer, and the constant
+address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
+`lw $2,-2146946720` that the assembler still expands to two words.
 
 ## 7. Narrow types
 
