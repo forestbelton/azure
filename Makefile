@@ -81,6 +81,13 @@ CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
           $(CFILES:%.c=build/%.o)
 
+# Coarse header dependency: ccpsx is too old to emit .d files conveniently, so
+# rebuild every C object when any header changes. Without this, editing
+# include/common.h leaves stale objects behind and the build silently keeps
+# using them.
+HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
+$(CFILES:%.c=build/%.o): $(HEADERS)
+
 .PHONY: all clean splat check
 
 all: build/$(SLUS) build/$(TOWN)
