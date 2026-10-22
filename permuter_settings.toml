@@ -1,0 +1,13 @@
+# Configuration for decomp-permuter's import.py.
+#
+# The permuter mutates a near-miss C function and recompiles it thousands of
+# times looking for a variant that matches. It is the tool for differences that
+# source-level reasoning cannot reach -- register allocation above all, which is
+# what blocks func_8003E14C and func_800422A8.
+
+build_system = "make"
+compiler_type = "gcc"
+
+# No project macros need preserving yet; the C is still plain enough that
+# everything can be preprocessed away.
+[preserve_macros]

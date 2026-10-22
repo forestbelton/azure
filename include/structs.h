@@ -327,7 +327,7 @@ extern u16 D_80080AFC;
 extern u16 D_80080B00;
 extern u16 D_80080B08;
 extern u16 D_80080B0A;
-extern u16 D_8008146C;
+extern s16 D_8008146C;  /* retyped: read with lh, not lhu */
 extern u32 D_80081480;
 extern u32 D_8008148C;
 extern u32 D_80081490;
@@ -391,6 +391,13 @@ extern Unk80083958 D_80083958;
 extern Unk80083C68 D_80083C68;
 extern Unk80083CA8 D_80083CA8;
 extern Unk80083CE8 D_80083CE8;
+
+/* Hand-added. 0x80082e6a is inside the region fieldscan merged into
+   Unk80082E60, but func_8003E14C reaches it as its own symbol rather than as
+   a field, so at least part of that region is separate adjacent globals
+   rather than one struct. Declared both ways deliberately; the linker
+   resolves each to the same address. */
+extern u8 D_80082E6A;
 
 #endif /* STRUCTS_H */
 

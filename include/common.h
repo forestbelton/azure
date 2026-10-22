@@ -12,7 +12,13 @@
  * __maspsx_include_asm_hack_* whose lines are tagged "# maspsx-keep", and
  * emits it in place. Defining INCLUDE_ASM here wins because include_asm.h
  * guards its own definition with #ifndef.
+ *
+ * Guarded like include_asm.h's own definition: under M2CTX or PERMUTER the
+ * macro has to expand to nothing, because m2c and decomp-permuter parse this
+ * with pycparser and an __asm__ statement is a syntax error to it. Defining
+ * it unconditionally here silently defeated that.
  */
+#if !defined(M2CTX) && !defined(PERMUTER)
 #define INCLUDE_ASM(FOLDER, NAME)                                 \
     void __maspsx_include_asm_hack_##NAME(void) {                 \
         __asm__(                                                  \
@@ -25,6 +31,7 @@
             "\t.set at # maspsx-keep\n"                            \
         );                                                         \
     }
+#endif /* !M2CTX && !PERMUTER */
 
 #include "types.h"
 #include "structs.h"

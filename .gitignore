@@ -10,3 +10,5 @@ scratch/
 az.bin
 ctx.c
 ctx.c.m2c
+# decomp-permuter working directories
+nonmatchings/

@@ -39,6 +39,13 @@ CHECK = python tools/check.py
 CC             = tools/ccpsx
 ASPSX_VERSION  = 2.56
 CFLAGS        += -O2 -G8 -Iinclude
+
+# decomp-permuter invokes make with PERMUTER=1. include_asm.h compiles its
+# INCLUDE_ASM macros away when PERMUTER is defined, so the define has to reach
+# the compiler or the permuter's build pulls in assembly it cannot handle.
+ifdef PERMUTER
+CFLAGS        += -DPERMUTER
+endif
 # -G8 is ccpsx's default and the game uses small-data addressing: there are 245
 # genuine $gp-relative loads/stores in the game's own code, against
 # $gp = 0x80080994 (set by crt0 at 0x800339ac, not by the PS-EXE header, whose
