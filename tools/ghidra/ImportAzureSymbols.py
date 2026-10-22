@@ -15,9 +15,20 @@
 # @category Azure
 # @runtime PyGhidra
 
+import os
+
 from java.math import BigInteger
+from ghidra.program.model.symbol import SourceType
 
 GP_VALUE = 0x80080994
+
+
+# PSX addresses live at 0x8xxxxxxx, which is past Java's signed int range. A
+# plain toAddr(pyint) makes jpype pick the toAddr(int) overload and raise
+# OverflowError, so go through the address space with a hex string instead.
+def addr_of(value):
+    space = currentProgram.getAddressFactory().getDefaultAddressSpace()
+    return space.getAddress("%x" % value)
 
 
 def read_table(path):
@@ -39,7 +50,7 @@ def apply_symbols(rows):
     for name, value, kind in rows:
         if name == "_gp":
             continue
-        addr = toAddr(value)
+        addr = addr_of(value)
         if getMemoryBlock(addr) is None:
             skipped += 1          # outside the loaded image
             continue
@@ -54,7 +65,7 @@ def apply_symbols(rows):
                     createLabel(addr, name, True)
                     labelled += 1
             else:
-                fn.setName(name, ghidra.program.model.symbol.SourceType.USER_DEFINED)
+                fn.setName(name, SourceType.USER_DEFINED)
                 renamed_fn += 1
         else:
             createLabel(addr, name, True)
@@ -73,14 +84,37 @@ def set_gp():
         if not block.isInitialized():
             continue
         ctx.setValue(gp, block.getStart(), block.getEnd(),
-                     BigInteger.valueOf(GP_VALUE))
+                     BigInteger("%x" % GP_VALUE, 16))
         n += 1
-    createLabel(toAddr(GP_VALUE), "_gp", True)
+    createLabel(addr_of(GP_VALUE), "_gp", True)
     return n
 
 
-tsv = askFile("Azure symbol table (build/ghidra_symbols.tsv)", "Import")
-rows = read_table(tsv.getAbsolutePath())
+def find_table():
+    """Locate the TSV without a dialog where possible.
+
+    A dialog makes the script unusable headlessly, which is also how it gets
+    tested. Order: an explicit script argument, then the conventional path
+    relative to this script, then ask.
+    """
+    args = getScriptArgs()
+    if args:
+        return args[0]
+    try:
+        here = os.path.dirname(os.path.abspath(
+            str(sourceFile.getAbsolutePath())))
+        guess = os.path.join(here, "..", "..", "build", "ghidra_symbols.tsv")
+        guess = os.path.normpath(guess)
+        if os.path.isfile(guess):
+            print("using " + guess)
+            return guess
+    except Exception:
+        pass
+    return askFile("Azure symbol table (build/ghidra_symbols.tsv)",
+                   "Import").getAbsolutePath()
+
+
+rows = read_table(find_table())
 print("read %d symbols" % len(rows))
 
 made, renamed, labelled, skipped = apply_symbols(rows)
