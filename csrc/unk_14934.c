@@ -635,7 +635,7 @@ s32 func_80046F88(u32 *p) {
 
     /* Single exit returning delta, and 0xC updated before 0x14: the
      * scheduler emits that pair in the opposite order to the source. */
-    if ((u32 *) p[9] != p) {
+    if (p != (u32 *) p[9]) {
         delta = (s32) ((u8 *) p - (u8 *) p[9]);
         p[9] = (u32) p;
         p[0] += delta;
