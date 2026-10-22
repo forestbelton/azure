@@ -1,11 +1,46 @@
-# Source shapes that move this compiler
+# How this compiler behaves
 
-Written 2026-10-22, from the twenty functions matched that day. Every entry
-here was *measured*: the cost in words is what reverting that shape did to a
-function that otherwise matched. Read `docs/where-we-are.md` first for the
-workflow and `docs/compiler-version.md` for which compiler this is.
+The peculiarities of the PSY-Q 4.1 `cc1psx` (`cygnus-2.7.2-970404`) as this
+project has measured them. **Read this before writing a function.** Every
+numbered entry was measured: the cost in words is what reverting that shape did
+to a function that otherwise matched, and the "dead ends" at the bottom are
+things not to retry.
 
-The list is roughly in order of how often it has been the answer.
+Keep it up to date. Anything learned in a session that is not written here
+gets re-derived from scratch next time, and that has been the single biggest
+waste of effort on this project.
+
+Companion documents:
+
+* `docs/where-we-are.md` -- state, workflow, the tools, and the queue.
+* `docs/compiler-version.md` -- which binary this is, the evidence for it, and
+  how to read `cc1psx`'s own RTL dumps.
+* `docs/addressing-and-translation-units.md` -- the long form of section 6.
+* `docs/open-matching-problems.md` -- the parked functions and the blocked
+  groups, each with its own analysis.
+* `docs/near-misses/` -- per-function source plus everything ruled out for it.
+* `docs/m2c-pitfalls.md` -- where the decompiler's inferences are wrong.
+
+## The pass order, and what each pass does to you
+
+gcc 2.7.2 runs these in order. Knowing which pass owns a difference tells you
+whether source can reach it at all.
+
+| pass | what it decides | how it bites |
+|------|-----------------|--------------|
+| `jump` | block layout, which arm goes out of line, label deletion | an `if`/`else`'s arms are not interchangeable; see section 8 |
+| `cse` | substitutes the cheapest equivalent per operand, then constant-folds | `rtx_cost` of a `CONST_INT` is ~0, so a known constant always beats an insn -- that is why `0x10 * 2` becomes `li 32` and cannot be talked out of it |
+| | memory equivalences | invalidation is **coarse**: a store through a register base kills entries at other offsets off the same base, which is why the target reloads a neighbouring field |
+| `loop` | invariant motion | hoists a constant's set into the preheader, where `combine` can no longer fold it into an immediate (section 3) |
+| | strength reduction | builds the giv list by **prepending**, so the *last* access in the body becomes `combine_givs`' representative (section 9) |
+| `flow` | `reg_n_refs`, `reg_live_length` | refs are weighted by `loop_depth`, so a loop note reweights the whole function (section 2). Both are recomputed after `sched1`. |
+| `combine` | substitutes an insn into its single user | blocked by a **second use**, by an intervening memory store (`use_crosses_set_p` / `mem_last_set`), and by basic-block boundaries. This is the most reachable pass from C. |
+| | proves bits via `nonzero_bits` | **not** reachable from C -- see the dead ends |
+| `sched1` | insn order **within one basic block** | ties break by `LUID`, i.e. source order; alias calls go through `MEM_IN_STRUCT_P` (section 5); a hazard heuristic reorders stores and cannot be steered |
+| `local-alloc` | registers for block-local quantities, **before** `global-alloc` | a value live in one block only is out of reach; it also takes the register `global-alloc` would have wanted |
+| `global-alloc` | everything else, by `floor_log2(refs)*refs/live_length` | section 3; `find_reg` also avoids registers that *conflicting* allocnos prefer, and a call's argument preferences propagate |
+| `jump2` | cross-jumping | merges identical tails, so duplicating a store into two arms costs nothing (section 1) |
+| `sched2`, `reorg` | delay slots | `reorg` can steal the insn at a branch target and redirect the branch past it, which looks like a duplicated instruction in the listing but comes from one statement |
 
 ## 1. Block membership beats scheduling
 
@@ -227,3 +262,57 @@ func_8003DBD0 and 262 in func_8003D0F0.
 * An index expression recomputed per iteration, where the target recomputes it,
   must be written out per use -- `D_80083360[i]` style indexing is not
   interchangeable with a walking pointer.
+
+## 10. Measured dead ends -- do not retry
+
+* **`volatile`.** Tried in func_80042900, func_80042A80, func_8003DBD0 and
+  func_8003D0F0. It changes the shape but never toward the target, and it
+  usually adds a word. Fine as a diagnostic to re-align a diff; not an answer.
+* **`combine` proving a bit.** `(s16) (x & 0x400)` always comes out `srl`,
+  never `sra`, because the mask proves bit 15 clear. Measured against: every
+  spelling of the cast, a second use of the masked value, a second use of the
+  loaded halfword, the mask in a different basic block, the value tested against
+  0 first, a union, a `volatile` load, and a function returning `s16`. Two of
+  those also add an `andi 0xffff` the target does not have. `andi 0xC000` and
+  `ori 0x400` do give `sra`, which confirms it is the proof and not the
+  spelling. This blocks func_80042A80 and is the one difference in it.
+* **`cse` folding a known constant.** `p->field = 0x10;` then `field * 2` in a
+  following block is always `li 32`, never `sll`. Measured against: the field
+  read back, an `s32` local, a `u8` local, the local given a second use, the
+  value derived as `other >> 4`, the local also feeding another field, a `(u8)`
+  cast on the product, `<<= 1`, the `if` inverted, and the two entry stores
+  swapped. `rtx_cost` is why: a `CONST_INT` costs ~0 and MIPS cannot store an
+  immediate, so expand always materialises the constant into a register before
+  the store and hands `cse` the equivalence. This blocks func_80041E70.
+* **`sched1`'s hazard heuristic.** It is a pure function of the insn and the
+  unit state; no statement order changes it. Move the basic-block boundary
+  instead (section 1).
+* **`local-alloc`'s choices.** A block-local quantity -- a switch index, a
+  value used only inside one arm -- is assigned before `global-alloc` runs, and
+  nothing in the source reaches it. This is what is left in func_80041344.
+* **A call's argument preferences.** An allocno that feeds a call argument
+  carries a preference for that register, `find_reg` avoids it for conflicting
+  allocnos, and allocnos crossing the call have their own preferences pruned by
+  `call_used_reg_set`. The whole assignment shifts around the call and no
+  spelling moves it. This is what makes func_800407C0 unreachable.
+* **decomp-permuter** cannot score a function that uses a constant address:
+  splat's `target.o` carries an `R_MIPS_LO16` relocation the constant form
+  cannot produce, so the score never reaches zero.
+
+## 11. Toolchain traps
+
+* **`make check` is the only authority.** `verify.py` compares a relocated word
+  on its upper 16 bits only; it now marks a differing `%lo` addend with `?`, but
+  it still cannot see a jump table landing at the wrong address.
+* **wine's filesystem is case-insensitive.** Two scratch files whose names
+  differ only in case are one file to `ccpsx`, which then exits 0 having written
+  the other one. `verify.py` diagnoses this now; name variants so they differ by
+  more than case.
+* **Concurrent `ccpsx` runs share one wine prefix** and can lose an output.
+  Retry before believing a compile failure.
+* **`cc1psx` output has CRLF line endings.** Strip the CR before matching
+  labels.
+* **`make splat` does `rm -rf asm/nonmatchings` first**, so never run it while
+  anything else is reading those listings.
+* **Do not pipe `make check` through `head` or `tail`** -- it masks make's exit
+  code, and a broken state was committed that way once.

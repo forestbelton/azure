@@ -33,6 +33,12 @@ Then create a new shell for the project:
 $ hatch shell
 ```
 
+## Decompiling
+
+`docs/where-we-are.md` is the entry point: state, workflow, tools and queue.
+`docs/matching-levers.md` is how this compiler behaves -- read it before
+writing a function, and add to it when you learn something.
+
 ## Build
 
 ```bash

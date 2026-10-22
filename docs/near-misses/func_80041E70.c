@@ -36,6 +36,15 @@
  * entry stores, because then mem(0x87) would be killed too and the body would
  * need an `lbu` the target does not have.
  *
+ * Five further probes (2026-10-22) against a minimal reproduction, all still
+ * `li 32`: the field read back in the body; an `s32` local doubled in place;
+ * the same local given a second use after the if; the stored value derived as
+ * `p->unk_6E >> 4`; and the local also used to compute the halfword's value.
+ * Note what those probes also show -- the halfword's doubling stays a real
+ * `sll` in every one of them, because its reload is genuine, so the byte and
+ * halfword halves of this statement pair behave differently and only the byte
+ * one folds.
+ *
  * Ruled out for the fold: `p->unk_87 <<= 1` and `* 2` (identical); the 0x10 in
  * an s32 local, a u8 local, or read back from the field; `p->unk_87 = n << 1`
  * from the local; the field as s8 (271 words, 242 DIFF -- so u8 is confirmed);

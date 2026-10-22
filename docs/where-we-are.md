@@ -19,9 +19,12 @@ listings, so the reference listing for a function you have already decompiled
 stays until the next `make splat` (which does `rm -rf asm/nonmatchings` first).
 Do not run `make splat` while anything else is reading those listings.
 
-Before writing a function, read `docs/matching-levers.md`. It is the measured
-list of source shapes that move this compiler, with the word cost of reverting
-each, and it is where most of the search has already been done.
+Before writing a function, read **`docs/matching-levers.md`**. It is the
+project's record of how this compiler behaves: the pass order and what each
+pass decides, the measured source shapes that move it with the word cost of
+reverting each, the dead ends not to retry, and the toolchain traps. It exists
+so nothing gets re-derived, so **add to it whenever a session learns
+something** -- that has been the single biggest waste of effort here.
 
 ## The 48 remaining stubs, in four groups
 
