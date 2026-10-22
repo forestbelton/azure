@@ -585,7 +585,33 @@ void func_80044234(u32 arg0, u32 arg1, u32 arg2, u32 arg3) {
     func_80053DA8(0x300);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004425C);
+/* arg0 is a short: the index and the `arg0 + 1` compared against the byte are
+ * sign-extended, but the byte *written* only needs the low bits, so the raw
+ * incoming register is reused -- which is what leaves the copy to $s2 free to
+ * fill the beq's delay slot. Declaring arg0 s32 forces the copy up front and
+ * the slot goes empty. */
+void func_8004425C(s16 arg0) {
+    s16 i = arg0;
+    Unk8006E61C *e = &D_8006E61C[i];
+    s16 n = e->unk_00 - 1;
+    u8 *p = &D_80080AF0[n];
+
+    if (*p == i + 1) {
+        return;
+    }
+    func_800542BC();
+    *p = arg0 + 1;
+    DrawSync(0);
+    D_80081480 = D_8008148C;
+    func_8003E4FC(6, e->unk_08, 0);
+    func_8003E4FC(6, e->unk_04, 0);
+    func_8003F320();
+    func_8003F5E0(D_8008148C);
+    func_80053DA8((u16) ((2 << n) | 0x10));
+    func_800542BC();
+    do {
+    } while (func_8005405C(e->unk_00) != 1);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004437C);
 

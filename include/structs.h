@@ -46,6 +46,15 @@ typedef struct Unk8006CE34 {
     u32 unk_0C;
 } Unk8006CE34;
 
+/* Hand-added. func_8004425C scales an index by 12 into this table; +0x00 is a
+   halfword id (one less than it indexes D_80080AF0) and +0x04/+0x08 are two
+   buffers handed to func_8003E4FC. */
+typedef struct Unk8006E61C {
+    u16  unk_00;
+    u8  *unk_04;
+    u8  *unk_08;
+} Unk8006E61C;
+
 /* 0x8006e7b4..0x8006e7bb, 0x8 bytes, 2 field(s) */
 typedef struct Unk8006E7B4 {
     u32 unk_00;
@@ -282,6 +291,9 @@ extern u16 D_80080AD2;
 extern u16 D_80080AD4;
 extern u32 D_80080AD8;
 extern u32 D_80080ADC;
+/* Indexed by a variable in func_8004425C, so the whole address has to be
+   materialised: an incomplete array, not a scalar. */
+extern u8  D_80080AF0[];
 extern u8  D_80080AF3;
 extern u16 D_80080AFC;
 extern u16 D_80080B00;
@@ -411,6 +423,7 @@ extern u16 D_800838D8[0x40];
 extern Unk8002D5B4 D_8002D5B4;
 extern Unk8006CE34 D_8006CE34;
 extern Unk8006CE80 D_8006CE80[];
+extern Unk8006E61C D_8006E61C[];
 extern Unk8006E7B4 D_8006E7B4;
 extern Unk800777AC D_800777AC;
 /* Declared as an array of unestablished length, not as the struct: at 6 bytes
@@ -498,7 +511,7 @@ void func_8003DB4C(int *, int);
 void func_8003DB6C(int *, int *, int);
 void func_800499BC(void);
 void func_8004437C(s32, s32);
-void func_8004425C(s32);
+void func_8004425C(s16);
 Unk8006CE34 *func_8003F534(void);
 void func_8003F540(u32, u32, u32, u32);
 void func_80053DA8(s32);
@@ -508,6 +521,8 @@ void func_80040A88(void (*)(void));
 void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
+void func_8003F5E0(u32);
+s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
 
 void func_800410FC(void);
