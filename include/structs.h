@@ -335,10 +335,22 @@ extern u32 D_80081494;
 /* Hand-added. A singly-linked list walked from D_80081498; the link is at
    +0x00 and a flag halfword at +0x1e. Size is a floor: only those two fields
    have been observed, so the padding is unexplored space, not known filler. */
+/* Hand-added. Reached through UnkNode.unk_08: three words advanced by three
+   more, which reads as a position and a velocity. Named for offsets only --
+   that reading is an inference, not evidence. */
+typedef struct UnkVec {
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+} UnkVec;
+
 typedef struct UnkNode {
     struct UnkNode  *unk_00;   /* next */
     struct UnkNode **unk_04;   /* points at whatever links to this node */
-    u32              unk_08;
+    UnkVec          *unk_08;
     u32              unk_0C;
     u32              unk_10;   /* compared against a caller's argument, and
                                   called through elsewhere, so a function
