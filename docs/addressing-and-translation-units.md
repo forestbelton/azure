@@ -168,6 +168,36 @@ objects in C. That unblocks 20 functions. Window A is a second, slightly harder
 step, because 25 of its 108 bytes are initialised and those values have to be
 carried across.
 
+### Window B's layout, derived and assembled
+
+The widths below are what the accesses prove, counted over every listing in
+`asm/nonmatchings`:
+
+| offset | symbol | width | accesses seen |
+|--------|--------|-------|---------------|
+| 0x1450 | D_80081450 | 4 | lw, sw, and lbu of its first byte |
+| 0x14B0 | D_800814B0 | 4 | sw |
+| 0x14B4 | D_800814B4 | 4 | sw |
+| 0x14C8 | D_800814C8 | 4 | sw |
+| 0x14CC | D_800814CC | 4 | lw, sw |
+| 0x14D0 | D_800814D0 | 1 | lbu, sb (29 accesses -- the busiest) |
+| 0x14D4 | D_800814D4 | 1 | sb |
+| 0x14E0 | D_800814E0 | 4 | lw, sw |
+| 0x14E8 | D_800814E8 | 2 | lh, sh |
+| 0x1500 | D_80081500 | 2 | lh, sh |
+| 0x1508 | D_80081508 | 4 | lw |
+| 0x1510 | D_80081510 | 4 | lw, sw |
+| 0x1518, 0x151A, 0x151C, 0x151E | | 2 each | lhu, sh (and one lbu each on the first two) |
+| 0x1520, 0x1522, 0x1524, 0x1526 | | 2 each | lhu, sh (and one lbu each on the first two) |
+
+A generated `.sdata` block for exactly this layout, with `.space` for the gaps,
+is staged at `gpdata_81450.c` in this session's scratchpad. It **assembles
+correctly already**: 0xE0 = 224 bytes of `.sdata`, twenty symbols, each at the
+right relative offset (D_800814B0 at +0x60, D_800814C8 at +0x78, D_80081526 at
++0xD6). And the `$gp` arithmetic checks out against the target listings --
+`gp = 0x80080994`, so D_80081510 is at offset 0xB7C, which is what
+func_80045340's `sw $zero, %gp_rel(D_80081510)($gp)` encodes.
+
 Still unverified, and the next thing to do: the placement half. The instruction
 forms are proved; nothing yet confirms that a carved window plus linker
 placement reproduces the image byte-for-byte. Do that on one function --
