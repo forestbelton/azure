@@ -40,7 +40,11 @@ class PSXSegShiftjis(segment.Segment):
         vram_start: Optional[int],
         args: list,
         yaml,
+        bss_size: Optional[int] = None,
     ):
+        # `bss_size` was added to Segment.__init__ in later splat releases and
+        # is passed by keyword to every segment class, so it must be accepted
+        # and forwarded even though a Shift-JIS string segment never has bss.
         if name == "" and rom_start is not None:
             name = hex(rom_start)
         super().__init__(
@@ -51,6 +55,7 @@ class PSXSegShiftjis(segment.Segment):
             vram_start,
             args=args,
             yaml=yaml,
+            bss_size=bss_size,
         )
 
     @staticmethod
