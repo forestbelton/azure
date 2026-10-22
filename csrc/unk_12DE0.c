@@ -91,9 +91,41 @@ void func_80040060(UnkNode **link, UnkNode *n) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800400B8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040190);
+void func_80040190(void) {
+    UnkNode *p = D_80081498;
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800401FC);
+    if (p != NULL) {
+        do {
+            u32 fn = p->unk_10;
+            UnkNode *next = p->unk_00;   /* read before the call clobbers it */
+
+            if ((s32) fn < 0 && !(p->unk_1E & 0x400)) {
+                ((void (*)(void *, UnkVec *, u32)) fn)((u8 *) p + 0x20,
+                                                       p->unk_08, p->unk_0C);
+            }
+            p = next;
+        } while (p != NULL);
+    }
+}
+
+void func_800401FC(void) {
+    UnkNode *p = D_80081498;
+
+    if (p != NULL) {
+        do {
+            UnkNode *next = p->unk_00;
+
+            if (p->unk_1E & 0x8000) {
+                func_80044A50(p);
+                func_8003FFF0(p);
+                if (!(p->unk_1E & 0x80)) {
+                    func_80040044((u32 *) p);
+                }
+            }
+            p = next;
+        } while (p != NULL);
+    }
+}
 
 void func_8004027C(void) {
     UnkNode *p = D_80081498;
