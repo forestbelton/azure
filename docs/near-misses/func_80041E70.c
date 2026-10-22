@@ -36,8 +36,26 @@
  * entry stores, because then mem(0x87) would be killed too and the body would
  * need an `lbu` the target does not have.
  *
- * Five further probes (2026-10-22) against a minimal reproduction, all still
- * `li 32`: the field read back in the body; an `s32` local doubled in place;
+ * FIVE MORE PROBES (2026-10-22, second batch), all still `li 32`, run against
+ * a minimal reproduction that otherwise matches the target instruction for
+ * instruction (`li 16` / `andi` / `beq` / `sb` in the delay slot / `lhu` / ...
+ * / `sll` / `sh`): the literal with the field read back; an `s32` local doubled
+ * IN PLACE (`n *= 2`); the same written `n = n * 2`; the local given a SECOND
+ * SET later in the function, so it is genuinely multi-set; and the local with
+ * the field read back for the store. The multi-set shape is worth noting
+ * because it is what defeats combine's `nonzero_bits` elsewhere (see
+ * docs/matching-levers.md section 7) -- it does nothing here, because cse's
+ * quantity still carries the constant at the point of the shift.
+ *
+ * What the target's instructions say about the shape, which narrows it: the
+ * doubling is `sll $v1,$v1,1` on the REGISTER with no reload, while unk_6E in
+ * the same block IS reloaded (`lhu`) because the `sb` at +0x87 invalidated it.
+ * So the original cse knew `mem(0x87) == reg` and did NOT know `reg == 16`,
+ * and that split is the thing to reproduce. Every spelling measured so far
+ * gives cse both facts or neither.
+ *
+ * Five further probes (2026-10-22, first batch) against a minimal
+ * reproduction, all still `li 32`: the field read back in the body; an `s32` local doubled in place;
  * the same local given a second use after the if; the stored value derived as
  * `p->unk_6E >> 4`; and the local also used to compute the halfword's value.
  * Note what those probes also show -- the halfword's doubling stays a real
