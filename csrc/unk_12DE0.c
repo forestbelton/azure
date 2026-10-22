@@ -3,6 +3,9 @@
 void func_80040BB4(void);
 void func_80040CBC(u8);
 void func_80040AA0(u16);
+void func_8003E1FC(void);
+u32 func_8003E240(s32);
+void func_800411FC(u16);
 u32 *func_80040574(s32);
 void func_8003F80C(u32, u16, u16, s32);
 
@@ -396,7 +399,36 @@ void func_80040BB4(void) {
     D_80083160.unk_110 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040C08);
+void func_80040C08(void) {
+    /* Two struct pointers, and the mode stored directly in each arm rather
+     * than through a local: the second pointer is re-materialised where
+     * sharing the first would reuse the register, and the three direct
+     * stores are cross-jumped into one with the constant in $v0, where a
+     * local keeps the value in $v1 and reorders the store. */
+    Unk80082E60 *p = &D_80082E60;
+    Unk80082E60 *q;
+
+    D_80080A7C = 0x38000;
+    D_80081480 = D_8008148C;
+    if (p->unk_0B == 0) {
+        D_8008148C = (u32) &D_80126804;
+        func_800411FC(0);
+        func_8003E1FC();
+        if (func_8003E240(0) == 0) {
+            p->unk_0B = 1;
+        } else {
+            p->unk_0B = 3;
+        }
+    } else {
+        p->unk_0B = 3;
+    }
+    q = &D_80082E60;
+    q->unk_0D = 0;
+    q->unk_0C = 0;
+    q->unk_18 = 0;
+    q->unk_0F &= 0x7E;
+    func_80040CBC(q->unk_0B);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040CBC);
 
