@@ -439,6 +439,14 @@ typedef struct UnkSlot {
 
 /* Hand-added signatures for callees that live in another unit. */
 void func_80044A50(UnkNode *);
+void func_8003DB4C(int *, int);
+void func_800499BC(void);
+void func_8004437C(s32, s32);
+void func_8004425C(s32);
+
+/* Hand-added. Outside the loaded image, so fieldscan excludes it; splat's
+   undefined_syms_auto resolves it for the linker. */
+extern s16 D_80013714;
 
 #endif /* STRUCTS_H */
 
