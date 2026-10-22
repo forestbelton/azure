@@ -13,6 +13,6 @@ checks them. Each one carries, in comments, what is still different and what
 has already been ruled out.
 
 To work on one, copy it to a `zz_*.c` scratch file in the project root
-(gitignored) and use the single-function verifier described in
-`docs/m2c-pitfalls.md`; keep the diff count in the file's header comment up to
-date so the next attempt starts from the current best.
+(gitignored) and run `tools/decomp/verify.py zz_foo.c <unit> <func>`; see
+`docs/where-we-are.md` for the loop. Keep the diff count in the file's header
+comment up to date so the next attempt starts from the current best.

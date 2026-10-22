@@ -1,6 +1,6 @@
 # Open matching problems
 
-Ten functions are parked. Every one of them reproduces the original logic;
+Eleven functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -19,6 +19,7 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
+| func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
 
 `docs/near-misses/` holds the source that got each one that close, with the
 shapes already ruled out in comments. Read that file before starting on one;
@@ -158,6 +159,28 @@ beats `p` at ~0.14, and `e` additionally carries a preference for `$a0` that
 `p` does not have. For the target's assignment `e` would have to be allocated
 after the n+6 induction variable -- 0.68 against 4.7, too wide to close by
 adjusting reference counts -- or else conflict with `$v1`.
+
+## func_800423C0  (unk_14934) -- partial
+
+Four instructions out of 72. Everything up to and including the
+func_800A1BD0 call is exact, as are all four accesses through the indexed base
+and the whole tail. What is left is how three 0x8001xxxx constants reach
+registers: the two `addu` operands are swapped, and where the target
+materialises a third independent `lui 0x8001` for 0x80012096, gcc reuses the
+base pointer's register (`move $a1, $v0`). gcc splits a large constant into
+lui + ori as two RTL insns, so cse shares the `lui 0x8001` across the extended
+basic block, and the 0x80012096 arm is the `bnez`'s fall-through -- inside it.
+
+The part worth not re-deriving is the addressing. The indexed base is the
+plain constant 0x80010000 with 0x2094/0x2098 as load displacements, not the
+symbol D_80012094, even though the listing reads `lui $v1, %hi(D_80012094)` /
+`lhu $a0, %lo(D_80012094)($v1)`: splat renders a bare `lui reg, 0x8001` as
+`%hi(SYM)` whenever it can pair the register with a later `%lo`. A symbol
+array with a *variable* index always materialises the whole address with
+`lui %hi` + `addiu %lo` and puts `0(reg)` on the load -- measured for an
+incomplete array, a complete `u16 B[0x100]`, two accesses at different
+indices, and a `union { u16 h; u8 b; }` element type. Only the constant base
+pointer gives the target's form.
 
 ## Functions blocked by the translation-unit problem
 
