@@ -177,7 +177,39 @@ UnkNode *func_8003FE78(s32 flags, UnkNode *arg1, s16 count) {
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FF2C);
+UnkNode *func_8003FF2C(s32 flags, UnkNode *arg1, s16 count, UnkNode **link) {
+    UnkNode *n;
+    u8 *p;
+
+    flags |= 0x80;
+    n = arg1;
+
+    func_8003DB4C((int *) n, count);
+
+    /* No saved `old`: the target re-reads n->unk_00 for the back link, in
+     * the same register it loaded *link into. */
+    n->unk_00 = *link;
+    *link = n;
+    n->unk_04 = link;
+    if (n->unk_00 != NULL) {
+        n->unk_00->unk_04 = &n->unk_00;
+    }
+    n->unk_1E = flags | 0x4000;
+
+    p = (u8 *) n + count * 4;
+    if (flags & 6) {
+        p -= 0x24;
+        n->unk_0C = (u32) p;
+    } else if (flags & 0x41) {
+        p -= 0x18;
+        n->unk_0C = (u32) p;
+    }
+    if (flags & 0x57) {
+        p -= 0x18;
+        n->unk_08 = (u32) p;
+    }
+    return n;
+}
 
 void func_8003FFF0(UnkNode *n) {
     UnkNode **link = n->unk_04;
@@ -284,7 +316,36 @@ void func_8004027C(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800402F4);
+void func_800402F4(void) {
+    s32 i;
+
+    for (i = 0; i < 0x20; i++) {
+        void (*f)(u8 *, UnkVec *, UnkSlot *);
+        UnkNode *n;
+
+        f = (void (*)(u8 *, UnkVec *, UnkSlot *)) D_80083360[i];
+        if (f == NULL) {
+            continue;
+        }
+        n = (UnkNode *) D_800833E0[i];
+        /* The clearing store has to sit at the end of the body, falling into
+         * the loop advance; as an `else` arm gcc lays it out inline with a
+         * jump over it. */
+        if (n == NULL) {
+            goto clear;
+        }
+        if (n->unk_1E & 0x800) {
+            continue;
+        }
+        f((u8 *) n + 0x20, n->unk_08, (UnkSlot *) n->unk_0C);
+        if (func_80045310(*(u32 *) (D_80083160.unk_00 + 0x8D0)) != 0) {
+            return;
+        }
+        continue;
+    clear:
+        D_80083360[i] = 0;
+    }
+}
 
 void func_800403BC(s32 arg0) {
     UnkNode *p = D_80081498;
