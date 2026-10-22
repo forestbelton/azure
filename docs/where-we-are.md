@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**143 of 191 game functions are C and the build is byte-identical.** `make
-check` is green at HEAD and the working tree is clean. The remaining 48 are
+**146 of 191 game functions are C and the build is byte-identical.** `make
+check` is green at HEAD and the working tree is clean. The remaining 45 are
 `INCLUDE_ASM` stubs in `csrc/`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
@@ -26,77 +26,91 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 48 remaining stubs, in four groups
+## The 45 remaining stubs, in four groups
 
-Run `tools/decomp/guard.py` for the count. The classification below is
-`grep -c '%gp_rel'` and `grep -c 'jtbl_'` against each listing:
+Run `tools/decomp/guard.py` for the stub count (`grep -cE '^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{' csrc/*.c` for the C count).
+The classification below is `grep -c '%gp_rel'` and `grep -c 'jtbl_'` against
+each listing:
 
 | group | count | what it means |
 |-------|-------|---------------|
-| workable | 6 | nothing structural in the way; just decompile them |
-| parked | 7 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
+| parked | 9 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
 | jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
 | gp-blocked | 31 | need `$gp`-relative and absolute addressing in one translation unit |
+| not a function | 1 | func_8003CAA8; see below |
 
-### Workable (6)
-
-Smallest first, by instruction count: func_8003CAA8 (7, but see below -- not a
-function), func_800407C0 (178), func_80041E70 (270), func_800463EC (294),
-func_80044D24 (380), func_80045CC4 (437).
-
-That is the whole unblocked queue. Everything smaller has been done; what is
-left after these six is the three blocked groups, so the next real decisions
-are the jump-table spec change (about 1550 instructions, and the analysis in
-`docs/open-matching-problems.md` is complete enough to act on) and then the
-translation-unit problem.
+**There is no longer an "easy" group.** Every stub with nothing structural in
+its way has been decompiled. What is left is nine near-misses, two blocked
+groups, and one splat artefact, so a fresh session's choice is: work a parked
+function with the mechanism named below, or make one of the two spec decisions.
 
 `func_8003CAA8` is in the stub list but is **not a function**: it is `main`'s
 unreachable epilogue, which splat split off because it follows `main`'s
 infinite loop. Fixing it is a spec change (extend the `main` asm subsegment to
 0x102c4), not a matching problem.
 
-### Parked (7)
+### Parked (9)
 
-All in `docs/open-matching-problems.md`, with the source that got each one
-close in `docs/near-misses/`. Several are one instruction or one *bit* away:
+All written up in `docs/open-matching-problems.md`, with the source that got
+each one close in `docs/near-misses/`. **Read the near-miss file before
+touching one**: each lists the shapes already measured and ruled out with their
+word costs, and re-deriving those is where the time goes.
 
+Ordered by how reachable they look:
+
+- func_8003D0F0 -- 10 of 222, eight of them the four `(s8)` byte conversions.
+  The near-miss header says this needs "a third blocking mechanism" because the
+  two known ones each cost a `move` the arm has no room for. That mechanism has
+  since been found and is `volatile` (section 7 of `docs/matching-levers.md`,
+  including two load-bearing caveats about where the pointer is declared); it
+  closed func_80044D24's identical gap first try with no extra register. This
+  is the best target in the set.
+- func_80045CC4 -- 8 of 437. Four are the same `(s8)` fold, so the same
+  mechanism applies; the other four are a loop.c hoisting choice between its
+  two masks, with a specific hypothesis in the near-miss file.
 - func_80042A80 -- one bit, `srl` where the target has `sra`.
 - func_80042900 -- one instruction, a dead volatile load that wants `$v1`.
-- func_80047054 -- every instruction identical, five registers permuted.
-- func_800423C0 -- four instructions, all about how three `lui 0x8001`s are
-  materialised.
-- func_8003D0F0 -- 10 of 222, eight of them the four `(s8)` byte conversions
-  that always fold to `lb`. That fold is the byte-load counterpart of the `lh`
-  fold in func_8004425C, so whatever blocks it is worth more than one function.
-
-Read the near-miss file before touching one. Each lists the shapes already
-measured and ruled out, and re-deriving those is where the time goes.
+- func_800423C0 -- every instruction matches; one register pair is swapped on a
+  7% priority gap, the closest margin in the project. The near-miss file names
+  the three numbers that would flip it.
+- func_80041E70 -- 4 of 270, cse folding a known constant.
+- func_80042560 -- about 56 words, the largest remaining gap. Its mixed
+  addressing is solved and worth keeping; loop 1's store/load order and three
+  `$s` registers are not, and part of its statement structure is still
+  unmodelled.
+- func_80047054 and func_800407C0 -- **argued unreachable from C**, both the
+  same shared-register-preference case, with the arithmetic in the near-miss
+  files. Do not start here; they are recorded so nobody re-opens them.
 
 ### Blocked by jump-table placement (4)
 
 func_80041344, func_80041588 and func_80042BDC (unk_14934) and func_8003E758
 (unk_11940) dispatch through tables that live in the opening `[0x800, bin]`
 subsegment. `docs/open-matching-problems.md` has the full analysis, including
-what the pad word at 0x8002D654 says about where the original translation-unit
-boundary was. The four things it needs are listed there; the one that shapes
-the work is that all three unk_14934 functions have to land at once.
+what the pad word at 0x8002D654 proves about where the original
+translation-unit boundary was. The four things it needs are listed there; the
+one that shapes the work is that all three unk_14934 functions have to land at
+once, which means `csrc/unk_14934.c` must be split at func_80041588 first.
+func_80041344's body is already written and verified as far as verify.py can
+see it (145/145, with the caveat below about relocated words).
 
 ### Blocked by addressing (31)
 
-The real obstacle, and the largest single group. `docs/addressing-and-translation-units.md`
-has the analysis. Five of the 31 need only `$gp`-relative addressing
-(func_8003E4FC, func_8003F5E0, func_80044618, func_80044698, func_800448BC) and
-the other 27 need both modes in one compilation, which no per-file `-G` can
-give.
+The real obstacle, and the largest single group.
+`docs/addressing-and-translation-units.md` has the analysis. Five of the 31
+need only `$gp`-relative addressing (func_8003E4FC, func_8003F5E0,
+func_80044618, func_80044698, func_800448BC) and the other 26 need both modes
+in one compilation, which no per-file `-G` can give.
 
 Two of the five are cheap: `func_8003F5E0` sits immediately after the
 carved-out `gprel_12DD4`, so extending that subsegment by one function picks it
 up (it needs renaming `unk_12DE0` to `unk_12DEC` and re-extracting), and
 `func_80044618`/`func_80044698` are adjacent inside `unk_14934` and could be
 carved out together. Both want a splat spec change, a re-extraction and a
-`MASPSXFLAGS_G8` line in the Makefile.
+`MASPSXFLAGS_G8` line in the Makefile. Both also mean `make splat`, so they
+cannot be done while anything else is reading `asm/nonmatchings`.
 
-The 27 need the documented long-term fix: each C file must *define* the globals
+The 26 need the documented long-term fix: each C file must *define* the globals
 its functions reach `$gp`-relatively, rather than declaring them `extern`, so
 maspsx can see the size. That means moving those objects out of the splat data
 segments and into C. **This is a structural decision about where the project's
@@ -174,16 +188,35 @@ were explained rather than fought.
 
 ## Open TODOs
 
-`TODO.md` still lists only the unused-symbol scanner. The real queue is:
+`TODO.md` has the live queue. In short:
 
-1. The six workable functions above.
+1. The nine parked near-misses, best-first as ordered above. Two of them
+   (func_8003D0F0 and func_80045CC4) have a mechanism named and not yet
+   applied, which makes them the cheapest real progress available.
 2. The jump-table spec change, which unblocks about 1550 instructions. The
    analysis is complete; it needs `csrc/unk_14934.c` split in two at
    func_80041588, the opening bin blob carved, linker-script placement of three
    units' `.rodata`, and all three unk_14934 switch functions landed together.
 3. A decision on the 31 addressing-blocked ones -- still the owner's call,
-   since it is about where the project's data lives.
-4. The seven parked near-misses, as a background activity. Two of them
-   (func_80042A80's `srl`/`sra` and func_8003D0F0's `(s8)` folds) are the same
-   class of problem -- combine proving something about a value's bits -- and a
-   way to defeat `nonzero_bits` from C would settle several at once.
+   since it is about where the project's data lives. The two cheap carve-outs
+   above could be done first, independently of that decision.
+4. Deferred type merges, all recorded where they matter: three scratchpad
+   typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP), three POLY_FT4s
+   (Unk463ECP/Unk3D0F0P/Unk44D24P), Unk800E3E48 into Unk42710, and the
+   RotAverage4 prototype disagreement (`s32 *` against `u32 *`). Each is held
+   back for a stated reason -- usually that retyping a field risks an existing
+   match for a cosmetic gain -- so read the reason before doing one.
+
+## Running agents on this
+
+Fresh `general-purpose` agents pointed at `docs/matching-levers.md` are the
+cheap way to work a parked function: measured at 212K tokens / 47 tool calls
+for func_80044D24, against about 890K / 326 for a fork of the main session,
+which inherits the whole conversation and pays for it on every turn. Give the
+agent the function, the three documents to read first, the mechanism you think
+it needs, and an explicit instruction not to run `make splat`, not to touch
+`csrc/`, and not to commit -- integration is the parent's job.
+
+Do not kill an agent that has been running a while: everything it has measured
+is in its context and is lost. Send it a message asking it to report what it
+has now, which caps its remaining turns and still yields the measurements.

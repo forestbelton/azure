@@ -3,9 +3,14 @@
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
 this compiler behaves. The queue, in order:
 
-- [ ] The remaining unblocked functions: func_800463EC (294), func_80044D24
-      (380), func_80045CC4 (437), and func_8003D0F0 (222, parked at 212 words
-      with its mechanism now known).
+- [ ] The nine parked near-misses, best-first. `docs/where-we-are.md` orders
+      them and `docs/near-misses/` has the source and the ruled-out shapes for
+      each. Two have a mechanism named and not yet applied, and are the
+      cheapest real progress available: func_8003D0F0 (10 of 222 words) and
+      func_80045CC4 (8 of 437), both wanting the `volatile` block on combine's
+      byte-to-signed refold from `docs/matching-levers.md` section 7. Two
+      others (func_80047054, func_800407C0) are argued unreachable from C and
+      are recorded so nobody re-opens them.
 - [ ] **The jump-table spec change**, which unblocks about 1550 instructions
       across func_80041344, func_80041588, func_80042BDC and func_8003E758.
       `docs/open-matching-problems.md` has the full analysis; it needs
