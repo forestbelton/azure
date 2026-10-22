@@ -508,6 +508,8 @@ void func_80040A88(void (*)(void));
 void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
+s32  func_800A1BD0(u8 *);
+
 void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
@@ -622,9 +624,13 @@ extern u16 D_80083CAE[];  /* incomplete: the two arms share one `lui` */
 /* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
    at +0x48; outside the loaded image, like D_800E2968. */
 typedef struct Unk800E3E48 {
-    u8 pad_00[0x48];
-    u8 unk_48;
-    u8 pad_49[0x43];
+    u8  pad_00[0x14];
+    u32 unk_14;  /* low 3 bits copied into the caller's +0x14 */
+    u8  pad_18[0x4];
+    u32 unk_1C;  /* low 3 bits copied into the caller's +0x1C */
+    u8  pad_20[0x28];
+    u8  unk_48;
+    u8  pad_49[0x43];
 } Unk800E3E48;
 extern Unk800E3E48 D_800E3E48[];
 

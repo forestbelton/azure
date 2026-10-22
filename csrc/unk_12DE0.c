@@ -191,9 +191,99 @@ UnkNode *func_8003FB98(s32 arg0, UnkNode *arg1) {
     return NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FC64);
+UnkNode *func_8003FC64(s32 arg0) {
+    /* The list head is read into its own variable for the test: assigning n
+     * directly loads it straight into $s0, where the target loads into $v0 and
+     * copies. */
+    u32 head;
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FD64);
+    if ((D_80013714 & 2) && (arg0 & 0x200)) {
+        return NULL;
+    }
+    head = D_80081490;
+    if (head != 0) {
+        UnkNode *n = (UnkNode *) head;
+        UnkNode *old;
+        u8 *p;
+
+        D_80081490 = (u32) n->unk_00;
+        func_8003DB4C((int *) n, 0x49);
+        old = D_80081498;
+        D_80081498 = n;
+        n->unk_00 = old;
+        if (old != NULL) {
+            old->unk_04 = &n->unk_00;
+        }
+        n->unk_1E = arg0 | 0x4000;
+        p = (u8 *) n + 0x124;
+        if (arg0 & 0x100) {
+            p = (u8 *) n + 0xF4;
+            n->unk_0C = (u32) p;
+        } else if (arg0 & 6) {
+            p = (u8 *) n + 0x100;
+            n->unk_0C = (u32) p;
+        } else if (arg0 & 0x41) {
+            p = (u8 *) n + 0x10C;
+            n->unk_0C = (u32) p;
+        }
+        if (arg0 & 0x157) {
+            /* In place, not `(UnkVec *) (p - 0x18)`: the target reuses p's
+         * register, and reorg then lifts the decrement into the delay slot. */
+        p -= 0x18;
+        n->unk_08 = (UnkVec *) p;
+        }
+        return n;
+    }
+    if (arg0 & 0x200) {
+        return NULL;
+    }
+    return func_8003FB98(arg0, NULL);
+}
+
+UnkNode *func_8003FD64(s32 arg0, UnkNode *arg1) {
+    /* Same two shapes as func_8003FC64: the list head read into its own
+     * variable for the test, and p decremented in place. */
+    u32 head;
+
+    if ((D_80013714 & 2) && (arg0 & 0x200)) {
+        return NULL;
+    }
+    head = D_80081490;
+    if (head != 0) {
+        UnkNode *n = (UnkNode *) head;
+        u8 *p;
+
+        D_80081490 = (u32) n->unk_00;
+        func_8003DB4C((int *) n, 0x49);
+        n->unk_00 = arg1->unk_00;
+        arg1->unk_00 = n;
+        n->unk_04 = &arg1->unk_00;
+        if (n->unk_00 != NULL) {
+            n->unk_00->unk_04 = &n->unk_00;
+        }
+        n->unk_1E = arg0 | 0x4000;
+        p = (u8 *) n + 0x124;
+        if (arg0 & 0x100) {
+            p = (u8 *) n + 0xF4;
+            n->unk_0C = (u32) p;
+        } else if (arg0 & 6) {
+            p = (u8 *) n + 0x100;
+            n->unk_0C = (u32) p;
+        } else if (arg0 & 0x41) {
+            p = (u8 *) n + 0x10C;
+            n->unk_0C = (u32) p;
+        }
+        if (arg0 & 0x157) {
+            p -= 0x18;
+            n->unk_08 = (UnkVec *) p;
+        }
+        return n;
+    }
+    if (arg0 & 0x200) {
+        return NULL;
+    }
+    return func_8003FB98(arg0, arg1);
+}
 
 UnkNode *func_8003FE78(s32 flags, UnkNode *arg1, s16 count) {
     UnkNode *n;
