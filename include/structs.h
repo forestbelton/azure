@@ -496,6 +496,7 @@ void func_80046884(u8 *, u8 *, s32);
 void func_8003BFE4(void);
 void func_8004D70C(void);
 void func_800AC3EC(void);
+void func_800A48F0(s8 *, s8, s8);
 void func_800AC4C4(void);
 void func_8003F8F8(u32 *);
 void func_8003F9E0(UnkEntry *);
@@ -559,6 +560,7 @@ extern u8  D_801C9E40[];
    a compiler-split store so it must be past the -G8 limit, and D_801EAFE8 is
    a run of 0x100 blocks of 0x124 bytes that func_8003FAD4 threads into a
    free list. */
+extern u16 *D_8006E7F0[];
 extern u32 D_801DA714;
 extern u32 D_801DA784;
 extern u32 D_801DA770;
@@ -567,7 +569,7 @@ extern u8  D_801EAFE8[];
 
 /* Hand-added. Outside the loaded image, so fieldscan excludes it; splat's
    undefined_syms_auto resolves it for the linker. */
-extern s16 D_80013714;
+extern u16 D_80013714;  /* read with lhu */
 /* Hand-added, same situation. Reached without an index, where the symbol and
    the equivalent constant address assemble to the same bytes; a table outside
    the image that is *indexed* must be written as a constant address instead,
