@@ -13,7 +13,6 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
-| func_800423C0 | unk_14934 | every instruction now matches; one register pair swapped on a 7% priority gap |
 | func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
@@ -72,7 +71,6 @@ than guessed:
 | func_80047054 | two allocnos sharing a `$a0` preference with a five-fold priority gap |
 | func_80042560 | `sched1` would need a dependence between two disjoint byte offsets, which `memrefs_conflict_p` can never produce |
 | func_80042900 | the register for a dead volatile load, i.e. another allocation preference |
-| func_800423C0 | an allocation priority gap of 7%, the closest of these -- the `lui` sharing is now solved |
 
 That is the honest reading: the parked list is close to exhausted as far as C
 can take it, and the remaining effort belongs on the jump-table spec change and
@@ -251,17 +249,32 @@ beats `p` at ~0.14, and `e` additionally carries a preference for `$a0` that
 after the n+6 induction variable -- 0.68 against 4.7, too wide to close by
 adjusting reference counts -- or else conflict with `$v1`.
 
-## func_800423C0  (unk_14934) -- instructions all match
+## func_800423C0  (unk_14934) -- SOLVED 2026-10-22
 
-The `lui 0x8001` sharing this was parked on is solved: the base pointer has to
-be built by an in-place `p += r * 2;` so the add consumes the constant's own
-register, `cmp` has to be declared before `p` so the sharing does not just move
-to the other constant, and the `+=` has to come before the `if`. All three are
-measured in `docs/near-misses/func_800423C0.c`, which also has the source.
+Landed in `csrc/unk_14934.c`, 72 of 72 words, with all five load-bearing
+shapes commented there.
 
-What is left is a two-register swap on a 7% allocation-priority gap -- `r` at
-1.00 against the base pointer at 0.93 -- which is the closest margin of any
-parked allocation case here and the one most worth another look.
+Kept here because the last step generalises. It had reached "every instruction,
+immediate and displacement matches, 12 register fields wrong": `r` wanted `$a0`
+and the base pointer `$v1` and they came out the other way round, on an
+allocation-priority gap of 7% -- `floor_log2(4) * 4 / 8 = 1.00` against
+`floor_log2(7) * 7 / 15 = 0.93` -- with whichever was allocated first taking
+`$v1`. The note here said the three numbers behind it all looked fixed by the
+target's own code, and they were. What was missed is that a reference count can
+be raised *without* changing the emitted code, because **cross-jumping runs in
+jump2, after global-alloc**: duplicating one byte store into both arms of an
+inner `if` took the pointer to 8 references across 18 insns, crossed the
+`floor_log2` boundary to `3 * 8 / 18 = 1.33`, flipped the allocation order from
+`95 113 ...` to `113 95 ...`, and jump2 then merged the copies back for an
+unchanged 72 words. Duplicating a different store in the same block worked
+identically.
+
+So "the priority gap is small but the numbers are fixed" is not the dead end it
+reads as. Check it against the remaining allocation cases: it needs a pseudo
+whose reference count is just under a power of two, and an `if` in its live
+range to duplicate into. It does **not** rescue func_80047054 or func_800407C0,
+whose gaps are five-fold and which are blocked on a shared `$a0` preference
+rather than on priority. Now in `docs/matching-levers.md` section 3.
 
 ## Functions blocked by the translation-unit problem
 

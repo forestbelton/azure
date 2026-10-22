@@ -3,7 +3,7 @@
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
 this compiler behaves. The queue, in order:
 
-- [ ] The nine parked near-misses, best-first. `docs/where-we-are.md` orders
+- [ ] The eight parked near-misses, best-first. `docs/where-we-are.md` orders
       them and `docs/near-misses/` has the source and the ruled-out shapes for
       each. Two have a mechanism named and not yet applied, and are the
       cheapest real progress available: func_8003D0F0 (10 of 222 words) and

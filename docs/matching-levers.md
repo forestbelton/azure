@@ -62,7 +62,11 @@ Two instances:
   too, not just a store: func_80044D24 negates inside both arms rather than at
   the join, jump2 merges the two `negu`s back into one, the word count is
   unchanged, and the sra's destination stays a block-local temp -- worth 8
-  words there. `jump2`'s cross-jumping merges the two
+  words there.
+
+  Because the merge happens in jump2, **after** global-alloc, the duplicate is
+  also a way to buy a pseudo one extra *reference* at allocation time at no
+  cost in words. That is what closed func_800423C0; see section 3. `jump2`'s cross-jumping merges the two
   copies back and plants the join label in front of the result, so the word
   count is unchanged -- but sched1 never saw the store and the constant in one
   ready list. That is how func_8004491C's last two words came right; the hazard
@@ -115,6 +119,21 @@ Levers that move them, all with no change to the emitted code:
   gets its single set hoisted by `loop.c` into the preheader, after the loop
   counter's initialisation; at function scope it is emitted in declaration
   order, ahead of it. func_80046C20.
+
+* **Duplicating an insn into both arms of an `if`** (section 1) raises the
+  reference count of every pseudo it mentions, and jump2 merges the duplicate
+  away after allocation, so the word count does not change. This is the only
+  lever here that raises a priority on demand, and it is what closed
+  func_800423C0: the base pointer sat at `floor_log2(7) * 7 / 15 = 0.93`
+  against the loop counter's `floor_log2(4) * 4 / 8 = 1.00`, a 7% gap, and
+  whichever was allocated first took `$v1` -- every instruction, immediate and
+  displacement already matched with 12 register fields wrong. Duplicating one
+  byte store into both arms of an inner `if` took the pointer to 8 references
+  across 18 insns, across the `floor_log2` boundary at `3 * 8 / 18 = 1.33`, and
+  the allocation order flipped from `95 113 ...` to `113 95 ...`. Duplicating a
+  different store in the same block worked identically. **Crossing a power of
+  two in the reference count is the whole move**; adding a reference without
+  crossing one lengthens live_length as well and usually makes things worse.
 
 Two things that cannot be steered from C:
 

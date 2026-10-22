@@ -281,7 +281,86 @@ void func_800422DC(u8 *arg0, u8 *arg1) {
     *(u32 *) (arg0 + 0x50) = *(u32 *) (arg1 + 0x54);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800423C0);
+/* Applies one monster's species record to an instance, then advances the
+ * shared 3-bit animation counter at 0x80012094 and copies two of its bytes
+ * into the instance.
+ *
+ * arg1 is genuinely unused: $a1 is overwritten with the -8 mask before any use
+ * of it, and that mask constant is what happens to be sitting in $a1 at the
+ * func_800A1BD0 call, which takes one argument.
+ *
+ * Five load-bearing shapes, four of them about how the three `lui 0x8001`s are
+ * materialised. The target has three independent ones where the obvious source
+ * gives gcc one that cse shares, so each of these blocks a reuse:
+ *
+ *  - The base pointer is built by an IN-PLACE update: `p = (u8 *) 0x80010000;`
+ *    and then `p += r * 2;`, never `p = (u8 *) 0x80010000 + r * 2;`. In place,
+ *    the add's destination ties to the constant's own pseudo and consumes it,
+ *    so nothing holds 0x80010000 afterwards and the 0x80012096 arm needs a
+ *    fresh `lui`. As one expression the constant survives in its own register
+ *    and cse reuses it with a `move` (4 DIFF, but the wrong instructions).
+ *    Same mechanism as func_8003FE78's in-place `flags |= 0x80`.
+ *  - `cmp` is declared and initialised BEFORE `p`. The other order puts p's
+ *    `lui` first and cse shares it with the 0x80012094 constant instead -- the
+ *    sharing just moves (14 DIFF).
+ *  - `p += r * 2;` comes BEFORE the `if (r == 0)`. After it, the sharing comes
+ *    back as a `move` (8 DIFF).
+ *  - The indexed base is the plain constant 0x80010000 with 0x2094/0x2098 as
+ *    load displacements, NOT the symbol D_80012094, even though splat renders
+ *    it as `%hi(D_80012094)`: splat prints a bare `lui reg, 0x8001` that way
+ *    whenever it can pair the register with a later `%lo`. A symbol array with
+ *    a variable index always materialises the whole address with
+ *    `lui %hi` + `addiu %lo` and indexes off that, for every spelling tried.
+ *    Inert, all 4 DIFF: `(u8 *) (r * 2 + 0x80010000)`, an `off` local, and
+ *    `&((u8 *) 0x80010000)[r * 2]`.
+ *
+ * And the fifth, which is why the `else` arm duplicates a store that could
+ * just follow the `if`: it buys the base pointer one extra REFERENCE at
+ * global-alloc time, and jump2's cross-jumping then merges the copies back
+ * together for free. r wants $a0 and p wants $v1; without the duplicate the
+ * allocation order is `95 113 ...` and they come out swapped -- every
+ * instruction, immediate and displacement already matched, with 12 register
+ * fields wrong. p has 7 references across 15 insns for a global.c priority of
+ * floor_log2(7) * 7 / 15 = 0.93, just under r's floor_log2(4) * 4 / 8 = 1.00,
+ * and whichever is allocated first takes $v1. Duplicating the store takes p to
+ * 8 references across 18 insns, which crosses the floor_log2 boundary: 3 * 8 /
+ * 18 = 1.33, the order becomes `113 95 ...`, and the word count is unchanged.
+ * Duplicating the 0x12 store instead works identically. A 7% priority gap was
+ * the closest margin in the project, so this is the one case where the
+ * allocator was persuaded rather than explained; see docs/matching-levers.md
+ * sections 1 and 3. */
+void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2) {
+    if (arg2 != NULL) {
+        Unk42710 *e = (Unk42710 *) &D_800E3E48[arg2[3] & 0x1F];
+        s32 r;
+
+        func_80042710((Unk42710 *) arg0, e);
+        *(u32 *) (arg0 + 0x14) &= ~7;
+        *(u32 *) (arg0 + 0x1C) &= ~7;
+        *(u32 *) (arg0 + 0x14) |= e->unk_14 & 7;
+        *(u32 *) (arg0 + 0x1C) |= e->unk_1C & 7;
+        r = (s16) func_800A1BD0(arg0);
+        if (r >= 0) {
+            u16 *cmp = (u16 *) 0x80012094;
+            u8 *p = (u8 *) 0x80010000;
+            u16 t;
+
+            p += r * 2;
+            if (r == 0) {
+                cmp = (u16 *) 0x80012096;
+            }
+            t = *(u16 *) (p + 0x2094);
+            if (t == *cmp) {
+                *(u16 *) (p + 0x2094) = (t + 1) & 7;
+                arg0[0x45] = p[0x2094];
+            } else {
+                arg0[0x45] = p[0x2094];
+            }
+            arg0[0x12] = p[0x2098];
+        }
+    }
+    *(u32 *) (arg0 + 0x1C) |= 0x20000;
+}
 
 void func_800424E0(u8 *arg0, s16 arg1, u8 *arg2) {
     func_800423C0(arg0, arg1, arg2);
