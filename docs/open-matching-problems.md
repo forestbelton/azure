@@ -108,7 +108,7 @@ Reading the region out of `data/slus_006.14` pins the layout down exactly:
 | jtbl_8002D630 | 0x8002D630..0x8002D653 | 9 | 0x800413A0..0x80041528 | func_80041344 |
 | *(pad)* | 0x8002D654 | 1 zero word | | |
 | jtbl_8002D658 | 0x8002D658..0x8002D67B | 9 | 0x8004164C..0x800417B0 | func_80041588 |
-| jtbl_8002D67C | 0x8002D67C.. | 13+ | 0x80042C2C..0x80043430 | func_80042BDC |
+| jtbl_8002D67C | 0x8002D67C..0x8002D6FB | **32** | 0x80042C2C..0x80043430 | func_80042BDC |
 
 The tables are contiguous except for that one zero word, and its position is
 informative. 0x8002D5C0, 0x8002D630 and 0x8002D658 are all 8-byte aligned
@@ -143,10 +143,22 @@ all three tables back to back with no pad at 0x8002D654.
 The arms are not in numeric order in the source, and the table is the only
 record of what order they were in. Read out of `data/slus_006.14`:
 
-| table | file offset | source order of the cases |
-|-------|-------------|---------------------------|
-| jtbl_8002D630 (func_80041344) | 0xB30 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
-| jtbl_8002D658 (func_80041588) | 0xE58 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
+| table | file offset | entries | source order of the cases |
+|-------|-------------|---------|---------------------------|
+| jtbl_8002D630 (func_80041344) | 0xB30 | 9 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
+| jtbl_8002D658 (func_80041588) | 0xE58 | 9 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
+| jtbl_8002D67C (func_80042BDC) | 0xE7C | 32 | 1..10, 27, 11, 12, 26, 32, (21/22/23), 18, 19, 20 |
+
+**jtbl_8002D67C has 32 entries and 128 bytes, not the "13+" first recorded.**
+The range check is `sltiu $v0, $v1, 0x20` and the word at 0x8002D6FC is
+0x94826082 -- Shift-JIS text, not a code address. Verified from the listing and
+again from the file. 0x80043430 is both the default label and the out-of-range
+target, so the eleven values 13-17, 24, 25 and 28-31 have no `case` label in
+the source at all, and cases 21, 22 and 23 share one body. **So the region the
+linker script has to place runs to 0x8002D6FB**, and jtbl_8002D658 and
+jtbl_8002D67C are contiguous across 0x8002D658..0x8002D6FB -- which is
+consistent with their belonging to the same original translation unit, the one
+that begins at func_80041588.
 
 Identical, which is further evidence the two are siblings over one command
 format -- as are their shared `default: return;`, the `blez` on case 9, the
@@ -158,13 +170,20 @@ format -- as are their shared `default: return;`, the `blez` on case 9, the
 |----------|-------|------|--------|
 | func_80041344 | 145 of 145 | 67 | `docs/near-misses/func_80041344.c` |
 | func_80041588 | 164 of 164 | 21 | `docs/near-misses/func_80041588.c` |
-| func_80042BDC | not started | | |
+| func_80042BDC | 543 of 543 | 200 | `docs/near-misses/func_80042BDC.c` |
 | func_8003E758 | not started, also `$gp`-blocked | | |
 
 func_80041588's 21 are one coupled three-register permutation with no
 instruction, immediate or ordering difference, and its near-miss file has the
 priorities, the conflict sets and the one remaining lever (stopping `flags`
-from taking `$a3`). It also **corrects func_80041344's note**: the switch index
+from taking `$a3`). func_80042BDC's 200 are all inside case 10,
+its 180-instruction transform-revert arm; every other arm matches word for
+word. Its near-miss file names the one word to chase (a `addu $a0,$s1,$zero`
+the target emits twice around a join and this source emits once) and the three
+register chains that follow from it. Both functions also found that
+`Unk41344` is **not** one type across all three: func_80042BDC is not a
+command-stream walker at all, and its record is the existing `Unk42710`, whose
+size floor this raises from 0x8C to at least 0xAA. It also **corrects func_80041344's note**: the switch index
 is not a block-local quantity assigned by local-alloc. `sltiu`/`beqz` end its
 block and the `sll` is in the next one, so it is an ordinary global allocno,
 and the numbers say it can never be allocated before the record pointer.
