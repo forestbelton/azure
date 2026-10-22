@@ -16,7 +16,7 @@ void func_800401FC(void);
 void func_8004027C(void);
 void func_800402F4(void);
 u32 *func_80040574(s32);
-void func_8003F80C(u32, s32, s32, s32);
+void func_8003F80C(u32, s32, s32, s16);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
 
@@ -99,7 +99,45 @@ void func_8003F7E4(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F80C);
+/* Uploads one 16x1 strip of a texture page to VRAM and records its owner in
+ * D_80082EC0, unless the caller's flag bits say to skip either half.
+ *
+ * Three shapes are load-bearing:
+ *  - arg3 is s16. As s32 the parameter has only three references, which leaves
+ *    its global.c priority below arg2's, and the two swap $s1 and $s2 -- the
+ *    difference this function was parked for. Narrowing it adds the HImode
+ *    pseudo that tips the order. It is also what the callers show: both
+ *    func_80041344 and func_80041588 sign-extend the fourth argument with
+ *    sll/sra before the jal, which is the conversion to a short parameter.
+ *  - rect[0] is assigned first even though its store comes out last. Its value
+ *    is computed before rect[1]'s in the target and sched1 sinks only the
+ *    store; writing it last costs 14 words.
+ *  - the second D_80082EC0 store goes through a base pointer local so the
+ *    +0x100 stays on the store as a displacement. Written as
+ *    `D_80082EC0[n + 0x40] = 0;` gcc folds the 0x100 into the lo_sum and the
+ *    store's displacement becomes 0. One pointer local at the top of the
+ *    function, shared with the first store, is much worse (45 DIFF): the
+ *    target rebuilds the base in each arm. */
+void func_8003F80C(u32 arg0, s32 arg1, s32 arg2, s16 arg3) {
+    s16 rect[4];
+    s32 n = (arg1 - 0x7000) >> 6;
+
+    if ((arg3 & 1) == 0) {
+        rect[0] = ((n & 0x40) << 1) + ((arg1 & 0x3F) << 4);
+        rect[1] = (n & 0x3F) + 0x1C0;
+        rect[2] = arg2 << 4;
+        rect[3] = 1;
+        LoadImage(rect, (u32 *) arg0);
+    }
+    if ((arg3 & 2) == 0) {
+        D_80082EC0[n] = (arg0 & 0xFFFFFF) | (arg2 << 24);
+    }
+    if (n < 0x40 && arg2 >= 0x11) {
+        u32 *q = D_80082EC0;
+
+        q[n + 0x40] = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F8F8);
 
