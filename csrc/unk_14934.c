@@ -269,7 +269,45 @@ s32 func_80042518(s8 *arg0, s8 arg1) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042560);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042640);
+/* Initialises a record from template `idx`: a 0x14-byte block assignment, the
+ * flag word merged in, then a handful of bytes picked back out of the same
+ * template, and finally the per-template word from D_8006D6D8.
+ *
+ * Two shapes are load-bearing, and together they are what this function was
+ * parked for ("gcc hoists each constant store into the preceding load's delay
+ * slot"):
+ *  - `d->unk_13 = idx;` comes after the unk_14 merge, not before it. Written
+ *    first, its `sb` is scheduled between the merge's two loads and the second
+ *    load's delay then needs a nop, which is one word too many. Written after,
+ *    the `sb` fills that delay slot itself.
+ *  - the three stores at +0x28/+0x25/+0x24 are in that order, so the 0xFF
+ *    constant is the LAST of the three. In any order that puts it earlier,
+ *    sched1 hoists it into the first lbu's delay slot, which forces that load
+ *    to a different register and reorders the whole group; two of the six
+ *    orderings also cost a word. With the constant last, the first lbu and its
+ *    store stay adjacent -- the target's nop -- because the only candidate for
+ *    that slot would clobber the loaded register.
+ *
+ * The block assignment is `*(UnkTemplate *) d = e->unk_00;`: UnkTemplate keeps
+ * u32 members for its upper half purely so its alignment stays 4 and the copy
+ * is lw/sw rather than lwl/lwr. */
+void func_80042640(Unk42710 *d, s16 idx) {
+    Unk8006D168 *e = &D_8006D168[idx];
+
+    *(UnkTemplate *) d = e->unk_00;
+    d->unk_14 |= e->unk_14;
+    d->unk_13 = idx;
+    d->unk_28 = e->unk_00.unk_05;
+    d->unk_25 = e->unk_00.unk_04;
+    d->unk_24 = 0xFF;
+    d->unk_26 = e->unk_00.unk_00;
+    d->unk_27 = e->unk_00.unk_01;
+    d->unk_45 = 6;
+    d->unk_42 = 0;
+    d->unk_41 = 0;
+    d->unk_54 = D_8006D6D8[idx];
+    func_80041E70(d);
+}
 
 /* Copies one record over another field by field, merging the two flag words
  * rather than replacing them, then hands the destination to func_80041E70.
@@ -317,7 +355,7 @@ void func_80042710(Unk42710 *d, Unk42710 *s) {
     d->unk_1C = (d->unk_1C | s->unk_1C) & 0xEFF6FEFF;
     d->unk_20 = s->unk_20;
     d->unk_22 = s->unk_22;
-    d->unk_24 = s->unk_24;
+    *(u16 *) &d->unk_24 = *(u16 *) &s->unk_24;
     d->unk_26 = s->unk_26;
     d->unk_27 = s->unk_27;
     d->unk_28 = s->unk_28;

@@ -1,6 +1,6 @@
 # Open matching problems
 
-Eight functions are parked. Every one of them reproduces the original logic;
+Seven functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -11,7 +11,6 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 |---------------|---------|--------------|
 | func_80041284 | unk_14934 | arm 1 wants the `*p` reload *after* the store but the store between `lui` and `and`; see below |
 | func_80042560 | unk_14934 | addressing solved; loop 1's store/load order and three `$s` registers are not; see below |
-| func_80042640 | unk_14934 | gcc hoists each constant store into the preceding load's delay slot |
 | func_8003F8F8 | unk_12DE0 | the width/height pair wants one induction variable with a -2 displacement; gcc makes two |
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |

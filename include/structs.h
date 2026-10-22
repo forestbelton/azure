@@ -97,7 +97,11 @@ typedef struct Unk42710 {
     u32         unk_1C;
     u16         unk_20;
     u16         unk_22;
-    u16         unk_24;
+    /* +0x24 and +0x25 are separate bytes: func_80042640 writes 0xFF and a
+       template byte into them individually. func_80042710 copies them as one
+       halfword, which it has to spell as a cast. */
+    u8          unk_24;
+    u8          unk_25;
     u8          unk_26;
     u8          unk_27;
     u8          unk_28;
@@ -105,7 +109,8 @@ typedef struct Unk42710 {
     u16         unk_2A;
     Unk42710B   unk_2C[4];
     u8          unk_34[0xD];
-    u8          pad_41[0x2];
+    u8          unk_41;
+    u8          unk_42;
     u8          unk_43;
     u8          unk_44;
     u8          unk_45;
@@ -667,9 +672,16 @@ extern u8 D_80082E6A;
    word at +0x14. D_8006D160 is the eight bytes below it, indexed on its own. */
 /* The 0x14-byte block func_80042640 copies into an entity in one go; the
    batched loads and stores it compiles to are a struct assignment. */
+/* The u32 members are only there for the alignment: func_80042640 reads
+   +0x00, +0x01, +0x04 and +0x05 as bytes, and an all-u8 spelling would drop
+   the alignment to 1 and turn the block assignment into lwl/lwr pairs. */
 typedef struct UnkTemplate {
-    u32 unk_00;
-    u32 unk_04;
+    u8  unk_00;
+    u8  unk_01;
+    u8  pad_02[0x2];
+    u8  unk_04;
+    u8  unk_05;
+    u8  pad_06[0x2];
     u32 unk_08;
     u32 unk_0C;
     u32 unk_10;
@@ -749,6 +761,7 @@ s32  func_80044724(void);
 void func_80043A68(void);
 void func_80043B4C(void);
 void func_80042710(Unk42710 *, Unk42710 *);
+void func_80042640(Unk42710 *, s16);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
