@@ -1,6 +1,6 @@
 # Open matching problems
 
-Ten functions are parked. Every one of them reproduces the original logic;
+Eleven functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -19,6 +19,7 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_8003F8F8 | unk_12DE0 | the width/height pair wants one induction variable with a -2 displacement; gcc makes two |
 | func_80043A68 | unk_14934 | two temporaries swapped: the target reuses the address chain's register for the element pointer |
 | func_80043B4C | unk_14934 | the same function with `\|= 0x8000` instead of `&= 0x7FFF`; same difference |
+| func_8003F80C | unk_12DE0 | two parameters swapped between `$s1` and `$s2`; everything else matches |
 
 The near-miss source for each is in the git history of the commit that parked
 it, and the shapes already ruled out are in those commit messages. Do not start

@@ -15,7 +15,7 @@ void func_800401FC(void);
 void func_8004027C(void);
 void func_800402F4(void);
 u32 *func_80040574(s32);
-void func_8003F80C(u32, u16, u16, s32);
+void func_8003F80C(u32, s32, s32, s32);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
 
