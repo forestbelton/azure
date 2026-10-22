@@ -510,6 +510,9 @@ void PopMatrix(void);
 void SetTransMatrix(void *);
 void SetRotMatrix(void *);
 void RotTrans(void *, void *, s32 *);
+void ReadRotMatrix(void *);
+void *TransposeMatrix(void *, void *);
+void ApplyMatrixSV(void *, void *, void *);
 /* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
    the same reason. */
 void LoadImage(void *, u32 *);

@@ -11,6 +11,7 @@ void func_80040B88(void);
 void func_80042984(u8 *);
 void func_80041AB0(void);
 void func_80041AE4(void);
+void func_80043CD0(void);
 void func_80043D04(void);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041134);
@@ -394,7 +395,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043A68);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043B4C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043C30);
+void func_80043C30(void) {
+    D_80082E60.unk_00 |= 1;
+    D_80081480 = D_8008148C;
+    func_8003FAD4();
+    func_800410FC();
+    D_80083160.unk_00 = D_801C9E40;
+    ClearOTagR(D_801C9E40 + 0x70, 0x218);
+    ClearOTagR(&D_801DA784, 0x218);
+    *(u8 **) (D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
+    SetDispMask(1);
+    func_8003F7E4();
+    func_80040A88(func_80043CD0);
+}
 
 void func_80043CD0(void) {
     D_80081480 = D_8008148C;
@@ -565,7 +578,20 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800463EC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046884);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046A5C);
+void func_80046A5C(u16 *arg0, void *out) {
+    u16 m[0x10];
+    u16 t[0x10];
+    s16 v[4];
+
+    ReadRotMatrix(m);
+    PushMatrix();
+    v[0] = arg0[0] - m[10];
+    v[1] = arg0[1] - m[12];
+    v[2] = arg0[2] - m[14];
+    TransposeMatrix(m, t);
+    ApplyMatrixSV(t, v, out);
+    PopMatrix();
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046AFC);
 
