@@ -55,12 +55,27 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 # It reads the assembly on stdin, forwards any flags it does not recognise to
 # GNU as, and with --run-assembler invokes as itself (reading from "-").
 #   --force-stdin      fail loudly instead of silently falling back to a file
-#   -G8                read by maspsx for its small-data limit AND forwarded
-#   --dont-force-G0    maspsx passes -G0 to as by default; we need -G8
+#   -G8                maspsx's own small-data limit; it emits explicit
+#                      %gp_rel for symbols it knows are small
 #   --use-comm-section put common symbols in .comm, which is ccpsx's behaviour
+#
+# Do NOT add --dont-force-G0. maspsx forces -G0 on GNU as by default, and that
+# is required: given a nonzero -G, gas assumes an *undefined* symbol is small
+# data and emits GPREL16, whereas ASPSX assumes externs are not small and
+# expands lui/%hi + %lo. Verified by assembling the same ccpsx output with the
+# real ASPSX 2.56 via `ccpsx -c`: it produces the lui/%lo pair, and so does
+# maspsx once gas is left at -G0. maspsx still emits %gp_rel where it belongs,
+# so nothing is lost.
 MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                 --run-assembler --gnu-as-path=$(AS) \
                 --use-comm-section --dont-force-G0 -G8
+
+# Per-file escape hatch. A translation unit whose functions reach their globals
+# absolutely rather than $gp-relatively needs gas left at -G0; see
+# docs/addressing-and-translation-units.md. Use as:
+#     build/csrc/some_unit.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
+                  --run-assembler --gnu-as-path=$(AS) --use-comm-section -G8
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
