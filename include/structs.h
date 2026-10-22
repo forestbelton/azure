@@ -55,6 +55,33 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. A 16-byte payload with byte alignment: func_8003E39C assigns it
+   whole and gcc emits four lwl/lwr plus four swl/swr pairs, which is the block
+   move for an unaligned 16-byte type. The 4-byte-aligned spelling gives plain
+   lw/sw instead. Same reason as Unk80080AB4. */
+typedef struct Unk3E39C {
+    u8 unk_00[4];
+    u8 unk_04[4];
+    u8 unk_08[4];
+    u8 unk_0C[4];
+} Unk3E39C;
+
+/* Hand-added. A 32-slot ring queue of 0x18-byte entries; D_800814D0[0] is the
+   read index and D_800814D0[1] the write index, both masked to 0x1F.
+   +0x08..+0x17 is dual-purpose: func_8003E39C stores a pointer in its first
+   word when unk_00 is 0xFF, and otherwise copies 16 bytes of inline payload
+   over the whole range, which is why unk_17 is both a flag and the payload's
+   last byte. Expect it to grow fields when func_8003E758, its consumer, is
+   attempted. */
+typedef struct Unk80083968 {
+    u8  unk_00;
+    u8  pad_01[0x3];
+    s32 unk_04;
+    s32 unk_08;
+    u8  pad_0C[0xB];
+    u8  unk_17;
+} Unk80083968;
+
 /* Hand-added. 0x8 bytes: three signed halfwords and two bytes of padding.
    func_80046884 walks arrays of these by -8 and hands triples to
    func_80046AFC, which treats +0x00/+0x02 as a pair interpolated against
@@ -423,6 +450,9 @@ extern u32 D_80083360[0x20];
 extern u32 D_800833E0[0x20];
 extern u16 D_80083858[0x40];
 extern u16 D_800838D8[0x40];
+/* Declared as an array of unestablished length: func_8003E39C indexes it with
+   a variable, which needs the whole address materialised. */
+extern Unk80083968 D_80083968[];
 
 /* The multi-field objects above, by their base label. */
 extern Unk8002D5B4 D_8002D5B4;
@@ -532,6 +562,7 @@ void func_8003F320(void);
 void func_8003F5E0(u32);
 s16  func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
 s32  func_8004491C(UnkNode *, u32);
+Unk80083968 *func_8003E39C(u8, s32, void *);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
 
