@@ -110,7 +110,7 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 
 | tool | use |
 |------|-----|
-| `verify.py zz.c UNIT FUNC` | the fast loop above |
+| `verify.py zz.c UNIT FUNC` | the fast loop above; marks a relocated word whose addend differs from the listing with `?`, and diagnoses the wine case clash |
 | `peek.sh UNIT FUNC` | print one already-decompiled function's asm |
 | `sizes.py` | every C function whose compiled size differs from its target -- run this first after a failed `make check`, because one wrong size shifts the image and makes every later byte diff meaningless |
 | `fdiff.py FUNC...` | built vs reference bytes side by side; only valid after a *successful* link, since a stale `build/slus_006.14` once produced a bogus MATCH |
