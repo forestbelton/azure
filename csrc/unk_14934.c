@@ -628,7 +628,33 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046D64);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046E38);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046F88);
+s32 func_80046F88(u32 *p) {
+    s32 delta = 0;
+    s32 i;
+    u32 *q;
+
+    /* Single exit returning delta, and 0xC updated before 0x14: the
+     * scheduler emits that pair in the opposite order to the source. */
+    if ((u32 *) p[9] != p) {
+        delta = (s32) ((u8 *) p - (u8 *) p[9]);
+        p[9] = (u32) p;
+        p[0] += delta;
+        p[2] += delta;
+        p[3] += delta;
+        p[5] += delta;
+        p[7] += delta;
+        q = (u32 *) p[0];
+        for (i = 0; i < (s32) p[1]; i++) {
+            *q += delta;
+            q++;
+        }
+        while ((u32) q < p[2]) {
+            q[1] += delta;
+            q += 2;
+        }
+    }
+    return delta;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047054);
 

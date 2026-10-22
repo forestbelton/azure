@@ -420,12 +420,24 @@ extern u8 D_80082E6A;
 
 /* Hand-added. func_800429E4 indexes this with a 0x18 stride and reads the
    word at +0x14. D_8006D160 is the eight bytes below it, indexed on its own. */
+/* The 0x14-byte block func_80042640 copies into an entity in one go; the
+   batched loads and stores it compiles to are a struct assignment. */
+typedef struct UnkTemplate {
+    u32 unk_00;
+    u32 unk_04;
+    u32 unk_08;
+    u32 unk_0C;
+    u32 unk_10;
+} UnkTemplate;
+
 typedef struct Unk8006D168 {
-    u8  pad_00[0x14];
-    u32 unk_14;
+    UnkTemplate unk_00;
+    u32         unk_14;
 } Unk8006D168;
 extern Unk8006D168 D_8006D168[];
 extern u8 D_8006D160[];
+/* Indexed by the same template number as D_8006D168. */
+extern u32 D_8006D6D8[];
 
 /* Hand-added. A table func_8003F9E0 walks until the first word is zero,
    passing the word and the two halfwords to func_8003F80C. The 0xC stride is
