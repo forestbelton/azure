@@ -241,11 +241,14 @@ typedef struct Unk80083160 {
     u8 pad_14[0x94];
     /* the next 10 fields run at a constant 0x4 stride; this may be an array */
     u32 unk_A8;
-    u32 unk_AC;  /* also read as 2 */
-    /* +0xae  is a 2-byte access inside this field */
-    /* +0xaf  is a 4-byte access inside this field */
-    u32 unk_B0;  /* also read as 2 */
-    /* +0xb3  is a 4-byte access inside this field */
+    /* Hand-split: func_80046884 reads +0xAC..+0xB1 as a three-halfword position
+       vector and hands it to func_80046A5C. The +0xaf/+0xb3 "4-byte access"
+       notes fieldscan left here are the lwl/swl halves of func_80044724's
+       block moves over the same range -- see Unk80083178. */
+    u16 unk_AC;
+    u16 unk_AE;
+    u16 unk_B0;
+    u16 unk_B2;
     u32 unk_B4;  /* also read as 2 */
     /* +0xb6  is a 2-byte access inside this field */
     /* +0xb7  is a 4-byte access inside this field */
@@ -650,7 +653,7 @@ u8  *func_8004068C(u8 *, u8 *);
 void func_80043568(void);
 void func_800542BC(void);
 void func_80044B48(void);
-void func_80046884(u8 *, u8 *, s32);
+void func_80046884(u16 *, Unk46AFC *, s32);
 void func_8003BFE4(void);
 void func_8004D70C(void);
 void func_800AC3EC(void);
@@ -663,8 +666,8 @@ void func_80067F20(u32 *, s32, s32, s32, s32);
 void func_80042BDC(s8 *, s8);
 void func_800482C8(Unk800777AC *, u32 *);
 void func_8005FFFC(void);
-s32  func_80064584(s16);
-s32  func_800644B8(s16);
+s32  func_80064584(s32);
+s32  func_800644B8(s32);
 void func_801768AC(void);
 u8  *func_8004CAE8(u8 *, s16);
 s32  func_80053428(Unk80083120 *);

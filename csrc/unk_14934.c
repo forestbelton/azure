@@ -1048,7 +1048,91 @@ s32 func_80046398(u8 *p, UnkVec *v, s16 *arg2) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800463EC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046884);
+/* Projects the four corners of a rect through func_80046A5C, clips each
+ * against the reference point in out[5] with func_80046AFC, and if any corner
+ * was clipped replaces all four with a ring of offsets around the transformed
+ * camera position; then copies out[0] into out[4].
+ *
+ * Load-bearing shapes, with the cost of reverting each:
+ *  - the third parameter is s32, not s16 (8 DIFF). With s16, gcc splits the
+ *    parameter copy into an SImode copy plus a HImode subreg copy, and that
+ *    second insn is schedulable, so it drifts to the end of the prologue
+ *    block; the target has the plain SImode copy pinned right after its
+ *    register save. The sll/sra in the loop is func_80046AFC's own s16
+ *    conversion, not a cast here.
+ *  - func_80064584/func_800644B8 take s32 (120 words otherwise): `ang` is s32,
+ *    so an s16 parameter makes gcc sign-extend at both call sites.
+ *  - `origin` is two explicit word stores into a u32[2]. Every aggregate
+ *    initialiser spelling calls bzero instead (126 words), which also forces
+ *    `r` out of $a0 into a callee-saved register; three `sh` field zeroes on an
+ *    Unk46AFC cost 99 words.
+ *  - the origin zeroing sits before the ReadGeomScreen statement, not just
+ *    before the first func_80046A5C call (22 DIFF): the two stores have to be
+ *    in the prologue block so sched1 can use them to cover the
+ *    `lhu $v1,0x6($a0)` load delay.
+ *  - the corner stores are chained assignments, in this direction. Eight
+ *    separate statements cost 128 words; `A = B = v` stores B first, and the
+ *    target stores the higher address of each pair first, so reversing any
+ *    pair is 8 DIFF. r[0] and r[1] really are reloaded for the second and
+ *    fourth statements -- the intervening stack stores invalidate cse's memory
+ *    table -- so they must not be hoisted into locals.
+ *  - the z store is one four-deep chain (119 words otherwise); it evaluates
+ *    innermost-first, which gives the target's descending 0x2C/0x24/0x1C/0x14.
+ *  - D_80083160 is reached through a pointer local declared at the top (116
+ *    words otherwise), as in func_8003D5A4: the whole address is materialised
+ *    in ReadGeomScreen's delay slot and carried in $s6 across every call even
+ *    though its first use is inside the if.
+ *  - the tail copy is field-by-field; `out[4] = out[0];` is an 8-byte block
+ *    move where the target has three lhu/sh pairs.
+ *
+ * arg0 is a four-halfword x/y/w/h rect, the same shape func_800404F8 and
+ * LoadImage take; if the project ever grows a RECT type those three belong
+ * together. */
+void func_80046884(u16 *r, Unk46AFC *out, s32 t) {
+    Unk46AFC c[4];
+    Unk46AFC xf[4];
+    u32 origin[2];
+    u16 v58[4];
+    u16 v60[4];
+    s32 i;
+    s32 flag = 0;
+    Unk80083160 *g = &D_80083160;
+
+    c[0].unk_00 = c[3].unk_00 = r[0];
+    c[1].unk_00 = c[2].unk_00 = r[0] + r[2];
+    c[0].unk_02 = c[1].unk_02 = r[1];
+    c[3].unk_02 = c[2].unk_02 = r[1] + r[3];
+    origin[0] = 0;
+    origin[1] = 0;
+    c[0].unk_04 = c[1].unk_04 = c[2].unk_04 = c[3].unk_04 = ReadGeomScreen();
+    func_80046A5C((u16 *) origin, &out[5]);
+    for (i = 3; i >= 0; i--) {
+        func_80046A5C((u16 *) &c[i], &xf[i]);
+        if (func_80046AFC(&out[5], &xf[i], &out[i], t) != 0) {
+            flag = 1;
+        }
+    }
+    if (flag != 0) {
+        s32 ang = g->unk_C8 + 0x600;
+
+        v58[0] = g->unk_AC;
+        v58[1] = g->unk_AE;
+        v58[2] = g->unk_B0;
+        func_80046A5C(v58, v60);
+        for (i = 3; i >= 0; i--) {
+            s32 cc = func_80064584(ang);
+            s32 ss = func_800644B8(ang);
+
+            ang += 0x400;
+            out[i].unk_00 = v60[0] + (cc >> 3) + (cc >> 4);
+            out[i].unk_02 = v60[1] + (ss >> 3) + (ss >> 4);
+            out[i].unk_04 = v60[2];
+        }
+    }
+    out[4].unk_00 = out[0].unk_00;
+    out[4].unk_02 = out[0].unk_02;
+    out[4].unk_04 = out[0].unk_04;
+}
 
 void func_80046A5C(u16 *arg0, void *out) {
     u16 m[0x10];
