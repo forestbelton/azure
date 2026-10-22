@@ -463,8 +463,27 @@ func_8003DBD0 and 262 in func_8003D0F0.
   `combine`'s byte-to-signed refold it is the answer, and it matched
   func_80044D24. See section 7. The distinction worth carrying is whether you
   can name the pass and the predicate it defeats.
-* **`combine` proving a bit.** `(s16) (x & 0x400)` always comes out `srl`,
-  never `sra`, because the mask proves bit 15 clear. Measured against: every
+* **`combine` proving a bit, when the value is single-set.** `(s16) (x & 0x400)`
+  comes out `srl`, never `sra`, because the mask proves bit 15 clear through
+  `nonzero_bits`.
+
+  **One thing does defeat it, and it costs a word.** `nonzero_bits` gives up on
+  a value with more than one set unless every set is a known constant with the
+  bit clear, so a second set that is *opaque* -- or a constant with bit 15 set
+  -- preserves the `sra` (measured, 2026-10-22):
+
+      s32 G(u16 *p, s32 c)         { s32 v = 0;      if (c) v = *p & 0x400; return (s16) v; }  /* srl */
+      s32 E(u16 *p, s32 c, s32 w)  { s32 v = w;      if (c) v = *p & 0x400; return (s16) v; }  /* sra */
+      s32 F(u16 *p, s32 c, s32 *q) { s32 v = *q;     if (c) v = *p & 0x400; return (s16) v; }  /* sra */
+      s32 H(u16 *p, s32 c)         { s32 v = 0x8000; if (c) v = *p & 0x400; return (s16) v; }  /* sra */
+
+  But **every** multi-set shape also emits an `andi 0xffff`, because combine
+  cannot narrow both sets to HImode and inserts the truncation on one path
+  instead. So this buys `sra` at the price of one word, which is no help where
+  the word count is already exact -- func_80042A80 is 58 against 58. Use it
+  where a spare word exists; where it does not, the target's value was
+  single-set and something else is going on. Measured against, for the
+  single-set case: every
   spelling of the cast, a second use of the masked value, a second use of the
   loaded halfword, the mask in a different basic block, the value tested against
   0 first, a union, a `volatile` load, and a function returning `s16`. Two of

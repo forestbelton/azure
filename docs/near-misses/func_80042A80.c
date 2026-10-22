@@ -49,8 +49,37 @@
  * are separate mechanisms -- combine substituting an insn versus combine
  * proving a bit -- and only the first is reachable from C.
  *
+ * NARROWED 2026-10-22, and `sra` IS reachable -- just not at 58 words.
+ * `nonzero_bits` gives up on a value with more than one SET unless every set
+ * is a known constant with bit 15 clear, so the way to keep the `sra` is a
+ * second set that is opaque, or a constant with bit 15 set:
+ *
+ *   s32 G(u16 *p, s32 c)         { s32 v = 0;      if (c) v = *p & 0x400; return (s16) v; }  -> srl
+ *   s32 E(u16 *p, s32 c, s32 w)  { s32 v = w;      if (c) v = *p & 0x400; return (s16) v; }  -> sra
+ *   s32 F(u16 *p, s32 c, s32 *q) { s32 v = *q;     if (c) v = *p & 0x400; return (s16) v; }  -> sra
+ *   s32 H(u16 *p, s32 c)         { s32 v = 0x8000; if (c) v = *p & 0x400; return (s16) v; }  -> sra
+ *
+ * G is the probe this file already recorded, and it is the odd one out BECAUSE
+ * its other set is a known 0: the union still proves the bit clear. That is
+ * the detail the earlier write-up missed when it concluded a block boundary
+ * does not help -- it was not the boundary that failed, it was the value 0.
+ *
+ * It does not land this function, though, and the reason is exact: every
+ * multi-set shape also emits an `andi 0xffff`, because combine cannot narrow
+ * both sets to HImode and inserts the truncation on one path instead. The
+ * target is 58 words against 58, with no truncation insn:
+ *
+ *     lhu $v0,0x0($v0) / nop / andi $v0,$v0,0x400 / sll $v0,$v0,16 / j / sra
+ *
+ * so the target's value is SINGLE-SET and the proof was defeated some other
+ * way. Note also that the other three arms do not sign-extend at all (the
+ * k == 4 arm ends `sll 10`/`ori 0x80`, the 0xF..0x11 arm `andi 0x80`), so
+ * there is no shared `s16` result variable to make multi-set -- each arm writes
+ * $v0 directly and jumps to the bare `jr`.
+ *
  * So neither a second use nor a block boundary defeats the proof, and the
- * extra `andi 0xffff` both of those introduce is not in the target anyway.
+ * extra `andi 0xffff` that a second use, a block boundary and the multi-set
+ * shape all introduce is not in the target anyway.
  * Whatever the original wrote, the value reaching the extension was opaque to
  * combine -- which is hard to square with the `andi 0x400` sitting immediately
  * before it. The remaining possibilities are that the extension is not a cast
