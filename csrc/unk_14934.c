@@ -7,6 +7,7 @@ void func_80047468(Unk800777AC *, u32, u16);
 void func_800463EC(u8 *, UnkVec *, s16 *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80044D24(u8 *, UnkSlot *, s16);
+void func_80041344(u32, u32);
 void func_8003F6D4(s32, s32, s32 *, s32);
 void func_80040B88(void);
 void func_80042984(u8 *);

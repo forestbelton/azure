@@ -39,7 +39,24 @@ Unk800777AC *func_8003DF0C(Unk800777AC *p, s32 arg1, s16 *arg2) {
     return found;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_113D0", func_8003DF74);
+u8 *func_8003DF74(u8 *arg0, UnkSlot *s, s16 *out, s16 arg3) {
+    s16 tmp[4];
+    s16 idx[4];
+    u8 *r = (u8 *) func_8003DF0C((Unk800777AC *) arg0, arg3, idx);
+
+    if (r != NULL) {
+        func_8003DBD0(s, r, tmp);
+        out[0] = tmp[0];
+        out[1] = tmp[1];
+        out[2] = tmp[2];
+    } else if (s->unk_14 & 0x6000) {
+        r = arg0;
+        out[1] = 0;
+        out[0] = 0;
+        out[2] = -0x40;
+    }
+    return r;
+}
 
 void func_8003E02C(s16 *arg0, s16 *out) {
     out[0] = (func_80064584(D_80083160.unk_C8) * arg0[0]) >> 12;
