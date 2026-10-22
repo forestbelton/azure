@@ -491,6 +491,12 @@ void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
 void func_800407C0(u8 *, u32 *);
+void func_80044B48(void);
+void func_80046884(u8 *, u8 *, s32);
+void func_8003BFE4(void);
+void func_8004D70C(void);
+void func_800AC3EC(void);
+void func_800AC4C4(void);
 void func_8003F8F8(u32 *);
 void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
@@ -527,6 +533,7 @@ void RotTrans(void *, void *, s32 *);
 void ReadRotMatrix(void *);
 void *TransposeMatrix(void *, void *);
 void ApplyMatrixSV(void *, void *, void *);
+void RotTransPers(void *, void *, void *, void *);
 /* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
    the same reason. */
 void LoadImage(void *, u32 *);

@@ -10,6 +10,10 @@ UnkNode *func_8003FC64(s32);
 UnkNode *func_8003FD64(s32, UnkNode *);
 void func_8003FFF0(UnkNode *);
 void func_80040044(u32 *);
+void func_80040190(void);
+void func_800401FC(void);
+void func_8004027C(void);
+void func_800402F4(void);
 u32 *func_80040574(s32);
 void func_8003F80C(u32, u16, u16, s32);
 
@@ -287,7 +291,29 @@ void func_80040060(UnkNode **link, UnkNode *n) {
     n->unk_04 = link;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800400B8);
+void func_800400B8(void) {
+    Unk80083160 *s = &D_80083160;
+
+    if (D_80080A86 == 0 && s->unk_1DC != 0) {
+        func_80046884((u8 *) s + 0x18, (u8 *) s + 0x20, 0);
+        func_8003BFE4();
+    }
+    func_80040190();
+    if (D_800814A0 & 0x8000) {
+        func_800401FC();
+    }
+    D_800814A0 = 0;
+    if (D_80080A86 == 0) {
+        func_8004027C();
+        func_8004D70C();
+        if (s->unk_1DC != 0) {
+            func_800AC3EC();
+            func_800AC4C4();
+        }
+    }
+    func_800402F4();
+    func_80044B48();
+}
 
 void func_80040190(void) {
     UnkNode *p = D_80081498;

@@ -544,7 +544,36 @@ s32 func_80044BB0(u8 *p, UnkVec *v, UnkSlot *s) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044C54);
+s32 func_80044C54(u8 *p, UnkVec *v, UnkSlot *s) {
+    u8 *scratch = (u8 *) 0x1F800000;
+    u16 t;
+
+    for (;;) {
+        UnkNode *n;
+
+        if (!(s->unk_14 & 0x80)) {
+            t = ((u16 *) v)[1];
+            *(u16 *) (scratch + 0x70) = t;
+            t = ((u16 *) v)[3];
+            *(u16 *) (scratch + 0x72) = t;
+            t = ((u16 *) v)[5];
+            *(u16 *) (scratch + 0x74) = t;
+            RotTransPers(scratch + 0x70, scratch, scratch + 0x90,
+                         scratch + 0x94);
+            func_80044D24(p, s, s->unk_06);
+            if (func_80045310(*(u32 *) (D_80083160.unk_00 + 0x8D0)) != 0) {
+                return 0;
+            }
+        }
+        n = *(UnkNode **) (p - 8);
+        if (n == NULL) {
+            return 0;
+        }
+        p = (u8 *) n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *) n->unk_0C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044D24);
 
