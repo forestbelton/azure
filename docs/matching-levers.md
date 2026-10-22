@@ -140,8 +140,22 @@ Two things that cannot be steered from C:
 * `find_reg` avoids registers that *conflicting allocnos prefer*, so changing
   which allocno holds a preference cascades through the whole assignment.
 * **local-alloc runs before global-alloc** and assigns block-local quantities
-  first. A switch index, or any value live in one block only, is out of reach.
-  That is what is left in func_80041344.
+  first, looking only inside the one block. A switch index, or any value live
+  in one block only, is out of its own reach -- that is what is left in
+  func_80041344 -- **but only while it has its own pseudo.** Giving the value a
+  variable that lives across blocks promotes it from a local quantity to a
+  global allocno, and every global allocno here conflicts with the hard
+  registers the function uses, so find_reg then avoids them.
+
+  Measured in func_80042900: a dead `volatile` load written as a bare statement
+  is a one-reference, one-block quantity, local-alloc sees `$v0` free in that
+  block (the return value's `$v0 = 0` is set in a different one) and takes it,
+  the first register in REG_ALLOC_ORDER. Assigning the load to the local that
+  holds the sign-extended argument both tests compare against -- a global
+  allocno, conflicting with hard reg 2 -- moves it to the target's `$v1` at no
+  cost in words, because that local's sign extension is a `sll`/`sra` pair the
+  target already has. So "it is block-local, therefore unreachable" is only
+  true of the pseudo, not of the value.
 
 ## 4. Re-dereference rather than cache
 
