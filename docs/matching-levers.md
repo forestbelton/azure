@@ -213,19 +213,30 @@ func_8003DBD0 and 262 in func_8003D0F0.
       s32 f(u8 *p, s32 *q) { u8 t = p[2]; *q = 5; return (s8) t; }
                           -> lbu / sw / sll 24 / sra 24
 
-  Three things it is *not*, all measured, because the obvious reading of the
-  first probe is wrong: a second use of the **loaded pseudo** gives two loads
-  (`lb` plus `lbu`), not a blocked fold; a second use of the **cast** costs a
-  redundant `move`; and an intervening **load** does nothing at all, so a
-  neighbouring `lhu` in the listing between the `lbu` and the `sll` is
-  scheduling, not the cause. Note that
-  `u8 t = p[2]; *q = t; return (s8) t;` has both a store and a second use, so
-  it does not discriminate -- that conflation is how this entry was first
-  written down wrong.
+  **Two sign extensions of the same loaded value** block it too, and that is
+  the shape to reach for when there is no store available. Load the byte once
+  above an `if` and cast it in both arms: combine cannot absorb the
+  `zero_extend` into either `sign_extend`, so you get one shared `lbu` and a
+  `sll 24` / `sra 24` pair per arm.
 
-  This is still not enough for func_8003D0F0: its arm has neither a store in
-  the right place nor a spare register, so that one's shape remains unknown.
-  See its near-miss file.
+      s32 g(u8 *p, s32 c) { u8 t = p[2]; if (c) return -(s8) t; return (s8) t; }
+                          -> lbu / sll 24 / sra 24 / sll 24 / sra 24 / subu
+
+  What does **not** work: a second use that is not itself a sign extension
+  (`*q = (s8) t; return t;`) gives two loads, `lb` plus `lbu`; one variable
+  assigned in both arms dies at its own use and folds locally; a second use of
+  the cast costs a redundant `move`; and an intervening **load** does nothing at
+  all, so a neighbouring `lhu` between the `lbu` and the `sll` in a listing is
+  scheduling, not the cause.
+
+  Note that `u8 t = p[2]; *q = t; return (s8) t;` has both a store and a second
+  use, so it does not discriminate between the two mechanisms -- that
+  conflation is how this entry was first written down wrong.
+
+  Worth 4 of func_80045CC4's 8 missing words. Still not enough for
+  func_8003D0F0, whose arm has neither a store in the right place nor a spare
+  register, and where the shared `sll` hoists into a delay slot so the two-arm
+  shape gains nothing -- see its near-miss file.
 * **The same trick does NOT work on the `srl`/`sra` downgrade.** For
   `(s16) (x & 0x400)` combine proves bit 15 clear and emits `srl`, and a second
   use of either the masked value or the loaded halfword does not stop it -- it

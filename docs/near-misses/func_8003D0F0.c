@@ -25,8 +25,13 @@
  *
  * Three things it is NOT, and the first write-up of this got it wrong by
  * conflating them:
- *   - a second use of the LOADED PSEUDO gives two loads, `lb` plus `lbu`:
+ *   - a second use of the LOADED PSEUDO that is not itself a sign extension
+ *     gives two loads, `lb` plus `lbu`:
  *       s32 iK(u8 *p, s32 *q) { u8 t = p[2]; *q = (s8) t; return t; }
+ *     (TWO sign extensions of it do block the fold -- one shared `lbu` and a
+ *     shift pair per arm -- and that is what func_80045CC4 needs. It does not
+ *     help here: measured below at 212 words, because the shared `sll` hoists
+ *     into a delay slot.)
  *   - a second use of the CAST costs a redundant `move`;
  *   - an intervening LOAD does nothing -- `a = p[2]; w = *q; a = -(s8) a;`
  *     still folds. So the `lhu` sitting between the target's `lbu` and `sll`
