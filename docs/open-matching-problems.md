@@ -1,6 +1,6 @@
 # Open matching problems
 
-Six functions are parked. Every one of them reproduces the original logic;
+Seven functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -15,6 +15,27 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
+| func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` byte conversions fold to `lb`; see below |
+
+## func_8003D0F0  (unk_102A8) -- partial, 10 words short
+
+Eight of the ten are the four `(s8)` byte conversions in the flag arms. The
+target has `lbu` + `sll 24` + `sra 24` in each; every spelling collapses to a
+single `lb`, because combine reduces
+`(sign_extend (subreg (zero_extend (mem:QI))))` to `(sign_extend (mem:QI))`.
+For the target's form the zero-extended value would need a second use or an
+intervening memory *store*, and the target has neither. This is the byte-load
+counterpart of the `lh` fold recorded for func_8004425C, so whatever blocks it
+is worth more than this one function.
+
+The other two are a copy-then-shift-in-place in the post-call block that
+combine folds away. The remaining 190 differing words are a single global
+`$s0`/`$s1` swap that should fall out once the byte conversions are right,
+since they change the reference counts in four basic blocks.
+
+`docs/near-misses/func_8003D0F0.c` has the source and the eleven shapes that
+are already established -- the scratchpad pointer local, the deliberately
+literal matrix arguments, the separate `sz` local, and the rest.
 
 ## Functions blocked by jump-table placement
 
