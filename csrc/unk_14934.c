@@ -553,9 +553,51 @@ void func_800439F8(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043A68);
+/* Clears bit 15 of the flag halfword of four elements -- n, n+1, n+22 and n+23
+ * -- for each of the two rows n = i << D_8008333C[5], i in 10..11.
+ *
+ * Two shapes are load-bearing:
+ *  - the shift has to be re-read inside every one of the four statements, not
+ *    hoisted into a local. Each `sh` invalidates cse's memory entry for it, so
+ *    the target genuinely reloads it and rebuilds the whole index chain four
+ *    times; with the index in a local the chain is computed once and the
+ *    function is 35 words instead of 57.
+ *  - `sh` has to be declared and initialised BEFORE `base`. Both symbol
+ *    references need `(high D_8008333C)` in a register, and only in this order
+ *    does cse share it: the word read then gets its `%lo` riding on the load
+ *    while the halfword base is an `addiu` off the same `lui`. Reading the
+ *    halfword as `((s16 *) D_8008333C)[10]` inline, or declaring `sh` after
+ *    `base`, costs a second `lui`.
+ *
+ * func_80043B4C is the same function with `|= 0x8000`; keeping them spelled
+ * identically is deliberate. */
+void func_80043A68(void) {
+    s16 *sh = (s16 *) D_8008333C;
+    u8 *base = (u8 *) D_8008333C[0];
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043B4C);
+    for (i = 10; i < 12; i++) {
+        ((Unk43A68 *) (base + 0x78))[i << sh[10]].unk_04 &= 0x7FFF;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 1].unk_04 &= 0x7FFF;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 22].unk_04 &= 0x7FFF;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 23].unk_04 &= 0x7FFF;
+    }
+}
+
+/* Sets bit 15 of the same four elements func_80043A68 clears it in; see the
+ * comment there for the two load-bearing shapes. */
+void func_80043B4C(void) {
+    s16 *sh = (s16 *) D_8008333C;
+    u8 *base = (u8 *) D_8008333C[0];
+    s32 i;
+
+    for (i = 10; i < 12; i++) {
+        ((Unk43A68 *) (base + 0x78))[i << sh[10]].unk_04 |= 0x8000;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 1].unk_04 |= 0x8000;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 22].unk_04 |= 0x8000;
+        ((Unk43A68 *) (base + 0x78))[(i << sh[10]) + 23].unk_04 |= 0x8000;
+    }
+}
 
 void func_80043C30(void) {
     D_80082E60.unk_00 |= 1;

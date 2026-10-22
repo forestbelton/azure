@@ -55,6 +55,15 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. A 6-byte element: func_80043A68 and func_80043B4C index an
+   array of these at D_8008333C[0] + 0x78 and flip bit 15 of the halfword at
+   +0x04. Only that field is observed; the first four bytes are unexplored
+   space, not known filler. */
+typedef struct Unk43A68 {
+    u8  pad_00[0x4];
+    u16 unk_04;
+} Unk43A68;
+
 /* Hand-added. func_80046C20 reads five consecutive elements of this (indices
    i and i+1 for i in 0..3); stride 8 from the `sll` by 3 and the walking
    pointer's +8. Only the first two halfwords are touched: unk_00 with `lh`,
@@ -641,6 +650,8 @@ void func_80064688(void);
 void func_80046E38(s16, u8 *);
 s32  func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
 s32  func_80044724(void);
+void func_80043A68(void);
+void func_80043B4C(void);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
