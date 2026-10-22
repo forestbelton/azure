@@ -707,6 +707,10 @@ void SetDispMask(s32);
 void PutDispEnv(void *);
 void PutDrawEnv(void *);
 void DrawOTag(void *);
+/* libetc root counters. GetRCnt's return has to be signed: func_80041CBC
+   computes `(GetRCnt(1) + 0xFF) >> 8` and the target has `sra`. */
+s32  GetRCnt(s32);
+void ResetRCnt(s32);
 /* libc, from the PSY-Q runtime. */
 void bzero(void *, s32);
 
@@ -714,6 +718,8 @@ void bzero(void *, s32);
    undefined_syms_auto resolve these for the linker. */
 void func_80069C90(void);
 void func_80048B28(void);
+void func_800894A0(void);
+void func_80040418(void);
 void func_80069CE8(void);
 extern u32 *D_8006CDC8[];
 /* Declared as an array of unestablished length: func_8003D7DC derives

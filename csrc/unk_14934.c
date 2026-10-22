@@ -17,7 +17,7 @@ void func_80043CD0(void);
 void func_80043D04(void);
 s32  func_80042518(s8 *, s8);
 UnkNode *func_8003FC64(s32);
-void func_80043FD0(void);
+void func_80043FD0(Unk44144 *);
 s32  func_8003F794(s16, s16);
 void func_80040454(void);
 void func_800400B8(void);
@@ -149,7 +149,68 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041BE4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041C64);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041CBC);
+/* The per-frame flip: present the display and draw environments, run the draw
+ * list unless bit 1 of the 0x80013714 flags is set, swap the double-buffered
+ * work area at D_801C9E40 and relink its OT, then record the frame time from
+ * counter 1 and optionally VSync.
+ *
+ * Load-bearing shapes, with the cost of reverting each:
+ *  - the 0x80013714 flags go through the out-of-image constant base pointer
+ *    and are re-read at all three tests. The existing `extern u16 D_80013714`
+ *    scalar costs 49 words, because the assembler-expanded load reuses its own
+ *    destination register so the `lui` cannot stay in $s1 across the calls;
+ *    `*(u16 *) 0x80013714` costs 88 (lui+ori plus 0($reg)). splat renders the
+ *    bare `lui $s1, 0x8001` as %hi(D_80013714) because it can pair it with the
+ *    later %lo, which hides the difference.
+ *  - caching that halfword in a local costs 86 words; three separate lhu off
+ *    $s1 is the target.
+ *  - `p += 0x108D4;` as a pointer increment. Both `D_801C9E40 + 0x108D4` and
+ *    `&D_801C9E40[0x108D4]` cost 57 words: nothing can fold a constant into a
+ *    lo_sum, so those spellings rebuild the whole address instead of the
+ *    target's lui 0x1 / ori 0x8D4 / addu.
+ *  - the second D_80083160.unk_00 read is its own expression rather than the
+ *    reused `p` (3 words). `p = D_80083160.unk_00;` after the ClearOTagR call
+ *    puts the reload in $a1 where the target has $v1, because p's pseudo
+ *    already has a live range before the call and that moves it down
+ *    local-alloc's quantity order.
+ *
+ * The duplicated `addiu $a0, $a1, 0x70` in the bne's delay slot is reorg
+ * stealing the join-point insn and redirecting the branch past it, not a
+ * source duplication. */
+void func_80041CBC(void) {
+    u8 *base = (u8 *) 0x80010000;
+    u8 *p;
+
+    PutDispEnv(D_80083160.unk_00 + 0x5C);
+    PutDrawEnv(D_80083160.unk_00);
+    if ((*(u16 *) (base + 0x3714) & 2) == 0) {
+        DrawOTag(D_80083160.unk_00 + 0x8CC);
+    }
+    func_8003E758();
+    func_800542BC();
+    D_80081480 = D_8008148C;
+    func_800411AC();
+    func_8003E2D8();
+    p = D_801C9E40;
+    if (D_80083160.unk_00 == p) {
+        p += 0x108D4;
+    }
+    D_80083160.unk_00 = p;
+    ClearOTagR(p + 0x70, 0x218);
+    *(u8 **) (D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
+    func_8003F6F4();
+    func_800894A0();
+    if ((*(u16 *) (base + 0x3714) & 2) == 0) {
+        DrawSync(0);
+    }
+    func_80048B28();
+    DrawSync(0);
+    D_80080A87 = (GetRCnt(1) + 0xFF) >> 8;
+    if ((*(u16 *) (base + 0x3714) & 2) == 0 && D_80080A85 == 0) {
+        VSync((D_80080A84 != 1) * 2);
+    }
+    ResetRCnt(1);
+}
 
 void func_80041E28(s32 *arg0, s32 *arg1) {
     func_8003DB6C(arg0, arg1, 0x13);
@@ -556,7 +617,67 @@ s32 func_80043FB8(s32 arg0, ...) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043FD0);
+/* The per-frame tick for a func_80044144 node. kind == 2 finishes a fade and
+ * clears itself; otherwise it runs the node's own callback and either records
+ * a failure in the D_80083120 slot or marks the node and D_800814A0 dirty.
+ *
+ * Two shapes are load-bearing:
+ *  - the node's flag word is reached as a plain pointer dereference,
+ *    `*(u16 *) ((u8 *) e - 2)`. Every struct or array spelling --
+ *    `((UnkNode *) e)[-1].unk_1E`, `((UnkNode *) e - 1)->unk_1E`, even
+ *    `((u16 *) e)[-1]` -- costs 2 words, because those are COMPONENT_REFs or
+ *    ARRAY_REFs so gcc sets MEM_IN_STRUCT_P, and true_dependence's exception
+ *    (no dependence when the in-struct flags differ and the non-struct side
+ *    has a non-varying address) then frees sched1 to interleave this
+ *    read-modify-write with the D_800814A0 one, filling both load-delay slots.
+ *    With a bare pointer dereference neither MEM is in-struct, the exception
+ *    does not apply, memrefs_conflict_p cannot separate a register base from a
+ *    symbol, and the two statements stay strictly sequential as the target has
+ *    them.
+ *  - e->unk_08 is re-read for each of the four D_80083120 stores. Hoisting
+ *    &D_80083120[e->unk_08] into a local costs 11 words: each store
+ *    invalidates cse's memory entry for e->unk_08, so the target genuinely
+ *    reloads it and recomputes the sll/addu four times, and only the array
+ *    base survives in $s2.
+ *
+ * The early-return shape of the kind == 2 arm is a free choice: a nested
+ * else-if matches too, as do re-reading e->unk_0A instead of keeping it in a
+ * local and hoisting e->unk_0C. */
+void func_80043FD0(Unk44144 *e) {
+    s16 kind = e->unk_0A;
+
+    if (kind == 2) {
+        if (*(u8 *) e->unk_04 == 0) {
+            return;
+        }
+        if (e->unk_0C != 0) {
+            e->unk_08 = func_8003F794(5, e->unk_0C);
+        }
+        func_80040454();
+        D_80080A86 = 0;
+        e->unk_0A = 0;
+        return;
+    }
+    if (D_80083120[e->unk_08].unk_00 != 0) {
+        return;
+    }
+    if (kind != 0) {
+        UnkNode *n = (*(UnkNode *(*)(u32)) e->unk_00)(e->unk_04);
+
+        if (n == NULL) {
+            D_80083120[e->unk_08].unk_00 = 6;
+            D_80083120[e->unk_08].unk_02 = 1;
+            D_80083120[e->unk_08].unk_04 = 1;
+            D_80083120[e->unk_08].unk_06 = 0;
+            return;
+        }
+        func_80040418();
+        D_80080A86 = 1;
+        n->unk_1E &= 0xF3FF;
+    }
+    *(u16 *) ((u8 *) e - 2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 UnkNode *func_80044144(s16 arg0, s16 arg1, u32 arg2, u32 arg3) {
     UnkNode *n = func_8003FC64(0);
