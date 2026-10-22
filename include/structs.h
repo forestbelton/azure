@@ -115,7 +115,11 @@ typedef struct Unk3DBD0SP {
    why that copy is field-by-field and not a whole-struct assignment. */
 typedef struct Unk42710A {
     u8 unk_00;
-    u8 pad_01[0x1];
+    /* func_80042710 copies +0x00 and +0x02 and skips this one because
+       func_80041E70 is what writes it: it derives it from unk_02, doubled and
+       clamped to 0x63 when bit 0x80 of unk_54 is set. So the skipped byte is a
+       real field, not padding. */
+    u8 unk_01;
     u8 unk_02;
 } Unk42710A;
 
@@ -160,7 +164,7 @@ typedef struct Unk42710 {
     u8          unk_26;
     u8          unk_27;
     u8          unk_28;
-    u8          pad_29[0x1];
+    u8          unk_29;
     u16         unk_2A;
     Unk42710B   unk_2C[4];
     u8          unk_34[0xD];
@@ -174,6 +178,20 @@ typedef struct Unk42710 {
     u32         unk_4C;
     u8          pad_50[0x4];
     u32         unk_54;
+    /* func_80041E70 reaches +0x87, so the record runs at least that far.
+       unk_66/unk_68/unk_69 and unk_29 above are each a clamped copy of a byte
+       field (0x04, 0x00, 0x01 and 0x05), gated by bits 4/8/0x10/2 of unk_54;
+       unk_6E and unk_87 are a halfword/byte pair scaled together by bit 0 and
+       by the sign of func_80042900's result. */
+    u8          pad_58[0xE];
+    u8          unk_66;
+    u8          pad_67[0x1];
+    u8          unk_68;
+    u8          unk_69;
+    u8          pad_6A[0x4];
+    u16         unk_6E;
+    u8          pad_70[0x17];
+    u8          unk_87;
 } Unk42710;
 
 /* Hand-added. Only its first word is read, by func_80040CBC; a struct rather

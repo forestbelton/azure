@@ -1,0 +1,249 @@
+/* func_80041E70 (unk_14934) -- 270 of 270 words, 4 DIFF. Not compiled; see
+ * docs/open-matching-problems.md.
+ *
+ * It rescales a record's size/speed pair by flag bits and by func_80042900's
+ * sign, then clamps-or-copies four byte fields and six flag-bit pairs.
+ * Everything is byte-exact except four words, and they are ONE problem:
+ *
+ *     X  li   $v1,32          |  sll  $v1, $v1, 1
+ *     X  sra  $v0,$v0,0x10    |  sra  $v1, $v0, 16
+ *     X  blez $v0,...         |  blez $v1, .L80041EE0
+ *     X  bgez $v0,...         |  bgez $v1, .L80041F04
+ *
+ * The root is the first. cse folds `p->unk_87 * 2` to the constant 32: the
+ * store `p->unk_87 = 0x10;` sits immediately before the branch and the if-body
+ * is the fall-through, so mem(0x87)'s equivalence class carries (const_int 16)
+ * into the body. Confirmed in the .cse dump -- insn 30 is already
+ * `(set (reg:SI 89) (const_int 32))`.
+ *
+ * And it is not a coincidence that the fold wins: cse weighs its candidates by
+ * rtx_cost, a CONST_INT costs ~0 and `(ashift reg 1)` costs an insn, so the
+ * constant is always cheaper. For the target's shape cse would have to not
+ * know the register holds 16 at all -- and MIPS cannot store an immediate, so
+ * expand always emits `(set (reg) (const_int 16))` before the `sb`, which is
+ * exactly what gives cse the equivalence. That is the wall.
+ *
+ * The three register fields are downstream of the fold, not independent: with
+ * it, the 0x10 pseudo dies at the `sb` before the branch and is block-local, so
+ * LOCAL-alloc takes it; without it the pseudo would be live across the branch
+ * and become a global allocno, which is almost certainly what pushes the
+ * sign-extended call result off $v0 onto $v1 in the target.
+ *
+ * Note the asymmetry that is already right: the `sb` at +0x87 DOES invalidate
+ * mem(0x6E), which is why the target reloads unk_6E with `lhu` inside the if,
+ * and this source reproduces that. So cse's memory invalidation is coarse
+ * enough to cross field offsets -- which also rules out reordering the two
+ * entry stores, because then mem(0x87) would be killed too and the body would
+ * need an `lbu` the target does not have.
+ *
+ * Ruled out for the fold: `p->unk_87 <<= 1` and `* 2` (identical); the 0x10 in
+ * an s32 local, a u8 local, or read back from the field; `p->unk_87 = n << 1`
+ * from the local; the field as s8 (271 words, 242 DIFF -- so u8 is confirmed);
+ * both accesses through `((u8 *) p)[0x87]`; unk_6E through a byte-pointer cast
+ * so its store would not kill mem(0x87); `(u8)` cast on the product; the
+ * if inverted so the body is the else arm; the two entry stores swapped (265
+ * DIFF).
+ *
+ * Ruled out for the sign-extend, independently: `s16 r` with the comparisons
+ * on r; `s32 r` with `(s16)` casts at both comparisons; `s32 r = (s16) call()`;
+ * `u16 r` with casts; all four orderings of the r/i declarations. All give
+ * `sra $v0,$v0,16` in place. In the `s32 r = (s16) call()` form the RTL does
+ * carry two pseudos, so the two-register form is reachable in principle -- the
+ * allocator just coalesces them onto $v0.
+ *
+ * Everything else was byte-exact first time and is worth not re-deriving: the
+ * 0x200000 arm writes unk_1C BEFORE unk_14 where the 0x4000000 arm writes them
+ * the other way round (that asymmetry is real); the five unk_14/unk_1C pairs
+ * have an else that masks unk_14 while the first and last have none; the
+ * `(u32) (p->unk_13 - 3) < 0x2B` range check compiles to addiu/sltiu directly;
+ * and the final `p->unk_54 &= 0xFF7FFFFF` reuses the value already loaded for
+ * the 0x800000 test.
+ *
+ * structs.h is already updated with what this function taught: Unk42710A's
+ * middle byte is a real field (this function writes it), unk_29 is a field not
+ * padding, and the record runs to at least +0x87. The forward declaration in
+ * csrc/unk_14934.c should become `void func_80041E70(Unk42710 *);` when this
+ * lands.
+ */
+
+#define Unk42710  Unk42710_orig
+#define Unk42710A Unk42710A_orig
+#define func_80041E70 func_80041E70_decl_clash
+#include "common.h"
+#undef Unk42710
+#undef Unk42710A
+#undef func_80041E70
+
+typedef struct Unk42710A {
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+} Unk42710A;
+
+typedef struct Unk42710 {
+    u8          unk_00;
+    u8          unk_01;
+    u8          unk_02;
+    u8          unk_03;
+    u8          unk_04;
+    u8          unk_05;
+    u16         unk_06;
+    Unk42710A   unk_08[3];
+    u8          unk_11;
+    u8          unk_12;
+    u8          unk_13;
+    u32         unk_14;
+    u32         unk_18;
+    u32         unk_1C;
+    u16         unk_20;
+    u16         unk_22;
+    u8          unk_24;
+    u8          unk_25;
+    u8          unk_26;
+    u8          unk_27;
+    u8          unk_28;
+    u8          unk_29;
+    u16         unk_2A;
+    Unk42710B   unk_2C[4];
+    u8          unk_34[0xD];
+    u8          unk_41;
+    u8          unk_42;
+    u8          unk_43;
+    u8          unk_44;
+    u8          unk_45;
+    u8          pad_46[0x2];
+    u32         unk_48;
+    u32         unk_4C;
+    u8          pad_50[0x4];
+    u32         unk_54;
+    u8          pad_58[0xE];
+    u8          unk_66;
+    u8          pad_67[0x1];
+    u8          unk_68;
+    u8          unk_69;
+    u8          pad_6A[0x4];
+    u16         unk_6E;
+    u8          pad_70[0x17];
+    u8          unk_87;
+} Unk42710;
+
+s32 func_80042900(s8 *, s8);
+
+void func_80041E70(Unk42710 *p) {
+    s16 r;
+    s32 i;
+
+    p->unk_6E = 0x100;
+    p->unk_87 = 0x10;
+    if (p->unk_54 & 1) {
+        p->unk_87 = p->unk_87 * 2;
+        p->unk_6E = p->unk_6E * 2;
+    }
+    r = func_80042900((s8 *) p, 7);
+    if (r > 0) {
+        p->unk_6E = p->unk_6E * 2;
+        p->unk_87 = p->unk_87 * 2;
+    } else if (r < 0) {
+        p->unk_6E = (s16) p->unk_6E >> 1;
+        p->unk_87 = p->unk_87 >> 1;
+    }
+    if (p->unk_54 & 2) {
+        s32 t = p->unk_05 * 2;
+
+        if (t >= 0x100) {
+            t = 0xFF;
+        }
+        p->unk_29 = t;
+    } else {
+        p->unk_29 = p->unk_05;
+    }
+    if (p->unk_54 & 4) {
+        s32 t = p->unk_04 * 2;
+
+        if (t >= 0x100) {
+            t = 0xFF;
+        }
+        p->unk_66 = t;
+    } else {
+        p->unk_66 = p->unk_04;
+    }
+    if (p->unk_54 & 8) {
+        s32 t = p->unk_00 * 2;
+
+        if (t >= 0x100) {
+            t = 0xFF;
+        }
+        p->unk_68 = t;
+    } else {
+        p->unk_68 = p->unk_00;
+    }
+    if (p->unk_54 & 0x10) {
+        s32 t = p->unk_01 * 2;
+
+        if (t >= 0x100) {
+            t = 0xFF;
+        }
+        p->unk_69 = t;
+    } else {
+        p->unk_69 = p->unk_01;
+    }
+    for (i = 2; i >= 0; i--) {
+        if (p->unk_08[i].unk_00 != 0) {
+            if (p->unk_54 & 0x80) {
+                s32 t = p->unk_08[i].unk_02 * 2;
+
+                if (t >= 0x64) {
+                    t = 0x63;
+                }
+                p->unk_08[i].unk_01 = t;
+            } else {
+                p->unk_08[i].unk_01 = p->unk_08[i].unk_02;
+            }
+        }
+    }
+    if (p->unk_54 & 0x4000000) {
+        p->unk_14 |= 0x400;
+        p->unk_1C &= ~0x400;
+    }
+    if (p->unk_54 & 0x2000000) {
+        p->unk_14 |= 0x200;
+        p->unk_1C &= ~0x200;
+    } else {
+        p->unk_14 &= ~0x200;
+    }
+    if (p->unk_54 & 0x8000000) {
+        p->unk_14 |= 0x10;
+        p->unk_1C &= ~0x10;
+    } else {
+        p->unk_14 &= ~0x10;
+    }
+    if (p->unk_54 & 0x10000000) {
+        p->unk_14 |= 0x20;
+        p->unk_1C &= ~0x20;
+    } else {
+        p->unk_14 &= ~0x20;
+    }
+    if (p->unk_54 & 0x20000000) {
+        p->unk_14 |= 0x40;
+        p->unk_1C &= ~0x40;
+    } else {
+        p->unk_14 &= ~0x40;
+    }
+    if (p->unk_54 & 0x40000000) {
+        p->unk_14 |= 0x80;
+        p->unk_1C &= ~0x80;
+    } else {
+        p->unk_14 &= ~0x80;
+    }
+    if (p->unk_54 & 0x200000) {
+        p->unk_1C |= 0x1000;
+        p->unk_14 &= ~0x1000;
+    }
+    if (p->unk_54 & 0x800000) {
+        if ((u32) (p->unk_13 - 3) < 0x2B) {
+            if (((u8 *) &p->unk_48)[0] != 4) {
+                p->unk_54 &= 0xFF7FFFFF;
+            }
+        }
+    }
+}

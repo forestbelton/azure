@@ -1,6 +1,6 @@
 # Open matching problems
 
-Seven functions are parked. Every one of them reproduces the original logic;
+Nine functions are parked. Every one of them reproduces the original logic;
 what is left in each case is a register assignment, the order of two adjacent
 instructions, or one dead instruction. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
@@ -16,6 +16,8 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
 | func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` byte conversions fold to `lb`; see below |
+| func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
+| func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
 
 ## func_8003D0F0  (unk_102A8) -- partial, 10 words short
 
