@@ -104,6 +104,11 @@ void func_8003F540(u32 arg0, u32 arg1, u32 arg2, u32 arg3) {
     D_8006CE34.unk_0C = arg3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F55C);
+s32 func_8003F55C(void) {
+    if (CdSync(1, NULL) == 2) {
+        CdControl(0x10, NULL, D_800814B8);
+    }
+    return CdPosToInt(D_800814B8);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003F5AC);

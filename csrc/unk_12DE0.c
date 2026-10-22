@@ -1,6 +1,9 @@
 #include "common.h"
 
 void func_80040BB4(void);
+void func_80040CBC(u8);
+void func_80040AA0(u16);
+u32 *func_80040574(s32);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
 
@@ -33,7 +36,20 @@ void func_8003F6D4(s32 arg0, s32 arg1, s32 *arg2, s32 arg3) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F6F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F794);
+s32 func_8003F794(s16 arg0, s16 arg1) {
+    s32 i;
+
+    for (i = 7; i >= 0; i--) {
+        if (D_80083120[i].unk_00 == 0) {
+            D_80083120[i].unk_00 = arg0;
+            D_80083120[i].unk_02 = 0;
+            D_80083120[i].unk_04 = arg1;
+            D_80083120[i].unk_06 = 0;
+            return (s16) i;
+        }
+    }
+    return -1;
+}
 
 void func_8003F7E4(void) {
     s32 i;
@@ -243,7 +259,15 @@ void func_80040454(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040490);
+void func_80040490(void *arg0, s16 *rect) {
+    /* The temporary fixes the grouping: written as one expression gcc
+       doubles rect[2] instead of rect[3]. */
+    s32 n = rect[3] * 2;
+    u32 *p = func_80040574(rect[2] * n);
+
+    func_8004068C(arg0, p);
+    LoadImage(rect, p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800404F8);
 
@@ -272,7 +296,18 @@ void func_80040B88(void) {
     func_80040BB4();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040BB4);
+void func_80040BB4(void) {
+    u8 n = D_80082E60.unk_08.b;
+
+    D_80082E60.unk_0B = n;
+    func_80040CBC(n);
+    D_80082E60.unk_0E = 0;
+    D_80082E60.unk_08.h = 0;
+    D_80083160.unk_154 = 0;
+    D_80083160.unk_198 = 0;
+    D_80083160.unk_CC = 0;
+    D_80083160.unk_110 = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040C08);
 
@@ -292,10 +327,41 @@ s32 func_80040F00(s32 *arg0) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040F2C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040FDC);
+void func_80040FDC(u16 arg0) {
+    /* The element pointer must be its own local: taking the field directly
+     * off D_8006CE80[arg0] schedules the table's address ahead of the index
+     * multiply, where the target has it after. */
+    Unk8006CE80 *e = &D_8006CE80[arg0];
+    u32 *p = e->unk_04;
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80041038);
+    if (p != NULL) {
+        u32 *q = (u32 *) p[2];
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80041094);
+        if (q != NULL) {
+            func_8003F8F8(q);
+        }
+    }
+}
+
+void func_80041038(u16 arg0) {
+    Unk8006CE80 *e = &D_8006CE80[arg0];
+    u32 *p = e->unk_04;
+
+    if (p != NULL) {
+        u32 *q = (u32 *) p[1];
+
+        if (q != NULL) {
+            func_8003F9E0(q);
+        }
+    }
+}
+
+void func_80041094(u16 arg0, s16 arg1, s16 arg2, s16 arg3, s16 arg4) {
+    func_80040AA0(arg0);
+    D_80082E60.unk_10 = arg1;
+    D_80082E60.unk_12 = arg2;
+    D_80082E60.unk_14 = arg3;
+    D_80082E60.unk_16 = arg4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800410FC);

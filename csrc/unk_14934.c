@@ -8,7 +8,13 @@ void func_80043D04(void);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041134);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800411AC);
+void func_800411AC(void) {
+    void (**p)(void) = D_80083C68;
+
+    while (*p != NULL) {
+        (*p++)();
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800411FC);
 
@@ -105,7 +111,16 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042710);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042900);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042984);
+void func_80042984(u8 *arg0) {
+    u8 t = arg0[0x13];
+
+    if (t >= 3 && t < 0x2E) {
+        u8 *p = *(u8 **) (arg0 - 0x14);
+        u16 v = *(u16 *) (p + 0x12) & 0xFFC0;
+
+        *(u16 *) (p + 0x12) = v + (func_800429E4(arg0) << 2);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800429E4);
 
@@ -147,7 +162,23 @@ s32 func_800438E4(u8 *arg0) {
     return v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043914);
+void func_80043914(u8 *arg0) {
+    u8 v;
+    u8 w;
+
+    if (arg0[0] != 0x16) {
+        return;
+    }
+    w = D_800E3E48[arg0[3] & 0x1F].unk_48;
+    if (w == 0xD) {
+        v = 0xF;
+    } else if (w == 0xF) {
+        v = 0xA;
+    } else {
+        return;
+    }
+    D_800E2968 = v;
+}
 
 void func_8004397C(u8 *arg0) {
     u8 v;
@@ -230,11 +261,36 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800448BC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004491C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044A50);
+void func_80044A50(UnkNode *n) {
+    UnkNode *a = n->unk_14;
+    UnkNode *b;
+
+    if (a == NULL) {
+        return;
+    }
+    b = n->unk_18;
+    if (b != NULL) {
+        b->unk_14 = a;
+    }
+    if ((u8 *) a >= (u8 *) &D_800833E0 &&
+        (u8 *) a < (u8 *) &D_800833E0 + 0x80) {
+        a->unk_00 = b;
+    } else {
+        a->unk_18 = b;
+    }
+    n->unk_18 = NULL;
+    n->unk_14 = NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044AAC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044B48);
+void func_80044B48(void) {
+    u32 *p = *(u32 **) (D_80083160.unk_00 + 0x8D0);
+
+    func_80067F20(p, 0, 0, 0, 0);
+    AddPrim(D_80083160.unk_00 + 0x8AC, p);
+    *(u32 **) (D_80083160.unk_00 + 0x8D0) = p + 3;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044BB0);
 
@@ -248,7 +304,7 @@ s32 func_80045310(u32 arg0) {
      * folds the +4 into it, where the target bumps a register. */
     u32 *p = D_80081478;
 
-    if (D_80083160.unk_00 != (u32) &D_801C9E40) {
+    if (D_80083160.unk_00 != (u8 *) &D_801C9E40) {
         p++;
     }
     return *p < arg0;

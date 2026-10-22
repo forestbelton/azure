@@ -28,6 +28,15 @@ typedef struct Unk8002D5B4 {
     u8 pad_0A[0x1];
 } Unk8002D5B4;
 
+/* Hand-added. func_80040FDC scales an index by 12 into this table and
+   follows the pointer at +0x04; only that field's own +0x08 is observed, so
+   its element type is left as u32. */
+typedef struct Unk8006CE80 {
+    u32  unk_00;
+    u32 *unk_04;
+    u32  unk_08;
+} Unk8006CE80;
+
 /* 0x8006ce34..0x8006ce43, 0x10 bytes, 4 field(s) */
 typedef struct Unk8006CE34 {
     u32 unk_00;
@@ -96,7 +105,14 @@ typedef struct Unk80081522 {
 typedef struct Unk80082E60 {
     u32 unk_00;
     void (*unk_04)(void);  /* called through */
-    u16 unk_08;  /* also read as 1 */
+    /* Hand-made union: func_80040BB4 reads the byte at +0x08 and clears the
+       halfword, and the byte read has to be a plain field access or gcc bases
+       the whole function's addressing on D_80082E60+8 instead of the
+       struct. */
+    union {
+        u16 h;
+        u8  b;
+    } unk_08;
     u8  unk_0A;
     u8  unk_0B;
     u8  unk_0C;
@@ -126,19 +142,22 @@ typedef struct Unk800830E8 {
     u8  unk_03;
 } Unk800830E8;
 
-/* 0x80083150..0x8008315f, 0x10 bytes, 5 field(s) */
-typedef struct Unk80083150 {
-    u16 unk_00;
-    u8 pad_02[0x6];
-    u16 unk_08;
-    u16 unk_0A;
-    u16 unk_0C;
-    u16 unk_0E;
-} Unk80083150;
+/* 0x80083120..0x8008315f, 8 entries of 0x8 bytes; labels: D_80083120 */
+/* Hand-corrected. fieldscan reported one 0x10-byte object based at
+   0x80083150 and structs.h mapped it to D_80083120; the accesses are really
+   an array of eight 8-byte entries, which func_8003F794 searches by index and
+   func_8003D8B0 zeroes as 0x10 words. The scan's five fields are entry 6's
+   first halfword and all four of entry 7's. */
+typedef struct Unk80083120 {
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    s16 unk_06;
+} Unk80083120;
 
 /* 0x80083160..0x80083351, 0x1f2 bytes, 36 field(s); labels: D_80083160, D_80083164, D_80083208, D_80083178, D_8008333C */
 typedef struct Unk80083160 {
-    u32 unk_00;
+    u8 *unk_00;  /* retyped by hand: compared against an address and indexed */
     u16 unk_04;
     u8 pad_06[0x2];
     u32 unk_08;
@@ -215,13 +234,6 @@ typedef struct Unk80083958 {
     u16 unk_08;
     u16 unk_0A;
 } Unk80083958;
-
-/* 0x80083c68..0x80083c73, 0xc bytes, 3 field(s) */
-typedef struct Unk80083C68 {
-    void (*unk_00)(void);  /* called through */
-    u32 unk_04;
-    u32 unk_08;
-} Unk80083C68;
 
 /* 0x80083ca8..0x80083cb1, 0xa bytes, 4 field(s); labels: D_80083CA8, D_80083CAE */
 /* Hand-split: fieldscan merged 0x04..0x07 into one word because func_80041900
@@ -338,7 +350,12 @@ typedef struct UnkNode {
     u32              unk_10;   /* compared against a caller's argument, and
                                   called through elsewhere, so a function
                                   pointer -- left as u32 until that is used */
-    u8               pad_14[0xA];
+    /* Hand-split out of pad_14: func_80044A50 unlinks the node from a second
+       list threaded through these two, and reaches the neighbour's +0x00 or
+       +0x18 depending on whether it lies inside D_800833E0. */
+    struct UnkNode  *unk_14;
+    struct UnkNode  *unk_18;
+    u8               pad_1C[0x2];
     u16              unk_1E;   /* flags */
 } UnkNode;
 
@@ -347,6 +364,9 @@ extern u32 D_800814A0;
 extern u8  D_800814A4;
 extern u8  D_800814AC;
 extern u32 D_800814B0;
+/* A CdlLOC that func_8003F55C fills with CdControl and converts; four bytes,
+   so its address comes out as an `la`. */
+extern u8  D_800814B8[4];
 extern u32 D_800814B4;
 extern u32 D_800814C8;
 extern u32 D_800814CC;
@@ -374,6 +394,10 @@ extern u32 D_80083110[4];  /* zeroed by index in func_8003D8B0 */
    fills it in a loop and func_8004383C indexes it, so the two observed
    offsets are elements 0 and 1, not named fields. Extent not established. */
 extern u32 D_800835E8[];
+/* Retyped by hand from the three-field struct fieldscan inferred: the three
+   observed words are consecutive entries of a null-terminated table of
+   callbacks that func_800411AC walks and calls. Extent not established. */
+extern void (*D_80083C68[])(void);
 extern u32 D_80083778;
 /* Retyped by hand from the three-field 0x80-byte structs fieldscan inferred:
    func_8003CAC4 fills both by index, 0x40 halfwords each. */
@@ -383,6 +407,7 @@ extern u16 D_800838D8[0x40];
 /* The multi-field objects above, by their base label. */
 extern Unk8002D5B4 D_8002D5B4;
 extern Unk8006CE34 D_8006CE34;
+extern Unk8006CE80 D_8006CE80[];
 extern Unk8006E7B4 D_8006E7B4;
 extern Unk800777AC D_800777AC;
 extern Unk80080AB4 D_80080AB4;
@@ -394,13 +419,12 @@ extern Unk80081522 D_80081522;
 extern Unk80082E60 D_80082E60;
 extern Unk800830C0 D_800830C0;
 extern Unk800830E8 D_800830E8;
-extern Unk80083150 D_80083120;
+extern Unk80083120 D_80083120[8];
 extern Unk80083160 D_80083160;
 extern Unk80083360 D_80083360;
 extern Unk800833E0 D_800833E0;
 extern Unk80083462 D_80083460;
 extern Unk80083958 D_80083958;
-extern Unk80083C68 D_80083C68;
 extern Unk80083CA8 D_80083CA8;
 extern Unk80083CE8 D_80083CE8;
 
@@ -447,6 +471,10 @@ void func_80040A88(void (*)(void));
 void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
+void func_8003F8F8(u32 *);
+void func_8003F9E0(u32 *);
+s32  func_800429E4(u8 *);
+void func_80067F20(u32 *, s32, s32, s32, s32);
 
 /* Hand-added. PSY-Q library entry points, declared here until the project has
    a header of its own for them. */
@@ -454,6 +482,21 @@ void _bu_init(void);
 void ChangeClearPAD(s32);
 s32  VSync(s32);
 s32  CdInit(void);
+s32  CdSync(s32, u8 *);
+s32  CdControl(u8, u8 *, u8 *);
+s32  CdPosToInt(u8 *);
+/* libgte. The MATRIX / SVECTOR / VECTOR parameters are left as void * until
+   the project models those types; only the pointer-ness matters to the
+   generated code. */
+void PushMatrix(void);
+void PopMatrix(void);
+void SetTransMatrix(void *);
+void SetRotMatrix(void *);
+void RotTrans(void *, void *, s32 *);
+/* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
+   the same reason. */
+void LoadImage(void *, u32 *);
+void AddPrim(void *, void *);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
@@ -470,6 +513,15 @@ extern s16 D_80013714;
    the image that is *indexed* must be written as a constant address instead,
    see docs/addressing-and-translation-units.md. */
 extern u8  D_800E2968;
+
+/* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
+   at +0x48; outside the loaded image, like D_800E2968. */
+typedef struct Unk800E3E48 {
+    u8 pad_00[0x48];
+    u8 unk_48;
+    u8 pad_49[0x43];
+} Unk800E3E48;
+extern Unk800E3E48 D_800E3E48[];
 
 /* Hand-added. func_800439BC indexes this with a 20-byte stride and reads a
    byte at +0x10; nothing else touches it, so that is the whole layout and the

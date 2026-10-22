@@ -127,6 +127,16 @@ Beyond the four write-ups in `docs/open-matching-problems.md`:
   separate local for the comparison and reading it again for the result; gcc
   rematerialises the load rather than preserving the register
   (func_8003F270).
+* An element pointer needs its own local where the target schedules the
+  table's address *after* the index multiply. `D_8006CE80[i].field` puts the
+  table address first; `e = &D_8006CE80[i]; e->field` puts it after
+  (func_80040FDC).
+* Several slots in one out-of-image region share a single `lui` only if the C
+  reaches them through a constant *base* pointer plus displacements
+  (`base = (u8 *) 0x80010000; base[0x3184]`). Three independent constant
+  addresses each assemble to their own `lui`/`$at` pair, and three separate
+  `extern` symbols get a `lui` each because gcc cannot know they share a
+  64 KB page (func_800439F8).
 
 ## Installing it
 
