@@ -274,7 +274,9 @@ typedef struct Unk42710 {
     u32         unk_4C;
     u8          pad_50[0x4];
     u32         unk_54;
-    /* func_80041E70 reaches +0x87, so the record runs at least that far.
+    /* The record is 0x8C bytes: func_800423C0 and func_80043914 both index
+       D_800E3E48 with that stride, and D_800E3E48's element type is this one
+       (see Unk800E3E48 below). func_80041E70 reaches +0x87, which fits.
        unk_66/unk_68/unk_69 and unk_29 above are each a clamped copy of a byte
        field (0x04, 0x00, 0x01 and 0x05), gated by bits 4/8/0x10/2 of unk_54;
        unk_6E and unk_87 are a halfword/byte pair scaled together by bit 0 and
@@ -288,6 +290,7 @@ typedef struct Unk42710 {
     u16         unk_6E;
     u8          pad_70[0x17];
     u8          unk_87;
+    u8          pad_88[0x4];
 } Unk42710;
 
 /* Hand-added. Only its first word is read, by func_80040CBC; a struct rather
@@ -1098,7 +1101,16 @@ extern u32 D_8008333C[];
 extern u16 D_80083CAE[];  /* incomplete: the two arms share one `lui` */
 
 /* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
-   at +0x48; outside the loaded image, like D_800E2968. */
+   at +0x48; outside the loaded image, like D_800E2968.
+
+   This is the SAME record as Unk42710 and should be replaced by it. The
+   evidence: func_800423C0 indexes D_800E3E48 with the same 0x8C stride and
+   passes the element straight to func_80042710, whose both parameters are
+   Unk42710; the two typedefs agree on unk_14 and unk_1C as the flag words;
+   and 0x8C is exactly where Unk42710 ends now that func_80041E70 has shown it
+   reaches +0x87. The merge is left for when more of the record is known,
+   because +0x48 is a word here (func_80042710 copies it whole, with the tag
+   byte at +0x49) and a byte there, so one of the two sites will need a cast. */
 typedef struct Unk800E3E48 {
     u8  pad_00[0x14];
     u32 unk_14;  /* low 3 bits copied into the caller's +0x14 */

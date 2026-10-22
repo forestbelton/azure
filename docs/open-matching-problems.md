@@ -13,7 +13,7 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
-| func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
+| func_800423C0 | unk_14934 | every instruction now matches; one register pair swapped on a 7% priority gap |
 | func_8003D0F0 | unk_102A8 | 212 of 222: the four `(s8)` conversions fold to `lb`, and neither known way to block that fits the target; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
 | func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
@@ -75,7 +75,7 @@ than guessed:
 | func_80047054 | two allocnos sharing a `$a0` preference with a five-fold priority gap |
 | func_80042560 | `sched1` would need a dependence between two disjoint byte offsets, which `memrefs_conflict_p` can never produce |
 | func_80042900 | the register for a dead volatile load, i.e. another allocation preference |
-| func_800423C0 | `cse` sharing one `lui` across an extended basic block |
+| func_800423C0 | an allocation priority gap of 7%, the closest of these -- the `lui` sharing is now solved |
 
 That is the honest reading: the parked list is close to exhausted as far as C
 can take it, and the remaining effort belongs on the jump-table spec change and
@@ -254,27 +254,17 @@ beats `p` at ~0.14, and `e` additionally carries a preference for `$a0` that
 after the n+6 induction variable -- 0.68 against 4.7, too wide to close by
 adjusting reference counts -- or else conflict with `$v1`.
 
-## func_800423C0  (unk_14934) -- partial
+## func_800423C0  (unk_14934) -- instructions all match
 
-Four instructions out of 72. Everything up to and including the
-func_800A1BD0 call is exact, as are all four accesses through the indexed base
-and the whole tail. What is left is how three 0x8001xxxx constants reach
-registers: the two `addu` operands are swapped, and where the target
-materialises a third independent `lui 0x8001` for 0x80012096, gcc reuses the
-base pointer's register (`move $a1, $v0`). gcc splits a large constant into
-lui + ori as two RTL insns, so cse shares the `lui 0x8001` across the extended
-basic block, and the 0x80012096 arm is the `bnez`'s fall-through -- inside it.
+The `lui 0x8001` sharing this was parked on is solved: the base pointer has to
+be built by an in-place `p += r * 2;` so the add consumes the constant's own
+register, `cmp` has to be declared before `p` so the sharing does not just move
+to the other constant, and the `+=` has to come before the `if`. All three are
+measured in `docs/near-misses/func_800423C0.c`, which also has the source.
 
-The part worth not re-deriving is the addressing. The indexed base is the
-plain constant 0x80010000 with 0x2094/0x2098 as load displacements, not the
-symbol D_80012094, even though the listing reads `lui $v1, %hi(D_80012094)` /
-`lhu $a0, %lo(D_80012094)($v1)`: splat renders a bare `lui reg, 0x8001` as
-`%hi(SYM)` whenever it can pair the register with a later `%lo`. A symbol
-array with a *variable* index always materialises the whole address with
-`lui %hi` + `addiu %lo` and puts `0(reg)` on the load -- measured for an
-incomplete array, a complete `u16 B[0x100]`, two accesses at different
-indices, and a `union { u16 h; u8 b; }` element type. Only the constant base
-pointer gives the target's form.
+What is left is a two-register swap on a 7% allocation-priority gap -- `r` at
+1.00 against the base pointer at 0.93 -- which is the closest margin of any
+parked allocation case here and the one most worth another look.
 
 ## Functions blocked by the translation-unit problem
 
