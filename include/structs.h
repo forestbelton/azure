@@ -478,6 +478,7 @@ void func_8003F320(void);
 void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
+void func_800407C0(u8 *, u32 *);
 void func_8003F8F8(u32 *);
 void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);

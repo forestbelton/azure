@@ -636,7 +636,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004713C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047200);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047270);
+void func_80047270(u8 *arg0, s16 *rect) {
+    s32 t = rect[3] * 2;
+    s32 n = rect[2] * t;
+
+    if (D_8008148C + D_80080A7C <= D_80081480 + n) {
+        D_80081480 = D_8008148C;
+        DrawSync(0);
+    }
+    func_800407C0(arg0, (u32 *) D_80081480);
+    LoadImage(rect, (u32 *) D_80081480);
+    t = rect[3] * 2;
+    D_80081480 = D_80081480 + rect[2] * t;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80047338);
 
