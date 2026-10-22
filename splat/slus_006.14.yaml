@@ -25,6 +25,8 @@ options:
   o_as_suffix: True
   use_legacy_include_asm: False
 
+  src_path: csrc
+
   symbol_addrs_path: splat/slus_006.14_symbol_addrs.txt
   reloc_addrs_path: splat/slus_006.14_reloc_addrs.txt
 
@@ -43,7 +45,10 @@ segments:
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
       - [0x72a8, bin]
       - [0x101f8, asm, main]
-      - [0x102a8, bin]
+      - [0x102a8, asm]
+      # First function converted to C. func_8003E12C is a 5-instruction leaf.
+      - [0x1192c, c, swap]
+      - [0x11940, asm]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]

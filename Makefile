@@ -38,7 +38,7 @@ CHECK = python tools/check.py
 # reports version 2.56. tools/ccpsx drives the shipped compiler under wine.
 CC             = tools/ccpsx
 ASPSX_VERSION  = 2.56
-CFLAGS        += -O2 -G8
+CFLAGS        += -O2 -G8 -Iinclude
 # -G8 is ccpsx's default and the game uses small-data addressing: there are 245
 # genuine $gp-relative loads/stores in the game's own code, against
 # $gp = 0x80080994 (set by crt0 at 0x800339ac, not by the PS-EXE header, whose
@@ -72,7 +72,11 @@ ASFLAGS_C += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1
 SPLATFILES := $(shell find splat -type f -name '*.yaml')
 
 BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
-SFILES := $(shell find asm -type f -name '*.s' 2>/dev/null)
+# asm/nonmatchings/ holds per-function assembly that C files pull in via
+# INCLUDE_ASM. Those files have no macro.inc of their own, so they must not be
+# assembled standalone.
+SFILES := $(shell find asm -type f -name '*.s' \
+            -not -path 'asm/nonmatchings/*' 2>/dev/null)
 CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
           $(CFILES:%.c=build/%.o)
@@ -93,6 +97,7 @@ build/$(SLUS): $(OFILES) build/$(SLUS).ld
 		--script=build/$(SLUS).ld \
 		--script=splat/$(SLUS)_undefined_funcs_auto.txt \
 		--script=splat/$(SLUS)_undefined_syms_auto.txt \
+		-Map=build/$(SLUS).map \
 		--output=build/$(SLUS).elf
 	$(OBJCOPY) -O binary build/$(SLUS).elf build/$(SLUS)
 	@echo ""
