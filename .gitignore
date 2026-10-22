@@ -3,6 +3,7 @@ __pycache__/
 asm/
 assets/
 build/
+expected/
 data/
 psy-q/
 scratch/

@@ -11,7 +11,9 @@ divergence shown is caused by whatever is currently being decompiled.
 
 
 def apply(config, args):
-    config["arch"] = "mips"
+    # mipsel: little-endian, -m mips:3000 -- the R3000A the PSX actually has.
+    # Plain "mips" is big-endian and disassembles the image into nonsense.
+    config["arch"] = "mipsel"
     config["baseimg"] = "data/slus_006.14"
     config["myimg"] = "build/slus_006.14"
     config["mapfile"] = "build/slus_006.14.map"

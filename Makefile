@@ -88,7 +88,7 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
-.PHONY: all clean splat check
+.PHONY: all clean splat check expected
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -149,6 +149,15 @@ build/%.o: %.bin
 # owns that offset. A whole-file checksum cannot tell you that.
 check: build/$(SLUS)
 	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
+
+# asm-differ's -o mode diffs objects against a known-good copy under
+# expected/. Only ever populate it from a build that `make check` passes,
+# since it becomes the reference everything is judged against.
+expected: check
+	rm -rf expected/build
+	@mkdir -p expected
+	cp -r build expected/build
+	@echo "expected/ populated from a byte-identical build"
 
 clean:
 	rm -rf asm assets build
