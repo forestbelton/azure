@@ -60,17 +60,27 @@ def main() -> int:
                     help="list already-decompiled functions instead")
     args = ap.parse_args()
 
+    # The C files are authoritative for what exists: tools/reorg.py keeps each
+    # one listing every function its unit owns, as a body or a stub. Enumerating
+    # from asm/nonmatchings would undercount, because splat only emits
+    # per-function assembly for functions that are still stubbed.
+    DEF = re.compile(r"^(?:[A-Za-z_][\w \t*]*?)\b(func_[0-9A-Fa-f]{8})\s*\([^;]*?\)\s*\{",
+                     re.M)
+    STUB = re.compile(r"^INCLUDE_ASM\([^)]*,\s*(func_[0-9A-Fa-f]{8})\);", re.M)
     rows = []
-    for d in sorted((ROOT / "asm/nonmatchings").glob("*")):
-        if not d.is_dir():
-            continue
-        cfile = ROOT / "csrc" / f"{d.name}.c"
-        src = cfile.read_text() if cfile.exists() else ""
-        for f in sorted(d.glob("*.s")):
-            name = f.stem
-            stubbed = re.search(rf"INCLUDE_ASM\([^)]*,\s*{re.escape(name)}\)", src)
-            info = scan(f)
-            info.update(name=name, unit=d.name, done=not stubbed)
+    for cfile in sorted((ROOT / "csrc").glob("*.c")):
+        unit = cfile.stem
+        src = cfile.read_text()
+        for name in DEF.findall(src):
+            rows.append({"name": name, "unit": unit, "done": True,
+                         "insns": 0, "calls": 0, "branches": 0,
+                         "words": 0, "gprel": 0, "forma": 0})
+        for name in STUB.findall(src):
+            asm = ROOT / "asm/nonmatchings" / unit / f"{name}.s"
+            info = scan(asm) if asm.exists() else {
+                "insns": 0, "calls": 0, "branches": 0,
+                "words": 0, "gprel": 0, "forma": 0}
+            info.update(name=name, unit=unit, done=False)
             rows.append(info)
 
     total = len(rows)
