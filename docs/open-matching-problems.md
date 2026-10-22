@@ -18,6 +18,29 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_800423C0 | unk_14934 | 4 of 72: gcc shares one `lui 0x8001` the target materialises three times |
 
+## Functions blocked by jump-table placement
+
+`func_80041344` (unk_14934) is a 9-case dense switch whose target dispatches
+through `jtbl_8002D630`, and that symbol lives inside the **opening**
+`[0x800, bin]` subsegment (vram 0x8002D000..0x80032E60) -- data that sits
+before all the code in the image. Compiling a switch does emit gcc's own table
+into `.rdata`, with exactly nine `.word`s in exactly the target's order, but
+`build/slus_006.14.ld` collects every `.rodata` at `_800_RODATA_START`, far
+past `.text`, so the table lands nowhere near 0x8002D630 and the image shifts.
+
+Landing it needs the table carved out of the opening bin blob as a `.rodata`
+subsegment belonging to `unk_14934`, and the rodata collection moved to the
+front of the linker script -- the same class of spec change as the
+`func_8003CAA8` and `gprel_12DD4` items in `docs/where-we-are.md`.
+`jtbl_8002D5C0`, `jtbl_8002D658` and `jtbl_8002D67C` sit in the same blob, so
+the change unblocks more than one function.
+
+Note that `verify.py` cannot see this problem -- it masks the two relocated
+halfwords that reference the table -- so a MATCH there would be misleading and
+only `make check` is the authority. `docs/near-misses/func_80041344.c` has the
+source that reaches 145/145 words and 67 DIFF, and the register-allocation
+analysis of what would still be left.
+
 `docs/near-misses/` holds the source that got each one that close, with the
 shapes already ruled out in comments. Read that file before starting on one;
 the commit that parked it has the reasoning, but only the file has the source.
