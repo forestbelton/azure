@@ -1,5 +1,11 @@
 #include "common.h"
 
+void func_800423C0(u8 *, s32, u8 *);
+void func_80041E70(void *);
+void func_80042984(u8 *);
+void func_80041AE4(void);
+void func_80043D04(void);
+
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041134);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800411AC);
@@ -14,15 +20,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041588);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041818);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800418B4);
+void func_800418B4(void) {
+    if (D_80080A89 != 0) {
+        return;
+    }
+    func_8003E4FC(6, &D_80080C50, 0);
+    func_8003F320();
+    D_80080A89 = 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041900);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800419EC);
+void func_800419EC(u16 arg0, u32 arg1) {
+    D_80083CA8.unk_08 = arg0;
+    D_80083CA8.unk_06 = arg1;
+    D_80083CA8.unk_00 = arg1 / arg0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041A10);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041AB0);
+void func_80041AB0(void) {
+    D_80081480 = D_8008148C;
+    func_80040A88(func_80041AE4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041AE4);
 
@@ -34,19 +54,48 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041C64);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041CBC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041E28);
+void func_80041E28(s32 *arg0, s32 *arg1) {
+    func_8003DB6C(arg0, arg1, 0x13);
+    arg0[0x15] = arg1[0x14];
+    func_80041E70(arg0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041E70);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800422A8);
+s16 func_800422A8(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
+    u32 q = (u32) (arg0 - arg1) / (u32) (arg2 & 0xFFFF);
+
+    /* Early-return on the failure case; the other order lays the arms out
+     * backwards. */
+    if (q >= (u32) (arg3 & 0xFFFF)) {
+        return -1;
+    }
+    return (s16) q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800422DC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800423C0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800424E0);
+void func_800424E0(u8 *arg0, s16 arg1, u8 *arg2) {
+    func_800423C0(arg0, arg1, arg2);
+    func_80042984(arg0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042518);
+s32 func_80042518(s8 *arg0, s8 arg1) {
+    s32 i;
+
+    for (i = 3; i >= 0; i--) {
+        if (arg0[i * 2 + 0x2C] == arg1) {
+            s32 r = arg0[i * 2 + 0x2D];
+
+            arg0[i * 2 + 0x2C] = 0;
+            arg0[i * 2 + 0x2D] = 0;
+            return r;
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80042560);
 
@@ -78,17 +127,49 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043704);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800437A4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004383C);
+u32 func_8004383C(u8 *arg0, s16 arg1) {
+    return D_800835E8[arg0[0x11] + arg1];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043868);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800438E4);
+s32 func_800438E4(u8 *arg0) {
+    s32 v = (s8) arg0[2];
+    u32 n = arg0[3] & 0x1F;
+    s32 t;
+
+    if (n != 0) {
+        /* The temporary is load-bearing: `v = v * 10` writes the product back
+         * into v's register, and the target keeps it in a scratch one. */
+        t = v * 10;
+        v = t * n;
+    }
+    return v;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043914);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004397C);
+void func_8004397C(u8 *arg0) {
+    u8 v;
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800439BC);
+    if (arg0[0x13] != 0x16) {
+        return;
+    }
+    if (arg0[0x48] == 0xD) {
+        v = 0xF;
+    } else if (arg0[0x48] == 0xF) {
+        v = 0xA;
+    } else {
+        return;
+    }
+    D_800E2968 = v;
+}
+
+s32 func_800439BC(s16 arg0) {
+    u8 b = D_8006DE24[arg0].unk_10;
+
+    return (((b >> 4) ^ b) & 3) == 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800439F8);
 
@@ -98,7 +179,10 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043B4C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043C30);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043CD0);
+void func_80043CD0(void) {
+    D_80081480 = D_8008148C;
+    func_80040A88(func_80043D04);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043D04);
 
@@ -118,7 +202,10 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80043FD0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044144);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044234);
+void func_80044234(u32 arg0, u32 arg1, u32 arg2, u32 arg3) {
+    func_8003F540(arg0, arg1, arg2, arg3);
+    func_80053DA8(0x300);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004425C);
 
@@ -126,7 +213,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004437C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_8004450C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_800445E0);
+u32 func_800445E0(void) {
+    Unk8006CE34 *p = func_8003F534();
+    u32 t = (p->unk_08 & 0xFFFFFF) - 0x20;
+
+    return t + p->unk_04;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044618);
 
@@ -150,7 +242,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044C54);
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80044D24);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80045310);
+s32 func_80045310(u32 arg0) {
+    /* D_80081478 must be declared with an incomplete array type: a complete
+     * one of 8 bytes is small data, which makes the base an `la` constant and
+     * folds the +4 into it, where the target bumps a register. */
+    u32 *p = D_80081478;
+
+    if (D_80083160.unk_00 != (u32) &D_801C9E40) {
+        p++;
+    }
+    return *p < arg0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80045340);
 

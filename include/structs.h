@@ -72,20 +72,6 @@ typedef struct Unk80081450 {
     /* +0x2   is a 1-byte access inside this field */
 } Unk80081450;
 
-/* 0x80081478..0x8008147f, 0x8 bytes, 2 field(s) */
-typedef struct Unk80081478 {
-    u32 unk_00;
-    u32 unk_04;
-} Unk80081478;
-
-/* 0x800814d0..0x800814d3, 0x4 bytes, 4 field(s); labels: D_800814D0, D_800814D1, D_800814D2, D_800814D3 */
-typedef struct Unk800814D0 {
-    u8  unk_00;
-    u8  unk_01;
-    u8  unk_02;
-    u8  unk_03;
-} Unk800814D0;
-
 /* 0x80081518..0x80081519, 0x2 bytes, 1 field(s) */
 typedef struct Unk80081518 {
     u16 unk_00;  /* also read as 1 */
@@ -220,28 +206,6 @@ typedef struct Unk80083462 {
     u16 unk_08;
 } Unk80083462;
 
-/* 0x800835e8..0x800835ef, 0x8 bytes, 2 field(s) */
-typedef struct Unk800835E8 {
-    u32 unk_00;
-    u32 unk_04;
-} Unk800835E8;
-
-/* 0x80083858..0x800838d7, 0x80 bytes, 3 field(s) */
-typedef struct Unk80083858 {
-    u16 unk_00;
-    u8 pad_02[0x7a];
-    u16 unk_7C;
-    u16 unk_7E;
-} Unk80083858;
-
-/* 0x800838d8..0x80083957, 0x80 bytes, 3 field(s) */
-typedef struct Unk800838D8 {
-    u16 unk_00;
-    u8 pad_02[0x7a];
-    u16 unk_7C;
-    u16 unk_7E;
-} Unk800838D8;
-
 /* 0x80083958..0x80083963, 0xc bytes, 6 field(s); labels: D_80083958, D_8008395C, D_8008395E, D_80083960 */
 typedef struct Unk80083958 {
     u32 unk_00;
@@ -260,10 +224,15 @@ typedef struct Unk80083C68 {
 } Unk80083C68;
 
 /* 0x80083ca8..0x80083cb1, 0xa bytes, 4 field(s); labels: D_80083CA8, D_80083CAE */
+/* Hand-split: fieldscan merged 0x04..0x07 into one word because func_80041900
+   subtracts unk_00 from it as a word, but that function also reads the
+   halfword at +0x06 on its own and func_800419EC writes it on its own, so the
+   word is a 16.16 quantity and +0x06 is its integer part. Declared as the two
+   halves; the word access needs a cast when func_80041900 is decompiled. */
 typedef struct Unk80083CA8 {
     u32 unk_00;
-    u32 unk_04;
-    /* +0x6   is a 2-byte access inside this field */
+    u16 unk_04;
+    s16 unk_06;  /* sign-extended where it is read */
     u16 unk_08;
 } Unk80083CA8;
 
@@ -302,7 +271,7 @@ extern u8  D_80080A85;
 extern u8  D_80080A86;
 extern u8  D_80080A87;
 extern u8  D_80080A88;
-extern u8  D_80080A89;
+extern s8  D_80080A89;  /* retyped: read with lb, not lbu */
 extern u8  D_80080A8A;
 extern u32 D_80080A8C;
 extern u16 D_80080A94;
@@ -317,6 +286,10 @@ extern u16 D_80080AAC;
 extern u32 D_80080AB0;
 extern u16 D_80080ABC;
 extern u16 D_80080ABE;
+/* Only their addresses are taken, by func_8003E1FC; declared as bytes so that
+   the address comes out as an `la` of the symbol rather than a split pair. */
+extern u8  D_80080AC0;
+extern u8  D_80080AC8;
 extern u8  D_80080AD0;
 extern u16 D_80080AD2;
 extern u16 D_80080AD4;
@@ -327,7 +300,17 @@ extern u16 D_80080AFC;
 extern u16 D_80080B00;
 extern u16 D_80080B08;
 extern u16 D_80080B0A;
+/* Only its address is taken, by func_800418B4; a byte for the same reason as
+   D_80080AC0 above. */
+extern u8  D_80080C50;
 extern s16 D_8008146C;  /* retyped: read with lh, not lhu */
+/* Retyped by hand from the two-field struct fieldscan inferred: func_80045310
+   picks one of the two words with a pointer bump, and func_8003D760 stores to
+   both through a register base. Two elements are known; the extent is left
+   unspecified deliberately, because a complete 8-byte array is small data and
+   folds the bump into an `la` -- see
+   docs/addressing-and-translation-units.md. */
+extern u32 D_80081478[];
 extern u32 D_80081480;
 extern u32 D_8008148C;
 extern u32 D_80081490;
@@ -367,6 +350,10 @@ extern u32 D_800814B0;
 extern u32 D_800814B4;
 extern u32 D_800814C8;
 extern u32 D_800814CC;
+/* Retyped by hand from the four-field struct fieldscan inferred: func_8003F270
+   reads elements 1 and 0, and gcc reuses the address of element 1 with a -1
+   displacement to reach element 0. */
+extern u8  D_800814D0[4];
 extern u8  D_800814D4;
 extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
@@ -377,9 +364,21 @@ extern u16 D_8008151C;
 extern u16 D_8008151E;
 extern u16 D_80081524;
 extern u16 D_80081526;
-extern u32 D_80082EC0;
-extern u32 D_80083110;
+/* Retyped by hand: func_8003F7E4 zeroes 0x80 words from the top down, which
+   runs to D_800830C0, and func_8004383C indexes it. Must be declared as an
+   array or the index folds into the %lo -- see
+   docs/addressing-and-translation-units.md. */
+extern u32 D_80082EC0[0x80];
+extern u32 D_80083110[4];  /* zeroed by index in func_8003D8B0 */
+/* Retyped by hand from the two-field struct fieldscan inferred: func_80043674
+   fills it in a loop and func_8004383C indexes it, so the two observed
+   offsets are elements 0 and 1, not named fields. Extent not established. */
+extern u32 D_800835E8[];
 extern u32 D_80083778;
+/* Retyped by hand from the three-field 0x80-byte structs fieldscan inferred:
+   func_8003CAC4 fills both by index, 0x40 halfwords each. */
+extern u16 D_80083858[0x40];
+extern u16 D_800838D8[0x40];
 
 /* The multi-field objects above, by their base label. */
 extern Unk8002D5B4 D_8002D5B4;
@@ -388,8 +387,6 @@ extern Unk8006E7B4 D_8006E7B4;
 extern Unk800777AC D_800777AC;
 extern Unk80080AB4 D_80080AB4;
 extern Unk80081450 D_80081450;
-extern Unk80081478 D_80081478;
-extern Unk800814D0 D_800814D0;
 extern Unk80081518 D_80081518;
 extern Unk8008151A D_8008151A;
 extern Unk80081520 D_80081520;
@@ -402,9 +399,6 @@ extern Unk80083160 D_80083160;
 extern Unk80083360 D_80083360;
 extern Unk800833E0 D_800833E0;
 extern Unk80083462 D_80083460;
-extern Unk800835E8 D_800835E8;
-extern Unk80083858 D_80083858;
-extern Unk800838D8 D_800838D8;
 extern Unk80083958 D_80083958;
 extern Unk80083C68 D_80083C68;
 extern Unk80083CA8 D_80083CA8;
@@ -440,13 +434,52 @@ typedef struct UnkSlot {
 /* Hand-added signatures for callees that live in another unit. */
 void func_80044A50(UnkNode *);
 void func_8003DB4C(int *, int);
+void func_8003DB6C(int *, int *, int);
 void func_800499BC(void);
 void func_8004437C(s32, s32);
 void func_8004425C(s32);
+Unk8006CE34 *func_8003F534(void);
+void func_8003F540(u32, u32, u32, u32);
+void func_80053DA8(s32);
+void func_80041284(u32 *);
+void func_8003E4FC(u8, u8 *, s32);
+void func_80040A88(void (*)(void));
+void func_8003CB08(void);
+void func_80044618(s32);
+void func_8003F320(void);
+
+/* Hand-added. PSY-Q library entry points, declared here until the project has
+   a header of its own for them. */
+void _bu_init(void);
+void ChangeClearPAD(s32);
+s32  VSync(s32);
+s32  CdInit(void);
+
+/* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
+   undefined_syms_auto resolve these for the linker. */
+void func_80069C90(void);
+void func_80069CE8(void);
+extern u32 *D_8006CDC8[];
+extern u32 D_801C9E40;
 
 /* Hand-added. Outside the loaded image, so fieldscan excludes it; splat's
    undefined_syms_auto resolves it for the linker. */
 extern s16 D_80013714;
+/* Hand-added, same situation. Reached without an index, where the symbol and
+   the equivalent constant address assemble to the same bytes; a table outside
+   the image that is *indexed* must be written as a constant address instead,
+   see docs/addressing-and-translation-units.md. */
+extern u8  D_800E2968;
+
+/* Hand-added. func_800439BC indexes this with a 20-byte stride and reads a
+   byte at +0x10; nothing else touches it, so that is the whole layout and the
+   element size is a floor only in the sense that 0x14 is the measured stride. */
+typedef struct Unk8006DE24 {
+    u8 pad_00[0x10];
+    u8 unk_10;
+    u8 pad_11[0x3];
+} Unk8006DE24;
+extern Unk8006DE24 D_8006DE24[];
 
 #endif /* STRUCTS_H */
 

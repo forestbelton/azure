@@ -1,12 +1,30 @@
 #include "common.h"
 
+void func_80040BB4(void);
+
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5EC);
+void func_8003F5EC(void) {
+    s32 i;
+
+    for (i = 0x200; i > 0; i--) {
+        VSync(0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F624);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F688);
+s32 func_8003F688(s32 arg0) {
+    s32 acc = 0;
+    s32 mul = 1;
+    s32 i;
+
+    for (i = 0; i < 8; i++) {
+        acc += (mul * (arg0 & (0xF << (i * 4)))) >> (i * 4);
+        mul = mul * 10;
+    }
+    return acc;
+}
 
 void func_8003F6D4(s32 arg0, s32 arg1, s32 *arg2, s32 arg3) {
     arg2[0] = (arg1 & 0x7FFFFF) | (arg0 << 23);
@@ -17,7 +35,13 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F6F4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F794);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F7E4);
+void func_8003F7E4(void) {
+    s32 i;
+
+    for (i = 0x7F; i >= 0; i--) {
+        D_80082EC0[i] = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F80C);
 
@@ -35,7 +59,44 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FC64);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FD64);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FE78);
+UnkNode *func_8003FE78(s32 flags, UnkNode *arg1, s16 count) {
+    UnkNode *n;
+    UnkNode *old;
+    u8 *p;
+
+    /* Both of these are load-bearing for the match. `flags` must be updated
+     * in place (a separate `f = flags | 0x80` lets cse fold the later
+     * `| 0x4000` through it into one `ori 0x4080`), and the node pointer
+     * must be copied into a local *after* that update, which is what puts
+     * `ori $s1` ahead of the `$s0` copy in the prologue. */
+    flags |= 0x80;
+    n = arg1;
+
+    func_8003DB4C((int *) n, count);
+
+    old = D_80081498;
+    D_80081498 = n;
+    n->unk_04 = NULL;
+    n->unk_00 = old;
+    if (old != NULL) {
+        old->unk_04 = &n->unk_00;
+    }
+    n->unk_1E = flags | 0x4000;
+
+    p = (u8 *) n + count * 4;
+    if (flags & 6) {
+        p -= 0x24;
+        n->unk_0C = (u32) p;
+    } else if (flags & 0x41) {
+        p -= 0x18;
+        n->unk_0C = (u32) p;
+    }
+    if (flags & 0x57) {
+        p -= 0x18;
+        n->unk_08 = (u32) p;
+    }
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003FF2C);
 
@@ -198,11 +259,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8004068C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800407C0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040A88);
+void func_80040A88(void (*arg0)(void)) {
+    D_80082E60.unk_04 = arg0;
+    D_80082E60.unk_0D = 0;
+    D_80082E60.unk_0C = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040AA0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040B88);
+void func_80040B88(void) {
+    D_80082E60.unk_18 = D_80082E60.unk_0B;
+    func_80040BB4();
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_80040BB4);
 

@@ -98,6 +98,36 @@ Learned while matching, worth knowing before reading m2c output:
   the constant folds into `la sym+12`.
 * The `lui` half is a loop invariant and a CSE candidate, so one `lui` serves
   every access to symbols sharing a 64 KB page within a function.
+* Which of the two shapes you get is decided by the *declaration*: a scalar or
+  an array within the `-G8` limit stays symbolic and is expanded by the
+  assembler, anything larger is split by the compiler. That table, and the
+  separate case of globals outside the loaded image (constant addresses, not
+  symbols), are in `docs/addressing-and-translation-units.md`.
+
+## Source shapes that decided matches
+
+Beyond the four write-ups in `docs/open-matching-problems.md`:
+
+* Where the target keeps an intermediate product in a scratch register, the C
+  needs an explicit temporary: `t = v * 10; v = t * n;` keeps `t` in `$v0`,
+  while `v = v * 10 * n;` writes the product back into `v`'s register and also
+  reassociates the multiply (func_800438E4).
+* Grouping decides which operand a constant folds into. `t = (x & m) - 0x20;
+  return t + y;` subtracts from the masked value as the target does;
+  `(x & m) - 0x20 + y` folds the `- 0x20` into `y` instead (func_800445E0).
+* Statement order survives into the schedule. Two adjacent increments of
+  struct fields come out in the order the statements are written, even though
+  both loads are hoisted above both stores (func_8003E70C).
+* A constant offset into a struct stays a load displacement only if it is
+  written as part of the index expression: `arg0[i * 2 + 0x2C]` keeps `0x2C`
+  on the load and strength-reduces `arg0 + i * 2`, while
+  `p = arg0 + 0x2C; p[i * 2]` folds `0x2C` into the initial pointer
+  (func_80042518).
+* Reloading a global instead of keeping it live is forced by reading it into a
+  separate local for the comparison and reading it again for the result; gcc
+  rematerialises the load rather than preserving the register
+  (func_8003F270).
+
 ## Installing it
 
 The compiler is not in the repository (`psy-q/` is ignored). It comes from
