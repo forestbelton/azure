@@ -956,7 +956,97 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
     return a->unk_02 + 0x1000 < out->unk_02;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80046C20);
+/* Builds four per-edge records from five points, clamping each y to a
+ * multiple of 0x40 and returning the lowest y seen, likewise clamped.
+ * Degenerate pairs are marked with unk_1C = -1 and decrement *cnt.
+ *
+ * Load-bearing shapes:
+ *  - `dx = abs(dx);` rather than `if (dx < 0) { dx = -dx; }`. The MIPS abssi2
+ *    pattern is a single insn whose template contains its own `bgez`/`subu`,
+ *    so it introduces no basic-block boundary and reorg cannot fill the branch
+ *    delay slot inside it -- which is why the target has a bare nop there.
+ *    With the abs as one insn the whole else-arm tail is a single block, so
+ *    sched1 can hoist the out->unk_14 reload (emitted at the `> 0` test, where
+ *    cse genuinely cannot fold it because the unk_20/unk_08 stores invalidated
+ *    the entry) up to immediately after the store. Written as an if, the
+ *    reload is stuck in the join block. It also settles the $v0/$v1 choice on
+ *    the two loads feeding dx. Same pattern as func_8003F6F4.
+ *  - `out` is a pointer incremented by the loop, with every field reached as
+ *    out->field. That is what gives the target's two induction registers: $a1
+ *    is the biv and $t0 = $a1 + 0x1C the one surviving address giv. Indexing
+ *    as out[i].field makes gcc use a single giv at +0 with displacements
+ *    0..0x24.
+ *  - `out->unk_1C = 0;` is the LAST out statement in the else arm even though
+ *    the emitted code shows it in the middle. gcc builds the giv list by
+ *    prepending as it discovers them, so the last access becomes
+ *    combine_givs' representative and sets the surviving pointer's +0x1C base;
+ *    written earlier the base comes out +0x24.
+ *  - `out->unk_04 = out->unk_0C << 7;` reads the field back rather than using
+ *    `dy << 7`, which is what produces the copy-then-shift pair instead of a
+ *    single `sll`, and it also settles min/base into $t3/$t4.
+ *  - `s32 m = -0x40;` is a local declared in the loop BODY, used for both the
+ *    mask and the -0x40 store but not for the return. The mask has to reach
+ *    the `and` as a loop-invariant register: as a literal in both places gcc
+ *    keeps the constant inside the loop and combine narrows it to an
+ *    `andi 0xffc0` immediate using nonzero_bits of the lhu. loop.c hoists the
+ *    local's single set into the preheader, which sits after `i = 0`, giving
+ *    the target's register order. At function scope the set is emitted ahead
+ *    of `i = 0`; in the else arm it is not a movable of the loop proper and
+ *    costs 26 words.
+ *  - `min` is s32; as s16 both the compare and the return need their own
+ *    sll/sra pair. */
+s32 func_80046C20(Unk46C20A *a, Unk46C20B *out, u16 *cnt) {
+    s32 min = 0x7FFF;
+    s32 i;
+
+    for (i = 0; i < 4; i++, out++) {
+        s32 d = a[i].unk_02 - a[i + 1].unk_02;
+        s32 m = -0x40;
+
+        if (d == 0) {
+            out->unk_1C = -1;
+            *cnt = *cnt - 1;
+        } else {
+            s32 lo;
+            s32 hi;
+            s32 y;
+            s32 dy;
+            s32 dx;
+
+            if (d < 0) {
+                lo = i;
+                hi = i + 1;
+            } else {
+                lo = i + 1;
+                hi = i;
+            }
+            out->unk_00 = a[lo].unk_00;
+            y = (s16) ((u16) a[lo].unk_02 & m);
+            out->unk_18 = y;
+            if (y < min) {
+                min = y;
+            }
+            dy = a[hi].unk_02 - y;
+            out->unk_0C = dy;
+            out->unk_10 = dy;
+            out->unk_04 = out->unk_0C << 7;
+            dx = a[hi].unk_00 - out->unk_00;
+            out->unk_14 = dx;
+            dx = abs(dx);
+            out->unk_20 = dx;
+            out->unk_08 = dx << 7;
+            if (out->unk_14 > 0) {
+                out->unk_14 = 0x40;
+            } else if (out->unk_14 < 0) {
+                out->unk_14 = m;
+            }
+            out->unk_20 = out->unk_20 + 0x20;
+            out->unk_24 = out->unk_20;
+            out->unk_1C = 0;
+        }
+    }
+    return min & ~0x3F;
+}
 
 void func_80046D64(u8 *base, s16 arg1) {
     Unk80083160 *s = &D_80083160;

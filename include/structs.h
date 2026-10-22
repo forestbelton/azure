@@ -55,6 +55,35 @@ typedef struct Unk8006E61C {
     u8  *unk_08;
 } Unk8006E61C;
 
+/* Hand-added. func_80046C20 reads five consecutive elements of this (indices
+   i and i+1 for i in 0..3); stride 8 from the `sll` by 3 and the walking
+   pointer's +8. Only the first two halfwords are touched: unk_00 with `lh`,
+   and unk_02 with `lh` for the pair difference but `lhu` where it is masked,
+   so it is signed with a (u16) cast at that one site. */
+typedef struct Unk46C20A {
+    s16 unk_00;
+    s16 unk_02;
+    u8  pad_04[0x4];
+} Unk46C20A;
+
+/* Hand-added. Stride 0x28 with all ten words written, so no padding: a
+   per-edge record func_80046C20 builds from a pair of Unk46C20A points.
+   unk_1C is -1 when the pair is degenerate and 0 otherwise, unk_14 ends up as
+   the sign of the x delta scaled to +/-0x40, and unk_04/unk_08 are the deltas
+   in 7-bit fixed point. */
+typedef struct Unk46C20B {
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+    s32 unk_18;
+    s32 unk_1C;
+    s32 unk_20;
+    s32 unk_24;
+} Unk46C20B;
+
 /* Hand-added. The 8-byte block D_8006E7F0[i]->unk_00 points at, which
    func_80046E38 copies onto its stack and hands to func_8003E4FC and
    func_8003F6D4; +0x04 doubles as the address the loop advances by 0x10. */
@@ -599,6 +628,7 @@ void func_80053E14(s16);
 void func_8006A444(void);
 void func_80064688(void);
 void func_80046E38(s16, u8 *);
+s32  func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
 void func_80043674(void);
 s16  func_8005405C(s16);
 s32  func_800A1BD0(u8 *);
