@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**149 of 191 game functions are C and the build is byte-identical.** `make
-check` is green at HEAD and the working tree is clean. The remaining 42 are
+**151 of 191 game functions are C and the build is byte-identical.** `make
+check` is green at HEAD and the working tree is clean. The remaining 40 are
 `INCLUDE_ASM` stubs in `csrc/`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
@@ -26,7 +26,7 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 42 remaining stubs, in four groups
+## The 40 remaining stubs, in four groups
 
 Run `tools/decomp/guard.py` for the stub count (`grep -cE '^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{' csrc/*.c` for the C count).
 The classification below is `grep -c '%gp_rel'` and `grep -c 'jtbl_'` against
@@ -36,7 +36,7 @@ each listing:
 |-------|-------|---------------|
 | parked | 6 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
 | jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
-| gp-blocked | 31 | need `$gp`-relative and absolute addressing in one translation unit |
+| gp-blocked | 29 | need `$gp`-relative and absolute addressing in one translation unit |
 | not a function | 1 | func_8003CAA8; see below |
 
 **There is no longer an "easy" group.** Every stub with nothing structural in
@@ -89,9 +89,16 @@ one unit CAN mix both modes" section first. (That document counts 32 rather
 than 31, because it includes func_8003E758, which is counted under the
 jump-table group here.)
 
+**The first two of this group have landed**, and by the cheap route: func_800410FC
+and func_80041134 went into `csrc/gprel_148FC.c`, a unit built with
+`MASPSXFLAGS_G8`, with no window definition and no data relocation at all. What
+found them was asking which `$gp` symbols cross a current unit boundary -- only
+two of 38 do, and each identifies a boundary that cuts an original translation
+unit. `verify.py <file> <unit> <func> --g8` models a carved unit, so check for
+that situation before reaching for a window definition.
+
 Five need only `$gp`-relative addressing -- func_8003E4FC, func_8003F5E0,
-func_80044618, func_80044698, func_800448BC -- and want the carve-out the
-project already has working: their own unit built with `MASPSXFLAGS_G8`, like
+func_80044618, func_80044698, func_800448BC -- and want the same carve-out: their own unit built with `MASPSXFLAGS_G8`, like
 `gprel_12DD4` and `gprel_14910`. `func_8003F5E0` sits immediately after the
 carved-out `gprel_12DD4`, so extending that subsegment by one function picks it
 up (renaming `unk_12DE0` to `unk_12DEC` and re-extracting), and func_80044618

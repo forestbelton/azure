@@ -45,9 +45,17 @@ if not os.path.exists(s):
         print('  ccpsx runs share one wine prefix and can lose an output).')
     sys.exit(2)
 asm = open(s).read()
-r = subprocess.run(['python3', os.path.expanduser('~/scratch/maspsx/maspsx.py'), '--aspsx-version=2.56', '--force-stdin',
-                    '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section', '-G8',
-                    '-EL', '-32', '-Iinclude', '-march=r3000', '-mtune=r3000', '-no-pad-sections', '-O1', '-o', o],
+# --g8 models a unit carved out with MASPSXFLAGS_G8 (gas left at -G8 rather
+# than maspsx's forced -G0), which is how gprel_12DD4 and gprel_14910 are
+# built: gas then assumes an *undefined* symbol is small data and emits
+# GPREL16. Use it to check a function before moving it into a carved unit.
+g8 = '--g8' in sys.argv
+maspsx = ['python3', os.path.expanduser('~/scratch/maspsx/maspsx.py'), '--aspsx-version=2.56', '--force-stdin',
+          '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section', '-G8']
+if g8:
+    maspsx.append('--dont-force-G0')
+r = subprocess.run(maspsx +
+                   ['-EL', '-32', '-Iinclude', '-march=r3000', '-mtune=r3000', '-no-pad-sections', '-O1', '-o', o],
                    input=asm, text=True, cwd=PROJ, capture_output=True)
 if r.returncode: print(r.stderr); sys.exit(1)
 # get .text bytes and relocations

@@ -26,8 +26,6 @@ void func_8003E758(void);
 void func_8003E2D8(void);
 void func_80042B68(s8 *, s8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_14934", func_80041134);
-
 void func_800411AC(void) {
     void (**p)(void) = D_80083C68;
 

@@ -1013,5 +1013,3 @@ void func_80041094(u16 arg0, s16 arg1, s16 arg2, s16 arg3, s16 arg4) {
     D_80082E60.unk_14 = arg3;
     D_80082E60.unk_16 = arg4;
 }
-
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800410FC);

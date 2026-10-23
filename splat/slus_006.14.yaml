@@ -60,8 +60,11 @@ segments:
       # assembled with gas at -G8 while everything else uses -G0.
       - [0x12dd4, c, gprel_12DD4]
       - [0x12de0, c, unk_12DE0]
-      - [0x14910, c, gprel_14910]
-      - [0x14934, c, unk_14934]
+      # Extended at both ends to take in func_800410FC and func_80041134:
+      # all three reach D_800814E0 $gp-relatively, so they were one original
+      # translation unit. See the header of csrc/gprel_148FC.c.
+      - [0x148fc, c, gprel_148FC]
+      - [0x149ac, c, unk_14934]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]

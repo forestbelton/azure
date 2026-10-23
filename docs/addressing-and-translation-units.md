@@ -223,6 +223,36 @@ objects in C. That unblocks 20 functions. Window A is a second, slightly harder
 step, because 25 of its 108 bytes are initialised and those values have to be
 carried across.
 
+### Which boundaries are wrong, and the two functions that landed because of it
+
+A `$gp`-relative reference means the function was compiled in the unit that
+defined the global, so asking **which symbols are referenced from more than one
+of the project's current units** finds boundaries that cut an original one.
+Only **two of the 38 do**, which says the current boundaries are nearly right
+and names exactly where they are not:
+
+| symbol | referenced from | what it means |
+|--------|-----------------|---------------|
+| D_800814D4 | func_8003E758 (unk_11940), func_8003F624 (unk_12DE0) | the boundary at 0x8003F5E0 cuts an original unit |
+| D_800814E0 | func_800410FC (unk_12DE0), func_80041134 (unk_14934) | so does the one at 0x80041134 |
+
+The second was actionable immediately. func_80041110 already sat between those
+two functions in a carved `-G8` unit of its own, so all three were one original
+translation unit; moving that carve-out's two ends to take them in landed both,
+with **no window definition and no data relocation**. `make check` is
+byte-identical and the stub count went 42 to 40. The unit is now
+`csrc/gprel_148FC.c`, renamed for its new start.
+
+`verify.py <file> <unit> <func> --g8` models a carved unit (gas left at `-G8`
+rather than maspsx's forced `-G0`), so the same check is cheap for the rest.
+**Try this before reaching for a window definition**: it needs no linker
+placement, no carving of the bin blob, and no new mechanism.
+
+The first row is the obvious next candidate, though it is harder -- the
+boundary at 0x8003F5E0 is where `gprel_12DD4` already sits, so absorbing
+func_8003F624 means extending that unit across func_8003F5E0 and whatever lies
+between.
+
 ### Window B's layout, derived and assembled
 
 The widths below are what the accesses prove, counted over every listing in

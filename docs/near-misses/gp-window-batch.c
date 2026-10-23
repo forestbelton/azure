@@ -1,4 +1,17 @@
-/* ELEVEN VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+/* NINE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+ *
+ * Two of the original eleven have since LANDED -- func_800410FC and
+ * func_80041134 -- and how is worth knowing, because it is the cheap route for
+ * this whole group. They did not need the .sdata definition at all: they went
+ * into csrc/gprel_148FC.c, a unit built with MASPSXFLAGS_G8, where gas assumes
+ * an undefined symbol is small data and emits GPREL16 while an incompletely
+ * declared array still gets the compiler-split absolute pair. Of the 38
+ * $gp-relative symbols in this group, exactly two are referenced from more
+ * than one of the project's units, and D_800814E0 was one -- which said those
+ * two functions and func_80041110 were one original translation unit, and
+ * moving that carve-out's two ends to take them in landed both. Check for the
+ * same situation before reaching for a window definition: `verify.py <file>
+ * <unit> <func> --g8` models a carved unit.
  *
  * Every function below is a clean verify.py MATCH with an exact word count,
  * relocations spot-checked by hand (R_MIPS_GPREL16 on the defined .sdata
@@ -41,7 +54,7 @@
  *
  * Word counts, all exact: func_8003F5E0 3, func_8003F240 12, func_80041B98 19,
  * func_80043DB8 19, func_80041C64 22, func_80043E60 22, func_80043E04 23,
- * func_800448BC 24, func_8003F624 25, func_80041134 30, func_800410FC 5.
+ * func_800448BC 24, func_8003F624 25.
  *
  * TYPES THE ACCESSES PROVE, three of which disagree with include/structs.h.
  * All three are reachable from the existing declaration with a cast, which is
@@ -222,38 +235,4 @@ void func_8003F624(void) {
     func_8003E70C();
 done:
     func_8003F5EC();
-}
-
-/* ---- zz_j_41134.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_800814E0\n\t.type D_800814E0,@object\n"
-        "\t.size D_800814E0,4\nD_800814E0:\n\t.word 0\n\t.text");
-
-void func_80041134(void (*arg0)(void)) {
-    void (**p)(void) = D_80083C68;
-
-    while (*p != NULL) {
-        if (*p == arg0) {
-            D_800814E0--;
-            do {
-                p[0] = p[1];
-                p++;
-            } while (*p != NULL);
-            return;
-        }
-        p++;
-    }
-}
-
-/* ---- func_800410FC, verified separately; it is the proof case in
-   docs/addressing-and-translation-units.md ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_800814E0\n\t.type D_800814E0,@object\n"
-        "\t.size D_800814E0,4\nD_800814E0:\n\t.word 0\n\t.text");
-
-void func_800410FC(void) {
-    D_800814E0 = (s32 *) D_80083C68;
-    D_80083C68[0] = NULL;
 }
