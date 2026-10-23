@@ -105,12 +105,16 @@ unk_12A70 (func_8003F2A4, func_8003F368, func_8003F5AC), unk_12DEC
 (func_8003F624), unk_1811C (func_80045340, func_800453E0, func_8004713C,
 func_80047338, func_80047468).
 
-**func_8003F624 is the exception** and cannot be carved: it needs `%gp_rel` for
-a store to D_800814D4 *and* an absolute `lui %hi`/`addiu %lo` pair for
-`&D_800814D4` in the same function. `-G8` makes the address-of `$gp`-relative
-too (18 differing words). maspsx's rewrite fires only on loads and stores, so
-only the `.sdata` definition route gives both -- and that still wants linker
-placement, which splat's legacy generation cannot express.
+**Four of them cannot be carved at all**: func_8003F624, func_8004713C,
+func_8003F2A4 and func_8003F368 each reach one object *both* `$gp`-relatively
+and absolutely, which no `-G` value (per size) or `.extern` override (per
+symbol) can express. Only maspsx's `.sdata` route can, since its rewrite fires
+on loads and stores and leaves an address materialisation alone -- and that
+still wants linker placement splat's legacy generation cannot express.
+func_8003F368 is the one to re-examine first: its absolute accesses are at +1,
++2 and +3 of objects whose +0 is `$gp`-relative, which may simply be byte
+writes through one materialised base rather than a genuine per-access split.
+See `docs/addressing-and-translation-units.md`.
 
 ### Blocked by jump-table placement (4)
 

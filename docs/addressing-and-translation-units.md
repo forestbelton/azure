@@ -346,6 +346,35 @@ function that touches the same object. func_8003F240 reaches D_800814D0
 object **absolutely** and already matches that way. They cannot have shared a
 unit, so that carve is one function wide.
 
+### The group the carve cannot reach: one object, both modes
+
+Four of the remaining `$gp` functions reach **the same object both
+`$gp`-relatively and absolutely**, which no unit-level setting can express --
+not a `-G` value (it decides per symbol size) and not an `.extern` override (it
+decides per symbol). Only maspsx's `.sdata` definition route can, because its
+rewrite fires on a **load or store** and leaves an address materialisation
+(`la`) alone -- which is exactly the split these functions need:
+
+| function | the object, both ways |
+|----------|-----------------------|
+| func_8003F624 | `sb %gp_rel(D_800814D4)` and `&D_800814D4` passed to CdControlB |
+| func_8004713C | `sh %gp_rel(D_80080B08)` and `lui/addiu %hi/%lo(D_80080B08)` into `$s5` |
+| func_8003F2A4 | `sw %gp_rel(D_800814B0)` and `lui %hi(D_800814B0)` |
+| func_8003F368 | `sw`/`lw %gp_rel(D_80081450)` and `lui %hi(D_80081451)`; likewise `D_800814D0` `$gp`-relative against `sb %lo(D_800814D3)` |
+
+The first three are the clean case: a direct store plus an address taken of the
+same symbol. `-G8` makes the `la` `$gp`-relative too; an `.extern SYM,16`
+override makes the store absolute. Measured on func_8003F624: 18 differing
+words at `-G8`.
+
+**func_8003F368 may not belong here, and is worth a look before being written
+off.** Its absolute accesses are at +1, +2 and +3 of objects whose +0 is
+`$gp`-relative, and splat names every referenced address as its own symbol. So
+what reads as "D_80081451 reached absolutely" could just as well be the
+original writing bytes through one materialised base -- `((u8 *) &X)[1]` --
+which is an ordinary C spelling and would need no per-access mode at all. That
+hypothesis is untested.
+
 ### Window B's layout, derived and assembled
 
 The widths below are what the accesses prove, counted over every listing in
