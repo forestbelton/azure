@@ -1147,6 +1147,8 @@ extern u32 D_8006AFE8[];
 extern u32 D_8006AFF4[];
 extern u32 D_8006B000[];
 extern u8 *D_80080A90;
+extern u32 D_80082D58[];
+extern u8  D_800212DC[];  /* out of image, reached as a symbol (lui+addiu) */
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;
@@ -1744,6 +1746,7 @@ s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
    the same reason. */
 void LoadImage(void *, u32 *);
 void MoveImage(void *, s32, s32);
+s32  rand(void);
 void AddPrim(void *, void *);
 s32  DrawSync(s32);
 void ClearImage(void *, u8, u8, u8);

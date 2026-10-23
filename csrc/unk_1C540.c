@@ -18,7 +18,17 @@ void func_80048D40(void) {
     func_80048C3C(2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048D60);
+void func_8004B568(u8 *);
+
+void func_80048D60(u8 *p) {
+    u16 f = *(u16 *) (p - 2);
+
+    if ((f & 0x2000) != 0) {
+        *(u16 *) (p - 2) = f & 0xDFFF;
+        *(u32 *) (p - 0x10) = (u32) D_800212DC;
+        func_8004B568(p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048DA0);
 
