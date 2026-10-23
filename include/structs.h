@@ -1197,6 +1197,10 @@ extern u8  D_8006ADEC[];
 extern u8  D_80080B54[8];
 extern u8  D_80080B88[8];
 extern u8  D_80080B90[8];
+extern u8  D_8006A908[];
+extern u32 D_8006A8B4[];
+extern u32 D_8006CD50[];
+extern s8  D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
 extern u8  D_80080B34[];
 extern u8  D_80080B40[];
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */

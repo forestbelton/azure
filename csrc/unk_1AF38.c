@@ -26,9 +26,9 @@ u8 *func_80047A44(s32 i) {
 }
 
 u8 *func_80047A44(s32);
-void func_800479D4(u8 *, u8 *, s32);
+void func_800479D4(u8 *, u8 *, u16);
 
-void func_80047A68(s32 a, u16 b) {
+void func_80047A68(s32 a, s32 b) {
     func_800479D4(func_80047A44(a), D_80080A90, b);
 }
 
@@ -76,15 +76,22 @@ s32 func_80047C60(u8 *p) {
     return (p - D_800FC000) / 0xD000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C8C);
+s32 func_80047C8C(s32 a) {
+    s32 i = func_80047B80();
+
+    if (i != -1) {
+        func_80047A68(i, a);
+    }
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047CD8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047D44);
 
-void func_800479D4(u8 *, u8 *, s32);
+void func_800479D4(u8 *, u8 *, u16);
 
-u8 *func_80047DB8(u16 a) {
+u8 *func_80047DB8(s32 a) {
     func_800479D4(D_80016000, D_80023000, a);
     /* `&D_8008152Cs`, a 4-byte scalar, and not the array D_8008152C: a small
        object's address is the one-insn `la` macro, and the target keeps the
