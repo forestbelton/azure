@@ -168,6 +168,59 @@ def t_mask1(text):
                text[: m.start()] + "(%s != 0)" % v + text[m.end() :])
 
 
+def _match_brace(text, i):
+    """Index just past the `}` closing the `{` at text[i]."""
+    depth = 0
+    while i < len(text):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def t_dup_into_arms(text):
+    """Move the statement after an if/else into BOTH arms.
+
+    Cross-jumping runs in jump2, after both schedulers and after allocation, so
+    the duplicate costs nothing in words -- and it buys the pseudos it mentions
+    an extra reference at allocation time, which is how func_800423C0's
+    register pair was flipped and how func_80045CC4's $s0/$s1 swap was closed.
+    It is also the way to PREVENT a merge, when each arm's own last insn should
+    stay in the arm.
+
+    Only a single-line statement is moved, and only into an if that already has
+    an else, so the rewrite stays a rewrite rather than a restructuring.
+    """
+    lo, hi = SPAN
+    for m in re.finditer(r"(?m)^([ \t]+)\}\s*else\s*\{", text):
+        if not (lo <= m.start() and m.end() <= hi):
+            continue
+        end = _match_brace(text, m.end() - 1)
+        if end < 0 or end > hi:
+            continue
+        # the if's opening brace, walked back from this `} else {`
+        head = text.rfind("if", lo, m.start())
+        if head < 0:
+            continue
+        open_brace = text.find("{", head)
+        if open_brace < 0 or open_brace > m.start():
+            continue
+        nxt = re.match(r"\n([ \t]+)([^\n{}]+;)\n", text[end:])
+        if not nxt:
+            continue
+        stmt = nxt.group(2)
+        ind = nxt.group(1)
+        inner = ind + "    "
+        body = (text[:m.start()].rstrip("\n") + "\n" + inner + stmt + "\n"
+                + text[m.start():end - 1].rstrip("\n") + "\n" + inner + stmt
+                + "\n" + ind + "}" + text[end + len(nxt.group(0)) - 1:])
+        yield ("duplicate `%s` into both arms" % stmt[:40], body)
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -176,6 +229,7 @@ TRANSFORMS = [
     t_join_binop,
     t_cmp_swap,
     t_mask1,
+    t_dup_into_arms,
 ]
 
 
