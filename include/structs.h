@@ -1126,6 +1126,11 @@ extern u8  D_8006AE4C[];
 extern u8  D_8006AE64[];
 extern u8  D_8006AE7C[];
 extern u8  D_8006AEAC[];
+extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
+extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
+extern u32 D_80080A80;
+extern u32 D_8006B008[];
+extern u32 D_800D0858[];  /* out of image, but lui+addiu: a SYMBOL */
 extern Unk80082660 D_80082660[];
 extern u32 D_8006ADC0[];
 extern u8  D_800812C8[];
@@ -1715,6 +1720,7 @@ s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
 /* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
    the same reason. */
 void LoadImage(void *, u32 *);
+void MoveImage(void *, s32, s32);
 void AddPrim(void *, void *);
 s32  DrawSync(s32);
 void ClearImage(void *, u8, u8, u8);
