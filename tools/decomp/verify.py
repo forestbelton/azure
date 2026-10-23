@@ -18,6 +18,9 @@ every subsequent turn.
 """
 import re, subprocess, sys, os
 SP = os.environ.get('AZURE_SCRATCH', '/tmp/azure-decomp')
+# maspsx is vendored at vendor/maspsx; MASPSX_DIR overrides it, which is the
+# same variable the Makefile honours, so the two cannot drift apart.
+MASPSX = os.path.join(os.environ.get('MASPSX_DIR', 'vendor/maspsx'), 'maspsx.py')
 os.makedirs(SP, exist_ok=True)
 PROJ = os.environ.get('AZURE_ROOT',
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -50,7 +53,7 @@ asm = open(s).read()
 # built: gas then assumes an *undefined* symbol is small data and emits
 # GPREL16. Use it to check a function before moving it into a carved unit.
 g8 = '--g8' in sys.argv
-maspsx = ['python3', os.path.expanduser('~/scratch/maspsx/maspsx.py'), '--aspsx-version=2.56', '--force-stdin',
+maspsx = ['python3', MASPSX, '--aspsx-version=2.56', '--force-stdin',
           '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section', '-G8']
 if g8:
     maspsx.append('--dont-force-G0')
