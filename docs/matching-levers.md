@@ -1566,6 +1566,15 @@ whose `addiu %lo` sits in a branch delay slot with the `lui` elsewhere
 rather than `extern u8 X[];` is what picks the first form. Only the size CLASS
 is evidence -- small enough for -G8 -- not the exact size.
 
+### A loop-invariant pointer belongs INSIDE the loop body
+
+Assigned as an initialiser before the loop, its materialisation lands ahead of
+the loop's guard branch; written inside the body, loop-invariant motion hoists
+it into the PREHEADER, after the guard, which is where these targets have it
+(func_8004CCBC, func_8003B7C8's `lui`). This is the opposite of the rule below
+for a pointer live across a CALL, and the two do not conflict: a guard branch
+is not a call, and nothing has to survive it.
+
 ### A base pointer assigned before a call lives in a callee-saved register
 
 `u8 *p = (u8 *) SYM;` ahead of two calls costs three words -- the `sw`, the

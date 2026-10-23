@@ -589,7 +589,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CBFC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CC38);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CCBC);
+void func_8004CCBC(u8 **p, s32 n) {
+    s32 i = 0;
+
+    for (; i < n; i++) {
+        /* `s` is assigned INSIDE the body so loop-invariant motion puts its
+           materialisation in the preheader, after the `blez`; as an
+           initialiser before the loop it lands ahead of the guard. And the
+           first element is read through the symbol while the other two go
+           through `s`, which is what the target's `%lo($t0)` against
+           `0x4($a3)` is showing. */
+        u32 *s = D_8002E5E8;
+
+        (*(u32 **) (*p + 8))[0] = D_8002E5E8[0];
+        (*(u32 **) (*p + 8))[1] = s[1];
+        (*(u32 **) (*p + 8))[2] = s[2];
+        p++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CD28);
 
@@ -919,7 +936,20 @@ void func_8004E884(u8 *p, u32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E8D8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E928);
+s32 func_8004E8D8(s32, s32);
+void func_8004E298(u8 *, s32, s32);
+
+u8 *func_8004E928(s32 a, s32 b) {
+    u8 *r = 0;
+
+    if (func_8004E8D8(a, b) != 0) {
+        r = (u8 *) func_8004B404(0x100);
+        if (r != 0) {
+            func_8004E298(r, a, b);
+        }
+    }
+    return r;
+}
 
 void func_8004E994(void) {
 }
@@ -945,7 +975,7 @@ void func_8004E9E4(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E9EC);
 
-void func_8004E9EC(u8 *, s32);
+s32 func_8004E9EC(u8 *, s32);
 
 u8 *func_8004EA70(u8 *p, s32 i) {
     func_8004E9EC(p, i);
