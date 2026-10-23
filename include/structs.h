@@ -1035,7 +1035,11 @@ typedef struct Unk44724Blk {
    known filler. */
 typedef struct Unk80083178 {
     u8          pad_00[0x94];
-    Unk44724Vec unk_94[4];
+    Unk44724Vec unk_94[4];   /* 8 bytes each, so this ends exactly at 0xB4 */
+    u32         unk_B4;      /* a callback, installed by func_8004D0C8/0x110 */
+    u32         unk_B8;
+    u8          pad_BC[0x1C];
+    u32         unk_D8;
 } Unk80083178;
 
 
@@ -1056,6 +1060,9 @@ void func_80038478(void);
 void func_80038588(void);
 void func_800385E8(void);
 void func_80038648(void);
+void func_8004D09C(void);
+void func_8004D0E4(void);
+void func_80039AE8(void);
 void func_80038464(u8 *);
 
 /* Objects with a single observed field: plain globals so far. */
@@ -1066,7 +1073,9 @@ void func_80038464(u8 *);
 extern u32 D_8006ADB8[];
 extern u32 D_80083168[];
 extern u8  D_80071298[];
-extern u16 D_80082A38[];
+extern u32 D_80071250[];
+extern u32 D_800712B4[];
+extern s16 D_80082A38[];   /* lh at +0xAC/+0xAE, so signed */
 extern u32 D_80083170[];
 extern s16 D_800847F6[];
 extern u32 D_80085FCC[];
