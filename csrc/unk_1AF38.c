@@ -6,7 +6,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047784);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800477F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800478B8);
+void func_800477F4(UnkSlot *);
+
+void func_800478B8(UnkSlot *s) {
+    func_800477F4(s);
+    func_80047694(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800478E8);
 
