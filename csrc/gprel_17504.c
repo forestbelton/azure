@@ -24,8 +24,31 @@ void func_80040A88(void (*)(void));
 void func_80040B88(void);
 s32  func_8003F794(s16, s16);
 void func_8003D92C(void);
+void func_80043DB8(void);
+void func_8003E2D8(void);
+void func_80040FDC(u16);
+void func_80041038(u16);
+void func_800411FC(u16);
+s32  func_80040F2C(u16);
 
-INCLUDE_ASM("asm/nonmatchings/gprel_17504", func_80043D04);
+/* func_80041AE4's twin for this mode, and the difference is load-bearing: the
+ * `D_80082E60.unk_00 &= ~1;` comes AFTER the func_8003F794 call here where the
+ * twin has it before, worth 9 words in each direction (measured both ways).
+ * `D_80082E60.unk_0B` is re-read at all four uses; caching it costs 33. */
+void func_80043D04(void) {
+    D_80081480 = D_8008148C;
+    func_8003E2D8();
+    func_80040FDC(D_80082E60.unk_0B);
+    func_80041038(D_80082E60.unk_0B);
+    func_800411FC(D_80082E60.unk_0B);
+    if (func_80040F2C(D_80082E60.unk_0B) != 0) {
+        func_80040B88();
+    } else {
+        D_80081500 = func_8003F794(5, 8);
+        D_80082E60.unk_00 &= ~1;
+        func_80040A88(func_80043DB8);
+    }
+}
 
 void func_80043DB8(void) {
     func_80043EB8();

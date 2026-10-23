@@ -52,10 +52,21 @@ asm = open(s).read()
 # than maspsx's forced -G0), which is how gprel_12DD4 and gprel_14910 are
 # built: gas then assumes an *undefined* symbol is small data and emits
 # GPREL16. Use it to check a function before moving it into a carved unit.
-g8 = '--g8' in sys.argv
+# The carved units are built with a nonzero gas -G. Which value matters: gas
+# goes $gp-relative only for a symbol whose `.extern SYM,size` gives a size in
+# (0, G], and cc1psx emits that size from the declared type -- so -G2 keeps
+# 2-byte objects $gp-relative while sending 4-byte ones to the absolute
+# bare-symbol form. Verified directly against gas.
+gasG = 0
+for a in sys.argv[1:]:
+    if a == '--g8':
+        gasG = 8
+    elif a.startswith('--gas-G='):
+        gasG = int(a.split('=', 1)[1])
 maspsx = ['python3', MASPSX, '--aspsx-version=2.56', '--force-stdin',
-          '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section', '-G8']
-if g8:
+          '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section',
+          '-G%d' % (gasG or 8)]
+if gasG:
     maspsx.append('--dont-force-G0')
 r = subprocess.run(maspsx +
                    ['-EL', '-32', '-Iinclude', '-march=r3000', '-mtune=r3000', '-no-pad-sections', '-O1', '-o', o],

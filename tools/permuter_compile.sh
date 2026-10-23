@@ -21,8 +21,8 @@ if [ ! -x "$PROJ/tools/ccpsx" ]; then
     exit 1
 fi
 
-MASPSX_DIR="$PROJ/vendor/maspsx"
-if [ ! -f "$MASPSX_DIR/maspsx.py" ]; then
+MASPSX_DIR="vendor/maspsx"
+if [ ! -f "$PROJ/$MASPSX_DIR/maspsx.py" ]; then
     echo "permuter_compile.sh: cannot locate vendored maspsx" >&2
     exit 1
 fi

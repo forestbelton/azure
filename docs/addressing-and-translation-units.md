@@ -29,8 +29,49 @@ the assembler:
 
 ASPSX 2.56 expands that to `lui %hi` + `lw %lo` -- verified by assembling this
 exact output with the real assembler via `ccpsx -c`, which emits the lui/%lo
-pair and the 0x52/0x54 relocation pair. GNU as, given a nonzero `-G`, instead
-assumes an *undefined* symbol is small data and emits `GPREL16`.
+pair and the 0x52/0x54 relocation pair. GNU as at a nonzero `-G` can instead
+emit `GPREL16`.
+
+**Exactly when it does was recorded wrongly here, and the correct rule is a
+lever.** gas does *not* assume an undefined symbol is small. It reads the size
+from a `.extern SYM,size` record and goes `$gp`-relative only for
+`0 < size <= G`. Measured directly against `mips64-linux-gnu-as -G8`:
+
+| input | result |
+|-------|--------|
+| `.extern foo, 4` + `lw $2,foo` | `lw v0,0(gp)`, GPREL16 |
+| `.extern foo, 16` + `lw $2,foo` | `lui` + `lw`, HI16/LO16 |
+| `.extern foo, 0` + `lw $2,foo` | absolute |
+| no `.extern` at all | **absolute** |
+
+And cc1psx emits that `.extern` line with the declared type's size. So the
+`$gp`-relativity at a nonzero `-G` is driven by the C declaration, through
+cc1psx's own `.extern`, not by gas guessing about imports.
+
+The awkward part is that cc1psx uses the same threshold for a second decision:
+a symbol of size `<= G` gets the **bare-symbol** form (left for the assembler
+to expand) *and* its `.extern`, while anything larger or incomplete gets the
+**compiler-split** `lui %hi` + displacement and, for an incomplete array, no
+`.extern` at all. There is therefore **no C declaration that yields
+bare-symbol-but-absolute** -- which is the shape func_80041AE4 and
+func_80043D04 need for D_80081480 and D_8008148C while wanting `$gp` for a
+`u16` in the same function.
+
+**The fix is a per-unit `-G` that splits the two by size.** Those two functions
+reach a `u16` (`.extern ...,2`) `$gp`-relatively and `u32`s
+(`.extern ...,4`) absolutely, so gas at `-G2` gives both: 2-byte objects
+`$gp`-relative, 4-byte ones absolute in the bare-symbol form the target has.
+`MASPSXFLAGS_G2` in the Makefile does this for `gprel_152E4` and `gprel_17504`
+only -- their existing contents assemble identically at `-G2` and `-G8`, while
+the other four carved units differ and must stay at `-G8`. Measured: at `-G8`
+func_80041AE4 comes out 44 of 45 words wrong; at `-G2`, with plain scalar
+declarations and nothing added, it matches.
+
+An `__asm__(".extern SYM, 16")` inside the function body also works, by
+overriding the size cc1psx emitted (gcc flushes its `.extern` block once before
+the first function, so a top-level `__asm__` lands ahead of it and loses). It
+was measured working, but `-G2` needs nothing non-C in the source and is what
+the tree uses.
 
 So the original build produced `$gp`-relative accesses only where ASPSX could
 *prove* the symbol was small, which means only where the symbol was **defined

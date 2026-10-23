@@ -12,7 +12,7 @@
 set -eu
 
 PROJ=$(cd "$(dirname "$0")/.." && pwd)
-M2C_DIR=${M2C_DIR:-$HOME/scratch/m2c}
+M2C_DIR=vendor/m2c
 
 if [ ! -f "$M2C_DIR/m2c.py" ]; then
     echo "tools/m2c: no m2c.py under $M2C_DIR" >&2

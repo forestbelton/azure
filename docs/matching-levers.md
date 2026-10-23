@@ -402,6 +402,19 @@ low half is zero so the materialisation is a single `lui` and everything else
 is a displacement. Literal constants per access cost 194 words in
 func_8003DBD0 and 262 in func_8003D0F0.
 
+**In a carved unit, the gas `-G` value picks the addressing mode BY SIZE, and
+that is a lever.** gas emits GPREL16 only for a symbol whose `.extern SYM,size`
+record gives a size in `(0, G]`; with no record at all the access is absolute.
+cc1psx emits that record from the declared type, and uses the same threshold to
+choose between the bare-symbol form (assembler-expanded) and its own
+`lui %hi` + displacement split. So there is **no C declaration that gives
+bare-symbol-but-absolute** -- and when one function needs `$gp` for a `u16` and
+absolute for a `u32`, the way to get both is a per-unit `-G` between the two
+sizes. `gprel_152E4` and `gprel_17504` are built at `-G2` for exactly that;
+func_80041AE4 is 44 of 45 words wrong at `-G8` and matches at `-G2` with plain
+scalar declarations. Measured against gas directly, and written up in
+`docs/addressing-and-translation-units.md`.
+
 **An out-of-image global is NOT always a constant address, and the second
 instruction tells you which.** This project's rule of thumb -- that a global
 outside 0x8002d000..0x8008875f was a constant address reached through a

@@ -67,7 +67,7 @@ endif
 # binutils. ASPSX 2.56 is one of the versions it models explicitly.
 #
 # maspsx is a checkout, not a pip package: https://github.com/mkst/maspsx
-MASPSX_DIR   ?= $(HOME)/scratch/maspsx
+MASPSX_DIR   ?= vendor/maspsx
 MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 #
 # It reads the assembly on stdin, forwards any flags it does not recognise to
@@ -77,13 +77,19 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 #                      %gp_rel for symbols it knows are small
 #   --use-comm-section put common symbols in .comm, which is ccpsx's behaviour
 #
-# Do NOT add --dont-force-G0. maspsx forces -G0 on GNU as by default, and that
-# is required: given a nonzero -G, gas assumes an *undefined* symbol is small
-# data and emits GPREL16, whereas ASPSX assumes externs are not small and
-# expands lui/%hi + %lo. Verified by assembling the same ccpsx output with the
-# real ASPSX 2.56 via `ccpsx -c`: it produces the lui/%lo pair, and so does
-# maspsx once gas is left at -G0. maspsx still emits %gp_rel where it belongs,
-# so nothing is lost.
+# Do NOT add --dont-force-G0 here. maspsx forces -G0 on GNU as by default and
+# that is what the bulk of the game wants, because at a nonzero -G gas emits
+# GPREL16 for any symbol whose `.extern SYM,size` gives a size in (0, G] -- and
+# cc1psx emits that `.extern` from the declared type, so every small extern
+# would go $gp-relative. ASPSX instead expands lui/%hi + %lo for an import.
+# Verified by assembling the same ccpsx output with the real ASPSX 2.56 via
+# `ccpsx -c`: it produces the lui/%lo pair, and so does maspsx once gas is left
+# at -G0. maspsx still emits %gp_rel where it belongs, so nothing is lost.
+#
+# (An earlier version of this comment said gas "assumes an undefined symbol is
+# small data". It does not -- with no `.extern` record at all the access comes
+# out absolute. The size record is the whole mechanism, and it is what makes
+# the per-unit -G2 below work.)
 MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                 --run-assembler --gnu-as-path=$(AS) \
                 --use-comm-section -G8
@@ -96,14 +102,30 @@ MASPSXFLAGS_G8 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                   --run-assembler --gnu-as-path=$(AS) --use-comm-section \
                   --dont-force-G0 -G8
 
+# Same, with a smaller small-data limit. The -G value is not a style choice:
+# gas emits GPREL16 for a symbol whose `.extern SYM,size` gives a size in
+# (0, G], and cc1psx emits that size from the declared type. So -G2 keeps
+# 2-byte objects $gp-relative while sending 4-byte ones to the absolute
+# bare-symbol form -- which is what two of the carved units need, because they
+# reach a u16 $gp-relatively and a u32 absolutely in the same function.
+MASPSXFLAGS_G2 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
+                  --run-assembler --gnu-as-path=$(AS) --use-comm-section \
+                  --dont-force-G0 -G2
+
 # Units whose functions reach their globals $gp-relatively rather than
-# absolutely. Measured over the game code: 109 functions need the -G0 default,
-# 7 need -G8, 48 touch no globals symbolically and do not care, and 27 need
-# both and cannot match under either. See
-# docs/addressing-and-translation-units.md.
+# absolutely, carved out of the units splat lumps together. See
+# docs/addressing-and-translation-units.md for how a cluster is identified and
+# carved.
 build/csrc/gprel_12A40.o build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o \
- build/csrc/gprel_152E4.o \
- build/csrc/gprel_17504.o build/csrc/gprel_17B7C.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
+ build/csrc/gprel_17B7C.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
+
+# These two need -G2 rather than -G8: each reaches a u16 ($gp-relative) and
+# D_80081480/D_8008148C as u32 (absolute, assembler-expanded) in one function,
+# and -G8 would make the u32s $gp-relative too -- 44 of 45 words wrong in
+# func_80041AE4. Verified that their existing contents assemble identically at
+# -G2 and -G8, so the switch moves nothing that already matched. The other four
+# units above DO differ between the two and must stay at -G8.
+build/csrc/gprel_152E4.o build/csrc/gprel_17504.o: MASPSXFLAGS := $(MASPSXFLAGS_G2)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
