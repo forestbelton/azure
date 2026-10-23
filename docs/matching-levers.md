@@ -204,8 +204,43 @@ took `len` from last of the three to first.
 But a loop whose invariants were hoisted must keep its note -- a hoisted base
 pointer in the preheader is proof that loop-invariant motion ran.
 
-**loop.c hoists the invariant constant that is SET FIRST in the body, not the
-cheapest one, and it hoists only one.** Measured on func_80045CC4, which has
+**loop.c hoists an invariant when `threshold * savings * lifetime >=
+insn_count`. "Set first" and "only one" are both artifacts of that test, not
+rules.** The gate is in `move_movables` (2.7.2 loop.c:1631):
+
+    already_moved[regno]
+    || (threshold * savings * m->lifetime) >= insn_count
+    || (m->forces && m->forces->done && n_times_used[m->forces->regno] == 1)
+
+and its inputs are `m->savings = n_times_used[regno]`, the number of USES of
+the register the invariant insn sets (loop.c:793); `m->lifetime =
+uid_luid[regno_last_uid] - uid_luid[regno_first_uid]`, its live span in logical
+insn numbers, computed function-wide rather than clamped to the loop (791-792);
+`insn_count`, the loop's insn count, doubled for a repeat move of the same
+regno (1609-1611); and `threshold = (loop_has_call ? 1 : 2) * (1 +
+n_non_fixed_regs)` (532) -- so a call inside the loop HALVES the threshold.
+`move_movables` loops over every movable and hoists each that passes
+independently, so there is no one-hoist limit; the second constant is simply
+failing the test. And the constant set first has the earlier `regno_first_uid`,
+hence the larger `lifetime`, hence the larger product -- which is why "set
+first" looked like the rule. `combine_movables` also ADDS the lifetimes and
+savings of movables it matches (1222-1223, 1282-1283, 1330-1331), though equal
+value and mode are required, so two different mask constants will not combine.
+
+**Read the numbers rather than inferring them.** The `.loop` dump prints all
+three: the loop header line gives `insn_count` ("Loop from 64 to 137: 23 real
+insns"), and each movable prints as "Insn 42: regno 94 (life 1), move-insn
+savings 1  moved to 176", where the trailing "moved to" appears only if it was
+actually hoisted. `tools/decomp/dump.sh` already collects it.
+
+So the levers are the test's inputs: raise `savings` by giving the constant a
+second USE inside the loop (not a second set -- that makes a new pseudo with
+its own lifetime, which is the measured-and-failed shape in func_80045CC4's
+header); lower `insn_count` by moving work out of the loop, which lowers the bar
+for both constants at once; or lengthen the losing constant's `lifetime`,
+checking first that the extra use does not set `m->global` (789-790).
+
+The original measurement that produced the superseded claim still stands: Measured on func_80045CC4, which has
 two invariant masks in one loop: with `(q->unk_00 & 0xFF000000) | (ot &
 0xFFFFFF)`, expand materialises 0xFF000000 first, so that is the one hoisted --
 as a single `lui` in the prologue -- and 0xFFFFFF stays inline as `lui` + `ori`

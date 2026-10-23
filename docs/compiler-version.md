@@ -204,10 +204,39 @@ expression.
 ## Reading the compiler's own dumps
 
 `cc1psx` honours gcc's dump flags -- `-dS` (post-sched1), `-dR` (post-sched2),
-`-dl` (local-alloc), `-dg` (global-alloc), `-dr` (initial RTL). The files land
-in the wine temp directory,
-`~/.cache/azure-psyq/drive_c/users/case/AppData/Local/Temp/`, as `PQ*.sched`,
-`.sched2`, `.lreg`, `.greg` and so on. The `.sched` dump prints the ready list
+`-dl` (local-alloc), `-dg` (global-alloc), `-dr` (initial RTL) -- and `-da`
+dumps all of them at once, which is what `tools/decomp/dump.sh` passes. The
+files land in the wine temp directory, under the prefix `tools/ccpsx` chose
+(`$AZURE_WINEPREFIX` if set, else `~/.cache/azure-psyq`), as
+`drive_c/users/*/AppData/Local/Temp/PQ*.<suffix>`.
+
+**There are sixteen dumps, and three of them do not exist in upstream 2.7.2.**
+Measured from a cleared temp directory, cc1psx emits `rtl jump cse loop cse2
+flow combine regmove lreg greg sched sched2 bp dbr shorten`, all headed with the
+compiled function's name. Upstream 2.7.2's `toplev.c` knows only `.rtl .jump
+.cse .loop .cse2 .flow .combine .lreg .greg .sched .sched2 .dbr .stack`, and
+there is **no `regmove.c` in the upstream 2.7.2 tarball at all** -- that pass
+arrived later. So `regmove` and `bp` are passes the Cygnus/SN build carries and
+upstream does not, and `.stack` is one upstream has that cc1psx does not emit.
+
+Two consequences. First, **upstream 2.7.2 source is a good reference for the
+passes it has and no reference at all for `regmove`** -- treat a conclusion that
+depends on the pass list as resting on an assumption, in the sense
+`docs/where-we-are.md`'s context audit means. Second, `regmove` rewrites
+register copies and in later gcc adjusts `REG_N_REFS` and `REG_LIVE_LENGTH`,
+which are exactly the inputs to `global.c`'s priority formula that several
+near-miss bounds are computed from -- so it is worth diffing `.combine` against
+`.regmove` before trusting such a bound. On func_80047054 it is a **no-op**
+(identical insn count and identical register histogram across the two dumps),
+so it does not explain that function's permutation; it has not been checked on
+func_800407C0, whose argument rests on preferences and refs/live_length.
+
+A trap this cost once: a dump collector that deletes a LIST of suffixes before
+compiling leaves the unlisted three behind, and the next run collects a previous
+function's dump under the new function's name -- a `.regmove` was collected
+headed `;; Function func_80041344` while a different function was being
+compiled. `dump.sh` now wipes `PQ*.*` wholesale and resolves the wine prefix
+the same way `tools/ccpsx` does, which it previously did not. The `.sched` dump prints the ready list
 and each insn's priority per cycle, and `.greg` prints each allocno with the
 hard registers it conflicts with; between them they explain any ordering or
 register difference without guessing.
