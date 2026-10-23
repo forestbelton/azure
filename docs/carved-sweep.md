@@ -1,0 +1,67 @@
+# Sweeping the carved units
+
+The four units carved on 2026-10-23 -- `unk_72A8` (294 functions), `unk_1C540`
+(465), `unk_1AF38` (53) and `unk_301D4` (5) -- are being worked cheapest-first
+by size. `tools/decomp/guard.py` has the live stub count.
+
+## How to run the sweep
+
+`verify.py` takes the **whole `.text`** of the scratch file as the function, so
+one candidate per file. A batched file reports nonsense (a two-word function
+came back "8 DIFF"). The driver scripts used for this live in the session
+scratchpad and are trivial to rewrite: write `#include "common.h"` plus one
+candidate to `zzone.c`, run `verify.py zzone.c <unit> <func>`, collect the
+MATCHes, then replace each `INCLUDE_ASM("asm/nonmatchings/<unit>", <func>);`
+line with the body and run `make check`.
+
+**Grep `include/structs.h` for an existing prototype before guessing a
+signature.** Several of these functions were already declared by callers that
+landed earlier, and a mismatch surfaces as a compile error, not a diff --
+func_80053E14 (`void(s16)`), func_80053DA8 (`void(s32)`), func_80038464
+(`void(u8 *)`).
+
+**A whole batch failing at once is one broken header, not bad candidates.** Ten
+simultaneous ERRORs turned out to be a duplicate `extern` for `D_80083178`,
+which was already declared as a struct 300 lines further down.
+
+## Patterns that have paid
+
+* **A global store needs an incomplete-array declaration.** `extern u32 D_X;`
+  with `D_X = 0;` gives four words through `$at` and cannot fill the delay slot.
+  `extern u32 D_X[];` with `D_X[0] = 0;` gives the compiler-split
+  `lui %hi / store %lo` the targets have. Worth 4 DIFF -> MATCH, every time.
+* **Callback installs put the store LAST in the source.** The listing shows the
+  `lui`/`addiu` at the top and the `sw` in the delay slot, which reads like
+  "address first", but the address materialisation floats to the front on its
+  own -- `rank_for_schedule` prefers a dependency-free insn before source order
+  is consulted. Byte stores first, callback store last.
+* **A rebased pointer must not fold.** `u32 *q = (u32 *) (p + 0x20);` keeps the
+  `addiu`; indexing the outer pointer folds the constant away. And chained
+  assignment stores the INNER one first, so `q[6] = q[7] = v;` emits +0x1C
+  before +0x18.
+* **Thin wrappers are unmistakable.** gcc 2.7.2 has no tail-call optimisation,
+  so a body that is one call keeps a full frame: `addiu $sp,-0x18` / `sw $ra` /
+  `jal` / arg in the delay slot / `lw $ra` / `addiu $sp` / `jr $ra`. Thirty-two
+  of these matched first try.
+* **An arithmetic constant binds to the term the source groups it with.**
+  `(v & 0xF) + 0x7C80` then `+ ((v & 0x10) << 3)` must be split into a local;
+  written as one expression the compiler folds the constant into the second
+  term instead, and parentheses do not survive `fold`.
+
+## Parked: tried and not matching
+
+Each of these has the right instruction set and word count with the registers
+or the order wrong, so they want the dumps rather than another guess.
+
+| function | unit | state | tried |
+|----------|------|-------|-------|
+| func_8004AC18 | unk_1C540 | 9/9 words, 7 DIFF | `D_8007359C[i * 5 + 1]`, a local base pointer, and a 20-byte struct array. The target materialises the base FIRST (`lui` is insn 1) and keeps the base in `$v0` with the index chain in `$v1`; all three spellings compute the index first and swap those registers. |
+| func_80053DCC | unk_1C540 | 9 DIFF | `D_8008480C = a;` as a scalar and as `D_8008480C[0]`, both with `func_80054D64(a)` after. The target has the `sh` in the `jal`'s delay slot. |
+| func_80053DA8 | unk_1C540 | 6 DIFF | `return func_80055778(a)` with `s16`/`u16`/`s32` signatures. structs.h declares it `void(s32)`, and the target sign-extends the callee's result (`sll 16` / `sra 16`) before returning, so the result is used despite the `void`. |
+| func_8004B4DC | unk_1C540 | 9 DIFF | A `while (1) { n++; if (p[0] & 0x80) break; p += 0xC; }` count loop. The target advances `p` in the branch's delay slot, so it is advanced on the exiting iteration too. |
+
+## Deferred for addressing, not for shape
+
+`func_8004DCE0`, `func_8004DDB4` and `func_80033D44` store through
+`%gp_rel(D_8008xxxx)`, which these units' forced `-G0` cannot produce. They
+belong with the addressing group in `docs/addressing-and-translation-units.md`.

@@ -1074,6 +1074,12 @@ extern u32 D_8006ADB8[];
 extern u32 D_80083168[];
 extern u8  D_80071298[];
 extern u32 D_80071250[];
+extern u8  D_800FC000[];
+extern u8  D_800713FC[];
+extern u32 *D_8007359C;
+extern u8  D_800717D0[];
+extern u8  D_800717E8[];
+extern s16 D_8008480C[];
 extern s16 D_80083D78[];
 extern u32 D_800712B4[];
 extern s16 D_80082A38[];   /* lh at +0xAC/+0xAE, so signed */
