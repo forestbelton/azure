@@ -162,6 +162,12 @@
  * (`*arg1 = 0`, then registered with func_8003E140, which is
  * `void func_8003E140(s8 *a) { *a = 1; }`), and arg2 is only tested against
  * zero and selects the asynchronous path.
+ *
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 70 variants of
+ * this source across its whole transform set and none improved on 21 DIFF.
+ * **Do not re-sweep local shapes here.** That agrees with the analysis above:
+ * what is left is winning the allocation ORDER so that `flags` does not take
+ * $a3, which is a priority question (section 3), not a shape one.
  */
 
 #include "common.h"
