@@ -266,6 +266,109 @@ typedef struct Unk44D24SP {
     s16        unk_8C;
 } Unk44D24SP;
 
+/* The FIFTH typedef for the 0x1F800000 scratchpad, after Unk3DBD0SP,
+   Unk463ECSP, Unk44D24SP and Unk3CCB0SP. Kept separate for the standing
+   reason: each function sees a different subset of the region at different
+   widths, and retyping a field to merge them risks an existing match for a
+   cosmetic gain. The merge is on TODO.md. */
+typedef struct Unk45CC4SP {
+    s16         unk_00;
+    s16         unk_02;
+    u8          pad_04[0x4];
+    Unk3DBD0W   unk_08;
+    Unk3DBD0W   unk_0C;
+    Unk3DBD0W   unk_10;
+    Unk3DBD0W   unk_14;
+    u8          pad_18[0x8];
+    u8         *unk_20;
+    u16         unk_24;
+    u8          pad_26[0xA];
+    Unk3DBD0W   unk_30;
+    Unk3DBD0W   unk_34;
+    s32         unk_38;
+    u8          pad_3C[0x14];
+    u16         unk_50;
+    u8          pad_52[0x6];
+    u16         unk_58;
+    u8          pad_5A[0x16];
+    s16         unk_70;
+    s16         unk_72;
+    s16         unk_74;
+    u8          pad_76[0x2];
+    s16         unk_78;
+    s16         unk_7A;
+    s16         unk_7C;
+    u8          pad_7E[0x2];
+    s16         unk_80;
+    s16         unk_82;
+    s16         unk_84;
+    u8          pad_86[0x2];
+    s16         unk_88;
+    s16         unk_8A;
+    s16         unk_8C;
+    u8          pad_8E[0x2];
+    s32         unk_90;
+    s32         unk_94;
+    u8          pad_98[0x28];
+    s32         unk_C0;
+    u8          pad_C4[0xC];
+    u8          unk_D0[0x14];
+    s32         unk_E4;
+    s32         unk_E8;
+    s32         unk_EC;
+    u8          pad_F0[0x10];
+    s16         unk_100;
+    s16         unk_102;
+    s16         unk_104;
+    u8          pad_106[0x2];
+    u16         unk_108;
+    u16         unk_10A;
+    u8          pad_10C[0x10];
+    u8          unk_11C[0x14];
+} Unk45CC4SP;
+
+/* The 0xC-byte element func_80045CC4 walks. */
+typedef struct Unk45CC4E {
+    u8  unk_00;
+    u8  unk_01;
+    u8  unk_02;
+    u8  unk_03;
+    u16 unk_04;
+    u16 unk_06;
+    u8  unk_08;
+    u8  unk_09;
+    u8  unk_0A;
+    u8  unk_0B;
+} Unk45CC4E;
+
+/* The 0x28-byte primitive it emits. */
+typedef union Unk45CC4UV {
+    u16 h;
+    u8  b[2];
+} Unk45CC4UV;
+
+typedef struct Unk45CC4T { u32 addr:24; u32 len:8; } Unk45CC4T;
+typedef struct Unk45CC4P {
+    u32         unk_00;
+    u32         unk_04;
+    u16         unk_08;
+    u16         unk_0A;
+    Unk45CC4UV  unk_0C;
+    u16         unk_0E;
+    u16         unk_10;
+    u16         unk_12;
+    Unk45CC4UV  unk_14;
+    u16         unk_16;
+    u16         unk_18;
+    u16         unk_1A;
+    Unk45CC4UV  unk_1C;
+    u16         unk_1E;
+    u16         unk_20;
+    u16         unk_22;
+    Unk45CC4UV  unk_24;
+    u16         unk_26;
+} Unk45CC4P;
+
 typedef struct Unk453E0SP {
     s16       unk_00;
     s16       unk_02;

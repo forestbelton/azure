@@ -1,6 +1,6 @@
 # Open matching problems
 
-Six functions are parked, and this file's table is kept in step with
+Five functions are parked, and this file's table is kept in step with
 `docs/where-we-are.md` -- that one is the authority. Every one reproduces the
 original logic; what is left in each case is a register assignment, the order of
 two adjacent instructions, or one dead instruction.
@@ -22,7 +22,6 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_8003F368 | unk_12A70 | 4 of 113, in two independent two-word gaps: local-alloc, and one named reorg check |
 | func_8004437C | gprel_17B7C | 8 of 100: an indexed symbol's address split between local-alloc and global-alloc |
 | func_80047054 | unk_19434 | 30 of 58, every instruction identical and five registers permuted; see below |
-| func_80045CC4 | unk_19434 | **2 of 437**: the `(s8)` fold, the mask hoisting and the mask tension are all solved; one sched1-then-allocation chain left |
 | func_800407C0 | unk_12DEC | 62 of 178, all register fields: a hard-reg preference created by the memcpy call -- see the near-miss file |
 
 ## func_8003D0F0  (unk_102A8) -- SOLVED 2026-10-22
@@ -54,15 +53,30 @@ Taking stock after a session that unparked five of the original eleven
 func_80041284): what is left divides into two kinds, and the division matters
 for where effort goes next.
 
-**Reachable, mechanism known, not yet applied.** `func_80045CC4` is one word
-short with every instruction accounted for: both of
-the problems recorded here are solved (the `(s8)` fold by the same HImode
-consumer, and the mask hoisting by the first-set-invariant rule, whose
-cost-based hypothesis was backwards). What remains is a `$s0`/`$s1` swap on a
-**0.9% priority gap** -- 1.4309 against 1.4438 -- which is the sort of margin
-section 3's duplicate-an-insn lever closed in func_800423C0, plus a four-word
-tension between the mask hoisting and the `or`'s operand order. All measured in
-the near-miss file.
+**SOLVED 2026-10-23: `func_80045CC4` landed**, and so did its sibling
+`func_800453E0`. Kept here because this section had the diagnosis right and the
+cause wrong twice over, which is the failure mode this file exists to record.
+
+The "0.9% priority gap" was real -- 1.4309 against 1.4438 -- and the fix was not
+to raise the scratchpad pointer's priority, as the duplicate-an-insn lever
+suggests. It was to stop inflating the GIV's. An `if`/`else` whose arms both
+store to the same field charges the base pseudo two loop-weighted references for
+a store that exists once in the output, because `reg_n_refs` is counted by
+`flow` and jump2 cross-jumps the arms long afterwards. Written as one store the
+giv drops from 77 refs to 75, and the scratchpad is allocated first. One
+reference was enough.
+
+And the "four-word tension between the mask hoisting and the `or`'s operand
+order" was not a tension. Those statements are bitfield stores through a
+P_TAG-shaped `struct { u32 addr:24; u32 len:8; }` -- libgpu's `addPrim` -- and
+no spelling of a hand-written `|` can satisfy both requirements, because
+`expand_binop` materialises operand 0's chain first. The bitfield expansion
+satisfies both by construction. Dozens of operand spellings across two headers
+had been failing at a C operator the original never used.
+
+Both mechanisms are in `docs/matching-levers.md`; the load-bearing shapes are
+commented on the landed functions in `csrc/gprel_18B40.c` and
+`csrc/unk_19434.c`.
 
 **Probably not reachable from C**, each for a reason now written down rather
 than guessed:

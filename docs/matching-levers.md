@@ -120,8 +120,32 @@ Three instances:
   allocation, the pseudo genuinely gains references, and jump2 merges only the
   duplicated tail afterwards -- which is how func_800423C0 and func_80045CC4
   were closed. Inserting a new `if` purely to make a boundary does not buy that.
-  So: use an existing branch to raise a reference count, use inserted identical
-  arms only for a cse run boundary, and **check the `.s` before relying on
+  **AND THE INVERSE IS A LEVER TOO, worth 126 words on func_80045CC4.** Because
+  `reg_n_refs` is counted by `flow` and jump2 runs long after it, an `if`/`else`
+  whose two arms both store to **the same field** charges the base pseudo two
+  loop-weighted references for a store that exists only once in the output. That
+  is a phantom reference at global-alloc time, and it can hand the race to the
+  wrong pseudo. Spelling the same thing as a single store -- a ternary, or a
+  temp set in both arms and stored once after the join, which is byte-identical
+  -- removes it.
+
+  On func_80045CC4 the if/else form gave the `q+4` giv 77 refs and
+  `6*77/320 = 1.4438` against the scratchpad pointer's `7*148/726 = 1.4270`, so
+  the giv was allocated first and `$s0`/`$s1` were exchanged across the whole
+  function. One store drops the giv to 75 and `6*75/319 = 1.4107` against
+  `7*148/724 = 1.4309`, and the scratchpad goes first, as the target has it.
+  Note one reference was enough to flip it, and 75 and 77 are in the same
+  `floor_log2` bucket, so this is a pure ref-count effect.
+
+  **It is site-specific, so measure rather than apply it everywhere.** The same
+  change at that function's other two-arm `q` store costs 6 words, because the
+  target keeps that site's two `sh` in branch delay slots -- they must stay two
+  stores. The lever applies only where the target itself cross-jumped the arms,
+  which the listing tells you.
+
+  So: use an existing branch to raise a reference count, **remove a two-arm
+  store to shed a phantom one**, use inserted identical arms only for a cse run
+  boundary, and **check the `.s` before relying on
   either for a schedule.**
 
   The other caveat is the price where it does apply: it is a real sched1 and
