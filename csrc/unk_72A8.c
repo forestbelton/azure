@@ -324,7 +324,15 @@ void func_80036110(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036154);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036210);
+void func_80036B10(u8 *, u8 *, u8 *, s32, u32);
+void func_8003626C(u8 *);
+
+void func_80036210(u8 *p) {
+    func_80036B10(D_80082414, D_80081FDC, p, 0,
+                  *(u32 *) (*(u8 **) (p + 0x74) + 0x80));
+    p[0x4C] = 0;
+    *(u32 *) (p + 0x68) = (u32) func_8003626C;
+}
 
 void func_800362A0(u8 *);
 
@@ -564,7 +572,19 @@ void func_800383D4(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038408);
+s32 func_800392A4(u8);
+void func_80038A10(void);
+
+void func_80038408(u8 *p) {
+    if (func_800392A4(p[0x2F]) != 0) {
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    } else {
+        p[0x89] -= 1;
+        if ((s8) p[0x89] < 0) {
+            *(u32 *) (p + 0x10) = (u32) func_80038A10;
+        }
+    }
+}
 
 void func_80038464(u8 *p) {
     p[0x84] = 0;
@@ -984,7 +1004,16 @@ void func_80039F80(u8 *p) {
     *(u32 *) (t + a * 4 + 0x48) = *(u32 *) (t + b * 4 + 0x48);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039FC0);
+void func_80039FC0(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *t = *(u8 **) (p + 0x80);
+    u32 i = *(*q)++;
+    u8 *c = *q;
+
+    *(u32 *) (t + i * 4 + 0x48) = c[0] + (c[1] << 8) + (c[2] << 16) +
+                                  (c[3] << 24);
+    *q += 4;
+}
 
 void func_8003A01C(u8 *p) {
     u8 **q = (u8 **) (p + 0x1C);
@@ -1080,7 +1109,16 @@ void func_8003A7BC(u8 *p) {
     *(u32 *) (t + a * 4 + 0x48) = *(u32 *) (t + b * 4 + 0x48);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A7FC);
+void func_8003A7FC(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *t = *(u8 **) (p + 0x80);
+    u32 i = *(*q)++;
+    u8 *c = *q;
+
+    *(u32 *) (t + i * 4 + 0x48) = c[0] + (c[1] << 8) + (c[2] << 16) +
+                                  (c[3] << 24);
+    *q += 4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A858);
 
@@ -1385,7 +1423,25 @@ void func_8003B8DC(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B92C);
+void func_80043458(void);
+void func_8003B820(void);
+void func_8003B714(void);
+
+void func_8003B92C(void) {
+    u8 *b;
+
+    func_80043458();
+    func_8003B820();
+    func_8003B714();
+    /* The constant base is assigned AFTER the three calls, which is where the
+       target materialises it; as an initialiser its `lui` is hoisted above
+       them. */
+    b = (u8 *) 0x80010000;
+    *(u32 *) (b + 0x2D5C) += *(u32 *) (b + 0x2D58);
+    if (*(u32 *) (b + 0x2D5C) > 0x3B9ACA00) {
+        *(u32 *) (b + 0x2D5C) = 0x3B9ACA00;
+    }
+}
 
 void func_8003B64C(void);
 void func_8003B8DC(void);

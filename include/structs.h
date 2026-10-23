@@ -1214,6 +1214,8 @@ extern u32 D_8006CD50[];
 extern s8  D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
 extern u32 D_800DCF54[];  /* out of image, a table of function pointers */
 extern u8  D_80080B70[];
+extern u8  D_80082414[];
+extern u8  D_80081FDC[];
 extern u8  D_800714B0[];
 extern s16 D_800848F8[];
 extern u8  D_80084918[];

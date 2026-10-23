@@ -189,7 +189,20 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048870);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800488F0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048998);
+void func_800488F0(u32, u32, s32);
+
+void func_80048998(u8 *p, s32 n) {
+    if (n != 0) {
+        /* `n -= 1` as its own statement: written `D_80083110[n - 1]` the -1
+           folds into the base (`addiu %lo(D_80083110)-4`) and the function is
+           a word short. */
+        n -= 1;
+        D_80083110[n] = (u32) p;
+        func_800488F0(*(u32 *) (p + 0x8), *(u32 *) (p + 0x28), 2);
+    } else {
+        func_800488F0(*(u32 *) (p + 0x8), *(u32 *) (p + 0x28), 3);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800489F4);
 
