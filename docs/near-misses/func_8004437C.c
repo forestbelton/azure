@@ -11,6 +11,17 @@
  *   after func_8003E4FC: this has the address in $v1 and the stored pointer in
  *             $a0; the target has them swapped                     (5 words)
  *
+ * ONE UNEXPLORED LEVER, added 2026-10-23 from reading local-alloc.c and NOT
+ * measured. The HIGH half is block-local, so local-alloc owns it -- and
+ * `block_alloc` has a preference system this header did not know about: every
+ * quantity carrying a SUGGESTION gets its suggested register in a first phase
+ * that jumps the queue, ahead of the unsuggested quantities sorted by life
+ * length. Suggestions come from `combine_regs` on a copy relating a pseudo to
+ * a HARD register, i.e. a call's arguments or return value, and this function
+ * has 6 calls. So the question "how do I make local-alloc put the HIGH
+ * somewhere else" has an answer shape that was never tried. See
+ * matching-levers section 3.
+ *
  * MECHANISM. Indexing a symbol (`D_80080AF4[i]`) goes through
  * legitimize_address, which puts the HIGH in one pseudo and force_regs the
  * LO_SUM into another. Here the LO_SUM pseudo is a global allocno ($a1) while

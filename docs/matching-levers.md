@@ -37,8 +37,8 @@ whether source can reach it at all.
 | `flow` | `reg_n_refs`, `reg_live_length` | refs are weighted by `loop_depth`, so a loop note reweights the whole function (section 2). Both are recomputed after `sched1`. |
 | `combine` | substitutes an insn into its single user | blocked by a **second use**, by an intervening memory store (`use_crosses_set_p` / `mem_last_set`), and by basic-block boundaries. This is the most reachable pass from C. |
 | | proves bits via `nonzero_bits` | **not** reachable from C -- see the dead ends |
-| `sched1` | insn order **within one basic block** | ties break by `LUID`, i.e. source order; alias calls go through `MEM_IN_STRUCT_P` (section 5); a hazard heuristic reorders stores and cannot be steered |
-| `local-alloc` | registers for block-local quantities, **before** `global-alloc` | a value live in one block only is out of reach; it also takes the register `global-alloc` would have wanted |
+| `sched1` | insn order **within one basic block** | priority, then a **dependence class** relative to the last-scheduled insn, and only then `LUID` (source order) as a stable tie-break -- so a dependency-free insn outranks a dependent one *before* source order is consulted, which is why a free address computation floats to the top of its block. Alias calls go through `MEM_IN_STRUCT_P` (section 5); a hazard heuristic reorders stores and cannot be steered |
+| `local-alloc` | registers for block-local quantities, **before** `global-alloc` | a value live in one block only is out of reach of `global-alloc`'s levers, and it takes the register `global-alloc` would have wanted. But it has its OWN preference system -- see the suggestion phase below -- so "it just takes the first free register" is true only of an *unsuggested* quantity |
 | `global-alloc` | everything else, by `floor_log2(refs)*refs/live_length` | section 3; `find_reg` also avoids registers that *conflicting* allocnos prefer, and a call's argument preferences propagate |
 | `sched2` | insn order again, after allocation | sees the code **before** cross-jumping, so a duplicate put in both arms is still two insns here |
 | `jump2` | cross-jumping | merges identical tails, so duplicating a store into two arms costs nothing (section 1). **It runs after both schedulers and after allocation** -- measured, not assumed: the twin branch and its label are present in the `.sched2` dump and gone in `.jump2` |
@@ -386,6 +386,63 @@ Levers that move them, all with no change to the emitted code:
   tie-break and no source shape softens it -- but note it prunes only the
   *preference*, so the self-preference escape above is unavailable precisely for
   allocnos that cross a call, and available for those that do not.
+
+  **LOCAL-ALLOC HAS ITS OWN PREFERENCE SYSTEM, and the docs here had none.**
+  `block_alloc` allocates in TWO phases (2.7.2 local-alloc.c, ~1463-1540):
+
+  1. Sort by `qty_sugg_compare_1`, then give **every quantity that carries a
+     suggestion** its suggested register -- `qty_phys_copy_sugg` (from a copy)
+     is tried before `qty_phys_sugg` (arithmetic). These jump the queue, and the
+     source comment says this is accepted in local allocation precisely because
+     it may allocate registers that otherwise would not be.
+  2. Sort what is left by *decreasing life length* (`qty_compare_1`) and give
+     each the first register `find_free_reg` finds.
+
+  So the rule recorded elsewhere -- a block-local quantity takes the first
+  entry of `REG_ALLOC_ORDER` -- describes phase 2 only. A suggested quantity
+  does not behave that way at all.
+
+  **Where suggestions come from, and the trap in it.** `combine_regs` records
+  them when a copy relates a pseudo to a hard register. But when the hard reg
+  is the SOURCE and a pseudo the destination -- an incoming parameter -- it
+  deliberately does **not** tie them: it records the hard reg in
+  `qty_phys_sugg` and returns failure *on purpose*, so the hard register's
+  lifespan terminates at that insn and nothing blocks the pseudo from later
+  getting it. Do not expect an incoming parameter to hold its argument register
+  by being tied to it; it holds it, when it does, by suggestion.
+
+  **`find_free_reg`'s exclusion set** is every register live at any point from
+  `born_index` to `dead_index`, plus `call_used_reg_set` if the quantity
+  crosses a call (`fixed_reg_set` if it does not) -- the same call distinction
+  `global.c` makes. So to keep a block-local quantity *off* a register, either
+  something must be live in it across that quantity's whole lifetime, or the
+  quantity must be suggested elsewhere.
+
+  **The consequence worth checking first: no calls means no suggestions.** A
+  function with no `jal` has no hard-register copies except its incoming
+  parameters, so almost every block-local quantity in it goes through phase 2
+  and the suggestion lever does not exist. func_80047054 has **zero** calls,
+  which is why nothing moves its `p[0]` load off `$a0`. func_8004437C (6 calls)
+  and func_8003F368 (12 calls) do have the lever available, and it is
+  unexplored on both.
+
+  **And sched1's ordering is not just priority-then-source-order.**
+  `rank_for_schedule` compares `INSN_PRIORITY` first; then classifies both
+  insns against the **last scheduled** insn -- 3 for independent or latency-1,
+  2 for anti/output dependent, 1 for data dependent -- and prefers the higher
+  class; only then does it fall back to `INSN_LUID` difference, which the
+  source says is there to make the sort stable and minimise movement. Since the
+  list is built in reverse, an insn that depends on nothing floats toward the
+  FRONT of its block, outranking a dependent neighbour regardless of where the
+  source put it.
+
+  That is the mechanism behind two measured observations: func_80047054's
+  `p[2]` load being hoisted above `e`'s `addu`, and func_80045CC4's
+  `p70 = p + 0x70` landing at the arm top. Both are class 3 against class 1 --
+  not a tie-break. **The lever is therefore to make the insn data-dependent on
+  its neighbour**, which is what "give it a predecessor chain" means, and it
+  explains why a constant offset from a parameter cannot be moved: there is
+  nothing in the block for `p + K` to depend on.
 
 
   * In func_80041344, `op` is copied into `$a3` as func_8003F80C's fourth

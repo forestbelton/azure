@@ -150,9 +150,39 @@
  * escape from local-alloc does not apply (the first being the contained live
  * range above).
  *
- * So this bound is tighter than the other six, not looser: it is genuinely
+ * So this bound is tighter than the others, not looser: it is genuinely
  * function-local, the surrounding context is evidence rather than assumption,
- * and the one open question is sched1's hoist of the `p[2]` load.
+ * and the one open question was sched1's hoist of the `p[2]` load.
+ *
+ * BOTH HALVES NOW HAVE A SOURCED MECHANISM, read out of gcc 2.7.2 on
+ * 2026-10-23. Neither opens a lever here, and both say why.
+ *
+ *  THE HOIST is not a tie-break. `rank_for_schedule` (sched.c) compares
+ *  INSN_PRIORITY, then classifies each insn against the LAST SCHEDULED insn --
+ *  3 for independent or latency-1, 2 for anti/output dependent, 1 for data
+ *  dependent -- and prefers the higher class, falling back to INSN_LUID only
+ *  to keep the sort stable. The list is built in reverse, so a dependency-free
+ *  insn floats to the FRONT of its block, outranking a dependent neighbour
+ *  wherever the source put it. The `p[2]` load depends on nothing in that
+ *  block, so it is class 3 and goes first. The lever would be to make it
+ *  data-dependent on its neighbour -- and nothing in the entry block exists
+ *  for `p[2]` to depend on, which is why all 14 spellings failed.
+ *
+ *  THE $a0 ASSIGNMENT is local-alloc phase 2, and phase 1 cannot be reached
+ *  from here. `block_alloc` first gives every quantity carrying a SUGGESTION
+ *  (qty_phys_copy_sugg, else qty_phys_sugg) its suggested register, jumping
+ *  the queue; only the unsuggested remainder is sorted by decreasing life and
+ *  handed the first register find_free_reg finds. Suggestions come from
+ *  `combine_regs` on a copy relating a pseudo to a HARD register -- i.e. from
+ *  a call's arguments or return value. **This function contains zero `jal`.**
+ *  No calls means no hard-register copies beyond the incoming parameters, so
+ *  no suggestion can be created for the block-local `p[0]` load, and it must
+ *  go through phase 2 and take the first free register, which is $a0. That is
+ *  also consistent with the function having no stack frame.
+ *
+ * Note for anyone carrying the lever elsewhere: func_8004437C (6 calls) and
+ * func_8003F368 (12 calls) DO have the suggestion lever available, and it is
+ * unexplored on both. It is unavailable here specifically, not generally.
  */
 
 #include "common.h"

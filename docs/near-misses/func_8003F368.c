@@ -15,6 +15,18 @@
  * WHAT IS LEFT is 4 words in two independent two-word gaps, both in the tail's
  * BCD validation chain:
  *
+ * ONE UNEXPLORED LEVER, added 2026-10-23 from reading local-alloc.c and NOT
+ * measured. `block_alloc` allocates in two phases: every quantity carrying a
+ * SUGGESTION (`qty_phys_copy_sugg`, else `qty_phys_sugg`) gets its suggested
+ * register first, jumping the queue, and only the unsuggested remainder is
+ * sorted by decreasing life and given the first register `find_free_reg`
+ * finds. Gap (A) below assumes the second path. This function has 12 calls, so
+ * hard-register copies -- the thing `combine_regs` turns into suggestions --
+ * do exist here, unlike in func_80047054 where there are none. Whether a
+ * suggestion can be put on THIS quantity is the open question; $v1 is hard to
+ * name from C, so check what the .lreg dump already shows for the quantities
+ * in that block before spending runs. See matching-levers section 3.
+ *
  *  (A) local-alloc. The third func_8003F688 comparison must land in $v1. Its
  *      RTL is `(set (reg 124) (le:SI (reg:SI 2 v0) (const_int 74)))`, a
  *      one-block quantity born where $v0 dies, so find_free_reg takes the first
