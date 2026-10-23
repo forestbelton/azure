@@ -75,22 +75,42 @@
  * empty set = {3,6}, 86 avoids both and takes $a0. There is nothing to subtract
  * because `c` prefers nothing.
  *
- * SO THE TARGET IS NARROW AND NAMED: give allocno 86 or 87 a hard-register
- * preference for 3 ($v1) or 6 ($a2). `set_preference` records one from a COPY
- * relating the pseudo to a hard register, which from C means an argument
- * position or a return value. That makes reg 3 effectively unreachable ($v1 is
- * only the high word of a 64-bit return) and leaves reg 6 = $a2 = **the third
- * argument of a call** as the single live route -- and this function has
- * exactly one call, the memcpy, whose third argument is the count. So the
- * question to answer is whether the original's memcpy count expression is
- * written in terms of the value that becomes `c`/`b`, rather than in terms of
- * `size`.
+ * AND THEN IT DOES NOT APPLY HERE. Recorded in full because the mechanism above
+ * is real and general, and because the way it failed is the failure mode this
+ * directory exists to document -- a true mechanism, over-extrapolated into a
+ * "named target" without checking it against what the target actually wants.
  *
- * That is a much narrower claim than this header's original one. It is not
- * "no spelling changes end's preference" (true, and the wrong side of the
- * conflict); it is "the pushed-off allocno needs a preference, and only one
- * argument slot can give it one". UNMEASURED -- the .greg evidence above is
- * solid, the source experiment has not been run.
+ * The extrapolation was: give allocno 86/87 a preference for 3 ($v1) or 6
+ * ($a2), which `set_preference` records from a copy relating the pseudo to a
+ * hard register, i.e. an argument position or a return value. Two independent
+ * checks kill it.
+ *
+ *  (1) The TARGET DOES NOT WANT `c` IN EITHER REGISTER. The target has `c` in
+ *      $a1 -- stated further down this header, "the target has one $a1 for c
+ *      and one $t0 for n" -- and this build has it in $a0 (.greg dispositions:
+ *      86 and 87 both in reg 4). Lifting the {3,6} exclusion moves `c` TOWARD
+ *      $v1/$a2, which is the wrong direction. The exclusion is real and is not
+ *      what stands between this build and the target. And reg 5 is not
+ *      reachable as a preference for `c` at all: the second argument slot of
+ *      the one call is `src + 2` and the second incoming parameter is `d`.
+ *
+ *  (2) The only route to a reg 6 preference is unavailable anyway. The memcpy
+ *      is in the `m == 0` else-branch; `c` and `b` live only in the `m & 1` and
+ *      `m != 0` branches, which are disjoint from it. So `c` is never live at
+ *      the call and cannot be one of its arguments without being MERGED with
+ *      the else-branch's count variable -- a different proposition, and note
+ *      the strided branch's own `size` is live alongside `c` there, so the two
+ *      cannot be one variable across the whole function.
+ *
+ * What survives is the general lever, which belongs to matching-levers section 3
+ * and not to this function: when X is pushed off R by Y's preference, the fix is
+ * on X's side, because `prune_preferences` subtracts X's own preferences before
+ * excluding Y's. Also surviving, and worth keeping for any future attempt here:
+ * allocnos 86 and 87 DO NOT cross the memcpy (verified via find_reg's
+ * call_used_reg_set exclusion against their caller-saved assignment), so
+ * preference pruning is not what limits them -- they simply have no preference
+ * to begin with, and no argument slot or return value in this function can give
+ * them one for reg 5.
  *
  * Independently, the target's order is out of reach arithmetically: `m` would
  * have to be allocated before `n`, and their floor_log2(refs)*refs/live_length
