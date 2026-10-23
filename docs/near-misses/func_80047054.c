@@ -54,11 +54,50 @@
  * a walking byte pointer is what makes gcc's combine_givs fold them into one
  * induction variable at +6 with the other access as `-0x2` off it.
  *
- * UNIT RENAMED: this function started in unk_14934. Successive $gp clusters have
- * been carved out of that chain, and the piece holding this function is now
- * unk_1811C -- pass that as verify.py's UNIT argument. The chain so far is
+ * UNIT: pass `unk_19434` as verify.py's UNIT argument. This function started in
+ * unk_14934; successive $gp clusters have been carved out of that chain, and
+ * the piece holding it is now unk_19434. (An earlier version of this line said
+ * unk_1811C, which was true for one carve and is now stale -- the chain is
  * unk_14934, gprel_152E4, unk_154BC, gprel_17504, unk_176B8, gprel_17B7C,
- * unk_1811C, each named for its start offset.
+ * unk_1811C, gprel_18B40, unk_19434, each named for its start offset. Derive it
+ * from the splat spec by address rather than from a comment:
+ * `tools/decomp/nmcheck.py --fix-units` does exactly that.)
+ *
+ * WALL, confirmed 2026-10-23 with a sharper diagnosis than the above, and the
+ * reason it is a wall is that the two facts the target needs have ONE common
+ * cause which cannot be split.
+ *
+ * `p` must keep $a0 and `e` must avoid it. Both follow from the block-local
+ * `p[0]` load being local-allocated to $a0: that makes `p`, which is live
+ * across it, conflict with hard reg 4 -- `.greg` shows
+ * `80 conflicts: ... 2 3 4 5 6 7 29` and consequently NO `preferences:` line
+ * for 80 at all, because `prune_preferences` strips the parameter's own $a0
+ * preference as a conflict -- and it propagates `;; 84 preferences: 4` onto
+ * `e` along the dataflow chain through `(set (reg 84) (plus (reg 88) (reg 87)))`.
+ *
+ * And it cannot be split, because **`p`'s live range strictly contains `e`'s**
+ * (88 insns against 40; the loop condition reads `p[2]` every iteration). Any
+ * hard register that conflicts with `e` therefore conflicts with `p` too, so
+ * there is no conflict-based assignment in which `e` avoids $a0 and `p` keeps
+ * it. That specifically closes off the conflict-import lever that closed
+ * func_8003CCB0 (matching-levers section 3), which is the newest thing anyone
+ * would reach for here. The only route left is allocation order, and the gaps
+ * are the ones recorded above: the n+6 giv at 4.7, `n` at 3.3, `e` at 0.675,
+ * `p` at 0.136 -- `p` would need 16 references to overtake `e` against the 6 it
+ * has, or `e` would need to drop to 3 against the 9 it has, all inside the loop
+ * and so weighted by loop_depth.
+ *
+ * The entry block's SCHEDULE differs too and is coupled to the same decision:
+ * the target leaves the `p[2]` load after `e`'s `addu` and pays a nop in its
+ * load-delay slot, where this build hoists the load and spends the word on
+ * `move $t2,$a0` instead -- which is how both come to 58 words. Every spelling
+ * tried left sched1 in source order.
+ *
+ * TEN MORE VARIANTS MEASURED, all exactly 58 words / 30 DIFF: a non-struct
+ * spelling of the bound, of `p[1]`, and of all three accesses; a struct pointer
+ * with three u32 fields and `p->unk_08` (all three in-struct); `break` instead
+ * of a `for` condition; `p[1] << 2` for `* 4`; `p[1] * 4 + p[0]` reversed;
+ * `(u8 *) p[0] + p[1] * 4`; and `&((u8 *) p[0])[p[1] * 4]`.
  */
 
 #include "common.h"

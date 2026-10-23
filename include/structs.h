@@ -181,6 +181,50 @@ typedef union Unk44D24UV {
    func_800463EC's match turns on which of its accesses are casts and which
    are struct fields, so changing its field types is a real risk for a
    cosmetic gain. */
+/* The 0x1F800000 scratchpad as func_8003CCB0 lays it out, and the FOURTH
+   typedef for the same region after Unk463ECSP, Unk3DBD0SP and Unk44D24SP.
+   It is a second independent confirmation of the union above: unk_40/44/48,
+   unk_70/72/74 and unk_94 agree field-for-field with Unk3DBD0SP, and the
+   u32 unk_08..unk_14 read back through `(u16)` casts is exactly the
+   sw-then-lhu asymmetry Unk44D24SP models as Unk3DBD0W unk_08..unk_14. If the
+   merge ever happens, those four can become Unk3DBD0W here -- untested, and
+   the `(u16)` casts are load-bearing, so it is a real risk for a cosmetic
+   gain. */
+typedef struct Unk3CCB0SP {
+    u8  pad_00[0x8];
+    u32 unk_08;
+    u32 unk_0C;
+    u32 unk_10;
+    u32 unk_14;
+    u8  pad_18[0x10];
+    s16 unk_28;
+    s16 unk_2A;
+    s16 unk_2C;
+    u8  pad_2E[0x12];
+    s32 unk_40;
+    s32 unk_44;
+    s32 unk_48;
+    u8  pad_4C[0x4];
+    u8  unk_50[0x20];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8  pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8  pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8  pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8  pad_8E[0x6];
+    s32 unk_94;
+} Unk3CCB0SP;
+
 typedef struct Unk44D24SP {
     s16        unk_00;
     u16        unk_02;
@@ -1333,6 +1377,14 @@ s32  GetRCnt(s32);
 void ResetRCnt(s32);
 /* libc, from the PSY-Q runtime. */
 void bzero(void *, s32);
+
+/* func_8003CCB0's 14 glyph records, 0xE of 0xC bytes, and the 14 characters it
+   names them with. D_80083798 sits at gp + 0x2E04, INSIDE the window, so the
+   declared extent is what keeps it off the $gp path in this -G8 unit; an
+   incomplete array measures identically but the size says why it is there.
+   D_8006CDB8 is below the window, so it has no -G8 hazard either way. */
+extern u8 D_80083798[0xA8];
+extern u8 D_8006CDB8[0xE];
 void *memcpy(void *, const void *, u32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and

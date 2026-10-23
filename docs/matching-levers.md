@@ -101,10 +101,33 @@ Three instances:
 
   That makes it the one way to put a **cse run boundary** in the middle of a
   straight-line stretch for free, which is what defeated func_80041E70's
-  constant fold at an unchanged 270 words. The caveat is the price: it is free
-  in words but it is a real **sched1 and sched2 block split**, so it only helps
-  where the surrounding schedule can tolerate one. In func_80041E70 the body
-  came out byte-exact and the first block then lost two words to scheduling.
+  constant fold at an unchanged 270 words.
+
+  **But it is ONLY reliably a cse boundary -- do not count on it as a sched1 or
+  allocation boundary, which an earlier version of this entry claimed.** An
+  INSERTED identical-arms `if` has a redundant branch, and the `jump` pass that
+  runs immediately after cse deletes it, so by sched1 there is no block split
+  left. Measured on func_8003CCB0: four placements of
+  `if (r != 0) { rr[3] = -4; } else { rr[3] = -4; }` inside a loop each gave
+  272 words and 29 DIFF with the generated `.s` **byte-identical** to the
+  baseline apart from label numbering -- no extra reference, no live-range
+  extension, no boundary. The cse boundary still works because cse itself runs
+  before that jump pass.
+
+  **The distinction that matters is whether the branch is needed for its own
+  sake.** Section 3's duplicate-an-insn lever duplicates a statement into both
+  arms of an **existing** `if` whose condition is real: the branch survives to
+  allocation, the pseudo genuinely gains references, and jump2 merges only the
+  duplicated tail afterwards -- which is how func_800423C0 and func_80045CC4
+  were closed. Inserting a new `if` purely to make a boundary does not buy that.
+  So: use an existing branch to raise a reference count, use inserted identical
+  arms only for a cse run boundary, and **check the `.s` before relying on
+  either for a schedule.**
+
+  The other caveat is the price where it does apply: it is a real sched1 and
+  sched2 split wherever the branch survives, so it only helps where the
+  surrounding schedule can tolerate one. In func_80041E70 the body came out
+  byte-exact and the first block then lost two words to scheduling.
   Arms holding a different insn, or placed a statement earlier or later, cost
   1-3 words -- the placement sweep is in its near-miss file.
 
@@ -285,6 +308,38 @@ Levers that move them, all with no change to the emitted code:
   count. **Diagnostic:** grep the `.lreg` dump for `(set (reg:SI 4 a0) (reg:SI
   N))`; `.greg`'s `;; N preferences: 4` line does *not* distinguish a copy
   preference from a plain one.
+
+* **Giving an EXISTING global allocno a second role in another block imports
+  that block's hard-register conflicts** -- which is how you keep a
+  hard-register copy that would otherwise coalesce away. This is the inverse of
+  the note below that promoting a block-local value to a global allocno gives
+  it hard-reg conflicts, and it is free when the second role is an assignment
+  the target already performs.
+
+  func_8003CCB0's init loop was missing the target's `addu $v1,$v0,$zero`, the
+  copy of a call's return value: the pseudo printed `preferences: 2`,
+  conflicted with nothing caller-saved, took `$v0` and the copy was deleted as
+  a self-move. Reusing that same variable for a `D_80080AB0` load in a later
+  block gave one allocno two ranges, and in that block a block-local `(high)`
+  quantity holds `$v0` across it -- so `global_conflicts` ORs reg 2 into its
+  `hard_reg_conflicts`, `prune_preferences` can no longer honour the `$v0`
+  preference, `find_reg` takes the next register in REG_ALLOC_ORDER, and the
+  copy becomes a real instruction. 29 differing words to 6, at an unchanged
+  word count.
+
+  **Two facts make this the only route, and both are worth knowing on their
+  own:**
+
+  * **A pseudo set from a hard register does not conflict with it.**
+    `global_conflicts` processes an insn's `REG_DEAD` notes *before* its
+    stores, so the dying source never conflicts with the destination. That is
+    why nothing written inside the block that contains the call can reach this,
+    and the conflicting value has to live in a *different* block.
+  * **A plain pointer copy is not a second pseudo.** cse's `canon_reg` rewrites
+    the uses to the quantity's first register and the copy dies: all eight ways
+    of distributing three uses across a variable and a copy of it gave
+    byte-identical output. A copy only survives if the original has a later use
+    of its own -- which costs a word.
 
   **There is a third lever, on the CONFLICT side, and it is the one to reach for
   when no lower-priority rival exists to populate `regs_someone_prefers` at
@@ -645,6 +700,39 @@ form:
   twice needs no pointer local: in func_800453E0, D_8006CD30 is reached by
   plain symbol at two sites separated by three calls and cse keeps the single
   pair in `$s5` unaided.
+* **The compiler-split address form turns on the pseudo's USE count, not its
+  SET count**, and with two uses the register is reload's spill register rather
+  than an allocated one. An earlier version of this said the split form needs
+  two sets reaching a join, and that one set folds back; both halves were
+  incomplete.
+
+  * **One set and ONE use in the same block folds** to `lui` + `lw %lo`, which
+    costs the word. Measured four ways on func_8003CCB0, and duplicating the
+    use into both arms of an `if` so each arm has its own set and its own use
+    folds too. So the folding condition is one use per set in the same block.
+  * **One set and TWO uses in different blocks gives the split form**, three
+    words per use. A single-set pseudo with a `REG_EQUIV` constant is picked up
+    by local-alloc's `update_equiv_regs`, its set insn is deleted, and reload
+    rematerialises the value at each use -- and because cc1psx has split
+    addresses on, a bare `SYMBOL_REF` is not a legitimate MEM address, so
+    reload must build the whole address into a reload register: `lui` + `addiu`
+    + a `0x0` displacement. The second use is what stops the address being
+    folded into the MEM in the first place. The register follows from
+    `reload1.c`'s `order_regs_for_reload`, which prefers registers no pseudo
+    uses, in REG_ALLOC_ORDER -- in func_8003CCB0 that is `$a3`, and `.greg`
+    prints `Spilling reg 7.` while the same function's other symbol addresses
+    go through the identical path.
+  * **Two sets reaching a join also select the split form, but then the pseudo
+    is a genuine allocno**, inherits `preferences: 2` from the block-local
+    `(high)` quantity and takes `$v0`. That is a different register from the
+    one-set/two-use form, so the two are not interchangeable: func_8003CCB0
+    needed `$a3` and the two-set shape gave it `$v0`.
+
+  Two dead ends in this family: two single-set locals, one per site, interfere
+  (cse merges them, the pseudo gets three references, is allocated and has its
+  `lui` hoisted into the prologue); and mixing a two-set site with a
+  single-set site is insensitive to where the single set goes.
+
 * `expand_block_move` `force_reg`s a fresh pointer when the address is a
   non-offsettable `(const (plus symbol off))`, so a block copy out of a global
   wants a pointer local (func_80044724, 106 words).

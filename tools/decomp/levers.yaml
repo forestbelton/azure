@@ -160,16 +160,31 @@
   cost: "1 word, which can shift a whole epilogue -- 18 differing words in
          func_80045CC4"
   options:
+    - "a pointer-to-symbol local with ONE set and TWO USES IN DIFFERENT BLOCKS.
+       local-alloc's update_equiv_regs deletes the set and reload
+       rematerialises the address at each use, into its spill register (the
+       first register no pseudo uses, in REG_ALLOC_ORDER). This is usually the
+       one you want."
     - "a pointer-to-symbol local with TWO SETS, both reaching the use from a
-       real join. With one set it folds back to `lui` + `lw %lo`."
+       real join. Also selects the split form, but the pseudo is then a genuine
+       allocno and inherits `preferences: 2` from the block-local (high)
+       quantity, so it lands in $v0 rather than the spill register -- a
+       different register from the one-set form, so the two are not
+       interchangeable."
   negative:
-    - "a single-set block-local pointer, `*(u8 **) &SYM`, an index expression,
+    - "one set and ONE use in the same block: folds back to `lui` + `lw %lo`.
+       Duplicating the use into both arms of an `if`, so each arm has its own
+       set and use, folds too -- the condition is one use per set per block."
+    - "two single-set locals, one per site: cse merges them, the pseudo gets
+       three references, is allocated and has its `lui` hoisted to the prologue"
+    - "a block-local pointer, `*(u8 **) &SYM`, an index expression,
        a volatile pointer or a volatile-qualified struct pointer -- all fold"
     - "the constant address `((T *) 0x80083160)->field`: cc1psx emits an
        absolute `lw $2,-2146946720` which the assembler still expands to two
        words"
-  note: "A CONST_INT folds through two sets; only a SYMBOL_REF is blocked by
-         them. This is the one spelling found that selects the split form for
+  note: "THE EARLIER VERSION OF THIS ENTRY SAID TWO SETS WERE REQUIRED, which
+         was incomplete: what matters is the USE count. A CONST_INT folds
+         through two sets; only a SYMBOL_REF is blocked by them. This is the one spelling found that selects the split form for
          an in-image symbol, and it is why one function can mix both spellings
          of one object."
 
