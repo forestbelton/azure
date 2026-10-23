@@ -21,18 +21,73 @@
  *      entry of REG_ALLOC_ORDER. For it to take $v1, something must occupy $v0
  *      across `[slti, beqz]` -- and nothing can, because that block contains
  *      the call.
- *  (B) reorg. The second comparison's branch must NOT steal
- *      `(set (reg/i:SI 2 v0) (const_int 0))` out of the shared return-0 block.
- *      All four branches to that block target one label with one `(set v0 0)`
- *      behind it; this build's `fill_eager_delay_slots` steals and retargets
- *      for all four, the target does it for three. `own_thread_p` is 0 for that
- *      thread in both builds, so copy-and-redirect is the only path either can
- *      take, and the three sites are identical in shape, target and condition
- *      register. The asymmetry was not found.
+ *  (B) reorg, and the exact pass check is now named. The second comparison's
+ *      branch must NOT fill its delay slot from the shared return-0 block,
+ *      where the other three do. Two facts narrow it to one test.
+ *
+ *      The target's test-2 branch is NOT redirected -- it reads
+ *      `beqz $v0, .L8003F50C` (the shared block) where the other three read
+ *      `.L8003F510`. In reorg, `new_thread` starts equal to `thread` and
+ *      advances only when a trial is accepted or deleted as redundant, and the
+ *      closing `reorg_redirect_jump` runs only `if (new_thread != thread)`. So
+ *      the first trial was REJECTED OUTRIGHT -- not consumed, and not found
+ *      redundant by `redundant_insn`, which would have redirected without
+ *      filling and given `.L8003F510` plus a nop. And on a first trial `set`
+ *      and `needs` are still empty and MIPS slots are not annulled, so the
+ *      condition register is unprotected -- test 1 is `beqz $v0` with
+ *      `set $v0,0` in its slot and is accepted. That leaves exactly one test
+ *      that can reject it:
+ *
+ *          ! insn_sets_resource_p (trial, &opposite_needs, 1)
+ *
+ *      with `opposite_needs = mark_target_live_regs (fallthrough_insn)`. So the
+ *      original had $v0 REPORTED LIVE AT THE HEAD OF THE THIRD COMPARISON'S
+ *      BLOCK -- test 2's fall-through -- and nowhere else. No dataflow can do
+ *      that: that block's first real event is `jal func_8003F688`, which
+ *      clobbers $v0. The only route is `mark_target_live_regs`'s conservative
+ *      fallback -- `find_basic_block` scans back to the previous BARRIER then
+ *      forward over CODE_LABELs for a `basic_block_head`, returns -1 on
+ *      failure, and every register is then marked live, so any trial that
+ *      writes one is rejected. **So gap (B) is a question about block-entry
+ *      layout in the tail, and producing it from C costs a word.** Three
+ *      zero-word ways to put a label at that block's head were probed -- a
+ *      `goto third;` above its own label, a `for (;;) { ... break; }` wrapper,
+ *      and inverting test 2 so the block is a branch target rather than a
+ *      fall-through -- and all three are 113 words / 4 DIFF, because jump2
+ *      deletes the redundant jump and the label's last use goes with it.
  *
  * **(A) and (B) are independent**, measured: writing the third comparison into
  * `saved` puts its `slti` in $s2, so $v0 IS free at that point, and branch 2
  * still steals -- the same two branch words wrong.
+ *
+ * THE `own_thread_p` LEVER POINTS THE WRONG WAY HERE, and the target proves it,
+ * so do not try it: giving the shared `(set v0 0)` its own thread would make
+ * reorg STEAL AND DELETE it, and the target KEEPS it -- `addu $v0,$zero,$zero`
+ * survives at 0x8003F50C, physically last before the epilogue, with three
+ * further copies of it in delay slots. **A surviving original plus copies
+ * elsewhere is the signature of an UN-OWNED thread**, which is the state this
+ * build is already in. Measured: the func_80042900 shape, with success falling
+ * off the end and failure owning the `return 0`, gives 109 words and 17 DIFF.
+ *
+ * And the barrier `own_thread_p` needs cannot be kept from C anyway. The final
+ * conditional always falls through into the return-0 block, because
+ * `set v0, pos` is harmless on both paths and gets hoisted above the `pos > 0`
+ * branch; the branch is then inverted to jump straight to the epilogue, the
+ * explicit `j epilogue` after `return pos` becomes a jump-to-next and is
+ * deleted, and its barrier goes with it. Confirmed in `.sched2`: the
+ * `goto zero;` form with an explicit jump on the success path collapses to a
+ * layout identical to the base's. The one shape that kept a barrier -- the
+ * return-0 block first with success behind `ok:` -- puts it AFTER the block,
+ * which is no use, since `own_thread_p` scans backwards.
+ *
+ * EXIT-BLOCK SHAPES MEASURED, 11 variants, on top of the 23 condition-chain
+ * ones above (34 spellings now, all one RTL shape): three `goto zero;` forms,
+ * the return-0 block first with success behind a label, and two-return-0-block
+ * forms with test 1 or test 2 returning directly -- all 113 words / 4 DIFF.
+ * Failure falling off the end with no `(set v0 0)` anywhere: 113 / 8, and that
+ * one is EVIDENCE -- all four delay slots then come out `nop`, which proves the
+ * target's three filled slots are copies of that one block's insn, and that the
+ * fourth really is one of four identical opportunities being declined.
  *
  * RULED OUT for the last 4 words, 23 compiled variants, all 113 words / 4 DIFF
  * unless noted. Everything in the condition chain canonicalises to one RTL

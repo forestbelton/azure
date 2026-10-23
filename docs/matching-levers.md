@@ -132,6 +132,21 @@ Three instances:
   delay slot and runs on both paths. A target with one such insn where two
   paths need it is evidence the original was written that way.
 
+  **The converse is the diagnostic, and it bounds this lever: if the shared insn
+  STILL EXISTS as its own instruction in the listing, with copies in delay slots
+  elsewhere, then reorg COPIED and the thread was not owned -- and that is what
+  the target wants.** Do not reach for `own_thread_p` there. func_8003F368 is
+  the counterexample: its `addu $v0,$zero,$zero` survives at 0x8003F50C with
+  three copies in slots, and the func_80042900 shape costs it 4 words (109
+  against 113). Its remaining gap is the other half of the same decision --
+  reorg declining ONE of four identical opportunities, which needs
+  `insn_sets_resource_p (trial, &opposite_needs)` to reject the trial, i.e.
+  `mark_target_live_regs` reporting the register live at that branch's
+  fall-through, reachable only through `find_basic_block` returning -1. That is
+  block-entry layout, and it costs a word to produce from C. **So the lever is
+  which way the layout goes, and the listing tells you which way to want: a
+  surviving original means copied, an absent one means stolen.**
+
 ## 2. Loop notes change every reference weight in the function
 
 **A backward `goto` is not a loop to loop.c at all, and that is a
