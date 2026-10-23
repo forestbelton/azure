@@ -1143,7 +1143,21 @@ extern u8  D_800717BC[];
 extern s16 D_8008480A[];
 extern u8  D_800FC000[];
 extern u8  D_800713FC[];
-extern u32 *D_8007359C;
+/* Hand-added. A pointer to a table of 20-byte entries; func_8004AC18 scales an
+   index by 20 and reads +0x04. Declared as an incomplete ARRAY of pointers and
+   read as D_8007359C[0] because cc1psx runs at -G8 over this whole project: a
+   4-byte scalar is small data, so its address comes out as the
+   assembler-expanded symbolic form, in which the lui and the lw are ONE insn
+   until maspsx splits them and so cannot be scheduled apart. The target has
+   two index instructions between them, which only the compiler-split form --
+   an object cc1psx cannot judge small -- allows. The original unit was
+   presumably compiled at -G0, where every symbol takes that form. */
+typedef struct Unk7359C {
+    u32 unk_00;
+    u32 unk_04;
+    u8  pad_08[0xC];
+} Unk7359C;
+extern Unk7359C *D_8007359C[];
 extern u8  D_800717D0[];
 extern u8  D_800717E8[];
 extern s16 D_8008480C[];
@@ -1170,8 +1184,8 @@ extern s8  D_80080A88;  /* retyped: read with lb */
 extern s8  D_80080A89;  /* retyped: read with lb, not lbu */
 extern u8  D_80080A8A;
 extern u32 D_80080A8C;
-extern u16 D_80080A94;
-extern u16 D_80080A98;
+extern s16 D_80080A94;
+extern s16 D_80080A98;
 extern u16 D_80080A9C;
 extern u8  D_80080AA0;
 extern u16 D_80080AA4;
@@ -1574,7 +1588,7 @@ void func_8004437C(s32, s32);
 void func_8004425C(s16);
 Unk8006CE34 *func_8003F534(void);
 void func_8003F540(u32, u32, u32, u32);
-void func_80053DA8(s32);
+s16  func_80053DA8(u16);
 void func_80041284(Unk41284 *);
 /* It does return a value -- five paths return func_8003E39C's result and the
    rest return NULL. The old `void` was an inference from the call sites: all
@@ -1597,8 +1611,8 @@ s32  func_8004491C(UnkNode *, u32);
 Unk80083968 *func_8003E39C(u8, s32, void *);
 void func_8003E34C(void);
 void func_80053F98(void);
-void func_80053DCC(s16);
-void func_80053DF0(s16);
+void func_80053DCC(s32);
+void func_80053DF0(s32);
 void func_80053E14(s16);
 void func_8006A444(void);
 void func_80064688(void);

@@ -228,7 +228,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AA78);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AB7C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AC18);
+u32 func_8004AC18(s32 i) {
+    return D_8007359C[0][i].unk_04;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AC3C);
 
@@ -305,7 +307,20 @@ UnkNode *func_8004B4A8(UnkNode *target) {
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B4DC);
+s32 func_8004B4DC(u8 *p) {
+    s32 n = 0;
+    u8 v;
+
+    /* The advance is inside the loop body and BEFORE the test, which is how it
+       ends up in the backward branch's delay slot and so runs on the exiting
+       iteration too. Latching the byte in `v` is what lets it. */
+    do {
+        n++;
+        v = *p;
+        p += 0xC;
+    } while ((v & 0x80) == 0);
+    return n;
+}
 
 void func_8004B500(u8 *p) {
     u32 g;
@@ -920,11 +935,25 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053CFC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053D64);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053DA8);
+s32 func_80055778(s32);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053DCC);
+s16 func_80053DA8(u16 a) {
+    return func_80055778(a);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053DF0);
+void func_80054D64(s32);
+
+void func_80053DCC(s32 a) {
+    D_8008480C[0] = a;
+    func_80054D64(a);
+}
+
+void func_800552C8(s32);
+
+void func_80053DF0(s32 a) {
+    D_8008480A[0] = a;
+    func_800552C8(a);
+}
 
 void func_80053E14(s16 v) {
     D_80084808[0] = v;
