@@ -14,6 +14,13 @@ candidate to `zzone.c`, run `verify.py zzone.c <unit> <func>`, collect the
 MATCHes, then replace each `INCLUDE_ASM("asm/nonmatchings/<unit>", <func>);`
 line with the body and run `make check`.
 
+**Grep BOTH `include/structs.h` AND the unit's own `.c` file before declaring a
+callee.** As the sweep proceeds, a callee may already have been DEFINED by it --
+declaring `void func_80034FD0(s16 *)` inline when the same file already had
+`s32 func_80034FD0(u32 *p)` 46 lines above broke the build, and the commit went
+in anyway because `make check`'s exit code was masked by an `echo` before the
+`&&`. Let the check result gate the commit directly.
+
 **Grep `include/structs.h` for an existing prototype before guessing a
 signature.** Several of these functions were already declared by callers that
 landed earlier, and a mismatch surfaces as a compile error, not a diff --
