@@ -1602,6 +1602,14 @@ shift" (`(s16) x << 8`, an s16 parameter, a multiply by 0x100) collapses to the
 single `sll 8`, because the value is stored as a halfword and combine drops the
 extension. func_8005B3D8, 2 words.
 
+### No re-test at the bottom means that is not the loop condition
+
+A `while (COND) { ... if (X) break; ... }` re-tests COND at the bottom of the
+loop. If the listing's backward branch tests only X and nothing re-tests COND,
+then COND was an `if` around the loop and the loop itself is a `do`/`while` on
+X -- and whatever the body does first belongs at the TOP of the body, where it
+lands in the first branch's delay slot. func_8004CE68, 9 DIFF.
+
 ### The arm written FIRST ends up SECOND
 
 For an `if`/`else` whose two arms both end the function -- two `return`s, or
