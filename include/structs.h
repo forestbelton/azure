@@ -619,13 +619,6 @@ typedef struct Unk80080AB4 {
     u8 unk_05;
 } Unk80080AB4;
 
-/* 0x80081450..0x80081453, 0x4 bytes, 3 field(s); labels: D_80081450, D_80081451, D_80081452 */
-typedef struct Unk80081450 {
-    u32 unk_00;  /* also read as 1 */
-    /* +0x1   is a 1-byte access inside this field */
-    /* +0x2   is a 1-byte access inside this field */
-} Unk80081450;
-
 /* 0x80081518..0x80081519, 0x2 bytes, 1 field(s) */
 typedef struct Unk80081518 {
     u16 unk_00;  /* also read as 1 */
@@ -919,11 +912,19 @@ extern UnkNode *D_80081498;
 extern u32 D_800814A0;
 extern u8  D_800814A4;
 extern u8  D_800814AC;
-extern u32 D_800814B0;
+/* Array-spelled, and the single element is the point: func_8003F2A4 stores to
+   both of these and reads arg0->unk_04 twice around them. As plain scalars the
+   store is a non-struct reference at a non-varying address, true_dependence's
+   differing-flags exception applies, cse's `invalidate` does NOT drop the
+   cached base load, the second read is shared into a `move` and sched1 hoists
+   both loads above both stores: 29 words against 31, all 31 differing. As
+   ARRAY_REFs both sides are in-struct, the base load is invalidated and
+   re-emitted, and the function matches. See docs/matching-levers.md section 5. */
+extern u32 D_800814B0[1];
 /* A CdlLOC that func_8003F55C fills with CdControl and converts; four bytes,
    so its address comes out as an `la`. */
 extern u8  D_800814B8[4];
-extern u32 D_800814B4;
+extern u32 D_800814B4[1];
 extern u32 D_800814C8;
 extern u32 D_800814CC;
 /* Retyped by hand from the four-field struct fieldscan inferred: func_8003F270
@@ -1044,7 +1045,18 @@ extern Unk800777AC D_800777AC;
    (`lui $v0, %hi` / `addiu $a1, $v0, %lo`). Cast at the use to get the
    6-byte, byte-aligned block move. */
 extern u8 D_80080AB4[];
-extern Unk80081450 D_80081450;
+/* The libcd location buffer: four bytes, reached as D_80081450 (the word, for
+   CdControl/CdSync) and as its +1 and +2 bytes individually. They are THREE
+   objects, not one struct: func_8003F368's absolute accesses are gas's
+   bare-symbol macro expansions (`lui $at` + `%lo`, and `lui $vX` +
+   `lbu %lo($vX)`), not one materialised base with displacements, so a struct
+   or array spelling gives the wrong OPCODES before maspsx's $gp rewrite even
+   enters into it -- measured at 109 words / 39 differing. The old
+   Unk80081450 typedef was the fieldscan's guess at the same four bytes and is
+   now gone. */
+extern u8  D_80081450[4];
+extern u8  D_80081451;
+extern u8  D_80081452;
 extern Unk80081518 D_80081518;
 extern Unk8008151A D_8008151A;
 extern Unk80081520 D_80081520;

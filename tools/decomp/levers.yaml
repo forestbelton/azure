@@ -68,22 +68,32 @@
 
 - id: srl-not-sra
   name: 16-bit truncation that came out sra, not srl
-  doc: "matching-levers.md section 10"
+  doc: "matching-levers.md section 7"
   window: ["sll:16", "sra:16"]
   gap: 1
-  cost: "1 bit, and it blocks func_80042A80 at 58 of 58 words"
+  cost: "1 bit (func_80042A80, now SOLVED and landed)"
   options:
-    - "if the value is single-set and masked, you cannot have `sra`: combine
-       proves bit 15 clear through nonzero_bits and emits `srl`."
-    - "a second set the accumulation cannot prove anything about -- an opaque
-       value, or a constant with bit 15 set -- preserves the `sra`. But every
-       multi-set shape also emits an `andi 0xffff`, so it costs a word."
+    - "put the extension's CONSUMER in a later basic block. combine downgrades
+       `sra` to `srl` only when it SUBSTITUTES the extension insn into its single
+       consumer -- typically the copy into $v0 for a `return` -- and its
+       LOG_LINKS are built per block, so a block boundary means it never
+       re-examines the insn and never consults nonzero_bits. A shared result
+       variable with one `return` at the end, or `if (c) { r = ...; } else
+       { r = 0; }`, does it. Zero words, and the value stays SINGLE-SET so no
+       `andi 0xffff` appears. A `goto out;` form is equivalent."
   negative:
     - "a second use of the masked value, or of the loaded halfword"
-    - "putting the mask in a different basic block (that probe's other set was
-       a literal 0, so the union still proved the bit clear)"
-  note: "nonzero_bits ORs its value and MINs sign_bit_copies over EVERY set, so
-         two sets of small constants prove exactly as much as one."
+    - "a second SET of the value: it does preserve the sra, but every multi-set
+       shape also emits an `andi 0xffff` and costs a word -- and it is not
+       needed, because the block boundary is free."
+  note: "THE OLD ENTRY HERE WAS WRONG and cost two sessions. It said a
+         single-set masked value cannot keep its `sra`, and that only a
+         multi-set shape could, at the price of a word. Both halves are false:
+         the value's bits are perfectly transparent to combine, and what matters
+         is whether the result is combinable into its consumer. func_80042A80
+         landed single-set. Expect the same to apply to the `sll 24`/`sra 24`
+         byte case above -- func_8003D0F0's four (s8) conversions are parked on
+         exactly this question."
 
 - id: block-move
   name: small byte-aligned struct assignment (movstrsi_internal)

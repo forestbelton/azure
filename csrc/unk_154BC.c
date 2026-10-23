@@ -5,6 +5,7 @@
 #include "common.h"
 
 void func_800423C0(u8 *, s32, u8 *);
+s32  func_80042900(s8 *, s8);
 extern u8 D_800E1D55[];
 extern u8 D_800E1D61[];
 extern u8 D_800E1D80[];
@@ -442,7 +443,57 @@ void func_80042710(Unk42710 *d, Unk42710 *s) {
     func_80041E70(d);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_154BC", func_80042900);
+/* Looks up the status-effect slot matching arg1 and returns its magnitude, or
+ * a code for two special effect numbers.
+ *
+ * THE LAST WORD WAS A `reorg` DECISION, and the rule generalises.
+ * `own_thread_p` decides whether the insn reorg puts in a delay slot is
+ * STOLEN -- the original deleted -- or COPIED, leaving the original behind and
+ * costing a word. It fails when the thread is reachable by fall-through, so the
+ * shape to aim for is a shared epilogue insn that has its OWN thread. Here that
+ * means the 0xD arm falls off the end of the function while the `else` holds
+ * the `return 0`: gcc then lays out `bne -> L_else` / `lw` / `jump L_end` /
+ * barrier / `L_else: v0 = 0` / `L_end:`, `own_thread_p` holds, reorg steals the
+ * `addu $v0,$zero,$zero` into the bne's delay slot and deletes the original,
+ * and the arm's jump-to-next goes away. Written the other way round -- the 0xD
+ * arm owning the only `return 0` -- the insn is copied instead: 34 words.
+ *
+ * The C is formally UB on the 0xD path, which falls off the end of a
+ * value-returning function. The emitted code returns 0 anyway, because the
+ * stolen insn sits in a non-annulled delay slot and runs on both paths -- and
+ * that is exactly what the target's single `addu $v0,$zero,$zero` means. The
+ * original almost certainly wrote it this way.
+ *
+ * Two more shapes are load-bearing. `t` is reused for both the effect number
+ * and the dead volatile load, which is what puts that load in $v1. And the
+ * inner early-return order is `if (byte == 0) return 0x100; return byte;` --
+ * the opposite nesting from the obvious one -- which gives the `beqz` with
+ * `addiu $v0,0x100` in its delay slot. That part of the loop only becomes
+ * order-sensitive once the tail above is right. */
+s32 func_80042900(s8 *arg0, s8 arg1) {
+    s32 i;
+    s32 t;
+
+    if (arg1 != 0) {
+        for (i = 3; i >= 0; i--) {
+            if (arg0[i * 2 + 0x2C] == arg1) {
+                if (arg0[i * 2 + 0x2D] == 0) {
+                    return 0x100;
+                }
+                return arg0[i * 2 + 0x2D];
+            }
+        }
+    }
+    t = arg1;
+    if (t == 0xE) {
+        return ((u8 *) arg0)[0x28] == 0;
+    }
+    if (t == 0xD) {
+        t = *(volatile u32 *) (arg0 + 0x14);
+    } else {
+        return 0;
+    }
+}
 
 void func_80042984(u8 *arg0) {
     u8 t = arg0[0x13];
@@ -479,7 +530,80 @@ s32 func_800429E4(u8 *arg0) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_154BC", func_80042A80);
+/* Hand-added, unit-local like the D_800E1Dxx block below: a 0x14-byte record
+ * whose +0x0C is a pointer to a 0x14-stride table that func_80042A80 indexes
+ * by p[0]. Only +0x00 and +0x0C are touched. */
+typedef struct Unk80073414 {
+    u8  unk_00;
+    u8  pad_01[0xB];
+    u8 *unk_0C;
+    u8  pad_10[0x4];
+} Unk80073414;
+
+extern Unk80073414 D_80073414[];
+
+/* Returns the 0x400 flag of the record addressed by p, with two special cases
+ * keyed on p[1], and 0 unless the global mode is 2.
+ *
+ * THE LAST DIFFERENCE WAS ONE BIT -- `0x00021402` against `0x00021403`, bit 0
+ * of a SPECIAL shift's funct field: SRL 0b000010 against SRA 0b000011 -- and
+ * the mechanism behind it corrects what this function was parked on for two
+ * sessions.
+ *
+ * combine does NOT downgrade `sra` to `srl` when it looks at the extension
+ * insn. It downgrades it when it SUBSTITUTES that insn into its single
+ * consumer, which here is the copy into the hard return register $v0. At that
+ * moment `simplify_shift_const` sees `(ashiftrt (reg) 16)` whose varop is a
+ * plain REG, consults `nonzero_bits` through `reg_last_set_nonzero_bits`, finds
+ * bit 31 clear and rewrites the code to LSHIFTRT. (combine never simplifies the
+ * sra on its own: `try_combine` of the two shifts fails, because the merged
+ * `(sign_extend:SI (subreg:HI ...))` has no MIPS pattern -- which is why both
+ * shifts survive at all.)
+ *
+ * So the lever is to DENY that substitution, and a basic-block boundary buys it
+ * for free, because combine's LOG_LINKS are built per block. Assigning the
+ * value to a shared result variable and returning it once -- the `else { r = 0;
+ * }` below -- puts the copy into $v0 in a later block, combine never
+ * re-examines the insn, `nonzero_bits` is never consulted, and the `sra`
+ * survives. A `goto out;` form matches identically. The value stays
+ * SINGLE-SET, so none of the `andi 0xFFFF` that the multi-set shapes produce
+ * appears.
+ *
+ * **This supersedes the old rule in docs/matching-levers.md section 10 that a
+ * single-set masked value cannot keep its `sra` and that multi-set costs a
+ * word.** The real rule is that the extension's result must not be combinable
+ * into its consumer. It should transfer to func_8003D0F0's four `(s8)`
+ * conversions, which are parked on the same question.
+ *
+ * verify.py flags two relocated words: `D_80082E60.unk_0A` for 0x80082E6A and
+ * `D_80073414[4].unk_0C` for 0x80073470. Both resolve to the listing's bytes. */
+s32 func_80042A80(u8 *p) {
+    s32 r;
+
+    if (D_80082E60.unk_0A == 2) {
+        u8 k = p[1];
+
+        if (k == 4) {
+            s32 v = ((*(u16 *) (D_80073414[4].unk_0C + p[0] * 0x14) & 0x400) != 0) << 10;
+
+            if (p[3] & 0x80) {
+                v |= 0x80;
+            }
+            return v;
+        }
+        if (k >= 0xF && k <= 0x11) {
+            return p[3] & 0x80;
+        }
+        if (D_80073414[p[1]].unk_00 == 0) {
+            r = (s16) (*(u16 *) (D_80073414[p[1]].unk_0C + p[0] * 0x14) & 0x400);
+        } else {
+            r = 0;
+        }
+    } else {
+        r = 0;
+    }
+    return r;
+}
 
 void func_80042B68(s8 *arg0, s8 arg1) {
     s32 i;

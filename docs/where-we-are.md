@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**179 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 12 are
+**182 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 9 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
 authority on that count; this file has been wrong about it before.
 
@@ -77,13 +77,13 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 12 remaining stubs
+## The 9 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
-| open near-misses | 4 | logic reproduced; a register or scheduling difference is left |
-| walls, re-examined and recorded | 5 | do not reopen without a new idea |
-| not yet written | 3 | nothing structural in the way |
+| open near-misses | 2 | logic reproduced; a register or scheduling difference is left |
+| walls, re-examined and recorded | 6 | do not reopen without a new idea |
+| not yet written | 1 | func_8003E758, the last jump-table function |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
@@ -95,9 +95,8 @@ than an open one at 47.
 
 | function | unit | words | DIFF | state |
 |----------|------|-------|------|-------|
-| func_80042A80 | unk_154BC | 93 of 93 | 1 | open; one bit, read it literally before sweeping |
-| func_80041E70 | unk_154BC | | 4 | open, though its header argues it is closed |
-| func_80042900 | unk_154BC | | 5 | open |
+| func_8003F368 | unk_12A70 | 113 of 113 | 4 | open; two independent two-word gaps, local-alloc and reorg |
+| func_80041E70 | unk_154BC | 270 of 270 | 1 | **WALL**, one word, owned by cse and argued completely |
 | func_8003CCB0 | gprel_10308 | 272 of 272 | 29 | open; two spots that cancel in the word count |
 | func_800453E0 | gprel_18B40 | 533 of 533 | 5 | **wall-ish**: the hoist, split, association and alias families are all swept |
 | func_80045CC4 | unk_19434 | 436 of 437 | 47 | **wall-ish**: the same mask tension, 4 of the 47; the rest is argued separately |

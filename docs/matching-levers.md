@@ -115,7 +115,37 @@ Three instances:
   arm's own `subu`/`addu` stays last and lands in the branch's delay slot;
   without it, jump2 pulls all four stores into the join. Worth 4 words.
 
+* **`reorg` STEALS a delay-slot insn or COPIES it, and `own_thread_p` decides
+  which -- a copy leaves the original behind and costs a word.** It fails when
+  the thread is reachable by fall-through: it scans back from the thread and
+  must reach a BARRIER before any insn or label. So when the target emits a
+  shared epilogue insn ONCE and you emit it twice, the fix is to give that insn
+  its own thread rather than to move it. In func_80042900 that meant letting the
+  0xD arm fall off the end of the function while the `else` holds the
+  `return 0`: gcc lays out `bne -> L_else` / `lw` / `jump L_end` / barrier /
+  `L_else: v0 = 0` / `L_end:`, `own_thread_p` holds, reorg steals the
+  `addu $v0,$zero,$zero` and deletes the original, and the arm's jump-to-next
+  goes away. Written the other way round -- the 0xD arm owning the only
+  `return 0` -- the insn is copied: 34 words against 33. Note the winning form
+  is formally UB (falling off the end of a value-returning function) and the
+  emitted code returns 0 anyway, because the stolen insn is in a non-annulled
+  delay slot and runs on both paths. A target with one such insn where two
+  paths need it is evidence the original was written that way.
+
 ## 2. Loop notes change every reference weight in the function
+
+**A backward `goto` is not a loop to loop.c at all, and that is a
+register-pressure lever rather than a style choice.** func_8003F368 repeats its
+whole body on one error code. Written as `for (;;) { ... }` with a `break`,
+loop.c sees a real outer loop and hoists an inner loop's invariant `li 1` past
+the OUTER back edge, so that pseudo is live across the second half of the body,
+conflicts with a pointer local, and the function needs a fourth callee-saved
+register: **115 words, 112 differing**. Written as a label plus `goto restart`,
+loop.c sees only the two inner loops, `move_movables` hoists the `li 1` into the
+INNER loop's preheader -- which is inside the goto cycle, so it is
+re-initialised on the back edge -- and its live range no longer overlaps the
+pointer's. One register carries both: 113 words. Same source logic, two words
+and the whole allocation.
 
 **In a register-starved function, dropping a loop note is destructive rather
 than a lever.** Rewriting func_8003CCB0's init loop as a backward `goto` loop
@@ -240,6 +270,37 @@ Levers that move them, all with no change to the emitted code:
   count. **Diagnostic:** grep the `.lreg` dump for `(set (reg:SI 4 a0) (reg:SI
   N))`; `.greg`'s `;; N preferences: 4` line does *not* distinguish a copy
   preference from a plain one.
+
+  **There is a third lever, on the CONFLICT side, and it is the one to reach for
+  when no lower-priority rival exists to populate `regs_someone_prefers` at
+  all.** Unifying a source variable with a value computed in ANOTHER block
+  imports that block's hard-register conflicts into the allocno, which pushes it
+  off a register it prefers. func_80041E70's sign-extended call result preferred
+  `$v0` and nothing conflicted with it, so `find_reg` simply gave it `$v0` --
+  three words wrong. Making that variable also hold the doubled `unk_87` value
+  computed in an earlier arm emits the identical two insns (cse still folds the
+  product) but gives the allocno a second live range, where a local-allocated
+  quantity already holds `$v0`; the union of the two ranges' conflicts therefore
+  contains hard reg 2, `find_reg` skips `$v0` for the whole allocno, and both
+  ranges land in `$v1` -- which is why the target holds the `unk_87` value and
+  the call result in one register. **They are one variable.** Zero words, 4 DIFF
+  to 1.
+
+  Two measured cautions with it. The unification has to create a real overlap:
+  assigning the call result into the loop counter's variable did nothing,
+  because the pseudo is dead between that assignment and the counter's init. And
+  it can be defeated by sched1: unifying with a `li 0x10` that is its own
+  statement lets sched1 hoist the `li` above the preceding `lw`, the two
+  block-0 quantities then need `$v0` AND `$v1`, and the union conflicts with
+  both -- 11 DIFF, landing on `$a0`.
+
+  **And this is why an intermediate variable cannot shed a preference**, which
+  the entry above asserts without the mechanism: `global.c`'s
+  `expand_preferences` merges preferences in BOTH directions between an allocno
+  set by an insn and an allocno that DIES in that insn, whenever the two do not
+  conflict. Measured on func_80041E70 -- splitting the cast so the `sll`'s dest
+  became a global allocno in its own right left that allocno preferring `$v0`
+  and the extension's dest preferring `$v0` as well.
 
   **So the lever on an argument-register preference is allocation order, not
   the preference.** Trying to break the preference does not work and should not
@@ -380,6 +441,21 @@ statement order: only one of the six permutations of its three stores produces
 the copy at all.
 
 
+* **The same flag decides whether cse keeps a cached load at all, which is a
+  bigger consequence than ordering.** `true_dependence`'s differing-flags
+  exception is what cse's `invalidate` consults too. In func_8003F2A4 the target
+  reads `arg0->unk_04` TWICE around two stores to small `$gp` globals. Declared
+  as plain `u32` scalars, each store is a non-struct reference at a non-varying
+  address, the exception applies, `invalidate` does not drop `MEM(a0+4)` from the
+  table, the second read is shared into a `move`, sched1 then hoists both loads
+  above both stores and the function needs an extra `move` to free `$a0`: **29
+  words against 31, all 31 differing**. Declared `u32 X[1]` and stored through
+  `X[0]`, each store is an ARRAY_REF, both sides are in-struct, the base load is
+  invalidated and re-emitted, the stores stay interleaved with the loads, and the
+  function matches. So the array-element spelling buys a RE-DEREFERENCE, not just
+  an ordering -- and it is the cheapest instance of section 4's "re-dereference
+  rather than cache", because the declaration causes it rather than the source.
+
 * **When sched1 lifts an arithmetic insn above stores that should precede it,
   hoist its operand's LOAD into a local one statement earlier.**
   `t = (s8) p[-2]; sp->a = t; sp->b = t; t = t + (u16) sp->f;` lets sched1 lift
@@ -391,7 +467,7 @@ the copy at all.
   section 7's is the number of sets; this is a third and cheaper one for the
   specific case of an arithmetic insn floating above stores.
 
-## 5. MEM_IN_STRUCT_P decides sched1's alias calls
+## 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference
 does not. `true_dependence` returns "no dependence" when two MEMs' in-struct
@@ -517,6 +593,21 @@ form:
   target's `lui %hi` / `addiu %lo` / `lw 0x0(reg)` at both of its sites:
   dropping the first site's arms costs 31 differing words at an unchanged word
   count, dropping the last site's costs a word.
+  **A ONE-set pointer-to-symbol local can survive unfolded too, and then where
+  it is ASSIGNED decides its register and which block materialises it.** The
+  two-set rule above is about stopping combine folding the pointer back into the
+  MEM; a single set suffices when the uses are negative-displacement
+  (`q[-3]` off `&D_800814D3` stays `lbu -0x3($s1)` / `sb -0x3($s1)`). What the
+  placement then buys is the rest: assigned in a block that DOMINATES the uses --
+  an inner loop's preheader -- it becomes a global allocno in a callee-saved
+  register, materialised where the listing has it, and func_8003F368 matches at
+  113 words; assigned inside the handler alongside its uses it still survives
+  unfolded but lands in caller-saved `$a0` and is materialised in the wrong
+  block, same word count and 22 differing. Removing it and reaching the object by
+  symbol throughout costs **7 words**, because the pointer-spelled accesses are a
+  different memory expression from the `%gp_rel` ones -- which is what lets cse
+  share one load between the test and the modify, and jump2 merge the two arms.
+
   **Where the pointer local is DECLARED is a second lever on top of that one,
   because it decides whether the address materialisation is a source statement
   or a loop.c hoist.** Declared outside a loop it is an ordinary statement and
@@ -858,6 +949,28 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   word can be written with `sw` and read with both `lw` and `lhu` in the same
   function without a union or a split declaration -- func_8003CCB0 does it at
   six sites, and dropping the casts costs 2 differing words.
+* **A 16-bit truncation keeps its `sra` when the extension's result cannot be
+  combined into its consumer, and a basic-block boundary buys that for free.**
+  combine does not downgrade `sra` to `srl` by looking at the extension insn; it
+  does it when it SUBSTITUTES that insn into its single consumer -- typically the
+  copy into `$v0` for a `return`. At that moment `simplify_shift_const` sees
+  `(ashiftrt (reg) 16)` whose varop is a plain REG, consults `nonzero_bits`
+  through `reg_last_set_nonzero_bits`, finds bit 31 clear and rewrites the code
+  to LSHIFTRT. (It never simplifies the `sra` alone: `try_combine` of the two
+  shifts fails because the merged `(sign_extend:SI (subreg:HI ...))` has no MIPS
+  pattern, which is why both shifts survive at all.)
+
+  combine's LOG_LINKS are built per basic block, so a consumer in a LATER block
+  has no link, the insn is never re-examined and `nonzero_bits` is never
+  consulted. Assign the value to a shared result variable and return it once --
+  `if (c) { r = (s16) (*q & 0x400); } else { r = 0; }  return r;` -- or use a
+  `goto out;` form. **Zero words**, and the value stays SINGLE-SET so none of
+  the `andi 0xffff` that the multi-set shapes produce appears. That is what
+  closed func_80042A80's last bit, and section 10's entry on the same subject
+  was wrong for two sessions. **Expect it to apply to the `sll 24`/`sra 24` byte
+  case too** -- func_8003D0F0's four `(s8)` conversions are parked on exactly
+  this question.
+
 * **A byte decrement is `addiu 0xFF` only if the arithmetic happens in the
   byte's own type.** For a `u8` lvalue, `x--` builds the constant in that type
   and emits `addiu rd,rs,0xFF`; going through an int-promoted temporary gives
@@ -1051,7 +1164,17 @@ into a shared tail differ by a word between the two spellings.
   `combine`'s byte-to-signed refold it is the answer, and it matched
   func_80044D24. See section 7. The distinction worth carrying is whether you
   can name the pass and the predicate it defeats.
-* **`combine` proving a bit.** `(s16) (x & 0x400)` comes out `srl`, never
+* **`combine` proving a bit -- SOLVED 2026-10-23, and this entry is kept only
+  because its conclusion was wrong for two sessions.** The downgrade is real but
+  it does not happen where this said. See section 7 for the lever; the short
+  version is that combine rewrites `sra` to `srl` when it SUBSTITUTES the
+  extension insn into its single consumer, and its LOG_LINKS are per basic
+  block, so putting the consumer in a later block denies the substitution for
+  free and keeps the value single-set. func_80042A80 landed that way. Everything
+  below about `nonzero_bits` and multi-set shapes is accurate but was the wrong
+  tree to be up.
+
+  `(s16) (x & 0x400)` comes out `srl`, never
   `sra`, because the mask proves bit 15 clear through `nonzero_bits`.
 
   **One thing does defeat it, and it costs a word.** `nonzero_bits` ORs its
