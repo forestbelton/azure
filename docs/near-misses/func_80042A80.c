@@ -98,12 +98,14 @@
  * D_80073414 is a 0x14-byte-stride table; D_80073470 is &D_80073414[4].unk_0C,
  * so the `case 4` arm needs no separate symbol.
  *
- * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 29 variants of
- * this source across its whole transform set -- declared widths, (s16) casts,
- * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
- * none improved on 1 DIFF. **Do not re-sweep local shapes here.** The remaining
- * gap is combine proving bit 15 clear on a single-set value, where every multi-set shape costs an `andi 0xffff` this function has no room for,
- * which no local rewrite reaches.
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py found 11 candidate
+ * changes inside this function's body and compiled 12 variants; none improved
+ * on 1 DIFF. Read that as "the eight transform families in search.py found
+ * nothing at the sites they recognise" -- NOT as "every source shape has been
+ * tried", which is a much stronger claim than 12 variants can support. The
+ * families are declared widths, adding and dropping an (s16) cast, splitting
+ * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
+ * the statement after an if/else into both arms.
  */
 
 #include "common.h"

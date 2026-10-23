@@ -93,12 +93,14 @@
  * `void func_80041344(u8 *, u32 *);` -- until then a scratch file needs the
  * `#define`/`#undef` dance around common.h, as below.
  *
- * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 71 variants of
- * this source across its whole transform set -- declared widths, (s16) casts,
- * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
- * none improved on 2 DIFF. **Do not re-sweep local shapes here.** The remaining
- * gap is one global-alloc priority comparison, 4.643 against 4.756,
- * which no local rewrite reaches.
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py found 44 candidate
+ * changes inside this function's body and compiled 45 variants; none improved
+ * on 2 DIFF. Read that as "the eight transform families in search.py found
+ * nothing at the sites they recognise" -- NOT as "every source shape has been
+ * tried", which is a much stronger claim than 45 variants can support. The
+ * families are declared widths, adding and dropping an (s16) cast, splitting
+ * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
+ * the statement after an if/else into both arms.
  */
 
 #define func_80041344 func_80041344_decl_clash

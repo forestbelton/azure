@@ -223,6 +223,15 @@
  * The shimmed typedefs below are layout-identical to what the real names must
  * become, so the codegen is unaffected, but this was never re-verified under
  * the real names in include/structs.h -- that check is still owed.
+ *
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py found 74 candidate
+ * changes inside this function's body and compiled 75 variants; none improved
+ * on 47 DIFF. That covers its eight transform families at the sites they
+ * recognise, not every source shape. Worth knowing that the one candidate
+ * which DID close the word count -- 436 to 437 -- did it by narrowing a u16
+ * struct field to u8, which shifts every later field offset and took the
+ * differing count to 143. The searcher now refuses that class of change and
+ * reports it separately; the missing word is still missing.
  */
 
 #define Unk3DBD0SP Unk3DBD0SP_orig

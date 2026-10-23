@@ -163,11 +163,14 @@
  * `void func_8003E140(s8 *a) { *a = 1; }`), and arg2 is only tested against
  * zero and selects the asynchronous path.
  *
- * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 70 variants of
- * this source across its whole transform set and none improved on 21 DIFF.
- * **Do not re-sweep local shapes here.** That agrees with the analysis above:
- * what is left is winning the allocation ORDER so that `flags` does not take
- * $a3, which is a priority question (section 3), not a shape one.
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py found 54 candidate
+ * changes inside this function's body and compiled 55 variants; none improved
+ * on 21 DIFF. Read that as "the eight transform families in search.py found
+ * nothing at the sites they recognise" -- NOT as "every source shape has been
+ * tried", which is a much stronger claim than 55 variants can support. The
+ * families are declared widths, adding and dropping an (s16) cast, splitting
+ * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
+ * the statement after an if/else into both arms.
  */
 
 #include "common.h"

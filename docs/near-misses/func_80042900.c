@@ -79,12 +79,14 @@
  * return r;`) flips the inner branch arms and costs more than it saves (9
  * diffs). The `t` reuse above is the cheap version of the same idea.
  *
- * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 13 variants of
- * this source across its whole transform set -- declared widths, (s16) casts,
- * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
- * none improved on 5 DIFF. **Do not re-sweep local shapes here.** The remaining
- * gap is reorg copying the join block's first insn because that label is not an own_thread_p,
- * which no local rewrite reaches.
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py found 11 candidate
+ * changes inside this function's body and compiled 12 variants; none improved
+ * on 5 DIFF. Read that as "the eight transform families in search.py found
+ * nothing at the sites they recognise" -- NOT as "every source shape has been
+ * tried", which is a much stronger claim than 12 variants can support. The
+ * families are declared widths, adding and dropping an (s16) cast, splitting
+ * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
+ * the statement after an if/else into both arms.
  */
 
 #include "common.h"
