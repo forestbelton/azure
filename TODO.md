@@ -61,5 +61,10 @@ The queue, in order:
 - [ ] Tool that scans `splat/*_symbol_addrs.txt` and warns about unused
       symbols.
 
-- [ ] `tools/lib2ar.sh` references a path under `$HOME/scratch` and does
-      `basename $1 .LIB` against a lowercase `.lib`. Known, tangential.
+- [ ] **Identify the ~120 KB of unidentified library code** in slus_006.14 --
+      23.6% of the file, about three times the volume of decompiled game code.
+      See the composition table in `docs/where-we-are.md`. Mechanical work with
+      known machinery: `psyq/lib/*.lib`, `azure lib --list`, `azure libmatch`,
+      `azure libscan`, and `tools/lib2ar.sh` (fixed, and tested end to end with
+      a stub parser). **It needs pcsx-redux's `psyq-obj-parser` built and on
+      PATH** -- that is the only missing piece, and it is not vendored here.
