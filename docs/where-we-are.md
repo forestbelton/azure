@@ -4,16 +4,16 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**514 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 494 are
-`INCLUDE_ASM` stubs in `csrc/`: 489 in the four units carved on 2026-10-23 and
+**562 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 446 are
+`INCLUDE_ASM` stubs in `csrc/`: 441 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
 
 **The carved-unit sweep is the live work**, and `docs/carved-sweep.md` is its
 record: the source patterns that keep paying, the declaration traps, and a
-parked list with measurements. On 2026-10-23 it went from 645 stubs to 494.
+parked list with measurements. On 2026-10-23 it went from 645 stubs to 446.
 
 **Both of the structural blockers that shaped most of this project are gone**,
 and neither needed the thing it was being built towards:
@@ -110,7 +110,7 @@ the survey that makes it final.
 | `unk_301D4` | 0x301d4-0x30290 | 5 |
 | **total** | | **1008** |
 
-`guard.py` is the authority and reads 494 stubs as of the end of
+`guard.py` is the authority and reads 446 stubs as of the end of
 2026-10-23's sweep; `make check` is byte-identical at e6bfbb9 after every
 carve.
 
@@ -217,12 +217,12 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| carved-unit sweep | 489 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
+| carved-unit sweep | 441 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
 | near-misses, source written and checked | 5 | each with a numeric bound or a named pass check |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
-About thirty of the 489 are parked with measurements in
+About forty of the 441 are parked with measurements in
 `docs/carved-sweep.md`'s table rather than untouched.
 
 ### Near-misses, with their files in `docs/near-misses/`
