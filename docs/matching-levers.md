@@ -1554,6 +1554,23 @@ into a shared tail differ by a word between the two spellings.
   invisible node in that sublist. See also the range-node entry above, which is
   the same pass counting a *run* of such cases double.
 
+### Two bounds written with `&&` become one range check
+
+`if (x > 0 && x < 4)` is folded into `addiu -1` / `sltiu 3`, one branch where
+the target has two; so is `if (id != 0 && id != 1)`, into a single
+`sltiu id, 2`. Nested ifs keep the two branches, and cse still shares the one
+load between them. Worth 13 DIFF on func_8005A33C, and it is half of what
+parks func_80033AA8.
+
+### Two shifts with mismatched counts are two shifts in the source
+
+`(x << 16) >> 8` cannot be combined -- the arithmetic right shift fills from
+bit 15, so the result is not `x << 8` -- and that pair is what a listing with
+`sll 16` / `sra 8` is showing. Every spelling that means "sign-extend, then
+shift" (`(s16) x << 8`, an s16 parameter, a multiply by 0x100) collapses to the
+single `sll 8`, because the value is stored as a halfword and combine drops the
+extension. func_8005B3D8, 2 words.
+
 ### The arm written FIRST ends up SECOND
 
 For an `if`/`else` whose two arms both end the function -- two `return`s, or
