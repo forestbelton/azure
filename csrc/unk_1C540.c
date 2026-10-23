@@ -132,7 +132,19 @@ s32 func_800494FC(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004951C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049790);
+s32 func_8004951C(u8 *, s32);
+
+u8 *func_80049790(s32 a) {
+    u8 *p = (u8 *) func_8004B404(0x104);
+
+    if (p != 0) {
+        if (func_8004951C(p, a) == 0) {
+            func_8004B1A4((s32) p);
+            p = 0;
+        }
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800497F4);
 
@@ -248,7 +260,15 @@ u32 func_8004A0C0(u32 m) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A10C);
+s16 func_8004A10C(u8 *p) {
+    s32 n;
+
+    if (p == 0) {
+        return 0;
+    }
+    n = func_8004B4DC(p);
+    return *(s8 *) (p + n * 0xC - 0xA) + 0x80;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A170);
 
@@ -516,7 +536,22 @@ void func_8004B774(s32 a, s32 b, s32 c) {
     func_800253A0(a, b, 3, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B7D0);
+typedef struct Unk4B7D0 {
+    u8 unk_00[4];
+} Unk4B7D0;
+
+void func_8004B634(void);
+void func_8003F320(void);
+void func_800253A0(s32, s32, s32, s32);
+
+void func_8004B7D0(s32 a) {
+    u8 t[4];
+
+    *(Unk4B7D0 *) t = *(Unk4B7D0 *) D_80080B50;
+    func_8004B634();
+    func_8003F320();
+    func_800253A0(a, 0, 0, (s32) t);
+}
 
 void func_8004B634(void);
 
@@ -558,7 +593,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CCBC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CD28);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CE68);
+void func_8004CE68(u8 *p, s32 f) {
+    /* A do-while with the `p = q` at the TOP of the body and an explicit
+       guard, not `while (p != 0)`: the loop condition is tested once, so the
+       listing has no `p != 0` at the bottom, and the copy lands in the first
+       branch's delay slot. */
+    u8 *q = p;
+
+    if (p != 0) {
+        do {
+            p = q;
+            if (f != 0) {
+                p[1] |= 2;
+            } else {
+                p[1] &= 0xFD;
+            }
+            if ((p[1] & 0xFC) == 0x38) {
+                q = p + 0x18;
+            } else {
+                q = p + 0xC;
+            }
+        } while ((p[0] & 0x80) == 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CECC);
 
