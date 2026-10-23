@@ -33,8 +33,24 @@
  *    to another record of the same kind) and -0x02 (a halfword OR'd with
  *    0x8000). func_80042984 already uses `*(u8 **) (arg0 - 0x14)`, so this
  *    matches existing practice, but the container itself is undescribed.
- *  - **Unk42710's size floor rises from 0x8C to at least 0xAA**, with these
- *    fields and this evidence:
+ *  - **Unk42710's size floor rises from 0x8C to at least 0xAA** -- and that
+ *    CONTRADICTS the comment on the typedef in include/structs.h, which pins
+ *    the record at 0x8C because func_800423C0 and func_80043914 both index
+ *    D_800E3E48 with that stride and the comment asserts D_800E3E48's element
+ *    type is this one. Both measurements are solid, so the model is wrong
+ *    somewhere, and the likeliest reading is that D_800E3E48's 0x8C-stride
+ *    array holds the species TEMPLATE while the instance this function walks
+ *    is a larger object -- func_80042710 takes both as `Unk42710 *`, which is
+ *    plausible for the original if the template array was a different, smaller
+ *    type. **The fields below are therefore NOT yet applied to structs.h**:
+ *    growing the typedef is safe for the code as it stands (nothing indexes an
+ *    array of `Unk42710`; the only indexed array is `D_800E3E48`, declared as
+ *    the separate `Unk800E3E48`), but it would bake in a model that
+ *    contradicts a comment resting on equally good evidence. Resolve which
+ *    object is which first -- the container this function reads at -0x20,
+ *    -0x18, -0x14 and -0x02 is the other half of that question.
+ *
+ *    The fields and their evidence:
  *      +0x13 u8   the entity "kind"; lbu, compared to 0x2E and 0, written from
  *                 +0xA8, and read back after the store (a real re-dereference)
  *      +0x14 u32  flag word; & 0x4000 gates every message, >> 14 & 1 taken as
