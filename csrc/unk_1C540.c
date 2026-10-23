@@ -1,5 +1,17 @@
 #include "common.h"
 
+/* D_800814A0 is declared `extern u32` in structs.h and csrc/unk_12DEC.c passes
+   its address to a function taking `u32 *`, so that declaration cannot become
+   an incomplete array -- and the scalar spelling gets the assembler-expanded
+   symbolic form, one `lui` per access. func_8004EE90 and func_8004F52C need
+   the compiler-split form (one `lui` shared by the load and the store), which
+   only the incomplete array gives, while func_8004B500 in this same unit needs
+   the symbolic one. One carved unit standing in for several original
+   translation units is why both appear against one symbol: an `__asm__` alias
+   gives those two functions the array spelling under a different C name,
+   without touching the declaration unk_12DEC depends on. */
+extern u32 D_800814A0a[] __asm__("D_800814A0");
+
 void func_80048C3C(s32);
 
 void func_80048D40(void) {
@@ -295,7 +307,15 @@ UnkNode *func_8004B4A8(UnkNode *target) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B4DC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B500);
+void func_8004B500(u8 *p) {
+    u32 g;
+
+    if (p != 0) {
+        g = D_800814A0;
+        *(u16 *) (p + 0x1E) |= 0x8000;
+        D_800814A0 = g | 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B530);
 
@@ -567,7 +587,23 @@ void func_8004EE70(s32 a) {
     func_8004EDA8(a, 2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EE90);
+void func_8004EE90(u8 *p) {
+    /* The global is read BEFORE the halfword store and written after, and that
+       is load-bearing: in the split addressing form its MEM is register-based,
+       so sched will not hoist the load above a store through a pointer it
+       cannot disambiguate. Written as a plain `D_800814A0a[0] |= 0x8000;`
+       after the halfword, the two chains stay serialised and the function is
+       12 words against 11 (12 DIFF). The target interleaves them, which also
+       costs the copy of the argument into $a1: with all four quantities live
+       at once the global's value takes $a0. */
+    u32 g;
+
+    if (p != 0) {
+        g = D_800814A0a[0];
+        *(u16 *) (p + 0x1E) |= 0x8000;
+        D_800814A0a[0] = g | 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EEBC);
 
@@ -601,7 +637,15 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F3D8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F418);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F52C);
+void func_8004F52C(u8 *p) {
+    u32 g;
+
+    if (p != 0) {
+        g = D_800814A0a[0];
+        *(u16 *) (p + 0x1E) |= 0x8000;
+        D_800814A0a[0] = g | 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F558);
 

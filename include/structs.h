@@ -1067,6 +1067,19 @@ extern Unk6CD30 D_8006CD30;
    materialisation then also comes out first, as the target has it. Fields are
    only those observed so far; the four large functions in the family are not
    decompiled yet. */
+/* Hand-added. An 8-byte entry: five functions in unk_72A8 scale a byte id by
+   8 into this table and read the signed byte at +0x01 or the word at +0x04
+   (which they test against zero, so a pointer or a callback). A struct for the
+   same reason as Unk80084960 -- with `u8 D_80082660[]` and the +1 written
+   inside the index, `fold` moves the constant onto the symbol and the load
+   comes out as `lb 0x0` off a base of `%lo(D_80082660)+1`. */
+typedef struct Unk80082660 {
+    u8  unk_00;
+    s8  unk_01;
+    u8  pad_02[2];
+    u32 unk_04;
+} Unk80082660;
+
 typedef struct Unk80084960 {
     u32 unk_00;
     s32 unk_04;
@@ -1113,7 +1126,7 @@ extern u8  D_8006AE4C[];
 extern u8  D_8006AE64[];
 extern u8  D_8006AE7C[];
 extern u8  D_8006AEAC[];
-extern u8  D_80082660[];
+extern Unk80082660 D_80082660[];
 extern u32 D_8006ADC0[];
 extern u8  D_800812C8[];
 extern u8  D_800812D0[];
