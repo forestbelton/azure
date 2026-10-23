@@ -61,8 +61,8 @@ __asm__(".sdata\n\t.size D_800814D0,1\n\t.size D_80080AD0,1\n"
  * `addiu` for the remaining four, which is the 0x4/0x5/0x6/0x8 displacements
  * in the listing. */
 void func_8003E34C(void) {
-    D_800814D2 = 2;
-    D_800814D3 = 0xFF;
+    D_800814D2[0] = 2;
+    D_800814D3[0] = 0xFF;
     D_80083958.unk_00 = 0;
     D_800814D0[0] = 0;
     D_800814D1 = 0;

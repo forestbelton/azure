@@ -49,9 +49,15 @@ segments:
     align: 4
     subsegments:
       # NB: 0x800 was added to all the offsets here to account for start addr
-      # Still raw in here: jtbl_8002D5C0 at 0xdc0, func_8003E758's table, which
-      # becomes `- [0xdc0, .rodata, unk_11F0C]` when that function lands.
       - [0x800, bin]
+      # jtbl_8002D5C0, func_8003E758's 28-entry table: the first of the three
+      # contiguous runs, 112 bytes.
+      - [0xdc0, .rodata, unk_11F0C]
+  - type: code
+    start: 0xe30
+    vram: 0x8002D630
+    align: 4
+    subsegments:
       # jtbl_8002D630 and jtbl_8002D658, func_80041344's and func_80041588's.
       # The leading dot matters: `.rodata` makes splat route the subsegment to
       # the sibling C object and extract nothing, where plain `rodata` would

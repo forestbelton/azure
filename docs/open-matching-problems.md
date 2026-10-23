@@ -213,6 +213,7 @@ record of what order they were in. Read out of `data/slus_006.14`:
 
 | table | file offset | entries | source order of the cases |
 |-------|-------------|---------|---------------------------|
+| jtbl_8002D5C0 (func_8003E758) | 0xDC0 | 28 | 0, 6, 9, 21, 27 -- numeric; the other 23 values share the default |
 | jtbl_8002D630 (func_80041344) | 0xB30 | 9 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
 | jtbl_8002D658 (func_80041588) | 0xE58 | 9 | 1, 5, 2, 6, 7, 8, 3, 4, 9 |
 | jtbl_8002D67C (func_80042BDC) | 0xE7C | 32 | 1..10, 27, 11, 12, 26, 32, (21/22/23), 18, 19, 20 |
@@ -240,11 +241,14 @@ Both are now landed, which settles it.
 | func_80041344 | unk_14934 | 145 of 145 | **MATCH** | `csrc/unk_14934.c` |
 | func_80041588 | unk_14934 | 164 of 164 | **MATCH** | `csrc/unk_14934.c` |
 | func_80042BDC | unk_154BC | 543 of 543 | **MATCH** | `csrc/unk_154BC.c` |
-| func_8003E758 | unk_11F0C | not started, also `$gp`-blocked | | |
+| func_8003E758 | unk_11F0C | 698 of 698 | **MATCH** | `csrc/unk_11F0C.c` |
 
-**Three of the four now match and two of the three runs are placed** --
-unk_14934's at 0x8002D630 and unk_154BC's at 0x8002D67C, both confirmed by
-`make check`. Only jtbl_8002D5C0 is still raw bin, waiting on func_8003E758.
+**ALL FOUR MATCH AND ALL THREE RUNS ARE PLACED** -- unk_11F0C's at
+0x8002D5C0, unk_14934's at 0x8002D630 and unk_154BC's at 0x8002D67C, confirmed
+by `make check`, and `jtbl_8002D5C0`, `jtbl_8002D630` and `jtbl_8002D67C` have
+all dropped out of `undefined_syms_auto` because the compiler now emits them.
+This section is closed; it is kept for the mechanism and the recovered case
+orders.
 
 One detail the recipe above needs spelling out, learnt placing the second run:
 under `ld_legacy_generation` a segment emits ALL of its `.data` before its

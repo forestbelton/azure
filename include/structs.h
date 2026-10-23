@@ -980,10 +980,19 @@ extern u8  D_800814D0[4];
    D_800814D0 $gp-relatively and these three absolutely in the same function,
    and maspsx's $gp rewrite keys on the symbol and ignores the displacement --
    so through the array spelling all four would come out $gp-relative. See the
-   comment on func_8003E34C in csrc/unk_11940.c. */
+   comment on func_8003E34C in csrc/gprel_11B4C.c.
+
+   D_800814D2 and D_800814D3 are declared as one-element ARRAYS, not scalars,
+   and that is load-bearing for func_8003E758: an ARRAY_REF on a real array decl
+   is MEM_IN_STRUCT_P, which is what keeps its D_800814D3 dispatch read below a
+   store group and its four D_800814D2 stores above the array load they must
+   precede (12 words across five sites). `((u8 *) &X)[0]` will NOT do instead --
+   `build_array_ref` turns indexing a non-decl into an INDIRECT_REF, whose
+   MEM_IN_STRUCT_P is AGGREGATE_TYPE_P(type), i.e. 0 for a byte. Measured
+   byte-identical for func_8003E34C, the only other user. */
 extern u8  D_800814D1;
-extern u8  D_800814D2;
-extern u8  D_800814D3;
+extern u8  D_800814D2[1];
+extern u8  D_800814D3[1];
 extern u8  D_800814D4;
 extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
@@ -1331,6 +1340,14 @@ s32  func_80053EF0(s32);
 s32  func_8004450C(s16);
 s32  CdSync(s32, u8 *);
 s32  CdControl(u8, u8 *, u8 *);
+s32  CdControlF(u8, u8 *);
+s32  CdRead(s32, u32 *, s32);
+s32  CdRead2(s32);
+s32  CdReset(s32);
+s32  CdReadSync(s32, u8 *);
+void StUnSetRing(void);
+/* CdIntToPos, at 0x8006124C -- outside the extracted code. */
+void func_8006124C(s32, u8 *);
 s32  CdControlB(u8, u8 *, u8 *);
 s32  CdPosToInt(u8 *);
 /* libgpu/libetc graphics setup. */
@@ -1385,6 +1402,15 @@ void bzero(void *, s32);
    D_8006CDB8 is below the window, so it has no -G8 hazard either way. */
 extern u8 D_80083798[0xA8];
 extern u8 D_8006CDB8[0xE];
+
+/* func_8003E758's CdReadSync result buffer, and D_80083958's unk_04/unk_06
+   under their own labels. The latter two are used only where cse has not
+   materialised the struct base; `D_80083958.unk_04` links to the same bytes,
+   but verify.py then flags six differing relocation addends. Same hazard class
+   as D_80083164. */
+extern u8  D_800814D8[8];
+extern u8  D_8008395C[];
+extern u16 D_8008395E[];
 void *memcpy(void *, const void *, u32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and

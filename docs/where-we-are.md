@@ -4,8 +4,9 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**183 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 8 are
+**184 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD, and green after a full
+`make splat`. The remaining 7 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
 authority on that count; this file has been wrong about it before.
 
@@ -77,12 +78,11 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 8 remaining stubs
+## The 7 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
-| walls, re-examined and recorded | 7 | each with a numeric bound; do not reopen without a new idea |
-| not yet written | 1 | func_8003E758, the last jump-table function |
+| walls, re-examined and recorded | 7 | each with a numeric bound or a named pass check |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.

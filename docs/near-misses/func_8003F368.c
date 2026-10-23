@@ -122,6 +122,11 @@
  *    goto is not a loop to loop.c, and that is what keeps `li 1` out of the
  *    outer preheader and the function inside three callee-saved registers.
  *
+ * NOTE ON THE SPELLING: D_800814D3 is now declared `extern u8 D_800814D3[1]`
+ * in include/structs.h -- func_8003E758 needs the ARRAY_REF to be
+ * MEM_IN_STRUCT_P -- so this source reaches it as `D_800814D3[0]` and
+ * `&D_800814D3[0]`. Re-verified at 113 of 113 / 4 DIFF after that change.
+ *
  * nmcheck: 113 of 113 words, 4 DIFF
  */
 #include "common.h"
@@ -159,7 +164,7 @@ restart:
         }
     }
     i = 0x10;
-    q = &D_800814D3;
+    q = &D_800814D3[0];
     for (;;) {
         if (CdSync(1, D_80081450) == 2) {
             break;
@@ -167,7 +172,7 @@ restart:
         if (--i == 0) {
             func_8003E70C();
             if (func_8003F240() == 0x1B) {
-                D_800814D3 = 0xFF;
+                D_800814D3[0] = 0xFF;
                 if (q[-3] != 0) {
                     D_800814D0[0]--;
                 } else {

@@ -387,6 +387,18 @@ Levers that move them, all with no change to the emitted code:
   block-local (3 words). Both were at one point written up as the floor for
   that function; neither was.
 
+* **An `asm` input operand is a zero-cost allocno reference**, and the only one
+  that is free unconditionally. `__asm__ volatile ("" :: "r" (x))` emits nothing
+  and adds one to `REG_N_REFS (x)`. On func_8003E758 that moved a pointer from
+  4 refs / 34 insns (0.118) past a rival's 5 / 41 (0.122) and swapped `$s1` and
+  `$s2`, worth 9 words. Two operands overshoot.
+
+  **This is a decomp device, not something the original wrote**, so treat it as
+  a last resort and say so where it ships: it is shaping the allocator directly
+  rather than reproducing a source shape. The statement-splitting lever above is
+  the one to reach for first, since it is a plausible thing for a human to have
+  written.
+
 * **Duplicating an insn into both arms of an `if`** (section 1) raises the
   reference count of every pseudo it mentions, and jump2 merges the duplicate
   away after allocation, so the word count does not change. This is the only
@@ -510,6 +522,32 @@ otherwise have filled in the next load's delay slot -- and it is sensitive to
 statement order: only one of the six permutations of its three stores produces
 the copy at all.
 
+
+* **The rule is about a FIXED-address scalar against a VARYING-address struct
+  reference, in either order -- so it governs store placement as well as load
+  delays, and the fix can be applied from either side.** gcc 2.7.2's
+  `true_dependence` assumes those two do not conflict. Measured on
+  func_8003E758, 12 words across five sites: as plain scalars its D_800814D3
+  dispatch read lifted ABOVE a `D_80083958.unk_0A |= 1` store group, and four
+  `sb D_800814D2` stores SANK PAST the array load they have to precede.
+  Nothing there is a load-delay nop; it is pure store/load placement in sched.
+
+  **Making the SCALAR in-struct is the other half of the lever**, and it is the
+  half this doc did not have. Where the struct side has to stay a struct -- in
+  func_8003E758 the array reference is what produces the target's index-first
+  `addu`, see the entry below -- the scalar is what you change. But it needs a
+  real `COMPONENT_REF` or an `ARRAY_REF` on an actual array DECL:
+  **`((u8 *) &X)[0]` does not work**, because `build_array_ref` turns indexing a
+  non-decl into an `INDIRECT_REF`, and `MEM_IN_STRUCT_P` for one of those is
+  `AGGREGATE_TYPE_P (type)` -- 0 for a byte. Declaring the object `u8 X[1]` does
+  work, and so does a one-byte struct cast; the array declaration is the one to
+  prefer, because it keeps the cast out of the source.
+
+  Also worth knowing for reading the other side: a pseudo holding `&SYM` via
+  `lui` + `addiu` counts as a **varying** address, because
+  `init_alias_analysis` does not canonicalise a `lo_sum`-set pseudo to its
+  constant. That is why a struct reached through a materialised base is the
+  "varying" side at all.
 
 * **The same flag decides whether cse keeps a cached load at all, which is a
   bigger consequence than ordering.** `true_dependence`'s differing-flags
@@ -1220,6 +1258,40 @@ into a shared tail differ by a word between the two spellings.
   to the right label with the left subtree inline, else left bounded gives
   `< node->low` jumping to the left label with the right subtree inline -- so
   **which test a node emits also tells you about its neighbours.**
+
+* **An array reference and pointer arithmetic produce the two operand orders of
+  the index+base `addu`, and no source spelling overrides it.** `arr[i].field`
+  always yields index-first (`addu $v0,$v0,$s2`); any pointer-deref spelling
+  always yields base-first (`addu $v0,$s2,$v0`). Five spellings were measured on
+  func_8003E758 -- `(u8 *) ARR + i*24 + 4`, `i*24 + (u8 *) ARR + 4`,
+  `i*24 + (u32) ARR + 4`, `(u8 *) &ARR[i] + 4` and `(u8 *) (ARR + i) + 4` -- and
+  all five came out base-first, because the front end canonicalises
+  `int + pointer` to pointer-first and `expand_expr` builds an array address
+  with `EXPAND_SUM`. That is 4 differing words if you pick the wrong one, and it
+  forces a split within one function: func_8003E758's entry access and `unk_04`
+  loads are array references while its `case 0xFF` `unk_08` read is a pointer
+  deref, because the target computes that one address base-first.
+  `docs/compiler-version.md` says the two spellings are "no longer equivalent";
+  this is what differs.
+
+* **`balance_case_nodes` counts case nodes whose tests are optimised away
+  entirely, so a switch's decision tree is evidence for case labels that emit
+  NOTHING.** A case whose body is `break` and whose value is a single point in a
+  gap, bounded above and below by its siblings and sharing the default's label,
+  has its test collapsed into the jump the default already needs -- invisible in
+  the listing, and yet it shifts every split point in the tree. func_8003E758
+  needs `case 0xF` and `case 0x16` for exactly this: without them its first
+  switch roots at `case 0xA` instead of the `0xB`/`0xC` range and the right
+  subtree roots at 0x1B instead of 0x15.
+
+  **The recipe for recovering the set**, which is what closed that dispatch:
+  compile a probe switch with distinct empty-bodied call arms, extract the
+  sequence of `slti`/`li` constants from the cc1psx output, and search over
+  candidate case sets until the sequence matches the target's. The split rule
+  was confirmed empirically on the way -- for a three-node sublist the root is
+  the middle node, so the target's `1B -> FC -> FF` chain required a fourth,
+  invisible node in that sublist. See also the range-node entry above, which is
+  the same pass counting a *run* of such cases double.
 
 ## 9. Induction variables
 
