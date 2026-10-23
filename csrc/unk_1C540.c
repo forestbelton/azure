@@ -1724,7 +1724,13 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B070);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B16C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B27C);
+void func_800564A8(s32);
+
+void func_8005B27C(s16 i, u8 a, u8 b) {
+    D_80086C00[i].unk_08 = a & 0x7F;
+    D_80086C00[i].unk_0A = b & 0x7F;
+    func_800564A8(i);
+}
 
 void func_8005B2C8(s16 i, s32 b, u16 *x, u16 *y) {
     *x = D_80086C00[i].unk_08;

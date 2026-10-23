@@ -1201,6 +1201,7 @@ extern u8  D_8006A908[];
 extern u32 D_8006A8B4[];
 extern u32 D_8006CD50[];
 extern s8  D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
+extern u32 D_80073740[];
 extern u8  D_80080B20[];
 extern u8  D_800712FC[];
 extern u32 D_800847D0[];
