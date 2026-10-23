@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**186 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+**186 of 784 functions in the RESIDENT EXECUTABLE are C and the build is
 byte-identical.** `make check` is green at HEAD, and green after a full
 `make splat`. The remaining 7 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
@@ -89,18 +89,32 @@ as `asm, psyq/*` is where that identification succeeded.
 on 4-8 invariant words. So this code is not any module of the twenty libraries
 in `psyq/lib`, although those are provably the ones the game linked against.
 
-### What the unidentified code actually is: ~421 more functions
+### The unidentified code was 759 more of the game's own functions
 
-Read it, 2026-10-23, and the answer matters for how this project describes
-itself. The two blocks are **not** SDK library code, and between them they hold
-roughly **421 functions** against the 191 splat has typed.
+Resolved 2026-10-23, and it reframes the project. Both blocks are now carved as
+C subsegments (`unk_72A8` and `unk_1C540`), `make check` is byte-identical, and
+splat's own disassembly counts them:
 
-| block | file range | vram | functions | self-calls | calls from typed game code |
-|-------|-----------|------|-----------|-----------|---------------------------|
-| A | 0x072a8-0x101f8 | 0x80033aa8-0x8003c9f8 | 113 | 232 | 15 |
-| B | 0x1c540-0x301a8 | 0x80048d40-0x8005c9a8 | 308 | 580 | 42 (+35 from elsewhere) |
+| block | file range | vram | functions |
+|-------|-----------|------|-----------|
+| A | 0x072a8-0x101f8 | 0x80033aa8-0x8003c9f8 | **294** |
+| B | 0x1c540-0x301a8 | 0x80048d40-0x8005c9a8 | **465** |
 
-Counted by scanning every `jal` in the image and bucketing call sites by region.
+So 759 functions, plus the 191 previously typed, is **784** -- the headline
+figure was a quarter of the executable's real function count. An earlier `jal`
+scan estimated 421; it counted only direct-call TARGETS and so missed everything
+reached indirectly.
+
+**They are the game's own code, not SDK modules.** The decisive evidence is
+what they CALL: block A calls `AddPrim`, `GetTPage`, `ClearImage`,
+`RotTransPers4`, `RotMatrix`, `CompMatrix`, `PushMatrix`/`PopMatrix`,
+`ScaleMatrix`, `LoadImage`, `VSync`; block B calls `DrawSync`, `SetSemiTrans`,
+`SetRotMatrix`/`SetTransMatrix`, plus `bzero`, `memcpy`, `strcpy`, `strncpy`,
+`strrchr` and `EnterCriticalSection`/`ExitCriticalSection`. That is libgpu,
+libgte, libc and libapi being *consumed*, and it is the same vocabulary as the
+engine code already decompiled -- func_800453E0 and func_80045CC4 call
+`RotTransPers4` and `RotAverage4` and link primitives with the `addPrim`
+bitfield store. Supporting evidence, gathered before the carve:
 Both blocks are cohesive -- the overwhelming majority of calls into them come
 from within themselves -- and both are called by the game code we have already
 decompiled.

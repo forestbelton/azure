@@ -1,7 +1,7 @@
 # TODO
 
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
-this compiler behaves. **186 of 191 resident-executable functions are C and
+this compiler behaves. **186 of 784 resident-executable functions are C and
 `make check` is byte-identical.** Both of the structural blockers that shaped
 most of this project -- jump-table placement and the object reached both
 `$gp`-relatively and absolutely -- are solved and neither needed the thing it
@@ -83,7 +83,18 @@ The queue, in order:
       12 alike. The only hits are a handful of tiny stubs matching ambiguously
       at many sites on 4-8 invariant words, which is noise.
 
-      **ANSWERED by reading it: it is ~421 functions, and not library code.**
+      **DONE: both blocks are carved, and they are 759 of the game's own
+      functions.** `unk_72A8` (294) and `unk_1C540` (465) are C subsegments as
+      of 2026-10-23 and `make check` is byte-identical. They are game code, not
+      SDK modules: block A calls AddPrim, GetTPage, ClearImage, RotTransPers4,
+      RotMatrix, CompMatrix, PushMatrix/PopMatrix, ScaleMatrix, LoadImage and
+      VSync; block B calls DrawSync, SetSemiTrans, the matrix stack, bzero,
+      memcpy, strcpy, strncpy, strrchr and Enter/ExitCriticalSection -- the SDK
+      being consumed, in the same vocabulary as the engine code already
+      decompiled. **The remaining work is decompiling 764 stubs**, which is now
+      the project's main body of work by a wide margin.
+
+      Earlier notes in this entry, kept for the record:
       Block A (0x072a8-0x101f8) holds 113 functions, block B
       (0x1c540-0x301a8) holds 308, counted by bucketing every `jal` in the
       image by call-site region. Both are cohesive (232 and 580 internal
