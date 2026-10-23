@@ -1,6 +1,6 @@
 # Where the decompilation is, and what to do next
 
-Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
+Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
@@ -82,88 +82,99 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| walls, re-examined and recorded | 7 | each with a numeric bound or a named pass check |
+| near-misses, source written and checked | 7 | each with a numeric bound or a named pass check |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
-Sorted by how open they look, not by DIFF -- a wall at 8 words is further away
-than an open one at 47.
+Sorted by how open they look, not by DIFF: a bounded gap at 8 words is further
+away than an open one at 47. **BOUNDED** means a numeric bound or a named pass
+check has been measured *under this project's current compilation assumptions*
+-- not that no C source produces these bytes, which cannot be true. See below.
 
 | function | unit | words | DIFF | state |
 |----------|------|-------|------|-------|
-| func_8003F368 | unk_12A70 | 113 of 113 | 4 | **WALL**, both gaps named; each costs a word to produce from C |
-| func_80041E70 | unk_154BC | 270 of 270 | 1 | **WALL**, one word, owned by cse and argued completely |
-| func_800453E0 | gprel_18B40 | 533 of 533 | 5 | **wall-ish**: the hoist, split, association and alias families are all swept |
-| func_80045CC4 | unk_19434 | 436 of 437 | 47 | **wall-ish**: the same mask tension, 4 of the 47; the rest is argued separately |
-| func_8004437C | gprel_17B7C | 100 of 100 | 8 | **WALL**, diagnosed at pseudo level |
-| func_800407C0 | unk_12DEC | 178 of 178 | 62 | **WALL**, a real copy preference plus a 5x priority gap |
-| func_80047054 | unk_19434 | 58 of 58 | 30 | **WALL**, one common cause that cannot be split |
+| func_8003F368 | unk_12A70 | 113 of 113 | 4 | **BOUNDED**, both gaps named; each costs a word to produce from C |
+| func_80041E70 | unk_154BC | 270 of 270 | 1 | **BOUNDED**, one word, owned by cse and argued completely |
+| func_800453E0 | gprel_18B40 | 533 of 533 | 5 | **BOUNDED**, 10 words were bought back; the hoist, split, association and alias families are swept |
+| func_80045CC4 | unk_19434 | 436 of 437 | 47 | **BOUNDED**, the same mask tension as above, 4 of the 47; the rest is argued separately |
+| func_8004437C | gprel_17B7C | 100 of 100 | 8 | **BOUNDED**, diagnosed at pseudo level |
+| func_800407C0 | unk_12DEC | 178 of 178 | 62 | **BOUNDED**, a real copy preference plus a 5x priority gap |
+| func_80047054 | unk_19434 | 58 of 58 | 30 | **BOUNDED**, one common cause, not splittable by any shape yet measured |
 
 ### What 191 of 191 would actually take
 
-Worth stating plainly, because the number is easy to assume is close. Three of
-the nine are open and being worked. **The other six are walls**, and between
-them they are 1, 5, 8, 30, 47 and 62 differing words -- so the realistic ceiling
-without breaking one is **185 of 191**, and three of the six are blocked at a
-single-digit word count by a mechanism with a numeric bound behind it rather
-than by an unfinished search.
+Worth stating plainly, because the number is easy to assume is close. All seven
+are near-misses with the source written and checked, and between them they are
+1, 4, 5, 8, 30, 47 and 62 differing words. Five of the seven have every opcode,
+immediate, displacement, branch offset and delay slot matching already and
+differ only in which register holds what.
 
-That is not a reason to stop; it is a reason to expect the last six to come from
-a *mechanism* rather than from more sweeping. Four conclusions in these files
-fell in one day once the right mechanism arrived, each after two sessions of
-sweeping had been written up as proof of unreachability -- see
-`docs/near-misses/README.md`. All seven now carry a numeric bound or a named pass check rather than an
-exhausted search, and func_8004437C has no open idea left at all; the two mask-tension
-functions share one cause, so one idea closes both.
+**Do not read BOUNDED as "unreachable".** These bytes were produced by cc1psx
+from a C file, so a C source that reproduces them exists -- that is a fact about
+how the ROM was built, not a hope. What the headers below have sometimes called
+unreachable is always narrower: unreachable *given everything else this project
+assumes*. The unit boundary, each symbol's declared type and size, the `-G`
+value, which other functions share the translation unit and in what order, the
+struct layout, the flags -- every one of those is this project's inference, not
+evidence about the original source. "No spelling of `end` moves that
+preference" can be a sound measurement and still rest on a fixed compilation
+context that was never verified.
 
-**The four marked WALL or wall-ish have each been re-examined with the levers
-that closed the others, and the negative results are recorded in their files.**
-Do not reopen one without an idea that is not already on its list; three
-sessions have now been spent re-deriving entries that were already written
-down. The two "mask tension" entries share one cause and are 4 and 5 words
-apart from matching -- solving it in either closes both.
+That distinction is where the next result comes from. Four conclusions in these
+files fell in one day once the right mechanism arrived, each after two sessions
+of sweeping had been written up as proof of unreachability -- see
+`docs/near-misses/README.md`. In all four the *measurements* held and the
+*context around them* was what moved. So expect the last seven to come from a
+mechanism or a changed assumption, not from more source-shape sweeping.
 
-**Read the near-miss file before touching one.** Each lists the shapes already
-measured with their word costs, and most record a `search.py` sweep that found
-nothing -- so the remaining gap is allocation or ordering, not source shape.
-`python3 tools/decomp/nmcheck.py` compiles them all and checks each against its
-own claimed count.
+### Audit the context before sweeping the source
 
-**What closed the last four of these was one mechanism**, and it is the first
-thing to try on the rest: `regs_someone_prefers` makes `find_reg` avoid a
-register that a *lower*-priority conflicting allocno prefers, so an allocno
-allocated first can be pushed off the register it should have had. The cheapest
-way to move a priority is a reference that costs no instruction -- splitting one
-assignment into two statements that compile to the same single insn. See
-`docs/matching-levers.md` section 3, which has the arithmetic. Two functions had
-been written off at "2 DIFF, a deliberate price" and "21 DIFF, one coupled
-permutation" before that.
+The questions that have actually paid, in rough order of how often this project
+has had them wrong:
 
-### Not yet written (3)
+1. **Does this function share a translation unit with what I think it does?**
+   Unit boundaries are inferred from `$gp` usage and jump-table runs, and both
+   inferences have been wrong (see the jump-table section of
+   `docs/open-matching-problems.md` for one that was not merely wrong but
+   impossible). The boundary decides which constants cse has already seen, what
+   loop.c has hoisted, and which allocnos live across a call.
+2. **Is every symbol it touches declared at its real type and size?** The
+   declaration, not the use, picks symbolic against split addressing, and a
+   wrong size silently changes the mode at every site. See
+   `docs/addressing-and-translation-units.md`.
+3. **Is the `-G` value right for this unit?** `-G8` against `-G0` moves which
+   objects are `$gp`-relative, which moves prologue register pressure.
+4. **Is the struct layout right?** A field at the wrong offset yields the right
+   instruction with the wrong displacement, and the diff then reads as a
+   register problem.
+5. **Is the function order within the unit right?** It is inferred from address
+   order, which is usually but not always the source order.
 
-| function | unit | instructions | note |
-|----------|------|--------------|------|
-| func_8003F2A4 | unk_12A70 | | was dual-mode `$gp`; use the size-record route |
-| func_8003F368 | unk_12A70 | | ditto, and may not need it -- see below |
-| func_8003E758 | unk_11F0C | 698 | the largest left; also dispatches through jtbl_8002D5C0 |
+Only once those are pinned is "the source shape is wrong" the live hypothesis.
 
-**func_8003F368 is worth a look before reaching for any directive.** Its
-absolute accesses are at +1, +2 and +3 of objects whose +0 is `$gp`-relative,
-and splat names every referenced address as its own symbol -- so "D_80081451
-reached absolutely" may just be the original writing bytes through one
-materialised base, `((u8 *) &D_80081450)[1]`, which is ordinary C needing no
-per-access mode at all.
+**Read the near-miss file before touching one**, and read it the way its own
+README says: the measurements are evidence, the verdict is a hypothesis. Each
+lists the shapes already measured with their word costs, and most record a
+`search.py` sweep that found nothing -- so if the context checks out, the
+remaining gap is allocation or ordering rather than source shape.
+`python3 tools/decomp/nmcheck.py` compiles all seven and checks each against the
+count in its own header.
 
-**func_8003E758 is the last jump-table function**, and the only one of the
-three runs still raw. Two of the three are placed -- unk_14934's and
-unk_154BC's -- so this one follows the same two-line spec change. It needs both
-solved blockers at once: its table is the
-28-entry jtbl_8002D5C0 at 0x8002D5C0, the first of the three runs, and
-`unk_11F0C` contributes exactly that one table -- so when it matches, the
-placement is a two-line spec change like the others.
+**The mechanism that closed the last four** is still the first thing to try on
+the rest: `regs_someone_prefers` makes `find_reg` avoid a register that a
+*lower*-priority conflicting allocno prefers, so an allocno allocated first can
+be pushed off the register it should have had. The cheapest way to move a
+priority is a reference costing no instruction -- splitting one assignment into
+two statements that compile to the same single insn. On a block-local quantity
+the currency is live length rather than reference count, so hoisting an
+arithmetic subterm works where an extra reference does not. The conflict side is
+a second lever: giving an existing allocno a second role in another block
+imports that block's hard-reg conflicts, which is what bought three of
+func_80041E70's four words for free. `docs/matching-levers.md` section 3 has the
+arithmetic.
 
 ## How to work a function
 
@@ -274,22 +285,28 @@ were explained rather than fought.
 
 `TODO.md` has the live queue. In short:
 
-1. The six parked near-misses, best-first as ordered above. Two of them
-   (func_8003D0F0 and func_80045CC4) have a mechanism named and not yet
-   applied, which makes them the cheapest real progress available.
-2. The jump-table spec change, which unblocks about 1550 instructions. The
-   analysis is complete; it needs `csrc/unk_14934.c` split in two at
-   func_80041588, the opening bin blob carved, linker-script placement of three
-   units' `.rodata`, and all three unk_14934 switch functions landed together.
-3. A decision on the 31 addressing-blocked ones -- still the owner's call,
-   since it is about where the project's data lives. The two cheap carve-outs
-   above could be done first, independently of that decision.
-4. Deferred type merges, all recorded where they matter: three scratchpad
-   typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP), three POLY_FT4s
+1. The seven near-misses, ordered above. The two mask-tension functions
+   (func_800453E0 and func_80045CC4) share one cause and are 5 and 47 words
+   out, so one idea closes both -- the cheapest real progress available. Run
+   the context audit above before sweeping any of them.
+2. A decision on func_8003E758's decomp device. It ships
+   `__asm__ volatile ("" :: "r" (q) : "memory")`, worth 13 words, which shapes
+   the allocator directly rather than reproducing a source shape. The honest
+   fallback is 698 words / 11 DIFF with the memory clobber alone.
+3. func_80042BDC's load-bearing source shapes were never written up -- the
+   agent that closed it was cut off immediately after reporting. The code
+   comment says so; the 14-DIFF near-miss is in git history if they need
+   recovering.
+4. Deferred type merges, all recorded where they matter: four scratchpad
+   typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP/Unk3CCB0SP), three POLY_FT4s
    (Unk463ECP/Unk3D0F0P/Unk44D24P), Unk800E3E48 into Unk42710, and the
    RotAverage4 prototype disagreement (`s32 *` against `u32 *`). Each is held
    back for a stated reason -- usually that retyping a field risks an existing
    match for a cosmetic gain -- so read the reason before doing one.
+5. The overlays, which are where the actual game is. `docs/overlays.md` has the
+   analysis; nothing there is started.
+6. `tools/lib2ar.sh` references a path under `$HOME/scratch` and does
+   `basename $1 .LIB` against a lowercase `.lib`. Known, tangential.
 
 ## Running agents on this
 

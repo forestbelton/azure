@@ -1,33 +1,61 @@
 # TODO
 
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
-this compiler behaves. The queue, in order:
+this compiler behaves. **184 of 191 resident-executable functions are C and
+`make check` is byte-identical.** Both of the structural blockers that shaped
+most of this project -- jump-table placement and the object reached both
+`$gp`-relatively and absolutely -- are solved and neither needed the thing it
+was being built towards; see `docs/where-we-are.md`.
 
-- [ ] The six parked near-misses, best-first. `docs/where-we-are.md` orders
-      them and `docs/near-misses/` has the source and the ruled-out shapes for
-      each. Two have a mechanism named and not yet applied, and are the
-      cheapest real progress available: func_80045CC4 (1 word of 437, with a
-      0.9% register-priority gap measured) and func_80042900 (one duplicated
-      `move`). Two others (func_80047054, func_800407C0) are argued unreachable
-      from C and are recorded so nobody re-opens them.
-- [ ] **The jump-table spec change**, which unblocks about 1550 instructions
-      across func_80041344, func_80041588, func_80042BDC and func_8003E758.
-      `docs/open-matching-problems.md` has the full analysis; it needs
-      `csrc/unk_14934.c` split in two at func_80041588, the opening bin blob
-      carved, linker-script placement of three units' `.rodata`, and all three
-      unk_14934 switch functions landed together.
-- [ ] **The addressing group, now unblocked in principle.** A symbol the unit
-      defines gets `%gp_rel` even at the forced `-G0` while undefined symbols
-      stay absolute, so one unit can mix both modes -- measured on
-      func_800410FC at 5 of 5 words. Three steps, cheapest first: (a) carve the
-      five gp-only functions into a `MASPSXFLAGS_G8` unit, the mechanism the
-      project already has working; (b) carve window B, 224 zero bytes at
-      0x80081450, place it from the linker script and define its twenty
-      objects -- the `.sdata` block is written and assembles correctly, only
-      placement is untested; (c) window A, 108 bytes with 25 initialised ones.
-      See `docs/addressing-and-translation-units.md`.
-- [ ] Two cheap spec changes noted in `docs/where-we-are.md`: extending the
-      `main` asm subsegment to 0x102c4 (which disposes of func_8003CAA8, not
-      actually a function), and carving out func_8003F5E0 and the adjacent
-      func_80044618/func_80044698 so their `-G8` assembly is possible.
-- [ ] Tool that scans `splat/*_symbol_addrs.txt` and warns about unused symbols.
+The queue, in order:
+
+- [ ] **The seven near-misses.** All seven have their source written and
+      checked (`python3 tools/decomp/nmcheck.py`); between them they are 1, 4,
+      5, 8, 30, 47 and 62 differing words, and five differ only in which
+      register holds what. `docs/near-misses/` has the source and the
+      ruled-out shapes for each, and `docs/where-we-are.md` orders them.
+
+      Cheapest first: **func_800453E0 and func_80045CC4 share one cause** --
+      the mask tension, where the target needs the natural operand order of a
+      `|` but loop.c hoists whichever invariant is set first -- so one idea
+      closes both, 5 and 47 words.
+
+      **Before sweeping any of them, run the context audit** in
+      `docs/where-we-are.md`. A C source producing these bytes exists by
+      construction, so every "unreachable from C" in these files really means
+      "unreachable given the unit boundary, declared sizes, `-G` value, struct
+      layout and function order this project has inferred" -- and those
+      inferences are where four previous dead ends turned out to be.
+
+- [ ] **A decision on func_8003E758's decomp device.** It ships
+      `__asm__ volatile ("" :: "r" (q) : "memory")`, worth 13 words (3 reload,
+      1 nop placement, 9 a register swap via a free allocno reference). It
+      shapes the allocator directly rather than reproducing a source shape.
+      The honest fallback is 698 words / 11 DIFF with the memory clobber
+      alone. Owner's call; flagged in the source comment and the commit.
+
+- [ ] **Write up func_80042BDC's load-bearing shapes.** The agent that closed
+      it was cut off immediately after reporting, so only the source survives.
+      The code comment says as much; the 14-DIFF near-miss is in git history
+      if the shapes need recovering by diff.
+
+- [ ] **Deferred type merges**, each recorded where it matters and each held
+      back for a stated reason -- usually that retyping a field risks an
+      existing match for a cosmetic gain. Read the reason before doing one.
+      Four scratchpad typedefs for the same 0x1F800000 region
+      (`Unk3DBD0SP`, `Unk463ECSP`, `Unk44D24SP`, `Unk3CCB0SP`); three
+      POLY_FT4s (`Unk463ECP`, `Unk3D0F0P`, `Unk44D24P`); `Unk800E3E48` into
+      `Unk42710`; and the `RotAverage4` prototype disagreement (`s32 *`
+      against `u32 *`).
+
+- [ ] **The overlays**, which are where the actual game is: roughly 8.4 MB of
+      code against the resident executable's 216 KB. `docs/overlays.md` has
+      the analysis. `dungeon.bin` has no splat spec at all, `town.bin` has one
+      `bin` blob over all 16 MB, and `main.bin`'s 28 subsegments are all
+      `bin`. Nothing here is started.
+
+- [ ] Tool that scans `splat/*_symbol_addrs.txt` and warns about unused
+      symbols.
+
+- [ ] `tools/lib2ar.sh` references a path under `$HOME/scratch` and does
+      `basename $1 .LIB` against a lowercase `.lib`. Known, tangential.

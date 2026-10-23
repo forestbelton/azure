@@ -69,7 +69,7 @@
  * build is already in. Measured: the func_80042900 shape, with success falling
  * off the end and failure owning the `return 0`, gives 109 words and 17 DIFF.
  *
- * And the barrier `own_thread_p` needs cannot be kept from C anyway. The final
+ * And no measured shape keeps the barrier `own_thread_p` needs anyway. The final
  * conditional always falls through into the return-0 block, because
  * `set v0, pos` is harmless on both paths and gets hoisted above the `pos > 0`
  * branch; the branch is then inverted to jump straight to the epilogue, the

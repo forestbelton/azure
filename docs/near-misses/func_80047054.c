@@ -26,7 +26,7 @@
  * too wide to close by tweaking ref counts) or else conflict with $v1.
  *
  * REASSESSED 2026-10-22: this is the shared-preference case, the same class as
- * func_800407C0, and it is very likely unreachable from C. `p` and `e` BOTH
+ * func_800407C0, and no source shape measured reaches it. `p` and `e` BOTH
  * prefer $a0 -- `p` because it is the incoming parameter, `e` because of its
  * own recorded preference -- and their live ranges overlap, because the loop
  * condition reads p[2] every iteration. So they conflict, both want $a0, and
@@ -63,9 +63,13 @@
  * from the splat spec by address rather than from a comment:
  * `tools/decomp/nmcheck.py --fix-units` does exactly that.)
  *
- * WALL, confirmed 2026-10-23 with a sharper diagnosis than the above, and the
- * reason it is a wall is that the two facts the target needs have ONE common
- * cause which cannot be split.
+ * BOUNDED, confirmed 2026-10-23 with a sharper diagnosis than the above: the
+ * two facts the target needs have ONE common cause, and no shape measured
+ * splits it. Note what that bound does and does not cover -- it is a statement
+ * about conflicts and allocation order WITHIN this translation unit as carved,
+ * with p[0] local-allocated to $a0. If the unit boundary or a declared size is
+ * wrong, the conflict set changes and the bound is void. See the context audit
+ * in docs/where-we-are.md before sweeping source shapes here again.
  *
  * `p` must keep $a0 and `e` must avoid it. Both follow from the block-local
  * `p[0]` load being local-allocated to $a0: that makes `p`, which is live
@@ -75,7 +79,8 @@
  * preference as a conflict -- and it propagates `;; 84 preferences: 4` onto
  * `e` along the dataflow chain through `(set (reg 84) (plus (reg 88) (reg 87)))`.
  *
- * And it cannot be split, because **`p`'s live range strictly contains `e`'s**
+ * And nothing measured splits it, because **`p`'s live range strictly contains
+ * `e`'s**
  * (88 insns against 40; the loop condition reads `p[2]` every iteration). Any
  * hard register that conflicts with `e` therefore conflicts with `p` too, so
  * there is no conflict-based assignment in which `e` avoids $a0 and `p` keeps

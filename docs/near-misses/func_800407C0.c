@@ -1,5 +1,11 @@
-/* func_800407C0 (unk_12DEC) -- 178 of 178 words, 62 DIFF, and argued to be
- * UNREACHABLE from C. Not compiled; see docs/open-matching-problems.md.
+/* func_800407C0 (unk_12DEC) -- 178 of 178 words, 62 DIFF. Not compiled; see
+ * docs/open-matching-problems.md. BOUNDED: the blocker is identified and
+ * priced, under this project's assumed compilation context. That context -- the
+ * unit boundary, the declared sizes, the -G value, what else shares the unit --
+ * is inferred, not known, so read the measurements below as evidence and the
+ * word "unreachable" as shorthand for "not reachable by any source shape
+ * measured, with the context held fixed". A C source producing these bytes
+ * exists by construction. See the context audit in docs/where-we-are.md.
  *
  * An RLE/nibble-stream blitter. `*src++` is a mode byte: bit 0 selects a
  * linear decoder, mode 0 is a plain memcpy, and anything else is a strided
@@ -19,7 +25,8 @@
  * d ($s0), size ($s1), phase ($t1), src ($t2), row ($t3), end ($v1) and
  * sphase_B ($a3) are already right.
  *
- * WHY IT IS UNREACHABLE. The blocker is a preference, not a priority. Allocno
+ * WHY NO SOURCE SHAPE REACHES IT. The blocker is a preference, not a
+ * priority. Allocno
  * `end` carries `preferences: 3 6`, and find_reg's first pass avoids registers
  * preferred by conflicting allocnos -- which is what pushes `c` off $v1/$a2 to
  * $a0 and `m` off $a2 to $t4. The `6` is created by the memcpy call: with the

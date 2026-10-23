@@ -1,20 +1,30 @@
 # Open matching problems
 
-Eight functions are parked. Every one of them reproduces the original logic;
-what is left in each case is a register assignment, the order of two adjacent
-instructions, or one dead instruction. The two tie-break rules that explain
+Seven functions are parked, and this file's table is kept in step with
+`docs/where-we-are.md` -- that one is the authority. Every one reproduces the
+original logic; what is left in each case is a register assignment, the order of
+two adjacent instructions, or one dead instruction.
+
+**On the word "unreachable", which appears in a few places below.** These bytes
+came out of cc1psx compiling a C file, so a C source that reproduces them
+exists. Every unreachability claim here is therefore narrower than it sounds:
+unreachable *given the unit boundary, declared symbol sizes, `-G` value, struct
+layout and function order this project has inferred*, all of which are
+inferences rather than evidence. See the context audit in
+`docs/where-we-are.md`; four dead ends in this file turned out to live there. The two tie-break rules that explain
 most of this class are in `docs/compiler-version.md` ("The two tie-breaks that
 decide register choice and instruction order"), and cc1psx's own dumps are the
 way to settle them -- see "Reading the compiler's own dumps" in the same file.
 
 | function      | unit    | what is left |
 |---------------|---------|--------------|
-| func_80042900 | unk_14934 | one extra `move $v0,$zero`: the dead load in the 0xD arm wants `$v1`; see below |
-| func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
-| func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
-| func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
-| func_800407C0 | unk_12DEC | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
-| func_80045CC4 | unk_14934 | 436 of 437: the `(s8)` fold and the mask hoisting are both solved; one register swap on a 0.9% gap remains |
+| func_80041E70 | unk_154BC | 1 of 270: cse puts `(const_int 16)` in mem(0x87)'s class and `rtx_cost` prefers it over the shift |
+| func_8003F368 | unk_12A70 | 4 of 113, in two independent two-word gaps: local-alloc, and one named reorg check |
+| func_800453E0 | gprel_18B40 | 5 of 533: the mask tension, in the first OT statement |
+| func_8004437C | gprel_17B7C | 8 of 100: an indexed symbol's address split between local-alloc and global-alloc |
+| func_80047054 | unk_19434 | 30 of 58, every instruction identical and five registers permuted; see below |
+| func_80045CC4 | unk_19434 | 47 of 437: the `(s8)` fold and the mask hoisting are solved; the same mask tension plus one register swap remain |
+| func_800407C0 | unk_12DEC | 62 of 178, all register fields: a hard-reg preference created by the memcpy call -- see the near-miss file |
 
 ## func_8003D0F0  (unk_102A8) -- SOLVED 2026-10-22
 

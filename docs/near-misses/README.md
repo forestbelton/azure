@@ -57,10 +57,55 @@ and check whether any lever added to `docs/matching-levers.md` *since that
 header was written* bears on it -- the git log of the header's own file will
 date it.
 
-Three files currently say WALL and mean it, each with a numeric bound rather
-than an exhausted search: `func_8004437C` (two address halves owned by
-local-alloc and global-alloc, which cannot be made to coincide from C),
-`func_80041E70` (one word; cse must put the constant in the equivalence class
-and `rtx_cost` must prefer it, and the only escape costs more than it saves),
-and `func_800407C0` (a real copy preference plus a 5x priority gap). Those are
-worth reopening only with an idea that is not already on their lists.
+All seven files now carry a numeric bound or a named pass check rather than an
+exhausted search. That is a real improvement over "I swept and found nothing",
+and it is still not what it can look like at a glance.
+
+## "Unreachable from C" is never what it says
+
+These bytes were produced by cc1psx compiling a C file. A C source that
+reproduces them therefore exists -- not probably, not in principle: it existed,
+and somebody wrote it. So every unreachability claim in these headers is
+narrower than its wording, and the narrower version is the useful one:
+
+> No source shape I measured produces these bytes, **with the compilation
+> context held fixed.**
+
+The fixed context is doing more work in that sentence than the measurements are.
+It includes which functions share the translation unit and in what order, each
+symbol's declared type and size, the `-G` value, the struct layout, and the
+flags. Not one of those is evidence about the original source; all of them are
+this project's inferences, several have been wrong before, and each of them
+changes what the passes these headers blame actually see:
+
+* the **unit boundary** decides which constants cse has already folded, what
+  loop.c has hoisted, and which allocnos are live across a call -- so it can
+  move a `preferences:` line or a conflict set wholesale;
+* a **declared size** picks symbolic against split addressing at every site, so
+  getting it wrong produces a register-shaped diff from a declaration-shaped
+  cause;
+* the **struct layout** can yield the right instruction with the wrong
+  displacement, which also reads as a register problem.
+
+A bound computed inside the wrong context is void, not weakened. So when a
+header says a priority gap is five-fold and fixed by the target's own code, the
+ratio is a measurement and "fixed" is a claim about a context that was assumed.
+`docs/where-we-are.md` has the audit to run before sweeping source shapes
+again; it is five questions and it is cheaper than another sweep.
+
+Current bounds, each worth reopening either with an idea not on its list or with
+a context question its own bound assumes away:
+
+* `func_80041E70` -- one word; cse must put the constant in the equivalence
+  class and `rtx_cost` must prefer it, and the only escape costs more than it
+  saves. Bound assumes: the `li 16` and the body are in one cse run, which
+  follows from the unit carve.
+* `func_8004437C` -- two address halves owned by local-alloc and global-alloc,
+  no spelling measured making them coincide. Bound assumes: this unit's carve
+  and `D_80080AF4`'s declared size.
+* `func_800407C0` -- a copy preference created by the memcpy call plus a 5x
+  priority gap. Bound assumes: the call is in this unit and the parameters'
+  pruned preferences follow from it.
+* `func_80047054` -- one common cause, no shape measured splitting it. Bound
+  assumes: the conflict set that follows from `p[0]` being local-allocated to
+  `$a0` within the unit as carved.

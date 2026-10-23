@@ -74,7 +74,9 @@
  * emit_move_insn(reg, symbol): the symbol materialised as a VALUE, not inside
  * an address computation. The general rule to carry away: **an indexed symbol
  * whose base is reused across blocks splits its address between local-alloc
- * and global-alloc, and from C the two halves cannot be made to coincide.**
+ * and global-alloc, and no source spelling measured makes the two halves
+ * coincide.** (That is a result about spellings, not a proof: it assumes this
+ * unit's carve and D_80080AF4's declared size, both inferred.)
  *
  * THE 3-WORD SPOT IS ALSO A SCHED1 TIE. Pre-sched order is
  * [lhu][lh][high][lo_sum], which is the target's. The `sched` dump gives
@@ -113,7 +115,9 @@
  *    degree of freedom in that block is pinned to what this source has.
  *
  * THE ONE UNTRIED ESCAPE IS NOT CONSTRUCTIBLE, checked 2026-10-23, so this
- * function now has no open idea at all. The escape was a cse run boundary
+ * function has no open idea left AT THE SOURCE LEVEL -- which is the point at
+ * which the context questions in docs/where-we-are.md become the cheaper thing
+ * to doubt. The escape was a cse run boundary
  * inside region 1 -- identical `if`/`else` arms between a single-set
  * `u32 **af4 = D_80080AF4;` and its uses, which section 1 makes free in words
  * and which is exactly what lets func_8003CCB0's two-set pointer locals survive
