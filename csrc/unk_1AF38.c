@@ -18,7 +18,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047A44);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047A68);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047AA4);
+u32 func_80047AA4(u32 a) {
+    return a + 0x8000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047AB0);
 

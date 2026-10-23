@@ -1049,6 +1049,18 @@ typedef struct Unk6CD30 {
 extern Unk6CD30 D_8006CD30;
 
 /* Objects with a single observed field: plain globals so far. */
+/* Discovered in the newly carved units (unk_72A8, unk_1C540). Each type is
+   read off the store width in the target listing: sw -> u32, sh -> u16,
+   sb -> u8. They are reached absolutely (lui %hi / %lo), which is what these
+   units' forced -G0 gives. */
+extern u32 D_8006ADB8[];
+extern u16 D_80073828[];
+extern u8  D_8007382A[];
+extern u8  D_80082B4B[];
+extern u32 D_80084130[];
+extern u16 D_80084778[];
+extern u16 D_80084808[];
+extern u32 D_80086D4C[];
 extern u32 D_80073470;
 extern u32 D_80080A7C;
 extern u8  D_80080A84;
