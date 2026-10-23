@@ -370,7 +370,11 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003719C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037394);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800374F4);
+u32 func_800374F4(u16 n) {
+    /* The product must be unsigned -- `(u32)` -- or the high half comes out
+       with `sra` where the target has `srl`. */
+    return (u32) (n * (u16) (rand() << 1)) >> 16;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037534);
 
@@ -616,7 +620,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039694);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039730);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039760);
+void func_80039760(u8 *p) {
+    u32 i = p[0x27];
+    u8 *c = *(u8 **) (p + 0x1C);
+
+    /* The byte offsets are written INSIDE each index, not folded into a
+       `c = base + i * 4` pointer: through a derived pointer the four loads
+       interleave with the shifts and the registers shift with them (12 DIFF).
+       Same rule as the field offsets in docs/matching-levers.md section 6. */
+    *(u32 *) (p + 0x1C) = c[i * 4] + (c[i * 4 + 1] << 8) +
+                          (c[i * 4 + 2] << 16) + (c[i * 4 + 3] << 24);
+}
 
 void func_800397A0(void) {
 }
@@ -910,7 +924,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003ACC0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AD08);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003ADB4);
+/* The array spelling, not the scalar `D_80082E6A`: a 1-byte scalar is small
+   data at -G8 and maspsx expands its load into one register, where the target
+   has the compiler-split pair across two. */
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+
+s16 func_8003ADB4(u16 a) {
+    if (D_80082E6Aa[0] != 2) {
+        return func_80053DA8(a);
+    } else {
+        return 0;
+    }
+}
 
 void func_8003ADF4(s16 x, s16 y, s16 w, s16 h, u32 *data) {
     s16 r[4];

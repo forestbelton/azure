@@ -38,9 +38,37 @@ u32 func_80047AA4(u32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047AB0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047B80);
+s32 func_80047B80(void) {
+    /* The three initialisers are in source order in the listing, so the
+       result and the counter are declared before the pointer. */
+    s32 r = -1;
+    s32 i = 0;
+    u8 *p = D_80083D08;
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047BC0);
+    for (; i < 6; i++) {
+        if (*(u32 *) p == 0) {
+            r = i;
+            break;
+        }
+        p += 8;
+    }
+    return r;
+}
+
+s32 func_80047BC0(s32 k) {
+    s32 r = -1;
+    s32 i = 0;
+    u8 *p = D_80083D08;
+
+    for (; i < 6; i++) {
+        if (*(s16 *) (p + 6) == k) {
+            r = i;
+            break;
+        }
+        p += 8;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C00);
 
