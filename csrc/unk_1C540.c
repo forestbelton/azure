@@ -874,7 +874,13 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055864);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800558FC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055990);
+void func_80055990(u8 *p) {
+    *(u16 *) (p + 0x10) = 0x80;
+    *(u32 *) (p + 0xC) = 3;
+    *(u32 *) (p + 0x4) = 0;
+    *(u16 *) (p + 0x16) = 0xA;
+    *(u16 *) (p + 0x18) = 0xA;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800559B4);
 

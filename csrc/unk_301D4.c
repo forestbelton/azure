@@ -10,7 +10,11 @@ INCLUDE_ASM("asm/nonmatchings/unk_301D4", func_8005C9F4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_301D4", func_8005CA1C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_301D4", func_8005CA4C);
+void func_8005B418(s32);
+
+void func_8005CA4C(s16 a) {
+    func_8005B418(a);
+}
 
 void func_8005CA90(s32);
 
