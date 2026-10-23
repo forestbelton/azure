@@ -1198,6 +1198,27 @@ into a shared tail differ by a word between the two spellings.
 A subagent working one function pays for its whole context on every turn, so
 tool output compounds. Two things dominate:
 
+**Step zero, before any compile: give the agent its own wine prefix.**
+Concurrent `ccpsx` runs share one prefix and silently lose an output -- the
+compile exits 0 having written nothing, or having written another run's file --
+and with several agents going at once that is not a rare race, it is the normal
+case. Put this in the brief verbatim:
+
+    cp -a ~/.cache/azure-psyq /tmp/azure-wine-$$ && export AZURE_WINEPREFIX=/tmp/azure-wine-$$
+
+`tools/ccpsx` honours `AZURE_WINEPREFIX`, and it has to be exported in every
+shell command the agent runs, not just the first. `AZURE_SCRATCH` is worth
+setting the same way if the agent will use `dump.sh`, since that writes to a
+shared `/tmp/azure-decomp` by default. An agent that measures a number under a
+shared prefix cannot tell a lost output from a real regression, and will report
+the regression.
+
+**Tell it what has changed since this document was last read.** Three briefs in
+a row went out without the levers that had landed that hour, and the agents
+re-derived them or worked around them. A brief is cheap; a re-derivation is a
+session. Name the specific sections that are new and say which functions they
+closed, so the agent knows they are load-bearing rather than background.
+
 **The recipe, in order.** Do not start by reading this document end to end:
 
     python3 tools/decomp/annotate.py <unit> <func>        # which levers can apply
