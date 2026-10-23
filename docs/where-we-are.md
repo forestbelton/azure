@@ -4,9 +4,43 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**159 of 191 game functions are C and the build is byte-identical.** `make
-check` is green at HEAD and the working tree is clean. The remaining 32 are
+**162 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 29 are
 `INCLUDE_ASM` stubs in `csrc/`.
+
+### Scope: this is the engine, not the game
+
+**Read this before quoting the number above.** "191 functions" is every
+function in `data/slus_006.14`'s own code, which is 43 KB of a 512 KB
+executable. It is *not* the game. Most of Azure Dreams' code lives in the
+overlays, and essentially none of it is analysed:
+
+| file | size | code-bearing (4 KB blocks, all distinct) |
+|------|------|------------------------------------------|
+| `slus_006.14` | 0.5 MB | ~216 KB -- 43 KB of game code plus PSY-Q library and crt0 |
+| `main.bin` | 2.5 MB | ~80 KB |
+| `town.bin` | 16.1 MB | ~1.0 MB |
+| `dungeon.bin` | 26.5 MB | ~7.3 MB |
+
+Measured by counting 4 KB blocks holding at least two `addiu $sp,$sp,-N`
+prologues *and* two `jr $ra`, then deduplicating by block hash: nothing
+repeats, so the volume is real. A sample from `dungeon.bin` at file offset
+0xA6000 disassembles to obvious compiler output -- the same
+`sll 16`/`sra 16`/`slti` clamp idiom, argument-register moves and filled delay
+slots we match here. Treat the figures as order-of-magnitude: the heuristic can
+count packed data and can miss sparse code, and `dungeon.bin` is certainly an
+archive of many separately loaded entries rather than one image.
+
+So the overlays hold roughly 8.4 MB of code against the executable's 216 KB.
+`make check` verifies **only** `slus_006.14`; `dungeon.bin` has no splat spec at
+all, `town.bin` has one `bin` blob covering all 16 MB, and `main.bin`'s 28
+subsegments are all `bin`.
+
+What the resident engine being nearly finished *does* mean: overlay code calls
+into it, and the 23 called-but-undefined functions above 0x8008875F are the
+engine calling out, so the engine genuinely had to come first. But the honest
+framing is "the engine is nearly done, the game content is unmapped", not "the
+game is 85% decompiled". See `docs/overlays.md`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
 `head`: that masks make's exit code, and a broken state was committed that way
