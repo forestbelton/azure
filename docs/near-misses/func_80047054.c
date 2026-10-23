@@ -103,6 +103,30 @@
  * with three u32 fields and `p->unk_08` (all three in-struct); `break` instead
  * of a `for` condition; `p[1] << 2` for `* 4`; `p[1] * 4 + p[0]` reversed;
  * `(u8 *) p[0] + p[1] * 4`; and `&((u8 *) p[0])[p[1] * 4]`.
+ *
+ * FOUR MIXED MEM_IN_STRUCT_P SPELLINGS, added 2026-10-23, also 58 / 30: the
+ * previous ten covered all-in-struct and all-non-struct but no combination, and
+ * section 5's lever is specifically about a dependence between references of
+ * DIFFERING kinds, so the mixtures were the live gap. `*(p+0) + *(p+1)*4` with
+ * the bound left as `p[2]`; the same with only `p[0]` non-struct; with only
+ * `p[1]` non-struct; and all three non-struct via `*(p+N)`. None of them moves
+ * sched1's hoist of the `p[2]` load.
+ *
+ * WHICH MATTERS, because the hoist -- not the priority arithmetic -- is the
+ * tighter statement of what is wrong. The entry block's schedule and the
+ * register assignment are ONE decision: hoisting the `p[2]` load above `e`'s
+ * `addu` makes a third value live at once, and that is what puts the `p[0]`
+ * load on $a0, which is what makes `p` conflict with $a0 and propagates the
+ * $a0 preference onto `e`. Everything in the paragraphs above follows from it.
+ * So the question to attack is not "how do I reprice `e` against `p`" (a
+ * five-fold gap, and the ten spellings above all failed at it) but **"what
+ * stops sched1 moving that one load"** -- and the answer is not operand order,
+ * not loop form, not struct-ness in any of the 14 combinations tried.
+ *
+ * Which leaves the context questions rather than more spellings: is `p`
+ * really one parameter of this type, is the 0x8 field really at 0x8, and does
+ * this function really sit in unk_19434 as carved. See the audit in
+ * docs/where-we-are.md.
  */
 
 #include "common.h"
