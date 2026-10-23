@@ -104,6 +104,23 @@ than an open one at 47.
 | func_800407C0 | unk_12DEC | 178 of 178 | 62 | **WALL**, a real copy preference plus a 5x priority gap |
 | func_80047054 | unk_19434 | | 30 | **WALL-ish**, argued unreachable at runtime |
 
+### What 191 of 191 would actually take
+
+Worth stating plainly, because the number is easy to assume is close. Three of
+the nine are open and being worked. **The other six are walls**, and between
+them they are 1, 5, 8, 30, 47 and 62 differing words -- so the realistic ceiling
+without breaking one is **185 of 191**, and three of the six are blocked at a
+single-digit word count by a mechanism with a numeric bound behind it rather
+than by an unfinished search.
+
+That is not a reason to stop; it is a reason to expect the last six to come from
+a *mechanism* rather than from more sweeping. Four conclusions in these files
+fell in one day once the right mechanism arrived, each after two sessions of
+sweeping had been written up as proof of unreachability -- see
+`docs/near-misses/README.md`. The three with numeric bounds (func_8004437C,
+func_80041E70, func_800407C0) are the ones to leave alone; the two mask-tension
+functions share one cause, so one idea closes both.
+
 **The four marked WALL or wall-ish have each been re-examined with the levers
 that closed the others, and the negative results are recorded in their files.**
 Do not reopen one without an idea that is not already on its list; three
