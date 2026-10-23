@@ -1152,6 +1152,8 @@ extern u8  D_800212DC[];  /* out of image, reached as a symbol (lui+addiu) */
 extern u8  D_80086CC0[];
 extern u32 D_800869B4;
 extern u8  D_80085FA8[];  /* 0x50-byte entries */
+extern u32 D_8006B1A8[];
+extern u32 D_800814A8;
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;

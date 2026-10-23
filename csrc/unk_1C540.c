@@ -92,7 +92,15 @@ s32 func_8004928C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800492B0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049330);
+u32 func_800492B0(u32);
+
+u32 func_80049330(u8 *p) {
+    if (p[0] != 0) {
+        return func_800492B0(p[3] & 0x1F);
+    } else {
+        return D_800814A8;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049374);
 
@@ -315,7 +323,16 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B248);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B298);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B2E0);
+void func_8004B2E0(s32 a, s32 b) {
+    s32 *n = (s32 *) b;
+
+    /* `!= 0`: the flag goes in while the count is still nonzero. */
+    *n -= 1;
+    if (*n != 0) {
+        *(u16 *) (a - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 void func_8004B298(s32, s32);
 void func_8004B2E0(s32, s32);
