@@ -1610,15 +1610,23 @@ then COND was an `if` around the loop and the loop itself is a `do`/`while` on
 X -- and whatever the body does first belongs at the TOP of the body, where it
 lands in the first branch's delay slot. func_8004CE68, 9 DIFF.
 
-### The arm written FIRST ends up SECOND
+### Read the block ORDER off the listing and write the arms to match
 
-For an `if`/`else` whose two arms both end the function -- two `return`s, or
-two returns of the same call that crossjumping merges -- the arm written first
-becomes the branch-over block and the arm written second becomes the
-fall-through. So the condition in the listing is the one the SECOND arm's
-source condition negates, and getting it backwards costs the branch opcode
-plus both arms' bodies: 6 DIFF on func_8003C8E4 (`bltz` for `bgez`), 3 on
-func_8005AC30. Write the arm whose block the listing places last FIRST.
+For an `if`/`else` whose arms all end the function, the listing's physical
+order of the arms is the thing to reproduce, and which source order gives it
+depends on how many arms there are. Two measured cases, both costing the branch
+opcode plus every word after it:
+
+* **Two arms, each a `return`:** the arm written FIRST becomes the branch-over
+  block and the one written SECOND becomes the fall-through, so the arm the
+  listing places LAST is written first. 6 DIFF on func_8003C8E4 (`bltz` where
+  the target has `bgez`), 3 on func_8005AC30.
+* **Three arms, i.e. an outer `if` and a nested one:** the outer arm the
+  listing places last is written LAST, inverting the outer condition.
+  func_800381D0, 18 DIFF, and func_80034FFC the same way.
+
+So do not apply either rule from memory: find which arm the listing puts last,
+try it in both positions, and keep the one that matches.
 
 Related, on the same two functions: `return f(a != 0);` is not the same as two
 returns of `f(1)` and `f(0)`. The first store-flags the condition into one

@@ -610,7 +610,23 @@ void func_800381A4(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800381D0);
+s32 func_80038240(s32);
+void func_80038288(u8 *);
+void func_800382F0(u8 *);
+void func_8003832C(u8 *);
+
+u32 func_800381D0(u8 *p) {
+    /* The func_80038288 arm is written LAST because the target places it last,
+       reached by `beq`; as an early `if (... == 0x100) return ...;` it comes
+       out first and everything after it shifts (18 DIFF). */
+    if (func_80053EF0(4) != 0x100) {
+        if (func_80038240((*(u8 **) (p + 0x1C))[0]) != 0) {
+            return (u32) func_800382F0;
+        }
+        return (u32) func_8003832C;
+    }
+    return (u32) func_80038288;
+}
 
 s32 func_80038240(s32 a) {
     if (a == 0) {
