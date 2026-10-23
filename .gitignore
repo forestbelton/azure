@@ -14,5 +14,5 @@ ctx.c.m2c
 nonmatchings/
 
 # subagent scratch files
-zz_*.c
+zz*.c
 zzsearch_*.c

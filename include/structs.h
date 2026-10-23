@@ -266,6 +266,102 @@ typedef struct Unk44D24SP {
     s16        unk_8C;
 } Unk44D24SP;
 
+typedef struct Unk453E0SP {
+    s16       unk_00;
+    s16       unk_02;
+    s16       unk_04;
+    u8        pad_06[0x2];
+    Unk3DBD0W unk_08;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    u8        pad_18[0x8];
+    u8       *unk_20;
+    u16       unk_24;
+    u8        pad_26[0xA];
+    Unk3DBD0W unk_30;
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    u8        pad_3C[0x14];
+    u16       unk_50;
+    u8        pad_52[0x6];
+    u16       unk_58;
+    u8        pad_5A[0x16];
+    s16       unk_70;
+    s16       unk_72;
+    s16       unk_74;
+    u8        pad_76[0x2];
+    s16       unk_78;
+    s16       unk_7A;
+    s16       unk_7C;
+    u8        pad_7E[0x2];
+    s16       unk_80;
+    s16       unk_82;
+    s16       unk_84;
+    u8        pad_86[0x2];
+    s16       unk_88;
+    s16       unk_8A;
+    s16       unk_8C;
+    u8        pad_8E[0x2];
+    s32       unk_90;
+    s32       unk_94;
+    u8        pad_98[0x20];
+    u16       unk_B8;
+    u16       unk_BA;
+    u8        pad_BC[0x4];
+    s32       unk_C0;
+    u8        pad_C4[0x8];
+    s32       unk_CC;
+    u8        pad_D0[0x14];
+    s32       unk_E4;
+    s32       unk_E8;
+    s32       unk_EC;
+    u16       unk_F0;
+    u16       unk_F2;
+    u16       unk_F4;
+    u16       unk_F6;
+    u16       unk_F8;
+    u16       unk_FA;
+    u16       unk_FC;
+    u16       unk_FE;
+    s16       unk_100;
+    s16       unk_102;
+    s16       unk_104;
+    u8        pad_106[0x2];
+    u16       unk_108;
+    u16       unk_10A;
+    u8        pad_10C[0x30];
+    u16       unk_13C;
+} Unk453E0SP;
+
+
+typedef union Unk453E0UV {
+    u16 h;
+    u8  b[2];
+} Unk453E0UV;
+
+typedef struct Unk453E0T { u32 addr:24; u32 len:8; } Unk453E0T;
+typedef struct Unk453E0P {
+    u32        unk_00;
+    u32        unk_04;
+    u16        unk_08;
+    u16        unk_0A;
+    u16        unk_0C;
+    u16        unk_0E;
+    u16        unk_10;
+    u16        unk_12;
+    Unk453E0UV unk_14;
+    u16        unk_16;
+    u16        unk_18;
+    u16        unk_1A;
+    Unk453E0UV unk_1C;
+    u16        unk_1E;
+    u16        unk_20;
+    u16        unk_22;
+    Unk453E0UV unk_24;
+    u16        unk_26;
+} Unk453E0P;
+
 /* Hand-added. A 0xC-byte sprite-piece record, the stride coming from the two
    `addiu ..., 0xC` in func_80044D24's loop. unk_00 is flags (bit 0x20 skips
    the piece, and `(s8) unk_00 < 0` terminates the list); unk_01 is copied to
@@ -839,8 +935,17 @@ typedef struct Unk80083178 {
     Unk44724Vec unk_94[4];
 } Unk80083178;
 
+
+/* 0x20-byte MATRIX global. Must be declared larger than -G8 so cc1psx
+   compiler-splits its address; as the existing `extern u32 D_8006CD30` it is a
+   small symbol and gas would make it $gp-relative in this -G8 unit. */
+typedef struct Unk6CD30 {
+    u8  pad_00[0x1C];
+    s32 unk_1C;
+} Unk6CD30;
+extern Unk6CD30 D_8006CD30;
+
 /* Objects with a single observed field: plain globals so far. */
-extern u32 D_8006CD30;
 extern u32 D_80073470;
 extern u32 D_80080A7C;
 extern u8  D_80080A84;
@@ -1374,7 +1479,11 @@ void RotTrans(void *, void *, s32 *);
 void ReadRotMatrix(void *);
 void *TransposeMatrix(void *, void *);
 void ApplyMatrixSV(void *, void *, void *);
-void RotTransPers(void *, void *, void *, void *);
+/* Returns the averaged projected z. Declared s32 (not void) because
+   func_800453E0 uses the return value as an OT index. */
+s32 RotTransPers(void *, void *, void *, void *);
+s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
+                  void *, void *, void *);
 /* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
    the same reason. */
 void LoadImage(void *, u32 *);

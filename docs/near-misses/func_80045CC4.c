@@ -1,4 +1,66 @@
-/* func_80045CC4 (unk_19434) -- 436 of 437 words, 47 DIFF. Not compiled; see
+/* func_80045CC4 (unk_19434) -- 437 of 437 words, 2 DIFF. NOT compiled.
+ *
+ * 2026-10-23: 47 -> 2. Three changes, each measured alone on top of the last:
+ *
+ *  1. THE MASK TENSION, 47 -> 43 (436 words): the two OT statements are the
+ *     libgpu `addPrim` macro, i.e. bitfield stores through a P_TAG-shaped
+ *     `struct { u32 addr:24; u32 len:8; }` (Unk45CC4T below). Mechanism and
+ *     the loop-dump arithmetic are written up in
+ *     docs/near-misses/func_800453E0.c, which MATCHES with the same shape.
+ *     Short form: loop.c hoists iff threshold*savings*lifetime >= insn_count,
+ *     threshold = 29 and drops by 3 per move; the bitfield expansion emits
+ *     the value (0xFFFFFF) before the clear-mask (0xFF000000) yet gives the
+ *     or the q side as operand 0. Here (318/319 insns): swapped `|` source
+ *     0xFFFFFF life 13 moved / 0xFF000000 life 9 not; natural `|` 0xFF000000
+ *     life 16 moved / 0xFFFFFF life 10 not; bitfield both statements life 12
+ *     moved / life 10 not, and the four lw/and words come right.
+ *     Also measured: bitfield in statement 1 only 436/43; statement 2 only
+ *     436/47 (loop dump: 0xFFFFFF life 11 moved, 11*29=319 >= 318 -- the
+ *     tightest data point for threshold = 29).
+ *  2. THE TAIL WORD AND THE PROLOGUE, 43 -> 9 (437 words): a function-scope
+ *     `Unk80083160 *g = &D_80083160;` used ONLY at the tail store
+ *     `*(u32 *) (g->unk_00 + 0x8D0) = (u32) q;`. One set, one use in a
+ *     different block -> update_equiv_regs deletes the set and reload
+ *     rematerialises `lui %hi / addiu %lo / lw 0x0` at the use (section 6's
+ *     lever; the header below wrongly believed a join was required). It also
+ *     fixes the 16-word prologue rotation, since the %hi scratch is no longer
+ *     a pseudo competing for $v0. Using g for the two top reads as well, or
+ *     for either one, is identical (9 DIFF each) -- cse folds them anyway.
+ *  3. THE FLAG-MERGE BLOCK, 9 -> 2: a separate `u8 f` for the flag byte
+ *     instead of reusing `t`. `t` was one pseudo for the two clamp pairs AND
+ *     the flag (20 refs across 17 insns, "Register 191"), so it ranked above
+ *     p->unk_24 (6 refs) in global_alloc and took $v1. With `f` (12 refs,
+ *     8 insns) the order is unchanged but the live ranges no longer force the
+ *     exchange. Same as func_800453E0's matching source.
+ *
+ * THE 2 REMAINING WORDS are the p70 lever's own cost (`addiu $a1,$s0,0x70` in
+ * the site-2 beqz delay slot where the target has `nop`, then `move $a0,$a1`
+ * where the target has `addiu $a0,$s0,0x70`). Measured today:
+ *   without the lever:           437 words, 126 DIFF ($s0/$s1 exchanged;
+ *     lreg: scratchpad 148 refs/726 insns = 7*148/726 = 1.4270 against the
+ *     q+4 giv 77/320 = 6*77/320 = 1.4438; with the lever 150/730 = 1.4384
+ *     against 77/322 = 1.4348). The gap is 1.2%, i.e. two weighted refs.
+ *   duplicate as arg 1 (`p78 = &p->unk_78`): 436 words -- lands in $a1 with
+ *     no move, but reorg steals the merged set into the delay slot and the
+ *     count is one short.
+ *   both p70 and p78 duplicated: 438 words.
+ *   p70 set first in each arm / in site 1's arms / in both sites' arms: all
+ *     437/2, same two words.
+ *   Why it costs: sched1 (a REVERSE list scheduler, sched.c:46) places the
+ *   dependency-free `p70 = p + 0x70` at the arm TOP (post-sched1 dump: right
+ *   after the arm's lbu), so p70 is live across the arm's `lhu $a0` and
+ *   global_alloc gives it $a1. If the set stayed at the arm tail, jump2 would
+ *   cross-jump it into the join as `addiu $a0,$s0,0x70` -- the target's
+ *   exact insn. Untried: any way to give that set a predecessor chain in the
+ *   arm, or any other +2 weighted refs on the scratchpad pseudo (refs are
+ *   counted by flow BEFORE combine, so a p-reference in an insn combine later
+ *   folds away would count for free).
+ *
+ * The header below is the state before today; its "THE TENSION", "THE TAIL
+ * WORD", "SIXTEEN WORDS" and "SEVEN WORDS" sections are superseded.
+ *
+ * ---- previous header follows ----
+ * func_80045CC4 (unk_19434) -- 436 of 437 words, 47 DIFF. Not compiled; see
  * docs/open-matching-problems.md.
  *
  * It emits one slot's elements: builds the matrix in the scratchpad, then per
@@ -373,6 +435,7 @@ typedef union Unk45CC4UV {
     u8  b[2];
 } Unk45CC4UV;
 
+typedef struct Unk45CC4T { u32 addr:24; u32 len:8; } Unk45CC4T;
 typedef struct Unk45CC4P {
     u32         unk_00;
     u32         unk_04;
@@ -399,6 +462,8 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
     Unk3DBD0SP *p = (Unk3DBD0SP *) 0x1F800000;
     Unk45CC4E *e;
     Unk45CC4P *q;
+    Unk80083160 *g = &D_80083160;
+
 
     p->unk_20 = D_80083160.unk_00 + 0xB0;
     p->unk_E4 = *(s16 *) ((u8 *) v + 2);
@@ -487,9 +552,7 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                               &p->unk_90, &p->unk_94) - arg3 - 8;
             p->unk_C0 = otz;
             if ((u32) otz < 0x1E0) {
-                u8 t;
-
-                if ((((u16) (q->unk_08 + 0x20) < 0x181 &&
+                u8 t; u8 f; if ((((u16) (q->unk_08 + 0x20) < 0x181 &&
                       (u16) (q->unk_0A + 0x20) < 0x121) |
                      ((u16) (q->unk_10 + 0x20) < 0x181 &&
                       (u16) (q->unk_12 + 0x20) < 0x121) |
@@ -535,21 +598,10 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                         q->unk_1C.b[1] = q->unk_1C.b[1] - 1;
                         q->unk_24.b[1] = q->unk_24.b[1] - 1;
                     }
-                    t = e->unk_01;
-                    ((u8 *) &s->unk_0C)[3] = t;
-                    if (p->unk_24 & 8) {
-                        if (p->unk_24 & 4) {
-                            ((u8 *) &s->unk_0C)[3] = t | 2;
-                        } else {
-                            ((u8 *) &s->unk_0C)[3] = t & 0xFD;
-                        }
-                    }
+                    f = e->unk_01; ((u8 *) &s->unk_0C)[3] = f; if (p->unk_24 & 8) { if (p->unk_24 & 4) { ((u8 *) &s->unk_0C)[3] = f | 2; } else { ((u8 *) &s->unk_0C)[3] = f & 0xFD; } }
                     q->unk_04 = s->unk_0C;
-                    q->unk_00 = (*(u32 *) (p->unk_20 + p->unk_C0 * 4) & 0xFFFFFF) |
-                        (q->unk_00 & 0xFF000000);
-                    *(u32 *) (p->unk_20 + p->unk_C0 * 4) =
-                        (*(u32 *) (p->unk_20 + p->unk_C0 * 4) & 0xFF000000) |
-                        ((u32) q & 0xFFFFFF);
+                    ((Unk45CC4T *) q)->addr = ((Unk45CC4T *) (p->unk_20 + p->unk_C0 * 4))->addr;
+                    ((Unk45CC4T *) (p->unk_20 + p->unk_C0 * 4))->addr = (u32) q;
                     q++;
                 }
             }
@@ -567,5 +619,5 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
         e++;
     }
     PopMatrix();
-    *(u32 *) (D_80083160.unk_00 + 0x8D0) = (u32) q;
+    *(u32 *) (g->unk_00 + 0x8D0) = (u32) q;
 }

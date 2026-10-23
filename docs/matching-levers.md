@@ -212,13 +212,22 @@ rules.** The gate is in `move_movables` (2.7.2 loop.c:1631):
     || (threshold * savings * m->lifetime) >= insn_count
     || (m->forces && m->forces->done && n_times_used[m->forces->regno] == 1)
 
-and its inputs are `m->savings = n_times_used[regno]`, the number of USES of
-the register the invariant insn sets (loop.c:793); `m->lifetime =
+and its inputs are `m->savings = n_times_used[regno]` (loop.c:793) -- which is
+**the number of SETS, not uses**: `n_times_used` is initialised by `bcopy` from
+`n_times_set` (loop.c:597), so for any single-set pseudo it is 1 and **a second
+use of the constant buys nothing**; `m->lifetime =
 uid_luid[regno_last_uid] - uid_luid[regno_first_uid]`, its live span in logical
 insn numbers, computed function-wide rather than clamped to the loop (791-792);
 `insn_count`, the loop's insn count, doubled for a repeat move of the same
 regno (1609-1611); and `threshold = (loop_has_call ? 1 : 2) * (1 +
 n_non_fixed_regs)` (532) -- so a call inside the loop HALVES the threshold.
+**`threshold` is then decremented by 3 after every successful move**
+(loop.c:1718, commented "the more regs we move, the less we like moving them"),
+which is the actual reason a second invariant usually fails: it is tested
+against a smaller threshold than the first. On this target the starting value is
+**29** (soft-float fixes the FP regs via `CONDITIONAL_REGISTER_USAGE`, leaving 25
+GPRs plus MD regs 64-66; these loops contain calls, so the multiplier is 1), and
+the second constant is therefore tested at 26.
 `move_movables` loops over every movable and hoists each that passes
 independently, so there is no one-hoist limit; the second constant is simply
 failing the test. And the constant set first has the earlier `regno_first_uid`,
@@ -233,12 +242,24 @@ insns"), and each movable prints as "Insn 42: regno 94 (life 1), move-insn
 savings 1  moved to 176", where the trailing "moved to" appears only if it was
 actually hoisted. `tools/decomp/dump.sh` already collects it.
 
-So the levers are the test's inputs: raise `savings` by giving the constant a
-second USE inside the loop (not a second set -- that makes a new pseudo with
-its own lifetime, which is the measured-and-failed shape in func_80045CC4's
-header); lower `insn_count` by moving work out of the loop, which lowers the bar
-for both constants at once; or lengthen the losing constant's `lifetime`,
-checking first that the extra use does not set `m->global` (789-790).
+So the only movable input is `lifetime`, and the way to move it is not to touch
+the constant at all. **What actually solved both mask-tension functions was
+recognising the statement as a BITFIELD STORE.** `addPrim` writes a 24-bit
+field, so expmed.c's `store_fixed_bit_field` expands the VALUE first (load
+`*ot`, set 0xFFFFFF, mask), then the lvalue's clear-mask (load `q->unk_00`, set
+0xFF000000, mask), then `ior` with **the q side as operand 0**. That hands over
+both things a hand-written `|` can never give together -- 0xFFFFFF gets the
+earlier set and so the longer lifetime, clearing the threshold at 29, while
+`q->unk_00 & 0xFF000000` still lands as the `or`'s operand 0 -- because
+`expand_binop` always materialises operand 0's chain first. sched1 is a reverse
+list scheduler (sched.c:46) and orders the loads and `and`s from that operand
+order, which is where the target's q-load-first comes from.
+
+The general lesson, and the reason this sat unsolved through dozens of operand
+spellings: **when two requirements on one statement are in direct conflict from
+C, check whether the original statement was not that C operator at all.** Here
+no spelling of `|` could satisfy both; a bitfield assignment satisfies both by
+construction.
 
 The original measurement that produced the superseded claim still stands: Measured on func_80045CC4, which has
 two invariant masks in one loop: with `(q->unk_00 & 0xFF000000) | (ot &
