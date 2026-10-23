@@ -42,6 +42,39 @@ SCRATCH = os.environ.get("AZURE_SCRATCH", "/tmp/azure-decomp")
 
 WIDTHS = ["s32", "u32", "s16", "u16", "s8", "u8"]
 
+# Every transform is restricted to the target function's BODY. Without that,
+# a near-miss file's header comment and its local struct typedefs are fair
+# game: the first real run of this tool "fixed" func_80045CC4's missing word by
+# narrowing a u16 STRUCT FIELD to u8, which shifts every later field offset --
+# a semantic change dressed as a shape change, and it tripled the differing
+# count while the word count looked better. It also cut the candidate count on
+# that function from 435 to the handful that are actually local variables.
+SPAN = (0, 0)
+
+
+def body_span(text, func):
+    """(start, end) of the function's body, or the whole file if not found."""
+    m = re.search(r"(?m)^[A-Za-z_][\w \*]*\b%s\s*\([^;{]*\)\s*\{"
+                  % re.escape(func), text)
+    if not m:
+        return 0, len(text)
+    i, depth = m.end(), 1
+    while i < len(text) and depth:
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+        i += 1
+    return m.end(), i - 1
+
+
+def scan(pattern, text):
+    """finditer, restricted to the current function body."""
+    lo, hi = SPAN
+    for m in re.finditer(pattern, text):
+        if lo <= m.start() and m.end() <= hi:
+            yield m
+
 
 # ---------------------------------------------------------------- transforms
 #
@@ -53,7 +86,7 @@ def t_decl_width(text):
     """Swap a local's declared width. Worth 8 words in func_8003D0F0 (the s16
     accumulator that blocks combine's byte-to-signed refold) and 2 in
     func_80042BDC (a u8 local that keeps `addiu 0xFF`)."""
-    for m in re.finditer(r"(?m)^([ \t]+)(%s)(\s+)(\w+)(\s*(?:;|=))" % "|".join(WIDTHS), text):
+    for m in scan(r"(?m)^([ \t]+)(%s)(\s+)(\w+)(\s*(?:;|=))" % "|".join(WIDTHS), text):
         cur = m.group(2)
         for w in WIDTHS:
             if w == cur:
@@ -65,7 +98,7 @@ def t_decl_width(text):
 def t_drop_cast16(text):
     """Remove an (s16)/(s8) cast. `lhu` where the target has `lh` means the
     cast belongs; the reverse means it does not."""
-    for m in re.finditer(r"\((s16|s8)\)\s*", text):
+    for m in scan(r"\((s16|s8)\)\s*", text):
         yield ("drop (%s) at %d" % (m.group(1), m.start()),
                text[: m.start()] + text[m.end() :])
 
@@ -74,7 +107,7 @@ def t_add_cast16(text):
     """Add an (s16) cast to an array index. A u16 field or global read with an
     (s16) cast yields a bare `lh`; one differing word per site in
     func_80041B98 and three siblings."""
-    for m in re.finditer(r"\[([A-Za-z_]\w*(?:->\w+|\.\w+)*)\]", text):
+    for m in scan(r"\[([A-Za-z_]\w*(?:->\w+|\.\w+)*)\]", text):
         inner = m.group(1)
         yield ("cast index [%s] -> [(s16) %s]" % (inner, inner),
                text[: m.start()] + "[(s16) " + inner + "]" + text[m.end() :])
@@ -87,7 +120,7 @@ def t_split_binop(text):
     boundary, which keeps the chain one global allocno: worth 81 differing
     words in func_80041588's flag word and 22 in func_80041344's."""
     pat = re.compile(r"(?m)^([ \t]+)(\w+)\s*=\s*([^;=]+?)\s*(\||\&|\+|-|<<|>>)\s*([^;]+);")
-    for m in re.finditer(pat, text):
+    for m in scan(pat, text):
         ind, var, lhs, op, rhs = m.groups()
         if var in lhs:  # already in-place
             continue
@@ -99,7 +132,7 @@ def t_split_binop(text):
 def t_join_binop(text):
     """The reverse of t_split_binop, for when the target wants one insn."""
     pat = re.compile(r"(?m)^([ \t]+)(\w+)\s*=\s*([^;=]+);\n[ \t]+\2\s*(\||\&|\+|-|<<|>>)=\s*([^;]+);")
-    for m in re.finditer(pat, text):
+    for m in scan(pat, text):
         ind, var, lhs, op, rhs = m.groups()
         repl = "%s%s = %s %s %s;" % (ind, var, lhs, op, rhs)
         yield ("join %s %s=" % (var, op),
@@ -112,7 +145,7 @@ def t_cmp_swap(text):
     func_80042BDC and about 2 at each of two sites in func_80045CC4."""
     flip = {"<": ">", ">": "<", "<=": ">=", ">=": "<="}
     pat = re.compile(r"\(([^()]+?)\s*(<=|>=|<|>)\s*([^()]+?)\)")
-    for m in re.finditer(pat, text):
+    for m in scan(pat, text):
         a, op, b = m.group(1), m.group(2), m.group(3)
         if "=" in a or "=" in b:
             continue
@@ -125,11 +158,11 @@ def t_mask1(text):
     """`if (x != 0)` versus `if ((x & 1) != 0)`. On a 0/1 value the mask plus a
     `u8` declaration keeps a one-insn materialisation that the bare test does
     not emit at all -- the word func_80042BDC was missing."""
-    for m in re.finditer(r"\((\w+)\s*!=\s*0\)", text):
+    for m in scan(r"\((\w+)\s*!=\s*0\)", text):
         v = m.group(1)
         yield ("mask %s != 0 -> (%s & 1) != 0" % (v, v),
                text[: m.start()] + "((%s & 1) != 0)" % v + text[m.end() :])
-    for m in re.finditer(r"\(\((\w+)\s*&\s*1\)\s*!=\s*0\)", text):
+    for m in scan(r"\(\((\w+)\s*&\s*1\)\s*!=\s*0\)", text):
         v = m.group(1)
         yield ("unmask (%s & 1) != 0 -> %s != 0" % (v, v),
                text[: m.start()] + "(%s != 0)" % v + text[m.end() :])
@@ -178,6 +211,19 @@ def score(text, unit, func, g8, cache):
     return res
 
 
+def better(cand, cur):
+    """Is `cand` a strict improvement on `cur`?
+
+    Fewer differing words with the word count no further off, or a closer word
+    count with the differing count no worse. Buying a word at the cost of a
+    much larger differing count is almost always a semantic change rather than
+    a shape change, so it is reported separately for a human to judge instead
+    of being chained into.
+    """
+    return ((cand[0] <= cur[0] and cand[1] < cur[1])
+            or (cand[0] < cur[0] and cand[1] <= cur[1]))
+
+
 def fmt(s):
     if s is None:
         return "does not build"
@@ -217,6 +263,8 @@ def main():
                          " ".join(t.__name__.replace("t_", "") for t in TRANSFORMS)))
                 return 2
 
+    global SPAN
+    SPAN = body_span(text, func)
     sites = [(t.__name__, lbl) for t in active for lbl, _ in t(text)]
     if "--sites" in flags:
         print("%d candidate change(s) from %s:" % (len(sites), base_path))
@@ -241,6 +289,7 @@ def main():
         if a.startswith("--max-compiles="):
             budget = int(a.split("=", 1)[1])
     accepted = []
+    flagged = []
     cur_text, cur = text, best
     passes = 0
     while passes < 8 and len(cache) < budget:
@@ -253,7 +302,10 @@ def main():
                 s = score(cand, unit, func, g8, cache)
                 if s is None:
                     continue
-                if s[:2] < cur[:2] and (improved is None or s[:2] < improved[0][:2]):
+                if s[0] < cur[0] and not better(s, cur):
+                    flagged.append((lbl, s))
+                if better(s, cur) and (improved is None
+                                       or better(s, improved[0])):
                     improved = (s, lbl, cand)
         if improved is None:
             break
@@ -266,6 +318,13 @@ def main():
 
     print()
     print("%d variant(s) compiled; best: %s" % (len(cache), fmt(cur)))
+    if flagged:
+        print()
+        print("NOT accepted -- these close the word count but cost differing")
+        print("words, so judge them by hand (a struct field narrowed to fix a")
+        print("word is a layout change, not a shape change):")
+        for lbl, s in flagged[:8]:
+            print("  %-46s %s" % (lbl, fmt(s)))
     if not accepted:
         print("no single change improved on the base. Either the shape is")
         print("already right and what is left is allocation or ordering (read")
