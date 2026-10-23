@@ -5,6 +5,7 @@ void func_80040CBC(s16);
 void func_800418B4(void);
 void func_80040AA0(u16);
 void func_8003E1FC(void);
+void func_8003E70C(void);
 u32 func_8003E240(s32);
 void func_800411FC(u16);
 UnkNode *func_8003FC64(s32);
@@ -16,7 +17,6 @@ void func_800401FC(void);
 void func_8004027C(void);
 void func_800402F4(void);
 u32 *func_80040574(s32);
-void func_8003F80C(u32, s32, s32, s16);
 
 void func_8003F5EC(void) {
     s32 i;
@@ -26,7 +26,55 @@ void func_8003F5EC(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DEC", func_8003F624);
+/* Tells the drive to spin down, retrying up to sixteen times, then resets the
+ * audio state either way.
+ *
+ * THE BLOCKER THIS FUNCTION USED TO BE, and how it was removed. D_800814D4 is
+ * reached BOTH ways here: the `D_800814D4 = 0x84` store is
+ * `sb %gp_rel(D_800814D4)` while `&D_800814D4` passed to CdControlB is an
+ * absolute `lui %hi` / `addiu %lo` pair. No unit-level setting can express
+ * that -- a `-G` value decides per symbol SIZE and an `.extern` override
+ * decides per SYMBOL, and both of those apply to every access alike -- so this
+ * could not be carved into a -G8 unit like its neighbours (18 differing words
+ * there).
+ *
+ * maspsx can express it, because its %gp_rel rewrite fires on a load or store
+ * and leaves an address materialisation alone. What blocked that route was
+ * that it was written as a .sdata DEFINITION -- `.globl` + `.type` + `.size` +
+ * a label + `.byte 0` -- which makes the symbol a defined OBJECT in a 1-byte
+ * .sdata section, and splat's legacy linker-script generation cannot place one
+ * object's .sdata at a distant fixed address.
+ *
+ * It does not need to be a definition. maspsx's `_uses_gp` only consults its
+ * `sdata_entries` table, which the `.size` record alone populates, so:
+ *
+ *     __asm__(".sdata\n\t.size D_800814D4,1\n\t.text");
+ *
+ * gives the identical 25 words while DEFINING NOTHING -- `readelf -sS` shows
+ * .sdata at 0 bytes and D_800814D4 still UND with size 1, so the linker
+ * script's own `D_800814D4 = 0x800814D4;` resolves it and there is no
+ * placement to arrange. Verified both ways: definition route MATCH, size-record
+ * route MATCH, and the object differs only in whether the symbol is defined.
+ *
+ * The `goto done` is load-bearing in the usual way (section 8): the retry
+ * exhaustion path has to fall through to func_8003E70C while the success path
+ * jumps past it, and an inline `return` in the arm costs a `j` plus a second
+ * epilogue. */
+__asm__(".sdata\n\t.size D_800814D4,1\n\t.text");
+
+void func_8003F624(void) {
+    s32 i;
+
+    D_800814D4 = 0x84;
+    for (i = 0x10; i != 0; i--) {
+        if (CdControlB(0xE, &D_800814D4, NULL) != 0) {
+            goto done;
+        }
+    }
+    func_8003E70C();
+done:
+    func_8003F5EC();
+}
 
 s32 func_8003F688(s32 arg0) {
     s32 acc = 0;

@@ -346,34 +346,70 @@ function that touches the same object. func_8003F240 reaches D_800814D0
 object **absolutely** and already matches that way. They cannot have shared a
 unit, so that carve is one function wide.
 
-### The group the carve cannot reach: one object, both modes
+### The group the carve could not reach: one object, both modes -- SOLVED
 
-Four of the remaining `$gp` functions reach **the same object both
-`$gp`-relatively and absolutely**, which no unit-level setting can express --
-not a `-G` value (it decides per symbol size) and not an `.extern` override (it
-decides per symbol). Only maspsx's `.sdata` definition route can, because its
+Four of the `$gp` functions reach **the same object both `$gp`-relatively and
+absolutely**, which no unit-level setting can express: a `-G` value decides per
+symbol SIZE and an `.extern` override decides per SYMBOL, and both apply to
+every access of that symbol alike.
+
+| function | the object, both ways | state |
+|----------|-----------------------|-------|
+| func_8003F624 | `sb %gp_rel(D_800814D4)` and `&D_800814D4` passed to CdControlB | landed, `csrc/unk_12DEC.c` |
+| func_8004713C | `sh %gp_rel(D_80080B08)` and `lui/addiu %hi/%lo(D_80080B08)` into `$s5` | landed, `csrc/unk_19434.c` |
+| func_8003F2A4 | `sw %gp_rel(D_800814B0)` and `lui %hi(D_800814B0)` | in progress |
+| func_8003F368 | `sw`/`lw %gp_rel(D_80081450)` and `lui %hi(D_80081451)`; likewise `D_800814D0` against `sb %lo(D_800814D3)` | in progress |
+
+**maspsx can express it, and it needs no linker placement.** Its `%gp_rel`
 rewrite fires on a **load or store** and leaves an address materialisation
-(`la`) alone -- which is exactly the split these functions need:
+alone, which is exactly the split these functions need. What blocked the route
+for months was that it was written as a `.sdata` **definition**:
 
-| function | the object, both ways |
-|----------|-----------------------|
-| func_8003F624 | `sb %gp_rel(D_800814D4)` and `&D_800814D4` passed to CdControlB |
-| func_8004713C | `sh %gp_rel(D_80080B08)` and `lui/addiu %hi/%lo(D_80080B08)` into `$s5` |
-| func_8003F2A4 | `sw %gp_rel(D_800814B0)` and `lui %hi(D_800814B0)` |
-| func_8003F368 | `sw`/`lw %gp_rel(D_80081450)` and `lui %hi(D_80081451)`; likewise `D_800814D0` `$gp`-relative against `sb %lo(D_800814D3)` |
+    /* DO NOT USE: makes the symbol a defined object that has to be placed */
+    __asm__(".sdata\n\t.globl D_800814D4\n\t.type D_800814D4,@object\n"
+            "\t.size D_800814D4,1\nD_800814D4:\n\t.byte 0\n\t.text");
 
-The first three are the clean case: a direct store plus an address taken of the
-same symbol. `-G8` makes the `la` `$gp`-relative too; an `.extern SYM,16`
-override makes the store absolute. Measured on func_8003F624: 18 differing
-words at `-G8`.
+That puts a real 1-byte object in `.sdata`, and splat's legacy linker-script
+generation cannot place one object's `.sdata` at a distant fixed address.
 
-**func_8003F368 may not belong here, and is worth a look before being written
-off.** Its absolute accesses are at +1, +2 and +3 of objects whose +0 is
-`$gp`-relative, and splat names every referenced address as its own symbol. So
-what reads as "D_80081451 reached absolutely" could just as well be the
-original writing bytes through one materialised base -- `((u8 *) &X)[1]` --
-which is an ordinary C spelling and would need no per-access mode at all. That
-hypothesis is untested.
+**It does not have to be a definition.** maspsx's `_uses_gp` consults only its
+`sdata_entries` table, and the `.size` record alone populates that. So:
+
+    __asm__(".sdata\n\t.size D_800814D4,1\n\t.text");   /* file scope */
+
+gives the identical code while defining nothing. Verified side by side on
+func_8003F624 -- both routes a 25-word MATCH -- and the objects differ only in
+the one way that matters:
+
+| | `.sdata` size | the symbol |
+|---|---|---|
+| definition route | 1 byte | `OBJECT GLOBAL` in `.sdata`, needs placing |
+| size-record route | **0 bytes** | **`NOTYPE GLOBAL UND`**, size 1 |
+
+With the symbol still undefined, the linker script's own
+`D_800814D4 = 0x800814D4;` from `undefined_syms_auto` resolves it and there is
+nothing to place. There is no `.globl`, no `.type`, no label and no `.word`, so
+nothing can collide with that assignment either.
+
+**This also removes the need for a window definition entirely**, which is what
+the rest of this document was building towards. A unit does not have to be
+carved to a particular `-G` for one of these: func_8004713C's two symbols are
+the only `$gp` references anywhere in `unk_19434`, and it landed in that unit
+at the project default `-G0` with the directive alone.
+
+Two things to keep in mind when reaching for it:
+
+* Give the **real size** of each symbol (1 for a byte, 2 for a halfword, 4 for
+  a word) and one `.size` per symbol -- the rewrite is per symbol, not per
+  object.
+* It is also the fix for a maspsx gap that costs one word per site in a carved
+  `-G8`/`-G2` unit: maspsx will not emit the load-delay nop before a `%gp_rel`
+  store of a symbol it knows only from an `.extern` record, because `_uses_gp`
+  skips `.extern` outright. See section 11 of `docs/matching-levers.md`.
+
+The principled fix is in `vendor/maspsx`: record `.extern SYM,size` and let
+`_uses_gp` consider those symbols when gas is left at a nonzero `-G`, gated on
+`--dont-force-G0`. If that lands, every one of these directives comes back out.
 
 ### Window B's layout, derived and assembled
 

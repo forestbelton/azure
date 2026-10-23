@@ -117,6 +117,11 @@ Three instances:
 
 ## 2. Loop notes change every reference weight in the function
 
+**In a register-starved function, dropping a loop note is destructive rather
+than a lever.** Rewriting func_8003CCB0's init loop as a backward `goto` loop
+costs 4 words and 250 differing; its main loop, 6 words and 263 differing.
+Reach for this only where the function has registers to spare.
+
 A `for` or `while` emits `NOTE_INSN_LOOP_BEG`, which puts its body at
 `loop_depth` 2, and `flow.c` adds `loop_depth` to `reg_n_refs` for every
 reference. A backward `goto` loop gets no note, so every reference outside an
@@ -181,6 +186,22 @@ Levers that move them, all with no change to the emitted code:
   gives `op` two more RTL references. This is the cheapest priority lever there
   is -- no extra insn, no extra live length to pay for, unlike the duplication
   below -- and it is what closed func_80041344 after 24 differing words.
+
+  **Two preconditions, both measured.** First, **the split-out statement must
+  not be a memory load.** A copy (`op = (s32) base;`) coalesces away; a load
+  (`a1 = p->unk_20;`) leaves a multi-set pseudo that stops combine folding the
+  address back into the MEM, and a real insn appears -- func_800453E0 measured
+  that three ways at +1 word and 76 differing. So split at an arithmetic
+  subterm, never at the base load. Second, **on a BLOCK-LOCAL quantity the
+  currency is live length, not references.** local-alloc orders quantities with
+  `qty_compare`, which compares `qty_death - qty_birth` and nothing else;
+  references are global.c's. A free reference therefore buys nothing there by
+  itself -- but hoisting a subterm into its own local still works, because the
+  pseudo is BORN ONE INSN EARLIER, which is a live-length change. That is what
+  took func_800453E0 from 10 differing words to 5, moving one global allocno
+  and one block-local quantity in a single exchange. **So: on a global allocno
+  reach for the extra reference, on a block-local quantity reach for the
+  earlier birth, and the same one-line hoist often gives both.**
 
   **The reason a couple of references matter so much there is worth knowing in
   its own right**, because it inverts the usual intuition that a high priority
@@ -358,6 +379,18 @@ otherwise have filled in the next load's delay slot -- and it is sensitive to
 statement order: only one of the six permutations of its three stores produces
 the copy at all.
 
+
+* **When sched1 lifts an arithmetic insn above stores that should precede it,
+  hoist its operand's LOAD into a local one statement earlier.**
+  `t = (s8) p[-2]; sp->a = t; sp->b = t; t = t + (u16) sp->f;` lets sched1 lift
+  the `addu` above both `sh`s, because its dependence chain is longer. Reading
+  the operand first -- `h = (u16) sp->f;` *before* the two stores, then
+  `t = t + h;` -- leaves the `addu` where the target has it. Worth 10 differing
+  words across two four-store groups in func_8003CCB0 at an unchanged word
+  count. Section 1's lever for a wrong sched1 order is block membership and
+  section 7's is the number of sets; this is a third and cheaper one for the
+  specific case of an arithmetic insn floating above stores.
+
 ## 5. MEM_IN_STRUCT_P decides sched1's alias calls
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference
@@ -451,9 +484,55 @@ form:
   with a later `%lo`, which hides the difference.
 * Nothing folds a constant into a `lo_sum`, so `p += CONST` on a pointer local
   is not interchangeable with `SYM + CONST` (func_80041CBC, 57 words).
+  **The mirror image: `&ARRAY[K]` DOES fold the constant into the address.** It
+  emits `lui %hi(SYM+K*size)` / `addiu %lo(SYM+K*size)`, one pair per pointer,
+  whereas `b = ARRAY; d = b + K1; s = b + K2;` materialises the symbol's
+  address once and adds the constants with their own `addiu`s -- cse keeps the
+  register because a REG costs less than a `CONST` in `rtx_cost` for an address
+  operand. In func_8003CB08 that difference is 2 words and 62 differing, and
+  the base-pointer form is the target's. So the rule covers both directions:
+  a constant folds into an address *constant* and never into a `lo_sum`.
 * A big object reached through a pointer local keeps its address in a
   callee-saved register across calls; reached by symbol it rebuilds a
   `lui`/`%lo` pair per access (func_8003D5A4, 105 words; func_80046884, 116).
+  **A ONE-set pointer local does something different and useful: it collapses
+  to a bare `lui %hi`, relocated into the function's ENTRY block.** expand
+  emits the object's `la` there; cse then rewrites every `g->field` MEM as a
+  `lo_sum` off the `(high)` pseudo, the `addiu %lo` goes dead, flow deletes it,
+  and what is left is `lui $s0,%hi(SYM)` in the entry block with
+  `lw %lo(SYM)($s0)` at each use. It is the only way found to get a large
+  in-image object's `%hi` materialised **before the first conditional branch**,
+  and in func_8003CB08 that one insn is worth a word and 104 differing words:
+  the anti-dependence forces `sw $s0` early in the prologue, which leaves
+  `sw $ra` for the first branch's delay slot and empties the second `beq`'s.
+  So the two cases have distinct signatures -- one set gives a hoisted bare
+  `lui`, two sets give the split `lui`/`addiu` pair per site.
+
+  **And the two-set rule needs the set and the use in DIFFERENT basic blocks.**
+  A plain `g = &SYM;` followed by a use in the same block folds back to
+  `lui` + `lw %lo` *even when the pseudo has other sets elsewhere in the
+  function*, because cse has the `(high)` pseudo live in that block. Section
+  1's zero-word identical `if (c) { g = &SYM; } else { g = &SYM; }` buys the
+  block boundary anywhere you need it, and that is what gives func_8003CCB0 the
+  target's `lui %hi` / `addiu %lo` / `lw 0x0(reg)` at both of its sites:
+  dropping the first site's arms costs 31 differing words at an unchanged word
+  count, dropping the last site's costs a word.
+  **Where the pointer local is DECLARED is a second lever on top of that one,
+  because it decides whether the address materialisation is a source statement
+  or a loop.c hoist.** Declared outside a loop it is an ordinary statement and
+  lands before the loop GUARD; declared as the loop body's first statement it
+  becomes a loop-invariant like any other and lands in the PREHEADER -- where it
+  competes with the loop's other invariants, because loop.c hoists only some of
+  them and takes them in the order it meets them. func_8004713C has three
+  invariants (the RECT address, `arg1 << 4`, `arg1 << 6`) and loop.c hoists two:
+  outside the loop, 47 words and 44 DIFF; no pointer local at all, 45 words and
+  45 DIFF with the address rebuilt per iteration; declared first inside the
+  body, a 49-word MATCH, with `arg1 << 6` the one left behind. Losing that
+  shift is what gives the first `beqz` an empty delay slot while the hoisted
+  `arg1 << 4` lets sched1 fill the second one. **So when the target hoists a
+  surprising subset of a loop's invariants, the lever is the order they appear
+  in the body, not the expressions themselves.**
+
   **That entry is about objects small enough for the assembler-expanded `la`.
   Once cc1psx has COMPILER-SPLIT the address into `lui %hi` + `addiu %lo`, the
   address is an ordinary pseudo and cse shares it by itself**, so a symbol used
@@ -774,6 +853,11 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   both arms (section 1) gives the same structure but makes the pseudo global,
   so it conflicts with the arm's registers and lands in `$a1`.
 * `GetRCnt` has to return a signed type for `(x + 0xFF) >> 8` to be `sra`.
+* **A `(u16)` cast on a `u32` memory field narrows the LOAD to `lhu`**, given a
+  HImode consumer (a halfword store, or a sum destined for one). That is how one
+  word can be written with `sw` and read with both `lw` and `lhu` in the same
+  function without a union or a split declaration -- func_8003CCB0 does it at
+  six sites, and dropping the casts costs 2 differing words.
 * **A byte decrement is `addiu 0xFF` only if the arithmetic happens in the
   byte's own type.** For a `u8` lvalue, `x--` builds the constant in that type
   and emits `addiu rd,rs,0xFF`; going through an int-promoted temporary gives
@@ -806,13 +890,25 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
 
 ## 8. Statement order and expression shape
 
+* **When a store's `lui %hi` sits one slot too early, give the RHS's first
+  subexpression its own statement** -- do not try to move the store.
+  `expand_assignment` evaluates the lvalue address before the RHS, so
+  `ARRAY[0] = (t >> 7) + ((t >> 10) + K);` puts the store's `lui %hi` ahead of
+  the first `sra` and sched1 keeps it there on the LUID tie-break. Splitting out
+  `u = (t >> 7);` as its own statement moves the `lui` after the `sra`, puts
+  `(t >> 7)` in `$a1` and the sum in `$v0`, and closed func_8003CB08's last 11
+  differing words. The `u + ((t >> 10) + K)` grouping is a separate choice worth
+  4 more.
 * An exit block that should sit physically last wants `break` or `goto done`
   out of the loop with the `return` after it; an inline `return` in the arm
   costs a `j` plus a separate epilogue (func_8004068C, 49 words;
   func_8004491C, 1).
 * Chained assignment `a = b = v;` stores `b` first and goes through
   `store_expr` with `want_value`: load to temp, store, copy -- and that copy
-  often fills a delay slot. A four-deep chain evaluates innermost-first, which
+  often fills a delay slot. For the two-deep case the direction is pinned:
+  `sp->a = sp->b = t;` emits the store to `b` and then the store to `a`, i.e.
+  the INNER one first (func_8003CCB0, 2 differing words when inverted; two
+  separate statements in listing order are equivalent to the correct chain). A four-deep chain evaluates innermost-first, which
   is how a descending run of stores comes out. Reversing a pair of a chain
   costs 8 words and writing the chain as separate statements 26
   (func_80046884).
@@ -923,6 +1019,29 @@ into a shared tail differ by a word between the two spellings.
   must be written out per use -- `D_80083360[i]` style indexing is not
   interchangeable with a walking pointer.
 
+* **How to get ONE induction register per base instead of two.** A source-level
+  `p += STRIDE` makes a biv; if that biv also has a non-address use (passed to a
+  call, stored after the loop) it cannot be eliminated, and loop.c
+  *additionally* reduces its address givs into a second register -- so one base
+  costs two registers. Writing `base[i * STRIDE + k]`, or
+  `cc = base + i * STRIDE;` with constant displacements off `cc`, creates no biv
+  for that base at all, just one reduced giv register. In func_8003CCB0 that is
+  the difference between four induction registers -- which pushed the incoming
+  parameter out of a register, spilling it to its stack home and reloading it
+  every iteration -- and two. Measured at 2 words and 246 differing per base.
+
+* **The surviving register's base offset is the REPRESENTATIVE giv's `add_val`,
+  not the last field's offset.** When all the field accesses share one
+  `&base[i]` subexpression the representative is that base address. So to
+  reproduce a target's `$s3 = SYM + 4` with displacements -2..+7 you must bias
+  the base pointer (`c = (u8 *) SYM + 4;`), not the field offsets:
+  `recs = (Rec *) SYM` with `recs[i].field` gives base +0 and every displacement
+  4 higher -- the same code shape, 20-odd differing words. The tell is the
+  `.loop` dump's `giv reg N ... mult 12 add (reg/v:SI 84)`: `add` being a REG
+  means the base is whatever that pointer holds. This refines the entry above,
+  which says the representative is the last nonzero-offset access -- that holds
+  when the accesses do not share a base subexpression.
+
 ## 10. Measured dead ends -- do not retry
 
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried
@@ -1029,6 +1148,14 @@ into a shared tail differ by a word between the two spellings.
 * **`make check` is the only authority.** `verify.py` compares a relocated word
   on its upper 16 bits only; it now marks a differing `%lo` addend with `?`, but
   it still cannot see a jump table landing at the wrong address.
+  **A `?` on an INTERIOR array address is the expected output, not a
+  difference.** Spelling an interior address through its container --
+  `D_80083858[i * 2 + 2]` -- emits `%hi`/`%lo(D_80083858)+4` where the listing
+  prints `D_8008385C`; both `%hi` are the same and `%lo(X)+4 == %lo(X+4)`, so
+  the linked bytes are identical. There are three instances now (D_80083164,
+  D_80083858/D_8008385C and D_800838D8/D_800838DC), and the container spelling
+  is what keeps the symbol out of the `-G8` hazard, so the flag is the price of
+  doing it right.
 * **wine's filesystem is case-insensitive.** Two scratch files whose names
   differ only in case are one file to `ccpsx`, which then exits 0 having written
   the other one. `verify.py` diagnoses this now; name variants so they differ by

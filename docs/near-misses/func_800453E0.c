@@ -1,4 +1,4 @@
-/* func_800453E0 (gprel_18B40) -- 533 of 533 words, 10 DIFF. NOT compiled.
+/* func_800453E0 (gprel_18B40) -- 533 of 533 words, 5 DIFF. NOT compiled.
  *
  * The fourth member of the "emit one slot's primitives" family, and its
  * closest sibling is func_80045CC4, not func_80044D24. It projects the slot
@@ -20,8 +20,9 @@
  *    one is already a KSEG0 primitive pointer. p->unk_CC is used to save and
  *    restore p->unk_C0 across that call.
  *
- * WHAT IS LEFT is 10 words, all in the FIRST OT statement, and the pass is
- * local-alloc. One clean register exchange ($v1/$a0 and $a1/$s4), with every
+ * WHAT IS LEFT is 5 words, all in the FIRST OT statement, and the pass is
+ * local-alloc. It was 10 until `cc4 = p->unk_CC * 4;` was hoisted into its own
+ * statement inside the OT guard -- see the corrected mechanism below. One clean register exchange ($v1/$a0 and $a1/$s4), with every
  * instruction, immediate, displacement, delay slot and block boundary
  * matching, and the SECOND OT statement -- the same expression mirrored --
  * matching byte for byte.
@@ -109,7 +110,63 @@
  *  6. No new element or slot type -- the existing UnkSlot and Unk44D24E are
  *     byte-for-byte right, measured.
  *
- * nmcheck: 533 of 533 words, 10 DIFF
+ * THE 5 WORDS IT CLOSED, and the correction that matters more than the words.
+ * Hoisting `cc4 = p->unk_CC * 4;` out of statement 1's address expression --
+ * same single `sll`, still in the guard's branch delay slot, no extra insn and
+ * no extra register -- moved p->unk_CC's global allocno from $v1 to the
+ * target's $a0 and p->unk_20's block-local quantity from $a0 to $v1, which is
+ * exactly the exchange diagnosed above.
+ *
+ * **The reason is live length, not reference count**, and this corrects both
+ * the paragraph above and the way the lever was first written up in
+ * matching-levers section 3. gcc 2.7.2's local-alloc orders quantities with
+ * `qty_compare`, which compares `qty_death - qty_birth` and nothing else --
+ * shorter-lived first. References are global.c's currency and do not enter it.
+ * So on a BLOCK-LOCAL quantity a free extra reference buys nothing by itself;
+ * what the hoist buys is that the pseudo is BORN ONE INSN EARLIER, and that is
+ * a live-length change. The claim above that "the only thing that moves those
+ * live lengths is which masked load is emitted first" is therefore struck:
+ * hoisting a subterm moves them too, and did.
+ *
+ * **And the split has a precondition: the split-out statement must not be a
+ * memory load.** Splitting the whole address -- `a1 = p->unk_20;
+ * a1 += p->unk_C0 * 4; a1 += p->unk_CC * 4;` -- costs a word (534 words, 76
+ * DIFF), and so does every partial split of it, because `a1 = p->unk_20;` is a
+ * LOAD: the multi-set pseudo stops combine folding the address back into the
+ * MEM and a real insn appears. func_80041344's `op = (s32) base;` is a COPY,
+ * which coalesces away. So split at an arithmetic subterm, never at the base
+ * load.
+ *
+ * MEASURED, second pass, 35 variants, all 533 words unless noted:
+ * `cc4` hoisted in statement 1 **5 DIFF**; `c04 = p->unk_C0 * 4;` instead 11;
+ * `ob = p->unk_20;` instead 10 (no change); `cc4` hoisted in statement 2
+ * instead 21; in both statements 16; `ob` in both 16; statement 1's address
+ * split three ways **534 words / 76 DIFF each**; statement 2's split two ways
+ * 16 each; both split, four ways, 534 / 76 each.
+ *
+ * Then on top of the 5-DIFF source, all 533 words and none better: the inner
+ * sum also hoisted 9 (worse); `c04` as well as `cc4` 9 (worse); `cc4`'s set
+ * lifted above the OT guard 14 (worse); `ob` as well as `cc4` 5; `cc4` split
+ * again into two statements 5; `q->unk_00` or `*ot` pre-loaded 5 each; four
+ * associations of the final `addu` 5 each -- and **the `addu`'s printed operand
+ * order is not source-driven**, since the dest is tied to whichever operand won
+ * its register, so reading the association off `addu $a0,$a0,$v0` is not
+ * evidence about the source; four MEM_IN_STRUCT_P spellings of the two masked
+ * loads 5 each -- two loads have no dependence between them, so
+ * `true_dependence` never gets a say in their order and **that family cannot
+ * reach a load/load pair at all.**
+ *
+ * THE RESIDUE is local-alloc's tie between two equally-free hard registers:
+ * the address pseudo takes $v0 where the target takes $a0 (both free, since
+ * `cc4` and the running sum both die in that `addu`) and the two masked values
+ * follow it, exchanged. The `|`'s operand order must stay swapped to keep
+ * loop.c hoisting 0xFFFFFF, that order forces the `*ot` load to be emitted
+ * first, and that one-insn difference in when the address pseudo dies picks its
+ * register. The hoist, split, association and alias families have all been
+ * swept against it. **Take 533/5 as the answer** unless the mask tension is
+ * solved in func_80045CC4 first, where the same root cause is worth 4 words.
+ *
+ * nmcheck: 533 of 533 words, 5 DIFF
  */
 #define D_8006CD30 D_8006CD30_orig
 #define RotTransPers RotTransPers_orig
@@ -345,6 +402,7 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                      ((u16) (q->unk_20 + 0x20) < 0x181 &&
                       (u16) (q->unk_22 + 0x20) < 0x121)) != 0) {
                     u8 t;
+                    s32 cc4;
                     u8 f;
 
                     ((u8 *) &q->unk_00)[3] = 9;
@@ -402,13 +460,11 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                         p->unk_CC = 0;
                     }
                     if ((u32) (p->unk_C0 + p->unk_CC) < 0x1D6) {
-                        q->unk_00 =
-                            (*(u32 *) (p->unk_20 + p->unk_C0 * 4 +
-                                       p->unk_CC * 4) & 0xFFFFFF) |
+                        cc4 = p->unk_CC * 4;
+                        q->unk_00 = (*(u32 *) (p->unk_20 + p->unk_C0 * 4 + cc4) & 0xFFFFFF) |
                             (q->unk_00 & 0xFF000000);
                         *(u32 *) (p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4) =
-                            (*(u32 *) (p->unk_20 + p->unk_C0 * 4 +
-                                       p->unk_CC * 4) & 0xFF000000) |
+                            (*(u32 *) (p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4) & 0xFF000000) |
                             ((u32) q & 0xFFFFFF);
                     }
                     q++;

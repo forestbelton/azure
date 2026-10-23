@@ -1050,6 +1050,17 @@ extern Unk80083160 D_80083160;
    verify.py then flags the differing relocation addend, and this is where a
    reader will look for the -G8 hazard. */
 extern u16 D_80083164[];
+
+/* Unk80083958's unk_08, reached ABSOLUTELY by func_8003CB08 as the heading
+   stamp it compares D_80080AA6 against. Same hazard class as D_80083164: it
+   sits inside gp +/- 0x8000, so in this -G8 carved unit a plain scalar
+   declaration would wrongly go $gp-relative -- measured, the access comes out
+   `lhu 0x0($gp)` and the function drops to 105 of 106 words with 74
+   differing. The incomplete array makes cc1psx compiler-split the address.
+   Element type u16: the value is loaded and stored as a halfword. The
+   two-register form in the listing is cc1psx's own split rather than a gas
+   macro, since gas reuses the destination register for a load. */
+extern u16 D_80083960[];
 extern Unk80083462 D_80083460;
 extern Unk80083958 D_80083958;
 extern Unk80083CA8 D_80083CA8;
@@ -1249,6 +1260,7 @@ s32  func_80053EF0(s32);
 s32  func_8004450C(s16);
 s32  CdSync(s32, u8 *);
 s32  CdControl(u8, u8 *, u8 *);
+s32  CdControlB(u8, u8 *, u8 *);
 s32  CdPosToInt(u8 *);
 /* libgpu/libetc graphics setup. */
 void SetVideoMode(s32);

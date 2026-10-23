@@ -19,7 +19,7 @@ void func_80047468(Unk800777AC *, u32, u32);
 void func_800463EC(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80044D24(u8 *, UnkSlot *, s16);
-void func_80041344(u32, u32);
+void func_80041344(u8 *, u32 *);
 void func_8003F6D4(s32, s32, s32 *, s32);
 void func_80040B88(void);
 void func_80042984(u8 *);
@@ -612,7 +612,67 @@ s32 func_80046F88(u32 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_19434", func_80047054);
 
-INCLUDE_ASM("asm/nonmatchings/unk_19434", func_8004713C);
+/* Uploads `arg2` 0x2000-byte tiles to VRAM, walking a 2x4 grid of slots: the
+ * x coordinate steps by 0x20 after the first pair and the y coordinate
+ * alternates by 0x80, with both offsets based on the page number in arg1.
+ *
+ * THE BLOCKER THIS USED TO BE. D_80080B08 is reached BOTH ways: the two
+ * coordinate stores are `sh %gp_rel(D_80080B08)` / `sh %gp_rel(D_80080B0A)`
+ * while the RECT address handed to LoadImage is an absolute `lui %hi` /
+ * `addiu %lo` pair. No unit-level setting can express that -- a `-G` value
+ * decides per symbol SIZE and an `.extern` override per SYMBOL, and both apply
+ * to every access alike -- so this unit could not simply be carved at -G8.
+ * maspsx can, because its %gp_rel rewrite fires on a load or store and leaves
+ * an address materialisation alone, and the bare size record below asks for it
+ * while DEFINING NOTHING: .sdata stays 0 bytes and both symbols stay UND, so
+ * the linker script's own assignments resolve them and there is no placement
+ * to arrange. See the longer note on func_8003F624 in csrc/unk_12DEC.c; these
+ * two symbols are the only $gp references anywhere in this unit, so no carve
+ * was needed at all.
+ *
+ * THE ONE LOAD-BEARING SHAPE is where `r` is declared, and it is worth 4 words
+ * plus a register. Three things in the body are loop-invariant -- the RECT
+ * address, `arg1 << 4` and `arg1 << 6` -- and loop.c hoists only two of them
+ * into the preheader. Which two depends on the order it meets them, so:
+ *  - with `r` declared OUTSIDE the loop it is an ordinary source statement and
+ *    lands before the loop GUARD, not in the preheader, leaving both shifts to
+ *    be hoisted: 47 words, 44 DIFF.
+ *  - with no `r` at all the address is rebuilt per iteration inside the loop
+ *    and both shifts are still hoisted: 45 words, 45 DIFF.
+ *  - with `r` declared as the loop body's FIRST statement it is a loop.c hoist
+ *    like the others, it is met first, and `arg1 << 6` is the one left behind.
+ *    That is the target: the `sll`/`andi` pair for x stays in the loop, which
+ *    is why the first `beqz` has an empty delay slot, while the hoisted
+ *    `arg1 << 4` lets sched1 drop y's `andi` into the second `beqz`'s slot.
+ *
+ * So this extends section 6's pointer-local entry: the lever is not only
+ * whether a pointer local exists but WHERE it is declared, because that decides
+ * whether its address materialisation is a statement or a hoist, and a hoist
+ * competes with the loop's other invariants. Declaring `y` separately and
+ * early, to try to lose `arg1 << 6` that way instead, gives 49 words and
+ * 7 DIFF -- the right word count with the wrong registers. */
+__asm__(".sdata\n\t.size D_80080B08,2\n\t.size D_80080B0A,2\n\t.text");
+
+void func_8004713C(u32 *arg0, u16 arg1, u16 arg2) {
+    s32 i;
+
+    for (i = 0; i < arg2; i++) {
+        u16 *r = &D_80080B08;
+        s32 x = (arg1 << 6) & 0x3C0;
+
+        if (i / 2 != 0) {
+            x += 0x20;
+        }
+        D_80080B08 = x;
+        x = (arg1 << 4) & 0x100;
+        if (i & 1) {
+            x += 0x80;
+        }
+        D_80080B0A = x;
+        LoadImage(r, arg0);
+        arg0 += 0x800;
+    }
+}
 
 void func_80047200(u16 *p, s32 rows, s32 flag) {
     s32 i;
