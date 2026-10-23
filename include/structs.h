@@ -1142,6 +1142,29 @@ typedef struct Unk80086C00 {
     u16 unk_0A;
 } Unk80086C00;
 extern Unk80086C00 D_80086C00[];
+
+/* Hand-added. 0x50-byte entries, D_800869B4 of them live; func_8005C818 and
+   func_80059D1C sweep fields across all of them. A struct because the field
+   offsets must not migrate into the induction variable's base. */
+typedef struct Unk80085FA8 {
+    u32 unk_00;
+    u8  pad_04[0x1C];
+    u32 unk_20;
+    u32 unk_24;
+    u8  pad_28[4];
+    u32 unk_2C;
+    u8  pad_30[0x20];
+} Unk80085FA8;
+extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
+
+/* Hand-added. 0x1C-byte entries indexed by D_80086D50; only +0x04 is observed,
+   a base that func_80057A50 adds a computed offset to. */
+typedef struct Unk80086A40 {
+    u32  unk_00;
+    u8  *unk_04;
+    u8   pad_08[0x14];
+} Unk80086A40;
+extern Unk80086A40 D_80086A40[];
 extern u32 D_8006AFDC[];  /* four pointer tables, indexed by func_800B2834 */
 extern u32 D_8006AFE8[];
 extern u32 D_8006AFF4[];
@@ -1154,6 +1177,11 @@ extern u32 D_800869B4;
 extern u8  D_80085FA8[];  /* 0x50-byte entries */
 extern u32 D_8006B1A8[];
 extern u32 D_800814A8;
+extern u8  D_80083780[];
+extern u32 D_800847D4;
+extern s16 D_80086D50;
+extern u32 D_80085FA4[];
+extern u32 D_800869B0[];
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;
