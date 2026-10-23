@@ -149,7 +149,11 @@ anything else is reading `asm/nonmatchings`.
 3b. When the logic is right and only shapes are wrong, hand it to
    `python3 tools/decomp/search.py zz_foo.c <unit> <func>` rather than
    iterating by hand: a verify cycle is 0.7s, so a few hundred variants is
-   minutes of compute and no thinking. It will not rescue wrong logic.
+   minutes of compute and no thinking. Add `--only=width,cast,dup` (the
+   families `annotate.py` implicated) once the function is big enough that one
+   greedy pass is slow. It will not rescue wrong logic, and a candidate it
+   flags as closing the word count *at the cost of* differing words wants
+   judging by hand -- that is the shape of a semantic accident, not a lever.
 4. When it says MATCH, replace the `INCLUDE_ASM` in `csrc/`, run
    `tools/decomp/guard.py` (nothing lost) and `make check` (byte-identical).
 5. Commit, with the load-bearing source shapes named in the message and

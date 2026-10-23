@@ -835,6 +835,25 @@ into a shared tail differ by a word between the two spellings.
 A subagent working one function pays for its whole context on every turn, so
 tool output compounds. Two things dominate:
 
+**The recipe, in order.** Do not start by reading this document end to end:
+
+    python3 tools/decomp/annotate.py <unit> <func>        # which levers can apply
+    ... write a candidate with the right LOGIC ...
+    python3 tools/decomp/search.py zz_foo.c <unit> <func> --only=<families>
+
+`annotate.py` enumerates the lever families whose signature is in the listing;
+`search.py` sweeps the source shapes mechanically at 0.7s a variant. The two
+compose -- the first decides *where* to look, the second explores the choices --
+and between them they replace the loop of "write a variant, read the diff,
+reason, write another" that costs a model turn per variant. What neither does
+is derive the logic: that is the irreducible part, and a structurally wrong
+candidate will not be rescued by any combination of rewrites.
+
+Pass `--only` once a function is large. `search.py` confines its transforms to
+the function body, but a 437-word function still offers ~74 candidate changes
+and one greedy pass compiles every one of them, so narrow to the families
+`annotate.py` implicated.
+
 * **This document, read end to end.** It is 9,000 words, every agent was told
   to read all of it, and most of it cannot apply to any one function. Run
   `python3 tools/decomp/annotate.py <unit> <func>` instead: it matches the
