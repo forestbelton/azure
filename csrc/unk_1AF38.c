@@ -34,7 +34,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047BC0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C00);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C60);
+s32 func_80047C60(u8 *p) {
+    return (p - D_800FC000) / 0xD000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C8C);
 

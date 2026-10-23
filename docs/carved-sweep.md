@@ -14,6 +14,14 @@ candidate to `zzone.c`, run `verify.py zzone.c <unit> <func>`, collect the
 MATCHes, then replace each `INCLUDE_ASM("asm/nonmatchings/<unit>", <func>);`
 line with the body and run `make check`.
 
+**Never widen or re-shape a declaration that landed code already uses.**
+Changing `extern u32 D_800814A0;` to `extern u32 D_800814A0[];` -- to get the
+split-addressing form for a function in this sweep -- broke `csrc/unk_12DEC.c`,
+which passes `&D_800814A0` to a function expecting `u32 *`. As an array that
+expression becomes `u32 (*)[]` and the build fails in a unit the sweep never
+touched. The incomplete-array trick is for NEWLY declared globals; for one that
+already has users, find a spelling that works with the existing type.
+
 **Grep BOTH `include/structs.h` AND the unit's own `.c` file before declaring a
 callee.** As the sweep proceeds, a callee may already have been DEFINED by it --
 declaring `void func_80034FD0(s16 *)` inline when the same file already had
@@ -67,6 +75,8 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_80053DF0 | unk_1C540 | 9 DIFF | Same shape as func_80053DCC and fails identically, so these are ONE family, not two puzzles: store a halfword into a global, then call a function with the same argument. Solve either and both land. |
 | func_80053DA8 | unk_1C540 | 6 DIFF | `return func_80055778(a)` with `s16`/`u16`/`s32` signatures. structs.h declares it `void(s32)`, and the target sign-extends the callee's result (`sll 16` / `sra 16`) before returning, so the result is used despite the `void`. |
 | func_800368D0 | unk_72A8 | 10/10 words, 2 DIFF | The target loads `+0x44` (a pointer) before `+0x4A` (an s16 offset); every spelling loads the s16 first. Tried: one expression with 0x44 first, two locals with 0x44 declared first, and two locals with 0x4A first. Source order does not drive it. |
+| func_8004B634 | unk_1C540 | 2 DIFF | `func_8003E4FC(6, D_80080B48, 0)` with the real signature `Unk80083968 *(u8, u8 *, s32)`. |
+| func_8004EE90 + func_8004F52C | unk_1C540 | 12-14 DIFF | An identical PAIR, so one cause. `if (p != 0) { *(u16 *) (p + 0x1E) \|= 0x8000; D_800814A0 \|= 0x8000; }`. D_800814A0 must stay a scalar (see the declaration warning above), which costs the split-addressing form the target uses; 12 DIFF as an array, 14 as a scalar. |
 | func_8004B4DC | unk_1C540 | 9 DIFF | A `while (1) { n++; if (p[0] & 0x80) break; p += 0xC; }` count loop. The target advances `p` in the branch's delay slot, so it is advanced on the exiting iteration too. |
 
 ## Deferred for addressing, not for shape

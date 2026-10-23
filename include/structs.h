@@ -947,11 +947,15 @@ typedef struct Unk80083160 {
        fieldscan reported at the misaligned +0xbb is an artifact. */
     u16 unk_B8;
     u16 unk_BA;
-    u32 unk_BC;  /* also read as 2 */
-    /* +0xbe  is a 2-byte access inside this field */
-    /* +0xbf  is a 4-byte access inside this field */
-    u32 unk_C0;  /* also read as 2 */
-    /* +0xc3  is a 4-byte access inside this field */
+    /* Hand-split from two u32s: func_8004D09C and func_8004D0E4 store three
+       consecutive HALFWORDS here (0xBC/0xBE/0xC0), which is what fieldscan's
+       "also read as 2" and "+0xbe is a 2-byte access" annotations were seeing.
+       The +0xbf/+0xc3 4-byte notes are the lwl/swl halves of a block move over
+       the same range, as with Unk80083178. */
+    u16 unk_BC;
+    u16 unk_BE;
+    u16 unk_C0;
+    u16 unk_C2;
     /* Hand-split: func_8003DBD0 reads +0xC4 and +0xC6 with lh as the first two
        components of the camera position, +0xC8 being the third. The 2-byte
        access fieldscan reported at +0xc6 is exactly that. */
@@ -1060,8 +1064,8 @@ void func_80038478(void);
 void func_80038588(void);
 void func_800385E8(void);
 void func_80038648(void);
-void func_8004D09C(void);
-void func_8004D0E4(void);
+void func_8004D09C(u8 *);
+void func_8004D0E4(u8 *);
 void func_80039AE8(void);
 void func_80038464(u8 *);
 
@@ -1075,6 +1079,10 @@ extern u32 D_80083168[];
 extern u8  D_80071298[];
 extern u32 D_80071250[];
 extern u8  D_80083D08[];
+extern u8  D_800712AC[];
+extern u8  D_800712B0[];
+extern u32 D_8007361C[];
+extern u8  D_80080B48[];
 extern Unk41284 D_80080B9C;
 extern Unk41284 D_80080C1C;
 extern u8  D_80071684[];
