@@ -12,6 +12,19 @@
    without touching the declaration unk_12DEC depends on. */
 extern u32 D_800814A0a[] __asm__("D_800814A0");
 
+/* Bare file-scope size records: they put each symbol in maspsx's sdata_entries
+   while DEFINING nothing, so .sdata stays 0 bytes, the symbols stay undefined
+   and the linker script's own assignments resolve them -- and maspsx rewrites
+   every load and store of them in this unit to %gp_rel, which is what these
+   functions' listings have. Address materialisation stays absolute, so
+   D_80080B18 is deliberately NOT here: func_80048DA0 indexes it through a
+   materialised base. Adding a symbol here changes every access to it in this
+   whole unit, so check `grep` before adding one. */
+__asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
+        "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
+        "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
+        "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.text");
+
 void func_80048C3C(s32);
 
 void func_80048D40(void) {
@@ -30,7 +43,11 @@ void func_80048D60(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048DA0);
+u8 func_80048DA0(s32 i, s32 n) {
+    D_80080B1B = n + 5;
+    D_80080B1C = n * 2 + 5;
+    return D_80080B18[i];
+}
 
 u32 func_80048DCC(s32 i) {
     return D_80071250[i];
@@ -378,7 +395,9 @@ s32 func_8004AE68(u8 **a, u8 **b) {
     return D_800713E4[(*a)[1]] - D_800713E4[(*b)[1]];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AE98);
+s32 func_8004AE98(u8 **a, u8 **b) {
+    return D_80081540[(*a)[0]] - D_80081540[(*b)[0]];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AEC4);
 
@@ -839,13 +858,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DC14);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DCA8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DCE0);
+void func_8004DCE0(u32 a) {
+    D_80081550 = a;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DCEC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DD2C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DDB4);
+void func_8004DDB4(void) {
+    D_80081554 = 0;
+    D_80081558 = 0;
+}
 
 void func_80033AE8(s32);
 
@@ -1334,7 +1358,16 @@ void func_80050B7C(s32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050BA4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050CAC);
+void func_80050BA4(s32);
+
+void func_80050CAC(void) {
+    s32 a = 0;
+
+    if (D_80080B94 != 0) {
+        a = D_80080B98;
+    }
+    func_80050BA4(a);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050CDC);
 

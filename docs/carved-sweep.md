@@ -168,8 +168,32 @@ already states -- the measurements held, the context around them moved -- and
 here the context was always which declaration cc1psx compiled the symbol
 against.
 
-## Deferred for addressing, not for shape
+## The $gp group: no longer deferred
 
-`func_8004DCE0`, `func_8004DDB4` and `func_80033D44` store through
-`%gp_rel(D_8008xxxx)`, which these units' forced `-G0` cannot produce. They
-belong with the addressing group in `docs/addressing-and-translation-units.md`.
+About 33 of the carved stubs reach a global `%gp_rel`, which these units' forced
+gas `-G0` cannot produce -- but the bare file-scope size record can:
+
+    __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n\t.text");
+
+It puts each symbol in maspsx's `sdata_entries` while DEFINING nothing, so
+`.sdata` stays 0 bytes, the symbols stay undefined, the linker script's own
+assignments resolve them, and maspsx rewrites every load and store of them in
+that unit to `%gp_rel`. The block is at the top of `csrc/unk_1C540.c`;
+`csrc/unk_11F0C.c` has the original write-up of why it works.
+
+Three things to know before adding a symbol to it:
+
+* **It changes every access to that symbol in the WHOLE unit**, landed
+  functions included, so `grep csrc/<unit>.c` first. As of this sweep none of
+  the $gp symbols had a landed user, which is why the block could go in at
+  once; that will not stay true.
+* **Address materialisation stays absolute.** D_80080B18 is deliberately not in
+  the block: func_80048DA0 indexes it through a materialised base, and a
+  `%gp_rel` rewrite would not touch that anyway.
+* **`verify.py` compiles a standalone file**, so a candidate has to carry a
+  copy of the `__asm__` block to be verified, and the landed body must NOT --
+  the unit already has it.
+
+func_8004DCE0, func_8004DDB4, func_80050CAC, func_8004AE98 and func_80048DA0
+all matched first try once the block was in place. unk_72A8 and unk_1AF38 need
+their own blocks for their own symbols (D_8008099C, D_8008152C and the rest).

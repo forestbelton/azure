@@ -1230,6 +1230,17 @@ typedef struct Unk80073414 {
 } Unk80073414;
 extern Unk80073414 D_80073414[];
 
+/* $gp-relative in the carved units; see the `.sdata` size records at the top
+   of csrc/unk_1C540.c and csrc/unk_72A8.c. */
+extern u32  D_80081550;
+extern u32  D_80081554;
+extern u32  D_80081558;
+extern u32  D_80080B94;
+extern s32  D_80080B98;
+extern u8  *D_80081540;
+extern u8   D_80080B1B;
+extern u8   D_80080B1C;
+extern u8   D_80080B18[];
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
 extern s16 D_8006A94C[];  /* s16 pairs, 0-terminated */
