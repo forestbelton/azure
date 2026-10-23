@@ -1218,6 +1218,8 @@ extern u8  D_80082414[];
 extern u8  D_80081FDC[];
 extern s16 D_8006ADE8[];
 extern u32 D_8008099C;
+extern u8  D_800809A8[];
+extern u8  D_800809B0[];
 extern u8  D_80080B50[];
 extern u8  D_800714B0[];
 extern s16 D_800848F8[];

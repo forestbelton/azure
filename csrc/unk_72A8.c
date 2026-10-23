@@ -102,7 +102,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800345B8);
 void func_80034E40(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034E48);
+void func_8003C920(void);
+void func_80034EC4(u8 *);
+
+void func_80034E48(void) {
+    u8 *p;
+
+    func_8003C920();
+    p = (u8 *) D_80082A38;
+    func_80034EB4(p);
+    func_80034EC4(p);
+    ClearImage(D_800809A8, 0, 0, 0);
+    ClearImage(D_800809B0, 0, 0, 0);
+}
 
 void func_80034EB4(u8 *p) {
     p[0] = 0;
@@ -935,7 +947,15 @@ void func_80039760(u8 *p) {
 void func_800397A0(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800397A8);
+void func_800397A8(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *r = (u8 *) func_8003C8E4(*(*q)++);
+
+    if (r != 0) {
+        r[2] = **q;
+    }
+    *q = *q + 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039814);
 
@@ -1795,10 +1815,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C890);
 
-s32 func_8003C5A4(void);
+s32 func_8003C5A4(s32);
 
-u32 *func_8003C8E4(void) {
-    s32 i = func_8003C5A4();
+/* The argument passes straight through to func_8003C5A4, which is invisible
+   here and shows up at func_800397A8, which passes a stream byte. */
+u32 *func_8003C8E4(s32 k) {
+    s32 i = func_8003C5A4(k);
 
     /* The arm written FIRST ends up SECOND in memory, so the `>= 0` arm first
        is what gives the target's `bgez`; written as `if (i < 0) return 0;`

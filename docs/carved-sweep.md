@@ -153,6 +153,8 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_80037030 | unk_72A8 | 24/24 words, 7 DIFF | The argument setup and the `sw $zero` before the call are in the other order, and reorg picks a different insn for the jal's delay slot. |
 | func_800491F4 | unk_1C540 | not measured in isolation | A list walk that threads each entry's +0xC to the previous one. |
 | func_8005A56C | unk_1C540 | 23 DIFF | Two stack blocks selected by the first argument, with `(x << 16) >> 8` scaling. |
+| func_8003C24C + func_8003C2F8 | unk_72A8 | 26/27 words, 11 DIFF | A pair. `u8 *b = (u8 *) D_80082D58;` with `*(u8 **) (b - 0x14)` is what stops the -0x14 folding into the load's address (26 DIFF -> 11), which is the whole structure; what is left is that the target computes `%hi(D_80082D58)` once and shares it between the base pointer and the final store's split form, where cse here folds the store onto the base pointer instead. |
+| func_80047CD8 | unk_1AF38 | 28/27 words, 20 DIFF | The target keeps the constant -1 in `$s1` across two calls and compares both results against it; this puts the first result there instead. An explicit `s32 m = -1;` local does not move it. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather
