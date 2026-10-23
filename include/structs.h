@@ -1091,6 +1091,8 @@ extern u8  D_8006AE34[];
 extern u8  D_8006AE4C[];
 extern u8  D_8006AE64[];
 extern u8  D_8006AE7C[];
+extern u8  D_8006AEAC[];
+extern u8  D_80082660[];
 extern u32 D_8006ADC0[];
 extern u8  D_800812C8[];
 extern u8  D_800812D0[];
