@@ -20,6 +20,13 @@ reports nonsense (a two-word function came back "8 DIFF"). `land` refuses a unit
 unless every stub is present exactly once and no inline prototype collides with
 a definition being landed.
 
+`tools/decomp/landlate.py batch_ok.py` lands the candidates whose only
+collision is a prototype BELOW their own stub -- a legal
+prototype-after-definition, which the sweep creates for itself every time a
+landed function declares a callee that is still a stub -- and writes
+`batch_ok_rest.py` for `sweep.py land`. It asserts the position rather than
+assuming it.
+
 **Let `make check`'s exit code gate the commit.** Writing
 `make check > log; echo rc=$?; git commit` puts an always-succeeding `echo`
 between them, so an `&&` guards nothing -- that committed a broken tree once.
@@ -68,6 +75,45 @@ which was already declared as a struct 300 lines further down.
   so a body that is one call keeps a full frame: `addiu $sp,-0x18` / `sw $ra` /
   `jal` / arg in the delay slot / `lw $ra` / `addiu $sp` / `jr $ra`. Thirty-two
   of these matched first try.
+* **A field offset inside an index expression migrates onto the symbol.**
+  `*(u32 *) &SYM[i * 0x9C + 0xC]` on `extern u8 SYM[]` gives
+  `addiu %lo(SYM)+0xC` with `lw 0x0`, where the target has `%lo(SYM)` and
+  `lw 0xC`: `fold` reassociates the constant next to the ADDR_EXPR. Declare the
+  table as an incomplete array of STRUCTS and write `SYM[i].unk_0C` -- a
+  COMPONENT_REF's offset is applied to the MEM at expand time and cannot
+  migrate, and the base materialisation comes out first as well. Six functions
+  on D_80084960, one on D_80082660, one on D_8007359C, five of them parked at
+  3-7 DIFF as register-order puzzles.
+* **Constant indices on an array name bias the base; a local pointer does
+  not.** `s16 *b = SYM; *(s32 *) &b[36] = b[86];` materialises the symbol once
+  and makes all four accesses displacements. Written as `SYM[36]` and `SYM[86]`
+  the base comes out as `%lo(SYM)+0x48` and a second `addiu` undoes it
+  (func_8003AAF8, 7 words against 8).
+* **An `__asm__` alias gives one function its own declaration of a shared
+  symbol.** `extern u32 X_arr[] __asm__("X");` is a second C name for the same
+  assembler symbol, so a function can use the incomplete-array
+  (compiler-split) spelling while everything already compiled against
+  `extern u32 X;` stays as it is. That is what the declaration warning above
+  wants instead of widening: it unparked func_8004EE90/func_8004F52C without
+  touching the declaration csrc/unk_12DEC.c depends on. Remember WHY two
+  functions in one unit can need different forms of one symbol: the carve
+  stands in for several original translation units.
+* **cc1psx runs at -G8 for every unit** (only gas's -G varies), so a 4-byte
+  scalar always gets the symbolic form, which is one insn until maspsx splits
+  it. Instructions BETWEEN a `lui` and its load in a target listing therefore
+  prove the original declaration was one cc1psx could not judge small -- an
+  incomplete array. func_8004AC18 is a pointer global read that way.
+* **A global `|=` next to a store through a pointer: read the global first.**
+  In the compiler-split form the global's MEM is register-based, so sched will
+  not hoist its load above a store through a pointer it cannot disambiguate.
+  Reading it into a local before the store and writing it back after is what
+  interleaves the two chains. In the symbolic (scalar) form the exception in
+  `docs/matching-levers.md` section 5 applies instead and the plain `|=` order
+  works -- so the two spellings are not interchangeable.
+* **`u8 *c = (*q)++;` and `u8 b = *c;` as two statements costs a copy that one
+  statement does not.** `u8 b = *(*q)++;` is 10 words; the two-statement form
+  is 12 and has the target's register copy of the cursor. The mechanism is
+  `protect_from_queue`; see matching-levers section 8.
 * **An arithmetic constant binds to the term the source groups it with.**
   `(v & 0xF) + 0x7C80` then `+ ((v & 0x10) << 3)` must be split into a local;
   written as one expression the compiler folds the constant into the second
@@ -80,18 +126,19 @@ or the order wrong, so they want the dumps rather than another guess.
 
 | function | unit | state | tried |
 |----------|------|-------|-------|
-| func_8004AC18 | unk_1C540 | 9/9 words, 7 DIFF | `D_8007359C[i * 5 + 1]`, a local base pointer, and a 20-byte struct array. The target materialises the base FIRST (`lui` is insn 1) and keeps the base in `$v0` with the index chain in `$v1`; all three spellings compute the index first and swap those registers. |
-| func_80053DCC | unk_1C540 | 9 DIFF | `D_8008480C = a;` as a scalar and as `D_8008480C[0]`, both with `func_80054D64(a)` after. The target has the `sh` in the `jal`'s delay slot. |
-| func_80053DF0 | unk_1C540 | 9 DIFF | Same shape as func_80053DCC and fails identically, so these are ONE family, not two puzzles: store a halfword into a global, then call a function with the same argument. Solve either and both land. |
-| func_80053DA8 | unk_1C540 | 6 DIFF | `return func_80055778(a)` with `s16`/`u16`/`s32` signatures. structs.h declares it `void(s32)`, and the target sign-extends the callee's result (`sll 16` / `sra 16`) before returning, so the result is used despite the `void`. |
-| func_800368D0 | unk_72A8 | 10/10 words, 2 DIFF | The target loads `+0x44` (a pointer) before `+0x4A` (an s16 offset); every spelling loads the s16 first. Tried: one expression with 0x44 first, two locals with 0x44 declared first, and two locals with 0x4A first. Source order does not drive it. |
+| func_80039730 + func_80039C44 + func_80039D10 | unk_72A8 | 12/12 words, 6 DIFF | An identical TRIO (one cause), and func_80039578 + func_800395B0 are the same cause with two bytes instead of one. `u8 *c = (*q)++;` then `u8 b = *c;` as two statements gets the word count and the instruction set exactly, including the register copy that five earlier spellings could not produce. What is left is that the copy is the mirror image of the target's: the target increments the COPY in place and dereferences the ORIGINAL, which gives the incremented quantity 4 references against 3 and so `$v0`. matching-levers section 8 states the open question precisely. `search.py` finds nothing from this base. |
+| func_800368D0 | unk_72A8 | 10/10 words, 2 DIFF | The target loads `+0x44` (a pointer) before `+0x4A` (an s16 offset); every spelling loads the s16 first. Tried: one expression with 0x44 first, two locals with 0x44 declared first, and two locals with 0x4A first. Source order does not drive it -- it is a sched1 priority tie between two loads, so it wants `dump.sh`'s `.sched` ready lists, not more spellings. |
 | func_8004B634 | unk_1C540 | 2 DIFF | `func_8003E4FC(6, D_80080B48, 0)` with the real signature `Unk80083968 *(u8, u8 *, s32)`. |
-| func_8004EE90 + func_8004F52C | unk_1C540 | 12-14 DIFF | An identical PAIR, so one cause. `if (p != 0) { *(u16 *) (p + 0x1E) \|= 0x8000; D_800814A0 \|= 0x8000; }`. D_800814A0 must stay a scalar (see the declaration warning above), which costs the split-addressing form the target uses; 12 DIFF as an array, 14 as a scalar. |
-| func_8005845C | unk_1C540 | 3 DIFF | `*(u32 *) &D_80084960[(a & 0xFF) * 0x9C] = b & 0xFF;`. The 0x9C stride comes out as the target's shift/add/subtract chain, so the arithmetic is right. Splitting the index into a local makes it WORSE (8 DIFF), so the single expression is closer. |
-| func_80039730 + func_80039C44 + func_80039D10 | unk_72A8 | 10-11 words vs 12 | An identical TRIO (one cause). Fetch a byte through the cursor at +0x1C, advance the cursor, clear +0x27, install a callback at +0x10, store the byte at +0x26. The target spends TWELVE words including an extra `addu $v0, $v1, $zero` -- a register copy of the cursor, so the byte load uses the original and the increment uses the copy. Five spellings all come out at 10 or 11 words, i.e. gcc reuses one register: `*(*q)++` via a pointer-to-pointer local; an explicit `u8 *c` with the byte read before the store; the same with the byte read after the store (10 words, and the lui hoists); a separate `u8 *n = c + 1`; and post-increment through the cast lvalue. The extra copy is the whole puzzle and reordering does not buy it. |
 | func_80049DE8 | unk_1C540 | 6 DIFF | A modular add: `a += d; if (d > 0) { if (a >= m) a -= m; } else { if (a < 0) a += m; }`. The `a += d` lands in the first branch's delay slot so it happens on both paths, which this source gives; the rest of the control flow is close but not exact. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
-| func_8004B4DC | unk_1C540 | 9 DIFF | A `while (1) { n++; if (p[0] & 0x80) break; p += 0xC; }` count loop. The target advances `p` in the branch's delay slot, so it is advanced on the exiting iteration too. |
+
+Cleared from this table on 2026-10-23, all of them by a DECLARATION rather
+than a source shape: func_8004AC18, func_8005845C, func_80053DA8,
+func_80053DCC, func_80053DF0, func_8004B4DC, func_8004EE90, func_8004F52C and
+the four func_8005C8xx readers. The lesson is the one the near-miss README
+already states -- the measurements held, the context around them moved -- and
+here the context was always which declaration cc1psx compiled the symbol
+against.
 
 ## Deferred for addressing, not for shape
 

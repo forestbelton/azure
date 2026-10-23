@@ -868,6 +868,17 @@ in the block to hoist it past.
   stays non-struct with a non-varying address, the exception applies, and
   sched1 hoists the load above the store as the target has it. Nothing else
   about the function changed.
+* **The split addressing form forfeits the exception, because its MEM has a
+  register base.** func_8004B500 is `if (p) { p->flags |= 0x8000;
+  D_800814A0 |= 0x8000; }`, and with D_800814A0 a scalar (a non-varying symbol
+  address) against a struct field it interleaves exactly as the target does.
+  Its twins func_8004EE90 and func_8004F52C need the compiler-split spelling of
+  the same symbol -- and then the global's address is `(lo_sum (reg) (symbol))`,
+  which varies, so no spelling of the pointer side frees the load to cross the
+  halfword store. It has to cross it in the SOURCE: read the global into a
+  local before the store and write it back after. Section 8 has the shape.
+  The interleave then also buys the copy of the argument into `$a1`, because
+  four quantities are live at once instead of three.
 
 ## 6. Declaration decides addressing
 
@@ -879,6 +890,38 @@ form:
   `lui`/`addiu` -- which is **two** insns, so reorg can put the `addiu` in a
   delay slot where the single `la` macro cannot be split (func_80040CBC, 3
   words).
+* **A field offset written inside the index expression migrates onto the
+  symbol; a COMPONENT_REF's cannot.** `*(s32 *) &SYM[i * STRIDE + K]` on
+  `extern u8 SYM[]` makes `fold` reassociate K next to the ADDR_EXPR, so the
+  base comes out as `addiu %lo(SYM)+K` with `lw 0x0` off the index, where the
+  target has `%lo(SYM)` and `lw K`. Declaring the table as an incomplete array
+  of structs and writing `SYM[i].unk_K` applies the offset to the MEM at expand
+  time, where no reassociation can reach it -- and the base materialisation
+  then also comes out FIRST, which is the other half of what such a listing
+  shows. Worth 5 DIFF on each of the four func_8005C8xx readers, 3 on
+  func_8005845C, and 7 on func_8004AC18, all of which had been parked as
+  register-order puzzles. The same thing with constant indices wants a local
+  pointer instead: `s16 *b = SYM; b[36] = b[86];` materialises the symbol once
+  and makes every access a displacement, where `SYM[36]` biases the base to the
+  first index and spends a second `addiu` undoing it (func_8003AAF8, 1 word).
+* **cc1psx runs at -G8 over this whole project** (`CFLAGS` in the Makefile;
+  only gas's -G varies per unit), so a 4-byte scalar is always small data and
+  always gets the symbolic form. That form is ONE insn until maspsx splits it,
+  so its `lui` and its load cannot be scheduled apart: a listing with other
+  instructions BETWEEN them is proof that the original declaration was one
+  cc1psx could not judge small. func_8004AC18's target has two index insns
+  between the `lui` and the `lw` of a pointer global, which `extern u32 *SYM;`
+  cannot produce and `extern T *SYM[];` read as `SYM[0]` can.
+* **An `__asm__` alias gives one function a different declaration of the same
+  object.** `extern u32 X_arr[] __asm__("X");` declares a second C name for the
+  same assembler symbol, so a function can have the incomplete-array
+  (compiler-split) spelling while `extern u32 X;` and everything already
+  compiled against it stay as they are. cc1psx honours asm labels on variables.
+  This is what unparked func_8004EE90/func_8004F52C, whose target needs the
+  split form of D_800814A0 while func_8004B500 -- in the same CARVED unit, on
+  the same symbol -- needs the symbolic one. One carved unit stands in for
+  several original translation units, and that is a contradiction only if you
+  believe the carve.
 * A global outside the loaded image (0x8002d000..0x8008875f) was a constant
   address reached through a constant base pointer with the offset written inside
   the index expression.
@@ -1510,6 +1553,38 @@ into a shared tail differ by a word between the two spellings.
   the middle node, so the target's `1B -> FC -> FF` chain required a fourth,
   invisible node in that sublist. See also the range-node entry above, which is
   the same pass counting a *run* of such cases double.
+
+### A post-increment whose value outlives its statement costs a copy
+
+`expand_increment` QUEUES the increment when the incremented thing is a true
+register reference (a pointer local), and `protect_from_queue` then decides
+what the old value costs:
+
+* increment not yet emitted (the use is in the SAME statement, before
+  `emit_queue`) -- the use gets the variable itself and the add is emitted
+  after it. `u8 b = *c++;` is 10 words and no copy.
+* increment already emitted -- `protect_from_queue` creates `QUEUED_COPY` and
+  emits `move(QUEUED_COPY, QUEUED_VAR)` *before* the increment insn. That is a
+  register-to-register copy, a whole extra word, and `cse` cannot fold it away
+  because the copy's SOURCE is modified between the copy and the use.
+
+The reachable shape is the second one: `u8 *c = (*q)++; u8 b = *c;` in two
+statements, where the first statement's `(*q)++` takes `expand_increment`'s
+`op0_is_copy` path, re-expands `*q` for the assignment, and cse rewrites that
+second load as a copy. It brings the parked trio func_80039730/func_80039C44/
+func_80039D10 from 10-11 words to the target's 12 with the right instruction
+set, 6 DIFF.
+
+**What is still open on those three** is the mirror image of the copy. The
+target's RTL is `X = Y; X = X + 1; MEM(q) = X; byte = MEM(Y)` -- the COPY is
+incremented in place and the ORIGINAL is dereferenced, so X carries 4 refs
+against Y's 3 and local-alloc gives X `$v0`. Every spelling measured gives
+`Y = MEM(q); X = Y; Y = Y + 1; MEM(q) = Y; byte = MEM(X)` instead, the exact
+mirror, and the ref counts then hand `$v0` to the other one. `d = c; d++;`
+would have the right shape and cse folds it to `d = c + 1` (10 words,
+func_80039730 variant uA). `search.py` finds nothing from the 6-DIFF base.
+So the remaining question is narrow and worth asking precisely: what makes
+cc1psx increment a COPY in place while keeping the original live?
 
 ## 9. Induction variables
 
