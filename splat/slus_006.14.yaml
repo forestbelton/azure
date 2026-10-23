@@ -87,6 +87,12 @@ segments:
       # consumes) and INCLUDE_ASM stubs to replace one function at a time.
       # Name is the start offset until the original translation unit is known.
       - [0x11940, c, unk_11940]
+      # func_8003E34C alone: it reaches D_800814D0 $gp-relatively while
+      # func_8003E39C, four lines below it in the old unit, reaches the same
+      # object absolutely -- and maspsx's size record is file-scope, so they
+      # cannot share a translation unit. Stays at -G0; see the unit header.
+      - [0x11b4c, c, gprel_11B4C]
+      - [0x11b9c, c, unk_11B9C]
       # func_8003E4FC reaches D_80080AD4/DC $gp-relatively and nothing
       # absolutely at all -- the cleanest carve in the game.
       - [0x11cfc, c, gprel_11CFC]

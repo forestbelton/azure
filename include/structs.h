@@ -824,8 +824,14 @@ extern u16 D_80080AA8;
 extern u8  D_80080AAA;
 extern u16 D_80080AAC;
 extern u32 D_80080AB0;
-extern u16 D_80080ABC;
-extern u16 D_80080ABE;
+/* Retyped u16 -> s16: func_8003D92C is the only function that touches either,
+   and it reads both with `lh` at every test while the one arithmetic site
+   wants `lhu` -- so the declaration is signed and that site carries a `(u16)`
+   cast. The reverse (u16 with `(s16)` casts) does not work: a `(s16)` cast
+   whose value only feeds a comparison against zero is folded away and the
+   load stays `lhu`. See docs/matching-levers.md section 7. */
+extern s16 D_80080ABC;
+extern s16 D_80080ABE;
 /* Only their addresses are taken, by func_8003E1FC; declared as bytes so that
    the address comes out as an `la` of the symbol rather than a split pair. */
 extern u8  D_80080AC0;
@@ -924,6 +930,15 @@ extern u32 D_800814CC;
    reads elements 1 and 0, and gcc reuses the address of element 1 with a -1
    displacement to reach element 0. */
 extern u8  D_800814D0[4];
+/* The three bytes above it, declared separately as well as being elements of
+   the array. They really are their own objects: func_8003E34C reaches
+   D_800814D0 $gp-relatively and these three absolutely in the same function,
+   and maspsx's $gp rewrite keys on the symbol and ignores the displacement --
+   so through the array spelling all four would come out $gp-relative. See the
+   comment on func_8003E34C in csrc/unk_11940.c. */
+extern u8  D_800814D1;
+extern u8  D_800814D2;
+extern u8  D_800814D3;
 extern u8  D_800814D4;
 extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;

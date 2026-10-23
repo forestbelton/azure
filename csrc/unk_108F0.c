@@ -3,6 +3,8 @@
 #include "common.h"
 
 void func_8003D7DC(void);
+void func_8003E758(void);
+void func_80040AA0(u16);
 
 /* Per-frame billboard emitter. Sets up a translate+rotate matrix in the
  * scratchpad, then walks D_800777AC -- 0xC-byte entries, ending when the sign
@@ -344,4 +346,112 @@ void func_8003D8B0(void) {
     func_8004425C(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_108F0", func_8003D92C);
+
+__asm__(".sdata\n\t.size D_80080ABC,2\n\t.size D_80080ABE,2\n\t.text");
+
+/* The "wait for the disc to be ready, then restart audio" tick. Returns 1 only
+ * on the frame it actually performs the restart.
+ *
+ * The two $gp objects, D_80080ABC and D_80080ABE, are reached $gp-relatively
+ * here while ten other symbols in the same function are absolute -- including
+ * seven that sit inside gp +/- 0x8000. This unit is therefore NOT carved and
+ * stays at the project default -G0, where everything is absolute, and the two
+ * $gp accesses are asked for individually by the bare size record below. That
+ * defines nothing: .sdata stays 0 bytes and both symbols stay UND, so the
+ * linker script's own assignments resolve them. See the longer note on
+ * func_8003F624 in csrc/unk_12DEC.c. Written as a -G8 carve instead, the seven
+ * in-window absolutes would all have to be re-declared past -G8 first; the
+ * directive is three lines against seven declaration changes.
+ *
+ * THE ONE SHAPE THAT DECIDED THE FUNCTION is that `g` is INITIALISED IN ITS
+ * DECLARATION rather than assigned after the early return. The target
+ * materialises `lui %hi(D_80083160)` / `addiu %lo(D_80083160)` in the PROLOGUE,
+ * interleaved with the register saves and ahead of the D_80082E6F test; a
+ * plain `g = &D_80083160;` after the `if` puts it inside the guarded region
+ * instead, which costs 15 words and also exchanges `g` and the unk_10 value
+ * between $v1 and $a0. This is matching-levers section 6's one-set pointer
+ * local, with the detail that it keeps its `addiu` here rather than collapsing
+ * to a bare `lui` as in func_8003CB08 -- because the accesses are at +0x8 and
+ * +0x10, so cse keeps the lo_sum base rather than folding `%lo` into each MEM.
+ *
+ * Also load-bearing: `b = g->unk_08;` is cached for the last TWO tests (the
+ * `& 0x100` guard and the `& 0x800` arm) while the three earlier reads of the
+ * same field are each re-read -- the target reuses $v1 across exactly those
+ * two and reloads for the others. `s16 t` holds the clamped sum so the compare
+ * sign-extends the stored register instead of reloading it, which is the
+ * `sll 16`/`sra 16` pair. D_80080ABC and D_80080ABE are declared s16 with a
+ * `(u16)` cast at the single arithmetic site, section 7's documented pattern:
+ * the `lhu` is the cast, the two `lh`s are the declaration.
+ *
+ * verify.py flags the D_80082E6F word, because `D_80082E60.unk_0F` emits
+ * `%lo(D_80082E60)+0xF` where the listing prints `%lo(D_80082E6F)`. Same
+ * address, same linked bytes; `make check` is the authority. */
+s32 func_8003D92C(void) {
+    Unk80083160 *g = &D_80083160;
+    s32 a;
+    s32 b;
+    s16 t;
+
+    if (D_80082E60.unk_0F & 0x80) {
+        return 0;
+    }
+    a = g->unk_10;
+    if (a & 0x100) {
+        if (!(g->unk_08 & 0x800)) {
+            D_80080ABE = 1;
+        }
+    } else if (a & 0x800) {
+        if (g->unk_08 & 0x100) {
+            D_80080ABE = 1;
+        } else {
+            D_80080ABE = 0;
+            D_80080ABC = 0;
+            return 0;
+        }
+    }
+    b = g->unk_08;
+    if (!(b & 0x100)) {
+        D_80080ABE = 0;
+        D_80080ABC = 0;
+        return 0;
+    }
+    if (D_80080ABE != 0) {
+        if (b & 0x800) {
+            t = (u16) D_80080ABC + D_80080A84;
+            D_80080ABC = t;
+            if (t >= 0x169) {
+                D_80080ABC = 0x168;
+            }
+        } else {
+            D_80080ABC = 0;
+        }
+    }
+    if (0x78 / D_80080A84 < D_80080ABC) {
+        D_80080ABE = 0;
+        D_80080ABC = 0;
+        func_8003F320();
+        while (func_80053EF0(4) == 0x100) {
+            func_8003E758();
+            func_80044618(2);
+        }
+        func_80053DA8(0x74);
+        while (func_80053EF0(4) != 0) {
+            func_8003E758();
+            func_80044618(2);
+        }
+        func_8003F320();
+        func_80040AA0(3);
+        D_80080A8A = 0;
+        D_80080A88 = 0;
+        D_80080AA0 = 0;
+        D_80082E60.unk_00 &= ~2;
+        func_80053DCC(D_80080A94);
+        func_80053DF0(D_80080A98);
+        func_80053E14(D_80080A9C);
+        func_80053DA8(0x7F);
+        func_8003D468();
+        D_80080A84 = 2;
+        return 1;
+    }
+    return 0;
+}
