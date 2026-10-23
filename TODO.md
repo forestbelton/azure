@@ -66,10 +66,32 @@ The queue, in order:
 - [ ] Tool that scans `splat/*_symbol_addrs.txt` and warns about unused
       symbols.
 
-- [ ] **Identify the ~120 KB of unidentified library code** in slus_006.14 --
-      23.6% of the file, about three times the volume of decompiled game code.
-      See the composition table in `docs/where-we-are.md`. Mechanical work with
-      known machinery: `psyq/lib/*.lib`, `azure lib --list`, `azure libmatch`,
-      `azure libscan`, and `tools/lib2ar.sh` (fixed, and tested end to end with
-      a stub parser). **It needs pcsx-redux's `psyq-obj-parser` built and on
-      PATH** -- that is the only missing piece, and it is not vendored here.
+- [ ] **Work out what the ~120 KB of unidentified CODE in slus_006.14 is.**
+      23.6% of the file, about three times the volume of decompiled game code;
+      see the composition table in `docs/where-we-are.md`. **This is NOT the
+      mechanical job it was filed as -- investigated 2026-10-23 and the easy
+      answer is ruled out.**
+
+      What was checked. `azure libmatch psyq` confirms the SDK release is
+      right: **162 of 163 already-placed modules match EXACTLY, mean fuzzy
+      0.998**, over libapi, libc, libcard, libcd, libds, libetc, libgpu,
+      libgte, libsn, libsnd and libspu. So the library set in `psyq/lib` is the
+      one the game linked against. But `azure libscan psyq` over the two large
+      unidentified code blocks -- 0x72a8-0x101f8 (36 KB, 348 prologues, sitting
+      immediately before `main`) and 0x1c540-0x301a8 (81 KB, 625 prologues) --
+      locates **zero** modules out of 1257 examined, at `--min-invariant` 4 and
+      12 alike. The only hits are a handful of tiny stubs matching ambiguously
+      at many sites on 4-8 invariant words, which is noise.
+
+      So that code is not any module of the 20 libraries we have, even though
+      those libraries are demonstrably the right release. Hypotheses, none
+      tested: a C runtime or startup object from outside these libs; game code
+      splat has not typed as `c`; modules present but defeating libscan's
+      invariant-word test (56 of the 1257 needed a truncated parse); or an
+      overlay loader. The first thing to do is probably disassemble a few
+      hundred bytes at 0x72a8 and read it, rather than run another scan.
+
+      NOTE, since this entry previously said otherwise: `psyq-obj-parser` is
+      **not** needed for any of this. `libmatch`/`libscan` read `.lib` files
+      natively through `src/azure/psyobj.py`. The parser only serves
+      `tools/lib2ar.sh`, i.e. manual `nm`/`objdump` introspection.

@@ -80,14 +80,24 @@ immediately *before* `main`, so crt0 plus linked library) and
 `libspu` modules splat already places by content). The 51 KB already attributed
 as `asm, psyq/*` is where that identification succeeded.
 
-This is not a hole in the decompilation in the usual sense -- a matching project
-links the SDK libraries from the original `.lib` files rather than decompiling
-them -- and the machinery for it is already here: `psyq/lib/*.lib`,
-`azure lib --list`, `azure libmatch`, `azure libscan`, and `tools/lib2ar.sh` to
-turn a library into a GNU ar archive for `nm`/`objdump` (that one needs
-pcsx-redux's `psyq-obj-parser`, which is not vendored). Identifying more of
-those 120 KB by content is mechanical work with a known method and would move
-the "unknown" figure a long way without touching a single game function.
+**And it is not the mechanical gap it looks like.** Investigated 2026-10-23.
+`azure libmatch psyq` confirms the library set is the right release -- 162 of
+163 already-placed modules match exactly, mean fuzzy 0.998 -- yet
+`azure libscan psyq` over both large code blocks (0x72a8-0x101f8 and
+0x1c540-0x301a8) locates **zero** of 1257 modules examined, at `--min-invariant`
+4 and 12 alike. The only hits are tiny stubs matching ambiguously at many sites
+on 4-8 invariant words. So this code is not any module of the twenty libraries
+in `psyq/lib`, although those are provably the ones the game linked against.
+
+That makes it an open question rather than a scanning job: a runtime or startup
+object from outside these libraries, game code splat has not typed as `c`,
+modules that defeat libscan's invariant test (56 of 1257 needed a truncated
+parse), or an overlay loader. Reading a few hundred bytes at 0x72a8 by hand is
+the obvious next step. The machinery is all here and working --
+`azure lib --list`, `azure libmatch`, `azure libscan`, and `tools/lib2ar.sh`
+for `nm`/`objdump` introspection; note `libmatch` and `libscan` read `.lib`
+natively and do **not** need pcsx-redux's `psyq-obj-parser`, which only
+`lib2ar.sh` uses.
 
 What the resident engine being nearly finished *does* mean: overlay code calls
 into it, and the 23 called-but-undefined functions above 0x8008875F are the

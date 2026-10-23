@@ -39,8 +39,23 @@ if ! command -v "$PSYQ_OBJ_PARSER" >/dev/null 2>&1 && [ ! -x "$PSYQ_OBJ_PARSER" 
     cat >&2 <<MSG
 lib2ar: cannot find psyq-obj-parser ("$PSYQ_OBJ_PARSER").
 
-It converts a PSY-Q .OBJ to ELF and is not part of this repo. Build it from
-pcsx-redux (tools/psyq-obj-parser) and either put it on PATH or point at it:
+It converts a PSY-Q .OBJ to ELF and is not part of this repo. Note you do NOT
+need it to identify library modules -- 'azure libmatch' and 'azure libscan'
+read .lib files natively through src/azure/psyobj.py. It is only for turning a
+library into an ar archive for nm/objdump.
+
+To build it: in a pcsx-redux checkout, 'make bins/Release/psyq-obj-parser'.
+That link FAILS on a distro without static libs ("cannot find -lz ... have you
+installed the static version"), because the Makefile's TOOLDEF rule hardcodes
+'-static -lz' for every tool. Either install the static libs (on Fedora:
+glibc-static, libstdc++-static, zlib-static) or relink dynamically without
+touching the vendored tree -- the objects are already built, only the link
+failed, so take the link line make would run, drop -static, and rerun it:
+
+    make -n bins/Release/psyq-obj-parser | grep 'psyq-obj-parser' \
+        | grep 'g++' | tail -1 | sed 's/ -static / /g' | bash
+
+Then put it on PATH or point at it:
 
     PSYQ_OBJ_PARSER=/path/to/psyq-obj-parser tools/lib2ar.sh "\$@"
 

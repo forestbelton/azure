@@ -4,3 +4,6 @@
 [submodule "vendor/maspsx"]
 	path = vendor/maspsx
 	url = https://github.com/mkst/maspsx
+[submodule "vendor/pcsx-redux"]
+	path = vendor/pcsx-redux
+	url = https://github.com/grumpycoders/pcsx-redux.git
