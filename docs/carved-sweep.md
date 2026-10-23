@@ -6,13 +6,23 @@ by size. `tools/decomp/guard.py` has the live stub count.
 
 ## How to run the sweep
 
-`verify.py` takes the **whole `.text`** of the scratch file as the function, so
-one candidate per file. A batched file reports nonsense (a two-word function
-came back "8 DIFF"). The driver scripts used for this live in the session
-scratchpad and are trivial to rewrite: write `#include "common.h"` plus one
-candidate to `zzone.c`, run `verify.py zzone.c <unit> <func>`, collect the
-MATCHes, then replace each `INCLUDE_ASM("asm/nonmatchings/<unit>", <func>);`
-line with the body and run `make check`.
+`tools/decomp/sweep.py` does it. Write a batch file defining `CANDS` as
+`(name, unit, body)` triples, then:
+
+    python3 tools/decomp/sweep.py verify batch.py    # prints each result,
+                                                     # writes batch_ok.py
+    python3 tools/decomp/sweep.py land  batch_ok.py  # edits csrc/<unit>.c
+    make check                                       # the only authority
+
+`verify` writes ONE candidate per scratch file, because `verify.py` treats the
+whole `.text` of the file as the function -- a file holding several candidates
+reports nonsense (a two-word function came back "8 DIFF"). `land` refuses a unit
+unless every stub is present exactly once and no inline prototype collides with
+a definition being landed.
+
+**Let `make check`'s exit code gate the commit.** Writing
+`make check > log; echo rc=$?; git commit` puts an always-succeeding `echo`
+between them, so an `&&` guards nothing -- that committed a broken tree once.
 
 **Never widen or re-shape a declaration that landed code already uses.**
 Changing `extern u32 D_800814A0;` to `extern u32 D_800814A0[];` -- to get the

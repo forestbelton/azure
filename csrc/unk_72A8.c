@@ -245,7 +245,15 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036154);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036210);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003626C);
+void func_800362A0(u8 *);
+
+void func_8003626C(u8 *p) {
+    if ((D_80083170[0] & 0x60) != 0) {
+        p[0x4C] = 0xFF;
+        p[0x50] = 0;
+        *(u32 *) (p + 0x68) = (u32) func_800362A0;
+    }
+}
 
 void func_80036154(void);
 
