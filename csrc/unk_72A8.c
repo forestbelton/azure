@@ -465,7 +465,18 @@ void func_80036434(u8 *p) {
     func_80053DA8(0x503);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036484);
+void func_800364BC(u8 *);
+
+void func_80036484(u8 *p) {
+    u16 *c = (u16 *) (p + 0x64);
+
+    *c = *c - 1;
+    if ((s16) *c <= 0) {
+        p[0x4D] = 0xFF;
+        p[0x51] = 0;
+        *(u32 *) (p + 0x68) = (u32) func_800364BC;
+    }
+}
 
 void func_80036154(void);
 
@@ -988,7 +999,20 @@ void func_80039814(u8 *p) {
     *q = *q + 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039884);
+s32 func_80039884(u8 *p) {
+    /* Through a pointer local, so the struct's address is materialised
+       (lui+addiu) rather than split with %lo in the load's displacement --
+       the target spends the addiu and fills the branch's delay slot with it. */
+    Unk80083160 *s = &D_80083160;
+    s32 r = 0;
+
+    if (*(s8 *) (p + 0x87) != 0) {
+        r = 1;
+    } else if ((s->unk_08 & 0x60) == 0) {
+        r = 1;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800398BC);
 
@@ -1503,7 +1527,13 @@ void func_8003AEF8(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AF58);
+void func_8003AF58(u8 *p, u8 *q) {
+    while (*(u8 **) (p + 0x14) != 0) {
+        p = *(u8 **) (p + 0x14);
+    }
+    *(u8 **) (p + 0x14) = q;
+    *(u8 **) (q + 0x14) = 0;
+}
 
 void func_8003AF8C(u32 *p) {
     p[5] = 0;
