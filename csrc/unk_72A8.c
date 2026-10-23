@@ -88,7 +88,24 @@ void func_80034EB4(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034EC4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034EF8);
+void func_80037D50(u8 *, u8);
+
+void func_80034EF8(u8 *p, u8 v) {
+    /* The table byte is read into a local BEFORE the last two stores, which is
+       what fills the load's delay slot; as the last statement's RHS the load
+       lands next to its own use and costs a nop. */
+    u8 c;
+
+    D_8008099C = 0;
+    func_80037D50(p, v);
+    p[2] = v;
+    p[0] = 0;
+    p[1] = 0;
+    c = D_8007216C[0];
+    p[0x3D] = 0;
+    *(u32 *) (p + 0x34) = 0;
+    p[0x3C] = c;
+}
 
 void func_80035484(u8 *, u8 *, s32);
 
@@ -480,7 +497,9 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037714);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037C7C);
 
-void func_80037D50(u8 *p) {
+/* The second parameter is unused here; func_80034EF8 masks a byte into it, so
+   it is real. An unused parameter costs no instruction. */
+void func_80037D50(u8 *p, u8 b) {
     u8 *q = p + 0x8C;
 
     q[0x25] = D_8006A908[p[2]];

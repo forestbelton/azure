@@ -149,6 +149,10 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_8005C668 | unk_1C540 | 11 DIFF | Builds a 0x40-byte block on the stack (a word from D_80073740, the constant 3, two halfwords) and passes its address. |
 | func_800489F4 | unk_1AF38 | not measured | func_80047738 plus an `ori 0x20`; park it with that one. |
 | func_80049E1C | unk_1C540 | 18 DIFF | A clamp: `x = a + d`, then `x` against `n - 1` when d >= 0 and against 0 when it is negative. Same family as func_80049DE8. |
+| func_800563B0 + func_80056DB4 + func_8005C668 + func_8005C6B4 | unk_1C540 | 4-14 DIFF | Four functions that fill a parameter block (three at D_80084918, one on the stack) and pass its address. The blocks' contents are right; in each, cc1psx schedules the D_80073740 lookup earlier than the target does. Reading it into a local first, in the middle, or last does not move it -- the load has the longest chain. func_80056DB4 is the closest at 4 DIFF, where only the two halfword zeros and the load are swapped. |
+| func_80037030 | unk_72A8 | 24/24 words, 7 DIFF | The argument setup and the `sw $zero` before the call are in the other order, and reorg picks a different insn for the jal's delay slot. |
+| func_800491F4 | unk_1C540 | not measured in isolation | A list walk that threads each entry's +0xC to the previous one. |
+| func_8005A56C | unk_1C540 | 23 DIFF | Two stack blocks selected by the first argument, with `(x << 16) >> 8` scaling. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather

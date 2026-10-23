@@ -1216,6 +1216,7 @@ extern u32 D_800DCF54[];  /* out of image, a table of function pointers */
 extern u8  D_80080B70[];
 extern u8  D_80082414[];
 extern u8  D_80081FDC[];
+extern u32 D_8008099C;
 extern u8  D_800714B0[];
 extern s16 D_800848F8[];
 extern u8  D_80084918[];
