@@ -1192,7 +1192,17 @@ void func_8005A3E0(void) {
     D_8007382A[0] = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A3F0);
+s32 func_8005A3F0(u32 a) {
+    a &= 0xFF;
+    if (a >= 0x19) {
+        return 0xFF;
+    }
+    if (a == 0) {
+        return 0xFF;
+    }
+    D_80073734[0] = a;
+    return a;
+}
 
 void func_8005A420(void) {
 }

@@ -77,6 +77,7 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_800368D0 | unk_72A8 | 10/10 words, 2 DIFF | The target loads `+0x44` (a pointer) before `+0x4A` (an s16 offset); every spelling loads the s16 first. Tried: one expression with 0x44 first, two locals with 0x44 declared first, and two locals with 0x4A first. Source order does not drive it. |
 | func_8004B634 | unk_1C540 | 2 DIFF | `func_8003E4FC(6, D_80080B48, 0)` with the real signature `Unk80083968 *(u8, u8 *, s32)`. |
 | func_8004EE90 + func_8004F52C | unk_1C540 | 12-14 DIFF | An identical PAIR, so one cause. `if (p != 0) { *(u16 *) (p + 0x1E) \|= 0x8000; D_800814A0 \|= 0x8000; }`. D_800814A0 must stay a scalar (see the declaration warning above), which costs the split-addressing form the target uses; 12 DIFF as an array, 14 as a scalar. |
+| func_8005845C | unk_1C540 | 3 DIFF | `*(u32 *) &D_80084960[(a & 0xFF) * 0x9C] = b & 0xFF;`. The 0x9C stride comes out as the target's shift/add/subtract chain, so the arithmetic is right. Splitting the index into a local makes it WORSE (8 DIFF), so the single expression is closer. |
 | func_8004B4DC | unk_1C540 | 9 DIFF | A `while (1) { n++; if (p[0] & 0x80) break; p += 0xC; }` count loop. The target advances `p` in the branch's delay slot, so it is advanced on the exiting iteration too. |
 
 ## Deferred for addressing, not for shape
