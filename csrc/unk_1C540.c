@@ -160,7 +160,10 @@ u32 func_80049E6C(s32 i) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049E88);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049F2C);
+void func_80049F2C(u8 *p) {
+    *(u16 *) (p + 0x28) += (*(s16 *) (p + 0x4) - *(s16 *) (p + 0x28)) >> 1;
+    *(u16 *) (p + 0x2A) += (*(s16 *) (p + 0x6) - *(s16 *) (p + 0x2A)) >> 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049F68);
 

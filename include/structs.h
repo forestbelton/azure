@@ -1142,6 +1142,11 @@ typedef struct Unk80086C00 {
     u16 unk_0A;
 } Unk80086C00;
 extern Unk80086C00 D_80086C00[];
+extern u32 D_8006AFDC[];  /* four pointer tables, indexed by func_800B2834 */
+extern u32 D_8006AFE8[];
+extern u32 D_8006AFF4[];
+extern u32 D_8006B000[];
+extern u8 *D_80080A90;
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;

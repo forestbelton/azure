@@ -223,13 +223,31 @@ void func_80035AAC(u32 *p) {
     p[0x1A] = (u32) func_80035AF8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035ABC);
+void func_80035ABC(u8 *p, u8 *q) {
+    u16 *v = (u16 *) (q + 2);
+
+    *v -= 0x10;
+    if ((s16) *v < 2) {
+        *v = 2;
+        *(u32 *) (p + 0x68) = (u32) func_80035AF8;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035AF8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035BE0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035C44);
+void func_80035C80(void);
+
+void func_80035C44(u8 *p, u8 *q) {
+    u16 *v = (u16 *) (q + 2);
+
+    *v += 0x10;
+    if ((s16) *v > 0x40) {
+        *v = 0x40;
+        *(u32 *) (p + 0x68) = (u32) func_80035C80;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035C80);
 
@@ -390,9 +408,22 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038240);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038288);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800382F0);
+void func_8003832C(u8 *);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003832C);
+void func_800382F0(u8 *p) {
+    if (func_80053EF0(4) == 0) {
+        func_8003832C(p);
+    }
+}
+
+void func_80039AF0(u8 *);
+void func_80038368(u8 *);
+
+void func_8003832C(u8 *p) {
+    func_80039AF0(p);
+    *(u16 *) (p + 0x18) = 5;
+    *(u32 *) (p + 0x10) = (u32) func_80038368;
+}
 
 void func_80038A10(void);
 
@@ -610,7 +641,14 @@ void func_80039AF0(u8 *p) {
     t[0x3C] = D_8007216C[t[1]];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039B28);
+void func_80039B28(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *c = *q;
+    u16 v = c[0] | (c[1] << 8);
+
+    *q = c + 2;
+    func_80053DA8(v);
+}
 
 void func_80039B64(void) {
 }
@@ -1004,13 +1042,24 @@ void func_8003B9B8(void) {
     func_8003B7C8();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B9E8);
+s32 func_800B2834(void);
+void func_8003BAF8(u32);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BA24);
+void func_8003B9E8(void) {
+    func_8003BAF8(D_8006AFDC[func_800B2834()]);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BA60);
+void func_8003BA24(void) {
+    func_8003BAF8(D_8006AFE8[func_800B2834()]);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BA9C);
+void func_8003BA60(void) {
+    func_8003BAF8(D_8006AFF4[func_800B2834()]);
+}
+
+void func_8003BA9C(void) {
+    func_8003BAF8(D_8006B000[func_800B2834()]);
+}
 
 void func_8003B9E8(void);
 
@@ -1120,6 +1169,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C890);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C8E4);
+s32 func_8003C5A4(void);
+
+u32 *func_8003C8E4(void) {
+    s32 i = func_8003C5A4();
+
+    /* The arm written FIRST ends up SECOND in memory, so the `>= 0` arm first
+       is what gives the target's `bgez`; written as `if (i < 0) return 0;`
+       the branch comes out `bltz` and the two arms swap (6 DIFF). */
+    if (i >= 0) {
+        return &((u32 *) 0x800135C4)[i];
+    } else {
+        return 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C920);

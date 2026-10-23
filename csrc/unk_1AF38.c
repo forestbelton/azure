@@ -25,7 +25,12 @@ u8 *func_80047A44(s32 i) {
     return &D_800FC000[i * 0xD000];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047A68);
+u8 *func_80047A44(s32);
+void func_800479D4(u8 *, u8 *, s32);
+
+void func_80047A68(s32 a, u16 b) {
+    func_800479D4(func_80047A44(a), D_80080A90, b);
+}
 
 u32 func_80047AA4(u32 a) {
     return a + 0x8000;

@@ -1554,6 +1554,22 @@ into a shared tail differ by a word between the two spellings.
   invisible node in that sublist. See also the range-node entry above, which is
   the same pass counting a *run* of such cases double.
 
+### The arm written FIRST ends up SECOND
+
+For an `if`/`else` whose two arms both end the function -- two `return`s, or
+two returns of the same call that crossjumping merges -- the arm written first
+becomes the branch-over block and the arm written second becomes the
+fall-through. So the condition in the listing is the one the SECOND arm's
+source condition negates, and getting it backwards costs the branch opcode
+plus both arms' bodies: 6 DIFF on func_8003C8E4 (`bltz` for `bgez`), 3 on
+func_8005AC30. Write the arm whose block the listing places last FIRST.
+
+Related, on the same two functions: `return f(a != 0);` is not the same as two
+returns of `f(1)` and `f(0)`. The first store-flags the condition into one
+`sltu` (13 DIFF on func_8005AC30); `if (a) b = 1; else b = 0;` does the same,
+because if-conversion does not care that the arms were written as statements.
+Two returns of the same call keep the branch and crossjumping merges the tails.
+
 ### A post-increment whose value outlives its statement costs a copy
 
 `expand_increment` QUEUES the increment when the incremented thing is a true
