@@ -158,7 +158,7 @@ segments:
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
       - [0x301a8, asm, psyq/libsnd/PLAY]
-      - [0x301d4, bin]
+      - [0x301d4, c, unk_301D4]
       - [0x30290, asm, psyq/libspu/S_INI]
       - [0x30404, asm, psyq/libspu/SPU]
       - [0x30f98, asm, psyq/libspu/S_DCB]
