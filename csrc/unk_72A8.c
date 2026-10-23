@@ -429,7 +429,17 @@ void func_800381A4(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800381D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038240);
+s32 func_80038240(s32 a) {
+    if (a == 0) {
+        return 0;
+    }
+    if (a == 1) {
+        func_80053DA8(0xB4);
+        return 0;
+    }
+    func_80053DA8(0x74);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038288);
 
@@ -515,7 +525,14 @@ void func_80038570(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038588;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038588);
+void func_80038A10(void);
+
+void func_80038588(u8 *p) {
+    if (*(s8 *) (p + 0x84) != 0) {
+        func_80053DA8(0xB4);
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    }
+}
 
 void func_800385D0(u8 *p) {
     p[0x27] = 0;
@@ -523,7 +540,14 @@ void func_800385D0(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_800385E8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800385E8);
+void func_80038A10(void);
+
+void func_800385E8(u8 *p) {
+    if (*(s8 *) (p + 0x84) != 0) {
+        func_80053DA8(0xB4);
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    }
+}
 
 void func_80038630(u8 *p) {
     p[0x27] = 0;
@@ -531,7 +555,14 @@ void func_80038630(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038648;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038648);
+void func_80038A10(void);
+
+void func_80038648(u8 *p) {
+    if (*(s8 *) (p + 0x84) != 0) {
+        func_80053DA8(0xB4);
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038690);
 
@@ -971,7 +1002,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AB44);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AC1C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003ACC0);
+u8 *func_8003ACC0(u8 *p, u16 n) {
+    /* The PARAMETER is the moving pointer and the saved copy is what gets
+       returned, which is the `addu $a2, $a0, $zero` at the top; the other way
+       round swaps those two registers through the whole function. */
+    u8 *r = p;
+    u8 *b = r + (n - 1);
+    u8 x;
+    u8 y;
+
+    while (p < b) {
+        x = *p;
+        y = *b;
+        *b-- = x;
+        *p++ = y;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AD08);
 
@@ -1008,7 +1055,15 @@ void func_8003AE28(s16 x, s16 y, s16 w, s16 h, s32 a, s32 b) {
     MoveImage(r, a, b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AE60);
+void func_8003AE60(s16 x, s16 y, s16 w, s16 h, u8 r, u8 g, u8 b) {
+    s16 rect[4];
+
+    rect[0] = x;
+    rect[1] = y;
+    rect[2] = w;
+    rect[3] = h;
+    ClearImage(rect, r, g, b);
+}
 
 void func_8003AEA8(u32 *p, s32 n) {
     for (; n > 0; n--) {
@@ -1049,7 +1104,13 @@ void func_8003B034(void) {
     func_800483AC(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B06C);
+void func_8003C758(u8 *);
+
+void func_8003B06C(void) {
+    func_8003C758(D_80080F40);
+    func_8003C758(D_80081010);
+    func_8003C758(D_80080F60);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B0B4);
 
@@ -1200,7 +1261,16 @@ void func_8003BAD8(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BAF8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BD34);
+typedef struct Unk8006ADBC {
+    u32 unk_00[12];
+} Unk8006ADBC;
+
+/* A 0x30-byte struct assignment: cc1psx's block move does four words per
+   iteration, which is the loop in the listing -- nothing in the source is
+   unrolled. */
+void func_8003BD34(void) {
+    *(Unk8006ADBC *) D_8006ADBC = *(Unk8006ADBC *) D_8006ADEC;
+}
 
 void func_8003BD7C(void) {
 }

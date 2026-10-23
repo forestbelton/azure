@@ -1095,9 +1095,9 @@ void func_80035AF8(void);
 void func_80038A08(void);
 void func_80038A00(void);
 void func_80038478(u8 *);
-void func_80038588(void);
-void func_800385E8(void);
-void func_80038648(void);
+void func_80038588(u8 *);
+void func_800385E8(u8 *);
+void func_80038648(u8 *);
 void func_8004D09C(u8 *);
 void func_8004D0E4(u8 *);
 void func_80039AE8(void);
@@ -1182,6 +1182,17 @@ extern u32 D_800847D4;
 extern s16 D_80086D50;
 extern u32 D_80085FA4[];
 extern u32 D_800869B0[];
+/* Declared SIZED, and at 8 bytes, because func_8003B06C's target materialises
+   each address as the one-insn `la` macro -- its three `jal`s have empty delay
+   slots, which a compiler-split lui/addiu pair would have filled. Only the
+   size CLASS is evidence here (small enough for -G8); 8 is the top of that
+   range and the exact size is unknown. */
+extern u8  D_80080F40[8];
+extern u8  D_80081010[8];
+extern u8  D_80080F60[8];
+extern u8  D_8006ADEC[];
+extern u8  D_80080B34[];
+extern u8  D_80080B40[];
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;

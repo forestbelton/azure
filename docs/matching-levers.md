@@ -1554,6 +1554,26 @@ into a shared tail differ by a word between the two spellings.
   invisible node in that sublist. See also the range-node entry above, which is
   the same pass counting a *run* of such cases double.
 
+### An empty `jal` delay slot says the address was ONE instruction
+
+An address materialised for a call argument comes out either as the
+assembler-expanded `la` -- one insn before maspsx, so reorg cannot split it and
+the `jal`'s delay slot goes empty -- or as the compiler-split lui/addiu, whose
+`addiu` reorg drops straight into that slot. So three `jal`s with `nop` delay
+slots (func_8003B06C) say the three symbols were small data, and a listing
+whose `addiu %lo` sits in a branch delay slot with the `lui` elsewhere
+(func_800494B4) says the opposite. Declaring the object `extern u8 X[8];`
+rather than `extern u8 X[];` is what picks the first form. Only the size CLASS
+is evidence -- small enough for -G8 -- not the exact size.
+
+### One call after the join, not a call in each arm
+
+func_800494B4 sets a pointer in each arm of an if and calls once after it. With
+the call inside both arms the argument setup for the OTHER parameter is
+duplicated into each arm and the `jal`'s delay slot goes empty: 14 DIFF on a
+17-word function, and nothing about it reads as a structural difference in the
+diff.
+
 ### Two bounds written with `&&` become one range check
 
 `if (x > 0 && x < 4)` is folded into `addiu -1` / `sltiu 3`, one branch where

@@ -110,7 +110,21 @@ void func_80049490(s32 a) {
     func_80049374(a, D_800713FC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800494B4);
+s32 func_800B8C90(void);
+
+void func_800494B4(s32 p) {
+    u8 *q;
+
+    /* One call after the join, not a call in each arm: in each arm the
+       argument setup for p is duplicated and the jal's delay slot goes empty
+       (14 DIFF). */
+    if (func_800B8C90() != 0) {
+        q = D_80080B34;
+    } else {
+        q = D_80080B40;
+    }
+    func_80049374(p, q);
+}
 
 s32 func_800494FC(u8 *p) {
     return func_80042A80(p) & 0x400;
@@ -344,16 +358,17 @@ void func_8004B324(s32 a, s32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B364);
 
-void func_8004B364(s32, s32, s32);
+u32 func_8004B364(s32, s32, s32);
 
 void func_8004B3DC(s32 a) {
     func_8004B364(0, 1, a);
 }
 
-void func_8004B364(s32, s32, s32);
+u32 func_8004B364(s32, s32, s32);
 
-void func_8004B404(s32 a) {
-    func_8004B364(0, 0, a);
+/* Returns what func_8004B364 returns: func_80048FBC stores the result. */
+u32 func_8004B404(s32 a) {
+    return func_8004B364(0, 0, a);
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B42C);
