@@ -70,7 +70,17 @@ s32 func_80047BC0(s32 k) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047C00);
+void func_80047C00(void) {
+    s32 i = 0;
+    u8 *p = D_80083D08;
+
+    for (; i < 6; i++) {
+        if ((*(u16 *) (p + 4) & 1) != 0) {
+            bzero(p, 8);
+        }
+        p += 8;
+    }
+}
 
 s32 func_80047C60(u8 *p) {
     return (p - D_800FC000) / 0xD000;
