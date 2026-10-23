@@ -89,11 +89,44 @@ as `asm, psyq/*` is where that identification succeeded.
 on 4-8 invariant words. So this code is not any module of the twenty libraries
 in `psyq/lib`, although those are provably the ones the game linked against.
 
-That makes it an open question rather than a scanning job: a runtime or startup
-object from outside these libraries, game code splat has not typed as `c`,
-modules that defeat libscan's invariant test (56 of 1257 needed a truncated
-parse), or an overlay loader. Reading a few hundred bytes at 0x72a8 by hand is
-the obvious next step. The machinery is all here and working --
+### What the unidentified code actually is: ~421 more functions
+
+Read it, 2026-10-23, and the answer matters for how this project describes
+itself. The two blocks are **not** SDK library code, and between them they hold
+roughly **421 functions** against the 191 splat has typed.
+
+| block | file range | vram | functions | self-calls | calls from typed game code |
+|-------|-----------|------|-----------|-----------|---------------------------|
+| A | 0x072a8-0x101f8 | 0x80033aa8-0x8003c9f8 | 113 | 232 | 15 |
+| B | 0x1c540-0x301a8 | 0x80048d40-0x8005c9a8 | 308 | 580 | 42 (+35 from elsewhere) |
+
+Counted by scanning every `jal` in the image and bucketing call sites by region.
+Both blocks are cohesive -- the overwhelming majority of calls into them come
+from within themselves -- and both are called by the game code we have already
+decompiled.
+
+**Three independent reasons they are not library modules we could just place:**
+
+1. `azure libmatch psyq` says the library set is right (162/163 exact, mean
+   fuzzy 0.998), so a miss is not a wrong-release artifact.
+2. `azure libscan psyq` locates **zero** of 1257 modules in either block.
+3. Byte-exact search: the first function at 0x80033aa8 is a bitmap set/clear/
+   test triple (reject id 0 and 1, `id >> 5` for the word, `id & 31` for the
+   bit, table at 0x80012D70 -- one of the out-of-image constant addresses this
+   project already documents as the game's own idiom). Its relocation-free
+   instruction run appears **twice in the executable and in none of the twenty
+   `.lib` files**, and content matching demonstrably works here, since that is
+   how libmatch placed 162 modules.
+
+Block A begins immediately after `psyq/libsn/SNMAIN` ends -- `__SN_ENTRY_POINT`,
+`__main` and `__do_global_dtors` are the last symbols before it -- so it sits
+exactly where a PSY-Q link puts the first linked objects, which is consistent
+with it being the game's own earliest objects rather than libraries.
+
+**What is not settled:** whether this is the game's own code or a third-party /
+engine library statically linked from something not in `psyq/lib`. Either way it
+is 117 KB of unmapped, game-reachable code in the file `make check` verifies,
+and the function count in this document was badly wrong. The machinery is all here and working --
 `azure lib --list`, `azure libmatch`, `azure libscan`, and `tools/lib2ar.sh`
 for `nm`/`objdump` introspection; note `libmatch` and `libscan` read `.lib`
 natively and do **not** need pcsx-redux's `psyq-obj-parser`, which only
@@ -103,9 +136,12 @@ What the resident engine being nearly finished *does* mean: overlay code calls
 into it, and the 23 called-but-undefined functions above 0x8008875F are the
 engine calling out, so the engine genuinely had to come first. But the honest
 framing is "the engine is nearly done, the game content is unmapped", not "the
-game is 85% decompiled" -- and the 186 of 191 figure is a count of *this
-executable's own functions*, which is 8.4% of its bytes. See
-`docs/overlays.md`.
+game is 85% decompiled". See `docs/overlays.md`.
+
+**And "191 functions" is NOT this executable's function count.** That claim was
+in this document until 2026-10-23 and it is wrong by about a factor of three --
+see the section below. 186 of 191 counts the functions splat has *typed as C*,
+which is 8.4% of the file's bytes.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
 `head`: that masks make's exit code, and a broken state was committed that way

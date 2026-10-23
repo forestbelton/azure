@@ -83,13 +83,21 @@ The queue, in order:
       12 alike. The only hits are a handful of tiny stubs matching ambiguously
       at many sites on 4-8 invariant words, which is noise.
 
-      So that code is not any module of the 20 libraries we have, even though
-      those libraries are demonstrably the right release. Hypotheses, none
-      tested: a C runtime or startup object from outside these libs; game code
-      splat has not typed as `c`; modules present but defeating libscan's
-      invariant-word test (56 of the 1257 needed a truncated parse); or an
-      overlay loader. The first thing to do is probably disassemble a few
-      hundred bytes at 0x72a8 and read it, rather than run another scan.
+      **ANSWERED by reading it: it is ~421 functions, and not library code.**
+      Block A (0x072a8-0x101f8) holds 113 functions, block B
+      (0x1c540-0x301a8) holds 308, counted by bucketing every `jal` in the
+      image by call-site region. Both are cohesive (232 and 580 internal
+      calls) and both are called by already-decompiled game code (15 and 42
+      times). The first function in block A is a bitmap set/clear/test triple
+      over a table at 0x80012D70, and its relocation-free instruction run
+      appears twice in the executable and in NONE of the twenty .lib files --
+      while content matching provably works, since libmatch placed 162 modules
+      that way. Full write-up in `docs/where-we-are.md`.
+
+      So the real work here is splitting and decompiling them, not scanning:
+      **this executable has roughly three times as many functions as the 191
+      this project has been counting.** Still open: whether they are the game's
+      own code or a third-party library linked from outside psyq/lib.
 
       NOTE, since this entry previously said otherwise: `psyq-obj-parser` is
       **not** needed for any of this. `libmatch`/`libscan` read `.lib` files
