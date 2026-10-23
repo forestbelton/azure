@@ -80,7 +80,10 @@ segments:
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
       - [0x72a8, bin]
       - [0x101f8, asm, main]
-      - [0x102a8, c, unk_102A8]
+      # main's unreachable epilogue (0x102a8..0x102c4) belongs to main, not to
+      # a C file: main ends in an infinite loop and splat split those seven
+      # instructions off only because the dead code carries a label.
+      - [0x102c4, c, unk_102C4]
       # The D_80080AA4.. cluster: two consecutive functions needing -G8.
       - [0x10308, c, gprel_10308]
       - [0x108f0, c, unk_108F0]

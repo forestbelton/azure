@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**178 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 13 are
+**179 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 12 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
 authority on that count; this file has been wrong about it before.
 
@@ -77,16 +77,15 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 13 remaining stubs
+## The 12 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
 | near-misses, written and measured | 9 | logic reproduced; a register or scheduling difference is left |
 | not yet written | 3 | nothing structural in the way |
-| not a function | 1 | func_8003CAA8, `main`'s unreachable epilogue |
 
-**Nothing is structurally blocked any more.** Every remaining function is
-either ordinary decompilation or a documented near-miss.
+**Nothing is structurally blocked any more, and every remaining stub is a real
+function.** Each is either ordinary decompilation or a documented near-miss.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
@@ -139,11 +138,6 @@ solved blockers at once: its table is the
 28-entry jtbl_8002D5C0 at 0x8002D5C0, the first of the three runs, and
 `unk_11F0C` contributes exactly that one table -- so when it matches, the
 placement is a two-line spec change like the others.
-
-### func_8003CAA8 is not a function
-
-`main`'s unreachable epilogue, below the `jr $ra` that ends it. It needs the
-splat spec's `main` subsegment extended to 0x102c4 rather than a C body.
 
 ## How to work a function
 
