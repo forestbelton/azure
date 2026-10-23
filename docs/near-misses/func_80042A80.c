@@ -97,6 +97,13 @@
  *
  * D_80073414 is a 0x14-byte-stride table; D_80073470 is &D_80073414[4].unk_0C,
  * so the `case 4` arm needs no separate symbol.
+ *
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 29 variants of
+ * this source across its whole transform set -- declared widths, (s16) casts,
+ * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
+ * none improved on 1 DIFF. **Do not re-sweep local shapes here.** The remaining
+ * gap is combine proving bit 15 clear on a single-set value, where every multi-set shape costs an `andi 0xffff` this function has no room for,
+ * which no local rewrite reaches.
  */
 
 #include "common.h"

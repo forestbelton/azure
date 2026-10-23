@@ -78,6 +78,13 @@
  * in $v1, but writing the loop that way (`r = arg0[i * 2 + 0x2D]; if (r != 0)
  * return r;`) flips the inner branch arms and costs more than it saves (9
  * diffs). The `t` reuse above is the cheap version of the same idea.
+ *
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 13 variants of
+ * this source across its whole transform set -- declared widths, (s16) casts,
+ * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
+ * none improved on 5 DIFF. **Do not re-sweep local shapes here.** The remaining
+ * gap is reorg copying the join block's first insn because that label is not an own_thread_p,
+ * which no local rewrite reaches.
  */
 
 #include "common.h"

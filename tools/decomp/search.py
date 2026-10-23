@@ -187,6 +187,11 @@ def fmt(s):
 
 
 def main():
+    # a run is minutes long, so stream progress rather than buffering it
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass
     flags = {a for a in sys.argv[1:] if a.startswith("--")}
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 3:
@@ -196,7 +201,23 @@ def main():
     g8 = "--g8" in flags
     text = open(base_path).read()
 
-    sites = [(t.__name__, lbl) for t in TRANSFORMS for lbl, _ in t(text)]
+    # --only=width,cast narrows the transform set. On a large function the full
+    # set generates hundreds of sites -- func_80045CC4 gives 435 -- and one
+    # greedy pass compiles every one of them. Narrow it to the families the
+    # listing actually implicates: run annotate.py first and pick from there.
+    active = TRANSFORMS
+    for a in sys.argv[1:]:
+        if a.startswith("--only="):
+            want = [w.strip() for w in a.split("=", 1)[1].split(",") if w.strip()]
+            active = [t for t in TRANSFORMS
+                      if any(w in t.__name__ for w in want)]
+            if not active:
+                print("no transform matches --only=%s; available: %s"
+                      % (",".join(want),
+                         " ".join(t.__name__.replace("t_", "") for t in TRANSFORMS)))
+                return 2
+
+    sites = [(t.__name__, lbl) for t in active for lbl, _ in t(text)]
     if "--sites" in flags:
         print("%d candidate change(s) from %s:" % (len(sites), base_path))
         for name, lbl in sites:
@@ -204,6 +225,8 @@ def main():
         return 0
 
     cache = {}
+    print("%d candidate change(s) across %d transform famil(y|ies)"
+          % (len(sites), len(active)))
     best = score(text, unit, func, g8, cache)
     if best is None:
         print("the base does not build; fix that first")
@@ -223,7 +246,7 @@ def main():
     while passes < 8 and len(cache) < budget:
         passes += 1
         improved = None
-        for t in TRANSFORMS:
+        for t in active:
             for lbl, cand in t(cur_text):
                 if len(cache) >= budget:
                     break
@@ -263,4 +286,9 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        # piped into head/less: exit quietly rather than dumping a traceback
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(0)

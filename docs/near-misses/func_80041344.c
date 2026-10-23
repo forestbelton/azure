@@ -92,6 +92,13 @@
  * csrc/unk_14934.c is `void func_80041344(u32, u32);` and must become
  * `void func_80041344(u8 *, u32 *);` -- until then a scratch file needs the
  * `#define`/`#undef` dance around common.h, as below.
+ *
+ * SEARCHER SWEEP (2026-10-22): tools/decomp/search.py compiled 71 variants of
+ * this source across its whole transform set -- declared widths, (s16) casts,
+ * splitting and joining a statement, `<` against `>`, the `& 1` mask -- and
+ * none improved on 2 DIFF. **Do not re-sweep local shapes here.** The remaining
+ * gap is one global-alloc priority comparison, 4.643 against 4.756,
+ * which no local rewrite reaches.
  */
 
 #define func_80041344 func_80041344_decl_clash
