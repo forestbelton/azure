@@ -123,10 +123,36 @@
  * stops sched1 moving that one load"** -- and the answer is not operand order,
  * not loop form, not struct-ness in any of the 14 combinations tried.
  *
- * Which leaves the context questions rather than more spellings: is `p`
- * really one parameter of this type, is the 0x8 field really at 0x8, and does
- * this function really sit in unk_19434 as carved. See the audit in
- * docs/where-we-are.md.
+ * CONTEXT AUDIT RUN, 2026-10-23, and it CLOSES rather than opens -- recorded so
+ * nobody spends a session there on my suggestion, which is what the previous
+ * version of this paragraph invited. Four of the five questions in
+ * docs/where-we-are.md's audit are not inferences for this function at all:
+ *
+ *  - Unit boundary, declared symbol sizes, -G value, function order within the
+ *    unit: ALL IRRELEVANT HERE. The target listing contains zero `lui`, `%hi`,
+ *    `%lo` and `%gp_rel` -- this function references no global whatsoever, and
+ *    addressing modes plus the .sdata table are the only things a unit carve
+ *    controls. So unk_19434's boundary cannot be what is wrong, and that is
+ *    direct evidence from the bytes rather than an argument.
+ *  - Struct layout: not inferred either. The displacements are IN the target --
+ *    0x0/0x4/0x8 off $a0, and -0x2/0x0/0xC off the inner walkers.
+ *
+ * What is genuinely unverified is only the signature: there are no callers of
+ * func_80047054 anywhere in the resident executable (it is reached from an
+ * overlay), so nothing cross-checks the parameter count or types. The target's
+ * own use of $a1/$a2/$a3 as full words added into u16 fields is the only
+ * evidence, and it is consistent with what this source declares.
+ *
+ * Worth knowing while working it: the function has NO STACK FRAME -- no
+ * `addiu $sp`, nothing saved -- so the allocator has only caller-saved
+ * registers to work with. Any lever that wants a callee-saved register is
+ * unavailable here by construction, which is a second reason the section 3
+ * escape from local-alloc does not apply (the first being the contained live
+ * range above).
+ *
+ * So this bound is tighter than the other six, not looser: it is genuinely
+ * function-local, the surrounding context is evidence rather than assumption,
+ * and the one open question is sched1's hoist of the `p[2]` load.
  */
 
 #include "common.h"
