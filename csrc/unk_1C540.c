@@ -116,7 +116,16 @@ u32 func_80049918(s32 i) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049944);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049984);
+s32 func_80049944(u32 *);
+
+s32 func_80049984(u8 *p) {
+    s32 r = 3;
+
+    if (p[0x13] != 0) {
+        r = func_80049944(*(u32 **) (p + 0x14));
+    }
+    return r;
+}
 
 void func_800499BC(void) {
     D_80083D78[0] = -1;
@@ -267,7 +276,14 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B028);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B08C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B1A4);
+/* s32 rather than u8 *, because the two callers 280 lines below already
+   declare it that way and pass their own s32 parameter straight through. */
+void func_8004B1A4(s32 a) {
+    if (a != 0) {
+        *(u16 *) (a - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B1DC);
 
@@ -332,7 +348,12 @@ void func_8004B500(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B530);
+void func_8004B530(u8 *p) {
+    if (p != 0) {
+        *(u16 *) (p - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B568);
 
@@ -915,7 +936,15 @@ void func_80053C3C(u8 *p) {
     func_8003F320();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053C6C);
+void func_80053C6C(void) {
+    u32 *b = (u32 *) D_8006ADBC;
+    u32 v = b[1];
+
+    *(u32 *) D_8006ADBC = v;
+    if (v != 0) {
+        func_80053C3C((u8 *) v);
+    }
+}
 
 void func_80053C6C(void);
 
@@ -1355,7 +1384,10 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B16C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B27C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B2C8);
+void func_8005B2C8(s16 i, s32 b, u16 *x, u16 *y) {
+    *x = D_80086C00[i].unk_08;
+    *y = D_80086C00[i].unk_0A;
+}
 
 void func_8005ACDC(void);
 

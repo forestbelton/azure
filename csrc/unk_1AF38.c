@@ -77,7 +77,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004827C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800482C8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048374);
+void func_80047784(u8 *, s32, s32);
+
+void func_80048374(u8 *p, s16 b, s16 c) {
+    *(u16 *) (p + 0x14) |= 0x400;
+    func_80047784(p, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800483AC);
 

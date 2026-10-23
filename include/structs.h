@@ -1126,6 +1126,18 @@ extern u8  D_8006AE4C[];
 extern u8  D_8006AE64[];
 extern u8  D_8006AE7C[];
 extern u8  D_8006AEAC[];
+extern u8  D_80016000[];  /* out of image, reached as symbols (lui+addiu) */
+extern u8  D_80023000[];
+extern u8  D_8008152C[];
+/* Hand-added. A 0xC-byte entry; func_8005B2C8 scales an s16 index by 12 and
+   reads the two halfwords at +0x08/+0x0A. A struct for the same reason as
+   Unk80084960: the field offset must not migrate onto the symbol. */
+typedef struct Unk80086C00 {
+    u8  pad_00[8];
+    u16 unk_08;
+    u16 unk_0A;
+} Unk80086C00;
+extern Unk80086C00 D_80086C00[];
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
 extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;
@@ -1279,6 +1291,8 @@ typedef struct UnkNode {
     u16              unk_1C;   /* indexes D_800833E0 in func_80044AAC */
     u16              unk_1E;   /* flags */
 } UnkNode;
+
+extern UnkNode D_80082D38;
 
 /* Hand-made. The 0x20 bytes immediately after an UnkNode: func_80044144
    allocates a node and fills this payload through a pointer to n + 1. */
