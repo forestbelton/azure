@@ -1,5 +1,10 @@
 /* NINE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
  *
+ * nmcheck: multi -- this file holds several functions, so tools/decomp/nmcheck.py
+ * compiles it rather than verifying one function against one listing. Each
+ * function's own word count is recorded below and each was verified
+ * individually before being collected here.
+ *
  * Two of the original eleven have since LANDED -- func_800410FC and
  * func_80041134 -- and how is worth knowing, because it is the cheap route for
  * this whole group. They did not need the .sdata definition at all: they went

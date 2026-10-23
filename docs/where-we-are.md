@@ -146,6 +146,10 @@ anything else is reading `asm/nonmatchings`.
    relocated halfwords and 26-bit jump targets. It prints `MATCH` or
    `N DIFF` plus a side-by-side. This is the fast loop; it never touches
    `build/`.
+3b. When the logic is right and only shapes are wrong, hand it to
+   `python3 tools/decomp/search.py zz_foo.c <unit> <func>` rather than
+   iterating by hand: a verify cycle is 0.7s, so a few hundred variants is
+   minutes of compute and no thinking. It will not rescue wrong logic.
 4. When it says MATCH, replace the `INCLUDE_ASM` in `csrc/`, run
    `tools/decomp/guard.py` (nothing lost) and `make check` (byte-identical).
 5. Commit, with the load-bearing source shapes named in the message and
@@ -162,6 +166,8 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 | `guard.py` | no function was dropped from `csrc/` |
 | `dump.sh file.c` | compile with gcc's RTL dumps and collect them |
 | `annotate.py UNIT FUNC` | which levers this function's listing can possibly need, with costs and ruled-out shapes; `--sites` to print the matching instructions, `--self-test` to check every signature still fires on a function known to need it |
+| `search.py BASE.c UNIT FUNC` | sweep the local source transforms this compiler is sensitive to -- declared widths, `(s16)` casts, splitting a statement in two, `<` against `>`, the `& 1` mask -- scoring each with verify.py. Greedy by default, `--sites` to list the candidate changes, `--exhaustive` when there are few. Prints what each accepted change was worth, which is the table a near-miss header wants |
+| `nmcheck.py` | every `docs/near-misses/*.c` still compiles and still agrees with the word/diff count in its own header |
 
 **When a function is one or two words short, compare the internal branches'
 immediate fields against the target's**, rather than reading the diff. Every

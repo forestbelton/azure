@@ -215,9 +215,10 @@
  *  - CompMatrix and RotAverage4 are already prototyped in include/structs.h by
  *    func_800463EC, with `s32 *` primitive arguments. The local copies this
  *    file used to carry are DELETED: they are a hard compile error now
- *    (`conflicting types for 'RotAverage4'`). There is no s32*/u32*
- *    disagreement to resolve -- the s32* form is byte-identical here, and the
- *    u32* spelling recorded earlier was simply obsolete.
+ *    (`conflicting types for 'RotAverage4'`). There is no
+ *    s32-versus-u32 pointer disagreement to resolve -- the `s32 *` form is
+ *    byte-identical here, and the `u32 *` spelling recorded earlier was
+ *    simply obsolete.
  *
  * The shimmed typedefs below are layout-identical to what the real names must
  * become, so the codegen is unaffected, but this was never re-verified under
