@@ -66,6 +66,7 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_80053DCC | unk_1C540 | 9 DIFF | `D_8008480C = a;` as a scalar and as `D_8008480C[0]`, both with `func_80054D64(a)` after. The target has the `sh` in the `jal`'s delay slot. |
 | func_80053DF0 | unk_1C540 | 9 DIFF | Same shape as func_80053DCC and fails identically, so these are ONE family, not two puzzles: store a halfword into a global, then call a function with the same argument. Solve either and both land. |
 | func_80053DA8 | unk_1C540 | 6 DIFF | `return func_80055778(a)` with `s16`/`u16`/`s32` signatures. structs.h declares it `void(s32)`, and the target sign-extends the callee's result (`sll 16` / `sra 16`) before returning, so the result is used despite the `void`. |
+| func_800368D0 | unk_72A8 | 10/10 words, 2 DIFF | The target loads `+0x44` (a pointer) before `+0x4A` (an s16 offset); every spelling loads the s16 first. Tried: one expression with 0x44 first, two locals with 0x44 declared first, and two locals with 0x4A first. Source order does not drive it. |
 | func_8004B4DC | unk_1C540 | 9 DIFF | A `while (1) { n++; if (p[0] & 0x80) break; p += 0xC; }` count loop. The target advances `p` in the branch's delay slot, so it is advanced on the exiting iteration too. |
 
 ## Deferred for addressing, not for shape

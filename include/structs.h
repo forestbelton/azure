@@ -1076,6 +1076,7 @@ extern u8  D_80071298[];
 extern u32 D_80071250[];
 extern u8  D_80083D08[];
 extern Unk41284 D_80080B9C;
+extern Unk41284 D_80080C1C;
 extern u8  D_80071684[];
 extern u8  D_800717BC[];
 extern s16 D_8008480A[];

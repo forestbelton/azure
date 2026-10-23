@@ -6,7 +6,11 @@ void func_8005C9D4(void) {
     func_8005A428();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_301D4", func_8005C9F4);
+void func_8005A4E8(u8, u8, u8);
+
+void func_8005C9F4(u8 a, u8 b, u8 c) {
+    func_8005A4E8(a, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_301D4", func_8005CA1C);
 
