@@ -133,7 +133,24 @@ s32 func_80034FE4(u32 *p) {
     return p[39] != (u32) func_80038A00;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034FFC);
+/* The split spelling: the scalar D_80082E6A's load is one insn before maspsx
+   and comes out in one register, where the target has the pair across two. */
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+
+s32 func_80034FFC(u32 *p) {
+    s32 r;
+
+    /* The `!= 2` arm is written FIRST so the bare `return func_80034FE4();`
+       ends up last in memory, which is where the target has it. */
+    if (D_80082E6Aa[0] != 2) {
+        r = 0;
+        if (func_80034FE4(p) != 0 || D_8006ADE8[0] != 0) {
+            r = 1;
+        }
+        return r;
+    }
+    return func_80034FE4(p);
+}
 
 void func_80035060(u8 *p, u32 v) {
     p[3] = v;
@@ -190,10 +207,10 @@ void func_800352D8(void) {
     func_80034FD0((u32 *) D_80082A38);
 }
 
-void func_80034FFC(s16 *);
+s32 func_80034FFC(u32 *);
 
 void func_800352FC(void) {
-    func_80034FFC(D_80082A38);
+    func_80034FFC((u32 *) D_80082A38);
 }
 
 void func_80035320(u32 v) {
@@ -296,7 +313,20 @@ void func_80035ABC(u8 *p, u8 *q) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035AF8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035BE0);
+void func_8003C7D8(u8, s8);
+void func_8003C160(void);
+void func_80035C44(u8 *, u8 *);
+
+void func_80035BE0(u8 *p) {
+    u16 *c = (u16 *) (p + 0x64);
+
+    *c = *c - 1;
+    if ((s16) *c < 0) {
+        func_8003C7D8(p[0x78], *(s8 *) (p + 0x79));
+        func_8003C160();
+        *(u32 *) (p + 0x68) = (u32) func_80035C44;
+    }
+}
 
 void func_80035C80(void);
 
