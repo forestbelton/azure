@@ -81,7 +81,8 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| near-misses, written and measured | 9 | logic reproduced; a register or scheduling difference is left |
+| open near-misses | 4 | logic reproduced; a register or scheduling difference is left |
+| walls, re-examined and recorded | 5 | do not reopen without a new idea |
 | not yet written | 3 | nothing structural in the way |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
@@ -89,16 +90,27 @@ function.** Each is either ordinary decompilation or a documented near-miss.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
-| function | unit | words | DIFF | note |
-|----------|------|-------|------|------|
-| func_80042A80 | unk_154BC | 93 of 93 | 1 | one bit |
-| func_80041E70 | unk_154BC | | 4 | its header argues it is closed |
-| func_80042900 | unk_154BC | | 5 | |
-| func_8004437C | gprel_17B7C | 100 of 100 | 8 | **a wall**, diagnosed at pseudo level; do not reopen without a new idea |
-| func_800453E0 | gprel_18B40 | 533 of 533 | 5 | func_80045CC4's unresolved mask tension |
-| func_8003CCB0 | gprel_10308 | 272 of 272 | 29 | two spots that cancel in the word count |
-| func_80047054 | unk_19434 | | 30 | argued unreachable at runtime |
-| func_80045CC4 | unk_19434 | 436 of 437 | 47 | the mask tension's other instance |
+Sorted by how open they look, not by DIFF -- a wall at 8 words is further away
+than an open one at 47.
+
+| function | unit | words | DIFF | state |
+|----------|------|-------|------|-------|
+| func_80042A80 | unk_154BC | 93 of 93 | 1 | open; one bit, read it literally before sweeping |
+| func_80041E70 | unk_154BC | | 4 | open, though its header argues it is closed |
+| func_80042900 | unk_154BC | | 5 | open |
+| func_8003CCB0 | gprel_10308 | 272 of 272 | 29 | open; two spots that cancel in the word count |
+| func_800453E0 | gprel_18B40 | 533 of 533 | 5 | **wall-ish**: the hoist, split, association and alias families are all swept |
+| func_80045CC4 | unk_19434 | 436 of 437 | 47 | **wall-ish**: the same mask tension, 4 of the 47; the rest is argued separately |
+| func_8004437C | gprel_17B7C | 100 of 100 | 8 | **WALL**, diagnosed at pseudo level |
+| func_800407C0 | unk_12DEC | 178 of 178 | 62 | **WALL**, a real copy preference plus a 5x priority gap |
+| func_80047054 | unk_19434 | | 30 | **WALL-ish**, argued unreachable at runtime |
+
+**The four marked WALL or wall-ish have each been re-examined with the levers
+that closed the others, and the negative results are recorded in their files.**
+Do not reopen one without an idea that is not already on its list; three
+sessions have now been spent re-deriving entries that were already written
+down. The two "mask tension" entries share one cause and are 4 and 5 words
+apart from matching -- solving it in either closes both.
 
 **Read the near-miss file before touching one.** Each lists the shapes already
 measured with their word costs, and most record a `search.py` sweep that found
@@ -116,7 +128,7 @@ assignment into two statements that compile to the same single insn. See
 been written off at "2 DIFF, a deliberate price" and "21 DIFF, one coupled
 permutation" before that.
 
-### Not yet written (8)
+### Not yet written (3)
 
 | function | unit | instructions | note |
 |----------|------|--------------|------|
