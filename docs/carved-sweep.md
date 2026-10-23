@@ -143,6 +143,11 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_80057A50 | unk_1C540 | 17/17 words, 2 DIFF | The two address materialisations interleave in the target (`lui`, `lui`, `addiu`, `lh`) and not here. A local for the index does not move it. |
 | func_80059D1C + func_80059D60 + func_8005C818 | unk_1C540 | 14-18 DIFF | Sweeps over D_80085FA8's 0x50-byte entries. The struct spelling fixes the displacements (a byte array biases the induction variable), and what is left is the copy of the loop bound into `$a2` plus the register cascade behind it. |
 | func_80047738 + func_8004827C | unk_1AF38 | 17 and 12 DIFF | Both shapes are close; func_8004827C's target copies the parameter into `$v0` before using it, which no spelling here reproduces. |
+| func_8003C890 | unk_72A8 | 20/21 words, 13 DIFF | Two early exits that share one `return 0`, which the target reaches by fall-through from the second test and by branch from the first. `if (b >= 0) { t = f(); if (t != 0) return ...; } return 0;` and the two-early-return form both come out with the second branch inverted. |
+| func_8004A784 | unk_1C540 | 23 DIFF | `(u8 *) 0x800133E8 + i * 19` guarded by `i < 0x14`, where i comes from func_8004A6C0 -- and 20 entries of 19 bytes from 0x800133E8 is exactly the 0x80013564 that func_8004A6C0 scans, so the two tables are one structure. Depends on the same constant-base handling as func_8004A6C0. |
+| func_8005C668 | unk_1C540 | 11 DIFF | Builds a 0x40-byte block on the stack (a word from D_80073740, the constant 3, two halfwords) and passes its address. |
+| func_800489F4 | unk_1AF38 | not measured | func_80047738 plus an `ori 0x20`; park it with that one. |
+| func_80049E1C | unk_1C540 | 18 DIFF | A clamp: `x = a + d`, then `x` against `n - 1` when d >= 0 and against 0 when it is negative. Same family as func_80049DE8. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather
