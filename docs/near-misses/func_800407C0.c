@@ -87,11 +87,47 @@
  * spelling; a single exit for branch B via goto; `c = *src; src++;` split;
  * `(c >> 4) == 0` instead of `(c & 0xF0) == 0`; `size` as u32; `w` as u8.
  *
+ * RE-EXAMINED 2026-10-23 with the levers that closed four other functions,
+ * and **the unreachability argument survives.** The new material was section
+ * 3's `regs_someone_prefers` entry and the func_8003E4FC finding that a
+ * hard-reg COPY preference can be deleted by changing how the argument is
+ * spelled -- which is exactly the shape of this blocker, since `end`'s `6`
+ * comes from `size` being copied into $a2 as memcpy's third argument and
+ * propagating back through the `end = d + size` addu. Four attempts on that,
+ * all 178 words:
+ *
+ *  - a SECOND function-scope `size2` used only in the memcpy arm, so `end`'s
+ *    chain never touches the value that is copied into $a2: **124 DIFF**, and
+ *    the same declared before `size`: 124. This is the strongest confirmation
+ *    yet that one shared `size` is right -- the note above had only ruled out a
+ *    block-local, which fails for a different reason (local-alloc grabs $s0).
+ *  - memcpy's third argument spelled as the expression instead of the variable,
+ *    `memcpy(d, src + 2, src[0] + (src[1] << 8))`: 62 DIFF and no extra word,
+ *    because cse folds it straight back to `size`'s pseudo. That is the
+ *    func_8003E4FC mechanism running the other way: there, writing the variable
+ *    where a literal belonged CREATED a copy preference cse had manufactured;
+ *    here the copy is genuine, so no spelling removes it.
+ *  - `end = d; end += size;` to break the arithmetic chain into two sets: 62,
+ *    unchanged. Preferences propagate through arithmetic regardless of the
+ *    number of sets.
+ *
+ * So both halves of the original argument hold: the preference is created by a
+ * real copy of a genuinely shared value, and the priority gap that would have
+ * to close is 0.54 against 2.55. **Treat this as a wall.** The one thing that
+ * would change the picture is a reason to believe `size` was NOT shared in the
+ * original -- but sharing is worth 50 words, and not sharing is worth 62 more
+ * differing ones, so the evidence is firmly against it.
+ *
  * Integration, when something does crack it: structs.h needs
  * `u8 *func_800407C0(u8 *, u8 *);` in place of
- * `void func_800407C0(u8 *, u32 *);`, and `void *memcpy(void *, const void *,
- * s32);` next to bzero -- memcpy is still undeclared project-wide, the same gap
- * func_80041344 hit. The one call site needs a (u8 *) cast on its second
+ * `void func_800407C0(u8 *, u32 *);`, and a memcpy declaration that
+ * agrees with this file's. **memcpy IS now declared project-wide** -- it went
+ * into include/structs.h as `void *memcpy(void *, const void *, u32);` when
+ * func_80041588 landed -- so this file's local `s32` version now draws
+ * "conflicting types for built-in function `memcpy'" from cc1psx. That is a
+ * warning, not an error, and the 62 reproduces either way; but whichever
+ * signature this function needs has to be reconciled with func_80041588's
+ * before it can land. The one call site needs a (u8 *) cast on its second
  * argument.
  */
 

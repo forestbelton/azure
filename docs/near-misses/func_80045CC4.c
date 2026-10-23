@@ -126,8 +126,32 @@
  * promoting it to a global allocno would push it to a callee-saved register,
  * not to $a0.
  *
- * THE MASK TENSION, 4 words, still open. The two-set lever was probed for it
- * and does not separate: two sets of the 0xFF000000 pseudo would stop loop.c
+ * THE MASK TENSION, 4 words, still open -- and the one family that cracked the
+ * SAME tension in func_800453E0 has now been measured against it and does not
+ * reach it. Baseline 47, all 436 words unless noted:
+ *
+ *  - `c04 = p->unk_C0 * 4;` hoisted out of the OT address in statement 1: 48.
+ *    In statement 2: 50. In both: 434 words, 202 DIFF. With the natural operand
+ *    order: 437 words, 73.
+ *  - the natural operand order alone, for the record: **437 words** -- the
+ *    right count, which this source is one short of -- and 68 DIFF.
+ *
+ * Why that family was worth trying, and why it failed: in func_800453E0
+ * hoisting an arithmetic SUBTERM of the OT address took the same tension from
+ * 10 differing words to 5, and the mechanism is live length rather than
+ * references -- local-alloc's `qty_compare` compares `qty_death - qty_birth`
+ * and nothing else, so a subterm hoisted into its own local is born one insn
+ * earlier and the block-local ordering changes. But there the address had
+ * THREE terms (`p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4`) and only the third
+ * one worked; hoisting `p->unk_C0 * 4` measured 11 against a 10 baseline there
+ * too. This address has only two terms, so the term that moved it does not
+ * exist here. See `docs/matching-levers.md` section 3 for the lever and its two
+ * preconditions, and `docs/near-misses/func_800453E0.c` for the full sweep.
+ *
+ * So the tension is now unresolved in two functions with the hoist, split,
+ * association and alias families all swept against it, and it is worth 4 words
+ * here against 5 there. Earlier probes, for completeness. The two-set lever
+ * does not separate: two sets of the 0xFF000000 pseudo would stop loop.c
  * hoisting it, but the only word-neutral place for them lands the merged `lui`
  * about 80 words earlier than the target's .L800462AC, and two sets in the
  * same block as the use are collapsed by cse.
