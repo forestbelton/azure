@@ -53,11 +53,44 @@
  * in it, which is what `set_preference` records -- and R leaves
  * `regs_someone_prefers[c]` without anybody's priority moving.
  *
- * The obvious caveat, from the same function: `prune_preferences` first OR-s
- * `call_used_reg_set` into the conflict set of any allocno that CROSSES A CALL
- * and deletes every caller-saved preference it had. $v1 and $a2 are
- * caller-saved, so this escape is only available if `c`'s live range does not
- * cross the memcpy. Check that in the .greg dump before spending runs on it.
+ * CAVEAT CHECKED, and the escape SURVIVES it. `prune_preferences` OR-s
+ * `call_used_reg_set` into the exclusion set of any allocno that CROSSES A CALL
+ * (global.c:851-854, an if/else on `allocno_calls_crossed[allocno] == 0`) and
+ * then AND_COMPLs all three preference sets with it, deleting every
+ * caller-saved preference. $v1 and $a2 are caller-saved, so the escape needs
+ * `c` not to cross the memcpy.
+ *
+ * It does not. The .greg dump does NOT print `allocno_calls_crossed`, and the
+ * hard registers in its `conflicts:` lines are not call-clobber marks, so the
+ * conflict lists cannot answer this -- but `find_reg` can. At global.c:923-926
+ * it COPIES `call_used_reg_set` into `used1` for a call-crossing allocno, i.e.
+ * excludes every caller-saved register outright. Allocnos 86 and 87 are both
+ * assigned hard reg 4 ($a0), which IS caller-saved, so neither crosses a call.
+ * (The one loophole is the `accept_call_clobbered` retry at 921-922, which is a
+ * last-resort pass; it would show as a spill, and there is none here.)
+ *
+ * And the .greg dump shows exactly why the subtraction currently does nothing:
+ * `;; 114 preferences: 3 6` for `end`, and allocnos 86 and 87 have **no
+ * `preferences:` line at all**. So regs_someone_prefers[86] = {3,6} minus the
+ * empty set = {3,6}, 86 avoids both and takes $a0. There is nothing to subtract
+ * because `c` prefers nothing.
+ *
+ * SO THE TARGET IS NARROW AND NAMED: give allocno 86 or 87 a hard-register
+ * preference for 3 ($v1) or 6 ($a2). `set_preference` records one from a COPY
+ * relating the pseudo to a hard register, which from C means an argument
+ * position or a return value. That makes reg 3 effectively unreachable ($v1 is
+ * only the high word of a 64-bit return) and leaves reg 6 = $a2 = **the third
+ * argument of a call** as the single live route -- and this function has
+ * exactly one call, the memcpy, whose third argument is the count. So the
+ * question to answer is whether the original's memcpy count expression is
+ * written in terms of the value that becomes `c`/`b`, rather than in terms of
+ * `size`.
+ *
+ * That is a much narrower claim than this header's original one. It is not
+ * "no spelling changes end's preference" (true, and the wrong side of the
+ * conflict); it is "the pushed-off allocno needs a preference, and only one
+ * argument slot can give it one". UNMEASURED -- the .greg evidence above is
+ * solid, the source experiment has not been run.
  *
  * Independently, the target's order is out of reach arithmetically: `m` would
  * have to be allocated before `n`, and their floor_log2(refs)*refs/live_length
