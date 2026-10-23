@@ -84,7 +84,7 @@ segments:
       - [0x6b60, data, psyq/libcd]
       - [0x6e44, data, psyq/libgpu]
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
-      - [0x72a8, bin]
+      - [0x72a8, c, unk_72A8]
       - [0x101f8, asm, main]
       # main's unreachable epilogue (0x102a8..0x102c4) belongs to main, not to
       # a C file: main ends in an infinite loop and splat split those seven

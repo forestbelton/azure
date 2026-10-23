@@ -15,7 +15,14 @@ have = set()
 for f in glob.glob(PROJ + '/csrc/*.c'):
     t = open(f).read()
     have |= set(re.findall(r'INCLUDE_ASM\("[^"]+", (\w+)\)', t))
-    have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*\)\s*\{', t, re.M))
+    # The parameter-list class MUST be lazy. Greedy `[^;]*` crosses newlines,
+    # so a run of consecutive bodyless definitions -- which splat emits for
+    # trivially empty functions, e.g. two `void func_X(void) {}` in a row --
+    # collapses into ONE match and only the first name is captured. That made
+    # guard.py report present functions as MISSING, which is the opposite of
+    # its job. Lazy matching stops at the nearest `) {` and still backtracks
+    # correctly through a nested `(...)` in a parameter list.
+    have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', t, re.M))
 missing = sorted(known - have)
 # Count macro INVOCATIONS, not the bare word: `INCLUDE_ASM` also appears in
 # prose inside csrc comments, which silently inflated this project's headline
