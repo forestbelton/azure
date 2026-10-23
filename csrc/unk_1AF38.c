@@ -2,7 +2,20 @@
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047738);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047784);
+void func_80047738(u8 *, s32, s32);
+
+/* s32 parameters with explicit `(s16)` casts at the call, because the caller
+   func_80048374 already declares it that way and sign-extends its own s16s
+   before passing them. The casts are the sll/sra pair here. */
+void func_80047784(u8 *p, s32 b, s32 c) {
+    s32 v;
+
+    func_80047738(p, (s16) b, (s16) c);
+    v = **(u16 **) p / D_80080A84;
+    *(u16 *) (p + 0x14) &= 0x9FFF;
+    p[5] = v;
+    func_80047694((UnkSlot *) p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800477F4);
 
@@ -19,7 +32,15 @@ void func_800479AC(void) {
     bzero(D_80083D08, 0x30);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800479D4);
+void func_800479D4(u8 *a, u8 *b, u16 c) {
+    s32 i = (s16) c;
+    s32 *r;
+
+    r = func_80043704(i, (s32) a);
+    func_8003E4FC(6, (u8 *) r, 0);
+    r = func_800437A4(i, (s32) b);
+    func_8003E4FC(6, (u8 *) r, 0);
+}
 
 u8 *func_80047A44(s32 i) {
     return &D_800FC000[i * 0xD000];
