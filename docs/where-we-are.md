@@ -54,11 +54,48 @@ So the overlays hold roughly 8.4 MB of code against the executable's 216 KB.
 all, `town.bin` has one `bin` blob covering all 16 MB, and `main.bin`'s 28
 subsegments are all `bin`.
 
+### And most of slus_006.14 itself is not accounted for either
+
+The scope caveat above is about the overlays. There is a second one inside the
+resident executable, and it is easy to miss because splat's summary line
+("Split 98 KB (18.72%) in defined segments") does not break the remainder down.
+Measured in 4 KB chunks over every `bin` subsegment, classifying each by zero
+density, Shift-JIS density, MIPS prologue/`jr $ra` count and Shannon entropy:
+
+| what | bytes | % of the 512 KB |
+|------|-------|-----------------|
+| high-entropy data (entropy 7.98, almost certainly packed assets) | 175,552 | 33.5% |
+| **code -- PSY-Q library, unidentified** | **123,484** | **23.6%** |
+| structured data | 95,180 | 18.2% |
+| C translation units (incl. the 5 remaining stubs inside them) | 44,112 | 8.4% |
+| identified library/asm (`psyq/*`, `main`) | 51,852 | 9.9% |
+| Shift-JIS text | 30,144 | 5.7% |
+| header, data, .rodata, split strings | ~4,000 | 0.7% |
+
+**So about 120 KB of this file is code nobody has identified -- roughly three
+times the volume of the game code that is decompiled.** It is not game code: it
+sits in the library regions, mostly 0x0072A8-0x0101F8 (36 KB, 348 prologues,
+immediately *before* `main`, so crt0 plus linked library) and
+0x01C540-0x0301A8 (81 KB, 625 prologues, interleaved with the `libsnd` and
+`libspu` modules splat already places by content). The 51 KB already attributed
+as `asm, psyq/*` is where that identification succeeded.
+
+This is not a hole in the decompilation in the usual sense -- a matching project
+links the SDK libraries from the original `.lib` files rather than decompiling
+them -- and the machinery for it is already here: `psyq/lib/*.lib`,
+`azure lib --list`, `azure libmatch`, `azure libscan`, and `tools/lib2ar.sh` to
+turn a library into a GNU ar archive for `nm`/`objdump` (that one needs
+pcsx-redux's `psyq-obj-parser`, which is not vendored). Identifying more of
+those 120 KB by content is mechanical work with a known method and would move
+the "unknown" figure a long way without touching a single game function.
+
 What the resident engine being nearly finished *does* mean: overlay code calls
 into it, and the 23 called-but-undefined functions above 0x8008875F are the
 engine calling out, so the engine genuinely had to come first. But the honest
 framing is "the engine is nearly done, the game content is unmapped", not "the
-game is 85% decompiled". See `docs/overlays.md`.
+game is 85% decompiled" -- and the 186 of 191 figure is a count of *this
+executable's own functions*, which is 8.4% of its bytes. See
+`docs/overlays.md`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
 `head`: that masks make's exit code, and a broken state was committed that way
