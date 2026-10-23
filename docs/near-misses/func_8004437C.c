@@ -112,12 +112,23 @@
  *    polarity and block layout are right too. Between them, every structural
  *    degree of freedom in that block is pinned to what this source has.
  *
- * THE ONE UNTRIED ESCAPE, for whoever has the budget: a cse run boundary
+ * THE ONE UNTRIED ESCAPE IS NOT CONSTRUCTIBLE, checked 2026-10-23, so this
+ * function now has no open idea at all. The escape was a cse run boundary
  * inside region 1 -- identical `if`/`else` arms between a single-set
- * `u32 **af4 = D_80080AF4;` and its uses, which is free in words (section 1)
- * and would let the local survive as one pseudo. Not tried because the same
- * construct is a sched1/sched2 block split in a block whose 17 words are
- * currently exact, so it has to buy back more than it spends.
+ * `u32 **af4 = D_80080AF4;` and its uses, which section 1 makes free in words
+ * and which is exactly what lets func_8003CCB0's two-set pointer locals survive
+ * cse. But section 1's lever duplicates a statement into the arms of an
+ * **existing** `if`, and region 1 is the function's FIRST comparison: there is
+ * no antecedent condition before it to duplicate into, and introducing one
+ * costs the test. (The stated worry -- that the construct is also a
+ * sched1/sched2 block split in a block whose 17 words are exact -- would have
+ * applied on top of that.)
+ *
+ * Also checked against the newer section 6 finding that a ONE-set
+ * pointer-to-symbol local survives unfolded when its uses are
+ * negative-displacement: these uses are `D_80080AF4[D_80080AFC]` with a
+ * non-constant index of 0 or 1, and biasing the base to `&D_80080AF4[1]` to get
+ * a negative displacement adds a subtraction, so it is not free either.
  *
  * The unit is built at -G8 and D_80080AF4 must stay an INCOMPLETE array; see
  * include/structs.h and the unit header for why.
