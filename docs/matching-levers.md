@@ -1566,6 +1566,17 @@ whose `addiu %lo` sits in a branch delay slot with the `lui` elsewhere
 rather than `extern u8 X[];` is what picks the first form. Only the size CLASS
 is evidence -- small enough for -G8 -- not the exact size.
 
+### A base pointer assigned before a call lives in a callee-saved register
+
+`u8 *p = (u8 *) SYM;` ahead of two calls costs three words -- the `sw`, the
+`lw` and the frame slot for `$s0` -- that a target which materialises the same
+address AFTER the calls does not spend. The fix is to move the assignment below
+them, which is a one-statement edit worth 15 differing words on func_8003B92C
+and 3 words plus a register on func_800540A8. The same reading applies to any
+address or loaded value whose first use is after a call: if the listing has no
+callee-saved register in the frame, nothing in the source may be live across
+the call.
+
 ### One call after the join, not a call in each arm
 
 func_800494B4 sets a pointer in each arm of an if and calls once after it. With
