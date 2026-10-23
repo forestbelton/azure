@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**175 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 16 are
+**178 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 13 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
 authority on that count; this file has been wrong about it before.
 
@@ -77,12 +77,12 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 16 remaining stubs
+## The 13 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
 | near-misses, written and measured | 9 | logic reproduced; a register or scheduling difference is left |
-| not yet written | 6 | nothing structural in the way |
+| not yet written | 3 | nothing structural in the way |
 | not a function | 1 | func_8003CAA8, `main`'s unreachable epilogue |
 
 **Nothing is structurally blocked any more.** Every remaining function is
@@ -98,7 +98,6 @@ either ordinary decompilation or a documented near-miss.
 | func_8004437C | gprel_17B7C | 100 of 100 | 8 | **a wall**, diagnosed at pseudo level; do not reopen without a new idea |
 | func_800453E0 | gprel_18B40 | 533 of 533 | 5 | func_80045CC4's unresolved mask tension |
 | func_8003CCB0 | gprel_10308 | 272 of 272 | 29 | two spots that cancel in the word count |
-| func_80042BDC | unk_154BC | 543 of 543 | 14 | all in case 10; closing it lets unk_154BC's table land |
 | func_80047054 | unk_19434 | | 30 | argued unreachable at runtime |
 | func_80045CC4 | unk_19434 | 436 of 437 | 47 | the mask tension's other instance |
 
@@ -122,11 +121,8 @@ permutation" before that.
 
 | function | unit | instructions | note |
 |----------|------|--------------|------|
-| func_8003D92C | unk_108F0 | | seven small-scalar `$gp`-window hazards |
-| func_8003E34C | unk_11940 | | the +0/+1/+2/+3 shape |
 | func_8003F2A4 | unk_12A70 | | was dual-mode `$gp`; use the size-record route |
 | func_8003F368 | unk_12A70 | | ditto, and may not need it -- see below |
-| func_800407C0 | unk_12DEC | | has a near-miss file too |
 | func_8003E758 | unk_11F0C | 698 | the largest left; also dispatches through jtbl_8002D5C0 |
 
 **func_8003F368 is worth a look before reaching for any directive.** Its
@@ -136,7 +132,10 @@ reached absolutely" may just be the original writing bytes through one
 materialised base, `((u8 *) &D_80081450)[1]`, which is ordinary C needing no
 per-access mode at all.
 
-**func_8003E758 needs both solved blockers at once**: its table is the
+**func_8003E758 is the last jump-table function**, and the only one of the
+three runs still raw. Two of the three are placed -- unk_14934's and
+unk_154BC's -- so this one follows the same two-line spec change. It needs both
+solved blockers at once: its table is the
 28-entry jtbl_8002D5C0 at 0x8002D5C0, the first of the three runs, and
 `unk_11F0C` contributes exactly that one table -- so when it matches, the
 placement is a two-line spec change like the others.

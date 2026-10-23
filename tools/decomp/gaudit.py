@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""gaudit.py -- check the carved -G8/-G2 units for symbols that would come out
-$gp-relative when the target reaches them absolutely.
+r"""gaudit.py -- two addressing checks that `verify.py` structurally cannot do.
 
-Run it before landing a function into a carved unit, and after any change to a
-`-G` assignment in the Makefile.
+CHECK 1: the carved -G8/-G2 units, for symbols that would come out
+$gp-relative where the target reaches them absolutely.
 
 The mechanism, from docs/addressing-and-translation-units.md: gas emits a
 GPREL16 relocation for any symbol whose `.extern SYM,size` record gives a size
@@ -25,6 +24,22 @@ its offset. An earlier version of this rule had that backwards.
 
 This only looks at functions still in assembly. A landed function's addressing
 is already proven by `make check`, which is the real authority.
+
+CHECK 2: the `__asm__(".sdata\n\t.size SYM,N\n\t.text")` size records, which
+are FILE-SCOPE. maspsx applies one to every access of that symbol in the
+translation unit, so a unit cannot have the symbol $gp-relative in one function
+and absolute in another -- and if a second function in the unit wanted it
+absolute, its accesses are silently rewritten and that function loses a word
+per site. That is how func_8003E34C and func_8003E39C were briefly left in one
+unit: func_8003E39C lost 5 words, the whole image shifted by -0x14 and the
+jump-table contents changed. `make check` caught it; `verify.py` could not,
+because it compiles one function at a time.
+
+So for each size record, this reports every OTHER function in the same unit
+that mentions the symbol. Each one is a site to check by hand -- some will
+genuinely want $gp-relative addressing too, so the report is a prompt rather
+than a verdict. It reads the pre-maspsx compiler output under build/csrc/, so
+it needs a build; it says so rather than guessing if one is missing.
 """
 import glob
 import os
@@ -38,6 +53,9 @@ PROJ = os.environ.get(
 
 SIZES = {"u8": 1, "s8": 1, "u16": 2, "s16": 2, "u32": 4, "s32": 4, "f32": 4}
 GP = 0x80080994
+
+SDATA_RE = re.compile(r'__asm__\s*\(\s*"\.sdata(.*?)\.text"\s*\)', re.S)
+SIZE_RE = re.compile(r"\.size\s+(D_[0-9A-Fa-f]+)\s*,\s*(\d+)")
 
 
 def carved_units(makefile):
@@ -65,7 +83,8 @@ def scalar_decls(header):
     }
 
 
-def main():
+def check_carved_units():
+    """CHECK 1 -- see the module docstring."""
     mk = open(os.path.join(PROJ, "Makefile")).read()
     hdr = open(os.path.join(PROJ, "include", "structs.h")).read()
     units = carved_units(mk)
@@ -101,7 +120,80 @@ def main():
 
     print("%d carved unit(s), %d scalar extern(s) declared, %d problem(s)"
           % (len(units), len(scal), problems))
-    return 1 if problems else 0
+    return problems
+
+
+def size_records():
+    """{unit: {symbol: size}} for every file-scope size record in csrc/."""
+    out = {}
+    for path in sorted(glob.glob(os.path.join(PROJ, "csrc", "*.c"))):
+        syms = {}
+        for block in SDATA_RE.findall(open(path).read()):
+            for sym, size in SIZE_RE.findall(block):
+                syms[sym] = int(size)
+        if syms:
+            out[os.path.basename(path)[:-2]] = syms
+    return out
+
+
+def functions_mentioning(unit, syms):
+    """{symbol: [function, ...]} from the unit's pre-maspsx compiler output."""
+    path = os.path.join(PROJ, "build", "csrc", unit + ".s")
+    if not os.path.exists(path):
+        return None
+    hits = {s: [] for s in syms}
+    current = None
+    for line in open(path, errors="replace"):
+        m = re.match(r"\s*\.ent\s+(\S+)", line)
+        if m:
+            current = m.group(1)
+            continue
+        if re.match(r"\s*\.end\b", line):
+            current = None
+            continue
+        if current is None:
+            continue
+        for s in syms:
+            # whole-word, so D_800814D0 does not match D_800814D00
+            if re.search(r"\b%s\b" % re.escape(s), line) and current not in hits[s]:
+                hits[s].append(current)
+    return hits
+
+
+def check_size_records():
+    """CHECK 2 -- see the module docstring."""
+    records = size_records()
+    if not records:
+        return 0
+    print()
+    problems = 0
+    missing = []
+    for unit, syms in sorted(records.items()):
+        hits = functions_mentioning(unit, syms)
+        if hits is None:
+            missing.append(unit)
+            continue
+        for sym, fns in sorted(hits.items()):
+            if len(fns) > 1:
+                problems += 1
+                print("%s: size record on %s, but %d functions mention it:"
+                      % (unit, sym, len(fns)))
+                for fn in fns:
+                    print("    %s" % fn)
+                print("    the record is FILE-SCOPE -- check that every one of those")
+                print("    wants %s $gp-relative, or carve them apart" % sym)
+                print()
+    if missing:
+        print("no build/csrc/*.s for %s -- run make, then re-run this check"
+              % ", ".join(missing))
+    nsyms = sum(len(s) for s in records.values())
+    print("%d size record(s) over %d unit(s), %d to check by hand"
+          % (nsyms, len(records), problems))
+    return problems
+
+
+def main():
+    return 1 if (check_carved_units() + check_size_records()) else 0
 
 
 if __name__ == "__main__":

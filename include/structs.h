@@ -1247,7 +1247,7 @@ void func_800AC4C4(void);
 void func_8003F9E0(UnkEntry *);
 s32  func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
-void func_80042BDC(s8 *, s8);
+void func_80042BDC(s8 *, s16);
 void func_800482C8(Unk800777AC *, u32 *);
 void func_8005FFFC(void);
 s32  func_80064584(s32);

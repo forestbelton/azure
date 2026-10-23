@@ -239,11 +239,20 @@ Both are now landed, which settles it.
 |----------|------|-------|------|--------|
 | func_80041344 | unk_14934 | 145 of 145 | **MATCH** | `csrc/unk_14934.c` |
 | func_80041588 | unk_14934 | 164 of 164 | **MATCH** | `csrc/unk_14934.c` |
-| func_80042BDC | unk_154BC | 543 of 543 | 14 | `docs/near-misses/func_80042BDC.c` |
+| func_80042BDC | unk_154BC | 543 of 543 | **MATCH** | `csrc/unk_154BC.c` |
 | func_8003E758 | unk_11F0C | not started, also `$gp`-blocked | | |
 
-**Both unk_14934 functions now match**, so that unit's run is placeable; see
-the recipe above. What closed them was one mechanism, and it is worth stating
+**Three of the four now match and two of the three runs are placed** --
+unk_14934's at 0x8002D630 and unk_154BC's at 0x8002D67C, both confirmed by
+`make check`. Only jtbl_8002D5C0 is still raw bin, waiting on func_8003E758.
+
+One detail the recipe above needs spelling out, learnt placing the second run:
+under `ld_legacy_generation` a segment emits ALL of its `.data` before its
+`.rodata`, so a run must be the **only** subsegment of its segment -- a
+`[0xe7c, bin]` left ahead of `[0xe7c, .rodata, unk_154BC]` would be placed
+first and the table would land 0x5C0 bytes late. The bin therefore moves into
+the *following* segment rather than staying put, and `--modes ld bin` is needed
+(not just `ld`) so the relocated bin's asset is regenerated. What closed them was one mechanism, and it is worth stating
 plainly because two sessions worked around it instead:
 
 * The switch index, the flag word and the loop bounds are **one source
@@ -266,14 +275,12 @@ another variable leaves both allocnos carrying it. What works is winning the
 allocation ORDER, and the cheapest way to move a priority is a reference the
 compiler emits no instruction for.
 
-func_80042BDC's 14 are all in one block of case 10, its 180-instruction
-transform-revert arm; every other arm matches word for word, and the
-all-ternary form it now uses is almost certainly the original shape. Its
-near-miss file names the one word to chase (a `addu $a0,$s1,$zero` the target
-emits twice around a join and this source emits once) and the three register
-chains that follow from it. It is also **not** a command-stream walker, so its
-record is the existing `Unk42710` rather than `Unk41344`, whose size floor this
-raises from 0x8C to at least 0xAA.
+func_80042BDC is landed, but **its load-bearing shapes are not written up**:
+the subagent that closed it was stopped by a usage limit immediately after
+reporting the match, so only the source survived. The 14-DIFF near-miss it
+replaced -- all in case 10, the one word to chase being an `addu $a0,$s1,$zero`
+the target emits twice around a join -- is in git history. Treat the shapes in
+`csrc/unk_154BC.c` as unexplained rather than deliberate.
 
 Note that `verify.py` cannot see the placement at all -- it masks the relocated
 halfwords that reference the table -- so a MATCH there is necessary and not

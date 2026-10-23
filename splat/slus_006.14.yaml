@@ -65,9 +65,16 @@ segments:
     vram: 0x8002D67C
     align: 4
     subsegments:
-      # Still raw in here: jtbl_8002D67C, func_80042BDC's 32-entry table, which
-      # becomes `- [0xe7c, .rodata, unk_154BC]` when that function lands.
-      - [0xe7c, bin]
+      # jtbl_8002D67C, func_80042BDC's 32-entry table: 128 bytes, the last of
+      # the three contiguous runs, and the only subsegment of this segment
+      # because a segment's .data all precedes its .rodata.
+      - [0xe7c, .rodata, unk_154BC]
+  - type: code
+    start: 0xefc
+    vram: 0x8002D6FC
+    align: 4
+    subsegments:
+      - [0xefc, bin]
       - [0x6b60, data, psyq/libcd]
       - [0x6e44, data, psyq/libgpu]
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
