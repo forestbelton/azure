@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**184 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
+**185 of 191 functions in the RESIDENT EXECUTABLE are C and the build is
 byte-identical.** `make check` is green at HEAD, and green after a full
 `make splat`. The remaining 7 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
@@ -78,7 +78,7 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 7 remaining stubs
+## The 6 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
@@ -98,17 +98,16 @@ check has been measured *under this project's current compilation assumptions*
 |----------|------|-------|------|-------|
 | func_8003F368 | unk_12A70 | 113 of 113 | 4 | **BOUNDED**, both gaps named; each costs a word to produce from C |
 | func_80041E70 | unk_154BC | 270 of 270 | 1 | **BOUNDED**, one word, owned by cse and argued completely |
-| func_800453E0 | gprel_18B40 | 533 of 533 | 5 | **BOUNDED**, 10 words were bought back; the hoist, split, association and alias families are swept |
-| func_80045CC4 | unk_19434 | 436 of 437 | 47 | **BOUNDED**, the same mask tension as above, 4 of the 47; the rest is argued separately |
+| func_80045CC4 | unk_19434 | 437 of 437 | 2 | **OPEN**, the closest of all six; mask tension solved, one sched1-then-allocation chain left |
 | func_8004437C | gprel_17B7C | 100 of 100 | 8 | **BOUNDED**, diagnosed at pseudo level |
 | func_800407C0 | unk_12DEC | 178 of 178 | 62 | **BOUNDED**, a real copy preference plus a 5x priority gap |
 | func_80047054 | unk_19434 | 58 of 58 | 30 | **BOUNDED**, one common cause, not splittable by any shape yet measured |
 
 ### What 191 of 191 would actually take
 
-Worth stating plainly, because the number is easy to assume is close. All seven
+Worth stating plainly, because the number is easy to assume is close. All six
 are near-misses with the source written and checked, and between them they are
-1, 4, 5, 8, 30, 47 and 62 differing words. Five of the seven have every opcode,
+1, 2, 4, 8, 30 and 62 differing words. Five of the six have every opcode,
 immediate, displacement, branch offset and delay slot matching already and
 differ only in which register holds what.
 
@@ -127,7 +126,7 @@ That distinction is where the next result comes from. Four conclusions in these
 files fell in one day once the right mechanism arrived, each after two sessions
 of sweeping had been written up as proof of unreachability -- see
 `docs/near-misses/README.md`. In all four the *measurements* held and the
-*context around them* was what moved. So expect the last seven to come from a
+*context around them* was what moved. So expect the last six to come from a
 mechanism or a changed assumption, not from more source-shape sweeping.
 
 ### Audit the context before sweeping the source
@@ -160,7 +159,7 @@ README says: the measurements are evidence, the verdict is a hypothesis. Each
 lists the shapes already measured with their word costs, and most record a
 `search.py` sweep that found nothing -- so if the context checks out, the
 remaining gap is allocation or ordering rather than source shape.
-`python3 tools/decomp/nmcheck.py` compiles all seven and checks each against the
+`python3 tools/decomp/nmcheck.py` compiles all six and checks each against the
 count in its own header.
 
 **The mechanism that closed the last four** is still the first thing to try on
@@ -285,10 +284,12 @@ were explained rather than fought.
 
 `TODO.md` has the live queue. In short:
 
-1. The seven near-misses, ordered above. The two mask-tension functions
-   (func_800453E0 and func_80045CC4) share one cause and are 5 and 47 words
-   out, so one idea closes both -- the cheapest real progress available. Run
-   the context audit above before sweeping any of them.
+1. The six near-misses, ordered above. **func_80045CC4 at 2 words is the
+   cheapest real progress available** -- the mask tension that blocked it and
+   func_800453E0 is solved (it was a bitfield store, not a hand-written `|`;
+   see matching-levers and the landed func_800453E0's comment), and what is
+   left is one sched1-then-allocation chain its header names. Run the context
+   audit above before sweeping any of the others.
 2. A decision on func_8003E758's decomp device. It ships
    `__asm__ volatile ("" :: "r" (q) : "memory")`, worth 13 words, which shapes
    the allocator directly rather than reproducing a source shape. The honest

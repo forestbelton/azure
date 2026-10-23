@@ -1,7 +1,7 @@
 # TODO
 
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
-this compiler behaves. **184 of 191 resident-executable functions are C and
+this compiler behaves. **185 of 191 resident-executable functions are C and
 `make check` is byte-identical.** Both of the structural blockers that shaped
 most of this project -- jump-table placement and the object reached both
 `$gp`-relatively and absolutely -- are solved and neither needed the thing it
@@ -9,16 +9,22 @@ was being built towards; see `docs/where-we-are.md`.
 
 The queue, in order:
 
-- [ ] **The seven near-misses.** All seven have their source written and
-      checked (`python3 tools/decomp/nmcheck.py`); between them they are 1, 4,
-      5, 8, 30, 47 and 62 differing words, and five differ only in which
-      register holds what. `docs/near-misses/` has the source and the
-      ruled-out shapes for each, and `docs/where-we-are.md` orders them.
+- [ ] **The six near-misses.** All six have their source written and checked
+      (`python3 tools/decomp/nmcheck.py`); between them they are 1, 2, 4, 8, 30
+      and 62 differing words, and five differ only in which register holds
+      what. `docs/near-misses/` has the source and the ruled-out shapes for
+      each, and `docs/where-we-are.md` orders them.
 
-      Cheapest first: **func_800453E0 and func_80045CC4 share one cause** --
-      the mask tension, where the target needs the natural operand order of a
-      `|` but loop.c hoists whichever invariant is set first -- so one idea
-      closes both, 5 and 47 words.
+      Cheapest first by a wide margin: **func_80045CC4 at 2 words of 437**. The
+      mask tension that blocked it and func_800453E0 is SOLVED -- those
+      statements are bitfield stores through a P_TAG-shaped
+      `struct { u32 addr:24; u32 len:8; }`, i.e. libgpu's addPrim, not a
+      hand-written `|`, and no spelling of `|` can match. func_800453E0 landed
+      on it. What is left in cc4 is one sched1-then-allocation chain named in
+      its header: sched1 puts the dependency-free `p70 = p + 0x70` at the arm
+      top, so it is live across an `lhu` and global-alloc gives it $a1; left at
+      the arm tail, jump2 would cross-jump it into the join as
+      `addiu $a0,$s0,0x70`, which is the target's insn.
 
       **Before sweeping any of them, run the context audit** in
       `docs/where-we-are.md`. A C source producing these bytes exists by
