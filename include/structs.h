@@ -1005,6 +1005,18 @@ extern Unk44724Vec D_80083CE8[4];
    rather than one struct. Declared both ways deliberately; the linker
    resolves each to the same address. */
 extern u8 D_80082E6A;
+/* +0x0E of the same struct, reached as its own symbol by func_80043E04 for the
+   same reason D_80082E6A is: spelled `D_80082E60.unk_0E` the code is
+   byte-identical but the relocation reads %lo(D_80082E60+14) where the listing
+   has %lo(D_80082E6E).
+
+   An INCOMPLETE ARRAY on purpose, and load-bearing: func_80043E04 lives in a
+   -G8 carve-out, where gas makes every small *undefined* symbol
+   $gp-relative -- and this one sits inside the $gp window (gp + 0x24DA) even
+   though the target reaches it absolutely. Declared incomplete, cc1psx emits
+   the compiler-split lui %hi + %lo itself and the -G no longer matters. As a
+   scalar it costs that function a word. */
+extern u8 D_80082E6E[];
 
 /* Hand-added. func_800429E4 indexes this with a 0x18 stride and reads the
    word at +0x14. D_8006D160 is the eight bytes below it, indexed on its own. */

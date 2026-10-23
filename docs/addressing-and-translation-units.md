@@ -233,8 +233,8 @@ and names exactly where they are not:
 
 | symbol | referenced from | what it means |
 |--------|-----------------|---------------|
-| D_800814D4 | func_8003E758 (unk_11940), func_8003F624 (unk_12DE0) | the boundary at 0x8003F5E0 cuts an original unit |
-| D_800814E0 | func_800410FC (unk_12DE0), func_80041134 (unk_14934) | so does the one at 0x80041134 |
+| D_800814D4 | func_8003E758 (unk_11940), func_8003F624 (unk_12DEC) | the boundary at 0x8003F5E0 cuts an original unit |
+| D_800814E0 | func_800410FC (unk_12DEC), func_80041134 (unk_14934) | so does the one at 0x80041134 |
 
 The second was actionable immediately. func_80041110 already sat between those
 two functions in a carved `-G8` unit of its own, so all three were one original

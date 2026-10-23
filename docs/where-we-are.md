@@ -101,7 +101,7 @@ Five need only `$gp`-relative addressing -- func_8003E4FC, func_8003F5E0,
 func_80044618, func_80044698, func_800448BC -- and want the same carve-out: their own unit built with `MASPSXFLAGS_G8`, like
 `gprel_12DD4` and `gprel_14910`. `func_8003F5E0` sits immediately after the
 carved-out `gprel_12DD4`, so extending that subsegment by one function picks it
-up (renaming `unk_12DE0` to `unk_12DEC` and re-extracting), and func_80044618
+up (renaming `unk_12DEC` to `unk_12DEC` and re-extracting), and func_80044618
 and func_80044698 are adjacent inside `unk_14934` and can be carved together.
 That is the cheapest landing in the group.
 

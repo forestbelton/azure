@@ -14,13 +14,25 @@ contains inline .word data.
 import argparse
 import pathlib
 import re
-import sys
+from typing import TypedDict
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 INSN = re.compile(r"^\s*/\* \w+ \w+ \w+ \*/\s+(\S+)")
 
+Scan = TypedDict(
+    "Scan",
+    {
+        "insns": int,
+        "calls": int,
+        "branches": int,
+        "words": int,
+        "gprel": int,
+        "forma": int,
+    },
+)
 
-def scan(path: pathlib.Path) -> dict:
+
+def scan(path: pathlib.Path) -> Scan:
     insns = calls = branches = words = gprel = forma = 0
     for line in path.read_text().splitlines():
         if ".word" in line:
@@ -43,64 +55,129 @@ def scan(path: pathlib.Path) -> dict:
         if mn in ("addiu", "addu", "addi") and "%lo(" in line:
             forma += 1
     return {
-        "insns": insns, "calls": calls, "branches": branches,
-        "words": words, "gprel": gprel, "forma": forma,
+        "insns": insns,
+        "calls": calls,
+        "branches": branches,
+        "words": words,
+        "gprel": gprel,
+        "forma": forma,
     }
+
+
+Row = TypedDict(
+    "Row",
+    {
+        "name": str,
+        "unit": str,
+        "done": bool,
+        "insns": int,
+        "calls": int,
+        "branches": int,
+        "words": int,
+        "gprel": int,
+        "forma": int,
+    },
+)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("-n", "--limit", type=int, default=25)
-    ap.add_argument("--leaves", action="store_true",
-                    help="only functions with no calls")
-    ap.add_argument("--matchable", action="store_true",
-                    help="exclude functions using the register-held base "
-                         "idiom, which does not reproduce from C yet")
-    ap.add_argument("--done", action="store_true",
-                    help="list already-decompiled functions instead")
+    ap.add_argument(
+        "--leaves", action="store_true", help="only functions with no calls"
+    )
+    ap.add_argument(
+        "--matchable",
+        action="store_true",
+        help="exclude functions using the register-held base "
+        "idiom, which does not reproduce from C yet",
+    )
+    ap.add_argument(
+        "--done", action="store_true", help="list already-decompiled functions instead"
+    )
     args = ap.parse_args()
 
     # The C files are authoritative for what exists: tools/reorg.py keeps each
     # one listing every function its unit owns, as a body or a stub. Enumerating
     # from asm/nonmatchings would undercount, because splat only emits
     # per-function assembly for functions that are still stubbed.
-    DEF = re.compile(r"^(?:[A-Za-z_][\w \t*]*?)\b(func_[0-9A-Fa-f]{8})\s*\([^;]*?\)\s*\{",
-                     re.M)
+    DEF = re.compile(
+        r"^(?:[A-Za-z_][\w \t*]*?)\b(func_[0-9A-Fa-f]{8})\s*\([^;]*?\)\s*\{", re.M
+    )
     STUB = re.compile(r"^INCLUDE_ASM\([^)]*,\s*(func_[0-9A-Fa-f]{8})\);", re.M)
-    rows = []
+    rows: list[Row] = []
     for cfile in sorted((ROOT / "csrc").glob("*.c")):
         unit = cfile.stem
         src = cfile.read_text()
         for name in DEF.findall(src):
-            rows.append({"name": name, "unit": unit, "done": True,
-                         "insns": 0, "calls": 0, "branches": 0,
-                         "words": 0, "gprel": 0, "forma": 0})
+            rows.append(
+                {
+                    "name": name,
+                    "unit": unit,
+                    "done": True,
+                    "insns": 0,
+                    "calls": 0,
+                    "branches": 0,
+                    "words": 0,
+                    "gprel": 0,
+                    "forma": 0,
+                }
+            )
         for name in STUB.findall(src):
             asm = ROOT / "asm/nonmatchings" / unit / f"{name}.s"
-            info = scan(asm) if asm.exists() else {
-                "insns": 0, "calls": 0, "branches": 0,
-                "words": 0, "gprel": 0, "forma": 0}
-            info.update(name=name, unit=unit, done=False)
-            rows.append(info)
+            info: Scan = (
+                scan(asm)
+                if asm.exists()
+                else {
+                    "insns": 0,
+                    "calls": 0,
+                    "branches": 0,
+                    "words": 0,
+                    "gprel": 0,
+                    "forma": 0,
+                }
+            )
+            rows.append(
+                {
+                    "name": name,
+                    "unit": unit,
+                    "done": False,
+                    **info,
+                }
+            )
 
     total = len(rows)
     done = sum(1 for r in rows if r["done"])
-    print(f"{done}/{total} functions decompiled "
-          f"({100 * done / total if total else 0:.1f}%)\n")
+    print(
+        f"{done}/{total} functions decompiled "
+        f"({100 * done / total if total else 0:.1f}%)\n"
+    )
 
     rows = [r for r in rows if r["done"] == bool(args.done)]
     if args.leaves:
         rows = [r for r in rows if r["calls"] == 0]
     if args.matchable:
         rows = [r for r in rows if r["forma"] == 0]
-    rows.sort(key=lambda r: (r["words"] > 0, r["forma"] > 0, r["calls"],
-                             r["branches"], r["gprel"], r["insns"]))
+    rows.sort(
+        key=lambda r: (
+            r["words"] > 0,
+            r["forma"] > 0,
+            r["calls"],
+            r["branches"],
+            r["gprel"],
+            r["insns"],
+        )
+    )
 
-    print(f"{'function':<22}{'unit':<12}{'insns':>6}{'call':>5}{'br':>4}"
-          f"{'gp':>4}{'fA':>4}{'data':>5}")
-    for r in rows[:args.limit]:
-        print(f"  {r['name']:<20}{r['unit']:<12}{r['insns']:>6}{r['calls']:>5}"
-              f"{r['branches']:>4}{r['gprel']:>4}{r['forma']:>4}{r['words']:>5}")
+    print(
+        f"{'function':<22}{'unit':<12}{'insns':>6}{'call':>5}{'br':>4}"
+        f"{'gp':>4}{'fA':>4}{'data':>5}"
+    )
+    for r in rows[: args.limit]:
+        print(
+            f"  {r['name']:<20}{r['unit']:<12}{r['insns']:>6}{r['calls']:>5}"
+            f"{r['branches']:>4}{r['gprel']:>4}{r['forma']:>4}{r['words']:>5}"
+        )
     if len(rows) > args.limit:
         print(f"  ... and {len(rows) - args.limit} more")
     return 0

@@ -1,4 +1,4 @@
-/* func_80045CC4 (unk_14934) -- 436 of 437 words, 47 DIFF. Not compiled; see
+/* func_80045CC4 (unk_176B8) -- 436 of 437 words, 47 DIFF. Not compiled; see
  * docs/open-matching-problems.md.
  *
  * It emits one slot's elements: builds the matrix in the scratchpad, then per
@@ -232,6 +232,11 @@
  * struct field to u8, which shifts every later field offset and took the
  * differing count to 143. The searcher now refuses that class of change and
  * reports it separately; the missing word is still missing.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until a $gp cluster was carved
+ * out of the middle of that unit and its tail became unk_176B8. The listing is
+ * now asm/nonmatchings/unk_176B8/, which is what verify.py wants as its UNIT
+ * argument.
  */
 
 #define Unk3DBD0SP Unk3DBD0SP_orig

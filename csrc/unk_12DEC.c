@@ -18,8 +18,6 @@ void func_800402F4(void);
 u32 *func_80040574(s32);
 void func_8003F80C(u32, s32, s32, s16);
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F5E0);
-
 void func_8003F5EC(void) {
     s32 i;
 
@@ -28,7 +26,7 @@ void func_8003F5EC(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_8003F624);
+INCLUDE_ASM("asm/nonmatchings/unk_12DEC", func_8003F624);
 
 s32 func_8003F688(s32 arg0) {
     s32 acc = 0;
@@ -764,7 +762,7 @@ done:
     return dst;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DE0", func_800407C0);
+INCLUDE_ASM("asm/nonmatchings/unk_12DEC", func_800407C0);
 
 void func_80040A88(void (*arg0)(void)) {
     D_80082E60.unk_04 = arg0;

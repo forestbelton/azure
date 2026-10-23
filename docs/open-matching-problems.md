@@ -13,7 +13,7 @@ way to settle them -- see "Reading the compiler's own dumps" in the same file.
 | func_80042A80 | unk_14934 | one bit: `srl` where the target has `sra`; see below |
 | func_80047054 | unk_14934 | every instruction identical, five registers permuted; see below |
 | func_80041E70 | unk_14934 | 4 of 270: cse folds `p->unk_87 * 2` to a constant, and the three register fields follow from that |
-| func_800407C0 | unk_12DE0 | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
+| func_800407C0 | unk_12DEC | 62 of 178, all register fields; argued unreachable -- see the near-miss file |
 | func_80045CC4 | unk_14934 | 436 of 437: the `(s8)` fold and the mask hoisting are both solved; one register swap on a 0.9% gap remains |
 
 ## func_8003D0F0  (unk_102A8) -- SOLVED 2026-10-22
@@ -388,7 +388,7 @@ addressing mode they need is per-compilation -- see
 func_800448BC) and 27 do both and so cannot match under either `-G`.
 
 Two of the five are cheap: `func_8003F5E0` is the first function of
-`unk_12DE0` and sits immediately after the carved-out `gprel_12DD4`, so
+`unk_12DEC` and sits immediately after the carved-out `gprel_12DD4`, so
 extending that subsegment by one function picks it up; `func_80044618` and
 `func_80044698` are adjacent to each other inside `unk_14934` and could be
 carved out together. Both need a splat spec change, a re-extraction and a
@@ -566,7 +566,7 @@ the `lo_sum` register, and nothing can fold a constant into a `lo_sum`. So
 
 ---
 
-## func_8003FE78  (unk_12DE0) -- resolved
+## func_8003FE78  (unk_12DEC) -- resolved
 
 Zero a node, push it on the list head, set flags, compute offsets into the
 tail. Two things were wrong under 4.0, and the first was also wrong under 4.1:

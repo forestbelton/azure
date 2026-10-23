@@ -59,12 +59,19 @@ segments:
       # Carved out: these reach their globals $gp-relatively, so they must be
       # assembled with gas at -G8 while everything else uses -G0.
       - [0x12dd4, c, gprel_12DD4]
-      - [0x12de0, c, unk_12DE0]
+      # Starts one function later than its old 0x12de0: func_8003F5E0 moved into
+      # gprel_12DD4, which it shares a $gp-relative global with.
+      - [0x12dec, c, unk_12DEC]
       # Extended at both ends to take in func_800410FC and func_80041134:
       # all three reach D_800814E0 $gp-relatively, so they were one original
       # translation unit. See the header of csrc/gprel_148FC.c.
       - [0x148fc, c, gprel_148FC]
       - [0x149ac, c, unk_14934]
+      # A $gp cluster carved out of the middle of unk_14934: these four
+      # functions reach D_80081500 $gp-relatively and nothing else does, so
+      # they were their own translation unit and need -G8.
+      - [0x17504, c, gprel_17504]
+      - [0x176b8, c, unk_176B8]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]

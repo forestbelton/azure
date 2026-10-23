@@ -1,4 +1,4 @@
-/* func_800407C0 (unk_12DE0) -- 178 of 178 words, 62 DIFF, and argued to be
+/* func_800407C0 (unk_12DEC) -- 178 of 178 words, 62 DIFF, and argued to be
  * UNREACHABLE from C. Not compiled; see docs/open-matching-problems.md.
  *
  * An RLE/nibble-stream blitter. `*src++` is a mode byte: bit 0 selects a

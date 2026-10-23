@@ -14,7 +14,7 @@ not be rescued by any combination of these rewrites.
 
     python3 tools/decomp/search.py zz_foo.c unk_14934 func_80045CC4
     python3 tools/decomp/search.py zz_foo.c unk_14934 func_80045CC4 --sites
-    python3 tools/decomp/search.py zz_foo.c unk_12DE0 func_8003F5E0 --g8
+    python3 tools/decomp/search.py zz_foo.c unk_12DEC func_8003F5E0 --g8
 
 Greedy by default: try every single change against the current best, keep the
 best improvement, repeat. `--exhaustive` enumerates all combinations instead,

@@ -156,7 +156,7 @@
  * beside bzero; `void func_8003E140(s8 *);` (defined in csrc/unk_11940.c and
  * declared nowhere -- this function takes its address); and
  * `void func_8003F80C(u32, s32, s32, s16);`, which currently has only a local
- * prototype in csrc/unk_12DE0.c. Nothing calls func_80041588 from C yet, so
+ * prototype in csrc/unk_12DEC.c. Nothing calls func_80041588 from C yet, so
  * its signature comes from the listing: arg0 is the Unk41284 * whose word is
  * masked and is passed on to func_8003E4FC, arg1 is an s8 * completion flag
  * (`*arg1 = 0`, then registered with func_8003E140, which is

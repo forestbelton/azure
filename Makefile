@@ -101,7 +101,7 @@ MASPSXFLAGS_G8 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
 # 7 need -G8, 48 touch no globals symbolically and do not care, and 27 need
 # both and cannot match under either. See
 # docs/addressing-and-translation-units.md.
-build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
+build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o build/csrc/gprel_17504.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.

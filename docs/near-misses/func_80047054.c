@@ -1,4 +1,4 @@
-/* func_80047054 (unk_14934) -- 58 words against 58, every opcode, immediate,
+/* func_80047054 (unk_176B8) -- 58 words against 58, every opcode, immediate,
  * displacement and nop identical. The only difference is a permutation of five
  * registers, and it follows from one decision.
  *
@@ -53,6 +53,11 @@
  * writing the halfword updates as `*(u16 *) (n + 4)` and `*(u16 *) (n + 6)` off
  * a walking byte pointer is what makes gcc's combine_givs fold them into one
  * induction variable at +6 with the other access as `-0x2` off it.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until a $gp cluster was carved
+ * out of the middle of that unit and its tail became unk_176B8. The listing is
+ * now asm/nonmatchings/unk_176B8/, which is what verify.py wants as its UNIT
+ * argument.
  */
 
 #include "common.h"

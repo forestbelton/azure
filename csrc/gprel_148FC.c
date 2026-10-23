@@ -6,7 +6,7 @@
  * The unit's extent is evidence, not a guess. Of the 38 $gp-relative symbols
  * the blocked functions reach, only two are referenced from more than one of
  * the project's current units, and D_800814E0 is one of them: func_800410FC
- * was the last function of unk_12DE0, func_80041134 the first of unk_14934,
+ * was the last function of unk_12DEC, func_80041134 the first of unk_14934,
  * and func_80041110 sat between them in a carved unit of its own. A
  * $gp-relative reference means the function was compiled in the unit that
  * defined the global, so all three were one original translation unit and the

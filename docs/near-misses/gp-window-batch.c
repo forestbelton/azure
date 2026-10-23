@@ -1,4 +1,12 @@
-/* NINE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+/* FIVE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+ *
+ * Three more have LANDED (func_80043DB8, func_80043E04, func_80043E60) and the
+ * route is the one to copy: their $gp cluster was carved out of the middle of
+ * unk_14934 as csrc/gprel_17504.c, built with MASPSXFLAGS_G8, which needs no
+ * window definition and no linker placement. The $gp symbols inside unk_14934
+ * cluster into runs of CONSECUTIVE functions -- one run per original
+ * translation unit -- so each remaining cluster is the same carve again. See
+ * docs/addressing-and-translation-units.md.
  *
  * nmcheck: multi -- this file holds several functions, so tools/decomp/nmcheck.py
  * compiles it rather than verifying one function against one listing. Each
@@ -57,9 +65,9 @@
  * func_80041588). Those two items should be done as one deliberate
  * restructuring. See docs/open-matching-problems.md.
  *
- * Word counts, all exact: func_8003F5E0 3, func_8003F240 12, func_80041B98 19,
- * func_80043DB8 19, func_80041C64 22, func_80043E60 22, func_80043E04 23,
- * func_800448BC 24, func_8003F624 25.
+ * Word counts, all exact: func_8003F240 12, func_80041B98 19, func_80041C64
+ * 22, func_800448BC 24, func_8003F624 25. (func_8003F5E0 also landed, by
+ * moving a unit boundary rather than carving.)
  *
  * TYPES THE ACCESSES PROVE, three of which disagree with include/structs.h.
  * All three are reachable from the existing declaration with a cast, which is
@@ -76,7 +84,7 @@
  *
  * DECLARATIONS NEEDED WHEN THESE LAND:
  *   s32 CdControlB(u8, u8 *, u8 *);     beside the existing CdControl
- *   extern u8 D_80082E6E;               byte +0x0E of Unk80082E60 reached as
+ *   extern u8 D_80082E6E[];            byte +0x0E of Unk80082E60 reached as
  *                                       its own symbol, exactly like the
  *                                       existing `extern u8 D_80082E6A;`
  *   void func_8003D92C(void);           still an INCLUDE_ASM stub, declared
@@ -88,19 +96,9 @@
  *
  * Per-unit forward declarations for intra-unit callees defined later in the
  * file: in unk_14934, func_80041CBC, func_80043EB8, func_80041BE4,
- * func_80043E04, func_80043E60; in unk_12DE0, func_8003E70C (which lives in
+ * func_80043E04, func_80043E60; in unk_12DEC, func_8003E70C (which lives in
  * unk_11940).
  */
-
-/* ---- zz_a_3F5E0.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_800814C8\n\t.type D_800814C8,@object\n"
-        "\t.size D_800814C8,4\nD_800814C8:\n\t.word 0\n\t.text");
-
-void func_8003F5E0(u32 arg0) {
-    D_800814C8 = arg0;
-}
 
 /* ---- zz_b_3F240.c ---- */
 #include "common.h"
@@ -128,22 +126,6 @@ void func_80041B98(void) {
     }
 }
 
-/* ---- zz_d_43DB8.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_80081500\n\t.type D_80081500,@object\n"
-        "\t.size D_80081500,2\nD_80081500:\n\t.half 0\n\t.text");
-
-void func_80043EB8(void);
-void func_80043E04(void);
-
-void func_80043DB8(void) {
-    func_80043EB8();
-    if (D_80083120[(s16) D_80081500].unk_00 == 0) {
-        func_80040A88(func_80043E04);
-    }
-}
-
 /* ---- zz_e_41C64.c ---- */
 #include "common.h"
 
@@ -158,45 +140,6 @@ void func_80041C64(void) {
     if (D_80083120[(s16) D_800814E8].unk_00 == 0) {
         D_80082E60.unk_00 |= 1;
         func_80040B88();
-    }
-}
-
-/* ---- zz_f_43E60.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_80081500\n\t.type D_80081500,@object\n"
-        "\t.size D_80081500,2\nD_80081500:\n\t.half 0\n\t.text");
-
-void func_80043EB8(void);
-void func_80040B88(void);
-
-void func_80043E60(void) {
-    func_80043EB8();
-    if (D_80083120[(s16) D_80081500].unk_00 == 0) {
-        D_80082E60.unk_00 |= 1;
-        func_80040B88();
-    }
-}
-
-/* ---- zz_g3_43E04scalar.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_80081500\n\t.type D_80081500,@object\n"
-        "\t.size D_80081500,2\nD_80081500:\n\t.half 0\n\t.text");
-
-extern u8 D_80082E6E;
-void func_80043EB8(void);
-void func_80043E60(void);
-s32  func_8003F794(s16, s16);
-void func_8003D92C(void);
-
-void func_80043E04(void) {
-    func_80043EB8();
-    if (D_80082E6E != 0) {
-        D_80081500 = func_8003F794(6, 8);
-        func_80040A88(func_80043E60);
-    } else {
-        func_8003D92C();
     }
 }
 
