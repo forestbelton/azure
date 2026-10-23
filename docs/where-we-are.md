@@ -122,6 +122,13 @@ anything else is reading `asm/nonmatchings`.
 
 ## How to work a function
 
+0. `python3 tools/decomp/annotate.py <unit> <func>` -- **do this first.** It
+   reads the target listing and prints every lever whose signature is present,
+   with the sites, the doc section, the measured word cost of getting it wrong,
+   the source shapes to try cheapest-first, and the shapes already measured
+   *not* to work. It replaces reading `docs/matching-levers.md` end to end
+   (9,000 words) with reading the few entries that can apply. It decides
+   nothing -- see the note below on why that is deliberate.
 1. Read `asm/nonmatchings/<unit>/<func>.s`.
 2. Write a candidate into a `zz_*.c` scratch file in the project root
    (gitignored) containing `#include "common.h"`, any prototypes it needs, and
@@ -147,6 +154,7 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 | `fdiff.py FUNC...` | built vs reference bytes side by side; only valid after a *successful* link, since a stale `build/slus_006.14` once produced a bogus MATCH |
 | `guard.py` | no function was dropped from `csrc/` |
 | `dump.sh file.c` | compile with gcc's RTL dumps and collect them |
+| `annotate.py UNIT FUNC` | which levers this function's listing can possibly need, with costs and ruled-out shapes; `--sites` to print the matching instructions, `--self-test` to check every signature still fires on a function known to need it |
 
 **When a function is one or two words short, compare the internal branches'
 immediate fields against the target's**, rather than reading the diff. Every
@@ -155,6 +163,16 @@ the first branch whose delta changes brackets the defect. That localised
 func_80042BDC's missing word to one arm of a 180-instruction `case` in a single
 verify run, where the differing-word count said nothing useful at all -- it had
 200 of 543 words "differing" purely from the shift.
+
+**`annotate.py` deliberately does not choose.** It prints candidates, each
+citing its measurement, because the two worst detours in this project came from
+inheriting a confident claim rather than from failing to find one -- the "two
+sign extensions" story cost two sessions, and "argument preferences are
+unreachable" parked two functions on a reason that turned out to be half true.
+A tool that ranked confidently would reproduce that failure faster. If you add
+an entry, it needs a `cost` naming a real function and word count, and any
+shape you measured as useless belongs in its `negative:` list, which is the
+most valuable field in the file.
 
 `dump.sh` is the one to reach for when the logic is right and only registers or
 the order of two adjacent instructions differ. `cc1psx` honours `-dS` (post

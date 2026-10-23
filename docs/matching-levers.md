@@ -835,6 +835,14 @@ into a shared tail differ by a word between the two spellings.
 A subagent working one function pays for its whole context on every turn, so
 tool output compounds. Two things dominate:
 
+* **This document, read end to end.** It is 9,000 words, every agent was told
+  to read all of it, and most of it cannot apply to any one function. Run
+  `python3 tools/decomp/annotate.py <unit> <func>` instead: it matches the
+  listing against `tools/decomp/levers.yaml` and prints only the entries whose
+  signature is actually present, with their costs and their ruled-out shapes.
+  On func_8003D0F0 it emits, in a tenth of a second, the same HImode-consumer
+  paragraph that was hand-written into a brief and closed that function first
+  try after two sessions of being parked.
 * **`verify.py` output.** The full side-by-side of a 437-word function is about
   10k tokens, and an iterating agent pays that again on every subsequent turn.
   It is abbreviated by default now -- differing words plus two of context, runs

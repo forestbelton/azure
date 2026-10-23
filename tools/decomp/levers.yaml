@@ -1,0 +1,259 @@
+# The matching levers, as data.
+#
+# docs/matching-levers.md is the prose; this is the machine-readable index of
+# the subset whose *signature is visible in the target listing*. It exists so
+# tools/decomp/annotate.py can tell you which levers a function can possibly
+# need before you write a line of C, and so a future variant searcher has a
+# work list rather than a guess.
+#
+# Every entry must carry a `cost` measured on a real function. If you cannot
+# name the function and the word count, the entry does not belong here yet --
+# that discipline is the point, because the prose version keeps acquiring
+# claims nobody measured (see the `negative:` fields, which are the ones that
+# cost this project the most time).
+#
+# Matching:
+#   match:   a regex against one instruction's "mnemonic operands" text
+#   window:  a sequence of mnemonic[:immediate] steps that must appear in
+#            order, each within `gap` instructions of the previous one
+#   absent:  the lever applies only if this regex matches NOWHERE in the function
+#   repeat:  keep a hit only if that exact instruction text occurs N+ times
+#            (the signature of reorg duplicating one source insn, rather than
+#            an ordinary copy, which appears in nearly every function)
+#
+# Fields:
+#   doc      section of docs/matching-levers.md (or another doc) to read
+#   cost     measured word cost of getting it wrong, with the function
+#   options  the source shapes to try, cheapest first
+#   negative shapes measured NOT to work -- do not retry them
+#   note     anything else worth knowing at the site
+
+- id: byte-fold
+  name: byte-to-signed conversion kept as lbu/sll 24/sra 24
+  doc: "matching-levers.md section 7"
+  window: ["lbu", "sll:24", "sra:24"]
+  gap: 3
+  cost: "8 words (func_8003D0F0), 7 (func_80044D24)"
+  options:
+    - "HImode consumer: declare the accumulator s16, not s32. Free -- no extra
+       pseudo, no move, no word. Try this first; if the value is stored with
+       `sh` or added to a halfword, this is almost certainly it."
+    - "a memory store between the load and the cast (use_crosses_set_p).
+       Free of registers, but you need a store you actually want there."
+    - "volatile: a `volatile u8 *` local, assigned in the ENCLOSING block, one
+       per block, pointed at the field the combined giv's representative is
+       derived from and indexed backwards. Use when the consumer is SImode and
+       no store is available."
+  negative:
+    - "two sign extensions of one loaded value. It changes the output but to a
+       different sequence -- one shared lbu above the `if` -- measured at 435
+       words against func_80045CC4's 437, and no gain at all in func_8003D0F0.
+       This claim cost two sessions; do not revive it."
+    - "a second use that is not a sign extension: gives two loads, lb plus lbu"
+  note: "`lb` in the target instead means the fold DID happen and a plain cast
+         is right. The natural expansion is lbu/sll/sra (extendqisi2 force_not_mem
+         under -O); `lb` is the optimised form combine produces."
+
+- id: halfword-signed-read
+  name: lh where the declaration is u16
+  doc: "matching-levers.md section 7"
+  match: "^lh\\b"
+  cost: "1 word per site (func_80041B98 and three siblings)"
+  options:
+    - "add an `(s16)` cast at the use and leave the declaration alone: combine
+       folds zero_extend-then-sign-extend-of-low to a bare `lh`. Works on a
+       GLOBAL as well as a struct field, which is the cheap way to take a
+       signed read off a u16 declaration you do not want to retype."
+  note: "`lhu` at a site where you wrote the cast means the opposite: drop it."
+
+- id: srl-not-sra
+  name: 16-bit truncation that came out sra, not srl
+  doc: "matching-levers.md section 10"
+  window: ["sll:16", "sra:16"]
+  gap: 1
+  cost: "1 bit, and it blocks func_80042A80 at 58 of 58 words"
+  options:
+    - "if the value is single-set and masked, you cannot have `sra`: combine
+       proves bit 15 clear through nonzero_bits and emits `srl`."
+    - "a second set the accumulation cannot prove anything about -- an opaque
+       value, or a constant with bit 15 set -- preserves the `sra`. But every
+       multi-set shape also emits an `andi 0xffff`, so it costs a word."
+  negative:
+    - "a second use of the masked value, or of the loaded halfword"
+    - "putting the mask in a different basic block (that probe's other set was
+       a literal 0, so the union still proved the bit clear)"
+  note: "nonzero_bits ORs its value and MINs sign_bit_copies over EVERY set, so
+         two sets of small constants prove exactly as much as one."
+
+- id: block-move
+  name: small byte-aligned struct assignment (movstrsi_internal)
+  doc: "matching-levers.md section 1"
+  window: ["lb", "lb", "sb", "sb"]
+  gap: 2
+  cost: "44 words plus one (func_80042560)"
+  options:
+    - "a whole-struct assignment, `*dst = *src;`, not field-by-field. It stays
+       ONE RTL insn through combine, sched1, global-alloc and sched2; the
+       lb/lb/sb/sb only appear from its output template at final."
+  note: "Three consequences: the loads are `lb` and combine cannot touch them;
+         nothing can be scheduled between those bytes and what follows; and it
+         costs each address pseudo one reference instead of two, which moves
+         allocation priority (section 3). Before concluding a pass cannot be
+         steered, check the instructions are separate insns at all."
+
+- id: gp-relative
+  name: "$gp-relative access -- needs the object defined in this unit"
+  doc: "addressing-and-translation-units.md"
+  match: "%gp_rel\\("
+  cost: "the whole function: without it you get an absolute lui/%lo pair
+         (4 words against 3 in func_8003F5E0)"
+  options:
+    - "define the object in a .sdata block in the same translation unit:
+       __asm__(\".sdata\\n\\t.globl D_x\\n\\t.type D_x,@object\\n\"
+               \"\\t.size D_x,4\\nD_x:\\n\\t.word 0\\n\\t.text\");
+       The `.size` line is the load-bearing one -- it is what puts the symbol
+       in maspsx's sdata_entries, and maspsx rewrites the access, not gas."
+  negative:
+    - "a top-level __asm__(\".extern D_x,4\") -- `.extern` terminates maspsx's
+       scan rather than producing an entry"
+    - "declaring the object as a struct or array larger than -G8 and reaching a
+       field through it: cc1psx then emits the compiler-split pair and maspsx
+       never sees a bare-symbol candidate"
+  note: "Grep the listing with `%gp_rel([^)]*)`, not `%gp_rel(SYM)` -- the
+         addend form `%gp_rel(D_80080AFC + 0x2)` exists and a naive pattern
+         misses it. If the function also has `%hi(`, it needs BOTH modes in one
+         unit, which is what defining the object buys you."
+
+- id: constant-vs-symbol
+  name: lui+ori means a constant address, lui+addiu means a symbol
+  doc: "matching-levers.md section 6"
+  window: ["lui", "ori"]
+  gap: 1
+  cost: "15 words with the count unchanged (func_80042BDC)"
+  options:
+    - "`ori` as the second instruction: the original wrote an integer constant
+       cast to a pointer, e.g. `(u8 *) 0x800E1D55`."
+    - "`addiu` as the second instruction: the original referenced a symbol.
+       Declare it, e.g. `extern u8 D_800E1D55[];`."
+  note: "This is the exception to the rule that out-of-image globals are
+         constant addresses. That rule holds for a base whose low half is zero
+         (the 0x1F800000 scratchpad) and for offsets folded into an index
+         expression, not for a plain two-instruction address. splat renders a
+         bare `lui 0x8001` as %hi(SYM) whenever it can pair it with a later
+         %lo, so the listing hides the difference -- read the second opcode."
+
+- id: split-address-form
+  name: compiler-split address (lui %hi, addiu %lo, then a 0x0 displacement)
+  doc: "matching-levers.md section 6"
+  window: ["lui", "addiu", "lw:0x0"]
+  gap: 1
+  cost: "1 word, which can shift a whole epilogue -- 18 differing words in
+         func_80045CC4"
+  options:
+    - "a pointer-to-symbol local with TWO SETS, both reaching the use from a
+       real join. With one set it folds back to `lui` + `lw %lo`."
+  negative:
+    - "a single-set block-local pointer, `*(u8 **) &SYM`, an index expression,
+       a volatile pointer or a volatile-qualified struct pointer -- all fold"
+    - "the constant address `((T *) 0x80083160)->field`: cc1psx emits an
+       absolute `lw $2,-2146946720` which the assembler still expands to two
+       words"
+  note: "A CONST_INT folds through two sets; only a SYMBOL_REF is blocked by
+         them. This is the one spelling found that selects the split form for
+         an in-image symbol, and it is why one function can mix both spellings
+         of one object."
+
+- id: switch-index-width
+  name: switch prologue -- the subtract/extend order gives the index's width
+  doc: "matching-levers.md section 8"
+  window: ["addiu", "sll:16", "sra:16", "sltiu"]
+  gap: 2
+  cost: "2 differing words (func_80042BDC: s16 200 DIFF, s8 202)"
+  options:
+    - "`addiu -min` BEFORE the sll/sra: the switch expression is narrow, and
+       `sll 16`/`sra 16` means s16 (or u16), `sll 24`/`sra 24` means s8.
+       c_expand_start_case calls get_unwidened after default_conversion, so a
+       narrow expression keeps its narrow type."
+    - "no extension at all: the expression is s32/int."
+  note: "Also check whether the index is a separate pseudo: write the
+         subtraction yourself and renumber the arms from `case 0`, and
+         expand_end_case skips its own MINUS (minval 0), so `sltiu` and `sll`
+         read YOUR pseudo. The index is then a source variable carrying its
+         references and conflicts -- worth 22 differing words in func_80041344."
+
+- id: byte-decrement
+  name: addiu rd,rs,0xFF -- a byte decrement in the byte's own type
+  doc: "matching-levers.md section 7"
+  match: "^addiu\\s+\\$\\w+,\\s*\\$\\w+,\\s*0xFF$"
+  cost: "2 words (func_8003D0F0, func_80045CC4)"
+  options:
+    - "`p->f = p->g--;` on a `u8` lvalue, so the constant is built in that type"
+  negative:
+    - "an int-promoted temporary and `t - 1`: combine narrows to QImode for the
+       byte store and trunc_int_for_mode rewrites the constant as -1, giving
+       `addiu rd,rs,-0x1`"
+
+- id: loop-guard-blez
+  name: blez on a loop bound means the bound has more than one set
+  doc: "matching-levers.md section 7"
+  match: "^blez\\b"
+  cost: "1 word, and it decides the loop's entry shape"
+  options:
+    - "`for (i = <load>; i > 0; i--)` -- the counter's two sets defeat
+       combine's nonzero_bits, so `i > 0` stays `blez` instead of narrowing"
+    - "`beqz` in the target instead means a single-set bound: load it into its
+       own variable and test that"
+  note: "Multi-set only stops combine SUBSTITUTING across a basic-block
+         boundary: reg_last_set_value accepts a multi-set register when its
+         last set is in the same block (label_tick), so within one block the
+         value still folds into a call argument."
+
+- id: join-materialisation
+  name: a bare register copy as its own insn at a join block
+  doc: "matching-levers.md section 7"
+  match: "^addu\\s+\\$\\w+,\\s*\\$\\w+,\\s*\\$zero$"
+  repeat: 2
+  cost: "1 source insn, 2 words (func_80042BDC), because reorg steals it into
+         the preceding branch's delay slot and retargets past it"
+  options:
+    - "if it materialises a 0/1 flag: declare the local `u8` and write the test
+       `if ((bit & 1) != 0)`. gcc proves the QImode value's bits, folds the
+       mask to the identity, and leaves the `addu`. The local's declared WIDTH
+       picks the opcode, not the mask: `if (bit != 0)` gives no insn at all,
+       and `s32` with the mask gives a real `andi`."
+    - "if it is a parameter or pointer copy: it may simply be reorg stealing a
+       join block's first insn, which the straightforward source already
+       produces. Read the generated .s before assuming it needs a lever."
+  note: "Also the shape of a two-set base pointer: masked, then copied back,
+         which puts the masked value in a callee-saved register instead of $v0."
+
+- id: delay-slot-nop
+  name: a nop in a load-delay slot the scheduler could have filled
+  doc: "matching-levers.md section 5"
+  window: ["lw|lh|lhu|lb|lbu", "nop"]
+  gap: 0
+  cost: "2 words (func_8003D0F0)"
+  options:
+    - "the dependence is REAL: spell the access so both sides have the same
+       MEM_IN_STRUCT_P. A cast like `*(u16 *) ((u8 *) e + 6)` makes a
+       non-struct reference that stays put, where `e->unk_06` lets sched1 lift
+       it into the store group and fill the slot."
+  note: "Per-site, not blanket -- a neighbouring access may not need the cast
+         because nothing is left in the block to hoist it past. And a pseudo
+         set once from a constant is canonicalised TO that constant by
+         init_alias_analysis, so a `u8 *p = (u8 *) 0x1F800000;` local is a
+         NON-varying address and the in-struct exception does apply to it."
+
+- id: abs-single-insn
+  name: a branch and negate with no block boundary (abssi2)
+  doc: "matching-levers.md section 1"
+  window: ["bgez", "subu"]
+  gap: 2
+  cost: "the surrounding block's whole schedule (func_80046C20, func_8003F6F4)"
+  options:
+    - "`x = abs(x);` rather than `if (x < 0) { x = -x; }`. The MIPS abssi2
+       pattern is a single insn whose output template contains its own
+       bgez/subu, so it creates no block boundary and its internal delay slot
+       stays a nop. `int abs(int)` is declared in structs.h for this."
+  note: "With the abs as one insn a whole arm becomes one block, and sched1 can
+         then hoist a reload up to the store it follows."
