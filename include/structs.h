@@ -1051,7 +1051,12 @@ extern Unk6CD30 D_8006CD30;
 /* Callbacks installed by the carved units, stored as function pointers. */
 void func_80035AF8(void);
 void func_80038A08(void);
-void func_80038464(void);
+void func_80038A00(void);
+void func_80038478(void);
+void func_80038588(void);
+void func_800385E8(void);
+void func_80038648(void);
+void func_80038464(u8 *);
 
 /* Objects with a single observed field: plain globals so far. */
 /* Discovered in the newly carved units (unk_72A8, unk_1C540). Each type is
@@ -1060,6 +1065,8 @@ void func_80038464(void);
    units' forced -G0 gives. */
 extern u32 D_8006ADB8[];
 extern u32 D_80083168[];
+extern u8  D_80071298[];
+extern u16 D_80082A38[];
 extern u32 D_80083170[];
 extern s16 D_800847F6[];
 extern u32 D_80085FCC[];
