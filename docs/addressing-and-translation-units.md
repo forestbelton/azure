@@ -253,6 +253,58 @@ boundary at 0x8003F5E0 is where `gprel_12DD4` already sits, so absorbing
 func_8003F624 means extending that unit across func_8003F5E0 and whatever lies
 between.
 
+### The method that actually worked: carve the cluster, don't place a window
+
+Proved four times over. **No window definition and no linker placement are
+needed** -- the existing `-G8` carve-out mechanism is enough, once the units
+are cut where the original ones were.
+
+Inside `unk_14934` (and `unk_11940`) the `$gp` symbols cluster into runs of
+**consecutive functions**, one run per symbol: D_80081500 is reached by exactly
+func_80043D04/DB8/E04/E60 and nothing else; D_800814E8 by exactly
+func_80041AE4/B98/BE4/C64. Since a `$gp`-relative reference means the function
+was compiled in the unit that *defined* the global, each run was its own
+translation unit. splat lumps several into one `c` subsegment, and that is the
+*only* reason a unit appeared to need both addressing modes at once.
+
+So the recipe is:
+
+1. Pick a cluster. Check the run is consecutive and note which functions in it
+   are already decompiled.
+2. **Audit every symbol the run reaches ABSOLUTELY.** At `-G8` gas makes any
+   small *undefined* symbol `$gp`-relative, so each must either sit outside
+   gp +/- 0x8000 or be declared so cc1psx compiler-splits the address itself
+   (an incomplete array, or a struct larger than `-G8`). A symbol inside the
+   window declared as a scalar costs a word -- D_80082E6E did exactly that.
+   Symbols reached only from functions that are still `INCLUDE_ASM` stubs need
+   no attention yet: the listing carries its own `%hi`/`%lo` and `-G` never
+   touches it.
+3. `python3 tools/decomp/carve.py UNIT FIRST LAST NEWUNIT TAILUNIT`, then add
+   the two splat subsegments and the `MASPSXFLAGS_G8` entry it prints.
+4. `make splat && make check`, then `nmcheck.py` and `annotate.py --self-test`
+   -- a carve moves listings between units and both tools catch the near-miss
+   files and self-test cases that still name the old one.
+
+Carved so far: `gprel_12A40`, `gprel_152E4`, `gprel_17504`, `gprel_17B7C`,
+plus the two boundary moves into `gprel_12DD4` and `gprel_148FC`. The chain
+through the old unk_14934 now reads unk_14934, gprel_152E4, unk_154BC,
+gprel_17504, unk_176B8, gprel_17B7C, unk_1811C.
+
+**Where the carve cannot help**, and this is the one case the window definition
+is still needed for: a function that needs **both modes for the same symbol**.
+func_8003F624 stores to D_800814D4 `$gp`-relatively *and* passes
+`&D_800814D4` to CdControlB, which the target reaches with an absolute
+`lui %hi` / `addiu %lo` pair. At `-G8` gas makes the address-of
+`$gp`-relative too, giving 18 differing words. maspsx's rewrite fires only on a
+load or store, so the `.sdata` definition route *does* give both -- which is
+why that function's verified source uses it. It stays blocked on placement.
+
+One more case worth knowing from the same work: a cluster can stop at a
+function that touches the same object. func_8003F240 reaches D_800814D0
+`$gp`-relatively while func_8003F270, immediately after it, reaches the same
+object **absolutely** and already matches that way. They cannot have shared a
+unit, so that carve is one function wide.
+
 ### Window B's layout, derived and assembled
 
 The widths below are what the accesses prove, counted over every listing in

@@ -56,6 +56,11 @@ segments:
       # consumes) and INCLUDE_ASM stubs to replace one function at a time.
       # Name is the start offset until the original translation unit is known.
       - [0x11940, c, unk_11940]
+      # func_8003F240 defines D_800814D0 and reaches it $gp-relatively, while
+      # its neighbour func_8003F270 reaches the same object absolutely -- so
+      # they were separate original units. -G8 for this one alone.
+      - [0x12a40, c, gprel_12A40]
+      - [0x12a70, c, unk_12A70]
       # Carved out: these reach their globals $gp-relatively, so they must be
       # assembled with gas at -G8 while everything else uses -G0.
       - [0x12dd4, c, gprel_12DD4]

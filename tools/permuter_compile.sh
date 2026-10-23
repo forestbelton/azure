@@ -20,7 +20,13 @@ if [ ! -x "$PROJ/tools/ccpsx" ]; then
     echo "permuter_compile.sh: cannot locate the project root" >&2
     exit 1
 fi
-MASPSX_DIR="${MASPSX_DIR:-$HOME/scratch/maspsx}"
+
+MASPSX_DIR="$PROJ/vendor/maspsx"
+if [ ! -f "$MASPSX_DIR/maspsx.py" ]; then
+    echo "permuter_compile.sh: cannot locate vendored maspsx" >&2
+    exit 1
+fi
+
 AS="${AS:-mips64-linux-gnu-as}"
 
 cd "$PROJ"

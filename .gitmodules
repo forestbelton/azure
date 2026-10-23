@@ -1,0 +1,6 @@
+[submodule "vendor/m2c"]
+	path = vendor/m2c
+	url = https://github.com/matt-kempster/m2c
+[submodule "vendor/maspsx"]
+	path = vendor/maspsx
+	url = https://github.com/mkst/maspsx

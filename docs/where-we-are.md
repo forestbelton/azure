@@ -4,8 +4,8 @@ Written 2026-10-22. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**151 of 191 game functions are C and the build is byte-identical.** `make
-check` is green at HEAD and the working tree is clean. The remaining 40 are
+**159 of 191 game functions are C and the build is byte-identical.** `make
+check` is green at HEAD and the working tree is clean. The remaining 32 are
 `INCLUDE_ASM` stubs in `csrc/`.
 
 Run `make check` before trusting anything. Do **not** pipe it through `tail` or
@@ -26,7 +26,7 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 40 remaining stubs, in four groups
+## The 32 remaining stubs, in four groups
 
 Run `tools/decomp/guard.py` for the stub count (`grep -cE '^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{' csrc/*.c` for the C count).
 The classification below is `grep -c '%gp_rel'` and `grep -c 'jtbl_'` against
@@ -36,7 +36,7 @@ each listing:
 |-------|-------|---------------|
 | parked | 6 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
 | jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
-| gp-blocked | 29 | need `$gp`-relative and absolute addressing in one translation unit |
+| gp-blocked | 21 | need `$gp`-relative and absolute addressing in one translation unit |
 | not a function | 1 | func_8003CAA8; see below |
 
 **There is no longer an "easy" group.** Every stub with nothing structural in
