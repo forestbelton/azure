@@ -154,7 +154,7 @@ segments:
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]
       - [0x1af14, asm, psyq/libsnd/SSGNC]
-      - [0x1af38, bin]
+      - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
       - [0x301a8, asm, psyq/libsnd/PLAY]
