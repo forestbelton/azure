@@ -189,29 +189,101 @@ def report(unit, func, levers, insns, show_sites):
 
 
 def self_test(levers):
-    """Check every lever's signature against a function known to need it."""
+    """Check every lever's signature still fires where it should.
+
+    Real functions are used where a stub still has a listing. Two signatures
+    only occur in functions that have since been decompiled -- `make splat`
+    deletes their listings -- so those use inline fixtures instead, which keeps
+    the self-test independent of splat state.
+    """
+    FIXTURES = {
+        "block-move": """
+    /* 1 80042500 0 */  lb         $v0, 0x2C($v1)
+    /* 1 80042504 0 */  lb         $v1, 0x2D($v1)
+    /* 1 80042508 0 */  sb         $v0, 0x0($s0)
+    /* 1 8004250C 0 */  sb         $v1, 0x1($s0)
+""",
+        "abs-single-insn": """
+    /* 1 80046C00 0 */  bgez       $v0, .L80046C08
+    /* 1 80046C04 0 */   nop
+    /* 1 80046C08 0 */  subu       $v0, $zero, $v0
+""",
+        "join-materialisation": """
+    /* 1 80043000 0 */  addu       $v0, $s2, $zero
+    /* 1 80043004 0 */  lw         $v1, 0x1C($s1)
+    /* 1 80043008 0 */  addu       $v0, $s2, $zero
+""",
+        "delay-slot-nop": """
+    /* 1 80043100 0 */  lhu        $v0, 0x10($s0)
+    /* 1 80043104 0 */  nop
+    /* 1 80043108 0 */  sh         $v0, 0x80($s0)
+""",
+    }
+    # The two noise-prone signatures need negative cases more than positive
+    # ones: a lone register copy and a nop not in a load-delay slot are in
+    # nearly every function, and matching them there would make the tool's
+    # output worthless.
+    NEGATIVE = {
+        "join-materialisation": """
+    /* 1 80043200 0 */  addu       $v0, $s2, $zero
+    /* 1 80043204 0 */  lw         $v1, 0x1C($s1)
+    /* 1 80043208 0 */  jr         $ra
+""",
+        "delay-slot-nop": """
+    /* 1 80043300 0 */  addiu      $v0, $zero, 0x2
+    /* 1 80043304 0 */  nop
+    /* 1 80043308 0 */  jr         $ra
+""",
+    }
     cases = [
-        ("unk_102A8", "func_8003D0F0", "byte-fold"),
+        ("unk_14934", "func_80045CC4", "byte-fold"),
         ("unk_14934", "func_80042A80", "srl-not-sra"),
-        ("unk_14934", "func_80042560", "block-move"),
         ("unk_12DE0", "func_8003F5E0", "gp-relative"),
         ("unk_14934", "func_80042BDC", "constant-vs-symbol"),
         ("unk_14934", "func_80042BDC", "switch-index-width"),
+        ("unk_14934", "func_80042BDC", "split-address-form"),
         ("unk_14934", "func_80041344", "loop-guard-blez"),
+        ("unk_14934", "func_80045CC4", "byte-decrement"),
+        ("unk_14934", "func_80045CC4", "halfword-signed-read"),
     ]
-    bad = 0
+    bad = skipped = 0
     for unit, func, want in cases:
         path = "%s/asm/nonmatchings/%s/%s.s" % (PROJ, unit, func)
         if not os.path.exists(path):
-            print("SKIP %-14s %-14s (no listing; run make splat)" % (func, want))
+            print("SKIP %-14s %-22s (no listing; run make splat)" % (func, want))
+            skipped += 1
             continue
         ids = [lv["id"] for lv, _ in applicable(levers, parse_listing(path))]
         ok = want in ids
         bad += 0 if ok else 1
-        print("%-4s %-14s expects %-20s got: %s"
-              % ("ok" if ok else "FAIL", func, want, ", ".join(ids) or "-"))
+        print("%-4s %-14s expects %-22s %s"
+              % ("ok" if ok else "FAIL", func, want,
+                 "" if ok else "got: " + (", ".join(ids) or "-")))
+    for want, text in FIXTURES.items():
+        insns = [Insn(m.group(2).upper(), m.group(3), m.group(4))
+                 for m in (INSN.match(l) for l in text.splitlines()) if m]
+        ids = [lv["id"] for lv, _ in applicable(levers, insns)]
+        ok = want in ids
+        bad += 0 if ok else 1
+        print("%-4s %-14s expects %-22s %s"
+              % ("ok" if ok else "FAIL", "(fixture)", want,
+                 "" if ok else "got: " + (", ".join(ids) or "-")))
+    for want, text in NEGATIVE.items():
+        insns = [Insn(m.group(2).upper(), m.group(3), m.group(4))
+                 for m in (INSN.match(l) for l in text.splitlines()) if m]
+        ids = [lv["id"] for lv, _ in applicable(levers, insns)]
+        ok = want not in ids
+        bad += 0 if ok else 1
+        print("%-4s %-14s must NOT fire %-15s %s"
+              % ("ok" if ok else "FAIL", "(negative)", want,
+                 "" if ok else "but it did"))
+    covered = {c[2] for c in cases} | set(FIXTURES)
+    uncovered = [lv["id"] for lv in levers if lv["id"] not in covered]
     print()
-    print("%d lever(s) in levers.yaml; %d self-test failure(s)" % (len(levers), bad))
+    if uncovered:
+        print("no self-test case for: %s" % ", ".join(uncovered))
+    print("%d lever(s); %d failure(s); %d skipped"
+          % (len(levers), bad, skipped))
     return 1 if bad else 0
 
 
