@@ -233,10 +233,13 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AE98);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AEC4);
 
-void func_8004AEC4(void);
+/* A forwarding wrapper: its four arguments pass through untouched, which is
+   invisible in the listing (no register setup before the jal) and only shows
+   up at a caller -- func_8004AA44 passes four. */
+void func_8004AEC4(s32, s32, s32, void *);
 
-void func_8004AFC8(void) {
-    func_8004AEC4();
+void func_8004AFC8(s32 a, s32 b, s32 c, void *d) {
+    func_8004AEC4(a, b, c, d);
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AFE8);
@@ -273,7 +276,17 @@ void func_8004B404(s32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B42C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B4A8);
+UnkNode *func_8004B4A8(UnkNode *target) {
+    UnkNode *p = D_80081498;
+
+    while (p != 0) {
+        if (p == target) {
+            break;
+        }
+        p = *(UnkNode **) p;
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B4DC);
 

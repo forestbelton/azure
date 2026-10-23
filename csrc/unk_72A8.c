@@ -83,7 +83,11 @@ void func_80034F88(u32 *p, u32 v) {
     p[66] = (u32) &p[50];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034F9C);
+void func_80034F9C(u8 *p) {
+    if (func_80034FD0((u32 *) p) != 0) {
+        p[0] = 1;
+    }
+}
 
 s32 func_80034FD0(u32 *p) {
     return p[4] != (u32) &p[2];
@@ -142,10 +146,8 @@ void func_8003528C(u32 v) {
     func_80034F88((u32 *) D_80082A38, v);
 }
 
-void func_80034F9C(s16 *);
-
 void func_800352B4(void) {
-    func_80034F9C(D_80082A38);
+    func_80034F9C((u8 *) D_80082A38);
 }
 
 void func_800352D8(void) {
