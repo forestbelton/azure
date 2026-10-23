@@ -33,7 +33,25 @@
  *      entry of REG_ALLOC_ORDER. For it to take $v1, something must occupy $v0
  *      across `[slti, beqz]` -- and nothing can, because that block contains
  *      the call.
- *  (B) reorg, and the exact pass check is now named. The second comparison's
+ *  (B) reorg. VERIFIED against 2.7.2's reorg.c on 2026-10-23: the check named
+ *      below is real, and only its identifier was wrong -- it is
+ *      `opposite_needed`, not `opposite_needs`. `find_basic_block` does return
+ *      -1 as well as 0, and `mark_target_live_regs` can use its cached
+ *      liveness only when `b != -1`, so the -1 path is genuine.
+ *
+ *      Also checked, because it looked like an escape and is not one here: the
+ *      same condition is
+ *          condition == const_true_rtx
+ *          || (! insn_sets_resource_p (trial, &opposite_needed, 1)
+ *              && ! may_trap_p (pat))
+ *      so for a conditional branch an insn that MAY TRAP is never stolen into
+ *      the slot, and `may_trap_p` is 1 for a memory reference that is not a
+ *      static var or a stack slot. That is a real general lever (now in
+ *      matching-levers), but it cannot be used here: the block reorg steals
+ *      from is a `return 0`, i.e. a constant, and making it may-trap would
+ *      mean returning a value loaded from memory -- a different function.
+ *
+ *      The second comparison's
  *      branch must NOT fill its delay slot from the shared return-0 block,
  *      where the other three do. Two facts narrow it to one test.
  *

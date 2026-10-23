@@ -187,12 +187,43 @@ Three instances:
   three copies in slots, and the func_80042900 shape costs it 4 words (109
   against 113). Its remaining gap is the other half of the same decision --
   reorg declining ONE of four identical opportunities, which needs
-  `insn_sets_resource_p (trial, &opposite_needs)` to reject the trial, i.e.
+  `insn_sets_resource_p (trial, &opposite_needed)` to reject the trial, i.e.
   `mark_target_live_regs` reporting the register live at that branch's
   fall-through, reachable only through `find_basic_block` returning -1. That is
   block-entry layout, and it costs a word to produce from C. **So the lever is
   which way the layout goes, and the listing tells you which way to want: a
   surviving original means copied, an absent one means stolen.**
+
+  **Verified against 2.7.2's reorg.c, 2026-10-23.** The claim above was written
+  from inference and is correct; only the identifier was misspelled
+  (`opposite_needed`, not `opposite_needs`). `find_basic_block` does return -1
+  as well as 0, and `mark_target_live_regs` takes that path: it can only use its
+  cached liveness when `b != -1`, so a -1 forces a recompute. The
+  `new_thread != thread` gate on `reorg_redirect_jump` is there too.
+
+  **AND THE SAME CONDITION HAS A SECOND DISJUNCT THAT IS A LEVER IN ITS OWN
+  RIGHT.** The full test is
+
+      condition == const_true_rtx
+      || (! insn_sets_resource_p (trial, &opposite_needed, 1)
+          && ! may_trap_p (pat))
+
+  and the trial is taken only when that holds. So for a **conditional** branch
+  -- where `condition` is not `const_true_rtx` -- **an insn that may trap can
+  never be stolen into the delay slot.** `may_trap_p` returns 1 for a memory
+  reference unless it is a static variable or a stack slot (its own comment
+  says so), and 0 for anything built from REG, CONST_INT, SYMBOL_REF and
+  friends.
+
+  That is a general tool for controlling delay-slot fills, and it cuts both
+  ways: a register-or-constant computation at a branch target is stealable, a
+  load through a pointer is not. When the target did NOT fill a slot it could
+  have, check whether the insn it declined reads memory through a pointer
+  before reaching for block layout. Note the escape does not help
+  func_8003F368's own gap, because the block reorg steals from there is a
+  `return 0` -- a constant, so `may_trap_p` is 0 -- and making it may-trap
+  would mean returning a value loaded from memory, which changes what the
+  function does.
 
 ## 2. Loop notes change every reference weight in the function
 
