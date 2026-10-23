@@ -102,8 +102,21 @@
  * (`sll $a3,$v1,16`). Here `flags` takes $a3 itself, because the copy into the
  * fourth argument register gives it a preference for $a3 and the `sll`/`sra`
  * pseudos coalesce with it. SO THE ONE REMAINING LEVER is to stop `flags`
- * taking $a3: break its argument-register preference, or get a conflicting
- * higher-priority allocno into $a3 first. Ruled out, all still 21 DIFF unless
+ * taking $a3 -- and of the two ways named here, **the first is now refuted and
+ * the second is the one to use.** Breaking the argument-register preference is
+ * not reachable: measured on func_80041344, such a preference propagates along
+ * the dataflow chain including through arithmetic insns, and splitting the
+ * chain through an intermediate variable leaves BOTH allocnos carrying it,
+ * while a separate `s32 f = (s16) x;` is eliminated by combine outright.
+ * Getting a conflicting higher-priority allocno in first is the live route,
+ * because `regs_someone_prefers` collects only the preferences of
+ * LOWER-priority conflicting allocnos -- so allocation order decides whose
+ * preference wins, and order is reachable through the section 3 levers.
+ * func_80041344 went from 24 differing words to 2 on exactly that comparison.
+ * Also worth trying here, from the same work: making the switch index a real
+ * source variable by writing `op = *(u16 *) p - 1;` with the arms renumbered
+ * from `case 0`, so expand_end_case skips its own MINUS and the index carries
+ * the flag word's references and conflicts. Ruled out, all still 21 DIFF unless
  * noted: `flags` as s16 or u16 (163 words), as u32, a separate
  * `s32 farg = (s16) flags;` or `s16 farg = flags;`, a flag variable used only
  * by case 6, the OR inside the argument expression (163 words), and passing

@@ -214,10 +214,43 @@ Levers that move them, all with no change to the emitted code:
     allocno carries the `$a0` preference that stops the duplicate being folded
     differently. Even then it can land in `$a1` and cost a `move`.
 
+**Hard-register preferences propagate along the dataflow chain, including
+through arithmetic insns, and they cannot be shed with an intermediate
+variable.** This is more than "a call's argument preferences propagate". In
+func_80041344 one allocno is printed `preferences: 3 7`: the 7 comes from
+`(set <t> (ashift <op> 16))` whose consumer writes hard `$a3` directly, and the
+3 from `(set <op> (ashift <t112> 4))` whose source local-alloc had put in `$v1`
+-- neither insn is a copy. With both preferences it takes `$v1`; with only the 7
+it takes `$a3`, and deleting the pref-3 source costs 51 differing words against
+24. Splitting the chain through another variable leaves **both** allocnos
+carrying `preferences: 3 7` and changes nothing, and a separate
+`s32 f = (s16) op;` is eliminated by combine outright.
+
+**But allocation ORDER decides whose preference wins, and that is reachable.**
+`regs_someone_prefers` collects only the preferences of *lower-priority*
+conflicting allocnos, so whoever is allocated first has its preferences
+collected into the other's avoid set. func_80041344's entire remaining
+permutation is one comparison -- 4.643 against 4.756 -- and moving it with the
+levers above puts eight registers right at once, taking it from 24 differing
+words to 2. So an argument-register preference is not a wall by itself; what
+matters is which allocno reaches `find_reg` first.
+
+**A dense switch's index is a separate pseudo only when the lowest case label
+is non-zero.** Write `op = *(u16 *) p - 1;` and renumber the arms from `case 0`,
+and `expand_end_case` skips its own MINUS because minval is 0 -- so `sltiu` and
+`sll` read the user's pseudo and the index **is** a source variable. It then
+carries whatever references that variable has, and conflicts with whatever it
+conflicts with. In func_80041344 the index, the flag word, both loop bounds and
+a pointer are deliberately one variable for exactly this reason. Second
+instance of the rule below: block-local is a property of the pseudo, not of the
+value.
+
 Two things that cannot be steered from C:
 
 * `find_reg` avoids registers that *conflicting allocnos prefer*, so changing
-  which allocno holds a preference cascades through the whole assignment.
+  which allocno holds a preference cascades through the whole assignment --
+  though see the ordering asymmetry above before concluding a preference is
+  fatal.
 * **local-alloc runs before global-alloc** and assigns block-local quantities
   first, looking only inside the one block. A switch index, or any value live
   in one block only, is out of its own reach -- that is what is left in
@@ -530,9 +563,15 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   strong and is corrected below.** Two things follow from multiple sets and
   they have different predicates, so keep them apart:
 
-  **(a) Substitution stops.** `can_combine_p` will not substitute a def into a
-  use when the def's register has more than one set, so a multi-set value
-  survives as its own pseudo. This is the half that acts as a lever.
+  **(a) Substitution stops -- but only ACROSS a basic-block boundary.**
+  `can_combine_p` will not substitute a def into a use when the def's register
+  has more than one set, so a multi-set value survives as its own pseudo --
+  *unless* the last set is in the same basic block as the use, because
+  `reg_last_set_value` accepts a multi-set register when
+  `reg_last_set_label == label_tick`. Measured in func_80041344: a many-set
+  function-scope variable loaded and passed straight to a call still folds to a
+  bare `lh $a3,0xC($s0)` with no extra word. So this lever needs the sets and
+  the use in different blocks; within one block it buys nothing.
 
   **(b) `nonzero_bits` does NOT give up -- it ACCUMULATES.**
   `set_nonzero_bits_and_sign_copies` ORs `nonzero_bits` and takes the MIN of
@@ -754,10 +793,20 @@ into a shared tail differ by a word between the two spellings.
 * **`local-alloc`'s choices.** A block-local quantity -- a switch index, a
   value used only inside one arm -- is assigned before `global-alloc` runs, and
   nothing in the source reaches it. This is what is left in func_80041344.
-* **A call's argument preferences.** An allocno that feeds a call argument
-  carries a preference for that register, `find_reg` avoids it for conflicting
-  allocnos, and allocnos crossing the call have their own preferences pruned by
-  `call_used_reg_set`. The whole assignment shifts around the call and no
+* **A call's argument preferences -- but this entry is now only half true, and
+  the two functions parked on it deserve re-examination.** The propagation is
+  real and cannot be broken by any spelling found (see section 3), but
+  `regs_someone_prefers` collects only *lower-priority* conflicting allocnos'
+  preferences, so allocation order decides whose preference wins -- and order is
+  reachable through section 3's priority levers. func_80041344 went from 24
+  differing words to 2 on exactly that. **func_800407C0 and func_80047054 are
+  parked as unreachable because of this entry**, on five-fold and 2.5-fold
+  priority gaps; those gaps may still be too wide, but the reason recorded for
+  them is weaker than it was. The original claim follows. An allocno that feeds
+  a call argument carries a preference for that register, `find_reg` avoids it
+  for conflicting allocnos, and allocnos crossing the call have their own
+  preferences pruned by `call_used_reg_set`. The whole assignment shifts around
+  the call and no
   spelling moves it. This is what makes func_800407C0 unreachable.
 * **decomp-permuter** cannot score a function that uses a constant address:
   splat's `target.o` carries an `R_MIPS_LO16` relocation the constant form

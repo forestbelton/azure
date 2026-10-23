@@ -168,15 +168,20 @@ format -- as are their shared `default: return;`, the `blez` on case 9, the
 
 | function | words | DIFF | source |
 |----------|-------|------|--------|
-| func_80041344 | 145 of 145 | 67 | `docs/near-misses/func_80041344.c` |
+| func_80041344 | 145 of 145 | **2** | `docs/near-misses/func_80041344.c` |
 | func_80041588 | 164 of 164 | 21 | `docs/near-misses/func_80041588.c` |
 | func_80042BDC | 543 of 543 | 14 | `docs/near-misses/func_80042BDC.c` |
 | func_8003E758 | not started, also `$gp`-blocked | | |
 
 func_80041588's 21 are one coupled three-register permutation with no
-instruction, immediate or ordering difference, and its near-miss file has the
-priorities, the conflict sets and the one remaining lever (stopping `flags`
-from taking `$a3`). func_80042BDC's 14 are all in one block of
+instruction, immediate or ordering difference. **Its stated remaining lever --
+"break `flags`' argument-register preference" -- is now refuted**: that
+preference propagates along the dataflow chain through arithmetic insns, and
+splitting the chain through another variable leaves both allocnos carrying it.
+What works instead is winning the allocation ORDER, because
+`regs_someone_prefers` only collects *lower-priority* conflicting allocnos'
+preferences; func_80041344 went from 24 differing words to 2 that way, and the
+same approach is what its sibling now wants. func_80042BDC's 14 are all in one block of
 case 10, its 180-instruction transform-revert arm; every other arm matches word
 for word, and the all-ternary form it now uses is almost certainly the original
 shape. Its near-miss file names the one word to chase (a `addu $a0,$s1,$zero`
