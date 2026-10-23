@@ -119,10 +119,8 @@ void func_800352B4(void) {
     func_80034F9C(D_80082A38);
 }
 
-void func_80034FD0(s16 *);
-
 void func_800352D8(void) {
-    func_80034FD0(D_80082A38);
+    func_80034FD0((u32 *) D_80082A38);
 }
 
 void func_80034FFC(s16 *);
