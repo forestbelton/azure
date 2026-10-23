@@ -43,7 +43,15 @@ void func_80033C84(u32 *p) {
     *p = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033C8C);
+void func_80033C8C(void) {
+    u8 *p = D_800816C0;
+    s32 i;
+
+    for (i = 0; i < 0x14; i++) {
+        func_80033C84((u32 *) p);
+        p += 0x64;
+    }
+}
 
 void func_80033CD8(u8 *p, u32 tag) {
     if (*(u32 *) (p - 0xC) == 0) {

@@ -1191,6 +1191,12 @@ extern u8  D_80080F40[8];
 extern u8  D_80081010[8];
 extern u8  D_80080F60[8];
 extern u8  D_8006ADEC[];
+/* Sized, for the same reason as D_80080F40: in func_80049D80 and
+   func_8005097C each address is the one-insn `la`, with the jal's delay slot
+   filled by an argument move instead of by an `addiu %lo`. */
+extern u8  D_80080B54[8];
+extern u8  D_80080B88[8];
+extern u8  D_80080B90[8];
 extern u8  D_80080B34[];
 extern u8  D_80080B40[];
 extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */

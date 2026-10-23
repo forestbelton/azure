@@ -185,12 +185,20 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800499E8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049CF4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049D80);
+void func_80049CF4(s32, s32);
+void func_800499E8(u8 *, s32, u8 *);
 
-void func_80049CF4(void);
+void func_80049D80(u8 *p, s32 b) {
+    func_80049CF4((s32) p, b);
+    func_800499E8(p + 0x18, b, D_80080B54);
+}
 
-void func_80049DC8(void) {
-    func_80049CF4();
+void func_80049CF4(s32, s32);
+
+/* Two arguments that pass through untouched, which is invisible here and shows
+   up at func_80049D80, which passes both. */
+void func_80049DC8(s32 a, s32 b) {
+    func_80049CF4(a, b);
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049DE8);
@@ -335,7 +343,14 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B1DC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B248);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B298);
+void func_8004B298(s32 a, s32 b) {
+    u32 *q = *(u32 **) (b + 4);
+
+    if (q[0] == 0) {
+        *(u16 *) (a - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 void func_8004B2E0(s32 a, s32 b) {
     s32 *n = (s32 *) b;
@@ -627,7 +642,21 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E130);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E188);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E21C);
+typedef struct Unk4E21C {
+    u8 unk_00[4];
+} Unk4E21C;
+
+void func_8004E188(u8 *, u8);
+
+u8 *func_8004E21C(u8 *p, u8 b) {
+    u8 t[16];
+
+    func_8004E188(t, b);
+    /* A byte-aligned 4-byte struct assignment: that is the lwl/lwr and
+       swl/swr pair rather than a word move. */
+    *(Unk4E21C *) p = *(Unk4E21C *) (t + 8);
+    return p;
+}
 
 void func_8004E264(u16 *p, u32 v) {
     u32 t = (v & 0xF) + 0x7C80;
@@ -642,7 +671,21 @@ u8 *func_8004E280(u8 *p, s32 *out) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E298);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E478);
+u8 *func_8004E478(u8 *p, u16 n) {
+    /* The PARAMETER is the moving pointer and the saved copy is returned. */
+    u8 *r = p;
+    u8 *b = r + (n - 1);
+    u8 x;
+    u8 y;
+
+    while (p < b) {
+        x = *p;
+        y = *b;
+        *b-- = x;
+        *p++ = y;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E4C0);
 
@@ -652,7 +695,13 @@ void func_8004E57C(s32 a, u16 b, s32 c) {
     func_8004E4C0(a, b, c, 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E5A0);
+u8 *func_8004E478(u8 *, u16);
+
+u8 *func_8004E5A0(s32 a, u16 n, u8 *dst) {
+    func_8004E57C(a, n, (s32) dst);
+    func_8004E478(dst, n);
+    return dst;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E5E8);
 
@@ -919,7 +968,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005084C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800508F0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005097C);
+void func_800508F0(u8 *, u8 *);
+
+void func_8005097C(u8 *p) {
+    func_800508F0(p, D_80080B88);
+    func_800499E8(p + 0x18, (s32) D_80080B88, D_80080B90);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800509C4);
 
