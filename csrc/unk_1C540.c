@@ -661,7 +661,18 @@ void func_8004D8F0(u32 a, u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D91C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D98C);
+void func_8004D98C(u8 a, s32 b, u8 *p) {
+    s32 t = b & 0xF;
+
+    p[1] = 0x2C;
+    *(u16 *) (p + 4) = 0x1F;
+    p[0] = 0;
+    *(u16 *) (p + 6) = t + 0x7C80;
+    if ((b & 0x10) != 0) {
+        *(u16 *) (p + 6) = t + 0x7C88;
+    }
+    func_8004D8F0(a, p + 8);
+}
 
 void func_8004D9E0(u8 *p, s32 b, s32 c, s32 d, s32 e) {
     /* `b * 4` is the LEFT operand of the outer add: the target's
@@ -780,7 +791,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E69C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E6F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E884);
+void func_8004E884(u8 *p, u32 b) {
+    u8 v;
+
+    if (p != 0) {
+        do {
+            func_8004E264((u16 *) p, b);
+            v = p[0];
+            p += 0xC;
+        } while ((v & 0x80) == 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E8D8);
 
@@ -810,7 +831,14 @@ void func_8004E9E4(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E9EC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EA70);
+void func_8004E9EC(u8 *, s32);
+
+u8 *func_8004EA70(u8 *p, s32 i) {
+    func_8004E9EC(p, i);
+    p += i * 2;
+    strncpy(p, D_80080B70, 2);
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EAC4);
 
@@ -833,7 +861,18 @@ s32 func_8004EBDC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EC20);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004ECAC);
+void func_8004ECAC(u8 *q) {
+    u8 *p = q - 0x20;
+    u16 f = *(u16 *) (p + 0x1E);
+    u8 *r;
+
+    if ((f & 0x2000) != 0) {
+        *(u16 *) (p + 0x1E) = f & 0xDFFF;
+        r = *(u8 **) q;
+        *(u16 *) (r + 0x1E) |= 0x2000;
+        func_8004EE90(p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004ED00);
 

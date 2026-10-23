@@ -1212,6 +1212,8 @@ extern u8  D_8006A908[];
 extern u32 D_8006A8B4[];
 extern u32 D_8006CD50[];
 extern s8  D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
+extern u32 D_800DCF54[];  /* out of image, a table of function pointers */
+extern u8  D_80080B70[];
 extern u32 D_80073740[];
 extern u8  D_80080B20[];
 extern u8  D_800712FC[];
@@ -1782,6 +1784,8 @@ void StUnSetRing(void);
 void func_8006124C(s32, u8 *);
 s32  CdControlB(u8, u8 *, u8 *);
 s32  CdPosToInt(u8 *);
+/* libc. */
+u8  *strncpy(u8 *, u8 *, s32);
 /* libgpu/libetc graphics setup. */
 void SetVideoMode(s32);
 void ResetGraph(s32);
