@@ -453,9 +453,30 @@ Levers that move them, all with no change to the emitted code:
   function with no `jal` has no hard-register copies except its incoming
   parameters, so almost every block-local quantity in it goes through phase 2
   and the suggestion lever does not exist. func_80047054 has **zero** calls,
-  which is why nothing moves its `p[0]` load off `$a0`. func_8004437C (6 calls)
-  and func_8003F368 (12 calls) do have the lever available, and it is
-  unexplored on both.
+  which is why nothing moves its `p[0]` load off `$a0`.
+
+  **But "the function has calls" is NOT enough -- corrected 2026-10-23 after
+  testing it on both candidates and getting nothing.** The test is not whether
+  the function contains a `jal`; it is whether *the quantity you need to move*
+  can be made to flow through a hard register, which from C means being a call
+  argument, a call's return value, or a returned value. A function can be full
+  of calls and still offer no route to the one quantity that matters:
+
+  * func_8004437C (6 calls): the quantity is the `%hi` half of
+    `D_80080AF4[D_80080AFC]`'s address. That address is never an argument and
+    never a return value -- the function's only hard-register copies are its
+    two parameters and the arguments of its calls (`6`, the `D_8006E704`
+    pointer, `0`, `arg1`, the `0x22`/`0x21` constant). No suggestion can reach
+    it without changing what the function does.
+  * func_8003F368 (12 calls): the quantity is a comparison RESULT, which is
+    not a copy at all, so `combine_regs` never looks at it. Four spellings
+    aimed at giving the function's return value a `$v0`-suggested pseudo that
+    outlives the third comparison were measured and all are worse than the
+    baseline -- see that file.
+
+  So the lever is real and narrower than it first looks: it needs a quantity
+  that is *already* on a hard-register copy path, and most interesting
+  quantities are not.
 
   **And sched1's ordering is not just priority-then-source-order.**
   `rank_for_schedule` compares `INSN_PRIORITY` first; then classifies both

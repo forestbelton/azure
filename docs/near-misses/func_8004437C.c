@@ -11,16 +11,24 @@
  *   after func_8003E4FC: this has the address in $v1 and the stored pointer in
  *             $a0; the target has them swapped                     (5 words)
  *
- * ONE UNEXPLORED LEVER, added 2026-10-23 from reading local-alloc.c and NOT
- * measured. The HIGH half is block-local, so local-alloc owns it -- and
- * `block_alloc` has a preference system this header did not know about: every
- * quantity carrying a SUGGESTION gets its suggested register in a first phase
- * that jumps the queue, ahead of the unsuggested quantities sorted by life
- * length. Suggestions come from `combine_regs` on a copy relating a pseudo to
- * a HARD register, i.e. a call's arguments or return value, and this function
- * has 6 calls. So the question "how do I make local-alloc put the HIGH
- * somewhere else" has an answer shape that was never tried. See
- * matching-levers section 3.
+ * THE LOCAL-ALLOC SUGGESTION LEVER DOES NOT REACH THIS FUNCTION, checked
+ * 2026-10-23. `block_alloc` does have a preference system this header did not
+ * know about -- every quantity carrying a SUGGESTION gets its suggested
+ * register in a first phase that jumps the queue, ahead of the unsuggested
+ * quantities sorted by life length -- and I recorded this function as a
+ * candidate because it has 6 calls. That was the wrong test.
+ *
+ * Suggestions come from `combine_regs` on a copy relating a pseudo to a HARD
+ * register, so what matters is whether THE QUANTITY YOU NEED TO MOVE is on a
+ * hard-register copy path, not whether the function makes calls. The quantity
+ * here is the `%hi` half of `D_80080AF4[D_80080AFC]`'s address, and that value
+ * is never an argument and never a return value: the only hard-register copies
+ * in this function are its two parameters and the arguments of its calls
+ * (`6`, the `D_8006E704` pointer, `0`, `arg1`, and the `0x22`/`0x21`
+ * constant). Nothing can attach a suggestion to the address without changing
+ * what the function does.
+ *
+ * So no new idea, and the analysis below stands unchanged.
  *
  * MECHANISM. Indexing a symbol (`D_80080AF4[i]`) goes through
  * legitimize_address, which puts the HIGH in one pseudo and force_regs the

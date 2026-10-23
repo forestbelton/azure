@@ -15,8 +15,31 @@
  * WHAT IS LEFT is 4 words in two independent two-word gaps, both in the tail's
  * BCD validation chain:
  *
- * ONE UNEXPLORED LEVER, added 2026-10-23 from reading local-alloc.c and NOT
- * measured. `block_alloc` allocates in two phases: every quantity carrying a
+ * THE LOCAL-ALLOC SUGGESTION LEVER WAS TRIED AND DOES NOT WORK HERE,
+ * 2026-10-23. Four variants, all worse than this file's 4 DIFF:
+ *
+ *   s32 r at function scope, r = 0 then r = pos in the if   114 words, 42 DIFF
+ *   r = pos then r = 0 in the negated if                    114 words, 16 DIFF
+ *   explicit if/else arms setting r                         113 words,  7 DIFF
+ *   (a fourth, a single-exit `goto out`, does not compile:
+ *    cc1psx is C89 and the declaration cannot go mid-block)
+ *
+ * The idea was that the target's `addu $v0,$zero,$zero` appearing in the FIRST
+ * and THIRD comparisons' delay slots but not the second means the return value
+ * is one pseudo carrying a $v0 copy-suggestion (combine_regs records one on the
+ * pseudo of a `(set (reg $v0) (reg pseudo))` return copy), which phase 1 would
+ * place in $v0 ahead of the unsuggested comparison results -- pushing the third
+ * comparison to $v1 and explaining gaps (A) and (B) as ONE phenomenon rather
+ * than two. The observation about the delay slots is real and still worth
+ * having. The explanation is refuted: every spelling that creates such a pseudo
+ * is worse.
+ *
+ * And the deeper reason the lever cannot apply, which is now in
+ * matching-levers: the quantity that must move is a comparison RESULT. It is
+ * not a copy, so `combine_regs` never examines it and no suggestion can be
+ * attached to it at all. Having 12 calls in the function is irrelevant.
+ *
+ * THE ORIGINAL ANALYSIS BELOW STANDS. `block_alloc` allocates in two phases: every quantity carrying a
  * SUGGESTION (`qty_phys_copy_sugg`, else `qty_phys_sugg`) gets its suggested
  * register first, jumping the queue, and only the unsuggested remainder is
  * sorted by decreasing life and given the first register `find_free_reg`

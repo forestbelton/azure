@@ -31,7 +31,12 @@ The queue, in order:
       layout and function order this project has inferred" -- and those
       inferences are where four previous dead ends turned out to be.
 
-- [ ] **A decision on func_8003E758's decomp device.** It ships
+- [x] **DECIDED 2026-10-23: func_8003E758's decomp device STAYS** until a more
+      robust solution turns up. Left in place deliberately, not overlooked; the
+      honest fallback is recorded below and in the function's comment if anyone
+      wants to take the 11 DIFF instead. Original note follows.
+
+      It ships
       `__asm__ volatile ("" :: "r" (q) : "memory")`, worth 13 words (3 reload,
       1 nop placement, 9 a register swap via a free allocno reference). It
       shapes the allocator directly rather than reproducing a source shape.
