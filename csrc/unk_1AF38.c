@@ -204,7 +204,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800483AC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004846C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048500);
+void func_8004846C(s32);
+
+void func_80048500(s32 a, s32 b) {
+    /* s32, not s16: as an s16 local the halfword comes out `lhu` plus an
+       sll/sra pair at the call instead of the target's single `lh`. */
+    s32 v;
+
+    func_80041284((Unk41284 *) (D_800710E4[b] + a * 8));
+    func_8003F320();
+    v = *(s16 *) (D_80081480 + 0x18);
+    DrawSync(0);
+    func_8004846C(v);
+}
 
 void func_80048500(s32, s32);
 

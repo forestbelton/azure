@@ -1275,11 +1275,44 @@ void func_8003A61C(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A684);
+void func_8003A684(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *t = *(u8 **) (p + 0x80);
+    u32 i = *(*q)++;
+    u8 *c = *q;
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A6EC);
+    if (*(s32 *) (t + i * 4 + 0x48) < 0) {
+        *q = (u8 *) (c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24));
+    } else {
+        *q = c + 4;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A754);
+void func_8003A6EC(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *t = *(u8 **) (p + 0x80);
+    u32 i = *(*q)++;
+    u8 *c = *q;
+
+    if (*(s32 *) (t + i * 4 + 0x48) >= 0) {
+        *q = (u8 *) (c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24));
+    } else {
+        *q = c + 4;
+    }
+}
+
+void func_8003A754(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *t = *(u8 **) (p + 0x80);
+    u32 i = *(*q)++;
+    u8 *c = *q;
+
+    if (*(s32 *) (t + i * 4 + 0x48) > 0) {
+        *q = (u8 *) (c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24));
+    } else {
+        *q = c + 4;
+    }
+}
 
 void func_8003A7BC(u8 *p) {
     u8 **q = (u8 **) (p + 0x1C);
