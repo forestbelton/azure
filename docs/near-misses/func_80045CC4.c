@@ -1,4 +1,4 @@
-/* func_80045CC4 (unk_1811C) -- 436 of 437 words, 47 DIFF. Not compiled; see
+/* func_80045CC4 (unk_19434) -- 436 of 437 words, 47 DIFF. Not compiled; see
  * docs/open-matching-problems.md.
  *
  * It emits one slot's elements: builds the matrix in the scratchpad, then per

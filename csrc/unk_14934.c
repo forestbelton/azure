@@ -2,8 +2,8 @@
 
 void func_800423C0(u8 *, s32, u8 *);
 void func_80041E70(void *);
-void func_80047338(Unk800777AC *, u32, u16);
-void func_80047468(Unk800777AC *, u32, u16);
+void func_80047338(Unk800777AC *, u32, u32);
+void func_80047468(Unk800777AC *, u32, u32);
 void func_800463EC(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80045CC4(u8 *, UnkVec *, UnkSlot *, s16);
 void func_80044D24(u8 *, UnkSlot *, s16);

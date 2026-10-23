@@ -124,7 +124,48 @@ def check(path):
     return path, func, "builds (%s); header states no count" % got
 
 
+def unit_for_addr(addr):
+    """Which c subsegment currently owns this vram address, per the splat spec.
+
+    Carving a $gp cluster moves every later function into a renamed unit, so a
+    near-miss header's UNIT goes stale every time -- four times so far. This
+    derives it instead of anyone remembering to update it.
+    """
+    y = open(os.path.join(PROJ, "splat/slus_006.14.yaml")).read()
+    subs = sorted((int(m.group(1), 16), m.group(2))
+                  for m in re.finditer(r"^\s*-\s*\[(0x[0-9a-fA-F]+),\s*c,\s*(\w+)\]",
+                                       y, re.M))
+    off = addr - 0x8002d000 + 0x800
+    owner = None
+    for start, name in subs:
+        if start <= off:
+            owner = name
+        else:
+            break
+    return owner
+
+
+def fix_units():
+    """Rewrite each near-miss header's UNIT to the one that owns its address."""
+    changed = 0
+    for path in sorted(glob.glob(os.path.join(PROJ, "docs/near-misses/*.c"))):
+        text = open(path).read()
+        m = HEAD.search(text[:4000])
+        if not m:
+            continue
+        func, unit = m.group(1), m.group(2)
+        want = unit_for_addr(int(func[5:], 16))
+        if want and want != unit:
+            open(path, "w").write(text.replace("(%s)" % unit, "(%s)" % want, 1))
+            print("  %-34s %s -> %s" % (os.path.relpath(path, PROJ), unit, want))
+            changed += 1
+    print("%d header(s) repointed" % changed)
+    return 0
+
+
 def main():
+    if "--fix-units" in sys.argv:
+        return fix_units()
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     files = args or sorted(glob.glob(os.path.join(PROJ, "docs/near-misses/*.c")))
     bad = 0

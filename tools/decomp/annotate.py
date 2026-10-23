@@ -236,15 +236,15 @@ def self_test(levers):
 """,
     }
     cases = [
-        ("unk_1811C", "func_80045CC4", "byte-fold"),
+        ("unk_19434", "func_80045CC4", "byte-fold"),
         ("unk_154BC", "func_80042A80", "srl-not-sra"),
-        ("unk_1811C", "func_80047338", "gp-relative"),
+        ("unk_12DEC", "func_8003F624", "gp-relative"),
         ("unk_154BC", "func_80042BDC", "constant-vs-symbol"),
         ("unk_154BC", "func_80042BDC", "switch-index-width"),
         ("unk_154BC", "func_80042BDC", "split-address-form"),
         ("unk_14934", "func_80041344", "loop-guard-blez"),
-        ("unk_1811C", "func_80045CC4", "byte-decrement"),
-        ("unk_1811C", "func_80045CC4", "halfword-signed-read"),
+        ("unk_19434", "func_80045CC4", "byte-decrement"),
+        ("unk_19434", "func_80045CC4", "halfword-signed-read"),
     ]
     bad = skipped = 0
     for unit, func, want in cases:

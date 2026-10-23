@@ -1,4 +1,4 @@
-/* func_80047054 (unk_1811C) -- 58 words against 58, every opcode, immediate,
+/* func_80047054 (unk_19434) -- 58 words against 58, every opcode, immediate,
  * displacement and nop identical. The only difference is a permutation of five
  * registers, and it follows from one decision.
  *

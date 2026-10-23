@@ -1022,6 +1022,19 @@ extern Unk80081522 D_80081522;
 extern Unk80082E60 D_80082E60;
 extern Unk80083120 D_80083120[8];
 extern Unk80083160 D_80083160;
+
+/* Unk80083160's unk_04, reached ABSOLUTELY by func_80047338 and func_80047468
+   as the texture-atlas generation stamp. It sits inside gp +/- 0x8000, so in a
+   -G8 carved unit a plain scalar declaration would wrongly go $gp-relative;
+   the incomplete array makes cc1psx compiler-split the address itself. Same
+   hazard class as D_80082E6E and D_80080AF4. Element type u16 from the access
+   (lhu at %lo with no displacement, stored into the u16 cursor stamps).
+
+   Strictly this declaration is optional -- `D_80083160.unk_04` produces
+   identical linked bytes, since %lo(D_80083160)+4 == %lo(D_80083164) -- but
+   verify.py then flags the differing relocation addend, and this is where a
+   reader will look for the -G8 hazard. */
+extern u16 D_80083164[];
 extern Unk80083462 D_80083460;
 extern Unk80083958 D_80083958;
 extern Unk80083CA8 D_80083CA8;

@@ -84,6 +84,13 @@ segments:
       # The D_80080AF3/AFC/B00 + D_80081508 cluster, needing -G8.
       - [0x17b7c, c, gprel_17B7C]
       - [0x1811c, c, unk_1811C]
+      # The D_80081510 cluster: two consecutive functions, their own original
+      # translation unit, needing -G8.
+      - [0x18b40, c, gprel_18B40]
+      - [0x19434, c, unk_19434]
+      # The D_80081518..E / D_80081520..6 atlas-cursor cluster, likewise.
+      - [0x1ab38, c, gprel_1AB38]
+      - [0x1ada4, c, unk_1ADA4]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]

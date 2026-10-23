@@ -117,7 +117,8 @@ MASPSXFLAGS_G2 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
 # docs/addressing-and-translation-units.md for how a cluster is identified and
 # carved.
 build/csrc/gprel_12A40.o build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o \
- build/csrc/gprel_17B7C.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
+ build/csrc/gprel_17B7C.o build/csrc/gprel_18B40.o \
+ build/csrc/gprel_1AB38.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
 
 # These two need -G2 rather than -G8: each reaches a u16 ($gp-relative) and
 # D_80081480/D_8008148C as u32 (absolute, assembler-expanded) in one function,
