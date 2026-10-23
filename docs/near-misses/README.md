@@ -16,7 +16,7 @@ the valuable ones to know about:
   when it happens. Its header has the mechanism, the type findings and the
   declarations they need.
 * **`func_80041588.c`** and **`func_80042BDC.c`** -- two of the three
-  jump-table functions, at 164 of 164 words / 21 DIFF and 543 of 543 / 200
+  jump-table functions, at 164 of 164 words / 21 DIFF and 543 of 543 / 14
   DIFF. Also blocked on that split rather than on matching, and both carry the
   recovered case order for their tables, which exists nowhere else.
 

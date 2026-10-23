@@ -148,6 +148,14 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 | `guard.py` | no function was dropped from `csrc/` |
 | `dump.sh file.c` | compile with gcc's RTL dumps and collect them |
 
+**When a function is one or two words short, compare the internal branches'
+immediate fields against the target's**, rather than reading the diff. Every
+branch whose span contains the missing word is off by exactly that count, so
+the first branch whose delta changes brackets the defect. That localised
+func_80042BDC's missing word to one arm of a 180-instruction `case` in a single
+verify run, where the differing-word count said nothing useful at all -- it had
+200 of 543 words "differing" purely from the shift.
+
 `dump.sh` is the one to reach for when the logic is right and only registers or
 the order of two adjacent instructions differ. `cc1psx` honours `-dS` (post
 sched1), `-dR` (post sched2), `-dl` (local-alloc), `-dg` (global-alloc) and

@@ -573,6 +573,18 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   sets of one pointer does the same job for register class -- func_80041588's
   `base` is masked, then copied back from the KSEG0 pointer, which is what puts
   the masked value in a callee-saved register instead of `$v0`.
+* **A `u8` local plus a redundant `& 1` keeps a one-insn materialisation of a
+  0/1 value, and the local's declared width picks the opcode.** For a value gcc
+  holds in a callee-saved register, `if (bit != 0)` compiles to a bare
+  `beqz $s2` with no insn of its own. Add the mask and declare the local
+  `s32` and you get a real `andi $v0,$s2,1`; declare it `u8` and gcc proves the
+  QImode value's bits, folds the mask to the identity, and what survives is
+  `addu $v0,$s2,$zero` -- a block-local SImode materialisation that local-alloc
+  puts in `$v0`. Measured on func_80042BDC: 542 words with no insn, 543 with
+  the `andi`, 543 with the `move`, and the `move` is what the target has. Note
+  the mask does **not** select the opcode -- the width does. Duplicating into
+  both arms (section 1) gives the same structure but makes the pseudo global,
+  so it conflicts with the arm's registers and lands in `$a1`.
 * `GetRCnt` has to return a signed type for `(x + 0xFF) >> 8` to be `sra`.
 * **A byte decrement is `addiu 0xFF` only if the arithmetic happens in the
   byte's own type.** For a `u8` lvalue, `x--` builds the constant in that type
@@ -607,6 +619,22 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   variable, is worth 30 words in func_80046E38 -- with one store the jump
   optimizer hoists the assignment above the comparison and the pseudo's live
   range changes class.
+
+**`a < b` and `b > a` are not interchangeable, though they emit the same
+`slt`.** Operand evaluation follows the source, so which of the two loads is
+emitted first does too. Worth 2 words in func_80042BDC (a byte load that has to
+precede a halfword load) and about 2 at each of two sites in func_80045CC4.
+
+**Dropping an intermediate pointer local can be worth a whole register chain.**
+`w = base + idx;` then `w[0xD0]` and `w[0xAC]` makes `w` a block-local pseudo
+that local-alloc assigns independently, and the chain around it permutes;
+writing `base + idx + 0xD0` and `base + idx + 0xAC` out in full lets cse keep
+one pseudo, which then coalesces with the value feeding it. 12 of 30 differing
+words in func_80042BDC, with the word count unchanged, and hoisting the local to
+function scope changes nothing. **This is the opposite direction from section
+6's rule** that a large object reached through a pointer local keeps its address
+in a callee-saved register: that applies to objects live across calls, while
+inside one basic block the local costs you the coalesce.
 
 **A switch on a narrow expression subtracts the minimum BEFORE extending, and
 the prologue therefore tells you the switch variable's declared width.**

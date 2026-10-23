@@ -1,4 +1,4 @@
-/* func_80042BDC (unk_14934) -- 543 of 543 words, 200 DIFF. NOT compiled, and
+/* func_80042BDC (unk_14934) -- 543 of 543 words, 14 DIFF. NOT compiled, and
  * not landable alone: it dispatches through jtbl_8002D67C, so it needs the
  * splat/linker change in docs/open-matching-problems.md and all three
  * unk_14934 switch functions must land together. verify.py masks the two
@@ -95,29 +95,68 @@
  *     bytes past the label, so its field names do not line up with these
  *     displacements.
  *
- * WHAT IS LEFT, all inside case 10:
+ * THE MISSING WORD IS RECOVERED, 2026-10-22: 200 DIFF -> 14, and the source is
+ * simpler for it. The all-ternary form -- the ternary at all seven 0x300/0x3000
+ * selection sites, almost certainly the original shape -- now reaches 543
+ * words, so the `m` variable and the five `if`-form sites are gone entirely.
  *
- *  (i) ONE WORD, and it is the one to chase. The target emits
- *      `addu $a0,$s1,$zero` twice around the join at .L800430C4/.L800430C8 --
- *      once as its own single-insn basic block entered from
- *      `bnez $v0, .L800430C4`, and once stolen into the preceding
- *      `j .L800430C8`'s delay slot by reorg. This source emits it once, so
- *      case 10 is one word short, and that shortfall is currently paid for by
- *      the five `if`-form selection sites each being a word long. Since the
- *      all-ternary form is almost certainly the original shape at all seven
- *      sites, recovering this word should make the all-ternary source land at
- *      543. Ruled out for it: explicit `else { if (...) }` nesting (542/305)
- *      and inverting to `if (bit == 0)` (541/287).
- * (ii) the `|= 0x10000` flag temp is in $v1 where the target has $a0, which is
- *      why the target's first call argument goes `lbu $v0` then
- *      `addu $a0,$v0,$zero` in a delay slot while this loads straight into $a0
- *      and leaves a nop.
- *(iii) the `(*(u32 *) (p + 0x1C) >> 19) & 1` flag stays in $s2 and is tested
- *      `beqz $s2`; the target copies it to $v0 first and tests that.
- * (iv) D_800E3D7C's loaded base lands in $a0 and the scaled index in $v0, the
- *      reverse of the target, which flips the `addu`'s operand order and the
- *      registers of the following lw/lbu/andi/sll/sw chain. Writing the add
- *      with the operands the other way round made no difference.
+ * The word is a one-insn materialisation of `bit` at the head of the join
+ * block, which reorg then steals into the preceding branch's delay slot and
+ * retargets past -- so one source insn becomes two words:
+ *
+ *     beqz $v0, .L8004303C
+ *      addu $v0, $s2, $zero      <- stolen into the delay slot
+ *     ... the D_800E3DF0 chain ...
+ *     addu $v0, $s2, $zero       <- the original, last insn of the arm
+ *   .L8004303C:
+ *
+ * The shape that produces it is `u8 bit;` with the test written
+ * `if ((bit & 1) != 0)`, and **the declared width of the local picks the
+ * opcode**: `if (bit != 0)` gives a bare `beqz $s2` with no insn at all (542
+ * words); `s32 bit` with the `& 1` gives a real `andi $v0,$s2,1` (543, 30
+ * DIFF); `u8 bit` with the `& 1` lets gcc prove the QImode value's bits, fold
+ * the mask to the identity, and leave `addu $v0,$s2,$zero` -- byte-identical
+ * to the target (543, 28 DIFF). The duplicate-into-both-arms route gives the
+ * same structure but makes the pseudo global, so it conflicts with the arm's
+ * registers and lands in $a1 (543, 32).
+ *
+ * WITHDRAWN: the earlier claim here that the word was the `addu $a0,$s1,$zero`
+ * duplication at .L800430C4/.L800430C8. It is not -- the straightforward
+ * `if (bit) { ... } else if (q[0x25] == 0) { ... }` already produces that pair,
+ * read off the generated .s rather than inferred, and $L34/$L71 match the
+ * target insn for insn. That hypothesis was reasoning from the listing instead
+ * of from the compiler's output.
+ *
+ * TWO MORE FIXED on the same pass, 14 words between them:
+ *  - Dropping the `u8 *w` local and writing both D_800E3D7C accesses out in
+ *    full off `((s16) k) * 4 + D_800E3D7C` is worth **12 words** with no change
+ *    in word count. With the local, the base is a block-local pseudo that
+ *    local-alloc assigns independently and the whole three-register chain
+ *    permutes against the target; written inline, cse keeps one pseudo that
+ *    coalesces with k's $v0. Hoisting `w` to function scope changes nothing.
+ *  - `if (p[0x71] > *(s16 *) (p + 0x8A))` rather than `<` with the operands
+ *    swapped: the same `slt` with the same operand order, but the byte load
+ *    first in LUID order, which is what the target has. 2 words.
+ *
+ * WHAT IS LEFT: 14 words, all in the `|= 0x10000` block, and they are one
+ * coupled allocation decision. In the target the `addu $s0,$v0,$zero` copy of
+ * func_800A1618's return sits FOURTH, so $v0 is still live when the 0x1C temp
+ * is born; the temp therefore cannot be $v0 and takes $a0; the first call
+ * argument is then pushed out of $a0 into a pseudo with an `addu $a0,$v0,$zero`
+ * move in the join block. Here the copy is FIRST, $v0 frees early, the temp
+ * takes $v1, the 0x14 temp takes $v0, and the argument's `lbu` writes hard $a0
+ * directly -- leaving a nop where the target has the move. The argument loads
+ * are hard-register writes in the pre-allocation RTL, so the copy's position is
+ * decided by sched2 on already-allocated code: **the allocation is the cause
+ * and the schedule the symptom**, not the other way round.
+ *
+ * Measured and ruled out for it, all at 543 words: swapping the `s3 = ...` and
+ * `|= 0x10000` statements (14, no change); the `|= 0x10000` through an explicit
+ * `u32 f` local feeding both the store and the ternary condition (14); `q` at
+ * function scope (14); `s3` at function scope (14); the two byte arguments
+ * hoisted into `s32` locals (14) or `u8` locals (14); evaluating
+ * `q = func_800A1618(...)` after the `|= 0x10000`/`s3` block (22, worse); and
+ * the `if` form at this one site (15, worse).
  *
  * include/structs.h, when this lands: the 15 `extern u8 D_800Exxxx[];` message
  * strings (they are in build/slus_006.14.map, just not in structs.h),
@@ -180,7 +219,6 @@ void func_80042BDC(s8 *arg0, s16 arg1) {
     u8 *p = (u8 *) arg0;
     void *msg;
     u8 *e;
-    s32 m;
     s32 k;
 
     switch (arg1) {
@@ -264,7 +302,7 @@ void func_80042BDC(s8 *arg0, s16 arg1) {
             u8 *q;
             Fn42BDC fn;
             s32 s3;
-            s32 bit;
+            u8 bit;
             u8 *g;
 
             e = *(u8 **) (p - 0x14);
@@ -288,22 +326,18 @@ void func_80042BDC(s8 *arg0, s16 arg1) {
             func_80042984(q);
             g = (u8 *) &D_80083460;
             if (*(u16 *) (g + 2) & 0x1000) {
-                if (*(s16 *) (p + 0x8A) < p[0x71]) {
+                if (p[0x71] > *(s16 *) (p + 0x8A)) {
                     *(u16 *) (g + 8) -= p[0x71] - *(u16 *) (p + 0x8A);
                 }
             }
             func_800A9A0C(q);
             *(u32 *) (q + 0x1C) &= ~0x10000;
             if (*(u32 *) (p + 0x14) & 0x4000) {
-                u8 *w;
-
                 k = func_800A1BD0(p);
-                w = ((s16) k) * 4 + D_800E3D7C;
-
-                D_800E3DF0[(*(u8 **) (w + 0xD0))[3] & 0x1F] = q;
-                *(u8 **) (w + 0xAC) = q;
+                D_800E3DF0[(*(u8 **) (((s16) k) * 4 + D_800E3D7C + 0xD0))[3] & 0x1F] = q;
+                *(u8 **) (((s16) k) * 4 + D_800E3D7C + 0xAC) = q;
             }
-            if (bit != 0) {
+            if ((bit & 1) != 0) {
                 u8 *w = D_800E3D7C;
 
                 *(u8 **) (w + 0x124) = q;
@@ -334,20 +368,12 @@ void func_80042BDC(s8 *arg0, s16 arg1) {
     }
     case 27:
         e = *(u8 **) (p - 0x14);
-        m = 0x3000;
-        if (*(u32 *) (p + 0x1C) & 0x2000) {
-            m = 0x300;
-        }
-        func_8009A21C(e[0x24], e[0x25], m);
+        func_8009A21C(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         func_800AA36C(p, *(u8 **) (p - 0x18), e, p);
         break;
     case 11:
         e = *(u8 **) (p - 0x14);
-        m = 0x3000;
-        if (*(u32 *) (p + 0x1C) & 0x2000) {
-            m = 0x300;
-        }
-        func_8009A3D0(e[0x24], e[0x25], m);
+        func_8009A3D0(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         *(u32 *) (p + 0x1C) &= ~0x2000;
         func_8009A21C(e[0x24], e[0x25], 0x3000);
         break;
@@ -358,30 +384,18 @@ void func_80042BDC(s8 *arg0, s16 arg1) {
             func_800A5720(msg);
         }
         e = *(u8 **) (p - 0x14);
-        m = 0x3000;
-        if (*(u32 *) (p + 0x1C) & 0x2000) {
-            m = 0x300;
-        }
-        func_8009A3D0(e[0x24], e[0x25], m);
+        func_8009A3D0(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         *(u32 *) (p + 0x1C) |= 0x2000;
         func_8009A21C(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         break;
     case 26:
         e = *(u8 **) (p - 0x14);
         *(u16 *) (p + 0x98) &= 0x7FFF;
-        m = 0x3000;
-        if (*(u32 *) (p + 0x1C) & 0x2000) {
-            m = 0x300;
-        }
-        func_8009A3D0(e[0x24], e[0x25], m);
+        func_8009A3D0(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         if (*(u16 *) (p + 0x98) & 0x4000) {
             *(u32 *) (p + 0x1C) |= 0x2000;
         }
-        m = 0x3000;
-        if (*(u32 *) (p + 0x1C) & 0x2000) {
-            m = 0x300;
-        }
-        func_8009A21C(e[0x24], e[0x25], m);
+        func_8009A21C(e[0x24], e[0x25], (*(u32 *) (p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
         *(u16 *) (e + 0x12) = *(u16 *) (p + 0xA6);
         break;
     case 32:
