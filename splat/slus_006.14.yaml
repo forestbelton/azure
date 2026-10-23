@@ -34,12 +34,40 @@ options:
   undefined_syms_auto_path: splat/slus_006.14_undefined_syms_auto.txt
 segments:
   - [0x0, header]
+  # The opening blob is cut in two so that the jump-table region can be placed.
+  # Under ld_legacy_generation a segment groups its entries by section, so one
+  # segment can hold only one `.rodata` run -- and the segment's `.rodata` group
+  # is also where the str/name/* Shift-JIS subsegments live, at 0x541D0. A
+  # `.rodata` subsegment added to the single old segment would therefore drag
+  # those strings to 0x8002D5C0. `align: 4` is required too: the default segment
+  # align is 16 and `_end_segment` emits ALIGN(__romPos, 16), which would pad a
+  # segment ending at 0x8002D67C and shift every later byte. See the
+  # jump-table section of docs/open-matching-problems.md.
   - type: code
     start: 0x800
     vram: 0x8002D000
+    align: 4
     subsegments:
       # NB: 0x800 was added to all the offsets here to account for start addr
+      # Still raw in here: jtbl_8002D5C0 at 0xdc0, func_8003E758's table, which
+      # becomes `- [0xdc0, .rodata, unk_11F0C]` when that function lands.
       - [0x800, bin]
+      # jtbl_8002D630 and jtbl_8002D658, func_80041344's and func_80041588's.
+      # The leading dot matters: `.rodata` makes splat route the subsegment to
+      # the sibling C object and extract nothing, where plain `rodata` would
+      # disassemble the bytes into asm/data/ and the Makefile would link them as
+      # well as the C. The unit's own `.rodata` is 0x4C bytes -- 9 entries, the
+      # zero word that is the second table's own `.align 3`, 9 entries -- so the
+      # pad falls out of the compiler and needs no spec entry.
+      - [0xe30, .rodata, unk_14934]
+  - type: code
+    start: 0xe7c
+    vram: 0x8002D67C
+    align: 4
+    subsegments:
+      # Still raw in here: jtbl_8002D67C, func_80042BDC's 32-entry table, which
+      # becomes `- [0xe7c, .rodata, unk_154BC]` when that function lands.
+      - [0xe7c, bin]
       - [0x6b60, data, psyq/libcd]
       - [0x6e44, data, psyq/libgpu]
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content

@@ -5,7 +5,7 @@ assets/
 build/
 expected/
 data/
-psy-q/
+psyq/
 scratch/
 az.bin
 ctx.c
@@ -15,3 +15,4 @@ nonmatchings/
 
 # subagent scratch files
 zz_*.c
+zzsearch_*.c

@@ -102,38 +102,106 @@ near the right address and the image shifts.
 
 Reading the region out of `data/slus_006.14` pins the layout down exactly:
 
-| symbol | vram | entries | targets | owner |
-|--------|------|---------|---------|-------|
-| jtbl_8002D5C0 | 0x8002D5C0..0x8002D62F | 28 | 0x8003EE60..0x8003F1F8 | func_8003E758 |
-| jtbl_8002D630 | 0x8002D630..0x8002D653 | 9 | 0x800413A0..0x80041528 | func_80041344 |
-| *(pad)* | 0x8002D654 | 1 zero word | | |
-| jtbl_8002D658 | 0x8002D658..0x8002D67B | 9 | 0x8004164C..0x800417B0 | func_80041588 |
-| jtbl_8002D67C | 0x8002D67C..0x8002D6FB | **32** | 0x80042C2C..0x80043430 | func_80042BDC |
+| symbol | vram | entries | targets | owner | unit |
+|--------|------|---------|---------|-------|------|
+| jtbl_8002D5C0 | 0x8002D5C0..0x8002D62F | 28 | 0x8003EE60..0x8003F1F8 | func_8003E758 | unk_11F0C |
+| jtbl_8002D630 | 0x8002D630..0x8002D653 | 9 | 0x800413A0..0x80041528 | func_80041344 | unk_14934 |
+| *(pad)* | 0x8002D654 | 1 zero word | | | |
+| jtbl_8002D658 | 0x8002D658..0x8002D67B | 9 | 0x8004164C..0x800417B0 | func_80041588 | unk_14934 |
+| jtbl_8002D67C | 0x8002D67C..0x8002D6FB | **32** | 0x80042C2C..0x80043430 | func_80042BDC | unk_154BC |
 
-The tables are contiguous except for that one zero word, and its position is
-informative. 0x8002D5C0, 0x8002D630 and 0x8002D658 are all 8-byte aligned
-while 0x8002D654 and 0x8002D67C are not, so `.rdata` was aligned to 8 per
-translation unit. func_80041344's table therefore **ends a translation unit**
-and func_80041588's **begins the next one**, while func_80041588's and
-func_80042BDC's are contiguous and so belong to the same unit.
+**The region is exactly three `.rodata` output sections laid end to end, one
+per existing splat unit, and no C file has to be split.** This supersedes an
+earlier reading of the same bytes, which took the zero word at 0x8002D654 for
+a translation-unit boundary and concluded that `csrc/unk_14934.c` had to be cut
+in two at func_80041588, and that func_80041588's and func_80042BDC's tables
+shared a unit. Both conclusions were wrong, and the second was impossible on
+its face: `gprel_152E4` sits between those two functions in the text, and a
+translation unit's code is contiguous.
 
-So `unk_14934` as currently split lumps at least two original units together,
-with a boundary at func_80041588 -- and that boundary has to exist in the C
-before the tables can land, because one unit's `.rdata` would otherwise emit
-all three tables back to back with no pad at 0x8002D654.
+What actually produces the layout is one fact about cc1psx, verified by
+compiling for it rather than inferred from the bytes:
+
+* **cc1psx emits each jump table into `.rdata` under `.align 3`.** A unit with
+  two 9-entry switches therefore has a `.rodata` of 0x4C bytes: the first table
+  at offset 0, a zero word of padding at 0x24, the second at 0x28. Compiled and
+  measured; `csrc/unk_14934.c` as it now stands produces a `.rodata` of exactly
+  0x4C.
+* **The leading `.align 3` is a no-op**, because it sits at offset 0 of the
+  section. So a unit's `.rodata` is 8-aligned *internally* but carries no
+  alignment requirement of its own at link time -- and `subalign: 4` on the
+  segment overrides the section's recorded 2**3 anyway.
+
+Those two together explain both alignment facts at once, which the
+unit-boundary reading could not: the pad at 0x8002D654 is the *second* table's
+`.align 3` **inside** unk_14934, and jtbl_8002D67C is free to begin at a
+merely 4-aligned 0x8002D67C because it is the *first* table in unk_154BC. The
+three runs then tile the region with nothing left over:
+
+```
+0x8002D5C0 + 0x70 (unk_11F0C: 28 entries)          = 0x8002D630
+0x8002D630 + 0x4C (unk_14934: 9 + pad + 9 entries) = 0x8002D67C
+0x8002D67C + 0x80 (unk_154BC: 32 entries)          = 0x8002D6FC
+```
+
+splat knows this mechanism itself, and says so in
+`segtypes/common/rodata.py`: "GCC aligns jumptables to 8, but it doesn't impose
+alignment restrictions for sections themselves on PSX/PS2... We can use this as
+a way to find file splits." The warning it prints on a misaligned jump table is
+a *hint*, not proof -- here it would have pointed at the wrong boundary.
 
 ### What landing them needs
 
-1. `csrc/unk_14934.c` split in two at func_80041588, with matching splat
-   subsegments, so each original unit gets its own `.rdata`.
-2. The opening bin blob carved so 0x8002D5C0..(end of jtbl_8002D67C) is not
-   also emitted as raw data.
-3. Linker-script placement of those three units' `.rodata` at 0x8002D5C0,
-   0x8002D630 and 0x8002D658, with 8-byte alignment between sections so the
-   pad word falls out on its own.
-4. All three unk_14934 functions decompiled **at once**: a missing one leaves
-   its unit's `.rodata` short and everything after it shifts, so they cannot be
-   landed one at a time.
+Placement, and nothing else. There is no C split and no linker arithmetic to
+do by hand; the whole change is in `splat/slus_006.14.yaml`, and it rests on
+three details of splat that are easy to get wrong:
+
+1. **The subsegment type must be written `.rodata`, with the leading dot.**
+   `CommonSegData.out_path()` branches on `self.type.startswith(".")`: with the
+   dot it returns the sibling C file, so the linker entry becomes
+   `build/csrc/<unit>.o(.rodata)` and `should_self_split()` is False, so
+   nothing is extracted. Written as plain `rodata` it instead disassembles the
+   bytes into `asm/data/<unit>.rodata.s`, which the Makefile's `SFILES` glob
+   would then assemble and link *as well* as the C object.
+2. **Each placement needs its own splat segment.** Under
+   `ld_legacy_generation: True` a segment's entries are grouped by section, so
+   one segment can hold only one `.rodata` run, after all of its `.data`. The
+   opening blob therefore has to be cut into a segment per run. This is not
+   optional cosmetics: the segment's `.rodata` group is also where the
+   `str/name/*` Shift-JIS subsegments live (they are `.rodata` too, at
+   0x541D0), so adding a `.rodata` subsegment to the existing single segment
+   drags *those* to 0x8002D5C0 and destroys the image.
+3. **Set `align: 4` on each new segment.** The default segment align is 16, and
+   `_end_segment` emits `__romPos = ALIGN(__romPos, 16)` after it. A segment
+   ending at 0x8002D67C or 0x8002D6FC would be rounded up to a 16-byte boundary
+   and every later byte would shift.
+
+The staged form -- one run at a time, as each unit's switch functions land --
+looks like this. unk_14934 is first because both of its functions now match:
+
+```yaml
+  - type: code
+    start: 0x800
+    vram: 0x8002D000
+    align: 4
+    subsegments:
+      - [0x800, bin]                      # jtbl_8002D5C0 still raw in here
+      - [0xe30, .rodata, unk_14934]
+  - type: code
+    start: 0xe7c
+    vram: 0x8002D67C
+    align: 4
+    subsegments:
+      - [0xe7c, bin]                      # jtbl_8002D67C still raw in here
+      ...the rest of the old segment...
+```
+
+A unit's run can only be placed once **every** switch function in that unit is
+matching, because the run's length is the sum of its tables: with one of
+unk_14934's two functions still `INCLUDE_ASM` the `.rodata` is 0x24 rather than
+0x4C and everything after it shifts. unk_11F0C and unk_154BC each hold exactly
+one of these functions, so each can be placed on its own as soon as that one
+lands.
 
 `func_8003E758` additionally needs the `$gp` work from
 `docs/addressing-and-translation-units.md`, so it comes last.
@@ -155,48 +223,61 @@ The range check is `sltiu $v0, $v1, 0x20` and the word at 0x8002D6FC is
 again from the file. 0x80043430 is both the default label and the out-of-range
 target, so the eleven values 13-17, 24, 25 and 28-31 have no `case` label in
 the source at all, and cases 21, 22 and 23 share one body. **So the region the
-linker script has to place runs to 0x8002D6FB**, and jtbl_8002D658 and
-jtbl_8002D67C are contiguous across 0x8002D658..0x8002D6FB -- which is
-consistent with their belonging to the same original translation unit, the one
-that begins at func_80041588.
+linker script has to place runs to 0x8002D6FB.** jtbl_8002D658 and
+jtbl_8002D67C are contiguous with no pad between them, which is explained by
+jtbl_8002D67C being the *first* table of unk_154BC rather than by the two
+sharing a unit -- see the section above.
 
-Identical, which is further evidence the two are siblings over one command
-format -- as are their shared `default: return;`, the `blez` on case 9, the
-`addu $t0, $s0, $zero` record copy, and the record type itself.
+The first two orders being identical is further evidence the two are siblings
+over one command format -- as are their shared `default: return;`, the `blez`
+on case 9, the `addu $t0, $s0, $zero` record copy, and the record type itself.
+Both are now landed, which settles it.
 
 ### State of the four
 
-| function | words | DIFF | source |
-|----------|-------|------|--------|
-| func_80041344 | 145 of 145 | **2** | `docs/near-misses/func_80041344.c` |
-| func_80041588 | 164 of 164 | 21 | `docs/near-misses/func_80041588.c` |
-| func_80042BDC | 543 of 543 | 14 | `docs/near-misses/func_80042BDC.c` |
-| func_8003E758 | not started, also `$gp`-blocked | | |
+| function | unit | words | DIFF | source |
+|----------|------|-------|------|--------|
+| func_80041344 | unk_14934 | 145 of 145 | **MATCH** | `csrc/unk_14934.c` |
+| func_80041588 | unk_14934 | 164 of 164 | **MATCH** | `csrc/unk_14934.c` |
+| func_80042BDC | unk_154BC | 543 of 543 | 14 | `docs/near-misses/func_80042BDC.c` |
+| func_8003E758 | unk_11F0C | not started, also `$gp`-blocked | | |
 
-func_80041588's 21 are one coupled three-register permutation with no
-instruction, immediate or ordering difference. **Its stated remaining lever --
-"break `flags`' argument-register preference" -- is now refuted**: that
-preference propagates along the dataflow chain through arithmetic insns, and
-splitting the chain through another variable leaves both allocnos carrying it.
-What works instead is winning the allocation ORDER, because
-`regs_someone_prefers` only collects *lower-priority* conflicting allocnos'
-preferences; func_80041344 went from 24 differing words to 2 that way, and the
-same approach is what its sibling now wants. func_80042BDC's 14 are all in one block of
-case 10, its 180-instruction transform-revert arm; every other arm matches word
-for word, and the all-ternary form it now uses is almost certainly the original
-shape. Its near-miss file names the one word to chase (a `addu $a0,$s1,$zero`
-the target emits twice around a join and this source emits once) and the three
-register chains that follow from it. Both functions also found that
-`Unk41344` is **not** one type across all three: func_80042BDC is not a
-command-stream walker at all, and its record is the existing `Unk42710`, whose
-size floor this raises from 0x8C to at least 0xAA. It also **corrects func_80041344's note**: the switch index
-is not a block-local quantity assigned by local-alloc. `sltiu`/`beqz` end its
-block and the `sll` is in the next one, so it is an ordinary global allocno,
-and the numbers say it can never be allocated before the record pointer.
+**Both unk_14934 functions now match**, so that unit's run is placeable; see
+the recipe above. What closed them was one mechanism, and it is worth stating
+plainly because two sessions worked around it instead:
 
-Note that `verify.py` cannot see any of this -- it masks the relocated
-halfwords that reference the table -- so a MATCH there is not evidence and only
-`make check` is the authority.
+* The switch index, the flag word and the loop bounds are **one source
+  variable**, with the arms renumbered from `case 0` so `expand_end_case` skips
+  its own MINUS and the index is a real variable rather than a compiler temp.
+  Applying that to func_80041588 took it from 21 DIFF to a match outright.
+* func_80041344 needed one thing more: that variable must also win the
+  allocation-order comparison against the shared loop counter, because
+  `regs_someone_prefers` makes a higher-priority allocno *avoid* a register
+  that a lower-priority conflicting allocno prefers -- and `op` prefers $a3,
+  being func_8003F80C's fourth argument. The fix is **two extra references for
+  `op` at zero instruction cost**, obtained by splitting case 9's pointer into
+  `op = (s32) base; op += e->unk_04;` (one `addu` either way). See the comment
+  on the function for the priority arithmetic.
+
+**Its stated remaining lever -- "break `flags`' argument-register preference"
+-- was refuted and is not what closed it**: that preference propagates along
+the dataflow chain through arithmetic insns, and splitting the chain through
+another variable leaves both allocnos carrying it. What works is winning the
+allocation ORDER, and the cheapest way to move a priority is a reference the
+compiler emits no instruction for.
+
+func_80042BDC's 14 are all in one block of case 10, its 180-instruction
+transform-revert arm; every other arm matches word for word, and the
+all-ternary form it now uses is almost certainly the original shape. Its
+near-miss file names the one word to chase (a `addu $a0,$s1,$zero` the target
+emits twice around a join and this source emits once) and the three register
+chains that follow from it. It is also **not** a command-stream walker, so its
+record is the existing `Unk42710` rather than `Unk41344`, whose size floor this
+raises from 0x8C to at least 0xAA.
+
+Note that `verify.py` cannot see the placement at all -- it masks the relocated
+halfwords that reference the table -- so a MATCH there is necessary and not
+sufficient, and only `make check` is the authority on whether a table landed.
 
 ## func_80042560  (unk_14934) -- SOLVED 2026-10-22
 

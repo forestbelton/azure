@@ -175,6 +175,66 @@ Levers that move them, all with no change to the emitted code:
   counter's initialisation; at function scope it is emitted in declaration
   order, ahead of it. func_80046C20.
 
+* **Splitting one assignment into two statements that compile to the same
+  instruction.** `op = (s32) base; op += e->unk_04;` and
+  `op = (s32) (base + e->unk_04);` both emit a single `addu`, but the first
+  gives `op` two more RTL references. This is the cheapest priority lever there
+  is -- no extra insn, no extra live length to pay for, unlike the duplication
+  below -- and it is what closed func_80041344 after 24 differing words.
+
+  **The reason a couple of references matter so much there is worth knowing in
+  its own right**, because it inverts the usual intuition that a high priority
+  is what you want. `find_reg` consults `regs_someone_prefers`, which collects
+  the hard-register preferences of conflicting allocnos that are *lower*
+  priority -- i.e. not yet allocated -- and avoids those registers if it can.
+  So an allocno that goes first can be *pushed off* the register it should have
+  had, by a rival that has not been allocated yet:
+
+  * In func_80041344, `op` is copied into `$a3` as func_8003F80C's fourth
+    argument, so it carries a preference for `$a3`. With one statement `op` had
+    52 references over a live length of 56 -- `floor_log2(52) * 52 / 56 =
+    4.64` -- just under the shared loop counter's `39 / 41 = 4.76`. The counter
+    was therefore allocated first, saw `op`'s `$a3` preference in
+    `regs_someone_prefers`, avoided `$a3`, took `$t0`, and the record pointer
+    `e` was left with `$a3`. The target has the counter in `$a3` and `e` in
+    `$t0`.
+  * Two more references for `op` (`54 / 56 = 4.82`) flip the order. `op` is now
+    allocated first and takes `$v1`; its preference is spent, so the counter
+    takes `$a3`; `e` then finds `$v1` and `$a3` both taken and lands on `$t0`.
+    Every register in the function falls into place at once.
+
+  **A hard-reg COPY preference beats that ordering asymmetry, and cse can
+  manufacture one for you.** `prune_preferences`/`find_reg` try an allocno's
+  copy preferences -- registers it is actually copied to or from -- *before* the
+  pass that excludes `regs_someone_prefers`, so a copy wins outright. In
+  func_8003E4FC the `u8` parameter's allocno prefers `$a0` and the switch-index
+  allocno has 26 references against 5, so the index goes first; with no copy it
+  avoids `$a0` for the parameter's sake and takes `$v1`, which is the target.
+  But writing `kind` at a call site whose case value cse cannot fold to a
+  constant makes cse rewrite the argument *as the index pseudo*, creating
+  `(set (reg:SI 4 a0) (reg:SI 106))` -- a copy preference for `$a0` on the
+  index -- and the index then takes `$a0` with the parameter spilled to `$v1`
+  behind a `move`. Writing the case's literal at those sites deletes the copy
+  and the whole permutation flips: 93 differing words at an unchanged word
+  count. **Diagnostic:** grep the `.lreg` dump for `(set (reg:SI 4 a0) (reg:SI
+  N))`; `.greg`'s `;; N preferences: 4` line does *not* distinguish a copy
+  preference from a plain one.
+
+  **So the lever on an argument-register preference is allocation order, not
+  the preference.** Trying to break the preference does not work and should not
+  be retried: it propagates along the dataflow chain through arithmetic insns,
+  splitting the chain through an intermediate variable leaves *both* allocnos
+  carrying it, and a separate `s32 f = (s16) x;` is eliminated by combine
+  outright. All three were measured on func_80041344 and func_80041588.
+
+  The two other ways of buying `op` those references both cost words, which is
+  the argument for preferring a split that emits nothing: splitting the switch
+  index into `op = *(u16 *) p; op -= 1;` leaves the load in `op`'s own register
+  where the target has a block-local `$v0` (2 words), and folding the loop
+  tail's `size` into `op` takes over the tail load, which the target also keeps
+  block-local (3 words). Both were at one point written up as the floor for
+  that function; neither was.
+
 * **Duplicating an insn into both arms of an `if`** (section 1) raises the
   reference count of every pseudo it mentions, and jump2 merges the duplicate
   away after allocation, so the word count does not change. This is the only
@@ -394,6 +454,12 @@ form:
 * A big object reached through a pointer local keeps its address in a
   callee-saved register across calls; reached by symbol it rebuilds a
   `lui`/`%lo` pair per access (func_8003D5A4, 105 words; func_80046884, 116).
+  **That entry is about objects small enough for the assembler-expanded `la`.
+  Once cc1psx has COMPILER-SPLIT the address into `lui %hi` + `addiu %lo`, the
+  address is an ordinary pseudo and cse shares it by itself**, so a symbol used
+  twice needs no pointer local: in func_800453E0, D_8006CD30 is reached by
+  plain symbol at two sites separated by three calls and cse keeps the single
+  pair in `$s5` unaided.
 * `expand_block_move` `force_reg`s a fresh pointer when the address is a
   non-offsettable `(const (plus symbol off))`, so a block copy out of a global
   wants a pointer local (func_80044724, 106 words).
@@ -716,6 +782,28 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   spelling that matches (func_8003D0F0, 2 words); a `u8` temp, or a separate
   `s32 u = t + 0xFF;`, works too (func_80045CC4, 2 words).
 
+  **This generalises to HImode, and there the costs INVERT**, because 0xFF is a
+  valid `addiu` immediate and 0xFF00 is not. The rule that covers both: for a
+  narrow store, **a constant whose masked value is not a valid 16-bit immediate
+  has to be applied in its own SImode statement.**
+
+  * `p->unk_102 = (s->unk_18 - 0x100) + <other>;` -- combine's `force_to_mode`
+    narrows the whole sum to HImode for the `sh`, recurses into the inner
+    `plus` with a 16-bit mask, and rewrites the constant as the raw masked
+    65280, which is not `SMALL_INT`. Result: `ori $a1,$zero,0xff00` plus
+    `addu`, **two insns**.
+  * `h = s->unk_18 - 0x100; p->unk_102 = h + <other>;` -- expand emits the
+    subtraction in SImode as its own insn with the constant -256, combine
+    cannot fold a three-operand `plus` into the HImode store, and
+    `addiu $v1,$v1,-0x100` survives. **One insn**, and the target's
+    (func_800453E0, 1 word).
+
+  `p->unk_B8 = p->unk_B8 - 0xA0;` is not a counterexample: there the narrowed
+  value is the OUTERMOST operation, so `trunc_int_for_mode` does rewrite 0xFF60
+  to -160 and a single `addiu` is right. The distinction is whether the
+  constant's `plus` is outermost under the store or nested inside another
+  `plus`.
+
 ## 8. Statement order and expression shape
 
 * An exit block that should sit physically last wants `break` or `goto done`
@@ -779,6 +867,47 @@ and the `if` form at the other five; all-ternary costs it a word and 105 extra
 differing words. The two forms are not always the same length, so this is a
 word-count lever as well as an ordering one -- the sites whose call cross-jumps
 into a shared tail differ by a word between the two spellings.
+
+* **Tree-level `fold` reassociates a constant onto the other operand of a
+  chained subtraction, and splitting the statement defeats it.**
+  `p->unk_C0 = p->unk_C0 - 0xA - arg3;` emits `addiu $s0,$s0,0xA` /
+  `subu $v0,$v0,$s0` -- the constant moved onto `arg3` -- where the target has
+  `addiu $v0,$v0,-0xA` / `subu $v0,$v0,$s0`. Writing the difference into its own
+  local (`s32 w = p->unk_C0 - 0xA;`) stops it: RTL `combine` does not
+  reassociate, and the three-operand `plus` it would have to build is
+  unrecognizable, so the `addiu` survives (func_800453E0, 1 word).
+
+* **A sparse switch's decision-tree SHAPE is a fingerprint of the case LIST,
+  including case labels that emit nothing at all.** This is the one lever here
+  that lets you recover source the output does not contain.
+
+  `group_case_nodes` merges adjacent case values sharing one code label into a
+  single RANGE node; `balance_case_nodes` then bisects the sorted node list with
+  `i = (nodes + ranges + 1) / 2` and walks it decrementing 1 per node and 2 per
+  range -- **so a range node counts double and pulls the bisect point left.** A
+  run of consecutive do-nothing cases is therefore one node that weighs two, and
+  when `node_is_bounded` holds (the neighbours' tests already fix both ends) it
+  emits no test of its own, just a jump to the default label that jump_optimize
+  folds into the surrounding default path. **A tree whose root sits one node to
+  the left of where the case count says it should is evidence of a hidden
+  contiguous group of case labels**, not of a different pass.
+
+  Measured on func_8003E4FC: the high subtree is {0xD, 0xE, 0x15, 0x16, 0x1B,
+  0xFC, 0xFE, 0xFF}; eight single nodes bisect at index 3, giving root 0x16,
+  which is what the straightforward source emits -- but the target's root is
+  0x15, index 2. Adding `case 0xF: case 0x10: case 0x11: case 0x12: case 0x13:`
+  to the do-nothing group makes nine nodes with one range, the bisect moves to
+  0x15, and the range contributes zero words. 13 differing words. Any range
+  wholly inside 0xF..0x13 gives the same tree; one ending at 0x14 does NOT,
+  because 0x14+1 == 0x15 bounds it above as well as below and gcc then emits
+  `> 0xE -> right` plus an unconditional jump to the left child instead of the
+  target's `< 0xE -> left` and fall-through.
+
+  Corollary worth carrying: `emit_case_nodes` chooses between those two patterns
+  on which CHILD is fully bounded -- right bounded gives `> node->high` jumping
+  to the right label with the left subtree inline, else left bounded gives
+  `< node->low` jumping to the left label with the right subtree inline -- so
+  **which test a node emits also tells you about its neighbours.**
 
 ## 9. Induction variables
 
@@ -906,6 +1035,30 @@ into a shared tail differ by a word between the two spellings.
   more than case.
 * **Concurrent `ccpsx` runs share one wine prefix** and can lose an output.
   Retry before believing a compile failure.
+  Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq` when more
+  than one line of work is compiling at once; `tools/ccpsx` honours it.
+* **maspsx drops the load-delay nop before a `%gp_rel` STORE of a symbol it
+  knows only from an `.extern` record**, which costs exactly one word per site
+  in a `-G8`/`-G2` unit and throws off every later branch offset. Its
+  `_uses_gp` reads `.sdata`/`.comm`/`.lcomm` and explicitly skips `.extern`
+  (`in_sdata = False; continue`), so it concludes there is no `$at` expansion
+  and no real nop -- while gas, left at a nonzero `-G`, turns the small extern
+  into a one-insn `%gp_rel` access anyway. gcc's own output has the `#nop` in
+  the right place; maspsx is what loses it. The in-source workaround, which is
+  the `.sdata` recipe minus the definition:
+
+      __asm__(".sdata\n\t.size D_80080ADC,4\n\t.text");   /* file scope */
+
+  That puts the symbol in maspsx's `sdata_entries`, so maspsx does the
+  `%gp_rel` rewrite itself *and* emits the nop, while defining nothing --
+  `readelf -sS` shows `.sdata` at 0 bytes and the symbol still `UND` with size
+  4. Unlike annotate.py's gp-relative lever there is no `.globl`, no `.type`,
+  no label and no `.word`, so there is no linker placement to arrange and
+  nothing to collide with the linker script's own assignment. Worth one word in
+  func_8003E4FC (131 against 132, with 59 differing). The principled fix is in
+  `vendor/maspsx`: record `.extern SYM,size` and let `_uses_gp` consider those
+  symbols when gas is left at a nonzero `-G`, gated on `--dont-force-G0` so the
+  `-G0` bulk of the game is unaffected.
 * **`cc1psx` output has CRLF line endings.** Strip the CR before matching
   labels.
 * **`make splat` does `rm -rf asm/nonmatchings` first**, so never run it while

@@ -55,6 +55,70 @@
  *    `func_8004437C(0x2A, 0)`, passes constants so no codegen change is
  *    expected there, but re-verify that function after the change.
  *
+ * SECOND PASS (2026-10-22). Still 100 of 100 words and 8 DIFF, and the
+ * diagnosis is now at pseudo level rather than at the level of shapes tried.
+ * **Treat this as a wall and do not spend another session on it without a new
+ * idea from outside the function.**
+ *
+ * WHY THE TWO HALVES CANNOT BE MADE TO COINCIDE. Region 1's address is
+ * `(set (reg 95) (high (symbol_ref "D_80080AF4")))` then
+ * `(set (reg 94) (lo_sum (reg 95) (symbol_ref "D_80080AF4")))`. Pseudo 94 is
+ * used by the `addu` in block 0 AND the `addu` in block 2, so it is a global
+ * allocno and global-alloc gives it $a1 -- which is correct. Pseudo 95 is
+ * block-local, so LOCAL-alloc gets it first and hands it $v1, the first
+ * register free after the `lh` result in $v0. Region 2's pair has the same
+ * shape but there BOTH pseudos are block-local, local-alloc owns both and
+ * reuses the dying source's register -- which is why region 2 already prints
+ * `lui $v1 / addiu $v1,$v1` with the right structure and only a $v1/$a0 swap.
+ * So the target's `lui $a1 / addiu $a1,$a1` is ONE pseudo, i.e.
+ * emit_move_insn(reg, symbol): the symbol materialised as a VALUE, not inside
+ * an address computation. The general rule to carry away: **an indexed symbol
+ * whose base is reused across blocks splits its address between local-alloc
+ * and global-alloc, and from C the two halves cannot be made to coincide.**
+ *
+ * THE 3-WORD SPOT IS ALSO A SCHED1 TIE. Pre-sched order is
+ * [lhu][lh][high][lo_sum], which is the target's. The `sched` dump gives
+ * `insn (lh): priority = 1` and `insn (high): priority = 1` -- a tie -- and
+ * sched1 hoists the `high` above the `lh` on the LUID tie-break in
+ * rank_for_schedule. Both chains to the block end are the same length
+ * (`lh -> sll -> addu -> lw -> bne` against `high -> lo_sum -> addu -> lw ->
+ * bne`), so no source change breaks the tie without adding an insn.
+ *
+ * TWELVE MORE SHAPES MEASURED, baseline 8 DIFF, 100/100 words unless noted:
+ * a two-set pointer local (region 1 + region 2), first set inside the
+ * comparison, 15 DIFF -- and the word count and the emitted `lui $v0 /
+ * addiu $a1,$v0` show cse folded the local into the addresses anyway, so the
+ * two-set trick does NOT survive here; the same with the first set as a plain
+ * statement, 15 DIFF; a region-2 slot local
+ * (`u32 **slot = &D_80080AF4[D_80080AFC];`), 10 DIFF; two-set
+ * `cur = D_8006E704[arg0];` before each comparison, 29 DIFF; the second
+ * comparison's operands swapped, 10 DIFF; both comparisons swapped, 20 DIFF;
+ * the first `if` inverted with `return 1` out of line, 99 words and 79 DIFF.
+ * Four `MEM_IN_STRUCT_P` spellings (`*(u32 **)((u8 *) D_80080AF4 + i * 4)` on
+ * the region-2 store LHS, on its RHS, on both, and on the first comparison
+ * alone) are **bit-identical**, not merely the same count: inert.
+ *
+ * TWO CORRECTIONS TO THE NOTES ABOVE, both from re-measuring:
+ *  - the in-struct requirement belongs to BLOCK 2's two `lw`s, not block 0's.
+ *    Block 0 has no `sh` to hoist past -- the `sh` is in block 2 -- so
+ *    spelling only the first comparison non-struct is free and buys nothing,
+ *    while spelling BOTH comparisons non-struct costs a word (101 words,
+ *    79 DIFF).
+ *  - the operand swap and the inverted `if` are evidence, not failures. The
+ *    swap moves the D_80080AF4 materialisation to the TOP of block 0, which
+ *    proves the operand evaluation order is source-controlled and that the
+ *    baseline's order -- materialised mid-block, after the D_8006E704 address
+ *    chain -- is the target's. The inverted `if` losing a word confirms the
+ *    polarity and block layout are right too. Between them, every structural
+ *    degree of freedom in that block is pinned to what this source has.
+ *
+ * THE ONE UNTRIED ESCAPE, for whoever has the budget: a cse run boundary
+ * inside region 1 -- identical `if`/`else` arms between a single-set
+ * `u32 **af4 = D_80080AF4;` and its uses, which is free in words (section 1)
+ * and would let the local survive as one pseudo. Not tried because the same
+ * construct is a sched1/sched2 block split in a block whose 17 words are
+ * currently exact, so it has to buy back more than it spends.
+ *
  * The unit is built at -G8 and D_80080AF4 must stay an INCOMPLETE array; see
  * include/structs.h and the unit header for why.
  */

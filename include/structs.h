@@ -362,6 +362,21 @@ typedef struct Unk41284 {
     u32 unk_00;
 } Unk41284;
 
+/* Hand-added. One record of the command stream func_80041344 and
+   func_80041588 walk: a 16-bit opcode, the record's own byte size, and three
+   words whose meaning depends on the opcode. Both functions read the two
+   halfwords through a `u8 *` cursor and the three words through a separate
+   pointer of this type -- that split is load-bearing (see the comment on
+   func_80041344), so the struct deliberately covers only the word fields that
+   are reached as a struct. */
+typedef struct Unk41344 {
+    u16 unk_00;
+    u16 unk_02;
+    u32 unk_04;
+    u32 unk_08;
+    u32 unk_0C;
+} Unk41344;
+
 /* Hand-added. A 3-byte element: func_80042710 copies +0x00 and +0x02 of each
    of three of these and deliberately leaves the middle byte alone, which is
    why that copy is field-by-field and not a whole-struct assignment. */
@@ -1151,7 +1166,17 @@ Unk8006CE34 *func_8003F534(void);
 void func_8003F540(u32, u32, u32, u32);
 void func_80053DA8(s32);
 void func_80041284(Unk41284 *);
-void func_8003E4FC(u8, u8 *, s32);
+/* It does return a value -- five paths return func_8003E39C's result and the
+   rest return NULL. The old `void` was an inference from the call sites: all
+   five existing callers discard it, so giving it its real type cannot change
+   their codegen. */
+Unk80083968 *func_8003E4FC(u8, u8 *, s32);
+/* func_80041588 passes this function's ADDRESS to func_8003E4FC as the
+   deferred-completion callback; it is defined in csrc/unk_11940.c. */
+void func_8003E140(s8 *);
+/* The fourth argument must be s16: callers pass either a bare `lh` of a
+   u16 field or a `sll 16`/`sra 16` of a flag word. */
+void func_8003F80C(u32, s32, s32, s16);
 void func_80040A88(void (*)(void));
 void func_8003CB08(void);
 void func_80044618(s32);
@@ -1269,6 +1294,7 @@ s32  GetRCnt(s32);
 void ResetRCnt(s32);
 /* libc, from the PSY-Q runtime. */
 void bzero(void *, s32);
+void *memcpy(void *, const void *, u32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
