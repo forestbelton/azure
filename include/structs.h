@@ -824,7 +824,16 @@ extern u32 D_80080ADC;
    materialised: an incomplete array, not a scalar. */
 extern u8  D_80080AF0[];
 extern u8  D_80080AF3;
-extern u16 D_80080AFC;
+/* SIGNED: func_8004437C reads it with `lh` at all four comparison sites. It
+   also needs one `lhu`, which `(u16) D_80080AFC ^ 1` gives at that one site --
+   a (s16) cast on a u16 would be folded away where the value only feeds a zero
+   test, so the declaration carries the sign and the cast handles the
+   exception. Must stay a SCALAR: as an array element its store becomes an
+   in-struct reference and true_dependence pins it ahead of neighbouring array
+   loads, costing func_8004437C a word and 79 differing ones. The halfword at
+   +2 is reached as `*(u16 *) ((u8 *) &D_80080AFC + 2)`, which still yields the
+   %gp_rel(SYM + 0x2) addend form. Only gprel_17B7C references it. */
+extern s16 D_80080AFC;
 extern u16 D_80080B00;
 extern u16 D_80080B08;
 extern u16 D_80080B0A;
@@ -909,6 +918,29 @@ extern s32 D_800814F0[2];
 extern s32 D_800814F8[2];
 extern u16 D_80081500;
 extern u32 D_80081508;
+
+/* Pointer slots at 0x80080AF4, indexed by D_80080AFC. In the $gp window and
+   reached ABSOLUTELY, so the array must stay INCOMPLETE: a sized declaration
+   makes cc1psx emit `.extern D_80080AF4,<size>`, and at -G8 gas then has a
+   size to judge it small by. An incomplete one emits no record and cc1psx
+   splits the address itself. Same hazard class as D_80082E6E. */
+extern u32 *D_80080AF4[];
+
+extern u32 *D_8006E704[];   /* pointer table, stride 4, indexed by an s16 */
+extern u8   D_801BEE40[];   /* out of image, but lui+addiu: a SYMBOL, not a
+                               constant address -- see matching-levers s6 */
+extern u8   D_801C4640[];
+
+/* 0x8006E6F4: two buffers per entry, stride 8 (func_8004450C scales by 8).
+   NOTE for whoever lays this region out: D_8006E6F4 (stride 8) and
+   D_8006E704 (stride 4) are only 0x10 apart, and D_8006E6F4 falls exactly at
+   &D_8006E61C[18] of the existing 12-byte table -- so it is worth checking
+   which of the three tables really ends where. */
+typedef struct Unk8006E6F4 {
+    u8 *unk_00;
+    u8 *unk_04;
+} Unk8006E6F4;
+extern Unk8006E6F4 D_8006E6F4[];
 extern u32 D_80081510;
 extern u16 D_8008151C;
 extern u16 D_8008151E;
@@ -1175,6 +1207,8 @@ void InitPAD(u8 *, s32, u8 *, s32);
 void ChangeClearPAD(s32);
 s32  VSync(s32);
 s32  CdInit(void);
+s32  func_80053EF0(s32);
+s32  func_8004450C(s16);
 s32  CdSync(s32, u8 *);
 s32  CdControl(u8, u8 *, u8 *);
 s32  CdPosToInt(u8 *);

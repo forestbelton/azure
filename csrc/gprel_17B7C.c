@@ -52,7 +52,44 @@ void func_80040454(void);
 
 INCLUDE_ASM("asm/nonmatchings/gprel_17B7C", func_8004437C);
 
-INCLUDE_ASM("asm/nonmatchings/gprel_17B7C", func_8004450C);
+/* Switches the active buffer pair to entry arg0, unless it is already current.
+ *
+ * Load-bearing: `s16 arg0`, so the raw parameter stays in $s1 for the `sb`
+ * while the sign-extended copy is a separate pseudo in $s0; `(s8) D_80080AF3`
+ * for the single `lb`; the 8-byte two-pointer element with unk_04 consumed
+ * before unk_00; `return 1` out of line and physically last; and D_8008148C
+ * read twice rather than cached.
+ *
+ * THE `__asm__` IS LOAD-BEARING -- see the unit header. D_80081480 and
+ * D_8008148C are u32 reached ABSOLUTELY, and this unit is built at -G8 because
+ * func_800448BC needs the equally-4-byte D_80081508 $gp-relative. No -G value
+ * separates two symbols of the same size, and no C declaration gives
+ * bare-symbol-but-absolute, so the size record is overridden directly. gas
+ * resolves small-vs-large at relaxation time and the LAST .extern wins;
+ * cc1psx's own `.extern X,4` sits in the file header, so a statement-level
+ * directive anywhere in a function body overrides it. It emits no bytes
+ * (readelf shows UND, value 0, size 0). It IS a scheduling barrier, so it
+ * lives in the `return 1` arm where it is free -- as the function's first
+ * statement it costs 6 words. Every declaration-based spelling measured 2
+ * words worse. */
+s32 func_8004450C(s16 arg0) {
+    if ((s8) D_80080AF3 != arg0) {
+        func_8003E4FC(6, D_8006E6F4[arg0].unk_04, 0);
+        DrawSync(0);
+        D_80081480 = D_8008148C;
+        func_8003E4FC(6, D_8006E6F4[arg0].unk_00, 0);
+        D_80080AF3 = arg0;
+        func_8003F320();
+        func_8003F5E0(D_8008148C);
+        func_80053DA8(0x11);
+        func_800542BC();
+        while (func_8005405C(0) != 1) {
+        }
+        return 0;
+    }
+    __asm__(".extern D_80081480, 16\n\t.extern D_8008148C, 16");
+    return 1;
+}
 
 u32 func_800445E0(void) {
     Unk8006CE34 *p = func_8003F534();
@@ -61,9 +98,67 @@ u32 func_800445E0(void) {
     return t + p->unk_04;
 }
 
-INCLUDE_ASM("asm/nonmatchings/gprel_17B7C", func_80044618);
+/* Waits a frame and, if the frame counter's low bits changed, pokes the sound
+ * driver. arg0 == 2 selects a 9-bit counter rather than 8.
+ *
+ * Load-bearing, and it is the whole function: `t` is assigned TWICE, once
+ * before the `if` and once inside it. cse does NOT delete the second
+ * `t = v >> 8;`, and the two sets promote the shift from a block-local
+ * quantity to a global allocno, which is what orders the registers $v0 (masks)
+ * / $v1 (shift) / $a0 (load) / $a1 (v) as the target has them. One set costs
+ * 29 words and 19 differing; no `t` at all, with `(v >> 8)` written into each
+ * ternary arm, costs 7 differing words. `u32 v`, not s32, for `srl` over
+ * `sra`. The ternary appears in both the test and the store, which is where
+ * the second srl/andi pair comes from; reorg then steals each srl into a
+ * branch delay slot, so one statement prints twice.
+ *
+ * The +2 halfword is reached as a cast off &D_80080AFC rather than as an array
+ * element: `extern u16 D_80080AFC[2]` with `[1]` also matches HERE, but costs
+ * func_8004437C a word and 79 differing ones (see structs.h). */
+void func_80044618(s32 arg0) {
+    u32 v = VSync(1);
+    u32 t;
 
-INCLUDE_ASM("asm/nonmatchings/gprel_17B7C", func_80044698);
+    t = v >> 8;
+
+    if (((arg0 == 2) ? (t & 0x1FF) : (t & 0xFF)) != *(u16 *) ((u8 *) &D_80080AFC + 2)) {
+        t = v >> 8;
+        *(u16 *) ((u8 *) &D_80080AFC + 2) = (arg0 == 2) ? (t & 0x1FF) : (t & 0xFF);
+        func_800542BC();
+    }
+}
+
+/* Drains the sound driver's queue, nudging it once on the first iteration
+ * unless it reports 3, and tracking the frame counter.
+ *
+ * Load-bearing: the `(u32)` cast on VSync's return (`srl`, not `sra` -- 1
+ * word); `u8 flag` with the redundant `& 1`, which keeps the one-insn
+ * materialisation as `addu $v0,$s0,$zero` in the beqz's delay slot (a plain
+ * `flag != 0` on a u8 gives `andi 0xFF`, and an s32 with the mask gives
+ * `andi 0x1` -- all three are 35 words, only this one matches); `flag = 1;`
+ * before the `r != 3` test, so the `addiu $s0,1` lands in the beq's delay
+ * slot; and the call inside the `while` condition, whose loop note is what
+ * hoists the constant 3 into $s1. */
+void func_80044698(void) {
+    u8 flag = 0;
+    s32 r;
+    u32 t;
+
+    while ((r = func_80053EF0(1)) != 0) {
+        if ((flag & 1) == 0) {
+            flag = 1;
+            if (r != 3) {
+                func_80053DA8(0xC1);
+            }
+        }
+
+        func_80044618(2);
+        t = ((u32) VSync(1) >> 8) & 0x1FF;
+        if (t != D_80080B00) {
+            D_80080B00 = t;
+        }
+    }
+}
 
 /* Compares four 3-halfword vectors against a cache and, if any component
  * differs, copies all four over and returns 1; returns 0 if they already

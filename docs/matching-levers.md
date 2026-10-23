@@ -355,6 +355,16 @@ in the block to hoist it past.
   not discriminate because `e1`'s register base is a *parameter*, which really
   does vary.
 
+* **Spelling a small `$gp` global as an array element makes its store
+  in-struct, and that pins it.** `D_80080AFC[0] = x;` is an in-struct
+  reference, so `true_dependence` holds it ahead of neighbouring array loads
+  and a load-delay slot goes empty; as a plain scalar the store is a non-struct
+  reference at a non-varying address, the exception applies, and sched1 drops
+  it into the slot exactly as the target has it. Worth one word and 79
+  differing ones in func_8004437C. **Corollary:** when one object must serve a
+  `+0` and a `+2` access in the same unit, do not retype it to an array --
+  spell the odd offset `*(u16 *) ((u8 *) &SYM + 2)`, which still yields the
+  `%gp_rel(SYM + 0x2)` addend form and leaves every other access a scalar.
 * **A parameter's type is the easiest way to set the flag.** func_80041284 was
   parked for four words on exactly this: as a `u32 *` both its loads and the
   `D_80081480` store are non-struct, the exception does not apply, and
@@ -402,6 +412,23 @@ low half is zero so the materialisation is a single `lui` and everything else
 is a displacement. Literal constants per access cost 194 words in
 func_8003DBD0 and 262 in func_8003D0F0.
 
+**`$at` in a `%hi`/`%lo` pair proves the reference was a BARE symbol left to
+the assembler.** gas's macro expansion uses `$at` for a store and reuses the
+destination register for a load (`lui $v0,%hi` / `lw $v0,%lo($v0)`), whereas
+cc1psx's own split form always uses two allocatable registers and can have
+other insns scheduled between them. splat prints both as `%hi`/`%lo`, so this
+is the tell -- the companion to the "read the second opcode" rule below, and
+what identified func_8004450C's addressing mode.
+
+**A constant address used TWICE costs 2 words.** expand `force_reg`s a large
+`CONST_INT` address at each use, cse merges the two materialisations, and
+combine folds a constant address back into the MEM only when the pseudo has a
+single use -- so a twice-used one survives in a callee-saved register across
+any call, buying an `sw`/`lw` pair. Single-use constant addresses do collapse
+to the two-word absolute form, which is the mechanism behind the
+`lw $2,-2146946720` note below. Measured at 55 words against 53 in
+func_8004450C.
+
 **In a carved unit, the gas `-G` value picks the addressing mode BY SIZE, and
 that is a lever.** gas emits GPREL16 only for a symbol whose `.extern SYM,size`
 record gives a size in `(0, G]`; with no record at all the access is absolute.
@@ -414,6 +441,29 @@ sizes. `gprel_152E4` and `gprel_17504` are built at `-G2` for exactly that;
 func_80041AE4 is 44 of 45 words wrong at `-G8` and matches at `-G2` with plain
 scalar declarations. Measured against gas directly, and written up in
 `docs/addressing-and-translation-units.md`.
+
+**`-G` separates by size, so it cannot help when the two symbols are the same
+size** -- and then the size record has to be overridden per symbol.
+`gprel_17B7C` needs the 4-byte D_80081508 `$gp`-relative (func_800448BC) and
+the equally 4-byte D_80081480/D_8008148C absolute (func_8004450C), so no `-G`
+value separates them. gas decides small-vs-large at **relaxation** time, after
+the whole file is read, and the LAST `.extern SYM,size` wins; cc1psx's own
+`.extern X,4` sits in the file header. So a statement-level
+`__asm__(".extern X, 16")` **inside any function body** of the unit flips that
+symbol to absolute and the natural scalar source then matches. It emits no
+bytes (`readelf -s` shows UND, value 0, size 0). Two caveats: a **file-scope**
+`__asm__` does not work, because cc1psx buffers top-level asm and emits it
+*ahead* of its own `.extern` block; and the directive is a scheduling barrier,
+so put it somewhere inert -- in func_8004450C's `return 1` arm it is free, and
+as the function's first statement it costs 6 words. Every declaration-based
+spelling measured 2 words worse.
+
+Worth knowing what this is standing in for: ASPSX did not use a size threshold
+at all. It emitted `$gp`-relative only for symbols **defined in the same
+translation unit**, which is why the original build's imports are all absolute.
+The faithful reproduction is therefore the `.sdata` definition route, not a
+`-G` value -- and that is blocked on linker placement splat cannot express, so
+the override is the pragmatic stand-in.
 
 **An out-of-image global is NOT always a constant address, and the second
 instruction tells you which.** This project's rule of thumb -- that a global
@@ -462,6 +512,13 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   read off a declaration you do not want to retype: `D_80083120[(s16) D_800814E8]`
   gives `lh` and dropping the cast gives `lhu`, one differing word with the
   count unchanged (func_80041B98, and three others in that batch).
+
+  **But only where the sign-extended value is actually consumed.** Cast a `u16`
+  global and compare it against zero and the cast is folded away entirely, so
+  the load stays `lhu` -- 10 differing words in func_8004437C. When one object
+  needs `lh` at its comparisons and `lhu` at one arithmetic site, do the
+  mirror image: declare it `s16` and put a `(u16)` cast at that one site.
+  `(u16) D_80080AFC ^ 1` gives the single `lhu`/`xori`/`sh` the target has.
 * **A narrow local is still an SImode pseudo** (`PROMOTE_MODE`), so there is no
   paradoxical-subreg escape from cse's `equiv_constant`: `u16 n`, `s16 n` and
   `u16 n <<= 1` all fold to `li 32` exactly as `s32` does (func_80041E70).
@@ -619,6 +676,14 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   statement, `flags = *(u16 *) (p + 0xC) | 2;`, already costs 3 words, so the
   split is doing the work, not the variable.
 
+  **Re-assigning a local the SAME expression in a later block keeps both
+  sets**, and that is the cheapest way to buy this. cse does not delete the
+  second `t = v >> 8;`, so the value stops being a block-local quantity and
+  becomes a global allocno, which reorders the whole allocation.
+  func_80044618 is entirely this: one set gives 29 words and 19 differing, two
+  sets match. Think of it as section 3's duplicate-into-both-arms lever for
+  when what you need is a second *set* rather than a second reference.
+
   **This is the lever to reach for when sched1 is wrong inside a block**, where
   section 10 says statement order will not help: changing the number of sets
   changes the dependency graph, which is the thing sched1 actually reads. Two
@@ -626,9 +691,14 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   `base` is masked, then copied back from the KSEG0 pointer, which is what puts
   the masked value in a callee-saved register instead of `$v0`.
 * **A `u8` local plus a redundant `& 1` keeps a one-insn materialisation of a
-  0/1 value, and the local's declared width picks the opcode.** For a value gcc
-  holds in a callee-saved register, `if (bit != 0)` compiles to a bare
-  `beqz $s2` with no insn of its own. Add the mask and declare the local
+  0/1 value, and the local's declared width picks the opcode.** For an `s32`
+  value gcc holds in a callee-saved register, `if (bit != 0)` compiles to a bare
+  `beqz $s2` with no insn of its own -- **but for a `u8` local it does not**:
+  `if (flag != 0)` emits `andi $v0,$s0,0xFF`, the QImode truncation. So on a
+  `u8` all three spellings cost the same single word and only one is right:
+  `& 1` gives `addu` (func_80044698's target), bare gives `andi 0xFF`, and an
+  `s32` with the mask gives `andi 0x1`. The original claim here was measured on
+  an `s32` local and stated too broadly. Add the mask and declare the local
   `s32` and you get a real `andi $v0,$s2,1`; declare it `u8` and gcc proves the
   QImode value's bits, folds the mask to the identity, and what survives is
   `addu $v0,$s2,$zero` -- a block-local SImode materialisation that local-alloc

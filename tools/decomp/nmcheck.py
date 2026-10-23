@@ -31,6 +31,24 @@ PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
 # "func_80042900 (unk_14934) -- 1 instruction off, 34 words against 33."
 # "func_80045CC4 (unk_14934) -- 436 of 437 words, 47 DIFF."
 HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\((\w+)\)")
+
+
+def unit_gas_flags():
+    """unit -> the verify.py flag matching how the Makefile assembles it.
+
+    The carved units are built with a nonzero gas -G, so verifying them at the
+    project default would model the wrong assembler and report a false failure.
+    Read the mapping out of the Makefile rather than hardcoding it, so adding a
+    carve cannot silently break this check.
+    """
+    mk = open(os.path.join(PROJ, "Makefile")).read()
+    out = {}
+    for m in re.finditer(r"^((?:\s*build/csrc/\S+\.o\s*\\?\s*)+):\s*"
+                         r"MASPSXFLAGS\s*:=\s*\$\(MASPSXFLAGS_G(\d+)\)",
+                         mk, re.M):
+        for u in re.findall(r"build/csrc/(\S+?)\.o", m.group(1)):
+            out[u] = "--gas-G=" + m.group(2)
+    return out
 CLAIM = re.compile(r"(\d+)\s+of\s+(\d+)\s+words,\s*(\d+)\s+DIFF")
 # some headers phrase it the other way round: "34 words against 33"
 CLAIM_W = re.compile(r"(\d+)\s+words\s+against\s+(\d+)")
@@ -75,10 +93,12 @@ def check(path):
     try:
         with os.fdopen(fd, "w") as fh:
             fh.write(text)
-        r = subprocess.run(
-            ["python3", os.path.join(HERE, "verify.py"),
-             os.path.basename(tmp), unit, func],
-            cwd=PROJ, capture_output=True, text=True)
+        cmd = ["python3", os.path.join(HERE, "verify.py"),
+               os.path.basename(tmp), unit, func]
+        flag = unit_gas_flags().get(unit)
+        if flag:
+            cmd.append(flag)
+        r = subprocess.run(cmd, cwd=PROJ, capture_output=True, text=True)
     finally:
         os.unlink(tmp)
 
