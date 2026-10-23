@@ -130,7 +130,17 @@ void func_80048190(s16 k) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800481E0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048224);
+s32 func_80047BC0(s32);
+
+s32 func_80048224(s16 k) {
+    s32 i = func_80047BC0(k);
+
+    if (i != -1) {
+        D_80083D08s[i].unk_04 &= 0xFFFE;
+        return 1;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004827C);
 

@@ -648,7 +648,20 @@ void func_8004D7E8(s32 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D828);
+u8 func_8004D828(u16 k) {
+    /* Indexed, not a walked pointer: through `u16 *p` and `p++` the base is
+       materialised before the guard branch instead of in the loop's
+       preheader (7 DIFF). */
+    s32 i = 0;
+
+    while (D_8007142C[i] != 0) {
+        if (D_8007142C[i] == k) {
+            break;
+        }
+        i++;
+    }
+    return D_8007147C[i];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D880);
 
@@ -1387,7 +1400,15 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054538);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800545F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800546B0);
+s32 func_800545F4(u8 *);
+void func_80054E00(s32);
+
+void func_800546B0(void) {
+    if ((u32) func_80053D64() >= D_800847DC ||
+        func_800545F4(D_80084858) == -1) {
+        func_80054E00(0x74);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054704);
 

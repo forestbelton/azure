@@ -203,7 +203,14 @@ void func_800355EC(u8 *p) {
     (*(void (**)(u8 *)) (p + 0x68))(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035614);
+void func_80035888(u8 *, u8 *, u8 *, s32, u32);
+void func_8003566C(void);
+
+void func_80035614(u8 *p) {
+    func_80035888(D_800821CC, D_80081F14, p, 0, *(u32 *) (p + 0x74));
+    p[0x4C] = 0;
+    *(u32 *) (p + 0x68) = (u32) func_8003566C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003566C);
 
@@ -1532,7 +1539,22 @@ void func_8003C488(u32 *cb, s32 b, u8 *p) {
 void func_8003C4C0(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C4C8);
+void func_8003C4C8(u8 *p, s32 b, u8 *q) {
+    s32 v = q[0xE] - 0x10;
+
+    *(u16 *) (q + 0x1C) -= 0x200;
+    if (v < 0) {
+        v = 0;
+    }
+    q[0xE] = v;
+    q[0xD] = v;
+    q[0xC] = v;
+    if (*(s16 *) (q + 0x1C) <= 0) {
+        *(u16 *) (q + 0x1E) = 0;
+        *(u32 *) p = 0;
+        func_8003C0C0(p, (u32) q);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C520);
 
