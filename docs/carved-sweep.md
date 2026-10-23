@@ -155,6 +155,8 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_8005A56C | unk_1C540 | 23 DIFF | Two stack blocks selected by the first argument, with `(x << 16) >> 8` scaling. |
 | func_8003C24C + func_8003C2F8 | unk_72A8 | 26/27 words, 11 DIFF | A pair. `u8 *b = (u8 *) D_80082D58;` with `*(u8 **) (b - 0x14)` is what stops the -0x14 folding into the load's address (26 DIFF -> 11), which is the whole structure; what is left is that the target computes `%hi(D_80082D58)` once and shares it between the base pointer and the final store's split form, where cse here folds the store onto the base pointer instead. |
 | func_80047CD8 | unk_1AF38 | 28/27 words, 20 DIFF | The target keeps the constant -1 in `$s1` across two calls and compares both results against it; this puts the first result there instead. An explicit `s32 m = -1;` local does not move it. |
+| func_8004D880 | unk_1C540 | 28/28 words, 22 DIFF | A Shift-JIS to ASCII classifier: three `(u16)(c + K) < N` range tests, each returning `c + K + delta`. The target computes `c + K` ONCE into a register and adds the delta to it; every spelling folds the two constants (`c + 0x7DE1`) instead, and the target's copy of the raw parameter into $v1 says the parameter is not masked either. An s32 parameter, a u16 one, and an explicit `s32 t` local used twice were all measured. |
+| func_8004EAC4 | unk_1C540 | 27/27 words, 13 DIFF | Only which of $s0/$s1/$s2 holds each of the three parameters. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather

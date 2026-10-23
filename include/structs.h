@@ -1218,6 +1218,18 @@ extern u8  D_80082414[];
 extern u8  D_80081FDC[];
 extern s16 D_8006ADE8[];
 extern u32 D_8008099C;
+/* Hand-added. A 0x14-byte record whose +0x0C points at another 0x14-stride
+   table; func_80042A80 indexes this one by p[0] and func_8004A940 and
+   func_8004A658 index both. Was unit-local to csrc/unk_154BC.c until a second
+   unit needed it. Only +0x00 and +0x0C are touched. */
+typedef struct Unk80073414 {
+    u8  unk_00;
+    u8  pad_01[0xB];
+    u8 *unk_0C;
+    u8  pad_10[0x4];
+} Unk80073414;
+extern Unk80073414 D_80073414[];
+
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
 extern s16 D_8006A94C[];  /* s16 pairs, 0-terminated */

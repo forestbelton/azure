@@ -530,18 +530,6 @@ s32 func_800429E4(u8 *arg0) {
     return r;
 }
 
-/* Hand-added, unit-local like the D_800E1Dxx block below: a 0x14-byte record
- * whose +0x0C is a pointer to a 0x14-stride table that func_80042A80 indexes
- * by p[0]. Only +0x00 and +0x0C are touched. */
-typedef struct Unk80073414 {
-    u8  unk_00;
-    u8  pad_01[0xB];
-    u8 *unk_0C;
-    u8  pad_10[0x4];
-} Unk80073414;
-
-extern Unk80073414 D_80073414[];
-
 /* Returns the 0x400 flag of the record addressed by p, with two special cases
  * keyed on p[1], and 0 unless the global mode is 2.
  *

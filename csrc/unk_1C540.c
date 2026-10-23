@@ -327,7 +327,19 @@ void func_8004A918(void) {
     bzero((void *) 0x80013564, 0x50);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A940);
+void func_8004A940(void) {
+    s16 *k = (s16 *) 0x80013564;
+    u8 *e = (u8 *) 0x800133E8;
+    s32 i = 0;
+
+    for (; i < 0x14; i++) {
+        if (k[0] != 0) {
+            *(u32 *) (D_80073414[k[0]].unk_0C + k[1] * 20 + 0xC) = (u32) e;
+        }
+        k += 2;
+        e += 0x13;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A9B0);
 
@@ -573,7 +585,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B954);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004BDDC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C010);
+u8 *func_8004C010(u8 *d, u8 *s) {
+    u8 *p;
+    s32 i;
+    s32 v;
+
+    if ((*(u32 *) s << 8) != 0x80808000) {
+        p = d;
+        /* All three increments in the `for`, in the target's order: with
+           `p++`/`s++` in the body the counter is bumped after the pointer. */
+        for (i = 0; i < 3; i++, p++, s++) {
+            v = (*p * *s) >> 7;
+            if (v < 0x100) {
+                *p = v;
+            } else {
+                *p = 0xFF;
+            }
+        }
+    }
+    return d;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C080);
 
