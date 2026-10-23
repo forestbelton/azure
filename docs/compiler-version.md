@@ -225,11 +225,32 @@ depends on the pass list as resting on an assumption, in the sense
 `docs/where-we-are.md`'s context audit means. Second, `regmove` rewrites
 register copies and in later gcc adjusts `REG_N_REFS` and `REG_LIVE_LENGTH`,
 which are exactly the inputs to `global.c`'s priority formula that several
-near-miss bounds are computed from -- so it is worth diffing `.combine` against
-`.regmove` before trusting such a bound. On func_80047054 it is a **no-op**
-(identical insn count and identical register histogram across the two dumps),
-so it does not explain that function's permutation; it has not been checked on
-func_800407C0, whose argument rests on preferences and refs/live_length.
+near-miss bounds are computed from -- so it looked worth diffing `.combine`
+against `.regmove` before trusting such a bound.
+
+**Measured, and it is a no-op.** On func_8003F368, func_80041E70, func_8004437C,
+func_800407C0 and func_80047054 the two dumps are byte-identical apart from the
+combiner's own statistics header and footer: same insn count, same RTL, same
+registers. So regmove explains none of the register permutations, and no bound
+computed from `REG_N_REFS` / `REG_LIVE_LENGTH` is disturbed by it. Only the two
+functions an agent was holding at the time are untested.
+
+The likely reason, offered as inference rather than fact since there is no
+source for this pass: regmove of that era exists to coalesce for **two-address**
+targets, making an insn's destination share a register with one of its inputs.
+MIPS is three-address, so it has nothing to do. Consistent with a no-op on every
+function tested, but not verified.
+
+**So do not decompile cc1psx to recover regmove.** The idea is sound in
+principle -- cc1psx is a GCC derivative, its source is GPL, and there is no
+upstream 2.7.2 source for this pass -- but the pass demonstrably does nothing
+here, and the binary is largely stripped (only `except.c` and `expr.c` survive as
+assert strings, and "regmove" appears only as the dump suffix), so it would be
+expensive as well as unrewarding. If some future function ever shows a live
+`.combine` -> `.regmove` difference, the cheap route is still not the binary:
+read `regmove.c` from gcc 2.8.0 or egcs-1.0.x, the trunk era this 1997-04-04
+Cygnus snapshot would have backported it from, and only then consider
+disassembly.
 
 A trap this cost once: a dump collector that deletes a LIST of suffixes before
 compiling leaves the unlisted three behind, and the next run collects a previous
