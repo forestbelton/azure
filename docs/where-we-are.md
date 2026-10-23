@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**186 of 784 functions in the RESIDENT EXECUTABLE are C and the build is
+**186 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
 byte-identical.** `make check` is green at HEAD, and green after a full
 `make splat`. The remaining 7 are
 `INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
@@ -89,7 +89,40 @@ as `asm, psyq/*` is where that identification succeeded.
 on 4-8 invariant words. So this code is not any module of the twenty libraries
 in `psyq/lib`, although those are provably the ones the game linked against.
 
-### The unidentified code was 759 more of the game's own functions
+### The code accounting is complete: 1008 functions, 186 of them C
+
+**Settled 2026-10-23, and this is the authoritative count.** It was revised
+upward four times in one afternoon as blobs were carved -- 191, then ~421 from a
+`jal` estimate, then 784, then 1008 -- so the number is stated here once, with
+the survey that makes it final.
+
+| unit | file range | functions |
+|------|-----------|-----------|
+| previously typed | various | 191 (186 C, 5 stubs) |
+| `unk_72A8` | 0x072a8-0x101f8 | 294 |
+| `unk_1C540` | 0x1c540-0x301a8 | 465 |
+| `unk_1AF38` | 0x1af38-0x1c520 | 53 |
+| `unk_301D4` | 0x301d4-0x30290 | 5 |
+| **total** | | **1008** |
+
+`guard.py` is the authority and reads 822 stubs. splat now reports `c` at 167 KB
+(32.0%) and `asm` at 51 KB (9.9%); `make check` is byte-identical at e6bfbb9
+after every carve.
+
+**Why this is final rather than another revision.** Every remaining `bin` range
+was surveyed for `addiu $sp` prologues, `jr $ra` returns, and how many `jal`
+instructions target it from outside. Exactly one was code-bearing (188 bytes),
+and it is now carved. The rest is data and matches the entropy profiles already
+recorded: 25 KB of Shift-JIS text at 0x800 and 0xefc, ~5.5 KB of data between
+0x31cc4 and 0x363a8, 90 KB of structured data at 0x3e01c, and 180 KB of
+packed assets at 0x54240 (entropy 7.98). The 80 `jal` targets landing in that
+last region are the engine calling **out-of-image overlay addresses**, which
+`docs/overlays.md` covers.
+
+So every code-bearing byte of `slus_006.14` now sits in a typed subsegment, and
+what is left as "unknown" is data.
+
+### These 817 functions are the game's own code
 
 Resolved 2026-10-23, and it reframes the project. Both blocks are now carved as
 C subsegments (`unk_72A8` and `unk_1C540`), `make check` is byte-identical, and

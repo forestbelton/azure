@@ -1,7 +1,7 @@
 # TODO
 
 See `docs/where-we-are.md` for the state and `docs/matching-levers.md` for how
-this compiler behaves. **186 of 784 resident-executable functions are C and
+this compiler behaves. **186 of 1008 resident-executable functions are C and
 `make check` is byte-identical.** Both of the structural blockers that shaped
 most of this project -- jump-table placement and the object reached both
 `$gp`-relatively and absolutely -- are solved and neither needed the thing it
@@ -83,8 +83,12 @@ The queue, in order:
       12 alike. The only hits are a handful of tiny stubs matching ambiguously
       at many sites on 4-8 invariant words, which is noise.
 
-      **DONE: both blocks are carved, and they are 759 of the game's own
-      functions.** `unk_72A8` (294) and `unk_1C540` (465) are C subsegments as
+      **DONE: all four code blocks are carved -- 817 of the game's own
+      functions, and the code accounting is now complete.** unk_72A8 (294),
+      unk_1C540 (465), unk_1AF38 (53) and unk_301D4 (5). Every remaining bin
+      range was surveyed for prologues, returns and inbound calls; only 188
+      bytes of code were left and they are carved. The rest of the "unknown"
+      300 KB is data. The executable has 1008 functions, 186 of them C. `unk_72A8` (294) and `unk_1C540` (465) are C subsegments as
       of 2026-10-23 and `make check` is byte-identical. They are game code, not
       SDK modules: block A calls AddPrim, GetTPage, ClearImage, RotTransPers4,
       RotMatrix, CompMatrix, PushMatrix/PopMatrix, ScaleMatrix, LoadImage and
