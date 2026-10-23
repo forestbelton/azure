@@ -1113,6 +1113,17 @@ extern u32 D_80083168[];
 extern u8  D_80071298[];
 extern u32 D_80071250[];
 extern u8  D_80083D08[];
+/* The same table as a struct array, for the functions that reach a field at a
+   constant offset off a VARIABLE index: through the byte array `fold` moves
+   that offset onto the symbol (`addiu %lo(D_80083D08)+4`, `lhu 0x0`) where the
+   target has it in the load's displacement. The functions that advance a
+   pointer by 8 instead use the byte array and are unaffected. */
+typedef struct Unk80083D08 {
+    u32 unk_00;
+    u16 unk_04;
+    s16 unk_06;
+} Unk80083D08;
+extern Unk80083D08 D_80083D08s[] __asm__("D_80083D08");
 extern u8  D_8006ADBC[];
 extern u8  D_8007382B[];
 extern u8  D_800820A8[];
