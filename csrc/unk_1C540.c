@@ -413,7 +413,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CE68);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CECC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D064);
+u8 *func_8004D064(u8 *p) {
+    /* The parameter is advanced in place and returned, which is the `addu
+       $v0, $a0, $zero` at the end; computing `p + 0xC` into the return value
+       instead fills both delay slots and loses a word. */
+    switch (p[1] & 0xF0) {
+    case 0x20:
+        p += 0xC;
+        break;
+    case 0x30:
+        p += 0x18;
+        break;
+    default:
+        p += 0xC;
+        break;
+    }
+    return p;
+}
 
 void func_8004D09C(u8 *p) {
     u16 *q = *(u16 **) (p + 0x20);
@@ -1360,7 +1376,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AAA8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AB50);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AC30);
+s32 func_8005ECF8(s32);
+
+s16 func_8005AC30(s16 a) {
+    /* Two returns of the same call, not `func_8005ECF8(a != 0)`, which
+       store-flags into one `sltu`. And the arm written FIRST ends up SECOND in
+       memory: crossjumping merges the two tails and leaves the second arm as
+       the fall-through, so `a == 0` first is what gives the target's `beqz`. */
+    if (a == 0) {
+        return func_8005ECF8(0);
+    } else {
+        return func_8005ECF8(1);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AC68);
 

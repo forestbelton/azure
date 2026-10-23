@@ -49,7 +49,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047CD8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047D44);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047DB8);
+void func_800479D4(u8 *, u8 *, s32);
+
+u8 *func_80047DB8(u16 a) {
+    func_800479D4(D_80016000, D_80023000, a);
+    /* `&D_8008152Cs`, a 4-byte scalar, and not the array D_8008152C: a small
+       object's address is the one-insn `la` macro, and the target keeps the
+       lui and the addiu adjacent and ahead of the epilogue. Through the
+       incomplete array the compiler splits them and sinks the addiu past the
+       `lw $ra`, which also lets the stack adjustment into the delay slot --
+       5 DIFF. */
+    return (u8 *) &D_8008152Cs;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047DF0);
 

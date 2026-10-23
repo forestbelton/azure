@@ -1129,6 +1129,10 @@ extern u8  D_8006AEAC[];
 extern u8  D_80016000[];  /* out of image, reached as symbols (lui+addiu) */
 extern u8  D_80023000[];
 extern u8  D_8008152C[];
+/* The same object as a scalar, for func_80047DB8: a 4-byte object's address is
+   the one-insn `la` macro, where the incomplete array gets the compiler split.
+   Three functions reach it $gp-relatively, so 4 bytes is also its real size. */
+extern u32 D_8008152Cs __asm__("D_8008152C");
 /* Hand-added. A 0xC-byte entry; func_8005B2C8 scales an s16 index by 12 and
    reads the two halfwords at +0x08/+0x0A. A struct for the same reason as
    Unk80084960: the field offset must not migrate onto the symbol. */

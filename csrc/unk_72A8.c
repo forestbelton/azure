@@ -1048,7 +1048,18 @@ void func_8003C0C0(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C0C8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C128);
+UnkNode *func_8003FE78(s32, UnkNode *, s16);
+void func_8003C3B4(void);
+
+void func_8003C128(void) {
+    /* u8 * rather than UnkNode *: the node's +0x20 is past the end of the
+       struct, so the offsets stay explicit until something says what is
+       there. */
+    u8 *n = (u8 *) func_8003FE78(0x15, &D_80082D38, 0x49);
+
+    *(u32 *) (n + 0x10) = (u32) func_8003C3B4;
+    *(u32 *) (n + 0x20) = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C160);
 
