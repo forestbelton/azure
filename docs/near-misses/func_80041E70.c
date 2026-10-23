@@ -1,4 +1,4 @@
-/* func_80041E70 (unk_14934) -- 270 of 270 words, 4 DIFF. Not compiled; see
+/* func_80041E70 (unk_154BC) -- 270 of 270 words, 4 DIFF. Not compiled; see
  * docs/open-matching-problems.md.
  *
  * It rescales a record's size/speed pair by flag bits and by func_80042900's
@@ -143,6 +143,10 @@
  * padding, and the record runs to at least +0x87. The forward declaration in
  * csrc/unk_14934.c should become `void func_80041E70(Unk42710 *);` when this
  * lands.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until the D_800814E8 $gp
+ * cluster was carved out of the middle of that unit; everything after the
+ * carve became unk_154BC. Pass that as verify.py's UNIT argument.
  */
 
 #define Unk42710  Unk42710_orig

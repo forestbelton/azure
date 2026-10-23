@@ -1,4 +1,4 @@
-/* func_80042BDC (unk_14934) -- 543 of 543 words, 14 DIFF. NOT compiled, and
+/* func_80042BDC (unk_154BC) -- 543 of 543 words, 14 DIFF. NOT compiled, and
  * not landable alone: it dispatches through jtbl_8002D67C, so it needs the
  * splat/linker change in docs/open-matching-problems.md and all three
  * unk_14934 switch functions must land together. verify.py masks the two
@@ -184,6 +184,10 @@
  * `void func_80042BDC(s8 *, s8);` to `(s8 *, s16)`, and the only caller,
  * func_80042B68, is already-matching C that passes an `s8` -- so that function
  * needs re-verifying when this lands.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until the D_800814E8 $gp
+ * cluster was carved out of the middle of that unit; everything after the
+ * carve became unk_154BC. Pass that as verify.py's UNIT argument.
  */
 
 #define func_80042BDC func_80042BDC_decl_clash

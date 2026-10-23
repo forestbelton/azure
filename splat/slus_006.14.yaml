@@ -67,6 +67,10 @@ segments:
       # translation unit. See the header of csrc/gprel_148FC.c.
       - [0x148fc, c, gprel_148FC]
       - [0x149ac, c, unk_14934]
+      # The D_800814E8 $gp cluster: four consecutive functions, their own
+      # original translation unit, needing -G8.
+      - [0x152e4, c, gprel_152E4]
+      - [0x154bc, c, unk_154BC]
       # A $gp cluster carved out of the middle of unk_14934: these four
       # functions reach D_80081500 $gp-relatively and nothing else does, so
       # they were their own translation unit and need -G8.

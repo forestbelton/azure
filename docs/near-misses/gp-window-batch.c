@@ -1,4 +1,4 @@
-/* FIVE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+/* THREE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
  *
  * Three more have LANDED (func_80043DB8, func_80043E04, func_80043E60) and the
  * route is the one to copy: their $gp cluster was carved out of the middle of
@@ -65,9 +65,10 @@
  * func_80041588). Those two items should be done as one deliberate
  * restructuring. See docs/open-matching-problems.md.
  *
- * Word counts, all exact: func_8003F240 12, func_80041B98 19, func_80041C64
- * 22, func_800448BC 24, func_8003F624 25. (func_8003F5E0 also landed, by
- * moving a unit boundary rather than carving.)
+ * Word counts, all exact: func_8003F240 12, func_800448BC 24, func_8003F624
+ * 25. (func_8003F5E0 landed by moving a unit boundary; func_80041B98,
+ * func_80041C64, func_80043DB8, func_80043E04 and func_80043E60 landed by
+ * carving their clusters.)
  *
  * TYPES THE ACCESSES PROVE, three of which disagree with include/structs.h.
  * All three are reachable from the existing declaration with a cast, which is
@@ -108,39 +109,6 @@ __asm__(".sdata\n\t.globl D_800814D0\n\t.type D_800814D0,@object\n"
 
 u8 func_8003F240(void) {
     return D_80083968[(D_800814D0[0] + 0x1F) & 0x1F].unk_00;
-}
-
-/* ---- zz_c_41B98.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_800814E8\n\t.type D_800814E8,@object\n"
-        "\t.size D_800814E8,2\nD_800814E8:\n\t.half 0\n\t.text");
-
-void func_80041CBC(void);
-void func_80041BE4(void);
-
-void func_80041B98(void) {
-    func_80041CBC();
-    if (D_80083120[(s16) D_800814E8].unk_00 == 0) {
-        func_80040A88(func_80041BE4);
-    }
-}
-
-/* ---- zz_e_41C64.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_800814E8\n\t.type D_800814E8,@object\n"
-        "\t.size D_800814E8,2\nD_800814E8:\n\t.half 0\n\t.text");
-
-void func_80041CBC(void);
-void func_80040B88(void);
-
-void func_80041C64(void) {
-    func_80041CBC();
-    if (D_80083120[(s16) D_800814E8].unk_00 == 0) {
-        D_80082E60.unk_00 |= 1;
-        func_80040B88();
-    }
 }
 
 /* ---- zz_h_448BC.c ---- */

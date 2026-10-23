@@ -17,7 +17,11 @@ for f in glob.glob(PROJ + '/csrc/*.c'):
     have |= set(re.findall(r'INCLUDE_ASM\("[^"]+", (\w+)\)', t))
     have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*\)\s*\{', t, re.M))
 missing = sorted(known - have)
-stubs = sum(len(re.findall(r'INCLUDE_ASM', open(f).read())) for f in glob.glob(PROJ + '/csrc/*.c'))
+# Count macro INVOCATIONS, not the bare word: `INCLUDE_ASM` also appears in
+# prose inside csrc comments, which silently inflated this project's headline
+# stub count.
+stubs = sum(len(re.findall(r'INCLUDE_ASM\("[^"]+",\s*\w+\)', open(f).read()))
+            for f in glob.glob(PROJ + '/csrc/*.c'))
 print('%d known, %d accounted for, %d still asm stubs' % (len(known), len(have & known), stubs))
 if missing:
     print('MISSING:', missing)

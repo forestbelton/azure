@@ -1,4 +1,4 @@
-/* func_80042900 (unk_14934) -- 1 instruction off, 34 words against 33.
+/* func_80042900 (unk_154BC) -- 1 instruction off, 34 words against 33.
  *
  * The loop, both early returns, the re-sign-extension of arg1 after the loop,
  * the 0xE arm AND (new, 2026-10-22) the register the dead load lands in are all
@@ -87,6 +87,10 @@
  * families are declared widths, adding and dropping an (s16) cast, splitting
  * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
  * the statement after an if/else into both arms.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until the D_800814E8 $gp
+ * cluster was carved out of the middle of that unit; everything after the
+ * carve became unk_154BC. Pass that as verify.py's UNIT argument.
  */
 
 #include "common.h"

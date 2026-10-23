@@ -237,11 +237,11 @@ def self_test(levers):
     }
     cases = [
         ("unk_176B8", "func_80045CC4", "byte-fold"),
-        ("unk_14934", "func_80042A80", "srl-not-sra"),
+        ("unk_154BC", "func_80042A80", "srl-not-sra"),
         ("unk_176B8", "func_80047338", "gp-relative"),
-        ("unk_14934", "func_80042BDC", "constant-vs-symbol"),
-        ("unk_14934", "func_80042BDC", "switch-index-width"),
-        ("unk_14934", "func_80042BDC", "split-address-form"),
+        ("unk_154BC", "func_80042BDC", "constant-vs-symbol"),
+        ("unk_154BC", "func_80042BDC", "switch-index-width"),
+        ("unk_154BC", "func_80042BDC", "split-address-form"),
         ("unk_14934", "func_80041344", "loop-guard-blez"),
         ("unk_176B8", "func_80045CC4", "byte-decrement"),
         ("unk_176B8", "func_80045CC4", "halfword-signed-read"),

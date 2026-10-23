@@ -1,4 +1,4 @@
-/* func_80042A80 (unk_14934) -- one bit off. 58 words against 58, every
+/* func_80042A80 (unk_154BC) -- one bit off. 58 words against 58, every
  * instruction identical except the last: the target ends the default arm with
  * `sra $v0, $v0, 16` and this ends it with `srl $v0, $v0, 16`.
  *
@@ -106,6 +106,10 @@
  * families are declared widths, adding and dropping an (s16) cast, splitting
  * and joining a statement, `<` against `>`, the `& 1` mask, and duplicating
  * the statement after an if/else into both arms.
+ *
+ * UNIT RENAMED: this function was in unk_14934 until the D_800814E8 $gp
+ * cluster was carved out of the middle of that unit; everything after the
+ * carve became unk_154BC. Pass that as verify.py's UNIT argument.
  */
 
 #include "common.h"
