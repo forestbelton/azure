@@ -37,11 +37,29 @@
  * the loop counter 252.
  *
  * THE REMAINING WORD -- `li $v1,32` where the target has `sll $v1,$v1,1` -- is
- * a WALL, owned by cse. mem(0x87)'s equivalence class contains both the pseudo
- * holding 16 and `(const_int 16)`; `fold_rtx` substitutes the cheapest class
- * member, and `rtx_cost` of a CONST_INT is ~0 against `COSTS_N_INSNS(1)` for
- * `(ashift reg 1)`, so the constant always wins and the insn becomes
- * `(set q (const_int 32))`. Keeping the register needs the class NOT to contain
+ * BOUNDED, owned by cse. The conclusion stands and the reasoning behind it was
+ * wrong; corrected 2026-10-23 against gcc 2.7.2's own cse.c.
+ *
+ * mem(0x87)'s equivalence class contains both the pseudo holding 16 and
+ * `(const_int 16)`. What this header used to say -- that `fold_rtx` picks the
+ * cheapest class member and `rtx_cost` of a CONST_INT is ~0 against
+ * `COSTS_N_INSNS(1)` for `(ashift reg 1)` -- compared against the wrong thing.
+ * The substitution loop (cse.c:5246) gates on
+ *
+ *     COST (replacement) < COST (the operand currently in place)
+ *
+ * so the comparison is against the OPERAND, not against the shift insn. `COST`
+ * (cse.c:481) is 1 for any pseudo pre-allocation, and `rtx_cost (X, SET) * 2`
+ * for a constant. The real question is therefore only whether MIPS gives this
+ * constant rtx_cost 0, and mips.h's `CONST_COSTS` answers
+ * `case CONST_INT: return 0;` **unconditionally, for every magnitude** -- its
+ * comment explains that MIPS has no different-sized instructions. So 0 < 1
+ * always, the constant displaces the pseudo, `simplify_binary_operation` folds
+ * `16 << 1`, and the insn becomes `(set q (const_int 32))`.
+ *
+ * Which makes the bound TIGHTER than it was, and kills a family of ideas
+ * project-wide: there is no "make the constant expensive enough to lose" lever
+ * on this target at all, for this or any other function. Do not look for one. Keeping the register needs the class NOT to contain
  * the constant, which needs the `li 16` to lie in a different cse run from the
  * body -- and MIPS cannot store an immediate, so expand always emits
  * `(set reg (const_int 16))` ahead of the `sb`. The constant is unavoidably in

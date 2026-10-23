@@ -29,7 +29,7 @@ whether source can reach it at all.
 | pass | what it decides | how it bites |
 |------|-----------------|--------------|
 | `jump` | block layout, which arm goes out of line, label deletion | an `if`/`else`'s arms are not interchangeable; see section 8 |
-| `cse` | substitutes the cheapest equivalent per operand, then constant-folds | `rtx_cost` of a `CONST_INT` is ~0, so a known constant always beats an insn -- that is why `0x10 * 2` becomes `li 32`. Cost decides *which* equivalent wins; what decides whether cse knows the constant at all is its **run boundary**, below |
+| `cse` | substitutes the cheapest equivalent per operand, then constant-folds | the gate is `COST(replacement) < COST(operand in place)` (cse.c:5246), and `COST` is **1 for any pseudo** against `rtx_cost(X,SET)*2` for a constant (cse.c:481). MIPS's `CONST_COSTS` returns **0 for every `CONST_INT`, whatever its magnitude** -- the macro says so, because MIPS has no different-sized instructions -- so a constant equivalent **always** displaces a pseudo operand, and `0x10 * 2` becomes `li 32`. **There is therefore no "make the constant too expensive to win" lever on this target**; do not look for one. What decides whether cse knows the constant at all is its **run boundary**, below |
 | | the extent of one run | a run is a maximal **linear** insn range that stops only at a `CODE_LABEL` with `LABEL_NUSES != 1`. It does **not** stop at a conditional jump, a barrier, or a single-use label -- so an `if` body inherits the test's table whether it is the fall-through or the branch target |
 | | memory equivalences | invalidation is **coarse**: a store through a register base kills entries at other offsets off the same base, which is why the target reloads a neighbouring field |
 | `loop` | invariant motion | hoists a constant's set into the preheader, where `combine` can no longer fold it into an immediate (section 3) |
@@ -313,6 +313,35 @@ Levers that move them, all with no change to the emitted code:
   priority -- i.e. not yet allocated -- and avoids those registers if it can.
   So an allocno that goes first can be *pushed off* the register it should have
   had, by a rival that has not been allocated yet:
+
+  **AND THERE IS A SECOND ESCAPE, which is cheaper than moving a priority and
+  which this project has never used.** `prune_preferences` (2.7.2 global.c, the
+  loop at ~871) builds `regs_someone_prefers[A]` by walking the *lower*-priority
+  conflicting allocnos and OR-ing in their `hard_reg_full_preferences` -- but
+  first it SUBTRACTS A's own full preferences, and the source comment says why:
+  if A also prefers one of those registers, it is not excluded. The subtraction
+  is skipped only when the rival's `allocno_size` exceeds A's, so for two
+  same-mode allocnos it always applies.
+
+  So to stop A being pushed off register R, you do not have to reprice anybody:
+  **make A prefer R itself.** A hard-register preference comes from a copy
+  relating the pseudo to that hard register -- being the incoming parameter in
+  it, being the call return value in it, or being copied into it as an outgoing
+  argument -- which `set_preference` records. This inverts where to look: when
+  allocno X is pushed off R by Y's preference, the fix is on **X's** side, not
+  Y's, and every "no spelling of Y changes its preference" result is therefore
+  beside the point.
+
+  **The other half of `prune_preferences` explains the call-crossing cases.**
+  Before that loop it takes the allocno's conflict set and, for an allocno that
+  crosses a call, OR-s in `call_used_reg_set`, then `AND_COMPL`s all three
+  preference sets with the result. That is the mechanism behind "the parameters'
+  preferences are pruned by the call": any preference for a caller-saved
+  register is deleted outright from an allocno live across a call. It is not a
+  tie-break and no source shape softens it -- but note it prunes only the
+  *preference*, so the self-preference escape above is unavailable precisely for
+  allocnos that cross a call, and available for those that do not.
+
 
   * In func_80041344, `op` is copied into `$a3` as func_8003F80C's fourth
     argument, so it carries a preference for `$a3`. With one statement `op` had

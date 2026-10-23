@@ -36,6 +36,29 @@
  * call_used_reg_set and the whole assignment shifts. No spelling of `end`
  * changes that.
  *
+ * ONE OPEN IDEA, added 2026-10-23 from reading global.c and NOT yet measured.
+ * Everything above argues on `end`'s side -- that no spelling changes `end`'s
+ * `preferences: 3 6`. That is true and it is the wrong side. `prune_preferences`
+ * (global.c, the loop at ~871) builds `regs_someone_prefers[A]` from the
+ * lower-priority conflicting allocnos' preferences but **subtracts A's own
+ * preferences first**, and the source comment is explicit: if A also prefers
+ * one of those registers, it is not excluded. The subtraction is skipped only
+ * when the rival allocno is larger, so for same-mode allocnos it always
+ * applies.
+ *
+ * So `c` is not pushed off $v1/$a2 because `end` prefers them; it is pushed off
+ * because `end` prefers them AND `c` does not. Give `c` its own preference for
+ * $v1 or $a2 -- a copy relating it to that hard register, i.e. being an
+ * outgoing argument in it, a call return value in it, or an incoming parameter
+ * in it, which is what `set_preference` records -- and R leaves
+ * `regs_someone_prefers[c]` without anybody's priority moving.
+ *
+ * The obvious caveat, from the same function: `prune_preferences` first OR-s
+ * `call_used_reg_set` into the conflict set of any allocno that CROSSES A CALL
+ * and deletes every caller-saved preference it had. $v1 and $a2 are
+ * caller-saved, so this escape is only available if `c`'s live range does not
+ * cross the memcpy. Check that in the .greg dump before spending runs on it.
+ *
  * Independently, the target's order is out of reach arithmetically: `m` would
  * have to be allocated before `n`, and their floor_log2(refs)*refs/live_length
  * priorities are 0.54 against 2.55. m's nine references and its live range over
