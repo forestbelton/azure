@@ -138,16 +138,3 @@ Unk80083968 *func_8003E39C(u8 arg0, s32 arg1, void *arg2) {
     D_800814D0[1] = (D_800814D0[1] + 1) & 0x1F;
     return &D_80083968[i];
 }
-
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E4FC);
-
-void func_8003E70C(void) {
-    D_80083958.unk_08 = D_80083958.unk_08 + 1;
-    D_80083958.unk_06 = D_80083958.unk_06 + 1;
-    if (D_80083958.unk_06 > 0x400) {
-        D_80083958.unk_06 = 0;
-        CdInit();
-    }
-}
-
-INCLUDE_ASM("asm/nonmatchings/unk_11940", func_8003E758);

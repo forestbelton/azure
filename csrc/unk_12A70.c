@@ -54,5 +54,3 @@ s32 func_8003F55C(void) {
     }
     return CdPosToInt(D_800814B8);
 }
-
-INCLUDE_ASM("asm/nonmatchings/unk_12A70", func_8003F5AC);

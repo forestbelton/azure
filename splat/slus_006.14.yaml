@@ -46,6 +46,9 @@ segments:
       - [0x72a8, bin]
       - [0x101f8, asm, main]
       - [0x102a8, c, unk_102A8]
+      # The D_80080AA4.. cluster: two consecutive functions needing -G8.
+      - [0x10308, c, gprel_10308]
+      - [0x108f0, c, unk_108F0]
       # Three consecutive leaf functions. Name is provisional: the first two
       # are word fill/copy helpers, the third is unrelated struct setup.
       - [0x1134c, c, mem]
@@ -56,11 +59,17 @@ segments:
       # consumes) and INCLUDE_ASM stubs to replace one function at a time.
       # Name is the start offset until the original translation unit is known.
       - [0x11940, c, unk_11940]
+      # func_8003E4FC reaches D_80080AD4/DC $gp-relatively and nothing
+      # absolutely at all -- the cleanest carve in the game.
+      - [0x11cfc, c, gprel_11CFC]
+      - [0x11f0c, c, unk_11F0C]
       # func_8003F240 defines D_800814D0 and reaches it $gp-relatively, while
       # its neighbour func_8003F270 reaches the same object absolutely -- so
       # they were separate original units. -G8 for this one alone.
       - [0x12a40, c, gprel_12A40]
       - [0x12a70, c, unk_12A70]
+      # func_8003F5AC, the last function of unk_12A70: a two-way split.
+      - [0x12dac, c, gprel_12DAC]
       # Carved out: these reach their globals $gp-relatively, so they must be
       # assembled with gas at -G8 while everything else uses -G0.
       - [0x12dd4, c, gprel_12DD4]

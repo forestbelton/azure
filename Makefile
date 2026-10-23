@@ -116,7 +116,8 @@ MASPSXFLAGS_G2 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
 # absolutely, carved out of the units splat lumps together. See
 # docs/addressing-and-translation-units.md for how a cluster is identified and
 # carved.
-build/csrc/gprel_12A40.o build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o \
+build/csrc/gprel_10308.o build/csrc/gprel_11CFC.o build/csrc/gprel_12A40.o \
+ build/csrc/gprel_12DAC.o build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o \
  build/csrc/gprel_17B7C.o build/csrc/gprel_18B40.o \
  build/csrc/gprel_1AB38.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
 
