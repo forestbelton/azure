@@ -257,11 +257,15 @@
  * differing count to 143. The searcher now refuses that class of change and
  * reports it separately; the missing word is still missing.
  *
- * UNIT RENAMED: this function started in unk_14934. Successive $gp clusters have
- * been carved out of that chain, and the piece holding this function is now
- * unk_1811C -- pass that as verify.py's UNIT argument. The chain so far is
- * unk_14934, gprel_152E4, unk_154BC, gprel_17504, unk_176B8, gprel_17B7C,
- * unk_1811C, each named for its start offset.
+ * UNIT RENAMED, and this note has itself gone stale once. This function started
+ * in unk_14934; successive $gp clusters have been carved out of that chain, and
+ * the piece holding it was unk_1811C and is now **unk_19434** -- that is what
+ * verify.py wants as its UNIT argument, and it needs no -G flag. The chain so
+ * far is unk_14934, gprel_152E4, unk_154BC, gprel_17504, unk_176B8,
+ * gprel_17B7C, unk_1811C, unk_19434, each named for its start offset. Do not
+ * trust this line either: `find asm/nonmatchings -name func_80045CC4.s` is the
+ * authority, and `tools/decomp/nmcheck.py --fix-units` derives it from the
+ * splat spec by address.
  */
 
 #define Unk3DBD0SP Unk3DBD0SP_orig
