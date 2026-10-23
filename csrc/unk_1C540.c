@@ -476,13 +476,45 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B568);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B634);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B660);
+void func_8004B634(void);
+void func_8003F320(void);
+void func_800253A0(s32, s32, s32, s32);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B6BC);
+void func_8004B660(s32 a, s32 b, s32 c) {
+    func_8004B634();
+    func_8003F320();
+    func_800253A0(a, b, 1, c);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B718);
+void func_8004B634(void);
+void func_8003F320(void);
+void func_800253A0(s32, s32, s32, s32);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B774);
+void func_8004B6BC(s32 a, s32 b, s32 c) {
+    func_8004B634();
+    func_8003F320();
+    func_800253A0(a, b, 2, c);
+}
+
+void func_8004B634(void);
+void func_8003F320(void);
+void func_800253A0(s32, s32, s32, s32);
+
+void func_8004B718(s32 a, s32 b, s32 c) {
+    func_8004B634();
+    func_8003F320();
+    func_800253A0(a, b, 0, c);
+}
+
+void func_8004B634(void);
+void func_8003F320(void);
+void func_800253A0(s32, s32, s32, s32);
+
+void func_8004B774(s32 a, s32 b, s32 c) {
+    func_8004B634();
+    func_8003F320();
+    func_800253A0(a, b, 3, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B7D0);
 
@@ -886,6 +918,8 @@ s32 func_8004EBDC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EC20);
 
+void func_8004EE90(u8 *);
+
 void func_8004ECAC(u8 *q) {
     u8 *p = q - 0x20;
     u16 f = *(u16 *) (p + 0x1E);
@@ -899,10 +933,24 @@ void func_8004ECAC(u8 *q) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004ED00);
+void func_8004EB8C(u8 *);
+void func_8004ECAC(u8 *);
+/* The split spelling of D_80081480, whose own declaration is a scalar with
+   users elsewhere: the symbolic form is one insn before maspsx, so its `lui`
+   cannot go in the `beqz`'s delay slot where the target has it. */
+extern u32 D_80081480a[] __asm__("D_80081480");
+
+void func_8004ED00(u8 *p) {
+    if (p[8] != 0) {
+        func_80041344(0x80020000, D_80081480a[0]);
+        DrawSync(0);
+        func_8004EB8C(p + 9);
+        *(u32 *) (p - 0x10) = (u32) func_8004ECAC;
+    }
+}
 
 void func_8004EC20(void);
-void func_8004ED00(void);
+void func_8004ED00(u8 *);
 
 void func_8004ED5C(u8 *p) {
     if (func_80044144(1, 0x1E, (u32) func_8004EC20, (u32) p) != 0) {
@@ -1380,7 +1428,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053F98);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005405C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800540A8);
+void func_800540A8(void) {
+    u8 *p;
+
+    func_8005A4E8(0, 0, 0);
+    func_80055990(D_80084858);
+    /* Assigned AFTER the calls: as an initialiser it lives across them in
+       $s0, which costs the save, the restore and the frame slot (3 words). */
+    p = (u8 *) D_800847D0;
+    *(u32 *) (p + 0x8) = 0;
+    *(u32 *) (p + 0xC) = 0;
+    p[0x30] = 0;
+    p[0x32] = 0;
+    *(u32 *) (p + 0x10) = 0;
+    *(u32 *) (p + 0x14) = 0;
+    p[0x31] = 0;
+    p[0x33] = 0;
+    *(u32 *) (p + 0x18) = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054104);
 
