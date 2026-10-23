@@ -205,7 +205,12 @@ s32 func_8004AA34(s32 *a, s32 *b) {
     return *a - *b;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AA44);
+s32 func_8004AA34(s32 *, s32 *);
+void func_8004AFC8(s32, s32, s32, void *);
+
+void func_8004AA44(s32 a, s32 b) {
+    func_8004AFC8(b, a, 4, func_8004AA34);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AA78);
 
@@ -1029,7 +1034,7 @@ void func_80055E6C(void) {
 void func_80055E74(void) {
 }
 
-void func_80055E7C(void) {
+void func_80055E7C(s32 a, s32 b, s32 c) {
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055E84);
@@ -1080,12 +1085,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80057A94);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80057D20);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005845C);
+void func_8005845C(u8 i, u8 v) {
+    D_80084960[i].unk_00 = v;
+}
 
 void func_8005848C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058494);
+void func_80058494(u8 i, s32 b, u8 v) {
+    D_80084960[i].unk_1C = v & 0x7F;
+    func_80055E7C(1, i, v);
+}
 
 void func_80059BC4(void);
 
@@ -1333,7 +1343,9 @@ u32 func_8005C808(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C818);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C858);
+s32 func_8005C858(s32 a, s16 i) {
+    return D_80084960[i].unk_0C;
+}
 
 void func_80057D20(s16, s32, u32);
 
@@ -1341,7 +1353,9 @@ void func_8005C88C(s32 arg0, s16 b, u32 c) {
     func_80057D20(b, 7, c & 0x7F);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C8B8);
+s32 func_8005C8B8(s32 a, s16 i) {
+    return D_80084960[i].unk_04;
+}
 
 void func_80057D20(s16, s32, u32);
 
@@ -1349,9 +1363,13 @@ void func_8005C8EC(s32 arg0, s16 b, u32 c) {
     func_80057D20(b, 0xA, c & 0x7F);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C918);
+s32 func_8005C918(s32 a, s16 i) {
+    return D_80084960[i].unk_1C;
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C94C);
+void func_8005C94C(s32 a, s16 i, u8 v) {
+    D_80084960[i].unk_1C = v & 0x7F;
+}
 
 void func_8005C980(void) {
 }

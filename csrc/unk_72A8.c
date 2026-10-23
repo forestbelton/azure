@@ -768,7 +768,15 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AD08);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003ADB4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003ADF4);
+void func_8003ADF4(s16 x, s16 y, s16 w, s16 h, u32 *data) {
+    s16 r[4];
+
+    r[0] = x;
+    r[1] = y;
+    r[2] = w;
+    r[3] = h;
+    LoadImage(r, data);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AE28);
 

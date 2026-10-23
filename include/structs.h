@@ -1056,6 +1056,27 @@ typedef struct Unk6CD30 {
 } Unk6CD30;
 extern Unk6CD30 D_8006CD30;
 
+/* Hand-added. A 0x9C-byte entry: fourteen functions in unk_1C540 scale an
+   index by 0x9C into this table, and the stride comes out as the target's
+   shift/add/shift/subtract/shift chain. It must be a STRUCT rather than
+   `u8 D_80084960[]` with the field offset inside the index expression: with a
+   byte array, `fold` reassociates the constant next to the symbol, giving
+   `addiu $v1, %lo(D_80084960)+0xC` and `lw 0x0($v0)` where the target has
+   `%lo(D_80084960)` and `lw 0xC($v0)`. A COMPONENT_REF's offset is applied to
+   the MEM at expand time instead, so it cannot migrate -- and the base
+   materialisation then also comes out first, as the target has it. Fields are
+   only those observed so far; the four large functions in the family are not
+   decompiled yet. */
+typedef struct Unk80084960 {
+    u32 unk_00;
+    s32 unk_04;
+    u8  pad_08[4];
+    s32 unk_0C;
+    u8  pad_10[0xC];
+    s32 unk_1C;   /* masked to 0x7F on every store */
+    u8  pad_20[0x7C];
+} Unk80084960;
+
 /* Callbacks installed by the carved units, stored as function pointers. */
 void func_80035AF8(void);
 void func_80038A08(void);
@@ -1084,7 +1105,7 @@ extern u8  D_8007382B[];
 extern u8  D_800820A8[];
 extern u8  D_80081EB0[];
 extern u8  D_800713E4[];
-extern u8  D_80084960[];
+extern Unk80084960 D_80084960[];
 extern u32 D_80073734[];
 extern u8  D_8006AE1C[];
 extern u8  D_8006AE34[];
