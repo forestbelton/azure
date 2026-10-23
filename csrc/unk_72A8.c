@@ -1241,7 +1241,17 @@ void func_8003AF94(s32 i, u32 v) {
     func_800411FC(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AFE0);
+void func_8003AFE0(s32 i, u32 v) {
+    /* The table read is the FIRST statement: with the `| 0x40000000` first
+       its `lui` comes out ahead of the index chain instead of in the load's
+       shadow, 8 DIFF. */
+    u32 t = D_8006CD50[i];
+
+    D_80189394 = v | 0x40000000;
+    D_801B8EB8 = t;
+    func_801768AC();
+    func_800411FC(0);
+}
 
 u32 func_80048D20(void);
 void func_800483AC(s32);
