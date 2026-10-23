@@ -1,4 +1,4 @@
-/* THREE VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
+/* TWO VERIFIED FUNCTIONS WAITING ON ONE STRUCTURAL CHANGE.
  *
  * Three more have LANDED (func_80043DB8, func_80043E04, func_80043E60) and the
  * route is the one to copy: their $gp cluster was carved out of the middle of
@@ -65,8 +65,7 @@
  * func_80041588). Those two items should be done as one deliberate
  * restructuring. See docs/open-matching-problems.md.
  *
- * Word counts, all exact: func_8003F240 12, func_800448BC 24, func_8003F624
- * 25. (func_8003F5E0 landed by moving a unit boundary; func_80041B98,
+ * Word counts, all exact: func_8003F240 12, func_8003F624 25. (func_8003F5E0 landed by moving a unit boundary; func_80041B98,
  * func_80041C64, func_80043DB8, func_80043E04 and func_80043E60 landed by
  * carving their clusters.)
  *
@@ -109,24 +108,6 @@ __asm__(".sdata\n\t.globl D_800814D0\n\t.type D_800814D0,@object\n"
 
 u8 func_8003F240(void) {
     return D_80083968[(D_800814D0[0] + 0x1F) & 0x1F].unk_00;
-}
-
-/* ---- zz_h_448BC.c ---- */
-#include "common.h"
-
-__asm__(".sdata\n\t.globl D_80081508\n\t.type D_80081508,@object\n"
-        "\t.size D_80081508,4\nD_80081508:\n\t.word 0\n\t.text");
-
-s32 func_800448BC(u16 arg0, u16 arg1) {
-    u8 *p = (u8 *) D_80081508;
-
-    while (p[0] != 0) {
-        if (p[0] == arg0 && p[1] == arg1) {
-            return 1;
-        }
-        p += 4;
-    }
-    return 0;
 }
 
 /* ---- zz_i_3F624.c ---- */

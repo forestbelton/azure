@@ -1,4 +1,4 @@
-/* func_80047054 (unk_176B8) -- 58 words against 58, every opcode, immediate,
+/* func_80047054 (unk_1811C) -- 58 words against 58, every opcode, immediate,
  * displacement and nop identical. The only difference is a permutation of five
  * registers, and it follows from one decision.
  *
@@ -54,10 +54,11 @@
  * a walking byte pointer is what makes gcc's combine_givs fold them into one
  * induction variable at +6 with the other access as `-0x2` off it.
  *
- * UNIT RENAMED: this function was in unk_14934 until a $gp cluster was carved
- * out of the middle of that unit and its tail became unk_176B8. The listing is
- * now asm/nonmatchings/unk_176B8/, which is what verify.py wants as its UNIT
- * argument.
+ * UNIT RENAMED: this function started in unk_14934. Successive $gp clusters have
+ * been carved out of that chain, and the piece holding this function is now
+ * unk_1811C -- pass that as verify.py's UNIT argument. The chain so far is
+ * unk_14934, gprel_152E4, unk_154BC, gprel_17504, unk_176B8, gprel_17B7C,
+ * unk_1811C, each named for its start offset.
  */
 
 #include "common.h"

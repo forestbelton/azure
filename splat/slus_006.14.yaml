@@ -76,6 +76,9 @@ segments:
       # they were their own translation unit and need -G8.
       - [0x17504, c, gprel_17504]
       - [0x176b8, c, unk_176B8]
+      # The D_80080AF3/AFC/B00 + D_80081508 cluster, needing -G8.
+      - [0x17b7c, c, gprel_17B7C]
+      - [0x1811c, c, unk_1811C]
       # - [0x2d854, shiftjis, str/name/kimbr]
       # - [0x2d860, shiftjis, str/name/girl2]
       # - [0x2d86c, shiftjis, str/name/girl1]
