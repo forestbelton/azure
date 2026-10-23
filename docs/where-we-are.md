@@ -26,106 +26,74 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 32 remaining stubs, in four groups
-
-Run `tools/decomp/guard.py` for the stub count (`grep -cE '^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{' csrc/*.c` for the C count).
-The classification below is `grep -c '%gp_rel'` and `grep -c 'jtbl_'` against
-each listing:
+## The 32 remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked | 6 | logic reproduced, within a few instructions; see `docs/open-matching-problems.md` |
-| jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob; needs a spec change |
-| gp-blocked | 21 | need `$gp`-relative and absolute addressing in one translation unit |
-| not a function | 1 | func_8003CAA8; see below |
+| **workable now** | 7 | in a carved `-G8` unit; nothing structural left, just decompile them |
+| gp-blocked | 14 | need their `$gp` cluster carved first; see the recipe below |
+| jtbl-blocked | 4 | dispatch through a jump table in the opening bin blob |
+| parked | 6 | logic reproduced, within a few words; `docs/open-matching-problems.md` |
+| not a function | 1 | func_8003CAA8, `main`'s unreachable epilogue |
 
-**There is no longer an "easy" group.** Every stub with nothing structural in
-its way has been decompiled. What is left is six near-misses, two blocked
-groups, and one splat artefact, so a fresh session's choice is: work a parked
-function with the mechanism named below, or make one of the two spec decisions.
+**There is a workable queue again**, which there was not for most of the
+addressing work. These seven sit in units already built with
+`MASPSXFLAGS_G8`, so they need no further structural change:
 
-`func_8003CAA8` is in the stub list but is **not a function**: it is `main`'s
-unreachable epilogue, which splat split off because it follows `main`'s
-infinite loop. Fixing it is a spec change (extend the `main` asm subsegment to
-0x102c4), not a matching problem.
+| function | unit | instructions |
+|----------|------|--------------|
+| func_80041AE4 | gprel_152E4 | 45 |
+| func_80041BE4 | gprel_152E4 | 32 |
+| func_80043D04 | gprel_17504 | 45 |
+| func_80044618 | gprel_17B7C | 32 |
+| func_80044698 | gprel_17B7C | 35 |
+| func_8004450C | gprel_17B7C | 53 |
+| func_8004437C | gprel_17B7C | 100 |
 
-### Parked (6)
+**Two things to know before touching one.** Pass `--g8` to `verify.py` (these
+units are not built at the project default `-G0`, and without the flag you
+model the wrong assembler). And audit the symbols the function reaches
+*absolutely*: at `-G8` gas makes any small **undefined** symbol
+`$gp`-relative, so one living inside gp +/- 0x8000 must be declared in the
+compiler-split form or it costs a word. D_80081480 and D_8008148C are the live
+cases, and they must **not** be changed in `include/structs.h` -- already-matching
+`-G0` functions depend on the scalar spelling -- so the carved unit gets its own
+declaration through a `#define` shim. The unit headers record which hazards
+were already checked.
 
-All written up in `docs/open-matching-problems.md`, with the source that got
-each one close in `docs/near-misses/`. **Read the near-miss file before
-touching one**: each lists the shapes already measured and ruled out with their
-word costs, and re-deriving those is where the time goes.
+### Blocked by addressing (14)
 
-Ordered by how reachable they look:
+Each needs its `$gp` cluster carved out first, which is now a recipe rather
+than a research problem: `docs/addressing-and-translation-units.md` has it, and
+`tools/decomp/carve.py` does the file surgery. By unit: unk_102A8 (func_8003CB08,
+func_8003CCB0, func_8003D92C), unk_11940 (func_8003E34C, func_8003E4FC),
+unk_12A70 (func_8003F2A4, func_8003F368, func_8003F5AC), unk_12DEC
+(func_8003F624), unk_1811C (func_80045340, func_800453E0, func_8004713C,
+func_80047338, func_80047468).
 
-- func_80045CC4 -- 1 word of 437, with every instruction accounted for. Both
-  mechanisms it was parked on are solved; what is left is a `$s0`/`$s1` swap on
-  a 0.9% priority gap and a four-word tension between the mask hoisting and an
-  `or`'s operand order. Its structs.h additions are written up and still owed.
-- func_80042A80 -- one bit, `srl` where the target has `sra`.
-- func_80042900 -- one instruction, a dead volatile load that wants `$v1`.
-- func_80041E70 -- 4 of 270, cse folding a known constant.
-- func_80047054 and func_800407C0 -- **argued unreachable from C**, both the
-  same shared-register-preference case, with the arithmetic in the near-miss
-  files. Do not start here; they are recorded so nobody re-opens them.
+**func_8003F624 is the exception** and cannot be carved: it needs `%gp_rel` for
+a store to D_800814D4 *and* an absolute `lui %hi`/`addiu %lo` pair for
+`&D_800814D4` in the same function. `-G8` makes the address-of `$gp`-relative
+too (18 differing words). maspsx's rewrite fires only on loads and stores, so
+only the `.sdata` definition route gives both -- and that still wants linker
+placement, which splat's legacy generation cannot express.
 
 ### Blocked by jump-table placement (4)
 
-func_80041344, func_80041588 and func_80042BDC (unk_14934) and func_8003E758
-(unk_11940) dispatch through tables that live in the opening `[0x800, bin]`
-subsegment. `docs/open-matching-problems.md` has the full analysis, including
-what the pad word at 0x8002D654 proves about where the original
-translation-unit boundary was. The four things it needs are listed there; the
-one that shapes the work is that all three unk_14934 functions have to land at
-once, which means `csrc/unk_14934.c` must be split at func_80041588 first.
-func_80041344's body is already written and verified as far as verify.py can
-see it (145/145, with the caveat below about relocated words).
+func_80041344 and func_80041588 (unk_14934), func_80042BDC (unk_154BC) and
+func_8003E758 (unk_11940) dispatch through tables in the opening `[0x800, bin]`
+subsegment. `docs/open-matching-problems.md` has the analysis, the recovered
+case orders and the entry counts. Three of the four are already written and
+close -- 2, 14 and 21 differing words -- so the remaining work is the splat and
+linker-script change, not the matching.
 
-### Blocked by addressing (31)
+### Parked (6)
 
-The largest single group, and **no longer the wall it was written up as**.
-`docs/addressing-and-translation-units.md` has the analysis; read its "Proved:
-one unit CAN mix both modes" section first. (That document counts 32 rather
-than 31, because it includes func_8003E758, which is counted under the
-jump-table group here.)
-
-**The first two of this group have landed**, and by the cheap route: func_800410FC
-and func_80041134 went into `csrc/gprel_148FC.c`, a unit built with
-`MASPSXFLAGS_G8`, with no window definition and no data relocation at all. What
-found them was asking which `$gp` symbols cross a current unit boundary -- only
-two of 38 do, and each identifies a boundary that cuts an original translation
-unit. `verify.py <file> <unit> <func> --g8` models a carved unit, so check for
-that situation before reaching for a window definition.
-
-Five need only `$gp`-relative addressing -- func_8003E4FC, func_8003F5E0,
-func_80044618, func_80044698, func_800448BC -- and want the same carve-out: their own unit built with `MASPSXFLAGS_G8`, like
-`gprel_12DD4` and `gprel_14910`. `func_8003F5E0` sits immediately after the
-carved-out `gprel_12DD4`, so extending that subsegment by one function picks it
-up (renaming `unk_12DEC` to `unk_12DEC` and re-extracting), and func_80044618
-and func_80044698 are adjacent inside `unk_14934` and can be carved together.
-That is the cheapest landing in the group.
-
-The other 26 need both modes in one compilation, which no per-file `-G` can
-give -- but **a symbol the unit DEFINES gets `%gp_rel` even at the forced
-`-G0`**, while undefined symbols in the same unit stay absolute. That is
-measured, with the relocations checked by hand, on func_800410FC at 5 of 5
-words. The whole group touches only 38 symbols, in two windows, and the window
-20 of them need is 224 bytes of zeros -- so no initial values have to be
-recovered. Both windows' layouts are derived, and the `.sdata` block for the
-all-zero one already assembles to the right size with every symbol at the right
-offset.
-
-So the structural decision this was waiting on is smaller than it looked: not
-"move the project's data into C", but "carve two small windows out of one bin
-blob and define their objects". Window B is 224 zero bytes and unblocks 20
-functions; window A is 108 bytes with 25 initialised ones to carry across, and
-unblocks 10 more.
-
-What is left untested is linker placement -- carving the window out of the
-closing `[0x54240, bin]` blob and placing it from the generated script, whose
-`/DISCARD/ : { *(*) }` silently drops any section splat does not place. That
-needs `make splat`, so like the carve-outs above it cannot be done while
-anything else is reading `asm/nonmatchings`.
+All in `docs/open-matching-problems.md` with their sources in
+`docs/near-misses/`. **Read the near-miss file before touching one**: each
+lists the shapes already measured with their word costs, and four of them also
+record a `search.py` sweep that found nothing, so the remaining gap is
+allocation or ordering rather than source shape.
 
 ## How to work a function
 
