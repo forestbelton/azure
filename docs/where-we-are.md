@@ -4,11 +4,16 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**186 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD, and green after a full
-`make splat`. The remaining 7 are
-`INCLUDE_ASM` stubs in `csrc/`. `python3 tools/decomp/guard.py` is the
-authority on that count; this file has been wrong about it before.
+**514 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 494 are
+`INCLUDE_ASM` stubs in `csrc/`: 489 in the four units carved on 2026-10-23 and
+5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
+on that count; this file has been wrong about it before, so quote it and not
+this paragraph.
+
+**The carved-unit sweep is the live work**, and `docs/carved-sweep.md` is its
+record: the source patterns that keep paying, the declaration traps, and a
+parked list with measurements. On 2026-10-23 it went from 645 stubs to 494.
 
 **Both of the structural blockers that shaped most of this project are gone**,
 and neither needed the thing it was being built towards:
@@ -105,9 +110,9 @@ the survey that makes it final.
 | `unk_301D4` | 0x301d4-0x30290 | 5 |
 | **total** | | **1008** |
 
-`guard.py` is the authority and reads 822 stubs. splat now reports `c` at 167 KB
-(32.0%) and `asm` at 51 KB (9.9%); `make check` is byte-identical at e6bfbb9
-after every carve.
+`guard.py` is the authority and reads 494 stubs as of the end of
+2026-10-23's sweep; `make check` is byte-identical at e6bfbb9 after every
+carve.
 
 **Why this is final rather than another revision.** Every remaining `bin` range
 was surveyed for `addiu $sp` prologues, `jr $ra` returns, and how many `jal`
@@ -208,14 +213,17 @@ reverting each, the dead ends not to retry, and the toolchain traps. It exists
 so nothing gets re-derived, so **add to it whenever a session learns
 something** -- that has been the single biggest waste of effort here.
 
-## The 5 remaining stubs
+## The remaining stubs
 
 | group | count | what it means |
 |-------|-------|---------------|
-| near-misses, source written and checked | 7 | each with a numeric bound or a named pass check |
+| carved-unit sweep | 489 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
+| near-misses, source written and checked | 5 | each with a numeric bound or a named pass check |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
+About thirty of the 489 are parked with measurements in
+`docs/carved-sweep.md`'s table rather than untouched.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
