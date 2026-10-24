@@ -294,24 +294,40 @@ void func_800350D4(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035164);
+void func_80037D9C(u8 *, u8);
 
-void func_80035164(s16 *, s32, s32);
+/* Both calls written out in all three arms: an `&&` or a nested `if` inverts
+   both branch senses (28 DIFF either way), and a shared `u8 *q = (u8 *) p;`
+   local costs a fourth callee-saved register. gcc's cross-jumping merges the
+   tails back to the target's single func_80037D9C and func_80034F88 sites. */
+void func_80035164(u8 *p, s32 b, u8 c) {
+    if (func_80034FD0((u32 *) p) != 0) {
+        if (p[0] != 0) {
+            func_800350D4(p);
+            func_80037D9C(p, c);
+        } else if (p[2] != c) {
+            func_800350D4(p);
+            func_80037D9C(p, c);
+        } else {
+            func_80034F88((u32 *) p, b);
+            return;
+        }
+    } else {
+        func_80037D9C(p, c);
+    }
+    func_80034F88((u32 *) p, b);
+}
 
 void func_80035208(s32 a) {
-    func_80035164(D_80082A38, a, 2);
+    func_80035164((u8 *) D_80082A38, a, 2);
 }
-
-void func_80035164(s16 *, s32, s32);
 
 void func_80035234(s32 a) {
-    func_80035164(D_80082A38, a, 1);
+    func_80035164((u8 *) D_80082A38, a, 1);
 }
 
-void func_80035164(s16 *, s32, s32);
-
 void func_80035260(s32 a) {
-    func_80035164(D_80082A38, a, 0);
+    func_80035164((u8 *) D_80082A38, a, 0);
 }
 
 void func_8003528C(u32 v) {
@@ -696,7 +712,28 @@ void func_80036988(u8 *d, u8 *s) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800369C8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036A70);
+void func_80067F20(u32 *, s32, s32, s32, s32);
+
+/* The 0x70 binds to the term the source groups it with: as
+   `D_80083160.unk_00 + n * 4 + 0x70` it folds onto the loaded base and costs
+   4 words, so the whole index lives in its own local. */
+void func_80036A70(s32 n) {
+    u8 *b = D_80083160.unk_00;
+    u32 *p = *(u32 **) (b + 0x8D0);
+    s16 t[4];
+    u16 tp;
+    s32 o;
+
+    *(u32 **) (b + 0x8D0) = p + 3;
+    t[0] = 0;
+    t[1] = 0;
+    t[2] = 0;
+    t[3] = 0;
+    tp = GetTPage(0, 0, 0x1C0, 0x100);
+    func_80067F20(p, 0, 0, tp, (s32) t);
+    o = n * 4 + 0x70;
+    AddPrim(D_80083160.unk_00 + o, p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036B10);
 
@@ -1864,7 +1901,17 @@ void func_8003AB14(u16 *d, u16 *s) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AB44);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AC1C);
+void func_8003AB44(u8 *, s16, s32, u8, s16, s32, s32);
+
+void func_8003AC1C(s16 x, s16 y, u8 c, u8 *p) {
+    s16 i = 0;
+
+    while (*p != 0) {
+        func_8003AB44(p, i, 0, c, x, y, 1);
+        p += 2;
+        i++;
+    }
+}
 
 u8 *func_8003ACC0(u8 *p, u16 n) {
     /* The PARAMETER is the moving pointer and the saved copy is what gets
@@ -2082,7 +2129,23 @@ void func_8003B324(void) {
     func_8003AE28(0x90, 0x1F2, 0x10, 1, 0, 0x1F2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B35C);
+extern u8 D_8006AE94[];
+extern Unk41284 D_80080ED0;
+extern Unk41284 D_80080ED8;
+void func_8003AF58(u8 *, u8 *);
+void func_8003AE28(s16, s16, s16, s16, s32, s32);
+void func_8004B834(void);
+void func_800418B4(void);
+
+void func_8003B35C(void) {
+    func_8003AF58(D_800717D0, D_8006AE94);
+    func_8003AE28(0, 0x1F2, 0x10, 1, 0x90, 0x1F2);
+    func_8003AE28(0x80, 0x1F2, 0x10, 1, 0, 0x1F2);
+    func_80041284(&D_80080ED0);
+    func_80041284(&D_80080ED8);
+    func_8004B834();
+    func_800418B4();
+}
 
 void func_8003AF58(u8 *, u8 *);
 

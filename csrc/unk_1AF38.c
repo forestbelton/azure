@@ -205,7 +205,21 @@ u8 *func_80047E78(u16 a) {
     return (u8 *) &D_80081528s;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047EEC);
+extern u8 D_8014A000[];
+
+/* `s32 n` and not `s16`: the listing has no sll/sra pair for it, and the three
+   landed callers' prototype already says s32. */
+void func_80047EEC(s32 n, u8 *p) {
+    s32 i = func_80047C60(p);
+
+    D_80083D08s[i].unk_00 = (u32) p;
+    D_80083D08s[i].unk_06 = n;
+    D_80083D08s[i + 1].unk_00 = (u32) p;
+    D_80083D08s[i + 1].unk_06 = n;
+    D_80083D08s[i + 2].unk_00 = (u32) p;
+    D_80083D08s[i + 2].unk_06 = n;
+    func_80047AB0(p, i + 5, (i * 3 + 0x1D2) << 6, 0xD, D_8014A000);
+}
 
 u8 *func_80047CD8(s32);
 void func_80047EEC(s32, u8 *);

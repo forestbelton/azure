@@ -2997,7 +2997,26 @@ void func_800543C8(void) {
     func_8005440C();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005440C);
+void func_800550E8(void);
+void func_80054538(u8 *);
+s32 func_800545F4(u8 *);
+void func_800553D4(s32);
+s32 func_80059D60(void);
+
+void func_8005440C(void) {
+    u8 *b = (u8 *) D_800847D0;
+
+    if ((*(u32 *) (b + 4) & 2) != 0) {
+        func_800550E8();
+    }
+    if ((D_800847D0[0] & 0x100) != 0) {
+        if (func_80059D60() == 3 ||
+            func_800545F4((u8 *) D_800848F8) == -1) {
+            func_800553D4(0x71);
+        }
+    }
+    func_80054538((u8 *) D_800848F8);
+}
 
 void func_80054538(u8 *);
 void func_800546B0(void);
