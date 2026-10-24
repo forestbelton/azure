@@ -832,6 +832,15 @@ that reason, and matched when the scalar was read through an array alias
 (`extern s16 D_80086D50a[] __asm__("D_80086D50")`, read as `[0]`), which gives
 the split high/lo_sum pair the scheduler can interleave.
 
+**A loop bound is the clearest case of the same rule.** Read through the
+incomplete-array spelling, the compiler's own `lui` half is loop-invariant, so
+LIM hoists it into a callee-saved register and the loop re-reads the word
+through that -- two words of prologue and one register more than the target.
+Read through the SCALAR spelling it is a single macro insn with nothing to
+hoist, and the loop re-materialises `lui`/`lw` each iteration, which is what
+func_80056558's listing has. (Its guard also says the bound is signed: `blez`,
+not the `beqz` a u32 bound compiles to against a zero start.)
+
 **And the same lever runs backwards.** When a target's `lui`/`addiu` pair is
 ADJACENT and an unrelated insn sits before or after it where the candidate has
 one between, the pair is maspsx's, so the object must be small: a SIZED alias
