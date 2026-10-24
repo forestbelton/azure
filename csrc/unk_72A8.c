@@ -1,5 +1,20 @@
 #include "common.h"
 
+/* Bare file-scope size records: each symbol lands in maspsx's sdata_entries
+   while nothing is DEFINED, so maspsx rewrites every load and store of it in
+   this unit to %gp_rel while leaving address materialisation absolute. See the
+   $gp section of docs/carved-sweep.md; adding a symbol changes every access to
+   it in this whole unit, so grep this file first.
+   D_8008099C is deliberately NOT here, and cannot be: func_80034EF8 and
+   func_8003C0C8 in this same unit reach it ABSOLUTELY and match that way,
+   while func_80033D44 and func_80033D54 need it $gp-relatively. One carved
+   unit cannot give one symbol both forms, so those two stay stubs until the
+   unit is split. */
+__asm__(".sdata\n\t.size D_80080A6C,4\n\t.size D_80081440,4\n"
+        "\t.size D_80081448,4\n\t.size D_80081460,4\n"
+        "\t.size D_800809B8,4\n\t.size D_800809BC,4\n"
+        "\t.text");
+
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033AA8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033AE8);

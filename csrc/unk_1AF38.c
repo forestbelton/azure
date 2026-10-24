@@ -1,5 +1,13 @@
 #include "common.h"
 
+/* Bare file-scope size records: each symbol lands in maspsx's sdata_entries
+   while nothing is DEFINED, so maspsx rewrites every load and store of it in
+   this unit to %gp_rel while leaving address materialisation absolute. See the
+   $gp section of docs/carved-sweep.md; adding a symbol changes every access to
+   it in this whole unit, so grep this file first. */
+__asm__(".sdata\n\t.size D_8008152C,4\n\t.size D_80081528,4\n"
+        "\t.text");
+
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047738);
 
 void func_80047738(u8 *, s32, s32);
@@ -118,7 +126,14 @@ s32 func_80047C8C(s32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047CD8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047D44);
+u8 *func_80047D44(u16 a) {
+    func_800479D4(D_80016000, D_80023000, a);
+    func_8003F320();
+    D_8008152Cs = func_80047AB0(D_80016000, 0xB, 0x7900, 0xD, D_80023000);
+    /* The STORE is $gp-relative and the address materialisation is not --
+       maspsx rewrites loads and stores only. */
+    return (u8 *) &D_8008152Cs;
+}
 
 void func_800479D4(u8 *, u8 *, u16);
 
@@ -133,11 +148,22 @@ u8 *func_80047DB8(s32 a) {
     return (u8 *) &D_8008152Cs;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047DF0);
+u32 func_80047AB0(u8 *, s32, s32, s32, u8 *);
+
+void func_80047DF0(void) {
+    D_8008152Cs = func_80047AB0(D_80016000, 0xB, 0x7900, 0xD, D_80023000);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047E30);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047E78);
+extern u32 D_80081528s __asm__("D_80081528");
+
+u8 *func_80047E78(u16 a) {
+    func_800479D4(D_80119000, D_80126000, a);
+    func_8003F320();
+    D_80081528s = func_80047AB0(D_80119000, 0x5, 0x7F80, 0xF, D_80126000);
+    return (u8 *) &D_80081528s;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047EEC);
 

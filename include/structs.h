@@ -1241,6 +1241,11 @@ extern u8  *D_80081540;
 extern u8   D_80080B1B;
 extern u8   D_80080B1C;
 extern u8   D_80080B18[];
+extern s32  D_80080A6C;
+extern u32  D_80081528;
+extern u8   D_8006B200[];
+extern u8   D_80119000[];
+extern u8   D_80126000[];
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
 extern s16 D_8006A94C[];  /* s16 pairs, 0-terminated */
