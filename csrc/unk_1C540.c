@@ -628,7 +628,30 @@ void func_8004B324(s32 a, s32 b) {
     func_8004B2E0(a, b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B364);
+void func_8004B324(s32, s32);
+
+/* Three parameters, as both callers declare it, though the third only passes
+   through to func_8003FC64 (whose own $a0 this zeroes). One return of the node
+   pointer, advanced in place -- `return (u8 *)(n + 1)` from two places
+   computes `$v1 + 0x20` twice, once into each guard's delay slot, and is a
+   word short. */
+u32 func_8004B364(s32 a, s32 b, s32 c) {
+    UnkNode *n = func_8003FC64(0);
+
+    if (n != NULL) {
+        if (a != 0) {
+            if (b != 0) {
+                u8 *e = (u8 *) n->unk_08;
+
+                *(s32 *) e = b;
+                *(s32 *) (e + 4) = a;
+                n->unk_10 = (u32) func_8004B324;
+            }
+        }
+        n++;
+    }
+    return (u32) n;
+}
 
 u32 func_8004B364(s32, s32, s32);
 
