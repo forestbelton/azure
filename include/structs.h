@@ -1248,6 +1248,7 @@ typedef struct Unk80081568 {
     u32 unk_00;
     u32 unk_04;
 } Unk80081568;
+extern u8   D_80085458[];  /* 0x78-byte entries, D_80073734 of them live */
 extern s16  D_800847F0[];
 extern u8   D_80082D08[];  /* 6 entries of 8 bytes, 3 halfwords each */
 extern u8   D_80082040[];

@@ -2729,7 +2729,30 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056408);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800564A8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056558);
+extern s32 D_80073734s __asm__("D_80073734");
+void func_800563B0(s32, s32, s32);
+
+/* The bound through the SCALAR spelling, so its load is one macro insn that
+   maspsx splits afterwards -- as the incomplete array the compiler splits it
+   itself and loop.c hoists the `lui` half into a callee-saved register, two
+   words longer. Signed, so the guard is `blez` and not `beqz`.
+   The entry pointer is computed INSIDE the body, which is what puts the giv's
+   initialisation in the preheader unbiased; `p += 0x78` on a pointer declared
+   outside biases it to +0x12 (the first field used) instead.
+   Both loads are left inside the comparison: in locals, the `lw` is emitted
+   first and the fill pass cannot put it in the `lh`'s delay slot (2 DIFF). */
+void func_80056558(void) {
+    s32 i = 0;
+
+    while (i < D_80073734s) {
+        u8 *p = D_80085458 + i * 0x78;
+
+        if (*(s16 *) (p + 0x6C) != *(s32 *) (p + 0x58)) {
+            func_800563B0(i, *(u16 *) (p + 0x10) + *(s32 *) (p + 0x58), *(u16 *) (p + 0x12) + *(s32 *) (p + 0x58));
+        }
+        i++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800565D8);
 
@@ -3155,7 +3178,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AE08);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AE90);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AF74);
+void func_80059D1C(void);
+void func_80056A08(void);
+
+void func_8005AF74(s16 i) {
+    Unk80086C00 *b;
+    Unk80086C00 *e;
+
+    D_80085F98[0] = 1;
+    D_800737A4[0] = 0;
+    func_80059D1C();
+    func_80056A08();
+    b = D_80086C00;
+    e = &b[i];
+    e->unk_0A = 0x7F;
+    e->unk_08 = 0x7F;
+    e->unk_02 = 2;
+    D_80085F98[0] = 0;
+}
 
 void func_80059D1C(void);
 void func_80056A08(void);
