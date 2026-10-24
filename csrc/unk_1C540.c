@@ -1174,7 +1174,24 @@ u8 *func_8004EA70(u8 *p, s32 i) {
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EAC4);
+s32 func_8004E9EC(u8 *, s32);
+
+/* The offset pointer is its OWN variable, not `dst += i * 2`. In-place, the
+   parameter and the walked pointer are one quantity that spans both calls and
+   the branch, so it is the function's only global allocno and takes the last
+   callee-saved register, dragging the other two parameters round with it. As a
+   separate local, `dst` dies at the `addu` and `q` is what lives, which is the
+   $s1/$s2/$s0 assignment the target has. 13 DIFF of pure register naming. */
+u8 *func_8004EAC4(u8 *dst, u8 *src, s32 i) {
+    s32 r = func_8004E9EC(dst, i);
+    u8 *q = dst + i * 2;
+
+    strncpy(q, src, 2);
+    if (r != 0) {
+        q[2] = 0;
+    }
+    return q;
+}
 
 void func_8004EB30(void) {
     D_80084130[0] = 0;
