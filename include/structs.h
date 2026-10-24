@@ -1984,6 +1984,10 @@ void StoreImage(void *, u32 *);
 void LoadImage(void *, u32 *);
 void MoveImage(void *, s32, s32);
 /* libapi. */
+s32  OpenEvent(u32, s32, s32, void *);
+s32  EnableEvent(s32);
+s32  SetRCnt(u32, u16, s32);
+s32  StartRCnt(u32);
 void EnterCriticalSection(void);
 void ExitCriticalSection(void);
 s32  rand(void);

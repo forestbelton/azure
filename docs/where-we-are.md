@@ -4,16 +4,16 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**744 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 264 are
-`INCLUDE_ASM` stubs in `csrc/`: 259 in the four units carved on 2026-10-23 and
+**771 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 237 are
+`INCLUDE_ASM` stubs in `csrc/`: 232 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
 
 **The carved-unit sweep is the live work**, and `docs/carved-sweep.md` is its
 record: the source patterns that keep paying, the declaration traps, and a
-parked list with measurements. On 2026-10-23 it went from 645 stubs to 264, in four sessions.
+parked list with measurements. On 2026-10-23 it went from 645 stubs to 237, in four sessions.
 
 **Both of the structural blockers that shaped most of this project are gone**,
 and neither needed the thing it was being built towards:

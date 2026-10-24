@@ -3405,7 +3405,20 @@ void func_80055BD8(s16 k) {
     D_800847D0[1] |= 0x1000000 << k;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055C50);
+void func_8005AC68(s16);
+
+void func_80055C50(s16 k) {
+    u8 *b = (u8 *) D_800847D0;
+
+    if ((D_800847D0[0] & (0x10000 << k)) != 0) {
+        if (k == 0 && (D_800847D0[0] & 0x100) != 0) {
+            func_800553D4(0x71);
+            *(s16 *) (b + 0x26) = -1;
+        }
+        func_8005AC68(k);
+        D_800847D0[0] &= ~(0x10000 << k);
+    }
+}
 
 void func_80055CEC(void) {
 }
@@ -3555,7 +3568,22 @@ void func_800584E4(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058510);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800585A0);
+void func_80058510(void);
+
+/* Arms the root counter 2 event with func_80058510 as the handler. */
+void func_800585A0(void) {
+    if (D_800737C0[0] == 0) {
+        D_800737C0[0] = 1;
+        EnterCriticalSection();
+        D_80085F9C[0] = OpenEvent(0xF2000002, 2, 0x1000, (void *) func_80058510);
+        EnableEvent(D_80085F9C[0]);
+        SetRCnt(0xF2000002, 0x1C00, 0x1000);
+        StartRCnt(0xF2000002);
+        ExitCriticalSection();
+        D_80085F98[0] = 0;
+        D_800737C0[0] = 0;
+    }
+}
 
 void func_8006A27C(u32);
 
