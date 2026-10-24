@@ -2288,7 +2288,7 @@ void func_8003C0C8(u8 *p, s32 q) {
 }
 
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
-void func_8003C3B4(void);
+void func_8003C3B4(u8 *, u8 *, s32);
 
 void func_8003C128(void) {
     /* u8 * rather than UnkNode *: the node's +0x20 is past the end of the
@@ -2355,7 +2355,26 @@ void func_8003C364(void) {
     D_800814A0 = g | 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C3B4);
+/* The last store as an if/else, not a `?:`: as a conditional expression the
+   value lands in $v1 instead of reusing the flag's $v0 (3 DIFF). The indirect
+   call's argument is the pass-through $a0. */
+void func_8003C3B4(u8 *p, u8 *q, s32 c) {
+    u8 *b = (u8 *) &D_80083160;
+    u32 f = *(u32 *) p;
+
+    if (f != 0) {
+        ((void (*)(u8 *)) f)(p);
+        if ((*(u16 *) (p - 2) & 0x8000) != 0) {
+            return;
+        }
+    }
+    func_8003C0C8(p, c);
+    if ((*(u32 *) (b + 8) & 0x10) != 0) {
+        *(s16 *) (q + 0xA) = 5;
+    } else {
+        *(s16 *) (q + 0xA) = 0x10;
+    }
+}
 
 void func_8003C488(u32 *, s32, u8 *);
 
