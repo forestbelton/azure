@@ -629,7 +629,18 @@ void func_8004AFC8(s32 a, s32 b, s32 c, void *d) {
     func_8004AEC4(a, b, c, d);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AFE8);
+/* `k` is a u32, not a u8: declared u8 the byte gets an `andi 0xFF` it does not
+   need, since the `lbu` already zero-extended it (17 words of 16). */
+s32 func_8004AFE8(u8 **p) {
+    u32 k = (*p)[1];
+    s32 n = 0;
+
+    while (p != NULL && (*p)[1] == k) {
+        p++;
+        n++;
+    }
+    return n;
+}
 
 void func_8004B028(u8 *m, u8 **list, s32 k) {
     s32 i = 0;
