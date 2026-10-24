@@ -1245,6 +1245,7 @@ extern u8   D_80080B1B;
 extern u8   D_80080B1C;
 extern u8   D_80080B18[];
 extern u32  D_800737C0[];
+extern u32  D_80085F9C[];  /* the event handle func_8005863C closes */
 extern u32  D_80085F98[];
 extern u32  D_80071660;
 extern u32  D_80071664[];

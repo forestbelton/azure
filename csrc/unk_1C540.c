@@ -2250,7 +2250,31 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005497C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800549FC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054A7C);
+void func_80055B44(u16);
+void func_800540A8(void);
+void func_800541E8(void);
+
+/* Cases 1 and 2 share a body and there is no default: {1,2} is a RANGE node,
+   and after `!= 3`, `< 4` and `!= 0` nothing is left to test, so
+   node_is_bounded holds for it and emit_case_nodes branches on the LEFT with
+   `blt` instead of the usual `bgt` on the right -- which is the branch sense
+   the listing shows. Written as a default, the test comes out the other way
+   round and the trailing `j` goes to the default body instead of the
+   epilogue. */
+void func_80054A7C(u16 k) {
+    switch (k & 0xFF) {
+    case 1:
+    case 2:
+        func_80055B44(k);
+        break;
+    case 3:
+        func_800540A8();
+        break;
+    case 4:
+        func_800541E8();
+        break;
+    }
+}
 
 s32 func_80054AF0(s32 a) {
     if (a == 1) {
@@ -2468,7 +2492,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058510);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800585A0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005863C);
+void func_8006A27C(u32);
+
+void func_8005863C(void) {
+    D_800737C0[0] = 1;
+    EnterCriticalSection();
+    func_8006A27C(0xF2000002);
+    DisableEvent(D_80085F9C[0]);
+    CloseEvent(D_80085F9C[0]);
+    ExitCriticalSection();
+    D_80085F98[0] = 0;
+    D_800737C0[0] = 0;
+}
 
 void func_8006A27C(u32);
 
