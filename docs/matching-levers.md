@@ -711,6 +711,35 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### Duplicate the tail per arm: cross-jumping puts it back
+
+`jump_optimize` runs a second time after reload with cross-jumping on, so two
+arms that end in the *same* instruction sequence are merged: the first arm
+keeps only its own insns plus a `j` to the second arm's copy of the tail. The
+merged output is word-for-word what a single join block would have produced --
+which means **the listing cannot tell you which one the source was**, and the
+two compile to different registers.
+
+    if (c) return t[*(s16 *) (p->unk_0C + (j * 2 + j) * 4 + 2)];
+    return     t[*(s16 *) (p->unk_0C + (j * 4 + j) * 4 + 2)];
+
+With a join block (`if (c) k = 3*j; else k = 5*j;` then one tail) the index is
+a **global** allocno: it is live across the join's `lw`, local-alloc has
+already given that `lw` `$v0`, so global-alloc records the conflict and the
+index is pushed to `$v1` -- and the pointer it was supposed to share a register
+with is pushed again, to `$a0`. Written per arm, every insn of the tail is
+block-local, local-alloc assigns the arm in insn order, the index chain keeps
+`$v0`, and the `lw` falls to `$v1`, where the dying pointer also lives
+(`lw $v1, 0xC($v1)`). func_8004A658: 29 DIFF with every opcode, immediate and
+delay slot already correct, then MATCH.
+
+Reach for this whenever a diff is registers-only around a join and the join
+contains a load. It is also the answer to the shape where sched1 and local-alloc
+pull against each other -- sched1 hoists the load above the shift because the
+load's latency makes its critical path longer, which hands the load the first
+quantity in the block and with it `$v0`; you cannot reorder your way out of
+that, but you can make the block contain the whole computation instead.
+
 ### A pass-through call that emits nothing still costs references
 
 A call that hands a function its own incoming arguments unchanged --
