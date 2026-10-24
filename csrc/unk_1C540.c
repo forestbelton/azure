@@ -102,7 +102,22 @@ void func_800491CC(u32 **p, u32 v, s32 n) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800491F4);
+/* An explicit guard plus a do-while, not a `while`: with the `while`, cse
+   shares the bottom test's `lbu` into the top of the body across the back edge
+   and the body has two reads where the target has three (21 words of 23). */
+u32 func_800491F4(s32 t, u8 *p, s32 n) {
+    u32 *tt = (u32 *) t;
+    u32 prev = 0;
+
+    if (*p < n) {
+        do {
+            *(u32 *) (tt[*p] + 0xC) = prev;
+            prev = tt[*p];
+            p++;
+        } while (*p < n);
+    }
+    return prev;
+}
 
 void func_80049250(u8 *p, u8 *n) {
     while (*(u8 **) (p + 0xC) != 0) {
@@ -1306,7 +1321,22 @@ s32 func_8004E0AC(void) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E130);
+void func_8003528C(u32);
+void func_800352B4(void);
+
+/* $gp group (D_80081554/58), so this was verified in a scratch file carrying
+   the unit's .sdata block. The call argument is written as a SECOND reference
+   to the array -- after `D_80081558 = D_80081554` cse knows the load of
+   D_80081558 is that same pseudo, so the two addresses are one expression and
+   there is only one `addu`, with the base materialised first (22 words; a
+   local for the element address gets the base materialised last, 21 words). */
+void func_8004E130(void) {
+    D_80081554 &= 0xF;
+    D_80081558 = D_80081554;
+    D_80083D98[D_80081554++] = 1;
+    func_8003528C((u32) &D_80083D98[D_80081558]);
+    func_800352B4();
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E188);
 
@@ -1800,7 +1830,7 @@ void func_8004F2BC(u8 *p) {
     func_8004F0DC(p);
 }
 
-void func_800491F4(s32, u8 *, s32);
+u32 func_800491F4(s32, u8 *, s32);
 
 void func_8004F308(s32 a) {
     func_800491F4(a, D_80071684, 7);
@@ -2136,7 +2166,7 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050A58);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050AF0);
 
-void func_800491F4(s32, u8 *, s32);
+u32 func_800491F4(s32, u8 *, s32);
 
 void func_80050B7C(s32 a) {
     func_800491F4(a, D_800717BC, 0x11);

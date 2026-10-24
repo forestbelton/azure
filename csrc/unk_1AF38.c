@@ -135,7 +135,29 @@ s32 func_80047C8C(s32 a) {
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047CD8);
+s32 func_80047BC0(s32);
+s32 func_80047C8C(s32);
+void func_80047C00(void);
+u8 *func_80047A44(s32);
+
+/* The first call's result goes into `r` and `r` is reused for the retry: with
+   the test written as `func_80047BC0(i) != -1` cse notices the value IS -1 on
+   the other arm and reuses that pseudo as the constant, where the target keeps
+   -1 in $s1 for both comparisons (28 words of 27). */
+u8 *func_80047CD8(s32 k) {
+    s16 i = k;
+    s32 r = func_80047BC0(i);
+
+    if (r != -1) {
+        return 0;
+    }
+    r = func_80047C8C(i);
+    if (r == -1) {
+        func_80047C00();
+        r = func_80047C8C(i);
+    }
+    return func_80047A44(r);
+}
 
 u8 *func_80047D44(u16 a) {
     func_800479D4(D_80016000, D_80023000, a);
@@ -332,7 +354,31 @@ u8 *func_800485E0(u8 *p, s16 i, s16 x, s16 y) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048660);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048734);
+/* The RLE expander: the top two bits of each byte are a repeat count and the
+   low six the value, and a byte of 1 twice over ends it.
+
+   `n` and `k` are two variables with the MASK BETWEEN them, which is what
+   keeps the `addu $v1, $v0, $zero` copy the target spends: the counter is
+   written in place by `k--`, so the copy has two sets and combine cannot
+   substitute it away -- but only in this order. Shifting straight into the
+   counter (`k = c >> 6;`) is one word short, and so is masking into a separate
+   variable; `k = n;` written before the mask folds the copy away again. */
+void func_80048734(u8 *src, u8 *dst) {
+    u32 c;
+    s32 n;
+    s32 k;
+
+    while (c = *src, c != 1 || src[1] != c) {
+        n = c >> 6;
+        c &= 0x3F;
+        k = n;
+        while (k != -1) {
+            *dst++ = c;
+            k--;
+        }
+        src++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004878C);
 
