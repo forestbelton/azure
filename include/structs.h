@@ -1149,7 +1149,7 @@ extern u32 D_8008152Cs __asm__("D_8008152C");
    Unk80084960: the field offset must not migrate onto the symbol. */
 typedef struct Unk80086C00 {
     s16 unk_00;  /* set to -1 by func_8005AFF4 */
-    u16 unk_02;
+    s16 unk_02;  /* read with lh by func_8005C5D0 */
     u32 unk_04;
     u16 unk_08;
     u16 unk_0A;

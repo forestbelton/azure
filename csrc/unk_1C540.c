@@ -4081,7 +4081,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C2C0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C4D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C5D0);
+s32 func_80059D60(void);
+
+/* The base into a local first so its lui/addiu precede the 0xC-stride index
+   chain, and the return RE-INDEXES rather than reusing `e`. Unk80086C00.unk_02
+   is signed: the target reads it with `lh`. */
+s16 func_8005C5D0(s16 i) {
+    Unk80086C00 *b = D_80086C00;
+    Unk80086C00 *e = &b[i];
+    s32 r;
+
+    if (e->unk_02 == 1) {
+        r = func_80059D60();
+        if (r == 3) {
+            e->unk_02 = r;
+        }
+    }
+    return D_80086C00[i].unk_02;
+}
 
 void func_8005F134(void *);
 
