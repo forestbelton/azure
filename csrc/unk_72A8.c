@@ -1793,7 +1793,22 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BFE4);
 void func_8003C064(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C06C);
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+
+/* A return in each arm, not one `t` assigned in both: with a join the table
+   pointer is a global allocno in $v1 and each arm's `(high)` is a block-local
+   that takes $v0, where the target has the `lui` and the `addiu` on the same
+   register. Per arm, cross-jumping merges the index and the load back into the
+   one tail the listing shows and the pair can share a register. 4 DIFF.
+
+   `== 2` with the fall-through arm second: written `!= 2` gcc branches TAKEN to
+   the then-block and lays the arms out the other way round (1 DIFF). */
+u32 func_8003C06C(s32 i) {
+    if (D_80082E6Aa[0] == 2) {
+        return D_8006B008[i];
+    }
+    return D_800D0858[i];
+}
 
 void func_8003C0A4(u8 *p, u32 *q) {
     if (q[2] != 0) {
