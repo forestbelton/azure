@@ -1721,7 +1721,20 @@ void func_8004F95C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F9AC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FA2C);
+void func_8004F9AC(u8 *);
+void func_8004F95C(u8 *);
+s32 func_80049DE8(s32, s32, s32);
+
+void func_8004FA2C(u8 *p, s32 b) {
+    *(u32 *) (p + 0x2C) = 0;
+    if (*(u32 *) p == (u32) func_8004F9AC) {
+        *(u32 *) (p + 0x20) = 0x20;
+        func_8004F9AC(p);
+    }
+    *(u32 *) p = (u32) func_8004F95C;
+    *(u32 *) (p + 0x34) = *(u32 *) (p + 0x30);
+    *(u32 *) (p + 0x30) = func_80049DE8(*(u32 *) (p + 0x30), b, *(u32 *) (p + 0x24));
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FAA4);
 
@@ -2059,7 +2072,31 @@ void func_800530A4(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800530C4);
+/* Both read-modify-writes in the loop are split into a read, a read, then the
+   two writes: cc1psx fills a load's delay slot with the insn that follows it
+   in the source and nothing else, so the global's `lw` needs the entry's `lhu`
+   next (17 DIFF with the two `|=` written whole, one nop each).
+
+   The last `D_800814A0 |= 0x8000` re-uses the value the loop left in the
+   register -- section 5's exception, since the global's address does not
+   vary. */
+void func_800530C4(u8 *p) {
+    u8 **b = (u8 **) (p + 0x20);
+    s32 i;
+
+    *(u32 *) (*b + 0x1C) = 0;
+    *(u16 *) (*b + 6) += 1;
+    for (i = 0; i < 0x10; i++) {
+        u8 *e = b[i + 4];
+        u32 g = D_800814A0;
+        u16 f = *(u16 *) (e + 0x1E);
+
+        D_800814A0 = g | 0x8000;
+        *(u16 *) (e + 0x1E) = f | 0x8000;
+    }
+    *(u16 *) ((u8 *) b - 2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005313C);
 
