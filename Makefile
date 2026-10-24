@@ -156,7 +156,7 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
-.PHONY: all clean splat check expected ctx ghidra-syms
+.PHONY: all clean splat check expected ctx ghidra-syms extract
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -248,3 +248,6 @@ splat: $(SPLATFILES)
 		echo "=== $$SPLATFILE === "; \
 		splat split $$SPLATFILE; \
 	done
+
+extract:
+	PYTHONPATH=src python3 extract.py spec.yaml
