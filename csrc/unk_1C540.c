@@ -2332,9 +2332,18 @@ void func_800510A0(u8 *p) {
     *(u32 *) (p + 0x8) = func_80126890(*(u32 *) (p + 0x4));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800510DC);
+void func_80051228(u8 *);
 
-void func_800510DC(void);
+void func_800510DC(u8 *p) {
+    if ((*(u16 *) (*(u8 **) (p + 4) + 0x1E) & 0x2000) != 0) {
+        func_80051228(p);
+        *(u16 *) (*(u8 **) p + 0x1E) |= 0x2000;
+        *(u16 *) (p - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+void func_800510DC(u8 *);
 void func_800510A0(u8 *);
 
 void func_80051164(u8 *p) {
@@ -3520,7 +3529,24 @@ void func_8005ACD0(u16 v) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005ACDC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AE08);
+/* The three magics are 'pQSE', 'MTdh' and 'KDT ' little-endian: the sequence
+   header check, then the first free slot in D_80086C00 takes the pointer. */
+s16 func_8005AE08(u32 *p, s16 n) {
+    s32 i;
+
+    if (*p != 0x53455170 && *p != 0x6468544D && *p != 0x2054444B) {
+        return -1;
+    }
+    for (i = 0; i < 8; i++) {
+        if (D_80086C00[i].unk_00 == -1) {
+            D_80086C00[i].unk_04 = (u32) p;
+            D_80086C00[i].unk_00 = n;
+            D_80086C00[i].unk_02 = 2;
+            return i;
+        }
+    }
+    return -1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AE90);
 
