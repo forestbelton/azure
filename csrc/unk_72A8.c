@@ -723,7 +723,31 @@ void func_80038000(u8 v) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003800C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038128);
+void func_80038A10(void);
+
+/* The struct through a pointer local declared at function scope, so its
+   lui/addiu pair lands in the entry block (the `addiu` ends up in the first
+   guard's delay slot) and the field load keeps a plain +8 displacement.
+   Written as `D_80083160.unk_08` the pair is emitted inside the second block
+   and cse folds the %lo into the load, which is a word short. */
+void func_80038128(u8 *p) {
+    Unk80083160 *s = &D_80083160;
+
+    if (*(s8 *) (p + 0x87) == 0 && (s->unk_08 & 0x20) != 0) {
+        if (p[0x2E] == 0) {
+            p[0x2E] = 1;
+        }
+        *(u16 *) (p + 0x18) = 0;
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    } else {
+        u16 *c = (u16 *) (p + 0x18);
+
+        *c = *c - 1;
+        if ((s16) *c <= 0) {
+            *(u32 *) (p + 0x10) = (u32) func_80038A10;
+        }
+    }
+}
 
 void func_80038A10(void);
 
