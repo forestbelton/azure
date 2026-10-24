@@ -816,7 +816,15 @@ void func_8004B8BC(s32 a, s32 b) {
     func_8004B854(a, b, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B8DC);
+void func_8004B834(void);
+void func_8003F320(void);
+void func_800B6A0C(s32, s32, s32, s32, s32);
+
+void func_8004B8DC(s32 a, s32 b, s32 c, s32 d, s32 e) {
+    func_8004B834();
+    func_8003F320();
+    func_800B6A0C(a, b, c, d, e);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B954);
 
