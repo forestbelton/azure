@@ -1955,8 +1955,13 @@ s32 func_8003C5A4(s32 key) {
     return -1;
 }
 
-u32 func_8003C5F0(void) {
-    s32 i = func_8003C5A4();
+s32 func_8003C5A4(s32);
+
+/* The key passes straight through from this function's own parameter, so no
+   argument move is emitted -- see the pass-through note in
+   docs/matching-levers.md section 3. */
+u32 func_8003C5F0(s32 key) {
+    s32 i = func_8003C5A4(key);
 
     if (i < 0) {
         return 0;
@@ -1989,7 +1994,7 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C758);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
 
-u32 func_8003C5F0(void);
+u32 func_8003C5F0(s32);
 
 /* `||` is the shape, not two nested ifs. The short-circuit layout puts the if
    BODY between the two tests and the continuation last -- `bltz` to the body,
@@ -2001,7 +2006,7 @@ u32 func_8003C5F0(void);
 s32 func_8003C890(s32 a, s32 b) {
     u32 t;
 
-    if (b < 0 || (t = func_8003C5F0()) == 0) {
+    if (b < 0 || (t = func_8003C5F0(a)) == 0) {
         return 0;
     }
     return *(u32 *) (t + b * 8) != 0;
