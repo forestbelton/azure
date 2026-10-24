@@ -2134,7 +2134,31 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800525D4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052774);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052A20);
+/* The counter is consumed and incremented in one expression at the TOP of the
+   body (`i++ << 4`), which is where the target's `addiu $a0, $a0, 1` sits --
+   as a `for`'s increment it comes out last (12 DIFF). The ten stores go
+   through a walked pointer, which loop.c splits into the two induction
+   variables the listing has: one at +0 and one biased to +0xB. */
+void func_80052A20(void) {
+    u8 *p = D_80084478;
+    s32 i = 0;
+
+    do {
+        u8 v = i++ << 4;
+
+        p[0] = 0xC0;
+        p[1] = 0x2C;
+        p[2] = 0;
+        p[3] = 0;
+        *(s16 *) (p + 4) = 0xE;
+        *(s16 *) (p + 6) = 0x7080;
+        p[8] = 0;
+        p[9] = v;
+        p[0xA] = 0xFC;
+        p[0xB] = 0x10;
+        p += 0xC;
+    } while (i < 0x10);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052A90);
 
