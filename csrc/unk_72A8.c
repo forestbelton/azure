@@ -1435,7 +1435,17 @@ void func_80039D48(u8 *p) {
     *(u32 *) (s + 0x84) = ((u32 (*)(u32, u32, u32, u32)) f)(*(u32 *) (s + 0x48), *(u32 *) (s + 0x4C), *(u32 *) (s + 0x50), *(u32 *) (s + 0x54));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039DBC);
+void func_80039DBC(u8 *p) {
+    u8 *c = *(u8 **) (p + 0x1C);
+    u8 *s = *(u8 **) (p + 0x80);
+    u32 n = *c;
+    u32 *t = *(u32 **) (s + 0x40);
+
+    *(u8 **) (p + 0x1C) = c + 1;
+    *(u32 *) (s + 0x84) = ((u32 (*)(u32, u32, u32, u32)) t[n])(
+        *(u32 *) (s + 0x48), *(u32 *) (s + 0x4C), *(u32 *) (s + 0x50),
+        *(u32 *) (s + 0x54));
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039E1C);
 
@@ -2331,7 +2341,20 @@ u32 func_8003C5F0(s32 key) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C634);
+/* $gp group: D_80080A6C is in this unit's sdata_entries block, so this was
+   verified in a scratch file carrying that block. The comparison is written
+   with the parameter on the LEFT: the other way round the `beq` operands swap.
+   */
+s32 func_8003C634(u8 *a) {
+    s32 i;
+
+    for (i = 0; i < D_80080A6C; i++) {
+        if ((u32) a == D_8006B200s[i].unk_00) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C67C);
 

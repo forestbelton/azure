@@ -3224,7 +3224,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800599B0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059BC4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059D1C);
+void func_80059D1C(void) {
+    u32 i = 0;
+
+    if (D_800869B4 != 0) {
+        do {
+            D_80085FA8s[i].unk_2C = 1;
+            D_80085FA8s[i].unk_00 = 0;
+            i++;
+        } while (i < D_800869B4);
+    }
+}
 
 s32 func_80059D60(void) {
     u32 i;
@@ -3605,7 +3615,17 @@ u32 func_8005C808(void) {
     return D_80085FCC[0];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C818);
+void func_8005C818(s32 a, u32 b) {
+    u32 i = 0;
+
+    if (D_800869B4 != 0) {
+        do {
+            D_80085FA8s[i].unk_24 = b;
+            D_80085FA8s[i].unk_20 = b;
+            i++;
+        } while (i < D_800869B4);
+    }
+}
 
 s32 func_8005C858(s32 a, s16 i) {
     return D_80084960[i].unk_0C;

@@ -1054,6 +1054,30 @@ Matched: func_80039730, func_80039C44, func_80039D10 (one byte) and
 func_80039578, func_800395B0, whose halfword is `(*q)[0] + ((*q)[1] << 8)`
 followed by `*q += 2`.
 
+**A LOOP BOUND gets the same copy from an explicit guard.** A `for (i = 0;
+i < SYM; i++)` reads the global once and uses the one pseudo for both the
+entry test gcc's loop inversion builds and the bottom test, so there is no
+copy. Writing the guard yourself gives the bound two reads: loop.c hoists the
+in-loop one into the preheader, cse2 finds it redundant against the guard's and
+rewrites it to a register copy, and that copy is what holds the bound for the
+`sltu`:
+
+    u32 i = 0;              /* NOT inside the if: see below */
+
+    if (D_800869B4 != 0) {
+        do {
+            ...
+            i++;
+        } while (i < D_800869B4);
+    }
+
+Worth one word in func_80059D1C and func_8005C818. The declaration initialiser
+is the second half: with `i = 0;` written as a statement inside the `if`, the
+branch's delay slot gets a `nop` instead of the `addu $a0, $zero, $zero`,
+because the move is then below the test and the filler will not sink it into
+the slot -- above the test it is a candidate to be moved down. Two words apart,
+one lever each.
+
 
 * **The rule is about a FIXED-address scalar against a VARYING-address struct
   reference, in either order -- so it governs store placement as well as load
