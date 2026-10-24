@@ -161,6 +161,9 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_8004E130 | unk_1C540 | 22/22 words, 9 DIFF | $gp group. Every instruction matches; only which of $v1/$a0 holds the masked index and which the table address. |
 | func_8003C634 | unk_72A8 | 7 DIFF | $gp group. Reading the bound in the loop condition took it from 18 DIFF to 7; what is left is the register pair, as in func_8005C818. |
 | func_80033D44 + func_80033D54 | unk_72A8 | BLOCKED, not a shape | Both need `%gp_rel(D_8008099C)`, and func_80034EF8 and func_8003C0C8 in the same carved unit reach that symbol ABSOLUTELY and are landed. maspsx's rewrite keys on the symbol for the whole unit, so one unit cannot give it both forms: these two want the unit split, or those two reverted. |
+| func_8004A464 | unk_1C540 | 25/24 words, 14 DIFF | The `q = p + 0x20` does not fill the `lhu`'s load-delay slot as it does in the target, so the function is a word long. Before the `if`, inside it, and block-scoped all measured. |
+| func_80053E90 | unk_1C540 | 17 DIFF | A three-case switch (1, 2, 4) over three halfword globals, emitted as a compare tree. |
+| func_80039DBC | unk_72A8 | 25/24 words, 18 DIFF | Calls through a table at +0x40 with four arguments from +0x48..+0x54; the fifth load reuses the table's register in the target and this spends an extra one. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather

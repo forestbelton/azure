@@ -27,10 +27,12 @@ void func_80047784(u8 *p, s32 b, s32 c) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800477F4);
 
-void func_800477F4(UnkSlot *);
+void func_800477F4(UnkSlot *, s32);
 
-void func_800478B8(UnkSlot *s) {
-    func_800477F4(s);
+/* The second argument passes through untouched, which is invisible here and
+   shows up at func_80048AC8. */
+void func_800478B8(UnkSlot *s, s32 b) {
+    func_800477F4(s, b);
     func_80047694(s);
 }
 
@@ -312,7 +314,15 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800489F4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048A44);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048AC8);
+void func_80048998(u8 *, s32);
+
+void func_80048AC8(u8 *p, s32 b) {
+    func_800477F4((UnkSlot *) p, b);
+    if ((*(u16 *) (p + 0x14) & 0x1220) != 0) {
+        func_80048998(p, b);
+        *(u16 *) (p + 0x14) &= 0xFFDF;
+    }
+}
 
 void func_800488F0(u32, u32, s32);
 

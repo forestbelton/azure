@@ -2267,9 +2267,21 @@ void func_8005B348(void) {
     func_8005E450(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B378);
+s32 func_8005DA88(void *);
 
-void func_8005DA88(s16 *);
+s16 func_8005B378(s16 a) {
+    s32 t[6];
+
+    t[0] = 1;
+    t[1] = a;
+    if (func_8005DA88(t) != 0) {
+        return -1;
+    }
+    D_8007382B[0] = a;
+    return a;
+}
+
+s32 func_8005DA88(void *);
 
 void func_8005B3D8(s32 x, s32 y) {
     s16 t[12];

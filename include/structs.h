@@ -1339,7 +1339,7 @@ extern u8  D_8007382A[];
 extern u8  D_80082B4B[];
 extern u32 D_80084130[];
 extern u16 D_80084778[];
-extern u16 D_80084808[];
+extern s16 D_80084808[];
 extern u32 D_80086D4C[];
 extern u32 D_80073470;
 extern u32 D_80080A7C;
