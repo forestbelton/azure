@@ -2055,7 +2055,19 @@ u32 func_8004FF00(u8 *p) {
     return q[q[12] + 4];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FF20);
+s32 func_800213AC(void);
+
+s32 func_8004FF20(u8 *p) {
+    s32 x = 0;
+
+    if (D_800717B4[*(u32 *) (p + 0x1C)] != 0) {
+        x = *(s32 *) (p + 0x20);
+        if (x == 2) {
+            x = func_800213AC() == 2;
+        }
+    }
+    return ((s32 (*)(u8 *, s32)) D_8007179C[*(u32 *) (p + 0x1C)])(p - 0x20, x);
+}
 
 s32 func_8004FF20(u8 *);
 void func_80050EA8(u8 *);
@@ -2234,7 +2246,29 @@ void func_80050DA8(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050E20);
+void func_8004FE78(u32);
+void func_8004B248(u32 *);
+
+/* $gp group (D_80080B98), so verified in a scratch file with the unit's .sdata
+   block. The +0x28 clear goes BEFORE the global store, which is what leaves
+   the call's argument for the `jal`'s delay slot, and the last two
+   read-modify-writes are split into read/read/write/write: whole, they come
+   out as two serialised groups (15 DIFF). */
+void func_80050E20(u8 *p) {
+    u8 *q = p + 0x20;
+    u32 g;
+    u16 f;
+
+    func_8004FE78(*(u32 *) (q + 0x28));
+    *(u32 *) (q + 0x28) = 0;
+    D_80080B98 = *(s32 *) (q + 0x1C);
+    func_8004B248((u32 *) (p + 0x8C));
+    *(u16 *) (*(u8 **) (q + 0xA0) + 0x1E) |= 0x8000;
+    g = D_800814A0;
+    f = *(u16 *) (p + 0x1E);
+    D_800814A0 = g | 0x8000;
+    *(u16 *) (p + 0x1E) = f | 0x8000;
+}
 
 void func_80050EA8(u8 *p) {
     u8 *q = p + 0x20;
