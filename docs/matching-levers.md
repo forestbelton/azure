@@ -711,6 +711,28 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### `||` puts the body BETWEEN the two tests
+
+Two tests that share one exit are often an `||`, and the layout proves it:
+short-circuit expansion emits `if (A) goto body` -- a branch TAKEN to the if's
+body -- then B's test branching PAST the body, then the body, then the
+continuation. So the shared `return` sits in the middle of the function with
+the real work last.
+
+    if (b < 0 || (t = func_8003C5F0()) == 0) {
+        return 0;
+    }
+    return *(u32 *) (t + b * 8) != 0;
+
+No nesting of two ifs reproduces it. `if (A) return 0; ... if (B) return 0;`,
+the same with `else`, and the `if (!A) { ... if (!B) ... } return 0;` form all
+write two identical `return 0` blocks, and cross-jumping keeps the TRAILING one
+and redirects the earlier branch to it -- which inverts the second branch and
+puts the work in the middle. func_8003C890 sat at 13 DIFF across four such
+spellings and matched on the `||`. An assignment inside the condition
+(`(t = f()) == 0`) is part of the shape: it is how the called value reaches the
+code after the body.
+
 ### Duplicate the tail per arm: cross-jumping puts it back
 
 `jump_optimize` runs a second time after reload with cross-jumping on, so two

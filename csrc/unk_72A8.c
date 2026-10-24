@@ -1971,7 +1971,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C758);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C890);
+u32 func_8003C5F0(void);
+
+/* `||` is the shape, not two nested ifs. The short-circuit layout puts the if
+   BODY between the two tests and the continuation last -- `bltz` to the body,
+   `bnez` past it -- which is what the listing has. Every nesting of two tests
+   with a `return 0` in each arm instead ends with gcc keeping the TRAILING
+   copy of `return 0` and inverting the second branch, because cross-jumping
+   merges the two identical return blocks and redirects the earlier one. 13 DIFF
+   over four spellings. */
+s32 func_8003C890(s32 a, s32 b) {
+    u32 t;
+
+    if (b < 0 || (t = func_8003C5F0()) == 0) {
+        return 0;
+    }
+    return *(u32 *) (t + b * 8) != 0;
+}
 
 s32 func_8003C5A4(s32);
 
