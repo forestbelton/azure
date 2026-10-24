@@ -856,13 +856,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DA74);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DC14);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DCA8);
+void func_8004DCA8(u8 *p) {
+    if (p == 0) {
+        p = D_80080B68;
+    }
+    /* The post-increment, not a separate read-and-store pair: it is what puts
+       the `addiu` before the index's `addu` (2 DIFF the other way, 13 with the
+       increment written as its own statement first). */
+    D_80083D98[D_80081554++] = (u32) p;
+}
 
 void func_8004DCE0(u32 a) {
     D_80081550 = a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DCEC);
+void func_8004DCEC(void) {
+    ((void (*)(u8 *)) D_800714A4[D_80081550])(D_80080B6C);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DD2C);
 
