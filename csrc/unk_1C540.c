@@ -2011,7 +2011,22 @@ void func_80050EA8(u8 *p) {
     *(u32 *) (q + 0x28) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050EF8);
+u32 func_8004FDE0(u32);
+void func_8004CAA0(void);
+
+u32 func_80050EF8(u8 *p) {
+    u8 *q = p + 0x20;
+
+    if (*(u32 *) (q + 0x28) != 0 ||
+        (*(u32 *) (q + 0x28) = func_8004FDE0(*(u32 *) (q + 0x20))) != 0) {
+        if (*(u32 *) (q + 0x24) != 0) {
+            *(u32 *) (p + 0x10) = *(u32 *) (q + 0x24);
+            *(u32 *) (q + 0x24) = 0;
+        }
+        func_8004491C((UnkNode *) p, (u32) func_8004CAA0);
+    }
+    return *(u32 *) (q + 0x28);
+}
 
 void func_80050F74(u8 *p, u32 v) {
     u32 *q = (u32 *) (p + 0x20);
@@ -2593,7 +2608,16 @@ void func_80055ADC(u8 *p, u32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055B44);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055BD8);
+void func_800553D4(s32);
+void func_80055C50(s16);
+
+void func_80055BD8(s16 k) {
+    if (k == 0 && (D_800847D0[0] & 0x100) != 0) {
+        func_800553D4(0x71);
+    }
+    func_80055C50(k);
+    D_800847D0[1] |= 0x1000000 << k;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055C50);
 
