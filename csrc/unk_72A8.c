@@ -592,7 +592,19 @@ void func_800364BC(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800364EC);
+void func_80037030(u8 *, s32, s32, s16, s16, u32);
+void func_80036574(void);
+
+void func_800364EC(u8 *p) {
+    u8 *s = *(u8 **) (p + 0x74);
+    s16 t = *(u16 *) (s + 0x22) - (s[0x26] - 1);
+
+    p[0x4D] = s[0x27];
+    func_80037030(D_80082538, (s32) D_80082040, (s32) p, 1, t,
+                  *(u32 *) (*(u8 **) (p + 0x74) + 0x80));
+    *(u16 *) (p + 0x64) = 0x5A;
+    *(u32 *) (p + 0x68) = (u32) func_80036574;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036574);
 

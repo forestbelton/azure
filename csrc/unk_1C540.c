@@ -1252,7 +1252,16 @@ void func_8004DCEC(void) {
     ((void (*)(u8 *)) D_800714A4[D_80081550])(D_80080B6C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DD2C);
+void func_8003528C(u32);
+
+void func_8004DD2C(u8 *p) {
+    D_80081554 &= 0xF;
+    D_80081558 = D_80081554;
+    D_80083D98[D_80081554++] = 0x15080707;
+    func_8004DCA8(p);
+    D_80083D98[D_80081554++] = 0x23;
+    func_8003528C((u32) &D_80083D98[D_80081558]);
+}
 
 void func_8004DDB4(void) {
     D_80081554 = 0;
