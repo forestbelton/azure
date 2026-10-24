@@ -1390,10 +1390,12 @@ void func_800502E0(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050308);
 
-void func_80050308(void);
+void func_80050308(u8 *);
 
-void func_80050494(void) {
-    func_80050308();
+/* The argument passes through untouched, which is invisible here and shows up
+   at func_80050640. */
+void func_80050494(u8 *p) {
+    func_80050308(p);
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800504B4);
@@ -1402,7 +1404,16 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050550);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800505BC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050640);
+void func_80050550(u8 *, u32, s32);
+void func_800505BC(void);
+
+void func_80050640(u8 *p) {
+    /* The post-increment is the ARGUMENT: the old value goes in $a1 and the
+       incremented one is stored, which is the copy in the listing. */
+    func_80050550(p + 0x58, (*(u32 *) (p + 8))++, 3);
+    *(u32 *) p = (u32) func_800505BC;
+    func_80050308(p);
+}
 
 void func_80050694(u8 *p) {
     (*(void (**)(u8 *)) p)(p);
@@ -2063,7 +2074,16 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059BC4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059D1C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059D60);
+s32 func_80059D60(void) {
+    u32 i;
+
+    for (i = 0; i < D_800869B4; i++) {
+        if (D_80085FA8s[i].unk_2C == 0) {
+            return 1;
+        }
+    }
+    return 3;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059DAC);
 
@@ -2265,7 +2285,22 @@ void func_8005B3D8(s32 x, s32 y) {
     func_8005DA88(t);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B418);
+void func_8005E97C(s32, s32);
+
+void func_8005B418(s32 a) {
+    s32 i = 0;
+    s32 r = 0;
+
+    /* The bound is read from the global IN the loop condition, not hoisted
+       into a local: loop-invariant motion then lifts that read into the
+       preheader as a COPY of the guard's read, which is the target's
+       `addu $a2, $v0, $zero`. With a local it is one read and one register,
+       a word short. The `(s32)` is what makes the tests `blez`/`slt`. */
+    for (; i < (s32) D_80073734[0]; i++) {
+        r |= D_80073740[i];
+    }
+    func_8005E97C(0, r);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B470);
 
