@@ -1249,6 +1249,16 @@ extern u32  D_80085F98[];
 extern u32  D_80071660;
 extern u32  D_80071664;
 extern u32  D_80071668;
+/* The two primitive templates func_8004EFF4 and func_8004F068 copy out: the
+   first word of each is read through the scalar spelling (an adjacent lui/lw
+   pair) and the other two through the incomplete-array one, whose split pair
+   the scheduler lifts above the byte stores. */
+extern u32  D_8007166C;
+extern u32  D_80071670[];
+extern u32  D_80071674[];
+extern u32  D_80071678;
+extern u32  D_8007167C[];
+extern u32  D_80071680[];
 extern u8   D_8007164C[];
 extern u8   D_80071644[];
 extern u32  D_80083D98[];
