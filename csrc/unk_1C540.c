@@ -308,7 +308,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A24C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A330);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A464);
+/* Both load-delay slots are filled in the target, and cc1psx's fill pass only
+   ever swaps a load with the insn IMMEDIATELY after it: so the `addiu` for the
+   +0x20 base has to stand right behind the `lhu`, and the first argument's
+   load right behind the global's load. That is this statement order -- the
+   flag update, then the base, then the argument read into a local, then the
+   global. Any other order leaves cc1psx emitting its own `#nop` after the
+   `lhu` and the function is a word long (14 DIFF over six orderings). */
+void func_8004A464(u8 *p) {
+    u8 *q;
+    u8 *v;
+
+    if (p != 0) {
+        *(u16 *) (p + 0x1E) |= 0x8000;
+        q = p + 0x20;
+        v = *(u8 **) (q + 8);
+        D_800814A0 |= 0x8000;
+        func_8004B530(v);
+        func_8004B530(*(u8 **) (q + 0x18));
+    }
+}
 
 s32 func_8004A4C4(s32 arg0, u8 *p) {
     return func_800438E4(p);
