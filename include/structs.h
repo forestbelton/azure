@@ -1311,6 +1311,15 @@ extern u32 D_80080A80;
 extern u32 D_8006B008[];
 extern u32 D_800D0858[];  /* out of image, but lui+addiu: a SYMBOL */
 extern Unk80082660 D_80082660[];
+/* Out of image. Compared against pointers stored in a block, so they are
+   addresses; reached as incomplete arrays, which is the lui/addiu pair the
+   comparisons show. */
+extern u32 D_800C3174[];
+extern u32 D_800C321C[];
+extern u32 D_800C3960[];
+/* Out of image: a 9-byte table func_80038C40 copies to its stack with
+   lwl/lwr, so byte-aligned. */
+extern s8  D_8002D03C[];
 extern u32 D_8006ADC0[];
 extern u8  D_800812C8[];
 extern u8  D_800812D0[];
