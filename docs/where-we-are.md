@@ -4,16 +4,17 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**771 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 237 are
-`INCLUDE_ASM` stubs in `csrc/`: 232 in the four units carved on 2026-10-23 and
+**822 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 186 are
+`INCLUDE_ASM` stubs in `csrc/`: 181 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
 
 **The carved-unit sweep is the live work**, and `docs/carved-sweep.md` is its
 record: the source patterns that keep paying, the declaration traps, and a
-parked list with measurements. On 2026-10-23 it went from 645 stubs to 237, in four sessions.
+parked list with measurements. On 2026-10-23 it went from 645 stubs to 237, in
+four sessions; on 2026-10-24 from 237 to 186.
 
 **Both of the structural blockers that shaped most of this project are gone**,
 and neither needed the thing it was being built towards:
@@ -217,13 +218,16 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| carved-unit sweep | 401 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
+| carved-unit sweep | 181 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
 | near-misses, source written and checked | 5 | each with a numeric bound or a named pass check |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
-About fifty of the 401 are parked with measurements in
-`docs/carved-sweep.md`'s table rather than untouched.
+Forty-two rows of `docs/carved-sweep.md`'s table are parked with measurements
+rather than untouched, and eight of the rest dispatch through a jump table
+whose `.rodata` has no placement yet (jtbl_80032E14 and its neighbours sit
+inside a `bin` blob at 0x6614, not in the three placed runs at the top of the
+file), so they want that carve before the C.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
