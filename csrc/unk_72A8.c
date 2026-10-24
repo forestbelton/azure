@@ -895,7 +895,19 @@ void func_80038708(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038A10;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003875C);
+/* D_80110E98 is an ARRAY of pointers, not a pointer to one: the target takes
+   its address (`addiu %lo`) where `extern u32 **` loads through it. */
+extern u32 *D_80110E98[];
+void func_80038A10(void);
+
+void func_8003875C(u8 *p) {
+    u32 r = (*(u32 (**)(u32)) (D_80110E98[*(s8 *) (p + 0x32)] + *(s8 *) (p + 0x33)))(*(u32 *) (p + 0x34));
+
+    if (r != 0) {
+        *(u32 *) (p + 0x34) = r;
+        *(u32 *) (p + 0x10) = (u32) func_80038A10;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800387D0);
 
