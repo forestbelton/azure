@@ -30,6 +30,10 @@ assuming it.
 **Let `make check`'s exit code gate the commit.** Writing
 `make check > log; echo rc=$?; git commit` puts an always-succeeding `echo`
 between them, so an `&&` guards nothing -- that committed a broken tree once.
+**A pipe does the same thing and is easier to miss:** `make check 2>&1 | tail -2
+&& git commit` takes `tail`'s exit code, which is always 0, so the commit always
+runs. That committed a second broken tree (func_8003C5A4 landed with a parameter
+its caller did not pass). `make check` prints four lines; run it unpiped.
 
 **Never widen or re-shape a declaration that landed code already uses.**
 Changing `extern u32 D_800814A0;` to `extern u32 D_800814A0[];` -- to get the
