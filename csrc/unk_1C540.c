@@ -3116,7 +3116,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AE90);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AF74);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AFF4);
+void func_80059D1C(void);
+void func_80056A08(void);
+
+/* The entry base read into a local after the calls, so its lui/addiu come out
+   ahead of the 0xC-stride index chain (13 DIFF the other way round). */
+void func_8005AFF4(s16 i) {
+    Unk80086C00 *b;
+    Unk80086C00 *e;
+
+    D_80085F98[0] = 1;
+    func_80059D1C();
+    func_80056A08();
+    b = D_80086C00;
+    e = &b[i];
+    e->unk_00 = -1;
+    e->unk_02 = 0;
+    e->unk_0A = 0x7F;
+    e->unk_08 = 0x7F;
+    D_80085F98[0] = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B070);
 

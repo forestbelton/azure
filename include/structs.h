@@ -1148,7 +1148,9 @@ extern u32 D_8008152Cs __asm__("D_8008152C");
    reads the two halfwords at +0x08/+0x0A. A struct for the same reason as
    Unk80084960: the field offset must not migrate onto the symbol. */
 typedef struct Unk80086C00 {
-    u8  pad_00[8];
+    s16 unk_00;  /* set to -1 by func_8005AFF4 */
+    u16 unk_02;
+    u8  pad_04[4];
     u16 unk_08;
     u16 unk_0A;
 } Unk80086C00;
