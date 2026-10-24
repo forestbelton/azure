@@ -283,5 +283,18 @@ Three things to know before adding a symbol to it:
   the block, then land the body without one and let `make check` be the check.
 
 func_8004DCE0, func_8004DDB4, func_80050CAC, func_8004AE98 and func_80048DA0
-all matched first try once the block was in place. unk_72A8 and unk_1AF38 need
-their own blocks for their own symbols (D_8008099C, D_8008152C and the rest).
+all matched first try once the block was in place.
+
+**unk_72A8 and unk_1AF38 have their own blocks now** -- unk_72A8's carries
+D_80080A6C, D_80081440, D_80081448, D_80081460, D_800809B8 and D_800809BC, and
+unk_1AF38's D_8008152C, D_80081528 and (added 2026-10-24, for func_80048660)
+the three halfword atlas cursors D_80080B10/12/14 plus D_80081530. Before
+adding a symbol, check BOTH the unit's `.c` and every listing in
+`asm/nonmatchings/<unit>/` for an absolute `%hi`/`%lo` reference to it: that is
+what makes D_8008099C impossible here, and the grep is two commands:
+
+    grep -l "gp_rel(SYM)" asm/nonmatchings/<unit>/*.s
+    grep -l "%hi(SYM)"    asm/nonmatchings/<unit>/*.s
+
+The remaining $gp stubs in unk_72A8 are func_8003C920, func_80035484 and
+func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.

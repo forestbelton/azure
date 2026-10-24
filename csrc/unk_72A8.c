@@ -1333,7 +1333,29 @@ void func_80038A00(void) {
 void func_80038A08(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038A10);
+extern u32 D_80081448;
+s32 func_80038AB8(u8 *, u8 *);
+
+/* $gp group (D_80081448), so this was verified in a scratch file carrying the
+   .sdata block at the top of this file. The three guards are `&&`-joined, so
+   each branches past the body as the target does, and reorg fills all three
+   delay slots with the `lui %hi(func_80038A10)` the loop then compares
+   against. */
+void func_80038A10(u8 *p, u8 *q, s32 r) {
+    Unk80083160 *g = &D_80083160;
+    u8 *s;
+
+    D_80081448 = (u32) p;
+    s = *(u8 **) (p + 0x80);
+    if (*(s8 *) (p + 0x87) == 0 && (g->unk_08 & 0x20) != 0 && p[0x2E] == 0) {
+        p[0x2E] = 1;
+    }
+    do {
+        if (func_80038AB8(p, s) == 0) {
+            break;
+        }
+    } while (*(u32 *) (p + 0x10) == (u32) func_80038A10);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038AB8);
 

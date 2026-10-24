@@ -6,6 +6,8 @@
    $gp section of docs/carved-sweep.md; adding a symbol changes every access to
    it in this whole unit, so grep this file first. */
 __asm__(".sdata\n\t.size D_8008152C,4\n\t.size D_80081528,4\n"
+        "\t.size D_80080B10,2\n\t.size D_80080B12,2\n"
+        "\t.size D_80080B14,2\n\t.size D_80081530,2\n"
         "\t.text");
 
 void func_80047738(u8 *p, s16 a, s16 b) {
@@ -525,7 +527,44 @@ u8 *func_800485E0(u8 *p, s16 i, s16 x, s16 y) {
     return e;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048660);
+extern u16 D_80080B10;
+extern u16 D_80080B12;
+extern u16 D_80080B14;
+extern u16 D_80081530;
+
+/* $gp group: all four of its cursors are in this unit's .sdata size records
+   at the top of the file, so it was verified in a scratch file carrying that
+   block. The atlas cursor: D_80081530 holds the frame the three cursors were
+   last reset for. */
+void func_80048660(u8 *p, u8 *q) {
+    u16 h = D_80083160.unk_04;
+    s32 a;
+    s32 b;
+
+    if (h != D_80081530) {
+        D_80080B14 = 0;
+        D_80080B12 = 0;
+        D_80080B10 = 0;
+        D_80081530 = h;
+    }
+    a = (p[0xA] + 1) >> 1;
+    b = p[0xB] + 1;
+    if (D_80080B12 + b >= 0x100) {
+        D_80080B12 = 0;
+        D_80080B10 = D_80080B10 + D_80080B14;
+    }
+    if (D_80080B10 + a >= 0x20) {
+        D_80080B10 = 0;
+        D_80080B12 = 0;
+        D_80080B14 = 0;
+    }
+    p[8] = D_80080B10 << 1;
+    p[9] = D_80080B12;
+    if (D_80080B14 < a) {
+        D_80080B14 = a;
+    }
+    D_80080B12 = D_80080B12 + b;
+}
 
 /* The RLE expander: the top two bits of each byte are a repeat count and the
    low six the value, and a byte of 1 twice over ends it.
