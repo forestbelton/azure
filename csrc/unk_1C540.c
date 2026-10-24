@@ -2140,7 +2140,29 @@ s32 func_8004FD78(u8 *p, s32 b) {
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FDE0);
+s32 func_8004FD78(u8 *, s32);
+s32 func_8004FC98(u8 *);
+
+/* The FAILURE arm is the fall-through (`== 0`), so the `bnez` goes to the
+   function-pointer pair; the other way round costs the `j` placement. */
+u32 func_8004FDE0(u32 a) {
+    UnkNode *n = func_8003FC64(0);
+    u8 *e;
+
+    if (n != NULL) {
+        e = (u8 *) (n + 1);
+        func_8004FC68(e);
+        *(u32 *) (e + 0x30) = func_8004FD78(e, a);
+        if (func_8004FC98(e) == 0) {
+            func_8004FE78((u32) n);
+            n = NULL;
+        } else {
+            n->unk_10 = (u32) func_8004FC2C;
+            *(u32 *) ((u8 *) n + 0x20) = (u32) func_8004F9AC;
+        }
+    }
+    return (u32) n;
+}
 
 void func_8001832C(u32);
 
