@@ -360,13 +360,37 @@ u32 func_8004A658(s32 i, s32 j) {
     return t[*(s16 *) (p->unk_0C + (j * 4 + j) * 4 + 2)];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A6C0);
+/* The scan is INDEXED by the counter off a loop-invariant constant base, not a
+   pointer walked with `p += 4`. Both spellings give the same 16 words, but a
+   walked pointer whose only uses are the two loads is eliminated by loop.c,
+   which biases the replacement giv's initial value to the second field
+   (`ori 0x3566`, `lh -2`, `lh 0`) -- one word long and the whole reason this
+   family sat parked. Indexed, the giv is `base + i * 4` and the two field
+   offsets stay as the loads' displacements, which is what the listing shows:
+   a bare `lui 0x8001` (0x80010000 has no low half) with 0x3564/0x3566 in the
+   loads and `addiu 4` in the branch delay slot.
+
+   s32 parameters, not s16: the target compares the `lh` results against $a0
+   and $a1 as they arrive, with no sign-extension of its own. */
+s32 func_8004A6C0(s32 x, s32 y) {
+    u8 *b = (u8 *) 0x80010000;
+    s32 i = 0;
+
+    for (; i < 0x14; i++) {
+        if (*(s16 *) (b + i * 4 + 0x3564) == x) {
+            if (*(s16 *) (b + i * 4 + 0x3566) == y) {
+                break;
+            }
+        }
+    }
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A700);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A784);
 
-s32 func_8004A6C0(void);
+s32 func_8004A6C0(s32, s32);
 
 /* The two halfwords are at the CONSTANT base 0x80010000 with their offsets
    written inside the index expression -- 0x80010000's low half is zero, so the
@@ -377,8 +401,8 @@ s32 func_8004A6C0(void);
    local, always materialises the whole address with an `addiu %lo` and is a
    word long: cse folds a %lo into a MEM only for a CONSTANT offset off the
    `(high)` pseudo, never past a register index. 13 DIFF. */
-void func_8004A7D8(void) {
-    s32 i = func_8004A6C0();
+void func_8004A7D8(s32 x, s32 y) {
+    s32 i = func_8004A6C0(x, y);
     u8 *b = (u8 *) 0x80010000;
 
     if (i < 0x14) {
