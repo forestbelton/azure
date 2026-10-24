@@ -711,6 +711,34 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### Index the scan; a walked pointer gets eliminated and its base biased
+
+A loop whose pointer is advanced by the element size and whose only other uses
+are two loads off it is a pointer loop.c will DELETE: it replaces the pointer
+with a giv of its own and biases that giv's initial value to one of the field
+offsets, so the preheader gains an `ori` and the loads get displacements
+relative to that field (`ori 0x3566`, `lh -2`, `lh 0`). One word long, and no
+amount of rewriting around the pointer removes it.
+
+Written with the counter as the index off a loop-invariant base, the giv is
+`base + i * 4` and both field offsets stay in the loads' displacements:
+
+    u8 *b = (u8 *) 0x80010000;
+    for (i = 0; i < 0x14; i++)
+        if (*(s16 *) (b + i * 4 + 0x3564) == x &&
+            *(s16 *) (b + i * 4 + 0x3566) == y) break;   /* as nested ifs */
+
+That is the unbiased `lui 0x8001` plus `addiu 4` in the branch delay slot the
+listing shows. It unparked func_8004A6C0, func_8004A8D8 and func_8004A784 at
+once. Note this is the opposite of section 9's advice for a loop that STORES
+through its pointer -- there the walked pointer is what the target has, because
+it survives. The question to ask is whether loop.c can delete the pointer.
+
+A matching detail from the same family: a constant base declared INSIDE the
+`if` makes its `lui` the body's first insn, which reorg then lifts into the
+guard's delay slot. At function scope the index is emitted first instead,
+because fold puts the constant operand second.
+
 ### A %lo in the displacement with a REGISTER index means a constant base
 
 cse folds a symbol's `%lo` into a MEM only when what is left is a CONSTANT

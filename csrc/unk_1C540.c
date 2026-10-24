@@ -388,7 +388,19 @@ s32 func_8004A6C0(s32 x, s32 y) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A700);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A784);
+s32 func_8004A6C0(s32, s32);
+
+/* 20 entries of 19 bytes from 0x800133E8, the other half of the table
+   func_8004A6C0 scans. */
+u8 *func_8004A784(s32 x, s32 y) {
+    u8 *r = 0;
+    s32 i = func_8004A6C0(x, y);
+
+    if (i < 0x14) {
+        r = (u8 *) 0x800133E8 + i * 19;
+    }
+    return r;
+}
 
 s32 func_8004A6C0(s32, s32);
 
@@ -414,7 +426,23 @@ void func_8004A7D8(s32 x, s32 y) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A83C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A8D8);
+s32 func_8004A6C0(s32, s32);
+
+/* The constant base is declared INSIDE the if, so its `lui` is the body's
+   first insn and reorg lifts it into the `beqz`'s delay slot. At function
+   scope the index comes out first instead (fold puts the constant second) and
+   the two insns are in the other order -- 4 DIFF, with the call's result in
+   $v1 rather than $a0 as a knock-on. */
+void func_8004A8D8(s32 x, s32 y) {
+    s32 i = func_8004A6C0(x, y);
+
+    if (i < 0x14) {
+        u8 *b = (u8 *) 0x80010000;
+
+        *(s16 *) (b + i * 4 + 0x3564) = 0;
+        *(s16 *) (b + i * 4 + 0x3566) = 0;
+    }
+}
 
 void func_8004A918(void) {
     bzero((void *) 0x80013564, 0x50);
