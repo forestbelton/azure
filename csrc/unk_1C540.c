@@ -1949,9 +1949,43 @@ void func_80053E14(s16 v) {
     D_80084808[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053E20);
+void func_800552C8(s32);
+void func_80054D64(s32);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053E90);
+/* The case bodies are emitted in SOURCE order, which the compare tree (built
+   from the sorted values) does not show: case 4 first, then 1, then 2, which
+   is why the `bne` for 4 falls straight into its own body. Written 2, 1, 4 the
+   three blocks come out in the other order -- 18 DIFF with every instruction
+   right. Both callees take the first parameter, which arrives in $a0 and is
+   never moved. */
+void func_80053E20(s32 a, s32 k) {
+    switch (k) {
+    case 4:
+        D_8008480C[0] = a;
+        func_80054D64(a);
+        break;
+    case 1:
+        D_8008480A[0] = a;
+        func_800552C8(a);
+        break;
+    case 2:
+        D_80084808[0] = a;
+        break;
+    }
+}
+
+/* func_80053E20's getter, same case order. */
+s16 func_80053E90(s32 k) {
+    switch (k) {
+    case 4:
+        return D_8008480C[0];
+    case 1:
+        return D_8008480A[0];
+    case 2:
+        return D_80084808[0];
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053EF0);
 

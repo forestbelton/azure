@@ -711,6 +711,16 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### A switch's case bodies are emitted in SOURCE order
+
+The compare tree is built from the sorted case values, so it tells you nothing
+about the order the cases were written in -- but the BODIES are laid out in
+source order, and that is visible: whichever body the last test falls through
+into was written first. func_80053E20 and func_80053E90 are a setter/getter
+pair over three halfword globals with cases 4, 1, 2 in that order; written
+2, 1, 4 every instruction is right and the three blocks are in the wrong
+places (18 DIFF).
+
 ### The load-delay slot is filled by the NEXT insn only
 
 cc1psx fills a load's delay slot by swapping the load with the insn immediately
