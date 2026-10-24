@@ -733,6 +733,21 @@ block-local, local-alloc assigns the arm in insn order, the index chain keeps
 (`lw $v1, 0xC($v1)`). func_8004A658: 29 DIFF with every opcode, immediate and
 delay slot already correct, then MATCH.
 
+A `return` in each arm does a second thing a shared join cannot: it makes the
+HARD register `$v0` live from the arm to the epilogue. local-alloc runs before
+global-alloc and knows nothing about pseudos it has not placed, but it does
+know which hard registers are live, so the arm's own computation routes around
+`$v0` -- which is how func_8005405C's second mask chain lands in `$v1`/`$a0`.
+Assign a variable instead and the order reverses: local-alloc gives the chain
+`$v0`, and the result, a global allocno, is pushed to `$a1` and copied into
+`$v0` at the end. Any `move $v0, <reg>` on the last line of a listing that the
+candidate does not have is this.
+
+Watch for the opposite trap in the same shape: `r = 1;` before a test with
+`r = 0;` after it is what jump.c store-flags into a single `sltu`, which no
+amount of register juggling will undo. Nested ifs with one `return` at the end
+keep the branches.
+
 Reach for this whenever a diff is registers-only around a join and the join
 contains a load. It is also the answer to the shape where sched1 and local-alloc
 pull against each other -- sched1 hoists the load above the shift because the
