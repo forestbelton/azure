@@ -3060,7 +3060,25 @@ void func_80052A20(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052A90);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052C10);
+void func_80052A90(u32, s32, s16);
+
+void func_80052C10(s16 k, u8 *p) {
+    s16 r1[4];
+    s16 r2[4];
+
+    r1[0] = 0x380;
+    r1[1] = k * 16;
+    r1[2] = 0x40;
+    r1[3] = 0x10;
+    ClearImage(r1, 0, 0, 0);
+    r2[0] = 0x3C0;
+    r2[1] = k * 16;
+    r2[2] = 0x40;
+    r2[3] = 0x10;
+    ClearImage(r2, 0, 0, 0);
+    func_80052A90(*(u32 *) (p + 8), 0x380, k * 16);
+    func_80052A90(*(u32 *) (p + 0xC), 0x3C0, k * 16);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052CE0);
 

@@ -915,7 +915,14 @@ void func_80036C44(s32 a, s32 b, s32 c) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036C7C);
+void func_80036C7C(u8 *p, u32 *s, u8 *d) {
+    *(u32 *) (d + 0) = s[0];
+    *(u32 *) (d + 4) = s[1];
+    *(u32 *) (d + 8) = s[2];
+    *(s16 *) (d + 4) = GetTPage(0, 1, *(s16 *) (p + 8), *(s16 *) (p + 0xA));
+    d[8] = d[8] + (p[0x18] + (s16) (*(s16 *) (p + 8) % 64) * 4);
+    d[9] = d[9] + (*(s16 *) (p + 0xA) % 256 + p[0x1A]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036D4C);
 
