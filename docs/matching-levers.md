@@ -711,6 +711,20 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### A wider store invalidates cse's entry for the narrow read after it
+
+Two word stores into adjacent scalars leave cse holding both values, so a read
+of either one afterwards is free. An 8-BYTE struct copy into the same place
+does not: the MEM it writes is a different size from the 4-byte MEM read after
+it, cse cannot match them, and the read comes out as a real `lw`.
+
+    *(Unk80081568 *) &D_80081568 = *(Unk80081568 *) p;   /* lw, lw, sw, sw */
+    D_80081568 = (((D_80081568 + 0x7FF) >> 11) << 23) | (b & 0x7FFFFF);
+
+func_80053CFC is a word short written as `D_80081568 = p[0]; D_8008156C = p[1];`
+and matches as the struct copy. So an unexpected re-read of a global that was
+just written is evidence about the WIDTH of the write, not only about aliasing.
+
 ### A switch's tree says which cases share a body, and whether there is a default
 
 `emit_case_nodes` (stmt.c) tests a node's own value first, then dispatches to

@@ -1240,6 +1240,13 @@ extern u32  D_80081554;
 extern u32  D_80081558;
 /* The four words func_8004D614 copies into the D_80083178 cache; $gp-relative
    in csrc/unk_1C540.c through that unit's sdata_entries block. */
+/* The 8-byte pair func_80053CFC fills with a struct copy and then rewrites the
+   first word of; $gp-relative in csrc/unk_1C540.c. */
+typedef struct Unk80081568 {
+    u32 unk_00;
+    u32 unk_04;
+} Unk80081568;
+extern u32  D_80081568;
 extern u32  D_80080B58;
 extern u32  D_80080B5C;
 extern u32  D_80080B60;

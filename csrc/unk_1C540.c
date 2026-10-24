@@ -23,6 +23,7 @@ extern u32 D_800814A0a[] __asm__("D_800814A0");
 __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
         "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
         "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
+        "\t.size D_80081568,4\n\t.size D_8008156C,4\n"
         "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
         "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
         "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.text");
@@ -2220,7 +2221,18 @@ void func_80053CD0(void) {
     func_80053C6C();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053CFC);
+/* $gp group (D_80081568 and D_8008156C added to the unit's sdata_entries
+   block; nothing else in the unit touches them). The pair is filled with an
+   8-BYTE STRUCT COPY, which is what makes the following `D_80081568` read a
+   real `lw` again: as two word stores cse keeps the value it just stored and
+   the function is a word short. Verified in a scratch file carrying the block,
+   since verify.py compiles standalone. */
+void func_80053CFC(u32 *p, u32 b) {
+    *(Unk80081568 *) &D_80081568 = *(Unk80081568 *) p;
+    D_80081568 = (((D_80081568 + 0x7FF) >> 11) << 23) | (b & 0x7FFFFF);
+    func_8003E4FC(6, (u8 *) &D_80081568, b);
+    func_8003F320();
+}
 
 s32 func_80053D64(void) {
     u8 loc[8];
