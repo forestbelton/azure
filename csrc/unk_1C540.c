@@ -2562,7 +2562,34 @@ void func_80055990(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800559B4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055ADC);
+/* Three separate statements -- the mask, the base, then the index -- which is
+   the order the five address insns come out in (`andi`, `lui`, `addiu`, `sll`,
+   `addu`). Any spelling that leaves the index inside the address expression
+   emits the shift before the symbol, because fold puts the ADDR_EXPR second:
+   3 DIFF through a base local, a sized alias, a struct array and an explicit
+   index local. The declarations' order is the rest of it: the offset, the
+   count and the counter are initialised before the address. */
+void func_80055ADC(u8 *p, u32 b) {
+    s32 off = 0x14;
+    s32 n = *(s32 *) (p + 0x10);
+    s32 i = 0;
+    s32 k = b & 0xFFFF;
+    u8 *base = D_80084878;
+    u32 *q = (u32 *) (base + k * 0x40);
+    u32 *d = q;
+
+    for (; i < 0x10; i++) {
+        if (i >= n) {
+            *d = *q;
+        } else {
+            u8 *e = p + off;
+
+            *d = (u32) (e + 0x10);
+            off += 0x10 + *(s32 *) (e + 4);
+        }
+        d++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055B44);
 
