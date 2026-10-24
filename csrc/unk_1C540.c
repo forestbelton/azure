@@ -641,7 +641,25 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C36C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CAA0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CAE8);
+u8 *func_8004CAE8(u8 *p, s32 k) {
+    /* A do-while with the byte latched and the advance BEFORE the test, so
+       the `addiu` lands in the back edge's delay slot and runs on the exiting
+       iteration too -- the same shape as func_8004B4DC. The second read of
+       p[0] is a second read in the source; cse does not share it across the
+       0x20 mask. */
+    u8 v;
+
+    do {
+        if ((p[0] & 0x20) != 0) {
+            if (*(u16 *) (p + 6) == k) {
+                return p;
+            }
+        }
+        v = p[0];
+        p += 0xC;
+    } while ((v & 0x80) == 0);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CB2C);
 
@@ -1500,7 +1518,14 @@ void func_800510A0(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800510DC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051164);
+void func_800510DC(void);
+void func_800510A0(u8 *);
+
+void func_80051164(u8 *p) {
+    if (func_80044144(1, 0x1E, (u32) func_800510A0, (u32) p) != 0) {
+        *(u32 *) (*(u8 **) (p + 4) + 0x10) = (u32) func_800510DC;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800511B4);
 
@@ -1940,7 +1965,16 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800585A0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005863C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800586B0);
+void func_8006A27C(u32);
+
+void func_800586B0(void) {
+    D_800737C0[0] = 1;
+    EnterCriticalSection();
+    func_8006A27C(0xF2000002);
+    ExitCriticalSection();
+    D_80085F98[0] = 0;
+    D_800737C0[0] = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058700);
 
@@ -1957,7 +1991,19 @@ void func_800587B4(void) {
 void func_800587F8(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058800);
+s32 func_80058800(u8 *a, u8 *b, s32 n) {
+    if (n == 0) {
+        return -1;
+    }
+    while (--n != 0) {
+        if (*a != *b) {
+            return *a - *b;
+        }
+        a++;
+        b++;
+    }
+    return *a - *b;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058850);
 

@@ -1241,6 +1241,8 @@ extern u8  *D_80081540;
 extern u8   D_80080B1B;
 extern u8   D_80080B1C;
 extern u8   D_80080B18[];
+extern u32  D_800737C0[];
+extern u32  D_80085F98[];
 extern u8   D_8007164C[];
 extern u8   D_80071644[];
 extern u32  D_80083D98[];
@@ -1808,7 +1810,7 @@ void func_8005FFFC(void);
 s32  func_80064584(s32);
 s32  func_800644B8(s32);
 void func_801768AC(void);
-u8  *func_8004CAE8(u8 *, s16);
+u8  *func_8004CAE8(u8 *, s32);
 s32  func_80053428(Unk80083120 *);
 s32  func_80053604(Unk80083120 *);
 void func_8004EB30(void);
@@ -1875,6 +1877,9 @@ s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
    the same reason. */
 void LoadImage(void *, u32 *);
 void MoveImage(void *, s32, s32);
+/* libapi. */
+void EnterCriticalSection(void);
+void ExitCriticalSection(void);
 s32  rand(void);
 void AddPrim(void *, void *);
 s32  DrawSync(s32);
