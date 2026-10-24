@@ -541,7 +541,7 @@ void func_80035ABC(u8 *p, u8 *q) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035AF8);
 
-void func_8003C7D8(u8, s8);
+s32 func_8003C7D8(s32, s32);
 void func_8003C160(void);
 void func_80035C44(u8 *, u8 *);
 
@@ -650,7 +650,7 @@ void func_8003605C(u8 *p, u8 *q, s32 r) {
     (*(void (**)(u8 *, u8 *, s32)) (p + 0x68))(p, q, r);
 }
 
-void func_80036154(void);
+void func_80036154(u8 *);
 
 void func_80036110(u8 *p) {
     *(u16 *) (*(u8 **) p + 0xA) -= 0x140;
@@ -660,7 +660,35 @@ void func_80036110(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036154);
+void func_80036210(u8 *);
+void func_800362D0(u8 *);
+void func_800364EC(u8 *);
+void func_8003666C(u8 *);
+void func_800368D0(u8 *);
+void func_80038478(u8 *);
+void func_80038588(u8 *);
+void func_800385E8(u8 *);
+void func_80038648(u8 *);
+void func_80038A00(void);
+void func_80036988(u8 *, u8 *);
+
+void func_80036154(u8 *p) {
+    u32 h = *(u32 *) (*(u8 **) (p + 0x74) + 0x10);
+
+    if (h == (u32) func_80038478) {
+        *(u32 *) (p + 0x68) = (u32) func_80036210;
+    } else if (h == (u32) func_80038588) {
+        *(u32 *) (p + 0x68) = (u32) func_800362D0;
+    } else if (h == (u32) func_800385E8) {
+        *(u32 *) (p + 0x68) = (u32) func_800364EC;
+    } else if (h == (u32) func_80038648) {
+        *(u32 *) (p + 0x68) = (u32) func_8003666C;
+    } else if (h == (u32) func_80038A00) {
+        *(u32 *) (p + 0x68) = (u32) func_800368D0;
+    }
+    func_80036988(p + 0xC, *(u8 **) (p + 0x74));
+    (*(u8 **) (p + 0x74))[0x85] = 1;
+}
 
 void func_80036B10(u8 *, u8 *, u8 *, s32, u32);
 void func_8003626C(u8 *);
@@ -682,7 +710,7 @@ void func_8003626C(u8 *p) {
     }
 }
 
-void func_80036154(void);
+void func_80036154(u8 *);
 
 void func_800362A0(u8 *p) {
     if (p[0x50] != 0) {
@@ -730,7 +758,7 @@ void func_80036484(u8 *p) {
     }
 }
 
-void func_80036154(void);
+void func_80036154(u8 *);
 
 void func_800364BC(u8 *p) {
     if (p[0x51] != 0) {
@@ -2809,7 +2837,43 @@ s32 func_8003C758(u8 *p) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
+extern u32 D_8006B220[];
+void func_8003C67C(s32);
+
+/* NESTED guards with one `return -1` at the end, not three early returns:
+   with three branches to a shared `-1` block reorg fills the second one's
+   delay slot from that block and the `li -1` is duplicated, a word over
+   (36 DIFF). Both parameters are `s32`, not the `(u8, s8)` the callers'
+   prototype said: the listing has no sign extension of the index and no
+   `andi` of the key before func_8003C5F0's pass-through. And the element
+   address is written index-first, `(u8 *) (n * 8 + (u32) t)`. */
+s32 func_8003C7D8(s32 k, s32 n) {
+    u32 *d = D_80082D58;
+    u8 *t;
+    u8 *e;
+    u8 *f;
+    s32 r;
+    u8 *b;
+
+    if (n >= 0) {
+        t = (u8 *) func_8003C5F0(k);
+        if (t != 0) {
+            e = (u8 *) (n * 8 + (u32) t);
+            f = *(u8 **) e;
+            if (f != 0) {
+                d[2] = *(u32 *) (e + 4);
+                r = func_8003C758(f);
+                func_8003C67C(r);
+                b = D_8006B200;
+                LoadImage(D_8006B220, *(u32 **) (b + 4));
+                LoadImage(&D_8006B220[2],
+                          (u32 *) (*(u32 *) (b + 4) + 0x2000));
+                return r;
+            }
+        }
+    }
+    return -1;
+}
 
 u32 func_8003C5F0(s32);
 

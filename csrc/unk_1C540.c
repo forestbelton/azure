@@ -3350,7 +3350,29 @@ void func_800544A4(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054538);
+void func_80054538(u8 *p) {
+    switch (*(s32 *) (p + 0xC)) {
+    case 1:
+        *(u16 *) (p + 0x10) = *(u16 *) (p + 0x10) + *(u16 *) (p + 0x14);
+        if (*(s16 *) (p + 0x10) >= 0x80) {
+            *(u16 *) (p + 0x10) = 0x7F;
+            *(s32 *) (p + 0xC) = 3;
+        }
+        break;
+    case 2:
+        *(u16 *) (p + 0x10) = *(u16 *) (p + 0x10) - *(u16 *) (p + 0x14);
+        if (*(s16 *) (p + 0x10) < *(s16 *) (p + 0x12)) {
+            *(u16 *) (p + 0x10) = *(u16 *) (p + 0x12);
+            *(s32 *) (p + 0xC) = 3;
+        }
+        break;
+    default:
+        return;
+    }
+    if (*(u32 *) p != 0) {
+        (*(void (**)(void)) p)();
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800545F4);
 
