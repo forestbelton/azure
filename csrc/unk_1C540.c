@@ -3538,7 +3538,32 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005500C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800550E8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800552C8);
+/* The magic 0x80010003 with post_shift 14 is a DIVISION BY 32767 (magic.py;
+   do not estimate it from the arithmetic). D_800848F8 is read through a
+   pointer local so the two constant indices come out as displacements off a
+   materialised base. func_8005B27C is reached through an __asm__ alias with
+   `(s16, s16, s16)`: the target passes the s16 result twice unmasked, where
+   the unit's own `(s16, u8, u8)` definition would make the caller `andi`. */
+s32 func_80055750(s16);
+void func_8005B27Cw(s16, s16, s16) __asm__("func_8005B27C");
+
+void func_800552C8(s32 unused) {
+    u8 *b = (u8 *) D_800847D0;
+    s16 *q;
+    s32 t;
+    s16 e;
+    s32 f;
+    s16 v;
+
+    if ((D_800847D0[0] & 0x100) != 0) {
+        q = D_800848F8;
+        t = q[4] * D_8008480A[0];
+        e = t / 32767;
+        f = e * q[8];
+        v = func_80055750(f / 128);
+        func_8005B27Cw(*(s16 *) (b + 0x22), v, v);
+    }
+}
 
 void func_8005537C(s16 a) {
     s16 v;
@@ -3836,7 +3861,35 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800565D8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056654);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056800);
+/* No local copy of the parameter: `u8 *p = q;` spends a word the target
+   leaves as a `nop`. And the negative arm's test is written with the
+   DIFFERENCE first (`a - b > -limit`), which is the order the target evaluates
+   its three `lh`s in; `-limit < a - b` negates first, 12 DIFF. */
+void func_80056800(u8 *p) {
+    if (*(u32 *) (p + 8) != 0) {
+        if (*(u32 *) (p + 0x34) != 0) {
+            if (*(s16 *) (p + 0x3A) + *(s16 *) (p + 0x38) <
+                *(s16 *) (p + 0x40)) {
+                *(u16 *) (p + 0x3A) = *(u16 *) (p + 0x3A) +
+                                      *(u16 *) (p + 0x38);
+            } else {
+                *(u32 *) (p + 0x34) = 0;
+                *(u16 *) (p + 0x3A) = *(u16 *) (p + 0x40);
+            }
+        } else {
+            if (*(s16 *) (p + 0x3A) - *(s16 *) (p + 0x38) >
+                -*(s16 *) (p + 0x40)) {
+                *(u16 *) (p + 0x3A) = *(u16 *) (p + 0x3A) -
+                                      *(u16 *) (p + 0x38);
+            } else {
+                *(u32 *) (p + 0x34) = 1;
+                *(u16 *) (p + 0x3A) = -*(u16 *) (p + 0x40);
+            }
+        }
+    } else {
+        *(s16 *) (p + 0x3A) = 0;
+    }
+}
 
 /* Steps +0x52 towards +0x56 by +0x54, clamping; +0x58 picks the direction.
    Each arm ends in its own `return` -- that is what gives all four of them
@@ -3968,7 +4021,33 @@ void func_800586B0(void) {
     D_800737C0[0] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058700);
+extern u32 D_800869A8[];
+void func_800584E4(void);
+void func_80056948(void);
+void func_8005ACDC(void);
+
+void func_80058700(void) {
+    if (D_80085F98[0] == 0) {
+        D_80085F98[0] = 1;
+        if (D_800737A4[0] != 0) {
+            if (D_800869A8[0] == 0x1E0) {
+                func_800584E4();
+                func_800584E4();
+                func_800584E4();
+                func_800584E4();
+                func_800584E4();
+                func_800584E4();
+            }
+            func_800584E4();
+            func_800584E4();
+            func_800584E4();
+            func_800584E4();
+        }
+        func_80056948();
+        func_8005ACDC();
+        D_80085F98[0] = 0;
+    }
+}
 
 void func_800599B0(void);
 
