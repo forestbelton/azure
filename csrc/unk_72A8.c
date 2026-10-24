@@ -957,7 +957,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038CB8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038F48);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800390D0);
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+void func_80038A00(void);
+s16 func_80053DA8(u16);
+
+/* `!= 0x100` with the early return in the ELSE: the branch is TAKEN to the
+   returning arm, which is therefore placed after the other one. Written
+   `== 0x100` with the return in the then-arm, the two blocks swap and the
+   whole tail follows them (19 DIFF). */
+void func_800390D0(u8 *p) {
+    if (D_80082E6Aa[0] != 2) {
+        if (func_80053EF0(4) != 0x100) {
+            func_80053DA8(0xC4);
+        } else {
+            *(u32 *) (p + 0x10) = 0;
+            *(u32 *) (p + 0x1C) -= 1;
+            return;
+        }
+    }
+    *(u32 *) (p + 0x10) = (u32) func_80038A00;
+}
 
 void func_800387D0(void);
 void func_800381A4(u8 *);
