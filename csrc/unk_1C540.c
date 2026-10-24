@@ -1443,17 +1443,66 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EEFC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EF90);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EFF4);
+/* The two template words are read into locals BEFORE the byte stores, because
+   sched cannot lift a load above a store through a pointer it cannot
+   disambiguate -- and they are read through the incomplete-array spelling, so
+   the lui/lw pair is the compiler's and can be split apart, where the scalar
+   spelling's pair is maspsx's and stays glued (10 DIFF with the loads in
+   place, 26 with them left in the stores). The first word stays a scalar. */
+u8 *func_8004EFF4(u8 *p) {
+    u32 a;
+    u32 b;
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F068);
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_8007166C;
+    a = D_80071674[0];
+    b = D_80071670[0];
+    p[1] |= 2;
+    p[0] |= 0x60;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 1;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
+
+/* func_8004EFF4's twin; see the note there.
+   The two template words are read into locals BEFORE the byte stores, because
+   sched cannot lift a load above a store through a pointer it cannot
+   disambiguate -- and they are read through the incomplete-array spelling, so
+   the lui/lw pair is the compiler's and can be split apart, where the scalar
+   spelling's pair is maspsx's and stays glued (10 DIFF with the loads in
+   place, 26 with them left in the stores). The first word stays a scalar. */
+u8 *func_8004F068(u8 *p) {
+    u32 a;
+    u32 b;
+
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_80071678;
+    a = D_80071680[0];
+    b = D_8007167C[0];
+    p[1] |= 2;
+    p[0] |= 0x61;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 1;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F0DC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F1E8);
 
 void func_8004EF90(u8 *);
-void func_8004EFF4(u8 *);
-void func_8004F068(u8 *);
+u8 *func_8004EFF4(u8 *);
+u8 *func_8004F068(u8 *);
 void func_8004F1E8(u8 *);
 void func_8004F0DC(u8 *);
 
