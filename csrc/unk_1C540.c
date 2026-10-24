@@ -1027,7 +1027,22 @@ u8 *func_8004E5E8(s32 a, u16 n, u8 *dst) {
     return dst;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E634);
+u8 *func_8004E478(u8 *, u16);
+
+void func_8004E634(u32 n, u8 *s) {
+    s32 len = 0;
+    u32 q;
+
+    do {
+        q = n / 10;
+        *s = n - q * 10 + 0x30;
+        len++;
+        s++;
+        n = q;
+    } while (n != 0);
+    *s = 0;
+    func_8004E478(s - len, len);
+}
 
 u8 *func_8004E69C(u8 *s) {
     u8 *p = s;
