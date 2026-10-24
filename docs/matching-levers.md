@@ -1750,6 +1750,22 @@ address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
   constant's `plus` is outermost under the store or nested inside another
   `plus`.
 
+**`>> 16` and `>> 24` on a word in memory ARE the narrow loads.** combine
+turns `(ashiftrt (mem:SI x) 16)` into `(sign_extend:SI (mem:HI x+2))` on this
+little-endian target, and `>> 24` into `(sign_extend:SI (mem:QI x+3))` -- so a
+target that reads one word four ways looks like four differently-typed loads:
+
+    d[0] = *(s32 *) (e + 0x48);          /* lbu 0x48          */
+    d[1] = *(s32 *) (e + 0x48) >> 8;     /* lw 0x48 ; sra 8   */
+    d[2] = *(s32 *) (e + 0x48) >> 16;    /* lh  0x4A          */
+    d[3] = *(s32 *) (e + 0x48) >> 24;    /* lb  0x4B          */
+
+Reading those as four FIELDS (`u8` at 0x48, `s16` at 0x4A, `s8` at 0x4B) gets
+the same four addresses but narrows each one all the way to `lbu`, because the
+only use is a byte store -- so an `lh`/`lb` whose value goes straight into an
+`sb` is the tell that a SHIFT produced it, not a declared type. Measured on
+func_8003A2E0: 14 DIFF as four fields, 7 as one word.
+
 ## 8. Statement order and expression shape
 
 * **When a store's `lui %hi` sits one slot too early, give the RHS's first

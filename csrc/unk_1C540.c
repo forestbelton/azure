@@ -1305,7 +1305,26 @@ void func_8004DA24(u8 *p, u8 *q) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DA74);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DC14);
+u32 func_8004B404(s32);
+s32 func_8004DA74(u8 *, u8 *, s32);
+s32 func_8004B4DC(u8 *);
+s32 puts(u8 *);
+
+u8 *func_8004DC14(u8 *name, s32 b) {
+    u8 *h = (u8 *) func_8004B404(0x100);
+
+    if (h != 0) {
+        if (func_8004DA74(h, name, b) != 0) {
+            if (func_8004B4DC(h) >= 0x16) {
+                puts(name);
+            }
+            return h;
+        }
+        func_8004B1A4((s32) h);
+        h = 0;
+    }
+    return h;
+}
 
 void func_8004DCA8(u8 *p) {
     if (p == 0) {
