@@ -1496,7 +1496,41 @@ u8 *func_8004F068(u8 *p) {
     return p + 0xC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F0DC);
+/* Seven entries of the same shape. The inner pointer at +4 is re-read for the
+   second store because the first one goes through it, which is what every
+   repeated `lw 0x4($a3)` in the listing is. */
+void func_8004F0DC(u8 *p) {
+    u8 *q;
+
+    q = *(u8 **) (p + 0x220);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 6;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x10;
+    *(u8 **) q = p + 8;
+    q = *(u8 **) (p + 0x234);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x80;
+    q = *(u8 **) (p + 0x238);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0x68;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0xF8;
+    q = *(u8 **) (p + 0x224);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0xA0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x70;
+    *(u8 **) q = p + 0x170;
+    q = *(u8 **) (p + 0x228);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x70;
+    *(u8 **) q = p + 0x170;
+    q = *(u8 **) (p + 0x22C);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0xA0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x170;
+    q = *(u8 **) (p + 0x230);
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x170;
+}
 
 u8 *func_8004F1E8(u8 *p) {
     p[1] = 0x80;
