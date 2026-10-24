@@ -336,7 +336,29 @@ void func_8004A638(s32 a) {
     func_8004A574(a, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A658);
+/* The tail is written TWICE, once per arm, and jump2's cross-jumping merges
+   it back into the single tail the listing shows -- so the duplication is
+   invisible in the output but decides the registers. Written with a join
+   block, the index is a global allocno that conflicts with the $v0 that
+   local-alloc gives the `lw` in the join; written per arm, the whole tail is
+   block-local, the index chain keeps $v0 and the load falls to $v1 -- which is
+   also where `p` ends up, dying into its own load. 29 DIFF with every opcode
+   already right.
+
+   The base pointers are read into locals first (`b`, `t`) so that each symbol
+   is materialised before the index that uses it: `&D_80073414[i]` alone folds
+   to index+ADDR_EXPR, and the ADDR_EXPR is TREE_CONSTANT, so fold puts it
+   second and the lui/addiu come out after the shifts. */
+u32 func_8004A658(s32 i, s32 j) {
+    u32 *t = D_8007361C;
+    Unk80073414 *b = D_80073414;
+    Unk80073414 *p = &b[i];
+
+    if (p->unk_00 != 0) {
+        return t[*(s16 *) (p->unk_0C + (j * 2 + j) * 4 + 2)];
+    }
+    return t[*(s16 *) (p->unk_0C + (j * 4 + j) * 4 + 2)];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A6C0);
 
