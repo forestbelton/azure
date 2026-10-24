@@ -299,7 +299,27 @@ void func_800485B8(s16 a) {
     func_80048500(a, 2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800485E0);
+/* The triple dereference is written out again after the if rather than reusing
+   `t`, because the arms leave cse nothing in common -- and it is read into a
+   local BEFORE `e -= 8`, so the join starts with a load. With the subtraction
+   first, reorg copies it into the `j`'s delay slot and the function carries two
+   of them (18 DIFF). */
+u8 *func_800485E0(u8 *p, s16 i, s16 x, s16 y) {
+    u8 *t = *(u8 **) *(u8 **) (p + 0x28);
+    u8 *e;
+    u32 v;
+
+    if ((u32) (i + 1) < *(u32 *) (t + 4)) {
+        e = *(u8 **) (*(u8 **) t + i * 4 + 4);
+    } else {
+        e = *(u8 **) (t + 8);
+    }
+    v = *(u32 *) (*(u8 **) *(u8 **) *(u8 **) (p + 0x28) + x * 4);
+    e -= 8;
+    *(s16 *) (e + 2) = 1;
+    *(u32 *) (e + 4) = v + y * 8;
+    return e;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048660);
 
@@ -307,7 +327,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048734);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004878C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048870);
+void func_8004878C(u32, s16 *);
+
+/* `(p[0xA] + 1) >> 1` is an `sra` (the sum is an int) where `p[8] >> 1` is an
+   `srl` (a u8 stays unsigned). */
+void func_80048870(u8 *p, u8 *q, s32 c) {
+    s16 t[4];
+
+    t[2] = (p[0xA] + 1) >> 1;
+    t[3] = p[0xB] + 1;
+    t[0] = (p[8] >> 1) + ((*(u16 *) (p + 4) << 6) & 0x3C0);
+    t[1] = p[9] + ((*(u16 *) (p + 4) << 4) & 0x100);
+    func_8004878C(*(u32 *) (q + 0xC) + c, t);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800488F0);
 
