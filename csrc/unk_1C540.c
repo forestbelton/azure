@@ -3743,7 +3743,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800563B0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056408);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800564A8);
+void func_800561D8(u8 *, Unk80084960 *);
+
+/* The entry pointer is INDEXED off the symbol inside the body, not walked:
+   `u8 *e = D_80085458; ... e += 0x78;` makes loop.c add a SECOND giv biased to
+   `e + 0x12` and use negative displacements, which is func_80056408's parked
+   problem (48 DIFF). And the D_80073734 bound is read SIGNED -- the listing
+   has `blez` and `slt`, where the u32 declaration gives `beqz` and `sltu`.
+   The parameter is unused; the caller's prototype already says it is there. */
+void func_800564A8(s32 unused) {
+    s32 i;
+
+    for (i = 0; i < (s32) D_80073734[0]; i++) {
+        u8 *e = D_80085458 + i * 0x78;
+
+        if (*(u16 *) (e + 6) < 0x10) {
+            func_800561D8(e, &D_80084960[*(u16 *) (e + 6)]);
+            func_800563B0(i, *(u16 *) (e + 0x10), *(u16 *) (e + 0x12));
+        }
+    }
+}
 
 extern s32 D_80073734s __asm__("D_80073734");
 void func_800563B0(s32, s32, s32);

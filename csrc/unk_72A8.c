@@ -612,7 +612,43 @@ u32 func_80035DBC(s32 k) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035E58);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003605C);
+void func_80036900(u8 *, u8 *, s32);
+
+/* A (p, q, r) HANDLER, like func_800359FC: the last two parameters are unused
+   except as the pass-through to the indirect call, and their allocnos are what
+   keep the +0x4C byte off $a1 -- declared `(u8 *p)` alone it lands in $a1
+   where the target has $a3, 3 DIFF that no cast, cache or branch shape moves.
+   And the +0x44 pointer and the +0x4A index in separate statements, pointer
+   first, as that family always wants. */
+void func_8003605C(u8 *p, u8 *q, s32 r) {
+    u8 *b;
+    s16 i;
+    u8 *e;
+    u8 c;
+    u8 *d;
+
+    if (p[0x48] != 0) {
+        b = *(u8 **) (p + 0x44);
+        i = *(s16 *) (p + 0x4A);
+        e = b + i;
+        c = e[0x4C];
+        if (c == 0xFF) {
+            e[0x50] = 1;
+            func_80033C84(*(u32 **) p);
+            func_80035090((u32 *) (p + 0x54));
+            d = p - 0x20;
+            func_80044A50((UnkNode *) d);
+            func_8003FFF0(d);
+            return;
+        }
+        if (c == 0xFE) {
+            p[0x4C] = 0xFF;
+            p[0x4D] = 0xFF;
+            *(u32 *) (p + 0x68) = (u32) func_80036900;
+        }
+    }
+    (*(void (**)(u8 *, u8 *, s32)) (p + 0x68))(p, q, r);
+}
 
 void func_80036154(void);
 
@@ -1701,7 +1737,29 @@ void func_80039DBC(u8 *p) {
         *(u32 *) (s + 0x54));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039E1C);
+/* `*cp += 4` comes AFTER the second byte chain. The store is to `p + 0x1C`
+   and the chain loads through an arbitrary pointer, so gcc cannot disambiguate
+   them: written before the chain the store pins all four loads behind it and
+   the function is a word long (42 DIFF). */
+void func_80039E1C(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u8 *s = *(u8 **) (p + 0x80);
+    u32 a;
+    u32 w;
+    u8 *r;
+    u8 *q;
+    u8 *t;
+
+    a = *(*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    w = q[0] + (q[1] << 8) + (q[2] << 16) + (q[3] << 24);
+    *cp += 4;
+    t = (u8 *) (a * 4 + w);
+    *(u32 *) (s + 0x84) = (*(u32 (**)(u32, u32, u32, u32)) t)(
+        *(u32 *) (s + 0x48), *(u32 *) (s + 0x4C),
+        *(u32 *) (s + 0x50), *(u32 *) (s + 0x54));
+}
 
 void func_80039ED0(u32 *p) {
     p[4] = 0;
@@ -1773,7 +1831,37 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A060);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A10C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A1A4);
+/* The func_8003A2E0 family. The first chain is one expression with the
+   `* 4` of the table value at the END; the SECOND chain has to be written as
+   an explicit accumulation (`w = q[0]; w += q[1] << 8; ...`) or the two
+   low bytes swap registers and the accumulator takes $v0 where the target has
+   $v1 (9 DIFF as one expression, in any term order). */
+void func_8003A1A4(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u32 w;
+    u8 *s;
+    u8 *r;
+    u8 *q;
+    u8 *d;
+    u8 *t;
+
+    a = *(*cp)++;
+    s = *(u8 **) (p + 0x80);
+    m = *(u32 *) (s + **cp * 4 + 0x48) * 4;
+    (*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24) + m);
+    *cp += 4;
+    w = q[0];
+    w += q[1] << 8;
+    w += q[2] << 16;
+    w += q[3] << 24;
+    d = (u8 *) w;
+    t = (u8 *) (a * 4 + (u32) s);
+    *(u32 *) (t + 0x48) = *(u32 *) d;
+}
 
 void func_8003A248(u8 *p) {
     u8 **q = (u8 **) (p + 0x1C);
