@@ -711,6 +711,33 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### A %lo in the displacement with a REGISTER index means a constant base
+
+cse folds a symbol's `%lo` into a MEM only when what is left is a CONSTANT
+offset off the `(high)` pseudo. With a register index in the address it never
+does, so
+
+    lui  $v0, %hi(SYM)
+    addu $s0, $s0, $v0        # $s0 = i * 4
+    sh   $zero, %lo(SYM)($s0)
+
+is NOT a symbol reference at all. It is the constant base 0x80010000 -- whose
+low half is zero, so the base is a bare `lui` -- with the field offset written
+inside the index expression:
+
+    u8 *b = (u8 *) 0x80010000;
+    *(s16 *) (b + i * 4 + 0x3564) = 0;
+    *(s16 *) (b + i * 4 + 0x3566) = 0;
+
+splat prints those displacements as `%lo(D_80013564)` and `%lo(D_80013566)`
+whenever both addresses are in its symbol list, which is what makes the listing
+look symbolic. Five symbol spellings on func_8004A7D8 -- incomplete array,
+sized array, struct array with an `__asm__` alias, an element pointer, and a
+one-set pointer local -- all spend an `addiu %lo` the target does not have.
+Probe it in isolation if in doubt: with constant indices cse DOES fold the
+`%lo` (`sh $0, %lo(SYM)($16)` off a bare `lui`), and with a register index it
+emits `lui`/`addiu`/`addu` every time.
+
 ### `p += x` is one long quantity; `q = p + x` is two short ones
 
 Advancing a parameter in place makes the parameter and the advanced pointer a

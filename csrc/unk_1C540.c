@@ -366,7 +366,27 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A700);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A784);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A7D8);
+s32 func_8004A6C0(void);
+
+/* The two halfwords are at the CONSTANT base 0x80010000 with their offsets
+   written inside the index expression -- 0x80010000's low half is zero, so the
+   base is a bare `lui`, and 0x3564/0x3566 stay as the stores' displacements
+   (splat prints them as %lo(D_80013564) and %lo(D_80013566) because both
+   addresses are in its symbol list). Declaring the table as a symbol instead,
+   in any of five spellings including a struct array and a one-set pointer
+   local, always materialises the whole address with an `addiu %lo` and is a
+   word long: cse folds a %lo into a MEM only for a CONSTANT offset off the
+   `(high)` pseudo, never past a register index. 13 DIFF. */
+void func_8004A7D8(void) {
+    s32 i = func_8004A6C0();
+    u8 *b = (u8 *) 0x80010000;
+
+    if (i < 0x14) {
+        bzero((u8 *) 0x800133E8 + i * 19, 0x13);
+        *(s16 *) (b + i * 4 + 0x3564) = 0;
+        *(s16 *) (b + i * 4 + 0x3566) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A83C);
 
