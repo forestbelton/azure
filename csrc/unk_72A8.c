@@ -624,7 +624,27 @@ void func_80036ED4(u8 *p, s32 b, s32 c, s16 d, s16 e, u32 f) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036F24);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037030);
+void func_80036D4C(u8 *, s32, s32, s32, s32, u32);
+void func_80037090(u8 *, u32, u32);
+
+/* func_80036ED4's shape plus the two stores, and both argument loads read into
+   locals BEFORE the store through `q`. Left in the call, they are evaluated
+   after it, and `sw $zero, 0xC($a2)` has a base sched cannot disambiguate from
+   `$s0`, so the `lw $a1, 0x8($s0)` can never move back above it: 7 DIFF of
+   pure order. The pointer itself has to be a local too, or the argument load
+   and the store's load are two separate `lw`s and the function is a word long
+   (14 DIFF). */
+void func_80037030(u8 *p, s32 b, s32 c, s16 d, s16 e, u32 f) {
+    u32 *q;
+    u32 v;
+
+    func_80036D4C(p, b, c, d, e, f);
+    q = *(u32 **) (p + 0xC);
+    v = *(u32 *) (p + 0x8);
+    *(u32 *) (p + 0x10) = (u32) func_80037090;
+    q[3] = 0;
+    func_80037090(p + 0x20, v, (u32) q);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037090);
 
