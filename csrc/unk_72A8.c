@@ -1935,7 +1935,25 @@ void func_8003C4C8(u8 *p, s32 b, u8 *q) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C520);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C5A4);
+/* A `while` with the test on the INDEXED table, not a walked pointer: loop
+   duplication gives the guard's `lb %lo(D_8006B1EC)` with the index folded
+   away, and strength reduction then walks the pointer in the body. One
+   `return -1` serves both the guard and the loop exit, which is why the target
+   can copy the guard's comparison constant into $a3 and return it in $v0 --
+   written as two returns the -1 is rematerialised and the index return needs
+   its own block (11 DIFF, one word long). The pointer spelling instead swaps
+   the pointer and the counter registers (13 DIFF). */
+s32 func_8003C5A4(s32 key) {
+    s32 i = 0;
+
+    while (D_8006B1EC[i] != -1) {
+        if (D_8006B1EC[i] == key) {
+            return i;
+        }
+        i++;
+    }
+    return -1;
+}
 
 u32 func_8003C5F0(void) {
     s32 i = func_8003C5A4();
