@@ -3280,7 +3280,43 @@ s32 func_80053EF0(s32 k) {
     return -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053F98);
+extern u8 D_80084548[];
+void func_8005A2FC(void);
+void func_8005A39C(u32);
+s32 func_8005A3F0(u32);
+/* func_8005A420 is an empty `(void)` function in this unit but is called here
+   with three arguments; an __asm__ alias gives this one call site the real
+   signature without touching that definition. */
+void func_8005A420c(u8 *, s32, s32) __asm__("func_8005A420");
+void func_8005ACD0(u16);
+s16 func_8005B378(s16);
+void func_8005B320(void);
+void func_8005B3D8(s32, s32);
+void func_8005A5C8(s16, s16);
+void func_800559B4(void);
+void func_80055864(void);
+void func_800557BC(void);
+void func_8005A37C(void);
+
+void func_80053F98(void) {
+    func_8005A2FC();
+    func_8005A39C(1);
+    func_8005A3F0(0x18);
+    func_8005A420c(D_80084548, 1, 1);
+    func_8005ACD0(0);
+    func_8005B378(4);
+    func_8005E7E0(4);
+    func_8005B320();
+    func_8005B3D8(0x3C, 0x3C);
+    func_8005A5C8(0x7F, 0x7F);
+    func_8005A4E8(0, 0, 0);
+    func_8005A56C(0, 0, 0);
+    func_80055B44(2);
+    func_800559B4();
+    func_80055864();
+    func_800557BC();
+    func_8005A37C();
+}
 
 /* Nested ifs with ONE return 0 at the end, and the 1 returned from the inner
    arm. Every shape that assigns a variable in the arms puts the result in a
