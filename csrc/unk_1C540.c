@@ -955,7 +955,19 @@ void func_8004CBFC(u32 *p, u8 *q, u32 *r) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CC38);
+/* The whole chain is re-read for each of the four words: a store through the
+   inner pointer invalidates cse's entries for both dereferences. */
+void func_8004CC38(u8 **p, s32 n) {
+    s32 i;
+
+    for (i = 0; i < n; i++) {
+        *(u32 *) *(u8 **) (*p + 4) = D_8002E5D8[0];
+        *(u32 *) (*(u8 **) (*p + 4) + 4) = D_8002E5D8[1];
+        *(u32 *) (*(u8 **) (*p + 4) + 8) = D_8002E5D8[2];
+        *(u32 *) (*(u8 **) (*p + 4) + 0xC) = D_8002E5D8[3];
+        p++;
+    }
+}
 
 void func_8004CCBC(u8 **p, s32 n) {
     s32 i = 0;
@@ -2534,7 +2546,28 @@ void func_800546B0(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054704);
+s32 func_8003F5AC(void);
+void func_80054E00(s32);
+/* func_80054D64 is called here with NO argument -- $a0 still holds the ~0x200
+   mask from the `&=` above and nothing sets it. An `__asm__` alias gives this
+   one call site a (void) declaration while the rest of the unit keeps the
+   `void(s32)` one; passing `~0x200` explicitly costs a word, because cse does
+   not delete the second `li` of a constant into $a0. */
+void func_80054D64v(void) __asm__("func_80054D64");
+void func_8005A4E8(u8, u8, u8);
+
+void func_80054704(void) {
+    if ((func_8003F5AC() & 4) != 0) {
+        D_800847D0[1] &= ~0x200;
+        if (D_800847D0[4] != 0) {
+            func_80054E00(0x74);
+        } else if ((D_800847D0[0] & 0x4000) == 0) {
+            D_800847D0[0] |= 0x400;
+            func_80054D64v();
+            func_8005A4E8(0, 0, 1);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054788);
 

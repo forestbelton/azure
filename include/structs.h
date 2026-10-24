@@ -1310,6 +1310,7 @@ typedef struct Unk8006B200 {
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 extern u8   D_80119000[];
 extern u8   D_80126000[];
+extern u32 D_8002E5D8[];  /* a 4-word template */
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
 extern s16 D_8006A94C[];  /* s16 pairs, 0-terminated */
