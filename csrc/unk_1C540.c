@@ -1036,7 +1036,17 @@ void func_8004D8F0(u32 a, u8 *p) {
     p[3] = 0x10;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D91C);
+/* The `andi $a0, 0xFF` is the u8 parameter widening to func_8004D8F0's u32,
+   not a mask in the source. */
+void func_8004D91C(u8 a, s16 *out) {
+    u8 t[4];
+
+    func_8004D8F0(a, t);
+    out[0] = (t[0] >> 2) + 0x3C0;
+    out[1] = t[1] + 0x100;
+    out[2] = t[2] >> 2;
+    out[3] = t[3];
+}
 
 void func_8004D98C(u8 a, s32 b, u8 *p) {
     s32 t = b & 0xF;
