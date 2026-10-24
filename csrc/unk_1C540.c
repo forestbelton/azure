@@ -455,7 +455,25 @@ s32 func_8004A6C0(s32 x, s32 y) {
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A700);
+s32 func_8004A6C0(s32, s32);
+
+/* The zero that initialises the returned pointer is also both arguments of the
+   scan -- one `addu $s0, $zero, $zero` serves all three. The halfwords go to
+   the constant base 0x80010000 with 0x3564/0x3566 as displacements, and the
+   base is declared INSIDE the if so its `lui` lands there. */
+u8 *func_8004A700(s16 x, s16 y) {
+    u8 *r = 0;
+    s32 i = func_8004A6C0(0, 0);
+
+    if (i < 0x14) {
+        u8 *b = (u8 *) 0x80010000;
+
+        r = (u8 *) 0x800133E8 + i * 19;
+        *(s16 *) (b + i * 4 + 0x3564) = x;
+        *(s16 *) (b + i * 4 + 0x3566) = y;
+    }
+    return r;
+}
 
 s32 func_8004A6C0(s32, s32);
 

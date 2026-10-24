@@ -1828,7 +1828,7 @@ void func_8003B034(void) {
     func_800483AC(0);
 }
 
-void func_8003C758(u8 *);
+s32 func_8003C758(u8 *);
 
 void func_8003B06C(void) {
     func_8003C758(D_80080F40);
@@ -2281,7 +2281,26 @@ void func_8003C6F8(u32 a, s32 i) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C758);
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+s32 func_8003C634(u8 *);
+
+/* $gp group: D_80080A6C is in this unit's sdata_entries block, so it was
+   verified in a scratch file carrying that block. It is re-read after the call
+   because the call invalidates it. */
+s32 func_8003C758(u8 *p) {
+    s32 r;
+
+    if (D_80082E6Aa[0] == 2 && D_800DCF4D != -2) {
+        r = -1;
+    } else {
+        r = func_8003C634(p);
+    }
+    if (r == -1) {
+        func_8003C6F8((u32) p, D_80080A6C - 1);
+        r = D_80080A6C - 1;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C7D8);
 
