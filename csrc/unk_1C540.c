@@ -645,7 +645,18 @@ void func_8004B530(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B568);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B634);
+/* The sized alias, not the incomplete `D_80080B48[]`: at -G8 an object of 8
+   bytes or fewer is small data, so its address is the ONE-insn `la` macro that
+   maspsx splits afterwards -- and a pair maspsx made cannot be scheduled
+   apart. Through the incomplete array the compiler splits it itself and sched1
+   puts the `addiu $a0, 6` between the `lui` and the `addiu`, which is the 2
+   DIFF this sat at. (The symbol is not in this unit's sdata_entries, so the
+   expansion is absolute, not $gp-relative.) */
+extern u8 D_80080B48s[8] __asm__("D_80080B48");
+
+void func_8004B634(void) {
+    func_8003E4FC(6, D_80080B48s, 0);
+}
 
 void func_8004B634(void);
 void func_8003F320(void);

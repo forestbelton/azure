@@ -723,6 +723,15 @@ that reason, and matched when the scalar was read through an array alias
 (`extern s16 D_80086D50a[] __asm__("D_80086D50")`, read as `[0]`), which gives
 the split high/lo_sum pair the scheduler can interleave.
 
+**And the same lever runs backwards.** When a target's `lui`/`addiu` pair is
+ADJACENT and an unrelated insn sits before or after it where the candidate has
+one between, the pair is maspsx's, so the object must be small: a SIZED alias
+of 8 bytes or fewer (`extern u8 D_80080B48s[8] __asm__("D_80080B48")`) puts the
+address back into the one-insn `la` form that nothing can split. That is
+func_8004B634's 2 DIFF -- an `addiu $a0, 6` scheduled into the middle of the
+pair. The symbol only becomes $gp-relative if it is also in the unit's
+`sdata_entries`, so a sized alias on its own is safe.
+
 ### Index the scan; a walked pointer gets eliminated and its base biased
 
 A loop whose pointer is advanced by the element size and whose only other uses
