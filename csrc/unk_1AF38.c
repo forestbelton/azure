@@ -198,7 +198,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047FF4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048088);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048118);
+u8 *func_80047CD8(s32);
+void func_800499DC(s32 *);
+
+u8 *func_80048118(s16 k, s32 *out) {
+    u8 *r;
+
+    if (k == 0x38) {
+        func_800481E0();
+        func_80047C00();
+    }
+    r = func_80047CD8(k);
+    if (r != 0) {
+        *out = 0;
+        func_8003E4FC(0xFF, (u8 *) func_800499DC, (s32) out);
+    }
+    return r;
+}
 
 s32 func_80047BC0(s32);
 

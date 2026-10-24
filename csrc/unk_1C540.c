@@ -1914,7 +1914,41 @@ void func_80050CAC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050CDC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050DA8);
+void func_80050CDC(void);
+void func_8004FE78(u32);
+
+/* $gp group: the store to D_80080B98 is %gp_rel because the symbol is in this
+   unit's sdata_entries block at the top of the file -- so this one has to be
+   verified in a scratch file carrying that block, not by sweep.py (which
+   compiles standalone and would report it wrong).
+
+   Both loads are read into locals before the two stores through `q`: sched
+   cannot lift a load above a store it cannot disambiguate, so left inside the
+   call and the assignment they come out after both stores (4 DIFF). */
+void func_80050DA8(u8 *p) {
+    u8 *q = p + 0x20;
+
+    if (p != 0) {
+        u32 v;
+        u32 arg;
+        u8 *e;
+        u32 g;
+        u16 f;
+
+        *(u32 *) (q + 8) = 2;
+        v = *(u32 *) (q + 0x1C);
+        arg = *(u32 *) (q + 0x28);
+        *(u32 *) (q - 0x10) = (u32) func_80050CDC;
+        D_80080B98 = v;
+        func_8004FE78(arg);
+        e = *(u8 **) (q + 0xA0);
+        g = D_800814A0;
+        f = *(u16 *) (e + 0x1E);
+        D_800814A0 = g | 0x8000;
+        *(u16 *) (e + 0x1E) = f | 0x8000;
+        *(u32 *) (q + 0x28) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050E20);
 
