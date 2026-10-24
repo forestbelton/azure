@@ -227,7 +227,30 @@ void func_80047F90(s16 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047FF4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048088);
+void func_8003F320(void);
+void func_80047FF4(s32, u8 *);
+
+/* The 0x38 in the second test is the same literal as the first, which is what
+   puts it in a callee-saved register across the calls -- and func_80047EEC
+   gets the LITERAL, not `k`, which is why its $a0 is materialised again where
+   the other arm has `k` already in the delay slot. */
+void func_80048088(s16 k) {
+    u8 *r;
+
+    if (k == 0x38) {
+        func_800481E0();
+        func_80047C00();
+    }
+    r = func_80047CD8(k);
+    if (r != 0) {
+        func_8003F320();
+        if (k == 0x38) {
+            func_80047EEC(0x38, r);
+        } else {
+            func_80047FF4(k, r);
+        }
+    }
+}
 
 u8 *func_80047CD8(s32);
 void func_800499DC(s32 *);

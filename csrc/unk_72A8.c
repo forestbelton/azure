@@ -683,11 +683,11 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036A70);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036B10);
 
-s32 func_80037534(s32, s32, s32);
+s32 func_80037534(u8 *, s32, s32);
 void func_800478B8(s32);
 
 void func_80036C44(s32 a, s32 b, s32 c) {
-    if (func_80037534(a, b, c) == 0) {
+    if (func_80037534((u8 *) a, b, c) == 0) {
         func_800478B8(c);
     }
 }
@@ -740,7 +740,34 @@ u32 func_800374F4(u16 n) {
     return (u32) (n * (u16) (rand() << 1)) >> 16;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037534);
+void func_80033C84(u32 *);
+void func_80035090(u32 *);
+void func_8003FFF0(u8 *);
+
+/* Two of the three parameters are unused -- func_80036C44 passes all three and
+   they cost nothing either way -- and the base goes into its own local: as one expression the `lh 0x4A` is
+   emitted before the `lw 0x44` whichever way round the operands are (3 DIFF). */
+s32 func_80037534(u8 *p, s32 b2, s32 c2) {
+    u8 *b;
+    u8 *q;
+    u8 *d;
+
+    if (p[0x48] == 0) {
+        return 0;
+    }
+    b = *(u8 **) (p + 0x44);
+    q = b + *(s16 *) (p + 0x4A);
+    if (q[0x4C] != 0xFF) {
+        return 0;
+    }
+    q[0x50] = 1;
+    func_80033C84(*(u32 **) p);
+    func_80035090((u32 *) (p + 0x54));
+    d = p - 0x20;
+    func_80044A50((UnkNode *) d);
+    func_8003FFF0(d);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800375C0);
 
@@ -761,7 +788,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037D9C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037E58);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037F70);
+s32 func_80043FB8(s32 arg0, ...);
+void func_8003800C(u8 *);
+
+void func_80037F70(u8 **p) {
+    u8 *b = (u8 *) D_80082A38;
+
+    func_80043FB8((s32) D_8002D000, (s32) b);
+    func_80043FB8((s32) D_8002D010, (s32) (b + 0xA8));
+    func_80043FB8((s32) D_8002D020, (s32) (b + 0x9C));
+    func_8003800C(*p);
+    (*p)[0x86] = (*p)[0x85];
+    (*p)[0x85] = 0;
+}
 
 void func_80038000(u8 v) {
     D_80082B4B[0] = v;

@@ -1357,6 +1357,9 @@ extern u32 D_800C321C[];
 extern u32 D_800C3960[];
 /* Out of image: a 9-byte table func_80038C40 copies to its stack with
    lwl/lwr, so byte-aligned. */
+extern u8  D_8002D000[];
+extern u8  D_8002D010[];
+extern u8  D_8002D020[];
 extern s8  D_8002D03C[];
 extern u32 D_8006ADC0[];
 extern u8  D_800812C8[];
