@@ -3741,7 +3741,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800561D8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800563B0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056408);
+void func_800561D8(u8 *, Unk80084960 *);
+void func_800563B0(s32, s32, s32);
+
+/* UNPARKED. The entry is indexed off the symbol INSIDE the loop body; as a
+   walked `e += 0x78` loop.c adds a second giv biased to `e + 0x12` and uses
+   negative displacements, which is what this was parked on. The D_80073734
+   bound is read signed (`blez`/`slt`) and re-read by the loop condition, which
+   is what keeps it out of a callee-saved register. */
+void func_80056408(void) {
+    s32 i;
+
+    for (i = 0; i < (s32) D_80073734[0]; i++) {
+        u8 *e = D_80085458 + i * 0x78;
+
+        func_800561D8(e, &D_80084960[*(u16 *) (e + 6)]);
+        func_800563B0(i, *(u16 *) (e + 0x10), *(u16 *) (e + 0x12));
+    }
+}
 
 void func_800561D8(u8 *, Unk80084960 *);
 
@@ -4114,7 +4131,37 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059E94);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059F8C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A1D0);
+void func_80059DAC(void);
+
+/* UNPARKED. Both loops index off a base LOCAL with the index written first --
+   `(u8 *) (i * 8 + (u32) b)`, not `b + i * 8` -- which is what gives the
+   target's `addu $v0, $v0, $a2` operand order and stops loop.c walking the
+   inner row pointer. `s32 i = 0;` is declared BEFORE `b` so its `addu $v1,
+   $zero, $zero` comes out ahead of the base's lui/addiu. */
+void func_8005A1D0(u32 k) {
+    s32 i = 0;
+    u8 *b = (u8 *) D_800869C0;
+
+    for (; i < 0x10; i++) {
+        if (*(u32 *) (i * 8 + (u32) b) == k) {
+            while (i < 0x10) {
+                u8 *d = (u8 *) (i * 8 + (u32) b);
+                u8 *s = (u8 *) ((i + 1) * 8 + (u32) b);
+                u32 v;
+
+                *(u32 *) (d + 4) = *(u32 *) (s + 4);
+                v = *(u32 *) s;
+                *(u32 *) d = v;
+                if (v == 0) {
+                    break;
+                }
+                i++;
+            }
+            func_80059DAC();
+            return;
+        }
+    }
+}
 
 /* Resets both tables. D_800869C0 is a pair of words per slot, cleared +4
    before +0. */
