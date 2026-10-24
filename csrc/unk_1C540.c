@@ -1498,12 +1498,38 @@ u8 *func_8004F068(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F0DC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F1E8);
+u8 *func_8004F1E8(u8 *p) {
+    p[1] = 0x80;
+    p[8] = 0;
+    p[9] = 0;
+    p[0xA] = 0xFF;
+    p[0xB] = 0xFF;
+    p += 0xC;
+    p[1] = 0x2C;
+    *(s16 *) (p + 4) = GetTPage(1, 0, 0x380, 0x100);
+    *(s16 *) (p + 6) = GetClut(0, 0x1F5);
+    p[0xA] = 0xA0;
+    p[8] = 0;
+    p[9] = 0;
+    p[0xB] = 0x70;
+    p += 0xC;
+    p[8] = 0x70;
+    p[9] = 0xE0;
+    p[1] = 0x80;
+    p[0xA] = 8;
+    p[0xB] = 8;
+    p += 0xC;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p[0] = 0x80;
+    return p + 0xC;
+}
 
 void func_8004EF90(u8 *);
 u8 *func_8004EFF4(u8 *);
 u8 *func_8004F068(u8 *);
-void func_8004F1E8(u8 *);
+u8 *func_8004F1E8(u8 *);
 void func_8004F0DC(u8 *);
 
 void func_8004F2BC(u8 *p) {
