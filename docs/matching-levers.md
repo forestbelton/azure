@@ -767,6 +767,15 @@ same reading: the default does nothing, so there is no default label. Written
 with a `default:` that calls, func_80054A7C came out with that test inverted
 and the `j` pointing at the default's body (3 DIFF through six case orders).
 
+### Two `beq`s that branch TO their bodies are a switch, not an if/else chain
+
+`if (k == A) {...} else if (k == B) {...}` tests and falls INTO each body in
+turn, so each test's branch jumps PAST its own body. A switch emits all the
+tests first -- each `beq` jumping forward to its body -- and a `j` past them to
+the default. func_800549FC is 23 DIFF as the chain and matches as the switch,
+with a shared `lui` for the global both bodies store to sitting in the second
+test's delay slot.
+
 ### A switch's case bodies are emitted in SOURCE order
 
 The compare tree is built from the sorted case values, so it tells you nothing
