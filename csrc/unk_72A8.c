@@ -521,7 +521,24 @@ void func_80035D4C(s16 k) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035DBC);
+void func_80035D4C(s16);
+
+/* The parameter is s32 -- only the call takes an s16, which is where the
+   sll/sra comes from; as an s16 parameter the three comparisons each want the
+   sign-extended copy and the function is five words longer. */
+u32 func_80035DBC(s32 k) {
+    func_80035D4C((s16) k);
+    if (k == 1) {
+        return D_8006A944;
+    }
+    if (k == 2) {
+        return D_8006A948;
+    }
+    if (k == 0xA && func_80033B2C(0x1473) == 0) {
+        return D_80080A50;
+    }
+    return D_8006AC5C[k];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035E58);
 

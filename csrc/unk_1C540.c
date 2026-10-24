@@ -516,7 +516,7 @@ s32 func_8004A6C0(s32, s32);
    scan -- one `addu $s0, $zero, $zero` serves all three. The halfwords go to
    the constant base 0x80010000 with 0x3564/0x3566 as displacements, and the
    base is declared INSIDE the if so its `lui` lands there. */
-u8 *func_8004A700(s16 x, s16 y) {
+u8 *func_8004A700(s32 x, s32 y) {
     u8 *r = 0;
     s32 i = func_8004A6C0(0, 0);
 
@@ -566,7 +566,26 @@ void func_8004A7D8(s32 x, s32 y) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A83C);
+u8 *func_8004A784(s32, s32);
+u8 *func_8004A700(s32, s32);
+
+/* Nested, not an early `return r;`: with the early return gcc merges the two
+   `$v0 = $s0` copies and the function is a word short. Both parameters are
+   s32 -- as s16 each one costs its own sll/sra pair, which is also why
+   func_8004A700's own parameters are now s32 (it stores them with `sh`, so
+   either spelling matches there). */
+u8 *func_8004A83C(s32 a, s32 b) {
+    u8 *r = func_8004A784(a, b);
+
+    if (r == 0) {
+        r = func_8004A700(a, b);
+        if (r != 0) {
+            bzero(r, 0x13);
+            *(u32 *) (D_80073414[a].unk_0C + b * 20 + 0xC) = (u32) r;
+        }
+    }
+    return r;
+}
 
 s32 func_8004A6C0(s32, s32);
 
@@ -632,7 +651,32 @@ void func_8004AA44(s32 a, s32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AA78);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AB7C);
+void func_8003E1FC(void);
+void func_8003F320(void);
+void func_800A6D60(s32);
+void func_800A6D98(u32);
+void func_8004AA78(s32);
+
+/* D_80012090 is read inside the loop, not hoisted: the call in the body
+   invalidates it, and the load sits ahead of the call. */
+void func_8004AB7C(void) {
+    u8 *e;
+    s32 i = 0;
+
+    func_8003E1FC();
+    func_8003F320();
+    func_800A6D60(1);
+    func_800A6D98(D_80013628);
+    e = (u8 *) D_80073414;
+    for (; i < 0x14; i++) {
+        if (((e[1] >> D_80012090) & 1) != 0) {
+            func_8004AA78(i);
+        }
+        e += 0x14;
+    }
+    func_8004A940();
+    func_800A6D60(0);
+}
 
 u32 func_8004AC18(s32 i) {
     return D_8007359C[0][i].unk_04;
