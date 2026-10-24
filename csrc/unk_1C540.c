@@ -2975,7 +2975,37 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052C10);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052CE0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052FE8);
+void func_80052CE0(void);
+void func_80044BB0(void);
+
+/* The 0x808080 store comes FIRST of the five through `e`: anywhere else and
+   the `ori` completing that constant is scheduled before the handler
+   pointer's lui/addiu instead of after the `addiu $v0, $s0, 0x20` (6 DIFF one
+   slot later, 22 two). */
+void func_80052FE8(u8 *p, s16 k) {
+    u8 *q = p + 0x20;
+    u8 *e;
+    u8 *f;
+
+    *(u32 *) (p + 0x10) = (u32) func_80052CE0;
+    *(u16 *) (p + 0x20) = 0;
+    *(u16 *) (q + 2) = 0;
+    *(u16 *) (q + 4) = 0;
+    *(u16 *) (q + 0xC) = 0;
+    *(u16 *) (q + 0xE) = 0;
+    *(u16 *) (q + 8) = k;
+    e = *(u8 **) (p + 0xC);
+    *(u32 *) (e + 0xC) = 0x808080;
+    *(u16 *) (e + 0x1E) = 0x1000;
+    *(u16 *) (e + 0x1C) = 0x1000;
+    *(u32 *) (e + 8) = (u32) (D_80084478 + k * 12);
+    *(u16 *) (e + 0x14) = *(u16 *) (e + 0x14) | 0x80;
+    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
+    f = *(u8 **) (p + 8);
+    *(u32 *) (f + 0) = 0;
+    *(u32 *) (f + 4) = 0;
+    *(u32 *) (f + 8) = 0x600000;
+}
 
 void func_8005313C(void);
 
@@ -3374,7 +3404,30 @@ void func_80054538(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800545F4);
+s32 func_800545F4(u8 *p) {
+    switch (*(s32 *) (p + 4)) {
+    case 1:
+        *(u16 *) (p + 8) = *(u16 *) (p + 8) + *(u16 *) (p + 0x16);
+        if (*(s16 *) (p + 0xA) < *(s16 *) (p + 8)) {
+            *(u16 *) (p + 8) = *(u16 *) (p + 0xA);
+            *(s32 *) (p + 4) = 3;
+        }
+        break;
+    case 2:
+        *(u16 *) (p + 8) = *(u16 *) (p + 8) - *(u16 *) (p + 0x18);
+        if (*(s16 *) (p + 8) <= 0) {
+            *(u16 *) (p + 8) = 0;
+            return -1;
+        }
+        break;
+    default:
+        return 0;
+    }
+    if (*(u32 *) p != 0) {
+        (*(void (**)(void)) p)();
+    }
+    return 0;
+}
 
 s32 func_800545F4(u8 *);
 void func_80054E00(s32);

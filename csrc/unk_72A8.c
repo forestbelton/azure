@@ -2437,7 +2437,38 @@ void func_8003B7C8(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B820);
+void func_800B2244(u32);
+
+/* Two constant-address levers here. The 0x80010000 half goes into its OWN
+   pointer local and the list pointer is built from it with `| 0x29C`: that is
+   what gives the target's `lui $s1` / `addu $s0, $s1, $zero` / `ori` -- one
+   hoisted %hi pseudo serving both constants -- where `(u32 *) 0x8001029C`
+   written whole is a separate `li` and the table base a second one (41 DIFF).
+   And the comparison constant goes into a local assigned BEFORE the base, so
+   loop.c hoists it first and it takes $s2 while the base takes $s1; the
+   literal 0x13 is hoisted second and the two registers swap (6 DIFF). */
+void func_8003B820(void) {
+    u32 *e;
+    u8 *base;
+    s32 key;
+
+    if (*(u32 *) 0x8001029C == 0) {
+        return;
+    }
+    key = 0x13;
+    base = (u8 *) 0x80010000;
+    e = (u32 *) ((u32) base | 0x29C);
+    do {
+        u8 *a = (u8 *) *e;
+
+        if (a[1] == key &&
+            *(s8 *) (base + 0x333 + (a[3] & 0x1F) * 84) < 0) {
+            func_800B2244((u32) a);
+        } else {
+            e++;
+        }
+    } while (*e != 0);
+}
 
 void func_800B2244(u32);
 
