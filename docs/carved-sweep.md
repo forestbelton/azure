@@ -20,6 +20,15 @@ reports nonsense (a two-word function came back "8 DIFF"). `land` refuses a unit
 unless every stub is present exactly once and no inline prototype collides with
 a definition being landed.
 
+`tools/decomp/magic.py 0x80010003 [post_shift]` tells you which DIVISOR a
+constant-division magic came from, by running gcc 2.7.2's own
+choose_multiplier over every divisor. Do not estimate it from the arithmetic:
+the magic and the shift are picked together, and 2^(32+14)/0x180010003 comes
+out at 10922.56, which sends you hunting for a non-integer divisor when the
+answer is 32767. For an unsigned add-back the listing's second shift is one
+less than the post_shift it prints (`srl 1` / `addu` / `srl 4` is post_shift 5,
+division by 21).
+
 `tools/decomp/perm.py cand.c UNIT FUNC` permutes the statements between a
 `/* PERM */` and `/* ENDPERM */` pair in a scratch candidate and scores every
 ordering with verify.py. Statement order is the lever this compiler is most

@@ -3191,7 +3191,21 @@ void func_80054CD4(void) {
     func_8003E4FC(0xD, *(u8 **) (b + 8), (s32) (b + 0x2C));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054D64);
+void func_8005A56C(s16, s16, s16);
+
+/* `/ 32767`, not the 10922.56 that 2^(32+14)/0x180010003 estimates: the magic
+   and the shift are chosen together, so invert the magic with
+   tools/decomp/magic.py instead of dividing. The base is declared INSIDE the
+   if so its lui/addiu land there rather than ahead of the guard. */
+void func_80054D64(s32 a) {
+    if ((D_800847D0[0] & 0x400) != 0) {
+        u8 *b = D_80084858;
+        s16 t = *(s16 *) (b + 8) * D_8008480C[0] / 32767;
+        s16 v = t * *(s16 *) (b + 0x10) / 128;
+
+        func_8005A56C(0, v, v);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054E00);
 
