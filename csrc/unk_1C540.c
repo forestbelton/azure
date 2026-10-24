@@ -2245,7 +2245,27 @@ void func_80050494(u8 *p) {
     func_80050308(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800504B4);
+void func_80050308(u8 *);
+
+/* Three parameters, two unused -- the caller passes all three. */
+void func_800504B4(u8 *p, s32 b, s32 c) {
+    s32 i;
+
+    for (i = 1; i < 7; i++) {
+        u8 *e = (u8 *) (*(u32 **) (p + 0x68))[i];
+        u8 *f = *(u8 **) (e + 8);
+
+        if (*(s16 *) (f + 2) > 0) {
+            *(s16 *) (f + 2) = *(u16 *) (f + 2) - 0x100;
+        } else {
+            *(s16 *) (f + 2) = 0;
+        }
+    }
+    if (*(s16 *) (*(u8 **) ((u8 *) (*(u32 **) (p + 0x68))[6] + 8) + 2) == 0) {
+        *(u32 *) p = (u32) func_80050494;
+    }
+    func_80050308(p);
+}
 
 /* Three quotients first, then the stores. The three bytes go through one local
    copy of the +0x4 pointer and the halfword at +0xC re-reads it, which is what

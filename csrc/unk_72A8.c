@@ -1273,7 +1273,24 @@ void func_8003965C(u8 *p) {
     *(u32 *) (p + 0x1C) = c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039694);
+/* The 32-bit jump target is composed from the four stream bytes; both arms
+   end in the same store to the cursor, which cross-jumping merges. */
+s32 func_80033B2C(s32);
+
+void func_80039694(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *c = *q;
+    u16 v = c[0] + (c[1] << 8);
+    u8 *r;
+
+    *q = c + 2;
+    if (func_80033B2C((s16) v) != 0) {
+        r = *q;
+        *q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    } else {
+        *q = *q + 4;
+    }
+}
 
 void func_80038570(u8 *);
 
@@ -1470,7 +1487,22 @@ void func_80039C44(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_800385D0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039C74);
+s32 func_80033B2C(s32);
+
+void func_80039C74(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u8 *c = *q;
+    u16 v = c[0] + (c[1] << 8);
+    u8 *r;
+
+    *q = c + 2;
+    if (func_80033B2C((s16) v) == 0) {
+        r = *q;
+        *q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    } else {
+        *q = *q + 4;
+    }
+}
 
 void func_80038630(u8 *);
 
