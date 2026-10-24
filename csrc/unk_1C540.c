@@ -1141,7 +1141,14 @@ void func_8004D70C(void) {
     func_8004D4AC();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D75C);
+/* The head word is copied by hand and the 0x40-byte tail as a struct: as one
+   0x44-byte struct assignment gcc puts the leftover word AFTER the loop, which
+   is where the target has it before (19 words either way, all 19 differing). */
+void func_8004D75C(u8 *d, u8 *s) {
+    *(u32 *) d = *(u32 *) s;
+    *(Blk40 *) (d + 4) = *(Blk40 *) (s + 4);
+    *(u32 *) s = 0;
+}
 
 void func_8004D75C(u8 *, u8 *);
 

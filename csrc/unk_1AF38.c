@@ -8,9 +8,18 @@
 __asm__(".sdata\n\t.size D_8008152C,4\n\t.size D_80081528,4\n"
         "\t.text");
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047738);
+void func_80047738(u8 *p, s16 a, s16 b) {
+    u8 *q = *(u8 **) (*(u8 **) *(u8 **) *(u8 **) (p + 0x28) + a * 4) + b * 8;
+    u32 v;
 
-void func_80047738(u8 *, s32, s32);
+    *(u8 **) p = q;
+    v = *(u32 *) (q + 4);
+    p[4] = b;
+    *(u16 *) (p + 0x14) &= 0xFFBF;
+    *(u32 *) (p + 8) = v;
+}
+
+void func_80047738(u8 *, s16, s16);
 
 /* s32 parameters with explicit `(s16)` casts at the call, because the caller
    func_80048374 already declares it that way and sign-extends its own s16s
@@ -358,7 +367,16 @@ void func_80048998(u8 *p, s32 n) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800489F4);
+void func_800489F4(u8 *p, s16 a, s16 b) {
+    u8 *q = *(u8 **) (*(u8 **) *(u8 **) *(u8 **) (p + 0x28) + a * 4) + b * 8;
+    u32 v;
+
+    *(u8 **) p = q;
+    v = *(u32 *) (q + 4);
+    p[4] = b;
+    *(u16 *) (p + 0x14) = (*(u16 *) (p + 0x14) & 0xFFBF) | 0x20;
+    *(u32 *) (p + 8) = v;
+}
 
 void func_800489F4(u8 *, s16, s16);
 void func_80048998(u8 *, s32);

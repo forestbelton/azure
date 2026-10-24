@@ -1307,6 +1307,13 @@ typedef struct Unk8006B200 {
     u32 unk_00;
     u32 unk_04;
 } Unk8006B200;
+
+/* A 0x40-byte word-aligned block, for the struct assignment func_8004D75C
+   copies with: the size is what picks gcc's block_move_loop over an unrolled
+   copy, and the word member is what lets it move words. */
+typedef struct Blk40 {
+    u32 w[0x10];
+} Blk40;
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 extern u8   D_80119000[];
 extern u8   D_80126000[];
