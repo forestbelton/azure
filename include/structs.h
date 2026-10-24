@@ -1247,8 +1247,8 @@ extern u8   D_80080B18[];
 extern u32  D_800737C0[];
 extern u32  D_80085F98[];
 extern u32  D_80071660;
-extern u32  D_80071664;
-extern u32  D_80071668;
+extern u32  D_80071664[];
+extern u32  D_80071668[];
 /* The two primitive templates func_8004EFF4 and func_8004F068 copy out: the
    first word of each is read through the scalar spelling (an adjacent lui/lw
    pair) and the other two through the incomplete-array one, whose split pair

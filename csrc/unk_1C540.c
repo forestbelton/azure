@@ -1441,7 +1441,29 @@ void func_8004EEBC(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EEFC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EF90);
+/* func_8004EFF4's shape: the two template words read into locals before the
+   byte stores, through the incomplete-array spelling so their lui/lw pairs are
+   the compiler's and can be scheduled apart. The `|= 2` then re-reads p[1]
+   because the intervening store through p invalidated cse's entry for it --
+   the parked note had this backwards, blaming the store ORDER. 24 DIFF. */
+u8 *func_8004EF90(u8 *p) {
+    u32 a;
+    u32 b;
+
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_80071660;
+    a = D_80071668[0];
+    b = D_80071664[0];
+    p[1] |= 2;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
 /* The two template words are read into locals BEFORE the byte stores, because
    sched cannot lift a load above a store through a pointer it cannot
@@ -1560,7 +1582,7 @@ u8 *func_8004F1E8(u8 *p) {
     return p + 0xC;
 }
 
-void func_8004EF90(u8 *);
+u8 *func_8004EF90(u8 *);
 u8 *func_8004EFF4(u8 *);
 u8 *func_8004F068(u8 *);
 u8 *func_8004F1E8(u8 *);

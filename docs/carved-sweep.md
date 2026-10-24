@@ -151,7 +151,6 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_8003C634 | unk_72A8 | 7 DIFF | $gp group. Reading the bound in the loop condition took it from 18 DIFF to 7; what is left is the register pair, as in func_8005C818. |
 | func_80033D44 + func_80033D54 | unk_72A8 | BLOCKED, not a shape | Both need `%gp_rel(D_8008099C)`, and func_80034EF8 and func_8003C0C8 in the same carved unit reach that symbol ABSOLUTELY and are landed. maspsx's rewrite keys on the symbol for the whole unit, so one unit cannot give it both forms: these two want the unit split, or those two reverted. |
 | func_80039DBC | unk_72A8 | 25/24 words, 18 DIFF | Calls through a table at +0x40 with four arguments from +0x48..+0x54; the fifth load reuses the table's register in the target and this spends an extra one. |
-| func_8004EF90 | unk_1C540 | 26/25 words, 24 DIFF | Fills two sub-blocks and returns a pointer into the second. The target RE-READS p[1] for its `|= 2` after an intervening word store; cc1psx here reorders the two stores -- it can prove p+1 and p+8 distinct -- and then cse keeps the 0xB0 it just stored. Making both accesses in-struct (section 5) is the thing to try next. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather
 than a source shape: func_8004AC18, func_8005845C, func_80053DA8,
