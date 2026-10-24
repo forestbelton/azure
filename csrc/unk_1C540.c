@@ -3357,7 +3357,27 @@ void func_8005A4E8(u8 a, u8 b, u8 c) {
     func_8005EDA0((s16 *) t);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A56C);
+void func_8005EDA0(s16 *);
+
+/* The two shifts are hoisted out of the arms, and as `s32` locals: that is
+   what sign-extends them (`sll 16` + `sra 8`). Written inside the arms, each
+   store needs only the low half and gcc emits a bare `sll 8` twice over. */
+void func_8005A56C(s16 f, s16 x, s16 y) {
+    s16 t[20];
+    s32 u = x << 8;
+    s32 v = y << 8;
+
+    if (f == 0) {
+        *(s32 *) &t[0] = 0xC0;
+        t[8] = u;
+        t[9] = v;
+    } else {
+        *(s32 *) &t[0] = 0xC00;
+        t[14] = u;
+        t[15] = v;
+    }
+    func_8005EDA0(t);
+}
 
 void func_8005EDA0(s16 *);
 
@@ -3579,9 +3599,36 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C4D0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C5D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C668);
+void func_8005F134(void *);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C6B4);
+s32 func_8005C668(s16 i, s16 a, s16 b) {
+    u32 t[0x10];
+
+    t[1] = 3;
+    t[0] = D_80073740[i];
+    *(u16 *) ((u8 *) t + 8) = a;
+    *(u16 *) ((u8 *) t + 0xA) = b;
+    func_8005F134(t);
+    return 0;
+}
+
+void func_8005F134(void *);
+
+/* An `s16` block here, where func_8005C668's is `u32` with casts for the two
+   halfwords: the masked stores have to be ARRAY_REFs on the DECL so that
+   MEM_IN_STRUCT_P is set on them. Through a cast they are plain INDIRECT_REFs,
+   sched1's alias calls answer differently and the `andi`/`sll` pair for the
+   first halfword floats to the top of the function (11 DIFF, same words). */
+s32 func_8005C6B4(s16 i, s16 a, s16 b) {
+    s16 t[0x20];
+
+    *(u32 *) &t[2] = 3;
+    *(u32 *) &t[0] = D_80073740[i];
+    t[4] = (a & 0x7F) << 7;
+    t[5] = (b & 0x7F) << 7;
+    func_8005F134(t);
+    return 0;
+}
 
 void func_8005FA34(u32 *);
 
