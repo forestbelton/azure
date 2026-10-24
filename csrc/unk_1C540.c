@@ -1927,7 +1927,33 @@ s32 func_8004FD78(u8 *p, s32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FDE0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FE78);
+void func_8001832C(u32);
+
+/* The two read-modify-writes at the end are split into both reads then both
+   writes, which is what fills the `lhu`'s delay slot with the global's `lui`. */
+void func_8004FE78(u32 a) {
+    u8 *p = (u8 *) a;
+    s32 i;
+    u8 *q;
+    u16 f;
+    u32 g;
+
+    if (p != 0) {
+        i = 0;
+        q = p + 0x20;
+        do {
+            if (*(u32 *) (q + 4) != 0) {
+                func_8001832C(*(u32 *) (q + 4));
+            }
+            i++;
+            q += 4;
+        } while (i < 3);
+        f = *(u16 *) (p + 0x1E);
+        g = D_800814A0;
+        *(u16 *) (p + 0x1E) = f | 0x8000;
+        D_800814A0 = g | 0x8000;
+    }
+}
 
 u32 func_8004FF00(u8 *p) {
     u32 *q = (u32 *) (p + 0x20);
