@@ -711,6 +711,22 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### A pass-through call that emits nothing still costs references
+
+A call that hands a function its own incoming arguments unchanged --
+`func_8004B834(a, b, c)` where the real callee is `void func_8004B834(void)` --
+compiles to *the same zero instructions* either way: cse substitutes `a0` for
+the pseudo, the move becomes `(set (reg a0) (reg a0))` and it is deleted. But
+the moves are references while they exist, and `REG_N_REFS` / `REG_LIVE_LENGTH`
+are what global-alloc's priority divides. In func_8004B854 the three spurious
+refs lengthened `a` past `b`, so `a` won `$s1` and `b` took `$s2`; the target
+has them the other way round. 6 DIFF, and the only visible symptom is the
+callee-saved numbering -- every opcode and immediate already agreed.
+
+So when a diff is nothing but a callee-saved swap between two parameters, check
+what the callees really take before touching the body. `grep` the unit: a
+`void f(void)` already decompiled elsewhere settles it.
+
 ## 4. Re-dereference rather than cache
 
 If a store invalidates cse's memory entry for another object, the target will
