@@ -3491,7 +3491,33 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059F8C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A1D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A26C);
+/* Resets both tables. D_800869C0 is a pair of words per slot, cleared +4
+   before +0. */
+void func_8005A26C(void) {
+    Unk80086A40 *p;
+    Unk80086C00 *q;
+    u32 *r;
+    s32 i;
+
+    p = D_80086A40;
+    for (i = 0; i < 0x10; i++) {
+        p[i].unk_00 = -1;
+        p[i].unk_19 = 0x7F;
+        p[i].unk_1A = 0x7F;
+        p[i].unk_1B = 0x40;
+    }
+    q = D_80086C00;
+    r = D_800869C0;
+    for (i = 0; i < 0x10; i++) {
+        q[i].unk_00 = -1;
+        q[i].unk_02 = 0;
+        q[i].unk_0A = 0x7F;
+        q[i].unk_08 = 0x7F;
+        r[i * 2 + 1] = 0;
+        r[i * 2] = 0;
+    }
+    D_80086D4C[0] = 0x1000;
+}
 
 void func_8005D838(s32, u8 *);
 
@@ -3556,7 +3582,30 @@ s32 func_8005A3F0(u32 a) {
 void func_8005A420(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A428);
+void func_8005863C(void);
+void func_8005A1D0(u32);
+void func_8005A26C(void);
+
+/* Nested ifs for the 0 < x < 4 test, as in func_8005A33C: with `&&` the two
+   bounds combine into one range check. */
+void func_8005A428(void) {
+    Unk80086A40 *p;
+    s32 i;
+
+    func_80056C30();
+    if ((s32) D_80086D4C[0] > 0) {
+        if ((s32) D_80086D4C[0] < 4) {
+            func_8005863C();
+        }
+    }
+    p = D_80086A40;
+    for (i = 0; i < 8; i++) {
+        if (p[i].unk_00 >= 0) {
+            func_8005A1D0(p[i].unk_10);
+        }
+    }
+    func_8005A26C();
+}
 
 void func_80056C30(void);
 void func_8005A26C(void);

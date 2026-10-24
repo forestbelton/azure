@@ -1178,7 +1178,10 @@ typedef struct Unk80086A40 {
     u8  *unk_04;
     u8   pad_08[0x8];
     u32  unk_10;
-    u8   pad_14[0x8];
+    u8   pad_14[0x5];
+    u8   unk_19;
+    u8   unk_1A;
+    u8   unk_1B;
 } Unk80086A40;
 extern Unk80086A40 D_80086A40[];
 extern u32 D_8006AFDC[];  /* four pointer tables, indexed by func_800B2834 */
@@ -1413,6 +1416,8 @@ extern u32 D_80085FCC[];
 extern u16 D_80073828[];
 extern u8  D_8007382A[];
 extern u8  D_80082B4B[];
+extern u32 D_800737A8[];
+extern u32 D_800869C0[];
 extern u32 D_80084130[];
 extern u16 D_80084778[];
 extern s16 D_80084808[];
