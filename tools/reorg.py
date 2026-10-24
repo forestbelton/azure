@@ -15,26 +15,29 @@ preserved by being moved, never regenerated.
 import argparse
 import pathlib
 import re
+import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CSRC = ROOT / "csrc"
 NONMATCH = ROOT / "asm/nonmatchings"
 
-def unit_ranges():
+Range = tuple[int, int | None, str]
+
+
+def unit_ranges() -> list[Range]:
     """[(lo, hi, name)] for every `c` subsegment, from the splat config.
 
     asm/nonmatchings cannot be used for this: splat only emits per-function
     assembly for functions that are still stubbed, so a unit whose functions
     are all decompiled has no directory at all.
     """
-    import yaml
     doc = yaml.safe_load((ROOT / "splat/slus_006.14.yaml").read_text())
     segs = doc["segments"]
-    out = []
+    out: list[Range] = []
     for i, seg in enumerate(segs):
         if not isinstance(seg, dict) or not seg.get("subsegments"):
             continue
-        tail = next((x[0] for x in segs[i + 1:] if isinstance(x, list) and x), None)
+        tail = next((x[0] for x in segs[i + 1 :] if isinstance(x, list) and x), None)
         ents = [e for e in seg["subsegments"] if isinstance(e, list) and e]
         for j, e in enumerate(ents):
             if len(e) > 2 and e[1] == "c":
@@ -46,19 +49,19 @@ def unit_ranges():
 VRAM, HDR = 0x8002D000, 0x800
 
 
-def file_offset(name):
+def file_offset(name: str) -> int:
     return int(name[5:], 16) - VRAM + HDR
 
 
 DEF = re.compile(
-    r"^(?:[A-Za-z_][\w \t*]*?)\b(func_[0-9A-Fa-f]{8})\s*\([^;]*?\)\s*\{",
-    re.M)
+    r"^(?:[A-Za-z_][\w \t*]*?)\b(func_[0-9A-Fa-f]{8})\s*\([^;]*?\)\s*\{", re.M
+)
 STUB = re.compile(r"^INCLUDE_ASM\([^)]*,\s*(func_[0-9A-Fa-f]{8})\);\s*$", re.M)
 
 
-def extract_bodies(text):
+def extract_bodies(text: str) -> dict[str, str]:
     """{name: source} for every function defined (not stubbed) in this file."""
-    out = {}
+    out: dict[str, str] = {}
     for m in DEF.finditer(text):
         name = m.group(1)
         i = text.index("{", m.start())
@@ -69,7 +72,7 @@ def extract_bodies(text):
             elif text[j] == "}":
                 depth -= 1
                 if depth == 0:
-                    out[name] = text[m.start():j + 1]
+                    out[name] = text[m.start() : j + 1]
                     break
     return out
 
@@ -80,7 +83,7 @@ def main():
     args = ap.parse_args()
 
     # Gather every decompiled body, wherever it currently lives.
-    bodies = {}
+    bodies: dict[str, str] = {}
     for f in sorted(CSRC.glob("*.c")):
         for name, src in extract_bodies(f.read_text()).items():
             bodies.setdefault(name, src)
@@ -96,20 +99,17 @@ def main():
     for lo, hi, unit in unit_ranges():
         if hi is None:
             continue
-        owned = sorted((n for n in known if lo <= file_offset(n) < hi),
-                       key=file_offset)
+        owned = sorted((n for n in known if lo <= file_offset(n) < hi), key=file_offset)
         if not owned:
             print("  %s owns no functions" % unit)
             continue
-        unit_dir = NONMATCH / unit
         parts = ['#include "common.h"', ""]
         for name in owned:
             if name in bodies:
                 parts.append(bodies[name])
                 placed += 1
             else:
-                parts.append('INCLUDE_ASM("asm/nonmatchings/%s", %s);'
-                             % (unit, name))
+                parts.append('INCLUDE_ASM("asm/nonmatchings/%s", %s);' % (unit, name))
                 stubbed += 1
             parts.append("")
         text = "\n".join(parts)

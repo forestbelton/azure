@@ -2,7 +2,7 @@
 import argparse
 import pathlib
 import sys
-from typing import BinaryIO, Union
+from typing import BinaryIO
 
 import hashlib
 
@@ -28,6 +28,9 @@ class Spec:
     files: list[SpecFile]
 
 
+Path = pathlib.Path | str
+
+
 def extract_file(f: BinaryIO, start_sector: int, file_size: int) -> bytes:
     data = bytearray()
     sector_index = start_sector
@@ -36,18 +39,18 @@ def extract_file(f: BinaryIO, start_sector: int, file_size: int) -> bytes:
         bytes_in_chunk = min(len(sector.data), file_size - len(data))
         data += sector.data[:bytes_in_chunk]
         sector_index += 1
-    return data
+    return bytes(data)
 
 
 def extract_file_to(
-    inf: BinaryIO, outfile: Union[pathlib.Path, str], start_sector: int, file_size: int
+    inf: BinaryIO, outfile: Path, start_sector: int, file_size: int
 ) -> None:
     data = extract_file(inf, start_sector, file_size)
     with open(outfile, "wb") as f:
         f.write(data)
 
 
-def get_file_shasum(filename: Union[pathlib.Path, str]) -> str:
+def get_file_shasum(filename: Path) -> str:
     hash = hashlib.sha1()
     with open(filename, "rb") as f:
         for chunk in iter(lambda: f.read(128 * hash.block_size), b""):

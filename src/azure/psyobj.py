@@ -95,7 +95,7 @@ def _solve_expr_hints(data: bytes) -> dict[int, int]:
         kind = probe.unknown_kind
         if kind is None or kind in hints:
             return hints
-        viable = []
+        viable: list[int] = []
         for candidate in _EXPR_CANDIDATES:
             trial = dict(hints)
             trial[kind] = candidate
@@ -154,9 +154,7 @@ class PsyQObject:
         Linker-script symbols such as `__heapsize` or `__datalen` sit in .data
         or .sbss; using them to infer a .text base yields nonsense offsets.
         """
-        return [
-            e for e in self.exports if self.section_names.get(e.section) == ".text"
-        ]
+        return [e for e in self.exports if self.section_names.get(e.section) == ".text"]
 
     @staticmethod
     def decode(
@@ -263,8 +261,8 @@ class PsyQObject:
                     name, pos = pstr(pos)
                     names[index] = name
                 elif tag in (0x12, 0x30):  # local bss symbol: idx, section,
-                    _, pos = u16(pos)      # size, name (e.g. libgpu's _que,
-                    _, pos = u16(pos)      # 0x1800 bytes)
+                    _, pos = u16(pos)  # size, name (e.g. libgpu's _que,
+                    _, pos = u16(pos)  # 0x1800 bytes)
                     _, pos = u32(pos)
                     _, pos = pstr(pos)
                 elif tag == 0x1C:  # source file name: index, path
@@ -284,9 +282,7 @@ class PsyQObject:
                 break
 
         return PsyQObject(
-            sections={
-                names[i]: bytes(buf) for i, buf in content.items() if i in names
-            },
+            sections={names[i]: bytes(buf) for i, buf in content.items() if i in names},
             relocs={names[i]: rs for i, rs in relocs.items() if i in names},
             exports=exports,
             section_names=dict(names),

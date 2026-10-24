@@ -92,8 +92,8 @@ def verify(exe: bytes, base: int, text: bytes, masks: list[int]) -> bool:
         keep = ~mask & 0xFFFFFFFF
         if keep == 0:
             continue
-        a, = struct.unpack_from("<I", text, i * 4)
-        b, = struct.unpack_from("<I", exe, base + i * 4)
+        (a,) = struct.unpack_from("<I", text, i * 4)
+        (b,) = struct.unpack_from("<I", exe, base + i * 4)
         if (a & keep) != (b & keep):
             return False
     return True
@@ -119,7 +119,7 @@ def locate(
         return [], invariant
 
     key = text[anchor * 4 : anchor * 4 + ANCHOR_BYTES]
-    bases = []
+    bases: list[int] = []
     for hit in index.get(key, ()):
         base = hit - anchor * 4
         if base < lo or base + len(text) > hi:
@@ -140,7 +140,7 @@ def scan(
     index = build_index(exe, lo, hi)
     unique: list[Located] = []
     ambiguous: list[Located] = []
-    stats: collections.Counter = collections.Counter()
+    stats = collections.Counter[str]()
 
     lib_index = LibraryIndex(release)
     for lib in sorted(lib_index.names):
@@ -173,7 +173,7 @@ def scan(
                     module=module.name,
                     path=path,
                     rom_start=base,
-                    length=len(text),
+                    length=len(text) if text else 0,
                     invariant_words=invariant,
                 )
                 for base in bases
@@ -188,7 +188,7 @@ def scan(
 
 
 def overlaps(located: list[Located]) -> list[tuple[Located, Located]]:
-    out = []
+    out: list[tuple[Located, Located]] = []
     for a, b in zip(located, located[1:]):
         if b.rom_start < a.rom_end:
             out.append((a, b))
@@ -220,24 +220,33 @@ def setup_parser(prog: str) -> argparse.ArgumentParser:
         help="existing splat config, for a before/after comparison",
     )
     parser.add_argument(
-        "--start", type=lambda v: int(v, 0), default=0x800,
+        "--start",
+        type=lambda v: int(v, 0),
+        default=0x800,
         help="first file offset to search (default 0x800)",
     )
     parser.add_argument(
-        "--end", type=lambda v: int(v, 0), default=0x55000,
+        "--end",
+        type=lambda v: int(v, 0),
+        default=0x55000,
         help="one past the last file offset to search (default 0x55000, the "
-             "end of the loaded image per the PS-EXE header)",
+        "end of the loaded image per the PS-EXE header)",
     )
     parser.add_argument(
-        "--lib", action="append", dest="libs",
+        "--lib",
+        action="append",
+        dest="libs",
         help="restrict to this library (repeatable)",
     )
     parser.add_argument(
-        "--min-invariant", type=int, default=4,
+        "--min-invariant",
+        type=int,
+        default=4,
         help="suppress identifications backed by fewer invariant words",
     )
     parser.add_argument(
-        "--emit", action="store_true",
+        "--emit",
+        action="store_true",
         help="print splat subsegment lines instead of the report",
     )
     parser.set_defaults(main=main)
@@ -271,10 +280,16 @@ def main(args: argparse.Namespace) -> None:
         f"{len(ambiguous)} ambiguous)"
     )
 
-    confirmed = [m for m in strong if m.label in existing
-                 and existing[m.label].rom_start == m.rom_start]
-    moved = [m for m in strong if m.label in existing
-             and existing[m.label].rom_start != m.rom_start]
+    confirmed = [
+        m
+        for m in strong
+        if m.label in existing and existing[m.label].rom_start == m.rom_start
+    ]
+    moved = [
+        m
+        for m in strong
+        if m.label in existing and existing[m.label].rom_start != m.rom_start
+    ]
     new = [m for m in strong if m.label not in existing]
     gone = [lbl for lbl in existing if lbl not in by_label]
 
@@ -287,22 +302,24 @@ def main(args: argparse.Namespace) -> None:
         print("\n=== boundaries to correct ===")
         for m in moved:
             delta = m.rom_start - existing[m.label].rom_start
-            print(f"  {m.label:<24} {existing[m.label].rom_start:#08x} -> "
-                  f"{m.rom_start:#08x} ({delta:+#x})  "
-                  f"{m.words}w, {m.invariant_words} invariant")
+            print(
+                f"  {m.label:<24} {existing[m.label].rom_start:#08x} -> "
+                f"{m.rom_start:#08x} ({delta:+#x})  "
+                f"{m.words}w, {m.invariant_words} invariant"
+            )
 
     if new:
         print(f"\n=== newly identified ({len(new)}) ===")
-        for lib, group in sorted(
-            collections.ChainMap(
-                *[{m.lib: None} for m in new]
-            ).items()
+        for lib, _group in sorted(
+            collections.ChainMap(*[{m.lib: None} for m in new]).items()
         ):
             members = [m for m in new if m.lib == lib]
             print(f"  {lib} ({len(members)} modules)")
             for m in members[:12]:
-                print(f"    {m.rom_start:#08x}  {m.module:<14} "
-                      f"{m.words:>5}w  {m.invariant_words} invariant")
+                print(
+                    f"    {m.rom_start:#08x}  {m.module:<14} "
+                    f"{m.words:>5}w  {m.invariant_words} invariant"
+                )
             if len(members) > 12:
                 print(f"    ... and {len(members) - 12} more")
 
@@ -310,22 +327,28 @@ def main(args: argparse.Namespace) -> None:
     if clashes:
         print(f"\n=== {len(clashes)} overlapping identifications ===")
         for a, b in clashes[:20]:
-            print(f"  {a.label} [{a.rom_start:#x}-{a.rom_end:#x}) overlaps "
-                  f"{b.label} [{b.rom_start:#x}-{b.rom_end:#x})")
+            print(
+                f"  {a.label} [{a.rom_start:#x}-{a.rom_end:#x}) overlaps "
+                f"{b.label} [{b.rom_start:#x}-{b.rom_end:#x})"
+            )
 
     if ambiguous:
-        seen: collections.Counter = collections.Counter(m.label for m in ambiguous)
+        seen = collections.Counter[str](m.label for m in ambiguous)
         print(f"\n=== ambiguous ({len(seen)} modules matched in >1 place) ===")
         for label, n in seen.most_common(12):
             places = [m.rom_start for m in ambiguous if m.label == label]
             inv = next(m.invariant_words for m in ambiguous if m.label == label)
-            print(f"  {label:<24} {n} sites, {inv} invariant words: "
-                  f"{', '.join(hex(p) for p in places[:6])}")
+            print(
+                f"  {label:<24} {n} sites, {inv} invariant words: "
+                f"{', '.join(hex(p) for p in places[:6])}"
+            )
 
     if strong:
         covered = sum(m.length for m in strong)
-        print(f"\ncoverage: {covered:#x} bytes of {args.end - args.start:#x} "
-              f"({100 * covered / (args.end - args.start):.1f}%)")
+        print(
+            f"\ncoverage: {covered:#x} bytes of {args.end - args.start:#x} "
+            f"({100 * covered / (args.end - args.start):.1f}%)"
+        )
 
 
 if __name__ == "__main__":

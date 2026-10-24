@@ -46,10 +46,13 @@ MANIFEST: dict[str, str] = dict(
 
 
 def main() -> None:
+    ok = True
     for raw_path, digest in MANIFEST.items():
         path = pathlib.Path(PSYQ_PREFIX, raw_path)
         if not path.exists() or not path.is_file():
-            abort(f"missing file: {path}")
+            ok = False
+            print(f"missing: {path}", file=sys.stderr)
+            continue
         with open(path, "rb") as f:
             chunk = f.read(512)
             hash = hashlib.sha256()
@@ -58,15 +61,13 @@ def main() -> None:
                 chunk = f.read(512)
             hash_digest = hash.hexdigest()
             if hash_digest != digest:
-                abort(
-                    f"bad shasum for file: {path} (actual={hash_digest} expected={digest})"
+                ok = False
+                print(
+                    f"bad shasum: file={path} actual={hash_digest} expected={digest}",
+                    file=sys.stderr,
                 )
-    print("OK")
-
-
-def abort(msg: str) -> None:
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
+    if ok:
+        print("OK")
 
 
 if __name__ == "__main__":

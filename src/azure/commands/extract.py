@@ -18,7 +18,9 @@ class SymInfo:
 SymInfoMap = dict[str, SymInfo]
 
 
-def extract_lib(library_file: str, info: Optional[SymInfoMap] = None) -> SymInfoMap:
+def extract_lib(
+    library_file: pathlib.Path, info: Optional[SymInfoMap] = None
+) -> SymInfoMap:
     info = info or {}
     lib_name = pathlib.Path(library_file).name.replace(".LIB", "").lower()
     with open(library_file, "rb") as f:

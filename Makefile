@@ -37,6 +37,7 @@ endif
 # Run the project's own tool with src/ on the path. `python src/azure/main.py`
 # only works inside `hatch shell`: invoked directly it puts src/azure on
 # sys.path rather than src, so `from azure.commands import ...` fails.
+# TODO: Fix
 AZURE = PYTHONPATH=src python3 src/azure/main.py
 CHECK = python tools/check.py
 

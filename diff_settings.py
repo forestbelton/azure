@@ -1,16 +1,18 @@
 """Configuration for asm-differ (https://github.com/simonlindholm/asm-differ).
 
-Clone it anywhere and run its diff.py from this directory, e.g.
+Run its diff.py from this directory, e.g.
 
-    ~/scratch/asm-differ/diff.py -mow func_8003E12C
+    vendor//asm-differ/diff.py -mow func_8003E12C
 
 -m rebuilds via make first, -o diffs against the original object, -w watches
 for changes. The byte-identical asm-only build is the baseline, so any
 divergence shown is caused by whatever is currently being decompiled.
 """
 
+from typing import Any
 
-def apply(config, args):
+
+def apply(config: Any, args: Any) -> None:
     # mipsel: little-endian, -m mips:3000 -- the R3000A the PSX actually has.
     # Plain "mips" is big-endian and disassembles the image into nonsense.
     config["arch"] = "mipsel"

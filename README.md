@@ -10,7 +10,7 @@ WIP decompilation of Azure Dreams
     - [Toolchain](#toolchain)
       - [Ubuntu](#ubuntu)
       - [Fedora](#fedora)
-    - [Enter Hatch environment](#enter-hatch-environment)
+    - [uv](#uv)
   - [Build](#build)
   - [Decompiling](#decompiling)
 
@@ -104,14 +104,9 @@ $ apt-get -y install \
 $ dnf -y install gcc-mips64-linux-gnu
 ```
 
-### Enter Hatch environment
+### uv
 
-Make sure you have [Hatch](https://hatch.pypa.io/latest/) installed.
-Then create a new shell for the project:
-
-```
-$ hatch shell
-```
+Make sure you have [uv](https://docs.astral.sh/uv/) installed.
 
 ## Build
 
