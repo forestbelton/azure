@@ -1572,7 +1572,23 @@ s32 func_8004EBDC(void) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EC20);
+s32 func_8004EBDC(void);
+
+/* One `r` and one `return` at the end, with the two guards as `&&`: written as
+   early `return r;`s gcc materialises 0 into $v0 twice and the function is two
+   words short -- the target spends `addu $v1, $v0, $zero` after the call and
+   `addu $v0, $v1, $zero` at the join. */
+s32 func_8004EC20(u8 *p) {
+    s32 r = 0;
+
+    if (p[8] != 0 && p[9] != 0) {
+        while (func_8004EBDC() == 0) {
+            func_80044618(2);
+        }
+        r = ((s32 (*)(u8 *)) D_80071654[*(u32 *) (p + 4)])(p - 0x20);
+    }
+    return r;
+}
 
 void func_8004EE90(u8 *);
 
@@ -1605,7 +1621,7 @@ void func_8004ED00(u8 *p) {
     }
 }
 
-void func_8004EC20(void);
+s32 func_8004EC20(u8 *);
 void func_8004ED00(u8 *);
 
 void func_8004ED5C(u8 *p) {
@@ -2187,7 +2203,30 @@ void func_80050A00(u8 *p, s32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050A58);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050AF0);
+s32 func_80049004(u8 *, s32, s32);
+u8 *func_80049150(u8 *, u32, s32);
+void func_80050A58(u32, u8 *);
+s32 func_80048FBC(u8 *, s32);
+
+s32 func_80050AF0(u8 *p, s32 b) {
+    u8 *q = p + 0x6C;
+    s32 ok = 0;
+    s32 r;
+    u8 *e;
+
+    r = func_80049004(q, b, 0xC);
+    *(u32 *) (p + 0x68) = r;
+    if (r != 0) {
+        e = func_80049150(q, 9, 0xC);
+        if (e != 0) {
+            func_80050A58(*(u32 *) (p + 0x68), e);
+            r = func_80048FBC(q, 0xC);
+            *(u32 *) (p + 0x2C) = r;
+            ok = r != 0;
+        }
+    }
+    return ok;
+}
 
 u32 func_800491F4(s32, u8 *, s32);
 
