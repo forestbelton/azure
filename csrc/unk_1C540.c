@@ -579,7 +579,19 @@ void func_8004B1A4(s32 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B1DC);
+/* Indexed, so the walked pointer is a giv loop.c creates in the PREHEADER --
+   after the `blez` -- where `p++` on the parameter puts the copy in the
+   prologue instead (8 DIFF, the register saves in the other order). */
+void func_8004B1DC(s32 *p, s32 n) {
+    s32 i;
+
+    for (i = 0; i < n; i++) {
+        if (p[i] != 0) {
+            func_8004B1A4(p[i]);
+            p[i] = 0;
+        }
+    }
+}
 
 void func_8004B248(u32 *p) {
     while (*p != 0) {
