@@ -3279,7 +3279,28 @@ void func_800557BC(void) {
     D_80084778[0] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800557C8);
+/* Pops the head off the halfword queue at D_80084778 (slot 0 is the count).
+   `r = 0;` is a STATEMENT after the clamp, not the declaration's initialiser:
+   as an initialiser the zero is materialised at the top of the function and
+   the guard's delay slot gets a nop; an early `return 0;` instead costs a `j`
+   and a second zero (40 words either way). */
+u16 func_800557C8(void) {
+    u16 r;
+    u16 i;
+
+    if (D_80084778[0] > 0x20) {
+        D_80084778[0] = 0x20;
+    }
+    r = 0;
+    if (D_80084778[0] != 0) {
+        r = D_80084778[1];
+        for (i = 1; i < D_80084778[0]; i++) {
+            D_80084778[i] = D_80084778[i + 1];
+        }
+        D_80084778[0] = D_80084778[0] - 1;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055864);
 
