@@ -2137,7 +2137,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80057948);
 void func_80057A48(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80057A50);
+extern s16 D_80086D50a[] __asm__("D_80086D50");
+
+/* The two address materialisations interleave -- `lui`, `lui`, `addiu`, `lh`
+   -- which they can only do if BOTH are compiler-split pairs. As the scalar
+   `D_80086D50`, cc1psx emits `lh $2,D_80086D50` as one macro insn and maspsx
+   expands it into an adjacent lui/lh pair that nothing can schedule apart, so
+   the pair lands after the other symbol's `addiu`: 2 DIFF that six statement
+   orderings could not move. The array alias gives the split form.
+
+   The 0x820 binds to the index term and not to the sum, so the index is its
+   own local: written as one expression the constant folds onto the pointer
+   instead and the final `addu`/`addiu` come out in the other order. */
+u8 *func_80057A50(s32 *p, u16 j) {
+    u8 *q = D_80086A40[D_80086D50a[0]].unk_04;
+    s32 k = (((*p << 4) + j) << 5) + 0x820;
+
+    return q + k;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80057A94);
 

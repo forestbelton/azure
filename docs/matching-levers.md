@@ -711,6 +711,18 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### Two address materialisations interleave only if BOTH are split pairs
+
+`lui`, `lui`, `addiu`, `lh` -- two symbols' addresses taken apart and woven
+together -- is proof that neither was the one-insn macro form. cc1psx emits a
+small scalar's load as `lh $2,D_80086D50`, ONE insn, and maspsx expands it into
+an adjacent `lui`/`lh` pair afterwards; nothing in the compiler can schedule
+anything between them, so the pair sinks past the other symbol's `addiu` as a
+block. func_80057A50 sat at 2 DIFF through six statement orderings for exactly
+that reason, and matched when the scalar was read through an array alias
+(`extern s16 D_80086D50a[] __asm__("D_80086D50")`, read as `[0]`), which gives
+the split high/lo_sum pair the scheduler can interleave.
+
 ### Index the scan; a walked pointer gets eliminated and its base biased
 
 A loop whose pointer is advanced by the element size and whose only other uses
