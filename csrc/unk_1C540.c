@@ -1950,10 +1950,22 @@ void func_80050550(u8 *p, s32 b, s32 d) {
     *(s16 *) (*(u8 **) (p + 8) + 2) = 0x400 - z;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800505BC);
+void func_80050550(u8 *, s32, s32);
+void func_800504B4(u8 *, s32, s32);
+
+/* The pre-increment is the ARGUMENT: the new value goes in $a1 and is stored
+   in the call's delay slot, and the test after the call re-reads the field. */
+void func_800505BC(u8 *p, s32 b, s32 c) {
+    func_80050550(p + 0x58, ++*(s32 *) (p + 8), 3);
+    if (*(s32 *) (p + 8) >= 3) {
+        *(s32 *) (p + 8) = 0;
+        *(u32 *) p = (u32) func_800504B4;
+    }
+    func_800504B4(p, b, c);
+}
 
 void func_80050550(u8 *, s32, s32);
-void func_800505BC(void);
+void func_800505BC(u8 *, s32, s32);
 
 void func_80050640(u8 *p) {
     /* The post-increment is the ARGUMENT: the old value goes in $a1 and the
