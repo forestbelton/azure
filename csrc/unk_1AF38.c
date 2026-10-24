@@ -225,7 +225,25 @@ void func_80047F90(s16 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047FF4);
+s32 func_80047C60(u8 *);
+u32 func_80047AB0(u8 *, s32, s32, s32, u8 *);
+
+/* The two slot stores go through D_80083D08s DIRECTLY, not through a pointer
+   local: as COMPONENT_REFs on the array they carry MEM_IN_STRUCT_P and sched1
+   leaves them after the whole argument chain, where through a local they float
+   up ahead of it (12-14 DIFF, same word count). */
+void func_80047FF4(s32 k, u8 *p) {
+    s32 i;
+
+    if (k == 0x38) {
+        func_80047EEC(0x38, p);
+        return;
+    }
+    i = func_80047C60(p);
+    D_80083D08s[i].unk_00 = (u32) p;
+    D_80083D08s[i].unk_06 = k;
+    func_80047AB0(p, i + 5, (i * 3 + 0x1D2) << 6, 0xD, D_80080A90);
+}
 
 void func_8003F320(void);
 void func_80047FF4(s32, u8 *);
@@ -319,7 +337,24 @@ void func_80048374(u8 *p, s16 b, s16 c) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800483AC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004846C);
+void func_80047200(u32 *, s32, s32);
+
+/* The VRAM read-back: a four-halfword RECT on the stack ahead of the 0x20-byte
+   buffer StoreImage fills. */
+void func_8004846C(s32 k) {
+    s16 r[4];
+    u32 buf[8];
+
+    r[0] = (k & 0x3F) << 4;
+    r[1] = k >> 6;
+    r[2] = 0x10;
+    r[3] = 1;
+    StoreImage(r, buf);
+    DrawSync(0);
+    func_80047200(buf, 1, 0);
+    func_8003F80C((u32) buf, k - 0x80, 1, 2);
+    DrawSync(0);
+}
 
 void func_8004846C(s32);
 

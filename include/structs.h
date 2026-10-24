@@ -1966,6 +1966,7 @@ s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
                   void *, void *, void *);
 /* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
    the same reason. */
+void StoreImage(void *, u32 *);
 void LoadImage(void *, u32 *);
 void MoveImage(void *, s32, s32);
 /* libapi. */
