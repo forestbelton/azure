@@ -2980,7 +2980,7 @@ void func_80054704(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054788);
 
-void func_800558FC(u8);
+void func_800558FC(u16);
 void func_80055BD8(s16);
 
 /* Four cases that all call the same function with different constants;
@@ -3183,7 +3183,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800557C8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055864);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800558FC);
+s32 func_8003F5D4(void);
+
+/* The four targets are incomplete arrays, so the `lui` lands in a register the
+   `beq`'s delay slot can take; as scalars each store spends `lui $at` instead
+   and the function is five words longer. */
+void func_800558FC(u16 k) {
+    s32 v = func_8003F5D4();
+
+    switch (k) {
+    case 0x11:
+        D_80084758[0] = v;
+        break;
+    case 0x12:
+        D_8008475C[0] = v;
+        break;
+    case 0x14:
+        D_80084760[0] = v;
+        break;
+    case 0x18:
+        D_80084764[0] = v;
+        break;
+    }
+}
 
 void func_80055990(u8 *p) {
     *(u16 *) (p + 0x10) = 0x80;
@@ -3224,7 +3246,32 @@ void func_80055ADC(u8 *p, u32 b) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055B44);
+void func_8005A3E0(void);
+void func_8005A3D4(void);
+
+/* The CdMix levels are written 2, 0, 3, 1 in both arms, which is the order the
+   target emits them in (0, 1, 2, 3 is 8 DIFF at the same word count). */
+void func_80055B44(u16 kk) {
+    u8 k = kk;
+    u8 t[4];
+
+    if (k == 1) {
+        func_8005A3E0();
+        t[2] = 0x4F;
+        t[0] = 0x4F;
+        t[3] = 0x4F;
+        t[1] = 0x4F;
+        D_800847D0[0] = (D_800847D0[0] & ~0x10) | 0x20;
+    } else {
+        func_8005A3D4();
+        t[2] = 0x7F;
+        t[0] = 0x7F;
+        t[3] = 0;
+        t[1] = 0;
+        D_800847D0[0] = (D_800847D0[0] & ~0x20) | 0x10;
+    }
+    CdMix(t);
+}
 
 void func_800553D4(s32);
 void func_80055C50(s16);
@@ -3298,7 +3345,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056654);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056800);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800568B4);
+/* Steps +0x52 towards +0x56 by +0x54, clamping; +0x58 picks the direction.
+   Each arm ends in its own `return` -- that is what gives all four of them
+   their own `j` to the epilogue (two words short with the else arms falling
+   through) -- and the second test is written `x - y > -c`, not `-c < x - y`,
+   so the subtraction is emitted before the negation. */
+void func_800568B4(u8 *p) {
+    if (*(s16 *) (p + 0x50) == 0) {
+        return;
+    }
+    if (*(u32 *) (p + 0x58) != 0) {
+        if (*(s16 *) (p + 0x52) + *(s16 *) (p + 0x54) < *(u16 *) (p + 0x56)) {
+            *(s16 *) (p + 0x52) = *(s16 *) (p + 0x52) + *(s16 *) (p + 0x54);
+            return;
+        }
+        *(s16 *) (p + 0x52) = *(u16 *) (p + 0x56);
+        return;
+    }
+    if (*(s16 *) (p + 0x52) - *(s16 *) (p + 0x54) > -*(u16 *) (p + 0x56)) {
+        *(s16 *) (p + 0x52) = *(s16 *) (p + 0x52) - *(s16 *) (p + 0x54);
+        return;
+    }
+    *(s16 *) (p + 0x52) = -*(u16 *) (p + 0x56);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056948);
 
