@@ -274,22 +274,41 @@ void func_800499DC(s32 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800499E8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049CF4);
+/* func_800508F0 with the two words as literals instead of globals. Both
+   parameters really are pointers: as `s32` with the casts inside, 22 DIFF --
+   which is why func_80049D80 and func_80049DC8 now cast at the call. */
+u8 *func_80049CF4(u8 *q, u8 *s) {
+    *(u32 *) (q + 4) = 0x586868;
+    q[1] = 0x48;
+    q[2] = s[0];
+    q[3] = s[2];
+    q[0xA] = s[4];
+    q[0xB] = s[6];
+    q += 0xC;
+    *(u32 *) (q + 4) = 0x98B8B8;
+    q[1] = 0x48;
+    q[2] = s[0];
+    q[3] = s[2];
+    q[0xA] = s[4];
+    q[0xB] = s[6];
+    q[0] = 3;
+    return q + 0xC;
+}
 
-void func_80049CF4(s32, s32);
+u8 *func_80049CF4(u8 *, u8 *);
 void func_800499E8(u8 *, s32, u8 *);
 
 void func_80049D80(u8 *p, s32 b) {
-    func_80049CF4((s32) p, b);
+    func_80049CF4(p, (u8 *) b);
     func_800499E8(p + 0x18, b, D_80080B54);
 }
 
-void func_80049CF4(s32, s32);
+u8 *func_80049CF4(u8 *, u8 *);
 
 /* Two arguments that pass through untouched, which is invisible here and shows
    up at func_80049D80, which passes both. */
 void func_80049DC8(s32 a, s32 b) {
-    func_80049CF4(a, b);
+    func_80049CF4((u8 *) a, (u8 *) b);
 }
 
 /* The negative arm is a CONDITIONAL EXPRESSION, not an `if`: the target spends

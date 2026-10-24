@@ -268,7 +268,31 @@ void func_800350B0(u8 *a, u8 *p) {
     func_80035068(a, p + 0x54);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800350D4);
+void func_80033C84(u32 *);
+void func_80035090(u32 *);
+void func_8003FFF0(u8 *);
+
+/* Drains the list at p+0x10 (the head is p+8, the forward link +8 off it):
+   each link stores the node that owns it, so `e` is the node and `e - 0x20` is
+   its allocation header. The head is re-read by the loop condition, which is
+   what the target does -- the three calls can move it. */
+void func_800350D4(u8 *p) {
+    u8 *h = p + 8;
+    u8 *n;
+    u8 *e;
+    u8 *d;
+
+    while ((n = *(u8 **) (h + 8)) != h) {
+        e = *(u8 **) n;
+        if (*(u32 **) e != 0) {
+            func_80033C84(*(u32 **) e);
+        }
+        func_80035090((u32 *) n);
+        d = e - 0x20;
+        func_80044A50((UnkNode *) d);
+        func_8003FFF0(d);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035164);
 
