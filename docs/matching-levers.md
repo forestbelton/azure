@@ -1215,6 +1215,15 @@ form:
   the same symbol -- needs the symbolic one. One carved unit stands in for
   several original translation units, and that is a contradiction only if you
   believe the carve.
+
+  **The same alias works on FUNCTIONS, and arity is what it buys.**
+  `void func_80054D64v(void) __asm__("func_80054D64");` lets one call site
+  declare a callee as taking nothing while the rest of the unit keeps the real
+  prototype. That is what a `jal` with NO argument setup means when the
+  register holds a leftover: func_80054704's `$a0` still carries the `~0x200`
+  mask from the `&=` two insns earlier. Passing the value explicitly is not the
+  same -- cse does not delete a second `li` of a constant into `$a0`, so it
+  costs a word.
 * A global outside the loaded image (0x8002d000..0x8008875f) was a constant
   address reached through a constant base pointer with the offset written inside
   the index expression.
