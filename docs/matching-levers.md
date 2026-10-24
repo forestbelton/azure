@@ -1566,6 +1566,16 @@ whose `addiu %lo` sits in a branch delay slot with the `lui` elsewhere
 rather than `extern u8 X[];` is what picks the first form. Only the size CLASS
 is evidence -- small enough for -G8 -- not the exact size.
 
+### Two offsets off a walked pointer become TWO induction variables
+
+`u8 *p = SYM; ... *(u32 *) p ... *(u16 *) (p + 4) ... p += 8;` makes loop.c
+create a giv per offset, so the listing gets two registers advancing in step.
+Indexing a struct array by the counter instead -- `SYM[i].unk_00`,
+`SYM[i].unk_04` -- leaves it ONE pointer with both offsets as displacements,
+which is what these targets have. func_800481E0, 18 DIFF; it is also most of
+what is left on func_8004A6C0, where the same change took 20 DIFF to 16 and
+one word.
+
 ### A loop-invariant pointer belongs INSIDE the loop body
 
 Assigned as an initialiser before the loop, its materialisation lands ahead of

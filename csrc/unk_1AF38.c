@@ -208,7 +208,19 @@ void func_80048190(s16 k) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800481E0);
+void func_800481E0(void) {
+    s32 i = 0;
+
+    /* Indexed through the struct array, not a walked `u8 *`: two accesses at
+       different offsets off a walked pointer become TWO induction variables
+       (one for +0, one for +4), where the struct's COMPONENT_REFs leave
+       loop.c one pointer with both offsets as displacements. 18 DIFF. */
+    for (; i < 6; i++) {
+        if (D_80083D08s[i].unk_00 != 0) {
+            D_80083D08s[i].unk_04 |= 1;
+        }
+    }
+}
 
 s32 func_80047BC0(s32);
 
