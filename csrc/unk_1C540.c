@@ -2512,7 +2512,19 @@ u32 func_80058AA8(u32 a, u32 b) {
     return ((a & 0xFF) << 8) | (b & 0xFF);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058ABC);
+u32 func_800589B8(s32);
+u32 func_80058A7C(u32, u32, u32, u32);
+
+/* Four u8 locals, so each result is masked again at the call. The first call
+   needs no argument move -- $a0 still holds the parameter. */
+s32 func_80058ABC(u8 *p) {
+    u8 a = func_800589B8((s32) p);
+    u8 b = func_800589B8((s32) p);
+    u8 c = func_800589B8((s32) p);
+    u8 d = func_800589B8((s32) p);
+
+    return func_80058A7C(a, b, c, d);
+}
 
 u32 func_800589B8(s32);
 
