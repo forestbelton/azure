@@ -1385,7 +1385,14 @@ void func_8003A9B8(u8 *p) {
     *q = *(u8 **) (t + i * 4 + 0x48);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A9E4);
+void func_8003A9E4(u8 *p) {
+    u8 **q = (u8 **) (p + 0x1C);
+    u32 a = *(*q)++;
+    u32 b = *(*q)++;
+    u8 *t = *(u8 **) (p + 0x80);
+
+    *(u32 *) (t + a * 4 + 0x48) *= *(u32 *) (t + b * 4 + 0x48);
+}
 
 void func_8003AA34(u8 *p) {
     u8 **q = (u8 **) (p + 0x1C);

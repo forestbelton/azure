@@ -154,7 +154,14 @@ void func_80047DF0(void) {
     D_8008152Cs = func_80047AB0(D_80016000, 0xB, 0x7900, 0xD, D_80023000);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047E30);
+void func_80046F88(u8 *);
+void func_80047054(u8 *, s32, s32, s32);
+
+void func_80047E30(void) {
+    func_80046F88(D_80016000);
+    func_80047054(D_80016000, 0xB, 0x7900, 0xD);
+    D_8008152Cs = (u32) D_80016000;
+}
 
 extern u32 D_80081528s __asm__("D_80081528");
 

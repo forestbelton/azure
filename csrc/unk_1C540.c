@@ -867,7 +867,14 @@ void func_8004D9E0(u8 *p, s32 b, s32 c, s32 d, s32 e) {
     p[3] = c * (e + 0x10) - 0x80;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DA24);
+void func_8004DA24(u8 *p, u8 *q) {
+    if (q != 0) {
+        p[0x8] += q[0];
+        p[0x9] += q[1];
+        p[0xA] = q[2];
+        p[0xB] = q[3];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DA74);
 
@@ -1016,15 +1023,27 @@ void func_8004E884(u8 *p, u32 b) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E8D8);
+s32 func_8004E8D8(u8 *p, s32 b) {
+    s32 r = 0;
+    u8 c = *p;
 
-s32 func_8004E8D8(s32, s32);
+    while (c != 0) {
+        if (c != 0x20 && c != 0xA) {
+            r = 1;
+            break;
+        }
+        p++;
+        c = *p;
+    }
+    return r;
+}
+
 void func_8004E298(u8 *, s32, s32);
 
 u8 *func_8004E928(s32 a, s32 b) {
     u8 *r = 0;
 
-    if (func_8004E8D8(a, b) != 0) {
+    if (func_8004E8D8((u8 *) a, b) != 0) {
         r = (u8 *) func_8004B404(0x100);
         if (r != 0) {
             func_8004E298(r, a, b);
