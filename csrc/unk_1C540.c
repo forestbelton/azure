@@ -1408,13 +1408,36 @@ void func_8004E130(void) {
     func_800352B4();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E188);
+extern u32 D_80071410[];
+
+/* Both of the first two arms write the whole four-byte group; cross-jumping
+   merges the shared tail, which is what puts the second arm's `addiu -0x60`
+   just before the common `sb 0x9`. */
+u8 *func_8004E188(u8 *p, u32 k) {
+    u32 i = k & 0xFF;
+    u32 f = D_800714B0[i];
+
+    if (f & 0x30) {
+        p[8] = (k & 0xF) << 3;
+        p[9] = (k & 0x70) >> 1;
+        p[0xA] = 8;
+        p[0xB] = 8;
+    } else if (f & 0x40) {
+        p[8] = (k & 0xF) << 3;
+        p[9] = (k & 0xF0) - 0x60;
+        p[0xA] = 8;
+        p[0xB] = 8;
+    } else if (f & 0x80) {
+        *(u32 *) (p + 8) = D_80071410[i];
+    }
+    return p;
+}
 
 typedef struct Unk4E21C {
     u8 unk_00[4];
 } Unk4E21C;
 
-void func_8004E188(u8 *, u8);
+u8 *func_8004E188(u8 *, u32);
 
 u8 *func_8004E21C(u8 *p, u8 b) {
     u8 t[16];
@@ -1759,7 +1782,30 @@ void func_8004EEBC(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EEFC);
+/* Both template bases go into locals: inline, the second one's lui/lw/addiu
+   does not get scheduled into the first block's load-delay nops and the
+   function is two words longer. The four `*(u8 **)(p + 4)` reads are written
+   out, not cached -- the first is cse'd to a copy of `a` and the rest are real
+   reloads, because each halfword store invalidates the entry. */
+void func_8004EEFC(u8 *p, u32 *a, u32 *b) {
+    u32 *s = D_8002E5D8;
+    u32 *t = D_8002E5E8;
+
+    a[0] = s[0];
+    a[1] = s[1];
+    a[2] = s[2];
+    a[3] = s[3];
+    b[0] = t[0];
+    b[1] = t[1];
+    b[2] = t[2];
+    *(u32 **) (p + 4) = a;
+    *(u32 **) (p + 8) = b;
+    *(u32 *) p = 0;
+    *(s16 *) (*(u8 **) (p + 4) + 8) = -0xA0;
+    *(s16 *) (*(u8 **) (p + 4) + 0xA) = -0x78;
+    *(s16 *) (*(u8 **) (p + 4) + 0xC) = 0x200;
+    (*(u8 **) (p + 4))[0xF] = 4;
+}
 
 /* func_8004EFF4's shape: the two template words read into locals before the
    byte stores, through the incomplete-array spelling so their lui/lw pairs are
@@ -1928,12 +1974,12 @@ void func_8004F3D0(u32 *p, u32 v) {
     *p = v;
 }
 
-void func_8004EEFC(u8 *, u8 *, u8 *);
+void func_8004EEFC(u8 *, u32 *, u32 *);
 void func_8004F2BC(u8 *);
 
 void func_8004F3D8(u8 *p, u32 v) {
     func_8004F3D0((u32 *) p, v);
-    func_8004EEFC(p + 0x210, p + 0x1E8, p + 0x1F8);
+    func_8004EEFC(p + 0x210, (u32 *) (p + 0x1E8), (u32 *) (p + 0x1F8));
     func_8004F2BC(p);
 }
 
@@ -2867,7 +2913,33 @@ void func_800543C8(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005440C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800544A4);
+void func_80054538(u8 *);
+void func_800546B0(void);
+
+/* +0x04 through a `u8 *` base and +0x00 as `D_800847D0[0]`: that is the pair
+   of forms the target has, one `lui` shared between the materialised base and
+   the symbolic load. */
+void func_800544A4(void) {
+    u8 *b = (u8 *) D_800847D0;
+    u32 f;
+    u8 *c;
+
+    if (*(u32 *) (b + 4) & 0x200) {
+        func_80054704();
+    }
+    f = D_800847D0[0];
+    if (f & 0x400) {
+        if (f & 0x4000) {
+            c = D_80084858;
+            func_80054538(c);
+            if (*(u32 *) (c + 0xC) == 3) {
+                func_80054E00(0x74);
+            }
+        } else {
+            func_800546B0();
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054538);
 
