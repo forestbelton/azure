@@ -1623,11 +1623,29 @@ void func_80050494(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800504B4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050550);
+/* Three quotients first, then the stores. The three bytes go through one local
+   copy of the +0x4 pointer and the halfword at +0xC re-reads it, which is what
+   the two `lw 0x4($a0)` in the listing are: a byte store through a loaded
+   pointer invalidates cse's entry for the pointer itself.
+
+   s32 for the second parameter, not the u32 the caller's prototype said: the
+   three divisions are signed. */
+void func_80050550(u8 *p, s32 b, s32 d) {
+    s32 x = b * 80 / d;
+    s32 y = -(b << 7) / d;
+    s32 z = (b << 10) / d;
+    u8 *q = *(u8 **) (p + 4);
+
+    q[2] = x + 0x30;
+    q[1] = x + 0x30;
+    q[0] = x + 0x30;
+    *(s16 *) (*(u8 **) (p + 4) + 0xC) = 0x180 - y;
+    *(s16 *) (*(u8 **) (p + 8) + 2) = 0x400 - z;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800505BC);
 
-void func_80050550(u8 *, u32, s32);
+void func_80050550(u8 *, s32, s32);
 void func_800505BC(void);
 
 void func_80050640(u8 *p) {
