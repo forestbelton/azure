@@ -2462,9 +2462,50 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054704);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054788);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005497C);
+void func_800558FC(u8);
+void func_80055BD8(s16);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800549FC);
+/* Four cases that all call the same function with different constants;
+   cross-jumping merges the four calls into the one the listing shows and reorg
+   puts two of the four argument loads into delay slots. */
+void func_8005497C(u8 k) {
+    func_800558FC(k);
+    switch (k) {
+    case 0x11:
+        func_80055BD8(0);
+        break;
+    case 0x12:
+        func_80055BD8(1);
+        break;
+    case 0x14:
+        func_80055BD8(2);
+        break;
+    case 0x18:
+        func_80055BD8(3);
+        break;
+    }
+}
+
+void func_800553D4(s32);
+void func_80055ADC(u8 *, u32);
+
+/* A switch, not an if/else chain: two `beq`s that branch TO their bodies and a
+   `j` past them, where the chain tests and falls into each body in turn (23
+   DIFF). The shared `lui %hi(D_800847F0)` in the second test's delay slot is
+   the other half of that reading. */
+void func_800549FC(u8 k) {
+    func_800553D4(0x71);
+    switch (k) {
+    case 0x21:
+        D_800847F0[0] = 0;
+        func_80055ADC(D_801BEE40, 0);
+        break;
+    case 0x22:
+        D_800847F0[0] = 1;
+        func_80055ADC(D_801C4640, 1);
+        break;
+    }
+}
 
 void func_80055B44(u16);
 void func_800540A8(void);
