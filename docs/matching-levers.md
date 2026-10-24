@@ -711,6 +711,23 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### `p += x` is one long quantity; `q = p + x` is two short ones
+
+Advancing a parameter in place makes the parameter and the advanced pointer a
+single quantity, live from the prologue to the last use -- which, if that
+crosses a call, is the function's only global allocno and takes the last
+callee-saved register, pushing every other parameter round by one. Giving the
+offset pointer its own local lets the parameter die at the `addu`, and the new
+pointer is what lives:
+
+    u8 *q = dst + i * 2;       /* not dst += i * 2; */
+
+func_8004EAC4 was 13 DIFF of pure register naming ($s0/$s1/$s2 permuted across
+its three parameters) and matched on that one line. The listing cannot show
+which spelling it was -- `addu $s1, $s1, $s0` is in-place either way, since the
+dying parameter's register is reused -- so try both whenever callee-saved
+numbering is all that is left.
+
 ### `||` puts the body BETWEEN the two tests
 
 Two tests that share one exit are often an `||`, and the layout proves it:
