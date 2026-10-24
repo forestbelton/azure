@@ -2794,7 +2794,32 @@ void func_800517AC(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800517CC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051BFC);
+extern UnkElem D_800720AC[];
+void func_800517CC(void);
+void func_80044BB0(void);
+
+void func_80051BFC(u8 *p, s32 a) {
+    u8 *q;
+    u8 *e;
+    u8 *f;
+
+    *(u32 *) (p + 0x10) = (u32) func_800517CC;
+    *(u32 *) (p + 0x20) = a;
+    q = p + 0x20;
+    *(u16 *) (q + 4) = 0;
+    *(u16 *) (q + 6) = 0;
+    *(u16 *) (q + 8) = 0;
+    e = *(u8 **) (p + 0xC);
+    *(u32 *) (e + 0xC) = 0x808080;
+    func_8003DB94((UnkSlot *) e, D_800720AC, 0);
+    *(u16 *) (e + 0x1E) = 0x1000;
+    *(u16 *) (e + 0x1C) = 0x1000;
+    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
+    f = *(u8 **) (p + 8);
+    *(u32 *) (f + 0) = 0x1A00000;
+    *(u32 *) (f + 4) = 0x600000;
+    *(u32 *) (f + 8) = 0x700000;
+}
 
 void func_80051CC4(void);
 
@@ -3073,7 +3098,48 @@ s16 func_80053E90(s32 k) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053EF0);
+extern u32 D_800848FC[];
+extern u32 D_8008485C[];
+
+/* A `switch`, not an if/else chain: both tests branch INTO their arm and the
+   default is the fall-through `j`. And each masked flag goes into its OWN
+   local before the `!= 0` -- written `return (f & 0x100) != 0;` combine turns
+   the pair into `srl 8` / `andi 1` where the target has `andi 0x100` / `sltu`
+   (4 DIFF; `> 0` and `!!` do the same). */
+s32 func_80053EF0(s32 k) {
+    u32 f;
+    u32 g;
+
+    switch (k) {
+    case 1:
+        f = D_800847D0[0];
+        if ((f & 0x1000) != 0) {
+            return 2;
+        }
+        if (D_800848FC[0] == 2) {
+            return 3;
+        }
+        g = f & 0x100;
+        return g != 0;
+    case 4: {
+        u8 *b = (u8 *) D_800847D0;
+
+        if ((*(u32 *) (b + 4) & 0x200) != 0) {
+            return 0x100;
+        }
+        f = D_800847D0[0];
+        if ((f & 0x4000) != 0) {
+            return 2;
+        }
+        if (D_8008485C[0] == 2) {
+            return 3;
+        }
+        g = f & 0x400;
+        return g != 0;
+    }
+    }
+    return -1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053F98);
 
@@ -4183,7 +4249,30 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A778);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005A90C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AAA8);
+u32 func_8005ECA0(u32);
+u32 func_8005EC40(u8 *, u32);
+
+/* The table base through a pointer local initialised in its declaration, so
+   its lui/addiu comes out BEFORE the index's sign extension and the final
+   `addu` has the operands the target's way round (8 DIFF indexing the symbol
+   directly). */
+s32 func_8005AAA8(u8 *p, s16 k) {
+    Unk80086A40 *t = D_80086A40;
+    u8 *e = (u8 *) &t[k];
+    s16 n = *(s16 *) e;
+    u32 r;
+
+    if (n != k) {
+        return -1;
+    }
+    r = func_8005ECA0(*(u32 *) (e + 0x10));
+    if (func_8005EC40(p, *(u32 *) (e + 0x14)) != *(u32 *) (e + 0x14)) {
+        return -1;
+    }
+    *(u32 *) (e + 0xC) = (u32) p;
+    *(u32 *) (e + 0x10) = r;
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AB50);
 

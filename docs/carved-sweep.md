@@ -137,6 +137,16 @@ which was already declared as a struct 300 lines further down.
   statement does not.** `u8 b = *(*q)++;` is 10 words; the two-statement form
   is 12 and has the target's register copy of the cursor. The mechanism is
   `protect_from_queue`; see matching-levers section 8.
+* **A store followed by a load of the same place is how to get a register
+  copy.** `*pp = f(...); b = *pp;` makes cse forward the load to the value
+  just stored, and the forwarding emits `addu $rD, $rS, $zero` -- the very
+  copy the parked rows are each one word short of. Assigning the call result
+  to `b` and storing *that* keeps both live instead and costs a callee-saved
+  register (func_80048EE4, 41 DIFF the wrong way). The same trick, with a
+  store through a pointer in between to invalidate the entry, gives
+  func_8005084C its `addu $v1, $a2, $zero` and then two real re-loads of the
+  same field. This is the fourth known cure for that missing copy and the only
+  one that works on a value the function itself produced.
 * **An arithmetic constant binds to the term the source groups it with.**
   `(v & 0xF) + 0x7C80` then `+ ((v & 0x10) << 3)` must be split into a local;
   written as one expression the compiler folds the constant into the second
