@@ -170,7 +170,18 @@ void func_80034EB4(u8 *p) {
     *(u32 *) (p + 0x34) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80034EC4);
+void func_80034EC4(u8 *p) {
+    u8 *q = p + 8;
+    /* A local for the table base, so the symbol is materialised once and both
+       words stay displacements off it. */
+    u8 *b = D_8006ADBC;
+
+    p[2] = 2;
+    *(u8 **) (p + 0x10) = q;
+    *(u8 **) (p + 0xC) = q;
+    *(u32 *) (p + 0x44) = *(u32 *) (b + 0x20);
+    *(u32 *) (p + 0x40) = *(u32 *) (b + 0x1C);
+}
 
 void func_80037D50(u8 *, u8);
 
