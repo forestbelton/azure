@@ -343,7 +343,27 @@ void func_80049F2C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049F68);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A030);
+void func_8004A030(u8 *p, s16 x, s16 y, s16 h) {
+    u8 *q = p + 0x20;
+
+    *(u32 *) (p + 0x30) = 0;
+    *(u16 *) (q + 8) = x - 0xA0;
+    *(u16 *) (q + 0xA) = y - 0x80;
+    *(u16 *) (q + 0xC) = 0x200;
+    q[0xF] = 4;
+    q = p + 0x40;
+    *(u32 *) (p + 0x50) = *(u32 *) (p + 0x1C);
+    *(u16 *) (q + 8) = 0xC;
+    *(u16 *) (q + 0xA) = 0xE;
+    q = p + 0x60;
+    *(u32 *) (p + 0x70) = *(u32 *) (p + 0x14);
+    *(u16 *) (q + 8) = h / 2;
+    *(u16 *) (q + 0xA) = 8;
+    q = p + 0x80;
+    *(u32 *) (p + 0x90) = *(u32 *) (p + 0x18);
+    *(u16 *) (q + 8) = 0x94;
+    *(u16 *) (q + 0xA) = 0x81;
+}
 
 u32 func_8004A0C0(u32 m) {
     /* The result, the counter and the pointer initialise in source order, and
@@ -2501,7 +2521,33 @@ void func_80051F38(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051F58);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800520B4);
+void func_80051F58(void);
+void func_80044BB0(void);
+
+/* func_8004491C's first argument is the pass-through: nothing sets $a0 before
+   that `jal`, so `p` is still there. */
+void func_800520B4(u8 *p, s32 a) {
+    u8 *q;
+    u8 *e;
+
+    *(u32 *) (p + 0x10) = (u32) func_80051F58;
+    *(u32 *) (p + 0x20) = a;
+    q = p + 0x20;
+    *(u16 *) (q + 4) = 0;
+    *(u16 *) (q + 6) = 0;
+    *(u16 *) (q + 0xA) = 0;
+    *(u16 *) (q + 0xC) = 0;
+    e = *(u8 **) (p + 0xC);
+    *(u32 *) (e + 8) = (u32) D_80071FF0;
+    *(u32 *) (e + 0xC) = 0;
+    *(u16 *) (e + 0x1E) = 0x1000;
+    *(u16 *) (e + 0x1C) = 0x1000;
+    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
+    e = *(u8 **) (p + 8);
+    *(u32 *) (e + 0) = 0x980000;
+    *(u32 *) (e + 4) = 0x800000;
+    *(u32 *) (e + 8) = 0xA00000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052144);
 
@@ -2946,7 +2992,27 @@ void func_80054C58(void) {
     p[1] &= ~0x200;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054CD4);
+void func_8005A4E8(u8, u8, u8);
+void func_8005A56C(s16, s16, s16);
+
+/* D_80084904 through the incomplete-array alias, so the compiler materialises
+   its `%hi` into a register instead of letting the assembler spend $at -- and
+   the store goes BEFORE the base assignment, which is what gets that `lui`
+   emitted first. As `D_80084904 = 2;` on a scalar: `lui $at` + `sw 0($at)`,
+   10 DIFF; with the base in its declaration, 9. */
+void func_80054CD4(void) {
+    u8 *b;
+
+    D_80084904a[0] = 2;
+    b = (u8 *) D_800847D0;
+    b[0x2C] = b[0x32];
+    b[0x2D] = b[0x30];
+    *(u32 *) (b + 4) |= 0x200;
+    func_8005A4E8(0, 0, 0);
+    func_8005A56C(0, 0, 0);
+    func_8003E4FC(0xE, 0, (s32) (b + 0x28));
+    func_8003E4FC(0xD, *(u8 **) (b + 8), (s32) (b + 0x2C));
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054D64);
 
