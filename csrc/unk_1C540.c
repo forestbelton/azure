@@ -26,6 +26,7 @@ __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
         "\t.size D_80081568,4\n\t.size D_8008156C,4\n"
         "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
         "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
+        "\t.size D_80080B80,4\n\t.size D_80080B84,4\n"
         "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.text");
 
 void func_80048C3C(s32);
@@ -2173,9 +2174,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800506BC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005084C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800508F0);
+/* Two 0xC-byte primitives; D_80080B84/80 joined this unit's .sdata block (no
+   other function in the unit reaches them), so this was verified in a scratch
+   file carrying the block. The global store comes BEFORE `q[1] = 0x48` so the
+   load's delay slot gets the constant, and `q[0] = 3` is the LAST statement. */
+u8 *func_800508F0(u8 *q, u8 *s) {
+    *(u32 *) (q + 4) = D_80080B84;
+    q[1] = 0x48;
+    q[2] = s[0];
+    q[3] = s[2];
+    q[0xA] = s[4];
+    q[0xB] = s[6];
+    q += 0xC;
+    *(u32 *) (q + 4) = D_80080B80;
+    q[1] = 0x48;
+    q[2] = s[0];
+    q[3] = s[2];
+    q[0xA] = s[4];
+    q[0xB] = s[6];
+    q[0] = 3;
+    return q + 0xC;
+}
 
-void func_800508F0(u8 *, u8 *);
+u8 *func_800508F0(u8 *, u8 *);
 
 void func_8005097C(u8 *p) {
     func_800508F0(p, D_80080B88);

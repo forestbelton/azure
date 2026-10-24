@@ -1288,6 +1288,8 @@ extern u32  D_80071678;
 extern u32  D_8007167C[];
 extern u32  D_80071680[];
 extern u8   D_8007164C[];
+extern u32  D_80080B80;
+extern u32  D_80080B84;
 extern u32  D_80071654[];  /* handler table indexed by the state at +0x04 */
 extern u8   D_80071644[];
 extern u32  D_80083D98[];
