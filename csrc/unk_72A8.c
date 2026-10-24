@@ -1250,7 +1250,24 @@ void func_800399EC(u8 *p) {
     t[0x3D] = *(*q)++;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039A08);
+s32 func_80039884(u8 *);
+void func_800389B4(u8 *);
+s16 func_80053DA8(u16);
+
+void func_80039A08(u8 *p) {
+    s32 r = func_80053EF0(4);
+
+    if (func_80039884(p) != 0) {
+        if (r != 0) {
+            *(u32 *) (p + 0x10) = 0;
+            *(u32 *) (p + 0x1C) -= 1;
+        }
+    } else if (r == 0x100) {
+        *(u32 *) (p + 0x10) = (u32) func_800389B4;
+    } else {
+        func_80053DA8(0xB4);
+    }
+}
 
 void func_80039A88(u8 *p) {
     if (func_80053EF0(4) != 0) {
@@ -2025,7 +2042,29 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BD84);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BE1C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BFE4);
+void func_8003BE1C(u8 *, s32, s32);
+
+/* Three halfwords per entry, six entries, through two walked pointers that
+   loop.c splits into four induction variables (+0 and +4 on each side). The
+   source base is `base + 0x20` off its OWN local, not `&D_80083160 + 0x20`:
+   written as one address expression the 0x20 folds into the `addiu %lo` and
+   the function is a word short. `d += 8` before `s += 8` is what gives the two
+   secondary givs the target's $a0/$v1 rather than the other way round. */
+void func_8003BFE4(void) {
+    u8 *d = D_80082D08;
+    u8 *base = (u8 *) &D_80083160;
+    u8 *s = base + 0x20;
+    s32 i;
+
+    for (i = 0; i < 6; i++) {
+        *(u16 *) d = *(u16 *) s;
+        *(u16 *) (d + 2) = *(u16 *) (s + 2);
+        *(u16 *) (d + 4) = *(u16 *) (s + 4);
+        d += 8;
+        s += 8;
+    }
+    func_8003BE1C(D_80082D08, 6, 4);
+}
 
 void func_8003C064(void) {
 }
