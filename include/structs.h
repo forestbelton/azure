@@ -1251,9 +1251,19 @@ extern u8   D_80080B68[8];
 extern u32  D_800714A4[];  /* function pointers, indexed by D_80081550 */
 /* Sized: func_8004DCEC materialises its address with the one-insn `la`. */
 extern u8   D_80080B6C[8];
+extern s8   D_800DCF4D;
+extern u32  D_80081460;
 extern s32  D_80080A6C;
 extern u32  D_80081528;
 extern u8   D_8006B200[];
+/* The same table as a struct array, for the functions that reach a field at a
+   constant offset off a variable index: the struct also brings the base
+   materialisation out first, which is the order these targets have. */
+typedef struct Unk8006B200 {
+    u32 unk_00;
+    u32 unk_04;
+} Unk8006B200;
+extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 extern u8   D_80119000[];
 extern u8   D_80126000[];
 extern u32 D_8002E5E8[];

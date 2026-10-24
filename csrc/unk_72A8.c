@@ -1951,7 +1951,21 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C634);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C67C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C6F8);
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+
+void func_8003C6F8(u32 a, s32 i) {
+    /* Through the struct array, which brings the base materialisation out
+       ahead of the index shift as the target has it (3 DIFF the other way). */
+    u32 v = D_8006B200s[i].unk_04;
+
+    D_8006B200s[i].unk_00 = a;
+    D_80081460 = a;
+    D_80080A8C = v;
+    func_80041284((Unk41284 *) a);
+    if (D_80082E6Aa[0] == 2) {
+        D_800DCF4D = -2;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C758);
 

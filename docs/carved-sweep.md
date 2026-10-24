@@ -195,7 +195,10 @@ Three things to know before adding a symbol to it:
   `%gp_rel` rewrite would not touch that anyway.
 * **`verify.py` compiles a standalone file**, so a candidate has to carry a
   copy of the `__asm__` block to be verified, and the landed body must NOT --
-  the unit already has it.
+  the unit already has it. A corollary that cost a round: once such a
+  candidate is in a `sweep.py` batch file, `sweep.py verify` will report it
+  WRONG, because the batch body has no block. Verify it in a scratch file with
+  the block, then land the body without one and let `make check` be the check.
 
 func_8004DCE0, func_8004DDB4, func_80050CAC, func_8004AE98 and func_80048DA0
 all matched first try once the block was in place. unk_72A8 and unk_1AF38 need
