@@ -15,11 +15,44 @@ __asm__(".sdata\n\t.size D_80080A6C,4\n\t.size D_80081440,4\n"
         "\t.size D_800809B8,4\n\t.size D_800809BC,4\n"
         "\t.text");
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033AA8);
+/* The bitmap set, clear and test on the out-of-image words at 0x80012D70,
+   whose base 0x80010000 has no low half, so 0x2D70 stays in the load and store
+   displacements. The base is assigned AFTER the two guards so its `lui` is the
+   first insn of the following block and reorg lifts it into the second guard's
+   delay slot; at the top of the function the index chain is emitted first and
+   the `lui` lands after the `sll` (3 DIFF). Adding the index to the base in a
+   separate statement (`p += ...`) also hands the `addu`'s destination to the
+   pointer's quantity instead of the index chain's, which permutes $a0/$v0
+   through the whole function (7 DIFF). */
+void func_80033AA8(s32 id) {
+    u32 k = id & 0xFFFF;
+    u8 *p;
+
+    if (k == 0) {
+        return;
+    }
+    if (k == 1) {
+        return;
+    }
+    p = (u8 *) 0x80010000;
+    *(u32 *) (p + (k >> 5) * 4 + 0x2D70) |= 1 << (id & 0x1F);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033AE8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033B2C);
+s32 func_80033B2C(s32 id) {
+    u32 k = id & 0xFFFF;
+    u8 *p;
+
+    if (k == 0) {
+        return 0;
+    }
+    if (k == 1) {
+        return 1;
+    }
+    p = (u8 *) 0x80010000;
+    return (*(u32 *) (p + (k >> 5) * 4 + 0x2D70) & (1 << (id & 0x1F))) != 0;
+}
 
 void func_80033AE8(s32);
 
