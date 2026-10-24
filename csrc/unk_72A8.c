@@ -399,7 +399,7 @@ void func_800355EC(u8 *p) {
 }
 
 void func_80035888(u8 *, u8 *, u8 *, s32, u32);
-void func_8003566C(void);
+void func_8003566C(u8 *);
 
 void func_80035614(u8 *p) {
     func_80035888(D_800821CC, D_80081F14, p, 0, *(u32 *) (p + 0x74));
@@ -407,7 +407,34 @@ void func_80035614(u8 *p) {
     *(u32 *) (p + 0x68) = (u32) func_8003566C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003566C);
+extern u8 D_800822F0[];
+extern u8 D_80081F78[];
+extern u8 D_8006A86C[];
+void func_80035E58(u8 *, u8 *, u8 *, u8 *, s32, u32);
+void func_8003571C(u8 *);
+
+/* THREE separate locals for the three reads of `*(u8 **) p`, not one `q`
+   reassigned: as one variable it is one allocno and the pointer and the
+   halfword swap registers in the first statement (8 DIFF). */
+void func_8003566C(u8 *p) {
+    u8 *q;
+    u8 *r;
+    u8 *s;
+
+    q = *(u8 **) p;
+    *(u16 *) (q + 8) = *(u16 *) (q + 8) - 0xA0;
+    r = *(u8 **) p;
+    if (*(s16 *) (r + 8) < 0) {
+        *(s16 *) (r + 8) = 0;
+    }
+    s = *(u8 **) p;
+    if (*(s16 *) (s + 8) < 0x100) {
+        func_80035E58(D_800822F0, D_80081F78, D_8006A86C, p, 1,
+                      *(u32 *) (p + 0x74));
+        p[0x4D] = 0;
+        *(u32 *) (p + 0x68) = (u32) func_8003571C;
+    }
+}
 
 void func_80035760(u8 *);
 
@@ -469,7 +496,34 @@ void func_80035820(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035888);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800359FC);
+void func_80035CE4(u8 *, u8 *, s32);
+void func_80037C7C(u8 *, s16);
+
+/* The +0x44 pointer and the +0x4A index in SEPARATE statements, pointer
+   first: that is the func_800368D0 family's load-order lever (sched1's
+   tie-break is RTL order), and here the registers come out right as well, so
+   it lands. Both calls take their arguments straight from the parameter
+   registers -- nothing sets $a0 before either `jal`. */
+void func_800359FC(u8 *p, u8 *q, s32 r) {
+    u8 *b;
+    s16 i;
+    u8 *e;
+
+    if (func_80037534(p, (s32) q, r) != 0) {
+        return;
+    }
+    if (p[0x48] != 0) {
+        b = *(u8 **) (p + 0x44);
+        i = *(s16 *) (p + 0x4A);
+        e = b + i;
+        if (e[0x4C] == 0xFE) {
+            func_8003C24C();
+            *(u32 *) (p + 0x68) = (u32) func_80035CE4;
+        }
+    }
+    (*(void (**)(u8 *, u8 *, s32)) (p + 0x68))(p, q, r);
+    func_80037C7C(p, *(s16 *) (q + 2));
+}
 
 void func_80035AAC(u32 *p) {
     p[0x1A] = (u32) func_80035AF8;

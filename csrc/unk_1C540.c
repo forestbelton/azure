@@ -2717,7 +2717,22 @@ void func_80050FCC(void) {
     func_80041284(&D_80080B9C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050FF4);
+extern Unk41284 D_80080BAC;
+void func_8003E140(s8 *);
+void func_80041344(u32, u32);
+
+void func_80050FF4(u8 *p) {
+    *p = 0;
+    func_8003E4FC(6, (u8 *) &D_80080BAC, 0);
+    func_8003E4FC(0xFF, (u8 *) func_8003E140, (s32) p);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    *p = 0;
+    func_8003E4FC(6, (u8 *) &D_80080B9C, 0);
+    func_8003E4FC(0xFF, (u8 *) func_8003E140, (s32) p);
+    func_8003F320();
+}
 
 void func_80050FF4(u8 *);
 u32 func_80126890(u32);
