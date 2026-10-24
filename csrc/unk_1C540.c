@@ -238,7 +238,32 @@ u8 *func_80049790(s32 a) {
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800497F4);
+/* The `!=` arm first, so the test branches forward INTO the `k` arm as the
+   target's `beq` does -- the other way round the `*p = 0` block needs a `j`
+   to reach the epilogue and the function is a word long. And the last read of
+   `p[1]` goes into its OWN local: reusing `e` makes one allocno for all four
+   reads and it keeps $v1, where the target coalesces the last one onto $a0,
+   the dead parameter's register. */
+void func_800497F4(u32 *p, s32 k) {
+    u8 *e;
+    u8 *f;
+
+    if (p[0] == 0) {
+        return;
+    }
+    e = (u8 *) p[1];
+    if ((*(u32 *) e << 8) != 0x80808000) {
+        e[0] -= 0x10;
+        ((u8 *) p[1])[1] -= 0x10;
+        ((u8 *) p[1])[2] -= 0x10;
+        f = (u8 *) p[1];
+        if ((*(u32 *) f << 8) == 0x80808000) {
+            *(u32 *) f = *(u32 *) D_80080B54;
+        }
+    } else if (k != 0) {
+        p[0] = 0;
+    }
+}
 
 typedef struct Unk498A0 {
     u8 unk_00[8];

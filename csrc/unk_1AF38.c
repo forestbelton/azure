@@ -340,7 +340,30 @@ s32 func_80048224(s16 k) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004827C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800482C8);
+void func_80047468(Unk800777AC *, u32, u32);
+void func_80047338(Unk800777AC *, u32, u32);
+
+/* func_800488F0's walk with a flag test instead of two. D_80082E60 is read as
+   a STRUCT FIELD, not through a pointer local: the local makes loop.c hoist
+   the constant 1 of the comparison as well as the address, which costs a
+   fifth callee-saved register and three words. */
+void func_800482C8(Unk800777AC *p, u32 *q) {
+    u32 *r = (u32 *) p;
+    s32 t;
+
+    do {
+        if ((p->unk_00 & 0x60) == 0) {
+            r--;
+            if (D_80082E60.unk_0A == 1) {
+                func_80047468(p, *q, *r);
+            } else {
+                func_80047338(p, *q, *r);
+            }
+        }
+        t = p->unk_00 & 0x80;
+        p++;
+    } while (t == 0);
+}
 
 void func_80047784(u8 *, s32, s32);
 

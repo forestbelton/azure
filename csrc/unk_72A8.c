@@ -1982,7 +1982,34 @@ u8 *func_8003ACC0(u8 *p, u16 n) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AD08);
+u8 *func_8003ACC0(u8 *, u16);
+
+/* `d` is REUSED for func_8003ACC0's result rather than a second pointer
+   local: as its own variable it takes $v1 and the hoisted 0x82 takes $a0,
+   where the target has them the other way round (5 DIFF, and no declaration
+   order, loop shape or explicit constant local moves it). The prototype has to
+   be in scope too -- without it the `u16` conversion of the digit count is
+   not emitted. */
+u8 *func_8003AD08(u32 n, u8 *out) {
+    u8 buf[0x10];
+    u8 *d = buf;
+    s32 c = 0;
+
+    do {
+        c++;
+        *d = n % 10;
+        n = n / 10;
+        d++;
+    } while (n != 0);
+    d = func_8003ACC0(buf, c);
+    do {
+        *out++ = 0x82;
+        *out++ = *d++ + 0x4F;
+        c--;
+    } while (c > 0);
+    *out = 0;
+    return out;
+}
 
 /* The array spelling, not the scalar `D_80082E6A`: a 1-byte scalar is small
    data at -G8 and maspsx expands its load into one register, where the target
