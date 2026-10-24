@@ -711,6 +711,31 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### A switch's tree says which cases share a body, and whether there is a default
+
+`emit_case_nodes` (stmt.c) tests a node's own value first, then dispatches to
+its subtrees -- and the branch SENSE tells you which subtree needed no test of
+its own. For a node with two children it normally tests `> high` and branches
+to the RIGHT; it tests `< high` and branches to the LEFT only when the left
+subtree is `node_is_bounded`, i.e. the parent tests have already narrowed the
+index to exactly that node's values. So
+
+    slti $v0, $a0, 4
+    bnez $v0, .L80054AB0      # branch on the LEFT
+
+means the left subtree is a range the remaining tests pin down exactly, which
+happens when two case values share one body and there is no default:
+
+    case 1:
+    case 2:
+        func_80055B44(k);
+        break;
+
+A trailing `j` to the EPILOGUE rather than to a body is the other half of the
+same reading: the default does nothing, so there is no default label. Written
+with a `default:` that calls, func_80054A7C came out with that test inverted
+and the `j` pointing at the default's body (3 DIFF through six case orders).
+
 ### A switch's case bodies are emitted in SOURCE order
 
 The compare tree is built from the sorted case values, so it tells you nothing
