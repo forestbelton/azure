@@ -1033,6 +1033,27 @@ otherwise have filled in the next load's delay slot -- and it is sensitive to
 statement order: only one of the six permutations of its three stores produces
 the copy at all.
 
+**The bytecode cursor is the same copy, and it is a whole family.** unk_72A8's
+opcode handlers read through the stream pointer at `p + 0x1C` and advance it in
+the same statement pair, and the advance is a read-modify-write of the FIELD,
+not of a local:
+
+    u8 **q = (u8 **) (p + 0x1C);
+
+    p[0x26] = **q;      /* -> lw p1 ; addu p2,p1,zero ; lbu */
+    *q += 1;            /* -> addiu p2,p2,1 ; sw        */
+
+Caching the cursor (`u8 *c = *q; ... *q = c + 1;`) collapses the pair to a
+single `addiu p2,p1,1` and comes out exactly ONE WORD SHORT with every other
+insn in the right order. That signature -- one missing word, nothing else
+misplaced -- is worth recognising before re-deriving the logic: eleven source
+shapes and all 24 permutations of the surrounding stores were tried on
+func_80039730 before the re-dereference was, and only `**q` with `*q += n`
+produces the copy. The two trailing stores have to come AFTER the pair.
+Matched: func_80039730, func_80039C44, func_80039D10 (one byte) and
+func_80039578, func_800395B0, whose halfword is `(*q)[0] + ((*q)[1] << 8)`
+followed by `*q += 2`.
+
 
 * **The rule is about a FIXED-address scalar against a VARYING-address struct
   reference, in either order -- so it governs store placement as well as load
