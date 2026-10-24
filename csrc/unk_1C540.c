@@ -310,7 +310,17 @@ s32 func_8004A4E4(s32 a, u8 *p) {
     return a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A534);
+typedef struct Unk800102F0 {
+    u8 pad_00[0x11];
+    u8 unk_11;
+    u8 pad_12[0x42];
+} Unk800102F0;
+
+u32 func_8004A534(u32 a, u8 *p) {
+    /* A struct at the constant base, so the +0x11 stays in the load's
+       displacement instead of folding onto the constant. */
+    return a + (a >> 2) * ((Unk800102F0 *) 0x800102F0)[p[3] & 0x1F].unk_11;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A574);
 
@@ -635,7 +645,14 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CAE8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CB2C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CBFC);
+void func_8004CBFC(u32 *p, u8 *q, u32 *r) {
+    p[2] = (u32) q;
+    p[0] = *(u16 *) q / D_80080A84;
+    p[1] = (u32) r;
+    if (r != 0) {
+        r[0] = *(u32 *) (q + 4);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CC38);
 
@@ -1264,7 +1281,12 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FA2C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FAA4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FC2C);
+void func_8004FAA4(u32 *);
+
+void func_8004FC2C(u32 *p) {
+    ((void (*)(u32 *)) p[0])(p);
+    func_8004FAA4(p);
+}
 
 u32 func_80021448(u8 *);
 
@@ -1344,7 +1366,14 @@ void func_8005097C(u8 *p) {
     func_800499E8(p + 0x18, (s32) D_80080B88, D_80080B90);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800509C4);
+void func_8005097C(u8 *);
+void func_80050640(u8 *);
+
+void func_800509C4(u8 *p, s32 a) {
+    *(s32 *) (p + 0x1C) = a;
+    func_8005097C(*(u8 **) (p + 0x2C));
+    *(u32 *) p = (u32) func_80050640;
+}
 
 void func_800509C4(u8 *, s32);
 void func_8005084C(u8 *, u8 *, u8 *, u8 *);
@@ -1413,7 +1442,13 @@ void func_80050FCC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050FF4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800510A0);
+void func_80050FF4(u8 *);
+u32 func_80126890(u32);
+
+void func_800510A0(u8 *p) {
+    func_80050FF4(p + 0xC);
+    *(u32 *) (p + 0x8) = func_80126890(*(u32 *) (p + 0x4));
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800510DC);
 
