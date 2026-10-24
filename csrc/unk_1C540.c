@@ -334,7 +334,35 @@ u32 func_80049E6C(s32 i) {
     return D_800712B4[i];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049E88);
+extern s8 D_800712E4[];
+extern u8 D_800712F0[];
+s16 func_80042900(s8 *, s8);
+
+/* func_80042900 is declared s16 HERE (it is `s32` in csrc/unk_154BC.c, where
+   it is defined): both tests of its result are on the low halfword,
+   `sll 16` then `bnez`/`blez`.
+
+   The trailing byte is read into a `u8` and cast back to `s8` for the call.
+   That is what the target's `lbu` plus `sll 24`/`sra 24` is -- the loop above
+   reads the same array with a plain `lb`, so the declaration is signed and the
+   unsigned read is the cast. A `u8` __asm__ alias gives the base a second
+   materialisation and costs 14 words. */
+u8 func_80049E88(s8 *p) {
+    s32 i = 0xB;
+    u8 c;
+
+    while (func_80042900(p, D_800712E4[i]) == 0) {
+        i--;
+        if (i <= 0) {
+            break;
+        }
+    }
+    c = D_800712E4[i];
+    if (c == 7 && func_80042900(p, (s8) c) > 0) {
+        i--;
+    }
+    return D_800712F0[i];
+}
 
 void func_80049F2C(u8 *p) {
     *(u16 *) (p + 0x28) += (*(s16 *) (p + 0x4) - *(s16 *) (p + 0x28)) >> 1;
@@ -1410,7 +1438,20 @@ void func_8004DDC4(void) {
     func_80033AE8(2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DDE4);
+void func_8004DCA8(u8 *);
+void func_8003528C(u32);
+
+/* func_8004DD2C's shape with a third word. `p` is the pass-through: nothing
+   sets $a0 before the `jal func_8004DCA8`. */
+void func_8004DDE4(u8 *p) {
+    D_80081554 &= 0xF;
+    D_80081558 = D_80081554;
+    D_80083D98[D_80081554++] = 0x15080707;
+    func_8004DCA8(p);
+    D_80083D98[D_80081554++] = 0x20C11;
+    D_80083D98[D_80081554++] = 1;
+    func_8003528C((u32) &D_80083D98[D_80081558]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DE88);
 
@@ -2362,7 +2403,39 @@ void func_80050694(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800506BC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005084C);
+void func_80050550(u8 *, s32, s32);
+
+/* Two things, both measured. The two templates are read ENTIRELY through
+   pointer locals (`d[0] = D_8002E5D8[0]` with the first element through the
+   symbol costs 30 DIFF here, unlike func_8004CCBC where that is the shape --
+   the difference is that these stores go to a parameter, not through a double
+   dereference). And `d`/`e` must be `u32 *` so the copies are ARRAY_REFs: as
+   `*(u32 *) (d + 4)` on a `u8 *` it is 32 DIFF.
+
+   The three tail stores all re-read `*(u8 **) (p + 4)`. cse forwards the
+   first one to the register just stored -- which is the target's
+   `addu $v1, $a2, $zero` -- and the `sh` through that pointer then
+   invalidates the entry, so the next two come out as real loads. Writing them
+   through `d` loses the copy and the function is a word short. */
+void func_8005084C(u8 *a, u8 *p, u32 *d, u32 *e) {
+    u32 *s = D_8002E5D8;
+    u32 *t = D_8002E5E8;
+
+    d[0] = s[0];
+    d[1] = s[1];
+    d[2] = s[2];
+    d[3] = s[3];
+    e[0] = t[0];
+    e[1] = t[1];
+    e[2] = t[2];
+    *(u32 **) (p + 4) = d;
+    *(u32 **) (p + 8) = e;
+    *(u32 *) p = 0;
+    *(s16 *) (*(u8 **) (p + 4) + 8) = -0x6C;
+    *(s16 *) (*(u8 **) (p + 4) + 0xA) = -0x10;
+    *(*(u8 **) (p + 4) + 0xF) = 4;
+    func_80050550(p, 0, 1);
+}
 
 /* Two 0xC-byte primitives; D_80080B84/80 joined this unit's .sdata block (no
    other function in the unit reaches them), so this was verified in a scratch
@@ -2403,12 +2476,12 @@ void func_800509C4(u8 *p, s32 a) {
 }
 
 void func_800509C4(u8 *, s32);
-void func_8005084C(u8 *, u8 *, u8 *, u8 *);
+void func_8005084C(u8 *, u8 *, u32 *, u32 *);
 void func_800506BC(u32, u8 *, s32);
 
 void func_80050A00(u8 *p, s32 b) {
     func_800509C4(p, b);
-    func_8005084C(p, p + 0x58, p + 0x30, p + 0x40);
+    func_8005084C(p, p + 0x58, (u32 *) (p + 0x30), (u32 *) (p + 0x40));
     func_800506BC(*(u32 *) (p + 0x68), p, b);
 }
 
@@ -2636,7 +2709,33 @@ void func_80051528(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051548);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051708);
+extern UnkElem D_80072044[];
+void func_80051548(void);
+void func_80044BB0(void);
+
+/* func_800520B4's recipe, with a SEPARATE local for the +8 block at the end:
+   reusing `e` gives that block $a0 where the target has $v1 (4 DIFF). */
+void func_80051708(u8 *p, s32 a) {
+    u8 *q;
+    u8 *e;
+    u8 *f;
+
+    *(u32 *) (p + 0x10) = (u32) func_80051548;
+    *(u32 *) (p + 0x20) = a;
+    q = p + 0x20;
+    *(u16 *) (q + 4) = 0;
+    *(u16 *) (q + 6) = 0;
+    e = *(u8 **) (p + 0xC);
+    *(u32 *) (e + 0xC) = 0x808080;
+    func_8003DB94((UnkSlot *) e, D_80072044, 0);
+    *(u16 *) (e + 0x1E) = 0x1000;
+    *(u16 *) (e + 0x1C) = 0x1000;
+    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
+    f = *(u8 **) (p + 8);
+    *(u32 *) (f + 0) = 0x1C00000;
+    *(u32 *) (f + 4) = 0xC00000;
+    *(u32 *) (f + 8) = 0x800000;
+}
 
 void func_800517CC(void);
 
@@ -2660,7 +2759,33 @@ void func_80051CA4(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051CC4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051E94);
+extern u32 D_80071A68[];
+void func_80051CC4(void);
+void func_80044BB0(void);
+
+void func_80051E94(u8 *p, s32 a) {
+    u8 *q;
+    u8 *e;
+    u8 *f;
+
+    *(u32 *) (p + 0x10) = (u32) func_80051CC4;
+    *(u32 *) (p + 0x20) = a;
+    q = p + 0x20;
+    *(u16 *) (q + 4) = 0;
+    *(u16 *) (q + 6) = 0;
+    *(u16 *) (q + 0xA) = 0;
+    *(u16 *) (q + 0xC) = 0;
+    e = *(u8 **) (p + 0xC);
+    *(u32 *) (e + 0xC) = 0;
+    *(u32 *) (e + 8) = D_80071A68[*(s16 *) (q + 0xA)];
+    *(u16 *) (e + 0x1E) = 0x1000;
+    *(u16 *) (e + 0x1C) = 0x1000;
+    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
+    f = *(u8 **) (p + 8);
+    *(u32 *) (f + 0) = 0x380000;
+    *(u32 *) (f + 4) = 0x280000;
+    *(u32 *) (f + 8) = 0x900000;
+}
 
 void func_80051F58(void);
 
