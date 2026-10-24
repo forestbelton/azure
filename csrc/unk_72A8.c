@@ -1757,7 +1757,22 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B64C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B714);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B7C8);
+s32 func_800B28A0(void);
+
+/* Indexed by the counter off the constant base, which is what puts the giv's
+   initialisation in the loop's PREHEADER -- after the `blez` -- and leaves
+   0xAC4 as the store's displacement and 0x54 as the increment. A pointer
+   walked with `p += 0x54` hoists its `lui` above the table lookup instead
+   (9 DIFF); see the unbiased-giv note in docs/matching-levers.md. */
+void func_8003B7C8(void) {
+    u8 *b = (u8 *) 0x80010000;
+    s32 n = D_800D0728[func_800B28A0()];
+    s32 i;
+
+    for (i = 0; i < n; i++) {
+        *(b + i * 0x54 + 0xAC4) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B820);
 
