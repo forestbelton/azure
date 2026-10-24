@@ -2347,7 +2347,27 @@ void func_80058E64(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058E6C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800590E0);
+u32 func_80058A04(s32);
+u32 func_800589B8(s32);
+
+/* `func_80058A04(p)` emits nothing -- $a0 already holds p and cse deletes the
+   no-op move -- but it is the FOURTH reference to p, which crosses the
+   floor_log2 boundary in global-alloc's priority (2*4/11 against 1*3/9) and
+   wins p the $s1 the target has. With three references n outranks it and the
+   two swap. The increment is written FIRST in the body, which is what puts a
+   copy of it in the preheader and the other in the bottom branch's delay
+   slot. */
+void func_800590E0(s32 p) {
+    u32 i = 0;
+    u32 n = func_80058A04(p);
+
+    do {
+        i++;
+        if ((u8) func_800589B8(p) == 0xF7) {
+            break;
+        }
+    } while (i < n);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005914C);
 
@@ -2355,7 +2375,26 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005947C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800595C0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800597A8);
+s32 func_800588C8(u32);
+s32 func_80058ABC(u8 *);
+
+/* No local for the second result: the target stores it straight out of $v0 and
+   only then copies it to $a1, because the `return 0` needs $v0. Reading
+   `*(u32 *) (p + 0x18)` back for the sum is free -- cse disambiguates it from
+   the +0x38 store -- while `*(u32 *) p` is re-read for real, the call having
+   invalidated it. */
+s32 func_800597A8(u8 *p) {
+    s32 v = func_800588C8(*(u32 *) p);
+
+    *(u32 *) p = v;
+    if (v == -1) {
+        return 1;
+    }
+    *(u32 *) (p + 0x18) = func_80058ABC(p);
+    *(u32 *) (p + 0x38) = *(u32 *) p;
+    *(u32 *) (p + 0x1C) = *(u32 *) p + *(u32 *) (p + 0x18);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059814);
 
