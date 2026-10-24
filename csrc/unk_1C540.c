@@ -1556,7 +1556,25 @@ void func_8004FC68(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FC98);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FD78);
+u32 func_8002137C(s32);
+
+/* The call is the FIRST declaration, so the counter is initialised after it
+   and never crosses it: it stays in $v1 and the function spends one
+   callee-saved register. Declared before the call, `i` crosses it, takes $s0
+   and pushes the pointer to $s1 -- 28 DIFF and two words longer. */
+s32 func_8004FD78(u8 *p, s32 b) {
+    u32 v = func_8002137C(b);
+    s32 i = 0;
+    s32 n = *(s32 *) (p + 0x24);
+
+    while (i < n) {
+        if (*(u32 *) (p + i * 4 + 0x10) == v) {
+            break;
+        }
+        i++;
+    }
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FDE0);
 
@@ -2466,7 +2484,21 @@ s16 func_8005AC30(s16 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005AC68);
+void func_8005A1D0(u32);
+
+/* The base read into a local first, so its lui/addiu come out ahead of the
+   28-stride index chain (8 DIFF the other way round). The -1 is one constant
+   shared by the compare and the store, which is why it sits in a callee-saved
+   register across the call. */
+void func_8005AC68(s16 i) {
+    Unk80086A40 *b = D_80086A40;
+    Unk80086A40 *p = &b[i];
+
+    if (p->unk_00 != -1) {
+        func_8005A1D0(p->unk_10);
+        p->unk_00 = -1;
+    }
+}
 
 void func_8005ACD0(u16 v) {
     D_80073828[0] = v;

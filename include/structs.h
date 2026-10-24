@@ -1174,7 +1174,9 @@ typedef struct Unk80086A40 {
     s16  unk_00;  /* read with lh and compared against -1 */
     u8   pad_02[0x2];
     u8  *unk_04;
-    u8   pad_08[0x14];
+    u8   pad_08[0x8];
+    u32  unk_10;
+    u8   pad_14[0x8];
 } Unk80086A40;
 extern Unk80086A40 D_80086A40[];
 extern u32 D_8006AFDC[];  /* four pointer tables, indexed by func_800B2834 */
