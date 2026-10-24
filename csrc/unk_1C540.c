@@ -1260,9 +1260,34 @@ void func_8004D110(u32 a) {
     D_80083178.unk_B4 = (u32) func_8004D0E4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D12C);
+/* THREE separate halfword locals, not one reused: as one quantity it spans
+   the whole tail and local-alloc gives it $a1, leaving the parameter in $a0,
+   where the target has the halfword in $a0 and the parameter copied to $a1 --
+   that copy IS the parameter move, and no explicit `u8 *p = r;` produces it
+   (10 DIFF in every distribution of p against r). */
+void func_8004D12C(u8 *p) {
+    u16 *d;
+    s32 t;
+    u16 a;
+    u16 b;
+    u16 c;
 
-void func_8004D12C(void);
+    t = *(s32 *) (p + 0x14) + *(s32 *) (p + 0x18);
+    d = *(u16 **) p;
+    *(s32 *) (p + 0x14) = t;
+    if (t >= 0x1000) {
+        *(s32 *) (p + 0x14) = 0x1000;
+        *(u32 *) (p - 4) = 0;
+    }
+    a = *(u16 *) (p + 4);
+    d[0] = *(u16 *) (p + 0xC) - a + ((s16) a * *(s32 *) (p + 0x14) >> 12);
+    b = *(u16 *) (p + 6);
+    d[1] = *(u16 *) (p + 0xE) - b + ((s16) b * *(s32 *) (p + 0x14) >> 12);
+    c = *(u16 *) (p + 8);
+    d[2] = *(u16 *) (p + 0x10) - c + ((s16) c * *(s32 *) (p + 0x14) >> 12);
+}
+
+void func_8004D12C(u8 *);
 
 /* The two pointer stores LAST, after all three subtractions: perm.py says
    that is the only one of the 120 orderings of those five statements that
@@ -2382,7 +2407,25 @@ s32 func_8004FFA8(u8 *p) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FFF4);
+/* The row pointer is INDEXED off the parameter inside the body: walking
+   `p += 4` makes loop.c bias the giv and the eight chains come out off
+   offsets 0 and 0x24 instead of 4 and 0x28, a word over. */
+void func_8004FFF4(u8 *b) {
+    s32 i;
+
+    for (i = 0; i < 6; i++) {
+        u8 *p = b + i * 4;
+
+        *(s16 *) (*(u8 **) (*(u8 **) (p + 4) + 4) + 8) = 0;
+        *(s16 *) (*(u8 **) (*(u8 **) (p + 0x28) + 4) + 8) = 0x1E;
+        *(*(u8 **) (*(u8 **) (p + 0x28) + 4) + 0) = 0x58;
+        *(*(u8 **) (*(u8 **) (p + 0x28) + 4) + 1) = 0x58;
+        *(*(u8 **) (*(u8 **) (p + 0x28) + 4) + 2) = 0x58;
+        *(*(u8 **) (*(u8 **) (p + 4) + 4) + 0) = 0x58;
+        *(*(u8 **) (*(u8 **) (p + 4) + 4) + 1) = 0x58;
+        *(*(u8 **) (*(u8 **) (p + 4) + 4) + 2) = 0x58;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800500B4);
 

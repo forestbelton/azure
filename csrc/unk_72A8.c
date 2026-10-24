@@ -1007,7 +1007,35 @@ void func_80037D50(u8 *p, u8 b) {
     *(u16 *) (q + 0xE) = D_8006A8B4[q[0x2A]] * q[0x25];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037D9C);
+extern u8 D_800809C0[];
+extern u8 D_8006A86C[];
+void func_8003AB14(u16 *, u16 *);
+void func_80037D50(u8 *, u8);
+void func_80038A10(u8 *, u8 *, s32);
+
+void func_80037D9C(u8 *p, u8 c) {
+    u8 *q = p + 0x8C;
+    u8 v;
+
+    *(u32 *) (q + 0x80) = (u32) p;
+    func_8003AB14((u16 *) q, (u16 *) D_8006A86C);
+    q[0x2A] = 1;
+    q[0x24] = 0x20;
+    *(s16 *) (q + 0xC) = 0xFC;
+    *(s16 *) (q + 8) = 0;
+    *(s16 *) (q + 0xA) = 0;
+    *(u32 *) (q + 0x1C) = (u32) D_800809C0;
+    *(s16 *) (q + 0x22) = 0;
+    *(s16 *) (q + 0x20) = 0;
+    q[0x2E] = 0;
+    v = p[3];
+    p[4] = v;
+    q[0x28] = v;
+    *(u32 *) (q + 0x7C) = (u32) (p + 0xC8);
+    *(u32 *) (q + 0x10) = (u32) func_80038A10;
+    p[2] = c;
+    func_80037D50(p, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037E58);
 
@@ -1031,7 +1059,7 @@ void func_80038000(u8 v) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003800C);
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 /* The struct through a pointer local declared at function scope, so its
    lui/addiu pair lands in the entry block (the `addiu` ends up in the first
@@ -1057,7 +1085,7 @@ void func_80038128(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_800381A4(u8 *p) {
     u16 *c = (u16 *) (p + 0x18);
@@ -1129,7 +1157,7 @@ void func_8003832C(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038368;
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038368(u8 *p) {
     u16 *c = (u16 *) (p + 0x18);
@@ -1140,7 +1168,7 @@ void func_80038368(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038394(u8 *p) {
     if (func_80033B2C(*(s16 *) (p + 0x30)) != 0) {
@@ -1148,7 +1176,7 @@ void func_80038394(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_800383D4(u8 *p) {
     if (D_80082660[p[0x2F]].unk_01 == 0) {
@@ -1157,7 +1185,7 @@ void func_800383D4(u8 *p) {
 }
 
 u8 *func_800392A4(u8);
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038408(u8 *p) {
     if (func_800392A4(p[0x2F]) != 0) {
@@ -1202,7 +1230,7 @@ void func_800384F8(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038538(u8 *p) {
     func_80053DA8(0xB4);
@@ -1215,7 +1243,7 @@ void func_80038570(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038588;
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038588(u8 *p) {
     if (*(s8 *) (p + 0x84) != 0) {
@@ -1230,7 +1258,7 @@ void func_800385D0(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_800385E8;
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_800385E8(u8 *p) {
     if (*(s8 *) (p + 0x84) != 0) {
@@ -1245,7 +1273,7 @@ void func_80038630(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038648;
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038648(u8 *p) {
     if (*(s8 *) (p + 0x84) != 0) {
@@ -1254,7 +1282,7 @@ void func_80038648(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038690(u8 *p) {
     u8 *s = *(u8 **) (p + 0x80);
@@ -1267,7 +1295,7 @@ void func_80038690(u8 *p) {
     }
 }
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_80038708(u8 *p) {
     ((void (*)(void)) D_800DCF54[*(s8 *) (p + 0x32)])();
@@ -1277,7 +1305,7 @@ void func_80038708(u8 *p) {
 /* D_80110E98 is an ARRAY of pointers, not a pointer to one: the target takes
    its address (`addiu %lo`) where `extern u32 **` loads through it. */
 extern u32 *D_80110E98[];
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_8003875C(u8 *p) {
     u32 r = (*(u32 (**)(u32)) (D_80110E98[*(s8 *) (p + 0x32)] + *(s8 *) (p + 0x33)))(*(u32 *) (p + 0x34));
@@ -1290,7 +1318,7 @@ void func_8003875C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800387D0);
 
-void func_80038A10(void);
+void func_80038A10(u8 *, u8 *, s32);
 
 void func_800389B4(u8 *p) {
     if (func_80053EF0(4) != 0x100) {
