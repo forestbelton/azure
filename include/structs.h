@@ -1238,6 +1238,12 @@ extern Unk80073414 D_80073414[];
 extern u32  D_80081550;
 extern u32  D_80081554;
 extern u32  D_80081558;
+/* The four words func_8004D614 copies into the D_80083178 cache; $gp-relative
+   in csrc/unk_1C540.c through that unit's sdata_entries block. */
+extern u32  D_80080B58;
+extern u32  D_80080B5C;
+extern u32  D_80080B60;
+extern u32  D_80080B64;
 extern u32  D_80080B94;
 extern s32  D_80080B98;
 extern u8  *D_80081540;

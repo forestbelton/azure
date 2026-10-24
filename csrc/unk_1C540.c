@@ -23,6 +23,8 @@ extern u32 D_800814A0a[] __asm__("D_800814A0");
 __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
         "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
         "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
+        "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
+        "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
         "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.text");
 
 void func_80048C3C(s32);
@@ -1016,7 +1018,25 @@ void func_8004D5D0(void) {
     func_8004D4AC();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D614);
+/* $gp group: D_80080B58..D_80080B64 are in this unit's sdata_entries block
+   (added for this function -- nothing else in the unit touches them), so their
+   four loads are %gp_rel. Verified in a scratch file carrying the block, since
+   verify.py compiles standalone. */
+void func_8004D614(void) {
+    u8 *p = (u8 *) &D_80083178;
+
+    bzero(p + 0x9C, 8);
+    *(u32 *) (p + 0x94) = D_80080B60;
+    *(u32 *) (p + 0x98) = D_80080B64;
+    *(u32 *) (p + 0xAC) = D_80080B58;
+    *(u32 *) (p + 0xB0) = D_80080B5C;
+    bzero(p + 0xA4, 8);
+    *(u32 *) (p + 0x13C) = 0;
+    *(u32 *) (p + 0x180) = 0;
+    *(u32 *) (p + 0xB4) = 0;
+    *(u32 *) (p + 0xF8) = 0;
+    func_8004D0C8((u32) D_80083780);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D690);
 
