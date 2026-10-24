@@ -1241,6 +1241,8 @@ extern u8  *D_80081540;
 extern u8   D_80080B1B;
 extern u8   D_80080B1C;
 extern u8   D_80080B18[];
+extern u8   D_8007164C[];
+extern u8   D_80071644[];
 extern u32  D_80083D98[];
 /* Sized: func_8004DCA8 materialises its address with the one-insn `la`. */
 extern u8   D_80080B68[8];

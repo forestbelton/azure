@@ -1091,9 +1091,17 @@ void func_8004EB30(void) {
     D_80084130[0] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EB3C);
+void func_8004EB3C(u8 *p) {
+    p[0] = 0;
+    func_8003E4FC(6, D_8007164C, 0);
+    func_8003E4FC(0xFF, (u8 *) func_8003E140, (s32) p);
+}
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004EB8C);
+void func_8004EB8C(u8 *p) {
+    p[0] = 0;
+    func_8003E4FC(6, D_80071644, 0);
+    func_8003E4FC(0xFF, (u8 *) func_8003E140, (s32) p);
+}
 
 s32 func_8004EBDC(void) {
     s32 r = 0;
@@ -1292,7 +1300,17 @@ s32 func_8004F85C(u32 *p, u32 *q) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F884);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F95C);
+void func_8004F884(u8 *);
+
+void func_8004F95C(u8 *p) {
+    func_8004F884(p);
+    /* The post-increment INSIDE the condition: the old value is compared and
+       the incremented one stored, which is the `addu $v1, $v0, $zero` copy.
+       Read, compare, then store as three statements is a word shorter. */
+    if ((*(s32 *) (p + 0x2C))++ >= *(s32 *) (p + 0x28)) {
+        *(u32 *) p = (u32) func_8004F67C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F9AC);
 
@@ -1433,7 +1451,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050DA8);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050E20);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050EA8);
+void func_80050EA8(u8 *p) {
+    u8 *q = p + 0x20;
+    u32 v = *(u32 *) (p + 0x10);
+
+    if (v != 0) {
+        *(u32 *) (q + 0x24) = v;
+        *(u32 *) (p + 0x10) = 0;
+    }
+    func_80044A50((UnkNode *) p);
+    func_8004FE78(*(u32 *) (q + 0x28));
+    *(u32 *) (q + 0x28) = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050EF8);
 
