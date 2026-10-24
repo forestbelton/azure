@@ -711,6 +711,23 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### Statement granularity is what orders the pieces of an address
+
+`fold` puts an ADDR_EXPR second in a sum, so an address written as one
+expression emits its INDEX first and the symbol after -- and no declaration
+spelling moves that: a base local, a sized alias, a small-object alias, a
+struct array and an index local all left func_80055ADC's `sll` ahead of its
+`lui`. What moves it is giving each piece its own statement, in the order the
+listing has them:
+
+    s32 k = b & 0xFFFF;                     /* andi  */
+    u8 *base = D_80084878;                  /* lui, addiu */
+    u32 *q = (u32 *) (base + k * 0x40);     /* sll, addu  */
+
+The same granularity decides the prologue: the three scalars initialised before
+the address in that function come out in declaration order, so an initialiser
+list IS a statement sequence for matching purposes.
+
 ### A wider store invalidates cse's entry for the narrow read after it
 
 Two word stores into adjacent scalars leave cse holding both values, so a read
