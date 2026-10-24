@@ -166,6 +166,16 @@ which was already declared as a struct 300 lines further down.
   makes gcc emit the parameter move the target has as its first instruction.
   No explicit `u8 *p = r;` produces that copy, in any distribution of the two
   names (10 DIFF).
+* **Decrement in place and test a COPY.** `n = *p; m = n--; *p = n;
+  if (m <= 0)` gives the target's `addu $v1, $v0, $zero` followed by
+  `addiu $v0, $v0, -1`; written `*p = n - 1;` with the test on `n` the
+  decrement goes to a fresh register, there is no copy, and the function is a
+  word short (func_8004CB2C).
+* **`&D_X` on a scalar is ONE `la` insn; an incomplete array's decayed name is
+  a split lui/addiu pair.** reorg can put the addiu of the split form into the
+  following call's delay slot, so a listing with an EMPTY delay slot before a
+  call whose only argument is a symbol address wants the scalar declaration and
+  `&D_X` (func_8003B0B4, one word).
 * **A flag word that is masked and then `|=`'d in branches wants a `u32`
   local.** As `u16` the masked value and the or-result are two pseudos, so the
   path that takes no branch needs a copy between them, where the target

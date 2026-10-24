@@ -1165,7 +1165,45 @@ u8 *func_8004CAE8(u8 *p, s32 k) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CB2C);
+/* The counter is decremented IN PLACE with a separate copy for the test
+   (`m = n--;`), which is the target's `addu $v1, $v0, $zero` followed by
+   `addiu $v0, $v0, -0x1`. Written `*(s32 *) p = n - 1;` the decrement goes to
+   a fresh register, there is no copy and the function is a word short. */
+s32 func_8004CB2C(u8 *p) {
+    s32 r = -1;
+    u8 *e;
+    s32 n;
+    s32 m;
+    s32 t;
+
+    if (*(u32 *) (p + 4) != 0) {
+        n = *(s32 *) p;
+        m = n--;
+        *(s32 *) p = n;
+        if (m <= 0) {
+            e = *(u8 **) (p + 8);
+            t = *(s16 *) (e + 2);
+            if (t == 2) {
+                *(u8 **) (p + 8) = e + 8;
+                r = 2;
+            } else if (t == 1) {
+                *(u8 **) (p + 8) = *(u8 **) (e + 4);
+                r = 1;
+            } else if (t == 0) {
+                *(u8 **) (p + 8) = *(u8 **) (e + 4);
+                r = 0;
+            }
+            e = *(u8 **) (p + 8);
+            if (*(s16 *) (e + 2) == 2) {
+                **(u32 **) (p + 4) = *(u32 *) (e + 4);
+            } else {
+                r = -2;
+            }
+            *(s32 *) p = *(u16 *) *(u8 **) (p + 8) / D_80080A84;
+        }
+    }
+    return r;
+}
 
 void func_8004CBFC(u32 *p, u8 *q, u32 *r) {
     p[2] = (u32) q;
@@ -2250,7 +2288,25 @@ s32 func_8004F85C(u32 *p, u32 *q) {
     return *(s16 *) ((u8 *) a + 0xC) - *(s16 *) ((u8 *) b + 0xC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F884);
+s32 func_8004F85C(u32 *, u32 *);
+void func_80044AAC(UnkNode *, UnkNode *);
+void func_8004F684(u8 *);
+void func_8004F780(u8 *);
+
+void func_8004F884(u8 *p) {
+    u32 t[4];
+    s32 i;
+
+    for (i = 0; i < *(s32 *) (p + 0x24); i++) {
+        t[i] = *(u32 *) (p + i * 4 + 4);
+    }
+    func_8004AFC8((s32) t, *(s32 *) (p + 0x24), 4, (void *) func_8004F85C);
+    for (i = 0; i < *(s32 *) (p + 0x24) - 1; i++) {
+        func_80044AAC((UnkNode *) t[i], (UnkNode *) t[i + 1]);
+    }
+    func_8004F684(p);
+    func_8004F780(p);
+}
 
 void func_8004F884(u8 *);
 

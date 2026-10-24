@@ -2365,7 +2365,40 @@ void func_8003B06C(void) {
     func_8003C758(D_80080F60);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B0B4);
+extern Unk41284 D_80080EA0;
+extern Unk41284 D_80080E28;
+extern Unk41284 D_800D1D54;
+extern Unk41284 D_800D1E7C;
+extern u8 D_80081018;
+void func_8008B408(s32);
+void func_8008B550(s32);
+void func_800903A8(void);
+
+/* D_80081018 is declared as a SCALAR and passed as `&D_80081018`: as an
+   incomplete array the decayed pointer comes out as a split lui/addiu pair
+   and reorg puts the addiu in func_8003C758's delay slot, a word short. As an
+   address-of it is one two-instruction `la`, which reorg cannot use for a
+   delay slot -- which is why all five of these calls have an empty one. */
+void func_8003B0B4(void) {
+    VSync(0);
+    VSync(0);
+    DrawSync(0);
+    func_80053DA8(0x7F);
+    func_800542BC();
+    VSync(0);
+    func_8003AF94(0x16, 0x5DB);
+    SetDispMask(1);
+    func_80041284(&D_80080EA0);
+    func_80041284(&D_80080E28);
+    func_80041284(&D_800D1D54);
+    func_80041284(&D_800D1E7C);
+    func_8003B034();
+    func_8003B06C();
+    func_8003C758(&D_80081018);
+    func_8008B408(1);
+    func_8008B550(1);
+    func_800903A8();
+}
 
 void func_8003AF58(u8 *, u8 *);
 
