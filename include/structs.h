@@ -1171,7 +1171,8 @@ extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
 /* Hand-added. 0x1C-byte entries indexed by D_80086D50; only +0x04 is observed,
    a base that func_80057A50 adds a computed offset to. */
 typedef struct Unk80086A40 {
-    u32  unk_00;
+    s16  unk_00;  /* read with lh and compared against -1 */
+    u8   pad_02[0x2];
     u8  *unk_04;
     u8   pad_08[0x14];
 } Unk80086A40;
