@@ -1927,7 +1927,23 @@ s32 func_80055750(s16 a) {
     return a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055778);
+/* Push onto the D_80084778 ring. The guard is an EARLY RETURN and the success
+   path returns its own 0: one variable assigned in both arms gave the target's
+   instructions with $v1 and a copy, because a variable live through the join is
+   a global allocno. With a return in each arm the whole tail is block-local,
+   the 0 goes straight into $v0, and jump2's cross-jumping merges the two `jr`s
+   back into the one the listing shows. 7 DIFF.
+
+   The count is re-read after `++` because the store invalidated cse's entry for
+   it -- matching-levers section 4 -- so the element written is [count + 1]. */
+s32 func_80055778(s32 v) {
+    if (D_80084778[0] >= 0x20) {
+        return -1;
+    }
+    D_80084778[0]++;
+    D_80084778[D_80084778[0]] = v;
+    return 0;
+}
 
 void func_800557BC(void) {
     D_80084778[0] = 0;
