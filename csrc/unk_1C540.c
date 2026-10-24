@@ -979,7 +979,28 @@ void func_8004B530(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B568);
+/* The rect's y is `0x100 + i * 0x80`, not a running counter: loop.c reduces
+   it to the walked value the target initialises in the preheader AFTER the
+   three hoisted constants, where a `y` variable of its own is expanded before
+   them and the two registers swap with the loop counter (12 DIFF). */
+void func_8004B568(u8 *unused) {
+    s16 r[4];
+    s32 i;
+    u8 *q;
+
+    q = (u8 *) 0x80016000;
+    DrawSync(0);
+    D_80081480 = D_8008148C;
+    for (i = 0; i < 2; i++) {
+        r[1] = 0x100 + i * 0x80;
+        r[0] = 0x140;
+        r[2] = 0x40;
+        r[3] = 0x80;
+        StoreImage(r, (u32 *) D_8008148C);
+        DrawSync(0);
+        q = func_8004068C((u8 *) D_80081480, q);
+    }
+}
 
 /* The sized alias, not the incomplete `D_80080B48[]`: at -G8 an object of 8
    bytes or fewer is small data, so its address is the ONE-insn `la` macro that
@@ -2646,9 +2667,34 @@ void func_80050CAC(void) {
     func_80050BA4(a);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050CDC);
+void func_8004B248(u32 *);
 
-void func_80050CDC(void);
+void func_80050CDC(u8 *p, s32 b, u8 **q) {
+    u8 *e;
+    u8 v;
+    s32 n;
+
+    e = q[2];
+    *(u16 *) (e + 2) = *(u16 *) (e + 2) - 0x40;
+    e = q[1];
+    *(u16 *) (e + 0xC) = *(u16 *) (e + 0xC) + 0x20;
+    e = q[1];
+    *(u16 *) (e + 8) = *(u16 *) (e + 8) - 0x40;
+    e = q[1];
+    v = e[2] - 0x20;
+    e[2] = v;
+    e[1] = v;
+    e[0] = v;
+    n = *(s32 *) (p + 8) - 1;
+    *(s32 *) (p + 8) = n;
+    if (n == -1) {
+        func_8004B248((u32 *) (p + 0x6C));
+        *(u16 *) (p - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+void func_80050CDC(u8 *, s32, u8 **);
 void func_8004FE78(u32);
 
 /* $gp group: the store to D_80080B98 is %gp_rel because the symbol is in this

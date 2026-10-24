@@ -2444,7 +2444,39 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B470);
 void func_8003B644(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B64C);
+void func_800A0150(s32, u8 *, u8 *, s32);
+void func_800B2244(u32);
+
+/* func_8003B820's constant-address recipe: the 0x80010000 half in its own
+   pointer local and the list pointer built from it with `| 0x29C`. Unlike
+   func_8003B714 -- same walk, one call fewer -- a single `s32 v` local for
+   the table byte is right here; the extra func_800B2244 call keeps the loop
+   long enough that loop.c leaves the comparison constant inside it. */
+void func_8003B64C(void) {
+    u32 *e;
+    u8 *base;
+
+    if (*(u32 *) 0x8001029C == 0) {
+        return;
+    }
+    base = (u8 *) 0x80010000;
+    e = (u32 *) ((u32) base | 0x29C);
+    do {
+        u8 *a = (u8 *) *e;
+
+        if (a[1] == 0x13) {
+            s32 k = (a[3] & 0x1F) * 84;
+            s32 v = *(s8 *) (base + 0x333 + k);
+
+            if (v >= 0) {
+                func_800A0150(v & 0x3F, a, (u8 *) (0x800102F0 + k), 0);
+                func_800B2244(*e);
+                continue;
+            }
+        }
+        e++;
+    } while (*e != 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B714);
 
