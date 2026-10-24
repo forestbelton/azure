@@ -711,6 +711,40 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### The load-delay slot is filled by the NEXT insn only
+
+cc1psx fills a load's delay slot by swapping the load with the insn immediately
+after it, and nothing else: it does not search the block. So when a target has
+no `nop` after a load, the insn that fills the slot was ALREADY written next in
+the source. func_8004A464 fills two slots -- the `+0x20` base behind an `lhu`,
+and an argument's `lw` behind a global's load -- and only one statement order
+out of six puts both there (the flag update, then the base, then the argument
+read into a local, then the global). Everything else leaves cc1psx emitting its
+own `#nop`, visible in the `-S` output, and the function is a word long. When a
+candidate has a `nop` the target does not, look at what stands after the load
+in the source rather than at the scheduler.
+
+### `?:` keeps the copies that `if` deletes
+
+A conditional expression assigned to a variable produces a copy into the result
+register on EACH arm and a copy back at the join; the equivalent `if` updates
+the variable in place and gcc deletes them. Neither is "better" -- they are
+different word counts, and the listing tells you which the source used.
+func_80049DE8's negative arm is `a = (a < 0) ? m + a : a;`: 13 words with the
+three copies, 12 and 6 DIFF as `if (a < 0) a = m + a;`. Its sibling
+func_80049E1C wants three or four MORE such copies than any shape found so far,
+so the same question is still open there.
+
+### A store through a loaded pointer pins the argument loads after it
+
+sched cannot disambiguate `sw $zero, 0xC($a2)` from `lw $a1, 0x8($s0)`, so once
+a store goes through a pointer the compiler cannot prove distinct, no later load
+moves above it. Arguments left inside the call are evaluated after such a store
+and stay there; reading them into locals BEFORE it is the only way to get the
+target's order. func_80037030: 7 DIFF of pure ordering. The same reasoning says
+the pointer the store goes through must be a local too, or its load and the
+argument's load are two separate `lw`s of the same address.
+
 ### Two address materialisations interleave only if BOTH are split pairs
 
 `lui`, `lui`, `addiu`, `lh` -- two symbols' addresses taken apart and woven
