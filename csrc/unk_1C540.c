@@ -121,7 +121,28 @@ s32 func_8004928C(u8 *p) {
     return func_80049280(p[3] & 0x1F);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800492B0);
+/* csrc/unk_154BC.c declares this symbol `u8 *D_800E3DF0[]`; here it is read as
+   a word table, under an alias so that declaration can stay. */
+extern s32 D_800E3DF0w[] __asm__("D_800E3DF0");
+s32 func_80049280(s32);
+u32 func_80021300(u32);
+u32 func_8002137C(s32);
+
+u32 func_800492B0(u32 i) {
+    u32 h;
+    s32 r;
+
+    if (func_80049280(i) != 0) {
+        h = *(s32 *) (D_800814A8 + 0x124);
+    } else {
+        h = D_800E3DF0w[i];
+    }
+    r = func_80021300(h);
+    if (r != 2) {
+        h = func_8002137C(r);
+    }
+    return h;
+}
 
 u32 func_800492B0(u32);
 
@@ -1765,7 +1786,32 @@ void func_8004F95C(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F9AC);
+void func_8004F67C(void);
+
+/* Both loop variables are written as expressions OF THE COUNTER, so loop.c
+   makes them givs and initialises them in the preheader -- after the `blez` --
+   which is where the listing has `$a2 = 0x18` and `$a1 = $a0`. Declared and
+   walked outside the loop their initialisations come out ahead of the guard
+   (17 DIFF), and an explicit `if (n > 0) { ... do ... }` guard reads the bound
+   a third time (36 words against 32).
+
+   `>> 3`, not `/ 8`: the division's sign correction is four extra insns. */
+void func_8004F9AC(u8 *p) {
+    s32 n = *(s32 *) (p + 0x20);
+    s32 i;
+
+    if (n > 0x20) {
+        n = 0x20;
+        *(u32 *) p = (u32) func_8004F67C;
+    }
+    for (i = 0; i < *(s32 *) (p + 0x24); i++) {
+        u8 *q = p + i * 4;
+        s32 v = 0x18 + i * n;
+
+        *(s16 *) (*(u8 **) (*(u8 **) (*(u8 **) (q + 4) + 0xC) + 4) + 8) = v;
+    }
+    *(s32 *) (p + 0x20) = n + ((0x28 - n) >> 3);
+}
 
 void func_8004F9AC(u8 *);
 void func_8004F95C(u8 *);
@@ -1848,7 +1894,7 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FFF4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800500B4);
 
-void func_80021300(u32);
+u32 func_80021300(u32);
 
 void func_800502E0(u8 *p) {
     func_80021300(func_8004FF00(p));
