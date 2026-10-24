@@ -1777,7 +1777,24 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053EF0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053F98);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005405C);
+/* Nested ifs with ONE return 0 at the end, and the 1 returned from the inner
+   arm. Every shape that assigns a variable in the arms puts the result in a
+   callee-chosen register with a `move $v0` at the end: a variable live to the
+   single return is a global allocno, local-alloc has already given the second
+   mask chain $v0, and the result is pushed to $a1. Returning directly makes
+   hard reg $v0 live from each arm, so local-alloc routes the second chain
+   around it ($v1/$a0) exactly as the target does. 13 DIFF.
+
+   `r = 1` before the second test and `r = 0` in the arm is also what jump.c
+   store-flags into one `sltu`, which three earlier spellings all hit. */
+s16 func_8005405C(s16 n) {
+    if ((D_800847D0[1] & (0x1000000 << n)) == 0) {
+        if ((D_800847D0[0] & (0x10000 << n)) != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 void func_800540A8(void) {
     u8 *p;
