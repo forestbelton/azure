@@ -459,7 +459,17 @@ void func_80035D40(u32 v) {
     D_8006ADB8[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035D4C);
+/* `k == p[0]`, not `p[0] == k`: the operand order survives into the `bne`. */
+void func_80035D4C(s16 k) {
+    s16 *p = D_8006A94C;
+
+    while (p[0] != 0) {
+        if (k == p[0]) {
+            func_80033AA8(p[1]);
+        }
+        p += 2;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035DBC);
 
