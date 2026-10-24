@@ -1368,6 +1368,10 @@ extern s16 D_8008480C[];
 extern s16 D_80083D78[];
 extern u32 D_800712B4[];
 extern s16 D_80082A38[];   /* lh at +0xAC/+0xAE, so signed */
+/* The same object as u32s, for the five-slot queue at +0x48; func_80035378
+   indexes it 10..14 with the +0x48 left as a displacement. */
+extern u32 D_80082A38w[] __asm__("D_80082A38");
+extern u32 D_80082AB8[];   /* the queue's last slot, reached as its own symbol */
 extern u32 D_80083170[];
 extern s16 D_800847F6[];
 extern u32 D_80085FCC[];

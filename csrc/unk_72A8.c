@@ -322,7 +322,33 @@ void func_80035348(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035378);
+/* The five-slot queue at D_80082A38+0x48, indexed 10..14. The 0x48 is added to
+   `&D_80082A38w[i]` rather than written inside the index: as `[i + 0x12]`
+   loop.c folds 0x48 into the giv's initial value and the function is four
+   words longer. D_80082AB8 is the last slot reached as its own symbol, through
+   the incomplete-array spelling so the store shares the `lui` instead of going
+   through the assembler's $at. */
+void func_80035378(u32 v) {
+    s32 i;
+
+    for (i = 10; i < 15; i++) {
+        u8 *q = (u8 *) &D_80082A38w[i];
+
+        if (*(u32 *) (q + 0x48) == 0) {
+            *(u32 *) (q + 0x48) = v;
+            if (i != 14) {
+                *(u32 *) (q + 0x4C) = 0;
+            }
+            return;
+        }
+    }
+    for (i = 11; i < 14; i++) {
+        u8 *q = (u8 *) &D_80082A38w[i];
+
+        *(u32 *) (q + 0x48) = *(u32 *) (q + 0x4C);
+    }
+    D_80082AB8[0] = v;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800353F4);
 
