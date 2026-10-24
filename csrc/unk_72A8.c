@@ -1225,7 +1225,17 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039D10);
 void func_80039D40(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039D48);
+/* A bytecode opcode: the four bytes at the cursor are a little-endian function
+   address, called with four words out of the block at +0x80 and its result
+   stored back there. */
+void func_80039D48(u8 *p) {
+    u8 *c = *(u8 **) (p + 0x1C);
+    u8 *s = *(u8 **) (p + 0x80);
+    u32 f = c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24);
+
+    *(u8 **) (p + 0x1C) = c + 4;
+    *(u32 *) (s + 0x84) = ((u32 (*)(u32, u32, u32, u32)) f)(*(u32 *) (s + 0x48), *(u32 *) (s + 0x4C), *(u32 *) (s + 0x50), *(u32 *) (s + 0x54));
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039DBC);
 
