@@ -468,7 +468,30 @@ void func_80048870(u8 *p, u8 *q, s32 c) {
     func_8004878C(*(u32 *) (q + 0xC) + c, t);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800488F0);
+void func_80048660(u8 *, u8 *);
+
+void func_800488F0(u32 a, u32 b, s32 f) {
+    u8 *p = (u8 *) a;
+    u8 **q = (u8 **) b;
+    u8 *r = p;
+    s32 c = f & 2;
+    s32 d = f & 1;
+    s32 t;
+
+    do {
+        if ((*p & 0x60) == 0) {
+            r -= 4;
+            if (c != 0) {
+                func_80048660(p, *q);
+            }
+            if (d != 0) {
+                func_80048870(p, *q, *(s32 *) r);
+            }
+        }
+        t = *p & 0x80;
+        p += 0xC;
+    } while (t == 0);
+}
 
 void func_800488F0(u32, u32, s32);
 

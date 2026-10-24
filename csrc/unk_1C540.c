@@ -63,7 +63,31 @@ u8 func_80048DE8(s32 i) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048E00);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048EE4);
+/* `*pp = f(...)` and then `b = *pp`: cse forwards the load to the value just
+   stored, which is the target's `addu $s0, $v0, $zero` reusing the parameter's
+   register. Assigning the call result to `b` first and storing that keeps both
+   live and costs a third callee-saved register (41 DIFF). */
+u8 *func_80048EE4(u8 **pp, s32 n) {
+    u8 **b;
+    u8 *e;
+    s32 i;
+
+    *pp = (u8 *) func_8004B404(0x104);
+    b = (u8 **) *pp;
+    if (b != 0) {
+        e = (u8 *) (b + n);
+        for (i = 0; i < n; i++) {
+            b[i] = e;
+            e += 0x10;
+        }
+        for (i = 0; i < n; i++) {
+            *(u8 **) (b[i] + 4) = e;
+            e += 0x10;
+        }
+        func_8004CC38(b, n);
+    }
+    return (u8 *) b;
+}
 
 s32 func_80048F8C(u32 *p, s32 n) {
     s32 i = 0;
@@ -1213,7 +1237,30 @@ void func_8004D110(u32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D12C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D1EC);
+void func_8004D12C(void);
+
+/* The two pointer stores LAST, after all three subtractions: perm.py says
+   that is the only one of the 120 orderings of those five statements that
+   matches. */
+void func_8004D1EC(u8 *p, u16 *a, s32 d, u16 *b) {
+    *(u32 *) (p + 0x14) = 0;
+    *(u32 *) (p + 0x1C) = 0;
+    if (d != 0) {
+        *(u32 *) (p + 0x18) = 0x400 / d;
+    } else {
+        *(u32 *) (p + 0x18) = 0x1000;
+    }
+    if (a != 0) {
+        *(u16 *) (p + 0xC) = a[0];
+        *(u16 *) (p + 0xE) = a[1];
+        *(u16 *) (p + 0x10) = a[2];
+        *(u16 *) (p + 4) = a[0] - b[0];
+        *(u16 *) (p + 6) = a[1] - b[1];
+        *(u16 *) (p + 8) = a[2] - b[2];
+        *(u32 *) (p + 0) = (u32) b;
+        *(u32 *) (p - 4) = (u32) func_8004D12C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D294);
 

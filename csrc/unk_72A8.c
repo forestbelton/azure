@@ -650,7 +650,7 @@ void func_800364BC(u8 *p) {
 }
 
 void func_80037030(u8 *, s32, s32, s16, s16, u32);
-void func_80036574(void);
+void func_80036574(u8 *);
 
 void func_800364EC(u8 *p) {
     u8 *s = *(u8 **) (p + 0x74);
@@ -663,7 +663,40 @@ void func_800364EC(u8 *p) {
     *(u32 *) (p + 0x68) = (u32) func_80036574;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036574);
+void func_8003661C(u8 *);
+void func_800364BC(u8 *);
+
+/* The expired arm is written FIRST, so the countdown test branches INTO the
+   still-running block as the target's `bgtz` does (41 DIFF the other way
+   round), and D_80083160 goes through a one-set POINTER LOCAL -- the struct
+   field read directly is the two-insn symbolic form where the target
+   materialises the base and loads `0x10($v1)`. */
+void func_80036574(u8 *p) {
+    Unk80083160 *g = &D_80083160;
+    s16 n;
+    u32 f;
+    u8 *e;
+
+    n = *(u16 *) (p + 0x64) - 1;
+    *(s16 *) (p + 0x64) = n;
+    if (n <= 0) {
+        e = *(u8 **) (p + 0x74);
+        p[0x4D] = 0xFF;
+        p[0x51] = 0;
+        e[0x27] = e[0x26];
+        *(u32 *) (p + 0x68) = (u32) func_800364BC;
+    } else {
+        f = g->unk_10;
+        if ((f & 0x20) != 0) {
+            p[0x4D] = *(u8 *) (*(u8 **) (p + 0x74) + 0x26) - 1;
+        } else if ((f & 0x40) != 0) {
+            p[0x4D] = 0;
+        } else {
+            return;
+        }
+        func_8003661C(p);
+    }
+}
 
 void func_80036484(u8 *);
 
@@ -710,7 +743,25 @@ void func_80036988(u8 *d, u8 *s) {
     *(u16 *) (d + 0xE) = *(u16 *) (s + 0xE);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800369C8);
+void func_80067F20(u32 *, s32, s32, s32, s32);
+
+void func_800369C8(s32 n) {
+    u8 *b = D_80083160.unk_00;
+    u32 *p = *(u32 **) (b + 0x8D0);
+    s16 t[4];
+    u16 tp;
+    s32 o;
+
+    *(u32 **) (b + 0x8D0) = p + 3;
+    t[0] = 0;
+    t[1] = 0;
+    t[2] = 0x40;
+    t[3] = 0x20;
+    tp = GetTPage(0, 0, 0x1C0, 0x100);
+    func_80067F20(p, 0, 0, tp, (s32) t);
+    o = n * 4 + 0x70;
+    AddPrim(D_80083160.unk_00 + o, p);
+}
 
 void func_80067F20(u32 *, s32, s32, s32, s32);
 
