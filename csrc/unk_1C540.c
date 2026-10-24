@@ -241,7 +241,22 @@ void func_80049DC8(s32 a, s32 b) {
     func_80049CF4(a, b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049DE8);
+/* The negative arm is a CONDITIONAL EXPRESSION, not an `if`: the target spends
+   a copy into $v0 on each of its two paths and a copy back into $a0 at the
+   join, which is what `?:` produces and what a plain `if (a < 0) a = m + a;`
+   optimises away (12 words against 13, 6 DIFF). The positive arm is a plain
+   `if`, in place. */
+s32 func_80049DE8(s32 a, s32 d, s32 m) {
+    a += d;
+    if (d > 0) {
+        if (a >= m) {
+            a -= m;
+        }
+    } else {
+        a = (a < 0) ? m + a : a;
+    }
+    return a;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049E1C);
 
