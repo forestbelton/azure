@@ -1932,7 +1932,23 @@ void func_80051164(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800511B4);
+void func_80051164(u8 *);
+
+UnkNode *func_800511B4(UnkNode *p) {
+    UnkNode *n = func_8003FC64(0);
+    u8 *e;
+
+    if (n != NULL) {
+        *(UnkNode **) (n + 1) = p;
+        n->unk_1E &= 0xDFFF;
+        p->unk_1E &= 0xDFFF;
+        e = (u8 *) (n + 1);
+        *(UnkNode **) (e + 4) = n;
+        e[0xC] = 0;
+        n->unk_10 = (u32) func_80051164;
+    }
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051228);
 
@@ -2891,7 +2907,20 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C668);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C6B4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C710);
+void func_8005FA34(u32 *);
+
+/* A u32 block, not a u8 one: as `u8 t[0x40]` with `*(u32 *)` casts the two
+   stores and the table load come out in the other order (3 DIFF). */
+s32 func_8005C710(s16 i, s16 *a, s16 *b) {
+    u32 t[0x10];
+
+    t[1] = 0;
+    t[0] = D_80073740[i];
+    func_8005FA34(t);
+    *a = *(u16 *) ((u8 *) t + 8);
+    *b = *(u16 *) ((u8 *) t + 0xA);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C784);
 
