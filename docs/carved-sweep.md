@@ -164,6 +164,7 @@ or the order wrong, so they want the dumps rather than another guess.
 | func_8004A464 | unk_1C540 | 25/24 words, 14 DIFF | The `q = p + 0x20` does not fill the `lhu`'s load-delay slot as it does in the target, so the function is a word long. Before the `if`, inside it, and block-scoped all measured. |
 | func_80053E90 | unk_1C540 | 17 DIFF | A three-case switch (1, 2, 4) over three halfword globals, emitted as a compare tree. |
 | func_80039DBC | unk_72A8 | 25/24 words, 18 DIFF | Calls through a table at +0x40 with four arguments from +0x48..+0x54; the fifth load reuses the table's register in the target and this spends an extra one. |
+| func_8004EF90 | unk_1C540 | 26/25 words, 24 DIFF | Fills two sub-blocks and returns a pointer into the second. The target RE-READS p[1] for its `|= 2` after an intervening word store; cc1psx here reorders the two stores -- it can prove p+1 and p+8 distinct -- and then cse keeps the 0xB0 it just stored. Making both accesses in-struct (section 5) is the thing to try next. |
 | func_80034EC4 | unk_72A8 | 7 DIFF | Sets a byte, points two fields at `p + 8`, then copies two words out of D_8006ADBC. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather

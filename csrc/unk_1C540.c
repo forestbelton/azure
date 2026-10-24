@@ -422,7 +422,23 @@ void func_8004AFC8(s32 a, s32 b, s32 c, void *d) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AFE8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B028);
+void func_8004B028(u8 *m, u8 **list, s32 k) {
+    s32 i = 0;
+    u8 *e;
+    u8 *q;
+
+    while (*list != 0) {
+        e = *list;
+        if (e[1] == k) {
+            q = m + e[0];
+            if (*q == 0) {
+                *q = i + 1;
+            }
+        }
+        list++;
+        i++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B08C);
 
