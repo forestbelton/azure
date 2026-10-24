@@ -2659,7 +2659,15 @@ s32 func_800588C8(u32 i) {
     return -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058940);
+s32 func_80058940(u32 i) {
+    do {
+        if (func_80058800(D_800737D0, (u8 *) (D_80085FA4[0] + i), 3) == 0) {
+            return i + 3;
+        }
+        i++;
+    } while (D_800869B0[0] >= i);
+    return -1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800589B8);
 
