@@ -798,7 +798,7 @@ void func_800383D4(u8 *p) {
     }
 }
 
-s32 func_800392A4(u8);
+u8 *func_800392A4(u8);
 void func_80038A10(void);
 
 void func_80038408(u8 *p) {
@@ -951,7 +951,27 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038A10);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038AB8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038C40);
+typedef struct Unk8002D03C {
+    s8 unk_00[9];
+} Unk8002D03C;
+
+/* The 9-byte table is COPIED to the stack -- a byte-aligned struct, so the
+   copy is lwl/lwr pairs plus an `lb` -- and the copy comes before the
+   counter's initialisation (as a `for`, not `i = 0` ahead of the copy, which
+   puts `move $t0, $zero` first and spends a register: 22 DIFF). The `for`
+   guard folds away because 0 < 9. */
+s32 func_80038C40(s8 k) {
+    Unk8002D03C t;
+    s32 i;
+
+    t = *(Unk8002D03C *) D_8002D03C;
+    for (i = 0; i < 9; i++) {
+        if (k == t.unk_00[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038CB8);
 
@@ -1043,7 +1063,23 @@ void func_80039258(u8 *p) {
 void func_8003929C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800392A4);
+u8 *func_800392A4(u8 i) {
+    u8 *q = (u8 *) D_80082660[i].unk_04;
+    u8 *r;
+
+    if (q != 0) {
+        r = q + 0x20;
+        if (i == 1) {
+            return r;
+        }
+        if (*(u32 *) (q + 0x10) == (u32) D_800C3174 || *(u32 *) (q + 0x10) == (u32) D_800C321C) {
+            if (*(u32 *) (r + 0x50) == (u32) D_800C3960) {
+                return r;
+            }
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003931C);
 
