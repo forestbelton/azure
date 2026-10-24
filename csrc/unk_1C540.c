@@ -80,7 +80,18 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048FBC);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049004);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049150);
+s32 func_80048F8C(u32 *, s32);
+u32 *func_8004B42C(u32 *, s32);
+
+u8 *func_80049150(u8 *p, u32 n, s32 c) {
+    s32 i = func_80048F8C((u32 *) p, c);
+    u8 *q = p + i * 4;
+
+    if (func_8004B42C((u32 *) q, n / 21 + 1) == 0) {
+        q = 0;
+    }
+    return q;
+}
 
 void func_800491CC(u32 **p, u32 v, s32 n) {
     s32 i;
@@ -668,7 +679,21 @@ u32 func_8004B404(s32 a) {
     return func_8004B364(0, 0, a);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B42C);
+u32 *func_8004B42C(u32 *p, s32 n) {
+    s32 i;
+
+    for (i = 0; i < n; i++) {
+        u32 v = func_8004B404(0x82);
+
+        p[i] = v;
+        if (v == 0) {
+            func_8004B248(p);
+            p = 0;
+            break;
+        }
+    }
+    return p;
+}
 
 UnkNode *func_8004B4A8(UnkNode *target) {
     UnkNode *p = D_80081498;
