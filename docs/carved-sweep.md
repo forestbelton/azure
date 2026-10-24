@@ -158,6 +158,18 @@ which was already declared as a struct 300 lines further down.
   `return (f & 0x100) != 0;` is rewritten by combine as `srl 8` / `andi 1`,
   where the target has `andi 0x100` / `sltu $zero`. `g = f & 0x100;
   return g != 0;` is the spelling; `> 0` and `!!` do not help.
+* **Shortening a temporary's live range is the cheapest way to free an
+  argument register.** func_8004D12C reads three halfwords in sequence; with
+  ONE local reused for them the quantity spans the whole tail, local-alloc
+  gives it $a1 and the parameter keeps $a0. With three separate locals each is
+  block-short, one takes $a0, and the parameter is pushed to $a1 -- which
+  makes gcc emit the parameter move the target has as its first instruction.
+  No explicit `u8 *p = r;` produces that copy, in any distribution of the two
+  names (10 DIFF).
+* **A flag word that is masked and then `|=`'d in branches wants a `u32`
+  local.** As `u16` the masked value and the or-result are two pseudos, so the
+  path that takes no branch needs a copy between them, where the target
+  spends a `nop` (func_800477F4, 12 DIFF).
 * **A store followed by a load of the same place is how to get a register
   copy.** `*pp = f(...); b = *pp;` makes cse forward the load to the value
   just stored, and the forwarding emits `addu $rD, $rS, $zero` -- the very

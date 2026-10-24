@@ -34,7 +34,43 @@ void func_80047784(u8 *p, s32 b, s32 c) {
     func_80047694((UnkSlot *) p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800477F4);
+/* The flag word goes into a `u32` local, not a `u16`: as u16 the masked value
+   and the `|=` result are two pseudos and the early-exit path needs a copy
+   between them, which the target spends as a `nop` (12 DIFF). */
+void func_800477F4(UnkSlot *s, s32 unused) {
+    u8 *p = (u8 *) s;
+    u16 f = *(u16 *) (p + 0x14);
+    u32 g;
+    u8 *c;
+    u8 *e;
+
+    g = f & 0xCFFF;
+    if ((f & 0x800) == 0) {
+        p[5] = p[5] - 1;
+        if ((s8) p[5] <= 0) {
+            c = *(u8 **) p;
+            if (*(s16 *) (c + 2) != 0) {
+                e = c + 8;
+                if (*(s16 *) (e + 2) == 0) {
+                    g |= 0x5000;
+                } else {
+                    if (*(s16 *) (e + 2) == 1) {
+                        e = *(u8 **) (e + 4);
+                        g |= 0x2000;
+                        p[4] = 0;
+                    } else {
+                        p[4] = p[4] + 1;
+                    }
+                    p[5] = *(u16 *) e / D_80080A84;
+                    *(u32 *) (p + 8) = *(u32 *) (e + 4);
+                    g |= 0x1000;
+                }
+                *(u8 **) p = e;
+            }
+        }
+    }
+    *(u16 *) (p + 0x14) = g;
+}
 
 void func_800477F4(UnkSlot *, s32);
 
@@ -45,7 +81,30 @@ void func_800478B8(UnkSlot *s, s32 b) {
     func_80047694(s);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800478E8);
+/* The key is `s32`, not `s16`: the listing compares the `lh` against the
+   parameter register with no sign extension of its own. The outer limit is
+   re-read through the whole `p + 0x28` chain by the loop condition, which is
+   what the target does at the bottom of every iteration. */
+void func_800478E8(u8 *p, u32 v, s32 k) {
+    u32 *t = *(u32 **) *(u32 **) (p + 0x28);
+    u8 *c = (u8 *) (t[0] + t[1] * 4);
+
+    while ((u32) c < (*(u32 **) *(u32 **) (p + 0x28))[2]) {
+        if (*(s16 *) (c + 2) == 2) {
+            u8 *e = *(u8 **) (c + 4);
+            s32 g;
+
+            do {
+                if ((*e & 0x20) != 0 && *(s16 *) (e + 6) == k) {
+                    *(u32 *) (e + 8) = v;
+                }
+                g = *e & 0x80;
+                e += 0xC;
+            } while (g == 0);
+        }
+        c += 8;
+    }
+}
 
 void func_800479AC(void) {
     bzero(D_80083D08, 0x30);
@@ -372,7 +431,26 @@ void func_80048374(u8 *p, s16 b, s16 c) {
     func_80047784(p, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800483AC);
+extern u32 D_800710DC[];
+extern u32 D_800710D4[];
+u32 *func_80040574(s32);
+void func_8003F80C(u32, s32, s32, s16);
+
+void func_800483AC(s16 f) {
+    u8 *b = (u8 *) func_80040574(0x2000);
+
+    bzero(b, 0x2000);
+    if (f != 0) {
+        LoadImage(D_800710DC, (u32 *) b);
+        func_8003F80C((u32) b, 0x7A40, 1, 2);
+        func_8003F80C((u32) b, 0x79C0, 1, 2);
+    } else {
+        LoadImage(D_800710D4, (u32 *) b);
+        func_8003F80C((u32) b, 0x7A41, 1, 2);
+        func_8003F80C((u32) b, 0x79C1, 1, 2);
+    }
+    DrawSync(0);
+}
 
 void func_80047200(u32 *, s32, s32);
 
