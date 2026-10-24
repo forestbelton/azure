@@ -616,7 +616,25 @@ void func_8004B834(void) {
     func_8004B634();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B854);
+void func_8004B834(void);
+void func_8003F320(void);
+void func_8002537C(s32, s32, s32, s32, s32);
+
+/* func_8004B834 takes no arguments. Passing a0/a1/a2 through to it costs no
+   instructions either way -- the moves are deleted as no-ops -- but while they
+   exist they are REFERENCES that lengthen each parameter's live range, and
+   global-alloc's priority is refs*log(refs)/live_length. With the three extra
+   refs `a` outranked `b` and took $s1; with the real (void) call the two
+   parameters' ranges end in source order and they come out $s2/$s1. 6 DIFF. */
+void func_8004B854(s32 a, s32 b, s32 c) {
+    u8 t[2];
+
+    func_8004B834();
+    t[0] = c;
+    t[1] = 0x13;
+    func_8003F320();
+    func_8002537C(a, 0, 0, (s32) t, b);
+}
 
 void func_8004B854(s32, s32, s32);
 
