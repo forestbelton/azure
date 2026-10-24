@@ -2151,7 +2151,7 @@ void func_8003C2B8(void) {
     func_80033D08(p);
 }
 
-void func_8003C520(void);
+void func_8003C520(u8 *, s32, u8 *);
 
 void func_8003C2F8(void) {
     u32 *b = D_80082D58;
@@ -2224,7 +2224,22 @@ void func_8003C4C8(u8 *p, s32 b, u8 *q) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C520);
+void func_8003C520(u8 *p, s32 b, u8 *q) {
+    s32 n = q[0xE] - 0x10;
+
+    *(u16 *) (q + 0x1C) -= 0x200;
+    if (n < 0) {
+        n = 0;
+    }
+    q[0xE] = n;
+    q[0xD] = n;
+    q[0xC] = n;
+    if (*(s16 *) (q + 0x1C) <= 0) {
+        func_80033D08(p);
+        *(u16 *) (p - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A `while` with the test on the INDEXED table, not a walked pointer: loop
    duplication gives the guard's `lb %lo(D_8006B1EC)` with the index folded

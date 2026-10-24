@@ -360,7 +360,18 @@ void func_80048998(u8 *p, s32 n) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_800489F4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048A44);
+void func_800489F4(u8 *, s16, s16);
+void func_80048998(u8 *, s32);
+
+void func_80048A44(u8 *p, s32 b, s32 c, s32 d) {
+    s32 v;
+
+    func_800489F4(p, (s16) b, (s16) c);
+    func_80048998(p, d);
+    v = **(u16 **) p / D_80080A84;
+    *(u16 *) (p + 0x14) &= 0x9FFF;
+    p[5] = v;
+}
 
 void func_80048998(u8 *, s32);
 
