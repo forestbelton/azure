@@ -45,11 +45,19 @@ segments:
   # (353 hits, noise floor 0). The code reaches 0x800DCCF4, which covers the
   # isolated 0x800D5460 that docs/overlays.md listed as "a different region".
   #
-  # CAVEAT, unlike town's and main.bin's: +0xa3000 is the sector-aligned
-  # offset that maps to 0x80088760, but it has NOT been confirmed against a
-  # live seek -- the CD-ROM log that confirmed the other two was captured in
-  # town, never entering a dungeon. Expect LBA 12644 and check it before
-  # relying on the start offset. The delta itself does not depend on this.
+  # Confirmed against live behaviour, like town's and main.bin's: a
+  # PCSX-Redux CD-ROM command log shows the game seeking LBA 12636 =
+  # dungeon.bin+0xa3000, and it is the most-requested address of the whole
+  # dungeon session (21 seeks), which is what reloading an overlay per floor
+  # looks like.
+  #
+  # There is only ONE code overlay in this container. The seeks at +0x2a3000,
+  # +0x4a3000 and so on -- 0xa3000 at 0x200000 strides, as if the container
+  # were chunked in 2 MB units -- are assets and low-RAM data, not more
+  # overlays: assuming the same 0x80088760 base at those offsets scores 0-45
+  # against this one's 353, and the reported spans run to megabytes. +0x2a3000
+  # holds pointers into 0x8001d4xx, so it belongs to the low-RAM region that
+  # main.bin's overlay occupies; +0x9f000 and +0x4a3000 are texture records.
   #
   # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
   - type: code

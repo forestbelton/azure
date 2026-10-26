@@ -127,12 +127,20 @@ Disassembling a predicted function confirms it: `town.bin+0x2ec8c` at vma
 `0x800AC3EC` is a clean prologue that builds `0x80083178` (our
 `D_80083178`) and makes internal `jal`s to `0x800AC37C` / `0x800AC1B0`.
 
-Two of the three start offsets are confirmed against live hardware behaviour:
-a PCSX-Redux CD-ROM command log (`Log` window -> `Special` -> "Log CD-ROM
-commands", plus `-stdout`) shows the game seeking LBA 3099 = `town.bin+0xb000`
-on entering the town and LBA 3027 = `main.bin+0x25d000` during boot.
-`dungeon.bin+0xa3000` is inferred from the shared base and should show up as
-LBA 12644; nobody has entered a dungeon with the log running yet.
+All three start offsets are confirmed against live hardware behaviour. A
+PCSX-Redux CD-ROM command log (`Log` window -> `Special` -> "Log CD-ROM
+commands", plus `-stdout`) shows the game seeking LBA 3027 =
+`main.bin+0x25d000` during boot, LBA 3099 = `town.bin+0xb000` on entering the
+town, and LBA 12636 = `dungeon.bin+0xa3000` on entering a dungeon -- the last
+being the most-requested address of the whole dungeon session, at 21 seeks,
+which is what reloading an overlay per floor looks like.
+
+`dungeon.bin` holds only one code overlay. Its seeks repeat at `0xa3000` plus
+`0x200000` strides, as if the container were chunked in 2 MB units, but
+assuming the same base at those offsets scores 0-45 against `+0xa3000`'s 353:
+they are assets and low-RAM data. `+0x2a3000` holds pointers into
+`0x8001d4xx`, so it belongs to the same low-RAM region `main.bin`'s overlay
+occupies, and `+0x9f000` / `+0x4a3000` are texture records.
 
 Not resolved: a second code run at `main.bin+0x269000..+0x272000` (191
 prologues, so certainly code) whose base is unknown -- only 58 internal jal
