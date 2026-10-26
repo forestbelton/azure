@@ -15,6 +15,15 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 import yaml
 
 
+def seg_start(seg):
+    """A segment's start offset, in either of splat's two spellings."""
+    if isinstance(seg, list) and seg:
+        return seg[0]
+    if isinstance(seg, dict):
+        return seg.get("start")
+    return None
+
+
 def subsegments(path: pathlib.Path):
     """[(start, end, kind, name)] over every code-segment subsegment."""
     doc = yaml.safe_load(path.read_text())
@@ -23,8 +32,13 @@ def subsegments(path: pathlib.Path):
     for i, seg in enumerate(segments):
         if not isinstance(seg, dict) or not seg.get("subsegments"):
             continue
-        tail = next((s[0] for s in segments[i + 1:]
-                     if isinstance(s, list) and s), None)
+        # The last subsegment of a segment ends where the *next segment*
+        # begins -- and that may be spelled either way. Looking only for the
+        # list form skips every `type: code` segment and so stretches the
+        # final subsegment to the end of the file, which then swallows (and
+        # mis-attributes) every later segment's offsets.
+        tail = next((off for off in map(seg_start, segments[i + 1:])
+                     if off is not None), None)
         entries = [e for e in seg["subsegments"] if isinstance(e, list) and e]
         for j, e in enumerate(entries):
             start = e[0]
@@ -36,10 +50,9 @@ def subsegments(path: pathlib.Path):
 
 
 def owner(subs, off):
-    for start, end, kind, name in subs:
-        if end is not None and start <= off < end:
-            return start, end, kind, name
-    return None
+    """The narrowest subsegment covering `off`, so a stray wide range loses."""
+    hits = [s for s in subs if s[1] is not None and s[0] <= off < s[1]]
+    return min(hits, key=lambda s: s[1] - s[0]) if hits else None
 
 
 def main() -> int:
