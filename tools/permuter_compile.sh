@@ -33,7 +33,7 @@ cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
 
-tools/ccpsx -O2 -G8 -Iinclude -DPERMUTER -S "$INPUT" -o "$S"
+tools/ccpsx -O2 -G8 -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
 python3 "$MASPSX_DIR/maspsx.py" \
     --aspsx-version=2.56 --force-stdin --run-assembler \
     --gnu-as-path="$AS" --use-comm-section -G8 \

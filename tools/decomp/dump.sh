@@ -33,7 +33,7 @@ rm -f "$T"/PQ*.*
 
 mkdir -p "$SP/dumps/$b"
 cd "$AZURE_ROOT"
-tools/ccpsx -O2 -G8 -Iinclude -da -S -o "$SP/dumps/$b/out.s" "$1" 2>&1
+tools/ccpsx -O2 -G8 -Iinclude -Ipsyq/include -da -S -o "$SP/dumps/$b/out.s" "$1" 2>&1
 for f in "$T"/PQ*.*; do
     [ -f "$f" ] && cp "$f" "$SP/dumps/$b/$(echo "$f" | sed 's/.*PQ[0-9]*\.//')"
 done

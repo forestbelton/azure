@@ -10,7 +10,7 @@ mkdir -p "$AZURE_SCRATCH"
 set -e
 cd "$AZURE_ROOT"
 out="$AZURE_SCRATCH"/$1.s
-tools/ccpsx -O2 -G8 -Iinclude -S -o "$out" csrc/"$1".c >/dev/null
+tools/ccpsx -O2 -G8 -Iinclude -Ipsyq/include -S -o "$out" csrc/"$1".c >/dev/null
 # cc1psx runs under wine, so the listing has CRLF line endings; strip the CR
 # before matching or the function label never compares equal.
 tr -d '\r' < "$out" | awk -v f="$2:" '$1==f{p=1} p{print} p&&/\.end/{exit}'

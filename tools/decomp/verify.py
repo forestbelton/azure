@@ -15,39 +15,23 @@ side, and runs of matching words collapsed to one line. Pass --full for the
 whole side-by-side. The abbreviation matters -- the full form of a 437-word
 function is about 10k tokens, and an agent iterating on it pays that again on
 every subsequent turn.
+
+When this says N DIFF and the shape is not obviously wrong, run `advise.py`
+with the same arguments: it ALIGNS the two streams instead of comparing them
+positionally -- so a one-word shift stops reading as N wrong words -- and
+names the lever each surviving difference corresponds to.
+
+The build pipeline lives in asmlib.py, so this tool, advise.py and nmcheck.py
+cannot drift apart on compiler flags again.
 """
-import re, subprocess, sys, os
-SP = os.environ.get('AZURE_SCRATCH', '/tmp/azure-decomp')
-# maspsx is vendored at vendor/maspsx; MASPSX_DIR overrides it, which is the
-# same variable the Makefile honours, so the two cannot drift apart.
-MASPSX = os.path.join(os.environ.get('MASPSX_DIR', 'vendor/maspsx'), 'maspsx.py')
-os.makedirs(SP, exist_ok=True)
-PROJ = os.environ.get('AZURE_ROOT',
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import sys
+
+import asmlib
+from asmlib import CompileError
+
 argv = [a for a in sys.argv[1:] if a != '--full']
 full = len(argv) != len(sys.argv) - 1
 src, unit, func = argv[0:3]
-base = os.path.splitext(os.path.basename(src))[0]
-s = f'{SP}/{base}.s'; o = f'{SP}/{base}.o'
-try:
-    os.remove(s)
-except OSError:
-    pass
-subprocess.run([f'{PROJ}/tools/ccpsx', '-O2', '-G8', '-Iinclude', '-S', '-o', s, src], cwd=PROJ, check=True)
-if not os.path.exists(s):
-    # wine's filesystem is case-insensitive, so if some other file in SP
-    # differs from this one only in case, ccpsx wrote that one and exited 0.
-    clash = [f for f in os.listdir(SP)
-             if f.lower() == os.path.basename(s).lower() and f != os.path.basename(s)]
-    print(f'ccpsx exited 0 but wrote no {s}')
-    if clash:
-        print(f'  it wrote {SP}/{clash[0]} instead: wine is case-insensitive, so those')
-        print(f'  two names are one file. Rename {src} so it differs by more than case.')
-    else:
-        print('  no case clash found in the scratch directory; try again (concurrent')
-        print('  ccpsx runs share one wine prefix and can lose an output).')
-    sys.exit(2)
-asm = open(s).read()
 # --g8 models a unit carved out with MASPSXFLAGS_G8 (gas left at -G8 rather
 # than maspsx's forced -G0), which is how gprel_12DD4 and gprel_14910 are
 # built: gas then assumes an *undefined* symbol is small data and emits
@@ -63,40 +47,13 @@ for a in sys.argv[1:]:
         gasG = 8
     elif a.startswith('--gas-G='):
         gasG = int(a.split('=', 1)[1])
-maspsx = ['python3', MASPSX, '--aspsx-version=2.56', '--force-stdin',
-          '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as', '--use-comm-section',
-          '-G%d' % (gasG or 8)]
-if gasG:
-    maspsx.append('--dont-force-G0')
-r = subprocess.run(maspsx +
-                   ['-EL', '-32', '-Iinclude', '-march=r3000', '-mtune=r3000', '-no-pad-sections', '-O1', '-o', o],
-                   input=asm, text=True, cwd=PROJ, capture_output=True)
-if r.returncode: print(r.stderr); sys.exit(1)
-# get .text bytes and relocations
-d = subprocess.run(['mips64-linux-gnu-objdump', '-d', '-z', '-r', '-j', '.text', o], capture_output=True, text=True).stdout
-words = []; relocs = {}
-for ln in d.split('\n'):
-    m = re.match(r'\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+(.*)', ln)
-    if m: words.append((int(m.group(1), 16), int(m.group(2), 16), m.group(3).strip())); continue
-    m = re.match(r'\s*([0-9a-f]+):\s+R_MIPS_(\w+)', ln)
-    if m: relocs[int(m.group(1), 16)] = m.group(2)
-tgt = []
-for ln in open(f'{PROJ}/asm/nonmatchings/{unit}/{func}.s'):
-    m = re.match(r'\s*/\* \w+ \w+ ([0-9A-F]{8}) \*/\s+(.*)', ln)
-    if m:
-        b = bytes.fromhex(m.group(1)); tgt.append((int.from_bytes(b, 'little'), m.group(2).strip()))
-
-def listing_addend(text):
-    """The addend splat's %hi/%lo operand implies, or None if there is none."""
-    m = re.search(r'%(?:hi|lo)\(([^)]*)\)', text)
-    if not m:
-        return None
-    inner = m.group(1)
-    a = re.search(r'([+-])\s*(0x[0-9A-Fa-f]+|\d+)\s*$', inner)
-    if not a:
-        return 0
-    v = int(a.group(2), 16 if a.group(2).lower().startswith('0x') else 10)
-    return v if a.group(1) == '+' else -v
+try:
+    words, relocs = asmlib.build(src, gasG)
+except CompileError as e:
+    print(e)
+    sys.exit(2)
+tgt = asmlib.target_words(unit, func)
+listing_addend = asmlib.listing_addend
 
 bad = 0; warn = 0
 rows = []
