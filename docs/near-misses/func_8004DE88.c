@@ -21,8 +21,22 @@
  * copy of $v0. For the target's allocation, that suggestion has to have been
  * blocked -- i.e. the cursor conflicts with $v0 -- which would be the case if
  * the address value in $v0 is live across the cursor's whole range. Reading
- * local-alloc.c's suggestion phase against the .lreg dump is the next step;
- * `advise.py --greg` prints the conflicts but not the suggestions.
+ * local-alloc.c's suggestion phase is the next step. MEASURED 2026-10-26 with
+ * `advise.py --greg`, which now prints every local-alloc quantity because this
+ * function is a single basic block and global-alloc therefore reports nothing:
+ * the two quantities competing for $v0 are pseudo 81, the cursor, at 20 refs
+ * over 28 insns (0.714), and pseudo 82, the address value, at 11 over 16
+ * (0.688). The cursor wins by that margin and keeps the $v0 it is born in as a
+ * copy of strrchr's return, so the copy is deleted; the target's allocation is
+ * the other way round.
+ *
+ * SPLITTING THE CURSOR to lower its reference count does NOT do it: writing
+ * the second four-byte group through a separate `q = p + 4` takes the cursor
+ * to 16 refs over 22 insns, which is 0.727 -- HIGHER, because the live range
+ * shrank with it -- gcc coalesces q back into p anyway, and the word count is
+ * unchanged at 64. To flip the contest the cursor has to lose references
+ * without losing live range, or the address value has to gain them, and no
+ * spelling found does either at zero instruction cost.
  *
  * MEASURED AND NOT WORKING: a separate `e` variable with `p = e;` (62 words --
  * gcc coalesces both and loses two more); the three stores as `p[0] = c; p++;`

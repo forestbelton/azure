@@ -2195,6 +2195,22 @@ cc1psx increment a COPY in place while keeping the original live?
   -- is a scheduler boundary too. A shape with an opaque third test does
   reproduce the body byte-for-byte at +2 words, which is the proof that the
   rest of the function is right.
+* **`MEM_IN_STRUCT_P` does NOT change whether cse forwards a stored value to
+  a following load -- refuted 2026-10-26, and worth recording because section
+  5 points straight at it.** Section 5 is about sched1's alias calls and cse's
+  INVALIDATION, and it is easy to assume the same flag decides forwarding.
+  Four probes on `f = f + 1; return f & 1;` over a u16 at +0x64 -- a cast
+  pointer `*(u16 *) (p + 0x64)`, a real struct field `p->f`, `p->f++`, and the
+  store and load through different base expressions -- all four emit
+  `lhu`/`addu`/`sh`/`andi` with NO reload. So a target that reloads the field
+  after storing it (func_80036F24 and func_80037090 both do, and it is the two
+  words they are short) is not doing it because of the struct flag, and no
+  spelling of the access reaches it. The mechanism is still unidentified: cse's
+  run ends only at a CODE_LABEL with LABEL_NUSES != 1 and those targets have no
+  label between the store and the load. This is the first case in the sweep
+  where cse FORWARDING is the problem rather than caching, so section 4's
+  "re-dereference rather than cache" has no counterpart to offer yet.
+
 * **`sched1`'s hazard heuristic.** It is a pure function of the insn and the
   unit state; no statement order changes it. Move the basic-block boundary
   instead (section 1).

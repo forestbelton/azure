@@ -536,6 +536,7 @@ def greg_report(src):
 
     lreg = {}
     local_of = {}
+    crosses = {}
     try:
         for ln in open(os.path.join(d, 'lreg')):
             m = re.match(r'Register (\d+) used (\d+) times across (\d+) insns'
@@ -545,6 +546,10 @@ def greg_report(src):
                 lreg[n] = (refs, live)
                 if m.group(4) is not None:
                     local_of[n] = int(m.group(4))
+                # `crosses N calls` is the fact that forces a callee-saved
+                # register, and it is in this dump but was not being printed.
+                c = re.search(r'crosses (\d+) calls?', ln)
+                crosses[n] = int(c.group(1)) if c else 0
     except OSError:
         pass
 
@@ -565,18 +570,49 @@ def greg_report(src):
             disp[int(a)] = int(b)
 
     print('  ALLOCATION (from the compiler\'s own .lreg/.greg dumps)')
-    print('  %-6s %-5s %-5s %-8s %-6s %-5s %s'
-          % ('pseudo', 'refs', 'live', 'priority', 'block', 'got', 'hard-reg conflicts'))
+    print('  %-6s %-5s %-5s %-8s %-6s %-5s %-5s %s'
+          % ('pseudo', 'refs', 'live', 'priority', 'block', 'xcall', 'got',
+             'hard-reg conflicts'))
     for n in order:
         refs, live = lreg.get(n, (0, 0))
         pri = (math.floor(math.log2(refs)) * refs / live) if refs > 1 and live else 0.0
         hard = sorted(r for r in conflicts.get(n, []) if r < 32)
         blk = local_of.get(n)
-        print('  %-6d %-5d %-5d %-8.3f %-6s %-5s %s'
+        print('  %-6d %-5d %-5d %-8.3f %-6s %-5s %-5s %s'
               % (n, refs, live, pri,
                  ('b%d' % blk) if blk is not None else 'global',
+                 crosses.get(n, 0) or '-',
                  regname(disp[n]) if n in disp else '-',
                  ' '.join(regname(r) for r in hard) or '-'))
+
+    # Everything global-alloc never saw. In a single-basic-block function that
+    # is the ENTIRE contest -- func_8004DE88's table above comes out empty
+    # because local-alloc decides all of it, and the report used to say
+    # nothing at all about the quantities that actually competed.
+    locals_only = sorted((n for n in lreg if n not in order),
+                         key=lambda n: -(lreg[n][0] / max(lreg[n][1], 1)))
+    if locals_only:
+        print()
+        print('  LOCAL-ALLOC quantities (global-alloc never saw these; it runs')
+        print('  SECOND, so these took their registers first)')
+        print('  %-6s %-5s %-5s %-9s %-6s %s'
+              % ('pseudo', 'refs', 'live', 'refs/live', 'block', 'xcall'))
+        for n in locals_only[:14]:
+            refs, live = lreg[n]
+            print('  %-6d %-5d %-5d %-9.3f %-6s %s'
+                  % (n, refs, live, refs / max(live, 1),
+                     ('b%d' % local_of[n]) if n in local_of else '?',
+                     crosses.get(n, 0) or '-'))
+        print(wrap('''refs/live is shown because it is the ordering local-alloc
+        appears to use and NOT because the formula has been verified here --
+        gcc 2.7.2's qty_compare weights the reference count, and whether it
+        also multiplies by floor_log2(refs) and the quantity size is a
+        HYPOTHESIS this project has not measured. Treat the column as the two
+        numbers side by side, not as a prediction. What it is good for is
+        seeing which quantities are close: on func_8004DE88 the cursor (20
+        refs / 28 insns) edges out the address value (11 / 16), the cursor
+        therefore keeps the $v0 it is born in as a copy of the return value,
+        and the copy the target spends is deleted.''', '  '))
 
     squeezed = [n for n in order
                 if n not in local_of

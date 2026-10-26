@@ -188,7 +188,16 @@ the shift instead of the `li`.
 **Local vs global allocnos (`local-alloc.c`, `global.c`).** A variable declared
 *inside a block* is a block-local quantity, and local-alloc assigns it before
 the block's other values -- by priority, so the one with the most references
-takes the lowest hard register. A variable declared at function scope and set
+takes the lowest hard register. **"most references" is loose, and the cases
+where it decides a match are decided by a few percent**: on func_8004DE88 the
+two quantities competing for `$v0` are 20 refs over 28 insns against 11 over
+16, i.e. 0.714 against 0.688, and that margin is the whole difference between
+matching and not. `tools/decomp/advise.py --greg` prints both columns for every
+local-alloc quantity, which is the only way to see the contest in a
+single-basic-block function, where global-alloc has nothing to report. Whether
+gcc 2.7.2's `qty_compare` additionally weights by `floor_log2(refs)` and the
+quantity size is a HYPOTHESIS nothing here has measured -- do not compute a
+prediction from it. A variable declared at function scope and set
 in several blocks becomes a global allocno instead, allocated after local-alloc
 has already handed out the low registers, so it lands higher. func_800439F8
 needs a separate `base` local inside each arm for this: one function-scope base
