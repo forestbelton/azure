@@ -25,6 +25,10 @@ options:
   o_as_suffix: True
   use_legacy_include_asm: False
 
+  # Namespaced like main.bin's: without this both this config and
+  # town.bin's would write their offset-0 bin into the default assets/.
+  asset_path: assets/dungeon
+
   symbol_addrs_path: splat/dungeon.bin_symbol_addrs.txt
   reloc_addrs_path: splat/dungeon.bin_reloc_addrs.txt
 
@@ -60,11 +64,18 @@ segments:
   # main.bin's overlay occupies; +0x9f000 and +0x4a3000 are texture records.
   #
   # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
-  - type: code
-    start: 0xa3000
-    vram: 0x80088760
-    subsegments:
-      - [0xa3000, .rodata, ovl_dungeon]
-      - [0xa3e28, asm, ovl_dungeon]
+  # NOT ACTIVE YET. Uncommenting this puts the overlay's asm into the link,
+  # and it references jump tables and data inside its own rodata
+  # (jtbl_80089900, D_80089960, ...) that splat cannot label without
+  # symbol_addrs entries, so the link fails with undefined references. Mapping
+  # the overlay means supplying those first. The addresses below are the
+  # finding; they are correct and verified, just not yet buildable.
+  # - type: code
+  # start: 0xa3000
+  # vram: 0x80088760
+  # subsegments:
+  # - [0xa3000, .rodata, ovl_dungeon]
+  # - [0xa3e28, asm, ovl_dungeon]
+  - [0xa3000, bin]
   - [0xf8000, bin]
   - [0x1a86800]

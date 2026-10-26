@@ -55,11 +55,18 @@ segments:
   #
   # rodata first, code from +0xd630 (gcc -G8 data-before-functions), which is
   # why the block opens on Shift-JIS text.
-  - type: code
-    start: 0xb000
-    vram: 0x80088760
-    subsegments:
-      - [0xb000, .rodata, ovl_town]
-      - [0xd630, asm, ovl_town]
-  - [0x52000, bin]
+  # NOT ACTIVE YET. Uncommenting this puts the overlay's asm into the link,
+  # and it references jump tables and data inside its own rodata
+  # (jtbl_80089900, D_80089960, ...) that splat cannot label without
+  # symbol_addrs entries, so the link fails with undefined references. Mapping
+  # the overlay means supplying those first. The addresses below are the
+  # finding; they are correct and verified, just not yet buildable.
+  # - type: code
+  # start: 0xb000
+  # vram: 0x80088760
+  # subsegments:
+  # - [0xb000, .rodata, ovl_town]
+  # - [0xd630, asm, ovl_town]
+  # Kept as the single blob it was: town.bin is the one container in
+  # `make all`, so it stays byte-for-byte in the shape that builds.
   - [0x101b800]
