@@ -1516,7 +1516,38 @@ void func_8004D45C(u8 *p, s32 b, u16 c) {
     func_8004D294(q, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D4AC);
+void func_80041900(u8 *);
+
+void func_8004D4AC(void)
+{
+    VECTOR v;
+    MATRIX m2;
+    MATRIX m3;
+    MATRIX m1;
+    SVECTOR sv;
+    s32 flag;
+    Unk80083178 *b = &D_80083178;
+
+    m1.t[0] = m1.t[1] = m1.t[2] = 0;
+    m2.t[0] = m2.t[1] = m2.t[2] = 0;
+    RotMatrix(&b->unk_94[3], &m1);
+    SetRotMatrix(&m1);
+    SetTransMatrix(&m1);
+    sv.vx = -b->unk_94[2].vx;
+    sv.vy = -b->unk_94[2].vy;
+    sv.vz = -b->unk_94[2].vz;
+    RotTrans(&sv, &v, &flag);
+    TransMatrix(&m1, &v);
+    RotMatrix(&b->unk_94[1], &m2);
+    SetRotMatrix(&m2);
+    SetTransMatrix(&m2);
+    RotTrans(&b->unk_94[0], &v, &flag);
+    TransMatrix(&m2, &v);
+    func_80041900((u8 *)&m2);
+    CompMatrix(&m2, &m1, &m3);
+    SetTransMatrix(&m3);
+    SetRotMatrix(&m3);
+}
 
 void func_8004D4AC(void);
 
@@ -4129,7 +4160,54 @@ void func_80055990(u8 *p) {
     *(u16 *) (p + 0x18) = 0xA;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800559B4);
+extern u32 D_80084850[];
+
+void func_80055990(u8 *);
+void func_800552C8(s32);
+void func_80054D64(s32);
+
+void func_800559B4(void)
+{
+    u8 *p = (u8 *)D_800847D0;
+    u8 *q = (u8 *)D_800848F8;
+    u8 *r = D_80084858;
+    u8 *c;
+
+    D_800847D0[0] = 0;
+    *(u32 *)(p + 0x4) = 0;
+    D_800847D0[0] = 0x10;
+    *(s16 *)(p + 0x1E) = 0x5A;
+    *(s16 *)(p + 0x26) = -1;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0;
+    p[0x30] = 0;
+    p[0x32] = 0;
+    *(u32 *)(p + 0x10) = 0;
+    *(u32 *)(p + 0x14) = 0;
+    p[0x31] = 0;
+    p[0x33] = 0;
+    *(u32 *)(p + 0x18) = 0;
+    *(s16 *)(p + 0x22) = 0;
+    *(s16 *)(p + 0x20) = 0;
+    D_80084808[0] = 0x7FFF;
+    c = (u8 *)D_80084808;
+    *(s16 *)(c + 0x2) = 0x7FFF;
+    *(s16 *)(c + 0x4) = 0x7FFF;
+    D_80084850[0] = 0;
+    func_80055990(q);
+    func_80055990(r);
+    *(u32 *)D_800848F8 = (u32)func_800552C8;
+    *(s16 *)(q + 0x8) = 0x64;
+    *(s16 *)(q + 0xA) = 0x64;
+    *(s16 *)(q + 0x12) = 0x50;
+    *(s16 *)(q + 0x14) = 2;
+    *(u32 *)D_80084858 = (u32)func_80054D64;
+    *(s16 *)(r + 0x8) = 0x7F;
+    *(s16 *)(r + 0xA) = 0x7F;
+    *(s16 *)(r + 0x14) = 0x14;
+    *(s16 *)(r + 0x12) = 0;
+    p[0x28] = 0xC8;
+}
 
 /* Three separate statements -- the mask, the base, then the index -- which is
    the order the five address insns come out in (`andi`, `lui`, `addiu`, `sll`,

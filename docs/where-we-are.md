@@ -4,15 +4,25 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**844 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 164 are
-`INCLUDE_ASM` stubs in `csrc/`: 159 in the four units carved on 2026-10-23 and
+**846 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 162 are
+`INCLUDE_ASM` stubs in `csrc/`: 157 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. **That count is the RESIDENT EXECUTABLE only.**
 `csrc/` covers no other file and `guard.py` counts nothing else, so quote it as
 "164 of the resident executable's 1008" -- the scope section below is why the
 number looks small next to the game. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
+
+**Pick the next function with `python3 tools/decomp/triage.py --easy --fresh`,
+not by word count.** Word count is a poor proxy for effort: measured over
+2026-10-26, call sequences and struct setups landed on the first or second
+attempt at any size, while every function parked at the exact word count was
+either a loop whose address arithmetic loop.c reduced differently or a register
+permutation in a branch-heavy body. triage.py scores the SHAPE of the target
+listing instead -- loops, jump tables, multiplies and stack switches are the
+expensive features, calls and stores are the cheap ones -- and `--fresh` drops
+what carved-sweep.md already has a measurement for.
 
 **The carved-unit sweep is the live work**, and `docs/carved-sweep.md` is its
 record: the source patterns that keep paying, the declaration traps, and a
