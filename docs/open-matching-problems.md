@@ -108,7 +108,13 @@ not a matching problem.
 
 ## Functions blocked by jump-table placement
 
-Four functions dispatch through a jump table, and all four are blocked:
+**All four of the functions this section was written about are now landed, and
+the mechanism it derives is the one still in use.** Kept because the derivation
+is what makes the placement recipe reusable, and because eight more functions
+in `unk_1C540` are waiting on exactly it -- see the region map at the end of
+the section.
+
+Four functions dispatch through a jump table, and all four were blocked:
 `func_80041344` and `func_80041588` (unk_14934, 145 and 164 instructions),
 `func_80042BDC` (unk_14934, 543) and `func_8003E758` (unk_11940, 698 -- also
 in the `$gp` group). That is about 1550 instructions, the largest blocked
@@ -312,6 +318,57 @@ the target emits twice around a join -- is in git history. Treat the shapes in
 Note that `verify.py` cannot see the placement at all -- it masks the relocated
 halfwords that reference the table -- so a MATCH there is necessary and not
 sufficient, and only `make check` is the authority on whether a table landed.
+
+### The whole region, and the eight tables still unplaced
+
+Measured 2026-10-26 against `data/slus_006.14`. The `.rodata` region of the
+executable is file 0x800..0x6b60 (vram 0x8002D000..0x80033360), and it holds
+seven runs of code pointers separated by const data. Scanning for aligned words
+in 0x80010000..0x80090000:
+
+| file | vram | words | tables | referencing stub |
+|------|------|-------|--------|------------------|
+| 0x00dc0..0x00efc | 8002D5C0..8002D6FC | 79 | jtbl_8002D5C0 / D630 / D658 / D67C | **placed** (unk_11F0C, unk_14934, unk_154BC) |
+| 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
+| 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | func_800517CC (268 w) |
+| 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
+| 0x06614..0x068fc | 80032E14..800330FC |186 | jtbl_80032E14 (36), jtbl_80032EA4 (23), pad, jtbl_80032F04 (126) | func_80054F9C (28 w), func_80057A94 (163 w), func_80057D20 (463 w) |
+| 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | func_800595C0 (122 w) |
+| 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
+
+Entry counts come from each dispatch's `sltiu` bound, and every run's extent
+agrees with those bounds, so the grouping is measured rather than inferred.
+
+**The run order matches the referencing functions' text order exactly**
+(func_8004CECC < func_800517CC < func_80052144 < func_80052CE0 < func_80054F9C
+< func_80057A94 < func_80057D20 < func_800595C0). That is the signature of six
+separate original translation units inside what this project carved as the
+single unit `unk_1C540`: a linker lays .rdata out in link order, and link order
+is text order.
+
+#### What that implies for placing them
+
+`unk_1C540.o` currently has **no `.rodata` section at all** (checked with
+`objdump -h`), so it can supply exactly **one** run. The first table therefore
+needs no unit split: add a segment per the pattern the three placed runs
+already use -- its own `type: code` segment, `align: 4`, one
+`[off, .rodata, unk_1C540]` subsegment, with the surrounding `bin` cut either
+side -- and land the one function whose switch generates it.
+
+The **second** table does need `unk_1C540` split into separate translation
+units, one per run, with the boundaries at the function addresses the run order
+implies. Codegen per function does not depend on which other functions share
+the file, but the file-scope `__asm__(".sdata\n\t.size ...")` size records and
+the `extern u32 D_800814A0a[] __asm__("D_800814A0")` alias at the top of
+`csrc/unk_1C540.c` are file-scope and must be copied into every piece.
+
+**The const arrays immediately before each table are not an obstacle.**
+D_8002E5D8/D_8002E5E8 (before jtbl_8002E5F8), D_8002E950 (before jtbl_8002E964)
+and D_80032E0C (before jtbl_80032E14) are small const data tables, i.e. the
+original units' other `.rodata` -- but they can stay in the `bin` blob, because
+a `.rodata` subsegment only has to equal what the sibling C object actually
+emits. They would only have to be reconstructed as `static const` in the C if
+one object had to supply two runs, which the split avoids.
 
 ## func_80042560  (unk_14934) -- SOLVED 2026-10-22
 
