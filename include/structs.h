@@ -1012,7 +1012,7 @@ typedef struct Unk80084960
 } Unk80084960;
 
 /* Callbacks installed by the carved units, stored as function pointers. */
-void func_80035AF8(void);
+void func_80035AF8(u8 *);
 void func_80038A08(void);
 void func_80038A00(void);
 void func_80038478(u8 *);

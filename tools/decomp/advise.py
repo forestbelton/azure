@@ -83,6 +83,14 @@ POLARITY_HINT = """the if/else arms are the wrong way round. `jump` decides
     first. Measured on func_80037C7C (the `>= 0x37` arm had to come first) and
     func_8005AB50 (`return id` had to become the taken branch)."""
 
+EVALORDER_HINT = """two adjacent instructions of the same kind have their
+    operands transposed, and for LOADS that is evaluation order rather than
+    reassociation: the operand the source names first is loaded first, and
+    sched1's tie-break for equal-priority insns is RTL order. If this is the
+    pair feeding a comparison, swap the comparison round -- `a > b` loads `a`
+    first where `b < a` loads `b` first, and the two are the same test. That
+    was worth the first of func_80059DAC's differences."""
+
 COMMUTE_HINT = """the two source operands of a commutative operation are
     swapped, which is reassociation, not allocation: the operand the source
     groups first becomes `rs`. For `base + index`, writing the INDEX first in
@@ -311,9 +319,15 @@ def main():
                             and b.regs != t.regs and b2.regs != t2.regs
                             and b.regs == t2.regs and b2.regs == t.regs):
                         shape_diff = True
-                        findings.append((1, 'REASSOCIATED', addr,
+                        # A transposed pair of LOADS is which operand the
+                        # source evaluates first; a transposed pair of adds is
+                        # base/index reassociation. Different fix either way.
+                        load = b.op in asmlib.LOADS or b.op in asmlib.STORES
+                        findings.append((1, 'EVAL-ORDER' if load else 'REASSOCIATED',
+                                         addr,
                                          'built %s then %s; target %s then %s'
-                                         % (b, b2, t, t2), COMMUTE_HINT))
+                                         % (b, b2, t, t2),
+                                         EVALORDER_HINT if load else COMMUTE_HINT))
                         k += 2
                         continue
                 reg_only.append((addr, b, t))
@@ -365,11 +379,18 @@ def main():
                                  'target has %s with nothing aligned to it' % T[j1 + k], ''))
             continue
 
+        # An insert or a delete is a real shape difference even when the word
+        # COUNTS happen to agree: an instruction the target has and built does
+        # not, balanced by one built has and the target does not, aligns as a
+        # delete plus an insert and must not be reported as MATCH. That bug
+        # called func_80035AF8 a match when verify.py said 3 DIFF.
         if tag == 'insert':      # words only in the target
+            shape_diff = True
             for k in range(j1, j2):
                 findings.append((4, 'MISSING', vram + 4 * k,
                                  'target has %s and built has nothing there' % T[k], ''))
         elif tag == 'delete':    # words only in built
+            shape_diff = True
             for k in range(i1, i2):
                 findings.append((4, 'EXTRA', vram + 4 * j1,
                                  'built has %s and the target has nothing there' % B[k], ''))
@@ -408,8 +429,9 @@ def main():
     elif reg_only:
         verdict = 'ALLOC'
     else:
-        verdict = 'MATCH (byte-for-byte on everything advise.py compares; '\
-                  'run verify.py and then make check)'
+        verdict = 'MATCH on every opcode, immediate, displacement, branch '\
+                  'offset and register advise.py aligned -- confirm with '\
+                  'verify.py, then make check'
     print('VERDICT: %s' % verdict)
 
     if len(B) != len(T):
