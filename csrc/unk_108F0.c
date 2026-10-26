@@ -46,7 +46,7 @@ void func_80040AA0(u16);
  *    load-delay slot. The cast makes the dependence real and the target's `nop`
  *    appears. Per-site: the neighbouring `e->unk_04` read does not need the
  *    cast, because by then nothing is left in the block to hoist it past.
- *  - **`p->unk_14 = p->unk_24--;`** rather than a `u8` temp and `t - 1`
+ *  - **`p->u1 = p->u3--;`** rather than a `u8` temp and `t - 1`
  *    (2 words). For a `u8` lvalue, `x--` builds the decrement constant in the
  *    lvalue's own type and emits `addiu rd,rs,0xFF`; through an int-promoted
  *    temporary it is `addiu rd,rs,-1`.
@@ -73,7 +73,7 @@ void func_8003D0F0(void)
 {
     s32 *sz = (s32 *)0x1F800094;
     Unk80083160 *s = &D_80083160;
-    Unk3D0F0P *p = *(Unk3D0F0P **)(D_80083160.unk_00 + 0x8D0);
+    POLY_FT4 *p = *(POLY_FT4 **)(D_80083160.unk_00 + 0x8D0);
     u8 *sp = (u8 *)0x1F800000;
     Unk800777AC *e;
 
@@ -156,10 +156,10 @@ void func_8003D0F0(void)
             ((SVECTOR *)(sp + 0x70))[3].vy = b;
             ((SVECTOR *)(sp + 0x70))[2].vy = b;
         }
-        RotTransSV((void *)(sp + 0x70), &p->unk_08, sz);
-        RotTransSV((void *)(sp + 0x78), &p->unk_10, sz);
-        RotTransSV((void *)(sp + 0x80), &p->unk_18, sz);
-        RotTransSV((void *)(sp + 0x88), &p->unk_20, sz);
+        RotTransSV((void *)(sp + 0x70), &p->x0, sz);
+        RotTransSV((void *)(sp + 0x78), &p->x1, sz);
+        RotTransSV((void *)(sp + 0x80), &p->x2, sz);
+        RotTransSV((void *)(sp + 0x88), &p->x3, sz);
         q = *(s32 *)(sp + 0x10);
         r = *(s32 *)(sp + 0x8);
         h = *(s32 *)(sp + 0x14);
@@ -173,19 +173,21 @@ void func_8003D0F0(void)
         *(u16 *)((u8 *)p + 0x16) = e->unk_04;
         *(u16 *)((u8 *)p + 0x1C) = *(u16 *)(sp + 0x14) + *(u16 *)(sp + 0x8);
         *(u16 *)((u8 *)p + 0x24) = *(u16 *)(sp + 0x14) + *(u16 *)(sp + 0x10);
-        if (p->unk_08 > p->unk_20)
+        if (p->x0 > p->x3)
         {
-            p->unk_14 = p->unk_24--;
+            p->u1 = p->u3--;
         }
-        if (p->unk_0A > p->unk_22)
+        if (p->y0 > p->y3)
         {
-            ((u8 *)&p->unk_1C)[1] = p->unk_25--;
+            p->v2 = p->v3--;
         }
-        p->unk_03 = 9;
-        p->unk_07 = 0x2C;
-        p->unk_06 = 0x80;
-        p->unk_05 = 0x80;
-        p->unk_04 = 0x80;
+        setPolyFT4(p);
+        /* Not setRGB0: the target writes b0, g0, r0 in that order, and the
+         * macro's r0-first order moves $s1's base from p+4 to p+6 and costs
+         * 0x17 bytes. */
+        p->b0 = 0x80;
+        p->g0 = 0x80;
+        p->r0 = 0x80;
         DrawPrim(p);
         p++;
         if ((s8)e->unk_00 < 0)
@@ -195,7 +197,7 @@ void func_8003D0F0(void)
         e++;
     }
     PopMatrix();
-    *(Unk3D0F0P **)(s->unk_00 + 0x8D0) = p;
+    *(POLY_FT4 **)(s->unk_00 + 0x8D0) = p;
 }
 
 void func_8003D468(void)

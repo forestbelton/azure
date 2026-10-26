@@ -389,7 +389,7 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
     u8 *tex = (u8 *)g->unk_1E8;
     u8 m[0x20];
     Unk463ECF *f;
-    Unk463ECP *p;
+    POLY_FT4 *p;
 
     PushMatrix();
     sp->unk_30 = s->unk_1C;
@@ -414,14 +414,12 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
     SetTransMatrix((void *)0x1F8000D0);
     SetRotMatrix((void *)0x1F8000D0);
     sp->unk_20 = (u32)(D_80083160.unk_00 + 0xB0);
-    p = (Unk463ECP *)*(u32 *)(D_80083160.unk_00 + 0x8D0);
+    p = (POLY_FT4 *)*(u32 *)(D_80083160.unk_00 + 0x8D0);
     s->unk_14 |= 0x8000;
     f = ((Unk463ECF **)g->unk_1E0)[s->unk_08];
     for (;;)
     {
-        s32 x;
-        s32 y;
-        s32 z;
+        long sxy0, sxy1, sxy2;
 
         *(u32 *)&sp->unk_70[0] = *(u32 *)&tbl[f->unk_00];
         *(u32 *)&sp->unk_70[1] = *(u32 *)&tbl[f->unk_02];
@@ -432,32 +430,32 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
         sp->unk_70[2].vz = tbl[f->unk_04].vz;
         sp->unk_70[3].vz = tbl[f->unk_06].vz;
         sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2],
-                                 &sp->unk_70[3], &p->unk_08, &p->unk_10,
-                                 &p->unk_18, &p->unk_20, &sp->unk_90, &sp->unk_94);
+                                 &sp->unk_70[3], &p->x0, &p->x1,
+                                 &p->x2, &p->x3, &sp->unk_90, &sp->unk_94);
         switch (s->unk_14 & 3)
         {
         case 0:
-            x = p->unk_08;
-            y = p->unk_10;
-            z = p->unk_18;
+            sxy0 = *(s32 *)&p->x0;
+            sxy1 = *(s32 *)&p->x1;
+            sxy2 = *(s32 *)&p->x2;
             break;
         case 1:
-            x = p->unk_10;
-            y = p->unk_08;
-            z = p->unk_20;
+            sxy0 = *(s32 *)&p->x1;
+            sxy1 = *(s32 *)&p->x0;
+            sxy2 = *(s32 *)&p->x3;
             break;
         case 2:
-            x = p->unk_20;
-            y = p->unk_18;
-            z = p->unk_10;
+            sxy0 = *(s32 *)&p->x3;
+            sxy1 = *(s32 *)&p->x2;
+            sxy2 = *(s32 *)&p->x1;
             break;
         default:
-            x = p->unk_18;
-            y = p->unk_20;
-            z = p->unk_08;
+            sxy0 = *(s32 *)&p->x2;
+            sxy1 = *(s32 *)&p->x3;
+            sxy2 = *(s32 *)&p->x0;
             break;
         }
-        sp->unk_114 = NormalClip(x, y, z);
+        sp->unk_114 = NormalClip(sxy0, sxy1, sxy2);
         if (sp->unk_114 > 0)
         {
             sp->unk_C0 = sp->unk_C0 - depth;
@@ -465,23 +463,23 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
             {
                 u16 t;
 
-                func_80065034(tex + f->unk_10 * 8, s->unk_0C, (u8 *)&p->unk_04);
-                *(u32 *)&p->unk_0C = f->unk_08;
-                p->unk_0E = p->unk_0E + s->unk_12;
-                *(u32 *)&p->unk_14 = f->unk_0C;
+                func_80065034(tex + f->unk_10 * 8, s->unk_0C, (u8 *)&p->r0);
+                *(u32 *)&p->u0 = f->unk_08;
+                p->clut = p->clut + s->unk_12;
+                *(u32 *)&p->u1 = f->unk_0C;
                 t = s->unk_10;
                 if (t != 0)
                 {
-                    p->unk_16 = t + (p->unk_16 & 0xFF9F);
+                    p->tpage = t + (p->tpage & 0xFF9F);
                 }
-                p->unk_1C = f->unk_12;
-                p->unk_24 = f->unk_14;
+                *(u16 *)&p->u2 = f->unk_12;
+                *(u16 *)&p->u3 = f->unk_14;
                 SetPolyFT4(p);
                 if (s->unk_14 & 8)
                 {
                     if (s->unk_14 & 4)
                     {
-                        p->unk_07 |= 2;
+                        p->code |= 2;
                     }
                 }
                 AddPrim((void *)(sp->unk_20 + sp->unk_C0 * 4), p);

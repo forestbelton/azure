@@ -119,33 +119,6 @@ typedef struct Unk463ECF
    s8 unk_17;
 } Unk463ECF;
 
-/* Hand-added. The 0x28-byte primitive, libgpu's POLY_FT4: the tag at +0x00,
-   RGB and code at +0x04..+0x07, and four {xy word, uv halfword} vertices with
-   the CLUT at +0x0E and the tpage at +0x16. The +0x0C and +0x14 word stores
-   span the uv and clut/tpage halfwords, so they are casts. Same type as
-   docs/near-misses/func_8003D0F0.c's Unk3D0F0P; merge when one of those
-   lands. */
-typedef struct Unk463ECP
-{
-   u32 unk_00;
-   u8 unk_04;
-   u8 unk_05;
-   u8 unk_06;
-   u8 unk_07;
-   s32 unk_08;
-   u16 unk_0C;
-   u16 unk_0E;
-   s32 unk_10;
-   u16 unk_14;
-   u16 unk_16;
-   s32 unk_18;
-   u16 unk_1C;
-   u16 unk_1E;
-   s32 unk_20;
-   u16 unk_24;
-   u16 unk_26;
-} Unk463ECP;
-
 /* Hand-added. +0x30 and +0x34 of the scratchpad below: func_8003DBD0 stores a
    word there and reads the low halfword back, and the mode difference is what
    makes the read a real `lhu` rather than a folded register reuse. */
@@ -154,15 +127,6 @@ typedef union Unk3DBD0W
    s32 w;
    u16 h;
 } Unk3DBD0W;
-
-/* Hand-added. A halfword that is also byte-patched: func_80044D24 stores each
-   of the primitive's UV pairs with `sh` and then patches one byte of it in the
-   clamps, so both views are needed. */
-typedef union Unk44D24UV
-{
-   u16 h;
-   u8 b[2];
-} Unk44D24UV;
 
 /* Hand-added. The 0x1F800000 scratchpad as func_80044D24 lays it out.
    unk_08/0C/10/14 are four more word/halfword unions -- each stored with `sw`
@@ -499,80 +463,6 @@ typedef struct Unk44D24E
    u8 unk_0A;
    u8 unk_0B;
 } Unk44D24E;
-
-/* Hand-added. The same 0x28-byte POLY_FT4 again, as func_8003D0F0 reaches it.
-   This is the third model of one object (see Unk463ECP and Unk44D24P), and it
-   is the one that says the most about the bytes: this function writes +0x03,
-   +0x04, +0x05, +0x06 and +0x07 as five separate `sb`, so +0x04 is four bytes
-   and not Unk44D24P's u32; it needs byte access at +0x14 and at +0x1D (the
-   companion byte of unk_1C) and at +0x24/+0x25 for the two clamps; and its
-   vertices are s16 pairs, agreeing with Unk44D24P against Unk463ECP's s32.
-
-   Merging all three means giving Unk463ECP s16 vertex pairs and byte members,
-   which changes func_800463EC's RotAverage4 argument types and
-   func_80044D24's +0x04 word copy -- both already matched. Held back for that
-   reason, as the other two entries say. Whoever does it should do all three at
-   once and re-verify those two functions. */
-typedef struct Unk3D0F0P
-{
-   u8 pad_00[0x3];
-   u8 unk_03;
-   u8 unk_04;
-   u8 unk_05;
-   u8 unk_06;
-   u8 unk_07;
-   s16 unk_08;
-   s16 unk_0A;
-   u16 unk_0C;
-   u16 unk_0E;
-   s16 unk_10;
-   s16 unk_12;
-   u8 unk_14;
-   u8 unk_15;
-   u16 unk_16;
-   s16 unk_18;
-   s16 unk_1A;
-   u16 unk_1C;
-   u16 unk_1E;
-   s16 unk_20;
-   s16 unk_22;
-   u8 unk_24;
-   u8 unk_25;
-   u16 unk_26;
-} Unk3D0F0P;
-
-/* Hand-added. The same 0x28-byte POLY_FT4 as Unk463ECP and
-   docs/near-misses/func_8003D0F0.c's Unk3D0F0P, but modelled more precisely by
-   func_80044D24, which is why it is separate for now: only the length byte at
-   +0x03 is written (never the word at +0x00); +0x04 is a whole u32, copied
-   from the slot's +0x0C; each vertex is an s16 PAIR, because gte_stsv writes
-   three `sh` at +0/+2/+4 and the clamps read +0x08/+0x0A and +0x20/+0x22 with
-   `lh`, which an s32 field cannot produce; and +0x14/+0x1C/+0x24 are
-   Unk44D24UV unions. Merging the three means applying all of that to
-   Unk463ECP, which would change func_800463EC's RotAverage4 argument types --
-   held back for the same reason as the scratchpad merge. */
-typedef struct Unk44D24P
-{
-   u8 pad_00[0x3];
-   u8 unk_03;
-   u32 unk_04;
-   s16 unk_08;
-   s16 unk_0A;
-   u16 unk_0C;
-   u16 unk_0E;
-   s16 unk_10;
-   s16 unk_12;
-   Unk44D24UV unk_14;
-   u16 unk_16;
-   s16 unk_18;
-   s16 unk_1A;
-   Unk44D24UV unk_1C;
-   u16 unk_1E;
-   s16 unk_20;
-   s16 unk_22;
-   Unk44D24UV unk_24;
-   u16 unk_26;
-} Unk44D24P;
 
 /* Hand-added. The 0x1F800000 scratchpad as func_8003DBD0 lays it out: an
    SVECTOR of results at +0x00, a flags halfword at +0x24, a VECTOR of

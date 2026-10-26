@@ -440,11 +440,17 @@ were explained rather than fought.
    comment says so; the 14-DIFF near-miss is in git history if they need
    recovering.
 4. Deferred type merges, all recorded where they matter: four scratchpad
-   typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP/Unk3CCB0SP), three POLY_FT4s
-   (Unk463ECP/Unk3D0F0P/Unk44D24P), Unk800E3E48 into Unk42710, and the
-   RotAverage4 prototype disagreement (`s32 *` against `u32 *`). Each is held
-   back for a stated reason -- usually that retyping a field risks an existing
-   match for a cosmetic gain -- so read the reason before doing one.
+   typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP/Unk3CCB0SP), Unk800E3E48 into
+   Unk42710, and the RotAverage4 prototype disagreement (`s32 *` against
+   `u32 *`). Each is held back for a stated reason -- usually that retyping a
+   field risks an existing match for a cosmetic gain -- so read the reason
+   before doing one. The three hand-written POLY_FT4s
+   (Unk463ECP/Unk3D0F0P/Unk44D24P) are DONE: the merge resolved itself by
+   adopting psyq's own POLY_FT4 in func_800463EC, func_8003D0F0 and
+   func_80044D24. All three still match, so the "retyping would change
+   func_800463EC's RotAverage4 argument types" worry those entries cited did
+   not materialise; the separate prototype disagreement in this list is
+   untouched.
 5. The overlays, which are where the actual game is. `docs/overlays.md` has the
    analysis; nothing there is started.
 6. `tools/lib2ar.sh` references a path under `$HOME/scratch` and does

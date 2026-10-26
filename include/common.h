@@ -36,6 +36,7 @@
 #include "sys/types.h"
 #include "libcd.h"
 #include "libgte.h"
+#include "libgpu.h"
 
 #include "types.h"
 #include "structs.h"
