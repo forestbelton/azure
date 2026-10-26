@@ -137,7 +137,28 @@ u32 func_80047AA4(u32 a) {
     return a + 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80047AB0);
+void func_8004713C(u32 *, u16, u16);
+void func_8003F80C(u32, s32, s32, s16);
+void func_80047200(u32 *, s32, s32);
+void func_80046F88(u8 *);
+void func_80047054(u8 *, s32, s32, s32);
+u32 func_80047AA4(u32);
+
+u32 func_80047AB0(u8 *p, s32 a, s32 b, s32 c, u8 *q)
+{
+    s32 s = a & 0xFFFF;
+    u32 buf;
+
+    func_8004713C((u32 *)q, s, 4);
+    buf = func_80047AA4((u32)q);
+    func_8003F80C(buf, b, 0x10, 2);
+    DrawSync(0);
+    func_80047200((u32 *)buf, 0x10, 0);
+    func_8003F80C(buf, b - 0x80, 0x10, 2);
+    func_80046F88(p);
+    func_80047054(p, s, b & 0xFFFF, c & 0xFFFF);
+    return (u32)p;
+}
 
 s32 func_80047B80(void) {
     /* The three initialisers are in source order in the listing, so the
@@ -592,7 +613,25 @@ void func_80048734(u8 *src, u8 *dst) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004878C);
+u8 *func_8004068C(u8 *, u8 *);
+void func_80048734(u8 *, u8 *);
+
+void func_8004878C(u32 a, s16 *r)
+{
+    s32 n = r[2] * r[3];
+    s32 n2 = n * 2;
+    u32 lim = D_8008148C + D_80080A7C;
+
+    if (D_80081480 + n * 4 + 2 >= lim)
+    {
+        D_80081480 = D_8008148C;
+        DrawSync(0);
+    }
+    func_8004068C((u8 *)a, (u8 *)(D_80081480 + n2));
+    func_80048734((u8 *)(D_80081480 + n2), (u8 *)D_80081480);
+    LoadImage((RECT *)r, (u_long *)D_80081480);
+    D_80081480 += n2;
+}
 
 void func_8004878C(u32, s16 *);
 

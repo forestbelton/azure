@@ -1766,6 +1766,30 @@ only use is a byte store -- so an `lh`/`lb` whose value goes straight into an
 `sb` is the tell that a SHIFT produced it, not a declared type. Measured on
 func_8003A2E0: 14 DIFF as four fields, 7 as one word.
 
+* **A narrow PARAMETER is not the same thing as a wide parameter with a cast,
+  and the difference is a register.** `(u8 *p, s32 e)` with `(s16) e` at the
+  use, and `(u8 *p, s16 e)` with a bare `e`, are the same arithmetic and
+  different code. In the first, the parameter's pseudo is a plain copy of its
+  incoming MEM (or argument register), so local-alloc's `update_equiv_regs`
+  sees one set and one use and substitutes the MEM back into the use: the load
+  SINKS to the point of use, `combine` folds the sign-extension into it as a
+  single `lh`, and the value never needs a register. In the second, the entry
+  insn is a promotion rather than a copy, the substitution cannot fire, the
+  value lives from entry in a callee-saved register, and the sign-extension
+  appears separately at the use.
+
+  So a target that reads a stack parameter with `lw $sN, 0x44($sp)` at ENTRY
+  and sign-extends it with `sll`/`sra` at the USE declared it narrow. A
+  candidate that emits `lh 0x44($sp)` at the use instead, and saves one fewer
+  callee-saved register, declared it wide. The cost is the `sw`/`lw` pair, two
+  words: func_8004A24C went 55/57 -> MATCH on declaring arguments 4, 5 and 6
+  `s16`, and func_8003AB44 went 52/54 -> 54/54 on argument 6 alone. It is not
+  specific to stack parameters -- argument 4 of func_8004A24C is in `$a3` and
+  behaves the same way.
+
+  `advise.py` reports this as CALLEE-SAVED and names it, because the diff on
+  its own reads as a frame-size difference and sends you looking for a spill.
+
 ## 8. Statement order and expression shape
 
 * **When a store's `lui %hi` sits one slot too early, give the RHS's first
@@ -2213,6 +2237,16 @@ cc1psx increment a COPY in place while keeping the original live?
   differ only in case are one file to `ccpsx`, which then exits 0 having written
   the other one. `verify.py` diagnoses this now; name variants so they differ by
   more than case.
+* **A tool that invokes `tools/ccpsx` needs `-Ipsyq/include` as well as
+  `-Iinclude`.** `include/common.h` pulls in `sys/types.h`, `libcd.h`,
+  `libgte.h` and `libgpu.h`, which exist only under `psyq/include`. The
+  Makefile passes both paths; the decomp tools passed only the first, so
+  adopting the Psy-Q types broke `verify.py` -- and therefore `search.py`,
+  `sweep.py` and `perm.py`, which all shell out to it -- for every file at
+  once, while `make` stayed green. The error names `gnu/stubs-32.h`, a host
+  header, and not the real cause. Fixed 2026-10-26.
+  **`python3 tools/decomp/nmcheck.py` is the one-command check that the fast
+  loop works**; run it before concluding a candidate is wrong.
 * **Concurrent `ccpsx` runs share one wine prefix** and can lose an output.
   Retry before believing a compile failure.
   Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq` when more

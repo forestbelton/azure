@@ -4,9 +4,9 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**822 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 186 are
-`INCLUDE_ASM` stubs in `csrc/`: 181 in the four units carved on 2026-10-23 and
+**841 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 167 are
+`INCLUDE_ASM` stubs in `csrc/`: 162 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
@@ -335,6 +335,16 @@ arithmetic.
    relocated halfwords and 26-bit jump targets. It prints `MATCH` or
    `N DIFF` plus a side-by-side. This is the fast loop; it never touches
    `build/`.
+3a. When it says N DIFF, run
+   `python3 tools/decomp/advise.py zz_foo.c <unit> <func>` before reading the
+   diff. A positional diff is actively misleading once anything has shifted --
+   func_8004CECC's single missing register copy reads as "101 DIFF" -- and
+   advise.py's verdict tells you which of the two very different jobs you have:
+   rewrite the C (SHAPE) or move an allocation priority (ALLOC). It also names
+   the six differences that are mechanically diagnosable: signedness, inverted
+   if/else arms, base/index reassociation, load-delay nops, a missing
+   callee-saved register, and a wrong constant. Each cites the function it was
+   measured on.
 3b. When the logic is right and only shapes are wrong, hand it to
    `python3 tools/decomp/search.py zz_foo.c <unit> <func>` rather than
    iterating by hand: a verify cycle is 0.7s, so a few hundred variants is
@@ -352,6 +362,7 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 
 | tool | use |
 |------|-----|
+| `advise.py zz.c UNIT FUNC` | **run this instead of re-reading a diff.** Aligns the two word streams instead of comparing them positionally, so a one-word shift stops reading as N wrong words, and classifies what is left into a KIND with the lever for it. The verdict is the point: SHAPE (the C is wrong, keep rewriting), ALLOC (every opcode and immediate already matches, so only section 3 reaches it) or LENGTH (with the shift localised to a branch span). `--greg` adds the allocator's own refs/live-length/conflict table; `--regs` lists every register-only site |
 | `verify.py zz.c UNIT FUNC` | the fast loop above; marks a relocated word whose addend differs from the listing with `?`, and diagnoses the wine case clash |
 | `peek.sh UNIT FUNC` | print one already-decompiled function's asm |
 | `sizes.py` | every C function whose compiled size differs from its target -- run this first after a failed `make check`, because one wrong size shifts the image and makes every later byte diff meaningless |
@@ -422,6 +433,17 @@ were explained rather than fought.
   splat's `target.o` carries an `R_MIPS_LO16` relocation the constant form
   cannot produce, so the score never reaches zero. `verify.py` and `make check`
   are the authority.
+- **Every tool that shells out to `tools/ccpsx` must pass `-Ipsyq/include`,
+  not just `-Iinclude`.** `include/common.h` includes `sys/types.h`,
+  `libcd.h`, `libgte.h` and `libgpu.h`, which live only under `psyq/include`;
+  the Makefile's `CFLAGS` has both paths and the decomp tools had only the
+  first. When the Psy-Q types were adopted that made `verify.py`, `search.py`,
+  `sweep.py`, `perm.py`, `nmcheck.py`, `dump.sh`, `peek.sh` and
+  `permuter_compile.sh` fail on EVERY file at once -- with a misleading
+  `gnu/stubs-32.h: No such file or directory` from the host headers rather
+  than anything naming the real cause, and `make` still green throughout,
+  because the build was never affected. Fixed 2026-10-26; `nmcheck.py` is the
+  cheapest check that the fast loop still works at all.
 - cc1psx runs under wine and its asm output has CRLF line endings. Strip the
   CR before matching labels.
 - **`verify.py` compares only the upper 16 bits of any relocated word.** A

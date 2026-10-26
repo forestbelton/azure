@@ -20,6 +20,15 @@ reports nonsense (a two-word function came back "8 DIFF"). `land` refuses a unit
 unless every stub is present exactly once and no inline prototype collides with
 a definition being landed.
 
+`tools/decomp/advise.py cand.c UNIT FUNC` is the first thing to run on a
+candidate that is not a MATCH. It aligns rather than positionally compares, so
+it reports an inserted word as an insertion instead of turning every later word
+into a difference, and it classifies the rest: signedness, inverted if/else
+arms, base/index reassociation, extra load-delay nops, a missing callee-saved
+register, a wrong constant, or "only registers differ" -- which is the one case
+where rewriting the C is known not to help. Validated against six functions in
+this table whose answers were already known.
+
 `tools/decomp/magic.py 0x80010003 [post_shift]` tells you which DIVISOR a
 constant-division magic came from, by running gcc 2.7.2's own
 choose_multiplier over every divisor. Do not estimate it from the arithmetic:
@@ -149,6 +158,15 @@ which was already declared as a struct 300 lines further down.
   It does not help in a loop with NO call (func_8003C67C): gcc's loop.c halves
   its strength-reduction threshold when `loop_has_call`, so a call-free copy
   loop gets reduced whatever the source says.
+
+  **And "write the index first" needs a pointer LOCAL to hold the base, not the
+  symbol's own name.** `(Unk *) (k * 12 + (u32) SYM)` still comes out
+  `addu $s0, $base, $index`, because `(u32) SYM` is a constant address
+  expression and `fold` reassociates it to the end; `t = SYM;` then
+  `(Unk *) (k * 12 + (u32) t)` makes it pseudo-plus-pseudo and gives the
+  target's `addu $s0, $index, $base`. That was the last word of func_8005AE90,
+  and `&SYM[k]` or `SYM + k` both give the other order. advise.py reports it
+  as COMMUTED.
 * **A handler called through a function-pointer field takes all the
   parameters it passes on.** The unk_72A8 `+0x68` handlers are
   `(u8 *p, u8 *q, s32 r)` and end in `(*(...)(p + 0x68))(p, q, r)`; `q` and
@@ -190,6 +208,17 @@ which was already declared as a struct 300 lines further down.
   func_8005084C its `addu $v1, $a2, $zero` and then two real re-loads of the
   same field. This is the fourth known cure for that missing copy and the only
   one that works on a value the function itself produced.
+* **Four long-lived block-locals in one block will take $a0-$a3 and lock a
+  global allocno out of them.** `local-alloc` runs before `global-alloc` and
+  orders its quantities by refs/live_length, so the short two-reference scratch
+  values cycle through $v0/$v1 and the few longer-lived ones take the argument
+  registers -- and the `;; NN conflicts` line in the `.greg` dump then shows
+  the global conflicting with hard regs 2..7, whatever its priority. When a
+  target holds one long-lived value in an argument register for a whole
+  function and puts a *constant* up in $t0, that is the signature: the original
+  block had one fewer such local. Costs exactly the parameter copy that the
+  displaced argument register then needs (func_8004CECC, one word).
+
 * **An arithmetic constant binds to the term the source groups it with.**
   `(v & 0xF) + 0x7C80` then `+ ((v & 0x10) << 3)` must be split into a local;
   written as one expression the compiler folds the constant into the second
@@ -255,6 +284,9 @@ directly and leaves the copy above the branch. |
 | func_8003C634 | unk_72A8 | 7 DIFF | $gp group. Reading the bound in the loop condition took it from 18 DIFF to 7; what is left is the register pair, as in func_8005C818. |
 | func_80033D44 + func_80033D54 | unk_72A8 | BLOCKED, not a shape | Both need `%gp_rel(D_8008099C)`, and func_80034EF8 and func_8003C0C8 in the same carved unit reach that symbol ABSOLUTELY and are landed. maspsx's rewrite keys on the symbol for the whole unit, so one unit cannot give it both forms: these two want the unit split, or those two reverted. |
 | func_80039DBC | unk_72A8 | 25/24 words, 18 DIFF | Calls through a table at +0x40 with four arguments from +0x48..+0x54; the fifth load reuses the table's register in the target and this spends an extra one. |
+| func_8003AB44 | unk_72A8 | **54/54 words, 9 DIFF** | A 3-cycle register rotation, source in `docs/near-misses/func_8003AB44.c`. Was 52/54 until argument 6 was declared `s16` instead of `s32`-with-a-cast (see the narrow-parameter entry in matching-levers section 7). Landing it means narrowing that argument in the committed prototype, which changes func_8003AAC4's call setup -- check that caller or use an `__asm__` alias. |
+| func_8005500C | unk_1C540 | **55/55 words, 33 DIFF** | Sparse `switch` on `& 0xF000`. One BRANCH-ARMS difference (the 0x9000 compare falls through into the shared body in the target, branches to it here) plus a 3-way register rotation. Source and everything measured against it in `docs/near-misses/func_8005500C.c`; `search.py` found nothing. |
+| func_8004CECC | unk_1C540 | **101/102 words, one word** | HSV->RGB. Every opcode, immediate, displacement, branch offset and delay slot matches, and the `beqz`->end delta agrees, so all six switch arms are byte-correct; the whole gap is the `v` parameter's entry copy `addu $v1,$a2,$zero`, and the 101 DIFF is that one-word shift rather than 101 wrong words. Diagnosed to the register from the dumps in `docs/near-misses/func_8004CECC.c`, which lists the eight shapes and the whole `search.py` sweep already measured against it and names the signature to aim at: the 0x80808081 magic belongs in $t0, not $a3, because the colour block had one fewer long-lived block-local than this source gives it. Landing it also needs jtbl_8002E5F8 placed. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather
 than a source shape: func_8004AC18, func_8005845C, func_80053DA8,

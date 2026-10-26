@@ -720,7 +720,7 @@ void func_800362A0(u8 *p) {
 }
 
 void func_80036ED4(u8 *, s32, s32, s16, s16, u32);
-void func_80036350(void);
+void func_80036350(u8 *, u8 *, s32);
 
 void func_800362D0(u8 *p) {
     u8 *s = *(u8 **) (p + 0x74);
@@ -731,11 +731,34 @@ void func_800362D0(u8 *p) {
     *(u32 *) (p + 0x68) = (u32) func_80036350;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036350);
+void func_80036434(u8 *, u8 *, s32);
+
+void func_80036350(u8 *p, u8 *q, s32 r)
+{
+    u8 *b = (u8 *)&D_80083160;
+    u32 f = *(u32 *)(b + 0x10);
+
+    if (f & 0x4000)
+    {
+        func_80053DA8(0x502);
+        p[0x4D] = p[0x4D] + 1;
+        p[0x4D] = p[0x4D] % *(u8 *)(*(u8 **)(p + 0x74) + 0x26);
+    }
+    else if (f & 0x1000)
+    {
+        func_80053DA8(0x502);
+        p[0x4D] = p[0x4D] + *(u8 *)(*(u8 **)(p + 0x74) + 0x26) - 1;
+        p[0x4D] = p[0x4D] % *(u8 *)(*(u8 **)(p + 0x74) + 0x26);
+    }
+    if (*(u32 *)(b + 0x10) & 0x40)
+    {
+        func_80036434(p, q, r);
+    }
+}
 
 void func_80036484(u8 *);
 
-void func_80036434(u8 *p) {
+void func_80036434(u8 *p, u8 *q, s32 r) {
     u8 *q = *(u8 **) (p + 0x74);
 
     q[0x27] = p[0x4D];
@@ -1003,7 +1026,55 @@ INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800375C0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037714);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037C7C);
+void func_80037C7C(u8 *p, s16 n)
+{
+    s16 m;
+    s16 t;
+
+    *(s32 *)(*(u8 **)p + 0x10) = n;
+    if (n >= 0x37)
+    {
+        *(s16 *)(p + 0xC) = -0x38;
+        *(s16 *)(p + 0x10) = 0x30;
+    }
+    else
+    {
+        *(s16 *)(p + 0xC) = -n - 2;
+        *(s16 *)(p + 0x10) = n - 6;
+        if (*(s16 *)(p + 0x10) <= 0)
+        {
+            *(s16 *)(p + 0x10) = 1;
+        }
+    }
+    if (n < 0x36)
+    {
+        s16 k = -n;
+
+        *(s16 *)(p + 0x24) = k + 0x36;
+    }
+    else
+    {
+        *(s16 *)(p + 0x24) = 0;
+    }
+    m = -n;
+    *(s16 *)(p + 0x28) = m - 3;
+    t = n + 6;
+    *(s16 *)(p + 0x2C) = t;
+    *(s16 *)(p + 0x18) = *(u16 *)(p + 0x10);
+    if (t <= 0)
+    {
+        *(s16 *)(p + 0x2C) = 1;
+    }
+    if (n < 0x40)
+    {
+        *(s16 *)(p + 0x40) = m + 0x40;
+    }
+    else
+    {
+        *(s16 *)(p + 0x40) = 0;
+    }
+    *(s16 *)(p + 0x34) = *(u16 *)(p + 0x2C);
+}
 
 /* The second parameter is unused here; func_80034EF8 masks a byte into it, so
    it is real. An unused parameter costs no instruction. */
