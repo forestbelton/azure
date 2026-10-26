@@ -391,6 +391,20 @@ were explained rather than fought.
 
 ## Things that cost time once and should not again
 
+- **`make clean` deletes `asm/` and `assets/`, not just `build/`.** The
+  `INCLUDE_ASM` macros reference `asm/nonmatchings/**/*.s`, so a plain `make`
+  after a clean fails with `can't open asm/nonmatchings/.../func_X.s`. The
+  recovery is `make clean && make splat && make`; nothing in the normal build
+  regenerates those trees. Do not wire `splat` in as a build prerequisite --
+  it re-splits the 26 MB dungeon container and costs minutes per `make`.
+- **`make splat` only clears `asm/nonmatchings`, so stale `.s` files survive.**
+  `SFILES` is a `find` over `asm/`, so a subsegment you removed or renamed
+  leaves its old `.s` behind and it keeps getting linked. If a link starts
+  failing on symbols from a segment you deleted, look for orphans in `asm/`.
+- **Scratch belongs in `scratch/`.** `.gitignore` covers `scratch/`, `zz*.c`
+  and `b[0-9]*.py`; `tools/decomp/verify.py`, `search.py` and `sweep.py` all
+  take a path, so `scratch/zz_foo.c` works. The root had accumulated 1252 of
+  these before they were moved on 2026-10-26.
 - **Declaration decides addressing.** A scalar or an array within `-G8` gets
   the assembler-expanded symbolic form; anything larger or an incomplete
   `extern u16 X[];` gets the compiler split. Check the declaration before
