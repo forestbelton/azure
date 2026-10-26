@@ -219,6 +219,17 @@ which was already declared as a struct 300 lines further down.
   block had one fewer such local. Costs exactly the parameter copy that the
   displaced argument register then needs (func_8004CECC, one word).
 
+* **When two arms end in the same call with different constants, assign the
+  constant on its own line FIRST.** jump2's `do_cross_jump` walks backwards
+  from the two arms' jumps while the insns are equivalent and stops at the
+  first difference, so the differing `lui` must come before the shared work,
+  not after it. `f = 0x1010000; m = (k << 8) & 0xFF00; g(f | m);` merges the
+  `sll` and the `andi`; `g(((k << 8) & 0xFF00) | 0x1010000)` emits the `lui`
+  last, the walk stops at once, and the mask is duplicated into both arms.
+  Worth 2 words on func_80055D84, and writing the constant first INSIDE the
+  expression does not help -- fold reorders it, so it has to be two
+  statements.
+
 * **An arithmetic constant binds to the term the source groups it with.**
   `(v & 0xF) + 0x7C80` then `+ ((v & 0x10) << 3)` must be split into a local;
   written as one expression the compiler folds the constant into the second
@@ -288,6 +299,7 @@ directly and leaves the copy above the branch. |
 | func_8005500C | unk_1C540 | **55/55 words, 33 DIFF** | Sparse `switch` on `& 0xF000`. One BRANCH-ARMS difference (the 0x9000 compare falls through into the shared body in the target, branches to it here) plus a 3-way register rotation. Source and everything measured against it in `docs/near-misses/func_8005500C.c`; `search.py` found nothing. |
 | func_80059DAC | unk_1C540 | **58/58 words, 8 DIFF** | A bubble sort over D_800869C0. Four structural things were needed to reach the exact count and they pull against each other -- separate base locals per loop, the second materialised INSIDE the loop body so it lands after the `blez` guard, the index written first, and the comparison round the target's way; all four are written up in `docs/near-misses/func_80059DAC.c`. What is left is loop.c declining to make `i * 8 + base` an outer giv. The function makes no calls, so `loop_has_call` is false and the threshold is not halved. |
 | func_80054104 | unk_1C540 | **61/57 words, four words OVER** | The only row here that is too BIG. loop.c strength-reduces the access to a LOCAL array into a walking cursor and hoists `$sp + 0x10` into its own register, costing two callee-saved registers the target does not spend; the target recomputes the address every inner iteration. Six subscript spellings measured, all 61 -- see `docs/near-misses/func_80054104.c`. Needs func_80055730 and func_8005BAB0 widened to two arguments to land. |
+| func_80055D84 | unk_1C540 | **58/58 words, 5 DIFF** | A two-register swap around the final `or`: the target reuses the mask's own register as the destination and this source does not, and --greg shows why (the mask is allocated first on priority and takes the lowest free register instead of preferring the argument register). Getting to the exact count needed the cross-jump lever above; everything measured is in `docs/near-misses/func_80055D84.c`. |
 | func_8004CECC | unk_1C540 | **101/102 words, one word** | HSV->RGB. Every opcode, immediate, displacement, branch offset and delay slot matches, and the `beqz`->end delta agrees, so all six switch arms are byte-correct; the whole gap is the `v` parameter's entry copy `addu $v1,$a2,$zero`, and the 101 DIFF is that one-word shift rather than 101 wrong words. Diagnosed to the register from the dumps in `docs/near-misses/func_8004CECC.c`, which lists the eight shapes and the whole `search.py` sweep already measured against it and names the signature to aim at: the 0x80808081 magic belongs in $t0, not $a3, because the colour block had one fewer long-lived block-local than this source gives it. Landing it also needs jtbl_8002E5F8 placed. |
 
 Cleared from this table on 2026-10-23, all of them by a DECLARATION rather

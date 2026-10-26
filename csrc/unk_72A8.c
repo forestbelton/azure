@@ -1613,7 +1613,44 @@ u8 *func_800392A4(u8 i) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003931C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80039470);
+s32 func_80039470(s32 a, s32 b, s32 c, s32 d)
+{
+    Unk80082660 *t = D_80082660;
+    s32 k = d & 0xFF;
+    u8 *e = (u8 *)&t[k];
+
+    if (*(s8 *)(e + 1) == 0)
+    {
+        u8 *r;
+        u8 *f;
+
+        if (k == 0)
+        {
+            return 1;
+        }
+        r = func_800392A4(k);
+        if (r == 0)
+        {
+            return 1;
+        }
+        e[0] = d >> 8;
+        e[1] = 1;
+        e[2] = a;
+        f = r - 0x20;
+        if (k == 1 && *(u32 **)(f + 0x10) != D_800C3174 && *(u32 **)(f + 0x10) != D_800C321C)
+        {
+            *(s16 *)(r + 0x36) = b;
+            *(s16 *)(r + 0x38) = c;
+        }
+        else
+        {
+            *(s16 *)(r + 0x88) = b;
+            *(s16 *)(r + 0x8A) = c;
+        }
+        return 1;
+    }
+    return 0;
+}
 
 void func_80039560(void) {
 }
@@ -2879,7 +2916,43 @@ void func_8003C128(void) {
     *(u32 *) (n + 0x20) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C160);
+extern u8 D_800F26F8[];
+extern u8 D_80077784[];
+extern u8 D_800776FC[];
+
+void func_8003DB94(u8 *, u32, s32);
+void func_8003C0A4(u8 *, u32 *);
+void func_8003C450(u32 *, s32, u8 *);
+
+void func_8003C160(void)
+{
+    u32 *b = D_80082D58;
+    u8 *e = (u8 *)b - 0x20;
+    u8 *p = *(u8 **)(e + 0xC);
+    u8 *q = *(u8 **)(e + 0x8);
+    u8 *t;
+
+    *(s16 *)(p + 0x1E) = 0x200;
+    *(s16 *)(p + 0x1C) = 0x200;
+    *(u32 *)(p + 0xC) = 0x808080;
+    *(u32 *)(p + 0x8) = (u32)D_800F26F8;
+    *(u32 *)(p + 0x0) = 0;
+    p[4] = 0;
+    p[5] = 0;
+    func_8003DB94(p, b[2], 0);
+    *(s16 *)(p + 0x14) = 0;
+    *(s16 *)(p + 0x10) = 0;
+    t = (u8 *)b[2];
+    if (t == D_80077784 || t == D_800776FC)
+    {
+        *(s16 *)(p + 0x14) |= 0x400;
+    }
+    *(s16 *)(q + 0x2) = 0x54;
+    *(s16 *)(q + 0x6) = 0x8D;
+    *(s16 *)(q + 0xA) = 0x10;
+    b[0] = (u32)func_8003C450;
+    func_8003C0A4((u8 *)b, (u32 *)p);
+}
 
 void func_8003C4C8(u8 *, s32, u8 *);
 

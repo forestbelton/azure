@@ -99,7 +99,14 @@ COMMUTE_HINT = """the two source operands of a commutative operation are
     The reliable fix is to bind one side into its own pointer local --
     `u8 *t = SYM + i * STRIDE;` then `t[j]` -- which forces base+stride to
     combine before the index. That is what closed func_8004FC98 (2 DIFF -> 0)
-    and func_8004F780."""
+    and func_8004F780.
+    CAVEAT: a transposed pair is detected from register NUMBERS alone, so it
+    can also be a plain RENAME of two independent values -- identical code
+    under a different allocation. Check whether the two registers' defining
+    instructions swap as well: if they do it is a rename and belongs under
+    ALLOCATION. func_80039470 looked exactly like this and was really the
+    table base being materialised AFTER the index instead of before it, fixed
+    by the pointer-local idiom (`T *t = SYM;` then `&t[k]`)."""
 
 NOP_HINT = """built has {n} extra nop(s), which are load-delay slots the
     target's scheduler filled and yours could not. sched1 decides memory

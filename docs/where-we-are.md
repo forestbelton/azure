@@ -4,10 +4,13 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**842 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 166 are
-`INCLUDE_ASM` stubs in `csrc/`: 161 in the four units carved on 2026-10-23 and
-5 long-standing near-misses. `python3 tools/decomp/guard.py` is the authority
+**844 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 164 are
+`INCLUDE_ASM` stubs in `csrc/`: 159 in the four units carved on 2026-10-23 and
+5 long-standing near-misses. **That count is the RESIDENT EXECUTABLE only.**
+`csrc/` covers no other file and `guard.py` counts nothing else, so quote it as
+"164 of the resident executable's 1008" -- the scope section below is why the
+number looks small next to the game. `python3 tools/decomp/guard.py` is the authority
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
 
