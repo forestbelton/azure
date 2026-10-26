@@ -1,0 +1,26 @@
+# Reproduces exactly what VS Code's C/C++ extension already applies on save:
+# its "Visual Studio" fallback style (LLVM with 4-space Allman braces and no
+# column limit). Pinning it here means the formatting survives an extension
+# default change and can be checked from the command line:
+#
+#     clang-format --dry-run --Werror csrc/*.c include/*.h
+#
+# Verified byte-for-byte against an editor-formatted file with clang-format
+# 20.1.0: running it over csrc/unk_1811C.c is a no-op.
+#
+# Formatting cannot affect matching -- whitespace does not reach the compiler's
+# output -- so the only thing at stake is keeping hand edits and format-on-save
+# from fighting over whole files.
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+BreakBeforeBraces: Allman
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+ColumnLimit: 0
+
+# The one deliberate departure from the editor default, and the reason this
+# file is worth committing: LLVM sorts includes, and sorting include/common.h
+# puts libcd.h ahead of sys/types.h, which fails to compile ("parse error
+# before `u_char'"). The order there is load-bearing. Verified by doing it.
+SortIncludes: Never
