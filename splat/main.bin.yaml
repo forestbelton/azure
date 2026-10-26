@@ -59,5 +59,32 @@ segments:
   - [0x226800, bin, title_bg_img]
   - [0x257000, bin, title_menu_img]
   - [0x258800, bin, unk_img_2]
-  - [0x25d000, bin]
+  # The low-RAM overlay: 130 functions at 0x80020000, in the 0x80010000
+  # region the engine reaches with the out-of-image constant-base-pointer
+  # idiom (docs/addressing-and-translation-units.md) rather than above the
+  # engine like town's and dungeon's.
+  #
+  # Found without any symbol list, by matching the block's own `jal` targets
+  # against its `addiu sp,sp,-N` prologues and taking the offset-to-address
+  # delta with the most agreement: 130 hits here against a noise floor of 0
+  # (the same test on town.bin scored 536 for the known answer and 0-16 for
+  # eight random deltas). Corroborated three ways: +0x25d000 is sector
+  # aligned, it maps to a round 0x80020000, and the game seeks exactly there
+  # (LBA 3027) -- caught in a PCSX-Redux CD-ROM command log.
+  #
+  # rodata first, code from +0x924: gcc 2.7.2 at -G8 emits data ahead of
+  # functions, which is also why the block opens on an "Assertion failed"
+  # string rather than instructions.
+  - type: code
+    start: 0x25d000
+    vram: 0x80020000
+    subsegments:
+      - [0x25d000, .rodata, ovl_main_80020000]
+      - [0x25d924, asm, ovl_main_80020000]
+  # A second code run sits at +0x269000..+0x272000 -- 191 prologues, so it is
+  # certainly code -- but its load address is UNRESOLVED. It has only 58
+  # internal jal targets and the best delta scored 6 against a floor of 5,
+  # which is noise. It cannot share 0x80020000: that would place it across
+  # the resident engine's base at 0x8002D000. Left as bin deliberately.
+  - [0x265000, bin]
   - [0x275800]

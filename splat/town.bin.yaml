@@ -39,4 +39,27 @@ segments:
   # - [0x6f681e, az_string, STR_ANGEL_GREETING]
   # - [0x6f69fe, bin]
   - [0x0, bin]
+  # The town overlay: 536 functions at 0x80088760, which is the first byte
+  # after the resident engine's last (0x8008875F) -- the layout
+  # docs/overlays.md predicted but could not place. dungeon.bin's overlay
+  # loads at the SAME address, so the two are mutually exclusive at runtime
+  # and one address means different code in each; see that doc.
+  #
+  # Located by matching the 49 overlay function addresses in
+  # slus_006.14_undefined_funcs_auto.txt against this file's
+  # `addiu sp,sp,-N` prologues (15/49 at this delta, next best 6), then
+  # confirmed by the block's own jal targets landing on its own prologues
+  # (536 hits, noise floor 0). +0xb000 is the sector-aligned offset that maps
+  # to 0x80088760, and the game seeks exactly there (LBA 3099) when loading
+  # the town -- caught in a PCSX-Redux CD-ROM command log.
+  #
+  # rodata first, code from +0xd630 (gcc -G8 data-before-functions), which is
+  # why the block opens on Shift-JIS text.
+  - type: code
+    start: 0xb000
+    vram: 0x80088760
+    subsegments:
+      - [0xb000, .rodata, ovl_town]
+      - [0xd630, asm, ovl_town]
+  - [0x52000, bin]
   - [0x101b800]

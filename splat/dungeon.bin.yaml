@@ -1,0 +1,62 @@
+name: dungeon.bin
+sha1: 27f9fcc384a570a991e349b920881e7070c0e13c
+options:
+  basename: dungeon.bin
+  target_path: data/dungeon/dungeon.bin
+  base_path: ..
+  platform: psx
+  compiler: GCC
+  extensions_path: splat/ext
+
+  create_asm_dependencies: False
+
+  ld_align_segment_vram_end: False
+  ld_align_section_vram_end: False
+  ld_dependencies: False
+  # TODO: We may be able to turn this off once more of the binary is mapped
+  ld_legacy_generation: True
+  ld_script_path: build/dungeon.bin.ld
+
+  subalign: 4
+
+  find_file_boundaries: False
+  gp_value: 0x80080994
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  symbol_addrs_path: splat/dungeon.bin_symbol_addrs.txt
+  reloc_addrs_path: splat/dungeon.bin_reloc_addrs.txt
+
+  undefined_funcs_auto_path: splat/dungeon.bin_undefined_funcs_auto.txt
+  undefined_syms_auto_path: splat/dungeon.bin_undefined_syms_auto.txt
+segments:
+  - [0x0, bin]
+  # The dungeon overlay: 353 functions at 0x80088760 -- the SAME address as
+  # town.bin's overlay, the first byte after the resident engine's last
+  # (0x8008875F). The two are therefore mutually exclusive at runtime, and an
+  # address in this range means different code depending on which is
+  # resident; docs/overlays.md has the consequences for mapping them.
+  #
+  # Located by matching the 49 overlay function addresses in
+  # slus_006.14_undefined_funcs_auto.txt against this file's
+  # `addiu sp,sp,-N` prologues (12/49 at this delta, next best 6), then
+  # confirmed by the block's own jal targets landing on its own prologues
+  # (353 hits, noise floor 0). The code reaches 0x800DCCF4, which covers the
+  # isolated 0x800D5460 that docs/overlays.md listed as "a different region".
+  #
+  # CAVEAT, unlike town's and main.bin's: +0xa3000 is the sector-aligned
+  # offset that maps to 0x80088760, but it has NOT been confirmed against a
+  # live seek -- the CD-ROM log that confirmed the other two was captured in
+  # town, never entering a dungeon. Expect LBA 12644 and check it before
+  # relying on the start offset. The delta itself does not depend on this.
+  #
+  # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
+  - type: code
+    start: 0xa3000
+    vram: 0x80088760
+    subsegments:
+      - [0xa3000, .rodata, ovl_dungeon]
+      - [0xa3e28, asm, ovl_dungeon]
+  - [0xf8000, bin]
+  - [0x1a86800]
