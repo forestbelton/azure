@@ -70,19 +70,6 @@ typedef struct Unk3F8F8
    u8 pad_0C[0x4];
 } Unk3F8F8;
 
-/* Hand-added. A 4-halfword SVECTOR. func_800463EC copies the x/y pair as one
-   u32 through a cast and vz as a field, and that asymmetry is load-bearing:
-   the differing MEM_IN_STRUCT_P flags are what let sched1 pipeline the x/y
-   group one deep while leaving the vz group serial. Should be rebuilt out of
-   libgte's SVECTOR if the project ever models it. */
-typedef struct Unk463ECV
-{
-   s16 unk_00;
-   s16 unk_02;
-   s16 unk_04;
-   s16 pad_06;
-} Unk463ECV;
-
 /* Hand-added. The 0x1F800000 scratchpad as func_800463EC lays it out: the OT
    base at +0x20, the scale VECTOR at +0x30, the translation VECTOR at +0x40, a
    MATRIX at +0x50, the four RotAverage4 input SVECTORs at +0x70, its two
@@ -104,7 +91,7 @@ typedef struct Unk463ECSP
    s32 unk_44;
    s32 unk_48;
    u8 pad_4C[0x24];
-   Unk463ECV unk_70[4];
+   SVECTOR unk_70[4];
    s32 unk_90;
    s32 unk_94;
    u8 pad_98[0x28];

@@ -27,10 +27,10 @@ void func_80041AB0(void);
 void func_80041AE4(void);
 void func_80043CD0(void);
 void func_80043D04(void);
-s32  func_80042518(s8 *, s8);
+s32 func_80042518(s8 *, s8);
 UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
-s32  func_8003F794(s16, s16);
+s32 func_8003F794(s16, s16);
 void func_80040454(void);
 
 /* Links the node into one of the 0x20 tag slots at D_80083360/D_800833E0,
@@ -58,23 +58,28 @@ void func_80040454(void);
  * -- they differ only in which index they use -- so they are written out
  * twice here as well. */
 
-s32 func_80045C34(u8 *p, UnkVec *v, UnkSlot *s) {
-    for (;;) {
+s32 func_80045C34(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    for (;;)
+    {
         UnkNode *n;
 
-        if (!(s->unk_14 & 0x80)) {
+        if (!(s->unk_14 & 0x80))
+        {
             func_80045CC4(p, v, s, s->unk_06);
-            if (func_80045310(*(u32 *) (D_80083160.unk_00 + 0x8D0)) != 0) {
+            if (func_80045310(*(u32 *)(D_80083160.unk_00 + 0x8D0)) != 0)
+            {
                 return 0;
             }
         }
-        n = *(UnkNode **) (p - 8);
-        if (n == NULL) {
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
             return 0;
         }
-        p = (u8 *) n + 0x20;
+        p = (u8 *)n + 0x20;
         v = n->unk_08;
-        s = (UnkSlot *) n->unk_0C;
+        s = (UnkSlot *)n->unk_0C;
     }
 }
 
@@ -128,22 +133,22 @@ s32 func_80045C34(u8 *p, UnkVec *v, UnkSlot *s) {
  *
  *  - A separate `u8 f` for the flag byte rather than reusing the clamp temp,
  *    worth 7 words. */
-void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
-    Unk45CC4SP *p = (Unk45CC4SP *) 0x1F800000;
+void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3)
+{
+    Unk45CC4SP *p = (Unk45CC4SP *)0x1F800000;
     Unk45CC4E *e;
     Unk45CC4P *q;
     Unk80083160 *g = &D_80083160;
 
-
     p->unk_20 = D_80083160.unk_00 + 0xB0;
-    p->unk_E4 = *(s16 *) ((u8 *) v + 2);
-    p->unk_E8 = *(s16 *) ((u8 *) v + 6);
-    p->unk_EC = *(s16 *) ((u8 *) v + 0xA);
+    p->unk_E4 = *(s16 *)((u8 *)v + 2);
+    p->unk_E8 = *(s16 *)((u8 *)v + 6);
+    p->unk_EC = *(s16 *)((u8 *)v + 0xA);
     p->unk_8C = 0;
     p->unk_84 = 0;
     p->unk_7C = 0;
     p->unk_74 = 0;
-    q = *(Unk45CC4P **) (D_80083160.unk_00 + 0x8D0);
+    q = *(Unk45CC4P **)(D_80083160.unk_00 + 0x8D0);
     s->unk_14 |= 0x8000;
     PushMatrix();
     p->unk_108 = s->unk_20;
@@ -154,16 +159,18 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
     p->unk_100 = s->unk_16;
     p->unk_104 = s->unk_1A;
     p->unk_102 = s->unk_18;
-    RotMatrix((void *) 0x1F800100, (void *) 0x1F8000D0);
-    ReadRotMatrix((void *) 0x1F80011C);
-    CompMatrix((void *) 0x1F80011C, (void *) 0x1F8000D0, (void *) 0x1F800050);
-    ScaleMatrix((void *) 0x1F800050, (void *) 0x1F800030);
-    SetTransMatrix((void *) 0x1F800050);
-    SetRotMatrix((void *) 0x1F800050);
-    e = (Unk45CC4E *) s->unk_08;
+    RotMatrix((void *)0x1F800100, (void *)0x1F8000D0);
+    ReadRotMatrix((void *)0x1F80011C);
+    CompMatrix((void *)0x1F80011C, (void *)0x1F8000D0, (void *)0x1F800050);
+    ScaleMatrix((void *)0x1F800050, (void *)0x1F800030);
+    SetTransMatrix((void *)0x1F800050);
+    SetRotMatrix((void *)0x1F800050);
+    e = (Unk45CC4E *)s->unk_08;
     p->unk_24 = s->unk_14;
-    for (;;) {
-        if ((e->unk_00 & 0x20) == 0) {
+    for (;;)
+    {
+        if ((e->unk_00 & 0x20) == 0)
+        {
             s32 u;
             s32 w;
             s16 a;
@@ -173,67 +180,85 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
             p->unk_08.w = u;
             w = e->unk_0A;
             p->unk_10.w = w;
-            if (u + w >= 0x100 || s->unk_1A != 0) {
+            if (u + w >= 0x100 || s->unk_1A != 0)
+            {
                 p->unk_10.w = w - 1;
             }
             u = e->unk_09;
             p->unk_0C.w = u;
             w = e->unk_0B;
             p->unk_14.w = w;
-            if (u + w >= 0x100 || s->unk_1A != 0) {
+            if (u + w >= 0x100 || s->unk_1A != 0)
+            {
                 p->unk_14.w = w - 1;
             }
-            if ((e->unk_00 ^ p->unk_24) & 1) {
-                a = -(s8) ((u8 *) e)[2] - p->unk_108;
+            if ((e->unk_00 ^ p->unk_24) & 1)
+            {
+                a = -(s8)((u8 *)e)[2] - p->unk_108;
                 p->unk_80 = a;
                 p->unk_70 = a;
                 a = a - p->unk_10.h;
                 p->unk_88 = a;
                 p->unk_78 = a;
-            } else {
-                a = (s8) ((u8 *) e)[2] - p->unk_108;
+            }
+            else
+            {
+                a = (s8)((u8 *)e)[2] - p->unk_108;
                 p->unk_80 = a;
                 p->unk_70 = a;
                 a = a + p->unk_10.h;
                 p->unk_88 = a;
                 p->unk_78 = a;
             }
-            if ((e->unk_00 ^ p->unk_24) & 2) {
-                a = -(s8) ((u8 *) e)[3] - p->unk_10A;
+            if ((e->unk_00 ^ p->unk_24) & 2)
+            {
+                a = -(s8)((u8 *)e)[3] - p->unk_10A;
                 p->unk_7A = a;
                 p->unk_72 = a;
                 a = a - p->unk_14.h;
                 p->unk_8A = a;
-                p->unk_82 = a; } else {
-                a = (s8) ((u8 *) e)[3] - p->unk_10A;
+                p->unk_82 = a;
+            }
+            else
+            {
+                a = (s8)((u8 *)e)[3] - p->unk_10A;
                 p->unk_7A = a;
                 p->unk_72 = a;
                 a = a + p->unk_14.h;
                 p->unk_8A = a;
-                p->unk_82 = a; }
+                p->unk_82 = a;
+            }
             otz = RotAverage4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
-                              (s32 *) &q->unk_08, (s32 *) &q->unk_10,
-                              (s32 *) &q->unk_18, (s32 *) &q->unk_20,
-                              &p->unk_90, &p->unk_94) - arg3 - 8;
+                              (s32 *)&q->unk_08, (s32 *)&q->unk_10,
+                              (s32 *)&q->unk_18, (s32 *)&q->unk_20,
+                              &p->unk_90, &p->unk_94) -
+                  arg3 - 8;
             p->unk_C0 = otz;
-            if ((u32) otz < 0x1E0) {
-                u8 t; u8 f; if ((((u16) (q->unk_08 + 0x20) < 0x181 &&
-                      (u16) (q->unk_0A + 0x20) < 0x121) |
-                     ((u16) (q->unk_10 + 0x20) < 0x181 &&
-                      (u16) (q->unk_12 + 0x20) < 0x121) |
-                     ((u16) (q->unk_18 + 0x20) < 0x181 &&
-                      (u16) (q->unk_1A + 0x20) < 0x121) |
-                     ((u16) (q->unk_20 + 0x20) < 0x181 &&
-                      (u16) (q->unk_22 + 0x20) < 0x121)) != 0) {
-                    ((u8 *) &q->unk_00)[3] = 9;
+            if ((u32)otz < 0x1E0)
+            {
+                u8 t;
+                u8 f;
+                if ((((u16)(q->unk_08 + 0x20) < 0x181 &&
+                      (u16)(q->unk_0A + 0x20) < 0x121) |
+                     ((u16)(q->unk_10 + 0x20) < 0x181 &&
+                      (u16)(q->unk_12 + 0x20) < 0x121) |
+                     ((u16)(q->unk_18 + 0x20) < 0x181 &&
+                      (u16)(q->unk_1A + 0x20) < 0x121) |
+                     ((u16)(q->unk_20 + 0x20) < 0x181 &&
+                      (u16)(q->unk_22 + 0x20) < 0x121)) != 0)
+                {
+                    ((u8 *)&q->unk_00)[3] = 9;
                     s->unk_14 &= 0x7FFF;
                     p->unk_10.w = p->unk_10.w + p->unk_08.w;
                     p->unk_14.w = p->unk_14.w + p->unk_0C.w;
                     p->unk_0C.w = p->unk_0C.w << 8;
                     p->unk_14.w = p->unk_14.w << 8;
-                    if (p->unk_24 & 0x100) {
+                    if (p->unk_24 & 0x100)
+                    {
                         q->unk_0E = s->unk_12;
-                    } else {
+                    }
+                    else
+                    {
                         q->unk_0E = s->unk_12 + e->unk_06;
                     }
                     q->unk_0C.h = p->unk_0C.h + p->unk_08.h;
@@ -241,60 +266,83 @@ void func_80045CC4(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                     q->unk_16 = (s->unk_10 != 0) ? s->unk_10 + (e->unk_04 & 0xFF9F) : e->unk_04;
                     q->unk_1C.h = p->unk_14.h + p->unk_08.h;
                     q->unk_24.h = p->unk_14.h + p->unk_10.h;
-                    if ((s16) p->unk_50 >= 0x1800) {
+                    if ((s16)p->unk_50 >= 0x1800)
+                    {
                         t = q->unk_24.b[0];
                         q->unk_24.b[0] = t + 0xFF;
                         q->unk_14.b[0] = t;
                     }
-                    if ((s16) p->unk_58 >= 0x1800) {
+                    if ((s16)p->unk_58 >= 0x1800)
+                    {
                         t = q->unk_24.b[1];
                         q->unk_24.b[1] = t + 0xFF;
                         q->unk_1C.b[1] = t;
                     }
-                    if ((s16) q->unk_08 > (s16) q->unk_20) {
+                    if ((s16)q->unk_08 > (s16)q->unk_20)
+                    {
                         q->unk_14.b[0] = q->unk_14.b[0] - 1;
                         q->unk_24.b[0] = q->unk_24.b[0] - 1;
                     }
-                    if ((s16) q->unk_0A > (s16) q->unk_22) {
+                    if ((s16)q->unk_0A > (s16)q->unk_22)
+                    {
                         q->unk_1C.b[1] = q->unk_1C.b[1] - 1;
                         q->unk_24.b[1] = q->unk_24.b[1] - 1;
                     }
-                    f = e->unk_01; s->unk_0C[3] = f; if (p->unk_24 & 8) { if (p->unk_24 & 4) { s->unk_0C[3] = f | 2; } else { s->unk_0C[3] = f & 0xFD; } }
-                    q->unk_04 = *(u32 *) s->unk_0C;
-                    ((Unk45CC4T *) q)->addr = ((Unk45CC4T *) (p->unk_20 + p->unk_C0 * 4))->addr;
-                    ((Unk45CC4T *) (p->unk_20 + p->unk_C0 * 4))->addr = (u32) q;
+                    f = e->unk_01;
+                    s->unk_0C[3] = f;
+                    if (p->unk_24 & 8)
+                    {
+                        if (p->unk_24 & 4)
+                        {
+                            s->unk_0C[3] = f | 2;
+                        }
+                        else
+                        {
+                            s->unk_0C[3] = f & 0xFD;
+                        }
+                    }
+                    q->unk_04 = *(u32 *)s->unk_0C;
+                    ((Unk45CC4T *)q)->addr = ((Unk45CC4T *)(p->unk_20 + p->unk_C0 * 4))->addr;
+                    ((Unk45CC4T *)(p->unk_20 + p->unk_C0 * 4))->addr = (u32)q;
                     q++;
                 }
             }
-        } else {
+        }
+        else
+        {
             void (*f)(u8 *, UnkVec *, UnkSlot *, Unk45CC4E *);
 
-            f = *(void (**)(u8 *, UnkVec *, UnkSlot *, Unk45CC4E *)) &e->unk_08;
-            if (f != NULL) {
+            f = *(void (**)(u8 *, UnkVec *, UnkSlot *, Unk45CC4E *))&e->unk_08;
+            if (f != NULL)
+            {
                 f(arg0, v, s, e);
             }
         }
-        if ((s8) e->unk_00 < 0) {
+        if ((s8)e->unk_00 < 0)
+        {
             break;
         }
         e++;
     }
     PopMatrix();
-    *(u32 *) (g->unk_00 + 0x8D0) = (u32) q;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
 }
 
-s32 func_80046398(u8 *p, UnkVec *v, UnkSlot *s) {
+s32 func_80046398(u8 *p, UnkVec *v, UnkSlot *s)
+{
     UnkNode *n;
 
-    for (;;) {
+    for (;;)
+    {
         func_800463EC(p, v, s, s->unk_06);
-        n = *(UnkNode **) (p - 8);
-        if (n == NULL) {
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
             return 0;
         }
-        p = (u8 *) n + 0x20;
+        p = (u8 *)n + 0x20;
         v = n->unk_08;
-        s = (UnkSlot *) n->unk_0C;
+        s = (UnkSlot *)n->unk_0C;
     }
 }
 
@@ -333,11 +381,12 @@ s32 func_80046398(u8 *p, UnkVec *v, UnkSlot *s) {
  * is below gcc's jump-table threshold so it builds the decision tree the
  * target has; and `break` out of `for (;;)` with the termination test at the
  * bottom. */
-void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth) {
+void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
+{
     Unk80083160 *g = &D_80083160;
-    Unk463ECSP *sp = (Unk463ECSP *) 0x1F800000;
-    Unk463ECV *tbl = (Unk463ECV *) g->unk_1E4;
-    u8 *tex = (u8 *) g->unk_1E8;
+    Unk463ECSP *sp = (Unk463ECSP *)0x1F800000;
+    SVECTOR *tbl = (SVECTOR *)g->unk_1E4;
+    u8 *tex = (u8 *)g->unk_1E8;
     u8 m[0x20];
     Unk463ECF *f;
     Unk463ECP *p;
@@ -346,43 +395,47 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth) {
     sp->unk_30 = s->unk_1C;
     sp->unk_34 = s->unk_1E;
     sp->unk_38 = s->unk_20;
-    sp->unk_40 = ((s16 *) v)[1];
-    sp->unk_44 = ((s16 *) v)[3];
-    sp->unk_48 = ((s16 *) v)[5];
+    sp->unk_40 = ((s16 *)v)[1];
+    sp->unk_44 = ((s16 *)v)[3];
+    sp->unk_48 = ((s16 *)v)[5];
     ReadRotMatrix(m);
-    TransMatrix((void *) 0x1F800050, (void *) 0x1F800040);
-    RotMatrix(&s->unk_16, (void *) 0x1F800050);
-    if (s->unk_14 & 1) {
+    TransMatrix((void *)0x1F800050, (void *)0x1F800040);
+    RotMatrix(&s->unk_16, (void *)0x1F800050);
+    if (s->unk_14 & 1)
+    {
         sp->unk_30 = -sp->unk_30;
     }
-    if (s->unk_14 & 2) {
+    if (s->unk_14 & 2)
+    {
         sp->unk_34 = -sp->unk_34;
     }
-    ScaleMatrix((void *) 0x1F800050, (void *) 0x1F800030);
-    CompMatrix(m, (void *) 0x1F800050, (void *) 0x1F8000D0);
-    SetTransMatrix((void *) 0x1F8000D0);
-    SetRotMatrix((void *) 0x1F8000D0);
-    sp->unk_20 = (u32) (D_80083160.unk_00 + 0xB0);
-    p = (Unk463ECP *) *(u32 *) (D_80083160.unk_00 + 0x8D0);
+    ScaleMatrix((void *)0x1F800050, (void *)0x1F800030);
+    CompMatrix(m, (void *)0x1F800050, (void *)0x1F8000D0);
+    SetTransMatrix((void *)0x1F8000D0);
+    SetRotMatrix((void *)0x1F8000D0);
+    sp->unk_20 = (u32)(D_80083160.unk_00 + 0xB0);
+    p = (Unk463ECP *)*(u32 *)(D_80083160.unk_00 + 0x8D0);
     s->unk_14 |= 0x8000;
-    f = ((Unk463ECF **) g->unk_1E0)[s->unk_08];
-    for (;;) {
+    f = ((Unk463ECF **)g->unk_1E0)[s->unk_08];
+    for (;;)
+    {
         s32 x;
         s32 y;
         s32 z;
 
-        *(u32 *) &sp->unk_70[0] = *(u32 *) &tbl[f->unk_00];
-        *(u32 *) &sp->unk_70[1] = *(u32 *) &tbl[f->unk_02];
-        *(u32 *) &sp->unk_70[2] = *(u32 *) &tbl[f->unk_04];
-        *(u32 *) &sp->unk_70[3] = *(u32 *) &tbl[f->unk_06];
-        sp->unk_70[0].unk_04 = tbl[f->unk_00].unk_04;
-        sp->unk_70[1].unk_04 = tbl[f->unk_02].unk_04;
-        sp->unk_70[2].unk_04 = tbl[f->unk_04].unk_04;
-        sp->unk_70[3].unk_04 = tbl[f->unk_06].unk_04;
+        *(u32 *)&sp->unk_70[0] = *(u32 *)&tbl[f->unk_00];
+        *(u32 *)&sp->unk_70[1] = *(u32 *)&tbl[f->unk_02];
+        *(u32 *)&sp->unk_70[2] = *(u32 *)&tbl[f->unk_04];
+        *(u32 *)&sp->unk_70[3] = *(u32 *)&tbl[f->unk_06];
+        sp->unk_70[0].vz = tbl[f->unk_00].vz;
+        sp->unk_70[1].vz = tbl[f->unk_02].vz;
+        sp->unk_70[2].vz = tbl[f->unk_04].vz;
+        sp->unk_70[3].vz = tbl[f->unk_06].vz;
         sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2],
                                  &sp->unk_70[3], &p->unk_08, &p->unk_10,
                                  &p->unk_18, &p->unk_20, &sp->unk_90, &sp->unk_94);
-        switch (s->unk_14 & 3) {
+        switch (s->unk_14 & 3)
+        {
         case 0:
             x = p->unk_08;
             y = p->unk_10;
@@ -405,39 +458,45 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth) {
             break;
         }
         sp->unk_114 = NormalClip(x, y, z);
-        if (sp->unk_114 > 0) {
+        if (sp->unk_114 > 0)
+        {
             sp->unk_C0 = sp->unk_C0 - depth;
-            if ((u32) sp->unk_C0 < 0x1E0) {
+            if ((u32)sp->unk_C0 < 0x1E0)
+            {
                 u16 t;
 
-                func_80065034(tex + f->unk_10 * 8, s->unk_0C, (u8 *) &p->unk_04);
-                *(u32 *) &p->unk_0C = f->unk_08;
+                func_80065034(tex + f->unk_10 * 8, s->unk_0C, (u8 *)&p->unk_04);
+                *(u32 *)&p->unk_0C = f->unk_08;
                 p->unk_0E = p->unk_0E + s->unk_12;
-                *(u32 *) &p->unk_14 = f->unk_0C;
+                *(u32 *)&p->unk_14 = f->unk_0C;
                 t = s->unk_10;
-                if (t != 0) {
+                if (t != 0)
+                {
                     p->unk_16 = t + (p->unk_16 & 0xFF9F);
                 }
                 p->unk_1C = f->unk_12;
                 p->unk_24 = f->unk_14;
                 SetPolyFT4(p);
-                if (s->unk_14 & 8) {
-                    if (s->unk_14 & 4) {
+                if (s->unk_14 & 8)
+                {
+                    if (s->unk_14 & 4)
+                    {
                         p->unk_07 |= 2;
                     }
                 }
-                AddPrim((void *) (sp->unk_20 + sp->unk_C0 * 4), p);
+                AddPrim((void *)(sp->unk_20 + sp->unk_C0 * 4), p);
                 p++;
                 s->unk_14 &= 0x7FFF;
             }
         }
-        if (f->unk_16 == 1 && f->unk_17 < 0) {
+        if (f->unk_16 == 1 && f->unk_17 < 0)
+        {
             break;
         }
         f++;
     }
     PopMatrix();
-    *(u32 *) (g->unk_00 + 0x8D0) = (u32) p;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)p;
 }
 
 /* Projects the four corners of a rect through func_80046A5C, clips each
@@ -480,7 +539,8 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth) {
  * arg0 is a four-halfword x/y/w/h rect, the same shape func_800404F8 and
  * LoadImage take; if the project ever grows a RECT type those three belong
  * together. */
-void func_80046884(u16 *r, Unk46AFC *out, s32 t) {
+void func_80046884(u16 *r, Unk46AFC *out, s32 t)
+{
     Unk46AFC c[4];
     Unk46AFC xf[4];
     u32 origin[2];
@@ -497,21 +557,25 @@ void func_80046884(u16 *r, Unk46AFC *out, s32 t) {
     origin[0] = 0;
     origin[1] = 0;
     c[0].unk_04 = c[1].unk_04 = c[2].unk_04 = c[3].unk_04 = ReadGeomScreen();
-    func_80046A5C((u16 *) origin, &out[5]);
-    for (i = 3; i >= 0; i--) {
-        func_80046A5C((u16 *) &c[i], &xf[i]);
-        if (func_80046AFC(&out[5], &xf[i], &out[i], t) != 0) {
+    func_80046A5C((u16 *)origin, &out[5]);
+    for (i = 3; i >= 0; i--)
+    {
+        func_80046A5C((u16 *)&c[i], &xf[i]);
+        if (func_80046AFC(&out[5], &xf[i], &out[i], t) != 0)
+        {
             flag = 1;
         }
     }
-    if (flag != 0) {
+    if (flag != 0)
+    {
         s32 ang = g->unk_C8 + 0x600;
 
         v58[0] = g->unk_AC;
         v58[1] = g->unk_AE;
         v58[2] = g->unk_B0;
         func_80046A5C(v58, v60);
-        for (i = 3; i >= 0; i--) {
+        for (i = 3; i >= 0; i--)
+        {
             s32 cc = func_80064584(ang);
             s32 ss = func_800644B8(ang);
 
@@ -526,7 +590,8 @@ void func_80046884(u16 *r, Unk46AFC *out, s32 t) {
     out[4].unk_04 = out[0].unk_04;
 }
 
-void func_80046A5C(u16 *arg0, void *out) {
+void func_80046A5C(u16 *arg0, void *out)
+{
     u16 m[0x10];
     u16 t[0x10];
     s16 v[4];
@@ -558,7 +623,8 @@ void func_80046A5C(u16 *arg0, void *out) {
  *    out right.
  *  - cx and cy have to be separate variables; one shared variable is
  *    coalesced with nx and costs a `j`. */
-s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
+s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t)
+{
     s32 dz = b->unk_04 - a->unk_04;
     s32 f;
     s32 nx;
@@ -567,7 +633,8 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
     s32 cy;
     s32 dx;
 
-    if (dz < 0x40) {
+    if (dz < 0x40)
+    {
         return 1;
     }
     dx = b->unk_00 - a->unk_00;
@@ -575,30 +642,39 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
     nx = dx * f / dz + b->unk_00;
     ny = (b->unk_02 - a->unk_02) * f / dz + b->unk_02;
     cx = -0x7FF0;
-    if (nx >= -0x7FF0) {
+    if (nx >= -0x7FF0)
+    {
         cx = 0x7FF0;
-        if (nx < 0x7FF1) {
+        if (nx < 0x7FF1)
+        {
             cx = nx;
         }
     }
     out->unk_00 = cx;
-    if (ny >= -0x7FF0) {
+    if (ny >= -0x7FF0)
+    {
         cy = 0x7FF0;
-        if (ny < 0x7FF1) {
+        if (ny < 0x7FF1)
+        {
             cy = ny;
         }
-    } else {
+    }
+    else
+    {
         cy = -0x7FF0;
     }
     out->unk_02 = cy;
     out->unk_04 = t;
-    if (out->unk_00 < a->unk_00 - 0x1000) {
+    if (out->unk_00 < a->unk_00 - 0x1000)
+    {
         return 1;
     }
-    if (a->unk_00 + 0x1000 < out->unk_00) {
+    if (a->unk_00 + 0x1000 < out->unk_00)
+    {
         return 1;
     }
-    if (out->unk_02 < a->unk_02 - 0x1000) {
+    if (out->unk_02 < a->unk_02 - 0x1000)
+    {
         return 1;
     }
     return a->unk_02 + 0x1000 < out->unk_02;
@@ -643,35 +719,44 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t) {
  *    costs 26 words.
  *  - `min` is s32; as s16 both the compare and the return need their own
  *    sll/sra pair. */
-s32 func_80046C20(Unk46C20A *a, Unk46C20B *out, u16 *cnt) {
+s32 func_80046C20(Unk46C20A *a, Unk46C20B *out, u16 *cnt)
+{
     s32 min = 0x7FFF;
     s32 i;
 
-    for (i = 0; i < 4; i++, out++) {
+    for (i = 0; i < 4; i++, out++)
+    {
         s32 d = a[i].unk_02 - a[i + 1].unk_02;
         s32 m = -0x40;
 
-        if (d == 0) {
+        if (d == 0)
+        {
             out->unk_1C = -1;
             *cnt = *cnt - 1;
-        } else {
+        }
+        else
+        {
             s32 lo;
             s32 hi;
             s32 y;
             s32 dy;
             s32 dx;
 
-            if (d < 0) {
+            if (d < 0)
+            {
                 lo = i;
                 hi = i + 1;
-            } else {
+            }
+            else
+            {
                 lo = i + 1;
                 hi = i;
             }
             out->unk_00 = a[lo].unk_00;
-            y = (s16) ((u16) a[lo].unk_02 & m);
+            y = (s16)((u16)a[lo].unk_02 & m);
             out->unk_18 = y;
-            if (y < min) {
+            if (y < min)
+            {
                 min = y;
             }
             dy = a[hi].unk_02 - y;
@@ -683,9 +768,12 @@ s32 func_80046C20(Unk46C20A *a, Unk46C20B *out, u16 *cnt) {
             dx = abs(dx);
             out->unk_20 = dx;
             out->unk_08 = dx << 7;
-            if (out->unk_14 > 0) {
+            if (out->unk_14 > 0)
+            {
                 out->unk_14 = 0x40;
-            } else if (out->unk_14 < 0) {
+            }
+            else if (out->unk_14 < 0)
+            {
                 out->unk_14 = m;
             }
             out->unk_20 = out->unk_20 + 0x20;
@@ -696,7 +784,8 @@ s32 func_80046C20(Unk46C20A *a, Unk46C20B *out, u16 *cnt) {
     return min & ~0x3F;
 }
 
-void func_80046D64(u8 *base, s16 arg1) {
+void func_80046D64(u8 *base, s16 arg1)
+{
     Unk80083160 *s = &D_80083160;
     u32 *p = &s->unk_1DC;
     u32 *q;
@@ -707,16 +796,17 @@ void func_80046D64(u8 *base, s16 arg1) {
      * variable (a global allocno) so local-alloc cannot tie them: the
      * `addu $a2,$v0,$zero` survives, which renumbers the allocnos enough that
      * p takes $a0 and base is pushed to $t0. */
-    v = (u32) (base + D_8006E7F0[arg1][4] * 4);
+    v = (u32)(base + D_8006E7F0[arg1][4] * 4);
     p[1] = v;
-    q = (u32 *) v;
-    for (i = D_8006E7F0[arg1][3]; i > 0; i--) {
-        *q += (u32) base;
+    q = (u32 *)v;
+    for (i = D_8006E7F0[arg1][3]; i > 0; i--)
+    {
+        *q += (u32)base;
         q++;
     }
-    p[2] = (u32) (base + D_8006E7F0[arg1][5] * 4);
-    p[3] = (u32) (base + D_8006E7F0[arg1][6] * 4);
-    p[4] = (u32) (base + D_8006E7F0[arg1][7] * 4);
+    p[2] = (u32)(base + D_8006E7F0[arg1][5] * 4);
+    p[3] = (u32)(base + D_8006E7F0[arg1][6] * 4);
+    p[4] = (u32)(base + D_8006E7F0[arg1][7] * 4);
 }
 
 /* Streams a run of compressed blocks through the unpacker, then hands the
@@ -756,7 +846,8 @@ void func_80046D64(u8 *base, s16 arg1) {
  *    func_8003E14C.
  *  - `while (n > 0)`, not `!= 0`, with n a plain s32 holding the lhu-loaded
  *    count, so the test is blez/bgtz and the decrement needs no masking. */
-void func_80046E38(s16 arg0, u8 *arg1) {
+void func_80046E38(s16 arg0, u8 *arg1)
+{
     Unk46E38A buf;
     u8 *orig = arg1;
     u32 base;
@@ -765,47 +856,55 @@ void func_80046E38(s16 arg0, u8 *arg1) {
 
     base = D_80081480 = D_8008148C;
     DrawSync(0);
-    buf = *((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_00;
-    n = ((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_04;
-    addr = ((Unk8006E7F0 *) D_8006E7F0[arg0])->unk_00->unk_04;
-    while (n > 0) {
-        func_8003E4FC(6, (u8 *) &buf, 0);
+    buf = *((Unk8006E7F0 *)D_8006E7F0[arg0])->unk_00;
+    n = ((Unk8006E7F0 *)D_8006E7F0[arg0])->unk_04;
+    addr = ((Unk8006E7F0 *)D_8006E7F0[arg0])->unk_00->unk_04;
+    while (n > 0)
+    {
+        func_8003E4FC(6, (u8 *)&buf, 0);
         addr += 0x10;
         func_8003F320();
-        arg1 = func_8004068C((u8 *) D_80081480, arg1);
+        arg1 = func_8004068C((u8 *)D_80081480, arg1);
         n--;
-        func_8003F6D4(0x10, 0, (s32 *) &buf, addr);
+        func_8003F6D4(0x10, 0, (s32 *)&buf, addr);
     }
     func_80046D64(orig, arg0);
-    if (D_80082E60.unk_0A == 2) {
+    if (D_80082E60.unk_0A == 2)
+    {
         D_80080A7C = 0x4000;
-    } else {
+    }
+    else
+    {
         D_80080A7C = 0x8000;
     }
     D_80081480 = (base + 3) & ~3;
 }
 
-s32 func_80046F88(u32 *p) {
+s32 func_80046F88(u32 *p)
+{
     s32 delta = 0;
     s32 i;
     u32 *q;
 
     /* Single exit returning delta, and 0xC updated before 0x14: the
      * scheduler emits that pair in the opposite order to the source. */
-    if (p != (u32 *) p[9]) {
-        delta = (s32) ((u8 *) p - (u8 *) p[9]);
-        p[9] = (u32) p;
+    if (p != (u32 *)p[9])
+    {
+        delta = (s32)((u8 *)p - (u8 *)p[9]);
+        p[9] = (u32)p;
         p[0] += delta;
         p[2] += delta;
         p[3] += delta;
         p[5] += delta;
         p[7] += delta;
-        q = (u32 *) p[0];
-        for (i = 0; i < (s32) p[1]; i++) {
+        q = (u32 *)p[0];
+        for (i = 0; i < (s32)p[1]; i++)
+        {
             *q += delta;
             q++;
         }
-        while ((u32) q < p[2]) {
+        while ((u32)q < p[2])
+        {
             q[1] += delta;
             q += 2;
         }
@@ -856,19 +955,23 @@ INCLUDE_ASM("asm/nonmatchings/unk_19434", func_80047054);
  * 7 DIFF -- the right word count with the wrong registers. */
 __asm__(".sdata\n\t.size D_80080B08,2\n\t.size D_80080B0A,2\n\t.text");
 
-void func_8004713C(u32 *arg0, u16 arg1, u16 arg2) {
+void func_8004713C(u32 *arg0, u16 arg1, u16 arg2)
+{
     s32 i;
 
-    for (i = 0; i < arg2; i++) {
+    for (i = 0; i < arg2; i++)
+    {
         u16 *r = &D_80080B08;
         s32 x = (arg1 << 6) & 0x3C0;
 
-        if (i / 2 != 0) {
+        if (i / 2 != 0)
+        {
             x += 0x20;
         }
         D_80080B08 = x;
         x = (arg1 << 4) & 0x100;
-        if (i & 1) {
+        if (i & 1)
+        {
             x += 0x80;
         }
         D_80080B0A = x;
@@ -877,40 +980,47 @@ void func_8004713C(u32 *arg0, u16 arg1, u16 arg2) {
     }
 }
 
-void func_80047200(u16 *p, s32 rows, s32 flag) {
+void func_80047200(u16 *p, s32 rows, s32 flag)
+{
     s32 i;
     s32 j;
 
-    if (flag == 0) {
-        for (i = 0; i < rows; i++) {
+    if (flag == 0)
+    {
+        for (i = 0; i < rows; i++)
+        {
             /* p++ first in the body, not last: the back-edge bnez then finds
              * `addiu $a0,$a0,2` at its target, and reorg's
              * fill_slots_from_thread steals it into the delay slot, redirects
              * the branch past it and emits the compensating addiu -2. */
             p++;
-            for (j = 1; j < 0x10; j++) {
+            for (j = 1; j < 0x10; j++)
+            {
                 *p |= 0x8000;
                 p++;
             }
         }
         return;
     }
-    for (j = 1; j < 0x100; j++) {
+    for (j = 1; j < 0x100; j++)
+    {
         *p |= 0x8000;
         p++;
     }
 }
 
-void func_80047270(u8 *arg0, s16 *rect) {
+void func_80047270(u8 *arg0, s16 *rect)
+{
     s32 t = rect[3] * 2;
     s32 n = rect[2] * t;
 
-    if (D_8008148C + D_80080A7C <= D_80081480 + n) {
+    if (D_8008148C + D_80080A7C <= D_80081480 + n)
+    {
         D_80081480 = D_8008148C;
         DrawSync(0);
     }
-    func_800407C0(arg0, (u32 *) D_80081480);
-    LoadImage(rect, (u32 *) D_80081480);
+    func_800407C0(arg0, (u32 *)D_80081480);
+    LoadImage(rect, (u32 *)D_80081480);
     t = rect[3] * 2;
     D_80081480 = D_80081480 + rect[2] * t;
 }
