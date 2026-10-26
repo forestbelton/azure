@@ -1444,7 +1444,7 @@ void func_800391B4(void) {
 void func_800391BC(u8 *p) {
     *(u16 *) (p + 0x20) = 0;
     *(u16 *) (p + 0x22) = 0;
-    ClearImage(p, 0, 0, 0);
+    ClearImage((RECT *)p, 0, 0, 0);
 }
 
 void func_800391EC(u8 *p) {
@@ -2252,33 +2252,33 @@ s16 func_8003ADB4(u16 a) {
 }
 
 void func_8003ADF4(s16 x, s16 y, s16 w, s16 h, u32 *data) {
-    s16 r[4];
+    RECT r;
 
-    r[0] = x;
-    r[1] = y;
-    r[2] = w;
-    r[3] = h;
-    LoadImage(r, data);
+    r.x = x;
+    r.y = y;
+    r.w = w;
+    r.h = h;
+    LoadImage(&r, data);
 }
 
 void func_8003AE28(s16 x, s16 y, s16 w, s16 h, s32 a, s32 b) {
-    s16 r[4];
+    RECT r;
 
-    r[0] = x;
-    r[1] = y;
-    r[2] = w;
-    r[3] = h;
-    MoveImage(r, a, b);
+    r.x = x;
+    r.y = y;
+    r.w = w;
+    r.h = h;
+    MoveImage(&r, a, b);
 }
 
 void func_8003AE60(s16 x, s16 y, s16 w, s16 h, u8 r, u8 g, u8 b) {
-    s16 rect[4];
+    RECT rect;
 
-    rect[0] = x;
-    rect[1] = y;
-    rect[2] = w;
-    rect[3] = h;
-    ClearImage(rect, r, g, b);
+    rect.x = x;
+    rect.y = y;
+    rect.w = w;
+    rect.h = h;
+    ClearImage(&rect, r, g, b);
 }
 
 void func_8003AEA8(u32 *p, s32 n) {
@@ -2990,7 +2990,7 @@ s32 func_8003C758(u8 *p) {
     return r;
 }
 
-extern u32 D_8006B220[];
+extern RECT D_8006B220[];
 void func_8003C67C(s32);
 
 /* NESTED guards with one `return -1` at the end, not three early returns:
@@ -3019,7 +3019,7 @@ s32 func_8003C7D8(s32 k, s32 n) {
                 func_8003C67C(r);
                 b = D_8006B200;
                 LoadImage(D_8006B220, *(u32 **) (b + 4));
-                LoadImage(&D_8006B220[2],
+                LoadImage(&D_8006B220[1],
                           (u32 *) (*(u32 *) (b + 4) + 0x2000));
                 return r;
             }

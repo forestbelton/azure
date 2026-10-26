@@ -36,8 +36,8 @@ void func_80042B68(s8 *, s8);
 void func_80043EB8(void) {
     u8 *p;
 
-    PutDispEnv(D_80083160.unk_00 + 0x5C);
-    PutDrawEnv(D_80083160.unk_00);
+    PutDispEnv((DISPENV *)(D_80083160.unk_00 + 0x5C));
+    PutDrawEnv((DRAWENV *)D_80083160.unk_00);
     DrawOTag(D_80083160.unk_00 + 0x8CC);
     func_8003E758();
     func_800542BC();

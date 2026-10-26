@@ -61,12 +61,12 @@ typedef struct Unk8006E61C
 
 /* Hand-added. A 0x10-byte entry: func_8003F8F8 walks a table of these until
    unk_00 is zero, unpacks the image it points at and loads it through the
-   four-halfword x/y/w/h rect at +0x04. The last four bytes are unexplored
+   RECT at +0x04. The last four bytes are unexplored
    space, not known filler. */
 typedef struct Unk3F8F8
 {
    u32 unk_00;
-   s16 rect[4];
+   RECT rect;
    u8 pad_0C[0x4];
 } Unk3F8F8;
 
@@ -749,18 +749,6 @@ typedef struct Unk80083968
    u8 unk_17;
 } Unk80083968;
 
-/* Hand-added. 0x8 bytes: three signed halfwords and two bytes of padding.
-   func_80046884 walks arrays of these by -8 and hands triples to
-   func_80046AFC, which treats +0x00/+0x02 as a pair interpolated against
-   +0x04. */
-typedef struct Unk46AFC
-{
-   s16 unk_00;
-   s16 unk_02;
-   s16 unk_04;
-   u8 pad_06[0x2];
-} Unk46AFC;
-
 /* 0x800777ac..0x800777b7, 0xc bytes, 9 field(s) */
 typedef struct Unk800777AC
 {
@@ -950,16 +938,6 @@ typedef struct Unk80083CA8
    u16 unk_08;
 } Unk80083CA8;
 
-/* Hand-added. Three halfwords and two bytes of padding: the shape
-   func_80044724 compares and copies the D_80083178+0x94 cache in. */
-typedef struct Unk44724Vec
-{
-   s16 unk_00;
-   s16 unk_02;
-   s16 unk_04;
-   u8 pad_06[0x2];
-} Unk44724Vec;
-
 /* The same 8 bytes with alignment 1, so an assignment comes out as the
    byte-aligned block move (two lwl/lwr plus two swl/swr pairs) rather than
    plain lw/sw. Same reason as Unk3E39C. */
@@ -980,7 +958,7 @@ typedef struct Unk44724Blk
 typedef struct Unk80083178
 {
    u8 pad_00[0x94];
-   Unk44724Vec unk_94[4]; /* 8 bytes each, so this ends exactly at 0xB4 */
+   SVECTOR unk_94[4]; /* 8 bytes each, so this ends exactly at 0xB4 */
    u32 unk_B4;            /* a callback, installed by func_8004D0C8/0x110 */
    u32 unk_B8;
    u8 pad_BC[0x1C];
@@ -1283,8 +1261,8 @@ extern u32 D_8002E5D8[]; /* a 4-word template */
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
 extern s16 D_8006A94C[]; /* s16 pairs, 0-terminated */
-extern u8 D_800809A8[];
-extern u8 D_800809B0[];
+extern RECT D_800809A8[];
+extern RECT D_800809B0[];
 extern u8 D_80080B50[];
 extern u8 D_800714B0[];
 extern u8 D_801B9000[];
@@ -1518,7 +1496,7 @@ extern u8 D_800814AC;
 extern u32 D_800814B0[1];
 /* A CdlLOC that func_8003F55C fills with CdControl and converts; four bytes,
    so its address comes out as an `la`. */
-extern u8 D_800814B8[4];
+extern CdlLOC D_800814B8;
 extern u32 D_800814B4[1];
 extern u32 D_800814C8;
 extern u32 D_800814CC;
@@ -1700,7 +1678,7 @@ extern Unk80083178 D_80083178;
 /* Retyped by hand from the eight-word struct fieldscan inferred: its only
    user, func_80044724, compares and copies it as four 8-byte vectors of three
    halfwords. */
-extern Unk44724Vec D_80083CE8[4];
+extern SVECTOR D_80083CE8[4];
 
 /* Hand-added. 0x80082e6a is inside the region fieldscan merged into
    Unk80082E60, but func_8003E14C reaches it as its own symbol rather than as
@@ -1830,7 +1808,7 @@ void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
 void func_8003F5E0(u32);
-s16 func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
+s16 func_80046AFC(SVECTOR *, SVECTOR *, SVECTOR *, s16);
 s32 func_8004491C(UnkNode *, u32);
 Unk80083968 *func_8003E39C(u8, s32, void *);
 void func_8003E34C(void);
@@ -1860,7 +1838,7 @@ u8 *func_8004068C(u8 *, u8 *);
 void func_80043568(void);
 void func_800542BC(void);
 void func_80044B48(void);
-void func_80046884(u16 *, Unk46AFC *, s32);
+void func_80046884(RECT *, SVECTOR *, s32);
 void func_8003BFE4(void);
 void func_8004D70C(void);
 void func_800AC3EC(void);
@@ -1923,9 +1901,9 @@ extern u8 D_801C9E40[];
    a run of 0x100 blocks of 0x124 bytes that func_8003FAD4 threads into a
    free list. */
 extern u16 *D_8006E7F0[];
-extern u32 D_801DA714;
+extern DRAWENV D_801DA714;
 extern u32 D_801DA784;
-extern u32 D_801DA770;
+extern DISPENV D_801DA770;
 extern u32 D_801DA72C[];
 extern u8 D_801EAFE8[];
 

@@ -433,8 +433,8 @@ void func_80048374(u8 *p, s16 b, s16 c) {
     func_80047784(p, b, c);
 }
 
-extern u32 D_800710DC[];
-extern u32 D_800710D4[];
+extern RECT D_800710DC[];
+extern RECT D_800710D4[];
 u32 *func_80040574(s32);
 void func_8003F80C(u32, s32, s32, s16);
 
@@ -459,14 +459,14 @@ void func_80047200(u32 *, s32, s32);
 /* The VRAM read-back: a four-halfword RECT on the stack ahead of the 0x20-byte
    buffer StoreImage fills. */
 void func_8004846C(s32 k) {
-    s16 r[4];
+    RECT r;
     u32 buf[8];
 
-    r[0] = (k & 0x3F) << 4;
-    r[1] = k >> 6;
-    r[2] = 0x10;
-    r[3] = 1;
-    StoreImage(r, buf);
+    r.x = (k & 0x3F) << 4;
+    r.y = k >> 6;
+    r.w = 0x10;
+    r.h = 1;
+    StoreImage(&r, buf);
     DrawSync(0);
     func_80047200(buf, 1, 0);
     func_8003F80C((u32) buf, k - 0x80, 1, 2);

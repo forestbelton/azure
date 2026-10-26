@@ -111,7 +111,7 @@ void func_8003F540(u32 arg0, u32 arg1, u32 arg2, u32 arg3) {
 
 s32 func_8003F55C(void) {
     if (CdSync(1, NULL) == 2) {
-        CdControl(0x10, NULL, D_800814B8);
+        CdControl(0x10, NULL, (u8 *)&D_800814B8);
     }
-    return CdPosToInt(D_800814B8);
+    return CdPosToInt(&D_800814B8);
 }

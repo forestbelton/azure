@@ -80,8 +80,8 @@ void func_8003CB08(void) {
         return;
     }
     D_80080AAA = v;
-    PutDispEnv(g->unk_00 + 0x5C);
-    PutDrawEnv(g->unk_00);
+    PutDispEnv((DISPENV *)(g->unk_00 + 0x5C));
+    PutDrawEnv((DRAWENV *)g->unk_00);
     p = D_801C9E40;
     if (g->unk_00 == p) {
         p += 0x108D4;

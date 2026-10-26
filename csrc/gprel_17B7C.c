@@ -192,18 +192,18 @@ void func_80044698(void) {
 s32 func_80044724(void) {
     Unk80083178 *s = &D_80083178;
 
-    if (s->unk_94[0].unk_00 != D_80083CE8[0].unk_00 ||
-        s->unk_94[0].unk_02 != D_80083CE8[0].unk_02 ||
-        s->unk_94[0].unk_04 != D_80083CE8[0].unk_04 ||
-        s->unk_94[1].unk_00 != D_80083CE8[1].unk_00 ||
-        s->unk_94[1].unk_02 != D_80083CE8[1].unk_02 ||
-        s->unk_94[1].unk_04 != D_80083CE8[1].unk_04 ||
-        s->unk_94[2].unk_00 != D_80083CE8[2].unk_00 ||
-        s->unk_94[2].unk_02 != D_80083CE8[2].unk_02 ||
-        s->unk_94[2].unk_04 != D_80083CE8[2].unk_04 ||
-        s->unk_94[3].unk_00 != D_80083CE8[3].unk_00 ||
-        s->unk_94[3].unk_02 != D_80083CE8[3].unk_02 ||
-        s->unk_94[3].unk_04 != D_80083CE8[3].unk_04) {
+    if (s->unk_94[0].vx != D_80083CE8[0].vx ||
+        s->unk_94[0].vy != D_80083CE8[0].vy ||
+        s->unk_94[0].vz != D_80083CE8[0].vz ||
+        s->unk_94[1].vx != D_80083CE8[1].vx ||
+        s->unk_94[1].vy != D_80083CE8[1].vy ||
+        s->unk_94[1].vz != D_80083CE8[1].vz ||
+        s->unk_94[2].vx != D_80083CE8[2].vx ||
+        s->unk_94[2].vy != D_80083CE8[2].vy ||
+        s->unk_94[2].vz != D_80083CE8[2].vz ||
+        s->unk_94[3].vx != D_80083CE8[3].vx ||
+        s->unk_94[3].vy != D_80083CE8[3].vy ||
+        s->unk_94[3].vz != D_80083CE8[3].vz) {
         *(Unk44724Blk *) &D_80083CE8[0] = *(Unk44724Blk *) &s->unk_94[0];
         *(Unk44724Blk *) &D_80083CE8[1] = *(Unk44724Blk *) &s->unk_94[1];
         *(Unk44724Blk *) &D_80083CE8[2] = *(Unk44724Blk *) &s->unk_94[2];

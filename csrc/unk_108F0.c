@@ -89,10 +89,10 @@ void func_8003D0F0(void)
     ((SVECTOR *)(sp + 0x28))->vx = 0;
     ((SVECTOR *)(sp + 0x28))->vy = 0;
     ((SVECTOR *)(sp + 0x28))->vz = 0;
-    TransMatrix((void *)0x1F800050, (void *)0x1F800040);
-    RotMatrix((void *)0x1F800028, (void *)0x1F800050);
-    SetRotMatrix((void *)0x1F800050);
-    SetTransMatrix((void *)0x1F800050);
+    TransMatrix((MATRIX *)0x1F800050, (VECTOR *)0x1F800040);
+    RotMatrix((SVECTOR *)0x1F800028, (MATRIX *)0x1F800050);
+    SetRotMatrix((MATRIX *)0x1F800050);
+    SetTransMatrix((MATRIX *)0x1F800050);
     for (;;)
     {
         s16 a;
@@ -324,7 +324,7 @@ void func_8003D760(void)
     func_8003D7DC();
     r[0] = 0;
     r[1] = 0x2000400;
-    ClearImage(r, 0, 0, 0);
+    ClearImage((RECT *)r, 0, 0, 0);
     D_8008148C = (u32)&D_80126804;
     D_80081480 = (u32)&D_80126804;
     D_80080A7C = 0x38000;
@@ -337,9 +337,11 @@ void func_8003D7DC(void)
      * target's single `addiu` off the base. */
     u8 *p = D_801C9E40;
 
-    SetDefDrawEnv(p, 0, 0, 0x140, 0xE0);
+    /* +0x5C is sizeof(DRAWENV): each buffer is a DRAWENV immediately followed
+     * by its DISPENV, the same pairing as D_801DA714/D_801DA770. */
+    SetDefDrawEnv((DRAWENV *)p, 0, 0, 0x140, 0xE0);
     SetDefDrawEnv(&D_801DA714, 0, 0xE0, 0x140, 0xE0);
-    SetDefDispEnv(p + 0x5C, 0, 0xE0, 0x140, 0xF0);
+    SetDefDispEnv((DISPENV *)(p + 0x5C), 0, 0xE0, 0x140, 0xF0);
     SetDefDispEnv(&D_801DA770, 0, 0, 0x140, 0xF0);
     *(s16 *)(p + 0x1093A) = 0xC;
     *(s16 *)(p + 0x66) = 0xC;

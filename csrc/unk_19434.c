@@ -514,7 +514,7 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
  *  - `origin` is two explicit word stores into a u32[2]. Every aggregate
  *    initialiser spelling calls bzero instead (126 words), which also forces
  *    `r` out of $a0 into a callee-saved register; three `sh` field zeroes on an
- *    Unk46AFC cost 99 words.
+ *    SVECTOR cost 99 words.
  *  - the origin zeroing sits before the ReadGeomScreen statement, not just
  *    before the first func_80046A5C call (22 DIFF): the two stores have to be
  *    in the prologue block so sched1 can use them to cover the
@@ -537,10 +537,10 @@ void func_800463EC(u8 *arg0, UnkVec *v, UnkSlot *s, s16 depth)
  * arg0 is a four-halfword x/y/w/h rect, the same shape func_800404F8 and
  * LoadImage take; if the project ever grows a RECT type those three belong
  * together. */
-void func_80046884(u16 *r, Unk46AFC *out, s32 t)
+void func_80046884(RECT *r, SVECTOR *out, s32 t)
 {
-    Unk46AFC c[4];
-    Unk46AFC xf[4];
+    SVECTOR c[4];
+    SVECTOR xf[4];
     u32 origin[2];
     u16 v58[4];
     u16 v60[4];
@@ -548,13 +548,13 @@ void func_80046884(u16 *r, Unk46AFC *out, s32 t)
     s32 flag = 0;
     Unk80083160 *g = &D_80083160;
 
-    c[0].unk_00 = c[3].unk_00 = r[0];
-    c[1].unk_00 = c[2].unk_00 = r[0] + r[2];
-    c[0].unk_02 = c[1].unk_02 = r[1];
-    c[3].unk_02 = c[2].unk_02 = r[1] + r[3];
+    c[0].vx = c[3].vx = r->x;
+    c[1].vx = c[2].vx = r->x + r->w;
+    c[0].vy = c[1].vy = r->y;
+    c[3].vy = c[2].vy = r->y + r->h;
     origin[0] = 0;
     origin[1] = 0;
-    c[0].unk_04 = c[1].unk_04 = c[2].unk_04 = c[3].unk_04 = ReadGeomScreen();
+    c[0].vz = c[1].vz = c[2].vz = c[3].vz = ReadGeomScreen();
     func_80046A5C((u16 *)origin, &out[5]);
     for (i = 3; i >= 0; i--)
     {
@@ -578,14 +578,14 @@ void func_80046884(u16 *r, Unk46AFC *out, s32 t)
             s32 ss = func_800644B8(ang);
 
             ang += 0x400;
-            out[i].unk_00 = v60[0] + (cc >> 3) + (cc >> 4);
-            out[i].unk_02 = v60[1] + (ss >> 3) + (ss >> 4);
-            out[i].unk_04 = v60[2];
+            out[i].vx = v60[0] + (cc >> 3) + (cc >> 4);
+            out[i].vy = v60[1] + (ss >> 3) + (ss >> 4);
+            out[i].vz = v60[2];
         }
     }
-    out[4].unk_00 = out[0].unk_00;
-    out[4].unk_02 = out[0].unk_02;
-    out[4].unk_04 = out[0].unk_04;
+    out[4].vx = out[0].vx;
+    out[4].vy = out[0].vy;
+    out[4].vz = out[0].vz;
 }
 
 void func_80046A5C(u16 *arg0, void *out)
@@ -611,7 +611,7 @@ void func_80046A5C(u16 *arg0, void *out)
  * Three shapes are load-bearing:
  *  - `dx` is hoisted into its own local one statement before `f`. That costs
  *    no instruction (sched1 still issues f's subtract first) but it pushes
- *    the last use of the CSE'd b->unk_04 load one slot later, so its live
+ *    the last use of the CSE'd b->vz load one slot later, so its live
  *    range grows from 11 insns to 12 and its global.c priority drops just
  *    below b's own. b is then allocated first and takes $a0, the load is
  *    pushed to $a1, and a/out/t slide down to $t1/$t2/$t3 as in the target.
@@ -621,9 +621,9 @@ void func_80046A5C(u16 *arg0, void *out)
  *    out right.
  *  - cx and cy have to be separate variables; one shared variable is
  *    coalesced with nx and costs a `j`. */
-s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t)
+s16 func_80046AFC(SVECTOR *a, SVECTOR *b, SVECTOR *out, s16 t)
 {
-    s32 dz = b->unk_04 - a->unk_04;
+    s32 dz = b->vz - a->vz;
     s32 f;
     s32 nx;
     s32 ny;
@@ -635,10 +635,10 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t)
     {
         return 1;
     }
-    dx = b->unk_00 - a->unk_00;
-    f = t - b->unk_04;
-    nx = dx * f / dz + b->unk_00;
-    ny = (b->unk_02 - a->unk_02) * f / dz + b->unk_02;
+    dx = b->vx - a->vx;
+    f = t - b->vz;
+    nx = dx * f / dz + b->vx;
+    ny = (b->vy - a->vy) * f / dz + b->vy;
     cx = -0x7FF0;
     if (nx >= -0x7FF0)
     {
@@ -648,7 +648,7 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t)
             cx = nx;
         }
     }
-    out->unk_00 = cx;
+    out->vx = cx;
     if (ny >= -0x7FF0)
     {
         cy = 0x7FF0;
@@ -661,21 +661,21 @@ s16 func_80046AFC(Unk46AFC *a, Unk46AFC *b, Unk46AFC *out, s16 t)
     {
         cy = -0x7FF0;
     }
-    out->unk_02 = cy;
-    out->unk_04 = t;
-    if (out->unk_00 < a->unk_00 - 0x1000)
+    out->vy = cy;
+    out->vz = t;
+    if (out->vx < a->vx - 0x1000)
     {
         return 1;
     }
-    if (a->unk_00 + 0x1000 < out->unk_00)
+    if (a->vx + 0x1000 < out->vx)
     {
         return 1;
     }
-    if (out->unk_02 < a->unk_02 - 0x1000)
+    if (out->vy < a->vy - 0x1000)
     {
         return 1;
     }
-    return a->unk_02 + 0x1000 < out->unk_02;
+    return a->vy + 0x1000 < out->vy;
 }
 
 /* Builds four per-edge records from five points, clamping each y to a
@@ -959,7 +959,7 @@ void func_8004713C(u32 *arg0, u16 arg1, u16 arg2)
 
     for (i = 0; i < arg2; i++)
     {
-        u16 *r = &D_80080B08;
+        RECT *r = (RECT *)&D_80080B08;
         s32 x = (arg1 << 6) & 0x3C0;
 
         if (i / 2 != 0)
@@ -1007,10 +1007,10 @@ void func_80047200(u16 *p, s32 rows, s32 flag)
     }
 }
 
-void func_80047270(u8 *arg0, s16 *rect)
+void func_80047270(u8 *arg0, RECT *rect)
 {
-    s32 t = rect[3] * 2;
-    s32 n = rect[2] * t;
+    s32 t = rect->h * 2;
+    s32 n = rect->w * t;
 
     if (D_8008148C + D_80080A7C <= D_80081480 + n)
     {
@@ -1019,6 +1019,6 @@ void func_80047270(u8 *arg0, s16 *rect)
     }
     func_800407C0(arg0, (u32 *)D_80081480);
     LoadImage(rect, (u32 *)D_80081480);
-    t = rect[3] * 2;
-    D_80081480 = D_80081480 + rect[2] * t;
+    t = rect->h * 2;
+    D_80081480 = D_80081480 + rect->w * t;
 }

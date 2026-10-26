@@ -102,11 +102,11 @@ void func_80040454(void);
  *    spelling sets MEM_IN_STRUCT_P where the cast arithmetic does not, which
  *    is what lets sched1 hoist the `lw` and the `addiu $a1,$sp,0x10` above the
  *    store and fill a load-delay slot. See matching-levers section 5.
- *  - `*(u16 *) &D_8008151A += rect[3];` on the FINAL store only (1 word). The
+ *  - `*(u16 *) &D_8008151A += rect.h;` on the FINAL store only (1 word). The
  *    other four sites use the struct spelling and must: the hoist above needs
  *    the store to be the non-struct side at a non-varying address. Section 6's
  *    "mix the two spellings for one object", applied per access site.
- *  - `rect[3]` read back off the stack rather than reusing `h` (1 word, 24
+ *  - `rect.h` read back off the stack rather than reusing `h` (1 word, 24
  *    DIFF) -- section 4. The readback is `lhu` although rect is s16[], because
  *    the u16 destination makes it a HImode consumer and combine narrows the
  *    load; that is not evidence of an unsigned array.
@@ -115,7 +115,7 @@ void func_80040454(void);
  * the two tests: `D_80081518 + w >= 0x40` is a signed `slti` while
  * `D_8008151C < uw` is `sltu`. `u32 w` costs 1 word. */
 void func_80047338(Unk800777AC *p, u32 src, u32 arg2) {
-    s16 rect[4];
+    RECT rect;
     s32 w;
     s32 h;
     u8 uw;
@@ -127,9 +127,9 @@ void func_80047338(Unk800777AC *p, u32 src, u32 arg2) {
         D_8008151E = D_80083164[0];
     }
     w = (p->unk_0A + 3) / 4;
-    rect[2] = w;
+    rect.w = w;
     h = p->unk_0B + 1;
-    rect[3] = h;
+    rect.h = h;
     if (D_8008151A.unk_00 + h >= 0x100) {
         D_80081518.unk_00 += D_8008151C;
         D_8008151A.unk_00 = 0;
@@ -143,19 +143,19 @@ void func_80047338(Unk800777AC *p, u32 src, u32 arg2) {
     if (D_8008151C < uw) {
         D_8008151C = w;
     }
-    rect[0] = D_80081518.unk_00 + ((p->unk_04 << 6) & 0x3C0);
-    rect[1] = D_8008151A.unk_00 + ((p->unk_04 << 4) & 0x100);
+    rect.x = D_80081518.unk_00 + ((p->unk_04 << 6) & 0x3C0);
+    rect.y = D_8008151A.unk_00 + ((p->unk_04 << 4) & 0x100);
     p->unk_08 = D_80081518.unk_00 << 2;
     p->unk_09 = D_8008151A.unk_00;
-    *(u16 *) &D_8008151A += rect[3];
-    func_80047270(((u8 **) src)[3] + arg2, rect);
+    *(u16 *) &D_8008151A += rect.h;
+    func_80047270(((u8 **) src)[3] + arg2, &rect);
 }
 
 /* The second atlas's cursor: identical in shape to func_80047338, with the
  * other quartet, thresholds of 0x80/0x20 and four constant biases. Every shape
  * noted above applies here unchanged. */
 void func_80047468(Unk800777AC *p, u32 src, u32 arg2) {
-    s16 rect[4];
+    RECT rect;
     s32 w;
     s32 h;
     u8 uw;
@@ -167,9 +167,9 @@ void func_80047468(Unk800777AC *p, u32 src, u32 arg2) {
         D_80081526 = D_80083164[0];
     }
     w = (p->unk_0A + 3) / 4;
-    rect[2] = w;
+    rect.w = w;
     h = p->unk_0B + 1;
-    rect[3] = h;
+    rect.h = h;
     if (D_80081522.unk_00 + h >= 0x80) {
         D_80081520.unk_00 += D_80081524;
         D_80081522.unk_00 = 0;
@@ -183,10 +183,10 @@ void func_80047468(Unk800777AC *p, u32 src, u32 arg2) {
     if (D_80081524 < uw) {
         D_80081524 = w;
     }
-    rect[0] = D_80081520.unk_00 + ((p->unk_04 << 6) & 0x3C0) + 0x20;
-    rect[1] = D_80081522.unk_00 + ((p->unk_04 << 4) & 0x100) + 0x80;
+    rect.x = D_80081520.unk_00 + ((p->unk_04 << 6) & 0x3C0) + 0x20;
+    rect.y = D_80081522.unk_00 + ((p->unk_04 << 4) & 0x100) + 0x80;
     p->unk_08 = (D_80081520.unk_00 << 2) - 0x80;
     p->unk_09 = D_80081522.unk_00 + 0x80;
-    *(u16 *) &D_80081522 += rect[3];
-    func_80047270(((u8 **) src)[3] + arg2, rect);
+    *(u16 *) &D_80081522 += rect.h;
+    func_80047270(((u8 **) src)[3] + arg2, &rect);
 }

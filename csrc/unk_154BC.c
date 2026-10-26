@@ -99,8 +99,8 @@ void func_80041CBC(void) {
     u8 *base = (u8 *) 0x80010000;
     u8 *p;
 
-    PutDispEnv(D_80083160.unk_00 + 0x5C);
-    PutDrawEnv(D_80083160.unk_00);
+    PutDispEnv((DISPENV *)(D_80083160.unk_00 + 0x5C));
+    PutDrawEnv((DRAWENV *)D_80083160.unk_00);
     if ((*(u16 *) (base + 0x3714) & 2) == 0) {
         DrawOTag(D_80083160.unk_00 + 0x8CC);
     }

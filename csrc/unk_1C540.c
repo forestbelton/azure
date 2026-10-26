@@ -1033,7 +1033,7 @@ void func_8004B530(u8 *p) {
    three hoisted constants, where a `y` variable of its own is expanded before
    them and the two registers swap with the loop counter (12 DIFF). */
 void func_8004B568(u8 *unused) {
-    s16 r[4];
+    RECT r;
     s32 i;
     u8 *q;
 
@@ -1041,11 +1041,11 @@ void func_8004B568(u8 *unused) {
     DrawSync(0);
     D_80081480 = D_8008148C;
     for (i = 0; i < 2; i++) {
-        r[1] = 0x100 + i * 0x80;
-        r[0] = 0x140;
-        r[2] = 0x40;
-        r[3] = 0x80;
-        StoreImage(r, (u32 *) D_8008148C);
+        r.y = 0x100 + i * 0x80;
+        r.x = 0x140;
+        r.w = 0x40;
+        r.h = 0x80;
+        StoreImage(&r, (u32 *) D_8008148C);
         DrawSync(0);
         q = func_8004068C((u8 *) D_80081480, q);
     }
@@ -3168,19 +3168,19 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052A90);
 void func_80052A90(u32, s32, s16);
 
 void func_80052C10(s16 k, u8 *p) {
-    s16 r1[4];
-    s16 r2[4];
+    RECT r1;
+    RECT r2;
 
-    r1[0] = 0x380;
-    r1[1] = k * 16;
-    r1[2] = 0x40;
-    r1[3] = 0x10;
-    ClearImage(r1, 0, 0, 0);
-    r2[0] = 0x3C0;
-    r2[1] = k * 16;
-    r2[2] = 0x40;
-    r2[3] = 0x10;
-    ClearImage(r2, 0, 0, 0);
+    r1.x = 0x380;
+    r1.y = k * 16;
+    r1.w = 0x40;
+    r1.h = 0x10;
+    ClearImage(&r1, 0, 0, 0);
+    r2.x = 0x3C0;
+    r2.y = k * 16;
+    r2.w = 0x40;
+    r2.h = 0x10;
+    ClearImage(&r2, 0, 0, 0);
     func_80052A90(*(u32 *) (p + 8), 0x380, k * 16);
     func_80052A90(*(u32 *) (p + 0xC), 0x3C0, k * 16);
 }
@@ -3341,7 +3341,7 @@ s32 func_80053D64(void) {
     if (CdSync(1, 0) == 2) {
         CdControl(0x10, 0, loc);
     }
-    return CdPosToInt(loc);
+    return CdPosToInt((CdlLOC *)loc);
 }
 
 s32 func_80055778(s32);
@@ -4045,24 +4045,24 @@ void func_8005A3D4(void);
    target emits them in (0, 1, 2, 3 is 8 DIFF at the same word count). */
 void func_80055B44(u16 kk) {
     u8 k = kk;
-    u8 t[4];
+    CdlATV t;
 
     if (k == 1) {
         func_8005A3E0();
-        t[2] = 0x4F;
-        t[0] = 0x4F;
-        t[3] = 0x4F;
-        t[1] = 0x4F;
+        t.val2 = 0x4F;
+        t.val0 = 0x4F;
+        t.val3 = 0x4F;
+        t.val1 = 0x4F;
         D_800847D0[0] = (D_800847D0[0] & ~0x10) | 0x20;
     } else {
         func_8005A3D4();
-        t[2] = 0x7F;
-        t[0] = 0x7F;
-        t[3] = 0;
-        t[1] = 0;
+        t.val2 = 0x7F;
+        t.val0 = 0x7F;
+        t.val3 = 0;
+        t.val1 = 0;
         D_800847D0[0] = (D_800847D0[0] & ~0x20) | 0x10;
     }
-    CdMix(t);
+    CdMix(&t);
 }
 
 void func_800553D4(s32);

@@ -162,11 +162,11 @@ void func_80041344(u8 *base, u32 *arg1) {
         switch (op) {
         case 0:
             func_8004068C(base + e->unk_04, (u8 *) arg1);
-            LoadImage(p + 8, arg1);
+            LoadImage((RECT *)(p + 8), arg1);
             DrawSync(0);
             break;
         case 4:
-            LoadImage(p + 8, (u32 *) (base + e->unk_04));
+            LoadImage((RECT *)(p + 8), (u32 *) (base + e->unk_04));
             DrawSync(0);
             break;
         case 1:
@@ -293,11 +293,11 @@ void func_80041588(Unk41284 *arg0, s8 *arg1, s32 arg2) {
         switch (op) {
         case 0:
             func_8004068C(base + e->unk_04, (u8 *) dst);
-            LoadImage(p + 8, (u32 *) dst);
+            LoadImage((RECT *)(p + 8), (u32 *) dst);
             DrawSync(0);
             break;
         case 4:
-            LoadImage(p + 8, (u32 *) (base + e->unk_04));
+            LoadImage((RECT *)(p + 8), (u32 *) (base + e->unk_04));
             DrawSync(0);
             break;
         case 1:

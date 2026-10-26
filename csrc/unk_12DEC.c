@@ -165,15 +165,15 @@ void func_8003F7E4(void) {
  *    function, shared with the first store, is much worse (45 DIFF): the
  *    target rebuilds the base in each arm. */
 void func_8003F80C(u32 arg0, s32 arg1, s32 arg2, s16 arg3) {
-    s16 rect[4];
+    RECT rect;
     s32 n = (arg1 - 0x7000) >> 6;
 
     if ((arg3 & 1) == 0) {
-        rect[0] = ((n & 0x40) << 1) + ((arg1 & 0x3F) << 4);
-        rect[1] = (n & 0x3F) + 0x1C0;
-        rect[2] = arg2 << 4;
-        rect[3] = 1;
-        LoadImage(rect, (u32 *) arg0);
+        rect.x = ((n & 0x40) << 1) + ((arg1 & 0x3F) << 4);
+        rect.y = (n & 0x3F) + 0x1C0;
+        rect.w = arg2 << 4;
+        rect.h = 1;
+        LoadImage(&rect, (u32 *) arg0);
     }
     if ((arg3 & 2) == 0) {
         D_80082EC0[n] = (arg0 & 0xFFFFFF) | (arg2 << 24);
@@ -207,17 +207,17 @@ void func_8003F80C(u32 arg0, s32 arg1, s32 arg2, s16 arg3) {
  * halfword. */
 void func_8003F8F8(Unk3F8F8 *e) {
     while (e->unk_00 != 0) {
-        s32 w = e->rect[2];
-        s32 n = e->rect[3] * 2;
+        s32 w = e->rect.w;
+        s32 n = e->rect.h * 2;
 
         if (D_8008148C + D_80080A7C >= D_80081480 + w * n) {
             D_80081480 = D_8008148C;
             DrawSync(0);
         }
         func_8004068C((u8 *) e->unk_00, (u8 *) D_80081480);
-        LoadImage(e->rect, (u32 *) D_80081480);
-        w = e->rect[2];
-        n = e->rect[3] * 2;
+        LoadImage(&e->rect, (u32 *) D_80081480);
+        w = e->rect.w;
+        n = e->rect.h * 2;
         D_80081480 = D_80081480 + w * n;
         e++;
     }
@@ -533,7 +533,7 @@ void func_800400B8(void) {
     Unk80083160 *s = &D_80083160;
 
     if (D_80080A86 == 0 && s->unk_1DC != 0) {
-        func_80046884((u16 *) ((u8 *) s + 0x18), (Unk46AFC *) ((u8 *) s + 0x20), 0);
+        func_80046884((RECT *) ((u8 *) s + 0x18), (SVECTOR *) ((u8 *) s + 0x20), 0);
         func_8003BFE4();
     }
     func_80040190();
@@ -673,20 +673,20 @@ void func_80040454(void) {
     }
 }
 
-void func_80040490(void *arg0, s16 *rect) {
+void func_80040490(void *arg0, RECT *rect) {
     /* The temporary fixes the grouping: written as one expression gcc
-       doubles rect[2] instead of rect[3]. */
-    s32 n = rect[3] * 2;
-    u32 *p = func_80040574(rect[2] * n);
+       doubles rect->w instead of rect->h. */
+    s32 n = rect->h * 2;
+    u32 *p = func_80040574(rect->w * n);
 
     func_8004068C(arg0, (u8 *) p);
     LoadImage(rect, p);
 }
 
-void func_800404F8(u16 *rect) {
-    u32 *p = func_80040574(((s16) rect[2] >> 1) * *(s16 *) (rect + 3));
+void func_800404F8(RECT *rect) {
+    u32 *p = func_80040574((rect->w >> 1) * rect->h);
 
-    func_8003DB4C((int *) p, ((s16) rect[2] >> 1) * *(s16 *) (rect + 3));
+    func_8003DB4C((int *) p, (rect->w >> 1) * rect->h);
     LoadImage(rect, p);
 }
 
