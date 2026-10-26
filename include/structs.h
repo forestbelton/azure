@@ -21,48 +21,53 @@
 /* Retyped by hand to 10 bytes with byte alignment, for the same reason as
    Unk80080AB4: func_8003D468 assigns it and gcc emits two lwl/lwr pairs plus
    two lb/sb. */
-typedef struct Unk8002D5B4 {
-    u8 unk_00[4];
-    u8 unk_04[4];
-    u8 unk_08;
-    u8 unk_09;
+typedef struct Unk8002D5B4
+{
+   u8 unk_00[4];
+   u8 unk_04[4];
+   u8 unk_08;
+   u8 unk_09;
 } Unk8002D5B4;
 
 /* Hand-added. func_80040FDC scales an index by 12 into this table and
    follows the pointer at +0x04; only that field's own +0x08 is observed, so
    its element type is left as u32. */
-typedef struct Unk8006CE80 {
-    u16  unk_00;  /* read as halfwords by func_80041818 */
-    u16  unk_02;
-    u32 *unk_04;
-    u32  unk_08;
+typedef struct Unk8006CE80
+{
+   u16 unk_00; /* read as halfwords by func_80041818 */
+   u16 unk_02;
+   u32 *unk_04;
+   u32 unk_08;
 } Unk8006CE80;
 
 /* 0x8006ce34..0x8006ce43, 0x10 bytes, 4 field(s) */
-typedef struct Unk8006CE34 {
-    u32 unk_00;
-    u32 unk_04;
-    u32 unk_08;
-    u32 unk_0C;
+typedef struct Unk8006CE34
+{
+   u32 unk_00;
+   u32 unk_04;
+   u32 unk_08;
+   u32 unk_0C;
 } Unk8006CE34;
 
 /* Hand-added. func_8004425C scales an index by 12 into this table; +0x00 is a
    halfword id (one less than it indexes D_80080AF0) and +0x04/+0x08 are two
    buffers handed to func_8003E4FC. */
-typedef struct Unk8006E61C {
-    u16  unk_00;
-    u8  *unk_04;
-    u8  *unk_08;
+typedef struct Unk8006E61C
+{
+   u16 unk_00;
+   u8 *unk_04;
+   u8 *unk_08;
 } Unk8006E61C;
 
 /* Hand-added. A 0x10-byte entry: func_8003F8F8 walks a table of these until
    unk_00 is zero, unpacks the image it points at and loads it through the
    four-halfword x/y/w/h rect at +0x04. The last four bytes are unexplored
    space, not known filler. */
-typedef struct Unk3F8F8 {
-    u32 unk_00;
-    s16 rect[4];
-    u8  pad_0C[0x4];
+typedef struct Unk3F8F8
+{
+   u32 unk_00;
+   s16 rect[4];
+   u8 pad_0C[0x4];
 } Unk3F8F8;
 
 /* Hand-added. A 4-halfword SVECTOR. func_800463EC copies the x/y pair as one
@@ -70,11 +75,12 @@ typedef struct Unk3F8F8 {
    the differing MEM_IN_STRUCT_P flags are what let sched1 pipeline the x/y
    group one deep while leaving the vz group serial. Should be rebuilt out of
    libgte's SVECTOR if the project ever models it. */
-typedef struct Unk463ECV {
-    s16 unk_00;
-    s16 unk_02;
-    s16 unk_04;
-    s16 pad_06;
+typedef struct Unk463ECV
+{
+   s16 unk_00;
+   s16 unk_02;
+   s16 unk_04;
+   s16 pad_06;
 } Unk463ECV;
 
 /* Hand-added. The 0x1F800000 scratchpad as func_800463EC lays it out: the OT
@@ -85,43 +91,45 @@ typedef struct Unk463ECV {
    reloads it immediately after storing it. The pad_ ranges are unexplored
    space, not known filler, and this overlaps Unk3DBD0SP -- the two describe
    the same region and should be merged once more of it is known. */
-typedef struct Unk463ECSP {
-    u8           pad_00[0x20];
-    u32          unk_20;
-    u8           pad_24[0xC];
-    s32          unk_30;
-    s32          unk_34;
-    s32          unk_38;
-    u8           pad_3C[0x4];
-    s32          unk_40;
-    s32          unk_44;
-    s32          unk_48;
-    u8           pad_4C[0x24];
-    Unk463ECV    unk_70[4];
-    s32          unk_90;
-    s32          unk_94;
-    u8           pad_98[0x28];
-    s32          unk_C0;
-    u8           pad_C4[0x50];
-    volatile s32 unk_114;
+typedef struct Unk463ECSP
+{
+   u8 pad_00[0x20];
+   u32 unk_20;
+   u8 pad_24[0xC];
+   s32 unk_30;
+   s32 unk_34;
+   s32 unk_38;
+   u8 pad_3C[0x4];
+   s32 unk_40;
+   s32 unk_44;
+   s32 unk_48;
+   u8 pad_4C[0x24];
+   Unk463ECV unk_70[4];
+   s32 unk_90;
+   s32 unk_94;
+   u8 pad_98[0x28];
+   s32 unk_C0;
+   u8 pad_C4[0x50];
+   volatile s32 unk_114;
 } Unk463ECSP;
 
 /* Hand-added. A 0x18-byte face record: four vertex indices into the
    D_80083160.unk_1E4 table, two packed UV words, a texture index scaled by 8
    into D_80083160.unk_1E8, two more UV halfwords, and the two bytes at +0x16
    that terminate the list when they read 1 and a negative value. */
-typedef struct Unk463ECF {
-    u16 unk_00;
-    u16 unk_02;
-    u16 unk_04;
-    u16 unk_06;
-    u32 unk_08;
-    u32 unk_0C;
-    u16 unk_10;
-    u16 unk_12;
-    u16 unk_14;
-    u8  unk_16;
-    s8  unk_17;
+typedef struct Unk463ECF
+{
+   u16 unk_00;
+   u16 unk_02;
+   u16 unk_04;
+   u16 unk_06;
+   u32 unk_08;
+   u32 unk_0C;
+   u16 unk_10;
+   u16 unk_12;
+   u16 unk_14;
+   u8 unk_16;
+   s8 unk_17;
 } Unk463ECF;
 
 /* Hand-added. The 0x28-byte primitive, libgpu's POLY_FT4: the tag at +0x00,
@@ -130,40 +138,43 @@ typedef struct Unk463ECF {
    span the uv and clut/tpage halfwords, so they are casts. Same type as
    docs/near-misses/func_8003D0F0.c's Unk3D0F0P; merge when one of those
    lands. */
-typedef struct Unk463ECP {
-    u32 unk_00;
-    u8  unk_04;
-    u8  unk_05;
-    u8  unk_06;
-    u8  unk_07;
-    s32 unk_08;
-    u16 unk_0C;
-    u16 unk_0E;
-    s32 unk_10;
-    u16 unk_14;
-    u16 unk_16;
-    s32 unk_18;
-    u16 unk_1C;
-    u16 unk_1E;
-    s32 unk_20;
-    u16 unk_24;
-    u16 unk_26;
+typedef struct Unk463ECP
+{
+   u32 unk_00;
+   u8 unk_04;
+   u8 unk_05;
+   u8 unk_06;
+   u8 unk_07;
+   s32 unk_08;
+   u16 unk_0C;
+   u16 unk_0E;
+   s32 unk_10;
+   u16 unk_14;
+   u16 unk_16;
+   s32 unk_18;
+   u16 unk_1C;
+   u16 unk_1E;
+   s32 unk_20;
+   u16 unk_24;
+   u16 unk_26;
 } Unk463ECP;
 
 /* Hand-added. +0x30 and +0x34 of the scratchpad below: func_8003DBD0 stores a
    word there and reads the low halfword back, and the mode difference is what
    makes the read a real `lhu` rather than a folded register reuse. */
-typedef union Unk3DBD0W {
-    s32 w;
-    u16 h;
+typedef union Unk3DBD0W
+{
+   s32 w;
+   u16 h;
 } Unk3DBD0W;
 
 /* Hand-added. A halfword that is also byte-patched: func_80044D24 stores each
    of the primitive's UV pairs with `sh` and then patches one byte of it in the
    clamps, so both views are needed. */
-typedef union Unk44D24UV {
-    u16 h;
-    u8  b[2];
+typedef union Unk44D24UV
+{
+   u16 h;
+   u8 b[2];
 } Unk44D24UV;
 
 /* Hand-added. The 0x1F800000 scratchpad as func_80044D24 lays it out.
@@ -190,80 +201,82 @@ typedef union Unk44D24UV {
    merge ever happens, those four can become Unk3DBD0W here -- untested, and
    the `(u16)` casts are load-bearing, so it is a real risk for a cosmetic
    gain. */
-typedef struct Unk3CCB0SP {
-    u8  pad_00[0x8];
-    u32 unk_08;
-    u32 unk_0C;
-    u32 unk_10;
-    u32 unk_14;
-    u8  pad_18[0x10];
-    s16 unk_28;
-    s16 unk_2A;
-    s16 unk_2C;
-    u8  pad_2E[0x12];
-    s32 unk_40;
-    s32 unk_44;
-    s32 unk_48;
-    u8  pad_4C[0x4];
-    u8  unk_50[0x20];
-    s16 unk_70;
-    s16 unk_72;
-    s16 unk_74;
-    u8  pad_76[0x2];
-    s16 unk_78;
-    s16 unk_7A;
-    s16 unk_7C;
-    u8  pad_7E[0x2];
-    s16 unk_80;
-    s16 unk_82;
-    s16 unk_84;
-    u8  pad_86[0x2];
-    s16 unk_88;
-    s16 unk_8A;
-    s16 unk_8C;
-    u8  pad_8E[0x6];
-    s32 unk_94;
+typedef struct Unk3CCB0SP
+{
+   u8 pad_00[0x8];
+   u32 unk_08;
+   u32 unk_0C;
+   u32 unk_10;
+   u32 unk_14;
+   u8 pad_18[0x10];
+   s16 unk_28;
+   s16 unk_2A;
+   s16 unk_2C;
+   u8 pad_2E[0x12];
+   s32 unk_40;
+   s32 unk_44;
+   s32 unk_48;
+   u8 pad_4C[0x4];
+   u8 unk_50[0x20];
+   s16 unk_70;
+   s16 unk_72;
+   s16 unk_74;
+   u8 pad_76[0x2];
+   s16 unk_78;
+   s16 unk_7A;
+   s16 unk_7C;
+   u8 pad_7E[0x2];
+   s16 unk_80;
+   s16 unk_82;
+   s16 unk_84;
+   u8 pad_86[0x2];
+   s16 unk_88;
+   s16 unk_8A;
+   s16 unk_8C;
+   u8 pad_8E[0x6];
+   s32 unk_94;
 } Unk3CCB0SP;
 
-typedef struct Unk44D24SP {
-    s16        unk_00;
-    u16        unk_02;
-    u8         pad_04[0x4];
-    Unk3DBD0W  unk_08;
-    Unk3DBD0W  unk_0C;
-    Unk3DBD0W  unk_10;
-    Unk3DBD0W  unk_14;
-    u8         pad_18[0x8];
-    s32        unk_20;
-    u16        unk_24;
-    u8         pad_26[0xA];
-    s32        unk_30;
-    s32        unk_34;
-    s32        unk_38;
-    u8         pad_3C[0x4];
-    s32        unk_40;
-    s32        unk_44;
-    s32        unk_48;
-    u8         pad_4C[0x4];
-    u16        unk_50;
-    u8         pad_52[0x6];
-    u16        unk_58;
-    u8         pad_5A[0x16];
-    s16        unk_70;
-    s16        unk_72;
-    s16        unk_74;
-    u8         pad_76[0x2];
-    s16        unk_78;
-    s16        unk_7A;
-    s16        unk_7C;
-    u8         pad_7E[0x2];
-    s16        unk_80;
-    s16        unk_82;
-    s16        unk_84;
-    u8         pad_86[0x2];
-    s16        unk_88;
-    s16        unk_8A;
-    s16        unk_8C;
+typedef struct Unk44D24SP
+{
+   s16 unk_00;
+   u16 unk_02;
+   u8 pad_04[0x4];
+   Unk3DBD0W unk_08;
+   Unk3DBD0W unk_0C;
+   Unk3DBD0W unk_10;
+   Unk3DBD0W unk_14;
+   u8 pad_18[0x8];
+   s32 unk_20;
+   u16 unk_24;
+   u8 pad_26[0xA];
+   s32 unk_30;
+   s32 unk_34;
+   s32 unk_38;
+   u8 pad_3C[0x4];
+   s32 unk_40;
+   s32 unk_44;
+   s32 unk_48;
+   u8 pad_4C[0x4];
+   u16 unk_50;
+   u8 pad_52[0x6];
+   u16 unk_58;
+   u8 pad_5A[0x16];
+   s16 unk_70;
+   s16 unk_72;
+   s16 unk_74;
+   u8 pad_76[0x2];
+   s16 unk_78;
+   s16 unk_7A;
+   s16 unk_7C;
+   u8 pad_7E[0x2];
+   s16 unk_80;
+   s16 unk_82;
+   s16 unk_84;
+   u8 pad_86[0x2];
+   s16 unk_88;
+   s16 unk_8A;
+   s16 unk_8C;
 } Unk44D24SP;
 
 /* The FIFTH typedef for the 0x1F800000 scratchpad, after Unk3DBD0SP,
@@ -271,198 +284,212 @@ typedef struct Unk44D24SP {
    reason: each function sees a different subset of the region at different
    widths, and retyping a field to merge them risks an existing match for a
    cosmetic gain. The merge is on TODO.md. */
-typedef struct Unk45CC4SP {
-    s16         unk_00;
-    s16         unk_02;
-    u8          pad_04[0x4];
-    Unk3DBD0W   unk_08;
-    Unk3DBD0W   unk_0C;
-    Unk3DBD0W   unk_10;
-    Unk3DBD0W   unk_14;
-    u8          pad_18[0x8];
-    u8         *unk_20;
-    u16         unk_24;
-    u8          pad_26[0xA];
-    Unk3DBD0W   unk_30;
-    Unk3DBD0W   unk_34;
-    s32         unk_38;
-    u8          pad_3C[0x14];
-    u16         unk_50;
-    u8          pad_52[0x6];
-    u16         unk_58;
-    u8          pad_5A[0x16];
-    s16         unk_70;
-    s16         unk_72;
-    s16         unk_74;
-    u8          pad_76[0x2];
-    s16         unk_78;
-    s16         unk_7A;
-    s16         unk_7C;
-    u8          pad_7E[0x2];
-    s16         unk_80;
-    s16         unk_82;
-    s16         unk_84;
-    u8          pad_86[0x2];
-    s16         unk_88;
-    s16         unk_8A;
-    s16         unk_8C;
-    u8          pad_8E[0x2];
-    s32         unk_90;
-    s32         unk_94;
-    u8          pad_98[0x28];
-    s32         unk_C0;
-    u8          pad_C4[0xC];
-    u8          unk_D0[0x14];
-    s32         unk_E4;
-    s32         unk_E8;
-    s32         unk_EC;
-    u8          pad_F0[0x10];
-    s16         unk_100;
-    s16         unk_102;
-    s16         unk_104;
-    u8          pad_106[0x2];
-    u16         unk_108;
-    u16         unk_10A;
-    u8          pad_10C[0x10];
-    u8          unk_11C[0x14];
+typedef struct Unk45CC4SP
+{
+   s16 unk_00;
+   s16 unk_02;
+   u8 pad_04[0x4];
+   Unk3DBD0W unk_08;
+   Unk3DBD0W unk_0C;
+   Unk3DBD0W unk_10;
+   Unk3DBD0W unk_14;
+   u8 pad_18[0x8];
+   u8 *unk_20;
+   u16 unk_24;
+   u8 pad_26[0xA];
+   Unk3DBD0W unk_30;
+   Unk3DBD0W unk_34;
+   s32 unk_38;
+   u8 pad_3C[0x14];
+   u16 unk_50;
+   u8 pad_52[0x6];
+   u16 unk_58;
+   u8 pad_5A[0x16];
+   s16 unk_70;
+   s16 unk_72;
+   s16 unk_74;
+   u8 pad_76[0x2];
+   s16 unk_78;
+   s16 unk_7A;
+   s16 unk_7C;
+   u8 pad_7E[0x2];
+   s16 unk_80;
+   s16 unk_82;
+   s16 unk_84;
+   u8 pad_86[0x2];
+   s16 unk_88;
+   s16 unk_8A;
+   s16 unk_8C;
+   u8 pad_8E[0x2];
+   s32 unk_90;
+   s32 unk_94;
+   u8 pad_98[0x28];
+   s32 unk_C0;
+   u8 pad_C4[0xC];
+   u8 unk_D0[0x14];
+   s32 unk_E4;
+   s32 unk_E8;
+   s32 unk_EC;
+   u8 pad_F0[0x10];
+   s16 unk_100;
+   s16 unk_102;
+   s16 unk_104;
+   u8 pad_106[0x2];
+   u16 unk_108;
+   u16 unk_10A;
+   u8 pad_10C[0x10];
+   u8 unk_11C[0x14];
 } Unk45CC4SP;
 
 /* The 0xC-byte element func_80045CC4 walks. */
-typedef struct Unk45CC4E {
-    u8  unk_00;
-    u8  unk_01;
-    u8  unk_02;
-    u8  unk_03;
-    u16 unk_04;
-    u16 unk_06;
-    u8  unk_08;
-    u8  unk_09;
-    u8  unk_0A;
-    u8  unk_0B;
+typedef struct Unk45CC4E
+{
+   u8 unk_00;
+   u8 unk_01;
+   u8 unk_02;
+   u8 unk_03;
+   u16 unk_04;
+   u16 unk_06;
+   u8 unk_08;
+   u8 unk_09;
+   u8 unk_0A;
+   u8 unk_0B;
 } Unk45CC4E;
 
 /* The 0x28-byte primitive it emits. */
-typedef union Unk45CC4UV {
-    u16 h;
-    u8  b[2];
+typedef union Unk45CC4UV
+{
+   u16 h;
+   u8 b[2];
 } Unk45CC4UV;
 
-typedef struct Unk45CC4T { u32 addr:24; u32 len:8; } Unk45CC4T;
-typedef struct Unk45CC4P {
-    u32         unk_00;
-    u32         unk_04;
-    u16         unk_08;
-    u16         unk_0A;
-    Unk45CC4UV  unk_0C;
-    u16         unk_0E;
-    u16         unk_10;
-    u16         unk_12;
-    Unk45CC4UV  unk_14;
-    u16         unk_16;
-    u16         unk_18;
-    u16         unk_1A;
-    Unk45CC4UV  unk_1C;
-    u16         unk_1E;
-    u16         unk_20;
-    u16         unk_22;
-    Unk45CC4UV  unk_24;
-    u16         unk_26;
+typedef struct Unk45CC4T
+{
+   u32 addr : 24;
+   u32 len : 8;
+} Unk45CC4T;
+typedef struct Unk45CC4P
+{
+   u32 unk_00;
+   u32 unk_04;
+   u16 unk_08;
+   u16 unk_0A;
+   Unk45CC4UV unk_0C;
+   u16 unk_0E;
+   u16 unk_10;
+   u16 unk_12;
+   Unk45CC4UV unk_14;
+   u16 unk_16;
+   u16 unk_18;
+   u16 unk_1A;
+   Unk45CC4UV unk_1C;
+   u16 unk_1E;
+   u16 unk_20;
+   u16 unk_22;
+   Unk45CC4UV unk_24;
+   u16 unk_26;
 } Unk45CC4P;
 
-typedef struct Unk453E0SP {
-    s16       unk_00;
-    s16       unk_02;
-    s16       unk_04;
-    u8        pad_06[0x2];
-    Unk3DBD0W unk_08;
-    Unk3DBD0W unk_0C;
-    Unk3DBD0W unk_10;
-    Unk3DBD0W unk_14;
-    u8        pad_18[0x8];
-    u8       *unk_20;
-    u16       unk_24;
-    u8        pad_26[0xA];
-    Unk3DBD0W unk_30;
-    Unk3DBD0W unk_34;
-    Unk3DBD0W unk_38;
-    u8        pad_3C[0x14];
-    u16       unk_50;
-    u8        pad_52[0x6];
-    u16       unk_58;
-    u8        pad_5A[0x16];
-    s16       unk_70;
-    s16       unk_72;
-    s16       unk_74;
-    u8        pad_76[0x2];
-    s16       unk_78;
-    s16       unk_7A;
-    s16       unk_7C;
-    u8        pad_7E[0x2];
-    s16       unk_80;
-    s16       unk_82;
-    s16       unk_84;
-    u8        pad_86[0x2];
-    s16       unk_88;
-    s16       unk_8A;
-    s16       unk_8C;
-    u8        pad_8E[0x2];
-    s32       unk_90;
-    s32       unk_94;
-    u8        pad_98[0x20];
-    u16       unk_B8;
-    u16       unk_BA;
-    u8        pad_BC[0x4];
-    s32       unk_C0;
-    u8        pad_C4[0x8];
-    s32       unk_CC;
-    u8        pad_D0[0x14];
-    s32       unk_E4;
-    s32       unk_E8;
-    s32       unk_EC;
-    u16       unk_F0;
-    u16       unk_F2;
-    u16       unk_F4;
-    u16       unk_F6;
-    u16       unk_F8;
-    u16       unk_FA;
-    u16       unk_FC;
-    u16       unk_FE;
-    s16       unk_100;
-    s16       unk_102;
-    s16       unk_104;
-    u8        pad_106[0x2];
-    u16       unk_108;
-    u16       unk_10A;
-    u8        pad_10C[0x30];
-    u16       unk_13C;
+typedef struct Unk453E0SP
+{
+   s16 unk_00;
+   s16 unk_02;
+   s16 unk_04;
+   u8 pad_06[0x2];
+   Unk3DBD0W unk_08;
+   Unk3DBD0W unk_0C;
+   Unk3DBD0W unk_10;
+   Unk3DBD0W unk_14;
+   u8 pad_18[0x8];
+   u8 *unk_20;
+   u16 unk_24;
+   u8 pad_26[0xA];
+   Unk3DBD0W unk_30;
+   Unk3DBD0W unk_34;
+   Unk3DBD0W unk_38;
+   u8 pad_3C[0x14];
+   u16 unk_50;
+   u8 pad_52[0x6];
+   u16 unk_58;
+   u8 pad_5A[0x16];
+   s16 unk_70;
+   s16 unk_72;
+   s16 unk_74;
+   u8 pad_76[0x2];
+   s16 unk_78;
+   s16 unk_7A;
+   s16 unk_7C;
+   u8 pad_7E[0x2];
+   s16 unk_80;
+   s16 unk_82;
+   s16 unk_84;
+   u8 pad_86[0x2];
+   s16 unk_88;
+   s16 unk_8A;
+   s16 unk_8C;
+   u8 pad_8E[0x2];
+   s32 unk_90;
+   s32 unk_94;
+   u8 pad_98[0x20];
+   u16 unk_B8;
+   u16 unk_BA;
+   u8 pad_BC[0x4];
+   s32 unk_C0;
+   u8 pad_C4[0x8];
+   s32 unk_CC;
+   u8 pad_D0[0x14];
+   s32 unk_E4;
+   s32 unk_E8;
+   s32 unk_EC;
+   u16 unk_F0;
+   u16 unk_F2;
+   u16 unk_F4;
+   u16 unk_F6;
+   u16 unk_F8;
+   u16 unk_FA;
+   u16 unk_FC;
+   u16 unk_FE;
+   s16 unk_100;
+   s16 unk_102;
+   s16 unk_104;
+   u8 pad_106[0x2];
+   u16 unk_108;
+   u16 unk_10A;
+   u8 pad_10C[0x30];
+   u16 unk_13C;
 } Unk453E0SP;
 
-
-typedef union Unk453E0UV {
-    u16 h;
-    u8  b[2];
+typedef union Unk453E0UV
+{
+   u16 h;
+   u8 b[2];
 } Unk453E0UV;
 
-typedef struct Unk453E0T { u32 addr:24; u32 len:8; } Unk453E0T;
-typedef struct Unk453E0P {
-    u32        unk_00;
-    u32        unk_04;
-    u16        unk_08;
-    u16        unk_0A;
-    u16        unk_0C;
-    u16        unk_0E;
-    u16        unk_10;
-    u16        unk_12;
-    Unk453E0UV unk_14;
-    u16        unk_16;
-    u16        unk_18;
-    u16        unk_1A;
-    Unk453E0UV unk_1C;
-    u16        unk_1E;
-    u16        unk_20;
-    u16        unk_22;
-    Unk453E0UV unk_24;
-    u16        unk_26;
+typedef struct Unk453E0T
+{
+   u32 addr : 24;
+   u32 len : 8;
+} Unk453E0T;
+typedef struct Unk453E0P
+{
+   u32 unk_00;
+   u32 unk_04;
+   u16 unk_08;
+   u16 unk_0A;
+   u16 unk_0C;
+   u16 unk_0E;
+   u16 unk_10;
+   u16 unk_12;
+   Unk453E0UV unk_14;
+   u16 unk_16;
+   u16 unk_18;
+   u16 unk_1A;
+   Unk453E0UV unk_1C;
+   u16 unk_1E;
+   u16 unk_20;
+   u16 unk_22;
+   Unk453E0UV unk_24;
+   u16 unk_26;
 } Unk453E0P;
 
 /* Hand-added. A 0xC-byte sprite-piece record, the stride coming from the two
@@ -472,17 +499,18 @@ typedef struct Unk453E0P {
    offsets; unk_04 is masked with 0xFF9F and added to the slot's +0x10 (tpage)
    and unk_06 added to its +0x12 (CLUT); unk_08..unk_0B are UV coordinates,
    tested in pairs against 0x100. */
-typedef struct Unk44D24E {
-    u8  unk_00;
-    u8  unk_01;
-    u8  unk_02;
-    u8  unk_03;
-    u16 unk_04;
-    u16 unk_06;
-    u8  unk_08;
-    u8  unk_09;
-    u8  unk_0A;
-    u8  unk_0B;
+typedef struct Unk44D24E
+{
+   u8 unk_00;
+   u8 unk_01;
+   u8 unk_02;
+   u8 unk_03;
+   u16 unk_04;
+   u16 unk_06;
+   u8 unk_08;
+   u8 unk_09;
+   u8 unk_0A;
+   u8 unk_0B;
 } Unk44D24E;
 
 /* Hand-added. The same 0x28-byte POLY_FT4 again, as func_8003D0F0 reaches it.
@@ -498,31 +526,32 @@ typedef struct Unk44D24E {
    func_80044D24's +0x04 word copy -- both already matched. Held back for that
    reason, as the other two entries say. Whoever does it should do all three at
    once and re-verify those two functions. */
-typedef struct Unk3D0F0P {
-    u8  pad_00[0x3];
-    u8  unk_03;
-    u8  unk_04;
-    u8  unk_05;
-    u8  unk_06;
-    u8  unk_07;
-    s16 unk_08;
-    s16 unk_0A;
-    u16 unk_0C;
-    u16 unk_0E;
-    s16 unk_10;
-    s16 unk_12;
-    u8  unk_14;
-    u8  unk_15;
-    u16 unk_16;
-    s16 unk_18;
-    s16 unk_1A;
-    u16 unk_1C;
-    u16 unk_1E;
-    s16 unk_20;
-    s16 unk_22;
-    u8  unk_24;
-    u8  unk_25;
-    u16 unk_26;
+typedef struct Unk3D0F0P
+{
+   u8 pad_00[0x3];
+   u8 unk_03;
+   u8 unk_04;
+   u8 unk_05;
+   u8 unk_06;
+   u8 unk_07;
+   s16 unk_08;
+   s16 unk_0A;
+   u16 unk_0C;
+   u16 unk_0E;
+   s16 unk_10;
+   s16 unk_12;
+   u8 unk_14;
+   u8 unk_15;
+   u16 unk_16;
+   s16 unk_18;
+   s16 unk_1A;
+   u16 unk_1C;
+   u16 unk_1E;
+   s16 unk_20;
+   s16 unk_22;
+   u8 unk_24;
+   u8 unk_25;
+   u16 unk_26;
 } Unk3D0F0P;
 
 /* Hand-added. The same 0x28-byte POLY_FT4 as Unk463ECP and
@@ -535,26 +564,27 @@ typedef struct Unk3D0F0P {
    Unk44D24UV unions. Merging the three means applying all of that to
    Unk463ECP, which would change func_800463EC's RotAverage4 argument types --
    held back for the same reason as the scratchpad merge. */
-typedef struct Unk44D24P {
-    u8         pad_00[0x3];
-    u8         unk_03;
-    u32        unk_04;
-    s16        unk_08;
-    s16        unk_0A;
-    u16        unk_0C;
-    u16        unk_0E;
-    s16        unk_10;
-    s16        unk_12;
-    Unk44D24UV unk_14;
-    u16        unk_16;
-    s16        unk_18;
-    s16        unk_1A;
-    Unk44D24UV unk_1C;
-    u16        unk_1E;
-    s16        unk_20;
-    s16        unk_22;
-    Unk44D24UV unk_24;
-    u16        unk_26;
+typedef struct Unk44D24P
+{
+   u8 pad_00[0x3];
+   u8 unk_03;
+   u32 unk_04;
+   s16 unk_08;
+   s16 unk_0A;
+   u16 unk_0C;
+   u16 unk_0E;
+   s16 unk_10;
+   s16 unk_12;
+   Unk44D24UV unk_14;
+   u16 unk_16;
+   s16 unk_18;
+   s16 unk_1A;
+   Unk44D24UV unk_1C;
+   u16 unk_1E;
+   s16 unk_20;
+   s16 unk_22;
+   Unk44D24UV unk_24;
+   u16 unk_26;
 } Unk44D24P;
 
 /* Hand-added. The 0x1F800000 scratchpad as func_8003DBD0 lays it out: an
@@ -565,33 +595,34 @@ typedef struct Unk44D24P {
    ranges are unexplored space, not known filler. +0x00, +0x30, +0x70, +0xD0
    and +0x100 are the libgte SVECTOR/VECTOR/MATRIX shapes, so if the project
    ever models those types this should be rebuilt out of them. */
-typedef struct Unk3DBD0SP {
-    s16         unk_00;
-    s16         unk_02;
-    u8          pad_04[0x20];
-    u16         unk_24;
-    u8          pad_26[0xA];
-    Unk3DBD0W   unk_30;
-    Unk3DBD0W   unk_34;
-    s32         unk_38;
-    u8          pad_3C[0x34];
-    s16         unk_70;
-    s16         unk_72;
-    s16         unk_74;
-    u8          pad_76[0x1E];
-    s32         unk_94;
-    u8          pad_98[0x38];
-    u8          unk_D0[0x14];
-    s32         unk_E4;
-    s32         unk_E8;
-    s32         unk_EC;
-    u8          pad_F0[0x10];
-    s16         unk_100;
-    s16         unk_102;
-    s16         unk_104;
-    u8          pad_106[0x2];
-    u16         unk_108;
-    u16         unk_10A;
+typedef struct Unk3DBD0SP
+{
+   s16 unk_00;
+   s16 unk_02;
+   u8 pad_04[0x20];
+   u16 unk_24;
+   u8 pad_26[0xA];
+   Unk3DBD0W unk_30;
+   Unk3DBD0W unk_34;
+   s32 unk_38;
+   u8 pad_3C[0x34];
+   s16 unk_70;
+   s16 unk_72;
+   s16 unk_74;
+   u8 pad_76[0x1E];
+   s32 unk_94;
+   u8 pad_98[0x38];
+   u8 unk_D0[0x14];
+   s32 unk_E4;
+   s32 unk_E8;
+   s32 unk_EC;
+   u8 pad_F0[0x10];
+   s16 unk_100;
+   s16 unk_102;
+   s16 unk_104;
+   u8 pad_106[0x2];
+   u16 unk_108;
+   u16 unk_10A;
 } Unk3DBD0SP;
 
 /* Hand-added. Only the word at +0x00 is observed, by func_80041284, which
@@ -601,8 +632,9 @@ typedef struct Unk3DBD0SP {
    free to hoist the second load above the store, which is what the target
    does. Through a plain `u32 *` both MEMs are non-struct, the exception does
    not apply, and the store comes first. */
-typedef struct Unk41284 {
-    u32 unk_00;
+typedef struct Unk41284
+{
+   u32 unk_00;
 } Unk41284;
 
 /* Hand-added. One record of the command stream func_80041344 and
@@ -612,25 +644,27 @@ typedef struct Unk41284 {
    pointer of this type -- that split is load-bearing (see the comment on
    func_80041344), so the struct deliberately covers only the word fields that
    are reached as a struct. */
-typedef struct Unk41344 {
-    u16 unk_00;
-    u16 unk_02;
-    u32 unk_04;
-    u32 unk_08;
-    u32 unk_0C;
+typedef struct Unk41344
+{
+   u16 unk_00;
+   u16 unk_02;
+   u32 unk_04;
+   u32 unk_08;
+   u32 unk_0C;
 } Unk41344;
 
 /* Hand-added. A 3-byte element: func_80042710 copies +0x00 and +0x02 of each
    of three of these and deliberately leaves the middle byte alone, which is
    why that copy is field-by-field and not a whole-struct assignment. */
-typedef struct Unk42710A {
-    u8 unk_00;
-    /* func_80042710 copies +0x00 and +0x02 and skips this one because
-       func_80041E70 is what writes it: it derives it from unk_02, doubled and
-       clamped to 0x63 when bit 0x80 of unk_54 is set. So the skipped byte is a
-       real field, not padding. */
-    u8 unk_01;
-    u8 unk_02;
+typedef struct Unk42710A
+{
+   u8 unk_00;
+   /* func_80042710 copies +0x00 and +0x02 and skips this one because
+      func_80041E70 is what writes it: it derives it from unk_02, doubled and
+      clamped to 0x63 when bit 0x80 of unk_54 is set. So the skipped byte is a
+      real field, not padding. */
+   u8 unk_01;
+   u8 unk_02;
 } Unk42710A;
 
 /* Hand-added. A 2-byte element, copied whole by func_80042710 -- that is what
@@ -641,9 +675,10 @@ typedef struct Unk42710A {
    func_800A48F0, and every one of those is a sign-extended byte load. Spelling
    them u8 costs that function 36 words. (The block move itself still reveals
    nothing -- it is the uses that do.) */
-typedef struct Unk42710B {
-    s8 unk_00;
-    s8 unk_01;
+typedef struct Unk42710B
+{
+   s8 unk_00;
+   s8 unk_01;
 } Unk42710B;
 
 /* Hand-added. The ~0x58-byte record func_80042710 copies field by field and
@@ -654,102 +689,108 @@ typedef struct Unk42710B {
    and unk_4C is a self-pointer set to &unk_48. Every pad_ range is unexplored
    space, not known filler, and the size is a floor: both of func_80042710's
    callers are still stubs, and the stride they index will pin it down. */
-typedef struct Unk42710 {
-    u8          unk_00;
-    u8          unk_01;
-    u8          unk_02;
-    u8          unk_03;
-    u8          unk_04;
-    u8          unk_05;
-    u16         unk_06;
-    Unk42710A   unk_08[3];
-    u8          unk_11;
-    u8          unk_12;
-    u8          unk_13;
-    u32         unk_14;
-    u32         unk_18;
-    u32         unk_1C;
-    u16         unk_20;
-    u16         unk_22;
-    /* +0x24 and +0x25 are separate bytes: func_80042640 writes 0xFF and a
-       template byte into them individually. func_80042710 copies them as one
-       halfword, which it has to spell as a cast. */
-    u8          unk_24;
-    u8          unk_25;
-    u8          unk_26;
-    u8          unk_27;
-    u8          unk_28;
-    u8          unk_29;
-    u16         unk_2A;
-    Unk42710B   unk_2C[4];
-    u8          unk_34[0xD];
-    u8          unk_41;
-    u8          unk_42;
-    u8          unk_43;
-    u8          unk_44;
-    u8          unk_45;
-    u8          pad_46[0x2];
-    u32         unk_48;
-    u32         unk_4C;
-    u8          pad_50[0x4];
-    u32         unk_54;
-    /* The record is 0x8C bytes: func_800423C0 and func_80043914 both index
-       D_800E3E48 with that stride, and D_800E3E48's element type is this one
-       (see Unk800E3E48 below). func_80041E70 reaches +0x87, which fits.
-       unk_66/unk_68/unk_69 and unk_29 above are each a clamped copy of a byte
-       field (0x04, 0x00, 0x01 and 0x05), gated by bits 4/8/0x10/2 of unk_54;
-       unk_6E and unk_87 are a halfword/byte pair scaled together by bit 0 and
-       by the sign of func_80042900's result. */
-    u8          pad_58[0xE];
-    u8          unk_66;
-    u8          pad_67[0x1];
-    u8          unk_68;
-    u8          unk_69;
-    u8          pad_6A[0x4];
-    u16         unk_6E;
-    u8          pad_70[0x17];
-    u8          unk_87;
-    u8          pad_88[0x4];
+typedef struct Unk42710
+{
+   u8 unk_00;
+   u8 unk_01;
+   u8 unk_02;
+   u8 unk_03;
+   u8 unk_04;
+   u8 unk_05;
+   u16 unk_06;
+   Unk42710A unk_08[3];
+   u8 unk_11;
+   u8 unk_12;
+   u8 unk_13;
+   u32 unk_14;
+   u32 unk_18;
+   u32 unk_1C;
+   u16 unk_20;
+   u16 unk_22;
+   /* +0x24 and +0x25 are separate bytes: func_80042640 writes 0xFF and a
+      template byte into them individually. func_80042710 copies them as one
+      halfword, which it has to spell as a cast. */
+   u8 unk_24;
+   u8 unk_25;
+   u8 unk_26;
+   u8 unk_27;
+   u8 unk_28;
+   u8 unk_29;
+   u16 unk_2A;
+   Unk42710B unk_2C[4];
+   u8 unk_34[0xD];
+   u8 unk_41;
+   u8 unk_42;
+   u8 unk_43;
+   u8 unk_44;
+   u8 unk_45;
+   u8 pad_46[0x2];
+   u32 unk_48;
+   u32 unk_4C;
+   u8 pad_50[0x4];
+   u32 unk_54;
+   /* The record is 0x8C bytes: func_800423C0 and func_80043914 both index
+      D_800E3E48 with that stride, and D_800E3E48's element type is this one
+      (see Unk800E3E48 below). func_80041E70 reaches +0x87, which fits.
+      unk_66/unk_68/unk_69 and unk_29 above are each a clamped copy of a byte
+      field (0x04, 0x00, 0x01 and 0x05), gated by bits 4/8/0x10/2 of unk_54;
+      unk_6E and unk_87 are a halfword/byte pair scaled together by bit 0 and
+      by the sign of func_80042900's result. */
+   u8 pad_58[0xE];
+   u8 unk_66;
+   u8 pad_67[0x1];
+   u8 unk_68;
+   u8 unk_69;
+   u8 pad_6A[0x4];
+   u16 unk_6E;
+   u8 pad_70[0x17];
+   u8 unk_87;
+   u8 pad_88[0x4];
 } Unk42710;
 
 /* Hand-added. Only its first word is read, by func_80040CBC; a struct rather
    than a bare u32 for the MEM_IN_STRUCT_P reason on Unk40CBCA below. */
-typedef struct Unk40CBCC {
-    u32 unk_00;
+typedef struct Unk40CBCC
+{
+   u32 unk_00;
 } Unk40CBCC;
 
 /* Hand-added. What Unk8006CE80's unk_08 points at for mode 4. Both fields have
    to be struct members rather than a cast pointer dereference: that is what
    sets MEM_IN_STRUCT_P and lets sched1 interleave the three loads against the
    two scalar stores in func_80040CBC. */
-typedef struct Unk40CBCA {
-    Unk40CBCC *unk_00;
-    u32        unk_04;
+typedef struct Unk40CBCA
+{
+   Unk40CBCC *unk_00;
+   u32 unk_04;
 } Unk40CBCA;
 
 /* Hand-added. An image descriptor: unk_00 packs a VRAM address in its low 23
    bits and a row count in the top 9, and unk_04 is the destination the row
    index is added to. */
-typedef struct Unk40CBCB {
-    u32 unk_00;
-    s32 unk_04;
+typedef struct Unk40CBCB
+{
+   u32 unk_00;
+   s32 unk_04;
 } Unk40CBCB;
 
 /* Hand-added. The per-mode table func_80040CBC indexes by D_8006CE80[i].unk_00
    with a stride of 8: unk_00 is the mode's handler, stored into
    D_80082E60.unk_04, and unk_04 points at the image descriptor above. */
-typedef struct Unk8006CE44 {
-    u32        unk_00;
-    Unk40CBCB *unk_04;
+typedef struct Unk8006CE44
+{
+   u32 unk_00;
+   Unk40CBCB *unk_04;
 } Unk8006CE44;
 
 /* Hand-added. A 6-byte element: func_80043A68 and func_80043B4C index an
    array of these at D_8008333C[0] + 0x78 and flip bit 15 of the halfword at
    +0x04. Only that field is observed; the first four bytes are unexplored
    space, not known filler. */
-typedef struct Unk43A68 {
-    u8  pad_00[0x4];
-    u16 unk_04;
+typedef struct Unk43A68
+{
+   u8 pad_00[0x4];
+   u16 unk_04;
 } Unk43A68;
 
 /* Hand-added. func_80046C20 reads five consecutive elements of this (indices
@@ -757,10 +798,11 @@ typedef struct Unk43A68 {
    pointer's +8. Only the first two halfwords are touched: unk_00 with `lh`,
    and unk_02 with `lh` for the pair difference but `lhu` where it is masked,
    so it is signed with a (u16) cast at that one site. */
-typedef struct Unk46C20A {
-    s16 unk_00;
-    s16 unk_02;
-    u8  pad_04[0x4];
+typedef struct Unk46C20A
+{
+   s16 unk_00;
+   s16 unk_02;
+   u8 pad_04[0x4];
 } Unk46C20A;
 
 /* Hand-added. Stride 0x28 with all ten words written, so no padding: a
@@ -768,45 +810,49 @@ typedef struct Unk46C20A {
    unk_1C is -1 when the pair is degenerate and 0 otherwise, unk_14 ends up as
    the sign of the x delta scaled to +/-0x40, and unk_04/unk_08 are the deltas
    in 7-bit fixed point. */
-typedef struct Unk46C20B {
-    s32 unk_00;
-    s32 unk_04;
-    s32 unk_08;
-    s32 unk_0C;
-    s32 unk_10;
-    s32 unk_14;
-    s32 unk_18;
-    s32 unk_1C;
-    s32 unk_20;
-    s32 unk_24;
+typedef struct Unk46C20B
+{
+   s32 unk_00;
+   s32 unk_04;
+   s32 unk_08;
+   s32 unk_0C;
+   s32 unk_10;
+   s32 unk_14;
+   s32 unk_18;
+   s32 unk_1C;
+   s32 unk_20;
+   s32 unk_24;
 } Unk46C20B;
 
 /* Hand-added. The 8-byte block D_8006E7F0[i]->unk_00 points at, which
    func_80046E38 copies onto its stack and hands to func_8003E4FC and
    func_8003F6D4; +0x04 doubles as the address the loop advances by 0x10. */
-typedef struct Unk46E38A {
-    u32 unk_00;
-    u32 unk_04;
+typedef struct Unk46E38A
+{
+   u32 unk_00;
+   u32 unk_04;
 } Unk46E38A;
 
 /* Hand-added. What each D_8006E7F0 slot points at. Declared separately from
    the array, which stays `u16 *` because func_80046D64 reaches +0x06..+0x0E as
    u16 indices and depends on that spelling; func_80046E38 casts the element to
    get at the pointer at +0x00 and the count at +0x04. */
-typedef struct Unk8006E7F0 {
-    Unk46E38A *unk_00;
-    u16        unk_04;   /* iteration count, read with lhu */
+typedef struct Unk8006E7F0
+{
+   Unk46E38A *unk_00;
+   u16 unk_04; /* iteration count, read with lhu */
 } Unk8006E7F0;
 
 /* Hand-added. A 16-byte payload with byte alignment: func_8003E39C assigns it
    whole and gcc emits four lwl/lwr plus four swl/swr pairs, which is the block
    move for an unaligned 16-byte type. The 4-byte-aligned spelling gives plain
    lw/sw instead. Same reason as Unk80080AB4. */
-typedef struct Unk3E39C {
-    u8 unk_00[4];
-    u8 unk_04[4];
-    u8 unk_08[4];
-    u8 unk_0C[4];
+typedef struct Unk3E39C
+{
+   u8 unk_00[4];
+   u8 unk_04[4];
+   u8 unk_08[4];
+   u8 unk_0C[4];
 } Unk3E39C;
 
 /* Hand-added. A 32-slot ring queue of 0x18-byte entries; D_800814D0[0] is the
@@ -816,38 +862,41 @@ typedef struct Unk3E39C {
    over the whole range, which is why unk_17 is both a flag and the payload's
    last byte. Expect it to grow fields when func_8003E758, its consumer, is
    attempted. */
-typedef struct Unk80083968 {
-    u8  unk_00;
-    u8  pad_01[0x3];
-    s32 unk_04;
-    s32 unk_08;
-    u8  pad_0C[0xB];
-    u8  unk_17;
+typedef struct Unk80083968
+{
+   u8 unk_00;
+   u8 pad_01[0x3];
+   s32 unk_04;
+   s32 unk_08;
+   u8 pad_0C[0xB];
+   u8 unk_17;
 } Unk80083968;
 
 /* Hand-added. 0x8 bytes: three signed halfwords and two bytes of padding.
    func_80046884 walks arrays of these by -8 and hands triples to
    func_80046AFC, which treats +0x00/+0x02 as a pair interpolated against
    +0x04. */
-typedef struct Unk46AFC {
-    s16 unk_00;
-    s16 unk_02;
-    s16 unk_04;
-    u8  pad_06[0x2];
+typedef struct Unk46AFC
+{
+   s16 unk_00;
+   s16 unk_02;
+   s16 unk_04;
+   u8 pad_06[0x2];
 } Unk46AFC;
 
 /* 0x800777ac..0x800777b7, 0xc bytes, 9 field(s) */
-typedef struct Unk800777AC {
-    u8  unk_00;
-    u8 pad_01[0x1];
-    u8  unk_02;
-    u8  unk_03;
-    u16 unk_04;
-    u16 unk_06;
-    u8  unk_08;
-    u8  unk_09;
-    u8  unk_0A;
-    u8  unk_0B;
+typedef struct Unk800777AC
+{
+   u8 unk_00;
+   u8 pad_01[0x1];
+   u8 unk_02;
+   u8 unk_03;
+   u16 unk_04;
+   u16 unk_06;
+   u8 unk_08;
+   u8 unk_09;
+   u8 unk_0A;
+   u8 unk_0B;
 } Unk800777AC;
 
 /* 0x80080ab4..0x80080aba, 0x7 bytes, 4 field(s) */
@@ -856,55 +905,62 @@ typedef struct Unk800777AC {
    an unaligned 6-byte type; the 4-byte-aligned spelling gives plain lw/sw.
    The "4-byte access at +0x3" fieldscan reported is the lwl half, not a
    field. */
-typedef struct Unk80080AB4 {
-    u8 unk_00[4];
-    u8 unk_04;
-    u8 unk_05;
+typedef struct Unk80080AB4
+{
+   u8 unk_00[4];
+   u8 unk_04;
+   u8 unk_05;
 } Unk80080AB4;
 
 /* 0x80081518..0x80081519, 0x2 bytes, 1 field(s) */
-typedef struct Unk80081518 {
-    u16 unk_00;  /* also read as 1 */
+typedef struct Unk80081518
+{
+   u16 unk_00; /* also read as 1 */
 } Unk80081518;
 
 /* 0x8008151a..0x8008151b, 0x2 bytes, 1 field(s) */
-typedef struct Unk8008151A {
-    u16 unk_00;  /* also read as 1 */
+typedef struct Unk8008151A
+{
+   u16 unk_00; /* also read as 1 */
 } Unk8008151A;
 
 /* 0x80081520..0x80081521, 0x2 bytes, 1 field(s) */
-typedef struct Unk80081520 {
-    u16 unk_00;  /* also read as 1 */
+typedef struct Unk80081520
+{
+   u16 unk_00; /* also read as 1 */
 } Unk80081520;
 
 /* 0x80081522..0x80081523, 0x2 bytes, 1 field(s) */
-typedef struct Unk80081522 {
-    u16 unk_00;  /* also read as 1 */
+typedef struct Unk80081522
+{
+   u16 unk_00; /* also read as 1 */
 } Unk80081522;
 
 /* 0x80082e60..0x80082e78, 0x19 bytes, 14 field(s); labels: D_80082E60, D_80082E64, D_80082E6A, D_80082E6B, D_80082E6E, D_80082E6F */
-typedef struct Unk80082E60 {
-    u32 unk_00;
-    void (*unk_04)(void);  /* called through */
-    /* Hand-made union: func_80040BB4 reads the byte at +0x08 and clears the
-       halfword, and the byte read has to be a plain field access or gcc bases
-       the whole function's addressing on D_80082E60+8 instead of the
-       struct. */
-    union {
-        u16 h;
-        u8  b;
-    } unk_08;
-    u8  unk_0A;
-    u8  unk_0B;
-    u8  unk_0C;
-    u8  unk_0D;
-    u8  unk_0E;
-    u8  unk_0F;
-    u16 unk_10;
-    u16 unk_12;
-    u16 unk_14;
-    u16 unk_16;
-    u8  unk_18;
+typedef struct Unk80082E60
+{
+   u32 unk_00;
+   void (*unk_04)(void); /* called through */
+   /* Hand-made union: func_80040BB4 reads the byte at +0x08 and clears the
+      halfword, and the byte read has to be a plain field access or gcc bases
+      the whole function's addressing on D_80082E60+8 instead of the
+      struct. */
+   union
+   {
+      u16 h;
+      u8 b;
+   } unk_08;
+   u8 unk_0A;
+   u8 unk_0B;
+   u8 unk_0C;
+   u8 unk_0D;
+   u8 unk_0E;
+   u8 unk_0F;
+   u16 unk_10;
+   u16 unk_12;
+   u16 unk_14;
+   u16 unk_16;
+   u8 unk_18;
 } Unk80082E60;
 
 /* 0x80083120..0x8008315f, 8 entries of 0x8 bytes; labels: D_80083120 */
@@ -913,90 +969,94 @@ typedef struct Unk80082E60 {
    an array of eight 8-byte entries, which func_8003F794 searches by index and
    func_8003D8B0 zeroes as 0x10 words. The scan's five fields are entry 6's
    first halfword and all four of entry 7's. */
-typedef struct Unk80083120 {
-    s16 unk_00;
-    s16 unk_02;
-    s16 unk_04;
-    s16 unk_06;
+typedef struct Unk80083120
+{
+   s16 unk_00;
+   s16 unk_02;
+   s16 unk_04;
+   s16 unk_06;
 } Unk80083120;
 
 /* 0x80083160..0x80083351, 0x1f2 bytes, 36 field(s); labels: D_80083160, D_80083164, D_80083208, D_80083178, D_8008333C */
-typedef struct Unk80083160 {
-    u8 *unk_00;  /* retyped by hand: compared against an address and indexed */
-    u16 unk_04;
-    u8 pad_06[0x2];
-    u32 unk_08;
-    u32 unk_0C;
-    u32 unk_10;
-    u8 pad_14[0x94];
-    /* the next 10 fields run at a constant 0x4 stride; this may be an array */
-    u32 unk_A8;
-    /* Hand-split: func_80046884 reads +0xAC..+0xB1 as a three-halfword position
-       vector and hands it to func_80046A5C. The +0xaf/+0xb3 "4-byte access"
-       notes fieldscan left here are the lwl/swl halves of func_80044724's
-       block moves over the same range -- see Unk80083178. */
-    u16 unk_AC;
-    u16 unk_AE;
-    u16 unk_B0;
-    u16 unk_B2;
-    u32 unk_B4;  /* also read as 2 */
-    /* +0xb6  is a 2-byte access inside this field */
-    /* +0xb7  is a 4-byte access inside this field */
-    /* Hand-split: func_8003DBD0 reads +0xB8 with lhu once and with lh once,
-       so it is a halfword, not the low half of a word. The 4-byte access
-       fieldscan reported at the misaligned +0xbb is an artifact. */
-    u16 unk_B8;
-    u16 unk_BA;
-    /* Hand-split from two u32s: func_8004D09C and func_8004D0E4 store three
-       consecutive HALFWORDS here (0xBC/0xBE/0xC0), which is what fieldscan's
-       "also read as 2" and "+0xbe is a 2-byte access" annotations were seeing.
-       The +0xbf/+0xc3 4-byte notes are the lwl/swl halves of a block move over
-       the same range, as with Unk80083178. */
-    u16 unk_BC;
-    u16 unk_BE;
-    u16 unk_C0;
-    u16 unk_C2;
-    /* Hand-split: func_8003DBD0 reads +0xC4 and +0xC6 with lh as the first two
-       components of the camera position, +0xC8 being the third. The 2-byte
-       access fieldscan reported at +0xc6 is exactly that. */
-    s16 unk_C4;
-    s16 unk_C6;
-    /* Hand-split: func_8003E02C reads +0xC8 with lh. The 4-byte access
-       fieldscan reported at the misaligned +0xcb is an artifact. */
-    s16 unk_C8;
-    u16 unk_CA;
-    u32 unk_CC;
-    u8 pad_D0[0x40];
-    u32 unk_110;
-    u8 pad_114[0x40];
-    u32 unk_154;
-    u8 pad_158[0x40];
-    u32 unk_198;
-    u8 pad_19C[0x40];
-    u32 unk_1DC;
-    u32 unk_1E0;
-    u32 unk_1E4;
-    u32 unk_1E8;
-    u32 unk_1EC;
-    u16 unk_1F0;
+typedef struct Unk80083160
+{
+   u8 *unk_00; /* retyped by hand: compared against an address and indexed */
+   u16 unk_04;
+   u8 pad_06[0x2];
+   u32 unk_08;
+   u32 unk_0C;
+   u32 unk_10;
+   u8 pad_14[0x94];
+   /* the next 10 fields run at a constant 0x4 stride; this may be an array */
+   u32 unk_A8;
+   /* Hand-split: func_80046884 reads +0xAC..+0xB1 as a three-halfword position
+      vector and hands it to func_80046A5C. The +0xaf/+0xb3 "4-byte access"
+      notes fieldscan left here are the lwl/swl halves of func_80044724's
+      block moves over the same range -- see Unk80083178. */
+   u16 unk_AC;
+   u16 unk_AE;
+   u16 unk_B0;
+   u16 unk_B2;
+   u32 unk_B4; /* also read as 2 */
+   /* +0xb6  is a 2-byte access inside this field */
+   /* +0xb7  is a 4-byte access inside this field */
+   /* Hand-split: func_8003DBD0 reads +0xB8 with lhu once and with lh once,
+      so it is a halfword, not the low half of a word. The 4-byte access
+      fieldscan reported at the misaligned +0xbb is an artifact. */
+   u16 unk_B8;
+   u16 unk_BA;
+   /* Hand-split from two u32s: func_8004D09C and func_8004D0E4 store three
+      consecutive HALFWORDS here (0xBC/0xBE/0xC0), which is what fieldscan's
+      "also read as 2" and "+0xbe is a 2-byte access" annotations were seeing.
+      The +0xbf/+0xc3 4-byte notes are the lwl/swl halves of a block move over
+      the same range, as with Unk80083178. */
+   u16 unk_BC;
+   u16 unk_BE;
+   u16 unk_C0;
+   u16 unk_C2;
+   /* Hand-split: func_8003DBD0 reads +0xC4 and +0xC6 with lh as the first two
+      components of the camera position, +0xC8 being the third. The 2-byte
+      access fieldscan reported at +0xc6 is exactly that. */
+   s16 unk_C4;
+   s16 unk_C6;
+   /* Hand-split: func_8003E02C reads +0xC8 with lh. The 4-byte access
+      fieldscan reported at the misaligned +0xcb is an artifact. */
+   s16 unk_C8;
+   u16 unk_CA;
+   u32 unk_CC;
+   u8 pad_D0[0x40];
+   u32 unk_110;
+   u8 pad_114[0x40];
+   u32 unk_154;
+   u8 pad_158[0x40];
+   u32 unk_198;
+   u8 pad_19C[0x40];
+   u32 unk_1DC;
+   u32 unk_1E0;
+   u32 unk_1E4;
+   u32 unk_1E8;
+   u32 unk_1EC;
+   u16 unk_1F0;
 } Unk80083160;
 
 /* 0x80083462..0x8008346b, 0xa bytes, 3 field(s) */
-typedef struct Unk80083462 {
-    u16 unk_00;
-    u8 pad_02[0x4];
-    u16 unk_06;
-    u16 unk_08;
+typedef struct Unk80083462
+{
+   u16 unk_00;
+   u8 pad_02[0x4];
+   u16 unk_06;
+   u16 unk_08;
 } Unk80083462;
 
 /* 0x80083958..0x80083963, 0xc bytes, 6 field(s); labels: D_80083958, D_8008395C, D_8008395E, D_80083960 */
-typedef struct Unk80083958 {
-    u32 unk_00;
-    u8  unk_04;
-    u8  unk_05;
-    u16 unk_06;
-    u16 unk_08;
-    u16 unk_0A;
+typedef struct Unk80083958
+{
+   u32 unk_00;
+   u8 unk_04;
+   u8 unk_05;
+   u16 unk_06;
+   u16 unk_08;
+   u16 unk_0A;
 } Unk80083958;
 
 /* 0x80083ca8..0x80083cb1, 0xa bytes, 4 field(s); labels: D_80083CA8, D_80083CAE */
@@ -1005,28 +1065,31 @@ typedef struct Unk80083958 {
    halfword at +0x06 on its own and func_800419EC writes it on its own, so the
    word is a 16.16 quantity and +0x06 is its integer part. Declared as the two
    halves; the word access needs a cast when func_80041900 is decompiled. */
-typedef struct Unk80083CA8 {
-    u32 unk_00;
-    u16 unk_04;
-    u16 unk_06;  /* read unsigned and sign-extended by func_80041900 */
-    u16 unk_08;
+typedef struct Unk80083CA8
+{
+   u32 unk_00;
+   u16 unk_04;
+   u16 unk_06; /* read unsigned and sign-extended by func_80041900 */
+   u16 unk_08;
 } Unk80083CA8;
 
 /* Hand-added. Three halfwords and two bytes of padding: the shape
    func_80044724 compares and copies the D_80083178+0x94 cache in. */
-typedef struct Unk44724Vec {
-    s16 unk_00;
-    s16 unk_02;
-    s16 unk_04;
-    u8  pad_06[0x2];
+typedef struct Unk44724Vec
+{
+   s16 unk_00;
+   s16 unk_02;
+   s16 unk_04;
+   u8 pad_06[0x2];
 } Unk44724Vec;
 
 /* The same 8 bytes with alignment 1, so an assignment comes out as the
    byte-aligned block move (two lwl/lwr plus two swl/swr pairs) rather than
    plain lw/sw. Same reason as Unk3E39C. */
-typedef struct Unk44724Blk {
-    u8 unk_00[4];
-    u8 unk_04[4];
+typedef struct Unk44724Blk
+{
+   u8 unk_00[4];
+   u8 unk_04[4];
 } Unk44724Blk;
 
 /* Hand-added. func_80044724 reaches the four vectors at +0x94 through a
@@ -1037,22 +1100,23 @@ typedef struct Unk44724Blk {
    odd-offset "4-byte access inside this field" notes, which are the lwl/swl
    halves of the block moves. The extent before +0x94 is unexplored space, not
    known filler. */
-typedef struct Unk80083178 {
-    u8          pad_00[0x94];
-    Unk44724Vec unk_94[4];   /* 8 bytes each, so this ends exactly at 0xB4 */
-    u32         unk_B4;      /* a callback, installed by func_8004D0C8/0x110 */
-    u32         unk_B8;
-    u8          pad_BC[0x1C];
-    u32         unk_D8;
+typedef struct Unk80083178
+{
+   u8 pad_00[0x94];
+   Unk44724Vec unk_94[4]; /* 8 bytes each, so this ends exactly at 0xB4 */
+   u32 unk_B4;            /* a callback, installed by func_8004D0C8/0x110 */
+   u32 unk_B8;
+   u8 pad_BC[0x1C];
+   u32 unk_D8;
 } Unk80083178;
-
 
 /* 0x20-byte MATRIX global. Must be declared larger than -G8 so cc1psx
    compiler-splits its address; as the existing `extern u32 D_8006CD30` it is a
    small symbol and gas would make it $gp-relative in this -G8 unit. */
-typedef struct Unk6CD30 {
-    u8  pad_00[0x1C];
-    s32 unk_1C;
+typedef struct Unk6CD30
+{
+   u8 pad_00[0x1C];
+   s32 unk_1C;
 } Unk6CD30;
 extern Unk6CD30 D_8006CD30;
 
@@ -1073,21 +1137,23 @@ extern Unk6CD30 D_8006CD30;
    same reason as Unk80084960 -- with `u8 D_80082660[]` and the +1 written
    inside the index, `fold` moves the constant onto the symbol and the load
    comes out as `lb 0x0` off a base of `%lo(D_80082660)+1`. */
-typedef struct Unk80082660 {
-    u8  unk_00;
-    s8  unk_01;
-    u8  pad_02[2];
-    u32 unk_04;
+typedef struct Unk80082660
+{
+   u8 unk_00;
+   s8 unk_01;
+   u8 pad_02[2];
+   u32 unk_04;
 } Unk80082660;
 
-typedef struct Unk80084960 {
-    u32 unk_00;
-    s32 unk_04;
-    u8  pad_08[4];
-    s32 unk_0C;
-    u8  pad_10[0xC];
-    s32 unk_1C;   /* masked to 0x7F on every store */
-    u8  pad_20[0x7C];
+typedef struct Unk80084960
+{
+   u32 unk_00;
+   s32 unk_04;
+   u8 pad_08[4];
+   s32 unk_0C;
+   u8 pad_10[0xC];
+   s32 unk_1C; /* masked to 0x7F on every store */
+   u8 pad_20[0x7C];
 } Unk80084960;
 
 /* Callbacks installed by the carved units, stored as function pointers. */
@@ -1110,36 +1176,37 @@ void func_80038464(u8 *);
    units' forced -G0 gives. */
 extern u32 D_8006ADB8[];
 extern u32 D_80083168[];
-extern u8  D_80071298[];
+extern u8 D_80071298[];
 extern u32 D_80071250[];
-extern u8  D_80083D08[];
+extern u8 D_80083D08[];
 /* The same table as a struct array, for the functions that reach a field at a
    constant offset off a VARIABLE index: through the byte array `fold` moves
    that offset onto the symbol (`addiu %lo(D_80083D08)+4`, `lhu 0x0`) where the
    target has it in the load's displacement. The functions that advance a
    pointer by 8 instead use the byte array and are unaffected. */
-typedef struct Unk80083D08 {
-    u32 unk_00;
-    u16 unk_04;
-    s16 unk_06;
+typedef struct Unk80083D08
+{
+   u32 unk_00;
+   u16 unk_04;
+   s16 unk_06;
 } Unk80083D08;
 extern Unk80083D08 D_80083D08s[] __asm__("D_80083D08");
-extern u8  D_8006ADBC[];
-extern u8  D_8007382B[];
-extern u8  D_800820A8[];
-extern u8  D_80081EB0[];
-extern u8  D_800713E4[];
+extern u8 D_8006ADBC[];
+extern u8 D_8007382B[];
+extern u8 D_800820A8[];
+extern u8 D_80081EB0[];
+extern u8 D_800713E4[];
 extern Unk80084960 D_80084960[];
 extern u32 D_80073734[];
-extern u8  D_8006AE1C[];
-extern u8  D_8006AE34[];
-extern u8  D_8006AE4C[];
-extern u8  D_8006AE64[];
-extern u8  D_8006AE7C[];
-extern u8  D_8006AEAC[];
-extern u8  D_80016000[];  /* out of image, reached as symbols (lui+addiu) */
-extern u8  D_80023000[];
-extern u8  D_8008152C[];
+extern u8 D_8006AE1C[];
+extern u8 D_8006AE34[];
+extern u8 D_8006AE4C[];
+extern u8 D_8006AE64[];
+extern u8 D_8006AE7C[];
+extern u8 D_8006AEAC[];
+extern u8 D_80016000[]; /* out of image, reached as symbols (lui+addiu) */
+extern u8 D_80023000[];
+extern u8 D_8008152C[];
 /* The same object as a scalar, for func_80047DB8: a 4-byte object's address is
    the one-insn `la` macro, where the incomplete array gets the compiler split.
    Three functions reach it $gp-relatively, so 4 bytes is also its real size. */
@@ -1147,56 +1214,59 @@ extern u32 D_8008152Cs __asm__("D_8008152C");
 /* Hand-added. A 0xC-byte entry; func_8005B2C8 scales an s16 index by 12 and
    reads the two halfwords at +0x08/+0x0A. A struct for the same reason as
    Unk80084960: the field offset must not migrate onto the symbol. */
-typedef struct Unk80086C00 {
-    s16 unk_00;  /* set to -1 by func_8005AFF4 */
-    s16 unk_02;  /* read with lh by func_8005C5D0 */
-    u32 unk_04;
-    u16 unk_08;
-    u16 unk_0A;
+typedef struct Unk80086C00
+{
+   s16 unk_00; /* set to -1 by func_8005AFF4 */
+   s16 unk_02; /* read with lh by func_8005C5D0 */
+   u32 unk_04;
+   u16 unk_08;
+   u16 unk_0A;
 } Unk80086C00;
 extern Unk80086C00 D_80086C00[];
 
 /* Hand-added. 0x50-byte entries, D_800869B4 of them live; func_8005C818 and
    func_80059D1C sweep fields across all of them. A struct because the field
    offsets must not migrate into the induction variable's base. */
-typedef struct Unk80085FA8 {
-    u32 unk_00;
-    u8  pad_04[0x1C];
-    u32 unk_20;
-    u32 unk_24;
-    u8  pad_28[4];
-    u32 unk_2C;
-    u8  pad_30[0x20];
+typedef struct Unk80085FA8
+{
+   u32 unk_00;
+   u8 pad_04[0x1C];
+   u32 unk_20;
+   u32 unk_24;
+   u8 pad_28[4];
+   u32 unk_2C;
+   u8 pad_30[0x20];
 } Unk80085FA8;
 extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
 
 /* Hand-added. 0x1C-byte entries indexed by D_80086D50; only +0x04 is observed,
    a base that func_80057A50 adds a computed offset to. */
-typedef struct Unk80086A40 {
-    s16  unk_00;  /* read with lh and compared against -1 */
-    u8   pad_02[0x2];
-    u8  *unk_04;
-    u8   pad_08[0x8];
-    u32  unk_10;
-    u8   pad_14[0x5];
-    u8   unk_19;
-    u8   unk_1A;
-    u8   unk_1B;
+typedef struct Unk80086A40
+{
+   s16 unk_00; /* read with lh and compared against -1 */
+   u8 pad_02[0x2];
+   u8 *unk_04;
+   u8 pad_08[0x8];
+   u32 unk_10;
+   u8 pad_14[0x5];
+   u8 unk_19;
+   u8 unk_1A;
+   u8 unk_1B;
 } Unk80086A40;
 extern Unk80086A40 D_80086A40[];
-extern u32 D_8006AFDC[];  /* four pointer tables, indexed by func_800B2834 */
+extern u32 D_8006AFDC[]; /* four pointer tables, indexed by func_800B2834 */
 extern u32 D_8006AFE8[];
 extern u32 D_8006AFF4[];
 extern u32 D_8006B000[];
 extern u8 *D_80080A90;
 extern u32 D_80082D58[];
-extern u8  D_800212DC[];  /* out of image, reached as a symbol (lui+addiu) */
-extern u8  D_80086CC0[];
+extern u8 D_800212DC[]; /* out of image, reached as a symbol (lui+addiu) */
+extern u8 D_80086CC0[];
 extern u32 D_800869B4;
-extern u8  D_80085FA8[];  /* 0x50-byte entries */
+extern u8 D_80085FA8[]; /* 0x50-byte entries */
 extern u32 D_8006B1A8[];
 extern u32 D_800814A8;
-extern u8  D_80083780[];
+extern u8 D_80083780[];
 extern u32 D_800847D4;
 extern s16 D_80086D50;
 extern u32 D_80085FA4[];
@@ -1206,35 +1276,36 @@ extern u32 D_800869B0[];
    slots, which a compiler-split lui/addiu pair would have filled. Only the
    size CLASS is evidence here (small enough for -G8); 8 is the top of that
    range and the exact size is unknown. */
-extern u8  D_80080F40[8];
-extern u8  D_80081010[8];
-extern u8  D_80080F60[8];
-extern u8  D_8006ADEC[];
+extern u8 D_80080F40[8];
+extern u8 D_80081010[8];
+extern u8 D_80080F60[8];
+extern u8 D_8006ADEC[];
 /* Sized, for the same reason as D_80080F40: in func_80049D80 and
    func_8005097C each address is the one-insn `la`, with the jal's delay slot
    filled by an argument move instead of by an `addiu %lo`. */
-extern u8  D_80080B54[8];
-extern u8  D_80080B88[8];
-extern u8  D_80080B90[8];
-extern u8  D_8006A908[];
+extern u8 D_80080B54[8];
+extern u8 D_80080B88[8];
+extern u8 D_80080B90[8];
+extern u8 D_8006A908[];
 extern u32 D_8006A8B4[];
 extern u32 D_8006CD50[];
-extern s8  D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
-extern u32 D_800DCF54[];  /* out of image, a table of function pointers */
-extern u8  D_80080B70[];
-extern u8  D_80082414[];
-extern u8  D_80081FDC[];
+extern s8 D_8006B1EC[];  /* a -1-terminated byte table scanned by func_8003C5A4 */
+extern u32 D_800DCF54[]; /* out of image, a table of function pointers */
+extern u8 D_80080B70[];
+extern u8 D_80082414[];
+extern u8 D_80081FDC[];
 extern s16 D_8006ADE8[];
 extern u32 D_8008099C;
 /* Hand-added. A 0x14-byte record whose +0x0C points at another 0x14-stride
    table; func_80042A80 indexes this one by p[0] and func_8004A940 and
    func_8004A658 index both. Was unit-local to csrc/unk_154BC.c until a second
    unit needed it. Only +0x00 and +0x0C are touched. */
-typedef struct Unk80073414 {
-    u8  unk_00;
-    u8  pad_01[0xB];
-    u8 *unk_0C;
-    u8  pad_10[0x4];
+typedef struct Unk80073414
+{
+   u8 unk_00;
+   u8 pad_01[0xB];
+   u8 *unk_0C;
+   u8 pad_10[0x4];
 } Unk80073414;
 extern Unk80073414 D_80073414[];
 extern u32 D_8006A944;
@@ -1245,129 +1316,131 @@ extern u32 D_80013628;
 
 /* $gp-relative in the carved units; see the `.sdata` size records at the top
    of csrc/unk_1C540.c and csrc/unk_72A8.c. */
-extern u32  D_80081550;
-extern u32  D_80081554;
-extern u32  D_80081558;
+extern u32 D_80081550;
+extern u32 D_80081554;
+extern u32 D_80081558;
 /* The four words func_8004D614 copies into the D_80083178 cache; $gp-relative
    in csrc/unk_1C540.c through that unit's sdata_entries block. */
 /* The 8-byte pair func_80053CFC fills with a struct copy and then rewrites the
    first word of; $gp-relative in csrc/unk_1C540.c. */
-typedef struct Unk80081568 {
-    u32 unk_00;
-    u32 unk_04;
+typedef struct Unk80081568
+{
+   u32 unk_00;
+   u32 unk_04;
 } Unk80081568;
-extern u8   D_80085458[];  /* 0x78-byte entries, D_80073734 of them live */
-extern s16  D_800847F0[];
-extern u8   D_80082D08[];  /* 6 entries of 8 bytes, 3 halfwords each */
-extern u8   D_80082040[];
-extern u8   D_80082538[];
-extern u8   D_80084478[];  /* 16 entries of 12 bytes, filled by func_80052A20 */
-extern u8   D_80084878[];  /* 0x40-byte entries of 16 words, filled by func_80055ADC */
-extern u32  D_80081568;
-extern u32  D_80080B58;
-extern u32  D_80080B5C;
-extern u32  D_80080B60;
-extern u32  D_80080B64;
-extern u32  D_80080B94;
-extern s32  D_80080B98;
-extern u8  *D_80081540;
-extern u8   D_80080B1B;
-extern u8   D_80080B1C;
-extern u8   D_80080B18[];
-extern u32  D_800737C0[];
-extern u32  D_80085F9C[];  /* the event handle func_8005863C closes */
+extern u8 D_80085458[]; /* 0x78-byte entries, D_80073734 of them live */
+extern s16 D_800847F0[];
+extern u8 D_80082D08[]; /* 6 entries of 8 bytes, 3 halfwords each */
+extern u8 D_80082040[];
+extern u8 D_80082538[];
+extern u8 D_80084478[]; /* 16 entries of 12 bytes, filled by func_80052A20 */
+extern u8 D_80084878[]; /* 0x40-byte entries of 16 words, filled by func_80055ADC */
+extern u32 D_80081568;
+extern u32 D_80080B58;
+extern u32 D_80080B5C;
+extern u32 D_80080B60;
+extern u32 D_80080B64;
+extern u32 D_80080B94;
+extern s32 D_80080B98;
+extern u8 *D_80081540;
+extern u8 D_80080B1B;
+extern u8 D_80080B1C;
+extern u8 D_80080B18[];
+extern u32 D_800737C0[];
+extern u32 D_80085F9C[]; /* the event handle func_8005863C closes */
 /* Byte strings the func_800588xx scanners compare against; out of image, and
    their addresses are materialised as held %hi registers. */
-extern u8   D_800330FC[];
-extern u8   D_80033104[];
-extern u8   D_800737D0[];
-extern u32  D_80085F98[];
-extern u32  D_80071660;
-extern u32  D_80071664[];
-extern u32  D_80071668[];
+extern u8 D_800330FC[];
+extern u8 D_80033104[];
+extern u8 D_800737D0[];
+extern u32 D_80085F98[];
+extern u32 D_80071660;
+extern u32 D_80071664[];
+extern u32 D_80071668[];
 /* The two primitive templates func_8004EFF4 and func_8004F068 copy out: the
    first word of each is read through the scalar spelling (an adjacent lui/lw
    pair) and the other two through the incomplete-array one, whose split pair
    the scheduler lifts above the byte stores. */
-extern u32  D_8007166C;
-extern u32  D_80071670[];
-extern u32  D_80071674[];
-extern u32  D_80071678;
-extern u32  D_8007167C[];
-extern u32  D_80071680[];
-extern u8   D_8007164C[];
-extern u32  D_80080B80;
-extern u32  D_80080B84;
-extern u32  D_80071654[];  /* handler table indexed by the state at +0x04 */
-extern u8   D_80071644[];
-extern u32  D_80083D98[];
+extern u32 D_8007166C;
+extern u32 D_80071670[];
+extern u32 D_80071674[];
+extern u32 D_80071678;
+extern u32 D_8007167C[];
+extern u32 D_80071680[];
+extern u8 D_8007164C[];
+extern u32 D_80080B80;
+extern u32 D_80080B84;
+extern u32 D_80071654[]; /* handler table indexed by the state at +0x04 */
+extern u8 D_80071644[];
+extern u32 D_80083D98[];
 /* Sized: func_8004DCA8 materialises its address with the one-insn `la`. */
-extern u8   D_80080B68[8];
-extern u32  D_800714A4[];  /* function pointers, indexed by D_80081550 */
+extern u8 D_80080B68[8];
+extern u32 D_800714A4[]; /* function pointers, indexed by D_80081550 */
 /* Sized: func_8004DCEC materialises its address with the one-insn `la`. */
-extern u8   D_80080B6C[8];
-extern s8   D_800DCF4D;
-extern u32  D_80081460;
-extern s32  D_80080A6C;
-extern u32  D_80081528;
-extern u8   D_8006B200[];
+extern u8 D_80080B6C[8];
+extern s8 D_800DCF4D;
+extern u32 D_80081460;
+extern s32 D_80080A6C;
+extern u32 D_80081528;
+extern u8 D_8006B200[];
 /* The same table as a struct array, for the functions that reach a field at a
    constant offset off a variable index: the struct also brings the base
    materialisation out first, which is the order these targets have. */
-typedef struct Unk8006B200 {
-    u32 unk_00;
-    u32 unk_04;
+typedef struct Unk8006B200
+{
+   u32 unk_00;
+   u32 unk_04;
 } Unk8006B200;
 
 /* A 0x40-byte word-aligned block, for the struct assignment func_8004D75C
    copies with: the size is what picks gcc's block_move_loop over an unrolled
    copy, and the word member is what lets it move words. */
-typedef struct Blk40 {
-    u32 w[0x10];
+typedef struct Blk40
+{
+   u32 w[0x10];
 } Blk40;
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
-extern u8   D_80119000[];
-extern u8   D_80126000[];
-extern u32 D_8002E5D8[];  /* a 4-word template */
+extern u8 D_80119000[];
+extern u8 D_80126000[];
+extern u32 D_8002E5D8[]; /* a 4-word template */
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];
-extern s16 D_8006A94C[];  /* s16 pairs, 0-terminated */
-extern u8  D_800809A8[];
-extern u8  D_800809B0[];
-extern u8  D_80080B50[];
-extern u8  D_800714B0[];
-extern u8  D_801B9000[];
+extern s16 D_8006A94C[]; /* s16 pairs, 0-terminated */
+extern u8 D_800809A8[];
+extern u8 D_800809B0[];
+extern u8 D_80080B50[];
+extern u8 D_800714B0[];
+extern u8 D_801B9000[];
 extern u32 D_80084538[];
 extern u32 D_800847C0[];
 extern u32 D_80084768[];
 extern s16 D_800848F8[];
-extern u8  D_80084918[];
+extern u8 D_80084918[];
 extern u32 D_800847DC;
 extern u32 D_80084758[];
 extern u32 D_8008475C[];
 extern u32 D_80084760[];
 extern u32 D_80084764[];
-void CdMix(void *);
-extern u8  D_80084858[];
-extern u8  D_800821CC[];
-extern u8  D_80081F14[];
+extern u8 D_80084858[];
+extern u8 D_800821CC[];
+extern u8 D_80081F14[];
 extern s32 D_800D0728[];
-extern u16 D_8007142C[];  /* 0-terminated key table; D_8007147C is its values */
-extern u8  D_8007147C[];
+extern u16 D_8007142C[]; /* 0-terminated key table; D_8007147C is its values */
+extern u8 D_8007147C[];
 extern u32 D_80073740[];
-extern u8  D_80080B20[];
-extern u8  D_800712FC[];
+extern u8 D_80080B20[];
+extern u8 D_800712FC[];
 extern u32 D_80084904;
 extern u32 D_80084904a[] __asm__("D_80084904");
 extern u32 D_80071FF0[];
 extern u32 D_800847D0[];
-extern u8  D_80080B34[];
-extern u8  D_80080B40[];
-extern u8  D_800816C0[];  /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
-extern u8  D_8007216C[];  /* byte lookup table indexed by a byte */
+extern u8 D_80080B34[];
+extern u8 D_80080B40[];
+extern u8 D_800816C0[]; /* 0x14 entries of 0x64 bytes, walked by func_80033BE4 */
+extern u8 D_8007216C[]; /* byte lookup table indexed by a byte */
 extern u32 D_80080A80;
 extern u32 D_8006B008[];
-extern u32 D_800D0858[];  /* out of image, but lui+addiu: a SYMBOL */
+extern u32 D_800D0858[]; /* out of image, but lui+addiu: a SYMBOL */
 extern Unk80082660 D_80082660[];
 /* Out of image. Compared against pointers stored in a block, so they are
    addresses; reached as incomplete arrays, which is the lui/addiu pair the
@@ -1377,28 +1450,28 @@ extern u32 D_800C321C[];
 extern u32 D_800C3960[];
 /* Out of image: a 9-byte table func_80038C40 copies to its stack with
    lwl/lwr, so byte-aligned. */
-extern u8  D_8002D000[];
-extern u8  D_8002D010[];
-extern u8  D_8002D020[];
-extern s8  D_8002D03C[];
+extern u8 D_8002D000[];
+extern u8 D_8002D010[];
+extern u8 D_8002D020[];
+extern s8 D_8002D03C[];
 extern u32 D_8006ADC0[];
-extern u8  D_800812C8[];
-extern u8  D_800812D0[];
+extern u8 D_800812C8[];
+extern u8 D_800812D0[];
 extern u32 D_800737A4[];
 extern u32 D_80073824[];
-extern u8  D_800712AC[];
-extern u8  D_800712B0[];
+extern u8 D_800712AC[];
+extern u8 D_800712B0[];
 extern u32 D_8007361C[];
-extern u8  D_80080B48[];
+extern u8 D_80080B48[];
 extern Unk41284 D_80080B9C;
 extern Unk41284 D_80080C1C;
-extern u8  D_80071684[];
-extern u8  D_800717B4[];
-extern u32 D_8007179C[];  /* a handler table indexed by the state at +0x1C */
-extern u8  D_800717BC[];
+extern u8 D_80071684[];
+extern u8 D_800717B4[];
+extern u32 D_8007179C[]; /* a handler table indexed by the state at +0x1C */
+extern u8 D_800717BC[];
 extern s16 D_8008480A[];
-extern u8  D_800FC000[];
-extern u8  D_800713FC[];
+extern u8 D_800FC000[];
+extern u8 D_800713FC[];
 /* Hand-added. A pointer to a table of 20-byte entries; func_8004AC18 scales an
    index by 20 and reads +0x04. Declared as an incomplete ARRAY of pointers and
    read as D_8007359C[0] because cc1psx runs at -G8 over this whole project: a
@@ -1408,28 +1481,29 @@ extern u8  D_800713FC[];
    two index instructions between them, which only the compiler-split form --
    an object cc1psx cannot judge small -- allows. The original unit was
    presumably compiled at -G0, where every symbol takes that form. */
-typedef struct Unk7359C {
-    u32 unk_00;
-    u32 unk_04;
-    u8  pad_08[0xC];
+typedef struct Unk7359C
+{
+   u32 unk_00;
+   u32 unk_04;
+   u8 pad_08[0xC];
 } Unk7359C;
 extern Unk7359C *D_8007359C[];
-extern u8  D_800717D0[];
-extern u8  D_800717E8[];
+extern u8 D_800717D0[];
+extern u8 D_800717E8[];
 extern s16 D_8008480C[];
 extern s16 D_80083D78[];
 extern u32 D_800712B4[];
-extern s16 D_80082A38[];   /* lh at +0xAC/+0xAE, so signed */
+extern s16 D_80082A38[]; /* lh at +0xAC/+0xAE, so signed */
 /* The same object as u32s, for the five-slot queue at +0x48; func_80035378
    indexes it 10..14 with the +0x48 left as a displacement. */
 extern u32 D_80082A38w[] __asm__("D_80082A38");
-extern u32 D_80082AB8[];   /* the queue's last slot, reached as its own symbol */
+extern u32 D_80082AB8[]; /* the queue's last slot, reached as its own symbol */
 extern u32 D_80083170[];
 extern s16 D_800847F6[];
 extern u32 D_80085FCC[];
 extern u16 D_80073828[];
-extern u8  D_8007382A[];
-extern u8  D_80082B4B[];
+extern u8 D_8007382A[];
+extern u8 D_80082B4B[];
 extern u32 D_800737A8[];
 extern u32 D_800869C0[];
 extern u32 D_80084130[];
@@ -1438,22 +1512,22 @@ extern s16 D_80084808[];
 extern u32 D_80086D4C[];
 extern u32 D_80073470;
 extern u32 D_80080A7C;
-extern u8  D_80080A84;
-extern u8  D_80080A85;
-extern u8  D_80080A86;
-extern u8  D_80080A87;
-extern s8  D_80080A88;  /* retyped: read with lb */
-extern s8  D_80080A89;  /* retyped: read with lb, not lbu */
-extern u8  D_80080A8A;
+extern u8 D_80080A84;
+extern u8 D_80080A85;
+extern u8 D_80080A86;
+extern u8 D_80080A87;
+extern s8 D_80080A88; /* retyped: read with lb */
+extern s8 D_80080A89; /* retyped: read with lb, not lbu */
+extern u8 D_80080A8A;
 extern u32 D_80080A8C;
 extern s16 D_80080A94;
 extern s16 D_80080A98;
 extern u16 D_80080A9C;
-extern u8  D_80080AA0;
+extern u8 D_80080AA0;
 extern u16 D_80080AA4;
 extern u16 D_80080AA6;
 extern u16 D_80080AA8;
-extern u8  D_80080AAA;
+extern u8 D_80080AAA;
 extern u16 D_80080AAC;
 extern u32 D_80080AB0;
 /* Retyped u16 -> s16: func_8003D92C is the only function that touches either,
@@ -1466,17 +1540,17 @@ extern s16 D_80080ABC;
 extern s16 D_80080ABE;
 /* Only their addresses are taken, by func_8003E1FC; declared as bytes so that
    the address comes out as an `la` of the symbol rather than a split pair. */
-extern u8  D_80080AC0;
-extern u8  D_80080AC8;
-extern u8  D_80080AD0;
+extern u8 D_80080AC0;
+extern u8 D_80080AC8;
+extern u8 D_80080AD0;
 extern u16 D_80080AD2;
 extern u16 D_80080AD4;
 extern u32 D_80080AD8;
 extern u32 D_80080ADC;
 /* Indexed by a variable in func_8004425C, so the whole address has to be
    materialised: an incomplete array, not a scalar. */
-extern u8  D_80080AF0[];
-extern u8  D_80080AF3;
+extern u8 D_80080AF0[];
+extern u8 D_80080AF3;
 /* SIGNED: func_8004437C reads it with `lh` at all four comparison sites. It
    also needs one `lhu`, which `(u16) D_80080AFC ^ 1` gives at that one site --
    a (s16) cast on a u16 would be folded away where the value only feeds a zero
@@ -1492,8 +1566,8 @@ extern u16 D_80080B08;
 extern u16 D_80080B0A;
 /* Only its address is taken, by func_800418B4; a byte for the same reason as
    D_80080AC0 above. */
-extern u8  D_80080C50;
-extern s16 D_8008146C;  /* retyped: read with lh, not lhu */
+extern u8 D_80080C50;
+extern s16 D_8008146C; /* retyped: read with lh, not lhu */
 /* Retyped by hand from the two-field struct fieldscan inferred: func_80045310
    picks one of the two words with a pointer bump, and func_8003D760 stores to
    both through a register base. Two elements are known; the extent is left
@@ -1511,48 +1585,51 @@ extern u32 D_80081494;
 /* Hand-added. Reached through UnkNode.unk_08: three words advanced by three
    more, which reads as a position and a velocity. Named for offsets only --
    that reading is an inference, not evidence. */
-typedef struct UnkVec {
-    s32 unk_00;
-    s32 unk_04;
-    s32 unk_08;
-    s32 unk_0C;
-    s32 unk_10;
-    s32 unk_14;
+typedef struct UnkVec
+{
+   s32 unk_00;
+   s32 unk_04;
+   s32 unk_08;
+   s32 unk_0C;
+   s32 unk_10;
+   s32 unk_14;
 } UnkVec;
 
-typedef struct UnkNode {
-    struct UnkNode  *unk_00;   /* next */
-    struct UnkNode **unk_04;   /* points at whatever links to this node */
-    UnkVec          *unk_08;
-    u32              unk_0C;
-    u32              unk_10;   /* compared against a caller's argument, and
-                                  called through elsewhere, so a function
-                                  pointer -- left as u32 until that is used */
-    /* Hand-split out of pad_14: func_80044A50 unlinks the node from a second
-       list threaded through these two, and reaches the neighbour's +0x00 or
-       +0x18 depending on whether it lies inside D_800833E0. */
-    struct UnkNode  *unk_14;
-    struct UnkNode  *unk_18;
-    u16              unk_1C;   /* indexes D_800833E0 in func_80044AAC */
-    u16              unk_1E;   /* flags */
+typedef struct UnkNode
+{
+   struct UnkNode *unk_00;  /* next */
+   struct UnkNode **unk_04; /* points at whatever links to this node */
+   UnkVec *unk_08;
+   u32 unk_0C;
+   u32 unk_10; /* compared against a caller's argument, and
+                  called through elsewhere, so a function
+                  pointer -- left as u32 until that is used */
+   /* Hand-split out of pad_14: func_80044A50 unlinks the node from a second
+      list threaded through these two, and reaches the neighbour's +0x00 or
+      +0x18 depending on whether it lies inside D_800833E0. */
+   struct UnkNode *unk_14;
+   struct UnkNode *unk_18;
+   u16 unk_1C; /* indexes D_800833E0 in func_80044AAC */
+   u16 unk_1E; /* flags */
 } UnkNode;
 
 extern UnkNode D_80082D38;
 
 /* Hand-made. The 0x20 bytes immediately after an UnkNode: func_80044144
    allocates a node and fills this payload through a pointer to n + 1. */
-typedef struct Unk44144 {
-    u32 unk_00;
-    u32 unk_04;
-    s16 unk_08;
-    s16 unk_0A;
-    s16 unk_0C;
+typedef struct Unk44144
+{
+   u32 unk_00;
+   u32 unk_04;
+   s16 unk_08;
+   s16 unk_0A;
+   s16 unk_0C;
 } Unk44144;
 
 extern UnkNode *D_80081498;
 extern u32 D_800814A0;
-extern u8  D_800814A4;
-extern u8  D_800814AC;
+extern u8 D_800814A4;
+extern u8 D_800814AC;
 /* Array-spelled, and the single element is the point: func_8003F2A4 stores to
    both of these and reads arg0->unk_04 twice around them. As plain scalars the
    store is a non-struct reference at a non-varying address, true_dependence's
@@ -1564,14 +1641,14 @@ extern u8  D_800814AC;
 extern u32 D_800814B0[1];
 /* A CdlLOC that func_8003F55C fills with CdControl and converts; four bytes,
    so its address comes out as an `la`. */
-extern u8  D_800814B8[4];
+extern u8 D_800814B8[4];
 extern u32 D_800814B4[1];
 extern u32 D_800814C8;
 extern u32 D_800814CC;
 /* Retyped by hand from the four-field struct fieldscan inferred: func_8003F270
    reads elements 1 and 0, and gcc reuses the address of element 1 with a -1
    displacement to reach element 0. */
-extern u8  D_800814D0[4];
+extern u8 D_800814D0[4];
 /* The three bytes above it, declared separately as well as being elements of
    the array. They really are their own objects: func_8003E34C reaches
    D_800814D0 $gp-relatively and these three absolutely in the same function,
@@ -1587,11 +1664,11 @@ extern u8  D_800814D0[4];
    `build_array_ref` turns indexing a non-decl into an INDIRECT_REF, whose
    MEM_IN_STRUCT_P is AGGREGATE_TYPE_P(type), i.e. 0 for a byte. Measured
    byte-identical for func_8003E34C, the only other user. */
-extern u8  D_800814D1;
-extern u8  D_800814D2[1];
-extern u8  D_800814D3[1];
-extern u8  D_800814D4;
-extern s32 *D_800814E0;  /* retyped by hand: dereferenced and bumped */
+extern u8 D_800814D1;
+extern u8 D_800814D2[1];
+extern u8 D_800814D3[1];
+extern u8 D_800814D4;
+extern s32 *D_800814E0; /* retyped by hand: dereferenced and bumped */
 extern u16 D_800814E8;
 /* func_800437A4 fills the first two words through func_8003F6D4 and returns
    its address; eight bytes, so the address comes out as an `la`. */
@@ -1607,19 +1684,20 @@ extern u32 D_80081508;
    splits the address itself. Same hazard class as D_80082E6E. */
 extern u32 *D_80080AF4[];
 
-extern u32 *D_8006E704[];   /* pointer table, stride 4, indexed by an s16 */
-extern u8   D_801BEE40[];   /* out of image, but lui+addiu: a SYMBOL, not a
-                               constant address -- see matching-levers s6 */
-extern u8   D_801C4640[];
+extern u32 *D_8006E704[]; /* pointer table, stride 4, indexed by an s16 */
+extern u8 D_801BEE40[];   /* out of image, but lui+addiu: a SYMBOL, not a
+                             constant address -- see matching-levers s6 */
+extern u8 D_801C4640[];
 
 /* 0x8006E6F4: two buffers per entry, stride 8 (func_8004450C scales by 8).
    NOTE for whoever lays this region out: D_8006E6F4 (stride 8) and
    D_8006E704 (stride 4) are only 0x10 apart, and D_8006E6F4 falls exactly at
    &D_8006E61C[18] of the existing 12-byte table -- so it is worth checking
    which of the three tables really ends where. */
-typedef struct Unk8006E6F4 {
-    u8 *unk_00;
-    u8 *unk_04;
+typedef struct Unk8006E6F4
+{
+   u8 *unk_00;
+   u8 *unk_04;
 } Unk8006E6F4;
 extern Unk8006E6F4 D_8006E6F4[];
 extern u32 D_80081510;
@@ -1635,7 +1713,7 @@ extern u16 D_80081526;
    reads four bytes of each through a materialised base with displacements,
    which only happens for a symbol past the -G8 limit, so these are buffers of
    unestablished length rather than 4-byte objects. */
-extern u8  D_800830C0[];
+extern u8 D_800830C0[];
 /* Hand-added. func_8003D5A4 bzeroes 8 bytes here. An array, so the address
    comes out as a single `la`. */
 extern u32 D_80081468[2];
@@ -1645,11 +1723,11 @@ extern u32 D_80081468[2];
    them as scalars swaps those two registers. They are symbol addresses, not
    integer constants -- the target materialises them with lui + addiu, where
    a constant would be lui + ori. */
-extern u8  D_801D8D7A[];
-extern u8  D_801E964E[];
-extern u8  D_800830E8[];
+extern u8 D_801D8D7A[];
+extern u8 D_801E964E[];
+extern u8 D_800830E8[];
 extern u32 D_80082EC0[0x80];
-extern u32 D_80083110[4];  /* zeroed by index in func_8003D8B0 */
+extern u32 D_80083110[4]; /* zeroed by index in func_8003D8B0 */
 /* Retyped by hand from the two-field struct fieldscan inferred: func_80043674
    fills it in a loop and func_8004383C indexes it, so the two observed
    offsets are elements 0 and 1, not named fields. Extent not established. */
@@ -1704,9 +1782,9 @@ extern u8 D_80080AB4[];
    enters into it -- measured at 109 words / 39 differing. The old
    Unk80081450 typedef was the fieldscan's guess at the same four bytes and is
    now gone. */
-extern u8  D_80081450[4];
-extern u8  D_80081451;
-extern u8  D_80081452;
+extern u8 D_80081450[4];
+extern u8 D_80081451;
+extern u8 D_80081452;
 extern Unk80081518 D_80081518;
 extern Unk8008151A D_8008151A;
 extern Unk80081520 D_80081520;
@@ -1773,21 +1851,23 @@ extern u8 D_80082E6E[];
 /* The u32 members are only there for the alignment: func_80042640 reads
    +0x00, +0x01, +0x04 and +0x05 as bytes, and an all-u8 spelling would drop
    the alignment to 1 and turn the block assignment into lwl/lwr pairs. */
-typedef struct UnkTemplate {
-    u8  unk_00;
-    u8  unk_01;
-    u8  pad_02[0x2];
-    u8  unk_04;
-    u8  unk_05;
-    u8  pad_06[0x2];
-    u32 unk_08;
-    u32 unk_0C;
-    u32 unk_10;
+typedef struct UnkTemplate
+{
+   u8 unk_00;
+   u8 unk_01;
+   u8 pad_02[0x2];
+   u8 unk_04;
+   u8 unk_05;
+   u8 pad_06[0x2];
+   u32 unk_08;
+   u32 unk_0C;
+   u32 unk_10;
 } UnkTemplate;
 
-typedef struct Unk8006D168 {
-    UnkTemplate unk_00;
-    u32         unk_14;
+typedef struct Unk8006D168
+{
+   UnkTemplate unk_00;
+   u32 unk_14;
 } Unk8006D168;
 extern Unk8006D168 D_8006D168[];
 extern u8 D_8006D160[];
@@ -1797,50 +1877,53 @@ extern u32 D_8006D6D8[];
 /* Hand-added. A table func_8003F9E0 walks until the first word is zero,
    passing the word and the two halfwords to func_8003F80C. The 0xC stride is
    measured; +0x08 is never touched. Named positionally. */
-typedef struct UnkEntry {
-    u32 unk_00;
-    u16 unk_04;
-    u16 unk_06;
-    u32 unk_08;
+typedef struct UnkEntry
+{
+   u32 unk_00;
+   u16 unk_04;
+   u16 unk_06;
+   u32 unk_08;
 } UnkEntry;
 
 /* Hand-added. func_8003DB94 indexes an array of these by a signed halfword
    and stores the resulting pointer, so the element is 8 bytes. */
-typedef struct UnkElem {
-    u8  unk_00;
-    u8  pad_01[3];
-    u32 unk_04;
+typedef struct UnkElem
+{
+   u8 unk_00;
+   u8 pad_01[3];
+   u32 unk_04;
 } UnkElem;
 
 /* Hand-added. The destination func_8003DB94 fills in. Distinct from UnkNode:
    its flag halfword is at +0x14, not +0x1e. */
-typedef struct UnkSlot {
-    UnkElem *unk_00;
-    s8       unk_04;
-    u8       unk_05;
-    s16      unk_06;
-    u32      unk_08;
-    /* Hand-split: func_800463EC hands the first four bytes to func_80065034
-       and reads +0x10 and +0x12 as halfwords (a palette index and a texture
-       page offset, both added into the primitive). func_80044D24 reads
-       +0x0C as a whole word and writes the byte at +0x0F on its own, so this
-       range may want further splitting when that one lands. */
-    u8       unk_0C[0x4];
-    u16      unk_10;
-    u16      unk_12;
-    u16      unk_14;   /* flags */
-    /* Hand-split: func_8003DBD0 copies +0x16..+0x23 into the scratchpad as a
-       rotation (unk_16/unk_18/unk_1A), a scale (unk_1C/unk_1E) and a
-       translation (unk_20/unk_22), all read with lhu. */
-    u16      unk_16;
-    u16      unk_18;
-    u16      unk_1A;
-    u16      unk_1C;
-    u16      unk_1E;
-    u16      unk_20;
-    u16      unk_22;
-    u8       pad_24[0x4];
-    u32      unk_28;   /* a pointer; left as u32 like unk_08 */
+typedef struct UnkSlot
+{
+   UnkElem *unk_00;
+   s8 unk_04;
+   u8 unk_05;
+   s16 unk_06;
+   u32 unk_08;
+   /* Hand-split: func_800463EC hands the first four bytes to func_80065034
+      and reads +0x10 and +0x12 as halfwords (a palette index and a texture
+      page offset, both added into the primitive). func_80044D24 reads
+      +0x0C as a whole word and writes the byte at +0x0F on its own, so this
+      range may want further splitting when that one lands. */
+   u8 unk_0C[0x4];
+   u16 unk_10;
+   u16 unk_12;
+   u16 unk_14; /* flags */
+   /* Hand-split: func_8003DBD0 copies +0x16..+0x23 into the scratchpad as a
+      rotation (unk_16/unk_18/unk_1A), a scale (unk_1C/unk_1E) and a
+      translation (unk_20/unk_22), all read with lhu. */
+   u16 unk_16;
+   u16 unk_18;
+   u16 unk_1A;
+   u16 unk_1C;
+   u16 unk_1E;
+   u16 unk_20;
+   u16 unk_22;
+   u8 pad_24[0x4];
+   u32 unk_28; /* a pointer; left as u32 like unk_08 */
 } UnkSlot;
 
 /* Hand-added signatures for callees that live in another unit. */
@@ -1852,7 +1935,7 @@ void func_8004437C(s32, s32);
 void func_8004425C(s16);
 Unk8006CE34 *func_8003F534(void);
 void func_8003F540(u32, u32, u32, u32);
-s16  func_80053DA8(u16);
+s16 func_80053DA8(u16);
 void func_80041284(Unk41284 *);
 /* It does return a value -- five paths return func_8003E39C's result and the
    rest return NULL. The old `void` was an inference from the call sites: all
@@ -1870,8 +1953,8 @@ void func_8003CB08(void);
 void func_80044618(s32);
 void func_8003F320(void);
 void func_8003F5E0(u32);
-s16  func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
-s32  func_8004491C(UnkNode *, u32);
+s16 func_80046AFC(Unk46AFC *, Unk46AFC *, Unk46AFC *, s16);
+s32 func_8004491C(UnkNode *, u32);
 Unk80083968 *func_8003E39C(u8, s32, void *);
 void func_8003E34C(void);
 void func_80053F98(void);
@@ -1881,22 +1964,22 @@ void func_80053E14(s16);
 void func_8006A444(void);
 void func_80064688(void);
 void func_80046E38(s16, u8 *);
-s32  func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
-s32  func_80044724(void);
+s32 func_80046C20(Unk46C20A *, Unk46C20B *, u16 *);
+s32 func_80044724(void);
 void func_80043A68(void);
 void func_80043B4C(void);
 void func_80042710(Unk42710 *, Unk42710 *);
 void func_80042640(Unk42710 *, s16);
 void func_8003F8F8(Unk3F8F8 *);
 void func_80043674(void);
-s16  func_8005405C(s16);
-s32  func_800A1BD0(u8 *);
+s16 func_8005405C(s16);
+s32 func_800A1BD0(u8 *);
 
 void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
 void func_800407C0(u8 *, u32 *);
-u8  *func_8004068C(u8 *, u8 *);
+u8 *func_8004068C(u8 *, u8 *);
 void func_80043568(void);
 void func_800542BC(void);
 void func_80044B48(void);
@@ -1907,17 +1990,17 @@ void func_800AC3EC(void);
 void func_800A48F0(s8 *, s8, s8);
 void func_800AC4C4(void);
 void func_8003F9E0(UnkEntry *);
-s32  func_800429E4(u8 *);
+s32 func_800429E4(u8 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
 void func_80042BDC(s8 *, s16);
 void func_800482C8(Unk800777AC *, u32 *);
 void func_8005FFFC(void);
-s32  func_80064584(s32);
-s32  func_800644B8(s32);
+s32 func_80064584(s32);
+s32 func_800644B8(s32);
 void func_801768AC(void);
-u8  *func_8004CAE8(u8 *, s32);
-s32  func_80053428(Unk80083120 *);
-s32  func_80053604(Unk80083120 *);
+u8 *func_8004CAE8(u8 *, s32);
+s32 func_80053428(Unk80083120 *);
+s32 func_80053604(Unk80083120 *);
 void func_8004EB30(void);
 extern u8 D_80126804;
 
@@ -1925,88 +2008,6 @@ extern u8 D_80126804;
    the MIPS abssi2 pattern is the only way to get the target's
    `bgez / addu / negu` shape (func_8003F6F4). */
 int abs(int);
-
-/* Hand-added. PSY-Q library entry points, declared here until the project has
-   a header of its own for them. */
-void _bu_init(void);
-void InitPAD(u8 *, s32, u8 *, s32);
-void ChangeClearPAD(s32);
-s32  VSync(s32);
-s32  CdInit(void);
-s32  func_80053EF0(s32);
-s32  func_8004450C(s16);
-s32  CdSync(s32, u8 *);
-s32  CdControl(u8, u8 *, u8 *);
-s32  CdControlF(u8, u8 *);
-s32  CdRead(s32, u32 *, s32);
-s32  CdRead2(s32);
-s32  CdReset(s32);
-s32  CdReadSync(s32, u8 *);
-void StUnSetRing(void);
-/* CdIntToPos, at 0x8006124C -- outside the extracted code. */
-void func_8006124C(s32, u8 *);
-s32  CdControlB(u8, u8 *, u8 *);
-s32  CdPosToInt(u8 *);
-/* libc. */
-u8  *strncpy(u8 *, u8 *, s32);
-/* libgpu/libetc graphics setup. */
-void SetVideoMode(s32);
-void ResetGraph(s32);
-void SetGraphDebug(s32);
-/* libgte. The MATRIX / SVECTOR / VECTOR parameters are left as void * until
-   the project models those types; only the pointer-ness matters to the
-   generated code. */
-void PushMatrix(void);
-void PopMatrix(void);
-void SetTransMatrix(void *);
-void SetRotMatrix(void *);
-void RotMatrix(void *, void *);
-void TransMatrix(void *, void *);
-void CompMatrix(void *, void *, void *);
-s32  RotAverage4(void *, void *, void *, void *, s32 *, s32 *, s32 *, s32 *, s32 *, s32 *);
-s32  NormalClip(s32, s32, s32);
-void SetPolyFT4(void *);
-void ScaleMatrix(void *, void *);
-void RotTransSV(void *, void *, s32 *);
-void DrawPrim(void *);
-void RotTrans(void *, void *, s32 *);
-void ReadRotMatrix(void *);
-void *TransposeMatrix(void *, void *);
-void ApplyMatrixSV(void *, void *, void *);
-/* Returns the averaged projected z. Declared s32 (not void) because
-   func_800453E0 uses the return value as an OT index. */
-s32 RotTransPers(void *, void *, void *, void *);
-s32 RotTransPers4(void *, void *, void *, void *, void *, void *, void *,
-                  void *, void *, void *);
-/* libgpu. The RECT parameter is a four-halfword x/y/w/h, left as s16 * for
-   the same reason. */
-void StoreImage(void *, u32 *);
-void LoadImage(void *, u32 *);
-void MoveImage(void *, s32, s32);
-/* libapi. */
-s32  OpenEvent(u32, s32, s32, void *);
-s32  EnableEvent(s32);
-s32  SetRCnt(u32, u16, s32);
-s32  StartRCnt(u32);
-void EnterCriticalSection(void);
-void ExitCriticalSection(void);
-s32  rand(void);
-void AddPrim(void *, void *);
-s32  DrawSync(s32);
-void ClearImage(void *, u8, u8, u8);
-void *SetDefDrawEnv(void *, s32, s32, s32, s32);
-void *SetDefDispEnv(void *, s32, s32, s32, s32);
-void *ClearOTagR(void *, s32);
-void SetDispMask(s32);
-void PutDispEnv(void *);
-void PutDrawEnv(void *);
-void DrawOTag(void *);
-/* libetc root counters. GetRCnt's return has to be signed: func_80041CBC
-   computes `(GetRCnt(1) + 0xFF) >> 8` and the target has `sra`. */
-s32  GetRCnt(s32);
-void ResetRCnt(s32);
-/* libc, from the PSY-Q runtime. */
-void bzero(void *, s32);
 
 /* func_8003CCB0's 14 glyph records, 0xE of 0xC bytes, and the 14 characters it
    names them with. D_80083798 sits at gp + 0x2E04, INSIDE the window, so the
@@ -2021,8 +2022,8 @@ extern u8 D_8006CDB8[0xE];
    materialised the struct base; `D_80083958.unk_04` links to the same bytes,
    but verify.py then flags six differing relocation addends. Same hazard class
    as D_80083164. */
-extern u8  D_800814D8[8];
-extern u8  D_8008395C[];
+extern u8 D_800814D8[8];
+extern u8 D_8008395C[];
 extern u16 D_8008395E[];
 void *memcpy(void *, const void *, u32);
 
@@ -2038,7 +2039,7 @@ extern u32 *D_8006CDC8[];
 /* Declared as an array of unestablished length: func_8003D7DC derives
    addresses inside it with `addiu`, which only happens when the base is a
    lo_sum in a register, and nothing can fold a constant into a lo_sum. */
-extern u8  D_801C9E40[];
+extern u8 D_801C9E40[];
 /* Out-of-image neighbours of D_801C9E40: the two whose addresses are only
    taken stay scalars so they come out as an `la`, D_801DA72C is reached with
    a compiler-split store so it must be past the -G8 limit, and D_801EAFE8 is
@@ -2049,20 +2050,20 @@ extern u32 D_801DA714;
 extern u32 D_801DA784;
 extern u32 D_801DA770;
 extern u32 D_801DA72C[];
-extern u8  D_801EAFE8[];
+extern u8 D_801EAFE8[];
 
 /* Hand-added. Outside the loaded image, so fieldscan excludes it; splat's
    undefined_syms_auto resolves it for the linker. */
-extern u16 D_80013714;  /* read with lhu */
+extern u16 D_80013714; /* read with lhu */
 /* Hand-added, same situation. Reached without an index, where the symbol and
    the equivalent constant address assemble to the same bytes; a table outside
    the image that is *indexed* must be written as a constant address instead,
    see docs/addressing-and-translation-units.md. */
-extern u8  D_800E2968;
+extern u8 D_800E2968;
 /* Declared as an array of unestablished length, not a scalar: func_80040CBC
    needs the compiler-split high/lo_sum pair so reorg can put the `addiu` in a
    delay slot, where a scalar's single `la` macro cannot be split. */
-extern u8  D_800E6000[];
+extern u8 D_800E6000[];
 /* Out-of-image scalars func_80040CBC stores two pointers into; the
    assembler-expanded $at form the scalar spelling gives is what the target
    has. */
@@ -2075,7 +2076,7 @@ extern u32 D_801B8EB8;
 extern u32 D_8008333C[];
 /* 0x80083cae is Unk80083CA8's unk_06; func_80041900 reaches it as its own
    symbol rather than through the struct, so it is declared both ways. */
-extern u16 D_80083CAE[];  /* incomplete: the two arms share one `lui` */
+extern u16 D_80083CAE[]; /* incomplete: the two arms share one `lui` */
 
 /* Hand-added. func_80043914 indexes this with a 0x8C stride and reads a byte
    at +0x48; outside the loaded image, like D_800E2968.
@@ -2088,28 +2089,30 @@ extern u16 D_80083CAE[];  /* incomplete: the two arms share one `lui` */
    reaches +0x87. The merge is left for when more of the record is known,
    because +0x48 is a word here (func_80042710 copies it whole, with the tag
    byte at +0x49) and a byte there, so one of the two sites will need a cast. */
-typedef struct Unk800E3E48 {
-    u8  pad_00[0x14];
-    u32 unk_14;  /* low 3 bits copied into the caller's +0x14 */
-    u8  pad_18[0x4];
-    u32 unk_1C;  /* low 3 bits copied into the caller's +0x1C */
-    u8  pad_20[0x28];
-    u8  unk_48;
-    u8  pad_49[0x43];
+typedef struct Unk800E3E48
+{
+   u8 pad_00[0x14];
+   u32 unk_14; /* low 3 bits copied into the caller's +0x14 */
+   u8 pad_18[0x4];
+   u32 unk_1C; /* low 3 bits copied into the caller's +0x1C */
+   u8 pad_20[0x28];
+   u8 unk_48;
+   u8 pad_49[0x43];
 } Unk800E3E48;
 extern Unk800E3E48 D_800E3E48[];
 
 /* Hand-added. func_800439BC indexes this with a 20-byte stride and reads a
    byte at +0x10; nothing else touches it, so that is the whole layout and the
    element size is a floor only in the sense that 0x14 is the measured stride. */
-typedef struct Unk8006DE24 {
-    u8 pad_00[0x10];
-    u8 unk_10;
-    u8 pad_11[0x3];
+typedef struct Unk8006DE24
+{
+   u8 pad_00[0x10];
+   u8 unk_10;
+   u8 pad_11[0x3];
 } Unk8006DE24;
 extern Unk8006DE24 D_8006DE24[];
 
 #endif /* STRUCTS_H */
 
-extern s32 D_80012090;  /* out of image, reached as a symbol by func_8004AB7C */
+extern s32 D_80012090; /* out of image, reached as a symbol by func_8004AB7C */
 /* excluded, base outside the loaded image 0x8002d000..0x8008875f: D_80000000 D_80000002 D_80000004 D_8001021C D_8001022C D_8001024B D_80010304 D_80010A93 D_80010A94 D_8001208C D_80012090 D_80012094 D_80012098 D_800120A0 D_800120A2 D_800120A4 D_800121E0 D_800121E1 D_80012273 D_80012D52 D_80012D53 D_80012D58 D_80012D5C D_80012D68 D_80012D6E D_80013180 D_80013184 D_80013185 D_80013186 D_80013614 D_80013630 D_80013632 D_80013634 D_80013636 D_80013638 D_8001363A D_8001363C D_80013714 D_800E2968 D_800E3D7C D_800E3E48 D_80189394 D_801B8EB8 D_801C9E40 D_801DA72C D_801EAFE8 */

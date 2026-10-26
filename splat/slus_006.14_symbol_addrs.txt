@@ -33,6 +33,7 @@ CdGetSector = 0x800611c8; // type:func
 CdGetSector2 = 0x800611e8; // type:func
 CdDataCallback = 0x80061208; // type:func
 // ???
+CdIntToPos = 0x8006124C; // type:func
 CdPosToInt = 0x80061350; // type:func
 // ???
 CD_ready = 0x80061bd8; // type:func

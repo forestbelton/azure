@@ -7,17 +7,19 @@ void func_8003E758(void);
 u32 func_8003E240(s32);
 void func_8003F624(void);
 void func_8003F5EC(void);
-u8  func_8003F240(void);
+u8 func_8003F240(void);
 
 __asm__(".sdata\n\t.size D_800814D0,1\n\t.size D_800814CC,4\n"
         "\t.size D_800814D4,1\n\t.size D_80081450,4\n"
         "\t.size D_80080AD0,1\n\t.size D_80080AD2,2\n"
         "\t.size D_80080AD4,2\n\t.size D_80080AD8,4\n\t.text");
 
-void func_8003E70C(void) {
+void func_8003E70C(void)
+{
     D_80083958.unk_08 = D_80083958.unk_08 + 1;
     D_80083958.unk_06 = D_80083958.unk_06 + 1;
-    if (D_80083958.unk_06 > 0x400) {
+    if (D_80083958.unk_06 > 0x400)
+    {
         D_80083958.unk_06 = 0;
         CdInit();
     }
@@ -110,8 +112,9 @@ void func_8003E70C(void) {
  *
  * The 28-entry jtbl_8002D5C0 is this unit's only jump table; verify.py masks
  * the two halfwords that reference it, so only `make check` can see it land. */
-void func_8003E758(void) {
-    u8 loc[8];
+void func_8003E758(void)
+{
+    CdlLOC loc;
     u8 res[8];
     s32 r;
     s32 i;
@@ -125,10 +128,13 @@ void func_8003E758(void) {
 
 again:
     D_80083958.unk_0A &= ~1;
-    if (D_800814D0[0] != D_800814D1) {
+    if (D_800814D0[0] != D_800814D1)
+    {
         D_80083958.unk_0A |= 1;
-        if (D_800814D3[0] == 0xFF) {
-            switch (D_80083968[D_800814D0[0]].unk_00) {
+        if (D_800814D3[0] == 0xFF)
+        {
+            switch (D_80083968[D_800814D0[0]].unk_00)
+            {
             case 0:
                 D_800814D3[0] = 0xFF;
                 D_80083958.unk_04 = 0;
@@ -137,8 +143,10 @@ again:
                 goto again;
             case 1:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 2;
@@ -148,37 +156,46 @@ again:
                 break;
             case 2:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    func_8006124C(D_80083968[D_800814D0[0]].unk_04, loc);
-                    if (CdControl(2, loc, (u8 *) &D_80081450) != 0) {
+                    CdIntToPos(D_80083968[D_800814D0[0]].unk_04, &loc);
+                    if (CdControl(CdlSetloc, (u_char *)&loc, (u8 *)&D_80081450) != 0)
+                    {
                         D_800814D0[0] = D_800814D0[0] + 1;
                     }
                 }
                 break;
             case 6:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    q = (u32 *) D_80083968[D_800814D0[0]].unk_04;
+                    q = (u32 *)D_80083968[D_800814D0[0]].unk_04;
                     nsec = q[0] >> 23;
                     addr = q[0] & 0x7FFFFF;
-                    if (addr == 0) {
+                    if (addr == 0)
+                    {
                         addr = D_80081480;
-                    } else {
+                    }
+                    else
+                    {
                         addr = addr | 0x80000000;
-                        __asm__ volatile ("" :: "r" (q) : "memory");
+                        __asm__ volatile("" ::"r"(q) : "memory");
                         nsec = q[0] >> 23;
                     }
-                    if (nsec == 0) {
+                    if (nsec == 0)
+                    {
                         u8 *p = &D_800814D3[0];
                         D_800814D3[0] = 0xFF;
                         p[-3] = p[-3] + 1;
@@ -186,28 +203,35 @@ again:
                     }
                     D_800814CC = addr + (nsec << 11) - 4;
                     D_800814D4 = 0x80;
-                    if (CdControl(0xE, &D_800814D4, NULL) == 0) {
+                    if (CdControl(CdlSetmode, &D_800814D4, NULL) == 0)
+                    {
                         return;
                     }
                     r = CdSync(1, res);
-                    if (r != 0) {
-                        if (r == 5) {
+                    if (r != 0)
+                    {
+                        if (r == 5)
+                        {
                             func_8003E70C();
                             return;
                         }
                     }
-                    func_8006124C(q[1], loc);
-                    if (CdControl(2, loc, NULL) == 0) {
+                    CdIntToPos(q[1], &loc);
+                    if (CdControl(CdlSetloc, (u_char *)&loc, NULL) == 0)
+                    {
                         return;
                     }
                     r = CdSync(1, res);
-                    if (r != 0) {
-                        if (r == 5) {
+                    if (r != 0)
+                    {
+                        if (r == 5)
+                        {
                             func_8003E70C();
                             return;
                         }
                     }
-                    if (CdRead(nsec, (u32 *) addr, 0x80) == 0) {
+                    if (CdRead(nsec, (u_long *)addr, 0x80) == 0)
+                    {
                         return;
                     }
                     D_800814D3[0] = 1;
@@ -215,27 +239,33 @@ again:
                 break;
             case 9:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    if (CdControl(9, NULL, (u8 *) &D_80081450) != 0) {
+                    if (CdControl(CdlPause, NULL, (u8 *)&D_80081450) != 0)
+                    {
                         D_800814D3[0] = 1;
                     }
                 }
                 break;
             case 0xD:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    if (CdControl(0xD, (u8 *) &D_80083968[D_800814D0[0]].unk_08,
-                                 (u8 *) &D_80081450) != 0) {
+                    if (CdControl(CdlSetfilter, (u8 *)&D_80083968[D_800814D0[0]].unk_08,
+                                  (u8 *)&D_80081450) != 0)
+                    {
                         D_800814D3[0] = 0xFF;
                         D_800814D0[0] = D_800814D0[0] + 1;
                     }
@@ -243,14 +273,17 @@ again:
                 break;
             case 0xE:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    if (CdControl(0xE, (u8 *) &D_80083968[D_800814D0[0]].unk_08,
-                                 (u8 *) &D_80081450) != 0) {
+                    if (CdControl(CdlSetmode, (u8 *)&D_80083968[D_800814D0[0]].unk_08,
+                                  (u8 *)&D_80081450) != 0)
+                    {
                         D_800814D3[0] = 0xFF;
                         D_800814D0[0] = D_800814D0[0] + 1;
                     }
@@ -258,35 +291,44 @@ again:
                 break;
             case 0x15:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    func_8006124C(D_80083968[D_800814D0[0]].unk_04, loc);
-                    if (CdControlF(0x15, loc) != 0) {
+                    CdIntToPos(D_80083968[D_800814D0[0]].unk_04, &loc);
+                    if (CdControlF(CdlSeekL, (u_char *)&loc) != 0)
+                    {
                         D_800814D3[0] = 1;
                     }
                 }
                 break;
             case 0x1B:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                     }
                     D_800814D2[0] = 0;
                     D_80083958.unk_04 = 0;
-                    func_8006124C(D_80083968[D_800814D0[0]].unk_04, loc);
+                    CdIntToPos(D_80083968[D_800814D0[0]].unk_04, &loc);
                     i = 0x10;
-                    if (CdControl(2, loc, NULL) == 0) {
+                    if (CdControl(CdlSetloc, (u_char *)&loc, NULL) == 0)
+                    {
                         return;
                     }
-                    while (i != 0) {
+                    while (i != 0)
+                    {
                         r = CdSync(1, res);
-                        if (r != 0) {
-                            if (r != 5) {
+                        if (r != 0)
+                        {
+                            if (r != 5)
+                            {
                                 goto readloop;
                             }
                             func_8003E70C();
@@ -298,9 +340,11 @@ again:
                     return;
                 readloop:
                     i = 0x10;
-                    while (CdRead2(0xC8) == 0) {
+                    while (CdRead2(0xC8) == 0)
+                    {
                         i--;
-                        if (i == 0) {
+                        if (i == 0)
+                        {
                             func_8003E70C();
                             return;
                         }
@@ -313,9 +357,11 @@ again:
                 D_800814D2[0] = 0;
                 D_80083958.unk_04 = 0;
                 i = 0x10;
-                while (CdReset(0) == 0) {
+                while (CdReset(0) == 0)
+                {
                     i--;
-                    if (i == 0) {
+                    if (i == 0)
+                    {
                         func_8003E70C();
                         return;
                     }
@@ -324,8 +370,8 @@ again:
                 D_800814D0[0] = D_800814D0[0] + 1;
                 break;
             case 0xFF:
-                (*(void (*)(s32)) D_80083968[D_800814D0[0]].unk_04)(
-                    *(s32 *) ((u8 *) D_80083968 + D_800814D0[0] * 24 + 8));
+                (*(void (*)(s32))D_80083968[D_800814D0[0]].unk_04)(
+                    *(s32 *)((u8 *)D_80083968 + D_800814D0[0] * 24 + 8));
                 D_800814D0[0] = D_800814D0[0] + 1;
                 break;
             case 0xFC:
@@ -340,20 +386,26 @@ again:
             case 0x16:
                 break;
             }
-        } else if (D_800814D3[0] == 1) {
-            switch (D_80083968[D_800814D0[0]].unk_00) {
-            case 0: {
-                    u8 *p = &D_800814D3[0];
-                    D_800814D3[0] = 0xFF;
-                    D_8008395C[0] = 0;
-                    D_800814D2[0] = 0;
-                    p[-3] = (p[-3] + 1) & 0x1F;
-                    goto again;
-                }
+        }
+        else if (D_800814D3[0] == 1)
+        {
+            switch (D_80083968[D_800814D0[0]].unk_00)
+            {
+            case 0:
+            {
+                u8 *p = &D_800814D3[0];
+                D_800814D3[0] = 0xFF;
+                D_8008395C[0] = 0;
+                D_800814D2[0] = 0;
+                p[-3] = (p[-3] + 1) & 0x1F;
+                goto again;
+            }
             case 6:
-                r = CdSync(1, (u8 *) &D_80081450);
-                if (r != 0) {
-                    if (r == 5) {
+                r = CdSync(1, (u8 *)&D_80081450);
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                         D_800814D3[0] = 0xFF;
                         D_8008395C[0] = 0;
@@ -362,24 +414,31 @@ again:
                     }
                     n = CdReadSync(1, D_800814D8);
                     D_80080AD8 = n;
-                    if (n > 0) {
+                    if (n > 0)
+                    {
                         break;
                     }
-                    if (n == 0) {
-                        if (D_80080AD0 != 0) {
-                            if ((*(u32 *) D_800814CC & 0xFFFF0000) == 0x10120000) {
+                    if (n == 0)
+                    {
+                        if (D_80080AD0 != 0)
+                        {
+                            if ((*(u32 *)D_800814CC & 0xFFFF0000) == 0x10120000)
+                            {
                                 break;
                             }
                             func_8003E70C();
                             D_800814D2[0] = 0;
                             D_80080AD2 = D_80080AD2 + 1;
-                            if ((D_80080AD2 & 3) == 3) {
+                            if ((D_80080AD2 & 3) == 3)
+                            {
                                 CdReset(0);
                                 func_8003F5EC();
                             }
                             D_800814D3[0] = 0xFF;
                             break;
-                        } else {
+                        }
+                        else
+                        {
                             u8 *p = &D_800814D3[0];
                             D_800814D3[0] = 0xFF;
                             p[-3] = p[-3] + 1;
@@ -389,7 +448,8 @@ again:
                             break;
                         }
                     }
-                    if (n >= 0) {
+                    if (n >= 0)
+                    {
                         break;
                     }
                     func_8003E70C();
@@ -399,15 +459,20 @@ again:
                 }
                 break;
             case 9:
-                r = CdSync(1, (u8 *) &D_80081450);
-                if (r != 0) {
-                    if (r == 5) {
+                r = CdSync(1, (u8 *)&D_80081450);
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                         D_800814D3[0] = 0xFF;
                         D_8008395C[0] = 0;
                         D_800814D2[0] = 0;
-                    } else if (CdControl(1, NULL, (u8 *) &D_80081450) != 0) {
-                        if ((*(u8 *) &D_80081450 & 0xFD) == 0) {
+                    }
+                    else if (CdControl(CdlNop, NULL, (u8 *)&D_80081450) != 0)
+                    {
+                        if ((*(u8 *)&D_80081450 & 0xFD) == 0)
+                        {
                             D_8008395C[0] = 2;
                             D_800814D3[0] = 0xFF;
                             D_800814D0[0] = D_800814D0[0] + 1;
@@ -417,14 +482,19 @@ again:
                 break;
             case 21:
                 r = CdSync(1, res);
-                if (r != 0) {
-                    if (r == 5) {
+                if (r != 0)
+                {
+                    if (r == 5)
+                    {
                         func_8003E70C();
                         D_800814D3[0] = 0xFF;
                         D_8008395C[0] = 0;
                         D_800814D2[0] = 0;
-                    } else if (CdControl(1, NULL, (u8 *) &D_80081450) != 0) {
-                        if ((*(u8 *) &D_80081450 & 0xFD) == 0) {
+                    }
+                    else if (CdControl(CdlNop, NULL, (u8 *)&D_80081450) != 0)
+                    {
+                        if ((*(u8 *)&D_80081450 & 0xFD) == 0)
+                        {
                             D_8008395C[0] = 2;
                             D_800814D3[0] = 0xFF;
                             D_800814D0[0] = D_800814D0[0] + 1;
@@ -433,57 +503,72 @@ again:
                 }
                 break;
             case 27:
-                if (CdSync(1, (u8 *) &D_80081450) == 5) {
+                if (CdSync(1, (u8 *)&D_80081450) == 5)
+                {
                     D_800814D3[0] = 0xFF;
                     break;
                 }
                 i = 0x10;
-                while (CdControl(1, NULL, (u8 *) &D_80081450) == 0) {
+                while (CdControl(CdlNop, NULL, (u8 *)&D_80081450) == 0)
+                {
                     i--;
-                    if (i == 0) {
+                    if (i == 0)
+                    {
                         func_8003E70C();
                         D_800814D3[0] = 0xFF;
                         return;
                     }
                 }
-                st = *(u8 *) &D_80081450;
-                if ((st & 0x40) != 0) {
+                st = *(u8 *)&D_80081450;
+                if ((st & 0x40) != 0)
+                {
                     break;
                 }
-                if ((st & 0x20) != 0) {
+                if ((st & 0x20) != 0)
+                {
                     u8 *p = &D_800814D2[0];
                     D_800814D2[0] = 0;
                     D_800814D3[0] = 0xFF;
-                    if (D_80083968[p[-2]].unk_17 != 0xFF) {
+                    if (D_80083968[p[-2]].unk_17 != 0xFF)
+                    {
                         D_8008395C[0] = 4;
                         D_80080AD4 = 1;
                     }
                     p[-2] = p[-2] + 1;
                     break;
                 }
-                if ((st & 0x80) != 0) {
+                if ((st & 0x80) != 0)
+                {
                     D_800814D3[0] = 0xFF;
                 }
                 break;
             }
         }
-    } else {
-        if (CdSync(1, NULL) == 5) {
-            if ((func_8003F240() & 0xFF) == 0x1B) {
+    }
+    else
+    {
+        if (CdSync(1, NULL) == 5)
+        {
+            if ((func_8003F240() & 0xFF) == 0x1B)
+            {
                 v = D_800814D0[0];
                 D_800814D3[0] = 0xFF;
                 w = v - 1;
-                if (v == 0) {
+                if (v == 0)
+                {
                     w = 0x1F;
                 }
                 D_800814D0[0] = w;
                 func_8003F624();
-            } else {
-                CdControl(1, NULL, NULL);
+            }
+            else
+            {
+                CdControl(CdlNop, NULL, NULL);
             }
         }
     }
-    if ((D_80083164[0] & 0x7FFF) == 0) {
+    if ((D_80083164[0] & 0x7FFF) == 0)
+    {
         D_8008395E[0] = 0;
     }
     D_800814D0[0] &= 0x1F;

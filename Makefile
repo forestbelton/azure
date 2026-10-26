@@ -50,7 +50,7 @@ CHECK = python tools/check.py
 # tools/ccpsx drives the compiler under wine.
 CC             = tools/ccpsx
 ASPSX_VERSION  = 2.56
-CFLAGS        += -O2 -G8 -Iinclude
+CFLAGS        += -O2 -G8 -Iinclude -Ipsyq/include
 
 # decomp-permuter invokes make with PERMUTER=1. include_asm.h compiles its
 # INCLUDE_ASM macros away when PERMUTER is defined, so the define has to reach

@@ -27,7 +27,8 @@ __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
         "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
         "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
         "\t.size D_80080B80,4\n\t.size D_80080B84,4\n"
-        "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.text");
+        "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n"
+        "\t.size D_80080B30,1\n\t.text");
 
 void func_80048C3C(s32);
 
@@ -418,7 +419,55 @@ void func_80049F2C(u8 *p) {
     *(u16 *) (p + 0x2A) += (*(s16 *) (p + 0x6) - *(s16 *) (p + 0x2A)) >> 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049F68);
+extern u8 D_80080B30;
+
+/* $gp group: D_80080B30 joined this unit's .sdata size records for this
+   function, so it was verified in a scratch file carrying the block. Two
+   levers. `u32 *s = D_8002E5D8;` is assigned INSIDE the loop body, so
+   loop-invariant motion materialises it in the preheader rather than leaving
+   a copy of the %hi pseudo behind (one word, func_8004CCBC's lever). And the
+   chain base is assigned inside the loop too and INDEXED rather than walked:
+   as a walked `c++` pointer the materialisation is expanded before the `4`'s
+   hoisted copy and the two come out in the wrong order (3 DIFF), while
+   indexing an incomplete-array alias splits the address into two registers
+   (2 DIFF). Assigning `&D_80080B30` inside the loop gives both the one-insn
+   `la` and the hoist order. */
+void func_80049F68(u8 *p) {
+    u32 *t = D_8002E5E8;
+    s32 i;
+    u8 *c;
+    s32 j;
+    u8 *d;
+
+    *(u32 *) (p + 0xA0) = D_8002E5E8[0];
+    *(u32 *) (p + 0xA4) = t[1];
+    *(u32 *) (p + 0xA8) = t[2];
+    for (i = 0; i < 4; i++) {
+        u8 *r = p + i * 0x20;
+        u32 *s = D_8002E5D8;
+
+        *(u32 *) (r + 0x20) = D_8002E5D8[0];
+        *(u32 *) (r + 0x24) = s[1];
+        *(u32 *) (r + 0x28) = s[2];
+        *(u32 *) (r + 0x2C) = s[3];
+        *(u32 *) (r + 0x34) = (u32) (p + 0x20 + i * 0x20);
+        *(u32 *) (r + 0x38) = (u32) (p + 0xA0);
+    }
+    d = p + 0x30;
+    if (D_80080B30 != 4) {
+        j = 0;
+        do {
+            u8 *x;
+
+            c = &D_80080B30;
+            x = (u8 *) ((c[j] << 5) + (u32) p + 0x30);
+            j++;
+            *(u32 *) (d + 0xC) = (u32) x;
+            d = x;
+        } while (c[j] != 4);
+    }
+    *(u32 *) (d + 0xC) = 0;
+}
 
 void func_8004A030(u8 *p, s16 x, s16 y, s16 h) {
     u8 *q = p + 0x20;

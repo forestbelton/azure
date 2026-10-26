@@ -20,18 +20,21 @@
  */
 #if !defined(M2CTX) && !defined(PERMUTER)
 #define INCLUDE_ASM(FOLDER, NAME)                                 \
-    void __maspsx_include_asm_hack_##NAME(void) {                 \
+    void __maspsx_include_asm_hack_##NAME(void)                   \
+    {                                                             \
         __asm__(                                                  \
             ".text # maspsx-keep\n"                               \
             "\t.align\t2 # maspsx-keep\n"                         \
             "\t.set noreorder # maspsx-keep\n"                    \
             "\t.set noat # maspsx-keep\n"                         \
             ".include \"" FOLDER "/" #NAME ".s\" # maspsx-keep\n" \
-            "\t.set reorder # maspsx-keep\n"                       \
-            "\t.set at # maspsx-keep\n"                            \
-        );                                                         \
+            "\t.set reorder # maspsx-keep\n"                      \
+            "\t.set at # maspsx-keep\n");                         \
     }
 #endif /* !M2CTX && !PERMUTER */
+
+#include "sys/types.h"
+#include "libcd.h"
 
 #include "types.h"
 #include "structs.h"
