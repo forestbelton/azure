@@ -2253,6 +2253,30 @@ then COND was an `if` around the loop and the loop itself is a `do`/`while` on
 X -- and whatever the body does first belongs at the TOP of the body, where it
 lands in the first branch's delay slot. func_8004CE68, 9 DIFF.
 
+### Many arms rejoining at several places is LABELS AND GOTOS, laid out to match
+
+When a dispatch's arms rejoin at more than one place, the listing's physical
+block order is the thing to reproduce and nested if/else cannot produce it.
+Write the arms with `goto`, put each join block where the listing has it, and
+end a join block with `goto` only where the listing spends a `j`.
+
+func_8003B470's layout is dispatch, five arms, `join1`, a one-call block,
+`tail`, `other`, `join2`. The giveaway is that `other` -- whose branch is the
+EARLIEST of the five -- comes LAST, because it falls through into `join2` where
+every other path has to jump there. As nested if/else that block lands ahead of
+`join1` and the whole tail shifts: 119 words and 48 DIFF against MATCH at 117.
+
+Two rules that came out of it:
+
+* a join block reached by a branch is written as `if (cond) goto label;` and
+  not as an `else` arm, or gcc spends a `j` the listing does not have;
+* the block the listing puts last is the one that FALLS THROUGH into the final
+  join, so write it last and let the earlier join blocks `goto` past it.
+
+`goto` is already used in csrc/unk_11F0C.c and unk_12DEC.c for the same reason
+-- see the "NOT A LOOP" note there, where the label form is what keeps loop.c
+out.
+
 ### A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH
 
 For three arms that each store a different constant to one field, an if-else

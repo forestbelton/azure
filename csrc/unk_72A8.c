@@ -2954,7 +2954,133 @@ void func_8003B42C(s32 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B470);
+/* The frame reset: five fixed calls, then a dispatch on the mode flags at
+   D_80082E76, then a common tail. Written with LABELS AND GOTOS, because the
+   five arms rejoin at three different places and the listing's physical block
+   order is dispatch, arms, `join1`, `ba24`, `tail`, `other`, `join2` -- the
+   `other` block, which falls through into `join2`, comes LAST even though its
+   branch is the earliest. Writing the arms as nested if/else puts `other`
+   ahead of `join1` and the whole tail moves: 48 DIFF at 119 words against this
+   one's MATCH at 117.
+
+   `D_80082E76` is declared as an INCOMPLETE ARRAY and read as `D_80082E76[0]`.
+   As a bare `u16` scalar it gets the assembler-expanded form -- one `lui` into
+   the destination register -- where the listing has the compiler-split pair
+   with a separate address temp. Same lever as D_8007359C.
+
+   The flag word is also D_80082E60's +0x16 field, and the function reaches it
+   BOTH ways: through its own symbol at the top, and through a struct pointer
+   local at the end, which is what gives the final mask a materialised base
+   with `0x16` displacements rather than one shared `%lo`. */
+extern u16 D_80082E76[];
+extern u8 D_8006AEC4[];
+extern Unk41284 D_80080EA0;
+
+void func_8003AF8C(u32 *);
+void func_8008EF58(void);
+void func_8008FCE0(void);
+void func_800A03DC(void);
+void func_80033D44(s32);
+void func_8003B42C(s32);
+void func_8003B988(void);
+void func_8003B92C(void);
+s32 func_80033B2C(s32);
+void func_8003BA60(void);
+void func_8003BA9C(void);
+void func_8003B9E8(void);
+void func_8003B9B8(void);
+void func_8003BA24(void);
+void func_800434E4(void);
+void func_800B9830(void);
+void func_8003BAF8(u32);
+void func_8008B408(s32);
+void func_8008B550(s32);
+void func_80041284(Unk41284 *);
+void func_8009FF28(void);
+void func_800B9890(void);
+void func_800B98B4(void);
+void func_800C0FA4(void);
+
+void func_8003B470(void)
+{
+    Unk80082E60 *q;
+    u8 *p;
+    u16 f;
+
+    func_8003AF8C((u32 *)D_800717D0);
+    func_8003AF8C((u32 *)D_800717E8);
+    func_8008EF58();
+    func_8008FCE0();
+    func_800A03DC();
+    *(u32 *)D_8006ADBC = 0;
+    func_80033D44(0);
+    f = D_80082E76[0];
+    if ((f & 0x4000) != 0)
+    {
+        func_8003B42C(0);
+        func_8003B988();
+        goto join1;
+    }
+    if ((f & 0x8000) != 0)
+    {
+        func_8003B42C(1);
+        func_8003B92C();
+        if (func_80033B2C(0x1391) == 0 || func_80033B2C(0xA2) != 0)
+        {
+            func_8003BA60();
+            goto tail;
+        }
+        if (func_80033B2C(0xA3) != 0)
+        {
+            goto join1;
+        }
+        func_8003BA9C();
+        goto tail;
+    }
+    if ((f & 4) != 0)
+    {
+        goto join1;
+    }
+    p = (u8 *)0x80010000;
+    if ((f & 2) == 0)
+    {
+        goto other;
+    }
+    *(u16 *)(p + 0x3714) &= 0xFFFD;
+    if (*(u16 *)(p + 0x20A) == 0)
+    {
+        goto ba24;
+    }
+    func_8003B42C(1);
+    *(u16 *)(p + 0x20A) = 0;
+    func_8003B9B8();
+
+join1:
+    func_8003B9E8();
+    goto tail;
+ba24:
+    func_8003BA24();
+tail:
+    func_8008B408(1);
+    func_8008B550(1);
+    func_80041284(&D_80080EA0);
+    goto join2;
+other:
+    func_800434E4();
+    p[0x2D6C] = 1;
+    func_800B9830();
+    *(u32 *)(p + 0x2D5C) = 0;
+    func_8003BAF8((u32) D_8006AEC4);
+    func_8008B408(0);
+    func_8008B550(0);
+join2:
+    q = &D_80082E60;
+    q->unk_16 &= 0x3FF9;
+    func_8009FF28();
+    func_800B9890();
+    func_800B98B4();
+    func_800C0FA4();
+}
 
 void func_8003B644(void) {
 }
