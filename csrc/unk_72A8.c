@@ -600,7 +600,7 @@ void func_80035BE0(u8 *p) {
     }
 }
 
-void func_80035C80(void);
+void func_80035C80(u8 *);
 
 void func_80035C44(u8 *p, u8 *q) {
     u16 *v = (u16 *) (q + 2);
@@ -612,9 +612,39 @@ void func_80035C44(u8 *p, u8 *q) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035C80);
+void func_80035D38(void);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035CE4);
+/* The func_800368D0 family: four functions that all end by storing through
+   `*(u8 **)(p + 0x44) + *(s16 *)(p + 0x4A)`, and all four were two registers
+   wrong at the exact word count until func_80036F24 showed the spelling. The
+   +0x44 pointer takes a local -- that is what puts its `lw` ahead of the `lh`,
+   sched1's tie-break being RTL order -- and the index stays INSIDE the
+   subscript. Given its own local the index is a second quantity with the
+   shorter live range, so local-alloc hands it $v0 and the pointer $v1, the
+   reverse of every one of these listings, and the `addu`'s operands swap with
+   them. func_800359FC above is the one member that wanted both as locals. */
+void func_80035C80(u8 *p) {
+    u8 *t;
+
+    if (p[0x78] != (*(u8 **) (p + 0x74))[1]) {
+        t = *(u8 **) (p + 0x44);
+        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+        func_8003C24C();
+        *(u32 *) (p + 0x68) = (u32) func_80035ABC;
+    }
+}
+
+void func_80035CE4(u8 *p, u8 *q, s32 r) {
+    u8 *t;
+
+    *(u16 *) (q + 2) = *(u16 *) (q + 2) - 0x20;
+    if (*(s16 *) (q + 2) < 2) {
+        *(u16 *) (q + 2) = 2;
+        *(u32 *) (p + 0x68) = (u32) func_80035D38;
+        t = *(u8 **) (p + 0x44);
+        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+    }
+}
 
 void func_80035D38(void) {
 }
@@ -911,12 +941,32 @@ void func_80036880(u8 *p) {
     func_80053DA8(0x503);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800368D0);
+void func_800368F8(void);
+
+void func_800368D0(u8 *p) {
+    u8 *t;
+
+    t = *(u8 **) (p + 0x44);
+    (t + *(s16 *) (p + 0x4A))[0x50] = 0xFF;
+    *(u32 *) (p + 0x68) = (u32) func_800368F8;
+}
 
 void func_800368F8(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036900);
+void func_80036980(void);
+
+void func_80036900(u8 *p, u8 *q, s32 r) {
+    u8 *t;
+
+    *(u16 *) (*(u8 **) p + 0xA) = *(u16 *) (*(u8 **) p + 0xA) + 0x100;
+    if (*(s16 *) (*(u8 **) p + 0xA) >= 0x401) {
+        func_80044A50((UnkNode *) (p - 0x20));
+        *(u32 *) (p + 0x68) = (u32) func_80036980;
+        t = *(u8 **) (p + 0x44);
+        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+    }
+}
 
 void func_80036980(void) {
 }
@@ -1001,7 +1051,56 @@ void func_80036ED4(u8 *p, s32 b, s32 c, s16 d, s16 e, u32 f) {
     func_80036F24(p + 0x20, *(u32 *) (p + 0x8), *(u32 *) (p + 0xC));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036F24);
+extern u32 D_8006A958[];
+extern u32 D_8006A964[];
+extern u32 D_8006A970[];
+extern u32 D_8006A97C[];
+extern u8 D_80082B50[];
+extern u8 D_80082B60[];
+extern u8 D_80082B70[];
+
+/* The counter at +0x64 is VOLATILE. The target increments it and then LOADS
+   IT AGAIN to test bit 0 -- `lhu`, `nop`, `addiu`, `sh`, `lhu`, `nop`,
+   `andi 1` -- and nothing about how the increment or the test is spelled stops
+   cse forwarding the stored value instead: a `u16 *` local, `(*p)++`, reading
+   it back as `s16`, and the increment through a `u16` temporary were all two
+   words short, and MEM_IN_STRUCT_P is refuted as the cause (matching-levers
+   section 10). A volatile load is never forwarded and never deleted, which is
+   exactly the behaviour the listing has, so the field was volatile in the
+   original struct. Only the RE-READ needs the qualifier; marking both is
+   equivalent.
+
+   The base at +0x44 goes into its own local so its `lw` is emitted before the
+   `lh` of +0x4A -- sched's tie-break for equal-priority insns is INSN_LUID,
+   i.e. RTL order. The index must NOT also be a local: as a local it is a
+   second quantity whose live range is shorter, so local-alloc gives it $v0 and
+   the pointer $v1, where the target has them the other way round, and the
+   `addu`'s operands come out swapped with them. Left inside the subscript it
+   is one operand of the pointer's own address expression. */
+void func_80036F24(u8 *p, u32 b, u32 r) {
+    u8 n;
+    u8 *t;
+
+    if (func_80037534(p, b, r) != 0) {
+        return;
+    }
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A958, D_80082B50);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A964, D_80082B60);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A970, D_80082B70);
+    t = *(u8 **) (p + 0x44);
+    n = (t + *(s16 *) (p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0) {
+        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
+        if ((*(volatile u16 *) (p + 0x64) & 1) == 0) {
+            *(u32 *) (r + 0xC) = 0;
+        } else {
+            *(u32 *) (r + 0xC) = 0xC0C0C0;
+        }
+    } else {
+        *(u32 *) (r + 0xC) = 0xC0C0C0;
+    }
+    *(u32 *) (r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *) (p + 0x66)];
+}
 
 void func_80036D4C(u8 *, s32, s32, s32, s32, u32);
 void func_80037090(u8 *, u32, u32);
@@ -1025,11 +1124,79 @@ void func_80037030(u8 *p, s32 b, s32 c, s16 d, s16 e, u32 f) {
     func_80037090(p + 0x20, v, (u32) q);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037090);
+/* func_80036F24 with the two arms of the inner test the other way round: the
+   zero store is the shared block both branches reach, so it is the `else` of
+   the inner test AND the `else` of the outer one. See func_80036F24 above for
+   the volatile counter and the pointer local. */
+void func_80037090(u8 *p, u32 b, u32 r) {
+    u8 n;
+    u8 *t;
+
+    if (func_80037534(p, b, r) != 0) {
+        return;
+    }
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A958, D_80082B50);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A964, D_80082B60);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A970, D_80082B70);
+    t = *(u8 **) (p + 0x44);
+    n = (t + *(s16 *) (p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0) {
+        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
+        if ((*(volatile u16 *) (p + 0x64) & 1) != 0) {
+            *(u32 *) (r + 0xC) = 0xC0C0C0;
+        } else {
+            *(u32 *) (r + 0xC) = 0;
+        }
+    } else {
+        *(u32 *) (r + 0xC) = 0;
+    }
+    *(u32 *) (r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *) (p + 0x66)];
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003719C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037394);
+extern u32 D_8006A988[];
+extern u32 D_8006A994[];
+extern u32 D_8006A9A0[];
+extern u32 D_8006A9AC[];
+extern u32 D_8006A9B8[];
+extern u32 D_8006A9C4[];
+extern u32 D_8006A9D0[];
+extern u8 D_80082B80[];
+extern u8 D_80082B90[];
+extern u8 D_80082BA0[];
+extern u8 D_80082BB0[];
+extern u8 D_80081E90[];
+extern u8 D_80081EA0[];
+
+/* func_80036F24's body with six of the copies instead of three. */
+void func_80037394(u8 *p, u32 b, u32 r) {
+    u8 n;
+    u8 *t;
+
+    if (func_80037534(p, b, r) != 0) {
+        return;
+    }
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A988, D_80082B80);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A994, D_80082B90);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9A0, D_80082BA0);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9AC, D_80082BB0);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9B8, D_80081E90);
+    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9C4, D_80081EA0);
+    t = *(u8 **) (p + 0x44);
+    n = (t + *(s16 *) (p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0) {
+        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
+        if ((*(volatile u16 *) (p + 0x64) & 1) == 0) {
+            *(u32 *) (r + 0xC) = 0;
+        } else {
+            *(u32 *) (r + 0xC) = 0xC0C0C0;
+        }
+    } else {
+        *(u32 *) (r + 0xC) = 0xC0C0C0;
+    }
+    *(u32 *) (r + 0x8) = D_8006A9D0[(n & 0x7F) + *(s16 *) (p + 0x66)];
+}
 
 u32 func_800374F4(u16 n) {
     /* The product must be unsigned -- `(u32)` -- or the high half comes out

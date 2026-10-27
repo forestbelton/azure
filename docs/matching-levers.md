@@ -1218,6 +1218,32 @@ in the block to hoist it past.
   The interleave then also buys the copy of the argument into `$a1`, because
   four quantities are live at once instead of three.
 
+### A load of a value just stored is a VOLATILE field
+
+When the listing stores a value and then loads the same address straight back
+-- `lhu`, `nop`, `addiu`, `sh`, `lhu`, `nop`, `andi 1` -- cse forwarding is not
+something a source spelling can switch off. Nothing about how the increment or
+the test is written denies it: on func_80036F24's counter at +0x64, a `u16 *`
+local, `(*p)++`, reading the value back as `s16`, the increment through a `u16`
+temporary, and the two accesses split across statements were ALL two words
+short, and `MEM_IN_STRUCT_P` is refuted as the cause (section 10 below, four
+probes). A volatile load is never forwarded and never deleted, which is exactly
+what the listing shows, so the field was `volatile` in the original struct:
+
+```c
+*(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
+if ((*(volatile u16 *) (p + 0x64) & 1) == 0) { ... }
+```
+
+Only the RE-READ needs the qualifier; marking the store's own load as well is
+equivalent. This landed func_80036F24, func_80037090 and func_80037394, three
+functions parked for exactly these two words.
+
+Do not reach for it on every unforwarded load -- `volatile` also pins the
+instruction where it is and empties its delay slot, so it will cost words if
+the listing does not actually show the reload. The evidence to require is the
+SECOND load of an address already stored, with no call or label between.
+
 ## 6. Declaration decides addressing
 
 This is the subject of `docs/addressing-and-translation-units.md`; the short
