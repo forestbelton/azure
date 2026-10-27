@@ -241,6 +241,17 @@ insn that sets it across the branch and the `nop` stays. One word, and
 func_80058510 went from 35 of 36 with 27 differing words to MATCH on nothing
 else.
 
+A SCAN over all the remaining stubs' listings found 22 with this signature --
+an empty conditional-branch slot followed by an insn that writes `$v0` -- and
+in 17 of them that insn is a LOAD, which the `may_trap_p` rule above already
+explains, so they are not candidates. Of the five whose insn is ALU
+(func_800345B8, func_800407C0, func_8004D294, func_800500B4, func_8005C2C0)
+every one is already at the exact word count, i.e. the slot is empty in our
+build too. And func_8003800C, the only `void` park that is a word SHORT, does
+not respond to the change. So the lever is narrow: the signature to act on is
+our build FILLING a slot the target leaves empty, with an ALU insn, in a
+function declared `void`.
+
 Read it the other way too: a function whose listing fills such a slot IS
 `void`. And the giveaway for this shape is a function that never sets `$v0` on
 any path yet leaves a slot empty before an insn that does -- the original
