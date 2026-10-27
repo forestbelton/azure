@@ -2406,6 +2406,55 @@ it into the PREHEADER, after the guard, which is where these targets have it
 for a pointer live across a CALL, and the two do not conflict: a guard branch
 is not a call, and nothing has to survive it.
 
+### `p = param` BEFORE the first branch moves that parameter's copy LAST
+
+`assign_parms` emits the hard-register copies in declaration order, so the
+first parameter's `addu $s3, $a0, $zero` is normally the first of them, and
+sched2 interleaves the prologue saves in that order -- each save pulled in
+directly ahead of the copy that clobbers its register. A listing whose
+save/copy pairs run $a1, $a2, $a3, $a0 is telling you the first parameter's
+copy is RTL-LAST, and the way to get that is to assign it to a local:
+
+```c
+p = base;               /* before anything that branches */
+if (n == 0) { return; }
+```
+
+combine folds `(set p base)` into the parameter copy by substituting into the
+LATER insn and deleting the earlier one, so a0's copy ends up at the
+assignment's position -- behind a1, a2 and a3. Walking the parameter itself
+instead leaves it first, which is 8 wrong words of prologue on
+func_8004AEC4.
+
+**The assignment has to be ahead of the first branch.** Put it after the
+guard and the folded copy lands in the NEXT basic block, so it comes out
+behind every remaining save and behind the guard branch itself -- 10 wrong
+words rather than 8. Same lever, overshot.
+
+This is not the `sched1` birthing rule: sched1 does not schedule the parameter
+block at all (its block 0 is one insn, the branch), and at sched2
+`adjust_priority` is a no-op. It is RTL order, and the assignment is what sets
+it.
+
+### Where a loop's counter is INITIALISED decides which register it gets
+
+Two values that live the same shape of life can tie at global-alloc to within
+a percent, and then one insn of live range settles them. func_8004AEC4's
+inner loop has a counter `j` and a walking pointer `q`, 13 refs over 12 insns
+against 14 over 13: `floor_log2(13) * 13 / 12` is 3.250 and
+`floor_log2(14) * 14 / 13` is 3.231, a 0.6% gap, and the lower-numbered
+callee-saved register goes to the winner.
+
+`for (j = i + 1; j < n; j++)` gives the counter $s0 and the pointer $s1.
+Lifting the initialiser out -- `m = p; j = i + 1; q = p + size;` and a
+`while (j < n)` -- is the same instructions in the same order but one insn of
+live range moved, and the registers swap to the listing's. Order the three
+initialisers to match the listing as well: `j` first and `m = p` comes out a
+slot late.
+
+When `advise.py --greg` reports an adjacent pair inside a few percent, this is
+the cheapest thing to try, because it costs nothing in the output.
+
 ### An early `return x` is another REFERENCE to x, and it can flip global-alloc
 
 `allocno_priority` is `floor_log2(refs) * refs * size / live_length`, so every

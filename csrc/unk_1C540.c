@@ -953,15 +953,71 @@ s32 func_8004AE98(u8 **a, u8 **b) {
     return D_80081540[(*a)[0]] - D_80081540[(*b)[0]];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AEC4);
+/* Selection sort over `n` records of `size` bytes with a caller-supplied
+   comparison, swapping through a 0x100-byte stack buffer. The three memcpys
+   run even when the minimum is already in place.
+
+   Two spellings are load-bearing, and both are allocation, not shape -- the
+   straightforward version is 65 words with the right structure and sixteen
+   wrong registers.
+
+   `p = base` BEFORE the `n == 0` test. combine folds the copy into the
+   parameter's own hard-register copy by substituting into the LATER insn and
+   deleting the earlier one, so a0's copy ends up at the assignment's position
+   -- last of the four instead of first -- and sched2 interleaves the prologue
+   saves in that order: $s6, $s5, $fp, $s3. Walking the parameter itself puts
+   a0's copy first (8 wrong words). Putting the assignment AFTER the test
+   overshoots: the copy leaves the entry block altogether and comes out behind
+   the saves and the guard branch.
+
+   `m = p;` then `j = i + 1;` then `q = p + size;`, with the inner loop a
+   `while` rather than a `for` carrying j's initialiser. j and q tie at
+   global-alloc to within 0.6% -- floor_log2(13) * 13 / 12 against
+   floor_log2(14) * 14 / 13 -- so one insn of live range decides which takes
+   $s0, and the init order is what supplies it. j initialised first and the
+   listing's registers appear but `m = p` lands a slot late (10 DIFF); j's
+   initialiser left in the `for` gives j $s0 and q $s1, the wrong way round
+   (16 DIFF). */
+void func_8004AEC4(u8 *base, s32 n, s32 size, s32 (*cmp)(u8 *, u8 *))
+{
+    u8 tmp[0x100];
+    s32 i;
+    s32 j;
+    u8 *p;
+    u8 *m;
+    u8 *q;
+
+    p = base;
+    if (n == 0)
+    {
+        return;
+    }
+    for (i = 0; i < n - 1; i++)
+    {
+        m = p;
+        j = i + 1;
+        q = p + size;
+        while (j < n)
+        {
+            if (cmp(m, q) > 0)
+            {
+                m = q;
+            }
+            q += size;
+            j++;
+        }
+        memcpy(tmp, p, size);
+        memcpy(p, m, size);
+        memcpy(m, tmp, size);
+        p += size;
+    }
+}
 
 /* A forwarding wrapper: its four arguments pass through untouched, which is
    invisible in the listing (no register setup before the jal) and only shows
    up at a caller -- func_8004AA44 passes four. */
-void func_8004AEC4(s32, s32, s32, void *);
-
 void func_8004AFC8(s32 a, s32 b, s32 c, void *d) {
-    func_8004AEC4(a, b, c, d);
+    func_8004AEC4((u8 *) a, b, c, (s32 (*)(u8 *, u8 *)) d);
 }
 
 /* `k` is a u32, not a u8: declared u8 the byte gets an `andi 0xFF` it does not
