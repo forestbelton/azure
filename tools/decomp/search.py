@@ -400,6 +400,68 @@ def t_volatile(text):
         yield ("volatile on the %s read at %d" % (m.group(1), m.start()), new)
 
 
+def _retype_uses(body, sym, to_array):
+    """Rewrite every use of `sym` in `body` for the other declared size.
+
+    scalar -> array: `&SYM` becomes `SYM` and a bare `SYM` becomes `SYM[0]`.
+    array -> scalar: `SYM[0]` becomes `SYM` and a bare `SYM` (an array name
+    decaying to a pointer) becomes `&SYM`. A use that is already subscripted
+    is returned verbatim, spacing included.
+    """
+    if not to_array:
+        body = re.sub(r"\b%s\s*\[\s*0\s*\]" % sym, sym, body)
+
+    def one(m):
+        if m.group(2) is not None:
+            return m.group(0)
+        if to_array:
+            return sym if m.group(1) == '&' else sym + '[0]'
+        return m.group(0) if m.group(1) == '&' else '&' + sym
+
+    return re.sub(r"(&?)\b%s\b(\s*\[)?" % sym, one, body)
+
+
+def t_global_decl(text):
+    """Flip a GLOBAL's declared size between the scalar and incomplete-array
+    spellings, rewriting its uses to match.
+
+    This is matching-levers section 6's "declaration decides addressing" as a
+    sweep. The two spellings differ in the INSTRUCTIONS, not just the
+    relocation: a scalar sets SYMBOL_REF_FLAG, so cc1psx emits a bare-symbol
+    load or an `la` and the `lui` and the access share ONE register, while an
+    incomplete array gives `lui %hi` into its own register and `%lo` in the
+    access's displacement. That decides whether the pair can straddle a
+    branch, which register each half gets, and how many registers an address
+    costs across a call.
+
+    It landed func_800353F4 (the scalar form's single-register `lui`/`lw`
+    cannot put the `lui` in the `beqz`'s delay slot; the array form can -- two
+    words, and the park had tried a `u8 *` type but not this) and is half of
+    func_8004DF8C (where the SCALAR form is the right one, for the
+    `%gp_rel` store beside a `-4($sN)` displacement).
+
+    Only file-scope `extern` declarations in the candidate itself are
+    rewritten -- a global declared in a header is left alone, since changing
+    it would change every other unit too.
+    """
+    # NOT `scan`: these declarations are at FILE scope, outside the function
+    # body SPAN that every other family is restricted to. The `^extern`
+    # anchor is what keeps this out of function bodies, which are indented.
+    for m in re.finditer(r"(?m)^extern\s+((?:volatile\s+)?\w+(?:\s*\*)*)\s+(\w+)\s*(\[\s*\])?\s*;[ \t]*$",
+                         text):
+        ty, sym, arr = m.group(1), m.group(2), m.group(3)
+        to_array = arr is None
+        decl = "extern %s %s%s;" % (ty, sym, "[]" if to_array else "")
+        body = text[: m.start()] + "\0" * len(decl) + text[m.end():]
+        body = _retype_uses(body, sym, to_array)
+        body = body.replace("\0" * len(decl), decl, 1)
+        if body == text:
+            continue
+        yield ("global %s: %s -> %s" % (sym, "scalar" if to_array else "array",
+                                        "array" if to_array else "scalar"),
+               body)
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -412,6 +474,7 @@ TRANSFORMS = [
     t_decl_order,
     t_decl_per_arm,
     t_volatile,
+    t_global_decl,
 ]
 
 

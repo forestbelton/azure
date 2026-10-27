@@ -882,6 +882,13 @@ The same granularity decides the prologue: the three scalars initialised before
 the address in that function come out in declaration order, so an initialiser
 list IS a statement sequence for matching purposes.
 
+**`search.py --only=global_decl` sweeps this.** The scalar/incomplete-array
+flip is now a transform family: it rewrites a candidate's own file-scope
+`extern` declaration and every use of the symbol with it (`&SYM` <-> `SYM`,
+`SYM` <-> `SYM[0]`), both directions, one symbol at a time. It finds
+func_800353F4's match in one pass. Globals declared in a header are left
+alone, since changing those would change every other unit too.
+
 ### A two-term index adds the BASE LAST unless the row address is its own statement
 
 The lever above is about a symbol in the sum; this one bites with the base

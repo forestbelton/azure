@@ -1,4 +1,4 @@
-/* func_8004D880 -- 28/28 words, 22 DIFF. A Shift-JIS to ASCII classifier:
+/* func_8004D880 -- 28 of 28 words, 22 DIFF. A Shift-JIS to ASCII classifier:
  * three `(u16)(c + K) < N` range tests, each returning the same sum plus an
  * ASCII base, falling through to func_8004D828.
  *
