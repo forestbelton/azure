@@ -375,8 +375,10 @@ void func_800352D8(void) {
 
 s32 func_80034FFC(u32 *);
 
-void func_800352FC(void) {
-    func_80034FFC((u32 *) D_80082A38);
+/* Returns func_80034FFC's answer: func_800353F4 tests it. The tail call puts
+   it in $v0 either way, so the code is the same as the `void` spelling's. */
+s32 func_800352FC(void) {
+    return func_80034FFC((u32 *) D_80082A38);
 }
 
 void func_80035320(u32 v) {
@@ -421,7 +423,45 @@ void func_80035378(u32 v) {
     D_80082AB8[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800353F4);
+extern u32 D_80082A70[];
+extern u8 D_8006B230[];
+
+s32 func_800352FC(void);
+void func_80035208(s32);
+
+/* The retry gate: if the engine is idle, or its current script is not
+   D_8006B230, it clears the five-slot queue, re-queues `v` and re-arms
+   D_8006B230; otherwise it only re-queues. Either way it answers 1.
+
+   The `||` is what gives the first test a branch INTO the body and the second
+   one a branch past it (as nested ifs, 22 DIFF), and the clear is
+   func_80035378's own `&D_80082A38w[i]` plus a 0x48 displacement -- written
+   `[i + 0x12]` instead, loop.c folds the 0x48 into the giv's initial value.
+
+   D_80082A70 IS AN INCOMPLETE ARRAY read through `[0]`, and that is the last
+   two words. The scalar spelling puts the `lui` and the `lw` in ONE register
+   (`lui $v1` / `lw $v1, 0($v1)`), so the pair cannot straddle the `beqz`;
+   declared `extern u32 D_80082A70[];` the high half gets its own register,
+   reorg puts `lui $v0, %hi(D_80082A70)` in the branch's delay slot and the
+   load reads `%lo(D_80082A70)($v0)` after it, which is the listing. Both
+   operand orders of the comparison are 2 DIFF with the scalar form, and a
+   scalar D_8006B230 with `&` is 37 words. See matching-levers section 6. */
+s32 func_800353F4(u32 v) {
+    s32 i;
+
+    if (func_800352FC() == 0 || D_80082A70[0] != (u32) D_8006B230) {
+        for (i = 0xA; i < 0xF; i++) {
+            u8 *q = (u8 *) &D_80082A38w[i];
+
+            *(u32 *) (q + 0x48) = 0;
+        }
+        func_80035378(v);
+        func_80035208((s32) D_8006B230);
+        return 1;
+    }
+    func_80035378(v);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035484);
 
