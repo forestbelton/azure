@@ -1561,6 +1561,20 @@ Qualify only the fields that are written repeatedly. Marking the whole base
 volatile pins the stores that the target DOES schedule freely and costs more
 than it saves (measured there: 32 DIFF against 36).
 
+**Where to look for it.** advise.py's MISSING row names the signature
+directly: "target has `lw`/`lbu`/`lhu` and built has nothing there" means the
+listing loads something this source does not, and a cse-forwarded read is the
+usual reason. Scanning all 44 parks on 2026-10-27, thirteen have that row:
+
+  func_8003800C  func_80038CB8  func_800398BC  func_8004437C  func_80047054
+  func_8004A330  func_8004AC3C  func_8004D294  func_80054B08  func_800565D8
+  func_80056654  func_8005914C  func_8005BBFC
+
+That is a work list, not a diagnosis -- a missing load can equally be a
+different addressing shape or a read the source simply does not make. But
+search.py's `t_volatile` now tries the read side of it mechanically, so the
+cheap half of the check is one sweep.
+
 ### A load of a value just stored is a VOLATILE field
 
 When the listing stores a value and then loads the same address straight back
