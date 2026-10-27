@@ -3492,7 +3492,95 @@ void func_800520B4(u8 *p, s32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052144);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800525D4);
+extern u8 D_80071E44[];
+
+UnkNode *func_8003FC64(s32);
+u8 *func_8003FD64(s32, u8 *);
+void func_8003F540(u32, u32, u32, u32);
+s16 func_80053DA8(u16);
+s32 func_80033B2C(s32);
+void func_80052144(void);
+void func_80051708(u8 *, s32);
+void func_80051BFC(u8 *, s32);
+void func_80051E94(u8 *, s32);
+void func_800520B4(u8 *, s32);
+void func_80053374(u8 *, s32);
+
+/* The handle takes a BLOCK-SCOPED local in each of the five slots, not one
+   shared `h` across all of them. As one variable it is a single allocno with
+   twenty references over a short total live length, which outranks `s` -- the
+   sub-struct base, thirty references but live across the whole body -- in
+   global-alloc's priority, so it takes $s0 and `s` takes $s1, the reverse of
+   the listing. Five separate allocnos each lose to `s`. 45 DIFF either way at
+   the exact word count, every word of it those two registers. */
+void func_800525D4(void) {
+    UnkNode *n = func_8003FC64(0);
+    u8 *s;
+
+    if (n != NULL) {
+        s = (u8 *) (n + 1);
+        n->unk_10 = (u32) func_80052144;
+        *(u16 *) (n + 1) = 0;
+        *(u16 *) (s + 2) = 0;
+        *(u16 *) (s + 4) = 0;
+        *(u16 *) (s + 6) = 0;
+        *(u32 *) (s + 8) = (u32) D_80071E44;
+        *(u32 *) (s + 0xC) = 0;
+        *(u32 *) (s + 0x10) = 0;
+        *(u32 *) (s + 0x14) = 0;
+        *(u32 *) (s + 0x18) = 0;
+        *(u32 *) (s + 0x1C) = 0;
+        func_8003F540(0, 0x15B7C, 0, 0x10093C8);
+        func_80053DA8(0x300);
+        {
+            u8 *h = func_8003FD64(0x212, (u8 *) n);
+
+            if (h != NULL) {
+                func_80051708(h, (s32) s);
+                *(u32 *) (s + 0xC) = (u32) h;
+                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            }
+        }
+        if (func_80033B2C(0x1392) == 0) {
+            {
+                u8 *h = func_8003FD64(0x212, (u8 *) n);
+
+                if (h != NULL) {
+                    func_80051BFC(h, (s32) s);
+                    *(u32 *) (s + 0x10) = (u32) h;
+                    *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+                }
+            }
+        }
+        {
+            u8 *h = func_8003FD64(0x212, (u8 *) n);
+
+            if (h != NULL) {
+                func_80051E94(h, (s32) s);
+                *(u32 *) (s + 0x14) = (u32) h;
+                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            }
+        }
+        {
+            u8 *h = func_8003FD64(0x212, (u8 *) n);
+
+            if (h != NULL) {
+                func_800520B4(h, (s32) s);
+                *(u32 *) (s + 0x18) = (u32) h;
+                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            }
+        }
+        {
+            u8 *h = func_8003FD64(0x212, (u8 *) n);
+
+            if (h != NULL) {
+                func_80053374(h, (s32) s);
+                *(u32 *) (s + 0x1C) = (u32) h;
+                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            }
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052774);
 

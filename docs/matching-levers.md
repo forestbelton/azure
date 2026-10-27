@@ -2176,6 +2176,20 @@ that passes a value and matches. func_800553D4 uses an `__asm__` alias to say
 that for one call site without touching the declaration its other call sites
 need.
 
+### A value reassigned in several blocks is several block-scoped locals
+
+A handle written once per slot -- `h = alloc(); if (h) { use(h); store(h); }`
+five times over -- is ONE allocno when `h` is declared at function scope: all
+its references add up and its live length does not, so it outranks a base
+pointer that is live across the whole body and takes the lower-numbered
+callee-saved register. Declared inside each block instead, each copy is its own
+allocno and each one loses to the base, which is the order the listing has.
+func_800525D4, 45 DIFF at the exact word count and every word of it those two
+registers.
+
+So when two long-lived pointers hold each other's callee-saved registers, look
+at whether one of them is really several variables.
+
 ### A post-increment whose value outlives its statement costs a copy
 
 `expand_increment` QUEUES the increment when the incremented thing is a true
