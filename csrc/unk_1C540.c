@@ -7732,7 +7732,55 @@ s32 func_8005B470(s16 i, u8 *dst) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B4D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005BAB0);
+void func_80056D44(s32, u8 *);
+void func_8005E97C(s32, s32);
+
+/* func_80057948's sibling: stops every D_80085458 entry whose +0x06 is at
+   least 0x10 and whose +0x0A, +0x5C and +0x04 match the two arguments' high
+   byte, high byte and low seven bits, OR-ing their D_80073740 handles
+   together and stopping the accumulation at the end. D_80085F98 is held at 1
+   across it.
+
+   Same two idioms as func_80057948: the entry pointer is INDEXED inside the
+   body (`D_80085458 + i * 0x78`) so loop.c keeps one giv with the field
+   offsets as displacements, and `D_80073740[i]` is indexed rather than
+   walked. The five tests are one `&&` chain, which is what gives the five
+   branches to the shared skip label; the fields differ so nothing combines
+   into a range check.
+
+   The two identical func_80056D44/func_8005E97C pairs and the two
+   `m |= D_80073740[i]` are in the listing exactly as written here. */
+void func_8005BAB0(s32 a, s32 b)
+{
+    s32 i = 0;
+    s32 m = 0;
+
+    D_80085F98[0] = 1;
+    if ((s32) D_80073734[0] > 0)
+    {
+        do
+        {
+            u8 *e = D_80085458 + i * 0x78;
+
+            if (*(u16 *) (e + 0x1A) != 0 && *(u16 *) (e + 6) >= 0x10 &&
+                *(u16 *) (e + 0xA) == (b >> 8) && *(u16 *) (e + 0x5C) == (a >> 8) &&
+                *(u16 *) (e + 4) == (a & 0x7F))
+            {
+                m |= D_80073740[i];
+                *(u16 *) (e + 0x1A) = 0;
+                *(u16 *) (e + 0xA) = 0;
+                func_80056D44(i, e);
+                func_8005E97C(0, D_80073740[i]);
+                func_80056D44(i, e);
+                func_8005E97C(0, D_80073740[i]);
+                m |= D_80073740[i];
+            }
+            i++;
+        } while (i < (s32) D_80073734[0]);
+    }
+    func_8005E97C(0, m);
+    D_80085F98[0] = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005BBFC);
 
