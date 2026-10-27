@@ -1028,20 +1028,55 @@ typedef struct Unk80084960
    /* Hand-split out of pad_10 and pad_20: func_800561D8 multiplies +0x14 into
       its scale chain and compares +0x2C against 0x40 with `sltiu`. */
    s32 unk_14;
-   u8 pad_18[0x4];
+   u32 unk_18;
    s32 unk_1C; /* masked to 0x7F on every store */
-   u8 pad_20[0xC];
+   u8 pad_20[0x8];
+   u32 unk_28;
    u32 unk_2C;
-   u8 pad_30[0xA];
+   /* The rest is hand-split out of pad_30, pad_3C and pad_54 for
+      func_80057D20, the controller-change applier, which is the only function
+      that touches most of them. +0x64/+0x68/+0x6C..+0x70 and
+      +0x80/+0x84/+0x88..+0x8C are two copies of one portamento-shaped group,
+      and +0x4C/+0x4D/+0x4E are the controller number, its sub-number and its
+      value as func_80057A94 reads them back. */
+   u8 unk_30;
+   u8 pad_31[0x7];
+   s16 unk_38;
    u16 unk_3A;
-   u8 pad_3C[0x11];
-   /* Hand-split out of pad_3C: func_8005914C compares it against 0x14 before
-      broadcasting a 0x06 controller. */
+   u8 pad_3C[0x4];
+   s16 unk_40;
+   u8 pad_42[0x2];
+   u32 unk_44;
+   u32 unk_48;
+   u8 unk_4C;
    u8 unk_4D;
-   u8 pad_4E[0x2];
+   u8 unk_4E;
+   u8 pad_4F[0x1];
    s16 unk_50;
    u16 unk_52;
-   u8 pad_54[0x48];
+   u8 pad_54[0x9];
+   u8 unk_5D;
+   u8 pad_5E[0x6];
+   u32 unk_64;
+   u32 unk_68;
+   u8 unk_6C;
+   u8 unk_6D;
+   u8 unk_6E;
+   u8 pad_6F[0x1];
+   u32 unk_70;
+   u8 pad_74[0x4];
+   u8 unk_78;
+   u8 pad_79[0x7];
+   u32 unk_80;
+   u32 unk_84;
+   u8 unk_88;
+   u8 unk_89;
+   u8 unk_8A;
+   u8 pad_8B[0x1];
+   u32 unk_8C;
+   u8 pad_90[0x8];
+   u8 unk_98;
+   u8 pad_99[0x3];
 } Unk80084960;
 
 /* Callbacks installed by the carved units, stored as function pointers. */

@@ -332,16 +332,17 @@ in 0x80010000..0x80090000:
 | 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
 | 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | func_800517CC (268 w) |
 | 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
-| 0x06614..0x068fc | 80032E14..800330FC |186 | jtbl_80032E14 (36), jtbl_80032EA4 (23), pad, jtbl_80032F04 (126) | func_80054F9C (28 w, **MATCHED**), func_80057A94 (163 w), func_80057D20 (463 w) |
+| 0x06614..0x068fc | 80032E14..800330FC |186 | jtbl_80032E14 (36), jtbl_80032EA4 (23), pad, jtbl_80032F04 (126) | func_80054F9C (28 w, **MATCHED**), func_80057A94 (163 w, **MATCHED**), func_80057D20 (463 w, 463/463 and 112 DIFF) |
 | 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_1C540, func_800595C0) |
 | 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
 
 Entry counts come from each dispatch's `sltiu` bound, and every run's extent
 agrees with those bounds, so the grouping is measured rather than inferred.
 
-**The 0x80032E14 run is the next one to place, and it is one function short of
-two.** func_80054F9C matches (28/28, `docs/near-misses/func_80054F9C.c`), so
-that run needs func_80057A94 and func_80057D20. With all three in C,
+**The 0x80032E14 run is the next one to place, and it is ONE FUNCTION SHORT.**
+func_80054F9C (28/28) and func_80057A94 (163/163) both match -- see their
+files in `docs/near-misses/` -- and func_80057D20 is at 463 of 463 words with
+112 DIFF, all of it one shifted region. So that run needs only func_80057D20. With all three in C,
 `unk_1C540` splits in TWO at func_800595C0 -- the first piece's `.rodata` is
 this run, the second's is jtbl_8003310C -- and the functions owning the three
 EARLIER runs are all still `INCLUDE_ASM`, so they contribute nothing to either
