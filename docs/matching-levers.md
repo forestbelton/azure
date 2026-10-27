@@ -2426,6 +2426,24 @@ So add a case label on the other side of the root and group it with
 further than that -- `case 0:` and `case 1:` are byte-identical. Two words,
 and it also tells you the original had a label there.
 
+### A switch's range split means there is a case label you have not found
+
+`emit_case_nodes` (stmt.c:5664) has its own shortcut: *"omit the conditional
+branch to default if we avoid only one right child; it costs too much space to
+save so little time"*. So a two-case switch comes out as two plain equality
+tests and NO range comparison. A listing that tests one case for equality and
+then splits the range -- `beq x, LO` then `slt t, x, LO+1` / `bnez t` to the
+default -- has at least THREE case nodes, and the third is a label whose body
+is the default's: gcc emits the root's equality, the `slt` to separate the two
+subtrees, then the left child's equality, which jump.c deletes because its
+label is already the default's, and inverts the branch over the `j default`
+that is left.
+
+So add a case label on the other side of the root and group it with
+`default:`. func_80051228 needs one below 2, and the compiler pins it no
+further than that -- `case 0:` and `case 1:` are byte-identical. Two words,
+and it also tells you the original had a label there.
+
 ### A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH
 
 For three arms that each store a different constant to one field, an if-else
