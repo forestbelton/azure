@@ -2629,13 +2629,93 @@ void func_8004FA2C(u8 *p, s32 b) {
     *(u32 *) (p + 0x30) = func_80049DE8(*(u32 *) (p + 0x30), b, *(u32 *) (p + 0x24));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004FAA4);
+s32 func_8004FD78(u8 *, s32);
+void func_8004FA2C(u8 *, s32);
 
-void func_8004FAA4(u32 *);
+/* D_80083160 through a STRUCT POINTER local, as in func_80050308: that is what
+   makes the flag word at +0x08 RE-READ before the inner 0x2000/0x8000 tests.
+   The store to `p + 0x38` just above invalidates it only if the two MEMs'
+   MEM_IN_STRUCT_P flags differ, and `q->unk_08` is a COMPONENT_REF where
+   `*(u32 *) (g + 8)` off a `u8 *` base is a bare dereference like the store
+   itself -- with both bare, cse forwards the value from the outer `& 0xA000`
+   test and the reload plus its delay nop go missing. */
+void func_8004FAA4(u8 *p)
+{
+    Unk80083160 *q = &D_80083160;
+    s32 s;
+    s32 t;
+
+    s = 0;
+    if (q->unk_08 != 0 && *(s32 *)(p + 0x24) >= 2)
+    {
+        if ((q->unk_08 & 0xA000) != 0)
+        {
+            if ((q->unk_10 & 0x2000) != 0)
+            {
+                s = 1;
+                *(s32 *)(p + 0x38) = 0;
+                *(s32 *)(p + 0x28) = 4;
+            }
+            else if ((q->unk_10 & 0x8000) != 0)
+            {
+                s = -1;
+                *(s32 *)(p + 0x38) = 0;
+                *(s32 *)(p + 0x28) = 4;
+            }
+            else
+            {
+                t = *(s32 *)(p + 0x38);
+                if (t >= 9)
+                {
+                    *(s32 *)(p + 0x38) = t - 2;
+                    if ((q->unk_08 & 0x2000) != 0)
+                    {
+                        s = 1;
+                        *(s32 *)(p + 0x28) = 3;
+                    }
+                    else if ((q->unk_08 & 0x8000) != 0)
+                    {
+                        s = -1;
+                        *(s32 *)(p + 0x28) = 3;
+                    }
+                }
+                else
+                {
+                    *(s32 *)(p + 0x38) = t + 1;
+                }
+            }
+        }
+        if (s == 0)
+        {
+            if ((q->unk_10 & 1) != 0)
+            {
+                if (*(s32 *)(D_800814A8 + 0xB0) != 0)
+                {
+                    t = func_8004FD78(p, 1);
+                    *(s32 *)(p + 0x28) = 4;
+                    s = t - *(s32 *)(p + 0x30);
+                }
+            }
+            else if ((q->unk_10 & 2) != 0 && *(s32 *)(D_800814A8 + 0xAC) != 0)
+            {
+                t = func_8004FD78(p, 0);
+                *(s32 *)(p + 0x28) = 4;
+                s = t - *(s32 *)(p + 0x30);
+            }
+        }
+        if (s != 0)
+        {
+            func_80053DA8(0x504);
+            func_8004FA2C(p, s);
+        }
+    }
+}
+
+void func_8004FAA4(u8 *);
 
 void func_8004FC2C(u32 *p) {
     ((void (*)(u32 *)) p[0])(p);
-    func_8004FAA4(p);
+    func_8004FAA4((u8 *) p);
 }
 
 u32 func_80021448(u8 *);
