@@ -2564,7 +2564,117 @@ u8 *func_8004E280(u8 *p, s32 *out) {
     return p + 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E298);
+/* The text layout pass: walks a NUL-terminated string and turns every
+   printable byte into a 0xC-byte glyph record through func_8004E264 and
+   func_8004E188, advancing a running `x` and `y`. Space, newline, tab, 0x08
+   and 0x0C are control codes; tab with an `s` after it sets the tab stop,
+   otherwise it advances `x` by (digit * (stop + 8)). Returns the start of the
+   run with the end bit set on the last record, or 0 if nothing was emitted.
+
+   `o + 0xA` is a GIV, not a second source pointer. `o` is set once in the
+   loop (`o += 0xC`, on one path only, which still makes it a biv for
+   loop.c's purposes) so strength_reduce adds a second register biased to the
+   +0x0A field -- the one the glyph arm reads back -- and rewrites +1, +2, +3
+   and +4 as NEGATIVE displacements off it. Write the pointer naturally and
+   loop.c produces the pair.
+
+   Three shapes paid for, 104 DIFF down to a match:
+
+   * The byte is read ONCE per iteration into an `s32` and masked into a
+     SECOND variable: `d = *src;` carries the loop's zero test, `c = d & 0xFF`
+     every comparison. A `u8 c = d` copy is a plain `addu` (that is
+     func_8005947C's shape), not the listing's `andi $v1, $v0, 0xFF`, because
+     the truncation of an `lbu` result is free; the explicit mask is what
+     survives.
+
+   * The space arm needs a TEMPORARY for the constant: `x = x + 8 + w;`
+     reassociates to `x + (w + 8)` and emits `addiu $v0, $s4, 8`, where the
+     listing has `addiu $v0, $s1, 8` -- the sum pinned as `(x + 8) + w`. Same
+     lever as matching-levers section 8's reassociation note.
+
+   * The four initialisers go `x`, `y`, `start`, `w`. That order decides which
+     of the five callee-saved register save/init pairs sched2 interleaves
+     first; every other permutation of the four is 4 to 9 words out, with
+     `start` first (the natural reading) at 6. */
+u8 *func_8004E298(u8 *o, u8 *src, s32 flags)
+{
+    u8 *start;
+    s32 x;
+    s32 y;
+    s32 w;
+    s32 t;
+    s32 u;
+    s32 d;
+    s32 c;
+
+    x = 0;
+    y = 0;
+    start = o;
+    w = 0;
+    d = *src;
+    while (d != 0)
+    {
+        c = d & 0xFF;
+        if (c == 0x20)
+        {
+            src++;
+            u = x + 8;
+            x = u + w;
+        }
+        else if (c == 0xA)
+        {
+            src++;
+            x = 0;
+            y += 8;
+        }
+        else if (c == 9)
+        {
+            src++;
+            if (*src == 0x73)
+            {
+                src++;
+                w = *src - 0x30;
+            }
+            else
+            {
+                x += (*src - 0x30) * (w + 8);
+            }
+            src++;
+        }
+        else if (c == 8)
+        {
+            src = func_8004E280(src + 1, &flags);
+        }
+        else if (c == 0xC)
+        {
+            src = func_8004E280(src + 1, &t);
+            x += t;
+        }
+        else
+        {
+            o[0] = 0;
+            o[1] = (flags & 0x80) ? 0x2E : 0x2C;
+            o[2] = x - 0x80;
+            o[3] = y - 0x80;
+            *(s16 *) (o + 4) = ((flags & 0x300) >> 3) | 0xF;
+            func_8004E264((u16 *) o, flags);
+            func_8004E188(o, *src);
+            src++;
+            x += o[0xA] + w;
+            o += 0xC;
+        }
+        d = *src;
+    }
+    if (o != start)
+    {
+        o[-0xC] |= 0x80;
+    }
+    else
+    {
+        start = 0;
+    }
+    return start;
+}
 
 u8 *func_8004E478(u8 *p, u16 n) {
     /* The PARAMETER is the moving pointer and the saved copy is returned. */
@@ -2667,7 +2777,6 @@ s32 func_8004E8D8(u8 *p, s32 b) {
     return r;
 }
 
-void func_8004E298(u8 *, s32, s32);
 
 u8 *func_8004E928(s32 a, s32 b) {
     u8 *r = 0;
