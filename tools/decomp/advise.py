@@ -311,9 +311,19 @@ def slot_report(B, T):
         return
     def fmt(d):
         return ' '.join('%s*%d' % (k, v) for k, v in sorted(d.items())) or '-'
+    def side(off, frame, saved):
+        # an offset means different things to the two builds when their frame
+        # sizes differ: the incoming-argument area starts AT the frame size,
+        # so the same displacement can be a local on one side and an argument
+        # on the other. Label each side by its own frame.
+        if frame and off >= frame:
+            return 'arg'
+        if off >= lo and saved:
+            return 'saved'
+        return 'local'
     for off, b, t in rows:
-        where = ('saved reg' if off >= lo and off < (fb if fb else 0)
-                 else 'incoming arg' if fb and off >= fb else 'local')
+        wb, wt = side(off, fb, sb), side(off, ft, st)
+        where = wb if wb == wt else '%s/%s' % (wb, wt)
         print('    0x%02X  %-12s built %-18s target %s'
               % (off, where, fmt(b), fmt(t)))
     print(wrap('a LOCAL row that exists on one side only is a local that one '

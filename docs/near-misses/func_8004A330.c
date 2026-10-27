@@ -67,6 +67,16 @@
  * arguments 5 and 6 above, applied to the result accumulator. Found by
  * search.py's declaration-width family in the sweep of all forty parks.
  * ONE word and 43 differing words left, where it was three and 74.
+ *
+ * THE FRAME, read with advise.py's census 2026-10-27: the listing's frame is
+ * 0x40 and this source's 0x38, and the whole 8 bytes is TWO MORE SAVED
+ * CALLEE-SAVED REGISTERS. The incoming arguments move with it, which is why
+ * the two builds reload DIFFERENT ones: with eight parameters, arguments 5
+ * to 8 are all on the stack, and the listing keeps 5 and 6 in registers and
+ * reloads 7 and 8 while this source does the opposite. So the one word left
+ * is not a missing instruction anywhere -- it is the register pressure being
+ * two registers lower here than in the listing, and the thing to look for is
+ * whatever makes two more values live across the calls.
  */
 
 #include "common.h"
