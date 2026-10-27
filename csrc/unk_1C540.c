@@ -1411,7 +1411,105 @@ u8 *func_8004C010(u8 *d, u8 *s) {
     return d;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C080);
+/* The primitive builder: dispatch on `e[1] & 0xFC`, modulate the colour words
+   with func_8004C010 for each of the primitive's vertices, and return the
+   advanced cursor. Three things decide it:
+
+   * ONE `return q;` at the end, not an early return per arm. Each `return q`
+     is another REFERENCE to `q` in global-alloc's priority formula, and with
+     five of them `q` (17 refs, live 152) outranks `e` (17 refs, live 188) and
+     takes $s3 where the listing has `e` there -- 32 register-only differing
+     words from that alone, with the word count already exact. Written as a
+     plain if/else-if chain with the single exit, the two swap.
+   * `p[7] = k;` followed by `p[7] = e[1];` -- two stores to the same byte with
+     the first dead. flow does NOT delete it, because the `lbu` of `e[1]`
+     between them is a load through a different pointer and that drops flow's
+     `mem_set_list` entry for the first store.
+   * the dispatch is an if/else-if chain, not a switch: the listing is a plain
+     `bne` chain with no range test anywhere. */
+u8 *func_8004C010(u8 *, u8 *);
+u8 *func_8004BDDC(u8 *, u8 *, u8 *, u8 *, u8 *);
+u8 *func_8004B954(u8 *, u8 *, u8 *, u8 *, u8 *, s32, s32);
+void func_80067DF0(u8 *, RECT *);
+
+u8 *func_8004C080(u8 *a, u8 *b, u8 *p, u8 *q, u8 *e, s32 n)
+{
+    RECT r;
+    s32 k = e[1] & 0xFC;
+
+    if (k == 0x28)
+    {
+        *(u32 *)(p + 4) = *(u32 *)(e + 4);
+        func_8004C010(p + 4, a);
+        func_8004C010(p + 4, b);
+        p[3] = 5;
+        *(u32 *)(p + 0xC) = *(u32 *)(p + 0x10);
+        *(u32 *)(p + 0x10) = *(u32 *)(p + 0x18);
+        *(u32 *)(p + 0x14) = *(u32 *)(p + 0x20);
+        p[7] = e[1];
+    }
+    else if (k == 0x48)
+    {
+        *(u32 *)(p + 4) = *(u32 *)(e + 4);
+        func_8004C010(p + 4, a);
+        func_8004C010(p + 4, b);
+        p[3] = 5;
+        *(u32 *)(p + 0x14) = 0x55555555;
+        p[7] = e[1];
+        *(u32 *)(p + 8) = *(u32 *)(p + 0x10);
+        *(u32 *)(p + 0xC) = *(u32 *)(p + 0x20);
+        *(u32 *)(p + 0x10) = *(u32 *)(p + 0x18);
+    }
+    else if (k == 0x38)
+    {
+        *(u32 *)(p + 4) = *(u32 *)(e + 4);
+        func_8004C010(p + 4, a);
+        func_8004C010(p + 4, b);
+        q += 0xC;
+        p[3] = 8;
+        p[7] = k;
+        p[7] = e[1];
+        *(u32 *)(p + 0xC) = *(u32 *)q;
+        func_8004C010(p + 0xC, a);
+        func_8004C010(p + 0xC, b);
+        *(u32 *)(p + 0x14) = *(u32 *)(q + 4);
+        func_8004C010(p + 0x14, a);
+        func_8004C010(p + 0x14, b);
+        *(u32 *)(p + 0x1C) = *(u32 *)(q + 8);
+        func_8004C010(p + 0x1C, a);
+        func_8004C010(p + 0x1C, b);
+    }
+    else if (k == 0x3C)
+    {
+        q = func_8004BDDC(a, b, p, q, e);
+    }
+    else if ((e[1] & 0x80) != 0)
+    {
+        s32 m = e[1] & 0x7F;
+
+        if (m == 0)
+        {
+            r.x = e[8];
+            r.y = e[9];
+            r.w = e[0xA] + 1;
+            r.h = e[0xB] + 1;
+            func_80067DF0(p, &r);
+        }
+        else if (m == 1)
+        {
+            func_80067F20((u32 *)p, 1, *(u16 *)(e + 6), *(s16 *)(e + 4), 0);
+        }
+        else if ((m & 0x7C) == 0x30)
+        {
+            q = func_8004B954(a, b, p, q, e, n, 1);
+        }
+        else if ((m & 0x7C) == 0x20)
+        {
+            q = func_8004B954(a, b, p, q, e, n, 0);
+        }
+    }
+    return q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C36C);
 

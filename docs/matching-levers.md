@@ -2340,6 +2340,21 @@ it into the PREHEADER, after the guard, which is where these targets have it
 for a pointer live across a CALL, and the two do not conflict: a guard branch
 is not a call, and nothing has to survive it.
 
+### An early `return x` is another REFERENCE to x, and it can flip global-alloc
+
+`allocno_priority` is `floor_log2(refs) * refs * size / live_length`, so every
+extra reference counts -- and `return x;` in five arms is five references to
+`x` even when jump.c later merges them. func_8004C080 was 187/187 words with
+32 register-only differing words for exactly this: five `return q;` gave `q`
+17 refs against `e`'s 17 with a shorter live range (152 against 188), so `q`
+took $s3 where the listing has `e` there, and the whole prologue and every
+base register followed. Rewritten as a plain if/else-if chain with ONE exit at
+the end, the two swap and it matches.
+
+So when `advise.py --greg` shows two allocnos tied on references and the
+listing wants the longer-lived one first, count the function's `return`
+statements before touching anything else -- collapsing them is free.
+
 ### A base pointer assigned before a call lives in a callee-saved register
 
 `u8 *p = (u8 *) SYM;` ahead of two calls costs three words -- the `sw`, the
