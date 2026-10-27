@@ -538,6 +538,13 @@ def t_goto_loop(text):
         if any(t in cond for t in ('++', '--', '=')) and '==' not in cond \
                 and '!=' not in cond and '<=' not in cond and '>=' not in cond:
             continue                      # a side effect in the condition
+        # A `break` or `continue` in the body belongs to THIS loop, and the
+        # rewrite would hand it to an enclosing one -- a silent semantic
+        # change. (func_80059F8C's two scans survive it only because their
+        # `break` is immediately followed by the outer loop's own `break`, so
+        # both spellings land in the same place; that is luck, not a rule.)
+        if re.search(r'\b(break|continue)\b', body):
+            continue
         lab = 'zzloop%d' % m.start()
         new = (pre
                + ind + 'if (' + cond + ') {\n'

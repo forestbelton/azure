@@ -1,4 +1,4 @@
-/* func_80059F8C (unk_2CDC0) -- 146 of 145 words, 121 DIFF. NOT compiled.
+/* func_80059F8C (unk_2CDC0) -- 145 of 145 words, 103 DIFF. NOT compiled.
  *
  * FIRST ATTEMPT, 2026-10-27, and this is a DECODING park rather than a
  * near-miss: the control flow below is read off the listing and compiles to
@@ -30,32 +30,34 @@
  * and so does the loop's preheader except for the copies below. `end = p + n`
  * in a local is worth one word (147 -> 146) and one differing word.
  *
- * WHAT IS WRONG is NOT the scans' spelling, and that is worth stating because
- * the listing makes it look as though it is. The two free-slot scans read
+ * THE WORD CAME FROM THE TWO FREE-SLOT SCANS AS BACKWARD GOTOS, 2026-10-27:
+ * 146 of 145 words and 121 DIFF to 145 of 145 and 103, the exact count. Each
+ * scan is now
  *
- *     L080:  v1 = a0 ; v0 = v1[1] ; beqz v0 -> store ; a2++ ;
- *            if (a2 < 0x10) { a0 = v1 + 8 ; goto L080 }
- *     L16C:  v0 = v1[1] ; beqz v0 -> store ; a2++ ;
- *            if (a2 < 0x10) { v1 += 8 ; goto L16C }
+ *     if (i < 0x10) {
+ *     scan1:
+ *         if (D_800869C0[i * 2 + 1] == 0) { store; break; }
+ *         i++;
+ *         if (i < 0x10) { goto scan1; }
+ *     }
+ *     break;
  *
- * -- a cursor advanced by 8 with the counter beside it and the test at the
- * TOP, i.e. a walked pointer. MEASURED 2026-10-27 and it is WORSE than the
- * indexed `D_800869C0[i * 2 + 1]` the draft uses:
+ * which is not a loop to loop.c, so it gets no biv, no giv and no hoisting --
+ * matching-levers section 2, the same lever that answered func_8003C67C's row
+ * and took func_8004E9EC from 34 words to 32. Found by `search.py
+ * --only=goto_loop`, and then WITHDRAWN FROM THAT FAMILY: a `break` inside a
+ * rewritten loop belongs to the loop being rewritten, and the goto form hands
+ * it to the enclosing one. Here that is harmless, because each scan's `break`
+ * is immediately followed by the outer loop's own `break` and both spellings
+ * land in the same place -- but it is luck rather than a rule, so the family
+ * now skips any body containing `break` or `continue` and this one has to be
+ * written by hand.
  *
- *   * both scans as `while (q[1] != 0) { i++; ... q += 2; }` with the outer
- *     loop walked too: 148 words, 125 DIFF
- *   * both scans as a `for (;;)` that stores and breaks, outer loop indexed:
- *     156 words, 127 DIFF
- *   * the draft below (indexed scans, indexed outer loop): 146, 121
- *
- * So the `addiu ..., 0x8` in each scan is strength reduction on an INDEXED
- * reference, as it is in the outer loops of this unit, and the extra copies
- * in the preheader ($t4/$t3/$t6/$t5/$t7/$t0/$t2/$t1 against the listing's
- * four) come from somewhere else -- most likely from how many separate
- * loop-invariant values the draft creates, since the listing keeps exactly
- * four ($a2 = 0, $t3 = the %hi, $t1 = end, $t2 = the table base) plus the
- * reserve's address. That census is the thing to work from next: count the
- * listing's invariants, then find a spelling with exactly those.
+ * Note what this did NOT need: the walked-pointer spelling the listing's
+ * `addiu ..., 0x8` suggests. Measured before the goto: both scans walked with
+ * the outer loop walked too, 148 words and 125 DIFF; both as a `for (;;)`
+ * with the outer loop indexed, 156 and 127. The `addiu` is strength reduction
+ * on an INDEXED reference, as everywhere else in this unit.
  *
  * The other thing to carry over from the sibling: `D_80073830[...]`'s ADDRESS
  * is hoisted into the preheader but its LOAD stays in the loop (the listing's
@@ -95,11 +97,16 @@ s32 func_80059F8C(u32 p, s32 n)
                 if (D_800869C0[0] < end) {
                     return -1;
                 }
-                for (; i < 0x10; i++) {
+                if (i < 0x10) {
+                scan1:
                     if (D_800869C0[i * 2 + 1] == 0) {
                         D_800869C0[i * 2] = p;
                         D_800869C0[i * 2 + 1] = n;
                         break;
+                    }
+                    i++;
+                    if (i < 0x10) {
+                        goto scan1;
                     }
                 }
                 break;
@@ -131,11 +138,16 @@ s32 func_80059F8C(u32 p, s32 n)
             if ((s32) D_800869C0[(i + 1) * 2] < (s32) end) {
                 return -1;
             }
-            for (; i < 0x10; i++) {
+            if (i < 0x10) {
+            scan2:
                 if (D_800869C0[i * 2 + 1] == 0) {
                     D_800869C0[i * 2] = p;
                     D_800869C0[i * 2 + 1] = n;
                     break;
+                }
+                i++;
+                if (i < 0x10) {
+                    goto scan2;
                 }
             }
             break;
