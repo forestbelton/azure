@@ -121,6 +121,17 @@ which was already declared as a struct 300 lines further down.
   and makes all four accesses displacements. Written as `SYM[36]` and `SYM[86]`
   the base comes out as `%lo(SYM)+0x48` and a second `addiu` undoes it
   (func_8003AAF8, 7 words against 8).
+* **A bare `.size` record wants an INCOMPLETE-ARRAY declaration, or the
+  address materialisation goes $gp-relative too.** The trick in
+  docs/addressing-and-translation-units.md gives "$gp-relative loads and
+  stores, absolute address materialisation" -- but only if cc1psx emits no
+  size of its own. `extern u32 D_X;` makes it emit `.extern D_X, 4`, `&D_X`
+  becomes a single `la`, and maspsx rewrites that to $gp-relative as well, so
+  a function that writes the ADDRESS out as data loses a word per
+  materialisation. `extern u32 D_X[];` with `D_X[0] = v` emits no size, keeps
+  the address as lui/addiu and still gets the one-word store. Worth 2 words on
+  func_8004DF8C, which needs both forms of the same symbol at once.
+
 * **An `__asm__` alias gives one function its own declaration of a shared
   symbol.** `extern u32 X_arr[] __asm__("X");` is a second C name for the same
   assembler symbol, so a function can use the incomplete-array
@@ -302,6 +313,8 @@ directly and leaves the copy above the branch. |
 | func_80054104 | unk_1C540 | **61/57 words, four words OVER** | The only row here that is too BIG. loop.c strength-reduces the access to a LOCAL array into a walking cursor and hoists `$sp + 0x10` into its own register, costing two callee-saved registers the target does not spend; the target recomputes the address every inner iteration. Six subscript spellings measured, all 61 -- see `docs/near-misses/func_80054104.c`. Needs func_80055730 and func_8005BAB0 widened to two arguments to land. |
 | func_80055D84 | unk_1C540 | **58/58 words, 5 DIFF** | A two-register swap around the final `or`: the target reuses the mask's own register as the destination and this source does not, and --greg shows why (the mask is allocated first on priority and takes the lowest free register instead of preferring the argument register). Getting to the exact count needed the cross-jump lever above; everything measured is in `docs/near-misses/func_80055D84.c`. |
 | func_8004DE88 | unk_1C540 | **64/65 words, one register copy** | Command-buffer builder. Everything matches except `addu $a0,$v0,$zero`, a copy of strrchr's return: the target keeps the cursor in $a0 and the constants in $v0, this source keeps the cursor in $v0 so the copy is deleted. The suspect is local-alloc's SUGGESTION pass, which assigns a quantity born from a hard-register copy before the priority loop. See `docs/near-misses/func_8004DE88.c`. |
+| func_8004DF8C | unk_1C540 | **70/72 words, two words** | func_8004DE88's sibling, and the same cursor-versus-address-value register contest. Its own contribution is the $gp-relative half: it needs both an absolute address materialisation and a one-word store for D_80081548/D_8008154C, which takes the bare `.size` records PLUS incomplete-array declarations (see the pattern above -- `extern u32 D_X;` costs two more words). Everything measured is in `docs/near-misses/func_8004DF8C.c`. |
+| func_80036B10 | unk_72A8 | **77/77 words, 3 DIFF** | One instruction one slot out: the target emits the `lui` of the call's fourth argument before the pair that saves $s5 and loads parameter 5, this source after. They tie on sched1 priority so LUID decides, which means the original's parameter-5 load is late in RTL where assign_parms puts this one at the top. See `docs/near-misses/func_80036B10.c`. |
 | func_8004CAA0 | unk_1C540 | **NOT a C function as written** | 18 words, and the cheapest-looking row in the table until you read it: it saves `$sp` into the PSX scratchpad at 0x1F8003FC, switches `$sp` there, calls func_8004C36C and restores. Plain C cannot assign `$sp`, so it wants inline asm or a decomp device like func_8003E758's. `triage.py` now reports this shape as STACK-SWITCH rather than EASY. |
 | func_8004CECC | unk_1C540 | **101/102 words, one word** | HSV->RGB. Every opcode, immediate, displacement, branch offset and delay slot matches, and the `beqz`->end delta agrees, so all six switch arms are byte-correct; the whole gap is the `v` parameter's entry copy `addu $v1,$a2,$zero`, and the 101 DIFF is that one-word shift rather than 101 wrong words. Diagnosed to the register from the dumps in `docs/near-misses/func_8004CECC.c`, which lists the eight shapes and the whole `search.py` sweep already measured against it and names the signature to aim at: the 0x80808081 magic belongs in $t0, not $a3, because the colour block had one fewer long-lived block-local than this source gives it. Landing it also needs jtbl_8002E5F8 placed. |
 

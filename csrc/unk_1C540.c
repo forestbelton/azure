@@ -2912,9 +2912,63 @@ void func_80050B7C(s32 a) {
     func_800491F4(a, D_800717BC, 0x11);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050BA4);
+s32 func_80050AF0(u8 *, s32);
+void func_80050A00(u8 *, s32);
+u32 func_8004FDE0(u32);
+void func_8004E130(void);
+void func_8004B248(u32 *);
+void func_80050694(u8 *);
+void func_8004CAA0(void);
+s32 func_8004491C(UnkNode *, u32);
 
-void func_80050BA4(s32);
+/* func_80050B7C is landed as `void` but its result is stored here, so this
+   function needs its own declaration of the same assembler symbol. */
+s32 func_80050B7Cr(s32) __asm__("func_80050B7C");
+
+s32 func_80050BA4(s32 a)
+{
+    u8 *x;
+    u8 *y;
+    u8 *m;
+    s32 r;
+    u16 f;
+    u32 g;
+
+    x = (u8 *) func_8003FC64(0);
+    if (x == 0)
+    {
+        return 0;
+    }
+    y = (u8 *) func_8003FC64(0);
+    if (y != 0)
+    {
+        m = y + 0x20;
+        *(u32 *)(m + 0xA0) = (u32)x;
+        if (func_80050AF0(m, 0x11) != 0)
+        {
+            *(u32 *)(y + 0xC) = (u32)(y + 0x78);
+            *(u32 *)(m + 0x64) = func_80050B7Cr(*(s32 *)(m + 0x68));
+            func_80050A00(m, a);
+            *(u32 *)(y + 0x10) = (u32)func_80050694;
+            r = func_8004FDE0(2);
+            *(u32 *)(m + 0x28) = r;
+            if (r != 0)
+            {
+                func_8004E130();
+                func_8004491C((UnkNode *)y, (u32)func_8004CAA0);
+                return (s32)x;
+            }
+        }
+        func_8004B248((u32 *)(m + 0x6C));
+        f = *(u16 *)(y + 0x1E);
+        g = D_800814A0;
+        *(s16 *)(y + 0x1E) = f | 0x8000;
+        D_800814A0 = g | 0x8000;
+    }
+    return (s32)x;
+}
+
+s32 func_80050BA4(s32);
 
 void func_80050CAC(void) {
     s32 a = 0;
