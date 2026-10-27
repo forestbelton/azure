@@ -995,7 +995,44 @@ void func_8004B028(u8 *m, u8 **list, s32 k) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B08C);
+/* `copy` is an array of 0x40 pointers and `m` a 0x80-byte table, in that
+   declaration order: reversing them swaps the two stack offsets. The NULL
+   terminator is written as `copy[n]`, which shares memcpy's `n * 4` through
+   cse -- one `sll` feeds both the size argument and the store's base.
+
+   The `list == NULL` test is INSIDE the body, after the `*list != 0` loop
+   condition, which is why only the latter appears twice (jump.c duplicates
+   the loop test to the back edge, the body's test stays single). */
+void func_8004B08C(u8 **list)
+{
+    u8 *copy[0x40];
+    u8 m[0x80];
+    s32 n;
+    s32 last;
+
+    D_80081540 = m;
+    n = func_8004AE3C((u32 *)list);
+    memcpy(copy, list, n * 4);
+    copy[n] = NULL;
+    func_8004AFC8((s32)list, n, 4, (void *)func_8004AE68);
+    last = 0;
+    while (*list != 0)
+    {
+        if (list == NULL)
+        {
+            break;
+        }
+        if ((*list)[1] != last)
+        {
+            last = (*list)[1];
+            bzero(m, 0x80);
+            n = func_8004AFE8(list);
+            func_8004B028(m, copy, last);
+            func_8004AFC8((s32)list, n, 4, (void *)func_8004AE98);
+            list += n;
+        }
+    }
+}
 
 /* s32 rather than u8 *, because the two callers 280 lines below already
    declare it that way and pass their own s32 parameter straight through. */
