@@ -2429,6 +2429,16 @@ shift" (`(s16) x << 8`, an s16 parameter, a multiply by 0x100) collapses to the
 single `sll 8`, because the value is stored as a halfword and combine drops the
 extension. func_8005B3D8, 2 words.
 
+### `break` and a tested `while` condition pick DIFFERENT registers
+
+`do { ...; q = next; p = q + K; } while (q != 0);` and
+`while (1) { ...; q = next; if (q == 0) break; p = q + K; }` generate the same
+instructions in the same order -- and give `q` a different hard register, $v0
+for the tested condition and $a0 for the break. func_80053A88 was 109/109 with
+three register-only differing words until the `break` form went in; the type
+of `q`, its declaration position and reusing an existing local for it all left
+it in $v0. Try the other form before reading an allocation dump.
+
 ### No re-test at the bottom means that is not the loop condition
 
 A `while (COND) { ... if (X) break; ... }` re-tests COND at the bottom of the
