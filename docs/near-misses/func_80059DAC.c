@@ -30,10 +30,25 @@
  * the inner loop (`addu $a1,$t1,$zero`), keeps a second copy of the base in
  * $t2 for the inner `j * 8 + base`, and increments the giv in the outer
  * branch's delay slot. This source recomputes `sll`/`addu` for both pointers
- * instead, so loop.c declined the reduction. Note the function makes NO calls,
- * so `loop_has_call` is false and the strength-reduction threshold is not
- * halved -- which is the likeliest reason, and would mean the lever is the
- * number of USES of `i * 8 + base` in the outer body rather than its spelling.
+ * instead, so loop.c declined the reduction.
+ *
+ * THE THRESHOLD GUESS IN THIS NOTE WAS WRONG and is corrected here. loop.c's
+ * cut is `v->lifetime * threshold * benefit < insn_count` (loop.c:3823) with
+ * `threshold = (loop_has_call ? 1 : 2) * (3 + n_non_fixed_regs)` -- and
+ * `n_non_fixed_regs` counts non-fixed HARD registers, so it is a constant for
+ * this target and the product is in the hundreds either way. `loop_has_call`
+ * cannot decide anything here. What decides a giv is only whether `benefit`
+ * survives above zero: the address's rtx cost, minus `add_cost * biv_count`,
+ * minus `copy_cost` when the giv is NOT replaceable.
+ *
+ * So the real question is `v->replaceable`. `d` is assigned inside the INNER
+ * loop here, which the outer loop's analysis sees as not-every-iteration, so
+ * `replaceable` is 0, `benefit` goes 4 - 2 - 2 = 0 and the giv is ignored.
+ * Hoisting `d` to the outer body makes it replaceable and the giv appears --
+ * which is the 57-word measurement below, one word short because the giv's
+ * register then IS `d` and the listing's `addu $a1, $t1, $zero` copy has
+ * nothing to copy. The open question is therefore narrower than it was: what
+ * makes the listing keep the walked value and `d` in SEPARATE registers.
  *
  * MEASURED, all worse: `d` hoisted to the outer body (57 words -- it gets the
  * giv but loses the copy), an explicit `r += 8` cursor (59), and an explicit
