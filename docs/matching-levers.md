@@ -3895,3 +3895,36 @@ answers have now been measured:
 So: count the copies of the exit test in the listing before choosing the loop
 form. Two copies means a `while`; one copy with a back edge to it means a
 `goto`.
+
+## Put each accumulation next to the channel it consumes
+
+func_8004E6F4 matched on this and nothing else, after sitting at the right
+word count with thirteen differing words.
+
+Three channels are interpolated and folded into one accumulator. Written as
+the listing's own grouping suggests -- all three sums, then all three
+accumulations -- the merged tail computes both sums before processing either,
+and no register assignment makes that agree with a listing that folds the
+first sum into the accumulator before computing the second. Written
+interleaved, and with all three accumulations INSIDE both arms of the
+branch:
+
+    r  = c[0] * w[i - 1] + b[0] * (4 - w[i - 1]);
+    acc += r >> 5;
+    g  = c[1] * w[i - 1] + b[1] * (4 - w[i - 1]);
+    acc += g & 0x3E0;
+    bl = c[2] * w[i - 1] + b[2] * (4 - w[i - 1]);
+    acc += (bl & 0x3E0) << 5;
+
+it matches exactly. jump2 cross-joins the identical suffixes of the two arms
+at no cost in words, so the duplication is free; what it buys is that each
+`addu` sum lands immediately before its own shift or mask. With the three
+accumulations hoisted out of the arms it is thirteen words wrong, with only
+the first inside thirteen, and with all three inside but the sums batched two
+words over.
+
+The companion shape on the same function: the weight and its complement
+INLINE at all six products rather than through locals, because a local makes
+the weight load first where the listing loads the first-named operand of the
+first product first. cse shares both subexpressions either way, so the inline
+form costs nothing and only fixes the order. Neither shape alone matches.

@@ -2748,7 +2748,73 @@ u8 *func_8004E69C(u8 *s) {
     return s;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E6F4);
+extern u8 D_8007162C[];
+
+void func_8003F80C(u32, s32, s32, s16);
+
+/* The eight-step gradient: builds sixteen 15-bit colours in a stack buffer by
+   interpolating between two or three palette entries with the 4-step weights
+   at D_8007162C[k * 8], then uploads the buffer as a 1x2 texture page.
+   `buf[0] = 0` and the loop from 1 are both the listing's.
+
+   Two shapes, and together they are the whole function:
+
+   * The weight and its complement are written INLINE at all six products,
+     `c[0] * w[i - 1] + b[0] * (4 - w[i - 1])`, not through `wt` and `u`
+     locals. The locals make `w[i - 1]` load FIRST; the listing loads the
+     first-named operand of the first product first (`lbu $v0, 0x0($a2)`
+     before `lbu $v1, -0x1($t6)`) and computes the complement lazily between
+     the first and second multiply. cse shares both subexpressions, so the
+     inline form costs nothing -- it only fixes the order.
+
+   * All three accumulations live INSIDE both arms, each immediately after the
+     channel it consumes: `r = ...; acc += r >> 5; g = ...; acc += g & 0x3E0;
+     bl = ...; acc += (bl & 0x3E0) << 5;`. jump2 cross-joins the identical
+     suffixes at no cost, so the duplication is free in words -- and the
+     interleaving is what puts each `addu` sum immediately before its own
+     shift or mask, where writing the three sums together and the three
+     accumulations after leaves the listing's order unreachable. With the
+     accumulations hoisted out of the arms it is 13 words wrong; with only
+     the first one inside, 13; with all three inside but the sums batched,
+     102 words. */
+void func_8004E6F4(s32 a, u8 *b, u8 *c, u8 *d, s32 k, s32 n)
+{
+    u16 buf[0x10];
+    s32 i;
+    u8 *w;
+    s32 acc;
+    s32 r;
+    s32 g;
+    s32 bl;
+
+    buf[0] = 0;
+    w = &D_8007162C[k * 8];
+    for (i = 1; i < 9; i++)
+    {
+        acc = (i < n) << 15;
+        if (i < 5)
+        {
+            r = c[0] * w[i - 1] + b[0] * (4 - w[i - 1]);
+            acc += r >> 5;
+            g = c[1] * w[i - 1] + b[1] * (4 - w[i - 1]);
+            acc += g & 0x3E0;
+            bl = c[2] * w[i - 1] + b[2] * (4 - w[i - 1]);
+            acc += (bl & 0x3E0) << 5;
+        }
+        else
+        {
+            r = d[0] * w[i - 1] + c[0] * (4 - w[i - 1]);
+            acc += r >> 5;
+            g = d[1] * w[i - 1] + c[1] * (4 - w[i - 1]);
+            acc += g & 0x3E0;
+            bl = d[2] * w[i - 1] + c[2] * (4 - w[i - 1]);
+            acc += (bl & 0x3E0) << 5;
+        }
+        *(u16 *) (i * 2 + (u32) buf) = acc;
+    }
+    func_8003F80C((u32) buf, (a & 0xF) | 0x7D00, 1, 2);
+    DrawSync(0);
+}
 
 void func_8004E884(u8 *p, u32 b) {
     u8 v;
