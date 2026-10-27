@@ -1235,6 +1235,25 @@ through the same base also separates them -- both addresses are bare pointer
 dereferences with varying addresses, so `true_dependence` makes the store
 invalidate everything -- but that costs a word elsewhere.
 
+### A stack buffer whose loads are NOT hoisted is a STRUCT, not a byte array
+
+When a loop body's loads each sit in front of an empty delay slot -- load, nop,
+use, load, nop, use -- the body was not scheduled at all, and the reason is
+alias analysis, not luck. Declare the buffer as a STRUCT and write its fields:
+struct accesses carry `MEM_IN_STRUCT_P`, so section 5's rule makes every load
+with a VARYING address depend on them and sched1 cannot move one above a store.
+Through `u8 buf[0x40]` with `*(u32 *)(buf + 4)` casts the stores are plain
+dereferences like the loads, sched1 interleaves them, and the function comes
+out short by the nops it filled.
+
+func_8005B16C: two words, and the whole body's order. func_8005B070, its
+sibling, needs the struct AND the right store order -- the table load is the
+SECOND store's source, and writing it last lets the load move two slots up and
+take a second register (4 DIFF at the exact word count).
+
+The type goes in `include/structs.h` as `Unk<callee>SP`, the convention the
+other stack-parameter structs there use.
+
 ### A store that gcc deletes as dead is a VOLATILE field
 
 The mirror of the entry below. When a listing writes one field two or three

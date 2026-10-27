@@ -78,6 +78,24 @@ typedef struct Unk3F8F8
    reloads it immediately after storing it. The pad_ ranges are unexplored
    space, not known filler, and this overlaps Unk3DBD0SP -- the two describe
    the same region and should be merged once more of it is known. */
+/* The 0x40-byte stack primitive func_8005F134 is handed, from func_8005B070,
+   func_8005B16C and their siblings. Only the first four fields are ever
+   written; the rest is the buffer the callee fills. It has to be a STRUCT and
+   not `u8 buf[0x40]` with casts: struct accesses carry MEM_IN_STRUCT_P, and
+   section 5's alias rule then makes every load with a varying address depend
+   on them, which is what keeps func_8005B16C's body in strict source order
+   with both load-delay slots empty. Through a byte array the stores and the
+   loads are all plain dereferences, sched1 interleaves them, and the function
+   comes out two words short. */
+typedef struct Unk5F134SP
+{
+   u32 unk_00;
+   s32 unk_04;
+   s16 unk_08;
+   s16 unk_0A;
+   u8 pad_0C[0x34];
+} Unk5F134SP;
+
 typedef struct Unk463ECSP
 {
    u8 pad_00[0x20];

@@ -6052,9 +6052,82 @@ void func_8005AFF4(s16 i) {
     D_80085F98[0] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B070);
+void func_8005F134(void *);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005B16C);
+/* The D_80085458 sweep. Four facts, each worth two words because a hoisted
+   invariant drags a callee-saved save and restore with it:
+
+   * the entry pointer is computed INSIDE the body. Walked from a pointer
+     declared outside, loop.c biases the giv to +0x1A -- the first field used
+     -- and the two loads come out with negative displacements. Same recipe as
+     func_80056558 above.
+   * the bound is read in the loop CONDITION, not into a local.
+   * the bound takes the INCOMPLETE ARRAY spelling. That is the OPPOSITE of
+     func_80056558, which needs the scalar alias for the same symbol: here the
+     listing has `lui $v0` / `lw $v1, %lo(...)($v0)`, the compiler-split form
+     with a separate address temp, where the scalar gives the assembler
+     macro's one-register form. Read the `lui`'s destination per site.
+   * the stack primitive is an `Unk5F134SP`, not `u8 buf[0x40]` with casts.
+     Struct accesses carry MEM_IN_STRUCT_P, which makes every varying-address
+     load depend on them, and the body then comes out in strict source order.
+     Through a byte array sched1 interleaves the loads with the stores.
+
+   The store order matters with it: +0x04, then +0x00 from the table, then the
+   two halfwords. With +0x00 written last the table load moves two slots
+   earlier and takes a second register (4 DIFF). */
+void func_8005B070(s16 n)
+{
+    Unk5F134SP buf;
+    s32 i = 0;
+
+    D_80085F98[0] = 1;
+    while (i < (s32)D_80073734[0])
+    {
+        u8 *e = D_80085458 + i * 0x78;
+
+        if (*(u16 *)(e + 6) < 0x10 && *(u16 *)(e + 0x1A) != 0)
+        {
+            buf.unk_04 = 3;
+            buf.unk_00 = D_80073740[i];
+            buf.unk_08 = 0;
+            buf.unk_0A = 0;
+            func_8005F134(&buf);
+        }
+        i++;
+    }
+    D_80086C00[n].unk_02 = 4;
+    D_80085F98[0] = 0;
+    D_800737A4[0] = 0;
+}
+
+/* func_8005B070's sweep with the two halfwords taken from the entry at +0x10
+   and +0x12 instead of zeroed, and a different tail: +0x02 gets 1 and
+   D_800737A4 gets 1, in the other order. The same four facts carry it; see
+   above. */
+void func_8005B16C(s16 n)
+{
+    Unk5F134SP buf;
+    s32 i = 0;
+
+    D_80085F98[0] = 1;
+    while (i < (s32)D_80073734[0])
+    {
+        u8 *e = D_80085458 + i * 0x78;
+
+        if (*(u16 *)(e + 6) < 0x10 && *(u16 *)(e + 0x1A) != 0)
+        {
+            buf.unk_04 = 3;
+            buf.unk_00 = D_80073740[i];
+            buf.unk_08 = *(u16 *)(e + 0x10);
+            buf.unk_0A = *(u16 *)(e + 0x12);
+            func_8005F134(&buf);
+        }
+        i++;
+    }
+    D_80086C00[n].unk_02 = 1;
+    D_800737A4[0] = 1;
+    D_80085F98[0] = 0;
+}
 
 void func_800564A8(s32);
 
