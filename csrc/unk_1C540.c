@@ -5835,7 +5835,127 @@ void func_80055E74(void) {
 void func_80055E7C(s32 a, s32 b, s32 c) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055E84);
+/* func_80056098's body one channel over -- every offset is +0x1C from that
+   function's, the final divide is by 256 rather than 1024, and the whole thing
+   is wrapped in an `else` so the early `p[0x42]++` path falls into the tail
+   instead of returning. All four of func_80056098's spellings carry over
+   unchanged: `t` declared `s8`, the wave test on the undoubled value, the
+   fall-through arm of each if/else written first, and the explicit `v != 0`.
+
+   The tail's own two facts: D_80084918 takes TWO pointer locals, one for the
+   `+4` store before the clamps and one for the `+0xA`/`+0xC`/`+0xE` stores
+   after them, because cse restarts at the clamps' joins and the listing
+   materialises the base twice (one local would live across them in a
+   callee-saved register, and this function saves only $ra); and `+8` is
+   reached through its OWN symbol D_80084920 as an incomplete array, which is
+   the compiler-split `lui`/`sh %lo` the listing has there, while `+0xA` and
+   up go through the second local. */
+extern s16 D_80084920[];
+void func_8005F134(void *);
+
+void func_80055E84(u8 *p)
+{
+    s32 g;
+    s32 n;
+    s8 t;
+    s32 v;
+    s32 u;
+    u8 *b;
+    u8 *c;
+    s32 x;
+
+    g = *(u32 *)(p + 0x4C);
+    if (g == 0)
+    {
+        return;
+    }
+    if (p[0x42] != p[0x50])
+    {
+        p[0x42] = p[0x42] + 1;
+    }
+    else
+    {
+        if (p[0x44] >= p[0x51])
+        {
+            *(u32 *)(p + 0x48) = g;
+        }
+        else
+        {
+            if (p[0x44] != 0)
+            {
+                *(u32 *)(p + 0x48) = *(u32 *)(p + 0x48) + *(u32 *)(p + 0x54);
+            }
+            else
+            {
+                *(u32 *)(p + 0x48) = *(u32 *)(p + 0x54);
+            }
+            p[0x44] = p[0x44] + 1;
+        }
+        p[0x43] = p[0x43] + p[0x52];
+        p[0x41] = 0;
+        n = *(s8 *)(p + 0x43);
+        if (n < 0)
+        {
+            n = -n;
+            u = n * 2;
+            t = (n << 25) < 0 ? -u : u;
+            v = *(s32 *)(p + 0x48) * t;
+            if (v > 0)
+            {
+                v = -v;
+            }
+        }
+        else
+        {
+            u = n * 2;
+            t = (n << 25) < 0 ? -u : u;
+            v = *(s32 *)(p + 0x48) * t;
+            if (v < 0)
+            {
+                v = -v;
+            }
+        }
+        if (v != 0)
+        {
+            *(u32 *)(p + 0x58) = v / 256;
+        }
+        else
+        {
+            *(u32 *)(p + 0x58) = 0;
+        }
+    }
+    if (*(s16 *)(p + 0x6C) != *(s32 *)(p + 0x58))
+    {
+        *(s16 *)(p + 0x6C) = *(u16 *)(p + 0x58);
+        b = D_80084918;
+        *(u32 *)(b + 4) = 0xF;
+        *(u32 *)D_80084918 = D_80073740[*(u16 *)p];
+        x = *(u16 *)(p + 0x10) + *(u32 *)(p + 0x58);
+        if (x < 0)
+        {
+            x = 0;
+        }
+        else if (x >= 0x4000)
+        {
+            x = 0x3FFF;
+        }
+        D_80084920[0] = x;
+        x = *(u16 *)(p + 0x12) + *(u32 *)(p + 0x58);
+        if (x < 0)
+        {
+            x = 0;
+        }
+        else if (x >= 0x4000)
+        {
+            x = 0x3FFF;
+        }
+        c = D_80084918;
+        *(s16 *)(c + 0xA) = x;
+        *(s16 *)(c + 0xC) = 0;
+        *(s16 *)(c + 0xE) = 0;
+        func_8005F134(c);
+    }
+}
 
 /* The +0x3C ramp: advance the +0x26 delay, then the +0x28 step, then fold the
    +0x27 phase through a triangle wave and scale by +0x2C. Four spellings:
