@@ -231,17 +231,51 @@ u32 func_80049330(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049374);
+s32 func_800494FC(u8 *);
+void func_8004DD2C(u8 *);
 
-void func_80049374(s32, u8 *);
+/* The index is spelled out in each arm instead of via a shared `n`: with
+   `n = p[0] * 5` / `* 3` and one `n * 4` after the join, the two quantities
+   land in each other's registers (11 DIFF). do_cross_jump merges the common
+   tail either way, so the per-arm spelling costs nothing.
 
-void func_80049490(s32 a) {
+   `s = D_80083D38` goes AFTER the second strcpy: that puts its `addu` in the
+   call's delay slot. Assigning before costs a word. */
+void func_80049374(u8 *p, u8 *q) {
+    u8 *s;
+
+    if (p == 0 || p[1] == 0) {
+        s = *(u8 **) (q + 4);
+    } else if (func_800494FC(p) != 0) {
+        s = *(u8 **) q;
+    } else {
+        Unk80073414 *b = D_80073414;
+        Unk80073414 *e;
+
+        e = &b[p[1]];
+
+        if (e->unk_00 == 0) {
+            s = *(u8 **) (e->unk_0C + p[0] * 20 + 8);
+        } else {
+            s = *(u8 **) (e->unk_0C + p[0] * 12 + 8);
+        }
+        if (p[1] == 0x13 && func_8004928C(p) != 0) {
+            strcpy((char *) D_80083D38, (char *) s);
+            strcpy((char *) rindex((char *) D_80083D38, 0) - 0x12,
+                   (char *) D_800713F8[0]);
+            s = D_80083D38;
+        }
+    }
+    func_8004DD2C(s);
+}
+
+void func_80049490(u8 *a) {
     func_80049374(a, D_800713FC);
 }
 
 s32 func_800B8C90(void);
 
-void func_800494B4(s32 p) {
+void func_800494B4(u8 *p) {
     u8 *q;
 
     /* One call after the join, not a call in each arm: in each arm the

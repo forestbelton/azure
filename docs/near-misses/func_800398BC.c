@@ -23,8 +23,13 @@
  * For gcc to decline that fold the masked value normally needs a second use,
  * or to be used in another basic block. MEASURED AND NOT WORKING, all still 75
  * words: an explicit `s32 i` index variable; splitting it as `i = u >> 0x13;
- * i &= 0x1F;` so the pseudo is multi-set; and reaching the table as
- * `*(u32 *) ((u8 *) D_800721C0 + i * 4)` off a byte-array declaration.
+ * i &= 0x1F;` so the pseudo is multi-set; reaching the table as
+ * `*(u32 *) ((u8 *) D_800721C0 + i * 4)` off a byte-array declaration; a
+ * COMPLETE `extern u32 D_800721C0[32]` declaration; the index typed `u8` and
+ * `u32`; `(u >> 0x13) % 32` instead of the mask; and `(u << 9) >> 27`. Eight
+ * spellings, all 75 words -- the fold is not reachable from how the index is
+ * written, so the second use (or whatever else denies combine the
+ * substitution) has to come from somewhere else in the original.
  */
 
 #include "common.h"

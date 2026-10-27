@@ -2065,6 +2065,41 @@ returns of `f(1)` and `f(0)`. The first store-flags the condition into one
 because if-conversion does not care that the arms were written as statements.
 Two returns of the same call keep the branch and crossjumping merges the tails.
 
+### Spell the whole expression out in each arm, not a shared temp after the join
+
+When both arms of an `if` compute the same shape with different constants and
+feed one expression after the join, writing the common part once -- a shared
+`n` set in each arm, then one `n * 4` and one dereference below -- gives the
+SAME instructions as repeating the whole expression in each arm, because
+`do_cross_jump` merges the identical tails either way. It does not give the
+same REGISTERS. With the shared temp, `n` is set in two blocks, so it is a
+global quantity and global-alloc assigns it after local-alloc has placed the
+per-arm loads; the two end up in each other's registers. Written out per arm,
+every quantity is block-local and they are allocated in listing order.
+
+func_80049374: 11 DIFF at the exact word count with
+
+```c
+if (e->unk_00 == 0) { n = p[0] * 5; } else { n = p[0] * 3; }
+s = *(u8 **) (e->unk_0C + n * 4 + 8);
+```
+
+and a MATCH with
+
+```c
+if (e->unk_00 == 0) {
+    s = *(u8 **) (e->unk_0C + p[0] * 20 + 8);
+} else {
+    s = *(u8 **) (e->unk_0C + p[0] * 12 + 8);
+}
+```
+
+Also measured on it, all 11 DIFF or worse: `n` declared at function scope, `n`
+declared first in the block, the `+ 8` written before the index, a separate
+`n *= 4;` statement, the arms swapped with the condition inverted, and the
+`unk_0C` load hoisted into a local above the `if` (that one goes a word SHORT).
+So try the per-arm spelling before hunting the allocation.
+
 ### A post-increment whose value outlives its statement costs a copy
 
 `expand_increment` QUEUES the increment when the incremented thing is a true

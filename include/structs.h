@@ -1327,6 +1327,7 @@ extern u8 D_800717BC[];
 extern s16 D_8008480A[];
 extern u8 D_800FC000[];
 extern u8 D_800713FC[];
+extern u8 D_80083D38[];
 /* Hand-added. A pointer to a table of 20-byte entries; func_8004AC18 scales an
    index by 20 and reads +0x04. Declared as an incomplete ARRAY of pointers and
    read as D_8007359C[0] because cc1psx runs at -G8 over this whole project: a
@@ -1343,6 +1344,12 @@ typedef struct Unk7359C
    u8 pad_08[0xC];
 } Unk7359C;
 extern Unk7359C *D_8007359C[];
+
+/* Hand-added. Also a pointer variable read as an incomplete array of pointers,
+   for the reason given above D_8007359C: func_80049374's listing has the
+   compiler-split `lui` into a separate address temp, which the 4-byte scalar
+   spelling cannot produce at -G8. */
+extern u8 *D_800713F8[];
 extern u8 D_800717D0[];
 extern u8 D_800717E8[];
 extern s16 D_8008480C[];
@@ -1881,6 +1888,8 @@ extern u8 D_800814D8[8];
 extern u8 D_8008395C[];
 extern u16 D_8008395E[];
 void *memcpy(void *, const void *, u32);
+char *strcpy(char *, const char *);
+char *rindex(const char *, s32);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
