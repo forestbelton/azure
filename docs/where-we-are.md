@@ -255,9 +255,9 @@ them COMBINED rows covering two or three functions at once, and a row has
 measurements but no source -- so nothing could be swept against it and the
 next reader had to reconstruct the candidate from the prose before doing any
 work. Reconstructing them is most of the work of landing one: of the rows
-turned into parks that day, nine MATCHED outright (func_800589B8,
-func_80033AE8, func_800353F4, func_80048510, func_8003B714, func_80050A58,
-func_8003A2E0, func_8003A10C and func_80058510) and six more came out
+turned into parks that day, EIGHT MATCHED outright (func_800589B8,
+func_80033AE8, func_800353F4, func_80058510, func_8003B714, func_80050A58,
+func_8003A2E0 and func_8003A10C) and six more came out
 measurably better than the row claimed -- func_80049E1C 18 DIFF to 8,
 func_80055864 19 to 3, func_8004E9EC's row could not be reproduced at all
 (its shape measures 34 words against the 33 it claimed), func_8003A3E8 and
