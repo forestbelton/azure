@@ -2401,23 +2401,24 @@ u = *(s16 *) (p + 8) % 64 * 4;          /* narrowed:  sll 16 / sra 14 */
 y = *(s16 *) (p + 0xA); u = y % 256;    /* not:       plain subu      */
 ```
 
-**The same narrowing decides whether `d * 2` shares a mask of `d`, and it cuts
-both ways in one function.** With `u8 d`, `d * 2` is shortened to QImode, so
-it carries no `(zero_extend d)` of its own and reuses whatever mask the
-neighbouring statement already computed; `d << 1` is not shortened -- shifts
-are not in `shorten`'s list -- so it keeps an SImode operand and gets a second
-`andi $rX, $d, 0xFF`. Which one is right depends on the DESTINATION:
+**`d * 2` and `d << 1` are NOT the same instruction count on a `u8`, and the
+difference is a mask.** Measured on func_80057D20, with `d` a `u8` parameter:
 
 ```c
-e->unk_08 = d;  e->unk_40 = d << 1;   /* s16 field: listing has TWO andi */
-e->unk_6C = d * 2;                    /* u8  field: listing has NO andi  */
+e->unk_6C = d * 2;    /* andi $v0, $s4, 0xFF ; sll $v0, $v0, 1 */
+e->unk_6C = d << 1;   /* sll  $v0, $s4, 1                      */
 ```
 
-On a byte destination the shortened multiply lets combine fold the mask away
-entirely and emit the bare `sll $v0, $s4, 1`, where the shift form adds a mask
-the listing does not have. func_80057D20 wants `<< 1` in case 1 and `* 2` in
-cases 20 and 25, two words each way, and getting either backwards shifts every
-later word.
+The multiply materialises the zero-extension as its own insn; the shift lets
+combine fold it away, because the byte store truncates and only the low eight
+bits of the result are wanted either way. On a WIDER destination the same
+difference decides whether a neighbouring statement's mask is shared: with
+`e->unk_08 = d;` ahead of it, `e->unk_40 = d * 2;` reuses that statement's
+`andi` and `e->unk_40 = d << 1;` gets a second one, which is what the listing
+has. So `<< 1` is right in both places and `* 2` is wrong in both, by one word
+each -- and because the two errors cancel in the total, a word count alone
+will not tell you. func_80057D20 read as 463 of 463 for a while with both
+wrong.
 
 ### An index INLINE in a call argument gets the hard register; a local does not
 

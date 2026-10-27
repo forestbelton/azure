@@ -1,4 +1,4 @@
-/* func_80057D20 (unk_1C540) -- 463 of 463 words, 112 DIFF. NOT compiled.
+/* func_80057D20 (unk_1C540) -- 463 of 463 words, 54 DIFF. NOT compiled.
  *
  * THE THIRD AND LAST FUNCTION OF THE 0x80032E14 JUMP-TABLE RUN. func_80054F9C
  * and func_80057A94 both MATCH (see their files); when this one does, the run
@@ -9,11 +9,10 @@
  * jtbl_80032F04, of which 25 have bodies. Case 1 (modulation) is 135 of the
  * 463 words and case 64 (sustain pedal) another 95.
  *
- * THE WORD COUNT IS EXACT and the 112 differing words are ONE shifted region,
- * lines 194..253 of the side-by-side -- cases 7 through 25. Everything else
- * matches instruction for instruction, including both case-1 arms, all four
- * of its loops, case 64's nested loops and its inner do/while, the two
- * portamento-shaped groups at +0x64 and +0x80, and the tail's two flag tests.
+ * THE WORD COUNT IS EXACT AND EVERY OPCODE MATCHES. All 54 differing words
+ * are REGISTER NAMES: about 32 of them are `d` sitting in $s5 where the
+ * listing has $s4, and the rest are the loop counters permuted with it.
+ * Nothing structural is left.
  *
  * THE CASE VALUES AND THEIR SOURCE ORDER come out of the table (file 0x6704,
  * 126 entries, index = cc - 1): 1, 2, 3, 4, 5, 7, 10, 11, 12, 20, 21, 22, 23,
@@ -28,10 +27,15 @@
  *   pressure of a function that holds s0-s7 and fp. `d` is `u8` too, which is
  *   what puts an `andi 0xFF` at every use rather than one at entry.
  *
- * * `func_80055E7C` is called with FOUR arguments in cases 7, 10 and 11 and
- *   with THREE in case 1's tail, so it has no prototype in the original:
- *   declare it `void func_80055E7C();`. With a 4-argument prototype case 1
- *   spends a word setting $a3 that the listing does not have.
+ * * `func_80055E7C` takes THREE arguments everywhere, and declaring it
+ *   unprototyped (`void func_80055E7C();`) is what lets case 1's tail call it
+ *   with three. The `addiu $a3, $zero, 1` in cases 7, 10, 11 and 12 is NOT a
+ *   fourth argument -- case 12 has no call at all and still has it -- it is
+ *   reload's register for the `f1 = 1` store, and $a3 is free precisely
+ *   because the calls stop at $a2. Reading it as an argument costs 58 DIFF:
+ *   the constant then needs its own pseudo, f1's value gets $t0, and a
+ *   `move $a3, $t0` appears that changes what cross-jumping merges in cases
+ *   7, 10 and 11.
  *
  * * Case 1's first arm READS BACK `e->unk_40` and its second arm reads back
  *   `e->unk_44`, both just stored. cse forwards each load to the register
@@ -40,13 +44,15 @@
  *   `u32`, where `d` is `u8` and would promote to signed `int` and give
  *   `div`. advise.py's SIGNEDNESS row names exactly this.
  *
- * * `d << 1` rather than `d * 2` in case 1's first arm. `* 2` is narrowed by
- *   `build_binary_op`'s `shorten` and shares the store's mask of `d`; the
- *   shift keeps its own, which is the listing's second `andi $a0, $s4, 0xFF`.
- *   The same choice goes the OTHER way in cases 20 and 25, where the
- *   destination is a byte: there `* 2` narrows to the listing's bare
- *   `sll $v0, $s4, 1` and `<< 1` adds a mask the listing does not have.
- *   Two words each way, and the two cases want opposite spellings.
+ * * `d << 1`, never `d * 2`, in all three places -- case 1's first arm and
+ *   cases 20 and 25. With a `u8 d` the multiply materialises the
+ *   zero-extension as its own `andi` and the shift lets combine fold it away;
+ *   on the byte destinations of cases 20 and 25 that is the difference
+ *   between the listing's bare `sll $v0, $s4, 1` and an extra mask, and in
+ *   case 1 it is the difference between sharing `e->unk_08 = d`'s mask and
+ *   getting the second `andi` the listing has. One word each, and the first
+ *   reading of this had it backwards -- with `* 2` in cases 20/25 the two
+ *   errors cancelled and the function still read 463 of 463.
  *
  * * The five D_80085458 loops take a BLOCK-SCOPED `u8 *q = D_80085458 + i *
  *   0x78;` inside the body -- func_80057948's recipe. A function-scope
@@ -68,12 +74,11 @@
  *   (460) and 272 DIFF. The two luis per loop are reorg copying the join's
  *   one into the `bne`'s slot, not two source expressions.
  *
- * * `f1 = 1` sits BEFORE the call in cases 7 and 11 and AFTER it in case 10.
- *   That asymmetry is worth 155 DIFF and is not cosmetic: with it before in
- *   case 10 as well, cross-jumping merges case 10's call into the shared site
- *   at .L8005807C and the function needs a `move $a3, $t0` it does not have.
+ * * `f1 = 1` sits BEFORE the call in all three of cases 7, 10 and 11. The
+ *   asymmetry the earlier draft needed here was an artefact of reading $a3 as
+ *   a fourth argument; with three-argument calls the plain order is right.
  *
- * WHAT IS LEFT, PART TWO -- 26 of the 112 words are ONE REGISTER. `d` is in
+ * ABOUT 32 OF THE 54 WORDS ARE ONE REGISTER. `d` is in
  * $s5 here and $s4 in the listing, and every `andi $v0, $d, 0xFF` reads as a
  * differing word because of it. advise.py --greg prices it exactly: `d` is
  * pseudo 84, 34 refs over 177 live insns, priority 0.960; the allocno that
@@ -87,30 +92,25 @@
  * 414 DIFF. Register reuse across disjoint live ranges does not mean one
  * variable, and that reading cost a round.
  *
- * WHAT IS LEFT -- one word misplaced inside cases 7..25, and its knock-on.
+ * The rest is the loop counters permuted around it: `i` is $s2 here and the
+ * listing uses $s2 for case 1's loops but $s5 for case 64's outer loop and
+ * the final one. That is NOT a third variable -- splitting them three ways
+ * (i for case 1, j for case 64's inner, a third for the outer and the final)
+ * is 464 words and 90 DIFF, and giving the inner loop `i` with the outer and
+ * final sharing a second is 464 and 123. Register reuse across disjoint live
+ * ranges does not mean one variable, and that reading has now cost two
+ * rounds.
  *
- * The listing DUPLICATES `lbu $a1, 0x10($sp)` in cases 7 and 11 and shares
- * only `jal` + `sw $a3, 0x14($sp)`; here the `lbu` is in the shared tail too,
- * so case 7 is a word short, and case 25 spends a word the listing does not
- * (its `andi` -- see the `* 2` note above; fixing that one alone leaves the
- * function two words short at 461).
- *
- * Underneath both is the constant 1: the listing materialises it into $a3
- * separately in each of cases 7, 10, 11 and 12, so the value that reaches
- * `sw $a3, 0x14($sp)` IS the call's fourth argument. Here it is one global
- * allocno in $t0 with a `move $a3, $t0` at the call, which changes what
- * cross-jumping can merge and what sched2 leaves for the delay slot. Measured
- * and NOT working: `f1` passed as the fourth argument (463/114, and case 10
- * then LOADS it back -- so f1 really is spilled, not register-allocated);
- * `f1` and `f2` declared `volatile` (the listing's load/or/store of f2 inside
- * case 64's loop looks like volatile but is not -- 467 words); every
- * before/after placement of `f1 = 1` in the three cases; the field store
- * moved after the call; all eight combinations of three- versus
- * four-argument calls in cases 7, 10 and 11, including the reading that $a3
- * is not an argument at all but only reload's register for the f1 store
- * (all-three 462/274); the two flags' declaration order, `u32` types and
- * separate initialising statements; and `e->unk_0C`/`e->unk_14` read back as
- * the third argument instead of `d`.
+ * MEASURED AND NOT WORKING, besides the counter partitions: `f1` passed as an
+ * argument (case 10 then LOADS it back, so f1 really is spilled); `f1` and
+ * `f2` declared `volatile` -- the listing's load/or/store of f2 inside case
+ * 64's loop looks like volatile but is not, 467 words; every before/after
+ * placement of `f1 = 1`; the field store moved after the call; `j` declared
+ * at function scope rather than in case 64's block (identical); the inner
+ * loop's `D_80073740[j]` walked as a pointer (462/250) or read into a local
+ * used three times (462/186) -- both drop one of `j`'s references, which is
+ * the arithmetic that would flip it, and both cost a word; and
+ * `e->unk_0C`/`e->unk_14` read back as the third argument instead of `d`.
  */
 
 #include "common.h"
@@ -258,7 +258,7 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
     case 7:
         e->unk_0C = d;
         f1 = 1;
-        func_80055E7C(3, ch, d, 1);
+        func_80055E7C(3, ch, d);
         break;
     case 10:
         if (d == 0)
@@ -269,20 +269,20 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
         {
             e->unk_04 = d;
         }
-        func_80055E7C(2, ch, e->unk_04, 1);
         f1 = 1;
+        func_80055E7C(2, ch, e->unk_04);
         break;
     case 11:
         e->unk_14 = d;
         f1 = 1;
-        func_80055E7C(5, ch, d, 1);
+        func_80055E7C(5, ch, d);
         break;
     case 12:
         e->unk_2C = d;
         f1 = 1;
         break;
     case 20:
-        e->unk_6C = d * 2;
+        e->unk_6C = d << 1;
         break;
     case 21:
         e->unk_6E = d;
@@ -308,7 +308,7 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
         }
         break;
     case 25:
-        e->unk_88 = d * 2;
+        e->unk_88 = d << 1;
         break;
     case 26:
         e->unk_8A = d;
