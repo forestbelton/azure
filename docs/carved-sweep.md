@@ -257,6 +257,7 @@ prologue, and it is one phenomenon rather than two rows' worth of bad luck:
 | func_80036D4C | 98/98 | 6 |
 | func_8004A330 | unk_1C540 | **70/77 words, seven words** | Six words are three callee-saved registers: the two STACK parameters (the update_equiv_regs substitution, whose exact condition is now in matching-levers section 7 -- `reg_n_refs == 2 && reg_basic_block < 0`) and `m = node + 0x20`, which gcc folds into displacements here and the target materialises. See `docs/near-misses/func_8004A330.c`. |
 | func_80054B08 | unk_1C540 | **82/84 words, two words** | Case bodies and order right; two words short with a D_80084858 base biased by 2 (offsets 6/8 where the target has 8/0xA). The prescribed local-pointer fix makes it worse, so the bias has another source. `docs/near-misses/func_80054B08.c`. |
+| func_800398BC | unk_72A8 | **75/76 words, one word** | First function worked from an m2c draft -- 75 of 76 on the first compile, then two documented fixes, and all branch spans match. The missing word is the D_800721C0 index scaling: the target spends `srl`/`andi 0x1F`/`sll 2` where gcc folds the mask and the scale into `srl 0x11`/`andi 0x7C`. Three spellings measured against it in `docs/near-misses/func_800398BC.c`. |
 
 Both take five or six arguments. The target emits each call-argument setup
 insn -- `addiu $a2,$zero,0x49`, `lui $a3,%hi(SYM)` -- BEFORE the `sw`/`lw`
