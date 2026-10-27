@@ -3403,7 +3403,121 @@ void func_8003BAD8(void) {
     func_8003B9E8();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BAF8);
+/* The frame-start handshake. Five things decide it:
+
+   * the two 0x30-byte records take POINTER LOCALS, and they are assigned
+     AFTER func_800A0560, not as initialisers: an initialiser is evaluated at
+     block entry, so its lui/addiu lands ahead of the call and the pointer
+     then lives across it in a callee-saved register (2 extra words). Written
+     as `D_8006ADEC + 0x28` inline, fold migrates each offset onto the symbol
+     and every store loses its displacement.
+   * THREE separate locals for D_8006ADEC, one per region. cse is an
+     extended-basic-block pass and restarts at a join, so the three
+     assignments stay three pseudos with short live ranges -- which is the
+     three lui/addiu pairs the listing has. One local reused would be one
+     pseudo spanning the calls, hence $s2.
+   * the two table arms each spell out `BASE + *(s16 *)(p + 2) * 0x20` in
+     full. jump.c's cross-jumping merges their identical trailing `sll`/`addu`
+     back into the join, which is exactly where the listing has them, while a
+     `cond ? A : B` base with the arithmetic after the join reads the index
+     once instead of twice.
+   * `*(u32 *)(p + 0xC)` goes into a local BEFORE the +0x10 store. After it,
+     the load's base (the record pointer) and the store's (p) are different
+     registers, memrefs_conflict_p cannot disambiguate them, and the load
+     cannot be hoisted into the lui/addiu gap -- a load-delay nop instead.
+   * D_800812F8 is a SCALAR whose address is taken, so its materialisation is
+     the assembler-expanded `la` -- ONE insn of length 2 before maspsx, which
+     `eligible_for_delay` rejects, so the `beq`'s delay slot stays a nop. As an
+     incomplete array the compiler-split `addiu` drops straight into it.
+
+   func_80041094's fifth parameter is declared u16 HERE: the listing stores
+   `D_80082E76[0] ^ 1` to the outgoing slot with no sign extension, and the s16
+   spelling adds the `sll`/`sra` pair (2 words). Its definition is in another
+   carved unit, so the two declarations can differ. */
+extern u8 D_800D381A;
+extern u8 D_800D2650[];
+extern u8 D_800D2FC0[];
+extern s16 D_800D426C;
+extern s16 D_800D426E;
+extern u16 D_800D5070[];
+extern u8 D_800812F8;
+extern void (*D_8006AE10)(void);
+extern s16 D_8006AE18[];
+extern u16 D_80013714a[] __asm__("D_80013714");
+
+void func_800A0560(void);
+u8 *func_800C1034(s16, s16);
+void func_80041094(u16, s16, s16, s16, u16);
+s32 func_80034FE4(u32 *);
+
+void func_8003BAF8(u32 p)
+{
+    u8 *a;
+    u8 *b;
+    u8 *c;
+    u8 *d;
+    u8 *t;
+    u8 *e;
+    u32 g;
+
+    func_800A0560();
+    a = D_8006ADBC;
+    b = D_8006ADEC;
+    *(s16 *)(b + 0x28) = *(s16 *)(a + 0x28) = *(u16 *)(a + 0x18);
+    *(s16 *)(b + 0x2A) = *(s16 *)(a + 0x2A) = *(u16 *)(a + 0x1A);
+    *(s16 *)(b + 0x18) = *(u16 *)p;
+    D_800D381A = *(s16 *)(b + 0x1A) = *(u16 *)(p + 2);
+    if (*(s16 *)p == 0xB)
+    {
+        t = D_800D2650 + *(s16 *)(p + 2) * 0x20;
+    }
+    else
+    {
+        t = D_800D2FC0 + *(s16 *)(p + 2) * 0x20;
+    }
+    c = D_8006ADEC;
+    e = func_800C1034(*(s16 *)(c + 0x18), *(s16 *)(c + 0x1A));
+    if (*(s16 *)(e + 4) == D_800D426C && *(s16 *)(e + 6) == D_800D426E)
+    {
+        D_80080A88 = 1;
+    }
+    g = *(u32 *)(p + 0xC);
+    d = D_8006ADEC;
+    *(u32 *)(d + 0x10) = (u32)t;
+    *(u32 *)(d + 0x24) = g;
+    *(s16 *)(d + 0x14) = *(u16 *)(p + 4);
+    *(s16 *)(d + 0x16) = *(u16 *)(p + 6);
+    *(s16 *)(d + 0xC) = D_800D5070[*(u16 *)(p + 0x10) & 3];
+    *(s16 *)(d + 0xE) = *(u16 *)(p + 0x12);
+    if (*(u32 *)(p + 8) != 0)
+    {
+        if (*(s16 *)(d + 0x18) != 0xC)
+        {
+            *(u32 *)(d + 4) = (u32)&D_800812F8;
+        }
+        else
+        {
+            *(u32 *)(d + 4) = *(u32 *)(p + 8);
+        }
+    }
+    if (D_8006AE10 != NULL)
+    {
+        D_8006AE10();
+    }
+    func_80041094(*(u16 *)p, *(u16 *)(t + 4) + (*(u16 *)(p + 4) + *(u16 *)t),
+                  *(u16 *)(t + 6) + (*(u16 *)(p + 6) + *(u16 *)(t + 2)), 0,
+                  D_80082E76[0] ^ 1);
+    D_80013714a[0] = D_80013714a[0] & 0xFFFD;
+    if (func_80034FE4((u32 *)D_80082A38) != 0)
+    {
+        D_8006ADE8[0] = 1;
+    }
+    else
+    {
+        D_8006ADE8[0] = 0;
+    }
+    D_8006AE18[0] = 0;
+}
 
 typedef struct Unk8006ADBC {
     u32 unk_00[12];
