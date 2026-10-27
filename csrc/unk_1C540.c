@@ -4423,7 +4423,61 @@ void func_80053374(u8 *p, s32 a) {
     func_80052A20();
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053428);
+/* func_80053604's twin, the fade-IN: the grey level is `0x100 - (p->unk_02 <<
+   8) / p->unk_04` instead of the quotient itself, the guard returns 1 when
+   +0x02 has caught up with +0x04, and +0x02 is advanced at the end rather
+   than conditionally. Every spelling in func_80053604's comment applies here
+   unchanged -- `col` reused for the quotient, the inner grouping of the grey
+   ramp explicit, the eight vertex halfwords in value order, `m = 1` then the
+   override, and `addPrim` for the two OT links. */
+s32 func_80053428(Unk80083120 *p)
+{
+    Unk80083160 *s;
+    u8 *q;
+    u8 *r;
+    s32 m;
+    u32 col;
+
+    s = &D_80083160;
+    if (p->unk_02 >= p->unk_04)
+    {
+        return 1;
+    }
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    *(u8 **)(D_80083160.unk_00 + 0x8D0) = q + 0xC;
+    r = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    *(u8 **)(D_80083160.unk_00 + 0x8D0) = r + 0x18;
+    m = 1;
+    if (p->unk_06 == 0)
+    {
+        m = 2;
+    }
+    func_80067F20((u32 *)q, 0, 0, GetTPage(0, m, 0, 0), 0);
+    if (p->unk_02 == 0)
+    {
+        col = 0xFFFFFF;
+    }
+    else
+    {
+        col = 0x100 - ((p->unk_02 << 8) / p->unk_04);
+        col = col + ((col << 8) + (col << 16));
+    }
+    *(u32 *)(r + 4) = col;
+    SetPolyF4((POLY_F4 *)r);
+    SetSemiTrans(r, 1);
+    *(s16 *)(r + 0x14) = 0x140;
+    *(s16 *)(r + 0x10) = 0x140;
+    *(s16 *)(r + 0xC) = 0;
+    *(s16 *)(r + 8) = 0;
+    *(s16 *)(r + 0x12) = 0;
+    *(s16 *)(r + 0xA) = 0;
+    *(s16 *)(r + 0x16) = 0xE0;
+    *(s16 *)(r + 0xE) = 0xE0;
+    addPrim(s->unk_00 + 0x70, r);
+    addPrim(s->unk_00 + 0x70, q);
+    p->unk_02 = p->unk_02 + 1;
+    return 0;
+}
 
 /* The screen fade quad: allocate a 0xC-byte tpage primitive and a 0x18-byte
    POLY_F4 out of the +0x8D0 bump allocator, build a full-screen semi-transparent
