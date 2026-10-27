@@ -1,4 +1,4 @@
-/* func_8004E6F4 (unk_1C540) -- 102 of 100 words, TWO words OVER. NOT
+/* func_8004E6F4 (unk_1C540) -- 100 of 100 words, 13 DIFF. NOT
  * compiled.
  *
  * Builds a 16-entry 15-bit colour ramp in a stack buffer and hands it to
@@ -45,6 +45,32 @@
  * inlined (101 words, the conditional shape), the masked func_8003F80C
  * argument computed before the loop (102), and six explicit product temps
  * (116).
+ *
+ * SINCE PARKED, 2026-10-27: 102 of 100 words and 101 DIFF to 100 of 100 and
+ * 13, in two steps.
+ *
+ * * `acc += r >> 5;` DUPLICATED into both arms of the `i < 5` test rather
+ *   than written once after it. Two words: jump2 cross-joins the copies at no
+ *   cost, and the duplicate buys the pseudos it mentions an extra reference
+ *   at allocation time. search.py's dup-into-arms family found it in the
+ *   sweep of all forty parks.
+ *
+ * * The weight and its complement written INLINE at all six products --
+ *   `c[0] * w[i - 1] + b[0] * (4 - w[i - 1])` -- instead of through `wt` and
+ *   `u` locals. 17 DIFF to 13. The locals made `w[i - 1]` load FIRST, and the
+ *   listing loads the first-named operand of the first product first
+ *   (`lbu $v0, 0x0($a2)` before `lbu $v1, -0x1($t6)`), with the complement
+ *   computed lazily between the first and second multiply. cse still shares
+ *   both subexpressions, so the inline form costs nothing. Keeping `u` as a
+ *   local and inlining only the weight is 17 again.
+ *
+ * WHAT IS LEFT, 13 words: nine of them register-only, and the other four a
+ * $t2/$t3 swap with its consequences. The six products land in $t4, $t2, $t3,
+ * $t1, $v1, $s1 in the listing and in $t4, $t3, $t2, $t1, $v1, $s1 here, so
+ * the two sums pair the wrong halves (`addu $v0, $t4, $t3` against the
+ * listing's `addu $v0, $t4, $t2`) and the shared tail then computes both sums
+ * before processing either, where the listing computes r's sum, folds it into
+ * acc, and only then computes g's.
  */
 
 #include "common.h"
@@ -68,23 +94,19 @@ void func_8004E6F4(s32 a, u8 *b, u8 *c, u8 *d, s32 k, s32 n)
         acc = (i < n) << 15;
         if (i < 5)
         {
-            s32 wt = w[i - 1];
-            s32 u = 4 - wt;
-
-            r = c[0] * wt + b[0] * u;
-            g = c[1] * wt + b[1] * u;
-            bl = c[2] * wt + b[2] * u;
+            r = c[0] * w[i - 1] + b[0] * (4 - w[i - 1]);
+            g = c[1] * w[i - 1] + b[1] * (4 - w[i - 1]);
+            bl = c[2] * w[i - 1] + b[2] * (4 - w[i - 1]);
+            acc += r >> 5;
         }
         else
         {
-            s32 wt = w[i - 1];
-            s32 u = 4 - wt;
+            r = d[0] * w[i - 1] + c[0] * (4 - w[i - 1]);
+            g = d[1] * w[i - 1] + c[1] * (4 - w[i - 1]);
+            bl = d[2] * w[i - 1] + c[2] * (4 - w[i - 1]);
 
-            r = d[0] * wt + c[0] * u;
-            g = d[1] * wt + c[1] * u;
-            bl = d[2] * wt + c[2] * u;
+            acc += r >> 5;
         }
-        acc += r >> 5;
         acc += g & 0x3E0;
         acc += (bl & 0x3E0) << 5;
         *(u16 *) (i * 2 + (u32) buf) = acc;
