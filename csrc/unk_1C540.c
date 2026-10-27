@@ -5119,7 +5119,106 @@ void func_80052A20(void) {
     } while (i < 0x10);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052A90);
+/* Blits a Shift-JIS string one 3x16 cell at a time: maps each two-byte code
+   to a font index, pulls the cell out of VRAM at 0x340 with StoreImage and
+   puts it back at (x, y) with LoadImage.
+
+   Five shapes, and the last of them is the whole reason this was parked at
+   one word:
+
+   * The flag is 32 bits WIDE and tested through a NARROW local. The listing
+     spends `addu $v0, $s3, $zero` and then `beqz $v0` -- a plain reg-to-reg
+     copy of the flag into the branch's register. `u8 ok` gives
+     `andi $v0, $s3, 0xFF` (the right count, the wrong opcode); `u32 ok`
+     tested directly gives `beqz $s3` alone and the function is a word short;
+     and `u32 t = ok;` is copy-propagated away. `u8 t = ok;` is
+     `(set (reg:QI t) (subreg:QI (reg:SI ok)))`, which cse's `insert` does not
+     recognise as a register copy -- it looks for a REG of the same mode in
+     the source's class -- so nothing merges the quantities, and MIPS emits a
+     QImode reg-reg move as `addu`. `s8` and `u16` do the same thing. See the
+     entry in docs/matching-levers.md.
+
+   * The last three arms of the code chain are a SWITCH, not two more
+     `else if`s, with `default:` written FIRST. As an if/else chain each body
+     follows its own test and the `beq` comes out as a `bne`; as a two-case
+     switch gcc emits both equality tests and then the bodies in source
+     order, which is the listing's default, 0xE, 0xD layout.
+
+   * The first and fourth arms produce the SAME value (`c + 0x7DC1`), which is
+     why the listing has one `j` serving both -- cross-jumping merged them, so
+     both arms have to be written out.
+
+   * `c` is a `u16`, so each use as an int is a zero-extension; the three
+     equality tests share one, and the rect computation gets its own through
+     `d = c;`. Without that local gcc folds the first mask into `andi 7` and
+     re-extends for the shift.
+
+   * Both RECT fills are written out in full, w and h included, even though
+     both are 3 and 0x10: the listing re-stores $s5 and $s4 the second time,
+     and loop.c hoists both constants into the preheader. */
+void func_80052A90(u32 s, s32 x, s16 y)
+{
+    RECT r;
+    u8 buf[0x80];
+    u32 ok = 1;
+    u8 t;
+    u16 c;
+    u32 d;
+
+    while (*(u8 *) s != 0)
+    {
+        c = (*(u8 *) s << 8) | *(u8 *) (s + 1);
+        s += 2;
+        if (c == 0x8140)
+        {
+            c = 0;
+        }
+        else if ((u16) (c + 0x7DA0) < 0x1A)
+        {
+            c = c + 0x7DC1;
+        }
+        else if ((u16) (c + 0x7D7F) < 0x1A)
+        {
+            c = c + 0x7DC0;
+        }
+        else if ((u16) (c + 0x7DB1) < 0xA)
+        {
+            c = c + 0x7DC1;
+        }
+        else
+        {
+            switch (c)
+            {
+            default:
+                ok = 0;
+                break;
+            case 0x8144:
+                c = 0xE;
+                break;
+            case 0x817C:
+                c = 0xD;
+                break;
+            }
+        }
+        t = ok;
+        if (t != 0)
+        {
+            d = c;
+            r.x = (d & 7) * 3 + 0x340;
+            r.y = (d >> 3) << 4;
+            r.w = 3;
+            r.h = 0x10;
+            StoreImage(&r, (u_long *) buf);
+            r.x = x;
+            r.y = y;
+            r.w = 3;
+            r.h = 0x10;
+            LoadImage(&r, (u_long *) buf);
+            DrawSync(0);
+        }
+        x += 3;
+    }
+}
 
 void func_80052A90(u32, s32, s16);
 

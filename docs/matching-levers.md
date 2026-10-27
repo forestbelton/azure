@@ -764,6 +764,27 @@ the natural spelling for exactly the kind of byte this function handles. Where
 the one-variable form would spend the same number of words it is only a
 register difference; where it would not, it is the word.
 
+**The same device buys a plain copy BEFORE A BRANCH**, which is the shape
+`addu $v0, $sN, $zero` / `beqz $v0` -- a register copy and then a zero test,
+where the value is already in a register the `beqz` could read. func_80052A90
+was parked one word short of exactly that for two sessions. The flag is 32
+bits wide and the test reads it through `u8 t = ok;`: `u8 ok` tested directly
+gives `andi $v0, $s3, 0xFF` (the right word count, the wrong opcode), `u32 ok`
+tested directly gives `beqz $s3` alone and the function is a word short, and a
+SAME-WIDTH `u32 t = ok;` is copy-propagated away. `s8` and `u16` work as well
+as `u8`, so it is the mode difference and nothing about the value.
+
+Two notes on scope. **It needs the destination to be NARROWER, not just
+different** -- signedness alone is the same mode and cse merges it. And it
+does NOT reach a parameter's entry copy: that copy is `(set pseudo $a0)` from
+a HARD register, where `make_regs_eqv` always makes the pseudo canonical, so
+the question is which hard register the allocno gets instead (func_8004D880
+and func_8004CECC are both parked on that, and
+`docs/near-misses/func_8004D880.c` has the arithmetic). A narrow LOCAL copy of
+a parameter does produce the entry copy -- measured on func_8004D880 -- but
+then the local is what holds the value and the parameter keeps $a0, which is a
+different register assignment from the listing's.
+
 ### Statement granularity is what orders the pieces of an address
 
 `fold` puts an ADDR_EXPR second in a sum, so an address written as one
