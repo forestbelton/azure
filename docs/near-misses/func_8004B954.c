@@ -10,6 +10,15 @@
  * TWO DRAFTS ARE PARKED HERE, because they are wrong in opposite directions
  * and each one has half the answer. The source below is the 283-word one.
  *
+ * THE 283-WORD DRAFT BELOW IS NOT SEMANTICALLY FAITHFUL, and that is
+ * deliberate -- it is parked for its measurements, not as a candidate. It
+ * stores `*(s32 *) (q - 8) = cx;` from a single `s16`, which writes cx
+ * sign-extended over four bytes where the listing writes the cx/cy PAIR as
+ * one word. `cy` is consequently dead and gcc drops it. Do not build on this
+ * draft as though it were correct C for this function; build on the
+ * `s16 v[2]` form described below, which is faithful and has the frame
+ * layout right, and find its extra local.
+ *
  * WHAT THE FRAME SAYS (advise.py's census; it is the whole diagnostic here)
  *
  * The listing's frame is 0x50 with the saved registers from 0x28, so the

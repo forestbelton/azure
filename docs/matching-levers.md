@@ -4018,3 +4018,21 @@ search.py now prints a REVIEW REQUIRED block naming every accepted
 narrowing, so the check cannot be skipped by accident. It was skipped once,
 because a batch script applied nine sweep results without anybody reading
 the diffs.
+
+**All 44 parks were then audited for the same hazard** -- every `s8`/`u8`/
+`s16`/`u16` local whose park uses it at a wider width (a shift at or beyond
+its width, an assignment from an `*(s32 *)`/`*(u32 *)` read or an `(s32)`
+cast, or a store through a wider pointer). Four came back and none is a new
+silent break:
+
+* func_8005B4D0 and func_8005BBFC, `u16 t` stored through `*(u32 *)`: both
+  FAITHFUL. The listing reads the field with `lhu` and stores it with `sw`,
+  so the value really is sixteen bits.
+* func_8005A90C, `s16 r`: already flagged in its park as unproven.
+* func_8004B954, `s16 cx` stored through `*(s32 *)`: already known wrong, and
+  its park now says outright that the 283-word draft is parked for its
+  measurements rather than as a candidate.
+
+So the scan is worth re-running after any width change, and two of its four
+hits are the kind of false positive to expect: a genuinely narrow value
+stored into a wider field is fine.
