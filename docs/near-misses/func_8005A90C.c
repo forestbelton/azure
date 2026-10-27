@@ -1,4 +1,4 @@
-/* func_8005A90C (unk_2CDC0) -- 99 of 103 words, 92 DIFF. NOT compiled.
+/* func_8005A90C (unk_2CDC0) -- 102 of 103 words, 92 DIFF. NOT compiled.
  *
  * The third member of the func_8005A608 / func_8005A778 family, and the one
  * with the longest tail: it claims a D_80086A40 slot the same way the other
@@ -32,6 +32,14 @@
  * 21) are stuck on a different fact -- which register the entry's `-1`
  * comparison constant lands in, and whether cc1psx materialises it once or
  * three times -- so this one is NOT blocked on them.
+ *
+ * SINCE PARKED, 2026-10-27: 99 of 103 words to 102 of 103, by declaring both
+ * `r` and `t` `s16` rather than `s32` and `u32`. Three words, found by
+ * search.py's declaration-width family in the sweep of all forty parks -- it
+ * needed BOTH, which is why a single-change sweep had to compose them over
+ * two passes. The differing count stays at 92 because one word is still
+ * missing and everything after it reads as wrong; advise.py's branch spans
+ * are the way to localise it, and the notes below predate these numbers.
  */
 
 #include "common.h"
@@ -49,8 +57,8 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
     s16 j;
     s32 k;
     u8 *e;
-    s32 r;
-    u32 t;
+    s16 r;
+    s16 t;
 
     D_8007382C[0] = 0;
     i = 0;

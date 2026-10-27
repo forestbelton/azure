@@ -38,10 +38,26 @@
  * stores are pinned and the non-volatile ones move around them.
  *
  * Reading the reads at their point of use rather than in the declarations
- * (measured) does not change that, so the next thing to look at is
- * `tools/decomp/sched.py` on this function: which priority group the four
- * non-volatile stores land in, and whether `potential_hazard` is what orders
- * them. See section 8 of docs/matching-levers.md for what the keys are.
+ * (measured) does not change that.
+ *
+ * sched.py HAS NOW BEEN READ, and `potential_hazard` is indeed what orders
+ * them -- but it cannot be reached from the source. Every promotion in this
+ * function, six of six, is a memory insn chosen over an ALU insn inside one
+ * priority group: `sb 0x31` and `sw 0x18` (insns 44 and 68) over the
+ * `lshiftrt` that feeds +0x33, the two `lw`s of the record over the `lo_sum`
+ * that builds the D_800847D0 base, and both stack saves over the `li` and
+ * `and` of the dispatch mask. The promotion is unconditional: it reads the
+ * machine description's `max_blockage` for the insn's function unit, not the
+ * insn or its neighbours.
+ *
+ * So the four non-volatile stores will always be pulled ahead of the
+ * arithmetic they sit between, and reordering statements cannot change it.
+ * What can is the PRIORITY, which is the longest LATENCY path from the insn
+ * to the end of the block -- and since an ALU-to-ALU edge costs zero, only a
+ * load, multiply or divide downstream of a store lengthens its chain. The
+ * whole block here is priority 1 to 4. That is the thing to aim at next:
+ * find a spelling that puts another load between a store and the block end.
+ * The mechanism is now written up in docs/matching-levers.md.
  */
 
 #include "common.h"

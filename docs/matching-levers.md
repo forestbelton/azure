@@ -3928,3 +3928,48 @@ INLINE at all six products rather than through locals, because a local makes
 the weight load first where the listing loads the first-named operand of the
 first product first. cse shares both subexpressions either way, so the inline
 form costs nothing and only fixes the order. Neither shape alone matches.
+
+## sched2's tie-break inside a priority group is MEMORY OVER ALU
+
+Section 8 says the keys are priority, then the dependence class, then
+INSN_LUID. The middle key has a name and a shape, and
+`tools/decomp/sched.py` prints it: `;; insn N has a greater potential
+hazard`.
+
+`schedule_select` (sched.c:2615) walks the ready list in runs of EQUAL
+priority, queues anything blocked this cycle, and among what is left in the
+FIRST such run picks the insn with the largest `potential_hazard`
+(sched.c:1318). That function is zero unless the insn's function unit has a
+`max_blockage` above 1 -- it reads the machine description, not the insn --
+so on MIPS it splits the ready list in two: insns that touch memory, and
+everything else.
+
+Measured on func_80054B08, every promotion the dump reports, six of six:
+
+    insn 107 (sw D_800847D0)   over 109 (high)
+    insn 227 (sw ra, 20(sp))   over 196 (li 4096), 194 (and)
+    insn 229 (sw s0, 16(sp))   over 196, 194, 227
+    insn 23  (lhu 0(v0))       over 20 (lo_sum), 39, 220
+    insn 39  (lw 12(v0))       over 20, 220
+    insn 44  (sb 0x31(a3))     over 73 (lshiftrt)
+    insn 68  (sw 0x18(a3))     over 73, 44
+
+A load or store always wins; `and`, `li`, `high`, `lo_sum` and `lshiftrt`
+always lose. Ties among memory insns fall through to ready-list order,
+because `best_cost` starts at -1 and a later insn must be STRICTLY greater to
+displace the first.
+
+**What that means for a reordering you are trying to fix.** If the listing
+has an ALU insn where your build has a load or a store, and `sched.py` shows
+them sharing a priority, no statement reordering will swap them -- the
+promotion is unconditional. The only thing that moves them is the PRIORITY,
+and priority here is the longest LATENCY path from the insn to the end of its
+basic block, not a count of instructions: `insn_cost` is zero for an
+ALU-to-ALU edge, so only loads, multiplies and divides lengthen a chain. That
+is why the whole top-of-function region sits at priority 1 and why a call can
+sit there too. To move a memory insn later, give the insns after it a longer
+latency chain; to move it earlier, shorten what follows it.
+
+The other mechanism in the same dump is separate and easy to confuse with
+it: `;; blocking insn N for M cycles` is `actual_hazard`, the memory unit
+being busy in that cycle, which DEFERS an insn rather than promoting one.
