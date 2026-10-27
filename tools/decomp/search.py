@@ -404,21 +404,28 @@ def _retype_uses(body, sym, to_array):
     """Rewrite every use of `sym` in `body` for the other declared size.
 
     scalar -> array: `&SYM` becomes `SYM` and a bare `SYM` becomes `SYM[0]`.
-    array -> scalar: `SYM[0]` becomes `SYM` and a bare `SYM` (an array name
-    decaying to a pointer) becomes `&SYM`. A use that is already subscripted
-    is returned verbatim, spacing included.
+    array -> scalar: `SYM[0]` becomes `SYM` and a bare `SYM` -- an array name
+    decaying to a pointer -- becomes `&SYM`. Any other subscript is left
+    verbatim, spacing included.
+
+    ONE pass, deliberately. Doing the `[0]` rewrite first and the bare-name
+    rewrite second turns `SYM[0] != 0` into `&SYM != 0`, which is a constant
+    and deletes the test -- a silent semantic break that scored BETTER on
+    func_8005914C (203 words against 205) because it removed a comparison.
     """
-    if not to_array:
-        body = re.sub(r"\b%s\s*\[\s*0\s*\]" % sym, sym, body)
-
     def one(m):
-        if m.group(2) is not None:
+        pre, sub = m.group(1), m.group(2)
+        if sub is None:                       # a bare name
+            if to_array:
+                return sym if pre == '&' else sym + '[0]'
+            return m.group(0) if pre == '&' else '&' + sym
+        if sub.rstrip().endswith('['):        # SYM[something else]
             return m.group(0)
-        if to_array:
-            return sym if m.group(1) == '&' else sym + '[0]'
-        return m.group(0) if m.group(1) == '&' else '&' + sym
+        if to_array:                          # already SYM[0]
+            return m.group(0)
+        return pre + sym                      # SYM[0] -> SYM
 
-    return re.sub(r"(&?)\b%s\b(\s*\[)?" % sym, one, body)
+    return re.sub(r"(&?)\b%s\b(\s*\[\s*0\s*\]|\s*\[)?" % sym, one, body)
 
 
 def t_global_decl(text):

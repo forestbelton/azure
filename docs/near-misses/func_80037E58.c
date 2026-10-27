@@ -1,4 +1,4 @@
-/* func_80037E58 (unk_72A8) -- 70 of 70 words, 8 DIFF. NOT compiled.
+/* func_80037E58 (unk_72A8) -- 70 of 70 words, 2 DIFF. NOT compiled.
  *
  * Spawns the node with func_8003FE78, hangs func_80037F70 on it, points its
  * +0x20/+0x24 pair at D_80082A38 and D_80082A38+0x8C, zeroes 0x6B eight-byte
@@ -25,9 +25,38 @@
  *      `q[0][0x86] = q[0][0x85]`, shares ONE load, which is only true when
  *      both subscripts are in the same statement.
  *
- * WHAT IS LEFT: 8 words, and all 8 are one register pair. The block after the
- * descending loop materialises two addresses:
+ * SIX OF THE EIGHT WENT ON 2026-10-27, and the lever was the DECLARATION:
+ * `extern u8 D_800809C0;` with `(u32) &D_800809C0`, not `extern u8
+ * D_800809C0[];`. The park's own arithmetic below had asked for exactly this
+ * -- "its live length down to 3, which would need D_800809C0's address to be
+ * one insn rather than two" -- and the scalar spelling is what gives it: a
+ * scalar sets SYMBOL_REF_FLAG, so cc1psx emits a one-insn `la` that gas
+ * expands to `lui`/`addiu` in the SAME register, where the incomplete array
+ * is a two-insn compiler-split pair from the start. Pseudo 106 then costs
+ * local-alloc one insn of live length instead of two, 103 is allocated
+ * first, and the pair comes out the listing's way round. Found by
+ * `search.py --only=global_decl`, the family added that day; the park had
+ * measured `&D_800809C0[0]` but not the declaration itself.
  *
+ * WHAT IS LEFT: TWO WORDS, and they are one sched2 choice inside priority 1.
+ * The listing has `lw $v1, 0x4($s2)` then `lui $v0, %hi(D_80012D6E)`; this
+ * has them the other way round. From the sched2 dump (block 4): insns 133
+ * (the `lw`) and 134 (the `lui`) are both priority 1, both ready at T-18, and
+ * `potential_hazard` takes the MEMORY insn first in the backward pass --
+ * which puts it LATER in the stream. That is matching-levers' "sched2's
+ * tie-break inside a priority group is memory over ALU", and the same class
+ * as func_80035E58's last two words: the whole top-of-block region is
+ * priority 1, so the dependence graph never gets a say, and no statement
+ * order reaches it. For the listing's order the `lui` would have to be
+ * selected at T-18, which needs it to OUTRANK the load on priority -- i.e. a
+ * longer path from the block start, which a bare `high` of a symbol cannot
+ * have.
+ *
+ * (The eight-word analysis that follows is kept because it is what named the
+ * fix. The register pair it describes is now right.)
+ *
+ * WHAT WAS LEFT AT 8 WORDS: all 8 were one register pair. The block after
+ * the descending loop materialises two addresses:
  *   lui/addiu $v0 = D_80082A38      (the listing)   vs   $v1   (this source)
  *   lui/addiu $v1 = D_800809C0                           $v0
  *   sw $v1, 0x88($v0) ; sw $zero, 0x38($v0)
@@ -62,7 +91,7 @@
 #include "common.h"
 
 extern UnkNode *D_80082BC0[];
-extern u8 D_800809C0[];
+extern u8 D_800809C0;
 extern u8 D_80012D6E[];
 
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
@@ -90,7 +119,7 @@ void func_80037E58(void)
     {
         r[i + 0x12] = 0;
     }
-    D_80082A38w[0x22] = (u32) D_800809C0;
+    D_80082A38w[0x22] = (u32) &D_800809C0;
     D_80082A38w[0xE] = 0;
     q[1][3] = D_80012D6E[0];
     func_80037D9C(q[1], 3);

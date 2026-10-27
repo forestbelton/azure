@@ -886,8 +886,16 @@ list IS a statement sequence for matching purposes.
 flip is now a transform family: it rewrites a candidate's own file-scope
 `extern` declaration and every use of the symbol with it (`&SYM` <-> `SYM`,
 `SYM` <-> `SYM[0]`), both directions, one symbol at a time. It finds
-func_800353F4's match in one pass. Globals declared in a header are left
-alone, since changing those would change every other unit too.
+func_800353F4's match in one pass and took func_80037E58 from 8 differing
+words to 2. Globals declared in a header are left alone, since changing those
+would change every other unit too.
+
+One warning that cost a false positive on its first run: the use rewrite has
+to be ONE pass. Rewriting `SYM[0]` to `SYM` first and bare names to `&SYM`
+second turns `SYM[0] != 0` into `&SYM != 0`, which is a constant -- the test
+vanishes and the candidate scores two words BETTER. The same caution as the
+declaration-width family: this one can change VALUES, not just
+representations, so read the diff of what it accepted.
 
 ### A two-term index adds the BASE LAST unless the row address is its own statement
 
