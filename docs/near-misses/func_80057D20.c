@@ -86,10 +86,17 @@
  * `sw $a3, 0x14($sp)` IS the call's fourth argument. Here it is one global
  * allocno in $t0 with a `move $a3, $t0` at the call, which changes what
  * cross-jumping can merge and what sched2 leaves for the delay slot. Measured
- * and NOT working: `f1` passed as the fourth argument, `f1` and `f2` declared
- * `volatile` (the listing's load/or/store of f2 inside case 64's loop looks
- * like volatile but is not -- 467 words), every before/after placement of
- * `f1 = 1` in the three cases, and the field store moved after the call.
+ * and NOT working: `f1` passed as the fourth argument (463/114, and case 10
+ * then LOADS it back -- so f1 really is spilled, not register-allocated);
+ * `f1` and `f2` declared `volatile` (the listing's load/or/store of f2 inside
+ * case 64's loop looks like volatile but is not -- 467 words); every
+ * before/after placement of `f1 = 1` in the three cases; the field store
+ * moved after the call; all eight combinations of three- versus
+ * four-argument calls in cases 7, 10 and 11, including the reading that $a3
+ * is not an argument at all but only reload's register for the f1 store
+ * (all-three 462/274); the two flags' declaration order, `u32` types and
+ * separate initialising statements; and `e->unk_0C`/`e->unk_14` read back as
+ * the third argument instead of `d`.
  */
 
 #include "common.h"
