@@ -1,4 +1,4 @@
-/* func_8004AC3C (unk_1C540) -- 129 of 128 words, 94 DIFF. NOT compiled.
+/* func_8004AC3C (unk_1C540) -- 128 of 128 words, 90 DIFF. NOT compiled.
  *
  * Resolves an item/monster record pointer from the two bytes at p[0]/p[1],
  * with a different table and a different field depending on D_80082E6A's mode
@@ -53,6 +53,13 @@
  * re-reads and drops the diff to 62 -- but volatile pins each load so its
  * delay slot stays empty, and the function comes out 131 words. So the
  * re-reads are ordinary loads that cse declined to fold, not volatile ones.
+ *
+ * SINCE PARKED, 2026-10-27: 129 of 128 words and 94 DIFF to 128 of 128 and
+ * 90, by declaring `r` `u16` rather than `s32` -- the word count is now
+ * exact. Found by search.py's declaration-width family in the sweep of all
+ * forty parks. advise.py's verdict is SHAPE, so what is left is still source
+ * shape rather than allocation, and the notes above were written against the
+ * old numbers.
  */
 
 #include "common.h"
@@ -65,7 +72,7 @@ s32 func_80049330(u8 *);
 s32 func_8004AC3C(u8 *p, s32 *out)
 {
     Unk80073414 *e;
-    s32 r;
+    u16 r;
     s32 n;
     s32 f;
 
