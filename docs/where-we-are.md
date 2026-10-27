@@ -243,8 +243,29 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 67 | 57 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
-| never attempted | 3 | 1725 words, all three now SURVEYED; see below |
+| parked, with a COMPILING CANDIDATE | 64 | a park file each in `docs/near-misses/` |
+| structurally blocked | 2 | func_80033D44 + func_80033D54, 541 words: both need `%gp_rel(D_8008099C)` while two landed functions in the same unit reach that symbol absolutely, so they want the unit split |
+| deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
+| never attempted | 3 | 1725 words, all three SURVEYED; see below |
+
+**EVERY NEAR-MISS NOW HAS A COMPILING CANDIDATE**, as of the end of
+2026-10-27. That was not true for most of the day: 44 of the 70 remaining
+stubs were recorded only as prose rows in `docs/carved-sweep.md`, several of
+them COMBINED rows covering two or three functions at once, and a row has
+measurements but no source -- so nothing could be swept against it and the
+next reader had to reconstruct the candidate from the prose before doing any
+work. Reconstructing them is most of the work of landing one: of the rows
+turned into parks that day, nine MATCHED outright (func_800589B8,
+func_80033AE8, func_800353F4, func_80048510, func_8003B714, func_80050A58,
+func_8003A2E0, func_8003A10C and func_80058510) and six more came out
+measurably better than the row claimed -- func_80049E1C 18 DIFF to 8,
+func_80055864 19 to 3, func_8004E9EC's row could not be reproduced at all
+(its shape measures 34 words against the 33 it claimed), func_8003A3E8 and
+func_8003A374 15 to 12, and func_80056DB4 4 to 2.
+
+So the first move on a near-miss is now `python3 tools/decomp/progress.py
+--parked` and then the park file, and the rows are there for their negatives
+rather than as the record of record.
 
 **THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the
 audit that caught it is worth re-running: a stub counts as attempted only if
