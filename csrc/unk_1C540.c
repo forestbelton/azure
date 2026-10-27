@@ -5175,7 +5175,7 @@ void func_80052FE8(u8 *p, s16 k) {
     *(u32 *) (f + 8) = 0x600000;
 }
 
-void func_8005313C(void);
+void func_8005313C(u8 *);
 
 void func_800530A4(u8 *p) {
     if (*(u32 *) (p + 0x10) == (u32) func_8005313C) {
@@ -5209,10 +5209,103 @@ void func_800530C4(u8 *p) {
     D_800814A0 |= 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005313C);
+/* The three-state tick installed at +0x10. State 1 walks the 0x10-byte
+   command records at +0x0C, claiming a free slot from the sixteen at +0x10 for
+   each one whose frame number matches, and advances the state when the record
+   list ends; state 0 just advances it once +0x0A is set; state 2 waits out
+   0x190 frames and then marks all sixteen slots and D_800814A0 dirty.
+
+   Two shapes, 30 DIFF down to a match:
+
+   * `*(s16 *) (p + 8)` is STORED and then read back for the slot index. cse
+     forwards the store, so the read is the stored register plus a HImode
+     sign-extension, and combine folds that into the listing's single
+     `sll 16` / `sra 14` with the `* 4`. Spelled through a local the `* 4` is
+     a plain `sll 2`.
+
+   * In state 2's loop the slot's +0x1E halfword is read into a LOCAL before
+     the `D_800814A0 |= 0x8000` store. A store to a global and a load through
+     a pointer are a real dependence to sched, so written in the obvious order
+     the second load cannot rise into the first load's delay slot and the
+     function is a word long with eleven registers permuted behind it. This is
+     advise.py's DELAY-NOPS lever, and it named it from the nop count alone.
+
+   The trailing `D_800814A0 |= 0x8000;` after the loop is one word, not five:
+   cse still has the value the loop's last iteration stored, so only the `sw`
+   survives. */
+void func_8005313C(u8 *p)
+{
+    u8 *q;
+    u8 *t;
+    s32 n;
+    s32 w;
+    s32 i;
+    u32 k;
+
+    n = *(u16 *) (p + 6) + 1;
+    *(u16 *) (p + 6) = n;
+    switch (*(s16 *) (p + 4))
+    {
+    case 0:
+        if (*(s16 *) (p + 0xA) != 0)
+        {
+            *(s16 *) (p + 0xA) = 0;
+            *(u16 *) (p + 6) = 0;
+            *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+        }
+        break;
+    case 1:
+        if (**(s16 **) (p + 0xC) == (s16) n)
+        {
+            do
+            {
+                *(s16 *) (p + 8) = (*(s16 *) (p + 8) + 1) % 16;
+                q = *(u8 **) (p + *(s16 *) (p + 8) * 4 + 0x10) + 0x20;
+                if (*(s16 *) (q + 6) == 0)
+                {
+                    *(s16 *) (q + 6) = 1;
+                    *(s16 *) (q + 0xA) = *(u16 *) (*(u8 **) (p + 0xC) + 2) - 0x180;
+                    *(s16 *) (q + 0x10) = *(u16 *) (*(u8 **) (p + 0xC) + 2) - 0x180;
+                    *(s16 *) (q + 0xC) = *(u16 *) (*(u8 **) (p + 0xC) + 4);
+                    *(s16 *) (q + 0xE) = *(s16 *) (*(u8 **) (p + 0xC) + 6) * 12 + 0xC;
+                    func_80052C10(*(s16 *) (p + 8), *(u8 **) (p + 0xC));
+                }
+                t = *(u8 **) (p + 0xC);
+                *(u8 **) (p + 0xC) = t + 0x10;
+                w = *(s16 *) (t + 0x10);
+                if (w == 0)
+                {
+                    *(u16 *) (p + 6) = 0;
+                    *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+                    return;
+                }
+            } while (w == *(s16 *) (p + 6));
+        }
+        break;
+    case 2:
+        if ((s16) n >= 0x190)
+        {
+            *(u32 *) (*(u32 *) p + 0x1C) = 0;
+            *(u16 *) (*(u32 *) p + 6) = *(u16 *) (*(u32 *) p + 6) + 1;
+            i = 0;
+            do
+            {
+                u8 *r = *(u8 **) (p + i * 4 + 0x10);
+
+                k = *(u16 *) (r + 0x1E);
+                D_800814A0 |= 0x8000;
+                *(u16 *) (r + 0x1E) = k | 0x8000;
+                i++;
+            } while (i < 0x10);
+            *(u16 *) (p - 2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 extern u8 D_80071A84[];
-void func_8005313C(void);
+void func_8005313C(u8 *);
 u8 *func_8003FD64(s32, u8 *);
 void func_80052FE8(u8 *, s16);
 void func_80052A20(void);
