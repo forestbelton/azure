@@ -1617,7 +1617,51 @@ void func_8004CCBC(u8 **p, s32 n) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CD28);
+/* Builds the per-entry primitive chain through func_8004C080 and links each
+   one into the OT. Three things decide it:
+
+   * the descriptor is copied with a WHOLE-STRUCT assignment through an
+     all-`u8` struct, which has alignment 1 -- that is the three `lwl`/`lwr`
+     pairs and three `swl`/`swr` pairs, not six word moves. Same lever as
+     func_800498A0 above.
+   * the counter's ADDRESS is passed to func_8004C080, so it is addressable
+     and lives on the stack: the listing reads and writes `0x28($sp)` once per
+     iteration rather than keeping it in a register.
+   * `e` is initialised to NULL and overridden, and the `*pp = e + 0xC` store
+     that the override makes dead is kept because the overwrite is in the
+     block AFTER the join -- flow's `mem_set_list` is per basic block. */
+typedef struct Unk4CD28
+{
+    u8 unk_00[12];
+} Unk4CD28;
+
+u8 *func_8004C080(u8 *, u8 *, u8 *, u8 *, u8 *, s32);
+
+u8 *func_8004CD28(u8 **ot, u8 *b, u8 **pp, u8 *prim)
+{
+    u8 t[12];
+    s32 n;
+    u8 *e;
+
+    n = 1;
+    *(Unk4CD28 *)t = *(Unk4CD28 *)*pp;
+    *pp = func_8004C080(b + 0xC, D_80080B54, prim, *pp, t, (s32)&n);
+    n--;
+    while (n != -1)
+    {
+        addPrim(ot, prim);
+        prim = prim + prim[3] * 4 + 4;
+        n--;
+    }
+    e = NULL;
+    if ((t[0] & 0x80) == 0)
+    {
+        e = *pp;
+        *pp = e + 0xC;
+    }
+    *pp = e;
+    return prim;
+}
 
 void func_8004CE68(u8 *p, s32 f) {
     /* A do-while with the `p = q` at the TOP of the body and an explicit
