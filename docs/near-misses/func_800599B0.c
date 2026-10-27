@@ -58,10 +58,15 @@
  * references to flip -- more than any no-cost split found. Measured and not
  * working: the read-back in a local reused for both stores (the move then
  * disappears and the function is a word short); reading +0x38 back from
- * +0x04; assigning the read-back to `v`, `f` or `n` instead of a fresh local;
- * assigning the same local twice; both operand orders of the sum; and every
- * position of the +0x18 store. A 400-ordering perm.py run over the nine
- * statements was still going when this was written.
+ * +0x04; assigning the read-back to `v`, `f`, `i`, `len` or `n` instead of a
+ * fresh local; assigning the same local twice; both operand orders of the
+ * sum; and every position of the +0x18 store.
+ *
+ * perm.py over all nine statements of the format-2 body (400 of 362880
+ * orderings sampled) returns the order below as the best, at the same 1 DIFF
+ * -- so this is NOT a statement-order problem and the remaining lever is in
+ * local-alloc's refusal to tie the second read-back, not in the source
+ * sequence.
  */
 
 #include "common.h"
