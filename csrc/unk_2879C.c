@@ -648,7 +648,131 @@ void func_80054F9C(s32 k, u8 *q)
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005500C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_800550E8);
+extern u8 D_80084810[];
+
+s16 func_8005405C(s16);
+s32 func_8005B470(s16, u8 *);
+void func_8005537C(s16);
+s16 func_8005AE08(u32 *, s16);
+void func_8005AE90(s16, u8, s16);
+extern void func_800552C8b(void) __asm__("func_800552C8");
+
+/* The turn-commit: validates the queued move at D_800847D0+0x26, charges its
+   cost through func_8005537C, looks the move up in two parallel tables indexed
+   by [+0x20][nibble of +0x26], starts its animation, clears the pending state,
+   and sets up the follow-up in D_800848F8 or D_800848FC by the top nibble.
+
+   D_80084878 holds POINTERS, not rows of data: the listing does `lw $a0, 0x0`
+   off the computed slot and passes the loaded word on, hence `*(u32 **)`.
+
+   Each lookup's ROW ADDRESS IS ITS OWN STATEMENT (`r = t + (x << 5); v =
+   *(s16 *)(r + c * 2);`). As one expression the base is added after both
+   terms are shifted -- `sll x; sll c; addu x+t; addu` where the listing has
+   `sll x; addu x+t; sll c; addu` -- and every register name after it follows,
+   since the pseudos are born in a different order; expr.c's INDIRECT_REF
+   expands its address under EXPAND_SUM, so a nested PLUS comes back as an
+   unforced rtx and both `addu`s are emitted when the address is finally
+   forced. Reverting the first row local is 3 DIFF, the second 7, both 10; one
+   row local shared by the two lookups is 121 words, 77 DIFF. The two tables
+   likewise want SEPARATE pointer locals: one local serving both is two sets
+   in two blocks, a global allocno whose `lui` and `addiu` land in different
+   registers where the listing ties them (121 words, 79 DIFF).
+
+   The D_800847D0 base is RE-MATERIALISED for the last call, inline as
+   func_800553D4 does it, so one `lui $s0` serves the symbolic `|= 0x100` and
+   the `addiu` rebuilds the base in the call's delay slot. Reading through the
+   function-scope `b` is 16 DIFF ($s0 stays live from the lookups and nothing
+   fills the delay slot); reassigning `b` before the `|= 0x100` puts the
+   `addiu` between the `lw` and the `ori`, untied from the `lui`.
+
+   The three-way `+0x16` store is a `switch` with `case 0x9000` written FIRST:
+   gcc emits a two-case switch as `beq <first> -> its body` then
+   `bne <second> -> default`, which is the listing's `beq 0x8000` /
+   `bne 0x9000` with the `= 4` arm falling through. An if-else chain gives
+   `bne`/`bne` and the bodies in source order (48-51 DIFF in four orderings).
+
+   func_8005537C is called TWICE, once per arm of the func_8005B470 test:
+   jump2 cross-joins the two `jal`s, where a single call site lets reorg put
+   the 0x64 in the test's delay slot and drops the `j`. func_800552C8 is
+   called with NO argument through an alias, as in func_800553D4. */
+void func_800550E8(void)
+{
+    u8 *b = (u8 *)D_800847D0;
+    u8 tmp[0x20];
+    s32 n;
+    s32 c;
+    s32 v;
+    u16 w;
+    u16 m;
+    u8 *t;
+    u8 *r;
+    u8 *r2;
+    u8 *t2;
+
+    if (*(s16 *)(b + 0x26) == -1)
+    {
+        func_800553D4(0x71);
+        return;
+    }
+    if (func_8005405C(0) == 0)
+    {
+        *(u32 *)(b + 4) |= 2;
+        return;
+    }
+    n = -((b[0x26] >> 4) * 2);
+    if ((s16)func_8005B470(0, tmp) == 0)
+    {
+        func_8005537C(tmp[0x18] + n);
+    }
+    else
+    {
+        func_8005537C(0x64);
+    }
+    b = (u8 *)D_800847D0;
+    w = *(u16 *)(b + 0x26);
+    c = w & 0xF;
+    *(s16 *)(b + 0x26) = c;
+    t = D_80084810;
+    r = t + (*(u16 *)(b + 0x20) << 5);
+    v = *(s16 *)(r + c * 2);
+    m = w & 0xF000;
+    if (v != 0)
+    {
+        func_8005B3D8(v, v);
+    }
+    t2 = D_80084878;
+    r2 = t2 + (*(u16 *)(b + 0x20) << 6);
+    *(s16 *)(b + 0x22) = func_8005AE08(*(u32 **)(r2 + *(s16 *)(b + 0x26) * 4), 0);
+    *(s16 *)(b + 0x26) = -1;
+    D_800847D0[0] &= ~0x1000;
+    *(u32 *)(b + 4) &= ~2;
+    if (m != 0)
+    {
+        u8 *d = (u8 *)D_800848F8;
+
+        *(u32 *)(d + 4) = 1;
+        *(s16 *)(d + 8) = 0;
+        switch (m)
+        {
+        case 0x9000:
+            *(s16 *)(d + 0x16) = 4;
+            break;
+        case 0x8000:
+            *(s16 *)(d + 0x16) = 2;
+            break;
+        default:
+            *(s16 *)(d + 0x16) = 0xA;
+            break;
+        }
+    }
+    else
+    {
+        D_800848FC[0] = 3;
+    }
+    D_800847D0[0] |= 0x100;
+    func_800552C8b();
+    func_8005AE90(*(s16 *)((u8 *)D_800847D0 + 0x22), 1, 1);
+}
 
 /* The magic 0x80010003 with post_shift 14 is a DIVISION BY 32767 (magic.py;
    do not estimate it from the arithmetic). D_800848F8 is read through a

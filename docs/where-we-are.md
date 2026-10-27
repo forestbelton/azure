@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 90 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 87 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,22 +243,23 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 88 | 44 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| parked, with measurements | 85 | 41 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
 | never attempted | 2 | func_800345B8 (546 w, GTE and scratchpad) and func_80056E10 (718 w) |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
-function.** As of 2026-10-27 only TWO of the ninety have never been attempted;
+function.** As of 2026-10-27 only TWO of the eighty-seven have never been attempted;
 everything else has a park file or a sweep row with measurements behind it, so
 the next session's first move is `python3 tools/decomp/progress.py --parked`
 and then the park, not a fresh reading of the listing.
 
-**Where the parked work actually is**, from advise.py's verdict over all 44
-park files on 2026-10-27:
+**Where the parked work actually is**, from advise.py's verdict over the 44
+park files that existed on 2026-10-27 (func_8004E6F4, func_80059814 and
+func_800550E8 have since MATCHED and landed, so the LENGTH count is now 8):
 
 | verdict | count | what it means for the next attempt |
 |---------|-------|------------------------------------|
 | SHAPE  | 28 | advise.py names a lever for each; the source is still wrong somewhere |
-| LENGTH | 11 | the word count is wrong, which is the most tractable signal there is |
+| LENGTH |  8 | the word count is wrong, which is the most tractable signal there is |
 | ALLOC  |  4 | every opcode, immediate and displacement matches; only register numbers differ |
 
 The four ALLOC ones are func_800599B0 (1 register), func_80055D84 (5),
@@ -266,10 +267,9 @@ func_8003931C (10) and func_800407C0 (62) -- no source rewrite reaches those,
 so read matching-levers section 3 and `advise.py --greg` rather than trying
 spellings. The eleven LENGTH ones, by how far off they are:
 
-  -1  func_8003800C  func_8004951C  func_8004A330  func_800550E8
+  -1  func_8003800C  func_8004951C  func_8004A330  func_8004B954 (was -7)
   +1  func_8005914C
-  -2  func_8004DF8C      +2  func_8004E6F4      +3  func_8005B4D0
-  -4  func_8005A90C      -7  func_8004B954      -9  func_80059814
+  -2  func_8004DF8C      +3  func_8005B4D0      -4  func_8005A90C
 
 Everything else is at the exact word count with a named shape finding, which
 is the state 28 of the 44 are in.

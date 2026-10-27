@@ -873,7 +873,61 @@ s32 func_800597A8(u8 *p) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_80059814);
+/* Advances the +0x10 accumulator by the +0x40 step at a rate set by the video
+   mode in D_800869A8, then splits the result into a remainder at +0x40 and a
+   quotient at +0x10. Ten case values in six bodies.
+
+   Each body stores the mask STRAIGHT INTO +0x40 and then READS +0x10 AGAIN
+   for the shift, rather than holding the sum in a local. That re-read is the
+   `addu $v1, $v0, $zero` in every arm of the listing, and it is worth nine
+   words: cse's `invalidate_memory` drops every pointer-based load after any
+   store through a pointer with no offset check at all, so the second read
+   survives expand as a real `lw`, which pins the first `sw 0x10` in place
+   (sched1 cannot sink a store that a live load depends on) and leaves jump2
+   only the two final stores to cross-jump. Hold the sum in a local instead
+   and the store sinks to the end of each arm, jump2 cross-jumps it into the
+   shared tail too, and every arm is a word short: 94 of 103, 69 DIFF. See
+   docs/matching-levers.md. */
+void func_80059814(Unk80085FA8 *p)
+{
+    switch (D_800869A8[0])
+    {
+    case 0x30:
+        p->unk_10 = p->unk_10 * 10;
+        p->unk_10 = p->unk_10 + p->unk_40;
+        p->unk_40 = p->unk_10 & 3;
+        p->unk_10 = p->unk_10 >> 2;
+        break;
+    case 0x60:
+        p->unk_10 = p->unk_10 * 5;
+        p->unk_10 = p->unk_10 + p->unk_40;
+        p->unk_40 = p->unk_10 & 3;
+        p->unk_10 = p->unk_10 >> 2;
+        break;
+    case 0xC0:
+    case 0xF0:
+        p->unk_10 = p->unk_10 + p->unk_40;
+        p->unk_40 = p->unk_10 & 1;
+        p->unk_10 = p->unk_10 >> 1;
+        break;
+    case 0x120:
+    case 0x168:
+        p->unk_10 = p->unk_10 / 3;
+        break;
+    case 0x180:
+    case 0x1E0:
+        p->unk_10 = p->unk_10 + p->unk_40;
+        p->unk_40 = p->unk_10 & 3;
+        p->unk_10 = p->unk_10 >> 2;
+        break;
+    case 0x300:
+    case 0x3C0:
+        p->unk_10 = p->unk_10 + p->unk_40;
+        p->unk_40 = p->unk_10 & 7;
+        p->unk_10 = p->unk_10 >> 3;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_800599B0);
 

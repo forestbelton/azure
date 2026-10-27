@@ -831,6 +831,41 @@ The same granularity decides the prologue: the three scalars initialised before
 the address in that function come out in declaration order, so an initialiser
 list IS a statement sequence for matching purposes.
 
+### A two-term index adds the BASE LAST unless the row address is its own statement
+
+The lever above is about a symbol in the sum; this one bites with the base
+already in a variable. A lookup written as one expression off a pointer local
+emits both shifts and then both adds:
+
+```c
+v = *(s16 *) (t + (x << 5) + c * 2);   /* sll x; sll c; addu x+t; addu   */
+r = t + (x << 5); v = *(s16 *) (r + c * 2);
+                                       /* sll x; addu x+t; sll c; addu   */
+```
+
+Both `addu`s keep the same operand order, so this is NOT the array-reference
+lever -- only the POSITION of the row `addu` moves, and the register names of
+everything after it follow, because the pseudos are born in a different order.
+A store that sits between the two terms in the listing (`sh c` after the row
+`addu`) is a second witness.
+
+`expand_expr`'s `case INDIRECT_REF` expands the address under `EXPAND_SUM`,
+and `case PLUS_EXPR` in ptr_mode under `EXPAND_SUM` expands both operands the
+same way and returns a bare `(plus op0 op1)` from `both_summands` without
+emitting an add. So the inner pointer sum is an unforced rtx -- only its
+`sll` is emitted -- the second term's `sll` follows, and both `addu`s are
+emitted together when `memory_address` finally forces the nested plus. An
+assignment statement goes through `expand_assignment` with no `EXPAND_SUM`,
+which forces the inner `addu` at its own statement.
+
+In func_800550E8 the two row locals are worth 3 and 7 differing words. Note
+they must be SEPARATE locals per lookup: one row local shared by both is two
+sets in two blocks, a global allocno, and costs a word and 77 DIFF. The same
+goes for the table bases -- one pointer local serving both tables puts its
+`lui` and `addiu` in different registers where the listing ties them. And
+grouping the index terms instead (`t + ((x << 5) + c * 2)`) is worse than the
+flat sum: the base is then added LAST of all.
+
 ### A wider store invalidates cse's entry for the narrow read after it
 
 Two word stores into adjacent scalars leave cse holding both values, so a read
@@ -1328,6 +1363,47 @@ one lever each.
   count. Section 1's lever for a wrong sched1 order is block membership and
   section 7's is the number of sets; this is a third and cheaper one for the
   specific case of an arithmetic insn floating above stores.
+
+* **A re-read after a pointer store PINS the store, which is worth more than
+  the copy it makes.** cse's `note_mem_written` sets `writes_ptr->var` for a
+  store through any pointer, and `invalidate_memory` then drops EVERY
+  `in_memory` entry whose address `cse_rtx_addr_varies_p` -- with no offset
+  check at all, since the offset-aware `refers_to_mem_p` path in `invalidate`
+  only handles the stored MEM's own entry. So after *any* store through *any*
+  pointer, cse has forgotten every pointer-based load, and a C-level re-read
+  survives expand as a real `(set rN (mem))`. That load has a true memory
+  dependence on the earlier store of the same field and a consumer after it,
+  so **sched1 can no longer sink that store to the end of the block** -- and
+  in a switch arm, a store that reaches the end of its block is cross-jumped
+  into the shared tail by jump2, costing a word per arm.
+
+      *(u32 *) (p + 0x10) = *(u32 *) (p + 0x10) + *(u32 *) (p + 0x40);
+      *(u32 *) (p + 0x40) = *(u32 *) (p + 0x10) & 3;   /* store through p   */
+      *(u32 *) (p + 0x10) = *(u32 *) (p + 0x10) >> 2;  /* re-read after it  */
+
+  gives `sw $v0,0x10 ; addu $v1,$v0,$zero ; andi $v0,$v0,3 ; srl $v1,$v1,2`,
+  with the store AHEAD of the arithmetic it feeds; holding the sum in a local
+  gives `andi $v1,$v0,3 ; sw $v0,0x10 ; srl $v0,$v0,2` and the store sinks.
+  **Worth nine words and 25 register differences in func_80059814** -- one
+  word per arm from the cross-join plus the copy per arm. Only the ORDER
+  matters, not the locals: keeping `m` and `t` but storing `m` to +0x40
+  *before* reading +0x10 again for `t` also matches.
+
+  Read the direction off the listing: `sw $rA, OFF(base)` sitting before the
+  ALU ops that consume `$rA`, followed by `addu $rB, $rA, $zero` with both
+  registers then modified in place, is a re-read. A store at the END of a
+  block with no copy is a local. The intervening store need not be through
+  the same pointer -- a store through another pointer or to a fixed-address
+  global makes the re-read survive too, and there it stays a real `lw`,
+  because sched1 cannot hoist it over a possibly-aliasing store.
+
+  One caveat on the copy itself: between the `.lreg` and `.greg` dumps the
+  load is rewritten in place (same UID, same LOG_LINKS, `REG_EQUIV` kept)
+  from `(set v1 (mem +0x10))` to `(set v1 v0)`. FSF 2.7.2.3's reload has no
+  path that touches an insn needing no reload, so this looks like the gcc 2.8
+  `reload_cse_regs` backported into this cygnus-2.7.2-970404 binary alongside
+  its `regmove` pass (2.7.2 has none). Not confirmed from source -- the
+  binary is all we have.
 
 ## 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation
 
