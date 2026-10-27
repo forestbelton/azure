@@ -1860,6 +1860,45 @@ func_8003A2E0: 14 DIFF as four fields, 7 as one word.
 
 ## 8. Statement order and expression shape
 
+### sched1 defers a value SET EXACTLY ONCE, and that is a knob
+
+sched1 has a register-pressure heuristic that sched2 does not: after it
+schedules an insn it sets that insn's priority to `LAUNCH_PRIORITY`
+(0x7f000001), and `schedule_insn` then calls `adjust_priority` on each
+predecessor it releases. `adjust_priority` is a no-op once `reload_completed`,
+but before reload it raises a **birthing insn** to `max_priority`, which at
+that moment is `LAUNCH_PRIORITY`. The raised priority is cached, so from then
+on that insn dominates every ready list it appears in.
+
+`birthing_insn_p` (sched.c) is narrower than its name:
+
+```c
+if (GET_CODE (pat) == SET && GET_CODE (SET_DEST (pat)) == REG)
+  if (bb_live_regs[offset] & bit)      /* dest live here */
+    return (reg_n_sets[i] == 1);       /* set ONCE in the whole function */
+```
+
+So the insn qualifies only when its destination register is live at that point
+AND is **set exactly once in the entire function**. Two consequences:
+
+* **Call-argument setup never qualifies.** `addiu $a2, $zero, 0x49` sets the
+  hard register $a2, which every other call in the function also sets, so
+  `reg_n_sets` is far above 1 and the insn keeps its path priority.
+* **A local assigned once does qualify**, and scheduling runs backward, so
+  being picked first puts it as LATE as sched1 can place it. A local assigned
+  TWICE does not qualify and stays where its dependencies put it.
+
+That is a knob, and it is the opposite of the usual advice: splitting one
+assignment into two, or merging two into one, changes `reg_n_sets` and so
+changes where sched1 puts the insn -- without changing a single instruction.
+Worth trying whenever a value's producer sits one slot from where the listing
+has it and nothing about statement order moves it.
+
+It is also the mechanism behind the stack-parameter prologue interleave
+cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
+pseudo set once, so sched1 defers its `lw` behind the argument setup, while
+the `addiu`s that set $a0-$a3 are pinned.
+
 ### Read the scheduler's own decisions -- it is not "priority, then LUID"
 
 `cc1psx` is gcc 2.7.2 and still honours gcc's `-d` dump letters. The `ccpsx`

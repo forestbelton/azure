@@ -93,6 +93,23 @@
  *     chain: this source's sched2 input already has 27 ahead of 14, and sched2
  *     moves it the other way.
  *
+ *   * WHY sched1 defers them is `adjust_priority` plus `birthing_insn_p`
+ *     (sched.c), now written up in matching-levers section 8. The trace shows
+ *     insns 14, 16 and 29 carrying priority 7f000001 -- `LAUNCH_PRIORITY` --
+ *     while 23, 25 and 27 sit at 1. An insn qualifies for that boost when its
+ *     destination register is live and `reg_n_sets[regno] == 1`: a parameter
+ *     read once is a pseudo set once, so both `lw`s qualify, and the `addiu`s
+ *     that load $a0-$a3 never can, because every other call in the function
+ *     sets those hard registers too. Being boosted means being picked first in
+ *     a BACKWARD pass, i.e. emitted as late as sched1 can place it -- which is
+ *     exactly behind the argument setup.
+ *
+ *     So the testable knob is `reg_n_sets` for parameters 5 and 6: a value
+ *     assigned twice is not a birthing insn. Nothing in this function's
+ *     listing assigns either of them twice, so if that is the answer it has to
+ *     come from a shape that writes to the parameter and still emits these
+ *     126 words.
+ *
  * Measured and NOT working, all 126/126 and 6 DIFF: parameter 6 as `u8 *`
  * rather than `u32`; func_8003FF2C's count parameter as `s32` rather than
  * `s16`; parameter 1 as `UnkNode *` with no cast at the call; and the fourth
