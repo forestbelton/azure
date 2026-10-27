@@ -41,6 +41,26 @@ missing = sorted(known - have)
 stubs = sum(len(re.findall(r'INCLUDE_ASM\("[^"]+",\s*\w+\)', open(f).read()))
             for f in glob.glob(PROJ + '/csrc/*.c'))
 print('%d known, %d accounted for, %d still asm stubs' % (len(known), len(have & known), stubs))
+
+# docs/carved-sweep.md's rows are the measurement record for every function
+# that has no park file, and a row for a function that has since LANDED is
+# worse than no row: it sends the next session hunting for words that are
+# already paid. Three such rows were found by hand on 2026-10-27, so check it.
+stub_names = set()
+for f in glob.glob(PROJ + '/csrc/*.c'):
+    stub_names |= set(re.findall(r'INCLUDE_ASM\("[^"]+",\s*(\w+)\)',
+                                 open(f).read()))
+try:
+    sweep = open(PROJ + '/docs/carved-sweep.md').read()
+except OSError:
+    sweep = ''
+stale = [m.group(1) for m in
+         re.finditer(r'^\| (func_\w+) \| \w+ \| \*{0,2}\d+/\d+ words?, \d+ DIFF',
+                     sweep, re.M)
+         if m.group(1) not in stub_names]
+if stale:
+    print('STALE carved-sweep.md rows (these functions have LANDED):',
+          ', '.join(sorted(stale)))
 if missing:
     print('MISSING:', missing)
     sys.exit(1)
