@@ -2094,7 +2094,9 @@ separate cursor instead and the symbol's pseudo stays valid, every later
 second `addiu` is gone. The same reuse keeps the cursor in the callee-saved
 register it already had, so the `addu $sB, $v0, $zero` copy after the call
 survives too. Both together are worth 2 words and 69 DIFF in func_8004DF8C --
-and the copy is the word func_8004DE88's park has been hunting in local-alloc.
+and the copy is the word func_8004DE88's park spent two sessions hunting in
+local-alloc -- the same shape MATCHED it, because the cursor is then the walked
+pointer's own pseudo rather than a quantity born from a copy of $v0.
 
 ### `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used
 

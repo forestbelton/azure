@@ -2473,15 +2473,65 @@ void func_8004DDE4(u8 *p) {
     func_8003528C((u32) &D_80083D98[D_80081558]);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DE88);
-
 extern u8 D_80083E18[];
-extern u8 D_80071404[];
-extern u32 D_80081548;
-extern u32 D_8008154C;
+extern u32 D_80083D88[];
 
 char *strcat(char *, const char *);
 char *strrchr(const char *, s32);
+
+/* Builds a command buffer in D_80083E18 -- a leading 0x08, the argument string
+   via strcpy, then 0x19, 0x02, 0x1A, then the address of D_80083D88 and that
+   address plus four, each written out as four separate bytes (an unaligned
+   32-bit store by hand) -- dispatches through D_800714A4[D_80081550], and
+   initialises D_80083D88[0] and [1].
+
+   ONE `u8 *p` SERVES BUFFER AND CURSOR, advanced in place: `p =
+   D_80083E18; *p++ = 8; strcpy((char *) p, ...)`, not `D_80083E18[0] = 8`
+   with `&D_80083E18[1]` as the argument. That is the whole difference, and it
+   is worth the `addu $a0, $v0, $zero` copy of strrchr's return value this
+   park spent two sessions hunting in local-alloc: the in-place `p++`
+   invalidates cse's {p, D_80083E18} class, so strrchr's argument is re-lowered
+   from the surviving `high` (`addiu $s1, $s1, %lo` after the strcpy) and the
+   cursor is the SAME pseudo as `p`, which keeps the register it already had
+   rather than being born in $v0 where the copy would be deleted. The two
+   quantities were never competing for $v0 on reference counts at all. The
+   sibling func_8004DF8C matched on the same shape; the lever is in
+   docs/matching-levers.md section 6.
+
+   D_80083D88 stays an INCOMPLETE ARRAY here, unlike the sibling's scalars:
+   the listing's `sw $v0, %lo(D_80083D88)($s0)` with the `addiu $s0, $s0, %lo`
+   after it is the high half crossing the call, which is what the array
+   spelling gives. */
+void func_8004DE88(u8 *s) {
+    u8 *p;
+    u32 a;
+
+    p = D_80083E18;
+    *p++ = 8;
+    strcpy((char *) p, (char *) s);
+    p = (u8 *) strrchr((char *) D_80083E18, 0);
+    *p++ = 0x19;
+    *p++ = 2;
+    *p++ = 0x1A;
+    a = (u32) D_80083D88;
+    p[0] = a;
+    p[1] = a >> 8;
+    p[2] = a >> 16;
+    p[3] = a >> 24;
+    p += 4;
+    a += 4;
+    p[0] = a;
+    p[1] = a >> 8;
+    p[2] = a >> 16;
+    p[3] = a >> 24;
+    ((void (*)(u8 *)) D_800714A4[D_80081550])(D_80083E18);
+    D_80083D88[0] = 0x2300030C;
+    D_80083D88[1] = 0x2300040C;
+}
+
+extern u8 D_80071404[];
+extern u32 D_80081548;
+extern u32 D_8008154C;
 
 /* The sibling of func_8004DE88: the same command buffer in D_80083E18, with a
    strcat of D_80071404 after the strcpy, and the two addresses written out

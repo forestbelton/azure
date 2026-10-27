@@ -195,6 +195,19 @@ is advice for the **assembly definition and the linker script only**; on the C
 side, one small scalar declaration per object, which is what `include/structs.h`
 already has.
 
+**A PARK FILE DOES NOT INHERIT ITS UNIT'S `.size` BLOCK, and that is a whole
+word of mis-measurement.** The `.size` records a carved unit needs live in one
+`__asm__(".sdata\n\t.size SYM,4\n\t.text")` block at the top of the unit's
+`.c` file. A candidate compiled standalone by `verify.py` has only what is in
+that file, so a reference to one of those symbols comes out as the two-word
+absolute form where the unit gets a one-word `%gp_rel`. func_8004DE88 was
+parked at "64 of 65 words, one word SHORT" for two sessions on this: the shape
+that matched it is 65 words with the block and 66 without, so the park was
+measuring one word too few in a function whose real defect was elsewhere
+entirely. `verify.py` and `advise.py` now WARN when a source references a
+symbol its unit sizes and it does not, and print the block to paste. An audit
+of all the remaining parks on 2026-10-27 found no other instance.
+
 **One symbol can take both modes inside one function, free.** func_8003F624
 stores through `%gp_rel(D_800814D4)($gp)` and then passes `&D_800814D4` to
 `CdControlB`, which comes out `lui %hi` / `addiu %lo` -- confirmed in the

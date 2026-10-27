@@ -210,7 +210,9 @@ quantity that has no such copy, however much higher the latter's priority.
 That is the correction: func_8004DE88's two competing quantities are 0.714 and
 0.688 by the formula below, and **the margin is irrelevant** -- the cursor wins
 because it is born from a copy of `$v0` and the address value is born from an
-`addiu`, so they are not even in the same phase.
+`addiu`, so they are not even in the same phase. (That function has since
+MATCHED, and not by winning this contest: the right source has no
+copy-of-`$v0` quantity in it at all. See the resolution below.)
 
 The priority formula itself, used by both `qty_compare_1` and as the second key
 of `qty_sugg_compare_1`, is
@@ -235,7 +237,20 @@ left behind.
 func_8004DE88 was briefly written up as an instance of it and is not one: its
 target's cursor crosses no call either, so something else kept that quantity
 out of phase 1. Check the listing for a `jal` inside the live range before
-reaching for this. A variable declared at function scope and set
+reaching for this.
+
+**RESOLVED 2026-10-27, and the answer was not in local-alloc at all.** The
+question "what kept func_8004DE88's cursor out of phase 1" was the wrong
+question: there was no such quantity. Written with ONE walked pointer --
+`p = D_80083E18; *p++ = 8; strcpy((char *) p, s); p = strrchr(...)` instead of
+`D_80083E18[0] = 8` with `&D_80083E18[1]` as the argument -- the cursor after
+strrchr is the SAME pseudo as the buffer pointer, which was born from an
+`addiu` chain and already holds a register. It is not born from a copy of
+`$v0`, so it has no suggestion, it is allocated in phase 2, and the
+`addu $a0, $v0, $zero` the park spent two sessions hunting is simply there.
+MATCHED. The lesson is the order to ask in: a surviving reg-reg copy is
+evidence about WHICH SOURCE VARIABLE the value lives in, and only after that
+about allocation. A variable declared at function scope and set
 in several blocks becomes a global allocno instead, allocated after local-alloc
 has already handed out the low registers, so it lands higher. func_800439F8
 needs a separate `base` local inside each arm for this: one function-scope base

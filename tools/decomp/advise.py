@@ -351,6 +351,17 @@ def main():
         elif a == '--g0':
             gasG = 0
 
+    miss = asmlib.missing_size_syms(src, unit)
+    if miss:
+        print('WARNING: this source references %s.' % ', '.join(miss))
+        print('         %s gives each of those a `.size` and this source does'
+              % unit)
+        print('         not, so every reference costs a word MORE here than it')
+        print('         does in the unit. Add, above the function:')
+        print('           __asm__(".sdata\\n\\t%s\\n\\t.text");'
+              % '\\n\\t'.join('.size %s,4' % s for s in miss))
+        print()
+
     try:
         words, relocs = asmlib.build(src, gasG)
     except CompileError as e:

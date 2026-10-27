@@ -56,6 +56,41 @@ def gas_g_for_unit(unit):
     return _G_BY_UNIT.get(unit, 0)
 
 
+_SIZES_BY_UNIT = {}
+
+
+def size_syms_for_unit(unit):
+    """The symbols the unit gives a `.size` to, from its own __asm__ block.
+
+    cc1psx emits `.extern SYM,size` from a DECLARED type, and gas goes
+    $gp-relative only for a symbol whose size is in (0, G]. A carved unit
+    therefore carries an `__asm__(".sdata\n\t.size SYM,4\n\t.text")` block
+    naming every small global it wants $gp-relative. A park file compiled
+    standalone does NOT inherit that block, so every reference to one of
+    these symbols costs a word more than it does in the unit -- which is a
+    whole word of mis-measurement, and it bit func_8004DE88 for two sessions.
+    """
+    if unit not in _SIZES_BY_UNIT:
+        try:
+            txt = open(os.path.join(PROJ, 'csrc', unit + '.c')).read()
+        except OSError:
+            txt = ''
+        _SIZES_BY_UNIT[unit] = set(re.findall(r'\.size (\w+),', txt))
+    return _SIZES_BY_UNIT[unit]
+
+
+def missing_size_syms(src, unit):
+    """Symbols `src` references that its unit sizes and `src` does not."""
+    try:
+        body = open(src).read()
+    except OSError:
+        return []
+    if '.size' in body:
+        return []
+    return sorted(s for s in size_syms_for_unit(unit)
+                  if re.search(r'\b' + s + r'\b', body))
+
+
 class CompileError(Exception):
     pass
 
