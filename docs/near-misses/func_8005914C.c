@@ -1,4 +1,4 @@
-/* func_8005914C (unk_1C540) -- 206 of 204 words, 132 DIFF. NOT compiled.
+/* func_8005914C (unk_1C540) -- 205 of 204 words, 131 DIFF. NOT compiled.
  *
  * The MIDI channel-message dispatcher: `switch (st & 0xF0)` over the seven
  * status nibbles 0x80..0xE0, with the channel in the low nibble. 0x80, 0x90,
@@ -9,8 +9,8 @@
  * tree, all seven arms, the 0x63/0x14 and 0x63/0x1E controller bodies, the
  * `D_80084960[ch].unk_4D == 0x14` test with its 0x9C-byte index chain, the
  * third loop, and the early `return` out of the 0x06 controller's else arm.
- * The whole gap is TWO WORDS: one load-delay `nop` in each of the first two
- * loops.
+ * The gap is ONE WORD: a load-delay `nop` in each of the first two loops
+ * against one insn fewer somewhere else in this source.
  *
  * WHAT IS PAID FOR
  *
@@ -48,21 +48,29 @@
  *   bound in $a0 across the loop instead of re-reading it. Only the first two
  *   loops re-read.
  *
- * WHAT IS LEFT -- two load-delay nops, and they are a SCHEDULING question.
+ * * The third loop also gets its OWN counter, `ic`, rather than sharing `i`
+ *   with the first two. One word, and the lever is the one func_80057D20
+ *   measured seven times over: a counter reused across disjoint loops is a
+ *   single allocno whose reference count SUMS over all of them, and the
+ *   inflated priority steals a low register. Splitting the first two as well
+ *   changes nothing (they are the pair that re-reads the bound, so they
+ *   behave alike), and splitting one of those two instead is 206 again.
  *
- * The listing puts each loop's `lw %lo(D_800869B4)($t4)` in the MIDDLE of the
- * body, after the first two stores and before the last four, with
- * `addiu $t1, $t1, 1` behind it covering the load delay. Here the load stays
- * at the end, where the source's `while` condition puts it, and the delay
- * needs a `nop`. sched cannot move it up because the load's base is a symbol
- * and the stores go through the loop's giv, so `true_dependence` has to
- * assume they may alias; the listing's placement means its load was already
- * mid-body before sched ran.
+ * WHAT IS LEFT -- one word, behind the two load-delay nops.
+ *
+ * The listing puts each of the first two loops' `lw %lo(D_800869B4)($t4)` in
+ * the MIDDLE of the body, after the first two stores and before the last
+ * four, with `addiu $t1, $t1, 1` behind it covering the load delay. Here the
+ * load stays at the end, where the source's `while` condition puts it, and
+ * the delay needs a `nop`. sched cannot move it up because the load's base is
+ * a symbol and the stores go through the loop's giv, so `true_dependence` has
+ * to assume they may alias; the listing's placement means its load was
+ * already mid-body before sched ran.
  *
  * Reading the bound into a local in the middle of the body DOES move it
  * (`m = D_800869B4n[0];` after the second store kills both nops) -- but then
  * the bound is a second source expression and the `move` for the address
- * pseudo comes back, so it is 206 words either way.
+ * pseudo comes back, so the word comes straight back with it.
  *
  * ALSO MEASURED 2026-10-27, after func_80057D20 taught the guard-plus-do-while
  * ordering that killed the same two nops there: it does NOT transfer. The
@@ -77,16 +85,17 @@
  *
  * And the five loaded values as explicit LOCALS, read in the listing's load
  * order (0x00, 0x10, 0x40, 0x2C, then the byte at 0x4A) and stored after, is
- * 205 words -- it kills ONE nop -- but 148 DIFF against 132, because the
+ * 205 words -- it kills ONE nop -- but 148 DIFF against 131, because the
  * listing's five live values in $v0/$v1/$a0/$a1/$a2 come out of sched
  * hoisting the loads rather than out of five source temps. Both loops
- * separately and the byte read first were measured too. Measured: every position
- * 0..6 for that read, with and without a pre-loop `m = D_800869B4n[0];`, both
- * loop forms, all three entry-pointer forms, `i++` at three positions, the
- * bound through a `u32 *b` pointer local, and the third loop as a `while`, a
- * guarded do-while, with a `u8` count and with the count sharing `m`. The best
- * is 206 words and 132 DIFF, which is the source below; the best DIFF with the
- * nops gone is 139.
+ * separately and the byte read first were measured too, as was that form
+ * combined with the third loop's own counter (still 148). Measured besides:
+ * every position 0..6 for the bound's read, with and without a pre-loop
+ * `m = D_800869B4n[0];`, both loop forms, all three entry-pointer forms,
+ * `i++` at three positions, the bound through a `u32 *b` pointer local, and
+ * the third loop as a `while`, a guarded do-while, with a `u8` count and with
+ * the count sharing `m`. The best is the 205/131 below; the best DIFF with
+ * the nops gone is 139.
  *
  * So the lever wanted is one that moves the load mid-body WITHOUT making it a
  * second expression -- or an alias fact that lets sched hoist it past the
@@ -109,6 +118,7 @@ void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
 {
     u8 ch = st & 0xF;
     u32 i;
+    u32 ic;
     u32 n;
 
     switch (st & 0xF0)
@@ -191,12 +201,12 @@ void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
                     n = D_800869B4n[0];
                     if (n != 0)
                     {
-                        i = 0;
+                        ic = 0;
                         do
                         {
-                            D_80085FA8s[i].unk_08 = d2;
-                            i++;
-                        } while (i < n);
+                            D_80085FA8s[ic].unk_08 = d2;
+                            ic++;
+                        } while (ic < n);
                     }
                 }
                 else
