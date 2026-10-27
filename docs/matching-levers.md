@@ -2809,6 +2809,18 @@ cc1psx increment a COPY in place while keeping the original live?
   which says the representative is the last nonzero-offset access -- that holds
   when the accesses do not share a base subexpression.
 
+* **A constant displacement survives on the STORE only when the giv's base is
+  a REGISTER.** `simplify_giv_expr` folds a symbol and a constant together
+  because symbol-plus-constant is itself a constant, so `SYM[i + K]` makes the
+  giv `SYM + K*4 + i*4` and the store comes out at displacement 0. Assign the
+  base to a local first -- `r = SYM;` then `r[i + K]` -- and `add_val` is a
+  pseudo that the constant cannot fold into: the giv is `r + i*4`, the `K*4`
+  stays as the MEM's displacement, and the preheader's base is biased by the
+  index's own range instead. func_80037E58's descending loop is
+  `addiu $v0, D_80082A38, 0x3C` with `sw $zero, 0x48($v0)`, which is only
+  reachable the second way; five byte-cast regroupings of the by-name form all
+  gave displacement 0, because the regrouping is undone before loop.c sees it.
+
 ## 10. Measured dead ends -- do not retry
 
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried
