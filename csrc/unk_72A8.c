@@ -3084,7 +3084,35 @@ void func_8003A01C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A060);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A10C);
+/* The same opcode in the other direction: composes the address the same way,
+   reads FOUR BYTES at it into a little-endian word, dereferences THAT as a
+   pointer, and stores the word it finds into `state[a].unk_48`.
+
+   Both byte compositions are one expression each, as in the landed
+   func_8003A1A4, and the cursor pair is the family's. Matched on the first
+   compile once func_8003A2E0's re-read finding was in hand; the sweep row had
+   both at 7-23 DIFF. */
+void func_8003A10C(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *r;
+    u8 *q;
+    u8 *s;
+    u8 *t;
+    u8 *d;
+
+    a = *(*cp)++;
+    m = **cp * 4;
+    (*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24) + m);
+    *cp += 4;
+    d = (u8 *) (q[0] + (q[1] << 8) + (q[2] << 16) + (q[3] << 24));
+    s = *(u8 **) (p + 0x80);
+    t = (u8 *) (a * 4 + (u32) s);
+    *(u32 *) (t + 0x48) = *(u32 *) d;
+}
 
 /* The func_8003A2E0 family. The first chain is one expression with the
    `* 4` of the table value at the END; the SECOND chain has to be written as
@@ -3141,7 +3169,46 @@ void func_8003A29C(u8 *p) {
     *tab[b] = *(u32 *) (t + a * 4 + 0x48);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A2E0);
+/* The palette-word WRITE opcode: composes a target address out of four
+   bytecode bytes plus the second index times four, and copies the four bytes
+   of `state[a].unk_48` into it.
+
+   THE FOUR STORES EACH RE-READ `*(s32 *) (t + 0x48)`, and that is the whole
+   function. A local for the field, or four declared byte fields, give one
+   load and three shifts; the listing has FOUR loads of three different widths
+   -- `lbu 0x48`, `lw 0x48` with `sra 8`, `lh 0x4A`, `lb 0x4B` -- because each
+   store through `q` invalidates cse's memory table (section 4's
+   invalidate_memory rule: a store through any pointer drops every
+   pointer-based load, with no offset check), so the next read is real, and
+   gcc then narrows each one to the width the shift actually needs. The sweep
+   row had this as "ONE s32 read four ways" without the re-read, and sat at
+   7-23 DIFF chasing a misplaced `sll` through all 120 permutations of the
+   five statements; written this way it matches on the first compile.
+
+   The cursor pair is the family's: `a = *(*cp)++;` then `m = **cp * 4;` with
+   `(*cp)++` after it, `r = *cp` for the four address bytes, and `*cp += 4`. */
+void func_8003A2E0(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *r;
+    u8 *q;
+    u8 *s;
+    u8 *t;
+
+    a = *(*cp)++;
+    m = **cp * 4;
+    (*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24) + m);
+    *cp += 4;
+    s = *(u8 **) (p + 0x80);
+    t = (u8 *) (a * 4 + (u32) s);
+    q[0] = *(s32 *) (t + 0x48);
+    q[1] = *(s32 *) (t + 0x48) >> 8;
+    q[2] = *(s32 *) (t + 0x48) >> 16;
+    q[3] = *(s32 *) (t + 0x48) >> 24;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A374);
 

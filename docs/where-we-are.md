@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 72 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 70 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,7 +243,7 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 69 | 46 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| parked, with measurements | 67 | 57 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
 | never attempted | 3 | 1725 words, all three now SURVEYED; see below |
 
 **THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the

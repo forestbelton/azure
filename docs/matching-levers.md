@@ -1588,6 +1588,17 @@ one lever each.
   matters, not the locals: keeping `m` and `t` but storing `m` to +0x40
   *before* reading +0x10 again for `t` also matches.
 
+  **And it is how a listing reads ONE field at several widths.**
+  func_8003A2E0 copies the four bytes of an `s32` field into four byte slots
+  and the listing shows FOUR loads of three widths -- `lbu 0x48`,
+  `lw 0x48` with `sra 8`, `lh 0x4A`, `lb 0x4B` -- not one load and three
+  shifts. Each store through the destination pointer invalidates the field's
+  entry, so each `*(s32 *) (t + 0x48) >> n` is a real load again, and gcc
+  narrows each one to the width its shift needs. A local for the field gives
+  the one-load form. Its sweep row had chased a misplaced `sll` through 120
+  permutations; with the re-reads written out, that function and its mirror
+  both matched on the first compile.
+
   Read the direction off the listing: `sw $rA, OFF(base)` sitting before the
   ALU ops that consume `$rA`, followed by `addu $rB, $rA, $zero` with both
   registers then modified in place, is a re-read. A store at the END of a
