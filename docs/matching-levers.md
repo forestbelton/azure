@@ -713,6 +713,35 @@ Two things that cannot be steered from C:
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
 
+### ONE variable per LOOP, not one counter reused -- refs add up, priority inflates
+
+A variable used by several loops whose live ranges do not overlap is still ONE
+allocno, and `allocno_compare`'s priority is
+`floor_log2(refs) * refs / live_length` over the SUM of those ranges. Reusing a
+counter therefore builds a single high-priority allocno that takes registers
+the long-lived values need, and the registers it takes are the low ones.
+
+func_80057D20 is the measurement: 48 of its 54 remaining differing words were
+this. One `i` across four loops in case 1, case 64's outer loop and the
+closing loop is 46 refs over 155 live insns -- priority 1.484, which outranks
+the entry pointer (56/206, 1.359) and the `d` parameter (34/177, 0.960) and
+takes $s1 and $s4 from them. Four separate counters for case 1's loops are 7
+refs over 17 live each, priority 0.824 apiece; one of them also serving case
+64's INNER loop, and a sixth for the outer and closing loops, put `e` back in
+$s1 and `d` in $s4 and every other register where the listing has them. Zero
+words either way -- the separate counters share one hard register because
+their ranges are disjoint.
+
+**Read the listing's register REUSE as evidence for the split, not against
+it.** Seeing $s2 serve case 1's loops AND case 64's inner loop does NOT mean
+one variable; two variables with disjoint ranges get the same register. That
+inference was made twice on func_80057D20 and cost two rounds both times,
+including a plausible-looking three-way repartition that measured 464 words
+and 90 DIFF. The reuse tells you the ranges are disjoint; what it does not
+tell you is how many variables there are. Count the allocnos with
+`advise.py --greg` instead, and split whenever a counter's refs are summing
+across regions.
+
 ### A `u8` destination makes a register copy INVISIBLE to cse
 
 This is the free way to keep a copy of a value as a second pseudo, and it is
