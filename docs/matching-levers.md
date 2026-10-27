@@ -1571,9 +1571,19 @@ usual reason. Scanning all 44 parks on 2026-10-27, thirteen have that row:
   func_80056654  func_8005914C  func_8005BBFC
 
 That is a work list, not a diagnosis -- a missing load can equally be a
-different addressing shape or a read the source simply does not make. But
-search.py's `t_volatile` now tries the read side of it mechanically, so the
-cheap half of the check is one sweep.
+different addressing shape or a read the source simply does not make. Eleven
+of the thirteen have now been swept with `t_volatile`, and exactly ONE moved:
+func_80047054, 30 differing words to 24. The other ten are ruled out as far
+as a single qualifier goes --
+
+  func_8003800C  func_80038CB8  func_800398BC  func_8004437C  func_8004A330
+  func_8004AC3C  func_8004D294  func_800565D8  func_80056654  func_8005914C
+
+-- so on those the missing load is something else, and the row should be read
+as "the listing makes a load this source does not" rather than as a volatile
+candidate. A one-in-eleven hit rate is about what a mechanical sweep over a
+signature this broad should be expected to give; the value is in the ten
+negatives being recorded rather than re-derived.
 
 ### A load of a value just stored is a VOLATILE field
 
