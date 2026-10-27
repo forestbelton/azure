@@ -4759,7 +4759,52 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800537D0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053858);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053A88);
+/* Walks a linked list of tile records, emitting a TILE and a tpage primitive
+   for each and linking both into the OT at +0x74. The loop is a `while (1)`
+   with an explicit `break` on the null next-pointer, NOT a `do`/`while (q !=
+   0)`: the two differ only in which register `q` gets -- $a0 for the break
+   form, $v0 for the tested-condition form -- and that is the last three
+   words. */
+s32 func_80053A88(u8 *p)
+{
+    Unk80083160 *s = &D_80083160;
+    u8 *e;
+    u8 *q;
+
+    while (1)
+    {
+        e = *(u8 **)(s->unk_00 + 0x8D0);
+        *(u8 **)(s->unk_00 + 0x8D0) = e + 0x10;
+        *(s16 *)(e + 8) = *(u16 *)(p + 0xC);
+        *(s16 *)(e + 0xA) = *(u16 *)(p + 0xE);
+        *(s16 *)(e + 0xC) = *(u16 *)(p + 0x10);
+        *(s16 *)(e + 0xE) = *(u16 *)(p + 0x12);
+        *(u32 *)(e + 4) = *(u32 *)(p + 8);
+        SetTile((TILE *)e);
+        if ((*(u16 *)(p + 0x16) & 1) != 0)
+        {
+            SetSemiTrans(e, 1);
+        }
+        if ((*(u16 *)(p + 0x16) & 2) == 0)
+        {
+            addPrim(s->unk_00 + 0x74, e);
+        }
+        e = *(u8 **)(s->unk_00 + 0x8D0);
+        *(u8 **)(s->unk_00 + 0x8D0) = e + 0xC;
+        func_80067F20((u32 *)e, 0, 0, GetTPage(0, *(s16 *)(p + 0x14), 0, 0), 0);
+        if ((*(u16 *)(p + 0x16) & 2) == 0)
+        {
+            addPrim(s->unk_00 + 0x74, e);
+        }
+        q = *(u8 **)(p - 8);
+        if (q == 0)
+        {
+            break;
+        }
+        p = q + 0x20;
+    }
+    return 0;
+}
 
 void func_80053C3C(u8 *p) {
     func_8003E4FC(6, p, 0);
