@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 76 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 75 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,8 +243,8 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 71 | 39 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
-| never attempted | 5 | 1925 words; see below |
+| parked, with measurements | 72 | 40 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| never attempted | 3 | 1725 words; see below |
 
 **THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the
 audit that caught it is worth re-running: a stub counts as attempted only if
@@ -252,11 +252,11 @@ it has a park file in `docs/near-misses/` or a ROW OF ITS OWN in
 `docs/carved-sweep.md`, and nine did not. Being mentioned inside another
 function's row is not a measurement. The list, smallest first:
 
-  func_80035888  93 w    func_80059F8C 145 w    func_8004C36C 461 w
+  func_8004C36C 461 w (GTE matrix setup, ~20 blocks)
   func_800345B8 546 w (GTE and scratchpad)
   func_80056E10 718 w (the voice family's third member)
 
-**FIVE OF THE TEN WENT THE SAME DAY THE LIST WAS WRITTEN**, and that is the
+**SEVEN OF THE TEN WENT THE SAME DAY THE LIST WAS WRITTEN**, and that is the
 argument for working through the rest before grinding the parks -- the parks
 have had their transform families swept, these had never been read:
 
@@ -264,7 +264,9 @@ have had their transform families swept, these had never been read:
   func_80035484  90 w   MATCHED, first draft
   func_8003C920  54 w   MATCHED, third draft
   func_8005560C  73 w   MATCHED, second draft
+  func_80035888  93 w   MATCHED, one statement swap from the first draft
   func_8005ACDC  75 w   parked at 3 DIFF, from 35 on the first draft
+  func_80059F8C 145 w   parked at 121 DIFF, structure decoded
 
 Each one took two or three edits from shapes already recorded in
 matching-levers.md and in the siblings' headers: the giv lever for
