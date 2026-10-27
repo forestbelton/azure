@@ -1218,6 +1218,21 @@ in the block to hoist it past.
   The interleave then also buys the copy of the argument into `$a1`, because
   four quantities are live at once instead of three.
 
+### A conditional negate with a COPY in it means the result is a NARROW local
+
+`u = n * 2; t = cond ? -u : u;` with both `s32` is ONE quantity: local-alloc
+unifies them and the negation happens in place, so the listing would show
+`negu $v1, $v1` and nothing in the branch's delay slot. A listing that has
+`addu $v1, $a1, $zero` for the unchanged arm and `negu $v1, $a1` for the
+negated one has TWO quantities, and declaring `t` as `s8` (with the
+sign-extension then falling out of its use, not a cast) is what keeps them
+apart. func_80056098, 2 words.
+
+**With it: write the mask test on the UNDOUBLED value.** `(u & 0x80) != 0`
+leaves the `andi`, because combine cannot fold a mask back through a pseudo
+with several uses; `(n << 25) < 0` is the fold combine would have done for the
+single-use case, and it is the two words the listing spends there.
+
 ### A switch subject read as `s16` is declared `s32`
 
 `s16 s = *(s16 *) (p + 4); switch (s)` gives the pseudo HImode, so the read is

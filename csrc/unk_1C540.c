@@ -5592,7 +5592,90 @@ void func_80055E7C(s32 a, s32 b, s32 c) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80055E84);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056098);
+/* The +0x3C ramp: advance the +0x26 delay, then the +0x28 step, then fold the
+   +0x27 phase through a triangle wave and scale by +0x2C. Four spellings:
+
+   * `t` is declared `s8`, not `s32` with an `(s8)` cast at the multiply.
+     As an `s32`, `t` and `u` are one quantity and the negation happens in
+     place; the listing has `addu $v1, $a1, $zero` in the `bgez` delay slot
+     and `negu $v1, $a1` after it, which is two DISTINCT quantities. The
+     narrow declaration is what keeps them apart.
+   * the wave's test is written on `n`, not on `u`. `u = n * 2;` and then
+     `(u & 0x80) != 0` leaves the `andi`, because combine cannot fold the mask
+     back through a pseudo with several uses; `(n << 25) < 0` is the fold it
+     would have done, and two words.
+   * both if/else pairs have the arm the listing FALLS THROUGH written first:
+     `p[0x28] >= p[0x35]` (the `sltu` is the taken branch) and the inner
+     `p[0x28] != 0`.
+   * the final store keeps its explicit `v != 0` test; `v / 1024` alone is the
+     three-word `bgez`/`addiu 0x3FF`/`sra` and no zero branch. */
+void func_80056098(u8 *p)
+{
+    s32 g;
+    s32 n;
+    s8 t;
+    s32 v;
+    s32 u;
+
+    g = *(u32 *)(p + 0x30);
+    if (g == 0)
+    {
+        return;
+    }
+    if (p[0x26] != p[0x34])
+    {
+        p[0x26] = p[0x26] + 1;
+        return;
+    }
+    if (p[0x28] >= p[0x35])
+    {
+        *(u32 *)(p + 0x2C) = g;
+    }
+    else
+    {
+        if (p[0x28] != 0)
+        {
+            *(u32 *)(p + 0x2C) = *(u32 *)(p + 0x2C) + *(u32 *)(p + 0x38);
+        }
+        else
+        {
+            *(u32 *)(p + 0x2C) = *(u32 *)(p + 0x38);
+        }
+        p[0x28] = p[0x28] + 1;
+    }
+    p[0x27] = p[0x27] + p[0x36];
+    p[0x25] = 0;
+    n = *(s8 *)(p + 0x27);
+    if (n < 0)
+    {
+        n = -n;
+        u = n * 2;
+        t = (n << 25) < 0 ? -u : u;
+        v = *(s32 *)(p + 0x2C) * t;
+        if (v > 0)
+        {
+            v = -v;
+        }
+    }
+    else
+    {
+        u = n * 2;
+        t = (n << 25) < 0 ? -u : u;
+        v = *(s32 *)(p + 0x2C) * t;
+        if (v < 0)
+        {
+            v = -v;
+        }
+    }
+    if (v != 0)
+    {
+        *(u32 *)(p + 0x3C) = v / 1024;
+    }
+    else
+    {
+        *(u32 *)(p + 0x3C) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800561D8);
 
