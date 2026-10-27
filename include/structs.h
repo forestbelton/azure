@@ -1359,6 +1359,15 @@ typedef struct Blk40
 {
    u32 w[0x10];
 } Blk40;
+
+/* The same idea at 0x20 bytes, which is small enough for an UNROLLED copy:
+   func_8003C920 moves eight words of D_8002D594 twice, once into a dead local
+   and once into D_8006B200, and the grouping (three registers for the first,
+   two for the second) is emit_block_move's own. */
+typedef struct Blk20
+{
+   u32 w[8];
+} Blk20;
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 extern u8 D_80119000[];
 extern u8 D_80126000[];

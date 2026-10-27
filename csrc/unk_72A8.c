@@ -4419,4 +4419,41 @@ u32 *func_8003C8E4(s32 k) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C920);
+extern Blk20 D_8002D594b __asm__("D_8002D594");
+extern u32 D_8006B200w[] __asm__("D_8006B200");
+
+/* Copies the eight-word D_8002D594 template into a DEAD local -- gcc 2.7.2's
+   flow does not delete dead stores to memory, so the copy survives and is the
+   whole 0x20 frame -- and then, unless D_80082E6A says mode 2, into
+   D_8006B200 as well; mode 2 instead plants a zero and the D_80016000
+   pointer. D_80080A6C records which.
+
+   MATCHED on the third draft. Two things carry it:
+
+   * The `!= 2` arm is written FIRST, so the mode-2 arm ends up last in
+     memory, where the listing has it (the other way round is 32 DIFF).
+
+   * The mode-2 arm's FIRST store is symbolic and its second goes through a
+     base LOCAL assigned between them. That is section 8's "N materialisations
+     of ONE base mean N LOCALS" read forwards: the listing has
+     `sw $zero, %lo(D_8006B200)($v0)` then `addiu $v0, $v0, %lo(D_8006B200)`
+     then `sw $v1, 0x4($v0)`, i.e. ONE `lui` -- which reorg lifts into the
+     `beq`'s delay slot -- serving the symbolic store, the rebuild, and the
+     other arm's `addiu $a1, $v0, %lo`. Both stores through one pointer local
+     declared before the `if` instead is 31 DIFF: that gives a lui/addiu pair
+     in the common block and two zero-displacement stores. */
+void func_8003C920(void) {
+    Blk20 t = D_8002D594b;
+
+    if (D_80082E6Aa[0] != 2) {
+        *(Blk20 *) D_8006B200w = D_8002D594b;
+        D_80080A6C = 4;
+    } else {
+        u32 *b;
+
+        D_8006B200w[0] = 0;
+        b = D_8006B200w;
+        b[1] = (u32) D_80016000;
+        D_80080A6C = 1;
+    }
+}
