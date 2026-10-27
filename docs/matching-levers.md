@@ -2219,6 +2219,29 @@ cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
 pseudo set once, so sched1 defers its `lw` behind the argument setup, while
 the `addiu`s that set $a0-$a3 are pinned.
 
+### A global's DECLARED SIZE also decides how many registers its address costs
+
+The incomplete-array-versus-scalar choice is already known to decide `-G8`
+placement and the `%gp_rel` form. It decides something else too, even for a
+symbol that is absolute either way: how many registers the address takes.
+
+```c
+extern CVECTOR D_80080B28;      /* lui $a1 / addiu $a1,$a1,%lo -- ONE reg */
+extern CVECTOR D_80080B28[];    /* lui $v0 / addiu $a2,$v0,%lo -- TWO     */
+```
+
+As a scalar the `(high sym)` pseudo dies into the `(lo_sum)` that follows it,
+`combine_regs` ties them, and the pair shares one register -- which then
+pushes whatever that address feeds (here the block copy's data word) down to
+the next register. As an array the address is a separate quantity, the high
+keeps the low-numbered register and everything after it shifts. Worth 13 words
+on func_800499E8, where the struct copy's `lwl`/`lwr` reads through the
+address and its `swl`/`swr` writes the frame.
+
+So when a listing materialises a symbol's address into a register that is NOT
+the one the `lui` wrote, try the array declaration before hunting for
+pressure elsewhere.
+
 ### A value stored twice is a CHAINED assignment, because a store flushes cse
 
 ```c
