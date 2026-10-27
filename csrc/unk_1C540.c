@@ -3378,7 +3378,7 @@ void func_80051E94(u8 *p, s32 a) {
     *(u32 *) (f + 8) = 0x900000;
 }
 
-void func_80051F58(void);
+void func_80051F58(u8 *, s32, u8 *);
 
 void func_80051F38(u8 *p) {
     if (*(u32 *) (p + 0x10) == (u32) func_80051F58) {
@@ -3386,9 +3386,83 @@ void func_80051F38(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051F58);
+/* Three declaration facts, each worth a word or two:
 
-void func_80051F58(void);
+   * The switch subject is `s32`, not `s16`. As an `s16` the pseudo is HImode,
+     so the read is a `lhu` and the switch sign-extends it with `sll`/`sra`
+     where the target has one `lh`.
+
+   * `w`, the UNSIGNED read of the same halfword, is a second load in the
+     listing -- `lh $v1, 0x4($a0)` and `lhu $a3, 0x4($a0)` back to back --
+     because cse relates a sign-extend and a zero-extend of one `(mem:HI)`
+     only one way: with both reads before the +6 store, whichever it folds
+     costs the `sll`/`sra` pair. Reading `w` before the store works only with
+     the `s32` spelling above; reading it after the store also works (the
+     store invalidates all memory, both addresses being p-relative bare
+     dereferences), and is a word worse.
+
+   * The three byte stores take ONE value in a local. `q[0xD] = q[0xE]` after
+     the store to +0xE re-reads it: two words in each of the two arms.
+
+   The cases are written 0, 1, 2, 3, default, which is the listing's physical
+   order -- case 0's tail is cross-jumped into case 1's, so case 0 has to come
+   first. */
+void func_80051F58(u8 *p, s32 b, u8 *q) {
+    s32 s;
+    u16 w;
+    u16 n;
+    u8 v;
+
+    n = *(u16 *) (p + 6) + 1;
+    s = *(s16 *) (p + 4);
+    w = *(u16 *) (p + 4);
+    *(u16 *) (p + 6) = n;
+    switch (s) {
+    case 0:
+        if (*(s16 *) (p + 0xC) != 0) {
+            *(s16 *) (p + 0xC) = 0;
+            *(u16 *) (p + 6) = 0;
+            *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+        }
+        return;
+    case 1:
+        v = q[0xE] + 2;
+        q[0xE] = v;
+        q[0xD] = v;
+        q[0xC] = v;
+        if (*(s16 *) (p + 6) >= 0x40) {
+            *(u16 *) (p + 6) = 0;
+            *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+        }
+        return;
+    case 2:
+        if ((s16) n >= 0x100) {
+            *(u16 *) (p + 4) = w + 1;
+            *(u16 *) (p + 6) = 0;
+        }
+        return;
+    case 3:
+        v = q[0xE] - 2;
+        q[0xE] = v;
+        q[0xD] = v;
+        q[0xC] = v;
+        if (*(s16 *) (p + 6) < 0x40) {
+            return;
+        }
+        break;
+    default:
+        q[0xE] = 0;
+        q[0xD] = 0;
+        q[0xC] = 0;
+        break;
+    }
+    *(u32 *) (*(u8 **) p + 0x18) = 0;
+    *(u16 *) (*(u8 **) p + 6) = *(u16 *) (*(u8 **) p + 6) + 1;
+    *(u16 *) (p - 2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
+
+void func_80051F58(u8 *, s32, u8 *);
 void func_80044BB0(void);
 
 /* func_8004491C's first argument is the pass-through: nothing sets $a0 before

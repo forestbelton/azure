@@ -1218,6 +1218,23 @@ in the block to hoist it past.
   The interleave then also buys the copy of the argument into `$a1`, because
   four quantities are live at once instead of three.
 
+### A switch subject read as `s16` is declared `s32`
+
+`s16 s = *(s16 *) (p + 4); switch (s)` gives the pseudo HImode, so the read is
+a `lhu` and the switch sign-extends it with `sll`/`sra` -- three words where
+the listing has one `lh`. Declaring the local `s32` makes the read
+`(sign_extend:SI (mem:HI))`, which is the `lh`. func_80051F58, one word.
+
+Its sibling fact, in the same function: the SAME halfword read both ways --
+`*(s16 *)` for the switch and `*(u16 *)` for an increment -- is TWO loads in
+the listing, `lh $v1, 0x4($a0)` and `lhu $a3, 0x4($a0)` back to back. cse
+relates a sign-extend and a zero-extend of one `(mem:HI)` in only one
+direction, so whichever one it folds costs the `sll`/`sra` pair; with the
+`s32` spelling above it folds neither. Putting the unsigned read after a store
+through the same base also separates them -- both addresses are bare pointer
+dereferences with varying addresses, so `true_dependence` makes the store
+invalidate everything -- but that costs a word elsewhere.
+
 ### A load of a value just stored is a VOLATILE field
 
 When the listing stores a value and then loads the same address straight back
