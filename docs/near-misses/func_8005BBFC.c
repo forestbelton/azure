@@ -67,13 +67,18 @@
  *
  * WHAT IS LEFT
  *
- * 1. `prog` and `key` are the two parameters that outlive the calls and only
- *    ONE callee-saved register is free for them: the listing spills `prog` to
- *    a halfword slot and keeps `key` in $fp, and this source does the
- *    opposite. Writing the two late stores in the order +0x08 then +0x04
- *    (below) takes the register-only count from 90 to 87 but does not flip
- *    the choice. Measured and not working: `prog` as `s16`, `key` as `u16`
- *    (332 words), and `(s16) prog * 0x10` hoisted into its own local.
+ * 1. SOLVED, and kept here because it is the lever: `prog` and `key` are the
+ *    two parameters that outlive the calls and only ONE callee-saved register
+ *    is free for them. The listing spills `prog` to a halfword slot and keeps
+ *    `key` in $fp, and WRITING THE TWO LATE STORES IN THE ORDER +0x08 THEN
+ *    +0x04 is what produces that: the parameter whose store comes LAST is the
+ *    one that gets the register. With +0x04 first it is the other way round
+ *    and three more words differ. The .greg dump explains the margin -- the
+ *    two allocnos are 2 refs each with live lengths 136 and 144, priorities
+ *    0.015 and 0.014, so the store order's effect on the live range is the
+ *    whole decision. Measured and not working for this: `prog` as `s16`,
+ *    `key` as `s32` or `u16` (332 words), `prog` as `s32`, `(s16) prog * 0x10`
+ *    hoisted into its own local, and computing `e` before `q`.
  *
  * 2. The two stack parameters are loaded in the listing's PROLOGUE (`lw $t0,
  *    0xA0($sp)` / `lw $t1, 0xA4($sp)` before anything else) and here they are
@@ -81,13 +86,28 @@
  *    the right place but is 327 words, six short, because the `(s16)` casts
  *    then disappear from the four places the listing keeps them.
  *
- * 3. The order of the voice-record stores and of the attr fills: the listing
- *    interleaves them differently in the 0x8005BE50..0x8005BF00 stretch, and
- *    the source order below is m2c's reading of the listing rather than a
- *    measured choice. Those stores are all to the same base, so sched moves
- *    them freely and a permutation sweep over them is the obvious next step
- *    (perm.py, or search.py now that it has the declaration-order and
- *    per-arm transforms).
+ * 3. ONE MISSING `addu` AND ONE EXTRA NOP, which cancel in the word count.
+ *    The listing copies the pan level into BOTH arms of the 0x40 split
+ *    (`addu $a2, $a0, $zero` and `addu $a1, $a0, $zero`); this source gets
+ *    the first copy and coalesces the second, because `a`'s only remaining
+ *    use is that arm. The compensating extra nop is the summing loop's load
+ *    delay: sched1 hoists `i++` above the `lhu` whatever order the body is
+ *    written in. `sum += *w; w++; i++;` and `sum += *w++; i++;` DO kill the
+ *    nop -- and then the function is 332 words, one short, which is the same
+ *    two defects seen separately. Worth knowing when the copy is found.
+ *
+ * 4. The order of the voice-record stores and of the attr fills: the listing
+ *    interleaves them differently in the 0x8005BE50..0x8005BF00 stretch.
+ *    Those stores are all to the same base, so sched moves them freely and
+ *    the emitted order is not the source order -- which is why a permutation
+ *    sweep over the 15 of them is 15! and perm.py can only sample it. The
+ *    source order below is the listing's own emitted order with the +0x04 and
+ *    +0x08 stores swapped per item 1.
+ *
+ * search.py's whole sweep (120 candidate changes, 240 variants, all ten
+ * transform families including the new declaration-order and per-arm ones)
+ * finds exactly one improvement worth 1 DIFF -- dropping one `(s16)` cast --
+ * so what is left really is allocation and schedule, not shape.
  */
 
 #include "common.h"
