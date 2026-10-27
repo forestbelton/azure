@@ -1235,6 +1235,24 @@ through the same base also separates them -- both addresses are bare pointer
 dereferences with varying addresses, so `true_dependence` makes the store
 invalidate everything -- but that costs a word elsewhere.
 
+### A store that gcc deletes as dead is a VOLATILE field
+
+The mirror of the entry below. When a listing writes one field two or three
+times with a progressively refined value and never reads it back, gcc's flow
+pass deletes every store but the last -- it keeps a `mem_set_list` and drops a
+store to a location that is stored again with nothing reading it in between --
+and the function comes out short by exactly the deleted stores.
+
+Spelling the refinements as in-place field updates does NOT save them:
+`*(u32 *) (b + 0x10) &= 0xFFFFFF;` reads the field back, cse forwards the value
+just stored, the load disappears and the store is dead again. `volatile` on the
+store is the only thing that keeps it. func_80054B08's two words, six stores
+across two fields.
+
+Qualify only the fields that are written repeatedly. Marking the whole base
+volatile pins the stores that the target DOES schedule freely and costs more
+than it saves (measured there: 32 DIFF against 36).
+
 ### A load of a value just stored is a VOLATILE field
 
 When the listing stores a value and then loads the same address straight back
