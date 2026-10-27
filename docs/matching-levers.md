@@ -2286,6 +2286,31 @@ whose `addiu %lo` sits in a branch delay slot with the `lui` elsewhere
 rather than `extern u8 X[];` is what picks the first form. Only the size CLASS
 is evidence -- small enough for -G8 -- not the exact size.
 
+**The same rule governs CONDITIONAL branches.** `eligible_for_delay` rejects
+any insn whose `get_attr_length` is not 1, and the assembler-expanded form is
+ONE insn of length 2, so a `beq` whose fall-through block begins with such a
+materialisation keeps its nop while a compiler-split `addiu` would drop
+straight in. func_8003BAF8's `*(u32 *)(q + 4) = (u32) &D_800812F8;` needs the
+scalar spelling for exactly that one word.
+
+### N materialisations of ONE base mean N LOCALS, because cse restarts at a join
+
+cse is an extended-basic-block pass: `cse_basic_block` follows a chain of
+blocks with single predecessors and starts fresh at a join. So a table base
+spelled through a pointer local is one pseudo for as far as that chain reaches,
+and a SECOND assignment of the same symbol after a join is a second pseudo that
+cse cannot prove equal to the first. Count the `lui`/`addiu` pairs for one
+symbol in the listing and use that many locals, each assigned in the region
+that uses it: func_8003BAF8 has three for D_8006ADEC and needs three. Reusing
+one variable is one pseudo whose live range spans the calls between the
+regions, which costs a callee-saved register and its save/restore pair.
+
+**And a local's INITIALISER is evaluated at block entry, not where it is
+written.** `u8 *b = SYM;` ahead of the function's first call puts the
+materialisation before that call and makes the pointer live across it;
+`u8 *b; ... f(); b = SYM;` puts it after. Two words of prologue in
+func_8003BAF8, and it reads as an allocation problem.
+
 ### Two offsets off a walked pointer become TWO induction variables
 
 `u8 *p = SYM; ... *(u32 *) p ... *(u16 *) (p + 4) ... p += 8;` makes loop.c
