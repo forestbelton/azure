@@ -253,9 +253,11 @@ the next session's first move is `python3 tools/decomp/progress.py --parked`
 and then the park, not a fresh reading of the listing.
 
 **Where the parked work actually is**, from advise.py's verdict over the 44
-park files that existed on 2026-10-27 (func_8004E6F4, func_80059814,
-func_800550E8, func_8004DF8C and func_8004DE88 have since MATCHED and landed,
-so the LENGTH count is now 6):
+park files that existed early on 2026-10-27. EIGHT have MATCHED and landed
+since that census -- func_8004E6F4, func_80059814, func_800550E8,
+func_8004DF8C, func_8004DE88, func_800589B8, func_80033AE8, func_800353F4 and
+func_80057D20 -- so read the counts below as the shape of the remaining work,
+not as a tally; `progress.py --parked` is the live one.
 
 | verdict | count | what it means for the next attempt |
 |---------|-------|------------------------------------|
@@ -272,8 +274,22 @@ spellings. The eleven LENGTH ones, by how far off they are:
   +1  func_8005914C
   +3  func_8005B4D0      -4  func_8005A90C
 
-Everything else is at the exact word count with a named shape finding, which
-is the state 28 of the 44 are in.
+Everything else is at the exact word count with a named shape finding.
+
+**The lowest-DIFF parks, as of the end of 2026-10-27**, which is where to
+start: func_800599B0 (1 DIFF, one register), func_80035E58 (2, one sched2
+swap), func_800565D8 (3), func_8004A574 and func_80055D84 (5), func_8003666C
+(7). Each of those has a park file whose header says what has been ruled out;
+read it before trying a spelling, because most of them have had their obvious
+families swept already.
+
+**Four of the day's matches came from rows, not parks**, and that is worth
+knowing: a carved-sweep row has measurements but no SOURCE, so nothing can be
+swept against it and the next reader has to reconstruct the candidate from the
+prose. Reconstructing one took four tries on func_800589B8 and reached MATCH;
+func_80033AE8, func_800353F4 and func_8003666C went the same way. If a row is
+the only record of a near-miss, writing its source into
+`docs/near-misses/` is most of the work of landing it.
 
 Two tools exist for the parks specifically, and both earn their keep:
 `search.py` sweeps the source transforms this compiler is sensitive to, and a
