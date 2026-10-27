@@ -73,6 +73,20 @@
  *   case 10 as well, cross-jumping merges case 10's call into the shared site
  *   at .L8005807C and the function needs a `move $a3, $t0` it does not have.
  *
+ * WHAT IS LEFT, PART TWO -- 26 of the 112 words are ONE REGISTER. `d` is in
+ * $s5 here and $s4 in the listing, and every `andi $v0, $d, 0xFF` reads as a
+ * differing word because of it. advise.py --greg prices it exactly: `d` is
+ * pseudo 84, 34 refs over 177 live insns, priority 0.960; the allocno that
+ * takes $s4 ahead of it is pseudo 288 -- case 64's INNER loop counter, 13
+ * refs over 32, priority 1.219. To flip them, 288's live length has to pass
+ * 40 insns (3 * 13 / 40.6 = 0.960) or `d` needs 44 references, and neither is
+ * available at zero cost. MEASURED: repartitioning the counters so the inner
+ * loop shares `i` with case 1's loops and a second variable serves case 64's
+ * outer loop and the final one -- which is what the listing's register REUSE
+ * suggests, $s2 in both places and $s5 in the other two -- is 468 words and
+ * 414 DIFF. Register reuse across disjoint live ranges does not mean one
+ * variable, and that reading cost a round.
+ *
  * WHAT IS LEFT -- one word misplaced inside cases 7..25, and its knock-on.
  *
  * The listing DUPLICATES `lbu $a1, 0x10($sp)` in cases 7 and 11 and shares
