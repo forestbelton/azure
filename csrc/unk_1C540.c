@@ -7139,7 +7139,131 @@ void func_800568B4(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056948);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056A08);
+/* The three-table reset: clears all 0x20 D_80085FA8 entries, then every live
+   D_80085458 entry whose +0x06 index is in range (keying its voice off and
+   collecting the handles into one mask), then all 0x10 D_80084960 entries,
+   and finally keys the collected mask off in one call.
+
+   Right at 138 words on the first compile; three shapes, two of them this
+   unit's standing recipe:
+
+   * Each entry pointer is INDEXED off the symbol inside the loop body
+     (`e = D_80085FA8 + i * 0x50`), which is what leaves loop.c one unbiased
+     giv per loop -- the listing's single `addiu $v1, $v1, 0x50` /
+     `addiu $s1, $s1, 0x78` / `addiu $v1, $v1, 0x9C`. Walking a pointer
+     declared outside biases the giv to the first field used.
+
+   * D_80084960 is reached through `(u8 *) &D_80084960[i]` -- the struct for
+     the stride (see the note on Unk80084960 in structs.h: a byte array lets
+     fold migrate the field offset onto the symbol) and a `u8 *` for the
+     fields, because this loop writes 28 of them and all but four are still
+     inside pads.
+
+   * `m = 0` comes BEFORE the D_80073738 store, which is what puts $s5's save
+     and its zeroing ahead of the `lui`; the natural order (the store first)
+     is 4 words out, and `i = 0` has to stay last so cse spells it
+     `addu $s2, $s5, $zero`. */
+void func_80056A08(void)
+{
+    s32 i;
+    u32 m;
+    u32 h;
+
+    m = 0;
+    D_80073738[0] = 0x7F;
+    i = 0;
+    do
+    {
+        u8 *e = D_80085FA8 + i * 0x50;
+
+        *(u32 *) (e + 0x00) = 0;
+        *(u32 *) (e + 0x04) = 0;
+        *(u32 *) (e + 0x08) = 0;
+        *(u32 *) (e + 0x0C) = 0;
+        *(u32 *) (e + 0x10) = 0;
+        *(u32 *) (e + 0x18) = 0;
+        *(u32 *) (e + 0x1C) = 0;
+        *(u32 *) (e + 0x20) = 0;
+        *(u32 *) (e + 0x24) = 0;
+        *(u32 *) (e + 0x28) = 0;
+        *(u32 *) (e + 0x2C) = 1;
+        *(u32 *) (e + 0x34) = 0;
+        *(u32 *) (e + 0x38) = 0;
+        *(u32 *) (e + 0x3C) = 0x78;
+        *(u32 *) (e + 0x40) = 0;
+        e[0x48] = 0;
+        e[0x49] = 0xFF;
+        e[0x4A] = 0;
+        e[0x4C] = 0;
+        i++;
+    } while (i < 0x20);
+
+    for (i = 0; i < (s32) D_80073734[0]; i++)
+    {
+        u8 *p = D_80085458 + i * 0x78;
+
+        if (*(u16 *) (p + 6) < 0x10)
+        {
+            *(s16 *) (p + 0x00) = i;
+            *(u16 *) (p + 0x1A) = 0;
+            *(u16 *) (p + 0x18) = 0x40;
+            p[0x1D] = 0;
+            p[0x27] = 0;
+            p[0x26] = 0;
+            p[0x28] = 0;
+            *(u32 *) (p + 0x2C) = 0;
+            *(u32 *) (p + 0x30) = 0;
+            *(u32 *) (p + 0x3C) = 0;
+            p[0x43] = 0;
+            p[0x42] = 0;
+            p[0x44] = 0;
+            *(u32 *) (p + 0x48) = 0;
+            *(u32 *) (p + 0x4C) = 0;
+            *(u32 *) (p + 0x58) = 0;
+            *(u32 *) (p + 0x70) = 0x40;
+            *(u32 *) (p + 0x74) = 0x40;
+            h = D_80073740[i];
+            func_80056DB4(i);
+            m |= h;
+            func_8005E97C(0, h);
+        }
+    }
+
+    for (i = 0; i < 0x10; i++)
+    {
+        u8 *q = (u8 *) &D_80084960[i];
+
+        *(u32 *) (q + 0x0C) = 0x7F;
+        *(u32 *) (q + 0x04) = 0x40;
+        *(u32 *) (q + 0x18) = 0;
+        *(u32 *) (q + 0x1C) = 0x40;
+        *(u32 *) (q + 0x14) = 0x7F;
+        *(u32 *) (q + 0x20) = 0x7F;
+        *(u32 *) (q + 0x24) = 0x7F;
+        *(u32 *) (q + 0x08) = 0;
+        *(u16 *) (q + 0x3A) = 0;
+        *(u32 *) (q + 0x44) = 0;
+        *(u16 *) (q + 0x40) = 0;
+        *(u32 *) (q + 0x48) = 0;
+        *(u32 *) (q + 0x94) = 0;
+        q[0x30] = 0;
+        q[0x60] = 0;
+        q[0x5F] = 0;
+        q[0x61] = 0;
+        *(u32 *) (q + 0x64) = 0;
+        *(u32 *) (q + 0x68) = 0;
+        q[0x7B] = 0;
+        q[0x7A] = 0;
+        q[0x7C] = 0;
+        *(u32 *) (q + 0x80) = 0;
+        *(u32 *) (q + 0x84) = 0;
+        *(u32 *) (q + 0x28) = 0;
+        *(u32 *) (q + 0x2C) = 0;
+        *(u16 *) (q + 0x50) = 0;
+        q[0x98] = 0;
+    }
+    func_8005E97C(0, m);
+}
 
 /* The D_80085458 reset. Four loop facts, three of them the recipe this unit's
    other sweeps use:
