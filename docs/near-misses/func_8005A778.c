@@ -21,7 +21,17 @@
  *   * The bound check is on `(s16) i` AFTER `i = j`, which is what gives the
  *     else arm its own `sll`/`sra` pair ahead of the `slti 0x10`.
  *
- * WHAT IS LEFT: 21 words, all of them the one register chain func_8005A608's
+ * SINCE PARKED: writing the sign-extension as two statements --
+ * `id = id << 16; id = id >> 16;` instead of `id = (s16) id` -- reproduces
+ * the listing's IN-PLACE `sll $a1, $a1, 16` / `sra $a1, $a1, 16` here too
+ * (23 differing words rather than 21, but structurally closer; see the lever
+ * in matching-levers section 7). What is then left is exactly
+ * func_8005A608's single scheduling fact: the listing emits
+ * `sw $zero, %lo(D_8007382C)($v0)` AFTER the shifts and this source emits it
+ * before, which decides whether $v0 is still holding the symbol's high half
+ * when `j = id` is allocated.
+ *
+ * THE OLDER ANALYSIS: 21 words, all of them the one register chain func_8005A608's
  * park describes -- the extension's intermediate takes $v0 here instead of
  * being in place in $a1, which pushes the entry's -1 to $a2, which lets
  * reload's find_equiv_reg reuse it in the then-arm and in the else instead of
