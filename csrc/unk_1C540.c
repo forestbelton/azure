@@ -7651,7 +7651,138 @@ u16 func_80058B2C(s32 a) {
     return func_80058AA8(x, y);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058B70);
+extern u32 D_800737C4[];
+extern u32 D_800737C8[];
+extern u32 D_800737D4[];
+extern u32 D_80085FA0[];
+extern u32 D_800869B8[];
+extern u32 D_800869B4n[] __asm__("D_800869B4");
+
+s32 func_80058850(u32);
+s32 func_80058940(u32);
+u16 func_80058B2C(s32);
+
+/* The sequencer file open: reads the header for whichever of the three
+   formats D_800737C8 says, fills in the track count, the division and the
+   first tick offsets, and for format 0 also derives the starting tempo the
+   same way func_80058E6C does.
+
+   Four shapes, 179 DIFF down to a match, and three of them came straight off
+   advise.py:
+
+   * `q = D_80085FA8;` is a LOCAL holding the base, set before the switch and
+     used for every call argument and every +0x1C..+0x24 field; only the two
+     `*(u32 *) D_80085FA8 = ...` stores go through the symbol. That is what
+     gives the listing its `$s2` (the whole address) alongside `$s0` (the
+     `high`, which later gets reused for D_800869B8 and D_800869B0): six
+     words, and without it each case materialises the base again.
+
+   * The case bodies are laid out in SOURCE order, so the source order is
+     1, 0, 2 -- the listing has format 1's body first. advise.py reports this
+     as a MISSING/EXTRA pair of `jal`s twelve words apart; nothing else moves.
+
+   * `(u32) func_80058ABC(q) >> 8`: the helper returns `s32`, so without the
+     cast the shift is `sra` where the listing has `srl`. advise.py's
+     SIGNEDNESS row.
+
+   * The `>= 0x60` arm of the tail is written FIRST, because the arm that
+     falls through in the listing has to come first (its two stores are
+     otherwise transposed -- advise.py's EVAL-ORDER row).
+
+   The `addiu $s3, $zero, 0x1` is shared between the switch's `case 1`
+   comparison and format 0's `D_800869B4[0] = 1`, which is cse, not a
+   deliberate hoist. */
+s32 func_80058B70(void)
+{
+    s32 n;
+    u32 i;
+    u32 j;
+    u32 m;
+    u32 k;
+    u8 *q;
+
+    D_800737D4[0] = 0;
+    i = 0;
+    q = D_80085FA8;
+    switch ((s32) D_800737C8[0])
+    {
+    case 1:
+        n = func_80058850(0);
+        *(u32 *) D_80085FA8 = n;
+        if (n == -1)
+        {
+            return 0;
+        }
+        D_80085FA0[0] = func_80058ABC(q);
+        D_800869B8[0] = func_80058B2C((s32) q) & 0xFFFF;
+        D_800869B4n[0] = func_80058B2C((s32) q) & 0xFFFF;
+        D_800869A8[0] = func_80058B2C((s32) q) & 0xFFFF;
+        if (D_800869B8[0] == 0)
+        {
+            D_800869B0[0] = 0x10000;
+            D_800869B0[0] = func_80058940(0);
+            *(u32 *) (q + 0x1C) = D_800869B0[0];
+        }
+        else
+        {
+            j = 0;
+            D_800869B0[0] = 0x10000;
+            while (j < D_800869B4n[0])
+            {
+                i = func_80058940(i);
+                *(u32 *) (q + 0x1C) = i;
+                j++;
+            }
+            D_800869B0[0] = i;
+        }
+        break;
+    case 0:
+        *(u32 *) D_80085FA8 = 8;
+        D_800869A8[0] = func_80058B2C((s32) q) & 0xFFFF;
+        D_800869B8[0] = 0;
+        D_800869B4n[0] = 1;
+        D_800869B0[0] = 0x10000;
+        D_800869B0[0] = func_80058940(0);
+        m = (u32) func_80058ABC(q) >> 8;
+        *(u32 *) (q + 0x20) = m;
+        k = 60000000 / m;
+        *(u32 *) (q + 0x24) = k;
+        *(u32 *) (q + 0x20) = k;
+        *(u32 *) (q + 0x24) = k * 100 / 115;
+        if (*(u32 *) (q + 0x24) >= 0x100)
+        {
+            *(u32 *) (q + 0x24) = 0xFF;
+        }
+        switch (D_800869A8[0])
+        {
+        case 0x18:
+        case 0x3C:
+            *(u32 *) (q + 0x24) >>= 1;
+            break;
+        case 0x1E:
+            *(u32 *) (q + 0x24) >>= 2;
+            break;
+        }
+        func_800589B8((s32) q);
+        break;
+    case 2:
+        D_800869B8[0] = 1;
+        D_800869A8[0] = *(u32 *) (D_80085FA4[0] + 8);
+        D_800869B4n[0] = *(u32 *) (D_80085FA4[0] + 0xC);
+        D_800869B0[0] = *(u32 *) (D_80085FA4[0] + 4);
+        break;
+    }
+    if (D_800869A8[0] >= 0x60)
+    {
+        D_800737C4[0] = D_800869A8[0];
+    }
+    else
+    {
+        D_800737C4[0] = 0;
+    }
+    D_800737C4[0] = D_800869A8[0];
+    return 1;
+}
 
 void func_80058E50(s32 *p, s32 v) {
     *p += v;
