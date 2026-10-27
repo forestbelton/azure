@@ -1183,7 +1183,10 @@ typedef struct Unk80073414
    u8 unk_00;
    u8 pad_01[0xB];
    u8 *unk_0C;
-   u8 pad_10[0x4];
+   /* Hand-split out of pad_10: func_8004951C reads it with `lbu` and compares
+      it against 4, 3 and 1 -- the entry's kind. */
+   u8 unk_10;
+   u8 pad_11[0x3];
 } Unk80073414;
 extern Unk80073414 D_80073414[];
 extern u32 D_8006A944;
