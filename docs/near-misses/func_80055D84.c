@@ -1,4 +1,4 @@
-/* func_80055D84 (unk_1C540) -- 58 of 58 words, 5 DIFF. NOT compiled.
+/* func_80055D84 (unk_2879C) -- 58 of 58 words, 5 DIFF. NOT compiled.
  *
  * Tries func_8005A778 on slot k, then func_8005AAA8; on the first failure it
  * reports 0x01010000, on the second 0x01020000 (both or-ed with

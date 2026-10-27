@@ -1,4 +1,4 @@
-/* func_80056654 (unk_1C540) -- 107 of 107 words, 21 DIFF. NOT compiled.
+/* func_80056654 (unk_2879C) -- 107 of 107 words, 21 DIFF. NOT compiled.
  *
  * Builds one sprite primitive in D_80084918 from the D_80084960 entry the
  * sprite's +0x06 index selects, then calls func_8005F134 to submit it, and

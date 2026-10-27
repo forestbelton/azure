@@ -330,9 +330,9 @@ in 0x80010000..0x80090000:
 |------|------|-------|--------|------------------|
 | 0x00dc0..0x00efc | 8002D5C0..8002D6FC | 79 | jtbl_8002D5C0 / D630 / D658 / D67C | **placed** (unk_11F0C, unk_14934, unk_154BC) |
 | 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
-| 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | func_800517CC (268 w) |
+| 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | **placed** (unk_1C540, func_800517CC) |
 | 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
-| 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_1C540, func_80054F9C + func_80057A94) |
+| 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_2879C, func_80054F9C + func_80057A94) |
 | 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | func_80057D20 (463 w, 463/463 and 6 DIFF) |
 | 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_2CDC0, func_800595C0) |
 | 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
@@ -350,10 +350,20 @@ stop at 0x80032F00 and leave the rest as `bin`, so the two matched functions
 landed without waiting for the third. 2026-10-27, byte-identical on the first
 build, 95 asm stubs to 93.
 
-What it cost: the unit split the comment below predicted. `unk_1C540` now
-carries the first run and `unk_2CDC0` -- the same carved unit from
-func_800595C0 on -- carries jtbl_8003310C. The mechanics of the split, for the
-next one:
+Then func_800517CC matched too (268/268, the same day), and its jtbl_8002E964
+is the run 0x4AB0 bytes EARLIER, so the carved unit is now cut into THREE:
+
+| piece | text | its one `.rodata` run | owner |
+|-------|------|------------------------|-------|
+| `unk_1C540` | 0x1c540..0x2879c | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_2879C` | 0x2879c..0x2cdc0 | jtbl_80032E14 + jtbl_80032EA4 @ 0x6614 | func_80054F9C, func_80057A94 |
+| `unk_2CDC0` | 0x2cdc0..0x301a8 | jtbl_8003310C @ 0x690c | func_800595C0 |
+
+Three of the carved unit's four tables are placed; only jtbl_80032F04 is still
+raw, waiting on func_80057D20's last six words. Two more cuts are already
+implied, at func_8004CECC and at func_80052144, when those land.
+
+The mechanics of a cut, for the next one:
 
 * The boundary is the function address, `[0x2cdc0, c, unk_2CDC0]` beside
   `[0x1c540, c, unk_1C540]`, and the C file is cut at the same function.

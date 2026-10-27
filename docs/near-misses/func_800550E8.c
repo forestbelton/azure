@@ -1,4 +1,4 @@
-/* func_800550E8 (unk_1C540) -- 119 of 120 words, 45 DIFF. NOT compiled.
+/* func_800550E8 (unk_2879C) -- 119 of 120 words, 45 DIFF. NOT compiled.
  *
  * The turn-commit: validates the queued move at D_800847D0+0x26, charges its
  * cost through func_8005537C, looks the move up in two parallel tables indexed

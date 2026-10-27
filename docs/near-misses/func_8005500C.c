@@ -1,4 +1,4 @@
-/* func_8005500C (unk_1C540) -- 55 of 55 words, 33 DIFF. NOT compiled.
+/* func_8005500C (unk_2879C) -- 55 of 55 words, 33 DIFF. NOT compiled.
  *
  * Dispatches on `arg & 0xF000`: 0x1000/0x2000/0x4000 each call
  * func_800553D4 with 0x71/0xE1/0xF1 (jump2 cross-jumps the three calls into

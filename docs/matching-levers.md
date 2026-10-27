@@ -3791,3 +3791,38 @@ guessing: the loop pass prints every giv it records (with `mult`, `add`,
 `replaceable` and lifetime), every `giv at N combined with giv at M`, and
 every `giv at N reduced to (reg:SI R)`. Measured on func_80057D20's case 64,
 where this is the last six words.
+
+## fold's `associate:` moves a constant onto the wrong operand
+
+`x - (y + K)` and `x - (y - K)` do not survive the front end. `fold`'s
+`associate:` case (fold-const.c) calls `split_tree` on each operand; for an
+operand that is a PLUS or MINUS with a constant it returns (var, con) and
+rebuilds the expression as `(x -+ K) - y`. The four instructions are the same
+but the constant lands on the OTHER operand: where the listing has
+`lw; lui; addu; subu` -- the constant added to the loaded word -- gcc gives
+`lui; lw; addu; subu`, the constant added to the other side.
+
+Two things block it, and func_800517CC's case 5 needed both:
+
+1. **Write the constant SIGNED.** The listing's literal is `+ 0xFF280000`,
+   which in C is an `unsigned int`, so the whole expression goes unsigned and
+   a following `/ 2` becomes one `srl` instead of the signed
+   `srl 31 / addu / sra 1`. Spell it `- 0xD80000`. Eight words on that
+   function.
+
+2. **Put the second operand in a LOCAL.** `split_tree` strips NOP_EXPRs of
+   the same machine mode, so no cast helps -- but a VAR_DECL gives it nothing
+   to split. This also fixes the ORDER: the listing loads the subtrahend AFTER
+   the call that computes the minuend, which no single statement can express,
+   so the minuend needs a local too and the two assignments run in the
+   listing's order. sched cannot move a load across a CALL_INSN, so the order
+   has to come from the source.
+
+And then **declare those locals in a brace of their own**, one per block. Two
+function-scope locals reused across four such blocks are two allocnos whose
+references SUM over all of them (the one-variable-per-loop rule above),
+which inflates their priority and takes a register the listing reuses: 32
+register-only words on func_800517CC, 28 with one brace per `case`, MATCH with
+one brace per block. Keep the struct updates as `+=` too -- an explicit
+`a = field + delta` local makes the second update read `a` instead of the
+word just stored, and the permutation comes back.

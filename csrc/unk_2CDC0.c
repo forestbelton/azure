@@ -433,7 +433,7 @@ extern UnkElem D_80072044[];
 
 void func_80044BB0(void);
 
-void func_800517CC(void);
+void func_800517CC(u8 *, u8 *, u8 *);
 
 extern UnkElem D_800720AC[];
 

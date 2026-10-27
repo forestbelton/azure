@@ -1,4 +1,4 @@
-/* func_8005947C (unk_1C540) -- 81 of 81 words, 12 DIFF. NOT compiled.
+/* func_8005947C (unk_2879C) -- 81 of 81 words, 12 DIFF. NOT compiled.
  *
  * The sequencer's event dispatch: reads a byte, decides whether it is a
  * running-status continuation or a new status byte, looks the status up in

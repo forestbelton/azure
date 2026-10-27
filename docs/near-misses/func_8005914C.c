@@ -1,4 +1,4 @@
-/* func_8005914C (unk_1C540) -- 205 of 204 words, 131 DIFF. NOT compiled.
+/* func_8005914C (unk_2879C) -- 205 of 204 words, 131 DIFF. NOT compiled.
  *
  * The MIDI channel-message dispatcher: `switch (st & 0xF0)` over the seven
  * status nibbles 0x80..0xE0, with the channel in the low nibble. 0x80, 0x90,

@@ -1,4 +1,4 @@
-/* func_80057D20 (unk_1C540) -- 463 of 463 words, 6 DIFF. NOT compiled.
+/* func_80057D20 (unk_2879C) -- 463 of 463 words, 6 DIFF. NOT compiled.
  *
  * THE THIRD AND LAST FUNCTION OF THE 0x80032E14 JUMP-TABLE RUN. func_80054F9C
  * and func_80057A94 both MATCH (see their files); when this one does, the run

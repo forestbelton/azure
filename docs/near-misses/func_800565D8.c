@@ -1,4 +1,4 @@
-/* func_800565D8 (unk_1C540) -- 31 of 31 words, 3 DIFF. NOT compiled.
+/* func_800565D8 (unk_2879C) -- 31 of 31 words, 3 DIFF. NOT compiled.
  *
  * The two-sided scale: a byte at +0x21 scaled by how far `n` is below 0x40
  * (negated), a byte at +0x20 scaled by how far it is above (positive), zero at

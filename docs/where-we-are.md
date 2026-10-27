@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 93 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 92 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -252,7 +252,7 @@ Forty-two rows of `docs/carved-sweep.md`'s table are parked with measurements
 rather than untouched, and four of the rest dispatch through a jump table whose
 `.rodata` has no placement yet, so they want that carve before the C.
 
-Five runs are placed. The fourth was jtbl_8003310C at 0x8003310C, with
+Six runs are placed. The fourth was jtbl_8003310C at 0x8003310C, with
 func_800595C0: one `.rodata` subsegment of its own segment, which is all a
 unit's FIRST landed table needs. The fifth, the same day, was the first two
 tables of the 0x80032E14 run, with func_80054F9C and func_80057A94 -- and that
@@ -262,7 +262,9 @@ two separated runs. The lesson worth carrying: **a run does not have to be
 placed whole.** jtbl_80032F04 belongs to func_80057D20, which is still six
 words short, and because its table is the LAST of the three the subsegment
 just stops early and the rest stays `bin`. See the jump-table section of
-`docs/open-matching-problems.md` for the split's mechanics.
+`docs/open-matching-problems.md` for the split's mechanics. The sixth run,
+jtbl_8002E964, came with func_800517CC the same day and cut the carved unit
+into THREE pieces -- `unk_1C540`, `unk_2879C` and `unk_2CDC0` -- one per run.
 
 ### Near-misses, with their files in `docs/near-misses/`
 

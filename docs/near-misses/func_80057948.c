@@ -1,4 +1,4 @@
-/* func_80057948 (unk_1C540) -- 64 of 64 words, 9 DIFF. NOT compiled.
+/* func_80057948 (unk_2879C) -- 64 of 64 words, 9 DIFF. NOT compiled.
  *
  * Stops every D_80085458 entry whose +0x06 and +0x0A match the two arguments,
  * OR-ing their sound handles together, except that an entry with +0x1D set
