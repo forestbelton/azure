@@ -1307,6 +1307,23 @@ before the second and third tests because both of those labels have more than
 one predecessor, so cse's extended basic block ends there. Reading the word
 into a local gives one load and loses the re-reads.
 
+### Which spelling a global's bound takes is PER SITE: read the `lui`'s register
+
+`extern s32 X` and `extern u32 X[]` both load X, and the project has matches
+that need each. The difference is one insn's register:
+
+* the SCALAR spelling emits the assembler's macro, which maspsx splits into
+  `lui $r, %hi(X)` / `lw $r, %lo(X)($r)` -- the SAME register for the address
+  and the value;
+* the INCOMPLETE ARRAY spelling is compiler-split, `lui $v0, %hi(X)` /
+  `lw $v1, %lo(X)($v0)` -- a separate address temp.
+
+func_80056558 needs the scalar for `D_80073734`; func_8005B070 needs the array
+for the same symbol, and getting it wrong there cost six of the ten words that
+were left, including a register swap at the top of the function. So this is not
+a project-wide choice. Look at the `lui`'s destination in the listing and match
+it.
+
 ### A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P
 
 `u8 *b = (u8 *) &D_80083160;` and `Unk80083160 *q = &D_80083160;` both put the
