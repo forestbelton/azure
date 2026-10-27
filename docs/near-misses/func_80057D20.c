@@ -109,8 +109,13 @@
  * `f2 |= D_80073740[j]` moved after the do/while (463/45); the three
  * `r`-based conditions written inline off D_80085458 so that `r` is not
  * computed first (477 words -- cse does not share the index chain); the
- * inner counter as `u32`; and `j` at function scope rather than in case 64's
- * block.
+ * inner counter as `u32`; `j` at function scope rather than in case 64's
+ * block; both source-level WALKED pointers for the two arrays instead of the
+ * indexed form, which is where the order WOULD be the declaration's (466
+ * words, 331 DIFF); `0x78 * i` instead of `i * 0x78`; `&D_80085458[i * 0x78]`;
+ * `*(D_80073740 + i)`; and the three conditions as nested `if`s. The last
+ * five are all 463 and 6, so the ordering is robust to how either reference
+ * is spelled -- it is the giv list, not the expression.
  *
  * MEASURED AND NOT WORKING earlier, kept so they are not retried: `f1`
  * passed as an argument (case 10 then LOADS it back, so f1 really is
