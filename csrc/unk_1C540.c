@@ -485,7 +485,107 @@ void func_800499DC(s32 *p) {
     *p = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800499E8);
+/* Builds the four-record gradient: two 0x18-byte records with four colour
+   words each, a 0xC-byte one in between, and a 0x81 terminator whose +0x00
+   gets the end bit. Returns the start of the run, which the listing computes
+   as `p - 0x3C` because the walked pointer is the only copy left.
+
+   Four things paid for, 123 DIFF down to a match:
+
+   * **The two templates are INCOMPLETE ARRAYS read `[0]`, not scalars.** 13
+     words, all of them register names. `extern CVECTOR D_80080B28;` lets the
+     `lui`/`addiu` pair share one register (combine_regs ties the lo_sum to
+     the dying high) and the copied word then takes $v0; as an array the
+     address is a separate quantity, the high keeps $v0, the word goes to $v1
+     and the address to $a2, which is the listing. Same declared-size lever as
+     the -G8 one in docs/open-matching-problems.md, seen from the register
+     side.
+
+   * **Both colour words go through LOCALS read before the stores.** The
+     second `lw` cannot be hoisted over a `sw` through `p` -- sched cannot
+     prove $sp+0x18 and $s0+4 distinct -- so written inline the second load
+     stalls. Read into `g`/`h` first and both loads come out together.
+
+   * **The third record needs ITS OWN pair of locals.** One `g`/`h` pair for
+     both records is one pseudo each, live across the records' blocks, so
+     global-alloc pins them to $v0/$v1 for the whole function and the third
+     record gets them in the first record's order. Fresh locals are local
+     quantities and local-alloc hands them out in load order, which is the
+     listing's swap.
+
+   * The second colour test is NESTED inside the first, not sequential: the
+     outer branch skips both scalings. The scalings' own `sb`s to the frame
+     flush cse, which is why the second test's `lw` of the colour is a real
+     re-load and the compiler cannot fold the test away.
+
+   The `/4` and `/2` of `*(s16 *) (s + 6)` are both HImode divides (the front
+   end narrows `/ C` -- see matching-levers section 8), which is why the third
+   record, where one load feeds both, sign-extends through `sll 16`/`sra 16`
+   and the first record, where only `/4` is wanted, uses the `lh` directly. */
+extern CVECTOR D_80080B28[];
+extern CVECTOR D_80080B2C[];
+
+u8 *func_800499E8(u8 *p, u8 *s, u8 *c)
+{
+    CVECTOR x;
+    CVECTOR y;
+    s32 g;
+    s32 h;
+    s32 i;
+    s32 j;
+
+    x = D_80080B28[0];
+    y = D_80080B2C[0];
+    bzero(p, 0x14);
+    if ((*(u32 *) c & 0xFFFFFF) != 0x808080)
+    {
+        x.r = x.r * c[0] >> 7;
+        x.g = x.g * c[1] >> 7;
+        x.b = x.b * c[2] >> 7;
+        if ((*(u32 *) c & 0xFFFFFF) != 0x808080)
+        {
+            y.r = y.r * c[0] >> 7;
+            y.g = y.g * c[1] >> 7;
+            y.b = y.b * c[2] >> 7;
+        }
+    }
+    p[1] = 0x38;
+    g = *(s32 *) &x;
+    h = *(s32 *) &y;
+    *(s32 *) (p + 0x4) = g;
+    *(s32 *) (p + 0xC) = g;
+    *(s32 *) (p + 0x10) = h;
+    *(s32 *) (p + 0x14) = h;
+    p[2] = s[0];
+    p[3] = s[2];
+    p[0xA] = s[4];
+    p[0xB] = *(s16 *) (s + 6) / 4;
+    p += 0x18;
+    p[1] = 0x28;
+    *(s32 *) (p + 0x4) = *(s32 *) &y;
+    p[2] = s[0];
+    p[3] = s[2] + *(s16 *) (s + 6) / 4;
+    p[0xA] = s[4];
+    p[0xB] = *(s16 *) (s + 6) / 2;
+    p += 0xC;
+    p[1] = 0x38;
+    i = *(s32 *) &y;
+    j = *(s32 *) &x;
+    *(s32 *) (p + 0x4) = i;
+    *(s32 *) (p + 0xC) = i;
+    *(s32 *) (p + 0x10) = j;
+    *(s32 *) (p + 0x14) = j;
+    p[2] = s[0];
+    p[3] = s[2] + *(s16 *) (s + 6) / 4 + *(s16 *) (s + 6) / 2;
+    p[0xA] = s[4];
+    p[0xB] = s[6] - *(s16 *) (s + 6) / 4 - *(s16 *) (s + 6) / 2;
+    p += 0x18;
+    p[1] = 0x81;
+    *(s16 *) (p + 0x4) = 0x10;
+    *(s16 *) (p + 0x6) = 1;
+    p[0] |= 0x80;
+    return p - 0x3C;
+}
 
 /* func_800508F0 with the two words as literals instead of globals. Both
    parameters really are pointers: as `s32` with the casts inside, 22 DIFF --
@@ -509,7 +609,6 @@ u8 *func_80049CF4(u8 *q, u8 *s) {
 }
 
 u8 *func_80049CF4(u8 *, u8 *);
-void func_800499E8(u8 *, s32, u8 *);
 
 void func_80049D80(u8 *p, s32 b) {
     func_80049CF4(p, (u8 *) b);
