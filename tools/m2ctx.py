@@ -29,6 +29,11 @@ def preprocess(headers: list[pathlib.Path], cpp: str) -> str:
         "-undef",
         "-nostdinc",
         f"-I{ROOT / 'include'}",
+        # psyq/include too: common.h includes sys/types.h, libcd.h, libgte.h
+        # and libgpu.h, which live only there. Without it this fails on the
+        # first include and ctx.c silently goes stale, which is what left m2c
+        # emitting `?` for every type.
+        f"-I{ROOT / 'psyq' / 'include'}",
         f"-I{ROOT}",
         "-x", "c", "-",
     ]

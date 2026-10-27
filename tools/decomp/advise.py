@@ -503,6 +503,96 @@ def main():
     return 0
 
 
+
+# ---------------------------------------------------------- margins
+#
+# The point of a margin rather than a state. A register-permutation diff tells
+# you WHICH register each quantity got; it does not tell you how close the
+# contest was, so every candidate edit is a guess and the loop is a random
+# restart. Both allocators decide by a closed-form formula, so the distance to
+# flipping a pair is computable: how many more references, or how much less
+# live range, quantity A needs to overtake quantity B. That turns "try
+# something" into "this needs +1 ref", which is a directed edit.
+#
+# Both formulas were read out of gcc 2.7.2 (scratch/gcc-src), not guessed:
+#   global.c   allocno_compare: floor_log2(refs) * refs / live_length
+#   local-alloc.c qty_compare_1: floor_log2(refs) * refs * size / live_length
+# The caveats live with the printout, because a margin is only meaningful when
+# the two quantities are decided by the formula at all.
+
+
+def refs_to_beat(refs, live, target_pri, size):
+    """Smallest reference count at this live length that beats target_pri.
+
+    Returns None if no count up to 4x the current one gets there -- that is
+    the honest answer for a quantity whose live range is the problem rather
+    than its reference count.
+    """
+    for r in range(refs + 1, max(refs * 4, refs + 32)):
+        if math.floor(math.log2(r)) * r * size / max(live, 1) > target_pri:
+            return r
+    return None
+
+
+def live_to_beat(refs, live, target_pri, size):
+    """Largest live length at this reference count that beats target_pri."""
+    if refs < 2:
+        return None
+    num = math.floor(math.log2(refs)) * refs * size
+    if target_pri <= 0:
+        return None
+    want = num / target_pri
+    lim = int(math.floor(want))
+    if lim >= live or lim < 1:
+        return None
+    return lim
+
+
+def margin_report(rows, size, what):
+    """rows: [(pseudo, refs, live, priority, got)] in allocation order.
+
+    Prints, for each adjacent pair the formula separates, what it would take
+    to swap them. Adjacent pairs are the only ones worth printing: a
+    non-adjacent swap needs every pair in between to move too.
+    """
+    sep = [r for r in rows if r[3] > 0]
+    if len(sep) < 2:
+        return
+    print()
+    print('  MARGINS (%s): what it would take to swap each adjacent pair' % what)
+    any_close = False
+    for (na, ra, la, pa, ga), (nb, rb, lb, pb, gb) in zip(sep, sep[1:]):
+        if pa <= pb:
+            continue
+        need_r = refs_to_beat(rb, lb, pa, size)
+        need_l = live_to_beat(rb, lb, pa, size)
+        gap = (pa - pb) / pa * 100
+        bits = []
+        if need_r is not None:
+            bits.append('%d refs (+%d)' % (need_r, need_r - rb))
+        if need_l is not None:
+            bits.append('live <= %d (-%d)' % (need_l, lb - need_l))
+        if not bits:
+            bits.append('nothing within 4x its reference count')
+        if gap < 25:
+            any_close = True
+        print('    %-5d (%.3f) over %-5d (%.3f)  gap %5.1f%%   to flip %d: %s'
+              % (na, pa, nb, pb, gap, nb, ', '.join(bits)))
+    if any_close:
+        print(wrap("""A gap under 25% is worth attacking; above that the
+        reference count usually has to cross a power of two, because
+        floor_log2 is a step. The cheapest reference that costs no instruction
+        is splitting one assignment into two statements that compile to the
+        same single insn (matching-levers section 3); the cheapest live-range
+        change is moving a value's first or last use.""", '    '))
+    print(wrap("""A MARGIN IS ONLY MEANINGFUL WHERE THE FORMULA DECIDES. It
+    does not apply to a pair where one side has a hard-register SUGGESTION and
+    the other does not -- that pair is settled in local-alloc's first phase,
+    which ignores priority entirely (func_8004DE88) -- nor to a quantity whose
+    register was forced by a conflict rather than by order. Check the
+    conflicts column and the xcall column before trusting a row here.""",
+    '    '))
+
 # ------------------------------------------------------------------ --greg
 #
 # This is the automation of what used to be a hand reading of the dumps. The
@@ -576,6 +666,7 @@ def greg_report(src):
         for a, b in re.findall(r'(\d+) in (\d+)', m.group(1)):
             disp[int(a)] = int(b)
 
+    grows = []
     print('  ALLOCATION (from the compiler\'s own .lreg/.greg dumps)')
     print('  %-6s %-5s %-5s %-8s %-6s %-5s %-5s %s'
           % ('pseudo', 'refs', 'live', 'priority', 'block', 'xcall', 'got',
@@ -591,6 +682,9 @@ def greg_report(src):
                  crosses.get(n, 0) or '-',
                  regname(disp[n]) if n in disp else '-',
                  ' '.join(regname(r) for r in hard) or '-'))
+        grows.append((n, refs, live, pri, regname(disp[n]) if n in disp else '-'))
+
+    margin_report(grows, 1, "global-alloc, allocno_compare")
 
     # Everything global-alloc never saw. In a single-basic-block function that
     # is the ENTIRE contest -- func_8004DE88's table above comes out empty
@@ -604,12 +698,14 @@ def greg_report(src):
         print('  SECOND, so these took their registers first)')
         print('  %-6s %-5s %-5s %-9s %-6s %s'
               % ('pseudo', 'refs', 'live', 'priority', 'block', 'xcall'))
+        lrows = []
         for n in locals_only[:14]:
             refs, live = lreg[n]
             print('  %-6d %-5d %-5d %-9.3f %-6s %s'
                   % (n, refs, live, local_priority(refs, live),
                      ('b%d' % local_of[n]) if n in local_of else '?',
                      crosses.get(n, 0) or '-'))
+            lrows.append((n, refs, live, local_priority(refs, live), '-'))
         print(wrap("""priority is local-alloc.c's own qty_compare_1,
         floor_log2(refs) * refs * size / live_length, with size taken as 4 --
         read out of gcc 2.7.2 rather than guessed, and the final tie-break is
@@ -632,6 +728,9 @@ def greg_report(src):
           is the difference between taking $v0 in phase 1 and falling through
           to phase 2 with its copy left behind -- which is what the xcall
           column is here for.""", '  '))
+
+    if locals_only:
+        margin_report(lrows, 4, "local-alloc, qty_compare_1")
 
     squeezed = [n for n in order
                 if n not in local_of

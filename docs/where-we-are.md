@@ -338,7 +338,24 @@ arithmetic.
    *not* to work. It replaces reading `docs/matching-levers.md` end to end
    (9,000 words) with reading the few entries that can apply. It decides
    nothing -- see the note below on why that is deliberate.
-1. Read `asm/nonmatchings/<unit>/<func>.s`.
+1. Read `asm/nonmatchings/<unit>/<func>.s` -- but get a DRAFT FIRST, because
+   hand-decoding a listing is the most expensive step there is:
+
+       make ctx     # once, after any include/*.h change
+       python3 vendor/m2c/m2c.py --target mipsel-gcc-c --context ctx.c \
+           -f <func> asm/nonmatchings/<unit>/<func>.s
+
+   m2c gets the control flow and most of the arithmetic right and prints the
+   extern list it needed, which is most of the declaration hunting done for
+   you. Read the listing to CHECK it, not to derive it from scratch. See
+   `docs/m2c-pitfalls.md` for where its inferences are wrong -- the types are
+   the part to distrust, and it cannot see addressing-mode or allocation
+   questions at all.
+
+   **`make ctx` was broken from 2026-10-21 to 2026-10-26** by the same missing
+   `-Ipsyq/include` that broke verify.py, so `ctx.c` was stale and m2c emitted
+   `?` for every type. If m2c's output has no real type names in it, rebuild
+   the context before blaming m2c.
 2. Write a candidate into a `zz_*.c` scratch file in the project root
    (gitignored) containing `#include "common.h"`, any prototypes it needs, and
    just that function.
