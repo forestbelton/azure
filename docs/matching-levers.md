@@ -2253,6 +2253,30 @@ then COND was an `if` around the loop and the loop itself is a `do`/`while` on
 X -- and whatever the body does first belongs at the TOP of the body, where it
 lands in the first branch's delay slot. func_8004CE68, 9 DIFF.
 
+### A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH
+
+For three arms that each store a different constant to one field, an if-else
+chain gives `bne`/`bne` and lays the bodies out in source order. A `switch`
+gives something an if-else chain cannot: gcc's `emit_case_nodes` emits
+`beq <low value> -> its body` and then `bne <high value> -> default`, FALLING
+THROUGH to whichever case body is written first. So
+
+```c
+switch (m) {
+case 0x9000: *(s16 *) (d + 0x16) = 4; break;   /* falls through to here */
+case 0x8000: *(s16 *) (d + 0x16) = 2; break;   /* the `beq` target */
+default:     *(s16 *) (d + 0x16) = 0xA; break; /* the `bne` target */
+}
+```
+
+reproduces a listing whose tests read `beq 0x8000` / `bne 0x9000` with the
+`= 4` arm in line -- note the case written first is NOT the one tested first.
+func_800550E8: four if-else orderings measured at 48 to 51 DIFF, the switch at
+45.
+
+Hoist whatever the three arms share above the test; repeated in each arm it
+costs two words per arm (five on that function).
+
 ### Read the block ORDER off the listing and write the arms to match
 
 For an `if`/`else` whose arms all end the function, the listing's physical
