@@ -1530,7 +1530,133 @@ void func_800375C0(u8 *p, u8 *q)
     *(u16 *)(p + 0x40) = *(u16 *)(p + 0x42) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037714);
+void func_80067F20(u32 *, s32, s32, s32, s32);
+
+/* The two-quad actor draw: projects the +0x0C rect's four corners with
+   RotTransPers4 and, if any corner lands on screen, builds a textured
+   POLY_FT4 for it; then does the same for the +0x28 rect, which gets an
+   untextured POLY_G4 plus a tpage primitive instead.
+
+   Nine shapes, 355 DIFF down to a match. Five are matching-levers entries now
+   (section 8); the four specific to this function:
+
+   * The four screen-coord slots RotTransPers4 writes are 8 BYTES apart
+     (sp+0x48, 0x50, 0x58, 0x60), so whatever the original declared there was
+     not `long sxy[4]`. `u8 s[0x20]` with the four slots cast reproduces the
+     frame, the `lw` for the vertex copies and the `lhu` pairs for the bound
+     tests exactly.
+
+   * `a = p + 0xC` is ONE pointer. The listing reads the first field through
+     the parameter (`0xC($t0)`) and the rest through `$s1` because cse
+     substitutes a MEM address that is a bare register with its equivalence
+     and cannot do the same for `(plus a 4)`.
+
+   * The ot index is INLINE in each `AddPrim`, not a local -- the opposite of
+     func_800369C8 in this unit, because here the add has a hard argument
+     register to tie to. 15 words.
+
+   * `g = &D_80083160` as a struct pointer, used in the SECOND half only.
+     That is the listing's `addiu $s5, $s3, %lo(D_80083160)`: `$s3` keeps the
+     `high` for the first half's two `%lo(...)($s3)` loads and `$s5` the whole
+     address for the second half's four `0($s5)` loads. Without it the
+     function is five words short.
+
+   And the last one, which was this function's park for a while: the u and v
+   running values are TWO locals, `t` and `w`. One shared `t` is 7 words out,
+   because the two chains are in different basic blocks and the listing gives
+   them different registers ($v1 and $v0) -- which one pseudo cannot have.
+   advise.py called it ("assign back to an existing local instead of
+   introducing a fresh one" is the same lever read from the other side). */
+void func_80037714(u8 *p)
+{
+    Unk80083160 *g;
+    u8 *a;
+    u8 *b;
+    u8 *q;
+    u8 *e;
+    SVECTOR v[4];
+    u8 s[0x20];
+    s32 pz;
+    s32 flag;
+    s32 t;
+    s32 u;
+    s32 w;
+    s32 y;
+
+    g = &D_80083160;
+    q = *(u8 **) p;
+    a = p + 0xC;
+    b = p + 0x28;
+
+    v[0].vx = v[2].vx = *(u16 *) a;
+    v[1].vx = v[3].vx = *(u16 *) a + *(u16 *) (a + 4);
+    v[0].vy = v[1].vy = *(u16 *) (a + 2);
+    v[2].vy = v[3].vy = *(u16 *) (a + 2) + *(u16 *) (a + 6);
+    v[0].vz = v[1].vz = v[2].vz = v[3].vz = 0;
+    RotTransPers4(&v[0], &v[1], &v[2], &v[3], (s32 *) (s + 0x00), (s32 *) (s + 0x08),
+                  (s32 *) (s + 0x10), (s32 *) (s + 0x18), &pz, &flag);
+    if (((u16) (*(u16 *) (s + 0x00) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x02) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x08) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x0A) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x10) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x12) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x18) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x1A) + 0x20) < 0x121))
+    {
+        e = *(u8 **) (D_80083160.unk_00 + 0x8D0);
+        *(u8 **) (D_80083160.unk_00 + 0x8D0) = e + 0x28;
+        SetPolyFT4(e);
+        *(s16 *) (e + 0xE) = GetClut(*(s16 *) (a + 0x14), *(s16 *) (a + 0x16));
+        *(s16 *) (e + 0x16) = GetTPage(0, 0, *(s16 *) (a + 0x8), *(s16 *) (a + 0xA));
+        e[4] = e[5] = e[6] = a[0x10];
+        u = *(s16 *) (a + 0x8) % 64 * 4;
+        t = a[0x18] + u;
+        e[0x1C] = t;
+        e[0xC] = t;
+        t = t + a[0xC];
+        e[0x24] = t;
+        e[0x14] = t;
+        y = *(s16 *) (a + 0xA);
+        w = y % 256 + a[0x1A];
+        e[0x15] = w;
+        e[0xD] = w;
+        w = w + a[0xE];
+        e[0x25] = w;
+        e[0x1D] = w;
+        *(s32 *) (e + 0x08) = *(s32 *) (s + 0x00);
+        *(s32 *) (e + 0x10) = *(s32 *) (s + 0x08);
+        *(s32 *) (e + 0x18) = *(s32 *) (s + 0x10);
+        *(s32 *) (e + 0x20) = *(s32 *) (s + 0x18);
+        AddPrim(D_80083160.unk_00 + (*(s32 *) (q + 0x60) * 4 + 0x70), e);
+    }
+
+    v[0].vx = v[2].vx = *(u16 *) b;
+    v[1].vx = v[3].vx = *(u16 *) b + *(u16 *) (b + 4);
+    v[0].vy = v[1].vy = *(u16 *) (b + 2);
+    v[2].vy = v[3].vy = *(u16 *) (b + 2) + *(u16 *) (b + 6);
+    v[0].vz = v[1].vz = v[2].vz = v[3].vz = 0;
+    RotTransPers4(&v[0], &v[1], &v[2], &v[3], (s32 *) (s + 0x00), (s32 *) (s + 0x08),
+                  (s32 *) (s + 0x10), (s32 *) (s + 0x18), &pz, &flag);
+    if (((u16) (*(u16 *) (s + 0x00) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x02) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x08) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x0A) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x10) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x12) + 0x20) < 0x121)
+        | ((u16) (*(u16 *) (s + 0x18) + 0x20) < 0x181 && (u16) (*(u16 *) (s + 0x1A) + 0x20) < 0x121))
+    {
+        e = *(u8 **) (g->unk_00 + 0x8D0);
+        *(u8 **) (g->unk_00 + 0x8D0) = e + 0x24;
+        SetPolyG4(e);
+        SetSemiTrans(e, 1);
+        e[4] = e[5] = e[6] = e[0xC] = e[0xD] = e[0x14] = e[0x15] = e[0x16] = e[0x1C] = e[0x1D] = 0;
+        e[0xE] = e[0x1E] = 0x40;
+        *(s32 *) (e + 0x08) = *(s32 *) (s + 0x00);
+        *(s32 *) (e + 0x10) = *(s32 *) (s + 0x08);
+        *(s32 *) (e + 0x18) = *(s32 *) (s + 0x10);
+        *(s32 *) (e + 0x20) = *(s32 *) (s + 0x18);
+        AddPrim(g->unk_00 + (*(s32 *) (q + 0x60) * 4 + 0x70), e);
+
+        e = *(u8 **) (g->unk_00 + 0x8D0);
+        *(u8 **) (g->unk_00 + 0x8D0) = e + 0xC;
+        func_80067F20((u32 *) e, 0, 0, GetTPage(0, 0, 0x140, 0), 0);
+        AddPrim(g->unk_00 + (*(s32 *) (q + 0x60) * 4 + 0x70), e);
+    }
+}
 
 void func_80037C7C(u8 *p, s16 n)
 {
