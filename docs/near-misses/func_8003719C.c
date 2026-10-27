@@ -76,15 +76,22 @@
  *     14 `lw $fp, 0x48($sp)`, 16 `lw $s5, 0x4C($sp)`, 264 `sw $fp, 0x30($sp)`,
  *     270 `sw $s5, 0x24($sp)`. `sched.py --insn N` prints any of them.
  *
- *   * THE LEAD TO TAKE NEXT is the pre-sched2 chain order. The dump's
- *     `;; insn[N]` listing walks that chain, and it reads 260-280 (prologue),
- *     then 4, 6, 8, 10 (the register parameter copies), then 23, 25, 27, 29
- *     (the argument setup), and only THEN 14, 16. assign_parms emits the
- *     parameter copies at function start, so the two loads begin ahead of the
- *     argument setup and sched1 moved them behind it. The hazard decisions
- *     sched2 then makes follow from that order, so the dump to read next is
- *     the `--sched1` one, where the question is about pseudos rather than hard
- *     registers.
+ *   * THE LEAD TO TAKE NEXT IS SCHED1, not sched2. Comparing the two dumps'
+ *     chain orders settles which pass moved what. sched1's INPUT has the
+ *     natural assign_parms order -- 14, 16 (the parameter loads) ahead of 23,
+ *     25, 27, 29 (the argument setup) -- and sched1's OUTPUT RTL, which is
+ *     also what the `greg` dump shows, has 4, 6, 8, 10, 23, 25, 27, 29, 14,
+ *     16. So sched1 moved both loads BEHIND the argument setup, and sched2
+ *     then pulled them back in front of 27 and 29 on the hazard rule above.
+ *
+ *     The target's order, 23, 25, 27, [264, 14], 29, [270, 16], is what sched2
+ *     produces by moving the loads LATER -- its usual direction for a memory
+ *     op -- from a chain that still had them FIRST. So the hypothesis to test
+ *     is that the original's sched1 left them where assign_parms put them, and
+ *     the knob is whatever changes sched1's graph for those two pseudos. Note
+ *     that the final order is NOT reachable by respecting LUID from this
+ *     chain: this source's sched2 input already has 27 ahead of 14, and sched2
+ *     moves it the other way.
  *
  * Measured and NOT working, all 126/126 and 6 DIFF: parameter 6 as `u8 *`
  * rather than `u32`; func_8003FF2C's count parameter as `s32` rather than
