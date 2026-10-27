@@ -1036,6 +1036,46 @@ the default. func_800549FC is 23 DIFF as the chain and matches as the switch,
 with a shared `lui` for the global both bodies store to sitting in the second
 test's delay slot.
 
+### A 0/1 pair ALWAYS triggers jump.c's store-flag transform; share the site
+
+`if (c) m = 1; else m = 0;` never survives as two branches. jump_optimize's
+store-flag gate (jump.c:1139) matches the pattern `x = a; if (...) x = b;` and
+fires when
+
+    ((reversep = 0, temp2 == const0_rtx)
+     || (temp3 == const0_rtx && (reversep = can_reverse_comparison_p ...))
+     || (BRANCH_COST >= 2 && both CONST_INT && bit-subset)
+     || BRANCH_COST >= 3)
+
+so with {0, 1} one of the two values IS `const0_rtx` whichever way round gcc
+normalises the if/else, the first or second disjunct holds, and you get
+`xori` + `sltu` instead of the branches. Reversing the test, hoisting one
+value as a pre-initialisation (`m = 1; if (c) m = 0;`) and masking the subject
+differently all leave it: they are all that same pattern.
+
+**What does escape it is removing the PAIR.** If the function assigns the same
+value somewhere else -- a default arm, another case -- make the two sites ONE
+statement and reach it with a `goto`:
+
+```c
+            if (x == 0x800) {
+                m = 0;
+            } else {
+                goto one;          /* the shared m = 1 */
+            }
+        ...
+        } else {
+        one:
+            m = 1;
+        }
+```
+
+The innermost `if` then has a single arm and a jump, and there is no
+`x = a; if (...) x = b;` to match. Worth two of func_8005552C's four missing
+words. The same reading applies in reverse: a listing that DOES show
+`xori`/`sltu` or a bare `sltu $v0, $zero, $v0` is telling you the source had
+the two assignments written out.
+
 ### A switch's case bodies are emitted in SOURCE order
 
 The compare tree is built from the sorted case values, so it tells you nothing
