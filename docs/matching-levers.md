@@ -3830,8 +3830,10 @@ word just stored, and the permutation comes back.
 ### Both halves of this are in search.py now
 
 `tools/decomp/search.py` has `t_decl_order` (transpose two adjacent
-declarations) and `t_decl_per_arm` (give each switch arm its own copy of a
-shared local, in a brace of its own). They are the two zero-cost knobs on
+declarations), `t_decl_per_arm` (give each switch arm its own copy of a
+shared local, in a brace of its own) and `t_volatile` (make one pointer
+dereference `volatile`, reads only -- the section 5 lever, which was the one
+documented lever the sweep could not reach). They are the two zero-cost knobs on
 local-alloc's choice between equally-weighted locals, and the second is the
 rule above. Run it over a park before hand-permuting anything: the sweep is
 free and it records what each accepted change was worth.

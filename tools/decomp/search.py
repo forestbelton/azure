@@ -363,6 +363,32 @@ def t_decl_per_arm(text):
         yield ("declare %s per switch arm" % name, out)
 
 
+def t_volatile(text):
+    """Make one pointer dereference `volatile`.
+
+    A volatile load is never forwarded by cse and never deleted, which is the
+    only way to keep a SECOND load of a word the source has already read --
+    the shape a listing shows when it loads the same field twice with nothing
+    in between. matching-levers has it as section 5; it landed func_80036F24,
+    func_80037090, func_80037394 and the word count of func_800565D8, and it
+    is the one documented lever search.py could not reach.
+
+    Tried one site at a time, on reads only: a volatile STORE pins stores the
+    target schedules freely and reliably costs words, so the write side is
+    left alone. The greedy loop composes several sites if several help.
+    """
+    for m in scan(r"\*\((u8|s8|u16|s16|u32|s32) \*\) ", text):
+        if text[m.start() - 1 : m.start()] == '&':
+            continue
+        # a read, not a store: the next `=` must not be this deref's own
+        tail = text[m.end():m.end() + 80]
+        if re.match(r"\([^;=]*\)\s*=[^=]", tail):
+            continue
+        new = (text[:m.start()] + '*(volatile %s *) ' % m.group(1)
+               + text[m.end():])
+        yield ("volatile on the %s read at %d" % (m.group(1), m.start()), new)
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -374,6 +400,7 @@ TRANSFORMS = [
     t_dup_into_arms,
     t_decl_order,
     t_decl_per_arm,
+    t_volatile,
 ]
 
 
