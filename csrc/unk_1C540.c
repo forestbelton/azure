@@ -7618,7 +7618,50 @@ s32 func_80058940(u32 i) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800589B8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058A04);
+/* The 7-bit varint: reads bytes most-significant group first, seven bits at a
+   time, while the top bit says another follows. 0 terminates it early.
+
+   ONE variable for the byte, reused by the loop. That is the whole of the
+   three words this was short of for two sessions, and it is the conflict
+   lever from docs/matching-levers.md rather than anything about the shape:
+   the target spends `addu $a0, $v0, $zero` after BOTH calls, which only
+   happens if the byte's allocno cannot have $v0, the call's own return
+   register. Writing the first byte and the loop's byte as two variables
+   gives the first one a live range that contains no other use of $v0, so
+   `find_reg` hands it $v0 and reload deletes the copy as a self-move.
+   Unifying them imports the loop's conflict: `c << 7` is a block-local
+   quantity holding $v0 while the byte is live, so `global_conflicts` ORs
+   hard reg 2 into the allocno and both copies become real instructions.
+
+   Measured dead ends for the same three words, all with two variables: a
+   copy between them, a `u8` byte (which does buy the loop's copy, because
+   the mask folds into the `& 0x7F` and `& 0x80` uses, but puts an
+   `andi 0xFF` where the first copy belongs -- the top's `== 0` and `c = w`
+   both need all eight bits), a nested `if`, and a `while (1)` with the
+   return inside. */
+u32 func_80058A04(s32 p)
+{
+    u32 w;
+    u32 c;
+
+    w = func_800589B8(p);
+    if (w == 0)
+    {
+        return 0;
+    }
+    c = w;
+    if ((c & 0x80) == 0)
+    {
+        return c;
+    }
+    c &= 0x7F;
+    do
+    {
+        w = func_800589B8(p);
+        c = (c << 7) + (w & 0x7F);
+    } while ((w & 0x80) != 0);
+    return c;
+}
 
 u32 func_80058A7C(u32 a, u32 b, u32 c, u32 d) {
     return ((((((a & 0xFF) << 8) + (b & 0xFF)) << 8) + (c & 0xFF)) << 8) | (d & 0xFF);
