@@ -18,6 +18,14 @@ number looks small next to the game. `python3 tools/decomp/guard.py` is the auth
 on that count; this file has been wrong about it before, so quote it and not
 this paragraph.
 
+For the per-unit picture -- how many of each file's functions are C, how many
+are still stubs, how many of those are parked, and what share of the unit's
+WORDS is done -- run `python3 tools/decomp/progress.py`. It takes unit names
+to list one file's remaining stubs smallest-first with each one's park state,
+and `--parked` to rank every park file by DIFF. The word columns read sizes
+out of `build/csrc/*.o`, so they want a build and are as stale as `build/`;
+the function counts do not.
+
 **Pick the next function with `python3 tools/decomp/triage.py --easy --fresh`,
 not by word count.** Word count is a poor proxy for effort: measured over
 2026-10-26, call sequences and struct setups landed on the first or second
