@@ -1233,6 +1233,18 @@ leaves the `andi`, because combine cannot fold a mask back through a pseudo
 with several uses; `(n << 25) < 0` is the fold combine would have done for the
 single-use case, and it is the two words the listing spends there.
 
+### An `s16` parameter's sign-extension sits at its first INT USE, not at entry
+
+`assign_parms` copies a narrow parameter into a pseudo with a plain move --
+HImode values live unmasked in registers, so `addu $t2, $a0, $zero` is the
+whole conversion. The `sll 16`/`sra 16` appears where the value is first used
+as an `int`. So a listing whose entry block materialises something ELSE
+between the parameter copies and the sign-extension is telling you the
+extension belongs to a later statement: use the parameter directly rather than
+copying it into an `s32` local as the first statement, which hoists the
+extension to the top and pushes everything else behind it. Four words in
+func_80052774, and the last thing wrong in it.
+
 ### A switch subject read as `s16` is declared `s32`
 
 `s16 s = *(s16 *) (p + 4); switch (s)` gives the pseudo HImode, so the read is

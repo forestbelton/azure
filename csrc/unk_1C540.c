@@ -4275,7 +4275,123 @@ void func_800525D4(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80052774);
+/* Three stacked LINE_F2 primitives -- a bright one at y and two dimmed ones at
+   y-1 and y+1 -- with the brightness taken from the fade step `n`. Six
+   spellings, and every one of them was worth words:
+
+   * `n` is used DIRECTLY, with no `s32` copy. An `s16` parameter's
+     sign-extension is emitted at its first integer USE, not by assign_parms,
+     so it lands after the `&D_80083160` materialisation, which is the
+     listing's order. `s32 k = n;` as the first statement puts the `sll`/`sra`
+     at the top and the `lui`/`addiu` behind it -- four words, and the only
+     thing left after everything else was right.
+   * TWO primitive-pointer variables: `p` for the first line and `q` for the
+     second and third. One variable is one pseudo and one register; the
+     listing has $t0 for the first and $a2 shared by the other two.
+   * the dimmed colours are assigned back into `c` and `d`. With separate
+     locals there are nine long-lived quantities and the allocation spills
+     into $a0/$a2/$a3, where the listing keeps seven in $t0..$t6 by letting
+     each colour die into its dimmed value (34 differing words).
+   * the dimming is `((u32)(c / 3) << 16) >> 15`, which is the listing's
+     `sll 16` / `srl 15`. `(c / 3) * 2` makes the second shift arithmetic
+     (`sra`), and `(u16)(c / 3) * 2` comes out as `andi 0xFFFF` / `sll 1`.
+   * `d` is computed AFTER the `c == 0x100` test, so reorg has it to put in
+     the `bne`'s delay slot; before the test, the slot takes a nop.
+   * the four coordinate stores are written out in BOTH arms of each
+     `if (x > 0)`. Cross-jumping merges the three identical trailing `sh`s
+     into the join and leaves the differing `sh 0x8` and the duplicated
+     `x + w - 1` in each arm, which is exactly what the listing has. */
+void func_80052774(s16 x, s16 y, s16 w, s16 n)
+{
+    Unk80083160 *s = &D_80083160;
+    u8 *p;
+    u8 *q;
+    s16 c;
+    s16 d;
+
+    if (n < 0x11)
+    {
+        c = n * 8 + 0x80;
+        if (c == 0x100)
+        {
+            c = 0xFF;
+        }
+        d = n * 8 + 0x40;
+    }
+    else
+    {
+        c = 0x200 - n * 16;
+        d = 0x100 - n * 8;
+    }
+    p = *(u8 **)(s->unk_00 + 0x8D0);
+    *(u8 **)(s->unk_00 + 0x8D0) = p + 0x10;
+    p[3] = 3;
+    p[7] = 0x40;
+    p[4] = d;
+    p[5] = d;
+    p[6] = c;
+    if (x > 0)
+    {
+        *(s16 *)(p + 8) = 0;
+        *(s16 *)(p + 0xA) = y;
+        *(s16 *)(p + 0xC) = x + w - 1;
+        *(s16 *)(p + 0xE) = y;
+    }
+    else
+    {
+        *(s16 *)(p + 8) = x;
+        *(s16 *)(p + 0xA) = y;
+        *(s16 *)(p + 0xC) = x + w - 1;
+        *(s16 *)(p + 0xE) = y;
+    }
+    addPrim(s->unk_00 + 0x230, p);
+    c = ((u32)(c / 3) << 16) >> 15;
+    d = ((u32)(d / 3) << 16) >> 15;
+    q = *(u8 **)(s->unk_00 + 0x8D0);
+    *(u8 **)(s->unk_00 + 0x8D0) = q + 0x10;
+    q[3] = 3;
+    q[7] = 0x42;
+    q[6] = c;
+    q[4] = d;
+    q[5] = d;
+    if (x > 0)
+    {
+        *(s16 *)(q + 8) = 0;
+        *(s16 *)(q + 0xA) = y - 1;
+        *(s16 *)(q + 0xC) = x + w - 1;
+        *(s16 *)(q + 0xE) = y - 1;
+    }
+    else
+    {
+        *(s16 *)(q + 8) = x;
+        *(s16 *)(q + 0xA) = y - 1;
+        *(s16 *)(q + 0xC) = x + w - 1;
+        *(s16 *)(q + 0xE) = y - 1;
+    }
+    addPrim(s->unk_00 + 0x230, q);
+    q = *(u8 **)(s->unk_00 + 0x8D0);
+    *(u8 **)(s->unk_00 + 0x8D0) = q + 0x10;
+    q[3] = 3;
+    q[7] = 0x42;
+    q[4] = d;
+    q[5] = d;
+    q[6] = c;
+    if (x > 0)
+    {
+        *(s16 *)(q + 8) = 0;
+        *(s16 *)(q + 0xA) = y + 1;
+        *(s16 *)(q + 0xC) = x + w - 1;
+        *(s16 *)(q + 0xE) = y + 1;
+    }
+    else
+    {
+        *(s16 *)(q + 8) = x;
+        *(s16 *)(q + 0xA) = y + 1;
+        *(s16 *)(q + 0xC) = x + w - 1;
+        *(s16 *)(q + 0xE) = y + 1;
+    }
+    addPrim(s->unk_00 + 0x230, q);
+}
 
 /* The counter is consumed and incremented in one expression at the TOP of the
    body (`i++ << 4`), which is where the target's `addiu $a0, $a0, 1` sits --
