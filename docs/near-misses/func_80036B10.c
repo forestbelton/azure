@@ -14,13 +14,24 @@
  * three stack parameters instead of one (6 DIFF). See the
  * STACK-PARAMETER PROLOGUE INTERLEAVE section of docs/carved-sweep.md.
  *
- * Both insns are dependency-free and both birth a single-set pseudo, so they
- * tie on sched1 priority and the order is decided by LUID, i.e. RTL order.
- * That means the target's parameter-5 load is LATE in its RTL -- sched1 then
- * groups it with its own prologue save, which is a late insn -- while this
- * source's comes from assign_parms at the very top. Why the original's is late
- * when the value still ends up in a callee-saved register is the open
- * question; nothing tried moves it, and the committed prototype
+ * THE RTL-ORDER EXPLANATION BELOW IS REFUTED. It read: "the target's
+ * parameter-5 load is LATE in its RTL ... while this source's comes from
+ * assign_parms at the very top", with the order decided by sched's LUID
+ * tie-break. The RTL order is not free. `thread_prologue_and_epilogue_insns`
+ * (function.c:5522) emits the prologue with `emit_insn_after (seq, f)`, right
+ * after the function's first NOTE, so every `sw $sX, N($sp)` precedes the
+ * whole body whatever the source said; it runs at toplev.c:3103, after reload
+ * and before sched2 at 3105, and -O2 enables both schedulers
+ * (toplev.c:3397). assign_parms' copies are emitted at function start, ahead
+ * of the rest of the body. So in both builds the LUID order is fixed --
+ * prologue saves, then parameter copies, then the call's argument setup -- and
+ * the difference has to be a priority or ready-list one. See
+ * docs/near-misses/func_8003719C.c, the third instance, for the full
+ * derivation and what to compute next.
+ *
+ * The old wording follows for the record: both insns are dependency-free and
+ * both birth a single-set pseudo, so they tie on sched1 priority and the order
+ * is decided by LUID. Nothing tried moves it, and the committed prototype
  * `void func_80036B10(u8 *, u8 *, u8 *, s32, u32)` plus its landed caller
  * func_80036210 pin parameter 5's type, so the narrow-parameter lever from
  * matching-levers section 7 is not available here without touching both.
