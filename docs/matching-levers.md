@@ -1279,6 +1279,34 @@ instruction where it is and empties its delay slot, so it will cost words if
 the listing does not actually show the reload. The evidence to require is the
 SECOND load of an address already stored, with no call or label between.
 
+### Two bit tests that stayed separate are two SPELLINGS of one lvalue
+
+`fold` rewrites `(x & 0x2000) != 0 || (x & 0x8000) != 0` into
+`(x & 0xA000) != 0`, one `andi` and one branch. A listing that spends two
+`andi`s and two branches on the same word therefore cannot come from a plain
+`||` of two masks -- and no amount of parenthesising or `!`-shuffling changes
+it, because fold works on the tree.
+
+What does work is writing the two tests through DIFFERENT spellings of the same
+lvalue:
+
+```c
+if ((*(u32 *) (g + 0x10) & 0x2000) != 0 || (D_80083160.unk_10 & 0x8000) != 0)
+```
+
+fold sees an `INDIRECT_REF` on one side and a `COMPONENT_REF` on the other, so
+it cannot merge them; cse then unifies the two loads, which is why the listing
+has ONE `lw 0x10($s2)` feeding both `andi`s. func_800366F4, three words and
+the whole branch structure.
+
+A `goto` out of a combined test does NOT work -- fold gets there first and the
+merged `andi` survives the restructuring (measured, still three words short).
+
+The same function shows the companion fact for free: its flag word is re-read
+before the second and third tests because both of those labels have more than
+one predecessor, so cse's extended basic block ends there. Reading the word
+into a local gives one load and loses the re-reads.
+
 ### A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P
 
 `u8 *b = (u8 *) &D_80083160;` and `Unk80083160 *q = &D_80083160;` both put the

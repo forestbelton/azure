@@ -931,11 +931,86 @@ void func_8003661C(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003666C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800366F4);
+void func_80036880(u8 *, s32, s32);
+
+/* The first test's two bits are written through TWO DIFFERENT SPELLINGS of the
+   same lvalue: `*(u32 *) (g + 0x10)` for 0x2000 and `D_80083160.unk_10` for
+   0x8000. With both written the same way `fold` merges
+   `(x & 0x2000) || (x & 0x8000)` into one `andi 0xA000` and the function is
+   three words short; with two spellings fold cannot see one expression, so the
+   two `andi`s and the two branches survive -- and cse still unifies the loads,
+   which is why the listing has only one `lw 0x10($s2)` feeding both.
+
+   The flag word is re-read before the 0x4000 test and again before the 0x40
+   test, and that comes for free: both labels have more than one predecessor,
+   so cse's extended basic block ends there. Reading it into a local would give
+   one load and lose the two re-reads. */
+void func_800366F4(u8 *p, s32 b, s32 c)
+{
+    u8 *g = (u8 *)&D_80083160;
+    s32 s;
+    s32 n;
+
+    s = p[0x4D];
+    if ((*(u32 *)(g + 0x10) & 0x2000) != 0 || (D_80083160.unk_10 & 0x8000) != 0)
+    {
+        if ((s & 1) != 0)
+        {
+            s = s - 1;
+        }
+        else if (s + 1 < (*(u8 **)(p + 0x74))[0x26])
+        {
+            s = s + 1;
+        }
+    }
+    if ((*(u32 *)(g + 0x10) & 0x4000) != 0)
+    {
+        if (s + 2 < (*(u8 **)(p + 0x74))[0x26])
+        {
+            s = s + 2;
+        }
+        else
+        {
+            s = s % 2;
+        }
+    }
+    else if ((*(u32 *)(g + 0x10) & 0x1000) != 0)
+    {
+        if (s - 2 >= 0)
+        {
+            s = s - 2;
+        }
+        else
+        {
+            n = (*(u8 **)(p + 0x74))[0x26];
+            if ((n & 1) == 0)
+            {
+                s = s % 2 + n - 2;
+            }
+            else if ((s & 1) != 0)
+            {
+                s = n - 2;
+            }
+            else
+            {
+                s = n - 1;
+            }
+        }
+    }
+    if (p[0x4D] != s)
+    {
+        func_80053DA8(0x502);
+        p[0x4D] = s;
+    }
+    if ((*(u32 *)(g + 0x10) & 0x40) != 0)
+    {
+        func_80036880(p, b, c);
+    }
+}
 
 void func_80036484(u8 *);
 
-void func_80036880(u8 *p) {
+void func_80036880(u8 *p, s32 b, s32 c) {
     u8 *q = *(u8 **) (p + 0x74);
 
     q[0x27] = p[0x4D];
