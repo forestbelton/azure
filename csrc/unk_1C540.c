@@ -5249,7 +5249,65 @@ void func_800540A8(void) {
     *(u32 *) (p + 0x18) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054104);
+extern u8 D_80032E0C[];
+
+/* UNPARKED. Copies the 8 bytes at D_80032E0C into a local `s16 t[4]` and then,
+   for each of 0x30 outer steps and the first three entries of t, calls
+   func_80055730 when func_8005405C accepts the entry.
+
+   The inner loop is written with `goto`, which is what keeps it out of
+   loop.c's hands: the C front end emits NOTE_INSN_LOOP_BEG only for a loop
+   STATEMENT, so a goto back edge gets no strength reduction and no invariant
+   motion. As a `for`, loop.c reduced `t[j]` to a walking cursor and hoisted
+   `$sp + 0x10` into a register of its own -- two callee-saved registers and
+   four words the target does not spend, where the listing recomputes
+   `sll $v0, $s1, 1` / `addu $v0, $sp, $v0` / `lh 0x10($v0)` every iteration.
+   Five subscript spellings had been measured against that and none of them
+   reached it; the loop's own form is the lever.
+
+   `j = 0` is the FIRST statement of the outer body, ahead of `hi` and `base`.
+   Loop rotation leaves one copy in the preheader and one in the outer back
+   edge's delay slot, which is where the listing has them; written after the
+   two expressions, the delay slot takes `andi $v0, $s2, 0xFF` instead.
+
+   `((u32) i & 0xFF) >> 4` unsigned, or the shift is `sra` where the listing
+   has `srl`. */
+void func_80054104(void)
+{
+    s16 t[4];
+    s32 i;
+    s32 j;
+
+    memcpy(t, D_80032E0C, 8);
+    for (i = 0; i < 0x30; i++)
+    {
+        s32 hi;
+        s32 base;
+
+        j = 0;
+        hi = ((u32) i & 0xFF) >> 4;
+        base = ((i & 0xF) << 10) + 0x1C00;
+    inner:
+        {
+            s16 v = t[j];
+            s32 k = ((v << 8) & 0xFF00) | hi;
+
+            if (v == 0)
+            {
+                k += 0x10;
+            }
+            if (func_8005405C(v))
+            {
+                func_80055730(k, base);
+            }
+        }
+        j++;
+        if (j < 3)
+        {
+            goto inner;
+        }
+    }
+}
 
 void func_8005E7E0(s32);
 
@@ -5932,10 +5990,13 @@ void func_80055604(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005560C);
 
-void func_8005BAB0(void);
+void func_8005BAB0(s32, s32);
 
-void func_80055730(void) {
-    func_8005BAB0();
+/* Both arguments pass straight through, so this compiles to the same bytes
+   either way; the widths are the ones func_8005BAB0's own entry and
+   func_80054104's call site prove. */
+void func_80055730(s32 a, s32 b) {
+    func_8005BAB0(a, b);
 }
 
 s32 func_80055750(s16 a) {
