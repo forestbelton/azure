@@ -252,6 +252,28 @@ everything else has a park file or a sweep row with measurements behind it, so
 the next session's first move is `python3 tools/decomp/progress.py --parked`
 and then the park, not a fresh reading of the listing.
 
+**Where the parked work actually is**, from advise.py's verdict over all 44
+park files on 2026-10-27:
+
+| verdict | count | what it means for the next attempt |
+|---------|-------|------------------------------------|
+| SHAPE  | 28 | advise.py names a lever for each; the source is still wrong somewhere |
+| LENGTH | 11 | the word count is wrong, which is the most tractable signal there is |
+| ALLOC  |  4 | every opcode, immediate and displacement matches; only register numbers differ |
+
+The four ALLOC ones are func_800599B0 (1 register), func_80055D84 (5),
+func_8003931C (10) and func_800407C0 (62) -- no source rewrite reaches those,
+so read matching-levers section 3 and `advise.py --greg` rather than trying
+spellings. The eleven LENGTH ones, by how far off they are:
+
+  -1  func_8003800C  func_8004951C  func_8004A330  func_800550E8
+  +1  func_8005914C
+  -2  func_8004DF8C      +2  func_8004E6F4      +3  func_8005B4D0
+  -4  func_8005A90C      -7  func_8004B954      -9  func_80059814
+
+Everything else is at the exact word count with a named shape finding, which
+is the state 28 of the 44 are in.
+
 Two tools exist for the parks specifically, and both earn their keep:
 `search.py` sweeps the source transforms this compiler is sensitive to, and a
 run of it over all 40 parks on 2026-10-27 improved NINE of them -- including
