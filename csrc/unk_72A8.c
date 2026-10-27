@@ -463,8 +463,75 @@ s32 func_800353F4(u32 v) {
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035484);
+extern UnkNode *D_80082BC0[];
+extern u8 D_80073B54[];
+extern s16 D_8006A93C[];
+extern u32 D_8006A8F0[];
+extern s32 D_80081440;
 
+UnkNode *func_8003FF2C(s32, UnkNode *, s16, UnkNode **);
+s32 func_8004491C(UnkNode *, u32);
+void func_80033C1C(u8 *, u32);
+void func_800350B0(u8 *, u8 *);
+void func_800355EC(u8 *);
+void func_80035614(u8 *);
+void func_80033D54(void);
+
+/* The 0x11 spawn: allocates the node, installs func_800355EC at its +0x10 and
+   func_80033D54 through func_8004491C, records it in D_80081440, fills the
+   +0x20 sub-object and the +0x08/+0x0C records, and sets the last two fields
+   from the D_8006A93C and D_8006A8F0 tables indexed by the third argument's
+   +0x02 byte.
+
+   MATCHED on the first draft, which is worth a note on why: every shape it
+   needs was already settled by its three siblings. `D_80082BC0` is an
+   incomplete ARRAY passed by name (func_80036B10's lever -- it puts the
+   lui/addiu between the two parameter save/load pairs); `e = (u8 *) n + 0x20`
+   is its own local while the +0x20 STORE and the three reads that follow are
+   spelled `(u8 *) n + 0x20` through the node, which is what names $s0 and
+   $s1 the way the listing does (func_80035E58's second finding); and the two
+   table lookups re-read their bases (`+0x20` for the first, `+0x74` for the
+   second) rather than reusing `e` or `c`, because the stores between them
+   flush cse.
+
+   The signature is the unit's own `void func_80035484(u8 *, u8 *, s32);` from
+   above, with the casts inside; the third argument is used as a POINTER here
+   (`lbu 0x2($s4)`), but the caller at func_800354xx passes an s32, and the
+   declared form matches too. */
+void func_80035484(u8 *a, u8 *b, s32 c) {
+    UnkNode *n;
+    u8 *e;
+    u8 *g;
+    u8 *h;
+
+    n = func_8003FF2C(0x11, (UnkNode *) a, 0x49, D_80082BC0);
+    D_80081440 = (s32) n;
+    n->unk_10 = (u32) func_800355EC;
+    func_8004491C(n, (u32) func_80033D54);
+    g = (u8 *) n->unk_08;
+    h = (u8 *) n->unk_0C;
+    func_80033C1C(b, 0);
+    *(u32 *) ((u8 *) n + 0x20) = (u32) b;
+    *(u32 *) (b + 0x60) = 6;
+    e = (u8 *) n + 0x20;
+    *(u32 *) (*(u32 *) ((u8 *) n + 0x20) + 0x10) = 0;
+    *(s16 *) (*(u32 *) ((u8 *) n + 0x20) + 8) = 0x400;
+    *(u32 *) (e + 4) = 0;
+    *(u32 *) (e + 8) = 0;
+    func_800350B0((u8 *) c, e);
+    *(u32 *) (e + 0x68) = (u32) func_80035614;
+    *(s16 *) (g + 2) = -0x86;
+    *(s16 *) (g + 6) = 0x78;
+    *(s16 *) (g + 0xA) = 0x200;
+    *(u32 *) (h + 0xC) = 0x808080;
+    *(u32 *) (h + 8) = (u32) D_80073B54;
+    *(u32 *) h = 0;
+    h[4] = 0;
+    h[5] = 0;
+    *(u32 *) (e + 0x74) = c;
+    *(u32 *) (*(u32 *) ((u8 *) n + 0x20) + 0x14) = D_8006A93C[((u8 *) c)[2]];
+    *(u32 *) (h + 8) = D_8006A8F0[(*(u8 **) (e + 0x74))[2]];
+}
 void func_800355EC(u8 *p) {
     (*(void (**)(u8 *)) (p + 0x68))(p);
 }

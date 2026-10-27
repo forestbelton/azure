@@ -890,7 +890,47 @@ void func_800555FC(void) {
 void func_80055604(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005560C);
+extern u16 D_800847EE[];
+
+void func_8005BAB0(s32, s32);
+s32 func_80055750(s16);
+s32 func_8003E14C(void);
+void func_8005B4D0(s32, s32, u16, u16, s32);
+
+/* Splits one note between the two voices: the pitch comes from
+   D_800847EE * D_80084808 / 32767 through func_80055750, and the bend from
+   func_8003E14C scaled by twice D_80084808 over the same 32767. With no bend
+   it plays one voice; with a bend it plays the remainder on one and the bend
+   on the other, the second call flagged.
+
+   MATCHED on the second draft, and the one finding is `<< 1`, NOT `* 2`:
+   written `D_80084808[0] * 2` fold reassociates the constant onto the OTHER
+   factor, so the `sll` lands on func_8003E14C's result (`sll $v0, $v0, 1`)
+   where the listing doubles the halfword (`sll $v1, $v1, 1`), and the operand
+   order of the `mult` goes with it -- 41 differing words and one short. The
+   shift form has nothing for fold's `associate:` to move. Spelling the
+   doubled halfword as the multiply's FIRST operand is 7 DIFF, so the operand
+   order matters too: the call's result comes first.
+
+   `func_8005BAB0(a, b)` emits no argument setup at all -- both parameters
+   pass straight through in $a0/$a1 while their copies go to $s3/$s4 -- and
+   the magic 0x80010003 with post_shift 14 is a DIVISION BY 32767
+   (tools/decomp/magic.py; do not estimate it from the arithmetic). */
+void func_8005560C(s32 a, s32 b) {
+    s32 t;
+    s32 d;
+
+    func_8005BAB0(a, b);
+    t = func_80055750((s16) (D_800847EE[0] * D_80084808[0] / 32767));
+    d = func_8003E14C() * (D_80084808[0] << 1) / 32767;
+    if (d == 0) {
+        func_8005B4D0(a, b, t, t, 0);
+    } else {
+        t -= d;
+        func_8005B4D0(a, b, t, t, 0);
+        func_8005B4D0(a, b, d, d, 1);
+    }
+}
 
 void func_8005BAB0(s32, s32);
 
