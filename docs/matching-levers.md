@@ -2070,6 +2070,70 @@ block-local initialised pointer, `*(u8 **) &SYM`, an index expression, a
 address `((T *) 0x80083160)->field`, which makes cc1psx emit an absolute
 `lw $2,-2146946720` that the assembler still expands to two words.
 
+### A walked pointer RE-LOWERS its symbol; a separate cursor does not
+
+A listing with `lui $sA, %hi(SYM)` whose `%lo` is added TWICE -- once into
+another register that is then incremented in place, and once back into `$sA`
+after some calls -- is ONE pointer variable assigned the symbol and advanced
+with `p++`:
+
+```c
+p = D_80083E18; *p++ = 8;               /* lui $s0; addiu $s1,$s0,%lo  */
+strcpy((char *) p, (char *) s);
+strcat((char *) p, (char *) D_80071404);
+p = (u8 *) strrchr((char *) D_80083E18, 0);
+                                        /* addiu $s0,$s0,%lo -- again  */
+```
+
+The in-place `p++` writes the pseudo that held the lowered symbol, so cse's
+class {p, SYM} is invalidated and the next reference to SYM is lowered again
+from the surviving `(high)` pseudo -- which is why `$sA` is the `lui`
+register: the high dies into that second `lo_sum`. Write `b = &SYM[1]` with a
+separate cursor instead and the symbol's pseudo stays valid, every later
+`lo_sum` collapses onto it, one pseudo lives across all the calls, and the
+second `addiu` is gone. The same reuse keeps the cursor in the callee-saved
+register it already had, so the `addu $sB, $v0, $zero` copy after the call
+survives too. Both together are worth 2 words and 69 DIFF in func_8004DF8C --
+and the copy is the word func_8004DE88's park has been hunting in local-alloc.
+
+### `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used
+
+Two stores to adjacent small globals that come out in *different* shapes --
+one off a callee-saved register with a small displacement, the next
+`$gp`-relative to the symbol -- are `q[-1]` and `q[0]` through one pointer
+whose VALUE was also used (written out byte-wise, passed, shifted) before the
+call:
+
+```c
+extern u32 D_80081548;                  /* scalars, + .size for maspsx */
+extern u32 D_8008154C;
+q = &D_8008154C;  p[0] = (u32) q; ... ; f();
+q[-1] = 0x2300030C;                     /* sw $v0, -4($s2)              */
+q[0]  = 0x2300040C;                     /* sw $v0, %gp_rel(D_8008154C)  */
+```
+
+Three passes have to agree for this. The scalar declaration sets
+`SYMBOL_REF_FLAG`, so cc1psx emits `la $sN, SYM` for the address -- and
+maspsx's aspsx-2.56 config has `gp_allow_la` OFF, so gas expands the `la` at
+-G0 into `lui`/`addiu` in the SAME register, which is the listing's pair.
+cse's `find_best_addr` then replaces the bare `(mem (reg q))` with the symbol,
+because `mips_address_cost` charges 4 for a REG and 1 for a flagged
+SYMBOL_REF, giving the `%gp_rel` store; it leaves `(mem (plus q -4))` alone.
+And combine folds `reg + const` into `SYM - 4` ONLY when the store is the
+pointer's sole use, so the byte-write uses are what keep `-4($s2)` alive --
+and what crosses the call in `$s2` is then q, the FULL address, not a high
+half, which is one callee-saved register fewer than the symbolic stores need.
+
+Measured in func_8004DF8C: plain `D_80081548 = X; D_8008154C = Y;` is 70 words
+and 62 DIFF; incomplete arrays for both symbols are 74 words and 70 DIFF (two
+`high` pseudos cross the call for `%lo(SYM)($sN)` stores, plus a fourth
+callee-saved register); only the first symbol as an array is 72 words, 2 DIFF.
+The offset's SIGN is irrelevant -- taking the addresses in the other order
+with `q[+1]` matches the same way -- so read which symbol the pointer ends on
+off the listing's displacement. One trap when switching a symbol from an
+incomplete array to a scalar: `a = (u32) D_80081548` now reads the VALUE, not
+the address. Write the `&`.
+
 ## 7. Narrow types
 
 * An `s16` parameter lets a halfword store reuse the raw incoming register

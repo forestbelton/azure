@@ -21,6 +21,7 @@ extern u32 D_800814A0a[] __asm__("D_800814A0");
    materialised base. Adding a symbol here changes every access to it in this
    whole unit, so check `grep` before adding one. */
 __asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
+        "\t.size D_80081548,4\n\t.size D_8008154C,4\n"
         "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
         "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
         "\t.size D_80081568,4\n\t.size D_8008156C,4\n"
@@ -2474,7 +2475,68 @@ void func_8004DDE4(u8 *p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DE88);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DF8C);
+extern u8 D_80083E18[];
+extern u8 D_80071404[];
+extern u32 D_80081548;
+extern u32 D_8008154C;
+
+char *strcat(char *, const char *);
+char *strrchr(const char *, s32);
+
+/* The sibling of func_8004DE88: the same command buffer in D_80083E18, with a
+   strcat of D_80071404 after the strcpy, and the two addresses written out
+   byte-wise are D_80081548 and D_8008154C.
+
+   ONE `u8 *p` SERVES BUFFER AND CURSOR, advanced in place, rather than a
+   `b = &D_80083E18[1]` with a separate cursor. `*p++` writes the pseudo that
+   held the lowered symbol, so cse's class {p, D_80083E18} is invalidated and
+   strrchr's argument is re-lowered from the still-valid `high` -- the
+   `addiu $s0, $s0, %lo(D_80083E18)` after the strcat, with $s0 the `lui`
+   register because the high dies into that lo_sum. With a separate `b` the
+   symbol's pseudo stays valid, every later `lo_sum` collapses onto it, one
+   pseudo lives across all three calls and the function is a word short; the
+   cursor after strrchr also keeps the callee-saved $s1 it already had, so the
+   `addu $s1, $v0, $zero` copy survives. Reverting both: 68 words, 69 DIFF.
+
+   THE FINAL STORES GO THROUGH THE ADDRESS POINTER `q`, as `q[-1]` and `q[0]`,
+   with both symbols declared as SCALARS (hence the two `.size` lines at the
+   top of this file). cse's find_best_addr replaces the bare `(mem (reg q))`
+   by the symbol, since mips_address_cost charges 4 for a REG and 1 for a
+   flagged SYMBOL_REF -- that is the `sw %gp_rel(D_8008154C)($gp)` -- but it
+   leaves `(mem (plus q -4))` alone, and combine folds `reg + const` into
+   `SYM - 4` only when the store is the pointer's SOLE use. Here q has the
+   four byte-write uses, so `-4($s2)` survives and what crosses the jalr in
+   $s2 is q, the full address, not a high half: three callee-saved registers
+   rather than the four the symbolic stores need. Plain `D_80081548 = X;
+   D_8008154C = Y;` is 70 words, 62 DIFF; incomplete arrays for both are 74
+   words, 70 DIFF; only D_80081548 as an array is 72 words, 2 DIFF. */
+void func_8004DF8C(u8 *s) {
+    u8 *p;
+    u32 *q;
+
+    p = D_80083E18;
+    *p++ = 8;
+    strcpy((char *) p, (char *) s);
+    strcat((char *) p, (char *) D_80071404);
+    p = (u8 *) strrchr((char *) D_80083E18, 0);
+    *p++ = 0x19;
+    *p++ = 2;
+    *p++ = 0x1A;
+    q = &D_80081548;
+    p[0] = (u32) q;
+    p[1] = (u32) q >> 8;
+    p[2] = (u32) q >> 16;
+    p[3] = (u32) q >> 24;
+    p += 4;
+    q = &D_8008154C;
+    p[0] = (u32) q;
+    p[1] = (u32) q >> 8;
+    p[2] = (u32) q >> 16;
+    p[3] = (u32) q >> 24;
+    ((void (*)(u8 *)) D_800714A4[D_80081550])(D_80083E18);
+    q[-1] = 0x2300030C;
+    q[0] = 0x2300040C;
+}
 
 s32 func_80033B2C(s32);
 void func_80033AE8(s32);

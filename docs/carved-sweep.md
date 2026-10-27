@@ -125,12 +125,21 @@ which was already declared as a struct 300 lines further down.
   address materialisation goes $gp-relative too.** The trick in
   docs/addressing-and-translation-units.md gives "$gp-relative loads and
   stores, absolute address materialisation" -- but only if cc1psx emits no
-  size of its own. `extern u32 D_X;` makes it emit `.extern D_X, 4`, `&D_X`
-  becomes a single `la`, and maspsx rewrites that to $gp-relative as well, so
-  a function that writes the ADDRESS out as data loses a word per
-  materialisation. `extern u32 D_X[];` with `D_X[0] = v` emits no size, keeps
-  the address as lui/addiu and still gets the one-word store. Worth 2 words on
-  func_8004DF8C, which needs both forms of the same symbol at once.
+  size of its own. `extern u32 D_X;` makes it emit `.extern D_X, 4` and sets
+  `SYMBOL_REF_FLAG`, so `&D_X` becomes a single `la`.
+
+  **CORRECTED 2026-10-27: maspsx does NOT rewrite that `la`.** aspsx-2.56's
+  config has `gp_allow_la = False`, so the `la` is passed to gas, which at -G0
+  expands it to `lui`/`addiu` in the SAME register -- which is exactly the
+  compiler-split shape, reached by another route. The scalar declaration costs
+  no word on an address materialisation; what costs a word is `a = (u32) D_X`
+  with the scalar spelling, which reads the VALUE (`lw %gp_rel`) instead of the
+  address. Write the `&`. func_8004DF8C MATCHED with both symbols scalar, and
+  as incomplete arrays it is 74 words against 72, because two `high` pseudos
+  then cross the call and a fourth callee-saved register goes with them.
+  `extern u32 D_X[];` with `D_X[0] = v` still emits no size and still gets the
+  one-word store, so the array form remains right where the listing shows
+  `%lo(SYM)($sN)` off a live high half -- read which one off the listing.
 
 * **An `__asm__` alias gives one function its own declaration of a shared
   symbol.** `extern u32 X_arr[] __asm__("X");` is a second C name for the same
@@ -373,7 +382,7 @@ directly and leaves the copy above the branch. |
 | func_80054104 | unk_264E0 | **LANDED** | It was the inner loop's FORM, not the subscript: written with `goto` it gets no NOTE_INSN_LOOP_BEG, so loop.c never strength-reduces `t[j]` or hoists `$sp + 0x10`, and the four extra words go away. `j = 0` first in the outer body supplies the back edge's delay slot. See the goto-loop lever in matching-levers section 9. |
 | func_80055D84 | unk_2879C | **58/58 words, 5 DIFF** | A two-register swap around the final `or`: the target reuses the mask's own register as the destination and this source does not, and --greg shows why (the mask is allocated first on priority and takes the lowest free register instead of preferring the argument register). Getting to the exact count needed the cross-jump lever above; everything measured is in `docs/near-misses/func_80055D84.c`. |
 | func_8004DE88 | unk_1C540 | **64/65 words, 59 DIFF** | Command-buffer builder. Everything matches except `addu $a0,$v0,$zero`, a copy of strrchr's return: the target keeps the cursor in $a0 and the constants in $v0, this source keeps the cursor in $v0 so the copy is deleted. The suspect is local-alloc's SUGGESTION pass, which assigns a quantity born from a hard-register copy before the priority loop. See `docs/near-misses/func_8004DE88.c`. |
-| func_8004DF8C | unk_1C540 | **70/72 words, two words** | func_8004DE88's sibling, and the same cursor-versus-address-value register contest. Its own contribution is the $gp-relative half: it needs both an absolute address materialisation and a one-word store for D_80081548/D_8008154C, which takes the bare `.size` records PLUS incomplete-array declarations (see the pattern above -- `extern u32 D_X;` costs two more words). Everything measured is in `docs/near-misses/func_8004DF8C.c`. |
+| func_8004DF8C | unk_1C540 | **MATCHED and landed 2026-10-27** | func_8004DE88's sibling. Two shapes, one word each: ONE `u8 *p` serves buffer and cursor, advanced in place (`p++` invalidates cse's register-equals-symbol class, so strrchr's argument is re-lowered from the surviving high, and the reused pseudo keeps its callee-saved register so the `addu` copy after the call survives); and the final stores go through the address pointer as `q[-1]`/`q[0]` with BOTH symbols scalar, where cse rewrites the bare `q[0]` to the symbol but combine cannot fold `q - 4` because the pointer has other uses. Both levers are in `docs/matching-levers.md`, and the `la` claim in the $gp-relative pattern above is corrected there and here. |
 | func_80036B10 | unk_72A8 | **LANDED** | The stack-parameter prologue interleave, and it was D_80082BC0 declared as an incomplete array and passed by name instead of `&` on a scalar pointer. See the SOLVED section above. |
 | func_8003931C | unk_72A8 | **85/85 words, 10 DIFF** | func_80039470's sibling and the same three shapes (one-statement cursor read, error blocks as `else` arms not guard clauses, pointer-local table base). What is left is a two-register swap with the margin measured: the opcode byte is 4 refs/23 insns (0.348) against the +0x80 pointer's 6/32 (0.375), and ONE more reference on the byte would flip it -- see `docs/near-misses/func_8003931C.c` for why none is available free. |
 | func_80036D4C | unk_72A8 | **LANDED** | The stack-parameter prologue interleave, and it was D_80082BC0 declared as an incomplete array and passed by name instead of `&` on a scalar pointer. See the SOLVED section above. |
@@ -489,7 +498,6 @@ wants `--greg` before any source change.
 | func_8004CECC | 102/102 | SHAPE | EXTRA,MISSING | 44 |
 | func_8004D294 | 114/114 | SHAPE | -- | 12 |
 | func_8004DE88 | 64/65 | LENGTH | EXTRA,LENGTH,MISSING,OPCODE | 31 |
-| func_8004DF8C | 70/72 | LENGTH | IMMEDIATE,OPCODE | 36 |
 | func_800500B4 | 139/139 | SHAPE | DELAY-NOPS,OPCODE | 64 |
 | func_80052A90 | 96/96 | SHAPE | OPCODE | - |
 | func_80054B08 | 84/84 | SHAPE | EXTRA,IMMEDIATE,MISSING,OPCODE | 10 |
