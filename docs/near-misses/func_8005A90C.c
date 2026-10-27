@@ -1,4 +1,4 @@
-/* func_8005A90C (unk_2CDC0) -- 102 of 103 words, 92 DIFF. NOT compiled.
+/* func_8005A90C (unk_2CDC0) -- 100 of 103 words, 92 DIFF. NOT compiled.
  *
  * The third member of the func_8005A608 / func_8005A778 family, and the one
  * with the longest tail: it claims a D_80086A40 slot the same way the other
@@ -40,6 +40,21 @@
  * two passes. The differing count stays at 92 because one word is still
  * missing and everything after it reads as wrong; advise.py's branch spans
  * are the way to localise it, and the notes below predate these numbers.
+ *
+ * A SWEEP RESULT WAS REVERTED HERE, 2026-10-27: search.py's
+ * declaration-width family proposed `s16 t` and it scores better, but it is
+ * SEMANTICALLY WRONG -- t takes func_8005ECA0's return value, declared `u32 func_8005ECA0(u32)`, and is stored with `*(u32 *) (e + 0x10) = t`.
+ *
+ * The companion narrowing `s16 r` IS kept -- it is worth one word -- but it
+ * is NOT proven: func_80059F8C is declared `s32 func_80059F8C(s32, u32)`,
+ * `r` is compared against -1 and stored through `*(u32 *) (e + 0x10)`, so
+ * s16 is faithful only if that function cannot return a value outside s16
+ * range. func_80059F8C is itself still an asm stub, so nothing settles it
+ * here. Check that before trusting this park's shape.
+ * The score is an oracle for SHAPE, not for correctness, and the width
+ * family is the one that can change VALUES rather than representations.
+ * See docs/matching-levers.md on reviewing a narrowing against the
+ * listing's own arithmetic before keeping it.
  */
 
 #include "common.h"
@@ -58,7 +73,7 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
     s32 k;
     u8 *e;
     s16 r;
-    s16 t;
+    u32 t;
 
     D_8007382C[0] = 0;
     i = 0;

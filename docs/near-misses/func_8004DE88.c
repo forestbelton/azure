@@ -1,4 +1,4 @@
-/* func_8004DE88 (unk_1C540) -- 65 of 65 words, 47 DIFF. NOT compiled.
+/* func_8004DE88 (unk_1C540) -- 64 of 65 words, 59 DIFF. NOT compiled.
  *
  * Builds a command buffer in D_80083E18: a leading 0x08, the argument string
  * via strcpy, then 0x19, 0x02, 0x1A, then the ADDRESS of D_80083D88 and that
@@ -91,6 +91,14 @@
  * reads SHAPE with a SIGNEDNESS row, so check the signedness of every local
  * in the expression it names before anything else -- the width change may
  * have moved the problem rather than fixed it.
+ *
+ * A SWEEP RESULT WAS REVERTED HERE, 2026-10-27: search.py's
+ * declaration-width family proposed `s16 a` and it scores better, but it is
+ * SEMANTICALLY WRONG -- a holds the 32-bit address of D_80083D88 and is split into four bytes with >> 8, >> 16 and >> 24; at s16 the top two shifts are dead.
+ * The score is an oracle for SHAPE, not for correctness, and the width
+ * family is the one that can change VALUES rather than representations.
+ * See docs/matching-levers.md on reviewing a narrowing against the
+ * listing's own arithmetic before keeping it.
  */
 
 #include "common.h"
@@ -102,7 +110,7 @@ char *strrchr(const char *, s32);
 
 void func_8004DE88(u8 *s) {
     u8 *p;
-    s16 a;
+    u32 a;
 
     D_80083E18[0] = 8;
     strcpy((char *) &D_80083E18[1], (char *) s);

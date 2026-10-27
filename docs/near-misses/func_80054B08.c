@@ -1,4 +1,4 @@
-/* func_80054B08 (unk_264E0) -- 84 of 84 words, 29 DIFF. NOT compiled.
+/* func_80054B08 (unk_264E0) -- 84 of 84 words, 32 DIFF. NOT compiled.
  *
  * Dispatches on `arg & 0xF000`: 0x1000/0x2000/0x4000 each call func_80054E00
  * with 0x74/0xE4/0xF4 (jump2 cross-joins the three into one call site), and 0
@@ -24,10 +24,20 @@
  *   `base`, so gcc computes `base - 0x20` once and shares it with the `+ 0x20`
  *   side, where the listing spends `addiu` then `addu` on each.
  *
- * SINCE PARKED, 2026-10-27: 32 DIFF to 29, by declaring the block-local `w`
- * `u8` rather than `u32`. Found by search.py's declaration-width family in
- * the sweep of all forty parks. advise.py now reads only TWO register-only
- * differences, so what is left really is the ordering described next.
+ * A SWEEP RESULT WAS REVERTED HERE, 2026-10-27, and the reason is worth more
+ * than the three differing words it bought. search.py's declaration-width
+ * family proposed `u8 w` in place of `u32 w` and scored 29 DIFF against 32.
+ * It is WRONG: `q->unk_08` is a `u32` field, the listing splits its top byte
+ * off with `srl $v0, $v1, 24` and masks the rest with `and $v1, $v1, $a2`,
+ * and with an 8-bit `w` the shift folds to zero -- we emit `sb $zero, 0x31`
+ * where the listing has real code, and `w &= 0xFFFFFF` becomes a no-op.
+ * The score improved because the function got SHORTER-sighted, not closer.
+ *
+ * search.py's score is an oracle for SHAPE, not for correctness, and the
+ * declaration-width family is the one that can change VALUES rather than
+ * just representations. Check a width change against the listing's own
+ * arithmetic before keeping it. (func_8005BBFC's park records the same
+ * hazard on a dropped cast.)
  *
  * WHAT IS LEFT: 29 words of schedule, and only two of allocation. The
  * target emits the block in source order -- `sh` to +0x1C, then the three
@@ -75,7 +85,7 @@ void func_80054B08(s32 a) {
         u8 *b = (u8 *) D_800847D0;
         u16 n;
         u32 base;
-        u8 w;
+        u32 w;
         u32 x;
         u32 f;
 

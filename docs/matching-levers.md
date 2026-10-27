@@ -3973,3 +3973,48 @@ latency chain; to move it earlier, shorten what follows it.
 The other mechanism in the same dump is separate and easy to confuse with
 it: `;; blocking insn N for M cycles` is `actual_hazard`, the memory unit
 being busy in that cycle, which DEFERS an insn rather than promoting one.
+
+## A declaration NARROWING can be a semantic break that scores better
+
+search.py's `t_decl_width` family is one of the most productive it has, and
+it is also the only one that can change the VALUE a local holds rather than
+just its representation. The score cannot tell the difference, and neither
+can a word count.
+
+Measured the hard way on 2026-10-27. A sweep over all forty-four parks
+proposed nine accepted changes; four were narrowings, and ALL FOUR were
+wrong:
+
+* func_80054B08, `u32 w` to `u8 w`, 32 DIFF to 29. `q->unk_08` is a `u32`
+  field whose top byte the listing splits off with `srl $v0, $v1, 24`. At 8
+  bits that shift folds to zero and the build emits `sb $zero, 0x31` where
+  the listing has real code.
+* func_8004DE88, `u32 a` to `s16 a`, 59 DIFF to 47. `a` holds the address of
+  D_80083D88 and is written out as four bytes with `>> 8`, `>> 16`, `>> 24`.
+  The top two shifts die.
+* func_8004AC3C, `s32 r` to `u16 r`, 94 DIFF to 90. `r` takes
+  `(s32) ((u8 *) 0x80010324 + ...)` and several `*(s32 *)` reads -- it holds
+  ADDRESSES.
+* func_8004A330, `s32 r` to `s16 r`, 74 DIFF to 43. `r` takes
+  func_8004B404's return value, and that is `u32 func_8004B404(s32)`, used
+  elsewhere as `(u8 *) func_8004B404(0x104)` -- an allocator returning a
+  pointer.
+
+Every one improved BOTH metrics. The pattern is the same each time:
+narrowing deletes high bits the function actually uses, the deleted code
+cannot differ from the listing because it is no longer there, and the score
+reads the absence as agreement.
+
+**How to check one in a few seconds.** Take the local the sweep narrowed and
+ask what the LISTING does with that value: a shift by more than the new
+width, a mask wider than it, a store through a wider pointer, or an
+assignment from a function whose declared return type is wider. Any of those
+and the narrowing is wrong however well it scores. A narrowing is safe when
+the value genuinely is that narrow -- a `u8` field read into a `u8` local, or
+an index compared against a small bound (func_8004951C's `k` reads a `u8`
+struct field, and that one stands).
+
+search.py now prints a REVIEW REQUIRED block naming every accepted
+narrowing, so the check cannot be skipped by accident. It was skipped once,
+because a batch script applied nine sweep results without anybody reading
+the diffs.

@@ -1,4 +1,4 @@
-/* func_8004A330 (unk_1C540) -- 76 of 77 words, 43 DIFF. NOT compiled.
+/* func_8004A330 (unk_1C540) -- 74 of 77 words, 74 DIFF. NOT compiled.
  *
  * Eight parameters. Allocates a node, allocates a buffer with func_8004B404,
  * and on success fills the +0x20 sub-object and hands six of its arguments to
@@ -77,6 +77,14 @@
  * is not a missing instruction anywhere -- it is the register pressure being
  * two registers lower here than in the listing, and the thing to look for is
  * whatever makes two more values live across the calls.
+ *
+ * A SWEEP RESULT WAS REVERTED HERE, 2026-10-27: search.py's
+ * declaration-width family proposed `s16 r` and it scores better, but it is
+ * SEMANTICALLY WRONG -- r takes func_8004B404's return value, and that function is declared `u32 func_8004B404(s32)` and used elsewhere as `(u8 *) func_8004B404(0x104)` -- it is an allocator returning a pointer, which an s16 truncates before `*(u32 *) (m + 8) = r` stores it.
+ * The score is an oracle for SHAPE, not for correctness, and the width
+ * family is the one that can change VALUES rather than representations.
+ * See docs/matching-levers.md on reviewing a narrowing against the
+ * listing's own arithmetic before keeping it.
  */
 
 #include "common.h"
@@ -88,7 +96,7 @@ void func_80049F2C(u8 *);
 s32 func_8004A330(u32 a, s32 b, s32 c, s32 d, s16 e, s16 f, s32 g, u8 *h) {
     u8 *n;
     u8 *m;
-    s16 r;
+    s32 r;
 
     n = (u8 *) func_8003FC64(0);
     if (n == 0) {

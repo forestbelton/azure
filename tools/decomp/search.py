@@ -52,6 +52,12 @@ WIDTHS = ["s32", "u32", "s16", "u16", "s8", "u8"]
 SPAN = (0, 0)
 
 
+def wrap(text, indent="  "):
+    import textwrap
+    return "\n".join(textwrap.wrap(text, 76, initial_indent=indent,
+                                   subsequent_indent=indent))
+
+
 def body_span(text, func):
     """(start, end) of the function's body, or the whole file if not found."""
     m = re.search(r"(?m)^[A-Za-z_][\w \*]*\b%s\s*\([^;{]*\)\s*\{"
@@ -571,6 +577,35 @@ def main():
     print("load-bearing changes, with the cost of reverting each:")
     for lbl, before, after in accepted:
         print("  %-46s %s -> %s" % (lbl, fmt(before), fmt(after)))
+
+    # A declaration NARROWING can change the VALUE a local holds, not just its
+    # representation, and this score cannot see that: on 2026-10-27 a sweep of
+    # all forty parks proposed nine changes and FOUR of them were narrowings
+    # that scored better while being wrong -- an s16 holding an address that is
+    # then split into four bytes, a u16 holding a pointer, an s16 taking an
+    # allocator's u32 return. Each looked like progress and was a semantic
+    # break. So say so, loudly, rather than leaving it to be noticed.
+    WIDTH_RANK = {"s8": 1, "u8": 1, "s16": 2, "u16": 2, "s32": 4, "u32": 4}
+    narrowings = []
+    for lbl, before, after in accepted:
+        m = re.match(r"decl (\w+): (\w+) -> (\w+)$", lbl)
+        if m and WIDTH_RANK.get(m.group(3), 9) < WIDTH_RANK.get(m.group(2), 0):
+            narrowings.append(m)
+    if narrowings:
+        print()
+        print("REVIEW REQUIRED -- %d of these NARROW a declaration:"
+              % len(narrowings))
+        for m in narrowings:
+            print("  %s: %s -> %s" % (m.group(1), m.group(2), m.group(3)))
+        print(wrap("A narrowing changes the VALUE the local holds, and the "
+                   "score cannot tell that from a shape change. Check each one "
+                   "against the target listing before keeping it: if the "
+                   "listing shifts, masks or stores the value at a width "
+                   "wider than the new type, or the local takes a pointer or "
+                   "another function's wider return value, the change is a "
+                   "semantic break that happens to score well. Four of nine "
+                   "accepted narrowings were exactly that on 2026-10-27.",
+                   "  "))
     return 0
 
 

@@ -1,4 +1,4 @@
-/* func_8004AC3C (unk_1C540) -- 128 of 128 words, 90 DIFF. NOT compiled.
+/* func_8004AC3C (unk_1C540) -- 129 of 128 words, 94 DIFF. NOT compiled.
  *
  * Resolves an item/monster record pointer from the two bytes at p[0]/p[1],
  * with a different table and a different field depending on D_80082E6A's mode
@@ -60,6 +60,14 @@
  * forty parks. advise.py's verdict is SHAPE, so what is left is still source
  * shape rather than allocation, and the notes above were written against the
  * old numbers.
+ *
+ * A SWEEP RESULT WAS REVERTED HERE, 2026-10-27: search.py's
+ * declaration-width family proposed `u16 r` and it scores better, but it is
+ * SEMANTICALLY WRONG -- r is assigned `(s32) ((u8 *) 0x80010324 + ...)` and several `*(s32 *)` reads -- it holds ADDRESSES, which a u16 truncates.
+ * The score is an oracle for SHAPE, not for correctness, and the width
+ * family is the one that can change VALUES rather than representations.
+ * See docs/matching-levers.md on reviewing a narrowing against the
+ * listing's own arithmetic before keeping it.
  */
 
 #include "common.h"
@@ -72,7 +80,7 @@ s32 func_80049330(u8 *);
 s32 func_8004AC3C(u8 *p, s32 *out)
 {
     Unk80073414 *e;
-    u16 r;
+    s32 r;
     s32 n;
     s32 f;
 
