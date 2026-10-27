@@ -4495,7 +4495,90 @@ void func_80054D64(s32 a) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054E00);
+/* Each case materialises D_800847D0's base for ITSELF -- a `u8 *` local inside
+   the case block, not one at function scope. At function scope the base is
+   live across the 0x74 arm's two calls and takes a callee-saved register,
+   where the listing creates it in $a2 after them.
+
+   D_80084858 takes a pointer local too. Written as `*(u32 *)(D_80084858 + 4)`
+   the first store goes out symbolically and gcc then materialises
+   `D_80084858 + 4` as the base for the two halfword stores, so their offsets
+   come out 4 and 6 where the listing has 8 and 0xA off the unbiased base --
+   the same bias func_80054B08 is parked on. */
+extern u32 D_80084864[];
+
+void func_8005A4E8(u8, u8, u8);
+s32 func_80054AF0(s32);
+s32 func_80053D64(void);
+void func_80054C58(void);
+void func_80054CD4(void);
+
+void func_80054E00(s32 n)
+{
+    switch (n & 0xFF)
+    {
+    case 0x74:
+    {
+        u8 *b;
+        u8 *s;
+        s32 v;
+
+        func_8005A4E8(0, 0, 0);
+        func_8003E4FC(9, NULL, 0);
+        b = (u8 *)D_800847D0;
+        D_800847D0[0] &= ~0x400;
+        if (*(u32 *)(b + 0x18) == 0)
+        {
+            s = D_80084858;
+            D_80084904a[0] = 1;
+            *(u32 *)(s + 4) = 0;
+            if (*(u32 *)(b + 0x10) != 0)
+            {
+                v = func_80054AF0(*(s16 *)(b + 0x1C));
+                *(s16 *)(s + 8) = v;
+                *(s16 *)(s + 0xA) = v;
+                func_80054C58();
+                func_80054CD4();
+            }
+        }
+        break;
+    }
+    case 0xE4:
+    {
+        u8 *b = (u8 *)D_800847D0;
+
+        if ((*(u32 *)(b + 4) & 0x200) != 0)
+        {
+            func_8003E4FC(9, NULL, 0);
+        }
+        else if ((D_800847D0[0] & 0x400) != 0)
+        {
+            u32 v = func_80053D64();
+
+            *(u32 *)(b + 0x18) = v;
+            if (*(u32 *)(b + 8) >= v)
+            {
+                *(u32 *)(b + 0x18) = *(u32 *)(b + 8);
+            }
+            D_80084864[0] = 2;
+            *(u32 *)(b + 0x10) = *(u32 *)(b + 0x18);
+            *(u32 *)(b + 0x14) = *(u32 *)(b + 0xC);
+            b[0x31] = b[0x30];
+            b[0x33] = b[0x32];
+            D_800847D0[0] |= 0x4000;
+        }
+        break;
+    }
+    case 0xF4:
+        if ((D_800847D0[0] & 0x4000) != 0)
+        {
+            *(u32 *)((u8 *)D_800847D0 + 0x18) = 0;
+            func_80054C58();
+            func_80054CD4();
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054F9C);
 
