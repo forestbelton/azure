@@ -1004,11 +1004,16 @@ typedef struct Unk80084960
 {
    u32 unk_00;
    s32 unk_04;
-   u8 pad_08[4];
+   u32 unk_08;
    s32 unk_0C;
    u8 pad_10[0xC];
    s32 unk_1C; /* masked to 0x7F on every store */
-   u8 pad_20[0x7C];
+   u8 pad_20[0x1A];
+   u16 unk_3A;
+   u8 pad_3C[0x14];
+   s16 unk_50;
+   u16 unk_52;
+   u8 pad_54[0x48];
 } Unk80084960;
 
 /* Callbacks installed by the carved units, stored as function pointers. */
