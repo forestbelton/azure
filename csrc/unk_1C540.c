@@ -6640,11 +6640,97 @@ void func_80056098(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800561D8);
+extern u16 D_80073738[];
+/* An incomplete-array alias: the listing's reads of the index are gcc's own
+   `(high)`/`(lo_sum)` pair with the high in a SEPARATE register, which the
+   committed 2-byte scalar cannot give -- that form is one insn and maspsx
+   splits it using the destination as the temp. */
+extern s16 D_80086D50a[] __asm__("D_80086D50");
+
+/* Derives an entity's two scale factors and its +0x18 brightness from the
+   active D_80086A40/D_80086C00 pair: the brightness is the slot's +0x1B plus
+   the entity's +0x16/+0x17 plus the caller's +0x04, biased by -0xC0 and
+   clamped to 0..0x7F (or pinned at 0x40 while D_8007382A is set); the scale is
+   a five-term fixed-point product split between the two axes by whether the
+   brightness is past 0x40, then scaled by the +0x08/+0x0A pair and the
+   entity's own +0x1C, and squared once more when the caller's +0x2C is 0x40 or
+   more.
+
+   The two table bases go through LOCALS (`b`, `g`) so that each symbol is
+   materialised before the index that uses it -- func_8004A658's idiom -- which
+   here also fills the `lh`'s load-delay slot with the second base's `addiu`
+   instead of a nop.
+
+   ONE accumulator for the five-term product, not an intermediate `m` and then
+   `s`. With two variables the chain's `mflo`s land in $t1, the final `sra`
+   reads a register the following `slti` does not write, and reorg is then free
+   to pull that `sra` into the branch's delay slot -- which the listing does
+   not do, because there the `sra` reads the very register the `slti` clobbers.
+
+   The two axis products are assigned BACK to `x` and `y` rather than into
+   fresh locals. The listing reuses x's and y's registers for them, which is
+   what gcc does when the old value dies in the same insn that computes the
+   new one; fresh locals land in $v1 twice over and serialise the two chains,
+   where the listing interleaves them (9 wrong words).
+
+   The `>= 0x40` arm is written FIRST so the other one goes out of line, and
+   the `t = sum - 0xC0` assignment comes before the D_8007382A test so it ends
+   up in that branch's delay slot. */
+void func_800561D8(u8 *p, Unk80084960 *q)
+{
+    Unk80086A40 *b;
+    Unk80086A40 *e;
+    Unk80086C00 *g;
+    Unk80086C00 *f;
+    s32 t;
+    s32 s;
+    s32 x;
+    s32 y;
+
+    b = D_80086A40;
+    e = &b[D_80086D50a[0]];
+    t = e->unk_1B + p[0x16] + p[0x17] + q->unk_04 - 0xC0;
+    if (D_8007382A[0] != 0)
+    {
+        t = 0x40;
+    }
+    if (t < 0)
+    {
+        t = 0;
+    }
+    if (t >= 0x80)
+    {
+        t = 0x7F;
+    }
+    *(s16 *) (p + 0x18) = t;
+    s = e->unk_18 * D_80073738[0] * q->unk_14 * q->unk_0C;
+    s = (u32) s >> 14;
+    s = (s * p[0x14] * p[0x15]) >> 14;
+    if (t >= 0x40)
+    {
+        y = s;
+        x = ((0x40 - (t & 0x3F)) * (y << 1)) >> 7;
+    }
+    else
+    {
+        x = s;
+        y = (t * (x << 1)) >> 7;
+    }
+    g = D_80086C00;
+    f = &g[D_80086D50a[0]];
+    x = (x * *(s16 *) &f->unk_08) >> 7;
+    y = (y * *(s16 *) &f->unk_0A) >> 7;
+    *(s16 *) (p + 0x10) = (x * (p[0x1C] & 0x7F)) >> 7;
+    *(s16 *) (p + 0x12) = (y * (p[0x1C] & 0x7F)) >> 7;
+    if (q->unk_2C >= 0x40)
+    {
+        *(s16 *) (p + 0x10) = (*(u16 *) (p + 0x10) * *(u16 *) (p + 0x10)) >> 14;
+        *(s16 *) (p + 0x12) = (*(u16 *) (p + 0x12) * *(u16 *) (p + 0x12)) >> 14;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800563B0);
 
-void func_800561D8(u8 *, Unk80084960 *);
 void func_800563B0(s32, s32, s32);
 
 /* UNPARKED. The entry is indexed off the symbol INSIDE the loop body; as a
@@ -6663,7 +6749,6 @@ void func_80056408(void) {
     }
 }
 
-void func_800561D8(u8 *, Unk80084960 *);
 
 /* The entry pointer is INDEXED off the symbol inside the body, not walked:
    `u8 *e = D_80085458; ... e += 0x78;` makes loop.c add a SECOND giv biased to

@@ -1024,9 +1024,15 @@ typedef struct Unk80084960
    s32 unk_04;
    u32 unk_08;
    s32 unk_0C;
-   u8 pad_10[0xC];
+   u8 pad_10[0x4];
+   /* Hand-split out of pad_10 and pad_20: func_800561D8 multiplies +0x14 into
+      its scale chain and compares +0x2C against 0x40 with `sltiu`. */
+   s32 unk_14;
+   u8 pad_18[0x4];
    s32 unk_1C; /* masked to 0x7F on every store */
-   u8 pad_20[0x1A];
+   u8 pad_20[0xC];
+   u32 unk_2C;
+   u8 pad_30[0xA];
    u16 unk_3A;
    u8 pad_3C[0x14];
    s16 unk_50;
