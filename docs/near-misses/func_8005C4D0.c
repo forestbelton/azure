@@ -1,0 +1,96 @@
+/* func_8005C4D0 (unk_1C540) -- 64 of 64 words, 22 DIFF. NOT compiled.
+ *
+ * Tears down the D_80085458 entry for index n: clears its +0x1A and +0x0A,
+ * runs func_80056D44/func_80056DB4, then spins on func_8005EB78 until the
+ * sound handle reports 2 or 0. Returns 0 on success, -1 if the entry was
+ * already free or its +0x06 index is out of range.
+ *
+ * WHAT IS PAID FOR -- 62 words on the first draft, 64 now
+ *
+ * * BOTH tails are out of line, and the FAIL tail comes first. The loop's two
+ *   exits jump forward past it to the success tail, so the shape needs labels
+ *   and gotos: `if (h == 0) goto fail; if (... < 0x10) goto fail; ... body ...
+ *   goto ok; fail: ... return -1; ok: ... return 0;`. As
+ *   `if (A && B) { body; return 0; } ... return -1;` the success tail is in
+ *   line and the fail tail last -- the reverse of the listing, and 6 words'
+ *   worth of displacement on the loop's `beq`.
+ *
+ * * `h = *(u16 *) (e + 0x1A);` is read into a local BEFORE
+ *   `D_80085F98[0] = 1`. After the store, the load cannot be hoisted across
+ *   it -- a store to a global and a load through a pointer are a real
+ *   dependence -- so the store cannot reach the `beqz`'s delay slot and a nop
+ *   stays. This is advise.py's DELAY-NOPS advice applied literally, and it is
+ *   two words.
+ *
+ * * BOTH tables take a pointer local for the base (`u8 *b = D_80085458;`,
+ *   `u32 *g = D_80073740;`). Written as `&D_80073740[n]` fold puts the symbol
+ *   after the index and the `addiu %lo` lands past the `sll`.
+ *
+ * * `func_80056D44` takes THREE arguments here, `(n, e, e)`. Its own listing
+ *   never reads $a1 or $a2, so two are ignored -- but the two-argument and
+ *   one-argument forms both come out 63 words, because the third argument is
+ *   what makes gcc keep `e` in a register and copy it, which is the
+ *   `addu $a1, $a2, $zero` the listing has before the two `sh`s.
+ *
+ * WHAT IS LEFT: 22 words, all register assignment in the prologue, and they
+ * follow from one choice -- `e` lands in $a1 here and $a2 in the target, with
+ * `n`'s sign-extended copy and the D_80085F98 address swapping to match. The
+ * knock-on is visible as the D_80085F98 store: the target keeps `lui $a1,
+ * %hi(...)` and puts `%lo` in the store, where this materialises the whole
+ * address with `lui`/`addiu` and stores at offset 0. The array spelling is
+ * right -- the `__asm__` scalar alias gives 63 words and 63 DIFF -- so this is
+ * not a declaration question.
+ */
+
+#include "common.h"
+
+void func_80056D44(s16, u8 *, u8 *);
+void func_80056DB4(s16);
+void func_8005E97C(s32, s32);
+s32 func_8005EB78(u32);
+
+s32 func_8005C4D0(s16 n)
+{
+    u8 *b = D_80085458;
+    u32 *g = D_80073740;
+    u8 *e;
+    u32 *t;
+    u32 v;
+    s32 r;
+    u16 h;
+
+    e = b + n * 0x78;
+    h = *(u16 *)(e + 0x1A);
+    D_80085F98[0] = 1;
+    if (h == 0)
+    {
+        goto fail;
+    }
+    if (*(u16 *)(e + 6) < 0x10)
+    {
+        goto fail;
+    }
+    t = &g[n];
+    v = *t;
+    *(u16 *)(e + 0x1A) = 0;
+    *(u16 *)(e + 0xA) = 0;
+    func_80056D44(n, e, e);
+    func_80056DB4(n);
+    func_8005E97C(0, *t);
+    do
+    {
+        func_8005E97C(0, v);
+        r = func_8005EB78(v);
+        if (r == 2)
+        {
+            goto ok;
+        }
+    } while (r != 0);
+    goto ok;
+fail:
+    D_80085F98[0] = 0;
+    return -1;
+ok:
+    D_80085F98[0] = 0;
+    return 0;
+}
