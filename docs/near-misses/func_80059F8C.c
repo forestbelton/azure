@@ -30,24 +30,32 @@
  * and so does the loop's preheader except for the copies below. `end = p + n`
  * in a local is worth one word (147 -> 146) and one differing word.
  *
- * WHAT IS WRONG, and it is one shape. THE TWO FREE-SLOT SCANS ARE WALKED
- * POINTERS, not indexed:
+ * WHAT IS WRONG is NOT the scans' spelling, and that is worth stating because
+ * the listing makes it look as though it is. The two free-slot scans read
  *
  *     L080:  v1 = a0 ; v0 = v1[1] ; beqz v0 -> store ; a2++ ;
  *            if (a2 < 0x10) { a0 = v1 + 8 ; goto L080 }
  *     L16C:  v0 = v1[1] ; beqz v0 -> store ; a2++ ;
  *            if (a2 < 0x10) { v1 += 8 ; goto L16C }
  *
- * -- a cursor advanced by 8 with the counter incremented beside it, and the
- * test at the TOP (the first iteration is entered unguarded, because i < 0x10
- * is already known). The draft below writes both as
- * `D_800869C0[i * 2 + 1]`, which is this unit's recipe for the OUTER loops
- * and the wrong one here: it leaves eight extra copies in the preheader
- * ($t4/$t3/$t6/$t5/$t7/$t0/$t2/$t1 against the listing's four) because each
- * indexed scan gets its own giv. Note the asymmetry -- the first scan copies
- * the cursor into `v1` and stores through the ORIGINAL, the second stores
- * through the cursor itself -- which is the same "one local per
- * materialisation" shape as elsewhere in this unit.
+ * -- a cursor advanced by 8 with the counter beside it and the test at the
+ * TOP, i.e. a walked pointer. MEASURED 2026-10-27 and it is WORSE than the
+ * indexed `D_800869C0[i * 2 + 1]` the draft uses:
+ *
+ *   * both scans as `while (q[1] != 0) { i++; ... q += 2; }` with the outer
+ *     loop walked too: 148 words, 125 DIFF
+ *   * both scans as a `for (;;)` that stores and breaks, outer loop indexed:
+ *     156 words, 127 DIFF
+ *   * the draft below (indexed scans, indexed outer loop): 146, 121
+ *
+ * So the `addiu ..., 0x8` in each scan is strength reduction on an INDEXED
+ * reference, as it is in the outer loops of this unit, and the extra copies
+ * in the preheader ($t4/$t3/$t6/$t5/$t7/$t0/$t2/$t1 against the listing's
+ * four) come from somewhere else -- most likely from how many separate
+ * loop-invariant values the draft creates, since the listing keeps exactly
+ * four ($a2 = 0, $t3 = the %hi, $t1 = end, $t2 = the table base) plus the
+ * reserve's address. That census is the thing to work from next: count the
+ * listing's invariants, then find a spelling with exactly those.
  *
  * The other thing to carry over from the sibling: `D_80073830[...]`'s ADDRESS
  * is hoisted into the preheader but its LOAD stays in the loop (the listing's
