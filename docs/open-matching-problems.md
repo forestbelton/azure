@@ -331,7 +331,8 @@ in 0x80010000..0x80090000:
 | 0x00dc0..0x00efc | 8002D5C0..8002D6FC | 79 | jtbl_8002D5C0 / D630 / D658 / D67C | **placed** (unk_11F0C, unk_14934, unk_154BC) |
 | 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
 | 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | **placed** (unk_1C540, func_800517CC) |
-| 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
+| 0x027dc..0x027f0 | 8002EFDC..8002EFF0 |  5 | jtbl_8002EFDC | func_80052144 (292 w) |
+| 0x027f0..0x02810 | 8002EFF0..8002F010 |  8 | jtbl_8002EFF0 | **placed** (unk_264E0, func_80052CE0) |
 | 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_2879C, func_80054F9C + func_80057A94) |
 | 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | func_80057D20 (463 w, 463/463 and 6 DIFF) |
 | 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_2CDC0, func_800595C0) |
@@ -350,32 +351,52 @@ stop at 0x80032F00 and leave the rest as `bin`, so the two matched functions
 landed without waiting for the third. 2026-10-27, byte-identical on the first
 build, 95 asm stubs to 93.
 
-Then func_800517CC matched too (268/268, the same day), and its jtbl_8002E964
-is the run 0x4AB0 bytes EARLIER, so the carved unit is now cut into THREE:
+Then func_800517CC matched (268/268) and func_80052CE0 after it (194/194,
+first compile), both the same day, and each owns a run EARLIER in the file, so
+the carved unit is now cut into FOUR:
 
 | piece | text | its one `.rodata` run | owner |
 |-------|------|------------------------|-------|
-| `unk_1C540` | 0x1c540..0x2879c | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_1C540` | 0x1c540..0x264e0 | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_264E0` | 0x264e0..0x2879c | jtbl_8002EFF0 @ 0x27f0 | func_80052CE0 |
 | `unk_2879C` | 0x2879c..0x2cdc0 | jtbl_80032E14 + jtbl_80032EA4 @ 0x6614 | func_80054F9C, func_80057A94 |
 | `unk_2CDC0` | 0x2cdc0..0x301a8 | jtbl_8003310C @ 0x690c | func_800595C0 |
 
-Three of the carved unit's four tables are placed; only jtbl_80032F04 is still
-raw, waiting on func_80057D20's last six words. Two more cuts are already
-implied, at func_8004CECC and at func_80052144, when those land.
+Four of the carved unit's six tables are placed. jtbl_80032F04 waits on
+func_80057D20's last six words, jtbl_8002EFDC on func_80052144 and
+jtbl_8002E5F8 on func_8004CECC -- and each of those three wants a cut of its
+own, which is three more pieces and would make NINE in total. The run order
+said six original translation units; it is now clear it was more.
+
+**jtbl_8002EFF0 shows that a run can be entered from the MIDDLE, not just cut
+short at the end.** Its run starts at 0x27dc with func_80052144's
+jtbl_8002EFDC, which is still raw, so the `.rodata` subsegment begins at
+0x27f0 -- the second table -- and the five words ahead of it stay in the
+`bin`. All that matters is that the object's `.rodata` equals the bytes from
+the subsegment's start.
 
 The mechanics of a cut, for the next one:
 
 * The boundary is the function address, `[0x2cdc0, c, unk_2CDC0]` beside
   `[0x1c540, c, unk_1C540]`, and the C file is cut at the same function.
 * **Every file-scope declaration above the cut has to be copied into the new
-  half**, not just the preamble: 332 of them here. The `.size` records and the
-  `__asm__` symbol aliases are the ones that matter, because they are
-  file-scope and change every access to those symbols in whichever unit they
-  appear -- the halves must both carry the whole list or the second half's
-  loads move off `$gp`. Ordinary prototypes are copied because declaration
-  order is all that stood between them and their callers, and a prototype that
-  goes missing becomes an implicit `int` declaration, which is a silent
-  codegen change rather than an error.
+  piece**, not just the preamble: 332 of them on the first cut, 222 on the
+  fourth. The `.size` records and the `__asm__` symbol aliases are the ones
+  that matter, because they are file-scope and change every access to those
+  symbols in whichever unit they appear -- every piece must carry the whole
+  list or its loads move off `$gp`.
+
+* **A function DEFINED above the cut and called below it needs a prototype
+  written into the new piece**, because only declarations are copied and the
+  definition stays behind. This is the one that actually bit, on the fourth
+  cut: func_80052774 is defined in `unk_1C540` and called seven times from
+  func_80052CE0 in `unk_264E0`, and without a prototype the implicit `int`
+  declaration drops the `s16` argument promotion -- the `sll 16` / `sra 16`
+  around `+0x0C + 0xF` simply vanishes, fifteen words, and the jump table's
+  own entries come out wrong because the code moved. gcc warns, but this
+  codebase has dozens of DELIBERATE implicit declarations (see the comment on
+  func_80054788), so the warning is not a usable signal -- `make check` is.
+  Check every call in the new piece against the declarations copied with it.
 * `INCLUDE_ASM` paths in the new half have to be repointed at
   `asm/nonmatchings/<new unit>`, because `splat split` regenerates the asm
   under the new segment's name.

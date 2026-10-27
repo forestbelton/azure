@@ -97,6 +97,21 @@ segments:
     align: 4
     subsegments:
       - [0x2184, bin]
+  # jtbl_8002EFF0, func_80052CE0's 8-entry table. It is the SECOND table of its
+  # run: jtbl_8002EFDC at 0x27dc is func_80052144's and still raw in the bin
+  # above, so this subsegment starts at 0x27f0 rather than at the run's head.
+  - type: code
+    start: 0x27f0
+    vram: 0x8002EFF0
+    align: 4
+    subsegments:
+      - [0x27f0, .rodata, unk_264E0]
+  - type: code
+    start: 0x2810
+    vram: 0x8002F010
+    align: 4
+    subsegments:
+      - [0x2810, bin]
   # The first of unk_1C540's two runs: jtbl_80032E14 (36 entries) and
   # jtbl_80032EA4 (23), func_80054F9C's and func_80057A94's, 0xEC bytes with no
   # pad -- each table gets its own `.align 3` and 144 is already a multiple of
@@ -213,8 +228,9 @@ segments:
       - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
-      # Cut at func_80054F9C and again at func_800595C0, so each of the three
-      # pieces supplies one of the carved unit's three .rodata runs.
+      # Cut at func_80052CE0, func_80054F9C and func_800595C0, so each of the
+      # four pieces supplies one of the carved unit's four .rodata runs.
+      - [0x264e0, c, unk_264E0]
       - [0x2879c, c, unk_2879C]
       - [0x2cdc0, c, unk_2CDC0]
       - [0x301a8, asm, psyq/libsnd/PLAY]

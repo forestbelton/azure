@@ -1,4 +1,4 @@
-/* func_80054B08 (unk_1C540) -- 84 of 84 words, 32 DIFF. NOT compiled.
+/* func_80054B08 (unk_264E0) -- 84 of 84 words, 32 DIFF. NOT compiled.
  *
  * Dispatches on `arg & 0xF000`: 0x1000/0x2000/0x4000 each call func_80054E00
  * with 0x74/0xE4/0xF4 (jump2 cross-joins the three into one call site), and 0
