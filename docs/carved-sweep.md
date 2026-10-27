@@ -282,7 +282,7 @@ func_8003FF2C call) and the array spelling takes it from 8 DIFF to 2; what is
 left there is unrelated. See `docs/near-misses/func_80035E58.c`.
 
 | func_8004A330 | unk_1C540 | **76/77 words, 43 DIFF** | Was 70/77. Four of the seven words came from declaring arguments 5 and 6 `s16` rather than `s32` -- advise.py's CALLEE-SAVED row applied literally, and the same lever that landed func_8004A24C. As `s32` each parameter's pseudo is a plain copy of its incoming MEM, so `update_equiv_regs` substitutes it back and the `lw` sinks to its single use; as `s16` the entry insn is a PROMOTION, the substitution cannot fire, and both live in callee-saved registers across the two calls. The listing's two `lw` at ENTRY are the signature. What is left is three words on `m`: the listing spends a callee-saved register and a copy on `n + 0x20` where this puts it straight into $a0, which it prefers as the callee's first argument; `m` crosses no call, so only a lower-priority conflicting allocno preferring $a0 would move it. The earlier reading that the 0x20 folds into the displacements was wrong -- `m` is a VAR_DECL and nothing folds. |
-| func_80054B08 | unk_264E0 | **84/84 words, 32 DIFF** | Was 82/84. Both missing words are paid for: the three stores to +0x10 and the three to +0x14 are VOLATILE -- the listing writes each field three times with a refined value and never reads it, so flow deletes the first two of each as dead, and no non-volatile spelling keeps them -- and the -0x20/+0x20 go in their own statements so fold cannot move the constant onto `base`. What is left is 32 words of schedule: the target emits the block in source order while this hoists two record loads and sinks the three byte/halfword stores. `docs/near-misses/func_80054B08.c`. |
+| func_80054B08 | unk_264E0 | **84/84 words, 29 DIFF** | Was 82/84. Both missing words are paid for: the three stores to +0x10 and the three to +0x14 are VOLATILE -- the listing writes each field three times with a refined value and never reads it, so flow deletes the first two of each as dead, and no non-volatile spelling keeps them -- and the -0x20/+0x20 go in their own statements so fold cannot move the constant onto `base`. What is left is 32 words of schedule: the target emits the block in source order while this hoists two record loads and sinks the three byte/halfword stores. `docs/near-misses/func_80054B08.c`. |
 | func_800398BC | unk_72A8 | **76/76 words, 50 DIFF** | First function worked from an m2c draft -- 75 of 76 on the first compile, then two documented fixes, and all branch spans match. The missing word is the D_800721C0 index scaling: the target spends `srl`/`andi 0x1F`/`sll 2` where gcc folds the mask and the scale into `srl 0x11`/`andi 0x7C`. Three spellings measured against it in `docs/near-misses/func_800398BC.c`. |
 
 ## Parked: tried and not matching
@@ -492,7 +492,7 @@ wants `--greg` before any source change.
 | func_8004DF8C | 70/72 | LENGTH | IMMEDIATE,OPCODE | 36 |
 | func_800500B4 | 139/139 | SHAPE | DELAY-NOPS,OPCODE | 64 |
 | func_80052A90 | 96/96 | SHAPE | OPCODE | - |
-| func_80054B08 | 84/84 | SHAPE | IMMEDIATE,OPCODE | 10 |
+| func_80054B08 | 84/84 | SHAPE | EXTRA,IMMEDIATE,MISSING,OPCODE | 2 |
 | func_8005500C | 55/55 | SHAPE | BRANCH-ARMS | 14 |
 | func_800550E8 | 119/120 | LENGTH | OPCODE | 27 |
 | func_80055D84 | 58/58 | ALLOC | -- | 5 |

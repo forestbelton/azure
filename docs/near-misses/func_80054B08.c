@@ -1,4 +1,4 @@
-/* func_80054B08 (unk_264E0) -- 84 of 84 words, 32 DIFF. NOT compiled.
+/* func_80054B08 (unk_264E0) -- 84 of 84 words, 29 DIFF. NOT compiled.
  *
  * Dispatches on `arg & 0xF000`: 0x1000/0x2000/0x4000 each call func_80054E00
  * with 0x74/0xE4/0xF4 (jump2 cross-joins the three into one call site), and 0
@@ -24,7 +24,12 @@
  *   `base`, so gcc computes `base - 0x20` once and shares it with the `+ 0x20`
  *   side, where the listing spends `addiu` then `addu` on each.
  *
- * WHAT IS LEFT: 32 words of schedule and allocation, no shape findings. The
+ * SINCE PARKED, 2026-10-27: 32 DIFF to 29, by declaring the block-local `w`
+ * `u8` rather than `u32`. Found by search.py's declaration-width family in
+ * the sweep of all forty parks. advise.py now reads only TWO register-only
+ * differences, so what is left really is the ordering described next.
+ *
+ * WHAT IS LEFT: 29 words of schedule, and only two of allocation. The
  * target emits the block in source order -- `sh` to +0x1C, then the three
  * +0x10 stores with `sb` to +0x31 between the second and third, then
  * +0x18 = 0, then the three +0x14 stores with `sb` to +0x33 -- while this
@@ -54,7 +59,7 @@ void func_80054B08(s32 a) {
         u8 *b = (u8 *) D_800847D0;
         u16 n;
         u32 base;
-        u32 w;
+        u8 w;
         u32 x;
         u32 f;
 
