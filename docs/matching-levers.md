@@ -820,6 +820,26 @@ target's order. func_80037030: 7 DIFF of pure ordering. The same reasoning says
 the pointer the store goes through must be a local too, or its load and the
 argument's load are two separate `lw`s of the same address.
 
+**The mirror case: a store to a GLOBAL pins a later load through a pointer**,
+and that is the commonest single-nop defect in this repo. `GLOBAL |= bit;`
+followed by `p->field |= bit;` cannot have the second load in the first's
+delay slot, because sched cannot prove `(mem (lo_sum ...))` and
+`(mem (plus p c))` distinct. Reading the field into a local BEFORE the global
+store is the whole fix:
+
+```c
+k = *(u16 *) (r + 0x1E);         /* read first */
+D_800814A0 |= 0x8000;
+*(u16 *) (r + 0x1E) = k | 0x8000;
+```
+
+That is one word and the eleven permuted registers behind it: it took
+func_8005313C from 30 DIFF to a MATCH outright, and func_800599B0 from 51 to
+1 (there the global is read and the pointer stores are the ones written
+first). **`advise.py` detects this from the nop count alone** -- its
+DELAY-NOPS row fires whenever the candidate has more `nop`s than the target
+and prints this recipe -- so run it before reasoning about the scheduler.
+
 ### Two address materialisations interleave only if BOTH are split pairs
 
 `lui`, `lui`, `addiu`, `lh` -- two symbols' addresses taken apart and woven
