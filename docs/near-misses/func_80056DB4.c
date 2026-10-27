@@ -1,4 +1,4 @@
-/* func_80056DB4 (unk_1C540) -- 23 of 23 words, 3 DIFF. NOT compiled.
+/* func_80056DB4 (unk_1C540) -- 23 of 23 words, 2 DIFF. NOT compiled.
  *
  * Written out of the `func_80056DB4 + func_800563B0 + func_80056D44` row on
  * 2026-10-27 so all three have sources (see the sibling files).
@@ -16,23 +16,25 @@
  * type for the block is NOT the answer: as COMPONENT_REFs the +0 store folds
  * onto the register base and the function is a word short (21 DIFF).
  *
- * WHAT IS LEFT: THREE WORDS, the order of the +0x24 store against the two
- * halfword stores and the lookup's own load. The listing emits
+ * WHAT IS LEFT: TWO WORDS, and the store ORDER that gets there is not the
+ * listing's. perm.py over all 120 orderings of the five stores (run
+ * 2026-10-27) ranks them
  *
- *     lw $a0, 0x0($a0)   (the lookup) ; addiu $v0, $zero, 0x5 ;
- *     sh $zero, 0x3A ; sh $zero, 0x3C ; sw $v0, 0x24 ; sw $a0, %lo(...)
+ *     1 4 3 2 5   2 DIFF   <- the order below: +4, +0x24, +0x3C, +0x3A, +0
+ *     1 4 2 3 5   3 DIFF
+ *     1 2 3 4 5   4 DIFF   <- the listing's own order
  *
- * i.e. the lookup's load and the constant 5 BEFORE the two halfword stores.
- * With the +0x24 store written after them (the listing's own store order)
- * this source emits the two `sh`s first and the load after: 4 DIFF. Writing
- * the +0x24 store BEFORE them -- the order below -- is 3. The lookup declared
- * before `q`, and read in a statement of its own after the +4 store, are both
- * 4.
+ * so the +0x24 store comes BEFORE the two halfword stores and the two
+ * halfwords are written in the REVERSE of the order they are emitted in. Both
+ * are stores of zero to independent fields, so the order is free in the
+ * source and only the score is evidence either way.
  *
- * None of the 120 permutations of the five stores reaches it (perm.py; the
- * row's run and a second one here agree, best 2-3 DIFF), so the remaining
- * words are sched1 ordering the load against the stores rather than statement
- * order.
+ * The two that remain are the lookup's load and the constant 5 against the
+ * two halfword stores: the listing emits `lw` then `addiu $v0, $zero, 0x5`
+ * then the two `sh`s, and this source still has the load after them. The
+ * lookup declared before `q`, and read in a statement of its own after the
+ * +4 store, are both worse. Since 120 orderings cannot reach it, that pair is
+ * sched1 ordering a load against stores rather than statement order.
  */
 
 #include "common.h"
@@ -45,8 +47,8 @@ void func_80056DB4(s32 i) {
 
     *(u32 *) (q + 4) = 0x60100;
     *(u32 *) (q + 0x24) = 5;
-    *(s16 *) (q + 0x3A) = 0;
     *(s16 *) (q + 0x3C) = 0;
+    *(s16 *) (q + 0x3A) = 0;
     *(u32 *) D_80084918 = h;
     func_8005F134(q);
 }
