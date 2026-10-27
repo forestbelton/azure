@@ -2770,6 +2770,27 @@ So when a listing materialises a symbol's address into a register that is NOT
 the one the `lui` wrote, try the array declaration before hunting for
 pressure elsewhere.
 
+### A 32-bit mask on a narrow value needs ITS OWN STATEMENT, not just a wide local
+
+`u32 v = *(u16 *) w; ... v & ~0x3F` is narrowed by fold to
+`andi $v0, $v0, 0xffc0`, because `v` provably fits in sixteen bits and the
+high half of the mask cannot matter. The wide LOCAL is not enough -- what
+keeps the constant 32-bit is applying it in a statement of its own, in place:
+
+```c
+    v = *w;
+    v &= ~0x3F;            /* and $v1, $v0, $t1, the mask hoisted to a reg */
+```
+
+or, equivalently, writing the cast and the full constant out
+(`(u32) *w & 0xFFFFFFC0`). Either way the constant survives as a 32-bit value,
+loop.c hoists its `addiu $t1, $zero, -0x40` into the prologue, and the loop
+gets a register `and` instead of an `andi`. In func_80048B8C that is a whole
+word -- the narrowed form runs 43 against 44 -- because the hoisted
+materialisation is the word. Worth knowing in both directions: an `andi` with
+a 16-bit immediate where the listing has a register `and` means the source
+applied the mask in the same expression as the narrow read.
+
 ### Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not
 
 Two variables for one byte is a known shape (func_8005947C: the raw `s32` the
