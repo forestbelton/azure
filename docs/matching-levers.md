@@ -1046,6 +1046,39 @@ the `return 0` must have a second predecessor. `goto done` from the other arm
 supplies it and the branches come back. **A listing that BRANCHES to return 1
 or 0 where you get a setcc is telling you that the `return 0` is shared.**
 
+
+### A DEAD reference is still a reference -- the free way to flip an allocno
+
+`allocno_priority` is `floor_log2(refs) * refs * size / live_length`, and
+`refs` counts every mention in the RTL, including one whose value cse folds
+away. So a loop guard written `i < n` where `i` is provably 0 costs nothing --
+it still compiles to the `blez` that `0 < n` gives -- and buys the counter one
+more reference.
+
+func_800387D0 is 10 wrong words with `if (p[0x25] - 1 > 0)` and MATCH with
+`if (i < p[0x25] - 1)`. The counter had 9 weighted references against the
++0x08 temporary's 6, which is `3 * 9 / 42 = 0.643` against
+`2 * 6 / 17 = 0.706`; the tenth reference crosses the `floor_log2` step's own
+denominator and gives `3 * 10 / 42 = 0.714`, and the two swap $t0 and $t1.
+
+References inside a loop are weighted by loop depth, so one OUTSIDE the loop
+is the finer instrument: it moves the count by one rather than two.
+
+### Keep $v0 busy to make a `lui`/`addiu` pair share its register
+
+`lui $a0, %hi(SYM)` / `addiu $a0, $a0, %lo(SYM)` and
+`lui $v0, %hi(SYM)` / `addiu $a0, $v0, %lo(SYM)` are the same two
+instructions; which you get is whether the `(high)` pseudo and the address
+pseudo were allocated the same register. The high dies at the `lo_sum`, so
+they CAN share, and local-alloc hands the high the lowest free register --
+$v0 -- unless something is live across it.
+
+So the lever is to put a value in $v0/$v1 across the materialisation. In
+func_800387D0 that is reading the clamped counter into a local BEFORE the
+table pointer is assigned: `w = (s16) p->counter; t = SYM;` instead of
+`t = SYM;` first. 2 wrong words otherwise, and it is the last thing that
+function needed.
+
 ## 4. Re-dereference rather than cache
 
 If a store invalidates cse's memory entry for another object, the target will

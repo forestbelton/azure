@@ -1900,7 +1900,66 @@ void func_8003875C(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800387D0);
+void func_8003AE28(s16, s16, s16, s16, s32, s32);
+void func_8003AE60(s16, s16, s16, s16, u8, u8, u8);
+
+/* The wipe animation's per-frame step: advances the +0x0A counter by 4 and,
+   once it has reached D_8006A8B4[+0x2A], draws p[0x25] - 1 bars through
+   func_8003AE28 and then one black one through func_8003AE60, and hands
+   control back to func_80038A10.
+
+   THREE spellings of the same two fields, and the listing wants all three:
+   `*(u16 *) (p + 0)` passed to an `s16` parameter gives `lhu` with the
+   narrowing `sll`/`sra` AFTER the sum, `(s16) *(u16 *) (p + 0)` gives the
+   `sll`/`sra` on each term BEFORE it, and `*(s16 *) (p + 2)` gives a plain
+   `lh`. Which one each argument takes is read straight off the listing.
+
+   The guard is `i < p[0x25] - 1`, not `p[0x25] - 1 > 0`. Both fold to the
+   same `blez`, but the dead reference to `i` is the tenth one its allocno
+   needs: `floor_log2(10) * 10 / 42` beats the +0x08 temporary's
+   `floor_log2(6) * 6 / 17` where nine references do not, and that decides
+   whether `i` or the temporary gets $t0. 10 wrong words otherwise, which is
+   matching-levers section 3's free-reference trick in its purest form.
+
+   `w` holds the clamped counter and is computed BEFORE `t` is assigned, which
+   keeps $v0 and $v1 busy across the table address's `lui` so its high half
+   shares $a0 with the address itself -- the listing's
+   `lui $a0, %hi` / `addiu $a0, $a0, %lo`. With `t` first the high lands in
+   $v0 and the pair is two registers. */
+void func_800387D0(u8 *p)
+{
+    u32 *t;
+    s32 i;
+    s32 w;
+
+    *(u16 *) (p + 0xA) = *(u16 *) (p + 0xA) + 4;
+    w = (s16) *(u16 *) (p + 0xA);
+    t = D_8006A8B4;
+    if (w < (s32) t[p[0x2A]])
+    {
+        return;
+    }
+    i = 0;
+    *(u16 *) (p + 0xA) = 0;
+    if (i < p[0x25] - 1)
+    {
+        u32 *u = t;
+
+        do
+        {
+            func_8003AE28(*(u16 *) (p + 0) + *(u16 *) (p + 8),
+                          *(u16 *) (p + 2) + *(u16 *) (p + 0xA) + u[p[0x2A]] * (i + 1) + 2,
+                          *(s16 *) (p + 0xC) / 4, (s16) u[p[0x2A]],
+                          (s16) *(u16 *) (p + 0) + (s16) *(u16 *) (p + 8),
+                          *(s16 *) (p + 2) + *(s16 *) (p + 0xA) + u[p[0x2A]] * i + 2);
+            i = i + 1;
+        } while (i < p[0x25] - 1);
+    }
+    func_8003AE60(*(u16 *) (p + 0) + *(u16 *) (p + 8),
+                  *(u16 *) (p + 2) + *(u16 *) (p + 0xA) + D_8006A8B4[p[0x2A]] * (p[0x25] - 1) + 2,
+                  *(s16 *) (p + 0xC) / 4, (s16) D_8006A8B4[p[0x2A]], 0, 0, 0);
+    *(u32 *) (p + 0x10) = (u32) func_80038A10;
+}
 
 void func_80038A10(u8 *, u8 *, s32);
 
@@ -2078,7 +2137,6 @@ void func_800390D0(u8 *p) {
     *(u32 *) (p + 0x10) = (u32) func_80038A00;
 }
 
-void func_800387D0(void);
 void func_800381A4(u8 *);
 
 void func_80039148(u8 *p) {
