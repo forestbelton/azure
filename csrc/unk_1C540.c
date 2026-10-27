@@ -3533,7 +3533,7 @@ void func_80051BFC(u8 *p, s32 a) {
     *(u32 *) (f + 8) = 0x700000;
 }
 
-void func_80051CC4(void);
+void func_80051CC4(u8 *, s32, u8 *);
 
 void func_80051CA4(u8 *p) {
     if (*(u32 *) (p + 0x10) == (u32) func_80051CC4) {
@@ -3541,10 +3541,96 @@ void func_80051CA4(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051CC4);
+extern u32 D_80071A68[];
+
+/* func_80051F58's family again, and the same two declaration facts carry it:
+   the switch subject as `s32`, and the UNSIGNED read of +4 as a second local
+   that only case 2 uses. The extras here:
+
+   `a` is `u16` and the `!= 7` test and the `% 7` are on `(s16) a`. The listing
+   stores the unextended value to +0xA (`sh $v0`) and sign-extends a COPY for
+   the comparison and the division, so the cast goes on the uses and not on the
+   variable.
+
+   The table index is `s16`, which is what folds `sll 16` / `sra 16` / `sll 2`
+   into the listing's `sll 16` / `sra 14`. Same spelling as func_80051D18's
+   `D_80071A68[*(s16 *) (q + 0xA)]` below. */
+void func_80051CC4(u8 *p, s32 b, u8 *q)
+{
+    s32 s;
+    u16 w;
+    u16 n;
+    u8 v;
+    u16 a;
+    s16 m;
+
+    n = *(u16 *)(p + 6) + 1;
+    s = *(s16 *)(p + 4);
+    w = *(u16 *)(p + 4);
+    *(u16 *)(p + 6) = n;
+    switch (s)
+    {
+    case 0:
+        if (*(s16 *)(p + 0xC) != 0)
+        {
+            *(s16 *)(p + 0xC) = 0;
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
+        }
+        return;
+    case 1:
+        v = q[0xE] + 4;
+        q[0xE] = v;
+        q[0xD] = v;
+        q[0xC] = v;
+        if (*(s16 *)(p + 6) >= 0x20)
+        {
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
+        }
+        return;
+    case 2:
+        if ((s16)n >= 0x3F)
+        {
+            *(u16 *)(p + 4) = w + 1;
+            *(u16 *)(p + 6) = 0;
+        }
+        return;
+    case 3:
+        v = q[0xE] - 4;
+        q[0xE] = v;
+        q[0xD] = v;
+        q[0xC] = v;
+        if (*(s16 *)(p + 6) < 0x20)
+        {
+            return;
+        }
+        a = *(u16 *)(p + 0xA) + 1;
+        *(u16 *)(p + 0xA) = a;
+        if ((s16)a != 7)
+        {
+            m = (s16)a % 7;
+            *(u16 *)(p + 0xA) = m;
+            *(u32 *)(q + 8) = D_80071A68[m];
+            *(s16 *)(p + 4) = 0;
+            *(u16 *)(p + 6) = 0;
+            return;
+        }
+        break;
+    default:
+        q[0xE] = 0;
+        q[0xD] = 0;
+        q[0xC] = 0;
+        break;
+    }
+    *(u32 *)(*(u8 **)p + 0x14) = 0;
+    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
+    *(u16 *)(p - 2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 extern u32 D_80071A68[];
-void func_80051CC4(void);
+void func_80051CC4(u8 *, s32, u8 *);
 void func_80044BB0(void);
 
 void func_80051E94(u8 *p, s32 a) {
