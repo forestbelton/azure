@@ -900,7 +900,82 @@ void func_8004AA44(s32 a, s32 b) {
     func_8004AFC8(b, a, 4, func_8004AA34);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AA78);
+/* Shuffles the nonzero +0x0C pointers of D_80073414[a]'s 0x14-stride table
+   among themselves: collects them into the stack buffer's word half, fills the
+   byte half with 0..k-1, shuffles those bytes with func_8004A9B0, then writes
+   them back through the permutation.
+
+   ONE buffer, reached at +0x40, not two arrays. `u8 b[0x140]` with the words
+   at `b + 0x40` keeps 0x40 as the store's displacement off a base of
+   `$sp + 0x10`; two locals (`u8 idx[0x40]; u32 vals[0x40];`) would put the
+   second at `$sp + 0x50` with displacement 0. Same reason as the giv rule in
+   matching-levers section 9: the constant only survives on the access when
+   the base it is added to is a register.
+
+   The first loop is an EXPLICIT `n != 0` guard around a `do`/`while`, not a
+   `for`. The cursor `d` has to be initialised in the PREHEADER -- the listing
+   has `addiu $v1, $sp, 0x10` after the guard branch, next to loop.c's own giv
+   init for `q` -- and a for-init is evaluated before the guard, where sched2
+   then floats it to the top of the entry block (4 words). `if (n != 0)`
+   wrapped round a `for` gets the placement right but pays for a second test.
+   `i = 0` stays OUTSIDE the guard so that `k = 0` keeps the function's first
+   slot and reorg fills the guard's delay slot with `i = 0` instead.
+
+   The third loop reuses `k`, reset after the call, rather than a fresh
+   counter. That is what decides its registers: one allocno across both loops
+   outranks the hoisted buffer base, keeps $a1, and leaves $a0 for the base;
+   a separate `c` is allocated first and takes $a0, which is 6 wrong words.
+   The two operand orders in the body are deliberate -- `b[k]` for the byte
+   read (base first, `addu $v0, $a0, $a1`) and `b[k] * 4 + (u32) b` for the
+   word (index first, `addu $v0, $v0, $a0`). */
+void func_8004AA78(s32 a)
+{
+    u8 b[0x140];
+    Unk80073414 *t;
+    Unk80073414 *e;
+    u8 *p;
+    s32 n;
+    s32 i;
+    s32 k;
+
+    k = 0;
+    t = D_80073414;
+    e = &t[a];
+    n = e->unk_02;
+    p = e->unk_0C;
+    i = 0;
+    if (n != 0)
+    {
+        u8 *q = p;
+        u8 *d = b;
+
+        do
+        {
+            if (*(u32 *) (q + 0xC) != 0)
+            {
+                *(u32 *) (d + 0x40) = *(u32 *) (q + 0xC);
+                d += 4;
+                k++;
+            }
+            q += 20;
+            i++;
+        } while (i < n);
+    }
+    for (i = 0; i < k; i++)
+    {
+        b[i] = i;
+    }
+    func_8004A9B0(b, k);
+    k = 0;
+    for (i = 0; i < n; i++)
+    {
+        if (*(u32 *) (p + i * 20 + 0xC) != 0)
+        {
+            *(u32 *) (p + i * 20 + 0xC) = *(u32 *) (b[k] * 4 + (u32) b + 0x40);
+            k++;
+        }
+    }
+}
 
 void func_8003E1FC(void);
 void func_8003F320(void);

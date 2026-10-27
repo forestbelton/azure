@@ -1187,7 +1187,11 @@ extern u32 D_8008099C;
 typedef struct Unk80073414
 {
    u8 unk_00;
-   u8 pad_01[0xB];
+   u8 pad_01;
+   /* Hand-split out of pad_01: func_8004AA78 reads it with `lbu` as the count
+      of +0x0C table entries. */
+   u8 unk_02;
+   u8 pad_03[0x9];
    u8 *unk_0C;
    /* Hand-split out of pad_10: func_8004951C reads it with `lbu` and compares
       it against 4, 3 and 1 -- the entry's kind. */

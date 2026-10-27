@@ -2406,6 +2406,53 @@ it into the PREHEADER, after the guard, which is where these targets have it
 for a pointer live across a CALL, and the two do not conflict: a guard branch
 is not a call, and nothing has to survive it.
 
+### A MUTATED cursor cannot be hoisted -- write the guard yourself
+
+The lever above gets a loop-INVARIANT pointer into the preheader by writing it
+inside the body. A cursor the loop advances cannot go there: written in the
+body it would reset every iteration, and written in the for-init it is
+evaluated BEFORE the guard, where sched2 floats it to the top of the entry
+block. The listing shows which one the original had -- a cursor's
+materialisation sitting in the preheader, between the guard branch and the
+loop label, alongside loop.c's own giv inits.
+
+The way to put it there is to write the guard in the source and make the loop
+a `do`/`while`:
+
+```c
+i = 0;
+if (n != 0)
+{
+    u8 *q = p;
+    u8 *d = b;
+
+    do { ... d += 4; q += 20; i++; } while (i < n);
+}
+```
+
+An inner scope inside the `if` is a basic block of its own after the guard,
+and the `do`/`while` contributes no second test, so the count is unchanged.
+Wrapping a plain `for` in the same `if` gets the placement right but pays for
+the loop's own redundant guard -- one word -- which is the tell that the
+original was a `do`/`while` all along.
+
+Keep the OTHER initialisers outside the guard. func_8004AA78 wants `k = 0` in
+the function's first slot and `i = 0` in the guard branch's delay slot: with
+`i = 0` inside the `if` there is nothing before the branch for reorg to take,
+so it pulls `k = 0` down into the delay slot instead and the whole entry block
+shifts.
+
+### Reusing one counter beats a second one, and that decides its register
+
+A loop that counts the same thing a previous loop counted is often the SAME
+variable reset, not a fresh one. It is worth trying for the register, not just
+the tidiness: one allocno across two loops has both loops' references, so it
+outranks whatever else the second loop's preheader holds. func_8004AA78's
+third loop re-walks the buffer it filled in the first; written with its own
+`c`, `c` is allocated before the hoisted buffer base and takes $a0, and the
+base falls to $a1 -- the listing has them the other way round. Resetting `k`
+after the intervening call instead is 6 words, and MATCH.
+
 ### `p = param` BEFORE the first branch moves that parameter's copy LAST
 
 `assign_parms` emits the hard-register copies in declaration order, so the
