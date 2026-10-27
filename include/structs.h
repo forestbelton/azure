@@ -1034,7 +1034,11 @@ typedef struct Unk80084960
    u32 unk_2C;
    u8 pad_30[0xA];
    u16 unk_3A;
-   u8 pad_3C[0x14];
+   u8 pad_3C[0x11];
+   /* Hand-split out of pad_3C: func_8005914C compares it against 0x14 before
+      broadcasting a 0x06 controller. */
+   u8 unk_4D;
+   u8 pad_4E[0x2];
    s16 unk_50;
    u16 unk_52;
    u8 pad_54[0x48];
@@ -1115,24 +1119,34 @@ extern Unk80086C00 D_80086C00[];
 typedef struct Unk80085FA8
 {
    u32 unk_00;
-   u8 pad_04[0xC];
+   /* Hand-split out of pad_04: func_8005914C's 0x63/0x14 controller saves the
+      first six fields into the second six and restores them on 0x63/0x1E, so
+      +0x04 pairs with +0x00, +0x14 with +0x10, +0x30 with +0x2C, +0x44 with
+      +0x40 and +0x4B with +0x4A. +0x08 is its own countdown. */
+   u32 unk_04;
+   u32 unk_08;
+   u8 pad_0C[0x4];
    /* Hand-split out of pad_04: func_80059BC4's countdown, read and written
       with `lw` and decremented toward zero. */
    u32 unk_10;
-   u8 pad_14[0xC];
+   u32 unk_14;
+   u8 pad_18[0x8];
    u32 unk_20;
    u32 unk_24; /* func_80059BC4 reads only its low half, with `lhu` */
    u8 pad_28[4];
    u32 unk_2C;
-   u8 pad_30[0xC];
+   u32 unk_30;
+   u8 pad_34[0x8];
    /* Hand-split out of pad_30: func_80059BC4's accumulator, which wraps at
       0x100. */
    u32 unk_3C;
-   u8 pad_40[0xA];
+   u32 unk_40;
+   u32 unk_44;
+   u8 pad_48[0x2];
    /* Hand-split out of pad_40: func_800595C0's running-status byte and the
       channel it plays on. */
    u8 unk_4A;
-   u8 pad_4B;
+   u8 unk_4B;
    u8 unk_4C;
    u8 pad_4D[3];
 } Unk80085FA8;
