@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 82 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 81 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,11 +243,11 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 80 | 40 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| parked, with measurements | 79 | 39 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
 | never attempted | 2 | func_800345B8 (546 w, GTE and scratchpad) and func_80056E10 (718 w) |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
-function.** As of 2026-10-27 only TWO of the eighty-two have never been attempted;
+function.** As of 2026-10-27 only TWO of the eighty-one have never been attempted;
 everything else has a park file or a sweep row with measurements behind it, so
 the next session's first move is `python3 tools/decomp/progress.py --parked`
 and then the park, not a fresh reading of the listing.
@@ -285,9 +285,9 @@ been swept across the parks. `advise.py` prints a FRAME census whenever the
 two builds disagree about a `$sp` slot, which is the sharpest diagnostic
 there is on a function that spills.
 
-SIX of the executable's eight referenced jump-table runs are placed, and the
-two that are not are waiting on one function each: jtbl_8002E5F8 on
-func_8004CECC and jtbl_80032F04 on func_80057D20. The first three went in
+SEVEN of the executable's eight referenced jump-table runs are placed, and
+the one that is not is waiting on func_8004CECC (jtbl_8002E5F8).
+jtbl_80032F04 went in on 2026-10-27 with func_80057D20. The first three went in
 with the units that own them. The other three all came on 2026-10-27 and
 between them settled how this works:
 

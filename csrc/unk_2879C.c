@@ -1904,7 +1904,381 @@ void func_80057A94(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80057D20);
+extern s32 D_80073734a[] __asm__("D_80073734");
+
+void func_80056654(u8 *, s32);
+s32 func_8005EB78(s32);
+/* No argument: the listing sets up nothing for it, where this unit's own
+   `void func_800564A8(s32 unused)` would make the caller load $a0. */
+void func_800564A8a(void) __asm__("func_800564A8");
+
+/* The controller-change applier: 126 controller numbers through jtbl_80032F04,
+   of which 25 have bodies. Case 1 (modulation) is 135 of the 463 words and
+   case 64 (sustain pedal) another 95. The case values and their SOURCE ORDER
+   come out of the table itself (index = cc - 1), and case 6 is out of order,
+   between 91 and 98 -- the body addresses say so and nothing else does.
+
+   WHAT THE SHAPE IS MADE OF, each measured (the full record, with every
+   negative, was docs/near-misses/func_80057D20.c before this landed):
+
+   * `ch` and `d` are `u8`. `ch` ends up in memory at 0x10($sp) -- `sb` once
+     at entry, `lbu` at each of its nine uses -- which is the register
+     pressure of a function holding s0-s7 and fp; `d` being `u8` is what puts
+     an `andi 0xFF` at every use rather than one at entry.
+   * THE SEVEN LOOP COUNTERS ARE SEVEN VARIABLES. Sharing one `i` makes a
+     single allocno with 46 references over 155 live insns (priority 1.484),
+     which outranks the entry pointer and `d` and takes their registers;
+     separate counters are 7 refs over 17 insns each (0.824) and put `e` back
+     in $s1 and `d` in $s4. That was worth 48 of the 54 words this was stuck
+     on. The listing's own register REUSE ($s2 for case 1's loops and case
+     64's inner loop) does NOT mean one variable -- disjoint live ranges.
+   * The five D_80085458 loops take a BLOCK-SCOPED `u8 *q = D_80085458 + i *
+     0x78;` inside the body: a function-scope pointer costs a `move` off the
+     giv every iteration, and a walked pointer costs loop.c a second biased
+     giv.
+   * Case 1's four loops are `n = D_80073734a[0]; i = 0; e->unk_3A = 0;
+     if (n > 0) { do ... while (i < D_80073734a[0]); }` -- the bound read
+     FIRST so it is not pinned behind the +0x3A store, `i = 0` second so it
+     fills the load-delay slot, and the store THIRD so reorg has it for the
+     `blez`'s delay slot. A plain `for` with the store ahead of it is two
+     words of nops.
+   * D_80073734 takes the INCOMPLETE-ARRAY alias here, the opposite of
+     func_80057948's choice: the scalar form is one insn of length 2 and
+     `eligible_for_delay` refuses it, so every loop keeps a nop instead
+     (three words, 272 DIFF).
+   * Case 1's arms READ BACK `e->unk_40` and `e->unk_44` just stored; cse
+     forwards each to the register holding the stored value, and the read-back
+     is also what makes the else arm's divide `divu`, since `e->unk_44` is
+     `u32` where `d` would promote to signed int.
+   * `d << 1`, never `d * 2`, in all three places: with a `u8 d` the multiply
+     materialises the zero-extension as its own `andi`, where the shift lets
+     combine fold it into the neighbouring mask.
+   * `f1 = 1` sits BEFORE the call in cases 7, 10 and 11. The
+     `addiu $a3, $zero, 1` there is NOT a fourth argument to func_80055E7C --
+     case 12 has no call at all and still has it; it is reload's register for
+     that store, and $a3 is free precisely because the calls stop at $a2.
+
+   THE LAST SIX WORDS WERE A GIV ORDERING, and `r2` below is the fix. In case
+   64's inner loop the listing initialises the D_80085458 giv before the
+   D_80073740 one and increments them in that order. loop.c's `record_giv`
+   PREPENDS to the biv's giv list and the reduction loop walks that list, so
+   EMISSION IS THE REVERSE OF CREATION: `r` is the body's first insn, so its
+   giv is created first and emitted second, while D_80073740's group is
+   represented by its LAST-created member -- the copy move_movables hoists out
+   of the do/while, which the loop pass makes last because loops are processed
+   innermost first. A SECOND row pointer at OFFSET ZERO, defined after the
+   do/while, is created after that hoisted copy, so `combine_givs` makes it
+   the group's representative: the two orders swap and the base stays
+   unbiased, because the representative's add_val IS the plain base. A walked
+   `r` does make it last too, but then the representative is the `+0x1A`
+   store and the pointer comes out biased to +0x1A (13 DIFF); writing the
+   conditions inline off D_80085458 so `r` is not computed first is 477 words,
+   since cse does not share the index chain. */
+void func_80057D20(u8 ch, u8 cc, u8 d)
+{
+    Unk80084960 *e = &D_80084960[ch];
+    s32 i1;
+    s32 i2;
+    s32 i3;
+    s32 i4;
+    s32 f1 = 0;
+    s32 f2 = 0;
+    s32 k;
+    s32 kk;
+    s32 n;
+
+    switch (cc)
+    {
+    case 1:
+        if (e->unk_48 < 0x40)
+        {
+            e->unk_08 = d;
+            e->unk_40 = d << 1;
+            if (e->unk_44 != 0 && e->unk_40 != 0)
+            {
+                e->unk_38 = e->unk_40 * 4 / e->unk_44;
+            }
+            else
+            {
+                n = D_80073734a[0];
+                i1 = 0;
+                e->unk_3A = 0;
+                if (n > 0)
+                {
+                    do
+                    {
+                        u8 *q = D_80085458 + i1 * 0x78;
+
+                        if (*(u16 *) (q + 6) == ch)
+                        {
+                            func_80056654(q, 1);
+                        }
+                        i1++;
+                    } while (i1 < D_80073734a[0]);
+                }
+            }
+            if (d == 0 || e->unk_38 == 0)
+            {
+                n = D_80073734a[0];
+                i2 = 0;
+                e->unk_3A = 0;
+                if (n > 0)
+                {
+                    do
+                    {
+                        u8 *q = D_80085458 + i2 * 0x78;
+
+                        if (*(u16 *) (q + 6) == ch)
+                        {
+                            func_80056654(q, 1);
+                        }
+                        i2++;
+                    } while (i2 < D_80073734a[0]);
+                }
+            }
+        }
+        else
+        {
+            e->unk_08 = d;
+            e->unk_44 = d;
+            if (e->unk_44 != 0 && e->unk_40 != 0)
+            {
+                e->unk_38 = e->unk_40 / e->unk_44 * 2;
+            }
+            else
+            {
+                n = D_80073734a[0];
+                i3 = 0;
+                e->unk_3A = 0;
+                if (n > 0)
+                {
+                    do
+                    {
+                        u8 *q = D_80085458 + i3 * 0x78;
+
+                        if (*(u16 *) (q + 6) == ch)
+                        {
+                            func_80056654(q, 1);
+                        }
+                        i3++;
+                    } while (i3 < D_80073734a[0]);
+                }
+            }
+            if (d == 0 || e->unk_38 == 0)
+            {
+                n = D_80073734a[0];
+                i4 = 0;
+                e->unk_3A = 0;
+                if (n > 0)
+                {
+                    do
+                    {
+                        u8 *q = D_80085458 + i4 * 0x78;
+
+                        if (*(u16 *) (q + 6) == ch)
+                        {
+                            func_80056654(q, 1);
+                        }
+                        i4++;
+                    } while (i4 < D_80073734a[0]);
+                }
+            }
+        }
+        func_80055E7C(4, ch, e->unk_08);
+        break;
+    case 2:
+        if (e->unk_48 < 0x40)
+        {
+            e->unk_44 = d;
+        }
+        else
+        {
+            e->unk_40 = d << 1;
+        }
+        break;
+    case 3:
+        e->unk_48 = d;
+        break;
+    case 4:
+        e->unk_28 = d;
+        break;
+    case 5:
+        e->unk_50 = d;
+        break;
+    case 7:
+        e->unk_0C = d;
+        f1 = 1;
+        func_80055E7C(3, ch, d);
+        break;
+    case 10:
+        if (d == 0)
+        {
+            e->unk_04 = 1;
+        }
+        else
+        {
+            e->unk_04 = d;
+        }
+        f1 = 1;
+        func_80055E7C(2, ch, e->unk_04);
+        break;
+    case 11:
+        e->unk_14 = d;
+        f1 = 1;
+        func_80055E7C(5, ch, d);
+        break;
+    case 12:
+        e->unk_2C = d;
+        f1 = 1;
+        break;
+    case 20:
+        e->unk_6C = d << 1;
+        break;
+    case 21:
+        e->unk_6E = d;
+        break;
+    case 22:
+        e->unk_68 = d << 4;
+        e->unk_64 = d << 4;
+        e->unk_6D = 0;
+        e->unk_5D = 1;
+        break;
+    case 23:
+        e->unk_6D = d;
+        if (d != 0)
+        {
+            if (e->unk_68 != 0)
+            {
+                e->unk_70 = e->unk_68 / d;
+                if (e->unk_70 == 0)
+                {
+                    e->unk_70 = 1;
+                }
+            }
+        }
+        break;
+    case 25:
+        e->unk_88 = d << 1;
+        break;
+    case 26:
+        e->unk_8A = d;
+        break;
+    case 27:
+        e->unk_84 = d << 7;
+        e->unk_80 = d << 7;
+        e->unk_89 = 0;
+        e->unk_78 = 1;
+        break;
+    case 28:
+        e->unk_89 = d;
+        if (d != 0)
+        {
+            if (e->unk_84 != 0)
+            {
+                e->unk_8C = e->unk_84 / d;
+                if (e->unk_8C == 0)
+                {
+                    e->unk_8C = 1;
+                }
+            }
+        }
+        break;
+    case 30:
+        D_80073738[0] = d;
+        func_800564A8a();
+        break;
+    case 64:
+        for (kk = 0; kk < D_80073734a[0]; kk++)
+        {
+            u8 *q = D_80085458 + kk * 0x78;
+
+            if (ch == *(u16 *) (q + 6))
+            {
+                if (d < 0x40)
+                {
+                    for (i1 = 0; i1 < D_80073734a[0]; i1++)
+                    {
+                        u8 *r = D_80085458 + i1 * 0x78;
+
+                        if (*(u16 *) (r + 6) == ch && r[0x1D] != 0 && (r[0x1C] & 0x80) != 0)
+                        {
+                            f2 |= D_80073740[i1];
+                            do
+                            {
+                                func_8005E97C(0, D_80073740[i1]);
+                                k = func_8005EB78(D_80073740[i1]);
+                            } while (k != 2 && k != 0);
+                            {
+                                u8 *r2 = D_80085458 + i1 * 0x78;
+
+                                r2[0x1D] = 0;
+                                *(u16 *) (r2 + 0x1A) = 0;
+                            }
+                        }
+                    }
+                    q[0x1D] = 0;
+                }
+                else
+                {
+                    q[0x1D] = 1;
+                }
+            }
+        }
+        if (d < 0x40)
+        {
+            D_80084960[ch].unk_18 = 0;
+        }
+        else
+        {
+            D_80084960[ch].unk_18 = 1;
+        }
+        break;
+    case 91:
+        e->unk_30 = d & 0x7F;
+        break;
+    case 6:
+        e->unk_4E = d;
+        if (e->unk_4D != 0x14 && e->unk_4D != 0x1E)
+        {
+            func_80057A94((u8 *) e);
+        }
+        break;
+    case 98:
+        e->unk_4C = d;
+        break;
+    case 99:
+        e->unk_4D = d;
+        break;
+    case 120:
+    case 121:
+    case 123:
+        func_80056A08();
+        break;
+    case 126:
+        e->unk_98 = d;
+        break;
+    }
+    if (f2 != 0)
+    {
+        func_8005E97C(0, f2);
+    }
+    if (f1 != 0)
+    {
+        for (kk = 0; kk < D_80073734a[0]; kk++)
+        {
+            u8 *q = D_80085458 + kk * 0x78;
+
+            if (ch == *(u16 *) (q + 6))
+            {
+                if (*(u16 *) (q + 0x1A) != 0)
+                {
+                    func_800561D8(q, &D_80084960[ch]);
+                    func_800563B0(kk, *(u16 *) (q + 0x10), *(u16 *) (q + 0x12));
+                }
+            }
+        }
+    }
+}
 
 void func_8005845C(u8 i, u8 v) {
     D_80084960[i].unk_00 = v;

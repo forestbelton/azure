@@ -328,6 +328,57 @@ hoisted constant is placed in the function prologue, not in a loop preheader,
 so seeing it there is not evidence that the original declared a function-scope
 local.
 
+### Giv EMISSION is the REVERSE of creation; a second pointer at offset ZERO reorders it
+
+Two strength-reduced pointers in one loop come out in an order the source
+cannot state directly, because `record_giv` PREPENDS to the biv's giv list and
+the reduction loop (loop.c:3856) walks that list: the initialisations before
+`loop_start` and the increments before the biv's own increment are both emitted
+in LIST order, so **emission is the reverse of creation, and creation is insn
+order**. The pointer whose row address is the body's first statement is
+therefore initialised and incremented LAST.
+
+Worse, you cannot fix it by moving a reference earlier. `combine_givs`
+(loop.c:5494) merges every giv in a group -- same mult, same add -- into one,
+and the representative is the first eligible `g1` in the list, i.e. the group's
+LAST-created member. So an earlier reference is simply combined INTO the later
+one and loses its place. In func_80057D20's inner loop the other array's group
+is represented by the copy `move_movables` hoists out of an inner do/while,
+which the loop pass creates last of all, because loops are processed innermost
+first -- nothing written in the body can be created after it.
+
+**The lever is a SECOND pointer to the same row, at offset ZERO, declared
+after that inner loop:**
+
+```c
+u8 *r = D_80085458 + i * 0x78;            /* conditions read through r */
+if (...) {
+    f2 |= D_80073740[i];
+    do { ... D_80073740[i] ... } while (...);
+    {
+        u8 *r2 = D_80085458 + i * 0x78;   /* same address, created LAST */
+
+        r2[0x1D] = 0;
+        *(u16 *) (r2 + 0x1A) = 0;
+    }
+}
+```
+
+`r2`'s giv is created after the hoisted copy, so it heads the list and
+`combine_givs` makes it the group's representative -- which swaps the two
+emission orders. And because its add_val is the PLAIN BASE, the register stays
+unbiased: that is the whole reason for offset zero. It costs nothing, since
+`r` and `r2` are one group and one register. Six words and the last of
+func_80057D20's 463.
+
+The alternatives all fail on the bias. A source-level walked pointer (`r =
+D_80085458; r += 0x78;`) does make the group's last member late, but that
+member is the `+0x1A` store, so the pointer comes out biased to +0x1A with
+negative displacements (13 DIFF). Respelling the trailing stores as fresh
+`D_80085458[i * 0x78 + 0x1D]` index expressions is the same trap at +0x1D, and
+writing the leading conditions inline so `r` is not computed first costs 14
+words, because cse does not share the index chain.
+
 ## 3. Allocation priority is the commonest thing left
 
 When every opcode, immediate and delay slot matches and only registers differ,

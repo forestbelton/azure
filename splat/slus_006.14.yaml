@@ -120,13 +120,14 @@ segments:
     align: 4
     subsegments:
       - [0x2810, bin]
-  # The first of unk_1C540's two runs: jtbl_80032E14 (36 entries) and
-  # jtbl_80032EA4 (23), func_80054F9C's and func_80057A94's, 0xEC bytes with no
-  # pad -- each table gets its own `.align 3` and 144 is already a multiple of
-  # 8, so the alignment falls out of the compiler. The zero word at 0x80032F00
-  # that follows is NOT this object's: it belongs to whichever original unit
-  # owns jtbl_80032F04, which is still raw in the `bin` below. That is why this
-  # subsegment stops at 0x6700 and not at 0x6704.
+  # unk_2879C's run, COMPLETE as of 2026-10-27: jtbl_80032E14 (36 entries),
+  # jtbl_80032EA4 (23) and jtbl_80032F04 (126) -- func_80054F9C's,
+  # func_80057A94's and func_80057D20's. 0x2E8 bytes: the first two are 0xEC
+  # with no pad between them, then one zero word of alignment before the
+  # third, which the compiler emits itself. It was cut short at 0x6700 while
+  # func_80057D20 was still asm, the rest left as `bin`; when that function
+  # matched, dropping the `bin` segment was the whole placement step, and the
+  # build stayed byte-identical.
   - type: code
     start: 0x6614
     vram: 0x80032E14
@@ -134,14 +135,16 @@ segments:
     subsegments:
       - [0x6614, .rodata, unk_2879C]
   - type: code
-    start: 0x6700
-    vram: 0x80032F00
+    start: 0x68fc
+    vram: 0x800330FC
     align: 4
     subsegments:
-      # The zero pad plus jtbl_80032F04, func_80057D20's 126-entry table, still
-      # raw: func_80057D20 is at 463 of 463 words and SIX DIFF, and lands here
-      # the day those six go. See docs/near-misses/func_80057D20.c.
-      - [0x6700, bin]
+      # Sixteen bytes that are NOT this object's: "MThd"/"MTrk" headers, i.e.
+      # the head of a MIDI resource that belongs to whatever unit comes next.
+      # Deleting this segment along with jtbl_80032F04's `bin` leaves a hole
+      # the linker fills with the following rodata, so the two have to be
+      # split rather than dropped together.
+      - [0x68fc, bin]
   # jtbl_8003310C, func_800595C0's 58-entry table: 0xE8 bytes, and the only
   # subsegment of its segment for the same reason as the runs above. unk_1C540
   # owns FOUR tables in TWO separated runs, and a unit's `.rodata` is one

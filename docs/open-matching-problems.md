@@ -319,7 +319,7 @@ Note that `verify.py` cannot see the placement at all -- it masks the relocated
 halfwords that reference the table -- so a MATCH there is necessary and not
 sufficient, and only `make check` is the authority on whether a table landed.
 
-### The whole region, and the seven tables still unplaced
+### The whole region, and the ONE run still unplaced
 
 Measured 2026-10-26 against `data/slus_006.14`. The `.rodata` region of the
 executable is file 0x800..0x6b60 (vram 0x8002D000..0x80033360), and it holds
@@ -334,7 +334,7 @@ in 0x80010000..0x80090000:
 | 0x027dc..0x027f0 | 8002EFDC..8002EFF0 |  5 | jtbl_8002EFDC | **placed** (unk_25944, func_80052144) |
 | 0x027f0..0x02810 | 8002EFF0..8002F010 |  8 | jtbl_8002EFF0 | **placed** (unk_264E0, func_80052CE0) |
 | 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_2879C, func_80054F9C + func_80057A94) |
-| 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | func_80057D20 (463 w, 463/463 and 6 DIFF) |
+| 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | **placed** (unk_2879C, func_80057D20) |
 | 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_2CDC0, func_800595C0) |
 | 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
 
@@ -363,10 +363,20 @@ the carved unit is now cut into FOUR:
 | `unk_2879C` | 0x2879c..0x2cdc0 | jtbl_80032E14 + jtbl_80032EA4 @ 0x6614 | func_80054F9C, func_80057A94 |
 | `unk_2CDC0` | 0x2cdc0..0x301a8 | jtbl_8003310C @ 0x690c | func_800595C0 |
 
-Five of the carved unit's six tables are placed; only jtbl_80032F04 is still
-raw, on func_80057D20's last six words, and jtbl_8002E5F8 on func_8004CECC --
-each wanting a cut of its own, which would make SEVEN pieces. The run order
-said six original translation units; it is now clear it was more.
+**jtbl_80032F04 WENT IN on 2026-10-27**, when func_80057D20 matched (the last
+six words were a giv ordering -- see matching-levers section 2). Placing it was
+one yaml edit and no cut: unk_2879C already owned the first two tables of that
+run, so the `.rodata` subsegment simply stops being cut short at 0x6700 and
+runs to 0x68fc. Note the sixteen bytes at 0x68fc, though -- "MThd"/"MTrk", the
+head of a MIDI resource belonging to whatever unit comes next. They need a
+`bin` segment of their OWN: dropping them along with the table's `bin` leaves a
+hole that the linker fills with the following `.rodata`, and the build then
+differs from 0x68fc on.
+
+So the carved unit's six tables are placed but for jtbl_8002E5F8, on
+func_8004CECC (102/102, 48 DIFF), which still wants a cut of its own and would
+make SIX pieces. The run order said six original translation units; it is now
+clear it was more.
 
 **unk_25944 and unk_264E0 between them supply ONE contiguous run**, 0x27dc and
 0x27f0, through two `.rodata` subsegments in two adjacent segments -- which is
