@@ -5312,7 +5312,78 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056948);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056A08);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80056C30);
+/* The D_80085458 reset. Four loop facts, three of them the recipe this unit's
+   other sweeps use:
+
+   * the counter is `s32`, not `s16`. As `s16` gcc sign-extends it at every use
+     and keeps an extra copy for the increment: six words and two more
+     callee-saved registers.
+   * the bound takes the `__asm__` SCALAR alias, so its load is one macro insn
+     that maspsx splits inside the loop. Through the incomplete array loop.c
+     hoists the `lui` half into a callee-saved register -- the opposite of what
+     func_8005B070 needs for the same symbol, which is why the rule is to read
+     the `lui`'s destination per site.
+   * the entry pointer is INDEXED inside the body. Walked from a pointer
+     declared outside, loop.c keeps the walked pointer AND adds a second giv
+     biased to +0x74.
+
+   * `i++` goes AFTER func_8005E97C, not between the two calls. The listing
+     has `addu $a0, $zero, $zero` -- func_8005E97C's first argument --
+     immediately after func_80056DB4's delay slot, with the three giv updates
+     on the far side of it. An argument setup cannot be scheduled earlier than
+     its place in the chain, but the giv updates CAN be hoisted across it and
+     across the call itself, because they write callee-saved registers the
+     call does not clobber. So put the increment after the call and let sched
+     pull the updates forward; with it between the calls the four insns come
+     out in the other order (4 DIFF at the exact word count). */
+extern u8 D_80085014[];
+extern s32 D_80073734s __asm__("D_80073734");
+
+void func_80056A08(void);
+void func_80056DB4(s32);
+void func_8005E97C(s32, s32);
+
+void func_80056C30(void)
+{
+    u8 *b;
+    s32 i;
+    u32 m;
+    u32 v;
+
+    func_80056A08();
+    i = 0;
+    m = 0;
+    if (D_80073734s > 0)
+    {
+        do
+        {
+            u8 *e = D_80085458 + i * 0x78;
+
+            *(s16 *)e = i;
+            *(s16 *)(e + 0x1A) = 0;
+            *(s16 *)(e + 0x18) = 0x40;
+            *(u32 *)(e + 0x70) = 0x40;
+            *(u32 *)(e + 0x74) = 0x40;
+            v = D_80073740[i];
+            func_80056DB4(i);
+            func_8005E97C(0, v);
+            i++;
+            m |= v;
+        } while (i < D_80073734s);
+    }
+    b = D_80085014;
+    *(u32 *)(b + 0xC) = 0x7F;
+    *(u32 *)(b + 4) = 0x40;
+    *(u32 *)(b + 0x18) = 0;
+    *(u32 *)(b + 0x1C) = 0x40;
+    *(u32 *)(b + 0x14) = 0x7F;
+    *(u32 *)(b + 0x20) = 0x7F;
+    *(u32 *)(b + 0x24) = 0x7F;
+    *(u32 *)(b + 8) = 0;
+    *(u32 *)(b + 0x94) = 0;
+    *(s16 *)(b + 0x50) = 0;
+    func_8005E97C(0, m);
+}
 
 void func_80056D3C(void) {
 }

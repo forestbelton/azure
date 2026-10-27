@@ -2443,6 +2443,32 @@ registers.
 So when two long-lived pointers hold each other's callee-saved registers, look
 at whether one of them is really several variables.
 
+### When a call's argument setup is EARLIER than the loop's giv updates, move `i++` after the call
+
+An argument setup cannot be scheduled earlier than its place in the insn
+chain, because `expand_call` emits it where the call is. Induction-variable
+updates CAN be hoisted across it, and across the call itself, because they
+write callee-saved registers the call does not clobber. So when a listing has
+a dependency-free argument setup -- a bare `addu $a0, $zero, $zero` -- sitting
+AHEAD of the loop's `addiu` giv updates, the increment is after the call in the
+source, not between the calls:
+
+```c
+func_80056DB4(i);
+func_8005E97C(0, v);   /* its $a0 = 0 lands right after the first call */
+i++;                   /* sched pulls the giv updates forward to just here */
+m |= v;
+```
+
+With `i++` between the two calls the four insns come out in the other order,
+and no spelling of the argument fixes it: a `s32 w = 0;` assigned before the
+increment is constant-propagated straight back to the call. func_80056C30, 4
+DIFF at the exact word count to MATCH.
+
+The general form: a dependency-free insn that the listing places EARLIER than
+this source does is pinned by its chain position, so move the statements around
+it rather than trying to move it.
+
 ### A post-increment whose value outlives its statement costs a copy
 
 `expand_increment` QUEUES the increment when the incremented thing is a true
