@@ -1412,6 +1412,23 @@ form:
   pointer instead: `s16 *b = SYM; b[36] = b[86];` materialises the symbol once
   and makes every access a displacement, where `SYM[36]` biases the base to the
   first index and spends a second `addiu` undoing it (func_8003AAF8, 1 word).
+* **`&scalar` and an incomplete array schedule DIFFERENTLY as a call
+  argument, even though both emit the same `lui`/`addiu`.** This is what the
+  "stack-parameter prologue interleave" cluster was, four functions deep.
+  `func_8003FF2C(0x11, (UnkNode *) p, 0x49, &D_80082BC0)` on
+  `extern UnkNode *D_80082BC0;` puts the pair AFTER both of the entry block's
+  parameter save/load pairs; `extern UnkNode *D_80082BC0[];` passed by name
+  puts it BETWEEN them, which is what every one of those listings has. Nothing
+  else changed and func_80036B10, func_80036D4C and func_8003719C all went
+  from parked to MATCH; func_80035E58 went 8 DIFF to 2. It also pulls the
+  preceding `addiu $a2, $zero, 0x49` one slot earlier, so a cluster of three
+  to six wrong words in an entry block collapses at once.
+
+  The mechanism is `schedule_select`'s `potential_hazard`, not priority: these
+  functions are a single basic block, so every entry insn is priority 1 and
+  the DEFINE_FUNCTION_UNIT model decides. **When an address is a call argument
+  and the entry block interleaves it with the prologue differently, try the
+  incomplete-array spelling before reading another scheduler dump.**
 * **cc1psx runs at -G8 over this whole project** (`CFLAGS` in the Makefile;
   only gas's -G varies per unit), so a 4-byte scalar is always small data and
   always gets the symbolic form. That form is ONE insn until maspsx splits it,

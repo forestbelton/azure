@@ -1103,7 +1103,53 @@ void func_80036A70(s32 n) {
     AddPrim(D_80083160.unk_00 + o, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036B10);
+extern UnkNode *D_80082BC0[];
+extern s16 D_8006A934[];
+extern u8 D_80073DC4[];
+
+UnkNode *func_8003FF2C(s32, UnkNode *, s16, UnkNode **);
+void func_80033C1C(u8 *, u32);
+void func_800350B0(u8 *, u8 *);
+void func_8003DB94(u8 *, u32, s32);
+void func_80033D54(void);
+void func_80036C44(s32, s32, s32);
+
+/* THE STACK-PARAMETER PROLOGUE INTERLEAVE, and it was the SPELLING of
+   D_80082BC0. func_8003FF2C's fourth argument is the list head's address; as
+   `&D_80082BC0` off a scalar `extern UnkNode *` the `lui`/`addiu` pair lands
+   AFTER both parameter save/load pairs, and as an incomplete array passed by
+   name it lands between them, which is what the listing has. The whole
+   function is one basic block, so every entry insn has priority 1 and
+   schedule_select is choosing on potential_hazard: the array form gives the
+   pair a different DEFINE_FUNCTION_UNIT shape and the memory operations stop
+   outranking the argument setup. Three and six words in the two siblings, six
+   here, and it also moved `addiu $a2, 0x49` ahead of the first save. */
+void func_80036B10(u8 *a, u8 *b, u8 *c, s32 d, u32 e)
+{
+    u8 *n;
+    u8 *m;
+    u8 *q;
+
+    n = (u8 *)func_8003FF2C(0x11, (UnkNode *)a, 0x49, D_80082BC0);
+    *(u32 *)(n + 0x10) = (u32)func_80036C44;
+    func_8004491C((UnkNode *)n, (u32)func_80033D54);
+    m = n + 0x20;
+    q = *(u8 **)(n + 0xC);
+    *(u32 *)(m + 0x44) = (u32)c;
+    m[0x48] = 1;
+    *(s16 *)(m + 0x4A) = d;
+    func_80033C1C(b, *(u32 *)c);
+    *(u32 *)(n + 0x20) = (u32)b;
+    *(u32 *)(b + 0x60) = 6;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x10) = 0x10C;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x14) =
+        D_8006A934[*(u8 *)(*(u8 **)(*(u8 **)(c + 0x74) + 0x80) + 2)];
+    *(u32 *)(m + 0x4) = 0;
+    *(u32 *)(m + 0x8) = 0;
+    func_800350B0((u8 *)e, m);
+    *(u32 *)(q + 0xC) = 0x808080;
+    func_8003DB94(q, (u32)D_80073DC4, 0);
+}
 
 s32 func_80037534(u8 *, s32, s32);
 void func_800478B8(s32);
@@ -1123,7 +1169,56 @@ void func_80036C7C(u8 *p, u32 *s, u8 *d) {
     d[9] = d[9] + (*(s16 *) (p + 0xA) % 256 + p[0x1A]);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80036D4C);
+extern UnkNode *D_80082BC0[];
+extern u32 D_8006A958[];
+extern u32 D_8006A964[];
+extern u32 D_8006A970[];
+extern u8 D_80082B50[];
+extern u8 D_80082B60[];
+extern u8 D_80082B70[];
+
+UnkNode *func_8003FF2C(s32, UnkNode *, s16, UnkNode **);
+void func_80033C1C(u8 *, u32);
+void func_800350B0(u8 *, u8 *);
+void func_80036C7C(u8 *, u32 *, u8 *);
+void func_80033D54(void);
+void func_80036F24(u8 *, u32, u32);
+
+/* D_80082BC0 as an incomplete array, not `&` on a scalar -- see
+   func_80036B10. Three of the six words here. */
+void func_80036D4C(u8 *p, s32 b, s32 c, s32 d, s32 e, u32 f)
+{
+    u8 *n;
+    u8 *m;
+    u8 *q;
+
+    n = (u8 *)func_8003FF2C(0x11, (UnkNode *)p, 0x49, D_80082BC0);
+    *(u32 *)(n + 0x10) = (u32)func_80036F24;
+    func_8004491C((UnkNode *)n, (u32)func_80033D54);
+    m = n + 0x20;
+    q = *(u8 **)(n + 0xC);
+    *(u32 *)(m + 0x44) = c;
+    m[0x48] = 1;
+    *(s16 *)(m + 0x4A) = d;
+    func_80033C1C((u8 *)b, *(u32 *)c);
+    *(u32 *)(n + 0x20) = b;
+    *(u32 *)(b + 0x60) = 6;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x10) = 0x47;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x14) = 2;
+    *(u32 *)(m + 0x4) = 0;
+    *(u32 *)(m + 0x8) = 0;
+    func_800350B0((u8 *)f, m);
+    *(u32 *)(q + 0xC) = 0xC0C0C0;
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A958, D_80082B50);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A964, D_80082B60);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A970, D_80082B70);
+    *(u32 *)(q + 0x8) = (u32)D_80082B60;
+    *(u32 *)(q + 0x0) = 0;
+    q[4] = 0;
+    q[5] = 0;
+    *(s16 *)(q + 0x14) = *(u16 *)(q + 0x14) | 0x1C;
+    *(s16 *)(m + 0x66) = e;
+}
 
 void func_80036D4C(u8 *, s32, s32, s32, s32, u32);
 void func_80036F24(u8 *, u32, u32);
@@ -1251,7 +1346,73 @@ void func_80037090(u8 *p, u32 b, u32 r)
     *(u32 *)(r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *)(p + 0x66)];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003719C);
+extern UnkNode *D_80082BC0[];
+extern u32 D_8006A988[];
+extern u32 D_8006A994[];
+extern u32 D_8006A9A0[];
+extern u32 D_8006A9AC[];
+extern u32 D_8006A9B8[];
+extern u32 D_8006A9C4[];
+extern u8 D_80082B80[];
+extern u8 D_80082B90[];
+extern u8 D_80082BA0[];
+extern u8 D_80082BB0[];
+extern u8 D_80081E90[];
+extern u8 D_80081EA0[];
+
+UnkNode *func_8003FF2C(s32, UnkNode *, s16, UnkNode **);
+void func_80033C1C(u8 *, u32);
+void func_800350B0(u8 *, u8 *);
+void func_80033D54(void);
+void func_80036C7C(u8 *, u32 *, u8 *);
+void func_80037394(u8 *, u32, u32);
+
+/* `t = D_80082B90;` goes AFTER the first func_80036C7C call: it is the second
+   call's third argument and the value stored to `q + 8` at the end, so it
+   lives in $s0 across all six, and a local above the first call puts its
+   lui/addiu one call too early -- nine words. D_80082BC0 is an incomplete
+   array, not `&` on a scalar; that is the last six -- see func_80036B10. */
+void func_8003719C(u8 *a, u8 *b, u8 *c, s16 d, s32 e, u32 f)
+{
+    u8 *n;
+    u8 *m;
+    u8 *q;
+    u8 *v;
+    u8 *t;
+
+    n = (u8 *)func_8003FF2C(0x11, (UnkNode *)a, 0x49, D_80082BC0);
+    *(u32 *)(n + 0x10) = (u32)func_80037394;
+    func_8004491C((UnkNode *)n, (u32)func_80033D54);
+    m = n + 0x20;
+    v = *(u8 **)(n + 0x8);
+    q = *(u8 **)(n + 0xC);
+    *(u32 *)(m + 0x44) = (u32)c;
+    m[0x48] = 1;
+    *(s16 *)(m + 0x4A) = d;
+    func_80033C1C(b, *(u32 *)c);
+    *(u32 *)(n + 0x20) = (u32)b;
+    *(u32 *)(b + 0x60) = 6;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x10) = 0x47;
+    *(u32 *)(*(u8 **)(n + 0x20) + 0x14) = 2;
+    *(u32 *)(m + 0x4) = 0;
+    *(u32 *)(m + 0x8) = 0;
+    func_800350B0((u8 *)f, m);
+    *(u32 *)(q + 0xC) = 0xC0C0C0;
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A988, D_80082B80);
+    t = D_80082B90;
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A994, t);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A9A0, D_80082BA0);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A9AC, D_80082BB0);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A9B8, D_80081E90);
+    func_80036C7C(*(u8 **)(m + 0x44) + 0xC, D_8006A9C4, D_80081EA0);
+    *(u32 *)(q + 0x8) = (u32)t;
+    *(u32 *)(q + 0x0) = 0;
+    q[0x4] = 0;
+    q[0x5] = 0;
+    *(u16 *)(q + 0x14) |= 0x1C;
+    *(s16 *)(m + 0x66) = e;
+    func_80037394(m, (u32)v, (u32)q);
+}
 
 extern u32 D_8006A988[];
 extern u32 D_8006A994[];

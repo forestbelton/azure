@@ -246,66 +246,44 @@ which was already declared as a struct 300 lines further down.
   written as one expression the compiler folds the constant into the second
   term instead, and parentheses do not survive `fold`.
 
-## Cluster: the stack-parameter prologue interleave
+## SOLVED: the stack-parameter prologue interleave was D_80082BC0's SPELLING
 
-Three functions are at the EXACT word count with every differing word in the
-entry block, and it is one phenomenon rather than three rows' worth of bad
-luck. All three place the first call's argument setup differently among the
-parameter save/load pairs: the target alternates setup, pair, setup, pair,
-setup, while these emit the pairs first and catch up on the setup afterwards.
+Three functions sat at the exact word count with every differing word in the
+entry block -- func_80036B10 (3 DIFF), func_80036D4C (6) and func_8003719C (6)
+-- all placing the first call's argument setup differently among the parameter
+save/load pairs: the target alternates setup, pair, setup, pair, setup, while
+the candidates emitted both pairs first and caught up on the setup afterwards.
+Two rounds of work refuted the RTL-order story (the prologue is emitted after
+reload by `thread_prologue_and_epilogue_insns`, so the LUID order is fixed in
+both builds) and the LUID tie-break story (`assign_parms` always copies a
+parameter into a pseudo at function entry), and left it as a sched2 ready-list
+question with every entry insn at priority 1 and `potential_hazard` deciding.
 
-The RTL-order explanation that stood here is REFUTED. The prologue is emitted
-after reload by `thread_prologue_and_epilogue_insns` (function.c:5522) with
-`emit_insn_after (seq, f)`, so every save precedes the whole body in the insn
-chain whatever the source said, and sched2 (toplev.c:3103-3105, both
-schedulers on at -O2 per toplev.c:3397) reads LUIDs over that chain. The LUID
-order is therefore fixed in both builds -- saves, then assign_parms' copies,
-then the argument setup -- and the difference has to be a priority or
-ready-list one. func_8003719C has no branches at all, so its priorities are
-path lengths through the whole function; computing them is the next step, not
-another source permutation. Full derivation in
-`docs/near-misses/func_8003719C.c`.
+It is none of those. All three call
 
-| function | words | DIFF |
-|----------|-------|------|
-| func_80036B10 | 77/77 | 3 |
-| func_80036D4C | 98/98 | 6 |
-| func_8003719C | 126/126 | 6 |
+    func_8003FF2C(0x11, (UnkNode *) p, 0x49, <list head address>)
+
+and the fourth argument is the address of D_80082BC0. Declared
+`extern UnkNode *D_80082BC0;` and passed as `&D_80082BC0`, its `lui`/`addiu`
+pair lands AFTER both save/load pairs. Declared `extern UnkNode *D_80082BC0[];`
+and passed by name -- the same two instructions, the same %hi/%lo -- it lands
+BETWEEN them, and all three functions go to MATCH with no other change. It also
+pulls `addiu $a2, $zero, 0x49` ahead of the first save, which is why the DIFF
+counts were 3 and 6 rather than 2 and 4.
+
+So `potential_hazard` was the right diagnosis and the wrong conclusion: the
+scheduler's view of the pair is what differs, and the array spelling is what
+changes it. The general rule is in matching-levers section 6 -- **when an
+address is a call argument and the entry block interleaves it with the
+prologue, try the incomplete-array spelling before reading another dump.**
+
+func_80035E58 is the fourth member of the family (six arguments, same
+func_8003FF2C call) and the array spelling takes it from 8 DIFF to 2; what is
+left there is unrelated. See `docs/near-misses/func_80035E58.c`.
+
 | func_8004A330 | unk_1C540 | **70/77 words, seven words** | Six words are three callee-saved registers: the two STACK parameters (the update_equiv_regs substitution, whose exact condition is now in matching-levers section 7 -- `reg_n_refs == 2 && reg_basic_block < 0`) and `m = node + 0x20`, which gcc folds into displacements here and the target materialises. See `docs/near-misses/func_8004A330.c`. |
 | func_80054B08 | unk_1C540 | **84/84 words, 32 DIFF** | Was 82/84. Both missing words are paid for: the three stores to +0x10 and the three to +0x14 are VOLATILE -- the listing writes each field three times with a refined value and never reads it, so flow deletes the first two of each as dead, and no non-volatile spelling keeps them -- and the -0x20/+0x20 go in their own statements so fold cannot move the constant onto `base`. What is left is 32 words of schedule: the target emits the block in source order while this hoists two record loads and sinks the three byte/halfword stores. `docs/near-misses/func_80054B08.c`. |
 | func_800398BC | unk_72A8 | **75/76 words, one word** | First function worked from an m2c draft -- 75 of 76 on the first compile, then two documented fixes, and all branch spans match. The missing word is the D_800721C0 index scaling: the target spends `srl`/`andi 0x1F`/`sll 2` where gcc folds the mask and the scale into `srl 0x11`/`andi 0x7C`. Three spellings measured against it in `docs/near-misses/func_800398BC.c`. |
-
-Both take five or six arguments. The target emits each call-argument setup
-insn -- `addiu $a2,$zero,0x49`, `lui $a3,%hi(SYM)` -- BEFORE the `sw`/`lw`
-pair that saves a callee-saved register and loads the stack parameter that
-will live in it; these candidates emit it after. func_80036D4C has three such
-pairs and so three times the difference, which is what makes it one cluster.
-
-Both insns tie on sched1 priority, so the order falls to `rank_for_schedule`'s
-remaining two keys -- the dependence CLASS relative to the last-scheduled insn,
-and only then `INSN_LUID`.
-
-**The LUID half is refuted.** `assign_parms` in gcc 2.7.2's function.c
-(read 2026-10-26; the tree is at scratch/gcc-src) ALWAYS copies a parameter
-into a pseudo unless it is addressable, has side effects, or `obey_regdecls` is
-on -- parameters passed in MEMORY included. So the load is emitted at function
-entry with an early LUID in the target and in every candidate alike, and no
-source shape moves it. Three probes confirm it from the outside: hoisting the
-symbol address into a local declared before the body, assigning it as the first
-statement, and reading both stack parameters into locals first all leave
-func_80036D4C at 98 words and 6 DIFF.
-
-That leaves the dependence-class key, which `rank_for_schedule` computes
-against whatever was scheduled last -- class 3 (independent of it, or latency
-one) beats class 2 (anti/output dependent) beats class 1 (data dependent). It
-is a property of the whole ready list at each cycle, not of any one statement,
-which is consistent with nothing in the source reaching it. Treat this cluster
-as sched1 ready-list ordering until something shows otherwise.
-
-Measured and not working: declaring the stack parameters narrow (their stores
-are `sh` with no sign extension, so matching-levers section 7 says they are
-wide), reordering the locals, and hoisting the argument expressions into
-locals.
 
 ## Parked: tried and not matching
 
@@ -384,9 +362,9 @@ directly and leaves the copy above the branch. |
 | func_80055D84 | unk_1C540 | **58/58 words, 5 DIFF** | A two-register swap around the final `or`: the target reuses the mask's own register as the destination and this source does not, and --greg shows why (the mask is allocated first on priority and takes the lowest free register instead of preferring the argument register). Getting to the exact count needed the cross-jump lever above; everything measured is in `docs/near-misses/func_80055D84.c`. |
 | func_8004DE88 | unk_1C540 | **64/65 words, one register copy** | Command-buffer builder. Everything matches except `addu $a0,$v0,$zero`, a copy of strrchr's return: the target keeps the cursor in $a0 and the constants in $v0, this source keeps the cursor in $v0 so the copy is deleted. The suspect is local-alloc's SUGGESTION pass, which assigns a quantity born from a hard-register copy before the priority loop. See `docs/near-misses/func_8004DE88.c`. |
 | func_8004DF8C | unk_1C540 | **70/72 words, two words** | func_8004DE88's sibling, and the same cursor-versus-address-value register contest. Its own contribution is the $gp-relative half: it needs both an absolute address materialisation and a one-word store for D_80081548/D_8008154C, which takes the bare `.size` records PLUS incomplete-array declarations (see the pattern above -- `extern u32 D_X;` costs two more words). Everything measured is in `docs/near-misses/func_8004DF8C.c`. |
-| func_80036B10 | unk_72A8 | **77/77 words, 3 DIFF** | One instruction one slot out: the target emits the `lui` of the call's fourth argument before the pair that saves $s5 and loads parameter 5, this source after. They tie on sched1 priority so LUID decides, which means the original's parameter-5 load is late in RTL where assign_parms puts this one at the top. See `docs/near-misses/func_80036B10.c`. |
+| func_80036B10 | unk_72A8 | **LANDED** | The stack-parameter prologue interleave, and it was D_80082BC0 declared as an incomplete array and passed by name instead of `&` on a scalar pointer. See the SOLVED section above. |
 | func_8003931C | unk_72A8 | **85/85 words, 10 DIFF** | func_80039470's sibling and the same three shapes (one-statement cursor read, error blocks as `else` arms not guard clauses, pointer-local table base). What is left is a two-register swap with the margin measured: the opcode byte is 4 refs/23 insns (0.348) against the +0x80 pointer's 6/32 (0.375), and ONE more reference on the byte would flip it -- see `docs/near-misses/func_8003931C.c` for why none is available free. |
-| func_80036D4C | unk_72A8 | **98/98 words, 6 DIFF** | 80 consecutive matching words; every difference is the stack-parameter prologue interleave above. Source in `docs/near-misses/func_80036D4C.c`. |
+| func_80036D4C | unk_72A8 | **LANDED** | The stack-parameter prologue interleave, and it was D_80082BC0 declared as an incomplete array and passed by name instead of `&` on a scalar pointer. See the SOLVED section above. |
 | func_8004CAA0 | unk_1C540 | **NOT a C function as written** | 18 words, and the cheapest-looking row in the table until you read it: it saves `$sp` into the PSX scratchpad at 0x1F8003FC, switches `$sp` there, calls func_8004C36C and restores. Plain C cannot assign `$sp`, so it wants inline asm or a decomp device like func_8003E758's. `triage.py` now reports this shape as STACK-SWITCH rather than EASY. |
 | func_8004CECC | unk_1C540 | **101/102 words, one word** | HSV->RGB. Every opcode, immediate, displacement, branch offset and delay slot matches, and the `beqz`->end delta agrees, so all six switch arms are byte-correct; the whole gap is the `v` parameter's entry copy `addu $v1,$a2,$zero`, and the 101 DIFF is that one-word shift rather than 101 wrong words. Diagnosed to the register from the dumps in `docs/near-misses/func_8004CECC.c`, which lists the eight shapes and the whole `search.py` sweep already measured against it and names the signature to aim at: the 0x80808081 magic belongs in $t0, not $a3, because the colour block had one fewer long-lived block-local than this source gives it. Landing it also needs jtbl_8002E5F8 placed. |
 
@@ -449,3 +427,5 @@ func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.
   the guarded block. greg collapses the two reads into one register because
   sched1 separates their live ranges; sixteen statement-order placements
   measured, all 70 words.
+
+| func_80035E58 | unk_72A8 | **129/129 words, 2 DIFF** | The six-argument spawn, and the fourth member of the prologue-interleave family: the D_80082BC0 array spelling took it from 8 DIFF to 2. What is left is ONE swap -- func_80036988 two argument setups land in each other load-delay slots. They tie on sched2 priority, and `rank_for_schedule` last key sorts DESCENDING by LUID while expand_call emits $a0 setup first (calls.c:1850), so a0-later is unreachable through argument order; `e + 0xC` does not lengthen its priority path because fold rewrites it back to `n + 0x2C`. `docs/near-misses/func_80035E58.c`. |
