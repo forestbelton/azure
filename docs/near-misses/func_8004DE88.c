@@ -37,16 +37,31 @@
  * story**: the two quantities are not in the same phase, and nothing done to
  * their reference counts will change that.
  *
- * WHAT WOULD CHANGE IT is the one escape `find_free_reg` has in phase 1: it is
- * called with `accept_call_clobbered = 0`, and it starts its `used` set from
- * `call_used_reg_set` whenever `qty_n_calls_crossed[qty] > 0`. $v0 is
- * call-clobbered, so a cursor that CROSSES A CALL is refused $v0 in phase 1,
- * falls through to phase 2, takes whatever is free -- $a0 -- and the copy
- * survives. That is exactly the target's shape. In this function the cursor's
- * last use is before the dispatching `jalr`, so it crosses nothing; whether
- * the original's did, and what source shape would put a call inside that
- * range without adding a word, is the open question. `advise.py --greg` prints
- * `crosses N calls` for this reason.
+ * PHASE 1 HAS ONE ESCAPE, AND IT IS NOT THIS FUNCTION'S ANSWER -- recorded
+ * because it was briefly written up as if it were. `find_free_reg` is called
+ * in the suggestion phase with `accept_call_clobbered = 0`, and it starts its
+ * `used` set from `call_used_reg_set` whenever `qty_n_calls_crossed[qty] > 0`.
+ * $v0 is call-clobbered, so a quantity with a $v0 suggestion that CROSSES A
+ * CALL is refused it in phase 1, falls through to phase 2, and its copy
+ * survives. That is a real lever and `advise.py --greg` prints `crosses N
+ * calls` for it. But CHECKED AGAINST THE LISTING: the target's cursor is born
+ * at `addu $a0,$v0,$zero` right after strrchr and dies at `sb $v0,0x3($a0)`
+ * (8004DF34), with no `jal` in between -- the dispatching `jalr` is after it.
+ * So the target's cursor crosses nothing either, and the escape cannot be why
+ * phase 1 declined to give it $v0.
+ *
+ * SO THE QUESTION IS NARROWER THAN IT LOOKS, and worth stating precisely for
+ * whoever picks it up: the target's cursor is a block-local quantity born from
+ * a plain move of a hard register, which gives it a `qty_phys_copy_sugg` of
+ * $v0; nothing in its live range holds $v0 (combine_regs deliberately
+ * terminates the hard register's lifespan at the copy, for exactly this
+ * reason); it crosses no call; and yet it came out in $a0 with the copy
+ * intact, which is what phase 2 allocation looks like. Something kept it out
+ * of phase 1 or out of $v0, and none of the three mechanisms read so far
+ * accounts for it. The remaining candidates are `reg_qty < 0` -- the pseudo
+ * not being local to one basic block, which would hand it to global-alloc and
+ * suppress the suggestion entirely -- and something in combine_regs' earlier
+ * tying logic refusing the pair.
  *
  * MEASURED 2026-10-26 with
  * `advise.py --greg`, which now prints every local-alloc quantity because this

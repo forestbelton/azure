@@ -1778,6 +1778,31 @@ func_8003A2E0: 14 DIFF as four fields, 7 as one word.
   value lives from entry in a callee-saved register, and the sign-extension
   appears separately at the use.
 
+  **The exact condition was read out of local-alloc.c on 2026-10-26** and it is
+  narrower than "one set and one use". `update_equiv_regs` substitutes only
+  when
+
+      reg_n_refs[regno] == 2 && reg_basic_block[regno] < 0
+
+  -- two references (the set plus ONE use) **and the pseudo spanning more than
+  one basic block**. The comment there says so in as many words: "this case
+  normally occurs when a parameter is read from memory and then used exactly
+  once, not in a loop". So the substitution needs the use to be in a DIFFERENT
+  block from the entry load, which is exactly the shape of a stack parameter
+  used inside an `if`. A parameter used twice, or used in the same block it is
+  loaded in, keeps its register.
+
+  Two things follow that are easy to get wrong. Copying the parameter into a
+  local at the top does NOT help: local-alloc ties the copy to the parameter,
+  the combined quantity still spans blocks, and it is still substituted
+  (measured on func_8003AB44 and func_8004A330). And a cse-merged second use
+  does not count either, because `reg_n_refs` is computed by flow AFTER cse.
+
+  Declaring the parameter narrow DOES block it -- measured twice, on
+  func_8004A24C (55/57 to MATCH) and func_8003AB44 (52/54 to 54/54) -- but
+  WHICH of the two conditions the promotion breaks is not established, only
+  that it does. Do not reason further from that than the measurement supports.
+
   So a target that reads a stack parameter with `lw $sN, 0x44($sp)` at ENTRY
   and sign-extends it with `sll`/`sra` at the USE declared it narrow. A
   candidate that emits `lh 0x44($sp)` at the use instead, and saves one fewer

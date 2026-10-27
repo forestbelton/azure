@@ -229,7 +229,13 @@ the suggestion phase.** `find_free_reg` is called there with
 `tools/decomp/advise.py --greg` prints a `crosses N calls` column: for a
 quantity with a `$v0` suggestion, one intervening call is the difference
 between taking `$v0` in phase 1 and falling through to phase 2 with the copy
-left behind. A variable declared at function scope and set
+left behind.
+
+**It is a real lever and it is not an explanation for every surviving copy.**
+func_8004DE88 was briefly written up as an instance of it and is not one: its
+target's cursor crosses no call either, so something else kept that quantity
+out of phase 1. Check the listing for a `jal` inside the live range before
+reaching for this. A variable declared at function scope and set
 in several blocks becomes a global allocno instead, allocated after local-alloc
 has already handed out the low registers, so it lands higher. func_800439F8
 needs a separate `base` local inside each arm for this: one function-scope base

@@ -255,6 +255,7 @@ prologue, and it is one phenomenon rather than two rows' worth of bad luck:
 |----------|-------|------|
 | func_80036B10 | 77/77 | 3 |
 | func_80036D4C | 98/98 | 6 |
+| func_8004A330 | unk_1C540 | **70/77 words, seven words** | Six words are three callee-saved registers: the two STACK parameters (the update_equiv_regs substitution, whose exact condition is now in matching-levers section 7 -- `reg_n_refs == 2 && reg_basic_block < 0`) and `m = node + 0x20`, which gcc folds into displacements here and the target materialises. See `docs/near-misses/func_8004A330.c`. |
 
 Both take five or six arguments. The target emits each call-argument setup
 insn -- `addiu $a2,$zero,0x49`, `lui $a3,%hi(SYM)` -- BEFORE the `sw`/`lw`
