@@ -36,6 +36,15 @@
  * default arm), so the question is what spelling leaves it with one set and
  * still a live copy. `t = ok; if (t != 0)` does not: copy propagation folds
  * it away (95 words).
+ *
+ * SINCE PARKED (advise.py): the one word is `andi $v0, $s3, 0xFF` where the
+ * listing has `addu $v0, $s3, $zero` -- a plain copy of the flag into the
+ * branch's register rather than a zero-extension of a QImode pseudo. So the
+ * listing's `ok` is 32 bits wide AND there is still a real copy before the
+ * test, which is the part no spelling found reaches: `u32`/`s32 ok` drops the
+ * word entirely (95 words, 41 DIFF, the register assignment cascading), and
+ * an explicit `t = ok; if (t != 0)` is propagated away. Also measured: `if
+ * (ok)` without the comparison (identical).
  */
 
 #include "common.h"
