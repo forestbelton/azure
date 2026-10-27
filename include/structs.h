@@ -1124,9 +1124,14 @@ typedef struct Unk80086A40
    s16 unk_00; /* read with lh and compared against -1 */
    u8 pad_02[0x2];
    u8 *unk_04;
-   u8 pad_08[0x8];
+   /* Hand-split out of pad_08: func_8005A608 stores the +0x12 halfword scaled
+      by 0x200 plus 0xA20 here, and the +0x14 word is the caller's +0x0C minus
+      it. */
+   u32 unk_08;
+   u8 pad_0C[0x4];
    u32 unk_10;
-   u8 pad_14[0x5];
+   u32 unk_14;
+   u8 unk_18;
    u8 unk_19;
    u8 unk_1A;
    u8 unk_1B;
