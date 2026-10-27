@@ -1233,6 +1233,46 @@ leaves the `andi`, because combine cannot fold a mask back through a pseudo
 with several uses; `(n << 25) < 0` is the fold combine would have done for the
 single-use case, and it is the two words the listing spends there.
 
+### A parameter re-assigned its own truncation extends IN PLACE -- and resets cse
+
+`sll $a1, $a1, 16` / `sra $a1, $a1, 16` with the raw value saved first --
+`addu $v1, $a1, $zero` -- is not what an `s16` parameter gives you. There the
+raw keeps its incoming register, nothing is copied, and the extension lands
+somewhere else. The spelling that produces the listing's shape is an `s32`
+parameter assigned its own truncation:
+
+```c
+j = id;              /* s16: the raw value, a plain copy */
+id = (s16) id;       /* the sign-extension, back into id */
+if (id == -1) { ...scan... }
+i = j;               /* the other arm uses the raw */
+```
+
+Two separate things fall out of that, and both are words:
+
+* **The copy.** `j = id` has to be a real insn, because the next statement
+  overwrites `id`.
+* **cse stops forwarding the extension.** Assigning to `id` invalidates that
+  pseudo's equivalences, so a later `(s16) i` -- with `i` copied from the raw
+  -- is no longer the same expression as the entry's `(s16) id` and is
+  recomputed. Without the re-assignment cse forwards it across the branch (it
+  follows a conditional jump whose label has one use and is preceded by a
+  barrier, cse.c:8107), and the second `sll`/`sra` pair goes missing.
+
+Three variables do NOT do it: `j = id; t = (s16) id; if (t == -1)` puts the
+extension in its own pseudo, the parameter keeps its incoming register and the
+copy disappears again. The assignment has to be back to the parameter.
+
+Worth 3 of 4 missing words on func_8005A608 (85 DIFF to 11) and the same on
+func_8005A778; func_8005A90C is a third instance.
+
+**The knock-on to read next:** where the extension's INTERMEDIATE pseudo lands
+decides what register the nearby constants get, and reload's `find_equiv_reg`
+-- which scans back only as far as the nearest CODE_LABEL -- then either
+re-materialises a constant or copies it from a register that happens to still
+hold it. A listing that materialises the same small constant three times is
+telling you those registers were clobbered in between.
+
 ### An `s16` parameter's sign-extension sits at its first INT USE, not at entry
 
 `assign_parms` copies a narrow parameter into a pseudo with a plain move --
