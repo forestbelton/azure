@@ -447,3 +447,57 @@ func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.
 | func_80038F48 | unk_72A8 | **98/98 words, 12 DIFF** | The script VM's control-flow dispatcher. Word count exact on the first compile; everything structural is verified and written up, including the `(u8) (op + 3) < 3 || op == 0` loop condition, the if/else-if chain over -3/-2/-1, the +0x80 table read into a local so 0x48 stays a displacement, and the cross-jumped tail the 0xFE and 0xFF arms share. The 12 words are all inside the 0xFF arm: the listing interleaves the four byte loads with the shifts and reuses $v1 for the first and last byte, where this source issues all four loads first and spends four registers. `docs/near-misses/func_80038F48.c`. |
 | func_8004E6F4 | unk_1C540 | **102/100 words, two words OVER** | The 15-bit colour-ramp builder. Every opcode, immediate and displacement in both arms and the shared tail is paid for, including `w[i - 1]` so the weight giv IS reduced (two adds, benefit 4) and three combined values rather than six product temps (six spill, 116 words). The two words are ONE register: the listing reuses $v1 for the weight and then the fifth product, which frees $t9 for `a`; this source keeps them apart, needs thirteen homes and pushes `a` into $s0. `docs/near-misses/func_8004E6F4.c`. |
 | func_800500B4 | unk_1C540 | **139/139 words, 96 DIFF** | The dialogue-window placer. Word count exact and the structure verified: a `goto` loop so loop.c does not bias the two walking pointers onto their first access, the -0x28 attached to `b` rather than the sum, `pp[8]` for the third store so the bias cannot settle, and the counter store through a pointer (`addiu $t0, $a2, 0xA4` in the delay slot). The 96 words are one register cascade: `a` takes $a2 where the listing has $a1 and shifts it IN PLACE, which is what lets sched2 fill the `lw 0x20($a0)` delay slot. `docs/near-misses/func_800500B4.c`. |
+
+## advise.py sweep of every park (run after the 2026-10-27 landings)
+
+`advise.py` on each `docs/near-misses/*.c` as committed. The LEVER column
+lists only the categories that name a MEASURED lever -- DELAY-NOPS,
+BRANCH-ARMS, CALLEE-SAVED, COMMUTED, SIGNEDNESS, IMMEDIATE and OPCODE; the
+EXTRA/MISSING/LENGTH/ALLOCATION rows appear on nearly everything and are
+left out. REGS is advise.py's count of register-only differences, which is
+what remains once every shape finding is paid for.
+
+Where to start: a row with a LEVER and a small REGS is one experiment away.
+A row with no LEVER and a large REGS is an allocation-order problem and
+wants `--greg` before any source change.
+
+| function | built/target | verdict | lever named | regs |
+|---|---|---|---|---|
+| func_80035E58 | 129/129 | SHAPE | OPCODE | - |
+| func_80037E58 | 70/70 | SHAPE | -- | 6 |
+| func_8003800C | 70/71 | LENGTH | -- | 1 |
+| func_80038CB8 | 164/164 | SHAPE | OPCODE | 8 |
+| func_80038F48 | 98/98 | SHAPE | OPCODE | 6 |
+| func_8003931C | 85/85 | ALLOC | -- | 10 |
+| func_800398BC | 75/76 | LENGTH | OPCODE | 21 |
+| func_8003AB44 | 54/54 | SHAPE | IMMEDIATE | 7 |
+| func_8003F368 | 113/113 | SHAPE | IMMEDIATE,OPCODE | 2 |
+| func_800407C0 | 178/178 | ALLOC | -- | 62 |
+| func_80041E70 | 270/270 | SHAPE | OPCODE | - |
+| func_8004437C | 107/100 | LENGTH | OPCODE | 7 |
+| func_80047054 | 58/58 | SHAPE | -- | 27 |
+| func_8004951C | 155/157 | LENGTH | OPCODE | - |
+| func_8004A330 | 70/77 | LENGTH | CALLEE-SAVED,IMMEDIATE,OPCODE | 11 |
+| func_8004AC3C | 129/128 | LENGTH | BRANCH-ARMS,DELAY-NOPS,IMMEDIATE,OPCODE | 22 |
+| func_8004CECC | 101/102 | LENGTH | -- | 42 |
+| func_8004D294 | 114/114 | SHAPE | -- | 12 |
+| func_8004DE88 | 64/65 | LENGTH | OPCODE | 31 |
+| func_8004DF8C | 70/72 | LENGTH | IMMEDIATE,OPCODE | 36 |
+| func_8004E6F4 | 102/100 | LENGTH | CALLEE-SAVED | 34 |
+| func_800500B4 | 139/139 | SHAPE | DELAY-NOPS,OPCODE | 64 |
+| func_80052A90 | 96/96 | SHAPE | OPCODE | - |
+| func_80054B08 | 84/84 | SHAPE | IMMEDIATE,OPCODE | 10 |
+| func_8005500C | 55/55 | SHAPE | BRANCH-ARMS | 14 |
+| func_800550E8 | 119/120 | LENGTH | OPCODE | 27 |
+| func_80055D84 | 58/58 | ALLOC | -- | 5 |
+| func_800565D8 | 31/31 | SHAPE | OPCODE | 1 | (the row's one shape finding has since been paid: 6 DIFF -> 3)
+| func_80056654 | 107/107 | SHAPE | OPCODE | 11 |
+| func_80057948 | 64/64 | SHAPE | IMMEDIATE | 7 |
+| func_8005947C | 81/81 | SHAPE | OPCODE | 10 |
+| func_80059814 | 94/103 | LENGTH | COMMUTED | 25 |
+| func_800599B0 | 133/133 | ALLOC | -- | 1 |
+| func_80059DAC | 58/58 | SHAPE | IMMEDIATE | 3 |
+| func_8005A608 | 92/92 | SHAPE | DELAY-NOPS,OPCODE | 8 |
+| func_8005A778 | 101/101 | SHAPE | DELAY-NOPS,IMMEDIATE,OPCODE | 13 |
+| func_8005C2C0 | 132/132 | SHAPE | OPCODE | 1 |
+| func_8005C4D0 | 64/64 | SHAPE | -- | 6 |
