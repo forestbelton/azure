@@ -4,9 +4,9 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**848 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
-byte-identical.** `make check` is green at HEAD. The remaining 160 are
-`INCLUDE_ASM` stubs in `csrc/`: 155 in the four units carved on 2026-10-23 and
+**849 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
+byte-identical.** `make check` is green at HEAD. The remaining 159 are
+`INCLUDE_ASM` stubs in `csrc/`: 154 in the four units carved on 2026-10-23 and
 5 long-standing near-misses. **That count is the RESIDENT EXECUTABLE only.**
 `csrc/` covers no other file and `guard.py` counts nothing else, so quote it as
 "164 of the resident executable's 1008" -- the scope section below is why the

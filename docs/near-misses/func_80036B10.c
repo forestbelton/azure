@@ -10,6 +10,10 @@
  * else, including the triple indirection through c+0x74 and the D_8006A934
  * halfword lookup, matches.
  *
+ * THIS IS A CLUSTER, not a one-off: func_80036D4C is the same difference with
+ * three stack parameters instead of one (6 DIFF). See the
+ * STACK-PARAMETER PROLOGUE INTERLEAVE section of docs/carved-sweep.md.
+ *
  * Both insns are dependency-free and both birth a single-set pseudo, so they
  * tie on sched1 priority and the order is decided by LUID, i.e. RTL order.
  * That means the target's parameter-5 load is LATE in its RTL -- sched1 then

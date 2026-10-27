@@ -2383,7 +2383,51 @@ void func_8004F3D8(u8 *p, u32 v) {
     func_8004F2BC(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F418);
+extern UnkNode D_80084138;
+extern u8 D_80027DD0[];
+
+UnkNode *func_8004B4A8(UnkNode *);
+UnkNode *func_8003FE78(s32, UnkNode *, s16);
+s32 func_8004491C(UnkNode *, u32);
+void func_8004F52C(u8 *);
+void func_8004F330(u8 *, s32);
+void func_8004F3D8(u8 *, u32);
+void func_8004EEBC(u8 *);
+
+/* func_8004F308 is landed as `void` but its result is stored here. */
+s32 func_8004F308r(s32) __asm__("func_8004F308");
+
+u8 *func_8004F418(u32 a, u32 b)
+{
+    u8 *n = (u8 *)&D_80084138;
+    u8 *m = n + 0x20;
+
+    if (func_8004B4A8((UnkNode *)n) == 0)
+    {
+        n = (u8 *)func_8003FE78(0, (UnkNode *)n, 0xCF);
+        func_8004491C((UnkNode *)n, (u32)D_80027DD0);
+    }
+    else
+    {
+        func_8004F52C(n);
+        *(s16 *)(n + 0x1E) = *(u16 *)(n + 0x1E) & 0x7FFF;
+        bzero(m, 0x31C);
+    }
+    D_801C9E40[0x19] = 0;
+    D_801C9E40[0x1A] = 0;
+    D_801C9E40[0x1B] = 0;
+    D_801C9E40[0x108ED] = 0;
+    D_801C9E40[0x108EE] = 0;
+    D_801C9E40[0x108EF] = 0;
+    func_8004F330(m, 7);
+    *(u32 *)(n + 0xC) = (u32)(m + 0x210);
+    *(u32 *)(m + 0x21C) = func_8004F308r((s32)(m + 0x220));
+    *(u32 *)(m + 0x4) = b;
+    func_8004F3D8(m, a);
+    *(u32 *)(n + 0x10) = (u32)func_8004EEBC;
+    func_8004EEBC(m);
+    return n;
+}
 
 void func_8004F52C(u8 *p) {
     u32 g;

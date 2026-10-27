@@ -246,6 +246,37 @@ which was already declared as a struct 300 lines further down.
   written as one expression the compiler folds the constant into the second
   term instead, and parentheses do not survive `fold`.
 
+## Cluster: the stack-parameter prologue interleave
+
+Two functions are at the EXACT word count with every differing word in the
+prologue, and it is one phenomenon rather than two rows' worth of bad luck:
+
+| function | words | DIFF |
+|----------|-------|------|
+| func_80036B10 | 77/77 | 3 |
+| func_80036D4C | 98/98 | 6 |
+
+Both take five or six arguments. The target emits each call-argument setup
+insn -- `addiu $a2,$zero,0x49`, `lui $a3,%hi(SYM)` -- BEFORE the `sw`/`lw`
+pair that saves a callee-saved register and loads the stack parameter that
+will live in it; these candidates emit it after. func_80036D4C has three such
+pairs and so three times the difference, which is what makes it one cluster.
+
+The argument setup and the parameter load both birth a single-set pseudo, so
+they tie on sched1 priority and the order falls to `INSN_LUID`, i.e. RTL
+order. So the question is where the parameter load sits in RTL -- early, from
+`assign_parms`, or late, at its point of use with sched1 hoisting it. For a
+parameter passed in MEMORY gcc 2.7.2's assign_parms normally leaves DECL_RTL
+as the stack MEM and emits no load at all, which would put it late; both of
+these candidates nonetheless get an early load. Reading assign_parms for when
+it does copy a memory parameter into a pseudo is the next step, and it would
+settle both functions at once.
+
+Measured and not working: declaring the stack parameters narrow (their stores
+are `sh` with no sign extension, so matching-levers section 7 says they are
+wide), reordering the locals, and hoisting the argument expressions into
+locals.
+
 ## Parked: tried and not matching
 
 Each of these has the right instruction set and word count with the registers
@@ -315,6 +346,8 @@ directly and leaves the copy above the branch. |
 | func_8004DE88 | unk_1C540 | **64/65 words, one register copy** | Command-buffer builder. Everything matches except `addu $a0,$v0,$zero`, a copy of strrchr's return: the target keeps the cursor in $a0 and the constants in $v0, this source keeps the cursor in $v0 so the copy is deleted. The suspect is local-alloc's SUGGESTION pass, which assigns a quantity born from a hard-register copy before the priority loop. See `docs/near-misses/func_8004DE88.c`. |
 | func_8004DF8C | unk_1C540 | **70/72 words, two words** | func_8004DE88's sibling, and the same cursor-versus-address-value register contest. Its own contribution is the $gp-relative half: it needs both an absolute address materialisation and a one-word store for D_80081548/D_8008154C, which takes the bare `.size` records PLUS incomplete-array declarations (see the pattern above -- `extern u32 D_X;` costs two more words). Everything measured is in `docs/near-misses/func_8004DF8C.c`. |
 | func_80036B10 | unk_72A8 | **77/77 words, 3 DIFF** | One instruction one slot out: the target emits the `lui` of the call's fourth argument before the pair that saves $s5 and loads parameter 5, this source after. They tie on sched1 priority so LUID decides, which means the original's parameter-5 load is late in RTL where assign_parms puts this one at the top. See `docs/near-misses/func_80036B10.c`. |
+| func_8003931C | unk_72A8 | **85/85 words, 10 DIFF** | func_80039470's sibling and the same three shapes (one-statement cursor read, error blocks as `else` arms not guard clauses, pointer-local table base). What is left is a two-register swap with the margin measured: the opcode byte is 4 refs/23 insns (0.348) against the +0x80 pointer's 6/32 (0.375), and ONE more reference on the byte would flip it -- see `docs/near-misses/func_8003931C.c` for why none is available free. |
+| func_80036D4C | unk_72A8 | **98/98 words, 6 DIFF** | 80 consecutive matching words; every difference is the stack-parameter prologue interleave above. Source in `docs/near-misses/func_80036D4C.c`. |
 | func_8004CAA0 | unk_1C540 | **NOT a C function as written** | 18 words, and the cheapest-looking row in the table until you read it: it saves `$sp` into the PSX scratchpad at 0x1F8003FC, switches `$sp` there, calls func_8004C36C and restores. Plain C cannot assign `$sp`, so it wants inline asm or a decomp device like func_8003E758's. `triage.py` now reports this shape as STACK-SWITCH rather than EASY. |
 | func_8004CECC | unk_1C540 | **101/102 words, one word** | HSV->RGB. Every opcode, immediate, displacement, branch offset and delay slot matches, and the `beqz`->end delta agrees, so all six switch arms are byte-correct; the whole gap is the `v` parameter's entry copy `addu $v1,$a2,$zero`, and the 101 DIFF is that one-word shift rather than 101 wrong words. Diagnosed to the register from the dumps in `docs/near-misses/func_8004CECC.c`, which lists the eight shapes and the whole `search.py` sweep already measured against it and names the signature to aim at: the 0x80808081 magic belongs in $t0, not $a3, because the colour block had one fewer long-lived block-local than this source gives it. Landing it also needs jtbl_8002E5F8 placed. |
 
