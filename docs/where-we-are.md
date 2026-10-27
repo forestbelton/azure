@@ -4,6 +4,10 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
+**`guard.py` reads 95 asm stubs as of 2026-10-27** and the build is
+byte-identical; `make check` is green at HEAD. The paragraph below is the
+2026-10-23 picture and is kept for its scope caveat, not its count.
+
 **849 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
 byte-identical.** `make check` is green at HEAD. The remaining 159 are
 `INCLUDE_ASM` stubs in `csrc/`: 154 in the four units carved on 2026-10-23 and
