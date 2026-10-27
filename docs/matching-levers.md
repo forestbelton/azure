@@ -1004,6 +1004,31 @@ So when a diff is nothing but a callee-saved swap between two parameters, check
 what the callees really take before touching the body. `grep` the unit: a
 `void f(void)` already decompiled elsewhere settles it.
 
+
+### `a - C + b` reassociates -- a TEMPORARY is the only way to pin the constant
+
+`x = x - 0x30 + d;` does NOT emit `addiu $v0, $s1, -0x30` then
+`addu $s1, $v0, $v1`. fold moves the constant onto the other operand and you
+get `addiu $v0, $v1, -0x30` / `addu $s1, $s1, $v0` -- the same two
+instructions with the subtraction on `d` instead of on `x`. Parentheses do not
+help (`(x - 0x30) + d` is identical), and nor does writing the sum the other
+way round (`d + (x - 0x30)`).
+
+What does is splitting the subexpression out:
+
+```c
+s32 t = x - 0x30;
+
+x = t + d;
+```
+
+`t` has one set and one use, so it costs nothing, and the constant stays where
+the listing has it. func_8004DA74's last 2 words, with everything else
+matching.
+
+Two statements on `x` itself (`x -= 0x30; x += d;`) is NOT the same -- that
+does the subtraction in place and comes out a word longer.
+
 ## 4. Re-dereference rather than cache
 
 If a store invalidates cse's memory entry for another object, the target will

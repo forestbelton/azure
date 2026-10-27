@@ -2188,10 +2188,117 @@ void func_8004DA24(u8 *p, u8 *q) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004DA74);
+u32 func_8004D880(u32);
+void func_8004D98C(u8, s32, u8 *);
+void func_8004E264(u16 *, u32);
+void func_8004D9E0(u8 *, s32, s32, s32, s32);
+
+/* The name renderer's escape parser: walks a Shift-JIS string and for each
+   pair emits a 0xC-byte glyph record through func_8004D98C/func_8004E264/
+   func_8004D9E0, tracking a column, a row and a size that the escapes 0x20,
+   0x08, 0x0A and 0x09 move about. Returns the first record, or 0 when nothing
+   was emitted; the last record gets 0x80 ORed into its first byte.
+
+   `c` is a `u8` local, which is why every `lbu` is followed by the
+   `andi 0xFF` the listing has -- as a `u32` the mask would be dropped, and
+   this is the one place in the file where the redundant mask is wanted.
+
+   The byte after a 0x09 goes into its own local `d`, read ONCE: the listing
+   reuses the register it tested against 0x73 for the arithmetic, where a
+   second `*s` reloads it (four words).
+
+   `s32 t = x - 0x30; x = t + d;` as two statements. Written
+   `x = x - 0x30 + d` -- or with parentheses, or as `d + (x - 0x30)` -- fold
+   moves the constant onto `d` and emits `addiu $v0, $v1, -0x30` /
+   `addu $s1, $s1, $v0`; the listing keeps it on `x`:
+   `addiu $v0, $s1, -0x30` / `addu $s1, $v0, $v1`. A temporary is the only way
+   to stop the reassociation (see matching-levers section 3).
+
+   `s[1] | (*s << 8)` in that operand order, and the trailing `out != base`
+   arm written FIRST so the `base = 0` arm goes out of line. */
+u8 *func_8004DA74(u8 *out, u8 *s, s32 a)
+{
+    u8 *base;
+    s32 x;
+    s32 y;
+    s32 z;
+    u8 c;
+
+    x = 0;
+    y = x;
+    z = x;
+    base = out;
+    if (s == 0)
+    {
+        return 0;
+    }
+    c = *s;
+    while (c != 0)
+    {
+        if (c == 0x20)
+        {
+            s++;
+            x++;
+        }
+        else if (c == 8)
+        {
+            s++;
+            a = *s - 0x30;
+            s++;
+        }
+        else if (c == 0xA)
+        {
+            s++;
+            x = 0;
+            y++;
+        }
+        else if (c == 9)
+        {
+            u8 d;
+
+            s++;
+            d = *s;
+            if (d == 0x73)
+            {
+                s++;
+                z = *s - 0x30;
+            }
+            else
+            {
+                s32 t = x - 0x30;
+
+                x = t + d;
+            }
+            s++;
+        }
+        else
+        {
+            u8 d = (u8) func_8004D880(s[1] | (*s << 8));
+
+            s += 2;
+            if (d != 0x20)
+            {
+                func_8004D98C(d, a, out);
+                func_8004E264((u16 *) out, a);
+                func_8004D9E0(out, x, y, z, 0);
+                out += 0xC;
+            }
+            x += 2;
+        }
+        c = *s;
+    }
+    if (out != base)
+    {
+        out[-0xC] |= 0x80;
+    }
+    else
+    {
+        base = 0;
+    }
+    return base;
+}
 
 u32 func_8004B404(s32);
-s32 func_8004DA74(u8 *, u8 *, s32);
 s32 func_8004B4DC(u8 *);
 s32 puts(u8 *);
 
