@@ -1261,6 +1261,35 @@ instruction where it is and empties its delay slot, so it will cost words if
 the listing does not actually show the reload. The evidence to require is the
 SECOND load of an address already stored, with no call or label between.
 
+### A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P
+
+`u8 *b = (u8 *) &D_80083160;` and `Unk80083160 *q = &D_80083160;` both put the
+symbol's address in a register and share it across every access, so they look
+interchangeable. They are not: the reads through `q` are COMPONENT_REFs, so
+`MEM_IN_STRUCT_P` is set on them, and the reads through `b` are bare pointer
+dereferences, so it is not. That decides whether a nearby store to an
+unrelated pointer invalidates them in cse (section 5).
+
+func_80050308 needs both halves at once: the listing shares one
+`addiu $a1, $v0, %lo(D_80083160)` between three reads of the global AND
+re-loads the +8 word after a store through the function's own `p`. Through
+`q->unk_08` that is what comes out. Through `*(u32 *)(b + 8)` the re-load and
+its delay nop go missing, because the read and the store are then both
+non-struct and cse forwards the value already in $a0.
+
+So when a global's base is materialised AND one of its fields is re-read
+across a store, the spelling is a pointer to its real type.
+
+### Reading one field twice beats a local when the value is wanted in two registers
+
+`*(s32 *)(p + 0x18) = *(s32 *)(p + 0x1C);` followed by
+`*(s32 *)(p + 0x1C) = f(*(s32 *)(p + 0x1C), ...);` compiles to ONE load plus a
+register copy: cse forwards the second read, because two MEMs at constant
+offsets off one base cannot alias, but the value is still wanted in two places
+at once and that is the `addu $v0, $a0, $zero` before the call. Holding it in a
+local instead gives one pseudo, which the allocator puts in the argument
+register, and the copy disappears -- a word short. func_80050308.
+
 ## 6. Declaration decides addressing
 
 This is the subject of `docs/addressing-and-translation-units.md`; the short

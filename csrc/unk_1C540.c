@@ -2800,11 +2800,127 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800500B4);
 
 u32 func_80021300(u32);
 
-void func_800502E0(u8 *p) {
-    func_80021300(func_8004FF00(p));
+/* Returns the tail call's value -- func_80050308 stores it to +0x20 -- so the
+   `return` is explicit even though the value is already in $v0 either way. */
+u32 func_800502E0(u8 *p) {
+    return func_80021300(func_8004FF00(p));
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050308);
+s16 func_80053DA8(u16);
+void func_80050DA8(u8 *);
+u32 func_800502E0(u8 *);
+s32 func_8004FF20(u8 *);
+s32 func_8004FFA8(u8 *);
+void func_80050EA8(u8 *);
+s32 func_80049DE8(s32, s32, s32);
+void func_800500B4(u32, u8 *);
+
+/* Two shape facts, both about cse.
+
+   D_80083160 is reached through a STRUCT POINTER local, not `(u8 *)` plus byte
+   offsets. The pointer gets the address materialised into a register, which is
+   the `addiu $a1, $v0, %lo(D_80083160)` the listing shares between all three
+   reads -- and, because the reads are then COMPONENT_REFs, MEM_IN_STRUCT_P is
+   set on them, so the store to `p + 0xC` invalidates the +8 word and it is
+   RE-READ for the second pair of flag tests. Through a `u8 *` base the reads
+   are bare dereferences like the store, `true_dependence` lets cse forward the
+   value it already has in $a0, and the re-load plus its delay nop go missing.
+
+   The +0x1C word is read TWICE rather than held in a local: once for the
+   +0x18 store and once as func_80049DE8's argument. cse forwards the second
+   read -- the +0x18 store cannot alias +0x1C, the offsets being constant off
+   one base -- but it still needs the value in two registers, which is the
+   `addu $v0, $a0, $zero` before the call. A single local is a word short. */
+s16 func_80053DA8(u16);
+void func_80050DA8(u8 *);
+u32 func_800502E0(u8 *);
+s32 func_8004FF20(u8 *);
+s32 func_8004FFA8(u8 *);
+void func_80050EA8(u8 *);
+s32 func_80049DE8(s32, s32, s32);
+void func_800500B4(u32, u8 *);
+
+void func_80050308(u8 *p)
+{
+    Unk80083160 *q = &D_80083160;
+    u32 f;
+    u32 g;
+    s32 s;
+    s32 c;
+    u32 v;
+
+    f = q->unk_08;
+    if (f != 0)
+    {
+        g = q->unk_10;
+        if ((g & 0x20) != 0)
+        {
+            func_80053DA8(0x515);
+            func_80050DA8(p - 0x20);
+        }
+        else if ((g & 0x40) != 0)
+        {
+            func_80053DA8(0x514);
+            *(u32 *)(p + 0x20) = func_800502E0(*(u8 **)(p + 0x28));
+            if (func_8004FF20(p) == 0)
+            {
+                v = *(u32 *)(p - 0x10);
+                *(u32 *)(p - 0x10) = (u32)func_8004FFA8;
+                *(u32 *)(p + 4) = v;
+            }
+            else
+            {
+                func_80050EA8(p - 0x20);
+            }
+        }
+        else if ((f & 0x5000) != 0)
+        {
+            s = 0;
+            if ((g & 0x4000) != 0)
+            {
+                s = 1;
+                *(s32 *)(p + 0xC) = 0;
+                *(s32 *)(p + 0x10) = 3;
+            }
+            else if ((g & 0x1000) != 0)
+            {
+                s = -1;
+                *(s32 *)(p + 0xC) = 0;
+                *(s32 *)(p + 0x10) = 3;
+            }
+            else
+            {
+                c = *(s32 *)(p + 0xC);
+                if (c >= 3)
+                {
+                    *(s32 *)(p + 0xC) = c - 1;
+                    if ((q->unk_08 & 0x4000) != 0)
+                    {
+                        s = 1;
+                        *(s32 *)(p + 0x10) = 2;
+                    }
+                    else if ((q->unk_08 & 0x1000) != 0)
+                    {
+                        s = -1;
+                        *(s32 *)(p + 0x10) = 2;
+                    }
+                }
+                else
+                {
+                    *(s32 *)(p + 0xC) = c + 1;
+                }
+            }
+            if (s != 0)
+            {
+                func_80053DA8(0x502);
+                *(s32 *)(p + 0x14) = 0;
+                *(s32 *)(p + 0x18) = *(s32 *)(p + 0x1C);
+                *(s32 *)(p + 0x1C) = func_80049DE8(*(s32 *)(p + 0x1C), s, 6);
+            }
+        }
+    }
+    func_800500B4(*(u32 *)(p + 0x68), p);
+}
 
 void func_80050308(u8 *);
 
