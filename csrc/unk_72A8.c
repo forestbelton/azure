@@ -9,7 +9,21 @@
    func_8003C0C8 in this same unit reach it ABSOLUTELY and match that way,
    while func_80033D44 and func_80033D54 need it $gp-relatively. One carved
    unit cannot give one symbol both forms, so those two stay stubs until the
-   unit is split. */
+   unit is split.
+
+   AND THE __asm__-ALIAS TRICK DOES NOT LIFT THAT, tried and reverted
+   2026-10-27. The idea was the one that gives one symbol two spellings
+   elsewhere in this project: add the size record, leave the two blocked
+   functions on the scalar declaration (bare symbol -> maspsx rewrites to
+   %gp_rel) and give the two landed ones `extern u32 D_8008099Ca[]
+   __asm__("D_8008099C")` with `[0]` (compiler-split -> maspsx leaves it
+   alone). It builds and it is NOT byte-identical: the landed form is
+   `lui $at, 0x8008` + `sw $zero, 0x99c($at)`, i.e. GAS expanding a bare
+   symbol through the assembler temp, and the array spelling makes cc1psx
+   emit the pair itself through a real register ($v0). The absolute form those
+   two match is specifically "bare symbol, not in sdata_entries, expanded by
+   gas", which no C spelling reproduces once the symbol IS in sdata_entries.
+   So the split is still the only way. */
 __asm__(".sdata\n\t.size D_80080A6C,4\n\t.size D_80081440,4\n"
         "\t.size D_80081448,4\n\t.size D_80081460,4\n"
         "\t.size D_800809B8,4\n\t.size D_800809BC,4\n"
