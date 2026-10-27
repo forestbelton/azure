@@ -632,8 +632,81 @@ void func_80035820(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035888);
+extern UnkNode *D_80082BC0[];
+extern u8 D_8006A9E8[];
+extern u8 D_8007386C[];
+extern s16 D_8006A90C[];
+extern u32 D_800809B8;
+extern u32 D_800809BC;
 
+UnkNode *func_8003FF2C(s32, UnkNode *, s16, UnkNode **);
+s32 func_8004491C(UnkNode *, u32);
+void func_800375C0(u8 *, u8 *);
+void func_800359FC(u8 *, u8 *, s32);
+void func_80035AAC(u32 *);
+void func_80033D54(void);
+void func_80037714(u8 *);
+
+/* The five-argument spawn, func_80035484's and func_80035E58's sibling:
+   allocates the node, installs func_800359FC at its +0x10 and func_80033D54
+   through func_8004491C, fills the +0x20 sub-object from the argument record
+   and the +0x08/+0x0C records, and sets the last field from D_8006A90C
+   indexed by the fifth argument's +0x02 byte.
+
+   Everything structural came from the siblings on the first compile, eight
+   words out. The eight were ONE SWAP: `*(u32 *) (e + 0x14) = D_800809B8;`
+   comes BEFORE `*(u32 *) (e + 0x68) = (u32) func_80035AAC;`. With the
+   function pointer first, the 0x808080 constant that the +0x0C store wants
+   lands in $v1 instead of the listing's $a0, and its `lui`/`ori` pair sits
+   where sched2 put it rather than split across the group as the listing has
+   it -- the $gp-relative load coming first is what lengthens the other
+   quantities' live ranges enough to leave $a0 to the constant.
+
+   perm.py over all nine stores of that group (250 of 362880 sampled) found a
+   6-DIFF ordering, better than the 8 this started at but NOT this: it scatters
+   the three zero stores through the group, which fixes the register by
+   accident and breaks the order of six stores. The listing's own store order
+   is the one below, and only the first two statements move.
+
+   The signature is the unit's own `(u8 *, u8 *, u8 *, s32, u32);` from above,
+   with the casts inside: the third argument is a `u32 *` here and the fifth a
+   pointer, but the call site passes them the declared way and both spellings
+   match. */
+void func_80035888(u8 *a, u8 *b, u8 *d, s32 i, u32 f)
+{
+    UnkNode *n;
+    u8 *e;
+    u8 *g;
+    u8 *h;
+
+    n = func_8003FF2C(0x11, (UnkNode *) a, 0x49, D_80082BC0);
+    n->unk_10 = (u32) func_800359FC;
+    func_8004491C(n, (u32) func_80033D54);
+    e = (u8 *) n + 0x20;
+    g = (u8 *) n->unk_08;
+    h = (u8 *) n->unk_0C;
+    *(u32 *) (e + 0x44) = (u32) d;
+    e[0x48] = 1;
+    *(s16 *) (e + 0x4A) = i;
+    func_80033C1C(b, *(u32 *) d);
+    *(u32 *) ((u8 *) n + 0x20) = (u32) b;
+    *(u32 *) (e + 4) = 0;
+    *(u32 *) (e + 8) = (u32) func_80037714;
+    func_800375C0(e, D_8006A9E8);
+    func_800350B0((u8 *) f, e);
+    *(u32 *) (e + 0x14) = D_800809B8;
+    *(u32 *) (e + 0x68) = (u32) func_80035AAC;
+    *(u32 *) (e + 0x18) = D_800809BC;
+    *(s16 *) (g + 2) = 0;
+    *(u32 *) (h + 0xC) = 0x808080;
+    *(u32 *) (h + 8) = (u32) D_8007386C;
+    *(u32 *) h = 0;
+    h[4] = 0;
+    h[5] = 0;
+    *(u32 *) (e + 0x74) = f;
+    e[0x78] = ((u8 *) f)[1];
+    *(u32 *) (*(u32 *) ((u8 *) n + 0x20) + 0x34) = D_8006A90C[(*(u8 **) (e + 0x74))[2]];
+}
 void func_80035CE4(u8 *, u8 *, s32);
 void func_80037C7C(u8 *, s16);
 

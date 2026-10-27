@@ -51,7 +51,9 @@
  * the giv to +0x1A (`lhu 0x0($s1)` where the listing has `lhu 0x1A($s1)`).
  * Measured on the way: the two arms in both orders (3 and 15), the guard on
  * `i` (18), `lhu` for D_80073828 (one more word differing), and no second row
- * pointer at all (30).
+ * pointer at all (30). A FULL `search.py` sweep over all twelve transform
+ * families found nothing better than the base, so the remaining three words
+ * are not a local source rewrite.
  */
 #include "common.h"
 
