@@ -552,6 +552,41 @@ Two consequences:
   source is, so the permuter never reaches zero. `make check` on the final
   bytes is the only authority for these.
 
+## When the same symbol needs both modes: cut the unit
+
+The size record is file-scope, so a unit can mix the two modes **across
+symbols** (previous section) but never **within one**. Twice now a carved unit
+has held one word reached both ways, and both times the answer was to split the
+unit at the function boundary between the two groups:
+
+| unit cut | symbol | $gp side | absolute side |
+|----------|--------|----------|---------------|
+| `unk_11940` -> `gprel_11B4C` | D_800814D0 | func_8003E34C | func_8003E39C, four lines below it |
+| `unk_72A8` -> `gprel_72A8` (2026-10-27) | D_8008099C | func_80033D44, func_80033D54 | func_80034EF8, func_8003C0C8 |
+
+The second one is the mechanical recipe, and it cost nothing:
+
+1. Split the splat `c` subsegment at the first function on the other side of
+   the divide -- here `- [0x72a8, c, gprel_72A8]` plus
+   `- [0x7db8, c, unk_72A8]`. **Give the new name to the piece that moves and
+   let the bulk keep the old one**, even if its start offset no longer matches
+   its name: the name is also its `asm/nonmatchings/` directory, its park
+   files and its `carved-sweep.md` rows, and renaming the bulk touched 16 park
+   files and 34 doc lines for no gain.
+2. Move that piece's functions into the new `csrc/<name>.c`, repoint their
+   `INCLUDE_ASM` paths, and give the new file only the size records its own
+   side wants. Check first that no function moving across needs any of the old
+   unit's other size-recorded symbols: `grep` each one in the moved range.
+   None of the thirteen moved here did, which is why no matched code changed.
+3. `splat split`, then `git checkout` the `*_undefined_syms_auto.txt` it
+   rewrites (it added a line for an already-placed jump table), and delete the
+   stale per-function asm under the old unit's directory.
+4. `make containers`. All four stayed byte-identical, and func_80033D44 --
+   blocked for weeks on four words -- matched on the first draft.
+
+Do not reach for a per-symbol escape instead; there isn't one. See the dead
+end below.
+
 ## Dead ends, recorded so they are not retried
 
 * maspsx is faithful. The real ASPSX produces the same output once gas is
@@ -570,3 +605,14 @@ Two consequences:
   That was recorded here as the opposite problem; it is in fact the lever for
   the register-base shape -- see "Which of the two shapes a declaration
   produces" above.
+* **One symbol cannot be given two spellings to get two modes.** The
+  `__asm__("SYM")` alias trick that works elsewhere in this project does not
+  work here, measured 2026-10-27 on D_8008099C: add the size record, leave the
+  functions that want `%gp_rel` on the scalar declaration, and give the ones
+  that want absolute an `extern u32 SYMa[] __asm__("SYM")` accessed as `[0]`.
+  It builds, and it is not byte-identical. The absolute form those functions
+  match is `lui $at, 0x8008` + `sw $zero, 0x99c($at)` -- **gas expanding a
+  bare symbol through the assembler temp** -- while the array spelling makes
+  cc1psx materialise the address itself, in a real register. Once a symbol is
+  in `sdata_entries` no C spelling reproduces the gas-expanded form, because
+  maspsx rewrites every bare-symbol access to it. Cut the unit instead.

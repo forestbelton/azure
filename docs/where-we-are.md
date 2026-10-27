@@ -244,9 +244,9 @@ something** -- that has been the single biggest waste of effort here.
 | group | count | what it means |
 |-------|-------|---------------|
 | parked, with a COMPILING CANDIDATE | 64 | a park file each in `docs/near-misses/` |
-| structurally blocked | 2 | func_80033D44 + func_80033D54, 541 words: both need `%gp_rel(D_8008099C)` while two landed functions in the same unit reach that symbol absolutely, so they want the unit split |
+| structurally blocked | 0 | was func_80033D44 + func_80033D54: on 2026-10-27 the old unk_72A8 was CUT in two (`gprel_72A8` + `unk_72A8`) so the pair gets its `%gp_rel(D_8008099C)` while the two landed functions below the cut keep the absolute form. func_80033D44 landed the same hour; func_80033D54 is now counted under never attempted |
 | deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
-| never attempted | 3 | 1725 words, all three SURVEYED; see below |
+| never attempted | 4 | 2262 words: the three SURVEYED giants below, plus func_80033D54 (537 words, a scratchpad function, unblocked by the unk_72A8 carve) |
 
 **EVERY NEAR-MISS NOW HAS A COMPILING CANDIDATE**, as of the end of
 2026-10-27. That was not true for most of the day: 44 of the 70 remaining
