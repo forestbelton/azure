@@ -4234,7 +4234,68 @@ void func_8005537C(s16 a) {
     D_800848F8[4] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800553D4);
+extern u32 D_800848FC[];
+extern s16 D_80084900[];
+
+void func_800552C8(s32);
+void func_8005AF74(s16);
+void func_8005AFF4(s16);
+void func_8005B070(s16);
+void func_8005B16C(s16);
+
+/* This call site passes NO argument. The listing has no argument move before
+   `jal func_800552C8` -- $a0 still holds the masked event code from the
+   dispatch, and the call's delay slot is spent on the D_80084900 store -- and
+   every spelling that passes the event code costs a word: cse follows the
+   switch's own `beq` into the arm (the label has one reference), records
+   `n == 0x71` there, and attaches it as a REG_EQUAL note that combine
+   rematerialises as `addiu $a0, $zero, 0x71`. Passing the literal 0x71 emits
+   the same word, so there is no source that passes a value and matches. The
+   `__asm__` alias says "prototype-less at this site" without touching the
+   declaration the two other call sites in this unit need; it works in the
+   original because $a0 happens to hold exactly what the callee reads. */
+extern void func_800552C8a(void) __asm__("func_800552C8");
+
+/* `D_800847D0[0] &= ~0x100;` and `&= ~0x1000;` as TWO statements. As one
+   expression fold merges the masks into a single `addiu $v1, $zero, -0x1101`
+   and the function is a word short; as two, gcc's flow pass drops the first
+   store as dead (nothing reads the location in between) and what is left is
+   the listing's one `lw`, two `and`s and one `sw`. */
+void func_800553D4(s32 n) {
+    u8 *b;
+
+    n &= 0xFF;
+    switch (n) {
+    case 0x71:
+        b = (u8 *) D_800847D0;
+        if ((D_800847D0[0] & 0x1100) != 0) {
+            D_80084900[0] = 0;
+            func_800552C8a();
+            func_8005AF74(*(s16 *) (b + 0x22));
+            func_8005AFF4(*(s16 *) (b + 0x22));
+        }
+        D_800848FC[0] = 0;
+        D_800847D0[0] &= ~0x100;
+        D_800847D0[0] &= ~0x1000;
+        *(u32 *) (b + 4) &= ~2;
+        if (*(s16 *) (b + 0x26) != -1) {
+            func_800550E8();
+        }
+        break;
+    case 0xE1:
+        if ((D_800847D0[0] & 0x100) != 0) {
+            func_8005B070(*(s16 *) ((u8 *) D_800847D0 + 0x22));
+            D_800847D0[0] = (D_800847D0[0] & ~0x100) | 0x1000;
+        }
+        break;
+    case 0xF1:
+        if ((D_800847D0[0] & 0x1000) != 0) {
+            func_8005B16C(*(s16 *) ((u8 *) D_800847D0 + 0x22));
+            D_800847D0[0] = (D_800847D0[0] & ~0x1000) | 0x100;
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005552C);
 

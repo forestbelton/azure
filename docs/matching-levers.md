@@ -2126,6 +2126,39 @@ declared first in the block, the `+ 8` written before the index, a separate
 `unk_0C` load hoisted into a local above the `if` (that one goes a word SHORT).
 So try the per-arm spelling before hunting the allocation.
 
+### Two masks of one word are two `&=` statements
+
+`D_800847D0[0] = D_800847D0[0] & ~0x100 & ~0x1000;` is ONE `and`: fold merges
+the constants into `addiu $v1, $zero, -0x1101`, and a listing that spends two
+`addiu`/`and` pairs on it is then a word short. Written as two statements
+
+```c
+D_800847D0[0] &= ~0x100;
+D_800847D0[0] &= ~0x1000;
+```
+
+the masks stay separate and the stores do NOT double: gcc 2.7.2's flow pass
+keeps a `mem_set_list` and deletes a store to a location that is stored again
+with no read in between, so what comes out is the listing's one `lw`, two
+`and`s and one `sw`. A local with two `&=` on it gives the same four
+instructions but lets sched1 hoist the `lw` above an unrelated store that the
+target emits first, so the global is the thing to write twice.
+func_800553D4, one word and then the load order.
+
+### cse learns a case value inside a switch arm
+
+cse follows a conditional jump into its target when the label has a single
+reference, so inside `case 0x71:` it knows the switch subject equals 0x71 --
+and `cse_insn` attaches that as a `REG_EQUAL` note, which combine then
+rematerialises. A call in the arm that passes the subject therefore costs
+`addiu $a0, $zero, 0x71` even though the subject is already in $a0, and
+passing the literal emits the same word. So when an arm's `jal` has NO
+argument move in front of it and the dispatch register already holds the
+value, the call site is prototype-less in the original; there is no spelling
+that passes a value and matches. func_800553D4 uses an `__asm__` alias to say
+that for one call site without touching the declaration its other call sites
+need.
+
 ### A post-increment whose value outlives its statement costs a copy
 
 `expand_increment` QUEUES the increment when the incremented thing is a true
