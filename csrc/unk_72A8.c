@@ -3836,7 +3836,50 @@ void func_8003B64C(void) {
     } while (*e != 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003B714);
+/* func_8003B820's twin with one call more, and THE LOOP IS A BACKWARD `goto`.
+   That is the whole difference between them. The sweep row here had the right
+   diagnosis and the wrong cure: the comparison constant 0x13 must NOT be
+   hoisted (the target re-materialises it inside the loop, where
+   func_8003B820 keeps it in $s2), and the only body that stopped loop.c
+   hoisting it was one that read the table byte TWICE -- once for the sign
+   test and once for the `& 0x3F` -- which is three words over, because the
+   target loads it once into $a0. As a `goto` loop there is no loop for
+   loop.c to hoist out of at all, so a single `s32 v` local for the byte is
+   right here as well as in the twin, and the function MATCHES. See
+   matching-levers section 2: this is the third function in a day that the
+   goto form settled.
+
+   The rest is func_8003B820's constant-address recipe: the 0x80010000 half in
+   its own pointer local, the list pointer built from it with `| 0x29C`, the
+   record index as `(a[3] & 0x1F) * 84`, and the table byte reached as
+   `base + 0x333 + k` so the 0x333 stays the `lb`'s displacement. */
+void func_8003B714(void) {
+    u32 *e;
+    u8 *base;
+
+    if (*(u32 *) 0x8001029C == 0) {
+        return;
+    }
+    base = (u8 *) 0x80010000;
+    e = (u32 *) ((u32) base | 0x29C);
+loop:
+    {
+        u8 *a = (u8 *) *e;
+
+        if (a[1] == 0x13) {
+            s32 k = (a[3] & 0x1F) * 84;
+            s32 v = *(s8 *) (base + 0x333 + k);
+
+            if (v >= 0) {
+                func_800A0150(v & 0x3F, a, (u8 *) (0x800102F0 + k), 1);
+            }
+        }
+        e++;
+    }
+    if (*e != 0) {
+        goto loop;
+    }
+}
 
 s32 func_800B28A0(void);
 

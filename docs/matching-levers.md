@@ -274,7 +274,13 @@ and the goto form leaves it one pointer: 34 words to 32. **`search.py
 --only=goto_loop` now sweeps this**, rewriting a `while` or `for` as a guarded
 backward goto with the body in its own block -- so a body that starts with
 declarations stays legal -- and skipping any condition with a side effect,
-since the condition is duplicated.) func_8003F368 repeats its
+since the condition is duplicated. It also MATCHED func_8003B714 outright: its
+sweep row knew the comparison constant must not be hoisted out of the loop and
+had settled on the only body that stopped it, one that reads the table byte
+twice and runs three words over, where the goto form stops the hoisting
+outright and lets the natural single-read body stand. When a row says "the
+only shape that stops loop.c hoisting X", try the goto before accepting the
+shape.) func_8003F368 repeats its
 whole body on one error code. Written as `for (;;) { ... }` with a `break`,
 loop.c sees a real outer loop and hoists an inner loop's invariant `li 1` past
 the OUTER back edge, so that pseudo is live across the second half of the body,
