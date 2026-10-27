@@ -2722,7 +2722,46 @@ UnkNode *func_8004F5F4(s32 a, s32 b) {
 void func_8004F67C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F684);
+extern u8 D_80071784[];
+
+/* func_8004F780's sibling, writing the +0xA/+0xC halfwords of each entry's
+   primitive instead of its colour bytes. Four spellings:
+
+   * `e` is the FIRST statement of the body, ahead of the D_80071784 pointer.
+     loop.c's `record_giv` PREPENDS, so the giv found LAST in the body gets its
+     initialisation emitted FIRST in the preheader -- and the listing's
+     preheader is `lui`/`addiu` of D_80071784 and then `addu $t3, $t0`, so the
+     `p + i * 4` reference has to come first in the source. Three words, and
+     the last thing wrong.
+   * `h = -lo + t[...]`, not `t[...] - lo`: the subtraction's operand order
+     decides which of the two byte addresses gets $v0 and which $v1, and that
+     permutes six words downstream.
+   * `c = *(s32 *)(p + 0x2C) * 30;` goes in a local. Written inline as
+     `h * (*(s32 *)(p + 0x2C) * 30)` fold reassociates the `* 30` onto `h`,
+     and the listing multiplies the +0x2C field by 30 first.
+   * the three-term sums are `lo * 30 + 0x200 + h * c / d` and
+     `lo * 12 - 0x40 + h * c / d`, with the constant SECOND. fold always
+     pushes a constant to the end of an associative chain, so the four
+     orderings of these three terms are not interchangeable: measured at 3, 9,
+     50 and 52 differing words. */
+void func_8004F684(u8 *p)
+{
+    s32 i;
+
+    for (i = 0; i < *(s32 *)(p + 0x24); i++)
+    {
+        u8 *e = *(u8 **)(*(u8 **)(p + i * 4 + 4) + 0xC);
+        u8 *t = &D_80071784[i * 3];
+        u8 lo = t[*(s32 *)(p + 0x34)];
+        s32 h = -lo + t[*(s32 *)(p + 0x30)];
+        s32 c;
+
+        c = *(s32 *)(p + 0x2C) * 30;
+        *(s16 *)(*(u8 **)(e + 4) + 0xC) = lo * 30 + 0x200 + h * c / *(s32 *)(p + 0x28);
+        c = *(s32 *)(p + 0x2C) * 12;
+        *(s16 *)(*(u8 **)(e + 4) + 0xA) = lo * 12 - 0x40 + h * c / *(s32 *)(p + 0x28);
+    }
+}
 
 extern u8 D_80071784[];
 extern u8 D_80071790[];
