@@ -41,12 +41,18 @@ src, unit, func = argv[0:3]
 # (0, G], and cc1psx emits that size from the declared type -- so -G2 keeps
 # 2-byte objects $gp-relative while sending 4-byte ones to the absolute
 # bare-symbol form. Verified directly against gas.
-gasG = 0
+# Default it from the UNIT, via the Makefile's own per-unit rule: passing the
+# wrong -G is silent, and a sweep over every park on 2026-10-27 measured
+# func_8004437C at 107 words against its park's 100 purely because the sweep
+# did not pass --g8 for a gprel_ unit.
+gasG = asmlib.gas_g_for_unit(unit)
 for a in sys.argv[1:]:
     if a == '--g8':
         gasG = 8
     elif a.startswith('--gas-G='):
         gasG = int(a.split('=', 1)[1])
+    elif a == '--g0':
+        gasG = 0
 try:
     words, relocs = asmlib.build(src, gasG)
 except CompileError as e:

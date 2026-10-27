@@ -26,6 +26,36 @@ PROJ = os.environ.get(
 CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include']
 
 
+# A unit built with MASPSXFLAGS_G8 or _G2 leaves gas at a nonzero -G, so an
+# UNDEFINED symbol whose `.extern SYM,size` size falls in (0, G] goes
+# $gp-relative. Getting this wrong is silent: the function simply does not
+# match, and nothing says why. The Makefile is the authority -- these are the
+# `build/csrc/<unit>.o: MASPSXFLAGS := ...` lines -- so read it rather than
+# guessing from the unit's name. A unit with no such rule gets the default
+# MASPSXFLAGS, which forces -G0, and that includes some gprel_ units: the
+# prefix records why the unit was carved out, not how it is assembled.
+_G_BY_UNIT = None
+
+
+def gas_g_for_unit(unit):
+    """The gas -G this unit is built with, from the Makefile's own rules."""
+    global _G_BY_UNIT
+    if _G_BY_UNIT is None:
+        _G_BY_UNIT = {}
+        try:
+            mk = open(os.path.join(PROJ, 'Makefile')).read()
+        except OSError:
+            mk = ''
+        # join the backslash continuations so one rule is one line
+        mk = mk.replace('\\\n', ' ')
+        for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
+                             r'\s*:\s*MASPSXFLAGS\s*:?=\s*\$\(MASPSXFLAGS_G(\d+)\)',
+                             mk, re.M):
+            for o in m.group(1).split():
+                _G_BY_UNIT[os.path.basename(o)[:-2]] = int(m.group(2))
+    return _G_BY_UNIT.get(unit, 0)
+
+
 class CompileError(Exception):
     pass
 

@@ -332,12 +332,14 @@ def main():
         print(__doc__)
         return 2
     src, unit, func = args[0:3]
-    gasG = 0
+    gasG = asmlib.gas_g_for_unit(unit)
     for a in flags:
         if a == '--g8':
             gasG = 8
         elif a.startswith('--gas-G='):
             gasG = int(a.split('=', 1)[1])
+        elif a == '--g0':
+            gasG = 0
 
     try:
         words, relocs = asmlib.build(src, gasG)
