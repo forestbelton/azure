@@ -3835,3 +3835,37 @@ shared local, in a brace of its own). They are the two zero-cost knobs on
 local-alloc's choice between equally-weighted locals, and the second is the
 rule above. Run it over a park before hand-permuting anything: the sweep is
 free and it records what each accepted change was worth.
+
+## An explicit `goto` is how you get a loop that is NOT rotated
+
+loop.c's `duplicate_loop_exit_test` copies a top-tested loop's exit test to
+the bottom. Whether you want that is a question for the listing, and both
+answers have now been measured:
+
+* func_8005914C WANTS it. Its listing has the guard-plus-bottom-test shape
+  with ONE `lui` serving both tests, which is exactly what the duplication
+  produces from a `while` -- and a hand-written guarded do-while is two
+  expressions, two `lui`s, two words worse.
+
+* func_8005B4D0's two scan loops do NOT. Their listings have a single copy of
+  the test at the top and the back edge jumping to it. `while (cond) { ...
+  if (bound) break; ... }` and `for (;;) { if (!cond) break; ... }` both
+  rotate and come out four words longer, with a second copy of the test.
+  The shape that matches is an explicit label and `goto`:
+
+      scan:
+          if (cond)
+          {
+              i++;
+              if (bound) { i = -1; }
+              else { p += STRIDE; goto scan; }
+          }
+
+  A loop built this way gets no loop notes at all, so nothing rotates AND
+  nothing is strength-reduced -- which is the other tell: that listing walks
+  its pointer (`addiu $a0, $a0, 0x78`) where every indexed loop in the same
+  unit gets a giv. Ten words over the two loops.
+
+So: count the copies of the exit test in the listing before choosing the loop
+form. Two copies means a `while`; one copy with a back edge to it means a
+`goto`.
