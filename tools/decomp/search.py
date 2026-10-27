@@ -469,6 +469,89 @@ def t_global_decl(text):
                body)
 
 
+def _match_brace(text, i):
+    """Index just past the `}` that closes the `{` at text[i]."""
+    assert text[i] == '{'
+    d = 0
+    while i < len(text):
+        if text[i] == '{':
+            d += 1
+        elif text[i] == '}':
+            d -= 1
+            if d == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def t_goto_loop(text):
+    """Rewrite a `while`/`for` loop as a guarded BACKWARD GOTO.
+
+    A backward goto is not a loop to loop.c at all -- the front end only emits
+    NOTE_INSN_LOOP_BEG for a loop statement -- so the loop pass never records
+    a biv, never strength-reduces, and never hoists an invariant out of it.
+    That is matching-levers section 2, and it is the shape to reach for
+    whenever the target recomputes an index shift every iteration where the
+    build walks a pointer: it answered func_8003C67C's sweep row (two pointers
+    walked by -8 against the listing's two `sll`s) and took func_8004E9EC from
+    34 words to 32 by killing the second, biased giv on its cursor.
+
+    The body is wrapped in its own block after the label, so a body that
+    begins with declarations stays legal C89. The condition is duplicated, so
+    a condition with a side effect would change meaning -- those are skipped.
+    """
+    for m in scan(r"(?m)^([ \t]*)(while|for)[ \t]*\(", text):
+        ind, kw = m.group(1), m.group(2)
+        # the condition: everything up to the matching ')'
+        i = text.index('(', m.start(2))
+        d = 0
+        j = i
+        while j < len(text):
+            if text[j] == '(':
+                d += 1
+            elif text[j] == ')':
+                d -= 1
+                if d == 0:
+                    break
+            j += 1
+        head = text[i + 1:j]
+        k = text.find('{', j)
+        if k < 0 or text[j + 1:k].strip():
+            continue
+        end = _match_brace(text, k)
+        if end < 0:
+            continue
+        body = text[k + 1:end - 1]
+        if kw == 'for':
+            parts = head.split(';')
+            if len(parts) != 3:
+                continue
+            init, cond, step = (x.strip() for x in parts)
+            if not cond:
+                continue
+            pre = (ind + init + ';\n') if init else ''
+            tail = (ind + '    ' + step + ';\n') if step else ''
+        else:
+            cond, pre, tail = head.strip(), '', ''
+            if not cond:
+                continue
+        if any(t in cond for t in ('++', '--', '=')) and '==' not in cond \
+                and '!=' not in cond and '<=' not in cond and '>=' not in cond:
+            continue                      # a side effect in the condition
+        lab = 'zzloop%d' % m.start()
+        new = (pre
+               + ind + 'if (' + cond + ') {\n'
+               + ind + lab + ':\n'
+               + ind + '    {' + body + ind + '    }\n'
+               + tail
+               + ind + '    if (' + cond + ') {\n'
+               + ind + '        goto ' + lab + ';\n'
+               + ind + '    }\n'
+               + ind + '}\n')
+        yield ("%s loop at %d -> backward goto" % (kw, m.start()),
+               text[:m.start()] + new + text[end:])
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -482,6 +565,7 @@ TRANSFORMS = [
     t_decl_per_arm,
     t_volatile,
     t_global_decl,
+    t_goto_loop,
 ]
 
 

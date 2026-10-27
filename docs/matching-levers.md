@@ -268,7 +268,13 @@ turn STRENGTH REDUCTION OFF outright: func_8003C67C's copy loop is reduced to
 two pointers walked by -8 as a `while`, and as a guarded backward `goto` it
 recomputes the index shift every iteration instead, which is what that
 listing wants. A sweep row there had blamed loop.c's `loop_has_call`
-threshold; the loop notes are the whole of it.) func_8003F368 repeats its
+threshold; the loop notes are the whole of it. It paid again the same day on
+func_8004E9EC, where the `while` form gives the cursor a SECOND, biased giv
+and the goto form leaves it one pointer: 34 words to 32. **`search.py
+--only=goto_loop` now sweeps this**, rewriting a `while` or `for` as a guarded
+backward goto with the body in its own block -- so a body that starts with
+declarations stays legal -- and skipping any condition with a side effect,
+since the condition is duplicated.) func_8003F368 repeats its
 whole body on one error code. Written as `for (;;) { ... }` with a `break`,
 loop.c sees a real outer loop and hoists an inner loop's invariant `li 1` past
 the OUTER back edge, so that pseudo is live across the second half of the body,
