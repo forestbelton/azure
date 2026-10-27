@@ -1347,6 +1347,17 @@ Two separate things fall out of that, and both are words:
   follows a conditional jump whose label has one use and is preceded by a
   barrier, cse.c:8107), and the second `sll`/`sra` pair goes missing.
 
+**The raw copy has to be a TRUNCATION, not a copy.** On func_8005C2C0 the
+same `j = a; a = a << 16; a = a >> 16;` gave the extension on the COPY's
+register, not in place. The difference is `j`'s type. `s32 j = a` is a plain
+copy, so cse puts j and a in one quantity; `canon_reg` returns that quantity's
+first register and rewrites `a << 16` into `j << 16`. The extension then reads
+the callee-saved copy, which hands `a`'s pseudo a fourth `reg_n_refs` -- enough
+to outrank the next parameter and swap two hard registers. `s16 j = a` is a
+truncation, a DIFFERENT expression, so cse records j as the low part of a
+rather than as a, leaves the shift reading the parameter, and the parameter
+extends in place in its incoming register while the copy keeps the raw.
+
 Three variables do NOT do it: `j = id; t = (s16) id; if (t == -1)` puts the
 extension in its own pseudo, the parameter keeps its incoming register and the
 copy disappears again. The assignment has to be back to the parameter.
@@ -2207,6 +2218,54 @@ It is also the mechanism behind the stack-parameter prologue interleave
 cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
 pseudo set once, so sched1 defers its `lw` behind the argument setup, while
 the `addiu`s that set $a0-$a3 are pinned.
+
+### A symbol added to an index expands SECOND; a pointer variable expands first
+
+`p = D_80085458 + b * 0x78` and `u8 *q = D_80085458; p = q + b * 0x78` compile
+to the same five instructions in a different ORDER, and on func_8005C2C0 that
+order was worth 26 words.
+
+The array name decays to an `ADDR_EXPR`, which is `TREE_CONSTANT`, so `fold`
+canonicalises the sum with the constant operand LAST: the tree is
+`MULT_EXPR(b, 0x78) + ADDR_EXPR(D_80085458)` and the three index shifts expand
+before the symbol's `high`/`lo_sum` pair. sched1 then has the longer of the
+two chains available first and lifts it into the shadow of whatever load is
+nearby -- here the `lw` that fetches `st.addr`. `combine_regs` in local-alloc
+ties the index pseudo and `p` into one quantity, so that quantity is now BORN
+while the load's destination is still live, and `p` cannot have `$v0`. Every
+register in the block after it shifts.
+
+Assigning the symbol to a pointer variable first makes it a variable, fold
+leaves it as operand 0, the symbol pair expands first and fills the load's
+shadow instead, and the index chain -- and so `p`'s quantity -- starts after
+the load's value is dead.
+
+Spelling the sum the other way round (`b * 0x78 + D_80085458`), using
+`&D_80085458[b * 0x78]`, or hoisting the multiply into its own local all
+change nothing: fold normalises them to the same tree. Only making the base a
+variable moves it.
+
+### Read a field BACK instead of respelling the expression -- cse makes a MOVE
+
+A field stored and then copied into a second place has two spellings, and they
+differ by one instruction:
+
+```c
+*(u16 *) (p + 0x10) = f << 7;
+st.volume.left = f << 7;                    /* cse shares the shift: 0 words */
+st.volume.left = *(u16 *) (p + 0x10);       /* cse makes a reg-to-reg MOVE   */
+```
+
+In the second, cse replaces the load's source with the register that was
+stored, which leaves `(set (reg t) (reg stored))` -- a real `addu $a0, $v1,
+$zero` in the output. That move is exactly what a listing shows when the same
+value reaches two places through different registers, and it is otherwise
+impossible to ask for: writing the expression twice shares one pseudo and the
+move never exists.
+
+The read-back is not always forwarded, and a listing that forwards one field
+and reloads the next (`addu` for +0x10, `lhu` for +0x12) is telling you both
+were written as read-backs -- not that one of them was spelled differently.
 
 ### Read the scheduler's own decisions -- it is not "priority, then LUID"
 

@@ -37,6 +37,7 @@
 #include "libcd.h"
 #include "libgte.h"
 #include "libgpu.h"
+#include "libspu.h"
 
 #include "types.h"
 #include "structs.h"
