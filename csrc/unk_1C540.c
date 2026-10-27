@@ -7660,7 +7660,136 @@ void func_80058E50(s32 *p, s32 v) {
 void func_80058E64(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80058E6C);
+extern u32 D_800737C8[];
+extern u32 D_800869A8[];
+extern u32 D_800869B4n[] __asm__("D_800869B4");
+
+s32 func_80058ABC(u8 *);
+void func_80058E50(s32 *, s32);
+
+/* The MIDI meta-event handler. 0x51 is the tempo: it reads three bytes (or
+   four through func_80058ABC when the file is format 1), turns them into BPM,
+   scales that, clamps it to 0xFF, divides again for the two low frame rates,
+   and writes it to every live D_80085FA8 track. 0x2F ends the track; 0x54,
+   0x58 and 0x59 just consume their payload bytes; everything else goes
+   through the generic skip.
+
+   Five shapes, 142 DIFF down to a match. The first three are the dispatch,
+   and they are worth reading together, because the listing's `bltz` is the
+   tell:
+
+   * The switch has a case RANGE 0x00..0x0F sharing the default's label -- the
+     text meta-events. That is what makes the case list six nodes spanning
+     0x00..0x59, and gcc only builds a comparison tree when
+     `range > 10 * count` (stmt.c:4817): without it the five scattered cases
+     span 42 for a count of 5, so cc1psx emits a JUMP TABLE and the function
+     is ten words short with nothing in common with the listing. The range
+     node also explains the two low-bound checks: `emit_case_nodes` gives a
+     range node `blt low -> default` (the `bltz`, low = 0) and then
+     `ble high -> node_label` (the `slti 0x10`, and node_label IS the default
+     here), before recursing to the 0x2F leaf.
+
+   * The index is SIGNED: `(s32) (k & 0xFF)`, which is where `slti`/`bltz`
+     come from. Unsigned gives `sltiu`/`bltu` throughout.
+
+   * The six bodies are independent; the shared single call at the end and the
+     0x54 -> 0x59 chain are jump.c cross-jumping, not source fall-through.
+
+   And two allocation shapes, both read off advise.py:
+
+   * The tempo loop reads its bound AND its value into locals, because the
+     loop's stores through `e` could alias `p + 0x24` and the global, so
+     neither load is loop-invariant. The bound is read TWICE -- once for the
+     guard and once inside -- and cse turns the second into the listing's
+     `addu $a2, $v0, $zero`.
+
+   * `i` -- the loop counter -- is reused for the tempo read-back. That is the
+     whole last ten words: as its own local the read-back's quantity outranks
+     the divide's result and takes $a0, where the listing has the divide in
+     $a0 and the read-back in $a1. Reusing a variable that also lives in
+     another block imports that block's hard-register conflicts, which is
+     advise.py's third ALLOCATION suggestion. */
+void func_80058E6C(u8 *p, u32 k)
+{
+    u32 n;
+    u32 i;
+    u8 *e;
+    u32 m;
+    u32 v;
+
+    switch ((s32) (k & 0xFF))
+    {
+    case 0x2F:
+        *(u32 *) (p + 0x2C) = 1;
+        func_800589B8((s32) p);
+        break;
+    case 0x51:
+        if (D_800737C8[0] == 1)
+        {
+            *(u32 *) (p + 0x20) = func_80058ABC(p) & 0xFFFFFF;
+        }
+        else
+        {
+            *(u32 *) (p + 0x20) = func_800589B8((s32) p) << 16;
+            *(u32 *) (p + 0x20) |= func_800589B8((s32) p) << 8;
+            *(u32 *) (p + 0x20) |= func_800589B8((s32) p);
+        }
+        n = 60000000 / *(u32 *) (p + 0x20);
+        *(u32 *) (p + 0x24) = n;
+        *(u32 *) (p + 0x20) = n;
+        i = *(u32 *) (p + 0x24);
+        *(u32 *) (p + 0x24) = i * 100 / 115;
+        if (*(u32 *) (p + 0x24) >= 0x100)
+        {
+            *(u32 *) (p + 0x24) = 0xFF;
+        }
+        switch (D_800869A8[0])
+        {
+        case 0x18:
+        case 0x3C:
+            *(u32 *) (p + 0x24) >>= 1;
+            break;
+        case 0x1E:
+            *(u32 *) (p + 0x24) >>= 2;
+            break;
+        }
+        i = 0;
+        v = *(u32 *) (p + 0x24);
+        if (D_800869B4n[0] != 0)
+        {
+            m = D_800869B4n[0];
+            do
+            {
+                e = D_80085FA8 + i * 0x50;
+                *(u32 *) (e + 0x24) = v;
+                *(u32 *) (e + 0x20) = v;
+                i++;
+            } while (i < m);
+        }
+        break;
+    case 0x54:
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        break;
+    case 0x58:
+        func_800589B8((s32) p);
+        *(s32 *) (p + 0x34) = func_80058ABC(p);
+        break;
+    case 0x59:
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        func_800589B8((s32) p);
+        break;
+    case 0x00 ... 0x0F:
+    default:
+        func_80058E50((s32 *) p, func_80058A04((s32) p));
+        break;
+    }
+}
 
 u32 func_80058A04(s32);
 u32 func_800589B8(s32);
