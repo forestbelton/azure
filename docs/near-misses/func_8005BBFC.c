@@ -108,10 +108,18 @@
  *    source order below is the listing's own emitted order with the +0x04 and
  *    +0x08 stores swapped per item 1.
  *
- * search.py's whole sweep (120 candidate changes, 240 variants, all ten
- * transform families including the new declaration-order and per-arm ones)
- * finds exactly one improvement worth 1 DIFF -- dropping one `(s16)` cast --
- * so what is left really is allocation and schedule, not shape.
+ * search.py's whole sweep (127 candidate changes, 254 variants, all eleven
+ * transform families including the declaration-order, per-arm and volatile
+ * ones) finds exactly one improvement worth 1 DIFF, and it is REJECTED here
+ * on purpose: it drops the `(s16)` from the FIRST of the two key-range
+ * comparisons and leaves it on the second. The listing uses the same
+ * sign-extended $a2 for both (`slt $v0, $a2, $v0` then `slt $v0, $v0, $a2`,
+ * off one `sll 16` / `sra 16` pair), so both casts belong, and a differing-word
+ * count that improves when one is removed is the score rewarding a semantic
+ * change rather than a shape change. That is the judgement search.py cannot
+ * make; the score is an oracle for shape, not for correctness.
+ *
+ * So what is left really is allocation and schedule, not shape.
  */
 
 #include "common.h"
