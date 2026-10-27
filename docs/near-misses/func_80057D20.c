@@ -1,4 +1,4 @@
-/* func_80057D20 (unk_1C540) -- 463 of 463 words, 54 DIFF. NOT compiled.
+/* func_80057D20 (unk_1C540) -- 463 of 463 words, 6 DIFF. NOT compiled.
  *
  * THE THIRD AND LAST FUNCTION OF THE 0x80032E14 JUMP-TABLE RUN. func_80054F9C
  * and func_80057A94 both MATCH (see their files); when this one does, the run
@@ -9,10 +9,9 @@
  * jtbl_80032F04, of which 25 have bodies. Case 1 (modulation) is 135 of the
  * 463 words and case 64 (sustain pedal) another 95.
  *
- * THE WORD COUNT IS EXACT AND EVERY OPCODE MATCHES. All 54 differing words
- * are REGISTER NAMES: about 32 of them are `d` sitting in $s5 where the
- * listing has $s4, and the rest are the loop counters permuted with it.
- * Nothing structural is left.
+ * THE WORD COUNT IS EXACT, EVERY OPCODE MATCHES AND SO DOES EVERY REGISTER.
+ * The six differing words are the ORDER of two giv initialisations and their
+ * two increments inside case 64's inner loop -- see the end of this comment.
  *
  * THE CASE VALUES AND THEIR SOURCE ORDER come out of the table (file 0x6704,
  * 126 entries, index = cc - 1): 1, 2, 3, 4, 5, 7, 10, 11, 12, 20, 21, 22, 23,
@@ -78,41 +77,50 @@
  *   asymmetry the earlier draft needed here was an artefact of reading $a3 as
  *   a fourth argument; with three-argument calls the plain order is right.
  *
- * ABOUT 32 OF THE 54 WORDS ARE ONE REGISTER. `d` is in
- * $s5 here and $s4 in the listing, and every `andi $v0, $d, 0xFF` reads as a
- * differing word because of it. advise.py --greg prices it exactly: `d` is
- * pseudo 84, 34 refs over 177 live insns, priority 0.960; the allocno that
- * takes $s4 ahead of it is pseudo 288 -- case 64's INNER loop counter, 13
- * refs over 32, priority 1.219. To flip them, 288's live length has to pass
- * 40 insns (3 * 13 / 40.6 = 0.960) or `d` needs 44 references, and neither is
- * available at zero cost. MEASURED: repartitioning the counters so the inner
- * loop shares `i` with case 1's loops and a second variable serves case 64's
- * outer loop and the final one -- which is what the listing's register REUSE
- * suggests, $s2 in both places and $s5 in the other two -- is 468 words and
- * 414 DIFF. Register reuse across disjoint live ranges does not mean one
- * variable, and that reading cost a round.
+ * THE SEVEN LOOP COUNTERS ARE SEVEN VARIABLES, and that is what fixed 48 of
+ * the 54 words this was stuck on. Sharing one `i` across the four case-1
+ * loops, case 64's outer loop and the final loop makes one allocno with 46
+ * references over 155 live insns (priority 1.484), which outranks the entry
+ * pointer (56/206, 1.359) and `d` (34/177, 0.960) and takes their registers;
+ * the listing's own register REUSE says the opposite -- $s2 serves case 1's
+ * loops AND case 64's INNER loop, $s5 serves case 64's outer loop and the
+ * final one -- which only works if they are separate variables with disjoint
+ * live ranges. Four separate counters for case 1's loops (7 refs / 17 live
+ * each, 0.824), one shared with case 64's inner loop, and one more for the
+ * outer and final loops puts `e` back in $s1 and `d` in $s4 and every other
+ * register where the listing has it. Register reuse across disjoint ranges
+ * does not mean one variable -- but splitting on it is still the right move,
+ * for the priorities rather than the reuse.
  *
- * The rest is the loop counters permuted around it: `i` is $s2 here and the
- * listing uses $s2 for case 1's loops but $s5 for case 64's outer loop and
- * the final one. That is NOT a third variable -- splitting them three ways
- * (i for case 1, j for case 64's inner, a third for the outer and the final)
- * is 464 words and 90 DIFF, and giving the inner loop `i` with the outer and
- * final sharing a second is 464 and 123. Register reuse across disjoint live
- * ranges does not mean one variable, and that reading has now cost two
- * rounds.
+ * WHAT IS LEFT -- six words, and they are ONE ORDERING. In case 64's inner
+ * loop the listing initialises the D_80085458 giv before the D_80073740 one
+ * and increments them in that order; this source does both the other way
+ * round. loop.c's `record_giv` PREPENDS to the biv's giv list, so the
+ * emission order is the reverse of the creation order, and creation order is
+ * insn order: `u8 *r = D_80085458 + j * 0x78;` is the first array reference
+ * in the body, so its giv is created first and emitted second. For the
+ * listing's order the D_80073740 reference has to come first, and it cannot:
+ * the listing's own `lw $v0, 0x0($s3)` sits INSIDE the `if`, after three
+ * conditions that all read through `r`.
  *
- * MEASURED AND NOT WORKING, besides the counter partitions: `f1` passed as an
- * argument (case 10 then LOADS it back, so f1 really is spilled); `f1` and
- * `f2` declared `volatile` -- the listing's load/or/store of f2 inside case
- * 64's loop looks like volatile but is not, 467 words; every before/after
- * placement of `f1 = 1`; the field store moved after the call; `j` declared
- * at function scope rather than in case 64's block (identical); the inner
- * loop's `D_80073740[j]` walked as a pointer (462/250) or read into a local
- * used three times (462/186) -- both drop one of `j`'s references, which is
- * the arithmetic that would flip it, and both cost a word; and
- * `e->unk_0C`/`e->unk_14` read back as the third argument instead of `d`.
+ * MEASURED AND NOT WORKING for those six: a `u32 *t = &D_80073740[j];`
+ * declared ahead of `r` (unused, identical; used for all three accesses,
+ * 459/363); the same pointer declared inside the `if` (462/262); the
+ * `f2 |= D_80073740[j]` moved after the do/while (463/45); the three
+ * `r`-based conditions written inline off D_80085458 so that `r` is not
+ * computed first (477 words -- cse does not share the index chain); the
+ * inner counter as `u32`; and `j` at function scope rather than in case 64's
+ * block.
+ *
+ * MEASURED AND NOT WORKING earlier, kept so they are not retried: `f1`
+ * passed as an argument (case 10 then LOADS it back, so f1 really is
+ * spilled); `f1` and `f2` declared `volatile` -- the listing's load/or/store
+ * of f2 inside case 64's loop looks like volatile but is not, 467 words;
+ * every before/after placement of `f1 = 1`; the field store moved after the
+ * call; the inner loop's `D_80073740[j]` walked as a pointer (462/250) or
+ * read into a local used three times (462/186); and `e->unk_0C`/`e->unk_14`
+ * read back as the third argument instead of `d`.
  */
-
 #include "common.h"
 
 extern s32 D_80073734a[] __asm__("D_80073734");
@@ -131,10 +139,14 @@ s32 func_8005EB78(s32);
 void func_80057D20(u8 ch, u8 cc, u8 d)
 {
     Unk80084960 *e = &D_80084960[ch];
-    s32 i;
+    s32 i1;
+    s32 i2;
+    s32 i3;
+    s32 i4;
     s32 f1 = 0;
     s32 f2 = 0;
     s32 k;
+    s32 kk;
     s32 n;
 
     switch (cc)
@@ -151,39 +163,39 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
             else
             {
                 n = D_80073734a[0];
-                i = 0;
+                i1 = 0;
                 e->unk_3A = 0;
                 if (n > 0)
                 {
                     do
                     {
-                        u8 *q = D_80085458 + i * 0x78;
+                        u8 *q = D_80085458 + i1 * 0x78;
 
                         if (*(u16 *) (q + 6) == ch)
                         {
                             func_80056654(q, 1);
                         }
-                        i++;
-                    } while (i < D_80073734a[0]);
+                        i1++;
+                    } while (i1 < D_80073734a[0]);
                 }
             }
             if (d == 0 || e->unk_38 == 0)
             {
                 n = D_80073734a[0];
-                i = 0;
+                i2 = 0;
                 e->unk_3A = 0;
                 if (n > 0)
                 {
                     do
                     {
-                        u8 *q = D_80085458 + i * 0x78;
+                        u8 *q = D_80085458 + i2 * 0x78;
 
                         if (*(u16 *) (q + 6) == ch)
                         {
                             func_80056654(q, 1);
                         }
-                        i++;
-                    } while (i < D_80073734a[0]);
+                        i2++;
+                    } while (i2 < D_80073734a[0]);
                 }
             }
         }
@@ -198,39 +210,39 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
             else
             {
                 n = D_80073734a[0];
-                i = 0;
+                i3 = 0;
                 e->unk_3A = 0;
                 if (n > 0)
                 {
                     do
                     {
-                        u8 *q = D_80085458 + i * 0x78;
+                        u8 *q = D_80085458 + i3 * 0x78;
 
                         if (*(u16 *) (q + 6) == ch)
                         {
                             func_80056654(q, 1);
                         }
-                        i++;
-                    } while (i < D_80073734a[0]);
+                        i3++;
+                    } while (i3 < D_80073734a[0]);
                 }
             }
             if (d == 0 || e->unk_38 == 0)
             {
                 n = D_80073734a[0];
-                i = 0;
+                i4 = 0;
                 e->unk_3A = 0;
                 if (n > 0)
                 {
                     do
                     {
-                        u8 *q = D_80085458 + i * 0x78;
+                        u8 *q = D_80085458 + i4 * 0x78;
 
                         if (*(u16 *) (q + 6) == ch)
                         {
                             func_80056654(q, 1);
                         }
-                        i++;
-                    } while (i < D_80073734a[0]);
+                        i4++;
+                    } while (i4 < D_80073734a[0]);
                 }
             }
         }
@@ -338,27 +350,25 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
         func_800564A8();
         break;
     case 64:
-        for (i = 0; i < D_80073734a[0]; i++)
+        for (kk = 0; kk < D_80073734a[0]; kk++)
         {
-            u8 *q = D_80085458 + i * 0x78;
+            u8 *q = D_80085458 + kk * 0x78;
 
             if (ch == *(u16 *) (q + 6))
             {
                 if (d < 0x40)
                 {
-                    s32 j;
-
-                    for (j = 0; j < D_80073734a[0]; j++)
+                    for (i1 = 0; i1 < D_80073734a[0]; i1++)
                     {
-                        u8 *r = D_80085458 + j * 0x78;
+                        u8 *r = D_80085458 + i1 * 0x78;
 
                         if (*(u16 *) (r + 6) == ch && r[0x1D] != 0 && (r[0x1C] & 0x80) != 0)
                         {
-                            f2 |= D_80073740[j];
+                            f2 |= D_80073740[i1];
                             do
                             {
-                                func_8005E97C(0, D_80073740[j]);
-                                k = func_8005EB78(D_80073740[j]);
+                                func_8005E97C(0, D_80073740[i1]);
+                                k = func_8005EB78(D_80073740[i1]);
                             } while (k != 2 && k != 0);
                             r[0x1D] = 0;
                             *(u16 *) (r + 0x1A) = 0;
@@ -412,16 +422,16 @@ void func_80057D20(u8 ch, u8 cc, u8 d)
     }
     if (f1 != 0)
     {
-        for (i = 0; i < D_80073734a[0]; i++)
+        for (kk = 0; kk < D_80073734a[0]; kk++)
         {
-            u8 *q = D_80085458 + i * 0x78;
+            u8 *q = D_80085458 + kk * 0x78;
 
             if (ch == *(u16 *) (q + 6))
             {
                 if (*(u16 *) (q + 0x1A) != 0)
                 {
                     func_800561D8(q, &D_80084960[ch]);
-                    func_800563B0(i, *(u16 *) (q + 0x10), *(u16 *) (q + 0x12));
+                    func_800563B0(kk, *(u16 *) (q + 0x10), *(u16 *) (q + 0x12));
                 }
             }
         }
