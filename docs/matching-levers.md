@@ -1308,6 +1308,19 @@ leaves the `andi`, because combine cannot fold a mask back through a pseudo
 with several uses; `(n << 25) < 0` is the fold combine would have done for the
 single-use case, and it is the two words the listing spends there.
 
+### `x = x << 16; x = x >> 16;` is the IN-PLACE sign-extension; the cast is not
+
+MIPS's `extendhisi2` expander allocates a FRESH pseudo for the intermediate
+shift, so `x = (s16) x` gives `sll $v0, $a1, 16` / `sra $a1, $v0, 16` -- two
+registers, and the intermediate competes for $v0 with whatever else is short
+-lived there. Writing the two shifts as separate statements on an `s32` makes
+them one pseudo set twice, and the listing's `sll $a1, $a1, 16` /
+`sra $a1, $a1, 16` comes out instead.
+
+It matters beyond the two words: with the intermediate off $v0, every other
+short-lived value in that block is renumbered. func_8005A608 and
+func_8005A778 both needed it.
+
 ### A parameter re-assigned its own truncation extends IN PLACE -- and resets cse
 
 `sll $a1, $a1, 16` / `sra $a1, $a1, 16` with the raw value saved first --

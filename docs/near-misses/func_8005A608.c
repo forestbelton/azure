@@ -33,7 +33,40 @@
  * words again, because the extension then lands in its own pseudo and the
  * parameter keeps $a1 with no copy. The assignment has to be back to `id`.
  *
- * WHAT IS LEFT: 11 words, and they are ONE chain, traced from the dumps:
+ * THE IN-PLACE EXTENSION IS NOW REPRODUCED, and it took writing the shifts
+ * out by hand:
+ *
+ *     id = id << 16;
+ *     id = id >> 16;
+ *
+ * rather than `id = (s16) id`. MIPS's `extendhisi2` expander always allocates
+ * a FRESH pseudo for the intermediate, so the cast gives `sll $v0, $a1, 16` /
+ * `sra $a1, $v0, 16` -- two registers -- and the two shifts written as
+ * statements are one pseudo set twice, which comes out as the listing's
+ * `sll $a1, $a1, 16` / `sra $a1, $a1, 16`. That is a general lever and is now
+ * in matching-levers section 7.
+ *
+ * WHAT IS LEFT with the hand-written shifts: 13 words, and they are ONE
+ * SCHEDULING FACT. The listing emits `sw $zero, %lo(D_8007382C)($v0)` AFTER
+ * the two shifts; this source emits it before. That one position decides
+ * everything else: with the store late, $v0 is still holding the symbol's
+ * high half across the extension, so `j = id` falls to $v1 (the listing's
+ * `addu $v1, $a1, $zero`) and the -1 then reuses $v0 once the store frees it;
+ * with the store early, $v0 is free, `j` takes it and the -1 is pushed to
+ * $a2, and the then-arm's own -1 becomes a copy instead of a fresh
+ * materialisation.
+ *
+ * The store has priority 1 in sched2 (nothing in the block depends on it) and
+ * the `sra` has 2, so the usual ordering puts the store first. In the listing
+ * it is the other way round, which is `schedule_select`'s `potential_hazard`
+ * and not priority. All twelve orders of the four entry statements were
+ * measured with the hand-written shifts: 13 is the floor, 15, 16 and 18 the
+ * alternatives, and nothing in the source moves the store.
+ *
+ * FOR REFERENCE, the `(s16)` cast version is 11 DIFF -- fewer differing words
+ * but structurally further away, since its extension is not in place.
+ *
+ * THE OLD ANALYSIS, which the above supersedes: 11 words, one chain:
  *
  *   the extension's intermediate pseudo takes $v0 here, so the entry's -1
  *   is pushed to $a2; the listing's extension is IN PLACE in $a1, which
