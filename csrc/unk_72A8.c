@@ -1818,7 +1818,80 @@ void func_80037D9C(u8 *p, u8 c) {
     func_80037D50(p, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80037E58);
+/* A scalar ALIAS for each of the two symbols, and `&` on the use: the
+   DECLARED SIZE is what decides whether the address is a one-insn `la` (which
+   gas expands to a lui/addiu pair in ONE register) or a two-insn
+   compiler-split pair, and here both want the one-insn form -- it is the last
+   eight words of this function. The unit's own `extern u8 D_800809C0[];`
+   above is left as it is, because func_80037D9C is matched against the array
+   spelling. */
+extern u8 D_800809C0s __asm__("D_800809C0");
+extern u8 D_80012D6E;
+
+UnkNode *func_8003FE78(s32, UnkNode *, s16);
+void func_80037F70(u8 **);
+
+/* Spawns the node with func_8003FE78, hangs func_80037F70 on it, points its
+   +0x20/+0x24 pair at D_80082A38 and D_80082A38+0x8C, zeroes 0x6B eight-byte
+   D_80082660 entries, clears sixteen words of D_80082A38 from the top down,
+   plants D_800809C0 and a zero, and copies a byte out of D_80012D6E.
+
+   Four shapes, and the two DECLARATIONS above are half of them:
+
+   * The DESCENDING loop keeps 0x48 as the store's DISPLACEMENT, with the giv
+     based at D_80082A38 + 0x3C. Reaching the words by name
+     (`D_80082A38w[i + 0x12] = 0`) lets loop.c fold the 0x48 into the giv's
+     add_val, because symbol plus constant IS a constant, and the store comes
+     out `sw $zero, 0x0($v0)` off a base of +0x84. Going through a
+     loop-invariant REGISTER (`r = D_80082A38w;` then `r[i + 0x12]`) leaves
+     the add_val a pseudo, the 0x48 cannot fold into it, and the displacement
+     survives.
+
+   * `q = (u8 **) (n + 0x20)` as its own local, with the +0x24 store and every
+     later read through it but the +0x20 store spelled `n + 0x20`. That
+     asymmetry is what the listing has ($s2 for 0x4, $v0 for 0x20).
+
+   * The three tail reads of q[0] each reload it, because the preceding `sb`
+     invalidates cse's memory table -- but the last pair,
+     `q[0][0x86] = q[0][0x85]`, shares ONE load, which is only true when both
+     subscripts are in the same statement.
+
+   The two declarations were worth six words and then the last two. With both
+   as incomplete arrays the park sat at 8 DIFF for a session with the right
+   diagnosis and the wrong cure: local-alloc priced lo_sum(D_800809C0) at 2
+   refs over 2 insns against lo_sum(D_80082A38)'s 3 over 4, took the shorter
+   one first and gave it $v0, and the park asked for "D_800809C0's address one
+   insn rather than two" without naming the declaration that does it. Found by
+   `search.py --only=global_decl`. */
+void func_80037E58(void)
+{
+    u8 *n;
+    u8 **q;
+    s32 i;
+    u32 *r;
+
+    n = (u8 *) func_8003FE78(0, D_80082BC0, 0x49);
+    q = (u8 **) (n + 0x20);
+    *(u32 *) (n + 0x10) = (u32) func_80037F70;
+    q[1] = (u8 *) D_80082A38w;
+    *(u32 *) (n + 0x20) = (u32) ((u8 *) D_80082A38w + 0x8C);
+    for (i = 0; i < 0x6B; i++)
+    {
+        memset(&D_80082660[i], 0, 8);
+    }
+    r = D_80082A38w;
+    for (i = 0xF; i >= 0; i--)
+    {
+        r[i + 0x12] = 0;
+    }
+    D_80082A38w[0x22] = (u32) &D_800809C0s;
+    D_80082A38w[0xE] = 0;
+    q[1][3] = D_80012D6E;
+    func_80037D9C(q[1], 3);
+    q[0][0x87] = 0;
+    q[0][0x85] = 0;
+    q[0][0x86] = q[0][0x85];
+}
 
 s32 func_80043FB8(s32 arg0, ...);
 void func_8003800C(u8 *);

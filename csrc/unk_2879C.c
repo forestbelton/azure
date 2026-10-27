@@ -1556,7 +1556,51 @@ void func_800568B4(u8 *p) {
     *(s16 *) (p + 0x52) = -*(u16 *) (p + 0x56);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056948);
+extern s32 D_80073734a[] __asm__("D_80073734");
+
+void func_80056098(u8 *);
+void func_80056654(u8 *, s32);
+
+/* The voice-off sweep: runs func_80056800 and func_800568B4 over all 0x10
+   D_80084960 channels, then over every live D_80085458 entry whose +0x06
+   index is in range.
+
+   MATCHED on the first compile. Both pointers are the INDEXED form off the
+   symbol inside the body, which is this unit's standing recipe -- it leaves
+   loop.c one UNBIASED giv per loop, so the second loop reads `lhu 0x6($s0)`
+   and still passes `$s0` itself to the three calls. A walked pointer would
+   bias the giv to +0x06, the first field used. D_80084960 goes through
+   `(u8 *) &D_80084960[i]` for the 0x9C stride, as func_80056A08 does.
+
+   D_80073734 takes the INCOMPLETE-ARRAY alias: the listing keeps its `%hi`
+   in $s2 across the loop and re-reads the bound through `%lo(...)($s2)` at
+   the bottom test, which is the compiler-split shape. The first loop's
+   bound is a constant, so it needs no guard; the second one does. */
+void func_80056948(void) {
+    s32 i;
+
+    i = 0;
+    do {
+        u8 *e = (u8 *) &D_80084960[i];
+
+        func_80056800(e);
+        func_800568B4(e);
+        i++;
+    } while (i < 0x10);
+    if (D_80073734a[0] > 0) {
+        i = 0;
+        do {
+            u8 *q = D_80085458 + i * 0x78;
+
+            if (*(u16 *) (q + 6) < 0x10) {
+                func_80056098(q);
+                func_80055E84(q);
+                func_80056654(q, 0);
+            }
+            i++;
+        } while (i < D_80073734a[0]);
+    }
+}
 
 /* The three-table reset: clears all 0x20 D_80085FA8 entries, then every live
    D_80085458 entry whose +0x06 index is in range (keying its voice off and
@@ -1903,8 +1947,6 @@ void func_80057A94(u8 *p)
         break;
     }
 }
-
-extern s32 D_80073734a[] __asm__("D_80073734");
 
 void func_80056654(u8 *, s32);
 s32 func_8005EB78(s32);

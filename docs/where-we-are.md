@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 81 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 79 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,14 +243,31 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 79 | 39 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
-| never attempted | 2 | func_800345B8 (546 w, GTE and scratchpad) and func_80056E10 (718 w) |
+| parked, with measurements | 70 | 38 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| never attempted | 9 | 2255 words; see below |
 
-**Nothing is structurally blocked any more, and every remaining stub is a real
-function.** As of 2026-10-27 only TWO of the eighty-one have never been attempted;
-everything else has a park file or a sweep row with measurements behind it, so
-the next session's first move is `python3 tools/decomp/progress.py --parked`
-and then the park, not a fresh reading of the listing.
+**THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the
+audit that caught it is worth re-running: a stub counts as attempted only if
+it has a park file in `docs/near-misses/` or a ROW OF ITS OWN in
+`docs/carved-sweep.md`, and nine did not. Being mentioned inside another
+function's row is not a measurement. The list, smallest first:
+
+  func_8003C920  54 w    func_8005560C  73 w    func_8005ACDC  75 w
+  func_80035484  90 w    func_80035888  93 w    func_80059F8C 145 w
+  func_8004C36C 461 w    func_800345B8 546 w (GTE and scratchpad)
+  func_80056E10 718 w (the voice family's third member)
+
+func_80056948 (48 w) was the tenth and MATCHED on the first draft on
+2026-10-27, which is the argument for working through the rest of them before
+grinding the parks: the parks have had their families swept, and these have
+never been read. The audit is five lines of Python over `csrc/` and the two
+docs; `guard.py` already checks the converse (a row for a function that has
+landed).
+
+Everything else has a park file or a sweep row with measurements behind it, so
+for those the next session's first move is
+`python3 tools/decomp/progress.py --parked` and then the park, not a fresh
+reading of the listing.
 
 **Where the parked work actually is**, from advise.py's verdict over the 44
 park files that existed early on 2026-10-27. EIGHT have MATCHED and landed
