@@ -2401,6 +2401,24 @@ u = *(s16 *) (p + 8) % 64 * 4;          /* narrowed:  sll 16 / sra 14 */
 y = *(s16 *) (p + 0xA); u = y % 256;    /* not:       plain subu      */
 ```
 
+**The same narrowing decides whether `d * 2` shares a mask of `d`, and it cuts
+both ways in one function.** With `u8 d`, `d * 2` is shortened to QImode, so
+it carries no `(zero_extend d)` of its own and reuses whatever mask the
+neighbouring statement already computed; `d << 1` is not shortened -- shifts
+are not in `shorten`'s list -- so it keeps an SImode operand and gets a second
+`andi $rX, $d, 0xFF`. Which one is right depends on the DESTINATION:
+
+```c
+e->unk_08 = d;  e->unk_40 = d << 1;   /* s16 field: listing has TWO andi */
+e->unk_6C = d * 2;                    /* u8  field: listing has NO andi  */
+```
+
+On a byte destination the shortened multiply lets combine fold the mask away
+entirely and emit the bare `sll $v0, $s4, 1`, where the shift form adds a mask
+the listing does not have. func_80057D20 wants `<< 1` in case 1 and `* 2` in
+cases 20 and 25, two words each way, and getting either backwards shifts every
+later word.
+
 ### An index INLINE in a call argument gets the hard register; a local does not
 
 For `AddPrim(base + n * 4 + 0x70, prim)` the five instructions are the same
