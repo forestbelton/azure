@@ -1,4 +1,4 @@
-/* func_8005C2C0 (unk_1C540) -- 132 of 132 words, 10 DIFF. NOT compiled.
+/* func_8005C2C0 (unk_2CDC0) -- 132 of 132 words, 10 DIFF. NOT compiled.
  *
  * Starts a voice: claims the D_80085458 entry for channel `b`, fills it in,
  * and keys the note on through func_8005EC0C with a stack SpuVoiceAttr.

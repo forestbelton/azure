@@ -1,4 +1,4 @@
-/* func_80059814 (unk_1C540) -- 94 of 103 words, 69 DIFF. NOT compiled.
+/* func_80059814 (unk_2CDC0) -- 94 of 103 words, 69 DIFF. NOT compiled.
  *
  * Advances the +0x10 accumulator by the +0x40 step at a rate set by the
  * current video mode in D_800869A8, then splits the result into a remainder

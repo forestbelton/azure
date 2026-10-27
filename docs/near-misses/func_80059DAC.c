@@ -1,4 +1,4 @@
-/* func_80059DAC (unk_1C540) -- 58 of 58 words, 8 DIFF. NOT compiled.
+/* func_80059DAC (unk_2CDC0) -- 58 of 58 words, 8 DIFF. NOT compiled.
  *
  * Sorts D_800869C0 ascending by each slot's first word. Counts the live slots
  * first (stop at a zero first word, cap 16), then a bubble sort comparing

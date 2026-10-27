@@ -1,4 +1,4 @@
-/* func_8005C4D0 (unk_1C540) -- 64 of 64 words, 22 DIFF. NOT compiled.
+/* func_8005C4D0 (unk_2CDC0) -- 64 of 64 words, 22 DIFF. NOT compiled.
  *
  * Tears down the D_80085458 entry for index n: clears its +0x1A and +0x0A,
  * runs func_80056D44/func_80056DB4, then spins on func_8005EB78 until the

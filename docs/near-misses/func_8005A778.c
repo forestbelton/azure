@@ -1,4 +1,4 @@
-/* func_8005A778 (unk_1C540) -- 101 of 101 words, 21 DIFF. NOT compiled.
+/* func_8005A778 (unk_2CDC0) -- 101 of 101 words, 21 DIFF. NOT compiled.
  *
  * func_8005A608 with a third argument and a bound check: claims a D_80086A40
  * slot for `p`, stores `h` at +0x10 twice (once as given, once as

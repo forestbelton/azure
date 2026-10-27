@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 95 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 93 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -241,14 +241,20 @@ something** -- that has been the single biggest waste of effort here.
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
 Forty-two rows of `docs/carved-sweep.md`'s table are parked with measurements
-rather than untouched, and seven of the rest dispatch through a jump table
-whose `.rodata` has no placement yet (jtbl_80032E14 and its neighbours sit
-inside a `bin` blob at 0x6614, not in the four placed runs), so they want that
-carve before the C. The fourth placed run is jtbl_8003310C at 0x8003310C,
-added 2026-10-27 with func_800595C0: one `.rodata` subsegment of its own
-segment, which is all a unit's FIRST landed table needs. `unk_1C540` cannot
-place a second without being split, because its four tables belong to two
-separated runs.
+rather than untouched, and four of the rest dispatch through a jump table whose
+`.rodata` has no placement yet, so they want that carve before the C.
+
+Five runs are placed. The fourth was jtbl_8003310C at 0x8003310C, with
+func_800595C0: one `.rodata` subsegment of its own segment, which is all a
+unit's FIRST landed table needs. The fifth, the same day, was the first two
+tables of the 0x80032E14 run, with func_80054F9C and func_80057A94 -- and that
+one needed `unk_1C540` SPLIT at func_800595C0 into `unk_1C540` and
+`unk_2CDC0`, because a unit emits one contiguous `.rodata` and this one owns
+two separated runs. The lesson worth carrying: **a run does not have to be
+placed whole.** jtbl_80032F04 belongs to func_80057D20, which is still six
+words short, and because its table is the LAST of the three the subsegment
+just stops early and the rest stays `bin`. See the jump-table section of
+`docs/open-matching-problems.md` for the split's mechanics.
 
 ### Near-misses, with their files in `docs/near-misses/`
 

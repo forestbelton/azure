@@ -1,4 +1,4 @@
-/* func_8005A608 (unk_1C540) -- 92 of 92 words, 11 DIFF. NOT compiled.
+/* func_8005A608 (unk_2CDC0) -- 92 of 92 words, 11 DIFF. NOT compiled.
  * WAS 88 of 92, 85 DIFF. The four missing words are now paid for and what is
  * left is one register chain.
  *

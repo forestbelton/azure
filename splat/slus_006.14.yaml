@@ -81,21 +81,40 @@ segments:
     align: 4
     subsegments:
       - [0xefc, bin]
+  # The first of unk_1C540's two runs: jtbl_80032E14 (36 entries) and
+  # jtbl_80032EA4 (23), func_80054F9C's and func_80057A94's, 0xEC bytes with no
+  # pad -- each table gets its own `.align 3` and 144 is already a multiple of
+  # 8, so the alignment falls out of the compiler. The zero word at 0x80032F00
+  # that follows is NOT this object's: it belongs to whichever original unit
+  # owns jtbl_80032F04, which is still raw in the `bin` below. That is why this
+  # subsegment stops at 0x6700 and not at 0x6704.
+  - type: code
+    start: 0x6614
+    vram: 0x80032E14
+    align: 4
+    subsegments:
+      - [0x6614, .rodata, unk_1C540]
+  - type: code
+    start: 0x6700
+    vram: 0x80032F00
+    align: 4
+    subsegments:
+      # The zero pad plus jtbl_80032F04, func_80057D20's 126-entry table, still
+      # raw: func_80057D20 is at 463 of 463 words and SIX DIFF, and lands here
+      # the day those six go. See docs/near-misses/func_80057D20.c.
+      - [0x6700, bin]
   # jtbl_8003310C, func_800595C0's 58-entry table: 0xE8 bytes, and the only
-  # subsegment of its segment for the same reason as the three runs above.
-  # unk_1C540 owns FOUR tables in TWO separated runs -- jtbl_80032E14 /
-  # jtbl_80032EA4 / jtbl_80032F04 at 0x80032E14 and this one at 0x8003310C --
-  # and a unit's `.rodata` is one contiguous output section, so this placement
-  # is only correct while func_800595C0 is the unit's ONLY switch function in
-  # C. When func_80054F9C, func_80057A94 or func_80057D20 lands, its table is
-  # emitted ahead of this one and the unit has to be split in two at
-  # func_800595C0. See docs/open-matching-problems.md.
+  # subsegment of its segment for the same reason as the runs above. unk_1C540
+  # owns FOUR tables in TWO separated runs, and a unit's `.rodata` is one
+  # contiguous output section, so the carved unit is split in two at
+  # func_800595C0: csrc/unk_1C540.c supplies the run above and csrc/unk_2CDC0.c
+  # supplies this one. See docs/open-matching-problems.md.
   - type: code
     start: 0x690c
     vram: 0x8003310C
     align: 4
     subsegments:
-      - [0x690c, .rodata, unk_1C540]
+      - [0x690c, .rodata, unk_2CDC0]
   - type: code
     start: 0x69f4
     vram: 0x800331F4
@@ -178,6 +197,8 @@ segments:
       - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
+      # Split off at func_800595C0 so each half supplies one .rodata run.
+      - [0x2cdc0, c, unk_2CDC0]
       - [0x301a8, asm, psyq/libsnd/PLAY]
       - [0x301d4, c, unk_301D4]
       - [0x30290, asm, psyq/libspu/S_INI]

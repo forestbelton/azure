@@ -1,4 +1,4 @@
-/* func_800599B0 (unk_1C540) -- 133 of 133 words, 1 DIFF. NOT compiled.
+/* func_800599B0 (unk_2CDC0) -- 133 of 133 words, 1 DIFF. NOT compiled.
  *
  * The sequencer start: clears D_800737C4, picks the format from the first byte
  * of the data at D_80085FA4 (0x70 -> 0, 0x4B -> 2, otherwise 1), runs

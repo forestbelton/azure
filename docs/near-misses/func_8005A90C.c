@@ -1,4 +1,4 @@
-/* func_8005A90C (unk_1C540) -- 99 of 103 words, 92 DIFF. NOT compiled.
+/* func_8005A90C (unk_2CDC0) -- 99 of 103 words, 92 DIFF. NOT compiled.
  *
  * The third member of the func_8005A608 / func_8005A778 family, and the one
  * with the longest tail: it claims a D_80086A40 slot the same way the other

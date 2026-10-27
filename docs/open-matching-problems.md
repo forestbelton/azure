@@ -332,22 +332,50 @@ in 0x80010000..0x80090000:
 | 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
 | 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | func_800517CC (268 w) |
 | 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
-| 0x06614..0x068fc | 80032E14..800330FC |186 | jtbl_80032E14 (36), jtbl_80032EA4 (23), pad, jtbl_80032F04 (126) | func_80054F9C (28 w, **MATCHED**), func_80057A94 (163 w, **MATCHED**), func_80057D20 (463 w, 463/463 and 6 DIFF) |
-| 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_1C540, func_800595C0) |
+| 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_1C540, func_80054F9C + func_80057A94) |
+| 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | func_80057D20 (463 w, 463/463 and 6 DIFF) |
+| 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_2CDC0, func_800595C0) |
 | 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
 
 Entry counts come from each dispatch's `sltiu` bound, and every run's extent
 agrees with those bounds, so the grouping is measured rather than inferred.
 
-**The 0x80032E14 run is the next one to place, and it is ONE FUNCTION SHORT.**
-func_80054F9C (28/28) and func_80057A94 (163/163) both match -- see their
-files in `docs/near-misses/` -- and func_80057D20 is at 463 of 463 words with
-SIX DIFF -- every opcode and every register right, the six being one giv
-ordering inside case 64's inner loop. So that run needs only func_80057D20. With all three in C,
-`unk_1C540` splits in TWO at func_800595C0 -- the first piece's `.rodata` is
-this run, the second's is jtbl_8003310C -- and the functions owning the three
-EARLIER runs are all still `INCLUDE_ASM`, so they contribute nothing to either
-piece. Three functions land on one split.
+**The 0x80032E14 run is placed in PART, and a run does not have to be placed
+whole.** That was the thing worth noticing: the run holds three tables, the
+third belongs to func_80057D20 (463 of 463 words and six DIFF, one giv
+ordering -- see `docs/near-misses/func_80057D20.c`), and the first two belong
+to func_80054F9C (28/28) and func_80057A94 (163/163), which both matched. Since
+func_80057D20's table is the LAST of the three, the `.rodata` subsegment can
+stop at 0x80032F00 and leave the rest as `bin`, so the two matched functions
+landed without waiting for the third. 2026-10-27, byte-identical on the first
+build, 95 asm stubs to 93.
+
+What it cost: the unit split the comment below predicted. `unk_1C540` now
+carries the first run and `unk_2CDC0` -- the same carved unit from
+func_800595C0 on -- carries jtbl_8003310C. The mechanics of the split, for the
+next one:
+
+* The boundary is the function address, `[0x2cdc0, c, unk_2CDC0]` beside
+  `[0x1c540, c, unk_1C540]`, and the C file is cut at the same function.
+* **Every file-scope declaration above the cut has to be copied into the new
+  half**, not just the preamble: 332 of them here. The `.size` records and the
+  `__asm__` symbol aliases are the ones that matter, because they are
+  file-scope and change every access to those symbols in whichever unit they
+  appear -- the halves must both carry the whole list or the second half's
+  loads move off `$gp`. Ordinary prototypes are copied because declaration
+  order is all that stood between them and their callers, and a prototype that
+  goes missing becomes an implicit `int` declaration, which is a silent
+  codegen change rather than an error.
+* `INCLUDE_ASM` paths in the new half have to be repointed at
+  `asm/nonmatchings/<new unit>`, because `splat split` regenerates the asm
+  under the new segment's name.
+* The zero word between two runs is not necessarily a pad the compiler emits.
+  Here 0x80032F00 is 8-aligned and each jump table carries its own `.align 3`,
+  so the matched object's `.rodata` is exactly 0xEC bytes and the zero belongs
+  to whichever original unit owns jtbl_80032F04. Reading it as this object's
+  trailing pad would have put the `bin` boundary one word late. `aspsx` does
+  NOT round a section's size up to its alignment -- unk_14934's 0x4C-byte
+  `.rodata` proves it.
 
 **The run order matches the referencing functions' text order exactly**
 (func_8004CECC < func_800517CC < func_80052144 < func_80052CE0 < func_80054F9C
@@ -370,8 +398,8 @@ and `jtbl_8003310C` has dropped out of `undefined_syms_auto`. The run chosen
 is the one whose single function was closest, not the first in the file -- and
 because it is the unit's LAST run, it is also the one that keeps working for
 the longest: the other three tables are emitted ahead of it in the same
-`.rodata`, so landing func_80054F9C, func_80057A94 or func_80057D20 breaks the
-placement and forces the split below.
+`.rodata`, so landing func_80054F9C and func_80057A94 broke the placement and
+forced the split -- which is done, as described above.
 
 Two traps met doing it. `splat split` with no `--modes` REWRITES
 `slus_006.14_undefined_syms_auto.txt` and `..._undefined_funcs_auto.txt` from
