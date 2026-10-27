@@ -514,6 +514,13 @@ def main():
 # situation, and it cost two hand investigations to recognise before this.
 
 ARGRET = [2, 3, 4, 5, 6, 7]     # $v0 $v1 $a0 $a1 $a2 $a3
+
+
+def local_priority(refs, live):
+    """local-alloc.c's qty_compare_1, with the quantity size taken as 4."""
+    if refs < 2 or not live:
+        return 0.0
+    return math.floor(math.log2(refs)) * refs * 4 / live
 SPECIAL = {64: 'hi', 65: 'lo', 66: 'md'}
 
 
@@ -590,29 +597,41 @@ def greg_report(src):
     # because local-alloc decides all of it, and the report used to say
     # nothing at all about the quantities that actually competed.
     locals_only = sorted((n for n in lreg if n not in order),
-                         key=lambda n: -(lreg[n][0] / max(lreg[n][1], 1)))
+                         key=lambda n: (-local_priority(*lreg[n]), n))
     if locals_only:
         print()
         print('  LOCAL-ALLOC quantities (global-alloc never saw these; it runs')
         print('  SECOND, so these took their registers first)')
         print('  %-6s %-5s %-5s %-9s %-6s %s'
-              % ('pseudo', 'refs', 'live', 'refs/live', 'block', 'xcall'))
+              % ('pseudo', 'refs', 'live', 'priority', 'block', 'xcall'))
         for n in locals_only[:14]:
             refs, live = lreg[n]
             print('  %-6d %-5d %-5d %-9.3f %-6s %s'
-                  % (n, refs, live, refs / max(live, 1),
+                  % (n, refs, live, local_priority(refs, live),
                      ('b%d' % local_of[n]) if n in local_of else '?',
                      crosses.get(n, 0) or '-'))
-        print(wrap('''refs/live is shown because it is the ordering local-alloc
-        appears to use and NOT because the formula has been verified here --
-        gcc 2.7.2's qty_compare weights the reference count, and whether it
-        also multiplies by floor_log2(refs) and the quantity size is a
-        HYPOTHESIS this project has not measured. Treat the column as the two
-        numbers side by side, not as a prediction. What it is good for is
-        seeing which quantities are close: on func_8004DE88 the cursor (20
-        refs / 28 insns) edges out the address value (11 / 16), the cursor
-        therefore keeps the $v0 it is born in as a copy of the return value,
-        and the copy the target spends is deleted.''', '  '))
+        print(wrap("""priority is local-alloc.c's own qty_compare_1,
+        floor_log2(refs) * refs * size / live_length, with size taken as 4 --
+        read out of gcc 2.7.2 rather than guessed, and the final tie-break is
+        the QUANTITY NUMBER, so among equals birth order decides. floor_log2
+        means a quantity has to cross a power of two in its reference count to
+        move far: 4 and 5 refs both give 2, 7 and 8 give 2 and 3.
+
+        TWO THINGS THIS TABLE CANNOT SHOW, both from local-alloc.c:
+        - `block_alloc` runs a SUGGESTION PHASE first, and it ignores priority.
+          Any quantity that is one side of a move whose other side is a hard
+          register -- a call's return value, or a value copied into an argument
+          register -- gets a suggested register from `combine_regs` and is
+          allocated BEFORE every quantity that has no such copy, however much
+          higher the latter's priority. If the contest you are looking at is
+          between a value born from a call return and one born from
+          arithmetic, priority is the wrong story entirely (func_8004DE88).
+        - that phase calls `find_free_reg` with accept_call_clobbered = 0, and
+          it starts `used` from call_used_reg_set whenever the quantity crosses
+          a call. So for a quantity with a $v0 suggestion, ONE intervening call
+          is the difference between taking $v0 in phase 1 and falling through
+          to phase 2 with its copy left behind -- which is what the xcall
+          column is here for.""", '  '))
 
     squeezed = [n for n in order
                 if n not in local_of

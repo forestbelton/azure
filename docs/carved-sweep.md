@@ -262,15 +262,26 @@ pair that saves a callee-saved register and loads the stack parameter that
 will live in it; these candidates emit it after. func_80036D4C has three such
 pairs and so three times the difference, which is what makes it one cluster.
 
-The argument setup and the parameter load both birth a single-set pseudo, so
-they tie on sched1 priority and the order falls to `INSN_LUID`, i.e. RTL
-order. So the question is where the parameter load sits in RTL -- early, from
-`assign_parms`, or late, at its point of use with sched1 hoisting it. For a
-parameter passed in MEMORY gcc 2.7.2's assign_parms normally leaves DECL_RTL
-as the stack MEM and emits no load at all, which would put it late; both of
-these candidates nonetheless get an early load. Reading assign_parms for when
-it does copy a memory parameter into a pseudo is the next step, and it would
-settle both functions at once.
+Both insns tie on sched1 priority, so the order falls to `rank_for_schedule`'s
+remaining two keys -- the dependence CLASS relative to the last-scheduled insn,
+and only then `INSN_LUID`.
+
+**The LUID half is refuted.** `assign_parms` in gcc 2.7.2's function.c
+(read 2026-10-26; the tree is at scratch/gcc-src) ALWAYS copies a parameter
+into a pseudo unless it is addressable, has side effects, or `obey_regdecls` is
+on -- parameters passed in MEMORY included. So the load is emitted at function
+entry with an early LUID in the target and in every candidate alike, and no
+source shape moves it. Three probes confirm it from the outside: hoisting the
+symbol address into a local declared before the body, assigning it as the first
+statement, and reading both stack parameters into locals first all leave
+func_80036D4C at 98 words and 6 DIFF.
+
+That leaves the dependence-class key, which `rank_for_schedule` computes
+against whatever was scheduled last -- class 3 (independent of it, or latency
+one) beats class 2 (anti/output dependent) beats class 1 (data dependent). It
+is a property of the whole ready list at each cycle, not of any one statement,
+which is consistent with nothing in the source reaching it. Treat this cluster
+as sched1 ready-list ordering until something shows otherwise.
 
 Measured and not working: declaring the stack parameters narrow (their stores
 are `sh` with no sign extension, so matching-levers section 7 says they are

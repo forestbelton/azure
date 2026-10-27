@@ -187,17 +187,49 @@ the shift instead of the `li`.
 
 **Local vs global allocnos (`local-alloc.c`, `global.c`).** A variable declared
 *inside a block* is a block-local quantity, and local-alloc assigns it before
-the block's other values -- by priority, so the one with the most references
-takes the lowest hard register. **"most references" is loose, and the cases
-where it decides a match are decided by a few percent**: on func_8004DE88 the
-two quantities competing for `$v0` are 20 refs over 28 insns against 11 over
-16, i.e. 0.714 against 0.688, and that margin is the whole difference between
-matching and not. `tools/decomp/advise.py --greg` prints both columns for every
-local-alloc quantity, which is the only way to see the contest in a
-single-basic-block function, where global-alloc has nothing to report. Whether
-gcc 2.7.2's `qty_compare` additionally weights by `floor_log2(refs)` and the
-quantity size is a HYPOTHESIS nothing here has measured -- do not compute a
-prediction from it. A variable declared at function scope and set
+`global-alloc` runs at all. **How it orders them was read out of
+local-alloc.c on 2026-10-26** (the tree is at scratch/gcc-src), and the short
+version in this document used to be wrong in a way that cost a wrong write-up,
+so here it is exactly.
+
+`block_alloc` allocates in TWO PHASES, and the first one ignores priority:
+
+1. **The suggestion phase.** `combine_regs` records a SUGGESTED hard register
+   for any quantity that is one side of a move whose other side is a hard
+   register -- a call's return value, or a value copied into an argument
+   register. Plain moves go in `qty_phys_copy_sugg`, everything else in
+   `qty_phys_sugg`. The quantities are then sorted by `qty_sugg_compare_1`,
+   which orders by the NUMBER of suggestions first ("most restrictive needs
+   first") and only then by priority, and every quantity that has a suggestion
+   is allocated immediately with `find_free_reg (..., just_try_suggested=1)`.
+2. **The priority phase.** Everything left is sorted by `qty_compare_1` and
+   allocated.
+
+So a quantity born from a copy of a hard register is allocated BEFORE every
+quantity that has no such copy, however much higher the latter's priority.
+That is the correction: func_8004DE88's two competing quantities are 0.714 and
+0.688 by the formula below, and **the margin is irrelevant** -- the cursor wins
+because it is born from a copy of `$v0` and the address value is born from an
+`addiu`, so they are not even in the same phase.
+
+The priority formula itself, used by both `qty_compare_1` and as the second key
+of `qty_sugg_compare_1`, is
+
+    floor_log2(refs) * refs * size / (death - birth)
+
+with the quantity NUMBER as the final tie-break -- so among equals, birth order
+decides. `floor_log2` means a quantity needs to cross a power of two in its
+reference count to move much: 4 refs and 5 refs give 2 and 2, but 7 and 8 give
+2 and 3.
+
+**And a quantity that crosses a call cannot get a call-clobbered register in
+the suggestion phase.** `find_free_reg` is called there with
+`accept_call_clobbered = 0`, and it starts its `used` set from
+`call_used_reg_set` whenever `qty_n_calls_crossed[qty] > 0`. That is why
+`tools/decomp/advise.py --greg` prints a `crosses N calls` column: for a
+quantity with a `$v0` suggestion, one intervening call is the difference
+between taking `$v0` in phase 1 and falling through to phase 2 with the copy
+left behind. A variable declared at function scope and set
 in several blocks becomes a global allocno instead, allocated after local-alloc
 has already handed out the low registers, so it lands higher. func_800439F8
 needs a separate `base` local inside each arm for this: one function-scope base

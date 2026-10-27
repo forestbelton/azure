@@ -21,7 +21,34 @@
  * copy of $v0. For the target's allocation, that suggestion has to have been
  * blocked -- i.e. the cursor conflicts with $v0 -- which would be the case if
  * the address value in $v0 is live across the cursor's whole range. Reading
- * local-alloc.c's suggestion phase is the next step. MEASURED 2026-10-26 with
+ * THE MECHANISM IS NOW READ, NOT GUESSED (local-alloc.c, 2026-10-26; the tree
+ * is at scratch/gcc-src). `block_alloc` allocates in two phases and the first
+ * ignores priority entirely: every quantity that has a SUGGESTED hard register
+ * -- recorded by `combine_regs` for either side of a move whose other side is
+ * a hard register -- is allocated first, with
+ * `find_free_reg (..., just_try_suggested=1)`. Only what is left is sorted by
+ * the priority formula.
+ *
+ * So the cursor, born from `(set (reg cursor) (reg $v0))` as a plain move of
+ * strrchr's return value, carries a `qty_phys_copy_sugg` of $v0 and is
+ * allocated in phase 1. The address value is born from an `addiu` and has no
+ * suggestion at all, so it waits for phase 2 and cannot compete. **The
+ * 0.714-against-0.688 priority margin recorded here before was the wrong
+ * story**: the two quantities are not in the same phase, and nothing done to
+ * their reference counts will change that.
+ *
+ * WHAT WOULD CHANGE IT is the one escape `find_free_reg` has in phase 1: it is
+ * called with `accept_call_clobbered = 0`, and it starts its `used` set from
+ * `call_used_reg_set` whenever `qty_n_calls_crossed[qty] > 0`. $v0 is
+ * call-clobbered, so a cursor that CROSSES A CALL is refused $v0 in phase 1,
+ * falls through to phase 2, takes whatever is free -- $a0 -- and the copy
+ * survives. That is exactly the target's shape. In this function the cursor's
+ * last use is before the dispatching `jalr`, so it crosses nothing; whether
+ * the original's did, and what source shape would put a call inside that
+ * range without adding a word, is the open question. `advise.py --greg` prints
+ * `crosses N calls` for this reason.
+ *
+ * MEASURED 2026-10-26 with
  * `advise.py --greg`, which now prints every local-alloc quantity because this
  * function is a single basic block and global-alloc therefore reports nothing:
  * the two quantities competing for $v0 are pseudo 81, the cursor, at 20 refs
