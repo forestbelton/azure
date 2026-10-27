@@ -1941,7 +1941,95 @@ void func_80038A10(u8 *p, u8 *q, s32 r) {
     } while (*(u32 *) (p + 0x10) == (u32) func_80038A10);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038AB8);
+extern u32 D_8006AA90[];
+
+void func_80038CB8(u8 *);
+s32 func_80038C40(s8);
+s16 func_8003ADB4(u16);
+void func_80039AE8(void);
+
+/* One step of the script VM: when the opcode at +0x1C is positive it runs
+   opcodes out of the D_8006AA90 table until one stops being func_80038A10 or
+   the stream turns negative, then re-arms through func_800381D0; when it is
+   not positive, func_80038CB8 handles it. Either way a +0x85 of zero means
+   give up: stop the sound, kick func_8003ADB4(0xB4) and reset. Returns 1 only
+   when +0x2E is 2.
+
+   TWO gotos, and both are needed for the word count. `goto bail` from the
+   non-positive arm into the body of the positive arm's `f == 0` block, and
+   `goto done` to the shared `return 0`. Written out twice instead,
+   cross-jumping does NOT merge them and the function is 111 words against 98;
+   and with the tail written as its own `if (...) return 1; return 0;` with
+   only one predecessor, jump.c rewrites it branchlessly as
+   `xori 0x2` / `sltiu 1`, where the listing branches. The `goto done` gives
+   the `return 0` a second predecessor and the branches come back.
+
+   The +0x85 read in the positive arm is the dereference itself, NOT an `s8`
+   local: assigned to a local whose only use is `== 0`, gcc drops the sign and
+   emits `lbu` where the listing has `lb`. One word, and the only one left
+   after the gotos.
+
+   `t` and `k` are locals at the top of the positive arm so their lui/addiu
+   pairs land in the loop's preheader, which is where the listing has them;
+   the table call is `(c * 4 + (u32) t)` index-first so 0x0 stays the load's
+   displacement. */
+s32 func_80038AB8(u8 *p, u8 *q)
+{
+    if (*(s8 *) *(u8 **) (p + 0x1C) <= 0)
+    {
+        if (*(s8 *) (p + 0x85) == 0)
+        {
+            goto bail;
+        }
+        func_80038CB8(p);
+        if (*(u8 *) (p + 0x2E) == 2)
+        {
+            if (func_80038C40(*(s8 *) *(u8 **) (p + 0x1C)) != 0)
+            {
+                return 1;
+            }
+        }
+        *(u8 *) (p + 0x2E) = 0;
+        goto done;
+    }
+    else
+    {
+        u32 *t = D_8006AA90;
+        u32 k = (u32) func_80038A10;
+
+        do
+        {
+            u8 *pc = *(u8 **) (p + 0x1C);
+            u8 c = *pc;
+
+            *(u8 **) (p + 0x1C) = pc + 1;
+            (*(void (**)(u8 *)) (c * 4 + (u32) t))(p);
+        } while (*(s8 *) *(u8 **) (p + 0x1C) > 0 && *(u32 *) (p + 0x10) == k);
+        if (*(u32 *) (p + 0x10) == (u32) func_80039AE8)
+        {
+            *(u32 *) (p + 0x10) = 0;
+            if (*(s8 *) (p + 0x85) == 0)
+            {
+            bail:
+                if (func_80034FD0((u32 *) q) == 0)
+                {
+                    func_8003ADB4(0xB4);
+                    func_80034EF8(q, q[2]);
+                    func_80034F58((s32) q);
+                }
+                return 0;
+            }
+            *(u8 **) (p + 0x1C) = *(u8 **) (p + 0x1C) + 1;
+            *(u32 *) (p + 0x10) = func_800381D0(p);
+        }
+    }
+    if (*(u8 *) (p + 0x2E) == 2)
+    {
+        return 1;
+    }
+done:
+    return 0;
+}
 
 typedef struct Unk8002D03C {
     s8 unk_00[9];

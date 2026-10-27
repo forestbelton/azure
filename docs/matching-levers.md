@@ -1029,6 +1029,23 @@ matching.
 Two statements on `x` itself (`x -= 0x30; x += d;`) is NOT the same -- that
 does the subtraction in place and comes out a word longer.
 
+
+### A shared tail cross-jumping does NOT reach wants a `goto`
+
+Cross-jumping merges identical tails, but not reliably across arms of
+different depth. func_80038AB8 has the same five-insn bail block in its
+non-positive arm and inside its positive arm's `f == 0` branch; written out
+twice, jump2 leaves BOTH and the function is 111 words against 98. A `goto`
+into the inner block -- legal C, and gcc 2.7.2 takes it -- gives the one copy
+the listing has, placed where the inner one was.
+
+The second `goto` there is a different trick with the same flavour. A tail of
+`if (c) { return 1; } return 0;` whose `return 0` has ONE predecessor gets
+rewritten branchlessly by jump.c as `xori`/`sltiu`; the listing branches, so
+the `return 0` must have a second predecessor. `goto done` from the other arm
+supplies it and the branches come back. **A listing that BRANCHES to return 1
+or 0 where you get a setcc is telling you that the `return 0` is shared.**
+
 ## 4. Re-dereference rather than cache
 
 If a store invalidates cse's memory entry for another object, the target will
