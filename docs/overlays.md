@@ -173,7 +173,36 @@ In rough order:
    table, or by taking a code entry's internal `jal` targets and finding the
    base that makes them land on its own function starts.
 3. **Then** a splat spec per overlay, with its own vram base, and a way to keep
-   two overlays' identical addresses apart.
+   two overlays' identical addresses apart. **Done for the three code
+   overlays** (2026-10-26). The "keep identical addresses apart" worry turned
+   out not to bite: each container links from its own generated script, and the
+   script names its object files explicitly, so `build/town.bin.ld` pulls in
+   `asm/ovl_town.o` and nothing else. town's and dungeon's overlays never meet,
+   and neither reaches the `slus_006.14` link. Calls out of an overlay into the
+   resident engine arrive as plain absolute symbol definitions in that
+   container's `_undefined_funcs_auto.txt` -- addresses, not objects -- so
+   there is no second source tree to build and no conflict to resolve.
+
+   Three things have to be right in the segment definition, and getting any of
+   them wrong is what parked the segments between 77b2c94 and eec0572:
+
+   * **`rodata`, not `.rodata`.** The leading dot routes a subsegment to a
+     SIBLING C OBJECT and extracts nothing. With no `csrc/ovl_town.c` to route
+     to, nothing is emitted and every reference into the overlay's own rodata
+     comes out undefined -- which is all
+     `undefined reference to jtbl_80089900` ever was.
+   * **A following segment.** Without one the code subsegment runs to the end
+     of the container; town.bin's became a single 4.3-million-line file.
+   * **A text end on a 16-byte boundary.** splat emits
+     `__romPos = ALIGN(__romPos, 16)` after a code segment, so a boundary off
+     that grid pads the container. Find the end from the last `jr $ra`, not
+     from where prologue fingerprinting stopped: all three of 77b2c94's figures
+     were short of the real end (town 0x51ed8 against 0x51fc0, dungeon 0xf8000
+     against 0xf7700, main 0x264c90 against 0x264e20).
+
+   What this split actually yields: 1815 functions in town's overlay, 862 in
+   dungeon's, 241 in main's -- against 178 in the resident engine. `make
+   containers` rebuilds all four containers and checks them.
 
 Sizes, for scale: the heuristic in `docs/where-we-are.md` puts about 8.4 MB of
 code-bearing blocks across the three containers against 216 KB in the resident
