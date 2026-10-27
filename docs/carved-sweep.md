@@ -281,9 +281,9 @@ func_80035E58 is the fourth member of the family (six arguments, same
 func_8003FF2C call) and the array spelling takes it from 8 DIFF to 2; what is
 left there is unrelated. See `docs/near-misses/func_80035E58.c`.
 
-| func_8004A330 | unk_1C540 | **74/77 words, 74 DIFF** | Was 70/77. Four of the seven words came from declaring arguments 5 and 6 `s16` rather than `s32` -- advise.py's CALLEE-SAVED row applied literally, and the same lever that landed func_8004A24C. As `s32` each parameter's pseudo is a plain copy of its incoming MEM, so `update_equiv_regs` substitutes it back and the `lw` sinks to its single use; as `s16` the entry insn is a PROMOTION, the substitution cannot fire, and both live in callee-saved registers across the two calls. The listing's two `lw` at ENTRY are the signature. What is left is three words on `m`: the listing spends a callee-saved register and a copy on `n + 0x20` where this puts it straight into $a0, which it prefers as the callee's first argument; `m` crosses no call, so only a lower-priority conflicting allocno preferring $a0 would move it. The earlier reading that the 0x20 folds into the displacements was wrong -- `m` is a VAR_DECL and nothing folds. |
+| func_8004A330 | unk_1C540 | **76/77 words, 43 DIFF** | Was 70/77. Four of the seven words came from declaring arguments 5 and 6 `s16` rather than `s32` -- advise.py's CALLEE-SAVED row applied literally, and the same lever that landed func_8004A24C. As `s32` each parameter's pseudo is a plain copy of its incoming MEM, so `update_equiv_regs` substitutes it back and the `lw` sinks to its single use; as `s16` the entry insn is a PROMOTION, the substitution cannot fire, and both live in callee-saved registers across the two calls. The listing's two `lw` at ENTRY are the signature. What is left is three words on `m`: the listing spends a callee-saved register and a copy on `n + 0x20` where this puts it straight into $a0, which it prefers as the callee's first argument; `m` crosses no call, so only a lower-priority conflicting allocno preferring $a0 would move it. The earlier reading that the 0x20 folds into the displacements was wrong -- `m` is a VAR_DECL and nothing folds. |
 | func_80054B08 | unk_264E0 | **84/84 words, 32 DIFF** | Was 82/84. Both missing words are paid for: the three stores to +0x10 and the three to +0x14 are VOLATILE -- the listing writes each field three times with a refined value and never reads it, so flow deletes the first two of each as dead, and no non-volatile spelling keeps them -- and the -0x20/+0x20 go in their own statements so fold cannot move the constant onto `base`. What is left is 32 words of schedule: the target emits the block in source order while this hoists two record loads and sinks the three byte/halfword stores. `docs/near-misses/func_80054B08.c`. |
-| func_800398BC | unk_72A8 | **75/76 words, one word** | First function worked from an m2c draft -- 75 of 76 on the first compile, then two documented fixes, and all branch spans match. The missing word is the D_800721C0 index scaling: the target spends `srl`/`andi 0x1F`/`sll 2` where gcc folds the mask and the scale into `srl 0x11`/`andi 0x7C`. Three spellings measured against it in `docs/near-misses/func_800398BC.c`. |
+| func_800398BC | unk_72A8 | **76/76 words, 50 DIFF** | First function worked from an m2c draft -- 75 of 76 on the first compile, then two documented fixes, and all branch spans match. The missing word is the D_800721C0 index scaling: the target spends `srl`/`andi 0x1F`/`sll 2` where gcc folds the mask and the scale into `srl 0x11`/`andi 0x7C`. Three spellings measured against it in `docs/near-misses/func_800398BC.c`. |
 
 ## Parked: tried and not matching
 
@@ -442,7 +442,7 @@ func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.
 
 | func_80035E58 | unk_72A8 | **129/129 words, 2 DIFF** | The six-argument spawn, and the fourth member of the prologue-interleave family: the D_80082BC0 array spelling took it from 8 DIFF to 2. What is left is ONE swap -- func_80036988 two argument setups land in each other load-delay slots. They tie on sched2 priority, and `rank_for_schedule` last key sorts DESCENDING by LUID while expand_call emits $a0 setup first (calls.c:1850), so a0-later is unreachable through argument order; `e + 0xC` does not lengthen its priority path because fold rewrites it back to `n + 0x2C`. `docs/near-misses/func_80035E58.c`. |
 
-| func_8004951C | unk_1C540 | **155/157 words, 108 DIFF** | The party status label. Structure verified and four spellings paid for: the D_80073414 base ASSIGNED rather than initialised (an initialiser is evaluated at block entry and lands ahead of the memset), D_80082E6A through an incomplete-array alias, an `s32` local for the `& 0x1F` value so combine emits `slti` instead of `sltiu`, and the 4 arm written out in full so cross-jumping merges its call pair with the kind-1 arm. Two words left, both from the kind-3 arm falling through into the shared `kind == 1` test where the listing reaches the call directly. `docs/near-misses/func_8004951C.c`. |
+| func_8004951C | unk_1C540 | **156/157 words, 97 DIFF** | The party status label. Structure verified and four spellings paid for: the D_80073414 base ASSIGNED rather than initialised (an initialiser is evaluated at block entry and lands ahead of the memset), D_80082E6A through an incomplete-array alias, an `s32` local for the `& 0x1F` value so combine emits `slti` instead of `sltiu`, and the 4 arm written out in full so cross-jumping merges its call pair with the kind-1 arm. Two words left, both from the kind-3 arm falling through into the shared `kind == 1` test where the listing reaches the call directly. `docs/near-misses/func_8004951C.c`. |
 
 | func_80059814 | unk_2CDC0 | **94/103 words, 69 DIFF** | The +0x10 accumulator advance, ten case labels in six bodies. Structure verified instruction by instruction, including that flow keeps both `sw 0x10` per body because the overwrite is in another basic block and `mem_set_list` resets per block. The 9 words left are ONE sched1 decision: `schedule_select` takes both stores first in the backward pass (`insn 32 has a greater potential hazard`), which puts them LAST in the body, so cross-jumping merges them into the shared tail and the five `addu $v1, $v0, $zero` copies go with them. `docs/near-misses/func_80059814.c`. |
 
@@ -476,15 +476,15 @@ wants `--greg` before any source change.
 | func_80038CB8 | 164/164 | SHAPE | OPCODE | 8 |
 | func_80038F48 | 98/98 | SHAPE | OPCODE | 6 |
 | func_8003931C | 85/85 | ALLOC | -- | 10 |
-| func_800398BC | 75/76 | LENGTH | OPCODE | 21 |
+| func_800398BC | 76/76 | SHAPE | EXTRA,MISSING,OPCODE | 22 |
 | func_8003AB44 | 54/54 | SHAPE | IMMEDIATE | 7 |
 | func_8003F368 | 113/113 | SHAPE | IMMEDIATE,OPCODE | 2 |
 | func_800407C0 | 178/178 | ALLOC | -- | 62 |
 | func_80041E70 | 270/270 | SHAPE | OPCODE | - |
 | func_8004437C | 107/100 | LENGTH | OPCODE | 7 |
 | func_80047054 | 58/58 | SHAPE | -- | 27 |
-| func_8004951C | 155/157 | LENGTH | OPCODE | - |
-| func_8004A330 | 70/77 | LENGTH | CALLEE-SAVED,IMMEDIATE,OPCODE | 11 |
+| func_8004951C | 156/157 | LENGTH | EXTRA,LENGTH,MISSING,OPCODE | 3 |
+| func_8004A330 | 76/77 | LENGTH | CALLEE-SAVED,EXTRA,IMMEDIATE,LENGTH,MISSING,OPCODE | 13 |
 | func_8004AC3C | 129/128 | LENGTH | BRANCH-ARMS,DELAY-NOPS,IMMEDIATE,OPCODE | 22 |
 | func_8004CECC | 101/102 | LENGTH | -- | 42 |
 | func_8004D294 | 114/114 | SHAPE | -- | 12 |

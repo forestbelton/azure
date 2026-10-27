@@ -1,4 +1,4 @@
-/* func_8004951C (unk_1C540) -- 155 of 157 words, 108 DIFF. NOT compiled.
+/* func_8004951C (unk_1C540) -- 156 of 157 words, 97 DIFF. NOT compiled.
  *
  * Builds the 0x20-byte status label for one party member into a stack buffer
  * and hands it to func_8004E298: memset to spaces, NUL at the end, then one
@@ -59,6 +59,12 @@
  * argument setup is emitted at the call, after the abs, and reorg fills both
  * slots with it. `v < 0 ? -v : v` as the argument, the inline form of the
  * same, and two separate call sites (159 words) all leave it there.
+ *
+ * SINCE PARKED, 2026-10-27: 155 of 157 words and 108 DIFF to 156 of 157 and
+ * 97, by declaring `k` `s16` rather than `s32`. Found by search.py's
+ * declaration-width family in the sweep of all forty parks. One word and
+ * eleven differing words still to go, and the WHAT IS LEFT note above is
+ * written against the old numbers.
  */
 
 #include "common.h"
@@ -70,7 +76,7 @@ s32 func_8004951C(u8 *dst, s32 p)
 {
     u8 buf[0x20];
     Unk80073414 *b;
-    s32 k;
+    s16 k;
 
     memset(buf, 0x20, 0x20);
     buf[0x1F] = 0;

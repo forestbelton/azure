@@ -1,4 +1,4 @@
-/* func_800398BC (unk_72A8) -- 75 of 76 words, one word short. NOT compiled.
+/* func_800398BC (unk_72A8) -- 76 of 76 words, 50 DIFF. NOT compiled.
  *
  * FIRST FUNCTION WORKED FROM AN m2c DRAFT, and worth recording as that: the
  * draft had the control flow, the two little-endian 4-byte reads off the
@@ -30,6 +30,12 @@
  * spellings, all 75 words -- the fold is not reachable from how the index is
  * written, so the second use (or whatever else denies combine the
  * substitution) has to come from somewhere else in the original.
+ *
+ * SINCE PARKED, 2026-10-27: 75 of 76 words and 52 DIFF to 76 of 76 and 50.
+ * The flag test is `(t & 1) != 0`, not `t != 0` -- the field is read with
+ * `lbu` and tested against bit 0 only, which costs the `andi` the listing
+ * has and that this source was folding away. Found by search.py's mask
+ * family in the sweep of all forty parks; it had simply never been run here.
  */
 
 #include "common.h"
@@ -42,7 +48,7 @@ void func_800398BC(u8 *p) {
     s32 t = func_80053EF0(4);
 
     if (func_80039884(p) != 0) {
-        if (t != 0) {
+        if ((t & 1) != 0) {
             *(u32 *) (p + 0x10) = 0;
             *(u8 **) (p + 0x1C) = *(u8 **) (p + 0x1C) - 1;
             return;

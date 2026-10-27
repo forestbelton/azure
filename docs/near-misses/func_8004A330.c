@@ -1,4 +1,4 @@
-/* func_8004A330 (unk_1C540) -- 74 of 77 words, three words short. NOT compiled.
+/* func_8004A330 (unk_1C540) -- 76 of 77 words, 43 DIFF. NOT compiled.
  *
  * Eight parameters. Allocates a node, allocates a buffer with func_8004B404,
  * and on success fills the +0x20 sub-object and hands six of its arguments to
@@ -61,6 +61,12 @@
  * source's RTL. MEASURED and NOT working: hoisting `d - 0xA0` and
  * `e - 0x80` into locals before the `if` (70 words, no change -- so the
  * substitution was never about where the subtraction sits).
+ *
+ * SINCE PARKED, 2026-10-27: 74 of 77 words and 74 DIFF to 76 of 77 and 43,
+ * by declaring the local `r` `s16` rather than `s32` -- the same lever as
+ * arguments 5 and 6 above, applied to the result accumulator. Found by
+ * search.py's declaration-width family in the sweep of all forty parks.
+ * ONE word and 43 differing words left, where it was three and 74.
  */
 
 #include "common.h"
@@ -72,7 +78,7 @@ void func_80049F2C(u8 *);
 s32 func_8004A330(u32 a, s32 b, s32 c, s32 d, s16 e, s16 f, s32 g, u8 *h) {
     u8 *n;
     u8 *m;
-    s32 r;
+    s16 r;
 
     n = (u8 *) func_8003FC64(0);
     if (n == 0) {
