@@ -4240,7 +4240,38 @@ void func_80050A00(u8 *p, s32 b) {
     func_800506BC(*(u8 ***) (p + 0x68), p, b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050A58);
+extern u8 D_8002E950[];
+
+/* Rebuilds the 17 pointers' +0x08 words: the D_8002E950 byte split by 21 --
+   the 0x86186187 magic with post_shift 4, which tools/decomp/magic.py names;
+   do not estimate it -- with the quotient indexing the second argument's word
+   table and the remainder times 12 added on.
+
+   `q` IS KEPT UNMASKED IN A LOCAL and cast at each of its two uses, and the
+   remainder is written INLINE in the final expression rather than in a local
+   of its own. Both halves matter, and they are what the sweep row had pulling
+   against each other:
+
+   * the remainder in its own statement puts the 21-multiply BEFORE the index
+     chain, where the listing emits `andi $a1, $v1, 0xFF` / `sll` /
+     `addu $a1, $t3` first -- 22 differing words, the whole remainder;
+   * masking `q` in the local instead (so the index needs no cast) makes the
+     21-multiply read the MASKED quotient, which is not what
+     `subu $a0, $a0, $v0` consumes.
+
+   Written as `*(u32 *) (e + 8) = tbl[(u8) q] + (u8) (c - q * 21) * 12;` the
+   evaluation order is the listing's and both masks land where it has them. */
+void func_80050A58(u32 arr, u8 *tbl) {
+    s32 i;
+
+    for (i = 0; i < 0x11; i++) {
+        u32 c = D_8002E950[i];
+        u32 q = c / 21;
+        u8 *e = (u8 *) ((u32 *) arr)[i];
+
+        *(u32 *) (e + 8) = *(u32 *) (tbl + (u8) q * 4) + (u8) (c - q * 21) * 12;
+    }
+}
 
 u8 *func_80049150(u8 *, u32, s32);
 void func_80050A58(u32, u8 *);
