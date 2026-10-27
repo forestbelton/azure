@@ -97,9 +97,17 @@ segments:
     align: 4
     subsegments:
       - [0x2184, bin]
-  # jtbl_8002EFF0, func_80052CE0's 8-entry table. It is the SECOND table of its
-  # run: jtbl_8002EFDC at 0x27dc is func_80052144's and still raw in the bin
-  # above, so this subsegment starts at 0x27f0 rather than at the run's head.
+  # The run at 0x8002EFDC, supplied by TWO objects: jtbl_8002EFDC is
+  # func_80052144's, in unk_25944, and jtbl_8002EFF0 is func_80052CE0's, in
+  # unk_264E0. Two contiguous `.rodata` subsegments in two adjacent segments,
+  # the same arrangement the three contiguous tables at 0x8002D630 use -- one
+  # segment can hold only one `.rodata` group under ld_legacy_generation.
+  - type: code
+    start: 0x27dc
+    vram: 0x8002EFDC
+    align: 4
+    subsegments:
+      - [0x27dc, .rodata, unk_25944]
   - type: code
     start: 0x27f0
     vram: 0x8002EFF0
@@ -228,8 +236,11 @@ segments:
       - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
-      # Cut at func_80052CE0, func_80054F9C and func_800595C0, so each of the
-      # four pieces supplies one of the carved unit's four .rodata runs.
+      # Cut at func_80052144, func_80052CE0, func_80054F9C and func_800595C0,
+      # so each of the five pieces supplies one of the carved unit's .rodata
+      # runs -- unk_25944 and unk_264E0 between them supply the two halves of
+      # the run at 0x27dc.
+      - [0x25944, c, unk_25944]
       - [0x264e0, c, unk_264E0]
       - [0x2879c, c, unk_2879C]
       - [0x2cdc0, c, unk_2CDC0]

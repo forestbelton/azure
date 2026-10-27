@@ -331,7 +331,7 @@ in 0x80010000..0x80090000:
 | 0x00dc0..0x00efc | 8002D5C0..8002D6FC | 79 | jtbl_8002D5C0 / D630 / D658 / D67C | **placed** (unk_11F0C, unk_14934, unk_154BC) |
 | 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
 | 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | **placed** (unk_1C540, func_800517CC) |
-| 0x027dc..0x027f0 | 8002EFDC..8002EFF0 |  5 | jtbl_8002EFDC | func_80052144 (292 w) |
+| 0x027dc..0x027f0 | 8002EFDC..8002EFF0 |  5 | jtbl_8002EFDC | **placed** (unk_25944, func_80052144) |
 | 0x027f0..0x02810 | 8002EFF0..8002F010 |  8 | jtbl_8002EFF0 | **placed** (unk_264E0, func_80052CE0) |
 | 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_2879C, func_80054F9C + func_80057A94) |
 | 0x06700..0x068fc | 80032F00..800330FC |127 | pad, jtbl_80032F04 (126) | func_80057D20 (463 w, 463/463 and 6 DIFF) |
@@ -357,16 +357,21 @@ the carved unit is now cut into FOUR:
 
 | piece | text | its one `.rodata` run | owner |
 |-------|------|------------------------|-------|
-| `unk_1C540` | 0x1c540..0x264e0 | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_1C540` | 0x1c540..0x25944 | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_25944` | 0x25944..0x264e0 | jtbl_8002EFDC @ 0x27dc | func_80052144 |
 | `unk_264E0` | 0x264e0..0x2879c | jtbl_8002EFF0 @ 0x27f0 | func_80052CE0 |
 | `unk_2879C` | 0x2879c..0x2cdc0 | jtbl_80032E14 + jtbl_80032EA4 @ 0x6614 | func_80054F9C, func_80057A94 |
 | `unk_2CDC0` | 0x2cdc0..0x301a8 | jtbl_8003310C @ 0x690c | func_800595C0 |
 
-Four of the carved unit's six tables are placed. jtbl_80032F04 waits on
-func_80057D20's last six words, jtbl_8002EFDC on func_80052144 and
-jtbl_8002E5F8 on func_8004CECC -- and each of those three wants a cut of its
-own, which is three more pieces and would make NINE in total. The run order
+Five of the carved unit's six tables are placed; only jtbl_80032F04 is still
+raw, on func_80057D20's last six words, and jtbl_8002E5F8 on func_8004CECC --
+each wanting a cut of its own, which would make SEVEN pieces. The run order
 said six original translation units; it is now clear it was more.
+
+**unk_25944 and unk_264E0 between them supply ONE contiguous run**, 0x27dc and
+0x27f0, through two `.rodata` subsegments in two adjacent segments -- which is
+the arrangement the three contiguous tables at 0x8002D630 already used, and it
+means a shared run does not force its functions into the same object.
 
 **jtbl_8002EFF0 shows that a run can be entered from the MIDDLE, not just cut
 short at the end.** Its run starts at 0x27dc with func_80052144's
