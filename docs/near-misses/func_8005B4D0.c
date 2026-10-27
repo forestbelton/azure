@@ -79,6 +79,32 @@
  * explained: cse would share one read, and reload gives a pseudo one slot, so
  * the original probably had two variables. The draft below uses two (`bs`
  * and `bs2`) on that reading.
+ *
+ * A SLOT CENSUS is the way to work on this, and it localises the defect to
+ * one local. Counting every `(s|l)(w|h|hu|b|bu)` against `$sp` in both
+ * streams:
+ *
+ *   0x10..0x4C   the SpuVoiceAttr -- every offset and every count already
+ *                agrees, so the struct and its fills are right
+ *   0x68..0x8C   the ten saved registers -- agree
+ *   0x50, 0x52   the two u16 volume arguments -- agree
+ *   0x54         `b >> 8`: this source writes and reads it twice, the
+ *                listing once each
+ *   0x58, 0x5C, 0x60   the counter and the two base pointers -- present in
+ *                both, with the traffic off by one either way
+ *   0x64         THIS SOURCE HAS A SEVENTH LOCAL AND THE LISTING HAS SIX
+ *   0x94         the second argument's own home slot: the listing reads it
+ *                TWICE (`lw` for `b >> 8`, `lhu` for `attr.note`), this
+ *                source once
+ *
+ * So the seventh slot is a spilled copy of `b`, and the listing does not need
+ * one because its `b` pseudo never won a register and reload used the
+ * parameter's HOME slot instead. Declaring the six in the listing's slot
+ * order (below) moves the offsets but does not remove the seventh, and
+ * dropping the `b >> 8` local to recompute it inline at all three uses is
+ * 380 words, one worse. What would fix it is whatever makes `b` lose its
+ * register outright -- an allocation question, and the first thing to try on
+ * the next attempt.
  */
 
 #include "common.h"
@@ -92,16 +118,18 @@ void func_8005EC0C(SpuVoiceAttr *, s32, s32);
 void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
 {
     SpuVoiceAttr attr;
-    u8 *bs;
+    u16 vs;
+    u16 ps;
+    s32 key;
+    s32 cnt;
     u8 *bs2;
+    u8 *bs;
     u8 *q;
     u8 *e;
     u8 *v;
     u8 *r;
     u32 *g;
     u16 *w;
-    s32 cnt;
-    s32 key;
     s32 prog;
     s32 bank;
     s32 layer;
@@ -117,8 +145,6 @@ void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
     s32 rv;
     s32 z;
     u16 t;
-    u16 vs;
-    u16 ps;
 
     i = 0;
     prog = a & 0x7F;
