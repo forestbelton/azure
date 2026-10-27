@@ -225,6 +225,30 @@ Three instances:
   would mean returning a value loaded from memory, which changes what the
   function does.
 
+**AN EMPTY DELAY SLOT BEFORE AN INSN THAT SETS `$v0` MEANS THE RETURN TYPE IS
+NOT `void`.** This is the cheapest delay-slot lever found so far and it costs
+one character. func_80058510's second guard is
+
+    bnez  $v0, <exit>
+     nop
+    addiu $v0, $zero, 0x1          <- the fall-through's first insn
+
+and a `void` function fills that slot with the `addiu`. Filling it is legal --
+the slot runs after the branch is resolved, and on the taken path the register
+is dead -- but only while it IS dead. Declare the function `s32` and never
+return a value, and `$v0` is live out at the epilogue, so reorg cannot move an
+insn that sets it across the branch and the `nop` stays. One word, and
+func_80058510 went from 35 of 36 with 27 differing words to MATCH on nothing
+else.
+
+Read it the other way too: a function whose listing fills such a slot IS
+`void`. And the giveaway for this shape is a function that never sets `$v0` on
+any path yet leaves a slot empty before an insn that does -- the original
+declared a return type it did not use, which is ordinary enough in this
+codebase (func_800564A8 takes an argument it ignores, func_800552C8 the same).
+The sweep row that preceded this guessed at reorg's `own_thread_p`; the answer
+is liveness, which is also why no arrangement of the three blocks reached it.
+
 ## 2. Loop notes change every reference weight in the function
 
 **A backward `goto` is not a loop to loop.c at all, and that is a

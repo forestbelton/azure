@@ -2382,9 +2382,43 @@ void func_800584E4(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80058510);
+void func_80056948(void);
+void func_8005ACDC(void);
 
-void func_80058510(void);
+/* The frame tick's reentrancy guard: with the enable word set and the busy
+   flag clear, raises the flag, runs func_800584E4, and every eleventh tick
+   sweeps the voices through func_80056948 and func_8005ACDC before resetting
+   the counter; then clears the flag and bumps the counter.
+
+   IT IS DECLARED `s32` AND NEVER RETURNS A VALUE, and that one word is why.
+   Every instruction matched position for position as `void`, including the
+   split read-modify-write at the end, with the function ONE WORD SHORT: the
+   target leaves the second guard's `bnez`'s delay slot EMPTY, where a `void`
+   function fills it with the `addiu $v0, $zero, 0x1` from the fall-through.
+   Filling it is legal -- the slot runs after the branch is resolved, and on
+   the taken path $v0 is dead -- but only if $v0 IS dead there. With a
+   non-void return type $v0 is live out at the epilogue, so reorg cannot move
+   an insn that sets it across the branch, and the `nop` stays. The row that
+   preceded this file guessed at reorg's `own_thread_p`; the answer is
+   liveness. See matching-levers section 1. */
+s32 func_80058510(void) {
+    u32 v;
+
+    if (D_80073824[0] != 0 && D_80085F98[0] == 0) {
+        D_80085F98[0] = 1;
+        func_800584E4();
+        if ((s32) D_800737A8[0] >= 0xB) {
+            func_80056948();
+            func_8005ACDC();
+            D_800737A8[0] = 0;
+        }
+        v = D_800737A8[0];
+        D_80085F98[0] = 0;
+        D_800737A8[0] = v + 1;
+    }
+}
+
+s32 func_80058510(void);
 
 /* Arms the root counter 2 event with func_80058510 as the handler. */
 void func_800585A0(void) {
