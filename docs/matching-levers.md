@@ -2219,6 +2219,79 @@ cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
 pseudo set once, so sched1 defers its `lw` behind the argument setup, while
 the `addiu`s that set $a0-$a3 are pinned.
 
+### A value stored twice is a CHAINED assignment, because a store flushes cse
+
+```c
+v[0].vx = x;  v[2].vx = x;      /* TWO loads of x */
+v[0].vx = v[2].vx = x;          /* one load, two stores */
+```
+
+cse's memory table is invalidated by any store it cannot prove distinct, and a
+store to the frame against a load through a pointer is exactly that case. So
+re-spelling the expression after a store re-loads it. The chain also fixes the
+ORDER: C assigns right to left, so `v[0].x = v[2].x = e` stores v[2] first,
+which is what a listing that writes the far slot first is telling you. A
+ten-deep chain of zero stores comes out in exactly descending order, and on
+func_80037714 that reproduced ten `sb $zero` and three colour bytes on the
+first try.
+
+### Four `||` terms whose `or`s sit in the delay slots are `|`, written INLINE
+
+`a || b || c || d` over four int LOCALS computes all four and then emits the
+three `or`s together at the end (or, worse, three branches). A listing that
+interleaves each `or` into the NEXT term's branch delay slot is telling you the
+terms are inline in one left-associative `|` expression:
+
+```c
+if ((A0 && B0) | (A1 && B1) | (A2 && B2) | (A3 && B3))
+```
+
+`|` folds the running value before the next term is evaluated, so the RTL order
+is term, term, or, term, or, term, or -- and the inner `&&`s keep their own
+short-circuit branches, which is where the `or`s then land. Worth 7 words on
+func_80037714.
+
+### `% C` is NARROWED by the front end, and a cast will not stop it
+
+`build_binary_op` sets `shorten` for TRUNC_MOD_EXPR (and for `*`, `/`, `+`,
+`-`), so `*(s16 *) p % 64` is computed in HImode and converted back to int,
+which is a `sll 16`/`sra 16` pair -- combined with a following `* 4` into the
+single `sll 16`/`sra 14` a listing shows. If the listing has NO such pair, the
+operand has to be genuinely `int`, and a cast does not achieve that:
+`get_narrower` strips NOP_EXPRs and finds the `short` underneath. An `s32`
+local assigned the load does:
+
+```c
+u = *(s16 *) (p + 8) % 64 * 4;          /* narrowed:  sll 16 / sra 14 */
+y = *(s16 *) (p + 0xA); u = y % 256;    /* not:       plain subu      */
+```
+
+### An index INLINE in a call argument gets the hard register; a local does not
+
+For `AddPrim(base + n * 4 + 0x70, prim)` the five instructions are the same
+either way, but which of the two operands ends up in `$a0` is not.
+`block_alloc` walks the add's operands in order and ties operand 0 to the
+insn's destination -- here the hard argument register -- so with the index in
+its own local the TIE goes to the loaded base and the index chain is left in
+`$v0`. Written inline the tie lands on the index chain instead and it gets
+`$a0`, which is what func_80037714's three `AddPrim` calls want: 15 words.
+
+This is the opposite of func_800369C8 and func_80036A70 in the same unit,
+where the index MUST be a local (`o = n * 4 + 0x70;`) or the `0x70` folds onto
+the loaded base. The difference is that there the base is a local too, so the
+add has no hard register to tie to and only the constant's binding matters.
+
+### cse rewrites `*q` into `*(p + C)` but leaves `*(q + 4)` alone
+
+A listing that reads a struct's FIRST field through the parameter and every
+other field through a second pointer looks like two source pointers and is
+usually one. For `q = p + 0xC`, cse substitutes a MEM address that is a bare
+register with that register's recorded equivalence, so `*(u16 *) q` becomes
+`0xC($t0)`; for `*(u16 *) (q + 4)` the address is `(plus q 4)` and folding it
+would need the equivalence of a REG inside an expression, which
+`equiv_constant` only does for constants -- so it stays `4($s1)`. Write every
+field through the second pointer and let cse produce the mixture.
+
 ### A symbol added to an index expands SECOND; a pointer variable expands first
 
 `p = D_80085458 + b * 0x78` and `u8 *q = D_80085458; p = q + b * 0x78` compile
