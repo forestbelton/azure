@@ -62,7 +62,25 @@
  * Reading the bound into a local in the middle of the body DOES move it
  * (`m = D_800869B4n[0];` after the second store kills both nops) -- but then
  * the bound is a second source expression and the `move` for the address
- * pseudo comes back, so it is 206 words either way. Measured: every position
+ * pseudo comes back, so it is 206 words either way.
+ *
+ * ALSO MEASURED 2026-10-27, after func_80057D20 taught the guard-plus-do-while
+ * ordering that killed the same two nops there: it does NOT transfer. The
+ * guarded form (`n = D_800869B4n[0]; i = 0; if (n > 0) { do ... while (i <
+ * D_800869B4n[0]); }`) is 208 words here, because the guard's read and the
+ * loop's read become two expressions and each loop pays a second `lui`; the
+ * `while` form's single `lui $t4` is what the listing has, and
+ * `duplicate_loop_exit_test` is what gives it both tests. The difference
+ * between the two functions is real: func_80057D20's listing materialises
+ * %hi(D_80073734) twice per loop, this one's materialises %hi(D_800869B4)
+ * once.
+ *
+ * And the five loaded values as explicit LOCALS, read in the listing's load
+ * order (0x00, 0x10, 0x40, 0x2C, then the byte at 0x4A) and stored after, is
+ * 205 words -- it kills ONE nop -- but 148 DIFF against 132, because the
+ * listing's five live values in $v0/$v1/$a0/$a1/$a2 come out of sched
+ * hoisting the loads rather than out of five source temps. Both loops
+ * separately and the byte read first were measured too. Measured: every position
  * 0..6 for that read, with and without a pre-loop `m = D_800869B4n[0];`, both
  * loop forms, all three entry-pointer forms, `i++` at three positions, the
  * bound through a `u32 *b` pointer local, and the third loop as a `while`, a
