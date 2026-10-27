@@ -3850,7 +3850,56 @@ void func_800542AC(void) {
     D_800847F6[0] = -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800542BC);
+extern u32 D_80084850[];
+
+u16 func_800557C8(void);
+void func_80054788(u16);
+void func_80054B08(u16);
+void func_8005500C(u16);
+void func_8005552C(u16);
+void func_800543C8(void);
+
+/* The dispatch is a real `switch`, so gcc builds the balanced comparison tree
+   the listing has (0x500 at the root, then 0x200, then 0x300/0 and
+   0x700/0x600/0x800) rather than a chain. The four handler bodies are laid out
+   in SOURCE order -- 0, 0x300, 0x200, then the group -- which is the order the
+   labels come in.
+
+   `func_8005552C`'s delay slot re-computes `v & 0xFFFF` where the three
+   single-case arms inherit the mask from the loop guard: its block has four
+   predecessors, so cse's extended basic block ends at that label and the
+   value is not available there. Nothing to spell differently, but it is why
+   one arm looks a word more expensive than its siblings. */
+void func_800542BC(void) {
+    u16 v;
+
+    D_80084850[0]++;
+    for (;;) {
+        v = func_800557C8();
+        if (v == 0) {
+            break;
+        }
+        switch (v & 0xF00) {
+        case 0x000:
+            func_80054788(v);
+            break;
+        case 0x300:
+            func_80054B08(v);
+            break;
+        case 0x200:
+            func_8005500C(v);
+            break;
+        case 0x500:
+        case 0x600:
+        case 0x700:
+        case 0x800:
+            func_8005552C(v);
+            break;
+        }
+    }
+    func_800543C8();
+    func_800557BC();
+}
 
 void func_80055CF4(void);
 void func_800544A4(void);
