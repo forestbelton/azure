@@ -5166,7 +5166,84 @@ s32 func_80053604(Unk80083120 *p)
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800537D0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053858);
+u8 *func_8004E21C(u8 *, u8);
+
+/* func_80053A88's sibling, one level further in: for every node in the -0x8
+   chain it walks the NUL-terminated byte string at +0x04, turns each byte into
+   a sprite through func_8004E21C and links it, advancing a running x by each
+   glyph's width, then links one tpage primitive per node.
+
+   `r = p` is a SECOND pointer for the body. The listing copies it in the
+   guard branch's delay slot (`addu $s1, $s5, $zero`) and reads every field
+   through it, keeping `p` for the string guard, the running x and the -0x8
+   link. One variable gives one register and the function is three words
+   short, because the extra callee-saved register is what the frame is sized
+   for.
+
+   `x` is an `s32` holding `*(s16 *) (p + 0x14)`, not an `s16` local: as an
+   s16 the load comes out `lhu` and the running sum is done narrow.
+
+   `f` is a SEPARATE variable for the tpage primitive, not `e` reused. With
+   `e` reused the final `addPrim`'s mask lands in $v1; with its own variable
+   the listing's in-place `and $s0, $s0, $s3` comes back, because the
+   primitive pointer dies into its own mask. 5 words. */
+s32 func_80053858(u8 *p)
+{
+    Unk80083160 *s = &D_80083160;
+    u8 buf[4];
+    u8 *e;
+    u8 *f;
+    u8 *q;
+    u8 *r;
+    s32 i;
+    s32 x;
+
+    while (1)
+    {
+        i = 0;
+        x = *(s16 *) (p + 0x14);
+        r = p;
+        if ((*(u8 **) (p + 4))[0] != 0)
+        {
+            do
+            {
+                func_8004E21C(buf, (*(u8 **) (r + 4))[i]);
+                e = *(u8 **) (s->unk_00 + 0x8D0);
+                *(u8 **) (s->unk_00 + 0x8D0) = e + 0x14;
+                *(s16 *) (e + 8) = x;
+                *(s16 *) (e + 0xA) = *(u16 *) (r + 0x16);
+                *(s16 *) (e + 0xE) = *(u16 *) (r + 0x1A);
+                *(u32 *) (e + 4) = *(u32 *) (r + 0x10);
+                e[0xC] = buf[0];
+                e[0xD] = buf[1];
+                *(s16 *) (e + 0x10) = buf[2];
+                *(s16 *) (e + 0x12) = buf[3];
+                x = x + buf[2];
+                SetSprt((SPRT *) e);
+                if ((*(u16 *) (r + 0x1C) & 1) != 0)
+                {
+                    SetSemiTrans(e, 1);
+                }
+                if ((*(u16 *) (r + 0x1C) & 2) == 0)
+                {
+                    addPrim(s->unk_00 + 0x70, e);
+                }
+                i++;
+            } while ((*(u8 **) (r + 4))[i] != 0);
+        }
+        f = *(u8 **) (s->unk_00 + 0x8D0);
+        *(u8 **) (s->unk_00 + 0x8D0) = f + 0xC;
+        func_80067F20((u32 *) f, 0, 0, GetTPage(0, *(s16 *) (r + 0x18), 0x3C0, 0), 0);
+        addPrim(s->unk_00 + 0x70, f);
+        q = *(u8 **) (p - 8);
+        if (q == 0)
+        {
+            break;
+        }
+        p = q + 0x20;
+    }
+    return 0;
+}
 
 /* Walks a linked list of tile records, emitting a TILE and a tpage primitive
    for each and linking both into the OT at +0x74. The loop is a `while (1)`

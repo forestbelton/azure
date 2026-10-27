@@ -2973,6 +2973,34 @@ func_80039730 variant uA). `search.py` finds nothing from the 6-DIFF base.
 So the remaining question is narrow and worth asking precisely: what makes
 cc1psx increment a COPY in place while keeping the original live?
 
+### Two primitives in one function are TWO variables, and that moves the mask
+
+`func_80053858` allocates one sprite primitive per character inside a loop and
+then one TPAGE primitive after it.  Both are `*(u8 **) (s->unk_00 + 0x8D0)`
+bumped by the primitive's size, so reusing a single `u8 *e` for both is the
+obvious spelling -- and it costs the last five words.
+
+The two uses are linked by the same `addPrim` tail, which masks the pointer
+into the ot word:
+
+```
+and  $s0, $s0, $s3          # the listing: masked IN PLACE on the primitive
+```
+
+With `e` reused, `e` is still live as "the loop's primitive" when the second
+block runs, so combine cannot let the mask clobber it: the pointer is copied
+to `$v1` and masked there, adding the copy and spilling the schedule around
+it.  With a second variable `u8 *f` for the TPAGE primitive, `f`'s live range
+ENDS at that `addPrim` -- it is the pointer's last use -- so the `and` writes
+back into the primitive's own register and `$s0` carries it.
+
+The general shape: **a pointer that dies into its own mask gets masked in
+place; a pointer reused later does not.**  When a function builds two objects
+of the same kind and the listing masks (or otherwise consumes destructively)
+only one of them in place, that is two variables, not one reused.  This is the
+same ref-count mechanism as "A value reassigned in several blocks is several
+block-scoped locals", seen from the combine side rather than the allocator's.
+
 ## 9. Induction variables
 
 * gcc builds the giv list by **prepending** as it discovers them, so the LAST
