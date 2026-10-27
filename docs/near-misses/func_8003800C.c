@@ -75,6 +75,28 @@
  * start: the two reads and the `lui` are all priority 1, the ready list at
  * T-4 holds the sb, the +0x10 store, the +0x3C addiu and readA, and it picks
  * the addiu. The target's order needs the sb at T-4 and readA at T-10.
+ *
+ * SINCE PARKED (advise.py): the missing word is localised. advise.py's branch
+ * spans put it inside the `beq` at 80038084 (span 80038088..800380E4), and
+ * the listing there reads `*(u8 **) (q + 0x80)` TWICE in adjacent
+ * instructions:
+ *
+ *     lw $v0, 0x80($s1)      ; one pointer
+ *     lw $v1, 0x80($s1)      ; and a second, same address
+ *     lw $a0, 0x34($v0)      ; +0x34 through the first
+ *
+ * cse shares the two reads here however they are spelled, so one load is all
+ * this gets -- and the second pointer is what the block's last store
+ * (`*(u32 *) (r2 + 0x34) = 0`) goes through, so it is live across the whole
+ * block alongside the first. Forcing the reload with the repo's `volatile`
+ * device -- `(u8 *) *(volatile u32 *) (q + 0x80)` -- does produce 71 words
+ * and takes the function to 4 DIFF, but sched then puts the `+0x34` load
+ * BETWEEN the two pointer loads (gcc 2.7.2's sched orders a volatile MEM
+ * against stores and other volatiles, not against plain loads), so the two
+ * never come out adjacent and the pair lands in one register instead of two.
+ * `volatile` on both is the same 4. So the original is reading that field
+ * twice through something cse cannot equate, and finding what that is is the
+ * whole remaining job.
  */
 
 #include "common.h"
