@@ -87,6 +87,7 @@
  *   python3 tools/decomp/sched.py cand.c func_8005C2C0 --insn 14
  */
 
+#include "common.h"
 
 void func_80056DB4(s32);
 void func_8005E97C(s32, u32);

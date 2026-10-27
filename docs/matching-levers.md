@@ -3571,6 +3571,15 @@ lands; an open-ended one costs about 315K and comes back short but with
 measurements. Either is far cheaper than a fork, which pays for the parent's
 whole conversation on every turn.
 
+**Rename with word boundaries when you test a variable SPLIT.** Giving one
+reused running value two locals is a routine experiment, and the obvious
+`text.replace(" t;", " w;")` leaves `w = t + x;` behind -- a candidate that
+mixes the two and scores wildly worse than either shape. func_80037714 was
+parked for a session on exactly that: the two-variable shape was recorded as
+343 DIFF and discarded, and when re-run with `re.sub(r'\bt\b', 'w', block)`
+it was a MATCH. Any measurement that comes back far worse than both
+neighbours is worth re-reading as a broken edit before it is believed.
+
 **Batch functions that share a mechanism.** Ten of the `$gp`-blocked functions,
 all needing the same `.sdata` definition recipe, came back all-MATCH in one run
 of 152K tokens and 52 tool calls -- about 15K per function, an order of
