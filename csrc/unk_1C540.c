@@ -4425,7 +4425,82 @@ void func_80053374(u8 *p, s32 a) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053428);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80053604);
+/* The screen fade quad: allocate a 0xC-byte tpage primitive and a 0x18-byte
+   POLY_F4 out of the +0x8D0 bump allocator, build a full-screen semi-transparent
+   quad whose grey level tracks +0x02 against +0x04, and link both into the OT
+   at +0x70. Five spellings:
+
+   * `col` is REUSED for the quotient. With a separate `k` local the two are
+     different quantities and land in $v0 and $v1, where the listing has the
+     `mflo` and the final `addu` both writing $a1.
+   * the grey ramp is `col + ((col << 8) + (col << 16))`, with the inner
+     grouping explicit. `col * 0x10101` makes synth_mult pick the three-op
+     factorisation `((k << 8) + k) << 8) + k`, and the left-grouped
+     `col + (col << 8) + (col << 16)` adds `k` first -- both are the same four
+     instructions in the wrong order.
+   * the eight vertex halfwords go in the LISTING's order, grouped by value
+     (0x14, 0x10, then the four zeros, then 0x16, 0xE). In x0,y0,x1,y1 order
+     both constants are live at once, so they take two registers instead of
+     one and the whole tail shifts.
+   * `m = 1; if (p->unk_06 == 0) { m = 2; }` -- an init and an override, not an
+     if/else: the listing sets $a1 to 1 before the `lh` and only the 2 is in a
+     branch. And the 0xFFFFFF arm is written FIRST, since the `bnez` into the
+     divide makes it the fall-through.
+   * the two OT links are `addPrim` from libgpu.h, i.e. P_TAG bitfield stores.
+     A hand-written `|` cannot match -- see the landed func_800453E0 in
+     csrc/gprel_18B40.c for the expand_binop reason. */
+s32 func_80053604(Unk80083120 *p)
+{
+    Unk80083160 *s;
+    u8 *q;
+    u8 *r;
+    s32 c = 0;
+    s32 m;
+    u32 col;
+
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    *(u8 **)(D_80083160.unk_00 + 0x8D0) = q + 0xC;
+    r = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    *(u8 **)(D_80083160.unk_00 + 0x8D0) = r + 0x18;
+    s = &D_80083160;
+    m = 1;
+    if (p->unk_06 == 0)
+    {
+        m = 2;
+    }
+    func_80067F20((u32 *)q, 0, 0, GetTPage(0, m, 0, 0), 0);
+    if (p->unk_02 > p->unk_04)
+    {
+        c = 1;
+    }
+    if (p->unk_02 >= p->unk_04)
+    {
+        col = 0xFFFFFF;
+    }
+    else
+    {
+        col = (p->unk_02 << 8) / p->unk_04;
+        col = col + ((col << 8) + (col << 16));
+    }
+    if (c == 0)
+    {
+        p->unk_02 = p->unk_02 + 1;
+    }
+    *(u32 *)(r + 4) = col;
+    SetPolyF4((POLY_F4 *)r);
+    SetSemiTrans(r, 1);
+    *(s16 *)(r + 0x14) = 0x140;
+    *(s16 *)(r + 0x10) = 0x140;
+    *(s16 *)(r + 0xC) = 0;
+    *(s16 *)(r + 8) = 0;
+    *(s16 *)(r + 0x12) = 0;
+    *(s16 *)(r + 0xA) = 0;
+    *(s16 *)(r + 0x16) = 0xE0;
+    *(s16 *)(r + 0xE) = 0xE0;
+    addPrim(s->unk_00 + 0x70, r);
+    addPrim(s->unk_00 + 0x70, q);
+    return c;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800537D0);
 
