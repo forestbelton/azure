@@ -2242,6 +2242,24 @@ So when a listing materialises a symbol's address into a register that is NOT
 the one the `lui` wrote, try the array declaration before hunting for
 pressure elsewhere.
 
+### Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not
+
+Two variables for one byte is a known shape (func_8005947C: the raw `s32` the
+read returns, plus a narrow copy for the comparisons). Which spelling of the
+narrow copy you need depends on what the listing shows:
+
+```c
+u8  c = d;        /* addu $v1, $v0, $zero -- the truncation is a no-op  */
+s32 c = d & 0xFF; /* andi $v1, $v0, 0xFF  -- a real instruction         */
+```
+
+`d = *src` through an `lbu` already has clean upper bits, so a cast to `u8`
+costs a plain move and the later comparisons use the narrow pseudo directly.
+The explicit mask is an AND that nothing can delete, because the mask is on
+the value and not on the type. A listing with `andi 0xFF` right after the load
+wants the second form; one with `addu` wants the first. func_8004E298 needed
+the mask; func_8005947C the copy.
+
 ### A value stored twice is a CHAINED assignment, because a store flushes cse
 
 ```c
