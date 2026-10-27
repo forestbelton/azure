@@ -2467,6 +2467,46 @@ func_8003A2E0: 14 DIFF as four fields, 7 as one word.
   `advise.py` reports this as CALLEE-SAVED and names it, because the diff on
   its own reads as a frame-size difference and sends you looking for a spill.
 
+### A narrow parameter a CALLER must not see: define under an `__asm__` alias
+
+A parameter's width is read off the CALLEE, but declaring it narrow also
+changes every caller that has the prototype in scope -- and in a carved unit
+the callers were never in the same file as the definition. That looks like a
+contradiction and it is not one; it is a declaration-scope problem with a
+one-line fix:
+
+```c
+void func_80033AE8w(u16) __asm__("func_80033AE8");
+
+void func_80033AE8w(u16 id) { ... }        /* emitted as func_80033AE8 */
+```
+
+Every existing `void func_80033AE8(s32);` in the unit, and every call site
+behind it, is untouched: they name the assembler symbol this definition
+provides. cc1psx accepts the asm label on a definition, and the body is
+identical to the un-aliased one -- only the C name differs.
+
+Give the alias a suffix that is NOT a hex digit (`w`, not `d`): `guard.py` and
+`progress.py` recognise an aliased definition and count the LABEL, but their
+`func_[0-9A-Fa-f]+` pattern would otherwise also match the C name and count
+the function twice.
+
+func_80033AE8 is the worked case. Its listing's `andi $a0, $v1, 0xFFFF` is the
+PARAMETER's own truncation, which is what leaves the raw argument alive in
+`$v1` for a later `& 0x1F` and lets the `sllv` take the constant 1 before the
+`lw`; written `s32` with the mask in the source, the raw value and the
+constant hold each other's registers and six of seventeen words differ. The
+sweep row had rejected `u16` outright, because func_80039258's
+`func_80033AE8((s16) v)` needs the `sll`/`sra` that a `u16` prototype in scope
+replaces with a truncation. With the alias both sides are right at once and
+the function MATCHES.
+
+So when a narrow parameter matches the callee and breaks a caller, that is not
+evidence against the narrow declaration. Check the callers' own listings, and
+if they want the wide view, give the definition an alias. (carved-sweep.md's
+`__asm__`-alias bullet is the same tool used for a DATA symbol's two
+spellings.)
+
 ## 8. Statement order and expression shape
 
 ### sched1 defers a value SET EXACTLY ONCE, and that is a knob

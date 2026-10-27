@@ -2054,7 +2054,45 @@ s32 func_80058940(u32 i) {
     return -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_800589B8);
+/* The byte reader every func_80058xxx call goes through: fetches the byte at
+   D_80085FA4[0] + the cursor at +0x00, advances the cursor, and on running
+   past D_800869B0[0] sets the +0x2C flag and answers -1.
+
+   THE CURSOR IS DEREFERENCED INLINE IN THE ADDRESS SUM and read a SECOND time
+   for the increment, rather than being named in a local. cse forwards the
+   second read for free (nothing is stored in between), and what it buys is
+   the ORDER OF THE TWO LOADS: the target loads `%lo(D_80085FA4)` first and
+   fills its load-delay slot with `lw 0x0($a1)`, while a local gives the
+   dereference first. With `off` in a local the deref's insn is ready one
+   cycle earlier, sched2's `potential_hazard` promotes it over the `high` of
+   the symbol, and the two loads come out swapped -- 19 words either way, 2
+   DIFF. Inline, the deref is not ready until the cycle after, and the
+   schedule is the listing's.
+
+   The `lim` read must also sit AHEAD of the cursor store, or both load-delay
+   slots go empty: 20 words with it after (19 DIFF). Measured on the way, all
+   MATCH or close: the globals in locals and the deref inline (2 DIFF), a
+   `u8 *` base local (2), both statement orders of the two globals (2 and
+   19), the cursor through an `s32 *` local (18 words), and the parameter
+   taken as `u8 *` rather than `s32` (MATCH as well -- but `s32` is what the
+   unit's own three per-site declarations say, so it is the spelling that
+   does not conflict with them; a `u8 *q = (u8 *) a;` local in place of the
+   casts is 19 DIFF). */
+u32 func_800589B8(s32 a) {
+    s32 off;
+    u32 lim;
+    s32 c;
+
+    c = *(u8 *) (D_80085FA4[0] + *(s32 *) a);
+    off = *(s32 *) a + 1;
+    lim = D_800869B0[0];
+    *(s32 *) a = off;
+    if (lim < (u32) off) {
+        *(s32 *) (a + 0x2C) = 1;
+        return -1;
+    }
+    return c;
+}
 
 /* The 7-bit varint: reads bytes most-significant group first, seven bits at a
    time, while the top bit says another follows. 0 terminates it early.

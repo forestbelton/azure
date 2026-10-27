@@ -38,7 +38,38 @@ void func_80033AA8(s32 id) {
     *(u32 *) (p + (k >> 5) * 4 + 0x2D70) |= 1 << (id & 0x1F);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80033AE8);
+/* The bitmap CLEAR, func_80033AA8's twin with `&= ~` for `|=`.
+
+   ITS PARAMETER IS `u16`, and that is the whole difference from the twin: the
+   listing's `andi $a0, $v1, 0xFFFF` is the PARAMETER's own truncation, which
+   leaves the raw argument alive in $v1 for the `& 0x1F` and lets the `sllv`
+   take the constant 1 out of $a1 before the `lw`. Declared `s32 id` with the
+   mask written in the source, the raw value and the constant 1 hold each
+   other's registers and six words differ. Nothing is lost by narrowing: both
+   spellings use only the low sixteen bits of the argument.
+
+   It is DEFINED UNDER AN __asm__ ALIAS so that this unit's own
+   `void func_80033AE8(s32);` declarations and their call sites keep the
+   32-bit view they are matched against -- func_80039258's
+   `func_80033AE8((s16) v)` needs the `sll`/`sra` pair that a u16 prototype
+   in scope would replace with a truncation. In the original sources the
+   definition and those callers were in different files; the alias is how a
+   carved unit says that (see docs/carved-sweep.md). */
+void func_80033AE8w(u16) __asm__("func_80033AE8");
+
+void func_80033AE8w(u16 id) {
+    u32 k = id & 0xFFFF;
+    u8 *p;
+
+    if (k == 0) {
+        return;
+    }
+    if (k == 1) {
+        return;
+    }
+    p = (u8 *) 0x80010000;
+    *(u32 *) (p + (k >> 5) * 4 + 0x2D70) &= ~(1 << (id & 0x1F));
+}
 
 s32 func_80033B2C(s32 id) {
     u32 k = id & 0xFFFF;

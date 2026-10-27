@@ -32,6 +32,8 @@ STUB_RE = re.compile(r'INCLUDE_ASM\("[^"]+",\s*(\w+)\)')
 # regex this is. Greedy matching swallows a run of bodyless definitions whole
 # and reports all but the first as missing.
 DEF_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', re.M)
+ALIAS_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*'
+                      r'__asm__\s*\(\s*"(\w+)"\s*\)\s*;', re.M)
 
 
 def units():
@@ -41,6 +43,12 @@ def units():
         t = open(f).read()
         stubs = STUB_RE.findall(t)
         done = [n for n in DEF_RE.findall(t) if n not in stubs]
+        # A definition may be emitted under an __asm__ label, so its C name is
+        # not the assembler name (matching-levers section 7). Count the label.
+        for name, label in ALIAS_RE.findall(t):
+            if re.search(r'^[A-Za-z_][\w \*]*?\b' + name + r'\s*\([^;]*?\)\s*\{',
+                         t, re.M) and label not in done:
+                done.append(label)
         out[os.path.basename(f)[:-2]] = (done, stubs)
     return out
 

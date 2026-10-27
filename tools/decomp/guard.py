@@ -23,6 +23,17 @@ for f in glob.glob(PROJ + '/csrc/*.c'):
     # its job. Lazy matching stops at the nearest `) {` and still backtracks
     # correctly through a nested `(...)` in a parameter list.
     have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', t, re.M))
+    # A definition may carry an __asm__ label, so the C name is NOT the
+    # assembler name: `void func_Xd(u16) __asm__("func_X"); void func_Xd(...)
+    # { ... }`. That is how a unit gives one function a narrow parameter while
+    # its own callers keep a wide prototype (matching-levers section 7), and
+    # without this the function reads as MISSING even though it is compiled.
+    for name, label in re.findall(
+            r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*'
+            r'__asm__\s*\(\s*"(\w+)"\s*\)\s*;', t, re.M):
+        if re.search(r'^[A-Za-z_][\w \*]*?\b' + name + r'\s*\([^;]*?\)\s*\{',
+                     t, re.M):
+            have.add(label)
 missing = sorted(known - have)
 # Count macro INVOCATIONS, not the bare word: `INCLUDE_ASM` also appears in
 # prose inside csrc comments, which silently inflated this project's headline
