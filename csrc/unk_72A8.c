@@ -3623,9 +3623,59 @@ void func_8003BD7C(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BD84);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BE1C);
+/* Pulls four 3-component vectors at a 4-halfword stride toward their common
+   average by n/d, clamping each component at 0x7FFF. The average is summed
+   into a zeroed stack array -- which is why every accumulation goes through
+   memory, the memset having taken its address -- and divided by 4 with the
+   `bgez` / `addiu 3` / `sra 2` sequence of a signed divide.
 
-void func_8003BE1C(u8 *, s32, s32);
+   Both loops INDEX by the counter: `p[i * 4]`, `p[i * 4 + 1]`,
+   `p[i * 4 + 2]`. Walking a cursor with `c += 4` and reading `c[0]`, `c[1]`,
+   `c[2]` does NOT give the listing's single `addiu $a0, $a0, 0x8` -- gcc adds
+   a second pointer biased to +4 and reads two of the three through it at -2
+   and 0, which is three words. Indexed, the giv is one register with the
+   three field offsets as displacements (matching-levers section 9), and
+   neither a `goto` loop nor a `do { } while (0)` wrapper reaches that; the
+   subscript is the lever here. */
+void func_8003BE1C(s16 *p, s32 n, s32 d)
+{
+    s32 sum[4];
+    s32 i;
+    s32 v;
+
+    memset(sum, 0, 0x10);
+    for (i = 0; i < 4; i++)
+    {
+        sum[0] += p[i * 4];
+        sum[1] += p[i * 4 + 1];
+        sum[2] += p[i * 4 + 2];
+    }
+    sum[0] = sum[0] / 4;
+    sum[1] = sum[1] / 4;
+    sum[2] = sum[2] / 4;
+    for (i = 0; i < 4; i++)
+    {
+        v = (p[i * 4] - sum[0]) * n / d + sum[0];
+        if (v > 0x7FFF)
+        {
+            v = 0x7FFF;
+        }
+        p[i * 4] = v;
+        v = (p[i * 4 + 1] - sum[1]) * n / d + sum[1];
+        if (v > 0x7FFF)
+        {
+            v = 0x7FFF;
+        }
+        p[i * 4 + 1] = v;
+        v = (p[i * 4 + 2] - sum[2]) * n / d + sum[2];
+        if (v > 0x7FFF)
+        {
+            v = 0x7FFF;
+        }
+        p[i * 4 + 2] = v;
+    }
+}
+
 
 /* Three halfwords per entry, six entries, through two walked pointers that
    loop.c splits into four induction variables (+0 and +4 on each side). The
@@ -3646,7 +3696,7 @@ void func_8003BFE4(void) {
         d += 8;
         s += 8;
     }
-    func_8003BE1C(D_80082D08, 6, 4);
+    func_8003BE1C((s16 *) D_80082D08, 6, 4);
 }
 
 void func_8003C064(void) {
