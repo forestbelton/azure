@@ -74,6 +74,17 @@
  * -- so this is NOT a statement-order problem and the remaining lever is in
  * local-alloc's refusal to tie the second read-back, not in the source
  * sequence.
+ *
+ * MEASURED 2026-10-27, reading the listing's four moves rather than the diff.
+ * The listing is `sw $s3,0x0 ; addu $v1,$s3 ; lhu $a2,0x10 ; addu $v0,$v1 ;
+ * ... sw $v1,0x4 ; sw $v1,0x38 ; sw $a2,0x18 ; addu $a1,$a2 ; addu $v0,$v0,$a1
+ * ; sw $v0,0x1C`, i.e. BOTH operands of the +0x1C sum are their own
+ * read-backs (a copy of the +0x38 value and a copy of len) while +0x04 and
+ * +0x38 share the first one. Giving the sum's first operand an explicit
+ * temporary read before the +0x18 store, with the +0x38 store moved up, does
+ * not reproduce that: from +0x38 it is 132 words / 39 DIFF, from +0x04 132 /
+ * 43, and from +0x00 133 / 11. All three are worse than the one register this
+ * file is on, so the shape below stands; the temporary is not the answer.
  */
 
 #include "common.h"

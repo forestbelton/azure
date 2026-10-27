@@ -105,6 +105,14 @@
  * differing words, and it confirms the allocation analysis below rather than
  * replacing it.
  *
+ * MEASURED 2026-10-27, and it rules out STATEMENT ORDER in the colour block:
+ * six valid orderings of the five statements between `sat` and the switch
+ * (p/q/t and the `h %= 1536` / `f = h & 0xFF` pair, in every arrangement that
+ * keeps the dependencies) -- 48, 48, 77, 91, 99 and 100 DIFF, with the base
+ * order and `h`/`f` hoisted to the top tied at the best. So the magic
+ * constant's live range, which is what spreading the three divisions changes,
+ * is NOT what decides whether it lands in $a3 or $t0. Do not re-run this.
+ *
  * Also measured on the new baseline, all of them 102 and 48 or worse: `u8 v`
  * (which gives an `andi` on the parameter, not the copy), `u16 s`, `s32 s`
  * with `(s16)` casts at both uses, `s16 sat` and `u16 sat` (both 101 again,
