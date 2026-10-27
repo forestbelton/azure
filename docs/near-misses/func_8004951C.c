@@ -62,9 +62,25 @@
  *
  * SINCE PARKED, 2026-10-27: 155 of 157 words and 108 DIFF to 156 of 157 and
  * 97, by declaring `k` `s16` rather than `s32`. Found by search.py's
- * declaration-width family in the sweep of all forty parks. One word and
- * eleven differing words still to go, and the WHAT IS LEFT note above is
- * written against the old numbers.
+ * declaration-width family in the sweep of all forty parks. The WHAT IS LEFT
+ * note above is written against the old numbers.
+ *
+ * THE ONE WORD LEFT IS A CROSS-JUMP THIS SOURCE WINS AND THE LISTING DOES
+ * NOT. Four arms end in `func_8004E5A0(x, n, &buf[m]); func_8004E69C(...)`,
+ * and jump2 merges their tails into one `jal` in both builds. But two of them
+ * -- the `p[1] == 4` arm and the `k == 1` arm -- pass the SAME `&buf[0xB]`,
+ * so here the `addiu $s0, $sp, 0x1B` and `addu $a2, $s0` merge into the
+ * shared site as well and the listing keeps a copy in each arm.
+ *
+ * The listing cannot merge them because its `k == 1` arm has the conditional
+ * `negu $a0, $a0` BETWEEN that setup and the call, so the streams have
+ * already diverged where cross-jumping walks back from the `jal`. Here the
+ * negate happens earlier, into a local `v`, and the whole argument setup is
+ * common tail. Measured and not working: the call written out in BOTH arms of
+ * the sign test (`func_8004E5A0(-*(s8 *) (p + 2), ...)` in one and the plain
+ * value in the other), either arm first -- 160 words, three too many, because
+ * the second call and its argument then stop merging too. What is wanted is
+ * the negate last and the rest merged, which no spelling has produced yet.
  */
 
 #include "common.h"
