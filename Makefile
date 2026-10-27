@@ -14,6 +14,7 @@ SHELL := /bin/bash
 SLUS = slus_006.14
 TOWN = town.bin
 MAIN = main.bin
+DUNGEON = dungeon.bin
 
 # GNU binutils handles the assemble/link stage: splat emits GNU-syntax asm
 # (see include/macro.inc) and a GNU ld script, neither of which ASPSX or
@@ -156,9 +157,15 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
-.PHONY: all clean splat check expected ctx ghidra-syms extract
+.PHONY: all containers clean splat check expected ctx ghidra-syms extract
 
 all: build/$(SLUS) build/$(TOWN)
+
+# Every container, not just the two in `all`. main.bin and dungeon.bin are
+# 26 MB and 16 MB, so relinking them on every build is not worth it -- but
+# their code overlays ARE split now, so there has to be one command that
+# proves all four still come out byte-identical.
+containers: build/$(SLUS) build/$(TOWN) build/$(MAIN) build/$(DUNGEON)
 
 # TODO: Probably want to use .d files generated from `splat` here
 # splat generates the linker script into build/, so it is a real prerequisite
@@ -197,6 +204,16 @@ build/$(MAIN): $(OFILES)
 	$(OBJCOPY) -O binary build/$(MAIN).elf build/$(MAIN)
 	@echo ""
 	@$(CHECK) build/$(MAIN) data/main/$(MAIN) --yaml splat/$(SLUS).yaml
+
+build/$(DUNGEON): $(OFILES)
+	$(LD) $(LDFLAGS) \
+		--script=build/$(DUNGEON).ld \
+		--script=splat/$(DUNGEON)_undefined_funcs_auto.txt \
+		--script=splat/$(DUNGEON)_undefined_syms_auto.txt \
+		--output=build/$(DUNGEON).elf
+	$(OBJCOPY) -O binary build/$(DUNGEON).elf build/$(DUNGEON)
+	@echo ""
+	@$(CHECK) build/$(DUNGEON) data/dungeon/$(DUNGEON) --yaml splat/$(SLUS).yaml
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)

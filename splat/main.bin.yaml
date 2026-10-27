@@ -75,19 +75,25 @@ segments:
   # rodata first, code from +0x924: gcc 2.7.2 at -G8 emits data ahead of
   # functions, which is also why the block opens on an "Assertion failed"
   # string rather than instructions.
-  # NOT ACTIVE YET. Uncommenting this puts the overlay's asm into the link,
-  # and it references jump tables and data inside its own rodata
-  # (jtbl_80089900, D_80089960, ...) that splat cannot label without
-  # symbol_addrs entries, so the link fails with undefined references. Mapping
-  # the overlay means supplying those first. The addresses below are the
-  # finding; they are correct and verified, just not yet buildable.
-  # - type: code
-  # start: 0x25d000
-  # vram: 0x80020000
-  # subsegments:
-  # - [0x25d000, .rodata, ovl_main_80020000]
-  # - [0x25d924, asm, ovl_main_80020000]
-  - [0x25d000, bin]
+  # The three corrections eec0572 worked out on town.bin apply here unchanged:
+  # `rodata` and not `.rodata` (the dot routes the subsegment to a sibling C
+  # object and extracts nothing, so every reference into the overlay's own
+  # rodata comes out undefined); a FOLLOWING segment, or the code subsegment
+  # runs to the end of the container; and a text end on a 16-byte boundary,
+  # because splat emits `__romPos = ALIGN(__romPos, 16)` after a code segment
+  # and a boundary off that grid pads the container.
+  #
+  # The text ends at 0x264e20: the last `jr $ra` is at 0x264e18 and its delay
+  # slot follows, and the words after it are pointers into 0x800284xx, so the
+  # overlay's own data continues there. 77b2c94 reported 0x264c90, which is
+  # 0x190 bytes short.
+  - type: code
+    start: 0x25d000
+    vram: 0x80020000
+    subsegments:
+      - [0x25d000, rodata, ovl_main_80020000]
+      - [0x25d924, asm, ovl_main_80020000]
+  - [0x264e20, bin]
   # A second code run sits at +0x269000..+0x272000 -- 191 prologues, so it is
   # certainly code -- but its load address is UNRESOLVED. It has only 58
   # internal jal targets and the best delta scored 6 against a floor of 5,

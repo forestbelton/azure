@@ -64,18 +64,21 @@ segments:
   # main.bin's overlay occupies; +0x9f000 and +0x4a3000 are texture records.
   #
   # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
-  # NOT ACTIVE YET. Uncommenting this puts the overlay's asm into the link,
-  # and it references jump tables and data inside its own rodata
-  # (jtbl_80089900, D_80089960, ...) that splat cannot label without
-  # symbol_addrs entries, so the link fails with undefined references. Mapping
-  # the overlay means supplying those first. The addresses below are the
-  # finding; they are correct and verified, just not yet buildable.
-  # - type: code
-  # start: 0xa3000
-  # vram: 0x80088760
-  # subsegments:
-  # - [0xa3000, .rodata, ovl_dungeon]
-  # - [0xa3e28, asm, ovl_dungeon]
-  - [0xa3000, bin]
-  - [0xf8000, bin]
+  # The three corrections eec0572 worked out on town.bin apply here unchanged:
+  # `rodata` and not `.rodata` (the dot routes the subsegment to a sibling C
+  # object and extracts nothing, so every reference into the overlay's own
+  # rodata comes out undefined); a FOLLOWING segment, or the code subsegment
+  # runs to the end of the container; and a text end on a 16-byte boundary,
+  # because splat emits `__romPos = ALIGN(__romPos, 16)` after a code segment
+  # and a boundary off that grid pads the container.
+  #
+  # The text ends at 0xf7700: the last `jr $ra` is at 0xf76f8 and its delay
+  # slot follows. The 0xf8000 the old bin split used is 0x900 bytes past it.
+  - type: code
+    start: 0xa3000
+    vram: 0x80088760
+    subsegments:
+      - [0xa3000, rodata, ovl_dungeon]
+      - [0xa3e28, asm, ovl_dungeon]
+  - [0xf7700, bin]
   - [0x1a86800]
