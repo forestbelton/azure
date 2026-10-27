@@ -399,6 +399,7 @@ Tools in `tools/decomp/` (they honour `AZURE_ROOT` and `AZURE_SCRATCH`):
 | `fdiff.py FUNC...` | built vs reference bytes side by side; only valid after a *successful* link, since a stale `build/slus_006.14` once produced a bogus MATCH |
 | `guard.py` | no function was dropped from `csrc/` |
 | `dump.sh file.c` | compile with gcc's RTL dumps and collect them |
+| `sched.py zz.c FUNC` | the scheduler's own decisions, read out of dump.sh's `sched2`: every insn's priority, the ready list at each cycle, every hazard decision, and `--insn N` to read a ready-list insn number back to an instruction. Run this before blaming a scheduling diff on "the LUID tie-break" -- that is the THIRD key, and section 8 of matching-levers has the order they really apply in |
 | `annotate.py UNIT FUNC` | which levers this function's listing can possibly need, with costs and ruled-out shapes; `--sites` to print the matching instructions, `--self-test` to check every signature still fires on a function known to need it |
 | `search.py BASE.c UNIT FUNC` | sweep the local source transforms this compiler is sensitive to -- declared widths, `(s16)` casts, splitting a statement in two, `<` against `>`, the `& 1` mask -- scoring each with verify.py. Greedy by default, `--sites` to list the candidate changes, `--exhaustive` when there are few. Prints what each accepted change was worth, which is the table a near-miss header wants |
 | `nmcheck.py` | every `docs/near-misses/*.c` still compiles and still agrees with the word/diff count in its own header |

@@ -1860,6 +1860,61 @@ func_8003A2E0: 14 DIFF as four fields, 7 as one word.
 
 ## 8. Statement order and expression shape
 
+### Read the scheduler's own decisions -- it is not "priority, then LUID"
+
+`cc1psx` is gcc 2.7.2 and still honours gcc's `-d` dump letters. The `ccpsx`
+driver swallows them, so `tools/decomp/sched.py` runs `cc1psx` directly on
+preprocessed input and prints the dump for one function:
+
+    python3 tools/decomp/sched.py cand.c func_8003719C          # sched2
+    python3 tools/decomp/sched.py cand.c func_8003719C --sched1
+    python3 tools/decomp/sched.py cand.c func_8003719C --insn 27
+
+`-dR` gives sched2 (after reload, hard registers -- the pass that interleaves
+the prologue saves with the body) and `-dS` gives sched1. The dump names every
+insn's priority, the ready list at each cycle, every hazard decision, and the
+scheduled RTL, so an insn number in a ready list can be read back to an
+instruction with `--insn`.
+
+Several write-ups in this repo blamed a scheduling difference on
+"sched's tie-break is `INSN_LUID`, i.e. RTL order". That is the THIRD key, and
+reading `sched.c` with the dump next to it shows the order the keys actually
+apply in:
+
+1. **`priority (insn)`** (sched.c:1425) is the longest dependency path to the
+   insn from the block START along `LOG_LINKS`, each edge contributing
+   `insn_cost (x, link, insn) - 1`. So **when every latency on the path is 1
+   the priority is 1**, and because the path is measured from the start the
+   whole top-of-function region sits at priority 1 whatever the function does
+   later: func_8003719C's priorities run 1 to 11 with every insn in its entry
+   block at 1, and func_8005947C's are 1 throughout. Within a priority group
+   this key does nothing.
+2. **`schedule_select`** (sched.c, the `greater potential hazard` message)
+   walks the rank-sorted ready list **in groups of equal priority**, queues
+   every insn in the group whose `actual_hazard` is non-zero, and then picks,
+   among what is left, the insn with the **largest `potential_hazard`** -- the
+   `DEFINE_FUNCTION_UNIT` model, not the dependence graph. Memory operations
+   therefore beat ALU operations inside a priority group, which is why prologue
+   saves win against an `addiu` that sets up a call argument.
+3. Only on a tie of all of the above does `rank_for_schedule` fall through to
+   the dependence class relative to `last_scheduled_insn` (independent beats
+   anti/output beats data) and then to `INSN_LUID`.
+
+Scheduling runs BACKWARD: the dump's `T-N` counts cycles from the block end,
+so the insn chosen at the LARGEST `T` is the one emitted first. That is also
+why priority grows downstream, and why the block's last insn carries a
+sentinel priority near `INT_MAX` -- the backward pass has to take it first.
+
+Read the dumps `tools/decomp/dump.sh` collects, which is what `sched.py` does,
+rather than invoking `cc1psx` by hand: the driver passes flags of its own, so
+a hand-rolled invocation is a second compile path that can disagree with the
+build.
+
+The practical consequence: when a diff is two insns in the wrong order and one
+of them touches memory, the lever is not statement order. It is whatever
+changes the priority group they land in, or the hazard state at that cycle.
+
+
 * **When a store's `lui %hi` sits one slot too early, give the RHS's first
   subexpression its own statement** -- do not try to move the store.
   `expand_assignment` evaluates the lvalue address before the RHS, so
