@@ -1128,7 +1128,13 @@ typedef struct Unk80085FA8
    /* Hand-split out of pad_30: func_80059BC4's accumulator, which wraps at
       0x100. */
    u32 unk_3C;
-   u8 pad_40[0x10];
+   u8 pad_40[0xA];
+   /* Hand-split out of pad_40: func_800595C0's running-status byte and the
+      channel it plays on. */
+   u8 unk_4A;
+   u8 pad_4B;
+   u8 unk_4C;
+   u8 pad_4D[3];
 } Unk80085FA8;
 extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
 

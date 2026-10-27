@@ -319,7 +319,7 @@ Note that `verify.py` cannot see the placement at all -- it masks the relocated
 halfwords that reference the table -- so a MATCH there is necessary and not
 sufficient, and only `make check` is the authority on whether a table landed.
 
-### The whole region, and the eight tables still unplaced
+### The whole region, and the seven tables still unplaced
 
 Measured 2026-10-26 against `data/slus_006.14`. The `.rodata` region of the
 executable is file 0x800..0x6b60 (vram 0x8002D000..0x80033360), and it holds
@@ -333,7 +333,7 @@ in 0x80010000..0x80090000:
 | 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | func_800517CC (268 w) |
 | 0x027dc..0x02810 | 8002EFDC..8002F010 | 13 | jtbl_8002EFDC (5), jtbl_8002EFF0 (8) | func_80052144 (292 w), func_80052CE0 (194 w) |
 | 0x06614..0x068fc | 80032E14..800330FC |186 | jtbl_80032E14 (36), jtbl_80032EA4 (23), pad, jtbl_80032F04 (126) | func_80054F9C (28 w), func_80057A94 (163 w), func_80057D20 (463 w) |
-| 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | func_800595C0 (122 w) |
+| 0x0690c..0x069f4 | 8003310C..800331F4 | 58 | jtbl_8003310C | **placed** (unk_1C540, func_800595C0) |
 | 0x06a3c..0x06ab8 | 8003323C..800332B8 | 31 | jtbl_8003323C, jtbl_8003325C | none -- referenced by no remaining asm |
 
 Entry counts come from each dispatch's `sltiu` bound, and every run's extent
@@ -348,12 +348,29 @@ is text order.
 
 #### What that implies for placing them
 
-`unk_1C540.o` currently has **no `.rodata` section at all** (checked with
-`objdump -h`), so it can supply exactly **one** run. The first table therefore
-needs no unit split: add a segment per the pattern the three placed runs
-already use -- its own `type: code` segment, `align: 4`, one
+`unk_1C540.o` can supply exactly **one** run, so the first table needed no
+unit split: its own `type: code` segment, `align: 4`, one
 `[off, .rodata, unk_1C540]` subsegment, with the surrounding `bin` cut either
-side -- and land the one function whose switch generates it.
+side, and the one function whose switch generates it landed.
+
+**This is done, for the LAST run rather than the first.** func_800595C0
+matched (see the comment on it in `csrc/unk_1C540.c`) and jtbl_8003310C is
+placed at 0x8003310C by a segment of its own; `make check` is byte-identical
+and `jtbl_8003310C` has dropped out of `undefined_syms_auto`. The run chosen
+is the one whose single function was closest, not the first in the file -- and
+because it is the unit's LAST run, it is also the one that keeps working for
+the longest: the other three tables are emitted ahead of it in the same
+`.rodata`, so landing func_80054F9C, func_80057A94 or func_80057D20 breaks the
+placement and forces the split below.
+
+Two traps met doing it. `splat split` with no `--modes` REWRITES
+`slus_006.14_undefined_syms_auto.txt` and `..._undefined_funcs_auto.txt` from
+only what this one yaml disassembles, which drops every symbol the psyq asm
+needs and leaves the link with hundreds of undefined references -- the
+Makefile's `build/%.ld` rule runs exactly that, so after a yaml edit both
+files have to be restored from git. And the new `bin` subsegment's asset has
+to be extracted (`splat split ... --modes ld bin`) before the link, or ld
+fails on a missing `build/assets/<off>.o`.
 
 The **second** table does need `unk_1C540` split into separate translation
 units, one per run, with the boundaries at the function addresses the run order

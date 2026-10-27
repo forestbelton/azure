@@ -557,7 +557,9 @@ Levers that move them, all with no change to the emitted code:
     the uses to the quantity's first register and the copy dies: all eight ways
     of distributing three uses across a variable and a copy of it gave
     byte-identical output. A copy only survives if the original has a later use
-    of its own -- which costs a word.
+    of its own -- which costs a word. **Or if the copy's destination is
+    NARROWER: see "A `u8` destination makes a register copy INVISIBLE to cse"
+    below, which is free.**
 
   **There is a third lever, on the CONFLICT side, and it is the one to reach for
   when no lower-priority rival exists to populate `regs_someone_prefers` at
@@ -710,6 +712,57 @@ Two things that cannot be steered from C:
   cost in words, because that local's sign extension is a `sll`/`sra` pair the
   target already has. So "it is block-local, therefore unreachable" is only
   true of the pseudo, not of the value.
+
+### A `u8` destination makes a register copy INVISIBLE to cse
+
+This is the free way to keep a copy of a value as a second pseudo, and it is
+the whole of func_800595C0 (122 words, four of them this).
+
+cse only merges two registers' quantities from `insert`, and `insert` calls
+`make_regs_eqv` only when it finds a REG **of the same mode** in the source's
+equivalence class:
+
+```c
+  if (GET_CODE (x) == REG && classp ...)
+    for (elt = classp; elt; elt = elt->next_same_value)
+      if (GET_CODE (elt->exp) == REG && GET_MODE (elt->exp) == GET_MODE (x))
+        { make_regs_eqv (regno, REGNO (elt->exp)); ... }
+```
+
+`c = w` with `w` a `u32` and `c` a `u8` expands to
+`(set (reg:QI c) (subreg:QI (reg:SI w)))`. The class holds a SUBREG, not a
+QImode REG, so `make_regs_eqv` never runs, the two never share a quantity, and
+`canon_reg` never rewrites `w`'s later uses to `c`. **MIPS emits a QImode
+reg-reg move as `addu`, so the dodge is free** -- the insn is the same `move`
+the `u32` spelling would have produced, and nothing masks.
+
+With both `u32`, `make_regs_eqv` does run, and because `c`'s last reference is
+past the end of every extended block that contains the copy it wins the
+canonical slot (`uid_cuid[regno_last_uid[new]] > cse_basic_block_end` and
+later than the source's last use), so the uses move to `c`, `w` dies at the
+copy, combine folds `(set w $v0)` into it, and one register does the work of
+two.
+
+What that buys, measured on func_800595C0 by flipping exactly these
+declarations:
+
+* the second callee-saved register and its `sw`/`lw` pair, plus the
+  `addu $s3, $s0, $zero` -- three words;
+* the local uses then read the CALL'S RETURN REGISTER. A per-block `u32 w` is
+  its own pseudo with `REG_BASIC_BLOCK` set to that block, local-alloc ties it
+  to `$v0`, and `(set w $v0)` disappears entirely -- so an arm spends only the
+  `addu $s2, $v0, $zero` and reads `$v0` for `w & 0x7F`. One function-scope
+  temp instead is a global allocno, gets ONE hard register for every arm, and
+  each arm pays a second copy;
+* the fourth word is the arm where `$v0` is NOT available -- a `lui` for a
+  global and the loop's `sltu` both want it -- so that arm's temp falls to
+  `$v1` and its `addu $v1, $v0, $zero` is a real instruction.
+
+Corollary for reading a listing: **`addu $sN, $v0, $zero` followed by a use of
+`$v0` means two variables of different widths**, and a `u8` carried value is
+the natural spelling for exactly the kind of byte this function handles. Where
+the one-variable form would spend the same number of words it is only a
+register difference; where it would not, it is the word.
 
 ### Statement granularity is what orders the pieces of an address
 

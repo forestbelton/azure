@@ -7948,7 +7948,169 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005914C);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005947C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800595C0);
+u32 func_800589B8(s32);
+void func_80056E10(u8, s32, s32);
+void func_80057948(u8, s32, s32);
+void func_8005845C(u8, u8);
+void func_80058494(u8, s32, u8);
+void func_8005914C(Unk80085FA8 *, u8, s32, s32);
+
+/* The event dispatcher: reads one byte, and if its top bit is clear treats it
+   as running status, otherwise dispatches on the low seven bits through
+   jtbl_8003310C. 58 entries covering 0x46..0x7F, of which seven have bodies;
+   the other 51 share the default. The table also records the SOURCE order of
+   the arms -- 0x4A, 0x4B, 0x47, 0x48, 0x49, 0x46, 0x7F, default -- which is
+   not numeric and cannot be recovered any other way.
+
+   The load-bearing shape is that the byte is TWO variables in every block: a
+   `u32 w` local to that block for the immediate uses, and the `u8 c` that
+   carries it to the common tail. Spelled with one variable, or with two that
+   are both `u32`, cse unifies them and the function is four words short.
+
+   * What keeps the pair apart is the `u8`. cse's `insert` only calls
+     `make_regs_eqv` when it finds a REG of the SAME MODE in the source's
+     equivalence class, and `c = w` with `c` a `u8` is
+     `(set (reg:QI c) (subreg:QI (reg:SI w)))` -- no QImode REG in the class,
+     so no quantity merge, so `canon_reg` never rewrites `w`'s later uses to
+     `c`. Two `u32`s make it a plain SImode copy, `make_regs_eqv` runs, and
+     because `c`'s last reference (the tail) is past the end of every
+     extended block that contains the copy it becomes the canonical register:
+     the uses move to `c`, `w` dies at the copy, and combine folds
+     `(set w $v0)` into it. MIPS emits a QImode reg-reg move as `addu`, so
+     the dodge costs nothing. `b = a` at the top is the same device.
+
+   * The temps are declared in each case's OWN BLOCK, so each is a separate
+     pseudo with `REG_BASIC_BLOCK` set to that arm. local-alloc then ties
+     each to $v0, the call's return register, and the `(set w $v0)` insn
+     disappears -- which is why the arms read `$v0` for `w & 0x7F` and spend
+     only the `addu $s2, $v0, $zero`. One function-scope temp instead is a
+     global allocno, gets ONE hard register ($a2 measured), and every arm
+     pays a second copy. Case 0x47 is the exception that makes the word count
+     122: the `lui` for D_800869B4 and the loop's `sltu` both want $v0, so
+     its temp falls to $v1 and `addu $v1, $v0, $zero` is a real insn.
+
+   * The return goes through a local -- `r = c & 0x80; return r != 0;`. As
+     one expression the tree handed to `do_store_flag` is a BIT_AND_EXPR
+     against zero with a power-of-two mask, which it turns into a shift
+     (`srl 7` + `andi 1`); through the local the comparison is on a VAR_DECL
+     and expands as `andi` + `sltu`, the two insns the listing splits across
+     .L80059780 and .L80059784.
+
+   * `a` stays `u32`: the target copies the call result straight into $s0,
+     and a `u8` there would mask it. The running body writes `w & 0x7F`
+     twice, once for the test and once for the argument, and cse folds the
+     pair into the single `andi $a2, $v0, 0x7F` whose result survives the
+     call in $a2.
+
+   verify.py masks the two halfwords that reference jtbl_8003310C, so only
+   `make check` can see this land. The table itself is placed by a segment of
+   its own in splat/slus_006.14.yaml -- see the comment there, and the
+   jump-table section of docs/open-matching-problems.md for the mechanism.
+   That placement holds only while this is unk_1C540's one switch function in
+   C: the unit's other three tables belong 0x2F8 bytes earlier, so landing
+   func_80054F9C, func_80057A94 or func_80057D20 means splitting the unit. */
+u8 func_800595C0(Unk80085FA8 *p)
+{
+    u32 a;
+    u8 b;
+    u8 c;
+    u32 i;
+    u32 n;
+    Unk80085FA8 *e;
+    u32 r;
+
+    a = func_800589B8((s32)p);
+    b = a;
+    if ((a & 0x80) == 0)
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        if ((w & 0x7F) != 0)
+        {
+            func_80056E10(p->unk_4C, a & 0x7F, w & 0x7F);
+        }
+        else
+        {
+            func_80057948(p->unk_4C, a & 0x7F, 0);
+        }
+        p->unk_4A = b;
+        r = c & 0x80;
+        return r != 0;
+    }
+    switch (a & 0x7F)
+    {
+    case 0x4A:
+        func_80057948(p->unk_4C, p->unk_4A, 0);
+        return 0;
+    case 0x4B:
+        func_80057948(p->unk_4C, p->unk_4A, 0);
+        return 1;
+    case 0x47:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        i = 0;
+        n = D_800869B4n[0];
+        if (n != 0)
+        {
+            u32 v = (w & 0x7F) * 2 + 2;
+
+            e = D_80085FA8s;
+            do
+            {
+                e->unk_24 = v;
+                i++;
+                e++;
+            } while (i < n);
+        }
+        break;
+    }
+    case 0x48:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        func_80058494(p->unk_4C, 0, w & 0x7F);
+        break;
+    }
+    case 0x49:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        func_8005845C(p->unk_4C, w & 0x7F);
+        break;
+    }
+    case 0x46:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        p->unk_4C = w & 0xF;
+        break;
+    }
+    case 0x7F:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        p->unk_2C = 1;
+        break;
+    }
+    default:
+    {
+        u32 w = func_800589B8((s32)p);
+
+        c = w;
+        func_8005914C(p, (u8)(p->unk_4C + 0xB0), b & 0x7F, w & 0x7F);
+        break;
+    }
+    }
+    r = c & 0x80;
+    return r != 0;
+}
 
 s32 func_800588C8(u32);
 s32 func_80058ABC(u8 *);

@@ -81,6 +81,27 @@ segments:
     align: 4
     subsegments:
       - [0xefc, bin]
+  # jtbl_8003310C, func_800595C0's 58-entry table: 0xE8 bytes, and the only
+  # subsegment of its segment for the same reason as the three runs above.
+  # unk_1C540 owns FOUR tables in TWO separated runs -- jtbl_80032E14 /
+  # jtbl_80032EA4 / jtbl_80032F04 at 0x80032E14 and this one at 0x8003310C --
+  # and a unit's `.rodata` is one contiguous output section, so this placement
+  # is only correct while func_800595C0 is the unit's ONLY switch function in
+  # C. When func_80054F9C, func_80057A94 or func_80057D20 lands, its table is
+  # emitted ahead of this one and the unit has to be split in two at
+  # func_800595C0. See docs/open-matching-problems.md.
+  - type: code
+    start: 0x690c
+    vram: 0x8003310C
+    align: 4
+    subsegments:
+      - [0x690c, .rodata, unk_1C540]
+  - type: code
+    start: 0x69f4
+    vram: 0x800331F4
+    align: 4
+    subsegments:
+      - [0x69f4, bin]
       - [0x6b60, data, psyq/libcd]
       - [0x6e44, data, psyq/libgpu]
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content

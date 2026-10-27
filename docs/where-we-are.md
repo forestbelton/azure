@@ -237,10 +237,14 @@ something** -- that has been the single biggest waste of effort here.
 **Nothing is structurally blocked any more, and every remaining stub is a real
 function.** Each is either ordinary decompilation or a documented near-miss.
 Forty-two rows of `docs/carved-sweep.md`'s table are parked with measurements
-rather than untouched, and eight of the rest dispatch through a jump table
+rather than untouched, and seven of the rest dispatch through a jump table
 whose `.rodata` has no placement yet (jtbl_80032E14 and its neighbours sit
-inside a `bin` blob at 0x6614, not in the three placed runs at the top of the
-file), so they want that carve before the C.
+inside a `bin` blob at 0x6614, not in the four placed runs), so they want that
+carve before the C. The fourth placed run is jtbl_8003310C at 0x8003310C,
+added 2026-10-27 with func_800595C0: one `.rodata` subsegment of its own
+segment, which is all a unit's FIRST landed table needs. `unk_1C540` cannot
+place a second without being split, because its four tables belong to two
+separated runs.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
