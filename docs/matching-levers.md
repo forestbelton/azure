@@ -2942,6 +2942,37 @@ Two rules that came out of it:
 -- see the "NOT A LOOP" note there, where the label form is what keeps loop.c
 out.
 
+### A comparison TREE where you get a jump table means a case you have not found
+
+cc1psx picks between a jump table and a comparison tree in `stmt.c:4817`:
+
+```c
+      else if (TREE_INT_CST_HIGH (range) != 0
+	       || count < CASE_VALUES_THRESHOLD      /* 4 with casesi, else 5 */
+	       || ((unsigned HOST_WIDE_INT) (TREE_INT_CST_LOW (range))
+		   > 10 * count)
+```
+
+`count` is the number of case NODES after `group_case_nodes` merges adjacent
+ones with the same label, and `range` is `maxval - minval` over the case
+values. So a tree needs either fewer than five nodes or a span wider than ten
+times the node count. func_80058E6C's five scattered meta-event cases
+(0x2F, 0x51, 0x54, 0x58, 0x59) span 42 for a count of 5 -- 42 is not more than
+50, so cc1psx emits a jump table and the candidate is ten words short with
+nothing in common with the listing. The listing's tree only becomes reachable
+with a SIXTH node low enough to widen the span: a case range 0x00..0x0F
+sharing the default's label (the text meta-events), which makes the span 89
+against a count of 6.
+
+**A `bltz` in a switch's dispatch is the signature of such a range node.**
+`emit_case_nodes` gives a range node `blt node->low -> default` followed by
+`ble node->high -> node->code_label`; when `node->low` is 0 the first is a
+bare `bltz`, and when the node shares the default's label the second branches
+to the default too. Two low-bound checks and no matching equality test is
+therefore not a mystery -- it is one range node whose body is the default's,
+and the case values it covers are `low` and `high` read straight off the two
+compares.
+
 ### A switch's range split means there is a case label you have not found
 
 `emit_case_nodes` (stmt.c:5664) has its own shortcut: *"omit the conditional
