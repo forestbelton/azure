@@ -7736,7 +7736,86 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005BAB0);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005BBFC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C130);
+s32 func_8005EB78(u32);
+s16 func_8005BBFC(s16, s16, s16, s16, s16, s16, s16, s16);
+
+/* Finds a free slot -- first a D_80073740 handle func_8005EB78 reports idle,
+   then a D_80085458 entry with a zero +0x1A -- and hands it plus all seven
+   arguments to func_8005BBFC, returning -1 if neither sweep found one.
+   D_80085F98 is held at 1 across the whole thing.
+
+   The first sweep is a `goto` loop inside a `do { } while (0)`, and that pair
+   is the lever. The listing wants BOTH halves of loop.c's behaviour split
+   apart: `lui $s1, %hi(D_80073734)` hoisted out of the sweep (so only the
+   `lw %lo(...)($s1)` is inside it), but the element address NOT
+   strength-reduced -- `sll $v0, $s0, 2` / `addu $v0, $v0, $s2` / `lw` every
+   iteration. A real `do`/`while` gives both: the giv's benefit is 4, one
+   `add_cost` over the cut, so loop.c reduces it to a walking pointer and the
+   function is two words short. A bare `goto` loop gives neither: with no
+   NOTE_INSN_LOOP_BEG there is nothing to hoist from, the `lui` stays inside
+   the sweep, the register pressure drops and the `c` parameter no longer
+   spills to 0x20($sp) -- two words short again, differently.
+
+   `do { } while (0)` round the goto loop gives exactly one of them. The
+   wrapper is a loop STATEMENT, so loop.c scans the region and hoists the
+   `(high D_80073734)` into the entry block; the back edge inside it is a
+   `goto`, so there is no biv and nothing to reduce. The extra callee-saved
+   register that the hoist occupies is what pushes `c` to its stack home.
+
+   The SECOND sweep is a plain `do`/`while`, because there the listing does
+   want the giv: `addiu $a0, $a0, 0x78` with +0x1A as the displacement, which
+   needs the 0x78-stride base in a register (matching-levers section 9).
+
+   `i = 0` is the function's first statement so that its `addu $s0, $zero,
+   $zero` pairs with `sw $s0` ahead of the stack parameters' loads. */
+s16 func_8005C130(s16 a, s16 b, s16 c, s16 d, s16 e, s16 f, s16 g)
+{
+    u32 *t;
+    u8 *q;
+    s32 i;
+
+    i = 0;
+    D_80085F98[0] = 1;
+    t = D_80073740;
+    do
+    {
+    scan:
+        if (func_8005EB78(*(u32 *) (i * 4 + (u32) t)) == 0)
+        {
+            goto call;
+        }
+        i++;
+        if (i <= (s32) D_80073734[0] - 1)
+        {
+            goto scan;
+        }
+        i = -1;
+    } while (0);
+call:
+    if (i == -1)
+    {
+        q = D_80085458;
+        i = 0;
+        do
+        {
+            if (*(u16 *) (q + i * 0x78 + 0x1A) == 0)
+            {
+                goto call2;
+            }
+            i++;
+        } while (i <= (s32) D_80073734[0] - 1);
+        i = -1;
+    call2:
+        if (i == -1)
+        {
+            goto out;
+        }
+    }
+    i = func_8005BBFC(i, a, b, c, d, e, f, g);
+out:
+    D_80085F98[0] = 0;
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8005C2C0);
 

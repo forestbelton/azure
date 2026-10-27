@@ -2909,6 +2909,39 @@ cc1psx increment a COPY in place while keeping the original live?
   can put in its back edge's delay slot**, which is the second thing to read
   off such a listing.
 
+* **`do { ... goto ... } while (0)` splits loop.c in half: hoisting WITHOUT
+  strength reduction.** The two things loop.c does to a loop are not always
+  both wanted. A listing can hoist a loop-invariant out of a sweep and still
+  recompute the element address every iteration -- and neither a real loop
+  statement nor a bare `goto` loop gives that, because the first gives both
+  and the second gives neither.
+
+  The device is to write the back edge as a `goto` and wrap the whole region
+  in a `do { } while (0)`. The wrapper IS a loop statement, so the front end
+  emits the loop notes, `scan_loop` runs over the region and
+  `move_movables` hoists its invariants into the entry block; the back edge
+  inside is a `goto`, so there is no biv and `strength_reduce` has nothing to
+  reduce. `while (0)` costs no instruction -- jump.c deletes the test.
+
+  func_8005C130's first sweep is the worked example. As a `do`/`while` the
+  element-address giv has benefit 4, one `add_cost` over the cut in
+  `strength_reduce` (`v->lifetime * threshold * benefit < insn_count`, loop.c
+  line 3823), so it reduces to a walking pointer and the function is two words
+  short. As a bare `goto` loop there is nothing to hoist, the
+  `lui %hi(D_80073734)` stays inside the sweep, the pressure on the
+  callee-saved registers drops and a parameter that the listing spills to its
+  stack home no longer does -- two words short again, differently. Wrapped,
+  it is MATCH.
+
+  Remember the threshold is a near-constant: `(loop_has_call ? 1 : 2) *
+  (3 + n_non_fixed_regs)`, and `n_non_fixed_regs` counts non-fixed HARD
+  registers, so it is the same for every function on this target. What decides
+  a giv is therefore just whether `benefit` -- the address's rtx cost, minus
+  `add_cost * biv_count`, minus `copy_cost` when it is not replaceable --
+  survives above zero. One operation (benefit 2) never does; two (benefit 4)
+  always does. That is why no spelling of a two-operation address reaches the
+  unreduced form, and why the loop's own form is the only lever.
+
 ## 10. Measured dead ends -- do not retry
 
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried
