@@ -2511,6 +2511,14 @@ third loop re-walks the buffer it filled in the first; written with its own
 base falls to $a1 -- the listing has them the other way round. Resetting `k`
 after the intervening call instead is 6 words, and MATCH.
 
+**And the inverse, which is the same lever read backwards.** When the listing
+gives two loops DIFFERENT registers for the same role, they were different
+variables. func_800506BC walks $a0 then $v1 and accumulates in $a3 then $a0;
+written with one cursor and one accumulator shared between the loops, each
+role is a single allocno and both loops come out on the same pair -- 18 wrong
+words with every opcode already right. So read the registers off the listing
+before deciding: one variable or two is a measurable choice either way.
+
 ### `p = param` BEFORE the first branch moves that parameter's copy LAST
 
 `assign_parms` emits the hard-register copies in declaration order, so the

@@ -3572,7 +3572,99 @@ void func_80050694(u8 *p) {
     (*(void (**)(u8 *)) p)(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800506BC);
+extern u8 D_80077E3C[];
+extern u8 D_80077E48[];
+extern u8 D_80077E54[];
+extern u8 D_80077E60[];
+extern u8 D_80077E6C[];
+extern u8 D_80077E78[];
+extern u8 D_80077E84[];
+extern u8 D_80077F80[];
+extern u8 D_80077F8C[];
+extern u8 D_80081485[];
+
+u32 func_80049E6C(s32);
+void func_8004FFF4(u8 *);
+
+/* Wires the ten-odd sub-objects of the +0x68 table to their handlers and
+   seeds their coordinates: six fixed D_80077Exx tables, one of two chosen by
+   D_80081485, then two more; then the 10..15 entries get their +0x00 from
+   `q`'s +0x2C with +0x0A stepping by 0x10 from -0x28 and +0x02 by 0xC4, and
+   the 1..5 entries get +0x02 stepping by 0xC4 again.
+
+   `s = (u32 *) p[6]` is loaded BEFORE the `if`: the listing has that `lw` in
+   the `lbu`'s load-delay slot, which only happens when it is ahead of the
+   branch. Left in the store after the join it comes out behind the branch
+   with a nop in the slot, and the value and the pointer swap registers -- one
+   word over.
+
+   The two loops have SEPARATE cursor and accumulator locals. This is the
+   inverse of func_8004AA78, where reusing one counter across two loops was
+   what the listing wanted: here it is wrong, because reusing them makes one
+   allocno per role and both loops come out on the same registers, where the
+   listing walks $a0 then $v1 and accumulates in $a3 then $a0. 18 wrong words.
+
+   Each loop's initialisers are hoisted out of the `for` and ordered the way
+   the listing's preheader has them -- the counter, then the accumulator, then
+   the rest -- and the `== 0` arm of the D_80081485 test is written FIRST so
+   the `!= 0` arm is the one that goes out of line. */
+void func_800506BC(u8 **p, u8 *q, s32 c)
+{
+    u8 *t;
+    u32 *s;
+    u8 **r;
+    u8 **r2;
+    s32 z2;
+    s32 i;
+    s32 y;
+    s32 z;
+
+    *(u32 *) p[0] = func_80049E6C(6);
+    *(u32 *) p[1] = (u32) D_80077E3C;
+    *(u32 *) p[2] = (u32) D_80077E48;
+    *(u32 *) p[3] = (u32) D_80077E54;
+    *(u32 *) p[4] = (u32) D_80077E60;
+    *(u32 *) p[5] = (u32) D_80077E6C;
+    s = (u32 *) p[6];
+    if (D_80081485[0] == 0)
+    {
+        t = D_80077F80;
+    }
+    else
+    {
+        t = D_80077F8C;
+    }
+    *s = (u32) t;
+    *(u32 *) p[8] = (u32) D_80077E78;
+    *(u32 *) p[9] = (u32) D_80077E84;
+    *(u32 *) (q + 0x10) = 1;
+    *(u32 *) (q + 0x14) = 1;
+    func_8004FFF4((u8 *) p);
+    i = 10;
+    z = 0;
+    *(s16 *) (*(u8 **) (p[0] + 4) + 0xA) = 0;
+    r = &p[10];
+    y = -0x28;
+    for (; i < 0x10; i++)
+    {
+        *(u32 *) r[0] = *(u32 *) (q + 0x2C);
+        *(s16 *) (*(u8 **) (r[0] + 4) + 0xA) = y;
+        *(s16 *) (*(u8 **) (r[0] + 8) + 2) = z;
+        r++;
+        y += 0x10;
+        z += 0xC4;
+    }
+    i = 1;
+    z2 = 0;
+    r2 = &p[1];
+    for (; i < 6; i++)
+    {
+        *(s16 *) (*(u8 **) (r2[0] + 8) + 2) = z2;
+        r2++;
+        z2 += 0xC4;
+    }
+    *(s16 *) (*(u8 **) (p[8] + 8) + 6) = -4;
+}
 
 void func_80050550(u8 *, s32, s32);
 
@@ -3648,12 +3740,11 @@ void func_800509C4(u8 *p, s32 a) {
 
 void func_800509C4(u8 *, s32);
 void func_8005084C(u8 *, u8 *, u32 *, u32 *);
-void func_800506BC(u32, u8 *, s32);
 
 void func_80050A00(u8 *p, s32 b) {
     func_800509C4(p, b);
     func_8005084C(p, p + 0x58, (u32 *) (p + 0x30), (u32 *) (p + 0x40));
-    func_800506BC(*(u32 *) (p + 0x68), p, b);
+    func_800506BC(*(u8 ***) (p + 0x68), p, b);
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050A58);
