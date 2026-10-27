@@ -1071,6 +1071,7 @@ typedef struct Unk80083D08
 extern Unk80083D08 D_80083D08s[] __asm__("D_80083D08");
 extern u8 D_8006ADBC[];
 extern u8 D_8007382B[];
+extern s32 D_80073830[];
 extern u8 D_800820A8[];
 extern u8 D_80081EB0[];
 extern u8 D_800713E4[];

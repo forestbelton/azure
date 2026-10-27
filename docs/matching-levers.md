@@ -2369,6 +2369,34 @@ which is what these targets have. func_800481E0, 18 DIFF; it is also most of
 what is left on func_8004A6C0, where the same change took 20 DIFF to 16 and
 one word.
 
+### Indexing a base pointer keeps it SET ONCE, which is a second lever
+
+The lever above is about how many induction variables you get. Keeping the
+base pointer un-walked buys a second thing on top of that: `reg_n_sets` for it
+stays at 1, so sched1's birthing-insn rule (section 8) applies to its
+initialisation and raises it over whatever else is sitting at priority 1 in
+the preheader.
+
+func_80059E94 is the whole of that. Its preheader is `i = 0`, a hoisted
+`lui $a3, 0x8` for the 0x80000 bound, and `addu $a0, $t0, $zero` for the table
+base. Written `p = D_800869C0; for (; i < 0x10; i++, p += 2)` with `p[0]` and
+`p[1]`, the pointer is set TWICE, its initialisation stays at priority 1, the
+ready list breaks the tie on RTL order, and the constant comes out one slot
+LATE -- which costs the registers too, because `$a3` is then free to carry the
+table address and the constant in turn instead of the listing's `$t0` and
+`$a3`. 62 words, 4 DIFF, and nothing about statement order moves it: the
+hoisted invariants go in before `loop_start`, so they are always behind a
+for-init.
+
+Written `p = D_800869C0; for (; i < 0x10; i++)` with `p[i * 2]` and
+`p[i * 2 + 1]`, strength reduction supplies the single `addiu $a0, $a0, 0x8`
+giv, `p` is set once, sched1 raises it, and the constant lands first. MATCH.
+
+Spelling the base out at each row instead -- `D_800869C0[i * 2]` -- is not the
+same thing: that gives TWO givs which `combine_givs` does not merge (64
+words), and so does hoisting a row pointer `u32 *q = &p[i * 2]` out of the
+references (63 words, with a `sll` left recomputing it).
+
 ### A loop-invariant pointer belongs INSIDE the loop body
 
 Assigned as an initialiser before the loop, its materialisation lands ahead of

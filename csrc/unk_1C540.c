@@ -6685,11 +6685,72 @@ s32 func_80059D60(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059DAC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059E94);
+void func_80059DAC(void);
+
+/* Claims a D_800869C0 slot -- a {offset, length} pair per slot, sixteen of
+   them -- for a run of `size` bytes and returns its offset, or -1 when the
+   run would reach past 0x80000 - D_80073830[D_8007382B[0]]. The slot table
+   empty is its own arm, allocating at 0x1010; otherwise the first slot with a
+   zero length is taken. Running off the end of the table is not an error: the
+   0x1010 that `base` still holds is what comes back.
+
+   `p` IS SET ONCE and the rows are reached as `p[i * 2]`, not by walking
+   `p += 2`. Both halves of the listing's preheader want that:
+
+     * strength reduction turns the two row references into ONE giv -- the
+       `addiu $a0, $a0, 0x8` at the bottom -- where `p += 2` plus `p[0]`/`p[1]`
+       leaves the user's own pointer and `D_800869C0[i * 2]` spelt out gives
+       two givs that combine_givs does not merge;
+     * a pointer set once is a pseudo with `reg_n_sets == 1`, so sched1's
+       birthing-insn rule raises `p = D_800869C0` above the hoisted `lui
+       $a3, 0x8` and emits the constant FIRST. With `p += 2` the pointer is
+       set twice, the two tie on priority, RTL order wins, and the constant
+       comes out one slot late -- which also costs the registers, because
+       `$a3` is then free to carry both values in turn ($a3 for the table
+       address, reused for 0x80000) instead of the listing's $t0 and $a3. */
+s32 func_80059E94(u32 size)
+{
+    u32 base;
+    u32 *p;
+    s32 i;
+
+    base = 0x1010;
+    if (D_800869C0[0] == 0)
+    {
+        if (base + size < 0x80000 - D_80073830[D_8007382B[0]])
+        {
+            D_800869C0[0] = base;
+            D_800869C0[1] = size;
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        i = 0;
+        p = D_800869C0;
+        for (; i < 0x10; i++)
+        {
+            if (p[i * 2 + 1] == 0)
+            {
+                base = p[i * 2];
+                if (base + size < 0x80000 - D_80073830[D_8007382B[0]])
+                {
+                    p[i * 2] = base + size;
+                    p[i * 2 + 1] = size;
+                    break;
+                }
+                return -1;
+            }
+        }
+    }
+    func_80059DAC();
+    return base;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059F8C);
-
-void func_80059DAC(void);
 
 /* UNPARKED. Both loops index off a base LOCAL with the index written first --
    `(u8 *) (i * 8 + (u32) b)`, not `b + i * 8` -- which is what gives the
