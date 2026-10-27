@@ -4,7 +4,7 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 79 asm stubs as of 2026-10-27** and the build is
+**`guard.py` reads 76 asm stubs as of 2026-10-27** and the build is
 byte-identical; `make check` is green at HEAD. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
@@ -243,8 +243,8 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with measurements | 70 | 38 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
-| never attempted | 9 | 2255 words; see below |
+| parked, with measurements | 71 | 39 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| never attempted | 5 | 1925 words; see below |
 
 **THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the
 audit that caught it is worth re-running: a stub counts as attempted only if
@@ -252,17 +252,28 @@ it has a park file in `docs/near-misses/` or a ROW OF ITS OWN in
 `docs/carved-sweep.md`, and nine did not. Being mentioned inside another
 function's row is not a measurement. The list, smallest first:
 
-  func_8003C920  54 w    func_8005560C  73 w    func_8005ACDC  75 w
-  func_80035484  90 w    func_80035888  93 w    func_80059F8C 145 w
-  func_8004C36C 461 w    func_800345B8 546 w (GTE and scratchpad)
+  func_80035888  93 w    func_80059F8C 145 w    func_8004C36C 461 w
+  func_800345B8 546 w (GTE and scratchpad)
   func_80056E10 718 w (the voice family's third member)
 
-func_80056948 (48 w) was the tenth and MATCHED on the first draft on
-2026-10-27, which is the argument for working through the rest of them before
-grinding the parks: the parks have had their families swept, and these have
-never been read. The audit is five lines of Python over `csrc/` and the two
-docs; `guard.py` already checks the converse (a row for a function that has
-landed).
+**FIVE OF THE TEN WENT THE SAME DAY THE LIST WAS WRITTEN**, and that is the
+argument for working through the rest before grinding the parks -- the parks
+have had their transform families swept, these had never been read:
+
+  func_80056948  48 w   MATCHED, first draft
+  func_80035484  90 w   MATCHED, first draft
+  func_8003C920  54 w   MATCHED, third draft
+  func_8005560C  73 w   MATCHED, second draft
+  func_8005ACDC  75 w   parked at 3 DIFF, from 35 on the first draft
+
+Each one took two or three edits from shapes already recorded in
+matching-levers.md and in the siblings' headers: the giv lever for
+func_8005ACDC, fold's `associate:` for func_8005560C's `<< 1`, the
+"N materialisations mean N locals" rule for func_8003C920's two arms, and for
+func_80035484 nothing new at all -- its three siblings had settled every
+shape. The audit that found the list is five lines of Python over `csrc/` and
+the two docs; `guard.py` already checks the converse (a row for a function
+that has landed).
 
 Everything else has a park file or a sweep row with measurements behind it, so
 for those the next session's first move is

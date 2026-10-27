@@ -890,6 +890,16 @@ func_800353F4's match in one pass and took func_80037E58 from 8 differing
 words to 2. Globals declared in a header are left alone, since changing those
 would change every other unit too.
 
+**And a diagnostic caution, which cost a session here.** A two-word difference
+that looks like a scheduling choice -- two adjacent insns swapped, both
+priority 1, the memory-over-ALU rule explaining the order you got -- can still
+be a DECLARATION. func_80037E58's last two words were written up as exactly
+that, with the sched2 dump's insn numbers and the reasoning for why no source
+order could reach it, and the cure was `extern u8 D_80012D6E;`. The
+declaration changes which register each half of an address lands in, which
+changes what the scheduler is choosing BETWEEN -- so run the sweep before
+concluding that a schedule is unreachable.
+
 One warning that cost a false positive on its first run: the use rewrite has
 to be ONE pass. Rewriting `SYM[0]` to `SYM` first and bare names to `&SYM`
 second turns `SYM[0] != 0` into `&SYM != 0`, which is a constant -- the test
