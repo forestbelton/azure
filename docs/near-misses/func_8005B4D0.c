@@ -99,7 +99,11 @@
  *
  * So the seventh slot is a spilled copy of `b`, and the listing does not need
  * one because its `b` pseudo never won a register and reload used the
- * parameter's HOME slot instead. Declaring the six in the listing's slot
+ * parameter's HOME slot instead. That is `assign_parms`' stack home being
+ * reached through `reg_equiv_mem`, which only happens when the parameter
+ * itself goes to memory -- not when a COPY of it does. Routing both uses
+ * through a `bb = b;` local is 378 words but grows the frame to 0x98, an
+ * eighth slot rather than six. Declaring the six in the listing's slot
  * order (below) moves the offsets but does not remove the seventh, and
  * dropping the `b >> 8` local to recompute it inline at all three uses is
  * 380 words, one worse. What would fix it is whatever makes `b` lose its
