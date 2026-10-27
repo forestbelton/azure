@@ -243,33 +243,51 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| carved-unit sweep | 181 | ordinary decompilation, worked cheapest-first; `docs/carved-sweep.md` |
-| near-misses, source written and checked | 5 | each with a numeric bound or a named pass check |
+| parked, with measurements | 88 | 44 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
+| never attempted | 2 | func_800345B8 (546 w, GTE and scratchpad) and func_80056E10 (718 w) |
 
 **Nothing is structurally blocked any more, and every remaining stub is a real
-function.** Each is either ordinary decompilation or a documented near-miss.
-Forty-two rows of `docs/carved-sweep.md`'s table are parked with measurements
-rather than untouched, and four of the rest dispatch through a jump table whose
-`.rodata` has no placement yet, so they want that carve before the C.
+function.** As of 2026-10-27 only TWO of the ninety have never been attempted;
+everything else has a park file or a sweep row with measurements behind it, so
+the next session's first move is `python3 tools/decomp/progress.py --parked`
+and then the park, not a fresh reading of the listing.
 
-Eight runs are placed. The fourth was jtbl_8003310C at 0x8003310C, with
-func_800595C0: one `.rodata` subsegment of its own segment, which is all a
-unit's FIRST landed table needs. The fifth, the same day, was the first two
-tables of the 0x80032E14 run, with func_80054F9C and func_80057A94 -- and that
-one needed `unk_1C540` SPLIT at func_800595C0 into `unk_1C540` and
-`unk_2CDC0`, because a unit emits one contiguous `.rodata` and this one owns
-two separated runs. The lesson worth carrying: **a run does not have to be
-placed whole.** jtbl_80032F04 belongs to func_80057D20, which is still six
-words short, and because its table is the LAST of the three the subsegment
-just stops early and the rest stays `bin`. See the jump-table section of
-`docs/open-matching-problems.md` for the split's mechanics. The sixth run,
-jtbl_8002E964, came with func_800517CC the same day, and the seventh,
-jtbl_8002EFF0, with func_80052CE0 right after it -- so the carved unit is now
-cut into FIVE pieces, `unk_1C540`, `unk_25944`, `unk_264E0`, `unk_2879C` and
-`unk_2CDC0`, one run each. jtbl_8002EFF0 showed that a run can be entered from
-the MIDDLE, and func_80052144 then supplied its first half from a DIFFERENT
-object, so one contiguous run can be shared between two units through two
-adjacent segments.
+Two tools exist for the parks specifically, and both earn their keep:
+`search.py` sweeps the source transforms this compiler is sensitive to, and a
+run of it over all 40 parks on 2026-10-27 improved NINE of them -- including
+func_8004CECC from 101 words (-1) and 101 DIFF to 102 (+0) and 48, and
+func_8004E6F4 from 102 (+2) and 101 to 100 (+0) and 17. Every one of those
+came from a transform family search.py already had; they had simply never
+been swept across the parks. `advise.py` prints a FRAME census whenever the
+two builds disagree about a `$sp` slot, which is the sharpest diagnostic
+there is on a function that spills.
+
+SIX of the executable's eight referenced jump-table runs are placed, and the
+two that are not are waiting on one function each: jtbl_8002E5F8 on
+func_8004CECC and jtbl_80032F04 on func_80057D20. The first three went in
+with the units that own them. The other three all came on 2026-10-27 and
+between them settled how this works:
+
+* **A run does not have to be placed whole.** jtbl_80032F04 is the LAST of
+  its run's three tables, so the `.rodata` subsegment stops before it and the
+  rest stays `bin` -- which landed func_80054F9C and func_80057A94 without
+  waiting for func_80057D20.
+
+* **A run can be entered from the middle.** jtbl_8002EFF0 is the SECOND of
+  its run's two tables, so its subsegment starts at the second one and the
+  five words ahead of it stay raw.
+
+* **One contiguous run can be shared between two units**, through two
+  `.rodata` subsegments in two adjacent segments -- which is how
+  jtbl_8002EFDC and jtbl_8002EFF0 are supplied once both their functions
+  matched.
+
+The price is that a unit emits ONE contiguous `.rodata`, so the carved unit
+`unk_1C540` is now cut into FIVE pieces, one run each: `unk_1C540`,
+`unk_25944`, `unk_264E0`, `unk_2879C` and `unk_2CDC0`. Two more cuts are
+implied when the last two functions land. The mechanics of a cut -- including
+the prototype trap that actually bit -- are in the jump-table section of
+`docs/open-matching-problems.md`.
 
 ### Near-misses, with their files in `docs/near-misses/`
 
