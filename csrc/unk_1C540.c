@@ -3565,7 +3565,131 @@ UnkNode *func_800511B4(UnkNode *p) {
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051228);
+/* The five-stage load screen. The repeated block is func_80050FF4's, spelled
+   the same way, five times over; the fifth takes its name from a nested
+   dispatch. Three things decide it:
+
+   * `func_8003E4FC(6, <addr>, 0)` is called IN EACH ARM, not once after the
+     switch on a `name` local. Cross-jumping merges the longest common suffix,
+     which runs from the `addu $a2, $zero, $zero` in the shared `jal`'s delay
+     slot backwards and stops at the differing address -- so `addiu $a0, 6`
+     and the `lui`/`addiu` of the name stay in every arm, which is what the
+     listing has (four words).
+   * the outer switch needs a case label BELOW 2 sharing the default's body.
+     With only `case 2`/`case 3`, `emit_case_nodes` takes its own shortcut --
+     "omit the conditional branch to default if we avoid only one right
+     child" -- and emits two plain equality tests. With a third node the root
+     is 2 with a left child and a right child, neither bounded, so it emits
+     `slt x, 3` to split them; jump.c then deletes the left child's test
+     (its label is the default's) and inverts the branch, leaving exactly the
+     listing's `slti`/`bnez`. Two words. The compiler only pins the value to
+     be less than 2: `case 0:` and `case 1:` are byte-identical here.
+   * the default arm is written FIRST, because the listing lays its inner
+     dispatch and the four name blocks out before `case 2`'s one-liner and
+     `case 3`'s inner dispatch -- gcc emits bodies in source order and
+     reorders the decision tree to the front.
+
+   func_8003E140's address is hoisted into $s0 for the first four blocks and
+   re-materialised for the fifth: cse restarts at the switch's join, which is
+   the per-join rule in matching-levers section 6. */
+extern Unk41284 D_80080BB4;
+extern Unk41284 D_80080BBC;
+extern Unk41284 D_80080BC4;
+extern Unk41284 D_80080BCC;
+extern Unk41284 D_80080BD4;
+extern Unk41284 D_80080BDC;
+extern Unk41284 D_80080BE4;
+extern Unk41284 D_80080BEC;
+extern Unk41284 D_80080BF4;
+extern Unk41284 D_80080BFC;
+extern Unk41284 D_80080C04;
+extern Unk41284 D_80080C0C;
+extern Unk41284 D_80080C14;
+extern u8 D_800D381A;
+extern u8 D_800136B8;
+extern u8 D_800D2FB4[];
+extern u8 D_8012F004[];
+
+void func_8003E140(s8 *);
+void func_80041344(u32, u32);
+void func_80046E38(s16, u8 *);
+
+void func_80051228(u8 *unused)
+{
+    u8 buf;
+
+    buf = 0;
+    func_8003E4FC(6, (u8 *)&D_80080BB4, 0);
+    func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)&buf);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    buf = 0;
+    func_8003E4FC(6, (u8 *)&D_80080BBC, 0);
+    func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)&buf);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    buf = 0;
+    func_8003E4FC(6, (u8 *)&D_80080BC4, 0);
+    func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)&buf);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    buf = 0;
+    func_8003E4FC(6, (u8 *)&D_80080BCC, 0);
+    func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)&buf);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    buf = 0;
+    switch (D_800D381A)
+    {
+    case 0:
+    default:
+        switch (D_800136B8)
+        {
+        default:
+            func_8003E4FC(6, (u8 *)&D_80080BD4, 0);
+            break;
+        case 0xB:
+            func_8003E4FC(6, (u8 *)&D_80080BDC, 0);
+            break;
+        case 0xC:
+            func_8003E4FC(6, (u8 *)&D_80080BE4, 0);
+            break;
+        case 0xD:
+            func_8003E4FC(6, (u8 *)&D_80080BEC, 0);
+            break;
+        }
+        break;
+    case 2:
+        func_8003E4FC(6, (u8 *)&D_80080BF4, 0);
+        break;
+    case 3:
+        switch (D_800136B8)
+        {
+        default:
+            func_8003E4FC(6, (u8 *)&D_80080BFC, 0);
+            break;
+        case 0xB:
+            func_8003E4FC(6, (u8 *)&D_80080C04, 0);
+            break;
+        case 0xC:
+            func_8003E4FC(6, (u8 *)&D_80080C0C, 0);
+            break;
+        case 0xD:
+            func_8003E4FC(6, (u8 *)&D_80080C14, 0);
+            break;
+        }
+        break;
+    }
+    func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)&buf);
+    func_8003F320();
+    func_80041344(0x80020000, D_80081480);
+    DrawSync(0);
+    func_80046E38(D_800D2FB4[D_800D381A * 0x20], D_8012F004);
+}
 
 void func_80051500(void) {
     func_80041284(&D_80080C1C);
