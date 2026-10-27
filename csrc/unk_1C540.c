@@ -241,41 +241,53 @@ void func_8004DD2C(u8 *);
 
    `s = D_80083D38` goes AFTER the second strcpy: that puts its `addu` in the
    call's delay slot. Assigning before costs a word. */
-void func_80049374(u8 *p, u8 *q) {
+void func_80049374(u8 *p, u8 *q)
+{
     u8 *s;
 
-    if (p == 0 || p[1] == 0) {
-        s = *(u8 **) (q + 4);
-    } else if (func_800494FC(p) != 0) {
-        s = *(u8 **) q;
-    } else {
+    if (p == 0 || p[1] == 0)
+    {
+        s = *(u8 **)(q + 4);
+    }
+    else if (func_800494FC(p) != 0)
+    {
+        s = *(u8 **)q;
+    }
+    else
+    {
         Unk80073414 *b = D_80073414;
         Unk80073414 *e;
 
         e = &b[p[1]];
 
-        if (e->unk_00 == 0) {
-            s = *(u8 **) (e->unk_0C + p[0] * 20 + 8);
-        } else {
-            s = *(u8 **) (e->unk_0C + p[0] * 12 + 8);
+        if (e->unk_00 == 0)
+        {
+            s = *(u8 **)(e->unk_0C + p[0] * 20 + 8);
         }
-        if (p[1] == 0x13 && func_8004928C(p) != 0) {
-            strcpy((char *) D_80083D38, (char *) s);
-            strcpy((char *) rindex((char *) D_80083D38, 0) - 0x12,
-                   (char *) D_800713F8[0]);
+        else
+        {
+            s = *(u8 **)(e->unk_0C + p[0] * 12 + 8);
+        }
+        if (p[1] == 0x13 && func_8004928C(p) != 0)
+        {
+            strcpy((char *)D_80083D38, (char *)s);
+            strcpy((char *)rindex((char *)D_80083D38, 0) - 0x12,
+                   (char *)D_800713F8[0]);
             s = D_80083D38;
         }
     }
     func_8004DD2C(s);
 }
 
-void func_80049490(u8 *a) {
+void func_80049490(u8 *a)
+{
     func_80049374(a, D_800713FC);
 }
 
 s32 func_800B8C90(void);
 
-void func_800494B4(u8 *p) {
+void func_800494B4(u8 *p)
+{
     u8 *q;
 
     /* One call after the join, not a call in each arm: in each arm the
@@ -3407,22 +3419,25 @@ void func_80051F38(u8 *p) {
    The cases are written 0, 1, 2, 3, default, which is the listing's physical
    order -- case 0's tail is cross-jumped into case 1's, so case 0 has to come
    first. */
-void func_80051F58(u8 *p, s32 b, u8 *q) {
+void func_80051F58(u8 *p, s32 b, u8 *q)
+{
     s32 s;
     u16 w;
     u16 n;
     u8 v;
 
-    n = *(u16 *) (p + 6) + 1;
-    s = *(s16 *) (p + 4);
-    w = *(u16 *) (p + 4);
-    *(u16 *) (p + 6) = n;
-    switch (s) {
+    n = *(u16 *)(p + 6) + 1;
+    s = *(s16 *)(p + 4);
+    w = *(u16 *)(p + 4);
+    *(u16 *)(p + 6) = n;
+    switch (s)
+    {
     case 0:
-        if (*(s16 *) (p + 0xC) != 0) {
-            *(s16 *) (p + 0xC) = 0;
-            *(u16 *) (p + 6) = 0;
-            *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+        if (*(s16 *)(p + 0xC) != 0)
+        {
+            *(s16 *)(p + 0xC) = 0;
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
         }
         return;
     case 1:
@@ -3430,15 +3445,17 @@ void func_80051F58(u8 *p, s32 b, u8 *q) {
         q[0xE] = v;
         q[0xD] = v;
         q[0xC] = v;
-        if (*(s16 *) (p + 6) >= 0x40) {
-            *(u16 *) (p + 6) = 0;
-            *(u16 *) (p + 4) = *(u16 *) (p + 4) + 1;
+        if (*(s16 *)(p + 6) >= 0x40)
+        {
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
         }
         return;
     case 2:
-        if ((s16) n >= 0x100) {
-            *(u16 *) (p + 4) = w + 1;
-            *(u16 *) (p + 6) = 0;
+        if ((s16)n >= 0x100)
+        {
+            *(u16 *)(p + 4) = w + 1;
+            *(u16 *)(p + 6) = 0;
         }
         return;
     case 3:
@@ -3446,7 +3463,8 @@ void func_80051F58(u8 *p, s32 b, u8 *q) {
         q[0xE] = v;
         q[0xD] = v;
         q[0xC] = v;
-        if (*(s16 *) (p + 6) < 0x40) {
+        if (*(s16 *)(p + 6) < 0x40)
+        {
             return;
         }
         break;
@@ -3456,9 +3474,9 @@ void func_80051F58(u8 *p, s32 b, u8 *q) {
         q[0xC] = 0;
         break;
     }
-    *(u32 *) (*(u8 **) p + 0x18) = 0;
-    *(u16 *) (*(u8 **) p + 6) = *(u16 *) (*(u8 **) p + 6) + 1;
-    *(u16 *) (p - 2) |= 0x8000;
+    *(u32 *)(*(u8 **)p + 0x18) = 0;
+    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
+    *(u16 *)(p - 2) |= 0x8000;
     D_800814A0 |= 0x8000;
 }
 
@@ -3513,70 +3531,78 @@ void func_80053374(u8 *, s32);
    global-alloc's priority, so it takes $s0 and `s` takes $s1, the reverse of
    the listing. Five separate allocnos each lose to `s`. 45 DIFF either way at
    the exact word count, every word of it those two registers. */
-void func_800525D4(void) {
+void func_800525D4(void)
+{
     UnkNode *n = func_8003FC64(0);
     u8 *s;
 
-    if (n != NULL) {
-        s = (u8 *) (n + 1);
-        n->unk_10 = (u32) func_80052144;
-        *(u16 *) (n + 1) = 0;
-        *(u16 *) (s + 2) = 0;
-        *(u16 *) (s + 4) = 0;
-        *(u16 *) (s + 6) = 0;
-        *(u32 *) (s + 8) = (u32) D_80071E44;
-        *(u32 *) (s + 0xC) = 0;
-        *(u32 *) (s + 0x10) = 0;
-        *(u32 *) (s + 0x14) = 0;
-        *(u32 *) (s + 0x18) = 0;
-        *(u32 *) (s + 0x1C) = 0;
+    if (n != NULL)
+    {
+        s = (u8 *)(n + 1);
+        n->unk_10 = (u32)func_80052144;
+        *(u16 *)(n + 1) = 0;
+        *(u16 *)(s + 2) = 0;
+        *(u16 *)(s + 4) = 0;
+        *(u16 *)(s + 6) = 0;
+        *(u32 *)(s + 8) = (u32)D_80071E44;
+        *(u32 *)(s + 0xC) = 0;
+        *(u32 *)(s + 0x10) = 0;
+        *(u32 *)(s + 0x14) = 0;
+        *(u32 *)(s + 0x18) = 0;
+        *(u32 *)(s + 0x1C) = 0;
         func_8003F540(0, 0x15B7C, 0, 0x10093C8);
         func_80053DA8(0x300);
         {
-            u8 *h = func_8003FD64(0x212, (u8 *) n);
+            u8 *h = func_8003FD64(0x212, (u8 *)n);
 
-            if (h != NULL) {
-                func_80051708(h, (s32) s);
-                *(u32 *) (s + 0xC) = (u32) h;
-                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            if (h != NULL)
+            {
+                func_80051708(h, (s32)s);
+                *(u32 *)(s + 0xC) = (u32)h;
+                *(u16 *)(s + 4) = *(u16 *)(s + 4) + 1;
             }
         }
-        if (func_80033B2C(0x1392) == 0) {
+        if (func_80033B2C(0x1392) == 0)
+        {
             {
-                u8 *h = func_8003FD64(0x212, (u8 *) n);
+                u8 *h = func_8003FD64(0x212, (u8 *)n);
 
-                if (h != NULL) {
-                    func_80051BFC(h, (s32) s);
-                    *(u32 *) (s + 0x10) = (u32) h;
-                    *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+                if (h != NULL)
+                {
+                    func_80051BFC(h, (s32)s);
+                    *(u32 *)(s + 0x10) = (u32)h;
+                    *(u16 *)(s + 4) = *(u16 *)(s + 4) + 1;
                 }
             }
         }
         {
-            u8 *h = func_8003FD64(0x212, (u8 *) n);
+            u8 *h = func_8003FD64(0x212, (u8 *)n);
 
-            if (h != NULL) {
-                func_80051E94(h, (s32) s);
-                *(u32 *) (s + 0x14) = (u32) h;
-                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            if (h != NULL)
+            {
+                func_80051E94(h, (s32)s);
+                *(u32 *)(s + 0x14) = (u32)h;
+                *(u16 *)(s + 4) = *(u16 *)(s + 4) + 1;
             }
         }
         {
-            u8 *h = func_8003FD64(0x212, (u8 *) n);
+            u8 *h = func_8003FD64(0x212, (u8 *)n);
 
-            if (h != NULL) {
-                func_800520B4(h, (s32) s);
-                *(u32 *) (s + 0x18) = (u32) h;
-                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            if (h != NULL)
+            {
+                func_800520B4(h, (s32)s);
+                *(u32 *)(s + 0x18) = (u32)h;
+                *(u16 *)(s + 4) = *(u16 *)(s + 4) + 1;
             }
         }
         {
-            u8 *h = func_8003FD64(0x212, (u8 *) n);
+            u8 *h = func_8003FD64(0x212, (u8 *)n);
 
-            if (h != NULL) {
-                func_80053374(h, (s32) s);
-                *(u32 *) (s + 0x1C) = (u32) h;
-                *(u16 *) (s + 4) = *(u16 *) (s + 4) + 1;
+            if (h != NULL)
+            {
+                func_80053374(h, (s32)s);
+                *(u32 *)(s + 0x1C) = (u32)h;
+                *(u16 *)(s + 4) = *(u16 *)(s + 4) + 1;
             }
         }
     }
@@ -4032,16 +4058,20 @@ void func_800543C8(void);
    predecessors, so cse's extended basic block ends at that label and the
    value is not available there. Nothing to spell differently, but it is why
    one arm looks a word more expensive than its siblings. */
-void func_800542BC(void) {
+void func_800542BC(void)
+{
     u16 v;
 
     D_80084850[0]++;
-    for (;;) {
+    for (;;)
+    {
         v = func_800557C8();
-        if (v == 0) {
+        if (v == 0)
+        {
             break;
         }
-        switch (v & 0xF00) {
+        switch (v & 0xF00)
+        {
         case 0x000:
             func_80054788(v);
             break;
@@ -4423,36 +4453,42 @@ extern void func_800552C8a(void) __asm__("func_800552C8");
    and the function is a word short; as two, gcc's flow pass drops the first
    store as dead (nothing reads the location in between) and what is left is
    the listing's one `lw`, two `and`s and one `sw`. */
-void func_800553D4(s32 n) {
+void func_800553D4(s32 n)
+{
     u8 *b;
 
     n &= 0xFF;
-    switch (n) {
+    switch (n)
+    {
     case 0x71:
-        b = (u8 *) D_800847D0;
-        if ((D_800847D0[0] & 0x1100) != 0) {
+        b = (u8 *)D_800847D0;
+        if ((D_800847D0[0] & 0x1100) != 0)
+        {
             D_80084900[0] = 0;
             func_800552C8a();
-            func_8005AF74(*(s16 *) (b + 0x22));
-            func_8005AFF4(*(s16 *) (b + 0x22));
+            func_8005AF74(*(s16 *)(b + 0x22));
+            func_8005AFF4(*(s16 *)(b + 0x22));
         }
         D_800848FC[0] = 0;
         D_800847D0[0] &= ~0x100;
         D_800847D0[0] &= ~0x1000;
-        *(u32 *) (b + 4) &= ~2;
-        if (*(s16 *) (b + 0x26) != -1) {
+        *(u32 *)(b + 4) &= ~2;
+        if (*(s16 *)(b + 0x26) != -1)
+        {
             func_800550E8();
         }
         break;
     case 0xE1:
-        if ((D_800847D0[0] & 0x100) != 0) {
-            func_8005B070(*(s16 *) ((u8 *) D_800847D0 + 0x22));
+        if ((D_800847D0[0] & 0x100) != 0)
+        {
+            func_8005B070(*(s16 *)((u8 *)D_800847D0 + 0x22));
             D_800847D0[0] = (D_800847D0[0] & ~0x100) | 0x1000;
         }
         break;
     case 0xF1:
-        if ((D_800847D0[0] & 0x1000) != 0) {
-            func_8005B16C(*(s16 *) ((u8 *) D_800847D0 + 0x22));
+        if ((D_800847D0[0] & 0x1000) != 0)
+        {
+            func_8005B16C(*(s16 *)((u8 *)D_800847D0 + 0x22));
             D_800847D0[0] = (D_800847D0[0] & ~0x1000) | 0x100;
         }
         break;

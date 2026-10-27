@@ -623,26 +623,30 @@ void func_80035D38(void);
    shorter live range, so local-alloc hands it $v0 and the pointer $v1, the
    reverse of every one of these listings, and the `addu`'s operands swap with
    them. func_800359FC above is the one member that wanted both as locals. */
-void func_80035C80(u8 *p) {
+void func_80035C80(u8 *p)
+{
     u8 *t;
 
-    if (p[0x78] != (*(u8 **) (p + 0x74))[1]) {
-        t = *(u8 **) (p + 0x44);
-        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+    if (p[0x78] != (*(u8 **)(p + 0x74))[1])
+    {
+        t = *(u8 **)(p + 0x44);
+        (t + *(s16 *)(p + 0x4A))[0x50] = 1;
         func_8003C24C();
-        *(u32 *) (p + 0x68) = (u32) func_80035ABC;
+        *(u32 *)(p + 0x68) = (u32)func_80035ABC;
     }
 }
 
-void func_80035CE4(u8 *p, u8 *q, s32 r) {
+void func_80035CE4(u8 *p, u8 *q, s32 r)
+{
     u8 *t;
 
-    *(u16 *) (q + 2) = *(u16 *) (q + 2) - 0x20;
-    if (*(s16 *) (q + 2) < 2) {
-        *(u16 *) (q + 2) = 2;
-        *(u32 *) (p + 0x68) = (u32) func_80035D38;
-        t = *(u8 **) (p + 0x44);
-        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+    *(u16 *)(q + 2) = *(u16 *)(q + 2) - 0x20;
+    if (*(s16 *)(q + 2) < 2)
+    {
+        *(u16 *)(q + 2) = 2;
+        *(u32 *)(p + 0x68) = (u32)func_80035D38;
+        t = *(u8 **)(p + 0x44);
+        (t + *(s16 *)(p + 0x4A))[0x50] = 1;
     }
 }
 
@@ -943,12 +947,13 @@ void func_80036880(u8 *p) {
 
 void func_800368F8(void);
 
-void func_800368D0(u8 *p) {
+void func_800368D0(u8 *p)
+{
     u8 *t;
 
-    t = *(u8 **) (p + 0x44);
-    (t + *(s16 *) (p + 0x4A))[0x50] = 0xFF;
-    *(u32 *) (p + 0x68) = (u32) func_800368F8;
+    t = *(u8 **)(p + 0x44);
+    (t + *(s16 *)(p + 0x4A))[0x50] = 0xFF;
+    *(u32 *)(p + 0x68) = (u32)func_800368F8;
 }
 
 void func_800368F8(void) {
@@ -956,15 +961,17 @@ void func_800368F8(void) {
 
 void func_80036980(void);
 
-void func_80036900(u8 *p, u8 *q, s32 r) {
+void func_80036900(u8 *p, u8 *q, s32 r)
+{
     u8 *t;
 
-    *(u16 *) (*(u8 **) p + 0xA) = *(u16 *) (*(u8 **) p + 0xA) + 0x100;
-    if (*(s16 *) (*(u8 **) p + 0xA) >= 0x401) {
-        func_80044A50((UnkNode *) (p - 0x20));
-        *(u32 *) (p + 0x68) = (u32) func_80036980;
-        t = *(u8 **) (p + 0x44);
-        (t + *(s16 *) (p + 0x4A))[0x50] = 1;
+    *(u16 *)(*(u8 **)p + 0xA) = *(u16 *)(*(u8 **)p + 0xA) + 0x100;
+    if (*(s16 *)(*(u8 **)p + 0xA) >= 0x401)
+    {
+        func_80044A50((UnkNode *)(p - 0x20));
+        *(u32 *)(p + 0x68) = (u32)func_80036980;
+        t = *(u8 **)(p + 0x44);
+        (t + *(s16 *)(p + 0x4A))[0x50] = 1;
     }
 }
 
@@ -1077,29 +1084,37 @@ extern u8 D_80082B70[];
    the pointer $v1, where the target has them the other way round, and the
    `addu`'s operands come out swapped with them. Left inside the subscript it
    is one operand of the pointer's own address expression. */
-void func_80036F24(u8 *p, u32 b, u32 r) {
+void func_80036F24(u8 *p, u32 b, u32 r)
+{
     u8 n;
     u8 *t;
 
-    if (func_80037534(p, b, r) != 0) {
+    if (func_80037534(p, b, r) != 0)
+    {
         return;
     }
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A958, D_80082B50);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A964, D_80082B60);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A970, D_80082B70);
-    t = *(u8 **) (p + 0x44);
-    n = (t + *(s16 *) (p + 0x4A))[0x4C];
-    if ((n & 0x80) != 0) {
-        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
-        if ((*(volatile u16 *) (p + 0x64) & 1) == 0) {
-            *(u32 *) (r + 0xC) = 0;
-        } else {
-            *(u32 *) (r + 0xC) = 0xC0C0C0;
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A958, D_80082B50);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A964, D_80082B60);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A970, D_80082B70);
+    t = *(u8 **)(p + 0x44);
+    n = (t + *(s16 *)(p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0)
+    {
+        *(volatile u16 *)(p + 0x64) = *(u16 *)(p + 0x64) + 1;
+        if ((*(volatile u16 *)(p + 0x64) & 1) == 0)
+        {
+            *(u32 *)(r + 0xC) = 0;
         }
-    } else {
-        *(u32 *) (r + 0xC) = 0xC0C0C0;
+        else
+        {
+            *(u32 *)(r + 0xC) = 0xC0C0C0;
+        }
     }
-    *(u32 *) (r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *) (p + 0x66)];
+    else
+    {
+        *(u32 *)(r + 0xC) = 0xC0C0C0;
+    }
+    *(u32 *)(r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *)(p + 0x66)];
 }
 
 void func_80036D4C(u8 *, s32, s32, s32, s32, u32);
@@ -1128,29 +1143,37 @@ void func_80037030(u8 *p, s32 b, s32 c, s16 d, s16 e, u32 f) {
    zero store is the shared block both branches reach, so it is the `else` of
    the inner test AND the `else` of the outer one. See func_80036F24 above for
    the volatile counter and the pointer local. */
-void func_80037090(u8 *p, u32 b, u32 r) {
+void func_80037090(u8 *p, u32 b, u32 r)
+{
     u8 n;
     u8 *t;
 
-    if (func_80037534(p, b, r) != 0) {
+    if (func_80037534(p, b, r) != 0)
+    {
         return;
     }
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A958, D_80082B50);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A964, D_80082B60);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A970, D_80082B70);
-    t = *(u8 **) (p + 0x44);
-    n = (t + *(s16 *) (p + 0x4A))[0x4C];
-    if ((n & 0x80) != 0) {
-        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
-        if ((*(volatile u16 *) (p + 0x64) & 1) != 0) {
-            *(u32 *) (r + 0xC) = 0xC0C0C0;
-        } else {
-            *(u32 *) (r + 0xC) = 0;
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A958, D_80082B50);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A964, D_80082B60);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A970, D_80082B70);
+    t = *(u8 **)(p + 0x44);
+    n = (t + *(s16 *)(p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0)
+    {
+        *(volatile u16 *)(p + 0x64) = *(u16 *)(p + 0x64) + 1;
+        if ((*(volatile u16 *)(p + 0x64) & 1) != 0)
+        {
+            *(u32 *)(r + 0xC) = 0xC0C0C0;
         }
-    } else {
-        *(u32 *) (r + 0xC) = 0;
+        else
+        {
+            *(u32 *)(r + 0xC) = 0;
+        }
     }
-    *(u32 *) (r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *) (p + 0x66)];
+    else
+    {
+        *(u32 *)(r + 0xC) = 0;
+    }
+    *(u32 *)(r + 0x8) = D_8006A97C[(n & 0x7F) + *(s16 *)(p + 0x66)];
 }
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003719C);
@@ -1170,32 +1193,40 @@ extern u8 D_80081E90[];
 extern u8 D_80081EA0[];
 
 /* func_80036F24's body with six of the copies instead of three. */
-void func_80037394(u8 *p, u32 b, u32 r) {
+void func_80037394(u8 *p, u32 b, u32 r)
+{
     u8 n;
     u8 *t;
 
-    if (func_80037534(p, b, r) != 0) {
+    if (func_80037534(p, b, r) != 0)
+    {
         return;
     }
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A988, D_80082B80);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A994, D_80082B90);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9A0, D_80082BA0);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9AC, D_80082BB0);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9B8, D_80081E90);
-    func_80036C7C(*(u8 **) (p + 0x44) + 0xC, D_8006A9C4, D_80081EA0);
-    t = *(u8 **) (p + 0x44);
-    n = (t + *(s16 *) (p + 0x4A))[0x4C];
-    if ((n & 0x80) != 0) {
-        *(volatile u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
-        if ((*(volatile u16 *) (p + 0x64) & 1) == 0) {
-            *(u32 *) (r + 0xC) = 0;
-        } else {
-            *(u32 *) (r + 0xC) = 0xC0C0C0;
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A988, D_80082B80);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A994, D_80082B90);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A9A0, D_80082BA0);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A9AC, D_80082BB0);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A9B8, D_80081E90);
+    func_80036C7C(*(u8 **)(p + 0x44) + 0xC, D_8006A9C4, D_80081EA0);
+    t = *(u8 **)(p + 0x44);
+    n = (t + *(s16 *)(p + 0x4A))[0x4C];
+    if ((n & 0x80) != 0)
+    {
+        *(volatile u16 *)(p + 0x64) = *(u16 *)(p + 0x64) + 1;
+        if ((*(volatile u16 *)(p + 0x64) & 1) == 0)
+        {
+            *(u32 *)(r + 0xC) = 0;
         }
-    } else {
-        *(u32 *) (r + 0xC) = 0xC0C0C0;
+        else
+        {
+            *(u32 *)(r + 0xC) = 0xC0C0C0;
+        }
     }
-    *(u32 *) (r + 0x8) = D_8006A9D0[(n & 0x7F) + *(s16 *) (p + 0x66)];
+    else
+    {
+        *(u32 *)(r + 0xC) = 0xC0C0C0;
+    }
+    *(u32 *)(r + 0x8) = D_8006A9D0[(n & 0x7F) + *(s16 *)(p + 0x66)];
 }
 
 u32 func_800374F4(u16 n) {
