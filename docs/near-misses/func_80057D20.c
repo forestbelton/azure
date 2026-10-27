@@ -95,13 +95,53 @@
  * WHAT IS LEFT -- six words, and they are ONE ORDERING. In case 64's inner
  * loop the listing initialises the D_80085458 giv before the D_80073740 one
  * and increments them in that order; this source does both the other way
- * round. loop.c's `record_giv` PREPENDS to the biv's giv list, so the
- * emission order is the reverse of the creation order, and creation order is
- * insn order: `u8 *r = D_80085458 + j * 0x78;` is the first array reference
- * in the body, so its giv is created first and emitted second. For the
- * listing's order the D_80073740 reference has to come first, and it cannot:
- * the listing's own `lw $v0, 0x0($s3)` sits INSIDE the `if`, after three
- * conditions that all read through `r`.
+ * round. The registers are already right ($s1 for D_80085458, $s3 for
+ * D_80073740): only the order of the two lui/addiu pairs and of the two
+ * increments differs.
+ *
+ * The mechanism, read out of the -dl dump rather than guessed (the loop pass
+ * prints every giv it records, every combination it makes and every reduction,
+ * so this is not inference): loop.c's `record_giv` PREPENDS to the biv's giv
+ * list, the reduction loop at loop.c:3856 walks that list, and both the
+ * initialisations before `loop_start` and the increments before the biv's own
+ * increment are emitted in list order -- so EMISSION IS THE REVERSE OF
+ * CREATION, and creation is insn order. `u8 *r = D_80085458 + j * 0x78;` is
+ * the body's first insn, so r's giv is created first and emitted second.
+ *
+ * And the D_80073740 giv cannot be created before it, because of
+ * `combine_givs` (loop.c:5494). Every D_80073740 reference in the loop -- the
+ * `f2 |=` load, the two loads inside the do/while, and the copy that the
+ * do/while's own invariant hoist leaves in its preheader -- has the same
+ * mult (4) and the same add (the %lo pseudo), so they are all one combinable
+ * group, and the representative is the FIRST eligible `g1` in the giv list,
+ * i.e. the LAST created member of the group. The dump says it plainly:
+ *
+ *     giv at 890 combined with giv at 1316
+ *     giv at 888 combined with giv at 1316
+ *     giv at 886 combined with giv at 1315
+ *     giv at 1316 reduced to (reg:SI 416)
+ *     giv at 860 reduced to (reg:SI 418)
+ *
+ * -- 1315/1316 being the hoisted copies move_movables made for the do/while,
+ * which the loop pass creates LAST because loops are processed innermost
+ * first. So the surviving D_80073740 giv is always the latest one, and
+ * putting a reference ahead of `r` in the source does not help: the early giv
+ * is simply combined INTO the late one and loses its place in the list. That
+ * is what `u32 *g = &D_80073740[j];` ahead of `r` does -- the dump shows
+ * `giv at 857 combined with giv at 906` -- and it also costs the
+ * `addu $s0, $s3, $zero` copy, because `*g` in the do/while is then already a
+ * pseudo and has nothing left to hoist: 462 words.
+ *
+ * For the listing's order, r's giv would have to be the one created last.
+ * Everything that gets a D_80085458 giv created after the do/while also
+ * changes which member represents THAT group, and the representative's
+ * add_val becomes the base: a source-level walked pointer (`u8 *r =
+ * D_80085458;` with `r += 0x78`) makes r a biv, every field access a giv on
+ * it, and the group's representative the last one -- the `+0x1A` store -- so
+ * the pointer comes out BIASED to +0x1A with displacements -20, 3, 2, 3, 0.
+ * That is 463 words and 13 DIFF, and it is the closest any reordering gets.
+ * Spelling the two stores after the do/while as fresh `D_80085458[j * 0x78 +
+ * 0x1D]` index expressions is the same trap at +0x1D (472/215).
  *
  * MEASURED AND NOT WORKING for those six: a `u32 *t = &D_80073740[j];`
  * declared ahead of `r` (unused, identical; used for all three accesses,

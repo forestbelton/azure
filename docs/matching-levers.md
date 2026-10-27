@@ -3752,3 +3752,42 @@ Two things that make the difference between those columns:
   Killing a long-running agent throws all of it away for nothing -- asking it
   to report what it has now caps its remaining turns and keeps the
   measurements.
+
+## Which of two givs is initialised first, and the bias on a walked pointer
+
+When a loop walks two arrays, the order of the two `lui`/`addiu` pairs before
+the loop and of the two increments at its end is decided entirely inside
+loop.c, and the source cannot reach it by moving the references around.
+
+`record_giv` PREPENDS to the biv's giv list; the reduction loop (loop.c:3856)
+walks that list and emits each giv's initialisation before `loop_start` and
+each increment before the biv's own increment, in list order. **Emission is
+the reverse of creation, and creation is insn order.** The array whose first
+reference comes LAST in the body is initialised FIRST.
+
+That is not the whole story, because `combine_givs` (loop.c:5494) collapses
+every giv with the same `mult_val` and an `add_val` differing by a constant
+into one group, and the representative it keeps is the first eligible `g1` in
+the giv list -- that is, the group's LAST-created member. Two consequences:
+
+* Putting a reference to the second array ahead of the first does NOT move its
+  initialisation. The early giv is combined into the late one and loses its
+  place in the list. Nothing in the source body can change the order when one
+  array's references are all inside a nested loop, because the nested loop's
+  own invariant hoist (`move_movables`) creates copies LAST -- loops are
+  processed innermost first.
+* The representative's `add_val` becomes the base register's value, so a
+  source-level WALKED pointer (`u8 *r = D_80085458;` with `r += 0x78`, which
+  makes `r` a biv and every field access a giv on it) comes out biased to the
+  offset of its LAST access, with negative displacements for the earlier
+  fields. That is the "biased giv" seen on func_80057948 and func_8005914C,
+  and it is why the matching form is almost always the block-scoped
+  `u8 *q = BASE + i * STRIDE;`: a pointer that is itself a giv records no
+  further givs for its field accesses, because `update_giv_derive` clears
+  `cant_derive` at the first conditional jump in the body.
+
+Read all of this out of `tools/decomp/dump.sh`'s `-dl` dump rather than
+guessing: the loop pass prints every giv it records (with `mult`, `add`,
+`replaceable` and lifetime), every `giv at N combined with giv at M`, and
+every `giv at N reduced to (reg:SI R)`. Measured on func_80057D20's case 64,
+where this is the last six words.
