@@ -90,7 +90,11 @@
  *    The listing copies the pan level into BOTH arms of the 0x40 split
  *    (`addu $a2, $a0, $zero` and `addu $a1, $a0, $zero`); this source gets
  *    the first copy and coalesces the second, because `a`'s only remaining
- *    use is that arm. The compensating extra nop is the summing loop's load
+ *    use is that arm. Measured and not working: both copies hoisted above
+ *    the branch (`l = a; r = a;` then two one-statement arms, 221 DIFF), and
+ *    naming `a` rather than the arm's own variable in either doubling (both
+ *    220, i.e. gcc folds the copy back either way). `a` cannot be declared
+ *    narrower to make the copy survive -- the product reaches 18 bits. The compensating extra nop is the summing loop's load
  *    delay: sched1 hoists `i++` above the `lhu` whatever order the body is
  *    written in. `sum += *w; w++; i++;` and `sum += *w++; i++;` DO kill the
  *    nop -- and then the function is 332 words, one short, which is the same
