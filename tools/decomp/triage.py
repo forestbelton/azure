@@ -45,12 +45,28 @@ two parked rows that say "not attempted" are kept and marked `listed`.
 """
 import os
 import re
+import glob
 import sys
 
 import asmlib
 from asmlib import BRANCHES, LOADS, STORES, REGS
 
-UNITS = ('unk_72A8', 'unk_1C540', 'unk_1AF38', 'unk_301D4')
+def units():
+    """Every csrc unit that still has an INCLUDE_ASM, newest cut first.
+
+    This was a hardcoded tuple and went stale the moment the carved unit
+    unk_1C540 was cut into five pieces for the jump-table placements: the
+    functions that moved into unk_25944, unk_264E0, unk_2879C and unk_2CDC0
+    simply stopped being triaged, silently. Read csrc/ instead -- it is the
+    same source progress.py and guard.py use, so the three cannot disagree
+    about what exists.
+    """
+    out = []
+    for f in sorted(glob.glob(os.path.join(asmlib.PROJ, 'csrc', '*.c'))):
+        t = open(f, encoding='utf-8', errors='replace').read()
+        if re.search(r'INCLUDE_ASM\("[^"]+",\s*\w+\)', t):
+            out.append(os.path.basename(f)[:-2])
+    return out
 
 
 def already_tried():
@@ -136,7 +152,7 @@ def main():
             unit_arg = sys.argv[i + 1]
 
     rows = []
-    for unit in UNITS:
+    for unit in units():
         if unit_arg and unit != unit_arg:
             continue
         for func in stubs(unit):
