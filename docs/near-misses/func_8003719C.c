@@ -57,8 +57,34 @@
  * won the other way -- it has to be a priority or ready-list difference, and
  * priority here is a path length through the whole function, since this
  * function has no branches at all and is a single basic block from `addiu $sp`
- * to the final `jal`. That is the thing to compute next, not another source
- * permutation.
+ * to the final `jal`.
+ *
+ * `tools/decomp/sched.py` reads that straight out of cc1psx's sched2 dump, and
+ * for this function it says:
+ *
+ *   * every insn in the entry region has priority 1, so rank_for_schedule's
+ *     first key is inert and `schedule_select` decides on `potential_hazard`,
+ *     the DEFINE_FUNCTION_UNIT model. The trace takes the prologue saves one
+ *     after another with `;; insn 280 has a greater potential hazard`, while
+ *     `;; blocking insn 14 for 1 cycles` / `blocking insn 16` defer the two
+ *     parameter loads at every cycle they are ready. Memory operations beat
+ *     the `addiu`s that set up the call's arguments, and that is the six
+ *     words.
+ *
+ *   * the insn numbers are 23 `li $a0, 0x11`, 25 `addu $a1, $v0`,
+ *     27 `li $a2, 0x49`, 29 `lui $a3, %hi(D_80082BC0)`,
+ *     14 `lw $fp, 0x48($sp)`, 16 `lw $s5, 0x4C($sp)`, 264 `sw $fp, 0x30($sp)`,
+ *     270 `sw $s5, 0x24($sp)`. `sched.py --insn N` prints any of them.
+ *
+ *   * THE LEAD TO TAKE NEXT is the pre-sched2 chain order. The dump's
+ *     `;; insn[N]` listing walks that chain, and it reads 260-280 (prologue),
+ *     then 4, 6, 8, 10 (the register parameter copies), then 23, 25, 27, 29
+ *     (the argument setup), and only THEN 14, 16. assign_parms emits the
+ *     parameter copies at function start, so the two loads begin ahead of the
+ *     argument setup and sched1 moved them behind it. The hazard decisions
+ *     sched2 then makes follow from that order, so the dump to read next is
+ *     the `--sched1` one, where the question is about pseudos rather than hard
+ *     registers.
  *
  * Measured and NOT working, all 126/126 and 6 DIFF: parameter 6 as `u8 *`
  * rather than `u32`; func_8003FF2C's count parameter as `s32` rather than
