@@ -32,14 +32,29 @@
  *   what makes gcc keep `e` in a register and copy it, which is the
  *   `addu $a1, $a2, $zero` the listing has before the two `sh`s.
  *
- * WHAT IS LEFT: 22 words, all register assignment in the prologue, and they
- * follow from one choice -- `e` lands in $a1 here and $a2 in the target, with
- * `n`'s sign-extended copy and the D_80085F98 address swapping to match. The
- * knock-on is visible as the D_80085F98 store: the target keeps `lui $a1,
- * %hi(...)` and puts `%lo` in the store, where this materialises the whole
- * address with `lui`/`addiu` and stores at offset 0. The array spelling is
- * right -- the `__asm__` scalar alias gives 63 words and 63 DIFF -- so this is
- * not a declaration question.
+ * WHAT IS LEFT: 22 words, and `advise.py --greg` traces them to ONE conflict.
+ *
+ * `e` is pseudo 86: 4 refs, live 16, no call crossed, and its conflict set is
+ * $v0 $v1 $a0 $s0 $sp -- $a1 and $a2 both free, so global-alloc takes the
+ * lower-numbered $a1. The target has it in $a2, which means $a1 must be
+ * occupied there, and the listing says by what: `lui $a1, %hi(D_80085F98)` is
+ * the FIRST insn of the function while its `sw $v0, %lo(D_80085F98)($a1)` is
+ * in the `beqz`'s delay slot twenty insns later. That long-lived %hi pseudo is
+ * what conflicts with `e` and pushes it to $a2; `n`'s sign-extended copy and
+ * the rest follow.
+ *
+ * So the question is not `e`'s allocation, it is why the %hi half of the
+ * D_80085F98 store is hoisted to the top of the function here and not there.
+ * The array spelling is right -- the `__asm__` scalar alias gives 63 words and
+ * 63 DIFF -- so it is not a declaration question. Measured and not moving it:
+ * a second pointer local for the two `sh`s and func_80056D44's second
+ * argument, which gcc coalesces back into `e`.
+ *
+ * Both of the other functions parked on a one-slot scheduling difference have
+ * since landed -- func_8005B070 on the struct stack buffer, func_80056C30 on
+ * moving `i++` after the call -- so this one's remaining question is
+ * allocation, not scheduling, and `--greg` rather than `sched.py` is the tool
+ * for it.
  */
 
 #include "common.h"
