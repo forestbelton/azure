@@ -917,6 +917,37 @@ a parameter does produce the entry copy -- measured on func_8004D880 -- but
 then the local is what holds the value and the parameter keeps $a0, which is a
 different register assignment from the listing's.
 
+### A LOCAL PER CONSTANT fixes the materialisation order without moving the stores
+
+When several big constants are `lui`/`ori` pairs hoisted to the top of a
+block, their ORDER is their first-use order -- and that can disagree with the
+order the stores have to be in. func_80055864 fills two parallel tables and
+the target materialises their constants ALTERNATING between the tables, while
+giving each table's three constants a descending run of registers from its own
+bank, which is what GROUPED stores give. Writing the stores in the alternation
+gets the order right and the registers wrong (29 differing words); grouping
+them gets the registers right and the order wrong (19).
+
+A local per constant, DECLARED in the order the listing materialises them,
+gives both -- the declarations are a statement sequence, so they set the
+materialisation order, and the stores stay grouped so each table's constants
+are still live over one contiguous range:
+
+```c
+    u32 c0 = 0x3A980;      /* the listing's order, which is neither table's */
+    u32 c1 = 0x3B990;
+    u32 c2 = 0x1BD50;
+    ...
+    D_800847C0[1] = c1;    /* the stores stay GROUPED per table */
+    D_800847C0[2] = c3;
+    ...
+    D_80084768[0] = c0;
+```
+
+Sixteen of nineteen words. The locals survive because each is used once in a
+different group from its neighbours, so no pass has a reason to re-order the
+materialisations back.
+
 ### Statement granularity is what orders the pieces of an address
 
 `fold` puts an ADDR_EXPR second in a sum, so an address written as one
