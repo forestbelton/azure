@@ -1,4 +1,4 @@
-/* func_800565D8 (unk_1C540) -- 31 of 31 words, 6 DIFF. NOT compiled.
+/* func_800565D8 (unk_1C540) -- 31 of 31 words, 3 DIFF. NOT compiled.
  *
  * The two-sided scale: a byte at +0x21 scaled by how far `n` is below 0x40
  * (negated), a byte at +0x20 scaled by how far it is above (positive), zero at
@@ -65,12 +65,28 @@
  * equal-priority chains cc1psx scheduled first. Section 8 of matching-levers
  * has the statement-order levers that bear on it; none of the ones listed
  * there applies to a single expression's two operand subtrees.
+ *
+ * SINCE PARKED, 6 DIFF -> 3: `d = n - 0x40;` is computed into a local BEFORE
+ * the `p[0x20] == 0` test. reorg fills a branch's delay slot from the insn
+ * BEFORE the branch first, so with the subtraction inside the arm the slot
+ * takes the shared `return 0`'s `addu $v0, $zero, $zero` from the branch
+ * TARGET instead, which is what the listing does not have.
+ *
+ * What is left is three words: the listing's `* 2` lands on the BYTE
+ * (`sll $v1, $v1, 1`, with the `lbu` ahead of the `subu`) and here fold moves
+ * it onto the other factor (`sll $v0, $v0, 1` on `0x3F - n`). A temporary
+ * pins it, as matching-levers says, but costs a word (32 words, 27 DIFF),
+ * and so does `<< 1` in place of `* 2` on the first operand; `<< 1` as the
+ * second operand is 31 words and 4 DIFF. So the constant's binding here is
+ * reachable only at the cost of the word count, which usually means one more
+ * reference somewhere else is what the original had.
  */
 
 #include "common.h"
 
 s16 func_800565D8(u8 *p, u32 n) {
     s32 r;
+    s32 d;
 
     if (n < 0x40) {
         if (p[0x21] == 0) {
@@ -80,10 +96,11 @@ s16 func_800565D8(u8 *p, u32 n) {
     } else if (n == 0x40) {
         return 0;
     } else {
+        d = n - 0x40;
         if (p[0x20] == 0) {
             return 0;
         }
-        r = (*(volatile u8 *) (p + 0x20) << 1) * (n - 0x40);
+        r = (*(volatile u8 *) (p + 0x20) << 1) * d;
     }
     return r;
 }
