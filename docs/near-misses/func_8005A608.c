@@ -34,6 +34,22 @@
  * else indexing through `id` instead of `i` (92 DIFF), an `s32` parameter with
  * the cast on the comparison (85), and `i = id` hoisted above the test with
  * `i = 0` moved into the then-arm (84).
+ *
+ * func_8005A90C IS THIS FUNCTION AGAIN with two more parameters -- same
+ * `D_8007382C[0] = 0`, same `id == -1` test, same sixteen-slot scan at the
+ * same stride, and the same `addu $v1, $a3, $zero` saving the raw parameter
+ * before the sign-extension overwrites its register. Whatever spelling fixes
+ * this one fixes that one too, so it is worth solving rather than routing
+ * round.
+ *
+ * The narrow question for word 1: the parameter copy out of the incoming hard
+ * register carries a $a1 SUGGESTION from local-alloc's `combine_regs`, so
+ * phase 1 puts the RAW value there and the sign-extension lands elsewhere.
+ * The listing has them the other way round -- extension in $a1, raw copied
+ * out to $v1 -- so the suggestion was not honoured there. Phase 1 ignores
+ * priority entirely, so no reordering of the source reaches it; what is
+ * wanted is a spelling in which the raw parameter is not itself the
+ * suggested quantity.
  */
 
 #include "common.h"
