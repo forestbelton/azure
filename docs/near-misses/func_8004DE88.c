@@ -1,4 +1,4 @@
-/* func_8004DE88 (unk_1C540) -- 64 of 65 words, one register copy. NOT compiled.
+/* func_8004DE88 (unk_1C540) -- 65 of 65 words, 47 DIFF. NOT compiled.
  *
  * Builds a command buffer in D_80083E18: a leading 0x08, the argument string
  * via strcpy, then 0x19, 0x02, 0x1A, then the ADDRESS of D_80083D88 and that
@@ -84,6 +84,13 @@
  * gcc coalesces both and loses two more); the three stores as `p[0] = c; p++;`
  * instead of `*p++ = c;` (64, unchanged); and computing the end pointer as
  * `&D_80083E18[1] + strlen(s)` instead of with strrchr (68).
+ *
+ * SINCE PARKED, 2026-10-27: 64 of 65 words to 65 of 65 and 47 DIFF, by
+ * declaring `a` `s16` rather than `u32`. Found by search.py's
+ * declaration-width family in the sweep of all forty parks. advise.py now
+ * reads SHAPE with a SIGNEDNESS row, so check the signedness of every local
+ * in the expression it names before anything else -- the width change may
+ * have moved the problem rather than fixed it.
  */
 
 #include "common.h"
@@ -95,7 +102,7 @@ char *strrchr(const char *, s32);
 
 void func_8004DE88(u8 *s) {
     u8 *p;
-    u32 a;
+    s16 a;
 
     D_80083E18[0] = 8;
     strcpy((char *) &D_80083E18[1], (char *) s);

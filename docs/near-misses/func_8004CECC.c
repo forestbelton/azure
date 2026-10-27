@@ -1,4 +1,4 @@
-/* func_8004CECC (unk_1C540) -- 101 of 102 words, 101 DIFF. NOT compiled.
+/* func_8004CECC (unk_1C540) -- 102 of 102 words, 48 DIFF. NOT compiled.
  *
  * HSV -> RGB, writing three bytes through the fourth argument and returning
  * it. The hue range is 1536 = 6 * 256 (`h %= 1536` by the 0xAAAAAAAB/10 magic,
@@ -85,6 +85,31 @@
  * verify.py to be meaningful, because the shift is before the dispatch. But
  * landing it DOES need the placement -- see that document's region map, which
  * has the segment this unit's `.rodata` wants.
+ *
+ * SINCE PARKED, 2026-10-27: 101 of 102 words and 101 DIFF to 102 of 102 and
+ * 48, by splitting `sat = s & 0xFF;` into `sat = s; sat &= 0xFF;`. Found by
+ * search.py's split-binop family in the sweep of all forty parks.
+ *
+ * READ THAT CAREFULLY: the word it adds is an `sra`, and the listing has no
+ * `sra`. With `sat` assigned from the `s16` parameter in a statement of its
+ * own, gcc materialises the sign-extended value (`sll 16` / `sra 16`) where
+ * the masked form folds it away -- and the listing's extra word, the one this
+ * source has been missing all along, is still the `addu $v1, $a2, $zero`
+ * entry copy of `v` described below. So the count now coincides for the wrong
+ * reason.
+ *
+ * It is kept because the DIFF drop is real: with the lengths equal the two
+ * streams align, and advise.py can now say the whole remainder is 44
+ * register-only differences plus that one swap -- `sra $a1, $a1` here against
+ * `addu $t2, $a0, $zero` there. That is a far better starting point than 101
+ * differing words, and it confirms the allocation analysis below rather than
+ * replacing it.
+ *
+ * Also measured on the new baseline, all of them 102 and 48 or worse: `u8 v`
+ * (which gives an `andi` on the parameter, not the copy), `u16 s`, `s32 s`
+ * with `(s16)` casts at both uses, `s16 sat` and `u16 sat` (both 101 again,
+ * i.e. they remove the `sra` and the word with it), `sat = (u8) s` (103), and
+ * `sat = sat & 0xFF` rather than `&=` (identical).
  */
 
 #include "common.h"
@@ -104,7 +129,8 @@ u8 *func_8004CECC(u32 h, s16 s, s32 v, u8 *out) {
         out[2] = val;
     } else {
         val = v & 0xFF;
-        sat = s & 0xFF;
+        sat = s;
+        sat &= 0xFF;
         p = (val * (0xFF00 - (sat << 8)) + 0x7F80) / 0xFF00;
         h %= 1536;
         f = h & 0xFF;
