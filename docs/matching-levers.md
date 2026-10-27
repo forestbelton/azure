@@ -2442,6 +2442,24 @@ the function's first slot and `i = 0` in the guard branch's delay slot: with
 so it pulls `k = 0` down into the delay slot instead and the whole entry block
 shifts.
 
+### reorg fills a delay slot from the insn BEFORE the branch first
+
+`fill_simple_delay_slots` searches backward from the branch before it looks at
+the fall-through, so whatever statement you leave immediately ahead of a guard
+is what lands in its slot. When the listing has the FALL-THROUGH's first insn
+there instead, the pre-branch candidate was taken out of reach -- usually by
+moving another statement in front of it.
+
+func_80049004 stores the allocation and then advances its cursor. With `p++`
+inside the `r != 0` arm the slot gets `sw $s1, 0x0($s0)` and the store and the
+test come out swapped (2 DIFF). With `p++` ahead of the test, the slot gets
+`addiu $s0, $s0, 0x4` and the store stays where the listing has it. MATCH, and
+nothing else in 83 words moved.
+
+The same reading in reverse: a guard whose slot holds something from INSIDE
+the arm says the arm's first statement is the only candidate, which is a hint
+about what is and is not before the test (func_8004AA78's `i = 0`).
+
 ### Reusing one counter beats a second one, and that decides its register
 
 A loop that counts the same thing a previous loop counted is often the SAME

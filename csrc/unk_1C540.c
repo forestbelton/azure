@@ -141,7 +141,88 @@ s32 func_80048F8C(u32 *p, s32 n) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048FBC);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049004);
+/* Builds a 0x104-byte row table: clears the old one, allocates, grows the two
+   NUL-terminated pointer lists that follow p[0], copies each list into one
+   half of a 32-word stack buffer, then fills the table with
+   `buf[i / 16] + (i % 16) * 16` and chains the second half at +4 of each row.
+
+   ONE buffer again, with the second list at `d[0x10]` so the store keeps 0x40
+   as its displacement off `$sp + 0x10`, and loop C reads `buf[k]` and
+   `buf[k + 0x10]` off one shared address for the same reason.
+
+   Both copy loops are an explicit `*p != 0` guard round a `do`/`while`,
+   because the cursor `d` has to be initialised in the preheader -- here in
+   the guard branch's own delay slot (see matching-levers section 8). Loop C
+   is a plain `for`: its buffer base is loop-invariant and used only inside the
+   body, so loop-invariant motion puts it in the preheader by itself, and the
+   row cursor is loop.c's giv for `r[i]`.
+
+   `p++` goes BEFORE the `r != 0` test, not inside it. reorg fills a delay slot
+   from the insn immediately preceding the branch first, so with `p++` inside
+   the arm the branch takes `sw $s1, 0x0($s0)` into its slot and the store and
+   the test come out swapped. Advancing the cursor ahead of the test puts
+   `addiu $s0, $s0, 0x4` in that position instead, which is what the listing
+   has.
+
+   The two shifts are UNSIGNED -- `(u32) n / 16` and `(u32) i / 16` -- because
+   both come out as a bare `srl`, while `i` and `n` are signed for the `blez`
+   guard and the `slt` bound. */
+u8 *func_80049004(u8 **p, s32 n, s32 m)
+{
+    u32 buf[0x20];
+    u8 *r;
+    s32 i;
+
+    bzero(p[0], m * 4);
+    r = (u8 *) func_8004B404(0x104);
+    p[0] = r;
+    p++;
+    if (r != 0)
+    {
+        if (func_8004B42C((u32 *) p, (u32) n / 16 + 1) == 0)
+        {
+            r = 0;
+            goto out;
+        }
+        if (*p != 0)
+        {
+            u32 *d = buf;
+
+            do
+            {
+                *d = (u32) *p;
+                p++;
+                d++;
+            } while (*p != 0);
+        }
+        if (func_8004B42C((u32 *) p, (u32) n / 16 + 1) == 0)
+        {
+            r = 0;
+            goto out;
+        }
+        if (*p != 0)
+        {
+            u32 *d = buf;
+
+            do
+            {
+                d[0x10] = (u32) *p;
+                p++;
+                d++;
+            } while (*p != 0);
+        }
+        for (i = 0; i < n; i++)
+        {
+            u8 *x = (u8 *) (buf[(u32) i / 16] + (i & 0xF) * 16);
+
+            ((u8 **) r)[i] = x;
+            *(u32 *) (x + 4) = buf[(u32) i / 16 + 0x10] + (i & 0xF) * 16;
+        }
+        func_8004CC38((u8 **) r, n);
+    }
+out:
+    return r;
+}
 
 s32 func_80048F8C(u32 *, s32);
 u32 *func_8004B42C(u32 *, s32);
@@ -3577,7 +3658,6 @@ void func_80050A00(u8 *p, s32 b) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80050A58);
 
-s32 func_80049004(u8 *, s32, s32);
 u8 *func_80049150(u8 *, u32, s32);
 void func_80050A58(u32, u8 *);
 s32 func_80048FBC(u8 *, s32);
@@ -3588,7 +3668,7 @@ s32 func_80050AF0(u8 *p, s32 b) {
     s32 r;
     u8 *e;
 
-    r = func_80049004(q, b, 0xC);
+    r = (s32) func_80049004((u8 **) q, b, 0xC);
     *(u32 *) (p + 0x68) = r;
     if (r != 0) {
         e = func_80049150(q, 9, 0xC);
