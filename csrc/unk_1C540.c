@@ -1327,7 +1327,68 @@ void func_8004B8DC(s32 a, s32 b, s32 c, s32 d, s32 e) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B954);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004BDDC);
+u8 *func_8004C010(u8 *, u8 *);
+
+/* Two shapes carry this one:
+
+   * `p[0x18] = p[0x30] = r[8] + r[0xA];` -- ONE chained assignment, not two
+     statements. The sum is computed once and the stores come out 0x30 first,
+     which is the order `a = b = e` gives. As two statements the second one
+     re-reads both bytes and re-adds them: the first `sb` is a QImode store,
+     and `note_mem_written` sets cse's `all` flag for every QImode store, so
+     nothing survives it. Same at the tail for 0x31/0x25.
+   * each decrement guard is `if (A < B || B != C)`, which puts the body
+     BETWEEN the two tests -- `bnez` to it, then `beq` past it. `B` is read
+     once because both tests are in the same expression, ahead of the four
+     byte stores that would otherwise flush it. */
+u8 *func_8004BDDC(u8 *a, u8 *b, u8 *p, u8 *q, u8 *r)
+{
+    *(u32 *)(p + 0x2C) = *(u32 *)(p + 0x20);
+    *(u32 *)(p + 0x20) = *(u32 *)(p + 0x18);
+    *(u32 *)(p + 0x14) = *(u32 *)(p + 0x10);
+    if (r[8] + r[0xA] >= 0x100)
+    {
+        r[0xA] = r[0xA] - 1;
+    }
+    if (r[9] + r[0xB] >= 0x100)
+    {
+        r[0xB] = r[0xB] - 1;
+    }
+    q += 0xC;
+    *(u32 *)(p + 0x10) = *(u32 *)q;
+    p[4] = p[0x13];
+    func_8004C010(p + 0x10, a);
+    func_8004C010(p + 0x10, b);
+    *(u32 *)(p + 0x1C) = *(u32 *)(q + 4);
+    p[5] = p[0x1F];
+    func_8004C010(p + 0x1C, a);
+    func_8004C010(p + 0x1C, b);
+    *(u32 *)(p + 0x28) = *(u32 *)(q + 8);
+    p[6] = p[0x2B];
+    func_8004C010(p + 0x28, a);
+    func_8004C010(p + 0x28, b);
+    func_8004C010(p + 4, a);
+    func_8004C010(p + 4, b);
+    p[3] = 0xC;
+    p[7] = r[1];
+    p[0xC] = r[8];
+    *(s16 *)(p + 0xE) = *(u16 *)(r + 6);
+    p[0xD] = r[9];
+    if (*(s16 *)(p + 0x14) < *(s16 *)(p + 8) || *(s16 *)(p + 8) != *(s16 *)(p + 0x20))
+    {
+        r[0xA] = r[0xA] - 1;
+    }
+    p[0x18] = p[0x30] = r[8] + r[0xA];
+    p[0x19] = r[9];
+    *(s16 *)(p + 0x1A) = *(u16 *)(r + 4);
+    p[0x24] = r[8];
+    if (*(s16 *)(p + 0x22) < *(s16 *)(p + 0xA) || *(s16 *)(p + 0xA) != *(s16 *)(p + 0x16))
+    {
+        r[0xB] = r[0xB] - 1;
+    }
+    p[0x25] = p[0x31] = r[9] + r[0xB];
+    return q;
+}
 
 u8 *func_8004C010(u8 *d, u8 *s) {
     u8 *p;
