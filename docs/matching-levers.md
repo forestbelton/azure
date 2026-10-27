@@ -2886,6 +2886,29 @@ cc1psx increment a COPY in place while keeping the original live?
   reachable the second way; five byte-cast regroupings of the by-name form all
   gave displacement 0, because the regrouping is undone before loop.c sees it.
 
+* **A `goto` loop is INVISIBLE to loop.c.** The C front end emits
+  `NOTE_INSN_LOOP_BEG`/`_END` only for a loop STATEMENT, and
+  `find_and_verify_loops` keys entirely on those notes -- so a back edge built
+  from `goto` gets no loop-invariant motion, no strength reduction and no
+  inversion. When a listing recomputes something inside a loop that loop.c
+  would obviously hoist, that is the tell, and the fix is to write the loop
+  with `goto` instead of `for`/`while`.
+
+  func_80059BC4's inner command pump is the worked example. As `for (;;)` with
+  `continue`, loop-invariant motion lifts `(high D_800737C8)` into the
+  preheader; the listing has it at the loop top. The knock-on is what actually
+  cost the word: hoisting puts the loop's LABEL after the `lui` instead of
+  before it, so the back edge's opposite thread begins with the `lw` that
+  READS that register, and `fill_slots_from_thread` then refuses to move the
+  fall-through's own `lui %hi(D_800737C4)` into the delay slot -- it copies the
+  loop's `lui` in instead and nothing is saved. With `goto` the label precedes
+  the `lui`, the opposite thread starts with an insn that only WRITES the
+  register, and the move goes through. 87 words to 86 and MATCH.
+
+  **Where a loop's label sits relative to a hoisted insn decides what reorg
+  can put in its back edge's delay slot**, which is the second thing to read
+  off such a listing.
+
 ## 10. Measured dead ends -- do not retry
 
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried

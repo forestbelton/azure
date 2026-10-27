@@ -1109,12 +1109,20 @@ extern Unk80086C00 D_80086C00[];
 typedef struct Unk80085FA8
 {
    u32 unk_00;
-   u8 pad_04[0x1C];
+   u8 pad_04[0xC];
+   /* Hand-split out of pad_04: func_80059BC4's countdown, read and written
+      with `lw` and decremented toward zero. */
+   u32 unk_10;
+   u8 pad_14[0xC];
    u32 unk_20;
-   u32 unk_24;
+   u32 unk_24; /* func_80059BC4 reads only its low half, with `lhu` */
    u8 pad_28[4];
    u32 unk_2C;
-   u8 pad_30[0x20];
+   u8 pad_30[0xC];
+   /* Hand-split out of pad_30: func_80059BC4's accumulator, which wraps at
+      0x100. */
+   u32 unk_3C;
+   u8 pad_40[0x10];
 } Unk80085FA8;
 extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
 

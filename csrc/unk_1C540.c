@@ -6634,7 +6634,7 @@ void func_80058494(u8 i, s32 b, u8 v) {
     func_80055E7C(1, i, v);
 }
 
-void func_80059BC4(void);
+s32 func_80059BC4(void);
 
 void func_800584E4(void) {
     if (D_800737A4[0] != 0) {
@@ -6869,7 +6869,116 @@ INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059814);
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800599B0);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80059BC4);
+extern u32 D_800737C4[];
+extern u32 D_800737C8[];
+/* An incomplete-array alias: this function's reads of the count have their
+   `lui` scheduled apart from the `lw` -- one lands in a branch delay slot --
+   which the scalar `extern u32 D_800869B4` cannot do, since that form is a
+   single insn until maspsx splits it. */
+extern u32 D_800869B4n[] __asm__("D_800869B4");
+
+void func_8005947C(Unk80085FA8 *);
+u8 func_800595C0(Unk80085FA8 *);
+void func_80059814(Unk80085FA8 *);
+
+/* Per-entry tick: advances each live D_80085FA8 entry's +0x3C accumulator by
+   its +0x24 step and, on each wrap past 0x100, either counts +0x10 down or --
+   when it is already zero -- runs the command pump until something sets it.
+
+   The inner pump is written with `goto`, and that is the whole point: the C
+   front end only emits NOTE_INSN_LOOP_BEG for a real loop statement, so
+   loop.c never sees a goto loop and never hoists its invariants. Written as
+   `for (;;)` with `continue`, loop-invariant motion lifts
+   `(high D_800737C8)` into the preheader, which puts the loop's LABEL after
+   the `lui` instead of before it -- and then reorg cannot move the
+   fall-through's `lui %hi(D_800737C4)` into the first back edge's delay slot,
+   because the opposite thread now starts with the `lw` that READS that
+   register. It copies the loop's own `lui` in instead, and the function is a
+   word long. With `goto` the label precedes the `lui`, the opposite thread
+   starts with an insn that only WRITES the register, and the move goes
+   through.
+
+   D_800737C8 has to be the incomplete-array form for the same reason: a
+   4-byte scalar is small data at -G8, one insn until maspsx splits it, so its
+   `lui` could not be stolen into the second back edge's slot at all.
+
+   `e = &D_80085FA8s[i]` indexed, not a walked `e++`: the pointer is passed to
+   every call, so a source-level increment would be a biv that cannot be
+   eliminated AND loop.c would reduce the field addresses into a second
+   register. Indexed, the giv is the one `addiu $s0, $s0, 0x50` the listing
+   has. */
+s32 func_80059BC4(void)
+{
+    Unk80085FA8 *e;
+    u32 i;
+    u32 v;
+
+    i = 0;
+    if (D_800869B4n[0] != 0)
+    {
+        do
+        {
+            e = &D_80085FA8s[i];
+            if (e->unk_2C == 0)
+            {
+                v = e->unk_3C + *(u16 *) &e->unk_24;
+                e->unk_3C = v;
+                if (v >= 0x100)
+                {
+                    e->unk_3C = v & 0xFF;
+                    if (e->unk_10 == 0)
+                    {
+                    top:
+                        if (D_800737C8[0] != 2)
+                        {
+                            func_8005947C(e);
+                            if (e->unk_2C != 0)
+                            {
+                                goto out;
+                            }
+                            e->unk_10 = func_80058A04((s32) e);
+                        }
+                        else if ((u8) func_800595C0(e) == 0)
+                        {
+                            if (e->unk_2C != 0)
+                            {
+                                goto out;
+                            }
+                            e->unk_10 = func_80058A04((s32) e);
+                        }
+                        else if (e->unk_2C != 0)
+                        {
+                            goto out;
+                        }
+                        if (e->unk_10 == 0)
+                        {
+                            goto top;
+                        }
+                        if (D_800737C4[0] != 0)
+                        {
+                            func_80059814(e);
+                        }
+                        if (e->unk_10 == 0)
+                        {
+                            goto top;
+                        }
+                    out:
+                        if (e->unk_10 != 0)
+                        {
+                            e->unk_10 = e->unk_10 - 1;
+                        }
+                    }
+                    else
+                    {
+                        e->unk_10 = e->unk_10 - 1;
+                    }
+                }
+            }
+            i++;
+        } while (i < D_800869B4n[0]);
+    }
+    return 0;
+}
 
 void func_80059D1C(void) {
     u32 i = 0;
