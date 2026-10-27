@@ -443,3 +443,9 @@ what makes D_8008099C impossible here, and the grep is two commands:
 
 The remaining $gp stubs in unk_72A8 are func_8003C920, func_80035484 and
 func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.
+
+* `func_8003800C` (unk_72A8, 71w) -- 70/71, 29 DIFF, parked in
+  `docs/near-misses/`. One word: the second `lw 0x80` of the owner pointer in
+  the guarded block. greg collapses the two reads into one register because
+  sched1 separates their live ranges; sixteen statement-order placements
+  measured, all 70 words.

@@ -1372,6 +1372,22 @@ at once and that is the `addu $v0, $a0, $zero` before the call. Holding it in a
 local instead gives one pseudo, which the allocator puts in the argument
 register, and the copy disappears -- a word short. func_80050308.
 
+### A reg-reg copy right after an `lbu` means the byte is a LOCAL
+
+The mirror of the entry above, for QImode. `r[4] = r[3]; q[0x28] = r[3];` does
+NOT share the `lbu`: `note_mem_written` sets cse's `all` flag for every QImode
+store -- ANSI lets a character pointer alias anything, and that is the one
+width cse refuses to disambiguate by offset -- so the first `sb` flushes the
+table and the second `r[3]` is a new pseudo. Word count is unchanged, because
+reload turns the second load into `addu $v0, $a1, $zero`, but the copy then
+occupies a branch delay slot the target leaves as a nop and the allocation
+shifts around it. `v = r[3]; r[4] = v; q[0x28] = v;` gives one pseudo and one
+`lbu` serving both stores. Seven differing words in func_8003800C; its sibling
+func_80037D9C already spells the same three lines that way.
+
+So: **an unexplained copy immediately after a byte load whose value is stored
+twice is not an allocation accident -- it is the second read.**
+
 ## 6. Declaration decides addressing
 
 This is the subject of `docs/addressing-and-translation-units.md`; the short
@@ -2213,6 +2229,33 @@ into a shared tail differ by a word between the two spellings.
   the middle node, so the target's `1B -> FC -> FF` chain required a fourth,
   invisible node in that sublist. See also the range-node entry above, which is
   the same pass counting a *run* of such cases double.
+
+### A `nop` in a CONDITIONAL branch's delay slot can mean a LOAD comes next
+
+Separate from the `jal` rule below. reorg will not move a `may_trap_p` insn
+into a slot that executes on both paths, so when the fall-through block begins
+with a `lw` the slot stays empty, and when it begins with a `lui` reorg fills
+it. The nop after func_8003800C's loop-closing `bne` is therefore evidence
+about what sched2 put FIRST in the next block, not about dependences -- read
+it as "the next block starts with a load" and work backwards to the statement
+order that puts one there.
+
+### Two loads of one MEM collapse at greg unless they overlap at SCHED1 time
+
+cse is not what merges two reads of the same memory: `invalidate_memory` drops
+every varying-address MEM on ANY store, so one intervening store is enough to
+keep both, and both survive to `lreg`. What deletes the second one is
+local-alloc giving the two pseudos the same hard register, after which reload
+sees `$v1 = $v1`; with different registers it degrades to a reg-reg copy
+instead (a word, but the wrong word). The pseudos share a register exactly
+when their live ranges do not overlap **in sched1's output**, which is not the
+order you wrote and not the order sched2 finally emits.
+
+So a one-word shortfall of this shape is a SCHEDULING question. Statement
+order is still the knob, but score it against `sched.py --sched1`'s ready
+lists rather than against the source: in func_8003800C every placement of the
+second read among the block's five stores (sixteen combinations) leaves sched1
+emitting it after the first read is already dead.
 
 ### An empty `jal` delay slot says the address was ONE instruction
 
