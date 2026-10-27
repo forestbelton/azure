@@ -30,6 +30,16 @@ what you do next:
   LENGTH -- the word counts differ. The shift is localised to a branch span
             below, which is far more informative than the diff.
 
+After the findings it prints a FRAME census whenever the two builds disagree
+about any `$sp` slot. On a spilled function that is the sharpest diagnostic
+there is: every local that loses its register takes a slot, the slots are
+handed out in pseudo order, and the displacements are in the listing -- so a
+frame that agrees offset for offset means the set of locals and their
+declaration order are both already right, and a row on one side only names
+the local to look at. It says nothing when the frames agree, which is itself
+worth reading: func_8005BBFC's 220 differing words print no FRAME rows at
+all, so none of them is a spill-layout problem.
+
 It decides nothing and asserts nothing it has not measured -- same contract as
 annotate.py, and for the same reason: a tool that ranked confidently would
 reproduce this project's two worst detours faster. annotate.py reads the TARGET
@@ -252,6 +262,67 @@ def branch_spans(insns):
         if ins.op in BRANCHES:
             out.append((i, ins.op, ins.simm))
     return out
+
+
+def slot_census(insns):
+    """{offset: {op: count}} for every $sp-relative load and store."""
+    out = {}
+    for ins in insns:
+        if ins.op in ('lw', 'sw', 'lh', 'lhu', 'sh', 'lb', 'lbu', 'sb') \
+                and REGS[ins.rs] == 'sp':
+            out.setdefault(ins.simm, {}).setdefault(ins.op, 0)
+            out[ins.simm][ins.op] += 1
+    return out
+
+
+def slot_report(B, T):
+    """Compare the two frames slot by slot.
+
+    On a function with heavy spilling the frame IS the diagnostic. Every
+    local that loses its register takes a slot, the slots are handed out in
+    pseudo order, and the displacement of each one is in the listing -- so a
+    frame that agrees offset for offset means the set of locals and the order
+    they were declared in are both right, and the first row that does not
+    agree names the local to look at. func_8005B4D0's gap came down to one
+    row: a seventh slot this source had and the listing did not, which was a
+    spilled copy of a parameter the listing kept in its own home slot.
+
+    Rows inside the saved-register block and the incoming-argument area are
+    printed too, because a count that differs there says something different
+    -- an argument read one more time, or a register saved that need not be.
+    """
+    cb, ct = slot_census(B), slot_census(T)
+    fb, ft = frame_size(B), frame_size(T)
+    sb, st = saved_regs(B), saved_regs(T)
+    lo = min([o for o in list(sb.values()) + list(st.values())] or [fb])
+    rows = []
+    for off in sorted(set(list(cb) + list(ct))):
+        b, t = cb.get(off, {}), ct.get(off, {})
+        if b == t:
+            continue
+        rows.append((off, b, t))
+    if not rows and fb == ft:
+        return
+    print()
+    print('  FRAME  built 0x%X, target 0x%X; saved registers from 0x%X'
+          % (fb, ft, lo))
+    if not rows:
+        print('    every $sp slot agrees')
+        return
+    def fmt(d):
+        return ' '.join('%s*%d' % (k, v) for k, v in sorted(d.items())) or '-'
+    for off, b, t in rows:
+        where = ('saved reg' if off >= lo and off < (fb if fb else 0)
+                 else 'incoming arg' if fb and off >= fb else 'local')
+        print('    0x%02X  %-12s built %-18s target %s'
+              % (off, where, fmt(b), fmt(t)))
+    print(wrap('a LOCAL row that exists on one side only is a local that one '
+               'build spilled and the other kept; the slots are handed out in '
+               'pseudo order, so declaring the spilled ones in the listing\'s '
+               'slot order is the first thing to try. An INCOMING ARG row '
+               'means the listing reads a parameter from its own home slot '
+               'where this source keeps a copy, or the other way round.',
+               '    '))
 
 
 def main():
@@ -496,6 +567,8 @@ def main():
         print('  register-only differences, in target order:')
         for addr, b, t in reg_only:
             print('    %08X  built %-30s target %s' % (addr, b, t))
+
+    slot_report(B, T)
 
     if '--greg' in flags:
         print()
