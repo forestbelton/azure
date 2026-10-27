@@ -221,6 +221,148 @@ def t_dup_into_arms(text):
         yield ("duplicate `%s` into both arms" % stmt[:40], body)
 
 
+def _decl_run(text):
+    """The run of plain declarations at the top of the function body.
+
+    Returns [(line_start, line_end, name)] in source order. Stops at the first
+    statement, so an initialised declaration (`u8 *p = q;`) ends the run -- it
+    cannot be reordered freely anyway, because its initialiser may depend on
+    an earlier one.
+    """
+    lo, hi = SPAN
+    out = []
+    i = lo
+    while i < hi:
+        j = text.find("\n", i)
+        if j < 0 or j > hi:
+            break
+        line = text[i:j]
+        if line.strip() == "":
+            i = j + 1
+            continue
+        # the separator must be whitespace or a `*`, so a bare statement
+        # (`foo;`) cannot pass as a declaration of `o` by type `fo`
+        m = re.match(r"^[ \t]+[A-Za-z_]\w*(?:[ \t]+|[ \t]*\*+[ \t]*)(\w+)[ \t]*;[ \t]*$",
+                     line)
+        if not m:
+            break
+        out.append((i, j + 1, m.group(1)))
+        i = j + 1
+    return out
+
+
+def t_decl_order(text):
+    """Transpose two adjacent declarations.
+
+    local-alloc assigns quantities in an order that depends on the pseudo
+    numbering, and the pseudos are numbered in declaration order -- so this is
+    a zero-cost knob on which of two equally-weighted locals wins the lower
+    register. Greedy search composes the transpositions into any permutation.
+    Documented as a tie-break in docs/compiler-version.md; it is the half of
+    that tie-break a source rewrite can actually reach (the other half, block
+    scope, is t_decl_per_arm below).
+    """
+    d = _decl_run(text)
+    for k in range(len(d) - 1):
+        a, b = d[k], d[k + 1]
+        swapped = text[b[0]:b[1]] + text[a[0]:a[1]]
+        yield ("declare %s before %s" % (b[2], a[2]),
+               text[:a[0]] + swapped + text[b[1]:])
+
+
+def _switch_arms(text):
+    """[(arm_body_start, arm_body_end)] for one switch's arms in the body.
+
+    Only the FIRST switch found is used, and only its own labels: an arm's
+    nested switch is left alone. The returned span starts after the last label
+    of a fallthrough run, so `case 1: case 2:` yields one arm.
+    """
+    lo, hi = SPAN
+    m = re.search(r"(?m)^[ \t]*switch\b", text[lo:hi])
+    if not m:
+        return []
+    ob = text.find("{", lo + m.end())
+    if ob < 0:
+        return []
+    close = _match_brace(text, ob)
+    if close < 0:
+        return []
+    labels = []
+    depth = 0
+    i = ob + 1
+    while i < close:
+        c = text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        elif depth == 0 and (text.startswith("case", i) or text.startswith("default", i)):
+            if i == 0 or text[i - 1] in " \t\n":
+                e = text.find(":", i)
+                if e > 0:
+                    labels.append((i, text.find("\n", e) + 1))
+                    i = e
+        i += 1
+    arms = []
+    for k, (_, body_start) in enumerate(labels):
+        # fold a run of consecutive labels into the last one
+        if k + 1 < len(labels) and text[body_start:labels[k + 1][0]].strip() == "":
+            continue
+        end = labels[k + 1][0] if k + 1 < len(labels) else close
+        arms.append((body_start, end))
+    return arms
+
+
+def t_decl_per_arm(text):
+    """Give each switch arm its own copy of a shared local, in a brace.
+
+    A local reused across arms is ONE allocno whose references sum over all of
+    them, which inflates its local-alloc priority and takes a register the
+    target reuses -- the one-variable-per-loop rule in matching-levers. The fix
+    is a declaration of the same name inside each arm that uses it, which is
+    what took func_800517CC from 32 register-only words to MATCH (one brace per
+    `case` was 28, one brace per block was the match).
+
+    Only applied to a local used in two or more arms and nowhere outside them.
+    """
+    d = _decl_run(text)
+    arms = _switch_arms(text)
+    if not arms or not d:
+        return
+    lo, hi = SPAN
+    for start, end, name in d:
+        decl = text[start:end]
+        word = re.compile(r"\b%s\b" % re.escape(name))
+        uses = [m.start() for m in word.finditer(text) if lo <= m.start() < hi
+                and not (start <= m.start() < end)]
+        if not uses:
+            continue
+        inside = [a for a in arms if any(a[0] <= u < a[1] for u in uses)]
+        if len(inside) < 2 or any(not any(a[0] <= u < a[1] for a in arms) for u in uses):
+            continue
+        ind = re.match(r"[ \t]*", decl).group(0)
+        pieces = []
+        last = 0
+        for a0, a1 in inside:
+            if not any(a0 <= u < a1 for u in uses):
+                continue
+            body = text[a0:a1].rstrip()
+            trailing = text[a0:a1][len(body):]
+            shifted = "\n".join(("    " + l) if l.strip() else l
+                                 for l in body.split("\n"))
+            pieces.append((a0, a1,
+                           ind + "{\n" + ind + "    " + decl.strip() + "\n\n"
+                           + shifted + "\n" + ind + "}" + trailing))
+        out = text
+        for a0, a1, rep in reversed(pieces):
+            out = out[:a0] + rep + out[a1:]
+        out = out[:start] + out[end + (len(out) - len(text)):] if False else out
+        # drop the function-scope declaration (indices unchanged: it is before
+        # every arm, and the arms were rewritten back to front)
+        out = out[:start] + out[start:].replace(decl, "", 1)
+        yield ("declare %s per switch arm" % name, out)
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -230,6 +372,8 @@ TRANSFORMS = [
     t_cmp_swap,
     t_mask1,
     t_dup_into_arms,
+    t_decl_order,
+    t_decl_per_arm,
 ]
 
 

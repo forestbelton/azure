@@ -62,6 +62,13 @@
  * fresh local; assigning the same local twice; both operand orders of the
  * sum; and every position of the +0x18 store.
  *
+ * Also measured 2026-10-27: giving the format-2 arm its OWN copy of each
+ * shared local in turn -- `e`, `n`, `v`, `f`, `i` -- which is the
+ * one-variable-per-block lever that landed func_800517CC. It does not reach
+ * this: `e`, `v` and `f` are still 1 DIFF, `n` is 9 and `i` is 19. All six
+ * orderings of the +0x04 / +0x18 / +0x38 stores are 1, 8 or 44, with the
+ * order below the best.
+ *
  * perm.py over all nine statements of the format-2 body (400 of 362880
  * orderings sampled) returns the order below as the best, at the same 1 DIFF
  * -- so this is NOT a statement-order problem and the remaining lever is in

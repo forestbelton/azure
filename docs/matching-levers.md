@@ -3826,3 +3826,12 @@ register-only words on func_800517CC, 28 with one brace per `case`, MATCH with
 one brace per block. Keep the struct updates as `+=` too -- an explicit
 `a = field + delta` local makes the second update read `a` instead of the
 word just stored, and the permutation comes back.
+
+### Both halves of this are in search.py now
+
+`tools/decomp/search.py` has `t_decl_order` (transpose two adjacent
+declarations) and `t_decl_per_arm` (give each switch arm its own copy of a
+shared local, in a brace of its own). They are the two zero-cost knobs on
+local-alloc's choice between equally-weighted locals, and the second is the
+rule above. Run it over a park before hand-permuting anything: the sweep is
+free and it records what each accepted change was worth.
