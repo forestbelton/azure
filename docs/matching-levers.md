@@ -1298,6 +1298,16 @@ instruction where it is and empties its delay slot, so it will cost words if
 the listing does not actually show the reload. The evidence to require is the
 SECOND load of an address already stored, with no call or label between.
 
+### Two bit tests that stayed separate are NESTED IFS
+
+`fold_truthop` merges two comparisons against ONE operand into a single masked
+compare, so `(x & 0x100) != 0 && (x & 0x1000) == 0` comes out as
+`andi 0x1100` against `0x100` -- three insns where the listing has four. As
+NESTED `if`s the two tests are separate statements, which fold cannot reach,
+and cse still shares the single load. Two words per pair, four in
+func_80054788. Try this before the two-spellings trick below: it costs nothing
+and needs no second declaration.
+
 ### Two bit tests that stayed separate are two SPELLINGS of one lvalue
 
 `fold` rewrites `(x & 0x2000) != 0 || (x & 0x8000) != 0` into

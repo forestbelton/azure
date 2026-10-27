@@ -4681,7 +4681,100 @@ void func_80054704(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80054788);
+/* The 0xF0-group dispatch. Three things decide it:
+
+   * the case BODIES are laid out in the listing's order -- 0x10, 0x20, 0x70,
+     0xE0, 0xF0, then the shared 0xB0/0xC0/0xD0 body, then the default -- which
+     is not numeric order; gcc emits bodies in source order and builds the
+     comparison tree separately (root 0xB0, the median of the eight labels).
+   * the two D_800847D0 tests in the shared body are NESTED IFS, not one
+     `&&` chain. `fold_truthop` merges two comparisons against one operand
+     into a single masked compare, so `(x & 0x100) != 0 && (x & 0x1000) == 0`
+     comes out as `andi 0x1100` against 0x100 -- two words per group, four in
+     all. Nested `if`s are separate statements, which fold cannot reach, and
+     cse still shares the one `lw`.
+   * func_8005497C and func_800549FC are called with NO PROTOTYPE in scope --
+     both are defined below this function and nothing declares them above it
+     -- so the `u16` argument takes the default promotion to `int` and the
+     listing's `andi $a0, 0xFFFF` is that zero-extension. Their own
+     definitions take `u8`, which would mask with 0xFF instead. */
+void func_800553D4(s32);
+void func_80054104(void);
+void func_80054E00(s32);
+
+void func_80054788(u16 n)
+{
+    switch (n & 0xF0)
+    {
+    case 0x10:
+        func_8005497C(n);
+        break;
+    case 0x20:
+        func_800549FC(n);
+        break;
+    case 0x70:
+        if ((n & 1) != 0)
+        {
+            func_800553D4(0x71);
+        }
+        if ((n & 2) != 0)
+        {
+            func_80054104();
+        }
+        if ((n & 4) != 0)
+        {
+            func_80054E00(0x74);
+        }
+        break;
+    case 0xE0:
+        if ((n & 1) != 0)
+        {
+            func_800553D4(0xE1);
+        }
+        if ((n & 4) != 0)
+        {
+            func_80054E00(0xE4);
+        }
+        break;
+    case 0xF0:
+        if ((n & 1) != 0)
+        {
+            func_800553D4(0xF1);
+        }
+        if ((n & 4) != 0)
+        {
+            func_80054E00(0xF4);
+        }
+        break;
+    case 0xB0:
+    case 0xC0:
+    case 0xD0:
+        if ((n & 1) != 0)
+        {
+            if ((D_800847D0[0] & 0x100) != 0)
+            {
+                if ((D_800847D0[0] & 0x1000) == 0)
+                {
+                    func_80054F9C(n & 0xFFF1, D_800848F8);
+                }
+            }
+        }
+        if ((n & 4) != 0)
+        {
+            if ((D_800847D0[0] & 0x400) != 0)
+            {
+                if ((D_800847D0[0] & 0x4000) == 0)
+                {
+                    func_80054F9C(n & 0xFFF4, D_80084858);
+                }
+            }
+        }
+        break;
+    default:
+        func_80054A7C(n & 0xFF);
+        break;
+    }
+}
 
 void func_800558FC(u16);
 void func_80055BD8(s16);
