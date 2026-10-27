@@ -55,18 +55,39 @@ segments:
   #
   # rodata first, code from +0xd630 (gcc -G8 data-before-functions), which is
   # why the block opens on Shift-JIS text.
-  # NOT ACTIVE YET. Uncommenting this puts the overlay's asm into the link,
-  # and it references jump tables and data inside its own rodata
-  # (jtbl_80089900, D_80089960, ...) that splat cannot label without
-  # symbol_addrs entries, so the link fails with undefined references. Mapping
-  # the overlay means supplying those first. The addresses below are the
-  # finding; they are correct and verified, just not yet buildable.
-  # - type: code
-  # start: 0xb000
-  # vram: 0x80088760
-  # subsegments:
-  # - [0xb000, .rodata, ovl_town]
-  # - [0xd630, asm, ovl_town]
-  # Kept as the single blob it was: town.bin is the one container in
-  # `make all`, so it stays byte-for-byte in the shape that builds.
+  # Three things had to be right before this could be in the build; the
+  # earlier attempt got all three wrong and failed with
+  # `undefined reference to jtbl_80089900`.
+  #
+  # 1. `rodata`, NOT `.rodata`. The leading dot routes a subsegment to a
+  #    SIBLING C OBJECT and extracts nothing (see the note on the slus
+  #    segment's own `.rodata` entries). There is no csrc/ovl_town.c, so
+  #    nothing was emitted and every reference into the overlay's own rodata
+  #    was undefined. With the plain form splat writes
+  #    asm/data/ovl_town.rodata.s with 73 `dlabel`s in it, jtbl_80089900 and
+  #    D_80089960 among them, and the link resolves.
+  # 2. The code subsegment needs a FOLLOWING segment. Without one it runs to
+  #    the end of the container and splat disassembles the remaining 16 MB as
+  #    a single 4.3-million-line file.
+  # 3. The boundary is 0x51fc0, not the 0x51ed8 the fingerprinting reported.
+  #    0x51ed8 is where the confirmed prologue run ended; the word there is
+  #    `addiu $sp, $sp, -0x20`, the start of one more function. The last
+  #    `jr $ra` is at 0x51fb8, so the text ends at 0x51fc0 -- which is also
+  #    16-byte aligned, and that matters: splat emits
+  #    `__romPos = ALIGN(__romPos, 16)` after a code segment, so a boundary at
+  #    0x51ed8 inserts eight bytes of padding and the container comes out
+  #    eight bytes long.
+  #
+  # Verified: `make` rebuilds town.bin byte-identical with these segments live.
+  - type: code
+    start: 0xb000
+    vram: 0x80088760
+    subsegments:
+      - [0xb000, rodata, ovl_town]
+      - [0xd630, asm, ovl_town]
+  # The rest of the container: assets, and the overlay's own data beyond its
+  # code. splat suggests rodata file splits at 0xc14c and 0xc1a0 (jump tables
+  # that are not file-aligned), which is the next step whenever this overlay's
+  # rodata is carved into translation units.
+  - [0x51fc0, bin]
   - [0x101b800]
