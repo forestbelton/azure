@@ -3393,7 +3393,7 @@ void func_80051500(void) {
     func_80041284(&D_80080C1C);
 }
 
-void func_80051548(void);
+void func_80051548(u8 *, u8 *, u8 *);
 
 void func_80051528(u8 *p) {
     if (*(u32 *) (p + 0x10) == (u32) func_80051548) {
@@ -3401,10 +3401,75 @@ void func_80051528(u8 *p) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80051548);
+/* func_80051F58's sibling, and it wants the same two things: the switch
+   subject as `s32`, not `s16`, and the default's three byte stores written
+   out. Two differences of its own.
+
+   `func_800478B8` is called with ONE argument here. Its definition in
+   unk_1AF38 takes two, but the listing sets only $a0 and csrc/unk_72A8.c
+   already calls it with one, so the one-argument spelling is what this unit's
+   original had.
+
+   Cases 0 and 2 share a body -- both reach the +0xC check -- and case 1's tail
+   shares the +4 increment with them, which jump2 cross-joins. */
+extern u32 D_800814A0;
+
+void func_800478B8(s32);
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+
+void func_80051548(u8 *p, u8 *q, u8 *r)
+{
+    s32 s;
+
+    *(u16 *)(p + 6) = *(u16 *)(p + 6) + 1;
+    func_800478B8((s32)r);
+    s = *(s16 *)(p + 4);
+    switch (s)
+    {
+    case 1:
+        *(s32 *)(q + 0) = 0x1C00000 - (func_800644B8(*(s16 *)(p + 6) * 0x10) >> 4) * 0xC000;
+        *(s32 *)(q + 4) = ((func_80064584(*(s16 *)(p + 6) * 0x10) >> 4) << 13) + 0x900000;
+        if (*(s16 *)(p + 6) >= 0x40)
+        {
+            *(s32 *)(q + 0) = 0x1000000;
+            *(s32 *)(q + 4) = 0x900000;
+            *(s32 *)(q + 8) = 0x700000;
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
+        }
+        return;
+    case 0:
+    case 2:
+        if (*(s16 *)(p + 0xC) != 0)
+        {
+            *(s16 *)(p + 0xC) = 0;
+            *(u16 *)(p + 6) = 0;
+            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
+        }
+        return;
+    case 3:
+        *(s32 *)(q + 0) = *(s32 *)(q + 0) + 0xFFF40000;
+        *(s32 *)(q + 4) = *(s32 *)(q + 4) + 0x20000;
+        if (*(s16 *)(p + 6) < 0x40)
+        {
+            return;
+        }
+        break;
+    default:
+        r[0xE] = 0;
+        r[0xD] = 0;
+        r[0xC] = 0;
+        break;
+    }
+    *(u32 *)(*(u8 **)p + 0xC) = 0;
+    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
+    *(u16 *)(p - 2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 extern UnkElem D_80072044[];
-void func_80051548(void);
+void func_80051548(u8 *, u8 *, u8 *);
 void func_80044BB0(void);
 
 /* func_800520B4's recipe, with a SEPARATE local for the +8 block at the end:
