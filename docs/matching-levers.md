@@ -2348,6 +2348,17 @@ materialisation before that call and makes the pointer live across it;
 `u8 *b; ... f(); b = SYM;` puts it after. Two words of prologue in
 func_8003BAF8, and it reads as an allocation problem.
 
+### The PREHEADER's giv initialisations are in REVERSE body order
+
+`record_giv` prepends to loop.c's giv list, and `strength_reduce` walks that
+list emitting each initialisation immediately before the loop start -- so the
+giv found LAST in the body gets its `lui`/`addiu` or `addu` FIRST in the
+preheader. Read the preheader's order off the listing and put the
+corresponding references in the body in the opposite order: func_8004F684's
+listing starts its preheader with D_80071784's base and then `addu $t3, $t0`,
+so the `p + i * 4` reference has to be the body's FIRST statement and the
+`&D_80071784[i * 3]` its second. Three words, and the last thing wrong in it.
+
 ### Two offsets off a walked pointer become TWO induction variables
 
 `u8 *p = SYM; ... *(u32 *) p ... *(u16 *) (p + 4) ... p += 8;` makes loop.c
