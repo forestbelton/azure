@@ -244,7 +244,7 @@ something** -- that has been the single biggest waste of effort here.
 | group | count | what it means |
 |-------|-------|---------------|
 | parked, with measurements | 70 | 43 with a park file in `docs/near-misses/`, the rest rows in `docs/carved-sweep.md` |
-| never attempted | 3 | 1725 words; see below |
+| never attempted | 3 | 1725 words, all three now SURVEYED; see below |
 
 **THE "ONLY TWO NEVER ATTEMPTED" CLAIM THAT STOOD HERE WAS WRONG**, and the
 audit that caught it is worth re-running: a stub counts as attempted only if
@@ -252,9 +252,16 @@ it has a park file in `docs/near-misses/` or a ROW OF ITS OWN in
 `docs/carved-sweep.md`, and nine did not. Being mentioned inside another
 function's row is not a measurement. The list, smallest first:
 
-  func_8004C36C 461 w (GTE matrix setup, ~20 blocks)
-  func_800345B8 546 w (GTE and scratchpad)
-  func_80056E10 718 w (the voice family's third member)
+  func_8004C36C 461 w (GTE model draw, 20 blocks, three stack objects)
+  func_800345B8 546 w (GTE sprite transform, the scratchpad as a struct)
+  func_80056E10 718 w (the voice family's third member, 47 blocks)
+
+All three now have a SURVEY ROW in `docs/carved-sweep.md` -- frame layout,
+stack object bases, the call sequence, the tables each one walks, and for each
+the thing to get right first (func_8004C36C's three stack records at +0x18,
++0x94 and +0xFC; func_800345B8's scratchpad struct at 0x1F800000, which is the
+only one in the project; func_80056E10's two spilled `u8` parameters and its
+three parallel tables). None has a candidate source yet.
 
 **SEVEN OF THE TEN WENT THE SAME DAY THE LIST WAS WRITTEN**, and that is the
 argument for working through the rest before grinding the parks -- the parks
