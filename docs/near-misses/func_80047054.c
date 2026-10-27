@@ -1,6 +1,10 @@
-/* func_80047054 (unk_19434) -- 58 words against 58, every opcode, immediate,
- * displacement and nop identical. The only difference is a permutation of five
- * registers, and it follows from one decision.
+/* func_80047054 (unk_19434) -- 58 of 58 words, 24 DIFF. NOT compiled.
+ *
+ * Every word count, and for a long time every opcode, immediate, displacement
+ * and nop was identical too, with the only difference a permutation of five
+ * registers that followed from one decision -- see below. advise.py now also
+ * reads EXTRA, IMMEDIATE and MISSING rows, so re-read it before trusting the
+ * register-permutation framing.
  *
  * The target keeps the first parameter in $a0 for all four of its loads and
  * puts the outer walker in $v1:
@@ -183,6 +187,13 @@
  * Note for anyone carrying the lever elsewhere: func_8004437C (6 calls) and
  * func_8003F368 (12 calls) DO have the suggestion lever available, and it is
  * unexplored on both. It is unavailable here specifically, not generally.
+ *
+ * SINCE PARKED, 2026-10-27: 30 DIFF to 24, by making the `+= arg2` at +0x06
+ * a `volatile` read-modify-write. A volatile load is never forwarded and the
+ * store is never deleted, which is what keeps the listing's separate load
+ * and store of that field; found by search.py's new `t_volatile` family, on
+ * the first park where advise.py's MISSING row named a load. The rest of the
+ * header below predates that and is written against 30 DIFF.
  */
 
 #include "common.h"
@@ -205,7 +216,7 @@ void func_80047054(u32 *p, s32 arg1, s32 arg2, s32 arg3) {
                         *(u16 *) (n + 4) += arg3;
                     }
                     if (!(*n & 0x20)) {
-                        *(u16 *) (n + 6) += arg2;
+                        *(volatile u16 *) (n + 6) += arg2;
                     }
                     f = *n;
                     n += 0xC;

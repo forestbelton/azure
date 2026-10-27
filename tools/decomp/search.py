@@ -373,9 +373,14 @@ def t_volatile(text):
     func_80037090, func_80037394 and the word count of func_800565D8, and it
     is the one documented lever search.py could not reach.
 
-    Tried one site at a time, on reads only: a volatile STORE pins stores the
-    target schedules freely and reliably costs words, so the write side is
-    left alone. The greedy loop composes several sites if several help.
+    Tried one site at a time. A plain STORE is skipped, because volatile on
+    one pins stores the target schedules freely and reliably costs words -- but
+    a compound assignment (`+=`, `|=`) is NOT skipped, deliberately: there the
+    qualifier keeps the separate load AND the separate store, which is the
+    shape matching-levers section 5 records for func_80054B08's six stores,
+    and it is what took func_80047054 from 30 differing words to 24 on the
+    first park this family was run against. The greedy loop composes several
+    sites if several help.
     """
     for m in scan(r"\*\((u8|s8|u16|s16|u32|s32) \*\) ", text):
         if text[m.start() - 1 : m.start()] == '&':
