@@ -326,6 +326,19 @@ repo; what matters is the checks.
    warns about this), then whether a store or a load's POSITION decides the
    register, and only then the priority table.
 
+6. **WHETHER A VALUE HAS A NAME IS A SWITCH, and it is cheap to try.** A
+   declared local's pseudo carries `REG_USERVAR_P`; one that expand or cse
+   invented does not, and the dumps print it as `/v`. On this target that flag
+   decides whether a giv pays `copy_cost` -- i.e. whether an address is
+   strength-reduced at all -- and whether an invariant can be hoisted to the
+   preheader. func_80059DAC landed on 2026-10-28 purely by deleting a
+   `u32 *d` local and writing its address out at each use: 8 DIFF to MATCH,
+   same statements, same order. So when a diff is "the target walks a pointer
+   and we recompute" or the reverse, try both spellings BEFORE theorising; and
+   read `matching-levers`' own `REG_USERVAR_P` section first, because most of
+   the places the flag is mentioned in the compiler are unreachable here --
+   combine in particular cannot be defeated this way.
+
 A MEASURED NEGATIVE worth not re-deriving, 2026-10-27: converting a park's
 definition to an OLD-STYLE (K&R) parameter list, with its declared types
 unchanged, was swept over all 38 multi-parameter park files and changed not one
