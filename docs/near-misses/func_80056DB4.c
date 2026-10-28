@@ -1,4 +1,4 @@
-/* func_80056DB4 (unk_1C540) -- 23 of 23 words, 2 DIFF. NOT compiled.
+/* func_80056DB4 (unk_2879C) -- 23 of 23 words, 2 DIFF. NOT compiled.
  *
  * Written out of the `func_80056DB4 + func_800563B0 + func_80056D44` row on
  * 2026-10-27 so all three have sources (see the sibling files).
@@ -119,6 +119,30 @@
  * every position of the 5's assignment among them. The best is the 2 DIFF this
  * file already has (reached by several of them, including `i = 5`), and nothing
  * beat it.
+ *
+ * 2026-10-28, AFTER func_800563B0 LANDED: the struct recipe that landed the
+ * sibling does NOT apply here, and the listing says so before any measurement.
+ * func_800563B0 has `lw $v0` with the +0 store in the `jal`'s delay slot; this
+ * function has `lw $a0, 0x0($a0)` with `addu $a0, $v1, $zero` in the slot --
+ * i.e. the loaded handle INHERITS the index register, which is exactly
+ * local-alloc's `combine_regs` tie that COMPONENT_REFs dissolve. So the cast
+ * stores in this file are right and a struct type would move the handle to
+ * $v0. See matching-levers, "A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY
+ * DEPENDENCE AT ALL", for both halves of that; the other half is that with
+ * cast stores NO memory dependence is recorded between the lookup's `lw` and
+ * these stores, which is why the lookup's source position is inert here. That
+ * was re-measured as a cross product -- all six orderings of the three stores
+ * against four positions of `h = D_80073740[i]` -- and the 24 scores are one
+ * per STORE ORDER with the lookup position never worth a word:
+ *
+ *     +0x24, +0x3C, +0x3A   2 DIFF   (all four lookup positions)
+ *     +0x24, +0x3A, +0x3C   3 DIFF
+ *     +0x3A, +0x3C, +0x24   4 DIFF   <- the listing's own order
+ *     +0x3C, +0x3A, +0x24   4 DIFF
+ *     +0x3A, +0x24, +0x3C   5 DIFF
+ *     +0x3C, +0x24, +0x3A   5 DIFF
+ *
+ * which confirms the 2 DIFF above and closes the lookup-position axis.
  *
  * SO WHAT A SOLUTION LOOKS LIKE, stated tightly enough to recognise: a second
  * set on the `li 5`'s pseudo and on the lookup's, both surviving into flow's

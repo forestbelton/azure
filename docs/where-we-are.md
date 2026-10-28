@@ -4,10 +4,27 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 51 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
-for -- and the build is byte-identical; `make check` is green at HEAD.
-`progress.py` puts it at 35832 of 41767 words, 85.8%, with 50 of the 51 stubs
-parked. NOTE that guard.py under-reported until 2026-10-28: its definition
+**`guard.py` reads 50 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+for -- and the build is byte-identical; `make check` is green at HEAD and all
+four containers verify by hash. `progress.py` puts it at 35854 of 41767 words,
+85.8%, with 49 of the 50 stubs parked.
+
+**NEWEST LEVER (2026-10-28), from landing func_800563B0 at 22 words.** A
+STRUCT TYPE for a global a function fills field by field is not cosmetic: it
+sets `MEM_IN_STRUCT_P` on every store, which (a) dissolves local-alloc's
+`combine_regs` tie so a loaded value does NOT inherit its address register, and
+(b) is what makes a memory dependence against an array-reference load exist at
+all -- so with a struct the lookup's source position decides the schedule, and
+with cast stores through a `u8 *` it is inert. The two siblings of that
+function want the OPPOSITE form, and their listings say which. Full writeup in
+matching-levers, "A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT
+ALL"; it is the first thing to try on any remaining packet filler.
+
+Also closed 2026-10-28: **cc1psx's three extra dump stages are not three extra
+passes.** `.regmove` is byte-identical to `.combine` in all 27 dump sets, so
+regmove runs and changes nothing and can never explain a register rotation;
+`.bp` is disabled profiling instrumentation dumped before allocation; `.shorten`
+is `shorten_branches`. The reference tree's pass set is adequate. NOTE that guard.py under-reported until 2026-10-28: its definition
 pattern wanted `) {` and so missed an OLD-STYLE (K&R) parameter list, which
 this project writes deliberately to narrow a parameter without putting a narrow
 prototype in scope. It was reporting the landed func_8005C2C0 as MISSING. The paragraph below is the
@@ -87,8 +104,13 @@ deciding, not the key the source reads as if it would.
   references in the listing too, so reference counts were never what kept their
   loads in the prologue.
 * **THE NUMBER-AGAINST-SHAPE CALL IS NOW CONSISTENT ACROSS THE PARKS**, audited
-  2026-10-28. Five files weigh a better score against a shape the listing
-  shows: func_800563B0 (keeps 14, records 11), func_8005914C (keeps 205/131,
+  2026-10-28 -- AND func_800563B0, THE FILE THE RULE WAS NAMED AFTER, THEN
+  LANDED FROM THE SHAPE IT KEPT. It held the listing's own store order at 14
+  DIFF and recorded an 11-DIFF reordering it refused; the 14 came out MATCH
+  once the packet was given a struct type, with that store order untouched.
+  That is the rule paying for itself, and it is the strongest evidence in these
+  docs that a park should keep the shape and record the number. Four files
+  still weigh the two: func_8005914C (keeps 205/131,
   records 203/116), func_8005BBFC (keeps 220, records 219), func_8005A778
   (keeps the in-place extension at the higher count) and func_8005A608 -- which
   held the `(s16)` cast at 11 DIFF while its own text said the in-place form at

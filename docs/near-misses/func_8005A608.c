@@ -124,7 +124,10 @@
  * 2026-10-28: THIS FILE NOW HOLDS THE IN-PLACE EXTENSION, 13 DIFF, and the
  * 11-DIFF cast version is recorded rather than kept. The note above already
  * said "13 is still the structurally closer one" and then kept the 11, which
- * is the opposite of the call func_800563B0 makes on the same trade ("the
+ * is the opposite of the call func_800563B0 makes on the same trade -- and
+ * func_800563B0 then LANDED from the shape it kept, 14 DIFF -> MATCH, with the
+ * store order it refused to change left exactly as it was; the missing piece
+ * was a struct type for the packet, nothing to do with the order. ("The
  * better NUMBER is not the better SOURCE ... this file keeps the 14 and
  * records the 11"). The listing decides it in two instructions:
  *

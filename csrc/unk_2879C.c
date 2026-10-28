@@ -1572,7 +1572,62 @@ void func_800561D8(u8 *p, Unk80084960 *q)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_800563B0);
+/* Fills the packet at D_80084918 -- the flag 0xF at +4, the two coordinates at
+   +8 and +0xA, zeros at +0xC and +0xE, and the D_80073740 handle at +0 -- and
+   hands its address to func_8005F134. Twenty-two words; the sibling fillers
+   func_80056DB4 and func_80056D44 are the same shape at other offsets.
+
+   TWO THINGS ARE LOAD-BEARING, and both were worth words:
+
+   * THE PACKET IS A STRUCT, NOT A `u8 *` WITH CAST STORES. Written as
+     `u8 *q = D_80084918;` with `*(u32 *) (q + 4) = 0xF;` and so on -- the
+     recipe the sibling park recommends -- the `lw` of the handle takes $a0
+     rather than $v0 and the whole tail reorders behind it: 14 differing words.
+     The cause is local-alloc's `combine_regs`, which ties an insn's
+     destination into the quantity of a source that DIES in it. As cast stores
+     the address sum `(q's base) + i * 4` dies in the `lw`, so the handle
+     inherits its register, $a0, and the +0 store then has to precede the
+     call's `addu $a0, $v1, $zero` -- which pins that copy into the `jal`'s
+     delay slot and pushes the `sw` of the handle out of it. As COMPONENT_REFs
+     the tie does not form, the handle takes $v0, and the copy is free to move.
+     The +0 store still comes out symbolic (`sw $v0, %lo(D_80084918)($a3)`)
+     because cse knows `p` is `lo_sum(%hi, D_80084918)` and folds the zero
+     displacement back onto the symbol.
+   * THE LOOKUP SITS BETWEEN THE +4 STORE AND THE FOUR HALFWORD STORES, in a
+     plain local, not in `p`'s declaration and not written inline into the +0
+     store. This is a memory-dependence fact, not a priority one: sched1 builds
+     its graph from the RTL order, so a lookup written BELOW the `sh`s makes
+     its `lw` anti-depend on all four of them and no later pass may lift it
+     above -- sched2 is then stuck with `sh sh sh sh lw`, six words wrong.
+     Written above them the dependence runs the other way and the pair
+     `lw`/`addu $a0` lands ahead of the four stores, which is the listing.
+     Hoisted all the way into the declaration, above the +4 store, it is 14
+     words wrong again: the +4 store has to be generated first for its `li 0xF`
+     to keep $v0 before the table address needs it. */
+typedef struct Unk80084918
+{
+    u32 unk_00;
+    u32 unk_04;
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+    s16 unk_0E;
+} Unk80084918;
+
+void func_800563B0(s32 i, s32 a, s32 b)
+{
+    Unk80084918 *p = (Unk80084918 *) D_80084918;
+    u32 h;
+
+    p->unk_04 = 0xF;
+    h = D_80073740[i];
+    p->unk_08 = a;
+    p->unk_0A = b;
+    p->unk_0C = 0;
+    p->unk_0E = 0;
+    p->unk_00 = h;
+    func_8005F134(p);
+}
 
 void func_800563B0(s32, s32, s32);
 
