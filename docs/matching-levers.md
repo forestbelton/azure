@@ -525,6 +525,28 @@ Levers that move them, all with no change to the emitted code:
       floor_log2 (qty_n_refs) * qty_n_refs * qty_size / (qty_death - qty_birth)
 
   exactly as global.c prices an allocno. References are NOT "global.c's only".
+
+  **THE SHAPE THIS TAKES IN PRACTICE IS AN EXACT TIE, and func_8004D294 is the
+  worked example** -- the first function landed on this corrected arithmetic.
+  Because `block_alloc` combines an insn's destination with a source that dies
+  in it, a two-insn value is ONE quantity carrying BOTH pseudos' references. At
+  each of that function's three sites the two rivals were
+
+      the extension  {sll dest, sra dest}    4 refs / 4-insn span   = 8
+      the delta      {lh dest, subu dest}    4 refs / 4-insn span   = 8
+
+  so neither priority decided anything and the tie fell to the earlier-born
+  quantity, which sched1 made the extension (the load carries a
+  true-dependence edge on the store ahead of it, and `rank_for_schedule`
+  prefers the candidate independent of the last insn scheduled -- section 8).
+  The cure was to split the delta into two statements that compile to the same
+  two insns, `dx = *(s16 *) (q + 0); dx -= (s16) w;`, which keeps the 4
+  references but packs them into a THREE-insn span: 10.67 against 8, won
+  outright, with nothing moved and no word spent. **So when two quantities
+  price identically, look for a statement split that shortens one span rather
+  than for a way to move an instruction.** One caveat measured there: the local
+  has to be distinct per site -- a single local referenced in three blocks is a
+  global allocno instead, and that measured 9 words worse.
   The old claim came from gcc's own comment above the sort site (local-alloc.c
   ~1480, "in order of decreasing length of life"), which is STALE -- the
   comment describes an older comparator than the code beneath it. Two
