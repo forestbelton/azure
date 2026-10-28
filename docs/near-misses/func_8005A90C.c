@@ -152,8 +152,16 @@
  * without passing func_8005A1D0's call, so on that path $a1 is untouched and
  * there was no allocno for global-alloc to conflict with pseudo 87. Copying
  * the parameter ABOVE the dispatch gives it a pseudo that is live on both
- * paths, which is what the listing's unconditional prologue copies are for --
- * and the three words that were missing are those copies.
+ * paths.
+ *
+ * WHAT THE THREE WORDS ACTUALLY ARE, corrected after checking rather than
+ * assumed: NOT the prologue parameter copies. The 100-word base already had
+ * all three of those (`move $s3, $a0`, `move $s2, $a1`, `move $s0, $a2`), so
+ * the first reading of this was wrong. Diffing the two builds, the copy adds a
+ * FOURTH callee-saved register -- `sw $s3, 0x1C($sp)`, `move $s3, $s0`, and
+ * the matching `lw` in the epilogue -- which is the cross-path home for `c`
+ * that the $a1 store made unnecessary before. The frame does not grow for it
+ * (0x28 had the slack; `sw $ra` just moves from 0x20 to 0x24).
  *
  * THE SPLIT BETWEEN COPY AND RAW IS LOAD-BEARING, which is the same shape as
  * func_8005BBFC's `vel` fix: cse cannot share a raw parameter read with a copy,
@@ -166,6 +174,16 @@
  *
  * and the copy's POSITION does not matter: before `D_8007382C[0] = 0`, after
  * it, or after the two shifts are all 103 words and the same 59.
+ *
+ * AND IT IS NOT THE ONLY PARAMETER THAT WORKS, which bounds the explanation
+ * above. `search.py`'s new `copy_param` family, run on the 100-word base,
+ * finds `copy param p (stores only)` at the same 103 words / 59 DIFF. The two
+ * builds are NOT the same: they differ in five words and so miss the target in
+ * different places. So what buys the word count is a cross-path pseudo for
+ * ANY of the parameters the `found:` block stores, and the `$a1` account above
+ * explains why the `c` form works rather than why it is the only one. Whether
+ * `c` or `p` is the listing's own shape is undecided -- both are 59 -- and
+ * picking between them is the next question, not finding a third.
  *
  * WHAT IS LEFT, from the new diff: the frame is 0x28 here against the
  * listing's 0x30, so the target still has eight more bytes of saved registers

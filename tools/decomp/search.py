@@ -369,6 +369,68 @@ def t_decl_per_arm(text):
         yield ("declare %s per switch arm" % name, out)
 
 
+def t_copy_param(text):
+    """Copy a PARAMETER into a local at the top of the body, and read the copy.
+
+    A parameter that is only used after a branch which bypasses every call
+    keeps its INCOMING HARD REGISTER: gcc stores `(reg:SI 5 a1)` straight to
+    memory, so there is no pseudo for global-alloc to conflict with and no
+    prologue copy. A listing that copies its parameters to callee-saved
+    registers unconditionally has three more words than such a build. Copying
+    the parameter ABOVE the branch gives it a pseudo live on both paths.
+
+    Two variants per parameter, and the split matters: cse cannot share a RAW
+    parameter read with a copy, so each keeps its own reference, and leaving
+    the call arguments reading the raw parameter can be worth a lot more than
+    converting every use. On func_8005A90C, 2026-10-28:
+
+        stores read the copy, call reads the raw   103 words, 59 DIFF
+        every use reads the copy                   100 words, 95 DIFF
+
+    from a base of 100 words / 92 DIFF -- so the first form fixed the word
+    count outright. func_8005BBFC's `vel` is the same lever from the other
+    side, where the RAW read is the one that buys the reference.
+    """
+    lo, hi = SPAN
+    m = re.search(r"(\w[\w \*]*)\b(\w+)\s*\(([^)]*)\)\s*\{", text[:lo + 1])
+    if not m:
+        return
+    params = []
+    for piece in m.group(3).split(","):
+        piece = piece.strip()
+        g = re.match(r"^((?:const\s+)?[A-Za-z_]\w*\s*\**\s*)(\w+)$", piece)
+        if g:
+            params.append((g.group(1).strip(), g.group(2)))
+    if not params:
+        return
+    body = text[lo:hi]
+    first = re.search(r"(?m)^([ \t]+)\S", body)
+    if not first:
+        return
+    ind = first.group(1)
+    decls = _decl_run(text)
+    after = (decls[-1][1] if decls else lo)      # insert below the declaration run
+    for ty, name in params:
+        word = re.compile(r"\b%s\b" % re.escape(name))
+        uses = [mm.start() for mm in word.finditer(text) if after <= mm.start() < hi]
+        if len(uses) < 2:
+            continue
+        fresh = name + "_c"
+        star = "*" if ty.rstrip().endswith("*") else ""
+        decl = "%s%s %s%s;\n" % (ind, ty.rstrip("* ").strip(), star, fresh)
+        init = "%s%s = %s;\n" % (ind, fresh, name)
+        for label, calls_too in (("stores only", False), ("every use", True)):
+            out, moved = [], text[after:hi]
+            lines = moved.split("\n")
+            new_lines = []
+            for l in lines:
+                is_call = re.search(r"\b\w+\s*\(", l) is not None
+                new_lines.append(l if (is_call and not calls_too)
+                                 else word.sub(fresh, l))
+            yield ("copy param %s (%s)" % (name, label),
+                   text[:after] + decl + init + "\n".join(new_lines) + text[hi:])
+
+
 def t_split_local(text):
     """Give each assignment to a straight-line local its OWN local.
 
@@ -740,6 +802,7 @@ TRANSFORMS = [
     t_hoist_read,
     t_decl_order_init,
     t_split_local,
+    t_copy_param,
 ]
 
 
