@@ -636,6 +636,14 @@ def t_hoist_read(text):
     lever and the hoist alone is not; a sweep that cannot vary it will report
     the function exhausted. The width matters too, and t_decl_width composes
     with this one in the greedy pass to reach it.
+
+    REACH, so a null result can be read correctly: it only inserts into the
+    LEADING DECLARATION RUN, so a hoist whose winning position is in the
+    middle of the body is out of range -- use perm.py for statement order
+    there. It only hoists `*(TYPE *) (...)` reads, not array subscripts or
+    struct field references, and only when the read is not the whole
+    initialiser. And it emits one variant per read per position, so on a
+    function with many reads the sweep is minutes rather than seconds.
     """
     run = _leading_run(text)
     if not run:
