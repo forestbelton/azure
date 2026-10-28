@@ -144,6 +144,53 @@
  * range inside the block. Note this is a cse question, not an allocation one,
  * which is a correction to everything above the 2026-10-28 line.
  *
+ * 2026-10-28, SECOND SESSION ON THE LAST THREE WORDS, and they are now a
+ * single question with a single answer that this source cannot give.
+ *
+ * THE REGISTERS ARE ALREADY RIGHT. In the committed source the low arm emits
+ * $v1 for the temp and `addu $v0, $v1, $zero` for the return, exactly as the
+ * listing does, and words 1-12 and 16-20 are byte-identical. The whole
+ * remaining difference is WHICH OF THE TWO ASSIGNMENTS IS UNCONDITIONAL:
+ *
+ *     listing  bgez $v0, L ; addu $v1,$v0,$zero ; addu $v1,$zero,$zero
+ *     built    bltz $v0, L ; addu $v1,$zero,$zero ; addu $v1,$v0,$zero
+ *
+ * The delay-slot insn is the one reorg's backward scan took from before the
+ * branch, so pre-reorg the listing is `s = a ; bgez a ; s = 0` and this source
+ * is `s = 0 ; bltz a ; s = a`. A one-armed `if` is the only shape that gives
+ * one unconditional assignment and one branch, so the listing's source is
+ * `s = a; if (a < 0) { s = 0; }` and this one is `s = 0; if (a >= 0) { s = a; }`.
+ *
+ * AND `s = a` UNCONDITIONAL CANNOT SURVIVE. Every spelling of it is SEVENTEEN
+ * words, three short, by the route in point 2 above. Tried and all 17 words:
+ * the test on `a` and on `s`; `s` block-scoped, function-scoped, and with the
+ * high arm's local in the other scope; both arms block-scoped; the high arm
+ * returning its expression with no local at all; the high arm in-place on a
+ * function-scope `r`; `s = a` hoisted ABOVE the `d >= 0` test (so that the
+ * copy and the test fall in different cse blocks -- 17 words, 11 DIFF, gcc
+ * sinks it); a `goto` form; `if (a < 0) { s = 0; return s; } return s;` and the
+ * same with `return a;` (16 words, 20 DIFF); and
+ * `if (a >= 0) { return a/return s; } s = 0; return s;`.
+ *
+ * Conversely every spelling whose UNCONDITIONAL assignment is the zero is 20
+ * words and the same 3 DIFF -- `s = 0; if (a >= 0) s = a;`, `if (a > 0)`,
+ * `if (!(a < 0))`, `if (a >= 0) { s = a; } else { s = 0; }`, and `u32 s`.
+ * So the mirror is stable and the cost is exactly the three words.
+ *
+ * WHERE THAT LEAVES IT. The cse rule quoted above explains why `s = a` cannot
+ * survive in THIS function: `s`'s last use is the return, which is past the
+ * join label and therefore past `cse_basic_block_end`, and it outlives `a`
+ * whose last use is the test. Both of `merge_equiv_classes`' conditions hold,
+ * so `s` becomes the canonical register, the test is rewritten to `s`, `a` dies
+ * at the copy, and the copy coalesces away. For the listing's shape, one of
+ * those conditions has to fail -- `a` must have a last use no earlier than
+ * `s`'s, or `s` must not be live past the join -- and neither is available: the
+ * only insns after the low arm's return are the `m == 0` block and the shared
+ * `jr`, and the clamp needs a join. So the next attempt should question an
+ * assumption OUTSIDE the arms (the parameter types, the `m == 0` placement, or
+ * whether `a += d` is really a reassignment of the parameter) rather than
+ * respell the low arm again. That space is now swept twice over.
+ *
  * MEASURED on the way, all with the high arm as above: both arms as ternaries,
  * as if/else, and as in-place clamps; per-arm returns and a shared `return r`;
  * one variable and two; the low arm's test on `a` and on `s`; `q = m - 1`
