@@ -591,6 +591,17 @@ were explained rather than fought.
   and `b[0-9]*.py`; `tools/decomp/verify.py`, `search.py` and `sweep.py` all
   take a path, so `scratch/zz_foo.c` works. The root had accumulated 1252 of
   these before they were moved on 2026-10-26.
+- **search.py has already been run over every park within 8 DIFF, and found
+  nothing.** 2026-10-27, greedy over its whole transform set on the twelve
+  closest (func_80041E70, func_800599B0, func_80035E58, func_8003A060,
+  func_8003A858, func_80056DB4, func_800537D0, func_800565D8, func_8005ACDC,
+  func_8003F368, func_8004A574, func_80055D84): "no single change improved on
+  the base" for all twelve. That is the expected answer and worth having in
+  writing -- every one of those headers diagnoses its remainder as a
+  `local-alloc`/`sched1` tie-break, and the sweep explores SOURCE SHAPES, so
+  it cannot reach them. Do not re-run it over these as a first move; read the
+  park's own margin numbers (`advise.py --greg`) instead. It is still the
+  right first move on a park whose remainder is NOT yet diagnosed.
 - **A park file's "measured and not working" list goes STALE, and re-testing it
   is the cheapest landing in the project.** func_80055864 landed on 2026-10-27
   on a spelling its own header had recorded as "3 DIFF" -- measured before the
