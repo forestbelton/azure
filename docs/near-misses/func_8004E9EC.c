@@ -39,6 +39,45 @@
  * zero-cost extra reference to `r` (matching-levers section 3's dead-reference
  * lever) rather than another spelling of the count.
  *
+ * THAT INSTRUCTION IS WRONG -- corrected 2026-10-27 from the dumps and the
+ * listing. It is not a priority question and no reference count touches it.
+ *
+ * The `.greg` dump says `r` (pseudo 83) conflicts with only 2 and 29 -- $v0
+ * and $sp -- so BOTH $a0 and $a1 are legal for it, and `find_reg`'s pass 1
+ * walks hard registers in ascending number, so it takes $a0. The count
+ * (pseudo 81) prefers 5 and gets $a1. Neither one's priority changes that:
+ * $a1 is in `regs_someone_prefers[83]` during pass 0 only, and pass 1 drops
+ * that and hands out the lowest LEGAL register.
+ *
+ * So the listing can only have `r` in $a1 if $a0 is ILLEGAL for it, i.e. if
+ * `r` CONFLICTS with $a0 -- and the listing shows exactly why it does:
+ *
+ *     addu $t2, $a1, $zero     <- the count copied out
+ *     addu $a1, $zero, $zero   <- r = 0, into $a1
+ *     sll  $v1, $t2, 1
+ *     bltz $v1, .L8004EA68
+ *      addu $a3, $a1, $zero    <- i = 0, a COPY of r's zero register
+ *     lui  $t1, %hi(D_80080B70)
+ *     addu $a2, $a0, $zero     <- q's PARAMETER COPY, at insn 7
+ *
+ * `r` is live across q's parameter copy, where $a0 is still live, so it
+ * conflicts with $a0 and $a1 is the lowest register left. In this build the
+ * parameter copies are all at the top, `r = 0` comes after them, and the
+ * conflict never forms.
+ *
+ * So the open question is: what emits q's parameter copy LATE, after `r = 0`?
+ * It is pinned out of sched1 (section 8's prefix entry) but sched2 can move
+ * it, and in sched2 every insn in that block is priority 1 -- so this is a
+ * sched2 PLACEMENT question, LUID order and hazards, not an allocation one.
+ * Note also that the listing's `i = 0` is a copy of `r`'s register, so cse has
+ * merged the two zeros; any shape that separates them loses that copy.
+ *
+ * Measured and NOT working, all 32 of 33 words and 26 DIFF: `i = 0` before
+ * `r = 0`; both initialised in their declarations with `r` first; the same
+ * with `i` first; the two declarations swapped with the assignments unchanged;
+ * and `i = r` in place of `i = 0`. Statement order does not reach it, which is
+ * what the sched2 reading predicts.
+ *
  * AUDIT 2026-10-27 -- pseudo 81 has a DOUBLED live length, and
  * it reports roughly twice its real range in this 33-word function.
  * `update_equiv_regs` (local-alloc.c:1018-1064) does `reg_live_length *= 2` for
