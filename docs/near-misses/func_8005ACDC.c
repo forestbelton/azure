@@ -126,9 +126,122 @@
  *
  * The movable exists at all only because the symbol is referenced TWICE, and
  * the file already prices dropping the second reference at seven words. So
- * both ends of this trade are now closed and the three words are not a naming
- * or a hoisting question; what remains is the LUID order of three
- * equal-priority ALU insns, which is where this file's earlier note leaves it.
+ * both ends of this trade are now closed.
+ *
+ * 2026-10-28: AND IT IS NOT A SCHEDULING QUESTION AT ALL -- THE PASS IS REORG.
+ * Everything above, and every earlier note in this file, reasons about where
+ * the three preheader insns are PLACED. They are already placed correctly.
+ * Read off the dumps rather than the diff:
+ *
+ *     sched1 places the preheader as  29, 220, 213, 226, 217, 250
+ *     sched2's chain reads            25(beqz), 29, 220, 213, 226, 217, 250
+ *     the TARGET emits                25(beqz), [29], 220, 213, 226, 217, 250
+ *     this build emits                25(beqz), [213], 29, 220, 226, 217, 250
+ *
+ * where 29 is `addu $s4, $s3, $zero` (`i = 0`), 220 is `addiu $s5, $zero, 2`
+ * (the hoisted inner-loop constant), 213/226 are the `lui`/`addiu` pair for
+ * D_80085458 and [brackets] mark the insn lifted into the `beqz`'s DELAY SLOT.
+ *
+ * So sched1 and sched2 BOTH already produce the listing's order, and the three
+ * words are entirely the delay-slot filler's choice: the target lifts the
+ * FIRST insn of the fall-through thread, this build reaches past it and lifts
+ * the THIRD. Nothing about move_movables, LUID or priority is involved -- the
+ * notes above are answering the wrong question, and they are kept only because
+ * their measurements are still true of the source.
+ *
+ * WHICH REORG PATH, narrowed in reorg.c. It is not
+ * `fill_simple_delay_slots`: its forward scan can never fill a conditional
+ * jump, because the win is gated on `target == 0` and for a JUMP_INSN
+ * `target = JUMP_LABEL (insn)` is set just above the loop (reorg.c:3004-3009,
+ * 3056). Its BACKWARD scan has no liveness-at-target test at all, which is why
+ * the other slots in this function hold whatever preceded their branch --
+ * including callee-saved $s2 after jump 181. So this slot was filled by
+ * `fill_eager_delay_slots` -> `fill_slots_from_thread`, whose candidate gate is
+ *
+ *     condition == const_true_rtx
+ *     || (! insn_sets_resource_p (trial, &opposite_needed, 1)
+ *         && ! may_trap_p (pat))                     -- reorg.c:3374-3376
+ *
+ * with `opposite_needed = mark_target_live_regs (insn_at_target)`. The loop
+ * keeps scanning past a rejected insn whenever `own_thread` holds
+ * (`(! lose || own_thread)`, reorg.c:3315), which is exactly the "reach past
+ * the first two" behaviour seen here.
+ *
+ * IT IS A REJECTION, NOT A POSITION, and the same function proves it: at jump
+ * 193 reorg takes insn 197, the FIRST insn of that fall-through. So it does
+ * take the first when it can, and insns 29 and 220 were refused.
+ *
+ * WHICH GATE REFUSED THEM IS STILL OPEN, and the attractive answer is
+ * probably the wrong one. The suggestive pattern is that every fall-through
+ * fill in this function sets a CALLER-saved register ($v0 at jumps 25 and 75,
+ * $a0 at jump 193) while the two refused insns set $s4 and $s5, and reorg does
+ * add the epilogue's restored registers to `end_of_function_needs`
+ * (reorg.c:4291-4299, whose comment says those registers "won't have been
+ * processed by flow"). That is the same liveness mechanism as the
+ * `$v0`-live-at-the-epilogue lever in matching-levers section 1, so it is the
+ * natural guess. TWO THINGS ARGUE AGAINST IT:
+ *
+ *   * `end_of_function_needs` is only used when `mark_target_live_regs` is
+ *     called with `target == 0` (reorg.c:2458). This target is a real insn in
+ *     a real block, so the answer comes from
+ *     `basic_block_live_at_start[b]` mapped through `reg_renumber` -- and flow
+ *     ran before allocation, where the only pseudo live at the start of the
+ *     post-loop block is `m`. `i` has no use after the exit test. So $s4
+ *     should NOT be in `opposite_needed`.
+ *   * the listing itself lifts an insn setting $s4 out of this very thread, so
+ *     callee-saved cannot be a blanket bar.
+ *
+ * AND THE OTHER TWO GATES ARE NOW RULED OUT, so it IS the liveness test after
+ * all. `eligible_for_delay` is MIPS's
+ * `(define_delay (eq_attr "type" "branch") [(and (eq_attr "dslot" "no")
+ * (eq_attr "length" "1")) ...])` (mips.md:125). `dslot` is "yes" only for
+ * `type` in `branch,jump,call,load,xfer,hilo,fcmp` (mips.md:79-82), and
+ * `movsi_internal2`'s attributes are
+ * `type "move,load,arith,arith,..."` with `length "1,2,1,2,..."`
+ * (mips.md:3298-3300) -- so a reg-to-reg move is type `move`, length 1, dslot
+ * `no`, and `addiu $s5, $zero, 2` is type `arith`, length 1, dslot `no`. Both
+ * are eligible. And `redundant_insn` is ruled out by arithmetic: when it fires
+ * on an owned thread reorg DELETES the insn (reorg.c:3350-3367) and this build
+ * is 75 of 75 words, so nothing was deleted.
+ *
+ * SO $s4 AND $s5 REALLY ARE IN `opposite_needed`, and the likely reason is
+ * structural: THERE IS NO BARRIER BEFORE THE POST-LOOP LABEL, because the loop
+ * falls through into it. `find_basic_block` (reorg.c) locates a block by
+ * scanning BACKWARD to the previous BARRIER, so for this target it walks back
+ * past the whole loop and the preheader, and `mark_target_live_regs` then
+ * simulates FORWARD from that far-back block head through the entire loop body
+ * to the target. `i` and the hoisted 2 are set inside that stretch. Whether
+ * they survive to the target depends on the REG_DEAD notes the walk passes,
+ * which is the thing to trace -- and it is also the lever, because a loop whose
+ * last block ends in an unconditional jump WOULD put a barrier there.
+ *
+ * What is NOT the answer: putting `i = 0` where the backward scan
+ * could reach it. Measured 2026-10-28, all 75 of 75 words:
+ *
+ *     `i = 0;` above the guard, guard on `m`      15 DIFF
+ *     `i = 0;` above the guard, guard on `i`      15 DIFF
+ *     `i = 0;` above `m = 0;`                     17 DIFF
+ *
+ * In the first of those the copy lands in the ENTRY block and the prologue's
+ * register saves reorder around it; the `beqz`'s slot still takes the `lui`.
+ * The target also has a `nop` in the guard's own block (the `lw` of
+ * D_80073734's load delay), which is evidence that `i = 0` was NOT in that
+ * block in the original either -- sched2 would have used it to fill that nop.
+ *
+ * SO THE NEXT STEP IS A REORG QUESTION, not a source sweep. In order of cost:
+ * read `movsi_internal2`'s `dslot`/`length` attributes in config/mips/mips.md
+ * (free); then, if those clear it, instrument the liveness by finding another
+ * function in this repo whose conditional-branch fall-through slot our build
+ * fills with an insn setting $s0-$s7 -- if none exists anywhere, the register
+ * class IS the gate whatever reorg.c appears to say, and the question becomes
+ * which register `i` gets rather than where the insns sit.
+ *
+ * AND THE GENERAL POINT, which is why this is worth the space: three earlier
+ * notes in this file each concluded with a different scheduling mechanism, and
+ * all three were about the placement of insns that were already placed
+ * correctly. Before arguing about sched1 or sched2, diff sched2's CHAIN against
+ * the emitted words. If they agree, the pass is reorg and no amount of
+ * statement order will move it.
  */
 #include "common.h"
 
