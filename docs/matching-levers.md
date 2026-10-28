@@ -3864,6 +3864,202 @@ only one of them in place, that is two variables, not one reused.  This is the
 same ref-count mechanism as "A value reassigned in several blocks is several
 block-scoped locals", seen from the combine side rather than the allocator's.
 
+### An address sum written INLINE is one PLUS tree -- the loads and shifts all come first
+
+`*(u8 **) (q[1] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24))` looks like the
+natural spelling of a four-byte little-endian fetch, and it costs func_80038F48
+its last 12 words (all in that arm). The listing interleaves the terms --
+`lbu`, `lbu`, `lbu`, `sll`, `addu`, `sll`, `lbu`, `addu`, `sll`, `addu` -- and
+reuses $v1 for r[1] and r[3], because r[1] is dead by the time r[3] is loaded.
+The inline form emits four `lbu`s and three `sll`s, THEN three `addu`s, keeps
+four bytes live at once, and pushes `r` from $a1 into $v0 behind the +0x7C
+increment's temporary.
+
+The mechanism is `expand_expr`'s modifier, not the scheduler. The INDIRECT_REF
+case expands its address with `EXPAND_SUM` (expr.c:4563), and the PLUS_EXPR
+case (expr.c:5237) only takes `goto binop` when the modifier is NOT
+`EXPAND_SUM` or the mode is not `ptr_mode`: otherwise it expands both operands
+with `EXPAND_SUM` too and returns `gen_rtx (PLUS, ...)` -- no add insn at all.
+Recursively, every LEAF of the sum (each `zero_extend` load, each `ashift`) is
+emitted as an insn in tree order and the nested PLUS rtx goes back up to
+`memory_address`, whose `force_operand` emits the three adds last. An `int`
+sum is SImode, which IS `ptr_mode` on MIPS, so the cast to a pointer does not
+help -- a NOP_EXPR of the same mode passes the modifier straight through.
+
+Through a local the sum is a plain binop and expands innermost-first:
+
+```c
+u32 a;
+a = q[1] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24);
+*(u8 **) (p + 0x1C) = *(u8 **) a;
+```
+
+`lbu`, `lbu`, `sll`, `addu`, `lbu`, `sll`, `addu`, `lbu`, `sll`, `addu` in
+RTL order; each byte dies at its add; local-alloc gives r[1] and r[3] the same
+register; sched2 produces the listing's interleave; MATCH. `u8 **a` with the
+cast on the right, `*(u32 *) a`, and the sum split into two or three `+=`
+statements all match as well (cse and combine rebuild the same insns). The park
+had rejected FOUR `+=` statements starting from `a = q[1];` at 99 words -- a
+single-term first statement is a copy -- so the one-statement local is the form
+to reach for.
+
+Read it off the listing: **when an address is built from several loaded terms
+and the listing interleaves load, shift, add and reuses a register for two of
+the terms, the sum is a LOCAL (or any non-address context), not spelled inline
+under the dereference.** The converse holds too: four loads in a row and three
+adds in a row with four distinct registers is the inline address.
+
+### A live length is trimmed ONE insn at a time by what sched1 puts before the value's last store
+
+The ALLOC leftovers are usually read as a reference-count problem (section 3),
+but `allocno_compare` divides by `reg_live_length`, which flow counts AFTER
+sched1 as the number of insns at which the pseudo is live plus its set
+(flow.c:1684 and :2073) -- so the denominator is movable by one insn at a
+time, where the reference count moves in steps that cross `floor_log2`.
+
+func_8003931C needed the opcode byte (4 refs) in $s3 ahead of the +0x80
+pointer (6 refs / 32 = 0.375) and BEHIND the index (5 / 25 = 0.400); global
+hands out $s2, $s3, $s4 in priority order, and a tie goes to the LOWER allocno
+number (global.c:607, `return *v1 - *v2`). 4 refs over 23 is 0.348; over 21
+it is 0.381 and the only value that works -- 22 is 0.364, 20 is a tie with the
+index that the byte loses. The byte's last uses are `sb`s in two out-of-line
+error blocks, and its live length is the main path plus, in each block,
+however many insns sched1 places before the `sb`. Original `else` arm:
+
+```c
+*(u8 **) (p + 0x1C) = *(u8 **) (p + 0x1C) - 2;   /* addiu, sw */
+p[0x2F] = n;                                     /* sb       */
+*(u32 *) (p + 0x10) = (u32) func_800383D4;       /* lui, addiu, sw */
+```
+
+Three live insns there (addiu, sw, sb). The two-insn cut:
+
+```c
+u8 *c = *(u8 **) (p + 0x1C) - 2;
+p[0x2F] = n;
+*(u8 **) (p + 0x1C) = c;
+*(u32 *) (p + 0x10) = (u32) func_800383D4;
+```
+
+`c`'s `addiu` is set once, so sched1 launches it and it sinks to its `sw`;
+the two stores keep source order on LUID; the `sb` is emitted FIRST in the
+block and the byte is live for one insn there: 23 -> 21, and the registers
+swap. The LISTING does not move, because sched2 puts the `sb` back between the
+`addiu %lo` and the `sw 0x10`: at that cycle both are ready at priority 1 and
+a store beats an ALU op on `potential_hazard`. That is the whole trick --
+sched1's placement decides the count, sched2's hazard order restores the
+listing.
+
+Measured around it, all on func_8003931C:
+
+* `*(p + 0x1C) -= 2` written AFTER the `sb`: 87 words, 80 DIFF. A QImode
+  store flushes cse's memory table, so the rewind re-loads the cursor instead
+  of reusing the `+ 1` pseudo (section 5's "reg-reg copy after an `lbu`" rule,
+  seen from the other side). The local exists to read the cursor BEFORE the
+  byte store.
+* The `sb` moved first in the OTHER error block (func_80038408's): that block
+  goes from 4 live insns to 1, the byte lands on 20 = 0.400, ties the index,
+  and takes $s2 -- 8 DIFF, a different wrong answer. All 24 permutations of
+  that block's four statements give 8, 10, 16, 17 or 18: the `sb` only ever
+  lands at position 1 or 4, because every other statement's value chain is
+  launched and sinks to its own store.
+
+So when `--greg` says "live <= N-2" and the value's last uses are stores in
+out-of-line arms: count the insns sched1 places ahead of each store (the
+`.sched` dump, or `sched.py --sched1 --rtl`), and change that count with a
+local for the NEIGHBOURING statement's value -- not with statement order,
+which the listing has already fixed.
+
+### An OLD-STYLE parameter list is how a parameter copy becomes schedulable
+
+The run of hard-register parameter copies at the very top of a function is
+PINNED OUT OF SCHED1. `schedule_block` opens with it (gcc-2.7.2.3/sched.c:3186,
+comment "At the start of a function, before reload has run, don't delay getting
+parameters from hard registers into pseudo registers"): it walks forward from
+the block head while the insn is a `SET` whose source -- after stripping
+SUBREG, SIGN_EXTEND, ZERO_EXTEND, SIGN_EXTRACT and ZERO_EXTRACT -- is a HARD
+register, sets `INSN_REF_COUNT` to 1 on each ("Keep this insn from ever being
+scheduled") and advances HEAD past it. Those insns are then outside the region
+sched1 analyses: they get no priority, no dependences, and they stay in
+parameter order at the top. In sched2 they ARE schedulable, but every tie there
+is broken by descending INSN_LUID (sched.c:2425, "sort by INSN_LUID so that we
+make the sort stable"), and their LUIDs are the smallest in the block, so they
+come out first anyway.
+
+That is a whole class of entry-block diff: the listing has some of the
+`move $sN,$aN` copies LATER than an insn of the body, and no statement order
+reaches it, because the copies were never candidates.
+
+Declaring the function OLD-STYLE moves them. A sub-word parameter in a K&R
+definition is PASSED as `int` and CONVERTED to its declared type, and
+assign_parms puts every such conversion in a separate `conversion_insns`
+sequence which it emits only "now that all parameters have been copied out of
+hard registers". So a sub-word parameter contributes a raw pinned copy AND a
+truncation further down; the pinned run ends at the first parameter that needs
+one, and every conversion after it is an ordinary schedulable insn. Their LUIDs
+are in parameter order, so their order in the block is parameter order too.
+
+func_8005C2C0 is the measurement. Prototyped, with `s32 a, s32 b, s32 c, s32 d,
+u16 e, u16 f, u16 g`, all four copies are pinned and the block begins
+b, c, d, lui, lhu, li -- 10 words wrong with every instruction right, and
+nothing in the source moves them (all six statement orders, the three-variable
+extension, reading st.note back, `d`'s type). Declared old-style with
+`s16 a; s32 b; u16 c; u16 d;` the pinned run is just `a`'s raw copy (deleted --
+it dies in the entry block and takes $a0) and `b`'s, and the three truncations
+land after the lui/lhu/li group in the order `a`, `c`, `d`: MATCH.
+
+Two other things come free from the same shape, and both are worth recognising
+on their own:
+
+* The sign-extension lands on the RAW pseudo. `(s16) a != -1` on a truncated
+  parameter is `sign_extend (subreg raw)`, and cse substitutes the raw pseudo,
+  which is dead after the compare and so gets the incoming register: the
+  listing's `sll $a0, $a0, 16` / `sra $a0, $a0, 16`, extending IN PLACE. This
+  is section 7's in-place extension with the truncation supplied by the
+  parameter list instead of by a `s16 j = a` local -- and unlike the local, it
+  carries a LUID from the parameter setup.
+* A truncated parameter is NOT assumed already extended. `d != 0` keeps its
+  `andi $s3, 0xFFFF`, where a PROTOTYPED `u16 d` is taken to arrive
+  zero-extended and gives a bare `bnez`. So the old-style list also removes
+  the need for a `(u16) d` cast in the source.
+
+Before reaching for this, read the entry block the way func_8005C2C0's park
+file had to: `sched.py --sched1` prints which insns have a priority at all, and
+the parameter copies' absence from that list IS the pin. The partner lever is
+the next one -- a single-set definition gets bumped to LAUNCH_PRIORITY and
+lands LATE, so the two together decide the whole entry block.
+
+### A single-set definition is pushed LATE; reassigning the variable keeps it early
+
+`birthing_insn_p` (sched.c:2469) returns true for a `SET` whose destination is
+a REG that is live at that point in the backward scan AND has
+`reg_n_sets == 1`. `adjust_priority` (sched.c:2505) then raises such an insn to
+`max_priority`, which at that moment is LAUNCH_PRIORITY (0x7f000001, set on the
+insn being scheduled at sched.c:3902 and read at :2574) -- so it is selected
+immediately in the backward pass, which places it as LATE in the block as its
+dependences allow. An insn whose destination has more than one set stays at
+priority 1 and comes out in LUID order, i.e. EARLY.
+
+Since gcc gives a C local ONE pseudo for all of its assignments, this is
+directly source-controlled:
+
+* `a = a << 16; a = a >> 16;` -- reassigning the parameter -- gives that pseudo
+  three sets, so neither shift is a birthing insn and both land early.
+* `sa = (a << 16) >> 16;` -- a fresh local -- makes the shift and the
+  intermediate single-set, both get bumped, and both land late.
+
+In func_8005C2C0 the listing wants them late: the in-place form put the two
+shifts six slots early, and the fresh local moved both to the exact slot with
+no other change (10 DIFF either way, but the remaining words were then only
+the parameter copies, which is what exposed the pin above). Note the direction
+is the opposite of the intuition: making a value SINGLE-ASSIGNMENT pushes its
+definition DOWN, towards its use.
+
+The bump only ever applies in sched1 -- `birthing_insn_p` returns 0 when
+`reload_completed` -- so what it decides is the insn ORDER that becomes sched2's
+LUID tie-break. Read it with `sched.py --sched1`: a bumped insn shows up in the
+ready lists as `(7f000001)` against its neighbours' `(1)`.
+
 ## 9. Induction variables
 
 * gcc builds the giv list by **prepending** as it discovers them, so the LAST

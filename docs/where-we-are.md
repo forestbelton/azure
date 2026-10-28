@@ -243,7 +243,7 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with a COMPILING CANDIDATE | 67 | a park file each in `docs/near-misses/` |
+| parked, with a COMPILING CANDIDATE | 64 | a park file each in `docs/near-misses/` |
 | structurally blocked | 0 | was func_80033D44 + func_80033D54: on 2026-10-27 the old unk_72A8 was CUT in two (`gprel_72A8` + `unk_72A8`) so the pair gets its `%gp_rel(D_8008099C)` while the two landed functions below the cut keep the absolute form. func_80033D44 landed the same hour; func_80033D54 is now counted under never attempted |
 | deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
 | never attempted | 0 | **all four giants were drafted on 2026-10-27**: func_80033D54 at 537 of 537 words / 46 DIFF (every instruction right, 34 of them four callee-saved register names), func_800345B8 at 546 of 546 / 128 DIFF (two adjacent allocno pairs), func_8004C36C at 464 of 461 / 171 DIFF (three load-delay nops and what follows them) and func_80056E10 at 713 of 718 / 687 DIFF (first reading; the seven scans are the new part) |
@@ -311,22 +311,29 @@ for those the next session's first move is
 reading of the listing.
 
 **Where the parked work actually is**, from advise.py's verdict over the 44
-park files that existed early on 2026-10-27. EIGHT have MATCHED and landed
+park files that existed early on 2026-10-27. TWELVE have MATCHED and landed
 since that census -- func_8004E6F4, func_80059814, func_800550E8,
-func_8004DF8C, func_8004DE88, func_800589B8, func_80033AE8, func_800353F4 and
-func_80057D20 -- so read the counts below as the shape of the remaining work,
+func_8004DF8C, func_8004DE88, func_800589B8, func_80033AE8, func_800353F4,
+func_80057D20, func_80038F48, func_8003931C and func_8005C2C0 -- so read the
+counts below as the shape of the remaining work,
 not as a tally; `progress.py --parked` is the live one.
 
 | verdict | count | what it means for the next attempt |
 |---------|-------|------------------------------------|
-| SHAPE  | 28 | advise.py names a lever for each; the source is still wrong somewhere |
+| SHAPE  | 26 | advise.py names a lever for each; the source is still wrong somewhere |
 | LENGTH |  6 | the word count is wrong, which is the most tractable signal there is |
-| ALLOC  |  4 | every opcode, immediate and displacement matches; only register numbers differ |
+| ALLOC  |  3 | every opcode, immediate and displacement matches; only register numbers differ |
 
-The four ALLOC ones are func_800599B0 (1 register), func_80055D84 (5),
-func_8003931C (10) and func_800407C0 (62) -- no source rewrite reaches those,
-so read matching-levers section 3 and `advise.py --greg` rather than trying
-spellings. The eleven LENGTH ones, by how far off they are:
+The three ALLOC ones are func_800599B0 (1 register), func_80055D84 (5) and
+func_800407C0 (62) -- no source rewrite reaches those, so read
+matching-levers section 3 and `advise.py --greg` rather than trying
+spellings. (func_8003931C, the fourth, LANDED 2026-10-27 on a live-length
+trim of exactly two insns -- see matching-levers section 8; func_80038F48
+landed the same day on the EXPAND_SUM lever there, and func_8005C2C0 -- 10
+words of entry-block SHAPE -- on the OLD-STYLE PARAMETER LIST lever, which is
+the one to read first for any diff that wants a `move $sN,$aN` placed later
+than the listing has it.) The eleven LENGTH
+ones, by how far off they are:
 
   -1  func_8003800C  func_8004951C  func_8004A330  func_8004B954 (was -7)
   +1  func_8005914C

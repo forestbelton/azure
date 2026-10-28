@@ -2378,7 +2378,86 @@ s32 func_80038C40(s8 k) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038CB8);
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038F48);
+extern u32 D_8006A944w[] __asm__("D_8006A944");
+
+u8 *func_8003AD08(u32, u8 *);
+void func_80039640(u8 *);
+
+/* The script VM's control-flow dispatcher: while the opcode at +0x1C is 0xFD,
+   0xFE, 0xFF or 0x00, it pushes a return address onto the +0x7C stack and
+   jumps -- 0xFD through the +0x80 table's +0x48 handler via func_8003AD08,
+   0xFE through D_8006A944 indexed by the next byte, 0xFF through a 32-bit
+   address built from the next four bytes -- and 0x00 goes to func_80039640.
+
+   The loop condition is `(u8) (op + 3) < 3 || op == 0` with `op` a `u8`
+   local (`addiu 3` / `andi 0xFF` / `sltiu 3` / `bnez`, then `beqz`). The
+   three arms are an if/else-if CHAIN over -3/-2/-1, not a switch. `t` is the
+   +0x80 pointer read BEFORE the loop so 0x48 stays the load's displacement;
+   the field is re-read inside the arm and after the call because the call
+   invalidates cse. D_8006A944 takes an incomplete-array `__asm__` alias so
+   its address is a `lui`/`addiu` pair. `q` is re-read from +0x1C in each arm
+   because the store through the +0x7C stack pointer invalidates cse.
+
+   In the 0xFF arm the four-byte sum goes through a `u32` LOCAL before it is
+   dereferenced. Written inline as the address, `*(u8 **) (q[1] + ... )`,
+   expand_expr sees the sum with EXPAND_SUM and builds one PLUS tree, so all
+   four `lbu`s and three `sll`s are emitted first and the three `addu`s last,
+   and four bytes are live at once. Through the local the sum is a plain
+   binop: load, shift, add, load, shift, add, and the listing's interleave
+   with $v1 reused for r[1] and r[3] follows (12 DIFF inline). */
+void func_80038F48(u8 *p)
+{
+    u8 *t;
+    u8 op;
+
+    op = **(u8 **)(p + 0x1C);
+    t = *(u8 **)(p + 0x80);
+    while ((u8)(op + 3) < 3 || op == 0)
+    {
+        u8 *pc = *(u8 **)(p + 0x1C);
+
+        if (*(s8 *)pc == -3)
+        {
+            u8 *q;
+
+            **(u8 ***)(p + 0x7C) = pc + 2;
+            *(u8 **)(p + 0x7C) = *(u8 **)(p + 0x7C) + 4;
+            q = *(u8 **)(p + 0x1C);
+            *(u8 **)(p + 0x1C) = q + 1;
+            func_8003AD08(*(u32 *)(q[1] * 4 + (u32)t + 0x48), *(u8 **)(p + 0x80) + 0x14);
+            *(u8 **)(p + 0x1C) = *(u8 **)(p + 0x80) + 0x14;
+        }
+        else if (*(s8 *)pc == -2)
+        {
+            u8 *q;
+
+            **(u8 ***)(p + 0x7C) = pc + 2;
+            *(u8 **)(p + 0x7C) = *(u8 **)(p + 0x7C) + 4;
+            q = *(u8 **)(p + 0x1C);
+            *(u8 **)(p + 0x1C) = q + 1;
+            *(u8 **)(p + 0x1C) = *(u8 **)(q[1] * 4 + (u32)D_8006A944w);
+        }
+        else if (*(s8 *)pc == -1)
+        {
+            u8 *q;
+            u8 *r;
+            u32 a;
+
+            **(u8 ***)(p + 0x7C) = pc + 5;
+            *(u8 **)(p + 0x7C) = *(u8 **)(p + 0x7C) + 4;
+            q = *(u8 **)(p + 0x1C);
+            r = q + 1;
+            *(u8 **)(p + 0x1C) = r;
+            a = q[1] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24);
+            *(u8 **)(p + 0x1C) = *(u8 **)a;
+        }
+        else
+        {
+            func_80039640(p);
+        }
+        op = **(u8 **)(p + 0x1C);
+    }
+}
 
 extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
 void func_80038A00(void);
@@ -2483,7 +2562,88 @@ u8 *func_800392A4(u8 i) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003931C);
+/* A script opcode handler, and the same shape as func_80039470 below: it
+   reads a byte from the cursor at p+0x1C, indexes D_80082660 by it, and either
+   rewinds two bytes and installs func_800383D4 / func_80038408, or fills the
+   slot and writes two halfwords into the object func_800392A4 returns -- at
+   +0x36/+0x38 when the slot is 1 and the +0x10 field is neither D_800C3174 nor
+   D_800C321C, and at +0x88/+0x8A otherwise.
+
+   Three shapes buy the word count: the cursor reads are ONE statement,
+   `n = *(*(u8 **)(p + 0x1C))++;` (split, a register copy); both error blocks
+   are `else` arms, not guard clauses (as guards the first `bne` spans 7 words
+   instead of 51); and the table base goes through a pointer local so its
+   `lui`/`addiu` precedes the index.
+
+   The last ten words were the byte's LIVE LENGTH. The opcode byte and the
+   +0x80 pointer both cross the call and compete for $s3/$s4 on global-alloc's
+   `floor_log2(refs) * refs / live_length`: 4 refs over 23 insns (0.348) lost
+   to the pointer's 6 over 32 (0.375). In the `else` arm, computing the
+   rewound cursor into `c` BEFORE the `sb` of the byte and storing it after
+   lets sched1 emit the `sb` first in that block (the `addiu`/`sw` chain is
+   launched and sinks to its store), so the byte is live for 1 insn there
+   instead of 3: 4/21 = 0.381 beats 0.375 and the two swap. sched2 then puts
+   the `sb` back between the `addiu %lo` and the `sw 0x10`, because a ready
+   store beats an ALU op on potential_hazard, so the listing's order is kept.
+   Written `*(p+0x1C) -= 2` AFTER the `sb` the QImode store flushes cse and
+   the rewind re-loads the cursor (87 words, 80 DIFF); the byte store moved
+   first in the OTHER error block takes the live length to 20, which TIES the
+   index's 5/25 = 0.400 and loses on allocno number (8 DIFF). */
+void func_8003931C(u8 *p)
+{
+    u8 n;
+    s32 k;
+    u8 *e;
+    u8 *r;
+    Unk80082660 *t;
+
+    n = *(*(u8 **)(p + 0x1C))++;
+    k = n;
+    t = D_80082660;
+    e = (u8 *)&t[k];
+    r = *(u8 **)(p + 0x80);
+    if (*(s8 *)(e + 1) == 0)
+    {
+        if (k != 0)
+        {
+            u8 *q = func_800392A4(k);
+
+            if (q != 0)
+            {
+                u8 *f = q - 0x20;
+
+                e[0] = *(*(u8 **)(p + 0x1C))++;
+                e[1] = 1;
+                e[2] = r[0x48];
+                if (k == 1 && *(u32 **)(f + 0x10) != D_800C3174 && *(u32 **)(f + 0x10) != D_800C321C)
+                {
+                    *(s16 *)(q + 0x36) = *(u16 *)(r + 0x4C);
+                    *(s16 *)(q + 0x38) = *(u16 *)(r + 0x50);
+                }
+                else
+                {
+                    *(s16 *)(q + 0x88) = *(u16 *)(r + 0x4C);
+                    *(s16 *)(q + 0x8A) = *(u16 *)(r + 0x50);
+                }
+            }
+            else
+            {
+                *(u32 *)(p + 0x10) = (u32)func_80038408;
+                p[0x2F] = n;
+                p[0x89] = 0x10;
+                *(u8 **)(p + 0x1C) = *(u8 **)(p + 0x1C) - 2;
+            }
+        }
+    }
+    else
+    {
+        u8 *c = *(u8 **)(p + 0x1C) - 2;
+
+        p[0x2F] = n;
+        *(u8 **)(p + 0x1C) = c;
+        *(u32 *)(p + 0x10) = (u32)func_800383D4;
+    }
+}
 
 s32 func_80039470(s32 a, s32 b, s32 c, s32 d)
 {

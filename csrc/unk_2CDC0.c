@@ -1866,7 +1866,119 @@ out:
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005C2C0);
+void func_8005EC0C(SpuVoiceAttr *);
+
+/* Starts one voice: picks the D_80085458 entry for channel `b`, fills its
+   twenty-odd fields, copies the volumes and the note into an SpuVoiceAttr and
+   hands that to func_8005EC0C.
+
+   OLD-STYLE PARAMETER LIST, and that is the whole reason this matches. With a
+   prototyped definition the first four parameters are copied out of $a0..$a3
+   by a CONTIGUOUS RUN of hard-register moves at the very top of the function,
+   and schedule_block pins that whole run out of sched1 (sched.c:3186, "At the
+   start of a function, before reload has run, don't delay getting parameters
+   from hard registers into pseudo registers" -- it walks the run setting
+   INSN_REF_COUNT to 1 and advancing HEAD past it). Pinned, they stay first,
+   and the lui/lhu/li group that belongs ahead of them in the listing can never
+   get there: 10 words, every instruction already right.
+
+   Declared old-style, a sub-word parameter is PASSED as int and CONVERTED to
+   its declared type in assign_parms' separate `conversion_insns` sequence,
+   which is emitted after every parameter has left its hard register. So `a`,
+   `c` and `d` each get a raw pinned copy plus a truncation further down, the
+   pinned run ends after `b`, and the three truncations are ordinary
+   schedulable insns whose LUIDs are in parameter order -- which is what puts
+   `move $s5,$a0`, `move $s4,$a2`, `move $s3,$a3` after the group and in that
+   order. Two more things fall out of the same shape: cse rewrites the
+   sign-extension of `a` onto the RAW pseudo, which dies in the entry block and
+   so extends in place in $a0 (the listing's `sll $a0`/`sra $a0`), and `d != 0`
+   keeps its `andi $s3,0xFFFF` because the truncated parameter is not assumed
+   already zero-extended the way a prototyped u16 parameter is.
+
+   Three field shapes also paid for, each measured:
+     * `q = D_80085458; p = q + b * 0x78;` -- a pointer VARIABLE for the base.
+       `D_80085458 + b * 0x78` has an ADDR_EXPR operand, which is TREE_CONSTANT,
+       so fold swaps it right and the index chain expands first; sched1 then
+       lifts the index shifts into the shadow of the `lw 0x10` that loads
+       st.addr and local-alloc gives p $v1 instead of $v0 -- 26 words.
+     * `st.volume.left = *(u16 *) (p + 0x10);` -- read BACK from the entry, not
+       `f << 7` spelled again, so cse turns the load into the move the listing
+       has. st.note is `e` because +0x12 is NOT forwarded and keeps its `lhu`.
+     * the four constant bytes in CHANNEL-INTERLEAVED order 0x14, 0x16, 0x15,
+       0x17 -- 16 words. It decides which constant sched1 hoists: with 0x7F's
+       pseudo born first it reaches the st.addr load's shadow, crosses the 0x11
+       and 0x40 pseudos in $v1 and takes $a0, which frees $v1 for `f << 7`. */
+
+s16 func_8005C2C0(a, b, c, d, e, f, g)
+s16 a;
+s32 b;
+u16 c;
+u16 d;
+u16 e;
+u16 f;
+u16 g;
+{
+    SpuVoiceAttr st;
+    u8 *q;
+    u8 *p;
+    s32 t;
+
+    D_80085F98[0] = 1;
+    if (a != -1 && b < 0x18)
+    {
+        func_80056DB4(b);
+        do
+        {
+            func_8005E97C(0, D_80073740[b]);
+            t = func_8005EB78(D_80073740[b]);
+        } while (t != 2 && t != 0);
+
+        st.mask = 0x1FFEF;
+        st.a_mode = 1;
+        st.s_mode = 1;
+        st.r_mode = 3;
+        st.ar = 0;
+        st.dr = 0;
+        st.sr = 0;
+        st.rr = 0;
+        st.sl = 0;
+        st.volmode.left = 0;
+        st.volmode.right = 0;
+        st.voice = D_80073740[b];
+        st.addr = D_80086A40[a].unk_10;
+
+        q = D_80085458;
+        p = q + b * 0x78;
+        *(u16 *)(p + 0x06) = 0x11;
+        *(u8 *)(p + 0x14) = 0x7F;
+        *(u8 *)(p + 0x16) = 0x40;
+        *(u8 *)(p + 0x15) = 0x7F;
+        *(u8 *)(p + 0x17) = 0x40;
+        *(u16 *)(p + 0x10) = f << 7;
+        *(u16 *)(p + 0x00) = b;
+        *(u16 *)(p + 0x1A) = 1;
+        *(u8 *)(p + 0x22) = c;
+        *(u8 *)(p + 0x23) = d;
+        *(u16 *)(p + 0x0A) = e;
+        *(u16 *)(p + 0x5C) = a;
+        *(u16 *)(p + 0x12) = g << 7;
+
+        st.volume.left = *(u16 *)(p + 0x10);
+        st.volume.right = *(u16 *)(p + 0x12);
+        st.note = e;
+        if (d != 0)
+        {
+            st.sample_note = ((c - 1) << 8) | (0x7F - d);
+        }
+        else
+        {
+            st.sample_note = d | (c << 8);
+        }
+        func_8005EC0C(&st);
+    }
+    D_80085F98[0] = 0;
+    return b;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005C4D0);
 
