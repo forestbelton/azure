@@ -273,14 +273,38 @@
  * the source's. Any allocator arithmetic in this file built on that 2 is
  * arithmetic about a derived number.
  *
- * WHAT IS STILL NOT ESTABLISHED, said plainly: WHICH routine in local-alloc
- * does it. `optimize_reg_copy_1` is permitted to -- its "don't mess with hard
- * regs" guard is `#ifdef SMALL_REGISTER_CLASSES` (local-alloc.c:712) and
- * config/mips never defines it -- but the replacement it performs runs the
- * other way, SRC into DEST, so it is not obviously the one. Do not attribute
- * this to a named function without checking; two readings of this park have
- * already been wrong, one blaming combine and one calling the two extra
- * registers "not a parameter".
+ * AND THE REASON IT IS LEGAL IS IN THE EMITTED CODE, which finishes the
+ * account. Read this build's own order around the two stores:
+ *
+ *     jal   func_8005A1D0
+ *     ...
+ *     move  $a1, $s0        <- the CALL ARGUMENT setup for func_80059F8C,
+ *                              hoisted well above the call, reloading `c`
+ *                              from its callee-saved copy in $s0
+ *     ...
+ *     sw    $a1, 0x14($s0)  <- the two stores then just READ $a1, because it
+ *     sw    $a1, 0x8($s0)      already holds `c`
+ *     ...
+ *     jal   func_80059F8C
+ *
+ * So nothing mysterious substituted a hard register into a store: gcc hoisted
+ * `func_80059F8C`'s `$a1 = c` setup above the stores, and the stores share the
+ * register it put the value in. That is why insn 180 (the argument) keeps
+ * pseudo 82 while 153 and 167 do not -- they come after the setup. It also
+ * explains the extra `move $a1, $s0` this build spends and the listing does
+ * not.
+ *
+ * THE LISTING DOES NOT SHARE: it keeps `c` in $s4 for the whole range and
+ * stores `$s4` directly (`sw $s4, 0x14($s0)`, `sw $s4, 0x8($s0)`), setting up
+ * $a1 only at the call. So the difference is WHERE `c` LIVES -- an argument
+ * register reloaded from a callee-saved copy, against a callee-saved register
+ * used directly -- and the six-versus-four register count follows from that
+ * one choice rather than from any priority.
+ *
+ * So the shape to look for gives `c` a use the argument register cannot serve,
+ * or stops the argument setup being hoisted above the stores. Note what does
+ * NOT do it: a duplicate copy (measured above, reverted) adds a fifth register
+ * instead of moving `c` into one.
  */
 
 #include "common.h"
