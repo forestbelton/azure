@@ -64,6 +64,26 @@
  *
  * So the question is what gives ONE arm's value a preference or a conflict
  * the other lacks. On the evidence that is not reachable by naming variables.
+ *
+ * 2026-10-28, THREE MORE SHAPES, all of them WORSE, and they say the same
+ * thing from the other direction: clamping `a` IN PLACE and copying it to `r`
+ * removes the very copies the target spends.
+ *
+ *     high arm in place, low arm as now      17 words,  9 DIFF
+ *     low arm in place, high arm as now      19 words, 14 DIFF
+ *     both arms in place                     16 words, 20 DIFF
+ *
+ * So each arm needs its own temp that is NOT the parameter, which is what this
+ * file already has -- and the open question stands. For the record of what the
+ * target's shape actually is: it spends TWO copies in the high arm (one per
+ * ternary branch, `addu $v0, $a0, $zero`) and ONE in the low arm
+ * (`addu $v0, $v1, $zero`), with the high temp in $a0 and the low in $v1. For
+ * the low temp to be $v1 rather than $a0 it has to be excluded from $a0 in its
+ * own block, and the only thing that can do that is a conflict -- so the shape
+ * to look for is one where the low arm's value is live at a point where $a0 is
+ * (the incoming parameter at the top), without paying for the copy that gets
+ * it there. Note that making it a cross-block allocno is the lever that landed
+ * func_800565D8, but every placement tried so far keeps it inside one block.
  */
 
 #include "common.h"
