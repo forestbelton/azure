@@ -117,13 +117,29 @@
  * larger while the function is closer. A 4-word register swap on an exact
  * structure beats 3 words with the constant bound to the wrong factor.
  *
- * THE SWAP IS PRICED, from `--greg` on that variant: the byte's chain is
- * pseudo 82 at 3 refs / 4 live / 0.750 and takes $v0; the subtraction is
- * pseudo 83 at 2 refs / 5 live / 0.400 and takes $v1. The listing wants them
- * the other way, so the SUBTRACTION has to outrank the byte. 3 refs on it
- * would only TIE (floor_log2(3) * 3 / 4 = 0.750) and a tie goes to the lower
- * allocno number, which is the byte -- it is born first. So it needs +2
- * references, or the byte's three cut to two, at zero instruction cost.
+ * THAT PRICING WAS ON THE WRONG PSEUDOS -- corrected 2026-10-27, from the
+ * dumps rather than from advise.py's tables. It said the byte was pseudo 82
+ * (3 refs / 4 live / 0.750, $v0) and the subtraction pseudo 83 (2 / 5 / 0.400,
+ * $v1), and concluded the subtraction needed +2 references. Both rows are
+ * GLOBAL allocnos that live elsewhere in this function. The registers that
+ * differ belong to two BLOCK-LOCAL quantities, and `lreg` names them:
+ *
+ *     Register 89 used 2 times across 6 insns in block 3
+ *     Register 91 used 2 times across 3 insns in block 3; 1 bytes
+ *
+ * 89 is the `0x3F - n` chain, 91 is the volatile byte -- and 91 is ONE BYTE,
+ * where advise.py's local table takes every quantity as 4. Priced properly
+ * with `qty_size` in bytes (local-alloc.c:380): 91 is 1 * 2 * 1 / 3 = 0.667
+ * and 89 is 1 * 2 * 4 / 6 = 1.333. So the SUBTRACTION ALREADY OUTRANKS THE
+ * BYTE two to one, and on priority alone it would take the lower register
+ * first -- which is exactly what the listing has.
+ *
+ * This build gives the byte $v0 regardless, so the byte is being allocated in
+ * local-alloc's EARLIER phase: `qty_sugg_compare` orders the quantities that
+ * carry a hard-register suggestion and they are all assigned before the
+ * unsuggested ones, whatever their priority. The lever is therefore that
+ * SUGGESTION -- find what copies the byte's quantity to or from $v0 and break
+ * it -- and no reference count on either side will do anything.
  *
  * Measured against that variant and NOT working: the subtraction through the
  * function-scope `d` before the byte test (32 words, 26 DIFF) or after it

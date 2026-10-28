@@ -1451,6 +1451,45 @@ Two corollaries worth keeping:
   changes which allocator sees the pseudo. When one of them says to split, the
   other is worth re-measuring too.
 
+### TWO WAYS TO PRICE AN ALLOCATION MARGIN WRONG, both of which I did
+
+Before using `advise.py --greg`'s MARGINS tables, check two things about the
+quantities you are pricing. A sweep of the 24 parks at 12 DIFF or less
+(2026-10-27) says both traps are common.
+
+**1. GLOBAL-ALLOC MAY NEVER HAVE RUN.** NINE of those 24 have no global
+allocnos at all -- func_80035E58, func_8003666C, func_8003A060, func_8003A374,
+func_8003A3E8, func_8003A858, func_8004827C, func_80048FBC, func_80056DB4. The
+`.greg` dump shows it instantly: no `;; N regs to allocate` block, straight to
+`;; Register dispositions`, and every `lreg` line says "in block N". For those
+functions the global `allocno_compare` table and every "+N refs" instruction
+derived from it describe a pass that did not happen; the decision is
+local-alloc's `qty_compare_1`, and before that its SUGGESTION phase.
+
+**2. advise.py's LOCAL table TAKES THE QUANTITY SIZE AS 4.** Its own docstring
+says so, but the consequence is not obvious: `qty_size[qty]` is
+`GET_MODE_SIZE` (local-alloc.c:380), i.e. the mode's size in BYTES, so a
+QImode quantity's real priority is a QUARTER of what the table prints and a
+HImode quantity's is a HALF. In a codebase this full of `u8` and `s16` fields
+that is most of the short-lived quantities.
+
+func_800565D8 is the worked example, and it caught me. Its park and my own
+re-pricing both reasoned about pseudos 82 and 83 from the GLOBAL table (3 refs
+/ 4 live / 0.750 against 2 / 5 / 0.400) and concluded the loser needed +2
+references. Both are the wrong rows. The registers that actually differ belong
+to pseudos 89 and 91, and `lreg` says:
+
+    Register 89 used 2 times across 6 insns in block 3
+    Register 91 used 2 times across 3 insns in block 3; 1 bytes
+
+-- BLOCK-LOCAL, so local-alloc decided them, and 91 is ONE BYTE. Priced
+properly: 91 is `1 * 2 * 1 / 3 = 0.667` and 89 is `1 * 2 * 4 / 6 = 1.333`, so
+the subtraction outranks the byte two to one and should take the lower register
+first, which is what the LISTING has. This build gives the byte $v0 anyway --
+so the byte is being allocated in local-alloc's earlier SUGGESTION phase
+(`qty_sugg_compare` runs before `qty_compare`), and the lever is that
+suggestion, not anybody's reference count.
+
 ### READ `.greg`'s OWN conflicts and preferences lines before pricing a margin
 
 `advise.py --greg` reconstructs priorities, but gcc prints the two things that
