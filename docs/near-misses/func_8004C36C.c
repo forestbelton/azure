@@ -1,4 +1,4 @@
-/* func_8004C36C (unk_1C540) -- 464 of 461 words, 171 DIFF. COMPILES.
+/* func_8004C36C (unk_1C540) -- 461 of 461 words, 29 DIFF. COMPILES.
  *
  * FIRST ATTEMPT, 2026-10-27, written the same day as func_80033D54's and
  * func_800345B8's parks; it is the third of the three giants that had never
@@ -39,32 +39,58 @@
  * and `.word 0x0000007f`, which assemble SILENTLY to the wrong bytes through
  * modern gas. The measurement is in that header's comment.
  *
- * WHAT IS LEFT: 3 words and the register/schedule positions that follow them.
- * All three are `nop`s in the primitive-field block, where the listing fills
- * each store's load-delay slot with the NEXT statement's load and this build
- * cannot: those loads are of the stack object and the stores are through
- * `prim`, and `true_dependence` makes them conflict because BOTH are QImode
- * (`lbu`/`sb`), which is the one case its MEM_IN_STRUCT_P exception cannot
- * reach -- see the note added to matching-levers section 5 for func_80033D54.
- * Measured and not working: the stack-object reads in that block spelled as
- * casts rather than struct fields (no change at all).
+ * 2026-10-28: 464 words / 171 DIFF -> 461 / 29, and the word count is now
+ * EXACT. Three changes, two of them the same lever twice.
  *
- * 2026-10-28: THE `const` ROUTE TO THOSE THREE NOPS IS CLOSED, from gcc's own
- * source rather than by measurement. `true_dependence`'s first line would free
- * the loads outright -- it returns 0 for an UNCHANGING read against a changing
- * store, whatever the modes -- but RTX_UNCHANGING_P cannot be bought here:
- * expand_expr sets it as `TREE_READONLY (exp) & TREE_STATIC (exp)`
- * (expr.c:4585) and the comment above that line says a pointer-to-const
- * deliberately does not qualify, with the `TREE_READONLY`-only version left
- * `#if 0`'d at expr.c:4907. So no const qualifier on `p`, on a cast, or on the
- * fields reaches it, and the stack object can never be unchanging. Combined
- * with the QImode note in matching-levers section 5 -- both arms of the
- * MEM_IN_STRUCT_P exception require the non-QImode side to be the varying
- * in-struct one, and here BOTH sides are QImode -- the dependence is not
- * removable by any spelling of these two accesses. The listing's compiler did
- * not have it, so the escape has to be a different pair of accesses: either the
- * stores are not byte stores in the original, or the values do not come from
- * the stack object at all.
+ *  - (*) THE PRIMITIVE-FIELD COPIES READ INTO LOCALS BEFORE THEIR STORES, in
+ *    PAIRS. The listing batches two loads off the stack object into two
+ *    different registers ahead of the two `sb`s that consume them; this source
+ *    used to spell each copy as one statement, and then every load stalled --
+ *    `lbu $v0` / `nop` / `sb $v0` three times over -- because a QImode store
+ *    to `prim` conflicts with the next QImode load off `p` and sched1 cannot
+ *    hoist across it (section 5, and the 2026-10-28 note above on why no
+ *    spelling removes that dependence). The fix is not to remove it but to
+ *    put the loads BEFORE the stores in SOURCE order, where it does not
+ *    bite:
+ *
+ *        g0 = p->unk_01;  g1 = p->unk_08;
+ *        prim->code = g0; prim->u0 = g1;
+ *        g2 = p->unk_06;  g3 = p->unk_09;
+ *        prim->clut = g2; prim->v0 = g3;
+ *
+ *    which gives the listing's `lbu`/`lbu`/`sb`/`sb` batching exactly. Two
+ *    words, 171 DIFF -> 153. PAIRWISE IS NOT THE SAME AS ALL-FOUR-FIRST:
+ *    reading all four into locals before all four stores is 462 / 156, three
+ *    DIFF worse, because sched then keeps all four loads together and the
+ *    listing's second pair comes after the first two stores.
+ *  - (*) THE SAME LEVER ON THE v1/tpage/u2 GROUP -- `g0 = p->unk_09;
+ *    g1 = p->unk_04;` ahead of `prim->v1`/`prim->tpage`, with `prim->u2`
+ *    still inline -- is worth two more words and takes it to 460 / 49.
+ *    Hoisting `p->unk_08` for `u2` as well is 459 / 162, i.e. a word SHORT
+ *    and much worse, so the group is two reads and not three.
+ *  - (*) THE CLOSING D_80083160 STORE GOES THROUGH A POINTER LOCAL
+ *    INITIALISED IN ITS DECLARATION: `u8 **gp = (u8 **) &D_80083160;` with
+ *    `*(POLY_FT4 **) (*gp + 0x8D0) = prim;`. The listing MATERIALISES that
+ *    address -- `lui $t0, %hi` / `addiu $t0, $t0, %lo` / `lw $v0, 0($t0)`,
+ *    three words -- where every folded spelling gives `lui` + `lw %lo(...)`
+ *    in two. An address materialisation is a `la`, neither a load nor a store
+ *    (docs/addressing-and-translation-units.md), so it needs the address to be
+ *    a VALUE; and the value has to be pinned by the DECLARATION, because
+ *    assigning it in a statement (`g = &D_80083160;` just above the store) is
+ *    folded straight back into the MEM and changes nothing. Measured and also
+ *    not working: an incomplete array indexed `[0]`, a `volatile` read of the
+ *    base pointer, and re-reading through the existing `base` local -- all
+ *    460 words / 49 DIFF.
+ *
+ * WHAT IS LEFT: 29 words, and advise.py now says SHAPE rather than LENGTH.
+ * Six `nop`s the listing fills and this build does not (8004C3E8, 8004C418,
+ * 8004C87C, 8004C88C, 8004C9FC, 8004CA2C), five `jal`-versus-delay-slot swaps
+ * where the listing puts a different store in the call's delay slot, and seven
+ * register-only differences behind them. The first one, 8004C3E8, is the
+ * `beqz $s3` guarding the node loop: the listing fills its delay slot with
+ * `addiu $a0, $s1, 0x50` -- the first argument of the body's first call --
+ * and this build emits that same insn eight words later, into a load-delay
+ * slot instead, so the pair is a scheduling choice and not a missing word.
  *
  * STILL UNVERIFIED, and the places to look first when picking this up:
  *   * the two `|| x != y` guards around the u/v decrements. The listing
@@ -168,11 +194,16 @@ void func_8004C36C(u8 *pl, u8 *list)
     MATRIX *m1;
     MATRIX *m2;
     u8 *base;
+    u8 **gp = (u8 **)&D_80083160;
     POLY_FT4 *prim;
     u8 *e;
     UnkNode *nd;
     u32 c0;
     u32 c1;
+    s32 g0;
+    s32 g1;
+    s32 g2;
+    s32 g3;
     s32 v0;
     s32 v1;
     s32 v2;
@@ -310,10 +341,14 @@ void func_8004C36C(u8 *pl, u8 *list)
                     setlen(prim, 9);
                     *(s32 *)&prim->r0 = p->unk_A8;
                     func_8004C010((u8 *)&prim->r0, (u8 *)&p->unk_78);
-                    prim->code = p->unk_01;
-                    prim->u0 = p->unk_08;
-                    prim->clut = p->unk_06;
-                    prim->v0 = p->unk_09;
+                    g0 = p->unk_01;
+                    g1 = p->unk_08;
+                    prim->code = g0;
+                    prim->u0 = g1;
+                    g2 = p->unk_06;
+                    g3 = p->unk_09;
+                    prim->clut = g2;
+                    prim->v0 = g3;
                     if (prim->x1 < prim->x0 || prim->x0 != prim->x2)
                     {
                         p->unk_0A = p->unk_0A - 1;
@@ -321,8 +356,10 @@ void func_8004C36C(u8 *pl, u8 *list)
                     t = p->unk_08 + p->unk_0A;
                     prim->u3 = t;
                     prim->u1 = t;
-                    prim->v1 = p->unk_09;
-                    prim->tpage = p->unk_04;
+                    g0 = p->unk_09;
+                    g1 = p->unk_04;
+                    prim->v1 = g0;
+                    prim->tpage = g1;
                     prim->u2 = p->unk_08;
                     if (prim->y2 < prim->y0 || prim->y0 != prim->y1)
                     {
@@ -385,5 +422,5 @@ void func_8004C36C(u8 *pl, u8 *list)
         list = (u8 *)nd->unk_0C;
     }
     PopMatrix();
-    *(POLY_FT4 **)((u8 *)D_80083160.unk_00 + 0x8D0) = prim;
+    *(POLY_FT4 **)(*gp + 0x8D0) = prim;
 }
