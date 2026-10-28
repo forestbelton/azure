@@ -32,6 +32,17 @@ compiler, and none from another source-shape guess.
   function call, and two cases where the listing demonstrably keeps the local
   the sweep deletes. Its guards catch the first two classes now; nothing but
   the listing catches the third.
+* **THE `csrc/` PROTOTYPES FOR PARKED FUNCTIONS ARE NOT EVIDENCE about their
+  parameter widths**, which is worth knowing because the "audit the context"
+  advice below makes them look like one. Twelve parks' assumed signatures
+  disagree with the prototype in `csrc/`, and in every one of the twelve the
+  caller's own argument is already the narrower type -- `func_80055D84(s16 k)`
+  passing `k` to func_8005A778's second parameter, declared `s16` there and
+  `s32` in the park, is the shape of all of them -- so the declared width
+  changes no caller code and neither declaration is testimony. What the list IS
+  is a landing checklist: the prototype in scope is what every caller compiled
+  against, so landing a park whose signature differs rewrites those callers,
+  which is the trap func_8003AB44's landing hit. `parkcheck.py` now prints it.
 * **THE SUB-12-DIFF PARKS ARE NOW EACH BOUNDED ON A NAMED COMPILER FACT**
   rather than on "an allocation question" -- see each file's last dated entry.
   Several standing "first thing to try" items were tried and closed today
