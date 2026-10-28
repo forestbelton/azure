@@ -46,6 +46,41 @@
  * the ready list prefers -- this is the same "memory over ALU inside one
  * priority group" family as func_80035E58's last two words, and if that is
  * what it is, the answer is that it is not reachable from the source.
+ *
+ * THAT IS THE WRONG QUESTION -- 2026-10-27, from the `.greg` dump. This is an
+ * ALLOCATION fact, and the scheduling follows from it.
+ *
+ * The five words are not a reordering, they are a MISSING COPY. Put the two
+ * streams side by side:
+ *
+ *     target  mult ; mflo $v0 ; lw $v1,8($a2) ; nop ; beqz $v1 ;
+ *             move $a0,$v0 (DELAY SLOT) ; jalr $v1
+ *     built   mult ; lw $v1,8($a2) ; nop ; beqz $v1 ; nop (DELAY SLOT) ;
+ *             mflo $a0 ; jalr $v1
+ *
+ * The listing keeps the product in $v0 and copies it into the argument
+ * register in the branch's delay slot; this build writes `mflo` straight into
+ * $a0 and has nothing left to fill the slot with, so it emits a `nop`. Same
+ * five words either way.
+ *
+ * And `--greg` says exactly why:
+ *
+ *     ;; 84 preferences: 4
+ *     ;; 84 conflicts: 80 82 83 84 2 5 29 64 66
+ *
+ * pseudo 84 -- the product -- PREFERS $a0, inherited from the copy into the
+ * call's argument register (global.c:809 propagates copy preferences across
+ * copies), and $a0 (4) is NOT in its conflict set, so it takes it. With the
+ * product already in $a0 the copy has nowhere to exist, and the empty delay
+ * slot is a CONSEQUENCE of that, not an independent scheduler choice.
+ *
+ * So this is carved-sweep's missing-copy family, not the "memory over ALU"
+ * family: the product and the argument are ONE quantity here and TWO in the
+ * listing. Section 3's rules say what separates them -- a conflict, or a
+ * second SET that survives cse -- and note that `v` already has two sets (one
+ * per arm) without that being enough, which is the thing to understand next.
+ * Reading the sched1 dump for the join block, as the paragraph above
+ * suggests, cannot answer it.
  */
 
 #include "common.h"
