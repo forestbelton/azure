@@ -1484,6 +1484,84 @@ against that value. Any variable live across the guard will do -- it does not
 have to be the loop counter -- and `--greg` after the change confirms the new
 priority rather than leaving it inferred.
 
+### A reference that COMBINE folds away still counts -- the phantom test
+
+This is the dead-reference lever above taken to its end, and it is the most
+artificial construct in this repo. It landed func_80033D54 (537 words) and
+nothing else reached that function, so it is written down in full -- including
+the four conditions that make it work, because three of them fail silently.
+
+`reg_n_refs` is counted ONCE, by flow's life analysis
+(`reg_n_refs[regno] += loop_depth`, flow.c:2067 and three sibling sites), and
+is never recomputed. sched1 recomputes only `reg_live_length` and
+`reg_n_calls_crossed`; local-alloc's `update_equiv_regs` only MOVES refs
+between the two sides of a copy (local-alloc.c:781/913). Flow runs BEFORE
+combine. So any mention that survives cse, loop, cse2 and jump, and is then
+deleted by COMBINE, is a reference that costs no instruction.
+
+Combine can delete things cse cannot, because it has `reg_nonzero_bits`
+(`set_nonzero_bits_and_sign_copies`), which is valid for a once-set pseudo in
+EVERY block. A large-constant pointer is still once-set at combine time: its
+`lui`/`ori` split happens between regmove and sched1 (the `.regmove` dump has
+one `(set m1 (const_int 0x1F800054))`, the `.sched` dump has the pair). So
+combine knows such a pointer's low bits are zero and folds a test of them.
+
+The recipe, written inside the loop whose references you want:
+
+    if ((((u32) m1 | (u32) m2) & 3) != 0)
+    {
+        p->unk_C4 = 0;
+    }
+
+The `ior` carries one reference to EACH pointer at loop depth 2, which is +2
+weighted each. On func_80033D54 that moved `m1` from 25 refs / 0.235 to 27 /
+0.253 and `m2` from 9 / 0.064 to 11 / 0.078, clearing `e` (0.248) and `pl`
+(0.077) -- the two adjacent margins, both at once, 46 DIFF to 10.
+
+All four conditions were measured, and each one is a silent failure mode:
+
+* **cse must not know the value in that block.** Written where cse can see the
+  pointer's constant it folds before flow counts anything. Inside the loop,
+  with the pointer set in the preheader, it survives.
+* **loop.c must not hoist it.** An invariant with lifetime 1-2 inside a
+  444-insn loop is "savings 2 not desirable" in the `.loop` dump
+  (`scan_loop`'s `threshold * savings * lifetime >= insn_count`), so it stays
+  put. In a SMALL loop it would be hoisted out, and the fix is a loop-varying
+  operand in the mask -- `& (3 & (u32) o)` also matches here.
+* **The folded branch must be ALWAYS TAKEN.** `if (always_false) {...}` folds
+  to `(set pc (label_ref))`, a recognised jump. `if (always_true) {...}` folds
+  to `(set pc pc)`, which matches no pattern, so `try_combine` undoes the whole
+  substitution and the `move`/`bnez`/`nop` survive: 3 extra words, 459 DIFF.
+* **The dead arm needs a STORE in it.** An empty arm is a jump to the next
+  insn, jump1 deletes it, and the comparison dies with it. With a store, jump2
+  -- the only `jump_optimize` with noop and barrier cleanup running after flow
+  -- deletes the jump and the unreachable store. Cost: one weighted reference
+  to the dead store's base (`p`, 317 to 319) and nothing else.
+
+TREAT THIS AS A LAST RESORT AND MARK IT. It is dead code whose only purpose is
+to move two integers in the compiler's bookkeeping; whether the original had
+anything equivalent is unknowable. When a function needs it, the honest reading
+is that some other assumption -- a declared type, a struct layout, the unit
+split -- is still wrong and is costing those references somewhere a person
+would have spent them.
+
+### `update_equiv_regs` DOUBLES the live length of a once-set constant pseudo
+
+Before pricing any margin, check whether the denominator is real.
+`update_equiv_regs` (local-alloc.c) takes a pseudo with `reg_n_sets == 1`
+whose initialising insn carries a REG_EQUAL constant, promotes the note to
+REG_EQUIV, and does `reg_live_length[regno] *= 2`. The comment says this does
+not affect local-alloc's own priority -- but global-alloc's
+`allocno_live_length` reads it afterwards.
+
+That is why `--greg` can show a live length near TWICE the function's insn
+count: on func_80033D54 (~433 insns) `p` shows 866 and `g` 858, both
+single-insn constant loads. A large-constant pointer ESCAPES the doubling,
+because its pre-sched `lui`/`ori` split leaves `reg_n_sets == 2` before
+local-alloc runs. So two pointers that look alike in the source can have
+denominators a factor of two apart, and a "live <= N" instruction from the
+MARGINS table is unreachable for the doubled one.
+
 ### Keep $v0 busy to make a `lui`/`addiu` pair share its register
 
 `lui $a0, %hi(SYM)` / `addiu $a0, $a0, %lo(SYM)` and
@@ -4066,6 +4144,43 @@ out-of-line arms: count the insns sched1 places ahead of each store (the
 `.sched` dump, or `sched.py --sched1 --rtl`), and change that count with a
 local for the NEIGHBOURING statement's value -- not with statement order,
 which the listing has already fixed.
+
+### Declaration ORDER is the sched2 tie-break for same-priority prologue insns
+
+`rank_for_schedule` keys on priority, then the dependence class against the
+last scheduled insn, then `INSN_LUID`; `potential_hazard` only reorders within
+ties the list order has already fixed (its test is a strict `>`). In a function
+prologue the guard load, the symbol `lui`s and the callee-saved `sw`s are all
+priority 1, so which `lui` comes first is simply which initialiser the front
+end emitted first -- i.e. the order the locals are DECLARED.
+
+func_80033D54: moving `Unk80083160 *g = &D_80083160;` above
+`Unk33D54SP *p = (Unk33D54SP *)0x1F800000;` puts `lui $s1` after
+`lw $v0, gp` / `lui $v1`. Four words, and nothing else in the function moves.
+So when a prologue's insns are right but two of them are swapped, try the
+declaration order before anything else -- it is free and it is local.
+
+### A VOLATILE byte read is how two loads of ONE byte sit side by side
+
+When the listing loads the same byte twice with nothing between, a second
+plain load is merged by cse and the function comes out a word short. A
+volatile load is never entered in cse's table, so it survives. The two are not
+interchangeable in either direction:
+
+* sched1 will pick a PLAIN load ahead of a volatile one (a QImode load cannot
+  cross a scratchpad store either way, but nothing stops that reorder), which
+  is how the listing gets its `+0x0C` reload above the volatile read.
+* TWO volatile loads carry an anti-dependence between them (`read_dependence`
+  returns true when both are volatile), and that dependence decides
+  `rank_for_schedule`'s class at the tie -- so making both volatile FLIPS their
+  order (7 DIFF on func_80033D54).
+* A volatile read expands as `(set (reg:QI) (mem/v))` plus a separate
+  `zero_extend`, and combine folds the extend only into a use in the SAME
+  block; across a block you get a stray `andi`, or you declare the local `u8`
+  and `reg_nonzero_bits` folds it anywhere.
+* A volatile MEM is still not replaced by a reduced giv (section 8's giv
+  entry), so the read has to go through the pointer local the listing reads
+  off, not through the struct pointer: through `e` instead of `q` is 23 DIFF.
 
 ### A SUB-WORD parameter type is how a parameter copy becomes schedulable
 
