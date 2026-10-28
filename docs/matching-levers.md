@@ -3033,6 +3033,18 @@ changes the priority group they land in, or the hazard state at that cycle.
   `(t >> 7)` in `$a1` and the sum in `$v0`, and closed func_8003CB08's last 11
   differing words. The `u + ((t >> 10) + K)` grouping is a separate choice worth
   4 more.
+* **And the converse: when the destination's `lui %hi` sits one slot too LATE,
+  the RHS is in a LOCAL that should be written inline.** Same mechanism read
+  the other way. `u8 *b = SYM; ... ARRAY[0] = (u32) b;` materialises `b` at
+  its declaration, which is ahead of the store, so the value's `lui`/`addiu`
+  come out before the destination's `lui`. Written `ARRAY[0] = (u32) SYM;` at
+  each of the sites instead, `expand_assignment` takes the lvalue address
+  first and the pair comes out in the listing's order -- cse still shares the
+  one address pseudo across the four stores, so nothing else moves. That was
+  the last three words of func_80055864, which LANDED on it; a park header had
+  recorded the same spelling as "3 DIFF", measured before the six constants
+  became one local each, so re-measure a rejected spelling after any other
+  shape in the function changes.
 * An exit block that should sit physically last wants `break` or `goto done`
   out of the loop with the `return` after it; an inline `return` in the arm
   costs a `j` plus a separate epilogue (func_8004068C, 49 words;

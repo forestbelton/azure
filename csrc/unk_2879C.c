@@ -996,7 +996,38 @@ u16 func_800557C8(void) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80055864);
+/* The six 0x1Xxxxx constants are LOCALS, one per constant: that is what
+   materialises all six `lui`/`ori` pairs up front, in declaration order,
+   ahead of the three store groups. Written inline at the stores they are
+   materialised one at a time between them (19 DIFF).
+
+   The first store's VALUE is written out as `(u32) D_801B9000` at each of the
+   four sites rather than hoisted into a `u8 *b` local. With the local, its
+   `lui`/`addiu` is emitted at the declaration, AHEAD of the first store's
+   destination `lui`; written inline, expand_assignment evaluates the lvalue
+   address first and the two come out in the listing's order. Three words. */
+void func_80055864(void)
+{
+    u32 c0 = 0x3A980;
+    u32 c1 = 0x3B990;
+    u32 c2 = 0x1BD50;
+    u32 c3 = 0x576E0;
+    u32 c4 = 0x11940;
+    u32 c5 = 0x69020;
+
+    D_80084538[0] = (u32)D_801B9000;
+    D_80084538[1] = (u32)(D_801B9000 + 0x3000);
+    D_80084538[2] = (u32)(D_801B9000 + 0x4020);
+    D_80084538[3] = (u32)(D_801B9000 + 0x4E40);
+    D_800847C0[0] = 0x1010;
+    D_800847C0[1] = c1;
+    D_800847C0[2] = c3;
+    D_800847C0[3] = c5;
+    D_80084768[0] = c0;
+    D_80084768[1] = c2;
+    D_80084768[2] = c4;
+    D_80084768[3] = 0xFA00;
+}
 
 s32 func_8003F5D4(void);
 
