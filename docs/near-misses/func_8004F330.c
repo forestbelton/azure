@@ -117,6 +117,41 @@
  * `set_preference` and `find_reg` in global.c for what can), or move `i = 0`
  * after the copy without disturbing the guard shape. Both splits, all four
  * declaration orders, and the whole MARGINS table are now closed.
+ *
+ * 2026-10-28: `set_preference` AND `prune_preferences` ARE NOW READ, and there
+ * is nothing in C that denies the preference. Four routes, all closed, with
+ * the code for each:
+ *
+ *   * WHERE IT COMES FROM. `set_preference`'s second branch (global.c:1601)
+ *     fires on `(set pseudo (reg a0))` whenever `reg_allocno[pseudo] >= 0`,
+ *     and records BOTH a copy preference and a full preference. The incoming
+ *     parameter copy is exactly that insn, so the preference exists for any
+ *     parameter that global-alloc allocates.
+ *   * DOWNGRADING IT DOES NOT HELP. `set_preference` records a plain rather
+ *     than a copy preference when the SET's source is an expression rather
+ *     than a bare register (`copy = 0` at the top of the function). It makes
+ *     no difference here, because `regs_someone_prefers` -- the set `find_reg`
+ *     avoids, global.c:953 -- is built from `hard_reg_full_preferences`
+ *     (global.c:880), which carries both kinds.
+ *   * MAKING $a0 ILLEGAL FOR `p` would prune the preference, and needs $a0
+ *     live inside `p`'s range. In a function with NO CALL, $a0 is live only at
+ *     entry; nothing in the source can extend it.
+ *   * THE SIZE ESCAPE NEEDS A CALL TOO. `prune_preferences` drops a rival's
+ *     preferences from `regs_someone_prefers` when the rival is not larger AND
+ *     this allocno prefers the same registers (global.c:876). So an address
+ *     value could take $a0 after all -- if it PREFERRED $a0 itself. A hard-reg
+ *     preference comes only from a copy to or from that hard register, i.e.
+ *     from an argument setup or a return value, and this function has neither.
+ *
+ * So for a PARAMETER used in more than one basic block, in a function with no
+ * call, the incoming register is reserved and no choice of which pointer is
+ * used where can change it. The one shape that removes the preference is a
+ * parameter confined to ONE block -- `reg_allocno < 0`, so local-alloc owns it
+ * and `set_preference` never fires -- and that is the same shape whose copy
+ * coalesces away, measured above at 39 words. That is the fork, stated
+ * exactly: the preference and the surviving copy cannot both be had by
+ * changing pointers, and what would break it is something that gives an
+ * address value its own $a0 preference.
  */
 
 #include "common.h"

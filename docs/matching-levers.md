@@ -2005,6 +2005,42 @@ exist. (The doubling diagnosis itself is sound: the parameter pseudo does carry
 `REG_EQUIV (mem:SI (reg:SI 0 $0))` on its incoming copy even though the
 argument arrives in `$a0`.)
 
+### A PARAMETER always reserves its incoming register, unless there is a call
+
+`set_preference`'s second branch (global.c:1601) fires on the incoming copy
+`(set pseudo (reg aN))` whenever `reg_allocno[pseudo] >= 0`, and records both a
+copy preference and a full preference for that argument register. `find_reg`
+then avoids it for every higher-priority allocno, because `regs_someone_prefers`
+(global.c:953) is built from `hard_reg_full_preferences` (global.c:880). So a
+parameter that global-alloc allocates holds its own argument register against
+everything else, however the source is spelt. The four ways out, and what each
+needs -- worked on func_8004F330 and worth checking before spending a session
+on "why does this value not take $a0":
+
+* **Downgrade the preference**: no. `set_preference` records a plain rather
+  than a copy preference when the SET's source is an expression rather than a
+  bare register (`copy = 0`), but `regs_someone_prefers` carries both kinds.
+* **Make the register illegal for the parameter**: needs the hard register live
+  inside the parameter's range, which in a function with NO CALL it never is.
+* **The `prune_preferences` size escape** (global.c:876): a rival's
+  preferences are dropped from `regs_someone_prefers` when the rival is not
+  larger AND this allocno prefers the same registers -- so a competing value
+  CAN take the argument register, if it prefers that register itself. A
+  hard-reg preference comes only from a copy to or from that register, i.e.
+  from an argument setup or a return value. In a function with no call there is
+  nothing to supply one. (`allocno_size` counts WORDS, so the "larger" branch
+  never applies between two pointers.)
+* **Confine the parameter to ONE basic block**, so `reg_allocno < 0`,
+  local-alloc owns it, and `set_preference` never fires. This is the one that
+  works -- and it is the same shape whose entry copy then coalesces away, which
+  is a word short wherever the listing spends that copy.
+
+The last two lines are the usable content: in a function WITH a call, give the
+competing value its own preference by making it an argument; in a function
+without one, the parameter's register is simply not available, and a park that
+needs it should be read as needing a different parameter or block structure
+rather than a different spelling.
+
 ### Keep $v0 busy to make a `lui`/`addiu` pair share its register
 
 `lui $a0, %hi(SYM)` / `addiu $a0, $a0, %lo(SYM)` and
