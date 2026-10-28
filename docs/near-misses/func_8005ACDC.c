@@ -94,6 +94,21 @@
  * restructuring of the body's opening statements, and it is not an allocation
  * question, so section 3's procedure does not apply (its step 1 already says
  * SHAPE here). See the section 9 entry.
+ *
+ * AND THAT REORDERING IS NOT AVAILABLE IN THIS SOURCE -- 2026-10-28, with the
+ * constant identified. The hoisted 2 is loop.c's insn 220 in the `.loop` dump,
+ * and its only use is insn 74, `(ltu (reg 83) (const_int 2))`, which is the
+ * `v >= 2` test. `v` is `*(u16 *) (e + 0x1A)` -- read THROUGH the symbol. So
+ * the data dependence forces D_80085458 to be touched before the 2 can be
+ * used at all, and no permutation of these statements puts the constant first.
+ *
+ * Which makes the listing's order evidence about the ORIGINAL: it hoists the 2
+ * ahead of the symbol, so the original must use the constant 2 somewhere that
+ * does NOT depend on D_80085458 and that is reached earlier in the body. This
+ * source has no such use -- its only 2s are `v >= 2` (dependent) and the inner
+ * `k != 2` (deeper still). That is a statement about the function's shape
+ * rather than its spelling, and it is the thing to look for: an early
+ * comparison against 2 on something other than the row halfword.
  */
 #include "common.h"
 
