@@ -130,6 +130,41 @@
  * func_80037E58's carved-sweep row is a sched2 choice written up as
  * unreachable that then LANDED on a declaration change. Read the limits above
  * as the live list they are.
+ * 2026-10-28: "THE FIRST THING TO TRY" HAS NOW BEEN TRIED, and it does not
+ * move. The note above leaves one opening -- that priority is sensitive to
+ * LOAD delays and insensitive to ALU chains, so a shape changing WHICH values
+ * arrive from memory could move priority at constant instruction count. Seven
+ * shapes, every one of them 43 of 43 words so the instruction count really is
+ * constant:
+ *
+ *     `s` and `t` both computed right after `a` is read      8 DIFF
+ *     `s` alone moved up, `t` left in place                  2 DIFF (base)
+ *     no `t` local -- the stores index `*(u32 *)(s + a * 4 + 0x48)`   2 DIFF
+ *     `t` written `(u32) s + a * 4` instead of `a * 4 + (u32) s`     11 DIFF
+ *     the `* 4` moved onto the read, `a = *(*cp)++ * 4;`      8 DIFF
+ *     `m`'s `* 4` deferred to its use in `q` instead         9 DIFF
+ *     BOTH multiplies moved that way                         2 DIFF
+ *
+ * The last row is the informative one. Moving either multiply alone is 8 or 9,
+ * moving both is 2 -- the same as the base -- so what the schedule is
+ * sensitive to is the two multiplies' position RELATIVE TO EACH OTHER, not
+ * where either sits in the block. That is consistent with the account above
+ * (the swap is between `sll $t0, $t0, 2` and `addu $a1, $a1, $t1`, and $t1 is
+ * the other multiply's result) and it says the load-delay opening is not a way
+ * in: none of these changes which values come from memory, because every one
+ * of them leaves the same four `lbu`s and the same `lw`s in place. To use the
+ * opening properly something would have to change a FIELD'S WIDTH or where a
+ * value is stored, which is the second bullet of the "what this argument does
+ * not cover" list -- a different dependence graph, not a different arrangement
+ * of this one. Still 2 DIFF, still the floor.
+ *
+ * 2026-10-28: AND IT WAS CONFIRMED ON THIS FILE, not just assumed from the
+ * identical listings. Four of the seven shapes were re-measured against
+ * func_8003A858's own target and score the same to the word: the two 2-DIFF
+ * ones (no `t` local; both multiplies moved) and the two 8-DIFF ones (`s` and
+ * `t` hoisted; the `* 4` moved onto the read). So a measurement on either
+ * file is a measurement on both, and whichever lands first lands the other --
+ * 86 words, not 43.
  */
 
 #include "common.h"
