@@ -195,14 +195,23 @@
  * the first park where advise.py's MISSING row named a load. The rest of the
  * header below predates that and is written against 30 DIFF.
  *
- * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
- * or margin number above that involves pseudo 80, 81, 82, 83 is wrong, and any
- * "live <= N" instruction from the MARGINS table for them is unreachable.
+ * AUDIT 2026-10-27 -- pseudo 80, 81, 82, 83 have a DOUBLED live length, and
+ * they report roughly twice their real range in this 58-word function.
  * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
  * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
- * doubled value -- so these pseudos report roughly twice their real range in a
- * 58-word function. See matching-levers section 3. Re-derive the arithmetic over
- * halved lengths before concluding anything about those pairs.
+ * doubled value.
+ *
+ * READ THAT CORRECTLY: global-alloc really does use the doubled number, so the
+ * ORDER `--greg` prints is the order gcc chose -- it is not wrong about the
+ * assignment. What is wrong is treating those priorities as a measure of the real
+ * live range, and the MARGINS table's `live <= N` instruction, which is in DOUBLED
+ * units: shortening the real range by k moves the stored value by 2k, so the
+ * instruction costs half as many real insns as it reads.
+ *
+ * No order change available here: all doubled rows are doubled by the same
+ * factor and they sit below every undoubled row either way, so escaping the
+ * doubling would not move the assignment. The note stands only as a warning
+ * against reading the numbers as real ranges.
  */
 
 #include "common.h"

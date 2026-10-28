@@ -83,14 +83,25 @@
  * `m2->t[1]`), and it does give m2 the references, but it also moves those
  * two stores onto $s6 where the listing has them off $s1. Measured: 126 DIFF.
  *
- * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
- * or margin number above that involves pseudo 83, 84 is wrong, and any
- * "live <= N" instruction from the MARGINS table for them is unreachable.
+ * AUDIT 2026-10-27 -- pseudo 83 has a DOUBLED live length, and
+ * it reports roughly twice its real range in this 546-word function.
  * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
  * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
- * doubled value -- so these pseudos report roughly twice their real range in a
- * 546-word function. See matching-levers section 3. Re-derive the arithmetic over
- * halved lengths before concluding anything about those pairs.
+ * doubled value.
+ *
+ * READ THAT CORRECTLY: global-alloc really does use the doubled number, so the
+ * ORDER `--greg` prints is the order gcc chose -- it is not wrong about the
+ * assignment. What is wrong is treating those priorities as a measure of the real
+ * live range, and the MARGINS table's `live <= N` instruction, which is in DOUBLED
+ * units: shortening the real range by k moves the stored value by 2k, so the
+ * instruction costs half as many real insns as it reads.
+ *
+ * AND IT IS A LEVER. A pseudo that is NOT once-set escapes the doubling entirely
+ * (a large-constant pointer does it by accident: its pre-sched lui/ori split
+ * leaves reg_n_sets == 2 before local-alloc runs). So giving 83 a second
+ * set that survives cse DOUBLES its priority at zero instruction cost, and
+ * then 83 would pass 111 (7.371 against 7.273, a 1.3% gap).
+ * Worth trying before any reference arithmetic. See matching-levers section 3.
  */
 #include "common.h"
 

@@ -1582,8 +1582,37 @@ count: on func_80033D54 (~433 insns) `p` shows 866 and `g` 858, both
 single-insn constant loads. A large-constant pointer ESCAPES the doubling,
 because its pre-sched `lui`/`ori` split leaves `reg_n_sets == 2` before
 local-alloc runs. So two pointers that look alike in the source can have
-denominators a factor of two apart, and a "live <= N" instruction from the
-MARGINS table is unreachable for the doubled one.
+denominators a factor of two apart.
+
+READ THE CONSEQUENCE CAREFULLY, because the obvious reading is wrong.
+Global-alloc really does use the doubled number, so the ORDER `--greg` prints
+is the order gcc chose -- it is not mispredicting the assignment. Two things
+ARE wrong: treating those priorities as a measure of the real live range, and
+the MARGINS table's `live <= N` instruction, which is in DOUBLED units.
+Shortening the real range by k moves the stored value by 2k, so that
+instruction costs half as many real insns as it reads.
+
+AND THE DOUBLING IS ITSELF A LEVER: a pseudo that is not once-set escapes it,
+so giving a doubled pseudo a SECOND SET THAT SURVIVES CSE doubles its priority
+at zero instruction cost. (The surviving kinds are the ones section 8's
+birthing entry lists: a parameter's incoming copy plus a reassignment, a
+loop-carried variable, the two arms of an `if`. A re-spelling does not count.)
+Swept over the eight parks whose headers quote live or margin numbers for a
+doubled pseudo, 2026-10-27, six have an adjacent pair that flips if the
+doubled one escapes:
+
+    func_800345B8   83 passes 111   (7.371 against 7.273 -- a 1.3% gap)
+    func_8004CECC   84 becomes the TOP global allocno (1.082 against 0.750)
+    func_80056654   80 passes 93    (0.905 against 0.659)
+    func_80041E70   80 passes 81    (2.433 against 2.000)
+    func_8004E9EC   81 passes 96    (0.296 against 0.227)
+    func_800537D0   82 passes 99    (0.107 against 0.062, both at the bottom)
+
+and two do not: func_80047054 and func_8004951C, where every doubled row is
+doubled by the same factor and sits below every undoubled row either way. Each
+of the eight park files carries its own note. Try this before any reference
+arithmetic on a doubled row -- it is a factor of two, where a reference is a
+`floor_log2` step.
 
 ### Keep $v0 busy to make a `lui`/`addiu` pair share its register
 

@@ -35,14 +35,25 @@
  * Read the row for the five known cures and why a parameter defeats all of
  * them.
  *
- * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
- * or margin number above that involves pseudo 82 is wrong, and any
- * "live <= N" instruction from the MARGINS table for it is unreachable.
+ * AUDIT 2026-10-27 -- pseudo 82 has a DOUBLED live length, and
+ * it reports roughly twice its real range in this 34-word function.
  * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
  * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
- * doubled value -- so this pseudo reports roughly twice its real range in a
- * 34-word function. See matching-levers section 3. Re-derive the arithmetic over
- * halved lengths before concluding anything about that pair.
+ * doubled value.
+ *
+ * READ THAT CORRECTLY: global-alloc really does use the doubled number, so the
+ * ORDER `--greg` prints is the order gcc chose -- it is not wrong about the
+ * assignment. What is wrong is treating those priorities as a measure of the real
+ * live range, and the MARGINS table's `live <= N` instruction, which is in DOUBLED
+ * units: shortening the real range by k moves the stored value by 2k, so the
+ * instruction costs half as many real insns as it reads.
+ *
+ * AND IT IS A LEVER. A pseudo that is NOT once-set escapes the doubling entirely
+ * (a large-constant pointer does it by accident: its pre-sched lui/ori split
+ * leaves reg_n_sets == 2 before local-alloc runs). So giving 82 a second
+ * set that survives cse DOUBLES its priority at zero instruction cost, and
+ * then 82 would pass 99 (0.107 against 0.062) -- both at the bottom of the order, so probably harmless here.
+ * Worth trying before any reference arithmetic. See matching-levers section 3.
  */
 
 #include "common.h"
