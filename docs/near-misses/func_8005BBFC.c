@@ -1,4 +1,4 @@
-/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 219 DIFF. NOT compiled.
+/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 220 DIFF. NOT compiled.
  *
  * SPU voice start: resolves the program record for (bank, prog, key), waits
  * for the hardware voice to go idle, sums the sample-table lengths to get the
@@ -231,6 +231,44 @@
  * register, WITHOUT putting any instruction in the entry block. `fn = (s16)
  * fine;` there is 332 words and 306 DIFF for the opposite reason: gcc folds
  * the cast into the load and emits `lh`, losing the sll/sra pair as well.
+ *
+ * 2026-10-28, LATE: THE RAW-`vel` TEST IS REVERTED, because the listing tests
+ * the CAST. This file spent the morning at 219 DIFF on the strength of
+ * `if (vel >= e[6] && e[7] >= vel)` -- the raw parameter giving `vel` a third
+ * reference so its load stayed in the prologue. The listing's own test says
+ * otherwise:
+ *
+ *     sll  $v0, $t0, 16
+ *     sra  $a2, $v0, 16        <- $a2 = (s16) vel
+ *     sll  $a1, $a2, 8
+ *     lbu  $v0, 0x6($s1)
+ *     slt  $v0, $a2, $v0       <- the test is on $a2, the CAST value
+ *     bnez $v0, .L8005C0EC
+ *      addu $s7, $a1, $a0      <- pit, in the delay slot
+ *     lbu  $v0, 0x7($s1)
+ *     slt  $v0, $v0, $a2       <- and so is the second half
+ *
+ * so the source tests `(s16) vel`, and this file now does. That is 220 DIFF
+ * with `vel`'s load sunk again (word 52 instead of the prologue), against 219
+ * with the raw test -- the better number off a shape the listing does not
+ * have, which is the call func_80056D44 and func_8005914C already get here.
+ *
+ * AND IT RETIRES THE THIRD-REFERENCE THEORY FOR BOTH PARAMETERS. In the
+ * listing, `vel` ($t0) is read ONCE, by the `sll` above, and `fine` ($t1) once
+ * by its own `sll` -- two references each, both multi-block, and BOTH loads
+ * sit in the prologue. So whatever keeps them there is not a reference count,
+ * and the raw-`vel` trick worked by accident. What the listing does differently
+ * has to be found in the register pressure around those two pseudos.
+ *
+ * ONE PIECE OF STRUCTURE THAT IS NOW EVIDENCE, from the prologue: the listing
+ * copies BOTH `volx` and `panx` into stack locals, `lhu $t2, 0xA8($sp)` then
+ * `sh $t2, 0x58($sp)`, and `lhu $t2, 0xAC($sp)` then `sh $t2, 0x60($sp)`. So
+ * the original has locals for them, the way the sibling func_8005B4D0's source
+ * has `vs = volx; ps = panx;`. Measured here and INERT: `u16 vs; u16 ps;`
+ * assigned before the D_80085F98 store is 333 words and the same 220 -- cse
+ * propagates the copies straight out, so there is nothing to spill -- and
+ * after the store it is 334 / 252. The locals are right and a plain copy does
+ * not keep them, which is the same wall as `fn = fine;` above.
  */
 
 #include "common.h"
@@ -274,7 +312,7 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
         q = b + ((s16) prog * 0x10 + 0x20);
         e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
         pit = ((s16) vel << 8) + (s16) fine;
-        if (vel >= e[6] && e[7] >= vel)
+        if ((s16) vel >= e[6] && e[7] >= (s16) vel)
         {
             func_80056DB4(ch, (s16) vel << 8, (s16) vel);
             g = &D_80073740[ch];
