@@ -92,6 +92,30 @@
  * word it would buy, and the BOUNDED verdict stands on a complete enumeration
  * rather than on three blocked ideas.
  *
+ * 2026-10-28, A CONSISTENCY CHECK THAT TIGHTENS THE VERDICT AGAIN. Inside this
+ * very arm, cse folds the unk_87 read and RELOADS unk_6E (`lhu` + `sll`, which
+ * both sides agree on). That is not an inconsistency in the analysis above --
+ * it is `note_mem_written`'s QImode rule (cse.c:7565-7576; levers section 5,
+ * "a reg-reg copy right after an `lbu`"): a store to a varying address wipes
+ * cse's WHOLE memory table unless the MEM is in a struct or its address is a
+ * PLUS *and* its mode is not QImode, so the arm's own `sb` to unk_87 flushes
+ * mem(0x6E) before the 0x6E read happens. The 0x87 read is folded only because
+ * it comes BEFORE that `sb`.
+ *
+ * Read the other way, those two words are evidence about the ORIGINAL: because
+ * a fresh cse block would cost the unk_87 read an `lbu` (271 words), the
+ * listing's single `sll $v1,$v1,1` cannot be a field read in a fresh block. It
+ * has to be a LOCAL doubled where its constant-ness is not known -- i.e. the
+ * local form AND a cse-run boundary, not either alone.
+ *
+ * And the local form is not free: `v = 0x10; p->unk_87 = v;` with `v = v * 2;`
+ * in the arm is 270 words / 4 DIFF -- the word is still folded (`li $v1,32`,
+ * since cse knows `v` in the same block) AND the three words that `r`'s second
+ * live range buys are lost, because the 0x10 is no longer in `r`. `v <<= 1` is
+ * 12. So the boundary would have to arrive on top of a form that already
+ * starts 3 worse, which puts every route further above the single word than
+ * the enumeration above already had it.
+ *
  * DECLARATIONS: none. include/structs.h's Unk42710/Unk42710A already carry
  * every field, verified by compiling against the header. The source needs only
  * `#include "common.h"` plus `s32 func_80042900(s8 *, s8);`, and when it lands
