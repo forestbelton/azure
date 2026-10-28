@@ -26,6 +26,43 @@
  * allocation question, not a spelling one.
  */
 
+/* 2026-10-28: THE TWELVE WORDS ARE ONE $v1/$a1 SWAP, AND THE QUANTITIES ARE
+ * NOW IDENTIFIED. From the `.lreg` dump and `.greg`'s dispositions, the two
+ * rivals are
+ *
+ *   the CURSOR   pseudo 94 = `88 + 1` (the second increment): 5 refs over 6
+ *                insns -- its own set, the `sw` to +0x1C, and the bases of
+ *                r[1], r[2], r[3]. Priority floor_log2(5)*5*4/6 = 6.67. It
+ *                takes $v1 here; the listing gives it $a1.
+ *   the ACCUM.   a FIVE-pseudo chain 95 -> 98 -> 101 -> 104 -> 85 (r[0]'s
+ *                byte, then each `addu`, then `d`), combined into ONE quantity
+ *                because each `addu`'s destination ties to its dying source,
+ *                so it carries ~10 refs -- but over a span that reaches from
+ *                r[0]'s load to the final `lbu`, which is long enough to put
+ *                it UNDER the cursor. It takes $a1 here; the listing gives it
+ *                $v1.
+ *
+ * So the accumulator has to outrank the cursor. MEASURED 2026-10-28, all 29
+ * words, none of it reaching:
+ *
+ *   * splitting the accumulation to buy free references -- `+ m` as its own
+ *     statement (15 DIFF), `+ (r[3] << 24)` and `+ m` split off (15), and
+ *     `d = r[0];` then one `+=` with the rest (13). The references do arrive,
+ *     but the split also moves `m`'s `sll` later and costs three words
+ *     elsewhere; +2 refs is not enough to flip 6.67 over a span this long,
+ *     and the arithmetic says it needs about +4.
+ *   * reading r[0] BEFORE the increment, so the accumulator is born first and
+ *     would win a tie -- `d = (*cp)[1];` above `(*cp)++` is 16 DIFF: it also
+ *     reorders the table byte's load.
+ *   * computing the cursor into `r` explicitly to lengthen its range --
+ *     `r = *cp + 1; *cp = r;` in place of `(*cp)++; r = *cp;`, with the
+ *     lookup before or after it, is 12 DIFF either way. gcc folds the two
+ *     forms together, so there is no range to lengthen there.
+ *
+ * The twin func_8003A3E8 sits at the same 12 and should take whatever lands
+ * here.
+ */
+
 #include "common.h"
 
 void func_8003A374(u8 *p) {

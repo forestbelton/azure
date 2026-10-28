@@ -100,6 +100,39 @@
  *     shape where `c` still prefers $a2 but `b` is not copied into it, or
  *     where `b` acquires a $a0 preference of its own.
  *
+ * 2026-10-28: WHAT IT WOULD TAKE TO BLOCK THE PROPAGATION, read out of
+ * `expand_preferences` (2.7.2 global.c:780-824) rather than inferred. The
+ * propagation across `c = b` is NOT unconditional. It fires only when
+ *
+ *   1. the copy insn carries a REG_DEAD note FOR ITS SOURCE -- the loop walks
+ *      `REG_NOTES` looking for `REG_DEAD` and does nothing otherwise; and
+ *   2. the two allocnos DO NOT CONFLICT (both directions are tested).
+ *
+ * Both conditions say the same thing here: `b` has to be LIVE past the copy.
+ * It is not, because every path through the `t != 0` block returns, so the
+ * `switch (b)` below is unreachable from the copy and flow marks `b` dead on
+ * it. Note the copy is in the listing too (`addu $s2, $a0, $zero`), so the
+ * original has the same copy and must be blocking the propagation some other
+ * way -- or `b` there is live past it.
+ *
+ * MEASURED, and both cost the word that makes them useless: hoisting the copy
+ * OUT of the `t != 0` block so that `b` is still live at it -- `c = b;` above
+ * the `if (t != 0)` with the arm reduced to the one-armed
+ * `if (p[0x49] == 0) { c = func_800589B8(...); }` -- is 82 words / 36 DIFF,
+ * and the same copy put immediately after `b = r;` is 82 / 70. The extra word
+ * is the copy itself: inside the arm it is the arm's only insn and reorg
+ * fills with it, hoisted it is a separate insn on both paths.
+ *
+ * So the remaining shapes are: a use of `b` after the copy ON THAT PATH that
+ * costs no instruction, or a conflict between `b` and `c` without one. Note
+ * also that `c` crosses a call and `b` does not, which is why pruning removes
+ * $a2 from `c` (and gives it $s2) but leaves it on `b`.
+ *
+ * EXHAUSTION: a full `tools/decomp/search.py` sweep over every transform
+ * family, run 2026-10-28 on this 6-DIFF base, improved on nothing. The
+ * measured lists above predate the 12 -> 6 inverted-if/else fix, so treat
+ * them as evidence about THAT source, not this one.
+ *
  * `u8 b` is load-bearing and was re-measured: `s32 b` and `u32 b` are 78
  * words / 62 DIFF, `s32 b = r & 0xFF` is 79 / 66, dropping `b` and masking
  * `r` at each site is 80 / 65. `b = r & 0xFF` with `u8 b` is identical to
