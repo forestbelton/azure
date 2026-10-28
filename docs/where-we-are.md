@@ -286,6 +286,41 @@ repo; what matters is the checks.
    is an impossible number: func_80047054 is a 58-word function whose pseudos
    80-83 all report live 88, and its margin row asks for "live <= 17 (-71)".
 
+5. **"IT IS AN ALLOCATION QUESTION" IS THE MOST OVERTURNED CLAIM IN THESE
+   FILES.** On 2026-10-28 five park conclusions of that form were wrong, and
+   all five failed the same way -- the park read a register permutation off the
+   diff, went to `--greg`, found a priority order that explained it, and
+   stopped. The priorities were real; they were not the cause. In order of how
+   much time each cost:
+
+   * func_8003AB44, "a pure 3-cycle register rotation" pointing at
+     global-alloc's order: argument 3 was `s32` with an `(s16)` cast instead of
+     `s16`. Declaring it narrow put all three callee-saved registers right at
+     once. 9 DIFF to MATCH. **Check sub-word PARAMETER TYPES before priorities**
+     -- a narrow parameter separates the raw value from its extension and moves
+     an allocation order with no section 3 lever at all.
+   * func_800565D8, "the lever is local-alloc's SUGGESTION phase": no quantity
+     in that block had a suggestion. `combine_regs` had merged the byte with
+     its shift, summing their references AND copying up the wider mode's size,
+     so the park's "the subtraction already outranks the byte two to one" was
+     arithmetic on a quantity that did not exist. 3 DIFF to MATCH.
+   * func_80038CB8, "one allocation decision": the register follows the
+     SCHEDULE. The listing's `sh` to +0x20 frees $v0 before the +0x28 byte is
+     loaded, so the temp reuses it; ours sinks the store and the temp takes
+     $v1, pushing the carried pointer off $v1.
+   * func_8004D880, "whatever bars the parameter from $a0 is the whole
+     finding": nothing can, in that shape. `find_reg` overrides its
+     lowest-legal pick with the allocno's own copy preference, and
+     `regs_someone_prefers` is consulted only in pass 0, which never allocates
+     a register for the first time. The listing uses a THIRD pseudo. 22 to 12.
+   * func_8004D294, "no spelling of the subtraction moves it, the next step is
+     sched.py": a statement split moved it. 9 DIFF to MATCH.
+
+   So the order to work an ALLOC verdict in is: parameter and field TYPES
+   first, then whether the rival quantities are MERGED (`advise.py --greg` now
+   warns about this), then whether a store or a load's POSITION decides the
+   register, and only then the priority table.
+
 A MEASURED NEGATIVE worth not re-deriving, 2026-10-27: converting a park's
 definition to an OLD-STYLE (K&R) parameter list, with its declared types
 unchanged, was swept over all 38 multi-parameter park files and changed not one
