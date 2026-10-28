@@ -2005,6 +2005,47 @@ exist. (The doubling diagnosis itself is sound: the parameter pseudo does carry
 `REG_EQUIV (mem:SI (reg:SI 0 $0))` on its incoming copy even though the
 argument arrives in `$a0`.)
 
+### `SMALL_REGISTER_CLASSES` IS ABSENT, so gcc treats HARD registers like pseudos
+
+`config/mips/` never defines `SMALL_REGISTER_CLASSES`, and that one absent
+macro turned out to be the deciding fact in three separate investigations on
+2026-10-28. It is worth knowing as a single rule rather than rediscovering it:
+**every restraint gcc puts on moving, folding and recording HARD registers is
+guarded by that macro, so on this target none of them applies.** The sites,
+with what each would have prevented:
+
+* **`combine.c:954`** -- `can_combine_p` would refuse to extend the life of a
+  hard register that is not a user variable. Inactive, so combine folds a
+  reg-to-reg copy whose source is a hard register. (Four more at `:1134`,
+  `:1279`, `:1765`, `:1831`; the `:1279` one is the i3 test.) This is why
+  naming a value cannot defeat combine here -- func_800599B0.
+* **`local-alloc.c:712`** -- `optimize_reg_copy_1`, comment "We don't want to
+  mess with hard regs if register classes are small". Inactive, so local-alloc
+  rewrites hard-register copies. This is why func_8005A90C's +0x14 store reads
+  `(reg:SI 5 a1)` in `.lreg` while still reading a pseudo in `.combine`.
+* **`loop.c:743`** -- `scan_loop` would refuse to replace a register's single
+  use with the source of its SET when that source is a hard register.
+  Inactive, so loop substitutes incoming argument registers into their one use
+  and deletes the copy.
+* **`cse.c:1893`** -- cse would decline to record equivalences for any
+  non-fixed hard register. Inactive, so cse DOES record them, which is the
+  upstream reason hard registers propagate at all.
+* **`loop.c:4138`** is the one `#ifndef`, i.e. ACTIVE here, and it cuts the
+  other way: a hard register is barred from an invariant only when it is
+  call-used AND a call has been seen, where a small-register-class target bars
+  every hard register.
+
+THE PRACTICAL CONSEQUENCE, and the reason three parks kept reporting the same
+surprise: an INCOMING ARGUMENT REGISTER can turn up far from the prologue,
+holding a parameter that never got a pseudo of its own, because every pass
+that would have stopped it is switched off. When a diff shows the target
+copying a parameter to a callee-saved register and your build reading `$aN`
+directly, that is this, not an allocation priority -- see func_8005A90C,
+func_8004F330 and func_8005A608. And read the pass dumps in order before
+blaming one: the rewrite can happen as late as local-alloc, and a `.lreg`
+reading attributed to combine sent func_8005A90C's park down the wrong path
+for two sessions.
+
 ### COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY
 
 `try_combine` only ever runs on a pair joined by a LOG_LINK, and LOG_LINKs are
