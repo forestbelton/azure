@@ -2809,8 +2809,13 @@ them is `rank_for_schedule`'s dependence CLASS against the last-scheduled insn
 (highest class wins, so the insn INDEPENDENT of it beats the one it depends
 on), and the only key above class is priority -- which, because `insn_cost` is
 1 between ALU insns against the `- 1` in `priority()`, grows ONLY across a load
-delay. func_8003A060's park file works that case out in full; it is why those
-two words are unreachable rather than merely unsolved.
+delay. func_8003A060's park file works that case out in full -- and states what the
+argument does NOT cover, which is everything outside its own dependence graph.
+Priority is insensitive to ALU chain length, not to load delays, so the escape
+from a case like that is a shape that changes which values arrive from memory,
+not another ordering of the same ones. "No statement order reaches it" is the
+claim the dumps support; "unreachable" is not, and the target is this
+compiler's own output from some source.
 
 ### A global's DECLARED SIZE also decides how many registers its address costs
 
