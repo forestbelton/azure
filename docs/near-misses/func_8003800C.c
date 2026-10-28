@@ -97,6 +97,25 @@
  * `volatile` on both is the same 4. So the original is reading that field
  * twice through something cse cannot equate, and finding what that is is the
  * whole remaining job.
+ *
+ * A STORE BETWEEN THE TWO READS DOES NOT DO IT -- measured 2026-10-28. The
+ * reasoning was that cse's memory table is flushed by a store it cannot prove
+ * disjoint, and the `*(u32 *) (q + 0x10) = func_80038A10` store sits AFTER the
+ * `t = ...` read in this source while the only thing between the two `+0x34`
+ * reads is a CONDITIONAL call -- so on the path that skips the call, nothing
+ * invalidates and cse equates them. Moving that store earlier does not help:
+ *
+ *     store before the `t = ...` read        69 of 71, 29 DIFF
+ *     store after `r2 = ...`                 70 of 71, 29 DIFF
+ *     `r2` read first, `t` read off `r2`     70 of 71, 29 DIFF
+ *
+ * all against the base's 70 of 71. So the invalidation is not reachable by
+ * moving the stores that are already there, and the next thing to try is the
+ * OTHER half of what decides cse's equating: MEM_IN_STRUCT_P (section 5). Two
+ * reads of the same address differ to cse if one carries it and the other does
+ * not, which in source terms is one read through a struct field and the other
+ * through a plain pointer cast. That needs a declared type for the +0x80
+ * object, which this source does not have.
  */
 
 #include "common.h"
