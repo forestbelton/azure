@@ -2046,40 +2046,41 @@ blaming one: the rewrite can happen as late as local-alloc, and a `.lreg`
 reading attributed to combine sent func_8005A90C's park down the wrong path
 for two sessions.
 
-### A HOISTED ARGUMENT SETUP GETS SHARED BY NEARBY STORES OF THE SAME VALUE
+### STORES CAN SHARE A HOISTED ARGUMENT REGISTER INSTEAD OF THE VALUE'S OWN
 
-When a value is both STORED somewhere and passed to a later call, gcc can hoist
-the call's `$aN = value` setup well above the stores, and the stores then read
-`$aN` because it already holds what they want. The emitted shape is
+When a value is both STORED somewhere and passed to a later call, gcc hoists
+the call's `$aN = value` setup above the stores -- and it may then let the
+stores READ `$aN` rather than the value's own register:
 
-    move $a1, $s0          <- the call's argument setup, hoisted
-    sw   $a1, 0x14($s0)    <- stores that just READ it
-    sw   $a1, 0x8($s0)
-    ...
-    jal  func_...
+    built    move $a1, $s0 ; sw $a1, 0x14($s0) ; sw $a1, 0x8($s0) ; jal ...
+    target   addu $a1, $s4, $zero ; sw $s4, 0x14($s0) ; sw $s4, 0x8($s0) ; jal ...
 
-against a listing that keeps the value in a callee-saved register and stores
-THAT directly, setting up `$aN` only at the call. Two things follow and both
-are worth having before reading an allocator table:
+NOTE WHAT IS THE SAME IN BOTH: the argument setup is hoisted above the stores
+either way. An earlier version of this entry claimed the listing sets up `$aN`
+only at the call, and that is simply false -- checked on func_8005A90C, where
+the target's `addu $a1, $s4, $zero` precedes all six of its field stores. The
+difference is only whether the stores read the argument register or the value's
+own, and the hoisting is not the lever.
 
-* **The register count changes.** The listing needs a callee-saved register for
-  the value; the sharing build does not, because the value's home becomes the
-  argument register, reloaded from a copy after any intervening call. That is
-  one fewer `sw`/`lw` pair and one extra `move`. func_8005A90C is four
-  callee-saved registers against the listing's six for exactly this reason.
-* **It looks like a substitution and is not.** The same difference read from
-  `.lreg` looks like a pass having put a hard register into a store, and that
-  reading cost func_8005A90C's park four wrong diagnoses in a row -- combine,
-  `update_equiv_regs`' two-reference rule, a local-alloc routine, and a
-  missing register for a non-parameter. READ THE EMITTED ORDER FIRST
-  (`verify.py --full`): if an `$aN` setup appears above the stores, there is
-  nothing else to find.
+What it costs: the build that shares does not need a callee-saved home for the
+value at all, because the stores are served by `$aN`; the listing keeps one.
+func_8005A90C is four callee-saved registers against the listing's six, partly
+from this. So the sharing is a symptom of having fewer registers to spend, and
+chasing it directly is chasing the consequence -- which is the honest state of
+that park rather than a lever anyone can apply.
 
-To break it, give the value a use the argument register cannot serve, or stop
-the setup being hoisted above the stores. What does NOT work is adding a
-duplicate copy of the value: that buys a fifth register instead of moving the
-value into one, and on func_8005A90C it scored three words better while adding
-an instruction the listing does not contain.
+AND IT MISREADS BADLY FROM A DUMP. The same difference in `.lreg` looks like a
+pass having substituted a hard register into a store, and that reading cost
+func_8005A90C's park four wrong diagnoses in a row: combine,
+`update_equiv_regs`' two-reference rule, an unnamed local-alloc routine, and
+the listing "needing a register for a non-parameter". Read the emitted order
+with `verify.py --full`, and read BOTH sides of it -- the fifth wrong reading
+came from checking where this build hoists its setup and assuming the listing
+did not.
+
+What definitely does NOT work is adding a duplicate copy of the value: on
+func_8005A90C that scored three words better while adding an instruction the
+listing does not contain, and it was reverted.
 
 ### COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY
 

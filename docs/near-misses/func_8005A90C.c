@@ -294,17 +294,33 @@
  * explains the extra `move $a1, $s0` this build spends and the listing does
  * not.
  *
- * THE LISTING DOES NOT SHARE: it keeps `c` in $s4 for the whole range and
- * stores `$s4` directly (`sw $s4, 0x14($s0)`, `sw $s4, 0x8($s0)`), setting up
- * $a1 only at the call. So the difference is WHERE `c` LIVES -- an argument
- * register reloaded from a callee-saved copy, against a callee-saved register
- * used directly -- and the six-versus-four register count follows from that
- * one choice rather than from any priority.
+ * CORRECTION, same day: THE LISTING HOISTS ITS SETUP TOO, so the hoisting is
+ * not the difference. Its order is
  *
- * So the shape to look for gives `c` a use the argument register cannot serve,
- * or stops the argument setup being hoisted above the stores. Note what does
- * NOT do it: a duplicate copy (measured above, reverted) adds a fifth register
- * instead of moving `c` into one.
+ *     addu $a1, $s4, $zero      <- the setup, ABOVE the stores, as here
+ *     addu $a0, $s3, $zero
+ *     sb   $v0, 0x18($s0) ; sh $s1, 0x0($s0) ; sw $s5, 0x4($s0)
+ *     sw   $s4, 0x8($s0)        <- but the stores read $s4, not $a1
+ *     sb   $v0, 0x1B($s0)
+ *     jal  func_80059F8C
+ *
+ * so both builds hoist `$a1 = c` above the field stores; only this one lets
+ * the stores READ $a1 instead of `c`'s own register. The paragraph this
+ * replaces said the listing "sets up $a1 only at the call", which is wrong --
+ * it was inferred from this build's order without checking the other side.
+ * That is the FIFTH wrong reading of this one fact in this file; the previous
+ * four are above.
+ *
+ * WHAT THE DIFFERENCE ACTUALLY IS, and it is uncomfortably circular: the
+ * listing can afford a dedicated callee-saved register for `c` ($s4) and this
+ * build cannot, so gcc serves the two stores from the argument register and
+ * frees $s0 for `e` sooner. The sharing is therefore a SYMPTOM of having four
+ * callee-saved registers where the listing has six -- not the cause of it --
+ * and attacking the sharing is attacking the consequence. The open question is
+ * the one this file has had all along, stated without a mechanism attached:
+ * what makes gcc spend six callee-saved registers here. Note only that a
+ * duplicate copy does not: it spends a fifth on a value the listing does not
+ * keep.
  */
 
 #include "common.h"
