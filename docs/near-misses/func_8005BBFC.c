@@ -402,6 +402,36 @@
  * pressure question in the entry block, and it is the first time this park has
  * had one -- every earlier formulation was about reference counts, which the
  * dumps have now settled as necessary but not sufficient.
+ *
+ * 2026-10-28, THE PLACEMENT STUDY FOR THE SECOND SET. Narrowing in place is
+ * the cure; WHERE it goes swings the word count by four, so all eight
+ * placements were measured. "top" is the entry block, just after
+ * `D_80085F98[0] = 1;`; "pit" is immediately above the `pit = ...` statement
+ * inside the `ch != -1` block. Target is 333 words.
+ *
+ *     base, no narrowing                     333 words, 220 DIFF
+ *     fine at pit                            334, 260
+ *     vel  at pit                            334, 247
+ *     BOTH at pit                            335, 330   <- prologue RIGHT
+ *     fine at top                            332, 325
+ *     BOTH at top                            331, 326
+ *     vel at top + fine at pit               333, 216
+ *     fine at top + vel at pit               333, 216   (a DIFFERENT build)
+ *
+ * NONE ADOPTED, and the two 216s are the ones to be careful about. They are
+ * the exact word count and four fewer differing words than the base, which
+ * looks like the best result here -- but count the PROLOGUE and the base
+ * matches five of the first twenty words while they match four. The gain is on
+ * the noisy axis and the structural part is slightly worse, so adopting would
+ * trade the thing this park is trying to fix for a better number. (The two
+ * also build differently from each other despite scoring the same, so the
+ * placement is not even stable.)
+ *
+ * THE INFORMATIVE ROW IS "BOTH AT pit" AT 335/330: that is the one whose
+ * prologue reproduces the listing's four parameter loads in order, with the
+ * same spills to 0x58 and 0x60. It is two words over, and both extra words are
+ * copies gcc makes to free an argument register. So the park's target is that
+ * row minus its two copies -- not either 216.
  */
 
 #include "common.h"
