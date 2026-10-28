@@ -269,6 +269,38 @@
  * propagates the copies straight out, so there is nothing to spill -- and
  * after the store it is 334 / 252. The locals are right and a plain copy does
  * not keep them, which is the same wall as `fn = fine;` above.
+ *
+ * 2026-10-28, THE FRAME LAYOUTS ARE IDENTICAL, which settles the structure of
+ * this source. Every stack slot the listing touches, this build touches, and
+ * the reverse: 0x10 0x14 0x18 0x1A 0x1C 0x1E 0x26 0x28 0x2C 0x30 0x34 0x4A
+ * 0x4C 0x50 0x58 0x60 0x68-0x8C and the four incoming slots 0xA0-0xAC. So the
+ * locals are right in number and in offset, and the `vs`/`ps` idea above is
+ * answered from the other side as well: 0x58 and 0x60 are ALREADY used by this
+ * build, because gcc spills `volx` and `panx` there by itself. There is no
+ * missing variable.
+ *
+ * AND THE 220 IS ENTIRELY POSITION. Both builds emit the same two loads -- the
+ * word counts are equal at 333 -- so nothing is missing or extra; the listing
+ * has `lw $t0, 0xA0($sp)` and `lw $t1, 0xA4($sp)` in the PROLOGUE and this
+ * build emits them at their use sites, and every word between shifts. That
+ * makes the park one placement decision rather than a shape problem.
+ *
+ * WHICH MEANS THE SINKING RULE DOES NOT EXPLAIN THE LISTING, and this file
+ * should stop leaning on it. `update_equiv_regs` sinks when
+ * `reg_n_refs == 2 && reg_basic_block < 0`, and in the LISTING both parameters
+ * satisfy that too: `$t0` is read once (`sll $v0, $t0, 16`), `$t1` is read once
+ * (`sll $a0, $t1, 16`), and both reads are past the `beqz` at word 31, so both
+ * are multi-block two-reference pseudos -- and neither load was sunk. So the
+ * condition is necessary and not sufficient, and what actually decides it here
+ * has not been found.
+ *
+ * Measured the same day and NOT working: the sum's operands swapped,
+ * `pit = (s16) fine + ((s16) vel << 8)`, on the theory that the listing
+ * extends `fine` FIRST (its `sll $a0, $t1, 16` does precede `sll $v0, $t0,
+ * 16`). 334 words, 266 DIFF -- a word over. The listing's own `addu $s7, $a1,
+ * $a0` takes the SHIFTED vel as its first operand, so the order in this file is
+ * already the listing's and the emission order is sched1's business, not the
+ * source's.
  */
 
 #include "common.h"
