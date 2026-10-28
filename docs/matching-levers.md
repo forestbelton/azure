@@ -1473,6 +1473,20 @@ QImode quantity's real priority is a QUARTER of what the table prints and a
 HImode quantity's is a HALF. In a codebase this full of `u8` and `s16` fields
 that is most of the short-lived quantities.
 
+HOW TO CHECK A QUANTITY'S SIZE: the `lreg` dump annotates a line with
+`; N bytes` ONLY when the mode is not a full word. `Register 91 used 2 times
+across 3 insns in block 3; 1 bytes` is a QImode quantity; a line with no such
+clause is SImode and advise.py's size-4 assumption is right for it. So the
+check is one grep, and it is worth doing before trusting any local margin.
+
+HOW FAR THESE TWO TRAPS ACTUALLY REACH, checked rather than assumed: none of
+the nine local-alloc-only parks cites global-alloc reasoning in its notes (only
+func_8004827C and func_80048FBC mention a pass at all, and both correctly say
+local-alloc), and func_8003A3E8's much-quoted 1.2% margin is between two
+full-word quantities, so it is sound. The traps are therefore a hazard for new
+work rather than a backlog of wrong notes -- the one note they did catch was my
+own, on func_800565D8.
+
 func_800565D8 is the worked example, and it caught me. Its park and my own
 re-pricing both reasoned about pseudos 82 and 83 from the GLOBAL table (3 refs
 / 4 live / 0.750 against 2 / 5 / 0.400) and concluded the loser needed +2
