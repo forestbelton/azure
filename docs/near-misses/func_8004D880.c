@@ -150,6 +150,11 @@ u8 func_8004D828(u16);
  *     third test writing x                      27,        26
  *     x = c before the final return             27,        26
  *
+ * EXHAUSTED 2026-10-28 on the 5-DIFF base: `unname.py` 0 improvements;
+ * `search.py` 31 variants over 17 transform families, "no single change
+ * improved on the base". Parameter type sweep (`s32`/`u16`/`s16 x`) and the
+ * two sum variables' types (9 combinations) are in the table too.
+ *
  * Everything that drops to 26-27 words loses the `c = x` copy; everything at
  * 28 words is the same 5. So the remaining question is only whether the first
  * cse block's reads of `c` can be kept off `x`, and no spelling of the

@@ -129,6 +129,11 @@ void func_8005845C(u8, u8);
 void func_8005848C(u8, u8);
 void func_80058494(u8, u8, u8);
 
+/* 2026-10-28: the csrc prototype's `(Unk80085FA8 *, u8, s32, s32)` is WRONG and
+ * this file's `u8` is right, so the signature-mismatch row for this function is
+ * closed. Measured: `s32 d1, s32 d2` is 200 words -- FIVE SHORT -- and 152 DIFF
+ * (the narrow parameters' masking insns are load-bearing); `s32 st` alone is
+ * inert at 205/131; all three `s32` is the same 200/152. */
 void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
 {
     u8 ch = st & 0xF;
