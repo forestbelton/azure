@@ -4914,6 +4914,25 @@ the weight load first where the listing loads the first-named operand of the
 first product first. cse shares both subexpressions either way, so the inline
 form costs nothing and only fixes the order. Neither shape alone matches.
 
+## `potential_hazard` acts ONLY inside one priority group
+
+Worth stating before the entry below, because two park files have leaned the
+other way. `schedule_select` (sched.c:2616) walks the ready list -- which is
+already sorted by descending priority -- in GROUPS OF EQUAL PRIORITY. For the
+first group it queues whatever `actual_hazard` blocks, then, if more than one
+insn remains, picks the one with the largest `potential_hazard`, and then it
+BREAKS. It only reaches a lower-priority group if EVERY insn in the higher one
+was queued.
+
+So potential_hazard can never promote a lower-priority insn over a higher one.
+An explanation of the form "the listing has the priority-1 insn first, which is
+potential_hazard rather than priority" is wrong on its face: if the two insns
+really are in different groups, no hazard reordering reaches it and the only
+lever is priority itself (which grows across load delays -- section 8). Check
+the SCHED2 dump before reasoning this way, not sched1: on func_8005A608 every
+insn in the entry block is priority 1 in sched2 while sched1 shows a spread,
+and the park file had quoted the sched1 numbers.
+
 ## sched2's tie-break inside a priority group is MEMORY OVER ALU
 
 Section 8 says the keys are priority, then the dependence class, then

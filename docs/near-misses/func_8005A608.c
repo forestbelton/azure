@@ -63,6 +63,37 @@
  * measured with the hand-written shifts: 13 is the floor, 15, 16 and 18 the
  * alternatives, and nothing in the source moves the store.
  *
+ * CORRECTED 2026-10-27, twice over.
+ *
+ * (1) THOSE PRIORITIES ARE THE SCHED1 DUMP'S. In sched2 -- the pass that
+ * emits this order -- EVERY insn in block 0 is priority 1, the store and both
+ * shifts included; the dump's own list says so. They are therefore all in one
+ * group, which is the only place `potential_hazard` can act: `schedule_select`
+ * (sched.c:2616) walks the ready list in groups of EQUAL priority, picks the
+ * largest potential hazard within the first group, and BREAKS -- it moves to a
+ * lower group only if every insn in the higher one was queued by
+ * `actual_hazard`. So potential_hazard can never promote a lower-priority insn
+ * over a higher one, and an explanation that needs it to is wrong on its face.
+ *
+ * (2) WHAT ACTUALLY PINS THE STORE is an anti-dependence, and it is the CAST's
+ * fault. With `id = (s16) id` the extension's intermediate takes $v0 -- the
+ * same register as the symbol's high half -- so the `sll` CLOBBERS it and the
+ * store has to come first. The dump shows it: insn 12 is
+ * `(set (reg $v0) (high D_8007382C))`, insn 23 is
+ * `(set (reg $v0) (ashift (reg $a1) 16))`, and 23 therefore depends on 15.
+ * The in-place form removes that WAR entirely, and on the sibling
+ * func_8005A778 the store then DOES move -- store-last puts it after both
+ * shifts. So "nothing in the source moves the store" is a property of the cast
+ * form, not of the function.
+ *
+ * (3) BUT THE SWEEP DOES NOT PAY HERE. All five store positions were measured
+ * against both extension spellings on this function: cast gives 11 / 14 / 14 /
+ * 18 and in-place gives 13 / 16 / 16 / 17 / 18, so `cast_slot0` -- the shape
+ * in this file -- is still the floor, and 13 is still the structurally closer
+ * one. The same sweep is worth THREE WORDS on func_8005A778 (21 to 18), which
+ * has a third parameter and a bound check competing for the same registers.
+ * Whatever is left here is not the store's position.
+ *
  * FOR REFERENCE, the `(s16)` cast version is 11 DIFF -- fewer differing words
  * but structurally further away, since its extension is not in place.
  *
