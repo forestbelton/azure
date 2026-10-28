@@ -33,6 +33,36 @@
  * for one the listing can afford, or read combine.c's `try_combine` for the
  * condition on a single-use destination (it is `REG_N_SETS == 1` plus the
  * REG_DEAD note on the link, and the dead note is what this tail has).
+ *
+ * 2026-10-28: THE FOLD IS UNCONDITIONAL ON THIS TARGET, so the "read
+ * combine.c" half of the note above is answered and the answer closes it.
+ * `can_combine_p`'s only escape for a reg-to-reg i3 is
+ *
+ *     || (REGNO (src) < FIRST_PSEUDO_REGISTER
+ *         && (! HARD_REGNO_MODE_OK (...)
+ *     #ifdef SMALL_REGISTER_CLASSES
+ *             || ! REG_USERVAR_P (src)
+ *     #endif
+ *            ))
+ *
+ * and `config/mips/` never defines SMALL_REGISTER_CLASSES, so neither naming
+ * the value nor its register class can stop it. The combine dump confirms the
+ * result directly: `(set (reg/i:SI 2 v0) (plus:SI (reg/v:SI 81) (const_int 4)))`
+ * with `REG_DEAD (reg/v:SI 81)`, one insn where the listing has two.
+ *
+ * AND AN INTERVENING INSN DOES NOT BLOCK IT EITHER. Four more spellings, all
+ * 48 of 49 words and the same 15 DIFF:
+ *
+ *     `*(volatile u8 *) &D_80080A89 = 0;` between the add and the return
+ *     the add written `e = (u32 *) ((u8 *) e + 4)`
+ *     the return written `return &e[0];`
+ *     the D_80080A89 store moved ABOVE the add
+ *
+ * The volatile one is the informative one: combine folds straight across a
+ * volatile store, so `volatile` is not a barrier between two insns, only a
+ * property of the access itself. That removes the last cheap idea here -- what
+ * is left is still a second USE of `e` after the add, and this tail has
+ * nothing to spend on one.
  */
 
 #include "common.h"

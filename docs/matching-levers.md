@@ -5089,6 +5089,13 @@ reorder those.
 
 ## 10. Measured dead ends -- do not retry
 
+* **`volatile` as a COMBINE BARRIER between two insns.** A volatile store
+  placed between an `addiu` and the reg-to-reg move that consumes it does not
+  stop combine folding the pair -- measured on func_80048C3C 2026-10-28, 48 of
+  49 words and the same 15 DIFF as without it, and the combine dump still shows
+  the single merged insn. `volatile` is a property of the ACCESS, not a fence
+  for the insns around it. (It does still work where the levers doc already
+  uses it: keeping a read or a store from being deleted or shared.)
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried
   that way in func_80042900, func_80042A80, func_8003DBD0 and func_8003D0F0: it
   changes the output but never toward the target, and it usually adds a word.
