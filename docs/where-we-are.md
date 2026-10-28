@@ -19,14 +19,28 @@ function landed (func_80059DAC) and three parks improved: func_8005C4D0
 220 -> 219. Every one of those came from a MECHANICAL sweep or from reading the
 compiler, and none from another source-shape guess.
 
-* **TWO NEW TOOLS.** `tools/decomp/unname.py` deletes each of a park's locals
-  in turn and re-scores -- whether a value has a NAME is a compiler switch, and
-  three of today's four improvements came out of it. `tools/decomp/nmcheck.py` already
-  checked every park's headline against a fresh build and now also warns where
-  a park's signature disagrees with its csrc prototype (all 54 headlines are
-  currently honest). `search.py` also gained `t_split_local`, the reverse transform.
-  SWEEPS COMPOSE: re-run `unname.py` after adopting a hit, because each one
-  changes the base -- that is how func_8005C4D0 went 22 -> 18 -> 15.
+* **ONE NEW TOOL, AND IT NEEDS READING WITH ITS RECORD.**
+  `tools/decomp/unname.py` deletes each of a park's locals in turn and
+  re-scores; whether a value has a NAME is a compiler switch, and two of
+  today's three real improvements came out of it. SWEEPS COMPOSE -- re-run it
+  after adopting a hit, which is how func_8005C4D0 went 22 -> 18 -> 15.
+  `search.py` gained `t_split_local` (the reverse transform, sound, no hits
+  yet) and `t_copy_param` (three hits, ALL THREE rejected -- read its docstring
+  before trusting one). `tools/decomp/nmcheck.py`, which already checked every
+  park's headline against a fresh build, now also warns where a park's
+  signature disagrees with its csrc prototype; all 54 headlines are honest.
+* **AND A SOUNDNESS BUG WAS FOUND IN AN OLD FAMILY, so re-check anything a
+  sweep told you before today.** `search.py`'s `t_hoist_read` matched store
+  DESTINATIONS as well as reads and substituted its fresh local there, which
+  deletes the store and scores a word better for it. On func_8005B4D0 that was
+  the best-looking result of the day -- 376 words exact, 333 DIFF against 344 --
+  and it had dropped `*(u32 *) (v + 0x64) = t;`. Twelve of twenty `_READ`
+  matches in that file are lvalues, and fixing it took a full pass from 562
+  candidates to 350 WITH a family added. Scope, so nobody over-reacts: negative
+  sweep results are unaffected, since nothing improved either way; only a pass
+  that ACCEPTED a hoist and continued greedily is void, and func_8005B4D0 was
+  the only one. All families are now audited and classified in search.py's
+  header as pure rewrites or semantic levers.
 * **A VARIANT THAT CHANGES THE WORD COUNT MUST BE CHECKED AGAINST THE
   TARGET'S INSTRUCTIONS, not just its score.** This is the specific form of
   "read the hit", and the vague form did not stop me adopting a wrong source
