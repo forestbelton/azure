@@ -23,6 +23,16 @@ for f in glob.glob(PROJ + '/csrc/*.c'):
     # its job. Lazy matching stops at the nearest `) {` and still backtracks
     # correctly through a nested `(...)` in a parameter list.
     have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', t, re.M))
+    # AN OLD-STYLE (K&R) DEFINITION puts its parameter DECLARATIONS between the
+    # `)` and the `{`, so the pattern above -- which wants `) {` -- misses it
+    # and the function reads as MISSING even though it is compiled. This
+    # project uses that form deliberately: it is how a unit narrows a
+    # parameter without putting a narrow prototype in scope for its callers
+    # (matching-levers section 7, and func_8005C2C0 is the case that exposed
+    # this). Accept a run of `type name;` declarations before the brace.
+    have |= set(re.findall(
+        r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([\w\s,\*]*?\)\s*'
+        r'(?:[A-Za-z_][\w \*]*[\w\*]\s*[\w\*\[\] ,]*;\s*)+\{', t, re.M))
     # A definition may carry an __asm__ label, so the C name is NOT the
     # assembler name: `void func_Xd(u16) __asm__("func_X"); void func_Xd(...)
     # { ... }`. That is how a unit gives one function a narrow parameter while

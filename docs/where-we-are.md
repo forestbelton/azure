@@ -4,8 +4,13 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 70 asm stubs as of 2026-10-27** and the build is
-byte-identical; `make check` is green at HEAD. The paragraph below is the
+**`guard.py` reads 56 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+for -- and the build is byte-identical; `make check` is green at HEAD.
+`progress.py` puts it at 35207 of 41767 words, 84.3%, with 55 of the 56 stubs
+parked. NOTE that guard.py under-reported until 2026-10-28: its definition
+pattern wanted `) {` and so missed an OLD-STYLE (K&R) parameter list, which
+this project writes deliberately to narrow a parameter without putting a narrow
+prototype in scope. It was reporting the landed func_8005C2C0 as MISSING. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
 **849 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
