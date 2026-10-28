@@ -34,6 +34,36 @@
  * measurements) is also 8 and lands the same way, and a `q = m - 1` local is
  * 18 words. So the two arms want DIFFERENT result registers, which is an
  * allocation question -- read `advise.py --greg`.
+ *
+ * THE `--greg` READING, done 2026-10-27, and it closes the obvious direction.
+ * From the `.greg` dump:
+ *
+ *     ;; 5 regs to allocate: 80 83 85 81 82
+ *     ;; 80 preferences: 2 4      -> gets $v0   (the result `r`)
+ *     ;; 83 preferences: 4        -> gets $a0   (7 refs, the busiest)
+ *     ;; 83 conflicts: 82 83 85 2 29
+ *     ;; 85 preferences: 6        -> gets $a2
+ *     ;; 82 preferences: 6        -> also $a2 (82 and 85 do not conflict)
+ *
+ * Two things follow. 83 CONFLICTS with $v0 (2), so $v0 is illegal for it and
+ * its $a0 is not a tie-break that more references would win -- and `r` (80)
+ * already has the $v0 the listing gives it. The eight words are therefore
+ * entirely about the LOW arm's value, which the listing puts in $v1 and this
+ * build folds into 83's $a0.
+ *
+ * And that fold cannot be broken by adding a variable, which is the thing to
+ * stop trying: the two arms' values live in DIFFERENT BLOCKS, so their live
+ * ranges never overlap, they never conflict, and local-alloc ties them into
+ * one quantity however many locals the source spells. Measured, all 20 of 20
+ * words and 8 DIFF: a `s32 t` local in the low arm assigned from the ternary;
+ * the same split into `t = a; if (t < 0) t = 0;`; and `r = a;` hoisted ahead
+ * of the `d >= 0` test with each arm narrowing it. A local in the HIGH arm is
+ * worse (17 words, 9 DIFF), and section 3's seventh cure does not apply --
+ * there is no copy whose source could stay live past it, because the two
+ * values are never simultaneously live.
+ *
+ * So the question is what gives ONE arm's value a preference or a conflict
+ * the other lacks. On the evidence that is not reachable by naming variables.
  */
 
 #include "common.h"
