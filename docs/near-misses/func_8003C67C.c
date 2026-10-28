@@ -145,9 +145,19 @@
  *
  * which is NOT one of the shapes measured above -- those either name one side
  * only, or put the decrement after both uses. It takes 8 off the
- * representative's benefit. Whether that is enough is a measurement, since
- * `giv at 50`'s own benefit is not printed; if it is not, the remaining term
- * is `add_cost * bl->biv_count`, which would need a second insn updating `i`.
+ * representative's benefit.
+ *
+ * MEASURED THE SAME DAY, and it is WORSE: 33 words, 33 DIFF -- TWO over the
+ * target, where every other shape here has been at 31 or 32. Both orders of
+ * the two declarations and both spellings of the copy (`*d = *s` and
+ * `d[0] = s[0]`) give the identical 33/33, so the two extra words are the two
+ * named pointers themselves rather than anything about the order. That is the
+ * same wall the goto forms hit from the other side: this function cannot
+ * afford the words that suppressing its reduction costs, whichever mechanism
+ * does the suppressing. What has NOT been checked is whether the reduction is
+ * actually gone in that 33-word build -- the `loop` dump would say, and if it
+ * is gone then the remaining question is only how to pay for it, which is a
+ * different (and narrower) question than "what stops loop.c".
  */
 
 #include "common.h"
