@@ -193,6 +193,44 @@
  * not keep its load in the prologue, it moves the whole `pit` chain forward
  * and costs a word. So one-block confinement is not the route either -- the
  * second reference is, and it has to be a reference the SOURCE can spell.
+ *
+ * 2026-10-28, THE 219 IS ONE INSTRUCTION, and the prologue diff says so
+ * exactly. Side by side from word 7:
+ *
+ *     target  lw $t0,0xA0 ; lw $t1,0xA4 ; lhu $t2,0xA8 ; li 1 ; ...
+ *     built   lw $t0,0xA0 ;              lhu $t1,0xA8 ; li 1 ; ...
+ *
+ * every later word shifts by that one missing `lw`, which is where 219
+ * differing words out of 333 come from. So this park is ONE LOAD, not a
+ * structural problem, and anything that puts it back is worth a large number.
+ *
+ * AND THE MECHANISM IS A LOST REGISTER, NOT A SUBSTITUTION. The built code has
+ * a SEPARATE `lw $v0, 0xA4($sp)` at the use site (word 56), not a memory
+ * operand folded into the shift -- and it could not fold one, because the use
+ * is `sll`, and `(set (reg) (ashift (mem) 16))` is not a MIPS insn, so
+ * `update_equiv_regs`' `validate_replace_rtx` would fail. What has happened is
+ * that `fine`'s pseudo did not get a hard register at all and reload
+ * rematerialised it from its stack home at the use. A pseudo with a REG_EQUIV
+ * stack slot is cheap for reload to spill AND has its live length doubled
+ * (local-alloc.c:1018-1064), so it loses the register contest -- which is the
+ * same arithmetic the `vel` fix beat by adding a third reference.
+ *
+ * TWO NEW SHAPES, neither adopted:
+ *
+ *   * `fn = fine << 16;` in the ENTRY block with `(fn >> 16)` at the use --
+ *     the `(s16)` cast split across the two blocks. 334 words, 252 DIFF. It
+ *     DOES put the load in the prologue (`lw $a0, 0xA4($sp)` at word 8 against
+ *     the target's word 7), so the mechanism is beatable; the cost is that the
+ *     `sll` lands in the entry block too and the function runs a word over.
+ *     The target's entry block holds the load ALONE, with its `sll $a0,$t1,16`
+ *     forty instructions later.
+ *   * `fn = fine;` in the entry block with `(s16) fn` at the use -- 333 words
+ *     and the same 219, because cse propagates the copy straight back out.
+ *
+ * So the shape wanted gives `fine`'s pseudo a reference, or a reason to win a
+ * register, WITHOUT putting any instruction in the entry block. `fn = (s16)
+ * fine;` there is 332 words and 306 DIFF for the opposite reason: gcc folds
+ * the cast into the load and emits `lh`, losing the sll/sra pair as well.
  */
 
 #include "common.h"
