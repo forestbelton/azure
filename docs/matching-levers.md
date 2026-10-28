@@ -1562,6 +1562,33 @@ across 3 insns in block 3; 1 bytes` is a QImode quantity; a line with no such
 clause is SImode and advise.py's size-4 assumption is right for it. So the
 check is one grep, and it is worth doing before trusting any local margin.
 
+**AND THE EXCEPTION THAT COSTS MORE THAN THE TRAP: a QImode quantity that gets
+TIED to a wider one is no longer QImode.** `combine_regs` ends with
+
+    if (usize < ssize)
+      { ... qty_size[sqty] = ssize; qty_mode[sqty] = GET_MODE (setreg); }
+
+(local-alloc.c:1884-1893), so when a byte load's pseudo is tied to the SImode
+destination of the insn that consumes it -- a shift, an add, anything -- the
+quantity it heads is priced at SIZE 4 *and* at the SUM of both pseudos'
+references. A `lbu` feeding one `sll` is therefore not a 2-ref QImode quantity
+at 0.667; it is a 4-ref word quantity at four times that, which is usually the
+highest priority in its block and takes the first register. func_800565D8's
+park priced it the first way, concluded the other factor "already outranks the
+byte two to one", and spent two days looking for a suggestion that does not
+exist.
+
+**The lever that follows is how to REFUSE the tie.** `combine_regs` bails out
+on `if (reg_qty[sreg] >= -1)` -- it will not tie into a destination that
+local-alloc is not allocating -- so making the CONSUMER's destination a
+cross-block value is enough: assign it to a variable that is also referenced in
+another block, and the byte stays a lone QImode quantity while the wide result
+goes to global-alloc. That, plus the statement split on the rival factor, is
+what landed func_800565D8 (`d` carries the doubled byte in one arm and
+`n - 0x40` in another for exactly this reason). The same reading explains
+func_8003A374 from the other side: there the tie is what the project WANTS, and
+a split that buys references dissolves it instead.
+
 HOW FAR THESE TWO TRAPS ACTUALLY REACH, checked rather than assumed: none of
 the nine local-alloc-only parks cites global-alloc reasoning in its notes (only
 func_8004827C and func_80048FBC mention a pass at all, and both correctly say
