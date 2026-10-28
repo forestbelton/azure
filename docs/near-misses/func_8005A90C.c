@@ -203,14 +203,32 @@
  * the wrong reason, and a park carrying that source would tell the next
  * attempt the shape is right when it is not.
  *
- * WHAT THE LISTING ACTUALLY WANTS, and this is a better-posed question than
- * the one this file started with: a SIXTH callee-saved register holding
- * something that is NOT a parameter. The target keeps p, b, c and i in four of
- * them and two more ($s0, $s2) for values assigned later; this build has five
- * registers for p, b, c, i and the duplicate. So something this source keeps
- * in a caller-saved register, or recomputes, is held across the calls there --
- * `e`, `k`, `r` or `t` are the candidates. Find which, and the three words
- * arrive without a duplicate copy.
+ * WHAT THE LISTING ACTUALLY WANTS -- stated from both register assignments
+ * rather than guessed. The first version of this note said "a sixth
+ * callee-saved register holding something that is NOT a parameter", and that
+ * is wrong: the target's two extra registers hold `c`, which IS a parameter,
+ * and `k`. The two sides are
+ *
+ *     target   $s5 = p   $s4 = c   $s3 = b   $s2 = k   $s1 = i   $s0 = e
+ *              six registers, each with ONE value
+ *     built    $s3 = p   $s2 = b then k   $s1 = i then a later value
+ *              $s0 = c then e
+ *              four registers, three of them REUSED
+ *
+ * so the difference is not a missing register, it is that the listing's six
+ * values are ALL LIVE AT ONCE while this build's ranges are disjoint enough to
+ * share. `move $s0, $a2` followed later by `addu $s0, $v1, $v0` is gcc deciding
+ * `c` is dead before `e` exists; `move $s2, $a1` then `sra $s2, $v0, 0x10` is
+ * the same for `b` against `k`. That is why adding a duplicate copy scores the
+ * three words and is still the wrong shape: it adds a fifth register instead
+ * of making two existing ranges overlap.
+ *
+ * So the question for the next attempt is which of those overlaps the source
+ * can create: `c` still live when `e` is formed, or `b` still live when `k`
+ * is. Note `c` IS read through `e` in this source
+ * (`*(u32 *) (e + 0x14) = c`), so gcc is reaching those stores with the
+ * parameter still in $a1 -- the insn-153 fact above -- and that is the same
+ * finding seen from the register side rather than the RTL side.
  */
 
 #include "common.h"
