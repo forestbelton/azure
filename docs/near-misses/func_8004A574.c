@@ -89,10 +89,24 @@
  *     listing has two -- which is the 17-DIFF measurement above, and a word
  *     short of the listing's shape.
  *
- * So the open question is narrower again: the product's copy into $a0 has to
- * survive, and `v` dies at it, so the cure has to come from the OTHER side --
- * something that makes $a0 unavailable at the `mflo` in the join block, where
- * nothing of this function's is live. Measured already and not working: a second `u = v` local for the
+ * SO WHAT MAKES $a0 UNAVAILABLE IS `p` ITSELF, and that is the whole finding.
+ * `p` is the call's SECOND argument, so it is live from entry right across the
+ * join block; if its pseudo held $a0 -- the register it arrives in and
+ * prefers -- the product could not take $a0 at the `mflo`, would fall to $v0,
+ * and the listing's copy into $a0 would have to be emitted. That is exactly
+ * the listing. This build gives `p` $t0 instead, because it is allocated LAST:
+ *
+ *     the product   3 refs /  6 live / 0.500
+ *     `p`           4 refs / 58 live / 0.138   <- 58 is the DOUBLING
+ *
+ * and by the time `p` is reached the product already owns $a0. So the target
+ * is to get `p` allocated BEFORE the product, i.e. past 0.500. Escaping
+ * `update_equiv_regs`' doubling with a second set takes its live length to its
+ * real 29 and gives 2*5/29 = 0.345, which is not enough; from there it needs
+ * EIGHT references (3*8/29 = 0.828) against the four it has. Lowering the
+ * product instead does not help on its own -- even at 2 refs it is 0.333,
+ * still above `p`'s doubled 0.138 -- but it would combine with the doubling
+ * escape, since 0.345 clears 0.333. That pair is the first thing to try. Measured already and not working: a second `u = v` local for the
  * argument (the copy coalesces, since `v` dies at it).
  *
  * So the question is only what pins the `mflo` above the function-pointer
