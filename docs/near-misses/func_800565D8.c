@@ -101,6 +101,44 @@
  * second operand is 31 words and 4 DIFF. So the constant's binding here is
  * reachable only at the cost of the word count, which usually means one more
  * reference somewhere else is what the original had.
+ *
+ * START FROM THE 4-DIFF VARIANT, NOT THIS ONE -- measured 2026-10-27. That
+ * line above undersells it. `r = -((0x3F - n) * (*(volatile u8 *) (p + 0x21)
+ * << 1));` is 31 words / 4 DIFF, and its four words are ALL REGISTER NAMES
+ * with the structure EXACT:
+ *
+ *     target  li $v0,0x3F ; lbu $v1,0x21 ; subu $v0,$v0,$a1 ; sll $v1,$v1,1
+ *     << 1    li $v1,0x3F ; lbu $v0,0x21 ; subu $v1,$v1,$a1 ; sll $v0,$v0,1
+ *
+ * -- the `lbu` is ahead of the `subu` and the shift is on the BYTE, which is
+ * exactly what this file's 3-DIFF form gets wrong structurally (it shifts
+ * `0x3F - n` instead, because fold moves the 2 across the multiply). The
+ * `mult $v1, $v0` word is identical in both, which is why the diff count is
+ * larger while the function is closer. A 4-word register swap on an exact
+ * structure beats 3 words with the constant bound to the wrong factor.
+ *
+ * THE SWAP IS PRICED, from `--greg` on that variant: the byte's chain is
+ * pseudo 82 at 3 refs / 4 live / 0.750 and takes $v0; the subtraction is
+ * pseudo 83 at 2 refs / 5 live / 0.400 and takes $v1. The listing wants them
+ * the other way, so the SUBTRACTION has to outrank the byte. 3 refs on it
+ * would only TIE (floor_log2(3) * 3 / 4 = 0.750) and a tie goes to the lower
+ * allocno number, which is the byte -- it is born first. So it needs +2
+ * references, or the byte's three cut to two, at zero instruction cost.
+ *
+ * Measured against that variant and NOT working: the subtraction through the
+ * function-scope `d` before the byte test (32 words, 26 DIFF) or after it
+ * (31 / 4); through a block-local `e` in its own braces (31 / 4); the byte
+ * factor written first in the product, with `* 2`, `<< 1` or a `(u32)` cast
+ * (all 32 words / 27 DIFF); `(u32)` and `(s32)` casts on the second operand
+ * (31 / 3, i.e. back to the structural problem); `byte + byte` instead of
+ * `byte * 2` (33 / 31); and the subtraction written `(s32) 0x3F - (s32) n`
+ * (31 / 4).
+ *
+ * No phantom test was tried. It would fit the shape -- see the section 3
+ * entry -- but on a 31-word function that is a poor trade for two
+ * references, and the SYMPTOM note there applies: if the subtraction really
+ * is two references short, something else about this function's context is
+ * still wrong.
  */
 
 #include "common.h"
