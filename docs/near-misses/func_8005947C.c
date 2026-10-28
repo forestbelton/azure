@@ -81,12 +81,24 @@
  *   * `b` DOES NOT CONFLICT WITH $a0. `--greg`'s conflicts column for its
  *     pseudo (82) reads `$v0 $v1 $sp` only, so $a0 is legal for it and this is
  *     not a live-range problem -- the range does not need shortening.
- *   * It is therefore an ORDER or PREFERENCE question. global-alloc's
- *     `find_reg` avoids a register that other allocnos PREFER (every call here
- *     sets $a0 for `(s32) p`), so a pseudo with no preference of its own is
- *     steered away from $a0. For `b` to land there it has to acquire a
- *     preference for $a0, which comes from being copied to or from that hard
- *     register -- i.e. from being passed as a FIRST argument somewhere.
+ *   * IT IS A PREFERENCE, and the `.greg` dump names it outright:
+ *
+ *         ;; 82 conflicts: 80 81 82 83 85 86 2 3 29
+ *         ;; 82 preferences: 6
+ *
+ *     `b` PREFERS $a2 (6). It did not earn that itself -- global.c:809
+ *     propagates copy preferences across copies, so `b` inherited it from `c`
+ *     through `c = b`, and `c` prefers $a2 because it is the THIRD argument of
+ *     func_8005914C. With no preference at all `b` would take $a0, because
+ *     `find_reg`'s pass 1 walks hard registers in ascending number (mips.h
+ *     defines no REG_ALLOC_ORDER) and $v0/$v1 are b's only conflicts below it.
+ *
+ *     So the lever is the COPY, not b's references or range. Measured and NOT
+ *     working: assigning `c` from `r` instead of `b` -- `c = r`,
+ *     `c = r & 0xFF`, `c = (u8) r` -- all three move the preference and all
+ *     three cost three words elsewhere (9 DIFF against 6). What is wanted is a
+ *     shape where `c` still prefers $a2 but `b` is not copied into it, or
+ *     where `b` acquires a $a0 preference of its own.
  *
  * `u8 b` is load-bearing and was re-measured: `s32 b` and `u32 b` are 78
  * words / 62 DIFF, `s32 b = r & 0xFF` is 79 / 66, dropping `b` and masking

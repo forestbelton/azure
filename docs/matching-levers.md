@@ -1451,6 +1451,46 @@ Two corollaries worth keeping:
   changes which allocator sees the pseudo. When one of them says to split, the
   other is worth re-measuring too.
 
+### READ `.greg`'s OWN conflicts and preferences lines before pricing a margin
+
+`advise.py --greg` reconstructs priorities, but gcc prints the two things that
+actually decide a register, and they are not priorities. The `.greg` dump
+(`dump.sh`, then `/tmp/azure-decomp/dumps/<base>/greg`) opens with:
+
+    ;; 8 regs to allocate: 81 109 80 82 83 84 86 85
+    ;; 82 conflicts: 80 81 82 83 85 86 2 3 29
+    ;; 82 preferences: 6
+
+-- the allocation ORDER, each allocno's conflicts (pseudos, then HARD regs by
+number), and its PREFERENCES. On func_8005947C that settles in one line what
+priority arithmetic could not: `b` (82) does not conflict with $a0 (4), so the
+register is legal and its live range needs no shortening -- it simply PREFERS
+$a2 (6) and gets it.
+
+WHERE A PREFERENCE COMES FROM, and why it is a source-level fact: global.c
+propagates copy preferences ACROSS COPIES (`IOR_HARD_REG_SET
+(hard_reg_copy_preferences[a1], hard_reg_copy_preferences[a2])`, global.c:809).
+`b`'s preference for $a2 is inherited from `c` through the copy `c = b`,
+because `c` is passed as the THIRD argument of a call and so prefers $a2. The
+preference is not b's own; it travelled up the copy.
+
+AND WHY AN UNPREFERRED PSEUDO TAKES THE LOWEST REGISTER: `find_reg` tries each
+hard register in two passes. Pass 0 ORs the COMPLEMENT of `regs_used_so_far`
+into the excluded set -- "we never allocate a register for the first time in
+pass 0" -- so it can only reuse a register an earlier allocno already took,
+and it also excludes `regs_someone_prefers`. Pass 1 drops both restrictions and
+takes the first legal register in `REG_ALLOC_ORDER`, which for MIPS is plain
+ascending register number because mips.h does not define one. So a pseudo with
+NO preference lands on the lowest non-conflicting register, and a pseudo with
+one lands on that instead.
+
+Practical consequence: when a value is in the wrong caller-saved register,
+check `preferences` first. If it has one, the lever is the COPY that gave it
+the preference, not the value's references or live range. (On func_8005947C,
+breaking the copy by assigning `c` from `r` rather than `b` -- as `c = r`,
+`c = r & 0xFF` or `c = (u8) r` -- does move b's preference, but all three cost
+three words elsewhere: 9 DIFF against 6.)
+
 ### A DEAD reference is still a reference -- the free way to flip an allocno
 
 `allocno_priority` is `floor_log2(refs) * refs * size / live_length`, and
