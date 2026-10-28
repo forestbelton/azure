@@ -4213,7 +4213,47 @@ void func_8003BD34(void) {
 void func_8003BD7C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003BD84);
+s32 func_80065F90(s32, s32);
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+
+/* atan2-style quadrant divide: takes |x| and |y|, and divides whichever of the
+   two is larger by a scale derived from both, shifting the quotient up 12.
+
+   THE ABSOLUTE VALUES ARE `abs()`, and that is the whole function. Written out
+   as a conditional negate -- `ax = x; if (ax < 0) { ax = -ax; }` -- the copy
+   and the negation end up in one cse equivalence class, canon_reg rewrites the
+   negation's operand to the OLDER member (the parameter), and the result is
+   `negu $v0, $s1` reading the parameter directly with the copy hoisted above
+   the branch. That is a word short of the listing (37 of 38) and 24 DIFF.
+   `abs()` expands to the listing's own shape instead: the branch first, the
+   copy in its DELAY SLOT, and the negation IN PLACE on the copy --
+   `bgez $s1` / `move $v0, $s1` / `negu $v0, $v0`.
+
+   The ternary `ax = (x < 0) ? -x : x` measures identically to the conditional
+   negate, as does testing on `x` rather than `ax`, and computing the negation
+   first (`ax = -x; if (x >= 0) { ax = x; }`): all three are 37 words and 24
+   DIFF, because cse folds the operand back either way. Only one of the two
+   needs to be `abs()` for the other to stay wrong, so both are. */
+
+s32 func_8003BD84(s32 x, s32 y)
+{
+    s32 ax;
+    s32 ay;
+    s32 r;
+
+    ax = abs(x);
+    ay = abs(y);
+    if (ax < ay)
+    {
+        r = (y / func_800644B8(func_80065F90(y, x))) << 12;
+    }
+    else
+    {
+        r = (x / func_80064584(func_80065F90(y, x))) << 12;
+    }
+    return r;
+}
 
 /* Pulls four 3-component vectors at a 4-halfword stride toward their common
    average by n/d, clamping each component at 0x7FFF. The average is summed

@@ -1992,6 +1992,33 @@ on this target -- all three placements cost one word (271 against 270) and the
 diff goes to 265-267. So reach for it when a boundary would buy more than a
 word, and price it before believing it.
 
+## A LIBRARY CONSTRUCT can have the shape the hand-written form loses
+
+`abs()` landed func_8003BD84 after the hand-written conditional negate had
+been measured four ways and all four lost the same word.
+
+The problem is canon_reg. `ax = x; if (ax < 0) { ax = -ax; }` puts the copy and
+the negation in one cse equivalence class; cse then canonicalises the
+negation's operand to the OLDEST member of the class, which is the parameter,
+so the negation reads `x`'s register directly and the copy -- now feeding
+nothing on that path -- is hoisted above the branch. The result is one word
+short of the listing, which keeps all three insns:
+
+    bgez $s1, L      ;  move $v0, $s1   (delay slot)  ;  negu $v0, $v0
+
+`ax = abs(x)` produces exactly that. The ternary `(x < 0) ? -x : x`, testing on
+`x` rather than `ax`, and computing the negation first (`ax = -x;
+if (x >= 0) { ax = x; }`) are all identical to the conditional negate -- 37
+words against 38, 24 DIFF -- because cse folds the operand back in every one.
+
+So when a shape is lost to cse canonicalisation, check whether a declared
+library function covers it before rearranging the source further: `abs` is
+declared in include/structs.h and the project had already used it in
+func_800345B8 without noticing it was a cure for this family. This is also the
+first cure for carved-sweep's "same missing word three times" row that works on
+a PARAMETER -- the other five all need the value to have a second live range,
+which a parameter does not.
+
 ## 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference
