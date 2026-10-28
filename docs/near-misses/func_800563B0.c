@@ -34,7 +34,10 @@
  * after it; this build runs the lookup first, because sched1 ranks by the
  * longest chain and the lookup's (lui/addiu, sll, addu, lw, sw) beats the
  * flags store's (li, sw). No store order changes that -- it is the same
- * normalisation that holds func_80056D44 two words short.
+ * normalisation that holds func_80056D44 two words short. Measured
+ * 2026-10-28, both 22 words and 14 DIFF: the lookup assigned BELOW the flags
+ * store (`u32 h;` with no initialiser), and the lookup written inline in the
+ * +0 store with no `h` at all. Priority decides it, not the source order.
  *
  * AND THE 2-DIFF SIBLING SAYS WHY IT WORKS THERE: func_80056DB4's early store
  * is 0x60100, which needs `lui`+`ori` -- a TWO-insn materialisation, long
