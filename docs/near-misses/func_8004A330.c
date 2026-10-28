@@ -85,6 +85,21 @@
  * family is the one that can change VALUES rather than representations.
  * See docs/matching-levers.md on reviewing a narrowing against the
  * listing's own arithmetic before keeping it.
+ *
+ * 2026-10-28: A SWEEP HIT THAT CALLS THE FUNCTION TWICE, recorded so it is not
+ * adopted if it reappears. `tools/decomp/unname.py` reported that deleting
+ * `r` -- so that `r = func_8004B404(0);` is written at both of its uses, the
+ * `+0x8` store and the `r != 0` test -- is 79 words and 69 DIFF against this
+ * file's 74 and 74. That is better on both axes (this source is three words
+ * SHORT of 77, the variant two over) and it is a different program: it calls
+ * func_8004B404 twice. The tool now refuses to move a value that contains a
+ * call at all.
+ *
+ * What is still worth taking from it: 79 words is reachable, so the three-word
+ * shortfall here is not forced, and whatever supplies the missing words has to
+ * do it without a second call. The obvious reading -- that the listing's extra
+ * words ARE a second call -- is wrong, since func_8004B404 appears once in the
+ * listing.
  */
 
 #include "common.h"

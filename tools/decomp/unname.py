@@ -27,8 +27,16 @@ substitution will not compile, the second because `sets != 1` rejects it.
 Scoring is verify.py's, lexicographic on (|built - target| words, differing
 words), the same as perm.py and search.py.
 
-TWO WARNINGS, both earned on 2026-10-28, the day this found its first two hits:
+THREE WARNINGS, all earned on 2026-10-28, the day this found its first hits.
+The first is the one to take seriously, because the guards below were each
+written AFTER the sweep proposed a wrong program with good numbers:
 
+  * A HIT CAN BE A DIFFERENT PROGRAM. The guards reject the two classes that
+    actually came up -- an operand written between the assignment and the use
+    (func_8003A904's `(*cp)++`), and a value that is a CALL or a memory read
+    duplicated across several uses (func_8004A330's `func_8004B404(0)`, which
+    scored 79 words / 69 DIFF against 74 / 74 by calling it twice). They are
+    syntactic and conservative, not a proof. Read what a hit actually does.
   * A BETTER NUMBER CAN BE THE WRONG SOURCE. On func_80056D44 this reports
     27/28 words and 25 DIFF against the park's 26/27 -- better on both counts
     -- but with no local gcc walks the base as a CURSOR (`addiu $v1, $v1, 0x4`
@@ -142,6 +150,16 @@ def variants(text):
         # every operand of the value must be unchanged from here to the last use
         operands = set(re.findall(r"\b([A-Za-z_]\w*)\b", init)) - KEYWORDS - {name}
         if any(touched(lines[i + 1:], o) for o in operands):
+            continue
+        # A CALL is not a value you can move or copy: inlining a local that
+        # holds one either duplicates its side effects (more than one use) or
+        # reorders them against another call. func_8004A330's
+        # `r = func_8004B404(0);` is used twice, and the sweep scored the
+        # duplicated form 79 words / 69 DIFF against 74 / 74 -- better, and two
+        # calls where the program has one.
+        has_call = re.search(r"\b\w+\s*\(", init)
+        calls_between = [l for l in lines[i + 1:] if re.search(r"\b\w+\s*\(", l)]
+        if has_call and (uses > 1 or calls_between):
             continue
         # A local holding a LOADED value, used more than once, becomes several
         # loads when it is inlined -- which differs if anything could have

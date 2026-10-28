@@ -5322,6 +5322,7 @@ closed, so the agent knows they are load-bearing rather than background.
     python3 tools/decomp/annotate.py <unit> <func>        # which levers can apply
     ... write a candidate with the right LOGIC ...
     python3 tools/decomp/search.py zz_foo.c <unit> <func> --only=<families>
+    python3 tools/decomp/unname.py <func>                 # delete each local
 
 `annotate.py` enumerates the lever families whose signature is in the listing;
 `search.py` sweeps the source shapes mechanically at 0.7s a variant. The two
@@ -5330,6 +5331,14 @@ and between them they replace the loop of "write a variant, read the diff,
 reason, write another" that costs a model turn per variant. What neither does
 is derive the logic: that is the irreducible part, and a structurally wrong
 candidate will not be rescued by any combination of rewrites.
+
+`unname.py` is the cheapest of the three and belongs at the END of a session
+as well as the start, because SWEEPS COMPOSE: it deletes one local at a time,
+so every hit you adopt changes the base and may expose another. On 2026-10-28
+it took func_8005C4D0 from 22 to 18 and then, re-run on its own result, to 15 --
+and both of those locals were ones the park file had explicitly reasoned FOR.
+Read its header before trusting a hit: a better number can be the wrong source,
+and it needs its own wine prefix if anything else is compiling.
 
 Pass `--only` once a function is large. `search.py` confines its transforms to
 the function body, but a 437-word function still offers ~74 candidate changes
