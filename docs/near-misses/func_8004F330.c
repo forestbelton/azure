@@ -54,6 +54,28 @@
  * the tail on $a0 (15 DIFF, words 6/8/10 and 34/37/40), and one pointer
  * everywhere coalesces the copy away (39 words, a word short).
  *
+ * 2026-10-28, THE PREFERENCE READING IS CONFIRMED and the class rule behind it
+ * is now in matching-levers section 3: `regs_someone_prefers` is honoured in
+ * `find_reg`'s PASS 0 only, and pass 0 can hand out exactly the registers in
+ * `regs_used_so_far`, which global.c:352 seeds with every CALLER-SAVED
+ * register. $a0 and $t0-$t2 are all caller-saved, so this function's contest
+ * is settled in pass 0 and the reservation really does bite -- which is why
+ * the three address values skip $a0. (The contrast is func_80048FBC, whose
+ * contest is over $s0/$s1: pass 0 cannot give out the first callee-saved
+ * register, so that one falls to pass 1 where the reservation is dropped and
+ * only priority decides.)
+ *
+ * MEASURED 2026-10-28 and NOT working, both 39 of 40 words -- a word SHORT:
+ * one pointer for everything with the copy made INSIDE the loop (`r = p;` as
+ * the body's first statement, which is loop-invariant and gets hoisted to the
+ * preheader for free), with and without a pre-loop initialiser. The point of
+ * the shape was to keep the PARAMETER live past the copy so that
+ * `expand_preferences` could not propagate its $a0 preference onto `r`; the
+ * copy coalesces away regardless, which is the same wall as "one pointer
+ * everywhere" below. And the conflict route to pruning the preference is not
+ * available either: this function contains NO CALL, so $a0 is live only at
+ * entry and nothing can conflict with it inside the parameter's range.
+ *
  * WHY THE PARAMETER TAKES $a0 HERE, from `--greg` on the single-pointer form:
  * pseudo 80 (`p`) is 11 refs / 74 live / 0.446 and the three in-loop address
  * values are 7 refs each at 0.667, 0.636 and 0.583 -- so the address values
