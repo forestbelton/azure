@@ -1,4 +1,4 @@
-/* func_8005B4D0 (unk_2CDC0) -- 379 of 376 words, 367 DIFF. NOT compiled.
+/* func_8005B4D0 (unk_2CDC0) -- 377 of 376 words, 344 DIFF. NOT compiled.
  *
  * func_8005BBFC's sibling: the note-on that has to FIND a voice. The packed
  * first argument carries the program in its low seven bits and the bank above
@@ -109,6 +109,30 @@
  * 380 words, one worse. What would fix it is whatever makes `b` lose its
  * register outright -- an allocation question, and the first thing to try on
  * the next attempt.
+ *
+ * 2026-10-28: 379 -> 377 WORDS AND 367 -> 344 DIFF, from `unname.py`. The
+ * `s32 m` holding `(s32) D_80073734[0] - 1` is deleted and the expression
+ * written at its one use, `if ((s32) D_80073734[0] - 1 < ch)`.
+ *
+ * It is sound and it is the listing's shape, which is why it was adopted
+ * rather than just recorded. The use sits inside the `scan:` goto-loop, so
+ * one TEXTUAL use is many dynamic ones and inlining moves a load into the
+ * loop -- but nothing in that loop writes D_80073734 (its body is `ch++`, the
+ * bound test, `r += 0x78` and the `goto`, with no call), so the value is the
+ * same on every pass. And the listing agrees: it materialises D_80073734
+ * TWICE, `lui $s0 / lw $v0, %lo(...)($s0)` and then a second
+ * `lui $v1 / lw $v1, %lo(...)($v1)` after .L8005B64C, i.e. inside the loop
+ * region. A local for the bound is what gives this build only one.
+ *
+ * ALSO REPORTED AND NOT ADOPTED: dropping `q`
+ * (`q = bs2 + (prog * 0x10 + 0x20)`, four uses) is 373 words / 355 DIFF on the
+ * old base -- three words SHORT where the base was three OVER, so it trades
+ * one sign of error for the other and only wins on the noisy axis. The address
+ * is pure arithmetic on unmodified operands, so it is not unsound; it is just
+ * not evidence. RE-MEASURED on this new base the same day and it no longer
+ * improves at all -- a full `unname.py` pass over the 377-word source reports
+ * zero hits -- so it was an artefact of the three-word overshoot that `m`
+ * removed, and this park's locals are now exhausted for that tool.
  */
 
 #include "common.h"
@@ -140,7 +164,6 @@ void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
     s32 ch;
     s32 i;
     s32 n;
-    s32 m;
     s32 sum;
     s32 k;
     s32 x;
@@ -199,13 +222,12 @@ void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
                 if (ch == -1)
                 {
                     ch = 0;
-                    m = (s32) D_80073734[0] - 1;
                     r = D_80085458;
                 scan:
                     if (*(u16 *) (r + 0x1A) != 0)
                     {
                         ch++;
-                        if (m < ch)
+                        if ((s32) D_80073734[0] - 1 < ch)
                         {
                             ch = -1;
                         }

@@ -99,7 +99,22 @@
  *
  * So the lever wanted is one that moves the load mid-body WITHOUT making it a
  * second expression -- or an alias fact that lets sched hoist it past the
- * stores. See docs/matching-levers.md on sched1's memory dependence. */
+ * stores. See docs/matching-levers.md on sched1's memory dependence. *
+ * 2026-10-28: A SWEEP HIT REFUSED ON THIS FILE'S OWN EVIDENCE. `unname.py`
+ * reports that deleting `n` -- so the third loop reads `D_800869B4n[0]` in
+ * both the guard and the bound test instead of holding it in a local -- is
+ * 203 words / 116 DIFF against this file's 205 / 131. Better on the noisy
+ * axis, and the same distance from 204 on the reliable one (one under instead
+ * of one over).
+ *
+ * It is sound: the do-while body only stores to D_80085FA8s and calls nothing,
+ * so re-reading the bound yields the same value. It is still wrong, and the
+ * bullet above says why -- "the listing keeps that bound in $a0 across the
+ * loop instead of re-reading it. Only the first two loops re-read." The two
+ * words it loses are the two the listing spends keeping it. So this is the
+ * func_80056D44 case again: a better number off a shape the listing does not
+ * have, and the right call is to keep the local.
+ */
 
 #include "common.h"
 
