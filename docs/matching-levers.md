@@ -1421,6 +1421,22 @@ denominator and gives `3 * 10 / 42 = 0.714`, and the two swap $t0 and $t1.
 References inside a loop are weighted by loop depth, so one OUTSIDE the loop
 is the finer instrument: it moves the count by one rather than two.
 
+**The LOOP GUARD is where to put it, and a counter initialised to 0 is not the
+only thing that can go there.** func_80057948 landed on this 2026-10-27 by
+writing its guard `if (m < D_80073734s)` instead of `if (D_80073734s > 0)`,
+where `m` is the loop's OR accumulator and is provably 0 at that point: cse
+folds the comparison back to the same `blez`, the word count does not move, and
+`m` goes from 7 weighted references to 8. The eighth crosses the `floor_log2`
+step -- `2 * 7 / 36 = 0.389` becomes `3 * 8 / 36 = 0.667` -- and clears the
+D_80073740 giv's `7 / 28 = 0.500`, which is the $s2 the target has. Nine words,
+one source change.
+
+So the recipe is: when `--greg` says "+1 ref" on a value that is zero or
+otherwise known at a guard ABOVE the loop, spell the guard as a comparison
+against that value. Any variable live across the guard will do -- it does not
+have to be the loop counter -- and `--greg` after the change confirms the new
+priority rather than leaving it inferred.
+
 ### Keep $v0 busy to make a `lui`/`addiu` pair share its register
 
 `lui $a0, %hi(SYM)` / `addiu $a0, $a0, %lo(SYM)` and

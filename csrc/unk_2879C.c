@@ -1881,7 +1881,65 @@ INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056DB4);
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056E10);
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80057948);
+void func_80056D44(s32, u8 *);
+
+/* func_80056654's sibling: stops every D_80085458 entry whose +0x06 and +0x0A
+   halfwords match the two arguments, OR-ing their D_80073740 handles together
+   and releasing the accumulation once at the end; an entry already marked at
+   +0x1D only gets bit 7 set in +0x1C instead.
+
+   THE LOOP GUARD MENTIONS `m`, and that is the last word of this function.
+   `m` is provably 0 there, so cse folds the comparison back to the same
+   `blez` that `D_80073734s > 0` gives -- but `reg_n_refs` counts the mention,
+   and one reference OUTSIDE the loop is worth exactly +1 where one inside is
+   worth +1 per loop depth. That takes `m` from 7 weighted references to 8,
+   and since allocno_priority is floor_log2(refs) * refs * size / live_length
+   the eighth crosses a floor_log2 step: 2 * 7 / 36 = 0.389 becomes
+   3 * 8 / 36 = 0.667, which clears the D_80073740 giv's 7 / 28 = 0.500 and
+   takes $s2 off it. That is 9 words -- the swap plus its consequences -- and
+   nothing else reaches it: `m`'s live range has to span the guard, because
+   the `beqz $s2` after the loop is reached both from the loop exit and from
+   the guard, so the live-length side of the formula is not available.
+   matching-levers section 3's dead-reference entry, second function to land
+   on it after func_800387D0.
+
+   Also paid for: the two masks are left IN the comparison (`(a & 0xFF)`), and
+   loop.c hoists them into $s5 and $s4 by itself; `i` and `m` are initialised
+   by their declarations and `m` is declared second; and `D_80073740[i]` is
+   written out at both uses rather than read into a local. */
+
+void func_80057948(s32 a, s32 b)
+{
+    s32 i = 0;
+    s32 m = 0;
+    if (m < D_80073734s)
+    {
+        do
+        {
+            u8 *e = D_80085458 + i * 0x78;
+
+            if ((a & 0xFF) == *(u16 *)(e + 6) && (b & 0xFF) == *(u16 *)(e + 0xA))
+            {
+                if (e[0x1D] == 0)
+                {
+                    func_80056D44(i, e);
+                    m |= D_80073740[i];
+                    func_8005E97C(0, D_80073740[i]);
+                    *(u16 *)(e + 0x1A) = 0;
+                }
+                else
+                {
+                    e[0x1C] |= 0x80;
+                }
+            }
+            i++;
+        } while (i < D_80073734s);
+    }
+    if (m != 0)
+    {
+        func_8005E97C(0, m);
+    }
+}
 
 void func_80057A48(void) {
 }
