@@ -50,6 +50,39 @@
  * nothing to copy. The open question is therefore narrower than it was: what
  * makes the listing keep the walked value and `d` in SEPARATE registers.
  *
+ * 2026-10-28: THE TARGET'S REGISTERS ARE NOW READ OUT IN FULL, and the missing
+ * word is identified exactly. The listing uses THREE registers where this
+ * source uses two:
+ *
+ *     addiu $t1, $v0, %lo(D_800869C0)   $t1 = the giv, &base[i], walked by 8
+ *     addu  $t2, $t1, $zero             $t2 = a second copy of the BASE
+ *     ...
+ *     addu  $a1, $t1, $zero             $a1 = a copy of the GIV, used as `d`
+ *     addu  $a0, $v0, $t2               s = j * 8 + $t2
+ *     ...
+ *     addiu $t1, $t1, 0x8               the giv increment, in the outer
+ *                                       branch's delay slot
+ *
+ * The `d`-hoisted variant (57 words) already produces TWO of those three: it
+ * emits `addiu $a1, $v0, %lo(...)` for the giv and `move $t1, $a1` for the
+ * base copy, which is the listing's $t2 with the two registers swapped. What
+ * it does NOT emit is the copy of the giv for `d` -- it addresses `d` through
+ * the giv's own register instead, and that one insn is the whole missing word.
+ *
+ * WHY THE COPY CANNOT BE BOUGHT WITH A COPY. `u32 *d = d0;` inside the inner
+ * loop is exactly the insn wanted, but cse1 runs BEFORE loop and propagates
+ * `d0` into `d`'s uses, so the copy insn is dead before `move_movables` ever
+ * sees it -- it never reaches the preheader where the listing has it. Measured
+ * 2026-10-28, both 57 words / 41 DIFF: `d0` computed in the outer body with
+ * `d = d0` in the inner loop, and the same with the comparison reading `d0`
+ * while the stores read `d` (which would make them conflict if cse kept them
+ * apart -- it does not; the two sources compile identically).
+ *
+ * So the next idea has to make `d` and the giv hold DIFFERENT RTL values, not
+ * the same value in two pseudos. The one shape in that direction already
+ * measured is the explicit `r += 8` cursor, which is 59 words -- a word over
+ * rather than under.
+ *
  * MEASURED, all worse: `d` hoisted to the outer body (57 words -- it gets the
  * giv but loses the copy), an explicit `r += 8` cursor (59), and an explicit
  * `u8 *e` giv with `d` copied from it inside the inner loop (57 words, 41
