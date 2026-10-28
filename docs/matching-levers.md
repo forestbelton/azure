@@ -516,12 +516,26 @@ Levers that move them, all with no change to the emitted code:
   (`a1 = p->unk_20;`) leaves a multi-set pseudo that stops combine folding the
   address back into the MEM, and a real insn appears -- func_800453E0 measured
   that three ways at +1 word and 76 differing. So split at an arithmetic
-  subterm, never at the base load. Second, **on a BLOCK-LOCAL quantity the
-  currency is live length, not references.** local-alloc orders quantities with
-  `qty_compare`, which compares `qty_death - qty_birth` and nothing else;
-  references are global.c's. A free reference therefore buys nothing there by
-  itself -- but hoisting a subterm into its own local still works, because the
-  pseudo is BORN ONE INSN EARLIER, which is a live-length change. That is what
+  subterm, never at the base load. Second, **a block-local quantity is priced by
+  the SAME refs-weighted formula as a global allocno** -- this doc said the
+  opposite until 2026-10-28 and the correction is worth reading. local-alloc
+  orders the un-suggested quantities with `qty_compare` / `qty_compare_1`
+  (2.7.2 local-alloc.c:1578-1623), and both compute
+
+      floor_log2 (qty_n_refs) * qty_n_refs * qty_size / (qty_death - qty_birth)
+
+  exactly as global.c prices an allocno. References are NOT "global.c's only".
+  The old claim came from gcc's own comment above the sort site (local-alloc.c
+  ~1480, "in order of decreasing length of life"), which is STALE -- the
+  comment describes an older comparator than the code beneath it. Two
+  consequences: a free reference moves a block-local quantity just as it moves
+  a global allocno, including across a `floor_log2` step (the func_80057948
+  mechanism, section 3); and `qty_n_refs` is accumulated across pseudos that
+  `combine_regs` merges into one quantity (`qty_n_refs[sqty] += reg_n_refs[sreg]`,
+  local-alloc.c:1870), so a two-insn sign extension whose pseudos get combined
+  carries the refs of BOTH. Hoisting a subterm into its own local also still
+  works, because the pseudo is BORN ONE INSN EARLIER, which is a live-length
+  change. That is what
   took func_800453E0 from 10 differing words to 5, moving one global allocno
   and one block-local quantity in a single exchange. **So: on a global allocno
   reach for the extra reference, on a block-local quantity reach for the
@@ -571,8 +585,13 @@ Levers that move them, all with no change to the emitted code:
      is tried before `qty_phys_sugg` (arithmetic). These jump the queue, and the
      source comment says this is accepted in local allocation precisely because
      it may allocate registers that otherwise would not be.
-  2. Sort what is left by *decreasing life length* (`qty_compare_1`) and give
-     each the first register `find_free_reg` finds.
+  2. Sort what is left by the refs-weighted priority above (`qty_compare_1`;
+     gcc's comment there says "decreasing length of life" and is stale) and
+     give each the first register `find_free_reg` finds. Exact ties fall back
+     to the LOWER QTY NUMBER (local-alloc.c:1622), and qty numbers are handed
+     out as the quantities are BORN scanning the block forward -- so between
+     two quantities of equal priority the earlier-born one is allocated first
+     and takes the first free register.
 
   So the rule recorded elsewhere -- a block-local quantity takes the first
   entry of `REG_ALLOC_ORDER` -- describes phase 2 only. A suggested quantity

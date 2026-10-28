@@ -548,9 +548,10 @@ the rest: `regs_someone_prefers` makes `find_reg` avoid a register that a
 *lower*-priority conflicting allocno prefers, so an allocno allocated first can
 be pushed off the register it should have had. The cheapest way to move a
 priority is a reference costing no instruction -- splitting one assignment into
-two statements that compile to the same single insn. On a block-local quantity
-the currency is live length rather than reference count, so hoisting an
-arithmetic subterm works where an extra reference does not. The conflict side is
+two statements that compile to the same single insn. A block-local quantity is priced by the SAME
+refs-weighted formula as a global allocno -- this file said otherwise until
+2026-10-28; see the correction in section 3 of `docs/matching-levers.md` -- so
+both levers apply to it, the free reference and the earlier birth a hoist buys. The conflict side is
 a second lever: giving an existing allocno a second role in another block
 imports that block's hard-reg conflicts, which is what bought three of
 func_80041E70's four words for free. `docs/matching-levers.md` section 3 has the
