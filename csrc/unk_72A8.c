@@ -994,7 +994,39 @@ void func_8003661C(u8 *p) {
     func_80053DA8(0x503);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003666C);
+void func_8003719C(u8 *, u8 *, u8 *, s16, s32, u32);
+void func_800366F4(u8 *, s32, s32);
+
+/* Kicks off a dialogue box: reads the layout record at +0x74, works out the
+   centred x from its width and column count, and hands the whole thing to
+   func_8003719C with func_800366F4 as the continuation.
+
+   THE +0x22 HALFWORD IS READ INTO ITS OWN `s32` LOCAL, and both halves of
+   that matter. Folded into the subtraction -- `t = (*(s16 *)(s + 0x22) - n) *
+   2;` -- the three field reads come out 0x27, 0x26, 0x22 where the listing
+   has 0x27, 0x22, 0x26, and the `move $a2,$s0` and `li $a3,1` argument setups
+   land in the gaps that leaves: 7 DIFF. Read first into a local, the 0x22 load
+   is emitted before the 0x26 one, which is the listing's order, and
+   everything else falls into place.
+
+   The local must be `s32`. As `s16 q` it is still 7 DIFF: the halfword then
+   round-trips through a truncation and the load is scheduled back where it
+   was. `s32` keeps the sign-extended `lh` as the value itself. Also measured
+   at 7: reusing `t` for the intermediate (`s16 t = *(s16 *)(s + 0x22);` then
+   `t = (t - n) * 2;`). */
+
+void func_8003666C(u8 *p)
+{
+    u8 *s = *(u8 **)(p + 0x74);
+    s32 q = *(s16 *)(s + 0x22);
+    s32 n = ((s[0x26] + 1) >> 1) - 1;
+    s16 t = (q - n) * 2;
+
+    p[0x4D] = s[0x27];
+    func_8003719C(D_80082538, D_80082040, p, 1, t,
+                  *(u32 *)(*(u8 **)(p + 0x74) + 0x80));
+    *(u32 *)(p + 0x68) = (u32)func_800366F4;
+}
 
 void func_80036880(u8 *, s32, s32);
 
