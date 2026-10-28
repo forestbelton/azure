@@ -121,13 +121,33 @@
  *     giv at 38 combined with giv at 50
  *     giv at 45 combined with giv at 50
  *
- * so copy_cost is never charged to ANY giv of this class and no spelling of
- * the index or the pointer can change the verdict. That is also why the park's
- * 31-word pointer-local variant stays reduced. The remaining knob in the same
- * line is `benefit -= add_cost * bl->biv_count`, which needs a SECOND insn
- * updating `i` -- a word this function does not have to spend. So the goto
- * form really is the only thing that suppresses the reduction here, and the
- * tension this file already describes stands unchanged.
+ * so the `loop.c:3797` charge is dead here, and that is why the park's 31-word
+ * pointer-local variant stays reduced however it is spelt.
+ *
+ * THE OTHER CHARGE IS STILL LIVE, though, and it is the thing to try next.
+ * `combine_givs` applies the same subtraction to every giv it ABSORBS
+ * (loop.c:5519-5522) and its condition has NO `bl->eliminable` conjunct:
+ *
+ *     g1->benefit += g2->benefit;
+ *     if (! g2->replaceable && REG_USERVAR_P (g2->dest_reg))
+ *       g1->benefit -= copy_cost;
+ *
+ * and this function's dump is exactly that shape -- `giv at 38 combined with
+ * giv at 50`, `giv at 45 combined with giv at 50`. Both absorbed givs are
+ * currently marked `replaceable`, so neither is charged. Both conditions are
+ * reachable from the source at once: NAMING each address gives it
+ * REG_USERVAR_P, and putting the biv update BETWEEN the two definitions and
+ * their uses makes both non-replaceable, since `record_giv` clears
+ * `replaceable` when a biv update falls inside the giv's lifetime
+ * (loop.c:4468-4479). That is
+ *
+ *     s = &D_8006B200s[i - 1]; d = &D_8006B200s[i]; i--; *d = *s;
+ *
+ * which is NOT one of the shapes measured above -- those either name one side
+ * only, or put the decrement after both uses. It takes 8 off the
+ * representative's benefit. Whether that is enough is a measurement, since
+ * `giv at 50`'s own benefit is not printed; if it is not, the remaining term
+ * is `add_cost * bl->biv_count`, which would need a second insn updating `i`.
  */
 
 #include "common.h"

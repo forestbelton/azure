@@ -5053,8 +5053,12 @@ reorder those.
   eliminated` then copy_cost is never charged to any giv of that class and no
   spelling of the pointer changes the verdict. func_80059DAC says `Cannot
   eliminate biv 83` (the biv is used by the inner loop's own test), which is
-  why the lever bites there; func_8003C67C says `biv 80 can be eliminated`,
-  which is why naming its pointer does NOT suppress its reduction.
+  why the lever bites there. BUT the conjunct guards only the `:3797` site:
+  `combine_givs` charges the same copy_cost without it, so an eliminable biv
+  closes one of the two doors and not the other. func_8003C67C is that case --
+  its dump says `biv 80 can be eliminated` AND `giv at 38 combined with giv at
+  50`, so its reachable charge is the combine one, and it needs the absorbed
+  givs to be both NAMED and NOT replaceable.
 
 * **A giv that is reduced but NOT replaceable emits a COPY, and that copy is
   often the word you are missing.** loop.c inserts `dest = new_reg` at the
@@ -5662,8 +5666,18 @@ LIVE:
 * **`loop.c:3797` -- `benefit -= copy_cost` on a giv.** Section 9 has this one
   in full; it decides whether an address is strength-reduced, and it landed
   func_80059DAC.
-* **`loop.c:5521` -- the same charge inside `combine_givs`**, applied to the
-  giv being absorbed. Same rule, same way to work it.
+* **`loop.c:5521` -- the same charge inside `combine_givs`**, applied to each
+  giv that is ABSORBED into another:
+
+      g1->benefit += g2->benefit;
+      if (! g2->replaceable && REG_USERVAR_P (g2->dest_reg))
+        g1->benefit -= copy_cost;
+
+  Note what is NOT in that condition: `bl->eliminable`. So in a loop whose biv
+  the dump says can be eliminated -- where the `:3797` charge is dead -- naming
+  an absorbed giv still costs the representative four. The two sites are worked
+  the same way but they are not gated the same way, and a loop that is immune
+  to one is not immune to the other.
 * **`loop.c:698` -- whether an invariant can be HOISTED to the preheader.**
   `move_movables` needs one of three things, and the second is "it is not a
   user variable and it is not used in the exit test". So when the set is not
