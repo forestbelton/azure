@@ -1,4 +1,4 @@
-/* func_8004C36C (unk_1C540) -- 461 of 461 words, 29 DIFF. COMPILES.
+/* func_8004C36C (unk_1C540) -- 461 of 461 words, 13 DIFF. COMPILES.
  *
  * FIRST ATTEMPT, 2026-10-27, written the same day as func_80033D54's and
  * func_800345B8's parks; it is the third of the three giants that had never
@@ -39,8 +39,8 @@
  * and `.word 0x0000007f`, which assemble SILENTLY to the wrong bytes through
  * modern gas. The measurement is in that header's comment.
  *
- * 2026-10-28: 464 words / 171 DIFF -> 461 / 29, and the word count is now
- * EXACT. Three changes, two of them the same lever twice.
+ * 2026-10-28: 464 words / 171 DIFF -> 461 / 13, and the word count is now
+ * EXACT. Seven changes; the first three paid the three missing words.
  *
  *  - (*) THE PRIMITIVE-FIELD COPIES READ INTO LOCALS BEFORE THEIR STORES, in
  *    PAIRS. The listing batches two loads off the stack object into two
@@ -82,15 +82,49 @@
  *    base pointer, and re-reading through the existing `base` local -- all
  *    460 words / 49 DIFF.
  *
- * WHAT IS LEFT: 29 words, and advise.py now says SHAPE rather than LENGTH.
- * Six `nop`s the listing fills and this build does not (8004C3E8, 8004C418,
- * 8004C87C, 8004C88C, 8004C9FC, 8004CA2C), five `jal`-versus-delay-slot swaps
- * where the listing puts a different store in the call's delay slot, and seven
- * register-only differences behind them. The first one, 8004C3E8, is the
- * `beqz $s3` guarding the node loop: the listing fills its delay slot with
- * `addiu $a0, $s1, 0x50` -- the first argument of the body's first call --
- * and this build emits that same insn eight words later, into a load-delay
- * slot instead, so the pair is a scheduling choice and not a missing word.
+ * THEN 29 -> 13, all of it statement order and which local carries what:
+ *
+ *  - (*) `p->unk_38 = 0;` MOVES ABOVE `PushMatrix()`. reorg fills a call's
+ *    delay slot from the insn before the call, so the listing's
+ *    `jal PushMatrix` / `sw $zero, 0x38($s1)` needs that store to be the last
+ *    thing before the call; with it after, the slot takes `sw $v0, 0x18($s1)`
+ *    instead and both words differ. 29 -> 27.
+ *  - (*) IN THE u3/u1/v1 GROUP, the `p->unk_09` read goes ABOVE the two `sb`s
+ *    it precedes, and `prim->u2`'s `p->unk_08` read gets its own local above
+ *    `prim->tpage`. Same mechanism as the pairwise lever: a read cannot be
+ *    hoisted over a QImode store, so it has to be written before it. 27 -> 21.
+ *  - (*) BOTH BOUNDS TESTS ARE WRITTEN THE OTHER WAY ROUND --
+ *    `prim->x0 > prim->x1` for `prim->x1 < prim->x0`, and `prim->y0 >
+ *    prim->y2`. The `slt` word is identical either way, but gcc expands the
+ *    operands left to right, so this decides which of the two `lh`s is emitted
+ *    first and the listing loads x0 before x1. 21 -> 19.
+ *  - (*) WHICH LOCAL CARRIES WHICH VALUE in the first prim group: `unk_01`
+ *    through g1 and `unk_08` through g0, `unk_06` through g3 and `unk_09`
+ *    through g2 -- i.e. both pairs swapped against the obvious order. Eight
+ *    words there were a pure $a0/$v1 naming difference, and since these are
+ *    this source's own locals the swap is free. 19 -> 13.
+ *
+ * WHAT IS LEFT: 13 words in three groups, and advise.py now says SHAPE rather
+ * than LENGTH.
+ *
+ *   * TWO WORDS, the `beqz $s3` guarding the node loop. The listing fills its
+ *     delay slot with `addiu $a0, $s1, 0x50` -- RotMatrix's first argument --
+ *     and this build emits that same insn eight words later into a load-delay
+ *     slot, leaving a `nop` at the branch. reorg can only fill from the
+ *     fall-through when the first insn there cannot trap, and in this build
+ *     that insn is `lw $v0, 0x8($s3)`: `may_trap_p` is true for any MEM, so
+ *     the slot stays empty. The fix is therefore to make the `addiu` the
+ *     block's FIRST insn, which is a sched2 question, not a source one -- a
+ *     local holding `&p->unk_50` is folded straight back into the call's
+ *     argument setup.
+ *   * FOUR WORDS, two pairs of adjacent independent loads emitted in the
+ *     other order (`lhu 0x6` against `lbu 0x9`, and `lhu 0x4` against
+ *     `lbu 0x8`). Measured: both source orders of each pair give the same 13,
+ *     so sched normalises them and the source cannot reach it.
+ *   * SEVEN WORDS at the count loop's bottom, where the listing interleaves
+ *     `count - 1` into the prim advance rather than after it. Writing
+ *     `count = count - 1;` above the advance costs TWO WORDS (463, 49 DIFF),
+ *     so it is not the statement order either.
  *
  * STILL UNVERIFIED, and the places to look first when picking this up:
  *   * the two `|| x != y` guards around the u/v decrements. The listing
@@ -222,8 +256,8 @@ void func_8004C36C(u8 *pl, u8 *list)
     base = D_80083160.unk_00;
     prim = *(POLY_FT4 **)(base + 0x8D0);
     p->unk_18 = (s32)(base + 0x70);
-    PushMatrix();
     p->unk_38 = 0;
+    PushMatrix();
     p->unk_74 = 0;
     p->unk_6C = 0;
     p->unk_64 = 0;
@@ -341,27 +375,28 @@ void func_8004C36C(u8 *pl, u8 *list)
                     setlen(prim, 9);
                     *(s32 *)&prim->r0 = p->unk_A8;
                     func_8004C010((u8 *)&prim->r0, (u8 *)&p->unk_78);
-                    g0 = p->unk_01;
-                    g1 = p->unk_08;
-                    prim->code = g0;
-                    prim->u0 = g1;
-                    g2 = p->unk_06;
-                    g3 = p->unk_09;
-                    prim->clut = g2;
-                    prim->v0 = g3;
-                    if (prim->x1 < prim->x0 || prim->x0 != prim->x2)
+                    g1 = p->unk_01;
+                    g0 = p->unk_08;
+                    prim->code = g1;
+                    prim->u0 = g0;
+                    g3 = p->unk_06;
+                    g2 = p->unk_09;
+                    prim->clut = g3;
+                    prim->v0 = g2;
+                    if (prim->x0 > prim->x1 || prim->x0 != prim->x2)
                     {
                         p->unk_0A = p->unk_0A - 1;
                     }
                     t = p->unk_08 + p->unk_0A;
+                    g0 = p->unk_09;
                     prim->u3 = t;
                     prim->u1 = t;
-                    g0 = p->unk_09;
-                    g1 = p->unk_04;
                     prim->v1 = g0;
+                    g1 = p->unk_04;
+                    g2 = p->unk_08;
                     prim->tpage = g1;
-                    prim->u2 = p->unk_08;
-                    if (prim->y2 < prim->y0 || prim->y0 != prim->y1)
+                    prim->u2 = g2;
+                    if (prim->y0 > prim->y2 || prim->y0 != prim->y1)
                     {
                         p->unk_0B = p->unk_0B - 1;
                     }
