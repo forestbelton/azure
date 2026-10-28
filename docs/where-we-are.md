@@ -72,6 +72,19 @@ compiler, and none from another source-shape guess.
   retired that park's central theory: both its sunk parameters have exactly two
   references in the listing too, so reference counts were never what kept their
   loads in the prologue.
+* **THE NUMBER-AGAINST-SHAPE CALL IS NOW CONSISTENT ACROSS THE PARKS**, audited
+  2026-10-28. Five files weigh a better score against a shape the listing
+  shows: func_800563B0 (keeps 14, records 11), func_8005914C (keeps 205/131,
+  records 203/116), func_8005BBFC (keeps 220, records 219), func_8005A778
+  (keeps the in-place extension at the higher count) and func_8005A608 -- which
+  held the `(s16)` cast at 11 DIFF while its own text said the in-place form at
+  13 was "structurally closer". The listing has
+  `sll $a1, $a1, 16` / `sra $a1, $a1, 16`, same register, so the cast's
+  two-register pair appears nowhere in it; that file now holds the 13. The rule
+  the others follow, from func_800563B0: **the better NUMBER is not the better
+  SOURCE**, because a park's job is to be the best candidate for the ORIGINAL,
+  and a source that scores well on an instruction the target lacks tells the
+  next attempt its shape is right.
 * **AND READ EVERY HIT BEFORE ADOPTING IT.** `unname.py` produced three
   proposals today with BETTER numbers that were different programs or the
   wrong shape: a value whose operand was incremented in between, a duplicated
