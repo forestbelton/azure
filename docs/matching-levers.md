@@ -5254,6 +5254,19 @@ reorder those.
 
 ## 10. Measured dead ends -- do not retry
 
+* **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT
+  EVIDENCE.** Tried as an audit across all parks on 2026-10-28, on the back of
+  the `s8 bank` rejection -- where the ABSENCE of a 24-bit shift did refute a
+  width. It does not generalise, and the sweep produced five flags and zero
+  findings. Two reasons, both worth knowing before trusting a similar scan:
+  a value loaded with `lbu`/`lhu` and used narrowly (`f = *q;` then
+  `f & 0x80`) never needs a truncation at all, so its listing has none -- that
+  is func_80048B8C, func_80047054 and func_8003800C; and a naive scan for
+  `^\s+u16 (\w+);` catches STRUCT AND UNION MEMBERS, which is all eighteen of
+  func_8004C36C's flags. The `s8 bank` case worked only because the value was
+  a SHIFT RESULT that had to be re-narrowed, so the truncation would have been
+  unavoidable. Use the absence of an instruction as evidence only when the
+  declaration would force that instruction.
 * **`volatile` as a COMBINE BARRIER between two insns.** A volatile store
   placed between an `addiu` and the reg-to-reg move that consumes it does not
   stop combine folding the pair -- measured on func_80048C3C 2026-10-28, 48 of
