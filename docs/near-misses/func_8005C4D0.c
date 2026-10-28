@@ -1,4 +1,4 @@
-/* func_8005C4D0 (unk_2CDC0) -- 64 of 64 words, 18 DIFF. NOT compiled.
+/* func_8005C4D0 (unk_2CDC0) -- 64 of 64 words, 15 DIFF. NOT compiled.
  *
  * Tears down the D_80085458 entry for index n: clears its +0x1A and +0x0A,
  * runs func_80056D44/func_80056DB4, then spins on func_8005EB78 until the
@@ -90,7 +90,14 @@
  * lowest-free-register outcome downstream of the materialisation order, not a
  * preference to be engineered.
  *
- * 2026-10-28: 22 -> 18, AND IT IS THE LEVER THIS FILE WAS ALREADY ASKING FOR.
+ * 2026-10-28: 22 -> 18 -> 15, AND IT IS THE LEVER THIS FILE WAS ALREADY ASKING
+ * FOR. The second step came from re-running the sweep on the 18-DIFF base:
+ * dropping the `u32 *t` cursor too and reading the table twice,
+ * `v = D_80073740[n];` and `func_8005E97C(0, D_80073740[n]);`, is 64 of 64
+ * words and 15 DIFF. Same semantics -- `*t` was two reads of that location as
+ * well -- and one less local. SWEEPS COMPOSE: each adopted hit changes the
+ * base, so re-run rather than assuming the first pass exhausted it.
+ *
  * Dropping the `u32 *g = D_80073740;` local and writing the one use as
  * `t = &D_80073740[n];` is 64 of 64 words and 18 DIFF. Found by a mechanical
  * sweep that deletes each park's locals one at a time, which is worth saying
@@ -131,7 +138,6 @@ s32 func_8005C4D0(s16 n)
 {
     u8 *b = D_80085458;
     u8 *e;
-    u32 *t;
     u32 v;
     s32 r;
     u16 h;
@@ -147,13 +153,12 @@ s32 func_8005C4D0(s16 n)
     {
         goto fail;
     }
-    t = &D_80073740[n];
-    v = *t;
+    v = D_80073740[n];
     *(u16 *)(e + 0x1A) = 0;
     *(u16 *)(e + 0xA) = 0;
     func_80056D44(n, e, e);
     func_80056DB4(n);
-    func_8005E97C(0, *t);
+    func_8005E97C(0, D_80073740[n]);
     do
     {
         func_8005E97C(0, v);
