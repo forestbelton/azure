@@ -369,6 +369,52 @@ def t_decl_per_arm(text):
         yield ("declare %s per switch arm" % name, out)
 
 
+def t_split_local(text):
+    """Give each assignment to a straight-line local its OWN local.
+
+    A local written several times is ONE quantity whose references SUM, and
+    local-alloc prices a quantity by `floor_log2(refs) * refs * size /
+    (death - birth)` (local-alloc.c:1578-1623) -- so one shared local and
+    several separate ones can take different registers and be born in a
+    different order. Three distinct block-local temps, where the obvious source
+    reuses one, is what took func_8004D294 from 9 differing words to MATCH; the
+    shared-local spelling measured 18 there.
+
+    This is the reverse of `tools/decomp/unname.py`, which deletes locals.
+
+    Applied only where the whole live range is STRAIGHT-LINE -- no brace and no
+    control keyword between the first assignment and the last use -- because
+    assignments in different arms of an `if` are alternatives, and splitting
+    those changes the program rather than its register allocation.
+    """
+    lo, hi = SPAN
+    d = _decl_run(text)
+    for start, end, name in d:
+        decl = text[start:end]
+        word = re.compile(r"\b%s\b" % re.escape(name))
+        assign = re.compile(r"(?m)^[ \t]+%s\s*=\s*[^;=][^;]*;" % re.escape(name))
+        sets = [m for m in assign.finditer(text) if lo <= m.start() < hi]
+        if len(sets) < 2:
+            continue
+        uses = [m.start() for m in word.finditer(text)
+                if lo <= m.start() < hi and not (start <= m.start() < end)]
+        region = text[sets[0].start():max(uses) ]
+        if re.search(r"[{}]|\b(if|else|while|for|do|goto|switch|case|return)\b", region):
+            continue
+        out, shift = text, 0
+        for k, m in enumerate(sets[1:], start=2):
+            fresh = "%s_%d" % (name, k)
+            nxt = sets[k - 1].start() if k - 1 < len(sets) else hi
+            a, b = m.start() + shift, nxt + shift
+            piece = word.sub(fresh, out[a:b])
+            out = out[:a] + piece + out[b:]
+            shift += len(piece) - (b - a)
+            newdecl = word.sub(fresh, decl)
+            out = out[:end + shift] + newdecl + out[end + shift:]
+            shift += len(newdecl)
+        yield ("split %s into %d locals" % (name, len(sets)), out)
+
+
 def t_volatile(text):
     """Make one pointer dereference `volatile`.
 
@@ -693,6 +739,7 @@ TRANSFORMS = [
     t_goto_loop,
     t_hoist_read,
     t_decl_order_init,
+    t_split_local,
 ]
 
 
