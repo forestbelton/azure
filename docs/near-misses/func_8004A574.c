@@ -39,6 +39,41 @@
  * of a guarded block, an `s32` product and a temporary for the argument (all
  * 5), plus a full search.py sweep of 18 variants.
  *
+ * 2026-10-28: IT IS NOT A SCHED QUESTION, and `--greg` says so. The six global
+ * allocnos are
+ *
+ *     107  3 refs /  5 live / 0.600  -> $v1   the function pointer
+ *     84   3 refs /  6 live / 0.500  -> $a0   THE PRODUCT `v`
+ *     85   3 refs /  6 live / 0.500  -> lo
+ *     82   4 refs / 19 live / 0.421  -> $a2   `e`
+ *     83   3 refs / 10 live / 0.300  -> $a3   `r`
+ *     80   4 refs / 58 live / 0.138  -> $t0   `p`, THE PARAMETER
+ *
+ * and `v` holds $a0 because it is the call's FIRST ARGUMENT: the copy into
+ * $a0 gives it a copy preference, and `find_reg` applies that preference over
+ * its lowest-legal pick. Once `v` owns $a0 there is nothing for the `mflo` to
+ * write but $a0, so it goes where the argument is set up -- after the branch.
+ * The listing has `v` in $v0 and spends the copy, which is only possible if
+ * $a0 is NOT available to it. So the mflo's position is DOWNSTREAM of that
+ * register, exactly as func_8004827C's shift turned out to be, and reading the
+ * sched1 ready list would be reading the consequence.
+ *
+ * WHY $a0 IS AVAILABLE HERE AND NOT IN THE LISTING. $a0 is caller-saved, so
+ * this is settled in `find_reg`'s pass 0 where a reservation does bite
+ * (matching-levers section 3, the class rule) -- but `v` prefers $a0 itself,
+ * and `prune_preferences` subtracts an allocno's own preferences from what it
+ * inherits from a conflicting rival, so no reservation can exclude it. The
+ * other route is a CONFLICT: $a0 would have to be live inside `v`'s range,
+ * which means the PARAMETER's pseudo holding $a0 -- and `p` is allocated LAST
+ * here, at 0.138, because its 58 live is `update_equiv_regs`' doubling of a
+ * once-set parameter (its real range is 29). Even with the doubling escaped it
+ * is 0.276 against `v`'s 0.500, and it would need eight references to pass it.
+ *
+ * So the open question is narrower than this header had it: get the PARAMETER
+ * allocated before the product, or give the product's copy into $a0 a reason
+ * to survive. Measured already and not working: a second `u = v` local for the
+ * argument (the copy coalesces, since `v` dies at it).
+ *
  * So the question is only what pins the `mflo` above the function-pointer
  * load. Both are in the join block; nothing in the source orders them,
  * because the multiply's result and the load are independent. Read the sched1
