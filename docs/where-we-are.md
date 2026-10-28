@@ -243,7 +243,7 @@ something** -- that has been the single biggest waste of effort here.
 
 | group | count | what it means |
 |-------|-------|---------------|
-| parked, with a COMPILING CANDIDATE | 56 | a park file each in `docs/near-misses/` |
+| parked, with a COMPILING CANDIDATE | 55 | a park file each in `docs/near-misses/` |
 | structurally blocked | 0 | was func_80033D44 + func_80033D54: on 2026-10-27 the old unk_72A8 was CUT in two (`gprel_72A8` + `unk_72A8`) so the pair gets its `%gp_rel(D_8008099C)` while the two landed functions below the cut keep the absolute form. func_80033D44 landed the same hour; func_80033D54 is now counted under never attempted |
 | deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
 | never attempted | 0 | **all four giants were drafted on 2026-10-27**: func_80033D54 **MATCHED and landed 2026-10-27** (it was at 537 of 537 / 46 DIFF, every instruction right, 34 of them four callee-saved register names; the phantom bit test in matching-levers section 3 carried the two missing references and is marked SYMPTOM in the landed source), func_800345B8 at 546 of 546 / 128 DIFF (two adjacent allocno pairs), func_8004C36C at 464 of 461 / 171 DIFF (three load-delay nops and what follows them) and func_80056E10 at 713 of 718 / 687 DIFF (first reading; the seven scans are the new part) |

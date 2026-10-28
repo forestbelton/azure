@@ -3460,9 +3460,31 @@ void func_8003AB14(u16 *d, u16 *s) {
     d[3] = s[5];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003AB44);
+extern s32 D_8006A8C8[];
+extern s32 D_8006A8DC[];
 
-void func_8003AB44(u8 *, s16, s32, u8, s16, s32, s32);
+s32 func_8004D880(s32);
+void func_8004D91C(u8, s16 *);
+
+/* Arguments 3 and 6 are `s16`, not `s32` with an `(s16)` cast at the use. Both
+   are the narrow-parameter lever in docs/matching-levers.md section 7: a
+   sub-word parameter arrives promoted, gcc keeps the raw pseudo and emits the
+   narrowing separately, and the three callee-saved registers fall out in the
+   listing's order. As `s32` with casts this is 54 words and 9 differing, a
+   3-cycle rotation of $s1/$s2/$s3. */
+
+void func_8003AB44(u8 *p, s16 b, s16 c, u8 d, s16 e, s16 f, s32 g)
+{
+    RECT r;
+    s32 x;
+
+    x = e + b * D_8006A8C8[d];
+    if (x >= 0x140 && x < 0x400)
+    {
+        func_8004D91C(func_8004D880(p[1] | (p[0] << 8)), (s16 *)&r);
+        MoveImage(&r, x, f + c * D_8006A8DC[d]);
+    }
+}
 
 void func_8003AC1C(s16 x, s16 y, u8 c, u8 *p) {
     s16 i = 0;
