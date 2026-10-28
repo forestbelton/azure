@@ -70,6 +70,24 @@
  * it did not do. Comparisons ONE and TWO use $v0 in both builds, so whatever
  * occupies $v0 in the listing is live across the third comparison only.
  *
+ * THE TIE CANNOT BE BROKEN BY NAMING EITHER SIDE, measured 2026-10-28. Ours
+ * shares $v0 between the call result and the third comparison because
+ * `block_alloc` ties an insn's destination into the quantity of a source that
+ * dies in it, and that tie needs BOTH sides to be quantities local-alloc is
+ * allocating -- so making either one cross-block should break it (the lever
+ * that landed func_800565D8). Both halves tried, both 113 words and the same
+ * 4 DIFF:
+ *
+ *   * all three CALL RESULTS through one shared `s32 v`, set in three blocks,
+ *     with the chain rewritten as nested ifs on `v`;
+ *   * all three COMPARISON RESULTS through one shared `s32 ok`, likewise.
+ *
+ * The second is the one that mattered -- the destination is the tied side --
+ * and it changes nothing because the comparison's result is folded into the
+ * branch before allocation, so `ok` never becomes a pseudo at all. That is the
+ * general shape of what is left here: the value whose register is wrong has no
+ * name in C.
+ *
  * So the next attempt is a dbr/local-alloc question, not a source-shape one:
  * read `/tmp/azure-decomp/dumps/<base>/dbr` and the `lreg` quantity table for
  * what holds $v0 across that third call, and work out why local-alloc refuses
