@@ -255,15 +255,32 @@
  * exactly -- set once, used once, multi-block -- the same rule that sinks
  * func_8005BBFC's parameter loads.
  *
- * WHAT IS NOT ESTABLISHED, said plainly so the next attempt does not inherit a
- * guess: `c` has THREE uses in this source (both stores and the call
- * argument), so a pseudo for it at two references means cse or combine has
- * already split `c` across more than one pseudo, and WHICH of them insn 153
- * uses has not been traced. Do that first -- walk pseudo 82 back through the
- * combine and cse dumps -- because the cure for a two-reference pseudo (give
- * it a third reference) and the cure for an overlap (make two ranges coexist)
- * are different shapes, and the duplicate-copy variant above is what you get
- * from guessing between them.
+ * AND THE SUBSTITUTION IS NOW TRACED, which rules out the obvious cure.
+ * Pseudo 82 appears FOUR times in the `rtl` dump -- its set at insn 8 plus
+ * exactly the three uses `c` has in this source -- so `c` is ONE pseudo and is
+ * not split across several, and the `update_equiv_regs` two-reference rule
+ * (set once, used once, multi-block) does NOT apply to it. Comparing the
+ * `flow` and `lreg` dumps use by use:
+ *
+ *     flow uses 82 in insns   8, 153, 167, 180
+ *     lreg uses 82 in insns   8,           180
+ *     insn 153  (set (mem (plus (reg 87) 20)) (reg:SI 5 a1))   <- +0x14 store
+ *     insn 167  (set (mem (plus (reg 87) 8))  (reg:SI 5 a1))   <- +8 store
+ *
+ * so local-alloc replaced the TWO STORES with the incoming register and left
+ * the call argument (insn 180) on the pseudo. THAT IS WHERE `--greg`'S "2
+ * refs" FOR PSEUDO 82 COMES FROM: it is the count AFTER the substitution, not
+ * the source's. Any allocator arithmetic in this file built on that 2 is
+ * arithmetic about a derived number.
+ *
+ * WHAT IS STILL NOT ESTABLISHED, said plainly: WHICH routine in local-alloc
+ * does it. `optimize_reg_copy_1` is permitted to -- its "don't mess with hard
+ * regs" guard is `#ifdef SMALL_REGISTER_CLASSES` (local-alloc.c:712) and
+ * config/mips never defines it -- but the replacement it performs runs the
+ * other way, SRC into DEST, so it is not obviously the one. Do not attribute
+ * this to a named function without checking; two readings of this park have
+ * already been wrong, one blaming combine and one calling the two extra
+ * registers "not a parameter".
  */
 
 #include "common.h"
