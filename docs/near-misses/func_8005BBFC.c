@@ -329,15 +329,19 @@
  * rule's precondition is satisfied after all, and the paragraph this replaces
  * was wrong.
  *
- * WHAT IS SOLID, as opposed to attributed: insns 20 and 22 are present in
- * `flow` and gone in `lreg`; both pseudos have one set and one use and are
- * multi-block; and NEITHER appears in `greg`'s ";; 37 regs to allocate" list,
- * so neither ever competes for a register. The attribution to a particular
- * routine is NOT settled -- `update_equiv_regs`' deletion at local-alloc.c:1104
- * requires `validate_replace_rtx` to succeed, and substituting the MEM into
- * `(set (reg) (ashift (reg 89) 16))` should fail, since MIPS `ashlsi3` wants a
- * register. So something consistent with the observations is happening and the
- * exact path is unproven; do not quote one without checking.
+ * AND `.lreg` SETTLES IT IN ONE LINE, which is the line to read instead of
+ * counting anything:
+ *
+ *     Register 88 used 2 times across 2 insns in block 3; GR_REGS or none.
+ *     Register 89 used 2 times across 2 insns in block 3; GR_REGS or none.
+ *
+ * gcc's own count, and its own block number. Two references each -- so the
+ * `reg_n_refs == 2` precondition holds -- and BOTH INSNS NOW SIT IN BLOCK 3,
+ * the block of the use. That is the sinking itself, visible as a fact rather
+ * than inferred: the load was moved into the use's block, which is why insns
+ * 20 and 22 are gone from the entry block in `lreg` and why neither pseudo
+ * reaches `greg`'s allocation list. The park's original mechanism was right
+ * and my two attempts to refute it were not.
  *
  * THE LISTING-SIDE PUZZLE IS UNAFFECTED and is the real question: the target's
  * `$t0` and `$t1` are also read exactly once each, in a block past the `beqz`
