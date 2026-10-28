@@ -1,4 +1,4 @@
-/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 216 DIFF. NOT compiled.
+/* func_8005BBFC (unk_2CDC0) -- 334 of 333 words, 221 DIFF. NOT compiled.
  *
  * SPU voice start: resolves the program record for (bank, prog, key), waits
  * for the hardware voice to go idle, sums the sample-table lengths to get the
@@ -445,6 +445,41 @@
  * same spills to 0x58 and 0x60. It is two words over, and both extra words are
  * copies gcc makes to free an argument register. So the park's target is that
  * row minus its two copies -- not either 216.
+ *
+ * 2026-10-28, THE PARAMETERS ARE `s16` AND THAT REPRODUCES THE PROLOGUE. This
+ * file measured `s16 vel` at 333/219 earlier today and recorded it as noise,
+ * with the note "worth re-running once this function is close enough for the
+ * score to mean something". It was the answer, and the score was the wrong way
+ * to judge it. With BOTH declared `s16` and the now-redundant casts dropped:
+ *
+ *     334 of 333 words, 221 DIFF -- and the first THIRTY-THREE words are
+ *     identical to the listing, prologue included.
+ *
+ * The base this replaces diverged at word 7. The whole parameter block is now
+ * right:
+ *
+ *     lw  $t0, 0xA0($sp) ; lw  $t1, 0xA4($sp)
+ *     lhu $t2, 0xA8($sp) ; sh  $t2, 0x58($sp) ; lhu $t2, 0xAC($sp) ; sh 0x60
+ *
+ * same registers, same offsets, same order.
+ *
+ * WHY THE EARLIER REASONING MISSED IT: this file argued that `s16` was refuted
+ * because the listing loads the slots with `lw` and a halfword parameter would
+ * use `lh`. That is wrong on this ABI -- a narrow argument occupies a full
+ * word slot and the CALLER sign-extends, so the callee loads the word and
+ * extends it itself where it needs an s32 (the listing's own
+ * `sll $a0, $t1, 16` / `sra` pair). The `lw` is evidence FOR `s16`, not
+ * against it. It also agrees with csrc/unk_2CDC0.c's prototype, which declares
+ * all eight parameters `s16` -- a corroboration this file had been treating as
+ * a placeholder.
+ *
+ * WHAT IS LEFT is one word and a register. The first divergence is at word 34
+ * and is only the branch offset shifting; the first real one is word 45,
+ * `lw $s4, 0x4($v0)` where the listing has `lw $s3, 0x4($v0)`, and word 47,
+ * where this build has `addu $s6, $s4, $v0` and the listing starts
+ * `sll $a0, $t1, 16` -- the extension of `fine`. So the remaining work is an
+ * ordering question around that extension, on a source whose prologue is now
+ * exact.
  */
 
 #include "common.h"
@@ -455,7 +490,7 @@ void func_8005E97C(s32, u32);
 s32 func_8005EB78(u32);
 void func_8005EC0C(SpuVoiceAttr *, s32, s32);
 
-s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 volx, u16 panx)
+s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s16 vel, s16 fine, u16 volx, u16 panx)
 {
     SpuVoiceAttr attr;
     s32 ch;
@@ -478,7 +513,6 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
 
     ch = ch0;
     D_80085F98[0] = 1;
-    fine = (s16) fine;
     if ((s32) D_80073734[0] - 1 < ch)
     {
         ch = -1;
@@ -488,7 +522,6 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
         b = D_80086A40[bank].unk_04;
         q = b + ((s16) prog * 0x10 + 0x20);
         e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
-        vel = (s16) vel;
         pit = (vel << 8) + fine;
         if (vel >= e[6] && e[7] >= vel)
         {
