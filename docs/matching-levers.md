@@ -5257,13 +5257,23 @@ reorder those.
   anything else is reading those listings.
 * **Do not pipe `make check` through `head` or `tail`** -- it masks make's exit
   code, and a broken state was committed that way once.
+* **`pgrep -f <pattern>` matches the shell running it.** A wait loop written
+  `while pgrep -f sweep.py >/dev/null; do sleep 10; done` never exits, because
+  the loop's own command line contains `sweep.py`; `pkill -f` on the same
+  pattern kills that shell instead (exit 144). A background job built this way
+  looks like it is working and does nothing at all -- an hour was lost to it on
+  2026-10-28. Wait on the PID, match with `pgrep -x`, or just let the job write
+  a sentinel line and read the file.
 
 ## 12. Keeping an agent's run cheap
 
 A subagent working one function pays for its whole context on every turn, so
 tool output compounds. Two things dominate:
 
-**Step zero, before any compile: give the agent its own wine prefix.**
+**Step zero, before any compile: give the agent its own wine prefix.** This
+applies to a BACKGROUND SWEEP in your own session too, not just to subagents:
+a sweep left running while you measure anything by hand is two concurrent
+`ccpsx` runs on one prefix, and the loser exits 0 having written nothing.
 Concurrent `ccpsx` runs share one prefix and silently lose an output -- the
 compile exits 0 having written nothing, or having written another run's file --
 and with several agents going at once that is not a rare race, it is the normal
@@ -5678,6 +5688,27 @@ LIVE:
   an absorbed giv still costs the representative four. The two sites are worked
   the same way but they are not gated the same way, and a loop that is immune
   to one is not immune to the other.
+
+  BUT THE OBVIOUS WAY TO SATISFY IT IS SELF-DEFEATING, measured on
+  func_8003C67C 2026-10-28. The charge needs a giv that is BOTH
+  non-replaceable AND absorbed, and the cheap way to clear `replaceable` is to
+  put a biv update inside the giv's lifetime (`record_giv`, loop.c:4468-4479)
+  -- which is also what stops `combine_givs` merging it. The dumps either side:
+
+      before   Insn 38: giv ... benefit 4 ... replaceable mult 8 add (reg 88)
+               giv at 38 combined with giv at 50
+      after    Insn 38: giv ... benefit 4 ...             mult 8 add (reg 91)
+               giv at 46 reduced to (reg:SI 107)
+               giv at 38 reduced to (reg:SI 110)
+
+  `replaceable` is gone exactly as intended and the combination goes with it,
+  so nothing is ever absorbed and nothing is ever charged -- both givs are
+  simply reduced on their own. Two givs separated by a biv update are not
+  derivable from one another, so the two requirements are in tension whenever
+  the biv update is the thing clearing `replaceable`. To use this site, clear
+  `replaceable` the OTHER way `record_giv` can: the `else` at loop.c:4493 takes
+  it when the giv's first use is not its setting insn or when the giv is live
+  past `loop_end` -- neither of which disturbs combinability.
 * **`loop.c:698` -- whether an invariant can be HOISTED to the preheader.**
   `move_movables` needs one of three things, and the second is "it is not a
   user variable and it is not used in the exit test". So when the set is not

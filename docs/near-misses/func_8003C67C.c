@@ -154,10 +154,29 @@
  * named pointers themselves rather than anything about the order. That is the
  * same wall the goto forms hit from the other side: this function cannot
  * afford the words that suppressing its reduction costs, whichever mechanism
- * does the suppressing. What has NOT been checked is whether the reduction is
- * actually gone in that 33-word build -- the `loop` dump would say, and if it
- * is gone then the remaining question is only how to pay for it, which is a
- * different (and narrower) question than "what stops loop.c".
+ * does the suppressing.
+ *
+ * AND THE DUMP SAYS THE REDUCTION IS NOT GONE -- the idea defeats itself, for
+ * a reason that generalises. Naming the two addresses and putting the
+ * decrement between them DID clear `replaceable` on both, exactly as intended:
+ *
+ *     before   Insn 38: giv ... benefit 4 ... replaceable mult 8 add (reg 88)
+ *              giv at 38 combined with giv at 50
+ *     after    Insn 38: giv ... benefit 4 ...             mult 8 add (reg 91)
+ *              giv at 46 reduced to (reg:SI 107)
+ *              giv at 38 reduced to (reg:SI 110)
+ *
+ * -- but the combination went with it, and `combine_givs` only charges a giv
+ * it ABSORBS. Two givs separated by a biv update are not derivable from one
+ * another, so nothing is absorbed, nothing is charged, and both are reduced on
+ * their own. The charge needs non-replaceable AND absorbed, and the biv-update
+ * route cannot give both at once.
+ *
+ * The other way `record_giv` clears `replaceable` (loop.c:4493: the giv's
+ * first use is not its setting insn, or it is live past the loop end) does not
+ * disturb combinability, so that is what a future attempt would have to reach
+ * -- but note this function is already TWO WORDS OVER in the 33-word shape, so
+ * even a working suppression has to be cheaper than the two named pointers.
  */
 
 #include "common.h"
