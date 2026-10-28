@@ -1,4 +1,4 @@
-/* func_8005A90C (unk_2CDC0) -- 103 of 103 words, 59 DIFF. NOT compiled.
+/* func_8005A90C (unk_2CDC0) -- 100 of 103 words, 92 DIFF. NOT compiled.
  *
  * The third member of the func_8005A608 / func_8005A778 family, and the one
  * with the longest tail: it claims a D_80086A40 slot the same way the other
@@ -136,8 +136,9 @@
  * See docs/matching-levers.md on reviewing a narrowing against the
  * listing's own arithmetic before keeping it.
  *
- * 2026-10-28: 100 -> 103 WORDS AND 92 -> 59 DIFF. The word count is now EXACT,
- * and the change is one statement:
+ * 2026-10-28: A 103-WORD / 59-DIFF VARIANT THAT IS NOT ADOPTED -- the better
+ * number off a shape the listing does not have, the same call func_80056D44
+ * and func_8005914C get. The change is one statement:
  *
  *     cc = c;                      <- a copy of the third parameter, made
  *                                     BEFORE the id dispatch
@@ -185,13 +186,31 @@
  * `c` or `p` is the listing's own shape is undecided -- both are 59 -- and
  * picking between them is the next question, not finding a third.
  *
- * WHAT IS LEFT, from the new diff: the frame is 0x28 here against the
- * listing's 0x30, so the target still has eight more bytes of saved registers
- * or locals than this source produces -- which is the surviving half of
- * advise.py's callee-saved hint, now that three of the words it wanted have
- * arrived. The register naming ($s4/$s2/$s0 here, $s5/$s3/$s4 there) and the
- * position of `sw $zero, %lo(D_8007382C)` relative to the two shifts follow
- * from it. Start there, not from the allocator tables.
+ * WHY IT IS NOT ADOPTED, read off the listing's own prologue:
+ *
+ *     addiu $sp, $sp, -0x30
+ *     sw $s5, 0x24($sp) ; addu $s5, $a0, $zero     <- p
+ *     sw $s3, 0x1C($sp) ; addu $s3, $a1, $zero     <- b
+ *     sw $s4, 0x20($sp) ; addu $s4, $a2, $zero     <- c
+ *     sw $s1, 0x14($sp) ; addu $s1, $zero, $zero   <- i
+ *     ... sw $s2, 0x18($sp) ... sw $s0, 0x10($sp)
+ *
+ * SIX callee-saved registers ($s0-$s5) and EXACTLY THREE parameter copies.
+ * The 100-word base already has those three; both 59-DIFF variants add a
+ * FOURTH copy -- a duplicate of a parameter in a fifth callee-saved register
+ * (`sw $s3`, `move $s3, $s0`, `lw $s3`), which is where their three words come
+ * from. The listing has no such duplicate. So the word count goes exact for
+ * the wrong reason, and a park carrying that source would tell the next
+ * attempt the shape is right when it is not.
+ *
+ * WHAT THE LISTING ACTUALLY WANTS, and this is a better-posed question than
+ * the one this file started with: a SIXTH callee-saved register holding
+ * something that is NOT a parameter. The target keeps p, b, c and i in four of
+ * them and two more ($s0, $s2) for values assigned later; this build has five
+ * registers for p, b, c, i and the duplicate. So something this source keeps
+ * in a caller-saved register, or recomputes, is held across the calls there --
+ * `e`, `k`, `r` or `t` are the candidates. Find which, and the three words
+ * arrive without a duplicate copy.
  */
 
 #include "common.h"
@@ -211,10 +230,8 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
     u8 *e;
     s16 r;
     u32 t;
-    u32 cc;
 
     D_8007382C[0] = 0;
-    cc = c;
     i = 0;
     j = id;
     id = id << 16;
@@ -239,11 +256,11 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
 found:
     k = i;
     e = (u8 *) &D_80086A40[k];
-    *(u32 *) (e + 0x14) = cc;
+    *(u32 *) (e + 0x14) = c;
     e[0x18] = 0x7F;
     *(s16 *) e = i;
     *(u8 **) (e + 4) = p;
-    *(u32 *) (e + 8) = cc;
+    *(u32 *) (e + 8) = c;
     e[0x1B] = 0x40;
     *(u32 *) (e + 0x10) = b;
     r = func_80059F8C(b, c);
