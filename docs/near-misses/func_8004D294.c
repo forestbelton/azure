@@ -1,4 +1,4 @@
-/* func_8004D294 (unk_1C540) -- 114 of 114 words, 27 DIFF. NOT compiled.
+/* func_8004D294 (unk_1C540) -- 114 of 114 words, 9 DIFF. NOT compiled.
  *
  * Wraps a caller's three Euler angles into 12-bit signed range, wraps
  * D_80083178's own three the same way, and snaps any axis that ended up more
@@ -46,6 +46,40 @@
  * into its own local first is WORSE, 33 DIFF. So no spelling of the
  * subtraction moves it, and the next step is `tools/decomp/sched.py` on one
  * block -- section 8 of docs/matching-levers.md for what its output means.
+ *
+ * 2026-10-27: 27 DIFF -> 18 -> 9, by two changes that cost nothing.
+ *
+ * 1. THE THREE CONDITIONAL NEGATES ARE `abs()`. `d = EXPR; if (d < 0) { d =
+ *    -d; }` puts the value and the negation in one cse class, canon_reg
+ *    rewrites the negation to read the older member, and the copy that should
+ *    sit in the branch's delay slot is hoisted out -- here it cost 9 words
+ *    across the three sites. `d = abs(EXPR)` gives the listing's shape
+ *    directly: `bgez` / delay slot / `negu $v0, $v0` in place. Same cure as
+ *    func_8003BD84, which landed on it; see matching-levers section 5.
+ *
+ * 2. THE OPERANDS INSIDE `abs()` ARE REVERSED -- `abs((s16) w - *(s16 *) (q +
+ *    k))`, not `abs(*(s16 *) (q + k) - (s16) w)`. This is FREE semantically,
+ *    since abs(a - b) == abs(b - a), and it is worth 9 more words: it makes
+ *    the subtraction `subu $v0, $v0, $v1` with the SAME ENCODING as before
+ *    while swapping which value each register holds, so the result lands in
+ *    the register the negate wants and the `move` disappears at all three
+ *    sites.
+ *
+ * WHAT IS LEFT: NINE WORDS, three at each site, and they are one register
+ * swap. The listing extends `w` into $v1 and loads q[k] into $v0; this source
+ * does the opposite:
+ *
+ *     target  sll $v1,$a0,16 ; lh $v0,0($s0) ; sra $v1,$v1,16 ; subu $v0,$v0,$v1
+ *     built   sll $v0,$a0,16 ; lh $v1,0($s0) ; sra $v0,$v0,16 ; subu $v0,$v0,$v1
+ *
+ * Both quantities are BLOCK-LOCAL (so this is local-alloc, not the global
+ * MARGINS table -- see section 3), and the load needs to be allocated before
+ * the extension to take $v0. Measured and NOT moving it: explicit `(s32)`
+ * casts on both operands; `abs(-(load - (s16) w))`; and the extension written
+ * as an in-place shift pair `(((s32) w << 16) >> 16)`. All three are 114
+ * words and 9 DIFF, so the spelling of the expression is exhausted and the
+ * next step is the local-alloc suggestion/priority order on those two
+ * quantities.
  */
 
 #include "common.h"
@@ -86,11 +120,7 @@ void func_8004D294(u16 *p, u8 *q, s32 a)
             w = t & 0x7FF;
         }
         *(u16 *)(b + 0xAC) = w;
-        d = *(s16 *)(q + 0) - (s16)w;
-        if (d < 0)
-        {
-            d = -d;
-        }
+        d = abs((s16)w - *(s16 *)(q + 0));
         if (d >= 0x801)
         {
             *(u16 *)(q + 0) = (w & 0xF000) | (*(u16 *)(q + 0) & 0xFFF);
@@ -116,11 +146,7 @@ void func_8004D294(u16 *p, u8 *q, s32 a)
             w = t & 0x7FF;
         }
         *(u16 *)(b + 0xAE) = w;
-        d = *(s16 *)(q + 2) - (s16)w;
-        if (d < 0)
-        {
-            d = -d;
-        }
+        d = abs((s16)w - *(s16 *)(q + 2));
         if (d >= 0x801)
         {
             *(u16 *)(q + 2) = (w & 0xF000) | (*(u16 *)(q + 2) & 0xFFF);
@@ -146,11 +172,7 @@ void func_8004D294(u16 *p, u8 *q, s32 a)
             w = t & 0x7FF;
         }
         *(u16 *)(b + 0xB0) = w;
-        d = *(s16 *)(q + 4) - (s16)w;
-        if (d < 0)
-        {
-            d = -d;
-        }
+        d = abs((s16)w - *(s16 *)(q + 4));
         if (d >= 0x801)
         {
             *(u16 *)(q + 4) = (w & 0xF000) | (*(u16 *)(q + 4) & 0xFFF);
