@@ -54,6 +54,24 @@ compiler, and none from another source-shape guess.
   listing. An exact word count reached by a spurious instruction is worse than
   being three short, because the park then tells the next attempt the shape is
   right.
+* **AND WHEN A CHANGE REWRITES AN EXPRESSION THE LISTING SHOWS, TRACE THAT
+  INSTRUCTION BEFORE CHANGING IT.** This is the OTHER retraction of
+  2026-10-28, and the word-count rule above does not catch it, because the
+  word count did not move. func_8005BBFC went 220 -> 219 by writing its range
+  test on the RAW parameter instead of `(s16) vel`, which buys `vel` a third
+  reference and keeps its load in the prologue. The listing settles it in four
+  instructions:
+
+      sll $v0, $t0, 16 ; sra $a2, $v0, 16 ; lbu $v0, 0x6($s1) ;
+      slt $v0, $a2, $v0
+
+  the test reads `$a2`, which is the CAST. Reverted to 220. A test, a cast, a
+  comparison's operand order and a shift width are all VISIBLE in the listing,
+  so a change to one is checkable in a minute -- and a reference-count argument
+  for changing it is not evidence about the original. The same trace also
+  retired that park's central theory: both its sunk parameters have exactly two
+  references in the listing too, so reference counts were never what kept their
+  loads in the prologue.
 * **AND READ EVERY HIT BEFORE ADOPTING IT.** `unname.py` produced three
   proposals today with BETTER numbers that were different programs or the
   wrong shape: a value whose operand was incremented in between, a duplicated
