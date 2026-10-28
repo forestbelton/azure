@@ -137,13 +137,19 @@
  * words, so the two differing words the cast saves are bought with an
  * extension the target does not have.
  *
- * Everything else in this file stands, and note what it means for the store
- * position: the paragraph above derives "nothing in the source moves the
- * store" from the CAST form's anti-dependence, where the extension's
- * intermediate takes $v0 and so clashes with the symbol's high half. With the
- * in-place form that WAR is gone -- the same paragraph says so -- so the store
- * sweep is worth re-running against this base rather than inherited from the
- * cast one.
+ * Everything else in this file stands, AND THE STORE SWEEP DOES NOT NEED
+ * RE-RUNNING -- I wrote that it did and the file already had it. The paragraph
+ * above measured all five store positions against BOTH extension spellings:
+ * "cast gives 11 / 14 / 14 / 18 and in-place gives 13 / 16 / 16 / 17 / 18".
+ * The 13 this file now holds is the best of the five in-place positions, so
+ * the sweep is complete for this base. What the switch does change is the
+ * EXPLANATION: "nothing in the source moves the store" was derived from the
+ * cast form's anti-dependence, where the extension's intermediate takes $v0
+ * and clashes with the symbol's high half, and the in-place form has no such
+ * WAR. So the store's position is still 13's, but it is no longer explained --
+ * and the sibling func_8005A778, which reaches the same wall from the in-place
+ * side, says store-last DOES move there. That difference between the two
+ * functions is the open question.
  */
 
 #include "common.h"
