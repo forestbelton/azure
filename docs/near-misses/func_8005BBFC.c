@@ -128,6 +128,40 @@
  * a single word is noise, and the two-parameter form going a word OVER says
  * the pair interact. Worth re-running once this function is close enough for
  * the score to mean something.
+ *
+ * THE FIRST DIVERGENCE IS DIAGNOSED, 2026-10-28, and it is the same fact at
+ * thirteen of advise.py's MISSING sites. The target's PROLOGUE loads the
+ * stack-passed arguments --
+ *
+ *     lw  $t0, 0xA0($sp)     <- arg 5, `vel`
+ *     lw  $t1, 0xA4($sp)     <- arg 6, `fine`
+ *     lhu $t2, 0xA8($sp)     <- arg 7, `volx`
+ *
+ * -- where this build loads only `volx` and defers the other two to their
+ * uses inside the `ch != -1` block. Word counts agree (333 both), so this is
+ * POSITION, not content, and it shifts everything after it.
+ *
+ * WHY: `update_equiv_regs` (local-alloc.c:1078) sinks a parameter's load to
+ * its use when
+ *
+ *     reg_n_refs[regno] == 2 && reg_basic_block[regno] < 0
+ *
+ * i.e. the pseudo is set once and used EXACTLY ONCE, in more than one block.
+ * This source reads `(s16) vel` three times and `(s16) fine` once, but cse
+ * shares the three casts into a SINGLE read of `vel`, so both parameters hit
+ * `reg_n_refs == 2` and both loads sink. The listing's do not, so there the
+ * parameters carry a second RTL reference or are confined to one block.
+ *
+ * MEASURED and NOT working: computing `pit` before the `ch` test, in three
+ * positions (272 DIFF each -- the arithmetic moves with the loads, which is
+ * worse than the loads being late); and reading `vel`/`fine` into locals at
+ * the top, one or both (220, unchanged -- the copies are propagated away and
+ * the parameters still hit the two-reference rule).
+ *
+ * So the lever is to give one of those parameters a SECOND reference that cse
+ * cannot share with the others, or to confine it to one block -- and that is
+ * the thing to look for before reading any later region of this diff, since
+ * everything after word 6 is shifted by it.
  */
 
 #include "common.h"
