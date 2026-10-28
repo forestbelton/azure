@@ -5646,3 +5646,50 @@ silent break:
 So the scan is worth re-running after any width change, and two of its four
 hits are the kind of false positive to expect: a genuinely narrow value
 stored into a wider field is fine.
+
+## `REG_USERVAR_P`: where NAMING a value changes a decision, and where it cannot
+
+A pseudo carries `REG_USERVAR_P` when it is the RTL of a declared variable or a
+parameter (`stmt.c:3390`, `function.c:3629`, `varasm.c:539`); a pseudo that
+expand or cse invented does not. Dumps print it as `/v` -- `(reg/v:SI 90)` is a
+user variable, `(reg:SI 132)` is not. So "write it inline" against "give it a
+name" is a real switch, and this is the complete list of what it switches on
+this target, read out of the 2.7.2.3 tree. Check the list before building a
+theory on it: most of the places that mention it are not reachable here.
+
+LIVE:
+
+* **`loop.c:3797` -- `benefit -= copy_cost` on a giv.** Section 9 has this one
+  in full; it decides whether an address is strength-reduced, and it landed
+  func_80059DAC.
+* **`loop.c:5521` -- the same charge inside `combine_givs`**, applied to the
+  giv being absorbed. Same rule, same way to work it.
+* **`loop.c:698` -- whether an invariant can be HOISTED to the preheader.**
+  `move_movables` needs one of three things, and the second is "it is not a
+  user variable and it is not used in the exit test". So when the set is not
+  guaranteed to run once the loop starts (`maybe_never`) and the register is
+  not confined to the set's own basic block, a compiler temp is still hoisted
+  and a NAMED local is not. Naming an invariant is therefore a way to hold a
+  materialisation down inside the loop, and spelling it inline is a way to
+  lift it -- the other half of the preheader-ordering levers in section 2.
+* **`regclass.c:1807` -- `REGNO_POINTER_FLAG` propagation.** A named local
+  keeps the pointer-ness its type gave it; for an unnamed pseudo gcc infers it
+  from the set. Minor, and it moves alignment assumptions rather than
+  allocation, but it is the one allocation-adjacent entry on the list.
+
+NOT LIVE ON THIS TARGET -- do not build on these:
+
+* **All four uses in `combine.c`** (`:954`, `:1134`, `:1765`, `:1831`, and the
+  i3 test at `:1279`) are inside `#ifdef SMALL_REGISTER_CLASSES`, and
+  `config/mips/` never defines it. **Combine cannot be defeated by naming a
+  value.** That closes the direction func_800599B0's park asks for in so many
+  words ("defeat combine, not cse"): no spelling of that read-back can stop
+  combine folding its copy, so the remaining word there is not reachable this
+  way.
+* **`cse.c:478` (`CHEAP_REG`)** requires `REGNO (N) < FIRST_PSEUDO_REGISTER`,
+  so it only ever fires on a hard register. Before reload the named local is a
+  pseudo and the macro is false either way -- naming does not change cse's
+  costs.
+* **`flow.c:1238`** is inside `#if 0`.
+* **`integrate.c`** is inlining, which this compiler does not do here, and
+  **`reload1.c`** only clears the flag.

@@ -143,6 +143,18 @@
  * not reproduce that: from +0x38 it is 132 words / 39 DIFF, from +0x04 132 /
  * 43, and from +0x00 133 / 11. All three are worse than the one register this
  * file is on, so the shape below stands; the temporary is not the answer.
+ *
+ * 2026-10-28: "DEFEAT COMBINE" IS NOT REACHABLE BY NAMING, checked in the
+ * compiler rather than by another run. The paragraph above ends on "anything
+ * that reaches the listing has to give read-back #2 a single consumer AND keep
+ * its copy -- i.e. defeat combine, not cse", and the obvious handle would be
+ * REG_USERVAR_P, which is exactly what decided func_80059DAC's giv that same
+ * day. combine.c consults it in five places -- :954, :1134, :1279, :1765,
+ * :1831 -- and EVERY one of them is inside `#ifdef SMALL_REGISTER_CLASSES`,
+ * which config/mips never defines. So combine treats a named local and a cse
+ * temp identically here and no spelling of read-back #2 changes whether its
+ * copy is folded. The full map of what REG_USERVAR_P does reach on this target
+ * is in matching-levers, under its own heading.
  */
 
 #include "common.h"
