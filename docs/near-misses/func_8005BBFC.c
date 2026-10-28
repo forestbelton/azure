@@ -301,6 +301,35 @@
  * $a0` takes the SHIFTED vel as its first operand, so the order in this file is
  * already the listing's and the emission order is sched1's business, not the
  * source's.
+ *
+ * 2026-10-28, THE DUMPS SAY WHAT ACTUALLY HAPPENS HERE, and it is not the rule
+ * this file has been quoting. The two stack parameters are pseudos 88 (`vel`,
+ * `(mem (plus (reg 76) 16))`) and 89 (`fine`, offset 20), each created with a
+ * REG_EQUIV note to its own incoming slot. Following them:
+ *
+ *     rtl    insn 20 and insn 22 present -- the two prologue loads
+ *     flow   both still present; each pseudo mentioned FOUR times
+ *     lreg   BOTH INSNS GONE -- local-alloc deleted them
+ *     greg   neither 88 nor 89 appears in ";; 37 regs to allocate: ..."
+ *
+ * So local-alloc resolves both parameters to their memory equivalent and they
+ * never enter the register contest at all; reload then emits a `lw` at each
+ * use, which is the load this file has been calling "sunk".
+ *
+ * AND `reg_n_refs == 2` IS NOT THE TRIGGER. Both pseudos are mentioned four
+ * times at `flow`, not twice, so the `update_equiv_regs` substitution rule
+ * quoted throughout this file does not fire on either of them. Taken with the
+ * listing-side observation above -- that the target's own `$t0` and `$t1` are
+ * two-reference multi-block pseudos and were NOT sunk -- the rule fails to
+ * explain either side, and every argument in this file that rests on it
+ * (including the reverted raw-`vel` change) should be read as unsupported.
+ *
+ * WHAT TO WORK NEXT, stated without a mechanism attached: find what makes
+ * local-alloc keep a REG_EQUIV parameter in the allocation set instead of
+ * resolving it to memory. That is a different question from reference counting
+ * and it is answerable from `local-alloc.c` plus these dumps, since both
+ * parameters here take the memory route and both take the register route in
+ * the listing.
  */
 
 #include "common.h"
