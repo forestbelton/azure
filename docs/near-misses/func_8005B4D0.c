@@ -186,6 +186,27 @@
  * families only (247 candidates, `--only=...` listed in search.py's header),
  * which is the way to sweep this function: semantic levers one at a time
  * against the listing, never mixed into a greedy pass.
+ *
+ * 2026-10-28, A CLEAN SWEEP AT LAST, and the park can be read as swept now.
+ * Two earlier passes over this function were void -- the first scored
+ * store-deleting variants from `t_hoist_read`, the second accepted
+ * `decl bank: s32 -> s8` and explored greedily from a width the listing
+ * refutes. The third ran the PURE-REWRITE families only (247 candidates, the
+ * `--only=` line in search.py's header) and finished with exactly one change:
+ *
+ *     split v = ... + ...      377 words (+1), 344 DIFF -> 377 (+1), 343
+ *
+ * i.e. `v = D_80085458; v += ch * 0x78;` in place of the single expression.
+ * NOT ADOPTED: it is one differing word at an IDENTICAL word count, which is
+ * below the noise floor for a function sitting 343 away -- no instruction is
+ * added or removed, so it is a register or an ordering shuffle, and the
+ * two-statement form is the less natural source. Recorded so the next sweep
+ * does not report it as new.
+ *
+ * So the local-rewrite space is exhausted for this base, and what is left is
+ * the prologue fact already written up: this build spills both halves of the
+ * packed argument and reloads one, where the listing keeps `a & 0x7F` in $fp
+ * from its second instruction.
  */
 
 #include "common.h"
