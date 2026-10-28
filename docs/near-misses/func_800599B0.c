@@ -75,6 +75,28 @@
  * local-alloc's refusal to tie the second read-back, not in the source
  * sequence.
  *
+ * MEASURED 2026-10-28, and it closes the reordering idea rather than opening
+ * it. The listing's shape is `sw $v1,0x4 ; sw $v1,0x38` -- BOTH stores from
+ * read-back #1 -- with read-back #2 a surviving copy of it that only the
+ * +0x1C sum reads. The obvious way to get the two stores onto one pseudo is to
+ * put the +0x18 store BELOW the +0x38 one (order 0x04, 0x38, 0x18, sum) so
+ * nothing intervenes between them. That is 132 words, one SHORT, 44 DIFF:
+ *
+ *   * the two stores do share read-back #1, as intended; but
+ *   * the sum's `*(u32 *) (e + 0x38)` then reuses it as well, because a store
+ *     to `e + 0x18` does NOT invalidate cse's entry for `e + 0x38` -- two
+ *     constant displacements off the SAME base register are disambiguated, so
+ *     the +0x18 store cannot be used as a cse barrier for +0x38 at all; and
+ *   * with only one consumer left, combine folds the substituted copy into the
+ *     `addu` and the move disappears -- hence the missing word.
+ *
+ * Swapping the sum's operands in that order is 46. So the missing ingredient is
+ * NOT an ordering: it is a SECOND read-back of the same value whose copy
+ * SURVIVES combine, and in this source the copy survives only because it has
+ * two consumers (the +0x38 store and the sum), which is exactly what makes the
+ * store name $v0. Anything that reaches the listing has to give read-back #2 a
+ * single consumer AND keep its copy -- i.e. defeat combine, not cse.
+ *
  * MEASURED 2026-10-27, reading the listing's four moves rather than the diff.
  * The listing is `sw $s3,0x0 ; addu $v1,$s3 ; lhu $a2,0x10 ; addu $v0,$v1 ;
  * ... sw $v1,0x4 ; sw $v1,0x38 ; sw $a2,0x18 ; addu $a1,$a2 ; addu $v0,$v0,$a1
