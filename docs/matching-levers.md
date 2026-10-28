@@ -3735,18 +3735,65 @@ construct from the two ends -- and CHECK the dump rather than assuming:
 `sched.py --sched1` prints the ready lists, and a bumped insn shows up there as
 `(7f000001)` against its neighbours' `(1)`.
 
-And when both competing insns are bumped, this knob is spent: what decides
-them is `rank_for_schedule`'s dependence CLASS against the last-scheduled insn
-(highest class wins, so the insn INDEPENDENT of it beats the one it depends
-on), and the only key above class is priority -- which, because `insn_cost` is
-1 between ALU insns against the `- 1` in `priority()`, grows ONLY across a load
-delay. func_8003A060's park file works that case out in full -- and states what the
-argument does NOT cover, which is everything outside its own dependence graph.
-Priority is insensitive to ALU chain length, not to load delays, so the escape
-from a case like that is a shape that changes which values arrive from memory,
-not another ordering of the same ones. "No statement order reaches it" is the
-claim the dumps support; "unreachable" is not, and the target is this
-compiler's own output from some source.
+**ALSO: `n_deaths` IS ALWAYS ZERO, so birthing is the ONLY case that runs.**
+`adjust_priority` switches on how many REG_DEAD notes the insn carries and
+divides the priority down for one, three or four deaths -- and the comment
+above the loop says `??? This code has no effect, because REG_DEAD notes are
+removed before we ever get here`. It is true: every insn reaching
+`adjust_priority` takes `case 0`. So in sched1 the priority of a released
+predecessor is either its path priority or `LAUNCH_PRIORITY`, nothing in
+between, and `birthing_insn_p` is the whole of the heuristic. Do not look for
+a middle value to aim at.
+
+### WHEN BOTH COMPETING INSNS ARE BUMPED, IT IS LUID -- AND A NEW LOCAL MOVES IT
+
+This was written up twice as spent and it is not. With both insns at
+`7f000001`, `rank_for_schedule`'s priority key ties; its class key ties too
+whenever both are ALU (`insn_cost` is 1, so both classify 3 against the
+last-scheduled insn); so **LUID decides, descending -- and because sched1 runs
+backward, the HIGHER LUID is picked first and placed LATER**. Net: within one
+bumped group the emitted order is by increasing LUID, which is the order the
+insns were generated in.
+
+That makes the requirement a position in the RTL stream, and the lever is
+**giving a sub-term its own statement so its insn is generated somewhere
+else.** func_8003A060 and its twin func_8003A858 landed on exactly this after
+two days at 2 DIFF. The target emits
+
+    ... ; addu $a1, $a1, $v1 ; sll $t0, $t0, 2 ; addu $a1, $a1, $t1 ; lbu ...
+
+so the destination index's `sll` has to fall between the operand sum's last
+two `addu`s -- impossible while `+ m` is the final term of the one expression
+that generates both of them. Splitting it out as
+
+```c
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    t = (u8 *) (a * 4 + (u32) s);
+    u = q + m;                          /* a NEW local, not q += m */
+```
+
+puts the `+ m` addu after the `sll` in LUID order and lands all 43 words.
+
+**It has to be a NEW local.** `q += m` in the same place is 9 DIFF, and the
+dump says why: it gives `q` two sets, which un-bumps BOTH of q's setters --
+the sum's last `addu` as well as the `+ m` one. The `sll` is then the only
+bumped insn in the contest and wins on priority instead of losing on LUID, so
+the pair does not even swap; and worse, with the sum's last `addu` down at
+priority 3 the still-bumped `sll $t1, $t1, 2` for `m * 4` beats it and drifts
+seven slots late. One extra single-set local avoids all of that. Prefer a
+fresh name over an in-place update whenever this knob is in play -- the same
+direction as the func_8005C2C0 note above.
+
+What is NOT reachable this way is a LUID interval strictly inside one
+expression: the insns of `A + B + C` are generated in one run and nothing can
+be interleaved with them. So read a sched1 tie as "which statement generates
+each insn", and move the boundary rather than the order.
+
+The key above LUID is priority, which -- because `insn_cost` is 1 between ALU
+insns against the `- 1` in `priority()` -- grows ONLY across a load delay. So
+if even the statement boundary cannot be moved, the remaining escape is a
+shape that changes which values arrive from memory, not another ordering of
+the same ones.
 
 ### A global's DECLARED SIZE also decides how many registers its address costs
 
@@ -4031,10 +4078,14 @@ re-deriving the whole key order per function.
   the third sibling func_80056DB4 is at 2 DIFF because ITS early store needs
   `lui`+`ori` -- a two-insn chain, long enough to win -- which is why the
   recipe does not transfer between them.
-* **Both chains are ALU and one feeds the next insn scheduled** -- key 2's
-  dependence class decides and the independent insn wins, whatever the LUIDs.
-  func_8003A060 and its twin func_8003A858: the `sll` is class 3 against the
-  `addu`'s class 1, permanently.
+* **Both chains are ALU and BOTH insns are bumped** -- key 1 and key 2 both
+  tie (two ALU producers are class 3 against anything), so it is key 3, LUID,
+  and LUID is a statement boundary: see "when both competing insns are bumped"
+  in section 8. func_8003A060 and its twin func_8003A858 LANDED here, on one
+  extra single-set local. The key-2 story this bullet used to tell -- that the
+  `sll` is class 3 against the `addu`'s class 1 -- was wrong: `insn_cost` is 1
+  between ALU insns, so the `addu` is class 3 too and class never separates
+  them.
 * **A STORE sinks to the end of its block** -- a store has no dependents inside
   the block, so its priority is the floor and nothing in the source raises it.
   func_80038CB8's `sh` to +0x20 sinks past the `slt`, so the +0x28 temp cannot

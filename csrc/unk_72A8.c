@@ -3128,7 +3128,46 @@ void func_8003A01C(u8 *p) {
     *(u32 *) (t + a * 4 + 0x48) = *tab[b];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A060);
+/* Reads the destination index and the table index with `*(*cp)++`, the four
+   operand bytes off `r = *cp`, advances the cursor by 4, and writes the
+   little-endian word they address into `state[a].unk_48` as four accumulating
+   stores (cse forwards each re-read of the slot, so the listing shows `sw`
+   after every step).
+
+   The `+ m` is its OWN local, not the last term of the operand sum, and that
+   is the whole of what took this one two days. Written as one expression the
+   sum's last `addu` and the destination's `sll $t0, $t0, 2` swap: sched1 bumps
+   every single-set insn in the group to LAUNCH_PRIORITY (adjust_priority's
+   n_deaths is always 0 -- the REG_DEAD notes are gone by then -- so
+   birthing_insn_p decides), which leaves LUID as the only tie-break, and the
+   `sll` then needs a LUID between the sum's last two insns. Giving `+ m` a
+   statement of its own after `t` puts the `addu` after the `sll` in LUID
+   order; it has to be a NEW local because `q += m` gives `q` a second set,
+   un-bumps both of q's setters and drags `m * 4` late with them. */
+void func_8003A060(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *r;
+    u8 *q;
+    u8 *s;
+    u8 *t;
+    u8 *u;
+
+    a = *(*cp)++;
+    m = **cp * 4;
+    (*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    *cp += 4;
+    s = *(u8 **) (p + 0x80);
+    t = (u8 *) (a * 4 + (u32) s);
+    u = q + m;
+    *(u32 *) (t + 0x48) = u[0];
+    *(u32 *) (t + 0x48) += u[1] << 8;
+    *(u32 *) (t + 0x48) += u[2] << 16;
+    *(u32 *) (t + 0x48) += u[3] << 24;
+}
 
 /* The same opcode in the other direction: composes the address the same way,
    reads FOUR BYTES at it into a little-endian word, dereferences THAT as a
@@ -3387,7 +3426,31 @@ void func_8003A7FC(u8 *p) {
     *q += 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A858);
+/* Byte-identical to func_8003A060 -- same opcode, second entry point. */
+void func_8003A858(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *r;
+    u8 *q;
+    u8 *s;
+    u8 *t;
+    u8 *u;
+
+    a = *(*cp)++;
+    m = **cp * 4;
+    (*cp)++;
+    r = *cp;
+    q = (u8 *) (r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24));
+    *cp += 4;
+    s = *(u8 **) (p + 0x80);
+    t = (u8 *) (a * 4 + (u32) s);
+    u = q + m;
+    *(u32 *) (t + 0x48) = u[0];
+    *(u32 *) (t + 0x48) += u[1] << 8;
+    *(u32 *) (t + 0x48) += u[2] << 16;
+    *(u32 *) (t + 0x48) += u[3] << 24;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A904);
 

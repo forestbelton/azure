@@ -4,20 +4,34 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 55 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 53 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD.
-`progress.py` puts it at 35265 of 41767 words, 84.4%, with 54 of the 55 stubs
+`progress.py` puts it at 35351 of 41767 words, 84.6%, with 52 of the 53 stubs
 parked. NOTE that guard.py under-reported until 2026-10-28: its definition
 pattern wanted `) {` and so missed an OLD-STYLE (K&R) parameter list, which
 this project writes deliberately to narrow a parameter without putting a narrow
 prototype in scope. It was reporting the landed func_8005C2C0 as MISSING. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
-**WHERE 2026-10-28 LEFT IT, so the next session does not re-derive it.** One
-function landed (func_80059DAC) and three parks improved: func_8005C4D0
-22 -> 15 DIFF, func_8005B4D0 379 -> 377 words and 367 -> 344, func_8005BBFC
-220 -> 219. Every one of those came from a MECHANICAL sweep or from reading the
-compiler, and none from another source-shape guess.
+**WHERE 2026-10-28 LEFT IT, so the next session does not re-derive it.** Three
+functions landed -- func_80059DAC, and the byte-identical pair func_8003A060 /
+func_8003A858, which had been the oldest 2-DIFF park -- and three more improved:
+func_8005C4D0 22 -> 15 DIFF, func_8005B4D0 379 -> 377 words and 367 -> 344,
+func_8005BBFC 220 -> 209 with its whole 26-word prologue exact. Every one of
+those came from a MECHANICAL sweep or from reading the compiler, and none from
+another source-shape guess.
+
+**AND THE A060 LANDING RETIRES A STANDING "UNREACHABLE".** That park had been
+argued closed three separate times -- on `rank_for_schedule`'s class key, on
+priority's insensitivity to ALU chains, and on `schedule_select` -- and each
+argument was about the ORDER of a fixed set of insns. What actually moved it was
+reading sched1's own ready lists instead of reasoning about them: every insn in
+the contested group prints `7f000001`, so the only live key was LUID, and LUID
+is decided by WHICH STATEMENT generates each insn. Splitting one term of an
+expression into its own new local moved the boundary. The transferable lesson is
+in matching-levers section 8 under "when both competing insns are bumped"; the
+procedural one is that a park's conclusion should name the key the DUMP shows
+deciding, not the key the source reads as if it would.
 
 * **ONE NEW TOOL, AND IT NEEDS READING WITH ITS RECORD.**
   `tools/decomp/unname.py` deletes each of a park's locals in turn and
@@ -117,7 +131,7 @@ compiler, and none from another source-shape guess.
 * **THE SUB-12-DIFF PARKS ARE NOW EACH BOUNDED ON A NAMED COMPILER FACT**
   rather than on "an allocation question" -- see each file's last dated entry.
   Several standing "first thing to try" items were tried and closed today
-  (func_8003A060's load-delay opening, func_8003A374's live-range term,
+  (func_8003A374's live-range term,
   func_8004F330's `$a0` preference, func_8005ACDC's hoist, func_80048C3C's
   combine fold, func_80038CB8's volatile route, and the second-set escape in
   five files). So the cheap end is genuinely worked out, and the section
@@ -129,8 +143,8 @@ compiler, and none from another source-shape guess.
 stub duplicates already-landed code.** Checked 2026-10-28 by taking each of the
 211 stub listings' instruction bytes and searching the whole 0x80000 image for
 them: every stub occurs exactly once except func_8003A060 and func_8003A858,
-which are the same 43 words at 0xD860 and 0xE058 and already share a
-carved-sweep row. So the tempting idea -- that some stub is a copy of a
+which are the same 43 words at 0xD860 and 0xE058 -- they shared a carved-sweep
+row and landed together on 2026-10-28. So the tempting idea -- that some stub is a copy of a
 function already in C and could be landed by transferring that source -- is
 closed. It cost two minutes; do not re-speculate it. (The check works because
 MIPS branches are PC-relative while `jal` targets and `lui`/`addiu` symbol
