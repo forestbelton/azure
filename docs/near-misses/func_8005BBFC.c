@@ -530,6 +530,43 @@
  * multi-set and costs a word. Swapping `q` and `e` is 225 or 227. So the
  * range cannot be shortened by moving statements, and the reference cannot be
  * bought from the arithmetic; what is left is something that changes 171.
+ *
+ * 2026-10-28, THE TWO REGISTERS ARE EXACTLY SWAPPED, and the rival is a
+ * CONSTANT. Pseudo 171, which takes the $s3 that `b` wants, is
+ *
+ *     (insn 733 (set (reg:SI 171) (const_int 2)))
+ *         with (expr_list:REG_EQUIV (const_int 2))
+ *
+ * i.e. the literal 2 from `} while (k != 2 && k != 0);`, hoisted out of that
+ * loop and held in a callee-saved register across its two calls. And the
+ * listing does the same thing with it -- `addiu $s4, $zero, 0x2` and
+ * `beq $v0, $s4, .L8005BD4C` -- so the two functions agree about WHAT is in
+ * registers and disagree only about WHICH:
+ *
+ *     target   b -> $s3    constant 2 -> $s4
+ *     built    b -> $s4    constant 2 -> $s3
+ *
+ * THE MARGIN, from `.lreg`, and why the constant wins:
+ *
+ *     171 (const 2)  3 refs / 18 insns  ->  1*3/18 = 0.167
+ *     97  (`b`)      4 refs / 49 insns  ->  2*4/49 = 0.163
+ *
+ * The constant's use sits INSIDE the loop, and `reg_n_refs` weights a
+ * reference by loop depth, which is where its third reference comes from: the
+ * RTL mentions it exactly twice (the hoisted set and the `beq`). So a value
+ * used once in a loop outranks a pointer used twice outside one.
+ *
+ * AND THE `pit` PLACEMENT DOES NOT TOUCH THIS -- checked, because it looked
+ * like it should. `b` is 4 refs / 49 insns in BOTH the 209 shape (`q`, `pit`,
+ * `e`) and the 221 shape (`q`, `e`, `pit`), and both give `97 in 20` and
+ * `171 in 19`. So the 209's advantage over the 221 is entirely the
+ * sign-extension order, and the register swap is independent of it.
+ *
+ * WHAT WOULD FLIP IT, all four terms: `b` at 5 refs (0.204), `b`'s range at 47
+ * insns (0.170), the constant's range at 19 insns (0.158), or the constant at
+ * 2 refs (0.111). The last is the one with a source handle -- its third
+ * reference is loop-depth weighting on a single use -- but the use is the loop
+ * condition itself and cannot leave the loop.
  */
 
 #include "common.h"
