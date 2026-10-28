@@ -39,6 +39,51 @@
  * of a guarded block, an `s32` product and a temporary for the argument (all
  * 5), plus a full search.py sweep of 18 variants.
  *
+ * 2026-10-28: IT IS NOT A SCHED QUESTION, AND THE PRODUCT IS NOT THE $a0
+ * ALLOCNO -- both this header and matching-levers section 3 had the two
+ * pseudos the wrong way round. From the `.lreg` RTL rather than from the
+ * priority table:
+ *
+ *     (set (reg/v:SI 85) (mult (reg 105) (reg/v:SI 84)))   <- in each arm
+ *
+ * so 84 is `s`, THE MULTIPLIER -- 3 refs, dying in two places, one per arm,
+ * which is why it holds $a0 (`lw $a0, 0x0($v0)` before the branch, `mult $v0,
+ * $a0` in both arms). The PRODUCT is 85, and its preferred class is LO_REG:
+ * `mulsi3_internal` writes LO, so `v` LIVES IN LO across the branch and the
+ * `mflo` is not a scheduled insn at all -- it is the call's ARGUMENT SETUP,
+ * which `expand_call` emits in the CALL block. That is the whole reason it
+ * sits after the `beqz` here.
+ *
+ * THE LISTING DOES THE SAME THING UNTIL THE JOIN. Its arms also end in `mult`
+ * (one of them in a `j`'s delay slot), so its product is in LO too; what it
+ * does differently is move LO out in the JOIN block -- `mflo $v0` as that
+ * block's first insn -- and then copy $v0 into $a0 at the call. So the
+ * question is not which register the product gets, it is WHERE THE MOVE OUT
+ * OF LO HAPPENS: at the argument setup (here) or at the join (the listing).
+ *
+ * WHAT THAT NEEDS is a GR_REGS pseudo, distinct from the LO one, assigned in
+ * the join block -- in source terms an intermediate for the product with
+ * `v = t;` after the `if`. MEASURED 2026-10-28, 41 words and still 5 DIFF:
+ * cse records `v == t`, rewrites the call's argument to `t`, and the copy dies
+ * -- `.greg` shows one LO pseudo (86 in 65) and no separate `v` at all. The
+ * levers entry's own rule says why the obvious fix does not apply: a second
+ * SET prevents SUBSTITUTION, and it is `v` being substituted here, which is
+ * set once. `t` being set twice does not help, because t is the value doing
+ * the substituting.
+ *
+ * So the shape to look for gives `v` a second set, or makes the join's copy
+ * something cse cannot see through, without spending the word that a copy in
+ * each arm would cost.
+ *
+ * Measured and not working: the function pointer read into a local AFTER the
+ * if/else (identical), a second `u = v` local for the argument (identical),
+ * and the row's own list -- both arms as if/else and as a ternary, the
+ * operands of the multiply swapped (7), the halfword into its own local with
+ * one multiply after the `if` (17), the multiply split from the load (12),
+ * the pointer hoisted into a local before the test, an early `return` instead
+ * of a guarded block, an `s32` product and a temporary for the argument (all
+ * 5), plus a full search.py sweep of 18 variants.
+ *
  * 2026-10-28: IT IS NOT A SCHED QUESTION, and `--greg` says so. The six global
  * allocnos are
  *

@@ -1697,14 +1697,14 @@ getting it wrong sends you to the wrong lever:
   value's live range -- or to remove the preference by removing the copy that
   created it.
 
-func_8004A574 is the case that forces the distinction. Its product `v` is
-already assigned in BOTH arms of the `if`, so it has two sets, and the copy
-into the call's argument register still vanishes -- because it vanishes by
-allocation, not by substitution. `--greg` shows `84 preferences: 4` with $a0
-absent from its conflict set, so the product simply takes $a0 and `mflo` writes
-there directly. What that function needs is for $a0 to be LIVE during the
-product's range, which means the multiplier (`s`, which sits in $a0 at the
-`mult`) still live afterwards, or the product live from before the `mult`.
+func_8004A574 was cited here as that case and the citation was WRONG, which is
+worth keeping as a warning about reading the priority table instead of the RTL:
+allocno 84, the one with `preferences: 4` that this entry called "the product",
+is the MULTIPLIER `s`. The product is 85, whose preferred class is LO_REG --
+`mulsi3_internal` writes LO -- so that function's `v` lives in LO across the
+branch and its `mflo` is the call's ARGUMENT SETUP, emitted in the call block
+by `expand_call`. Nothing about $a0's availability is involved. Its park has
+the corrected reading; the distinction below still stands on func_800537D0.
 
 THE GENERAL CURE FOR THE ALLOCATION KIND: EXTEND THE SOURCE VALUE PAST THE
 COPY. If `q` dies exactly where `v` is born, the two never overlap and
