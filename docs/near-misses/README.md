@@ -16,7 +16,11 @@ header that has drifted, or a file that no longer compiles against the current
 
 To work on one, copy it to a `zz_*.c` scratch file in the project root
 (gitignored) and run `tools/decomp/verify.py zz_foo.c <unit> <func>` -- with
-`--g8` if the unit is in the Makefile's `MASPSXFLAGS_G8` list. See
+`--g8` if the unit is in the Makefile's `MASPSXFLAGS_G8` list. Run
+`tools/decomp/unname.py <func>` too: it deletes each of the park's locals in
+turn and re-scores, which is cheap and found three improvements on 2026-10-28
+that the files had explicitly reasoned AGAINST. Re-run it after adopting any
+hit, because each one changes the base. See
 `docs/where-we-are.md` for the queue and `docs/matching-levers.md` for the
 levers. **Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq`** if
 anything else in the repo is compiling at the same time; concurrent `ccpsx` runs
@@ -35,6 +39,24 @@ Every file here records what has been measured, and that part has been reliable:
 a word count with a shape next to it has not once turned out to be wrong. What
 has repeatedly been wrong is the **conclusion** drawn from those measurements.
 On 2026-10-23 four of these files were re-examined and four conclusions fell:
+
+**THE 2026-10-28 CASE IS THE SHARPEST, because it is four wrong conclusions
+about ONE fact.** func_8005A90C's park reported that its `+0x14` store holds
+the incoming register `$a1`, read from the `.lreg` dump. Over one session that
+was attributed to combine, to `update_equiv_regs`' two-reference rule, to an
+unnamed local-alloc routine, and -- from the other side -- to the listing
+needing "a sixth callee-saved register holding something that is not a
+parameter". All four were wrong, and the answer was in `verify.py --full` the
+whole time: gcc hoists the later call's `$a1 = c` setup above the stores, and
+the stores share the register. Nothing substituted anything.
+
+The lesson is narrower than "distrust conclusions": **read the EMITTED ORDER
+before reading any dump.** A `.lreg` or `.greg` reading describes RTL that
+several passes have already rewritten, and it cannot tell you whether a hard
+register got there by substitution or by being hoisted into place. The same
+session also shows the cost of the reverse error -- a variant that scored three
+words better was adopted and reverted, because the words it added were an
+instruction the listing does not contain.
 
 * **func_80041344** -- "2 DIFF, a deliberate price; splitting the index into two
   sets is what buys the allocation priority". It was not a price. The index was
