@@ -5036,6 +5036,26 @@ reorder those.
   the guard is false, and 4 - 2 = 2 survives (reduced). That is the whole of
   func_80059DAC's last eight words.
 
+  READ IT OFF THE `loop` DUMP rather than reasoning about it. Both spellings
+  record the SAME giv -- `benefit 4 ... mult 8 add (reg/v:SI 90)`, neither
+  marked `replaceable` -- and differ only in the verdict line:
+
+      named    giv of insn 179 not worth while, -3844 vs 35
+      inline   giv at 202 reduced to (reg:SI 132)
+
+  The product printed is `lifetime * threshold * benefit` against
+  `insn_count`, so with lifetime 31 the two benefits are -2 and +2 and the gap
+  is `copy_cost`, which is 4 on this target. The `/v` on a register in the dump
+  IS `REG_USERVAR_P`, so the dump also shows which pseudos can be charged.
+
+  THE GUARD'S OTHER CONJUNCT IS `! bl->eliminable`, and it is what makes this
+  lever unavailable in some functions: if the dump says `biv N can be
+  eliminated` then copy_cost is never charged to any giv of that class and no
+  spelling of the pointer changes the verdict. func_80059DAC says `Cannot
+  eliminate biv 83` (the biv is used by the inner loop's own test), which is
+  why the lever bites there; func_8003C67C says `biv 80 can be eliminated`,
+  which is why naming its pointer does NOT suppress its reduction.
+
 * **A giv that is reduced but NOT replaceable emits a COPY, and that copy is
   often the word you are missing.** loop.c inserts `dest = new_reg` at the
   giv's original site whenever it cannot replace the uses in place -- so a

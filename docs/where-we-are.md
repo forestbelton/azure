@@ -4,9 +4,9 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 56 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 55 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD.
-`progress.py` puts it at 35207 of 41767 words, 84.3%, with 55 of the 56 stubs
+`progress.py` puts it at 35265 of 41767 words, 84.4%, with 54 of the 55 stubs
 parked. NOTE that guard.py under-reported until 2026-10-28: its definition
 pattern wanted `) {` and so missed an OLD-STYLE (K&R) parameter list, which
 this project writes deliberately to narrow a parameter without putting a narrow

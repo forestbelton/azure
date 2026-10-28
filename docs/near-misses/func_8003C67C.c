@@ -108,6 +108,26 @@
  * Also measured by the row, all worse: `while` with `i--` in the condition, a
  * `for`, `p[i] = p[--i]`, a separate `j = i - 1`, field-by-field copies, and a
  * `(u32)`-cast index.
+ *
+ * 2026-10-28: THE ONE NEW LEVER OF THAT DAY IS NOT AVAILABLE HERE, checked
+ * against the `loop` dump so nobody spends a run on it. func_80059DAC landed
+ * by making loop.c DROP a giv, and the knob was `benefit -= copy_cost` at
+ * loop.c:3797 -- charged only when the giv's dest is a user variable, which is
+ * why spelling a pointer out or naming it decides the reduction there. The
+ * guard has a second conjunct, `! bl->eliminable`, and this function's dump
+ * says
+ *
+ *     biv 80 can be eliminated.
+ *     giv at 38 combined with giv at 50
+ *     giv at 45 combined with giv at 50
+ *
+ * so copy_cost is never charged to ANY giv of this class and no spelling of
+ * the index or the pointer can change the verdict. That is also why the park's
+ * 31-word pointer-local variant stays reduced. The remaining knob in the same
+ * line is `benefit -= add_cost * bl->biv_count`, which needs a SECOND insn
+ * updating `i` -- a word this function does not have to spend. So the goto
+ * form really is the only thing that suppresses the reduction here, and the
+ * tension this file already describes stands unchanged.
  */
 
 #include "common.h"
