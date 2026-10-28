@@ -22,13 +22,43 @@
  * also measured `p += f(...)` and a separate `q = p + i`, which move the
  * arithmetic ahead of the second call instead (16 DIFF).
  *
- * So the lever is not a spelling of the statement. To flip the two
- * quantities, either the pointer needs more references or the chain fewer,
- * at zero instruction cost -- matching-levers section 3's dead-reference
- * entry is the thing to read, and `advise.py --greg` prints both priorities.
- * Note the pointer's nine-insn range is the whole function (it is the
- * parameter, live from entry to the store), so shortening it is not
- * available; raising its reference count is the only side with any room.
+ * THOSE PRIORITIES WERE THIS HEADER'S OWN ESTIMATE AND THEY ARE WRONG --
+ * corrected 2026-10-28 from `advise.py --greg`, which reads the dumps. There
+ * is no 6-reference chain quantity. The function's four quantities are
+ *
+ *     85   2 refs /  2 insns / 4.000   -- crosses no call
+ *     86   2 refs /  2 insns / 4.000   -- crosses no call
+ *     82   2 refs /  3 insns / 2.667   -- crosses 1 call: THE INDEX
+ *     80   3 refs / 16 insns / 0.750   -- crosses 2 calls: THE POINTER
+ *
+ * and 85/86 never compete for $s0 or $s1 at all, because they cross no call
+ * and `find_free_reg` hands them caller-saved registers. The whole contest is
+ * 82 against 80, at 2.667 against 0.750 -- a factor of 3.6, not the factor of
+ * 13 this header used to claim. What it would take, in the same arithmetic:
+ *
+ *   * THE POINTER NEEDS SIX REFERENCES (it has three): floor_log2(6)*6*4/16 =
+ *     3.000 clears 2.667, while four refs give 2.000 and five give 2.500 --
+ *     both still short. So this is not one free reference, it is three.
+ *   * OR THE INDEX NEEDS AN ELEVEN-INSN RANGE (it has three):
+ *     floor_log2(2)*2*4/11 = 0.727 falls below 0.750. Its range runs from the
+ *     first call's result to the `sll`, and there is nothing to put between
+ *     them that does not cost a word.
+ *
+ * Measured 2026-10-28 and NOT working, all THREE WORDS SHORT at 15 of 18 and
+ * 16 DIFF: reassigning the pointer to buy references -- `p += func_80048F8C(p,
+ * n);`, `p = p + func_80048F8C(p, n);` and `p = &p[func_80048F8C(p, n)];`,
+ * with the store then through `*p`. They do add the references, but a pointer
+ * that is dead after the store no longer needs to survive the second call, so
+ * gcc keeps the whole function in caller-saved registers and the two
+ * callee-saved saves and restores go with it.
+ *
+ * So the lever is not a spelling of the statement, and the two targets are the
+ * ones in the arithmetic above: three free references on the pointer, or eight
+ * more insns of range on the index. The pointer's range is already the whole
+ * function (it is the parameter, live from entry to the store) so there is
+ * nothing to shorten, and every reference bought so far has come with an
+ * instruction or has removed the call-crossing that makes the register
+ * callee-saved in the first place.
  */
 
 #include "common.h"
