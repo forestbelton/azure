@@ -81,6 +81,30 @@
  * guard. Those two are in tension in every form tried, and that tension is
  * the real content of this park.
  *
+ * THE "EXPLICIT WORD COPIES" SUGGESTION IS REFUTED, 2026-10-28. The paragraph
+ * above offers it as one of two ideas; it costs six or seven words:
+ *
+ *     two `u32` locals for the saved element, fields copied in and out   24/31
+ *     the same plus field-by-field copies in the loop                    25/31
+ *
+ * against the struct assignment's 31 of 31. The struct assignment is what
+ * holds the word count -- with explicit fields gcc shares and folds more of
+ * the addressing -- so it is load-bearing and that idea is closed.
+ *
+ * ON THE SAVE/RESTORE ITSELF, worth recording because it looks like the
+ * standing struct-copy lever and is not: the listing INTERLEAVES the two words
+ * while this build batches them --
+ *
+ *     target  lw $v1,0($v0) ; addiu $sp,-8 ; sw $v1,0($sp) ; lw $v0,4($v0) ;
+ *             blez ; sw $v0,4($sp)
+ *     built   lw $v0,0($a2) ; lw $v1,4($a2) ; sw $v0,0($sp) ; blez ;
+ *             sw $v1,4($sp)
+ *
+ * -- load, store, load, store against load, load, store, store. Both are the
+ * same four insns from the same struct assignment, so this is sched2 ordering
+ * two independent lw/sw pairs, not the block-move-versus-word-pairs choice in
+ * section 8, and no spelling of the copy reaches it.
+ *
  * Also measured by the row, all worse: `while` with `i--` in the condition, a
  * `for`, `p[i] = p[--i]`, a separate `j = i - 1`, field-by-field copies, and a
  * `(u32)`-cast index.
