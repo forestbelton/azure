@@ -5468,9 +5468,11 @@ reorder those.
 
 ## A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT ALL
 
-Landed func_800563B0 on this, 14 DIFF -> MATCH, and it is the lever to try
-FIRST on any filler that stores several fields of one global and then calls
-something with its address.
+**This landed THREE functions on 2026-10-28** -- func_800563B0 (22 words, 14
+DIFF), func_80056DB4 (23 words, 2 DIFF, parked for two days) and
+func_80056D44 (28 words, 27 DIFF) -- and it is the lever to try FIRST on any
+function that fills several fields of one global and then calls something with
+its address.
 
 Two sources that differ only in whether the destination is a struct:
 
@@ -5482,48 +5484,66 @@ compile to the SAME MEM addresses -- `(mem:SI (plus (reg/v:SI 85) (const_int
 4)))` against `(mem/s:SI (plus (reg/v:SI 85) (const_int 4)))` -- with the same
 `(reg 85)`, the same REG_EQUAL `(symbol_ref "D_80084918")` on its setter, and so
 the same `reg_known_value` for `canon_rtx`. The `/s` is `MEM_IN_STRUCT_P`, and
-it is the whole difference. TWO CONSEQUENCES, and they pull in opposite
-directions, so read which one the listing wants before reaching for either.
+it is the whole difference. It is worth words for TWO INDEPENDENT REASONS.
 
-**(1) SCHEDULING FREEDOM.** An array reference is ALSO `mem/s` -- `D_80073740[i]`
-dumps as `(mem/s:SI (reg:SI 92))`. So with struct stores both sides are
-in-struct and sched records the dependence; with cast stores only the load is,
-and **no dependence is recorded in either direction**. Measured on this
-function with the ORDER controlled, which is what makes it conclusive: with the
-lookup written BELOW all five stores, the struct version's `lw` carries
-`(insn_list 23 (insn_list 26 (insn_list 29 (insn_list 32 (insn_list 35 ...`
--- all five -- and the cast version's carries only its own address `addu`.
+**(1) IT DISSOLVES local-alloc's `combine_regs` TIE.** That ties an insn's
+destination into the quantity of a source which DIES in it. As cast stores the
+address sum `D_80073740 + i * 4` dies in the handle's `lw`, so the loaded value
+inherits the INDEX register ($a0), and the +0 store then has to precede the
+call's `addu $a0, $v1, $zero` -- which pins that copy into the `jal`'s delay
+slot and pushes the handle's `sw` out of it. As COMPONENT_REFs the tie does not
+form and the value takes $v0. Eight of func_800563B0's fourteen words.
+
+**(2) IT CREATES THE MEMORY DEPENDENCE AT ALL.** An ARRAY REFERENCE is also
+`mem/s` -- `D_80073740[i]` dumps as `(mem/s:SI (reg:SI 92))`. So with struct
+stores both sides are in-struct and sched records the dependence; with cast
+stores only the load is, and **no dependence is recorded in either direction**.
+Measured with the RTL ORDER CONTROLLED, which is what makes it conclusive:
+with the lookup written BELOW all five stores, the struct version's `lw`
+carries `(insn_list 23 (insn_list 26 (insn_list 29 (insn_list 32 (insn_list 35
+...` -- all five -- and the cast version's carries only its own address `addu`.
 Identical addresses, identical RTL order, identical known values.
 
-That decides whether the SOURCE ORDER of the lookup is a lever or inert. With
-struct stores it is load-bearing: written above the field stores the `lw` and
-the call's `addu $a0, $v1, $zero` land ahead of them, which is the listing;
-written below, the `lw` anti-depends on all five and NO later pass may lift it,
-so sched2 is stuck with `sh sh sh sh lw` -- six words wrong. With cast stores
-the position is completely inert: 24 variants on the sibling func_80056DB4
-(six store orders x four lookup positions) give one score per store order and
-the lookup position never moves a word.
+TWO CONSEQUENCES OF (2), and both landed a function:
 
-**(2) WHICH REGISTER THE LOADED VALUE TAKES.** local-alloc's `combine_regs`
-ties an insn's destination into the quantity of a source that DIES in it. As
-cast stores the address sum dies in the `lw`, so the loaded value inherits the
-index register -- $a0 here -- and the +0 store then has to precede the call's
-argument copy, which pins that copy into the `jal`'s delay slot. As
-COMPONENT_REFs the tie does not form and the value takes $v0, freeing the copy
-to move. **So the listing tells you which form to write:** func_800563B0 has
-`lw $v0` and `sw $v0` in the delay slot and wants the struct; its sibling
-func_80056DB4 has `lw $a0, 0x0($a0)` and `addu $a0, $v1, $zero` in the delay
-slot and wants the cast stores. Same unit, same global, same callee, opposite
-answers -- which is why the sibling park's "a struct type for the block is NOT
-the answer" did not transfer, and why that sentence should be read as a claim
-about ONE function.
+* **IT DECIDES WHETHER THE LOOKUP'S SOURCE POSITION IS A LEVER.** With struct
+  stores it is load-bearing; written below the field stores the `lw`
+  anti-depends on all of them and NO later pass may lift it, so sched2 is stuck
+  with `sh sh sh sh lw` -- six words wrong on func_800563B0. With cast stores
+  the position is inert: 24 variants on func_80056DB4 (six store orders x four
+  lookup positions) gave one score per store order and the position never moved
+  a word.
+* **IT IS HOW A LISTING'S LOAD-DELAY NOPS SURVIVE.** func_80056D44's listing
+  spends three `nop`s after `lw`/`lhu`/`lhu` and fills only one delay slot, with
+  the call's argument. As cast stores there is nothing to stop sched filling all
+  three and the function is two words short at 26; as struct stores the copies
+  are pinned against the loads and the nops stand. **A park whose residue is
+  "the target spends a nop here and we fill it" should check MEM_IN_STRUCT_P on
+  both sides before anything else.**
 
-The struct is declared in the csrc unit next to the function, `Unk<address>`
-with `unk_NN` fields, following func_8004C36C's `Unk4C36C`. Declaring only the
-witnessed fields is fine: `D_80084918` keeps its `extern u8 []` declaration in
-structs.h, so nothing about -G or addressing changes, and the +0 store still
-comes out symbolic (`sw $v0, %lo(D_80084918)($a3)`) because cse folds the zero
-displacement back onto the symbol through `p`'s LO_SUM.
+WHAT THE STRUCT DOES NOT COVER, measured on all three: the flag store at +4 is
+generated FIRST, above the lookup. Hoisting the lookup into the pointer's
+declaration is 14 words wrong on func_800563B0 and leaves func_80056D44's base
+`%lo` materialisation sitting in the lookup's own load-delay slot. And the
+other side need not be a struct -- func_80056D44's entry argument stays a
+`u8 *` with cast loads (a struct type for it also matches), so an unwitnessed
+0x78-byte record does not have to be invented.
+
+The struct goes in the csrc unit next to the functions, `Unk<address>` with
+`unk_NN` fields and `pad_NN[]` for the gaps, following func_8004C36C's
+`Unk4C36C`; one declaration served all three of these. The global keeps its
+`extern u8 []` declaration in structs.h, so nothing about -G or addressing
+changes, and the +0 store still comes out symbolic
+(`sw $v0, %lo(D_80084918)($a3)`) because cse folds the zero displacement back
+onto the symbol through the pointer's LO_SUM -- the symbol materialised once
+and spent two ways, the high half for the +0 store and the base for the rest.
+
+AND IT RETIRED A COUPLING THAT WAS AN ARTEFACT. func_80056DB4's park had five
+store orders scoring 2 and 3 DIFF against the listing's own order at 4, and
+concluded that "the two sides are COUPLED, which is why 120 orderings of the
+stores cannot get both". With the struct the LISTING's order is the one that
+matches and the other five are 2 and 3. **A score ordering that contradicts
+the listing is evidence of a wrong type, not of a coupling.**
 
 MECHANISM, stated as far as it was actually read. sched.c:831-863
 (`true_dependence` / `anti_dependence` / `output_dependence`) is the ONLY

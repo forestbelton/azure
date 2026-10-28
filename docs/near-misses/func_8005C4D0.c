@@ -29,11 +29,19 @@
  *   `addiu %lo` past the `sll`, is true about the instruction order and wrong
  *   about the cost.
  *
- * * `func_80056D44` takes THREE arguments here, `(n, e, e)`. Its own listing
- *   never reads $a1 or $a2, so two are ignored -- but the two-argument and
- *   one-argument forms both come out 63 words, because the third argument is
- *   what makes gcc keep `e` in a register and copy it, which is the
- *   `addu $a1, $a2, $zero` the listing has before the two `sh`s.
+ * * `func_80056D44` takes THREE arguments here, `(n, e, e)`, and this bullet
+ *   USED TO SAY its listing never reads $a1 or $a2. THAT WAS WRONG, and
+ *   func_80056D44 landing on 2026-10-28 settled its signature: it is
+ *   `(s32 i, u8 *e)` and it READS $a1 three times, copying the entry's +0x60,
+ *   +0x64 and +0x68 into the packet. So only the THIRD argument here is
+ *   surplus, not two of them. The measurement behind the bullet still stands
+ *   -- the two-argument and one-argument forms both come out 63 words, and the
+ *   third argument is what makes gcc keep `e` in a register and copy it, which
+ *   is the `addu $a1, $a2, $zero` the listing has before the two `sh`s -- but
+ *   it is now a SCAFFOLD with a known-wrong callee signature holding it up,
+ *   and the prototype at the foot of this file disagrees with the landed one
+ *   (`(s16, u8 *, u8 *)` against `(s32, u8 *)`). Whatever produces that copy
+ *   in the original, it is not a third argument.
  *
  * WHAT IS LEFT: 22 words, and `advise.py --greg` traces them to ONE conflict.
  *

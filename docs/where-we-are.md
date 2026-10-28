@@ -4,21 +4,34 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 50 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 48 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD and all
-four containers verify by hash. `progress.py` puts it at 35854 of 41767 words,
-85.8%, with 49 of the 50 stubs parked.
+four containers verify by hash. `progress.py` puts it at 35905 of 41767 words,
+86.0%, with 47 of the 48 stubs parked.
 
-**NEWEST LEVER (2026-10-28), from landing func_800563B0 at 22 words.** A
-STRUCT TYPE for a global a function fills field by field is not cosmetic: it
-sets `MEM_IN_STRUCT_P` on every store, which (a) dissolves local-alloc's
-`combine_regs` tie so a loaded value does NOT inherit its address register, and
-(b) is what makes a memory dependence against an array-reference load exist at
-all -- so with a struct the lookup's source position decides the schedule, and
-with cast stores through a `u8 *` it is inert. The two siblings of that
-function want the OPPOSITE form, and their listings say which. Full writeup in
-matching-levers, "A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT
-ALL"; it is the first thing to try on any remaining packet filler.
+**NEWEST LEVER (2026-10-28): A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY
+DEPENDENCE AT ALL.** It landed THREE functions in one sitting -- func_800563B0,
+func_80056DB4 and func_80056D44, the whole D_80084918 packet-filler family,
+parked at 14, 2 and 27 DIFF. A struct type for a global a function fills field
+by field is not cosmetic: it sets `MEM_IN_STRUCT_P` on every store, which
+(a) dissolves local-alloc's `combine_regs` tie so a loaded value does NOT
+inherit its index register, and (b) is what makes a memory dependence against
+an array-reference load (`D_80073740[i]`, also `mem/s`) exist at all. With cast
+stores through a `u8 *` NO dependence is recorded in either direction, so sched
+is free -- which is why the cast version filled all three of func_80056D44's
+load-delay NOPS and came out two words short, and why the lookup's source
+position is inert as casts and load-bearing as fields. Full writeup in
+matching-levers under that heading. **Try it first on any remaining filler, and
+on any park whose residue is "the target spends a nop here and we fill it".**
+
+Two habits this family is worth remembering for. The parks had all three
+functions wrong the same way because the FIRST of them said "a struct type is
+NOT the answer" and the other two inherited it -- a negative result about one
+function spread as a family rule, and nobody re-measured it. And
+func_80056DB4's park had five store orders scoring 2 and 3 DIFF against the
+LISTING's own order at 4, and theorised a coupling to explain it; the listing's
+order is what matches with the struct. **A score ordering that contradicts the
+listing is evidence of a wrong type, not of a coupling.**
 
 Also closed 2026-10-28: **cc1psx's three extra dump stages are not three extra
 passes.** `.regmove` is byte-identical to `.combine` in all 27 dump sets, so

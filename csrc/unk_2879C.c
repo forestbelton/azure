@@ -1572,38 +1572,61 @@ void func_800561D8(u8 *p, Unk80084960 *q)
     }
 }
 
-/* Fills the packet at D_80084918 -- the flag 0xF at +4, the two coordinates at
-   +8 and +0xA, zeros at +0xC and +0xE, and the D_80073740 handle at +0 -- and
-   hands its address to func_8005F134. Twenty-two words; the sibling fillers
-   func_80056DB4 and func_80056D44 are the same shape at other offsets.
+/* THREE FILLERS OF THE PACKET AT D_80084918, all handing its address to
+   func_8005F134 and all the SAME SHAPE: a flag word at +4, the D_80073740
+   handle at +0, then the fields this caller sets. func_800563B0 writes the
+   flag 0xF and two coordinates at +8/+0xA with zeros at +0xC/+0xE;
+   func_80056DB4 (below) writes 0x60100, zeros at +0x3A/+0x3C and a 5 at +0x24;
+   func_80056D44 (below) writes 0x60100 and copies +0x3A/+0x3C/+0x24 out of its
+   entry argument. 22, 23 and 28 words, and all three were parked -- at 14, 2
+   and 27 differing words -- behind the same single mistake.
 
-   TWO THINGS ARE LOAD-BEARING, and both were worth words:
+   THE PACKET IS A STRUCT, NOT A `u8 *` WITH CAST STORES. That one change
+   landed all three, and it is worth words for two independent reasons. The
+   MEM ADDRESSES ARE IDENTICAL either way -- `(mem:SI (plus (reg/v:SI 85)
+   (const_int 4)))` against the same thing as `mem/s` -- with the same base
+   pseudo and the same REG_EQUAL `(symbol_ref "D_80084918")` on its setter, so
+   `MEM_IN_STRUCT_P` is the whole difference.
 
-   * THE PACKET IS A STRUCT, NOT A `u8 *` WITH CAST STORES. Written as
-     `u8 *q = D_80084918;` with `*(u32 *) (q + 4) = 0xF;` and so on -- the
-     recipe the sibling park recommends -- the `lw` of the handle takes $a0
-     rather than $v0 and the whole tail reorders behind it: 14 differing words.
-     The cause is local-alloc's `combine_regs`, which ties an insn's
+   * IT DISSOLVES local-alloc's `combine_regs` TIE, which ties an insn's
      destination into the quantity of a source that DIES in it. As cast stores
-     the address sum `(q's base) + i * 4` dies in the `lw`, so the handle
-     inherits its register, $a0, and the +0 store then has to precede the
-     call's `addu $a0, $v1, $zero` -- which pins that copy into the `jal`'s
-     delay slot and pushes the `sw` of the handle out of it. As COMPONENT_REFs
-     the tie does not form, the handle takes $v0, and the copy is free to move.
-     The +0 store still comes out symbolic (`sw $v0, %lo(D_80084918)($a3)`)
-     because cse knows `p` is `lo_sum(%hi, D_80084918)` and folds the zero
-     displacement back onto the symbol.
-   * THE LOOKUP SITS BETWEEN THE +4 STORE AND THE FOUR HALFWORD STORES, in a
-     plain local, not in `p`'s declaration and not written inline into the +0
-     store. This is a memory-dependence fact, not a priority one: sched1 builds
-     its graph from the RTL order, so a lookup written BELOW the `sh`s makes
-     its `lw` anti-depend on all four of them and no later pass may lift it
-     above -- sched2 is then stuck with `sh sh sh sh lw`, six words wrong.
-     Written above them the dependence runs the other way and the pair
-     `lw`/`addu $a0` lands ahead of the four stores, which is the listing.
-     Hoisted all the way into the declaration, above the +4 store, it is 14
-     words wrong again: the +4 store has to be generated first for its `li 0xF`
-     to keep $v0 before the table address needs it. */
+     the address sum `D_80073740 + i * 4` dies in the handle's `lw`, so the
+     handle inherits the index register $a0; the +0 store then has to precede
+     the call's `addu $a0, $v1, $zero`, which pins that copy into the `jal`'s
+     delay slot. As COMPONENT_REFs the tie does not form and the handle takes
+     $v0. Worth 8 of func_800563B0's 14 words on its own.
+   * IT CREATES THE MEMORY DEPENDENCE AT ALL. An ARRAY REFERENCE is also
+     `mem/s` -- `D_80073740[i]` is `(mem/s:SI (reg:SI 92))` -- so with struct
+     stores sched records a dependence against the field stores and with cast
+     stores it records NONE in either direction. Measured with the RTL order
+     controlled: written below all the stores, the struct version's `lw`
+     carries `(insn_list 23 (insn_list 26 (insn_list 29 (insn_list 32
+     (insn_list 35 ...` and the cast version's carries only its own address
+     `addu`. That is why func_80056D44 keeps the listing's three load-delay
+     NOPS -- nothing may be lifted into them -- where the cast version filled
+     all three, and why the lookup's source position is a lever here at all.
+
+   The +0 store still comes out symbolic (`sw $v0, %lo(D_80084918)($a3)`)
+   because cse knows `p` is `lo_sum(%hi, D_80084918)` and folds the zero
+   displacement back onto the symbol, so the symbol is materialised once and
+   spent two ways -- the high half for the +0 store, the base for the rest.
+
+   TWO THINGS THE STRUCT DOES NOT COVER, both measured:
+
+   * THE +4 STORE IS GENERATED FIRST, before the lookup. Hoisting the lookup
+     into `p`'s declaration is 14 words wrong for func_800563B0 and leaves
+     func_80056D44's base `%lo` materialisation sitting in the lookup's own
+     load-delay slot: the +4 store has to come first for its flag value to
+     hold $v0 before the table address needs it.
+   * `e` STAYS A `u8 *` with cast loads in func_80056D44. Giving it a struct
+     type too also matches, so the 0x78-byte entry record does not have to be
+     invented for this.
+
+   func_80056DB4's park recorded a 2-DIFF store order that is NOT the
+   listing's, kept the listing's own order at 4, and said the two were coupled.
+   With the struct the LISTING's order (+0x3A, +0x3C, +0x24) is the one that
+   matches, and the five other orders are 2 and 3 -- so that coupling was an
+   artefact of the cast stores. */
 typedef struct Unk80084918
 {
     u32 unk_00;
@@ -1612,20 +1635,23 @@ typedef struct Unk80084918
     s16 unk_0A;
     s16 unk_0C;
     s16 unk_0E;
+    u8 pad_10[0x14];
+    u32 unk_24;
+    u8 pad_28[0x12];
+    s16 unk_3A;
+    s16 unk_3C;
 } Unk80084918;
 
 void func_800563B0(s32 i, s32 a, s32 b)
 {
     Unk80084918 *p = (Unk80084918 *) D_80084918;
-    u32 h;
 
     p->unk_04 = 0xF;
-    h = D_80073740[i];
+    p->unk_00 = D_80073740[i];
     p->unk_08 = a;
     p->unk_0A = b;
     p->unk_0C = 0;
     p->unk_0E = 0;
-    p->unk_00 = h;
     func_8005F134(p);
 }
 
@@ -2038,9 +2064,42 @@ void func_80056C30(void)
 void func_80056D3C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056D44);
+/* The second and third fillers of the D_80084918 packet. Read the comment on
+   func_800563B0 above for the whole of why these are struct stores -- it is
+   the only thing that was wrong with either -- and note the two particulars
+   that show up here rather than there: func_80056D44 keeps the listing's
+   THREE load-delay nops, which is the memory dependence doing its work, and
+   `e` stays a `u8 *` with cast loads because a struct type for it also
+   matches and the 0x78-byte entry record is not witnessed here.
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056DB4);
+   func_80056DB4's store order below is the LISTING's own (+0x3A, +0x3C,
+   +0x24). Its park had the other five orders scoring 2 and 3 against the
+   listing's 4 and concluded the two sides were coupled; with the struct the
+   listing's order is the one that matches and the other five are the ones
+   that are wrong. */
+void func_80056D44(s32 i, u8 *e)
+{
+    Unk80084918 *p = (Unk80084918 *) D_80084918;
+
+    p->unk_04 = 0x60100;
+    p->unk_00 = D_80073740[i];
+    p->unk_3A = *(u16 *) (e + 0x60);
+    p->unk_3C = *(u16 *) (e + 0x64);
+    p->unk_24 = *(u32 *) (e + 0x68);
+    func_8005F134(p);
+}
+
+void func_80056DB4(s32 i)
+{
+    Unk80084918 *p = (Unk80084918 *) D_80084918;
+
+    p->unk_04 = 0x60100;
+    p->unk_00 = D_80073740[i];
+    p->unk_3A = 0;
+    p->unk_3C = 0;
+    p->unk_24 = 5;
+    func_8005F134(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056E10);
 
