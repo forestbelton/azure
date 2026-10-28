@@ -48,6 +48,43 @@
  * +0x28 into a local; `*(s8 *) (p + 0x28) > n` instead of `n < ...`; a
  * read-back for the second loop's carried pointer (165 words); and three
  * orders of the second loop's tail.
+ *
+ * 2026-10-28: IT IS NOT AN ALLOCATION-ORDER QUESTION, it is WHERE THE `sh`
+ * GOES. Read the two streams side by side at the second loop's tail:
+ *
+ *   target  lhu 0x20 ; lw 0x1C ; addiu +1 ; sh 0x20 ; lb 0x28 ; addiu q+2 ;
+ *           slt ; bnez ; sw 0x1C
+ *   built   lw 0x1C ; lhu 0x20 ; lb 0x28 ; addiu q+2 ; addiu +1 ; slt ;
+ *           sh 0x20 ; bnez ; sw 0x1C
+ *
+ * The listening completes the +0x20 read-modify-write FIRST, which frees $v0,
+ * and the +0x28 temp then REUSES $v0 -- `lb $v0, 0x28($s0)`. This build leaves
+ * the `sh` until after the `slt`, so $v0 is still holding the incremented
+ * halfword when the temp is loaded and the temp has to take $v1; the carried
+ * pointer is then pushed off $v1 to $a1, and the four words that name it
+ * follow. So the register assignment is downstream of the schedule, and the
+ * source question is what puts the `sh` ahead of the `lb`.
+ *
+ * Note the two MEMs do NOT conflict -- same base register, offsets 0x20 and
+ * 0x28, sizes 2 and 1, so `memrefs_conflict_p` separates them before the
+ * QImode clause of `true_dependence` is ever reached -- which is why sched is
+ * free to order them either way and why the source order (the +0x20 update is
+ * already written first) does not pin it. Measured 2026-10-28, all 164 words
+ * and all 12 DIFF: the +0x20 update moved above `n--`, the +0x28 read taken
+ * into a local immediately after that store, and both together. sched
+ * normalises every one of them.
+ *
+ * WHY THE `sh` SINKS, and what would lift it: a store has no dependents inside
+ * the block, so its sched priority is the floor and nothing in the source
+ * changes that. The one thing that WOULD give it a dependent is a later read
+ * of +0x20 in the same block -- the loop's own next-iteration read is across
+ * the back edge, which sched never sees. So the shape to look for is one where
+ * something after the store reads +0x20 (or any address sched cannot separate
+ * from it) at no instruction cost. The prototype for func_8003AB44 in
+ * this file was also stale: its arguments 3 and 6 are `s16`, which is how that
+ * function landed on 2026-10-28, and correcting it changes nothing here (164
+ * words, 12 DIFF either way) because every argument at these three call sites
+ * is already an `s16` expression.
  */
 
 #include "common.h"
@@ -55,7 +92,7 @@
 void func_80038128(u8 *);
 void func_80038F48(u8 *);
 void func_80039148(u8 *);
-void func_8003AB44(u8 *, s16, s32, u8, s16, s32, s32);
+void func_8003AB44(u8 *, s16, s16, u8, s16, s16, s32);
 
 void func_80038CB8(u8 *p)
 {
