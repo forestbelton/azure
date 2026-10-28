@@ -47,6 +47,14 @@
  * loses. So the three siblings differ in this one respect and the recipe does
  * not transfer: what would fix this function is a longer dependence chain
  * ahead of the lookup, not another arrangement of the stores.
+ *
+ * ALSO MEASURED 2026-10-28: un-bumping the lookup by making its destination
+ * multi-set -- `i = D_80073740[i];`, reusing the parameter, which is the only
+ * second set a straight-line function has -- is 22 words and 16 DIFF, two
+ * worse. Same result as the sibling func_80056DB4 got from the same change
+ * (10 DIFF there). The `birthing_insn_p` mechanism behind "bumped" is now
+ * written up in matching-levers section 8, including why this lever wants a
+ * value whose live range is already short: here it lengthens `i`'s.
  */
 
 #include "common.h"

@@ -3722,6 +3722,37 @@ apply in:
    `DEFINE_FUNCTION_UNIT` model, not the dependence graph. Memory operations
    therefore beat ALU operations inside a priority group, which is why prologue
    saves win against an `addiu` that sets up a call argument.
+**AND THE PRIORITY A PARK CALLS "BUMPED" IS NOT KEY 1 AT ALL -- it is an
+adjustment made as each insn becomes ready, and it has a source-level lever.**
+`schedule_block` (sched.c, the block ending at ~2546) rewrites the priority of
+every insn it launches according to how many registers DIE in it:
+
+    n_deaths >= 4   INSN_PRIORITY (prev) >>= 3      /* divided by 8 */
+    n_deaths == 3   INSN_PRIORITY (prev) >>= 2
+    n_deaths == 1,2 INSN_PRIORITY (prev) >>= 1
+    n_deaths == 0   if (birthing_insn_p (prev)) INSN_PRIORITY (prev) = max_priority
+
+and `birthing_insn_p` (sched.c:2469) is a SET whose destination is a REG that
+is already live and whose **`reg_n_sets` is 1**. The scheduler runs BACKWARD,
+taking the highest priority first and placing it latest, so the two halves read:
+
+* **an insn that KILLS registers is pulled EARLY** -- the more operands die in
+  it, the earlier, and at four or more its priority is an eighth of what key 1
+  gave it;
+* **an insn that gives a single-set pseudo its value floats as LATE as its
+  consumer allows**, because its priority is raised to the block maximum. This
+  is what func_80056DB4's park means by "the lookup's load is BUMPED".
+
+**The lever is `reg_n_sets`: a second set un-bumps the insn.** That is the same
+free-reference trick as section 3's, with a different consequence -- and it is
+the only one of these two halves the source can reach, since the death count is
+a property of the dependence graph. Measured on this family and NOT working,
+which is worth knowing before spending a run: func_80056DB4 reuses its
+parameter (`i = D_80073740[i];`) to get the second set and goes to 10 DIFF
+because the longer range moves its base pointer; func_800563B0, same change, 14
+DIFF to 16. Both lose more to the lengthened live range than they gain from the
+un-bump, so this lever wants a value whose range is already short.
+
 **WHICH KEY IS DECIDING, BY SYMPTOM.** Six parks are held by a scheduling
 difference and they are NOT all the same wall; reading the symptom first saves
 re-deriving the whole key order per function.
