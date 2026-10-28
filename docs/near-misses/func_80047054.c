@@ -194,7 +194,38 @@
  * and store of that field; found by search.py's new `t_volatile` family, on
  * the first park where advise.py's MISSING row named a load. The rest of the
  * header below predates that and is written against 30 DIFF.
+ * *
+ * 2026-10-27, THE FIRST DIVERGENCE IS AN EXTRA COPY OF THE PARAMETER, and the
+ * `.greg` dump gives the reason. Word 2:
  *
+ *     target  lw $v0,0x4($a0) ; lw $v1,0x0($a0) ; sll ; addu $v1,$v1,$v0 ;
+ *             lw $v0,0x8($a0) ; nop ; sltu $v0,$v1,$v0 ; beqz
+ *     built   move $t2,$a0 ; lw $v0,0x4($t2) ; lw $a0,0x0($t2) ;
+ *             lw $v1,0x8($t2) ; sll ; addu $a0,$a0,$v0 ; sltu ; beqz
+ *
+ * The listing keeps `p` in $a0 for the whole function -- it reads the bound
+ * off $a0 twice, once before the loop and once at the back edge -- and puts
+ * `e` in $v1. This build copies `p` into $t2 and gives `e` the parameter's own
+ * $a0, which costs the copy.
+ *
+ * WHY, from the dump:
+ *
+ *     ;; 10 regs to allocate: 95 122 96 124 84 80 81 82 83 94
+ *     ;; 80 conflicts: ... 2 3 4 5 6 7 29      (and NO preferences)
+ *     ;; 81 preferences: 5   82: 6   83: 7   84: 4
+ *     dispositions: 80 in $t2, 84 in $a0
+ *
+ * pseudo 80 -- the one the copy writes -- conflicts with EVERY argument
+ * register and with $v0/$v1, and carries no preference of its own, so $t2 is
+ * the first register left for it. The three other parameters prefer $a1, $a2
+ * and $a3 and get them; 84 prefers $a0 and gets it. So the question is not a
+ * scheduling one: it is why a pseudo holding the first parameter ends up
+ * conflicting with all four argument registers here, when the same shape in
+ * func_8004F330 leaves its parameter free to take $a0 (its conflicts there are
+ * `2 3 5 29`, no 4).
+ *
+ * That comparison is the thing to pull on next -- two functions, the same
+ * first-parameter-plus-loop shape, one with the conflict and one without.
  * AUDIT 2026-10-27 -- pseudo 80, 81, 82, 83 have a DOUBLED live length, and
  * they report roughly twice their real range in this 58-word function.
  * `update_equiv_regs` (local-alloc.c:1018-1064) does `reg_live_length *= 2` for
