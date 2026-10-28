@@ -152,6 +152,23 @@
  * improves at all -- a full `unname.py` pass over the 377-word source reports
  * zero hits -- so it was an artefact of the three-word overshoot that `m`
  * removed, and this park's locals are now exhausted for that tool.
+ *
+ * 2026-10-28, A FULL `search.py` PASS WHOSE ONLY HIT WAS UNSOUND -- so this
+ * park is NOT swept out, and the note is here so nobody reads it as such. The
+ * pass offered 562 candidates across all sixteen families and accepted exactly
+ * one:
+ *
+ *     pass 1: hoist *(u32 *) (v + 0x64) into q0 at decl 10
+ *             377 words (+1), 344 DIFF -> 376 words (+0), 333 DIFF
+ *
+ * which deletes the store. `t_hoist_read`'s `_READ` pattern matched the store's
+ * DESTINATION and the family substituted its fresh local there, turning
+ * `*(u32 *) (v + 0x64) = t;` into a dead `q0 = t;` -- and the word it "saved"
+ * is that `sw`. Twelve of the twenty `_READ` matches in this file are store
+ * destinations, so the family was offering unsound variants throughout the
+ * run. It is fixed now (an lvalue is not a read), but the pass's own greedy
+ * second round ran from that bad base, so nothing it reports about this
+ * function can be trusted either way. RE-RUN the full pass.
  */
 
 #include "common.h"
