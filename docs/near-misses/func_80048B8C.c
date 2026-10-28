@@ -34,6 +34,30 @@
  *   unit: that is what puts the `lbu` before the `addiu` with the increment
  *   in the branch's delay slot.
  *
+ * 2026-10-28: THE ROTATION IS PRICED, and it is far out of reach of a
+ * reference change. The three quantities and their `allocno_priority`
+ * (floor_log2(refs) * refs * size / live_length), from `.lreg`/`.greg`:
+ *
+ *     96  `w`           17 refs / 13 live / 5.23  -> $v1, target $a1
+ *     92  `q`           17 refs / 17 live / 4.00  -> $a1, target $a2
+ *     93  the `*q` byte  6 refs /  5 live / 2.40  -> $a2, target $v1
+ *
+ * They all conflict with each other and with $v0, so they take the first three
+ * legal registers in allocation order, and 81 (`e`) reserves $a0 through
+ * `regs_someone_prefers`. Order 96, 92, 93 gives $v1, $a1, $a2. The listing's
+ * assignment needs 93 allocated FIRST, i.e. its priority above 5.23 -- from
+ * 2.40, which at 5 live means NINE references against its six. That is three
+ * free references on a value that is read once and used twice, so the margins
+ * table cannot price it and no split reaches it.
+ *
+ * MEASURED 2026-10-28, all 44 words and all 14 DIFF: a 64-variant cross
+ * product of where `q`, `w`, `f` and `v` are declared (block or function
+ * scope), the `*q` read named or left inline, and `v` as `u32` or `u16`; plus
+ * naming the or'd flag value inside the `if`, and computing `w` before the
+ * test. `fl`/`nf` both named ahead of the test is 45 words. The back edges
+ * MATCH, so there is no structural loop difference here of the kind that
+ * landed func_8004C36C -- both `beqz` and `bnez` targets agree.
+ *
  * WHAT IS LEFT: fourteen words, and the row's reading of them stands -- the
  * target has the entry pointer in $a2, the halfword cursor in $a1 and the
  * flag byte in $v1, this source $a1/$v1/$a2, and the `addiu` of the cursor's
