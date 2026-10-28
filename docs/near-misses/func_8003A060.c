@@ -44,13 +44,39 @@
  * exists and the question is only which shape it has. The two insns are 54 (the
  * operand chain's last `addu`, which adds `m`) and 68 (the destination index's
  * `sll`). In sched1 BOTH are bumped to LAUNCH_PRIORITY -- the ready list reads
- * `68 (7f000001) 54 (7f000001) 61 (2)` at T-20 -- so what decides them is the
+ * `68 (7f000001) 54 (7f000001) 61 (2)` at T-20 -- and the 2026-10-28 note
+ * below says exactly what that bump is -- so what decides them is the
  * key BELOW priority, and it is not LUID. `rank_for_schedule` (sched.c:2399)
  * classifies each candidate against the LAST-SCHEDULED insn: class 1 if that
  * insn is DATA dependent on the candidate, 2 if anti/output, 3 if independent,
  * and it takes the HIGHEST class. The insn after this pair is `lbu $v1, 0($a1)`,
  * which depends on the `addu` for $a1 -- so the `addu` is permanently class 1
  * and the `sll` class 3, and the `sll` wins every time, whatever their LUIDs.
+ *
+ * WHAT THE BUMP IS, 2026-10-28, read out of sched.c rather than inferred from
+ * the dump. Both insns are BIRTHING INSNS. `schedule_block`'s launch logic
+ * adjusts every insn's priority as it becomes ready by how many registers DIE
+ * in it (>>= 3 at four or more, >>= 2 at three, >>= 1 at one or two), and at
+ * ZERO deaths, if `birthing_insn_p` holds, it assigns `max_priority`
+ * (sched.c:2539). `birthing_insn_p` (sched.c:2469) is a SET whose destination
+ * is an already-live REG with **`reg_n_sets` == 1**. And `max_priority` is set
+ * to `MAX (INSN_PRIORITY (ready[0]), INSN_PRIORITY (insn))` (sched.c:2574)
+ * where `insn` is the one being scheduled, whose priority was just set to
+ * LAUNCH_PRIORITY -- which is why a birthing insn prints as exactly 7f000001
+ * and why TWO of them can, so the dump reading above is right.
+ *
+ * THAT GIVES THE LEVER A NAME: `reg_n_sets`. Un-bump either insn and the other
+ * wins on priority before the class key is ever consulted -- and un-bumping
+ * the `sll` is what this function wants, since the bumped insn is taken first
+ * in the backward pass and so placed LAST. Both attempts at it are recorded
+ * above and both fail for reasons that are now explicable rather than
+ * mysterious: `a = a * 4;` in place is expanded as a temp plus a copy, and cse
+ * propagates the temp into `a`'s single later use, so `reg_n_sets` returns to
+ * 1; and splitting the index into its own statement does un-bump it but gives
+ * it a much smaller LUID, which moves it seven slots instead of one. So the
+ * shape wanted is a second set on the shift's destination that cse CANNOT
+ * propagate away -- which needs the destination to have another use, and in
+ * this source it has exactly one.
  *
  * The only key above class is PRIORITY, and it cannot be moved here. Priority
  * is the longest dependence path from the block start, and `insn_cost` is 1
