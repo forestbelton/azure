@@ -417,7 +417,28 @@ run of it over all 40 parks on 2026-10-27 improved NINE of them -- including
 func_8004CECC from 101 words (-1) and 101 DIFF to 102 (+0) and 48, and
 func_8004E6F4 from 102 (+2) and 101 to 100 (+0) and 17. Every one of those
 came from a transform family search.py already had; they had simply never
-been swept across the parks. `advise.py` prints a FRAME census whenever the
+been swept across the parks.
+
+**EVERY `search.py` SWEEP RECORDED BEFORE 2026-10-28 PREDATES TWO FAMILIES,
+and seventeen park files cite one as evidence of exhaustion.** `t_hoist_read`
+lifts a memory read into a NEW local and tries each legal POSITION among the
+leading initialisers; `t_decl_order_init` transposes adjacent declarations
+when either is initialised. Neither existed, and the old set could not express
+either shape:
+
+* `t_split_binop` splits a statement IN PLACE and introduces no new local, and
+  nothing moved a local's initialiser earlier -- yet that is exactly what
+  landed func_8003666C (7 DIFF to MATCH: the +0x22 read hoisted into an `s32`
+  local placed BEFORE `n`, where the same local after `n` is still 7).
+* `t_decl_order` reads `_decl_run`, which STOPS at the first initialised
+  declaration, so on the 7 parks whose leading declarations all carry
+  initialisers it had an empty run and generated nothing at all.
+
+So a park header saying a full sweep found nothing is weaker evidence than it
+reads, and re-sweeping is cheap and costs no model tokens. The two landings
+that exposed this -- func_8003666C and func_8003BD84 -- were both sitting
+behind a park's own measured negative that named a spelling without naming its
+position. `advise.py` prints a FRAME census whenever the
 two builds disagree about a `$sp` slot, which is the sharpest diagnostic
 there is on a function that spills.
 
