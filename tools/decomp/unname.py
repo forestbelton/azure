@@ -169,18 +169,28 @@ def variants(text):
         calls_between = [l for l in lines[i + 1:] if re.search(r"\b\w+\s*\(", l)]
         if has_call and (uses > 1 or calls_between):
             continue
-        # A local holding a LOADED value, used more than once, becomes several
-        # loads when it is inlined -- which differs if anything could have
-        # written that memory in between. A call is the cheap proxy for that.
-        # `&x[i]` is exempt: it is an address, not a read.
+        # A local holding a LOADED value becomes several loads when it is
+        # inlined, which differs if anything could have written that memory in
+        # between; a call is the cheap proxy for that. `&x[i]` is exempt, being
+        # an address rather than a read.
+        #
+        # THE USE COUNT IS NOT THE TEST, and an earlier version of this guard
+        # wrongly made it one (`uses > 1`). A SINGLE textual use inside a loop
+        # is many dynamic evaluations, so moving a read into a loop body is the
+        # same hazard with uses == 1 -- func_8005B4D0's `m` is exactly that
+        # shape, and it is sound only because nothing in that goto-loop writes
+        # D_80073734 and the loop contains no call. Detecting "inside a loop"
+        # syntactically is unreliable here (the sources use `goto` loops as
+        # often as `while`), so the check is simply: a memory-reading value is
+        # never moved past a call, whatever the use count.
         body = lines[i + 1:]
         last = max(j for j, l in enumerate(body)
                    if re.search(r"\b%s\b" % re.escape(name), l))
         reads_mem = (not init.strip().startswith("&")
                      and re.search(r"\*\s*\(|->|\w\s*\[", init))
-        if uses > 1 and reads_mem and any(re.search(r"\bfunc_[0-9A-Fa-f]{6,8}\s*\(|"
-                                                    r"\b[A-Z]\w*\s*\(", l)
-                                          for l in body[:last + 1]):
+        if reads_mem and any(re.search(r"\bfunc_[0-9A-Fa-f]{6,8}\s*\(|"
+                                       r"\b[A-Z]\w*\s*\(", l)
+                             for l in body[:last + 1]):
             continue
         rep = "(" + init.strip() + ")"
         out = []
