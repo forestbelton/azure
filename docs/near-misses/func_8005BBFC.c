@@ -1,4 +1,4 @@
-/* func_8005BBFC (unk_2CDC0) -- 334 of 333 words, 221 DIFF. NOT compiled.
+/* func_8005BBFC (unk_2CDC0) -- 334 of 333 words, 209 DIFF. NOT compiled.
  *
  * SPU voice start: resolves the program record for (bank, prog, key), waits
  * for the hardware voice to go idle, sums the sample-table lengths to get the
@@ -480,6 +480,27 @@
  * `sll $a0, $t1, 16` -- the extension of `fine`. So the remaining work is an
  * ordering question around that extension, on a source whose prologue is now
  * exact.
+ *
+ * 2026-10-28, AND `pit` GOES BETWEEN `q` AND `e`: 221 -> 209 DIFF. With the
+ * parameters `s16`, the remaining divergence was the ORDER of the three
+ * sign-extensions. The listing emits them fine, vel, key; this source emitted
+ * key first, because `e` (which uses `key`) was written before `pit` (which
+ * uses `vel` and `fine`). Moving the one statement up puts them in the
+ * listing's order and the whole run matches:
+ *
+ *     sll $a0, $t1, 16 ; sra $a0, $a0, 16     <- (s16) fine
+ *     addu $s6, $s3, $v0
+ *     sll $v0, $t0, 16 ; sra $a2, $v0, 16     <- (s16) vel
+ *     sll $a1, $a2, 8                         <- vel << 8
+ *
+ * every one of those is now identical. All four placements of `pit` were
+ * measured: before `b` 335/328, after `b` 335/328, before `q` 335/328,
+ * BETWEEN `q` AND `e` 334/209, after `e` (the old position) 334/221.
+ *
+ * WHAT IS LEFT IN THAT REGION IS ONE REGISTER: `lw $s4, 0x4($v0)` where the
+ * listing has `lw $s3`, and the `addu $s6, $s4, $v0` that follows it. So `b`
+ * wants $s3 and gets $s4. That one choice is now the first real difference in
+ * the function, with 44 words matching ahead of it.
  */
 
 #include "common.h"
@@ -521,8 +542,8 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s16 vel, s16 fine, u16 v
     {
         b = D_80086A40[bank].unk_04;
         q = b + ((s16) prog * 0x10 + 0x20);
-        e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
         pit = (vel << 8) + fine;
+        e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
         if (vel >= e[6] && e[7] >= vel)
         {
             func_80056DB4(ch, vel << 8, vel);
