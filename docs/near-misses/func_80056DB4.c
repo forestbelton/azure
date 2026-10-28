@@ -71,6 +71,62 @@
  * reorder anything. SYMPTOM: nothing in this file is implausible as original
  * source; the +0x24-first store order is the only oddity and it is worth 2
  * words against the listing's own order.
+ *
+ * 2026-10-28: THE REQUIREMENT IS NOW EXACT, and it is TWO un-bumps, not one.
+ * Read out of this function's own sched1 ready lists in the LISTING's store
+ * order (0x3A, 0x3C, 0x24, which scores 4 DIFF with everything else right):
+ *
+ *     ;; ready list at T-5: 31 (1) 28 (1) 25 (1) 34 (7f000001) 20 (7f000001)
+ *
+ * where 20 is the lookup's `lw`, 34 is the `li 5`, and 25/28/31 are the three
+ * stores. The two bumped insns win every round and are placed LATE; the
+ * stores, which can never be bumped (a MEM destination fails
+ * `birthing_insn_p`), lose until T-11..T-13 and so are placed FIRST -- which
+ * is exactly the 4 words wrong. For the listing's order the pick sequence has
+ * to be 36, 31, 28, 34, 20, 18, 16, 13, 12, 25, so BOTH 34 and 20 must come
+ * down to priority 1 and the `li 5` must also be generated BEFORE the two
+ * `sh`s (its LUID has to be below theirs while its store stays above them,
+ * which needs the 5 in a named local).
+ *
+ * ALL THREE WAYS OF BUYING A SECOND SET COST MORE THAN THE TWO WORDS:
+ *
+ *   * `u32 v = 0x60100;` reused for the 5 (`v = 5;`) does un-bump the `li`
+ *     and the three stores DO move to the right side of it -- the order
+ *     requirement is met -- but the shared quantity takes $a2 where the
+ *     listing has $v0 and everything downstream shifts: 15 DIFF, in all three
+ *     positions of `v = 5` and with the lookup in a declaration or a
+ *     statement. Note the listing's own `lui $v0`/`ori $v0` and
+ *     `addiu $v0, $zero, 0x5` share $v0 anyway, so that register reuse is the
+ *     allocator's and NOT evidence of a shared variable.
+ *   * `i = D_80073740[i];` un-bumps the `lw` and is the only second set a
+ *     straight-line function has for it, but it moves `h` out of $a0 (the
+ *     listing loads into the parameter's own register, `lw $a0, 0x0($a0)`):
+ *     10 DIFF alone, and 15 combined with the shared `v` above, where the
+ *     emitted ORDER is right and five registers are wrong.
+ *   * A DEAD INITIALISER BUYS NOTHING. `u32 h = 0;` / `u32 n = 0;` before the
+ *     real assignments is 23 words and the same 4 DIFF, and the dumps say why
+ *     rather than leaving it inferred: `.rtl` and `.jump` carry four
+ *     `(const_int 0)`s, `.flow` and `.combine` carry two, so FLOW ITSELF
+ *     deletes the dead sets, and the sched1 ready list still reads
+ *     `34 (7f000001) 31 (7f000001)`. See the refinement this produced in
+ *     matching-levers section 3: the free-reference lever needs an insn
+ *     removed AFTER flow, not before it.
+ *
+ * AND 432 VARIANTS SAY THERE IS NOTHING ELSE ON THESE AXES. Swept 2026-10-28:
+ * the 5 inline / in a fresh local / reusing `i` / sharing the flags local, the
+ * flags inline or in a local, `h` in its own local or reusing `i`, the lookup
+ * in a declaration or a statement, all six orderings of the three stores, and
+ * every position of the 5's assignment among them. The best is the 2 DIFF this
+ * file already has (reached by several of them, including `i = 5`), and nothing
+ * beat it.
+ *
+ * SO WHAT A SOLUTION LOOKS LIKE, stated tightly enough to recognise: a second
+ * set on the `li 5`'s pseudo and on the lookup's, both surviving into flow's
+ * `reg_n_sets`, neither lengthening a quantity's live range. This function has
+ * no branch, so it has no `if` arms and no loop-carried variable -- the two
+ * constructs that produce such a set for free -- and the two it does have
+ * (the parameter's incoming copy, and one local doing double duty) are both
+ * priced above. That is the whole of it; do not re-run store orders.
  */
 
 #include "common.h"

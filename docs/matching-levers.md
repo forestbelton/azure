@@ -1843,6 +1843,20 @@ spellings that mention the cursor one more time --
 6.667, and the function stays at 12 DIFF. They are the same address
 arithmetic, so they fold to the same RTL and flow has nothing extra to count.
 
+**AND "A LATER PASS" MEANS AFTER FLOW, NOT BEFORE IT.** `reg_n_refs` and
+`reg_n_sets` are both built by flow analysis, so the insn has to survive as far
+as flow and be removed by something downstream of it -- combine, or reload.
+An insn that jump.c or cse deletes, or that flow deletes itself, is never
+counted. Measured on func_80056DB4 2026-10-28, where a dead initialiser was the
+obvious free second set: `u32 h = 0;` and `u32 n = 0;` ahead of the real
+assignments leave the word count untouched AND leave `reg_n_sets` at 1, so
+neither insn is un-bumped and the function does not move. The dumps show the
+deletion point exactly -- `.rtl` and `.jump` carry four `(const_int 0)`s and
+`.flow` and `.combine` carry two -- and sched1's ready list still reads
+`34 (7f000001) 31 (7f000001)` for the two insns the change was meant to demote.
+So "a dead REFERENCE still counts" is about a reference inside an insn that
+survives flow; a dead SET does not count at all.
+
 The ones that DO work add an insn that mentions the pseudo and that a later
 pass removes: the loop guard above (a new comparison, folded to the `blez` the
 plain guard would have given, func_80057948) and the phantom test below (a new
