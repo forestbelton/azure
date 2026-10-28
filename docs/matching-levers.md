@@ -1976,6 +1976,22 @@ one lever each.
   its `regmove` pass (2.7.2 has none). Not confirmed from source -- the
   binary is all we have.
 
+## A cse BLOCK ends at a LOOP-END note, not only at a label
+
+Worth knowing whenever the problem is "cse folded a constant it should not
+have known". `cse_end_of_basic_block` (cse.c:8053) scans forward to the next
+CODE_LABEL, but it also breaks on two notes: NOTE_INSN_SETJMP, and
+NOTE_INSN_LOOP_END -- the latter only when `after_loop` is clear, i.e. in cse1
+and not cse2. So a loop's END is a cse run boundary for the first run, and
+values known before it are not carried past it.
+
+The cheapest source construct that buys one is `do { ... } while (0)`, which is
+also idiomatic enough to be plausible as original code. MEASURED on
+func_80041E70, where exactly one word hangs on a cse boundary: it is NOT free
+on this target -- all three placements cost one word (271 against 270) and the
+diff goes to 265-267. So reach for it when a boundary would buy more than a
+word, and price it before believing it.
+
 ## 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation
 
 A struct or array reference sets `MEM_IN_STRUCT_P`; a bare pointer dereference

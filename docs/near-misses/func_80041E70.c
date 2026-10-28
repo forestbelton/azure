@@ -69,6 +69,29 @@
  * redundant duplicate store), and the one free boundary -- identical if/else
  * arms -- costs 1 to 2 words in that block, i.e. more than the word it saves.
  *
+ * A FIFTH BOUNDARY, found 2026-10-27 and also priced out. A LABEL is not the
+ * only thing that ends a cse block: `cse_end_of_basic_block` (cse.c:8053)
+ * breaks on a NOTE_INSN_LOOP_END as well --
+ *
+ *     if (! after_loop && GET_CODE (p) == NOTE
+ *         && NOTE_LINE_NUMBER (p) == NOTE_INSN_LOOP_END)
+ *       break;
+ *
+ * -- in cse1 only, since cse2 runs with `after_loop` set and ignores it. And
+ * the cheapest way to buy a loop-end note is `do { ... } while (0)`, which is
+ * also about the most idiomatic 1990s C there is, so it would have been a good
+ * answer. It is not: all three placements cost ONE WORD (271 against 270) and
+ * blow the diff to 265-267 --
+ *
+ *     do { unk_6E = 0x100; unk_87 = 0x10; } while (0);   271 words, 267 DIFF
+ *     unk_6E = 0x100; do { unk_87 = 0x10; } while (0);   271 words, 265 DIFF
+ *     unk_6E = 0x100; unk_87 = 0x10; do { } while (0);   271 words, 265 DIFF
+ *
+ * so the note is not free on this target the way it is in the abstract. That
+ * makes five routes to a boundary, every one of them priced above the single
+ * word it would buy, and the BOUNDED verdict stands on a complete enumeration
+ * rather than on three blocked ideas.
+ *
  * DECLARATIONS: none. include/structs.h's Unk42710/Unk42710A already carry
  * every field, verified by compiling against the header. The source needs only
  * `#include "common.h"` plus `s32 func_80042900(s8 *, s8);`, and when it lands
