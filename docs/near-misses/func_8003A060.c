@@ -169,10 +169,19 @@
  *
  * `rank_for_schedule` (sched.c) has exactly three keys, in order:
  *
- *   1. PRIORITY, higher first. Both are 3 -- and 68's cannot be raised,
- *      because priority only grows across a LOAD (cost 2 against the -1 in
- *      `priority()`), and 68's path to the end is sll -> `addu $t0,$t0,$v0`
- *      (insn 70) -> the `sw` (insn 74), all ALU.
+ *   1. PRIORITY, higher first. Both are 3. CORRECTED: `priority()` iterates
+ *      an insn's LOG_LINKS -- its PRODUCERS -- so priority is the depth from
+ *      the block START, not the distance to the end, and the dump bears that
+ *      out (insn 13 is priority 1, insn 90 is 6). The `- 1` in the comment
+ *      "when all instructions have a latency of 1 ... all instructions will
+ *      end up with a priority of one" means only LOAD delays add depth. So
+ *      priority(68) = priority(insn 17, the `lbu` of `a`) + 1 = 3, and
+ *      priority(54) = max(insn 26, insn 52) + 0 = 3, both ALU-fed. Raising 68
+ *      needs a SECOND load in `a`'s derivation, and `a = *(*cp)++;` has one.
+ *      Lowering 54 needs a shallower producer chain, and it sits at the end of
+ *      the sum. (The scheduler also runs BACKWARD, which is why key 3 reads
+ *      `INSN_LUID(y) - INSN_LUID(x)`: the higher LUID is taken first and
+ *      placed LATER.)
  *   2. The DEPENDENCE CLASS relative to `last_scheduled_insn`: class 3 is
  *      "independent of it, OR has latency of one", class 1 is data dependent,
  *      class 2 anti/output dependent, and the HIGHEST class wins.
