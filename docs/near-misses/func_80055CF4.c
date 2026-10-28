@@ -43,7 +43,33 @@
  * shape below, not from that.
  *
  * Also measured, all 35 words and 31 DIFF: everything through the symbol with
- * no `b` at all, and the loop as an explicit `i = 0; do { ... } while (i < 4);`.
+ * no `b` at all, and the loop as an explicit `i = 0; do { ... } while (i < 4);`. *
+ * 2026-10-27: THE MISSING COPY IS DOWNSTREAM OF THE SAVE'S POSITION. The park
+ * above reads it as local-alloc producing the `lui`/`addiu` pair straight into
+ * $s1 because `b` must be callee-saved. That is true but it is the second
+ * fact; the words say which order causes it:
+ *
+ *     target  lui $v0,%hi ; addiu $v0,$v0,%lo ; sw $s1,0x14($sp) ;
+ *             addu $s1,$v0,$zero
+ *     built   lui $v0,%hi ; sw $s1,0x14($sp) ; addiu $s1,$v0,%lo
+ *
+ * The listing COMPLETES the address in $v0 and only then saves $s1 and copies
+ * into it. This build interleaves: the `sw $s1` lands between the `lui` and
+ * the `addiu`, so by the time the `addiu` runs $s1 is already free and it
+ * writes there directly -- and a copy that would have gone from $v0 to $s1 has
+ * nothing to do. So the question is not how to force a second quantity for the
+ * address; it is why the save is scheduled INTO the pair here and after it in
+ * the listing. sched2 interleaves the prologue saves with the body (section 8),
+ * and both the save and the `addiu` are in that interleave.
+ *
+ * Measured and NOT working, all 35 of 36 words and 31 DIFF: `b` declared last
+ * among the locals, declared in the middle, declared without an initialiser
+ * and assigned as the first statement, and an explicit
+ * `u8 *t = (u8 *) D_800847D0; u8 *b = t;` temp pair -- so neither declaration
+ * ORDER (section 8's prologue tie-break) nor an explicit second variable
+ * reaches it. Section 3's seventh cure does not apply either: the value whose
+ * live range would have to extend past the copy is the address itself, and its
+ * only use IS the copy.
  */
 
 #include "common.h"
