@@ -125,6 +125,19 @@
  * slot and a nop stays. Inlining the OTHER base as well (`b`) changes nothing,
  * 64 words and the same 18, so `b`'s local is free either way and the
  * asymmetry between the two tables is real rather than a spelling accident.
+ *
+ * 2026-10-28, AND THE 15 IS SWEPT OUT. A full `search.py` pass on this new
+ * base -- 40 candidates across all sixteen families, 41 variants compiled --
+ * improves on nothing. That is worth recording because the pass was WORTH
+ * re-running: the file's earlier sweeps were against the 22-DIFF source, and
+ * two locals have gone since, so none of those results carried over. It did
+ * not pay this time, but "sweeps compose" cuts both ways and the re-run is
+ * what establishes that 15 is the floor for local rewrites here.
+ *
+ * `unname.py` is likewise exhausted on this base (zero hits), so what remains
+ * is the materialisation ORDER described above -- the listing's
+ * `lui %hi(D_80085F98)` ahead of D_80085458's pair -- and that is a sched1
+ * LUID question, not a source-shape one.
  */
 
 #include "common.h"
