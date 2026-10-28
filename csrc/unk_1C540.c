@@ -2097,9 +2097,109 @@ void func_8004D1EC(u8 *p, u16 *a, s32 d, u16 *b) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D294);
+void func_8004D294(u16 *p, u8 *q, s32 a)
+{
+    u8 *b = (u8 *)&D_80083178;
+    u16 t;
+    u16 v;
+    u16 w;
+    s32 d;
+    s32 dx;
+    s32 dy;
+    s32 dz;
 
-void func_8004D294(s16 *, s32, u16);
+    if (p != NULL)
+    {
+        func_8004D1EC(b + 0xB8, p, a & 0xFFFF, (u16 *)(b + 0xA4));
+    }
+    if (q != NULL)
+    {
+        t = *(u16 *)(q + 0);
+        if ((t & 0x800) != 0)
+        {
+            v = t | 0xF800;
+        }
+        else
+        {
+            v = t & 0x7FF;
+        }
+        *(u16 *)(q + 0) = v;
+        t = *(u16 *)(b + 0xAC);
+        if ((t & 0x800) != 0)
+        {
+            w = t | 0xF800;
+        }
+        else
+        {
+            w = t & 0x7FF;
+        }
+        *(u16 *)(b + 0xAC) = w;
+        dx = *(s16 *)(q + 0);
+        dx -= (s16)w;
+        d = abs(dx);
+        if (d >= 0x801)
+        {
+            *(u16 *)(q + 0) = (w & 0xF000) | (*(u16 *)(q + 0) & 0xFFF);
+        }
+
+        t = *(u16 *)(q + 2);
+        if ((t & 0x800) != 0)
+        {
+            v = t | 0xF800;
+        }
+        else
+        {
+            v = t & 0x7FF;
+        }
+        *(u16 *)(q + 2) = v;
+        t = *(u16 *)(b + 0xAE);
+        if ((t & 0x800) != 0)
+        {
+            w = t | 0xF800;
+        }
+        else
+        {
+            w = t & 0x7FF;
+        }
+        *(u16 *)(b + 0xAE) = w;
+        dy = *(s16 *)(q + 2);
+        dy -= (s16)w;
+        d = abs(dy);
+        if (d >= 0x801)
+        {
+            *(u16 *)(q + 2) = (w & 0xF000) | (*(u16 *)(q + 2) & 0xFFF);
+        }
+
+        t = *(u16 *)(q + 4);
+        if ((t & 0x800) != 0)
+        {
+            v = t | 0xF800;
+        }
+        else
+        {
+            v = t & 0x7FF;
+        }
+        *(u16 *)(q + 4) = v;
+        t = *(u16 *)(b + 0xB0);
+        if ((t & 0x800) != 0)
+        {
+            w = t | 0xF800;
+        }
+        else
+        {
+            w = t & 0x7FF;
+        }
+        *(u16 *)(b + 0xB0) = w;
+        dz = *(s16 *)(q + 4);
+        dz -= (s16)w;
+        d = abs(dz);
+        if (d >= 0x801)
+        {
+            *(u16 *)(q + 4) = (w & 0xF000) | (*(u16 *)(q + 4) & 0xFFF);
+        }
+        func_8004D1EC(b + 0x140, (u16 *)q, a & 0xFFFF, (u16 *)(b + 0xAC));
+    }
+}
 
 void func_8004D45C(u8 *p, s32 b, u16 c) {
     s16 t[3];
@@ -2111,7 +2211,7 @@ void func_8004D45C(u8 *p, s32 b, u16 c) {
         t[2] = *(u16 *) (p + 0xA);
         q = t;
     }
-    func_8004D294(q, b, c);
+    func_8004D294((u16 *)q, (u8 *)b, c);
 }
 
 void func_80041900(u8 *);

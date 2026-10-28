@@ -139,7 +139,7 @@ u8 *func_8004C080(u8 *, u8 *, u8 *, u8 *, u8 *, s32);
 
 void func_8004D12C(u8 *);
 
-void func_8004D294(s16 *, s32, u16);
+void func_8004D294(u16 *, u8 *, s32);
 
 void func_80041900(u8 *);
 
