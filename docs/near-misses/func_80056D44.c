@@ -49,6 +49,35 @@
  * and `true_dependence`'s differing-flags exception does NOT apply -- the
  * reordering is allowed because `memrefs_conflict_p` sees two different
  * pseudo bases, not because of the flags.
+ *
+ * 2026-10-28: A BETTER NUMBER THAT IS THE WRONG SOURCE, recorded and NOT
+ * adopted -- the same call this file's sibling func_800563B0 makes about its
+ * perm.py result. Deleting the `u8 *q = D_80084918;` local and writing every
+ * use as `D_80084918` is 27 of 28 words (one closer than this file's 26) and
+ * 25 DIFF (two better than 27), found by the mechanical local-inlining sweep.
+ *
+ * It is not the listing's shape. With no local, gcc turns the base into a
+ * CURSOR and walks it -- `addiu $v1, $v1, 0x4` then `sw $v0, -0x4($v1)`, and
+ * an `addiu $v1, $v1, -0x4` after -- where the listing holds one base in $v1
+ * for the whole function. The extra word is that cursor arithmetic, so the
+ * gain is an accident of alignment rather than a step toward the target.
+ *
+ * WHAT THE LISTING ACTUALLY DOES, now that the diff has been read end to end,
+ * and it is worth having written down because this file never stated it:
+ *
+ *     lui   $a2, %hi(D_80084918)     <- the HIGH half, kept in its own register
+ *     addiu $v1, $a2, %lo(D_80084918) <- the base, derived from it
+ *     ...
+ *     sw    $v0, 0x4($v1)            <- the field stores go through the base
+ *     sw    $v0, %lo(D_80084918)($a2) <- the +0 store goes through the HIGH
+ *
+ * i.e. the symbol is materialised ONCE and spent two ways, and the `+0` store
+ * is the symbolic form off the high half rather than a zero displacement off
+ * the base. This file's source already produces that pair of registers
+ * ($v1 for the high, $a0 for the base) -- so the two missing words are not the
+ * addressing, they are the two load-delay nops the listing spends and this
+ * build fills, which is the sched normalisation the rest of this file
+ * describes.
  */
 
 #include "common.h"

@@ -1,4 +1,4 @@
-/* func_8005C4D0 (unk_2CDC0) -- 64 of 64 words, 22 DIFF. NOT compiled.
+/* func_8005C4D0 (unk_2CDC0) -- 64 of 64 words, 18 DIFF. NOT compiled.
  *
  * Tears down the D_80085458 entry for index n: clears its +0x1A and +0x0A,
  * runs func_80056D44/func_80056DB4, then spins on func_8005EB78 until the
@@ -22,9 +22,12 @@
  *   stays. This is advise.py's DELAY-NOPS advice applied literally, and it is
  *   two words.
  *
- * * BOTH tables take a pointer local for the base (`u8 *b = D_80085458;`,
- *   `u32 *g = D_80073740;`). Written as `&D_80073740[n]` fold puts the symbol
- *   after the index and the `addiu %lo` lands past the `sll`.
+ * * THE D_80085458 BASE takes a pointer local (`u8 *b = D_80085458;`); the
+ *   D_80073740 one MUST NOT -- see the 22 -> 18 note at the end of this file.
+ *   What this bullet used to say, that both want a local because
+ *   `&D_80073740[n]` puts the symbol after the index and lands the
+ *   `addiu %lo` past the `sll`, is true about the instruction order and wrong
+ *   about the cost.
  *
  * * `func_80056D44` takes THREE arguments here, `(n, e, e)`. Its own listing
  *   never reads $a1 or $a2, so two are ignored -- but the two-argument and
@@ -86,6 +89,35 @@
  * Nothing prefers $a2, so the listing's element pointer there is a
  * lowest-free-register outcome downstream of the materialisation order, not a
  * preference to be engineered.
+ *
+ * 2026-10-28: 22 -> 18, AND IT IS THE LEVER THIS FILE WAS ALREADY ASKING FOR.
+ * Dropping the `u32 *g = D_80073740;` local and writing the one use as
+ * `t = &D_80073740[n];` is 64 of 64 words and 18 DIFF. Found by a mechanical
+ * sweep that deletes each park's locals one at a time, which is worth saying
+ * because this file had reasoned its way PAST the shape: the bullet above
+ * recorded that `&D_80073740[n]` moves the symbol after the index, which it
+ * does, and concluded the local was wanted, which it is not.
+ *
+ * The mechanism is the one the analysis above already names. `e` goes to $a1
+ * here and $a2 in the listing because nothing occupies $a1, and what occupies
+ * it in the listing is the long-lived `lui $a1, %hi(D_80085F98)` emitted at
+ * the top. Removing `g`'s local takes one materialisation out of the entry
+ * block's ready list and moves the contest, which is why four words come back
+ * without the statement order changing at all.
+ *
+ * STILL OPEN, and unchanged in kind: the FIRST divergence is still which
+ * symbol is materialised first -- the listing's `lui %hi(D_80085F98)` ahead of
+ * D_80085458's pair, this build's the other way round. Re-measured on top of
+ * the new 18-DIFF base, both ways of moving the flag store up are worse than
+ * they were on the old base:
+ *
+ *     D_80085F98[0] = 1; first                       65 words, 61 DIFF
+ *     the same, between `e = ...` and the `h` load   65 words, 61 DIFF
+ *
+ * -- a word over, because the store then no longer reaches the `beqz`'s delay
+ * slot and a nop stays. Inlining the OTHER base as well (`b`) changes nothing,
+ * 64 words and the same 18, so `b`'s local is free either way and the
+ * asymmetry between the two tables is real rather than a spelling accident.
  */
 
 #include "common.h"
@@ -98,7 +130,6 @@ s32 func_8005EB78(u32);
 s32 func_8005C4D0(s16 n)
 {
     u8 *b = D_80085458;
-    u32 *g = D_80073740;
     u8 *e;
     u32 *t;
     u32 v;
@@ -116,7 +147,7 @@ s32 func_8005C4D0(s16 n)
     {
         goto fail;
     }
-    t = &g[n];
+    t = &D_80073740[n];
     v = *t;
     *(u16 *)(e + 0x1A) = 0;
     *(u16 *)(e + 0xA) = 0;
