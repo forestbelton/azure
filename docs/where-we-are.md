@@ -4,10 +4,32 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 48 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 47 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD and all
-four containers verify by hash. `progress.py` puts it at 35905 of 41767 words,
-86.0%, with 47 of the 48 stubs parked.
+four containers verify by hash. `progress.py` puts it at 35936 of 41767 words,
+86.0%, with 46 of the 47 stubs parked.
+
+**SECOND LEVER OF 2026-10-28: TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT
+STATEMENTS.** func_8004D690 landed on it (31 words, 29/31 and 18 DIFF before).
+A loop with one arm that ends the function and one that stops the loop is a
+different program depending on whether each uses `return`, `break` or `goto`,
+because jump.c:1800 ("Look for if (foo) bar; else break;") inverts the first
+test and swaps the arms unless `JUMP_LABEL (range1end) != next_label (label1)`.
+`return` on the arm that ends the function and `break` on the other blocks it;
+every uniform spelling, and the reverse order, do not. **Any park that is two
+words short with every instruction already right should try the mixed form.**
+
+AND THE SWEEP LESSON, which is the bigger half of both of today's landings.
+func_8004D690's park had jump.c:1800 identified by line number, listed five of
+its conditions, and declared the function unreachable -- having measured
+`return`, `break` and `goto out` and found them "identical". They are identical
+WHEN BOTH ARMS USE THE SAME ONE; the sweep held the arms symmetric and never
+entered the mixed half of the space, and the condition that actually fails is a
+sixth one the list omitted. The packet-filler family was the same failure in a
+different dress: one function's negative result ("a struct type is NOT the
+answer") was inherited by two siblings that nobody re-measured. **A park that
+names a mechanism precisely can still have swept the wrong axis -- check that
+the sweep varied what the mechanism actually reads.**
 
 **NEWEST LEVER (2026-10-28): A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY
 DEPENDENCE AT ALL.** It landed THREE functions in one sitting -- func_800563B0,

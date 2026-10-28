@@ -5557,6 +5557,65 @@ which would make the clause unreachable, so something in that term does not
 evaluate the way a straight reading suggests. **The dependence lists are the
 measurement; the clause is the only candidate; the arithmetic was not closed.**
 
+## TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT STATEMENTS
+
+Landed func_8004D690 on this, 29 of 31 words and 18 DIFF -> MATCH, and the
+general shape is worth recognising because the park had the mechanism right
+and the sweep wrong.
+
+A loop with two early exits -- one arm that ends the function, one that stops
+the loop -- can be written with `return` in both, `break` in both, `goto` a
+trailing label in both, or MIXED. Those are not the same program to gcc, and
+only one of the mixed forms matched:
+
+    if (handler installed) { call it; return; }   <- return
+    if (counter exhausted) { break; }             <- break
+    pump(); /* loop */
+
+Both `return`, both `break`, both `goto out`, and `break`/`return` in the other
+order are all 29 words -- two SHORT, because **jump.c:1800** fires. Its comment
+reads "Look for   if (foo) bar; else break;" and it matches
+
+    insn = condjump label1;
+    ...range1...
+    jump label2;
+    label1:
+    ...range2...
+    jump somewhere unconditionally
+    label2:
+
+inverting the condition and SWAPPING the two ranges. The arm that ends the
+function moves to the end of the function, falls into the epilogue, and its `j`
+plus delay-slot `nop` stop being needed. That is the two words, and it is why
+a function can be two words short with every instruction already right.
+
+**THE CONDITION THAT BLOCKS IT is `JUMP_LABEL (range1end) == label2`, where
+`label2 = next_label (label1)`.** With `break` on the SECOND arm the loop's own
+end label is emitted between the pump and the epilogue, so `label2` is the loop
+end while the first arm's `return` jumps past it to the epilogue -- not equal,
+no swap. Reverse the two statements and the first arm jumps to the loop end,
+which IS `next_label` of the pump, so it matches again. **The lever is which
+arm gets which statement, and the order is not symmetric.**
+
+Its other conditions are all things to check before concluding a function is
+unreachable, and none of them was the lever here: `! first` (it is skipped on
+jump_optimize's first internal round and after reload, so it always gets a
+chance), `condjump_p (insn)` with `JUMP_LABEL (insn) == next_label (insn)`,
+`LABEL_NUSES (label1) == 1`, `simplejump_p (range1end)`, the second range
+ending in an unconditional JUMP_INSN followed by a BARRIER, and `invert_jump`
+succeeding.
+
+**THE SWEEP LESSON IS THE BIGGER HALF.** The park had identified jump.c:1800
+exactly, listed five conditions, and concluded "the two openings are a second
+use of the pump's label or a conditional back edge, and both cost a word in
+this source" -- having measured `return`, `break` and `goto out` and found them
+"identical". They are identical WHEN BOTH ARMS USE THE SAME ONE. The sweep
+varied the statement and held the arms symmetric, so the whole mixed half of
+the space was never entered, and the condition that actually fails is a SIXTH
+one the list did not include. **When a transformation's match depends on which
+label an exit targets, vary the arms INDEPENDENTLY -- a uniform sweep over exit
+spellings answers a different question.**
+
 ## 10. Measured dead ends -- do not retry
 
 * **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT

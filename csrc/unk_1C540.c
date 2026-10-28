@@ -2691,7 +2691,53 @@ void func_8004D614(void) {
     func_8004D0C8((u32) D_80083780);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D690);
+/* The retry pump: while the handler slot at `a` is empty, run func_8004D7E8
+   on `c` as long as `b`'s word is nonzero; once the slot is filled, call
+   through it with `a + 4` and stop.
+
+   ONE THING IS LOAD-BEARING AND IT IS THE ASYMMETRY OF THE TWO EXITS: the
+   handler arm `return`s and the exhausted arm `break`s. Spelling both the same
+   way -- both `return`, both `break`, or both `goto` a label at the end -- is
+   29 words against the listing's 31, because gcc then INVERTS the first test
+   and SWAPS the two arms, which lets the handler arm fall into the epilogue
+   and saves its `j` and `nop`.
+
+   The transformation is jump.c:1800, the one whose comment reads "Look for
+   if (foo) bar; else break;". It matches
+
+       insn = condjump label1;   <- `if (*(u32 *) a != 0)`
+       ...range1...              <- the handler arm
+       jump label2;              <- its exit
+       label1:                   <- the pump
+       ...range2...
+       jump somewhere unconditionally   <- the back edge
+       label2:
+
+   and the condition that fails here is `JUMP_LABEL (range1end) == label2`
+   where `label2 = next_label (label1)`. With `break` on the SECOND arm the
+   loop's own end label sits between the pump and the epilogue, so `label2` is
+   the loop end while the handler arm's `return` jumps past it to the epilogue,
+   and the two are not equal. Written the other way round -- `break` first and
+   `return` second -- the handler arm jumps to the loop end, which IS
+   `next_label` of the pump, so it matches and swaps: 29 words again. The
+   asymmetry has to be this way round.
+
+   Its other four conditions all hold either way and are not the lever:
+   `LABEL_NUSES (label1) == 1` (the back edge targets the loop top, not the
+   pump), `simplejump_p (range1end)`, the back edge being an unconditional
+   JUMP_INSN followed by a BARRIER, and `invert_jump` succeeding. */
+void func_8004D690(u8 *a, u8 *b, s32 c) {
+    while (1) {
+        if (*(u32 *) a != 0) {
+            (*(void (**)(u8 *)) a)(a + 4);
+            return;
+        }
+        if (*(u32 *) b == 0) {
+            break;
+        }
+        func_8004D7E8(c);
+    }
+}
 
 void func_8004D690(u8 *, u8 *, s32);
 void func_8004D4AC(void);
