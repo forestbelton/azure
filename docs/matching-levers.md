@@ -3722,6 +3722,36 @@ apply in:
    `DEFINE_FUNCTION_UNIT` model, not the dependence graph. Memory operations
    therefore beat ALU operations inside a priority group, which is why prologue
    saves win against an `addiu` that sets up a call argument.
+**WHICH KEY IS DECIDING, BY SYMPTOM.** Six parks are held by a scheduling
+difference and they are NOT all the same wall; reading the symptom first saves
+re-deriving the whole key order per function.
+
+* **One chain carries a LOAD and the other does not** -- the load-bearing chain
+  wins on key 1 and no source order touches it, because priority is measured
+  from the block start. func_800563B0: the `D_80073740[i]` lookup
+  (lui/addiu, sll, addu, lw, sw) beats the flags store (li, sw), so the lookup
+  runs first and the listing's order is unreachable; its sibling func_80056D44
+  is two words short for the same reason, with the spare insns falling into the
+  load-delay slots. The tell is that moving the statements changes nothing. And
+  the third sibling func_80056DB4 is at 2 DIFF because ITS early store needs
+  `lui`+`ori` -- a two-insn chain, long enough to win -- which is why the
+  recipe does not transfer between them.
+* **Both chains are ALU and one feeds the next insn scheduled** -- key 2's
+  dependence class decides and the independent insn wins, whatever the LUIDs.
+  func_8003A060 and its twin func_8003A858: the `sll` is class 3 against the
+  `addu`'s class 1, permanently.
+* **A STORE sinks to the end of its block** -- a store has no dependents inside
+  the block, so its priority is the floor and nothing in the source raises it.
+  func_80038CB8's `sh` to +0x20 sinks past the `slt`, so the +0x28 temp cannot
+  reuse the register the store would have freed. The only lever is a later read
+  of the stored location IN THE SAME BLOCK, and a loop's next-iteration read is
+  across the back edge where sched never looks.
+
+Two things that are NOT sched, for contrast, because both were filed as sched
+questions and were not: a preheader's order is `move_movables`' discovery order
+(section 9, func_8005ACDC), and an `mflo`'s position follows from whether the
+product's pseudo is in LO or in a GR register (func_8004A574).
+
 3. Only on a tie of all of the above does `rank_for_schedule` fall through to
    the dependence class relative to `last_scheduled_insn` (independent beats
    anti/output beats data) and then to `INSN_LUID`.
