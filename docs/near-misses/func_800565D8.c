@@ -150,6 +150,40 @@
  * `byte * 2` (33 / 31); and the subtraction written `(s32) 0x3F - (s32) n`
  * (31 / 4).
  *
+ * 2026-10-28: THE TWO PRIORITY LEVERS ARE NOW MEASURED INERT, which retires
+ * the "whatever lengthens the BYTE's quantity or shortens the constant chain's"
+ * line above and leaves the SUGGESTION reading as the only one standing.
+ *
+ * Against the 4-DIFF variant, the subtraction chain was given the free-
+ * reference split that landed func_8004D294 -- `c = 0x3F; c -= n;` into a
+ * block-local, which compiles to the same `li`/`subu` pair. It works as
+ * intended on the numbers: `.lreg` then reads `Register 84 used 4 times across
+ * 5 insns in block 3`, i.e. 4 refs over 5, priority 6.400 -- the HIGHEST of any
+ * quantity in that block, against the byte's 0.667 and its shift's 4.000. And
+ * `.greg`'s dispositions are unchanged: `84 in 3`, `90 in 2`, `91 in 2`. The
+ * byte keeps $v0, the chain keeps $v1, 31 words, 4 DIFF.
+ *
+ * So qty_compare_1 DOES NOT DECIDE THIS PAIR, and no reference count or live
+ * length on either side will move it -- which is what the suggestion phase
+ * predicts, since it is assigned before priority is consulted at all. Three
+ * more probes agree:
+ *
+ *   * reading the byte into a block-local BEFORE the `li` (so its range is the
+ *     longer of the two as well as the split being in place): 31 words, 4.
+ *   * the byte through a local shared by BOTH arms, which makes it a global
+ *     allocno: `.greg` gives it neither a $v0 conflict nor a preference and it
+ *     still takes $v0 -- 4 DIFF with the `li` first, and 32 words / 27 DIFF if
+ *     the volatile load opens the block, because then the `li` cannot reach
+ *     the branch delay slot (the volatile MEM is not a legal filler).
+ *   * routing the subtraction through `r`, the returned variable -- whose
+ *     allocno really does carry the $v0 copy preference from the return -- is
+ *     7 DIFF: the preference does not win $v0 either, and the mult result, the
+ *     negate and the `mflo` all follow the chain into $v1.
+ *
+ * EXHAUSTION: a full `tools/decomp/search.py` sweep over every transform
+ * family, 17 candidates across 15 families, run 2026-10-28 ON THE 4-DIFF
+ * VARIANT rather than on this file, improved on nothing.
+ *
  * No phantom test was tried. It would fit the shape -- see the section 3
  * entry -- but on a 31-word function that is a poor trade for two
  * references, and the SYMPTOM note there applies: if the subtraction really
