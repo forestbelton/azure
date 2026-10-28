@@ -3749,6 +3749,19 @@ construct from the two ends -- and CHECK the dump rather than assuming:
 `sched.py --sched1` prints the ready lists, and a bumped insn shows up there as
 `(7f000001)` against its neighbours' `(1)`.
 
+**AND THE NUMBER OF USES IS IRRELEVANT -- IT IS SETS, ONLY SETS.**
+`birthing_insn_p` tests `reg_n_sets[REGNO (SET_DEST (pat))] == 1` and the
+dest's liveness, and nothing else. So giving a value a second USE does not
+un-bump its producer, however the live range changes. This is worth stating
+because the natural cheap move looks like a second use: a bumped insn is placed
+as late as its FIRST use allows, so an early second use DOES pull it earlier --
+func_8005A778 measures that -- but it pulls it by adding an insn, and the insn
+is the thing you were trying not to spend. A `(high (symbol_ref))` pseudo is
+the worst case: it is single-set by construction, cse merges later uses onto it
+without adding a set, and a reference in another block is a different pseudo,
+so there is no way to un-bump one from C at all. func_8005A778's park works
+that out in full for the func_8005A608 / func_8005A90C cluster.
+
 **ALSO: `n_deaths` IS ALWAYS ZERO, so birthing is the ONLY case that runs.**
 `adjust_priority` switches on how many REG_DEAD notes the insn carries and
 divides the priority down for one, three or four deaths -- and the comment

@@ -134,6 +134,42 @@
  * spending a word. That is the open question, and it is a narrow one: it has a
  * definite answer in loop.c/local-alloc rather than in another source sweep.
  *
+ * 2026-10-28, SECOND PASS: THE UN-BUMP ROUTE IS CLOSED, and the two things
+ * that close it are worth separating.
+ *
+ * FIRST, A SECOND USE IS NOT A SECOND SET. The obvious cheap version of "born
+ * early" is to give the high a second USE, since a bumped insn is placed as
+ * late as its FIRST use allows. Tested with `D_8007382C[1] = 0;` added after
+ * the shifts (which shares the one high pseudo rather than making a second
+ * one): the ready list still reads `19 (7f000001)`. `birthing_insn_p` tests
+ * `reg_n_sets[REGNO (SET_DEST (pat))] == 1` and nothing else, so the number of
+ * USES is irrelevant to whether an insn is bumped. The insn did move earlier --
+ * it must precede the first store -- but at the cost of the extra word, so it
+ * is a diagnostic rather than a candidate.
+ *
+ * SECOND, A `(high (symbol_ref))` PSEUDO CANNOT BE GIVEN A SECOND SET FROM C.
+ * Each materialisation of a symbol's high half is one `(set (reg) (high sym))`
+ * with a fresh pseudo; cse merges later USES onto the existing pseudo but never
+ * adds a set to it, and a reference in another block is a different pseudo,
+ * also single-set and also bumped. The two constructs that do produce an
+ * uncollapsible second set -- the arms of an `if` and a loop-carried variable
+ * -- cannot be put around an unconditional store in a straight-line head
+ * without spending a word. So "un-bump the high" is a correct statement of what
+ * the listing has and NOT a reachable one.
+ *
+ * AND THE PAIR IS ALREADY SEPARATED, which is the part that reframes the
+ * remaining gap. sched2 runs after reload, where `adjust_priority` is a no-op,
+ * so nothing is bumped there: the store is a MEM write with no in-block
+ * consumers, so in the backward pass it is ready immediately and drifts LATE,
+ * while the high becomes ready only once the store is picked and so drifts
+ * EARLIER. Both builds show that separation -- this one has high at 11 and
+ * store at 18 before reorg, the listing 8 and 14. The gap is six or seven
+ * insns either way. What differs is not the separation but a THREE-SLOT SHIFT
+ * of the whole pair, and the pair's position follows the store statement's
+ * LUID, which is the thing this file has already swept across all five
+ * positions. So the next idea has to change the block's insn count or the
+ * hazard pattern ahead of it, not where the store is written.
+ *
  * MEASURED 2026-10-28 and NOT working -- the DECLARED SIZE lever (section 6),
  * which this file had tried only as a scalar alias. All 101 words:
  *
