@@ -45,6 +45,25 @@
  * for `e` and once for `e2`) rather than being part of the giv's own
  * initialisation, which is what gives it the earlier LUID.
  *
+ * MEASURED 2026-10-27, which prices the trade exactly. Dropping `e2` and
+ * writing the trailing store through `e` is SEVEN words: the three preheader
+ * words above become right in kind -- there is no movable left to hoist, so
+ * each `lui` sits next to its own `addiu` -- but the two giv initialisations
+ * then come out in the other order (D_80073740's first, D_80085458's second)
+ * and so do the two increments at the loop bottom, which is four words plus
+ * the one this trade was meant to save. That is the mechanism from both
+ * sides: `e2` exists to make the D_80085458 giv the LAST one created, which
+ * puts it FIRST in the preheader (giv initialisations are emitted in reverse
+ * body order), and the price of the second reference is that the symbol's
+ * high half becomes a loop movable and is hoisted ahead of everything.
+ *
+ * Also measured and not working: the second row through a base local assigned
+ * inside the loop body (`base = D_80085458;` with both rows derived from it,
+ * either declared in the body or at function scope) -- 3 DIFF, the movable is
+ * still hoisted first; the trailing store written inline with the symbol
+ * (80 words); and `e2` through an `__asm__` alias of the same symbol, which
+ * does defeat cse but costs the second materialisation (82 words).
+ *
  * So the thing to try next is a spelling that keeps the second row reference
  * WITHOUT giving the symbol a second materialisation to hoist: `e2 = e;`
  * loses the giv ordering and goes back to 18 DIFF, and a walked `e` biases

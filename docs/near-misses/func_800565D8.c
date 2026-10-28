@@ -31,7 +31,8 @@
  *    and no spelling measured gets all three of those at once. Writing the
  *    doubling as `<< 1` keeps it on the byte and gives the target's exact
  *    instruction ORDER, but then the two chains hold each other's registers
- *    and the mult's operand roles swap (7 DIFF):
+ *    and the mult's operand roles swap (4 DIFF, RE-MEASURED 2026-10-27 -- this
+ *    header said 7, from before the volatile read was added):
  *
  *      r = -((0x3F - n) * (*(volatile u8 *) (p + 0x21) << 1));
  *
@@ -49,6 +50,26 @@
  *    into its own local before the zero test (32 words). `-(0x3F - n) * byte`
  *    and `(n - 0x3F) * byte` collapse the `li`/`subu` pair into one `addiu`
  *    (25 words).
+ *
+ *    RE-MEASURED 2026-10-27, and the tension is now exactly located: it is
+ *    WHICH CHAIN GETS $v0, and the source can have either the order or the
+ *    registers but not both.
+ *
+ *      `-(byte << 1) * (0x3F - n)` (byte first, inline)   32 words: registers
+ *          right (byte in $v1, the constant chain in $v0, `mult $v1,$v0`
+ *          byte-first) but the `li 0x3F` no longer reaches the branch delay
+ *          slot, because the body now opens with the `lbu`.
+ *      `d = 0x3F - n;` then `-(byte << 1) * d`            31 words, 5 DIFF:
+ *          order right AND operand roles right (`mult $v0,$v1`, byte first),
+ *          registers swapped -- the byte takes $v0 because after scheduling
+ *          its quantity is the shorter of the two (`advise.py --greg`'s
+ *          local-alloc table, block b3: three quantities at 2 refs each, and
+ *          qty_compare_1 orders them by live length).
+ *      the same with `d * byte`, with both operands in locals either way, and
+ *          with `* 2` instead of `<< 1`: 4, 4, 5, 5 DIFF.
+ *
+ *    So the remaining lever is whatever lengthens the BYTE's quantity or
+ *    shortens the constant chain's, not the expression shape.
  *
  * 2. Arm two, two words plus the branch. The target's zero-byte test branches
  *    BACKWARD to the shared `j .L8005664C` / `addu $v0, $zero, $zero` block
