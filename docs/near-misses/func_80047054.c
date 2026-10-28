@@ -226,6 +226,30 @@
  *
  * That comparison is the thing to pull on next -- two functions, the same
  * first-parameter-plus-loop shape, one with the conflict and one without.
+ *
+ * PSEUDO 80 IS `p` ITSELF, confirmed from the lreg RTL: it is set at insn 4 --
+ * the first insn -- and is the base of all three `p[]` loads
+ * (`mem/s:SI (plus (reg/v:SI 80) ...)`), 6 refs across 88 insns (doubled, so
+ * ~44 real). Pseudo 84, which takes $a0, is `e`: set at insn 24, 9 refs across
+ * 40, also a pointer.
+ *
+ * So `p` had an $a0 copy preference from its own incoming copy and LOST it:
+ * `prune_preferences` (global.c:859) ANDs away any preference that is in the
+ * allocno's conflict set, so a parameter conflicting with its own argument
+ * register prints with no preference at all. That is why the dump shows none
+ * for 80. The whole question therefore reduces to ONE thing:
+ *
+ *     why is $a0 live somewhere inside `p`'s live range here?
+ *
+ * There are no calls in this function, so $a0's only obvious live range is
+ * entry to insn 4 -- and in func_8004F330, where the same first-parameter copy
+ * happens at the top of a loop function, no such conflict is recorded (its
+ * conflicts are `2 3 5 29`). The difference to test first is the PARAMETER
+ * COUNT: this function has four, func_8004F330 two, so `p` here is live across
+ * three further argument copies rather than one. Measured and NOT changing
+ * anything: the loop as an explicit guard plus do-while, and as a plain
+ * `while` with `e += 8` at the end -- both 58 words and 24 DIFF, identical to
+ * the `for`.
  * AUDIT 2026-10-27 -- pseudo 80, 81, 82, 83 have a DOUBLED live length, and
  * they report roughly twice their real range in this 58-word function.
  * `update_equiv_regs` (local-alloc.c:1018-1064) does `reg_live_length *= 2` for

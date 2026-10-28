@@ -1579,6 +1579,26 @@ range and no spare register -- so it works on a PARAMETER.
 So: read the `.greg` conflicts and preferences first, and only reach for a
 second set when the copy is being substituted rather than allocated away.
 
+AN EMPTY `preferences` LINE CAN MEAN THE PREFERENCE WAS PRUNED, not that there
+never was one. `prune_preferences` (global.c:859) does
+
+    AND_COMPL_HARD_REG_SET (hard_reg_preferences[allocno], temp);
+    AND_COMPL_HARD_REG_SET (hard_reg_copy_preferences[allocno], temp);
+
+where `temp` is that allocno's CONFLICTS plus the call-clobbered or fixed set
+plus everything outside its preferred class. So a pseudo that conflicts with
+the register it would have preferred loses the preference entirely and prints
+with none at all.
+
+func_80047054 is the case to recognise it by. Its pseudo 80 is the first
+parameter -- set at insn 4, and the base of all three `p[]` loads -- so it
+necessarily had an $a0 copy preference from the incoming copy, yet the dump
+reads `;; 80 conflicts: ... 2 3 4 5 6 7 29` with NO preferences line, and it
+takes $t2 while `e` takes $a0. The preference was pruned by the $a0 conflict.
+So when a parameter is in the wrong register, do not conclude from a missing
+preferences line that it never wanted its argument register -- find out why it
+CONFLICTS with it, which is the real question.
+
 A PREFERENCE ALSO RESERVES THE REGISTER AGAINST EVERYONE ELSE, which is the
 half that explains parameters. `prune_preferences` (global.c:833) walks the
 allocnos from least to most important and sets `regs_someone_prefers[a]` to the
