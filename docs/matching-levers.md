@@ -2694,6 +2694,23 @@ So on a function with stack-passed arguments:
   declares `s32` and the park declares `s16`, all three of `s16`, `s32` and
   `u16` build to the same 129 words and the same 2 DIFF. A prototype mismatch
   on a stack parameter is worth ONE compile; it is not worth a theory.
+
+THE LEVER IS NOW EXHAUSTED ACROSS THE PARKS, so do not re-sweep it. Only four
+park functions take stack arguments at all:
+
+    func_8005BBFC   8 params   `s16 vel, s16 fine` -- UNLOCKED, 220 -> 209
+    func_80035E58   6 params   width of param 5 is INERT (s16/s32/u16 all 2 DIFF)
+    func_8004B954   7 params   params 5-7 are pointers and `s32`; no `lhu` of an
+                               incoming slot anywhere, so nothing narrow to find
+    func_8005B4D0   5 params   `force` is read `lw` at 0xA0, which does not
+                               choose; and `s16 b` was separately measured at
+                               377/347 against a 377/344 base
+
+Its three `lhu`s of `$sp` are at 0x50, 0x52 and 0x94 -- the first two are
+`u16` LOCALS and the third is the low half of a SPILLED register parameter, not
+an incoming stack slot. Read the offset against the frame size before treating
+an `lhu` as a width witness: with a 0x90 frame the incoming slots start at
+0x90, and anything below that is a local or a spill.
 * **Try the narrow declaration anyway and judge it on SHAPE, not score.** The
   score moved by one word here, which is why it was dismissed; the prologue
   moved from 5 matching words to 26.
