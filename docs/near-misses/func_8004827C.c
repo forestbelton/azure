@@ -34,7 +34,37 @@
  * register unavailable" cure in a form a parameter CAN have. It cannot help
  * this function -- the copy it wants is INTO $v0, not away from it -- but
  * func_80055CF4 and func_8003BD84 should be checked against it before
- * anything else.
+ * anything else. *
+ * 2026-10-27: THE FIRST DIVERGENCE IS THE SHIFT'S DESTINATION, not the copy,
+ * and that reorders the whole investigation. Side by side from word 9:
+ *
+ *     target  sll $a0,$v0,3 ; addu $v0,$s0,$zero ; lui $v1 ; addiu $v1 ;
+ *             lw $a1,0xC($v0) ; addu $a0,$a0,$v1 ; sw $a0,0x28($a1)
+ *     built   sll $v0,$v0,3 ; lui $v1 ; addiu $v1 ; lw $a0,0xC($s0) ;
+ *             addu $v0,$v0,$v1 ; sw $v0,0x28($a0)
+ *
+ * The listing shifts `k` OUT of $v0 into $a0 and carries the address sum in
+ * $a0; this build shifts in place and carries it in $v0. Only once $v0 is
+ * free does the listing's copy of `p` into it make any sense -- so the copy is
+ * DOWNSTREAM of the shift's register, and attacking the copy directly (which
+ * is what this row's note says to do) is attacking the second fact.
+ *
+ * Both builds have the shift and the sum as ONE quantity, so the question is
+ * just which register that quantity gets: the call's result arrives in $v0,
+ * the shift ties to it here, and the listing does not. Per section 3's "two
+ * ways a copy disappears", the tie is the ALLOCATION kind, so what is needed
+ * is for the shift's destination to CONFLICT with $v0 -- i.e. for the call's
+ * result to still be live after the shift -- and `k` has exactly one use, so
+ * nothing in this source does that.
+ *
+ * Measured and NOT working, all 18 of 19 words and 12 DIFF: a `u8 *pp = p;`
+ * local for the dereference (it coalesces, as the row predicts); the address
+ * computed into a local before the dereference; the dereference written inline
+ * inside the store; and `k` holding the already-multiplied value
+ * (`func_80047BC0(i) * 8`). Section 3's seventh cure -- extend the source
+ * value past the copy, which landed func_800537D0 -- does not apply, because
+ * the value whose live range would have to grow is the CALL RESULT and its
+ * only use is the shift.
  */
 
 #include "common.h"
