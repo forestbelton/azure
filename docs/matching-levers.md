@@ -433,6 +433,48 @@ words, because cse does not share the index chain.
 
 ## 3. Allocation priority is the commonest thing left
 
+### DIAGNOSE IN THIS ORDER -- priority is the LAST question, not the first
+
+Written 2026-10-28 after a run in which six parks turned out to be filed under
+the wrong mechanism, four of them by me. The entries below this one are the
+mechanisms; this is the order to apply them, because the cheap checks rule out
+the expensive ones.
+
+1. **Is the diff register-only?** `advise.py`'s verdict. If it says SHAPE, fix
+   the shape first -- but note the one false positive: callee-saved `sw`/`lw`
+   stack-slot offsets are reported as IMMEDIATE findings whenever the register
+   assignment differs, and those are a consequence (func_8003AB44).
+2. **Which allocator decided it?** `dump.sh`, then the `.greg` dump. If the
+   `;; N regs to allocate` block is ABSENT, global-alloc never ran and every
+   number from `allocno_compare` -- including advise.py's global MARGINS table
+   -- describes a pass that did not happen; `lreg`'s "in block N" says the same
+   thing per pseudo. NINE of the 24 parks at 12 DIFF or less are in this state.
+3. **Is the wanted register in the value's CONFLICTS?** Straight from `.greg`.
+   If it is, the register is ILLEGAL and no reference count, preference or
+   priority will ever give it: the only lever is the live range
+   (func_8004E9EC, func_80049E1C).
+4. **Does the value PREFER the register it got?** Also from `.greg`. If so, the
+   lever is the COPY that created the preference, not the value's references --
+   preferences propagate across copies (global.c:809), so a value can inherit
+   one from a variable it is merely assigned to (func_8005947C's `b`
+   inheriting $a2 from `c`). And an EMPTY preferences line may mean the
+   preference was PRUNED by a conflict (global.c:859), not that there was
+   none (func_80047054).
+5. **Is the register preferred by a CONFLICTING allocno?** `prune_preferences`
+   reserves it, and `find_reg` avoids it even for allocnos allocated earlier.
+   A parameter's incoming-copy preference reserves its argument register this
+   way (func_8004F330), and no amount of priority takes a reserved register.
+6. **Is the word a MISSING COPY rather than a wrong register?** Then ask which
+   of the two disappearance mechanisms applies -- see "two ways a copy
+   disappears" below -- because a second SET cures one of them and does
+   nothing for the other.
+7. **ONLY NOW is it a priority margin**, and the MARGINS table applies with
+   two corrections: its local-alloc rows take the quantity size as 4, so a
+   QImode quantity's real priority is a quarter of the printed value and
+   HImode a half (check `lreg` for a `; N bytes` clause); and a once-set
+   pseudo carrying a REG_EQUIV has a DOUBLED `reg_live_length`, which makes
+   its "live <= N" instruction cost half as many real insns as it reads.
+
 When every opcode, immediate and delay slot matches and only registers differ,
 it is almost always one allocation-order decision. Read it out of the dumps
 rather than guessing:
