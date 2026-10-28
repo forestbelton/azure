@@ -501,6 +501,35 @@
  * listing has `lw $s3`, and the `addu $s6, $s4, $v0` that follows it. So `b`
  * wants $s3 and gets $s4. That one choice is now the first real difference in
  * the function, with 44 words matching ahead of it.
+ *
+ * 2026-10-28, `b` WANTS $s3 AND THE MARGIN IS 2%. From `.greg` and `.lreg` on
+ * the 209 base, `b` is pseudo 97 and its rival is 171:
+ *
+ *     97  (`b`)  4 refs /  49 insns / crosses 3 calls  ->  2*4/49 = 0.163
+ *     171        3 refs /  18 insns / crosses 2 calls  ->  1*3/18 = 0.167
+ *
+ * They CONFLICT (each is in the other's list), 171 is reached first in the
+ * allocation order -- position 30 of 39 against 97's 32 -- and takes $s3
+ * (register 19). `b` then falls to $s4 (register 20), which is the first real
+ * difference in the function and the source of everything after it.
+ *
+ * TWO WAYS TO FLIP IT, both quantified:
+ *   * ONE MORE REFERENCE on `b`: `floor_log2(5)*5/49 = 0.204` clears 0.167
+ *     easily. `b` has one set and two uses in the source (`q` and `e`), and
+ *     there is no third use to be had for nothing -- `e` cannot be expressed
+ *     from `q`, since q = b + prog*16 + 32 and e = b + prog*512 + key*32 +
+ *     0x820 differ by more than a constant.
+ *   * TWO FEWER INSNS of live range: `2*4/47 = 0.170` also clears it. `b`'s
+ *     range runs from its load to `e`, and the `pit` statement now sits inside
+ *     it -- which is the tension, because `pit` is there to get the extension
+ *     order right and it lengthens `b` by its own instructions.
+ *
+ * MEASURED AND NOT WORKING for the second route: splitting `pit` around `q` so
+ * that only `fine` is read before it (`pit = fine;` then `pit += vel << 8;`,
+ * in both placements) is 335 words / 328 DIFF -- the `+=` makes `pit`
+ * multi-set and costs a word. Swapping `q` and `e` is 225 or 227. So the
+ * range cannot be shortened by moving statements, and the reference cannot be
+ * bought from the arithmetic; what is left is something that changes 171.
  */
 
 #include "common.h"
