@@ -69,9 +69,30 @@
  * once-set parameter (its real range is 29). Even with the doubling escaped it
  * is 0.276 against `v`'s 0.500, and it would need eight references to pass it.
  *
- * So the open question is narrower than this header had it: get the PARAMETER
- * allocated before the product, or give the product's copy into $a0 a reason
- * to survive. Measured already and not working: a second `u = v` local for the
+ * AND BOTH ROUTES SECTION 3 SUGGESTS ARE CLOSED BY THE BLOCK STRUCTURE, read
+ * off the words 2026-10-28. The levers entry says this function needs "$a0
+ * LIVE during the product's range, which means the multiplier `s` still live
+ * afterwards, or the product live from before the `mult`". The words say why
+ * neither is available:
+ *
+ *   * `s` IS in $a0 -- `lw $a0, 0x0($v0)` before the branch, and both arms
+ *     read it as `mult $v0, $a0` -- but its last use IS the `mult`, so $a0
+ *     falls dead at the end of each arm whatever the source does with it.
+ *     Keeping it live past the arms needs a use after them, and there is none
+ *     to be had for free.
+ *   * THE PRODUCT CANNOT BE LIVE BEFORE THE MULT, because there are TWO mults
+ *     -- one per arm -- and a SINGLE `mflo` in the join block, which is the
+ *     two arms' identical tails cross-jumped together. The product is born at
+ *     that `mflo`, after both arms, so its range cannot reach back over $a0's.
+ *     Assigning the halfword to `v` and multiplying once after the `if` does
+ *     put `v` live across the multiply, but it leaves ONE mult where the
+ *     listing has two -- which is the 17-DIFF measurement above, and a word
+ *     short of the listing's shape.
+ *
+ * So the open question is narrower again: the product's copy into $a0 has to
+ * survive, and `v` dies at it, so the cure has to come from the OTHER side --
+ * something that makes $a0 unavailable at the `mflo` in the join block, where
+ * nothing of this function's is live. Measured already and not working: a second `u = v` local for the
  * argument (the copy coalesces, since `v` dies at it).
  *
  * So the question is only what pins the `mflo` above the function-pointer
