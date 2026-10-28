@@ -1,4 +1,4 @@
-/* func_8005947C (unk_2879C) -- 81 of 81 words, 12 DIFF. NOT compiled.
+/* func_8005947C (unk_2879C) -- 81 of 81 words, 6 DIFF. NOT compiled.
  *
  * The sequencer's event dispatch: reads a byte, decides whether it is a
  * running-status continuation or a new status byte, looks the status up in
@@ -57,7 +57,41 @@
  * `s32 b` with `(b & 0xFF)` at every comparison and `b &= 0xFF` in the tail
  * (80 words -- the in-place mask DOES appear, and costs the +0x4A arm's
  * `andi`); and the whole tail nested inside `if (t == 0)` instead of after an
- * early return (37).
+ * early return (37). *
+ * 2026-10-27: 12 DIFF -> 6, AND FACT 2 IS SOLVED.
+ *
+ * `c` is assigned in the two arms of an INVERTED if/else --
+ * `if (p[0x49] != 0) { c = b; } else { c = func_800589B8(...); }` -- instead
+ * of `c = b;` followed by a one-armed `if`. That starts `c`'s live range
+ * inside the arms rather than before the test, which is the one insn the
+ * MARGINS table was asking for: `t` and `c` were 0.308 against 0.300, a 2.5%
+ * gap with "live <= 9 (-1)" on `c`, and they now sit at 3 refs / 11 live /
+ * 0.273 EACH -- an exact tie -- in the listing's own $s2 and $s3. Same word
+ * count, six words gone.
+ *
+ * Measured alternatives for that block: the if/else with the condition the
+ * natural way round is 7 DIFF (one worse, and it is the inversion that does
+ * it); moving the `t == 2` block ahead of the `c` assignment is 75 or 60 DIFF
+ * depending on the form, which is a different function.
+ *
+ * WHAT IS LEFT is only fact 1 -- `b` in $a2 here and $a0 in the listing, six
+ * register-only words (advise.py now says VERDICT: ALLOC). Two things are now
+ * known about it that the older note did not have:
+ *
+ *   * `b` DOES NOT CONFLICT WITH $a0. `--greg`'s conflicts column for its
+ *     pseudo (82) reads `$v0 $v1 $sp` only, so $a0 is legal for it and this is
+ *     not a live-range problem -- the range does not need shortening.
+ *   * It is therefore an ORDER or PREFERENCE question. global-alloc's
+ *     `find_reg` avoids a register that other allocnos PREFER (every call here
+ *     sets $a0 for `(s32) p`), so a pseudo with no preference of its own is
+ *     steered away from $a0. For `b` to land there it has to acquire a
+ *     preference for $a0, which comes from being copied to or from that hard
+ *     register -- i.e. from being passed as a FIRST argument somewhere.
+ *
+ * `u8 b` is load-bearing and was re-measured: `s32 b` and `u32 b` are 78
+ * words / 62 DIFF, `s32 b = r & 0xFF` is 79 / 66, dropping `b` and masking
+ * `r` at each site is 80 / 65. `b = r & 0xFF` with `u8 b` is identical to
+ * plain `b = r` (6 DIFF), so the mask in the source is free but buys nothing.
  */
 
 #include "common.h"
@@ -93,8 +127,9 @@ s32 func_8005947C(u8 *p) {
     }
     t = D_800737DC[(i >> 4) & 0xF];
     if (t != 0) {
-        c = b;
-        if (p[0x49] == 0) {
+        if (p[0x49] != 0) {
+            c = b;
+        } else {
             c = func_800589B8((s32) p);
         }
         if (t == 2) {
