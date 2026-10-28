@@ -2256,6 +2256,27 @@ words: the two extra `lbu` feeding the UV wrap clamps have to be between two
 particular scratchpad stores, and since they cannot be hoisted across one,
 only the statement order decides which side of it they land on.
 
+**SO ORDER THE SOURCE SO NOTHING HAS TO BE HOISTED -- that is the lever the two
+notes above leave out, and it was worth four words on func_8004C36C.** A
+byte-copy block (`prim->code = p->unk_01; prim->u0 = p->unk_08; ...`) spelled
+one statement per copy stalls on every load, because each `sb` conflicts with
+the NEXT `lbu` and sched1 cannot lift it. The listing instead batches two loads
+into two registers ahead of the two stores that consume them -- and you get
+that by putting the loads before the stores IN SOURCE ORDER, where the
+dependence never applies:
+
+    g0 = p->unk_01;  g1 = p->unk_08;
+    prim->code = g0; prim->u0 = g1;
+
+**In PAIRS, not all at once.** Reading all four values into locals before all
+four stores is three differing words WORSE there: sched keeps the four loads
+together, while the listing's second pair sits after the first two stores. So
+match the listing's batch size, and read the count off the listing -- on that
+function one group is two reads and a third inline, and hoisting the third as
+well goes a word short. The general shape: **when a dependence you cannot
+remove is blocking a hoist, check whether the original simply did not need the
+hoist.**
+
 * `*(u16 *) ((u8 *) p - 2)` keeps two read-modify-writes strictly sequential;
   every struct or array spelling of the same address lets sched1 interleave
   them and fill both load-delay slots. func_80043FD0, 2 words.
