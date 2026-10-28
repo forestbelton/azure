@@ -559,6 +559,85 @@ def t_goto_loop(text):
                text[:m.start()] + new + text[end:])
 
 
+def _leading_run(text):
+    """Line spans of the function body's leading declaration lines, in order.
+
+    Unlike `_decl_run` this KEEPS initialised declarations, because the point
+    here is to insert among them: their initialisers run in source order, so
+    the position of a new one relative to the others is exactly the knob. The
+    run ends at the first line that is not a declaration.
+    """
+    lo, hi = SPAN
+    out = []
+    i = lo
+    while i < hi:
+        j = text.find("\n", i)
+        if j < 0 or j > hi:
+            break
+        line = text[i:j]
+        if line.strip() == "":
+            i = j + 1
+            continue
+        if not re.match(r"^[ \t]+[A-Za-z_]\w*(?:[ \t]+|[ \t]*\*+[ \t]*)"
+                        r"\w+[ \t]*(?:=[^;]*)?;[ \t]*$", line):
+            break
+        out.append((i, j + 1, line))
+        i = j + 1
+    return out
+
+
+_READ = re.compile(r"\*\(\s*[us](?:8|16|32)\s*\*\s*\)\s*\([^()]*\)")
+
+
+def t_hoist_read(text):
+    """Hoist a memory read into its own local, at each legal POSITION.
+
+    `t_split_binop` splits a statement in place and `t_decl_order` permutes
+    uninitialised declarations; neither can lift a subexpression into a NEW
+    local and then move that local's initialiser earlier among the others.
+    That is a real knob, because the leading initialisers run in source order
+    and loads are emitted in it: func_8003666C is 7 DIFF with the +0x22 read
+    folded into its subtraction and a MATCH with
+
+        s32 q = *(s16 *) (s + 0x22);     <- hoisted, and BEFORE `n`
+
+    while the same local placed after `n` is still 7. So the position is the
+    lever and the hoist alone is not; a sweep that cannot vary it will report
+    the function exhausted. The width matters too, and t_decl_width composes
+    with this one in the greedy pass to reach it.
+    """
+    run = _leading_run(text)
+    if not run:
+        return
+    names = set(re.findall(r"\b(\w+)[ \t]*(?:=[^;]*)?;", "".join(r[2] for r in run)))
+    fresh = next(n for n in ("q", "q0", "q1", "q2") if n not in names)
+    # which run line declares each name, so an insert cannot precede its inputs
+    decl_at = {}
+    for k, (_, _, line) in enumerate(run):
+        m = re.match(r"^[ \t]+[A-Za-z_]\w*(?:[ \t]+|[ \t]*\*+[ \t]*)(\w+)", line)
+        if m:
+            decl_at[m.group(1)] = k
+    for m in scan(_READ, text):
+        read = m.group(0)
+        owner = next((k for k, (a, b, _) in enumerate(run) if a <= m.start() < b), len(run))
+        # the read must not be the whole initialiser -- then hoisting is a rename
+        if owner < len(run) and run[owner][2].split("=", 1)[-1].strip().rstrip(";") == read:
+            continue
+        lowest = 0
+        for ident in set(re.findall(r"\b[A-Za-z_]\w*\b", read)):
+            if ident in decl_at:
+                lowest = max(lowest, decl_at[ident] + 1)
+        for pos in range(lowest, min(owner, len(run)) + 1):
+            ind = re.match(r"^[ \t]*", run[0][2]).group(0)
+            line = "%ss32 %s = %s;\n" % (ind, fresh, read)
+            out = text[:m.start()] + fresh + text[m.end():]
+            at = run[pos][0] if pos < len(run) else run[-1][1]
+            if at > m.start():
+                at += len(fresh) - len(read)
+            yield ("hoist %s into %s at decl %d" % (read, fresh, pos),
+                   out[:at] + line + out[at:])
+
+
 TRANSFORMS = [
     t_decl_width,
     t_drop_cast16,
@@ -573,6 +652,7 @@ TRANSFORMS = [
     t_volatile,
     t_global_decl,
     t_goto_loop,
+    t_hoist_read,
 ]
 
 
