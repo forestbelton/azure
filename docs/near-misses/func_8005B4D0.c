@@ -207,6 +207,24 @@
  * the prologue fact already written up: this build spills both halves of the
  * packed argument and reloads one, where the listing keeps `a & 0x7F` in $fp
  * from its second instruction.
+ *
+ * 2026-10-28: THE `s16` PARAMETER FINDING FROM func_8005BBFC DOES NOT TRANSFER
+ * HERE, checked because it was worth checking. That sibling's two stack
+ * parameters turned out to be `s16` -- the listing loads them with `lw`
+ * because a narrow argument occupies a full word slot and the CALLER
+ * sign-extends, so `lw` is evidence FOR a narrow type, not against it -- and
+ * it took that park from 220 to 209 DIFF with the whole prologue matching.
+ * This function's `lw`/`lhu` pair on slot 0x94 is the same shape of evidence,
+ * so:
+ *
+ *     `s16 b`            377 words, 347 DIFF   (base 377 / 344)
+ *     `s16 a, s16 b`     373 words, 343 DIFF   -- three words SHORT
+ *
+ * Neither is an improvement: the first is worse on the noisy axis and the
+ * second loses three words on the reliable one. And `a` cannot be narrow on
+ * semantic grounds in any case -- it is the packed (bank, prog) argument and
+ * `a >> 8` on a signed halfword would not give the bank. So the parameters
+ * here really are `s32` and the 0x94 reads are a 32-bit value read two ways.
  */
 
 #include "common.h"
