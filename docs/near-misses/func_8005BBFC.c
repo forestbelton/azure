@@ -348,6 +348,38 @@
  * at word 31, so the original's parameters look like two-reference multi-block
  * pseudos TOO -- and their loads stayed in the prologue. Whatever separates
  * the two cases is not the reference count.
+ *
+ * 2026-10-28, THE CURE IS PROVEN AND COSTS ONE WORD EACH. The sinking rule
+ * needs `reg_n_sets == 1` -- `update_equiv_regs` only looks at pseudos set
+ * once -- so ASSIGNING TO THE PARAMETER removes it from that path entirely.
+ * Narrowing in place does it, and the cast is needed anyway:
+ *
+ *     fine = (s16) fine;
+ *     pit = ((s16) vel << 8) + fine;
+ *
+ * gcc's own report changes exactly as predicted, and the load moves:
+ *
+ *     base   Register 89 used 2 times across 2 insns IN BLOCK 3
+ *            -> `lw $v0, 0xA4($sp)` at word 56, beside its use
+ *     set    Register 89 used 4 times across 44 insns; dies in 2 places
+ *            -> `lw $t0, 0xA4($sp)` AT WORD 7, in the prologue
+ *
+ * which is where the listing has it. So the mechanism is settled in both
+ * directions: two references and block-local means sunk, a second set means
+ * not sunk.
+ *
+ * THE PRICE IS A WORD PER PARAMETER, and that is what is left. Narrowing
+ * `fine` alone is 334 of 333 words and 260 DIFF; narrowing BOTH (`vel` too, in
+ * which case the range test and the func_80056DB4 arguments read the narrowed
+ * `vel` directly, which is the listing's shape) is 335 and 330. The word goes
+ * on the parameter's new life: once it is not block-local its pseudo spans 44
+ * insns and needs a home it did not need before.
+ *
+ * SO THE QUESTION IS NARROW AND WORTH THE NEXT SESSION: a second SET for
+ * `fine` and `vel` that costs no instruction. The narrowing is the obvious
+ * spelling and it is a word too dear; what else writes to a parameter for
+ * free? Note the listing wants BOTH loads in the prologue, so whatever it is
+ * has to work twice.
  */
 
 #include "common.h"
