@@ -90,6 +90,21 @@
  *     words alone (46 DIFF), and 133 words / 11 DIFF with the sum's first
  *     operand also moved to +0x04.
  *
+ * AND THE COMBINE-BLOCKING ROUTE IS CLOSED TOO, 2026-10-28. `try_combine`
+ * cannot fold a copy whose SOURCE is modified between the copy and its use,
+ * and this function has such a modification available for nothing: `n += len`
+ * already happens, just below the +0x1C store. Moved up between the +0x38
+ * store and the sum, and also above the +0x38 store, it is 133 words and the
+ * SAME single differing word both times.
+ *
+ * The reason is worth keeping: read-back #2 is a copy of READ-BACK #1's
+ * pseudo, not of `n`. cse copies `n` into a fresh pseudo for #1 (the listing's
+ * `addu $v1, $s3, $zero`) and then copies THAT for #2, so modifying `n` leaves
+ * #2's source untouched. Blocking combine would need #1 itself to be
+ * reassigned between, and #1 is a cse artefact with no source-level name --
+ * giving it one (a local read of +0x00 stored to both fields) is the shared
+ * local that costs the third copy, measured above at 132 words.
+ *
  * So the listing has BOTH things this source can only have one of: the two
  * stores sharing a register AND a third copy. Every spelling that shares gives
  * up the copy and every spelling that keeps the copy makes the +0x38 store its
