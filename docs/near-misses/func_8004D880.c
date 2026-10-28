@@ -72,9 +72,27 @@
  *     d        (81)   2 refs / 13 live / 0.154  -> $a2, target $a0
  *
  * so `d` has to end up sharing $a0 with `x` -- which it may, since x dies at
- * `c = x` -- and `c` and the sums have to swap. The first thing to try is
- * whatever shortens `x`'s range, since it is the only one of the four whose
- * live length is not already minimal.
+ * `c = x` -- and `c` and the sums have to swap.
+ *
+ * WHAT STOPS `x` BEING SHORT is cse, and it is the same obstacle as above seen
+ * from the other side: `c = x` makes the two pseudos one value, cse
+ * canonicalises every later read to the OLDER of them -- the parameter -- so
+ * the sums read `x` and its range runs to the third test (6 refs / 15 live,
+ * the longest of the four) instead of ending at the copy. Measured 2026-10-28
+ * and NOT working, both of them by removing a copy this function needs:
+ *
+ *   * `u16 c` or `s16 c` instead of `u32 c`, to make the values differ so cse
+ *     keeps them apart: 27 words, 26 DIFF. The narrowing is free, which is
+ *     exactly the problem -- a HImode move coalesces and the entry copy goes
+ *     with it.
+ *   * dropping `d` and passing the parameter itself (`func_8004D828(x)`, with
+ *     or without a `(u16)` cast), so that x legitimately holds $a0 to the
+ *     call: 26 words, 27 DIFF -- BOTH copies disappear.
+ *
+ * So the entry copy survives only while `c` is word-wide AND reassigned, and
+ * in that shape cse hands the sums to `x`. Something has to make `c` the
+ * canonical pseudo for those three reads without changing its value or its
+ * width.
  */
 
 #include "common.h"
