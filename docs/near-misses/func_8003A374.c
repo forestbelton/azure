@@ -75,6 +75,26 @@
  * what competes, and the margin is thin: at 10 refs it needs about +1
  * reference or -2 live to pass 6.667. Both have to arrive WITH the tie intact.
  *
+ * AND THE OTHER HALF OF THAT MARGIN -- "-2 live" -- IS NOW CLOSED TOO, by
+ * statement order rather than by splitting. `s` and `t` are computed BETWEEN
+ * `d`'s definition and its only use, so moving them out should shorten the
+ * accumulator's span by the three insns they take (`lw`, `sll`, `addu`), which
+ * is more than the -2 the arithmetic asks for. Measured 2026-10-28:
+ *
+ *     `s` and `t` both moved above `d`            29 words, 16 DIFF
+ *     `s` alone above `d`, `t` left after         29 words, 12 DIFF
+ *     `s`, `t` and `*cp += 4` all above `d`       28 words, 28 DIFF
+ *     `*cp += 4` alone above `d`                  28 words, 26 DIFF
+ *
+ * So the span does not buy the swap: the two that keep the word count are 16
+ * and 12, and the two that move the cursor's increment lose a word outright --
+ * gcc folds `*cp += 4` into the preceding increment once they are adjacent.
+ * Taken with the splits above, BOTH terms of the margin are now closed by
+ * measurement: references cannot be added without dissolving the tie that
+ * sums them, and the span cannot be shortened without either moving a load or
+ * losing a word. What is left needs the quantity structure to change, not its
+ * references or its range.
+ *
  * The twin func_8003A3E8 sits at the same 12 and should take whatever lands
  * here.
  */

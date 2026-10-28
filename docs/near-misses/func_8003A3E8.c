@@ -23,6 +23,16 @@
  * ...`), which is func_8003A1A4's shape for ITS second composition, is 15 --
  * so the one-expression form below is right and the registers are an
  * allocation question, not a spelling one.
+ *
+ * 2026-10-28: see func_8003A374's park for the two measurement runs that close
+ * BOTH terms of the margin this pair is waiting on -- the free-reference
+ * splits (which dissolve the `combine_regs` tie that sums the chain's
+ * references, so each piece then prices on its own 2 refs and loses by more
+ * than the whole did) and the live-range shortenings by statement order (`s`
+ * and `t` moved above the accumulation: 16 DIFF, and moving `*cp += 4` with
+ * them costs a word, because gcc folds it into the preceding increment). The
+ * accumulator still has to outrank the cursor and neither term of the
+ * arithmetic is reachable from the source.
  */
 
 #include "common.h"
