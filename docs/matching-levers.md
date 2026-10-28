@@ -1484,6 +1484,29 @@ against that value. Any variable live across the guard will do -- it does not
 have to be the loop counter -- and `--greg` after the change confirms the new
 priority rather than leaving it inferred.
 
+**A FREE REFERENCE NEEDS A NEW INSN -- re-spelling an existing one buys
+nothing.** This is the trap, and it is worth one `--greg` before and after
+every attempt. Measured on func_8003A3E8 (32 words, 12 register-only words, a
+1.2% margin wanting exactly +1 reference on the cursor): four different
+spellings that mention the cursor one more time --
+
+    *cp = r + 4;        instead of   *cp += 4;
+    *cp = &r[4];        instead of   *cp += 4;
+    *cp = &r[0] + 4;    instead of   *cp += 4;
+    d = *r + ...        instead of   d = r[0] + ...
+
+-- all leave `--greg` BIT-IDENTICAL: pseudo 99 stays at 5 refs / 6 live /
+6.667, and the function stays at 12 DIFF. They are the same address
+arithmetic, so they fold to the same RTL and flow has nothing extra to count.
+
+The ones that DO work add an insn that mentions the pseudo and that a later
+pass removes: the loop guard above (a new comparison, folded to the `blez` the
+plain guard would have given, func_80057948) and the phantom test below (a new
+comparison plus a dead store, deleted by combine and jump2, func_80033D54). So
+the test to apply before spending effort is not "does this mention the value
+again" but "does this ADD AN INSN that mentions it". If the answer is no, the
+reference count cannot move.
+
 ### A reference that COMBINE folds away still counts -- the phantom test
 
 This is the dead-reference lever above taken to its end, and it is the most

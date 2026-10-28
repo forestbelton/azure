@@ -34,6 +34,15 @@
  * $v1 and $a0, and making $v0 live out at the epilogue does not touch either.
  * Read the row for the five known cures and why a parameter defeats all of
  * them.
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 82 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for it is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so this pseudo reports roughly twice its real range in a
+ * 34-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about that pair.
  */
 
 #include "common.h"

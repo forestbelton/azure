@@ -194,6 +194,15 @@
  * and store of that field; found by search.py's new `t_volatile` family, on
  * the first park where advise.py's MISSING row named a load. The rest of the
  * header below predates that and is written against 30 DIFF.
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 80, 81, 82, 83 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for them is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so these pseudos report roughly twice their real range in a
+ * 58-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about those pairs.
  */
 
 #include "common.h"

@@ -38,6 +38,15 @@
  * function and compare the two quantities' priorities, and look for a
  * zero-cost extra reference to `r` (matching-levers section 3's dead-reference
  * lever) rather than another spelling of the count.
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 81 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for it is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so this pseudo reports roughly twice its real range in a
+ * 33-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about that pair.
  */
 
 #include "common.h"

@@ -82,6 +82,15 @@
  * pointer whose priority has to rise -- is available here too (`m2->t[0]`,
  * `m2->t[1]`), and it does give m2 the references, but it also moves those
  * two stores onto $s6 where the listing has them off $s1. Measured: 126 DIFF.
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 83, 84 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for them is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so these pseudos report roughly twice their real range in a
+ * 546-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about those pairs.
  */
 #include "common.h"
 

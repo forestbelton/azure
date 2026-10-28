@@ -118,6 +118,15 @@
  * with `(s16)` casts at both uses, `s16 sat` and `u16 sat` (both 101 again,
  * i.e. they remove the `sra` and the word with it), `sat = (u8) s` (103), and
  * `sat = sat & 0xFF` rather than `&=` (identical).
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 84 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for it is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so this pseudo reports roughly twice its real range in a
+ * 102-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about that pair.
  */
 
 #include "common.h"

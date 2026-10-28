@@ -76,6 +76,15 @@
  * `void func_80041E70(Unk42710 *);`.
  *
  * nmcheck: 270 of 270 words, 1 DIFF
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 80 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for it is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so this pseudo reports roughly twice its real range in a
+ * 270-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about that pair.
  */
 #include "common.h"
 

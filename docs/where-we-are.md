@@ -248,6 +248,44 @@ something** -- that has been the single biggest waste of effort here.
 | deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
 | never attempted | 0 | **all four giants were drafted on 2026-10-27**: func_80033D54 **MATCHED and landed 2026-10-27** (it was at 537 of 537 / 46 DIFF, every instruction right, 34 of them four callee-saved register names; the phantom bit test in matching-levers section 3 carried the two missing references and is marked SYMPTOM in the landed source), func_800345B8 at 546 of 546 / 128 DIFF (two adjacent allocno pairs), func_8004C36C at 464 of 461 / 171 DIFF (three load-delay nops and what follows them) and func_80056E10 at 713 of 718 / 687 DIFF (first reading; the seven scans are the new part) |
 
+## Re-auditing a parked conclusion
+
+Several park conclusions this project has leaned on turned out to be stale or
+to rest on a measurement that could not have tested its own hypothesis. That is
+now a thing to check deliberately, not a thing to discover by accident, and
+four of the checks are mechanical. A one-off script for them lives outside the
+repo; what matters is the checks.
+
+1. **HEADLINE.** Compare the park's own `N of M words, D DIFF` first line with
+   `verify.py` today. Swept over every park 2026-10-27: all of them agree,
+   which is a real credit to the discipline here -- so when a park is stale it
+   is stale in the BODY, not the headline. func_80056DB4's "WHAT IS LEFT"
+   described a `lw`/`li` pair that had already come right while the headline's
+   2 DIFF was correct.
+2. **VERDICT vs the header's own category.** Run `advise.py` and compare its
+   SHAPE/ALLOC/LENGTH verdict with what the header reasons about. TWO FALSE
+   POSITIVE MODES, both found immediately: advise reports the callee-saved
+   `sw`/`lw` stack-slot offsets as an IMMEDIATE finding when the register
+   assignment differs (func_8003AB44 -- the park is right to call those a
+   consequence), and a header that names a direction in order to RULE IT OUT
+   ("the statement order is pinned") reads as if it were reasoning that way
+   (func_8003A374, func_8003A3E8). Treat this check as a prompt to read, not a
+   finding.
+3. **ALLOCATOR MISMATCH.** If the header invokes local-alloc machinery --
+   `qty_compare`, `qty_phys_*`, a copy suggestion -- check whether the pseudos
+   it cites are `global` in `--greg`'s table, and vice versa. A hypothesis
+   about local-alloc tested with a function-scope variable has not been tested
+   at all, because that variable spans blocks and global-alloc sees it. That is
+   exactly what happened to func_8003F368's four 2026-10-23 measurements.
+4. **DOUBLED LIVE LENGTH.** Flag any `--greg` row whose live length exceeds
+   about 1.5x the function's word count. `update_equiv_regs` doubles
+   `reg_live_length` for a once-set pseudo with a constant REG_EQUAL note (see
+   matching-levers section 3), and global-alloc reads the doubled value, so
+   those rows' priorities are half what the real live ranges give and the
+   MARGINS table's "live <= N" instructions for them are unreachable. The tell
+   is an impossible number: func_80047054 is a 58-word function whose pseudos
+   80-83 all report live 88, and its margin row asks for "live <= 17 (-71)".
+
 A MEASURED NEGATIVE worth not re-deriving, 2026-10-27: converting a park's
 definition to an OLD-STYLE (K&R) parameter list, with its declared types
 unchanged, was swept over all 38 multi-parameter park files and changed not one

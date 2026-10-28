@@ -81,6 +81,15 @@
  * value in the other), either arm first -- 160 words, three too many, because
  * the second call and its argument then stop merging too. What is wanted is
  * the negate last and the rest merged, which no spelling has produced yet.
+ *
+ * AUDIT 2026-10-27 -- THIS PARK'S LIVE LENGTHS ARE DOUBLED, so any priority
+ * or margin number above that involves pseudo 80, 81 is wrong, and any
+ * "live <= N" instruction from the MARGINS table for them is unreachable.
+ * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
+ * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
+ * doubled value -- so these pseudos report roughly twice their real range in a
+ * 157-word function. See matching-levers section 3. Re-derive the arithmetic over
+ * halved lengths before concluding anything about those pairs.
  */
 
 #include "common.h"
