@@ -75,6 +75,27 @@
  * local-alloc's refusal to tie the second read-back, not in the source
  * sequence.
  *
+ * MEASURED 2026-10-28 (second batch), five more shapes and none of them moves
+ * the +0x38 store onto read-back #1:
+ *
+ *   * the +0x1C sum's two operands read into their OWN LOCALS just above it,
+ *     one local or two -- 133 words, still 1 DIFF, the same word. So the sum's
+ *     two surviving copies are not what the store's register depends on.
+ *   * ONE SHARED LOCAL for both stores (`y = *(u32 *) (e + 0x00);` with both
+ *     stores writing `y`), in all three positions of the +0x18 store relative
+ *     to them, and with the sum reading +0x38 or +0x04: 132 words every time,
+ *     44-46 DIFF. The shared local is exactly the listing's "both stores from
+ *     read-back #1", and it always costs the third copy -- which is the word.
+ *   * the +0x38 store's value read back from +0x04 instead of +0x00: 132
+ *     words alone (46 DIFF), and 133 words / 11 DIFF with the sum's first
+ *     operand also moved to +0x04.
+ *
+ * So the listing has BOTH things this source can only have one of: the two
+ * stores sharing a register AND a third copy. Every spelling that shares gives
+ * up the copy and every spelling that keeps the copy makes the +0x38 store its
+ * consumer. That is the shape of the remaining word, stated as precisely as
+ * these measurements can.
+ *
  * MEASURED 2026-10-28, and it closes the reordering idea rather than opening
  * it. The listing's shape is `sw $v1,0x4 ; sw $v1,0x38` -- BOTH stores from
  * read-back #1 -- with read-back #2 a surviving copy of it that only the
