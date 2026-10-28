@@ -73,6 +73,27 @@
  * pointer at all (30). A FULL `search.py` sweep over all twelve transform
  * families found nothing better than the base, so the remaining three words
  * are not a local source rewrite.
+ *
+ * WHAT DECIDES THE HOIST ORDER, 2026-10-28 -- and it explains why none of
+ * those families reaches it. `scan_loop` APPENDS each movable as it discovers
+ * it (loop.c:799-802, `last_movable->next = m`) and `move_movables` emits the
+ * list in that order ahead of the loop, so THE PREHEADER'S ORDER IS THE ORDER
+ * THE INVARIANTS ARE FIRST USED in the body -- the one used first ends up
+ * furthest from the loop. Here the symbol's first use is the body's FIRST
+ * statement (`e = D_80085458 + i * 0x78`) and the hoisted constant 2 is used
+ * far deeper (`v >= 2`), so the symbol is discovered first and hoisted first.
+ * That is exactly the `lui` the listing puts LAST:
+ *
+ *     target  move $s4,$s3 ; li $s5,2 ; lui $v0 ; addiu $s1,$v0,%lo
+ *     built   lui $v0 ; move $s4,$s3 ; li $s5,2 ; addiu $s1,$v0,%lo
+ *
+ * So the shape to look for is one whose body touches the CONSTANT before the
+ * SYMBOL. None of the twelve transform families does that -- they move
+ * declarations, spellings and statement order among the existing uses, while
+ * what decides this is which invariant is reached FIRST. That is a
+ * restructuring of the body's opening statements, and it is not an allocation
+ * question, so section 3's procedure does not apply (its step 1 already says
+ * SHAPE here). See the section 9 entry.
  */
 #include "common.h"
 
