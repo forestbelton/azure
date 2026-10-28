@@ -2311,6 +2311,28 @@ and the target's `nop` only appears with the cast), while the neighbouring
 `e->unk_04` read does not need the cast at all, because by then nothing is left
 in the block to hoist it past.
 
+**THE VOLATILE CLAUSE IN `true_dependence` NEEDS BOTH SIDES.** Its return is
+
+    return ((MEM_VOLATILE_P (x) && MEM_VOLATILE_P (mem))
+            || (memrefs_conflict_p (...) && ...));
+
+so `volatile` on ONE of a store/load pair creates no dependence at all -- the
+only question then is whether `memrefs_conflict_p` separates the addresses, and
+two constant displacements off one base register are always separated.
+Measured on func_80038CB8 2026-10-28, where the open question is how to stop a
+`sh` to +0x20 sinking past an `lb` of +0x28:
+
+    `volatile` on the +0x28 READ only        166 words, 71 DIFF
+    `volatile` on the +0x20 STORE only       164 words, 12 DIFF -- NO CHANGE
+    both                                     166 words, 63 DIFF
+
+The middle row is the rule in action: one volatile side is inert. Both
+together do force the order, and it is still not usable there, because the
+volatile read costs two words. So this IS a lever for pinning two memory
+accesses in a chosen order -- the only one that works on non-conflicting
+addresses -- and its price is whatever `volatile` costs on the read side, which
+has to be checked before the ordering is worth having.
+
 **AND THE OTHER ESCAPE IN `true_dependence` IS UNREACHABLE FROM C, so stop
 looking for it.** Its first line returns 0 for an UNCHANGING read against a
 changing store:

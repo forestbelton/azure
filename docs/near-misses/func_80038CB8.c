@@ -85,6 +85,28 @@
  * function landed on 2026-10-28, and correcting it changes nothing here (164
  * words, 12 DIFF either way) because every argument at these three call sites
  * is already an `s16` expression.
+ *
+ * 2026-10-28: THE `volatile` ROUTE IS PRICED, and the rule behind it is worth
+ * more than the result. This file asks for "something after the store that
+ * reads +0x20, or any address sched cannot separate from it, at no instruction
+ * cost". `volatile` is that something -- `true_dependence` (sched.c) returns a
+ * dependence for
+ *
+ *     (MEM_VOLATILE_P (x) && MEM_VOLATILE_P (mem)) || (memrefs_conflict_p ...)
+ *
+ * -- but BOTH MEMs have to carry it, which is why the obvious single-sided
+ * attempts do nothing. Measured:
+ *
+ *     `volatile` on the +0x28 read only     166 words, 71 DIFF
+ *     `volatile` on the +0x20 store only    164 words, 12 DIFF -- unchanged
+ *     both                                  166 words, 63 DIFF
+ *
+ * The store-only row is the one to keep: a volatile STORE is not a barrier,
+ * because the clause is an AND. Both together do create the dependence and
+ * still lose, because the volatile read costs two words. So the ordering this
+ * file wants is reachable and not affordable, which is a different verdict
+ * from "no source shape does it" -- and if a future change makes the +0x28
+ * read cost nothing to mark, the order comes with it.
  */
 
 #include "common.h"
