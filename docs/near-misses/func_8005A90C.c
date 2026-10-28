@@ -48,6 +48,27 @@
  * VALUE stored by `*(u32 *) (e + 0x10) = b` and passed to
  * `func_80059F8C(s32, u32)`, and it scores better for an unrelated reason.
  *
+ * THE THREE MERGES, from `--greg` (this park had no allocator numbers). Seven
+ * allocnos cross a call and they land in only FOUR registers, because three
+ * pairs share:
+ *
+ *     87  13 refs /  27 live / 1.444 / xcall 3  -> $s0
+ *     82   2 refs /  94 live / 0.021 / xcall 1  -> $s0   <- shares
+ *     84  11 refs /  50 live / 0.660 / xcall 1  -> $s1
+ *     89   2 refs /   7 live / 0.286 / xcall 1  -> $s1   <- shares
+ *     86   4 refs /  31 live / 0.258 / xcall 3  -> $s2
+ *     81   2 refs /  96 live / 0.021 / xcall 1  -> $s2   <- shares
+ *     80   4 refs / 146 live / 0.055 / xcall 4  -> $s3
+ *
+ * Two of those three have to come apart to reach the listing's six. Note what
+ * the three low rows have in common: 2 references and a live length near 95 or
+ * 146, which is `update_equiv_regs`' DOUBLING of a once-set parameter -- so
+ * 80, 81 and 82 are parameters and their real ranges are half what is printed.
+ * A pair sharing a register means global-alloc found NO CONFLICT between them,
+ * so each merge is a claim that the two values are never live at the same
+ * time; the fix is to find which of those claims the listing contradicts and
+ * make the two overlap, not to move a priority.
+ *
  * Which leaves the callee-saved finding itself standing and its cause open:
  * the listing keeps SIX values across calls and this build four. The target's
  * prologue names them -- $s5 = p, $s3 = b, $s4 = c, $s1 = i -- so the two
