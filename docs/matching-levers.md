@@ -4626,6 +4626,38 @@ this section's first entry -- a value set exactly once gets bumped to
 LAUNCH_PRIORITY and lands LATE -- and the two together decide the whole entry
 block: that pair is what took func_8005C2C0 from 10 DIFF to a match.
 
+## The PREHEADER's order is the order the invariants are FIRST USED
+
+A loop with several hoisted invariants emits them in a definite order, and it
+is a source-level fact. `scan_loop` APPENDS each movable as it finds it --
+
+    if (movables == 0) movables = m; else last_movable->next = m;
+    last_movable = m;                        /* loop.c:799-802 */
+
+-- so the list is in DISCOVERY order, which is the order of each invariant's
+FIRST USE walking the loop body, and `move_movables` emits it in that order
+ahead of the loop. The invariant used first in the body ends up furthest from
+the loop.
+
+func_8005ACDC is three words of exactly this. Its preheader holds the loop's
+base-symbol materialisation and a hoisted constant 2, and the listing puts the
+`lui` LAST:
+
+    target  move $s4,$s3 ; li $s5,2 ; lui $v0 ; addiu $s1,$v0,%lo
+    built   lui $v0 ; move $s4,$s3 ; li $s5,2 ; addiu $s1,$v0,%lo
+
+In this source the symbol's first use is the loop body's first statement
+(`e = D_80085458 + i * 0x78`) while the 2 is used much deeper (`v >= 2`), so
+the symbol is discovered first and hoisted first. For the listing's order the
+ORIGINAL must touch the constant before it touches the symbol. That is a
+restructuring of the body's first few statements, not a declaration order and
+not an allocation question -- which is why that park's full `search.py` sweep
+over twelve transform families found nothing: none of them moves a FIRST USE.
+
+So when hoisted invariants come out in the wrong order, do not look at
+declarations or at `--greg`. Find each invariant's first use in the body and
+reorder those.
+
 ## 9. Induction variables
 
 * gcc builds the giv list by **prepending** as it discovers them, so the LAST
