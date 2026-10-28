@@ -1065,9 +1065,77 @@ s32 func_80059D60(void) {
     return 3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_80059DAC);
+/* Sorts the D_800869C0 slot table ascending by each slot's offset. Counts the
+   live slots first -- stop at a zero offset, cap sixteen -- then a bubble sort
+   comparing slot `i` against slot `j` for `j` from `n - 1` down to `i + 1`,
+   swapping the whole eight-byte pair through a stack temp, which is the entire
+   frame.
 
-void func_80059DAC(void);
+   FOUR SHAPES ARE LOAD-BEARING and all four are SYMPTOMs -- matching artefacts
+   rather than anything the original author would have had to think about:
+
+     * the bases go through LOCALS with the index written first,
+       `(u32 *) (i * 8 + (u32) c)` and not `c + i * 8`, which is the same idiom
+       func_8005A1D0 below already uses;
+     * the two loops need SEPARATE base locals, because with one the second
+       loop reuses the first's register and the second `lui`/`addiu` pair goes
+       missing;
+     * the second loop's base is materialised INSIDE the outer body, so loop.c
+       hoists it to the preheader, which is AFTER the `blez` guard. Declared
+       between the loops it lands before the guard and reorg then steals
+       `i = 0` into the first loop's `beq` delay slot;
+     * the comparison is `*(s32 *) <d> > *(s32 *) s`, not `s < d` -- same test,
+       but the operand named first is loaded first.
+
+   AND THE ROW POINTER IS WRITTEN OUT IN FULL rather than kept in a `u32 *d`
+   local, which is the whole of the last eight words. The listing walks
+   `&base[i]` as a strength-reduced giv in $t1 and copies it into $a1 inside
+   the outer body; that copy is what loop.c emits for a giv it reduces but
+   cannot REPLACE. Whether the giv happens at all is `benefit` surviving above
+   zero (loop.c:3786-3823), and the subtraction that kills it here,
+   `benefit -= copy_cost`, is guarded by `REG_USERVAR_P (v->dest_reg)`
+   (loop.c:3799). A named `d` is a user variable, pays the copy_cost, and ends
+   at 4 - 2 - 2 = 0, so the giv is dropped and the address is recomputed from
+   `i` every outer iteration. Spelt inline, the pointer is a pseudo cse1
+   created, REG_USERVAR_P is false, the subtraction is skipped, benefit is
+   4 - 2 = 2, and the giv appears -- together with the copy, because it is
+   still not replaceable. The freed delay slot at the outer back edge then
+   takes the giv's `addiu $t1, $t1, 0x8` instead of a duplicated `n - 1`. */
+void func_80059DAC(void)
+{
+    u8 *b = (u8 *)D_800869C0;
+    s32 n;
+    s32 i;
+
+    for (n = 0; n < 0x10; n++)
+    {
+        if (*(u32 *)(n * 8 + (u32)b) == 0)
+        {
+            break;
+        }
+    }
+    for (i = 0; i < n; i++)
+    {
+        u8 *c = (u8 *)D_800869C0;
+        s32 j;
+
+        for (j = n - 1; i < j; j--)
+        {
+            u32 *s = (u32 *)(j * 8 + (u32)c);
+            u32 t[2];
+
+            if (*(s32 *)((u32 *)(i * 8 + (u32)c)) > *(s32 *)s)
+            {
+                t[1] = ((u32 *)(i * 8 + (u32)c))[1];
+                t[0] = ((u32 *)(i * 8 + (u32)c))[0];
+                ((u32 *)(i * 8 + (u32)c))[1] = s[1];
+                ((u32 *)(i * 8 + (u32)c))[0] = s[0];
+                s[1] = t[1];
+                s[0] = t[0];
+            }
+        }
+    }
+}
 
 /* Claims a D_800869C0 slot -- a {offset, length} pair per slot, sixteen of
    them -- for a run of `size` bytes and returns its offset, or -1 when the

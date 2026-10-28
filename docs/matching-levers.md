@@ -5021,6 +5021,32 @@ reorder those.
   always does. That is why no spelling of a two-operation address reaches the
   unreduced form, and why the loop's own form is the only lever.
 
+* **`copy_cost` is only charged to a NAMED pointer, so spelling the address
+  inline can buy the giv.** The subtraction above is guarded:
+
+      if (! v->replaceable && ! bl->eliminable
+          && REG_USERVAR_P (v->dest_reg))
+        benefit -= copy_cost;                        -- loop.c:3797-3800
+
+  `REG_USERVAR_P` is set on the pseudo of a declared variable and NOT on one
+  cse1 invented. So the same address, written two ways, gets two verdicts: as
+  `u32 *d = (u32 *)(i * 8 + (u32)c);` it is a user variable and scores
+  4 - 2 - 2 = 0 (dropped, the address recomputed from the biv every iteration);
+  written out at each use, cse1 folds the occurrences into a temp of its own,
+  the guard is false, and 4 - 2 = 2 survives (reduced). That is the whole of
+  func_80059DAC's last eight words.
+
+* **A giv that is reduced but NOT replaceable emits a COPY, and that copy is
+  often the word you are missing.** loop.c inserts `dest = new_reg` at the
+  giv's original site whenever it cannot replace the uses in place -- so a
+  listing that walks a pointer in one register and copies it into another
+  (`addiu $t1, $t1, 0x8` at the back edge, `addu $a1, $t1, $zero` in the body)
+  is showing a non-replaceable giv, not two separate values. Do not go looking
+  for a source shape that makes the two registers hold DIFFERENT things, and do
+  not try to make the giv replaceable -- replaceable is the case with no copy.
+  Keep the computation off every-iteration (func_80059DAC's is in the inner
+  loop's preheader) and get `benefit` over zero by the bullet above.
+
 ## 10. Measured dead ends -- do not retry
 
 * **`volatile` as a nudge** -- reaching for it hoping the shape shifts. Tried

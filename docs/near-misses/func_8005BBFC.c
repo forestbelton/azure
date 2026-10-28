@@ -181,6 +181,18 @@
  * recomputed at its second use rather than carried in a variable. Check
  * whether the listing has two `sll 8`/`addu` pairs before spending a run on
  * it.
+ *
+ * AND THE TWO HOISTS WERE RE-MEASURED ON THIS NEW BASELINE, 2026-10-28, since
+ * the earlier 272 predates the `vel` fix and the interaction could have
+ * changed. It did not, and both are far worse than the 219:
+ *
+ *     pit computed in the ENTRY block           334 words, 278 DIFF
+ *     only `fine` read into an entry-block local  332 words, 306 DIFF
+ *
+ * The second is the informative one: giving `fine` an entry-block home does
+ * not keep its load in the prologue, it moves the whole `pit` chain forward
+ * and costs a word. So one-block confinement is not the route either -- the
+ * second reference is, and it has to be a reference the SOURCE can spell.
  */
 
 #include "common.h"
