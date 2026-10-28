@@ -3277,6 +3277,65 @@ same thing: that gives TWO givs which `combine_givs` does not merge (64
 words), and so does hoisting a row pointer `u32 *q = &p[i * 2]` out of the
 references (63 words, with a `sll` left recomputing it).
 
+### A displacement offset by a CONSTANT from the field it reads is a REDUCED GIV
+
+func_80033D54's inner loop reads a 0xC-byte record through `$s2` with
+`lbu 0x7($s2)` for the field at +0x08, `lbu 0x1($s2)` for +0x02, and so on:
+every displacement is the field offset MINUS ONE, and `$s2` is initialised
+`addiu $s2, $s5, 0x1` in the preheader and bumped `addiu $s2, $s2, 0xC` in the
+back-branch's delay slot. That reads like a `u8 *q = &e->unk_01` walking
+beside `e`. IT IS NOT. Write the fields as plain STRUCT FIELDS off the biv
+(`e->unk_08`, `e->unk_0A`, ...) and loop.c's strength reduction supplies that
+register itself: the DEST_ADDR givs for the field addresses all combine into
+the one recorded LAST, and the combined giv's base is whatever offset that
+last reference had -- here `e->unk_01`, the flag byte read at the bottom of
+the body, hence +1.
+
+Writing the pointer local instead costs a word and the whole allocation. With
+`q` in the source loop.c records a DEST_REG giv for it as well, the DEST_ADDR
+givs combine into the last one and the combined giv is then REJECTED --
+`giv of insn 985 not worth while, 0 vs 311` in the `.loop` dump, because the
+representative's own benefit is 3 and `benefit -= add_cost * bl->biv_count`
+takes it to 0 -- so the `addiu` stays inside the loop, `e` keeps four more
+references, and the priority order of the callee-saved registers changes with
+it. Making the pointer an EXPLICIT second biv (`q = ...; ... q += 0xC;`) is
+worse again: loop.c then reduces the high-offset uses into a THIRD register
+(at e+4, because `find_mem_givs` skips the `mult 1 add 0` giv so `q[0]` cannot
+be the representative), and the extra pressure spills the next value out of
+its callee-saved register. 537 words either way, 49 DIFF against 53 and 542.
+
+So READ THE DUMP before respelling: `dump.sh cand.c` then grep the `loop` dump
+for `not worth while` and `reduced to`. The message names the insn and prints
+`lifetime * threshold * benefit` against the loop's insn count.
+
+### A volatile MEM is NOT replaced by a reduced giv
+
+Same function: its two sign bytes are volatile reads (that is what keeps
+`lbu` + `sll 24` + `sra 23` instead of letting combine fold the cast into an
+`lb`), and loop.c leaves a volatile MEM's address alone. So those two reads
+come out off the BIV, at the field's own offset, while every non-volatile read
+beside them is off the reduced giv -- four register-only words, and the extra
+references to the biv are enough to move an allocno.
+
+The fix is to give just those reads a pointer local and cast at the use:
+`q = (u8 *)&e->unk_01;` with `(s8)((volatile u8 *)q)[1]`. `q` is then a
+DEST_REG giv that `combine_givs` marks `same` as the reduced giv, so it costs
+no register and the reads land on the giv's own register. Note the cast has to
+be AT THE USE: a `volatile u8 *q` makes the other reads through it volatile
+too, and a volatile QImode read cannot be widened in place, so each one picks
+up an `andi 0xff`.
+
+### A struct copy is a FOUR-REGISTER block move; N statements are N lw/sw pairs
+
+`o->unk_40 = p->unk_54;` with a 0x20-byte struct on both sides is `movstrsi`:
+four `lw` into four registers, then four `sw`, twice -- 16 words. Eight word
+assignments through eight `s32` fields are eight `lw`/`sw` pairs through ONE
+register with a `nop` between each load and its store, 23 words. The listing
+tells you which it is at a glance (one register reused and nops, or four
+registers and none), and it decides how both structs model that range.
+func_80033D54 copies a MATRIX twice this way, so the shape is worth 14 words
+there.
+
 ### A loop-invariant pointer belongs INSIDE the loop body
 
 Assigned as an initialiser before the loop, its materialisation lands ahead of
