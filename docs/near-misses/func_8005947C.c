@@ -137,6 +137,38 @@
  * words / 62 DIFF, `s32 b = r & 0xFF` is 79 / 66, dropping `b` and masking
  * `r` at each site is 80 / 65. `b = r & 0xFF` with `u8 b` is identical to
  * plain `b = r` (6 DIFF), so the mask in the source is free but buys nothing.
+ *
+ * 2026-10-28: THE SIX WORDS ARE ONE REGISTER, stated from the diff rather than
+ * from the allocator tables. Every differing word mentions `b`: this build has
+ * it in $a2 and the listing in $a0, and the fourth difference
+ * (`andi $v1, $a2, 0xff` against `andi $a0, $a0, 0xFF`) is a consequence --
+ * once `b` owns $a0 it is dead at the mask and the mask writes back into it
+ * instead of taking a scratch. So there is one fact to explain, and the file's
+ * reading of it stands: `b` in the listing has NO preference and takes the
+ * lowest free register, which is $a0 ($v0 and $v1 are both busy); here it
+ * inherits $a2 from `c` across the `c = b` copy.
+ *
+ * FIVE MORE SHAPES MEASURED, none better than the 6, and the last two refute a
+ * reading of the listing that looks right until it is compiled:
+ *
+ *     c written inline as a ternary at the call          78 words, 76 DIFF
+ *     the two arms inverted                              81 words,  7 DIFF
+ *     `c = b;` then a one-armed `if (p[0x49] == 0)`      81 words, 12 DIFF
+ *     no `c` at all -- `b` itself reassigned, passed     81 words, 17 DIFF
+ *     the same with the test the other way round         81 words, 17 DIFF
+ *
+ * The last two are worth the detail. The listing's `addu $s2, $a0, $zero` sits
+ * in the DELAY SLOT of the `p[0x49]` test, i.e. on both arms, with the else
+ * arm overwriting it with the call result -- which is exactly what a single
+ * variable assigned conditionally looks like, and `b` reassigned that way
+ * would also explain why `b` is live past the copy and so never hands over its
+ * preference. It compiles to 17. The reason it cannot be right is in the
+ * listing itself: the switch at .L80059550 reads $a0 while the call's third
+ * argument comes from $s2, and ONE allocno gets ONE register, so the listing
+ * has two variables there whatever the delay slot suggests.
+ *
+ * Also of note: the ternary is the only shape that changes the word count, and
+ * it loses three. `c` is load-bearing as a named local with its own arms.
  */
 
 #include "common.h"
