@@ -316,20 +316,34 @@
  * never enter the register contest at all; reload then emits a `lw` at each
  * use, which is the load this file has been calling "sunk".
  *
- * AND `reg_n_refs == 2` IS NOT THE TRIGGER. Both pseudos are mentioned four
- * times at `flow`, not twice, so the `update_equiv_regs` substitution rule
- * quoted throughout this file does not fire on either of them. Taken with the
- * listing-side observation above -- that the target's own `$t0` and `$t1` are
- * two-reference multi-block pseudos and were NOT sunk -- the rule fails to
- * explain either side, and every argument in this file that rests on it
- * (including the reverted raw-`vel` change) should be read as unsupported.
+ * CORRECTION, same day: `reg_n_refs == 2` DOES HOLD. I first read "four
+ * mentions at flow" off a grep and called the rule refuted; two of those four
+ * are NOTES, not references. For `fine` (89) the mentions are
  *
- * WHAT TO WORK NEXT, stated without a mechanism attached: find what makes
- * local-alloc keep a REG_EQUIV parameter in the allocation set instead of
- * resolving it to memory. That is a different question from reference counting
- * and it is answerable from `local-alloc.c` plus these dumps, since both
- * parameters here take the memory route and both take the register route in
- * the listing.
+ *     insn 22   (set (reg/v:SI 89) (mem ...))        <- the set
+ *     insn 112  (ashift:SI (reg/v:SI 89) 16)         <- the one use
+ *     insn 112  (expr_list:REG_DEAD (reg/v:SI 89))   <- a note
+ *     insn 113  (expr_list:REG_EQUAL (sign_extend (subreg (reg 89))))  <- a note
+ *
+ * so one set and one use: reg_n_refs is 2, and `vel` (88) is identical. The
+ * rule's precondition is satisfied after all, and the paragraph this replaces
+ * was wrong.
+ *
+ * WHAT IS SOLID, as opposed to attributed: insns 20 and 22 are present in
+ * `flow` and gone in `lreg`; both pseudos have one set and one use and are
+ * multi-block; and NEITHER appears in `greg`'s ";; 37 regs to allocate" list,
+ * so neither ever competes for a register. The attribution to a particular
+ * routine is NOT settled -- `update_equiv_regs`' deletion at local-alloc.c:1104
+ * requires `validate_replace_rtx` to succeed, and substituting the MEM into
+ * `(set (reg) (ashift (reg 89) 16))` should fail, since MIPS `ashlsi3` wants a
+ * register. So something consistent with the observations is happening and the
+ * exact path is unproven; do not quote one without checking.
+ *
+ * THE LISTING-SIDE PUZZLE IS UNAFFECTED and is the real question: the target's
+ * `$t0` and `$t1` are also read exactly once each, in a block past the `beqz`
+ * at word 31, so the original's parameters look like two-reference multi-block
+ * pseudos TOO -- and their loads stayed in the prologue. Whatever separates
+ * the two cases is not the reference count.
  */
 
 #include "common.h"
