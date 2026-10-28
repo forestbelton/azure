@@ -567,6 +567,34 @@
  * 2 refs (0.111). The last is the one with a source handle -- its third
  * reference is loop-depth weighting on a single use -- but the use is the loop
  * condition itself and cannot leave the loop.
+ *
+ * 2026-10-28, ALL FOUR FLIP CONDITIONS ARE NOW CLOSED, so the register swap is
+ * characterised rather than open.
+ *
+ * `b`'s THIRD USE is `*(u16 *) (b + 0x12)` in the `w` computation, forty-odd
+ * insns after its load -- `(set (reg 183) (zero_extend (mem:HI (plus (reg 97)
+ * (const_int 18)))))` with the REG_DEAD on it. So the 49-insn range is genuine
+ * and not `update_equiv_regs`' doubling, which was the first guess; and it
+ * cannot be shortened, because that use is where the source needs it.
+ *
+ * AND THE +1 REFERENCE IS NOT AVAILABLE EITHER. That same line is
+ *
+ *     w = (u16 *) (D_80086A40[bank].unk_04 + (*(u16 *) (b + 0x12) << 9) + 0x820);
+ *
+ * which RE-READS `D_80086A40[bank].unk_04` -- the very value `b` holds. Writing
+ * `b` there instead would be the free fifth reference that flips the
+ * allocation (2*5/49 = 0.204 against the constant's 0.167). The listing says
+ * not to: it loads that field TWICE, `lw $s3, 0x4($v0)` for `b` and
+ * `lw $v0, 0x4($v0)` again for this expression, and reads the halfword through
+ * $s3. So the re-read in this source is the listing's own shape and the
+ * reference cannot be bought.
+ *
+ * Summary of the four, for the next attempt: `b` +1 ref -- refuted by the
+ * listing's second load; `b`'s range to 47 -- the range is three genuine uses
+ * spanning the function; the constant's range to 19 -- loop.c's hoist
+ * placement, not a source choice; the constant to 2 refs -- its single use is
+ * the loop condition and the third reference is loop-depth weighting. What is
+ * left is not a source shape, and the park should be read that way.
  */
 
 #include "common.h"
