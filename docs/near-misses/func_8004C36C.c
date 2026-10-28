@@ -49,6 +49,23 @@
  * Measured and not working: the stack-object reads in that block spelled as
  * casts rather than struct fields (no change at all).
  *
+ * 2026-10-28: THE `const` ROUTE TO THOSE THREE NOPS IS CLOSED, from gcc's own
+ * source rather than by measurement. `true_dependence`'s first line would free
+ * the loads outright -- it returns 0 for an UNCHANGING read against a changing
+ * store, whatever the modes -- but RTX_UNCHANGING_P cannot be bought here:
+ * expand_expr sets it as `TREE_READONLY (exp) & TREE_STATIC (exp)`
+ * (expr.c:4585) and the comment above that line says a pointer-to-const
+ * deliberately does not qualify, with the `TREE_READONLY`-only version left
+ * `#if 0`'d at expr.c:4907. So no const qualifier on `p`, on a cast, or on the
+ * fields reaches it, and the stack object can never be unchanging. Combined
+ * with the QImode note in matching-levers section 5 -- both arms of the
+ * MEM_IN_STRUCT_P exception require the non-QImode side to be the varying
+ * in-struct one, and here BOTH sides are QImode -- the dependence is not
+ * removable by any spelling of these two accesses. The listing's compiler did
+ * not have it, so the escape has to be a different pair of accesses: either the
+ * stores are not byte stores in the original, or the values do not come from
+ * the stack object at all.
+ *
  * STILL UNVERIFIED, and the places to look first when picking this up:
  *   * the two `|| x != y` guards around the u/v decrements. The listing
  *     branches to the decrement when `prim->x1 < prim->x0` and past it when

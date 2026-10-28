@@ -2224,6 +2224,29 @@ and the target's `nop` only appears with the cast), while the neighbouring
 `e->unk_04` read does not need the cast at all, because by then nothing is left
 in the block to hoist it past.
 
+**AND THE OTHER ESCAPE IN `true_dependence` IS UNREACHABLE FROM C, so stop
+looking for it.** Its first line returns 0 for an UNCHANGING read against a
+changing store:
+
+    if (RTX_UNCHANGING_P (x) && ! RTX_UNCHANGING_P (mem))
+      return 0;
+
+which would separate any read from any store, QImode included. It cannot be
+bought with `const`. expand_expr sets the flag as
+
+    RTX_UNCHANGING_P (temp) = TREE_READONLY (exp) & TREE_STATIC (exp);
+
+(2.7.2 expr.c:4585), and the comment immediately above it says why the obvious
+version is wrong: "the fact that a location is accessed through a pointer to
+const does not mean that the value there can never change". The OFFSET_REF path
+that did set it from `TREE_READONLY` alone is `#if 0`'d out (expr.c:4907) with
+the same comment. So RTX_UNCHANGING_P reaches a MEM only for an object that is
+readonly AND static -- file-scope `const` data -- and never for a cast
+dereference, a const-qualified pointer, or anything on the stack. Measured
+before it was read: `*(const s16 *) (q + k)` on func_8004D294 left the MEM
+printing as a plain `(mem:HI` with no `/u` and changed nothing. This closes the
+idea for func_8004C36C's three `nop`s as well.
+
 **A QImode load can never be freed by the exception, whichever way round.**
 Both arms of the test require the non-QImode side to be the one with the
 varying in-struct address, so a BYTE read through a walked pointer always
