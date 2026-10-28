@@ -1561,6 +1561,21 @@ there directly. What that function needs is for $a0 to be LIVE during the
 product's range, which means the multiplier (`s`, which sits in $a0 at the
 `mult`) still live afterwards, or the product live from before the `mult`.
 
+THE GENERAL CURE FOR THE ALLOCATION KIND: EXTEND THE SOURCE VALUE PAST THE
+COPY. If `q` dies exactly where `v` is born, the two never overlap and
+local-alloc ties them; if `q` is still live after the copy, they conflict and
+the copy survives. Often that is one line of source order:
+
+    q = v / 10;          q = v / 10;
+    if (q == 0) ...;     v = q;             <- copy FIRST
+    v = q;               if (q == 0) ...;   <- test keeps q live past it
+
+func_800537D0 landed on exactly that, 3 DIFF to MATCH, and the listing's shape
+falls out: the division writes $v1, the branch tests $v1, and the copy into
+$a0 fills the branch's delay slot. This is the cure carved-sweep's missing-copy
+row was short of, and unlike that row's first five it needs no second live
+range and no spare register -- so it works on a PARAMETER.
+
 So: read the `.greg` conflicts and preferences first, and only reach for a
 second set when the copy is being substituted rather than allocated away.
 

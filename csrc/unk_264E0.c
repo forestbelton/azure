@@ -922,7 +922,58 @@ s32 func_80053604(Unk80083120 *p)
     return c;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_264E0", func_800537D0);
+/* The fixed-width decimal formatter: fills buf[0..n-1] right to left with v's
+   digits and then spaces, so `blank` latches once the quotient runs out.
+
+   `v = q;` GOES BEFORE THE `q == 0` TEST, and that one line is three words.
+   Written the other way round -- test, then assign -- `q`'s live range ends at
+   the copy and `v`'s begins there, so the two never overlap, local-alloc ties
+   them into one quantity, and the division writes straight into `v`'s register
+   with nothing left for the branch's delay slot:
+
+       built   subu $a0, $v1, $v0 ; bnez $a0 ; nop
+       target  subu $v1, $v1, $v0 ; bnez $v1 ; addu $a0, $v1, $zero  (slot)
+
+   With the copy FIRST, `q` is still live after it -- the test reads it -- so
+   `q` and `v` CONFLICT, `q` cannot have $a0, and the copy survives into the
+   slot. The `.greg` dump is where this is visible: the quotient's pseudo
+   prefers $v0, $v1 AND $a0, the last inherited from the copy, and does not
+   conflict with the parameter. See "two ways a copy disappears" in
+   matching-levers section 3 -- this is the ALLOCATION kind, so no number of
+   sets on `v` would have helped and the cure has to create a conflict.
+
+   Also load-bearing, from the park: `u8 *d = buf + i;` in the loop body, which
+   stops loop.c strength-reducing `buf[i]` into a walked pointer, and the digit
+   arm FIRST (`if (blank == 0)`) rather than the space arm. Measured and worse:
+   the digit store moved after the division (29 words), and testing `v` rather
+   than `q` after the copy (3 DIFF). */
+
+void func_800537D0(s32 v, s32 n, u8 *buf)
+{
+    s32 blank = 0;
+    s32 i;
+    s32 q;
+
+    for (i = n - 1; i >= 0; i--)
+    {
+        u8 *d = buf + i;
+
+        if (blank == 0)
+        {
+            *d = v % 10 + 0x30;
+        }
+        else
+        {
+            *d = 0x20;
+        }
+        q = v / 10;
+        v = q;
+        if (q == 0)
+        {
+            blank = 1;
+        }
+    }
+}
 
 u8 *func_8004E21C(u8 *, u8);
 
