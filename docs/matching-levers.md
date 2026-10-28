@@ -2668,11 +2668,32 @@ dropping the now-redundant casts took it from 220 DIFF to 209 with the whole
 26-word prologue and 44 words exact, where the previous source diverged at word
 7. The `lw` was evidence FOR `s16` all along.
 
+BUT THE LOAD *DOES* SEPARATE SIGNED FROM UNSIGNED, which is the usable half of
+this. In func_8005BBFC's own prologue the four stack arguments come out as
+
+    lw  $t0, 0xA0($sp)     <- `s16 vel`
+    lw  $t1, 0xA4($sp)     <- `s16 fine`
+    lhu $t2, 0xA8($sp)     <- `u16 volx`
+    lhu $t2, 0xAC($sp)     <- `u16 panx`
+
+`lhu` reads exactly the value a `u16` needs, so gcc uses it; for an `s16` it
+would need `lh`, and instead it loads the word and sign-extends at the use,
+because the HImode pseudo lives unmasked in a register. So: **`lhu` of an
+incoming slot means `u16`; `lw` means `s16` OR `s32` and does not choose.**
+That is how the park settled its last two parameters against its own csrc
+prototype, which declares all eight `s16` and is simply wrong about those two.
+
 So on a function with stack-passed arguments:
 
-* **A `lw` of an incoming slot tells you nothing about the width.** Look at
-  what the callee does with the value: a `sll 16`/`sra 16` immediately after is
-  equally consistent with `s16` and with `(s16)` on an `s32`.
+* **A `lw` of an incoming slot tells you nothing about the width** -- only that
+  the parameter is not `u16`. Look at what the callee does with the value: a
+  `sll 16`/`sra 16` immediately after is equally consistent with `s16` and with
+  `(s16)` on an `s32`.
+* **AND THE WIDTH IS OFTEN INERT ANYWAY, so measure before theorising.** On
+  func_80035E58, whose fifth parameter is a stack argument that `csrc/`
+  declares `s32` and the park declares `s16`, all three of `s16`, `s32` and
+  `u16` build to the same 129 words and the same 2 DIFF. A prototype mismatch
+  on a stack parameter is worth ONE compile; it is not worth a theory.
 * **Try the narrow declaration anyway and judge it on SHAPE, not score.** The
   score moved by one word here, which is why it was dismissed; the prologue
   moved from 5 matching words to 26.
