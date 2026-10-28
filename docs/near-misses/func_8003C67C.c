@@ -48,6 +48,39 @@
  * instead of sharing one and offsetting by -8? Try the source index through a
  * second base local, or the two struct halves as explicit word copies.
  *
+ * 2026-10-27: THE -8 OFFSET IS A GIV, so the question is really "what stops
+ * loop.c strength-reducing this loop", and the answer has to cost no words.
+ * The listing does NOT reduce it -- it recomputes the index each iteration,
+ * TWICE, with the decrement between the two shifts:
+ *
+ *     addu $a2,$a0,$zero   <- the base copied out, because $a0 is reused
+ *     sll  $a0,$a1,3       <- dest offset, from i
+ *     addiu $a1,$a1,-1     <- i--
+ *     sll  $v0,$a1,3       <- source offset, from the NEW i
+ *     addu $v0,$v0,$a2 ; lw $v1,0($v0) ; addu $a0,$a0,$a2 ; sw $v1,0($a0)
+ *
+ * while this build has `addiu $t0,$t0,-8` -- a walked pointer, i.e. exactly
+ * the giv the question above describes as "sharing one base and offsetting by
+ * -8". So the two addresses are not computed separately because the INDEX is
+ * no longer being multiplied at all.
+ *
+ * Measured 2026-10-27, and the word count is the wall:
+ *   * `s32 j = i; i--; D_8006B200s[j] = D_8006B200s[i];` -- the decrement
+ *     between the two subscripts, which is the listing's own order: 32 words
+ *     (one too many), 32 DIFF.
+ *   * the same through a pointer local (`Unk8006B200 *d = &D_8006B200s[i];
+ *     i--; *d = D_8006B200s[i];`): 31 of 31 words and 28 DIFF -- the only
+ *     variant that holds the count, but loop.c still reduces it to a walked
+ *     pointer, so it buys nothing.
+ *   * three GOTO-LOOP forms, which is the repo's standing way to hide a loop
+ *     from loop.c (section 8): plain, with `--i` in the test, and with the
+ *     pointer local. All three are 32 words and 32 DIFF -- the extra guard
+ *     costs the word the giv saves.
+ *
+ * So: the loop must not be a loop to loop.c AND must not spend a word on the
+ * guard. Those two are in tension in every form tried, and that tension is
+ * the real content of this park.
+ *
  * Also measured by the row, all worse: `while` with `i--` in the condition, a
  * `for`, `p[i] = p[--i]`, a separate `j = i - 1`, field-by-field copies, and a
  * `(u32)`-cast index.
