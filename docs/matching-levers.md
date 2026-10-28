@@ -2652,6 +2652,37 @@ copying it into an `s32` local as the first statement, which hoists the
 extension to the top and pushes everything else behind it. Four words in
 func_80052774, and the last thing wrong in it.
 
+### A narrow STACK parameter is loaded with `lw`, so `lw` is not evidence for `s32`
+
+The o32 ABI gives every stack-passed argument a full WORD slot and makes the
+CALLER widen the value, so a callee reading an `s16` parameter from the stack
+emits `lw`, not `lh` -- and then its own `sll 16`/`sra 16` where it needs an
+`int`. Both halves of that look exactly like an `s32` parameter with an
+`(s16)` cast at the use, which is the trap.
+
+It cost func_8005BBFC a whole session. That park had measured `s16 vel` at one
+differing word better and dismissed it as noise, and the reasoning against it
+was explicit: "the listing loads the slot with `lw`, so a halfword parameter
+would have used `lh`". Declaring BOTH of its stack parameters `s16` and
+dropping the now-redundant casts took it from 220 DIFF to 209 with the whole
+26-word prologue and 44 words exact, where the previous source diverged at word
+7. The `lw` was evidence FOR `s16` all along.
+
+So on a function with stack-passed arguments:
+
+* **A `lw` of an incoming slot tells you nothing about the width.** Look at
+  what the callee does with the value: a `sll 16`/`sra 16` immediately after is
+  equally consistent with `s16` and with `(s16)` on an `s32`.
+* **Try the narrow declaration anyway and judge it on SHAPE, not score.** The
+  score moved by one word here, which is why it was dismissed; the prologue
+  moved from 5 matching words to 26.
+* **The `csrc/` prototype is worth a second look in this case.** It declared
+  all eight of that function's parameters `s16`, and `nmcheck.py` had been
+  reporting the mismatch as a landing checklist item. Those prototypes are not
+  evidence in general -- see where-we-are -- but when one disagrees about a
+  STACK parameter's width, the callee's own loads cannot settle it, so the
+  prototype is the only opinion on record.
+
 ### "A pure register rotation" can be a narrow PARAMETER -- check the types first
 
 func_8003AB44 cost most of a session to this. advise.py said ALLOC with every
