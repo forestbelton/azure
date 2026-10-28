@@ -75,7 +75,6 @@
  * what holds $v0 across that third call, and work out why local-alloc refuses
  * to tie there. Statement order, control-flow spelling and the return-value
  * variable have all been swept.
- */
  *
  * And the deeper reason the lever cannot apply, which is now in
  * matching-levers: the quantity that must move is a comparison RESULT. It is
