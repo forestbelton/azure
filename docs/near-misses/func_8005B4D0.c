@@ -110,6 +110,25 @@
  * register outright -- an allocation question, and the first thing to try on
  * the next attempt.
  *
+ * MEASURED 2026-10-28, the direct way of doing that: a `volatile` PARAMETER,
+ * which keeps it in its stack home and makes every read a load -- which is
+ * what the listing's two reads of 0x94 look like. It does not pay:
+ *
+ *     `volatile s32 b`   378 words, 362 DIFF
+ *     `volatile s32 a`   380 words, 372 DIFF
+ *
+ * against 377 / 344. So the mechanism is reachable and the spelling is wrong:
+ * `volatile` also stops the two reads sharing anything, which costs more than
+ * the seventh slot saves. What the listing needs is `b` losing its register to
+ * RELOAD under pressure, not being barred from one by its type.
+ *
+ * AND THE FIRST DIVERGENCE IS NOW IN THE PROLOGUE, worth writing down for the
+ * next attempt: this build spills BOTH halves of the packed argument to the
+ * frame and reloads one (`sw $a0, 0x64($sp)`, `sw $t1, 0x60($sp)`,
+ * `lw $t1, 0x64($sp)`), where the listing keeps `a & 0x7F` in $fp from its
+ * second instruction and never spills either. So the seventh slot and the
+ * prologue spills are the same register-pressure fact seen twice.
+ *
  * 2026-10-28: 379 -> 377 WORDS AND 367 -> 344 DIFF, from `unname.py`. The
  * `s32 m` holding `(s32) D_80073734[0] - 1` is deleted and the expression
  * written at its one use, `if ((s32) D_80073734[0] - 1 < ch)`.
