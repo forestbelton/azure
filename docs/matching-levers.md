@@ -1404,6 +1404,53 @@ supplies it and the branches come back. **A listing that BRANCHES to return 1
 or 0 where you get a setcc is telling you that the `return 0` is shared.**
 
 
+### WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT
+
+This is the first thing to try on an ALLOC row, before any priority
+arithmetic, because it changes which pass is making the decision at all.
+
+A variable declared at FUNCTION scope and assigned in two arms of an `if` is
+ONE pseudo with two live ranges. The `lreg` dump names it exactly -- "used 4
+times across 8 insns; dies in 2 places", with NO block -- and a pseudo that is
+not local to one basic block goes to GLOBAL-alloc. Declared inside each arm it
+becomes two pseudos, each local to one block ("used 2 times across 2 insns in
+block 1"), and those go to LOCAL-alloc. The two passes do not have the same
+machinery, so the same source values can land in different registers purely
+because of where they were declared.
+
+What local-alloc has and global-alloc does not: for any insn whose operand 0
+is an `=` output that is not earlyclobber, it walks the input operands looking
+for one that DIES in that insn and calls `combine_regs` on it
+(local-alloc.c:1239 onwards). When operand 0 is a hard register and the input
+is a pseudo, `combine_regs` records that hard register in `qty_phys_sugg` for
+the pseudo's quantity (local-alloc.c:1829). Quantities carrying a suggestion
+are allocated in an earlier pass than those without (`qty_sugg_compare`, which
+sorts on the number of suggestions first and only then on the usual
+`floor_log2(refs) * refs * size / live_length`), so a suggested register beats
+the plain "lowest free register" the other pass falls back on.
+
+func_80055D84 is the measurement. Its last five words were the final
+`or`: the target has the mask in $a0 and the constant in $v0, so
+`or $a0, $a0, $v0` reuses the mask's own register as the destination, while
+function-scope declarations gave `or $a0, $v0, $v1`. Every spelling of the
+`or` itself was measured and none of them moved it -- `m |= f`,
+`f |= m`, `m | f`, a separate destination variable, an in-place destination --
+because combine folds the argument copy into the `or` in every one of them, so
+the insn reaching the allocator is always
+`(set (reg:SI 4 a0) (ior (reg 84) (reg 83)))`. Moving the two declarations
+into the arms that use them is the whole change, and it matches.
+
+Two corollaries worth keeping:
+
+* "Every spelling of this statement gives the same RTL" does NOT mean the
+  allocation is fixed. Check the `lreg` dump for whether the pseudos are even
+  block-local; if they are not, the statement was never the thing to vary.
+* The one-variable-per-block lever (section 8) and this one are the same
+  construct seen from the allocator's side rather than the scheduler's: giving
+  each arm its own variable changes `reg_n_sets`, which sched1 reads, AND
+  changes which allocator sees the pseudo. When one of them says to split, the
+  other is worth re-measuring too.
+
 ### A DEAD reference is still a reference -- the free way to flip an allocno
 
 `allocno_priority` is `floor_log2(refs) * refs * size / live_length`, and

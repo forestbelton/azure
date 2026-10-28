@@ -1197,7 +1197,75 @@ void func_80055CEC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80055CF4);
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80055D84);
+s32 func_8005A778(u8 *, s16, u32);
+s32 func_8003F52C(s32);
+
+/* Starts channel k: tries func_8005A778, then func_8005AAA8, and on either
+   failure reports 0x01010000 or 0x01020000 or-ed with `(k << 8) & 0xFF00`
+   through func_8003F52C; on success it sets bit `0x10000 << k` in
+   D_800847D0[0].
+
+   `f` AND `m` ARE DECLARED INSIDE THE ARMS, and that is what puts the mask in
+   $a0. Declared at function scope and assigned in both arms, each is ONE
+   pseudo with two live ranges -- the lreg dump says "used 4 times across 8
+   insns; dies in 2 places" with no block -- so both go to GLOBAL-alloc, which
+   has no operand-tying machinery: the mask takes the lowest free register and
+   the result is `or $a0, $v0, $v1` (5 words, every instruction already right).
+   Declared inside each arm they are four pseudos, two per basic block ("used
+   2 times across 2 insns in block 1"), which LOCAL-alloc handles -- and
+   local-alloc, for any insn whose operand 0 is an `=` output, walks the input
+   operands looking for one that dies there and calls combine_regs on it
+   (local-alloc.c:1239 onwards). Operand 0 here is the hard register $a0, so
+   combine_regs records $a0 in qty_phys_sugg for the MASK's quantity
+   (local-alloc.c:1829), quantities carrying a suggestion are allocated before
+   those without, and the mask's priority beats the constant's -- so the mask
+   takes $a0, the constant takes $v0, and the `or` reuses the mask's own
+   register as its destination exactly as the listing does.
+
+   WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT. That is the
+   general lever; matching-levers section 3 carries it.
+
+   The other load-bearing shape, worth two words: the constant is assigned
+   FIRST and the mask SECOND, as two statements, so each arm ends with the
+   same `sll`/`andi`/`or`/`jal` and differs only in its `lui`. jump2's
+   do_cross_jump walks backwards from the two jumps while the insns are
+   equivalent and stops at the first difference, so this form merges the mask
+   computation into one block that both failure paths jump to. Written as one
+   expression -- `func_8003F52C(((k << 8) & 0xFF00) | 0x1010000)` -- the `lui`
+   lands last in each arm, the backwards walk stops at once, and the mask is
+   duplicated into both arms. Putting the constant first inside the expression
+   does not help: fold reorders it. */
+
+void func_80055D84(s16 k)
+{
+    s16 r;
+
+    r = func_8005A778((u8 *)D_80084538[k], k, D_800847C0[k]);
+    if (r == -1)
+    {
+        s32 f = 0x1010000;
+        s32 m = (k << 8) & 0xFF00;
+        func_8003F52C(f | m);
+    }
+    else
+    {
+        r = func_8005AAA8((u8 *)D_80084758[k], k);
+        if (r == -1)
+        {
+            s32 f = 0x1020000;
+            s32 m;
+
+            func_80055C50(k);
+            m = (k << 8) & 0xFF00;
+            func_8003F52C(f | m);
+        }
+        else
+        {
+            func_8005AC30(1);
+            D_800847D0[0] |= 0x10000 << k;
+        }
+    }
+}
 
 void func_80055E6C(void) {
 }
