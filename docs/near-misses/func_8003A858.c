@@ -165,6 +165,50 @@
  * `t` hoisted; the `* 4` moved onto the read). So a measurement on either
  * file is a measurement on both, and whichever lands first lands the other --
  * 86 words, not 43.
+ *
+ * 2026-10-28, THE TIE IS NOW NAMED AT INSN LEVEL, and that closes the class
+ * route. The two swapped words are, from the `sched2` dump:
+ *
+ *     insn 54  (set (reg a1) (plus (reg a1) (reg t1)))   the `+ m` addu
+ *              priority = 3, ref_count = 4
+ *     insn 68  (set (reg t0) (ashift (reg t0) 2))        the `a * 4` sll
+ *              priority = 3, ref_count = 1
+ *
+ * `rank_for_schedule` (sched.c) has exactly three keys, in order:
+ *
+ *   1. PRIORITY, higher first. Both are 3 -- and 68's cannot be raised,
+ *      because priority only grows across a LOAD (cost 2 against the -1 in
+ *      `priority()`), and 68's path to the end is sll -> `addu $t0,$t0,$v0`
+ *      (insn 70) -> the `sw` (insn 74), all ALU.
+ *   2. The DEPENDENCE CLASS relative to `last_scheduled_insn`: class 3 is
+ *      "independent of it, OR has latency of one", class 1 is data dependent,
+ *      class 2 anti/output dependent, and the HIGHEST class wins.
+ *   3. INSN_LUID, lower first -- i.e. source order.
+ *
+ * KEY 2 CAN NEVER BITE HERE, which is the new result. For insn 54 to fall to
+ * class 1 it must be data dependent on the last scheduled insn with a latency
+ * above one -- that means being fed by a LOAD. Its two LOG_LINKS are
+ *
+ *     insn 26  (set (reg t1) (ashift (reg t1) 2))    `m * 4`
+ *     insn 52  (set (reg a1) (plus (reg a1) (reg v1)))  the r[3]<<24 term
+ *
+ * both ALU, both cost 1, so insn 54 is class 3 against either of them forever.
+ * Measured, trying to put a byte LOAD last in the sum so the final addu would
+ * consume it: `(r[1]<<8) + (r[2]<<16) + (r[3]<<24) + m + r[0]` is 20 DIFF,
+ * `m + ... + r[0]` is 8, and `... + m + (r[3]<<24)` is 4. All 43 words. The
+ * operand order also fixes the emitted SHIFT order, which is already right, so
+ * every reordering that would demote the addu breaks something worth more.
+ *
+ * SO IT IS KEY 3, AND KEY 3 IS ALL-OR-NOTHING. The addu wins today only
+ * because `q = ...` precedes `t = ...` in the source, giving it the lower
+ * LUID. Giving the `sll` the lower LUID instead does not move it one slot --
+ * it makes the sll win EVERY tie in its priority group, so it drifts to the
+ * front of the whole operand block, which is the 7-and-8-DIFF column the
+ * `a4 = a * 4;` split already measured at positions 1-4. The listing's
+ * position for it -- second to last, immediately before the addu -- is
+ * reachable from neither key. That is a complete account of the two words and
+ * it says the remaining escape is a different dependence GRAPH, not a
+ * different order within this one.
  */
 
 #include "common.h"
