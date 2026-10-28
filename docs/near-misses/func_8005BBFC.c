@@ -375,11 +375,33 @@
  * on the parameter's new life: once it is not block-local its pseudo spans 44
  * insns and needs a home it did not need before.
  *
- * SO THE QUESTION IS NARROW AND WORTH THE NEXT SESSION: a second SET for
- * `fine` and `vel` that costs no instruction. The narrowing is the obvious
- * spelling and it is a word too dear; what else writes to a parameter for
- * free? Note the listing wants BOTH loads in the prologue, so whatever it is
- * has to work twice.
+ * AND NARROWING BOTH REACHES THE LISTING'S PROLOGUE SHAPE. With
+ * `vel = (s16) vel; fine = (s16) fine;` the opening is
+ *
+ *     built   ... lw $a2,0xA0 ; lw $t0,0xA4 ; lhu $t2,0xA8 ; li 1 ;
+ *                 sw $s5 ; sh $t2,0x58 ; lhu $t2,0xAC ...
+ *     target  ... lw $t0,0xA0 ; lw $t1,0xA4 ; lhu $t2,0xA8 ; li 1 ;
+ *                 sw $s5 ; sh $t2,0x58 ; lhu $t2,0xAC ...
+ *
+ * the same four parameter loads in the same order, with the same spills to
+ * 0x58 and 0x60 -- which is the prologue this park has been missing all along,
+ * and the registers differ only by naming. So the shape is REACHABLE.
+ *
+ * WHAT IT COSTS IS TWO PARAMETER COPIES, not two of anything else. The build
+ * is 335 of 333 words, and the first extra word is visible at word 2:
+ * `move $t1, $a2`, a copy of the third argument that the listing does not
+ * make. Both extras are copies of that kind: once the two stack parameters
+ * stop being block-local, the register pressure in the entry block rises and
+ * gcc preserves an argument register it otherwise would not. Note also that
+ * the ONE-parameter version (`fine` only) costs a single word and that word is
+ * a load-delay `nop`, not an instruction -- both builds assemble from 314
+ * insns and differ only in how many nops maspsx inserts.
+ *
+ * SO THE QUESTION IS NARROW AND WORTH THE NEXT SESSION: keep both second SETs
+ * and lose the two argument-register copies they provoke. That is a register
+ * pressure question in the entry block, and it is the first time this park has
+ * had one -- every earlier formulation was about reference counts, which the
+ * dumps have now settled as necessary but not sufficient.
  */
 
 #include "common.h"
