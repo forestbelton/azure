@@ -13,6 +13,36 @@ this project writes deliberately to narrow a parameter without putting a narrow
 prototype in scope. It was reporting the landed func_8005C2C0 as MISSING. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
+**WHERE 2026-10-28 LEFT IT, so the next session does not re-derive it.** One
+function landed (func_80059DAC) and three parks improved: func_8005C4D0
+22 -> 15 DIFF, func_8005B4D0 379 -> 377 words and 367 -> 344, func_8005BBFC
+220 -> 219. Every one of those came from a MECHANICAL sweep or from reading the
+compiler, and none from another source-shape guess.
+
+* **TWO NEW TOOLS.** `tools/decomp/unname.py` deletes each of a park's locals
+  in turn and re-scores -- whether a value has a NAME is a compiler switch, and
+  three of today's four improvements came out of it. `tools/decomp/parkcheck.py`
+  checks every park's headline against a fresh build (all 54 are currently
+  honest). `search.py` also gained `t_split_local`, the reverse transform.
+  SWEEPS COMPOSE: re-run `unname.py` after adopting a hit, because each one
+  changes the base -- that is how func_8005C4D0 went 22 -> 18 -> 15.
+* **AND READ EVERY HIT BEFORE ADOPTING IT.** `unname.py` produced three
+  proposals today with BETTER numbers that were different programs or the
+  wrong shape: a value whose operand was incremented in between, a duplicated
+  function call, and two cases where the listing demonstrably keeps the local
+  the sweep deletes. Its guards catch the first two classes now; nothing but
+  the listing catches the third.
+* **THE SUB-12-DIFF PARKS ARE NOW EACH BOUNDED ON A NAMED COMPILER FACT**
+  rather than on "an allocation question" -- see each file's last dated entry.
+  Several standing "first thing to try" items were tried and closed today
+  (func_8003A060's load-delay opening, func_8003A374's live-range term,
+  func_8004F330's `$a0` preference, func_8005ACDC's hoist, func_80048C3C's
+  combine fold, func_80038CB8's volatile route, and the second-set escape in
+  five files). So the cheap end is genuinely worked out, and the section
+  "Audit the context before sweeping the source" below is now the live advice:
+  what moves next is a changed assumption -- a field width, a parameter type, a
+  unit boundary -- not another spelling.
+
 **THERE IS EXACTLY ONE DUPLICATED ROUTINE in the resident executable, and no
 stub duplicates already-landed code.** Checked 2026-10-28 by taking each of the
 211 stub listings' instruction bytes and searching the whole 0x80000 image for
