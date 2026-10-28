@@ -1,4 +1,4 @@
-/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 220 DIFF. NOT compiled.
+/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 219 DIFF. NOT compiled.
  *
  * SPU voice start: resolves the program record for (bank, prog, key), waits
  * for the hardware voice to go idle, sums the sample-table lengths to get the
@@ -158,10 +158,29 @@
  * the top, one or both (220, unchanged -- the copies are propagated away and
  * the parameters still hit the two-reference rule).
  *
- * So the lever is to give one of those parameters a SECOND reference that cse
- * cannot share with the others, or to confine it to one block -- and that is
- * the thing to look for before reading any later region of this diff, since
- * everything after word 6 is shifted by it.
+ * THE LEVER IS A SECOND REFERENCE, AND `vel` NOW HAS ONE: the range test reads
+ * the RAW parameter, `if (vel >= e[6] && e[7] >= vel)`, instead of `(s16) vel`
+ * twice. cse cannot share a raw read with the casts, so `vel` reaches three
+ * references, `update_equiv_regs` leaves it alone, and its load stays where
+ * assign_parms put it -- `lw $t0, 0xA0($sp)` in the prologue, which now MATCHES
+ * the listing word for word. 220 DIFF -> 219.
+ *
+ * THE SEMANTIC NOTE, because this is the same class of change as the `s16 b`
+ * rejected in func_8005A90C's park: dropping the cast is faithful only if
+ * `vel` is always within s16 range, since `(s16) vel` is still what feeds
+ * `pit` and func_80056DB4. Unlike that case, the evidence here is FOR the
+ * change -- the listing's prologue load appears only in this form -- but the
+ * caller should still be checked. Making the call's arguments raw as well is
+ * also 219, so that part is not evidence either way.
+ *
+ * `fine` IS STILL SUNK and is the next word: the listing loads it as
+ * `lw $t1, 0xA4($sp)` right after `vel`, and this source has only ONE use of
+ * it (in `pit`), so it sits exactly on the two-reference rule. There is no
+ * second use of `fine` anywhere in this source to give it, which says the
+ * original reads it twice -- the obvious candidate being that `pit` is
+ * recomputed at its second use rather than carried in a variable. Check
+ * whether the listing has two `sll 8`/`addu` pairs before spending a run on
+ * it.
  */
 
 #include "common.h"
@@ -205,7 +224,7 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
         q = b + ((s16) prog * 0x10 + 0x20);
         e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
         pit = ((s16) vel << 8) + (s16) fine;
-        if ((s16) vel >= e[6] && e[7] >= (s16) vel)
+        if (vel >= e[6] && e[7] >= vel)
         {
             func_80056DB4(ch, (s16) vel << 8, (s16) vel);
             g = &D_80073740[ch];
