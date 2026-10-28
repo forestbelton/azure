@@ -125,14 +125,40 @@
  * consequence; the cause was the loop form.
  *
  * WHAT IS LEFT: 10 words in two groups, both schedule.
+ *   * SIX WORDS at the count loop's bottom, and the tie is now named from the
+ *     dump. `sched2` block 29 reads
+ *
+ *         ;; ready list at T-3: 974 (6) 979 (6), now 979 974
+ *
+ *     where 974 is `addiu $s2, $v0, 4` (the prim advance) and 979 is
+ *     `addiu $v1, $v1, -1` (count - 1). Equal priority, same class against the
+ *     `sw` just scheduled, so it falls to LUID descending -- and the listing
+ *     needs 974 picked there, i.e. the advance GENERATED AFTER the decrement.
+ *
+ *     That order costs exactly two words and the reason is `&count`. Writing
+ *     `count = count - 1;` first gives `lw ; nop ; addiu ; sw ; lbu ; nop ;
+ *     sll ; addu`: the count store cannot be crossed by the `lbu` off `prim`,
+ *     because count's address is taken (it is passed to func_8004C080 as
+ *     `(s32)&count`) so `memrefs_conflict_p` cannot disambiguate a stack slot
+ *     from a pointer dereference. The store is therefore pinned between the
+ *     two chains and both load delays go unfilled -- 463 words, 47 DIFF. The
+ *     listing instead has `lw ; lbu ; addiu -1 ; sll ; addu ; addiu $s2 ; bne
+ *     ; sw`, with the `lbu` ahead of the store so nothing is pinned.
+ *
+ *     MEASURED 2026-10-28 and all 461 words / 10 DIFF: `count--`,
+ *     `count -= 1`, `for (; count != -1; count = count - 1)`,
+ *     `for (count = count - 1; ...; count = count - 1)`, and hoisting the
+ *     `prim[3]` read into a local above the decrement (which was the shape
+ *     meant to get the `lbu` ahead of the store -- cse folds it back).
+ *     `while (count-- != 0)` is 458 words, and `g0 = prim[3] * 4` is 462.
+ *     So the loop construct and the statement order are both exhausted; what
+ *     is left wants the advance's LUID above the decrement's WITHOUT the
+ *     store moving between them, and no C ordering gives that.
+ *
  *   * FOUR WORDS, two pairs of adjacent independent loads emitted in the
  *     other order (`lhu 0x6` against `lbu 0x9`, and `lhu 0x4` against
  *     `lbu 0x8`). Measured: both source orders of each pair give the same 13,
  *     so sched normalises them and the source cannot reach it.
- *   * SEVEN WORDS at the count loop's bottom, where the listing interleaves
- *     `count - 1` into the prim advance rather than after it. Writing
- *     `count = count - 1;` above the advance costs TWO WORDS (463, 49 DIFF),
- *     so it is not the statement order either.
  *
  * STILL UNVERIFIED, and the places to look first when picking this up:
  *   * the two `|| x != y` guards around the u/v decrements. The listing
