@@ -13,6 +13,18 @@ this project writes deliberately to narrow a parameter without putting a narrow
 prototype in scope. It was reporting the landed func_8005C2C0 as MISSING. The paragraph below is the
 2026-10-23 picture and is kept for its scope caveat, not its count.
 
+**THERE IS EXACTLY ONE DUPLICATED ROUTINE in the resident executable, and no
+stub duplicates already-landed code.** Checked 2026-10-28 by taking each of the
+211 stub listings' instruction bytes and searching the whole 0x80000 image for
+them: every stub occurs exactly once except func_8003A060 and func_8003A858,
+which are the same 43 words at 0xD860 and 0xE058 and already share a
+carved-sweep row. So the tempting idea -- that some stub is a copy of a
+function already in C and could be landed by transferring that source -- is
+closed. It cost two minutes; do not re-speculate it. (The check works because
+MIPS branches are PC-relative while `jal` targets and `lui`/`addiu` symbol
+halves are absolute and identical in a true copy, so a duplicated routine has
+byte-identical text wherever it sits.)
+
 **849 of 1008 functions in the RESIDENT EXECUTABLE are C and the build is
 byte-identical.** `make check` is green at HEAD. The remaining 159 are
 `INCLUDE_ASM` stubs in `csrc/`: 154 in the four units carved on 2026-10-23 and
