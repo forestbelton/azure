@@ -60,7 +60,22 @@
  * are allocated FIRST and still do not take $a0; they take $t0, $t1, $t2.
  * `p` takes $a0 afterwards because global-alloc records a COPY PREFERENCE on
  * it from the incoming parameter copy (`set_preference` in global.c), and a
- * copy preference is tried before the register order. So this is a PREFERENCE
+ * copy preference is tried before the register order. CONFIRMED FROM THE DUMP
+ * 2026-10-27 rather than inferred -- `/tmp/azure-decomp/dumps/<base>/greg`:
+ *
+ *     ;; 10 regs to allocate: 138 82 140 139 137 80 85 86 81 129
+ *     ;; 80 preferences: 4
+ *     ;; 81 preferences: 5
+ *     ;; 137 conflicts: 80 81 82 85 86 129 137 138 139 140 2 3 29
+ *
+ * and the second half matters more than the first: the three address values
+ * (140, 139, 137) are allocated BEFORE `p`, $a0 is LEGAL for them -- it is not
+ * in their conflict sets -- and they still skip it, because
+ * `prune_preferences` (global.c:833) puts every register preferred by a
+ * conflicting LOWER-priority allocno into `regs_someone_prefers` and find_reg
+ * avoids it. `p`'s preference RESERVES $a0. So the listing's assignment
+ * requires the parameter not to hold that preference at all; no amount of
+ * priority on the address values can take a reserved register. So this is a PREFERENCE
  * question, not a priority one, and the MARGINS table cannot price it -- every
  * "to flip: +N refs" row in it is about `allocno_compare`, which has already
  * been decided by the time the preference applies.

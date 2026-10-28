@@ -1484,6 +1484,36 @@ ascending register number because mips.h does not define one. So a pseudo with
 NO preference lands on the lowest non-conflicting register, and a pseudo with
 one lands on that instead.
 
+A PREFERENCE ALSO RESERVES THE REGISTER AGAINST EVERYONE ELSE, which is the
+half that explains parameters. `prune_preferences` (global.c:833) walks the
+allocnos from least to most important and sets `regs_someone_prefers[a]` to the
+union of the preferences of every CONFLICTING allocno of LOWER priority -- i.e.
+allocated AFTER a -- and `find_reg` excludes that set. So a parameter's
+incoming-copy preference for its argument register is not just a pull on the
+parameter; it pushes every conflicting pseudo off that register, including ones
+allocated earlier.
+
+func_8004F330's dump shows it end to end:
+
+    ;; 10 regs to allocate: 138 82 140 139 137 80 85 86 81 129
+    ;; 80 preferences: 4        <- the pointer parameter prefers $a0
+    ;; 81 preferences: 5        <- the count parameter prefers $a1
+    ;; 137 conflicts: ... 2 3 29    <- no preference; $a0 is LEGAL for it
+
+The three in-loop address values (140, 139, 137) are allocated BEFORE the
+parameter and still skip $a0 and $a1, landing on $t0, $t1, $t2, and every other
+allocno starts at $a2. The listing puts an address value in $a0 and the
+parameter in $t3, so in the original the parameter cannot be holding that
+preference -- which is a much sharper statement than "the parameter wins on
+priority", and it is the opposite of where the reference arithmetic points.
+
+ALSO FREE FROM THE DUMP: whether global-alloc ran at all. The
+`;; N regs to allocate` / conflicts / preferences block is ABSENT when every
+pseudo is block-local and local-alloc did the work -- func_80048FBC's greg dump
+goes straight to `;; Register dispositions`, and its `lreg` lines all say "in
+block 0". That is the cheapest discriminator there is for which pass to reason
+about, and section 3's first entry explains why it matters.
+
 Practical consequence: when a value is in the wrong caller-saved register,
 check `preferences` first. If it has one, the lever is the COPY that gave it
 the preference, not the value's references or live range. (On func_8005947C,
