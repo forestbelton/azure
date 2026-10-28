@@ -57,6 +57,17 @@
  * result to still be live after the shift -- and `k` has exactly one use, so
  * nothing in this source does that.
  *
+ * Measured and NOT working, 2026-10-28, also all 18 of 19 and 12 DIFF: the
+ * address as an ARRAY REFERENCE off the typed alias, `&D_80083D08s[k]` (the
+ * byte-array form `&D_80083D08[k]` is 17 words, since the element size is 1
+ * and the `* 8` disappears); and the multiply SPLIT into its own statement,
+ * `k = k * 8;` with the sum then `D_80083D08 + k`, in both the pointer and the
+ * integer spelling. The split is the free-reference lever and it does nothing
+ * here, which is the expected result rather than a surprise: `k` and the call
+ * result are ONE quantity either way, so the extra reference lands on the
+ * quantity that already owns $v0 instead of giving the call result a use that
+ * outlives the shift.
+ *
  * Measured and NOT working, all 18 of 19 words and 12 DIFF: a `u8 *pp = p;`
  * local for the dereference (it coalesces, as the row predicts); the address
  * computed into a local before the dereference; the dereference written inline
