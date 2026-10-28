@@ -591,6 +591,16 @@ were explained rather than fought.
   and `b[0-9]*.py`; `tools/decomp/verify.py`, `search.py` and `sweep.py` all
   take a path, so `scratch/zz_foo.c` works. The root had accumulated 1252 of
   these before they were moved on 2026-10-26.
+- **A park file's "measured and not working" list goes STALE, and re-testing it
+  is the cheapest landing in the project.** func_80055864 landed on 2026-10-27
+  on a spelling its own header had recorded as "3 DIFF" -- measured before the
+  other half of the function's shape (six constants, one local each) was
+  found, which changed what the allocator did with it. A rejected variant is
+  only evidence against the source it was measured on. So after any shape in a
+  function changes, re-measure the rejections; and when recording one, say what
+  else was in place at the time. `search.py` does this mechanically for the
+  families it knows and costs no tokens, so run it over a park before reading
+  the header's negatives as final.
 - **Declaration decides addressing.** A scalar or an array within `-G8` gets
   the assembler-expanded symbolic form; anything larger or an incomplete
   `extern u16 X[];` gets the compiler split. Check the declaration before
