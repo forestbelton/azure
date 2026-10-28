@@ -87,6 +87,67 @@
  * and reload's find_equiv_reg stops reusing it. Still the same single
  * allocation that the older analysis below identified, and still the one that
  * would also settle func_8005A608 and func_8005A90C.
+ *
+ * 2026-10-28: THE BUMP IS CONFIRMED FROM THE DUMP, so "sched1's birthing bump"
+ * above is a measurement now rather than an inference, and that names the
+ * requirement exactly. In the store-after-the-shifts shape, `.sched`'s first
+ * block reads
+ *
+ *     ;; ready list at T-5: 24 (1) 17 (1) 26 (7f000001), now 26 24 17
+ *
+ * and insn 26 is `(set (reg:SI 90) (high:SI (symbol_ref:SI ("D_8007382C"))))`.
+ * So the high pseudo is raised to LAUNCH_PRIORITY, is picked as soon as it is
+ * ready, and -- the pass running backward -- is PLACED as late as its single
+ * use allows, which is just before its own store. The listing has the `lui` at
+ * word 8 and the store at 14, six insns apart, so THE LISTING'S HIGH IS NOT
+ * BUMPED. An un-bumped insn with no producers sits at priority 1, loses every
+ * tie in its block and drifts to the front -- which is "born early, used late",
+ * word for word what the paragraph above asks for.
+ *
+ * AND THE csrc PROTOTYPE IS WRONG FOR PARAMETER 2, settled 2026-10-28 so the
+ * standing signature-mismatch list can stop pointing here. `csrc/unk_2CDC0.c`
+ * declares `(u8 *, s16, u32)` against this park's `(u8 *, s32, s32)`.
+ * Parameter 2 as `s16` is 77 words -- TWENTY-FOUR SHORT -- and 94 DIFF: a
+ * narrow parameter is assumed already extended by the caller, so the whole
+ * `id = id << 16; id = id >> 16;` pair disappears, and that pair is the
+ * listing's own `sll $a1, $a1, 16` / `sra $a1, $a1, 16`. The explicit
+ * narrowing IS the evidence that the parameter is wide, and it is a register
+ * parameter, so the prototype is not a witness either way. Parameter 3 as
+ * `u32` is inert (101 words, the same 20 DIFF), so take the `u32` if the
+ * prototype is ever reconciled and leave parameter 2 as `s32`.
+ *
+ * SO THIS PARK IS THE SAME MECHANISM AS THE func_8003A060 LANDING, and the
+ * requirement reduces to one sentence: give the `(high (symbol_ref))` pseudo a
+ * SECOND SET so `birthing_insn_p` stops firing (matching-levers section 8).
+ * That also explains the -1 for free. With the high born at 11 and consumed in
+ * the branch's delay slot at 19, $v0 is busy across the whole head and the
+ * comparison's -1 is pushed to $a2; with the high at 8 and its store at 14,
+ * $v0 falls free and `addiu $v0, $zero, -1` lands there at 15, exactly as the
+ * listing has it.
+ *
+ * WHAT IS NOT KNOWN is how to get that second set. A `(high)` pseudo is
+ * written once by construction: a second reference to the same symbol is cse'd
+ * onto the same pseudo (still one set) or materialised in another block (a
+ * different pseudo, also single-set and also bumped), and the two constructs
+ * that do produce an uncollapsible second set -- the arms of an `if` and a
+ * loop-carried variable -- are not available to a straight-line head without
+ * spending a word. That is the open question, and it is a narrow one: it has a
+ * definite answer in loop.c/local-alloc rather than in another source sweep.
+ *
+ * MEASURED 2026-10-28 and NOT working -- the DECLARED SIZE lever (section 6),
+ * which this file had tried only as a scalar alias. All 101 words:
+ *
+ *     extern s32 D_8007382C[];    store after i=0 / after j=id / last   20/20/23
+ *     extern s32 D_8007382C[1];   same three positions                  24/24/24
+ *     extern s32 D_8007382C[2];   same three positions                  24/24/24
+ *     extern s32 D_8007382C[4];   same three positions                  20/20/23
+ *
+ * So `[1]` and `[2]` behave like the scalar alias already recorded above (24 at
+ * every position) and `[4]` behaves like the incomplete array. The threshold is
+ * between 8 and 16 bytes, i.e. the -G8 small-data limit -- worth knowing that
+ * THIS unit is a -G8 unit for addressing purposes even though it is not in the
+ * Makefile's MASPSXFLAGS_G8 list, since the declared size still decides the
+ * addressing shape. Neither size reaches the listing.
  */
 
 #include "common.h"
