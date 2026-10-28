@@ -229,6 +229,41 @@
  * (`*(u32 *) (e + 0x14) = c`), so gcc is reaching those stores with the
  * parameter still in $a1 -- the insn-153 fact above -- and that is the same
  * finding seen from the register side rather than the RTL side.
+ *
+ * 2026-10-28, WHICH PASS PUTS $a1 IN THAT STORE -- it is LOCAL-ALLOC, not
+ * combine, and that relocates the whole question. Counting `(reg:SI 5 a1)` in
+ * each dump of this source:
+ *
+ *     rtl 5    cse 5    loop 5    combine 8    flow 8    lreg 10
+ *
+ * and the +0x14 store itself still reads `(reg/v:SI 82)` in the COMBINE dump:
+ *
+ *     (set (mem:SI (plus:SI (reg/v:SI 87) (const_int 20))) (reg/v:SI 82))
+ *
+ * So the park's insn-153 reading -- taken from `.lreg` -- is of RTL that
+ * local-alloc had already rewritten. Nothing before local-alloc puts the
+ * incoming register in that store.
+ *
+ * TWO THINGS THAT FOLLOW. First, `optimize_reg_copy_1`'s refusal to touch hard
+ * registers is `#ifdef SMALL_REGISTER_CLASSES` (local-alloc.c:712-716, comment
+ * "We don't want to mess with hard regs if register classes are small"), and
+ * config/mips never defines it -- so on this target local-alloc DOES rewrite
+ * hard-register copies, and that is the third place today where that macro is
+ * the deciding fact (the others are combine's REG_USERVAR_P tests and
+ * `can_combine_p`'s reg-to-reg escape). Second, pseudo 82 is listed at TWO
+ * references in `--greg`, which is `update_equiv_regs`' substitution rule
+ * exactly -- set once, used once, multi-block -- the same rule that sinks
+ * func_8005BBFC's parameter loads.
+ *
+ * WHAT IS NOT ESTABLISHED, said plainly so the next attempt does not inherit a
+ * guess: `c` has THREE uses in this source (both stores and the call
+ * argument), so a pseudo for it at two references means cse or combine has
+ * already split `c` across more than one pseudo, and WHICH of them insn 153
+ * uses has not been traced. Do that first -- walk pseudo 82 back through the
+ * combine and cse dumps -- because the cure for a two-reference pseudo (give
+ * it a third reference) and the cure for an overlap (make two ranges coexist)
+ * are different shapes, and the duplicate-copy variant above is what you get
+ * from guessing between them.
  */
 
 #include "common.h"
