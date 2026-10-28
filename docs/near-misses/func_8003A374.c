@@ -95,6 +95,42 @@
  * losing a word. What is left needs the quantity structure to change, not its
  * references or its range.
  *
+ * 2026-10-28: AND THE NEW-LOCAL SHAPE THAT LANDED func_8003A060 DOES NOT HELP
+ * HERE, which is worth recording because the two functions are the same opcode
+ * family and the shape looks tailor-made for this park's margin. func_8003A060
+ * landed by splitting `+ m` out of the operand sum into its OWN NEW LOCAL
+ * (`u = q + m;`) -- a new local rather than `q += m` precisely because a second
+ * set breaks the tie this file's "WHY THE SPLITS FAIL" paragraph is about. So
+ * the obvious read is that `e = d + m;` buys the accumulator a reference WITH
+ * the tie intact, which is exactly the "+1 ref" the arithmetic above asks for.
+ *
+ * It does not, and the reason is the other half of the fraction. Measured, all
+ * 29 words:
+ *
+ *     e = d + m; right after `d`, store through `e`      12 DIFF (base)
+ *     e = d + m; before `*cp += 4`, s/t after            12
+ *     e = d + m; after s/t, store through `e`            14
+ *     e = m + d;                                         18
+ *
+ * and `.lreg`/`.greg` say why 12 stays 12: the new local merges into the same
+ * quantity as intended (the chain is still one register -- pseudos 96, 99, 102,
+ * 85, 86 all land in reg 5, exactly as 95, 98, 101, 104, 85 do in the base) and
+ * the cursor is still reg 3 against the listing's reg 5. The reference arrives
+ * and buys nothing, because the extra `addu` lengthens the quantity's live span
+ * by the same step: `allocno_priority` is
+ * `floor_log2(refs) * refs * size / live_length`, so a reference that comes with
+ * its own insn adds to the numerator AND the denominator and the ratio does not
+ * move. That is the same trap as the "A FREE REFERENCE NEEDS A NEW INSN" note in
+ * matching-levers section 3, read from the other side: the insn has to be one a
+ * LATER PASS REMOVES, so the reference survives into flow's count while the
+ * span does not grow. A dead loop guard is the known instance and this function
+ * is straight-line, so it has nowhere to put one.
+ *
+ * So all three terms are now closed by measurement: references cannot be added
+ * without either dissolving the tie (the splits) or paying for the span (this
+ * note), and the span cannot be shortened without moving a load or losing a
+ * word. What is left needs a different quantity STRUCTURE.
+ *
  * The twin func_8003A3E8 sits at the same 12 and should take whatever lands
  * here.
  */

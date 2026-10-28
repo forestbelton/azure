@@ -48,6 +48,45 @@
  * `e + 0xC` does NOT provide one, because fold rewrites it straight back to
  * `n + 0x2C` (measured -- same instruction, same 2 DIFF).
  *
+ * 2026-10-28, AND THE A060 LEVER DOES NOT REACH IT, checked in this function's
+ * own sched1 dump rather than by analogy. func_8003A060 landed the same week on
+ * a sched1 tie between two insns that were BOTH bumped to LAUNCH_PRIORITY, where
+ * the live key is LUID and LUID is a statement boundary (matching-levers section
+ * 8). That is not this tie. From the `.sched` dump:
+ *
+ *     insn 197  (set (reg:SI 4 a0) (plus:SI (reg/v:SI 87) (const_int 44)))
+ *     insn 199  (set (reg:SI 5 a1) (reg/v:SI 90))
+ *
+ * -- reg 87 is `n`, reg 90 is `q` -- and the ready list reads
+ * `197 (3) 199 (3)`, NOT 7f000001. Neither is bumped and neither can be: both
+ * destinations are the hard argument registers $a0 and $a1, which every call in
+ * the function sets, so `reg_n_sets` is far above 1 and `birthing_insn_p` cannot
+ * fire. An argument setup is permanently outside that lever.
+ *
+ * WHICH LEAVES PRIORITY, and the class key is now closed as well. At the
+ * decision point (T-22 in the dump) `last_scheduled_insn` is insn 192, the `sh`
+ * of the D_8006A92C lookup to +0x36, whose LOG_LINKS are insn 53 (`e`) and insn
+ * 190 (the `lhu`) -- neither 197 nor 199 -- so `find_insn_list` returns 0 for
+ * both candidates and both classify 3. Class cannot separate them here however
+ * the lookups are arranged, because the only insn that consumes either argument
+ * register is the call.
+ *
+ * AND THE LUID ORDER REALLY IS FIXED, read out of calls.c rather than inferred.
+ * `expand_call`'s register-load loop (calls.c:1850) is a forward
+ * `for (i = 0; i < num_actuals; i++)` over `emit_move_insn`, and the comment
+ * above it -- "Their expressions were already evaluated" -- says the argument
+ * EXPRESSIONS are computed earlier. Both insns above are at the load loop's
+ * position anyway: $a0's `addiu` is there because combine folded the
+ * precomputed `n + 0x2C` into the move (that pseudo had one use), and $a1 is a
+ * bare copy because `q` has three (insns 180 and 204 read `q + 0x80`), so
+ * combine could not fold its definition. So arg1 before arg2, always.
+ *
+ * So the one key left is priority, exactly as the paragraph above says, and the
+ * only thing that raises it is a LOAD on $a0's path -- which this function's
+ * $a0 value, an `addiu` off the func_8003FF2C result, does not have and cannot
+ * be given for free. Do not re-try statement order, declaration order or the
+ * `e + 0xC` spelling: they are all below the key that decides.
+ *
  * Also measured and not working: `np = (u8 *)n` for the +0x20/+0x2C bases;
  * all three declaration orders of e/g/q; `f += 0x8C` in place of a `q` local
  * (12 DIFF); the +0x74 store moved after the lookups (27); `f + 0x8C` inline
