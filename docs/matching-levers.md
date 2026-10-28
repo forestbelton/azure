@@ -1537,6 +1537,33 @@ ascending register number because mips.h does not define one. So a pseudo with
 NO preference lands on the lowest non-conflicting register, and a pseudo with
 one lands on that instead.
 
+TWO DIFFERENT WAYS A COPY DISAPPEARS, AND THEY TAKE DIFFERENT CURES. This
+distinction is what the missing-copy row in carved-sweep has been circling, and
+getting it wrong sends you to the wrong lever:
+
+* **combine/cse substitutes the value away.** The copy never reaches the
+  allocator. THIS is what a second SET prevents -- a pseudo set more than once
+  cannot be substituted, which is section 4's note and the reason
+  `m |= f`-style shapes sometimes keep an insn.
+* **the ALLOCATOR gives both pseudos the same register.** The copy reaches
+  reload as `$a0 = $a0` and is deleted there. A second set does NOTHING about
+  this: `reg_n_sets` is not consulted when `find_reg` honours a preference.
+  The only cures are to make the register UNAVAILABLE -- a CONFLICT with the
+  value's live range -- or to remove the preference by removing the copy that
+  created it.
+
+func_8004A574 is the case that forces the distinction. Its product `v` is
+already assigned in BOTH arms of the `if`, so it has two sets, and the copy
+into the call's argument register still vanishes -- because it vanishes by
+allocation, not by substitution. `--greg` shows `84 preferences: 4` with $a0
+absent from its conflict set, so the product simply takes $a0 and `mflo` writes
+there directly. What that function needs is for $a0 to be LIVE during the
+product's range, which means the multiplier (`s`, which sits in $a0 at the
+`mult`) still live afterwards, or the product live from before the `mult`.
+
+So: read the `.greg` conflicts and preferences first, and only reach for a
+second set when the copy is being substituted rather than allocated away.
+
 A PREFERENCE ALSO RESERVES THE REGISTER AGAINST EVERYONE ELSE, which is the
 half that explains parameters. `prune_preferences` (global.c:833) walks the
 allocnos from least to most important and sets `regs_someone_prefers[a]` to the

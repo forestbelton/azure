@@ -76,11 +76,21 @@
  *
  * So this is carved-sweep's missing-copy family, not the "memory over ALU"
  * family: the product and the argument are ONE quantity here and TWO in the
- * listing. Section 3's rules say what separates them -- a conflict, or a
- * second SET that survives cse -- and note that `v` already has two sets (one
- * per arm) without that being enough, which is the thing to understand next.
- * Reading the sched1 dump for the join block, as the paragraph above
- * suggests, cannot answer it.
+ * listing. And the reason `v` already having two sets (one per arm) does not
+ * help is now settled: a COPY CAN DISAPPEAR TWO WAYS. combine/cse can
+ * substitute the value away, and a second set prevents that; or the ALLOCATOR
+ * can give both pseudos the same register, so the copy reaches reload as
+ * `$a0 = $a0` and is deleted there -- and `reg_n_sets` is never consulted when
+ * `find_reg` honours a preference. This is the second kind, so set counts are
+ * irrelevant to it (matching-levers section 3 now carries the distinction).
+ *
+ * THE REQUIREMENT, stated exactly: $a0 must be LIVE during the product's live
+ * range, so that the product CONFLICTS with it. $a0 holds the multiplier `s`
+ * at the `mult` and dies there, and the product's range begins at the `mflo`
+ * just after -- so the two never overlap. Either `s` has to still be live
+ * after the multiply, or the product has to be live from before it. Neither
+ * is available in this source as written, and that is the shape to hunt,
+ * not another statement order.
  */
 
 #include "common.h"
