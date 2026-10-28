@@ -34,6 +34,49 @@
  * having. The explanation is refuted: every spelling that creates such a pseudo
  * is worse.
  *
+ * BUT THE 2026-10-23 EXPERIMENTS WERE THE WRONG SHAPE FOR THEIR OWN
+ * HYPOTHESIS, noted 2026-10-27. All four put `r` at FUNCTION scope, which (see
+ * the new first entry of matching-levers section 3) makes it a pseudo spanning
+ * several basic blocks -- so GLOBAL-alloc sees it, and global-alloc has no
+ * `combine_regs` and records no copy suggestion at all. The hypothesis needed
+ * the return-value pseudo to be BLOCK-LOCAL for local-alloc to suggest $v0 on
+ * it. So the idea is NOT refuted by those four measurements; it was never
+ * tested.
+ *
+ * It is tested now, and it still does not reach it. Three block-local shapes,
+ * each giving every `return` its own basic block:
+ *
+ *     four early returns, conditions negated with >=        113 words, 7 DIFF
+ *     four early returns, conditions negated with !(... <)  113 words, 7 DIFF
+ *     four NESTED ifs with one `return 0` at the end        113 words, 4 DIFF
+ *
+ * The nested form is the same 4 DIFF as the `&&` chain -- as expected, since
+ * short-circuit `&&` already builds that CFG -- so the control-flow spelling
+ * is exhausted from both ends now.
+ *
+ * WHERE THE FOUR WORDS ACTUALLY ARE, read off the diff rather than inferred:
+ *
+ *     word 96   beqz +0xb            vs  beqz +0xa
+ *     word 97   move $v0, $zero      vs  nop
+ *     word 102  slti $v0, $v0, 0x4B  vs  slti $v1, $v0, 0x4B
+ *     word 103  beqz $v0             vs  beqz $v1
+ *
+ * i.e. ONE decision with three consequences: the THIRD comparison's result
+ * goes to $v1 in the listing and $v0 here. Ours ties the `slti`'s destination
+ * to the call-result pseudo that dies in it (so `slti $v0, $v0`), the listing
+ * does not. The two words at 96/97 follow: with the third comparison writing
+ * $v0, dbr can fill the SECOND branch's delay slot from the `return 0` block
+ * and advance the label by one, which the listing's nop and shorter offset say
+ * it did not do. Comparisons ONE and TWO use $v0 in both builds, so whatever
+ * occupies $v0 in the listing is live across the third comparison only.
+ *
+ * So the next attempt is a dbr/local-alloc question, not a source-shape one:
+ * read `/tmp/azure-decomp/dumps/<base>/dbr` and the `lreg` quantity table for
+ * what holds $v0 across that third call, and work out why local-alloc refuses
+ * to tie there. Statement order, control-flow spelling and the return-value
+ * variable have all been swept.
+ */
+ *
  * And the deeper reason the lever cannot apply, which is now in
  * matching-levers: the quantity that must move is a comparison RESULT. It is
  * not a copy, so `combine_regs` never examines it and no suggestion can be
