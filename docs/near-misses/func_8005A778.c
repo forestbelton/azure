@@ -1,4 +1,7 @@
-/* func_8005A778 (unk_2CDC0) -- 101 of 101 words, 21 DIFF. NOT compiled.
+/* func_8005A778 (unk_2CDC0) -- 101 of 101 words, 20 DIFF. NOT compiled.
+ * (A cast-form variant reaches 18, but it shifts into $v0 first and is the
+ * wrong structure -- see the 2026-10-27 note below. This file carries the
+ * in-place form on purpose.)
  *
  * func_8005A608 with a third argument and a bound check: claims a D_80086A40
  * slot for `p`, stores `h` at +0x10 twice (once as given, once as
@@ -37,7 +40,53 @@
  * reload's find_equiv_reg reuse it in the then-arm and in the else instead of
  * materialising fresh, which in turn moves the else's index registers. Fix
  * that one allocation and this function, func_8005A608 and func_8005A90C all
- * fall.
+ * fall. *
+ * 2026-10-27, 21 DIFF -> 18, AND THE CONTESTED ALLOCATION IS NAMED.
+ *
+ * Moving `D_8007382C[0] = 0;` OFF the front -- to just after `i = 0;` or just
+ * after `j = id;` -- is worth three words with the cast form (18 DIFF) and one
+ * with the in-place form (20). All ten positions were swept against both
+ * extension spellings:
+ *
+ *     cast    store first / after i=0 / after j=id / last   21 / 18 / 18 / 23
+ *     inplace store first / i=0 / j=id / mid-shifts / last  23 / 20 / 20 / 23 / 23
+ *
+ * WORK FROM THE 20, NOT THE 18. The listing's extension is IN PLACE on $a1
+ * (`sll $a1, $a1, 16` / `sra $a1, $a1, 16`), which only the two-statement form
+ * produces; the cast form scores better while shifting into $v0 first, which
+ * is the wrong structure. Same trap as func_800565D8's park.
+ *
+ * WHAT THE REMAINING WORDS ARE. The listing's head is
+ *
+ *     lui $v0,%hi(D_8007382C) ; move $v1,$a1 ; sw $s3 ; move $s3,$s4 ;
+ *     sll $a1,$a1,16 ; sra $a1,$a1,16 ; sw $zero,%lo(D_8007382C)($v0) ;
+ *     li $v0,-1
+ *
+ * so `j = id` is in $v1 and the symbol's HIGH half stays in $v0 across four
+ * insns until the store consumes it. Two separate facts follow:
+ *
+ *   * WITH THE STORE EARLY (slot 1 or 2) `j` takes $v0, because the high is
+ *     dead by then -- and the store has to precede `j = id` for that to work,
+ *     which is the 20-DIFF shape.
+ *   * WITH THE STORE LAST `j` correctly takes $v1 and the two shifts land
+ *     exactly right, but the `lui` goes with its store: it lands at word 11
+ *     and the `sw` at 19, where the listing has 8 and 14. That is sched1's
+ *     birthing bump on the high pseudo -- single-set, so it is raised and
+ *     placed as late as its use allows (section 8's first entry).
+ *
+ * So what is needed is the HIGH BORN EARLY AND USED LATE, with the store after
+ * the shifts. A pointer local for the base does not do it: that gives
+ * `lui`+`addiu` and the listing has the symbolic `sw ...%lo(...)($v0)` form,
+ * one word fewer. Measured and NOT working: declaring the symbol as a SCALAR
+ * under an `__asm__` alias instead of an incomplete array -- 24 DIFF at every
+ * one of the five store positions, so the array spelling is load-bearing here
+ * (section 6).
+ *
+ * The -1 in $v0 at word 15 and the fresh `li $a0,-1` at 22 are downstream of
+ * this: once the high is out of $v0, the constant lands there instead of $a2
+ * and reload's find_equiv_reg stops reusing it. Still the same single
+ * allocation that the older analysis below identified, and still the one that
+ * would also settle func_8005A608 and func_8005A90C.
  */
 
 #include "common.h"
@@ -56,10 +105,11 @@ s32 func_8005A778(u8 *p, s32 id, s32 h)
     Unk80086A40 *e;
     s32 r;
 
-    D_8007382C[0] = 0;
     i = 0;
+    D_8007382C[0] = 0;
     j = id;
-    id = (s16) id;
+    id = id << 16;
+    id = id >> 16;
     if (id == -1)
     {
         do
