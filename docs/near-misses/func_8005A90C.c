@@ -28,6 +28,32 @@
  * with field accesses rather than a `u8 *` with casts; `s16 k`; and the
  * `(s16) id` cast form in place of the two shifts.
  *
+ * ADVISE.PY'S CALLEE-SAVED HINT IS REFUTED HERE, 2026-10-28, and the refutation
+ * is worth having because the hint scores better. It reports that the target
+ * saves $s4 and $s5 where this build does not -- four words, two sw/lw pairs --
+ * and says THE USUAL CAUSE IS A NARROW PARAMETER DECLARED WIDE. Measured:
+ *
+ *     s16 b                      101 words, 91 DIFF   <- one word closer
+ *     s16 b + u16 c              101 words, 91 DIFF
+ *     u16 b                      100 words, 95 DIFF
+ *     u16 c                      100 words, 95 DIFF
+ *     s16 id, shifts removed      96 words, 99 DIFF
+ *     s16 id, shifts kept         73 words, 102 DIFF
+ *
+ * so `s16 b` looks like a gain. IT IS NOT THE LISTING'S SHAPE: the target's
+ * prologue copies `b` with a PLAIN MOVE, `addu $s3, $a1, $zero`, with no
+ * sign-extension anywhere -- compare `id` three insns later, which DOES get
+ * the `sll 16`/`sra 16` pair. So `b` is genuinely `s32` there, and narrowing
+ * it is the same class of error as the `s16 t` reverted below: it changes the
+ * VALUE stored by `*(u32 *) (e + 0x10) = b` and passed to
+ * `func_80059F8C(s32, u32)`, and it scores better for an unrelated reason.
+ *
+ * Which leaves the callee-saved finding itself standing and its cause open:
+ * the listing keeps SIX values across calls and this build four. The target's
+ * prologue names them -- $s5 = p, $s3 = b, $s4 = c, $s1 = i -- so the two
+ * extra are among the rest, and the question is which value this build lets
+ * die that the listing keeps.
+ *
  * The family's other two parks (func_8005A608 at 11 DIFF, func_8005A778 at
  * 21) are stuck on a different fact -- which register the entry's `-1`
  * comparison constant lands in, and whether cc1psx materialises it once or
