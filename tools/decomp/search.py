@@ -791,6 +791,11 @@ def t_hoist_read(text):
         # a read, so skip it.
         if re.match(r"\s*(=[^=]|\+\+|--|[-+*/%|&^]=|<<=|>>=)", text[m.end():]):
             continue
+        # The scale of what that skip removes, for anyone weighing a rerun:
+        # on func_8005B4D0 a full pass went from 562 candidates to 350 with a
+        # family ADDED, and this family's own site count fell by about 60%.
+        # Any sweep of that function recorded before 2026-10-28 was scoring
+        # mostly store-deleting variants.
         owner = next((k for k, (a, b, _) in enumerate(run) if a <= m.start() < b), len(run))
         # the read must not be the whole initialiser -- then hoisting is a rename
         if owner < len(run) and run[owner][2].split("=", 1)[-1].strip().rstrip(";") == read:
