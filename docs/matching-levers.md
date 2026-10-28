@@ -571,6 +571,26 @@ Levers that move them, all with no change to the emitted code:
   So an allocno that goes first can be *pushed off* the register it should have
   had, by a rival that has not been allocated yet:
 
+  **WHETHER A RESERVATION WORKS AT ALL DEPENDS ON THE REGISTER'S CLASS, and
+  that reconciles two parks that looked contradictory.** `regs_someone_prefers`
+  is OR-ed into `used` in `find_reg`'s PASS 0 only; pass 1 drops it. Pass 0
+  also excludes everything outside `regs_used_so_far` -- which global.c:352
+  seeds with every register that is `regs_ever_live` OR CALLER-SAVED, on the
+  stated grounds that there is no cost in using those. So:
+
+  * **Caller-saved ($v0-$v1, $a0-$a3, $t0-$t9): pass 0 hands these out, and a
+    reservation is effective.** func_8004F330 is the case -- three address
+    values skip the $a0 that the parameter prefers and take $t0, $t1, $t2,
+    exactly as its park says.
+  * **Callee-saved ($s0-$s7, $fp): pass 0 cannot give one out until another is
+    already live, so the first $sN of a function goes through pass 1, where the
+    reservation is gone.** There, only the priority order and real conflicts
+    decide -- which is why func_80048FBC's $s0/$s1 swap is a pure
+    priority question and no preference reserves anything.
+
+  Read that before deciding which of the two stories a register difference is:
+  the same mechanism is decisive in one class and absent in the other.
+
   **THE SIZE ESCAPE IN THAT SUBTRACTION DOES NOT EXIST ON THIS TARGET, so the
   rule above is absolute.** `prune_preferences` skips the subtraction when the
   LOWER-priority allocno is larger (global.c:875,

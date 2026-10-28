@@ -695,16 +695,23 @@ def margin_report(rows, size, what):
     allocno's own COPY PREFERENCE if the preferred register is in the same
     class and is not an outright conflict (global.c, after the two passes). So
     an incoming parameter allocated first takes its argument register even
-    when a lower-numbered one is free. `regs_someone_prefers` cannot stop it:
-    it is OR-ed into `used` for PASS 0 only, and pass 0 never allocates a
-    register for the first time, so for the first allocno of a function it has
-    no effect at all. Nor can a rival's preference exclude a register this
-    allocno also prefers -- `prune_preferences` subtracts its own preferences
-    from the inherited set unless the rival is LARGER, and `allocno_size`
-    counts WORDS (regs.h:64), so between integer values it never is. When the
-    listing puts a parameter somewhere other than its argument register, look
-    for a different VALUE in that register, not a different priority
-    (func_8004D880).""", '    '))
+    when a lower-numbered one is free, UNLESS a rival's preference reserved it
+    -- and whether that reservation works depends on the register's class.
+    `regs_someone_prefers` is OR-ed into `used` for PASS 0 only, and pass 0
+    also excludes everything outside `regs_used_so_far`, which global.c:352
+    seeds with every CALLER-SAVED register ("no cost in using them") plus
+    whatever is already live. So pass 0 is the pass that normally hands out
+    $v0-$v1, $a0-$a3 and $t0-$t9, and a reservation on one of those is
+    effective (func_8004F330: three address values skip the $a0 the parameter
+    prefers and take $t0-$t2). A CALLEE-SAVED register cannot be given out by
+    pass 0 until one is already live, so the first $sN goes through pass 1,
+    where `regs_someone_prefers` is dropped -- there, only priority order and
+    real conflicts decide (func_80048FBC's $s0/$s1 swap). The other limit
+    holds in both classes: a rival's preference can never exclude a register
+    this allocno ALSO prefers, since `prune_preferences` subtracts its own
+    preferences from the inherited set unless the rival is LARGER, and
+    `allocno_size` counts WORDS (regs.h:64), so between integer values it
+    never is (func_8004D880).""", '    '))
 
 # ------------------------------------------------------------------ --greg
 #

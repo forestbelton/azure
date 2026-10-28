@@ -47,7 +47,12 @@
  * in $a0; this source's parameter takes $a0 because it PREFERS it (it arrives
  * there) and it is allocated first. Both routes out are now closed by reading:
  *
- *   * `regs_someone_prefers` CANNOT bar it. `prune_preferences` (global.c:875)
+ *   * `regs_someone_prefers` CANNOT bar it -- and note the reason is the
+ *     SUBTRACTION below, not the pass structure. (A reservation on a
+ *     caller-saved register like $a0 IS effective in general: pass 0 can hand
+ *     those out, because global.c:352 seeds `regs_used_so_far` with every
+ *     caller-saved register. It is only callee-saved registers that pass 0
+ *     cannot give out for the first time.) `prune_preferences` (global.c:875)
  *     subtracts the higher-priority allocno's own preferences from the set it
  *     inherits from a conflicting lower-priority one -- "if we also prefer
  *     some of those registers, don't exclude them" -- and skips the
