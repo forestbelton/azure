@@ -1,4 +1,4 @@
-/* func_8005A608 (unk_2CDC0) -- 92 of 92 words, 11 DIFF. NOT compiled.
+/* func_8005A608 (unk_2CDC0) -- 92 of 92 words, 13 DIFF. NOT compiled.
  * WAS 88 of 92, 85 DIFF. The four missing words are now paid for and what is
  * left is one register chain.
  *
@@ -120,6 +120,30 @@
  * func_8005A778 is the same function with a third argument and a bound check
  * and is at 101/101 words with the same residue; func_8005A90C is a fourth
  * member. One register chain unlocks three functions.
+ *
+ * 2026-10-28: THIS FILE NOW HOLDS THE IN-PLACE EXTENSION, 13 DIFF, and the
+ * 11-DIFF cast version is recorded rather than kept. The note above already
+ * said "13 is still the structurally closer one" and then kept the 11, which
+ * is the opposite of the call func_800563B0 makes on the same trade ("the
+ * better NUMBER is not the better SOURCE ... this file keeps the 14 and
+ * records the 11"). The listing decides it in two instructions:
+ *
+ *     sll $a1, $a1, 16
+ *     sra $a1, $a1, 16
+ *
+ * SAME register, which is what `id = id << 16; id = id >> 16;` emits. The
+ * `(s16)` cast gives `sll $v0, $a1, 16` / `sra $a1, $v0, 16` -- two registers,
+ * which the listing does not contain anywhere. Both spellings are 92 of 92
+ * words, so the two differing words the cast saves are bought with an
+ * extension the target does not have.
+ *
+ * Everything else in this file stands, and note what it means for the store
+ * position: the paragraph above derives "nothing in the source moves the
+ * store" from the CAST form's anti-dependence, where the extension's
+ * intermediate takes $v0 and so clashes with the symbol's high half. With the
+ * in-place form that WAR is gone -- the same paragraph says so -- so the store
+ * sweep is worth re-running against this base rather than inherited from the
+ * cast one.
  */
 
 #include "common.h"
@@ -140,7 +164,8 @@ s32 func_8005A608(u8 *p, s32 id)
     D_8007382C[0] = 0;
     i = 0;
     j = id;
-    id = (s16) id;
+    id = id << 16;
+    id = id >> 16;
     if (id == -1)
     {
         do
