@@ -1,4 +1,4 @@
-/* func_8004C36C (unk_1C540) -- 461 of 461 words, 10 DIFF. COMPILES.
+/* func_8004C36C (unk_1C540) -- 461 of 461 words, 4 DIFF. COMPILES.
  *
  * FIRST ATTEMPT, 2026-10-27, written the same day as func_80033D54's and
  * func_800345B8's parks; it is the third of the three giants that had never
@@ -125,7 +125,51 @@
  * consequence; the cause was the loop form.
  *
  * WHAT IS LEFT: 10 words in two groups, both schedule.
- *   * SIX WORDS at the count loop's bottom, and the tie is now named from the
+ * 2026-10-28, SECOND ROUND: 10 DIFF -> 4, all of it the BIRTHING BUMP
+ * (matching-levers section 8). Three changes, each found by reading which of
+ * two tied insns carried `7f000001` in sched1's ready list:
+ *
+ *  - (*) `p->unk_06` GOES THROUGH `g1`, NOT `g3`. `g3` was assigned exactly
+ *    once in the whole function, so its load was birthing, bumped, picked
+ *    first in the backward pass and PLACED LAST -- which is why the pair came
+ *    out `lbu 0x9` then `lhu 0x6` against the listing's `lhu` first. `g1` is
+ *    assigned three times, so the load is not bumped, and with neither insn of
+ *    the pair bumped the source order decides and it is already right. Two
+ *    words.
+ *  - (*) `p->unk_04` GOES THROUGH `g3`, the now-unused single-set name, for
+ *    the OPPOSITE reason: that pair needs its `lhu` placed LAST, so it wants
+ *    to be bumped. Two words. The two pairs are the same mechanism read in
+ *    both directions, and that is the useful part -- the lever is which NAME
+ *    carries the value, because the name's total assignment count decides
+ *    `reg_n_sets` and so decides the bump.
+ *  - (*) THE COUNT LOOP'S BOTTOM is now in the listing's order
+ *    (`lw ; lbu ; addiu -1 ; sll ; addu ; addiu $s2`) from
+ *    `g0 = ((u8 *)prim)[3]; t = count - 1; count = t; prim = ... g0 * 4 ...`.
+ *    Two things had to hold at once. The `lbu` must be hoisted ABOVE the count
+ *    store, because `&count` is passed to func_8004C080 so the store cannot be
+ *    crossed by a load through `prim` -- leave it below and the store pins
+ *    between the two chains for 463 words. And the decrement must go through a
+ *    MULTI-SET name (`t`): as a plain `count = count - 1;` its temp is
+ *    single-set, bumped, and beats the prim advance on priority at
+ *    `ready list at T-3: 974 (6) 979 (7f000001)`.
+ *
+ * WHAT IS LEFT: FOUR WORDS, and they are REGISTERS, not order. The count
+ * loop's bottom now matches the listing instruction for instruction and only
+ * the registers differ:
+ *
+ *     built  lw $v0,0x128 ; lbu $a0,0x3 ; addiu $v1,$v0,-1 ; sll $v0,$a0,2
+ *     target lw $v1,0x128 ; lbu $v0,0x3 ; addiu $v1,$v1,-1 ; sll $v0,$v0,2
+ *
+ * The listing does both arithmetic steps IN PLACE on the loaded register; this
+ * build loads into one and writes another. In-place needs the load's pseudo
+ * and the arithmetic's dest tied, which `combine_regs` will do only when the
+ * dest is a value local-alloc is allocating -- and the dest has to be
+ * MULTI-SET here to escape the bump, which is exactly what stops the tie. That
+ * is the fork: the bump and the in-place tie want opposite things from the same
+ * name. Measured on this base: a plain `count = count - 1;` is 6, `g0 = g0 * 4`
+ * for an in-place shift is 8, both together 5, and `g2` in place of `g0` is 8.
+ *
+ *   * SIX WORDS at the count loop [SUPERSEDED, kept for the measurements]'s bottom, and the tie is now named from the
  *     dump. `sched2` block 29 reads
  *
  *         ;; ready list at T-3: 974 (6) 979 (6), now 979 974
@@ -419,9 +463,9 @@ void func_8004C36C(u8 *pl, u8 *list)
                         g0 = p->unk_08;
                         prim->code = g1;
                         prim->u0 = g0;
-                        g3 = p->unk_06;
+                        g1 = p->unk_06;
                         g2 = p->unk_09;
-                        prim->clut = g3;
+                        prim->clut = g1;
                         prim->v0 = g2;
                         if (prim->x0 > prim->x1 || prim->x0 != prim->x2)
                         {
@@ -432,9 +476,9 @@ void func_8004C36C(u8 *pl, u8 *list)
                         prim->u3 = t;
                         prim->u1 = t;
                         prim->v1 = g0;
-                        g1 = p->unk_04;
+                        g3 = p->unk_04;
                         g2 = p->unk_08;
-                        prim->tpage = g1;
+                        prim->tpage = g3;
                         prim->u2 = g2;
                         if (prim->y0 > prim->y2 || prim->y0 != prim->y1)
                         {
@@ -475,9 +519,10 @@ void func_8004C36C(u8 *pl, u8 *list)
                                           (p->unk_10C * 4 + p->unk_18)) &
                                  c1) |
                                 ((u32)prim & c0);
-                            prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 +
-                                                4);
-                            count = count - 1;
+                            g0 = ((u8 *)prim)[3];
+                            t = count - 1;
+                            count = t;
+                            prim = (POLY_FT4 *)((u8 *)prim + g0 * 4 + 4);
                         }
                         e = e + 0xC;
                     }
