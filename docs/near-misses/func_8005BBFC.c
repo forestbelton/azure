@@ -1,4 +1,4 @@
-/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 220 DIFF. NOT compiled.
+/* func_8005BBFC (unk_2CDC0) -- 333 of 333 words, 216 DIFF. NOT compiled.
  *
  * SPU voice start: resolves the program record for (bank, prog, key), waits
  * for the hardware voice to go idle, sums the sample-table lengths to get the
@@ -418,14 +418,27 @@
  *     vel at top + fine at pit               333, 216
  *     fine at top + vel at pit               333, 216   (a DIFFERENT build)
  *
- * NONE ADOPTED, and the two 216s are the ones to be careful about. They are
- * the exact word count and four fewer differing words than the base, which
- * looks like the best result here -- but count the PROLOGUE and the base
- * matches five of the first twenty words while they match four. The gain is on
- * the noisy axis and the structural part is slightly worse, so adopting would
- * trade the thing this park is trying to fix for a better number. (The two
- * also build differently from each other despite scoring the same, so the
- * placement is not even stable.)
+ * ONE IS ADOPTED -- `fine` at top, `vel` at pit, 333 of 333 words and 216
+ * DIFF -- and this file first rejected it on a bad metric, which is worth
+ * recording. The rejection counted how many of the first twenty words match
+ * and found the base at five against this at four. That count is confounded
+ * by a single early insertion: both narrowed builds gain a `move $t1, $a2` at
+ * word 2, which shifts everything after it and makes almost every later word
+ * read as differing however right it is.
+ *
+ * THE TEST THAT IS NOT CONFOUNDED is simply which parameter loads reach the
+ * prologue at all, since that is this park's whole blocker:
+ *
+ *     base                 NEITHER   (both sunk to their uses)
+ *     fine at top + vel at pit   `lw $a2, 0xA0($sp)` -- vel, at the target's
+ *                                own first-load position
+ *     vel at top + fine at pit   `lw $t0, 0xA4($sp)` -- fine, in vel's slot
+ *     BOTH at pit                BOTH, in the target's order
+ *
+ * so the base has none of the two and the adopted shape has one, at the right
+ * position, for the same 333 words. Note which way round that is: it is
+ * narrowing at `pit`, not at the top, that keeps a load up -- narrowing at the
+ * top lets gcc fold the cast into the load instead.
  *
  * THE INFORMATIVE ROW IS "BOTH AT pit" AT 335/330: that is the one whose
  * prologue reproduces the listing's four parameter loads in order, with the
@@ -465,6 +478,7 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
 
     ch = ch0;
     D_80085F98[0] = 1;
+    fine = (s16) fine;
     if ((s32) D_80073734[0] - 1 < ch)
     {
         ch = -1;
@@ -474,10 +488,11 @@ s32 func_8005BBFC(s16 ch0, s16 bank, u16 prog, s16 key, s32 vel, s32 fine, u16 v
         b = D_80086A40[bank].unk_04;
         q = b + ((s16) prog * 0x10 + 0x20);
         e = b + ((s16) prog * 0x10 + key) * 0x20 + 0x820;
-        pit = ((s16) vel << 8) + (s16) fine;
-        if ((s16) vel >= e[6] && e[7] >= (s16) vel)
+        vel = (s16) vel;
+        pit = (vel << 8) + fine;
+        if (vel >= e[6] && e[7] >= vel)
         {
-            func_80056DB4(ch, (s16) vel << 8, (s16) vel);
+            func_80056DB4(ch, vel << 8, vel);
             g = &D_80073740[ch];
             do
             {
