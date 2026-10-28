@@ -1054,7 +1054,13 @@ typedef struct Unk80084960
    u8 pad_4F[0x1];
    s16 unk_50;
    u16 unk_52;
-   u8 pad_54[0x9];
+   /* Hand-split out of pad_54 for func_80056E10, which stores the pitch-bend
+      span at +0x54, its unscaled form at +0x56, a flag word at +0x58 and the
+      key at +0x5C. */
+   s16 unk_54;
+   u16 unk_56;
+   u32 unk_58;
+   u8 unk_5C;
    u8 unk_5D;
    u8 pad_5E[0x6];
    u32 unk_64;
