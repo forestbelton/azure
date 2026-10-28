@@ -571,6 +571,21 @@ Levers that move them, all with no change to the emitted code:
   So an allocno that goes first can be *pushed off* the register it should have
   had, by a rival that has not been allocated yet:
 
+  **THE SIZE ESCAPE IN THAT SUBTRACTION DOES NOT EXIST ON THIS TARGET, so the
+  rule above is absolute.** `prune_preferences` skips the subtraction when the
+  LOWER-priority allocno is larger (global.c:875,
+  `allocno_size[j] <= allocno_size[A]`), which would let a rival's preference
+  exclude a register A also prefers. But `allocno_size` is `PSEUDO_REGNO_SIZE`,
+  which counts WORDS, not bytes (regs.h:64) -- every QImode, HImode and SImode
+  value is size 1 -- so between integer values the subtraction always applies.
+  **Consequence: a register that an allocno prefers can never be taken away
+  from it by `regs_someone_prefers`, and an incoming parameter therefore always
+  gets its own argument register when it is allocated first.** func_8004D880 is
+  the worked case: its parameter and the call's argument both prefer $a0, the
+  listing gives the parameter $v1, and no reference count or type width reaches
+  it -- the cure there is a THIRD variable, which buys the listing's entry copy
+  at the cost of a fourth allocno.
+
   **AND THERE IS A SECOND ESCAPE, which is cheaper than moving a priority and
   which this project has never used.** `prune_preferences` (2.7.2 global.c, the
   loop at ~871) builds `regs_someone_prefers[A]` by walking the *lower*-priority

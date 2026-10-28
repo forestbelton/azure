@@ -1,12 +1,16 @@
-/* func_8004D880 -- 28 of 28 words, 22 DIFF. A Shift-JIS to ASCII classifier:
+/* func_8004D880 (unk_1C540) -- 28 of 28 words, 12 DIFF. A Shift-JIS to ASCII
+ * classifier:
  * three `(u16)(c + K) < N` range tests, each returning the same sum plus an
  * ASCII base, falling through to func_8004D828.
  *
- * The word count and the whole structure are right, and what is left is a
- * three-way REGISTER PERMUTATION of the function's three long-lived values.
+ * The word count and the structure are right and what is left is allocation.
+ * The listing's three long-lived values sit as
  *
  *   target:  parameter -> $v1   call argument -> $a0   the sums -> $a1
- *   built:   parameter -> $a0   call argument -> $a1   the sums -> $v1
+ *
+ * and the 2026-10-28 section below has where this source puts them, why the
+ * two-variable form cannot reach it, and what the current four-allocno source
+ * has left.
  *
  * Two shapes are paid for and should not be re-derived:
  *
@@ -23,36 +27,67 @@
  *   makes the listing's third `addiu` write $v1 in place rather than taking a
  *   fourth register.
  *
- * The permutation is the open part. The parameter and the call's argument both
- * PREFER $a0 -- the parameter arrives there, the argument has to end there --
- * and they conflict, so whichever `find_reg` reaches first takes it. Here the
- * parameter wins because it has the references (three sums plus the copy
- * against the argument's two) over a live range of the same length, and
- * `prune_preferences`' `regs_someone_prefers` does not fire the other way.
- * Measured, all 28 words and 22 DIFF or worse: `d` as `u16`/`u32`/`s32`, the
- * two declarations in both orders, `d = c` as the first statement, as the last
- * statement before the call, and inside the call's own block (both 27 words,
- * because then the parameter simply stays in $a0 and the listing's SECOND copy
- * has nowhere to come from), and the parameter as `u32`/`s32`/`u16`.
+ * 2026-10-28: 22 DIFF -> 12, and the shape of what is left is now different
+ * from what this header used to claim.
  *
- * Note the listing spends TWO copies on one value -- in at entry and back out
- * for the call -- so a source that keeps it in $a0 throughout is a word short,
- * not a word better. Whatever bars the parameter from $a0 is the whole
- * finding; see the entry on `regs_someone_prefers` in docs/matching-levers.md
- * for the pass arithmetic, and func_80058A04 for the one cure that worked on
- * a non-parameter (give the value a second live range so a block-local
- * quantity's hard register conflicts with it -- a parameter has no second
- * range to give it). */
+ *  - (*) THE THIRD TEST IS INVERTED: `if ((u16) c >= 0x1A) { return
+ *    func_8004D828(d); } return c + 0x61;` rather than the in-range return in
+ *    the `if`. The listing falls THROUGH to `addiu $v0, $v1, 0x61` and
+ *    branches away to the call, which fills its `j`'s delay slot; written the
+ *    other way round this source branches to the return instead and spends a
+ *    `nop`. ON ITS OWN THAT IS 27 WORDS, 26 DIFF -- A WORD SHORT -- which is
+ *    the real news: the 28 words this file used to have were 28 for the WRONG
+ *    REASON, a `nop` standing in for the listing's entry copy.
+ *  - (*) THE PARAMETER IS COPIED INTO ITS OWN LOCAL: `c = x;` with the call's
+ *    argument then taken as `d = c`. That is the listing's
+ *    `addu $v1, $a0, $zero`, and it restores the 28th word. 26 -> 12.
+ *
+ * WHY THE TWO-VARIABLE FORM CANNOT GET THERE, which is what the old header was
+ * really asking. The listing holds the parameter in $v1 and the call argument
+ * in $a0; this source's parameter takes $a0 because it PREFERS it (it arrives
+ * there) and it is allocated first. Both routes out are now closed by reading:
+ *
+ *   * `regs_someone_prefers` CANNOT bar it. `prune_preferences` (global.c:875)
+ *     subtracts the higher-priority allocno's own preferences from the set it
+ *     inherits from a conflicting lower-priority one -- "if we also prefer
+ *     some of those registers, don't exclude them" -- and skips the
+ *     subtraction only when the lower allocno is LARGER. `allocno_size` is
+ *     PSEUDO_REGNO_SIZE, which is in WORDS (regs.h:64), so every integer value
+ *     in this function is size 1, the subtraction always applies, and a
+ *     register the allocno prefers is never excluded. Measured in passing:
+ *     the parameter as `u16`/`s16` with `d` as `u32`/`s32`, in all four
+ *     combinations, is still 22 DIFF (and `s16` is 29 words).
+ *   * PRIORITY CANNOT BAR IT EITHER, because `d` holds the SAME VALUE as the
+ *     parameter and cse canonicalises every read to one pseudo. Moving the
+ *     three sums' reads onto `d` to raise it does nothing at all -- one sum,
+ *     two sums, both 28 words and 22 DIFF -- and moving the third sum too
+ *     costs a word (29). So references cannot be moved between them.
+ *
+ * WHAT IS LEFT: 12 words, and they are an allocation puzzle with FOUR allocnos
+ * where the listing has three live values. `advise.py --greg` on this source:
+ *
+ *     the sums (82)   6 refs / 11 live / 1.091  -> $v1, target $a1
+ *     x        (80)   6 refs / 15 live / 0.800  -> $a0, target $a0 (dies early)
+ *     c        (83)   4 refs / 12 live / 0.667  -> $a1, target $v1
+ *     d        (81)   2 refs / 13 live / 0.154  -> $a2, target $a0
+ *
+ * so `d` has to end up sharing $a0 with `x` -- which it may, since x dies at
+ * `c = x` -- and `c` and the sums have to swap. The first thing to try is
+ * whatever shortens `x`'s range, since it is the only one of the four whose
+ * live length is not already minimal.
+ */
 
 #include "common.h"
 
 u8 func_8004D828(u16);
 
-u8 func_8004D880(u32 c)
+u8 func_8004D880(u32 x)
 {
     u16 d;
     u16 e;
+    u32 c;
 
+    c = x;
     d = c;
     e = c + 0x7DB1;
     if (e < 0xA)
@@ -65,9 +100,9 @@ u8 func_8004D880(u32 c)
         return e + 0x41;
     }
     c = c + 0x7D7F;
-    if ((u16) c < 0x1A)
+    if ((u16) c >= 0x1A)
     {
-        return c + 0x61;
+        return func_8004D828(d);
     }
-    return func_8004D828(d);
+    return c + 0x61;
 }
