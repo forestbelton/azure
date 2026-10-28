@@ -128,6 +128,49 @@
  * also that `c` crosses a call and `b` does not, which is why pruning removes
  * $a2 from `c` (and gives it $s2) but leaves it on `b`.
  *
+ * 2026-10-28: WHERE `c`'s $a2 PREFERENCE ACTUALLY COMES FROM -- not a copy,
+ * which is what the note above assumes, and the correction widens the
+ * mechanism. `set_preference` (global.c) opens with
+ *
+ *     if (GET_RTX_FORMAT (GET_CODE (src))[0] == 'e')
+ *       src = XEXP (src, 0), copy = 0;
+ *
+ * so it DESCENDS through any unary or binary source and records a
+ * `hard_reg_preferences` bit (though not a `hard_reg_copy_preferences` one) for
+ * whatever pseudo it lands on. The argument setup here is insn 125,
+ * `(set (reg:SI 6 a2) (zero_extend:SI (reg/v:QI 18 s2)))` -- an extension, not
+ * a copy -- and that is what gives `c` its $a2. The same is true of `i`: insn
+ * 123 is `(set (reg:SI 5 a1) (zero_extend:SI (subreg:QI (reg/v:SI 17 s1) 0)))`.
+ * So EVERY narrow argument setup hands its value an argument-register
+ * preference, and no spelling of the call avoids it while the `andi` stays in
+ * the listing.
+ *
+ * AND THE SAME MECHANISM IS RIGHT FOR `r` AND WRONG FOR `b`, which is the
+ * useful observation. `i` and `c` both cross calls, so pruning strips the
+ * preference from both; `expand_preferences` has already propagated it to their
+ * non-call-crossing partners, `r` (insn 52, `i = r`) and `b` (insn 83,
+ * `c = b`), where it survives. `r` takes $a1 and that IS the listing. `b` takes
+ * $a2 and the listing has $a0. So the construct is not wrong in general and
+ * there is nothing to remove wholesale -- only this one propagation to block.
+ *
+ * ALSO: THE SWITCH'S EXTENSION IS PART OF THE SAME KNOT, which the note above
+ * does not account for. Pseudo 109 is insn 177,
+ * `(set (reg:SI 109) (zero_extend:SI (reg/v:QI 82)))` -- the `switch (b)`
+ * compare value. The listing allocates it to `b`'s OWN register, which is why
+ * its mask is the in-place `andi $a0, $a0, 0xFF`; this build gives it $v1
+ * (`andi $v1, $a2, 0xFF`). And `.greg`'s order is `81 109 80 82 83 84 86 85`,
+ * so 109 is allocated SECOND -- BEFORE `b`. Its preferences read `3 6`: the 6
+ * is inherited from `b` through insn 177, and whatever gives it the 3 is what
+ * puts it in $v1 before `b` is allocated at all. So "get `b` into $a0" is not
+ * the whole requirement; 109 has to land on `b`'s register too, and it is
+ * decided first.
+ *
+ * MEASURED 2026-10-28, all 81 of 81 words and the same 6 DIFF: `u32 c`,
+ * `s32 c`, `c` declared before `b`, `c = (u8) b`, `switch ((s32) b)`, `u32 d`,
+ * and `d` declared last. Declaration order and the widths of `c` and `d` do
+ * not touch it, as expected now that the preference is known to come from the
+ * extension rather than from the declaration.
+ *
  * EXHAUSTION: a full `tools/decomp/search.py` sweep over every transform
  * family, run 2026-10-28 on this 6-DIFF base, improved on nothing. The
  * measured lists above predate the 12 -> 6 inverted-if/else fix, so treat
