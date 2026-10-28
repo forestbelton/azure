@@ -586,6 +586,37 @@ def _leading_run(text):
     return out
 
 
+def t_decl_order_init(text):
+    """Transpose two adjacent declarations when EITHER is initialised.
+
+    `t_decl_order` uses `_decl_run`, which stops at the first initialised
+    declaration -- so on a function whose leading declarations all carry
+    initialisers (7 of the 58 parks) it has an empty run and does nothing at
+    all, and a sweep reported as covering declaration order did not cover it.
+    The position of an initialiser is a real knob for the same reason
+    t_hoist_read is: they run in source order and their loads are emitted in
+    it.
+
+    Reordering initialised declarations is only safe when neither initialiser
+    mentions the other's name, so that is checked rather than assumed.
+    """
+    run = _leading_run(text)
+    for k in range(len(run) - 1):
+        a, b = run[k], run[k + 1]
+        na = re.match(r"^[ \t]+[A-Za-z_]\w*(?:[ \t]+|[ \t]*\*+[ \t]*)(\w+)", a[2])
+        nb = re.match(r"^[ \t]+[A-Za-z_]\w*(?:[ \t]+|[ \t]*\*+[ \t]*)(\w+)", b[2])
+        if not (na and nb):
+            continue
+        ia = a[2].split("=", 1)[1] if "=" in a[2] else ""
+        ib = b[2].split("=", 1)[1] if "=" in b[2] else ""
+        if re.search(r"\b%s\b" % re.escape(na.group(1)), ib):
+            continue            # b's initialiser reads a
+        if re.search(r"\b%s\b" % re.escape(nb.group(1)), ia):
+            continue            # a's initialiser reads b
+        yield ("declare %s before %s (initialised)" % (nb.group(1), na.group(1)),
+               text[:a[0]] + b[2] + a[2] + text[b[1]:])
+
+
 _READ = re.compile(r"\*\(\s*[us](?:8|16|32)\s*\*\s*\)\s*\([^()]*\)")
 
 
@@ -653,6 +684,7 @@ TRANSFORMS = [
     t_global_decl,
     t_goto_loop,
     t_hoist_read,
+    t_decl_order_init,
 ]
 
 
