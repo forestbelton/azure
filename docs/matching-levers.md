@@ -4654,6 +4654,28 @@ restructuring of the body's first few statements, not a declaration order and
 not an allocation question -- which is why that park's full `search.py` sweep
 over twelve transform families found nothing: none of them moves a FIRST USE.
 
+CONFIRMED BY PROBE, 2026-10-28, not just read out of loop.c. The `.loop` dump
+names the hoisted symbols in emission order, so the order is directly
+observable. On func_8005ACDC, whose body opens with
+`e = D_80085458 + i * 0x78`:
+
+    base    D_80073828, D_80073734, D_80085458
+    probe   D_80073828, D_80073734, D_80073740
+
+where the probe moved the `D_80073740[i]` read ahead of the `e` computation
+(changing the semantics -- it is a probe, 73 words against 75). The first two
+are the guard's symbols from outside the loop and do not move; the THIRD
+changes to whichever symbol the body now touches first. That is the mechanism,
+measured.
+
+Read the order with:
+
+    grep -E 'high:SI \(symbol_ref' /tmp/azure-decomp/dumps/<base>/loop
+
+and note that the built disassembly cannot tell you this -- every symbol's
+`lui` reads `lui $v0,0x0` there because the relocations are unresolved, which
+is why the dump is the only way to see it.
+
 So when hoisted invariants come out in the wrong order, do not look at
 declarations or at `--greg`. Find each invariant's first use in the body and
 reorder those.
