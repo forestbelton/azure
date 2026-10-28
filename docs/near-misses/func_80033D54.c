@@ -1,4 +1,4 @@
-/* func_80033D54 (gprel_72A8) -- 537 of 537 words, 49 DIFF. COMPILES.
+/* func_80033D54 (gprel_72A8) -- 537 of 537 words, 46 DIFF. COMPILES.
  *
  * The sprite/billboard draw of the object tree: for each node on the
  * `UnkNode.unk_18` chain it builds the object's world matrix in the
@@ -7,117 +7,134 @@
  * the `(u8 *p, UnkVec *v, UnkSlot *s)` family -- func_80044BB0, func_80044C54,
  * func_80045C34, func_80046398, func_800463EC -- and its inner loop is
  * func_80044D24's, so READ csrc/unk_1811C.c's func_80044D24 FIRST: the element
- * record (Unk44D24E), the +0x100 UV wrap clamps, the sign arms, `setlen`,
- * the `s->unk_0C[3]` flag byte and the `AddPrim` tail are all the same code
- * with the scratchpad offsets shifted by +4.
+ * record (Unk44D24E), the +0x100 UV wrap clamps, the sign arms, `setlen`, the
+ * `s->unk_0C[3]` flag byte and the `AddPrim` tail are all the same code with
+ * the scratchpad offsets shifted by +4.
  *
  * It was the last function BLOCKED on addressing (it needs
  * %gp_rel(D_8008099C) while two landed functions in the old unk_72A8 reach
  * that word absolutely); the unit carve of 2026-10-27 unblocked it.
  *
- * WHAT IS LEFT: 49 words, and they are ALL ALLOCATION, in two groups.
+ * EVERY INSTRUCTION IS RIGHT. What is left is the allocation of four
+ * callee-saved registers and two scheduler tie-breaks, and the two are not
+ * independent: 34 of the 46 words are the register names.
  *
- *  (1) TWO ADJACENT PAIRS OF CALLEE-SAVED REGISTERS ARE SWAPPED. The target
- *      has m1=$s4, e=$s5, m2=$s6, pl=$s7; this build has e=$s4, m1=$s5,
- *      pl=$s6, m2=$s7. `advise.py --greg` prints the allocator's own numbers:
- *      e is 24 refs / 385 live / priority 0.249 and m1 is 25 / 425 / 0.235, a
- *      5.6% gap, and pl (11/429/0.077) over m2 (9/421/0.064) is 16.6%. To
- *      flip the first pair e has to reach 408 live or m1 has to drop to 401,
- *      or m1 has to cross 32 refs (floor_log2 is a step). Everything tried is
- *      recorded at the bottom. Fixing it is worth all 49 words: there is no
- *      instruction difference left anywhere else except (2).
+ * ================= THE ALLOCATION, AND WHAT IT NEEDS =================
  *
- *  (2) THE TWO EXTRA `lbu` OF THE WRAP CLAMPS sit six slots late (sched1
- *      puts them after `lbu 0x9($s2)`, the target after the first
- *      `lbu 0x7($s2)`, where they fill its load-delay slot). Statement
- *      placement is already swept: a and b between the +0x10 and +0x14
- *      stores is the best of the six legal positions (65 DIFF at the time,
- *      the others 73/75 or a word short because cse merges the reload).
+ * The target has m1=$s4, e=$s5, m2=$s6, pl=$s7; this build has e=$s4,
+ * m1=$s5, pl=$s6, m2=$s7 -- two ADJACENT pairs swapped in global-alloc's
+ * priority order. `advise.py --greg` prints the allocator's own numbers;
+ * priority is `floor_log2(refs) * refs * size / live_length` and `refs` is
+ * weighted 1 outside the loops, 2 in the outer loop and 3 in the inner:
  *
- * THE SHAPES THAT ARE SETTLED. Each was measured; the cost of reverting is in
- * brackets.
+ *     e  (91): 24 refs / 385 live / 0.249     m1 (86): 25 / 425 / 0.235
+ *     pl (80): 11 refs / 429 live / 0.077     m2 (87):  9 / 421 / 0.064
+ *
+ * so e needs to reach 408 live or 22 refs, and m2 needs 11 refs or 351 live.
+ * BOTH MOVES HAVE BEEN DEMONSTRATED, each with one deliberately wrong
+ * instruction, and together they take this source to **12 DIFF**:
+ *
+ *   - `if (((q[-1] ^ p->unk_28) & 1) != 0)` for the first sign test, instead
+ *     of `e->unk_00`. That is one inner-loop reference moved off `e` (-3
+ *     weighted), e drops to 21 refs, and m1 takes $s4. Cost: one word, the
+ *     listing's `lbu $v0, 0x0($s5)` comes out `lbu $v0, -0x1($s2)`.
+ *   - `((s32 *)m2)[-1] = o->unk_60;` for the +0xC4 store, instead of
+ *     `p->unk_C4`. That is one outer-loop reference added to m2 (+2), m2
+ *     reaches 11 refs and takes $s6. Cost: one word, `sw $v0, 0xC4($s1)`
+ *     comes out `sw $v0, -0x4($s6)`.
+ *
+ * So the allocation is understood exactly and what is missing is a spelling
+ * that moves those reference counts WITHOUT moving an instruction. Measured
+ * and rejected for that: the eight-word matrix copy read through `m1`
+ * (`((s32 *)m1)[k]`, which does give m1 the references -- 33, and the right
+ * order -- but puts the loads on $s4 instead of $s1, nine words);
+ * `tv = (VECTOR *)((u8 *)m1 - 0x10)` and `m2 = (MATRIX *)((u8 *)m1 + 0x74)`
+ * (cse folds the constant and the reference with it, no change); a dead
+ * `m1 = (MATRIX *)p;` ahead of the real assignment (deleted, no change);
+ * all six orders of the three pointer assignments; assigning them before or
+ * after `PushMatrix()`; assigning them inside the outer loop (509 words --
+ * the constants fold into the call sites and the arms cross-join); moving
+ * `e = s->unk_08` to the top of the outer loop body (538); and reusing a
+ * multi-set local for `a` or `b`.
+ *
+ * ================= THE TWO SCHEDULER TIE-BREAKS =================
+ *
+ * With the allocation forced, these are the only words left.
+ *
+ *  (1) FOUR WORDS IN THE PROLOGUE, a permutation of the same four
+ *      instructions: this build emits `sw $s1` / `lui $s1` / `lw $v0,gp` /
+ *      `lui $v1,%hi` and the target emits the two loads first and the
+ *      save/lui pair after. All four are priority 1 in sched2, so the choice
+ *      is `potential_hazard` (sched.py prints it: `insn 1256 has a greater
+ *      potential hazard` is the $s1 save winning the tie). The gp load is
+ *      blocked repeatedly by its hazard with the `beqz` it feeds.
+ *  (2) SIX WORDS AT THE TOP OF THE INNER LOOP. The two extra `lbu` that feed
+ *      the UV wrap clamps have to sit between the `sw 0x1C` and the `sw 0x0C`
+ *      (the target fills the first `lbu`'s load-delay slot with them); here
+ *      they come out either before the `sw 0x1C` or after the `sw 0x10`.
+ *      They cannot be hoisted across a scratchpad store: `true_dependence`'s
+ *      MEM_IN_STRUCT_P exception needs the load to be non-QImode, so a
+ *      record byte load always conflicts with a `p->` store, and
+ *      `memrefs_conflict_p` cannot separate two register bases. Which side
+ *      they land on therefore follows ONLY from statement order:
+ *        * `a`/`b` read after the +0x10 store (the obvious place) leaves them
+ *          after it -- 8 words out, and the same for the other five legal
+ *          positions (all 16 combinations swept: 14, 22 or 24 DIFF, or a word
+ *          short where cse merges the reload).
+ *        * `a`/`b` read BEFORE `p->unk_1C = prim + 1` -- the arrangement in
+ *          this file -- gets them to 6 words out, and that store is also the
+ *          cse invalidation that makes the +0x08/+0x09 reload real. Moving
+ *          them after it merges the reload and loses a word.
+ *
+ * ================= THE SHAPES THAT ARE SETTLED =================
  *
  *  - THE +1 POINTER IS NOT IN THE SOURCE. Every element field is read as a
- *    STRUCT FIELD off `e` (`e->unk_08`, `e->unk_0A`, ...) and loop.c
- *    strength-reduces the address givs into one register that happens to be
- *    e+1, which is why the listing reads `0x7($s2)` for `unk_08`: $s2 is the
- *    REDUCED GIV, initialised `addiu $s2, $s5, 0x1` in the inner loop's
- *    PREHEADER and bumped `addiu $s2, $s2, 0xC` in the back-branch's delay
- *    slot. Writing the obvious `q = (u8 *)&e->unk_01;` and indexing off it
- *    instead costs ONE WORD and the whole allocation: loop.c then records a
- *    DEST_REG giv for q as well, the DEST_ADDR givs all combine into the LAST
- *    one recorded, and the combined giv is rejected --
- *    `giv of insn N not worth while, 0 vs 311` in the .loop dump -- so the
- *    `addiu` stays INSIDE the loop and `e` keeps four more references.
- *    See matching-levers section 8. An explicit second pointer
- *    (`q = ...; ... q += 0xC;`) is worse again (+5): loop.c then reduces the
- *    high-offset uses into a THIRD register at e+4, and the extra pressure
- *    spills the callback pointer out of $fp.
- *
- *  - BUT THE TWO SIGN BYTES MUST GO THROUGH A POINTER LOCAL, because they are
- *    VOLATILE reads and a volatile MEM is not replaced by the reduced giv.
- *    `q = (u8 *)&e->unk_01;` with `(s8)((volatile u8 *)q)[1]` lands them on
- *    $s2 as the listing has them; `*(volatile u8 *)&e->unk_02` reads them off
- *    $s5 instead (4 register-only words, and it pushes `e` from 24 refs to
- *    36, which is what makes the (1) gap unreachable).
- *
- *  - THE VOLATILE CAST ITSELF IS LOAD-BEARING. `(s8)x * 2` on a plain `u8 *`
- *    read folds the sign-extension into the load: `lb` + `sll 1`, two words
- *    where the target has three (`lbu` + `sll 24` + `sra 23`). combine
- *    cannot fold a volatile MEM, so the shifts survive. The same cast on the
- *    four UV reads would cost an `andi 0xff` each (a volatile QImode read
- *    cannot be widened in place), so exactly two reads are volatile.
- *
- *  - THE MATRIX COPY IS EIGHT SEPARATE WORD ASSIGNMENTS, not a struct copy.
- *    `o->unk_40 = p->unk_54;` with MATRIX on both sides is a 4-register block
- *    move (16 words); the target reuses ONE register with a nop between each
- *    load and store (23 words), which is what eight statements give. So both
- *    structs model that range as eight `s32`s.
- *
- *  - ARM B'S LAST CALL IS WRITTEN `TransMatrix(m2, &p->unk_44)` AND ARM A'S
- *    `TransMatrix(m2, tv)`. Both arms end in the same 30-word tail; with the
- *    same spelling in both, jump2's cross-jumping merges all 30 and the
- *    function is 28 WORDS SHORT (509/537, 512 DIFF). The target merged only
- *    the `jal` and its delay slot, because the argument setup differs --
- *    `lw $a1, 0x28($sp)` (tv is spilled) against `addiu $a1, $s1, 0x44`.
- *
+ *    STRUCT FIELD off `e` and loop.c strength-reduces the address givs into
+ *    one register that happens to be e+1, which is why the listing reads
+ *    `0x7($s2)` for `unk_08`: $s2 is the REDUCED GIV, initialised
+ *    `addiu $s2, $s5, 0x1` in the inner loop's PREHEADER and bumped in the
+ *    back-branch's delay slot. Writing `q = (u8 *)&e->unk_01` and indexing
+ *    off it blocks the reduction outright -- `giv of insn 985 not worth
+ *    while, 0 vs 311` in the `.loop` dump -- and an explicit second biv puts
+ *    a THIRD register at e+4. matching-levers section 8.
+ *  - BUT THE TWO SIGN BYTES GO THROUGH `q`, because they are VOLATILE reads
+ *    and a volatile MEM is not replaced by the reduced giv; without the
+ *    pointer local they read off $s5 instead of $s2.
+ *  - THE VOLATILE CAST ITSELF IS LOAD-BEARING: `(s8)x * 2` on a plain `u8 *`
+ *    read folds the sign-extension into an `lb` + `sll 1`, two words where
+ *    the target has `lbu` + `sll 24` + `sra 23`. The same cast on the four UV
+ *    reads would cost an `andi 0xff` each, so exactly two reads are volatile.
+ *  - THE MATRIX COPY IS EIGHT SEPARATE WORD ASSIGNMENTS. A struct copy is a
+ *    four-register block move (16 words); the target reuses one register with
+ *    a nop between each load and store (23), which is what eight statements
+ *    give. Both structs therefore model that range as eight `s32`s.
+ *  - ARM B'S LAST CALL IS `TransMatrix(m2, &p->unk_44)` AND ARM A'S IS
+ *    `TransMatrix(m2, tv)`. Both arms end in the same 30-word tail; with one
+ *    spelling in both, jump2's cross-jumping merges all 30 and the function
+ *    is 28 words short (509/537). The target merged only the `jal` and its
+ *    delay slot, because the argument setup differs -- `lw $a1, 0x28($sp)`
+ *    (tv is spilled) against `addiu $a1, $s1, 0x44`.
  *  - EACH SIGN ARM HAS ITS OWN SINGLE-SET LOCALS (x0/t0 .. x3/t3) and its own
- *    copy of the two `sh`. Sharing one `x` and one `t` across the four arms
- *    costs FOUR WORDS (533/537): a local SET EXACTLY ONCE is a birthing insn
- *    for sched1, which schedules it LAST in its block, and that is what keeps
- *    `subu`/`addu` after the two `sh` -- with a shared local the subtract
- *    moves ahead of them, the arms' tails become identical and cross-jumping
- *    lifts both stores into the join. matching-levers section 8.
- *
- *  - `a` AND `b` HOLD THE FIRST OPERAND OF EACH WRAP CLAMP (a second read of
- *    unk_08/unk_09, which the stores in between make a real reload). Reading
- *    the fields inline in the conditions instead is a word over and 389 DIFF.
- *
+ *    copy of the two `sh`. Sharing one `x` and one `t` costs four words: a
+ *    local set exactly once is a birthing insn for sched1, which schedules it
+ *    LAST in its block, and that is what keeps `subu`/`addu` after the two
+ *    `sh`; with a shared local the subtract moves ahead of them and
+ *    cross-jumping lifts both stores into the join.
  *  - THE CLIP TEST IS ONE EXPRESSION: four `&&` pairs joined by `|`, not four
- *    0/1 locals OR'd afterwards. The ORs have to interleave with the
- *    short-circuit branches (two of them sit in branch delay slots).
- *
- *  - THE CLUT IS A TERNARY INSIDE THE u0/v0 STORE, so that the
- *    `p->unk_10.w + p->unk_0C.w` sum is computed BEFORE the branch.
- *
- *  - THE PROLOGUE READS THE OT POINTER INTO ITS OWN SHORT-LIVED LOCAL (`ot`),
- *    separate from the loop's `prim`. Without it the value lands in $s0
- *    (12 words); with the loop's `prim` reused it lands in a callee-saved
- *    register instead of the target's $v1. The three matrix pointers and
- *    `base` are assigned AFTER the D_8008099C guard -- initialising them at
- *    their declarations materialises them above the guard (9 words).
- *
+ *    0/1 locals OR'd afterwards; the ORs interleave with the short-circuit
+ *    branches and two of them sit in delay slots.
+ *  - THE CLUT IS A TERNARY INSIDE THE u0/v0 STORE, so the
+ *    `p->unk_10.w + p->unk_0C.w` sum is computed before the branch.
+ *  - THE PROLOGUE'S OT READ HAS ITS OWN SHORT-LIVED LOCAL (`ot`), separate
+ *    from the loop's `prim`, which is what puts it in $v1 rather than a
+ *    callee-saved register (12 words). The three matrix pointers and `base`
+ *    are assigned AFTER the D_8008099C guard; initialising them at their
+ *    declarations materialises them above the guard (9 words).
  *  - The guard is `if (D_8008099C != 0) { return 0; }` with a separate
  *    `return 0;` at the end; that is what gives `beqz`+`j` rather than one
  *    `bnez`, because the then-arm carries its own `$v0 = 0`.
- *
- * MEASURED AND REJECTED for the allocation swap: reordering the three matrix
- * pointer assignments (all six orders, 119-122 DIFF at the time); assigning
- * them just before PushMatrix (no change); assigning them inside the outer
- * loop (509 words -- the constants fold into the call sites); moving
- * `e = s->unk_08` to the top of the outer loop body (538 words); reusing a
- * multi-set local for `a` or `b` (68/73 DIFF). The two margins above are the
- * place to attack, with `advise.py --greg`.
+ *  - `e = s->unk_08` sits BEFORE `p->unk_28 = s->unk_14` (two words: it fills
+ *    the `lhu`'s load-delay slot).
  */
 #include "common.h"
 
@@ -263,8 +280,8 @@ s32 func_80033D54(u8 *pl, UnkVec *v, UnkSlot *s)
         o = *(Unk33D54O **)pl;
         f = *(void (**)(u8 *))(pl + 8);
         p->unk_C4 = o->unk_60;
-        p->unk_28 = s->unk_14;
         e = (Unk44D24E *)s->unk_08;
+        p->unk_28 = s->unk_14;
         p->unk_34.vx = o->unk_20;
         p->unk_34.vy = o->unk_24;
         p->unk_34.vz = o->unk_28;
@@ -315,12 +332,12 @@ s32 func_80033D54(u8 *pl, UnkVec *v, UnkSlot *s)
         while (e != NULL)
         {
             prim = p->unk_1C;
-            p->unk_1C = prim + 1;
             q = (u8 *)&e->unk_01;
-            p->unk_0C.w = e->unk_08;
-            p->unk_10.w = e->unk_09;
             a = e->unk_08;
             b = e->unk_09;
+            p->unk_1C = prim + 1;
+            p->unk_0C.w = e->unk_08;
+            p->unk_10.w = e->unk_09;
             p->unk_14.w = e->unk_0A;
             p->unk_18.w = e->unk_0B;
             if (a + e->unk_0A >= 0x100)

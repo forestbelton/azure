@@ -1648,6 +1648,15 @@ and the target's `nop` only appears with the cast), while the neighbouring
 `e->unk_04` read does not need the cast at all, because by then nothing is left
 in the block to hoist it past.
 
+**A QImode load can never be freed by the exception, whichever way round.**
+Both arms of the test require the non-QImode side to be the one with the
+varying in-struct address, so a BYTE read through a walked pointer always
+depends on every store before it through a scratchpad struct -- there is no
+spelling of either side that separates them. In func_80033D54 that is six
+words: the two extra `lbu` feeding the UV wrap clamps have to be between two
+particular scratchpad stores, and since they cannot be hoisted across one,
+only the statement order decides which side of it they land on.
+
 * `*(u16 *) ((u8 *) p - 2)` keeps two read-modify-writes strictly sequential;
   every struct or array spelling of the same address lets sched1 interleave
   them and fill both load-delay slots. func_80043FD0, 2 words.
