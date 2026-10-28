@@ -131,3 +131,45 @@ a context question its own bound assumes away:
 * `func_80047054` -- one common cause, no shape measured splitting it. Bound
   assumes: the conflict set that follows from `p[0]` being local-allocated to
   `$a0` within the unit as carved.
+
+## LANDING A PARK: the gate is `RESULT: MATCH`, nothing else
+
+Written 2026-10-28 after a landing attempt put a NON-MATCHING function into
+`csrc/` and reported "`make check` and `make containers` passed (all four
+byte-identical)". None of that had run; the unit did not even assemble. The
+cost was not the wasted attempt, it was that `progress.py` silently dropped the
+whole unit -- 4678 words out of BOTH the numerator and the denominator -- so the
+headline number fell from 84.6% to 82.7% and looked like lost work.
+
+So, in order, and do not skip to step 3:
+
+1. **`verify.py` must print `RESULT: MATCH` on the park file.** That is the
+   only thing that licenses touching `csrc/`. A build that links is not
+   evidence; neither is a word count that agrees. `nmcheck.py` is NOT evidence
+   either -- it only compiles the files in this directory and never reads
+   `csrc/`, so it is green no matter what a landing does.
+2. **Find the stub by name, not by eye:**
+   `grep -n 'func_XXXXXXXX' csrc/<unit>.c`. Replace THAT function's own
+   `INCLUDE_ASM` line. The attempt above replaced the stub of a DIFFERENT
+   function that happened to be nearby, which left one function with two
+   definitions (`Error: symbol 'func_XXXXXXXX' is already defined`) and another
+   with none.
+3. `make check`, then `make containers`. Read the hashes, not the exit status.
+4. `tools/decomp/guard.py` -- it prints `N known, N accounted for` and names
+   anything MISSING. It catches exactly the mistake in step 2, in one second,
+   and it would have caught this one before the commit.
+5. Only then delete the park file, mark the `docs/carved-sweep.md` row, and
+   update the counts at the top of `docs/where-we-are.md`.
+
+AND IF IT DOES NOT MATCH, the park file is the deliverable: put the
+measurements and the dump evidence in its header, and leave `csrc/` alone. A
+negative with a named mechanism is worth having. A non-matching function in
+`csrc/` is worse than no change at all, because it breaks the one number that
+tells you where the project is.
+
+A COROLLARY FOR SHAPE CLAIMS. "The two arms are ternaries", "the positive arm
+is the fall-through" and the rest of a park's WHAT IS PAID FOR list are
+restatements of the park, not findings -- they are true before the attempt
+starts. Reporting them as verification steps hides the fact that nothing moved.
+The only numbers that mean anything are the word count and the DIFF, before and
+after, from `verify.py`.
