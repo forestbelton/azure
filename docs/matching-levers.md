@@ -2422,6 +2422,34 @@ copying it into an `s32` local as the first statement, which hoists the
 extension to the top and pushes everything else behind it. Four words in
 func_80052774, and the last thing wrong in it.
 
+### "A pure register rotation" can be a narrow PARAMETER -- check the types first
+
+func_8003AB44 cost most of a session to this. advise.py said ALLOC with every
+opcode, immediate and displacement already matching, and the park wrote the
+rest up as a 3-cycle rotation of $s1/$s2/$s3 and pointed at global-alloc's
+priority order. The real fault was that argument 3 was declared `s32` with an
+`(s16)` cast at its use instead of `s16` -- the same thing argument 6 of the
+same function had been fixed for two days earlier. Declaring it narrow put all
+three callee-saved registers in the listing's order at once, from 9 differing
+words to MATCH.
+
+**So when the verdict is ALLOC on a function with sub-word parameters, re-read
+the SIGNATURE before reading the priorities.** A narrow parameter changes the
+reference counts and live ranges of everything it touches -- the raw pseudo and
+the extension are separate values (see the entry above) -- so it moves an
+allocation order without any of the levers in section 3. The arithmetic there
+is for when the types are already right; it will happily tell you what it would
+take to move a priority that should never have been where it was.
+
+The hard route is still worth knowing, because it worked: a second set on the
+parameter (`c = (s16) c * D_8006A8DC[d];`, which the multiply pays for anyway)
+escapes `update_equiv_regs`' live-length doubling AND adds references, which
+took that allocno from last in the order to first; a free-reference split on
+the rival (`x = b * D[d]; x += e;`) then kept it in second place. That reached 4
+of the 9 words. What it could not fix is the tell: each product then sits in a
+callee-saved register where the listing computes it into a temp, which is what
+says the original bought those references somewhere else entirely.
+
 ### A switch subject read as `s16` is declared `s32`
 
 `s16 s = *(s16 *) (p + 4); switch (s)` gives the pseudo HImode, so the read is
