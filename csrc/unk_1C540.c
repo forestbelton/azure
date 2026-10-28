@@ -1861,7 +1861,373 @@ u8 *func_8004C080(u8 *a, u8 *b, u8 *p, u8 *q, u8 *e, s32 n)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004C36C);
+/* The GTE model draw. For each node on the UnkNode.unk_18 chain it walks the
+   part list (list->unk_0C), builds each part's matrix with RotMatrix /
+   TransMatrix / CompMatrix / ScaleMatrix, then walks that part's 0xC-byte
+   element records projecting four corners through RTPT/RTPS and emitting one
+   primitive each -- inline on the 0x2C path, otherwise through func_8004C080,
+   which answers a count in a stack slot.
+
+   SEVEN THINGS ARE LOAD-BEARING. Each was worth words and none is cosmetic:
+
+   * THE STACK OBJECT IS REACHED THROUGH A POINTER LOCAL. `Unk4C36C pp;` with
+     `Unk4C36C *p = &pp;` and every access as `p->unk_NN` gives one base
+     register for all 0x110 bytes. Accessed as `pp.unk_NN` gcc addresses every
+     field off $sp instead -- same word count, 436 differing words.
+   * EVERY NODE FIELD IS RE-DEREFERENCED, not cached: the listing reloads
+     `list->unk_08` and `list->unk_04` before each word it copies out. A local
+     for either is twenty words short.
+   * THE PER-NODE SETUP IS OUTSIDE THE LOOP -- `if (list != NULL) { setup;
+     for (;;) { advance; part 2; elements; } }`, not
+     `while (list != NULL) { setup; advance; ... }`. The listing's node walk
+     ends with `j` to the ADVANCE, not with a branch back to the body start.
+     Writing it as a `while` also makes the body start a label, which stops
+     reorg filling the guard's delay slot with RotMatrix's first argument.
+   * THE PRIMITIVE-FIELD COPIES READ INTO LOCALS BEFORE THEIR STORES, in pairs,
+     because a QImode store to `prim` conflicts with the next QImode load off
+     `p` and sched1 cannot hoist across it.
+   * WHICH NAME CARRIES EACH PAIRED READ DECIDES ITS ORDER. `p->unk_06` goes
+     through `g1` and `p->unk_04` through `g3` -- not the other way round.
+     sched1 bumps a load whose destination is assigned exactly once in the
+     function (birthing_insn_p, reg_n_sets == 1) to LAUNCH_PRIORITY, and a
+     bumped insn is picked first in the backward pass and so placed LAST. `g3`
+     has one assignment and `g1` three, so swapping them swaps the pair.
+   * IN THE COUNT LOOP, `a3` AND `cd` ARE BLOCK-LOCAL AND ASSIGNED TWICE. The
+     element size must be read before the count store, because `&count` goes to
+     func_8004C080 and the store cannot be crossed by a load through `prim`;
+     and both arithmetic steps must be IN PLACE on the loaded register, which
+     needs a destination local-alloc is allocating. A function-scope name is
+     global so combine_regs will not tie it; a single-set block-local is
+     bumped. Block-local and twice-assigned is the only shape that is neither.
+   * `p->unk_02`/`unk_03` are read through `*(volatile u8 *)` to keep the
+     listing's `lbu` + `sll 24` + `sra 24`; without it combine folds the
+     sign-extension into an `lb`. The volatile is a stand-in for whatever the
+     original wrote -- see the Unk4C36CW note in the project docs. */
+
+typedef union Unk4C36CW
+{
+    s32 w;
+    struct
+    {
+        u16 lo;
+        u16 hi;
+    } u;
+    struct
+    {
+        s16 lo;
+        s16 hi;
+    } h;
+    u8 b[4];
+} Unk4C36CW;
+
+typedef struct Unk4C36C
+{
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+    u8 unk_03;
+    u16 unk_04;
+    u16 unk_06;
+    u8 unk_08;
+    u8 unk_09;
+    u8 unk_0A;
+    u8 unk_0B;
+    u8 pad_0C[0xC];
+    s32 unk_18;
+    u8 pad_1C[0x4];
+    Unk4C36CW unk_20;
+    Unk4C36CW unk_24;
+    s32 unk_28;
+    u8 pad_2C[0x4];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    u8 pad_3C[0x4];
+    s32 unk_40;
+    s32 unk_44;
+    u8 pad_48[0x8];
+    s32 unk_50;
+    s32 unk_54;
+    s16 unk_58;
+    s16 unk_5A;
+    s16 unk_5C;
+    u8 pad_5E[0x2];
+    s16 unk_60;
+    s16 unk_62;
+    s16 unk_64;
+    u8 pad_66[0x2];
+    s16 unk_68;
+    s16 unk_6A;
+    s16 unk_6C;
+    u8 pad_6E[0x2];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s32 unk_78;
+    MATRIX unk_7C;
+    u8 pad_9C[0xC];
+    s32 unk_A8;
+    Unk4C36CW unk_AC;
+    Unk4C36CW unk_B0;
+    Unk4C36CW unk_B4;
+    s32 unk_B8;
+    Unk4C36CW unk_BC;
+    Unk4C36CW unk_C0;
+    MATRIX unk_C4;
+    MATRIX unk_E4;
+    u8 pad_104[0x8];
+    s32 unk_10C;
+} Unk4C36C;
+
+void func_8004C36C(u8 *pl, u8 *list)
+{
+    Unk4C36C pp;
+    Unk4C36C *p = &pp;
+    s32 count;
+    MATRIX *m1;
+    MATRIX *m2;
+    u8 *base;
+    u8 **gp = (u8 **)&D_80083160;
+    POLY_FT4 *prim;
+    u8 *e;
+    UnkNode *nd;
+    u32 c0;
+    u32 c1;
+    s32 g0;
+    s32 g1;
+    s32 g2;
+    s32 g3;
+    s32 v0;
+    s32 v1;
+    s32 v2;
+    s32 v3;
+    s32 t0;
+    s32 t1;
+    s32 t2;
+    s32 t3;
+    s32 t;
+    s32 w;
+
+    m1 = &p->unk_E4;
+    m2 = &p->unk_7C;
+    c0 = 0xFFFFFF;
+    c1 = 0xFF000000;
+    base = D_80083160.unk_00;
+    prim = *(POLY_FT4 **)(base + 0x8D0);
+    p->unk_18 = (s32)(base + 0x70);
+    p->unk_38 = 0;
+    PushMatrix();
+    p->unk_74 = 0;
+    p->unk_6C = 0;
+    p->unk_64 = 0;
+    p->unk_5C = 0;
+    for (;;)
+    {
+        if (list != NULL)
+        {
+            p->unk_B8 = *(s32 *)(*(u8 **)(list + 8) + 0);
+            p->unk_BC.w = *(s32 *)(*(u8 **)(list + 8) + 4);
+            p->unk_C0.w = *(s32 *)(*(u8 **)(list + 8) + 8);
+            p->unk_20.w = *(s16 *)(*(u8 **)(list + 4) + 8) + p->unk_BC.h.hi;
+            p->unk_24.w = *(s16 *)(*(u8 **)(list + 4) + 0xA) + p->unk_C0.h.lo;
+            p->unk_28 = *(s16 *)(*(u8 **)(list + 4) + 0xC) + p->unk_C0.h.hi;
+            p->unk_50 = p->unk_B8;
+            p->unk_54 = p->unk_BC.w;
+            RotMatrix((SVECTOR *)&p->unk_50, &p->unk_C4);
+            TransMatrix(&p->unk_C4, (VECTOR *)&p->unk_20);
+            p->unk_40 = *(s16 *)(*(u8 **)(list + 4) + 4);
+            p->unk_44 = *(s16 *)(*(u8 **)(list + 4) + 6);
+            p->unk_78 = *(s32 *)(*(u8 **)(list + 4) + 0);
+            p->unk_10C = (*(u8 **)(list + 4))[0xF];
+            for (;;)
+            {
+                do
+                {
+                    list = *(u8 **)(list + 0xC);
+                    if (list == NULL)
+                    {
+                        goto done;
+                    }
+                    e = *(u8 **)list;
+                } while (e == NULL);
+                p->unk_A8 = *(s32 *)(*(u8 **)(list + 4) + 0);
+                p->unk_AC.w = *(s32 *)(*(u8 **)(list + 4) + 4);
+                p->unk_B0.w = *(s32 *)(*(u8 **)(list + 4) + 8);
+                p->unk_B4.w = *(s32 *)(*(u8 **)(list + 4) + 0xC);
+                p->unk_50 = *(s32 *)(*(u8 **)(list + 8) + 0);
+                p->unk_54 = *(s32 *)(*(u8 **)(list + 8) + 4);
+                RotMatrix((SVECTOR *)&p->unk_50, m1);
+                p->unk_20.w = *(s16 *)(*(u8 **)(list + 8) + 6);
+                p->unk_24.w = *(s16 *)(*(u8 **)(list + 8) + 8);
+                p->unk_28 = *(s16 *)(*(u8 **)(list + 8) + 0xA) + p->unk_B4.h.lo;
+                TransMatrix(m1, (VECTOR *)&p->unk_20);
+                CompMatrix(&p->unk_C4, m1, m2);
+                p->unk_30 = p->unk_AC.h.lo;
+                p->unk_34 = p->unk_AC.h.hi;
+                ScaleMatrix(m2, (VECTOR *)&p->unk_30);
+                ScaleMatrix(m2, (VECTOR *)&p->unk_40);
+                SetRotMatrix(m2);
+                SetTransMatrix(m2);
+                for (;;)
+                {
+                    *(s32 *)&p->unk_00 = *(s32 *)(e + 0);
+                    *(s32 *)&p->unk_04 = *(s32 *)(e + 4);
+                    w = *(s32 *)(e + 8);
+                    *(s32 *)&p->unk_08 = w;
+                    if (w != 0)
+                    {
+                        if (p->unk_00 & 1)
+                        {
+                            v0 = p->unk_B0.u.lo - (s8) * (volatile u8 *)&p->unk_02 -
+                                 p->unk_20.u.lo - p->unk_BC.u.hi;
+                            p->unk_68 = v0;
+                            p->unk_58 = v0;
+                            t0 = v0 - p->unk_0A;
+                            p->unk_70 = t0;
+                            p->unk_60 = t0;
+                        }
+                        else
+                        {
+                            v1 = p->unk_B0.u.lo + (s8) * (volatile u8 *)&p->unk_02 -
+                                 p->unk_20.u.lo - p->unk_BC.u.hi;
+                            p->unk_68 = v1;
+                            p->unk_58 = v1;
+                            t1 = v1 + p->unk_0A;
+                            p->unk_70 = t1;
+                            p->unk_60 = t1;
+                        }
+                        if (p->unk_00 & 2)
+                        {
+                            v2 = p->unk_B0.u.hi - (s8) * (volatile u8 *)&p->unk_03 -
+                                 p->unk_24.u.lo - p->unk_C0.u.lo;
+                            p->unk_62 = v2;
+                            p->unk_5A = v2;
+                            t2 = v2 - p->unk_0B;
+                            p->unk_72 = t2;
+                            p->unk_6A = t2;
+                        }
+                        else
+                        {
+                            v3 = p->unk_B0.u.hi + (s8) * (volatile u8 *)&p->unk_03 -
+                                 p->unk_24.u.lo - p->unk_C0.u.lo;
+                            p->unk_62 = v3;
+                            p->unk_5A = v3;
+                            t3 = v3 + p->unk_0B;
+                            p->unk_72 = t3;
+                            p->unk_6A = t3;
+                        }
+                        gte_ldv3(&p->unk_58, &p->unk_60, &p->unk_68);
+                        gte_rtpt();
+                        gte_stsxy3(&prim->x0, &prim->x1, &prim->x2);
+                        gte_ldv0(&p->unk_70);
+                        gte_rtps();
+                        gte_stsxy(&prim->x3);
+                    }
+                    if ((p->unk_01 & 0xFC) == 0x2C)
+                    {
+                        if (p->unk_08 + p->unk_0A >= 0x100)
+                        {
+                            p->unk_0A = p->unk_0A - 1;
+                        }
+                        if (p->unk_09 + p->unk_0B >= 0x100)
+                        {
+                            p->unk_0B = p->unk_0B - 1;
+                        }
+                        setlen(prim, 9);
+                        *(s32 *)&prim->r0 = p->unk_A8;
+                        func_8004C010((u8 *)&prim->r0, (u8 *)&p->unk_78);
+                        g1 = p->unk_01;
+                        g0 = p->unk_08;
+                        prim->code = g1;
+                        prim->u0 = g0;
+                        g1 = p->unk_06;
+                        g2 = p->unk_09;
+                        prim->clut = g1;
+                        prim->v0 = g2;
+                        if (prim->x0 > prim->x1 || prim->x0 != prim->x2)
+                        {
+                            p->unk_0A = p->unk_0A - 1;
+                        }
+                        t = p->unk_08 + p->unk_0A;
+                        g0 = p->unk_09;
+                        prim->u3 = t;
+                        prim->u1 = t;
+                        prim->v1 = g0;
+                        g3 = p->unk_04;
+                        g2 = p->unk_08;
+                        prim->tpage = g3;
+                        prim->u2 = g2;
+                        if (prim->y0 > prim->y2 || prim->y0 != prim->y1)
+                        {
+                            p->unk_0B = p->unk_0B - 1;
+                        }
+                        t = p->unk_09 + p->unk_0B;
+                        prim->v3 = t;
+                        prim->v2 = t;
+                        *(u32 *)prim =
+                            (*(u32 *)prim & c1) |
+                            (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                      (p->unk_10C * 4 + p->unk_18)) &
+                             c0);
+                        *(u32 *)(p->unk_B4.b[3] * 4 + (p->unk_10C * 4 + p->unk_18)) =
+                            (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                      (p->unk_10C * 4 + p->unk_18)) &
+                             c1) |
+                            ((u32)prim & c0);
+                        e = e + 0xC;
+                        prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 + 4);
+                    }
+                    else
+                    {
+                        count = 1;
+                        e = func_8004C080((u8 *)&p->unk_78, (u8 *)&p->unk_A8,
+                                          (u8 *)prim, e, (u8 *)p, (s32)&count);
+                        count = count - 1;
+                        while (count != -1)
+                        {
+                            s32 a3;
+                            s32 cd;
+
+                            *(u32 *)prim =
+                                (*(u32 *)prim & c1) |
+                                (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                          (p->unk_10C * 4 + p->unk_18)) &
+                                 c0);
+                            *(u32 *)(p->unk_B4.b[3] * 4 +
+                                     (p->unk_10C * 4 + p->unk_18)) =
+                                (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                          (p->unk_10C * 4 + p->unk_18)) &
+                                 c1) |
+                                ((u32)prim & c0);
+                            a3 = ((u8 *)prim)[3];
+                            a3 *= 4;
+                            cd = count;
+                            cd--;
+                            count = cd;
+                            prim = (POLY_FT4 *)((u8 *)prim + a3 + 4);
+                        }
+                        e = e + 0xC;
+                    }
+                    if (p->unk_00 & 0x80)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    done:
+        nd = *(UnkNode **)(pl - 8);
+        if (nd == NULL)
+        {
+            break;
+        }
+        pl = (u8 *)nd + 0x20;
+        list = (u8 *)nd->unk_0C;
+    }
+    PopMatrix();
+    *(POLY_FT4 **)(*gp + 0x8D0) = prim;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CAA0);
 
