@@ -1623,6 +1623,20 @@ the MARGINS table's `live <= N` instruction, which is in DOUBLED units.
 Shortening the real range by k moves the stored value by 2k, so that
 instruction costs half as many real insns as it reads.
 
+CONFIRMED BY PROBE, 2026-10-27. On func_8004CECC, adding a second set of the
+parameter `out` -- `out = out + 1; return out;` in place of `return out;`,
+which changes the function's meaning and is a MECHANISM PROBE, not a candidate
+-- moves its `lreg` line from
+
+    Register 84 used 23 times across 170 insns      (once-set: doubled)
+    Register 84 used 25 times across  86 insns      (twice-set: real)
+
+in a 102-word function. Exactly halved, give or take the one insn the probe
+itself adds, and the reference count rises by the set plus its use. So the
+escape is real and it is worth a factor of two on the denominator: 84 goes from
+0.541 to 4 * 25 / 86 = 1.163 and becomes the top global allocno, which is what
+the re-derivation predicted.
+
 AND THE DOUBLING IS ITSELF A LEVER: a pseudo with two or more sets escapes it,
 so giving a doubled pseudo a SECOND SET THAT SURVIVES CSE doubles its priority
 at zero instruction cost. (The surviving kinds are the ones section 8's
