@@ -120,6 +120,14 @@
  * make; the score is an oracle for shape, not for correctness.
  *
  * So what is left really is allocation and schedule, not shape.
+ *
+ * MEASURED 2026-10-28, the narrow-parameter lever (section 7), since every use
+ * of `vel` and `fine` in this source is `(s16)`-cast: `s16 vel` is 333 words
+ * and 219 DIFF (one better), `s16 fine` is 220 (unchanged), and BOTH together
+ * is 334 words and 221. Recorded rather than adopted -- at 220 differing words
+ * a single word is noise, and the two-parameter form going a word OVER says
+ * the pair interact. Worth re-running once this function is close enough for
+ * the score to mean something.
  */
 
 #include "common.h"
