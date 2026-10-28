@@ -129,8 +129,12 @@
  * STILL UNVERIFIED, and the places to look first when picking this up:
  *   * the two `|| x != y` guards around the u/v decrements. The listing
  *     branches to the decrement when `prim->x1 < prim->x0` and past it when
- *     `prim->x0 == prim->x2`, which is what `a < b || b != c` gives, but
- *     nothing has tested the other groupings.
+ *     `prim->x0 == prim->x2`, which is what `a < b || b != c` gives. THE OTHER
+ *     GROUPINGS ARE NOW TESTED, 2026-10-28, all 461 words: the second test's
+ *     operands reversed (`prim->x2 != prim->x0`) is 15 DIFF, the two tests
+ *     swapped is 39, and the first test written `prim->x1 < prim->x0` rather
+ *     than `prim->x0 > prim->x1` is 15 -- so the shape in this file, with the
+ *     greater-than form first, is the floor at 13 and this item is closed.
  *   * `p->unk_02`/`unk_03` are read through `*(volatile u8 *)` to keep the
  *     listing's `lbu` + `sll 24` + `sra 24`; without it combine folds the
  *     sign-extension into an `lb` and four words differ. The volatile is a
