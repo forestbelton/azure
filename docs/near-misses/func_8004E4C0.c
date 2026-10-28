@@ -32,6 +32,36 @@
  * this file's): an explicit guard plus do-while, `w > 1` as the guard, an
  * `m = w` local for the first bound, for the pad bound, and before the guard
  * -- all 46 words -- and a rotated loop at 48.
+ *
+ * TWO ADDITIONS, 2026-10-27, both from reading the two streams side by side
+ * rather than the margins.
+ *
+ * (1) THE MAGIC CONSTANT'S REGISTER DIFFERS TOO, which the note above does
+ * not mention, and it is the other half of the same fact:
+ *
+ *     target  lui $t1,0xcccc ; ori $t1 ; multu $a0,$t1 ... andi $v1,$a1,0xffff
+ *     built   lui $t2,0xcccc ; ori $t2 ; multu $a0,$t2 ... andi $t1,$a1,0xffff
+ *
+ * and the POSITIONS differ with them: this build computes the first mask at
+ * word 6, before the first digit's divide, while the listing computes it at
+ * word 14, immediately before the loop guard that uses it. So in the listing
+ * the magic is allocated first and takes $t1, leaving the mask $v1; here the
+ * mask is allocated first, takes $t1, and pushes the magic to $t2. Any lever
+ * has to move that order, and the mask's EARLY POSITION is the thing to
+ * attack -- a single-set pseudo is bumped by sched1 and placed just before
+ * its use (section 8), which is what the listing shows, so ask why this
+ * build's mask is NOT being bumped.
+ *
+ * (2) THE LISTING HAS TWO QUANTITIES WHERE THIS HAS ONE. Its mask is SHORT --
+ * from the `andi` to the `addu $t2, $v1, $zero` -- and the bound then rides
+ * in $t2 through the loop; this build has one long-lived mask in $t1 and
+ * therefore nothing to copy. That is why `m = w` coalesces away: two pseudos
+ * holding the same value merge unless they CONFLICT or one of them is
+ * MULTI-SET. So the shape to look for is not another placement of `m = w`
+ * (four were measured) but a second SET of the bound that survives cse --
+ * section 3's note on which second sets survive lists the three kinds, and
+ * none of them is available before a loop with no preceding branch, which is
+ * the real obstacle here and worth stating plainly.
  */
 
 #include "common.h"
