@@ -1971,6 +1971,16 @@ void func_80056D44(s32, u8 *);
    matching-levers section 3's dead-reference entry, second function to land
    on it after func_800387D0.
 
+   TREAT THAT GUARD AS A SYMPTOM, NOT A FINDING. What is real is the EFFECT --
+   one more reference to `m`, outside the loop, at zero instruction cost. The
+   spelling is only the cheapest way found to produce it, and nobody writes
+   `if (m < n)` when they mean `if (n > 0)`. The likely truth is that the
+   original had a variable here this source does not model, or wrote the loop
+   in a form that references the accumulator once more on the way in. Anything
+   that adds that one reference for a reason a person would have had replaces
+   this line and is strictly better; the eight words either side of it do not
+   depend on which.
+
    Also paid for: the two masks are left IN the comparison (`(a & 0xFF)`), and
    loop.c hoists them into $s5 and $s4 by itself; `i` and `m` are initialised
    by their declarations and `m` is declared second; and `D_80073740[i]` is
