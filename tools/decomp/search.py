@@ -390,6 +390,23 @@ def t_copy_param(text):
     from a base of 100 words / 92 DIFF -- so the first form fixed the word
     count outright. func_8005BBFC's `vel` is the same lever from the other
     side, where the RAW read is the one that buys the reference.
+
+    BUT ITS RECORD SO FAR IS THREE HITS AND THREE REJECTIONS (2026-10-28, the
+    day it was written), and they fail the same way: the copy buys an extra
+    CALLEE-SAVED REGISTER and an `$sN <- $sN` move, which scores better and
+    which the listing does not contain.
+
+        func_8005A90C   100 (-3)/92  -> 103 (+0)/59   adopted then REVERTED
+        func_8004E4C0    46 (-1)/45  ->  47 (+0)/30   extra word is `move $t1,$a0`;
+                                                      the listing's `multu` reads $a0
+        func_8005552C    50 (-2)/37  ->  53 (+1)/26   adds a third callee-saved
+                                                      register; the listing saves two
+
+    So treat a hit from this family as a question, not an answer: diff the two
+    builds, find the instruction the copy adds, and look for it in the listing.
+    Twice now the listing has shown the raw/copy split is one gcc makes for
+    itself from a plain parameter, which is evidence FOR the park's existing
+    source rather than against it.
     """
     lo, hi = SPAN
     m = re.search(r"(\w[\w \*]*)\b(\w+)\s*\(([^)]*)\)\s*\{", text[:lo + 1])

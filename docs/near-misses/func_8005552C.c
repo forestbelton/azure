@@ -57,6 +57,32 @@
  * reads the copy, so `andi $v1, $s1` rather than the listing's
  * `andi $a0, $a0`), and the innermost pair as `m = 1; if (x == 0x800) m = 0;`
  * (identical: that IS the form the transform matches).
+ *
+ * 2026-10-28: A 26-DIFF VARIANT, MEASURED AND REJECTED, with the listing's own
+ * prologue as the reason. `search.py`'s `copy_param` family reports that
+ * copying the parameter (`k_c = k;`, with the three masks reading `k_c`) is
+ * 53 words / 26 DIFF against this file's 50 / 37 -- one over instead of two
+ * short, and eleven fewer differing words.
+ *
+ * The three words it adds are `sw $s2, 0x18($sp)`, `move $s2, $s1` and the
+ * frame growth that follows, i.e. a THIRD callee-saved register holding a copy
+ * of the second. The listing has neither: it saves exactly $s0, $s1 and $ra in
+ * a 0x20 frame, and contains ZERO `addu $sN, $sM, $zero` copies between
+ * callee-saved registers.
+ *
+ * WHAT THE LISTING'S PROLOGUE DOES SAY, and it is worth more than the
+ * rejection:
+ *
+ *     addu  $s1, $a0, $zero      <- `k` copied to its callee-saved home, ONCE
+ *     andi  $a0, $a0, 0xF00      <- the first mask reads the ARGUMENT register,
+ *                                   in place
+ *     addiu $v0, $zero, 0x600
+ *     beq   $a0, $v0, ...
+ *
+ * so the raw/copy split this variant tries to spell by hand is one gcc makes
+ * for itself: the first test masks `$a0` while the later uses read `$s1`. The
+ * source therefore wants `k` left exactly as the parameter, which is what this
+ * file has. Checked under the word-count rule in unname.py's header.
  */
 
 #include "common.h"
