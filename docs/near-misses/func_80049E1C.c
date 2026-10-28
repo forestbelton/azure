@@ -1,4 +1,4 @@
-/* func_80049E1C (unk_1C540) -- 20 of 20 words, 8 DIFF. NOT compiled.
+/* func_80049E1C (unk_1C540) -- 20 of 20 words, 3 DIFF. NOT compiled.
  *
  * Written out of its carved-sweep row on 2026-10-27, and ten words better
  * than the row's 18: it had this at 16-18 words of 20, three or four short,
@@ -88,6 +88,70 @@
 
 #include "common.h"
 
+/* 2026-10-28: 8 DIFF -> 3, AND THE TWO THINGS THAT DID IT.
+ *
+ * Everything this file used to say about the two arms wanting different result
+ * registers was right; what it had wrong was that the fix is not naming more
+ * locals. Two changes, each measured on its own:
+ *
+ * 1. THE LOW ARM'S TEMP IS DECLARED INSIDE THE ELSE BLOCK, not at function
+ *    scope. That alone makes the ENTIRE HIGH ARM match -- words 5..12, the
+ *    `addu $a0,$v0,$zero` / `addiu $a2,-1` / `slt` / `bnez` / `addu $v0,$a0`
+ *    / `addu $a0,$a2` / `j` / `addu $v0,$a0` run -- and fixes the `bltz`
+ *    offset too, because the high arm is then 8 words as the listing has it
+ *    rather than 7. With one function-scope `r` shared by both arms the m-1
+ *    exit gets cross-jumped into the low arm's tail, which is what forced both
+ *    temps into $a0. See "WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR
+ *    SEES IT" in matching-levers section 3.
+ *
+ * 2. THE LOW ARM IS WRITTEN `s = 0;` THEN `if (a >= 0) { s = a; }` -- the
+ *    zero unconditional and the copy conditional. Written the other way round
+ *    (`s = a; if (a < 0) { s = 0; }`) the function is SEVENTEEN words, three
+ *    short, because cse rewrites the test's operand from `a` to `s`, `a` then
+ *    dies at the copy, `s` and `a` no longer conflict, global-alloc gives both
+ *    $v0 and all three moves vanish. With `s = 0` first, cse cannot equate `s`
+ *    with `a` at all, so the copy survives and `s` takes $v1 -- the listing's
+ *    register.
+ *
+ * WHAT IS LEFT IS THREE WORDS, and they are one mirror image. The listing's
+ * low arm is
+ *
+ *     bgez $v0, .L80049E58 ; addu $v1,$v0,$zero ; addu $v1,$zero,$zero
+ *
+ * i.e. `s = a` unconditional with `s = 0` under the branch; this source emits
+ *
+ *     bltz $v0, L          ; addu $v1,$zero,$zero ; addu $v1,$v0,$zero
+ *
+ * the same three insns with the branch sense and the two assignments swapped.
+ * Words 1-12 and 16-20 are identical. So the original wrote the clamp the
+ * other way round and did NOT lose the copy to cse, which is exactly what
+ * point 2 says this source cannot do.
+ *
+ * AND THE cse RULE IS NOW READ OUT RATHER THAN INFERRED, which is where the
+ * next attempt starts. `merge_equiv_classes` (cse.c:837-862) makes the NEW
+ * register of an equivalence class the canonical one when
+ *
+ *     uid_cuid[regno_last_uid[new]]  > cse_basic_block_end
+ *       || uid_cuid[regno_first_uid[new]] < cse_basic_block_start
+ *     AND uid_cuid[regno_last_uid[new]] > uid_cuid[regno_last_uid[firstr]]
+ *
+ * -- "if NEW will live longer than any other reg of the same qty, and that is
+ * beyond the current basic block, make it the new canonical replacement". `s`
+ * qualifies on both counts: it is used after the join, so it outlives `a` and
+ * its last use is past the block end. That is why the test is rewritten to `s`
+ * and why `a` dies at the copy. So the shape to look for gives `a` a last use
+ * no earlier than `s`'s -- a use of `a` after the join -- or keeps `s`'s live
+ * range inside the block. Note this is a cse question, not an allocation one,
+ * which is a correction to everything above the 2026-10-28 line.
+ *
+ * MEASURED on the way, all with the high arm as above: both arms as ternaries,
+ * as if/else, and as in-place clamps; per-arm returns and a shared `return r`;
+ * one variable and two; the low arm's test on `a` and on `s`; `q = m - 1`
+ * hoisted; `s = a` hoisted ahead of the `d >= 0` test; a goto form; and a
+ * 139-variant cross product of all of those. Everything with a function-scope
+ * low temp is 8 DIFF and everything with `s = a` first is 17 words.
+ */
+
 s32 func_80049E1C(s32 a, s32 d, s32 m) {
     s32 r;
 
@@ -95,10 +159,15 @@ s32 func_80049E1C(s32 a, s32 d, s32 m) {
         a += d;
         if (d >= 0) {
             r = (a >= m - 1) ? m - 1 : a;
+            return r;
         } else {
-            r = (a < 0) ? 0 : a;
+            s32 s = 0;
+
+            if (a >= 0) {
+                s = a;
+            }
+            return s;
         }
-        return r;
     }
     return 0;
 }
