@@ -483,6 +483,20 @@ rather than guessing:
     grep 'Register 8' /tmp/azure-decomp/dumps/zz_foo/lreg   # refs / live_length
     sed -n '/regs to allocate/,/dispositions/p' .../greg    # order and conflicts
 
+**DO NOT COUNT REFERENCES WITH `grep -c` ON AN RTL DUMP.** It counts NOTES and
+sub-expressions alongside real references, and the error reads as a factor of
+two. On func_8005BBFC 2026-10-28 a pseudo showed four `grep` hits and I
+reported it as a four-reference register, twice over; the four were
+
+    (set (reg/v:SI 89) (mem ...))                     <- the set
+    (ashift:SI (reg/v:SI 89) (const_int 16))          <- the one use
+    (expr_list:REG_DEAD (reg/v:SI 89))                <- a note
+    (expr_list:REG_EQUAL (sign_extend (subreg ...)))  <- a note
+
+i.e. `reg_n_refs` is 2, and a whole mechanism was declared refuted on the
+strength of the miscount. Use `grep 'Register N'` in `.lreg`, which prints the
+counts gcc computed, or read the matched lines before believing the number.
+
 `global.c` ranks by roughly `floor_log2(refs) * refs / live_length`, and both
 numbers are measured **post-sched1**. Crossing a power-of-two boundary in the
 reference count is a large jump; one insn of live length is a small one, and
