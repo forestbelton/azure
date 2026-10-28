@@ -1,4 +1,4 @@
-/* func_8005A90C (unk_2CDC0) -- 100 of 103 words, 92 DIFF. NOT compiled.
+/* func_8005A90C (unk_2CDC0) -- 103 of 103 words, 59 DIFF. NOT compiled.
  *
  * The third member of the func_8005A608 / func_8005A778 family, and the one
  * with the longest tail: it claims a D_80086A40 slot the same way the other
@@ -135,6 +135,45 @@
  * family is the one that can change VALUES rather than representations.
  * See docs/matching-levers.md on reviewing a narrowing against the
  * listing's own arithmetic before keeping it.
+ *
+ * 2026-10-28: 100 -> 103 WORDS AND 92 -> 59 DIFF. The word count is now EXACT,
+ * and the change is one statement:
+ *
+ *     cc = c;                      <- a copy of the third parameter, made
+ *                                     BEFORE the id dispatch
+ *     ...
+ *     *(u32 *) (e + 0x14) = cc;    <- the two stores read the COPY
+ *     *(u32 *) (e + 8)    = cc;
+ *     r = func_80059F8C(b, c);     <- the call still reads the RAW parameter
+ *
+ * This is the thread the paragraph above says to pull, and it closes it. The
+ * build was storing the INCOMING HARD REGISTER (`(set (mem (plus (reg 87) 20))
+ * (reg:SI 5 a1))`) because the `id == -1` arm reaches `found:` by `goto`
+ * without passing func_8005A1D0's call, so on that path $a1 is untouched and
+ * there was no allocno for global-alloc to conflict with pseudo 87. Copying
+ * the parameter ABOVE the dispatch gives it a pseudo that is live on both
+ * paths, which is what the listing's unconditional prologue copies are for --
+ * and the three words that were missing are those copies.
+ *
+ * THE SPLIT BETWEEN COPY AND RAW IS LOAD-BEARING, which is the same shape as
+ * func_8005BBFC's `vel` fix: cse cannot share a raw parameter read with a copy,
+ * so each keeps its own reference. Measured:
+ *
+ *     stores read `cc`, call reads `c`     103 words, 59 DIFF   <- this file
+ *     stores AND call read `cc`            100 words, 95 DIFF
+ *     the same for `b` as well             106 words, 102 DIFF
+ *     the same for `p` as well             106 words, 102 DIFF
+ *
+ * and the copy's POSITION does not matter: before `D_8007382C[0] = 0`, after
+ * it, or after the two shifts are all 103 words and the same 59.
+ *
+ * WHAT IS LEFT, from the new diff: the frame is 0x28 here against the
+ * listing's 0x30, so the target still has eight more bytes of saved registers
+ * or locals than this source produces -- which is the surviving half of
+ * advise.py's callee-saved hint, now that three of the words it wanted have
+ * arrived. The register naming ($s4/$s2/$s0 here, $s5/$s3/$s4 there) and the
+ * position of `sw $zero, %lo(D_8007382C)` relative to the two shifts follow
+ * from it. Start there, not from the allocator tables.
  */
 
 #include "common.h"
@@ -154,8 +193,10 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
     u8 *e;
     s16 r;
     u32 t;
+    u32 cc;
 
     D_8007382C[0] = 0;
+    cc = c;
     i = 0;
     j = id;
     id = id << 16;
@@ -180,11 +221,11 @@ s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
 found:
     k = i;
     e = (u8 *) &D_80086A40[k];
-    *(u32 *) (e + 0x14) = c;
+    *(u32 *) (e + 0x14) = cc;
     e[0x18] = 0x7F;
     *(s16 *) e = i;
     *(u8 **) (e + 4) = p;
-    *(u32 *) (e + 8) = c;
+    *(u32 *) (e + 8) = cc;
     e[0x1B] = 0x40;
     *(u32 *) (e + 0x10) = b;
     r = func_80059F8C(b, c);
