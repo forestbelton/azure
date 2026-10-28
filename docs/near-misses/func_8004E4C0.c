@@ -62,6 +62,34 @@
  * section 3's note on which second sets survive lists the three kinds, and
  * none of them is available before a loop with no preceding branch, which is
  * the real obstacle here and worth stating plainly.
+ *
+ * 2026-10-28: A 47-WORD / 30-DIFF VARIANT, MEASURED AND REJECTED -- and the
+ * rejection is itself evidence about the source. `search.py`'s `copy_param`
+ * family reports that copying the parameter into a local and dividing the COPY
+ * (`n_c = n;` then `n_c = n_c / 10;`, with the digits taken from `n_c`) is 47
+ * of 47 words -- exact, where this file is one short -- and 30 DIFF against
+ * 45. Better on both axes, and a more natural source shape than modifying a
+ * parameter in place.
+ *
+ * It is still wrong. The one word it adds is `move $t1, $a0`, the copy itself,
+ * and the listing does not have it: its first three instructions are
+ *
+ *     lui   $t1, (0xCCCCCCCD >> 16)
+ *     ori   $t1, $t1, (0xCCCCCCCD & 0xFFFF)
+ *     multu $a0, $t1
+ *
+ * i.e. the reciprocal multiply reads `$a0` DIRECTLY, so the parameter is never
+ * copied anywhere. That settles a question this file could otherwise only
+ * guess at: the original really does divide the parameter in place, which is
+ * the shape here. The missing 47th word is somewhere else -- note the listing
+ * has `addiu $t0, $zero, 0x1` in the opening run where this build has
+ * `andi $t1, $a1, 0xFFFF`, so look at the second parameter's masking and at
+ * where the constant 1 comes from.
+ *
+ * (Checked under the rule added to unname.py's header the same day: when a
+ * variant changes the word count, name the instruction it adds and find it in
+ * the listing. This is the second hit that rule has caught; func_8005A90C's
+ * was adopted before the rule existed and had to be reverted.)
  */
 
 #include "common.h"

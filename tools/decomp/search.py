@@ -766,6 +766,14 @@ def t_hoist_read(text):
             decl_at[m.group(1)] = k
     for m in scan(_READ, text):
         read = m.group(0)
+        # `_READ` matches any `*(TYPE *) (...)` dereference, INCLUDING one being
+        # assigned to. Substituting the fresh name there turns a store into a
+        # dead local assignment and silently deletes it: on func_8005B4D0 that
+        # produced `q0 = t;` in place of `*(u32 *) (v + 0x64) = t;` and scored
+        # a word better for exactly that reason (2026-10-28). An lvalue is not
+        # a read, so skip it.
+        if re.match(r"\s*(=[^=]|\+\+|--|[-+*/%|&^]=|<<=|>>=)", text[m.end():]):
+            continue
         owner = next((k for k, (a, b, _) in enumerate(run) if a <= m.start() < b), len(run))
         # the read must not be the whole initialiser -- then hoisting is a rename
         if owner < len(run) and run[owner][2].split("=", 1)[-1].strip().rstrip(";") == read:
