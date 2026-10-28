@@ -109,6 +109,26 @@
  * `k != 2` (deeper still). That is a statement about the function's shape
  * rather than its spelling, and it is the thing to look for: an early
  * comparison against 2 on something other than the row halfword.
+ *
+ * 2026-10-28: "A SPELLING THAT DOES NOT GIVE THE SYMBOL A MOVABLE TO HOIST"
+ * DOES NOT EXIST, and the reason is structural rather than another thing to
+ * measure. `move_movables` will hoist a loop invariant when any of three
+ * conditions holds (loop.c:690-700), and the second -- "it is not a user
+ * variable and it is not used in the exit test" -- is the one a source can
+ * work, by giving the value a NAME so the pseudo carries REG_USERVAR_P. That
+ * is a real lever and it landed nothing here, because the THIRD condition
+ * already holds: the set is guaranteed to run once the loop starts. The shared
+ * `%hi(D_80085458)` pseudo is set at `e`'s computation, which is the FIRST
+ * statement of the do-body, before any branch -- and `maybe_never` only
+ * becomes true at the first label or jump scan_loop walks past (loop.c:921).
+ * So the movable is hoisted however it is spelt, which is exactly what the
+ * `base = D_80085458;` measurements above found from the other end.
+ *
+ * The movable exists at all only because the symbol is referenced TWICE, and
+ * the file already prices dropping the second reference at seven words. So
+ * both ends of this trade are now closed and the three words are not a naming
+ * or a hoisting question; what remains is the LUID order of three
+ * equal-priority ALU insns, which is where this file's earlier note leaves it.
  */
 #include "common.h"
 

@@ -5672,6 +5672,15 @@ LIVE:
   and a NAMED local is not. Naming an invariant is therefore a way to hold a
   materialisation down inside the loop, and spelling it inline is a way to
   lift it -- the other half of the preheader-ordering levers in section 2.
+
+  `maybe_never` IS CHEAPER TO TRIP THAN IT SOUNDS: `scan_loop` sets it at the
+  first CODE_LABEL or JUMP_INSN it walks past in the body (loop.c:921-930), so
+  everything after the body's first `if` is "maybe never". An invariant
+  computed at the TOP of the body, before any branch, is hoisted whatever it is
+  called, and no naming reaches it -- which is why func_8005ACDC's
+  `%hi(D_80085458)` cannot be held down: the movable's SET is the first
+  statement of the body even though the second reference that creates it is
+  buried three conditionals deep.
 * **`regclass.c:1807` -- `REGNO_POINTER_FLAG` propagation.** A named local
   keeps the pointer-ness its type gave it; for an unnamed pseudo gcc infers it
   from the set. Minor, and it moves alignment assumptions rather than
