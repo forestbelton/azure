@@ -72,14 +72,68 @@
  *     target  sll $v1,$a0,16 ; lh $v0,0($s0) ; sra $v1,$v1,16 ; subu $v0,$v0,$v1
  *     built   sll $v0,$a0,16 ; lh $v1,0($s0) ; sra $v0,$v0,16 ; subu $v0,$v0,$v1
  *
- * Both quantities are BLOCK-LOCAL (so this is local-alloc, not the global
- * MARGINS table -- see section 3), and the load needs to be allocated before
- * the extension to take $v0. Measured and NOT moving it: explicit `(s32)`
- * casts on both operands; `abs(-(load - (s16) w))`; and the extension written
- * as an in-place shift pair `(((s32) w << 16) >> 16)`. All three are 114
- * words and 9 DIFF, so the spelling of the expression is exhausted and the
- * next step is the local-alloc suggestion/priority order on those two
- * quantities.
+ * Note the two `subu` words are IDENTICAL by coincidence: each form puts the
+ * difference in its own op0's register, and `d` wants $v0 either way. The
+ * target's `subu $v0, $v0, $v1` is `load - ext`, so the TARGET'S OPERAND ORDER
+ * IS `abs(*(s16 *) (q + k) - (s16) w)`, which is the opposite of what this
+ * file compiles -- see the escapes below for why this file keeps the other.
+ *
+ * 2026-10-28: THE NINE WORDS ARE EXPLAINED, and the explanation is an exact
+ * allocator TIE. From the `.lreg` dump, at each site local-alloc sees two
+ * COMBINED quantities, because `block_alloc` ties an insn's destination to a
+ * source that dies in it and `qty_n_refs` is then the SUM of both pseudos'
+ * references (local-alloc.c:1870):
+ *
+ *     the extension  {sll dest, sra dest}    4 refs over a 4-insn span
+ *     the delta      {lh dest, subu dest}    4 refs over a 4-insn span
+ *
+ * so both price out at floor_log2(4) * 4 * 4 / 4 = 8 -- the SAME priority.
+ * `qty_compare_1` breaks an exact tie on the LOWER QTY NUMBER
+ * (local-alloc.c:1622), and qty numbers are handed out in birth order, so the
+ * register goes to whichever quantity is born first. The extension is born
+ * first because sched1 puts the `sll` ahead of the `lh`: the `lh` carries a
+ * true-dependence edge on the `sh` to `b + 0xAC` (`true_dependence`,
+ * sched.c:817 -- both MEMs have varying addresses, so neither disambiguation
+ * clause fires), and `rank_for_schedule`'s class key prefers the candidate
+ * that is independent of the last-scheduled insn. The `.lreg` dump prints the
+ * edge as the `(insn_list 94 (nil))` on the load.
+ *
+ * MEASURED PROOF of exactly that: move the write-back AFTER the delta
+ * (`*(u16 *) (b + 0xAC) = w;` below the `d = abs(...)` line) and the edge is
+ * gone, the load is born first, and ALL NINE REGISTER WORDS COME OUT RIGHT --
+ * `sll $v1` / `lh $v0` / `sra $v1` / `subu $v0,$v0,$v1`, with the `nop` in the
+ * `bgez` delay slot instead of this file's `move`. It is not a match overall
+ * (42 DIFF) because the `sh` then sinks eight words down and the if-body's two
+ * `andi`s swap registers, but nothing else is left to explain.
+ *
+ * So the target needs the DELTA's quantity to win the tie WITH the store still
+ * ahead of the load. Three escapes, all closed:
+ *
+ *   * REVERSING THE OPERANDS ALONE (`abs(load - (s16) w)`, the target's own
+ *     order) keeps every opcode and displacement right but leaves the load in
+ *     $v1, which costs a `move` in the delay slot as well: 18 DIFF. Hoisting
+ *     `(s16) w` into a local first measures the same 18 -- sched1 normalises
+ *     the order, and a local shared by the three sites is a global allocno.
+ *   * RTX_UNCHANGING_P on the load would cut the edge at the first line of
+ *     `true_dependence`, but cc1psx does not set it for a cast pointer
+ *     dereference: `*(const s16 *) (q + k)` still prints as a plain `(mem:HI`
+ *     with no `/u` and the edge survives, 9 DIFF unchanged.
+ *   * THE MEM_IN_STRUCT_P CLAUSE needs the load IN a struct at a varying
+ *     address AND the store at a FIXED one. The store's base has to stay the
+ *     register `$s1` to match the listing at all (see WHAT IS PAID FOR), so
+ *     its address varies and the clause cannot fire.
+ *
+ * WHAT TO TRY NEXT, in the arithmetic above and without moving the store:
+ * give the DELTA quantity a fifth reference (floor_log2(5) * 5 * 4 / 4 = 10
+ * beats 8) or lengthen the EXTENSION's span to five insns (32 / 5 = 6.4 loses
+ * to 8). A free reference on a block-local quantity DOES move it -- that is
+ * the 2026-10-28 correction in section 3 of docs/matching-levers.md, which
+ * until then said references were global-alloc's currency only.
+ *
+ * EXHAUSTION: a full `tools/decomp/search.py` sweep over every transform
+ * family, 178 variants, run 2026-10-28 on this 9-DIFF base, improved on
+ * nothing. The per-shape "measured" list that used to stand here was taken
+ * before the two `abs()` changes and is superseded by that sweep.
  */
 
 #include "common.h"
