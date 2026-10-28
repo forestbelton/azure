@@ -31,6 +31,25 @@
  * it is the extra insns in the tail changing sched1's ready list, and the
  * thing to read is the sched1 dump of the whole block in both functions
  * (tools/decomp/sched.py), not another spelling of the two loads.
+ *
+ * 2026-10-28: A SWEEP HIT THAT IS WRONG, recorded so it is not adopted if it
+ * turns up again. `tools/decomp/unname.py`'s first version reported that
+ * inlining `m` -- deleting
+ *
+ *     m = *(u32 *) (s + **cp * 4 + 0x48) * 4;
+ *
+ * and writing that expression at its one use inside `q` -- is 44 words and
+ * 42 DIFF against this file's 46 and 44, i.e. better on BOTH axes (one word
+ * under instead of one over). It is a semantic change and not a candidate:
+ * `(*cp)++` runs between that line and the use, so the inlined form reads the
+ * byte through the INCREMENTED pointer. The right number off the wrong program.
+ *
+ * The tool now rejects it -- it checks that every operand of a value it moves
+ * is unwritten between the assignment and the last use -- so this is a note
+ * about the function rather than a standing caution. What it does say about
+ * the function is that 44 words is reachable here and the current shape is one
+ * over, which is worth remembering when the real 45-word shape is looked for:
+ * the one-over is not forced by the arithmetic.
  */
 
 #include "common.h"

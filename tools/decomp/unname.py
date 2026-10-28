@@ -83,6 +83,29 @@ def n_sets(lines, name):
     return sum(1 for l in lines if pat_lhs.match(l) or pat_inc.search(l))
 
 
+def touched(lines, name):
+    """True if `name` is written ANYWHERE in `lines`, directly or through it.
+
+    Moving a value to its use is only sound while every operand of that value
+    still holds what it held at the assignment. This is the guard for that, and
+    it is deliberately blunt: `name`, `*name`, `(*name)++`, `name[i]`,
+    `name->f` on the left of an assignment or carrying an increment all count.
+
+    It is not paranoia. Without it the sweep reports func_8003A904's
+    `m = *(u32 *) (s + **cp * 4 + 0x48) * 4;` as 44 words / 42 DIFF against the
+    park's 46 / 44 -- a real improvement on both axes, and WRONG, because
+    `(*cp)++` runs between that line and `m`'s only use, so the inlined form
+    reads the incremented pointer. A sweep that proposes a semantic change is
+    worse than one that finds nothing.
+    """
+    pat = re.compile(
+        r"^\s*\(*\**\s*%s\b[^=;]*?(=[^=]|\+\+|--|\+=|-=|\*=|/=|\|=|&=|\^=|<<=|>>=)"
+        % re.escape(name))
+    inc = re.compile(r"(\+\+|--)\s*\(*\**\s*%s\b|\b%s\b\s*\)*\s*(\+\+|--)"
+                     % (re.escape(name), re.escape(name)))
+    return any(pat.match(l) or inc.search(l) for l in lines)
+
+
 def variants(text):
     """Yield (label, source) with one local deleted and inlined."""
     lines = text.split("\n")
@@ -115,6 +138,23 @@ def variants(text):
             continue
         uses = sum(len(re.findall(r"\b%s\b" % re.escape(name), l)) for l in lines[i + 1:])
         if not 1 <= uses <= 14:
+            continue
+        # every operand of the value must be unchanged from here to the last use
+        operands = set(re.findall(r"\b([A-Za-z_]\w*)\b", init)) - KEYWORDS - {name}
+        if any(touched(lines[i + 1:], o) for o in operands):
+            continue
+        # A local holding a LOADED value, used more than once, becomes several
+        # loads when it is inlined -- which differs if anything could have
+        # written that memory in between. A call is the cheap proxy for that.
+        # `&x[i]` is exempt: it is an address, not a read.
+        body = lines[i + 1:]
+        last = max(j for j, l in enumerate(body)
+                   if re.search(r"\b%s\b" % re.escape(name), l))
+        reads_mem = (not init.strip().startswith("&")
+                     and re.search(r"\*\s*\(|->|\w\s*\[", init))
+        if uses > 1 and reads_mem and any(re.search(r"\bfunc_[0-9A-Fa-f]{6,8}\s*\(|"
+                                                    r"\b[A-Z]\w*\s*\(", l)
+                                          for l in body[:last + 1]):
             continue
         rep = "(" + init.strip() + ")"
         out = []
