@@ -59,6 +59,22 @@
  *     lookup before or after it, is 12 DIFF either way. gcc folds the two
  *     forms together, so there is no range to lengthen there.
  *
+ * WHY THE SPLITS FAIL, which is the useful part. The chain is one quantity
+ * only because each `addu`'s destination ties to a source that DIES in it; the
+ * tie is what sums the references. A split (`d += x;`) makes `d` multi-set and
+ * BREAKS that tie: in the three-split variant `d` does reach 8 refs over 11
+ * insns, exactly as intended, but `.greg`'s dispositions then show the chain
+ * scattered across three registers instead of one, each piece pricing on its
+ * own 2 refs and losing by more than the whole did. So the usual free-
+ * reference lever is unavailable here: it cannot add a reference to this
+ * quantity without dissolving it.
+ *
+ * `advise.py --greg` prints the chain as separate 2-ref pseudos at 4.000 and
+ * 2.667 against the cursor's 6.667, because it reads the per-pseudo .lreg
+ * lines and does not model `combine_regs`' merging. The merged quantity is
+ * what competes, and the margin is thin: at 10 refs it needs about +1
+ * reference or -2 live to pass 6.667. Both have to arrive WITH the tie intact.
+ *
  * The twin func_8003A3E8 sits at the same 12 and should take whatever lands
  * here.
  */
