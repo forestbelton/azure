@@ -34,6 +34,22 @@ better for it:
     func_8005C2C0 landed -- but a better score from one is not evidence on its
     own.
 
+RUN THE SEMANTIC LEVERS SEPARATELY, with `--only`. This is greedy search: it
+accepts the best single change and then explores from there, so if it accepts a
+SEMANTIC lever the whole remainder of the run is built on a program that may
+not be the original. On func_8005B4D0 2026-10-28 a full pass accepted
+`decl bank: s32 -> s8` (377 words, 344 DIFF -> 340) and carried on from it --
+and that width is refuted in one grep, since an `s8` local needs a 24-bit
+truncation and the listing contains no `sll`/`sra ..., 24` at all. The pure set
+is
+
+    --only=split_binop,join_binop,cmp_swap,decl_order,decl_per_arm,global_decl,\
+goto_loop,hoist_read,decl_order_init,split_local,copy_param,volatile,dup_into_arms
+
+which is 247 candidates on that function against 350 for everything. Sweep with
+that first, adopt what survives, and only then try a width or a cast ONE AT A
+TIME against the listing.
+
 AND FOR ANY HIT THAT CHANGES THE WORD COUNT, name the instructions it adds or
 removes and find them in the listing before adopting it. On 2026-10-28 that
 check rejected four better-scoring variants, three of them from `copy_param`,

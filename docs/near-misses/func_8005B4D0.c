@@ -169,6 +169,23 @@
  * run. It is fixed now (an lvalue is not a read), but the pass's own greedy
  * second round ran from that bad base, so nothing it reports about this
  * function can be trusted either way. RE-RUN the full pass.
+ *
+ * RE-RUN DONE, and it hit the same structural problem from the other side.
+ * With the lvalue fix the pass offers 350 candidates instead of 562, and its
+ * first accepted change is `decl bank: s32 -> s8` -- 377 words, 344 DIFF ->
+ * 340. REJECTED: an `s8` local needs a 24-bit truncation, and this listing
+ * contains no `sll` or `sra ..., 24` anywhere. What it does with the value is
+ *
+ *     sra $a0, $a0, 8       <- a >> 8
+ *     sll $v1, $a0, 16
+ *     sra $v1, $v1, 16      <- a 16-bit extension, i.e. `(s16) bank`
+ *
+ * which is what this source already has. And because search.py is GREEDY, the
+ * rest of that run explored from the s8 base, so it is void for the same
+ * reason the first run was. A third pass is running over the PURE-REWRITE
+ * families only (247 candidates, `--only=...` listed in search.py's header),
+ * which is the way to sweep this function: semantic levers one at a time
+ * against the listing, never mixed into a greedy pass.
  */
 
 #include "common.h"
