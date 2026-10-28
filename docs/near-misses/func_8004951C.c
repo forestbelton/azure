@@ -84,9 +84,11 @@
  *
  * AUDIT 2026-10-27 -- pseudo 80, 81 have a DOUBLED live length, and
  * they report roughly twice their real range in this 157-word function.
- * `update_equiv_regs` (local-alloc.c) does `reg_live_length *= 2` for a once-set
- * pseudo whose init carries a constant REG_EQUAL note, and global-alloc reads the
- * doubled value.
+ * `update_equiv_regs` (local-alloc.c:1018-1064) does `reg_live_length *= 2` for
+ * any pseudo with `reg_n_sets == 1` whose insn carries a REG_EQUIV note, and
+ * global-alloc reads the doubled value. The note comes from a CONSTANT_P
+ * REG_EQUAL, from a MEM init confined to one block, or -- most often -- from
+ * being a PARAMETER, which assign_parms equates to its incoming stack slot.
  *
  * READ THAT CORRECTLY: global-alloc really does use the doubled number, so the
  * ORDER `--greg` prints is the order gcc chose -- it is not wrong about the

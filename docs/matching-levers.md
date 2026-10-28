@@ -1568,14 +1568,45 @@ is that some other assumption -- a declared type, a struct layout, the unit
 split -- is still wrong and is costing those references somewhere a person
 would have spent them.
 
-### `update_equiv_regs` DOUBLES the live length of a once-set constant pseudo
+### `update_equiv_regs` DOUBLES the live length of any ONCE-SET EQUIVALENT pseudo
 
 Before pricing any margin, check whether the denominator is real.
-`update_equiv_regs` (local-alloc.c) takes a pseudo with `reg_n_sets == 1`
-whose initialising insn carries a REG_EQUAL constant, promotes the note to
-REG_EQUIV, and does `reg_live_length[regno] *= 2`. The comment says this does
-not affect local-alloc's own priority -- but global-alloc's
+`update_equiv_regs` (local-alloc.c:1018-1064) skips any pseudo with
+`reg_n_sets[regno] != 1`, and for the rest, if the insn ends up with a
+REG_EQUIV note it does `reg_live_length[regno] *= 2`. The comment says this
+does not affect local-alloc's own priority -- but global-alloc's
 `allocno_live_length` reads it afterwards.
+
+THE TRIGGER IS WIDER THAN A CONSTANT, which the first version of this entry
+got wrong. Three ways a once-set pseudo acquires the note:
+
+* a REG_EQUAL note whose value is `CONSTANT_P` is PROMOTED to REG_EQUIV
+  (local-alloc.c:1031) -- the symbol-address or large-constant pointer case;
+* a pseudo INITIALISED FROM A MEM, confined to one basic block
+  (`reg_basic_block >= 0`), whose MEM is unchanged over the register's life,
+  gets a REG_EQUIV synthesised (local-alloc.c:1051);
+* **a PARAMETER**, because `assign_parms` already attaches a REG_EQUIV naming
+  the argument's incoming stack slot to the parameter copy.
+
+So EVERY once-set parameter is penalised by a factor of two in global-alloc's
+priority. That is systematic, not an edge case. func_8004CECC shows both sides
+in one function: `out`, the pointer parameter and the only one never
+reassigned, reports 23 refs across 170 insns in a 102-WORD function, while `h`
+-- reassigned by `h %= 1536`, so twice-set and not doubled -- reports 48.
+
+AND IT EXPLAINS advise.py's STANDING TOP ADVICE. "Assign back to a parameter or
+an existing local instead of introducing one" has been the first suggestion on
+every ALLOC row for months, and the reason is this: assigning back does not
+merely add a reference (a `floor_log2` step), it takes `reg_n_sets` off 1 and
+ESCAPES THE DOUBLING, which halves the denominator. That is the bigger half of
+why the trick works.
+
+A CAVEAT ON DETECTING IT: the only cheap tell is a live length larger than the
+function, so a sweep for "live > 1.5x the word count" finds the cases where
+doubling is VISIBLE, not where it happens. On a short function a doubled range
+still fits inside the word count and looks ordinary. Assume any once-set
+parameter or constant pointer is doubled unless you have checked
+`reg_n_sets`.
 
 That is why `--greg` can show a live length near TWICE the function's insn
 count: on func_80033D54 (~433 insns) `p` shows 866 and `g` 858, both
@@ -1592,7 +1623,7 @@ the MARGINS table's `live <= N` instruction, which is in DOUBLED units.
 Shortening the real range by k moves the stored value by 2k, so that
 instruction costs half as many real insns as it reads.
 
-AND THE DOUBLING IS ITSELF A LEVER: a pseudo that is not once-set escapes it,
+AND THE DOUBLING IS ITSELF A LEVER: a pseudo with two or more sets escapes it,
 so giving a doubled pseudo a SECOND SET THAT SURVIVES CSE doubles its priority
 at zero instruction cost. (The surviving kinds are the ones section 8's
 birthing entry lists: a parameter's incoming copy plus a reassignment, a
