@@ -2005,6 +2005,36 @@ exist. (The doubling diagnosis itself is sound: the parameter pseudo does carry
 `REG_EQUIV (mem:SI (reg:SI 0 $0))` on its incoming copy even though the
 argument arrives in `$a0`.)
 
+### COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY
+
+`try_combine` only ever runs on a pair joined by a LOG_LINK, and LOG_LINKs are
+built by life analysis with an explicit same-block test:
+
+    if (y && (BLOCK_NUM (y) == blocknum)
+        && (regno >= FIRST_PSEUDO_REGISTER || asm_noperands (PATTERN (y)) < 0))
+      LOG_LINKS (y) = gen_rtx (INSN_LIST, VOIDmode, insn, LOG_LINKS (y));
+
+                                                     -- 2.7.2 flow.c:2080-2091
+
+So a copy whose single use is in ANOTHER block is never a combine candidate at
+all. That is the one general way to keep a reg-to-reg copy that combine would
+otherwise fold, and it is worth knowing because the other routes are closed on
+this target: `REG_USERVAR_P` is `SMALL_REGISTER_CLASSES`-only in combine.c
+(see the REG_USERVAR_P section), and `volatile` is not a fence between two
+insns (section 10). The remaining in-block route is the one func_800599B0's
+park describes -- modify the copy's SOURCE between the copy and its use, which
+`can_combine_p` does refuse -- and that needs a source the C can name.
+
+The price is whatever the boundary costs. A basic block boundary needs a label
+with a live use or a jump, and func_80041E70's park prices all five ways of
+buying one in a straight-line body: `thread_jumps` runs before cse, jump1's
+dead-set DCE removes the obvious ones, a duplicate store is deleted, identical
+if/else arms cost one to two words, and `do { } while (0)` -- which does end a
+cse block via NOTE_INSN_LOOP_END -- cost a word in all three placements there.
+So this lever is free only where the function already HAS a branch between the
+copy and its use, and otherwise it costs about what it saves. Check for an
+existing boundary before building one.
+
 ### A PARAMETER always reserves its incoming register, unless there is a call
 
 `set_preference`'s second branch (global.c:1601) fires on the incoming copy

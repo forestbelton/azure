@@ -155,6 +155,46 @@
  * temp identically here and no spelling of read-back #2 changes whether its
  * copy is folded. The full map of what REG_USERVAR_P does reach on this target
  * is in matching-levers, under its own heading.
+ *
+ * 2026-10-28, THE ONE FORM OF "DEFEAT COMBINE" THAT IS STILL OPEN. The note
+ * above closes naming (combine.c's REG_USERVAR_P uses are all
+ * SMALL_REGISTER_CLASSES-only, which config/mips never defines) and the file
+ * already closes modifying the copy's source. There is a third way, and it is
+ * structural rather than a spelling: `try_combine` only runs on a pair joined
+ * by a LOG_LINK, and life analysis builds one only when the using insn is in
+ * the SAME basic block --
+ *
+ *     if (y && (BLOCK_NUM (y) == blocknum) ...)
+ *       LOG_LINKS (y) = gen_rtx (INSN_LIST, VOIDmode, insn, LOG_LINKS (y));
+ *                                                -- 2.7.2 flow.c:2080-2091
+ *
+ * -- so a copy whose single use is in another block is never a candidate, and
+ * read-back #2's copy would survive with its one consumer intact, which is
+ * exactly what this file asks for.
+ *
+ * WHAT IS NOT KNOWN is whether a boundary can be had here for nothing. This
+ * function needs no extra word -- it is 133 of 133 with one register wrong --
+ * so a boundary that costs a word is no better than the shapes already
+ * measured. func_80041E70's park prices all five ways of buying one in a
+ * straight-line body and every one costs at least a word, so the only version
+ * worth trying is a boundary this function ALREADY has.
+ *
+ * CHECKED THE SAME DAY, and it does not: the format-2 body runs
+ *
+ *     e = D_80085FA8 + i * 0x50;  *(u32 *)(e + 0x00) = n;
+ *     len = ...;  +0x24 = 0x68;  +0x20 = 0x68;
+ *     +0x04 = *(u32 *)(e + 0x00);  +0x18 = len;
+ *     +0x38 = *(u32 *)(e + 0x00);
+ *     +0x1C = *(u32 *)(e + 0x38) + *(u32 *)(e + 0x18);
+ *
+ * with no branch anywhere between the +0x00 store and the sum -- the nearest
+ * one is the `if (f != 0)` five statements later. So the boundary would have to
+ * be BOUGHT, every way of buying one costs at least a word (func_80041E70
+ * prices all five), and this function has no word to spend: it is already 133
+ * of 133 with a single register wrong. The combine route is therefore closed
+ * in all three of its forms here -- naming, modifying the source, and a block
+ * boundary -- and the remaining word is local-alloc's refusal to tie the
+ * second read-back, exactly as the body of this file says.
  */
 
 #include "common.h"
