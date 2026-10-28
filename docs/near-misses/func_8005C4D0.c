@@ -55,6 +55,37 @@
  * moving `i++` after the call -- so this one's remaining question is
  * allocation, not scheduling, and `--greg` rather than `sched.py` is the tool
  * for it.
+ *
+ * 2026-10-27: WHAT THE FIRST DIVERGENCE ACTUALLY IS -- the ORDER OF THE TWO
+ * SYMBOL MATERIALISATIONS, not a register on its own. From word 3:
+ *
+ *     target  lui $a1,%hi(D_80085F98) ; lui $v1,%hi(D_80085458) ;
+ *             addiu $v1,$v1,%lo ; sll ; sw $s2 ; sra ; ... ; addu $a2,$v0,$v1
+ *     built   lui $v1,%hi(D_80085458) ; addiu $v1,$v1,%lo ; sll ; sw $s2 ;
+ *             sra ; ... ; addu $a1,$v0,$v1 ; lui $v1,%hi(D_80085F98)
+ *
+ * The listing puts the FLAG's high in $a1 at the very top, before the
+ * D_80085458 base's pair, and keeps it until the `sw $v0,%lo(D_80085F98)($a1)`
+ * sixteen words later. This build materialises the base pair first and the
+ * flag's high afterwards -- and the element pointer's register follows from
+ * that ($a2 in the listing, $a1 here), which is where most of the 22 words
+ * come from. So the thing to move is which symbol is materialised first.
+ *
+ * Measured and NOT working:
+ *   * a POINTER LOCAL for D_80085F98 (`u32 *f = D_80085F98;`), declared
+ *     before `b` or after `g`: 46 and 48 DIFF. It shares the address but as a
+ *     `lui`+`addiu` pair, where the listing shares only the HIGH and puts
+ *     `%lo` in each store's displacement -- so a pointer local is the wrong
+ *     construct here even though it is the standing recipe elsewhere.
+ *   * `D_80085F98[0] = 1;` moved to the top of the function, or between
+ *     `e = ...` and the `h` load: 66 words both times (two too many), 63
+ *     DIFF. Its position in this file is load-bearing.
+ *
+ * `--greg` for the record: six global allocnos, 89 86 88 91 112 84 in that
+ * order, and only two carry preferences -- 86 wants $a1 and 89 wants $v0.
+ * Nothing prefers $a2, so the listing's element pointer there is a
+ * lowest-free-register outcome downstream of the materialisation order, not a
+ * preference to be engineered.
  */
 
 #include "common.h"
