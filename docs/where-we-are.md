@@ -91,17 +91,29 @@ compiler, and none from another source-shape guess.
   function call, and two cases where the listing demonstrably keeps the local
   the sweep deletes. Its guards catch the first two classes now; nothing but
   the listing catches the third.
-* **THE `csrc/` PROTOTYPES FOR PARKED FUNCTIONS ARE NOT EVIDENCE about their
-  parameter widths**, which is worth knowing because the "audit the context"
-  advice below makes them look like one. Twelve parks' assumed signatures
-  disagree with the prototype in `csrc/`, and in every one of the twelve the
-  caller's own argument is already the narrower type -- `func_80055D84(s16 k)`
+* **THE `csrc/` PROTOTYPES ARE NOT EVIDENCE ABOUT A *REGISTER* PARAMETER'S
+  WIDTH -- BUT THEY ARE THE ONLY WITNESS FOR A *STACK* ONE.** The first half
+  was audited on 2026-10-28 and the second half was learned the hard way four
+  hours later, so take them together. For an argument in `$a0-$a3` the
+  caller's own argument type already fixes the generated code, so a prototype
+  declaring it narrow or wide changes nothing and proves nothing: twelve
+  parks' assumed signatures disagree with `csrc/` and in every one the
+  caller's argument is already the narrower type -- `func_80055D84(s16 k)`
   passing `k` to func_8005A778's second parameter, declared `s16` there and
   `s32` in the park, is the shape of all of them -- so the declared width
   changes no caller code and neither declaration is testimony. What the list IS
   is a landing checklist: the prototype in scope is what every caller compiled
   against, so landing a park whose signature differs rewrites those callers,
   which is the trap func_8003AB44's landing hit. `nmcheck.py` now prints it.
+
+  FOR A STACK-PASSED ARGUMENT IT IS DIFFERENT. The callee loads a full word
+  whatever the declared width (the o32 caller widens), so its own listing
+  cannot tell you -- and the prototype becomes the only opinion on record.
+  func_8005BBFC's prototype declared all eight parameters `s16`; the park had
+  `s32 vel, s32 fine`, dismissed `s16` as noise on a one-word score, and
+  reasoned against it from the `lw`. Adopting `s16` took it from 220 to 209
+  DIFF with its whole prologue exact. So when a mismatch concerns a parameter
+  beyond the fourth, test it.
 * **THE SUB-12-DIFF PARKS ARE NOW EACH BOUNDED ON A NAMED COMPILER FACT**
   rather than on "an allocation question" -- see each file's last dated entry.
   Several standing "first thing to try" items were tried and closed today
