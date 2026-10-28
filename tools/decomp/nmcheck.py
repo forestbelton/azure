@@ -11,6 +11,16 @@ silently, and both have:
   * the header's claimed word/diff count drifts from what the source actually
     produces, after include/structs.h or a prototype changes under it.
 
+It also warns -- separately, as a LANDING CHECKLIST and not an error -- where a
+park's own signature disagrees with the prototype for that function in csrc/.
+The prototype in scope is what every caller compiled against, so landing a
+park whose signature differs rewrites those callers; func_8003AB44's landing
+needed exactly that noticing, where a missing declaration had been passing a
+`u8` argument untruncated. These are NOT evidence about parameter widths --
+checked 2026-10-28 across all twelve current mismatches, and in every one the
+caller's own argument is already the narrower type, so the declared width
+changes no caller code either way.
+
 This parses "func_NNNNNNNN (unit_X) -- A of B words, N DIFF" out of each
 header's first lines, compiles the file, and compares. Exit status is non-zero
 if any file fails to build or disagrees with its own header.
@@ -19,6 +29,7 @@ if any file fails to build or disagrees with its own header.
     python3 tools/decomp/nmcheck.py docs/near-misses/func_80042900.c
 """
 import glob
+import io
 import os
 import re
 import subprocess
@@ -163,6 +174,31 @@ def fix_units():
     return 0
 
 
+def signature_warnings(files):
+    """Park signatures that disagree with the prototype in csrc/."""
+    csrc = "\n".join(io.open(q, encoding="utf-8", errors="replace").read()
+                     for q in glob.glob(os.path.join(PROJ, "csrc/*.c")))
+    out = []
+    for path in files:
+        func = os.path.basename(path)[:-2]
+        text = io.open(path, encoding="utf-8", errors="replace").read()
+        d = re.search(r"^[A-Za-z_][\w \*]*\b%s\s*\(([^)]*)\)\s*$" % re.escape(func),
+                      text, re.M)
+        if not d:
+            continue
+        mine = ([re.sub(r"\s+\w+$", "", x).strip().replace(" ", "")
+                 for x in d.group(1).split(",")]
+                if d.group(1).strip() not in ("", "void") else [])
+        for proto in set(re.findall(
+                r"^[A-Za-z_][\w \*]*\b%s\s*\(([^)]*)\)\s*;" % re.escape(func),
+                csrc, re.M)):
+            theirs = ([x.strip().replace(" ", "") for x in proto.split(",")]
+                      if proto.strip() not in ("", "void") else [])
+            if mine != theirs:
+                out.append((func, d.group(1).strip(), proto.strip()))
+    return sorted(set(out))
+
+
 def main():
     if "--fix-units" in sys.argv:
         return fix_units()
@@ -182,6 +218,13 @@ def main():
             print("FAIL  %-34s %s" % (rel, problem))
     print()
     print("%d file(s), %d problem(s)" % (len(files), bad))
+    warn = signature_warnings(files)
+    if warn:
+        print("\n%d signature(s) to correct when the park lands (not an error):"
+              % len(warn))
+        for func, mine, theirs in warn:
+            print("  %-16s park(%s)" % (func, mine))
+            print("  %-16s csrc(%s)" % ("", theirs))
     return 1 if bad else 0
 
 

@@ -5411,7 +5411,7 @@ closed, so the agent knows they are load-bearing rather than background.
     ... write a candidate with the right LOGIC ...
     python3 tools/decomp/search.py zz_foo.c <unit> <func> --only=<families>
     python3 tools/decomp/unname.py <func>                 # delete each local
-    python3 tools/decomp/parkcheck.py                     # headlines still true?
+    python3 tools/decomp/nmcheck.py                       # headlines still true?
 
 `annotate.py` enumerates the lever families whose signature is in the listing;
 `search.py` sweeps the source shapes mechanically at 0.7s a variant. The two

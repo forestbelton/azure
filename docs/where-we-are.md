@@ -21,9 +21,10 @@ compiler, and none from another source-shape guess.
 
 * **TWO NEW TOOLS.** `tools/decomp/unname.py` deletes each of a park's locals
   in turn and re-scores -- whether a value has a NAME is a compiler switch, and
-  three of today's four improvements came out of it. `tools/decomp/parkcheck.py`
-  checks every park's headline against a fresh build (all 54 are currently
-  honest). `search.py` also gained `t_split_local`, the reverse transform.
+  three of today's four improvements came out of it. `tools/decomp/nmcheck.py` already
+  checked every park's headline against a fresh build and now also warns where
+  a park's signature disagrees with its csrc prototype (all 54 headlines are
+  currently honest). `search.py` also gained `t_split_local`, the reverse transform.
   SWEEPS COMPOSE: re-run `unname.py` after adopting a hit, because each one
   changes the base -- that is how func_8005C4D0 went 22 -> 18 -> 15.
 * **AND READ EVERY HIT BEFORE ADOPTING IT.** `unname.py` produced three
@@ -42,7 +43,7 @@ compiler, and none from another source-shape guess.
   changes no caller code and neither declaration is testimony. What the list IS
   is a landing checklist: the prototype in scope is what every caller compiled
   against, so landing a park whose signature differs rewrites those callers,
-  which is the trap func_8003AB44's landing hit. `parkcheck.py` now prints it.
+  which is the trap func_8003AB44's landing hit. `nmcheck.py` now prints it.
 * **THE SUB-12-DIFF PARKS ARE NOW EACH BOUNDED ON A NAMED COMPILER FACT**
   rather than on "an allocation question" -- see each file's last dated entry.
   Several standing "first thing to try" items were tried and closed today
