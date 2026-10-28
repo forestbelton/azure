@@ -2097,6 +2097,14 @@ void func_8004D1EC(u8 *p, u16 *a, s32 d, u16 *b) {
     }
 }
 
+/* SYMPTOM: dx, dy and dz are three locals where one would do, and the delta is
+   split into `dx = *(s16 *)(q + k); dx -= (s16) w;` rather than written as one
+   expression. Both are matching shapes, not meaning: the split gives the delta
+   quantity four references over a three-insn span so it wins the exact tie
+   against the sign-extension's (see docs/matching-levers.md section 3), and a
+   SINGLE shared local is referenced in three blocks, becomes a global allocno
+   instead of three block-local quantities, and measures 18 DIFF. */
+
 void func_8004D294(u16 *p, u8 *q, s32 a)
 {
     u8 *b = (u8 *)&D_80083178;
