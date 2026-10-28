@@ -12,6 +12,33 @@ It does NOT derive logic. Deciding what the function *does* from the listing is
 the part a search cannot do, and a candidate that is structurally wrong will
 not be rescued by any combination of these rewrites.
 
+SOME FAMILIES CHANGE THE PROGRAM AND SOME DO NOT, and a hit means different
+things in each case. Audited 2026-10-28 after `t_hoist_read` was found
+substituting into store destinations -- deleting a store and scoring a word
+better for it:
+
+  * PURE REWRITES, where a hit needs no semantic judgement: split_binop,
+    join_binop, cmp_swap, decl_order, decl_order_init, decl_per_arm,
+    global_decl, goto_loop, split_local, copy_param, volatile (it only ever
+    makes gcc more conservative), hoist_read (now that lvalues are skipped),
+    and dup_into_arms. The last was suspected and cleared: it appends the
+    following statement to the END of each arm, so the copy runs exactly on
+    the paths that fell out of that arm, which is when it ran before -- and
+    where an arm exits first (`return`, `break`, `goto`), the copy lands after
+    the exit and is dead. Three such sites exist in the parks and all three
+    are sound.
+  * SEMANTIC LEVERS, where the hit is a QUESTION about the original's types and
+    must be judged against the listing: decl_width, drop_cast16, add_cast16,
+    and mask1 (`x != 0` against `(x & 1) != 0` agree only on a 0/1 value).
+    These are deliberate -- narrowing a declaration is how func_8003AB44 and
+    func_8005C2C0 landed -- but a better score from one is not evidence on its
+    own.
+
+AND FOR ANY HIT THAT CHANGES THE WORD COUNT, name the instructions it adds or
+removes and find them in the listing before adopting it. On 2026-10-28 that
+check rejected four better-scoring variants, three of them from `copy_param`,
+each of which bought its words with an instruction the target does not contain.
+
     python3 tools/decomp/search.py zz_foo.c unk_14934 func_80045CC4
     python3 tools/decomp/search.py zz_foo.c unk_14934 func_80045CC4 --sites
     python3 tools/decomp/search.py zz_foo.c unk_12DEC func_8003F5E0 --g8
