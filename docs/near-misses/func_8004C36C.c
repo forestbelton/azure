@@ -1,4 +1,4 @@
-/* func_8004C36C (unk_1C540) -- 461 of 461 words, 13 DIFF. COMPILES.
+/* func_8004C36C (unk_1C540) -- 461 of 461 words, 10 DIFF. COMPILES.
  *
  * FIRST ATTEMPT, 2026-10-27, written the same day as func_80033D54's and
  * func_800345B8's parks; it is the third of the three giants that had never
@@ -104,19 +104,27 @@
  *    words there were a pure $a0/$v1 naming difference, and since these are
  *    this source's own locals the swap is free. 19 -> 13.
  *
- * WHAT IS LEFT: 13 words in three groups, and advise.py now says SHAPE rather
- * than LENGTH.
+ * 2026-10-28: 13 DIFF -> 10. THE NODE SETUP IS OUTSIDE THE LOOP. The two
+ * back edges gave it away: this source ended the node walk with
+ * `bnez $s3, <body start>` and the listing ends it with
+ * `j .L8004C4D8`, which is the `list = *(u8 **)(list + 0xC)` ADVANCE at word
+ * 92 -- not the body start at word 33. So the listing runs the per-node setup
+ * (unk_B8..unk_10C, RotMatrix, TransMatrix) ONCE under `if (list != NULL)` and
+ * then loops advance -> part 2 -> element loops -> advance, leaving via the
+ * `goto done` when the list ends. Written as `while (list != NULL)` the setup
+ * is re-run every iteration, and the emitted stream is identical except for
+ * that one transfer -- which is why this was only ever 1 word of the 13.
  *
- *   * TWO WORDS, the `beqz $s3` guarding the node loop. The listing fills its
- *     delay slot with `addiu $a0, $s1, 0x50` -- RotMatrix's first argument --
- *     and this build emits that same insn eight words later into a load-delay
- *     slot, leaving a `nop` at the branch. reorg can only fill from the
- *     fall-through when the first insn there cannot trap, and in this build
- *     that insn is `lw $v0, 0x8($s3)`: `may_trap_p` is true for any MEM, so
- *     the slot stays empty. The fix is therefore to make the `addiu` the
- *     block's FIRST insn, which is a sched2 question, not a source one -- a
- *     local holding `&p->unk_50` is folded straight back into the call's
- *     argument setup.
+ * AND IT PAYS FOR THE GUARD'S DELAY SLOT TOO, which is the other two. With the
+ * back edge pointing at the body start, word 33 is a LABEL, so reorg's
+ * `stop_search_p` ends the thread scan immediately and the `beqz $s3`'s slot
+ * stays a `nop`. With the setup hoisted there is no label there and reorg
+ * lifts `addiu $a0, $s1, 0x50` -- RotMatrix's first argument -- into the slot,
+ * exactly as the listing has it. So the old note below (that this was a sched2
+ * question about making the `addiu` the block's first insn) was looking at the
+ * consequence; the cause was the loop form.
+ *
+ * WHAT IS LEFT: 10 words in two groups, both schedule.
  *   * FOUR WORDS, two pairs of adjacent independent loads emitted in the
  *     other order (`lhu 0x6` against `lbu 0x9`, and `lhu 0x4` against
  *     `lbu 0x8`). Measured: both source orders of each pair give the same 13,
@@ -268,7 +276,7 @@ void func_8004C36C(u8 *pl, u8 *list)
     p->unk_5C = 0;
     for (;;)
     {
-        while (list != NULL)
+        if (list != NULL)
         {
             p->unk_B8 = *(s32 *)(*(u8 **)(list + 8) + 0);
             p->unk_BC.w = *(s32 *)(*(u8 **)(list + 8) + 4);
@@ -284,170 +292,173 @@ void func_8004C36C(u8 *pl, u8 *list)
             p->unk_44 = *(s16 *)(*(u8 **)(list + 4) + 6);
             p->unk_78 = *(s32 *)(*(u8 **)(list + 4) + 0);
             p->unk_10C = (*(u8 **)(list + 4))[0xF];
-            do
-            {
-                list = *(u8 **)(list + 0xC);
-                if (list == NULL)
-                {
-                    goto done;
-                }
-                e = *(u8 **)list;
-            } while (e == NULL);
-            p->unk_A8 = *(s32 *)(*(u8 **)(list + 4) + 0);
-            p->unk_AC.w = *(s32 *)(*(u8 **)(list + 4) + 4);
-            p->unk_B0.w = *(s32 *)(*(u8 **)(list + 4) + 8);
-            p->unk_B4.w = *(s32 *)(*(u8 **)(list + 4) + 0xC);
-            p->unk_50 = *(s32 *)(*(u8 **)(list + 8) + 0);
-            p->unk_54 = *(s32 *)(*(u8 **)(list + 8) + 4);
-            RotMatrix((SVECTOR *)&p->unk_50, m1);
-            p->unk_20.w = *(s16 *)(*(u8 **)(list + 8) + 6);
-            p->unk_24.w = *(s16 *)(*(u8 **)(list + 8) + 8);
-            p->unk_28 = *(s16 *)(*(u8 **)(list + 8) + 0xA) + p->unk_B4.h.lo;
-            TransMatrix(m1, (VECTOR *)&p->unk_20);
-            CompMatrix(&p->unk_C4, m1, m2);
-            p->unk_30 = p->unk_AC.h.lo;
-            p->unk_34 = p->unk_AC.h.hi;
-            ScaleMatrix(m2, (VECTOR *)&p->unk_30);
-            ScaleMatrix(m2, (VECTOR *)&p->unk_40);
-            SetRotMatrix(m2);
-            SetTransMatrix(m2);
             for (;;)
             {
-                *(s32 *)&p->unk_00 = *(s32 *)(e + 0);
-                *(s32 *)&p->unk_04 = *(s32 *)(e + 4);
-                w = *(s32 *)(e + 8);
-                *(s32 *)&p->unk_08 = w;
-                if (w != 0)
+                do
                 {
-                    if (p->unk_00 & 1)
+                    list = *(u8 **)(list + 0xC);
+                    if (list == NULL)
                     {
-                        v0 = p->unk_B0.u.lo - (s8) * (volatile u8 *)&p->unk_02 -
-                             p->unk_20.u.lo - p->unk_BC.u.hi;
-                        p->unk_68 = v0;
-                        p->unk_58 = v0;
-                        t0 = v0 - p->unk_0A;
-                        p->unk_70 = t0;
-                        p->unk_60 = t0;
+                        goto done;
                     }
-                    else
-                    {
-                        v1 = p->unk_B0.u.lo + (s8) * (volatile u8 *)&p->unk_02 -
-                             p->unk_20.u.lo - p->unk_BC.u.hi;
-                        p->unk_68 = v1;
-                        p->unk_58 = v1;
-                        t1 = v1 + p->unk_0A;
-                        p->unk_70 = t1;
-                        p->unk_60 = t1;
-                    }
-                    if (p->unk_00 & 2)
-                    {
-                        v2 = p->unk_B0.u.hi - (s8) * (volatile u8 *)&p->unk_03 -
-                             p->unk_24.u.lo - p->unk_C0.u.lo;
-                        p->unk_62 = v2;
-                        p->unk_5A = v2;
-                        t2 = v2 - p->unk_0B;
-                        p->unk_72 = t2;
-                        p->unk_6A = t2;
-                    }
-                    else
-                    {
-                        v3 = p->unk_B0.u.hi + (s8) * (volatile u8 *)&p->unk_03 -
-                             p->unk_24.u.lo - p->unk_C0.u.lo;
-                        p->unk_62 = v3;
-                        p->unk_5A = v3;
-                        t3 = v3 + p->unk_0B;
-                        p->unk_72 = t3;
-                        p->unk_6A = t3;
-                    }
-                    gte_ldv3(&p->unk_58, &p->unk_60, &p->unk_68);
-                    gte_rtpt();
-                    gte_stsxy3(&prim->x0, &prim->x1, &prim->x2);
-                    gte_ldv0(&p->unk_70);
-                    gte_rtps();
-                    gte_stsxy(&prim->x3);
-                }
-                if ((p->unk_01 & 0xFC) == 0x2C)
+                    e = *(u8 **)list;
+                } while (e == NULL);
+                p->unk_A8 = *(s32 *)(*(u8 **)(list + 4) + 0);
+                p->unk_AC.w = *(s32 *)(*(u8 **)(list + 4) + 4);
+                p->unk_B0.w = *(s32 *)(*(u8 **)(list + 4) + 8);
+                p->unk_B4.w = *(s32 *)(*(u8 **)(list + 4) + 0xC);
+                p->unk_50 = *(s32 *)(*(u8 **)(list + 8) + 0);
+                p->unk_54 = *(s32 *)(*(u8 **)(list + 8) + 4);
+                RotMatrix((SVECTOR *)&p->unk_50, m1);
+                p->unk_20.w = *(s16 *)(*(u8 **)(list + 8) + 6);
+                p->unk_24.w = *(s16 *)(*(u8 **)(list + 8) + 8);
+                p->unk_28 = *(s16 *)(*(u8 **)(list + 8) + 0xA) + p->unk_B4.h.lo;
+                TransMatrix(m1, (VECTOR *)&p->unk_20);
+                CompMatrix(&p->unk_C4, m1, m2);
+                p->unk_30 = p->unk_AC.h.lo;
+                p->unk_34 = p->unk_AC.h.hi;
+                ScaleMatrix(m2, (VECTOR *)&p->unk_30);
+                ScaleMatrix(m2, (VECTOR *)&p->unk_40);
+                SetRotMatrix(m2);
+                SetTransMatrix(m2);
+                for (;;)
                 {
-                    if (p->unk_08 + p->unk_0A >= 0x100)
+                    *(s32 *)&p->unk_00 = *(s32 *)(e + 0);
+                    *(s32 *)&p->unk_04 = *(s32 *)(e + 4);
+                    w = *(s32 *)(e + 8);
+                    *(s32 *)&p->unk_08 = w;
+                    if (w != 0)
                     {
-                        p->unk_0A = p->unk_0A - 1;
+                        if (p->unk_00 & 1)
+                        {
+                            v0 = p->unk_B0.u.lo - (s8) * (volatile u8 *)&p->unk_02 -
+                                 p->unk_20.u.lo - p->unk_BC.u.hi;
+                            p->unk_68 = v0;
+                            p->unk_58 = v0;
+                            t0 = v0 - p->unk_0A;
+                            p->unk_70 = t0;
+                            p->unk_60 = t0;
+                        }
+                        else
+                        {
+                            v1 = p->unk_B0.u.lo + (s8) * (volatile u8 *)&p->unk_02 -
+                                 p->unk_20.u.lo - p->unk_BC.u.hi;
+                            p->unk_68 = v1;
+                            p->unk_58 = v1;
+                            t1 = v1 + p->unk_0A;
+                            p->unk_70 = t1;
+                            p->unk_60 = t1;
+                        }
+                        if (p->unk_00 & 2)
+                        {
+                            v2 = p->unk_B0.u.hi - (s8) * (volatile u8 *)&p->unk_03 -
+                                 p->unk_24.u.lo - p->unk_C0.u.lo;
+                            p->unk_62 = v2;
+                            p->unk_5A = v2;
+                            t2 = v2 - p->unk_0B;
+                            p->unk_72 = t2;
+                            p->unk_6A = t2;
+                        }
+                        else
+                        {
+                            v3 = p->unk_B0.u.hi + (s8) * (volatile u8 *)&p->unk_03 -
+                                 p->unk_24.u.lo - p->unk_C0.u.lo;
+                            p->unk_62 = v3;
+                            p->unk_5A = v3;
+                            t3 = v3 + p->unk_0B;
+                            p->unk_72 = t3;
+                            p->unk_6A = t3;
+                        }
+                        gte_ldv3(&p->unk_58, &p->unk_60, &p->unk_68);
+                        gte_rtpt();
+                        gte_stsxy3(&prim->x0, &prim->x1, &prim->x2);
+                        gte_ldv0(&p->unk_70);
+                        gte_rtps();
+                        gte_stsxy(&prim->x3);
                     }
-                    if (p->unk_09 + p->unk_0B >= 0x100)
+                    if ((p->unk_01 & 0xFC) == 0x2C)
                     {
-                        p->unk_0B = p->unk_0B - 1;
-                    }
-                    setlen(prim, 9);
-                    *(s32 *)&prim->r0 = p->unk_A8;
-                    func_8004C010((u8 *)&prim->r0, (u8 *)&p->unk_78);
-                    g1 = p->unk_01;
-                    g0 = p->unk_08;
-                    prim->code = g1;
-                    prim->u0 = g0;
-                    g3 = p->unk_06;
-                    g2 = p->unk_09;
-                    prim->clut = g3;
-                    prim->v0 = g2;
-                    if (prim->x0 > prim->x1 || prim->x0 != prim->x2)
-                    {
-                        p->unk_0A = p->unk_0A - 1;
-                    }
-                    t = p->unk_08 + p->unk_0A;
-                    g0 = p->unk_09;
-                    prim->u3 = t;
-                    prim->u1 = t;
-                    prim->v1 = g0;
-                    g1 = p->unk_04;
-                    g2 = p->unk_08;
-                    prim->tpage = g1;
-                    prim->u2 = g2;
-                    if (prim->y0 > prim->y2 || prim->y0 != prim->y1)
-                    {
-                        p->unk_0B = p->unk_0B - 1;
-                    }
-                    t = p->unk_09 + p->unk_0B;
-                    prim->v3 = t;
-                    prim->v2 = t;
-                    *(u32 *)prim =
-                        (*(u32 *)prim & c1) |
-                        (*(u32 *)(p->unk_B4.b[3] * 4 +
-                                  (p->unk_10C * 4 + p->unk_18)) &
-                         c0);
-                    *(u32 *)(p->unk_B4.b[3] * 4 + (p->unk_10C * 4 + p->unk_18)) =
-                        (*(u32 *)(p->unk_B4.b[3] * 4 +
-                                  (p->unk_10C * 4 + p->unk_18)) &
-                         c1) |
-                        ((u32)prim & c0);
-                    e = e + 0xC;
-                    prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 + 4);
-                }
-                else
-                {
-                    count = 1;
-                    e = func_8004C080((u8 *)&p->unk_78, (u8 *)&p->unk_A8,
-                                      (u8 *)prim, e, (u8 *)p, (s32)&count);
-                    count = count - 1;
-                    while (count != -1)
-                    {
+                        if (p->unk_08 + p->unk_0A >= 0x100)
+                        {
+                            p->unk_0A = p->unk_0A - 1;
+                        }
+                        if (p->unk_09 + p->unk_0B >= 0x100)
+                        {
+                            p->unk_0B = p->unk_0B - 1;
+                        }
+                        setlen(prim, 9);
+                        *(s32 *)&prim->r0 = p->unk_A8;
+                        func_8004C010((u8 *)&prim->r0, (u8 *)&p->unk_78);
+                        g1 = p->unk_01;
+                        g0 = p->unk_08;
+                        prim->code = g1;
+                        prim->u0 = g0;
+                        g3 = p->unk_06;
+                        g2 = p->unk_09;
+                        prim->clut = g3;
+                        prim->v0 = g2;
+                        if (prim->x0 > prim->x1 || prim->x0 != prim->x2)
+                        {
+                            p->unk_0A = p->unk_0A - 1;
+                        }
+                        t = p->unk_08 + p->unk_0A;
+                        g0 = p->unk_09;
+                        prim->u3 = t;
+                        prim->u1 = t;
+                        prim->v1 = g0;
+                        g1 = p->unk_04;
+                        g2 = p->unk_08;
+                        prim->tpage = g1;
+                        prim->u2 = g2;
+                        if (prim->y0 > prim->y2 || prim->y0 != prim->y1)
+                        {
+                            p->unk_0B = p->unk_0B - 1;
+                        }
+                        t = p->unk_09 + p->unk_0B;
+                        prim->v3 = t;
+                        prim->v2 = t;
                         *(u32 *)prim =
                             (*(u32 *)prim & c1) |
                             (*(u32 *)(p->unk_B4.b[3] * 4 +
                                       (p->unk_10C * 4 + p->unk_18)) &
                              c0);
-                        *(u32 *)(p->unk_B4.b[3] * 4 +
-                                 (p->unk_10C * 4 + p->unk_18)) =
+                        *(u32 *)(p->unk_B4.b[3] * 4 + (p->unk_10C * 4 + p->unk_18)) =
                             (*(u32 *)(p->unk_B4.b[3] * 4 +
                                       (p->unk_10C * 4 + p->unk_18)) &
                              c1) |
                             ((u32)prim & c0);
-                        prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 +
-                                            4);
-                        count = count - 1;
+                        e = e + 0xC;
+                        prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 + 4);
                     }
-                    e = e + 0xC;
-                }
-                if (p->unk_00 & 0x80)
-                {
-                    break;
+                    else
+                    {
+                        count = 1;
+                        e = func_8004C080((u8 *)&p->unk_78, (u8 *)&p->unk_A8,
+                                          (u8 *)prim, e, (u8 *)p, (s32)&count);
+                        count = count - 1;
+                        while (count != -1)
+                        {
+                            *(u32 *)prim =
+                                (*(u32 *)prim & c1) |
+                                (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                          (p->unk_10C * 4 + p->unk_18)) &
+                                 c0);
+                            *(u32 *)(p->unk_B4.b[3] * 4 +
+                                     (p->unk_10C * 4 + p->unk_18)) =
+                                (*(u32 *)(p->unk_B4.b[3] * 4 +
+                                          (p->unk_10C * 4 + p->unk_18)) &
+                                 c1) |
+                                ((u32)prim & c0);
+                            prim = (POLY_FT4 *)((u8 *)prim + ((u8 *)prim)[3] * 4 +
+                                                4);
+                            count = count - 1;
+                        }
+                        e = e + 0xC;
+                    }
+                    if (p->unk_00 & 0x80)
+                    {
+                        break;
+                    }
                 }
             }
         }
