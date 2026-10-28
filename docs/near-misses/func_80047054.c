@@ -250,6 +250,26 @@
  * anything: the loop as an explicit guard plus do-while, and as a plain
  * `while` with `e += 8` at the end -- both 58 words and 24 DIFF, identical to
  * the `for`.
+ *
+ * THE PARAMETER-COUNT HYPOTHESIS IS REFUTED, 2026-10-28. A PROBE variant with
+ * the signature cut to `(u32 *p, s32 arg1)` -- arg2 and arg3 replaced by arg1
+ * in the body, so the semantics change and it is not a candidate -- still
+ * records the conflict:
+ *
+ *     2 params   ;; 80 conflicts: 80 81 82 92 93 94 120 122 2 3 4 5 29
+ *     4 params   ;; 80 conflicts: 80 81 82 83 84 94 95 96 122 124 2 3 4 5 6 7 29
+ *
+ * The $a1/$a2/$a3 entries come and go with the parameter count exactly as
+ * expected, but 4 ($a0) is in BOTH. So `p` conflicting with its own argument
+ * register is not caused by living across the other parameters' copies, and
+ * the difference from func_8004F330 is elsewhere.
+ *
+ * What is left to distinguish the two functions, for whoever picks this up:
+ * here `p`'s CONTENTS initialise the loop pointer (`e = p[0] + p[1] * 4`) and
+ * the bound is re-read from `p[2]` inside the loop, so `p` is live across a
+ * loop whose body walks a pointer derived from it; in func_8004F330 `p` is
+ * only a store base and nothing is derived from its contents. That, rather
+ * than the parameter list, is the next thing to vary.
  * AUDIT 2026-10-27 -- pseudo 80, 81, 82, 83 have a DOUBLED live length, and
  * they report roughly twice their real range in this 58-word function.
  * `update_equiv_regs` (local-alloc.c:1018-1064) does `reg_live_length *= 2` for
