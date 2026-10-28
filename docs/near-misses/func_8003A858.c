@@ -192,7 +192,34 @@
  *   2. The DEPENDENCE CLASS relative to `last_scheduled_insn`: class 3 is
  *      "independent of it, OR has latency of one", class 1 is data dependent,
  *      class 2 anti/output dependent, and the HIGHEST class wins.
- *   3. INSN_LUID, lower first -- i.e. source order.
+ *   3. INSN_LUID, via `INSN_LUID(y) - INSN_LUID(x)` -- a DESCENDING sort.
+ *
+ * AND `rank_for_schedule` ONLY SORTS; `schedule_select` (sched.c) PICKS, which
+ * is the part this file was missing. It walks the ready list in groups of
+ * equal priority, queues any blocked by `actual_hazard`, and among the rest
+ * takes the largest `potential_hazard`, ties going to the first in the array.
+ * Both of our insns are plain ALU on the same unit, so the hazards tie and the
+ * array order decides -- and the array is sorted descending by priority, then
+ * descending by LUID. The pass runs BACKWARD, so first-picked is placed LAST.
+ * Net effect, and this is the usable statement: WITHIN A PRIORITY GROUP THE
+ * FINAL ORDER IS BY INCREASING LUID.
+ *
+ * WHICH MAKES THE REQUIREMENT PRECISE AND UNREACHABLE. Our priority-3 group
+ * emits in LUID order 26, 42, 44, 46, 48, 50, 52, 54, 68 -- the sum's insns,
+ * then the `+ m` addu, then the sll. The listing emits ..., 52, 68, 54, so it
+ * needs LUID(68) to fall STRICTLY BETWEEN insn 52 and insn 54. Both of those
+ * come from the single `q = (u8 *) (r[0] + ... + m)` expression, so no
+ * arrangement of STATEMENTS can put the `a * 4` between them; it would have to
+ * sit inside that expression.
+ *
+ * MEASURED, the one shape that does satisfy the LUID interval: split the
+ * `+ m` into its own statement placed after `t`, so the addu's LUID exceeds
+ * the sll's. Three spellings (`q += m;`, `q = q + m;`, and with `s` hoisted)
+ * are all 43 words and 9 DIFF. It does reorder those two -- but `m` is then
+ * used only in that late statement, so the `sll $t1, $t1, 2` for `m * 4` sinks
+ * to meet it, and the listing wants that multiply EARLY (its line 18, right
+ * after `lw $v0, 0x80($a0)`). So the interval is reachable and costs more than
+ * it buys.
  *
  * KEY 2 CAN NEVER BITE HERE, which is the new result. For insn 54 to fall to
  * class 1 it must be data dependent on the last scheduled insn with a latency
