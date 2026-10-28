@@ -2767,6 +2767,35 @@ cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
 pseudo set once, so sched1 defers its `lw` behind the argument setup, while
 the `addiu`s that set $a0-$a3 are pinned.
 
+Two measurements from 2026-10-27 sharpen the knob.
+
+**It landed func_8005C2C0's two shifts.** The park had `a = a << 16;
+a = a >> 16;` -- the in-place extension -- which gives that pseudo three sets,
+so neither shift was birthing and both came out six slots EARLY. Rewriting it
+as a fresh `sa = (a << 16) >> 16;` made the shift and its intermediate
+single-set, both were bumped, and both landed on the exact slot. Note the
+direction: making a value single-assignment pushes its definition DOWN,
+towards its use.
+
+**But the second set has to survive cse.** On func_8003A060, `a = a * 4;`
+written in place does NOT un-bump the shift. The expansion is `temp = a << 2`
+followed by `a = temp`; cse propagates that copy back out, `reg_n_sets`
+returns to 1, and the ready list still reads `7f000001`. The sets that survive
+are the ones cse cannot collapse: a PARAMETER's incoming copy plus a
+reassignment, a loop-carried variable, and the two arms of an `if`. So read
+this together with the one-variable-per-block lever -- they are the same
+construct from the two ends -- and CHECK the dump rather than assuming:
+`sched.py --sched1` prints the ready lists, and a bumped insn shows up there as
+`(7f000001)` against its neighbours' `(1)`.
+
+And when both competing insns are bumped, this knob is spent: what decides
+them is `rank_for_schedule`'s dependence CLASS against the last-scheduled insn
+(highest class wins, so the insn INDEPENDENT of it beats the one it depends
+on), and the only key above class is priority -- which, because `insn_cost` is
+1 between ALU insns against the `- 1` in `priority()`, grows ONLY across a load
+delay. func_8003A060's park file works that case out in full; it is why those
+two words are unreachable rather than merely unsolved.
+
 ### A global's DECLARED SIZE also decides how many registers its address costs
 
 The incomplete-array-versus-scalar choice is already known to decide `-G8`
@@ -3970,7 +3999,7 @@ out-of-line arms: count the insns sched1 places ahead of each store (the
 local for the NEIGHBOURING statement's value -- not with statement order,
 which the listing has already fixed.
 
-### An OLD-STYLE parameter list is how a parameter copy becomes schedulable
+### A SUB-WORD parameter type is how a parameter copy becomes schedulable
 
 The run of hard-register parameter copies at the very top of a function is
 PINNED OUT OF SCHED1. `schedule_block` opens with it (gcc-2.7.2.3/sched.c:3186,
@@ -3980,85 +4009,72 @@ the block head while the insn is a `SET` whose source -- after stripping
 SUBREG, SIGN_EXTEND, ZERO_EXTEND, SIGN_EXTRACT and ZERO_EXTRACT -- is a HARD
 register, sets `INSN_REF_COUNT` to 1 on each ("Keep this insn from ever being
 scheduled") and advances HEAD past it. Those insns are then outside the region
-sched1 analyses: they get no priority, no dependences, and they stay in
-parameter order at the top. In sched2 they ARE schedulable, but every tie there
-is broken by descending INSN_LUID (sched.c:2425, "sort by INSN_LUID so that we
-make the sort stable"), and their LUIDs are the smallest in the block, so they
-come out first anyway.
+sched1 analyses: no priority, no dependences, and they stay in parameter order
+at the top. In sched2 they ARE schedulable, but ties there go to descending
+INSN_LUID (sched.c:2425) and theirs are the smallest in the block, so they come
+out first anyway.
 
 That is a whole class of entry-block diff: the listing has some of the
 `move $sN,$aN` copies LATER than an insn of the body, and no statement order
 reaches it, because the copies were never candidates.
 
-Declaring the function OLD-STYLE moves them. A sub-word parameter in a K&R
-definition is PASSED as `int` and CONVERTED to its declared type, and
-assign_parms puts every such conversion in a separate `conversion_insns`
-sequence which it emits only "now that all parameters have been copied out of
-hard registers". So a sub-word parameter contributes a raw pinned copy AND a
-truncation further down; the pinned run ends at the first parameter that needs
-one, and every conversion after it is an ordinary schedulable insn. Their LUIDs
-are in parameter order, so their order in the block is parameter order too.
+**A sub-word DECLARED parameter type breaks the run.** A `s16`/`u16`/`u8`
+parameter still ARRIVES promoted in SImode, so assign_parms keeps a raw SImode
+pseudo for it and emits the narrowing separately, in the sequence it flushes
+only after every parameter has left its hard register. For the first such
+parameter the emitted insn is a TRUNCATION whose source is a SUBREG OF A
+PSEUDO -- and that is precisely what the prefix loop's test rejects: it strips
+the SUBREG, finds a pseudo, and breaks. Everything from there on is an ordinary
+schedulable insn, and their LUIDs are in parameter order, so their order in the
+block is parameter order too.
 
-func_8005C2C0 is the measurement. Prototyped, with `s32 a, s32 b, s32 c, s32 d,
-u16 e, u16 f, u16 g`, all four copies are pinned and the block begins
-b, c, d, lui, lhu, li -- 10 words wrong with every instruction right, and
-nothing in the source moves them (all six statement orders, the three-variable
-extension, reading st.note back, `d`'s type). Declared old-style with
-`s16 a; s32 b; u16 c; u16 d;` the pinned run is just `a`'s raw copy (deleted --
-it dies in the entry block and takes $a0) and `b`'s, and the three truncations
-land after the lui/lhu/li group in the order `a`, `c`, `d`: MATCH.
+func_8005C2C0 is the measurement, and the sched1 dump shows it directly. With
+`s32 a, s32 b, s32 c, s32 d, u16 e, u16 f, u16 g` all four copies are pinned and
+the block begins b, c, d, lui, lhu, li -- 10 words wrong with every instruction
+right, and nothing in the source moves them (all six statement orders, the
+three-variable extension, reading st.note back, `d`'s type). With
+`s16 a, s32 b, u16 c, u16 d, ...` the pinned run is just insn 4 (`a`'s raw
+SImode copy, which is then DELETED -- it dies in the entry block and takes
+$a0) and insn 8 (`b`); insn 6 is `(set (reg/v:HI 80) (subreg:HI (reg:SI 81) 0))`,
+the truncation that breaks the run, and it appears in the priority list where
+the pinned ones do not. The three narrowings then land after the lui/lhu/li
+group in the order `a`, `c`, `d`: MATCH.
+
+**The declaration STYLE is irrelevant -- do not repeat this mistake.** The
+first write-up of this lever credited an OLD-STYLE (K&R) parameter list,
+because the two changes were made in one step. Measured afterwards: prototyped
+with the same narrowed types also matches, and converting the definition to
+old-style while KEEPING the declared types changes nothing at all -- swept over
+all 38 multi-parameter park files, every one identical to the word. What the
+parameter list cannot do is supply the narrowing; only the type can.
+
+(func_8005C2C0 is nevertheless committed old-style, for an unrelated reason
+worth knowing: a narrow PROTOTYPE in scope rewrites a later caller's
+`sll`/`sra` into a truncation, which is the hazard func_80033AE8's row hit and
+solved with an `__asm__` alias. An old-style definition declares no prototype,
+so it cannot do that to a future caller in the unit.)
 
 Two other things come free from the same shape, and both are worth recognising
 on their own:
 
-* The sign-extension lands on the RAW pseudo. `(s16) a != -1` on a truncated
+* The sign-extension lands on the RAW pseudo. `a != -1` on a narrowed
   parameter is `sign_extend (subreg raw)`, and cse substitutes the raw pseudo,
-  which is dead after the compare and so gets the incoming register: the
+  which is dead after the compare and so keeps the incoming register: the
   listing's `sll $a0, $a0, 16` / `sra $a0, $a0, 16`, extending IN PLACE. This
   is section 7's in-place extension with the truncation supplied by the
-  parameter list instead of by a `s16 j = a` local -- and unlike the local, it
-  carries a LUID from the parameter setup.
-* A truncated parameter is NOT assumed already extended. `d != 0` keeps its
-  `andi $s3, 0xFFFF`, where a PROTOTYPED `u16 d` is taken to arrive
-  zero-extended and gives a bare `bnez`. So the old-style list also removes
-  the need for a `(u16) d` cast in the source.
+  parameter's type instead of by a `s16 j = a` local -- and unlike the local,
+  it carries a LUID from the parameter setup.
+* A narrowed parameter is NOT assumed already extended. `d != 0` keeps its
+  `andi $s3, 0xFFFF`, where a `u16 d` whose value arrives through a prototype
+  is taken to be zero-extended already and gives a bare `bnez`. So the
+  narrowing also removes the need for a `(u16) d` cast in the source.
 
 Before reaching for this, read the entry block the way func_8005C2C0's park
 file had to: `sched.py --sched1` prints which insns have a priority at all, and
 the parameter copies' absence from that list IS the pin. The partner lever is
-the next one -- a single-set definition gets bumped to LAUNCH_PRIORITY and
-lands LATE, so the two together decide the whole entry block.
-
-### A single-set definition is pushed LATE; reassigning the variable keeps it early
-
-`birthing_insn_p` (sched.c:2469) returns true for a `SET` whose destination is
-a REG that is live at that point in the backward scan AND has
-`reg_n_sets == 1`. `adjust_priority` (sched.c:2505) then raises such an insn to
-`max_priority`, which at that moment is LAUNCH_PRIORITY (0x7f000001, set on the
-insn being scheduled at sched.c:3902 and read at :2574) -- so it is selected
-immediately in the backward pass, which places it as LATE in the block as its
-dependences allow. An insn whose destination has more than one set stays at
-priority 1 and comes out in LUID order, i.e. EARLY.
-
-Since gcc gives a C local ONE pseudo for all of its assignments, this is
-directly source-controlled:
-
-* `a = a << 16; a = a >> 16;` -- reassigning the parameter -- gives that pseudo
-  three sets, so neither shift is a birthing insn and both land early.
-* `sa = (a << 16) >> 16;` -- a fresh local -- makes the shift and the
-  intermediate single-set, both get bumped, and both land late.
-
-In func_8005C2C0 the listing wants them late: the in-place form put the two
-shifts six slots early, and the fresh local moved both to the exact slot with
-no other change (10 DIFF either way, but the remaining words were then only
-the parameter copies, which is what exposed the pin above). Note the direction
-is the opposite of the intuition: making a value SINGLE-ASSIGNMENT pushes its
-definition DOWN, towards its use.
-
-The bump only ever applies in sched1 -- `birthing_insn_p` returns 0 when
-`reload_completed` -- so what it decides is the insn ORDER that becomes sched2's
-LUID tie-break. Read it with `sched.py --sched1`: a bumped insn shows up in the
-ready lists as `(7f000001)` against its neighbours' `(1)`.
+this section's first entry -- a value set exactly once gets bumped to
+LAUNCH_PRIORITY and lands LATE -- and the two together decide the whole entry
+block: that pair is what took func_8005C2C0 from 10 DIFF to a match.
 
 ## 9. Induction variables
 

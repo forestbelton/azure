@@ -36,6 +36,38 @@
  * and 2. So the pair is not statement order. Both insns are ALU, both in one
  * priority group, so this is sched1 within priority 1 -- the same family as
  * func_80035E58's last two words and probably as unreachable.
+ *
+ * UNREACHABLE, AND HERE IS THE PROOF -- measured 2026-10-27 against gcc's own
+ * sched.c, so this upgrades the "probably" above. The two insns are 54 (the
+ * operand chain's last `addu`, which adds `m`) and 68 (the destination index's
+ * `sll`). In sched1 BOTH are bumped to LAUNCH_PRIORITY -- the ready list reads
+ * `68 (7f000001) 54 (7f000001) 61 (2)` at T-20 -- so what decides them is the
+ * key BELOW priority, and it is not LUID. `rank_for_schedule` (sched.c:2399)
+ * classifies each candidate against the LAST-SCHEDULED insn: class 1 if that
+ * insn is DATA dependent on the candidate, 2 if anti/output, 3 if independent,
+ * and it takes the HIGHEST class. The insn after this pair is `lbu $v1, 0($a1)`,
+ * which depends on the `addu` for $a1 -- so the `addu` is permanently class 1
+ * and the `sll` class 3, and the `sll` wins every time, whatever their LUIDs.
+ *
+ * The only key above class is PRIORITY, and it cannot be moved here. Priority
+ * is the longest dependence path from the block start, and `insn_cost` is 1
+ * between ALU insns against the `- 1` in `priority()` (sched.c:1488) -- so a
+ * chain of adds and shifts does not accumulate priority AT ALL. It only grows
+ * across a LOAD delay (cost 2). Both insns sit at 3 for that reason: the
+ * `sll` is lw(1) -> lbu(2) -> sll(3), the `addu` is lbu(2) -> sll(3) ->
+ * addu(3) -> addu(3) -> addu(3). Lengthening either side by one needs an extra
+ * LOAD on that path, which is an extra instruction.
+ *
+ * Also measured, and the reason the obvious reading of section 8's new
+ * birthing lever does NOT apply: splitting the index into its own statement
+ * (`a4 = a * 4;` with `t = (u8 *) (a4 + (u32) s);`) to give the `sll` a
+ * smaller LUID moves it 7 slots, not 1 -- 8 DIFF after statement 1, 7 after
+ * 2, 3 and 4, and 2 (unchanged) after 5, 6 and 7. Once the `sll` is not the
+ * last of its group it loses every subsequent tie and drifts to the front of
+ * the whole operand block. And `a = a * 4;` in place does NOT un-bump it:
+ * cse propagates the copy back out, so `reg_n_sets` returns to 1 and the
+ * ready list still shows `7f000001`. See the note on that in
+ * docs/matching-levers.md section 8.
  */
 
 #include "common.h"

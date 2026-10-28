@@ -1872,28 +1872,42 @@ void func_8005EC0C(SpuVoiceAttr *);
    twenty-odd fields, copies the volumes and the note into an SpuVoiceAttr and
    hands that to func_8005EC0C.
 
-   OLD-STYLE PARAMETER LIST, and that is the whole reason this matches. With a
-   prototyped definition the first four parameters are copied out of $a0..$a3
-   by a CONTIGUOUS RUN of hard-register moves at the very top of the function,
-   and schedule_block pins that whole run out of sched1 (sched.c:3186, "At the
-   start of a function, before reload has run, don't delay getting parameters
-   from hard registers into pseudo registers" -- it walks the run setting
-   INSN_REF_COUNT to 1 and advancing HEAD past it). Pinned, they stay first,
-   and the lui/lhu/li group that belongs ahead of them in the listing can never
-   get there: 10 words, every instruction already right.
+   THREE PARAMETERS ARE NARROWED TO SUB-WORD TYPES, and that is the whole
+   reason this matches. With all four of a, b, c, d declared s32 they are
+   copied out of $a0..$a3 by a CONTIGUOUS RUN of hard-register moves at the top
+   of the function, and schedule_block pins that whole run out of sched1
+   (sched.c:3186, "At the start of a function, before reload has run, don't
+   delay getting parameters from hard registers into pseudo registers" -- it
+   walks the run setting INSN_REF_COUNT to 1 and advancing HEAD past it).
+   Pinned, they stay first, and the lui/lhu/li group that belongs ahead of them
+   in the listing can never get there: 10 words, every instruction already
+   right.
 
-   Declared old-style, a sub-word parameter is PASSED as int and CONVERTED to
-   its declared type in assign_parms' separate `conversion_insns` sequence,
-   which is emitted after every parameter has left its hard register. So `a`,
-   `c` and `d` each get a raw pinned copy plus a truncation further down, the
-   pinned run ends after `b`, and the three truncations are ordinary
-   schedulable insns whose LUIDs are in parameter order -- which is what puts
-   `move $s5,$a0`, `move $s4,$a2`, `move $s3,$a3` after the group and in that
-   order. Two more things fall out of the same shape: cse rewrites the
-   sign-extension of `a` onto the RAW pseudo, which dies in the entry block and
-   so extends in place in $a0 (the listing's `sll $a0`/`sra $a0`), and `d != 0`
-   keeps its `andi $s3,0xFFFF` because the truncated parameter is not assumed
-   already zero-extended the way a prototyped u16 parameter is.
+   A sub-word parameter still ARRIVES promoted in SImode, so gcc keeps a raw
+   SImode pseudo for it and emits the narrowing separately, after every
+   parameter has left its hard register. For the first one the narrowing is a
+   TRUNCATION whose source is a SUBREG OF A PSEUDO -- which is exactly what the
+   prefix loop's source test rejects, so the run ends there. In the sched1 dump
+   the pinned insns are 4 (a's raw copy, later deleted: it dies in the entry
+   block and takes $a0) and 8 (b), while insn 6, the truncation
+   `(set (reg/v:HI 80) (subreg:HI (reg:SI 81) 0))`, has a priority like any
+   schedulable insn. The three narrowings then land after the lui/lhu/li group
+   in parameter order -- `move $s5,$a0`, `move $s4,$a2`, `move $s3,$a3` -- which
+   is the listing.
+
+   Two more things fall out of the same shape: cse rewrites the sign-extension
+   of `a` onto the RAW pseudo, which dies in the entry block and so extends in
+   place in $a0 (the listing's `sll $a0`/`sra $a0`), and `d != 0` keeps its
+   `andi $s3,0xFFFF` because a narrowed parameter is not assumed already
+   zero-extended the way one arriving through a prototype is.
+
+   The DECLARATION STYLE is not load-bearing -- measured: prototyped with these
+   same types also matches, and converting a definition to old-style while
+   keeping its types changes nothing in any of the 38 multi-parameter park
+   files. It is written old-style for a different reason: a narrow prototype in
+   scope rewrites a later caller's sll/sra into a truncation (the hazard
+   func_80033AE8's carved-sweep row hit, solved there with an __asm__ alias),
+   and an old-style definition declares no prototype.
 
    Three field shapes also paid for, each measured:
      * `q = D_80085458; p = q + b * 0x78;` -- a pointer VARIABLE for the base.

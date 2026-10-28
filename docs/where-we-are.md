@@ -248,6 +248,17 @@ something** -- that has been the single biggest waste of effort here.
 | deliberately asm | 1 | func_8004CAA0, 18 words, STACK-SWITCH |
 | never attempted | 0 | **all four giants were drafted on 2026-10-27**: func_80033D54 at 537 of 537 words / 46 DIFF (every instruction right, 34 of them four callee-saved register names), func_800345B8 at 546 of 546 / 128 DIFF (two adjacent allocno pairs), func_8004C36C at 464 of 461 / 171 DIFF (three load-delay nops and what follows them) and func_80056E10 at 713 of 718 / 687 DIFF (first reading; the seven scans are the new part) |
 
+A MEASURED NEGATIVE worth not re-deriving, 2026-10-27: converting a park's
+definition to an OLD-STYLE (K&R) parameter list, with its declared types
+unchanged, was swept over all 38 multi-parameter park files and changed not one
+word in any of them. The declaration style reaches nothing; what moved
+func_8005C2C0 was NARROWING three parameters to sub-word types, and the
+difference between those two statements is the whole lever (section 8 of
+docs/matching-levers.md). The sweep also means the sub-word lever is only worth
+trying where the listing's own evidence says a parameter is narrow -- a
+truncation, an `andi 0xFFFF`, a `sll`/`sra` pair on an incoming register -- not
+as a blind spelling.
+
 **EVERY NEAR-MISS NOW HAS A COMPILING CANDIDATE**, as of the end of
 2026-10-27. That was not true for most of the day: 44 of the 70 remaining
 stubs were recorded only as prose rows in `docs/carved-sweep.md`, several of
@@ -330,9 +341,11 @@ matching-levers section 3 and `advise.py --greg` rather than trying
 spellings. (func_8003931C, the fourth, LANDED 2026-10-27 on a live-length
 trim of exactly two insns -- see matching-levers section 8; func_80038F48
 landed the same day on the EXPAND_SUM lever there, and func_8005C2C0 -- 10
-words of entry-block SHAPE -- on the OLD-STYLE PARAMETER LIST lever, which is
+words of entry-block SHAPE -- on the SUB-WORD PARAMETER TYPE lever, which is
 the one to read first for any diff that wants a `move $sN,$aN` placed later
-than the listing has it.) The eleven LENGTH
+than the listing has it. That lever was first written up as an old-style
+parameter list, which measurement then disproved; the entry in section 8 says
+so, because the wrong version is the kind that gets re-derived.) The eleven LENGTH
 ones, by how far off they are:
 
   -1  func_8003800C  func_8004951C  func_8004A330  func_8004B954 (was -7)
