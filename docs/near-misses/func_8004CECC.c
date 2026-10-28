@@ -140,6 +140,28 @@
  * set that survives cse DOUBLES its priority at zero instruction cost, and
  * then 84 would become the TOP global allocno (1.082, passing 91's 0.750).
  * Worth trying before any reference arithmetic. See matching-levers section 3.
+ *
+ * 2026-10-28: THE SECOND-SET LEVER IS NOT REACHABLE FOR A PARAMETER, measured
+ * on func_80041E70 and recorded in all five files that carry this paragraph.
+ * Three zero-cost spellings of a second set -- `p = p;` before the first
+ * statement, after it, and `p = (Unk42710 *) (u8 *) p;` -- are each 270 of 270
+ * words and the SAME 1 DIFF as the base, and the dumps say why rather than
+ * leaving it to inference: the `flow` dump still carries exactly one
+ * REG_EQUIV, and `.greg` prints the identical conflict list and the identical
+ * allocation order. A no-op move is deleted before flow runs, so `reg_n_sets`
+ * never reaches 2 and the doubling is never escaped.
+ *
+ * Which is the general statement, and it is why this paragraph should stop
+ * being read as an open suggestion: a second set only survives if it computes
+ * a DIFFERENT value, and a different value costs an instruction. The
+ * large-constant pointer in the paragraph above escapes the doubling precisely
+ * because its `lui`/`ori` pair is work that has to happen anyway -- that is a
+ * property of the CONSTANT, not something a parameter or an ordinary local can
+ * be given. Checked separately and worth knowing: the parameter pseudo really
+ * does carry the note on this target, `REG_EQUIV (mem:SI (reg:SI 0 $0))` on
+ * the `(set (reg/v:SI 80) (reg:SI 4 a0))`, even though the argument arrives in
+ * a register -- so the doubling diagnosis itself is right, it is only the cure
+ * that is unavailable.
  */
 
 #include "common.h"

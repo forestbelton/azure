@@ -1989,6 +1989,22 @@ of the eight park files carries its own note. Try this before any reference
 arithmetic on a doubled row -- it is a factor of two, where a reference is a
 `floor_log2` step.
 
+MEASURED 2026-10-28, and it makes "a re-spelling does not count" concrete
+rather than cautionary: on func_80041E70, `p = p;` before the first statement,
+the same after it, and `p = (Unk42710 *) (u8 *) p;` are each 270 of 270 words
+and the SAME 1 DIFF as the base, with the `flow` dump still carrying exactly
+one REG_EQUIV and `.greg` printing an identical conflict list and allocation
+order. No-op moves are deleted before flow, so `reg_n_sets` never reaches 2.
+There is no free second set for a PARAMETER at all: a set survives only if it
+computes a different value, and a different value costs an instruction. The
+large-constant pointer escapes because its `lui`/`ori` pair is work that has to
+happen anyway -- a property of the constant, not something a parameter can be
+given. So on a doubled PARAMETER row, go straight to the reference arithmetic;
+the factor of two is only available where the listed surviving kinds already
+exist. (The doubling diagnosis itself is sound: the parameter pseudo does carry
+`REG_EQUIV (mem:SI (reg:SI 0 $0))` on its incoming copy even though the
+argument arrives in `$a0`.)
+
 ### Keep $v0 busy to make a `lui`/`addiu` pair share its register
 
 `lui $a0, %hi(SYM)` / `addiu $a0, $a0, %lo(SYM)` and
