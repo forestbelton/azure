@@ -1637,7 +1637,47 @@ void func_80056558(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_800565D8);
+/* SYMPTOM: `d` carries two unrelated values -- the doubled byte in the first
+   arm, `n - 0x40` in the last -- because being referenced in both arms is what
+   makes it a cross-block allocno, and that is what stops local-alloc tying the
+   first arm's byte to its shift (local-alloc.c:1890 would otherwise give that
+   one quantity four references at size 4 and the first pick of the registers).
+   `c = 0x3F; c -= n;` is the same lever on the other factor: two statements,
+   one `li`/`subu` pair, four references instead of two. See
+   docs/matching-levers.md section 3. */
+
+s16 func_800565D8(u8 *p, u32 n)
+{
+    s32 r;
+    s32 d;
+    s32 c;
+
+    if (n < 0x40)
+    {
+        if (p[0x21] == 0)
+        {
+            return 0;
+        }
+        c = 0x3F;
+        c -= n;
+        d = *(volatile u8 *)(p + 0x21) << 1;
+        r = -(d * c);
+    }
+    else if (n == 0x40)
+    {
+        return 0;
+    }
+    else
+    {
+        d = n - 0x40;
+        if (p[0x20] == 0)
+        {
+            return 0;
+        }
+        r = (*(volatile u8 *)(p + 0x20) << 1) * d;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056654);
 
