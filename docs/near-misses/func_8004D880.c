@@ -1,4 +1,4 @@
-/* func_8004D880 (unk_1C540) -- 28 of 28 words, 12 DIFF. A Shift-JIS to ASCII
+/* func_8004D880 (unk_1C540) -- 28 of 28 words, 5 DIFF. A Shift-JIS to ASCII
  * classifier:
  * three `(u16)(c + K) < N` range tests, each returning the same sum plus an
  * ASCII base, falling through to func_8004D828.
@@ -104,10 +104,63 @@
 
 u8 func_8004D828(u16);
 
+/* 2026-10-28: 12 DIFF -> 5. ONE CHANGE: the sum goes in TWO variables, one per
+ * range test (`e` and `f`), instead of one reused `e`. Everything else in this
+ * file is unchanged. That fixes the entry copy's register ($v1, was $a1), both
+ * `andi`s, both `+ 0x30`/`+ 0x41` returns and the whole third test including
+ * its in-place `addiu $v1, $v1, 0x7D7F`.
+ *
+ * WHAT IS LEFT: 5 words, ONE cause. Every one of them reads $a0 where the
+ * listing reads $v1 -- i.e. the two sums, `d`, and the final return all read
+ * `x` and not `c`. From `.lreg`, final RTL:
+ *
+ *     insn  4  (set (reg/v:SI 80) (reg:SI 4 a0))              x = param
+ *     insn 11  (set (reg/v:SI 84) (reg/v:SI 80))              c = x      [survives]
+ *     insn 14  (set (reg/v:HI 81) (subreg:HI (reg 80) 0))     d  <- reads 80
+ *     insn 21  (set (subreg (reg/v:HI 82)) (plus (reg 80) 32177))  e  <- reads 80
+ *     insn 45  (set (subreg (reg/v:HI 83)) (plus (reg 80) 32160))  f  <- reads 80
+ *     insn 65  (set (reg/v:SI 84) (plus (reg/v:SI 84) 32127))  c += ...  reads 84 OK
+ *     insn 90  (set (reg 106) (plus (reg 80) 32224))           folded x + 0x7DE0
+ *
+ * So `c` (84) already has the listing's $v1 and the third test is already
+ * right; `x` (80) keeps 6 refs over 15 insns and takes $a0, which is why `d`
+ * is pushed to $a2. `.greg`: order 80, 84, 83, 82, 81; `80 preferences: 4`.
+ * insn 65 reads `c` because it is in a later cse block; insns 14/21/45 are in
+ * the first one and were rewritten to `x`.
+ *
+ * MEASURED 2026-10-28, all with the e/f split unless noted:
+ *
+ *     e/f split (this file)                     28 words,  5 DIFF
+ *     e block-scoped per test                   28,         5
+ *     d = x instead of d = c                    28,         5
+ *     d = c between the two sums                28,         5
+ *     sums reading d                            28,         5
+ *     sums written 0x7DB1 + c                   28,         5
+ *     d = c moved into the third test's body    28,         5
+ *     `c += 0x7D7F`                             28,         5
+ *     one reused `e` (the old base)             28,        12
+ *     u32 e (one var, no split)                 28,         9
+ *     u32 e/f split                             28,         9
+ *     u16 c / s16 c                             27,        26
+ *     u32 d                                     26,        27
+ *     no `c` (reassign the parameter)           27,        26
+ *     no `d` (call takes c)                     26,        27
+ *     three sum vars e/f/g                      27,        26
+ *     d = x before c = x                        27,        26
+ *     third test writing x                      27,        26
+ *     x = c before the final return             27,        26
+ *
+ * Everything that drops to 26-27 words loses the `c = x` copy; everything at
+ * 28 words is the same 5. So the remaining question is only whether the first
+ * cse block's reads of `c` can be kept off `x`, and no spelling of the
+ * statements reaches it.
+ */
+
 u8 func_8004D880(u32 x)
 {
     u16 d;
     u16 e;
+    u16 f;
     u32 c;
 
     c = x;
@@ -117,10 +170,10 @@ u8 func_8004D880(u32 x)
     {
         return e + 0x30;
     }
-    e = c + 0x7DA0;
-    if (e < 0x1A)
+    f = c + 0x7DA0;
+    if (f < 0x1A)
     {
-        return e + 0x41;
+        return f + 0x41;
     }
     c = c + 0x7D7F;
     if ((u16) c >= 0x1A)
