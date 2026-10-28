@@ -977,6 +977,59 @@ tell you is how many variables there are. Count the allocnos with
 `advise.py --greg` instead, and split whenever a counter's refs are summing
 across regions.
 
+### RETURN THROUGH THE PARAMETER to stop cse canonicalising a copy away
+
+**This is what landed func_80049E1C**, and it is the cheapest copy-survival
+cure found so far: one extra statement that compiles to nothing.
+
+The shape is a clamp written `s = a; if (a < 0) { s = 0; } return s;`. It
+should keep the copy -- `a` is used by the test, which is AFTER `s = a`, so the
+two overlap and cannot share a register. It does not: the function comes out
+three words short with the whole `$v1` round trip gone. The reason is cse, not
+the allocator. `merge_equiv_classes` (cse.c:837-862) decides which register of
+an equivalence class is the canonical one:
+
+```c
+  /* Among pseudos, if NEW will live longer than any other reg of the same
+     qty, and that is beyond the current basic block, make it the new
+     canonical replacement for this qty.  */
+  if (... && ((uid_cuid[regno_last_uid[new]] > cse_basic_block_end
+               || uid_cuid[regno_first_uid[new]] < cse_basic_block_start)
+              && (uid_cuid[regno_last_uid[new]]
+                  > uid_cuid[regno_last_uid[firstr]])))
+```
+
+`s` satisfies both clauses -- its last use is the return, which is past the
+join label and so past `cse_basic_block_end`, and it outlives `a`, whose last
+use is the test. So `s` becomes canonical, the test is rewritten from `a` to
+`s`, `a` now dies AT THE COPY, the conflict disappears and the copy coalesces
+away.
+
+**The fix is to give the copy's SOURCE a use after the destination's last one**,
+which breaks the second clause. Returning through the parameter does it for
+free:
+
+```c
+    s32 s = a;
+
+    if (a < 0) { s = 0; }
+    a = s;              /* <- `a`'s last use is now after `s`'s */
+    return a;
+```
+
+`a = s` costs nothing (it coalesces with the return copy the function already
+spends), the test keeps `a`, `s` keeps its own register, and the round trip
+survives. `return s;` is three words short; `a = s; return a;` is a MATCH.
+
+Note the two clauses are an OR and an AND, so there are two ways in and only
+one is usually available. Making the copy's destination not live past the join
+(clause 1) needs the value not to be returned, which a clamp cannot do; giving
+the source a later use (clause 2) only needs one more assignment. Confirmation
+that it really is this rule: INVERTING the two arms so the other arm is emitted
+last also makes the copy survive, because `a`'s last use then falls in the
+later-emitted arm -- but that costs the branch sense the listing wants, so it
+is a diagnostic rather than a cure.
+
 ### A `u8` destination makes a register copy INVISIBLE to cse
 
 This is the free way to keep a copy of a value as a second pseudo, and it is

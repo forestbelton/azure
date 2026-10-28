@@ -641,7 +641,45 @@ s32 func_80049DE8(s32 a, s32 d, s32 m) {
     return a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80049E1C);
+/* The wrapping clamp's sibling: adds the delta, clamps at `m - 1` going up and
+   at 0 going down, and answers 0 when `m` is 0.
+
+   Four things are load-bearing and each is worth words:
+
+   * the `m == 0` answer goes LAST (`if (m != 0) { ... } return 0;`), because
+     the listing's `beqz $a2` jumps to the function's final block;
+   * the POSITIVE arm is the fall-through, since the listing's `bltz $a1`
+     branches to the low-clamp arm;
+   * the low arm's temp is declared INSIDE the else block. At function scope,
+     shared with the high arm, both arms' values land in one register and the
+     high arm's `m - 1` exit is cross-jumped into the low arm's tail;
+   * `a = s; return a;` rather than `return s;`. That is not cosmetic: cse's
+     `merge_equiv_classes` makes the NEWER register of an equivalence class
+     canonical when it outlives the older one, so with a plain `return s` the
+     `if (a < 0)` test is rewritten to use `s`, `a` then dies at `s = a`, the
+     two stop conflicting and the whole `$v1` round trip coalesces away --
+     three words short. Returning through `a` gives `a` a use after `s`'s
+     last, the rewrite does not happen, and `s` keeps its own register. */
+s32 func_80049E1C(s32 a, s32 d, s32 m) {
+    s32 r;
+
+    if (m != 0) {
+        a += d;
+        if (d >= 0) {
+            r = (a >= m - 1) ? m - 1 : a;
+            return r;
+        } else {
+            s32 s = a;
+
+            if (a < 0) {
+                s = 0;
+            }
+            a = s;
+            return a;
+        }
+    }
+    return 0;
+}
 
 u32 func_80049E6C(s32 i) {
     return D_800712B4[i];
