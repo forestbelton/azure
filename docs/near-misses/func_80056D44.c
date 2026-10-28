@@ -1,4 +1,4 @@
-/* func_80056D44 (unk_1C540) -- 26 of 28 words, 27 DIFF. NOT compiled.
+/* func_80056D44 (unk_2879C) -- 26 of 28 words, 27 DIFF. NOT compiled.
  *
  * Written out of the `func_80056DB4 + func_800563B0 + func_80056D44` row on
  * 2026-10-27. Same recipe as func_80056DB4 (read that file's header for the

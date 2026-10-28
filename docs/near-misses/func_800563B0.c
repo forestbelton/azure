@@ -1,4 +1,4 @@
-/* func_800563B0 (unk_1C540) -- 22 of 22 words, 14 DIFF. NOT compiled.
+/* func_800563B0 (unk_2879C) -- 22 of 22 words, 14 DIFF. NOT compiled.
  *
  * Written out of the `func_80056DB4 + func_800563B0 + func_80056D44` row on
  * 2026-10-27. Same recipe as func_80056DB4 (read that file's header for the
@@ -10,13 +10,40 @@
  * (`jal func_8005F134 ; sw $v0, %lo(D_80084918)($a3)`), so it is the last of
  * the six and reorg moves it.
  *
- * WHAT IS LEFT: fourteen words. The row expected twelve and did not say which
- * arrangement gave them, so that is worth re-measuring before anything else;
- * this file is the plain shape with the stores in the listing's own order and
- * has had no permutation run of its own. Start with
- * `tools/decomp/perm.py` over the six stores -- 720 orderings, so pass
- * `--max 200` -- and then compare against func_80056DB4's 3 DIFF, since the
- * two differ only in the stores they make.
+ * THE PERMUTATION RUN IS DONE, 2026-10-28 (perm.py, 200 of the 720 orderings).
+ * Two results, and the better NUMBER is not the better SOURCE:
+ *
+ *     1 2 3 4 5 6   22 words, 14 DIFF   <- the order below, and the LISTING's
+ *     1 5 6 2 3 4   22 words, 11 DIFF   <- three words closer, wrong order
+ *
+ * The listing's own store order is the one in this file: flags at +4, then
+ * +8, +0xA, +0xC, +0xE, with the +0 handle LAST (reorg then lifts it into the
+ * `jal`'s delay slot). The 11-DIFF arrangement gets there by moving the +0xE
+ * zero and the +0 handle up between the flags and the arguments, which is not
+ * what the listing does, so this file keeps the 14 and records the 11.
+ *
+ * WHAT IS ACTUALLY LEFT IS A SCHEDULE, and it is the same wall as the sibling
+ * func_80056D44's. Side by side:
+ *
+ *     target  addiu q ; li 0xF ; sw ra ; sw +4 ; lui/addiu table ; sll ;
+ *             addu ; lw ; addu $a0,$v1 <- the call arg fills the load slot
+ *     built   addiu q ; lui/addiu table ; sll ; addu ; sw ra ; lw ; li 0xF ;
+ *             sw +4 ; ... ; sw +0 ; jal ; move $a0,$v1 <- the arg in the jal slot
+ *
+ * The listing does the flags store FIRST and leaves the table lookup until
+ * after it; this build runs the lookup first, because sched1 ranks by the
+ * longest chain and the lookup's (lui/addiu, sll, addu, lw, sw) beats the
+ * flags store's (li, sw). No store order changes that -- it is the same
+ * normalisation that holds func_80056D44 two words short.
+ *
+ * AND THE 2-DIFF SIBLING SAYS WHY IT WORKS THERE: func_80056DB4's early store
+ * is 0x60100, which needs `lui`+`ori` -- a TWO-insn materialisation, long
+ * enough to outrank the lookup, which is exactly what its header describes as
+ * "+0x24 stores a REGISTER value and its `li 5` has to be pulled ahead of it,
+ * and the load rides along". Here the flags value is 0xF, one `li`, and it
+ * loses. So the three siblings differ in this one respect and the recipe does
+ * not transfer: what would fix this function is a longer dependence chain
+ * ahead of the lookup, not another arrangement of the stores.
  */
 
 #include "common.h"
