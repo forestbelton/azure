@@ -69,6 +69,39 @@
  * time; the fix is to find which of those claims the listing contradicts and
  * make the two overlap, not to move a priority.
  *
+ * WHY THERE IS NO CONFLICT, from the `.greg` conflict lists and the `.lreg`
+ * RTL, 2026-10-28 -- and this is the thread to pull. The lists say the merges
+ * are legal, not accidental:
+ *
+ *     ;; 81 conflicts: 80 81 82 84 85 92 93 105 119 ...
+ *     ;; 82 conflicts: 80 81 82 84 85 92 93 105 119 ...
+ *     ;; 86 conflicts: 80 84 86 87 89 143 ...
+ *     ;; 87 conflicts: 80 84 86 87 89 143 ...
+ *
+ * so {81, 82} and {86, 87} are two disjoint groups: the parameters never
+ * overlap `k` or the entry pointer at all. That contradicts the source, where
+ * `*(u32 *) (e + 0x14) = c` plainly uses a parameter after `e` exists -- and
+ * the RTL says why:
+ *
+ *     (insn 153 (set (mem:SI (plus:SI (reg/v:SI 87) (const_int 20)))
+ *                    (reg:SI 5 a1)))
+ *
+ * the stored value is the INCOMING HARD REGISTER $a1, not a pseudo. gcc is
+ * keeping that parameter in its argument register across the block rather than
+ * copying it to a pseudo, so there is no allocno to conflict with 87 and
+ * nothing for global-alloc to separate. The listing cannot be doing that: it
+ * copies three parameters to callee-saved registers in the prologue
+ * ($s5 = p, $s3 = b, $s4 = c), which is what its six registers are FOR.
+ *
+ * So the question is no longer "which priority moves" but "why does this build
+ * get to use $a1 directly there". The likely answer is the path: insn 153 sits
+ * on the `id == -1` arm, which reaches `found:` by `goto` WITHOUT passing
+ * func_8005A1D0's call, so on that path $a1 is still intact. The listing's
+ * prologue copies happen before the dispatch, i.e. unconditionally. Something
+ * about this source lets gcc prove the argument register survives, and the
+ * first thing to check is whether the two paths into `found:` really are
+ * equivalent in the listing.
+ *
  * Which leaves the callee-saved finding itself standing and its cause open:
  * the listing keeps SIX values across calls and this build four. The target's
  * prologue names them -- $s5 = p, $s3 = b, $s4 = c, $s1 = i -- so the two
