@@ -70,6 +70,10 @@
  * reaches it. Section 3's seventh cure does not apply either: the value whose
  * live range would have to extend past the copy is the address itself, and its
  * only use IS the copy.
+ * Measured 2026-10-28 and NOT working: `s16 i` instead of `s32 i` with the
+ * `(s16)` casts dropped -- the narrow-local form of the lever that landed
+ * func_8003AB44 -- is 38 words, TWO over, and 30 DIFF.
+ *
  */
 
 #include "common.h"

@@ -65,6 +65,10 @@
  * set that survives cse DOUBLES its priority at zero instruction cost, and
  * then 80 would pass 93 (0.905 against 0.659).
  * Worth trying before any reference arithmetic. See matching-levers section 3.
+ * Measured 2026-10-28 and NOT working: `s16 x` instead of `s32 x` with the
+ * `(s16)` casts dropped -- the narrow-local form of the lever that landed
+ * func_8003AB44 -- is 108 words, a word OVER, and 67 DIFF.
+ *
  */
 
 #include "common.h"
