@@ -27,6 +27,19 @@ compiler, and none from another source-shape guess.
   currently honest). `search.py` also gained `t_split_local`, the reverse transform.
   SWEEPS COMPOSE: re-run `unname.py` after adopting a hit, because each one
   changes the base -- that is how func_8005C4D0 went 22 -> 18 -> 15.
+* **A VARIANT THAT CHANGES THE WORD COUNT MUST BE CHECKED AGAINST THE
+  TARGET'S INSTRUCTIONS, not just its score.** This is the specific form of
+  "read the hit", and the vague form did not stop me adopting a wrong source
+  on 2026-10-28: func_8005A90C went from 100 words (three short) to 103
+  (exact) at 59 DIFF against 92, and I committed it. The three words were a
+  FOURTH parameter copy into a fifth callee-saved register -- and the
+  listing's prologue has exactly THREE parameter copies and six callee-saved
+  registers, so the count went exact by adding an instruction the target does
+  not contain. Reverted. The check that would have caught it is one diff:
+  name the instructions the variant adds or removes, then find them in the
+  listing. An exact word count reached by a spurious instruction is worse than
+  being three short, because the park then tells the next attempt the shape is
+  right.
 * **AND READ EVERY HIT BEFORE ADOPTING IT.** `unname.py` produced three
   proposals today with BETTER numbers that were different programs or the
   wrong shape: a value whose operand was incremented in between, a duplicated

@@ -37,6 +37,14 @@ written AFTER the sweep proposed a wrong program with good numbers:
     duplicated across several uses (func_8004A330's `func_8004B404(0)`, which
     scored 79 words / 69 DIFF against 74 / 74 by calling it twice). They are
     syntactic and conservative, not a proof. Read what a hit actually does.
+  * IF A HIT CHANGES THE WORD COUNT, NAME THE INSTRUCTIONS IT ADDS OR REMOVES
+    AND FIND THEM IN THE LISTING. That is the check; "read the diff" is not
+    specific enough to perform. On 2026-10-28 a 100 -> 103 word hit on
+    func_8005A90C (three short to exact, 92 -> 59 DIFF) was committed and then
+    reverted: its three words were a FOURTH parameter copy, and the listing's
+    prologue has exactly three. An exact count bought with an instruction the
+    target does not contain is worse than being short, because the park then
+    asserts a wrong shape.
   * A BETTER NUMBER CAN BE THE WRONG SOURCE. On func_80056D44 this reports
     27/28 words and 25 DIFF against the park's 26/27 -- better on both counts
     -- but with no local gcc walks the base as a CURSOR (`addiu $v1, $v1, 0x4`
