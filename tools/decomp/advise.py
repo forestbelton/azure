@@ -688,6 +688,23 @@ def margin_report(rows, size, what):
     register was forced by a conflict rather than by order. Check the
     conflicts column and the xcall column before trusting a row here.""",
     '    '))
+    if 'global' in what:
+      print(wrap("""AND WINNING THE ORDER IS NOT THE SAME AS GETTING THE
+    REGISTER, which is the trap on the global side. `find_reg` picks the
+    lowest-numbered legal register, then OVERRIDES that choice with the
+    allocno's own COPY PREFERENCE if the preferred register is in the same
+    class and is not an outright conflict (global.c, after the two passes). So
+    an incoming parameter allocated first takes its argument register even
+    when a lower-numbered one is free. `regs_someone_prefers` cannot stop it:
+    it is OR-ed into `used` for PASS 0 only, and pass 0 never allocates a
+    register for the first time, so for the first allocno of a function it has
+    no effect at all. Nor can a rival's preference exclude a register this
+    allocno also prefers -- `prune_preferences` subtracts its own preferences
+    from the inherited set unless the rival is LARGER, and `allocno_size`
+    counts WORDS (regs.h:64), so between integer values it never is. When the
+    listing puts a parameter somewhere other than its argument register, look
+    for a different VALUE in that register, not a different priority
+    (func_8004D880).""", '    '))
 
 # ------------------------------------------------------------------ --greg
 #
@@ -809,7 +826,23 @@ def greg_report(src):
         means a quantity has to cross a power of two in its reference count to
         move far: 4 and 5 refs both give 2, 7 and 8 give 2 and 3.
 
-        TWO THINGS THIS TABLE CANNOT SHOW, both from local-alloc.c:
+        THREE THINGS THIS TABLE CANNOT SHOW, all from local-alloc.c:
+        - THE ROWS ARE PER-PSEUDO AND THE ALLOCATOR PRICES QUANTITIES.
+          `block_alloc` ties an insn's destination into the quantity of a
+          source that DIES in it (`combine_regs`, ~1850-1893), and when it
+          does it ADDS their reference counts and takes the LARGER mode's
+          size. So a `lbu` feeding one `sll`, or a chain of `addu`s each
+          consuming the last, is ONE row's worth of register but several rows
+          here, and its real priority is the SUM of their refs at size 4 --
+          typically the highest in its block, not the 2-ref QImode entry this
+          table prints. Two consequences worth knowing before trusting a
+          margin: a byte load tied to a wider consumer is never the cheap
+          quantity it looks like (func_800565D8), and a statement split that
+          buys references can DISSOLVE the tie and lose more than it gains
+          (func_8003A374). To break a tie deliberately, make the consumer's
+          destination a value local-alloc is not allocating -- a pseudo
+          referenced in another block -- since `combine_regs` refuses to tie
+          into one (`reg_qty[sreg] >= -1`).
         - `block_alloc` runs a SUGGESTION PHASE first, and it ignores priority.
           Any quantity that is one side of a move whose other side is a hard
           register -- a call's return value, or a value copied into an argument
