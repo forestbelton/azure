@@ -48,6 +48,10 @@ target and says which ones DO.
 
     python3 tools/decomp/advise.py scratch/zz_foo.c unk_1C540 func_8004F780
     python3 tools/decomp/advise.py scratch/zz_foo.c unk_1C540 func_8004F780 --greg
+
+`--terse` prints the verdict and the finding headlines without the hint
+paragraphs: the measurements alone, for a caller that does not need the prose
+re-read on every turn. parkstats.py uses it to generate park headers.
 """
 import difflib
 import math
@@ -538,7 +542,8 @@ def main():
     if len(B) != len(T):
         print()
         print('  LENGTH  built %d, target %d (%+d)' % (len(B), len(T), len(B) - len(T)))
-        print(wrap(SHIFT_HINT.format(d=abs(len(B) - len(T))), '          '))
+        if '--terse' not in flags:
+            print(wrap(SHIFT_HINT.format(d=abs(len(B) - len(T))), '          '))
         bs, ts = branch_spans(B), branch_spans(T)
         print()
         print('          branch spans (first row whose delta differs brackets the defect):')
@@ -576,7 +581,7 @@ def main():
         order += 1
         print()
         print('  %-13s %08X  %s' % (tag, addr, detail))
-        if hint:
+        if hint and '--terse' not in flags:
             print(wrap(hint, '                '))
         # list the other sites of the same kind compactly
         more = [a for p, g, a, d, h in findings

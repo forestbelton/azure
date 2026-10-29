@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""parkstats.py [FILE...] -- regenerate the stats header of each near-miss file.
+
+A park file carries facts, not a write-up: the word count, the DIFF, and which
+words differ. All three are measurements that `verify.py` already produces, so
+this generates them instead of leaving them to drift. Run it after changing a
+park source, include/structs.h, a prototype, or a unit's flags.
+
+The generated first line keeps the `func_XXXXXXXX (unit) -- A of B words,
+N DIFF` shape that nmcheck.py parses, so the two tools agree by construction.
+
+    python3 tools/decomp/parkstats.py                       # every park
+    python3 tools/decomp/parkstats.py docs/near-misses/func_80041E70.c
+    python3 tools/decomp/parkstats.py --check               # exit 1 if stale
+"""
+import glob
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
+sys.path.insert(0, HERE)
+import asmlib  # noqa: E402
+
+HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\((\w+)\)")
+MULTI = re.compile(r"nmcheck:\s*multi")
+BUILT = re.compile(r"built (\d+) words, target (\d+) words")
+RESULT = re.compile(r"RESULT: (?:(\d+) DIFF|MATCH)")
+
+# verify.py marks a differing word with a leading X and separates the built
+# and target columns with a pipe.
+XLINE = re.compile(r"^X (\S+) (.*?)\s*\|\s*(\S+) (.*)$")
+
+MAX_WORDS = 20
+
+
+def strip_comments(src):
+    """Drop every comment, respecting string and char literals."""
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c in "\"'":
+            j = i + 1
+            while j < n and src[j] != c:
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+        elif src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        else:
+            out.append(c)
+            i += 1
+    text = "".join(out)
+    # A removed comment leaves its own blank line behind; collapse runs.
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+
+
+def run(tool, body, unit, func, extra=()):
+    fd, tmp = tempfile.mkstemp(suffix=".c", prefix="zzps_", dir=PROJ)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(body)
+        cmd = ["python3", os.path.join(HERE, tool),
+               os.path.basename(tmp), unit, func,
+               "--gas-G=%d" % asmlib.gas_g_for_unit(unit)] + list(extra)
+        return subprocess.run(cmd, cwd=PROJ, capture_output=True, text=True)
+    finally:
+        os.unlink(tmp)
+
+
+def advise_block(body, unit, func):
+    """advise.py's aligned findings: the verdict and the finding headlines."""
+    r = run("advise.py", body, unit, func, ("--terse", "--regs"))
+    lines = r.stdout.split("\n")
+    out = []
+    for l in lines:
+        if l.startswith("VERDICT:"):
+            out.append(l.strip())
+        elif re.match(r"^  (?:[A-Z][A-Z ]{2,13}) [0-9A-F]{8}  ", l):
+            # the detail's trailing " -- ..." is advice, not a measurement
+            out.append("  " + " ".join(l.split()).split(" -- ")[0])
+        elif l.strip().startswith("also at:") and out:
+            out.append("    " + l.strip())
+        elif re.match(r"^  LENGTH  built ", l):
+            out.append(l.strip())
+        elif re.match(r"^    [0-9A-F]{8}  built ", l):
+            out.append("  " + " ".join(l.split()))
+    return out
+
+
+KEEP = " * MEASURED"
+
+
+def measured_tail(old_header):
+    """Hand-written measurements are append-only and survive regeneration.
+
+    Everything from a ` * MEASURED` line to the end of the old header is kept
+    verbatim. Generated stats go above it, so a run cannot delete a number
+    somebody measured by hand.
+    """
+    lines = old_header.split("\n")
+    for i, l in enumerate(lines):
+        if l.startswith(KEEP):
+            tail = [x for x in lines[i:] if not x.strip().startswith("*/")]
+            while tail and not tail[-1].strip(" *\t"):
+                tail.pop()        # or a blank comment line accumulates per run
+            return tail
+    return []
+
+
+def measure(path, body):
+    """Measure this park's source and return (header_text, error)."""
+    m = HEAD.search(open(path).read()[:4000])
+    if not m:
+        return None, "no 'func_XXXXXXXX (unit)' in the header"
+    func, unit = m.group(1), m.group(2)
+
+    r = run("verify.py", body, unit, func)
+    mb, mr = BUILT.search(r.stdout), RESULT.search(r.stdout)
+    if not mb or not mr:
+        tail = (r.stdout + r.stderr).strip().split("\n")[-1][:90]
+        return None, "does not build (%s)" % tail
+    built, target, diff = int(mb.group(1)), int(mb.group(2)), int(mr.group(1) or 0)
+
+    out = ["/* %s (%s) -- %d of %d words, %d DIFF. NOT compiled." % (
+        func, unit, built, target, diff)]
+    out.append(" *")
+    out.append(" * Stats generated by tools/decomp/parkstats.py; do not hand-edit them.")
+    if diff:
+        out.append(" * DIFF counts words positionally. advise.py aligns the two streams,")
+        out.append(" * so the findings below are the differences that survive alignment.")
+        out.append(" *")
+        for l in advise_block(body, unit, func)[:MAX_WORDS]:
+            out.append((" * " + l).rstrip())
+    text = open(path).read()
+    j = text.find("*/")
+    if j >= 0:
+        out.extend(measured_tail(text[:j]))
+    out.append(" */")
+    return "\n".join(out) + "\n", None
+
+
+def process(path, check_only):
+    text = open(path).read()
+    if MULTI.search(text[:4000]):
+        return "skip", "nmcheck: multi"
+    i = text.find("*/")
+    if i < 0:
+        return "fail", "no header comment"
+    body = strip_comments(text[i + 2:])
+    header, err = measure(path, body)
+    if err or header is None:
+        return "fail", err
+    new = header + "\n" + body
+    if new == text:
+        return "ok", None
+    if check_only:
+        return "stale", None
+    open(path, "w").write(new)
+    return "wrote", None
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    check_only = "--check" in sys.argv
+    files = args or sorted(glob.glob(os.path.join(PROJ, "docs/near-misses/func_*.c")))
+    counts = {}
+    bad = []
+    for p in files:
+        state, note = process(p, check_only)
+        counts[state] = counts.get(state, 0) + 1
+        if state in ("fail", "stale"):
+            bad.append("%-8s %s%s" % (state, os.path.relpath(p, PROJ),
+                                      ": " + note if note else ""))
+    for line in bad:
+        print(line)
+    print(", ".join("%d %s" % (v, k) for k, v in sorted(counts.items())))
+    return 1 if any(s in counts for s in ("fail", "stale")) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
