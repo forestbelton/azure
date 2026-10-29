@@ -2808,7 +2808,7 @@ void func_80058700(void) {
     }
 }
 
-void func_800599B0(void);
+s32 func_800599B0(void);
 
 void func_800587B4(void) {
     D_80085FA4[0] = 0x80080000;

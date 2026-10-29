@@ -657,7 +657,7 @@ void func_80056948(void);
 
 void func_8005ACDC(void);
 
-void func_800599B0(void);
+s32 func_800599B0(void);
 
 u32 func_800589B8(s32);
 
@@ -929,7 +929,6 @@ void func_80059814(Unk80085FA8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_800599B0);
 
 extern u32 D_800737C4[];
 extern u32 D_800737C8[];
@@ -938,6 +937,157 @@ extern u32 D_800737C8[];
    which the scalar `extern u32 D_800869B4` cannot do, since that form is a
    single insn until maspsx splits it. */
 extern u32 D_800869B4n[] __asm__("D_800869B4");
+
+void func_80058B70(void);
+
+/* The sequencer start: clears D_800737C4, picks the format from the first byte
+   of the data at D_80085FA4 (0x70 -> 0, 0x4B -> 2, otherwise 1), runs
+   func_80058B70, then initialises all D_800869B4 of the D_80085FA8 track
+   entries -- one way for formats 0 and 1, another for format 2, where each
+   track also gets a running offset advanced by its own length halfword.
+
+   SEVEN THINGS ARE LOAD-BEARING. The last one is the whole of format 2's
+   read-back pattern and was worth the final word; the six before it are the
+   126 DIFF this came down from.
+
+   * `switch ((s32) D_800737C8[0])` with the CAST. The symbol is `u32` in this
+     unit (func_80059BC4 needs that) and unsigned gives one `sltiu` range
+     check where the listing has `bltz`, `slti 0x2` and `beq 0x2` -- gcc's
+     signed balanced tree over cases 0, 1 and 2.
+   * EACH ENTRY POINTER IS INDEXED INSIDE THE LOOP BODY
+     (`e = D_80085FA8 + i * 0x50`). Walked as `e += 0x50` loop.c adds a second
+     giv biased to `e + 0x40` and rewrites half the fields as negative
+     displacements off it; that was 40 words.
+   * FORMAT 2's LENGTH HALFWORD IS ALSO INDEXED, off a base read before the
+     loop (`b = (u8 *) D_80085FA4[0];`). The base has to be a local because
+     the loop calls func_80058A04, so the load is not loop-invariant, and the
+     index has to be an index because that is what puts the giv's
+     initialisation in the preheader.
+   * `f = D_800737C4[0];` IS READ INTO A LOCAL between the three byte stores
+     and the three word stores of the shared tail. A store through `e` and a
+     load of a global are a real dependence to sched, so left inside
+     `if (D_800737C4[0] != 0)` after the stores the load cannot reach a delay
+     slot and both loops end with stalls.
+   * FORMAT 2's +0x04, +0x38 and +0x1C ARE READ-BACKS, not re-spellings of `n`
+     and `len`. That is where the listing's three reg-to-reg moves come from.
+     Spelled as `n` and `len` directly the function loses three words.
+   * THE TWO STORES OF THE READ-BACK SHARE ONE SOURCE-LEVEL READ -- `y`, read
+     once and stored to +0x04 and +0x38. Two separate reads of +0x00 give the
+     +0x38 store a register of its own and that is one differing word (this
+     function sat at exactly that for two days).
+   * AND THE +0x1C SUM RE-READS +0x00, NOT +0x38, with the +0x18 store BETWEEN
+     the +0x04 and +0x38 stores. Both halves are about which loads survive cse,
+     and the rule behind them is worth stating because it is not obvious:
+
+       A LOAD cse EQUATES BECOMES A COPY BEFORE COMBINE, WHICH FOLDS IT AWAY;
+       A LOAD THAT SURVIVES cse BECOMES A COPY IN RELOAD, TOO LATE TO FOLD.
+
+     So every one of the listing's three moves is a load that cse did NOT
+     equate, carrying a REG_EQUIV note from local-alloc's `update_equiv_regs`
+     and turned into a register copy by reload. cse's memory table is flushed
+     by every store here, so a load survives exactly when a store stands
+     between it and the store that last wrote its field. `y`'s +0x00 read is
+     covered by the +0x24/+0x20 stores; the sum's +0x18 read by the +0x38
+     store; and the sum's first operand has to read +0x00 -- covered by three
+     stores -- because reading +0x38 puts it immediately after the store that
+     writes +0x38, where cse equates it and combine folds the move.
+     Reading +0x04 instead is 13 DIFF and reading +0x38 is 132 words. */
+s32 func_800599B0(void)
+{
+    u8 *e;
+    u8 *b;
+    u32 i;
+    u32 n;
+    u32 y;
+    u32 v;
+    u32 len;
+    u32 f;
+
+    D_800737C4[0] = 0;
+    D_800737C8[0] = 1;
+    n = 0;
+    if (*(u8 *) D_80085FA4[0] == 0x70)
+    {
+        D_800737C8[0] = 0;
+    }
+    else if (*(u8 *) D_80085FA4[0] == 0x4B)
+    {
+        D_800737C8[0] = 2;
+    }
+    func_80058B70();
+    switch ((s32) D_800737C8[0])
+    {
+    case 0:
+    case 1:
+        i = 0;
+        if (D_800869B4n[0] != 0)
+        {
+            do
+            {
+                e = D_80085FA8 + i * 0x50;
+                if (D_800737C8[0] == 1)
+                {
+                    *(u32 *) (e + 0x00) = n + 1;
+                    *(u32 *) (e + 0x24) = 0x68;
+                    *(u32 *) (e + 0x20) = 0x68;
+                    func_800597A8(e);
+                    n = *(u32 *) (e + 0x00);
+                }
+                *(u32 *) (e + 0x04) = *(u32 *) (e + 0x00);
+                v = func_80058A04((s32) e);
+                e[0x48] = 0;
+                e[0x4A] = 0;
+                e[0x49] = 0;
+                f = D_800737C4[0];
+                *(u32 *) (e + 0x10) = v;
+                *(u32 *) (e + 0x2C) = 0;
+                *(u32 *) (e + 0x40) = 0;
+                if (f != 0)
+                {
+                    func_80059814((Unk80085FA8 *) e);
+                }
+                i++;
+            } while (i < D_800869B4n[0]);
+        }
+        break;
+    case 2:
+        n = 0x50;
+        b = (u8 *) D_80085FA4[0];
+        i = 0;
+        if (D_800869B4n[0] != 0)
+        {
+            do
+            {
+                e = D_80085FA8 + i * 0x50;
+                *(u32 *) (e + 0x00) = n;
+                len = *(u16 *) (b + i * 2 + 0x10);
+                *(u32 *) (e + 0x24) = 0x68;
+                *(u32 *) (e + 0x20) = 0x68;
+                y = *(u32 *) (e + 0x00);
+                *(u32 *) (e + 0x04) = y;
+                *(u32 *) (e + 0x18) = len;
+                *(u32 *) (e + 0x38) = y;
+                *(u32 *) (e + 0x1C) = *(u32 *) (e + 0x00) + *(u32 *) (e + 0x18);
+                n += len;
+                v = func_80058A04((s32) e);
+                e[0x48] = 0;
+                e[0x4A] = 0;
+                e[0x49] = 0;
+                f = D_800737C4[0];
+                *(u32 *) (e + 0x10) = v;
+                *(u32 *) (e + 0x2C) = 0;
+                *(u32 *) (e + 0x40) = 0;
+                if (f != 0)
+                {
+                    func_80059814((Unk80085FA8 *) e);
+                }
+                i++;
+            } while (i < D_800869B4n[0]);
+        }
+        break;
+    }
+    return 0;
+}
 
 void func_8005947C(Unk80085FA8 *);
 u8 func_800595C0(Unk80085FA8 *);
@@ -1546,7 +1696,7 @@ s16 func_8005AE08(u32 *p, s16 n) {
 extern s16 D_80086D48[];
 
 void func_80056A08(void);
-void func_800599B0(void);
+s32 func_800599B0(void);
 
 void func_8005AE90(s16 k, u8 b, s16 c)
 {

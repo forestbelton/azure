@@ -5646,6 +5646,75 @@ straight run has not used this. func_800599B0 is that case: its surviving
 copies and their uses are eight insns apart in one basic block with no call,
 so the rule is measured-closed there and the park says so.
 
+## A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE
+
+Landed func_800599B0 on this (133 words, 1 DIFF -> MATCH, after two days at
+that one word) and it reframes every park whose residue is "the listing has a
+`move` here and we do not", or the reverse. The rule, stated as a rule:
+
+  **A LOAD cse EQUATES BECOMES A COPY *BEFORE* COMBINE, WHICH FOLDS IT AWAY.
+  A LOAD THAT SURVIVES cse BECOMES A COPY IN *RELOAD*, TOO LATE TO FOLD.**
+
+Both halves matter and the second one was the surprise. Walk one of these
+moves backwards through the dumps and it is a LOAD in `.cse2`, still a LOAD in
+`.combine`, still a LOAD in `.lreg`, and a register copy only in `.greg`:
+
+    cse2     (set (reg:SI 149) (mem:SI (reg:SI 168)))
+    combine  (set (reg:SI 149) (mem:SI (reg:SI 168)))
+    lreg     (set (reg:SI 149) (mem:SI (reg:SI 168)))   + REG_EQUIV (mem ...)
+    greg     (set (reg:SI 3 v1) (reg:SI 19 s3))
+
+So these moves are not cse artefacts at all, which is what func_800599B0's park
+assumed for two days while it tried to "defeat combine". **combine never sees
+them.** The REG_EQUIV note is attached by local-alloc's `update_equiv_regs`
+(local-alloc.c:1044-1056): a load whose destination lives in ONE basic block
+and whose MEM `validate_equiv_mem` proves unchanged for the register's life
+gets the note, and reload then satisfies the load from a register that already
+holds the value.
+
+WHAT KILLS THE NOTE, from `validate_equiv_mem` (local-alloc.c) -- useful when
+the listing has a real `lw` and this source folds it to a move:
+  * the MEM has side effects, i.e. **`volatile`** (this is why the `volatile`
+    device buys a load back, and the reason is now named);
+  * a **CALL_INSN** in the register's live range, unless the MEM is
+    RTX_UNCHANGING_P;
+  * a store that `true_dependence` cannot prove disjoint -- so the
+    MEM_IN_STRUCT_P lever applies here too (see the struct-type entry);
+  * a **register mentioned in the MEM's address being reassigned** in the
+    range, which is `reg_overlap_mentioned_p` in
+    `validate_equiv_mem_from_store` and the cheapest of the four.
+One more consequence worth knowing: when the note IS created,
+`reg_live_length[regno]` is **DOUBLED** on the spot (local-alloc.c:1061), which
+halves that allocno's global-alloc priority. A load with a REG_EQUIV note is
+never the priority the raw live range suggests.
+
+SO THE SOURCE-LEVEL LEVER IS WHICH FIELD A READ-BACK READS. cse's memory table
+is flushed by essentially every store through a pointer local, so a load
+survives cse exactly when **a store stands between it and the store that last
+wrote its field**. In func_800599B0's format-2 body the listing wants three
+moves, and each one is a load placed where a store covers it:
+
+    *(u32 *) (e + 0x24) = 0x68;              <- covers y's read
+    *(u32 *) (e + 0x20) = 0x68;
+    y = *(u32 *) (e + 0x00);                 <- move 1
+    *(u32 *) (e + 0x04) = y;
+    *(u32 *) (e + 0x18) = len;
+    *(u32 *) (e + 0x38) = y;                 <- covers the sum's +0x18 read
+    *(u32 *) (e + 0x1C) = *(u32 *) (e + 0x00) + *(u32 *) (e + 0x18);
+
+and the two deciding details are: the +0x04 and +0x38 stores SHARE ONE
+source-level read (two separate reads of +0x00 give the second store a
+register of its own -- that was the single differing word), and the sum's first
+operand reads **+0x00, not +0x38**. Reading +0x38 puts the load immediately
+after the store that writes +0x38, where cse equates it and combine folds the
+move: 132 words. Reading +0x04 is 13 DIFF. Reading +0x00, which three stores
+stand between, is the match.
+
+**DIAGNOSTIC:** a function that is one or two words SHORT with every
+instruction right, where the listing has `addu $x, $y, $zero` and this source
+does not, is this. Do not look at cse's equating or at combine; look at which
+field each read-back reads and what stores lie between.
+
 ## 10. Measured dead ends -- do not retry
 
 * **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT

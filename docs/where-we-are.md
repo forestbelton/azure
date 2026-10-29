@@ -4,10 +4,26 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 47 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 46 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD and all
-four containers verify by hash. `progress.py` puts it at 35936 of 41767 words,
-86.0%, with 46 of the 47 stubs parked.
+four containers verify by hash. `progress.py` puts it at 36069 of 41767 words,
+86.4%, with 45 of the 46 stubs parked.
+
+**THIRD LEVER OF 2026-10-28, and the one most likely to move other parks: A
+REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE.** func_800599B0
+landed on it (133 words, 1 DIFF -> MATCH, after two days on that word). A load
+cse equates becomes a copy BEFORE combine, which folds it away; a load that
+SURVIVES cse stays a load through combine and becomes a register copy only in
+RELOAD, carrying a REG_EQUIV note that local-alloc's `update_equiv_regs`
+attached -- so combine never sees it. Walk one through the dumps and it is a
+`(mem ...)` in .cse2, .combine and .lreg and a `(reg)` only in .greg. cse's
+memory table is flushed by essentially every store through a pointer local, so
+the source-level lever is WHICH FIELD each read-back reads and what stores lie
+between. Full writeup, including the four things that kill the REG_EQUIV note
+(volatile, a call, a non-disjoint store, a reassigned address register) and the
+fact that the note DOUBLES `reg_live_length`, is in matching-levers under that
+heading. **Any park whose residue is "the listing has a move here and we do
+not", or the reverse, should be re-read against it.**
 
 **SECOND LEVER OF 2026-10-28: TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT
 STATEMENTS.** func_8004D690 landed on it (31 words, 29/31 and 18 DIFF before).
