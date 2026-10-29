@@ -26,12 +26,17 @@ levers. **Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq`** if
 anything else in the repo is compiling at the same time; concurrent `ccpsx` runs
 share one prefix and silently lose an output.
 
-`gp-window-batch.c` is the one file here that is not a near-miss: it holds
+`gp-window-batch.c` was the one file here that was not a near-miss: it held
 functions that were clean MATCHes blocked on a structural change rather than on
-matching. **That change is done** -- see the size-record route in
-`docs/addressing-and-translation-units.md` -- so the file is now a historical
-record of how the `$gp` group was worked, and `nmcheck.py` marks it `multi`
-because it holds several functions with no single count to check.
+matching. **All eleven have landed** -- the last two, func_8003F240 and
+func_8003F624, into `csrc/gprel_12A40.c` and `csrc/unk_12DEC.c` -- so the file
+was deleted on 2026-10-29. Its sources are superseded by what landed (the
+size-record route beat the `.sdata` definition the park carried) and its
+mechanism now lives in `docs/addressing-and-translation-units.md` and the
+`csrc/gprel_*.c` headers. `git log docs/near-misses/gp-window-batch.c` if the
+park itself is ever wanted. `probe-cse-forwarding.c` is the remaining file
+`nmcheck.py` marks `multi`, because it holds several functions with no single
+count to check.
 
 ## Read the header, and then distrust its conclusion
 

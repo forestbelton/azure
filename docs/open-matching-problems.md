@@ -620,58 +620,46 @@ with the fold defeated and the body byte-exact, the call result still comes out
 `sll`/`sra` coalesced onto `$v0`. That is an independent allocation problem and
 wants its own small dispatch.
 
-## The real remaining blocker: splitting csrc/unk_14934.c
+## The translation-unit blocker: resolved, and neither half needed the split
 
-Two of the three big items on this list have turned out to need the same
-structural change, and it is worth stating once rather than twice.
+Two of the three big items on this list were read as needing the same
+structural change -- cutting `csrc/unk_14934.c` at func_80041588 -- and neither
+of them did. Both halves of that reading are superseded, and the shape of the
+error is worth keeping.
 
-**The jump-table group** needs `csrc/unk_14934.c` split at func_80041588,
-because the pad word at 0x8002D654 proves func_80041344's table ends one
-original translation unit and func_80041588's begins the next, and a single
-unit would emit all three tables back to back with no pad.
+**The jump-table half was a misread of the bytes.** The pad word at 0x8002D654
+is not a translation-unit boundary; it is the second table's `.align 3` *inside*
+unk_14934, and the region tiles as one `.rodata` output section per existing
+unit. The jump-table section above has the measurement. The other half of that
+reading was impossible on its face: it put func_80041588's and func_80042BDC's
+tables in one unit, with `gprel_152E4` sitting between them in the text.
 
-**The addressing group** needs it too, for a different reason. The mechanism is
-solved (a unit that *defines* a small object gets `%gp_rel` for it while
-undefined symbols stay absolute -- see
-`docs/addressing-and-translation-units.md`), and eleven functions are already
-verified against it in `docs/near-misses/gp-window-batch.c`. But the definition
-must sit in the same object file as the code, so each unit has to define the
-objects its own functions reach. The objects do cluster by unit, exactly as the
-addressing analysis predicts, which is further evidence for the split. The
-obstacles are that a unit's `.sdata` is one contiguous block while the objects'
-addresses are scattered through the window, and that the two functions which
-would otherwise be a cheap `-G8` carve-out -- func_80044618 and func_80044698,
-consecutive and with no absolute references -- sit in the **middle** of
-`csrc/unk_14934.c`, so carving them means splitting it in three and renaming
-the tail.
+**The addressing half needed no split, no window definition and no data move.**
+`__asm__(".sdata\n\t.size SYM,N\n\t.text");` populates maspsx's
+`sdata_entries` table while defining nothing, so loads and stores of SYM become
+`%gp_rel` and an address materialisation of it stays absolute -- and because the
+symbol stays undefined there is no `.sdata` to place and nothing has to be
+contiguous. See `docs/addressing-and-translation-units.md`. The project now
+carries 122 such records across 15 units; they are FILE-SCOPE, which is the one
+hazard, and `tools/decomp/gaudit.py` audits them. Where a unit wants every
+access `$gp`-relative instead, the cheaper route is a `-G8` carve of the
+consecutive run that shares the object -- the `csrc/gprel_*.c` units, one per
+original translation unit.
 
-So the next real decision is not "where does the project's data live" but
-**where are unk_14934's original translation-unit boundaries, and split it
-there**. The jump tables give one boundary (func_80041588) and the
-`$gp`-relative clustering gives independent evidence for others. Doing it once
-unblocks about 1550 instructions of switch functions and most of the addressing
-group together.
+## Functions blocked by the translation-unit problem -- none, as of 2026-10-29
 
-## Functions blocked by the translation-unit problem
+This section listed 32 stubs: five reaching their globals only `$gp`-relatively
+(func_8003E4FC, func_8003F5E0, func_80044618, func_80044698, func_800448BC) and
+27 doing both. All five landed by carve -- `gprel_11CFC`, `gprel_12DD4`,
+`gprel_17B7C` -- and the mixed ones landed on the size record above, as did the
+eleven functions once parked in `docs/near-misses/gp-window-batch.c`; that park
+file has been deleted, its mechanism having moved into
+`docs/addressing-and-translation-units.md` and the `csrc/` unit headers.
 
-32 of the remaining stubs cannot match in their current unit, because the
-addressing mode they need is per-compilation -- see
-`docs/addressing-and-translation-units.md`. Five reach their globals only
-`$gp`-relatively (func_8003E4FC, func_8003F5E0, func_80044618, func_80044698,
-func_800448BC) and 27 do both and so cannot match under either `-G`.
-
-Two of the five are cheap: `func_8003F5E0` is the first function of
-`unk_12DEC` and sits immediately after the carved-out `gprel_12DD4`, so
-extending that subsegment by one function picks it up; `func_80044618` and
-`func_80044698` are adjacent to each other inside `unk_14934` and could be
-carved out together. Both need a splat spec change, a re-extraction and a
-`MASPSXFLAGS_G8` line in the Makefile.
-
-The 27 mixed ones need the real fix from that document: each C file eventually
-has to *define* the globals its functions reach `$gp`-relatively, rather than
-declaring them `extern`, so maspsx can see the size. That means moving those
-objects out of the splat data segments and into C, which is a much larger
-change.
+Of the stubs that remain, not one has addressing in its residue. The only park
+that still mentions `%gp_rel` is func_80047054's, and it does so to rule the
+whole class out: its target listing contains no `lui`, `%hi`, `%lo` or
+`%gp_rel` at all, so no unit carve can be what is wrong there.
 
 ## func_8003E188  (unk_11940) -- resolved, kept for the reasoning
 
