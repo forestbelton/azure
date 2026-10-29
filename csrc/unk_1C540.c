@@ -2796,7 +2796,64 @@ u8 func_8004D828(u16 k) {
     return D_8007147C[i];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004D880);
+u8 func_8004D880(u32 x)
+{
+    u16 d;
+    u16 e;
+    u16 f;
+    u32 c;
+
+    /* Shift-JIS fullwidth to ASCII: 0x824F-0x8258 are '0'-'9', 0x8260-0x8279
+       'A'-'Z', 0x8281-0x829A 'a'-'z'; anything else goes to the table walk in
+       func_8004D828.
+
+       The dead `if (c)` with identical arms is load-bearing, and it is NOT
+       valid C -- it reads `c` before `c` is assigned. It does two things the
+       listing needs, and no legal spelling gave either:
+
+         * It puts a use of `c` ahead of the block that assigns it, so
+           cse.c:make_regs_eqv makes `c` the canonical register of the {x, c}
+           class rather than `x`. Otherwise every read of `c` is rewritten to
+           `x`, and `c + 0x7D7F` then folds with the `+ 0x61` into a single
+           `addiu 0x7DE0`; the listing keeps the two adds apart.
+
+         * It makes `c` live from entry, so `c` conflicts with `x` and
+           global.c:expand_preferences cannot hand `c` the parameter's $a0.
+           `c` falls to $v1, and `d` takes the $a0 it already prefers as
+           func_8004D828's argument.
+
+       Legal spellings measured, all 5 DIFF: `goto L; L:`, `switch (0) { case
+       0: }`, `c = c ? x : x`, and `if (c) { }` with the assignment outside
+       (gcc folds all four away). An identical-arm `if` on an initialised
+       value is 30 DIFF, because the test emits code. A dead `c = 0` in the
+       fallback arm fixes the immediate but then lets `c` coalesce into $a0,
+       which drops the entry copy and gives 27 words. */
+    if (c)
+    {
+        c = x;
+    }
+    else
+    {
+        c = x;
+    }
+    d = c;
+    e = c + 0x7DB1;
+    if (e < 0xA)
+    {
+        return e + 0x30;
+    }
+    f = c + 0x7DA0;
+    if (f < 0x1A)
+    {
+        return f + 0x41;
+    }
+    c = c + 0x7D7F;
+    if ((u16) c >= 0x1A)
+    {
+        return func_8004D828(d);
+    }
+    return c + 0x61;
+}
 
 void func_8004D8F0(u32 a, u8 *p) {
     p[0] = (a & 0xF) << 3;
@@ -2846,7 +2903,7 @@ void func_8004DA24(u8 *p, u8 *q) {
     }
 }
 
-u32 func_8004D880(u32);
+u8 func_8004D880(u32);
 void func_8004D98C(u8, s32, u8 *);
 void func_8004E264(u16 *, u32);
 void func_8004D9E0(u8 *, s32, s32, s32, s32);
