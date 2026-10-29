@@ -2,8 +2,6 @@ import argparse
 import re
 from typing import Optional
 
-import yaml
-
 from azure.commands import extract
 
 SYMBOL_ADDR_PATTERN = re.compile(r"^(\w+)\s*=\s*0x([a-fA-F0-9]+);.*$")
