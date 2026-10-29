@@ -50,6 +50,90 @@
  *   `bne $v0, $s0` is therefore a statement about what sched2 put first, not
  *   about dependences.
  *
+ * 2026-10-28, SECOND PASS: THE MISSING WORD IS NOT A SCHEDULING PROBLEM. Read
+ * the sections below for their measurements, but not for the mechanism -- they
+ * conclude "this is a SCHEDULING problem, not a cse one: the fix has to make
+ * sched1 place the second read before the `lw 0x34`", and that is wrong at the
+ * top. Walk the second load through the dumps and it is a `(mem ...)` in
+ * `.cse2`, in `.combine` AND in `.lreg`, and gone in `.greg`:
+ *
+ *   * local-alloc's `update_equiv_regs` (local-alloc.c:1044-1056) gives it a
+ *     REG_EQUIV note, because its destination lives in ONE basic block and
+ *     `validate_equiv_mem` proves `(mem (plus q 128))` unchanged for the
+ *     register's life;
+ *   * RELOAD then satisfies the load from the register the FIRST load put the
+ *     value in, and the resulting same-register copy is deleted.
+ *
+ * So combine never sees it and sched1's order is not what deletes it. The
+ * general rule is matching-levers, "A REG-TO-REG MOVE IN THE LISTING IS A LOAD
+ * cse DID *NOT* EQUATE". This park's claim that cse keeps both loads is RIGHT
+ * and now has a citation -- `note_mem_written` always sets `writes->var`, and
+ * `invalidate_memory`'s last clause `cse_rtx_addr_varies_p (p->exp)` ignores
+ * the flags, so one store of any width clears every register-plus-constant
+ * entry. What was wrong is the conclusion drawn from it.
+ *
+ * WHY `volatile` BUYS THE LOAD BACK, named at last: `validate_equiv_mem`
+ * returns 0 for `side_effects_p (memref)`. Its four exits are the four ways to
+ * deny the note, and three of them are closed here:
+ *
+ *   * a CALL_INSN in the register's live range -- not available, because the
+ *     listing holds the second pointer in $v1, a CALLER-saved register, so it
+ *     cannot span the do-while's call;
+ *   * a store `true_dependence` cannot prove disjoint -- every store in the
+ *     range is off `q` with a constant displacement, so all are disambiguated;
+ *   * a REG mentioned in the MEM's address being SET in the range
+ *     (`reg_overlap_mentioned_p`, in `validate_equiv_mem_from_store`) -- `q`
+ *     is the parameter and is never reassigned.
+ *
+ * THE LISTING'S SHAPE IS NOW REACHED, and what it costs is a different word.
+ * `volatile` on BOTH reads, with the second going into this function's
+ * EXISTING outer pointer local `r` (so its pseudo is multi-block and
+ * multi-set), gives the two `lw 0x80($s1)` ADJACENT -- which nothing before
+ * this had. 70 words, 30 DIFF: two loads gained, and the listing's
+ * branch-delay `nop` lost, because sched2 puts the `lui %hi(func_80038A10)`
+ * FIRST in the block and dbr then speculates it into the preceding `bne`'s
+ * delay slot. That is this file's own DELAY-NOPS bullet seen from the other
+ * side: a load first in the block keeps the slot empty, a `lui` first does not.
+ *
+ * AND THE REMAINING TIE IS EXACT. Block 6's sched2 trace for that variant
+ * matches the listing PICK FOR PICK except at one slot:
+ *
+ *     ;; ready list at T-8: 118 (1) 113 (1) 116 (2), now 116 118 113
+ *
+ * where 118 is the `lui`, 113 the second `lw 0x80` and 116 the `lw 0x34`. 116
+ * has priority 2 and wins; the listing picks 118 there, which puts the `lui`
+ * fourth and leaves a LOAD first in the block, where dbr cannot speculate it
+ * (`may_trap_p`). Everything else is already identical -- both loads, the
+ * `lw 0x34`, the addiu/sw pair, `sb 0x2E` before `addiu q+0x3C`, and the three
+ * closing stores. **The whole remaining job is to make the `lui` outrank the
+ * `lw 0x34` at T-8, or to shorten the `lw 0x34`'s path to the block end so its
+ * priority falls to 1.** That 2 comes from its single dependent, the
+ * `*(u32 *) (q + 0x1C) = t` store, which sched2 places at T-2.
+ *
+ * ONE REGISTER DIFFERENCE RIDES ALONG, and it is `combine_regs`. In that
+ * variant `t` reuses readA's register (`lw $v1, 0x34($v1)`) because readA DIES
+ * in the 0x34 load and `combine_regs` ties an insn's destination into the
+ * quantity of a source that dies in it; the listing gives `t` its own ($a0).
+ * The tie is refused when the SOURCE pseudo is not block-local or dies more
+ * than once (`reg_qty[ureg] < 0`, local-alloc.c:1762) or when the DEST is one
+ * local-alloc is not allocating. Buying the second death by reusing `ra` for
+ * `q + 0x3C` loses the second load again.
+ *
+ * MEASURED 2026-10-28 AND NOT WORKING, all 70 words unless noted:
+ *
+ *     second read through the outer `r`, NO volatile            70,  29
+ *     that, with a fresh block-local for the first read         71,   6   (one load + a `move`)
+ *     volatile on ONE read only, either position                71,   4   (the long-standing number)
+ *     volatile on both, second into `r`  <- THE SHAPE           70,  30
+ *     all three reads volatile, including the +0x34 load        70,  30
+ *     the two reads' roles swapped                              70,  29
+ *     `*(u32 *) (q + 0x1C) = t;` moved above the other stores   70,  30
+ *     `ra` reused for `q + 0x3C`, two positions                 70,  29
+ *     an ARRAY REF on the pointer, `((u8 **) q)[0x20]`, as
+ *       either read or both: does NOT set MEM_IN_STRUCT_P,
+ *       because the C front end builds INDIRECT_REF(PLUS) for
+ *       a pointer and not ARRAY_REF                             70,  29
+ *
  * WHAT IS LEFT: one word -- the SECOND `lw 0x80($s1)` in the guarded block.
  *
  * The target reads the owner twice there, once for `t` and once as the base
