@@ -50,6 +50,58 @@
  *     real move. With the three stores in address order the second read-back
  *     is free and the function is a word short.
  *
+ * READ THIS BEFORE THE SECTIONS BELOW IT, 2026-10-28. Several of them weigh a
+ * trade-off THIS SOURCE DOES NOT FACE, and one of them tells the next session
+ * to "defeat combine, not cse". That is wrong, and the whole-diff print says
+ * so: **all three copies are already here and byte-identical to the
+ * listing's.** Side by side, the format-2 body, with the one differing word
+ * marked:
+ *
+ *       sw   $s3, 0x0($s0)        sw   $s3, 0x0($s0)
+ *       addu $v1, $s3, $zero      addu $v1, $s3, $zero    <- read-back #1
+ *       lhu  $a2, 0x10($s2)       lhu  $a2, 0x10($s2)
+ *       addu $v0, $v1, $zero      addu $v0, $v1, $zero    <- read-back #2
+ *       sw   $s4, 0x24($s0)       sw   $s4, 0x24($s0)
+ *       sw   $s4, 0x20($s0)       sw   $s4, 0x20($s0)
+ *       sw   $v1, 0x4($s0)        sw   $v1, 0x4($s0)
+ *   X   sw   $v0, 0x38($s0)       sw   $v1, 0x38($s0)     <- THE WORD
+ *       sw   $a2, 0x18($s0)       sw   $a2, 0x18($s0)
+ *       addu $a1, $a2, $zero      addu $a1, $a2, $zero    <- len's read-back
+ *       addu $s3, $s3, $a2        addu $s3, $s3, $a2
+ *       addu $v0, $v0, $a1        addu $v0, $v0, $a1
+ *
+ * Nothing has to be kept, defeated or traded: read-back #2's copy is present,
+ * len's copy is present, both are unfolded in BOTH builds, and the function
+ * is 133 words on both sides. The sections below that talk about "giving up
+ * the copy", "keeping the copy", "a third copy" and "defeating combine" were
+ * written from advise.py's register-difference summary rather than from this
+ * print, and they overstate the problem.
+ *
+ * WHAT IS ACTUALLY WRONG is one register on one store, and the reason is
+ * narrow. Read-back #2's copy insn has TWO consumers here -- the +0x38 store
+ * and the +0x1C sum -- and ONE in the listing, the sum. The +0x38 store's own
+ * `*(u32 *) (e + 0x00)` read becomes a copy because the +0x18 store between it
+ * and the +0x04 store invalidates cse's entry for +0x00, and that copy is then
+ * never folded into the store. For the listing's word the store has to read
+ * read-back #1 DIRECTLY, which needs its +0x00 read to hit a VALID cse entry
+ * -- i.e. no invalidation before it -- while the sum still needs one so that
+ * ITS read becomes a copy. The two want the invalidation in two different
+ * places and the +0x18 store is the only thing available to provide it. That
+ * is the whole of the remaining word.
+ *
+ * MEASURED 2026-10-28 on that reading, and it moves the sum but not the store:
+ *
+ *     sum's first operand from +0x04 (store still +0x00)   133 words,  8 DIFF
+ *     sum's first operand from +0x00                       134 words, 45 DIFF
+ *     that, operands swapped                               134 words, 46 DIFF
+ *
+ * The 8-DIFF one does what it was meant to -- the sum reads read-back #1 and
+ * #2's copy is left with a single consumer -- and the +0x38 store STILL takes
+ * a copy of its own rather than #1, which is the proof that the store's copy
+ * is not folded even with one use. So the question to answer is not about the
+ * sum at all: it is why `(set P2 P1)` is not folded into `(set (mem e+0x38))
+ * P2)`, or how the store's +0x00 read avoids being invalidated.
+ *
  * WHAT IS LEFT. The listing stores +0x04 and +0x38 from ONE read-back ($v1)
  * and keeps the SECOND ($v0) only for the +0x1C sum; here the second
  * read-back serves both the +0x38 store and the sum, so the store names $v0.

@@ -5616,6 +5616,36 @@ one the list did not include. **When a transformation's match depends on which
 label an exit targets, vary the arms INDEPENDENTLY -- a uniform sweep over exit
 spellings answers a different question.**
 
+## COMBINE WILL NOT COMBINE ACROSS A CALL
+
+combine.c:924-929, in `can_combine_p`, after the REG_NO_CONFLICT checks:
+
+      /* Don't combine across a CALL_INSN, because that would possibly
+         change whether the life span of some REGs crosses calls or not,
+         and it is a pain to update that information.
+         Exception: if source is a constant, moving it later can't hurt.  */
+      || (INSN_CUID (insn) < last_call_cuid && ! CONSTANT_P (src))
+    return 0;
+
+`last_call_cuid` is the cuid of the most recent CALL_INSN combine has scanned,
+so the rule is: **a candidate insn that sits before a call cannot be combined
+into a use after it, unless its source is a constant.**
+
+This is the lever for the case where THE LISTING KEEPS A COPY (or an address
+sum, or any insn whose result has a single use) THAT THIS SOURCE FOLDS AWAY --
+a function that is one or two words SHORT with the right instructions
+otherwise. Moving the value's computation to the other side of a call that is
+already in the function costs nothing and blocks the fold. It is the cheapest
+of the combine blockers, because the other one -- `use_crosses_set_p (src,
+INSN_CUID (insn))`, i.e. reassigning the SOURCE between -- needs a second
+assignment that usually has to be invented.
+
+CHECK THE LISTING FIRST. The rule only applies if the listing itself has a
+call between the two, and a listing that shows the copy and its use in one
+straight run has not used this. func_800599B0 is that case: its surviving
+copies and their uses are eight insns apart in one basic block with no call,
+so the rule is measured-closed there and the park says so.
+
 ## 10. Measured dead ends -- do not retry
 
 * **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT
