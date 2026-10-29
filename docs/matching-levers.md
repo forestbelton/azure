@@ -5731,6 +5731,34 @@ instruction right, where the listing has `addu $x, $y, $zero` and this source
 does not, is this. Do not look at cse's equating or at combine; look at which
 field each read-back reads and what stores lie between.
 
+**THE SAME RULE READ BACKWARDS LANDED func_8003800C** (71 words, 70 of 71 and
+29 DIFF before), where the listing keeps a real `lw` that this source folded to
+nothing. Three things, and the second two are reusable on their own:
+
+* A `volatile` on the read, flagged as a scaffold, because
+  `validate_equiv_mem` returns 0 for `side_effects_p` and its three other
+  exits were each unavailable there. Note what the scaffold is standing in
+  for: SOMETHING in the original denied that note, and the four candidates are
+  the list above.
+* **THE TWO READS HAVE TO BE BLOCK-LOCALS, NOT A FUNCTION-SCOPE NAME.** The
+  listing holds them in $v0 and $v1, which LOCAL-alloc hands out; reusing a
+  function-scope pointer makes the pseudo multi-block, so GLOBAL alloc assigns
+  it after local-alloc has already taken $v0 and $v1, and it lands in $a1 --
+  four differing words with the shape otherwise exact. **Scope is an
+  allocation lever, not a style choice:** block-local means local-alloc,
+  function-scope-with-two-blocks means global-alloc, and the two pools are
+  handed out in that order.
+* **A BYTE STORE MOVED ABOVE A `lui` TO KEEP A BRANCH-DELAY nop.** dbr will not
+  speculate a `may_trap_p` insn into a slot that executes on both paths, so a
+  block that STARTS with a load or store leaves the preceding conditional
+  branch's slot empty, and one that starts with a `lui` does not. Writing the
+  stores in address order put the `lui` first and cost the listing's `nop`;
+  moving `q[0x2E] = 0;` above the `+0x10` store gave the block a store to
+  start with. The tie it had been losing is visible in its own sched2 trace --
+  `ready list at T-8: 118 (1) 113 (1) 116 (2)`, the `lw 0x34` at priority 2
+  beating the `lui` at 1 -- and the fix is not to win that tie but to put
+  something untouchable in front of it.
+
 ## 10. Measured dead ends -- do not retry
 
 * **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT

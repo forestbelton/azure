@@ -1937,7 +1937,117 @@ void func_80038000(u8 v) {
     D_80082B4B[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003800C);
+extern u8 D_800809C4[];
+extern u8 D_8002D030[];
+
+s32 func_80053EF0(s32);
+void func_800387D0(u8 *);
+void func_80038A10(u8 *, u8 *, s32);
+
+/* The D_800809C4 reset for one actor's +0x8C sub-struct: three func_80043FB8
+   calls, the owner's +3/+4 byte pair synchronised, then -- if the owner's
+   +0x34 handle is set -- the state function driven round to func_80038A10, the
+   sub-struct re-pointed at its own +0x3C and the owner's handle taken over and
+   cleared. Finally the state function is called, defaulting to func_80038A10
+   if null.
+
+   `q` is the SUB-STRUCT, not the actor: every offset here is one of
+   func_80037D9C's `q = p + 0x8C` fields, and `*(u8 **) (q + 0x80)` is the owner
+   pointer that function stores there. `q + 0x3C` is the actor's +0xC8, which is
+   what func_80037D9C writes to the same +0x7C slot.
+
+   SEVEN THINGS ARE LOAD-BEARING.
+
+   * THE OWNER BYTE IS READ ONCE INTO A LOCAL -- `v = r[3]; r[4] = v;
+     q[0x28] = v;`, exactly as func_80037D9C spells the same three lines.
+     Written `r[4] = r[3]; q[0x28] = r[3];` the second `r[3]` is a separate
+     pseudo, because `note_mem_written` sets cse's `all` flag for any QImode
+     store (ANSI lets a char pointer alias anything), and reload turns it into
+     `addu $v0, $a1, $zero`: same word count, seven differing words, and the
+     copy occupies the `beq` delay slot the listing leaves as a nop. An extra
+     reg-reg copy right after an `lbu` whose value is stored twice means the
+     byte is a LOCAL in the source.
+   * THE THREE READS OF THE OWNER IN THE +3/+4 BLOCK GO THROUGH ONE POINTER
+     LOCAL; the comparison casts to `s8` (two `lb`) and the stored value does
+     not (one `lbu`). Three loads of the owner POINTER would be wrong: the
+     block has one `lw 0x80`.
+   * THE +0x34 GUARD AND THE +0x34 USES EACH RE-DEREFERENCE `q + 0x80` rather
+     than reusing the block-1 local -- the two `sb`s in block 1 set cse's `all`
+     flag, so the pointer is reloaded, and the listing has a fresh `lw 0x80` at
+     80038074 to prove it.
+   * A `nop` IN A BRANCH DELAY SLOT CAN MEAN THE NEXT INSN IS A LOAD. dbr will
+     not speculate a `may_trap_p` insn into a slot that executes on both paths,
+     so when the fall-through block starts with a `lw` the slot stays empty and
+     when it starts with a `lui` dbr fills it.
+   * AND THAT IS WHY `q[0x2E] = 0;` IS THE FIRST STATEMENT OF THE GUARDED
+     BLOCK'S TAIL, above the +0x10 store. Written after it -- the natural
+     address order -- sched2 puts the `lui %hi(func_80038A10)` first in the
+     block and dbr speculates it into the preceding `bne`'s delay slot, costing
+     the listing's `nop`. Its own sched2 trace shows the tie it loses:
+     `ready list at T-8: 118 (1) 113 (1) 116 (2)`, where 116 is the `lw 0x34`
+     at priority 2 and 118 the `lui` at 1. Moving the byte store up gives the
+     block a store to start with and the slot stays a nop.
+   * THE TWO POINTER READS IN THE TAIL ARE A BLOCK-LOCAL EACH, not the outer
+     `r`. The listing holds them in $v0 and $v1, which local-alloc hands out;
+     reusing the function-scope `r` makes that pseudo multi-block, so GLOBAL
+     alloc assigns it after local-alloc has taken $v0 and $v1 and it lands in
+     $a1 -- four differing words with everything else right.
+   * (*) THE FIRST OF THE TWO READS IS `volatile`, AND THIS IS A SCAFFOLD. What
+     it buys is that the read is not folded away: a load whose destination
+     lives in one basic block and whose MEM `validate_equiv_mem` proves
+     unchanged gets a REG_EQUIV note from local-alloc's `update_equiv_regs`,
+     and RELOAD then satisfies it from the register the other load put the
+     value in, deleting the same-register copy -- which is one word short.
+     `validate_equiv_mem` returns 0 for `side_effects_p`, so `volatile` denies
+     the note. Its three other exits are each unavailable here: a CALL_INSN in
+     the range cannot be, because the listing holds the second pointer in $v1
+     and a caller-saved register cannot span the do-while's call; every store in
+     the range is off `q` with a constant displacement and so disambiguated by
+     `true_dependence`; and `q` is the parameter and is never reassigned.
+     SOMETHING in the original denied that note and `volatile` stands in for it.
+     See matching-levers, "A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID
+     *NOT* EQUATE". */
+void func_8003800C(u8 *q)
+{
+    u8 *r;
+    u8 v;
+
+    func_80043FB8((s32) D_800809C4);
+    func_80043FB8((s32) D_8002D030, func_80053EF0(4));
+    func_80043FB8((s32) D_800809C4);
+    r = *(u8 **) (q + 0x80);
+    if (*(s8 *) (r + 3) != *(s8 *) (r + 4))
+    {
+        v = r[3];
+        r[4] = v;
+        q[0x28] = v;
+    }
+    if (*(u32 *) (*(u8 **) (q + 0x80) + 0x34) != 0)
+    {
+        u8 *r2;
+        u32 t;
+
+        if (*(u32 *) (q + 0x10) == (u32) func_800387D0)
+        {
+            do
+            {
+                func_800387D0(q);
+            } while (*(u32 *) (q + 0x10) != (u32) func_80038A10);
+        }
+        t = *(u32 *) ((u8 *) *(volatile u32 *) (q + 0x80) + 0x34);
+        r2 = *(u8 **) (q + 0x80);
+        q[0x2E] = 0;
+        *(u32 *) (q + 0x10) = (u32) func_80038A10;
+        *(u32 *) (q + 0x7C) = (u32) (q + 0x3C);
+        *(u32 *) (q + 0x1C) = t;
+        *(u32 *) (r2 + 0x34) = 0;
+    }
+    if (*(u32 *) (q + 0x10) == 0)
+    {
+        *(u32 *) (q + 0x10) = (u32) func_80038A10;
+    }
+    (*(void (**)(u8 *)) (q + 0x10))(q);
+}
 
 void func_80038A10(u8 *, u8 *, s32);
 

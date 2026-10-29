@@ -4,10 +4,10 @@ Written 2026-10-23. Read this first, then `docs/compiler-version.md`.
 
 ## State
 
-**`guard.py` reads 46 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
+**`guard.py` reads 45 asm stubs as of 2026-10-28** -- 177 known, 177 accounted
 for -- and the build is byte-identical; `make check` is green at HEAD and all
-four containers verify by hash. `progress.py` puts it at 36069 of 41767 words,
-86.4%, with 45 of the 46 stubs parked.
+four containers verify by hash. `progress.py` puts it at 36140 of 41767 words,
+86.5%, with 44 of the 45 stubs parked.
 
 **THIRD LEVER OF 2026-10-28, and the one most likely to move other parks: A
 REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE.** func_800599B0
@@ -61,6 +61,16 @@ load-delay NOPS and came out two words short, and why the lookup's source
 position is inert as casts and load-bearing as fields. Full writeup in
 matching-levers under that heading. **Try it first on any remaining filler, and
 on any park whose residue is "the target spends a nop here and we fill it".**
+
+**func_8003800C LANDED on the reg-to-reg-move rule read BACKWARDS** -- there
+the listing keeps a real `lw` that this source folded away. Two halves of that
+are reusable on their own and are in the same matching-levers entry: SCOPE IS
+AN ALLOCATION LEVER (a block-local goes to local-alloc, a function-scope name
+used in two blocks goes to global-alloc, and the pools are handed out in that
+order -- that was four words), and A BLOCK THAT STARTS WITH A LOAD OR STORE
+KEEPS THE PRECEDING CONDITIONAL BRANCH'S DELAY-SLOT nop, because dbr will not
+speculate a `may_trap_p` insn; moving one byte store above a `lui` was the
+word.
 
 Two habits this family is worth remembering for. The parks had all three
 functions wrong the same way because the FIRST of them said "a struct type is

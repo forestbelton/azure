@@ -471,11 +471,19 @@ what makes D_8008099C impossible here, and the grep is two commands:
 The remaining $gp stubs in unk_72A8 are func_8003C920, func_80035484 and
 func_80035888 (plus the two blocked on D_8008099C); unk_1AF38 has none left.
 
-* `func_8003800C` (unk_72A8, 71w) -- 70/71, 29 DIFF, parked in
-  `docs/near-misses/`. One word: the second `lw 0x80` of the owner pointer in
-  the guarded block. greg collapses the two reads into one register because
-  sched1 separates their live ranges; sixteen statement-order placements
-  measured, all 70 words.
+* `func_8003800C` (unk_72A8, 71w) -- **LANDED 2026-10-28**. The one word was
+  the second `lw 0x80`, and the park's account of it ("greg collapses the two
+  reads because sched1 separates their live ranges") named the wrong pass: the
+  load is a `(mem ...)` in .cse2, .combine AND .lreg and gone in .greg, because
+  `update_equiv_regs` gives it a REG_EQUIV note and RELOAD satisfies it from
+  the other load's register. Three changes landed it -- the two tail reads as
+  BLOCK-LOCALS (reusing the function-scope `r` makes the pseudo multi-block, so
+  global-alloc assigns it after local-alloc has taken $v0 and $v1 and it lands
+  in $a1), `q[0x2E] = 0;` moved ABOVE the +0x10 store so the block starts with
+  a store and dbr cannot speculate the `lui` into the preceding `bne`'s delay
+  slot, and a flagged `volatile` on the first read to deny the REG_EQUIV note.
+  See matching-levers, "A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID
+  *NOT* EQUATE".
 
 | func_80035E58 | unk_72A8 | **129/129 words, 2 DIFF** | The six-argument spawn, and the fourth member of the prologue-interleave family: the D_80082BC0 array spelling took it from 8 DIFF to 2. What is left is ONE swap -- func_80036988 two argument setups land in each other load-delay slots. They tie on sched2 priority, and `rank_for_schedule` last key sorts DESCENDING by LUID while expand_call emits $a0 setup first (calls.c:1850), so a0-later is unreachable through argument order; `e + 0xC` does not lengthen its priority path because fold rewrites it back to `n + 0x2C`. `docs/near-misses/func_80035E58.c`. |
 
@@ -513,7 +521,7 @@ wants `--greg` before any source change.
 |---|---|---|---|---|
 | func_80035E58 | 129/129 | SHAPE | OPCODE | - |
 | func_80037E58 | 70/70 | SHAPE | -- | 6 |
-| func_8003800C | 70/71 | LENGTH | -- | 1 |
+| func_8003800C | 71/71 | LANDED | -- | 0 |
 | func_80038CB8 | 164/164 | SHAPE | OPCODE | 8 |
 | func_80038F48 | 98/98 | SHAPE | OPCODE | 6 |
 | func_8003931C | 85/85 | ALLOC | -- | 10 |
