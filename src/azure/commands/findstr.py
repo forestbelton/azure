@@ -107,13 +107,11 @@ def main(args: argparse.Namespace) -> None:
     with open(args.file, "rb") as f:
         strs = find_shiftjis(f)
     for loc in strs:
-        print(
-            f"""{{
-    "offset": {hex(loc.offset)},
-    "length": {len(loc.raw)},
-    "str": "{escape_surrogates(loc.s)}"
-}}"""
-        )
+        print(f"""{{
+                "offset": {hex(loc.offset)},
+                "length": {len(loc.raw)},
+                "str": "{escape_surrogates(loc.s)}"
+            }}""".strip())
 
 
 if __name__ == "__main__":

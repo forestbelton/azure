@@ -1,4 +1,5 @@
 import argparse
+from typing import Callable
 
 from azure.commands import (
     bincue,
@@ -8,10 +9,13 @@ from azure.commands import (
     libmatch,
     libscan,
     shiftjis,
+    spec,
     symbols,
 )
 
-ALL_PARSERS = {
+Parser = Callable[[str], argparse.ArgumentParser]
+
+ALL_PARSERS: dict[str, Parser] = {
     "bincue": bincue.setup_parser,
     "extract": extract.setup_parser,
     "findstr": findstr.setup_parser,
@@ -19,6 +23,7 @@ ALL_PARSERS = {
     "libmatch": libmatch.setup_parser,
     "libscan": libscan.setup_parser,
     "shiftjis": shiftjis.setup_parser,
+    "spec": spec.setup_parser,
     "symbols": symbols.setup_parser,
 }
 

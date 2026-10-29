@@ -41,6 +41,7 @@ def sort_file(filename: str) -> None:
 
     def sort_key(line: str) -> int:
         m = SYMBOL_ADDR_PATTERN.match(line)
+        assert m is not None
         return get_addr(m.group(2))
 
     lines.sort(key=sort_key)
@@ -50,7 +51,7 @@ def sort_file(filename: str) -> None:
 
 def validate_file(addrs_filename: str) -> None:
     with open(addrs_filename, "r") as f:
-        lines = [line for line in f if SYMBOL_ADDR_PATTERN.match(line)]
+        _lines = [line for line in f if SYMBOL_ADDR_PATTERN.match(line)]
 
 
 def setup_parser(prog: str) -> argparse.ArgumentParser:

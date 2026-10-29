@@ -1,4 +1,3 @@
-# TODO: Turn into `azure` command
 import argparse
 import pathlib
 import sys
@@ -58,10 +57,14 @@ def get_file_shasum(filename: Path) -> str:
     return hash.hexdigest()
 
 
-def main():
+def setup_parser(name: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec")
-    args = parser.parse_args()
+    parser.set_defaults(main=main)
+    return parser
+
+
+def main(args: argparse.Namespace):
     with open(args.spec, "r") as f:
         raw_spec = yaml.full_load(f)
     spec = Spec(**raw_spec)
@@ -89,4 +92,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = setup_parser("spec")
+    main(parser.parse_args())

@@ -11,3 +11,15 @@ dependencies = [
     "PyYAML>=6.0.2,<7.0.0",
     "splat64[mips]>=0.32.2,<1.0.0",
 ]
+
+[project.scripts]
+azure = "azure.main:main"
+extract = "extract:main"
+
+[build-system]
+requires = ["uv-build<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = []

@@ -35,11 +35,7 @@ ASFLAGS_C += -EL -32
 LDFLAGS   += -m elf32ltsmip
 endif
 
-# Run the project's own tool with src/ on the path. `python src/azure/main.py`
-# only works inside `hatch shell`: invoked directly it puts src/azure on
-# sys.path rather than src, so `from azure.commands import ...` fails.
-# TODO: Fix
-AZURE = PYTHONPATH=src python3 src/azure/main.py
+AZURE = uv run azure
 CHECK = python tools/check.py
 
 # The game code was built with the cc1psx from the PSY-Q 4.1 runtime disc,
@@ -267,4 +263,4 @@ splat: $(SPLATFILES)
 	done
 
 extract:
-	PYTHONPATH=src python3 extract.py spec.yaml
+	$(AZURE) spec spec.yaml
