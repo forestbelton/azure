@@ -45,17 +45,18 @@ pool.
 
 ## What the permuter's output is, and is not
 
-It is a *measurement*, not a landing. Its source is mutated C and routinely
-illegal: the `func_8004D880` winner reads two uninitialised locals in a dead
-`if (c || e)` whose arms are identical, which costs zero words and creates the
-basic-block boundary the listing needs. That is a real mechanism and not
-landable as written.
+It is a *measurement*, not yet a landing. Its source is mutated C: the
+`func_8004D880` winner reads two uninitialised locals in a dead `if (c || e)`
+whose arms are identical, which costs zero words and creates the basic-block
+boundary the listing needs.
 
-So a win needs a cleanup pass: find a legal spelling with the same effect, then
-`verify.py` again. For that function, three legal boundary spellings were
-measured and all three fold away, leaving the park at 5 DIFF -- `goto L; L:`,
-`switch (0) { case 0: ... }`, and an identical-arm `if (x)`/`else` (which
-emits the test: 30 DIFF). That is where it stands.
+Work out the mechanism, then try for a legal spelling with the same effect and
+`verify.py` again. For that function three were measured and all three fold
+away, leaving the park at 5 DIFF -- `goto L; L:`, `switch (0) { case 0: ... }`,
+and an identical-arm `if (x)`/`else` (which emits the test: 30 DIFF). When
+nothing legal holds the match, the shape lands as a documented device: see
+"Decomp devices" in `docs/landing-a-function.md` for the conditions, and
+`csrc/unk_11F0C.c:194` for the precedent.
 
 `verify.py` then `make check` remain the only authority. A permuter score of 0
 is worth running them on, nothing more: the scorer cannot see a jump table

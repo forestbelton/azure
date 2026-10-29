@@ -73,14 +73,47 @@ the one section you need.
    `zz_$FUNC.c`, then
    `python3 tools/decomp/verify.py zz_$FUNC.c <unit> $FUNC`.
    A permuter score of 0 is a lead; `verify.py` is the measurement.
-3. Clean it up. Permuter output is mutated C and often illegal -- dead tests on
-   uninitialised locals, duplicated arms, redundant casts. Work out what the
-   mutation actually does (a block boundary, a reference count, a different
-   allocator seeing a value) and find a legal spelling with the same effect.
-   Re-run `verify.py` after each attempt; each one costs ~2s.
-4. If no legal spelling holds the match, say so explicitly, record the
-   spellings you measured and their scores in the park header, and stop. Do not
-   land illegal C.
+3. Work out what the mutation actually does. Permuter output is mutated C:
+   dead tests on uninitialised locals, duplicated arms, redundant casts,
+   pointless temporaries. Name the mechanism -- a basic-block boundary, a
+   reference count, a different allocator seeing a value, a cse run boundary --
+   because a device whose effect you cannot state is a coincidence you cannot
+   maintain.
+4. Try for a legal spelling with the same effect, and re-run `verify.py` after
+   each attempt; each costs ~2s. If one holds the match, prefer it.
+5. If none does, **land it as a device anyway** -- see below. The search for a
+   legal spelling is cleanup, not a gate.
+
+### Decomp devices
+
+A device is a construct the original author would not have written that makes
+the bytes come out right. They are allowed. The project already ships one:
+`csrc/unk_11F0C.c:194` has `__asm__ volatile("" ::"r"(q) : "memory")`, worth 13
+measured words, with a comment recording each job it does.
+
+The reason this is not a compromise: `make check` is byte-identical, so the
+emitted instructions *are* the original's. Undefined behaviour in a dead test
+lives in the C abstract machine and never reaches the binary -- gcc emits no
+code that reads those locals -- and this project is pinned to one compiler out
+of necessity, so the portability argument that normally makes UB serious does
+not apply here.
+
+Conditions, all of them:
+
+- `make check` and `make containers` byte-identical, as for any landing. That
+  is the only thing a device is allowed to be justified by.
+- Annotate it `/* DEVICE: ... */` so every one is greppable. Say what the
+  construct is, what it is worth in words, and what the function does without
+  it. The barrier in `unk_11F0C.c` predates the marker and does not carry it
+  yet, so a census means grepping for both until it is retrofitted.
+- Record the legal spellings you ruled out, with their scores, in the same
+  comment. A later attempt starts where you stopped rather than re-measuring.
+- If the device warns under `-Wall` -- an uninitialised read does -- say so in
+  the comment. The default `CFLAGS` has no `-Wall`, so the build is silent, and
+  the note is what stops somebody "fixing" it later.
+- It must sit inside the function. A device that changes a shared header, a
+  unit's flags or the splat spec affects other functions' output and is a
+  different change needing its own measurement.
 
 ## 4. The landing gate
 
@@ -128,6 +161,8 @@ fall in one day.
   container, and anything else reading those listings breaks.
 - Do not touch `csrc/` before `RESULT: MATCH`.
 - Do not commit. Integration is the caller's job.
+- A device is fine; an unexplained device is not. If you cannot say what it
+  changes, keep searching or park it with the measurement.
 - Do not use `--full`, `--greg` or `dump.sh` unless the header's findings have
   run out; they are large.
 - Name scratch files so they differ by more than case: wine's filesystem is
