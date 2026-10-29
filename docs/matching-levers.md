@@ -5688,10 +5688,26 @@ One more consequence worth knowing: when the note IS created,
 halves that allocno's global-alloc priority. A load with a REG_EQUIV note is
 never the priority the raw live range suggests.
 
-SO THE SOURCE-LEVEL LEVER IS WHICH FIELD A READ-BACK READS. cse's memory table
-is flushed by essentially every store through a pointer local, so a load
-survives cse exactly when **a store stands between it and the store that last
-wrote its field**. In func_800599B0's format-2 body the listing wants three
+SO THE SOURCE-LEVEL LEVER IS WHICH FIELD A READ-BACK READS, and the rule for
+that is simpler than it looks: **EVERY STORE THROUGH A POINTER LOCAL FLUSHES
+EVERY VARYING-ADDRESS ENTRY FROM cse's MEMORY TABLE.** Read out of cse.c
+rather than inferred. `note_mem_written` classifies the store -- a QImode one
+with a varying address sets `writes->all` outright, because "the ANSI C
+standard allows character pointers to alias anything", and a wider one through
+a `(plus (reg) (const_int))` sets only `nonscalar` -- but it always sets
+`writes->var`, which is what makes cse call `invalidate_memory`, and
+`invalidate_memory`'s own test is
+
+    p->in_memory && (all || (nonscalar && p->in_struct)
+                     || cse_rtx_addr_varies_p (p->exp))
+
+whose LAST clause does not look at the flags at all. Every entry whose address
+is a register plus a constant matches it. So the flag classification is beside
+the point for anything reached through a pointer: one store of any width
+clears all of them.
+
+A load therefore survives cse exactly when **a store stands between it and the
+store that last wrote its field**. In func_800599B0's format-2 body the listing wants three
 moves, and each one is a load placed where a store covers it:
 
     *(u32 *) (e + 0x24) = 0x68;              <- covers y's read
