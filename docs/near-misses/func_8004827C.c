@@ -76,6 +76,34 @@
  * value past the copy, which landed func_800537D0 -- does not apply, because
  * the value whose live range would have to grow is the CALL RESULT and its
  * only use is the shift.
+ *
+ * 2026-10-28: THE "DIE MORE THAN ONCE" ROUTE IS CLOSED, which is worth having
+ * because it is the one `combine_regs` refusal a single-basic-block function
+ * can reach. `combine_regs` (local-alloc.c:1762) refuses the tie when the
+ * SOURCE pseudo has `reg_qty < 0` -- "not local to this block OR DIES MORE
+ * THAN ONCE" -- and this function has no branch, so multi-block is not
+ * available but dying twice is: give a variable two live ranges and
+ * local-alloc hands it to global-alloc instead, where no tie forms. Five
+ * shapes measured, ALL 18 of 19 words and 12 DIFF, i.e. bit-identical to the
+ * base:
+ *
+ *     `p` reused to hold the address sum
+ *     one pointer local reused for `p`'s copy and then for `q`
+ *     `k` reused as the copy's destination (`k = (s32) p;`)
+ *     `k` reused to hold the address sum
+ *     `q` reused for the copy, the load and then `q + 0x28`
+ *
+ * and six spellings of the dereference and the sum are the same 18/12 as well:
+ * a `pp = p` local after the call, a `u32` base, the sum into a local before
+ * or after the read, and `q` as a `u32`. So the copy is not being coalesced by
+ * `combine_regs` at all -- a source-level `pp = p` never reaches local-alloc,
+ * because cse substitutes `p` for `pp` and flow deletes the dead set. THE COPY
+ * IN THE LISTING IS THEREFORE NOT A SOURCE-LEVEL COPY, and the next thing to
+ * establish is which pass creates it. Note what it is NOT: it has no
+ * displacement (`addu $v0, $s0, $zero`, then `lw $a1, 0xC($v0)`), so it is not
+ * an address computation; `$s0` has no later use, so it is not a liveness
+ * conflict; and gcc 2.7's caller-save spills to stack slots rather than
+ * registers, so it is not that either.
  */
 
 #include "common.h"

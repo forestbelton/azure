@@ -215,6 +215,23 @@
  * which is the thing to trace -- and it is also the lever, because a loop whose
  * last block ends in an unconditional jump WOULD put a barrier there.
  *
+ * 2026-10-28: THE BARRIER HYPOTHESIS ABOVE IS DEAD. The paragraph before this
+ * one proposes that `find_basic_block` walks back past the whole loop because
+ * nothing puts a BARRIER before the post-loop label, and offers "a loop whose
+ * last block ends in an unconditional jump WOULD put a barrier there" as the
+ * lever. **The TARGET's loop falls through to .L8005ADD0 too** -- its last
+ * insns are `bnez $v0, .L8005AD38` and its delay slot, with no barrier -- so
+ * whatever reorg sees there, it sees in both builds. Do not spend a
+ * restructuring on this.
+ *
+ * Re-verified the same day: the three words are exactly the rotation and
+ * nothing else moves. Ours is `[lui] move li addiu`, the listing is
+ * `[move] li lui addiu`, so BOTH are consistent with one pre-reorg order --
+ * move, li, lui, addiu -- from which the listing lifts the FIRST into the slot
+ * and this build lifts the THIRD. The gate that refused the first two is still
+ * the open question, and since the registers and the pre-reorg order agree,
+ * it cannot be anything the source spells.
+ *
  * What is NOT the answer: putting `i = 0` where the backward scan
  * could reach it. Measured 2026-10-28, all 75 of 75 words:
  *
