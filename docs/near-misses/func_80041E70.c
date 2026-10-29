@@ -116,6 +116,80 @@
  * starts 3 worse, which puts every route further above the single word than
  * the enumeration above already had it.
  *
+ * 2026-10-28, THIRD PASS. The BOUNDED verdict stands, and it now rests on a
+ * mechanism read end to end rather than on an enumeration of blocked ideas.
+ * THREE OF THIS FILE'S CLAIMS WERE WRONG and the corrections matter:
+ *
+ *  1. THE FOLD IS NOT THE OPERAND SUBSTITUTION. This file says the constant
+ *     "displaces the pseudo" because `COST (replacement) < COST (operand in
+ *     place)` and `rtx_cost` of a CONST_INT is 0. The gate is quoted right,
+ *     but the substitution it gates actually FAILS: `validate_change` is asked
+ *     to put `(const_int 16)` into `(ashift (reg) (const_int 1))`, and MIPS has
+ *     no shift of an immediate operand, so `ashlsi3` does not recognise it.
+ *     The loop then tries the second candidate -- the register itself -- under
+ *     `COST (reg) < COST (reg)`, which is false, and gives up. **What folds the
+ *     insn is `simplify_binary_operation` further down `fold_rtx`, called with
+ *     `const_arg0` from `equiv_constant`.** So the thing to defeat is
+ *     `equiv_constant` returning 16, not a cost comparison -- and no cost
+ *     lever would have worked even if MIPS had one.
+ *  2. THE LOCAL FORM IS FREE, not three words worse. This file says
+ *     `v = 0x10; p->unk_87 = v;` with `v = v * 2;` in the arm "is 270 words /
+ *     4 DIFF ... AND the three words that `r`'s second live range buys are
+ *     lost, because the 0x10 is no longer in `r`". That is only true if the
+ *     ARM also writes `v`. Keep `r` as the arm's destination and give the
+ *     constant its own local --
+ *
+ *         v = 0x10; p->unk_6E = 0x100; p->unk_87 = v;
+ *         if (p->unk_54 & 1) { r = v * 2; p->unk_87 = r; ... }
+ *
+ *     -- and it is **270 words and the same 1 DIFF**. `r` keeps both live
+ *     ranges, the three words stay bought, and the local form costs nothing.
+ *     So the "boundary on top of a form that already starts 3 worse" argument
+ *     against the local route is withdrawn.
+ *  3. THE LOOP-END-NOTE ROUTE IS FREE IN WORDS, and it is cse2 that kills it,
+ *     not the word count. All three placements this file priced at 271 words
+ *     put the note AFTER the `sb` to unk_87, which is a reorg barrier and
+ *     costs the branch-delay fill. With the constant in its own local the note
+ *     can go BEFORE the stores, where it is free:
+ *
+ *         v = 0x10; do { } while (0); p->unk_6E = 0x100; p->unk_87 = v; ...
+ *             270 words, 5 DIFF
+ *
+ *     and the dumps show it WORKING in cse1 -- `.cse` carries
+ *     `(set (reg/v:SI 81) (ashift (reg/v:SI 83) (const_int 1)))`, a real shift.
+ *     Then `.cse2` carries `(set (reg/v:SI 81) (const_int 32))`. **cse2 refolds
+ *     it, because it runs with `after_loop` set and ignores NOTE_INSN_LOOP_END
+ *     -- exactly as this file predicted but never demonstrated.** The other
+ *     four words of the 5 are register shifts that follow from the note.
+ *
+ * SO THE REQUIREMENT IS NOW EXACT: the boundary has to be a **CODE_LABEL**,
+ * because `cse_end_of_basic_block`'s scan loop is
+ * `while (p && GET_CODE (p) != CODE_LABEL)` -- a label ends the block in BOTH
+ * cse runs and needs no use count -- and it has to lie between `v = 0x10;` and
+ * the arm but BEFORE the `sb`, so that reorg can still lift the `sb` into the
+ * `beqz`'s delay slot. A label is free; the BRANCH that keeps it alive through
+ * jump1 is not. Priced 2026-10-28 on the corrected base:
+ *
+ *     two ifs on the same condition, unk_87 arm second   273 words, 254 DIFF
+ *     if/else with `p->unk_87 = v;` duplicated           272 words, 253 DIFF
+ *     two ifs, unk_87 arm FIRST                          270 words,   1 DIFF
+ *     switch (p->unk_54 & 1) { case 1: ... }             271 words, 268 DIFF
+ *     while (cond) { ...; break; }                       270 words,   1 DIFF
+ *     for (;;) { if (!cond) break; ...; break; }         270 words,   1 DIFF
+ *
+ * and the three that stay at 270/1 do so because the label is GONE by cse
+ * time: a loop whose only back edge is unreachable after the `break` has its
+ * top label deleted by jump1, and two identical consecutive `if`s are merged.
+ * The ones that keep a label cost two to three words for the branch.
+ *
+ * AND EIGHT MORE SPELLINGS OF THE DOUBLING ALL FOLD, measured the same day, so
+ * there is no narrow-type or subreg escape either: `u8 v`/`s8 v` with the arm
+ * writing `v` (270/4), `u16 v` (270/12), `(u8) v * 2`, `(s8) v * 2`,
+ * `(u16) v * 2`, `v + v`, and `u8 v` with the arm writing `r` (all 270/1).
+ * `equiv_constant` does return 0 for a SUBREG, which is why this was worth
+ * trying, but `fold_rtx` folds a `zero_extend`/`sign_extend` of a register
+ * whose quantity has a constant before the shift ever sees a subreg.
+ *
  * DECLARATIONS: none. include/structs.h's Unk42710/Unk42710A already carry
  * every field, verified by compiling against the header. The source needs only
  * `#include "common.h"` plus `s32 func_80042900(s8 *, s8);`, and when it lands
