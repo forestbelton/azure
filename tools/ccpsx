@@ -23,11 +23,70 @@ if [ ! -f "$PSYQ/ccpsx.exe" ]; then
 fi
 
 # Keep the wine prefix out of the repo so it is never committed or splatted.
-export WINEPREFIX=${AZURE_WINEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/azure-psyq}
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}
+export WINEPREFIX=${AZURE_WINEPREFIX:-$CACHE/azure-psyq}
 export WINEDEBUG=${WINEDEBUG:--all}
+
+# CONCURRENCY -- read this before running anything in parallel.
+#
+# Two ccpsx runs sharing one prefix can swap each other's output. Measured
+# 2026-10-29 at 8-way parallelism with distinct inputs: 3 of 80 outputs held
+# ANOTHER input's code, .file symbol and all -- a wrong answer that assembles
+# cleanly, which is the worst possible input to a search that selects the
+# minimum score. Per-invocation %TEMP% does not fix it (5/80 -> 2/80) and
+# neither does a per-invocation working directory (2/80). A separate wine
+# prefix per concurrent run does.
+#
+# So when the pool exists, claim one prefix per invocation with flock. Same 80
+# compiles at 8-way, measured:
+#
+#   shared prefix   1s   3/80 WRONG
+#   pooled          1-2s 0/80
+#
+# `make permuter-prefixes` creates the pool; the copies are reflinked, so each
+# 1.8 GB prefix costs ~0 bytes. AZURE_WINEPREFIX still overrides everything,
+# and with no pool this behaves exactly as it always did -- correct for a
+# serial caller like make. AZURE_CCPSX_POOL=0 opts out.
+if [ -z "${AZURE_WINEPREFIX:-}" ] && [ "${AZURE_CCPSX_POOL:-1}" != 0 ] \
+   && [ -d "$CACHE/azure-psyq-pool" ]; then
+    # Lock files live OUTSIDE the prefixes: a held write fd on a file inside a
+    # prefix costs wine ~0.8s per run (measured -- 0.14s became 0.92s).
+    LOCKS="$CACHE/azure-psyq-pool/.locks"
+    mkdir -p "$LOCKS"
+    claimed=
+    while [ -z "$claimed" ]; do
+        for p in "$CACHE"/azure-psyq-pool/p*/; do
+            [ -d "$p" ] || continue
+            exec 9>"$LOCKS/$(basename "${p%/}")"
+            if flock -n 9; then
+                claimed="${p%/}"
+                break
+            fi
+            exec 9>&-
+        done
+        # Every prefix busy: wait and rescan. Do NOT block on one specific
+        # prefix -- every waiter queues behind it and the pool serialises.
+        [ -z "$claimed" ] && sleep 0.02
+    done
+    export WINEPREFIX="$claimed"
+    POOLED=1
+fi
 mkdir -p "$WINEPREFIX"
 
-psyq_win=$(winepath -w "$PSYQ")
+# 9>&- for the same reason as below: winepath is itself a wine program, and
+# the services it starts would inherit the pool lock and never release it.
+psyq_win=$(winepath -w "$PSYQ" 9>&-)
 export WINEPATH="$psyq_win"
+
+if [ "${POOLED:-}" = 1 ]; then
+    # THE LOCK MUST NOT REACH WINE. `exec wine` passes fd 9 to services.exe and
+    # winedevice.exe, which outlive ccpsx and then hold the lock forever: 96
+    # such processes accumulated while this was being written, every prefix
+    # read as permanently busy, and the resulting rescan-and-spin looked like
+    # pooling costing 20x (45s against 1s for 80 compiles). It costs nothing.
+    # So close fd 9 for the child and wait, rather than exec'ing.
+    wine "$PSYQ/ccpsx.exe" "$@" 9>&-
+    exit $?
+fi
 
 exec wine "$PSYQ/ccpsx.exe" "$@"

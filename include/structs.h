@@ -1119,7 +1119,12 @@ typedef struct Unk80083D08
    u16 unk_04;
    s16 unk_06;
 } Unk80083D08;
+/* Hidden from pycparser, which cannot parse an asm label: m2c and
+   decomp-permuter both parse with it, and permuter.py exits before its
+   first iteration on the syntax error. The real build is unaffected. */
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern Unk80083D08 D_80083D08s[] __asm__("D_80083D08");
+#endif
 extern u8 D_8006ADBC[];
 extern u8 D_8007382B[];
 extern s32 D_80073830[];
@@ -1140,7 +1145,9 @@ extern u8 D_8008152C[];
 /* The same object as a scalar, for func_80047DB8: a 4-byte object's address is
    the one-insn `la` macro, where the incomplete array gets the compiler split.
    Three functions reach it $gp-relatively, so 4 bytes is also its real size. */
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern u32 D_8008152Cs __asm__("D_8008152C");
+#endif
 /* Hand-added. A 0xC-byte entry; func_8005B2C8 scales an s16 index by 12 and
    reads the two halfwords at +0x08/+0x0A. A struct for the same reason as
    Unk80084960: the field offset must not migrate onto the symbol. */
@@ -1191,7 +1198,9 @@ typedef struct Unk80085FA8
    u8 unk_4C;
    u8 pad_4D[3];
 } Unk80085FA8;
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
+#endif
 
 /* Hand-added. 0x1C-byte entries indexed by D_80086D50; only +0x04 is observed,
    a base that func_80057A50 adds a computed offset to. */
@@ -1374,7 +1383,9 @@ typedef struct Blk20
 {
    u32 w[8];
 } Blk20;
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
+#endif
 extern u8 D_80119000[];
 extern u8 D_80126000[];
 extern u32 D_8002E5D8[]; /* a 4-word template */
@@ -1406,7 +1417,9 @@ extern u32 D_80073740[];
 extern u8 D_80080B20[];
 extern u8 D_800712FC[];
 extern u32 D_80084904;
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern u32 D_80084904a[] __asm__("D_80084904");
+#endif
 extern u32 D_80071FF0[];
 extern u32 D_800847D0[];
 extern u8 D_80080B34[];
@@ -1478,7 +1491,9 @@ extern u32 D_800712B4[];
 extern s16 D_80082A38[]; /* lh at +0xAC/+0xAE, so signed */
 /* The same object as u32s, for the five-slot queue at +0x48; func_80035378
    indexes it 10..14 with the +0x48 left as a displacement. */
+#if !defined(M2CTX) && !defined(PERMUTER)
 extern u32 D_80082A38w[] __asm__("D_80082A38");
+#endif
 extern u32 D_80082AB8[]; /* the queue's last slot, reached as its own symbol */
 extern u32 D_80083170[];
 extern s16 D_800847F6[];

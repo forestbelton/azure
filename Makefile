@@ -153,7 +153,8 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
-.PHONY: all containers clean splat check expected ctx ghidra-syms extract
+.PHONY: all containers clean splat check expected ctx ghidra-syms extract \
+        permuter-prefixes permuter-prefixes-clean
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -228,6 +229,28 @@ build/%.o: %.bin
 
 # Report where the build diverges from the original, and which subsegment
 # owns that offset. A whole-file checksum cannot tell you that.
+# One wine prefix per concurrent ccpsx run. Two runs sharing a prefix can swap
+# each other's output (see tools/ccpsx), which a parallel permuter would turn
+# into false winners. The copies are reflinked, so on btrfs each 1.8 GB prefix
+# costs ~0 bytes and 0.15s; POOL=N to size it (default: one per core).
+POOL ?= $(shell nproc)
+PREFIX_POOL := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq-pool
+PREFIX_BASE := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq
+
+permuter-prefixes:
+	@test -d "$(PREFIX_BASE)" || { echo "no $(PREFIX_BASE); run any build first"; exit 1; }
+	@mkdir -p "$(PREFIX_POOL)"
+	@for i in $$(seq 1 $(POOL)); do \
+		d="$(PREFIX_POOL)/p$$i"; \
+		if [ ! -d "$$d" ]; then \
+			cp -a --reflink=auto "$(PREFIX_BASE)" "$$d" || exit 1; \
+		fi; \
+	done
+	@echo "prefix pool: $$(ls -d $(PREFIX_POOL)/*/ | wc -l) prefixes in $(PREFIX_POOL)"
+
+permuter-prefixes-clean:
+	rm -rf "$(PREFIX_POOL)"
+
 check: build/$(SLUS)
 	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
 
