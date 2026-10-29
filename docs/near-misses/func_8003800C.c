@@ -110,12 +110,86 @@
  *     `r2` read first, `t` read off `r2`     70 of 71, 29 DIFF
  *
  * all against the base's 70 of 71. So the invalidation is not reachable by
- * moving the stores that are already there, and the next thing to try is the
- * OTHER half of what decides cse's equating: MEM_IN_STRUCT_P (section 5). Two
- * reads of the same address differ to cse if one carries it and the other does
- * not, which in source terms is one read through a struct field and the other
- * through a plain pointer cast. That needs a declared type for the +0x80
- * object, which this source does not have.
+ * moving the stores that are already there.
+ *
+ * THAT PARAGRAPH USED TO END by proposing MEM_IN_STRUCT_P as the next thing to
+ * try -- two reads of one address differing to cse because one is a struct
+ * field and the other a plain cast. **THAT IS CLOSED AND IT WAS WRONG, read
+ * out of cse.c on 2026-10-28.** cse does NOT consult MEM_IN_STRUCT_P when it
+ * equates. cse.c:1951 sets `hash_arg_in_struct` while hashing, but the flag
+ * never enters the hash VALUE; it is stored on the table element
+ * (cse.c:1488, `new->in_struct`) and read in exactly one place,
+ * `invalidate_memory` at cse.c:1715 -- `p->in_memory && (all || (nonscalar &&
+ * p->in_struct) || cse_rtx_addr_varies_p (p->exp))`. So the flag makes an
+ * entry EASIER TO INVALIDATE and never harder to equate, and `exp_equiv_p`
+ * ignores it entirely. No declared type for the +0x80 object is needed for
+ * this, and one would not have helped. (The flag DOES decide sched's memory
+ * dependences -- that is matching-levers' "A STRUCT TYPE IS WHAT GIVES A
+ * STORE A MEMORY DEPENDENCE AT ALL", which landed three functions the same
+ * day -- but sched is not what equates these two loads.) Also measured while
+ * closing it: an ARRAY REFERENCE ON A POINTER does not set the flag either.
+ * `((u8 **) q)[0x20]` is the same address as `*(u8 **) (q + 0x80)` and the C
+ * front end builds INDIRECT_REF(PLUS) for it, not ARRAY_REF, so it dumps as
+ * plain `mem`; as `t`'s read, as `r2`'s, and as both, all 70 of 71 and 29.
+ *
+ * 71 WORDS IS REACHABLE WITHOUT `volatile`, and the extra word is the wrong
+ * one. Reusing the function's EXISTING pointer local for the inner read --
+ * `r = *(u8 **) (q + 0x80);` in place of the block-local `r2`, and the
+ * clearing store through `r` -- is **71 of 71 words and 6 DIFF**, against this
+ * file's 70 and 29. But the word is a copy, not the second load:
+ *
+ *     built   lw $a1, 0x80($s1) ; lui $v0 ; move $v1, $a1 ; lw $v1, 0x34($v1)
+ *     target  lw $v0, 0x80($s1) ; lw $v1, 0x80($s1) ; lw $a0, 0x34($v0)
+ *
+ * so cse equated the two reads after all, which also corrects this file's
+ * claim that "`invalidate_memory` drops every varying-address MEM on any
+ * store": the `*(u32 *) (q + 0x10)` store between them does NOT invalidate
+ * `(mem (plus q 0x80))`, because both are varying addresses off the SAME
+ * register with different constant displacements and `memrefs_conflict_p`
+ * disambiguates them. A fresh inner local for the first read (`ra = ...;
+ * t = *(u32 *) (ra + 0x34);`) with `r` reused for the second is the same 71
+ * and the same 6. `volatile` on the reused read is 70 and 30.
+ *
+ * THE REQUIREMENT IS NOW EXACT, read from block 6's own sched1 trace
+ * (tools/decomp/dump.sh, `.sched`, "basic block number 6 from 107 to 135").
+ * The eleven insns are 110 readA, 112 `lw 0x34`, 114/116 the func_80038A10
+ * address, 118 the +0x10 store, 121 readB, 124 `sb 0x2E`, 127 `addiu q+0x3C`,
+ * 129 `sw 0x7C`, 132 `sw 0x1C`, 135 `sw 0x34(readB)`. sched1 emits
+ *
+ *     built   110 114 112 116 118 124 121 127 129 132 135
+ *     target  110 121 112 114 116 118 127 124 129 132 135
+ *
+ * and readB is the only insn that has to move: everything after it follows by
+ * one slot. **readB IS BUMPED** -- `;; ready list at T-5: 124 (2) 118 (2)
+ * 121 (7f000001)` -- and its only dependent is the clearing store scheduled at
+ * T-1, so it is ready at T-2 and wins by T-5 however the stores are arranged.
+ * Un-bumping it is the whole requirement.
+ *
+ * AND THE TWO HALVES OF THAT FIGHT EACH OTHER, which is why neither device
+ * above reaches it. Un-bumping needs `reg_n_sets != 1`, i.e. a second
+ * assignment to readB's variable; every second set this function has makes
+ * readB the SAME VARIABLE as some other read, and then it is the same pseudo
+ * and cse hands back one load and a copy. But the target holds the two values
+ * in $v0 and $v1 AT ONCE, which one pseudo with two sets cannot do -- so they
+ * must stay two pseudos. `volatile` buys the two pseudos (71 words, 4 DIFF)
+ * and leaves readB single-set and bumped, so the `lui` lands between the two
+ * loads; local reuse buys the second set and loses the second pseudo. Six
+ * `volatile` placements measured 2026-10-28 -- on `r2`, on `t`'s pointer, on
+ * both, and each of those with the `+0x34` read volatile too -- and five are
+ * 4 DIFF while `volatile` on the +0x34 read alone is 70 and 29.
+ *
+ * THIS FILE KEEPS THE 70, as the number-against-shape rule says it should:
+ * the 71-word version reaches the right COUNT with an instruction the listing
+ * does not contain (`move $v1, $a1`), while the 70-word base contains nothing
+ * the listing lacks and is simply one short. Do not adopt the 6 without the
+ * second load.
+ *
+ * SO WHAT A SOLUTION LOOKS LIKE: two reads of `q + 0x80` that cse will not
+ * equate, where the SECOND one's pseudo has more than one set, and without a
+ * `volatile`. Nothing in this source's vocabulary does both at once. The thing
+ * to look for is a second assignment to the clearing store's pointer that is
+ * NOT a read of q+0x80 -- a value it holds earlier for another purpose -- or a
+ * reason the two reads differ that is not volatility.
  */
 
 #include "common.h"
