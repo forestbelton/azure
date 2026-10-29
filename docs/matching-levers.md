@@ -5759,6 +5759,55 @@ nothing. Three things, and the second two are reusable on their own:
   beating the `lui` at 1 -- and the fix is not to win that tie but to put
   something untouchable in front of it.
 
+## loop.c CANNOT BE PERSUADED NOT TO STRENGTH-REDUCE -- READ ITS OWN PRINTOUT
+
+Took func_8003C67C from 28 DIFF to 5, and the first half of that was abandoning
+a thread that could never have worked.
+
+The gate is ONE LINE and it prints the comparison (loop.c:3822):
+
+    if (v->lifetime * threshold * benefit < insn_count && ! bl->reversed)
+      { ... "giv of insn %d not worth while, %d vs %d.\n" ... v->ignore = 1; }
+
+so the `.loop` dump tells you the numbers for the givs it SKIPS. What it does
+not print for the ones it reduces, you can reconstruct:
+`threshold = (loop_has_call ? 1 : 2) * (3 + n_non_fixed_regs)`, which is about
+**58** on this target, and `insn_count` is the loop's insn count -- 9 for a
+ten-insn loop. A giv with benefit 13 at lifetime 1 therefore scores **754
+against 9**.
+
+**So the benefit side is not a lever.** `copy_cost` charges, which is where
+func_8003C67C's park spent two sessions (`benefit -= copy_cost` at loop.c:3797
+for a giv whose dest is a user variable, and the same subtraction in
+`combine_givs` at loop.c:5519), are worth about 8 -- against a margin of 745.
+The only giv that gets skipped in that function is skipped because its benefit
+reached exactly 0. Before reaching for a benefit charge, work out the product:
+if it is not within a few of `insn_count`, **the only thing that stops the
+reduction is preventing loop.c from seeing a loop at all** (section 2's
+backward `goto`, which emits no NOTE_INSN_LOOP_BEG).
+
+AND THE GOTO IS OFTEN PRICED WRONG, because it is measured alone. That park
+had three goto forms at 32 words against a target of 31 and concluded "the loop
+must not be a loop to loop.c AND must not spend a word on the guard. Those two
+are in tension in every form tried". They were not: every one of those forms
+also had a SHARED-ADDRESS body, which is a different word. With the body also
+corrected -- a pointer local capturing the pre-decrement index, so the two
+addresses are not derivable from one another -- the goto is free. **Price a
+structural change against the structure it is meant to enable, not against the
+current body.**
+
+A THIRD THING FELL OUT OF THE SAME FUNCTION AND IS WORTH ITS OWN LINE: ONCE
+THE LOOP IS UNREDUCED, STRUCT ASSIGNMENTS STOP HOLDING THE WORD COUNT. The old
+park had measured field-by-field copies as six or seven words worse and closed
+the idea. Against the reduced loop that was true; against the unreduced one,
+field by field is worth THREE separate things -- the symbolic first store of a
+two-word restore (`sw $v0, %lo(sym)($v1)` then `addiu $v1, $v1, %lo` for the
+second word, where a struct assignment materialises the address first), the
+INTERLEAVED `lw ; sw ; lw ; sw` of a two-word save where a struct assignment
+batches `lw ; lw ; sw ; sw`, and the same interleaving in the loop body. 28 ->
+22 -> 14 -> 5. **A measurement taken against the wrong structure is not a
+closed idea.**
+
 ## 10. Measured dead ends -- do not retry
 
 * **"A NARROW LOCAL WITH NO NARROWING INSTRUCTION IN THE LISTING" IS NOT

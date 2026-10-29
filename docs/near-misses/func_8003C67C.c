@@ -1,182 +1,89 @@
-/* func_8003C67C (unk_72A8) -- 31 of 31 words, 28 DIFF. NOT compiled.
+/* func_8003C67C (unk_72A8) -- 31 of 31 words, 5 DIFF. NOT compiled.
  *
- * Written out of its carved-sweep row on 2026-10-27, with the row's open
- * question ANSWERED: a backward `goto` does stop the strength reduction.
+ * 2026-10-28: 28 DIFF -> 5, AND THE PARK'S CENTRAL QUESTION IS ANSWERED. Every
+ * note below this one was written against a 28-DIFF source whose loop was
+ * STRENGTH-REDUCED, and they circle one question -- "the loop must not be a
+ * loop to loop.c AND must not spend a word on the guard", which they call "the
+ * real content of this park". That is now done, the loop is unreduced at the
+ * right word count, and the remaining 5 are a single register swap.
  *
- * Moves D_8006B200s[i] to the front, shifting the rest up through an 8-byte
- * stack temp. The word count is right as STRUCT assignments on the
- * `Unk8006B200 D_8006B200s[]` alias -- the block moves then cost exactly what
- * the target spends.
+ * FIRST, THE BENEFIT ARITHMETIC THE OLD NOTES WERE WORKING IS HOPELESS, and
+ * knowing that saves the next session the whole `copy_cost` thread. loop.c's
+ * gate is one line (loop.c:3822):
  *
- * WHAT IS LEFT: loop.c strength-reduces both addresses into pointers walked
- * by -8, where the target recomputes two `sll ..., 3`s every iteration with
- * the base in $a2:
+ *     if (v->lifetime * threshold * benefit < insn_count && ! bl->reversed)
+ *         v->ignore = 1;                     -- i.e. do NOT reduce
  *
- *     L6AC:  sll   $a0, $a1, 3        <- the DESTINATION index, old i
- *            addiu $a1, $a1, -0x1     <- i--
- *            sll   $v0, $a1, 3        <- the SOURCE index, i.e. the NEW i
- *            addu  $v0, $v0, $a2
- *            lw/sw ... ; lw/sw ...
- *            bgtz  $a1, .L8003C6AC
+ * and it PRINTS the comparison. This function's `.loop` dump says
+ * `giv of insn 36 not worth while, 0 vs 9.`, so `insn_count` is 9, while
+ * `threshold = (loop_has_call ? 1 : 2) * (3 + n_non_fixed_regs)` is about 58
+ * on this target. The givs that get reduced carry benefit 13 after combining
+ * at lifetime 1, i.e. **754 against 9**. No `copy_cost` charge (worth 8) can
+ * bridge that, and the only giv that IS skipped is skipped because its benefit
+ * reached exactly 0. loop.c cannot be PERSUADED not to reduce this loop; it
+ * can only be prevented from seeing it.
  *
- * MEASURED 2026-10-27, and the shape is now bracketed rather than open:
+ * FOUR THINGS GET IT TO 5, and each is worth words on its own:
  *
- *   * `while (i > 0) { D_8006B200s[i] = D_8006B200s[i - 1]; i--; }`
- *     -- the source below -- 31 words, 28 DIFF, fully strength-reduced.
- *   * THE SAME LOOP AS A BACKWARD `goto` (`if (i > 0) { loop: ...; if (i > 0)
- *     goto loop; }`): 32 words, 32 DIFF, and NO STRENGTH REDUCTION -- one
- *     `sll` per iteration, which is half of what the listing wants. This is
- *     section 2's "a backward goto is not a loop to loop.c at all", and it
- *     answers the row's guess about `loop_has_call`: the threshold is not the
- *     reason, the loop notes are. The cost is that the symbol is then
- *     materialised TWICE, once per address.
- *   * goto PLUS a `Unk8006B200 *p = D_8006B200s;` base local: 30 words, 31
- *     DIFF -- ONE materialisation copied to a register, which is the
- *     listing's `addu $a2, $a0, $zero`, and still no strength reduction. But
- *     gcc then shares ONE address between source and destination and reaches
- *     the source with `-8`/`-4` displacements, where the listing computes two.
- *   * goto + base local + `j = i; i--; p[j] = p[i];` (the decrement BETWEEN
- *     the two index uses, which is what the listing's two `sll`s say): 32
- *     words, 32 DIFF.
- *   * the same `j` form as a `while` loop, with and without the base local:
- *     32 words, 32 DIFF -- strength-reduced again, so the base local
- *     re-enables it whenever the loop is a real loop.
+ *  1. THE GOTO LOOP, which is why loop.c never sees a loop. The old notes
+ *     priced goto forms at 32 words, one too many -- but they were all paired
+ *     with a shared-address body. Combined with the three below it is free.
+ *  2. THE BASE LOCAL IS DECLARED INSIDE THE GUARDED BLOCK, not at function
+ *     scope and not used by the save. That is what produces the listing's
+ *     `addu $a2, $a0, $zero` -- the base copied into the loop's own register --
+ *     and it is the difference between 30 words and 31. With the base also
+ *     feeding the save it is 32.
+ *  3. THE DESTINATION GOES THROUGH A POINTER LOCAL THAT CAPTURES THE OLD
+ *     INDEX, with `i--` between it and the source subscript:
+ *     `d = &p[i]; i--; d->unk_00 = p[i].unk_00;`. That is what makes gcc
+ *     compute TWO addresses -- the listing's two `sll ..., 3` with the
+ *     decrement between them -- instead of sharing one and reaching the source
+ *     with a -8 displacement. Written `p[i] = p[i - 1]; i--;` the two
+ *     subscripts are linearly related and gcc shares: 29 or 30 words.
+ *  4. THE SAVE, THE RESTORE AND THE LOOP BODY ARE ALL FIELD BY FIELD, not
+ *     struct assignments. This REVERSES the old note's "the struct assignment
+ *     is what holds the word count ... and that idea is closed" -- that was
+ *     measured against the reduced loop, where it was true. Here each one is
+ *     worth several words, and for two separate reasons:
+ *       * the RESTORE field by field gives the listing's symbolic first store,
+ *         `sw $v0, %lo(D_8006B200)($v1)` followed by `addiu $v1, $v1, %lo`
+ *         for the second word, where the struct assignment materialises the
+ *         whole address first: 28 -> 22.
+ *       * the SAVE field by field gives the listing's INTERLEAVED
+ *         `lw ; sw ; lw ; sw` where the struct assignment batches
+ *         `lw ; lw ; sw ; sw`: 22 -> 14. The old note called this
+ *         "sched2 ordering two independent lw/sw pairs ... no spelling of the
+ *         copy reaches it"; field by field reaches it.
+ *       * the LOOP BODY field by field, on top of the pointer local: 14 -> 5.
  *
- * So the target sits between the 30-word goto-plus-base form and the 32-word
- * two-index form, and the question is now narrow: with the goto loop and ONE
- * base register, what spelling makes gcc compute the two addresses separately
- * instead of sharing one and offsetting by -8? Try the source index through a
- * second base local, or the two struct halves as explicit word copies.
+ * WHAT IS LEFT: FIVE WORDS AND ONE SWAP, with the margin measured. Every
+ * opcode, immediate, displacement and branch offset matches (advise.py says
+ * ALLOC). $v1 and $a0 are exchanged between two quantities:
  *
- * 2026-10-27: THE -8 OFFSET IS A GIV, so the question is really "what stops
- * loop.c strength-reducing this loop", and the answer has to cost no words.
- * The listing does NOT reduce it -- it recomputes the index each iteration,
- * TWICE, with the decrement between the two shifts:
+ *     ours    sll $v1,$a1,3 ... lw $a0,0($v0) ; addu $v1,$a2,$v1 ; sw $a0,0($v1)
+ *     target  sll $a0,$a1,3 ... lw $v1,0($v0) ; addu $a0,$a0,$a2 ; sw $v1,0($a0)
  *
- *     addu $a2,$a0,$zero   <- the base copied out, because $a0 is reused
- *     sll  $a0,$a1,3       <- dest offset, from i
- *     addiu $a1,$a1,-1     <- i--
- *     sll  $v0,$a1,3       <- source offset, from the NEW i
- *     addu $v0,$v0,$a2 ; lw $v1,0($v0) ; addu $a0,$a0,$a2 ; sw $v1,0($a0)
+ * From `.lreg`: pseudo 107 is the destination address (3 refs, live 8,
+ * priority 1.500) and pseudo 101 is the first loaded word (2 refs, live 6,
+ * 1.333). 107 is allocated first and takes $v1, the lowest free register, and
+ * 101 falls to $a0. **To flip them pseudo 101 needs ONE more reference or ONE
+ * less of live length** -- `advise.py --greg` puts the gap at 20%, needing
+ * 3 refs or live <= 5. Measured and not reaching it: the two loaded words
+ * through named locals, one shared local for both (30 words), splitting the
+ * destination sum (`k = i * 8` then the add, or `d = p; d = &d[i];`), and five
+ * spellings of the destination address -- `&p[i]`, `p + i`, `i + p`,
+ * byte-cast arithmetic in both operand orders, and an integer base -- all
+ * 5 DIFF, because gcc canonicalises the sum's operand order whatever the
+ * source says.
  *
- * while this build has `addiu $t0,$t0,-8` -- a walked pointer, i.e. exactly
- * the giv the question above describes as "sharing one base and offsetting by
- * -8". So the two addresses are not computed separately because the INDEX is
- * no longer being multiplied at all.
- *
- * Measured 2026-10-27, and the word count is the wall:
- *   * `s32 j = i; i--; D_8006B200s[j] = D_8006B200s[i];` -- the decrement
- *     between the two subscripts, which is the listing's own order: 32 words
- *     (one too many), 32 DIFF.
- *   * the same through a pointer local (`Unk8006B200 *d = &D_8006B200s[i];
- *     i--; *d = D_8006B200s[i];`): 31 of 31 words and 28 DIFF -- the only
- *     variant that holds the count, but loop.c still reduces it to a walked
- *     pointer, so it buys nothing.
- *   * three GOTO-LOOP forms, which is the repo's standing way to hide a loop
- *     from loop.c (section 8): plain, with `--i` in the test, and with the
- *     pointer local. All three are 32 words and 32 DIFF -- the extra guard
- *     costs the word the giv saves.
- *
- * So: the loop must not be a loop to loop.c AND must not spend a word on the
- * guard. Those two are in tension in every form tried, and that tension is
- * the real content of this park.
- *
- * THE "EXPLICIT WORD COPIES" SUGGESTION IS REFUTED, 2026-10-28. The paragraph
- * above offers it as one of two ideas; it costs six or seven words:
- *
- *     two `u32` locals for the saved element, fields copied in and out   24/31
- *     the same plus field-by-field copies in the loop                    25/31
- *
- * against the struct assignment's 31 of 31. The struct assignment is what
- * holds the word count -- with explicit fields gcc shares and folds more of
- * the addressing -- so it is load-bearing and that idea is closed.
- *
- * ON THE SAVE/RESTORE ITSELF, worth recording because it looks like the
- * standing struct-copy lever and is not: the listing INTERLEAVES the two words
- * while this build batches them --
- *
- *     target  lw $v1,0($v0) ; addiu $sp,-8 ; sw $v1,0($sp) ; lw $v0,4($v0) ;
- *             blez ; sw $v0,4($sp)
- *     built   lw $v0,0($a2) ; lw $v1,4($a2) ; sw $v0,0($sp) ; blez ;
- *             sw $v1,4($sp)
- *
- * -- load, store, load, store against load, load, store, store. Both are the
- * same four insns from the same struct assignment, so this is sched2 ordering
- * two independent lw/sw pairs, not the block-move-versus-word-pairs choice in
- * section 8, and no spelling of the copy reaches it.
- *
- * Also measured by the row, all worse: `while` with `i--` in the condition, a
- * `for`, `p[i] = p[--i]`, a separate `j = i - 1`, field-by-field copies, and a
- * `(u32)`-cast index.
- *
- * 2026-10-28: THE ONE NEW LEVER OF THAT DAY IS NOT AVAILABLE HERE, checked
- * against the `loop` dump so nobody spends a run on it. func_80059DAC landed
- * by making loop.c DROP a giv, and the knob was `benefit -= copy_cost` at
- * loop.c:3797 -- charged only when the giv's dest is a user variable, which is
- * why spelling a pointer out or naming it decides the reduction there. The
- * guard has a second conjunct, `! bl->eliminable`, and this function's dump
- * says
- *
- *     biv 80 can be eliminated.
- *     giv at 38 combined with giv at 50
- *     giv at 45 combined with giv at 50
- *
- * so the `loop.c:3797` charge is dead here, and that is why the park's 31-word
- * pointer-local variant stays reduced however it is spelt.
- *
- * THE OTHER CHARGE IS STILL LIVE, though, and it is the thing to try next.
- * `combine_givs` applies the same subtraction to every giv it ABSORBS
- * (loop.c:5519-5522) and its condition has NO `bl->eliminable` conjunct:
- *
- *     g1->benefit += g2->benefit;
- *     if (! g2->replaceable && REG_USERVAR_P (g2->dest_reg))
- *       g1->benefit -= copy_cost;
- *
- * and this function's dump is exactly that shape -- `giv at 38 combined with
- * giv at 50`, `giv at 45 combined with giv at 50`. Both absorbed givs are
- * currently marked `replaceable`, so neither is charged. Both conditions are
- * reachable from the source at once: NAMING each address gives it
- * REG_USERVAR_P, and putting the biv update BETWEEN the two definitions and
- * their uses makes both non-replaceable, since `record_giv` clears
- * `replaceable` when a biv update falls inside the giv's lifetime
- * (loop.c:4468-4479). That is
- *
- *     s = &D_8006B200s[i - 1]; d = &D_8006B200s[i]; i--; *d = *s;
- *
- * which is NOT one of the shapes measured above -- those either name one side
- * only, or put the decrement after both uses. It takes 8 off the
- * representative's benefit.
- *
- * MEASURED THE SAME DAY, and it is WORSE: 33 words, 33 DIFF -- TWO over the
- * target, where every other shape here has been at 31 or 32. Both orders of
- * the two declarations and both spellings of the copy (`*d = *s` and
- * `d[0] = s[0]`) give the identical 33/33, so the two extra words are the two
- * named pointers themselves rather than anything about the order. That is the
- * same wall the goto forms hit from the other side: this function cannot
- * afford the words that suppressing its reduction costs, whichever mechanism
- * does the suppressing.
- *
- * AND THE DUMP SAYS THE REDUCTION IS NOT GONE -- the idea defeats itself, for
- * a reason that generalises. Naming the two addresses and putting the
- * decrement between them DID clear `replaceable` on both, exactly as intended:
- *
- *     before   Insn 38: giv ... benefit 4 ... replaceable mult 8 add (reg 88)
- *              giv at 38 combined with giv at 50
- *     after    Insn 38: giv ... benefit 4 ...             mult 8 add (reg 91)
- *              giv at 46 reduced to (reg:SI 107)
- *              giv at 38 reduced to (reg:SI 110)
- *
- * -- but the combination went with it, and `combine_givs` only charges a giv
- * it ABSORBS. Two givs separated by a biv update are not derivable from one
- * another, so nothing is absorbed, nothing is charged, and both are reduced on
- * their own. The charge needs non-replaceable AND absorbed, and the biv-update
- * route cannot give both at once.
- *
- * The other way `record_giv` clears `replaceable` (loop.c:4493: the giv's
- * first use is not its setting insn, or it is live past the loop end) does not
- * disturb combinability, so that is what a future attempt would have to reach
- * -- but note this function is already TWO WORDS OVER in the 33-word shape, so
- * even a working suppression has to be cheaper than the two named pointers.
+ * ALSO MEASURED AND WORSE, so the four above are each load-bearing: the
+ * destination as an array reference with the old index in a variable
+ * (`j = i; i--; p[j]...` -- 32 words, the `j` copy), both subscripts as array
+ * references with `j = i - 1` (22), the source through the symbol while the
+ * destination goes through `p` (33), two base locals (32), the base local at
+ * function scope or feeding the save (30, 23), and `--i` inside the source
+ * subscript (30 -- it does give two addresses and an unreduced loop, but
+ * without the base copy).
  */
 
 #include "common.h"
@@ -184,10 +91,21 @@
 void func_8003C67C(s32 i) {
     Unk8006B200 t;
 
-    t = D_8006B200s[i];
-    while (i > 0) {
-        D_8006B200s[i] = D_8006B200s[i - 1];
+    t.unk_00 = D_8006B200s[i].unk_00;
+    t.unk_04 = D_8006B200s[i].unk_04;
+    if (i > 0) {
+        Unk8006B200 *p = D_8006B200s;
+        Unk8006B200 *d;
+
+    loop:
+        d = &p[i];
         i--;
+        d->unk_00 = p[i].unk_00;
+        d->unk_04 = p[i].unk_04;
+        if (i > 0) {
+            goto loop;
+        }
     }
-    D_8006B200s[0] = t;
+    D_8006B200s[0].unk_00 = t.unk_00;
+    D_8006B200s[0].unk_04 = t.unk_04;
 }
