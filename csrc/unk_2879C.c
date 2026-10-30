@@ -882,7 +882,90 @@ void func_800553D4(s32 n)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005552C);
+void func_80055730(s32, s32);
+void func_8005560C(s32, s32);
+
+/* Written as four tests and a goto chain, because the shape of the join is
+   load-bearing twice over.
+
+   The `m = 1` arm is DUPLICATED -- once for `k <= 0x600`, once as the
+   fall-through default. Sharing the two with one `goto`, which is the obvious
+   spelling, cross-jumps them into a single block and the function comes out 50
+   words (35 DIFF): the second copy is what pays for the
+   `addiu $v0, $zero, 0x1` at 0x80055568 and for the `addu $s0, $v0, $zero`
+   that the delay-slot filler then steals out of the join block at 0x80055588.
+   Nesting the tests as if/else instead emits the arms innermost-first --
+   0x800, 0x700, 0x600 rather than the listing's 0x600, 0x700, 0x800 -- for 37
+   DIFF, and a real `switch` builds a balanced tree rooted at 0x700 for 43
+   DIFF.
+
+   The parameter is `u16`, and that is the whole of the register allocation:
+   with `u32` the mask reads the $s1 copy of `k` and lands in $v1 instead of
+   reading and overwriting $a0, which is 5 DIFF and nothing else. A halfword
+   parameter arrives through a subreg, so `k` and the copy that crosses the
+   call are not cse-equivalent and the first read stays on the argument
+   register; with a word parameter the longer-lived copy becomes canonical
+   (cse.c, make_regs_eqv) and takes the read with it. Adding a second local
+   and copying `k` into it by hand does not reproduce that -- still 5 DIFF.
+   `s16` matches too; `u16` is what the declarations in unk_264E0, unk_2879C
+   and unk_2CDC0 already say. Dropping `x` and writing `(s32) (k & 0xF00)` in
+   all four tests is 1 DIFF. */
+void func_8005552C(u16 k)
+{
+    s16 m;
+    s32 a;
+    s32 b;
+    s32 x;
+
+    x = k & 0xF00;
+    if (x == 0x600)
+    {
+        goto l2;
+    }
+    if (x <= 0x600)
+    {
+        goto l1;
+    }
+    if (x == 0x700)
+    {
+        goto l3;
+    }
+    if (x == 0x800)
+    {
+        goto l0;
+    }
+    m = 1;
+    goto join;
+l1:
+    m = 1;
+    goto join;
+l2:
+    m = 2;
+    goto join;
+l3:
+    m = 3;
+    goto join;
+l0:
+    m = 0;
+join:
+    if (func_8005405C(m) != 0)
+    {
+        a = (m << 8) | ((k & 0xFF) >> 4);
+        b = ((k & 0xF) << 10) + 0x1C00;
+        if (m == 0)
+        {
+            a += 0x10;
+        }
+        if ((k & 0x1000) != 0)
+        {
+            func_80055730(a, b);
+        }
+        else
+        {
+            func_8005560C(a, b);
+        }
+    }
+}
 
 void func_800555FC(void) {
 }
