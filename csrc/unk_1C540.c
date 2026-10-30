@@ -4830,7 +4830,131 @@ void func_8004FFF4(u8 *b) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_800500B4);
+void func_800500B4(u32 arg0, u8 *q)
+{
+    u8 **p = (u8 **)arg0;
+    s32 a;
+    s32 b;
+    s32 e;
+    s32 f;
+    s32 i;
+    u8 **pp;
+    u8 *qq;
+
+    /* a and b serve the first bar only; e and f are a SECOND pair for the
+       second, not these two reused. Reusing a/b makes them multi-set,
+       local-alloc then gives a $a2 instead of $a1, q's pseudo keeps its own
+       incoming $a1 and the `addu $t2, $a1, $zero` coalesces away: 138 words
+       for the target's 139, with the body otherwise exact. */
+    a = *(s32 *) (q + 0x18);
+    b = ((*(s32 *) (q + 0x1C) - a) * (*(s32 *) (q + 0x14) << 4)) / *(s32 *) (q + 0x10) - 0x28;
+    /* The shift is its own statement and the -0x28 stays on b's: the two are
+       then independent leaves of the `addu` and take one address-load delay
+       slot each. `= (a << 4) + b` leaves the first slot a nop (+1 word), and
+       moving the -0x28 into the store expression lets fold put it on a
+       instead, chaining the two so only one slot fills. */
+    a = a << 4;
+    *(s16 *) (*(u8 **) (p[8] + 4) + 0xA) = a + b;
+    *(s16 *) (*(u8 **) (p[9] + 4) + 0xA) = *(u16 *) (*(u8 **) (p[8] + 4) + 0xA);
+    *(s16 *) (*(u8 **) (p[8] + 8) + 8) = *(u16 *) (*(u8 **) (p[8] + 4) + 0xA) - 2;
+    e = *(s32 *) (q + 0x1C);
+    f = ((e - *(s32 *) (q + 0x18)) * -(*(s32 *) (q + 0x14) << 9)) / *(s32 *) (q + 0x10);
+    i = 0;
+    pp = p;
+    qq = q;
+    /* Likewise two statements, not `-(e << 9)`: as one expression the sll and
+       negu stay a pair after the first load and neither is in place. Split,
+       the sll goes ahead of the load and the negu into its slot. */
+    e = e << 9;
+    e = -e;
+    *(s16 *) (*(u8 **) (pp[8] + 8) + 4) = e - f;
+top:
+    {
+        /* DEVICE: the `+ i` here and the `r = r - i;` below are a
+           free-reference pair, not arithmetic. qq is q + i, so the pair is
+           q + 2*i + 0xA4 and then qq + 0xA4 again; combine folds it back to
+           the single `addiu $t0, $a2, 0xA4` the target has, but FLOW counts it
+           first, and r goes from 2 references to 4 -- priority 0.118 to
+           0.400, which is what puts r in $t0 ahead of i and q.
+           Worth 18 words together with the `i` pair below; neither works
+           alone (this one alone 20 DIFF, the i pair alone 18). Without both,
+           r/i/q take $t2/$t1/$t0 where the target has $t0/$t1/$t2, and every
+           q dereference in the function reads as a wrong word.
+           Legal spellings ruled out, scored on this source (advise.py DIFF):
+             u8 *r = qq + 0xA4;                            18
+             the same at function or loop-block scope, as
+               s8 *, and as &qq[0xA4] -- 12 spellings      18 each
+             u8 *r = qq + 0xA5; r = r - 1;                 18  (cse folds it
+               before flow, so the reference is never counted)
+             u8 *r = qq; r = r + 0xA4;                     18  (same)
+             u8 *r = qq + 0xA4; r = r + i; r = r - i;      23
+             u8 *r = qq + i; r = r + 0xA4; r = r - i;      23
+             *r = d; duplicated into both arms             94
+             r also holding *(u8 **) (pp[8] + 8) for the
+               pre-loop store                               5  (buys the
+               priority but spends two words of its own)
+           No -Wall warning: the pair is value-identical and reads nothing
+           uninitialised. */
+        u8 *r = qq + 0xA4 + i;
+        s16 c = qq[0xA4];
+        u8 d;
+
+        r = r - i;
+        if (i == *(s32 *) (q + 0x1C))
+        {
+            d = c + (8 - c) / (*(s32 *) (q + 0x10) - *(s32 *) (q + 0x14) + 1);
+        }
+        else
+        {
+            /* d is `u8` so that cse cannot see `d = c` as a register copy:
+               the QImode move survives as the `addu $v0, $a1, $zero` the
+               target has, and an `s32 d` coalesces it away (one word short). */
+            d = c;
+            if (d != 0)
+            {
+                d = d - 1;
+            }
+        }
+        *r = d;
+        {
+            /* Its OWN local, not the c above reused: reusing c puts the
+               second read in c's $a1 and costs the in-place
+               `addiu $v1, $v1, 0x1E` (27 DIFF against 18). */
+            s16 g = qq[0xA4];
+
+            *(s16 *) (*(u8 **) (pp[1] + 4) + 8) = g;
+            *(s16 *) (*(u8 **) (pp[10] + 4) + 8) = g + 0x1E;
+        }
+        *(u8 *) (*(u8 **) (pp[10] + 4) + 0) = qq[0xA4] * 5 + 0x58;
+        *(u8 *) (*(u8 **) (pp[10] + 4) + 1) = qq[0xA4] * 5 + 0x58;
+        *(u8 *) (*(u8 **) (pp[10] + 4) + 2) = qq[0xA4] * 5 + 0x58;
+        *(u8 *) (*(u8 **) (pp[1] + 4) + 0) = qq[0xA4] * 5 + 0x58;
+        *(u8 *) (*(u8 **) (pp[1] + 4) + 1) = qq[0xA4] * 5 + 0x58;
+        *(u8 *) (*(u8 **) (pp[1] + 4) + 2) = qq[0xA4] * 5 + 0x58;
+        /* DEVICE: `i++` with one extra reference pair. combine folds the two
+           addius into the single `addiu $t1, $t1, 0x1` the target has; flow
+           counts 7 references on i instead of 5, priority 0.123 to 0.279,
+           which clears q's 0.262 and puts i in $t1. Same 18 words as the r
+           pair above, and needed with it, not instead of it.
+           Ruled out: i++, ++i, i += 1, i = i + 1 (one insn, 5 refs, 18 DIFF);
+           for (i = 0; i < 6; i++) and the do/while form (138 words, 98);
+           i = i + 3; i = i - 1; i = i - 1; (9 refs, 22); i also holding the
+           tail's q+0x14 read (5 DIFF paired with r's second role, but three
+           words of its own). No -Wall warning. */
+        i = i + 2;
+        i = i - 1;
+        pp++;
+        qq++;
+    }
+    if (i < 6)
+    {
+        goto top;
+    }
+    if (*(s32 *) (q + 0x14) < *(s32 *) (q + 0x10))
+    {
+        *(s32 *) (q + 0x14) = *(s32 *) (q + 0x14) + 1;
+    }
+}
 
 u32 func_80021300(u32);
 
