@@ -2300,7 +2300,40 @@ void func_8004C36C(u8 *pl, u8 *list)
     *(POLY_FT4 **)(*gp + 0x8D0) = prim;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CAA0);
+/* Member of the `(u8 *p, UnkVec *v, UnkSlot *s)` family (func_80044BB0,
+   func_80044C54, func_80045C34, func_80046398, func_800463EC): it moves $sp to
+   the top of the scratchpad so that func_8004C36C's 0x110-byte frame lands in
+   fast RAM, calls it, then restores $sp. 0x1F8003FC is the slot the old $sp is
+   parked in, and the new $sp starts one word below it.
+
+   DEVICE: the two `__asm__ volatile` blocks. Switching $sp is not expressible
+   in C, so there is no legal spelling of this function: without them it is
+   `func_8004C36C(p, (u8 *)s); return 0;`, 8 words against the target's 18, and
+   the 10 words of stack switch are gone. Neither block reads an uninitialised
+   value, so nothing here warns under -Wall.
+
+   The `"r"(s)` input is load-bearing and is the whole of what the first draft
+   got wrong. It forces $a1 to be loaded before the switch; with no operands at
+   all the asm block is still a scheduling barrier, but the call's own
+   `move $a1, $a2` is then emitted after it and the reorder pass pulls it into
+   the `jal` delay slot, leaving 17 words and 16 DIFF. Measured alternatives
+   that also reach MATCH: pinning the value with
+   `register u8 *arg __asm__("$5") = s;` and passing `"r"(arg)`, and declaring
+   `"$6"` clobbered instead of taking any input. The plain input is kept
+   because it says the true thing -- the value has to be live in a register
+   across the stack switch. */
+s32 func_8004CAA0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    __asm__ volatile("li $v1, 0x1F8003FC\n"
+                     "\tmove $t0, $v1\n"
+                     "\tsw $sp, 0($t0)\n"
+                     "\taddiu $t0, $t0, -4\n"
+                     "\tmove $sp, $t0" ::"r"(s));
+    func_8004C36C(p, (u8 *)s);
+    __asm__ volatile("addiu $sp, $sp, 4\n"
+                     "\tlw $sp, 0($sp)");
+    return 0;
+}
 
 u8 *func_8004CAE8(u8 *p, s32 k) {
     /* A do-while with the byte latched and the advance BEFORE the test, so
@@ -5019,7 +5052,6 @@ u32 func_8004FDE0(u32);
 void func_8004E130(void);
 void func_8004B248(u32 *);
 void func_80050694(u8 *);
-void func_8004CAA0(void);
 s32 func_8004491C(UnkNode *, u32);
 
 /* func_80050B7C is landed as `void` but its result is stored here, so this
@@ -5181,7 +5213,6 @@ void func_80050EA8(u8 *p) {
 }
 
 u32 func_8004FDE0(u32);
-void func_8004CAA0(void);
 
 u32 func_80050EF8(u8 *p) {
     u8 *q = p + 0x20;
