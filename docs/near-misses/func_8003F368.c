@@ -5,8 +5,6 @@
  * so the findings below are the differences that survive alignment.
  *
  * VERDICT: SHAPE
- *   IMMEDIATE 8003F374 built lw imm 0, target imm 2748
- *     also at: 8003F384 8003F444 8003F450 8003F460 8003F46C 8003F480 8003F48C 8003F4B4
  *   OPCODE 8003F4E4 built addu v0,zero,zero target nop
  *   ALLOCATION 8003F368 2 register-only difference(s) as well
  *   8003F4F8 built slti v0,v0 target slti v1,v0
@@ -14,11 +12,16 @@
  * MEASURED 2026-10-30. Every number below is verify.py DIFF on unk_12A70,
  * 113 of 113 words unless the line says otherwise.
  *
- * THE VERDICT IS WRONG: this is ALLOC plus one reorg word, not SHAPE. The nine
- * IMMEDIATE sites are the `%gp_rel` addend artefact of matching-levers.md's
- * "An unresolved %gp_rel addend makes advise.py print SHAPE for an ALLOC row":
- * cc1psx leaves the displacement 0 with a relocation and the target carries the
- * linked 0xABC. Checked directly rather than inferred, and the check is
+ * THE NINE IMMEDIATE ROWS THIS PARK WAS WRITTEN AGAINST ARE GONE: the aligner
+ * bug behind them is fixed in advise.py (its target-side test for a relocated
+ * word now looks for `%gp_rel(` as well as `%hi(`/`%lo(`), so the header above
+ * is its real output -- one OPCODE row for the reorg delay slot and two
+ * register-only words. The verdict SHAPE is correct, on the strength of that
+ * one genuine opcode difference rather than of the artefact.
+ *
+ * The artefact, for the record: cc1psx leaves the displacement 0 with a
+ * relocation and the target carries the linked 0xABC. Checked directly rather
+ * than inferred, and the check is
  * runnable -- but NOT with plain `objdump`, which in this environment reports
  * the architecture as UNKNOWN, prints every relocation type as UNKNOWN and
  * refuses to disassemble at all. Use `mips64-linux-gnu-objdump` (the same

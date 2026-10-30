@@ -379,7 +379,19 @@ def main():
         ins.rel = addr in relocs
     T = asmlib.decode_target(tgt)
     for ins in T:
-        ins.rel = '%hi(' in ins.text or '%lo(' in ins.text
+        # The built side gets this from the real relocation table above. Here
+        # there is only splat's text, so every spelling of a relocated operand
+        # has to be listed -- and %gp_rel is one: splat writes a $gp access as
+        # `lhu $v0, %gp_rel(SYM)($gp)`, with no %hi or %lo anywhere in it. With
+        # it missing, a gp-relative word was `rel = False` on this side and
+        # `rel = True` on the other, so `shape` compared the target's linked
+        # addend against the built side's 'REL', SequenceMatcher refused to
+        # pair the two, and the mismatch printed as an IMMEDIATE finding with
+        # a slipped alignment behind it -- on a function whose every differing
+        # word was a register number. See matching-levers.md, "An unresolved
+        # %gp_rel addend makes advise.py print SHAPE for an ALLOC row".
+        ins.rel = ('%hi(' in ins.text or '%lo(' in ins.text
+                   or '%gp_rel(' in ins.text)
 
     def shape(ins):
         op, imm = ins.shape

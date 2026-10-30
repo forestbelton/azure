@@ -5,8 +5,6 @@
  * so the findings below are the differences that survive alignment.
  *
  * VERDICT: SHAPE
- *   IMMEDIATE 800443CC built lhu imm 0, target imm 360
- *     also at: 800443F8 8004440C 80044444 800444A8 800444CC
  *   MISSING 800443AC target has lh v0,gp and built has nothing there
  *   EXTRA 800443B4 built has lh v0,gp and the target has nothing there
  *   ALLOCATION 8004437C 7 register-only difference(s) as well
@@ -19,14 +17,28 @@
  *   800444BC built sw a0,v0 target sw v1,v0
  * MEASURED 2026-10-30. Every number below is verify.py DIFF on gprel_17B7C.
  *
- * THE VERDICT IS WRONG: this is ALLOC, not SHAPE. The IMMEDIATE/MISSING/EXTRA
- * findings are all one artefact. cc1psx leaves the `%gp_rel` addend as 0 with
- * a relocation, the target has 360, and advise.py's aligner therefore refuses
- * to pair the six `lh/lhu/sh D_80080AFC` words -- which also pushes the
- * cluster-A `lh` out of alignment and manufactures the MISSING/EXTRA pair.
- * verify.py normalises the addend, so none of the six is in the 8 DIFF. All
- * eight differing words are register numbers, in two clusters of the SAME
- * cause: the two `lui %hi(D_80080AF4)` / `addiu %lo(D_80080AF4)` pairs.
+ * THE IMMEDIATE ARTEFACT IS NOW FIXED IN THE TOOL, and the correction below
+ * is a caller's, replacing what this park said before. advise.py marked a
+ * target word relocated by looking for `%hi(`/`%lo(` in splat's text, which a
+ * `%gp_rel(SYM)($gp)` access contains neither of, so it refused to pair the
+ * six `lh/lhu/sh D_80080AFC` words against this build's addend-0 versions and
+ * printed them as one IMMEDIATE finding. That clause now also tests
+ * `%gp_rel(`, the finding is gone, and the header above is advise.py's real
+ * output.
+ *
+ * WHAT WAS WRONG IN THIS PARK, AND IN THE COMMIT THAT WROTE IT: the
+ * MISSING/EXTRA pair was called part of the same artefact and the verdict was
+ * called ALLOC. Both are false. With the aligner fixed, advise.py still
+ * reports MISSING 800443AC / EXTRA 800443B4 for `lh v0,gp`, and it is REAL --
+ * `mips64-linux-gnu-objdump -d` on this park's object against
+ * nonmatchings/func_8004437C/target.o shows 100 words each, 7 differing, and
+ * two of them are a straight TRANSPOSITION: at 0x30 this build has `lui`
+ * where the target has `lh`, and at 0x34 the reverse. Reloc profiles are
+ * identical on both sides (8 R_MIPS_26, 1 R_MIPS_32, 7 GPREL16, 6 HI16,
+ * 6 LO16), so no relocation differs. So the verdict SHAPE is CORRECT: two
+ * words are out of order, and the other five differing words are register
+ * numbers from the two `lui %hi(D_80080AF4)` / `addiu %lo(D_80080AF4)` pairs
+ * analysed below. Only the IMMEDIATE row was ever the artefact.
  *
  * THE MECHANISM, from --greg and from cc1psx's own -S listing (the listing is
  * the quicker read: it tags each half `# high` / `# low`, so the split is the
