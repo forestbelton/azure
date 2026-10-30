@@ -28,165 +28,168 @@ Companion documents:
 One line per lever, with its line number. Read this,
 then read only the section you need.
 
-- The pass order, and what each pass does to you  `:193`
-- 1. Block membership beats scheduling  `:216`
-- 2. Loop notes change every reference weight in the function  `:432`
-  - Giv EMISSION is the REVERSE of creation; a second pointer at offset ZERO reorders it  `:552`
-  - A degenerate loop is a BLOCK BOUNDARY you can put anywhere  `:603`
-  - A SCAN loop's failure `return` belongs INSIDE it -- LOOP_END is a sched1 slot  `:620`
-- 3. Allocation priority is the commonest thing left  `:663`
-  - DIAGNOSE IN THIS ORDER -- priority is the LAST question, not the first  `:665`
-  - ONE variable per LOOP, not one counter reused -- refs add up, priority inflates  `:1180`
-  - RETURN THROUGH THE PARAMETER to stop cse canonicalising a copy away  `:1209`
-  - A `u8` destination makes a register copy INVISIBLE to cse  `:1262`
-  - A LOCAL PER CONSTANT fixes the materialisation order without moving the stores  `:1334`
-  - Statement granularity is what orders the pieces of an address  `:1365`
-  - A two-term index adds the BASE LAST unless the row address is its own statement  `:1407`
-  - POINTER arithmetic is always pointer-first; INTEGER arithmetic keeps source order  `:1442`
-  - A wider store invalidates cse's entry for the narrow read after it  `:1467`
-  - A switch's tree says which cases share a body, and whether there is a default  `:1481`
-  - Two `beq`s that branch TO their bodies are a switch, not an if/else chain  `:1506`
-  - A 0/1 pair ALWAYS triggers jump.c's store-flag transform; share the site  `:1515`
-  - A switch's case bodies are emitted in SOURCE order  `:1555`
-  - The load-delay slot is filled by the NEXT insn only  `:1565`
-  - `?:` keeps the copies that `if` deletes  `:1578`
-  - A store through a loaded pointer pins the argument loads after it  `:1589`
-  - Two address materialisations interleave only if BOTH are split pairs  `:1619`
-  - An unresolved `%gp_rel` addend makes advise.py print SHAPE for an ALLOC row  `:1662`
-  - A %lo in the displacement with a REGISTER index means a constant base  `:1707`
-  - `p += x` is one long quantity; `q = p + x` is two short ones  `:1734`
-  - `||` puts the body BETWEEN the two tests  `:1751`
-  - Duplicate the tail per arm: cross-jumping puts it back  `:1773`
-  - A pass-through call that emits nothing still costs references  `:1817`
-  - `a - C + b` reassociates -- a TEMPORARY is the only way to pin the constant  `:1834`
-  - AND THE IN-PLACE FORM COSTS FOUR REFERENCES, which can be worth more  `:1858`
-  - A shared tail cross-jumping does NOT reach wants a `goto`  `:1886`
-  - WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT  `:1903`
-  - TWO WAYS TO PRICE AN ALLOCATION MARGIN WRONG, both of which I did  `:1950`
-  - TWO MORE REFERENCES ON A TIED CHAIN, not on its rival  `:2034`
-  - READ `.greg`'s OWN conflicts and preferences lines before pricing a margin  `:2086`
-  - A FREE RETURN of the value just stored is the first thing to check on an ALLOC row  `:2218`
-  - A DEAD reference is still a reference -- the free way to flip an allocno  `:2252`
-  - A reference that COMBINE folds away still counts -- the phantom test  `:2322`
-  - `update_equiv_regs` DOUBLES the live length of any ONCE-SET EQUIVALENT pseudo  `:2383`
-  - `SMALL_REGISTER_CLASSES` IS ABSENT, so gcc treats HARD registers like pseudos  `:2490`
-  - STORES CAN SHARE A HOISTED ARGUMENT REGISTER INSTEAD OF THE VALUE'S OWN  `:2531`
-  - COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY  `:2567`
-  - A CONSTANT FOLDED INTO A LATER SHIFT needs a SECOND SET, not a boundary  `:2597`
-  - A PARAMETER always reserves its incoming register, unless there is a call  `:2639`
-  - Keep $v0 busy to make a `lui`/`addiu` pair share its register  `:2675`
-  - A VALUE-PRESERVING NARROWING CAST in a test still moves the allocation  `:2690`
-  - A POINTER LOCAL at ONE store site hoists that symbol's `(high)` to the TOP  `:2715`
-  - A PHANTOM ARGUMENT FROM A WRONG SIGNATURE COSTS A SCHED2 CYCLE  `:2747`
-- 4. Re-dereference rather than cache  `:2785`
-- A cse BLOCK ends at a LOOP-END note, not only at a label  `:2964`
-- A LIBRARY CONSTRUCT can have the shape the hand-written form loses  `:2980`
-- 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation  `:3007`
-  - A conditional negate with a COPY in it means the result is a NARROW local  `:3169`
-  - `x = x << 16; x = x >> 16;` is the IN-PLACE sign-extension; the cast is not  `:3184`
-  - A parameter re-assigned its own truncation extends IN PLACE -- and resets cse  `:3197`
-  - An `s16` parameter's sign-extension sits at its first INT USE, not at entry  `:3248`
-  - A narrow STACK parameter is loaded with `lw`, so `lw` is not evidence for `s32`  `:3260`
-  - "A pure register rotation" can be a narrow PARAMETER -- check the types first  `:3329`
-  - A switch subject read as `s16` is declared `s32`  `:3357`
-  - A stack buffer whose loads are NOT hoisted is a STRUCT, not a byte array  `:3374`
-  - A store that gcc deletes as dead is a VOLATILE field  `:3393`
-  - A load of a value just stored is a VOLATILE field  `:3449`
-  - THE LAST STORE OF A VOLATILE RUN CAN BE PLAIN, and that fills the delay slot  `:3475`
-  - Two bit tests that stayed separate are NESTED IFS  `:3490`
-  - Two bit tests that stayed separate are two SPELLINGS of one lvalue  `:3500`
-  - Which spelling a global's bound takes is PER SITE: read the `lui`'s register  `:3528`
-  - A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P  `:3545`
-  - Reading one field twice beats a local when the value is wanted in two registers  `:3564`
-  - A reg-reg copy right after an `lbu` means the byte is a LOCAL  `:3574`
-- 6. Declaration decides addressing  `:3590`
-  - A SUBSCRIPT keeps the symbol's own pseudo; a `u8 *` BASE eats the `%lo`  `:3873`
-  - A walked pointer RE-LOWERS its symbol; a separate cursor does not  `:3905`
-  - `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used  `:3933`
-  - A SYMBOL whose accesses ALL sit at a nonzero offset wants a POINTER LOCAL  `:3971`
-- 7. Narrow types  `:3996`
-  - A narrow parameter a CALLER must not see: define under an `__asm__` alias  `:4327`
-  - A narrow RETURN the caller must not see: truncate in the BODY, not in the type  `:4367`
-- 8. Statement order and expression shape  `:4393`
-  - sched1 defers a value SET EXACTLY ONCE, and that is a knob  `:4395`
-  - WHEN BOTH COMPETING INSNS ARE BUMPED, IT IS LUID -- AND A NEW LOCAL MOVES IT  `:4478`
-  - A THREE-SET integer chain puts a lookup's quantity on the INDEX, not the base  `:4528`
-  - A global's DECLARED SIZE also decides how many registers its address costs  `:4563`
-  - A 32-bit mask on a narrow value needs ITS OWN STATEMENT, not just a wide local  `:4586`
-  - Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not  `:4607`
-  - A value stored twice is a CHAINED assignment, because a store flushes cse  `:4625`
-  - Four `||` terms whose `or`s sit in the delay slots are `|`, written INLINE  `:4641`
-  - `% C` is NARROWED by the front end, and a cast will not stop it  `:4657`
-  - An index INLINE in a call argument gets the hard register; a local does not  `:4691`
-  - cse rewrites `*q` into `*(p + C)` but leaves `*(q + 4)` alone  `:4706`
-  - A symbol added to an index expands SECOND; a pointer variable expands first  `:4717`
-  - Read a field BACK instead of respelling the expression -- cse makes a MOVE  `:4743`
-  - Read the scheduler's own decisions -- it is not "priority, then LUID"  `:4765`
-  - A `nop` in a CONDITIONAL branch's delay slot can mean a LOAD comes next  `:5046`
-  - Two loads of one MEM collapse at greg unless they overlap at SCHED1 time  `:5056`
-  - An empty `jal` delay slot says the address was ONE instruction  `:5073`
-  - N materialisations of ONE base mean N LOCALS, because cse restarts at a join  `:5092`
-  - The PREHEADER's giv initialisations are in REVERSE body order  `:5110`
-  - Two offsets off a walked pointer become TWO induction variables  `:5121`
-  - A displacement offset by a CONSTANT from the field it reads is a REDUCED GIV  `:5159`
-  - A volatile MEM is NOT replaced by a reduced giv  `:5190`
-  - A struct copy is a FOUR-REGISTER block move; N statements are N lw/sw pairs  `:5207`
-  - A loop-invariant pointer belongs INSIDE the loop body  `:5218`
-  - A MUTATED cursor cannot be hoisted -- write the guard yourself  `:5227`
-  - reorg fills a delay slot from the insn BEFORE the branch first  `:5263`
-  - Reusing one counter beats a second one, and that decides its register  `:5281`
-  - `p = param` BEFORE the first branch moves that parameter's copy LAST  `:5300`
-  - Where a loop's counter is INITIALISED decides which register it gets  `:5330`
-  - An early `return x` is another REFERENCE to x, and it can flip global-alloc  `:5349`
-  - A base pointer assigned before a call lives in a callee-saved register  `:5364`
-  - One call after the join, not a call in each arm  `:5375`
-  - Two bounds written with `&&` become one range check  `:5383`
-  - Two shifts with mismatched counts are two shifts in the source  `:5391`
-  - `break` and a tested `while` condition pick DIFFERENT registers  `:5400`
-  - No re-test at the bottom means that is not the loop condition  `:5410`
-  - Many arms rejoining at several places is LABELS AND GOTOS, laid out to match  `:5418`
-  - A comparison TREE where you get a jump table means a case you have not found  `:5442`
-  - A switch's range split means there is a case label you have not found  `:5473`
-  - A switch's range split means there is a case label you have not found  `:5491`
-  - A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH  `:5509`
-  - Read the block ORDER off the listing and write the arms to match  `:5533`
-  - Spell the whole expression out in each arm, not a shared temp after the join  `:5557`
-  - Two masks of one word are two `&=` statements  `:5592`
-  - cse learns a case value inside a switch arm  `:5611`
-  - A value reassigned in several blocks is several block-scoped locals  `:5625`
-  - When a call's argument setup is EARLIER than the loop's giv updates, move `i++` after the call  `:5639`
-  - A post-increment whose value outlives its statement costs a copy  `:5665`
-  - Two primitives in one function are TWO variables, and that moves the mask  `:5697`
-  - An address sum written INLINE is one PLUS tree -- the loads and shifts all come first  `:5725`
-  - A live length is trimmed ONE insn at a time by what sched1 puts before the value's last store  `:5770`
-  - Declaration ORDER is the sched2 tie-break for same-priority prologue insns  `:5831`
-  - A VOLATILE byte read is how two loads of ONE byte sit side by side  `:5846`
-  - A SUB-WORD parameter type is how a parameter copy becomes schedulable  `:5868`
-- The PREHEADER's order is the order the invariants are FIRST USED  `:5945`
-- 9. Induction variables  `:5999`
-- A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT ALL  `:6154`
-- TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT STATEMENTS  `:6245`
-- COMBINE WILL NOT COMBINE ACROSS A CALL  `:6304`
-- A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE  `:6334`
-- loop.c CANNOT BE PERSUADED NOT TO STRENGTH-REDUCE -- READ ITS OWN PRINTOUT  `:6447`
-- 10. Measured dead ends -- do not retry  `:6496`
-- 11. Toolchain traps  `:6660`
-- 12. Keeping an agent's run cheap  `:6727`
-- Which of two givs is initialised first, and the bias on a walked pointer  `:6854`
-- fold's `associate:` moves a constant onto the wrong operand  `:6893`
-  - Both halves of this are in search.py now  `:6928`
-- An explicit `goto` is how you get a loop that is NOT rotated  `:6939`
-- Put each accumulation next to the channel it consumes  `:6973`
-- `potential_hazard` acts ONLY inside one priority group  `:7006`
-- sched2's tie-break inside a priority group is MEMORY OVER ALU  `:7025`
-- A declaration NARROWING can be a semantic break that scores better  `:7070`
-- `REG_USERVAR_P`: where NAMING a value changes a decision, and where it cannot  `:7133`
-- A use before the assignment: the one cure for a PARAMETER's copy, and it is not valid C  `:7220`
-- An unused `return p` is where a post-call copy of a PARAMETER comes from  `:7267`
-- A pointer BUMPED AND RETURNED needs to be its own variable  `:7300`
-- An in-place `x &= MASK` blocks the shift/and/scale fold, and costs nothing  `:7363`
-- A COMPARISON TEMPORARY'S $v1 PREFERENCE TRAVELS TO A LATER ZERO-EXTEND  `:7400`
-- TWO ARGUMENT SETUPS IN ONE CALL CANNOT BE REORDERED FROM THE SOURCE  `:7470`
+- The pass order, and what each pass does to you  `:196`
+- 1. Block membership beats scheduling  `:219`
+- 2. Loop notes change every reference weight in the function  `:435`
+  - Giv EMISSION is the REVERSE of creation; a second pointer at offset ZERO reorders it  `:555`
+  - A degenerate loop is a BLOCK BOUNDARY you can put anywhere  `:606`
+  - A SCAN loop's failure `return` belongs INSIDE it -- LOOP_END is a sched1 slot  `:623`
+- 3. Allocation priority is the commonest thing left  `:666`
+  - DIAGNOSE IN THIS ORDER -- priority is the LAST question, not the first  `:668`
+  - ONE variable per LOOP, not one counter reused -- refs add up, priority inflates  `:1183`
+  - RETURN THROUGH THE PARAMETER to stop cse canonicalising a copy away  `:1212`
+  - A `u8` destination makes a register copy INVISIBLE to cse  `:1265`
+  - A LOCAL PER CONSTANT fixes the materialisation order without moving the stores  `:1337`
+  - Statement granularity is what orders the pieces of an address  `:1368`
+  - A two-term index adds the BASE LAST unless the row address is its own statement  `:1410`
+  - POINTER arithmetic is always pointer-first; INTEGER arithmetic keeps source order  `:1445`
+  - A wider store invalidates cse's entry for the narrow read after it  `:1470`
+  - A switch's tree says which cases share a body, and whether there is a default  `:1484`
+  - Two `beq`s that branch TO their bodies are a switch, not an if/else chain  `:1509`
+  - A 0/1 pair ALWAYS triggers jump.c's store-flag transform; share the site  `:1518`
+  - A switch's case bodies are emitted in SOURCE order  `:1558`
+  - The load-delay slot is filled by the NEXT insn only  `:1568`
+  - `?:` keeps the copies that `if` deletes  `:1581`
+  - A store through a loaded pointer pins the argument loads after it  `:1592`
+  - Two address materialisations interleave only if BOTH are split pairs  `:1622`
+  - An unresolved `%gp_rel` addend makes advise.py print SHAPE for an ALLOC row  `:1665`
+  - A %lo in the displacement with a REGISTER index means a constant base  `:1710`
+  - `p += x` is one long quantity; `q = p + x` is two short ones  `:1737`
+  - `||` puts the body BETWEEN the two tests  `:1754`
+  - Duplicate the tail per arm: cross-jumping puts it back  `:1776`
+  - A pass-through call that emits nothing still costs references  `:1820`
+  - `a - C + b` reassociates -- a TEMPORARY is the only way to pin the constant  `:1837`
+  - AND THE IN-PLACE FORM COSTS FOUR REFERENCES, which can be worth more  `:1861`
+  - A shared tail cross-jumping does NOT reach wants a `goto`  `:1889`
+  - WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT  `:1906`
+  - TWO WAYS TO PRICE AN ALLOCATION MARGIN WRONG, both of which I did  `:1953`
+  - TWO MORE REFERENCES ON A TIED CHAIN, not on its rival  `:2037`
+  - READ `.greg`'s OWN conflicts and preferences lines before pricing a margin  `:2089`
+  - A FREE RETURN of the value just stored is the first thing to check on an ALLOC row  `:2221`
+  - A DEAD reference is still a reference -- the free way to flip an allocno  `:2255`
+  - A reference that COMBINE folds away still counts -- the phantom test  `:2325`
+  - `update_equiv_regs` DOUBLES the live length of any ONCE-SET EQUIVALENT pseudo  `:2386`
+  - `SMALL_REGISTER_CLASSES` IS ABSENT, so gcc treats HARD registers like pseudos  `:2493`
+  - STORES CAN SHARE A HOISTED ARGUMENT REGISTER INSTEAD OF THE VALUE'S OWN  `:2534`
+  - COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY  `:2570`
+  - A CONSTANT FOLDED INTO A LATER SHIFT needs a SECOND SET, not a boundary  `:2600`
+  - A PARAMETER always reserves its incoming register, unless there is a call  `:2642`
+  - Keep $v0 busy to make a `lui`/`addiu` pair share its register  `:2678`
+  - A VALUE-PRESERVING NARROWING CAST in a test still moves the allocation  `:2693`
+  - A POINTER LOCAL at ONE store site hoists that symbol's `(high)` to the TOP  `:2718`
+  - A PHANTOM ARGUMENT FROM A WRONG SIGNATURE COSTS A SCHED2 CYCLE  `:2750`
+- 4. Re-dereference rather than cache  `:2788`
+- A cse BLOCK ends at a LOOP-END note, not only at a label  `:2967`
+- A LIBRARY CONSTRUCT can have the shape the hand-written form loses  `:2983`
+- 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation  `:3010`
+  - A conditional negate with a COPY in it means the result is a NARROW local  `:3172`
+  - `x = x << 16; x = x >> 16;` is the IN-PLACE sign-extension; the cast is not  `:3187`
+  - A parameter re-assigned its own truncation extends IN PLACE -- and resets cse  `:3200`
+  - An `s16` parameter's sign-extension sits at its first INT USE, not at entry  `:3251`
+  - A narrow STACK parameter is loaded with `lw`, so `lw` is not evidence for `s32`  `:3263`
+  - "A pure register rotation" can be a narrow PARAMETER -- check the types first  `:3332`
+  - A switch subject read as `s16` is declared `s32`  `:3360`
+  - A stack buffer whose loads are NOT hoisted is a STRUCT, not a byte array  `:3377`
+  - A store that gcc deletes as dead is a VOLATILE field  `:3396`
+  - A load of a value just stored is a VOLATILE field  `:3452`
+  - THE LAST STORE OF A VOLATILE RUN CAN BE PLAIN, and that fills the delay slot  `:3478`
+  - Two bit tests that stayed separate are NESTED IFS  `:3493`
+  - Two bit tests that stayed separate are two SPELLINGS of one lvalue  `:3503`
+  - Which spelling a global's bound takes is PER SITE: read the `lui`'s register  `:3531`
+  - A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P  `:3548`
+  - Reading one field twice beats a local when the value is wanted in two registers  `:3567`
+  - A reg-reg copy right after an `lbu` means the byte is a LOCAL  `:3577`
+- 6. Declaration decides addressing  `:3593`
+  - A SUBSCRIPT keeps the symbol's own pseudo; a `u8 *` BASE eats the `%lo`  `:3876`
+  - A walked pointer RE-LOWERS its symbol; a separate cursor does not  `:3908`
+  - `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used  `:3936`
+  - A SYMBOL whose accesses ALL sit at a nonzero offset wants a POINTER LOCAL  `:3974`
+- 7. Narrow types  `:3999`
+  - A narrow parameter a CALLER must not see: define under an `__asm__` alias  `:4330`
+  - A narrow RETURN the caller must not see: truncate in the BODY, not in the type  `:4370`
+- 8. Statement order and expression shape  `:4396`
+  - sched1 defers a value SET EXACTLY ONCE, and that is a knob  `:4398`
+  - WHEN BOTH COMPETING INSNS ARE BUMPED, IT IS LUID -- AND A NEW LOCAL MOVES IT  `:4481`
+  - A THREE-SET integer chain puts a lookup's quantity on the INDEX, not the base  `:4531`
+  - A global's DECLARED SIZE also decides how many registers its address costs  `:4566`
+  - A 32-bit mask on a narrow value needs ITS OWN STATEMENT, not just a wide local  `:4589`
+  - Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not  `:4610`
+  - A value stored twice is a CHAINED assignment, because a store flushes cse  `:4628`
+  - Four `||` terms whose `or`s sit in the delay slots are `|`, written INLINE  `:4644`
+  - `% C` is NARROWED by the front end, and a cast will not stop it  `:4660`
+  - An index INLINE in a call argument gets the hard register; a local does not  `:4694`
+  - cse rewrites `*q` into `*(p + C)` but leaves `*(q + 4)` alone  `:4709`
+  - A symbol added to an index expands SECOND; a pointer variable expands first  `:4720`
+  - Read a field BACK instead of respelling the expression -- cse makes a MOVE  `:4746`
+  - Read the scheduler's own decisions -- it is not "priority, then LUID"  `:4768`
+  - A `nop` in a CONDITIONAL branch's delay slot can mean a LOAD comes next  `:5049`
+  - Two loads of one MEM collapse at greg unless they overlap at SCHED1 time  `:5059`
+  - An empty `jal` delay slot says the address was ONE instruction  `:5076`
+  - N materialisations of ONE base mean N LOCALS, because cse restarts at a join  `:5095`
+  - The PREHEADER's giv initialisations are in REVERSE body order  `:5113`
+  - Two offsets off a walked pointer become TWO induction variables  `:5124`
+  - A displacement offset by a CONSTANT from the field it reads is a REDUCED GIV  `:5162`
+  - A volatile MEM is NOT replaced by a reduced giv  `:5193`
+  - A struct copy is a FOUR-REGISTER block move; N statements are N lw/sw pairs  `:5210`
+  - A loop-invariant pointer belongs INSIDE the loop body  `:5221`
+  - A MUTATED cursor cannot be hoisted -- write the guard yourself  `:5230`
+  - reorg fills a delay slot from the insn BEFORE the branch first  `:5266`
+  - Reusing one counter beats a second one, and that decides its register  `:5284`
+  - `p = param` BEFORE the first branch moves that parameter's copy LAST  `:5303`
+  - Where a loop's counter is INITIALISED decides which register it gets  `:5333`
+  - An early `return x` is another REFERENCE to x, and it can flip global-alloc  `:5352`
+  - A base pointer assigned before a call lives in a callee-saved register  `:5367`
+  - One call after the join, not a call in each arm  `:5378`
+  - Two bounds written with `&&` become one range check  `:5386`
+  - Two shifts with mismatched counts are two shifts in the source  `:5394`
+  - `break` and a tested `while` condition pick DIFFERENT registers  `:5403`
+  - No re-test at the bottom means that is not the loop condition  `:5413`
+  - Many arms rejoining at several places is LABELS AND GOTOS, laid out to match  `:5421`
+  - A comparison TREE where you get a jump table means a case you have not found  `:5445`
+  - A switch's range split means there is a case label you have not found  `:5476`
+  - A switch's range split means there is a case label you have not found  `:5494`
+  - A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH  `:5512`
+  - Read the block ORDER off the listing and write the arms to match  `:5536`
+  - Spell the whole expression out in each arm, not a shared temp after the join  `:5560`
+  - Two masks of one word are two `&=` statements  `:5595`
+  - cse learns a case value inside a switch arm  `:5614`
+  - A value reassigned in several blocks is several block-scoped locals  `:5628`
+  - When a call's argument setup is EARLIER than the loop's giv updates, move `i++` after the call  `:5642`
+  - A post-increment whose value outlives its statement costs a copy  `:5668`
+  - Two primitives in one function are TWO variables, and that moves the mask  `:5700`
+  - An address sum written INLINE is one PLUS tree -- the loads and shifts all come first  `:5728`
+  - A live length is trimmed ONE insn at a time by what sched1 puts before the value's last store  `:5773`
+  - Declaration ORDER is the sched2 tie-break for same-priority prologue insns  `:5834`
+  - A VOLATILE byte read is how two loads of ONE byte sit side by side  `:5849`
+  - A SUB-WORD parameter type is how a parameter copy becomes schedulable  `:5871`
+- The PREHEADER's order is the order the invariants are FIRST USED  `:5948`
+- 9. Induction variables  `:6002`
+- A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT ALL  `:6157`
+- TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT STATEMENTS  `:6248`
+- COMBINE WILL NOT COMBINE ACROSS A CALL  `:6307`
+- A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE  `:6337`
+- loop.c CANNOT BE PERSUADED NOT TO STRENGTH-REDUCE -- READ ITS OWN PRINTOUT  `:6450`
+- 10. Measured dead ends -- do not retry  `:6499`
+- 11. Toolchain traps  `:6663`
+- 12. Keeping an agent's run cheap  `:6730`
+- Which of two givs is initialised first, and the bias on a walked pointer  `:6857`
+- fold's `associate:` moves a constant onto the wrong operand  `:6896`
+  - Both halves of this are in search.py now  `:6931`
+- An explicit `goto` is how you get a loop that is NOT rotated  `:6942`
+- Put each accumulation next to the channel it consumes  `:6976`
+- `potential_hazard` acts ONLY inside one priority group  `:7009`
+- sched2's tie-break inside a priority group is MEMORY OVER ALU  `:7028`
+- A declaration NARROWING can be a semantic break that scores better  `:7073`
+- `REG_USERVAR_P`: where NAMING a value changes a decision, and where it cannot  `:7136`
+- A use before the assignment: the one cure for a PARAMETER's copy, and it is not valid C  `:7223`
+- An unused `return p` is where a post-call copy of a PARAMETER comes from  `:7270`
+- A pointer BUMPED AND RETURNED needs to be its own variable  `:7303`
+- An in-place `x &= MASK` blocks the shift/and/scale fold, and costs nothing  `:7366`
+- A COMPARISON TEMPORARY'S $v1 PREFERENCE TRAVELS TO A LATER ZERO-EXTEND  `:7403`
+- TWO ARGUMENT SETUPS IN ONE CALL CANNOT BE REORDERED FROM THE SOURCE  `:7473`
+- `x >= 0 ? x : -x` FOLDS TO `abs`; `x < 0 ? -x : x` DOES NOT  `:7526`
+- A REDUNDANT TEST STILL HAS TO BE OUT OF THE ARM'S PATH  `:7574`
+- AN `s16` LOCAL READ FROM A `u8` FIELD COSTS A WIDENING COPY  `:7600`
 
 <!-- END INDEX -->
 
@@ -7519,3 +7522,92 @@ different mechanism: there it moves an allocator PREFERENCE, here it moves an
 `INSN_LUID`. Reach for it when `advise.py` reports an OPCODE finding that is
 really two adjacent insns exchanged and both are argument setups for the same
 call -- no statement reordering can reach that one.
+
+## `x >= 0 ? x : -x` FOLDS TO `abs`; `x < 0 ? -x : x` DOES NOT
+
+Two spellings of the same absolute value compile to the same three
+instructions -- a copy, a `bge` over, a negate in place -- and to different
+word counts, because they do not go through the same code.
+
+`fold-const.c:4864` recognises `A op 0 ? A : -A` only with the bare value in
+the TRUE arm and the `NEGATE_EXPR` in the FALSE arm:
+
+    if (integer_zerop (TREE_OPERAND (arg0, 1))
+        && TREE_CODE (arg2) == NEGATE_EXPR
+        && operand_equal_p (TREE_OPERAND (arg2, 0), arg1, 0))
+      switch (comp_code) { ... case GE_EXPR: case GT_EXPR:
+        return ... fold (build1 (ABS_EXPR, TREE_TYPE (arg1), arg1)); ... }
+
+So `v >= 0 ? v : -v` and `v > 0 ? v : -v` become `ABS_EXPR` and are expanded
+by `expand_abs`. Write the arms the other way round, `v < 0 ? -v : v`, and
+`arg2` is not a `NEGATE_EXPR`, the rule does not fire, and the `COND_EXPR`
+survives to `expr.c:5793`'s `X ? A + B : A` singleton path -- which also
+copies, jumps and negates in place, which is why the listing cannot tell you
+which one you have.
+
+What it changes is WHERE the branch sits relative to a call's argument setup.
+As a call argument, the `ABS_EXPR` form leaves every other argument register
+loaded before the branch:
+
+    addiu   $a1, $zero, 0x2
+    lb      $a0, 0x2($s1)
+    addiu   $s0, $sp, 0x1B
+    addu    $a2, $s0, $zero
+    bgez    $a0, .L8004970C
+     nop
+    negu    $a0, $a0
+  .L8004970C:
+    jal     func_8004E5A0
+
+The `if` statement and the unfolded `COND_EXPR` put the branch first and the
+argument setup after it, where a sibling arm making the same call
+cross-jumps the whole `addiu $s0 / addu $a2 / jal / jal` tail instead of just
+the two `jal`s -- three words short. func_8004951C, 157 words: `v >= 0 ? v : -v`
+MATCH, `v > 0 ? v : -v` MATCH, the same `>= 0` ternary with no local MATCH;
+`if (v < 0) { v = -v; }` 154, `v < 0 ? -v : v` 154; the call duplicated into
+both arms of an `if`/`else` 158.
+
+Section 8's `?:` entry is the other half of this: there the question was the
+copies a `?:` keeps when its value is ASSIGNED, here it is which of the two
+arm orders the front end rewrites before expansion ever sees it.
+
+## A REDUNDANT TEST STILL HAS TO BE OUT OF THE ARM'S PATH
+
+A test that cannot be true in one arm of a chain still costs that arm words if
+the arm's control flow runs through it, because cross-jumping merges an arm's
+tail with a later identical tail only when the two reach the same
+continuation. func_8004951C ends with
+
+    if (k == 3) { ... buf[0] = 0x7A; ... }
+    else { ...chain on p[1]... else if (k == 1) { ... }
+           if (k == 1) { ... buf[0] = 0x79; } }
+    func_8004E298(dst, buf, 0);
+
+The trailing `if (k == 1)` reads as redundant where it is -- it is inside the
+`else` of `if (k == 3)`, so `k` is already known not to be 3, not that it
+helps. Lift it out of the `else`, which is the shape that reads naturally, and
+the `k == 3` arm falls into it: its `buf[0] = 0x7A` store then has a different
+continuation from the `buf[0] = 0x79` store below, keeps its own `sb`, and the
+arm's exit branch fills its delay slot from the test (`addiu $v0, $zero, 0x1`)
+instead of from the call (`addu $a0, $s3, $zero`). 158 words out of the
+`else`, 157 inside it.
+
+The diagnostic is the delay slot and the exit target together: an arm whose
+exit branch lands on a later TEST where the listing lands on the shared tail
+has one block too many in its path, and the cure is a nesting level, not a
+reordering.
+
+## AN `s16` LOCAL READ FROM A `u8` FIELD COSTS A WIDENING COPY
+
+`s16 k = b[i].unk_10;` where `unk_10` is `u8` emits the `lbu` and then an
+`addu` into a second register, and every later use of `k` reads that second
+register -- the HImode pseudo is not the same quantity as the load's result
+and reload cannot coalesce them. Declaring the local `s32` (or `u8`) deletes
+the copy. func_8004951C, 158 words with `s16` against 157 with `s32`, every
+other word already right; the register-only rows advise.py printed for it
+(`slti $v0, $a1` for `slti $v0, $s2`) were the copy's register, not an
+allocation problem.
+
+The reverse reading matters more: a widening copy immediately after an `lbu`
+whose value is then compared several times is evidence for a NARROW local, and
+its absence is evidence against one.

@@ -402,9 +402,124 @@ s32 func_800494FC(u8 *p) {
     return func_80042A80(p) & 0x400;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004951C);
+/* The split spelling of D_80082E6A, as in csrc/unk_72A8.c: the scalar
+   `extern u8 D_80082E6A` in structs.h is a small undefined symbol and gets the
+   assembler-expanded symbolic form, where this listing has the compiler-split
+   lui + lbu %lo pair that only the incomplete array gives. */
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
 
-s32 func_8004951C(u8 *, s32);
+/* Three source shapes here are load-bearing and all three were measured
+   against the 157-word listing:
+
+   - `s32 k` and not `s16 k`. The field is a u8, so the short costs an extra
+      `addu a1,s2,zero` to hold the HImode value: 158 words with `s16`.
+
+   - The trailing `if (k == 1)` sits inside the `else` of `if (k == 3)`, where
+     it reads as redundant -- k cannot be both. It is not redundant to the
+     output: with the test outside, the k == 3 arm falls into it, its
+     `buf[0] = 0x7A` store cannot cross-jump with the `buf[0] = 0x79` store
+     below, and the arm's exit branch lands on the test instead of on the
+     func_8004E298 call. 158 words that way.
+
+   - `v >= 0 ? v : -v` and not `if (v < 0) { v = -v; }`. The arm order is what
+     matters: with the negate in the FALSE arm fold-const.c turns the whole
+     conditional into `ABS_EXPR`, whose expansion leaves the other argument
+     registers loaded BEFORE the branch, so the `p[1] == 4` arm's own
+     `&buf[0xB]` setup stays unmerged and only the two jals cross-jump.
+     `v > 0 ? v : -v` also matches, and so does the same `>= 0` ternary
+     written on `*(s8 *)(p + 2)` with no `v` at all. Ruled out at 154 words:
+     `if (v < 0) { v = -v; }`, and `v < 0 ? -v : v` -- which fold leaves as a
+     plain COND_EXPR and is therefore NOT the same shape. Two separate calls
+     in an if/else: 158. */
+s32 func_8004951C(u8 *dst, s32 p)
+{
+    u8 buf[0x20];
+    Unk80073414 *b;
+    s32 k;
+
+    memset(buf, 0x20, 0x20);
+    buf[0x1F] = 0;
+    if (D_80082E6Aa[0] == 2 && func_80042A80(p) != 0)
+    {
+        return 0;
+    }
+    b = D_80073414;
+    k = b[*(u8 *)(p + 1)].unk_10;
+    if (k >= 4)
+    {
+        return 0;
+    }
+    if (k == 3)
+    {
+        s32 m = *(u8 *)(p + 3) & 0x1F;
+
+        if (m < 0x14 && D_80082E6Aa[0] != 1 && *(u8 *)(func_800492B0(m) + 0x28) == 0)
+        {
+            buf[0] = 0x7A;
+        }
+    }
+    else
+    {
+        if (*(u8 *)(p + 1) == 0x12)
+        {
+            if (D_80082E6Aa[0] != 1)
+            {
+                func_8004E5A0(0x64 - *(s8 *)(p + 2), 3, &buf[9]);
+                func_8004E69C(&buf[9]);
+                buf[0xC] = 0xA;
+                buf[0xD] = 9;
+                buf[0xE] = 0x39;
+                buf[0x12] = 0x25;
+            }
+        }
+        else if (*(u8 *)(p + 1) == 4)
+        {
+            func_8004E5A0(*(s8 *)(p + 2), 2, &buf[0xB]);
+            func_8004E69C(&buf[0xB]);
+        }
+        else if (*(u8 *)(p + 1) == 0xE)
+        {
+            func_8004E5A0(func_800438E4(p), 5, &buf[6]);
+            func_8004E69C(&buf[6]);
+            buf[0xB] = 0xA;
+            buf[0xC] = 9;
+            buf[0xD] = 0x39;
+            buf[0x10] = 0x47;
+        }
+        else if (k == 1)
+        {
+            if (*(s8 *)(p + 2) != 0)
+            {
+                s32 v;
+
+                if (*(s8 *)(p + 2) > 0)
+                {
+                    buf[0xA] = 0x6B;
+                }
+                else
+                {
+                    buf[0xA] = 0x6C;
+                }
+                v = *(s8 *)(p + 2);
+                func_8004E5A0(v >= 0 ? v : -v, 2, &buf[0xB]);
+                func_8004E69C(&buf[0xB]);
+            }
+        }
+        if (k == 1)
+        {
+            if ((*(u8 *)(p + 3) & 0x40) != 0)
+            {
+                buf[0xD] = 0xA;
+                buf[0xE] = 0x7A;
+            }
+            if ((*(u8 *)(p + 3) & 0x20) != 0)
+            {
+                buf[0] = 0x79;
+            }
+        }
+    }
+    func_8004E298(dst, buf, 0);
+}
 
 u8 *func_80049790(s32 a) {
     u8 *p = (u8 *) func_8004B404(0x104);
@@ -1331,12 +1446,6 @@ void func_8004AB7C(void) {
 u32 func_8004AC18(s32 i) {
     return D_8007359C[0][i].unk_04;
 }
-
-/* The split spelling of D_80082E6A, as in csrc/unk_72A8.c: the scalar
-   `extern u8 D_80082E6A` in structs.h is a small undefined symbol and gets the
-   assembler-expanded symbolic form, where this listing has the compiler-split
-   lui + lbu %lo pair that only the incomplete array gives. */
-extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
 
 /* Two source shapes here are load-bearing and both were measured:
 
