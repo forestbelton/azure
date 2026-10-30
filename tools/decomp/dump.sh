@@ -11,6 +11,13 @@ SP="$AZURE_SCRATCH"
 # fail loudly -- it silently collects stale dumps, or a concurrently running
 # compile's dumps from the shared prefix, and attributes them to this source.
 PREFIX=${AZURE_WINEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/azure-psyq}
+# ...and that resolution is only half of it: with AZURE_WINEPREFIX unset,
+# ccpsx claims a POOL prefix (azure-psyq-pool/pN) per invocation whenever the
+# pool exists, so the dumps land there while this script reads the BASE prefix
+# and collects nothing. advise.py then prints "--greg: no greg dump" and the
+# mechanism you were chasing is simply invisible. Pin the prefix for our own
+# compile so ccpsx writes where we are about to look.
+export AZURE_WINEPREFIX="$PREFIX"
 T=""
 for d in "$PREFIX"/drive_c/users/*/AppData/Local/Temp; do
     [ -d "$d" ] && T="$d" && break
