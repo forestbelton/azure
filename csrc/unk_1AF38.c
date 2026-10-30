@@ -750,7 +750,80 @@ void func_80048B28(void) {
     } while (i > 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048B8C);
+/* The flag byte at q[0] and the masked halfword at w[0] are ONE function-scope
+   variable, and that is the whole 12-word allocation fix. One variable
+   referenced in two basic blocks is not block-local, so global-alloc sees it
+   instead of local-alloc, and local-alloc's combine_regs then refuses to tie
+   the `and`'s result to the `lhu`'s register (it bails when the register being
+   set has no quantity). The inner temporaries therefore occupy $v0 AND $v1,
+   which keeps $v1 away from w and gives the target's assignment: the first
+   flag read in $v1, w in $a1, q in $a2, e in $a0, p in $t0. Separate
+   per-scope locals are 14 DIFF no matter how the inner body is spelled --
+   measured there: one `u32 v`, a `u32 t` plus `u32 v`, the mask folded into
+   the load, all five declarations hoisted to function scope, and `f` as u32
+   with the 0x80 test pre-masked. `*q |= 8` before w's initialiser with
+   per-scope locals is 23 DIFF: it gets the flag read into $v1 but then w and
+   it share $v1 and everything below shifts down a register.
+
+   `volatile u16 *w` is not a device. gcc deletes the first `sh` as dead
+   without it: `*w = f; *w = f + 0xE;` on a plain pointer is 43 words / 26
+   DIFF, and both updates in place (`*w &= ~0x3F; *w += 0xE;`) is 42 words /
+   36 DIFF. A plain `w` with the qualifier on the first store alone
+   (`*(volatile u16 *)w = f`) scores the same 2 DIFF as the pointer-qualified
+   form did before the wrapper below went in, so it may sit on either.
+
+   DEVICE: the do/while(0) is a degenerate loop whose NOTE_INSN_LOOP_BEG
+   splits the inner body between the two stores, which stops sched1 hoisting
+   `addiu $v0, $v1, 0xE` above the first `sh` -- without it the two come out
+   swapped. Worth 2 differing words; the word count is 44 either way. Ruled
+   out, both 2 DIFF: `if (1) { ... }` and `switch (1) { case 1: ... }`, neither
+   of which is a loop note. Also MATCH, i.e. the note's exact placement inside
+   the body does not matter: `while (1) { ...; break; }` here, the wrapper
+   around both stores, and the wrapper around the whole tail of the body.
+   `f += 0xE` in place fixes the order by anti-dependence instead, but then
+   the sum lands in f's own register (`addiu $v1, $v1, 0xE`) -- 2 DIFF. Also
+   ruled out: the second store through `q` instead of `w` (11 DIFF), the
+   `g = *q` read moved between the two stores (43 words, 34 DIFF), and the
+   chained `*w = (*w = f) + 0xE;` (46 words, 27 DIFF). Nothing here is
+   uninitialised, so -Wall is quiet on it. */
+void func_80048B8C(u8 *p)
+{
+    u8 *e;
+    u8 *q;
+    volatile u16 *w;
+    u32 f;
+    u8 g;
+
+    e = (u8 *)(*(u32 *)p + *(u32 *)(p + 4) * 4);
+    while ((u32)e < *(u32 *)(p + 8))
+    {
+        if (*(s16 *)(e + 2) == 2)
+        {
+            q = *(u8 **)(e + 4);
+            f = *q;
+            if ((f & 8) == 0)
+            {
+                *q = f | 8;
+                w = (volatile u16 *)(q + 4);
+                do
+                {
+                    f = *w & ~0x3F;
+                    *w = f;
+                    /* DEVICE: see the header comment -- this degenerate loop
+                       is a block boundary, not dead code. */
+                    do
+                    {
+                        *w = f + 0xE;
+                    } while (0);
+                    w += 6;
+                    g = *q;
+                    q += 0xC;
+                } while ((g & 0x80) == 0);
+            }
+        }
+        e += 8;
+    }
+}
 
 extern u32 D_80071210[];
 
