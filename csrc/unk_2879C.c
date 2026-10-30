@@ -1321,7 +1321,35 @@ void func_80055C50(s16 k) {
 void func_80055CEC(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80055CF4);
+void func_80055D84(s16);
+
+/* Dispatches the lowest set flag of the top nibble of D_800847D0[1]: calls
+   func_80055D84 with its index and clears just that flag.
+
+   Spelled with the `D_800847D0[1]` subscript, NOT through the unit's usual
+   `u8 *b = (u8 *) D_800847D0;` base: the subscript makes cse materialise the
+   symbol address into its own pseudo, which is the target's
+   `addiu v0,v0,%lo` + `addu s1,v0,zero` pair.  The `u8 *` base folds the %lo
+   into the move and comes out one word short (35 of 36, 31 DIFF).
+   `i` is unsigned for the loop test's sltiu; s32 gives slti. */
+void func_80055CF4(void)
+{
+    u32 i;
+    u32 f;
+    u32 m;
+
+    f = D_800847D0[1] & 0xFF000000;
+    for (i = 0; i < 4; i++)
+    {
+        m = (0x1000000 << i) & 0xF000000;
+        if ((f & m) != 0)
+        {
+            func_80055D84((s16) i);
+            D_800847D0[1] = D_800847D0[1] & ~m;
+            break;
+        }
+    }
+}
 
 s32 func_8005A778(u8 *, s16, u32);
 s32 func_8003F52C(s32);
