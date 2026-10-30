@@ -2478,6 +2478,48 @@ So this lever is free only where the function already HAS a branch between the
 copy and its use, and otherwise it costs about what it saves. Check for an
 existing boundary before building one.
 
+### A CONSTANT FOLDED INTO A LATER SHIFT needs a SECOND SET, not a boundary
+
+func_80041E70's one remaining word is `p->unk_87 = 0x10;` followed, in the body
+of `if (p->unk_54 & 1)`, by a doubling of it. The listing doubles the register
+the store left live:
+
+    80041E8C  addiu  $v1, $zero, 0x10
+    80041E94  beqz   $v0, .L80041EB0
+    80041E98   sb    $v1, 0x87($s0)
+    80041EA0  sll    $v1, $v1, 1
+    80041EA4  sb     $v1, 0x87($s0)
+
+Eighteen C spellings emit `addiu $v1, $zero, 0x20` at 80041EA0 instead, all at
+270 words: the field read, in place or through a temp, `<< 1`, `2 * x`, `x + x`,
+`((u8 *) p)[0x87]`, a `(s32)`, `(u8)`, `(s8)`, `& 0xFF` or `| 0` on either side,
+and `(u8) 0x10`, `(s8) 0x10` or `~0xEF` as the stored constant.
+
+**The boundary from the section above does not stop this fold.**
+`do { } while (0)` as the first statement of the if's body is free here -- 270
+words, unlike the three straight-line placements this park prices -- and the
+fold still happens, so whatever folds it is not reading a cse block table.
+
+What stops it is a SECOND SET of the pseudo between the constant and the shift,
+which is the `can_combine_p` route above. A non-volatile
+
+    __asm__("" : "+r"(v));
+
+on an `s32` local carrying the 0x10 emits the listing's `sll $v1, $v1, 1` and
+costs no word. `volatile` costs one in all six placements measured: it is a
+scheduling barrier, so `addiu $v1, $zero, 0x10` can no longer be scheduled into
+the load-delay slot after `lw $v0, 0x54($s0)` and a `nop` appears there.
+
+It still does not land the function, because moving the 0x10 out of the field
+and into a local is what pays for it. The local's live range now crosses the
+branch, sched1 hoists `lw $v0, 0x54($s0)` above `sh $v0, 0x6E($s0)`, those two
+stop sharing $v0, and the local falls to $a0: 9 to 12 DIFF over fourteen
+placements, against the 1 DIFF of the folded spelling. `register s32 v
+__asm__("$3")` puts it back in $v1 -- the pin alone is free, 1 DIFF on the
+unmodified park -- and then the `sll`, both `sb`s, the `sra` and both branches
+match; 4 DIFF is the best of nineteen pinned placements, and what is left is the
+0x100 store scheduled after the unk_87 store instead of before it.
+
 ### A PARAMETER always reserves its incoming register, unless there is a call
 
 `set_preference`'s second branch (global.c:1601) fires on the incoming copy
