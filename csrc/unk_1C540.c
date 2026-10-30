@@ -881,7 +881,41 @@ void func_8004A24C(u8 *p, u32 b, u8 *c, s16 d, s16 e, s16 f)
     func_8004A030(p, d, e, g);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A330);
+UnkNode *func_8003FC64(s32);
+u32 func_8004B404(s32);
+s32 func_8004491C(UnkNode *, u32);
+s32 func_8004CAA0(u8 *, UnkVec *, UnkSlot *);
+
+s32 func_8004A330(u32 a, s16 b, s16 c, s16 d, s16 e, s16 f, s32 g, u8 *h)
+{
+    u8 *n;
+
+    n = (u8 *)func_8003FC64(0);
+    if (n != 0)
+    {
+        u8 *m = n + 0x20;
+        s32 r = func_8004B404(0);
+
+        *(u32 *)(m + 0x8) = r;
+        if (r != 0)
+        {
+            *(s16 *)(n + 0x20) = g;
+            *(s16 *)(m + 0x4) = d - 0xA0;
+            *(s16 *)(m + 0x6) = e - 0x80;
+            func_8004A24C(m, a, h, b, c, f);
+            *(u32 *)(n + 0xC) = (u32)(n + 0x50);
+            func_8004491C((UnkNode *)n, (u32)func_8004CAA0);
+            *(u32 *)(n + 0x10) = (u32)func_80049F2C;
+        }
+        else
+        {
+            *(s16 *)(n + 0x1E) = *(u16 *)(n + 0x1E) | 0x8000;
+            D_800814A0 |= 0x8000;
+            n = 0;
+        }
+    }
+    return (s32)n;
+}
 
 /* Both load-delay slots are filled in the target, and cc1psx's fill pass only
    ever swaps a load with the insn IMMEDIATELY after it: so the `addiu` for the
