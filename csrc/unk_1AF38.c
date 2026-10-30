@@ -752,9 +752,46 @@ void func_80048B28(void) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048B8C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_80048C3C);
+extern u32 D_80071210[];
 
-void func_80048C3C(s32);
+void func_8003F320(void);
+void func_8003F80C(u32, s32, s32, s16);
+void func_80047200(u32 *, s32, s32);
+void func_80046F88(u8 *);
+void func_80048B8C(u8 *);
+
+/* The pair at D_80071210[i * 2] is {source, dest}; the function returns a
+   pointer to the second slot. Spelling that as a second pointer -- `n = &e[1]`,
+   dereferenced for the body and returned -- is what the target's two closing
+   words are: `addiu $s1, $s1, 0x4` for `n` (scheduled after its own last use as
+   a load base) and `addu $v0, $s1, $zero` for the return. Fold the two into one
+   variable (`q = (u8 *) e[1]` plus `e++; return e`) and regmove merges the add
+   into the return-value move: 48 of 49 words, 15 DIFF, and the prologue's
+   `addiu $a0, $zero, 0x6` moves below the %hi/%lo pair as well. Also measured
+   at 48/15: `e += 1`, `return ++e`, the store before the increment,
+   `e = &e[1]`, `(u32 *) ((u8 *) e + 4)`, `&D_80071210[i * 2]` as an array ref,
+   a split `k = i * 8`, and hoisting `e[0]` into a local. */
+u32 *func_80048C3C(s32 i) {
+    u32 *e;
+    u32 *n;
+    u8 *q;
+    u8 *r;
+
+    e = (u32 *) ((u8 *) D_80071210 + i * 8);
+    func_8003E4FC(6, (u8 *) e[0], 0);
+    func_8003F320();
+    n = &e[1];
+    q = (u8 *) *n;
+    r = q + *(u32 *) (q + 0x1C);
+    func_8003F80C((u32) r, 0x7A00, *(u32 *) (q + 0x20), 2);
+    DrawSync(0);
+    func_80047200((u32 *) r, 1, 1);
+    func_8003F80C((u32) r, 0x7980, *(u32 *) (q + 0x20), 2);
+    func_80046F88(q);
+    func_80048B8C(q);
+    D_80080A89 = 0;
+    return n;
+}
 
 void func_80048D00(void) {
     func_80048C3C(0);
