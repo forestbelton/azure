@@ -1332,7 +1332,91 @@ u32 func_8004AC18(s32 i) {
     return D_8007359C[0][i].unk_04;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004AC3C);
+/* The split spelling of D_80082E6A, as in csrc/unk_72A8.c: the scalar
+   `extern u8 D_80082E6A` in structs.h is a small undefined symbol and gets the
+   assembler-expanded symbolic form, where this listing has the compiler-split
+   lui + lbu %lo pair that only the incomplete array gives. */
+extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
+
+/* Two source shapes here are load-bearing and both were measured:
+
+   `(u8)(p[1] - 0xF) < 3`, not `(u32)(p[1] - 0xF) < 3`. For a u8 p[1] the two
+   tests are the same -- the wrapped values 0xF1..0xFF are all >= 3 -- and both
+   emit the same `addiu $v0, -0xF; sltiu $v0, 3`. What differs is allocation:
+   the u8 cast puts func_80042A80's result in $a0 and p[1] in $v1, so the
+   +0x0C blocks reload p[1] and the D_80073414 `lui` lands in the `beqz` delay
+   slot, which is this listing. The u32 spelling builds 127 of 128 words,
+   101 DIFF.
+
+   The unk_00 test and its two table reads are written out TWICE rather than
+   shared through a goto. Sharing them -- one copy reached by `goto` from the
+   func_80042A80 arm -- lets jump.c's cross-jumping merge the two identical
+   blocks and builds 115 of 128 words; blocking the merge with an empty
+   `__asm__ volatile("")` builds 132. */
+s32 func_8004AC3C(u8 *p, s32 *out)
+{
+    s32 r;
+    s32 f;
+
+    *out = 0;
+    if (D_80082E6Aa[0] != 1)
+    {
+        if (p[1] == 0x13)
+        {
+            r = func_80049330(p) + 0x34;
+        }
+        else
+        {
+            f = func_80042A80(p);
+            if (f != 0)
+            {
+                if ((u8)(p[1] - 0xF) < 3 || (p[1] == 4 && (f & 0x400) == 0))
+                {
+                    r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 20 + 4);
+                }
+                else
+                {
+                    r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 20 + 0xC);
+                }
+                *out = 4;
+            }
+            else
+            {
+                if (D_80073414[p[1]].unk_00 == 0)
+                {
+                    r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 20 + 4);
+                }
+                else
+                {
+                    r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 12 + 4);
+                }
+            }
+        }
+    }
+    else
+    {
+        if (p[1] == 0x13)
+        {
+            r = (s32)((u8 *)0x80010324 + (p[3] & 0x1F) * 0x54);
+        }
+        else
+        {
+            if (p[1] == 0x16)
+            {
+                *out = 7;
+            }
+            if (D_80073414[p[1]].unk_00 == 0)
+            {
+                r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 20 + 4);
+            }
+            else
+            {
+                r = *(s32 *)(D_80073414[p[1]].unk_0C + p[0] * 12 + 4);
+            }
+        }
+    }
+    return r;
+}
 
 s32 func_8004AE3C(u32 *p) {
     s32 n = 0;
