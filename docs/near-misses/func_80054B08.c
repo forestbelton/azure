@@ -84,6 +84,22 @@
  *    __asm__ volatile("" ::"r"(q)) after the x load to keep q live 66; the
  *    final 0x14 store duplicated into both arms of the if 47; 0x18 or 0x1C
  *    left unqualified 22 and 27.
+ *
+ * PARAMETER TYPE, measured 2026-10-30 on the 3-DIFF body above (coordinator's
+ * lead: func_8005500C and func_8005552C, two siblings with the same
+ * switch (a & 0xF000) dispatch, both needed the u16 narrowing of
+ * matching-levers :1205). It is NOT the remaining 3 words:
+ *   u16  3 DIFF folded / 14 in place     <- what this body now uses
+ *   s16  3 DIFF folded / 14 in place     byte-identical to u16
+ *   s32  3 DIFF folded / 14 in place     byte-identical to u16
+ *   u32  4 DIFF folded / 15 in place
+ * u16, s16 and s32 are byte-for-byte the same function, with the same 3-word
+ * window at 80054B94. u32's extra word is the switch dispatch: the listing has
+ * `slti $v0, $a0, 0x1001` and an unsigned subject gives `sltiu`, so the
+ * subject is SIGNED -- u32 is positively excluded, and u16 (promoted to int)
+ * is not. The body is spelled u16 because that is what unk_264E0.c:1438
+ * already prototypes and what the two siblings landed as; it is a free
+ * agreement, not a score.
  */
 
 #include "common.h"
@@ -94,7 +110,7 @@ s32 func_80054AF0(s32);
 void func_80054C58(void);
 void func_80054CD4(void);
 
-void func_80054B08(s32 a) {
+void func_80054B08(u16 a) {
     switch (a & 0xF000) {
     case 0x0: {
         volatile Unk8006CE34 *q = (volatile Unk8006CE34 *) func_8003F534();
