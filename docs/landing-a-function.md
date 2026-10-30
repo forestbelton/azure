@@ -139,6 +139,13 @@ In order. Do not skip to step 3.
    and `TODO.md` alone: their counts come from `progress.py` and `guard.py`,
    and whoever integrates your change runs those once for every function that
    landed rather than once per function.
+6. If the landing established a new mechanism -- a measured one, not a
+   hypothesis -- add it to `docs/matching-levers.md` as its own heading with
+   the measurement, the same way step 5.4 asks for a park. A landing is the
+   better occasion for it, not the worse one: the match confirms the mechanism
+   instead of leaving it inferred from a floor. The spellings you ruled out and
+   their scores belong at the site in `csrc/`, next to the code they explain.
+   Do not run `leverindex.py`; the caller regenerates the index.
 
 A non-matching function in `csrc/` is worse than no change: `progress.py` drops
 the whole unit from both numerator and denominator, which once moved the
@@ -175,6 +182,9 @@ fall in one day.
   takes a path or a name.
 - Do not edit a project-wide document. `docs/carved-sweep.md`,
   `docs/where-we-are.md` and `TODO.md` are bookkeeping for the caller.
+  `docs/matching-levers.md` is NOT one of these: a new measured mechanism is
+  wanted there whether the function landed or parked, as its own heading. Only
+  the index is the caller's, so do not run `leverindex.py`.
 - A device is fine; an unexplained device is not. If you cannot say what it
   changes, keep searching or park it with the measurement.
 - Do not use `--full`, `--greg` or `dump.sh` unless the header's findings have
