@@ -23,6 +23,138 @@
  *   8004EA50 built addiu a0,zero target addiu a1,zero
  *   8004EA58 built sll v1,a1 target sll v1,t2
  *   8004EA6C built addu v0,a0,zero target addu v0,a1,zero
+ * MEASURED 2026-10-30. The body in this file is the best SCORE. A different
+ * body, described under "THE TARGET DOES NOT WALK q" below, is the better
+ * SHAPE at a worse score (31 words / 32 DIFF); both are recorded because they
+ * disagree about the source, not about the compiler.
+ *
+ * Sweeps on this body: search.py 49 variants, no improvement on 32/26;
+ * `decl i: s32 -> u16` and `while -> backward goto` each reach 33 words at
+ * 27 DIFF, rejected (they close the count with differing words). unname.py
+ * 0 improvements. permuter 60m, 196042 candidates at 54.5/s, 8 jobs,
+ * base=430 best=185, 100 better-only outputs, never 0. Its floor candidate
+ * (a `new_var = D_80080B70s` before the inner label) measures 32 words /
+ * 33 DIFF under verify.py, so permuter score 185 is NOT closer than this
+ * body's 430 by the project's metric -- do not adopt an output on score.
+ *
+ * THE TARGET DOES NOT WALK q. Target word 1 is `addu $t2,$a1,$zero` (a copy
+ * of n) and its `addu $a2,$a0,$zero` is word 7, in the loop PREHEADER, right
+ * after the hoisted `lui`. A modified parameter's copy is emitted in the
+ * prologue and cannot be scheduled into another block, so word 7 is a
+ * strength-reduced giv initialisation and the source indexes. Rewriting the
+ * body with `q[i]`, `q[i+1]`, `q[i+2]` and no `q++`/`q += 2` puts that copy
+ * at word 7 aligned with the target: 31 words, 29 DIFF.
+ *
+ * THE %lo GOES INSIDE THE LOOP WITH A USER-VARIABLE POINTER AND A DEAD SET.
+ * On the indexed body, adding
+ *
+ *     s8 *p;
+ *     p = 0;                     [before the outer loop, dead]
+ *     ...
+ *     inner:
+ *         p = D_80080B70s;       [first statement after the label]
+ *         a = p[0]; b = p[1]; c = p[2];
+ *
+ * moves `addiu $t?,$t1,%lo` from the preheader to the inner loop's first
+ * insn, with `lui` left hoisted -- the target's exact addressing. 31 words,
+ * 32 DIFF. Mechanism: see docs/matching-levers.md, "A USER-VARIABLE POINTER
+ * WITH A DEAD EARLIER SET keeps the %lo INSIDE the loop".
+ *
+ * THAT BODY IS 31 WORDS AND THE TWO MISSING WORDS ARE ONE CAUSE. It lacks
+ * `addu $t2,$a1,$zero` (the copy of n) and the second `addiu $a1,$zero,1`.
+ * In it `r` and `m` share $t0 -- they do not conflict, because `m` is only
+ * live on paths that go on to set `r = 1` -- so (a) reorg cannot steal
+ * `r = 1` into the `beqz` delay slot, which would clobber `m` before the
+ * fall-through reads it, and (b) `n` keeps $a1. The target has `r` in $a1
+ * and `m` in $t0, which is why `n` is copied to $t2. Separating `r` from `m`
+ * is the whole remaining gap.
+ *
+ * `--greg` ON THAT BODY SAYS IT IS NOT A PRIORITY QUESTION. dump.sh's .greg
+ * gives `8 regs to allocate: 116 90 82 87 83 98 80 81` and dispositions
+ * `80 in 4  81 in 5  82 in 7  83 in 8  87 in 8  90 in 3  98 in 9  116 in 6`.
+ * 80 is the q parameter (prefers 4), 81 the n parameter (prefers 5), 116 the
+ * giv, 82 is i, 83 is r, 87 is m, 98 the (high). r and m share $t0 because
+ * 87 is absent from 83's conflict list. r skipped $a0 and $a1 not because
+ * they were taken -- neither 80 nor 81 was allocated yet -- but because
+ * find_reg's first pass also excludes every register a CONFLICTING allocno
+ * merely PREFERS, and 83 conflicts with both 80 and 81. The second pass,
+ * which drops that exclusion, only runs when the first finds nothing.
+ *
+ * THAT MAKES THIS AN INSTANCE OF "A PARAMETER always reserves its incoming
+ * register, unless there is a call" (docs/matching-levers.md), and both of
+ * its horns are measured here. Leave n used in two blocks and global-alloc
+ * owns it, its $a1 preference fires, and r is pushed to $t0: 31 words.
+ * Confine n to the entry block with `kk = n;` as its only use and pseudo 81
+ * does leave .greg -- but pseudo 89 (kk) then carries `preferences: 5`
+ * itself, because `(set kk (reg $a1))` is an incoming copy too, so it takes
+ * $a1 and the entry copy coalesces: also 31 words. `tt = n; kk = tt;` with
+ * tt confined to the entry block collapses the chain and is also 31 words.
+ * The function has no call, so none of that lever's other escapes applies.
+ * A different SPELLING will not produce this word; a different parameter or
+ * block structure is the only thing left to try.
+ *
+ * Spellings that left it at 31 words and did NOT separate them: a local copy
+ * `k = n` used throughout (coalesced away); reusing the parameter `n` itself
+ * as the flag with `k = n; n = 0; ... return n;` (also coalesced); `i = 0`
+ * before `r = 0`; `r` declared first, and declared last; an extra temporary
+ * `t = q[i]` for the outer test; `m > i` instead of `i < m`; `s8` instead of
+ * `s32` for a, b, c; `p = (s8 *)q` instead of `p = 0` for the dead set.
+ *
+ * DECLARED SIZE OF THE ARRAY, measured on the indexed body: `[2]`, `[3]`,
+ * `[4]`, `[8]` all give 32 words / 30 DIFF with THREE separate `lui`+`lb`
+ * pairs inside the loop and nothing hoisted (the symbolic form); `[9]`,
+ * `[12]`, `[16]` and the incomplete `[]` all give 31 words / 29 DIFF with
+ * one `lui`+`addiu` hoisted into the preheader (the split form). So the -G8
+ * boundary for this unit is at 8 bytes inclusive. The target wants the split
+ * form, so the incomplete declaration is right.
+ *
+ * WRITING THE LOOP GUARD IN THE SOURCE IS WRONG. `if (n * 2 >= 0) { p = q;
+ * do { ... } while (!(n * 2 < i)); }` reaches 33 words but 31 DIFF: cse
+ * shares `n * 2` between the written guard and the loop bottom into its own
+ * register ($t3) and re-materialises `m` with a second `sll` in the loop.
+ * The target recomputes `sll $v1,$t2,1` at the bottom from $t2, which is
+ * what gcc's own loop inversion of a plain `while (i <= n * 2)` gives.
+ *
+ * `decl m: s32 -> u16` reaches 33 words / 24 DIFF on the indexed body and is
+ * REJECTED: the word it adds is `andi $v0,$t0,0xffff` plus a `j`/`nop`, not
+ * either of the target's two, and it truncates m.
+ *
+ * THE INDEXED BODY ITSELF, so the next attempt starts from it rather than
+ * rebuilding it from the prose above. Re-measured as written here: 31 words,
+ * 32 DIFF. It is the better SHAPE at the worse SCORE, and it is the body the
+ * two mechanisms and the --greg reading above were all measured on, so the
+ * remaining gap is only diagnosed for THIS body, not for the one compiled
+ * below.
+ *
+ *     s32 func_8004E9EC(u8 *q, s32 n) {
+ *         s32 i; s32 r; s32 a; s32 b; s32 c; s32 m; s8 *p;
+ *
+ *         r = 0;
+ *         i = 0;
+ *         p = 0;
+ *         while (i <= n * 2) {
+ *             if (q[i] == 0) {
+ *                 m = n * 2;
+ *                 if (i < m) {
+ *                 inner:
+ *                     p = D_80080B70s;
+ *                     a = p[0];
+ *                     b = p[1];
+ *                     c = p[2];
+ *                     q[i] = a;
+ *                     q[i + 1] = b;
+ *                     q[i + 2] = c;
+ *                     i += 2;
+ *                     if (i < m) {
+ *                         goto inner;
+ *                     }
+ *                 }
+ *                 r = 1;
+ *             }
+ *             i++;
+ *         }
+ *         return r;
+ *     }
  */
 
 #include "common.h"
