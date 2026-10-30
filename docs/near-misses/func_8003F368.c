@@ -11,6 +11,82 @@
  *   ALLOCATION 8003F368 2 register-only difference(s) as well
  *   8003F4F8 built slti v0,v0 target slti v1,v0
  *   8003F4FC built beq v0,zero target beq v1,zero
+ * MEASURED 2026-10-30. Every number below is verify.py DIFF on unk_12A70,
+ * 113 of 113 words unless the line says otherwise.
+ *
+ * THE VERDICT IS WRONG: this is ALLOC plus one reorg word, not SHAPE. The nine
+ * IMMEDIATE sites are the `%gp_rel` addend artefact of matching-levers.md's
+ * "An unresolved %gp_rel addend makes advise.py print SHAPE for an ALLOC row":
+ * cc1psx leaves the displacement 0 with a relocation and the target carries the
+ * linked 0xABC. Checked directly rather than inferred, and the check is
+ * runnable -- but NOT with plain `objdump`, which in this environment reports
+ * the architecture as UNKNOWN, prints every relocation type as UNKNOWN and
+ * refuses to disassemble at all. Use `mips64-linux-gnu-objdump` (the same
+ * toolchain as compile.sh's `mips64-linux-gnu-as`). Build the park's object
+ * with `bash nonmatchings/func_8003F368/compile.sh <park.c> x <out.o>`, then:
+ *   -r on it and on nonmatchings/func_8003F368/target.o give IDENTICAL
+ *     profiles -- 16 R_MIPS_26, 1 R_MIPS_32, 9 R_MIPS_GPREL16, 8 R_MIPS_HI16,
+ *     8 R_MIPS_LO16 on each side. The 9 GPREL16 are the 9 IMMEDIATE rows.
+ *   -d gives 113 words on each side and exactly 4 differing raw words, which
+ *     are the 4 verify.py reports. Re-confirmed by the caller 2026-10-30.
+ * So the IMMEDIATE rows are advise.py artefacts and the row is ALLOC plus one
+ * reorg word. NOTE FOR THE SWEEP: this is unk_12A70, an ordinary unit -- the
+ * artefact is NOT confined to the units named gprel_*, so any function can
+ * hit it.
+ *
+ * THE FOUR WORDS, two independent causes, both in the MSF validation tail:
+ *
+ *   The `< 0x3C` guard (8003F4E0). Built `beqz $v0, .L8003F510` with
+ *   `addu $v0,$zero,$zero` in the delay slot; target `beqz $v0, .L8003F50C`
+ *   with `nop`. reorg copied the one-instruction block at .L8003F50C into the
+ *   slot and redirected the branch past it. The target does exactly that for
+ *   the other two guards -- 8003F4C4 and 8003F4FC both carry the copied
+ *   `addu $v0,$zero,$zero` -- and not for this one.
+ *
+ *   The `< 0x4B` guard after it (8003F4F8/8003F4FC). Built
+ *   `slti $v0,$v0,0x4B` / `beqz $v0`; target `slti $v1,$v0,0x4B` / `beqz $v1`.
+ *   Two register-only words.
+ *
+ * SEARCH. search.py: 21 variants over 17 transform families, none improved on
+ * 113/4. unname.py: 0 improvements. permuter: 179,339 candidates in 60 minutes
+ * on 8 jobs, base 210, floor 145, two kept outputs. output-145-1's body
+ * measures 8 DIFF and is not semantics-preserving (it assigns the `&&` of the
+ * first two tests to `pos`, so it returns 1 rather than the position), i.e. the
+ * permuter's score went below the base while its DIFF went above it; its score
+ * does not rank this residue.
+ *
+ * SPELLINGS MEASURED:
+ *   4   park as found
+ *   4   three separate `if (f(..) >= K) { return 0; }` early returns
+ *   4   three nested ifs, one per test
+ *   4   nested ifs with a `return 0;` per arm
+ *   4   the && chain split 2+2 and 1+3 into an outer and an inner if
+ *   4   the `pos > 0` test alone in an inner if
+ *   4   function-scope temps a/b/c for the three call results
+ *   4   one block-scope temp for the third call result
+ *   4   one temp reused across all three blocks
+ *   4   three temps, each declared in its own nested block
+ *   4   `pos >= 1` for the last test
+ *   4   reversed comparisons: `0x4B > f(..)`, `0 < pos`
+ *   4   `pos` merged into `i` -- one variable for the counter and the position
+ *   4   `pos` declared first, and last, among the locals
+ *   4   an extra unused `s32 dead;` among the locals
+ *   4   `pos` declared inside a block holding the whole tail
+ *   4   a dead copy `dead = c;` of the third call result
+ *   4   `return (s32) pos;`
+ *   7   `return cond ? pos : 0;`
+ *   7   `if (pos <= 0) { return 0; } return pos;` inside the chain
+ *   8   permuter output-145-1's body
+ *   16  `goto done` with `pos = 0` on the failure path (114 words)
+ *   18  `(u8) func_8003F688(D_80081452) < 0x4B` (114 words)
+ *   31  `pos > 0` first in the && chain (114 words)
+ *   42  a single result variable assigned in the if (114 words)
+ *
+ * CONTEXT AUDITED. func_8003F688 is already in csrc/unk_12DEC.c as
+ * `s32 func_8003F688(s32)`, so the signature is not a guess. The unit is at the
+ * project default -G0 with the file-scope `.size` record csrc/unk_12A70.c
+ * already carries; the park's own `__asm__` reproduces the two records this
+ * function needs. The park's object and target.o agree on every relocation.
  */
 
 #include "common.h"
