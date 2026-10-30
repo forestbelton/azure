@@ -18,3 +18,6 @@ zzsearch_*.c
 
 # sweep.py batch files (tools/decomp/sweep.py verify b1.py)
 b[0-9]*.py
+
+# personal permission overrides
+.claude/settings.local.json
