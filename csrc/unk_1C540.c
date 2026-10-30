@@ -140,7 +140,22 @@ s32 func_80048F8C(u32 *p, s32 n) {
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_80048FBC);
+/* Allocates a 0x104-byte row and parks it in the first free slot of `p`.
+
+   `return r` is free -- $v0 already holds it -- and it is also the whole
+   match. Declared `void`, the stored value's pseudo has two references and
+   dies at the store; local-alloc then ranks the index/shift/address
+   quantity (6 references over 5 insns) above the parameter's (3 over 11)
+   and hands it $s0, which is 18 of 18 words and 7 DIFF with $s0 and $s1
+   swapped. func_80050AF0 declares the return and uses it. */
+s32 func_80048FBC(u8 *p, s32 n)
+{
+    s32 i = func_80048F8C((u32 *) p, n);
+    s32 r = func_8004B404(0x104);
+
+    *(u32 *) (p + i * 4) = r;
+    return r;
+}
 
 /* Builds a 0x104-byte row table: clears the old one, allocates, grows the two
    NUL-terminated pointer lists that follow p[0], copies each list into one
@@ -916,18 +931,74 @@ u32 func_8004A534(u32 a, u8 *p) {
     return a + (a >> 2) * ((Unk800102F0 *) 0x800102F0)[p[3] & 0x1F].unk_11;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004A574);
+extern s32 D_800713CC[];
 
-void func_8004A574(s32, s32);
+void func_8004A574(u8 *p, s32 w) {
+    u8 *e;
+    u8 *r;
+    s32 s;
+    s32 v;
 
-void func_8004A618(s32 a) {
-    func_8004A574(a, 1);
+    e = (u8 *) D_80073414 + p[1] * 20;
+    r = (u8 *) *(u32 *) (e + 0xC) + p[0] * 20;
+    s = D_800713CC[e[3]];
+    if (w == 0) {
+        v = *(u16 *) (r + 0x10) * s;
+    } else {
+        v = *(u16 *) (r + 0x12) * s;
+    }
+    /* DEVICE: empty asm with "+r"(v) and an $a0 clobber, worth 5 DIFF.
+       Without it the function is 41 of 41 words at 5 DIFF: `v` is the output
+       of mulsi3_internal, whose operand 0 is constrained "=l", so its pseudo
+       prefers LO_REG and LIVES IN LO across the pointer test -- the single
+       `mflo $a0` in the call block IS the call's argument setup. The listing
+       instead copies LO out in the JOIN block (`mflo $v0`) and sets up $a0
+       with a separate `addu $a0, $v0, $zero` that dbr hoists into the beqz's
+       delay slot.
+
+       The two halves of the device do two different jobs:
+         "+r"(v)   a GR-constrained use of `v` at the join, which forces the
+                   LO->GR copy there instead of at the argument setup. Alone:
+                   2 DIFF -- right position, but the pseudo still takes $a0
+                   from its argument copy preference and swallows the move.
+         "$4"      makes `v` conflict with $a0, so prune_preferences drops
+                   that preference; with none, find_reg takes the lowest
+                   non-conflicting register, $v0, and the argument copy
+                   survives as its own insn.
+       The clobber alone is 5 DIFF (no hoist); "r"(v) as an input-only operand
+       is 42 words/10 DIFF. "+d"(v) is 2 DIFF (same as "+r" with no clobber).
+       It emits no instruction and warns under -Wall: it doesn't.
+
+       Legal spellings ruled out, all 41 words:
+         base, two mults in the arms                              5 DIFF
+         `t` in the arms, `v = t` at the join                     5 DIFF
+         `v` in the arms, `t = v` at the join, pass `t`           5 DIFF
+         fn pointer read into a local before the test             5 DIFF
+         early return instead of the `if`                         5 DIFF
+         block-local copy inside the `if` body                    5 DIFF
+         ternary instead of if/else                               5 DIFF
+         `v += 0;` / `v &= -1;` / `v *= 1;` / `v |= 0;`
+           / `v = (s32) (u32) v;` at the join                     5 DIFF
+         all 6 declaration orders of e/r/s/v                      5 DIFF
+         a dead `v = 0;` before the arms                42 words, 19 DIFF
+       And the halfword selected in the arms with ONE mult after the join --
+       which is the shape that would put the product in a GR -- is 39 words,
+       17 DIFF: dbr pulls that mult into the beqz's delay slot rather than
+       copying it into the `j`'s, so the listing's duplicated `mult` never
+       appears. A GR-constrained use with no instruction behind it is not
+       expressible in C, which is why this is a device. */
+    __asm__ volatile("" : "+r"(v) : : "$4");
+    if (*(u32 *) (e + 8) != 0) {
+        (*(void (**)(s32, u8 *)) (e + 8))(v, p);
+    }
 }
 
-void func_8004A574(s32, s32);
+void func_8004A618(s32 a) {
+    func_8004A574((u8 *) a, 1);
+}
 
 void func_8004A638(s32 a) {
-    func_8004A574(a, 0);
+    func_8004A574((u8 *) a, 0);
 }
 
 /* The tail is written TWICE, once per arm, and jump2's cross-jumping merges
@@ -3974,7 +4045,31 @@ void func_8004F308(s32 a) {
     func_800491F4(a, D_80071684, 7);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004F330);
+void func_8004F330(u8 *p, s32 n) {
+    s32 i;
+    u32 *t;
+
+    for (i = 0; i < n; i++) {
+        u32 *s = D_8002E5D8;
+        /* The template's first word goes through its own local: writing
+           D_8002E5D8[0] inline at the store site puts the load after the
+           0x220 store, which leaves only two scratch pseudos live in the
+           loop and sends p to $a0 instead of $t3 (9 DIFF). */
+        u32 v = D_8002E5D8[0];
+
+        *(u32 *) (p + 0x220 + i * 4) = (u32) (p + 0x23C + i * 0x10);
+        *(u32 *) (p + 0x2AC + i * 0x10) = v;
+        *(u32 *) (p + 0x2B0 + i * 0x10) = s[1];
+        *(u32 *) (p + 0x2B4 + i * 0x10) = s[2];
+        *(u32 *) (p + 0x2B8 + i * 0x10) = s[3];
+        *(u32 *) (p + 0x240 + i * 0x10) = (u32) (p + 0x2AC + i * 0x10);
+        *(u32 *) (p + 0x244 + i * 0x10) = (u32) (p + 0x204);
+    }
+    t = D_8002E5E8;
+    *(u32 *) (p + 0x204) = t[0];
+    *(u32 *) (p + 0x208) = t[1];
+    *(u32 *) (p + 0x20C) = t[2];
+}
 
 void func_8004F3D0(u32 *p, u32 v) {
     *p = v;

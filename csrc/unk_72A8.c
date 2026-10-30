@@ -3405,9 +3405,130 @@ void func_8003A2E0(u8 *p) {
     q[3] = *(s32 *) (t + 0x48) >> 24;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A374);
+/* The reverse of func_8003A2E0: composes an address out of four bytecode bytes
+   plus the second index times four, reads ONE byte at it, and stores
+   `state[a].unk_48` to the address that byte value gives. The cursor pair is
+   the family's, as in func_8003A2E0 and func_8003A10C.
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003A3E8);
+   DEVICE: `a = (d = *(*cp)++);` instead of `a = *(*cp)++;`. Legal C -- no
+   undefined behaviour, no dead code, silent under -Wall -- but a spelling the
+   author would not have written: `d` is used as a scratch for the first byte
+   and then overwritten by the composed address. Worth 12 words. Without it the
+   function is 29 of 29 words with 12 register-only differences: $v1 and $a1 are
+   swapped throughout, the cursor taking $v1 where the target has $a1 and the
+   byte accumulator taking $a1 where the target has $v1.
+
+   The mechanism is local-alloc priority, and global-alloc never runs here --
+   the `.greg` dump has no `regs to allocate` block, every pseudo is "in block
+   0". local-alloc's `qty_compare_1` ranks by
+   `floor_log2(qty_n_refs) * qty_n_refs * qty_size / (qty_death - qty_birth)`
+   and allocates in ascending hard-register order, so the winner takes $v1.
+   `combine_regs` ties each `addu` whose first operand dies into one quantity,
+   so the whole byte chain -- the `lbu` of r[0], the four `addu`s and `d` -- is
+   ONE quantity: 10 references, span 34, `3 * 10 * 4 / 34 = 3.53`. The cursor
+   pseudo is its own quantity at 5 references (its `addiu`, the `sw` to *cp and
+   three `lbu`s) over span 10, `2 * 5 * 4 / 10 = 4.00`, so the cursor is
+   allocated first and takes $v1. The chained assignment gives `d` two more
+   references -- `.lreg` reads "used 4 times" instead of "used 2 times" -- which
+   is 12 on the quantity and `3 * 12 * 4 / 34 = 4.24`, clearing the cursor's
+   4.00. The two swap, and nothing else in the stream moves.
+
+   Legal spellings ruled out, all measured with verify.py:
+
+     base (one expression, no device)                          12 DIFF
+     `q = (u8 *) (...)` pointer local, `*(u32 *) *q`, as the
+       rest of the family writes it                            12 DIFF
+     a second pointer copy `e = q` before the store            12 DIFF
+     `w = ...; d = w;` copy into the accumulator               12 DIFF
+     no `r` local, four `(*cp)[i]` subscripts                  12 DIFF
+     `u32 *d` local for the final store address                12 DIFF
+     `m = 4; m = **cp * m;` (split set, +2 refs on `m`)        12 DIFF
+     final byte load into `m`, or into `r`                     12 DIFF
+     final byte load into `a`, or into `s`                     22 DIFF
+     `m = 4; m = **cp * m;` AND final load into `m`             2 DIFF
+     `d = *(*cp)++; a = d;` (the device as two statements)     22 DIFF
+     `d = **cp * 4;` reusing `d` for `m`                       18 DIFF
+     explicit accumulation `w = r[0]; w += r[1] << 8; ...`     15 DIFF
+     `d = (...) ; d += m;`                                     15 DIFF
+     `m` first in the sum, or parenthesised `m + (...)`     16, 18 DIFF
+     `m = **cp;` with `m * 4` in the sum                       15 DIFF
+     the four other term orders of the byte sum            14-20 DIFF
+     `s` and `t` computed before the sum                       16 DIFF
+
+   The closest legal spelling is `m = 4; m = **cp * m;` together with
+   `m = *(u8 *) d;` for the final load: 2 DIFF, and the two words left are the
+   byte load's destination, $t1 against the target's $v1. Neither half moves
+   anything on its own.
+
+   tools/decomp/search.py's 42 single changes and tools/decomp/unname.py both
+   found no improvement on the base. The permuter scored 12187 candidates in
+   6 minutes and found ten at 0, this one among them; the five others that were
+   read all buy the same references by another route (a `new_var` copy of `m`,
+   a second pointer local aliasing `*cp`, a comma expression, `m` reused for
+   the final byte load). */
+void func_8003A374(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *r;
+    u32 d;
+    u8 *s;
+    u8 *t;
+
+    a = (d = *(*cp)++);
+    m = **cp * 4;
+    (*cp)++;
+    r = *cp;
+    d = r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24) + m;
+    *cp += 4;
+    s = *(u8 **) (p + 0x80);
+    t = (u8 *) (a * 4 + (u32) s);
+    *(u32 *) (u32) *(u8 *) d = *(u32 *) (t + 0x48);
+}
+
+/* DEVICE: `a = (d = *(*cp)++)` -- the chained assignment stores the cursor byte
+   into `d` as well, and that store is dead: `d` is overwritten by the byte sum
+   four statements later and never read in between. Worth 12 measured words.
+   Without it the function is correct C and 12 DIFF, a pure $v0/$a1 swap: the
+   cursor pseudo takes $v0 and the byte-sum accumulator $a1, where the target
+   has them the other way round.
+
+   Same device, same mechanism and same 12 words as func_8003A374 above, whose
+   comment carries the local-alloc derivation: the extra assignment raises the
+   accumulator quantity's reference count, so `qty_compare_1` ranks it ahead of
+   the cursor quantity and it is allocated first into the lower hard register.
+   This is a dead store, not an uninitialised read, so it is silent under
+   -Wall as well as under the project's CFLAGS.
+
+   Legal spellings ruled out, all measured with verify.py on this function:
+
+     base (no device)                                          12 DIFF
+     final byte load into `m`                                  12 DIFF
+     `m = 4; m = *(u32 *) (...) * m;` (split set, +2 on `m`)    12 DIFF
+     both of those together                                     9 DIFF
+     `d` reused for `a`, with `t` computed before the sum       20 DIFF
+     `d = *(*cp)++; a = d;` (the device as two statements)      24 DIFF
+
+   The 9 DIFF pair is the best legal spelling measured and does not close. */
+void func_8003A3E8(u8 *p) {
+    u8 **cp = (u8 **) (p + 0x1C);
+    u32 a;
+    u32 m;
+    u8 *s;
+    u8 *r;
+    u32 d;
+    u8 *t;
+
+    a = (d = *(*cp)++);
+    s = *(u8 **) (p + 0x80);
+    m = *(u32 *) (s + **cp * 4 + 0x48) * 4;
+    (*cp)++;
+    r = *cp;
+    d = r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24) + m;
+    *cp += 4;
+    t = (u8 *) (a * 4 + (u32) s);
+    *(u32 *) (u32) *(u8 *) d = *(u32 *) (t + 0x48);
+}
 
 void func_8003A468(u8 *p) {
     u8 **q = (u8 **) (p + 0x1C);
@@ -4838,7 +4959,44 @@ s32 func_8003C634(u8 *a) {
     return -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_8003C67C);
+void func_8003C67C(s32 i) {
+    Unk8006B200 t;
+
+    t.unk_00 = D_8006B200s[i].unk_00;
+    /* DEVICE: the do/while(0) is a degenerate loop whose NOTE_INSN_LOOP_BEG
+       splits the basic block between the two halves of the t copy, which is
+       what lets the prologue's `addiu sp, sp, -8` sink between them as the
+       target has it. Worth 4 words: 5 DIFF without it, 1 with (MATCH once the
+       address below is also right). Ruled out, all 5 DIFF: `switch (1) { case
+       1: ... }`, a forward `goto` to a label here, and declaring the copy in
+       scalars instead of a struct (28 DIFF); starting the wrapper before the
+       first half is 32 DIFF. `while (1) { ...; break; }` also MATCHes -- same
+       loop note, less tidy. Nothing here is uninitialised, so -Wall is quiet
+       on it. */
+    do {
+        t.unk_04 = D_8006B200s[i].unk_04;
+        if (i > 0) {
+            Unk8006B200 *p = D_8006B200s;
+            Unk8006B200 *d;
+
+            /* `i * 8 + (s32) p`, not `&p[i]`: pointer_int_sum() builds the
+               PLUS_EXPR pointer-first and expand carries that order into the
+               addu, giving `addu a0,a2,a0` where the target has
+               `addu a0,a0,a2`. Integer operands keep their source order.
+               `(s32) p + i * 8` is 1 DIFF. */
+        loop:
+            d = (Unk8006B200 *) (i * 8 + (s32) p);
+            i--;
+            d->unk_00 = p[i].unk_00;
+            d->unk_04 = p[i].unk_04;
+            if (i > 0) {
+                goto loop;
+            }
+        }
+    } while (0);
+    D_8006B200s[0].unk_00 = t.unk_00;
+    D_8006B200s[0].unk_04 = t.unk_04;
+}
 
 extern u8 D_80082E6Aa[] __asm__("D_80082E6A");
 

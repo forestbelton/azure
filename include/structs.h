@@ -1383,7 +1383,10 @@ typedef struct Blk20
 {
    u32 w[8];
 } Blk20;
-#if !defined(M2CTX) && !defined(PERMUTER)
+/* Not guarded against PERMUTER: decomp-permuter's forked pycparser parses an
+   __asm__ label on a declaration (perm_pycparser/c_parser.py asm_label_opt)
+   and re-emits it, so the permuter sees the symbol. m2c's does not. */
+#ifndef M2CTX
 extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 #endif
 extern u8 D_80119000[];

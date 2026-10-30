@@ -2,7 +2,9 @@
 
 You have been given this document and a function name. `FUNC` below is that
 name. Work only on it. Do not start other functions, do not reorganise the
-project, and do not commit.
+project, do not update any project-wide document, and do not commit. Your
+deliverable is the function and its park file; the counts, the sweep table and
+the commit are the caller's.
 
 Your scarce resource is context, not CPU. A permuter candidate costs ~25ms and
 no tokens; a hypothesis you reason out costs a turn, and a turn costs the whole
@@ -12,6 +14,10 @@ conversation again. Start the search before you start thinking.
 
     make permuter-prefixes                        # once per machine; needed
     python3 tools/decomp/parkstats.py docs/near-misses/$FUNC.c
+
+Always pass that path. Bare `parkstats.py`, and `parkstats.py --check`,
+re-measure every park in `docs/near-misses/` -- two compiles each, all of them
+irrelevant to you. One park is well under a second.
 
 The park header now holds the word count, the DIFF and `advise.py`'s aligned
 findings. That header is the whole brief. **Read it and stop reading.** Do not
@@ -54,7 +60,7 @@ These cost CPU and almost no context:
 `search.py` sweeps its transform set; `unname.py` deletes each local in turn
 and re-scores. Re-run `unname.py` after adopting any hit, because each one
 changes the base. If either improves on the base, adopt it, re-run
-`parkstats.py`, and restart the permuter from the new base.
+`parkstats.py` on the park file, and restart the permuter from the new base.
 
 Then audit the compilation context, because a bound computed in the wrong
 context is void rather than weakened: which functions share the translation
@@ -129,8 +135,10 @@ In order. Do not skip to step 3.
    the hashes, not the exit status, and never pipe make through `head`/`tail`.
 4. `python3 tools/decomp/guard.py` -- it prints `N known, N accounted for` and
    names anything missing.
-5. Delete the park file, mark the row in `docs/carved-sweep.md`, and update the
-   counts in `docs/where-we-are.md`.
+5. Delete the park file. Leave `docs/carved-sweep.md`, `docs/where-we-are.md`
+   and `TODO.md` alone: their counts come from `progress.py` and `guard.py`,
+   and whoever integrates your change runs those once for every function that
+   landed rather than once per function.
 
 A non-matching function in `csrc/` is worse than no change: `progress.py` drops
 the whole unit from both numerator and denominator, which once moved the
@@ -148,8 +156,9 @@ The park file is the deliverable. Leave `csrc/` alone and:
    you tried with its score. Facts and numbers, no narrative, no verdict about
    what is reachable.
 4. If you established a new mechanism -- not a hypothesis, a measured one --
-   add it to `docs/matching-levers.md` as its own heading with the measurement,
-   then run `python3 tools/decomp/leverindex.py`.
+   add it to `docs/matching-levers.md` as its own heading with the measurement.
+   That one is worth the edit, because nothing else records it. Do not run
+   `leverindex.py`; the caller regenerates the index.
 
 A quantified negative is a real result. An exhausted search written up as a
 property of the function is not: this project has had four such conclusions
@@ -161,6 +170,11 @@ fall in one day.
   container, and anything else reading those listings breaks.
 - Do not touch `csrc/` before `RESULT: MATCH`.
 - Do not commit. Integration is the caller's job.
+- Do not run `parkstats.py --check`, `nmcheck.py`, `triage.py` or anything else
+  that sweeps every park. You were given one function, and every tool here
+  takes a path or a name.
+- Do not edit a project-wide document. `docs/carved-sweep.md`,
+  `docs/where-we-are.md` and `TODO.md` are bookkeeping for the caller.
 - A device is fine; an unexplained device is not. If you cannot say what it
   changes, keep searching or park it with the measurement.
 - Do not use `--full`, `--greg` or `dump.sh` unless the header's findings have

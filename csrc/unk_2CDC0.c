@@ -1672,7 +1672,80 @@ void func_8005ACD0(u16 v) {
     D_80073828[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005ACDC);
+void func_8005E97C(s32, s32);
+s32 func_8005EB78(u32);
+
+/* Ages every live D_80085458 entry whose D_80073740 handle func_8005EB78
+   reports in state 3: the +0x1A counter is bumped until it reaches 2, and on
+   the second pass the voice is stopped (func_8005E97C, then spun on
+   func_8005EB78 until it reports 2 or 0) and the counter cleared. The handles
+   stopped this way are OR-ed into one mask and stopped once more at the end.
+
+   Same two idioms as func_8005BAB0: the entry pointer is INDEXED inside the
+   body so loop.c keeps one giv with +0x1A as its displacement, and
+   D_80073740[i] is indexed rather than walked.
+
+   The guard is TWO NESTED IFS with `i = 0` between them, not one `&&` chain.
+   Written as a chain, `i = 0` lands after the second branch and reorg fills
+   that branch's delay slot with the `lui %hi(D_80085458)` of the first giv
+   instead of the `i = 0` copy -- 3 DIFF, and no statement order inside the
+   loop moves it. Split, the copy sits before the branch and reorg sinks it.
+
+   Both globals are read through a SIGNED cast: D_80073828 is `lh`, and the
+   bound is `slt`. */
+void func_8005ACDC(void)
+{
+    s32 m;
+    s32 i;
+    s32 k;
+    u32 v;
+
+    m = 0;
+    if ((s16)D_80073828[0] == 0)
+    {
+        i = 0;
+        if (m < (s32)D_80073734[0])
+        {
+            do
+            {
+                u8 *e = D_80085458 + i * 0x78;
+
+                if (*(u16 *)(e + 0x1A) != 0)
+                {
+                    if (func_8005EB78(D_80073740[i]) == 3)
+                    {
+                        v = *(u16 *)(e + 0x1A);
+                        if (v >= 2)
+                        {
+                            u32 *h = &D_80073740[i];
+
+                            m |= D_80073740[i];
+                            do
+                            {
+                                func_8005E97C(0, h[0]);
+                                k = func_8005EB78(h[0]);
+                            } while (k != 2 && k != 0);
+                            {
+                                u8 *e2 = D_80085458 + i * 0x78;
+
+                                *(u16 *)(e2 + 0x1A) = 0;
+                            }
+                        }
+                        else
+                        {
+                            *(u16 *)(e + 0x1A) = v + 1;
+                        }
+                    }
+                }
+                i++;
+            } while (i < (s32)D_80073734[0]);
+        }
+    }
+    if (m != 0)
+    {
+        func_8005E97C(0, m);
+    }
+}
 
 /* The three magics are 'pQSE', 'MTdh' and 'KDT ' little-endian: the sequence
    header check, then the first free slot in D_80086C00 takes the pointer. */
