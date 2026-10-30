@@ -3402,4 +3402,108 @@ void func_800590E0(s32 p) {
 
 INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005914C);
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005947C);
+extern u32 D_800737DC[];
+
+void func_8005914C(s32, u8, u8, u8);
+
+s32 func_8005947C(u8 *p)
+{
+    s32 r;
+    u8 b;
+    u32 i;
+    u8 c;
+    u8 d;
+    s32 t;
+
+    d = 0;
+    r = func_800589B8((s32) p);
+    b = r;
+    if ((r & 0x80) == 0)
+    {
+        i = p[0x4A];
+        p[0x49] = 1;
+    }
+    else
+    {
+        if (b != 0xFF)
+        {
+            p[0x4A] = r;
+        }
+        i = r;
+        p[0x49] = 0;
+    }
+    t = D_800737DC[(i >> 4) & 0xF];
+    if (t != 0)
+    {
+        if (p[0x49] != 0)
+        {
+            c = b;
+        }
+        else
+        {
+            c = func_800589B8((s32) p);
+        }
+        if (t == 2)
+        {
+            d = func_800589B8((s32) p);
+        }
+        func_8005914C((s32) p, i, c, d);
+        return 0;
+    }
+    /* DEVICE: `register u32 e asm("$4")` pins the switch's zero-extended copy
+       of `b` to $a0, which is what makes the dispatch read
+       `andi $a0, $a0, 0xFF` / `beq $a0, $v0` / `bne $a0, $v0` instead of
+       computing it into $v1. Worth 3 measured words; without the pin the
+       function is 81 of 81 words with those 3 differing, and every other word
+       -- opcode, immediate, displacement and branch offset -- already matches.
+       It does not warn under -Wall and it changes no storage: $a0 is
+       call-clobbered and `e` is live only from the mask to the second branch,
+       with no call in between.
+
+       Why $v1 is otherwise forced (from the .lreg/.greg dumps): the earlier
+       `b != 0xFF` test zero-extends `b` into a block-local pseudo that
+       local-alloc puts in $v1, so global.c's set_preference records $v1 as a
+       hard-reg preference on `b`; expand_preferences then merges that
+       preference onto the switch's own zero-extend pseudo, because `b` dies in
+       the insn that sets it and the two do not conflict. find_reg checks
+       preferences in register-number order, so $v1 ($3) beats $a0 ($4) and the
+       preference is only dropped if $v1 conflicts -- which nothing here makes
+       it do. $a0 is additionally excluded from find_reg's first pass by
+       prune_preferences, since the lower-priority `p` prefers it.
+
+       Legal spellings ruled out, all 81 of 81 words:
+         switch (b & 0xFF) / (u32) b / (s32) b                      3 DIFF
+         b &= 0xFF; switch (b)                                      3 DIFF
+         a second u8 copied from b and switched on                   3 DIFF
+         switching through r / i / c / d / t instead of a new local  4..27 DIFF
+         (u8) r != 0xFF for the first test                          4 DIFF
+         if (b == 0xFF) {} else {...} for the first test            3 DIFF
+         if/else chain in place of the switch                       12, 13 DIFF
+         b as u32 or s32, with the masks written explicitly    78..80 words
+           (cse coalesces the u32 copy with r and the `addu` is lost)
+         all 720 permutations of the six declarations              3 DIFF
+         search.py's 47 transforms, unname.py, and 180 dead-test
+           arm-duplication sites                                    3 DIFF
+       A dead-test duplication of `c = b` (from decomp-permuter) is worth the
+       other 3 of the original 6 differing words on its own, but `register ...
+       asm("$4")` subsumes it: with the pin, `c = b` plain matches.
+       Pinning the same local to $v1 instead reproduces the 3 DIFF exactly,
+       which is the control for the mechanism above. */
+    {
+        register u32 e asm("$4") = b;
+
+        switch (e)
+        {
+        case 0xFF:
+            func_80058E6C(p, (u8) func_800589B8((s32) p));
+            break;
+        case 0xF0:
+            func_800590E0((s32) p);
+            break;
+        default:
+            func_80058E64();
+            break;
+        }
+    }
+    return 0;
+}
