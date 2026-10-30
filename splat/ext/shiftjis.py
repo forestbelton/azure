@@ -1,5 +1,5 @@
 import pathlib
-from typing import Optional
+from typing import Any
 
 from splat.segtypes import segment
 from splat.util import options
@@ -15,9 +15,9 @@ dlabel {name}
 
 
 class ShiftJisException(Exception):
-    base_exception: Optional[Exception]
+    base_exception: Exception | None
 
-    def __init__(self, start_addr: int, base_exception: Exception = None):
+    def __init__(self, start_addr: int, base_exception: Exception | None = None):
         self.message = f"failed to parse Shift-JIS string at 0x{start_addr:08x}"
         self.base_exception = base_exception
         if base_exception is not None:
@@ -28,26 +28,48 @@ class ShiftJisException(Exception):
         return self.message
 
 
+def escape(data: str) -> str:
+    """Escape a decoded string so the `.shiftjis` directive stays on one line.
+
+    The item and dialogue pools embed the script's control bytes -- 0x0a for a
+    line break, and 0x11/0x08 which the text engine uses for its own purposes
+    -- and those decode to C0 control characters. Written raw they would end
+    the directive's line mid-string and the assembler would see garbage.
+    `azure shiftjis` reverses exactly these three escapes.
+    """
+    out: list[str] = []
+    for ch in data:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"':
+            out.append('\\"')
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append("\\x{:02x}".format(ord(ch)))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 # NB: Pretty sure the game uses some special byte sequences that aren't valid
 # Shift-JIS, will need to expand this (and rename) later when those arise.
 class PSXSegShiftjis(segment.Segment):
     def __init__(
         self,
-        rom_start: Optional[int],
-        rom_end: Optional[int],
+        rom_start: int | None,
+        rom_end: int | None,
         type: str,
         name: str,
-        vram_start: Optional[int],
-        args: list,
-        yaml,
-        bss_size: Optional[int] = None,
+        vram_start: int | None,
+        args: list[Any],
+        yaml: Any,
+        bss_size: int | None = None,
     ):
         # `bss_size` was added to Segment.__init__ in later splat releases and
         # is passed by keyword to every segment class, so it must be accepted
         # and forwarded even though a Shift-JIS string segment never has bss.
         if name == "" and rom_start is not None:
             name = hex(rom_start)
-        super().__init__(
+        super().__init__(  # type: ignore
             rom_start,
             rom_end,
             type,
@@ -72,28 +94,32 @@ class PSXSegShiftjis(segment.Segment):
     def get_linker_section_linksection(self) -> str:
         return ".rodata"
 
-    def out_path(self) -> Optional[pathlib.Path]:
+    def out_path(self) -> pathlib.Path | None:
         return options.opts.asm_path / f"{self.name}.s"
 
     def split(self, rom_bytes: bytes) -> None:
         encoded = bytes(rom_bytes[self.rom_start : self.rom_end])
         trailing_zeros = 0
+        assert self.rom_end is not None
         while rom_bytes[self.rom_end - trailing_zeros - 1] == 0:
             trailing_zeros += 1
         assert trailing_zeros < len(encoded)
         if trailing_zeros > 0:
             encoded = encoded[:-trailing_zeros]
-        self.out_path().parent.mkdir(parents=True, exist_ok=True)
+        out_path = self.out_path()
+        assert out_path is not None
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         name = self.name.replace("/", "_").upper()
         try:
             data = encoded.decode("shift-jis")
         except Exception as exc:
+            assert self.rom_start is not None
             raise ShiftJisException(self.rom_start, exc)
-        with open(self.out_path(), "w") as f:
+        with open(out_path, "w") as f:
             f.write(
                 FILE_TEMPLATE.format(
                     name=name,
-                    data=data,
+                    data=escape(data),
                     trailing_zeros=trailing_zeros,
                 )
             )

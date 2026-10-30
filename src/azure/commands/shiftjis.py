@@ -3,7 +3,23 @@ import re
 import sys
 from typing import TextIO
 
-SHIFTJIS_DIRECTIVE_PATTERN = re.compile(r"^(\s*)\.shiftjis \"(.*?)\"(\s*)$")
+# The string body may carry the escapes `splat/ext/shiftjis.py` writes, so it
+# is matched as "either a plain character or a backslash pair" rather than
+# with a non-greedy `.*?`, which would stop at the first escaped quote.
+SHIFTJIS_DIRECTIVE_PATTERN = re.compile(
+    r"^(\s*)\.shiftjis \"((?:[^\"\\]|\\.)*)\"(\s*)$"
+)
+ESCAPE_PATTERN = re.compile(r"\\(\\|\"|x[0-9a-fA-F]{2})")
+
+
+def unescape(body: str) -> str:
+    def sub(match: re.Match) -> str:
+        esc = match.group(1)
+        if esc.startswith("x"):
+            return chr(int(esc[1:], 16))
+        return esc
+
+    return ESCAPE_PATTERN.sub(sub, body)
 
 
 def convert_shiftjis(f: TextIO) -> None:
@@ -12,7 +28,7 @@ def convert_shiftjis(f: TextIO) -> None:
         if match is None:
             print(line, end="")
             continue
-        encoded = match.group(2).encode("shift-jis")
+        encoded = unescape(match.group(2)).encode("shift-jis")
         literals = ", ".join("0x{:02x}".format(byte) for byte in encoded)
         print(match.group(1), end="")
         print(f".byte {literals}", end="")

@@ -52,22 +52,42 @@ nothing there is started.
 Inside the executable, measured in 4 KB chunks by zero density, Shift-JIS
 density, MIPS prologue count and entropy:
 
-| what | bytes | % of 512 KB |
-|------|-------|-------------|
-| high-entropy data (packed assets) | 175,552 | 33.5% |
-| code -- PSY-Q library region, unidentified | 123,484 | 23.6% |
-| structured data | 95,180 | 18.2% |
-| identified library/asm (`psyq/*`, `main`) | 51,852 | 9.9% |
-| C translation units | 44,112 | 8.4% |
-| Shift-JIS text | 30,144 | 5.7% |
+**The first thing to know is that the 512 KB file is not the program.** The
+PS-X EXE header gives `t_addr` 0x8002D000 and `t_size` 0x54800, so the loaded
+image is file 0x800-0x55000 / vram 0x8002D000-0x80081800 -- 346,112 bytes --
+and the last 176,128 bytes of the file (33.6%) are mastering slack the PSX
+loader never reads. The earlier version of this table counted them as
+"high-entropy data (packed assets)", which was wrong: nothing reaches them.
+`azure libscan`'s `--end` default already knew the boundary; the splat spec
+did not until 2026-10-30, and the tail is now the `tail_unloaded` subsegment.
+`docs/data-map.md` has the full accounting and the evidence.
 
-The 120 KB of unidentified code sits in the library regions
-(0x0072A8-0x0101F8, 36 KB, 348 prologues, immediately before `main`; and
-0x01C540-0x0301A8, 81 KB, 625 prologues). It is not any module of the twenty
-libraries in `psyq/lib`: `azure libmatch psyq` confirms the library set is the
-right release (162 of 163 placed modules exact, mean fuzzy 0.998), while
-`azure libscan psyq` locates zero of 1257 modules in either block at
-`--min-invariant` 4 or 12.
+Percentages below are of the 346,112-byte **image**, not of the file:
+
+| what | bytes | % of image |
+|------|-------|-------------|
+| C translation units | 167,596 | 48.4% |
+| unknown `bin` | 109,784 | 31.7% |
+| identified library/asm (`psyq/*`, `main`) | 51,852 | 15.0% |
+| Shift-JIS text, split (`str/item/*`, `str/credits/*`, `str/name/*`) | 14,016 | 4.0% |
+| PSY-Q `data` subsegments (libcd, libgpu) | 1,488 | 0.4% |
+| jump tables (`.rodata` of C units) | 1,376 | 0.4% |
+
+The 109,784 unknown bytes are twelve blobs, listed one by one in
+`docs/data-map.md`. Three facts about them are worth carrying around:
+**~22 KB is still Shift-JIS text**, **5,556 bytes is library code**, not
+data, and the remaining ~81 KB is structured data, nearly all of it the
+single blob at 0x3E01C. Text is split with the union-plus-zero coverage test
+in `docs/data-map.md`, not from one detector's output.
+
+The unidentified code is down to five gaps between placed PSY-Q modules --
+0x31CC4, 0x32934, 0x33234, 0x34BD0 and 0x362B4, 5,556 bytes in all. Every one
+is 100% plausible MIPS opcodes with real prologues, so they are library
+modules, not data; `azure libscan psyq` locates none of them at
+`--min-invariant` 4. That is the same negative result the two large blocks
+gave before they were carved: `azure libmatch psyq` confirms the library set
+is the right release (162 of 163 placed modules exact, mean fuzzy 0.998)
+while `libscan` locates zero of 1257 modules by content.
 
 The 817 functions carved as `unk_72A8` (294, 0x80033aa8-0x8003c9f8) and
 `unk_1C540` (465, 0x80048d40-0x8005c9a8) are the game's own code, not SDK

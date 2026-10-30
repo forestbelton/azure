@@ -63,6 +63,32 @@ The queue, in order:
       `bin` blob over all 16 MB, and `main.bin`'s 28 subsegments are all
       `bin`. Nothing here is started.
 
+- [ ] **The data in `slus_006.14`.** `docs/data-map.md` is the accounting and
+      the method; read it before touching any `bin` blob. State as of
+      2026-10-30: splat reports 122,048 bytes unknown, down from 299,816,
+      because **176,128 bytes of the file turned out not to be part of the
+      executable at all** -- the PS-X EXE header's `t_size` puts the end of
+      the loaded image at file 0x55000, and the rest is mastering slack. That
+      is now the `tail_unloaded` subsegment and it needs no further work.
+
+      Of what is left: 5,556 bytes in five blobs is library **code**, not
+      data; ~81 KB is the structured blob at 0x3E01C (part of which is a
+      1025-entry sine table at 0x4EACC); and ~35 KB is Shift-JIS text.
+
+      **Done 2026-10-30: 0x2810-0x57F8**, the item description-and-name pool,
+      322 strings under `str/item/`. Two things it established, both in
+      `docs/data-map.md`: subsegment boundaries must satisfy
+      `offset % 4 == 0` because `subalign: 4` pads every section, and
+      `.shiftjis` now escapes the script's control bytes (0x0A, 0x11, 0x08)
+      -- that second one was blocking *every* text pool and is now cleared.
+
+      Next, in order: **0xEFC-0x2164** (4,712 bytes, 54 uncovered non-zero),
+      **0x800-0xDC0** (1,472, 70), then the 90 strings left at 0x57F8, which
+      need one extra segment per 2-aligned entry. Use the union-plus-zero
+      coverage test rather than one detector's output: `azure findstr` misses
+      kanji runs -- it skipped 46 untranslated Japanese item names in the pool
+      just split -- and Ghidra's string model beats both local scanners.
+
 - [ ] Tool that scans `splat/*_symbol_addrs.txt` and warns about unused
       symbols.
 
