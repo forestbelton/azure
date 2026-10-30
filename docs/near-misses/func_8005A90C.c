@@ -64,6 +64,10 @@
  *   r = func_80059F8C(e->unk_10, c) / (b, e->unk_14) / both (cse forwards
  *     each load back to the register, so no lw and no change)
  *   no prototype for func_80059F8C, or (void *, u32), or (s32, void *)
+ *     -- NOTE (caller, 2026-10-30): func_8005A778 has since landed in this
+ *     unit with a forward `s32 func_80059F8C(u32, u32);`, which disagrees
+ *     with this park's `(s32, u32)` at line 138 and with func_80059F8C's own
+ *     park. Landing this one means reconciling all three in one unit.
  *   comma expressions in the argument list to force an evaluation order --
  *     ((c, b), c), (b, (b, c)), ((e, b), c), ((c, b), (b, c)) -- and c + 0,
  *     c | 0, b + 0 to make one argument an expression rather than a bare

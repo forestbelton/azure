@@ -1635,7 +1635,97 @@ found:
     return k;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005A778);
+/* func_80059F8C is still an INCLUDE_ASM stub in THIS unit (above), so this
+   forward declaration is the only one the compiler sees -- and two parks
+   disagree with it: docs/near-misses/func_80059F8C.c defines it
+   `(u32 p, s32 n)` and docs/near-misses/func_8005A90C.c declares it
+   `(s32, u32)`. Both measured their own prototype as neutral for their own
+   function, but all three are in unk_2CDC0, so whichever lands next has to
+   reconcile them or the unit will not compile -- and its measurements were
+   taken against a prototype that may have to change. Changing it here is a
+   change to this function's output and needs re-measuring. */
+s32 func_80059F8C(u32, u32);
+
+/* The three-argument twin of func_8005A608 above: same scan, same note
+   placement (the `for (;;)` with both exits inside it is worth 16 of the 20
+   words -- see that function's comment), plus a bound check on the supplied
+   `id` and a second copy of `p`.
+
+   Two spellings carry the last 4 words.
+
+   `id` is an `s16` PARAMETER here, not an `s32` sign-extended in place. The
+   raw `addu $v1, $a1, $zero` for `j = id` has to come out BEFORE the
+   `sll`/`sra` pair, and section 5's rule puts a narrow parameter's
+   sign-extension at its first INT use -- which is the `== -1` test, i.e.
+   after the copy. func_8005A608's in-place `id = id << 16; id = id >> 16;`
+   extends first and is 4 DIFF; `s16 id` with those shifts kept as well is
+   95 DIFF, and a separate `t = id << 16; t = t >> 16;` is 93. The caller in
+   unk_2879C.c already declares the parameter `s16`.
+
+   `q = p` has to be written AFTER `j = id`. The copy's RTL position is the
+   assignment's, so `u8 *q = p;` as a declaration initialiser -- or the
+   assignment anywhere ahead of `j = id` -- emits `sw $s3, 0x1C($sp)` and
+   `addu $s3, $s4, $zero` one slot early, 3 DIFF. Written after `j = id` the
+   pair lands between that copy and the `sll`. The second pointer is not
+   optional: using `p` for both the stored value and the +0x12/+0xC/+0x18
+   loads is 97 DIFF, and giving `q` the store and `p` the loads is 6.
+   `D_8007382C[0] = 0;` ahead of `i = 0;` (which is the order func_8005A608
+   wants) is 7 DIFF here. */
+s32 func_8005A778(u8 *p, s16 id, u32 h)
+{
+    u8 *q;
+    s16 i;
+    s16 j;
+    s32 k;
+    Unk80086A40 *e;
+    s32 r;
+
+    i = 0;
+    D_8007382C[0] = 0;
+    j = id;
+    q = p;
+    if (id == -1)
+    {
+        for (;;)
+        {
+            if (D_80086A40[i].unk_00 == -1)
+            {
+                goto found;
+            }
+            i++;
+            if (i >= 0x10)
+            {
+                return -1;
+            }
+        }
+    }
+    i = j;
+    if (i >= 0x10)
+    {
+        return -1;
+    }
+    if (D_80086A40[i].unk_00 != -1)
+    {
+        func_8005A1D0(D_80086A40[i].unk_10);
+    }
+found:
+    k = i;
+    e = &D_80086A40[k];
+    e->unk_00 = i;
+    e->unk_04 = p;
+    e->unk_08 = (*(u16 *) (q + 0x12) << 9) + 0xA20;
+    e->unk_10 = h;
+    e->unk_14 = *(u32 *) (q + 0xC) - e->unk_08;
+    e->unk_18 = q[0x18];
+    e->unk_1B = q[0x19];
+    r = func_80059F8C(h, e->unk_14);
+    e->unk_10 = r;
+    if (r == -1)
+    {
+        return -1;
+    }
+    return k;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005A90C);
 

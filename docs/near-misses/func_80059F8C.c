@@ -24,6 +24,16 @@
  *   8005A014 built sw a1,a2 target sw a1,t0
  *   8005A01C built sw a1,v1 target sw v0,t0
  *   8005A034 built addu t8,t6,zero target addu a2,zero,zero
+ * MEASURED 2026-10-30 (caller's note, not a measurement of this function).
+ * THE SIGNATURE IS ALREADY PINNED IN THE UNIT. func_8005A778 landed at
+ * csrc/unk_2CDC0.c with a forward `s32 func_80059F8C(u32, u32);`, and this
+ * park defines it `(u32 p, s32 n)`. Same translation unit, so landing this
+ * one means reconciling the two or the unit will not compile. The third
+ * spelling is in docs/near-misses/func_8005A90C.c, `(s32, u32)`. None of the
+ * three is established -- each was measured neutral for its own function
+ * only -- so treat the second parameter's type as an open knob here rather
+ * than as settled by the landed declaration, and re-measure the caller if
+ * this park wants a different one.
  */
 
 #include "common.h"
