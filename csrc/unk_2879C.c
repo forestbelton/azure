@@ -646,7 +646,50 @@ void func_80054F9C(s32 k, u8 *q)
     *(s16 *) (q + 0x18) = r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005500C);
+/* The queued-move dispatch on the top nibble of the event code. The group arm
+   (0x0/0x8000/0x9000) is FIRST in the switch: with it last, gcc fills the final
+   test's delay slot with a copy of the arm's `lui` and jumps over it, which
+   costs two words (57 vs 55). The parameter is u16 and `a & 0xF000` is spelled
+   out AGAIN inside the arm rather than reused from the switch value -- that is
+   what puts the raw code in $a1 and the mask in $a0, and re-derives the mask at
+   0x80055080. Holding it in a local `k` and testing `k != 0` builds 54 words. */
+void func_8005500C(u16 a)
+{
+    u8 *b;
+    s32 v;
+
+    switch (a & 0xF000)
+    {
+    case 0x0:
+    case 0x8000:
+    case 0x9000:
+        b = (u8 *) D_800847D0;
+        v = a & 0xFF;
+        *(s16 *) (b + 0x26) = v;
+        if ((a & 0xF000) != 0)
+        {
+            *(s16 *) (b + 0x26) = v | (a & 0xF000);
+        }
+        if ((D_800847D0[0] & 0x100) != 0)
+        {
+            func_80054F9C(0xB1, (u8 *) D_800848F8);
+        }
+        else
+        {
+            func_800550E8();
+        }
+        break;
+    case 0x1000:
+        func_800553D4(0x71);
+        break;
+    case 0x4000:
+        func_800553D4(0xF1);
+        break;
+    case 0x2000:
+        func_800553D4(0xE1);
+        break;
+    }
+}
 
 extern u8 D_80084810[];
 
