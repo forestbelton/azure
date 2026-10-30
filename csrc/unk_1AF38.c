@@ -420,7 +420,20 @@ s32 func_80048224(s16 k) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1AF38", func_8004827C);
+/* Returns its own pointer argument: the target's `addu $v0, $s0, $zero` is the
+   return-value copy, scheduled into the slot after `sll $a0, $v0, 3` where the
+   call's return value has just died. No caller declares this function, so the
+   value is unused -- but without the `return p` the copy is absent and every
+   register from the shift onwards shifts down one (18 of 19 words, 12 DIFF).
+   Also tried at 18/12: the address as `(u8 *) D_80083D08 + k * 8`, a `u8 *`
+   local for the loaded pointer, `u8 **` / struct-pointer parameters, the call
+   inline in the store, and `q = p` (a no-op move, deleted before flow). */
+u8 *func_8004827C(u8 *p, s16 i) {
+    s32 k = func_80047BC0(i);
+
+    *(u32 *) (*(u8 **) (p + 0xC) + 0x28) = (u32) &D_80083D08s[k];
+    return p;
+}
 
 void func_80047468(Unk800777AC *, u32, u32);
 void func_80047338(Unk800777AC *, u32, u32);
