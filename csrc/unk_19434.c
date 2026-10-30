@@ -910,7 +910,83 @@ s32 func_80046F88(u32 *p)
     return delta;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_19434", func_80047054);
+/* Walks the same table func_80046F88 relocates: p[0] is the base, p[1] the
+ * count of 4-byte entries before the 8-byte records, p[2] the end. Each
+ * record whose 0x02 field is 2 holds a node list at 0x04; the list is a
+ * 0xC-stride chain terminated by bit 0x80 of its flag byte, and bit 0x8 marks
+ * a list already shifted this pass.
+ *
+ * `arg1` is `s16`, not `s32`, and that is the whole function. The narrowing
+ * costs no instruction -- the `sh` at 0x4 discards the bits an `s32` would
+ * have kept, so cc1psx deletes the sign-extension -- but its RTL insn is
+ * still there for local-alloc, and it is what keeps `p` in $a0. With `s32`,
+ * local-alloc gives the `p[0]` load $a0 (its live range spans the duplicated
+ * loop-exit test's `p[2]` load, which sched1 slides in to cover the load
+ * delay, so $v0 and $v1 are both busy); `p`'s allocno then CONFLICTS with $a0
+ * and prune_preferences strips its incoming-copy preference, while `e`
+ * inherits a plain $a0 preference through set_preference's expression branch
+ * (the `plus`'s first operand is that already-renumbered load). `p` lands in
+ * $t2 behind an extra `move t2,a0`. See docs/matching-levers.md, "A NARROW
+ * PARAMETER'S DELETED SIGN-EXTENSION STILL MOVES local-alloc".
+ *
+ * The two local prototypes in csrc/unk_1AF38.c still say
+ * `void func_80047054(u8 *, s32, s32, s32)`, and both callers match with
+ * them as they are. Widening the parameter here or narrowing it there is a
+ * change to another unit's output and needs its own measurement. The
+ * disagreement cannot change a value either way: `arg1`'s only use is a
+ * 16-bit `+=`, so the bits an `s32` would carry are discarded by the `sh`
+ * whatever the declaration says. The wider of the two call sites passes
+ * `a & 0xFFFF` (csrc/unk_1AF38.c:149), which does exceed s16 range, and it
+ * still does not matter for that reason; the other passes 0xB.
+ *
+ * Ruled out with `s32 arg1`, all 58 words: four spellings of the `e` init
+ * (`p[1] * 4 + p[0]`, `(u8 *)p[0] + p[1] * 4`, `&((u8 *)p[0])[p[1] * 4]`,
+ * `&((u32 *)p[0])[p[1]]`) x three of the bound (`(u32)e < p[2]`,
+ * `e < (u8 *)p[2]`, `p[2] > (u32)e`), all 30 DIFF; `p[1] << 2` 30; temporaries
+ * for p[0], p[1] and both, in either order, 30 (cse folds them back); a
+ * second pointer `q = p` for either the init or the bound, 30; the guard as a
+ * source-level `if` with a cached `lim`, 30; `n` and `f` hoisted out of the
+ * loop, 30; `n += 0xC; f = *n;` 29; the `volatile` the park carried on
+ * `n + 6`, which blocks the giv and is what the IMMEDIATE row was, 24 but
+ * wrong-shaped. `while` with the increment in the body 57 words/58 DIFF,
+ * `goto`/label form 53/52, a `?:` for the two arms 53/45, `for (;;)` with a
+ * `break` 59/39, a degenerate loop before the bound 62/59. */
+void func_80047054(u32 *p, s16 arg1, s32 arg2, s32 arg3)
+{
+    u8 *e;
+
+    for (e = (u8 *)(p[0] + p[1] * 4); (u32)e < p[2]; e += 8)
+    {
+        if (*(s16 *)(e + 2) == 2)
+        {
+            u8 *n = *(u8 **)(e + 4);
+
+            if (!(*n & 8))
+            {
+                u8 f;
+
+                *n |= 8;
+                do
+                {
+                    if (*n & 0x40)
+                    {
+                        *(u16 *)(n + 4) += arg1;
+                    }
+                    else
+                    {
+                        *(u16 *)(n + 4) += arg3;
+                    }
+                    if (!(*n & 0x20))
+                    {
+                        *(u16 *)(n + 6) += arg2;
+                    }
+                    f = *n;
+                    n += 0xC;
+                } while (!(f & 0x80));
+            }
+        }
+    }
+}
 
 /* Uploads `arg2` 0x2000-byte tiles to VRAM, walking a 2x4 grid of slots: the
  * x coordinate steps by 0x20 after the first pair and the y coordinate
