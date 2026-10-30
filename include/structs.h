@@ -1122,7 +1122,7 @@ typedef struct Unk80083D08
 /* Hidden from pycparser, which cannot parse an asm label: m2c and
    decomp-permuter both parse with it, and permuter.py exits before its
    first iteration on the syntax error. The real build is unaffected. */
-#if !defined(M2CTX) && !defined(PERMUTER)
+#ifndef M2CTX
 extern Unk80083D08 D_80083D08s[] __asm__("D_80083D08");
 #endif
 extern u8 D_8006ADBC[];
@@ -1145,7 +1145,7 @@ extern u8 D_8008152C[];
 /* The same object as a scalar, for func_80047DB8: a 4-byte object's address is
    the one-insn `la` macro, where the incomplete array gets the compiler split.
    Three functions reach it $gp-relatively, so 4 bytes is also its real size. */
-#if !defined(M2CTX) && !defined(PERMUTER)
+#ifndef M2CTX
 extern u32 D_8008152Cs __asm__("D_8008152C");
 #endif
 /* Hand-added. A 0xC-byte entry; func_8005B2C8 scales an s16 index by 12 and
@@ -1198,7 +1198,7 @@ typedef struct Unk80085FA8
    u8 unk_4C;
    u8 pad_4D[3];
 } Unk80085FA8;
-#if !defined(M2CTX) && !defined(PERMUTER)
+#ifndef M2CTX
 extern Unk80085FA8 D_80085FA8s[] __asm__("D_80085FA8");
 #endif
 
@@ -1420,7 +1420,7 @@ extern u32 D_80073740[];
 extern u8 D_80080B20[];
 extern u8 D_800712FC[];
 extern u32 D_80084904;
-#if !defined(M2CTX) && !defined(PERMUTER)
+#ifndef M2CTX
 extern u32 D_80084904a[] __asm__("D_80084904");
 #endif
 extern u32 D_80071FF0[];
@@ -1494,7 +1494,7 @@ extern u32 D_800712B4[];
 extern s16 D_80082A38[]; /* lh at +0xAC/+0xAE, so signed */
 /* The same object as u32s, for the five-slot queue at +0x48; func_80035378
    indexes it 10..14 with the +0x48 left as a displacement. */
-#if !defined(M2CTX) && !defined(PERMUTER)
+#ifndef M2CTX
 extern u32 D_80082A38w[] __asm__("D_80082A38");
 #endif
 extern u32 D_80082AB8[]; /* the queue's last slot, reached as its own symbol */

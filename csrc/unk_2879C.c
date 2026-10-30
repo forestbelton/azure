@@ -3513,11 +3513,157 @@ void func_800590E0(s32 p) {
     } while (i < n);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_8005914C);
+void func_80056E10(u8, u8, u8);
+void func_80057948b(u8, u8, u8) __asm__("func_80057948");
+void func_80057A48b(u8, u8, u8) __asm__("func_80057A48");
+void func_8005848Cb(u8, u8) __asm__("func_8005848C");
+void func_80058494b(u8, u8, u8) __asm__("func_80058494");
+
+/* DEVICE: `*(u32 *)(void *)D_800869B4n` instead of `D_800869B4n[0]`, worth 1
+   word and 131 of the 131 differing words.
+
+   gcc 2.7.2's alias heuristic (sched.c `true_dependence`, and `invariant_p`
+   via loop.c:2779) says a MEM_IN_STRUCT reference at a varying address, in a
+   mode other than QImode, can never conflict with a non-MEM_IN_STRUCT
+   reference at a fixed address. `D_800869B4n[0]` is an ARRAY_REF, and
+   expr.c:4888 stamps MEM_IN_STRUCT_P on every ARRAY_REF, so with that
+   spelling the count conflicts with the `D_80085FA8s[i]` stores and the
+   reload for the loop test cannot be hoisted above them: it lands last in the
+   block and buys a load-delay nop in each of the first two loops. Casting
+   through a second pointer type takes expr.c:4568's INDIRECT_REF path, where
+   MEM_IN_STRUCT_P is set only for a PLUS_EXPR address, an aggregate type or
+   an ADDR_EXPR of an aggregate -- a NOP_EXPR is none of those -- so the read
+   becomes a non-aggregate at a fixed address and the heuristic applies:
+
+     * the four SImode stores no longer conflict, so the reload rises to just
+       after the `sb`, whose QImode is excluded from the heuristic by name;
+       that is exactly where the listing has it, and the stores then fill its
+       delay slot;
+     * in the third loop, whose body has no QImode store, nothing conflicts at
+       all, so loop.c hoists the read into the preheader, cse folds it into the
+       rotated guard's load, and what is left is the `addu $a0, $v0, $zero` the
+       listing has there.
+
+   `*D_800869B4n` and `*(u32 *)D_800869B4n` do NOT work: build_indirect_ref
+   folds the decay back to an ADDR_EXPR of the array, and a cast to the type
+   it already has is dropped, so both stay ARRAY_REFs. Measured, all on the
+   204-word target: `D_800869B4n[0]` 205 words / 131 DIFF; `*D_800869B4n` and
+   `*(u32 *)D_800869B4n` 205 / 131; a scalar `extern u32 D_800869B4n` 206 /
+   140 (cc1psx then emits `.extern D_800869B4,4` and the bare-symbol load,
+   which gas -G0 expands to two words at each of the five references and
+   shares no hoisted `lui`); `*(u32 *)(u8 *)D_800869B4n` also matches.
+   It does not warn under -Wall and reads 4 aligned bytes either way. */
+void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
+{
+    u8 ch = st & 0xF;
+    u32 i;
+
+    switch (st & 0xF0)
+    {
+    case 0x80:
+        func_80057948b(ch, d1, d2);
+        break;
+    case 0x90:
+        if (d2 != 0)
+        {
+            func_80056E10(ch, d1, d2);
+        }
+        else
+        {
+            func_80057948b(ch, d1, 0);
+        }
+        break;
+    case 0xA0:
+        func_80057A48b(ch, d1, d2);
+        break;
+    case 0xB0:
+        if (d1 == 0x63)
+        {
+            if (d2 == 0x14)
+            {
+                if (D_800869B8[0] != 0)
+                {
+                    i = 0;
+                    while (i < *(u32 *)(void *)D_800869B4n)
+                    {
+                        D_80085FA8s[i].unk_04 = D_80085FA8s[i].unk_00;
+                        D_80085FA8s[i].unk_08 = 0x14;
+                        D_80085FA8s[i].unk_14 = D_80085FA8s[i].unk_10;
+                        D_80085FA8s[i].unk_44 = D_80085FA8s[i].unk_40;
+                        D_80085FA8s[i].unk_30 = D_80085FA8s[i].unk_2C;
+                        D_80085FA8s[i].unk_4B = D_80085FA8s[i].unk_4A;
+                        i++;
+                    }
+                }
+                else
+                {
+                    p->unk_08 = 0x7F;
+                    p->unk_04 = p->unk_00;
+                }
+            }
+            else if (d2 == 0x1E)
+            {
+                if (p->unk_08 != 0)
+                {
+                    if (p->unk_08 < 0x7F)
+                    {
+                        p->unk_08 = p->unk_08 - 1;
+                    }
+                    if (D_800869B8[0] != 0)
+                    {
+                        i = 0;
+                        while (i < *(u32 *)(void *)D_800869B4n)
+                        {
+                            D_80085FA8s[i].unk_00 = D_80085FA8s[i].unk_04;
+                            D_80085FA8s[i].unk_10 = D_80085FA8s[i].unk_14;
+                            D_80085FA8s[i].unk_40 = D_80085FA8s[i].unk_44;
+                            D_80085FA8s[i].unk_2C = D_80085FA8s[i].unk_30;
+                            D_80085FA8s[i].unk_4A = D_80085FA8s[i].unk_4B;
+                            i++;
+                        }
+                    }
+                    else
+                    {
+                        p->unk_00 = p->unk_04;
+                    }
+                }
+            }
+        }
+        if (d1 == 6)
+        {
+            if (D_80084960[ch].unk_4D == 0x14)
+            {
+                if (D_800869B8[0] != 0)
+                {
+                    i = 0;
+                    while (i < *(u32 *)(void *)D_800869B4n)
+                    {
+                        D_80085FA8s[i].unk_08 = d2;
+                        i++;
+                    }
+                }
+                else
+                {
+                    p->unk_08 = d2;
+                    return;
+                }
+            }
+        }
+        func_80057D20(ch, d1, d2);
+        break;
+    case 0xE0:
+        func_80058494b(ch, d1, d2);
+        break;
+    case 0xC0:
+        func_8005845C(ch, d1);
+        break;
+    case 0xD0:
+        func_8005848Cb(ch, d1);
+        break;
+    }
+}
 
 extern u32 D_800737DC[];
-
-void func_8005914C(s32, u8, u8, u8);
 
 s32 func_8005947C(u8 *p)
 {
@@ -3560,7 +3706,7 @@ s32 func_8005947C(u8 *p)
         {
             d = func_800589B8((s32) p);
         }
-        func_8005914C((s32) p, i, c, d);
+        func_8005914C((Unk80085FA8 *)p, i, c, d);
         return 0;
     }
     /* DEVICE: `register u32 e asm("$4")` pins the switch's zero-extended copy

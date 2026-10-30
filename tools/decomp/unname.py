@@ -69,9 +69,21 @@ SP = os.environ.get("AZURE_SCRATCH", "/tmp/azure-decomp")
 os.makedirs(SP, exist_ok=True)
 
 # `TYPE *name = init;` -- a declaration carrying its value
-DECL_INIT = re.compile(r"^(\s+)((?:const\s+)?[A-Za-z_]\w*\s*\**\s*)(\w+)\s*=\s*([^;]+);\s*$")
+#
+# SEP is why these are not written `[A-Za-z_]\w*\s*\**\s*(\w+)`: with
+# nothing required between the type and the name, the type part backtracks
+# INTO a single word and splits it. `    return;` matched DECL_BARE with
+# group(1) == "n" (type "retur"), `break;` with "k", `continue;` with "e", and
+# `    count = 5;` matched DECL_INIT as type "coun" name "t" -- so unname.py
+# reported dropping a local that was really a `return;` or an assignment, and
+# `e`/`n` are common local names here. The KEYWORDS set below was meant to
+# stop exactly this and cannot, because it tests the captured halves and
+# neither half is ever the keyword. A declaration always has whitespace or a
+# `*` between the two, so requiring one is the fix.
+SEP = r"(?:\s+\**|\s*\*+)\s*"
+DECL_INIT = re.compile(r"^(\s+)((?:const\s+)?[A-Za-z_]\w*" + SEP + r")(\w+)\s*=\s*([^;]+);\s*$")
 # `TYPE *name;` -- a declaration without one
-DECL_BARE = re.compile(r"^\s+(?:const\s+)?[A-Za-z_]\w*\s*\**\s*(\w+)\s*;\s*$")
+DECL_BARE = re.compile(r"^\s+(?:const\s+)?[A-Za-z_]\w*" + SEP + r"(\w+)\s*;\s*$")
 # `name = rhs;` -- a plain assignment, not a comparison or a compound op
 ASSIGN = re.compile(r"^(\s+)(\w+)\s*=\s*([^;=][^;]*);\s*$")
 
