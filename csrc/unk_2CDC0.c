@@ -2285,7 +2285,68 @@ u16 g;
     return b;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005C4D0);
+/* Two spellings are load-bearing here, both measured against the 15 DIFF the
+   plain form sits at:
+
+     * `u32 *f = D_80085F98;` used for the `= 1` store ONLY, with the two exit
+       stores spelled through the symbol. The pointer local puts the symbol's
+       `(high)` at the TOP of the entry block instead of beside its store, so
+       it conflicts with $a0's incoming `n` and with $v1's D_80085458 address
+       and takes $a1 -- the listing's hoisted `lui $a1` at 8005C4D4. combine
+       folds the `%lo` back into the store, so the local costs no instruction
+       and the `addiu` it would otherwise need never appears. Writing the exit
+       stores through `f` as well is 47 DIFF; dropping the local is 55 DIFF at
+       63 words.
+     * `func_80056D44(n, e)` -- TWO arguments, which is the signature this unit
+       already declares at the top. The third `e` that m2c infers from $a2
+       being live is a phantom `$a2 = $a2`: reload deletes it, but sched2 still
+       schedules it, it takes cycle T-10, and `lw $s1` then loses T-12 to
+       `addu $a1,$a2,$zero` and comes out one insn late. That alone is the
+       remaining 2 DIFF. */
+
+s32 func_8005C4D0(s16 n)
+{
+    u32 *f = D_80085F98;
+    u8 *b = D_80085458;
+    u8 *e;
+    u32 v;
+    s32 r;
+    u16 h;
+
+    e = b + n * 0x78;
+    h = *(u16 *)(e + 0x1A);
+    f[0] = 1;
+    if (h == 0)
+    {
+        goto fail;
+    }
+    if (*(u16 *)(e + 6) < 0x10)
+    {
+        goto fail;
+    }
+    v = D_80073740[n];
+    *(u16 *)(e + 0x1A) = 0;
+    *(u16 *)(e + 0xA) = 0;
+    func_80056D44(n, e);
+    func_80056DB4(n);
+    func_8005E97C(0, D_80073740[n]);
+    do
+    {
+        func_8005E97C(0, v);
+        r = func_8005EB78(v);
+        if (r == 2)
+        {
+            goto ok;
+        }
+    } while (r != 0);
+    goto ok;
+fail:
+    D_80085F98[0] = 0;
+    return -1;
+ok:
+    D_80085F98[0] = 0;
+    return 0;
+}
 
 s32 func_80059D60(void);
 
