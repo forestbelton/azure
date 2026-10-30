@@ -2618,7 +2618,141 @@ s32 func_80038C40(s8 k) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80038CB8);
+void func_80038F48(u8 *);
+void func_80039148(u8 *);
+void func_8003AB44(u8 *, s16, s16, u8, s16, s16, s32);
+
+/* Three arms, selected by +0x2E and the signed byte at +0x28, each of which
+   runs the script at +0x1C forward by two bytes and bumps the +0x20 step
+   counter. +0x2E nonzero loops until the opcode at +0x1C turns positive;
+   +0x28 negative runs the same loop at most -p[0x28] times, with `n` counting
+   down from 0, and then reloads +0x28 from the +0x80 table's +0x03 byte;
+   otherwise one step, and a nonzero +0x28 arms the +0x10 callback. All three
+   re-read +0x1C after calling func_80038F48, because the call invalidates
+   cse. */
+void func_80038CB8(u8 *p)
+{
+    u8 *q;
+    s32 n;
+    u8 *r;
+    u8 *u;
+    u8 *w;
+
+    if (p[0x2E] != 0)
+    {
+        q = *(u8 **)(p + 0x1C);
+        if (*(s8 *)q <= 0)
+        {
+            do
+            {
+                if (*q != 0 && *(s16 *)(p + 0x20) >= p[0x24])
+                {
+                    func_80039148(p);
+                    return;
+                }
+                func_80038F48(p);
+                if (*(s8 *)*(u8 **)(p + 0x1C) > 0)
+                {
+                    return;
+                }
+                func_8003AB44(*(u8 **)(p + 0x1C), *(s16 *)(p + 0x20), *(s16 *)(p + 0x22), p[0x2A], *(s16 *)p, (s16)(*(u16 *)(p + 2) + 2), 1);
+                *(u16 *)(p + 0x20) = *(u16 *)(p + 0x20) + 1;
+                r = *(u8 **)(p + 0x1C);
+                *(u8 **)(p + 0x1C) = r + 2;
+                q = *(u8 **)(p + 0x1C);
+            } while (*(s8 *)(r + 2) <= 0);
+        }
+    }
+    else if (*(s8 *)(p + 0x28) < 0)
+    {
+        n = 0;
+        u = *(u8 **)(p + 0x1C);
+        if (*(s8 *)u <= 0)
+        {
+            do
+            {
+                if (*u != 0 && *(s16 *)(p + 0x20) >= p[0x24])
+                {
+                    func_80039148(p);
+                    return;
+                }
+                func_80038F48(p);
+                if (*(s8 *)*(u8 **)(p + 0x1C) > 0)
+                {
+                    return;
+                }
+                func_8003AB44(*(u8 **)(p + 0x1C), *(s16 *)(p + 0x20), *(s16 *)(p + 0x22), p[0x2A], *(s16 *)p, (s16)(*(u16 *)(p + 2) + 2), 1);
+                /* DEVICE: the one-iteration do/while around `n--` is worth the
+                   whole of the remaining difference -- 164 of 164 words and
+                   12 DIFF with a plain `n--;`, MATCH with this. Without it the
+                   nine-word group at 80038E4C comes out with its schedule and
+                   its allocation rotated: `lb $v0, 0x28` hoisted above
+                   `sh $v0, 0x20`, p[0x28] in $v1 instead of $v0, `q + 2` in
+                   $a1 instead of $v1, and `u` in $a1 instead of $v1 back at
+                   the loop guard (80038DB4, 80038DBC, 80038DCC).
+
+                   What does the work is the loop NOTES, not a basic-block
+                   boundary: flow.c sets basic_block_loop_depth by counting
+                   NOTE_INSN_LOOP_BEG/END (flow.c:440), and propagate_block
+                   then does `reg_n_refs[regno] += loop_depth` (flow.c:2067
+                   and three more sites), so a dummy loop weights this
+                   reference to `n` by 2 instead of 1 and takes `n`'s count
+                   from 2 to 3. Both allocators order quantities by a priority
+                   built from that count -- qty_compare in local-alloc.c:1587,
+                   allocno_n_refs in global.c:421 -- so `n` is allocated
+                   earlier and `u` gets $v1 rather than $a1; with `u` in $v1,
+                   $v0 is dead after the `sh` and sched2's hard-register
+                   anti-dependence puts the `lb $v0, 0x28` after it, which is
+                   the listing's order.
+
+                   Legal spellings ruled out, all 164 words and 12 DIFF:
+                   `n = n - 1;`, `n -= 1;`, `--n;`, `{ n--; }`, `if (1) n--;`,
+                   `if (1) { n--; }`, `switch (0) { default: n--; }`,
+                   `n--, n;`, `n--; goto L1; L1:` (a label alone is a
+                   basic-block boundary and does not do it), and five
+                   reorderings of this statement group, including folding the
+                   decrement into the test as `if (--n < *(s8 *)(p + 0x28))`.
+                   `n - 1` in the test is 14 DIFF. Replacing the `break` with
+                   a two-term `while` condition is 12 DIFF, i.e. a no-op.
+                   The other two loop spellings, `for (;;) { n--; break; }`
+                   and `while (1) { n--; break; }`, also MATCH -- any loop
+                   will do, which is the evidence for the notes.
+
+                   This is ordinary defined C with the semantics of `n--`, not
+                   an uninitialised read, so it is silent even under -Wall. */
+                do
+                {
+                    n--;
+                } while (0);
+                *(u16 *)(p + 0x20) = *(u16 *)(p + 0x20) + 1;
+                q = *(u8 **)(p + 0x1C);
+                u = q + 2;
+                *(u8 **)(p + 0x1C) = u;
+                if (n < *(s8 *)(p + 0x28))
+                {
+                    break;
+                }
+            } while (*(s8 *)(q + 2) <= 0);
+        }
+        p[0x28] = (*(u8 **)(p + 0x80))[3];
+    }
+    else
+    {
+        func_80038F48(p);
+        if (*(s8 *)*(u8 **)(p + 0x1C) > 0)
+        {
+            return;
+        }
+        func_8003AB44(*(u8 **)(p + 0x1C), *(s16 *)(p + 0x20), *(s16 *)(p + 0x22), p[0x2A], *(s16 *)p, (s16)(*(u16 *)(p + 2) + 2), 1);
+        *(u16 *)(p + 0x20) = *(u16 *)(p + 0x20) + 1;
+        *(u8 **)(p + 0x1C) = *(u8 **)(p + 0x1C) + 2;
+        if (*(s8 *)(p + 0x28) != 0)
+        {
+            *(s16 *)(p + 0x18) = *(s8 *)(p + 0x28);
+            *(u32 *)(p + 0x10) = (u32)func_80038128;
+        }
+    }
+}
 
 extern u32 D_8006A944w[] __asm__("D_8006A944");
 
