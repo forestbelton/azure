@@ -46,9 +46,20 @@ Launch it in the background and let it run while you do step 2. It prints one
 line when it finishes. Do not poll it, do not tail its output, and do not read
 `nonmatchings/$FUNC/base.c` -- it is the whole preprocessed translation unit.
 
-`--jobs` must not exceed the prefix pool; `permrun.py` refuses otherwise,
+ONE SEARCH AT A TIME. The jobs are a machine-wide budget of 20, which the
+user's own machine is inside -- `permrun.py` counts what every other running
+permuter already holds, clamps `--jobs` to what is left, and refuses outright
+once the budget is spent. Launch the search once and leave it: if it is still
+running, that is the search, not a reason to start another. A relaunched
+search does not replace the old one, it adds to it.
+
+If you need to stop a search, say so in your report and let the caller do it;
+do not work around a refused `pkill` by starting more.
+
+`--jobs` must also not exceed the prefix pool; `permrun.py` refuses otherwise,
 because concurrent compiles in one wine prefix swap outputs and manufacture
-false winners.
+false winners -- so oversubscribing the budget is a correctness bug and not
+just a slow machine.
 
 ## 2. While it runs, do the cheap mechanical checks
 

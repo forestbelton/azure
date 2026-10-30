@@ -16,6 +16,13 @@ no context, so let it run long and read only the verdict.
 A `best` below `base` means the permuter found something: its source is in
 nonmatchings/FUNC/output-*/, and the gate for it is still verify.py then
 make check on a cleaned-up version.
+
+JOBS ARE A MACHINE-WIDE BUDGET OF 20, not a per-run setting. This script
+counts the jobs every other running permuter already holds and clamps
+`--jobs` to what is left, because the jobs are what compete for the machine
+the user is also using, and because concurrent compiles beyond the prefix
+pool swap outputs and manufacture false winners. If the budget is already
+spent, it refuses rather than queueing -- run ONE search at a time.
 """
 import datetime
 import io
@@ -36,6 +43,44 @@ LOG = os.path.join(PROJ, "nonmatchings/permlog.tsv")
 BASE = re.compile(r"base score = (\d+)")
 ITER = re.compile(r"iteration (\d+)")
 SCORE = re.compile(r"score = (\d+)")
+
+
+# Machine-wide, across every concurrent permuter. The user shares this
+# box with the search, so this is a ceiling on what the searches may
+# take, not a target to reach. Override with AZURE_PERM_JOBS.
+MAX_JOBS = int(os.environ.get("AZURE_PERM_JOBS") or 20)
+
+
+def jobs_in_flight():
+    """Jobs held by permuter processes other than this one's children.
+
+    Counts only the top-level permuter.py invocations: each forks a worker
+    pool whose members carry the same argv, so counting every matching
+    process would multiply the figure by the pool size.
+    """
+    total = 0
+    me = os.getpid()
+    for ent in os.listdir("/proc"):
+        if not ent.isdigit() or int(ent) == me:
+            continue
+        try:
+            with open(os.path.join("/proc", ent, "cmdline"), "rb") as fh:
+                argv = fh.read().split(b"\0")
+        except (IOError, OSError):
+            continue
+        argv = [a.decode("utf-8", "replace") for a in argv if a]
+        if not any(a.endswith("permuter.py") for a in argv):
+            continue
+        if any("forkserver" in a or "multiprocessing" in a for a in argv):
+            continue
+        if "-j" in argv:
+            try:
+                total += int(argv[argv.index("-j") + 1])
+            except (IndexError, ValueError):
+                total += 1
+        else:
+            total += 1
+    return total
 
 
 def pool_size():
@@ -66,6 +111,19 @@ def main():
     npool = pool_size()
     if not jobs:
         jobs = max(1, min(8, npool))
+
+    held = jobs_in_flight()
+    free = MAX_JOBS - held
+    if free < 1:
+        print("permrun: REFUSING -- %d of the %d-job budget is already held "
+              "by running permuters. Run ONE search at a time; wait for it "
+              "or stop it first." % (held, MAX_JOBS))
+        return 1
+    if jobs > free:
+        print("permrun: -j %d clamped to %d (%d of the %d-job budget is held "
+              "by other permuters)." % (jobs, free, held, MAX_JOBS))
+        jobs = free
+
     if jobs > 1 and npool < jobs:
         print("permrun: REFUSING -j %d with %d pooled prefixes. Concurrent "
               "compiles in one prefix swap outputs and manufacture false "
