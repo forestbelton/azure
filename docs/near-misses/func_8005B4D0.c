@@ -24,6 +24,28 @@
  *   8005B580 built addiu a1,a1 target addiu t0,t0
  *   8005B584 built slt v0,a1,t1 target slt v0,t0,fp
  *   8005B590 built addu s5,zero,zero target addu s4,zero,zero
+ * MEASURED blocks and standing leads follow (parkstats.py keeps from here down).
+ *
+ * CALLEE ARITY, an UNMEASURED lead from a project-wide sweep 2026-10-30.
+ * This park declares a callee with more arguments than csrc/ does:
+ *
+ *   func_8005EC0C: park passes 3, csrc has void func_8005EC0C(SpuVoiceAttr *), csrc/unk_2CDC0.c:2160
+ *
+ * m2c reads arity off which argument registers are live at the call, so a
+ * value that merely sits in $a2 becomes a parameter. A phantom argument is
+ * rewritten to $aN = $aN and deleted by reload, so it costs no word and
+ * verify.py shows no extra instruction -- but sched2 runs BEFORE that
+ * deletion and spends a cycle on it, which can transpose two words near the
+ * call. That was the last 2 DIFF on func_8005C4D0; see matching-levers,
+ * "A PHANTOM ARGUMENT FROM A WRONG SIGNATURE COSTS A SCHED2 CYCLE".
+ *
+ * This is NOT a measurement and NOT an instruction to change the call. The
+ * callee's own declaration is not authority: a callee whose parameters are
+ * unused compiles identically whether it is written (void) or with them, so
+ * a (void) callee does NOT prove its callers pass nothing. Only this
+ * function's own DIFF decides -- measure both arities. (For contrast,
+ * func_80056E10's park declares func_8005EC0C with ONE argument through an
+ * __asm__ alias, while two other parks declare the same callee with three.)
  */
 
 #include "common.h"
