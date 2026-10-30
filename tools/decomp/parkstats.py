@@ -37,30 +37,20 @@ XLINE = re.compile(r"^X (\S+) (.*?)\s*\|\s*(\S+) (.*)$")
 MAX_WORDS = 20
 
 
-def strip_comments(src):
-    """Drop every comment, respecting string and char literals."""
-    out = []
-    i, n = 0, len(src)
-    while i < n:
-        c = src[i]
-        if c in "\"'":
-            j = i + 1
-            while j < n and src[j] != c:
-                j += 2 if src[j] == "\\" else 1
-            out.append(src[i:j + 1])
-            i = j + 1
-        elif src.startswith("/*", i):
-            j = src.find("*/", i + 2)
-            i = n if j < 0 else j + 2
-        elif src.startswith("//", i):
-            j = src.find("\n", i)
-            i = n if j < 0 else j
-        else:
-            out.append(c)
-            i += 1
-    text = "".join(out)
-    # A removed comment leaves its own blank line behind; collapse runs.
-    text = re.sub(r"[ \t]+\n", "\n", text)
+def normalise_body(src):
+    """Tidy a park body WITHOUT deleting the comments in it.
+
+    This used to strip every comment and write the stripped body back, which
+    silently deleted any annotation left at the site it explains -- a
+    `/* DEVICE: */` marker above the spelling it marks is the one place a
+    reader of that spelling will look, and it did not survive the next run.
+    Measured 2026-10-30: all 14 park bodies held zero comments, which is what
+    being stripped on every run leaves behind.
+
+    Comments are invisible to cc1psx, so keeping them cannot move a score.
+    Whitespace is still normalised, so `--check` stays stable.
+    """
+    text = re.sub(r"[ \t]+\n", "\n", src)
     return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
 
 
@@ -156,7 +146,7 @@ def process(path, check_only):
     i = text.find("*/")
     if i < 0:
         return "fail", "no header comment"
-    body = strip_comments(text[i + 2:])
+    body = normalise_body(text[i + 2:])
     header, err = measure(path, body)
     if err or header is None:
         return "fail", err

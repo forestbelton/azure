@@ -29,7 +29,7 @@
  * CALLEE ARITY, an UNMEASURED lead from a project-wide sweep 2026-10-30.
  * This park declares a callee with more arguments than csrc/ does:
  *
- *   func_8005EC0C: park passes 3, csrc has void func_8005EC0C(SpuVoiceAttr *), csrc/unk_2CDC0.c:2160
+ *   func_8005EC0C: park passes 3, csrc has void func_8005EC0C(SpuVoiceAttr *), csrc/unk_2CDC0.c:2315
  *
  * m2c reads arity off which argument registers are live at the call, so a
  * value that merely sits in $a2 becomes a parameter. A phantom argument is
@@ -46,6 +46,27 @@
  * function's own DIFF decides -- measure both arities. (For contrast,
  * func_80056E10's park declares func_8005EC0C with ONE argument through an
  * __asm__ alias, while two other parks declare the same callee with three.)
+ *
+ * THIS PARK CANNOT LAND AS WRITTEN -- caller's note, 2026-10-30. The arity
+ * lead above is not only a lead here, it is a COMPILE ERROR waiting at the
+ * landing. func_8005BBFC and func_8005B4D0 both belong to unk_2CDC0, and that
+ * unit ALREADY declares `void func_8005EC0C(SpuVoiceAttr *);` at
+ * csrc/unk_2CDC0.c:2315 and ALREADY CALLS IT WITH ONE ARGUMENT at
+ * csrc/unk_2CDC0.c:2437, inside landed, matching code. A three-argument
+ * declaration in the same translation unit conflicts with both.
+ *
+ * The remedy is the one func_80056E10's park already uses for this callee:
+ * give the three-argument view its own name and alias it, so the existing
+ * declaration and its call site are untouched --
+ *
+ *     void func_8005EC0C3(SpuVoiceAttr *, s32, s32) __asm__("func_8005EC0C");
+ *
+ * That emits the same `jal func_8005EC0C` and leaves :2315 and :2437 alone.
+ * Measure the park again after the rename before landing: the alias is a
+ * different declaration and this header's numbers were taken without it.
+ * unk_2CDC0 now has TWO pending prototype conflicts -- this one and
+ * func_80059F8C's three-way disagreement, recorded in that park -- and
+ * whichever function lands first has to reconcile its own.
  */
 
 #include "common.h"

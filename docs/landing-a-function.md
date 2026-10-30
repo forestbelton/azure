@@ -173,6 +173,11 @@ The park file is the deliverable. Leave `csrc/` alone and:
    the candidate count and floor from `permlog.tsv`, and each source spelling
    you tried with its score. Facts and numbers, no narrative, no verdict about
    what is reachable.
+   A `/* DEVICE: */` marker goes at the SITE, in the body, next to the
+   spelling it explains, with its measurements in the header. Park bodies keep
+   their comments as of 2026-10-30; before that `parkstats.py` stripped every
+   comment from the body on each run and markers left at the site silently
+   vanished, which is why older parks carry theirs in the header.
 4. If you established a new mechanism -- not a hypothesis, a measured one --
    add it to `docs/matching-levers.md` as its own heading with the measurement.
    That one is worth the edit, because nothing else records it. Do not run
