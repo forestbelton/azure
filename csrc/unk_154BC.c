@@ -41,7 +41,7 @@ void func_800AC82C(u8 *, u8 *, u8 *, u8 *);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
 void func_800AA36C(u8 *, u8 *, u8 *, u8 *);
-void func_80041E70(void *);
+void func_80041E70(Unk42710 *);
 void func_80047338(Unk800777AC *, u32, u32);
 void func_80047468(Unk800777AC *, u32, u32);
 void func_800463EC(u8 *, UnkVec *, UnkSlot *, s16);
@@ -136,7 +136,207 @@ void func_80041E28(s32 *arg0, s32 *arg1) {
     func_80041E70(arg0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_154BC", func_80041E70);
+void func_80041E70(Unk42710 *p)
+{
+    s32 r;
+    s32 i;
+    s32 v = 0x10;
+
+    p->unk_6E = 0x100;
+    p->unk_87 = v;
+    if (p->unk_54 & 1)
+    {
+        /* DEVICE: an empty `__asm__` that copies v into r. It is worth ONE
+           word, the `sll $v1, $v1, 1` below. Without it the function is 270
+           words and 1 DIFF: cse knows v is 0x10, folds `v * 2` to 0x20 and
+           emits `addiu $v1, $zero, 0x20` instead of doubling the register the
+           `sb` left live. The asm is opaque to cse, so r has no known
+           constant and the doubling stays a shift. No -Wall warning: v is
+           initialised and r is written by the asm before it is read.
+
+           Three details are load-bearing, all measured against this file:
+             - the output must be r, the local that later holds
+               func_80042900's result. A fresh local for it costs a word
+               (271, 261 DIFF) and with the asm doing the shift itself it is
+               3 DIFF -- r's reuse is what keeps the sign-extension in $v1.
+             - it must sit INSIDE the `if`. Hoisted above it: 268 DIFF.
+             - the second set must be of r, NOT of v. `__asm__("" : "+r"(v))`
+               on v gives v two sets, which stops sched1's birthing-insn bump
+               (see matching-levers.md) and lets `addiu $v1, $zero, 0x10`
+               drift above the 0x100 store: 7 DIFF over thirteen placements,
+               9-15 with v pinned to a hard register.
+
+           Legal spellings ruled out, all 270 words. 1 DIFF: reading the field
+           back in place, through a temp, as `<< 1`, `2 * x`, `x + x`,
+           `((u8 *) p)[0x87]`, with an `(s32)`, `(u8)`, `(s8)`, `& 0xFF` or
+           `| 0` on either side, and with `(u8) 0x10`, `(s8) 0x10` or `~0xEF`
+           as the stored constant; `do { } while (0)` as a cse boundary costs a
+           word in all three placements. 4 DIFF: splitting the read from the
+           shift through an s32 temp, or holding 0x10 in a `u8`/`s8` local.
+           12 DIFF: holding it in a plain `s32`/`s16`/`u16` local. A field read
+           can never produce this instruction at all: cse forwards a QImode
+           store only as a CONSTANT, so when the stored value is not one the
+           read becomes a real `lbu` and the function is 271 words.
+
+           `__asm__ volatile` also MATCHes here; the plain form is kept because
+           volatile is a scheduling barrier and costs a word elsewhere. */
+        __asm__("" : "=r"(r) : "0"(v));
+        p->unk_87 = r * 2;
+        p->unk_6E = p->unk_6E * 2;
+    }
+    r = (s16)func_80042900((s8 *)p, 7);
+    if (r > 0)
+    {
+        p->unk_6E = p->unk_6E * 2;
+        p->unk_87 = p->unk_87 * 2;
+    }
+    else if (r < 0)
+    {
+        p->unk_6E = (s16)p->unk_6E >> 1;
+        p->unk_87 = p->unk_87 >> 1;
+    }
+    if (p->unk_54 & 2)
+    {
+        s32 t = p->unk_05 * 2;
+
+        if (t >= 0x100)
+        {
+            t = 0xFF;
+        }
+        p->unk_29 = t;
+    }
+    else
+    {
+        p->unk_29 = p->unk_05;
+    }
+    if (p->unk_54 & 4)
+    {
+        s32 t = p->unk_04 * 2;
+
+        if (t >= 0x100)
+        {
+            t = 0xFF;
+        }
+        p->unk_66 = t;
+    }
+    else
+    {
+        p->unk_66 = p->unk_04;
+    }
+    if (p->unk_54 & 8)
+    {
+        s32 t = p->unk_00 * 2;
+
+        if (t >= 0x100)
+        {
+            t = 0xFF;
+        }
+        p->unk_68 = t;
+    }
+    else
+    {
+        p->unk_68 = p->unk_00;
+    }
+    if (p->unk_54 & 0x10)
+    {
+        s32 t = p->unk_01 * 2;
+
+        if (t >= 0x100)
+        {
+            t = 0xFF;
+        }
+        p->unk_69 = t;
+    }
+    else
+    {
+        p->unk_69 = p->unk_01;
+    }
+    for (i = 2; i >= 0; i--)
+    {
+        if (p->unk_08[i].unk_00 != 0)
+        {
+            if (p->unk_54 & 0x80)
+            {
+                s32 t = p->unk_08[i].unk_02 * 2;
+
+                if (t >= 0x64)
+                {
+                    t = 0x63;
+                }
+                p->unk_08[i].unk_01 = t;
+            }
+            else
+            {
+                p->unk_08[i].unk_01 = p->unk_08[i].unk_02;
+            }
+        }
+    }
+    if (p->unk_54 & 0x4000000)
+    {
+        p->unk_14 |= 0x400;
+        p->unk_1C &= ~0x400;
+    }
+    if (p->unk_54 & 0x2000000)
+    {
+        p->unk_14 |= 0x200;
+        p->unk_1C &= ~0x200;
+    }
+    else
+    {
+        p->unk_14 &= ~0x200;
+    }
+    if (p->unk_54 & 0x8000000)
+    {
+        p->unk_14 |= 0x10;
+        p->unk_1C &= ~0x10;
+    }
+    else
+    {
+        p->unk_14 &= ~0x10;
+    }
+    if (p->unk_54 & 0x10000000)
+    {
+        p->unk_14 |= 0x20;
+        p->unk_1C &= ~0x20;
+    }
+    else
+    {
+        p->unk_14 &= ~0x20;
+    }
+    if (p->unk_54 & 0x20000000)
+    {
+        p->unk_14 |= 0x40;
+        p->unk_1C &= ~0x40;
+    }
+    else
+    {
+        p->unk_14 &= ~0x40;
+    }
+    if (p->unk_54 & 0x40000000)
+    {
+        p->unk_14 |= 0x80;
+        p->unk_1C &= ~0x80;
+    }
+    else
+    {
+        p->unk_14 &= ~0x80;
+    }
+    if (p->unk_54 & 0x200000)
+    {
+        p->unk_1C |= 0x1000;
+        p->unk_14 &= ~0x1000;
+    }
+    if (p->unk_54 & 0x800000)
+    {
+        if ((u32)(p->unk_13 - 3) < 0x2B)
+        {
+            if (((u8 *)&p->unk_48)[0] != 4)
+            {
+                p->unk_54 &= 0xFF7FFFFF;
+            }
+        }
+    }
+}
 
 s16 func_800422A8(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
     u32 q = (u32) (arg0 - arg1) / (u32) (arg2 & 0xFFFF);
