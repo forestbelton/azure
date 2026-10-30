@@ -1853,7 +1853,12 @@ void func_80056558(void) {
    one `li`/`subu` pair, four references instead of two. See
    docs/matching-levers.md section 3. */
 
-s16 func_800565D8(u8 *p, u32 n)
+/* The return type is s32 with the truncation written in the body, not an s16
+   return: the sll/sra at .L80056644 is the same either way, but func_80056654
+   adds $v0 in straight, and an s16 prototype in scope there costs it two words
+   of sign extension. Measured: s16 return, 31/31 MATCH here and 109 words /
+   62 DIFF there; s32 with `return (s16)r;`, both MATCH. */
+s32 func_800565D8(u8 *p, u32 n)
 {
     s32 r;
     s32 d;
@@ -1883,10 +1888,90 @@ s16 func_800565D8(u8 *p, u32 n)
         }
         r = (*(volatile u8 *)(p + 0x20) << 1) * d;
     }
-    return r;
+    return (s16)r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056654);
+s32 func_8005EB78(s32);
+
+/* Builds the one sprite primitive in D_80084918 from the D_80084960 entry the
+   +0x06 index selects, then hands it to func_8005F134.
+
+   Everything in the build block is schedule and allocation, and five shapes
+   fix it; each was measured on its own, from 21 DIFF down to MATCH:
+
+   - The D_80073740 row is reached with INTEGER arithmetic through a local that
+     is assigned THREE times -- the scaled index, the base added to it, then
+     the loaded word. Multi-set means sched1's birthing heuristic does not
+     defer it, so the `lui`/`addiu` stay at the top of the block while the `lw`
+     lands late; and because the sum's destination is the index's own quantity
+     rather than the base's, that quantity carries the `lw` and the `sw` too,
+     outranks everything else in the block and takes $v1. `q = D_80073740;
+     q = &q[*(u16 *)p];` is the same instruction count with the base holding
+     the quantity instead: 10 DIFF. `*(u16 *)p << 2` for the scale: 9 DIFF.
+   - `u` likewise takes the +0xC halfword, its shift and both sums, so its
+     `lhu` is not deferred either; a single-set temp for the shift leaves it
+     three slots later and costs the register order with it.
+   - And `u`'s load must be written BEFORE the 0x60 store, which is what puts
+     its `lhu` first in the block: after it, 3 DIFF.
+   - `x` is refined in place, with the sign extension spelled as two statements
+     (`w = x << 16; w = w >> 23;`) so that pseudo is multi-set as well.
+     `(s16)x >> 7` in one expression: 12 DIFF.
+   - D_80084918 needs TWO base locals: cse restarts at the join after the
+     +0x18 if/else, so the target re-materialises the address there, and the
+     +0x16 store plus the call argument hang off the second one. One local
+     reused across the join keeps it in $a3: 3 words. */
+void func_80056654(u8 *p, s32 f)
+{
+    Unk80084960 *e = &D_80084960[*(u16 *)(p + 6)];
+    u8 *b;
+    u8 *c;
+    s32 x;
+    s32 y;
+    s32 u;
+    s32 w;
+    u32 *q;
+    s32 i;
+
+    if (*(s32 *)(p + 0x4C) != 0 || *(s32 *)(p + 0x30) != 0 || e->unk_08 != 0 ||
+        e->unk_50 != 0 || e->unk_1C != *(s32 *)(p + 0x70) || f != 0)
+    {
+        x = *(u16 *)(p + 0x3C);
+        *(s32 *)(p + 0x70) = e->unk_1C;
+        x = x + (e->unk_3A + e->unk_52);
+        y = func_800565D8(p, e->unk_1C);
+        b = D_80084918;
+        u = *(u16 *)(p + 0xC);
+        *(u32 *)(b + 4) = 0x60;
+        q = D_80073740;
+        i = *(u16 *)p * 4;
+        i = i + (s32)q;
+        i = *(u32 *)i;
+        u = u << 7;
+        u = u + y;
+        x = x + u;
+        w = x << 16;
+        w = w >> 23;
+        x = x & 0x7F;
+        x = x | (w << 8);
+        *(u32 *)D_80084918 = i;
+        if (p[0x23] != 0)
+        {
+            *(s16 *)(b + 0x18) = ((p[0x22] - 1) << 8) | (0x7F - p[0x23]);
+        }
+        else
+        {
+            *(s16 *)(b + 0x18) = p[0x23] | (p[0x22] << 8);
+        }
+        c = D_80084918;
+        *(s16 *)(c + 0x16) = x;
+        func_8005F134(c);
+    }
+    if (*(s32 *)(p + 0x30) != 0 && func_8005EB78(D_80073740[*(u16 *)p]) == 0)
+    {
+        *(s32 *)(p + 0x30) = 0;
+        *(s32 *)(p + 0x3C) = 0;
+    }
+}
 
 /* No local copy of the parameter: `u8 *p = q;` spends a word the target
    leaves as a `nop`. And the negative arm's test is written with the
