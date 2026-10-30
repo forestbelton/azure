@@ -1568,7 +1568,72 @@ void func_8005A5C8(s16 x, s16 y) {
     func_8005EDA0(t);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005A608);
+extern s32 D_8007382C[];
+
+/* The scan is an INFINITE loop with both exits inside it, not a `do`/`while`
+   with the `return -1` after it. The NOTE_INSN_LOOP_END then lands after that
+   return rather than before it, and that one note is the whole 13 DIFF: it
+   defers `sw $zero, %lo(D_8007382C)($v0)` three sched1 slots, past the raw
+   copy of `id`, so $v0 stays live and the copy falls to $v1. $v0 is then free
+   for the entry test's -1 -- and because `lui $v0, %hi(D_80086A40)` clobbers
+   it immediately after the `bne`, reload's find_equiv_reg no longer sees a
+   register holding -1 and re-materialises `addiu $a0, $zero, -0x1` in the
+   preheader instead of copying it. The `do`/`while` spelling keeps -1 in $a2
+   across the whole scan and pays a `move` for it.
+   `while (1)` with a `break` and the return outside is 13 DIFF again; the
+   loop rewritten as `while (i < 0x10)` or `for (i = 0; i < 0x10; i++)` is
+   also 13. `id = id << 16; id = id >> 16;` is the in-place sign-extension
+   (section 5) and `j = id` has to be the s16 truncation, both already here. */
+s32 func_8005A608(u8 *p, s32 id)
+{
+    s16 i;
+    s16 j;
+    s32 k;
+    Unk80086A40 *e;
+    s32 h;
+
+    D_8007382C[0] = 0;
+    i = 0;
+    j = id;
+    id = id << 16;
+    id = id >> 16;
+    if (id == -1)
+    {
+        for (;;)
+        {
+            if (D_80086A40[i].unk_00 == -1)
+            {
+                goto found;
+            }
+            i++;
+            if (i >= 0x10)
+            {
+                return -1;
+            }
+        }
+    }
+    i = j;
+    if (D_80086A40[i].unk_00 != -1)
+    {
+        func_8005A1D0(D_80086A40[i].unk_10);
+    }
+found:
+    k = i;
+    e = &D_80086A40[k];
+    e->unk_00 = i;
+    e->unk_04 = p;
+    e->unk_08 = (*(u16 *) (p + 0x12) << 9) + 0xA20;
+    e->unk_14 = *(u32 *) (p + 0xC) - e->unk_08;
+    e->unk_18 = p[0x18];
+    e->unk_1B = p[0x19];
+    h = func_80059E94(e->unk_14);
+    e->unk_10 = h;
+    if (h == -1)
+    {
+        return -1;
+    }
+    return k;
+}
 
 INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005A778);
 
