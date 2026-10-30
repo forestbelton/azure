@@ -753,7 +753,107 @@ u32 func_80035DBC(s32 k) {
     return D_8006AC5C[k];
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_80035E58);
+extern u16 D_8006A91C[];
+extern u16 D_8006A924[];
+extern u16 D_8006A92C[];
+extern u32 D_8006A8FC[];
+extern s16 D_8006A914[];
+extern u8 D_80073AAC[];
+extern u8 D_8006AA3C[];
+
+void func_80036988(u8 *, u8 *);
+void func_8003605C(u8 *, u8 *, s32);
+void func_80036110(u8 *);
+
+/* The 0x11 spawn with a ClearImage, func_80035484's and func_80035888's
+   sibling: allocates the node, installs func_8003605C at its +0x10 and
+   func_80033D54 through func_8004491C, clears the third argument's RECT,
+   fills the +0x20 sub-object and the +0x0C record, records the fifth
+   argument's +0x8C sub-record at +0x74 and sets four fields from the
+   D_8006A91C, D_8006A924, D_8006A92C, D_8006A8FC and D_8006A914 tables
+   indexed by that sub-record's +0x80 pointer's +0x02 byte.
+
+   Signature, store order and the re-read bases all came from the two
+   siblings: the unit's own `(u8 *, u8 *, u8 *, s32, u32)` declaration with
+   the casts inside, `e = (u8 *)n + 0x20` as its own local while the +0x20
+   store and the +0x34 read go through the node, and every table lookup
+   re-reading `q` rather than caching `*(u8 **)(q + 0x80)`. What was left was
+   two words, and they needed the device below. */
+
+/* DEVICE: `register u8 *q_in_a1 __asm__("$5")` -- a local register variable
+   pinned to $a1, so the move of `q` into $a1 is emitted at its declaration
+   instead of inside expand_call's own register-load loop. Worth 2 words:
+   without it the function is byte-identical except that the two
+   argument-setup instructions come out in the opposite order -- `addiu
+   $a0, $s2, 0x2C` lands at 0x80035FB0 and `addu $a1, $s1, $zero` at
+   0x80035FD4, instead of the other way round (2 DIFF). Behaviour is
+   unchanged, there is no uninitialised read and no UB, so it is silent under
+   -Wall.
+
+   Why no source spelling reaches it: calls.c:1850 (`load_register_parameters`)
+   walks the argument vector FORWARD -- MIPS gets no PUSH_ARGS_REVERSED,
+   because calls.c:42 only defines it when PUSH_ROUNDING is -- so the $a0
+   setup always has the lower INSN_LUID. In sched2 the two insns are 197
+   `(set (reg a0) (plus (reg s2) 44))` and 199 `(set (reg a1) (reg s1))`, and
+   they tie on both of rank_for_schedule's first two keys: priority is 3 for
+   both, pinned there by the anti-dependence on the preceding call to
+   func_800350B0 (insn 115, priority 3, and every insn after a call inherits
+   its priority unless a LOAD lengthens the chain -- $s2 is `n`, set in the
+   prologue, so nothing can lengthen $a0's), and both are class 3 against
+   last_scheduled_insn 192. So the choice falls to the third key,
+   `INSN_LUID (tmp) - INSN_LUID (tmp2)` at sched.c:2427, which prefers the
+   HIGHER luid and therefore always gives the $a1 move the later slot.
+   Declaring the register variable puts `(set (reg a1) q)` ahead of the call's
+   own loop, which is the only thing that reverses the two luids.
+
+   Legal spellings ruled out, all 129 words and 2 DIFF unless noted: the
+   unit's declared signature on its own; a plain local for the second argument
+   (`r = q;`); a `register` local with no asm name; either of those in a
+   nested block; a temporary for the first argument; `e + 0xC` for the first
+   argument; `f + 0x8C` passed directly; a comma operator in the first
+   argument; moving the `+0x36` store after the call (11 DIFF); search.py's 24
+   candidates over 17 transform families; unname.py (0 improvements). */
+void func_80035E58(u8 *a, u8 *b, u8 *c, u8 *d, s32 i, u32 f)
+{
+    UnkNode *n;
+    u8 *e;
+    u8 *g;
+    u8 *q;
+
+    n = func_8003FF2C(0x11, (UnkNode *)a, 0x49, D_80082BC0);
+    n->unk_10 = (u32)func_8003605C;
+    func_8004491C(n, (u32)func_80033D54);
+    e = (u8 *)n + 0x20;
+    g = (u8 *)n->unk_0C;
+    *(u32 *)(e + 0x44) = (u32)d;
+    e[0x48] = 1;
+    *(s16 *)(e + 0x4A) = i;
+    ClearImage((RECT *)(c + 4), 0, 0, 0);
+    func_80033C1C(b, *(u32 *)d);
+    *(u32 *)((u8 *)n + 0x20) = (u32)b;
+    *(u32 *)(e + 4) = (u32)c;
+    *(u32 *)(e + 8) = (u32)func_80037714;
+    func_800375C0(e, D_8006AA3C);
+    func_800350B0((u8 *)f, e);
+    *(u32 *)(e + 0x68) = (u32)func_80036110;
+    *(u32 *)(g + 0xC) = 0x808080;
+    *(u32 *)(g + 8) = (u32)D_80073AAC;
+    *(u32 *)g = 0;
+    g[4] = 0;
+    g[5] = 0;
+    q = (u8 *)f + 0x8C;
+    *(u32 *)(e + 0x74) = (u32)q;
+    *(s16 *)(e + 0x12) = D_8006A91C[(*(u8 **)(q + 0x80))[2]];
+    *(s16 *)(e + 0x2E) = D_8006A924[(*(u8 **)(q + 0x80))[2]];
+    *(s16 *)(e + 0x36) = D_8006A92C[(*(u8 **)(q + 0x80))[2]];
+    {
+        register u8 *q_in_a1 __asm__("$5") = q;
+
+        func_80036988((u8 *)n + 0x2C, q_in_a1);
+    }
+    *(u32 *)(g + 8) = D_8006A8FC[(*(u8 **)(q + 0x80))[2]];
+    *(u32 *)(*(u32 *)((u8 *)n + 0x20) + 0x34) = D_8006A914[(*(u8 **)(q + 0x80))[2]];
+}
 
 void func_80036900(u8 *, u8 *, s32);
 
