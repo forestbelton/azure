@@ -1411,7 +1411,7 @@ does NOT reach a parameter's entry copy: that copy is `(set pseudo $a0)` from
 a HARD register, where `make_regs_eqv` always makes the pseudo canonical, so
 the question is which hard register the allocno gets instead (func_8004D880
 and func_8004CECC are both parked on that, and
-`docs/near-misses/func_8004D880.c` has the arithmetic). A narrow LOCAL copy of
+the comment on the landed function in `csrc/` has the arithmetic). A narrow LOCAL copy of
 a parameter does produce the entry copy -- measured on func_8004D880 -- but
 then the local is what holds the value and the parameter keeps $a0, which is a
 different register assignment from the listing's.
@@ -4783,7 +4783,7 @@ above the call so the first store fills the `jal`'s delay slot.
   use of either the masked value or the loaded halfword does not stop it -- it
   only adds an `andi 0xffff` that the target does not have. Nor does putting
   the mask in a different basic block. Four shapes measured in
-  `docs/near-misses/func_80042A80.c`; that one is still open.
+  the comment on the landed function in `csrc/`; that one is still open.
 * **A block move's bytes are `lb`; explicit `s8` temporaries give `lbu`** --
   the opposite of what this line used to say. Copying a two-byte field through
   `s8` locals lets combine fold the `sign_extend` load into the `(subreg:QI)`
@@ -5102,7 +5102,7 @@ Worth trying whenever a value's producer sits one slot from where the listing
 has it and nothing about statement order moves it.
 
 It is also the mechanism behind the stack-parameter prologue interleave
-cluster (`docs/near-misses/func_8003719C.c`): a parameter read once is a
+cluster (the comment on the landed function in `csrc/`): a parameter read once is a
 pseudo set once, so sched1 defers its `lw` behind the argument setup, while
 the `addiu`s that set $a0-$a3 are pinned.
 

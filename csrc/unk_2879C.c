@@ -3015,7 +3015,7 @@ void func_800564A8a(void) __asm__("func_800564A8");
    between 91 and 98 -- the body addresses say so and nothing else does.
 
    WHAT THE SHAPE IS MADE OF, each measured (the full record, with every
-   negative, was docs/near-misses/func_80057D20.c before this landed):
+   negative, was in this function's park file before it landed):
 
    * `ch` and `d` are `u8`. `ch` ends up in memory at 0x10($sp) -- `sb` once
      at entry, `lbu` at each of its nine uses -- which is the register

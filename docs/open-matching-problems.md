@@ -344,7 +344,7 @@ agrees with those bounds, so the grouping is measured rather than inferred.
 **The 0x80032E14 run is placed in PART, and a run does not have to be placed
 whole.** That was the thing worth noticing: the run holds three tables, the
 third belongs to func_80057D20 (463 of 463 words and six DIFF, one giv
-ordering -- see `docs/near-misses/func_80057D20.c`), and the first two belong
+ordering -- see the comment on the landed function in `csrc/`), and the first two belong
 to func_80054F9C (28/28) and func_80057A94 (163/163), which both matched. Since
 func_80057D20's table is the LAST of the three, the `.rodata` subsegment can
 stop at 0x80032F00 and leave the rest as `bin`, so the two matched functions
@@ -510,7 +510,7 @@ gives it `$v0`, the first register in `REG_ALLOC_ORDER` and free because the
 return value's `$v0 = 0` is only set afterwards, and re-emits `move $v0, zero`
 after the load. That move is the extra instruction. Matching it means making
 the return value live across the load; the shapes tried are listed in
-`docs/near-misses/func_80042900.c`.
+the comment on the landed function in `csrc/`.
 
 ## func_80042A80  (unk_14934) -- partial
 
