@@ -14,12 +14,15 @@
  * u32[0x20] and would also have been safe, but it is left outside the carve
  * because it needs no $gp access.
  *
- * Still to watch when the stubs here are decompiled: func_8004437C reaches
- * D_80080AF4 and func_8004450C reaches D_80081480 and D_8008148C, all small
- * scalars INSIDE the $gp window that the target reaches absolutely. They are
- * harmless while those functions are asm -- the listing carries its own
- * %hi/%lo and -G does not touch it -- but each will need an incomplete-array
- * declaration, as D_80082E6E did.
+ * Still to watch when the stubs here are decompiled: func_8004450C reaches
+ * D_80081480 and D_8008148C, small scalars INSIDE the $gp window that the
+ * target reaches absolutely. They are harmless while the function is asm --
+ * the listing carries its own %hi/%lo and -G does not touch it -- but each
+ * will need an incomplete-array declaration, as D_80082E6E did. (func_8004437C
+ * was the same case for D_80080AF4, and landed the other way: its target has
+ * the one-insn `la` form, which the incomplete array cannot give, so it
+ * carries two block-scope aliases -- see the DEVICE note on the function --
+ * and this unit's .extern record for D_80080AF4 now says 16.)
  */
 /* The tail of the original unk_14934 split, carved off when gprel_17504 was
  * taken out of the middle of it: a $gp cluster cannot be compiled with the
@@ -49,8 +52,80 @@ UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
 s32  func_8003F794(s16, s16);
 void func_80040454(void);
+void func_80044698(void);
+s32  func_8004450C(s16);
 
-INCLUDE_ASM("asm/nonmatchings/gprel_17B7C", func_8004437C);
+/* Makes entry arg0 the current buffer pair's pointer at the other slot of
+ * D_80080AF4, flipping D_80080AFC, unless arg0 is already the current slot's
+ * (returns 1). If the other slot held something else, it recolours entry
+ * arg0's header, pushes it, stores it in the slot and flushes.
+ *
+ * Defined under an alias: structs.h declares it `void (s32, s32)` for its
+ * caller in unk_108F0, and the callee's own listing wants `s16` parameters
+ * (the `sll`/`sra` pairs). See matching-levers, "A narrow parameter a CALLER
+ * must not see". */
+s32 func_8004437Cw(s16, s16) __asm__("func_8004437C");
+
+s32 func_8004437Cw(s16 arg0, s16 arg1) {
+    /* DEVICE: two block-scope aliases of D_80080AF4, worth all 8 differing
+     * words (3 at the first compare, 5 at the store). Without them the body
+     * is 100 of 100 words at 8 DIFF, every one a register name in the two
+     * `lui`/`addiu` pairs for D_80080AF4: the target's pairs are adjacent
+     * and single-register, i.e. maspsx's expansion of a one-insn `la`, and
+     * cc1psx emits `la` only for a symbol it marked small -- SYMBOL_REF_FLAG,
+     * set once at make_decl_rtl from the declared size (mips.h:2554-2559,
+     * size <= -G). A sized declaration alone (`[2]`, 8 bytes) also makes it
+     * emit `.extern D_80080AF4, 8`, and this symbol is inside the unit's $gp
+     * window, so gas at -G8 collapses the `la` to `addiu $a1,$gp,0`: 98
+     * words, 87 DIFF. The .extern record is made separately, at the
+     * identifier's FIRST USE in the parser (c-parse.c:2062 ->
+     * assemble_external -> mips.c:3895-3904), with the size read then; the
+     * records are pushed LIFO and output first-wins per asm name
+     * (mips.c:4219-4222). So the 8-byte alias carries the flag and the
+     * three accesses, and the 16-byte decoy, whose only use is parsed
+     * later inside a sizeof, puts `.extern D_80080AF4, 16` at the head of
+     * the list; gas never judges the symbol small and expands both `la`s.
+     * With the address one pseudo instead of a (high)/(lo_sum) pair, the
+     * store's address quantity is 2 refs over 6 suids (1.33) against the
+     * stored value's 2 over 4 (2.0), so the value takes $v1 and the address
+     * $a0, as the target has. Controls: decoy parsed before the alias's
+     * first use, 87; decoy sized 8, 87; no decoy, 87. Silent under -Wall.
+     * Unit-wide effect: the unit's `.extern D_80080AF4` line reads 16 where
+     * the incomplete array in structs.h emits none; no other function in
+     * gprel_17B7C references the symbol, and %hi/%lo pairs are not touched
+     * by .extern anyway. Legal spellings all measured at 8: temps for the
+     * index, the stored pointer or the compared operand; casts at all three
+     * sites; `*(D_80080AF4 + i)`; `&D_80080AF4[0] + i`; a memory barrier
+     * before the store. A file-scope `u32 **p = D_80080AF4` local is 14.
+     * See docs/matching-levers.md, "TWO ALIASES SPLIT THE TWO SIZE
+     * DECISIONS". */
+    extern u32 *D_80080AF4s[2] __asm__("D_80080AF4");
+    extern u32 *D_80080AF4big[4] __asm__("D_80080AF4");
+
+    if (D_8006E704[arg0] == D_80080AF4s[D_80080AFC]) {
+        return 1;
+    }
+
+    D_80080AFC = (u16) D_80080AFC ^ 1;
+    (void) sizeof(D_80080AF4big); /* DEVICE: parse-time use only, see above */
+
+    if (D_8006E704[arg0] != D_80080AF4s[D_80080AFC]) {
+        func_800542BC();
+        if ((s8) D_80080AF3 != arg1) {
+            func_80044698();
+        }
+        *D_8006E704[arg0] &= 0xFF800000;
+        *D_8006E704[arg0] |= (D_80080AFC != 0) ? ((u32) D_801C4640 & 0x7FFFFF)
+                                                     : ((u32) D_801BEE40 & 0x7FFFFF);
+        func_8003E4FC(6, (u8 *) D_8006E704[arg0], 0);
+        D_80080AF4s[D_80080AFC] = D_8006E704[arg0];
+        func_8003F320();
+    }
+
+    func_8004450C(arg1);
+    func_80053DA8(D_80080AFC != 0 ? 0x22 : 0x21);
+    return 0;
+}
 
 /* Switches the active buffer pair to entry arg0, unless it is already current.
  *
