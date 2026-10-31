@@ -73,6 +73,11 @@ def jobs_in_flight():
             continue
         if any("forkserver" in a or "multiprocessing" in a for a in argv):
             continue
+        # The `timeout` wrapper carries the same argv as the search it wraps,
+        # so counting both doubles every run -- which quietly halved this
+        # budget the moment the wrapper was added.
+        if os.path.basename(argv[0]) == "timeout":
+            continue
         if "-j" in argv:
             try:
                 total += int(argv[argv.index("-j") + 1])

@@ -10,3 +10,6 @@
 [submodule "vendor/decomp-permuter"]
 	path = vendor/decomp-permuter
 	url = https://github.com/simonlindholm/decomp-permuter
+[submodule "vendor/kdt-tool"]
+	path = vendor/kdt-tool
+	url = https://github.com/Nisto/kdt-tool
