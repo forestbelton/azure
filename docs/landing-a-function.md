@@ -56,6 +56,16 @@ search does not replace the old one, it adds to it.
 If you need to stop a search, say so in your report and let the caller do it;
 do not work around a refused `pkill` by starting more.
 
+DO NOT WAIT ON IT WITH `pgrep -f`. A pattern like `pgrep -f "permrun.py
+$FUNC"` matches the command line of the very shell running it, so it always
+reports a hit and a wait-loop built on it never fires -- and `pkill -f` on
+the same pattern always returns a nonzero exit for the same reason, which is
+NOT evidence that nothing was running. Read the exit code of either as "no
+information". What to do instead: the run appends exactly one row to
+`nonmatchings/permlog.tsv` when it finishes, so wait on that row appearing,
+or bracket the pattern (`pgrep -f "[p]ermrun.py $FUNC"`) to stop it matching
+itself.
+
 `--jobs` must also not exceed the prefix pool; `permrun.py` refuses otherwise,
 because concurrent compiles in one wine prefix swap outputs and manufacture
 false winners -- so oversubscribing the budget is a correctness bug and not

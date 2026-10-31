@@ -83,6 +83,22 @@ def jobs_in_flight():
     return total
 
 
+def new_session_and_die_with_parent():
+    """preexec: own session (so killpg hits only the search), and PDEATHSIG.
+
+    Without the second half, killing permrun.py orphans the search instead of
+    stopping it: os.setsid() puts it out of reach of the shell's own group.
+    """
+    os.setsid()
+    try:
+        import ctypes
+        PR_SET_PDEATHSIG = 1
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(
+            PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0)
+    except Exception:
+        pass            # a missing prctl costs promptness, not the deadline
+
+
 def pool_size():
     if not os.path.isdir(POOL):
         return 0
@@ -141,11 +157,22 @@ def main():
     env.pop("AZURE_WINEPREFIX", None)   # let tools/ccpsx claim per compile
 
     before = set(os.listdir(d))
+    # The deadline is enforced TWICE on purpose. The loop below kills the
+    # group when this process sees the clock run out, and `timeout` kills it
+    # from inside the group when this process is not there to look -- which
+    # happens whenever the shell that backgrounded permrun.py is reaped,
+    # leaving permuter.py running in the session os.setsid() gave it with
+    # nothing left to time it. That is how 16 searches accumulated on
+    # 2026-10-30: each permrun.py had died, and every orphan ran past its
+    # --minutes forever. PR_SET_PDEATHSIG makes an orphan die at once rather
+    # than at the deadline.
+    cmd = ["timeout", "--kill-after=30", "%ds" % int(minutes * 60 + 15),
+           sys.executable, PERMUTER, os.path.relpath(d, PROJ),
+           "-j", str(jobs), "--better-only", "--stop-on-zero"]
     proc = subprocess.Popen(
-        [sys.executable, PERMUTER, os.path.relpath(d, PROJ), "-j", str(jobs),
-         "--better-only", "--stop-on-zero"],
-        cwd=PROJ, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1, preexec_fn=os.setsid)
+        cmd, cwd=PROJ, env=env, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, text=True, bufsize=1,
+        preexec_fn=new_session_and_die_with_parent)
 
     base = best = None
     iters = 0
