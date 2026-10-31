@@ -252,9 +252,11 @@
  * That emits the same `jal func_8005EC0C` and leaves :2315 and :2437 alone.
  * Measure the park again after the rename before landing: the alias is a
  * different declaration and this header's numbers were taken without it.
- * unk_2CDC0 now has TWO pending prototype conflicts -- this one and
- * func_80059F8C's three-way disagreement, recorded in that park -- and
- * whichever function lands first has to reconcile its own.
+ * This is now unk_2CDC0's ONLY pending prototype conflict: func_80059F8C's
+ * three-way disagreement was settled 2026-10-30 by measuring it -- the
+ * landed `(u32, u32)` is free for all three sites, and both parks adopted
+ * it. func_8005EC0C's arity is not settled that way, because the existing
+ * one-argument CALL at :2437 is in landed code and cannot absorb a third.
  */
 
 #include "common.h"

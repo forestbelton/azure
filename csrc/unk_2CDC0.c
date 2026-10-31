@@ -1636,14 +1636,13 @@ found:
 }
 
 /* func_80059F8C is still an INCLUDE_ASM stub in THIS unit (above), so this
-   forward declaration is the only one the compiler sees -- and two parks
-   disagree with it: docs/near-misses/func_80059F8C.c defines it
-   `(u32 p, s32 n)` and docs/near-misses/func_8005A90C.c declares it
-   `(s32, u32)`. Both measured their own prototype as neutral for their own
-   function, but all three are in unk_2CDC0, so whichever lands next has to
-   reconcile them or the unit will not compile -- and its measurements were
-   taken against a prototype that may have to change. Changing it here is a
-   change to this function's output and needs re-measuring. */
+   forward declaration is the only one the compiler sees. Two parks used to
+   disagree with it and no longer do: measured 2026-10-30, func_80059F8C's own
+   park is 101 DIFF whether its second parameter is `s32` or `u32`, and
+   func_8005A90C is 2 DIFF whether it declares this callee `(s32, u32)` or
+   `(u32, u32)`, so the spelling below is free at all three sites and both
+   parks now use it. Nothing has to be reconciled here at landing. Changing it
+   is still a change to this function's output and needs re-measuring. */
 s32 func_80059F8C(u32, u32);
 
 /* The three-argument twin of func_8005A608 above: same scan, same note

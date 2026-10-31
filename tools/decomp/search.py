@@ -188,15 +188,36 @@ def t_join_binop(text):
                text[: m.start()] + repl + text[m.end() :])
 
 
+def _cmp_operand(s):
+    """True if `s` is a single comparison operand, not part of a larger one.
+
+    `->` is stripped first so a field reference is not mistaken for `>`.
+    """
+    t = s.replace("->", "")
+    return not any(c in t for c in ("&&", "||", "<", ">", "=", "?", ":", ","))
+
+
 def t_cmp_swap(text):
     """`a < b` and `b > a` emit the same `slt` but evaluate their operands in
     source order, so they differ in which load comes first: 2 words in
     func_80042BDC and about 2 at each of two sites in func_80045CC4."""
     flip = {"<": ">", ">": "<", "<=": ">=", ">=": "<="}
-    pat = re.compile(r"\(([^()]+?)\s*(<=|>=|<|>)\s*([^()]+?)\)")
+    # The operator must be a real comparison: not the `>` of `->`, and not
+    # half of `<<` or `>>`. Before these lookarounds `(e->unk_10 > n)` matched
+    # `-` `>` as the operator and swapped to `(unk_10 > n < e-)`.
+    pat = re.compile(
+        r"\(([^()]+?)\s*"
+        r"(<=|>=|(?<![-<>])<(?![<=])|(?<![-<>])>(?![>=]))"
+        r"\s*([^()]+?)\)")
     for m in scan(pat, text):
         a, op, b = m.group(1), m.group(2), m.group(3)
-        if "=" in a or "=" in b:
+        # The operands must be ONE comparison's worth each. `[^()]+?` happily
+        # spans `&&`, a second comparison, and the second half of `>>`, and
+        # the swap is nonsense then: `(b < p && p < r[0])` came out as
+        # `(p && p < r[0] > b)`, which is not that comparison and still
+        # compiles, so it scored as a candidate. Measured on func_80059F8C
+        # 2026-10-30.
+        if not (_cmp_operand(a) and _cmp_operand(b)):
             continue
         repl = "(%s %s %s)" % (b, flip[op], a)
         yield ("swap %s %s %s" % (a.strip(), op, b.strip()),

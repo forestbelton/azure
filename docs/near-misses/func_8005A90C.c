@@ -64,10 +64,13 @@
  *   r = func_80059F8C(e->unk_10, c) / (b, e->unk_14) / both (cse forwards
  *     each load back to the register, so no lw and no change)
  *   no prototype for func_80059F8C, or (void *, u32), or (s32, void *)
- *     -- NOTE (caller, 2026-10-30): func_8005A778 has since landed in this
- *     unit with a forward `s32 func_80059F8C(u32, u32);`, which disagrees
- *     with this park's `(s32, u32)` at line 138 and with func_80059F8C's own
- *     park. Landing this one means reconciling all three in one unit.
+ *     -- RESOLVED (caller, 2026-10-30): this park declared the callee
+ *     `(s32, u32)` against the unit's landed `s32 func_80059F8C(u32, u32);`
+ *     (csrc/unk_2CDC0.c:1647) and against func_80059F8C's own park. All
+ *     three are in unk_2CDC0, so it was a compile error waiting at the
+ *     landing. Measured: this function is 2 DIFF with EITHER declaration,
+ *     and func_80059F8C's park is 101 DIFF with either of its two, so the
+ *     landed `(u32, u32)` is free everywhere. This park now uses it.
  *   comma expressions in the argument list to force an evaluation order --
  *     ((c, b), c), (b, (b, c)), ((e, b), c), ((c, b), (b, c)) -- and c + 0,
  *     c | 0, b + 0 to make one argument an expression rather than a bare
@@ -139,7 +142,7 @@
 extern s32 D_8007382C[];
 
 void func_8005A1D0(u32);
-s32 func_80059F8C(s32, u32);
+s32 func_80059F8C(u32, u32);
 u32 func_8005ECA0(u32);
 u32 func_8005EC40(u8 *, u32);
 
