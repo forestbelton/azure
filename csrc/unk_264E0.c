@@ -1803,7 +1803,120 @@ s32 func_80054AF0(s32 a) {
     return 0x7F;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_264E0", func_80054B08);
+extern u32 D_80084864[];
+
+void func_80054C58(void);
+void func_80054CD4(void);
+
+/* The group-move commit: copies the queued move's header out of the record
+   func_8003F534 returns into D_800847D0 (+0x1C halfword, +0x10 and +0x14
+   words with their top bytes split off into +0x31 and +0x33, +0x18 cleared),
+   then either flags the pending state (+0x00 bit 0x400) or starts the
+   follow-up.
+
+   Every field access is `volatile` because that is what holds the listing's
+   order: the four loads from `q` in source order against the stores, and
+   the three stores to +0x10 (and +0x14) kept as three stores. The LAST +0x14
+   store is plain so dbr can lift it into the `beqz` delay slot. The `w` tail
+   is spelled in place (`w -= 0x20; w += base;`) because the listing has
+   `addiu $v1, $v1, -0x20` / `addu $v1, $v1, $a1`; the folded
+   `w - 0x20 + base` puts the constant on `base` (matching-levers, "a - C + b
+   reassociates"). `f` is read before the last +0x14 store and tested after. */
+void func_80054B08(u16 a)
+{
+    switch (a & 0xF000)
+    {
+    case 0x0:
+    {
+        volatile Unk8006CE34 *q = (volatile Unk8006CE34 *)func_8003F534();
+        u8 *b = (u8 *)D_800847D0;
+        u16 n;
+        u32 base;
+        u32 w;
+        u32 x;
+        u32 t1;
+        u32 t2;
+        u32 f;
+
+        n = *(volatile u16 *)q;
+        *(volatile s16 *)(b + 0x1C) = n;
+        base = q->unk_04;
+        w = q->unk_08;
+        *(volatile u32 *)(b + 0x10) = w;
+        x = q->unk_0C;
+        t1 = w >> 24;
+        w &= 0xFFFFFF;
+        *(volatile u32 *)(b + 0x10) = w;
+        /* DEVICE: `(t1 + t1 + t1) - t1 - t1` is `t1`, stored. It is a
+           phantom-reference construct and the original cannot have had it.
+           What it is worth: 14 -> MATCH (11 register words plus the
+           `srl`/`sw`/`lw` order they drag along). Without it, `t1` has 2
+           references and local-alloc allocates `x` (11 refs over 34 suids,
+           priority 3.88) before `t1` (2 refs over 10, 0.8); `x` takes $v0,
+           `t1` falls to $a0, `t2` to $v1, and sched2 then hoists the `srl`
+           three slots. The chain survives cse, combine folds it to one copy
+           `(set 104 (reg 89))` that local-alloc TIES into `t1`'s quantity
+           (7 refs over 12 suids, 4.67 against `x`'s 3.67 once the copy
+           sits inside its range), so `t1` is allocated first and
+           holds $v0 inside `x`'s range; the copy is `(set $v0 $v0)` after
+           allocation and is deleted before the .greg dump, so no word is
+           spent. The copy is launched by this `sb` (sched1 birthing-insn
+           rule) and so sits before `and x`, inside BOTH `base`'s and
+           `mask`'s ranges, which keeps `base` ahead of `mask` for $a1/$a2.
+           Ruled out, all on this same body (verify.py DIFF): plain `t1` 14;
+           `(t1 + t1) - t1` 14 (5 refs over 12, 3.33 < 3.67); the same
+           phantom on `t2` 7 (x lands in $a0 but the copy sits after
+           `and x`, lengthening only `base`, and the base/mask tie flips);
+           `t1`/`t2` as `u8` 14 (combine merges the narrowing copy into the
+           store); `__asm__("" :: "r"(t2) x3)` 14; a `do { } while (0)`
+           boundary at every statement 14-66; the store in both arms 47.
+           No warning under -Wall: it is unsigned arithmetic on an
+           initialised value. See docs/matching-levers.md, "A TIED PHANTOM
+           COPY". */
+        *(volatile u8 *)(b + 0x31) = (t1 + t1 + t1) - t1 - t1;
+        w -= 0x20;
+        w += base;
+        *(volatile u32 *)(b + 0x10) = w;
+        *(volatile u32 *)(b + 0x18) = 0;
+        *(volatile u32 *)(b + 0x14) = x;
+        t2 = x >> 24;
+        x &= 0xFFFFFF;
+        *(volatile u32 *)(b + 0x14) = x;
+        *(volatile u8 *)(b + 0x33) = t2;
+        x += 0x20;
+        f = *(volatile u32 *)D_800847D0;
+        x += base;
+        *(u32 *)(b + 0x14) = x;
+        if (f & 0x400)
+        {
+            D_800847D0[0] = f | 0x4000;
+            D_80084864[0] = 2;
+        }
+        else if ((*(u32 *)(b + 4) & 0x200) == 0)
+        {
+            s32 r;
+            u8 *p = D_80084858;
+
+            *(u32 *)(p + 4) = 0;
+            r = func_80054AF0((s16)n);
+            *(s16 *)(p + 8) = r;
+            *(s16 *)(p + 0xA) = r;
+            func_80054C58();
+            func_80054CD4();
+        }
+        break;
+    }
+    case 0x1000:
+        func_80054E00(0x74);
+        break;
+    case 0x2000:
+        func_80054E00(0xE4);
+        break;
+    case 0x4000:
+        func_80054E00(0xF4);
+        break;
+    }
+}
 
 void func_80054C58(void) {
     u32 *p = D_800847D0;
