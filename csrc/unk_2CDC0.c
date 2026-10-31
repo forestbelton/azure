@@ -1726,10 +1726,110 @@ found:
     return k;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005A90C);
-
 u32 func_8005ECA0(u32);
 u32 func_8005EC40(u8 *, u32);
+
+/* The four-argument sibling of func_8005A608 and func_8005A778 above: same
+   scan with both exits inside the `for (;;)`, same in-place sign extension of
+   `id`. Three things carry the rest, each measured on the one before it:
+   the `do { } while (0);` after the unk_14 store is a block boundary that keeps
+   the call's argument copies below the pointer computation, which is what
+   makes b and c overlap e and costs the fifth and sixth callee-saved
+   registers the listing spends (99 words / 87 DIFF without it, 103 / 13 with);
+   the func_8005ECA0 result goes back into the dead parameter b, not a fresh
+   local (13 -> 11); and the DEVICE at the stores, which is the last 2 words
+   and is explained where it sits. The `(u32, u32)` prototype for
+   func_80059F8C is the unit's own, above. */
+s32 func_8005A90C(u8 *p, s32 b, u32 c, s32 id)
+{
+    s16 i;
+    s16 j;
+    s32 k;
+    Unk80086A40 *e;
+    s32 r;
+
+    D_8007382C[0] = 0;
+    i = 0;
+    j = id;
+    id = id << 16;
+    id = id >> 16;
+    if (id == -1)
+    {
+        for (;;)
+        {
+            if (D_80086A40[i].unk_00 == -1)
+            {
+                goto found;
+            }
+            i++;
+            if (i >= 0x10)
+            {
+                return -1;
+            }
+        }
+    }
+    i = j;
+    if (D_80086A40[i].unk_00 != -1)
+    {
+        func_8005A1D0(D_80086A40[i].unk_10);
+    }
+found:
+    k = i;
+    e = &D_80086A40[k];
+    e->unk_14 = c;
+    do
+    {
+    } while (0);
+    {
+        /* DEVICE: the call's second argument copied into $a1 HERE, by a
+           register variable pinned to $5, plus an empty asm that reads and
+           rewrites that register. Worth the last 2 of 103 words; without it
+           the function is 103/103 and 2 DIFF with `addu $a0` and `addu $a1`
+           the other way round, and nothing in the call can fix that, because
+           expand_call emits the $a0 copy before the $a1 copy for every call
+           (calls.c:1850, no PUSH_ARGS_REVERSED on mips) and sched1 breaks
+           their tie on INSN_LUID (sched.c:2428), which keeps that order.
+           Emitted at the declaration, the $a1 copy is the first insn after
+           the loop notes above, so sched_analyze_insn (sched.c:2058) makes it
+           the fence that everything after depends on: it sits right after the
+           unk_14 store, the $a0 copy lands after it, and the call's own
+           `$a1 = $a1` is deleted as a no-op by flow (flow.c:957). The asm is
+           needed because cse prices a user-variable hard register at 0
+           against a pseudo's 1 (cse.c:477-485) and would otherwise rewrite
+           `e->unk_08 = c` to store $a1 -- 1 DIFF; its set of $a1 ends that
+           equivalence and its empty body emits nothing.
+           Ruled out, all 103/103: the pinned copy without the asm, 1 DIFF
+           (`sw $a1,0x8`); `__asm__ volatile("")` instead of the asm, 1 DIFF;
+           the copy before the `do {} while (0)`, 11 DIFF (it floats to the
+           block top); no loop at all, 11 DIFF. A plain `register u32 zz = c;`
+           with the same asm also MATCHES, by a different route (reload
+           materialises the copy for the asm's matching constraint); the
+           pinned form is the one whose dump was read. Silent under -Wall; no
+           uninitialised read. */
+        register u32 zz __asm__("$5") = c;
+        __asm__("" : "=r"(zz) : "0"(zz));
+        e->unk_18 = 0x7F;
+        e->unk_00 = i;
+        e->unk_04 = p;
+        e->unk_08 = c;
+        e->unk_1B = 0x40;
+        e->unk_10 = b;
+        r = func_80059F8C(b, zz);
+    }
+    e->unk_10 = r;
+    if (r == -1)
+    {
+        return -1;
+    }
+    b = func_8005ECA0(r);
+    if (func_8005EC40(p, e->unk_14) != e->unk_14)
+    {
+        return -1;
+    }
+    *(u32 *) e->pad_0C = (u32) p;
+    e->unk_10 = b;
+    return k;
+}
 
 /* The table base through a pointer local initialised in its declaration, so
    its lui/addiu comes out BEFORE the index's sign extension and the final
