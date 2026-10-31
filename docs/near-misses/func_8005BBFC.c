@@ -252,6 +252,16 @@
  * That emits the same `jal func_8005EC0C` and leaves :2315 and :2437 alone.
  * Measure the park again after the rename before landing: the alias is a
  * different declaration and this header's numbers were taken without it.
+ *
+ * REMEDY CONFIRMED -- caller's note, 2026-10-31. func_8005B4D0's park has now
+ * adopted exactly that alias and re-measured with it, and the rename is free
+ * there (see docs/near-misses/func_8005B4D0.c, which declares
+ * `void func_8005EC0C3(SpuVoiceAttr *, s32, s32) __asm__("func_8005EC0C");`
+ * and calls it as func_8005EC0C3). So the construct is known to cost nothing
+ * on one of the two three-argument parks in this unit. It is still NOT applied
+ * here, because this header's numbers predate it and a park whose stats were
+ * taken against a different declaration must be re-measured, not assumed --
+ * do the rename and re-measure as the first step of landing this one.
  * This is now unk_2CDC0's ONLY pending prototype conflict: func_80059F8C's
  * three-way disagreement was settled 2026-10-30 by measuring it -- the
  * landed `(u32, u32)` is free for all three sites, and both parks adopted
