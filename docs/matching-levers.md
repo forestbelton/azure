@@ -9797,3 +9797,82 @@ This is the fourth phantom: the tied phantom copy puts references on a
 stored value, the phantom zero on an operand, the phantom test on a branch
 condition; this one puts a SET on a value, which is the only one of the four
 that reaches the allocator as a conflict.
+
+**Second instance, func_8004E9EC (unk_1C540), 2026-10-31 -- NOT landed,
+33 of 33 words at 5 DIFF from 31/32, all measured by verify.py and read in
+the dumps.** Three uses of the non-volatile asm on one 33-word function,
+each doing a different job, and three facts about what the construct can
+and cannot do that the first instance did not need:
+
+* **The dead output is the only way the asm creates a second death.** A
+  tied value (`"=r"(p) : "0"(p)`) gets NO `REG_DEAD` for the input that is
+  also the output (flow dump: the asm insn carries none), so `.lreg` still
+  reads one death and local-alloc keeps the pseudo. The park's pointer `p`
+  needed global-alloc (its `$a1` comes from being first in `allocno_compare`
+  order with hard 2/3/4 held by the block-local loads), and only
+  `__asm__("" : "=r"(p), "=r"(a), "=r"(b), "=r"(c) : "1"(a), "2"(b), "3"(c))`
+  after the loads -- p as a DEAD output -- gave "dies in 2 places" and the
+  global allocation (`9 regs to allocate: 88 ...`, p first, `88 in 5`).
+* **A tied single output is an opaque value for cse and a second set for
+  loop.c.** `__asm__("" : "=r"(p) : "0"(p))` right after `p = SYM;` stops
+  `find_best_addr` folding the first `(mem (reg p))` into `(mem (lo_sum))`
+  (cse.c:2710-2735: ADDRESS_COST is 1 for both a bare REG -- mips.h:2895
+  short-circuits `REG_P` ahead of `mips_address_cost` -- and a LO_SUM
+  (mips.c:1608-1610), and on an equal address cost `find_best_addr` takes the
+  HIGHER rtx cost, cse.c:2719-2721; nested mems fold too via fold_rtx's MEM
+  case, cse.c:5034), so all three loads read off p and p conflicts with the first
+  load's register; and p now has two sets in the loop, so `scan_loop`'s
+  `n_times_set == 1` test (loop.c:705; its `consec_sets_invariant_p` arm at
+  :706-708 needs every set invariant, and an asm is not) keeps the
+  `addiu %lo` in the loop
+  even when the inner loop is a real `while` -- which the `p = 0` lever
+  above cannot do, because for a real inner loop its clause (1) holds.
+* **An asm is latency-free to the scheduler in BOTH directions, and the two
+  rules are different code.** As a PRODUCER it costs 1: `insn_cost` returns
+  early for an unrecognisable insn (sched.c:1379-1383, `INSN_CODE (insn) < 0`
+  -> `INSN_COST = 1`), where the load it displaces costs 2 (mips.md:157-159,
+  load READY-DELAY 2 on r3000). So a store that reads its value through a
+  tied asm has priority `priority(asm) + 1 - 1` instead of `+ 2 - 1`
+  (priority(), sched.c:1488-1491) -- 1 instead of 2, tying with the biv
+  increment. As a CONSUMER it discounts the links into it
+  (`LINK_COST_FREE`, :1394-1396, applied at :1402-1403), which keeps the asm
+  itself at the loads' priority rather than above them; that rule does NOT
+  touch the store's link, so do not reach for it to explain a consumer's
+  priority. Conversely an `"r"(x)` input cannot LIFT an insn's priority
+  (12 DIFF measured) -- both rules work the one way.
+* **Which way that tie resolves, with the direction nailed down.**
+  `rank_for_schedule` SWAPS ITS OWN ARGUMENTS (`tmp = *y; tmp2 = *x`,
+  sched.c:2389-2390) and its header comment says a positive return prefers
+  `y` (:2381-2383), so `ready[0]` is the MOST preferred: highest priority,
+  then highest class (:2399-2420 -- class 3 independent of
+  `last_scheduled_insn`, class 2 anti/output-dependent on it, class 1 data).
+  The pass runs BACKWARD and the first insn chosen becomes the tail
+  (sched.c:3748-3750, :3773), so the winner of a tie is emitted LAST. That
+  is how the target's `addiu $a3,2` AFTER the three `sb`s was reproduced:
+  the increment is the class-3 insn at that tie and the stores class 2.
+* **A tied copy with no preference**: `__asm__("" : "=r"(kk), "=r"(r) :
+  "0"(n))` as the first statement, kk used everywhere n was. set_preference
+  returns because the source is an ASM_OPERANDS, not a REG
+  (global.c:1551-1559; rtl.def:417 gives ASM_OPERANDS the format `ssiEEsi`,
+  so the 'e'-strip at :1545 does not reach it), expand_preferences never
+  looks at a two-output asm at all because `single_set` is 0 on a PARALLEL of
+  two SETs (global.c:792; a single-output form instead fails the dying-reg
+  allocno test at :798 once n is block-local), reload materialises the "0"
+  tie as the target's `addu $t2,$a1,$zero`, and the dead output r pins
+  `r = 0` behind n's death (without it sched1 hoists `r = 0` and r conflicts
+  with hard 5: 31 DIFF). A legal `kk = n` cannot: make_regs_eqv (cse.c:851-856)
+  makes kk canonical, n dies at the copy, kk inherits `5`.
+
+**The floor it left, as a warning.** The copy device cannot reproduce the
+target's `$t1`/`$t2` because allocation ORDER is priority
+(`allocno_compare`, global.c:587-608: `floor_log2(refs)*refs/live_length`
+times `allocno_size`, ties by allocno number): a pseudo born at a statement measures
+~30 insns of life where the parameter pseudo measures 56, so `kk` (0.258)
+outranks the `high` temp (0.058; 0.154 with a real inner loop, whose lo_sum
+use weighs loop_depth 3) while the real parameter (0.143) does not. The
+target therefore has the PARAMETER in `$t2` with its `$a1` preference somehow
+ineffective; under global.c as read that needs hard 5 in n's conflicts before
+allocation, and WHY the original has it is not established. The lesson for
+the lever: a dead set or tied copy changes conflicts and preferences, never
+`live_length`, so it cannot move an allocno past one whose life begins at
+the function entry.

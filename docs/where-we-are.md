@@ -28,6 +28,16 @@ sweeping by hand: `docs/permuter-protocol.md`. Search costs CPU; reasoning about
 hand costs context, and the measured marginal cost of a landing rose 17x
 between 2026-10-23 and 2026-10-29 (3.6M raw tokens per function to 61M).
 
+**That last paragraph no longer applies to the 6 remaining parks.** Every one
+of them has had the permuter and `search.py` run on it without reaching a
+match, so as of 2026-10-31 they are worked by hand from the dumps and the gcc
+source, with `verify.py` as the only measurement -- six of the seven functions
+landed on 2026-10-30/31 went that way, and the seventh (func_8004E9EC) went
+from 26 DIFF to 5 by hand after 196k permuter candidates had not improved on
+its base. Do not read `docs/landing-a-function.md` as requiring the search
+tools on these; its contracts (the landing gate, the DEVICE and park
+contracts) still hold.
+
 `func_8003CAA8` is not a function: it is `main`'s unreachable epilogue, split
 off because it follows `main`'s infinite loop. Landing it is a spec change --
 extend the `main` asm subsegment to 0x102c4 and start the C unit there.
