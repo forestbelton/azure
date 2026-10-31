@@ -2328,10 +2328,243 @@ void func_8005BAB0(s32 a, s32 b)
     D_80085F98[0] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005BBFC);
+void func_8005E4A0(s32, u32);
+/* The unit declares func_8005EC0C with ONE argument (its own landing, below)
+   and calls it so. This function passes three: one argument measured 102 DIFF
+   against the matched body. The alias keeps both views and emits the same
+   `jal func_8005EC0C`. */
+void func_8005EC0C3(SpuVoiceAttr *, s32, s32) __asm__("func_8005EC0C");
+
+/* Starts a note on channel `ch0`: looks the program and key up in bank
+   `bank`'s data, waits for the channel's voice to go idle, sums the sample
+   table to find the wave address, fills the D_80085458 entry and an
+   SpuVoiceAttr, pans the volume, and hands the attr to func_8005EC0C.
+   Returns the channel, or -1 if the channel or velocity range is out.
+
+   The load-bearing spellings, each measured on docs/near-misses before it
+   was folded in (the park is gone; the numbers are what reverting cost):
+   - D_80085458 + ch * 0x78 is recomputed three times, each with its OWN base
+     local (s3 / s / s2) and its OWN result local (v0 / v / v2): 57 words.
+   - `l = sum * 8;` as its own statement into `l`, which already has a range:
+     puts the shift in the lw delay slot (7 words; `sum *= 8` or inlining it
+     into attr.addr emits it in the wrong slot).
+   - `d = e[0xD];` hoisted above the halfword stores: 15 words.
+   - halfword store order 0x00, 0x04, 0x08, 0x0A, 0x06, 0x1A (unique minimum
+     of all 720 orders); loop setup `i = 0; sum = 0; n = ...; w = ...;`.
+   - `sum += *w; w++; i++;` -- the bump before the counter, or the loop needs
+     a nop in the lhu delay slot (334 words).
+   - `b + (((s16) prog * 0x10 + key) * 0x20 + 0x820)`: 0x820 joins the index
+     before `b` is added.
+   - `u` and `t` are two locals, one per ADSR halfword.
+   - `attr.note = pit;` sits after attr.volume.right so its `sh $s7` is what
+     sched2 drops into the `lhu 0x12` delay slot; 42 other positions measured
+     2 to 271.
+   The two `__asm__` statements are devices; see docs/matching-levers.md,
+   "A DEAD SET IN A TWO-OUTPUT ASM: a conflict for global-alloc and a second
+   death for local-alloc, with no insn and no fence". */
+s16 func_8005BBFC(s16 ch0, s16 bank, s16 prog, s16 key, s16 vel, s16 fine, s16 volx, s16 panx)
+{
+    SpuVoiceAttr attr;
+    s32 ch;
+    u8 *b;
+    u8 *q;
+    u8 *e;
+    u8 *v;
+    u8 *v0;
+    u8 *v2;
+    u16 *w;
+    s32 pit;
+    s32 i;
+    s32 n;
+    s32 sum;
+    s32 k;
+    s32 x;
+    s32 a;
+    s32 l;
+    s32 r;
+    u16 t;
+    u16 u;
+    u8 d;
+    u8 *s;
+    u8 *s2;
+    u8 *s3;
+    s32 g;
+
+    ch = ch0;
+    D_80085F98[0] = 1;
+    if ((s32) D_80073734[0] - 1 < ch)
+    {
+        ch = -1;
+    }
+    if (ch != -1)
+    {
+        b = D_80086A40[bank].unk_04;
+        q = b + ((s16) prog * 0x10 + 0x20);
+        pit = (vel << 8) + fine;
+        e = b + (((s16) prog * 0x10 + key) * 0x20 + 0x820);
+        if (vel >= e[6] && e[7] >= vel)
+        {
+            func_80056DB4(ch);
+            do
+            {
+                func_8005E97C(0, D_80073740[ch]);
+                k = func_8005EB78(D_80073740[ch]);
+            } while (k != 2 && k != 0);
+            i = 0;
+            sum = 0;
+            n = *(s16 *) (e + 0x16);
+            w = (u16 *) (D_80086A40[bank].unk_04 + (*(u16 *) (b + 0x12) << 9) + 0x820);
+            if (n > 0)
+            {
+                do
+                {
+                    sum += *w;
+                    w++;
+                    i++;
+                } while (i < n);
+            }
+
+            l = sum * 8;
+            attr.mask = SPU_VOICE_VOLL | SPU_VOICE_VOLR | SPU_VOICE_VOLMODEL | SPU_VOICE_VOLMODER |
+                        SPU_VOICE_NOTE | SPU_VOICE_SAMPLE_NOTE | SPU_VOICE_WDSA |
+                        SPU_VOICE_ADSR_AMODE | SPU_VOICE_LSAX | SPU_VOICE_ADSR_ADSR1 |
+                        SPU_VOICE_ADSR_ADSR2;
+            attr.volmode.left = 0;
+            attr.volmode.right = 0;
+            attr.voice = D_80073740[ch];
+            attr.addr = D_80086A40[bank].unk_10 + l;
+
+            s3 = D_80085458;
+            v0 = s3 + ch * 0x78;
+            u = *(u16 *) (e + 0x10);
+            attr.adsr1 = u;
+            *(u32 *) (v0 + 0x60) = u;
+            t = *(u16 *) (e + 0x12);
+            attr.adsr2 = t;
+            *(u32 *) (v0 + 0x64) = t;
+            if ((*(u16 *) (e + 0x10) & 0x80) != 0)
+            {
+                attr.a_mode = SPU_VOICE_EXPIncN;
+            }
+            else
+            {
+                attr.a_mode = SPU_VOICE_LINEARIncN;
+            }
+            attr.loop_addr = attr.addr;
+            s = D_80085458;
+            v = s + ch * 0x78;
+            v[0x22] = e[4];
+            v[0x23] = e[5];
+            v[0x21] = e[0xC];
+            d = e[0xD];
+            *(s16 *) (v + 0x00) = ch;
+            *(u16 *) (v + 0x04) = prog;
+            *(s16 *) (v + 0x08) = key;
+            *(s16 *) (v + 0x0A) = pit >> 8;
+            *(s16 *) (v + 0x06) = 0x11;
+            *(s16 *) (v + 0x1A) = 1;
+            v[0x20] = d;
+            v[0x14] = q[1];
+            v[0x16] = q[4];
+            v[0x15] = e[2];
+            v[0x17] = e[3];
+            *(s16 *) (v + 0x5C) = bank;
+            x = D_80086A40[bank].unk_1B + v[0x16] + v[0x17] - 0x80;
+            if (x < 0)
+            {
+                x = 0;
+            }
+            if (x >= 0x80)
+            {
+                x = 0x7F;
+            }
+            *(s16 *) (v + 0x18) = x;
+            g = D_80086A40[bank].unk_18;
+            a = g * v[0x14] * v[0x15] >> 7;
+            /* DEVICE: a second, dead set of `g` in its own block, in an asm
+             * that emits nothing and is kept because its other output (`x`,
+             * tied to itself) is used. The dead set gets a REG_UNUSED death
+             * (flow.c:2094-2101), so `g` "dies in 2 places" and local-alloc
+             * leaves it to global-alloc (local-alloc.c:472), which allocates
+             * it AFTER `x` (priority 1.0 against 1.565) into $a0. Left to
+             * local-alloc it takes $v1 ahead of `x`, `x` falls to $a0, and
+             * the arms below cannot come out right: 15 DIFF without this.
+             * The tie target is free (`l` matches, `x` matches; `r` is
+             * uninitialised here and gives 15) and so is the block (either
+             * arm matches too). Not volatile, so sched does not fence on it
+             * (sched.c:1957). No -Wall warning. */
+            __asm__("" : "=r"(g), "=r"(x) : "1"(x));
+            if (x >= 0x40)
+            {
+                r = a;
+                /* DEVICE: a dead set of `a` after the copy, in an asm that
+                 * emits nothing; its other output ties `r` to itself so flow
+                 * keeps the insn (flow.c:2094-2101). global_conflicts records
+                 * the set against everything live -- `r` here, `l` in the
+                 * else arm (global.c:729, then the REG_UNUSED death at :765-767)
+                 * -- so `a` CONFLICTS with both
+                 * and expand_preferences (global.c:781-828) does not pass it
+                 * the $a1/$a2 the two copies would otherwise hand it; with no
+                 * usable preference find_reg takes the lowest free register
+                 * (global.c:951-980; mips.h has no REG_ALLOC_ORDER), $a0.
+                 * Without the pair `a` shares $a1 with `l`, the else-arm copy
+                 * is free, and the body is one word short: 108. One arm alone
+                 * is 117 / 108. `__asm__ volatile("" : "=r"(a));` (a fence)
+                 * also matches; a single-output non-volatile asm is deleted
+                 * as dead (no change). Legal spellings measured: a dead
+                 * `a = 0;` after the call 21 (cse makes `a` canonical and the
+                 * shifts read it, cse.c:853-857); `r = x * (a << 1) >> 7`
+                 * no change (cse rewrites `a` to `l`); an identical-arm
+                 * `if (a)` at the join 104-122; `a = unk_18; a = a * ...`
+                 * 39/41; one-argument func_8005EC0C 102. No -Wall warning. */
+                __asm__("" : "=r"(a), "=r"(r) : "1"(r));
+                l = (0x40 - (x & 0x3F)) * (r << 1) >> 7;
+            }
+            else
+            {
+                l = a;
+                /* DEVICE: the else arm's half of the pair above. */
+                __asm__("" : "=r"(a), "=r"(l) : "1"(l));
+                r = x * (l << 1) >> 7;
+            }
+
+            l = l * D_80086A40[bank].unk_18 >> 7;
+            r = r * D_80086A40[bank].unk_18 >> 7;
+            s2 = D_80085458;
+            v2 = s2 + ch * 0x78;
+            *(s16 *) (v2 + 0x10) = l * (s16) volx >> 7;
+            *(s16 *) (v2 + 0x12) = r * (s16) panx >> 7;
+            attr.volume.left = *(s16 *) (v2 + 0x10);
+            attr.volume.right = *(u16 *) (v2 + 0x12);
+            attr.note = pit;
+            if (e[5] != 0)
+            {
+                attr.sample_note = (*(e - 0x1C) << 8) | (0x7F - e[5]);
+            }
+            else
+            {
+                attr.sample_note = e[5] | (e[4] << 8);
+            }
+            func_8005EC0C3(&attr, l, r);
+            if ((e[1] & 4) != 0)
+            {
+                func_8005E4A0(1, D_80073740[ch]);
+            }
+            else
+            {
+                func_8005E4A0(0, D_80073740[ch]);
+            }
+        }
+        else
+        {
+            ch = -1;
+        }
+    }
+    D_80085F98[0] = 0;
+    return ch;
+}
 
 s32 func_8005EB78(u32);
-s16 func_8005BBFC(s16, s16, s16, s16, s16, s16, s16, s16);
 
 /* Finds a free slot -- first a D_80073740 handle func_8005EB78 reports idle,
    then a D_80085458 entry with a zero +0x1A -- and hands it plus all seven
