@@ -5,6 +5,10 @@
 s32 func_8003F270(void);
 void func_8003E758(void);
 u32 func_8003E240(s32);
+void func_8003E70C(void);
+void func_8003F624(void);
+s32 func_8003F688(s32);
+u8 func_8003F240(void);
 
 /* One file-scope size record for the whole unit: func_8003F2A4 and
  * func_8003F368 reach these four objects $gp-relatively while reaching others
@@ -92,7 +96,87 @@ void func_8003F320(void) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12A70", func_8003F368);
+/* Reads the drive's current MSF position into loc[] and returns it as a
+ * sector number, or 0 if the drive did not settle or the position is not a
+ * valid MSF (minutes < 75, seconds < 60, frames < 75, sector > 0).
+ *
+ * The validation tail is NOT written as one `&&` chain. Nineteen spellings of
+ * the chain all measured 4 DIFF: the target leaves the SECOND guard's delay
+ * slot empty and puts the THIRD guard's compare in $v1, and both come from a
+ * `return 0` that sits between the third `slti` and its `beqz` before reorg.
+ * That is what `if (!(C)) return 0;` produces: cc1psx's jump1 hoists the
+ * fall-through arm's `v0 = 0` above the conditional jump and inverts it to
+ * the return label (upstream 2.7.2 hoists the OTHER arm; this is measured,
+ * not read). With `v0` reborn between the compare's birth and death the
+ * compare cannot take $v0 (local-alloc.c:1416, :2108) and falls to $v1;
+ * reorg's backward scan then steals that `v0 = 0` into the third guard's slot
+ * and leaves a `(use (insn))` marker where it was (reorg.c:2943, :2244),
+ * which mark_target_live_regs counts as a set of $v0 live at the second
+ * guard's fall-through (:2698-2704), so the second guard may not copy the
+ * `return 0` from its target (:3375-3376) and keeps a nop. See
+ * docs/matching-levers.md, "A `return 0` BETWEEN A COMPARE AND ITS BRANCH". */
+s32 func_8003F368(void) {
+    u8 loc[4];
+    u8 res[8];
+    u8 *q;
+    u32 saved;
+    s32 i;
+    s32 pos;
+
+    saved = *(u32 *) D_80081450;
+    *(u32 *) D_80081450 = 0;
+    if (CdSync(1, res) != 2) {
+        return 0;
+    }
+restart:
+    i = 0x10;
+    for (;;) {
+        if (CdControl(0x10, NULL, D_80081450) == 1) {
+            break;
+        }
+        if (--i == 0) {
+            func_8003E70C();
+            func_8003F624();
+            i = 0x10;
+        }
+    }
+    i = 0x10;
+    q = &D_800814D3[0];
+    for (;;) {
+        if (CdSync(1, D_80081450) == 2) {
+            break;
+        }
+        if (--i == 0) {
+            func_8003E70C();
+            if (func_8003F240() == 0x1B) {
+                D_800814D3[0] = 0xFF;
+                if (q[-3] != 0) {
+                    D_800814D0[0]--;
+                } else {
+                    q[-3] = 0x1F;
+                }
+                D_800814D0[0] &= 0x1F;
+                func_8003F624();
+                goto restart;
+            }
+            *(u32 *) D_80081450 = saved;
+            i = 0x10;
+        }
+    }
+    loc[0] = D_80081450[0];
+    loc[1] = D_80081451;
+    loc[2] = D_80081452;
+    pos = CdPosToInt((CdlLOC *)loc);
+    if (func_8003F688(D_80081450[0]) < 0x4B && func_8003F688(D_80081451) < 0x3C) {
+        if (!(func_8003F688(D_80081452) < 0x4B)) {
+            return 0;
+        }
+        if (pos > 0) {
+            return pos;
+        }
+    }
+    return 0;
+}
 
 s32 func_8003F52C(s32 arg0) {
     return arg0;
