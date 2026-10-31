@@ -2340,7 +2340,461 @@ void func_80056DB4(s32 i)
     func_8005F134(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2879C", func_80056E10);
+/* The three-channel note trigger: walks the program's region table in the
+   bank at D_80086A40[D_80086D50], picks a free voice out of D_80085458, and
+   fills the SPU attribute packet at D_80084918 for it.
+
+   Four things the listing demanded, all measured on this function:
+
+   * D_80086D50 takes the INCOMPLETE-ARRAY alias. As the `extern s16
+     D_80086D50;` of structs.h its load is one symbolic `lh` macro insn, which
+     sched2 is free to hoist into the load-delay slot after the `lbu` of `ch`
+     in the prologue; the target's load is a separate `lui`/`lh %lo` pair that
+     stays at its use. 131 -> 129 DIFF with `s16 pan`, then 99 with the alias.
+
+   * The scan over the program's 0x10-byte entries is `b[c * 0x10 + 0x20]`,
+     not a `u8 *r` walked with `r += 0x10`. Both give the same giv, but with
+     the explicit pointer the preheader holds the source's `r = b` copy BEFORE
+     loop.c's hoist of the `prog` bound, and sched2 breaks the tie between the
+     two copies on INSN_LUID -- so `addu $v1,$t0,$zero` came out ahead of
+     `addu $a0,$v0,$zero`. The index form puts the giv init after the hoist
+     and matches. Worth the last 2 DIFF.
+
+   * `sum = sum * 8;` as its own statement, not `+ sum * 8` inline. The
+     product's pseudo only ties to `sum`'s quantity -- and so reuses $a1
+     instead of taking a fresh $v1 -- when it is written back to `sum`. 4 -> 2.
+
+   * `sum` is also the scratch for the func_8005EB78 result at the first
+     one-armed test. That raises its allocno priority above the loop counter's
+     (global.c ranks on floor_log2(refs)*refs/live_length), which is what puts
+     the accumulator in $a1 and the counter in $a2 the way the target has them
+     in BOTH loops; without it the pair comes out swapped and loop1 costs 5
+     further words. 20 -> 4 DIFF. Either one-armed test does it; the other two
+     call sites keep their own `st`, and unifying `st` and `sum` outright is
+     529 DIFF.
+
+   Ruled out, with scores: `c = 0; sum = 0;` ahead of the loop (131 -> 101 at
+   the time, and +2 once the rest was in place), `sum += *w++` and `w++` after
+   `c++` (232), `sum += w[c]` (306), func_80055E74 called with no arguments
+   (412), the limit hoisted into its own local (538), `r = b` lifted out of
+   the `if` (641).
+
+   `s32 dummy[6]` below is SCAFFOLD -- do not delete it without re-running
+   `make check`. It is 24 bytes of frame the listing never touches, and it is
+   unreferenced on purpose: an unused aggregate still gets its stack slot at
+   expand time, so declaring it reserves the space. The size is evidence --
+   the locals start at 0x30, the outgoing-argument area is 0x18, and reload
+   hands spill slots out in pseudo order with the parameters first, so the gap
+   below `ch`'s slot can only be an expand-time allocation, i.e. an aggregate
+   local the original declared and never used (or used in code that folded
+   away). Its SIZE is known from the slot layout; its type and contents are a
+   guess that happens to fill the hole. The park that preceded this landing
+   asked for a better account of it before landing and did not get one, so
+   this is still the open question in an otherwise byte-identical function. */
+
+extern u8 D_80084930[];
+extern SpuVoiceAttr D_80084918s __asm__("D_80084918");
+
+void func_8005E4A0(s32, u32);
+s32 func_8005E78C(void);
+void func_8005EC0C1(SpuVoiceAttr *) __asm__("func_8005EC0C");
+void func_80055E74f(s32, s32, s32, s32, s32) __asm__("func_80055E74");
+
+void func_80056E10(u8 ch, u8 key, u8 vel)
+{
+    s32 dummy[6]; /* SCAFFOLD: frame padding, see above -- not dead code */
+    u16 j;
+    s32 n;
+    u16 prog;
+    u8 *b;
+    u8 *b2;
+    u8 *q;
+    s32 flag;
+    u32 k;
+    u16 chh;
+    Unk80084960 *s;
+    u8 *e;
+    u8 *v;
+    u16 *w;
+    s32 sum;
+    s32 c;
+    s32 x;
+    s16 pan;
+    u16 note;
+    s32 st;
+    s16 i;
+    u16 t;
+
+    n = 0;
+    s = &D_80084960[ch];
+    b2 = D_80086A40[D_80086D50a[0]].unk_04;
+    b = b2;
+    prog = *(u16 *)s;
+    c = 0;
+    if (prog != 0)
+    {
+        do
+        {
+            if (b[c * 0x10 + 0x20] != 0)
+            {
+                n = n + 1;
+            }
+            c = c + 1;
+        } while (c < prog);
+    }
+    q = b + (prog * 0x10 + 0x20);
+    note = key;
+    j = 0;
+    if (q[0] == 0)
+    {
+        return;
+    }
+    k = key;
+    chh = ch;
+    do
+    {
+        e = b + ((n * 0x10 + j) * 0x20 + 0x820);
+        flag = 0;
+        if (k >= e[6] && e[7] >= k)
+        {
+            i = -1;
+            if (s->unk_98 != 0)
+            {
+                i = 0;
+                do
+                {
+                    u8 *p = D_80085458 + i * 0x78;
+                    if (chh == *(u16 *)(p + 6))
+                    {
+                        goto found1;
+                    }
+                    i = i + 1;
+                } while (i < D_80073734a[0]);
+                i = -1;
+                found1:
+                if (i != -1)
+                {
+                    u8 *p = D_80085458 + i * 0x78;
+                    if (*(u16 *)(p + 0x1A) == 0)
+                    {
+                        func_80056DB4(i);
+                        func_8005E97C(0, D_80073740[i]);
+                    }
+                    else
+                    {
+                        flag = 1;
+                    }
+                }
+                else
+                {
+                    i = 0;
+                    do
+                    {
+                        sum = func_8005EB78(D_80073740[i]);
+                        if (sum == 0)
+                        {
+                            goto found2;
+                        }
+                        i = i + 1;
+                    } while (i < (s32)D_80073734[0]);
+                    i = -1;
+                    found2:
+                    if (i == -1)
+                    {
+                        i = 0;
+                        do
+                        {
+                            st = func_8005EB78(D_80073740[i]);
+                            if (st == 2)
+                            {
+                                goto found3;
+                            }
+                            if (st == 0)
+                            {
+                                goto found3;
+                            }
+                            i = i + 1;
+                        } while (i < D_80073734s);
+                        i = -1;
+                        found3:;
+                    }
+                }
+                if (s->unk_50 != 0)
+                {
+                    note = s->unk_5C & 0x7F;
+                    s->unk_52 = 0;
+                    if (s->unk_5C < k)
+                    {
+                        s->unk_56 = (key - s->unk_5C) << 7;
+                        s->unk_54 = (s->unk_56 << 2) / s->unk_50;
+                        s->unk_58 = 1;
+                    }
+                    else if (s->unk_5C == k)
+                    {
+                        s->unk_54 = 0;
+                        note = key;
+                    }
+                    else
+                    {
+                        s->unk_56 = (s->unk_5C - key) << 7;
+                        s->unk_54 = (s->unk_56 << 2) / s->unk_50;
+                        s->unk_58 = 0;
+                    }
+                }
+                else
+                {
+                    s->unk_52 = 0;
+                }
+            }
+            else
+            {
+                if (s->unk_50 != 0)
+                {
+                    note = s->unk_5C & 0x7F;
+                    s->unk_52 = 0;
+                    if (s->unk_5C < k)
+                    {
+                        s->unk_56 = (key - s->unk_5C) << 7;
+                        s->unk_54 = (s->unk_56 << 2) / s->unk_50;
+                        s->unk_58 = 1;
+                    }
+                    else if (s->unk_5C == k)
+                    {
+                        s->unk_54 = 0;
+                        note = key;
+                    }
+                    else
+                    {
+                        s->unk_56 = (s->unk_5C - key) << 7;
+                        s->unk_54 = (s->unk_56 << 2) / s->unk_50;
+                        s->unk_58 = 0;
+                    }
+                }
+                else
+                {
+                    s->unk_52 = 0;
+                }
+            }
+            if (i == -1)
+            {
+                i = 0;
+                do
+                {
+                    if (func_8005EB78(D_80073740[i]) == 0)
+                    {
+                        goto found4;
+                    }
+                    i = i + 1;
+                } while (i < (s32)D_80073734[0]);
+                i = -1;
+                found4:
+                if (i == -1)
+                {
+                    i = 0;
+                    do
+                    {
+                        st = func_8005EB78(D_80073740[i]);
+                        if (st == 2)
+                        {
+                            goto found5;
+                        }
+                        if (st == 0)
+                        {
+                            goto found5;
+                        }
+                        i = i + 1;
+                    } while (i < D_80073734s);
+                    i = -1;
+                    found5:
+                    if (i == -1)
+                    {
+                        i = 0;
+                        do
+                        {
+                            u8 *p = D_80085458 + i * 0x78;
+                            if (chh == *(u16 *)(p + 6) && *(u16 *)(p + 0xA) == key)
+                            {
+                                goto found6;
+                            }
+                            i = i + 1;
+                        } while (i < D_80073734a[0]);
+                        i = -1;
+                        found6:
+                        if (i == -1)
+                        {
+                            i = 0;
+                            do
+                            {
+                                u8 *p = D_80085458 + i * 0x78;
+                                if (*(u16 *)(p + 0x1A) == 0)
+                                {
+                                    goto found7;
+                                }
+                                i = i + 1;
+                            } while (i < D_80073734a[0]);
+                            i = -1;
+                            found7:
+                            if (i == -1)
+                            {
+                                goto next;
+                            }
+                        }
+                    }
+                }
+            }
+            v = D_80085458 + i * 0x78;
+            if (s->unk_98 == 0)
+            {
+                func_80056DB4(i);
+                func_8005E97C(0, D_80073740[i]);
+                func_80055E74f(i, key, ch, D_80084918s.volume.left, D_80084918s.volume.right);
+            }
+            w = (u16 *)(D_80086A40[D_80086D50a[0]].unk_04 + (*(u16 *)(b2 + 0x12) << 9) + 0x820);
+            c = 0;
+            sum = 0;
+            if (*(s16 *)(e + 0x16) > 0)
+            {
+                do
+                {
+                    sum += *w;
+                    w++;
+                    c++;
+                } while (c < *(s16 *)(e + 0x16));
+            }
+            D_80084918s.mask = SPU_VOICE_VOLL | SPU_VOICE_VOLR | SPU_VOICE_VOLMODEL | SPU_VOICE_VOLMODER |
+            SPU_VOICE_NOTE | SPU_VOICE_SAMPLE_NOTE | SPU_VOICE_WDSA |
+            SPU_VOICE_ADSR_AMODE | SPU_VOICE_ADSR_ADSR1 | SPU_VOICE_ADSR_ADSR2;
+            D_80084918s.volmode.left = 0;
+            D_80084918s.volmode.right = 0;
+            D_80084918s.voice = D_80073740[i];
+            sum = sum * 8;
+            D_80084918s.addr = D_80086A40[D_80086D50a[0]].unk_10 + sum;
+            t = *(u16 *)(e + 0x10);
+            D_80084918s.adsr1 = t;
+            *(u32 *)(v + 0x60) = t;
+            t = *(u16 *)(e + 0x12);
+            D_80084918s.adsr2 = t;
+            *(u32 *)(v + 0x64) = t;
+            if ((*(u16 *)(e + 0x10) & 0x80) != 0)
+            {
+                D_80084918s.a_mode = SPU_VOICE_EXPIncN;
+            }
+            else
+            {
+                D_80084918s.a_mode = SPU_VOICE_LINEARIncN;
+            }
+            *(u32 *)(v + 0x68) = D_80084918s.a_mode;
+            s->unk_5C = key;
+            *(u32 *)((u8 *)s + 0x10) = vel;
+            v[0x22] = e[4];
+            v[0x23] = e[5];
+            v[0x21] = e[0xC];
+            v[0x20] = e[0xD];
+            *(s16 *)(v + 0x00) = i;
+            *(u16 *)(v + 0x04) = prog;
+            *(s16 *)(v + 0x08) = j;
+            *(s16 *)(v + 0x0A) = note & 0x7F;
+            *(s16 *)(v + 0x0C) = note & 0x7F;
+            *(s16 *)(v + 0x06) = chh;
+            *(s16 *)(v + 0x1A) = 1;
+            s->unk_3A = 0;
+            v[0x14] = q[1];
+            v[0x16] = q[4];
+            v[0x15] = e[2];
+            v[0x17] = e[3];
+            v[0x1C] = vel;
+            v[0x27] = 0;
+            v[0x26] = 0;
+            v[0x28] = 0;
+            v[0x34] = s->unk_6C;
+            v[0x36] = s->unk_6E;
+            *(u32 *)(v + 0x38) = s->unk_70;
+            *(u32 *)(v + 0x30) = s->unk_68;
+            v[0x35] = s->unk_6D;
+            v[0x24] = s->unk_5D;
+            *(u32 *)(v + 0x2C) = 0;
+            *(u32 *)(v + 0x3C) = 0;
+            v[0x43] = 0;
+            v[0x42] = 0;
+            v[0x44] = 0;
+            v[0x50] = s->unk_88;
+            v[0x52] = s->unk_8A;
+            *(u32 *)(v + 0x54) = s->unk_8C;
+            *(u32 *)(v + 0x4C) = s->unk_84;
+            v[0x51] = s->unk_89;
+            v[0x40] = s->unk_78;
+            *(u32 *)(v + 0x48) = 0;
+            *(u32 *)(v + 0x58) = 0;
+            func_800561D8(D_80085458 + i * 0x78, &D_80084960[ch]);
+            D_80084918s.volume.left = *(u16 *)(v + 0x10);
+            D_80084918s.volume.right = *(u16 *)(v + 0x12);
+            v[0x1D] = s->unk_18;
+            *(s16 *)(v + 0x0A) = key & 0x7F;
+            *(u32 *)(v + 0x74) = s->unk_1C;
+            *(u32 *)(v + 0x70) = -1;
+            if (s->unk_28 < 0x40)
+            {
+                pan = *(u16 *)(v + 0x3C) + (s->unk_3A + s->unk_52);
+                x = func_800565D8(v, s->unk_1C);
+                pan = pan + ((*(u16 *)(v + 0x0C) << 7) + x);
+                x = (s16)pan >> 7;
+                pan &= 0x7F;
+                pan += x << 8;
+                D_80084918s.note = pan;
+            }
+            else
+            {
+                s->unk_1C = 0x40;
+                D_80084918s.note = note << 8;
+            }
+            if (e[5] != 0)
+            {
+                *(s16 *)D_80084930 = ((e[4] - 1) << 8) | (0x7F - e[5]);
+            }
+            else
+            {
+                *(s16 *)D_80084930 = e[5] | (e[4] << 8);
+            }
+            if (flag == 0)
+            {
+                func_8005EC0C1(&D_80084918s);
+            }
+            if (s->unk_30 == 0)
+            {
+                if ((e[1] & 4) != 0)
+                {
+                    do
+                    {
+                        func_8005E4A0(1, D_80073740[i]);
+                    } while ((func_8005E78C() & D_80073740[i]) == 0);
+                }
+                else
+                {
+                    do
+                    {
+                        func_8005E4A0(0, D_80073740[i]);
+                    } while ((func_8005E78C() & D_80073740[i]) != 0);
+                }
+            }
+            else if (s->unk_30 != 1)
+            {
+                do
+                {
+                    func_8005E4A0(1, D_80073740[i]);
+                } while ((func_8005E78C() & D_80073740[i]) == 0);
+            }
+            else
+            {
+                do
+                {
+                    func_8005E4A0(0, D_80073740[i]);
+                } while ((func_8005E78C() & D_80073740[i]) != 0);
+            }
+        }
+        next:
+        j = j + 1;
+    } while (j < q[0]);
+}
 
 void func_80056D44(s32, u8 *);
 
