@@ -1093,7 +1093,7 @@ void func_80047270(u8 *arg0, RECT *rect)
         D_80081480 = D_8008148C;
         DrawSync(0);
     }
-    func_800407C0(arg0, (u32 *)D_80081480);
+    func_800407C0(arg0, (u8 *)D_80081480);
     LoadImage(rect, (u32 *)D_80081480);
     t = rect->h * 2;
     D_80081480 = D_80081480 + rect->w * t;

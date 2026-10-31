@@ -1978,7 +1978,7 @@ s32 func_800A1BD0(u8 *);
 void func_800410FC(void);
 void func_8003FAD4(void);
 void func_8003F7E4(void);
-void func_800407C0(u8 *, u32 *);
+u8 *func_800407C0(u8 *, u8 *);
 u8 *func_8004068C(u8 *, u8 *);
 void func_80043568(void);
 void func_800542BC(void);

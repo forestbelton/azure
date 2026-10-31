@@ -810,7 +810,237 @@ done:
     return dst;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_12DEC", func_800407C0);
+u8 *func_800407C0(u8 *src, u8 *d)
+{
+    s32 phase = 0;
+    u8 *row = d;
+    s32 m = *(src++);
+    s32 n;
+    u32 c;
+    u8 b;
+    s32 size;
+    u32 w;
+    s32 sphase;
+    if ((m & 1) != 0)
+    {
+        for (;;)
+        {
+            c = *(src++);
+            if ((c & 0xF0) == 0)
+            {
+                u8 *q;
+                if ((c & 0xFF) == 0)
+                {
+                    break;
+                }
+                n = (c & 0xFF) * 2;
+                sphase = 0;
+                if (n > 0)
+                {
+                loopA:
+                    if (sphase == 0)
+                    {
+                        c = *(src++);
+                    }
+
+                    q = d;
+                    if (phase == 0)
+                    {
+                        if (sphase != 0)
+                        {
+                            *d = c & 0xF;
+                        }
+                        else
+                        {
+                            *d = c >> 4;
+                        }
+                    }
+                    else
+                    {
+                        u32 t;
+                        t = *d;
+                        d++;
+                        if (sphase != 0)
+                        {
+                            w = (c << 4) & 0xF0;
+                            *q = t | w;
+                        }
+                        else
+                        {
+                            w = c & 0xF0;
+                            *q = t | w;
+                        }
+                    }
+                    sphase ^= 1;
+                    phase ^= 1;
+                    n--;
+                    if (n > 0)
+                    {
+                        goto loopA;
+                    }
+                }
+            }
+            else
+            {
+                n = c >> 4;
+                b = c & 0xF;
+                for (; n >= 0; n--)
+                {
+                    if (phase == 0)
+                    {
+                        *d = b;
+                    }
+                    else
+                    {
+                        *d = (*d) | (b << 4);
+                        d++;
+                    }
+                    phase ^= 1;
+                }
+            }
+        }
+
+        return d + 1;
+    }
+    if (m != 0)
+    {
+        u8 *rowend;
+        u8 *end;
+        m = m >> 1;
+        size = src[0] + (src[1] << 8);
+        src += 2;
+        rowend = d + m;
+        end = d + size;
+        do
+        {
+            c = *(src++);
+            if ((c & 0xF0) == 0)
+            {
+                n = c * 2;
+                for (sphase = 0; n > 0; n--)
+                {
+                    u32 v;
+                    if (sphase == 0)
+                    {
+                        c = *(src++);
+                    }
+                    if (phase == 0)
+                    {
+                        v = c & 0xF;
+                        if (sphase == 0)
+                        {
+                            v = c >> 4;
+                        }
+                    }
+                    else
+                    {
+                        u32 t;
+                        t = *d;
+                        if (sphase != 0)
+                        {
+                            w = (c << 4) & 0xF0;
+                            v = t | w;
+                        }
+                        else
+                        {
+                            w = c & 0xF0;
+                            v = t | w;
+                        }
+                    }
+                    *d = v;
+                    d += m;
+                    sphase ^= 1;
+                    if (d >= end)
+                    {
+                        phase ^= 1;
+                        if (phase == 0)
+                        {
+                            row++;
+                            if (row >= rowend)
+                            {
+                                /* DEVICE: both arms return `end'. The duplicated tail is what
+                                 * makes the allocation come out right; collapsing it to a single
+                                 * `return end;' costs 38 DIFF. gcc 2.7.2 enables cross-jumping
+                                 * only in the post-reload jump pass, so the two blocks survive
+                                 * through local-alloc and split live ranges there, then merge
+                                 * away -- 178 words either way, and make check is byte-identical.
+                                 * The guard has to test something gcc cannot fold against the
+                                 * `phase == 0' branch already taken. Measured on this body, all
+                                 * at 178 words: `sphase != 0' MATCH; `c' 26; `phase == 0' 38
+                                 * (folded, phase is known 0 here); `d >= end' 38; single
+                                 * `return end;' 38. `sphase' is live and initialised, so this
+                                 * does not warn under -Wall (CFLAGS has no -Wall anyway).
+                                 * Without it the function still decodes correctly; only the
+                                 * register assignment changes. */
+                                if (sphase != 0)
+                                {
+                                    return end;
+                                }
+                                else
+                                {
+                                    return end;
+                                }
+                            }
+                        }
+                        d = row;
+                    }
+                }
+            }
+            else
+            {
+                n = c >> 4;
+                b = c & 0xF;
+                for (; n >= 0; n--)
+                {
+                    if (phase == 0)
+                    {
+                        *d = b;
+                    }
+                    /* DEVICE: the `else' arm is written twice behind a guard that is
+                     * always true (`src' is a live non-null cursor). Same mechanism as
+                     * the duplicated `return end;' above -- the second block survives
+                     * local-alloc and splits live ranges, then cross-jumps away after
+                     * reload, so the function is still 178 words. Dropping the
+                     * duplicate costs 6 DIFF. Guards measured here: `src', `d', `end',
+                     * `m', `n >= 0', `n > 0' all MATCH; `row' 25; `phase != 0' 6 (no
+                     * effect); `phase == 1' 102 -- a test gcc can fold against the
+                     * `phase == 0' above is worthless, which is why the guard reads as
+                     * unrelated to the logic. No uninitialised read, so no -Wall
+                     * warning. Without it the function still decodes correctly. */
+                    else if (src)
+                    {
+                        *d = (*d) | (b << 4);
+                    }
+                    else
+                    {
+                        *d = (*d) | (b << 4);
+                    }
+                    d += m;
+                    if (d >= end)
+                    {
+                        phase ^= 1;
+                        if (phase == 0)
+                        {
+                            row++;
+                            if (row >= rowend)
+                            {
+                                return end;
+                            }
+                        }
+                        d = row;
+                    }
+                }
+            }
+        } while ((((d + m) < end) || (phase == 0)) || ((row + 1) < rowend));
+        return end;
+    }
+    else
+    {
+        size = src[0] + (src[1] << 8);
+        memcpy(d, src + 2, size);
+        return d + size;
+    }
+}
 
 void func_80040A88(void (*arg0)(void)) {
     D_80082E60.unk_04 = arg0;
