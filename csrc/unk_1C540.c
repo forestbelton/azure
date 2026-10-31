@@ -3750,12 +3750,68 @@ u8 *func_8004E478(u8 *p, u16 n) {
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E4C0);
+u8 *func_8004E4C0(u32 n, u16 w, u8 *out, u8 pad)
+{
+    s32 i;
+    u32 t;
+    u32 q;
+    u16 lim = w;
 
-void func_8004E4C0(s32, u16, s32, s32);
+    *out++ = n % 10 + 0x30;
+    i = 1;
+    if (i < lim)
+    {
+        while (i < lim)
+        {
+            n = n / 10;
+            if (n == 0)
+            {
+                break;
+            }
+            q = n / 10;
+            /* DEVICE: `+ ((q + q) - q - q)` is a phantom ZERO on the quotient.
+               The original cannot have had it. What it is worth: 7 -> MATCH
+               on this body (5 on the park's `t = n % 10` body); every opcode,
+               immediate and branch already matched and the differing words
+               were $v0/$v1 swapped across `srl`..`subu`. flow counts the three
+               references before combine folds them (flow.c:2067 counts,
+               cse.c:3760-3810 folds `(minus (ashift q 1) q)` to `q` and
+               :3743-3746 folds `q - q` to 0; the final `+ 0` goes too, but
+               WHERE is not established -- :3757 is the MINUS-by-zero rule,
+               not a PLUS one, and the PLUS case has no `x + 0` rule), so no
+               insn survives (.combine dump: 90/92/94/96 deleted) and the
+               quotient is priced at 12 weighted refs over 4 suids = 36.0
+               against the tied *10 chain's 20 over 10 = 32.0 (qty_compare_1
+               local-alloc.c:1598, the chain's tie :1858-1870); the quotient
+               is allocated first and takes $v0 (find_free_reg :2158). Without
+               it the quotient is 6 refs = 12.0 and takes $v1 after the chain.
+               Ruled out (verify.py DIFF): every plain named-quotient form 7;
+               `t = n % 10` unnamed 5; no temp 7; `t |= 0x30` 6; the phantom
+               as the MULTIPLICAND `((q+q+q)-q-q) * 10` 7 (combine merges the
+               `srl` into the folded copy and the inflated pseudo is deleted);
+               `q = (q+q+q)-q-q` self-assigned 7 (dies in 2 places, so
+               local-alloc.c:472 sends it to global-alloc). No -Wall warning.
+               See docs/matching-levers.md, "A PHANTOM ZERO". */
+            t = q * 10 + ((q + q) - q - q);
+            t = n - t;
+            t += 0x30;
+            *out++ = t;
+            i++;
+        }
+        while (i < w)
+        {
+            *out++ = pad;
+            i++;
+        }
+    }
+    *out = 0;
+    return out - w;
+}
+
+u8 *func_8004E4C0(u32, u16, u8 *, u8);
 
 void func_8004E57C(s32 a, u16 b, s32 c) {
-    func_8004E4C0(a, b, c, 0x20);
+    func_8004E4C0(a, b, (u8 *) c, 0x20);
 }
 
 u8 *func_8004E478(u8 *, u16);
@@ -3766,11 +3822,11 @@ u8 *func_8004E5A0(s32 a, u16 n, u8 *dst) {
     return dst;
 }
 
-void func_8004E4C0(s32, u16, s32, s32);
+u8 *func_8004E4C0(u32, u16, u8 *, u8);
 u8 *func_8004E478(u8 *, u16);
 
 u8 *func_8004E5E8(s32 a, u16 n, u8 *dst) {
-    func_8004E4C0(a, n, (s32) dst, 0x30);
+    func_8004E4C0(a, n, dst, 0x30);
     func_8004E478(dst, n);
     return dst;
 }
