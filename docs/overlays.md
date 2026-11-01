@@ -473,6 +473,17 @@ a general register, which can be hoisted and shared -- the hoisted-lui shape
 this overlay uses everywhere. On `func_80020924` that is the difference
 between 26 words and 24.
 
+A consequence worth stating, because it retires one of this project's main
+declaration-level levers for all overlay code. The symbolic-vs-split choice
+documented in `docs/addressing-and-translation-units.md` is a test of a
+global's declared size against `-G`: at `-G8` a scalar or an array of <= 8
+bytes gets the symbolic form and anything larger gets the split. At `-G0` no
+declared size is ever `<= G`, so **every** global access takes the split form
+whatever the declaration says. Spelling a global `extern T X[];` instead of as
+a scalar cannot change the addressing shape in an overlay. The levers that do
+still work are the ones about WHICH register the address lands in and WHERE
+the `high` is emitted -- which is what landed `func_80020924`.
+
 ### One source reproduces both builds
 
 The same C source compiles to the live block at `-G0` and to the **debug twin
