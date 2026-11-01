@@ -1274,12 +1274,18 @@ s32 func_80022B20(s32 a)
     return func_800491F4(a, D_80027F60, 7);
 }
 
-/* NEAR MISS, parked at 40 words / 13 DIFF; source and the full measurement
+/* NEAR MISS, parked at 40 words / 9 DIFF; source and the full measurement
    table are in docs/near-misses/func_80022B48.c, which is also the permuter's
-   base (`tools/decomp/permimport.py func_80022B48`). Register allocation
-   already matches; what is left is the schedule of the `ptrs[i] =
-   &c->ents[i]` pair and, consequently, two register names. The five siblings
-   are the same shape at the other five base offsets. */
+   base (`tools/decomp/permimport.py func_80022B48`). Two permuter runs and a
+   by-hand sweep took it from 13 to 9: the lever is a SECOND base pointer,
+   `UnkCardGrp8B0 *b = c;`, used only for the three trailing `shared` stores.
+   That is what forces the `addu $t3, $a0, $zero` copy at word 0 -- without it
+   gcc keeps the base in $a0 and the function is one word short -- and once
+   the `e` local is dropped and both UnkCardPair fields go through
+   `c->ents[i]`, the loop body is the target instruction for instruction.
+   What is left is that the loop still addresses off $a0 where the target uses
+   $t3, so the prims address takes $v1 instead of $a0. The five siblings are
+   the same shape at the other five base offsets. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022B48);
 
 /* NEAR MISS: 27 words against 24, and the register allocation ALREADY matches ($a3 maxlen, $t1 last, $a2 index, $t0 cursor). The three extra words are a duplicated inner-loop test: the target enters the inner loop with 'j' straight to the bottom test, the plain gcc 2.7.2 'while' shape, while every spelling here gets a guard copy of the test at the top AND the bottom one. Related, and probably the cause: 'last = i' is loop-invariant in the inner loop, and loop.c SINKS it out past the loop here (it lands in the bottom branch's delay slot, shared with the guard's target) where the target keeps it inside, in the if's delay slot. Three spellings measured: 'last = i' before the if, after it, and the if-body order swapped.
