@@ -10892,3 +10892,74 @@ Three things about that lever:
   insns earlier, so by pass 3142 there is nothing there: 74 words / 47 DIFF.
   A trailing `;` or an unused label is 74/47 for the same reason; `return r;`
   is 76/15 and `while (0) {}` is 75/24.
+
+### `if (c) x = 1; else x = 0;` -- WHICH ARM'S ASSIGNMENT COMES FIRST decides whether the compare and the flag share a register
+
+A flag set on one path and cleared on the other, then passed to a call:
+
+```c
+if (p[0x12] == 1) { flag = 1; }
+else { func_80023A50((s32 *)p[6], p[0x11]); flag = 0; }
+```
+
+compiles to the compare's constant in its own register and the flag as a COPY
+of it, with the copy in the branch's delay slot:
+
+```
+lw    $v1, 0x48($s2)
+addiu $v0, $zero, 0x1
+beq   $v1, $v0, .L8002506C
+addu  $s3, $v0, $zero          # delay slot: flag = 1
+lw $a0 / lw $a1 / jal func_80023A50
+addu  $s3, $zero, $zero        # delay slot: flag = 0
+```
+
+Write the same thing as `flag = 1; if (p[0x12] != 1) { flag = 0; call; }` --
+or put `flag = 0;` BEFORE the call in the else arm -- and you instead get
+`li $s3, 1` / `beq $v1, $s3`, with the flag's register as the compare operand
+and the delay slot filled by stealing the join block's `i = 0` (the branch
+displacement grows by one as reorg redirects past the stolen insn). 46 words
+either way, 4 DIFF.
+
+The chain, read off `-da` dumps of both spellings:
+
+1. `jump.c:699` ("Simplify `if (...) x = a; else x = b;` by converting it to
+   `x = b; if (...) x = a;`") requires `temp2 = next_active_insn (insn)` -- the
+   FIRST active insn of the else part -- to be a `single_set` of the same
+   register with a REG, SUBREG or CONSTANT source. `flag = 0;` written first
+   in the else arm satisfies that, so jump1 hoists `flag = 1` out of the then
+   block to just before the branch and inverts the condition. Writing the call
+   first makes `temp2` a `CALL_INSN` and the transform declines, so the set
+   stays inside the then block. `flag = 1;` before the `if` is already the
+   hoisted form.
+2. Once hoisted, the flag's `(set r81 (const_int 1))` sits next to the
+   compare's `(set r85 (const_int 1))` in one cse block. cse keeps the
+   constant (a `const_int` in a SET and a REG both cost 0, and the tie goes to
+   `src`), then `insert_regs` merges r81 into r85's quantity, and
+   `make_regs_eqv` (`cse.c`) makes r81 the quantity's `qty_first_reg` because
+   its last use is beyond `cse_basic_block_end` and later than r85's -- so
+   `canon_reg` rewrites the BRANCH to use the flag's register and r85's set
+   dies. Nothing downstream can undo it, and the branch now reads $s3, so
+   reorg cannot take the flag's set for the delay slot.
+3. Left inside the then block, the set survives cse, loop, cse2 and combine as
+   `(set r81 (const_int 1))` in a quantity of its own, and becomes
+   `(set (reg s3) (reg v0))` with its `REG_EQUAL (const_int 1)` kept only
+   after allocation -- first visible in the `.greg` dump, i.e. reload-time
+   constant reuse, not cse. reorg then takes it as the insn before the branch.
+
+So the copy-versus-`li` choice is NOT a narrower-destination or
+register-pressure question. Measured on func_80025030 (ovl_main_80020000), 46
+words (every spelling came out 46 words): the `if`/`else` with the call before
+`flag = 0` is a MATCH; the same `if`/`else` with `flag = 0` before the call is
+4 DIFF; `flag = 1` before the `if` is 4 DIFF whether the arm is
+`flag = 0; call;` or `call; flag = 0;`; so is `flag = 1` at its declaration,
+`if (p[0x12] != flag)`, and a shared `s32 one = 1` local. A `u8` or `u16` flag
+is 4 DIFF with three different words (it fixes the compare but costs an
+`andi` at the call and swaps the prologue's $s3/$ra saves); `s8`/`s16` are 47
+words. Hoisting the condition into its own `s32 cond` local is 47 words/40
+DIFF -- combine turns it into `xori`/`beqz` instead of `li`/`beq`.
+
+A corollary worth keeping: when a diff is "the target copies a constant into
+the flag register and we load it directly", look for an arm whose statements
+can be reordered to take `jump.c:699` out of play, before reaching for a
+declaration change.
