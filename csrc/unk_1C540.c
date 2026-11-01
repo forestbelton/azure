@@ -3992,7 +3992,43 @@ void func_8004E9C0(s32 a) {
 void func_8004E9E4(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004E9EC);
+/* The three byte stores are ONE 3-byte struct copy, not three assignments.
+   movstrsi_internal's four scratches take $v0-$a1 in local-alloc, their
+   clobbers put hard $a1 in the parameter's conflicts, and n loses its $a1
+   preference legally: r takes $a1, the lui $t1, the parameter copy $t2.
+   Three asm devices on the hand-written stores reached 33 words / 5 DIFF
+   and could not swap the last two registers. See matching-levers.md,
+   "A 3-BYTE STRUCT COPY IS A BLOCK MOVE WHOSE SCRATCHES PRUNE THE
+   PARAMETER'S PREFERENCE". */
+typedef struct Unk4E9EC
+{
+    u8 unk_00[3];
+} Unk4E9EC;
+
+s32 func_8004E9EC(u8 *q, s32 n)
+{
+    s32 i;
+    s32 r;
+    s32 m;
+
+    r = 0;
+    i = 0;
+    while (i <= n * 2)
+    {
+        if (q[i] == 0)
+        {
+            m = n * 2;
+            while (i < m)
+            {
+                *(Unk4E9EC *)&q[i] = *(Unk4E9EC *)D_80080B70;
+                i += 2;
+            }
+            r = 1;
+        }
+        i++;
+    }
+    return r;
+}
 
 s32 func_8004E9EC(u8 *, s32);
 
