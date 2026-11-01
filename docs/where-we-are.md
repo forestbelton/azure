@@ -120,18 +120,20 @@ Percentages below are of the 346,112-byte **image**, not of the file:
 | what | bytes | % of image |
 |------|-------|-------------|
 | C translation units | 167,596 | 48.4% |
-| `data` subsegments | 105,692 | 30.5% |
+| `data` subsegments | 94,028 | 27.2% |
 | identified library/asm (`psyq/*`, `main`) | 57,408 | 16.6% |
-| Shift-JIS text, split (`str/item/*`, `str/credits/*`, `str/name/*`) | 14,016 | 4.0% |
+| Shift-JIS text, split (`str/item/*`, `str/credits/*`, `str/name/*`) | 14,040 | 4.1% |
+| `rodata` subsegments | 11,640 | 3.4% |
 | jump tables (`.rodata` of C units) | 1,400 | 0.4% |
 | **unknown** | **0** | **0.0%** |
 
 (splat's own report line omits `data` from its "Split N KB in defined
 segments" total, so it reads 79.57%; the line to watch is `unknown`.)
 
-Of the 105,692 `data` bytes, **31,752 are PSY-Q library data** placed at
-module granularity and 73,940 are the game's. Two things made that possible,
-both on 2026-11-01 and both written up in `docs/data-map.md`:
+Of the 105,668 `data` + `rodata` bytes, **31,752 are PSY-Q library data and
+rodata** placed at module granularity, and 73,916 are the game's. Two things
+made that possible, both on 2026-11-01 and both written up in
+`docs/data-map.md`:
 
 - **The library stamp.** Every PSY-Q library carries one 8-byte record
   `50 73 <id> 15 9C <ck> 40 00` -- ASCII "Ps" plus a library id -- at offset 0
@@ -139,10 +141,20 @@ both on 2026-11-01 and both written up in `docs/data-map.md`:
   one, so the id is a lookup table, and the seven in this executable each mark
   a section start exactly.
 - **`.data` scanning.** `azure libscan` matches modules with relocation
-  masking but only over `.text`. The same method applied to `.data` places 18
-  library modules with zero mismatching words, including all four libgte
-  tables (`rsin_tbl`, `SQRT`, `rcossin_tbl`, `ratan_tbl`) and libc's
-  `_ctype_`. 42 real PSY-Q names came out of the modules' export tables.
+  masking but only over `.text`. The same method applied to `.data` and
+  `.rdata` places 31 library module sections with zero mismatching words,
+  including all four libgte tables (`rsin_tbl`, `SQRT`, `rcossin_tbl`,
+  `ratan_tbl`) and libc's `_ctype_`. 42 real PSY-Q names came out of the
+  modules' export tables.
+
+It also corrected two things in the config. The 0x69F4-0x7130 region is the
+libraries' `.rdata`, not `.data` -- splat had been saying so on every run --
+and the libcd/libgpu boundary was 24 bytes too late, filing libgpu/PRIM's
+`"tpage: (%d,%d,%d,%d)"` under libcd. And the claim that
+`ld_legacy_generation` groups a segment's subsegments by section, which two
+yaml comments and `data-map.md` all asserted, is **false**; the real
+constraint is `subalign: 4`. Correcting it completed the character-name list
+at nineteen names, which the old rule had blocked at sixteen.
 
 The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 0x3E01C is the SN module descriptor, and it self-validates: `__text` +

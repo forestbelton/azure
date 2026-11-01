@@ -94,9 +94,10 @@ group the splat ld script emits ahead of the text; see "two data groups" below.
 | type | bytes | % of file | % of image |
 |---|---|---|---|
 | `c` | 167,596 | 31.97% | 48.42% |
-| `data` | 105,692 | 20.16% | 30.54% |
+| `data` | 94,028 | 17.93% | 27.17% |
 | `asm` | 57,408 | 10.95% | 16.59% |
-| `shiftjis` | 14,016 | 2.67% | 4.05% |
+| `shiftjis` | 14,040 | 2.68% | 4.06% |
+| `rodata` | 11,640 | 2.22% | 3.36% |
 | `.rodata` (jump tables in C units) | 1,400 | 0.27% | 0.40% |
 | `bin` (`tail_unloaded`, outside the image) | 176,128 | 33.59% | -- |
 | `header` (outside the image) | 2,048 | 0.39% | -- |
@@ -201,6 +202,78 @@ independent cross-checks on that shift:
 This is the same story the five `unk_*` code blocks tell: the game's libspu
 and libcd are a build we do not have a copy of.
 
+## The libraries' `.rdata` at 0x69F4-0x7130
+
+The same `.data` scan run over the region ahead of the text places it module
+by module, zero mismatching words throughout. These were typed `data` until
+2026-11-01, which was simply wrong -- they are `.rdata`.
+
+| file range | module | bytes |
+|---|---|---|
+| 0x69F4-0x6A3C | libspu/SPU | 72 |
+| 0x6A3C-0x6A7C | libspu/S_SCA -- `jtbl_8003323C`, `jtbl_8003325C` | 64 |
+| 0x6A7C-0x6AB8 | libspu/unk_32934 -- `jtbl_8003327C` and the run at 0x6A9C | 60 |
+| 0x6AB8-0x6AC8 | libetc/VSYNC (its whole `.rdata`, `"VSync: timeout\n"`) | 16 |
+| 0x6AC8-0x6B34 | libetc/INTR | 108 |
+| 0x6B34-0x6B60 | libetc/INTR_DMA | 44 |
+| 0x6B60-0x6B78 | libcd/EVENT (`"CdInit: Init failed\n"`, unique match) | 24 |
+| 0x6B78-0x6B80 | libcd/SYS (`"none"`, already `gCd_Str_None`) | 8 |
+| 0x6B80-0x6DD0 | libcd/BIOS | 592 |
+| 0x6DD0-0x6E14 | libcd/CDREAD | 68 |
+| 0x6E14-0x6E2C | libcd/C_011 (`"DMA STATUS ERROR %x\n"`, unique match) | 24 |
+| 0x6E2C-0x6EFC | libgpu/PRIM | 208 |
+| 0x6EFC-0x7130 | libgpu/SYS | 564 |
+
+Two things fell out of this. The **libcd/libgpu boundary was wrong**: it was
+0x6E44, which is 24 bytes past the start of libgpu/PRIM's `.rdata`, so
+`"tpage: (%d,%d,%d,%d)"` was filed under libcd. It is 0x6E2C now. And the two
+jump-table runs at 0x6A3C and 0x6A7C resolve to **S_SCA** and **unk_32934**
+from their targets (0x8005EE34/0x8005EEFC are file 0x325FC/0x326FC, inside
+S_SCA; 0x8005F278/0x8005F358 are file 0x32A78/0x32B58, inside unk_32934) --
+a third independent line of evidence that `unk_32934` is a libspu module.
+
+## The three splat diagnostics, and what they were
+
+`splat split` used to print three warnings. They were worth chasing: two were
+real and one is permanent.
+
+**0x6A3C and 0x6D30, "symbol at vram ... is a jumptable, indicating the start
+of the rodata section _may_ be near here" -- both correct.** The blobs at
+0x69F4 and 0x6B60 were typed `data` and really are `.rodata`. 0x6A3C, the
+offset the first warning named, is exactly where libspu/SPU's `.rdata` ends
+and the jump tables begin. Fixing the types produced the table above and
+found the 0x6E44 boundary bug.
+
+**0x54D98, same warning, in `gp_data` -- a permanent false positive.**
+0x80081598 is a RAM pointer slot that libapi/PATCH loads from and stores to
+(`asm/psyq/libapi/PATCH.s:13` and `:44`); it is zero in the file, and
+spimdisasm classifies it as a jumptable because code jumps through it.
+`.rodata` does not start there: 0x54D98 is past `__data`'s end (`_gp`,
+0x54194) and just below `__bss` (0x800815C0 / file 0x54DC0), so it is
+`.sbss`. Acting on the suggestion would be wrong. It cannot be suppressed
+without `suggestion_rodata_section_start: False`, which would also silence
+the check over `game_data`, so it is left to print. PATCH's `.sbss` is 16
+bytes and exports no name, so the slot cannot be named either.
+
+**What prints now.** Retyping the region to `rodata` replaced those with 14
+"Rodata segment X may belong to the text segment Y" hints, which splat
+suppresses once a rodata subsegment has a *sibling* -- a text subsegment of
+the same name (`segtypes/common/rodata.py:34`). Naming each piece after its
+owning module cleared 12 of them. The subsegment names in the yaml are
+therefore load-bearing: rename one and its hint comes back.
+
+Two hints remain, on `psyq/libcd/BIOS`, naming `BIOS_1` and `unk_34BD0`.
+They are the honest answer and **must not be silenced**: our libcd has one
+`BIOS` module and that 592-byte run is its whole `.rdata`, but the game's SDK
+split BIOS's *text* into BIOS_1/2/3 plus unk_34BD0 and unk_362B4 while
+leaving the `.rdata` in one run, so no single text subsegment owns it. Naming
+the run after either module would make the warning go away by asserting
+something false. That the hint names `unk_34BD0` at all is yet another
+confirmation that it is a libcd BIOS sibling.
+
+So the steady state is three messages: two that correctly flag an
+unresolvable ownership, and one known-false `.sbss` jumptable.
+
 ## Library data symbols recovered
 
 `splat/slus_006.14_symbol_addrs.txt` gained 42 real PSY-Q names from the
@@ -254,29 +327,54 @@ whole range is now eleven named subsegments, every boundary a multiple of 4
 | 0x54170-0x54194 | 36 | `psyq/libapi_data` |
 | 0x54194-0x541D0 | 60 | `game_gp` |
 
-29,864 of the 90,548 bytes -- a third of what this doc called the largest
+29,900 of the 90,548 bytes -- a third of what this doc called the largest
 remaining data problem -- are library data, now placed at module granularity.
 
-### Two data groups
+### Two data groups, and the ordering rule
 
-The libraries have data in *two* places, which is a property of splat's
-`ld_legacy_generation` and worth knowing before adding subsegments here. One
-segment's ld script emits, in order: its leading `data` subsegments, then the
-`.text` group, then the rest of its `data` subsegments, then the `.rodata`
-group, then any trailing `data`. So `_69F4` lays out as
+The libraries have data in *two* places: `.rdata` at 0x69F4-0x7130, ahead of
+the text, and `.data` at 0x4CCEC-0x54194, after it. `_69F4` lays out as
 
 ```
-0x69F4   data   psyq/libspu, psyq/libetc, psyq/libcd, psyq/libgpu   (strings,
-                                                       jump tables: .rodata)
-0x7130   text   everything
-0x3E01C  data   psyq/libsn_data ... psyq/libapi_data, game_gp
-0x541D0  rodata str/name/*
-0x54250  data   game_gp_data, tail_unloaded
+0x69F4   rodata  psyq/libspu/SPU ... psyq/libgpu/SYS   (13 subsegments)
+0x7130   text    everything
+0x3E01C  data    psyq/libsn_data ... psyq/libapi_data, game_gp
+0x541D0  rodata  str/name/*   (19 names)
+0x54250  data    gp_name_ptr, str/name/max|zu|kid, gp_data, tail_unloaded
 ```
 
-`data` subsegments keep their relative order, so the 0x3E01C range can be cut
-into as many pieces as the evidence supports. The `psyq/<lib>` names were
-already taken by the first group, hence `psyq/<lib>_data` for the second.
+**The ordering rule, corrected.** This doc and two comments in
+`slus_006.14.yaml` used to say that `ld_legacy_generation` groups a segment's
+subsegments by section, that the `.data` group is emitted before the
+`.rodata` group, and therefore that `.data` and `.rodata` subsegments cannot
+be interleaved. **That is false in splat 0.50.1.** Explicitly declared
+subsegments are emitted in declared *offset* order whatever their section,
+and `_X_SECTION_START`/`_END` are only brackets dropped at the first and last
+occurrence of each section. Three independent checks, all byte-identical:
+
+- retyping `psyq/libcd` from `data` to `rodata`, between two `data`
+  subsegments, changes nothing but the label position;
+- merging the 0x800, 0xE30 and 0xE7C segments into one segment of four
+  subsegments -- one `rodata` plus three dotted `.rodata` naming three
+  *different* C units -- builds byte-identical;
+- the layout above already interleaves: `data` at 0x3E01C, `rodata` at
+  0x541D0, `data` at 0x54250, all in one segment.
+
+What **is** grouped is the non-primary sections of `asm`/`c` subsegments:
+their `.data`/`.rodata`/`.bss` come out in blocks after the text group. That
+is the real constraint, and it is the one that bites -- an object has exactly
+one `.rodata`, and a dotted `.rodata` subsegment can pull it to exactly one
+offset, so a unit owning two *separated* `.rodata` runs must be cut into two
+units. That is the `unk_1C540` case in `docs/open-matching-problems.md`, and
+it is unaffected by any of the above.
+
+Two consequences. First, the fifteen segments covering 0x800-0x69F4 exist
+only to satisfy a constraint that is not there; they are left alone because
+byte-identity is what matters, but do not add a segment just to put a
+`.rodata` next to a `data`. Second, the three names the config used to hold
+back -- `max`, `zu`, `kid` at 0x54254/0x5425C/0x54264, behind a 4-byte
+pointer at 0x54250 -- split in place with no new segment, so the name list is
+now nineteen and complete.
 
 ### What is left inside `game_data`
 
@@ -336,14 +434,21 @@ subdivision.
 | `str_item_tail` | 0x57F8-0x6614 | 3,612 | tail of the item pool; 90 strings held back, see below |
 | `smf_magic` | 0x68FC-0x690C | 16 | `MThd`/`MTrk` with zero lengths |
 | `game_gp` | 0x54194-0x541D0 | 60 | the `_gp` anchor; `_gp` = 0x80080994 is its first word |
-| `game_gp_data` | 0x54250-0x55000 | 3,504 | `.data`/`.sdata`/`.sbss` above `_gp`, then zero fill |
+| `gp_name_ptr` | 0x54250-0x54254 | 4 | a pointer to 0x8002D34C, between name 16 and name 17 |
+| `gp_data` | 0x5426C-0x55000 | 3,476 | `.sdata`/`.sbss` above `_gp`, then zero fill |
+
+The first five are `rodata` subsegments, not `data`: they sit among the C
+units' jump-table `.rodata` runs and the `str/item/*` pool, which is
+`.rodata` too. `gp_data` is **not** the game's alone, which is why it is no
+longer called `game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there,
+and it is the source of the permanent 0x54D98 diagnostic above.
 
 `smf_magic`'s owner is no longer unknown: `csrc/unk_2879C.c` calls
 `func_80058800(D_800330FC, ..., 4)`, a 4-byte compare, so these are two magic
 strings a sequence loader validates against -- and unk_2879C is the very unit
 whose jump tables end at 0x68FC, so it is that unit's own `.rodata`. Folding
 it into the C file would need the compiler to emit the array after the jump
-tables, which is not worth 16 bytes to find out; it stays a `data`
+tables, which is not worth 16 bytes to find out; it stays a `rodata`
 subsegment.
 
 The pool at **0x2810-0x57F8 is done**: 322 `shiftjis` subsegments under
@@ -357,20 +462,21 @@ Shift-JIS comes out as `.short`/`.word` rather than readable text. Turning
 them into `shiftjis` subsegments is still worth doing; the rules have not
 changed.
 
-`ld_legacy_generation` groups a segment's subsegments by section, and **the
-`.data` group is emitted before the `.rodata` group**. A `shiftjis`
-subsegment is `.rodata` and a `bin` or `data` subsegment is `.data`, so:
+Only one rule actually constrains this, and it is **not** the section-order
+rule this section used to state (see "the ordering rule, corrected" above --
+`.data` and `.rodata` subsegments interleave freely, and non-text bytes in the
+middle or at the end of a pool do **not** need a segment of their own):
 
-- You **can** replace a whole blob with `shiftjis` subsegments when it is
-  already its own segment. Then the `.rodata` group starts exactly at the
-  segment's vram and nothing moves. This is how `str/credits/*` landed.
-- You **cannot** interleave them. Any non-text bytes in the middle of the pool
-  have to go in a segment of their own, the way the jump-table runs in
-  `slus_006.14.yaml` do. Non-text bytes at the *end* of a blob also need their
-  own segment, because a trailing `.data` subsegment would be emitted *first*.
+- **`subalign: 4` is the real constraint.** Every subsegment boundary must be
+  a multiple of 4, because `subalign` pads each input section to 4 and a
+  boundary that is not 4-aligned shifts everything after it. A string that
+  starts 2-aligned therefore cannot begin a subsegment.
 - A `shiftjis` subsegment runs to the next subsegment's offset and zero-fills
   the remainder, so trailing NUL padding needs no entry of its own -- it is
   absorbed as each string's `.fill`.
+- Mixed content is fine: `data` for the non-text bytes, `shiftjis` for the
+  strings, in offset order, in one segment. The `max`/`zu`/`kid` split at
+  0x54250 is exactly that shape and is byte-identical.
 
 ### The coverage test
 
@@ -405,9 +511,9 @@ at 0x57F8. What it cost, and what the next pool will cost too:
   composed-name nouns at 0x57FA, 0x586E, 0x596A, 0x5A62 and 0x60C6 -- and
   `subalign: 4` pads every input section to 4, so a subsegment boundary that
   is not a multiple of 4 shifts everything after it. 0x57F8-0x6614 keeps the
-  remaining 90 strings as one `data` subsegment; splitting them needs one
-  extra segment per misalignment. **Check `offset % 4 == 0` on every boundary
-  before splitting.** The same rule governed every boundary in the 0x3E01C
+  remaining 90 strings as one `rodata` subsegment. **Check `offset % 4 == 0`
+  on every boundary before splitting** -- that, and not section ordering, is
+  what makes those five strings expensive. The same rule governed every boundary in the 0x3E01C
   rewrite above, and is why `psyq/libsn_data` ends at 0x3E040 rather than at
   0x3E03E, where `unk_72A8.c`'s biased array base points.
 - **The `.shiftjis` directive could not hold the script's control bytes.** The
