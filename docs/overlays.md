@@ -735,7 +735,7 @@ target reaches A by a taken `bnez` rather than by falling through.
 ## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
 
 The sweep that follows the one above took the card overlay from 192 of 241
-functions to 213, and from roughly 54% to **82.7% of its 7487 words (6194
+functions to **220**, and from roughly 54% to **86.2% of its 7487 words (6457
 landed)**. Every function in the unit that had not been looked at before is
 now either landed or parked; the 28 remaining stubs are all near-misses with
 measurement tables in `docs/near-misses/`.
@@ -884,3 +884,35 @@ there keeps both `INCLUDE_RODATA` blocks and COPIES from the extern --
 `UnkFnTab5 a = D_80020034;` -- which is what the listing was showing all
 along: batched `lw`/`sw` pairs are gcc's block move, not an initialiser being
 materialised.
+
+### The permuter is for ORDERINGS, and a good base is most of the work
+
+The six-function arrayed-primitive family resisted two sessions of hand
+restructuring and two 50-minute permuter runs, and then fell in 7 minutes and
+15,022 candidates. What changed was the BASE it was given.
+
+The residue was a register assignment: the targets keep the group pointer in
+`$t3`, copied from `$a0` at word 0, leaving `$a0` free as the scratch for the
+prims address. Reading that as "the function needs a second base pointer" is
+natural and wrong -- a `b = c` used for the trailing stores does force the
+copy, and does take the park from 13 differing words to 9, but leaves `c` in
+`$a0` for the loop so the prims address still lands in `$v1`. Sixteen
+spellings around that idea all stop at 9.
+
+The actual answer is one reordering inside the loop:
+
+```c
+v = D_8002E5D8[0];        /* read it FIRST, into a local */
+c->ptrs[i] = &c->ents[i];
+c->prims[i][0] = v;
+```
+
+With the load first the allocator reaches the target's assignment on its own,
+and all six functions go to zero. Nobody was going to guess that; a search
+over statement orderings finds it immediately. The lesson is the division of
+labour: work out the SHAPE by hand -- the struct spelling, which fields go
+through which cursor, the branch senses -- and hand the ordering to the
+permuter. The two earlier runs failed because they searched from a base whose
+shape was still wrong (an `e` local keeping a live pointer, so the two field
+stores were off the stride-16 induction variable); the successful run searched
+from a base where only the order was wrong.

@@ -128,9 +128,9 @@ Three things about the overlays that change how they are worked, all in
   project (symbolic vs split addressing, the out-of-image constant base
   pointer) does not arise. `main.bin`'s overlay is a `c` subsegment as of
   2026-11-01 with per-unit `CFLAGS`/`MASPSXFLAGS` overrides in the Makefile,
-  and stands at **213 of 241 functions, 6,194 of 7,487 words (82.7%)**, with
-  all four containers byte-identical. The 28 remaining stubs are all parked
-  near-misses; six of them are one family sharing a single residue.
+  and stands at **220 of 241 functions, 6,457 of 7,487 words (86.2%)**, with
+  all four containers byte-identical. The 21 remaining stubs are all parked
+  near-misses.
 * **`main.bin+0x269000` is the same source at `-G8`**, with more of its
   asserts compiled in, and its rodata names nine original translation units.
   Unit boundaries are where four previous dead ends turned out to be. One C
