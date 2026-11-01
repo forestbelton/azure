@@ -1350,7 +1350,203 @@ s32 func_80059E94(u32 size)
     return base;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_80059F8C);
+/* Claims a D_800869C0 slot for the run [p, p + n) at a CALLER-CHOSEN offset
+   `p`, keeping the table sorted by offset, and returns `p`, or -1 when the
+   run is out of range, overlaps a neighbour, or the table is full. Row 0 is
+   special-cased (the empty table, and a run below the first row); otherwise
+   the walked cursor `q` finds the row at or above `p`.
+
+   Everything about the shape below was read off the listing and the
+   compiler's own dumps; each item names the pass that wants it.
+
+   1. THE TAIL IS INSIDE THE LOOP, ONCE PER SCAN, AND THE FUNCTION ENDS IN
+      THE CALL. loop.c's find_and_verify_loops (loop.c:2222; the move at
+      :2331-2427) takes every block that ends in a jump out of the loop and
+      is hopped over by a conditional jump, and drops it after the first
+      BARRIER at the jump target's loop depth found walking BACK from that
+      target (:2390-2393). The hit and new-slot blocks jump to the return
+      label, so they land after the empty arm's barrier -- the target's
+      .L8005A018/.L8005A028 -- only if nothing with a barrier sits between
+      the loop and the epilogue: the `if (i == lim) return -1; break;`
+      tails are in the loop body and the loop falls into
+      `func_80059DAC(); return p;`. Each scan's store block then lands after
+      its own tail's barrier (scan 1) or after the new-slot test's
+      `return -1` (scan 2), which is where the listing has them.
+
+   2. NO CALL IN THE LOOP. A CALL_INSN sets unknown_address_altered
+      (loop.c:2199-2203) and no MEM is invariant after that; the target
+      hoists the `lbu` of D_8007382B into the preheader.
+
+   3. `lim`. Written as the constant, the two `(set tmp 16)` are movables
+      that combine_movables (loop.c:1245-1285) adds together and move_movables
+      (:1630-1633) hoists -- and the 3 it takes off the threshold (:1719) is
+      what leaves the `high D_8007382B` behind. A user variable assigned in
+      two blocks fails all three admission clauses (loop.c:695-700:
+      maybe_never, REG_USERVAR_P, reg_in_basic_block_p) and stays put.
+
+   4. STRUCT ROWS AND A NON-AGGREGATE BYTE READ. With store blocks in the
+      loop, the `lbu` is invariant only if true_dependence (sched.c:817-838)
+      clears it against every store: the stores must be MEM_IN_STRUCT_P
+      (COMPONENT_REF, expr.c:4890) and the byte read must NOT be
+      (`D_8007382B[0]` is, expr.c:4567-4576 marks any aggregate reference).
+      `*(u8 *) (u32) D_8007382B` is the read that is not. Measured:
+      `D_8007382B[0]` here is 146 words / 112 DIFF.
+
+   5. THE SCANS INDEX THE TABLE BY THE COUNTER WITH NO POINTER LOCAL. The
+      row address is then a compiler-temp giv, and loop.c:3798-3800 only
+      charges copy_cost to a REG_USERVAR_P giv, so it is reduced (benefit
+      4 - add_cost 2) even though its store block has been moved out of the
+      loop and makes it non-replaceable; the `tmp = giv` copy loop.c emits
+      is what cse2 then sorts out per scan. Scan 1's block sits AFTER the
+      loop: cse2's TAKEN pass (store block inside, cse_basic_block_end past
+      it) leaves the reduced register canonical and the stores on it, the
+      NOT_TAKEN pass (end at the back-branch) makes the copy canonical
+      (make_regs_eqv, cse.c:850-857) and puts the load and the increment on
+      it -- `addu $v1,$a0 / lw 4($v1) / addiu $a0,$v1,8 / sw 0($a0)`. Scan
+      2's block sits BEFORE the loop, the copy's first reference precedes
+      the block (clause 1b) in both passes, the reduced register stays
+      canonical and the copy dies: one register. A pointer local cannot do
+      this: cse1 retargets `u = X; v = u` into `v = X` (cse.c:7452-7476)
+      and the user variable it leaves is either not reduced or not split.
+      The lo_sum for the row address is also born inside the scan, after
+      `c < p + n`, which is why the preheader copies come out high, plus,
+      lo_sum; a pointer local initialised in the arm shares the `c` load's
+      lo_sum temp and hoists it ahead of the plus (145/9 at best).
+
+   6. `e2`. The `slt` compares against a RECOMPUTED `p + n` (`addu
+      $v0,$s0,$a1` at 8005A150) while the two other sites use the hoisted
+      copy. A user variable with a dead earlier set (`e2 = 0` before the
+      loop, deleted by flow) moves regno_first_uid off the in-loop set, so
+      reg_in_basic_block_p's first test (loop.c) fails and the set stays.
+      Without `e2 = 0` it hoists: 144 words / 37 DIFF. Reassigning `end`
+      instead changes the entry block (148/118); reusing `c` moves 20
+      registers (146/53). */
+typedef struct
+{
+    u32 offset;
+    u32 length;
+} Slot;
+
+s32 func_80059F8C(u32 p, u32 n)
+{
+    s32 i;
+    u32 b;
+    u32 c;
+    u32 end;
+    u32 e2;
+    s32 lim;
+    Slot *q;
+    Slot *r;
+
+    if ((u32) (p - 0x1010) > 0x7EFEF)
+    {
+        return -1;
+    }
+    e2 = 0;
+    end = p + n;
+    if (end > 0x7FFFF)
+    {
+        return -1;
+    }
+    q = (Slot *) D_800869C0;
+    if (D_800869C0[0] == 0)
+    {
+        if (end < 0x80000 - D_80073830[*(u8 *) (u32) D_8007382B])
+        {
+            D_800869C0[0] = p;
+            D_800869C0[1] = n;
+            func_80059DAC();
+            return p;
+        }
+        return -1;
+    }
+    for (i = 0; i < 0x10; i++, q++)
+    {
+        if (i == 0)
+        {
+            /* named so the load stays in the loop: scan_loop's clause (1)
+               refuses a user-variable set past the `if (i == 0)` branch */
+            c = D_800869C0[0];
+            if (p < c)
+            {
+                if (c < p + n)
+                {
+                    return -1;
+                }
+                while (i < 0x10)
+                {
+                    if (((Slot *) D_800869C0)[i].length == 0)
+                    {
+                        ((Slot *) D_800869C0)[i].offset = p;
+                        ((Slot *) D_800869C0)[i].length = n;
+                        break;
+                    }
+                    i++;
+                }
+                lim = 0x10;
+                if (i == lim)
+                {
+                    return -1;
+                }
+                break;
+            }
+        }
+        else if (p < q->offset)
+        {
+            continue;
+        }
+        b = q->offset;
+        if (b == p)
+        {
+            q->offset = p;
+            q->length = n;
+            return p;
+        }
+        /* index-first through a cast keeps row i+1 off row i's giv */
+        r = (Slot *) ((i + 1) * 8 + (u32) D_800869C0);
+        if (r->length == 0)
+        {
+            if (p + n < 0x80000 - D_80073830[*(u8 *) (u32) D_8007382B])
+            {
+                r->offset = p;
+                r->length = n;
+                func_80059DAC();
+                return p;
+            }
+            return -1;
+        }
+        if (b < p && p < r->offset)
+        {
+            if (p < b + q->length)
+            {
+                return -1;
+            }
+            e2 = p + n;
+            if ((s32) r->offset < (s32) e2)
+            {
+                return -1;
+            }
+            while (i < 0x10)
+            {
+                if (((Slot *) D_800869C0)[i].length == 0)
+                {
+                    ((Slot *) D_800869C0)[i].offset = p;
+                    ((Slot *) D_800869C0)[i].length = n;
+                    break;
+                }
+                i++;
+            }
+            lim = 0x10;
+            if (i == lim)
+            {
+                return -1;
+            }
+            break;
+        }
+    }
+    func_80059DAC();
+    return p;
+}
 
 /* UNPARKED. Both loops index off a base LOCAL with the index written first --
    `(u8 *) (i * 8 + (u32) b)`, not `b + i * 8` -- which is what gives the
@@ -1635,8 +1831,8 @@ found:
     return k;
 }
 
-/* func_80059F8C is still an INCLUDE_ASM stub in THIS unit (above), so this
-   forward declaration is the only one the compiler sees. Two parks used to
+/* func_80059F8C is now defined in THIS unit (above) with this signature;
+   the declaration is kept as the record of how it was settled. Two parks used to
    disagree with it and no longer do: measured 2026-10-30, func_80059F8C's own
    park is 101 DIFF whether its second parameter is `s32` or `u32`, and
    func_8005A90C is 2 DIFF whether it declares this callee `(s32, u32)` or
