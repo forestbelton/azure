@@ -3774,9 +3774,25 @@ void func_80026C94(s32 *p)
     q->unk_00 = (s32)D_80028430;
 }
 
-/* NEAR MISS: 34 words, 11 DIFF: $s0 and $s1 are swapped -- the target keeps the parameter in $s1 and the D_80027E68 base in $s0, every spelling here does the reverse. Three measured (the table inline at both call sites, hoisted into a local declared before or after the UnkCardPair temp, and the parameter copied to a local). Allocation only; the instruction sequence is identical.
-   Source in docs/near-misses/func_80026CF0.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026CF0);
+/* func_8004CBFC takes THREE arguments (csrc/unk_1C540.c:2791) and the third
+   is the UnkCardPair this function just wrote through -- which is why the
+   target loads it into $a2, uses $a2 for the two field stores, and then
+   leaves it there for the call. With two arguments the pointer goes to a
+   different register and $s0/$s1 come out swapped for the whole function.
+   Same discovery as func_800269B4, from the other side. */
+void func_80026CF0(s32 *p)
+{
+    UnkCardPair *q;
+
+    q = (UnkCardPair *)p[0x1A];
+    q->unk_04->unk_08 = 0x40;
+    q->unk_04->unk_0A = 0x20;
+    func_8004CBFC((u32 *)(p + 1), D_80027E68, (u32 *)q);
+    q = (UnkCardPair *)p[0x1B];
+    q->unk_04->unk_08 = 0xC0;
+    q->unk_04->unk_0A = 0x20;
+    func_8004CBFC((u32 *)(p + 4), D_80027E68, (u32 *)q);
+}
 
 void func_80026D78(s32 *p)
 {
