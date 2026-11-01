@@ -56,7 +56,78 @@ segments:
   - [0x208e8, shiftjis, str/main/golem_egg]
   - [0x20904, shiftjis, str/main/cinnabar]
   - [0x20924, shiftjis, str/main/tyrant_egg]
-  - [0x20940, bin]
+  # The rest of the name/colour/egg-description pool the `str/main/*` segments
+  # above start: 0x20940 opens on "TYRANT" and continues the same
+  # (NAME, colour, "A NAME egg.") triplets in full-width Shift-JIS, which is
+  # how the US release renders Latin text in the Japanese font. Still `bin`
+  # because splitting it into `shiftjis` segments needs the 4-aligned-boundary
+  # check in docs/data-map.md; the text proper ends at 0x21280.
+  - [0x20940, bin, str/main/pool_tail]
+  # Pointer and index tables, then 11 KB of unidentified fixed-size records,
+  # then zero padding from 0x24440. The game reads this: the CD-ROM command
+  # log seeks main.bin+0x20800 and +0x21800. 144 of its words are pointers
+  # into 0x8002c094..0x8008b270, i.e. into the resident executable's own RAM,
+  # so it is a relocated resource rather than a standalone file.
+  - [0x21280, bin, main_tables_21280]
+  # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
+  # in any container, and it holds nothing. It is kept as a named `bin` for the
+  # same reason as slus_006.14's `tail_unloaded`: so splat stops calling it
+  # unknown and nobody spends another pass on it.
+  #
+  # The game never reads it. A PCSX-Redux CD-ROM command log covering boot,
+  # title, town and dungeon (78 distinct seeks) hits main.bin at exactly 11
+  # offsets -- +0x0, +0x3000, +0x4800, +0x20000, +0x20800, +0x21800, then
+  # straight to +0x221800, +0x226800, +0x257000, +0x258800, +0x25d000. The one
+  # gap in that list is this run, to the sector. There is also no resource
+  # table to reach it with: neither slus_006.14 nor main.bin contains the
+  # sector numbers (67, 1091, 1101, 1198, 1201, 1210) or the byte offsets
+  # (0x221800, 0x226800, 0x257000, 0x258800, 0x25d000) of the known resources
+  # as a u16 or u32 table anywhere.
+  #
+  # It is nevertheless real, deliberately mastered content, not a dump
+  # artifact: all 1011 of its CD sectors (LBA 1897..2907) carry a VALID EDC
+  # over bytes 16..2071, checked against the Mode 2 Form 1 layout and
+  # validated on known-good sectors first.
+  #
+  # What it is NOT, each tested rather than assumed:
+  #   - not compressed game data -- it is incompressible. zlib -9 returns
+  #     100.03% of input and xz 100.02%; both expand it.
+  #   - not any PRNG fill. Berlekamp-Massey over its bits gives linear
+  #     complexity exactly n/2+1 (1001 at 2000 bits, 10001 at 20000), the
+  #     random signature, so no LFSR generated it; and solving
+  #     x[n+1] = a*x[n] + c mod 2^32 from three consecutive words predicts
+  #     2 of 4095 at every alignment and endianness tried, so no word LCG did.
+  #   - not SPU-ADPCM and not XA-ADPCM. The 16-byte-block test scores 0.2543 /
+  #     0.0324 against a random baseline of 0.254 / 0.031 at every phase, and
+  #     0 of 16167 128-byte groups show the XA sound-group header redundancy.
+  #   - not images -- no TIM header occurs in it at any 4-aligned offset.
+  #   - not a copy of anything else on the disc. Six 24-byte needles taken
+  #     across it each occur exactly ONCE in all 298 MB of az.bin: here.
+  #   - not the disc's own padding convention. /STR/DUMMY_.STR and
+  #     /STRT/DUMMYM.STR are 99.6% zeros (16 bytes of 0x0c, then zero fill,
+  #     one sector repeated 166 times); this is nothing like them.
+  #   - not a file-wide pre-fill either. Every OTHER gap in main.bin is zeros
+  #     (0x24440..0x28420, 0x265000, 0x2719e0 all 90-99.9% zero), so only this
+  #     one run was filled this way.
+  #
+  # What it measures as: 2,069,472 bytes at H = 7.9999 bits/byte, chi-square
+  # 218.5 on 255 df, zero fraction 0.00392 = 1/256, longest zero run in the
+  # whole 2 MB just 2 bytes, and 0 anomalous windows out of 16167 scanned at
+  # 128-byte resolution. That is indistinguishable from uniform random, and it
+  # is the SAME fingerprint as slus_006.14's `tail_unloaded` (176,128 bytes,
+  # H = 7.9989, chi-square 268.7, zero fraction 0.00374), which docs/data-map.md
+  # reached the same dead end on. Two regions, one explanation.
+  #
+  # The one structural fact worth recording: it ends at 0x221800, and
+  # 0x221800 - 0x21800 = exactly 0x200000. Read with the segment above, the
+  # resource the game loads at +0x21800 sits at the head of a round 2 MiB
+  # reservation whose unwritten remainder is this run. That makes it a
+  # reserved hole keeping the images at +0x221800 and beyond on fixed sector
+  # offsets -- which is why it must still be reproduced byte for byte by
+  # `make containers` even though nothing reads it.
+  #
+  # Do not spend time on it.
+  - [0x28420, bin, unread_filler]
   - [0x221800, bin, unk_img_1]
   - [0x226800, bin, title_bg_img]
   - [0x257000, bin, title_menu_img]

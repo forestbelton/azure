@@ -41,6 +41,18 @@ What the tail is was **not** established, only what it is not:
 Nothing in the image can reach it, so it does not matter for the
 decompilation. Do not spend time on it.
 
+**2026-11-01: it has a twin, and the twin is dead too.** `main.bin` carries
+2,069,472 bytes at 0x28420..0x221800 with the *same* fingerprint as this tail
+-- entropy 7.9999 against 7.9989, chi-square 218.5 against 268.7, zero
+fraction 0.00392 against 0.00374, all three matching a true-random control --
+and there the case is closed independently: the CD-ROM command log shows the
+game seeking straight past it, and all 1011 of its sectors carry a valid EDC,
+so it is deliberately mastered filler in a reserved hole. That run also
+answers two of the open questions about this one: it is incompressible (zlib
+and xz both expand it) and Berlekamp-Massey gives it linear complexity n/2+1,
+so "compressed or encrypted" above is too generous -- no LFSR or word LCG
+produced it either. See `docs/main-bin-data.md`.
+
 ## The binary states its own layout
 
 libsn/SNMAIN is the first object in link order, so its `.data` is the first
