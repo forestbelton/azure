@@ -30,7 +30,543 @@ __asm__(".sdata\n\t.size D_80080A6C,4\n\t.size D_80081440,4\n"
         "\t.size D_800809B8,4\n\t.size D_800809BC,4\n"
         "\t.text");
 
-INCLUDE_ASM("asm/nonmatchings/unk_72A8", func_800345B8);
+extern Unk6CD30 D_8006CD10[];
+extern Unk6CD30 D_8006A84C[];
+extern s16 D_8006A83E[];
+extern u8 D_8006A847[];
+
+s32 func_80065F90(s32, s32);
+
+typedef struct Unk345B8SP
+{
+    u8 pad_00[0x4];
+    SVECTOR unk_04;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    POLY_FT4 *unk_1C;
+    u8 pad_20[0x4];
+    s32 unk_24;
+    u16 unk_28;
+    u8 pad_2A[0x2A];
+    MATRIX unk_54;
+    s16 unk_74;
+    s16 unk_76;
+    s16 unk_78;
+    u8 pad_7A[0x2];
+    s16 unk_7C;
+    s16 unk_7E;
+    s16 unk_80;
+    u8 pad_82[0x2];
+    s16 unk_84;
+    s16 unk_86;
+    s16 unk_88;
+    u8 pad_8A[0x2];
+    s16 unk_8C;
+    s16 unk_8E;
+    s16 unk_90;
+    u8 pad_92[0x2];
+    s32 unk_94;
+    s32 unk_98;
+    u8 pad_9C[0x20];
+    u16 unk_BC;
+    u16 unk_BE;
+    u8 pad_C0[0x4];
+    s32 unk_C4;
+    MATRIX unk_C8;
+    u16 unk_E8;
+    u16 unk_EA;
+    u16 unk_EC;
+    u16 unk_EE;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    SVECTOR unk_F8;
+    u16 unk_100;
+    u16 unk_102;
+} Unk345B8SP;
+
+s32 func_800345B8(u8 *pl, UnkVec *v, UnkSlot *s)
+{
+    Unk345B8SP *p = (Unk345B8SP *)0x1F800000;
+    /* mb/ma are declared here but assigned INSIDE the outer loop; see the
+       comment at the loop top for why that is the whole matrix-selection
+       mechanism. */
+    Unk6CD30 *mb;
+    Unk6CD30 *ma;
+    Unk80083160 *g = &D_80083160;
+    MATRIX *m1;
+    MATRIX *m2;
+    Unk6CD30 *m;
+    u8 *base;
+    POLY_FT4 *ot;
+    POLY_FT4 *prim;
+    Unk44D24E *e;
+    UnkNode *n;
+    u8 *q;
+    s32 u;
+    s32 w;
+    u16 nrep;
+    s32 i;
+    s32 x;
+    s32 t0x;
+    u16 y;
+    s32 yt;
+    s32 z;
+    s32 x0;
+    s32 x1;
+    s32 x2;
+    s32 x3;
+    s32 t0;
+    s32 t1;
+    s32 t2;
+    s32 t3;
+    s32 t;
+    u8 c;
+
+    base = D_80083160.unk_00;
+    ot = *(POLY_FT4 **)(base + 0x8D0);
+    p->unk_24 = (s32)(base + 0xB0);
+    p->unk_C8.t[2] = 0;
+    p->unk_1C = ot;
+    for (;;)
+    {
+        /* mb/ma are assigned HERE, at the top of the outer loop body, and
+           nowhere else. This one placement is what gives the target BOTH the
+           three-word `lui t0 / addiu t0 / sw 0x1C(t0)` stores below AND the
+           `lui t0 / addiu a0,t0` matrix arms at the CompMatrix selection,
+           and it fills the `beqz` delay slot there (third pass, 21 -> 10
+           DIFF at 546 words; the park's var_cm3 was 547).
+
+           Each assignment is `(set H (high SYM))` + `(set P (lo_sum H SYM))`.
+           P is a user variable set once in the loop and used only in this
+           basic block, so it is a movable (scan_loop's third case,
+           loop.c:696-700); its lo_sum FORCES its high (loop.c:1221) and
+           hands the high its lifetime and savings (loop.c:1282-1283).
+           With P's use 29 luids away the high reaches `savings 3,
+           life 31` (.loop dump: `Insn 42: regno 119 (life 31), move-insn
+           savings 3  moved to 1319`), passes `threshold * savings *
+           lifetime >= insn_count` (loop.c:1631; threshold is
+           `1 + n_non_fixed_regs` for a loop with calls, loop.c:532) and is
+           hoisted; then P is hoisted after it (`forces 42 ... moved`).
+           The arm's own `(high SYM)` at the CompMatrix selection has the
+           same value, so combine_movables chains it to the hoisted one
+           (loop.c:1232-1285: `m1->done = 1; m1->match = m` at :1284-1285)
+           and move_movables replaces its register and deletes its insn
+           (loop.c:1945-1964; dump: `Insn 364: regno 201 (life 1), done
+           move-insn matches 42`). Both pseudos now live across the whole
+           loop with two or three refs each, so they are the LAST allocnos
+           in global.c's order (the .greg header ends `... 120 119 84 85 86`)
+           and every callee-saved register is taken before they are reached;
+           they stay unallocated with REG_EQUIV `(symbol_ref)` and
+           `(high (symbol_ref))` (both are LEGITIMATE_CONSTANT_P on MIPS,
+           mips.h:2387, and HIGH is CONSTANT_P, rtl.h:237), so reload
+           rematerialises them at each use into the spill register, which is
+           t0 because order_regs_for_reload puts the call-used register with
+           no pseudo uses first (reload1.c:3686-3693): the store gets `la t0`
+           through the movsi expander (`lui t0 / addiu t0,t0`) and the arm's
+           `low` insn gets `lui t0` + `addiu a0,t0,%lo`. Reload also deletes
+           the hoisted inits (reload1.c:1918-1922, delete_dead_insn at
+           :2281), so the preheader carries no trace. The CD30 arm is different because
+           D_8006CD30 is stored to directly below, which keeps its high
+           block-local (`matches 95`, 95 not desirable): `lui a0 / addiu
+           a0,a0`, as the target has it.
+
+           Measured alternatives (all with var_cm3's three CompMatrix arms):
+             initialised in the declarations (the park)   547 words, 411 DIFF
+             assigned at the loop BOTTOM                  547 words, 501 DIFF
+             assigned here, base's single CompMatrix      546 words, 17 DIFF
+             assigned just before the stores              546 words, 10 DIFF
+           `m = ma;` / `CompMatrix(ma, ...)` in the arms ICE: jump2's
+           `if (c) a0 = A; else a0 = B;` rewrite copies the `(set a0
+           (symbol_ref))` that only reload's constraint check had accepted,
+           and the fresh copy is unrecognizable (insn 1364 in the .jump2
+           dump). Written in the preheader the pointers are not movables at
+           all and the arm highs stay block-local, tied to $a0 by
+           qty_phys_sugg (block_alloc's tie at local-alloc.c:1295,
+           combine_regs's hard-sreg suggestion at :1824-1834, the
+           suggested-register pass at :1472): the park's
+           `lui a0 / j / addiu a0,a0` and the unfilled slot. */
+        mb = &D_8006CD10[0];
+        ma = &D_8006A84C[0];
+        /* m2 is set INSIDE the loop, not in the preheader. Its one set is a
+           loop invariant either way and loop.c hoists the `lui`/`ori` for
+           0x1F8000C8 into the prologue either way, but setting it here
+           shortens the allocno's live range enough to move it ahead of nrep
+           in allocation priority, which is the order the target has
+           (m2 in s6, x in s7, nrep in fp). In the preheader it scored
+           71 DIFF against 65 here, same 546 words. */
+        m2 = &p->unk_C8;
+        p->unk_04.vx = ((u16 *)v)[1];
+        p->unk_04.vy = ((u16 *)v)[3];
+        p->unk_04.vz = ((u16 *)v)[5];
+        p->unk_C4 = RotTransPers(&p->unk_04, (s32 *)&p->unk_BC, &p->unk_94, &p->unk_98);
+        s->unk_14 |= 0x8000;
+        /* The CD30 store's destination is written BEFORE the shift that
+           computes z (10 -> 2 DIFF). expand_assignment expands the
+           destination first (expr.c:2607, store_expr of the source only at
+           :2661), so `(set H (high CD30+0x1C))` precedes z's
+           `(set z (ashift ...))` in the chain and has the lower LUID.
+           sched1 is a backward list scheduler: when the CD30 store is
+           scheduled both insns are launched (schedule_insn,
+           sched.c:2557-2611, through adjust_priority's birthing case,
+           :2507-2545) and
+           tie, and rank_for_schedule's last key (sched.c:2428) takes the
+           higher LUID first, i.e. emits it LAST. With z's shift later in the
+           chain the order comes out `lui / sll / sw` and the high's quantity
+           lives 4 half-insns instead of 2; its local-alloc priority
+           (qty_compare_1, local-alloc.c:1598-1615: floor_log2(4)*4*4/4 = 8)
+           then falls below z's (floor_log2(12)*12*4/10 = 14.4, the lw temp
+           tied into z by combine_regs, :1870), so z is allocated first
+           and takes $v0 and the high gets $v1 -- which is why the target's
+           `lui v1` can then float to the top of the block in sched2.
+           `z = ...; D_8006CD30.unk_1C = z;` leaves the high adjacent to the
+           store (life 2, priority 16) and the registers the other way round,
+           8 words. Three inline `p->unk_C4 << 2` without z: 550 words. */
+        D_8006CD30.unk_1C = z = p->unk_C4 << 2;
+        mb->unk_1C = z;
+        ma->unk_1C = z;
+        p->unk_C4 = p->unk_C4 - (s16)s->unk_06;
+        if ((u32)p->unk_C4 < 0x1E0)
+        {
+            PushMatrix();
+            nrep = 1;
+            /* y's value is computed FIRST (first pass: any x-first order is
+               a word longer and 494+ DIFF, because the one computed first
+               loses the last callee-saved register and is spilled; the
+               target keeps x in $s7 and spills y). */
+            /* x is `s32 x` copied from an `s32 t0x` (the park's var_t1):
+               with both SImode, make_regs_eqv (cse.c:826-860) makes x the
+               canonical register of the quantity because it lives beyond
+               the block and its last use is later, so the `sll` of the abs
+               test reads x's register ($s7) while the store, which comes
+               BEFORE the copy, keeps t0x ($v0). With `u16 x` every spelling
+               has cse's paradoxical-SUBREG fold (cse.c:4850-4870) rewrite
+               `(subreg:SI (reg:HI x))` to the temp: `sll v0,v0`. y's temp
+               still comes first so that x, not y, gets the last callee-saved
+               register (y is spilled to 0x28(sp) as in the target), but y's
+               own copy and store sit after the device below. */
+            yt = p->unk_BE - 0x78;
+            t0x = p->unk_BC - 0xA0;
+            p->unk_BC = t0x;
+            /* DEVICE: an empty volatile asm between the `sh v0,0xBC(s1)` of
+               t0x and the `addu s7,v0` copy into x. Worth the last 2 words:
+               without it the function is 546 of 546 words / 2 DIFF with
+               `move s7,v0 / sh v0` where the target has `sh v0 / addu s7,v0`.
+               It emits nothing and warns under nothing (-Wall is clean apart
+               from the pre-existing RotTransPers pointer-type warnings).
+
+               Why sched2 cannot otherwise produce the target's order: after
+               reload the store reads $v0 and the copy reads $v0 and writes
+               $s7, so neither depends on the other; both become ready when
+               the `sll v0,s7,16` that overwrites $v0 is scheduled (the
+               .sched2 trace of the body without the device: `ready list at
+               T-8: 150 (2) 138 (2) 147 (2)`, then `insn 147 has a greater
+               potential hazard`),
+               they share priority 2, and schedule_select (sched.c:2616-2660)
+               moves the memory insn to the front of an equal-priority group
+               because a store has a positive potential_hazard (sched.c:1318-1344,
+               `(unit_n_insns - 1) * 0x1000 + unit` at :1344) and an ALU insn has
+               none; the scheduler runs backwards, so the insn picked first is
+               emitted LAST. Only an insn that depends on the store can make
+               the copy wait, and the target has nothing between the two.
+               The asm is that insn: sched_analyze_2 makes a traditional or
+               volatile asm depend on every earlier use and set and marks it
+               as setting everything (sched.c:1943-1970, `reg_pending_sets_all
+               = 1` and flush_pending_lists at :1968-1970), so the copy after
+               it is a successor of the store before it.
+
+               Ruled out, all at 546 words:
+                 p->unk_BC = t0x; x = t0x;  (no device)                2 DIFF
+                 x = t0x; p->unk_BC = t0x;  (store reads x: `sh s7`)   489
+                 x = p->unk_BC - 0xA0; p->unk_BC = x;                  489
+                 p->unk_BC = x = p->unk_BC - 0xA0;                     489
+                 p->unk_BC -= 0xA0; x = p->unk_BC; (cse does not forward
+                   the zero_extend load, `lhu s7,0xBC(s1)`)            10
+                 __asm__("" : "+r"(t0x)) / ("=r"(x) : "0"(t0x)): regmove
+                   re-ties the asm to $s7 and reload copies $v0 -> $s7
+                   BEFORE it, the pair ties again                      2
+                 this asm with `y = ...` still above it: it also pins y's
+                   spill store above the copy                          9
+                 the park's u16 / s16 / load-back spellings            see park */
+            __asm__ __volatile__("");
+            x = t0x;
+            y = yt;
+            p->unk_BE = y;
+            if (abs((s16)x) < 0x330 && abs((s16)y) < 0x330)
+            {
+                nrep = 5;
+            }
+            for (i = 0; i < nrep; i++)
+            {
+                if (i != 0)
+                {
+                    p->unk_C4 = 0xA;
+                    p->unk_BC = x - D_8006A83E[i] *
+                                        func_800644B8(func_80065F90((s16)x, 0x200)) /
+                                        0x1000;
+                    p->unk_BE = y - D_8006A83E[i] *
+                                        func_800644B8(func_80065F90((s16)y, 0x200)) /
+                                        0x1000;
+                }
+                p->unk_F8.vx = s->unk_16;
+                p->unk_F8.vy = s->unk_18;
+                p->unk_F8.vz = s->unk_1A;
+                u = s->unk_20;
+                p->unk_C8.t[0] = u;
+                p->unk_100 = u;
+                w = s->unk_22;
+                p->unk_C8.t[1] = w;
+                p->unk_102 = w;
+                RotMatrix(&p->unk_F8, m2);
+                /* CompMatrix is written in ALL THREE arms (the park's
+                   var_cm3). Cross-jumping runs only in the post-reload jump
+                   pass (toplev.c:3142 is the sole jump_optimize call with
+                   cross_jump = 1), so flow counts three `a1 = m2` copies at
+                   depth 3 and m2's 13 refs put it ahead of x and nrep in
+                   global.c's order: m2 $s6, x $s7, nrep $fp, as the target.
+                   jump2 then merges the three tails back into one call. The
+                   pointer locals mb/ma are deliberately NOT used here; see
+                   the loop-top comment for the ICE that gives. */
+                if (i != 0)
+                {
+                    if (D_8006A847[i] != 0)
+                    {
+                        m = &D_8006A84C[0];
+                        CompMatrix((MATRIX *)m, m2, &p->unk_54);
+                    }
+                    else
+                    {
+                        m = &D_8006CD10[0];
+                        CompMatrix((MATRIX *)m, m2, &p->unk_54);
+                    }
+                }
+                else
+                {
+                    m = &D_8006CD30;
+                    CompMatrix((MATRIX *)m, m2, &p->unk_54);
+                }
+                m1 = &p->unk_54;
+                SetTransMatrix(m1);
+                SetRotMatrix(m1);
+                e = (Unk44D24E *)s->unk_08;
+                p->unk_28 = s->unk_14;
+                for (;;)
+                {
+                    /* q is set as the FIRST statement of the body, above the
+                       `& 0x20` test (second pass, 65 -> 23 DIFF). q is a giv
+                       of the biv e (e + 1) and loop.c reduces it into a new
+                       pseudo either way; what the position decides is whether
+                       the giv is REPLACEABLE (record_giv, loop.c:4449-4451:
+                       `! not_every_iteration || last_use_this_basic_block`).
+                       not_every_iteration is set once the scan passes any
+                       JUMP_INSN or CODE_LABEL (loop.c:3365-3377), and q's uses
+                       span several blocks, so a set below the `bne` of this
+                       test falls to the `else` at :4493-4498, check_final_value
+                       (:4551) cannot help on a `for (;;)`, and strength_reduce
+                       emits `q = reduced` (:3946-3949). The volatile reads
+                       keep the ORIGINAL q: their address is never rewritten
+                       because loop.c runs under init_recog_no_volatile
+                       (loop.c:339) and general_operand (recog.c:807) rejects a
+                       volatile MEM while volatile_ok is 0, so validate_change
+                       on them fails. cse2 folded the first pair of arms onto
+                       the reduced giv (same extended block as the copy) and
+                       left the second pair, past the join, reading the copy in
+                       $a1: that was `move a1,s3` in the `beqz` delay slot
+                       where the target has `nop`, and `lbu 2(a1)`. Here the
+                       dump says `giv reg 96 ... replaceable`, the copy is
+                       gone, q carries 67 refs instead of 63, and global-alloc
+                       orders it (1.288) ahead of `s` (86 refs/460, 1.122):
+                       q in $s2 and s in $s3, which is the target, and the
+                       two prologue save-slot immediates follow from that. */
+                    q = (u8 *)&e->unk_01;
+                    if ((e->unk_00 & 0x20) == 0)
+                    {
+                        prim = p->unk_1C;
+                        p->unk_1C = prim + 1;
+                        p->unk_0C.w = e->unk_08;
+                        p->unk_10.w = e->unk_09;
+                        p->unk_14.w = e->unk_0A;
+                        p->unk_18.w = e->unk_0B;
+                        if (((e->unk_00 ^ p->unk_28) & 1) != 0)
+                        {
+                            x0 = -(s8)((volatile u8 *)q)[1] - p->unk_100;
+                            p->unk_84 = x0;
+                            p->unk_74 = x0;
+                            t0 = x0 - p->unk_14.h;
+                            p->unk_8C = t0;
+                            p->unk_7C = t0;
+                        }
+                        else
+                        {
+                            x1 = (s8)((volatile u8 *)q)[1] - p->unk_100;
+                            p->unk_84 = x1;
+                            p->unk_74 = x1;
+                            t1 = x1 + p->unk_14.h;
+                            p->unk_8C = t1;
+                            p->unk_7C = t1;
+                        }
+                        if (((e->unk_00 ^ p->unk_28) & 2) != 0)
+                        {
+                            x2 = -(s8)((volatile u8 *)q)[2] - p->unk_102;
+                            p->unk_7E = x2;
+                            p->unk_76 = x2;
+                            t2 = x2 - p->unk_18.h;
+                            p->unk_8E = t2;
+                            p->unk_86 = t2;
+                        }
+                        else
+                        {
+                            x3 = (s8)((volatile u8 *)q)[2] - p->unk_102;
+                            p->unk_7E = x3;
+                            p->unk_76 = x3;
+                            t3 = x3 + p->unk_18.h;
+                            p->unk_8E = t3;
+                            p->unk_86 = t3;
+                        }
+                        p->unk_90 = 0;
+                        p->unk_88 = 0;
+                        p->unk_80 = 0;
+                        p->unk_78 = 0;
+                        RotTransPers4((SVECTOR *)&p->unk_74, (SVECTOR *)&p->unk_7C,
+                                      (SVECTOR *)&p->unk_84, (SVECTOR *)&p->unk_8C,
+                                      (s32 *)&p->unk_E8, (s32 *)&p->unk_EC,
+                                      (s32 *)&p->unk_F0, (s32 *)&p->unk_F4,
+                                      &p->unk_94, &p->unk_98);
+                        prim->x0 = p->unk_E8 + p->unk_BC;
+                        prim->y0 = p->unk_EA + p->unk_BE;
+                        prim->x1 = p->unk_EC + p->unk_BC;
+                        prim->y1 = p->unk_EE + p->unk_BE;
+                        prim->x2 = p->unk_F0 + p->unk_BC;
+                        prim->y2 = p->unk_F2 + p->unk_BE;
+                        prim->x3 = p->unk_F4 + p->unk_BC;
+                        prim->y3 = p->unk_F6 + p->unk_BE;
+                        if (((u16)(prim->x0 + 0x20) < 0x181 &&
+                             (u16)(prim->y0 + 0x20) < 0x121) |
+                            ((u16)(prim->x1 + 0x20) < 0x181 &&
+                             (u16)(prim->y1 + 0x20) < 0x121) |
+                            ((u16)(prim->x2 + 0x20) < 0x181 &&
+                             (u16)(prim->y2 + 0x20) < 0x121) |
+                            ((u16)(prim->x3 + 0x20) < 0x181 &&
+                             (u16)(prim->y3 + 0x20) < 0x121))
+                        {
+                            setlen(prim, 9);
+                            s->unk_14 &= 0x7FFF;
+                            t = p->unk_14.w + p->unk_0C.w;
+                            p->unk_14.w = t;
+                            if (t & 0x100)
+                            {
+                                p->unk_14.w = t - 1;
+                            }
+                            t = p->unk_18.w + p->unk_10.w;
+                            p->unk_18.w = t;
+                            if (t & 0x100)
+                            {
+                                p->unk_18.w = t - 1;
+                            }
+                            p->unk_18.w = p->unk_18.w << 8;
+                            p->unk_10.w = p->unk_10.w << 8;
+                            *(s32 *)&prim->u0 = p->unk_10.w + p->unk_0C.w +
+                                                ((s->unk_12 + e->unk_06) << 16);
+                            if (i != 0)
+                            {
+                                *(u16 *)&prim->u1 = p->unk_10.h + p->unk_14.h;
+                                if (s->unk_10 != 0)
+                                {
+                                    prim->tpage =
+                                        (s->unk_10 + (e->unk_04 & 0xFF9F)) | 0x20;
+                                }
+                                else
+                                {
+                                    prim->tpage = e->unk_04 | 0x20;
+                                }
+                            }
+                            else
+                            {
+                                *(u16 *)&prim->u1 = p->unk_10.h + p->unk_14.h;
+                                if (s->unk_10 != 0)
+                                {
+                                    prim->tpage = s->unk_10 + (e->unk_04 & 0xFF9F);
+                                }
+                                else
+                                {
+                                    prim->tpage = e->unk_04;
+                                }
+                            }
+                            *(u16 *)&prim->u2 = p->unk_18.h + p->unk_0C.h;
+                            *(u16 *)&prim->u3 = p->unk_18.h + p->unk_14.h;
+                            if (prim->x0 > prim->x3)
+                            {
+                                prim->u1 = prim->u1 - 1;
+                                prim->u3 = prim->u3 - 1;
+                            }
+                            if (prim->y0 > prim->y3)
+                            {
+                                prim->v2 = prim->v2 - 1;
+                                prim->v3 = prim->v3 - 1;
+                            }
+                            c = e->unk_01;
+                            s->unk_0C[3] = c;
+                            if (i != 0)
+                            {
+                                s->unk_0C[3] = c | 2;
+                            }
+                            else if (p->unk_28 & 8)
+                            {
+                                if (p->unk_28 & 4)
+                                {
+                                    s->unk_0C[3] = c | 2;
+                                }
+                                else
+                                {
+                                    s->unk_0C[3] = c & 0xFD;
+                                }
+                            }
+                            if (p->unk_28 & 0x10)
+                            {
+                                s->unk_0C[3] = s->unk_0C[3] & 0xFE;
+                            }
+                            else
+                            {
+                                s->unk_0C[3] = s->unk_0C[3] | 1;
+                            }
+                            *(u32 *)&prim->r0 = *(u32 *)s->unk_0C;
+                            if (i != 0)
+                            {
+                                /* r0, g0, b0 in declaration order: the target
+                                   loads 0x4, 0x6, 0x5 in that order, and
+                                   writing b0 before g0 (0x4, 0x5, 0x6) costs
+                                   4 words. */
+                                prim->r0 = prim->r0 >> 2;
+                                prim->g0 = prim->g0 >> 2;
+                                prim->b0 = prim->b0 >> 2;
+                            }
+                            AddPrim((void *)(p->unk_24 + p->unk_C4 * 4), prim);
+                        }
+                    }
+                    if ((s8)e->unk_00 < 0)
+                    {
+                        break;
+                    }
+                    e++;
+                }
+            }
+            PopMatrix();
+        }
+        n = *(UnkNode **)(pl - 8);
+        if (n == NULL)
+        {
+            break;
+        }
+        pl = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+    *(POLY_FT4 **)((u8 *)g->unk_00 + 0x8D0) = p->unk_1C;
+    return 0;
+}
 
 void func_80034E40(void) {
 }
