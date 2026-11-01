@@ -1973,7 +1973,173 @@ void func_8004B8DC(s32 a, s32 b, s32 c, s32 d, s32 e) {
     func_800B6A0C(a, b, c, d, e);
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004B954);
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+u8 *func_8004C010(u8 *, u8 *);
+
+/* The two primitive sizes this function emits, as whole words: `g[3] = 6`
+   (seven words, stride 0x1C) and `g[3] = 4` (five words, stride 0x14).  Word
+   copies through a struct type, not through `*(s32 *)(g + off)`, because the
+   struct type is what lets sched1 lift the `*(s32 *) v` read above the
+   stores through `g` (see docs/matching-levers.md, the func_8004B954 lever). */
+typedef struct
+{
+    s32 w0, w1, w2, w3, w4, w5, w6;
+} Unk4B954W7;
+typedef struct
+{
+    s32 w0, w1, w2, w3, w4;
+} Unk4B954W5;
+
+/* The unit's prototype declares the sixth parameter `s32`; this definition
+   needs the pointer, so it is defined under an alias (the `w` suffix is not a
+   hex digit, which guard.py/progress.py rely on). */
+u8 *func_8004B954w(u8 *, u8 *, u8 *, u8 *, u8 *, s32 *, s32) __asm__("func_8004B954");
+
+u8 *func_8004B954w(u8 *c0, u8 *c1, u8 *p, u8 *r, u8 *f, s32 *out, s32 mode)
+{
+    s16 v[2];
+    s32 bx;
+    s32 dx;
+    s32 step;
+    s32 code;
+    u8 *e;
+    u8 *q;
+    u8 *g;
+    u8 *o;
+    s32 n;
+    s32 dy;
+    s32 by;
+    s32 i;
+
+    code = 1;
+    q = p;
+    g = q;
+    e = q;
+    dx = *(s16 *) (e + 0x10) - *(s16 *) (e + 8);
+    dy = *(s16 *) (e + 0x22) - *(s16 *) (e + 0xA);
+    if ((f[0] & 0x20) == 0)
+    {
+        if ((f[0] & 0x10) != 0)
+        {
+            n = 0x20;
+        }
+        else
+        {
+            n = 0x10;
+        }
+    }
+    else
+    {
+        n = 0x40;
+    }
+    step = 0x1000 / n;
+    if ((f[0] & 0x40) != 0)
+    {
+        if ((f[0] & 1) != 0)
+        {
+            code += 0x400;
+            bx = *(s16 *) (p + 8) - dx;
+        }
+        else
+        {
+            bx = *(s16 *) (p + 8);
+        }
+        if ((f[0] & 2) != 0)
+        {
+            by = *(s16 *) (p + 0xA) - dy;
+            code += 0x800;
+        }
+        else
+        {
+            by = *(s16 *) (p + 0xA);
+        }
+        n = n / 4;
+    }
+    else
+    {
+        dy = dy >> 1;
+        dx = dx >> 1;
+        bx = *(s16 *) (p + 8) + dx;
+        by = *(s16 *) (p + 0xA) + dy;
+    }
+    if (dx != 0 && dy != 0)
+    {
+        v[0] = (func_80064584(0) * dx >> 12) + bx;
+        v[1] = (func_800644B8(0) * dy >> 12) + by;
+        *(s16 *) (g + 8) = (s8) f[8] + bx;
+        *(s16 *) (g + 0xA) = (s8) f[9] + by;
+        if (mode != 0)
+        {
+            g[3] = 6;
+        }
+        else
+        {
+            g[3] = 4;
+        }
+        o = g + 4;
+        *(s32 *) (p + 4) = *(s32 *) (f + 4);
+        func_8004C010(o, c0);
+        func_8004C010(o, c1);
+        g[7] = f[1] & 0x7F;
+        if (mode != 0)
+        {
+            o = g + 0xC;
+            r += 0xC;
+            *(s32 *) (g + 0xC) = *(s32 *) r;
+            func_8004C010(o, c0);
+            func_8004C010(o, c1);
+            i = code;
+            *(s32 *) (g + 0x14) = *(s32 *) (g + 0xC);
+            if (code + n >= i)
+            {
+                do
+                {
+                    ((Unk4B954W7 *) g)->w0 = *(s32 *) q;
+                    ((Unk4B954W7 *) g)->w1 = *(s32 *) (q + 4);
+                    ((Unk4B954W7 *) g)->w2 = *(s32 *) (q + 8);
+                    ((Unk4B954W7 *) g)->w3 = *(s32 *) (q + 0xC);
+                    ((Unk4B954W7 *) g)->w5 = *(s32 *) (q + 0x14);
+                    ((Unk4B954W7 *) g)->w4 = *(s32 *) v;
+                    v[0] = (func_80064584(i * step) * dx >> 12) + bx;
+                    v[1] = (func_800644B8(i * step) * dy >> 12) + by;
+                    ((Unk4B954W7 *) g)->w6 = *(s32 *) v;
+                    i++;
+                    g += 0x1C;
+                } while (code + n >= i);
+            }
+        }
+        else
+        {
+            i = code;
+            if (code + n >= i)
+            {
+                do
+                {
+                    ((Unk4B954W5 *) e)->w0 = *(s32 *) q;
+                    ((Unk4B954W5 *) e)->w1 = *(s32 *) (q + 4);
+                    ((Unk4B954W5 *) e)->w2 = *(s32 *) (q + 8);
+                    ((Unk4B954W5 *) e)->w3 = *(s32 *) v;
+                    v[0] = (func_80064584(i * step) * dx >> 12) + bx;
+                    v[1] = (func_800644B8(i * step) * dy >> 12) + by;
+                    ((Unk4B954W5 *) e)->w4 = *(s32 *) v;
+                    i++;
+                    e += 0x14;
+                } while (code + n >= i);
+            }
+        }
+        *out = n;
+    }
+    else
+    {
+        if (mode != 0)
+        {
+            r += 0xC;
+        }
+        *out = 0;
+    }
+    return r;
+}
 
 u8 *func_8004C010(u8 *, u8 *);
 
