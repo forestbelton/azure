@@ -241,7 +241,7 @@ void func_80022774(s32 *a, s32 *b);
 void func_80022934(s32 *p);
 void func_80022488(s32 *p);
 void func_80022524(void);
-void func_8004CBFC(s32 *p, u8 *q);
+void func_8004CBFC(u32 *p, u8 *q, u32 *r);
 void func_800439F8(void);
 void func_8006A0F4(u8 *p);
 extern const u8 D_80020084[];
@@ -284,6 +284,9 @@ extern u8 D_80079054[];
 extern u8 D_800790B4[];
 extern u8 D_80079114[];
 extern s32 D_8002809C[];
+extern u8 D_80028068[][2];
+extern s32 D_8002806C[];
+extern u8 *D_80028074[];
 extern u8 D_800287E8[];
 extern u8 D_800291D0[];
 extern u8 D_80029618[][0x3E4];
@@ -1457,7 +1460,34 @@ s32 func_800235A0(s32 p, s32 w, s32 h)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023600);
+/* Four sprite slots per row, three rows, each x and y written through a
+   freshly reloaded `p[k + i]` -- gcc cannot CSE the second store's base
+   because the first store may alias it, so spelling each store as its own
+   full expression is what produces the doubled `lw` pairs. A `do`/`while`
+   here is 78 words against 76. */
+void func_80023600(s32 *p)
+{
+    s32 i;
+
+    p[32] = 1;
+    p[33] = 1;
+    func_8002352C((u8 *)p);
+    func_800235A0((s32)(p + 1), 0x36, 0x10);
+    func_800233D0(p);
+    ((UnkCardPair *)p[104])->unk_04->unk_0A = 0x1A;
+    for (i = 0; i < 3; i++)
+    {
+        ((UnkCardPair *)p[118 + i])->unk_04->unk_08 = 0x8E;
+        ((UnkCardPair *)p[118 + i])->unk_04->unk_0A = (i * 16) + 0x82;
+        ((UnkCardPair *)p[106 + i])->unk_04->unk_08 = 9;
+        ((UnkCardPair *)p[106 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+        ((UnkCardPair *)p[110 + i])->unk_04->unk_08 = 0x42;
+        ((UnkCardPair *)p[110 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+        ((UnkCardPair *)p[114 + i])->unk_04->unk_08 = 0x24;
+        ((UnkCardPair *)p[114 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+    }
+    func_80023470(p);
+}
 
 void func_80023730(UnkCardPair *p, u32 *a, u32 *b)
 {
@@ -2694,7 +2724,44 @@ void func_80026920(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800269B4);
+/* Two slots, each selected through the D_80028068 pick table. Four spellings
+   were load-bearing here, and three of them are about the ORDER gcc emits a
+   two-register `addu` in:
+
+   - D_80028068 has to be declared `[][2]` and indexed `[p[9]][i]`. As a flat
+     `u8 []` with `[p[9] * 2 + i]` gcc adds `i` before the array base, which
+     is six words wrong across the three evaluations.
+   - The func_8004CBFC pointer needs its offset parenthesised,
+     `(u8 *)p + (k * 12 + 4)`, so the `+ 4` lands in the scaled value rather
+     than after the base is added.
+   - The tested pointer has to come off a BYTE cursor whose scale is already
+     applied (`(u8 *)p + k * 4`, then `0x68` as the displacement). Written
+     `p[26 + k]` the offset is still a shift when the address is formed, and
+     gcc canonicalises `(plus (mult ...) (reg))` with the shift first, giving
+     `addu $v0, $v0, $s2` where the target has `addu $v0, $s2, $v0`. Four
+     base-first spellings of the same index all leave that one word wrong.
+
+   func_8004CBFC takes THREE arguments (see csrc/unk_1C540.c:2791); the
+   declaration here had two, and the third is this same pointer, which is why
+   the target loads it into $a2 before the test. */
+void func_800269B4(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        s32 k = D_80028068[p[9]][i];
+        u8 *q = (u8 *)p + k * 4;
+        u32 *e = *(u32 **)(q + 0x68);
+
+        if (e[0] != 0)
+        {
+            func_8004CBFC((u32 *)((u8 *)p + (k * 12 + 4)), D_80028074[i], e);
+        }
+        ((UnkCardPair *)p[24 + i])->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
+        ((UnkCardPair *)p[26 + i])->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
+    }
+}
 
 void func_80026AE4(s32 *p)
 {
