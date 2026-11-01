@@ -10748,3 +10748,42 @@ a dependence, sched.c:817-839), with the right store after both.
 Not established: why the original had a `(high D_80085458)` ahead of the
 busy loop. The dead store reproduces the RTL; what statement produced it in
 the source is a guess.
+
+## AN ARGUMENT REGISTER SET IN A `jal`'s DELAY SLOT IS THAT CALL'S LIVE ARGUMENT -- AND THE SAME INSN IN EVERY PREDECESSOR'S SLOT IS A SUCCESSOR BLOCK'S FIRST INSN
+
+Two separate readings of a delay slot, both measured on
+`func_80025398` (ovl_main_80020000, 53 words):
+
+**A `jal`'s delay slot executes before the callee.** An `a`-register write
+there is therefore not dead code to be explained away by scheduling -- it is
+how that argument is passed. The listing has
+
+    13  0C0094D6  jal   func_80025358
+    14  3C048001  lui   $a0, 0x8001
+
+so the first argument is `0x80010000`, i.e. the function's base pointer. The
+park had read word 14 as a dead constant materialisation that reorg happened
+to park next to the call, and spelled the call `func_80025358(p - 8, p[10])`;
+the argument is `(s32 *)b`.
+
+**The same insn in both predecessors' branch slots belongs to the block they
+branch TO.** Both guards here carry an identical `addiu $a0, $s2, -0x20`:
+
+    10  10400019  beqz  $v0, .L80025428
+    11  2644FFE0  addiu $a0, $s2, -0x20
+    ...
+    18  10400011  beqz  $v0, .L80025428
+    19  2644FFE0  addiu $a0, $s2, -0x20
+
+and the block at `.L80025428` starts with `lui $v0, %hi(...)`, not with the
+`addiu`. That is the fail block's own `func_800230F4((s32)(p - 8))` argument,
+hoisted into every predecessor's slot and deleted from the block -- which
+reorg can only do when *every* predecessor carries it. Read in reverse: an
+identical insn in two slots targeting one label is evidence about the
+successor's first statement, not about either predecessor.
+
+Cost of the misreading: exactly one word. Twelve spellings measured at
+53 words / 1 DIFF (the constant in a local, re-assigned after the call, a
+second local, inline at all three uses; `(s32)p - 0x20` and `(u8 *)p - 0x20`
+at the fail site, the call site and both), plus `p - 8` hoisted into a local
+at 54 words / 50 DIFF. Changing the one argument to `b`: MATCH.
