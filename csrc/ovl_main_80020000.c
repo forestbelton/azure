@@ -1943,6 +1943,10 @@ s32 func_800237C4(s32 a)
     return func_800491F4(a, D_80027F68, 0x12);
 }
 
+/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x184 with
+   18 entries. Identical source, identical residue; source in
+   docs/near-misses/func_800237EC.c and the family's measurement table in
+   docs/near-misses/func_80022B48.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800237EC);
 
 void func_8002388C(s32 *p, s32 v)
@@ -2169,6 +2173,10 @@ s32 func_80023ECC(s32 a)
     return func_800491F4(a, D_80027FC4, 0xA);
 }
 
+/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x240 with
+   10 entries. Identical source, identical residue; source in
+   docs/near-misses/func_80023EF4.c and the family's measurement table in
+   docs/near-misses/func_80022B48.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023EF4);
 
 void func_80023F94(s32 *p, s32 a, s32 b)
@@ -2591,6 +2599,10 @@ void func_80024C48(s32 a)
     func_800491F4(a, D_80027FF8, 0x15);
 }
 
+/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0xb20 with
+   21 entries. Identical source, identical residue; source in
+   docs/near-misses/func_80024C70.c and the family's measurement table in
+   docs/near-misses/func_80022B48.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024C70);
 
 void func_80024D10(s32 *p, s32 v)
@@ -3706,6 +3718,10 @@ s32 func_80026DC8(s32 a)
     return func_800491F4(a, D_8002808C, 4);
 }
 
+/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x44 with
+   4 entries. Identical source, identical residue; source in
+   docs/near-misses/func_80026DF0.c and the family's measurement table in
+   docs/near-misses/func_80022B48.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026DF0);
 
 void func_80026E90(s32 *p, s32 v)
@@ -3825,6 +3841,10 @@ s32 func_80027254(s32 a)
     return func_800491F4(a, D_80028094, 4);
 }
 
+/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0xd4 with
+   4 entries. Identical source, identical residue; source in
+   docs/near-misses/func_8002727C.c and the family's measurement table in
+   docs/near-misses/func_80022B48.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002727C);
 
 void func_8002731C(s32 *p, s32 v)
