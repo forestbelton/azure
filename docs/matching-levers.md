@@ -1977,6 +1977,51 @@ load's latency makes its critical path longer, which hands the load the first
 quantity in the block and with it `$v0`; you cannot reorder your way out of
 that, but you can make the block contain the whole computation instead.
 
+### A cross-jumped tail can present as a DELAY SLOT, not as registers
+
+The heading above says to reach for the duplicated tail "whenever a diff is
+registers-only around a join". That trigger is too narrow, and it is what kept
+func_800262BC parked. Its symptom was three words of *scheduling*: in the fail
+arm the target computed the call's argument `addiu $a0, $s0, -0x20` before
+finishing the `func_800265B8` address and put `sw $v0, 0x34($s0)` in the
+`jal`'s delay slot, where every candidate put the argument in the slot and the
+store before it. Every opcode, immediate, displacement and register already
+matched, and the word counts agreed at 55, so nothing pointed at the join.
+
+The join was the cause anyway. Written with the shared store spelled by hand --
+one `s32 h` assigned in each of the three arms and `p[-4] = h` once after the
+if -- the arm's last two insns are the `p[13]` store and the argument. sched2
+is a REVERSE list scheduler (`sched.c`: it walks the dependence graph from the
+last insn back), and on r3000 every latency is 1, so `priority()`'s
+`priority(pred) + insn_cost - 1` leaves *every* insn at priority 1 and
+`rank_for_schedule`'s class test is dead too (`insn_cost == 1` makes all three
+classes 3). The only live tiebreak is `INSN_LUID`, descending -- the ready
+insn that was LAST in the source goes last in the block. The argument is after
+the store in source order, so the argument lands next to the `jal` and reorg
+takes it for the slot. Nothing the source says about those two statements
+changes that, because the tiebreak is over their *order*, which the arm fixes.
+
+Writing `p[-4] = ...` out in all three arms instead -- the way the twin
+func_80025230 does it -- makes the store part of each arm, so the argument is
+no longer the arm's last insn, and the `p[13]` store takes the slot.
+`jump_optimize`'s second run then merges the three copies back into the tail
+and produces the register, the `j` to the shared block and the
+`sw $v0, -0x10($s0)` in func_80020984's delay slot that the listing shows.
+55 words, 3 DIFF to MATCH.
+
+Measured on the hand-merged spelling, all 55 words: all six permutations of
+the arm's three statements (best 3 DIFF, next 56w/44, 57-58w for any order
+with the `h` assignment before the call), the argument in a local at block and
+at function scope (both 3 DIFF), `(s32)p - 32` and `(s32)&p[-8]` as the
+argument (both 3 DIFF). One of them is worth keeping as a diagnostic: re-base
+the store on the argument local, `s32 *q = p - 8; q[21] = ...;
+func_80022EEC((s32)q);`. The store then depends on the argument, so the
+argument is ready first and the order comes out exactly right -- 55w/1 DIFF,
+the single wrong word being the store's base (`sw $v0, 0x54($a0)` for
+`sw $v0, 0x34($s0)`). A 1-DIFF whose only fault is a base register, reached by
+giving an insn an artificial dependence, says the real source got that order
+some other way, and the join is the first place to look.
+
 ### A pass-through call that emits nothing still costs references
 
 A call that hands a function its own incoming arguments unchanged --

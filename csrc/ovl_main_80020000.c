@@ -3579,9 +3579,50 @@ void func_80026270(s32 **pp)
     } while (++i < 5);
 }
 
-/* NEAR MISS: 55 words, 3 DIFF: in the failure block the target computes the call's argument 'addiu $a0, $s0, -0x20' BEFORE finishing the func_800265B8 address and schedules the 'sw $v0, 0x34($s0)' into the call's delay slot; every spelling here emits the store before the argument. Four measured: the two branch senses (== 0 first is right -- it took this from 28 DIFF to 3), the argument hoisted into a local inside the block, and the store moved after the call (56w/45). Everything else matches, including the 0x80010000 constant base for both the D_80010208 halfword read and the two pointer arguments.
-   Source in docs/near-misses/func_800262BC.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800262BC);
+/* The `p[-4] = ...` store is written out in all three arms, as in the twin
+   func_80025230, and gcc's cross-jumping merges them into the tail: that is
+   where the target's `sw $v0, -0x10($s0)` in func_80020984's delay slot comes
+   from. Spelling the merge by hand -- one `s32 h` assigned in each arm and
+   stored once after the if -- lands 55 words with 3 DIFF, because then the
+   `p[13]` store and the `p - 8` argument are the last two insns of the fail
+   block and sched2, which is a REVERSE list scheduler whose only live
+   tiebreak on r3000 is descending INSN_LUID (every latency is 1, so every
+   priority is 1), puts the argument in the jal's delay slot instead of the
+   store. Measured on that spelling: all six permutations of the fail block's
+   three statements (parked order 55w/3, next best 56w/44, anything with the
+   `h` assignment before the call 57-58w), the argument in a local at block
+   and at function scope (both 55w/3), `(s32)p - 32` and `(s32)&p[-8]` as the
+   argument (both 55w/3), and the store re-based on the argument local as
+   `q[21]` with `q = p - 8`, which fixes the order and leaves only the base
+   register wrong (55w/1). */
+void func_800262BC(s32 *p)
+{
+    func_80026128((u8 *)0x80010000, p[11], p[9]);
+    if (func_80021F18(p[11], (u8 *)0x80010000) == 0)
+    {
+        p[13] = (s32)func_800265B8;
+        func_80022EEC((s32)(p - 8));
+        p[-4] = (s32)func_800261C0;
+    }
+    else
+    {
+        func_80024F3C((s32 *)p[1], p[11], 3);
+        func_80026270((s32 **)p);
+        func_800241D4((s32 *)p[p[11] + 3], 1);
+        if (((s16 *)0x80010000)[0x104] != 0)
+        {
+            func_800A6104();
+            p[-4] = (s32)func_80026240;
+        }
+        else
+        {
+            func_80053DA8(0x503);
+            p[-4] = (s32)func_800265B8;
+        }
+    }
+    func_80020984();
+    p[16] = 0;
+}
 
 void func_80026398(s32 *p)
 {
