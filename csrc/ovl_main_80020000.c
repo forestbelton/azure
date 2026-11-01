@@ -280,6 +280,7 @@ extern u8 D_800790B4[];
 extern u8 D_80079114[];
 extern s32 D_8002809C[];
 extern u8 D_800291D0[];
+extern u8 D_80029618[][0x3E4];
 extern u8 *D_800282A4[];
 extern u8 D_800791A4[];
 void func_8002727C(s32 a, s32 n);
@@ -908,7 +909,41 @@ void func_80021EB8(s32 *gsw)
    `(... ^ sum) == 0`, and u32 against s32. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021EE0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021F18);
+s32 func_8006A124(u8 *a, u8 *b);
+void func_80021DF4(s32 idx, u8 *src);
+
+/* func_8006A124 is almost certainly libapi `rename`: it takes two of the
+   0x20-byte name buffers func_80021B18 builds, and this function uses it to
+   move the real save to the scratch name (slot 5), read it back, and move it
+   home again. The two buffers must be declared nameA-then-nameB to land at
+   sp+0x18 and sp+0x38 in that order; reversed gives 19 DIFF. */
+s32 func_80021F18(s32 idx, u8 *buf)
+{
+    u8 nameA[0x20];
+    u8 nameB[0x20];
+    s32(*tbl)[32];
+    s32 *row;
+    s32 r;
+
+    func_80021B18(nameA, idx);
+    func_80021B18(nameB, 5);
+    tbl = D_80083E98;
+    row = tbl[idx];
+    if (row[0] != 0)
+    {
+        func_8006A124(nameA, nameB);
+    }
+    *(s32 *)(buf + 0x204) = 0;
+    func_80021EB8((s32 *)buf);
+    r = func_80021C4C(nameB, buf, 0xC0, 0, row[0]);
+    if (r != 0)
+    {
+        func_80021DF4(idx, buf);
+        func_800220DC();
+    }
+    func_8006A124(nameB, nameA);
+    return r;
+}
 
 s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
 {
@@ -1040,7 +1075,25 @@ void func_8002233C(u8 *p, s32 idx, s32 n)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800223B4);
+u8 *func_80022300(s32 *a, u8 *p, s32 n);
+
+/* p[569] is ptrs[6] of the 0x8B0 group (ptrs starts at 0x8CC) and p[563 + n]
+   is ptrs[n]; the two s16 stores are the sprite's x and y, each a position
+   minus half the corresponding extent. `x * 4` has to be a local declared
+   BEFORE the other two: the target computes it at word 3, ahead of the $s4
+   save and the `p + 0xE4` address, and inline it is computed after both. */
+void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z)
+{
+    s32 sx = x * 4;
+    UnkCardPair *e = (UnkCardPair *)p[569];
+    u8 *q = (u8 *)&p[57];
+
+    e->unk_04->unk_08 = sx - (p[6] / 2) + 0xA2;
+    e->unk_04->unk_0A = (n * 17) - (p[7] / 2) + 0x7A;
+    func_80022300(p, q, y);
+    e->unk_00 = (s32)q;
+    func_8002233C((u8 *)((UnkCardPair *)p[563 + n])->unk_00, z, y);
+}
 
 void func_80022488(s32 *p)
 {
@@ -1100,7 +1153,25 @@ void func_8002290C(s32 *p)
     q[0] = p + 9;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022934);
+/* Five sprites in a row, 0x180 bytes of buffer apart, each label rendered by
+   func_8004DA74 into `(u8 *)p + 0x114 + i * 0x180`. D_800280B4 must be
+   indexed directly: hoisting it into a `UnkStrSet *t` local costs 5 DIFF
+   even though gcc hoists the base address either way, and giving the row its
+   own local inside the loop costs 21. */
+void func_80022934(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 5; i++)
+    {
+        UnkCardPair *e = (UnkCardPair *)p[563 + i];
+
+        e->unk_04->unk_08 = 0x124 - (p[6] / 2);
+        e->unk_04->unk_0A = (i * 17) - (p[7] / 2) + 0xFC;
+        e->unk_00 = (s32)func_8004DA74((u8 *)p + 0x114 + i * 0x180,
+                                       D_800280B4[p[2]].strs[i], 1);
+    }
+}
 
 /* The second parameter is unused by the body but func_80022AE8 sets $a1
    before the call and sets nothing else. */
@@ -1556,9 +1627,9 @@ void func_80023EC4(s32 *p)
     p[-4] = 0;
 }
 
-void func_80023ECC(s32 a)
+s32 func_80023ECC(s32 a)
 {
-    func_800491F4(a, D_80027FC4, 0xA);
+    return func_800491F4(a, D_80027FC4, 0xA);
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023EF4);
@@ -1576,7 +1647,37 @@ void func_80023FA0(s32 *p, s32 a, s32 b)
     func_80023E14(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023FF0);
+void func_80023EF4(s32 *p, s32 n);
+
+/* The func_800238D4 constructor idiom at an INDEXED row: D_80029618 is an
+   array of 0x3E4-byte rows, and gcc synthesises the 996 multiply as
+   `(((b << 5) - b) << 3) + b) << 2`. func_80023ECC had to become `s32` with
+   a `return` -- its value lands in r[150] here -- which leaves its own ten
+   words unchanged. `q[3] = ...` must come BEFORE the func_80023ECC call:
+   reversed, the function grows to 64 words. */
+s32 func_80023FF0(s32 a, s32 b)
+{
+    s32 *q = (s32 *)D_80029618[b];
+    s32 *r = q + 8;
+
+    if (func_8004B4A8(q) == 0)
+    {
+        q = func_8003FE78(0, (u8 *)q, 0xF9);
+        func_8004491C((UnkNode *)q, (u32)func_80027DD0);
+    }
+    else
+    {
+        func_80024184(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_80069EC8(r, 0x3C4);
+    }
+    func_80023EF4(r, 0xA);
+    q[3] = (s32)(r + 147);
+    r[150] = func_80023ECC((s32)(r + 151));
+    func_80023FA0(r, a, b);
+    q[4] = (s32)func_80023EC4;
+    return (s32)q;
+}
 
 void func_800240EC(s32 *p)
 {
@@ -2488,7 +2589,31 @@ s32 *func_80026868(s32 *p, s32 a)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026920);
+/* Same destructor family as func_80025D34, which is still a near miss; this
+   one lands because only the last of its four calls is inside the loop, so
+   there is no delay-slot nop to account for. gcc folds the 0xC into the
+   memory displacement and strength-reduces the index to the q cursor, so
+   `q[3]` with `q++` and `q[3 + i]` in a `for` both give the same 37 words. */
+void func_80026920(s32 *p)
+{
+    s32 *q = p + 8;
+    s32 i;
+
+    if (p != 0)
+    {
+        func_8004F52C(q[0]);
+        func_80024EEC((s32 *)q[1]);
+        func_80027458((s32 *)q[2]);
+        i = 0;
+        do
+        {
+            func_80024184((s32 *)q[3]);
+            q++;
+        } while (++i < 5);
+        ((u16 *)p)[15] |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800269B4);
 
