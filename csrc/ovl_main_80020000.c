@@ -71,7 +71,7 @@ extern u8 D_80028094[];
    give 19 words. The lever is PER SITE. */
 extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 
-void func_800491F4(s32 a, u8 *fmt, s32 n);
+s32 func_800491F4(s32 a, u8 *fmt, s32 n);
 void func_800269B4(s32 *p);
 void func_80026B18(s32 *p, u8 *a, u8 *b);
 s32 func_8004CAA0(void);
@@ -115,6 +115,15 @@ typedef struct
     u8 b2;
     u8 b3;
 } UnkFour;
+
+/* 0x80 bytes, alignment 1: func_80021DF4 copies a whole D_80083E98 row with
+   gcc's unknown-alignment block move -- the `(src | dst) & 3` test and both a
+   lwl/lwr and a lw loop. Through the s32[][32] type gcc would know both sides
+   are word-aligned and emit only the second. */
+typedef struct
+{
+    u8 b[0x80];
+} UnkRow;
 
 typedef struct
 {
@@ -184,7 +193,7 @@ void func_8005863C(void);
 void func_8006A084(void);
 void func_8006A094(void);
 void func_8006A248(u32 ev);
-void func_80027AFC(s32 *p, s32 a);
+s32 *func_80027AFC(s32 a, s32 b);
 u8 *func_80022A30(u8 *p, s32 *q);
 void func_80021538(void);
 void func_80025D34(s32 *p);
@@ -227,7 +236,15 @@ void func_80023C44(s32 *p);
 s32 func_8006A0A4(u8 *name, s32 mode);
 s32 *func_8003FE78(s32 a, u8 *b, s32 c);
 s32 *func_8003FC64(s32 a);
-s32 func_80027364(s32 *p);
+s32 func_8004B4A8(s32 *p);
+s32 func_80021F18(s32 a, u8 *b);
+extern u8 *D_800282A4[];
+extern u8 D_800791A4[];
+void func_8002727C(s32 a, s32 n);
+s16 func_80027DD0(void);
+extern u8 D_8002BB08[];
+extern u8 D_8002B968[];
+s32 *func_80027364(s32 *p);
 s32 func_800238D4(s32 *p);
 s32 func_80024D58(s32 *p, s32 a, s32 b);
 extern u8 D_80027FD0[];
@@ -316,12 +333,12 @@ void func_800270E0(s32 *p);
 
 void func_80025230(s32 *p);
 void func_800265B8(void);
-void func_80027584(void);
+void func_80027584(s32 *p);
 void func_8002789C(void);
 void func_8002593C(void);
-void func_80025398(void);
-void func_800262BC(void);
-void func_80027584(void);
+void func_80025398(s32 *p);
+void func_800262BC(s32 *p);
+void func_80027584(s32 *p);
 
 /* c_server.c, somewhere in lines 1-180: the first function in the overlay and
    the first one landed. Its twin is func_804008A0.
@@ -740,6 +757,8 @@ s32 func_80021D54(s32 idx)
     return r;
 }
 
+/* NEAR MISS: 49 words, 7 DIFF: the function is an 0x80-byte block copy of one D_80083E98 row from src+0x200, through a byte-aligned struct so gcc emits its unknown-alignment expansion (the (src|dst)&3 test plus both a lwl/lwr and a lw loop), then sets row[0] = 1. What differs is only the ORDER of the SECOND row-address computation: the target emits 'sll' then 'lui'/'addiu' then 'addu' (and reorg pulls the sll into the preceding j's delay slot), while every spelling here emits the base first. Three measured: the plain 2D index, a byte offset for the second access, and byte offsets for both. The FIRST computation's order (base first) already matches, so the two differ in the target and no single spelling gives both.
+   Source in docs/near-misses/func_80021DF4.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021DF4);
 
 void func_80021EB8(s32 *gsw)
@@ -1290,7 +1309,24 @@ void func_80023A78(UnkCardPair *p, u32 *a, u32 *b, s32 n)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023B18);
+void func_80023B18(s32 *p)
+{
+    UnkCardPair *q = (UnkCardPair *)p[0x98];
+    s32 k;
+
+    k = func_80022138() >= 3;
+    q->unk_00 = (s32)func_8004DA74((u8 *)p + 8, D_800282A4[k], 1);
+    q->unk_04->unk_08 = 0xF0;
+    q->unk_04->unk_0A = 0x91;
+    q = (UnkCardPair *)p[0x9C];
+    q->unk_04->unk_08 = 0x70;
+    q->unk_04->unk_0A = 0x10;
+    q->unk_00 = (s32)D_800791A4;
+    q = (UnkCardPair *)p[0x9E];
+    q->unk_00 = (s32)((u8 *)p + 0x134);
+    q->unk_04->unk_08 = 0xAE;
+    q->unk_04->unk_0A = 0x18;
+}
 
 s32 func_80023BE4(s32 p, s32 w, s32 h)
 {
@@ -1755,6 +1791,8 @@ void func_80025358(s32 *p, s32 v)
     func_80025FFC(p, v);
 }
 
+/* NEAR MISS: 53 words and exactly ONE differing word: the target fills func_80025358's jal delay slot with a DEAD 'lui $a0, 0x8001' (overwritten by the next instruction's 'lw $a0, 0x28($s2)'), where every spelling here fills it with a second copy of 'addiu $a0, $s2, -0x20'. Both are reorg picking the next instruction in the stream; the target's stream had the 0x80010000 materialisation there and this one's had the fail-path argument. Four measured: the constant in a local against inline at all three uses, and 'p - 8' hoisted into a local (54w/50, much worse). Everything else matches, including the goto structure -- the two failure exits really do converge on one block and then on the shared tail.
+   Source in docs/near-misses/func_80025398.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025398);
 
 void func_8002546C(s32 *p)
@@ -1906,7 +1944,7 @@ void func_80025B60(s32 *p)
 void func_80025B9C(s32 *p)
 {
     func_80025D34(p - 8);
-    func_80027AFC((s32 *)p[8], 0);
+    func_80027AFC(p[8], 0);
 }
 
 void func_80025BD4(s32 *p)
@@ -2087,6 +2125,8 @@ void func_80026270(s32 **pp)
     } while (++i < 5);
 }
 
+/* NEAR MISS: 55 words, 3 DIFF: in the failure block the target computes the call's argument 'addiu $a0, $s0, -0x20' BEFORE finishing the func_800265B8 address and schedules the 'sw $v0, 0x34($s0)' into the call's delay slot; every spelling here emits the store before the argument. Four measured: the two branch senses (== 0 first is right -- it took this from 28 DIFF to 3), the argument hoisted into a local inside the block, and the store moved after the call (56w/45). Everything else matches, including the 0x80010000 constant base for both the D_80010208 halfword read and the two pointer arguments.
+   Source in docs/near-misses/func_800262BC.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800262BC);
 
 void func_80026398(s32 *p)
@@ -2183,7 +2223,7 @@ void func_80026748(s32 *p)
 void func_80026784(s32 *p)
 {
     func_80026920(p - 8);
-    func_80027AFC((s32 *)p[8], p[9]);
+    func_80027AFC(p[8], p[9]);
 }
 
 void func_800267C0(s32 *p)
@@ -2224,7 +2264,7 @@ s32 *func_80026868(s32 *p, s32 a)
         func_800220DC();
         q[8] = func_8004F418(q, 0);
         r[1] = func_80024D58(q, r[11], 3);
-        r[2] = func_80027364(q);
+        r[2] = (s32)func_80027364(q);
         r[10] = 0;
         q[4] = (s32)func_800267C0;
     }
@@ -2373,9 +2413,9 @@ void func_800271C0(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-void func_80027254(s32 a)
+s32 func_80027254(s32 a)
 {
-    func_800491F4(a, D_80028094, 4);
+    return func_800491F4(a, D_80028094, 4);
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002727C);
@@ -2392,7 +2432,28 @@ void func_80027324(s32 *p, s32 v)
     func_800270E0(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027364);
+s32 *func_80027364(s32 *p)
+{
+    s32 *q = (s32 *)D_8002B968;
+    s32 *r = q + 8;
+
+    if (func_8004B4A8(q) == 0)
+    {
+        q = func_8003FE78(0, D_8002B968, 0x68);
+        func_8004491C((UnkNode *)q, (u32)func_80027DD0);
+    }
+    else
+    {
+        func_80023A00(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_80069EC8(r, 0x180);
+    }
+    func_8002727C((s32)r, 4);
+    q[3] = (s32)(r + 0x38);
+    r[0x3B] = func_80027254((s32)(r + 0x3C));
+    func_80027324(r, (s32)p);
+    return q;
+}
 
 void func_8002742C(s32 *p)
 {
@@ -2438,7 +2499,40 @@ void func_800274D8(s32 *p)
    Source in docs/near-misses/func_80027528.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027528);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027584);
+void func_80027584(s32 *p)
+{
+    s32 i = 0;
+    s32 r;
+
+    do
+    {
+        r = func_80021A84(p[3]);
+        if (r != 5)
+        {
+            break;
+        }
+    } while (i++ < 6);
+    p[14] = 0;
+    func_80020984();
+    if (r == 1)
+    {
+        p[11] = (s32)func_8002789C;
+        func_80023054((s32)(p - 8));
+        p[-4] = (s32)func_800274D8;
+    }
+    else if (r == 4)
+    {
+        p[11] = (s32)func_8002789C;
+        func_80022E9C((s32)(p - 8));
+        p[-4] = (s32)func_800274A8;
+    }
+    else
+    {
+        p[11] = (s32)func_8002789C;
+        func_8002302C((s32)(p - 8));
+        p[-4] = (s32)func_800274D8;
+    }
+}
 
 void func_8002765C(s32 *p)
 {
@@ -2511,7 +2605,26 @@ void func_80027A9C(s32 *p)
     p[-4] = (s32)func_8002789C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027AFC);
+s32 *func_80027AFC(s32 a, s32 b)
+{
+    s32 *q = (s32 *)D_8002BB08;
+    s32 *r = q + 8;
+
+    if (func_8004B4A8(q) == 0)
+    {
+        q = func_8003FE78(0, D_8002BB08, 0x19);
+    }
+    else
+    {
+        func_80027C90(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_80069EC8(r, 0x44);
+    }
+    D_80082E60.unk_0F |= 0x80;
+    func_80027A68(r, a, b);
+    q[4] = (s32)func_80027A9C;
+    return q;
+}
 
 void func_80027BC0(void)
 {
@@ -2560,14 +2673,14 @@ void func_80027C90(s32 *p)
 void func_80027D0C(s32 *p)
 {
     func_80027C60();
-    func_80027AFC(p, 1);
+    func_80027AFC((s32)p, 1);
 }
 
 void func_80027D40(s32 *p)
 {
     func_800A68C0();
     func_80027C60();
-    func_80027AFC(p, 2);
+    func_80027AFC((s32)p, 2);
 }
 
 void func_80027D7C(s32 *p)
@@ -2576,7 +2689,7 @@ void func_80027D7C(s32 *p)
     D_80083200 = 0x200;
     func_80064F20(0x200);
     func_80064F00(0xA0, 0x78);
-    func_80027AFC(p, 0);
+    func_80027AFC((s32)p, 0);
 }
 
 s16 func_80027DD0(void)
