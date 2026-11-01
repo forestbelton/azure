@@ -121,6 +121,29 @@ typedef struct
     u8 b3;
 } UnkFour;
 
+/* Eight and 0x20 bytes, alignment 1, for the same reason as UnkFour:
+   func_80025FFC copies D_800200B8 onto its stack and a D_80027E78 row into
+   its argument with lwl/lwr + swl/swr. */
+typedef struct
+{
+    u8 b[8];
+} UnkEight;
+
+typedef struct
+{
+    u8 b[0x20];
+} UnkBlock20;
+
+/* The u16 pair at the front of func_80025FFC's stack copy: the loads are
+   `lhu`, not `lh`, so the fields are unsigned. */
+typedef struct
+{
+    u16 x;
+    u16 y;
+    u16 w;
+    u16 h;
+} UnkURect;
+
 /* 0x80 bytes, alignment 1: func_80021DF4 copies a whole D_80083E98 row with
    gcc's unknown-alignment block move -- the `(src | dst) & 3` test and both a
    lwl/lwr and a lw loop. Through the s32[][32] type gcc would know both sides
@@ -285,6 +308,10 @@ extern u8 D_800790B4[];
 extern u8 D_80079114[];
 extern s32 D_8002809C[];
 extern u8 D_80028068[][2];
+extern u8 D_80027E78[][0x20];
+extern u8 D_800200B8[];
+void func_8006733C(UnkURect *r, u8 *src);
+void func_80067014(s32 n);
 extern s32 D_8002806C[];
 extern u8 *D_80028074[];
 extern u8 D_800287E8[];
@@ -335,6 +362,8 @@ void func_8004E884(u8 *p, s32 a);
 void func_8004E264(u8 *p, s32 a);
 extern s32 D_80084118;
 extern s32 D_800287D0;
+extern s32 D_80028540;
+extern s32 D_80028548;
 extern s32 D_800287D8;
 extern s32 D_80028808;
 extern u8 *D_800282BC[];
@@ -670,7 +699,51 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020048);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002168C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800217D4);
+/* A button-repeat counter over the two-entry D_80028540/D_80028548 pair. It
+   RETURNS &D_800287D8, which is why the target computes that address on both
+   exits and then never reads it -- as a void function those two words
+   disappear and nothing else changes. Both arms repeat the pair of clearing
+   stores so jump.c cross-jumps them into the shared tail at $a0/$a1. */
+s32 *func_800217D4(void)
+{
+    s32 v = func_80021410();
+    s32 i;
+
+    if (v != 0)
+    {
+        i = func_8002190C();
+        if ((&D_80028548)[i] == v)
+        {
+            (&D_80028540)[i]++;
+        }
+        else
+        {
+            (&D_80028540)[i] = 0;
+        }
+        (&D_80028548)[i] = v;
+        if (v == 1 || v == 4)
+        {
+            if ((&D_80028540)[i] >= 4)
+            {
+                (&D_800287D8)[i] = 1;
+                (&D_80028540)[i] = 0;
+                (&D_80028548)[i] = 0;
+            }
+        }
+        else
+        {
+            (&D_80084118)[i] = 0;
+            if ((&D_80028540)[i] >= 4)
+            {
+                (&D_800287D8)[i] = 0;
+                (&D_80028540)[i] = 0;
+                (&D_80028548)[i] = 0;
+            }
+        }
+        func_800209C4();
+    }
+    return &D_800287D8;
+}
 
 void func_80021904(void)
 {
@@ -2493,7 +2566,28 @@ s32 func_80025ECC(void)
    Source in docs/near-misses/func_80025F0C.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025F0C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025FFC);
+/* A three-pass VRAM upload. 0x80010080 is a constant address, not a symbol --
+   the `lui` + `ori` pair is the tell (see docs/addressing-and-translation-units.md).
+   Both block copies have to go through the alignment-1 structs: the loads are
+   lwl/lwr, so gcc is not allowed to assume either side is word-aligned.
+   The `r.y` update must come AFTER the row copy (43 DIFF before it), and the
+   source pointer must be `(u8 *)0x80010080 + i * 0x80` rather than a walking
+   local advanced at the bottom of the loop (56 DIFF). */
+void func_80025FFC(s32 *p, s32 n)
+{
+    UnkURect r;
+    s32 i;
+
+    *(UnkEight *)&r = *(UnkEight *)D_800200B8;
+    *(UnkBlock20 *)((u8 *)p + 0x60) = *(UnkBlock20 *)D_80027E78[n];
+    r.y += n * 16;
+    for (i = 0; i < 3; i++)
+    {
+        func_8006733C(&r, (u8 *)0x80010080 + i * 0x80);
+        r.x += 4;
+    }
+    func_80067014(0);
+}
 
 void func_80026128(u8 *p, s32 a, s32 mode)
 {
