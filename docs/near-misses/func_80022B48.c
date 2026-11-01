@@ -14,11 +14,19 @@
    pointer for the unk_04/unk_08 stores, so those two go through $v1 with
    displacements 4 and 8 instead of through $a2 with 0x8EC and 0x8F0.
 
+   UPDATED 2026-11-01 after a 40-minute permuter run (130,470 candidates at
+   54/s, base score 1305 -> best 280, NO match). The search did not solve it
+   but it found one real improvement, now folded in: writing the unk_08 store
+   as `c->ents[i].unk_08` rather than through the `e` local keeps that store
+   on the $a2 induction variable instead of making $v1 live as an `e`
+   pointer. 13 DIFF -> 11. This file is the new permuter base.
+
    Measured, all with the same struct spelling:
 
      no `e` local, ptrs first          39w, one word short, no base copy
      no `e` local, prims first         40w, 19 DIFF, ptrs scheduled late
-     `e` local, ptrs first (THIS)      40w, 13 DIFF
+     `e` local, ptrs first              40w, 13 DIFF
+     + unk_08 via c->ents[i] (THIS)    40w, 11 DIFF
      `e` local, prims first            40w, 19 DIFF
      `e` for ptrs + c->ents[] fields   39w  (gcc CSEs them back onto `e`)
      `q` local for the prims pointer   39w, 39 DIFF
@@ -79,7 +87,7 @@ void func_80022B48(UnkCardGrp8B0 *c, s32 n)
         c->prims[i][2] = D_8002E5D8[2];
         c->prims[i][3] = D_8002E5D8[3];
         e->unk_04 = (UnkCardPrim *)c->prims[i];
-        e->unk_08 = (UnkCardPrim12 *)c->shared;
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
     }
     c->shared[0] = D_8002E5E8[0];
     c->shared[1] = D_8002E5E8[1];

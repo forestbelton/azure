@@ -188,7 +188,7 @@ void func_80026C94(s32 *p);
 void func_80026CF0(s32 *p);
 void func_80064F20(s32 a);
 void func_80064F00(s32 a, s32 b);
-void func_8006A024(s32 ev);
+s32 func_8006A024(s32 ev);
 s32 func_8002191C(void);
 void func_80027C90(s32 *p);
 void func_80025C7C(s32 *p, s32 a);
@@ -205,6 +205,12 @@ void func_80022488(s32 *p);
 void func_80022524(void);
 void func_8004CBFC(s32 *p, u8 *q);
 void func_800439F8(void);
+void func_8006A0F4(u8 *p);
+extern const u8 D_80020084[];
+
+s32 func_8006A104(u8 *name, u8 *e);
+u8 *func_8006A114(u8 *e);
+void func_8005FE18(s32 a);
 extern u8 D_80027E68[];
 void func_80069E78(u8 *dst, u8 *src);
 void func_80069E38(u8 *dst, u8 *src);
@@ -447,7 +453,28 @@ s32 func_800213A0(void)
    Source in docs/near-misses/func_800213C4.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800213C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021410);
+s32 func_80021410(void)
+{
+    s32 r = 0;
+
+    if (func_8006A024(D_80028550) != 0)
+    {
+        r = 1;
+    }
+    else if (func_8006A024(D_80028554) != 0)
+    {
+        r = 2;
+    }
+    else if (func_8006A024(D_80028558) != 0)
+    {
+        r = 3;
+    }
+    else if (func_8006A024(D_8002855C) != 0)
+    {
+        r = 4;
+    }
+    return r;
+}
 
 void func_800214A4(void)
 {
@@ -504,7 +531,51 @@ s32 func_8002190C(void)
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020074);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002191C);
+s32 func_8002191C(void)
+{
+    u8 name[0x20];
+    s32 n = 0;
+    u8 *e = (u8 *)D_80028570;
+    u8 **t = D_80027F18;
+
+    if (D_800287CC != 0)
+    {
+        t++;
+    }
+    func_80069E78(name, *t);
+    func_80069E38(name, (u8 *)D_80020084);
+    if (func_8006A104(name, e) != 0)
+    {
+        do
+        {
+            n++;
+            e += 0x28;
+        } while (func_8006A114(e) == e);
+    }
+    return n;
+}
+
+/* splat MIGRATED this block into func_8002191C's nonmatching listing, so
+   landing that function in C left the symbol with no definition and the link
+   failed with "undefined reference to D_80020084". It cannot be replaced by a
+   `"*"` literal in the function either: the label covers 28 bytes holding
+   SEVEN strings, lumped under one name because only the first is referenced
+   symbolically, and "TMP" and "04".."00" belong to functions still in asm.
+   So it is defined here, immediately after the function whose listing used to
+   carry it, which is its place in the assembly stream. As those other
+   functions land, their literals come from gcc and this shrinks.
+
+   (Turning splat's `migrate_rodata_to_functions` off is NOT the fix, though
+   it looks like one: with migration off splat routes the whole `.rodata`
+   subsegment to a standalone asm/data file instead of into the sibling C
+   object, and then gcc's own constants -- func_800258C8's local
+   function-pointer array -- have nowhere correct to land.) */
+const u8 D_80020084[28] = "*\0\0\0TMP\0"
+                          "04\0\0"
+                          "03\0\0"
+                          "02\0\0"
+                          "01\0\0"
+                          "00\0\0";
 
 /* NEAR MISS: 18 words against 19: the target copies the materialised base into the induction variable ('addu $v1, $v0, $zero') and seeds the sum from the counter's zero ('addu $a1, $a2, $zero'); every spelling folds one of the two away. Four measured (indexed against pointer-walk, counter declared first or not, guarded do/while), all 18 words.
    Source in docs/near-misses/func_800219B8.c. */
@@ -551,7 +622,37 @@ s32 func_80021A04(s32 n, u8 *s)
     return ret;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021A84);
+s32 func_80021A84(s32 flag)
+{
+    u8 **t;
+    s32 r;
+
+    func_80069C28(0);
+    func_80069C28(1);
+    func_80021538();
+    t = D_80027F18;
+    if (flag != 0)
+    {
+        t++;
+    }
+    func_8006A0F4(*t);
+    while ((r = func_800214FC()) == 0)
+    {
+        func_8005FE18(0);
+    }
+    if (r != 1)
+    {
+        if (r == 3)
+        {
+            r = 4;
+        }
+        else
+        {
+            r = 5;
+        }
+    }
+    return r;
+}
 
 void func_80021B18(u8 *s, s32 idx)
 {
@@ -1553,7 +1654,25 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025C7C);
    this walks from p+0x24. func_800267C0 is its sibling and will follow it. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025D34);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025DC8);
+void func_80025DC8(s32 *p)
+{
+    s32 off = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (i == p[11])
+        {
+            func_800241D4((s32 *)p[off + 3], 1);
+        }
+        else
+        {
+            func_80024274((s32 *)p[off + 3]);
+        }
+        off++;
+    } while (++i < 5);
+    func_80024F3C((s32 *)p[1], p[11], 3);
+}
 
 s32 func_80025E54(void)
 {
@@ -1700,7 +1819,25 @@ void func_800264D8(s32 *p)
     p[-4] = (s32)func_800261F0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002651C);
+void func_8002651C(s32 *p)
+{
+    if (D_80083E98[p[11]][0] != 0)
+    {
+        p[-4] = (s32)func_8002644C;
+    }
+    else if (func_80022138() >= 3)
+    {
+        p[-4] = (s32)func_800263C0;
+    }
+    else if (func_80022160() != 0)
+    {
+        func_80026494(p);
+    }
+    else
+    {
+        func_800264D8(p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800265B8);
 
