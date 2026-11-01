@@ -343,12 +343,43 @@ def report_live(args):
     print(f"  {len(pairs)} of {len(live_funcs)} live functions pair with a "
           f"twin function")
 
-    # Carry the twin's anchors across, then fill each unit's run by contiguity.
+    # Carry the twin's anchors across...
     anchored = {t2l[j]: u for j, u in twin_assign.items() if j in t2l}
     unmapped = sorted(u for j, u in twin_assign.items() if j not in t2l)
-    order = sorted(anchored)
     print(f"  {len(anchored)} live functions inherit a unit directly"
           + (f"; {len(unmapped)} twin anchors did not pair" if unmapped else ""))
+
+    # ...and then add the live block's OWN signals, which are not just a
+    # corroboration. The live build is not a plain NDEBUG build: it keeps 24
+    # assert sites, all in c_server.c, in two functions (lines 185-226 and
+    # 263-277). So c_server.c was compiled with asserts live and the other
+    # eight units were not -- a per-file difference in the shipped build, and
+    # the only place the live block names a unit by itself.
+    live_names = filenames(LIVE)
+    live_sites = assert_sites(live_funcs, live_names)
+    # ONLY the assert sites, never the own-rodata signal. Signal 2 needs one
+    # rodata anchor PER UNIT to partition a block, and the live block has
+    # exactly one (c_server.c's) because its other eight units were built with
+    # asserts out. Running it here put every rodata address and every
+    # rodata-referencing function in c_server.c, which then broke contiguity
+    # at five indices and contradicted the propagation at func_800258C8. The
+    # twin is the only block the own-rodata signal can be applied to.
+    own, own_lines, own_conflicts = anchored_units(live_funcs, live_sites,
+                                                  lambda a: None)
+    print(f"  {len(live_sites)} assert sites in the live block itself, naming "
+          f"{sorted(set(u for _, _, u, _ in live_sites))} in "
+          f"{len(own)} function(s)")
+    clash = {i: (anchored[i], own[i]) for i in own
+             if i in anchored and anchored[i] != own[i]}
+    if clash:
+        print("  DISAGREEMENT between the propagated unit and the live "
+              "block's own signal -- the alignment is wrong somewhere: "
+              + str({live_funcs[i][1]: v for i, v in clash.items()}))
+    else:
+        added = [i for i in own if i not in anchored]
+        print(f"  the live block's own signal agrees with the propagation "
+              f"everywhere they overlap, and adds {len(added)} function(s)")
+    anchored.update(own)
 
     print()
     print(f"{'unit':14s} {'live idx run':>14s} {'anch':>5s} "

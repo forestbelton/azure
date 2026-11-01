@@ -121,14 +121,20 @@ Three things about the overlays that change how they are worked, all in
 `docs/overlays.md`:
 
 * **No `$gp`-relative addressing in any of them** -- 0 refs across ~200K
-  instructions, so they are `-G0`. The structural problem class that shaped
-  most of this project (symbolic vs split addressing, the out-of-image
-  constant base pointer) does not arise.
-* **`main.bin+0x269000` is a debug build of the `0x80020000` overlay**, with
+  instructions, so they are `-G0`, which is confirmed by measurement
+  (`func_80020924` is 24 words at `-G0` and 26 at `-G8`) and is forced anyway:
+  GPREL16 reaches +/-32K from `$gp` = `0x80080994` and no overlay keeps its
+  data in that window. The structural problem class that shaped most of this
+  project (symbolic vs split addressing, the out-of-image constant base
+  pointer) does not arise. `main.bin`'s overlay is a `c` subsegment as of
+  2026-11-01 with per-unit `CFLAGS`/`MASPSXFLAGS` overrides in the Makefile,
+  and stands at 3 of 241 functions with all four containers byte-identical.
+* **`main.bin+0x269000` is the same source at `-G8`**, with more of its
   asserts compiled in, and its rodata names nine original translation units.
-  Unit boundaries are where four previous dead ends turned out to be. It is
-  dead code on retail (`0x80400000` is 8 MB dev-board RAM) but still has to
-  be reproduced.
+  Unit boundaries are where four previous dead ends turned out to be. One C
+  source reproduces both blocks byte-for-byte, so every function in this
+  overlay has TWO independent targets. It is dead code on retail
+  (`0x80400000` is 8 MB dev-board RAM) but still has to be reproduced.
 * **town and dungeon have no such oracle.** None of town's 76 assert records
   is inside its big overlay, and dungeon has zero.
 

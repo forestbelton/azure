@@ -78,12 +78,26 @@ The queue, in order:
       `main.bin` container-complete. It also establishes the per-overlay
       C build pattern on 7.5K words instead of discovering it on 85K.
 
-      Two facts that change the work: **no `$gp`-relative addressing in any
-      overlay** (they are `-G0`, so this project's hardest structural class
-      does not arise), and **`main.bin+0x269000` is a debug build of the same
-      source as the live overlay**, carrying nine original translation unit
-      names, a `__LINE__` at every assert site, and real identifiers from the
-      assert expressions. Build the oracle from it before writing any C.
+      **Started 2026-11-01. `main.bin`'s overlay is a `c` subsegment, 3 of
+      241 functions, all four containers byte-identical.** The flags are
+      settled: cc1psx `-O2 -G0` with maspsx at `-G0`, overridden per unit in
+      the Makefile. `-G0` is forced, not chosen -- GPREL16 reaches +/-32K
+      from `$gp` and no overlay keeps its data in that window -- and it is
+      what gives the hoisted-lui global access shape instead of the
+      assembler-expanded `lui $at` pair.
+
+      **The twin is the same source at `-G8`.** One C source reproduces
+      `func_80020924` (24 words, `-G0`) and `func_804008A0` (26 words, `-G8`)
+      with 0 differing words each, so every function here has TWO independent
+      targets and a shape that matches one build but not the other is wrong.
+      `tools/decomp/ovlverify.py --G` checks either channel.
+
+      The unit map is in `docs/overlays.md`: nine original translation units,
+      `tools/assertmap.py` recovers them, and the live block's own 24 assert
+      sites (all `c_server.c`) agree with the propagated map wherever they
+      overlap. **Carve this file into the nine units before matching anything
+      whose shape depends on which unit it is in.** Of 241 functions, 110 are
+      under 20 words and 201 under 50.
 
       Open before town can follow: its 59 tier-2 low-RAM overlays vote much
       more weakly than the big four (`+0x2ab000` 42 against 9, `+0x64b000`

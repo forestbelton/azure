@@ -110,6 +110,35 @@ MASPSXFLAGS_G2 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                   --run-assembler --gnu-as-path=$(AS) --use-comm-section \
                   --dont-force-G0 -G2
 
+# The OVERLAYS are built at cc1psx -G0, not the -G8 the resident executable
+# uses, and that is a measurement rather than a guess. There are 0 $gp-relative
+# refs across ~200K instructions of split overlay code, and there could not be
+# any: main.bin's overlay keeps its data at 0x80027E20 and town's and
+# dungeon's live at 0x80088760+, all far outside $gp's +/-32K window around
+# 0x80080994, so psylink would have rejected a GPREL16 there.
+#
+# What -G actually changes, measured on func_80020924 (24 words): at -G8
+# cc1psx records `.extern SYM,4` and a global access comes out as the
+# assembler-expanded `lui $at` + `%lo` pair, giving 26 words; at -G0 cc1psx
+# emits its own `%hi`/`%lo` split address into a general register -- the
+# hoisted-lui shape -- giving 24. maspsx gets -G0 too, so it makes no
+# small-data decisions of its own on a unit that has no small data.
+#
+# Worth knowing: main.bin's DEBUG TWIN at 0x80400000 is the SAME SOURCE built
+# at -G8. One C source reproduces both blocks byte-for-byte (func_80020924 at
+# -G0 and its twin func_804008A0 at -G8, 0 differing words each), which gives
+# every function in this overlay two independent targets. See
+# docs/overlays.md.
+CFLAGS_G0 := -O2 -G0 -Iinclude -Ipsyq/include
+ifdef PERMUTER
+CFLAGS_G0 += -DPERMUTER
+endif
+MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
+                  --run-assembler --gnu-as-path=$(AS) --use-comm-section -G0
+
+build/csrc/ovl_main_80020000.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/ovl_main_80020000.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # Units whose functions reach their globals $gp-relatively rather than
 # absolutely, carved out of the units splat lumps together. See
 # docs/addressing-and-translation-units.md for how a cluster is identified and

@@ -359,6 +359,23 @@ masked instruction words -- `jal` targets and i-type immediates dropped, since
 those differ between the links -- and carries each unit label across.
 **184 of the live block's 241 functions pair.**
 
+The live block is not a plain `NDEBUG` build. It keeps **24 assert sites, all
+naming `c_server.c`, in two functions** (`func_80020A80` at lines 185-226 and
+`func_80020F18` at 263-277), while its other eight units have none. So the
+shipped build compiled `c_server.c` with asserts live and the rest without --
+a per-file difference worth knowing before writing any of those files. Those
+24 sites are a signal of the live block's own, and they **agree with the
+propagated map everywhere the two overlap**, which is an independent check on
+the alignment that the alignment could not have arranged.
+
+But only the ASSERT signal transfers to the live block, not the own-rodata
+one. Signal 2 needs one rodata anchor per unit to partition a block, and the
+live block has exactly one, because its other eight units' assert strings were
+never emitted. Running it there put every rodata address and every
+rodata-referencing function in `c_server.c`, broke contiguity at five indices
+and contradicted the propagation at `func_800258C8`. The twin is the only
+block signal 2 can be applied to; `tools/assertmap.py` now says so in code.
+
 The scoring matters and the obvious choice is wrong. difflib's symmetric
 `ratio()` pairs only 171, and worse, it drops the anchors that matter: the
 twin functions carrying the information are exactly the ones holding asserts,
@@ -400,7 +417,7 @@ because their unit is known outright rather than bracketed:
 
 | unit | anchored live functions |
 |---|---|
-| `c_server.c` | `func_80021594`, `func_8002191C`, `func_80021EB8`, `func_80021EE0` |
+| `c_server.c` | `func_80020A80`, `func_80020F18` (its own asserts), `func_80021594`, `func_8002191C`, `func_80021EB8`, `func_80021EE0` |
 | `card_mes.c` | `func_80022D60` |
 | `card_opt.c` | `func_800238D4`, `func_80023C44`, `func_80023D64` |
 | `card_win.c` | `func_80023FF0` |
@@ -415,9 +432,9 @@ of that file's functions are among the 33 unanchored indices before it. That
 is an independent check on any proposed split.
 
 Finally, the live block's own rodata partitions cleanly as far as the anchors
-reach: `0x80020034`, `0x80020048` and `0x80020084` belong to `c_server.c` and
-`0x800200A8` to `cardinfo.c`, none disputed. Four addresses is thin -- the
-live block has only 10 rodata symbols -- but it is the mechanism a per-unit
+reach: `0x80020000`, `0x80020028`, `0x80020034`, `0x80020048` and `0x80020084`
+belong to `c_server.c` and `0x800200A8` to `cardinfo.c`, none disputed. Six of
+the block's ten rodata symbols is thin, but it is the mechanism a per-unit
 rodata split will use, and it needs more anchored functions rather than a
 different method.
 
@@ -430,3 +447,101 @@ different method.
 * **It is not itself the goal.** It is dead code on retail. The live
   `0x80020000` overlay is what gets decompiled; the twin exists to say what
   the units are.
+
+## Building the card overlay: the flags, and the first function (2026-11-01)
+
+`main.bin`'s `0x80020000` overlay is now a `c` subsegment in the build, with
+one function compiled from C and `main.bin` still byte-identical. All four
+containers stay byte-identical.
+
+### The overlays are -G0, and that is forced, not chosen
+
+The resident executable is built at cc1psx `-G8`. The overlays are `-G0`.
+
+Two reasons to believe it before measuring anything. There are **0
+`$gp`-relative references across ~200K instructions** of split overlay code.
+And there could not have been any: `$gp` is `0x80080994` and GPREL16 reaches
++/-32K from it, i.e. `0x80078994..0x80088994`, while this overlay keeps its
+data at `0x80027E20..0x8002D000` and town's and dungeon's live at
+`0x80088760` and above. psylink would have rejected a GPREL16 in any of them.
+
+What `-G` actually changes here has nothing to do with `$gp` in the end. At
+`-G8` cc1psx records `.extern SYM,4` for a 4-byte global and emits a bare
+symbol reference, which the assembler expands into a `lui $at` / `%lo($at)`
+pair **per use**. At `-G0` cc1psx emits its own `%hi`/`%lo` split address into
+a general register, which can be hoisted and shared -- the hoisted-lui shape
+this overlay uses everywhere. On `func_80020924` that is the difference
+between 26 words and 24.
+
+### One source reproduces both builds
+
+The same C source compiles to the live block at `-G0` and to the **debug twin
+at `-G8`**, both with 0 differing words:
+
+| block | flags | words | shape |
+|---|---|---|---|
+| live `func_80020924` | `-O2 -G0` | 24 | `lui $v1` hoisted, shared by both stores |
+| twin `func_804008A0` | `-O2 -G8` | 26 | `lui $at` re-expanded at each of three uses |
+
+So the twin is not a different compiler and not only an asserts-on build: it
+is the same source at a different `-G`, with `c_server.c`'s asserts kept in
+both and the other eight units' kept only in the twin. **That gives every
+function in this overlay two independent targets from one source.** A shape
+that matches one build and not the other is wrong, and the two disagree about
+exactly the things `-G` controls, which is where global-access mistakes live.
+
+(`tools/decomp/ovlverify.py` is verify.py's job for an overlay function, whose
+target has to come out of the one big listing rather than
+`asm/nonmatchings/<unit>/<func>.s`. It takes `--G` so both channels can be
+checked, and masks the fields an unlinked candidate object cannot have filled
+in -- `jal` targets and `%hi`/`%lo` -- the way advise.py's aligned verdict
+does.)
+
+### `.rodata` WITH the dot, once a C sibling exists
+
+town.bin.yaml and dungeon.bin.yaml both carry a hard-won note saying to use
+`rodata` and **not** `.rodata`, because the dot "routes a subsegment to a
+sibling C object and extracts nothing". Converting this overlay to `c` makes
+splat refuse the undotted form outright: *"The `rodata` section was not
+prefixed with a dot, which is required for the rodata migration feature to
+work properly and avoid build errors due to duplicated symbols at link-time."*
+
+Both are the same rule from opposite sides. The dot routes rodata to a sibling
+C unit, so it is wrong when there is no such unit and required when there is.
+The earlier note is right for town and dungeon, which are still `asm`, and
+stops being right the moment either of them is converted.
+
+With the dot, splat migrates each rodata symbol into the nonmatching listing
+of the single function that uses it, which is what puts `jtbl_80020060` where
+it belongs without any manual placement.
+
+### Per-unit flags in the Makefile
+
+    CFLAGS_G0 := -O2 -G0 -Iinclude -Ipsyq/include
+    MASPSXFLAGS_G0 := ... --use-comm-section -G0
+    build/csrc/ovl_main_80020000.o: CFLAGS := $(CFLAGS_G0)
+    build/csrc/ovl_main_80020000.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
+maspsx gets `-G0` as well, so that it makes no small-data decisions of its own
+on a unit that has none. Note this is a `CFLAGS` override, which the Makefile
+had no mechanism for before -- only `MASPSXFLAGS` was overridable per unit.
+
+### func_80020924
+
+24 words, the first function in the overlay. Its C is in
+`csrc/ovl_main_80020000.c` with the reasoning in the comment; the lever is
+`docs/matching-levers.md:3173`, **spent at the two stores and not at the
+read**.
+
+Storing straight to the global puts each `%hi` beside its own store, so the
+`else` branch materialises a second `lui` and the function comes out 25 words.
+Assigning the symbol to a pointer local after the three calls moves the `%hi`
+to the assignment, ahead of the branch, where both stores share `$v1` and
+reorg pulls it into the `beqz` delay slot. The trailing read stays a bare
+symbol so it keeps its own re-materialised `lui $v0`, which is what the
+listing has. The local costs no instruction -- combine folds the `%lo` back
+into the stores.
+
+Two of the overlay's 241 functions were free: `func_80021904` and
+`func_8002519C` are `jr $ra; nop`, and splat emits them as real C rather than
+`INCLUDE_ASM`. So the overlay stands at 3 of 241.

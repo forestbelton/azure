@@ -26,6 +26,7 @@ options:
   use_legacy_include_asm: False
 
   asset_path: assets/main
+  src_path: csrc
 
   symbol_addrs_path: splat/main.bin_symbol_addrs.txt
   reloc_addrs_path: splat/main.bin_reloc_addrs.txt
@@ -91,8 +92,26 @@ segments:
     start: 0x25d000
     vram: 0x80020000
     subsegments:
-      - [0x25d000, rodata, ovl_main_80020000]
-      - [0x25d924, asm, ovl_main_80020000]
+      # `.rodata` WITH the dot, now that there is a sibling C unit. The
+      # dotted form is what splat requires for rodata migration -- an
+      # undotted `rodata` beside a `c` subsegment is a hard error ("not
+      # prefixed with a dot, which is required for the rodata migration
+      # feature"). The warning in town.bin.yaml and dungeon.bin.yaml is the
+      # same rule seen from the other side: there, with no C unit to migrate
+      # INTO, the dot routes the subsegment to a sibling object that does not
+      # exist and extracts nothing. The dot is right exactly when a `c`
+      # sibling exists.
+      - [0x25d000, .rodata, ovl_main_80020000]
+      # `c`, not `asm`: this overlay is being decompiled. The unit is built at
+      # cc1psx -G0, NOT the -G8 the resident executable uses, and the Makefile
+      # has the per-unit override. -G is not cosmetic here: at -G8 cc1psx
+      # records `.extern SYM,4` and a global access comes out as the
+      # assembler-expanded `lui $at` / `%lo` pair, while at -G0 it emits its
+      # own `%hi`/`%lo` split address into a general register, which is the
+      # hoisted-lui shape this block uses. Nothing in the overlay is
+      # $gp-relative (0 refs), and it could not be: the block's data at
+      # 0x80027E20 is far outside $gp's +/-32K window around 0x80080994.
+      - [0x25d924, c, ovl_main_80020000]
   - [0x264e20, bin]
   - [0x265000, bin]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
