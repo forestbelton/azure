@@ -113,32 +113,65 @@ loader never reads. The earlier version of this table counted them as
 did not until 2026-10-30, and the tail is now the `tail_unloaded` subsegment.
 `docs/data-map.md` has the full accounting and the evidence.
 
+**The executable is now fully mapped: `splat split` reports 0 bytes
+unknown**, and `make containers` stays byte-identical on all four containers.
 Percentages below are of the 346,112-byte **image**, not of the file:
 
 | what | bytes | % of image |
 |------|-------|-------------|
 | C translation units | 167,596 | 48.4% |
-| unknown `bin` | 109,784 | 31.7% |
-| identified library/asm (`psyq/*`, `main`) | 51,852 | 15.0% |
+| `data` subsegments | 105,692 | 30.5% |
+| identified library/asm (`psyq/*`, `main`) | 57,408 | 16.6% |
 | Shift-JIS text, split (`str/item/*`, `str/credits/*`, `str/name/*`) | 14,016 | 4.0% |
-| PSY-Q `data` subsegments (libcd, libgpu) | 1,488 | 0.4% |
-| jump tables (`.rodata` of C units) | 1,376 | 0.4% |
+| jump tables (`.rodata` of C units) | 1,400 | 0.4% |
+| **unknown** | **0** | **0.0%** |
 
-The 109,784 unknown bytes are twelve blobs, listed one by one in
-`docs/data-map.md`. Three facts about them are worth carrying around:
-**~22 KB is still Shift-JIS text**, **5,556 bytes is library code**, not
-data, and the remaining ~81 KB is structured data, nearly all of it the
-single blob at 0x3E01C. Text is split with the union-plus-zero coverage test
-in `docs/data-map.md`, not from one detector's output.
+(splat's own report line omits `data` from its "Split N KB in defined
+segments" total, so it reads 79.57%; the line to watch is `unknown`.)
 
-The unidentified code is down to five gaps between placed PSY-Q modules --
-0x31CC4, 0x32934, 0x33234, 0x34BD0 and 0x362B4, 5,556 bytes in all. Every one
-is 100% plausible MIPS opcodes with real prologues, so they are library
-modules, not data; `azure libscan psyq` locates none of them at
-`--min-invariant` 4. That is the same negative result the two large blocks
-gave before they were carved: `azure libmatch psyq` confirms the library set
-is the right release (162 of 163 placed modules exact, mean fuzzy 0.998)
-while `libscan` locates zero of 1257 modules by content.
+Of the 105,692 `data` bytes, **31,752 are PSY-Q library data** placed at
+module granularity and 73,940 are the game's. Two things made that possible,
+both on 2026-11-01 and both written up in `docs/data-map.md`:
+
+- **The library stamp.** Every PSY-Q library carries one 8-byte record
+  `50 73 <id> 15 9C <ck> 40 00` -- ASCII "Ps" plus a library id -- at offset 0
+  of one designated module's section. All 18 libraries in `psyq/lib` carry
+  one, so the id is a lookup table, and the seven in this executable each mark
+  a section start exactly.
+- **`.data` scanning.** `azure libscan` matches modules with relocation
+  masking but only over `.text`. The same method applied to `.data` places 18
+  library modules with zero mismatching words, including all four libgte
+  tables (`rsin_tbl`, `SQRT`, `rcossin_tbl`, `ratan_tbl`) and libc's
+  `_ctype_`. 42 real PSY-Q names came out of the modules' export tables.
+
+The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
+0x3E01C is the SN module descriptor, and it self-validates: `__text` +
+`__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
+It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
+
+What remains is not unknown, just coarse: **59 KB in one `game_data`
+subsegment** (pointer tables, three packed Shift-JIS dialogue pools, and a
+long run of fixed-size records with its own directory) and **~10 KB of
+Shift-JIS text still typed `data` rather than `shiftjis`**, so splat accounts
+for it but it does not read as text. Text is split with the union-plus-zero
+coverage test in `docs/data-map.md`, not from one detector's output.
+
+The five formerly-unidentified code gaps -- 0x31CC4, 0x32934, 0x33234,
+0x34BD0 and 0x362B4, 5,556 bytes in all -- are now `asm` subsegments, which is
+what the bytes are. `azure libscan psyq` still names no module, at any
+`--min-invariant` down to 2, but the **library** is settled by the data each
+block reaches: the first three share libspu private state (`_spu_RQmask`,
+`_spu_RXX`, `_spu_mem_mode_plus`) with S_INI, S_SK, SPU, S_CRWA, S_M_INIT,
+S_M_UTIL and S_STSA, and the last two share libcd BIOS state (`CD_nopen`
+among it) with BIOS_1/2/3. They are now `psyq/libspu/unk_*` and
+`psyq/libcd/unk_*`.
+
+Why `libscan` cannot name them has an answer too: the game's libspu/S_INI
+`.data` matches ours exactly **minus the 8-byte library stamp**, which is also
+why no libspu stamp occurs anywhere in the file. The game linked a libspu and
+libcd build this project has no copy of. `azure libmatch psyq` still confirms
+the library set is the right release (162 of 163 placed modules exact, mean
+fuzzy 0.998).
 
 The 817 functions carved as `unk_72A8` (294, 0x80033aa8-0x8003c9f8) and
 `unk_1C540` (465, 0x80048d40-0x8005c9a8) are the game's own code, not SDK

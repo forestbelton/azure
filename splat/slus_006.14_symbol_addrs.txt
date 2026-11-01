@@ -311,3 +311,82 @@ StRingSize = 0x80086dac; // type:u32
 
 StRingAddr = 0x80086dc0; // type:u32
 StFinalSector = 0x80086dc4; // type:u32
+
+// ---------------------------------------------------------------------------
+// PSY-Q library data, recovered from the libraries' own export tables.
+//
+// Every address below comes from a relocation-masked content match of a
+// module's `.data` against this executable with ZERO mismatching words, so
+// the module's exported names and offsets transfer directly. `azure libscan`
+// only scans `.text`; these came from the same method applied to `.data`.
+// See docs/data-map.md.
+// ---------------------------------------------------------------------------
+
+// libsn/SNMAIN -- the SN module descriptor, all 36 bytes matched. __text +
+// __textlen is exactly __data, and __data + __datalen is exactly _gp.
+__heapbase = 0x8006a820; // type:u32
+__heapsize = 0x8006a824; // type:u32
+__text = 0x8006a828; // type:u32
+__textlen = 0x8006a82c; // type:u32
+__data = 0x8006a830; // type:u32
+__datalen = 0x8006a834; // type:u32
+__bss = 0x8006a838; // type:u32
+__bsslen = 0x8006a83c; // type:u32
+
+// libspu/S_INI -- 1132 bytes matched. The game's copy is this module MINUS
+// the 8-byte library stamp, so every export offset shifts down by 8; that is
+// also why no libspu stamp occurs anywhere in the file.
+_spu_EVdma = 0x800794ec; // type:u32
+_spu_keystat = 0x800794f0; // type:u32
+_spu_trans_mode = 0x800794f4; // type:u32
+_spu_rev_flag = 0x800794f8; // type:u32
+_spu_rev_reserve_wa = 0x800794fc; // type:u32
+_spu_rev_offsetaddr = 0x80079500; // type:u32
+_spu_rev_attr = 0x80079504; // type:u32 size:0x14
+_spu_RQvoice = 0x80079518; // type:u32
+_spu_RQmask = 0x8007951c; // type:u32
+_spu_voice_centerNote = 0x80079520; // type:u32
+_spu_zerobuf = 0x80079550; // type:u32
+_spu_env = 0x80079950; // type:u32
+_spu_isCalled = 0x80079954; // type:u32
+
+// libspu/SPU -- 92 bytes matched, contiguous with S_INI above.
+_spu_RXX = 0x80079958; // type:u32 size:0x18
+_spu_tsa = 0x80079970; // type:u32
+_spu_transMode = 0x80079974; // type:u32
+_spu_addrMode = 0x80079978; // type:u32
+_spu_mem_mode = 0x8007997c; // type:u32
+_spu_mem_mode_plus = 0x80079980; // type:u32
+_spu_mem_mode_unit = 0x80079984; // type:u32
+_spu_mem_mode_unitM = 0x80079988; // type:u32
+_spu_inTransfer = 0x8007998c; // type:u32
+_spu_transferCallback = 0x80079990; // type:u32
+_spu_IRQCallback = 0x80079994; // type:u32
+
+// libspu/S_RMP -- 760 bytes matched.
+_spu_rev_startaddr = 0x800799c0; // type:u32
+_spu_rev_workareasize = 0x800799e8; // type:u32
+_spu_rev_param = 0x80079a10; // type:u32
+
+// libetc/VSYNC -- 24 bytes matched.
+Hcount = 0x80079cc8; // type:u32
+
+// libcd/BIOS -- 792 bytes matched. BIOS also exports CD_com at 0x8007aed1,
+// which this file already calls gCdLastCommand; the project name is kept.
+// CD_nopen is reached ONLY by psyq/libcd/unk_34BD0, which is part of how that
+// block was identified as libcd.
+CD_nopen = 0x8007aec8; // type:u32
+
+// libgte -- four tables, each its module's whole .data and each verified
+// numerically as well as by content:
+//   rsin_tbl     1025 u16 = round(4096*sin(i*pi/2048)), i in 0..1024, max
+//                error 0, then 7 entries clamped to 4096 for lookup overshoot
+//   SQRT         192 u16, 4096..8175
+//   ratan_tbl    1025 u16, 0..512
+rsin_tbl = 0x8007b2cc; // type:u16 size:0x802
+SQRT = 0x8007bae0; // type:u16 size:0x180
+rcossin_tbl = 0x8007bf70; // type:u16 size:0x4000
+ratan_tbl = 0x8007ff70; // type:u16 size:0x802
+
+// libc/CTYPE0 -- 129 bytes matched, the character-class table.
+_ctype_ = 0x800808ec; // type:u8 size:0x81

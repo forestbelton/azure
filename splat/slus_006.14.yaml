@@ -49,7 +49,7 @@ segments:
     align: 4
     subsegments:
       # NB: 0x800 was added to all the offsets here to account for start addr
-      - [0x800, bin]
+      - [0x800, data, str_pool_800]
       # jtbl_8002D5C0, func_8003E758's 28-entry table: the first of the three
       # contiguous runs, 112 bytes.
       - [0xdc0, .rodata, unk_11F0C]
@@ -80,7 +80,7 @@ segments:
     vram: 0x8002D6FC
     align: 4
     subsegments:
-      - [0xefc, bin]
+      - [0xefc, data, str_pool_EFC]
   # jtbl_8002E5F8, func_8004CECC's 6-entry table and, since that function
   # matched on 2026-11-01, the only `.rodata` of the FIRST piece of the carved
   # unit unk_1C540 -- the piece now ends at func_800517CC, which with
@@ -99,7 +99,7 @@ segments:
     vram: 0x8002E610
     align: 4
     subsegments:
-      - [0x1e10, bin]
+      - [0x1e10, data, str_pool_1E10]
   # jtbl_8002E964, func_800517CC's 8-entry table: the only `.rodata` of
   # unk_24FCC, the sixth piece. 32 bytes, no pad -- the table's own `.align 3`
   # is relative to the object's section origin, which is offset 0 here.
@@ -543,7 +543,7 @@ segments:
     vram: 0x80031FF8
     align: 4
     subsegments:
-      - [0x57f8, bin]
+      - [0x57f8, data, str_item_tail]
   # unk_2879C's run, COMPLETE as of 2026-10-27: jtbl_80032E14 (36 entries),
   # jtbl_80032EA4 (23) and jtbl_80032F04 (126) -- func_80054F9C's,
   # func_80057A94's and func_80057D20's. 0x2E8 bytes: the first two are 0xEC
@@ -568,7 +568,7 @@ segments:
       # Deleting this segment along with jtbl_80032F04's `bin` leaves a hole
       # the linker fills with the following rodata, so the two have to be
       # split rather than dropped together.
-      - [0x68fc, bin]
+      - [0x68fc, data, smf_magic]
   # jtbl_8003310C, func_800595C0's 58-entry table: 0xE8 bytes, and the only
   # subsegment of its segment for the same reason as the runs above. unk_1C540
   # owns FOUR tables in TWO separated runs, and a unit's `.rodata` is one
@@ -586,7 +586,8 @@ segments:
     vram: 0x800331F4
     align: 4
     subsegments:
-      - [0x69f4, bin]
+      - [0x69f4, data, psyq/libspu]
+      - [0x6ab8, data, psyq/libetc]
       - [0x6b60, data, psyq/libcd]
       - [0x6e44, data, psyq/libgpu]
       - [0x7130, asm, psyq/libsn/SNMAIN] # __SN_ENTRY_POINT / __main / __do_global_dtors  # UNVERIFIED: module exists in this SDK but could not be placed by content
@@ -695,7 +696,37 @@ segments:
       - [0x31780, asm, psyq/libspu/S_SRA]
       - [0x31c50, asm, psyq/libspu/S_RRWA]
       - [0x31ca0, asm, psyq/libspu/S_SRV]
-      - [0x31cc4, bin]
+      # The five `unk_*` blocks below are PSY-Q library code whose MODULE could
+      # not be named, though the LIBRARY now can be. Each is 100% plausible
+      # MIPS with a real prologue; `azure libscan psyq` names none of them at
+      # any --min-invariant, down to 2, because the module is not in the
+      # PSY-Q 4.0 libraries this project ships. The same gap shows up in the
+      # data region, where libspu/S_INI's .data matches at 0x4CCEC except for
+      # the 8 bytes that should be the libspu stamp -- so the game linked a
+      # libspu (and libcd) build we do not have a copy of.
+      #
+      # They are `asm` rather than `bin` because they are code, which is also
+      # what keeps splat from reporting them as unknown.
+      #
+      # The library assignment is not from link position alone. Each block was
+      # checked against the data it reaches, and in every case that data is
+      # private state shared only with modules of one library:
+      #   unk_31CC4  D_8007951C, D_80079950 shared with libspu/S_INI, S_SK;
+      #              D_80079958 with nine more libspu modules       -> libspu
+      #   unk_32934  D_80079520 with unk_33234, D_80079958 as above -> libspu
+      #              (its jump tables jtbl_8003327C and the run at 0x6AA8
+      #              also point into this block, from libspu's own .data)
+      #   unk_33234  D_80079980 with libspu/SPU, S_CRWA, S_M_INIT,
+      #              S_M_UTIL, S_STSA                               -> libspu
+      #   unk_34BD0  10 of its 12 symbols shared with libcd/BIOS_1, and
+      #              D_8007AEC8/D_8007AF78/D_8007B078 with nothing
+      #              else at all                                    -> libcd
+      #   unk_362B4  D_8007B178, D_8007B191 with libcd/BIOS_1/2/3   -> libcd
+      # Link position agrees with all five. BIOS_1/2/3 are themselves marked
+      # UNVERIFIED below as a newer-SDK subdivision of the single `BIOS`
+      # module our libcd has; unk_34BD0 and unk_362B4 are two more pieces of
+      # that same subdivision.
+      - [0x31cc4, asm, psyq/libspu/unk_31CC4]
       - [0x31f8c, asm, psyq/libspu/S_GRV]
       - [0x31fb0, asm, psyq/libspu/S_GAV]
       - [0x31fe0, asm, psyq/libspu/S_CRWA]
@@ -706,9 +737,9 @@ segments:
       - [0x324a0, asm, psyq/libspu/S_STSA]
       - [0x324f8, asm, psyq/libspu/S_ITC]
       - [0x325a0, asm, psyq/libspu/S_SCA]
-      - [0x32934, bin]
+      - [0x32934, asm, psyq/libspu/unk_32934]
       - [0x32f40, asm, psyq/libspu/S_N2P]
-      - [0x33234, bin]
+      - [0x33234, asm, psyq/libspu/unk_33234]
       - [0x33618, asm, psyq/libetc/VSYNC]
       - [0x337fc, asm, psyq/libetc/INTR]
       - [0x33f0c, asm, psyq/libetc/INTR_VB]
@@ -717,11 +748,11 @@ segments:
       - [0x34304, asm, psyq/libcd/CDROM]
       - [0x34334, asm, psyq/libcd/EVENT]
       - [0x34444, asm, psyq/libcd/SYS]
-      - [0x34bd0, bin]
+      - [0x34bd0, asm, psyq/libcd/unk_34BD0]
       - [0x353d8, asm, psyq/libcd/BIOS_1] # CD_ready / CD_cw / ??? / CD_initvol / CD_initintr / CD_init / CD_datasync  # UNVERIFIED: name not in this SDK (newer-SDK subdivision); code unmatched
       - [0x360c4, asm, psyq/libcd/BIOS_2] # CD_getsector  # UNVERIFIED: name not in this SDK (newer-SDK subdivision); code unmatched
       - [0x361c4, asm, psyq/libcd/BIOS_3] # CD_getsector2  # UNVERIFIED: name not in this SDK (newer-SDK subdivision); code unmatched
-      - [0x362b4, bin]
+      - [0x362b4, asm, psyq/libcd/unk_362B4]
       - [0x363a8, asm, psyq/libcd/CDREAD]
       - [0x36c24, asm, psyq/libcd/CDREAD2]
       - [0x36cd8, asm, psyq/libcd/C_002]
@@ -850,7 +881,104 @@ segments:
       - [0x3de6c, asm, psyq/libapi/PATCH]
       - [0x3defc, asm, psyq/libapi/SENDPAD]
       - [0x3dfbc, asm, psyq/libapi/CHCLRPAD]
-      - [0x3e01c, bin]
+      # 0x3E01C-0x541D0 was one 90 KB `bin` blob described as game data. It is
+      # not: its last third is PSY-Q library `.data`, and every boundary below
+      # is byte-verified rather than inferred. Two independent methods agree.
+      #
+      # (1) The library stamp. Every PSY-Q library carries exactly one 8-byte
+      #     record `50 73 <id> 15 9C <ck> 40 00` -- ASCII "Ps" plus a library
+      #     id -- at offset 0 of one designated module's section. All 18
+      #     libraries in psyq/lib carry one, so the id is a lookup table:
+      #     00 libapi/C114, 01 libc/A63, 02 libc2/PUTS, 03 libcard/INIT,
+      #     04 libcd/BIOS, 05 libcomb/COMB, 06 libetc/VSYNC, 07 libgpu/SYS,
+      #     08 libgs/GS_001, 09 libgte/MSC00, 0A libgun/GUN, 0B libmath/FERR,
+      #     0E libpress, 0F libsio/SIO, 10 libsnd/SSINIT, 11 libspu/S_INI,
+      #     14 libtap/TAP, 18 libmcrd. Seven occur in this executable, and
+      #     because the stamp is at section offset 0 each one marks a section
+      #     start exactly: 0x4D4B8 (06, libetc), 0x4E6A8 (04, libcd),
+      #     0x53F74 (07, libgpu), 0x540E4 (03, libcard), plus 0x37E80,
+      #     0x3D608 and 0x3D7C4 in .text, which confirm the libgte/MSC00,
+      #     libc/A63 and libapi/C114 placements already in this file.
+      # (2) Relocation-masked content match of each library module's `.data`
+      #     against the executable -- the same method `azure libscan` uses for
+      #     `.text`, which only scans `.text`. Modules placed exactly, with
+      #     zero mismatching words:
+      #       0x4CCEC libspu/S_INI -- our copy's .data is 1140 B and matches
+      #               here with 8 mismatching words, but S_INI.data[8:]
+      #               matches with ZERO mismatches over 1132 B, and the 8
+      #               bytes dropped are exactly the library stamp. The game
+      #               linked an S_INI built without it, which is also why no
+      #               libspu stamp occurs anywhere in the file, and why SPU's
+      #               .data below lands contiguously rather than overlapping.
+      #               Every S_INI export offset therefore shifts down by 8 --
+      #               that is where the _spu_* names in the symbol_addrs file
+      #               come from. Same story the five unk_* blocks tell.
+      #       0x4D158 libspu/SPU      0x4D1C0 libspu/S_RMP (760 B, 122 distinct invariant words)
+      #       0x4D4B8 libetc/VSYNC    0x4D4D0 libetc/INTR  (4340 B)
+      #       0x4E618 libcd CD-register table (16 B, shared by every C_0xx)
+      #       0x4E6A8 libcd/BIOS (792 B, 152 distinct invariant words)  0x4EA7C libcd/C_011
+      #       0x4EACC libgte/SINCOS (2050 B, 504 distinct invariant words)
+      #       0x4F2E0 libgte/SQRTBL  0x4F460 libgte/MTX_006
+      #       0x4F770 libgte/CSTBL (16384 B, 4092 distinct invariant words)
+      #       0x53770 libgte/RATAN (2050 B, 513 distinct invariant words)
+      #       0x53F74 libgpu/SYS (368 B)   0x540E4 libcard/INIT (8 B: the
+      #               stamp is the whole section)
+      #       0x540EC libc/CTYPE0 (129 B, the ctype class table)
+      #       0x54170 libapi/COUNTER (24 B)
+      # The subsegments below are cut at library granularity; the module list
+      # above is the finer map. Every boundary is a multiple of 4, which
+      # `subalign: 4` requires -- see docs/data-map.md.
+      #
+      # SNMAIN is the first object in link order, so its .data is the first
+      # .data. All 36 bytes of it match our libsn copy exactly, and SNMAIN
+      # exports a name for every word, so this is the SN module descriptor
+      # read out in full -- an authoritative statement of the image layout
+      # that happens to sit inside the binary:
+      #   __heapbase 0  __heapsize 0
+      #   __text  0x80033930  __textlen 0x36EEC -> ends 0x8006A81C
+      #   __data  0x8006A81C  __datalen 0x16178 -> ends 0x80080994
+      #   __bss   0x800815C0  __bsslen  0x71A0  -> ends 0x80088760
+      # It self-validates twice over: __text + __textlen is exactly __data,
+      # and __data + __datalen is exactly _gp (the `gp_value` above, derived
+      # independently from $gp-relative code). It also pins .bss, which is
+      # not otherwise visible: 0x800815C0-0x80088760. The image ends at
+      # 0x80081800, so the file carries the first 0x240 bytes of .bss as
+      # zeros -- which is why the last non-zero byte of the image is 0x54C35
+      # (vram 0x80081435), just below __bss. __main zeroes the rest.
+      #
+      # unk_72A8.c reaches a game s16 array at 0x8006A83E, i.e. inside
+      # __bsslen's upper half; that is a biased base from the original C, not
+      # a separate object, and 0x3E03E is not 4-aligned anyway. The cut goes
+      # at 0x3E040, where SNMAIN's section genuinely ends.
+      - [0x3e01c, data, psyq/libsn_data]
+      # 59 KB of genuine game data: pointer/descriptor tables, three packed
+      # Shift-JIS dialogue pools, and a large run of fixed-size records with
+      # its own directory. Still one blob -- its internal boundaries are real
+      # but not yet pinned to the byte, so they live in docs/data-map.md
+      # rather than being guessed at here.
+      - [0x3e040, data, game_data]
+      - [0x4ccec, data, psyq/libspu_data]
+      - [0x4d4b8, data, psyq/libetc_data]
+      - [0x4e618, data, psyq/libcd_data]
+      # The three libgte tables worth knowing, all verified numerically:
+      #   0x4EACC SINCOS -- 1025 u16 = round(4096*sin(i*pi/2048)) for
+      #           i in 0..1024, max error 0, then 7 entries clamped to 4096 so
+      #           a lookup may overshoot. GEO_00/GEO_01 reach it through bases
+      #           biased by -0x800/-0x1000/-0x1800 to pick a quadrant, which
+      #           is why splat invents symbols at 0x4D2CC, 0x4DACC and 0x4E2CC
+      #           inside the libspu and libetc runs. Those are aliases of this
+      #           table, not objects.
+      #   0x4F2E0 SQRTBL -- 192 u16, 4096..8175 (one octave of mantissa).
+      #   0x53770 RATAN  -- 1025 u16, 0..512. Not a sine and not a ramp; the
+      #           arctangent table RATAN.s indexes.
+      - [0x4eacc, data, psyq/libgte_data]
+      - [0x53f74, data, psyq/libgpu_data]
+      - [0x540e4, data, psyq/libcard_data]
+      - [0x540ec, data, psyq/libc_data]
+      - [0x54170, data, psyq/libapi_data]
+      # Back to the game: the $gp anchor region. _gp = 0x80080994 is file
+      # 0x54194, the first word of this piece.
+      - [0x54194, data, game_gp]
       - [0x541d0, shiftjis, str/name/boy]
       - [0x541d8, shiftjis, str/name/man]
       - [0x541e0, shiftjis, str/name/cat]
@@ -875,7 +1003,7 @@ segments:
       # runs above use; 24 bytes is not worth it yet.
       - [0x54240, shiftjis, str/name/fur]
       - [0x54248, shiftjis, str/name/guy]
-      - [0x54250, bin]
+      - [0x54250, data, game_gp_data]
       # NOT PART OF THE EXECUTABLE. The PS-X EXE header gives t_addr
       # 0x8002D000 and t_size 0x54800, so the loaded image is file
       # 0x800-0x55000 / vram 0x8002D000-0x80081800 and the PSX loader never
