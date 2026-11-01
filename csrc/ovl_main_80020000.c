@@ -303,7 +303,7 @@ void func_80064F00(s32 a, s32 b);
 s32 func_8006A024(s32 ev);
 s32 func_8002191C(void);
 void func_80027C90(s32 *p);
-s32 *func_80025C7C(s32 *p);
+s32 *func_80025C7C(s32 *p, s32 a);
 s32 *func_80026868(s32 *p, s32 a);
 s32 func_8004F418(s32 *p, s32 *q);
 void func_80020F18(void);
@@ -3184,7 +3184,7 @@ void func_80025BD4(s32 *p)
     }
 }
 
-s32 *func_80025C7C(s32 *p)
+s32 *func_80025C7C(s32 *p, s32 a)
 {
     s32 *q = func_8003FE78(0, D_8002B7E0, 0x1C);
     s32 *r = q + 8;
@@ -3922,9 +3922,27 @@ void func_800274D8(s32 *p)
     }
 }
 
-/* NEAR MISS: 23 words, 2 DIFF, register names only: the target holds the tested p[0] in $a1 and reuses it for the call's second argument, this holds it in $v0 and moves zero into $a1. Two spellings measured (the if reversed, a local temp), 2 and 4 DIFF.
-   Source in docs/near-misses/func_80027528.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027528);
+/* The two calls take the SAME local, which is the whole function: gcc knows
+   `v` is 0 in the true arm and materialises `addu $a1, $zero, $zero` there,
+   and in the false arm `v` is already in $a1 from the test, so nothing is
+   emitted. func_80025C7C needs a second parameter declared for this -- it
+   ignores it, so its own 46 words are unchanged, and it had no other
+   caller. */
+void func_80027528(s32 *p)
+{
+    s32 v;
+
+    func_80027C90(p - 8);
+    v = p[0];
+    if (v == 0)
+    {
+        func_80025C7C((s32 *)p[5], v);
+    }
+    else
+    {
+        func_80026868((s32 *)p[5], v);
+    }
+}
 
 void func_80027584(s32 *p)
 {
