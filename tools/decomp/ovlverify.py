@@ -77,31 +77,45 @@ def target(func):
     return out
 
 
-def norm(w, text):
-    """Mask fields a candidate object cannot have filled in yet.
+RELOC = re.compile(r"%(?:hi|lo)\(|^(?:jal|j)\s+(?:func_|\.L)")
+
+
+def norm(w, text, relocated):
+    """Mask ONLY the fields the linker still has to fill in.
 
     An unresolved `jal` or `%hi`/`%lo` in a freshly assembled object reads 0,
-    so comparing them raw reports every global access as wrong. Masking them
-    is what makes the remaining diff mean something -- it is the same choice
-    advise.py makes when it reports an aligned verdict instead of a positional
-    one.
+    so comparing those raw reports every global access as wrong. But masking
+    every i-type immediate, which this did at first, also hides REAL
+    displacement differences: func_800240EC came back "1 differing" when its
+    cursor started at p + 0x260 with displacement 0 against the target's p
+    with displacement 0x260 -- every load and store differed and only the
+    `addiu`-against-`addu` showed. So the mask is now driven by whether that
+    particular word carries a relocation, taken from the candidate object's
+    own reloc table and from the target listing's `%hi`/`%lo`/symbolic-target
+    text.
     """
+    if not relocated:
+        return w
     op = w >> 26
     if op in (2, 3):
         return 0x0C000000 if op == 3 else 0x08000000
-    if op == 0x0F:                      # lui: drop imm, keep dest
-        return w & 0xFFFF0000
-    if op in (0x23, 0x2B, 0x21, 0x25, 0x29, 0x28, 0x20, 0x24, 0x09, 0x0D):
-        return w & 0xFFFF0000           # load/store/addiu/ori: drop imm
-    return w
+    return w & 0xFFFF0000               # lui / i-type: drop the imm16
 
 
-def report(func, got, tgt, masked):
+def report(func, got, gotrel, tgt, masked):
     gw = [w for _, w, _ in got]
     tw = [w for w, _ in tgt]
     if masked:
-        gc = [norm(w, t) for _, w, t in got]
-        tc = [norm(w, t) for w, t in tgt]
+        # A pair is masked when EITHER side carries a relocation: the
+        # candidate's comes from objdump's reloc table, the target's from the
+        # listing text splat wrote.
+        trel = [bool(RELOC.search(t)) for w, t in tgt]
+        grel = [a in gotrel or bool(RELOC.search(t)) for a, w, t in got]
+        n = max(len(gw), len(tw))
+        rel = [(grel[i] if i < len(grel) else False)
+               or (trel[i] if i < len(trel) else False) for i in range(n)]
+        gc = [norm(w, t, rel[i]) for i, (_, w, t) in enumerate(got)]
+        tc = [norm(w, t, rel[i]) for i, (w, t) in enumerate(tgt)]
     else:
         gc, tc = gw, tw
     diff = sum(1 for i in range(max(len(gc), len(tc)))
@@ -165,7 +179,7 @@ def main():
         later = sorted(v for v in syms.values() if v > lo)
         hi = later[0] if later else max(a for a, _, _ in words) + 4
         body = [(a, w, t) for a, w, t in words if lo <= a < hi]
-        total += report(f, body, target(f), not args.raw)
+        total += report(f, body, relocs, target(f), not args.raw)
         print()
     sys.exit(1 if total else 0)
 
