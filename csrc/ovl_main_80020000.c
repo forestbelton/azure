@@ -185,7 +185,7 @@ void func_8006A084(void);
 void func_8006A094(void);
 void func_8006A248(u32 ev);
 void func_80027AFC(s32 *p, s32 a);
-void func_80022A30(s32 *a, s32 *b);
+u8 *func_80022A30(u8 *p, s32 *q);
 void func_80021538(void);
 void func_80025D34(s32 *p);
 void func_80023E14(s32 *p);
@@ -202,8 +202,8 @@ void func_80064F00(s32 a, s32 b);
 s32 func_8006A024(s32 ev);
 s32 func_8002191C(void);
 void func_80027C90(s32 *p);
-void func_80025C7C(s32 *p, s32 a);
-void func_80026868(s32 *p);
+s32 *func_80025C7C(s32 *p);
+s32 *func_80026868(s32 *p, s32 a);
 s32 func_8004F418(s32 *p, s32 *q);
 void func_80020F18(void);
 void func_800585A0(void);
@@ -224,12 +224,24 @@ void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z);
 void func_8006A134(u8 *name);
 s32 func_80049E6C(s32 a);
 void func_80023C44(s32 *p);
+s32 func_8006A0A4(u8 *name, s32 mode);
+s32 *func_8003FE78(s32 a, u8 *b, s32 c);
+s32 *func_8003FC64(s32 a);
+s32 func_80027364(s32 *p);
+s32 func_800238D4(s32 *p);
+s32 func_80024D58(s32 *p, s32 a, s32 b);
+extern u8 D_80027FD0[];
+extern u8 D_8002B7E0[];
+s32 func_8006A0B4(s32 fd, s32 off, s32 whence);
+s32 func_8006A0C4(s32 fd, u8 *buf, s32 len);
+s32 func_8006A0E4(s32 fd);
+extern u8 D_800200A0[];
 void func_80023B18(s32 *p);
 extern u8 D_80027F7C[];
 extern u8 D_800282B0[];
 extern u8 D_80077E84[];
 void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z);
-s32 func_80021B98(u8 *name, s32 *e, s32 a, s32 b);
+s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off);
 extern u8 D_80028064[];
 extern u8 *D_800283EC[];
 u8 *func_8006A114(u8 *e);
@@ -237,7 +249,7 @@ void func_8005FE18(s32 a);
 extern u8 D_80027E68[];
 void func_80069E78(u8 *dst, u8 *src);
 void func_80069E38(u8 *dst, u8 *src);
-void func_80025788(void);
+void func_80025788(s32 *p);
 extern u8 *D_80027F18[];
 extern u8 D_80027F20[];
 extern u8 *D_80027F30[];
@@ -690,6 +702,8 @@ void func_80021B18(u8 *s, s32 idx)
     func_80069E38(s, D_80027F30[idx]);
 }
 
+/* NEAR MISS: 45 words, 28 DIFF, all register NAMES: the open/lseek/read/close sequence is right (func_8006A0A4/B4/C4/E4 = open/lseek/read/close on "bu00:"), but local-alloc assigns the five callee-saved locals differently -- the target has buf=$s5, n=$s2, off=$s4, r=$s1, -1=$s3, fd=$s0 and keeps the -1 in a register across both comparisons. Three spellings measured (an explicit -1 local, fd declared first with a len local, the plain form); the plain form is this one. Allocation only.
+   Source in docs/near-misses/func_80021B98.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021B98);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021C4C);
@@ -720,7 +734,7 @@ s32 func_80021D54(s32 idx)
     e[0] = v;
     if (v != 0)
     {
-        r = func_80021B98(name, e, 1, 4);
+        r = func_80021B98(name, (u8 *)e, 1, 4);
         e[0] = 1;
     }
     return r;
@@ -922,11 +936,15 @@ void func_8002290C(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022934);
 
+/* The second parameter is unused by the body but func_80022AE8 sets $a1
+   before the call and sets nothing else. */
+/* NEAR MISS: 44 words against 46, and the two missing words are COPIES of hoisted constants: the target has 'addiu $t4, $zero, 5' then 'addu $t3, $t4, $zero', and the same pair for 6, where every spelling here CSEs the two 5s into one pseudo before loop.c sees them. Per docs/matching-levers.md:567, combine_movables matches two movables of equal value and mode and hoists one while the other becomes a copy -- so the target's two 5s survived cse1 as separate pseudos and this one's did not. The rest is right: an unaligned 4-byte copy of D_800200A0 to a stack buffer, then four iterations writing two 0xC-byte records each (byte 0 from the buffer, byte 1 = 0x48, word at 4 = 0x104058, bytes 0xA/0xB = 5 then 6), then 'p[-0x18] |= 0x80' and return p.
+   Source in docs/near-misses/func_80022A30.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022A30);
 
 void func_80022AE8(s32 *p)
 {
-    func_80022A30(p + 9, p);
+    func_80022A30((u8 *)(p + 9), p);
     func_8002290C(p);
 }
 
@@ -1128,7 +1146,21 @@ void func_800233D0(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023470);
+void func_80023470(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 3; i++)
+    {
+        ((UnkCardPair *)p[0x72 + i])->unk_04->unk_08 = 0x24;
+        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[0] = 0x68;
+        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[1] = 0x68;
+        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[2] = 0x60;
+        ((UnkCardPair *)p[0x6A + i])->unk_04->unk_08 = 9;
+        ((UnkCardPair *)p[0x6E + i])->unk_04->unk_08 = 0x42;
+        ((UnkCardPair *)p[0x76 + i])->unk_04->unk_08 = 0x8F;
+    }
+}
 
 void func_8002352C(u8 *p)
 {
@@ -1449,6 +1481,8 @@ void func_80024298(s32 *p)
     }
 }
 
+/* NEAR MISS: 46 words, 10 DIFF: the halved width and height must be computed INSIDE the loop (they are loop-invariant, so loop.c hoists them, and hoisting puts them AFTER the three constant movables where the target has them) -- that took it from 24 DIFF to 10. What is left is register naming around those two divisions. The shape is right: a 0xC-byte header, four 0x18-byte records (byte 1 = 0x38, three words of 0x9CBCBC then one of 0x8C9C9C, bytes 0xA/0xB the halved extents, byte 0 from D_80027FD0[i]), then a 0xC-byte trailer, returning p + 0xC.
+   Source in docs/near-misses/func_800242D8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800242D8);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A0);
@@ -1614,9 +1648,33 @@ void func_80024FFC(s32 *p)
     p[-4] = (s32)func_8002593C;
 }
 
+/* NEAR MISS: 46 words, 4 DIFF, register naming only: the target materialises the comparison's 1 into $v0 and COPIES it into $s3 for the flag ('addu $s3, $v0, $zero', which reorg then puts in the beq's delay slot), while every spelling here puts the 1 straight into $s3 and compares against that. Four measured: flag initialised at its declaration or assigned before the if, the test as == with the 1-assignment in the then arm, as != with it in the else, and a shared 'one' local. Initialising the loop counter and cursor AFTER the if is what took it from 13 DIFF to 4 and must be kept.
+   Source in docs/near-misses/func_80025030.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025030);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800250E8);
+void func_800250E8(s32 *p)
+{
+    s32 off = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (i == p[11])
+        {
+            func_80024224((s32 *)p[off + 1], 1);
+        }
+        else if (i == p[10])
+        {
+            func_800241D4((s32 *)p[off + 1], 1);
+        }
+        else
+        {
+            func_80024274((s32 *)p[off + 1]);
+        }
+        off++;
+    } while (++i < 5);
+    func_80024F3C((s32 *)p[7], p[10], p[0x11]);
+}
 
 /* Empty, but it takes an argument: func_80025230 sets $a0 to the bare
    0x80010000 base before calling it and sets nothing else. A callee that
@@ -1763,7 +1821,37 @@ void func_8002570C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025788);
+void func_80025788(s32 *p)
+{
+    s32 i;
+    s32 off;
+
+    if (p[14] != 0)
+    {
+        p[-4] = (s32)func_8002593C;
+    }
+    else
+    {
+        if (func_8002219C(p[10]) != 0)
+        {
+            p[-4] = (s32)func_8002593C;
+            off = 0;
+            for (i = 0; i < 5; i++)
+            {
+                func_80024298((s32 *)p[off + 1]);
+                off++;
+            }
+        }
+        else
+        {
+            p[13] = (s32)func_8002593C;
+            func_8002316C((s32)(p - 8));
+            p[-4] = (s32)func_80024F7C;
+        }
+        func_80020984();
+        p[16] = 0;
+    }
+}
 
 void func_80025848(s32 *p)
 {
@@ -1845,7 +1933,22 @@ void func_80025BD4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025C7C);
+s32 *func_80025C7C(s32 *p)
+{
+    s32 *q = func_8003FE78(0, D_8002B7E0, 0x1C);
+    s32 *r = q + 8;
+
+    func_80025B40(r, (s32)p);
+    func_8002223C();
+    func_800220DC();
+    r[0x12] = 1;
+    q[8] = func_8004F418(q, q + 0x1A);
+    r[6] = func_800238D4(q);
+    r[7] = func_80024D58(q, r[10], 0);
+    r[9] = 0;
+    q[4] = (s32)func_80025BD4;
+    return q;
+}
 
 /* NEAR MISS, 36 words against 37, parked. Source in
    docs/near-misses/func_80025D34.c. The missing word is a delay-slot nop: the
@@ -2107,7 +2210,26 @@ void func_800267C0(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026868);
+s32 *func_80026868(s32 *p, s32 a)
+{
+    s32 *q = func_8003FC64(0);
+    s32 *r;
+
+    if (q != 0)
+    {
+        r = q + 8;
+        r[9] = a;
+        func_80026728(r, (s32)p);
+        func_8002223C();
+        func_800220DC();
+        q[8] = func_8004F418(q, 0);
+        r[1] = func_80024D58(q, r[11], 3);
+        r[2] = func_80027364(q);
+        r[10] = 0;
+        q[4] = (s32)func_800267C0;
+    }
+    return q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026920);
 

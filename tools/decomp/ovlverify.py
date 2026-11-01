@@ -15,6 +15,11 @@ hoisted-lui shape the live overlay uses. Measured on func_80020924: -G8 gives
 (The debug twin at 0x80400000 uses the `lui $at` shape throughout, so IT looks
 like a -G8 build of the same source. Do not assume one -G fits both blocks.)
 
+ONE FALSE POSITIVE TO KNOW ABOUT: run on a function that is still an
+INCLUDE_ASM stub, this reports 0 differing. The stub's own assembly defines
+the symbol in the object, so the candidate IS the target. A 0 only means
+something for a function you have actually written in C.
+
 WHAT THIS CANNOT SEE, and it has already cost one broken build: it compares
 ONE FUNCTION'S words. It says nothing about the unit's .rodata. A C function
 with a local array initialiser emits that initialiser into the unit's
