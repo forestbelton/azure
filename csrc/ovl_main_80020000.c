@@ -263,7 +263,7 @@ void func_800A6104(void);
 void func_80022774(s32 *a, s32 *b);
 void func_80022934(s32 *p);
 void func_80022488(s32 *p);
-void func_80022524(void);
+void func_80022524(s32 *p);
 void func_8004CBFC(u32 *p, u8 *q, u32 *r);
 void func_800439F8(void);
 void func_8006A0F4(u8 *p);
@@ -311,6 +311,7 @@ extern u8 D_80028068[][2];
 extern u8 D_80027E78[][0x20];
 extern u8 D_800200B8[];
 s32 func_80049DE8(s32 a, s32 b, s32 c);
+s32 func_80049E1C(s32 a, s32 d, s32 m);
 void func_8002651C(s32 *p);
 void func_8006733C(UnkURect *r, u8 *src);
 void func_80067014(s32 n);
@@ -356,7 +357,7 @@ void func_80024390(s32 *p);
 void func_80024818(s32 *p);
 void func_800249B4(s32 *p);
 void func_800250E8(s32 *p);
-void func_80025584(void);
+void func_80025584(s32 *p);
 extern s16 D_80028010[];
 void func_80020A80(void);
 void func_80069EC8(void *p, s32 n);
@@ -1197,7 +1198,84 @@ void func_80022488(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022524);
+/* The same input-handler shape as func_800265B8, and the same two levers:
+   the `p[4] >= 3` arm comes first with the increment as the `else`, and the
+   0x8000/0x2000 pair is written out in BOTH arms so jump.c cross-jumps the
+   two `dir` assignments into one tail. func_800231E4(1) is likewise written
+   in both arms of the p[8] test -- the target calls it either way but only
+   stores the result when p[8] is non-zero, and the store needs p[8] reloaded
+   after the call, so the test has to precede it. */
+void func_80022524(s32 *p)
+{
+    s32 dir = 0;
+    s32 n;
+
+    if (D_80083160.unk_08 == 0)
+    {
+        return;
+    }
+    if (D_80083160.unk_10 & 0x20)
+    {
+        func_80053DA8(0x515);
+        func_800231E4(1);
+        if (p[8] != 0)
+        {
+            *(s32 *)p[8] = 1;
+        }
+    }
+    else if (D_80083160.unk_10 & 0x40)
+    {
+        func_80053DA8(0x514);
+        if (p[8] != 0)
+        {
+            *(s32 *)p[8] = func_800231E4(1);
+        }
+        else
+        {
+            func_800231E4(1);
+        }
+    }
+    else if (D_80083160.unk_08 & 0xA000)
+    {
+        if (D_80083160.unk_10 & 0xA000)
+        {
+            p[4] = 0;
+            if (D_80083160.unk_10 & 0x8000)
+            {
+                dir = -1;
+            }
+            else if (D_80083160.unk_10 & 0x2000)
+            {
+                dir = 1;
+            }
+        }
+        else if (p[4] >= 3)
+        {
+            if (D_80083160.unk_08 & 0x8000)
+            {
+                dir = -1;
+            }
+            else if (D_80083160.unk_08 & 0x2000)
+            {
+                dir = 1;
+            }
+        }
+        else
+        {
+            p[4]++;
+        }
+    }
+    if (dir != 0)
+    {
+        n = func_80049E1C(p[0], dir, D_800280B4[p[2]].unk_14);
+        if (n != p[0])
+        {
+            p[0] = n;
+            func_80053DA8(0x502);
+        }
+        func_80022488(p);
+    }
+}
 
 void func_800226A8(s32 *p)
 {
@@ -2349,7 +2427,81 @@ void func_800254E4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025584);
+/* The third of the input handlers, and the closest to func_800265B8 -- same
+   0x40 / 0x5000 chain, same `p[12] >= 0xD` arm first, same pair of separate
+   exit tests -- with three differences: the 0x20 case FALLS THROUGH into the
+   0x40 test instead of leaving through a goto, the held-key step is -2 rather
+   than -4, and func_80027AFC takes a literal 0 as its second argument. The
+   unk_08 test has to be an enclosing `if`, not an early return: on the
+   zero path the target still runs the func_8002168C/func_80021904 tail. */
+void func_80025584(s32 *p)
+{
+    s32 dir = 0;
+    s32 r;
+
+    if (D_80083160.unk_08 != 0)
+    {
+        if (D_80083160.unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            p[-4] = (s32)func_80024FFC;
+        }
+        if (D_80083160.unk_10 & 0x40)
+        {
+            func_80053DA8(0x503);
+            func_800254E4(p);
+        }
+        else if (D_80083160.unk_08 & 0x5000)
+        {
+            if (D_80083160.unk_10 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_80083160.unk_10 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_10 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 2;
+                if (D_80083160.unk_08 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_08 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        if (dir != 0)
+        {
+            func_80053DA8(0x502);
+            p[10] = func_80049DE8(p[10], dir, 5);
+            func_800250E8(p);
+        }
+    }
+    r = func_8002168C();
+    func_80021904();
+    if (r == 0)
+    {
+        return;
+    }
+    if (r == 1)
+    {
+        return;
+    }
+    func_80025D34(p - 8);
+    func_80027AFC(p[8], 0);
+}
 
 void func_8002570C(s32 *p)
 {
