@@ -731,3 +731,156 @@ is loop rotation of `do { n++; ... } while (...)`. Writing the `n--` makes it
 places first follows the source's test sense. func_800254E4 is one word short
 with `if (x != 0) A else B` and exact with `if (x == 0) B else A`, because the
 target reaches A by a taken `bnez` rather than by falling through.
+
+## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
+
+The sweep that follows the one above took the card overlay from 192 of 241
+functions to 213, and from roughly 54% to **82.7% of its 7487 words (6194
+landed)**. Every function in the unit that had not been looked at before is
+now either landed or parked; the 28 remaining stubs are all near-misses with
+measurement tables in `docs/near-misses/`.
+
+Two findings did most of the work, and both are worth knowing before touching
+another overlay.
+
+### `func_80069DF8` is `noreturn`, and that is what unlocks the asserts
+
+The assert sites the translation-unit map used to identify `c_server.c` back
+in Phase 1 are a bracketed pair of calls:
+
+```c
+if (!cond)
+{
+    func_80069F18(D_80020000, D_80020028, __LINE__);
+    func_80069DF8(1);
+}
+```
+
+Declared ordinarily, gcc assumes the body falls through into whatever follows,
+so after the two calls it re-materialises the next global's `%hi` -- one
+wasted word per assert site. Declare the abort as
+
+```c
+void func_80069DF8(s32 code) __attribute__((noreturn));
+```
+
+and the `lui` that reorg puts in each test's `bnez` delay slot is the one the
+branch target's load uses. func_80020F18 went from 121 words against 114 with
+nothing else differing, to exact; func_80020A80, the overlay's second largest
+function at 264 words, then came out zero-differing on the FIRST spelling --
+eight `OpenEvent` calls inside the `EnterCriticalSection` pair, each asserting
+the handle is not -1, then eight `EnableEvent` calls each asserting a non-zero
+result. All sixteen `%hi` values stay live in their own callee-saved register
+across the calls, which is why that function saves `$s0..$s7` and `$fp`.
+
+`town.bin` has 76 assert records against this overlay's 10, including 54 in
+`main.c`; the lever should pay there many times over.
+
+### Decode one of a family and the rest are nearly free
+
+Five of the functions landed here are the same input handler at different
+state offsets: func_800265B8, func_80022524, func_80025584, func_8002789C and
+func_8002593C, 527 words between them. The first took a dozen spellings; the
+other four took one or two each, because three levers transfer whole:
+
+* the repeat counter's `>= N` arm comes FIRST, with the plain increment as the
+  `else`, since the target branches forward into the increment;
+* the two exit tests are separate `if`s -- as `r == 0 || r == 1` gcc folds
+  them into `sltiu r, 2`;
+* each direction assignment is written out in BOTH arms of its 0x8000/0x2000
+  pair so jump.c cross-jumps them into one tail.
+
+Where they differ is instructive about how little of a family is actually
+shared: one's 0x20 case returns, another's falls through, a third jumps into
+the tail past the `func_8002168C`/`func_80021904` pair; the held-key steps are
+-2 and -4; one has two flags rather than one.
+
+### Nine more levers
+
+**9. An unused RETURN VALUE looks like a dead address or copy in `$v0`.**
+(3 functions) func_80023FF0, func_80022D60 and func_800217D4 all end with a
+`lui`/`addiu` pair or an `addu $v0, $sN, $zero` that nothing reads -- in
+func_800217D4's case split across a `beqz`'s delay slot on one exit. Every
+caller ignores the value; as `void` the function is one or two words short.
+Declare the return and the words appear.
+
+**10. gcc's allocation priority is `floor_log2(n_refs) * freq / live_length`,
+and a reference count is a lever.** func_80023C44's last 18 differing words
+were nothing but `$s0` and `$s1` swapped: with three references the
+D_80083EA4 base scored 1/27 against `p`'s 3/58 and lost the register.
+Advancing that base IN PLACE -- spelling the second access as a byte offset,
+`*(s32 *)((u8 *)D_80083EA4[p[0]] + 0x20)` -- is a fourth reference, lifts it
+to 2/27, and wins it `$s0`. This is also the one lever that did NOT reach the
+func_80022B48 family, where the base is a parameter: gcc keeps a parameter in
+its incoming register unless a higher-priority allocno wants it, and no source
+spelling raises the competitor enough.
+
+**11. `addu` operand order follows RTL canonicalisation, so pre-scale the
+offset.** (func_800269B4) gcc canonicalises `(plus (mult ...) (reg))` with the
+shift first, so `p[26 + k]` gives `addu $v0, $v0, $s2` where the target has
+`addu $v0, $s2, $v0`. Four base-first spellings of the same index all leave
+that word wrong; only applying the scale first, `(u8 *)p + k * 4` with the
+0x68 as a displacement, fixes it. Relatedly, parenthesise an offset you want
+folded into the scaled value: `(u8 *)p + (k * 12 + 4)`, not
+`(u8 *)p + k * 12 + 4`.
+
+**12. A flat array indexed `[i * n + j]` adds `j` before the base; a 2-D array
+does not.** (func_800269B4) `D_80028068[p[9] * 2 + i]` emits
+`addu $v0, $v0, $s0` then `+= $s4`, six words wrong across three evaluations;
+`extern u8 D_80028068[][2]` with `[p[9]][i]` adds the base first.
+
+**13. A loop needs to BE a loop for loop.c to give it a preheader.**
+(func_8002225C) Written `if (*s == ' ') do { s++; } while (*s == ' ');` gcc
+shares one register for the 0x20 all three of the function's comparisons
+test against; written as a plain `while`, loop rotation hoists a second copy
+into the skip loop's own preheader, which is what the target has. `while`,
+`for`, and either order of the body's increments all match.
+
+**14. An 8-byte pair copy is a struct assignment, not two field
+assignments.** (func_8002789C) gcc's aligned `movstrsi` is `lw`/`lw` then
+`sw`/`sw`; two field assignments come out interleaved as `lw`/`sw`/`lw`/`sw`
+and one word longer. Needs a 4-aligned 8-byte struct (`UnkTwoWords`) -- the
+alignment-1 `UnkEight` gives `lwl`/`lwr`.
+
+**15. When a symbol is relocated at an OFFSET, the source used a struct.**
+(func_80024390) The target holds `&D_80083EA4` -- which is `D_80083E98 + 0xC`
+-- in a callee-saved register and derives the row base as `that - 0xC` in
+`$fp`. That only happens if gcc saw ONE symbol with field offsets, so the row
+is a struct whose first access in the function is the field at +0xC. The unit
+already declared `D_80083E98` as `s32 [][32]` for five other functions, so
+this one gets an `__asm__` alias: `extern UnkSaveRow D_80083E98_s[]
+__asm__("D_80083E98")`. Through two separate symbols each access materialises
+its own `%hi` and the function is five words longer.
+
+**16. `flags & (1 << i)` needs the mask in a local.** (func_80024390)
+Otherwise combine rewrites it to `(flags >> i) & 1`. The flags word wants a
+local too, and which of the two gets one settles the order of the loop
+preheader's two hoists.
+
+**17. A clamp's branch sense is `x >= N ? hi : x`.** (func_80024390, twice)
+The target branches on the FALSE case with the clamped constant in the delay
+slot; `x < N ? x : hi` branches on the true case and is three words wrong
+each time.
+
+### And one piece of bookkeeping that bites twice
+
+`INCLUDE_RODATA` is not the only way a rodata symbol reaches the link. splat
+migrates a symbol into the listing of the one function that references it, so
+LANDING that function deletes the symbol and the link fails with
+`undefined reference`. It happened to D_80020084 in the first sweep and to
+D_800200A4 -- the string `" "` -- in this one. The fix both times: define the
+block in C at the position it belongs to in the rodata stream, which for
+D_800200A4 is immediately after `INCLUDE_RODATA(D_800200A0)`.
+
+The mirror-image trap is gcc emitting a function's OWN constants there.
+func_80021594's two five-entry function-pointer tables verify clean as local
+array initialisers -- 62 words, 0 differing -- and still break the build,
+because gcc puts a function's constants in `.rodata` right after that
+function and func_80021594 sits *before* this unit's first `INCLUDE_RODATA`
+line, so they land at 0x80020000 and push every later block down. The
+initialiser lever is only available where the function's position in the file
+already puts its constants in the slot they belong to. The shape that works
+there keeps both `INCLUDE_RODATA` blocks and COPIES from the extern --
+`UnkFnTab5 a = D_80020034;` -- which is what the listing was showing all
+along: batched `lw`/`sw` pairs are gcc's block move, not an initialiser being
+materialised.
