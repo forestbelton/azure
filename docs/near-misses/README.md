@@ -1,5 +1,10 @@
 # Near-miss sources for the functions that have not landed
 
+**Empty as of 2026-11-01: every function in the resident executable has
+landed.** The procedure below is kept because it is the one that finished the
+project, and because the overlays will need it again. `probe-cse-forwarding.c`
+is not a park -- it is a standing compiler probe.
+
 One file per function that is written but not matching: the source that got
 closest, plus a generated stats header. They are **not** compiled into the
 game -- the function is still an `INCLUDE_ASM` stub and `make check` neither

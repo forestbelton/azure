@@ -2472,7 +2472,295 @@ s32 func_8005B470(s16 i, u8 *dst) {
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_2CDC0", func_8005B4D0);
+void func_8005E4A0(s32, u32);
+void func_8005EC0C(SpuVoiceAttr *);
+
+/* The SPU note-on: counts the bank's live programs, finds a free voice in
+   D_80085458 (busy-poll first, then the +0x1A scan), fills an SpuVoiceAttr
+   and the voice entry, and hands the attr to func_8005EC0C. Last function in
+   the project to land; what the listing demanded, each measured on this body:
+
+   * The three D_80085458 highs are ONE loop-hoisted pseudo with no register
+     (`lui t1` rematerialised per site, reload1.c:552-569 via rtl.h:237-240
+     CONSTANT_P including HIGH), their lo_sums are LOCAL per site, and the
+     scan loop's high is a separate local in $v0. That needs three things:
+     (1) the scan loop in the sibling unit's idiom -- the cursor computed
+     INSIDE the loop from `ch` -- so loop.c regenerates its high out of the
+     inner loop with a fresh regno that the outer loop skips (loop.c:686,
+     "made by loop-optimization for an inner loop"); the r-biv form puts a
+     movable high at the scan site, every `(high D_80085458)` merges into the
+     first one in insn order (combine_movables loop.c:1245-1283), and one
+     decision moves all four. (2) A `(high D_80085458)` BEFORE the busy loop
+     in insn order, so the merged head is tested at threshold 31 and
+     insn_count 280 (loop.c:1631; threshold 31 = 1 + 30 non-fixed regs: the
+     scan loop's own dump prints -124 = 1*62*-2 for a 2-benefit giv), before
+     the busy loop's hoists cost 3 per move and double insn_count
+     (loop.c:1719, :1609-1611). That is the dead `v = D_80085458` at the body
+     top: DEVICE, worth 18 DIFF (without it the head is evaluated after four
+     doublings and stays local, `lui v0` at every site). The hoisted high then
+     loses $fp to `prog` on refs (global.c:587-608, 3 refs vs 11) exactly as
+     the listing has it. (3) The per-site lo_sums `pN = D_80085458` MATCH the
+     scan loop's regenerated lo_sum (.loop "regno 100, done move-insn matches
+     889"); a matched movable is never evaluated on its own (loop.c:1585
+     `!m->done`) and its head fails as "halved since already moved", so they
+     stay local without any multiply-set trick. Written as compiler temps
+     (`v = D_80085458 + ch * 0x78`) the same match happens; the explicit pN
+     only keeps the launch order readable.
+
+   * `bank` is copied from the shift temp AFTER `bs` (`bank = ab`), with the
+     index `(s16) ab` reading the temp: tmp stays live across the
+     sign-extension, the extension takes $v1 instead of reusing $a0, the
+     D_80086A40 lo_sum takes $a1, `i` (born at the function top, conflicting
+     with the argument registers) is pushed to $t0, and the copy lands in the
+     load delay slot where `i = 0` used to sit. `ab` must be a FRESH
+     single-set variable: reusing `x` (set again by the clamps) is not
+     birthing_insn_p (sched.c:2469-2501, reg_n_sets == 1), loses the launch
+     priority (sched.c:2507-2549) and floats to the block top: 83 DIFF.
+
+   * Per-site pointers (v, v2, v3) and per-site temps (t, t2, t3): one
+     function-scope `v` is a global allocno and takes one register for all
+     three ranges; the listing's $v0/$a1/$v0 is three block-local pseudos
+     allocated lowest-free in each block. Likewise the two adsr loads are
+     $a0 then $v1, and the volume.right load is $v0.
+
+   * `sum = sum * 8` as its own statement (in-place `sll a1,a1,3`),
+     `l = l * unk_18 >> 7` likewise, `i = l * vs` and `l = rv * ps` holding
+     the two volume products: a product into a LO-preferring temp is spilled
+     out of $lo by reload and retried with the argument registers forbidden
+     (reload1.c:709 forbidden_regs = bad_spill_regs; :3497), so it can never
+     be $a1; into `l` (GR-preferring, dead) it is `mflo a1` directly. The
+     volume.right load into `t3` before `attr.note = b` is what lets sched2
+     put the load ahead of the note's reload-and-store (the load may alias the
+     store, sched.c:817-839).
+
+   Rejected on this base, with scores: `x` as the shift temp 83; r-biv scan
+   loop with the dead top store 366 (+3 words); a per-site `r = ...; r += ...`
+   holder 285 (+1); `z` for rv*ps 6; a shared `t` 8; single function-scope
+   `v` 31. -Wall is silent. */
+void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
+{
+    SpuVoiceAttr attr;
+    u16 vs;
+    u16 ps;
+    s32 key;
+    s32 cnt;
+    u8 *bs2;
+    u8 *bs;
+    u8 *q;
+    u8 *e;
+    u8 *v;
+    u8 *v2;
+    u8 *v3;
+    u8 *p1;
+    u8 *p2;
+    u8 *p3;
+    u8 *r;
+    u32 *g;
+    u16 *w;
+    s32 prog;
+    s32 ab;
+    s16 bank;
+    s32 layer;
+    s32 ch;
+    s32 i;
+    s32 n;
+    s32 sum;
+    s32 k;
+    s32 x;
+    s32 c;
+    s32 l;
+    s32 rv;
+    u16 t;
+    u16 t2;
+    u16 t3;
+
+    i = 0;
+    prog = a & 0x7F;
+    ab = a >> 8;
+    D_80085F98[0] = 1;
+    cnt = 0;
+    vs = volx;
+    ps = panx;
+    bs = D_80086A40[(s16)ab].unk_04;
+    bank = ab;
+    bs2 = bs;
+    if (prog != 0)
+    {
+        r = bs;
+        do
+        {
+            if (r[0x20] != 0)
+            {
+                cnt++;
+            }
+            i++;
+            r += 0x10;
+        } while (i < prog);
+    }
+    layer = 0;
+    q = bs2 + (prog * 0x10 + 0x20);
+    key = b >> 8;
+    if (q[0] != 0)
+    {
+        do
+        {
+            e = bs2 + ((cnt * 0x10 + layer) * 0x20 + 0x820);
+            /* DEVICE: dead store. Its `(high D_80085458)` is the first in the
+             * loop, so the three voice-pointer highs below merge into it and
+             * are hoisted before the busy loop's moves tax the threshold;
+             * flow deletes the store. Without it: 18 DIFF (local highs in
+             * $v0 at all three sites). The r-biv scan loop with this store
+             * 366 (+3 words): its high merges too and the scan site becomes
+             * `lui t1`. -Wall is silent. */
+            v = D_80085458;
+            if (key >= e[6] && e[7] >= key)
+            {
+                ch = 0;
+                while (func_8005EB78(D_80073740[ch]) != 0)
+                {
+                    ch++;
+                    if ((s32)D_80073734[0] - 1 < ch)
+                    {
+                        ch = -1;
+                        break;
+                    }
+                }
+                if (ch == -1)
+                {
+                    ch = 0;
+                    do
+                    {
+                        r = D_80085458 + ch * 0x78;
+                        if (*(u16 *)(r + 0x1A) == 0)
+                        {
+                            goto found;
+                        }
+                        ch++;
+                    } while ((s32)D_80073734[0] - 1 >= ch);
+                    ch = -1;
+                found:;
+                }
+                if (ch != -1)
+                {
+                    func_80056DB4(ch);
+                    g = &D_80073740[ch];
+                    do
+                    {
+                        func_8005E97C(0, *g);
+                        k = func_8005EB78(*g);
+                    } while (k != 2 && k != 0);
+                    i = 0;
+                    sum = 0;
+                    n = *(s16 *)(e + 0x16);
+                    w = (u16 *)(D_80086A40[(s16)bank].unk_04 + (*(u16 *)(bs + 0x12) << 9) + 0x820);
+                    if (n > 0)
+                    {
+                        do
+                        {
+                            sum += *w++;
+                            i++;
+                        } while (i < n);
+                    }
+                    attr.mask = SPU_VOICE_VOLL | SPU_VOICE_VOLR | SPU_VOICE_VOLMODEL |
+                                SPU_VOICE_VOLMODER | SPU_VOICE_NOTE | SPU_VOICE_SAMPLE_NOTE |
+                                SPU_VOICE_WDSA | SPU_VOICE_ADSR_AMODE | SPU_VOICE_LSAX |
+                                SPU_VOICE_ADSR_ADSR1 | SPU_VOICE_ADSR_ADSR2;
+                    attr.volmode.left = 0;
+                    attr.volmode.right = 0;
+                    attr.voice = D_80073740[ch];
+                    sum = sum * 8;
+                    attr.addr = D_80086A40[bank].unk_10 + sum;
+                    p1 = D_80085458;
+                    v = p1 + ch * 0x78;
+                    t = *(u16 *)(e + 0x10);
+                    attr.adsr1 = t;
+                    *(u32 *)(v + 0x60) = t;
+                    t2 = *(u16 *)(e + 0x12);
+                    attr.adsr2 = t2;
+                    *(u32 *)(v + 0x64) = t2;
+                    if ((*(u16 *)(e + 0x10) & 0x80) != 0)
+                    {
+                        attr.a_mode = SPU_VOICE_EXPIncN;
+                    }
+                    else
+                    {
+                        attr.a_mode = SPU_VOICE_LINEARIncN;
+                    }
+                    attr.loop_addr = attr.addr;
+                    p2 = D_80085458;
+                    v2 = p2 + ch * 0x78;
+                    v2[0x22] = e[4];
+                    v2[0x23] = e[5];
+                    v2[0x21] = e[0xC];
+                    v2[0x20] = e[0xD];
+                    *(s16 *)(v2 + 0x00) = ch;
+                    *(u16 *)(v2 + 0x04) = prog;
+                    *(s16 *)(v2 + 0x08) = layer;
+                    *(s16 *)(v2 + 0x0A) = b >> 8;
+                    *(s16 *)(v2 + 0x06) = 0x11;
+                    *(s16 *)(v2 + 0x1A) = 1;
+                    v2[0x14] = q[1];
+                    v2[0x16] = q[4];
+                    v2[0x15] = e[2];
+                    v2[0x17] = e[3];
+                    *(s16 *)(v2 + 0x5C) = bank;
+                    x = D_80086A40[bank].unk_1B + v2[0x16] + v2[0x17] - 0x80;
+                    if (x < 0)
+                    {
+                        x = 0;
+                    }
+                    if (x >= 0x80)
+                    {
+                        x = 0x7F;
+                    }
+                    *(s16 *)(v2 + 0x18) = x;
+                    c = D_80086A40[bank].unk_18 * v2[0x14] * v2[0x15] >> 7;
+                    if (x >= 0x40)
+                    {
+                        rv = c;
+                        l = (0x40 - (x & 0x3F)) * (rv << 1) >> 7;
+                    }
+                    else
+                    {
+                        l = c;
+                        rv = x * (l << 1) >> 7;
+                    }
+                    l = l * D_80086A40[bank].unk_18 >> 7;
+                    rv = rv * D_80086A40[bank].unk_18 >> 7;
+                    p3 = D_80085458;
+                    v3 = p3 + ch * 0x78;
+                    i = l * vs;
+                    *(s16 *)(v3 + 0x10) = i >> 7;
+                    l = rv * ps;
+                    *(s16 *)(v3 + 0x12) = l >> 7;
+                    attr.volume.left = *(s16 *)(v3 + 0x10);
+                    t3 = *(u16 *)(v3 + 0x12);
+                    attr.note = b;
+                    attr.volume.right = t3;
+                    if (e[5] != 0)
+                    {
+                        attr.sample_note = ((e[4] - 1) << 8) | (0x7F - e[5]);
+                    }
+                    else
+                    {
+                        attr.sample_note = e[5] | (e[4] << 8);
+                    }
+                    func_8005EC0C(&attr);
+                    if ((e[1] & 4) != 0 || force != 0)
+                    {
+                        func_8005E4A0(1, D_80073740[ch]);
+                    }
+                    else
+                    {
+                        func_8005E4A0(0, D_80073740[ch]);
+                    }
+                }
+            }
+            layer++;
+        } while (layer < q[0]);
+    }
+    D_80085F98[0] = 0;
+}
 
 void func_80056D44(s32, u8 *);
 void func_8005E97C(s32, s32);
