@@ -103,9 +103,43 @@ group the splat ld script emits ahead of the text; see "two data groups" below.
 | `header` (outside the image) | 2,048 | 0.39% | -- |
 | **unknown** | **0** | **0.00%** | **0.00%** |
 
-Note that splat's own report line does not count `data` in its "Split N KB in
-defined segments" total, so that line reads 79.57% while the accounting above
-is 100.00%. The number to watch is the `unknown` line.
+### Why splat's own total says 79.58%
+
+`splat split` reports `Split 417 KB (79.58%) in defined segments` and lists
+only `header`, `shiftjis`, `asm`, `c` and `bin`. That is **a splat bug, not a
+gap in the map**, and it is worth knowing because the headline number now
+*falls* as the map improves.
+
+`Statistics.print_statistics` sums everything handed to `add_size`, and that
+comes from each segment's `statistics` property. `CommonSegAsm`, `CommonSegC`,
+`CommonSegBin` and `PSXSegShiftjis` inherit it from `Segment`, which returns
+`{self.type: size}`. But `CommonSegData` -- and `CommonSegRodata`, which
+subclasses it, and `CommonSegBss` -- inherit from **`CommonSegGroup`**, whose
+override aggregates `self.subsegments`. A `data` or `rodata` subsegment is a
+leaf with no subsegments, so the aggregation returns an empty dict and its
+bytes are never registered:
+
+| segtype | `statistics` comes from | registered? |
+|---|---|---|
+| `asm`, `c`, `bin`, `shiftjis`, `header` | `Segment` | yes |
+| `data`, `rodata`, `.data`, `.rodata`, `.bss` | `CommonSegGroup` | **no** |
+
+So the report line counts 417,220 of 524,288 bytes and silently drops 107,068
+-- exactly this project's `data` (94,028) + `rodata` (11,640) + `.rodata`
+(1,400). 417,220 + 107,068 = 524,288.
+
+This was always happening, just invisibly: before 2026-11-01 the dropped
+bytes were only 2,888 (the jump-table `.rodata` plus two psyq `data`
+subsegments), which is why the old report summed to 78.51% + 20.94% = 99.45%
+rather than 100%. Converting unnamed `bin` blobs to `data` moved their bytes
+out of `unknown` *and* out of the total, so "Split ... in defined segments"
+went **down** from 78.51% to 79.58% by less than the 20.94% that left the
+unknown line.
+
+**What to trust.** The `unknown` line is correct -- `CommonSegBin` registers
+properly, and an unnamed `bin` is what `statistics_type` maps to `"unk"`
+(`segtypes/common/bin.py:38`), so `unknown: 0 B (0.00%)` means what it says.
+For the rest, use the accounting table above rather than splat's total.
 
 ## The library stamp
 

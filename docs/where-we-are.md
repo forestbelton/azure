@@ -127,8 +127,12 @@ Percentages below are of the 346,112-byte **image**, not of the file:
 | jump tables (`.rodata` of C units) | 1,400 | 0.4% |
 | **unknown** | **0** | **0.0%** |
 
-(splat's own report line omits `data` from its "Split N KB in defined
-segments" total, so it reads 79.57%; the line to watch is `unknown`.)
+(splat's own report line reads 79.58%, not 100%. It drops every `data`,
+`rodata` and `.bss` subsegment -- those segtypes inherit `statistics` from
+`CommonSegGroup`, which aggregates subsegments they do not have, so their
+bytes are never registered. It is a splat bug, and it means the headline
+number goes DOWN as blobs are mapped out of `bin` into `data`. The `unknown`
+line is unaffected and correct. `docs/data-map.md` has the detail.)
 
 Of the 105,668 `data` + `rodata` bytes, **31,752 are PSY-Q library data and
 rodata** placed at module granularity, and 73,916 are the game's. Two things
