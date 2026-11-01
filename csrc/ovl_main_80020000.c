@@ -134,6 +134,15 @@ typedef struct
     u8 b[0x20];
 } UnkBlock20;
 
+/* Two words, alignment 4: func_8002789C copies the pair func_800217D4
+   returns into p[6]/p[7] with gcc's aligned 8-byte block move (lw/lw/sw/sw);
+   as two field assignments it is one word longer and interleaved. */
+typedef struct
+{
+    s32 a;
+    s32 b;
+} UnkTwoWords;
+
 /* The u16 pair at the front of func_80025FFC's stack copy: the loads are
    `lhu`, not `lh`, so the fields are unsigned. */
 typedef struct
@@ -230,6 +239,8 @@ void func_8004CB2C(s32 *p);
 void func_80026920(s32 *p);
 void func_80027BF4(void);
 void func_80040AA0(s32 a);
+UnkNode *func_80044144(s16 a, s16 b, u32 c, u32 d);
+void func_800A68F4(void);
 void func_8005863C(void);
 void func_8006A084(void);
 void func_8006A094(void);
@@ -442,7 +453,7 @@ void func_800270E0(s32 *p);
 void func_80025230(s32 *p);
 void func_800265B8(s32 *p);
 void func_80027584(s32 *p);
-void func_8002789C(void);
+void func_8002789C(s32 *p);
 void func_8002593C(void);
 void func_80025398(s32 *p);
 void func_800262BC(s32 *p);
@@ -3486,7 +3497,80 @@ void func_800277BC(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002789C);
+/* The fourth input handler. Its tail is the interesting part: it calls
+   func_800217D4 for the &D_800287D8 pair that function returns, records
+   whether each word changed, then copies the pair into p[6]/p[7]. That copy
+   has to be an 8-byte STRUCT assignment -- gcc's aligned movstrsi, lw/lw
+   then sw/sw -- because as two field assignments it comes out interleaved
+   and one word longer. The 0x40 case returns outright rather than falling
+   into the shared tail. */
+void func_8002789C(s32 *p)
+{
+    s32 flag = 0;
+    s32 *t;
+    s32 diff[2];
+
+    if (D_80083160.unk_08 != 0)
+    {
+        if (D_80083160.unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            func_80027C90(p - 8);
+            func_80027BF4();
+            if (D_80082E60.unk_0B == 3)
+            {
+                func_80040AA0(3);
+            }
+            else
+            {
+                func_80044144(0, 0, 0, 0);
+                ((u16 *)p[5])[15] |= 0x2000;
+                if (p[0] == 2)
+                {
+                    func_800A68F4();
+                }
+            }
+        }
+        else if (D_80083160.unk_10 & 0x40)
+        {
+            func_80053DA8(0x503);
+            func_80020924(p[3]);
+            p[13] = 0;
+            p[-4] = (s32)func_800277BC;
+            return;
+        }
+        else if (D_80083160.unk_08 & 0xA000)
+        {
+            if (D_80083160.unk_08 & 0x8000)
+            {
+                if (p[3] != 0)
+                {
+                    flag = 1;
+                }
+                p[3] = 0;
+            }
+            else
+            {
+                if (p[3] == 0)
+                {
+                    flag = 1;
+                }
+                p[3] = 1;
+            }
+        }
+        if (flag != 0)
+        {
+            func_80053DA8(0x502);
+            func_80026FD4((s32 *)p[9], p[3]);
+        }
+    }
+    t = func_800217D4();
+    diff[0] = t[0] != p[6];
+    diff[1] = t[1] != p[7];
+    *(UnkTwoWords *)&p[6] = *(UnkTwoWords *)t;
+    func_80026FF8((s32 *)p[9], t, diff);
+    func_80021904();
+}
 
 void func_80027A68(s32 *p, s32 a, s32 b)
 {
