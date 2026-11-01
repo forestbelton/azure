@@ -134,6 +134,13 @@ typedef struct
     u8 b[0x20];
 } UnkBlock20;
 
+/* 24 bytes, alignment 1: func_80022774 copies a D_80027F48 template into its
+   third primitive with lwl/lwr + swl/swr. */
+typedef struct
+{
+    u8 b[24];
+} UnkBlock24;
+
 /* Two words, alignment 4: func_8002789C copies the pair func_800217D4
    returns into p[6]/p[7] with gcc's aligned 8-byte block move (lw/lw/sw/sw);
    as two field assignments it is one word longer and interleaved. */
@@ -278,7 +285,7 @@ void func_800585A0(void);
 s32 func_80021FF0(s32 a, u8 *b, s32 c);
 s32 func_80033B2C(s16 a);
 void func_800A6104(void);
-void func_80022774(s32 *a, s32 *b);
+u8 *func_80022774(u8 *p, s32 *q);
 void func_80022934(s32 *p);
 void func_80022488(s32 *p);
 void func_80022524(s32 *p);
@@ -353,6 +360,7 @@ s32 func_8006A0B4(s32 fd, s32 off, s32 whence);
 s32 func_8006A0C4(s32 fd, u8 *buf, s32 len);
 s32 func_8006A0E4(s32 fd);
 extern u8 D_800200A0[];
+extern u8 D_80027F48[];
 void func_80023B18(s32 *p);
 extern u8 D_80027F7C[];
 extern u8 D_800282B0[];
@@ -360,7 +368,11 @@ extern u8 D_80077E84[];
 void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z);
 s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off);
 extern u8 D_80028064[];
+extern u8 *D_800283B8[];
+extern u8 D_800283C4[];
 extern u8 *D_800283EC[];
+extern u8 *D_800283F4[];
+extern u8 D_800283FC[];
 u8 *func_8006A114(u8 *e);
 void func_8005FE18(s32 a);
 extern u8 D_80027E68[];
@@ -1525,6 +1537,8 @@ void func_800226E0(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
+/* NEAR MISS: 102 words -- the right count -- but 84 differing, nearly all of it register names cascading from one hoisting decision. This is func_80022A30's bigger sibling (same unaligned D_800200A0 copy, same four iterations, same 'p[-0x18] |= 0x80' and return) with THREE primitives per iteration instead of two: 0xC, 0xC and then 0x18 bytes, the last one a D_80027F48 template copied through a 24-byte alignment-1 struct and then patched with four 0x90D0E0 words. The width and height come from D_800280B4[q[2]].unk_16 * 4 and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite bytes. Declaring w and h as u32 is right -- it turns three of the four halvings from 'sra' into the 'srl' the target has, and the fourth, (w + 0xA) >> 1, really is 'sra' there. What is left: loop.c hoists all FOUR halvings out of the loop here, where the target hoists only three and leaves 'h + 0xA' unshifted in $t4, doing the 'srl' inside the loop each iteration -- a move_movables threshold decision, so the register pressure differs by one quantity. Seven spellings measured: >>1 and /2 on u32 and on s32 with casts (all 102w/84), and three shapes that hoist a, b and c into explicit locals and shift d inline (102w/88, and 111w/102 when the UnkStrSet row is re-indexed per value instead of cached in w/h).
+   Source in docs/near-misses/func_80022774.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022774);
 
 void func_8002290C(s32 *p)
@@ -1609,7 +1623,7 @@ void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
 
 void func_80022CD8(s32 *p)
 {
-    func_80022774(p + 9, p);
+    func_80022774((u8 *)(p + 9), p);
     func_80022934(p);
     p[0] = D_800280B4[p[2]].unk_15;
     func_80022488(p);
@@ -2287,7 +2301,52 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024390);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024818);
+/* Three label layouts for the save-slot list, then a loop writing the text
+   sprites. `k` is `p[32] == 1` -- gcc's `xori` plus `sltu 1` -- and it is used
+   BOTH as the first condition and as an index into D_800283B8 and
+   D_800283F4, even though it is provably 0 on the two arms that index with
+   it. n/3 is the signed magic multiply by 0x55555556. */
+void func_80024818(s32 *p)
+{
+    u8 buf[0x40];
+    u8 num[0x10];
+    s32 k = p[32] == 1;
+    s32 n;
+    s32 cnt;
+    s32 i;
+
+    n = func_80022138();
+    if (k != 0 && func_80022160() == 0)
+    {
+        func_8004DA74((u8 *)p + 0x84, D_800283EC[0], 1);
+        func_8004DA74((u8 *)p + 0x204, D_800283EC[1], 1);
+        cnt = 2;
+    }
+    else if (n < 3)
+    {
+        func_8004DA74((u8 *)p + 0x84, D_800283C4, 1);
+        func_8004DA74((u8 *)p + 0x204, D_800283B8[k], 1);
+        func_8004DA74((u8 *)p + 0x384, D_800283B8[2], 1);
+        cnt = 3;
+    }
+    else
+    {
+        func_8004DA74((u8 *)p + 0x84, D_800283F4[k], 1);
+        func_8003AD08(n / 3, num);
+        func_80069E78(buf, num);
+        func_80069E38(buf, D_800283FC);
+        func_8004DA74((u8 *)p + 0x204, buf, 1);
+        cnt = 2;
+    }
+    for (i = 0; i < cnt; i++)
+    {
+        UnkCardPair *e = (UnkCardPair *)p[723 + i];
+
+        e->unk_00 = (s32)((u8 *)p + 0x84 + 0x180 * i);
+        e->unk_04->unk_08 = 0xA9;
+        e->unk_04->unk_0A = 0x110 + 0x10 * i;
+    }
+}
 
 void func_800249B4(s32 *p)
 {
