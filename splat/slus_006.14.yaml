@@ -81,16 +81,34 @@ segments:
     align: 4
     subsegments:
       - [0xefc, bin]
-  # jtbl_8002E964, func_800517CC's 8-entry table and the only `.rodata` of the
-  # FIRST of the three pieces the carved unit unk_1C540 is now cut into. 32
-  # bytes, no pad: the table's own `.align 3` is relative to the object's
-  # section origin, which is offset 0 here.
+  # jtbl_8002E5F8, func_8004CECC's 6-entry table and, since that function
+  # matched on 2026-11-01, the only `.rodata` of the FIRST piece of the carved
+  # unit unk_1C540 -- the piece now ends at func_800517CC, which with
+  # everything after it is csrc/unk_24FCC.c. 24 bytes, no pad. It needs its
+  # own segment because the 0x354 bytes of Shift-JIS text that follow are
+  # `bin`, which is `.data`, and a segment emits all its `.data` ahead of all
+  # its `.rodata`.
+  - type: code
+    start: 0x1df8
+    vram: 0x8002E5F8
+    align: 4
+    subsegments:
+      - [0x1df8, .rodata, unk_1C540]
+  - type: code
+    start: 0x1e10
+    vram: 0x8002E610
+    align: 4
+    subsegments:
+      - [0x1e10, bin]
+  # jtbl_8002E964, func_800517CC's 8-entry table: the only `.rodata` of
+  # unk_24FCC, the sixth piece. 32 bytes, no pad -- the table's own `.align 3`
+  # is relative to the object's section origin, which is offset 0 here.
   - type: code
     start: 0x2164
     vram: 0x8002E964
     align: 4
     subsegments:
-      - [0x2164, .rodata, unk_1C540]
+      - [0x2164, .rodata, unk_24FCC]
   - type: code
     start: 0x2184
     vram: 0x8002E984
@@ -652,10 +670,13 @@ segments:
       - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
       - [0x1c540, c, unk_1C540]
-      # Cut at func_80052144, func_80052CE0, func_80054F9C and func_800595C0,
-      # so each of the five pieces supplies one of the carved unit's .rodata
-      # runs -- unk_25944 and unk_264E0 between them supply the two halves of
-      # the run at 0x27dc.
+      # Cut at func_800517CC, func_80052144, func_80052CE0, func_80054F9C and
+      # func_800595C0, so each of the six pieces supplies one of the carved
+      # unit's .rodata runs -- unk_25944 and unk_264E0 between them supply the
+      # two halves of the run at 0x27dc. The first cut is the newest: it was
+      # needed the moment func_8004CECC matched and the first piece owned two
+      # separated runs, 0x1df8 and 0x2164.
+      - [0x24fcc, c, unk_24FCC]
       - [0x25944, c, unk_25944]
       - [0x264e0, c, unk_264E0]
       - [0x2879c, c, unk_2879C]

@@ -2900,7 +2900,123 @@ void func_8004CE68(u8 *p, s32 f) {
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/unk_1C540", func_8004CECC);
+u8 *func_8004CECC(u32 h, s16 s, s32 v, u8 *out) {
+    /* Not a device, but load-bearing: `val` is a ONE-BYTE STRUCT, so its
+     * pseudo is QImode (expand_decl stmt.c:3357-3364 has no aggregate
+     * exclusion, and promote_mode widens only scalars) and `val.b = v` is
+     * `(set (reg:QI val) (subreg:QI (reg:SI v) 0))` (store_bit_field's
+     * lsb-aligned branch, expmed.c:296-316: emit_move_insn of
+     * gen_lowpart). After reload that is `(set (reg:QI 6) (subreg:QI (reg:SI
+     * 3)))`, which assembles as `addu a2,v1,zero` but is NOT the no-op jump2
+     * deletes: jump.c:427-466 asks find_equiv_reg (reload.c:5348) with
+     * mode = GET_MODE (SET_SRC) = QImode, the entry copy it finds is
+     * `(set (reg:SI 3) (reg:SI 6))`, and reload.c:5514 `GET_MODE (value) !=
+     * mode` rejects it. An s32 `val` here is deleted by that pass (the park's
+     * 102/1 with a nop in the slot). Hoisted above the `if` so that reorg's
+     * back-scan (reorg.c:2900-2951) finds it as the nearest eligible insn
+     * before the bnez and puts it in the slot; in the grey arm it stays
+     * there and `t1 = a3` takes the slot instead (102 words / 3 DIFF). */
+    struct {
+        u8 b;
+    } val;
+    s32 sat;
+    s32 f;
+    s32 p;
+    s32 q;
+    s32 t;
+    s32 vv;
+    u32 idx;
+
+    val.b = v;
+    if (s == 0) {
+        /* Not a device, but load-bearing: a DEAD write to `v` that flow
+         * deletes (the .flow dump has it as NOTE_INSN_DELETED) and that emits
+         * nothing. cse records `val` as equivalent to `(subreg:QI (reg:SI v))`
+         * at the copy above, and in cc1psx that subreg heads the class, so
+         * every `val.b` read in this arm would be rewritten to read `v`
+         * directly (the copy then dies: 99 words, `v` left in $a2). This
+         * write bumps v's reg_tick, cse's "Skip invalid entries" test
+         * (cse.c:6690-6699, exp_equiv_p's reg_in_table != reg_tick) drops
+         * the subreg, and the stores keep `val`. Worth the function: without
+         * it the hoisted copy is 99 words / 100 DIFF. Warns under -Wall? No. */
+        v = 0;
+        out[0] = val.b;
+        out[1] = val.b;
+        out[2] = val.b;
+    } else {
+        vv = v & 0xFF;
+        sat = s & 0xFF;
+        /* DEVICE: a tied asm on `vv` that does two jobs and emits no
+         * instruction. (a) Its two operands on `vv` are two references,
+         * lifting vv from 5 to 7 (.lreg: "Register 91 used 7 times across
+         * 32 insns in block 2"), which puts vv's qty_compare_1 priority at
+         * 2258 -- inside the window (2000, 2608) between sat and the
+         * p-numerator -- so local-alloc gives the block-local vv $a2 and
+         * the global `val` inherits it through the copy preference on
+         * `val.b = vv`. 6 refs is 1935 and vv takes $t0 (61 DIFF); 8 refs is
+         * 3870 and vv takes $a1 (47 DIFF). (b) Its `"r"(v)` input is a use
+         * of v scheduled right after the `and` because the asm feeds the
+         * mult chain, so v outlives vv's birth, conflicts with hard 6 and
+         * takes $v1 -- the target's register. Legal +1 spellings of the end
+         * copy all give 6 refs: `(vv + vv) - vv`, `vv * 2 - vv`,
+         * `(vv << 1) - vv` (61 DIFF). The phantom zero gives 8 refs and
+         * costs a word (103). Two-statement `val = vv + X; val = val - X`
+         * gives 5 for X in {h, f, p, q, t} (71-80) and 52 for X = sat.
+         * The statement form `__asm__("" ::"r"(v))` cannot do (b): sched1
+         * parks it as filler and v then lives across the whole block and
+         * takes $t4. Worth 14 register-only words and one EXTRA against the
+         * park's earlier 102/36 body; removing it from the landed body is
+         * 101 words / 101 DIFF. Warns under -Wall? No. */
+        __asm__("" : "=r"(vv) : "0"(vv), "r"(v));
+        p = (vv * (0xFF00 - (sat << 8)) + 0x7F80) / 0xFF00;
+        h %= 1536;
+        /* Not a device: the index's STATEMENT POSITION. sched1 breaks its
+         * priority ties by original insn order (sched.c:2428), so written
+         * here the srl lands between p's and q's rounding chains as in the
+         * target, conflicts with q's numerator and both high-word temps,
+         * takes $t0, and every mfhi/mflo register after it follows. At the
+         * switch it is 1 EXTRA + 17 register rows. */
+        idx = h >> 8;
+        f = h & 0xFF;
+        q = (vv * (0xFF00 - sat * f) + 0x7F80) / 0xFF00;
+        t = (vv * (0xFF00 - sat * (0x100 - f)) + 0x7F80) / 0xFF00;
+        val.b = vv;
+
+        switch (idx) {
+        case 0:
+            out[0] = val.b;
+            out[1] = t;
+            out[2] = p;
+            break;
+        case 1:
+            out[0] = q;
+            out[1] = val.b;
+            out[2] = p;
+            break;
+        case 2:
+            out[0] = p;
+            out[1] = val.b;
+            out[2] = t;
+            break;
+        case 3:
+            out[0] = p;
+            out[1] = q;
+            out[2] = val.b;
+            break;
+        case 4:
+            out[0] = t;
+            out[1] = p;
+            out[2] = val.b;
+            break;
+        case 5:
+            out[0] = val.b;
+            out[1] = p;
+            out[2] = q;
+            break;
+        }
+    }
+    return out;
+}
 
 u8 *func_8004D064(u8 *p) {
     /* The parameter is advanced in place and returned, which is the `addu
@@ -6163,456 +6279,3 @@ void func_800517AC(u8 *p) {
     }
 }
 
-/* func_80051548's bigger sibling: the same cutscene camera driver, eight
-   states instead of four, dispatched through jtbl_8002E964 on the `s32` copy
-   of +0x04. It takes func_80051548's whole recipe -- the switch subject
-   through an `s32` local, `func_800478B8` with ONE argument, the default's
-   three byte stores written out, the states that stop with `return` and the
-   two that fall out of the switch to the shared tail -- and adds the damped
-   interpolation in cases 5 and 6, which is where all the work was.
-
-   Each of the four interpolation blocks is `b = goal; c = pos - BASE;
-   pos_delta += (b - c) / 2; pos += pos_delta;` with **b and c declared in a
-   brace of their own**, and all three parts are load-bearing:
-
-   * The BASE must be subtracted as a signed constant (`- 0xD80000`), not
-     added as the listing's literal `+ 0xFF280000`. The hex literal is
-     unsigned, which makes the whole subtraction unsigned and turns the
-     `/ 2` into a single `srl` -- eight words short.
-
-   * `c` has to be a LOCAL, because the listing loads `pos` AFTER the
-     func_80064584 call. Written inline, fold's `associate:` case runs
-     `split_tree` on the second operand, finds (var, const) and rewrites
-     `goal - (pos - BASE)` into `(goal + BASE) - pos` -- the same four
-     instructions with the constant folded into the wrong operand. Two
-     VAR_DECLs give it nothing to split. And `b` has to be a local too, or the
-     statement that computes `c` sits ahead of the call.
-
-   * The braces are the difference between MATCH and 32 register-only words.
-     Function-scope `b` and `c` are two allocnos whose references sum over all
-     four blocks, so their priority is inflated and the product takes $a0
-     where the listing reuses $v1; one brace per case is still 28. The lever
-     is docs/matching-levers.md's one-variable-per-loop, applied per block.
-
-   The `+=` spelling of the two stores matters as well: with an explicit
-   `a = pos_delta + ...` local the second store reads `a` instead of the
-   stored word and the register permutation comes back. */
-s32 rand(void);
-
-void func_800517CC(u8 *p, u8 *q, u8 *r)
-{
-    s32 s;
-
-    *(u16 *)(p + 6) = *(u16 *)(p + 6) + 1;
-    func_800478B8((s32)r);
-    s = *(s16 *)(p + 4);
-    switch (s)
-    {
-    case 0:
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 1:
-        if (*(s16 *)(p + 6) >= 0x60)
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 2:
-        *(s32 *)(q + 0) = 0x1A00000 - ((func_800644B8(*(s16 *)(p + 6) * 0x10) >> 4) << 16);
-        *(s32 *)(q + 4) = ((func_80064584(*(s16 *)(p + 6) * 0x10) >> 4) << 14) + 0x200000;
-        if (*(s16 *)(p + 6) >= 0x40)
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 3:
-        *(s32 *)(q + 0) = 0xC00000 - ((func_80064584(*(s16 *)(p + 6) * 0x20) >> 4) << 13);
-        *(s32 *)(q + 4) = ((func_800644B8(*(s16 *)(p + 6) * 0x20) >> 4) << 12) + 0x200000;
-        if (*(s16 *)(p + 6) >= 0x20)
-        {
-            *(s32 *)(q + 8) = 0x800000;
-            *(s16 *)(p + 8) = rand() % 0x40 + 0x20;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 4:
-        if (*(s16 *)(p + 6) >= *(s16 *)(p + 8))
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = 7;
-        }
-        return;
-    case 5:
-        {
-            s32 b;
-            s32 c;
-
-            b = (func_80064584((*(s16 *)(p + 6) + 0x100) * 8) >> 4) * 0x1800;
-            c = *(s32 *)(q + 0) - 0xD80000;
-            *(s32 *)(q + 0xC) = *(s32 *)(q + 0xC) + ((b - c) / 2);
-            *(s32 *)(q + 0) = *(s32 *)(q + 0) + *(s32 *)(q + 0xC);
-        }
-        {
-            s32 b;
-            s32 c;
-
-            b = (func_80064584(*(s16 *)(p + 6) * 8) >> 4) << 10;
-            c = *(s32 *)(q + 4) - 0x2C0000;
-            *(s32 *)(q + 0x10) = *(s32 *)(q + 0x10) + ((b - c) / 2);
-            *(s32 *)(q + 4) = *(s32 *)(q + 4) + *(s32 *)(q + 0x10);
-        }
-        if (*(s16 *)(p + 6) >= 0x100)
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = 7;
-        }
-        return;
-    case 6:
-        {
-            s32 b;
-            s32 c;
-
-            b = (func_80064584(*(s16 *)(p + 6) * 0x10) >> 4) * 0x1800;
-            c = *(s32 *)(q + 0) - 0xD80000;
-            *(s32 *)(q + 0xC) = *(s32 *)(q + 0xC) + ((b - c) / 2);
-            *(s32 *)(q + 0) = *(s32 *)(q + 0) + *(s32 *)(q + 0xC);
-        }
-        {
-            s32 b;
-            s32 c;
-
-            b = (func_80064584((*(s16 *)(p + 6) + 0x80) * 0x10) >> 4) << 10;
-            c = *(s32 *)(q + 4) - 0x2C0000;
-            *(s32 *)(q + 0x10) = *(s32 *)(q + 0x10) + ((b - c) / 2);
-            *(s32 *)(q + 4) = *(s32 *)(q + 4) + *(s32 *)(q + 0x10);
-        }
-        if (*(s16 *)(p + 6) >= 0x80)
-        {
-            *(s16 *)(p + 8) = rand() % 0x40 + 0x20;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = 4;
-        }
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = 7;
-        }
-        return;
-    case 7:
-        *(s32 *)(q + 0) = *(s32 *)(q + 0) + 0xFFF40000;
-        *(s32 *)(q + 4) = *(s32 *)(q + 4) + 0x20000;
-        if (*(s16 *)(p + 6) < 0x40)
-        {
-            return;
-        }
-        break;
-    default:
-        r[0xE] = 0;
-        r[0xD] = 0;
-        r[0xC] = 0;
-        break;
-    }
-    *(u32 *)(*(u8 **)p + 0x10) = 0;
-    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
-    *(u16 *)(p - 2) |= 0x8000;
-    D_800814A0 |= 0x8000;
-}
-
-extern UnkElem D_800720AC[];
-void func_800517CC(u8 *, u8 *, u8 *);
-void func_80044BB0(void);
-
-void func_80051BFC(u8 *p, s32 a) {
-    u8 *q;
-    u8 *e;
-    u8 *f;
-
-    *(u32 *) (p + 0x10) = (u32) func_800517CC;
-    *(u32 *) (p + 0x20) = a;
-    q = p + 0x20;
-    *(u16 *) (q + 4) = 0;
-    *(u16 *) (q + 6) = 0;
-    *(u16 *) (q + 8) = 0;
-    e = *(u8 **) (p + 0xC);
-    *(u32 *) (e + 0xC) = 0x808080;
-    func_8003DB94((UnkSlot *) e, D_800720AC, 0);
-    *(u16 *) (e + 0x1E) = 0x1000;
-    *(u16 *) (e + 0x1C) = 0x1000;
-    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
-    f = *(u8 **) (p + 8);
-    *(u32 *) (f + 0) = 0x1A00000;
-    *(u32 *) (f + 4) = 0x600000;
-    *(u32 *) (f + 8) = 0x700000;
-}
-
-void func_80051CC4(u8 *, s32, u8 *);
-
-void func_80051CA4(u8 *p) {
-    if (*(u32 *) (p + 0x10) == (u32) func_80051CC4) {
-        *(u16 *) (p + 0x2C) = 1;
-    }
-}
-
-extern u32 D_80071A68[];
-
-/* func_80051F58's family again, and the same two declaration facts carry it:
-   the switch subject as `s32`, and the UNSIGNED read of +4 as a second local
-   that only case 2 uses. The extras here:
-
-   `a` is `u16` and the `!= 7` test and the `% 7` are on `(s16) a`. The listing
-   stores the unextended value to +0xA (`sh $v0`) and sign-extends a COPY for
-   the comparison and the division, so the cast goes on the uses and not on the
-   variable.
-
-   The table index is `s16`, which is what folds `sll 16` / `sra 16` / `sll 2`
-   into the listing's `sll 16` / `sra 14`. Same spelling as func_80051D18's
-   `D_80071A68[*(s16 *) (q + 0xA)]` below. */
-void func_80051CC4(u8 *p, s32 b, u8 *q)
-{
-    s32 s;
-    u16 w;
-    u16 n;
-    u8 v;
-    u16 a;
-    s16 m;
-
-    n = *(u16 *)(p + 6) + 1;
-    s = *(s16 *)(p + 4);
-    w = *(u16 *)(p + 4);
-    *(u16 *)(p + 6) = n;
-    switch (s)
-    {
-    case 0:
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 1:
-        v = q[0xE] + 4;
-        q[0xE] = v;
-        q[0xD] = v;
-        q[0xC] = v;
-        if (*(s16 *)(p + 6) >= 0x20)
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 2:
-        if ((s16)n >= 0x3F)
-        {
-            *(u16 *)(p + 4) = w + 1;
-            *(u16 *)(p + 6) = 0;
-        }
-        return;
-    case 3:
-        v = q[0xE] - 4;
-        q[0xE] = v;
-        q[0xD] = v;
-        q[0xC] = v;
-        if (*(s16 *)(p + 6) < 0x20)
-        {
-            return;
-        }
-        a = *(u16 *)(p + 0xA) + 1;
-        *(u16 *)(p + 0xA) = a;
-        if ((s16)a != 7)
-        {
-            m = (s16)a % 7;
-            *(u16 *)(p + 0xA) = m;
-            *(u32 *)(q + 8) = D_80071A68[m];
-            *(s16 *)(p + 4) = 0;
-            *(u16 *)(p + 6) = 0;
-            return;
-        }
-        break;
-    default:
-        q[0xE] = 0;
-        q[0xD] = 0;
-        q[0xC] = 0;
-        break;
-    }
-    *(u32 *)(*(u8 **)p + 0x14) = 0;
-    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
-    *(u16 *)(p - 2) |= 0x8000;
-    D_800814A0 |= 0x8000;
-}
-
-extern u32 D_80071A68[];
-void func_80051CC4(u8 *, s32, u8 *);
-void func_80044BB0(void);
-
-void func_80051E94(u8 *p, s32 a) {
-    u8 *q;
-    u8 *e;
-    u8 *f;
-
-    *(u32 *) (p + 0x10) = (u32) func_80051CC4;
-    *(u32 *) (p + 0x20) = a;
-    q = p + 0x20;
-    *(u16 *) (q + 4) = 0;
-    *(u16 *) (q + 6) = 0;
-    *(u16 *) (q + 0xA) = 0;
-    *(u16 *) (q + 0xC) = 0;
-    e = *(u8 **) (p + 0xC);
-    *(u32 *) (e + 0xC) = 0;
-    *(u32 *) (e + 8) = D_80071A68[*(s16 *) (q + 0xA)];
-    *(u16 *) (e + 0x1E) = 0x1000;
-    *(u16 *) (e + 0x1C) = 0x1000;
-    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
-    f = *(u8 **) (p + 8);
-    *(u32 *) (f + 0) = 0x380000;
-    *(u32 *) (f + 4) = 0x280000;
-    *(u32 *) (f + 8) = 0x900000;
-}
-
-void func_80051F58(u8 *, s32, u8 *);
-
-void func_80051F38(u8 *p) {
-    if (*(u32 *) (p + 0x10) == (u32) func_80051F58) {
-        *(u16 *) (p + 0x2C) = 1;
-    }
-}
-
-/* Three declaration facts, each worth a word or two:
-
-   * The switch subject is `s32`, not `s16`. As an `s16` the pseudo is HImode,
-     so the read is a `lhu` and the switch sign-extends it with `sll`/`sra`
-     where the target has one `lh`.
-
-   * `w`, the UNSIGNED read of the same halfword, is a second load in the
-     listing -- `lh $v1, 0x4($a0)` and `lhu $a3, 0x4($a0)` back to back --
-     because cse relates a sign-extend and a zero-extend of one `(mem:HI)`
-     only one way: with both reads before the +6 store, whichever it folds
-     costs the `sll`/`sra` pair. Reading `w` before the store works only with
-     the `s32` spelling above; reading it after the store also works (the
-     store invalidates all memory, both addresses being p-relative bare
-     dereferences), and is a word worse.
-
-   * The three byte stores take ONE value in a local. `q[0xD] = q[0xE]` after
-     the store to +0xE re-reads it: two words in each of the two arms.
-
-   The cases are written 0, 1, 2, 3, default, which is the listing's physical
-   order -- case 0's tail is cross-jumped into case 1's, so case 0 has to come
-   first. */
-void func_80051F58(u8 *p, s32 b, u8 *q)
-{
-    s32 s;
-    u16 w;
-    u16 n;
-    u8 v;
-
-    n = *(u16 *)(p + 6) + 1;
-    s = *(s16 *)(p + 4);
-    w = *(u16 *)(p + 4);
-    *(u16 *)(p + 6) = n;
-    switch (s)
-    {
-    case 0:
-        if (*(s16 *)(p + 0xC) != 0)
-        {
-            *(s16 *)(p + 0xC) = 0;
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 1:
-        v = q[0xE] + 2;
-        q[0xE] = v;
-        q[0xD] = v;
-        q[0xC] = v;
-        if (*(s16 *)(p + 6) >= 0x40)
-        {
-            *(u16 *)(p + 6) = 0;
-            *(u16 *)(p + 4) = *(u16 *)(p + 4) + 1;
-        }
-        return;
-    case 2:
-        if ((s16)n >= 0x100)
-        {
-            *(u16 *)(p + 4) = w + 1;
-            *(u16 *)(p + 6) = 0;
-        }
-        return;
-    case 3:
-        v = q[0xE] - 2;
-        q[0xE] = v;
-        q[0xD] = v;
-        q[0xC] = v;
-        if (*(s16 *)(p + 6) < 0x40)
-        {
-            return;
-        }
-        break;
-    default:
-        q[0xE] = 0;
-        q[0xD] = 0;
-        q[0xC] = 0;
-        break;
-    }
-    *(u32 *)(*(u8 **)p + 0x18) = 0;
-    *(u16 *)(*(u8 **)p + 6) = *(u16 *)(*(u8 **)p + 6) + 1;
-    *(u16 *)(p - 2) |= 0x8000;
-    D_800814A0 |= 0x8000;
-}
-
-void func_80051F58(u8 *, s32, u8 *);
-void func_80044BB0(void);
-
-/* func_8004491C's first argument is the pass-through: nothing sets $a0 before
-   that `jal`, so `p` is still there. */
-void func_800520B4(u8 *p, s32 a) {
-    u8 *q;
-    u8 *e;
-
-    *(u32 *) (p + 0x10) = (u32) func_80051F58;
-    *(u32 *) (p + 0x20) = a;
-    q = p + 0x20;
-    *(u16 *) (q + 4) = 0;
-    *(u16 *) (q + 6) = 0;
-    *(u16 *) (q + 0xA) = 0;
-    *(u16 *) (q + 0xC) = 0;
-    e = *(u8 **) (p + 0xC);
-    *(u32 *) (e + 8) = (u32) D_80071FF0;
-    *(u32 *) (e + 0xC) = 0;
-    *(u16 *) (e + 0x1E) = 0x1000;
-    *(u16 *) (e + 0x1C) = 0x1000;
-    func_8004491C((UnkNode *) p, (u32) func_80044BB0);
-    e = *(u8 **) (p + 8);
-    *(u32 *) (e + 0) = 0x980000;
-    *(u32 *) (e + 4) = 0x800000;
-    *(u32 *) (e + 8) = 0xA00000;
-}
-
-void func_80051528(u8 *);
-void func_800517AC(u8 *);
-void func_80051CA4(u8 *);
-void func_80051F38(u8 *);
-void func_800530A4(u8 *);
-void func_800530C4(u8 *);
-s32 func_80053EF0(s32);
-void func_80041094(u16, s16, s16, s16, u16);

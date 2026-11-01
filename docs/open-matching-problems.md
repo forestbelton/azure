@@ -110,9 +110,10 @@ not a matching problem.
 
 **All four of the functions this section was written about are now landed, and
 the mechanism it derives is the one still in use.** Kept because the derivation
-is what makes the placement recipe reusable, and because eight more functions
-in `unk_1C540` are waiting on exactly it -- see the region map at the end of
-the section.
+is what makes the placement recipe reusable. As of 2026-11-01 nothing is
+waiting on it: the last run, jtbl_8002E5F8, went in with func_8004CECC and
+every table in the image is placed -- see the region map at the end of the
+section.
 
 Four functions dispatch through a jump table, and all four were blocked:
 `func_80041344` and `func_80041588` (unk_14934, 145 and 164 instructions),
@@ -329,8 +330,8 @@ in 0x80010000..0x80090000:
 | file | vram | words | tables | referencing stub |
 |------|------|-------|--------|------------------|
 | 0x00dc0..0x00efc | 8002D5C0..8002D6FC | 79 | jtbl_8002D5C0 / D630 / D658 / D67C | **placed** (unk_11F0C, unk_14934, unk_154BC) |
-| 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | func_8004CECC (102 w) |
-| 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | **placed** (unk_1C540, func_800517CC) |
+| 0x01df8..0x01e10 | 8002E5F8..8002E610 |  6 | jtbl_8002E5F8 | **placed** (unk_1C540, func_8004CECC) |
+| 0x02164..0x02184 | 8002E964..8002E984 |  8 | jtbl_8002E964 | **placed** (unk_24FCC, func_800517CC) |
 | 0x027dc..0x027f0 | 8002EFDC..8002EFF0 |  5 | jtbl_8002EFDC | **placed** (unk_25944, func_80052144) |
 | 0x027f0..0x02810 | 8002EFF0..8002F010 |  8 | jtbl_8002EFF0 | **placed** (unk_264E0, func_80052CE0) |
 | 0x06614..0x066fc | 80032E14..80032F00 | 59 | jtbl_80032E14 (36), jtbl_80032EA4 (23) | **placed** (unk_2879C, func_80054F9C + func_80057A94) |
@@ -352,12 +353,14 @@ landed without waiting for the third. 2026-10-27, byte-identical on the first
 build, 95 asm stubs to 93.
 
 Then func_800517CC matched (268/268) and func_80052CE0 after it (194/194,
-first compile), both the same day, and each owns a run EARLIER in the file, so
-the carved unit is now cut into FOUR:
+first compile), both the same day, and each owns a run EARLIER in the file. The
+last cut came on 2026-11-01 with func_8004CECC, which put a SECOND run inside
+the first piece and so split it again. The carved unit is now SIX pieces:
 
 | piece | text | its one `.rodata` run | owner |
 |-------|------|------------------------|-------|
-| `unk_1C540` | 0x1c540..0x25944 | jtbl_8002E964 @ 0x2164 | func_800517CC |
+| `unk_1C540` | 0x1c540..0x24fcc | jtbl_8002E5F8 @ 0x1df8 | func_8004CECC |
+| `unk_24FCC` | 0x24fcc..0x25944 | jtbl_8002E964 @ 0x2164 | func_800517CC |
 | `unk_25944` | 0x25944..0x264e0 | jtbl_8002EFDC @ 0x27dc | func_80052144 |
 | `unk_264E0` | 0x264e0..0x2879c | jtbl_8002EFF0 @ 0x27f0 | func_80052CE0 |
 | `unk_2879C` | 0x2879c..0x2cdc0 | jtbl_80032E14 + jtbl_80032EA4 @ 0x6614 | func_80054F9C, func_80057A94 |
@@ -373,10 +376,20 @@ head of a MIDI resource belonging to whatever unit comes next. They need a
 hole that the linker fills with the following `.rodata`, and the build then
 differs from 0x68fc on.
 
-So the carved unit's six tables are placed but for jtbl_8002E5F8, on
-func_8004CECC (102/102, 48 DIFF), which still wants a cut of its own and would
-make SIX pieces. The run order said six original translation units; it is now
-clear it was more.
+**All seven of the carved unit's runs are now placed.** jtbl_8002E5F8 was the
+last, on 2026-11-01: func_8004CECC matched, which gave the first piece a second
+run and forced the sixth cut, at func_800517CC. Byte-identical on the first
+build, and all three containers `cmp` identical. The run order said six original
+translation units; the pieces now number six as well, though that is arithmetic
+rather than evidence -- 0x1c540's own first run belongs to func_8004CECC, not to
+the unit's head.
+
+The sixth cut needed far less copying than the earlier ones: the tail from
+func_800517CC to the end of the file uses none of the head's ten typedefs and
+none of its five `__asm__`-aliased declarations, and every function it calls it
+declares itself, so only the `.size` block went across. **Check what the tail
+actually uses rather than copying by rule** -- the count ("332 on the first
+cut, 222 on the fourth") is a function of where the cut falls, not a floor.
 
 **unk_25944 and unk_264E0 between them supply ONE contiguous run**, 0x27dc and
 0x27f0, through two `.rodata` subsegments in two adjacent segments -- which is
