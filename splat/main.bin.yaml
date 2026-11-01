@@ -94,10 +94,58 @@ segments:
       - [0x25d000, rodata, ovl_main_80020000]
       - [0x25d924, asm, ovl_main_80020000]
   - [0x264e20, bin]
-  # A second code run sits at +0x269000..+0x272000 -- 191 prologues, so it is
-  # certainly code -- but its load address is UNRESOLVED. It has only 58
-  # internal jal targets and the best delta scored 6 against a floor of 5,
-  # which is noise. It cannot share 0x80020000: that would place it across
-  # the resident engine's base at 0x8002D000. Left as bin deliberately.
   - [0x265000, bin]
+  # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
+  # left it as bin, reporting "only 58 internal jal targets and the best
+  # delta scored 6 against a floor of 5, which is noise" -- that measurement
+  # was wrong, not the method. Voting this block's own `jal` targets against
+  # its own `addiu sp,sp,-N` prologues over the full +0x269000..+0x272000
+  # span gives 654 jal sites to 265 distinct targets, 191 prologues, and
+  # **142 hits at this delta against a next-best of 33** -- the same
+  # second-vote test that placed the other three overlays.
+  #
+  # Four independent confirmations, so the vote is not carrying this alone:
+  #
+  # 1. The function-pointer table at +0x269058 holds 0x804010F0, 0x804013D0,
+  #    0x804013A8, 0x804012B0, and the last two ARE prologues at the
+  #    predicted file offsets (0x26A2B0, 0x26A22C: `addiu $sp, $sp, -0x20`
+  #    and `-0x18`).
+  # 2. The code builds its addresses as `lui $at, 0x8041`, e.g.
+  #    `lui $at, 0x8041; sw $v0, -0x6B14($at)` -> 0x804094EC, which lands in
+  #    this block's own data.
+  # 3. Text ends at 0x2719dc and the `.data` immediately after it is
+  #    pointers 0x80409140 / 0x8040914C / 0x80409158 / 0x80409164.
+  # 4. 0x80400000 is upper RAM on an 8 MB DTL-H2000 development board, which
+  #    is why nothing loads it on retail and why the CD-ROM command log shows
+  #    no seek here. It is DEAD CODE on the shipped disc -- but it is in the
+  #    container, so `make containers` still has to reproduce it.
+  #
+  # What it is: a DEBUG BUILD OF THE SAME SOURCE as the 0x80020000 overlay
+  # above, with asserts compiled in. 50.4% of the live overlay's 7487 words
+  # are covered by shared masked instruction runs with this block, the
+  # longest 121 words, and the function pointers correspond one-to-one with a
+  # small shift from the assert calls (0x800210F0 -> 0x804010F0,
+  # 0x80021298 -> 0x804012B0). That makes this block an oracle for the live
+  # overlay rather than just more work: its rodata carries nine translation
+  # unit names from the original source -- c_server.c, card_mes.c,
+  # card_opt.c, card_win.c, cardbk.c, cardinfo.c, cardslot.c, cardsme.c and
+  # memory.c -- against the live overlay's one, plus a `__LINE__` immediate
+  # at every assert site and the assert EXPRESSIONS, which leak real
+  # identifiers (`card_first_flg`, `(int)gsw->check_sum`).
+  #
+  # Boundaries. rodata is 0x269000..0x2698a0: the last string is "memory.c"
+  # at 0x269894 and 0x2698a0 is the first prologue. Text END IS 0x2719e0,
+  # NOT 0x2719dc: the last `jr $ra` is at 0x2719d4 and its delay slot at
+  # 0x2719d8, so the code proper stops at 0x2719dc, but splat emits
+  # `__romPos = ALIGN(__romPos, 16)` after a code segment and 0x2719dc is off
+  # that grid -- a boundary there pads the container. 0x2719e0 takes one word
+  # of the three zero words of padding into .text and is 16-byte aligned.
+  # The block's data starts at 0x2719e8.
+  - type: code
+    start: 0x269000
+    vram: 0x80400000
+    subsegments:
+      - [0x269000, rodata, ovl_main_80400000]
+      - [0x2698a0, asm, ovl_main_80400000]
+  - [0x2719e0, bin]
   - [0x275800]

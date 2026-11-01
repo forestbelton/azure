@@ -57,11 +57,38 @@ The queue, in order:
       `Unk42710`; and the `RotAverage4` prototype disagreement (`s32 *`
       against `u32 *`).
 
-- [ ] **The overlays**, which are where the actual game is: roughly 8.4 MB of
-      code against the resident executable's 216 KB. `docs/overlays.md` has
-      the analysis. `dungeon.bin` has no splat spec at all, `town.bin` has one
-      `bin` blob over all 16 MB, and `main.bin`'s 28 subsegments are all
-      `bin`. Nothing here is started.
+- [ ] **The overlays**, which are where the actual game is and are now the
+      whole of the remaining work. `docs/overlays.md` has the analysis.
+
+      **The earlier text of this entry was stale** -- it said dungeon had no
+      spec, town was one 16 MB blob and nothing was started. Four code
+      overlays are split, in the build and byte-identical: `main.bin`'s live
+      one at `0x80020000` (241 functions / 7,487 words), `main.bin`'s debug
+      twin at `0x80400000` (263 / 8,271), `town.bin`'s at `0x80088760`
+      (1,815 / 70,244) and `dungeon.bin`'s at the same address (862 /
+      85,558). Town's is 1.7x this executable's 41,767 words and dungeon's
+      2.0x.
+
+      **Decided 2026-11-01: start with `main.bin`'s card overlay at
+      `0x80020000`.** It is one eighth of what was just finished, it is a
+      coherent self-contained subsystem (memory card save/load), it is the
+      only overlay with a translation-unit oracle, its load address collides
+      with nothing (town and dungeon share `0x80088760`, so an address there
+      means different code depending on which is resident), and it makes
+      `main.bin` container-complete. It also establishes the per-overlay
+      C build pattern on 7.5K words instead of discovering it on 85K.
+
+      Two facts that change the work: **no `$gp`-relative addressing in any
+      overlay** (they are `-G0`, so this project's hardest structural class
+      does not arise), and **`main.bin+0x269000` is a debug build of the same
+      source as the live overlay**, carrying nine original translation unit
+      names, a `__LINE__` at every assert site, and real identifiers from the
+      assert expressions. Build the oracle from it before writing any C.
+
+      Open before town can follow: its 59 tier-2 low-RAM overlays vote much
+      more weakly than the big four (`+0x2ab000` 42 against 9, `+0x64b000`
+      only 12 against 3), and 54 copies of `main.c` across the container
+      suggest many separate links of one source, which has to be checked.
 
 - [ ] **The data in `slus_006.14`.** `docs/data-map.md` is the accounting and
       the method; read it before touching any `bin` blob. State as of

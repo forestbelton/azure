@@ -91,11 +91,18 @@ Three code overlays are now placed. None of the containers is loaded as a
 unit -- they are 2.5/16.1/26.5 MB against 2 MB of RAM, and the disc is
 addressed by absolute LBA, so a container is just a region of it.
 
-| Container | Overlay at | Loads at | Code | Functions |
-|---|---|---|---|---|
-| `town.bin` | `+0xb000` | `0x80088760` | `+0xd630..+0x51ed8` | 536 |
-| `dungeon.bin` | `+0xa3000` | `0x80088760` | `+0xa3e28..+0xf7594` | 353 |
-| `main.bin` | `+0x25d000` | `0x80020000` | `+0x25d924..+0x264c90` | 130 |
+| Container | Overlay at | Loads at | Code | Vote | Functions |
+|---|---|---|---|---|---|
+| `town.bin` | `+0xb000` | `0x80088760` | `+0xd630..+0x51fc0` | 536 | 1815 |
+| `dungeon.bin` | `+0xa3000` | `0x80088760` | `+0xa3e28..+0xf7700` | 353 | 862 |
+| `main.bin` | `+0x25d000` | `0x80020000` | `+0x25d924..+0x264e20` | 130 | 241 |
+| `main.bin` | `+0x269000` | `0x80400000` | `+0x2698a0..+0x2719e0` | 142 | 263 |
+
+("Vote" is the jal-against-prologue agreement score that placed the overlay,
+which is what the first version of this table reported in a column labelled
+"Functions"; "Functions" is what splat actually emitted. The code spans are
+the corrected 16-byte-aligned ends, not the shorter ones 77b2c94 reported --
+see each yaml's comment.)
 
 `0x80088760` is the first byte after the resident engine's last
 (`0x8008875F`), which is the layout this document predicted. town and dungeon
@@ -142,12 +149,118 @@ they are assets and low-RAM data. `+0x2a3000` holds pointers into
 `0x8001d4xx`, so it belongs to the same low-RAM region `main.bin`'s overlay
 occupies, and `+0x9f000` / `+0x4a3000` are texture records.
 
-Not resolved: a second code run at `main.bin+0x269000..+0x272000` (191
-prologues, so certainly code) whose base is unknown -- only 58 internal jal
-targets and a best score of 6 against a floor of 5. It cannot share
-`0x80020000`, which would place it across the engine's base. And
 `0x801768AC`, the isolated address near the top of RAM, is in none of the
-three spans. `0x800D5460` is, in dungeon's.
+spans. `0x800D5460` is, in dungeon's.
+
+## The fourth overlay: `main.bin+0x269000` at `0x80400000` (2026-11-01)
+
+This block was filed here as unresolvable -- "191 prologues, so certainly
+code, whose base is unknown: only 58 internal jal targets and a best score of
+6 against a floor of 5." **That measurement was wrong, not the method.** Run
+over the full `+0x269000..+0x272000` span the block has 654 jal sites to 265
+distinct targets, and the second vote -- its own jal targets against its own
+`addiu sp,sp,-N` prologues -- scores **142 at `0x80400000` against a next-best
+of 33.** The lesson generalises to the containers still unmapped: when this
+test comes back at noise, re-check the span and the prologue predicate before
+concluding the base is unrecoverable.
+
+Four confirmations beyond the vote:
+
+1. The function-pointer table at `+0x269058` holds `0x804010F0`,
+   `0x804013D0`, `0x804013A8`, `0x804012B0`, and the last two are prologues
+   at exactly the file offsets that base predicts.
+2. The code builds addresses as `lui $at, 0x8041` -- e.g.
+   `lui $at, 0x8041; sw $v0, -0x6B14($at)` -> `0x804094EC`, inside the
+   block's own data.
+3. Text ends at `+0x2719dc` and the `.data` right after it is
+   `0x80409140` / `0x8040914C` / `0x80409158` / `0x80409164`.
+4. `0x80400000` is upper RAM on an 8 MB DTL-H2000 development board. On
+   retail hardware RAM stops at `0x80200000`, so nothing can load this
+   block -- which is why the CD-ROM command log shows no seek for it, and
+   why the earlier search for a live load address could not succeed. It is
+   **dead code on the shipped disc.** It still has to be reproduced
+   byte-for-byte, because it is in the container.
+
+### It is a debug build of the `0x80020000` overlay, and that makes it an oracle
+
+The two blocks are the same source compiled twice. 50.4% of the live
+overlay's 7487 words are covered by shared masked instruction runs with this
+block, the longest 121 words, and the function pointers correspond one-to-one
+under a small shift consistent with assert calls being inserted
+(`0x800210F0` -> `0x804010F0`, `0x80021298` -> `0x804012B0`). The debug build
+has asserts compiled in and the live one does not.
+
+What that buys, and it is the thing this project has never had for any
+segment:
+
+* **Translation unit names.** The `Assertion failed: file "%s", line %d\n`
+  marker is followed, word-aligned, by the filename. The debug block carries
+  nine -- `c_server.c`, `card_mes.c`, `card_opt.c`, `card_win.c`,
+  `cardbk.c`, `cardinfo.c`, `cardslot.c`, `cardsme.c`, `memory.c` -- against
+  the live overlay's one (`c_server.c`). Unit boundaries are where four
+  previous dead ends in this project turned out to be; see TODO.md.
+* **Source line numbers.** Every assert site passes `__LINE__` as an
+  immediate, which brackets function order and rough line structure within
+  each unit.
+* **Real identifiers**, from the assert expressions: `card_first_flg`,
+  `(int)gsw->check_sum`.
+
+splat also suggests a rodata file split at `+0x26907C` from jump-table
+alignment, which is an independent witness for a unit boundary there.
+
+The subsystem is the memory card: `bu00:`/`bu10:`, `TMP`, `ERROR` /
+`NOTHING` / `UN FORMAT` / `NEW READY` / `READY` / `NOW CHECK`, `CARD%d %s`,
+`CARD STATUS0 %x`, `illegal data`. Its external calls go to 65 distinct
+engine targets, many already named -- `printf`, `exit`, `strcat`, `rand`,
+`TestEvent`, `_card_wait` (libcard is resident at `0x3d3f8..0x3d578` with
+module names). Its 69 private data symbols live at
+`0x80027E20..0x8002D000`, a region no engine C file references.
+
+### The assert-record census across all four containers
+
+Same marker, scanned over every container:
+
+| container | records | translation units named |
+|---|---|---|
+| `main.bin` | 10 | `c_server.c` (x2), `card_mes.c`, `card_opt.c`, `card_win.c`, `cardbk.c`, `cardinfo.c`, `cardslot.c`, `cardsme.c`, `memory.c` |
+| `town.bin` | 76 | `main.c` (54), `lshop.c` (10), `tobjs.c` (8), `player.c` (4) |
+| `dungeon.bin` | 0 | -- |
+| `slus_006.14` | 0 | -- |
+
+Two things follow. **None of town's 76 records is inside the `0x80088760`
+overlay** -- they are all at `+0x2ab000` and beyond, in a second tier of
+small low-RAM overlays, so the big town overlay has no oracle either. And
+**dungeon was built with asserts out entirely**, so there is nothing of this
+kind to recover there.
+
+Town's tier 2 also leaks identifiers: `((u_long)p - (u_long)ost_w)/
+sizeof(OSETDT)`, `((u_long)pp - (u_long)osel_w)/ sizeof(OSETDT*)`,
+`cdhd_cnt`, `s0[0]`, `s1[0]`, `s[0]` -- two variable names and a typedef.
+
+### How much code is left in each container
+
+Scanning for code outside the placed overlays, by 4 KB chunk with at least
+four prologues and three `jr $ra`:
+
+| container | unplaced code | runs | largest |
+|---|---|---|---|
+| `main.bin` | ~0 | 1 (noise) | 12 KB / 14 prologues at `+0x21000` -- density too low to be code |
+| `town.bin` | 0.64 MB | 59 | 69 KB / 291 prologues at `+0x649000` |
+| `dungeon.bin` | 6.13 MB | 401 | 364 KB / 715 prologues at `+0xe2d000`, then 360 KB / 598 at `+0xcdd000` |
+
+So **`main.bin` is structurally complete** with this block placed: both of
+its code blocks are split and nothing else in the container is code.
+
+Town's remaining 59 runs are separately linked low-RAM overlays, and the
+second vote is much weaker on them than on the big four: `+0x2ab000` scores
+42 against a floor of 9 (-> `0x80015800`), `+0x64b000` only 12 against 3
+(-> `0x80016000`). They are small, so there are few internal jals to vote
+with. 54 copies of `main.c` across town suggests many separate links of one
+source, which has to be checked before trusting any of them.
+
+Dungeon's 6.13 MB is an overestimate: long stretches of it are near-identical
+repeated 20 KB / 36-prologue blocks at `0x6000` stride, and the container has
+chunks repeating at `0x27B800`. The two large blocks are unambiguously real.
 
 Do not try to trace this with PCSX-Redux Lua breakpoints: on the
 `8a86b7ec` AppImage build, `PCSX.addBreakpoint` installs, reports itself

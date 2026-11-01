@@ -95,10 +95,42 @@ extend the `main` asm subsegment to 0x102c4 and start the C unit there.
 | `town.bin` | 16.1 MB | ~1.0 MB |
 | `dungeon.bin` | 26.5 MB | ~7.3 MB |
 
-So the overlays hold roughly 8.4 MB of code against the executable's 216 KB.
-`dungeon.bin` has no splat spec, `town.bin` is one 16 MB `bin` blob, and
-`main.bin`'s 28 subsegments are all `bin`. `docs/overlays.md` has the analysis;
-nothing there is started.
+So the overlays hold several MB of code against the executable's 216 KB.
+
+**That paragraph used to say `dungeon.bin` had no splat spec, `town.bin` was
+one 16 MB `bin` blob and nothing was started. All three are stale.** As of
+2026-11-01 four code overlays are split, in the build, and byte-identical:
+
+| overlay | vram | functions | words | median fn | max fn |
+|---|---|---|---|---|---|
+| `main.bin+0x25d000` | `0x80020000` | 241 | 7,487 | 20 | 290 |
+| `main.bin+0x269000` | `0x80400000` | 263 | 8,271 | -- | -- |
+| `town.bin+0xb000` | `0x80088760` | 1,815 | 70,244 | 24 | 797 |
+| `dungeon.bin+0xa3000` | `0x80088760` | 862 | 85,558 | 64 | 1,817 |
+
+For scale against the 41,767 words of this executable: town's overlay is
+1.7x it, dungeon's 2.0x, and main's live overlay 18% of it.
+
+Unplaced code remaining, by 4 KB chunk with >=4 prologues and >=3 `jr $ra`:
+`main.bin` effectively none (one 12 KB run at `+0x21000` with 14 prologues in
+3,072 words, too sparse to be code), `town.bin` 0.64 MB in 59 runs,
+`dungeon.bin` 6.13 MB in 401 runs -- the dungeon figure inflated by long
+stretches of near-identical repeated blocks.
+
+Three things about the overlays that change how they are worked, all in
+`docs/overlays.md`:
+
+* **No `$gp`-relative addressing in any of them** -- 0 refs across ~200K
+  instructions, so they are `-G0`. The structural problem class that shaped
+  most of this project (symbolic vs split addressing, the out-of-image
+  constant base pointer) does not arise.
+* **`main.bin+0x269000` is a debug build of the `0x80020000` overlay**, with
+  asserts compiled in, and its rodata names nine original translation units.
+  Unit boundaries are where four previous dead ends turned out to be. It is
+  dead code on retail (`0x80400000` is 8 MB dev-board RAM) but still has to
+  be reproduced.
+* **town and dungeon have no such oracle.** None of town's 76 assert records
+  is inside its big overlay, and dungeon has zero.
 
 Inside the executable, measured in 4 KB chunks by zero density, Shift-JIS
 density, MIPS prologue count and entropy:
