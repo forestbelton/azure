@@ -461,7 +461,7 @@ void func_80025230(s32 *p);
 void func_800265B8(s32 *p);
 void func_80027584(s32 *p);
 void func_8002789C(s32 *p);
-void func_8002593C(void);
+void func_8002593C(s32 *p);
 void func_80025398(s32 *p);
 void func_800262BC(s32 *p);
 void func_80027584(s32 *p);
@@ -2803,7 +2803,113 @@ void func_8002592C(s32 *p)
     p[19] = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002593C);
+/* The fifth input handler, and the widest: two flags rather than one. `dir`
+   drives the func_80049DE8 step (through p[10] with a limit of 5 or p[17]
+   with 3, depending on p[18]) and `upd` records that the layout changed, so
+   func_80025030 can run once at the very end. Its 0x20 case RETURNS, which
+   is why it skips that final call. Same two levers as its siblings -- the
+   `p[12] >= 0xD` arm first, and the two exit tests nested rather than
+   `r == 0 || r == 1`. */
+void func_8002593C(s32 *p)
+{
+    s32 dir = 0;
+    s32 upd = 0;
+    s32 r;
+
+    if (D_80083160.unk_08 != 0)
+    {
+        if (D_80083160.unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            func_80025D34(p - 8);
+            func_80027AFC(p[8], 0);
+            return;
+        }
+        if (D_80083160.unk_10 & 0x40)
+        {
+            func_80053DA8(0x503);
+            if (p[18] == 0)
+            {
+                func_8002592C(p);
+                upd = 1;
+            }
+            else
+            {
+                func_800258C8(p);
+            }
+        }
+        else if (D_80083160.unk_08 & 0x5000)
+        {
+            if (D_80083160.unk_10 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_80083160.unk_10 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_10 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 4;
+                if (D_80083160.unk_08 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_08 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        else if (D_80083160.unk_08 & 0xA000)
+        {
+            if (D_80083160.unk_08 & 0x2000)
+            {
+                p[18] = 1;
+            }
+            else
+            {
+                p[18] = 0;
+            }
+            upd = 1;
+        }
+        if (dir != 0)
+        {
+            func_80053DA8(0x502);
+            if (p[18] == 1)
+            {
+                p[10] = func_80049DE8(p[10], dir, 5);
+            }
+            else
+            {
+                p[17] = func_80049DE8(p[17], dir, 3);
+            }
+            func_80025030(p);
+        }
+    }
+    r = func_8002168C();
+    func_80021904();
+    if (r != 0)
+    {
+        if (r != 1)
+        {
+            func_80025D34(p - 8);
+            func_80027AFC(p[8], 0);
+        }
+    }
+    if (upd != 0)
+    {
+        func_80025030(p);
+    }
+}
 
 void func_80025B38(s32 *p, s32 v)
 {
