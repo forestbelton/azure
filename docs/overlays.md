@@ -662,3 +662,72 @@ in `csrc/ovl_main_80020000.c`; three spellings have been measured (38w/40
 DIFF, 39w/37, 39w/40) and the open question is which induction variables the
 target derives, since it keeps the base in `$t3` with only `$a3 = 0` above the
 loop guard and everything else in the preheader.
+
+## The levers this sweep keeps needing
+
+These are not overlay-specific -- they are ordinary gcc 2.7.2 behaviour that
+the engine's own functions happened not to exercise much -- but each has now
+cost two or more iterations in this unit, so they are collected here. Counts
+are how many functions in `csrc/ovl_main_80020000.c` each one landed.
+
+**1. Put the table base in a local before indexing it.** (5 functions)
+`&TBL[i]` written directly lets gcc fold a constant field offset into the
+symbol's `%lo` and lets it compute `i * stride` before materialising the base;
+assigning the table to a local first forces the base out as its own quantity,
+materialised first. Symptoms, all one or two words:
+
+* `D_800280B4[p[2]].unk_15` with the base inline gives `lbu $v0, 0($v0)` where
+  the target has `lbu $v0, 0x15($v0)` -- the 0x15 went into the relocation.
+  With `UnkStrSet *t = D_800280B4; r = &t[p[2]];` it matches
+  (func_80022488, func_80022CD8).
+* `D_80083E98[idx]` inline emits the shift before the `lui`/`addiu`; through a
+  local it emits the base first and fills the load-delay slot with the
+  `addiu` (func_80021D54, func_8002219C, func_800254E4).
+* The same thing one step further on: `row = tbl` as a separate copy makes the
+  materialised address and the walking pointer two quantities, which is the
+  extra `addu` the target has (func_80021A04). See matching-levers.md's
+  `p += x` is one long quantity note.
+
+**2. A value used only after a call must not be computed before it.**
+(3 functions) Written above the call it is live across it, takes a
+callee-saved register, and costs that register's save and restore -- two
+words, sometimes three. func_800251A4's 1-or-3 flag (37 words against 35),
+func_80021A84's table pointer, func_80023E14's table base. The fix is always
+to move the assignment below the last call that precedes its first use.
+
+**3. Write the store into both arms of an if/else and let jump.c cross-jump
+them.** (3 functions) One store of a local after the join keeps the local
+live across the arms' calls; a store in each arm is merged by cross-jumping,
+usually into the following call's delay slot. func_80025230, func_8002570C,
+func_80025848.
+
+**4. Declaration order decides which callee-saved register each local gets,
+and the order the setup is emitted in.** (6 functions) The target's first
+instructions are the cheapest way to read this off: whichever local is
+initialised first in the listing is declared first. func_80021EB8 (`sum`
+before the cursor, 2 DIFF), func_80023194 and func_800239B0 (counter before
+cursor, plus a local COPY of the parameter, 6 DIFF), func_8002191C,
+func_80025E54, func_80021A04.
+
+**5. `x++` is not `x = 1` even when x is provably 0.** (1 function, but it
+unblocked three other things) func_80021A04's mismatch flag increments; with
+the increment form gcc stops hoisting the flag's `= 0` out of the enclosing
+loop, which is what made the rest of that function's allocation fall into
+place.
+
+**6. Index a cursor by an integer offset, not by walking a pointer, when the
+displacement is large.** (2 functions) `q = p; ... q[0x98] ...; q++` lets gcc
+fold the 0x98 into the base (`addiu $s0, $s2, 0x260`, displacement 0); an
+integer `off` with `p[off + 0x98]` keeps the displacement where the target has
+it (func_800240EC, func_80025DC8).
+
+**7. A trailing correction in the listing can be the compiler's, not the
+source's.** func_8002191C increments its count before the loop, again in the
+loop's delay slot, and decrements after -- which reads like a source `n--` and
+is loop rotation of `do { n++; ... } while (...)`. Writing the `n--` makes it
+40 words / 9 DIFF; leaving it out, 39 / 0.
+
+**8. Branch LAYOUT order is part of the source.** Which arm the compiler
+places first follows the source's test sense. func_800254E4 is one word short
+with `if (x != 0) A else B` and exact with `if (x == 0) B else A`, because the
+target reaches A by a taken `bnez` rather than by falling through.
