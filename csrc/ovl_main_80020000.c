@@ -32,7 +32,7 @@ s32 func_8002219C(s32 idx);
    from which argument register each wrapper sets; the register copies
    (`addu $a2, $a1, $zero` where the kind equals the id, `addu $a3, $a2,
    $zero` where both are 0) are gcc reusing an equal value, not source. */
-void func_80022D60(s32 a, s32 id, s32 kind, s32 p);
+s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p);
 
 extern s32 D_800287C8;
 extern s32 D_800287CC;
@@ -42,6 +42,11 @@ extern s32 D_800287E4;
    where a scalar would fold differently. The element type is a guess that
    only has to make offset 0 a word. */
 extern s32 D_80083E98[][32];
+extern s32 D_80083EA4[][32];
+extern u8 D_80078FD0[];
+void func_8004E5A0(s32 v, s32 n, u8 *out);
+void func_8004E69C(u8 *q);
+s8 *func_8004E298(u8 *a, u8 *b, s32 c);
 extern s32 D_80084120[];
 /* The overlay's own data, past its text end at 0x80027E20 and so in the
    following `bin` segment; the linker resolves them from
@@ -279,6 +284,7 @@ extern u8 D_80079054[];
 extern u8 D_800790B4[];
 extern u8 D_80079114[];
 extern s32 D_8002809C[];
+extern u8 D_800287E8[];
 extern u8 D_800291D0[];
 extern u8 D_80029618[][0x3E4];
 extern u8 *D_800282A4[];
@@ -1185,9 +1191,9 @@ void func_80022AE8(s32 *p)
     func_8002290C(p);
 }
 
-void func_80022B20(s32 a)
+s32 func_80022B20(s32 a)
 {
-    func_800491F4(a, D_80027F60, 7);
+    return func_800491F4(a, D_80027F60, 7);
 }
 
 /* NEAR MISS, parked at 40 words / 13 DIFF; source and the full measurement
@@ -1234,7 +1240,37 @@ void func_80022CD8(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022D60);
+void func_80022B48(s32 a, s32 n);
+
+/* The same constructor idiom as func_80023FF0 and func_800238D4, at the
+   singleton D_800287E8. It RETURNS q even though every caller ignores the
+   value: the target copies $s0 into $v0 and stores the func_80022CD8 pointer
+   through $v0, which as a void function is three words instead of four.
+   func_80022B20 likewise had to become `s32` with a `return`, since its
+   value lands in r[0x232]; its own ten words are unchanged. */
+s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p)
+{
+    s32 *q = (s32 *)D_800287E8;
+    s32 *r = q + 8;
+
+    if (func_8004B4A8(q) == 0)
+    {
+        q = func_8003FE78(0, D_800287E8, 0x27A);
+        func_8004491C((UnkNode *)q, (u32)func_80027DD0);
+    }
+    else
+    {
+        func_800231E4(r[3] != 2);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_80069EC8(r, 0x9C8);
+    }
+    func_80022B48((s32)r, 7);
+    q[3] = (s32)(r + 0x22F);
+    r[0x232] = func_80022B20((s32)(r + 0x233));
+    func_80022C90(r, a, id, kind, p);
+    q[4] = (s32)func_80022CD8;
+    return (s32)q;
+}
 
 void func_80022E74(s32 a, s32 p)
 {
@@ -1581,7 +1617,50 @@ s32 func_80023BE4(s32 p, s32 w, s32 h)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023C44);
+/* Four UnkCardPair slots set up in a row, each `e->unk_00` plus the x and y
+   in its UnkCardPrim. Two things are load-bearing:
+
+   `e = (UnkCardPair *)p[155]` must be assigned BEFORE the func_8004E5A0 /
+   func_8004E69C pair, not after: the target loads $s3 at word 39, ahead of
+   both calls, and with the load after them the function is 71 words instead
+   of 72 (gcc fills the p[0] load-delay slot with the `li $a1, 4` that the
+   target has already issued back at word 27).
+
+   The second table access has to be spelled as a BYTE offset. The target
+   advances the D_80083EA4 base register in place at word 37
+   (`addu $s0, $s0, $v0`), which gives that pseudo a fourth reference and so
+   wins it $s0 over `p`; `D_80083EA4[p[0]][8]` computes the sum into a
+   scratch instead and leaves $s0/$s1 swapped through the whole function (18
+   DIFF). A named `s32 (*tbl)[32]` local with `tbl += p[0]` gets the in-place
+   update but hoists the `lui`/`addiu` into the prologue, which is worse
+   (23). */
+void func_80023C44(s32 *p)
+{
+    u8 buf[8];
+    UnkCardPair *e;
+
+    e = (UnkCardPair *)p[156];
+    e->unk_04->unk_08 = 0x70;
+    e->unk_04->unk_0A = 0x10;
+    e->unk_00 = (s32)D_80078FD0;
+
+    e = (UnkCardPair *)p[152];
+    e->unk_00 = (s32)func_8004DA74((u8 *)(p + 2), (u8 *)D_80083EA4[p[0]], 1);
+    e->unk_04->unk_08 = 0xF0;
+    e->unk_04->unk_0A = 0x91;
+
+    e = (UnkCardPair *)p[155];
+    func_8004E5A0(*(s32 *)((u8 *)D_80083EA4[p[0]] + 0x20), 4, buf);
+    func_8004E69C(buf);
+    e->unk_00 = (s32)func_8004E298((u8 *)(p + 0x41), buf, 1);
+    e->unk_04->unk_08 = 0x147;
+    e->unk_04->unk_0A = 0x91;
+
+    e = (UnkCardPair *)p[158];
+    e->unk_00 = (s32)(p + 77);
+    e->unk_04->unk_08 = 0xAE;
+    e->unk_04->unk_0A = 0x18;
+}
 
 void func_80023D64(s32 *p)
 {
