@@ -15,6 +15,16 @@ hoisted-lui shape the live overlay uses. Measured on func_80020924: -G8 gives
 (The debug twin at 0x80400000 uses the `lui $at` shape throughout, so IT looks
 like a -G8 build of the same source. Do not assume one -G fits both blocks.)
 
+WHAT THIS CANNOT SEE, and it has already cost one broken build: it compares
+ONE FUNCTION'S words. It says nothing about the unit's .rodata. A C function
+with a local array initialiser emits that initialiser into the unit's
+.rodata, and if the same bytes are also pulled in by an INCLUDE_RODATA line
+the unit gets them twice -- which happened with D_800200A8 and
+func_800258C8, put 0x10 extra bytes ahead of the text, and moved every
+function from func_800210F0 on by 0x10. Every per-function check here still
+reported 0 differing; only `make build/main.bin` caught it. So a clean run of
+this tool is a reason to build, not a substitute for building.
+
 Usage:
     python3 tools/decomp/ovlverify.py <candidate.c> <func_8002xxxx> [more funcs]
     python3 tools/decomp/ovlverify.py --dump <func_8002xxxx>

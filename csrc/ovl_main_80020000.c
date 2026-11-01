@@ -73,7 +73,7 @@ extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 
 void func_800491F4(s32 a, u8 *fmt, s32 n);
 void func_800269B4(s32 *p);
-void func_80026B18(s32 *p);
+void func_80026B18(s32 *p, u8 *a, u8 *b);
 s32 func_8004CAA0(void);
 
 /* State handlers whose ADDRESS is stored into a field at -0x10 by the
@@ -167,6 +167,35 @@ void func_80025FFC(s32 *p, s32 v);
 void func_80026D78(s32 *p);
 void func_80022BE8(u8 *p);
 s32 func_80069BF8(s32 a);
+void func_80023A78(s32 *a, s32 *b, s32 *c, s32 d);
+void func_80026C94(s32 *p);
+void func_80026CF0(s32 *p);
+void func_80064F20(s32 a);
+void func_80064F00(s32 a, s32 b);
+void func_8006A024(s32 ev);
+s32 func_8002191C(void);
+void func_80027C90(s32 *p);
+void func_80025C7C(s32 *p, s32 a);
+void func_80026868(s32 *p);
+s32 func_8004F418(s32 *p, s32 *q);
+s32 func_80026ED0(s32 *p, s32 v);
+void func_800252CC(void);
+void func_8002570C(void);
+void func_80025848(void);
+extern u8 D_80028418[];
+extern u8 D_80028430[];
+extern u8 D_8002807C[];
+extern u8 D_80028084[];
+extern s32 D_80083200;
+extern s32 D_80028550;
+extern s32 D_80028554;
+extern s32 D_80028558;
+extern s32 D_8002855C;
+extern s32 D_80028560;
+extern s32 D_80028564;
+extern s32 D_80028568;
+extern s32 D_8002856C;
+extern s32 D_80084128[];
 extern u8 D_80028020[];
 extern u8 D_800280B4[];
 extern s32 D_80028570[][10];
@@ -336,7 +365,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800213C4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021410);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800214A4);
+void func_800214A4(void)
+{
+    func_8006A024(D_80028550);
+    func_8006A024(D_80028554);
+    func_8006A024(D_80028558);
+    func_8006A024(D_8002855C);
+}
 
 s32 func_800214FC(void)
 {
@@ -351,7 +386,14 @@ s32 func_800214FC(void)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021538);
+void func_80021538(void)
+{
+    D_800287E4 = 0;
+    func_8006A024(D_80028560);
+    func_8006A024(D_80028564);
+    func_8006A024(D_80028568);
+    func_8006A024(D_8002856C);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021594);
 
@@ -436,7 +478,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021F18);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021FF0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800220DC);
+void func_800220DC(void)
+{
+    s32 i = D_800287CC != 0;
+    s32 n;
+
+    n = func_8002191C();
+    D_80084128[i] = n;
+    D_80084120[i] = func_800219B8(n);
+}
 
 s32 func_80022138(void)
 {
@@ -563,6 +613,8 @@ void func_80022B20(s32 a)
    are the same shape at the other five base offsets. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022B48);
 
+/* NEAR MISS: 27 words against 24, and the register allocation ALREADY matches ($a3 maxlen, $t1 last, $a2 index, $t0 cursor). The three extra words are a duplicated inner-loop test: the target enters the inner loop with 'j' straight to the bottom test, the plain gcc 2.7.2 'while' shape, while every spelling here gets a guard copy of the test at the top AND the bottom one. Related, and probably the cause: 'last = i' is loop-invariant in the inner loop, and loop.c SINKS it out past the loop here (it lands in the bottom branch's delay slot, shared with the guard's target) where the target keeps it inside, in the if's delay slot. Three spellings measured: 'last = i' before the if, after it, and the if-body order swapped.
+   Source in docs/near-misses/func_80022BE8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022BE8);
 
 void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
@@ -848,7 +900,12 @@ void func_80023F94(s32 *p, s32 a, s32 b)
     p[1] = a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023FA0);
+void func_80023FA0(s32 *p, s32 a, s32 b)
+{
+    func_80023F94(p, a, b);
+    func_80023A78(p + 0x93, p + 0x89, p + 0x8D, b);
+    func_80023E14(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023FF0);
 
@@ -1124,7 +1181,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025788);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025848);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800258C8);
+void func_800258C8(s32 *p)
+{
+    void (*fns[4])(void) = {func_800252CC, func_8002570C, func_80025848, func_800252CC};
+
+    fns[p[0x11]]();
+}
 
 void func_8002592C(s32 *p)
 {
@@ -1263,7 +1325,17 @@ void func_80026240(s32 *p)
     func_80040AA0(3);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026270);
+void func_80026270(s32 **pp)
+{
+    s32 i = 0;
+    s32 **p = pp;
+
+    do
+    {
+        func_80024298((s32 *)p[3]);
+        p++;
+    } while (++i < 5);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800262BC);
 
@@ -1383,11 +1455,29 @@ void func_80026C00(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026C94);
+void func_80026C94(s32 *p)
+{
+    UnkCardPair *q;
+
+    q = (UnkCardPair *)p[0x18];
+    q->unk_04->unk_08 = 0x40;
+    q->unk_04->unk_0A = 0x20;
+    q->unk_00 = (s32)D_80028418;
+    q = (UnkCardPair *)p[0x19];
+    q->unk_04->unk_08 = 0xC0;
+    q->unk_04->unk_0A = 0x20;
+    q->unk_00 = (s32)D_80028430;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026CF0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026D78);
+void func_80026D78(s32 *p)
+{
+    func_80026C94(p);
+    func_80026CF0(p);
+    func_80026B18(p, D_8002807C, D_80028084);
+    func_800269B4(p);
+}
 
 void func_80026DC8(s32 a)
 {
@@ -1419,9 +1509,9 @@ void func_80026FD4(s32 *p, s32 v)
     func_800269B4(q);
 }
 
-void func_80026FF8(s32 *p)
+void func_80026FF8(s32 *p, u8 *a, u8 *b)
 {
-    func_80026B18(p + 8);
+    func_80026B18(p + 8, a, b);
 }
 
 void func_80027018(s32 *p)
@@ -1533,6 +1623,8 @@ void func_800274D8(s32 *p)
     }
 }
 
+/* NEAR MISS: 23 words, 2 DIFF, register names only: the target holds the tested p[0] in $a1 and reuses it for the call's second argument, this holds it in $v0 and moves zero into $a1. Two spellings measured (the if reversed, a local temp), 2 and 4 DIFF.
+   Source in docs/near-misses/func_80027528.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027528);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027584);
@@ -1582,7 +1674,15 @@ void func_80027A68(s32 *p, s32 a, s32 b)
     p[3] = func_8002190C();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027A9C);
+void func_80027A9C(s32 *p)
+{
+    s32 *q = p - 8;
+
+    p[8] = func_8004F418(q, p + 3);
+    p[9] = func_80026ED0(q, p[3]);
+    func_800209C4();
+    p[-4] = (s32)func_8002789C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027AFC);
 
@@ -1617,7 +1717,14 @@ void func_80027D40(s32 *p)
     func_80027AFC(p, 2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027D7C);
+void func_80027D7C(s32 *p)
+{
+    func_80027C60();
+    D_80083200 = 0x200;
+    func_80064F20(0x200);
+    func_80064F00(0xA0, 0x78);
+    func_80027AFC(p, 0);
+}
 
 s16 func_80027DD0(void)
 {
@@ -1636,6 +1743,11 @@ void func_80027DF4(s32 *p, s32 v)
     }
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A8);
+/* D_800200A8 is func_800258C8's own local array initialiser, which gcc now
+   emits into this unit's .rodata, so it must NOT also be pulled in by
+   INCLUDE_RODATA -- doing both put 0x10 extra bytes of rodata ahead of the
+   text and moved every function from func_800210F0 on by 0x10, which the
+   function-pointer tables at D_80020034 and D_80020048 then disagreed with.
+   Each per-function ovlverify check still passed; only `make` caught it. */
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200B8);
