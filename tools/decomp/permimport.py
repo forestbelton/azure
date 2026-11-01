@@ -90,7 +90,7 @@ PROJ="{proj}"
 cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
-tools/ccpsx -O2 -G8 -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
+tools/ccpsx -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
 python3 vendor/maspsx/maspsx.py \\
     --aspsx-version=2.56 --force-stdin --run-assembler \\
     --gnu-as-path="${{AS:-{as_}}}" --use-comm-section {gflags} \\
@@ -131,19 +131,28 @@ def main():
         return 1
 
     gasG = asmlib.gas_g_for_unit(unit)
+    cc1G = asmlib.cc1_g_for_unit(unit)
     # maspsx forces gas to -G0 unless the unit is one of the carved ones.
-    gflags = "-G8" if gasG == 0 else "--dont-force-G0 -G%d" % gasG
+    # An OVERLAY unit is compiled at cc1psx -G0 and passes maspsx -G0 too, so
+    # that maspsx makes no small-data decisions of its own on a unit that has
+    # none; mirror the Makefile rather than the resident executable's -G8.
+    if cc1G == 0:
+        gflags = "-G0"
+    elif gasG == 0:
+        gflags = "-G8"
+    else:
+        gflags = "--dont-force-G0 -G%d" % gasG
     sh = os.path.join(d, "compile.sh")
     io.open(sh, "w", encoding="utf-8").write(COMPILE_SH.format(
-        unit=unit, proj=PROJ, as_=AS, gflags=gflags))
+        unit=unit, proj=PROJ, as_=AS, gflags=gflags, cc1g=cc1G))
     os.chmod(sh, 0o755)
     io.open(os.path.join(d, "settings.toml"), "w", encoding="utf-8").write(
         SETTINGS.format(func=func))
     io.open(os.path.join(d, "function.txt"), "w", encoding="utf-8").write(
         func + "\n")
 
-    print("%s: unit %s, gas -G%d -> %s" % (
-        func, unit, gasG, os.path.relpath(d, PROJ)))
+    print("%s: unit %s, cc1psx -G%d, gas -G%d -> %s" % (
+        func, unit, cc1G, gasG, os.path.relpath(d, PROJ)))
     return 0
 
 

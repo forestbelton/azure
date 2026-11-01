@@ -141,19 +141,33 @@ void func_80023600(s32 *p);
 void func_80023730(UnkCardPair *p, u32 *a, u32 *b);
 void func_80024BB4(UnkCardPair *p, u32 *a, u32 *b);
 void func_800271C0(UnkCardPair *p, u32 *a, u32 *b);
-void func_800239B0(s32 *p);
+void func_800239B0(s32 **pp);
+void func_800240EC(s32 *p);
+void func_80024E44(s32 *p);
+void func_8002742C(s32 *p);
+void func_80025030(s32 *p);
+void func_80025DC8(s32 *p);
+void func_8004F52C(s32 a);
+s32 func_80021D54(s32 n);
+s32 func_80023FF0(s32 a, s32 n);
+void func_80025B9C(void);
+void func_80027684(void);
+void func_80020984(void);
+void func_80026410(void);
+void func_80049D80(s32 p, s16 *r);
+void func_8004E994(s32 a);
+extern u8 D_800786DC[];
+extern u8 D_800786E8[];
 s32 func_8002168C(void);
 void func_800231E4(s32 a);
 void func_80024ACC(s32 *p);
 void func_800270E0(s32 *p);
 
 void func_80025230(void);
-void func_800261F0(void);
 void func_800265B8(void);
 void func_80027584(void);
 void func_8002789C(void);
 void func_8002593C(void);
-void func_800274D8(void);
 void func_80025398(void);
 void func_800262BC(void);
 void func_80027584(void);
@@ -426,23 +440,12 @@ void func_80022B20(s32 a)
     func_800491F4(a, D_80027F60, 7);
 }
 
-/* NEAR MISS, left as asm deliberately. The shape is worked out: see the
-   UNK_CARD_GROUP comment above for the layout and the six base offsets and
-   counts. Two spellings measured, neither reached it:
-
-     separate base pointers (base + 0x8CC etc. into locals)   38w, 40 DIFF
-     struct-indexed, `u32 *s1 = D_8002E5D8` local before loop 39w, 37 DIFF
-     struct-indexed, D_8002E5D8[k] inline in the loop         39w, 40 DIFF
-
-   Target is 40 words. What the remaining difference is about: the target's
-   first word is `addu $t3, $a0, $zero`, a copy of the base parameter into
-   another register AHEAD of the `blez $a1` guard, and only `$a3 = 0` joins it
-   there -- every other invariant sits in the preheader after the guard. The
-   struct-indexed forms put too much above the guard. Worth trying next: a
-   local pointer assigned from the parameter (`c = base;`) so the copy is a
-   real insn, and checking which of the four induction variables the target
-   actually derives (it keeps base in $t3 and walks byte offsets in $t1/$t2
-   plus base-relative pointers in $a2/$t0). */
+/* NEAR MISS, parked at 40 words / 13 DIFF; source and the full measurement
+   table are in docs/near-misses/func_80022B48.c, which is also the permuter's
+   base (`tools/decomp/permimport.py func_80022B48`). Register allocation
+   already matches; what is left is the schedule of the `ptrs[i] =
+   &c->ents[i]` pair and, consequently, two register names. The five siblings
+   are the same shape at the other five base offsets. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022B48);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022BE8);
@@ -555,7 +558,21 @@ void func_8002316C(s32 a)
     func_80022D60(a, 19, 0, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023194);
+/* The local copy of the parameter is load-bearing, and so is declaring the
+   counter first: the target saves $s1 (the counter) before $s0 (the cursor)
+   and fills the load-delay slot with the cursor's own increment. Walking the
+   parameter directly puts $s0 first and leaves a nop there -- 6 differing. */
+void func_80023194(s32 **pp)
+{
+    s32 i = 0;
+    s32 **p = pp;
+
+    do
+    {
+        func_8004E994(*p[0x233]);
+        p++;
+    } while (++i < 5);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800231E4);
 
@@ -567,7 +584,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023470);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002352C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800235A0);
+s32 func_800235A0(s32 p, s32 w, s32 h)
+{
+    s16 r[4];
+
+    r[0] = -w / 2;
+    r[1] = -h / 2;
+    r[2] = w;
+    r[3] = h;
+    func_80049D80(p, r);
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023600);
 
@@ -613,7 +640,17 @@ void func_80023894(s32 *p, s32 v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800238D4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800239B0);
+void func_800239B0(s32 **pp)
+{
+    s32 i = 0;
+    s32 **p = pp;
+
+    do
+    {
+        func_8004E994(*p[0x76]);
+        p++;
+    } while (++i < 3);
+}
 
 void func_80023A00(s32 *p)
 {
@@ -622,7 +659,7 @@ void func_80023A00(s32 *p)
     if (p != 0)
     {
         q = p + 8;
-        func_800239B0(q);
+        func_800239B0((s32 **)q);
         ((u16 *)q)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
     }
@@ -648,7 +685,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023A78);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023B18);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023BE4);
+s32 func_80023BE4(s32 p, s32 w, s32 h)
+{
+    s16 r[4];
+
+    r[0] = -w / 2;
+    r[1] = -h / 2;
+    r[2] = w;
+    r[3] = h;
+    func_80049D80(p, r);
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023C44);
 
@@ -691,11 +738,64 @@ void func_80024160(s32 **p)
     } while (++i < 10);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024184);
+void func_80024184(s32 *p)
+{
+    s32 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800241D4);
+    if (p != 0)
+    {
+        q = p + 8;
+        func_800240EC(q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024224);
+void func_800241D4(s32 *p, s32 flag)
+{
+    s32 *q;
+    s32 *r;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        r = (s32 *)q[0xA0];
+        q[0x89] = 0x808080;
+        if (flag != 0)
+        {
+            r[0] = (s32)D_800786E8;
+        }
+        else
+        {
+            r[0] = 0;
+        }
+        ((u16 *)r[1])[4] = 0x60;
+        ((u16 *)r[1])[5] = 0x18;
+    }
+}
+
+void func_80024224(s32 *p, s32 flag)
+{
+    s32 *q;
+    s32 *r;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        r = (s32 *)q[0xA0];
+        q[0x89] = 0x808080;
+        if (flag != 0)
+        {
+            r[0] = (s32)D_800786DC;
+        }
+        else
+        {
+            r[0] = 0;
+        }
+        ((u16 *)r[1])[4] = 0x66;
+        ((u16 *)r[1])[5] = 0x18;
+    }
+}
 
 void func_80024274(s32 *p)
 {
@@ -769,7 +869,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024D58);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024E44);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024EEC);
+void func_80024EEC(s32 *p)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        func_80024E44(q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024F3C);
 
@@ -837,7 +948,13 @@ void func_8002546C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025494);
+void func_80025494(s32 *p)
+{
+    p[15] = 1;
+    func_800230CC((s32)(p - 8), (s32)(p + 16));
+    p[16] = 1;
+    p[-4] = (s32)func_8002546C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800254E4);
 
@@ -869,14 +986,51 @@ void func_80025B40(s32 *p, s32 v)
     func_80025B38(p, v);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025B60);
+void func_80025B60(s32 *p)
+{
+    func_80025030(p);
+    func_80020984();
+    p[-4] = (s32)func_8002593C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025B9C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025BD4);
+void func_80025BD4(s32 *p)
+{
+    s32 n = p[9];
+
+    if (n < 5)
+    {
+        if (func_80021D54(n) != 0)
+        {
+            p[n + 1] = func_80023FF0((s32)(p - 8), n);
+            p[9] = p[9] + 1;
+        }
+        else
+        {
+            p[13] = (s32)func_80025B9C;
+            func_80023004((s32)(p - 8));
+            p[-4] = (s32)func_80024F7C;
+        }
+    }
+    if (n == 5)
+    {
+        p[-4] = (s32)func_80025B60;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025C7C);
 
+/* NEAR MISS, 36 words against 37, parked. Source in
+   docs/near-misses/func_80025D34.c. The missing word is a delay-slot nop: the
+   target leaves BOTH of the first two loop calls' slots empty and fills only
+   the third, with the counter increment, while every spelling tried lets
+   reorg fill the first one too. Seven measured, all 36 words: q[0] or p[8]
+   for the leading call, counter declared before or after the cursor, `i = 0`
+   at the declaration or in the body, `++i` in the condition against `i++` at
+   the top or bottom of the body, and a `for` loop. The cursor's base also
+   differs -- the target walks from p+0x20 with displacements 0x18/0x1C/0x04,
+   this walks from p+0x24. func_800267C0 is its sibling and will follow it. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025D34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025DC8);
@@ -903,7 +1057,15 @@ void func_800261C0(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800261F0);
+void func_800261F0(s32 *p)
+{
+    func_800261C0(p);
+    if (func_8002168C() >= 4)
+    {
+        func_800231E4(0);
+        p[-4] = (s32)func_800265B8;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026240);
 
@@ -922,11 +1084,22 @@ void func_80026398(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800263C0);
+void func_800263C0(s32 *p)
+{
+    p[15] = 1;
+    func_80022F64((s32)(p - 8), (s32)(p + 16));
+    p[16] = 1;
+    p[-4] = (s32)func_80026398;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026410);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002644C);
+void func_8002644C(s32 *p)
+{
+    p[13] = (s32)func_80026410;
+    func_80022F3C((s32)(p - 8), (s32)(p + 14));
+    p[-4] = (s32)func_800261F0;
+}
 
 void func_80026494(s32 *p)
 {
@@ -956,7 +1129,12 @@ void func_80026728(s32 *p, s32 v)
     func_80026720(p, v);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026748);
+void func_80026748(s32 *p)
+{
+    func_80025DC8(p);
+    func_80020984();
+    p[-4] = (s32)func_800265B8;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026784);
 
@@ -1033,7 +1211,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027018);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027054);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027080);
+s32 func_80027080(s32 p, s32 w, s32 h)
+{
+    s16 r[4];
+
+    r[0] = -w / 2;
+    r[1] = -h / 2;
+    r[2] = w;
+    r[3] = h;
+    func_80049D80(p, r);
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800270E0);
 
@@ -1081,7 +1269,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027364);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002742C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027458);
+void func_80027458(s32 *p)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        func_8002742C(q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 void func_800274A8(s32 *p)
 {
@@ -1095,7 +1294,15 @@ void func_800274A8(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800274D8);
+void func_800274D8(s32 *p)
+{
+    func_800274A8(p);
+    if (func_8002168C() >= 4)
+    {
+        func_800231E4(0);
+        p[-4] = (s32)func_8002789C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027528);
 
@@ -1114,7 +1321,12 @@ void func_8002765C(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027684);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800276EC);
+void func_800276EC(s32 *p)
+{
+    p[11] = (s32)func_80027684;
+    func_80022E74((s32)(p - 8), (s32)(p + 15));
+    p[-4] = (s32)func_800274D8;
+}
 
 void func_80027734(s32 *p)
 {

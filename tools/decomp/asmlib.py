@@ -56,6 +56,36 @@ def gas_g_for_unit(unit):
     return _G_BY_UNIT.get(unit, 0)
 
 
+_CC1_G_BY_UNIT = None
+
+
+def cc1_g_for_unit(unit):
+    """The cc1psx -G this unit is compiled with, from the Makefile's own rules.
+
+    The resident executable is -G8 and CFLAGS says so, but the OVERLAYS are
+    -G0 and carry a per-unit `build/csrc/<unit>.o: CFLAGS := $(CFLAGS_G0)`
+    override. Getting this wrong is silent in the worst way: at -G8 a global
+    access comes out as the assembler-expanded `lui $at` / `%lo` pair instead
+    of cc1psx's own split address, so every candidate the permuter compiles is
+    wrong in the same way and the search cannot converge on anything. Read the
+    Makefile rather than assume CFLAGS.
+    """
+    global _CC1_G_BY_UNIT
+    if _CC1_G_BY_UNIT is None:
+        _CC1_G_BY_UNIT = {}
+        try:
+            mk = open(os.path.join(PROJ, 'Makefile')).read()
+        except OSError:
+            mk = ''
+        mk = mk.replace('\\\n', ' ')
+        for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
+                             r'\s*:\s*CFLAGS\s*:?=\s*\$\(CFLAGS_G(\d+)\)',
+                             mk, re.M):
+            for o in m.group(1).split():
+                _CC1_G_BY_UNIT[os.path.basename(o)[:-2]] = int(m.group(2))
+    return _CC1_G_BY_UNIT.get(unit, 8)
+
+
 _SIZES_BY_UNIT = {}
 
 
