@@ -125,6 +125,19 @@ typedef struct
     u8 b[0x80];
 } UnkRow;
 
+/* Five function pointers, 20 bytes: func_80021594 block-copies both
+   D_80020034 and D_80020048 onto its stack and dispatches through the copy.
+   It has to be a struct COPY from the extern, not a local array
+   INITIALISER: gcc emits a function's own constants into .rodata right after
+   that function, and func_80021594 sits BEFORE this unit's first
+   INCLUDE_RODATA line, so an initialiser lands at 0x80020000 and pushes
+   every other rodata block down. (func_800258C8's initialiser works only
+   because that function sits where its constant belongs.) */
+typedef struct
+{
+    s32 (*f[5])(void);
+} UnkFnTab5;
+
 typedef struct
 {
     s32 unk_00;
@@ -198,7 +211,7 @@ u8 *func_80022A30(u8 *p, s32 *q);
 void func_80021538(void);
 void func_80025D34(s32 *p);
 void func_80023E14(s32 *p);
-void func_80025F0C(s32 *p, s32 v);
+void func_80025F0C(u8 *p, s32 n);
 void func_80025FFC(s32 *p, s32 v);
 void func_80026D78(s32 *p);
 void func_80022BE8(UnkStrSet *p);
@@ -245,6 +258,21 @@ s32 func_80069C18(s32 a);
 s32 func_8002168C(void);
 void func_80026DF0(s32 a, s32 n);
 s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
+void func_80024C70(s32 a, s32 n);
+void func_8003AD08(s32 n, u8 *buf);
+s32 func_800210F0(void);
+extern UnkFnTab5 D_80020034;
+extern UnkFnTab5 D_80020048;
+s32 func_80021298(void);
+extern u8 *D_80028294[];
+extern u8 *D_800282A0;
+/* func_80024D58 calls func_80024C48 with ONLY $a0 set, where the function
+   itself takes five arguments (func_80022C90 passes all five). The one-argument
+   call cannot be written through the real prototype, so it goes through an
+   `__asm__`-aliased declaration, the same device csrc/gprel_72A8.c uses for
+   func_80033AE8w. */
+s32 func_80024C48w(s32 *p) __asm__("func_80024C48");
+extern u8 D_8002A990[];
 u8 *func_800242D8(u8 *p, s32 w, s32 h);
 extern u8 D_8002B850[];
 extern u8 D_80079054[];
@@ -260,7 +288,7 @@ extern u8 D_8002BB08[];
 extern u8 D_8002B968[];
 s32 *func_80027364(s32 *p);
 s32 *func_800238D4(s32 *p);
-s32 func_80024D58(s32 *p, s32 a, s32 b);
+s32 *func_80024D58(s32 *p, s32 a, s32 b);
 extern u8 D_80027FD0[];
 extern u8 D_8002B7E0[];
 s32 func_8006A0B4(s32 fd, s32 off, s32 whence);
@@ -343,6 +371,21 @@ extern u8 D_800786E8[];
 s32 func_8002168C(void);
 void func_80026DF0(s32 a, s32 n);
 s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
+void func_80024C70(s32 a, s32 n);
+void func_8003AD08(s32 n, u8 *buf);
+s32 func_800210F0(void);
+extern UnkFnTab5 D_80020034;
+extern UnkFnTab5 D_80020048;
+s32 func_80021298(void);
+extern u8 *D_80028294[];
+extern u8 *D_800282A0;
+/* func_80024D58 calls func_80024C48 with ONLY $a0 set, where the function
+   itself takes five arguments (func_80022C90 passes all five). The one-argument
+   call cannot be written through the real prototype, so it goes through an
+   `__asm__`-aliased declaration, the same device csrc/gprel_72A8.c uses for
+   func_80033AE8w. */
+s32 func_80024C48w(s32 *p) __asm__("func_80024C48");
+extern u8 D_8002A990[];
 u8 *func_800242D8(u8 *p, s32 w, s32 h);
 extern u8 D_8002B850[];
 extern u8 D_80079054[];
@@ -581,7 +624,31 @@ void func_80021538(void)
     func_8006A024(D_8002856C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021594);
+s32 func_80021594(void)
+{
+    UnkFnTab5 a = D_80020034;
+    UnkFnTab5 b = D_80020048;
+    s32 r = 0;
+    s32 st = D_800287E0;
+
+    if (st == 0)
+    {
+        r = func_80021410();
+        if (r != 0)
+        {
+            r = a.f[r]();
+        }
+    }
+    else if (st == 1)
+    {
+        r = func_800214FC();
+        if (r != 0)
+        {
+            r = b.f[r]();
+        }
+    }
+    return r;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020000);
 
@@ -843,7 +910,36 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021EE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021F18);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021FF0);
+s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
+{
+    u8 name[0x20];
+    s32 saved;
+    s32 *row;
+    s32(*tbl)[32];
+
+    func_80021B18(name, idx);
+    if (func_80021B98(name, buf, 0xC0, 0) != 0 && func_80021EE0((s32 *)buf) != 0)
+    {
+        if (flag != 0)
+        {
+            saved = *(s16 *)(buf + 0x208);
+            *(s16 *)(buf + 0x208) = 0;
+            *(s32 *)(buf + 0x204) = 0;
+            func_80021EB8((s32 *)buf);
+            tbl = D_80083E98;
+            row = tbl[idx];
+            *(s16 *)((u8 *)row + 8) = 0;
+            row[1] = *(s32 *)(buf + 0x204);
+            func_80021C4C(name, (u8 *)row, 1, 4, row[0]);
+            func_80021C4C(name, buf, 1, 0, row[0]);
+            *(s16 *)(buf + 0x208) = saved;
+        }
+        else
+        {
+            *(s16 *)(buf + 0x208) = 0;
+        }
+    }
+}
 
 void func_800220DC(void)
 {
@@ -1703,7 +1799,31 @@ void func_80024D18(s32 *p, s32 v)
     func_80024ACC(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024D58);
+s32 *func_80024D58(s32 *p, s32 a, s32 b)
+{
+    s32 *q = (s32 *)D_8002A990;
+    s32 *r = q + 8;
+
+    if (func_8004B4A8(q) == 0)
+    {
+        q = func_8003FE78(0, D_8002A990, 0x394);
+        func_8004491C((UnkNode *)q, (u32)func_80027DD0);
+    }
+    else
+    {
+        func_80024EEC(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_80069EC8(r, 0xE30);
+    }
+    r[0x1F] = a;
+    r[0x20] = b;
+    func_80024C70((s32)r, 0x15);
+    q[3] = (s32)(r + 0x2CB);
+    r[0x2CE] = (s32)func_80024C48w(r + 0x2CF);
+    func_80024D18(r, (s32)p);
+    q[4] = 0;
+    return q;
+}
 
 void func_80024E44(s32 *p)
 {
@@ -1882,7 +2002,7 @@ void func_800252CC(s32 *p)
 
 void func_80025358(s32 *p, s32 v)
 {
-    func_80025F0C(p, v);
+    func_80025F0C((u8 *)p, v);
     func_80025FFC(p, v);
 }
 
@@ -2077,7 +2197,7 @@ s32 *func_80025C7C(s32 *p)
     r[0x12] = 1;
     q[8] = func_8004F418(q, q + 0x1A);
     r[6] = (s32)func_800238D4(q);
-    r[7] = func_80024D58(q, r[10], 0);
+    r[7] = (s32)func_80024D58(q, r[10], 0);
     r[9] = 0;
     q[4] = (s32)func_80025BD4;
     return q;
@@ -2159,6 +2279,8 @@ s32 func_80025ECC(void)
     return sum;
 }
 
+/* NEAR MISS: 57 words against 60: the target keeps the parameter p ITSELF in a fourth callee-saved register ($s3) as well as p+4 in $s0, and RECOMPUTES p+4 once after the if/else join -- which is where the three words go. Five spellings measured: p+4 in one local (57w/58), p+4 written inline at all eleven call sites (61w/31), the local reassigned after the join (61w/32), and the D_80028294 base hoisted into a local for indices 1..3 or for all four (both 57w/58). The body is right: strcpy from D_80028294[0], then func_8003AD08(n+1) into a stack buffer and a chain of strcats with D_80028294[3] twice, the 0x8001020C literal, D_80028294[1] or [2] on the 0x80010208 halfword, D_800282A0, and finally func_8003AD08 of the word at 0x8001022C.
+   Source in docs/near-misses/func_80025F0C.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025F0C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025FFC);
@@ -2175,7 +2297,7 @@ void func_80026128(u8 *p, s32 a, s32 mode)
     *(s16 *)(b + 0x20A) = f;
     *(s32 *)(b + 0x230) = func_80025E54();
     *(s32 *)(b + 0x228) = func_80025ECC();
-    func_80025F0C((s32 *)p, a);
+    func_80025F0C((u8 *)p, a);
     func_80025FFC((s32 *)p, a);
 }
 
@@ -2358,7 +2480,7 @@ s32 *func_80026868(s32 *p, s32 a)
         func_8002223C();
         func_800220DC();
         q[8] = func_8004F418(q, 0);
-        r[1] = func_80024D58(q, r[11], 3);
+        r[1] = (s32)func_80024D58(q, r[11], 3);
         r[2] = (s32)func_80027364(q);
         r[10] = 0;
         q[4] = (s32)func_800267C0;
