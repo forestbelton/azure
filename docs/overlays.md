@@ -735,7 +735,7 @@ target reaches A by a taken `bnez` rather than by falling through.
 ## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
 
 The sweep that follows the one above took the card overlay from 192 of 241
-functions to **220**, and from roughly 54% to **86.2% of its 7487 words (6457
+functions to **222**, and from roughly 54% to **87.2% of its 7487 words (6528
 landed)**. Every function in the unit that had not been looked at before is
 now either landed or parked; the 28 remaining stubs are all near-misses with
 measurement tables in `docs/near-misses/`.

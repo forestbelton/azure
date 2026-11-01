@@ -97,7 +97,7 @@ The queue, in order:
       sites (all `c_server.c`) agree with the propagated map wherever they
       overlap.
 
-      **Sweeping: 220 of 241 functions, 6,457 of 7,487 words (86.2%) as of
+      **Sweeping: 222 of 241 functions, 6,528 of 7,487 words (87.2%) as of
       2026-11-01.** Every function in the unit has now been worked; the 28
       remaining stubs are all near-misses with measurement tables in
       `docs/near-misses/`. The six-function family that shared one residue was
