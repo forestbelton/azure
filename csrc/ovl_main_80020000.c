@@ -113,6 +113,21 @@ typedef struct
     s32 unk_0C;
 } UnkCardPair;
 
+/* 24-byte records: five string pointers then four bytes. The size comes
+   from func_80022C48's `b * 24` index and the layout from func_80022BE8,
+   which walks the five pointers and writes the bytes at 0x16 and 0x17. The
+   struct spelling is load-bearing in func_80022CD8: as a plain u8 array
+   indexed `[i * 24 + 0x15]` gcc folds the 0x15 into the symbol's %lo and the
+   listing's `lbu $v0, 0x15($v0)` comes out with displacement 0. */
+typedef struct
+{
+    u8 *strs[5];
+    u8 unk_14;
+    u8 unk_15;
+    u8 unk_16;
+    u8 unk_17;
+} UnkStrSet;
+
 /* The arrayed form of the same initialiser, at six different base offsets.
    Each of func_80022B48, func_800237EC, func_80023EF4, func_80024C70,
    func_80026DF0 and func_8002727C builds N of these in one loop, and the
@@ -143,7 +158,7 @@ void func_80024BB4(UnkCardPair *p, u32 *a, u32 *b);
 void func_800271C0(UnkCardPair *p, u32 *a, u32 *b);
 void func_800239B0(s32 **pp);
 void func_800240EC(s32 *p);
-void func_800251A4(void);
+void func_800251A4(s32 *p);
 void func_80024E44(s32 *p);
 void func_8002742C(s32 *p);
 void func_80025030(s32 *p);
@@ -166,7 +181,7 @@ void func_80023E14(s32 *p);
 void func_80025F0C(s32 *p, s32 v);
 void func_80025FFC(s32 *p, s32 v);
 void func_80026D78(s32 *p);
-void func_80022BE8(u8 *p);
+void func_80022BE8(UnkStrSet *p);
 s32 func_80069BF8(s32 a);
 void func_80023A78(s32 *a, s32 *b, s32 *c, s32 d);
 void func_80026C94(s32 *p);
@@ -182,6 +197,28 @@ s32 func_8004F418(s32 *p, s32 *q);
 void func_80020F18(void);
 void func_800585A0(void);
 s32 func_80021FF0(s32 a, u8 *b, s32 c);
+s32 func_80033B2C(s16 a);
+void func_800A6104(void);
+void func_80022774(s32 *a, s32 *b);
+void func_80022934(s32 *p);
+void func_80022488(s32 *p);
+void func_80022524(void);
+void func_8004CBFC(s32 *p, u8 *q);
+void func_800439F8(void);
+extern u8 D_80027E68[];
+void func_80069E78(u8 *dst, u8 *src);
+void func_80069E38(u8 *dst, u8 *src);
+void func_80025788(void);
+extern u8 *D_80027F18[];
+extern u8 D_80027F20[];
+extern u8 *D_80027F30[];
+s32 func_80069C08(s32 a);
+void func_80024390(s32 *p);
+void func_80024818(s32 *p);
+void func_800249B4(s32 *p);
+void func_800250E8(s32 *p);
+void func_80025584(void);
+extern s16 D_80028010[];
 void func_80020A80(void);
 void func_80069EC8(void *p, s32 n);
 void func_8004E884(u8 *p, s32 a);
@@ -192,9 +229,9 @@ extern s32 D_800287D8;
 extern s32 D_80028808;
 extern u8 *D_800282BC[];
 s32 func_80026ED0(s32 *p, s32 v);
-void func_800252CC(void);
-void func_8002570C(void);
-void func_80025848(void);
+void func_800252CC(s32 *p);
+void func_8002570C(s32 *p);
+void func_80025848(s32 *p);
 extern u8 D_80028418[];
 extern u8 D_80028430[];
 extern u8 D_8002807C[];
@@ -210,7 +247,7 @@ extern s32 D_80028568;
 extern s32 D_8002856C;
 extern s32 D_80084128[];
 extern u8 D_80028020[];
-extern u8 D_800280B4[];
+extern UnkStrSet D_800280B4[];
 extern s32 D_80028570[][10];
 extern s32 D_800287E0;
 void func_80024A50(s32 *p);
@@ -357,7 +394,26 @@ s32 func_800210E0(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800210F0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002121C);
+s32 func_8002121C(void)
+{
+    s32 r = 0;
+
+    if (D_800287C8 == 2)
+    {
+        func_800214A4();
+        if (func_80069C08(D_800287CC) == 0)
+        {
+            D_800287C8 = 0;
+            r = 5;
+        }
+        else
+        {
+            D_800287E0 = 0;
+            D_800287C8 = D_800287C8 + 1;
+        }
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021298);
 
@@ -454,11 +510,61 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002191C);
    Source in docs/near-misses/func_800219B8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800219B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021A04);
+s32 func_80021A04(s32 n, u8 *s)
+{
+    s32 i = 0;
+    s32 ret = 0;
+    u8 *tbl = (u8 *)D_80028570;
+    u8 *row;
+
+    if (n > 0)
+    {
+        row = tbl;
+        do
+        {
+            s32 bad = 0;
+            s32 j = 0;
+
+            do
+            {
+                u8 c = s[j];
+
+                if (c == 0)
+                {
+                    break;
+                }
+                if (c != row[j])
+                {
+                    bad++;
+                    break;
+                }
+                j++;
+            } while (j < 0x15);
+            if (bad == 0)
+            {
+                ret = 1;
+                break;
+            }
+            row += 0x28;
+        } while (++i < n);
+    }
+    return ret;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021A84);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021B18);
+void func_80021B18(u8 *s, s32 idx)
+{
+    u8 **t = D_80027F18;
+
+    if (D_800287CC != 0)
+    {
+        t++;
+    }
+    func_80069E78(s, *t);
+    func_80069E38(s, D_80027F20);
+    func_80069E38(s, D_80027F30[idx]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021B98);
 
@@ -662,7 +768,7 @@ void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
     p[2] = b;
     p[3] = c;
     p[8] = d;
-    func_80022BE8(&D_800280B4[b * 24]);
+    func_80022BE8(&D_800280B4[b]);
 }
 
 void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
@@ -672,7 +778,21 @@ void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
     func_80022AE8(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022CD8);
+void func_80022CD8(s32 *p)
+{
+    func_80022774(p + 9, p);
+    func_80022934(p);
+    p[0] = D_800280B4[p[2]].unk_15;
+    func_80022488(p);
+    if (p[3] == 2)
+    {
+        p[-4] = (s32)func_800226A8;
+    }
+    else
+    {
+        p[-4] = (s32)func_80022524;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022D60);
 
@@ -1087,7 +1207,28 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024818);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800249B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024A50);
+void func_80024A50(s32 *p)
+{
+    s32 n = p[0x1F];
+
+    if (D_80083E98[n][0] != 0)
+    {
+        func_80024390(p);
+    }
+    else
+    {
+        s32 m = p[0x20];
+
+        if (m != 0 && m != 2)
+        {
+            func_80024818(p);
+        }
+        else
+        {
+            func_800249B4(p);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024ACC);
 
@@ -1202,7 +1343,23 @@ void func_8002519C(u8 *p)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800251A4);
+void func_800251A4(s32 *p)
+{
+    u16 *b = (u16 *)0x80010000;
+    s32 v;
+
+    func_80027BF4();
+    v = 1;
+    if (p[0x11] == 0)
+    {
+        v = 3;
+    }
+    b[0x1B8A] = v;
+    D_80082E60.unk_16 |= 2;
+    func_80025D34(p - 8);
+    func_800439F8();
+    func_80040AA0(b[0x104] != 0 ? 5 : 6);
+}
 
 void func_80025230(s32 *p)
 {
@@ -1232,7 +1389,24 @@ void func_800252A4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800252CC);
+void func_800252CC(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_80083E98[n][0] != 0)
+    {
+        p[15] = 1;
+        func_80022F8C((s32)(p - 8), (s32)(p + 16));
+        p[16] = 1;
+        p[-4] = (s32)func_800252A4;
+    }
+    else
+    {
+        p[13] = (s32)func_8002593C;
+        func_800230A4((s32)(p - 8));
+        p[-4] = (s32)func_80024FAC;
+    }
+}
 
 void func_80025358(s32 *p, s32 v)
 {
@@ -1265,11 +1439,43 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800254E4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025584);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002570C);
+void func_8002570C(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_80083E98[n][0] != 0)
+    {
+        p[11] = n;
+        func_800250E8(p);
+        p[-4] = (s32)func_80025584;
+    }
+    else
+    {
+        p[13] = (s32)func_8002593C;
+        func_800230A4((s32)(p - 8));
+        p[-4] = (s32)func_80024FAC;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025788);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025848);
+void func_80025848(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_80083E98[n][0] != 0)
+    {
+        p[13] = (s32)func_80025788;
+        func_80023144((s32)(p - 8), (s32)(p + 14));
+        p[-4] = (s32)func_80024FAC;
+    }
+    else
+    {
+        p[13] = (s32)func_8002593C;
+        func_800230A4((s32)(p - 8));
+        p[-4] = (s32)func_80024FAC;
+    }
+}
 
 void func_800258C8(s32 *p)
 {
@@ -1349,7 +1555,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025D34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025DC8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025E54);
+s32 func_80025E54(void)
+{
+    s32 mask = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (func_80033B2C(D_80028010[i]) != 0)
+        {
+            mask += 1 << i;
+        }
+    } while (++i < 8);
+    return mask;
+}
 
 /* The byte table is NOT the symbol splat prints. The listing reads
    `lui $v1, %hi(D_800133A4)` / `lbu $v0, %lo(D_800133A4)($v1)` with `$v1`
@@ -1559,6 +1778,8 @@ void func_80026C94(s32 *p)
     q->unk_00 = (s32)D_80028430;
 }
 
+/* NEAR MISS: 34 words, 11 DIFF: $s0 and $s1 are swapped -- the target keeps the parameter in $s1 and the D_80027E68 base in $s0, every spelling here does the reverse. Three measured (the table inline at both call sites, hoisted into a local declared before or after the UnkCardPair temp, and the parameter copied to a local). Allocation only; the instruction sequence is identical.
+   Source in docs/near-misses/func_80026CF0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026CF0);
 
 void func_80026D78(s32 *p)
@@ -1822,7 +2043,19 @@ void func_80027C60(void)
     func_80020EA0();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027C90);
+void func_80027C90(s32 *p)
+{
+    s32 *q = p + 8;
+
+    func_8004F52C(q[8]);
+    func_80026FB4((u16 *)q[9]);
+    if (p[8] == 2)
+    {
+        func_800A6104();
+    }
+    ((u16 *)p)[15] |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 void func_80027D0C(s32 *p)
 {
