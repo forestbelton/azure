@@ -3274,17 +3274,33 @@ s32 *func_80025C7C(s32 *p, s32 a)
     return q;
 }
 
-/* NEAR MISS, 36 words against 37, parked. Source in
-   docs/near-misses/func_80025D34.c. The missing word is a delay-slot nop: the
-   target leaves BOTH of the first two loop calls' slots empty and fills only
-   the third, with the counter increment, while every spelling tried lets
-   reorg fill the first one too. Seven measured, all 36 words: q[0] or p[8]
-   for the leading call, counter declared before or after the cursor, `i = 0`
-   at the declaration or in the body, `++i` in the condition against `i++` at
-   the top or bottom of the body, and a `for` loop. The cursor's base also
-   differs -- the target walks from p+0x20 with displacements 0x18/0x1C/0x04,
-   this walks from p+0x24. func_800267C0 is its sibling and will follow it. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025D34);
+/* The destructor family's other member, and identical in shape to
+   func_80026920: only the LAST of the four calls is inside the loop. The park
+   had all three of func_80023A00, func_80024EEC and func_80024184 in the
+   loop body, which is 36 words against 37 and 31 differing; reading the
+   branch target (word 22's `bnez` goes to word 17, not word 11) says
+   otherwise. The two outside calls take q[6] and q[7], the one inside takes
+   q[1] with the cursor advancing. */
+void func_80025D34(s32 *p)
+{
+    s32 *q = p + 8;
+    s32 i;
+
+    if (p != 0)
+    {
+        func_8004F52C(q[0]);
+        func_80023A00((s32 *)q[6]);
+        func_80024EEC((s32 *)q[7]);
+        i = 0;
+        do
+        {
+            func_80024184((s32 *)q[1]);
+            q++;
+        } while (++i < 5);
+        ((u16 *)p)[15] |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 void func_80025DC8(s32 *p)
 {
