@@ -255,6 +255,13 @@ typedef struct
         u32 prims[n][4];             \
     } name
 
+UNK_CARD_GROUP(UnkCardGrp8B0, 0x8B0, 7);
+UNK_CARD_GROUP(UnkCardGrp184, 0x184, 18);
+UNK_CARD_GROUP(UnkCardGrp240, 0x240, 10);
+UNK_CARD_GROUP(UnkCardGrpB20, 0xB20, 21);
+UNK_CARD_GROUP(UnkCardGrp044, 0x44, 4);
+UNK_CARD_GROUP(UnkCardGrp0D4, 0xD4, 4);
+
 void func_80023600(s32 *p);
 void func_80023730(UnkCardPair *p, u32 *a, u32 *b);
 void func_80024BB4(UnkCardPair *p, u32 *a, u32 *b);
@@ -330,14 +337,14 @@ s32 *func_8003FE78(s32 a, u8 *b, s32 c);
 s32 *func_8003FC64(s32 a);
 s32 func_8004B4A8(s32 *p);
 s32 func_80021F18(s32 a, u8 *b);
-void func_800237EC(s32 a, s32 n);
+void func_800237EC(UnkCardGrp184 *c, s32 n);
 void func_80023258(s32 *p);
 s32 func_80069C38(s32 a);
 s32 func_80069C18(s32 a);
 s32 func_8002168C(void);
-void func_80026DF0(s32 a, s32 n);
+void func_80026DF0(UnkCardGrp044 *c, s32 n);
 s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
-void func_80024C70(s32 a, s32 n);
+void func_80024C70(UnkCardGrpB20 *c, s32 n);
 void func_8003AD08(s32 n, u8 *buf);
 s32 func_800210F0(void);
 extern UnkFnTab5 D_80020034;
@@ -373,7 +380,7 @@ extern u8 D_800291D0[];
 extern u8 D_80029618[][0x3E4];
 extern u8 *D_800282A4[];
 extern u8 D_800791A4[];
-void func_8002727C(s32 a, s32 n);
+void func_8002727C(UnkCardGrp0D4 *c, s32 n);
 s16 func_80027DD0(void);
 extern u8 D_8002BB08[];
 extern u8 D_8002B968[];
@@ -475,9 +482,9 @@ void func_8004E994(s32 a);
 extern u8 D_800786DC[];
 extern u8 D_800786E8[];
 s32 func_8002168C(void);
-void func_80026DF0(s32 a, s32 n);
+void func_80026DF0(UnkCardGrp044 *c, s32 n);
 s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
-void func_80024C70(s32 a, s32 n);
+void func_80024C70(UnkCardGrpB20 *c, s32 n);
 void func_8003AD08(s32 n, u8 *buf);
 s32 func_800210F0(void);
 extern UnkFnTab5 D_80020034;
@@ -1619,19 +1626,40 @@ s32 func_80022B20(s32 a)
     return func_800491F4(a, D_80027F60, 7);
 }
 
-/* NEAR MISS, parked at 40 words / 9 DIFF; source and the full measurement
-   table are in docs/near-misses/func_80022B48.c, which is also the permuter's
-   base (`tools/decomp/permimport.py func_80022B48`). Two permuter runs and a
-   by-hand sweep took it from 13 to 9: the lever is a SECOND base pointer,
-   `UnkCardGrp8B0 *b = c;`, used only for the three trailing `shared` stores.
-   That is what forces the `addu $t3, $a0, $zero` copy at word 0 -- without it
-   gcc keeps the base in $a0 and the function is one word short -- and once
-   the `e` local is dropped and both UnkCardPair fields go through
-   `c->ents[i]`, the loop body is the target instruction for instruction.
-   What is left is that the loop still addresses off $a0 where the target uses
-   $t3, so the prims address takes $v1 instead of $a0. The five siblings are
-   the same shape at the other five base offsets. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022B48);
+/* The arrayed primitive initialiser, six copies of it at six base offsets.
+   The lever, found by decomp-permuter after two long searches on the wrong
+   idea: D_8002E5D8[0] must be read into a LOCAL before the `ptrs[i]` store,
+   not fetched where it is used. That one reordering is the whole difference
+   between 9 differing words and zero, in all six functions.
+
+   What it buys: with the load first, gcc keeps the base in $t3 (copied from
+   $a0 at word 0) and leaves $a0 free as the scratch for the prims address,
+   which is the register assignment the targets have. Fetched in place, the
+   base stays in $a0 and the prims address takes $v1 -- and no amount of
+   restructuring around a second base pointer reaches it, which is what the
+   earlier 9-DIFF park was trying. Both UnkCardPair fields must also go
+   through `c->ents[i]` rather than a live `e` local, so they stay on the
+   stride-16 induction variable at displacements 0x8EC/0x8F0. */
+void func_80022B48(UnkCardGrp8B0 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 /* NEAR MISS: 27 words against 24, and the register allocation ALREADY matches ($a3 maxlen, $t1 last, $a2 index, $t0 cursor). The three extra words are a duplicated inner-loop test: the target enters the inner loop with 'j' straight to the bottom test, the plain gcc 2.7.2 'while' shape, while every spelling here gets a guard copy of the test at the top AND the bottom one. Related, and probably the cause: 'last = i' is loop-invariant in the inner loop, and loop.c SINKS it out past the loop here (it lands in the bottom branch's delay slot, shared with the guard's target) where the target keeps it inside, in the if's delay slot. Three spellings measured: 'last = i' before the if, after it, and the if-body order swapped.
    Source in docs/near-misses/func_80022BE8.c. */
@@ -1669,7 +1697,7 @@ void func_80022CD8(s32 *p)
     }
 }
 
-void func_80022B48(s32 a, s32 n);
+void func_80022B48(UnkCardGrp8B0 *c, s32 n);
 
 /* The same constructor idiom as func_80023FF0 and func_800238D4, at the
    singleton D_800287E8. It RETURNS q even though every caller ignores the
@@ -1693,7 +1721,7 @@ s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p)
         ((u16 *)q)[15] &= 0x7FFF;
         func_80069EC8(r, 0x9C8);
     }
-    func_80022B48((s32)r, 7);
+    func_80022B48((UnkCardGrp8B0 *)r, 7);
     q[3] = (s32)(r + 0x22F);
     r[0x232] = func_80022B20((s32)(r + 0x233));
     func_80022C90(r, a, id, kind, p);
@@ -1943,11 +1971,26 @@ s32 func_800237C4(s32 a)
     return func_800491F4(a, D_80027F68, 0x12);
 }
 
-/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x184 with
-   18 entries. Identical source, identical residue; source in
-   docs/near-misses/func_800237EC.c and the family's measurement table in
-   docs/near-misses/func_80022B48.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800237EC);
+void func_800237EC(UnkCardGrp184 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 void func_8002388C(s32 *p, s32 v)
 {
@@ -1977,7 +2020,7 @@ s32 *func_800238D4(s32 *p)
         ((u16 *)q)[15] &= 0x7FFF;
         func_80069EC8(r, 0x428);
     }
-    func_800237EC((s32)r, 0x12);
+    func_800237EC((UnkCardGrp184 *)r, 0x12);
     q[3] = (s32)(r + 0x64);
     r[0x67] = func_800237C4((s32)(r + 0x68));
     func_80023894(r, (s32)p);
@@ -2173,11 +2216,26 @@ s32 func_80023ECC(s32 a)
     return func_800491F4(a, D_80027FC4, 0xA);
 }
 
-/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x240 with
-   10 entries. Identical source, identical residue; source in
-   docs/near-misses/func_80023EF4.c and the family's measurement table in
-   docs/near-misses/func_80022B48.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023EF4);
+void func_80023EF4(UnkCardGrp240 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 void func_80023F94(s32 *p, s32 a, s32 b)
 {
@@ -2192,7 +2250,7 @@ void func_80023FA0(s32 *p, s32 a, s32 b)
     func_80023E14(p);
 }
 
-void func_80023EF4(s32 *p, s32 n);
+void func_80023EF4(UnkCardGrp240 *c, s32 n);
 
 /* The func_800238D4 constructor idiom at an INDEXED row: D_80029618 is an
    array of 0x3E4-byte rows, and gcc synthesises the 996 multiply as
@@ -2216,7 +2274,7 @@ s32 func_80023FF0(s32 a, s32 b)
         ((u16 *)q)[15] &= 0x7FFF;
         func_80069EC8(r, 0x3C4);
     }
-    func_80023EF4(r, 0xA);
+    func_80023EF4((UnkCardGrp240 *)r, 0xA);
     q[3] = (s32)(r + 147);
     r[150] = func_80023ECC((s32)(r + 151));
     func_80023FA0(r, a, b);
@@ -2599,11 +2657,26 @@ void func_80024C48(s32 a)
     func_800491F4(a, D_80027FF8, 0x15);
 }
 
-/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0xb20 with
-   21 entries. Identical source, identical residue; source in
-   docs/near-misses/func_80024C70.c and the family's measurement table in
-   docs/near-misses/func_80022B48.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024C70);
+void func_80024C70(UnkCardGrpB20 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 void func_80024D10(s32 *p, s32 v)
 {
@@ -2635,7 +2708,7 @@ s32 *func_80024D58(s32 *p, s32 a, s32 b)
     }
     r[0x1F] = a;
     r[0x20] = b;
-    func_80024C70((s32)r, 0x15);
+    func_80024C70((UnkCardGrpB20 *)r, 0x15);
     q[3] = (s32)(r + 0x2CB);
     r[0x2CE] = (s32)func_80024C48w(r + 0x2CF);
     func_80024D18(r, (s32)p);
@@ -3718,11 +3791,26 @@ s32 func_80026DC8(s32 a)
     return func_800491F4(a, D_8002808C, 4);
 }
 
-/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0x44 with
-   4 entries. Identical source, identical residue; source in
-   docs/near-misses/func_80026DF0.c and the family's measurement table in
-   docs/near-misses/func_80022B48.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026DF0);
+void func_80026DF0(UnkCardGrp044 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 void func_80026E90(s32 *p, s32 v)
 {
@@ -3747,7 +3835,7 @@ s32 *func_80026ED0(s32 *p, s32 a)
         ((u16 *)q)[15] &= 0x7FFF;
         func_80069EC8(r, 0xF0);
     }
-    func_80026DF0((s32)r, 4);
+    func_80026DF0((UnkCardGrp044 *)r, 4);
     q[3] = (s32)(r + 0x14);
     r[0x17] = func_80026DC8((s32)(r + 0x18));
     r[9] = a;
@@ -3841,11 +3929,26 @@ s32 func_80027254(s32 a)
     return func_800491F4(a, D_80028094, 4);
 }
 
-/* NEAR MISS, 40 words / 9 DIFF -- func_80022B48's sibling at base 0xd4 with
-   4 entries. Identical source, identical residue; source in
-   docs/near-misses/func_8002727C.c and the family's measurement table in
-   docs/near-misses/func_80022B48.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002727C);
+void func_8002727C(UnkCardGrp0D4 *c, s32 n)
+{
+    s32 i;
+    u32 v;
+
+    for (i = 0; i < n; i++)
+    {
+        v = D_8002E5D8[0];
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = v;
+        c->prims[i][1] = D_8002E5D8[1];
+        c->prims[i][2] = D_8002E5D8[2];
+        c->prims[i][3] = D_8002E5D8[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002E5E8[0];
+    c->shared[1] = D_8002E5E8[1];
+    c->shared[2] = D_8002E5E8[2];
+}
 
 void func_8002731C(s32 *p, s32 v)
 {
@@ -3875,7 +3978,7 @@ s32 *func_80027364(s32 *p)
         ((u16 *)q)[15] &= 0x7FFF;
         func_80069EC8(r, 0x180);
     }
-    func_8002727C((s32)r, 4);
+    func_8002727C((UnkCardGrp0D4 *)r, 4);
     q[3] = (s32)(r + 0x38);
     r[0x3B] = func_80027254((s32)(r + 0x3C));
     func_80027324(r, (s32)p);
