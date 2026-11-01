@@ -5,6 +5,36 @@
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
 
+/* Declarations this park needs; they live in csrc/ovl_main_80020000.c.
+   Repeated here so the park compiles STANDALONE, which is what
+   tools/decomp/permimport.py needs -- without them a permrun reports a
+   silent `base=?` and searches nothing. */
+typedef struct
+{
+    s32 unk_00;
+    s32 unk_04;
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+    u8 unk_0E;
+    u8 unk_0F;
+} UnkCardPrim;
+
+typedef struct
+{
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+} UnkCardPrim12;
+
+typedef struct
+{
+    s32 unk_00;
+    UnkCardPrim *unk_04;
+    UnkCardPrim12 *unk_08;
+    s32 unk_0C;
+} UnkCardPair;
+
 void func_80023258(s32 *p)
 {
     s32 w = p[35];

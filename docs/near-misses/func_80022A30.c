@@ -5,6 +5,40 @@
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
 
+/* Declarations this park needs; they live in csrc/ovl_main_80020000.c.
+   Repeated here so the park compiles STANDALONE, which is what
+   tools/decomp/permimport.py needs -- without them a permrun reports a
+   silent `base=?` and searches nothing. */
+typedef struct
+{
+    s32 unk_00;
+    s32 unk_04;
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+    u8 unk_0E;
+    u8 unk_0F;
+} UnkCardPrim;
+
+typedef struct
+{
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+} UnkCardPrim12;
+
+/* Four bytes, alignment 1: func_80026128 copies this out of D_80028064 with
+   lwl/lwr + swl/swr, which is what gcc emits for a struct it cannot assume is
+   word-aligned. */
+typedef struct
+{
+    u8 b0;
+    u8 b1;
+    u8 b2;
+    u8 b3;
+} UnkFour;
+extern u8 D_800200A0[];
+
 u8 *func_80022A30(u8 *p, s32 *q)
 {
     u8 buf[4];

@@ -5,6 +5,15 @@
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
 
+/* Declarations this park needs; they live in csrc/ovl_main_80020000.c.
+   Repeated here so the park compiles STANDALONE, which is what
+   tools/decomp/permimport.py needs -- without them a permrun reports a
+   silent `base=?` and searches nothing. */
+extern s32 D_80028530;
+extern s32 D_80028538;
+extern s32 D_800287D0;
+extern s32 D_80084118;
+
 s32 func_8002168C(void)
 {
     s32 st = func_80021594();

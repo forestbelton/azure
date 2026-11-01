@@ -11,6 +11,19 @@
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
 
+/* Declarations this park needs; they live in csrc/ovl_main_80020000.c.
+   Repeated here so the park compiles STANDALONE, which is what
+   tools/decomp/permimport.py needs -- without them a permrun reports a
+   silent `base=?` and searches nothing. */
+typedef struct
+{
+    u8 *strs[5];
+    u8 unk_14;
+    u8 unk_15;
+    u8 unk_16;
+    u8 unk_17;
+} UnkStrSet;
+
 void func_80022BE8(UnkStrSet *q)
 {
     s32 maxlen = 0;
@@ -33,6 +46,6 @@ void func_80022BE8(UnkStrSet *q)
             last = i;
         }
     }
-    base[0x16] = maxlen;
-    base[0x17] = last + 1;
+    q->unk_16 = maxlen;
+    q->unk_17 = last + 1;
 }

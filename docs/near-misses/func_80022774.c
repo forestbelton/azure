@@ -5,6 +5,35 @@
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
 
+/* Types and declarations this needs; they live in csrc/ovl_main_80020000.c,
+   which is also where the live comment is. Repeated here so the park compiles
+   standalone, which is what tools/decomp/permimport.py needs. */
+typedef struct
+{
+    u8 b0;
+    u8 b1;
+    u8 b2;
+    u8 b3;
+} UnkFour;
+
+typedef struct
+{
+    u8 b[24];
+} UnkBlock24;
+
+typedef struct
+{
+    u8 *strs[5];
+    u8 unk_14;
+    u8 unk_15;
+    u8 unk_16;
+    u8 unk_17;
+} UnkStrSet;
+
+extern u8 D_800200A0[];
+extern u8 D_80027F48[];
+extern UnkStrSet D_800280B4[];
+
 u8 *func_80022774(u8 *p, s32 *q)
 {
     u8 buf[4];
