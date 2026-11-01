@@ -95,9 +95,26 @@ The queue, in order:
       The unit map is in `docs/overlays.md`: nine original translation units,
       `tools/assertmap.py` recovers them, and the live block's own 24 assert
       sites (all `c_server.c`) agree with the propagated map wherever they
-      overlap. **Carve this file into the nine units before matching anything
-      whose shape depends on which unit it is in.** Of 241 functions, 110 are
-      under 20 words and 201 under 50.
+      overlap.
+
+      **Sweeping: 81 of 241 functions, 902 of 7487 words as of 2026-11-01.**
+      Work the FAMILIES -- grouping stubs by masked instruction signature
+      found 15 of them among the stubs, and three families were most of the
+      first day's progress. `tools/decomp/ovlverify.py` is the fast loop and
+      `make build/main.bin` is the gate.
+
+      **The carve is NOT the first step, which is a correction to the plan
+      this entry used to carry.** Only one of the nine boundaries is anywhere
+      near pinned (`c_server.c` ends at idx 57 or 58, from the rodata
+      ordering constraint), carving needs nine exact text boundaries plus a
+      three-way rodata split, and at `-G0` unit membership no longer changes
+      the shape of a global access. The sweep produces the anchors that pin
+      the carve, not the other way round. One combined file is safe for
+      rodata order as long as function order is preserved.
+
+      One near-miss parked with its analysis in the source:
+      `func_80022B48` and five siblings, 40 words each, three spellings
+      measured and none reaching it.
 
       Open before town can follow: its 59 tier-2 low-RAM overlays vote much
       more weakly than the big four (`+0x2ab000` 42 against 9, `+0x64b000`

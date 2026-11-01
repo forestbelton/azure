@@ -556,3 +556,109 @@ into the stores.
 Two of the overlay's 241 functions were free: `func_80021904` and
 `func_8002519C` are `jr $ra; nop`, and splat emits them as real C rather than
 `INCLUDE_ASM`. So the overlay stands at 3 of 241.
+
+## Sweeping the card overlay (2026-11-01)
+
+**81 of 241 functions, 902 of 7487 words, `make containers` byte-identical on
+all four.** `tools/decomp/ovlverify.py` for the fast loop, `make build/main.bin`
+as the gate.
+
+### The carve is not possible yet, and does not block the sweep
+
+The plan said to carve the file into the nine units first. That was the wrong
+order, and the rodata is what shows it.
+
+A unit emits one contiguous `.rodata`, so the 11 rodata labels in
+`0x80020000..0x80020924` must partition across the units in text order. They
+do, and it is a real check: listing each label with the index of the first
+function that references it gives **8, 8, 22, 22, 23, 27, 54, 123, 156, 170**
+-- strictly non-decreasing in rodata address, which a wrong unit order would
+break. Two functions sharing a label are in the same unit, so idx 54 and 57
+(both reaching `0x800200A0`) merge, which extends `c_server.c` past its last
+alignment-bracketed anchor and pins its end to **idx 57 or 58**, one index of
+slack.
+
+That is the ONLY boundary anywhere near pinned. Carving nine units needs nine
+exact text boundaries and a three-way split of the rodata -- `c_server.c` to
+`0x800200A4`, `cardbk.c` the four bytes at `0x800200A4`, `cardinfo.c` the rest
+including the 2156-byte Shift-JIS message pool at `0x800200B8`, which is
+full-width Shift-JIS card-UI text ("failed to delete data!", "Do you wish to
+delete", "Cannot overwrite this data!"). Those attributions follow from the
+ordering, but the text boundaries do not.
+
+So the dependency runs the other way: **the sweep produces the anchors that
+pin the carve.** And at `-G0` the carve buys much less than it did for the
+engine -- the declared-size addressing lever does not exist there (see above),
+so unit membership no longer changes the shape of a global access. One
+combined file is also safe for rodata ORDER, because first-use order within
+it equals the target's rodata order as long as function order is preserved,
+which splat already does. What a carve is still needed for is a faithful
+source tree and per-unit rodata placement, and the risk it carries is
+colliding `static`s -- nothing seen so far.
+
+### Where the yield was
+
+Families. Grouping the stubs by masked instruction signature (`jal` targets
+and i-type immediates dropped) found 15 families among the 177 stubs, and
+three of them were most of a day's progress:
+
+* **20 one-line message wrappers** (`func_80022E74..func_8002316C`, 10 words
+  each, `0x28` apart) around `card_mes.c`'s `func_80022D60(a, id, kind, p)`,
+  one per message id 0..19. Decoded mechanically from which argument register
+  each wrapper writes; the register copies (`addu $a2, $a1, $zero` where kind
+  equals id, `addu $a3, $a2, $zero` where both are 0) are gcc reusing an
+  equal value, not source. All 20 landed from one generator.
+* **5 three-pointer primitive initialisers** (37 words each).
+* **13 small accessor/setter/wrapper groups** of 2-20 words.
+
+### Four levers this overlay needed
+
+1. **The pointer-local hoist** (`docs/matching-levers.md:3173`), per site.
+   `func_80020924` and `func_8002137C` both store to a global on one branch
+   and read or store it on another; through the symbol each `%hi` is emitted
+   beside its own store and the second branch materialises a second `lui`,
+   one word long. Through a local assigned just before the branch the `%hi`
+   goes ahead of it, both arms share the register, and reorg pulls it into the
+   branch delay slot.
+2. **The array-spelling aliasing lever** (`include/structs.h`'s
+   `extern u32 D_800814B0[1]`, `docs/matching-levers.md` section 5), and this
+   unit needs **both spellings of one symbol**. `func_80026FB4` updates
+   `D_800814A0` in place beside a `u16` store and the target INTERLEAVES the
+   two, which the scalar form permits. `func_80023A00` does the same two
+   updates and the target does NOT interleave -- 20 words with a load-delay
+   nop against 19 interleaved -- so it needs the array form, where both sides
+   are in-struct, cse's `invalidate` drops the cached load and sched1 cannot
+   hoist. `extern u32 D_800814A0_a[1] __asm__("D_800814A0");` gives the array
+   spelling without touching the shared declaration every engine unit uses.
+   Neither a cast-to-pointer index nor a pointer local reaches it: both stay
+   at 19 words.
+3. **A struct copy is not a word copy.** `*a = *(UnkCardPrim *)D_8002E5D8`
+   compiles to gcc's block move -- three loads then three stores off a
+   materialised base -- while the target has four independent `lw`/`sw` pairs
+   with load-delay nops. Four separate word assignments through a `u32 *` are
+   what match. The templates stay `extern u32 []` as `include/structs.h`
+   declares them; retyping them would reach every engine unit.
+4. **Where a loop-invariant address is computed decides its register and its
+   schedule.** In the 37-word family the second template's base must be a
+   local assigned before the copies (`u32 *s2 = D_8002E5E8;`): then its live
+   range overlaps the first copy, it takes `$a3` instead of reusing `$v0`, and
+   sched1 fills the first copy's load-delay nops with it -- 37 words against
+   39 with the nops left in place.
+
+And two shapes worth knowing for the next sweep: a downcounted `do`/`while`
+wants its increment in the CONDITION (`} while (++i < 10);` is 9 words,
+`i++;` in the body is 10 -- the body form hoists the increment above the load
+and pays a load-delay nop), and two initialisers in a row want the cheaper one
+first, since `s32 sum = 0;` ahead of `s32 *q = gsw + 0x82;` is the whole
+difference between 0 and 2 differing words in `func_80021EB8`.
+
+### The one near-miss left
+
+`func_80022B48` and its five siblings (40 words each, 240 words together) are
+the arrayed form of the 37-word initialiser, at six base offsets with six
+counts (`0x8B0`/7, `0x184`/18, `0x240`/10, `0xB20`/21, `0x44`/4, `0xD4`/4) and
+an identical internal layout at all six. The shape is worked out and recorded
+in `csrc/ovl_main_80020000.c`; three spellings have been measured (38w/40
+DIFF, 39w/37, 39w/40) and the open question is which induction variables the
+target derives, since it keeps the base in `$t3` with only `$a3 = 0` above the
+loop guard and everything else in the preheader.
