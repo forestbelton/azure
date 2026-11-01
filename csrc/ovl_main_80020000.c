@@ -243,6 +243,13 @@ UnkNode *func_80044144(s16 a, s16 b, u32 c, u32 d);
 void func_800A68F4(void);
 void func_8005863C(void);
 void func_8006A084(void);
+extern u8 D_80020000[];
+extern u8 D_80020028[];
+s32 func_8006A004(s32 ev);
+s32 func_80069FF4(u32 cls, u32 spec, s32 mode, void *fn);
+s32 func_8006A034(s32 ev);
+void func_80069F18(u8 *fmt, u8 *file, s32 line);
+void func_80069DF8(s32 code) __attribute__((noreturn));
 void func_8006A094(void);
 void func_8006A248(u32 ev);
 s32 *func_80027AFC(s32 a, s32 b);
@@ -543,7 +550,109 @@ s32 func_80020A6C(void)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80020A80);
+/* c_server.c's event setup, and the overlay's second largest function: eight
+   func_80069FF4 (OpenEvent) calls inside the func_8006A084 / func_8006A094
+   critical section, each asserting the handle is not -1, then eight
+   func_8006A034 (EnableEvent) calls each asserting a non-zero result. Source
+   lines 185..200 and 212..226.
+
+   It falls out whole once func_80069DF8 is NORETURN (see func_80020F18): each
+   of the sixteen %hi values then stays live in its own callee-saved register
+   across the calls, which is why the function saves $s0..$s7 and $fp, and
+   $s0 holds the -1 the first eight comparisons share. */
+void func_80020A80(void)
+{
+    func_8006A084();
+    D_80028550 = func_80069FF4(0xF4000001, 4, 0x2000, 0);
+    if (D_80028550 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 185);
+        func_80069DF8(1);
+    }
+    D_80028554 = func_80069FF4(0xF4000001, 0x8000, 0x2000, 0);
+    if (D_80028554 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 187);
+        func_80069DF8(1);
+    }
+    D_80028558 = func_80069FF4(0xF4000001, 0x100, 0x2000, 0);
+    if (D_80028558 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 189);
+        func_80069DF8(1);
+    }
+    D_8002855C = func_80069FF4(0xF4000001, 0x2000, 0x2000, 0);
+    if (D_8002855C == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 191);
+        func_80069DF8(1);
+    }
+    D_80028560 = func_80069FF4(0xF0000011, 4, 0x1000, (void *)func_80020A30);
+    if (D_80028560 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 194);
+        func_80069DF8(1);
+    }
+    D_80028564 = func_80069FF4(0xF0000011, 0x8000, 0x1000, (void *)func_80020A44);
+    if (D_80028564 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 196);
+        func_80069DF8(1);
+    }
+    D_80028568 = func_80069FF4(0xF0000011, 0x100, 0x1000, (void *)func_80020A58);
+    if (D_80028568 == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 198);
+        func_80069DF8(1);
+    }
+    D_8002856C = func_80069FF4(0xF0000011, 0x2000, 0x1000, (void *)func_80020A6C);
+    if (D_8002856C == -1)
+    {
+        func_80069F18(D_80020000, D_80020028, 200);
+        func_80069DF8(1);
+    }
+    func_8006A094();
+    if (func_8006A034(D_80028550) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 212);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_80028554) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 214);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_80028558) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 216);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_8002855C) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 218);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_80028560) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 220);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_80028564) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 222);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_80028568) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 224);
+        func_80069DF8(1);
+    }
+    if (func_8006A034(D_8002856C) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 226);
+        func_80069DF8(1);
+    }
+}
 
 void func_80020EA0(void)
 {
@@ -562,7 +671,61 @@ void func_80020EA0(void)
     D_800287C8 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80020F18);
+/* c_server.c's teardown: eight asserts bracketed by func_8006A084 /
+   func_8006A094 (EnterCriticalSection / ExitCriticalSection), one per event
+   handle, at source lines 263..277 in steps of two.
+
+   func_80069DF8 has to be declared NORETURN. Without it gcc assumes each
+   assert body falls through into the next test, so after the two calls it
+   re-materialises the next handle's %hi -- one extra word per assert, 121
+   against 114. With it the `lui` that reorg puts in each `bnez`'s delay slot
+   is the one the branch target's `lw` uses. This is the lever that makes the
+   whole assert family reachable; see func_80020A80, which has 24 of them. */
+void func_80020F18(void)
+{
+    func_8006A084();
+    if (func_8006A004(D_80028550) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 263);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_80028554) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 265);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_80028558) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 267);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_8002855C) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 269);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_80028560) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 271);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_80028564) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 273);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_80028568) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 275);
+        func_80069DF8(1);
+    }
+    if (func_8006A004(D_8002856C) == 0)
+    {
+        func_80069F18(D_80020000, D_80020028, 277);
+        func_80069DF8(1);
+    }
+    func_8006A094();
+}
 
 s32 func_800210E0(void)
 {
