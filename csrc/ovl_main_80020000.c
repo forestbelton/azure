@@ -1143,7 +1143,48 @@ void func_8002223C(void)
     func_8002219C(5);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002225C);
+/* The space-skipping width measurer: for each of the a+1 segments it skips a
+   run of spaces (one unit each), then walks the glyphs two bytes at a time
+   (two units each), reporting the run start in *x, the glyph count in *y and
+   the accumulated glyph total in *z.
+
+   The space skip has to be a plain `while`, not a guarded `do`/`while`. Both
+   compile to the same guard-plus-rotated-test shape, but written as
+   `if (...) do ... while (...)` gcc shares ONE register for the 0x20 it
+   compares against, where the target has three: one hoisted out of the outer
+   loop, one hoisted into the skip loop by loop rotation, and one for the
+   glyph walk. Writing the skip as a loop in its own right is what makes
+   loop.c hoist that second copy. */
+void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z)
+{
+    s32 total = 0;
+    s32 n = 0;
+    s32 i = 0;
+
+    *z = 0;
+    if (a < 0)
+    {
+        return;
+    }
+    do
+    {
+        *z += n;
+        while (*s == ' ')
+        {
+            s++;
+            total++;
+        }
+        *x = total;
+        n = 0;
+        while (*s != ' ' && *s != 0)
+        {
+            s += 2;
+            n++;
+        }
+        total += n * 2;
+        *y = n;
+    } while (++i <= a);
+}
 
 /* NEAR MISS, 15 words -- the right length and the right instruction set, with
    11 of 15 in the wrong order or register. Source in
