@@ -310,6 +310,8 @@ extern s32 D_8002809C[];
 extern u8 D_80028068[][2];
 extern u8 D_80027E78[][0x20];
 extern u8 D_800200B8[];
+s32 func_80049DE8(s32 a, s32 b, s32 c);
+void func_8002651C(s32 *p);
 void func_8006733C(UnkURect *r, u8 *src);
 void func_80067014(s32 n);
 extern s32 D_8002806C[];
@@ -435,7 +437,7 @@ void func_80024ACC(s32 *p);
 void func_800270E0(s32 *p);
 
 void func_80025230(s32 *p);
-void func_800265B8(void);
+void func_800265B8(s32 *p);
 void func_80027584(s32 *p);
 void func_8002789C(void);
 void func_8002593C(void);
@@ -2732,7 +2734,91 @@ void func_8002651C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800265B8);
+/* The card-list input handler. Three things are load-bearing:
+
+   The `p[12] >= 0xD` arm has to come FIRST, with the plain increment as the
+   `else`: the target's `slti`/`bnez` jumps forward to the increment, so the
+   increment is the block placed after the chain, and writing it the natural
+   way round costs a `j` over it.
+
+   The two exit tests must be two separate `if`s. As `r == 0 || r == 1` gcc
+   folds them into `sltiu $s0, $s0, 2`, where the target keeps `beqz` plus a
+   `beq` against a materialised 1.
+
+   The 0x20 case leaves through a `goto` into the tail -- it does NOT fall
+   into the func_8002168C/func_80021904 pair the way every other path does.
+
+   D_80083160 is the Unk80083160 struct from include/structs.h, read as
+   .unk_08 and .unk_10; the same pair appears in func_800277BC. */
+void func_800265B8(s32 *p)
+{
+    s32 dir = 0;
+    s32 r;
+
+    if (D_80083160.unk_08 != 0)
+    {
+        if (D_80083160.unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            goto close;
+        }
+        if (D_80083160.unk_10 & 0x40)
+        {
+            func_80053DA8(0x503);
+            func_8002651C(p);
+        }
+        else if (D_80083160.unk_08 & 0x5000)
+        {
+            if (D_80083160.unk_10 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_80083160.unk_10 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_10 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 4;
+                if (D_80083160.unk_08 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_80083160.unk_08 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        if (dir != 0)
+        {
+            func_80053DA8(0x502);
+            p[11] = func_80049DE8(p[11], dir, 5);
+            func_80025DC8(p);
+        }
+    }
+    r = func_8002168C();
+    func_80021904();
+    if (r == 0)
+    {
+        return;
+    }
+    if (r == 1)
+    {
+        return;
+    }
+close:
+    func_80026920(p - 8);
+    func_80027AFC(p[8], p[9]);
+}
 
 void func_80026720(s32 *p, s32 v)
 {
