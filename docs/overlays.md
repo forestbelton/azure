@@ -321,3 +321,112 @@ Sizes, for scale: the heuristic in `docs/where-we-are.md` puts about 8.4 MB of
 code-bearing blocks across the three containers against 216 KB in the resident
 executable. Even discounting it heavily for packed data, the content dwarfs the
 engine.
+
+## The unit map for the card overlay (2026-11-01)
+
+`tools/assertmap.py` turns the twin into a translation-unit map for the live
+`0x80020000` overlay. It is the overlay replacement for `tools/tuscan.py`,
+which proposes units from `$gp`-relative accesses and therefore has nothing to
+read here: the overlays are `-G0`.
+
+Three signals, in decreasing strength, and one structural constraint. The
+constraint is tuscan's: the linker lays each object's text out contiguously,
+so a unit must be a contiguous run of functions in address order.
+
+1. **Assert sites.** 37 of them across the twin's 9 units, each naming its
+   unit and its `__LINE__`.
+2. **Own-rodata references.** Each unit's string literals sit in its own
+   object's `.rodata`, and the linker emitted the units' rodata in the same
+   order as their text, so a function reaching into unit X's rodata run was
+   compiled in X. 33 functions carry this, and **none of them references more
+   than one unit's rodata** -- the signal is perfectly clean here.
+3. **Own-data references**, corroboration only. `.bss` here holds shared
+   globals as well as per-unit statics, so the ranges overlap
+   (`cardbk.c` reaches `0x805030EF`, `cardinfo.c` `0x80408EC8..0x8040B516`)
+   and it cannot set a boundary. It is what argues the twin's first eight
+   functions belong to `c_server.c`: they share `0x804094E8`/`0x804094EC` with
+   functions inside that unit's run and have no rodata of their own.
+
+In the twin all nine units come out **contiguous and in strict address order
+with zero interleaving**, which is what link order looks like and is a check
+the signals were not forced to pass.
+
+### Propagating to the live block
+
+The two builds are the same source in the same link order, so their function
+sequences align. The tool runs an order-preserving global alignment over
+masked instruction words -- `jal` targets and i-type immediates dropped, since
+those differ between the links -- and carries each unit label across.
+**184 of the live block's 241 functions pair.**
+
+The scoring matters and the obvious choice is wrong. difflib's symmetric
+`ratio()` pairs only 171, and worse, it drops the anchors that matter: the
+twin functions carrying the information are exactly the ones holding asserts,
+and their live counterparts are missing a block per assert. A symmetric ratio
+counts that insertion against both sides and **24 of the 33 anchored functions
+failed to pair, leaving 9 live functions labelled and three units unplaced.**
+Normalising matched length by the shorter body instead treats the extra blocks
+as insertion: 16 anchors carry over and only `cardbk.c` needs bracketing.
+
+Anchors that do not pair are still constrained, because the alignment is
+monotonic: an unpaired twin anchor sits between the nearest paired twin
+indices either side of it, so its live counterpart sits between their live
+partners. That is what places `cardbk.c`, none of whose three anchors paired.
+
+### The map
+
+Live-block function indices (0-based, address order). "starts in" is the
+interval the unit's own first function must lie in.
+
+| unit | starts in | first anchor | last anchor | twin lines | anchors paired |
+|---|---|---|---|---|---|
+| `c_server.c` | [0, 11] | [7, 11] | [56, 58] | 180-267 | 4/14 |
+| `card_mes.c` | [59, 65] | 65 | 65 | 665 | 1/1 |
+| `card_opt.c` | [66, 99] | 99 | 107 | 337 | 3/3 |
+| `card_win.c` | [108, 114] | 114 | 114 | 299-303 | 1/1 |
+| `cardbk.c` | [115, 122] | [121, 122] | [122, 126] | 378 | 0/3 |
+| `cardinfo.c` | [127, 134] | [132, 134] | [166, 173] | 416 | 1/3 |
+| `cardslot.c` | [174, 202] | 202 | 204 | 310-339 | 3/3 |
+| `cardsme.c` | [205, 215] | 215 | [227, 230] | 238 | 2/3 |
+| `memory.c` | [231, 232] | [231, 232] | 232 | 371-387 | 1/2 |
+
+The nine stay in order and do not overlap, which the alignment did not
+enforce. Eight functions follow `memory.c` in the live block and 23 follow it
+in the twin; in the twin those are PSY-Q library stubs (16-byte bodies at
+16-byte spacing), not one of the nine units.
+
+The anchored live functions themselves, which are the ones to start from
+because their unit is known outright rather than bracketed:
+
+| unit | anchored live functions |
+|---|---|
+| `c_server.c` | `func_80021594`, `func_8002191C`, `func_80021EB8`, `func_80021EE0` |
+| `card_mes.c` | `func_80022D60` |
+| `card_opt.c` | `func_800238D4`, `func_80023C44`, `func_80023D64` |
+| `card_win.c` | `func_80023FF0` |
+| `cardinfo.c` | `func_800258C8` |
+| `cardslot.c` | `func_80026ED0`, `func_80026FB4`, `func_80026FD4` |
+| `cardsme.c` | `func_80027364`, `func_800277BC` |
+| `memory.c` | `func_80027BC0` |
+
+The twin's line maxima are lower bounds on each file's length, and
+`card_mes.c` reaching line 665 while its only anchor is one function says most
+of that file's functions are among the 33 unanchored indices before it. That
+is an independent check on any proposed split.
+
+Finally, the live block's own rodata partitions cleanly as far as the anchors
+reach: `0x80020034`, `0x80020048` and `0x80020084` belong to `c_server.c` and
+`0x800200A8` to `cardinfo.c`, none disputed. Four addresses is thin -- the
+live block has only 10 rodata symbols -- but it is the mechanism a per-unit
+rodata split will use, and it needs more anchored functions rather than a
+different method.
+
+### What not to use the twin for
+
+* **Its external `jal` targets are not retail engine addresses.** It calls
+  printf at `0x8007C040` and exit at `0x8007BEF0`; in the shipped executable
+  those land inside libgte's `rcossin_tbl`. It was linked against a different
+  engine build.
+* **It is not itself the goal.** It is dead code on retail. The live
+  `0x80020000` overlay is what gets decompiled; the twin exists to say what
+  the units are.
