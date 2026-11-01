@@ -1,6 +1,15 @@
 #include "common.h"
 
-/* NEAR MISS: 102 words -- the right count -- but 84 differing, nearly all of it register names cascading from one hoisting decision. This is func_80022A30's bigger sibling (same unaligned D_800200A0 copy, same four iterations, same 'p[-0x18] |= 0x80' and return) with THREE primitives per iteration instead of two: 0xC, 0xC and then 0x18 bytes, the last one a D_80027F48 template copied through a 24-byte alignment-1 struct and then patched with four 0x90D0E0 words. The width and height come from D_800280B4[q[2]].unk_16 * 4 and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite bytes. Declaring w and h as u32 is right -- it turns three of the four halvings from 'sra' into the 'srl' the target has, and the fourth, (w + 0xA) >> 1, really is 'sra' there. What is left: loop.c hoists all FOUR halvings out of the loop here, where the target hoists only three and leaves 'h + 0xA' unshifted in $t4, doing the 'srl' inside the loop each iteration -- a move_movables threshold decision, so the register pressure differs by one quantity. Seven spellings measured: >>1 and /2 on u32 and on s32 with casts (all 102w/84), and three shapes that hoist a, b and c into explicit locals and shift d inline (102w/88, and 111w/102 when the UnkStrSet row is re-indexed per value instead of cached in w/h).
+/* NEAR MISS: 102 words -- the right count -- but 84 differing, nearly all of it register names cascading from one hoisting decision. This is func_80022A30's bigger sibling (same unaligned D_800200A0 copy, same four iterations, same 'p[-0x18] |= 0x80' and return) with THREE primitives per iteration instead of two: 0xC, 0xC and then 0x18 bytes, the last one a D_80027F48 template copied through a 24-byte alignment-1 struct and then patched with four 0x90D0E0 words. The width and height come from D_800280B4[q[2]].unk_16 * 4 and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite bytes. Declaring w and h as u32 is right -- it turns three of the four halvings from 'sra' into the 'srl' the target has, and the fourth, (w + 0xA) >> 1, really is 'sra' there. What is left: loop.c hoists all FOUR halvings out of the loop here, where the target hoists only three and leaves 'h + 0xA' unshifted in $t4, doing the 'srl' inside the loop each iteration -- a move_movables threshold decision, so the register pressure differs by one quantity. Its smaller sibling func_80022A30 was corrected on 2026-11-01 (the byte-0
+   store comes LAST in each primitive, and the 0xA/0xB bytes come from a
+   register and a `u8` COPY of it), which took that one from 36 DIFF to 8.
+   Neither correction helps here: byte-0 last is 102w/85 and `u8` locals for
+   the four halvings are 102w/88, because this function's residue is the
+   hoisting count, not the store order -- the target's loop-body order is the
+   same 0xA, 0xB, 1, 4, 0 either way, and the scheduler reaches it from both
+   spellings.
+
+   Seven spellings measured: >>1 and /2 on u32 and on s32 with casts (all 102w/84), and three shapes that hoist a, b and c into explicit locals and shift d inline (102w/88, and 111w/102 when the UnkStrSet row is re-indexed per value instead of cached in w/h).
 
    Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80020000.c, which also carries the
    declarations this needs. */
