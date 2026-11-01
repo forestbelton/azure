@@ -27,27 +27,31 @@ typedef struct Probe
 } Probe;
 
 /* A: a cast pointer -- a NON-struct reference. */
-s32 pr_a(u8 *p) {
-    *(u16 *) (p + 0x64) = *(u16 *) (p + 0x64) + 1;
-    return *(u16 *) (p + 0x64) & 1;
+s32 pr_a(u8 *p)
+{
+    *(u16 *)(p + 0x64) = *(u16 *)(p + 0x64) + 1;
+    return *(u16 *)(p + 0x64) & 1;
 }
 
 /* B: a real struct field -- MEM_IN_STRUCT_P is set. */
-s32 pr_b(Probe *p) {
+s32 pr_b(Probe *p)
+{
     p->f = p->f + 1;
     return p->f & 1;
 }
 
 /* C: struct field, post-increment. */
-s32 pr_c(Probe *p) {
+s32 pr_c(Probe *p)
+{
     p->f++;
     return p->f & 1;
 }
 
 /* D: cast pointer, but the store and the load go through DIFFERENT bases. */
-s32 pr_d(u8 *p) {
-    u16 *c = (u16 *) (p + 0x64);
+s32 pr_d(u8 *p)
+{
+    u16 *c = (u16 *)(p + 0x64);
 
     *c = *c + 1;
-    return *(u16 *) (p + 0x64) & 1;
+    return *(u16 *)(p + 0x64) & 1;
 }

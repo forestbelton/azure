@@ -148,12 +148,43 @@ void func_8002742C(s32 *p);
 void func_80025030(s32 *p);
 void func_80025DC8(s32 *p);
 void func_8004F52C(s32 a);
+u8 *func_8004DA74(u8 *out, u8 *s, s32 a);
+void func_8004CB2C(s32 *p);
+void func_80026920(s32 *p);
+void func_80027BF4(void);
+void func_80040AA0(s32 a);
+void func_8005863C(void);
+void func_8006A084(void);
+void func_8006A094(void);
+void func_8006A248(u32 ev);
+void func_80027AFC(s32 *p, s32 a);
+void func_80022A30(s32 *a, s32 *b);
+void func_80021538(void);
+void func_80025D34(s32 *p);
+void func_80023E14(s32 *p);
+void func_80025F0C(s32 *p, s32 v);
+void func_80025FFC(s32 *p, s32 v);
+void func_80026D78(s32 *p);
+void func_80022BE8(u8 *p);
+s32 func_80069BF8(s32 a);
+extern u8 D_80028020[];
+extern u8 D_800280B4[];
+extern s32 D_80028570[][10];
+extern s32 D_800287E0;
+void func_80024A50(s32 *p);
+/* In town's/dungeon's overlay region above the engine, reached as a plain
+   absolute call; the address comes from main.bin_undefined_funcs_auto.txt. */
+void func_800A68C0(void);
+extern u8 D_80077EF0[];
+extern u8 D_80077EFC[];
+void func_80020EA0(void);
+extern u8 D_800282CC[];
 s32 func_80021D54(s32 n);
 s32 func_80023FF0(s32 a, s32 n);
-void func_80025B9C(void);
+void func_80025B9C(s32 *p);
 void func_80027684(void);
 void func_80020984(void);
-void func_80026410(void);
+void func_80026410(s32 *p);
 void func_80049D80(s32 p, s16 *r);
 void func_8004E994(s32 a);
 extern u8 D_800786DC[];
@@ -204,9 +235,25 @@ void func_80020924(s32 arg0)
     func_800213C4(D_800287CC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80020984);
+void func_80020984(void)
+{
+    func_800214A4();
+    func_80069C28(0);
+    func_80069C28(1);
+    func_800213C4(D_800287CC);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800209C4);
+void func_800209C4(void)
+{
+    s32 v;
+
+    func_800214A4();
+    func_80069C28(0);
+    func_80069C28(1);
+    v = 0x10 - D_800287CC;
+    D_800287CC = v;
+    func_800213C4(v);
+}
 
 void func_80020A0C(void)
 {
@@ -283,13 +330,26 @@ s32 func_800213A0(void)
     return r;
 }
 
+/* NEAR MISS: 18 words against 19: the target carries an extra 'addu $v1, $v0, $zero' copy before storing 1 into D_800287C8, with the constant materialised back in the loop's branch delay slot. Three spellings measured (a local for the 1, 'while' against 'do/while', the two stores swapped), all 18 words and 10-11 DIFF. Reload artifact; permuter.
+   Source in docs/near-misses/func_800213C4.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800213C4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021410);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800214A4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800214FC);
+s32 func_800214FC(void)
+{
+    s32 v = D_800287E4;
+    s32 r = 0;
+
+    if (v != 0)
+    {
+        r = v;
+        func_80021538();
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021538);
 
@@ -320,6 +380,8 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020074);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002191C);
 
+/* NEAR MISS: 18 words against 19: the target copies the materialised base into the induction variable ('addu $v1, $v0, $zero') and seeds the sum from the counter's zero ('addu $a1, $a2, $zero'); every spelling folds one of the two away. Four measured (indexed against pointer-walk, counter declared first or not, guarded do/while), all 18 words.
+   Source in docs/near-misses/func_800219B8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800219B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021A04);
@@ -355,6 +417,19 @@ void func_80021EB8(s32 *gsw)
     gsw[0x81] = sum;
 }
 
+/* NEAR MISS, 14 words and 6 DIFF, all of them register NAMES -- the target
+   keeps the cursor in $a1 and the counter in $v1, this gets them the other way
+   round. Source in docs/near-misses/func_80021EE0.c; it is the verifier half
+   of func_80021EB8 above.
+
+   The INDEXED loop is not a stylistic choice and must be kept: written as
+   `*q++` with an upcount, loop.c's check_dbra_loop reverses the loop into the
+   downcount form func_80021EB8 actually has (`li 0x177D` / `addiu -1` /
+   `bgez`), 13 words. Indexing by the counter makes it the addressing biv and
+   blocks the reversal. Seven spellings all give 14 words and the same 6 DIFF:
+   declaration order either way, `for` against `do`/`while`, `q[i]` against
+   `gsw[0x82 + i]` against `(gsw + 0x82)[i]`, `== sum` against
+   `(... ^ sum) == 0`, and u32 against s32. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021EE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021F18);
@@ -374,7 +449,20 @@ s32 func_80022138(void)
     return *p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022160);
+s32 func_80022160(void)
+{
+    s32 count = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (D_80083E98[i][0] != 0)
+        {
+            count++;
+        }
+    } while (++i < 5);
+    return count;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002219C);
 
@@ -385,6 +473,23 @@ void func_8002223C(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002225C);
 
+/* NEAR MISS, 15 words -- the right length and the right instruction set, with
+   11 of 15 in the wrong order or register. Source in
+   docs/near-misses/func_80022300.c. The target reads p[0] at word 4, between
+   the two halves of `(n << 3) + 4`, keeps it in $v1 across the whole body and
+   writes it back from the `jr` delay slot, and computes the return value
+   `p + 0xC` in the middle at word 9; every spelling tried reads p[0] at word 7
+   and computes the return value in the delay slot instead. Seven measured: an
+   explicit temp for p[0] or the OR folded into it, the return value in a local
+   declared first, the word store moved before or after the `p[0xA]` byte
+   store, and `u32 *` against `s32 *` for it.
+
+   The first parameter really is unused -- $a0 is overwritten by the 0xA04010
+   constant at word 0 while $a1 and $a2 are read, so there are three
+   parameters and the first is dead. This is very likely a PSY-Q primitive
+   macro (the byte at 0x1 is 0x28, the byte at 0xB is 0x13, the word at 0x4 is
+   0xA04010), in which case the shape comes from the macro rather than from
+   anything spellable here. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022300);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002233C);
@@ -395,7 +500,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022488);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022524);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800226A8);
+void func_800226A8(s32 *p)
+{
+    if (*(s32 *)p[8] == 0)
+    {
+        func_800231E4(0);
+    }
+}
 
 void func_800226E0(UnkCardPair *p, u32 *a, u32 *b)
 {
@@ -433,7 +544,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022934);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022A30);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022AE8);
+void func_80022AE8(s32 *p)
+{
+    func_80022A30(p + 9, p);
+    func_8002290C(p);
+}
 
 void func_80022B20(s32 a)
 {
@@ -450,9 +565,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022B48);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022BE8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022C48);
+void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
+{
+    p[5] = a;
+    p[2] = b;
+    p[3] = c;
+    p[8] = d;
+    func_80022BE8(&D_800280B4[b * 24]);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022C90);
+void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
+{
+    func_80022C48(p, a, b, c, d);
+    func_800226E0((UnkCardPair *)(p + 0x22F), (u32 *)(p + 0x225), (u32 *)(p + 0x229));
+    func_80022AE8(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022CD8);
 
@@ -809,7 +936,18 @@ void func_80024274(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024298);
+void func_80024298(s32 *p)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        func_800240EC(q);
+        func_80024160((s32 **)q);
+        func_80023E14(q);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800242D8);
 
@@ -882,7 +1020,19 @@ void func_80024EEC(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024F3C);
+void func_80024F3C(s32 *p, s32 a, s32 b)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        q[0x1F] = a;
+        q[0x20] = b;
+        func_80024E44(q);
+        func_80024A50(q);
+    }
+}
 
 void func_80024F7C(s32 *p)
 {
@@ -906,7 +1056,11 @@ void func_80024FAC(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024FFC);
+void func_80024FFC(s32 *p)
+{
+    func_80025030(p);
+    p[-4] = (s32)func_8002593C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025030);
 
@@ -933,7 +1087,11 @@ void func_800252A4(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800252CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025358);
+void func_80025358(s32 *p, s32 v)
+{
+    func_80025F0C(p, v);
+    func_80025FFC(p, v);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025398);
 
@@ -993,7 +1151,11 @@ void func_80025B60(s32 *p)
     p[-4] = (s32)func_8002593C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025B9C);
+void func_80025B9C(s32 *p)
+{
+    func_80025D34(p - 8);
+    func_80027AFC((s32 *)p[8], 0);
+}
 
 void func_80025BD4(s32 *p)
 {
@@ -1037,7 +1199,34 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025DC8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025E54);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025ECC);
+/* The byte table is NOT the symbol splat prints. The listing reads
+   `lui $v1, %hi(D_800133A4)` / `lbu $v0, %lo(D_800133A4)($v1)` with `$v1`
+   incremented by 2 each iteration -- a %lo in the displacement with a
+   REGISTER index, which per docs/matching-levers.md:1870 cannot be a symbol
+   reference at all: cse folds a %lo into a MEM only when what is left is a
+   constant offset off the `(high)` pseudo. It is the constant base
+   0x80010000, whose low half is zero so it needs a bare `lui`, with 0x33A4
+   written inside the index expression. splat prints the displacement
+   symbolically because 0x800133A4 happens to be in its symbol list.
+
+   Four symbol spellings cost the extra `addiu` the target does not have, all
+   17 words against 16: `extern u8 D_800133A4[]` indexed, the same as a
+   scalar through `(&D_800133A4)[k]`, a pointer walked by 2, and
+   `*((u8 *)0x800133A4 + i * 2)` -- the last one being a constant too, but
+   with a NONZERO low half, so it still has to be materialised. The zero low
+   half of 0x80010000 is the whole point. */
+s32 func_80025ECC(void)
+{
+    u8 *b = (u8 *)0x80010000;
+    s32 sum = 0;
+    s32 i;
+
+    for (i = 0; i < 0x22; i++)
+    {
+        sum += D_80028020[b[i * 2 + 0x33A4]];
+    }
+    return sum;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025F0C);
 
@@ -1067,7 +1256,12 @@ void func_800261F0(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026240);
+void func_80026240(s32 *p)
+{
+    func_80026920(p - 8);
+    func_80027BF4();
+    func_80040AA0(3);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026270);
 
@@ -1092,7 +1286,17 @@ void func_800263C0(s32 *p)
     p[-4] = (s32)func_80026398;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026410);
+void func_80026410(s32 *p)
+{
+    if (p[14] != 0)
+    {
+        p[-4] = (s32)func_800265B8;
+    }
+    else
+    {
+        func_800263C0(p);
+    }
+}
 
 void func_8002644C(s32 *p)
 {
@@ -1136,7 +1340,11 @@ void func_80026748(s32 *p)
     p[-4] = (s32)func_800265B8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026784);
+void func_80026784(s32 *p)
+{
+    func_80026920(p - 8);
+    func_80027AFC((s32 *)p[8], p[9]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800267C0);
 
@@ -1146,7 +1354,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026920);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800269B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026AE4);
+void func_80026AE4(s32 *p)
+{
+    func_8004CB2C(p + 1);
+    func_8004CB2C(p + 4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026B18);
 
@@ -1184,7 +1396,12 @@ void func_80026DC8(s32 a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026DF0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026E90);
+void func_80026E90(s32 *p, s32 v)
+{
+    p[0] = v;
+    func_80026C00((UnkCardPair *)(p + 0x14), (u32 *)(p + 0xA), (u32 *)(p + 0xE));
+    func_80026D78(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80026ED0);
 
@@ -1207,9 +1424,18 @@ void func_80026FF8(s32 *p)
     func_80026B18(p + 8);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027018);
+void func_80027018(s32 *p)
+{
+    *(s32 *)p[0x3C] = (s32)D_80077EF0;
+    *(s32 *)p[0x3D] = (s32)D_80077EFC;
+    *(s32 *)p[0x3E] = (s32)(p + 1);
+    *(s32 *)p[0x3F] = (s32)(p + 0x1F);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027054);
+void func_80027054(u8 *p)
+{
+    func_8004DA74(p + 0x7C, D_800282CC, 1);
+}
 
 s32 func_80027080(s32 p, s32 w, s32 h)
 {
@@ -1267,7 +1493,10 @@ void func_80027324(s32 *p, s32 v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027364);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002742C);
+void func_8002742C(s32 *p)
+{
+    func_8004E994(*(s32 *)p[0x3F]);
+}
 
 void func_80027458(s32 *p)
 {
@@ -1346,23 +1575,47 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800277BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002789C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027A68);
+void func_80027A68(s32 *p, s32 a, s32 b)
+{
+    p[5] = a;
+    p[0] = b;
+    p[3] = func_8002190C();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027A9C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027AFC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027BC0);
+void func_80027BC0(void)
+{
+    func_8006A084();
+    func_8006A248(0xF2000002);
+    func_8006A094();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027BF4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027C60);
+void func_80027C60(void)
+{
+    func_8005863C();
+    D_80080A84 = 1;
+    func_80020EA0();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027C90);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027D0C);
+void func_80027D0C(s32 *p)
+{
+    func_80027C60();
+    func_80027AFC(p, 1);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027D40);
+void func_80027D40(s32 *p)
+{
+    func_800A68C0();
+    func_80027C60();
+    func_80027AFC(p, 2);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027D7C);
 
@@ -1371,7 +1624,17 @@ s16 func_80027DD0(void)
     return func_8004CAA0();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80027DF4);
+void func_80027DF4(s32 *p, s32 v)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        q[3] = v;
+        func_80026FD4((s32 *)q[9], v);
+    }
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A8);
 
