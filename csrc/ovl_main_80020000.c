@@ -134,6 +134,32 @@ typedef struct
     u8 b[0x20];
 } UnkBlock20;
 
+/* The 0x80-byte save-slot row, declared as a STRUCT alias of D_80083E98 (the
+   unit already has it as `s32 [][32]`, which the other functions want).
+   func_80024390 needs the struct spelling: its first row access is the name
+   at +0xC, so gcc relocates against D_80083E98+0xC -- which splat names
+   D_80083EA4 -- keeps that address in a callee-saved register, and derives
+   the row base as `that - 0xC` in $fp for the other seven fields. With two
+   separate symbols each access materialises its own %hi. */
+typedef struct
+{
+    s32 unk_00;
+    s32 unk_04;
+    s16 unk_08;
+    s16 unk_0A;
+    u8 name[0x10];
+    u32 unk_1C;
+    s32 unk_20;
+    s32 unk_24;
+    s32 unk_28;
+    u32 unk_2C;
+    s32 unk_30;
+    s32 unk_34;
+    u8 pad_38[0x48];
+} UnkSaveRow;
+
+extern UnkSaveRow D_80083E98_s[] __asm__("D_80083E98");
+
 /* 24 bytes, alignment 1: func_80022774 copies a D_80027F48 template into its
    third primitive with lwl/lwr + swl/swr. */
 typedef struct
@@ -361,6 +387,12 @@ s32 func_8006A0C4(s32 fd, u8 *buf, s32 len);
 s32 func_8006A0E4(s32 fd);
 extern u8 D_800200A0[];
 extern u8 D_80027F48[];
+extern u8 D_800282D8[];
+extern u8 D_800282E8[];
+extern u8 *D_800283A8[];
+extern const u8 D_800200A4[];
+extern u8 *D_80027FD4[];
+u8 *func_8004E5E8(s32 v, u16 n, u8 *out);
 void func_80023B18(s32 *p);
 extern u8 D_80027F7C[];
 extern u8 D_800282B0[];
@@ -2299,7 +2331,130 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800242D8);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80024390);
+/* splat migrated this one-character string into func_80024390's listing, so
+   landing that function loses the symbol. Defined here, immediately after
+   D_800200A0, which is where it belongs in the rodata stream -- the same
+   trap and the same fix as D_80020084. */
+const u8 D_800200A4[] = " ";
+
+/* The save-slot detail panel, and the overlay's largest function: eight text
+   sprites built into one 0x100-byte stack buffer and handed to the font
+   renderer, then eight icon slots driven by a bitmask.
+
+   Four things are load-bearing:
+
+   - D_80083E98 has to be the UnkSaveRow STRUCT alias. The first row access
+     in the function is the name at +0xC, so gcc relocates against
+     D_80083E98+0xC -- splat calls that D_80083EA4 -- holds it in $s1 across
+     every call and derives the row base as `$s1 - 0xC` in $fp for the other
+     seven fields. Through the two separate symbols each access materialises
+     its own %hi and the function is five words longer.
+   - Each block's `e = (UnkCardPair *)p[k]` has to come BEFORE that block's
+     calls, not after: $s3 is callee-saved and the target loads it first.
+   - The two clamps are `x >= 1000 ? 999 : x`, not `x < 1000 ? x : 999` --
+     the target branches on the false case with the 999 in the delay slot.
+   - In the icon loop the mask needs its own local (`m = 1 << i`) or combine
+     rewrites `flags & (1 << i)` into `(flags >> i) & 1`, and the flags word
+     needs one too, which is what settles the order of the two hoists in the
+     loop preheader. The two arms assign a pointer and share one store.
+
+   The playtime is `row.unk_1C / 60` unsigned for seconds, then `/ 3600` and
+   `/ 60` signed for hours and minutes -- three different magic multiplies. */
+void func_80024390(s32 *p)
+{
+    u8 buf[0x100];
+    u8 num[0x10];
+    UnkCardPair *e;
+    s32 sec;
+    s32 hr;
+    s32 mn;
+    s32 i;
+    s32 m;
+    u8 *s;
+
+    e = (UnkCardPair *)p[723];
+    func_8003AD08(p[31] + 1, buf);
+    func_80069E38(buf, D_800282D8);
+    func_80069E38(buf, D_80083E98_s[p[31]].name);
+    func_8004DA74((u8 *)p + 0x84, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x84);
+    e->unk_04->unk_08 = 0xA8;
+    e->unk_04->unk_0A = 0x110;
+    e = (UnkCardPair *)p[724];
+    func_80069E78(buf, D_800282E8);
+    func_8004DA74((u8 *)p + 0x204, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x204);
+    e->unk_04->unk_08 = 0xA0;
+    e->unk_04->unk_0A = 0x110;
+    if (D_80083E98_s[p[31]].unk_08 != 0)
+    {
+        e = (UnkCardPair *)p[725];
+        func_80069E78(buf, D_800283A8[2]);
+        func_8003AD08(D_80083E98_s[p[31]].unk_34, num);
+        func_80069E38(buf, num);
+        func_80069E38(buf, D_800283A8[3]);
+        func_8004DA74((u8 *)p + 0x384, buf, 1);
+        e->unk_00 = (s32)((u8 *)p + 0x384);
+        e->unk_04->unk_08 = 0xB8;
+        e->unk_04->unk_0A = 0x140;
+    }
+    e = (UnkCardPair *)p[726];
+    func_8004E5A0(D_80083E98_s[p[31]].unk_24, 0xA, buf);
+    func_8004E69C(buf);
+    func_8004E298((u8 *)p + 0x504, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x504);
+    e->unk_04->unk_08 = 0x148;
+    e->unk_04->unk_0A = 0x110;
+    sec = D_80083E98_s[p[31]].unk_1C / 60;
+    hr = sec / 3600;
+    e = (UnkCardPair *)p[727];
+    func_8004E5A0(hr >= 1000 ? 999 : hr, 3, buf);
+    func_80069E38(buf, (u8 *)D_800200A4);
+    mn = sec / 60;
+    func_8004E5E8(mn - hr * 60, 2, num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, (u8 *)D_800200A4);
+    func_8004E5E8(sec - mn * 60, 2, num);
+    func_80069E38(buf, num);
+    func_8004E69C(buf);
+    func_8004E298((u8 *)p + 0x684, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x684);
+    e->unk_04->unk_08 = 0x150;
+    e->unk_04->unk_0A = 0x120;
+    e = (UnkCardPair *)p[728];
+    func_8004E5A0(D_80083E98_s[p[31]].unk_2C >= 1000 ? 999 : D_80083E98_s[p[31]].unk_2C,
+                  3, buf);
+    func_8004E69C(buf);
+    func_8004E298((u8 *)p + 0x804, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x804);
+    e->unk_04->unk_08 = 0x100;
+    e->unk_04->unk_0A = 0x120;
+    e = (UnkCardPair *)p[729];
+    func_8004E5A0(D_80083E98_s[p[31]].unk_28, 2, buf);
+    func_8004E69C(buf);
+    func_8004E298((u8 *)p + 0x984, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x984);
+    e->unk_04->unk_08 = 0x188;
+    e->unk_04->unk_0A = 0x130;
+    for (i = 0; i < 8; i++)
+    {
+        s32 f = D_80083E98_s[p[31]].unk_30;
+
+        e = (UnkCardPair *)p[730 + i];
+        m = 1 << i;
+        if (f & m)
+        {
+            s = D_80027FD4[i];
+        }
+        else
+        {
+            s = D_80027FD4[8];
+        }
+        e->unk_00 = (s32)s;
+        e->unk_04->unk_08 = 0x34 + 0x10 * i;
+        e->unk_04->unk_0A = 0xB0;
+    }
+}
 
 /* Three label layouts for the save-slot list, then a loop writing the text
    sprites. `k` is `p[32] == 1` -- gcc's `xori` plus `sltu 1` -- and it is used
