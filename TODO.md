@@ -97,11 +97,21 @@ The queue, in order:
       sites (all `c_server.c`) agree with the propagated map wherever they
       overlap.
 
-      **Sweeping: 81 of 241 functions, 902 of 7487 words as of 2026-11-01.**
-      Work the FAMILIES -- grouping stubs by masked instruction signature
-      found 15 of them among the stubs, and three families were most of the
-      first day's progress. `tools/decomp/ovlverify.py` is the fast loop and
-      `make build/main.bin` is the gate.
+      **Sweeping: 213 of 241 functions, 6,194 of 7,487 words (82.7%) as of
+      2026-11-01.** Every function in the unit has now been worked; the 28
+      remaining stubs are all near-misses with measurement tables in
+      `docs/near-misses/`, and 6 of those 28 are one family sharing a single
+      9-differing-word residue. Work the FAMILIES -- grouping stubs by masked
+      instruction signature found 15 of them, and decoding one member of a
+      repeated family makes the rest nearly free: five input handlers, 527
+      words, came from one decode. `tools/decomp/ovlverify.py` is the fast
+      loop and `make build/main.bin` is the gate.
+
+      The lever that matters most for the NEXT overlay is that
+      `func_80069DF8` is `noreturn`: without that declaration every assert
+      site costs a wasted word, and with it the overlay's two assert-bearing
+      functions (378 words, one of them 264) fell out at once. `town.bin` has
+      76 assert records to this overlay's 10.
 
       **The carve is NOT the first step, which is a correction to the plan
       this entry used to carry.** Only one of the nine boundaries is anywhere
