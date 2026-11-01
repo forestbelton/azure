@@ -783,9 +783,100 @@ s32 func_800210E0(void)
     return D_800287C8;
 }
 
-/* NEAR MISS: 75 words, 2 DIFF -- everything matches but the ORDER of the two stores that end the st==3 block. The target has 'u[0] = 1' then 'D_800287C8 = 0'; in that order gcc cross-jumps the trailing 'D_800287C8 = 0' with the identical store that ends the st==1 block, which drops the function to 74 words, and the only orders that keep 75 put one of the two pairs the wrong way round. Four things ARE load-bearing and already right: the dispatch has to be a GOTO CHAIN with the bodies placed after it (a switch on any case grouping roots the tree at 1 instead of testing 0 and 2 by equality first, and the inner split must be spelled '(u32)st >= 3' to get the sltiu); the D_80084118 selection is a pointer advanced by the condition, not '(&D_80084118)[cond]'; the two blocks need SEPARATE pointer locals, because with one shared local the st==1 block's lo_sum lands in a different register from its 'lui' (3 DIFF) where the target ties them; and 'st' must be read into a local before 'r' so the %hi(D_800287C8) stays live in $a1 for both stores. Measured: switch with five case groupings (75w/63 each), two-stage early-goto plus switch (70w/66), explicit unsigned split with inline bodies (73w/62), goto chain with shared local (74w/50), the three reorderings of each block's tail, and 'r = 2' moved to the end of the st==3 block (74w/47, gcc hoists it back above the stores).
-   Source in docs/near-misses/func_800210F0.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800210F0);
+s32 func_800210F0(void)
+{
+    s32 st = D_800287C8;
+    s32 r = 0;
+    s32 *t;
+    s32 *u;
+
+    if (st == 0)
+    {
+        goto out;
+    }
+    if (st == 2)
+    {
+        goto out;
+    }
+    if ((u32)st >= 3)
+    {
+        goto high;
+    }
+    if (st == 1)
+    {
+        goto one;
+    }
+    r = 5;
+    goto out;
+high:
+    if (st == 3)
+    {
+        goto three;
+    }
+    r = 5;
+    goto out;
+one:
+    t = &D_80084118;
+    if (D_800287CC != 0)
+    {
+        t++;
+    }
+    if (t[0] != 0)
+    {
+        r = 1;
+        D_800287C8 = 0;
+    }
+    else if ((func_80069C18(0) & 1) != 0 || (func_80069C18(1) & 1) != 0)
+    {
+        func_800214A4();
+        while (func_80069C08(D_800287CC) == 0)
+        {
+        }
+        D_800287E0 = 0;
+        D_800287C8 = 3;
+    }
+    goto out;
+three:
+    u = &D_80084118;
+    if (D_800287CC != 0)
+    {
+        u++;
+    }
+    r = 2;
+    u[0] = 1;
+    D_800287C8 = 0;
+    /* DEVICE: an empty volatile asm, worth 1 word. It emits nothing; it exists
+       only to put a non-SET insn at the end of this basic block. gcc 2.7.2 runs
+       jump_optimize with cross_jump AFTER sched2 and BEFORE dbr_schedule
+       (toplev.c:3117/3142/3167), and for an unconditional `j' find_cross_jump is
+       called with minimum == 1 (jump.c:1978), so ONE matching insn before the
+       jump is enough to merge. Without this asm the insn before `out:' is
+       `sw $zero,%lo(D_800287C8)($a1)', identical to the one that ends the st==1
+       block above, so the st==1 block's `j out' is retargeted onto this one; dbr
+       then fills its delay slot with the preceding `addiu $s1,1' instead of the
+       store and the function comes out 74 words (47 DIFF). The asm's pattern is
+       ASM_INPUT, not SET, so find_cross_jump breaks on the GET_CODE(p1) !=
+       GET_CODE(p2) test with minimum still 1 and no merge happens. It cannot be
+       moved: between the two stores it is 74 words again, and at the end of the
+       st==1 block it is 76 (ASM_INPUT also stops dbr's backward scan, so that
+       block's delay slot goes to a nop).
+
+       Ruled out, all measured with tools/decomp/ovlverify.py: reordering the
+       st==1 tail to `D_800287C8 = 0; r = 1;' keeps 75 words but 2 DIFF (sched2
+       does not swap the two leaf stores back -- they tie on priority and the tie
+       breaks to source order); swapping the st==3 tail (any of its six orders)
+       74w/47 or 75w/4; `*(volatile s32 *)&D_800287C8 = 0' on either store
+       74w/47 (rtx_renumbered_equal_p ignores MEM_VOLATILE_P); `*(u32 *)&',
+       `*(s32 *)&' and `*(&D_800287C8)' 74w/47; a trailing `goto out;' 74w/47
+       (the early jump_optimize deletes a jump to the next label long before the
+       cross-jump pass); a trailing `return r;' 76w/15; a trailing `while (0) {}'
+       75w/24; a trailing `;' or an unused label 74w/47.
+
+       It does NOT warn under -Wall. */
+    __asm__ volatile("");
+out:
+    return r;
+}
 
 s32 func_8002121C(void)
 {

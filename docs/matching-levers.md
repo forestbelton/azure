@@ -10787,3 +10787,63 @@ Cost of the misreading: exactly one word. Twelve spellings measured at
 second local, inline at all three uses; `(s32)p - 0x20` and `(u8 *)p - 0x20`
 at the fail site, the call site and both), plus `p - 8` hoisted into a local
 at 54 words / 50 DIFF. Changing the one argument to `b`: MATCH.
+
+## CROSS-JUMPING RUNS AFTER sched2 AND BEFORE reorg, AND ONE MATCHING INSN IS ENOUGH -- SO AN EMPTY `__asm__` AT A BLOCK'S END IS A ONE-WORD LEVER
+
+Measured on `func_800210F0` (ovl_main_80020000, 75 words).
+
+The pass order matters and is checkable in the tree at
+`scratch/gcc-src/gcc-2.7.2.3/toplev.c`: `schedule_insns` (sched2) at 3117,
+`jump_optimize (insns, 1, 1, 0)` -- the one call with `cross_jump` nonzero --
+at 3142, `dbr_schedule` at 3167. So cross-jumping sees the *final* instruction
+order, already register-allocated and already scheduled, and only delay slots
+come after it. Two consequences:
+
+**You cannot out-schedule a cross-jump.** sched2 has already run, so there is
+no later pass to restore an order that the merge destroyed. In this function
+the `st == 3` body ends `u[0] = 1; D_800287C8 = 0;` and the `st == 1` body ends
+`r = 1; D_800287C8 = 0;`; the two trailing stores are the identical word
+`ACA087C8`, and the st==1 body's `j out` is retargeted onto the st==3 body's
+copy. reorg then fills that jump's slot with the preceding `addiu $s1, 1`
+instead of the store, and the function is 74 words. Reordering the st==1 tail
+to `D_800287C8 = 0; r = 1;` does break the merge -- back to 75 words -- but
+sched2 does not swap the pair back: two leaf stores tie on priority (neither
+has an in-block successor) and the tie breaks to source order, so the slot gets
+`addiu $s1, 1` again and the block comes out `sw; j; addiu` instead of
+`addiu; j; sw`. 75 words, 2 DIFF. That the scheduler *is* running is visible in
+the same block: `addiu $v0, 1` is hoisted above the `D_800287C8` store because
+it has a successor (`sw $v0, 0($a0)`) and so a longer chain.
+
+**One matching insn is enough.** For an unconditional jump, `jump.c:1978`
+calls `find_cross_jump (insn, JUMP_LABEL (insn), 1, ...)` -- `minimum` is 1, so
+a single identical insn before the jump and before the label merges them. (It
+is 2 for a conditional jump, for a second jump to the same label, and for a
+`RETURN`.) There is no profitability test to lose, and nothing to tune from the
+C side.
+
+What is left is the match test itself. `find_cross_jump` walks `i1` back with
+`prev_nonnote_insn` and breaks before matching anything if
+`GET_CODE (p1) != GET_CODE (p2)`. An empty `__asm__ volatile("")` has pattern
+`ASM_INPUT`, not `SET`, so one at the end of the st==3 body makes the compare
+fail on the first pair with `minimum` still 1, no merge happens, and the asm
+itself emits nothing: 75 words, MATCH.
+
+Three things about that lever:
+
+- **It only works at the END of the block whose tail you want to keep.** Put it
+  between the two stores and the trailing store is still the last insn: 74
+  words again. Put it at the end of the st==1 body instead and reorg loses the
+  slot, because `stop_search_p` (`reorg.c:699`) stops the backward scan on
+  `ASM_INPUT`: 76 words.
+- **`volatile` on the store does not do it.** `*(volatile s32 *)&D_800287C8 = 0`
+  on either store is 74 words / 47 DIFF: `rtx_renumbered_equal_p` compares the
+  address and the mode, not `MEM_VOLATILE_P`, so the two patterns still match.
+  Nor do `*(u32 *)&`, `*(s32 *)&` or `*(&D_800287C8)` -- all 74/47.
+- **A trailing `goto` to the next label is not an insn by then.** Writing
+  `goto out;` as the st==3 body's last statement would put a `JUMP_INSN` and a
+  `BARRIER` before the label, and `find_cross_jump`'s `i2` loop skips only
+  `NOTE` and `CODE_LABEL`, so a `BARRIER` would break the compare. But the
+  first `jump_optimize` deletes a jump to the following label thousands of
+  insns earlier, so by pass 3142 there is nothing there: 74 words / 47 DIFF.
+  A trailing `;` or an unused label is 74/47 for the same reason; `return r;`
+  is 76/15 and `while (0) {}` is 75/24.

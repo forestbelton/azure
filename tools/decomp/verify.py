@@ -47,6 +47,16 @@ src, unit, func = argv[0:3]
 # func_8004437C at 107 words against its park's 100 purely because the sweep
 # did not pass --g8 for a gprel_ unit.
 gasG = asmlib.gas_g_for_unit(unit)
+# cc1psx's OWN -G is a separate number from gas's, and it must come from the
+# unit too. asmlib.CFLAGS hard-codes -G8 because the resident executable is
+# -G8; the overlays carry a per-unit `CFLAGS := $(CFLAGS_G0)` override in the
+# Makefile, and at -G8 a global access comes out as the assembler-expanded
+# `lui $at`/`%lo` pair instead of cc1psx's own split address. Passing the
+# wrong one is silent and total: it scored an already-matching
+# ovl_main_80020000 park at 78 DIFF on 2026-11-01, which read as the function
+# being wrong rather than the gate. compile_asm appends these after CFLAGS and
+# the later -G wins.
+cc1G = asmlib.cc1_g_for_unit(unit)
 for a in sys.argv[1:]:
     if a == '--g8':
         gasG = 8
@@ -54,6 +64,8 @@ for a in sys.argv[1:]:
         gasG = int(a.split('=', 1)[1])
     elif a == '--g0':
         gasG = 0
+    elif a.startswith('--cc1-G='):
+        cc1G = int(a.split('=', 1)[1])
 miss = asmlib.missing_size_syms(src, unit)
 if miss:
     print('WARNING: this source references %s.' % ', '.join(miss))
@@ -65,7 +77,7 @@ if miss:
           % '\\n\\t'.join('.size %s,4' % s for s in miss))
     print()
 try:
-    words, relocs = asmlib.build(src, gasG)
+    words, relocs = asmlib.build(src, gasG, cflags=('-G%d' % cc1G,))
 except CompileError as e:
     print(e)
     sys.exit(2)
