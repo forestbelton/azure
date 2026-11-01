@@ -51,7 +51,15 @@ inherit it. func_8004B954 is the caution on reading a park's DIFF: its 247
 looked hopeless and was two words of LENGTH plus a positional shift, with
 three register-only rows underneath. **Read `advise.py`'s aligned verdict,
 never the positional DIFF, when deciding what a park is worth.** A triage in
-`docs/carved-sweep.md` that called it a wrong-shape body was wrong. Do not read `docs/landing-a-function.md` as requiring the search
+`docs/carved-sweep.md` that called it a wrong-shape body was wrong.
+func_8005B4D0 is the caution on a lever the park itself recorded: its two scan
+loops had been written as explicit `goto`s on a 2026-10-27 lever worth 10
+words, and that is exactly what held the function -- a goto loop carries no
+`LOOP_BEG` note, loop.c never sees it, and nothing gets hoisted. **A lever is
+evidence about the function it was measured on.** Reading the `.loop` dump,
+which had never been read for that park, turned 333 DIFF into 76 and priced
+the hoist decision in numbers the dump prints. Do not read
+`docs/landing-a-function.md` as requiring the search
 tools on these; its contracts (the landing gate, the DEVICE and park
 contracts) still hold.
 
