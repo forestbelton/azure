@@ -553,6 +553,8 @@ s32 func_800210E0(void)
     return D_800287C8;
 }
 
+/* NEAR MISS: 75 words, 2 DIFF -- everything matches but the ORDER of the two stores that end the st==3 block. The target has 'u[0] = 1' then 'D_800287C8 = 0'; in that order gcc cross-jumps the trailing 'D_800287C8 = 0' with the identical store that ends the st==1 block, which drops the function to 74 words, and the only orders that keep 75 put one of the two pairs the wrong way round. Four things ARE load-bearing and already right: the dispatch has to be a GOTO CHAIN with the bodies placed after it (a switch on any case grouping roots the tree at 1 instead of testing 0 and 2 by equality first, and the inner split must be spelled '(u32)st >= 3' to get the sltiu); the D_80084118 selection is a pointer advanced by the condition, not '(&D_80084118)[cond]'; the two blocks need SEPARATE pointer locals, because with one shared local the st==1 block's lo_sum lands in a different register from its 'lui' (3 DIFF) where the target ties them; and 'st' must be read into a local before 'r' so the %hi(D_800287C8) stays live in $a1 for both stores. Measured: switch with five case groupings (75w/63 each), two-stage early-goto plus switch (70w/66), explicit unsigned split with inline bodies (73w/62), goto chain with shared local (74w/50), the three reorderings of each block's tail, and 'r = 2' moved to the end of the st==3 block (74w/47, gcc hoists it back above the stores).
+   Source in docs/near-misses/func_800210F0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800210F0);
 
 s32 func_8002121C(void)
