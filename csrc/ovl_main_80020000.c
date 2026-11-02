@@ -1388,9 +1388,50 @@ void func_80021B18(u8 *s, s32 idx)
     func_80069E38(s, D_80027F30[idx]);
 }
 
-/* NEAR MISS: 45 words, 28 DIFF, all register NAMES: the open/lseek/read/close sequence is right (func_8006A0A4/B4/C4/E4 = open/lseek/read/close on "bu00:"), but local-alloc assigns the five callee-saved locals differently -- the target has buf=$s5, n=$s2, off=$s4, r=$s1, -1=$s3, fd=$s0 and keeps the -1 in a register across both comparisons. Three spellings measured (an explicit -1 local, fd declared first with a len local, the plain form); the plain form is this one. Allocation only.
-   Source in docs/near-misses/func_80021B98.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021B98);
+s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
+{
+    s32 r = 0;
+    s32 fd;
+
+    fd = func_8006A0A4(name, 1);
+    if (fd != -1)
+    {
+        n = n << 7;
+        if (off == 0 || func_8006A0B4(fd, off << 7, 0) != -1)
+        {
+            r = func_8006A0C4(fd, buf, n) == n;
+        }
+        func_8006A0E4(fd);
+    }
+    /* DEVICE: the two nested degenerate loops weight the `return r`
+       reference by 3 (flow.c:440 counts the LOOP_BEG/END notes,
+       propagate_block does `reg_n_refs[regno] += loop_depth`), which takes
+       r's quantity from 3 references to 5. Worth 11 words: without them r
+       and n swap $s1 and $s2 and every use of either differs. They emit no
+       instruction and the function is otherwise unchanged; it is still
+       `return r;`. See "A `return` WEIGHTED BY TWO NESTED DEGENERATE LOOPS"
+       in docs/matching-levers.md for the arithmetic -- global.c's
+       allocno_compare wants r's priority strictly between n's 10/19 and
+       fd's 10/17, and 10/18 is the only value that fits.
+       Spellings ruled out, all 45 words: the plain `return r;` 11 DIFF; ONE
+       degenerate loop (4 refs) 11; nested `if (1)` instead of the loops
+       (inert, 3 refs) 11; THREE nested loops (6 refs, r takes $s0) 15;
+       `do { r = 0; } while (0)` as well (prologue reschedules) 6;
+       the two natural extra mentions of r -- `off == r` for `off == 0` and
+       `r` for the lseek whence argument -- are constant-propagated by cse1
+       and leave the dumps bit-identical, 11. `for (;;)` and `while (1)`
+       nested twice both MATCH and are interchangeable with this.
+       Warns under -Wall? No -- nothing is read uninitialised and the
+       `while (0)` conditions are constant by construction, so the build is
+       silent with or without the flag. */
+    do
+    {
+        do
+        {
+            return r;
+        } while (0);
+    } while (0);
+}
 
 s32 func_80021C4C(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
 {
