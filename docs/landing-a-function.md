@@ -172,6 +172,63 @@ A non-matching function in `csrc/` is worse than no change: `progress.py` drops
 the whole unit from both numerator and denominator, which once moved the
 headline from 84.6% to 82.7% and read as lost work.
 
+## 4b. Reading the compiler instead of guessing spellings
+
+The permuter searches spellings. When the residue is small and structural --
+a permutation, one extra or missing word, a register swap -- it is usually
+cheaper to open the compiler and find the pass that makes the decision. The
+`ovl_main_80020000` sweep of 2026-11-01 landed nine functions by hand with no
+permuter at all, the later ones worked this way from the dumps; and in all
+nine the park's MEASUREMENT TABLE was sound while its stated CAUSE was wrong.
+Read a park's numbers as fact and its diagnosis as a guess.
+
+The two stages are Windows binaries, so they go through wine -- `psyq/*.exe`
+is not executable on its own, and `tools/ccpsx` drives the `ccpsx` DRIVER
+rather than the stages. `WINEPATH` has to name `psyq/` or `cpppsx` fails with
+"could not execute".
+
+```sh
+cd /tmp/.../scratch                      # dumps are written to the CWD
+PROJ=/home/case/projects/azure
+export WINEPREFIX=$HOME/.cache/azure-psyq WINEDEBUG=-all
+export WINEPATH=$(winepath -w "$PROJ/psyq")
+
+wine "$PROJ/psyq/cpppsx.exe" -I"$PROJ/include" -I"$PROJ/psyq/include" \
+    -DPERMUTER f.c > f.i
+wine "$PROJ/psyq/cc1psx.exe" -O2 -G0 -da -quiet f.i -o f.s
+#                                 ^^^ -G0 for an overlay, -G8 resident
+```
+
+**The dumps land next to the `.i` file**, one per pass, in pass order:
+`f.i.rtl`, `.jump`, `.cse`, `.loop`, `.flow`, `.combine`, `.regmove`, `.sched`,
+`.lreg`, `.greg`, `.cse2`, `.jump2`, `.bp`, `.sched2`, `.shorten`, `.dbr`.
+They only appear in wine's `Temp` as `PQ2.*` when `ccpsx` names the temporary
+itself, so invoke the two stages yourself and read them in place. Verified
+2026-11-01.
+
+Which dump answers which question, as established so far:
+
+| symptom | dump | what to look for |
+|---|---|---|
+| an invariant hoisted or not | `.loop` | `moved to N` vs `not desirable`, and the "N real insns" count the threshold test uses |
+| two insns in the wrong order, same block | `.sched` | the ready lists; sched1 here schedules a block BACKWARD, so `T-1` is its LAST slot |
+| a duplicated tail merged too far | `.jump` | how many insns the cross-jump absorbed |
+| a value in the wrong register | `.lreg` / `.greg` | the quantity's reference count and birth/death |
+| a constant that keeps or loses a copy | `.cse` | whether two constant pseudos were unified |
+| something in a branch delay slot | `.dbr` | whether it was stolen from the jump's target |
+
+Two cautions learned the hard way. A dump tells you what the pass DID, not
+what it would do to different input, so a conclusion is worth having only once
+you have changed the source and watched the dump change with it. And the
+decisive pass is often earlier than the symptom: a delay-slot fill, a register
+swap and a schedule permutation have all turned out to be consequences of a
+`cse1` or `loop.c` decision several passes upstream.
+
+The gcc 2.7.2 source this compiler descends from is unpacked at
+`scratch/gcc-src`. Cite `file:line` for anything you conclude from it --
+`loop.c`, `jump.c`, `sched.c`, `local-alloc.c`, `reorg.c` and `cse.c` are the
+ones that have mattered.
+
 ## 5. If it does not match
 
 The park file is the deliverable. Leave `csrc/` alone and:
