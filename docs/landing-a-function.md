@@ -217,12 +217,32 @@ Which dump answers which question, as established so far:
 | a constant that keeps or loses a copy | `.cse` | whether two constant pseudos were unified |
 | something in a branch delay slot | `.dbr` | whether it was stolen from the jump's target |
 
-Two cautions learned the hard way. A dump tells you what the pass DID, not
-what it would do to different input, so a conclusion is worth having only once
-you have changed the source and watched the dump change with it. And the
-decisive pass is often earlier than the symptom: a delay-slot fill, a register
-swap and a schedule permutation have all turned out to be consequences of a
-`cse1` or `loop.c` decision several passes upstream.
+Four cautions learned the hard way.
+
+A dump tells you what the pass DID, not what it would do to different input,
+so a conclusion is worth having only once you have changed the source and
+watched the dump change with it.
+
+The decisive pass is often earlier than the symptom: a delay-slot fill, a
+register swap and a schedule permutation have all turned out to be
+consequences of a `cse1` or `loop.c` decision several passes upstream.
+
+**Look up a branch target label's ADDRESS; never infer where a shared tail
+begins from the first instruction that looks shared.** The listing prints
+every label with its vram, so this costs one `grep`. On `func_8002168C` both
+the park's header and the brief written from it put `.L8002177C` three words
+above where it is, and every conclusion that followed -- which arm stored
+what, how many words were cross-jumped, whether `cse` was involved -- was
+wrong as a result. The function landed as soon as the label was read off the
+listing instead of guessed.
+
+**A low DIFF is not evidence that the structure is right.** On the same
+function a shared `s32 off = i * 4` local reached 82 words / 6 DIFF with every
+register and every `addu` operand order already exact, from a shape that was
+not the target's at all. Six looks like "nearly there" and invites polishing;
+it was a dead end, and the 11-DIFF body was the one with a future. Score tells
+you how far apart two instruction streams are, not whether you are on the
+right road.
 
 The gcc 2.7.2 source this compiler descends from is unpacked at
 `scratch/gcc-src`. Cite `file:line` for anything you conclude from it --
