@@ -11108,3 +11108,66 @@ is MATCH. Note the block copy on the line above KEEPS the one-expression form:
 its address is a MEM and the target wants `lui`/`addiu`/`sll` there. The two
 row addresses in that function are the same arithmetic written two ways, which
 is exactly what a park note read as "the two orders cannot both be had".
+
+### A HOISTED CONSTANT CANNOT KEEP A COPY -- a body-order preheader can be all STATEMENTS
+
+A preheader whose constants are materialised in the order the loop BODY uses
+them is the signature of `loop.c`'s `move_movables`, which inserts each
+movable with `emit_insn_before (pattern, loop_start)` in movables-list order
+(= first-set order in the body), and then `strength_reduce` appends the giv
+initialisations after them. That reading is right about the order and can
+still be the wrong conclusion, because **a hoisted pair can never keep its
+copy, and two hoisted constants of the same value can never be two
+registers.** Two independent passes delete it:
+
+* cse1 runs before loop.c and the whole body is one basic block, so a second
+  pseudo holding a known constant is collapsed into the first. The `.cse`
+  dump shows it directly: one `(set (reg:QI N) (const_int 5))` and both
+  stores reading `reg N`. Widening the source so the move is mode-invisible
+  (the `u8 h = w` lever at `:1376`) does NOT save it here -- cse folds the
+  source to the constant first, so there is no reg-reg move left for the mode
+  test to protect. Measured on func_80022A30 in all of `u8/u8`, `u32/u8`,
+  `u16/u8`, `u8/u32`, `u32/u32` and `h1 = 5` instead of `h1 = w1`: 44 words,
+  36 DIFF, identically.
+* even if one survived cse1, `combine_movables` would match the pair --
+  modes equal, `dependencies` both 0 (that field is only ever set for libcall
+  blocks, so it never distinguishes two ordinary movables), and the copy's REG
+  source satisfies `matched_regs[REGNO (m1->set_src)]` -- and `move_movables`
+  then rewrites the second register to the first. Only `m1->global` and
+  `n_times_used[regno] != 1` block the match, and a dead pre-loop assignment
+  to make the pseudo global does not reach that far, because cse1 has already
+  collapsed the pair (measured: still 44w/36).
+
+So when the preheader holds a constant AND a reg-reg copy of it, those two
+insns are PRE-LOOP STATEMENTS, not hoists -- the copy survives there because
+it sits in a different cse basic block from its only use (the copy before the
+loop, the use inside it), so `canon_reg` never rewrites the use. And then the
+whole preheader is statements, in source order, and anything the listing puts
+BETWEEN two such pairs is a statement too: `:1448`'s local-per-constant.
+
+func_80022A30 (ovl_main_80020000) is the measurement. Its preheader is
+`i = 0`, 5, a copy of the 5, 0x48, 0x104058, 6, a copy of the 6, then the giv
+`addiu $a0, $a3, 4`. With 0x48 and 0x104058 left as literals at their two use
+sites each they ARE hoisted, which puts them after the for-init instead of
+between the pairs: 46 words, 8 DIFF. Giving each its own pre-loop local, and
+lifting the counter out of the `for` so its initialisation comes first --
+
+```c
+    i = 0;
+    w1 = 5;
+    h1 = w1;
+    c = 0x48;
+    d = 0x104058;
+    w2 = 6;
+    h2 = w2;
+    for (; i < 4; i++)
+```
+
+-- is MATCH. The `for (; i < 4; i++)` is load-bearing: `for (i = 0; ...)`
+emits `i = 0` after the six materialisations.
+
+**Corollary for reading a listing:** a reg-reg copy of a constant in a
+preheader is positive evidence that the counter's initialisation and the
+constants are all plain statements, which also fixes where the loop body
+begins. A hoist and a statement are distinguishable at a glance only when the
+hoisted set has no copy.

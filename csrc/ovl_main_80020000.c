@@ -1739,9 +1739,72 @@ void func_80022934(s32 *p)
 
 /* The second parameter is unused by the body but func_80022AE8 sets $a1
    before the call and sets nothing else. */
-/* NEAR MISS: 44 words against 46, and the two missing words are COPIES of hoisted constants: the target has 'addiu $t4, $zero, 5' then 'addu $t3, $t4, $zero', and the same pair for 6, where every spelling here CSEs the two 5s into one pseudo before loop.c sees them. Per docs/matching-levers.md:567, combine_movables matches two movables of equal value and mode and hoists one while the other becomes a copy -- so the target's two 5s survived cse1 as separate pseudos and this one's did not. The rest is right: an unaligned 4-byte copy of D_800200A0 to a stack buffer, then four iterations writing two 0xC-byte records each (byte 0 from the buffer, byte 1 = 0x48, word at 4 = 0x104058, bytes 0xA/0xB = 5 then 6), then 'p[-0x18] |= 0x80' and return p.
-   Source in docs/near-misses/func_80022A30.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022A30);
+u8 *func_80022A30(u8 *p, s32 *q)
+{
+    u8 buf[4];
+    u8 w1;
+    u8 h1;
+    u8 c;
+    s32 d;
+    u8 w2;
+    u8 h2;
+    s32 i;
+
+    /* Every one of these seven assignments is its own pre-loop statement, and
+       that order is the whole function. The target's preheader is
+       `i = 0`, 5, a COPY of the 5, 0x48, 0x104058, 6, a COPY of the 6, and
+       then the giv `addiu $a0, $a3, 4`. Two things it is NOT:
+
+       - the pairs are not hoisted out of the loop. Written inside the body
+         they ARE hoisted in body order, which looks like the listing, but
+         cse1 collapses the two pseudos holding 5 before loop.c ever sees
+         them (confirmed in the .cse dump: one `(set (reg:QI N) (const_int 5))`
+         serves both stores) and the function comes out 44 words / 36 DIFF.
+         Widening the source so the copy is mode-invisible to cse does not
+         help either -- `u32 w1; u8 h1 = w1;` is still 44/36 -- and even if a
+         pair survived cse1, loop.c's combine_movables would match the two
+         movables (equal mode, and `matched_regs[w1]` makes the copy's REG
+         source count as the same value) and replace one register with the
+         other. A hoisted pair can never keep its copy.
+       - 0x48 and 0x104058 are not literals at their use sites. As literals
+         they are hoisted by loop.c, which puts them AFTER the for-init
+         instead of between the two pairs: 46 words, 8 DIFF.
+
+       So all seven are statements, `i = 0` is lifted out of the `for` to put
+       it first, and the pairs survive because the copy and its only use sit
+       in different cse basic blocks -- the copy is before the loop, the use
+       inside it, so canon_reg never rewrites the use. Measured alternatives,
+       all on the same body: pairs assigned before the loop with 0x48/0x104058
+       left as literals 46w/8; pairs inside the loop body 44w/36; pairs inside
+       with w1 `u32`/`u16` and h1 `u8` 44w/36; h1 `u32` and w1 `u8` 44w/36;
+       all four `u32` 44w/36; `h1 = 5` instead of `h1 = w1` 44w/36; a dead
+       pre-loop `h1 = 0` to make the movable global 44w/36. */
+    *(UnkFour *)buf = *(UnkFour *)D_800200A0;
+    i = 0;
+    w1 = 5;
+    h1 = w1;
+    c = 0x48;
+    d = 0x104058;
+    w2 = 6;
+    h2 = w2;
+    for (; i < 4; i++)
+    {
+        p[0xA] = w1;
+        p[0xB] = h1;
+        p[1] = c;
+        *(s32 *)(p + 4) = d;
+        p[0] = buf[i];
+        p += 0xC;
+        p[0xA] = w2;
+        p[0xB] = h2;
+        p[1] = c;
+        *(s32 *)(p + 4) = d;
+        p[0] = buf[i];
+        p += 0xC;
+    }
+    p[-0x18] |= 0x80;
+    return p;
+}
 
 void func_80022AE8(s32 *p)
 {
