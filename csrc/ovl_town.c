@@ -30,7 +30,11 @@ extern Unk80082660 D_800CF720[];
    that the six slots are word-sized has a witness. */
 typedef struct UnkTownArg80
 {
-    u8 pad_00[0x8];
+    u8 pad_00[0x4];
+    /* The actor reaches this one through +0x7C rather than +0x80. Whether
+       that is the same table is not established; the field offsets do not
+       overlap, so one typedef serves both. */
+    void *unk_04;
     void *unk_08;
     void *unk_0C;
     void *unk_10;
@@ -55,9 +59,22 @@ typedef struct UnkTownActor
     u8 pad_64[0x8];
     s16 unk_6C;
     u8 pad_6E[0x4];
+    /* +0x72 is a FACING, in PSX angle units where 0x1000 is a full turn: the
+       wander family writes 0, 0x400, 0x800 and 0xC00 into it, which are the
+       four quarter turns, and the step family divides it by 0x400 to get a
+       direction index back out. */
     s16 unk_72;
-    u8 pad_74[0xC];
+    u8 pad_74[0x8];
+    UnkTownArg80 *unk_7C;
     UnkTownArg80 *unk_80;
+    /* A position and a half-extent per axis: the families test
+       +0x84 +/- +0x8C against the mover's x and +0x86 +/- +0x8E against its
+       y, which is a centre-and-radius bounds check on both. */
+    s16 unk_84;
+    s16 unk_86;
+    u8 pad_88[0x4];
+    s16 unk_8C;
+    s16 unk_8E;
 } UnkTownActor;
 
 /* The 0x8009xxxx families' arg0, and the same idea one layer down: handlers
@@ -109,6 +126,11 @@ typedef struct UnkTown2AE8
     s32 unk_04;
     u8 pad_08[0x2];
     s16 unk_0A;
+    /* The per-frame delta added into +0x00/+0x04, clamped to +/-0x20000 --
+       which is +/-2.0 if these are 16.16, and that is the reading the s16
+       views at +0x02/+0x06 support. */
+    s32 unk_0C;
+    s32 unk_10;
 } UnkTown2AE8;
 
 /* Likewise named for its consumer. One family adds +0x14 into +0x08, hands
@@ -624,6 +646,40 @@ void func_800CB7EC();
 void func_800CC644();
 void func_800CC8AC();
 
+/* THE LARGE PAIRS: three families of two, 710 words, the first functions in
+   this overlay with real control flow rather than a call and a store. They
+   are the town NPC movement AI, and each pair is one function emitted twice
+   with a different callee -- a 0x800C3xxx/0x800C7xxx set and a 0x800C9xxx
+   twin of it.
+
+   The wander function tries up to sixteen times: take a direction from
+   func_800374F4(4), test the actor's bounds against the mover's position on
+   that axis, and on the first direction with room write the matching quarter
+   turn into +0x72 and break. The step function then advances the mover by its
+   own delta, divides +0x72 by 0x400 to recover the direction, clamps the
+   position against the same bounds, and either hands off to a per-pair callee
+   or drifts the delta off four 4-entry tables with a +/-0x20000 limit.
+
+   Three things in these worth knowing.
+
+   THE DISPATCH SHAPE TELLS YOU WHICH C IT WAS. The wander function tests its
+   direction with `bnez`, then `bne 1`, then `bne 2` -- a sequential chain,
+   which is an if/else-if. The step function tests `== 1`, then `< 2`, then
+   `== 0`, then `== 2` -- a balanced tree, which is a `switch`. Same four
+   cases, same value range, different source construct, and the tree is how
+   you tell.
+
+   TWO OF THE SIX DIFFER ONLY IN STATEMENT ORDER, and it costs four words.
+   func_800C7674 computes its direction BEFORE the two calls and runs the
+   func_800C30E0 guard after them, where func_800C355C does the opposite; so
+   the direction has to survive the calls, takes a callee-saved register,
+   and the function pays an extra save, restore and 8 bytes of frame. Nothing
+   else about them differs. A reordering is worth a register.
+
+   ARITHMETIC THAT IS NOT IN THE SOURCE. `bgez` then `addiu 0x3FF` then
+   `sra 10` is one signed divide by 0x400, not a test and a bias; and `bgez`
+   then `negu` then `slt` is abs(). Reading either as source control flow
+   invents branches that are not there. */
 /* Four families, 22 functions. Two of them pin things the earlier sweeps
    could only guess at, both the same lesson as func_800C4174's second
    parameter: an actor has handler slots at BOTH +0x50 and +0x54 (one bind
@@ -643,10 +699,15 @@ void func_800CC8AC();
    not a conflict at all: on little-endian MIPS the HIGH half of the word at
    +0x08 lives at bytes +0x0A, so `sh` to +0x0A is how you set the integer
    part of a 16.16 fixed-point value at +0x08 -- which fits +0x00/+0x04 taking
-   +/-0x20000 in the same family. If that is right the two are one struct of
-   fixed-point coordinates. It is a model, it would mean respelling landed
-   code, and the bytes are right either way, so it is recorded and not acted
-   on. */
+   +/-0x20000 in the same family.
+
+   CONFIRMED by the large pairs below, which is why the accesses there are
+   spelled `*(s16 *)((u8 *)b + 2)`. Those functions read and WRITE +0x02 and
+   +0x06 as s16s while the same struct's +0x00 and +0x04 are whole words, so
+   both views of one field are now witnessed. The eventual shape is a union
+   of an s32 with an {u16 frac; s16 i;} pair; it is not taken here because it
+   would mean respelling every landed member of the countdown-and-advance
+   family for no change in bytes. */
 extern u8 D_800D61C4[];
 extern u8 D_800D61CC[];
 extern u8 D_800D61F4[];
@@ -664,9 +725,7 @@ void func_800C7AC4();
 void func_800C8788();
 void func_800C9610();
 void func_800C9678();
-void func_800C9864();
 void func_800C9B44();
-void func_800C9DB8();
 void func_800CA020();
 void func_800CDADC();
 void func_800CDC2C();
@@ -695,6 +754,19 @@ extern u32 D_80081458;
    information at all; the first family that USES it decides. */
 void func_8009A1A4();
 s32 func_800C2AE8(UnkTown2AE8 *b);
+s32 abs(s32 x);
+u32 func_800374F4(u16 n);
+extern s32 D_800D4FE8[];
+extern s32 D_800D4FF8[];
+extern s32 D_800D5008[];
+extern s32 D_800D5018[];
+void func_800C37C4(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C7A6C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C95A8(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C9DB8(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C355C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C9384(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C9864(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 s32 func_800C2B38(UnkTown2AE8 *b);
 void func_800C9D40();
 void func_800CDF54();
@@ -3606,6 +3678,38 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9EDC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9F74);
 
+/* THE BIGGEST PAIR LEFT, and its structure is mapped even though no source is
+   written yet: func_800BA00C and func_800BA468, 279 words each, 558 together.
+   Start here, and start from this rather than from the listing.
+
+   It is an entity spawner with FOUR construction blocks, all the same recipe:
+   func_8003FD64(type, base) to allocate, func_8004491C(obj, template) to
+   initialise, a handler stored at obj->+0x10, then obj+0x20 is an actor view
+   whose +0x9C gets the parent and +0x98 the parent's +0x98, then obj->+0x08
+   is a third object whose +0x00/+0x04 come from the second argument.
+   Block 1 is type 0x136 in a 4-iteration loop, block 2 type 0x36 in a
+   4-iteration loop, blocks 3 and 4 are single, types 0x36 and 0x136. Each
+   block bails to the end on a null allocation.
+
+   Four things that will mislead if read as source:
+
+   * THE PARAMETER POINTS INTO THE MIDDLE OF ITS OBJECT. The first argument is
+     used at -0x10 and -0x20 (`sw $v0, -0x10($s3)`, `addiu $a1, $s3, -0x20`),
+     and every allocated object is handled as obj and obj+0x20. So the callers
+     pass an interior pointer -- the +0x20 actor view -- and the container base
+     is 0x20 below it. Declaring the parameter as the container type and
+     subtracting will not produce these offsets.
+   * FOUR DIVISION IDIOMS, none of them a branch in the source. `bgez` +
+     `addiu 0xFFF` + `sra 12` is a signed divide by 0x1000; the same with
+     0x1FF/`sra 9` is 0x200, with 0x3/`sra 2` is 4, and the `mult` by
+     0x38E38E39 with `sra 1` is a divide by 9 (confirm with
+     tools/decomp/magic.py). Several are followed by `sll`/`subu`, which makes
+     them MODULO, not division.
+   * `sll $v0, $s7, 24` then `sra $v0, $v0, 24` is a cast to s8, compared
+     against the `lb` at +0x97 -- a signed-char comparison, not arithmetic.
+   * ONLY TWO CONSTANTS DIFFER between the two members: 0x1A against 0xA at
+     w84 and 0x19 against 0x9 at w258, both stored to the third object's
+     +0x08. Everything else is identical, so landing one lands both. */
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA00C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA468);
@@ -4056,13 +4160,115 @@ void func_800C34EC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C355C);
+void func_800C355C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 dir;
+
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_0A = func_800C2B38(b);
+    dir = (0x400 - a->unk_72) / 0x400 & 3;
+    switch (dir)
+    {
+    case 0:
+        if (a->unk_84 + a->unk_8C >= *(s16 *)((u8 *)b + 2))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 + a->unk_8C;
+        break;
+    case 1:
+        if (a->unk_86 + a->unk_8E >= *(s16 *)((u8 *)b + 6))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 + a->unk_8E;
+        break;
+    case 2:
+        if (*(s16 *)((u8 *)b + 2) >= a->unk_84 - a->unk_8C)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 - a->unk_8C;
+        break;
+    default:
+        if (*(s16 *)((u8 *)b + 6) >= a->unk_86 - a->unk_8E)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 - a->unk_8E;
+        break;
+    }
+    func_800C37C4(a, b, c);
+    return;
+
+drift:
+    b->unk_0C += D_800D4FE8[dir];
+    if (abs(b->unk_0C) > 0x20000)
+    {
+        b->unk_0C = D_800D4FF8[dir];
+    }
+    b->unk_10 += D_800D5008[dir];
+    if (abs(b->unk_10) > 0x20000)
+    {
+        b->unk_10 = D_800D5018[dir];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3780);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C37C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C382C);
+void func_800C382C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 i;
+    u16 r;
+
+    b->unk_0C = 0;
+    b->unk_10 = 0;
+    for (i = 0; i < 0x10; i++)
+    {
+        r = func_800374F4(4);
+        if (r == 0)
+        {
+            if (*(s16 *)((u8 *)b + 2) < a->unk_84 + a->unk_8C)
+            {
+                a->unk_72 = 0x400;
+                break;
+            }
+        }
+        else if (r == 1)
+        {
+            if (*(s16 *)((u8 *)b + 6) < a->unk_86 + a->unk_8E)
+            {
+                a->unk_72 = 0;
+                break;
+            }
+        }
+        else if (r == 2)
+        {
+            if (a->unk_84 - a->unk_8C < *(s16 *)((u8 *)b + 2))
+            {
+                a->unk_72 = 0xC00;
+                break;
+            }
+        }
+        else
+        {
+            if (a->unk_86 - a->unk_8E < *(s16 *)((u8 *)b + 6))
+            {
+                a->unk_72 = 0x800;
+                break;
+            }
+        }
+    }
+    func_800C2E84(a, c, a->unk_7C->unk_04);
+    a->unk_50 = func_800C355C;
+}
 
 void func_800C3960(UnkTownDispatch *d)
 {
@@ -4853,7 +5059,64 @@ void func_800C7604(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7674);
+void func_800C7674(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 dir;
+
+    dir = (0x400 - a->unk_72) / 0x400 & 3;
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_0A = func_800C2AE8(b);
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    switch (dir)
+    {
+    case 0:
+        if (a->unk_84 + a->unk_8C >= *(s16 *)((u8 *)b + 2))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 + a->unk_8C;
+        break;
+    case 1:
+        if (a->unk_86 + a->unk_8E >= *(s16 *)((u8 *)b + 6))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 + a->unk_8E;
+        break;
+    case 2:
+        if (*(s16 *)((u8 *)b + 2) >= a->unk_84 - a->unk_8C)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 - a->unk_8C;
+        break;
+    default:
+        if (*(s16 *)((u8 *)b + 6) >= a->unk_86 - a->unk_8E)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 - a->unk_8E;
+        break;
+    }
+    func_800C7A6C(a, b, c);
+    return;
+
+drift:
+    b->unk_0C += D_800D4FE8[dir];
+    if (abs(b->unk_0C) > 0x20000)
+    {
+        b->unk_0C = D_800D4FF8[dir];
+    }
+    b->unk_10 += D_800D5008[dir];
+    if (abs(b->unk_10) > 0x20000)
+    {
+        b->unk_10 = D_800D5018[dir];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C78A8);
 
@@ -5119,13 +5382,115 @@ void func_800C9314(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9384);
+void func_800C9384(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 dir;
+
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_0A = func_800C2B38(b);
+    dir = (0x400 - a->unk_72) / 0x400 & 3;
+    switch (dir)
+    {
+    case 0:
+        if (a->unk_84 + a->unk_8C >= *(s16 *)((u8 *)b + 2))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 + a->unk_8C;
+        break;
+    case 1:
+        if (a->unk_86 + a->unk_8E >= *(s16 *)((u8 *)b + 6))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 + a->unk_8E;
+        break;
+    case 2:
+        if (*(s16 *)((u8 *)b + 2) >= a->unk_84 - a->unk_8C)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 - a->unk_8C;
+        break;
+    default:
+        if (*(s16 *)((u8 *)b + 6) >= a->unk_86 - a->unk_8E)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 - a->unk_8E;
+        break;
+    }
+    func_800C95A8(a, b, c);
+    return;
+
+drift:
+    b->unk_0C += D_800D4FE8[dir];
+    if (abs(b->unk_0C) > 0x20000)
+    {
+        b->unk_0C = D_800D4FF8[dir];
+    }
+    b->unk_10 += D_800D5008[dir];
+    if (abs(b->unk_10) > 0x20000)
+    {
+        b->unk_10 = D_800D5018[dir];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C95A8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9610);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9678);
+void func_800C9678(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 i;
+    u16 r;
+
+    b->unk_0C = 0;
+    b->unk_10 = 0;
+    for (i = 0; i < 0x10; i++)
+    {
+        r = func_800374F4(4);
+        if (r == 0)
+        {
+            if (*(s16 *)((u8 *)b + 2) < a->unk_84 + a->unk_8C)
+            {
+                a->unk_72 = 0x400;
+                break;
+            }
+        }
+        else if (r == 1)
+        {
+            if (*(s16 *)((u8 *)b + 6) < a->unk_86 + a->unk_8E)
+            {
+                a->unk_72 = 0;
+                break;
+            }
+        }
+        else if (r == 2)
+        {
+            if (a->unk_84 - a->unk_8C < *(s16 *)((u8 *)b + 2))
+            {
+                a->unk_72 = 0xC00;
+                break;
+            }
+        }
+        else
+        {
+            if (a->unk_86 - a->unk_8E < *(s16 *)((u8 *)b + 6))
+            {
+                a->unk_72 = 0x800;
+                break;
+            }
+        }
+    }
+    func_800C2E84(a, c, a->unk_7C->unk_04);
+    a->unk_50 = func_800C9384;
+}
 
 void func_800C97AC(void *arg0)
 {
@@ -5143,7 +5508,64 @@ void func_800C97F4(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9864);
+void func_800C9864(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 dir;
+
+    dir = (0x400 - a->unk_72) / 0x400 & 3;
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_0A = func_800C2AE8(b);
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    switch (dir)
+    {
+    case 0:
+        if (a->unk_84 + a->unk_8C >= *(s16 *)((u8 *)b + 2))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 + a->unk_8C;
+        break;
+    case 1:
+        if (a->unk_86 + a->unk_8E >= *(s16 *)((u8 *)b + 6))
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 + a->unk_8E;
+        break;
+    case 2:
+        if (*(s16 *)((u8 *)b + 2) >= a->unk_84 - a->unk_8C)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 2) = a->unk_84 - a->unk_8C;
+        break;
+    default:
+        if (*(s16 *)((u8 *)b + 6) >= a->unk_86 - a->unk_8E)
+        {
+            goto drift;
+        }
+        *(s16 *)((u8 *)b + 6) = a->unk_86 - a->unk_8E;
+        break;
+    }
+    func_800C9DB8(a, b, c);
+    return;
+
+drift:
+    b->unk_0C += D_800D4FE8[dir];
+    if (abs(b->unk_0C) > 0x20000)
+    {
+        b->unk_0C = D_800D4FF8[dir];
+    }
+    b->unk_10 += D_800D5008[dir];
+    if (abs(b->unk_10) > 0x20000)
+    {
+        b->unk_10 = D_800D5018[dir];
+    }
+}
 
 void func_800C9A98(UnkTownActor *a)
 {
