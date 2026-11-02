@@ -1301,20 +1301,43 @@ void func_80021EB8(s32 *gsw)
     gsw[0x81] = sum;
 }
 
-/* NEAR MISS, 14 words and 6 DIFF, all of them register NAMES -- the target
-   keeps the cursor in $a1 and the counter in $v1, this gets them the other way
-   round. Source in docs/near-misses/func_80021EE0.c; it is the verifier half
-   of func_80021EB8 above.
+/* The `while (1)` plus `break` is load-bearing, not style: with a `for` or
+   `while` whose test is the loop's last insn, loop.c's check_dbra_loop
+   reverses this into the downcount form func_80021EB8 has (`li 0x177D` /
+   `addiu -1` / `bgez`), 13 words. Here the conditional branch is followed by
+   the backward jump, so get_condition_for_loop finds no final conditional
+   branch and check_dbra_loop bails before it can reverse -- jump2 then merges
+   the two branches back into the one `bnez`. The walking `*q++` is equally
+   load-bearing: `q[i]` makes the cursor a loop.c giv whose initialisation is
+   emitted at the loop start, i.e. AFTER the source's own `i = 0`, and
+   local_alloc then gives the counter $a1 and the cursor $v1 -- 14 words, 6
+   DIFF, all register names.
+   Ruled out, measured: `q[i]` in twelve spellings (declaration orders, `i = 0`
+   as a declaration initialiser, `while`, `do`/`while`, `gsw[0x82 + i]`,
+   `(gsw + 0x82)[i]`, `(... ^ sum) == 0`, u32) -- all 14 words / 6 DIFF;
+   `for (i = 0; i < 0x177E; i++) sum ^= *q++;` -- 13 words / 11 DIFF
+   (reversed); `do { } while (++i < 0x177E)` with `*q++` -- 13 / 11;
+   `for (;;)` in place of `while (1)` -- 14 / 3 (the first iteration is
+   peeled); `if (++i == 0x177E) break;` -- 14 / 6 (`bne` against a
+   register-held 0x177E instead of `slti`/`bnez`). `if (++i >= 0x177E) break;`
+   and a `goto` loop also match. */
+s32 func_80021EE0(s32 *gsw)
+{
+    s32 sum = 0;
+    s32 *q = gsw + 0x82;
+    s32 i = 0;
 
-   The INDEXED loop is not a stylistic choice and must be kept: written as
-   `*q++` with an upcount, loop.c's check_dbra_loop reverses the loop into the
-   downcount form func_80021EB8 actually has (`li 0x177D` / `addiu -1` /
-   `bgez`), 13 words. Indexing by the counter makes it the addressing biv and
-   blocks the reversal. Seven spellings all give 14 words and the same 6 DIFF:
-   declaration order either way, `for` against `do`/`while`, `q[i]` against
-   `gsw[0x82 + i]` against `(gsw + 0x82)[i]`, `== sum` against
-   `(... ^ sum) == 0`, and u32 against s32. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021EE0);
+    while (1)
+    {
+        sum ^= *q++;
+        i++;
+        if (i >= 0x177E)
+        {
+            break;
+        }
+    }
+    return gsw[0x81] == sum;
+}
 
 s32 func_8006A124(u8 *a, u8 *b);
 void func_80021DF4(s32 idx, u8 *src);

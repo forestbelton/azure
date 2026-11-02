@@ -10963,3 +10963,73 @@ A corollary worth keeping: when a diff is "the target copies a constant into
 the flag register and we load it directly", look for an arm whose statements
 can be reordered to take `jump.c:699` out of play, before reaching for a
 declaration change.
+
+## `while (1)` WITH A `break` DEFEATS LOOP REVERSAL, AND THAT IS WHAT KEEPS A WALKED POINTER
+
+An upcounting loop over a walked pointer -- `for (i = 0; i < N; i++) sum ^=
+*q++;` -- does not come out as written. `loop.c:check_dbra_loop` turns the
+counter into a downcount (`li N-1` / `addiu -1` / `bgez`) and the `slti`
+disappears: one word shorter and nothing like the listing. The route in is
+`no_use_except_counting`, which is computed when the compared biv has no givs
+and the loop has no exit other than the fall-through, and which is true for
+any counter used only to count -- exactly the case here.
+
+Blocking it with the usual levers costs code: a second non-invariant read
+(`num_nonfixed_reads <= 1`), a second store (`num_mem_sets <= 1`), a call, or
+a `volatile`. Indexing by the counter instead (`q[i]`) does block the
+reversal -- the counter acquires a giv, so `no_use_except_counting` stays 0
+and the two-iv-class disjunct fails -- but it costs the pointer: the cursor
+becomes a loop.c giv, and `emit_iv_add_mult (..., loop_start)` puts its
+initialisation at the loop start, i.e. AFTER the source's own `i = 0`.
+`combine` then folds the source's `q = base + K` into that copy at the COPY's
+position, so the preheader comes out `sum = 0` / `i = 0` / `cursor = base + K`
+where the listing has `sum = 0` / `cursor = base + K` / `i = 0`, and
+local_alloc, assigning in insn order, gives the counter the lower register.
+That residue is 6 DIFF of pure register names and no spelling of the indexed
+loop moves it, because the giv's init site is unconditional in loop.c.
+
+The free blocker is the loop FORM. Write the test as a `break` in the body:
+
+    s32 i = 0;
+    while (1)
+    {
+        sum ^= *q++;
+        i++;
+        if (i >= N)
+        {
+            break;
+        }
+    }
+
+`check_dbra_loop` starts with `get_condition_for_loop (PREV_INSN (loop_end))`
+and gives up when that is not a conditional branch. Here the loop's last insn
+is the backward jump and the conditional branch sits before it, so it returns
+0 before any of the conditions above are reached -- the `.loop` dump says
+`Loop unrolling: No final conditional branch found` and nothing about
+reversing. jump2 then merges the branch pair back into the one `bnez`, so the
+emitted loop is identical to the `for`'s -- minus the reversal.
+
+Measured on func_80021EE0 (ovl_main_80020000), 14 words:
+
+* `while (1)` + `i++;` + `if (i >= 0x177E) break;` -- MATCH.
+* `while (1)` + `if (++i >= 0x177E) break;` -- MATCH.
+* `goto` loop (`loop: ...; if (++i < 0x177E) goto loop;`) -- MATCH. No loop
+  notes at all, so check_dbra_loop never runs; same bytes.
+* `for (;;)` in place of `while (1)` -- 14 words, 3 DIFF. Not a synonym here:
+  the first iteration is peeled (`lw $a2, 0x208($a0)` / `addiu $a1, $a0,
+  0x20C` / `li $v1, 1`).
+* `if (++i == 0x177E) break;` -- 14 words, 6 DIFF: `bne` against a
+  register-held 0x177E instead of `slti`/`bnez`. `check_dbra_loop`'s reversal
+  arm also requires `GET_CODE (comparison) == LT`, so `!=` blocks the
+  reversal too, but it changes the test's code.
+* `for (i = 0; i < 0x177E; i++) sum ^= *q++;` and
+  `do { sum ^= *q++; } while (++i < 0x177E);` -- 13 words, 11 DIFF, reversed.
+* `q[i]` in twelve spellings (declaration orders, `i = 0` as a declaration
+  initialiser, `while`, `do`/`while`, `gsw[0x82 + i]`, `(gsw + 0x82)[i]`,
+  `(... ^ sum) == 0`, u32) -- all 14 words, the same 6 DIFF.
+
+Read in reverse: a listing whose loop walks a pointer AND keeps an upcounting
+`slti` counter is telling you the exit test was not the loop's last insn in
+the source. Its sibling func_80021EB8, which differs only in storing the sum
+instead of comparing it, DOES have the reversed form and is spelled as the
+downcount.
