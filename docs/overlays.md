@@ -735,10 +735,18 @@ target reaches A by a taken `bnez` rather than by falling through.
 ## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
 
 The sweep that follows the one above took the card overlay from 192 of 241
-functions to **240**, and from roughly 54% to **98.6% of its 7487 words (7385
-landed)** -- which leaves the whole project at 1,292 of 1,293 functions and
-99.8% of its words. ONE stub remains anywhere: `func_80022774`, parked at 102
-words / 3 DIFF with two annotated devices and ~90 measurements in its header.
+functions to **all 241**, and from roughly 54% to **100.0% of its 7487
+words** -- which COMPLETES THE PROJECT at 1,293 of 1,293 functions and 100.0%
+of its words, with no `INCLUDE_ASM` left anywhere in `csrc/`.
+
+The last function to fall, `func_80022774`, took four passes and about a
+thousand compiled variants. Its park spent three of those passes believing a
+false obstruction, and the note on it is worth keeping: a reference marker is
+the LAST CONSUMER of the insn producing its operand, so under a backward
+scheduler the clock the marker is picked at is the clock that load launches.
+Two jobs were competing for one scheduling hole, which is not a thing the
+listing shows. The fix was a device that consumes nothing -- a hard-register
+pin -- rather than a cleverer marker.
 
 Its last stretch -- seven functions, no permuter -- was worked a different
 way, and the way generalises: open the compiler's per-pass RTL dumps

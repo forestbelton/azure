@@ -97,12 +97,13 @@ The queue, in order:
       sites (all `c_server.c`) agree with the propagated map wherever they
       overlap.
 
-      **DONE but for one: 240 of 241 functions, 7,385 of 7,487 words (98.6%)
-      as of 2026-11-01**, which takes the whole project to 1,292 of 1,293
-      functions and 99.8% of its words. The single remaining stub is
-      `func_80022774`, parked at 102 words / 3 DIFF with two annotated
-      devices; its header carries ~90 measurements and an argument for why
-      the residue is closed rather than merely unsearched.
+      **DONE: 241 of 241 functions, 7,487 of 7,487 words (100.0%) as of
+      2026-11-01**, which takes the whole project to **1,293 of 1,293
+      functions and 100.0% of its words**. There is no `INCLUDE_ASM` left
+      anywhere in `csrc/`, and all four containers are byte-identical from a
+      forced rebuild. The project ships 32 annotated devices across eleven
+      units, four of them in this one; `grep -rn 'DEVICE:' csrc/` is the
+      census.
 
       The second sweep landed EIGHTEEN functions by hand with no permuter at
       all, working from the compiler's per-pass RTL dumps (section 4b of
