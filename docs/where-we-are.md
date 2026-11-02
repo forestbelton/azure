@@ -309,6 +309,14 @@ size, the `-G` value, the struct layout, the flags.
 1. **The overlays**, which are where the actual game is and are now the only
    large thing left: 8.4 MB of code against the executable's 216 KB.
    `docs/overlays.md` has the mechanisms; `progress.py` has the state.
+
+   `town.bin`'s overlay is the one in progress and has its own operating
+   procedure in **`docs/town-sweep.md`**: the work ranking
+   (`tools/decomp/worklist.py`), the verbatim subagent brief, the traps, and
+   what is already established about its types. Start there rather than here
+   when continuing it. `main.bin`'s overlay is complete; `dungeon.bin`'s is
+   still an `asm` subsegment and its yaml records a boundary error to fix
+   before converting it.
 2. Devices stay in a number of landed functions, each deliberate and each
    documented at its site with what it is worth and what was ruled out.
    `grep -rn "DEVICE:" csrc/` is the index -- 27 comments as of 2026-11-01,
