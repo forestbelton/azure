@@ -201,7 +201,9 @@ wine "$PROJ/psyq/cc1psx.exe" -O2 -G0 -da -quiet f.i -o f.s
 
 **The dumps land next to the `.i` file**, one per pass, in pass order:
 `f.i.rtl`, `.jump`, `.cse`, `.loop`, `.flow`, `.combine`, `.regmove`, `.sched`,
-`.lreg`, `.greg`, `.cse2`, `.jump2`, `.bp`, `.sched2`, `.shorten`, `.dbr`.
+`.lreg`, `.greg`, `.cse2`, `.bp`, `.sched2`, `.jump2`, `.shorten`, `.dbr` --
+note `.jump2` runs AFTER `.sched2`, which is why a reordering done to break a
+cross-jump merge is also the order that gets emitted.
 They only appear in wine's `Temp` as `PQ2.*` when `ccpsx` names the temporary
 itself, so invoke the two stages yourself and read them in place. Verified
 2026-11-01.

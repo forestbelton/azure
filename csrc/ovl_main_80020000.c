@@ -899,9 +899,87 @@ s32 func_8002121C(void)
     return r;
 }
 
-/* NEAR MISS: 58 words against 57, 23 DIFF. The dispatch is the problem: the target tests st==1 and st==3 with BEQ to blocks placed AFTER the chain, sets r=5 in the second beq's delay slot and jumps to the exit. Four structures measured -- plain if/else-if chain (56w/44, one word short, gcc merges the r=5 path into the exit), st!=1 first (56w/44, the FIRST test then matches), fully nested != (56w/44), a switch (58w/23), and this goto chain (58w/23). The bodies are right: state 1 re-registers the events then checks func_80069C38 and func_80069C18's bit 4 before advancing D_800287C8, state 3 clears one of the two D_80084118 words chosen by D_800287CC and returns 3, anything else returns 5.
-   Source in docs/near-misses/func_80021298.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021298);
+/* The three `goto`s out of the dispatch, the DUPLICATED fail body and the
+   trailing `def:` block are all load-bearing; measurements in
+   docs/matching-levers.md under "A DUPLICATED FAIL BODY IS WHAT PUTS IT IN
+   cse1's PATH".
+
+   - The fail body has to appear TWICE, once per test. cse1 can only share the
+     one `lui %hi(D_800287C8)` with a block it reaches on a path from the
+     function's first insn, and cse_end_of_basic_block (cse.c:8103) will only
+     extend a path across a conditional jump whose target label has
+     LABEL_NUSES == 1. A single shared fail block (`&&`, or either nesting)
+     gives that label two uses, so the fail body gets a SECOND `lui`: 58 words
+     / 23 DIFF. jump2's cross-jumping merges the two copies back into one.
+   - `def:` must sit between the st==3 arm and `out:`. Without it the st==3
+     arm's trailing `D_800287C8 = 0` is the insn before `out:` and is the same
+     word as the fail body's, so find_cross_jump (jump.c:1978, minimum 1)
+     steals the fail copies' store instead and each copy loses a word to the
+     merge: 58 words / 25 DIFF. With `def:` in between, the insn before `out:`
+     is `r = 5`, the compare fails, and the two fail copies merge with each
+     other instead -- which is the 3-word block the target has.
+
+   Ruled out, all measured: plain if/else-if chain 56w/44; `st != 1` first
+   56w/44; fully nested `!=` 56w/44; `switch` 58w/23; a single-fail `goto`
+   chain 58w/23; duplicated fail bodies inline (if/else-if/else) 58w/36;
+   duplicated fail bodies out of line without `def:` 58w/25; duplicated with
+   `D_800287C8 = 0;` before `r = 5;` 57w/2; duplicated with the st==3 arm's
+   two stores swapped 57w/2. */
+s32 func_80021298(void)
+{
+    s32 st = D_800287C8;
+    s32 r = 0;
+    s32 *t;
+
+    if (st == 0)
+    {
+        goto out;
+    }
+    if (st == 1)
+    {
+        goto one;
+    }
+    if (st == 3)
+    {
+        goto three;
+    }
+    goto def;
+one:
+    func_80021538();
+    if (func_80069C38(D_800287CC) == 0)
+    {
+        goto fail1;
+    }
+    if ((func_80069C18(D_800287CC != 0) & 4) == 0)
+    {
+        goto fail2;
+    }
+    D_800287E0 = st;
+    D_800287C8 = D_800287C8 + 1;
+    goto out;
+fail1:
+    r = 5;
+    D_800287C8 = 0;
+    goto out;
+fail2:
+    r = 5;
+    D_800287C8 = 0;
+    goto out;
+three:
+    t = &D_80084118;
+    if (D_800287CC != 0)
+    {
+        t++;
+    }
+    r = 3;
+    t[0] = 0;
+    D_800287C8 = 0;
+    goto out;
+def:
+    r = 5;
+out:
+    return r;
+}
 
 s32 func_8002137C(void)
 {
