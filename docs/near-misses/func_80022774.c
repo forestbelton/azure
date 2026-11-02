@@ -104,6 +104,14 @@
    `__asm__("" ::"r"(h))` 13; `i++` moved into the MIDDLE of the body (just
    after the first `p += 0xC`) 91 at 103 words.
 
+   OPCODE CENSUS, 2026-11-01 -- this park does NOT have the hidden-load
+   problem that turned out to be the whole of func_80023258's residue (where
+   three surplus `lbu` hid inside load-delay `nop`s, so the word count and the
+   measurement table both missed them). Counted on this body against the
+   target and every class is equal: lbu 6/6, lw 1/1, lwl 7/7, lwr 7/7,
+   swl 7/7, swr 7/7, sb 12/12, sh 0/0, sw 8/8. So the 3 DIFF really is the
+   preheader permutation described above and nothing is hiding behind it.
+
    search.py: 37 variants compiled on the 11-DIFF body, none better.
    The permuter was not used (hand work, by request).
 
