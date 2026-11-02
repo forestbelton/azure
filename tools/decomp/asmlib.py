@@ -128,34 +128,42 @@ class CompileError(Exception):
 def compile_asm(src, cflags=()):
     """ccpsx -S the candidate; return the assembly text.
 
-    Raises CompileError, including for wine's case-insensitivity trap: with
-    zz_gA.s already in the scratch directory, ccpsx writes THAT file for
-    zz_ga.c, exits 0, and the output we want never appears.
+    Wine's filesystem is case-insensitive, so the name ccpsx writes is not
+    always the name we asked for: `I1.c` gets its output written as `i1.s`,
+    and a stale `zz_gA.s` in the scratch directory is the same file as
+    `zz_ga.s`. Both are handled by clearing every case-variant of the target
+    name first and then accepting whichever case actually appeared -- there can
+    only be one such file, and it is ours.
+
+    Raises CompileError if nothing was written under any spelling.
     """
     os.makedirs(SP, exist_ok=True)
     base = os.path.splitext(os.path.basename(src))[0]
     s = os.path.join(SP, base + '.s')
-    try:
-        os.remove(s)
-    except OSError:
-        pass
+    want = os.path.basename(s).lower()
+    for f in os.listdir(SP):
+        if f.lower() == want:
+            try:
+                os.remove(os.path.join(SP, f))
+            except OSError:
+                pass
     r = subprocess.run([os.path.join(PROJ, 'tools/ccpsx')] + CFLAGS + list(cflags)
                        + ['-S', '-o', s, src], cwd=PROJ,
                        capture_output=True, text=True)
     if r.returncode:
         raise CompileError(r.stdout + r.stderr)
     if not os.path.exists(s):
-        clash = [f for f in os.listdir(SP)
-                 if f.lower() == os.path.basename(s).lower() and f != os.path.basename(s)]
-        msg = 'ccpsx exited 0 but wrote no %s' % s
-        if clash:
-            msg += ('\n  it wrote %s/%s instead: wine is case-insensitive, so those'
-                    '\n  two names are one file. Rename %s so it differs by more than case.'
-                    % (SP, clash[0], src))
+        # wine may have written our output under a different case, e.g. i1.s
+        # for I1.c. We cleared every case-variant above, so any that exists now
+        # is this run's output.
+        variant = [f for f in os.listdir(SP) if f.lower() == want]
+        if variant:
+            s = os.path.join(SP, variant[0])
         else:
-            msg += ('\n  no case clash in the scratch directory; try again (concurrent'
-                    '\n  ccpsx runs share one wine prefix and can lose an output).')
-        raise CompileError(msg)
+            raise CompileError(
+                'ccpsx exited 0 but wrote no %s under any spelling of the name;'
+                '\n  try again (concurrent ccpsx runs share one wine prefix and'
+                '\n  can lose an output).' % s)
     return open(s).read()
 
 
@@ -207,11 +215,35 @@ def build(src, gasG=0, cflags=()):
     return object_words(assemble(asm, name, gasG))
 
 
-def target_words(unit, func):
-    """[(word, text)] from splat's nonmatchings listing."""
+def _listing_rows(unit, func):
+    """The listing rows that belong to FUNC itself.
+
+    A nonmatchings listing is not all .text: splat emits a switch's jump table
+    into the same file, as `.word .L...` rows BEFORE the `glabel`, and those
+    rows carry the same `/* rom vram WORD */` comment as an instruction. Taking
+    every row shifts the whole comparison by the size of the table -- which is
+    why func_8002168C read as "built 82 words, target 87" with every word
+    wrong, and why no function with a jump table could ever verify.
+
+    So rows are taken from `glabel FUNC` up to the next `glabel`. A listing
+    with no glabel at all falls back to every row.
+    """
     path = '%s/asm/nonmatchings/%s/%s.s' % (PROJ, unit, func)
+    lines = open(path).readlines()
+    start = next((i + 1 for i, ln in enumerate(lines)
+                  if re.match(r'\s*glabel\s+%s\s*$' % re.escape(func), ln)), None)
+    if start is None:
+        return lines, path
+    end = next((i for i, ln in enumerate(lines[start:], start)
+                if re.match(r'\s*glabel\s', ln)), len(lines))
+    return lines[start:end], path
+
+
+def target_words(unit, func):
+    """[(word, text)] from splat's nonmatchings listing, FUNC's rows only."""
+    rows, path = _listing_rows(unit, func)
     out = []
-    for ln in open(path):
+    for ln in rows:
         m = re.match(r'\s*/\* \w+ \w+ ([0-9A-F]{8}) \*/\s+(.*)', ln)
         if m:
             b = bytes.fromhex(m.group(1))
@@ -222,9 +254,9 @@ def target_words(unit, func):
 
 
 def target_vram(unit, func):
-    """The function's vram start, from the listing's first row."""
-    path = '%s/asm/nonmatchings/%s/%s.s' % (PROJ, unit, func)
-    for ln in open(path):
+    """The function's vram start, from its first row (not a jump table's)."""
+    rows, _ = _listing_rows(unit, func)
+    for ln in rows:
         m = re.match(r'\s*/\* \w+ (\w+) [0-9A-F]{8} \*/', ln)
         if m:
             return int(m.group(1), 16)
