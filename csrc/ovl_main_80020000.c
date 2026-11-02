@@ -1957,9 +1957,44 @@ void func_80022B48(UnkCardGrp8B0 *c, s32 n)
     c->shared[2] = D_8002E5E8[2];
 }
 
-/* NEAR MISS: 27 words against 24, and the register allocation ALREADY matches ($a3 maxlen, $t1 last, $a2 index, $t0 cursor). The three extra words are a duplicated inner-loop test: the target enters the inner loop with 'j' straight to the bottom test, the plain gcc 2.7.2 'while' shape, while every spelling here gets a guard copy of the test at the top AND the bottom one. Related, and probably the cause: 'last = i' is loop-invariant in the inner loop, and loop.c SINKS it out past the loop here (it lands in the bottom branch's delay slot, shared with the guard's target) where the target keeps it inside, in the if's delay slot. Three spellings measured: 'last = i' before the if, after it, and the if-body order swapped.
-   Source in docs/near-misses/func_80022BE8.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022BE8);
+/* The pointer bump belongs in the TEST, not the body. `duplicate_loop_exit_test`
+   (jump.c:2131) copies the inner loop's exit test above the loop in either
+   spelling, so the three extra words of `while (*s != 0) { s++; ... }` are not
+   a guard that failed to appear -- they are a guard that failed to be merged
+   back. `jump2`'s conditional cross-jump (jump.c:1923-1950) collapses the guard
+   into the plain `j` at 0x80022BFC only if the guard copy and the bottom test
+   end in an identical tail of at least `minimum` = 2 insns (find_cross_jump,
+   jump.c:2371, which scans BACKWARD from each conditional jump and stops at the
+   first mismatch). With `s++` in the test both tails are `lbu` + `addiu`, so two
+   insns match and the merge fires. With `s++` in the body, sched1 fills the load
+   delay after the `lbu` with `last = i` at the bottom and with `len = 0` in the
+   guard, so the very first backward pair already differs and nothing merges.
+   Measured: `while (*s != 0) { s++; ... }` 27 words / 23 DIFF;
+   `for (len = 0; *s != 0; s++)` 28 words / 23 DIFF; this spelling 24 / 0. */
+void func_80022BE8(UnkStrSet *q)
+{
+    s32 maxlen = 0;
+    s32 last = 0;
+    s32 i;
+
+    for (i = 0; i < 5; i++)
+    {
+        u8 *s = q->strs[i];
+        s32 len = 0;
+
+        while (*s++ != 0)
+        {
+            len++;
+            if (maxlen < len)
+            {
+                maxlen = len;
+            }
+            last = i;
+        }
+    }
+    q->unk_16 = maxlen;
+    q->unk_17 = last + 1;
+}
 
 void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
 {
