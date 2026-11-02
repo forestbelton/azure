@@ -2309,9 +2309,47 @@ s32 func_800231E4(s32 flag)
     return D_80028808;
 }
 
-/* NEAR MISS: 94 words, 70 DIFF, and nearly all of it is one register swap -- the target holds p in $t1 and the loop counter in $t2, every spelling here has them the other way round, and that shifts the register names through the whole body. Words 1-11 and 15-20 are otherwise instruction-for-instruction right, which took three levers: p[33] * 16 must be spelled '<< 4' (as '* 16' gcc reassociates the constant onto the (p[34] - p[35]) difference instead, 93w/85); p[35] needs a LOCAL, or gcc reloads it narrowed to 'lhu' for the 16-bit store instead of reusing the word it already loaded; and the division plus 0xA needs its own local, or fold moves the 0xA onto the (p[35] << 4) term. The remaining word is the store address: the target computes 'addiu $t0, $a3, 0x7C' off the stride-1 induction variable and stores through it, where the plain '((u8 *)p)[0x7C + i] = v' gives a one-word 'sb $v0, 124($a2)' (93w/49, the best DIFF measured) and '&((u8 *)p)[0x7C + i]' gives two words but computes 'i + 124' before adding p. Also measured: four groupings of the head expression, three store-pointer spellings, three declaration orders, and a copy of the parameter into a local (68 DIFF, the only thing that moved the swap at all).
-   Source in docs/near-misses/func_80023258.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80023258);
+void func_80023258(s32 *p)
+{
+    s32 w = p[35];
+    s32 d = ((p[34] - w) * (p[33] << 4)) / p[32] + 0xA;
+    s32 i;
+
+    ((UnkCardPair *)p[105])->unk_04->unk_0A = (w << 4) + d;
+    for (i = 0; i < 3; i++)
+    {
+        s32 v = ((u8 *)p)[0x7C + i];
+        s32 u;
+        s32 n;
+        u8 *q = (u8 *)p + i + 0x7C;
+
+        if (i == p[34])
+        {
+            n = v + (8 - v) / (p[32] - p[33] + 1);
+        }
+        else
+        {
+            n = v;
+            if (n != 0)
+            {
+                n -= 1;
+            }
+        }
+        *q = n;
+        u = ((u8 *)p)[0x7C + i];
+        ((UnkCardPair *)p[114 + i])->unk_04->unk_08 = u + 0x24;
+        ((UnkCardPair *)p[118 + i])->unk_04->unk_08 = u + 0x8F;
+        ((UnkCardPair *)p[106 + i])->unk_04->unk_08 = u + 9;
+        ((UnkCardPair *)p[110 + i])->unk_04->unk_08 = u + 0x42;
+        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
+    }
+    if (p[33] < p[32])
+    {
+        p[33]++;
+    }
+}
 
 void func_800233D0(s32 *p)
 {
