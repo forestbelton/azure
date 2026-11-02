@@ -306,11 +306,9 @@ size, the `-G` value, the struct layout, the flags.
 
 ## Open TODOs
 
-`TODO.md` has the live queue.
-
 1. **The overlays**, which are where the actual game is and are now the only
-   large thing left: 8.4 MB of code against the executable's 216 KB, none of
-   it started. `docs/overlays.md` has the analysis.
+   large thing left: 8.4 MB of code against the executable's 216 KB.
+   `docs/overlays.md` has the mechanisms; `progress.py` has the state.
 2. Devices stay in a number of landed functions, each deliberate and each
    documented at its site with what it is worth and what was ruled out.
    `grep -rn "DEVICE:" csrc/` is the index -- 27 comments as of 2026-11-01,

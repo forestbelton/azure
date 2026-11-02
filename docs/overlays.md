@@ -1,7 +1,13 @@
 # Overlays: how the game's code is actually laid out
 
-Written 2026-10-22, after `docs/where-we-are.md` had spent a while implying the
-game was nearly decompiled when what is nearly decompiled is the engine.
+What the overlays are, where they load, and the mechanisms that apply to all
+overlay code.
+
+**Fixed findings only.** The counts here -- functions, words, code spans, vote
+scores -- are properties of the images and do not change. How much of any of it
+is decompiled is deliberately NOT recorded here: run
+`python3 tools/decomp/progress.py` and `python3 tools/decomp/guard.py`, which
+are the authority.
 
 ## The PSX model, in one paragraph
 
@@ -78,16 +84,16 @@ and the engine depends on it. The engine is not a self-contained program.
 Because nothing is relocated. A call into an overlay is a `jal` with a 26-bit
 absolute target, so the only thing the engine needs is the *number*, and
 `splat/slus_006.14_undefined_funcs_auto.txt` supplies it as a linker-script
-assignment. That is exactly why 162 functions can match byte-for-byte against
-code that calls into a 1 MB overlay nobody has looked at.
+assignment. That is exactly why the engine's functions can match byte-for-byte
+against code that calls into a 1 MB overlay nobody has looked at.
 
 The same mechanism is what makes the overlays hard: their code is full of
 `jal`s back into the engine and references to engine globals, so they are not
 independent either.
 
-## Where the overlays actually load (answered 2026-10-26)
+## Where the overlays load
 
-Three code overlays are now placed. None of the containers is loaded as a
+Four code overlays are placed. None of the containers is loaded as a
 unit -- they are 2.5/16.1/26.5 MB against 2 MB of RAM, and the disc is
 addressed by absolute LBA, so a container is just a region of it.
 
@@ -98,11 +104,10 @@ addressed by absolute LBA, so a container is just a region of it.
 | `main.bin` | `+0x25d000` | `0x80020000` | `+0x25d924..+0x264e20` | 130 | 241 |
 | `main.bin` | `+0x269000` | `0x80400000` | `+0x2698a0..+0x2719e0` | 142 | 263 |
 
-("Vote" is the jal-against-prologue agreement score that placed the overlay,
-which is what the first version of this table reported in a column labelled
-"Functions"; "Functions" is what splat actually emitted. The code spans are
-the corrected 16-byte-aligned ends, not the shorter ones 77b2c94 reported --
-see each yaml's comment.)
+("Vote" is the jal-against-prologue agreement score that placed the overlay;
+"Functions" is what splat emitted. The code spans end on the 16-byte boundary
+splat's `__romPos` alignment requires -- see each yaml's comment and the rule
+below.)
 
 `0x80088760` is the first byte after the resident engine's last
 (`0x8008875F`), which is the layout this document predicted. town and dungeon
@@ -152,11 +157,11 @@ occupies, and `+0x9f000` / `+0x4a3000` are texture records.
 `0x801768AC`, the isolated address near the top of RAM, is in none of the
 spans. `0x800D5460` is, in dungeon's.
 
-## The fourth overlay: `main.bin+0x269000` at `0x80400000` (2026-11-01)
+## The fourth overlay: `main.bin+0x269000` at `0x80400000`
 
-This block was filed here as unresolvable -- "191 prologues, so certainly
-code, whose base is unknown: only 58 internal jal targets and a best score of
-6 against a floor of 5." **That measurement was wrong, not the method.** Run
+This block looked unresolvable at first: 191 prologues, so certainly code, but
+only 58 internal jal targets and a best score of 6 against a floor of 5.
+**That measurement was wrong, not the method.** Run
 over the full `+0x269000..+0x272000` span the block has 654 jal sites to 265
 distinct targets, and the second vote -- its own jal targets against its own
 `addiu sp,sp,-N` prologues -- scores **142 at `0x80400000` against a next-best
@@ -198,7 +203,7 @@ segment:
   nine -- `c_server.c`, `card_mes.c`, `card_opt.c`, `card_win.c`,
   `cardbk.c`, `cardinfo.c`, `cardslot.c`, `cardsme.c`, `memory.c` -- against
   the live overlay's one (`c_server.c`). Unit boundaries are where four
-  previous dead ends in this project turned out to be; see TODO.md.
+  previous dead ends in this project turned out to be.
 * **Source line numbers.** Every assert site passes `__LINE__` as an
   immediate, which brackets function order and rough line structure within
   each unit.
@@ -272,7 +277,7 @@ costs nothing.
 
 In rough order:
 
-1. **Find the archive structure.** Partly done. The engine's CD queue takes
+1. **The archive structure.** The engine's CD queue takes
    8-byte descriptors, `{nsec << 23 | dest, LBA}`, with `dest == 0` meaning
    "the D_80081480 bump arena"; the pump is `func_8003E758` and the queue
    dispatcher `func_8003E4FC`. The 49 descriptors at `0x80081020..0x800811a8`
@@ -280,15 +285,14 @@ In rough order:
    bytes at each source offset), and `D_8006E6F4` is a 2-entry table of
    descriptor pairs selecting the town or dungeon sound bank. No descriptor in
    the ROM targets a code overlay, so those are built at runtime.
-2. **Recover each entry's load address.** Done for the three code overlays
-   above, by prologue/jal fingerprinting rather than from any table. Still
-   open for the asset entries. Either from the container's own
-   table, or by taking a code entry's internal `jal` targets and finding the
-   base that makes them land on its own function starts.
-3. **Then** a splat spec per overlay, with its own vram base, and a way to keep
-   two overlays' identical addresses apart. **Done for the three code
-   overlays** (2026-10-26). The "keep identical addresses apart" worry turned
-   out not to bite: each container links from its own generated script, and the
+2. **Recovering an entry's load address.** Prologue/jal fingerprinting, not a
+   table: that is what placed all four code overlays above. Either read it from
+   the container's own table if one is ever found, or take a code entry's
+   internal `jal` targets and find the base that makes them land on its own
+   function starts.
+3. **A splat spec per overlay**, with its own vram base. The "keep two
+   overlays' identical addresses apart" worry turned out not to bite: each
+   container links from its own generated script, and the
    script names its object files explicitly, so `build/town.bin.ld` pulls in
    `asm/ovl_town.o` and nothing else. town's and dungeon's overlays never meet,
    and neither reaches the `slus_006.14` link. Calls out of an overlay into the
@@ -299,11 +303,10 @@ In rough order:
    Three things have to be right in the segment definition, and getting any of
    them wrong is what parked the segments between 77b2c94 and eec0572:
 
-   * **`rodata`, not `.rodata`.** The leading dot routes a subsegment to a
-     SIBLING C OBJECT and extracts nothing. With no `csrc/ovl_town.c` to route
-     to, nothing is emitted and every reference into the overlay's own rodata
-     comes out undefined -- which is all
-     `undefined reference to jtbl_80089900` ever was.
+   * **The rodata dot tracks whether a C sibling exists.** The dot routes a
+     subsegment to a SIBLING C OBJECT, so `rodata` is right for an `asm`
+     overlay and `.rodata` is required for a `c` one. Full rule and both
+     failure messages under "The rodata dot" below.
    * **A following segment.** Without one the code subsegment runs to the end
      of the container; town.bin's became a single 4.3-million-line file.
    * **A text end on a 16-byte boundary.** splat emits
@@ -313,16 +316,15 @@ In rough order:
      were short of the real end (town 0x51ed8 against 0x51fc0, dungeon 0xf8000
      against 0xf7700, main 0x264c90 against 0x264e20).
 
-   What this split actually yields: 1815 functions in town's overlay, 862 in
-   dungeon's, 241 in main's -- against 178 in the resident engine. `make
-   containers` rebuilds all four containers and checks them.
+   `make containers` rebuilds all four containers and checks each against its
+   reference sha1.
 
 Sizes, for scale: the heuristic in `docs/where-we-are.md` puts about 8.4 MB of
 code-bearing blocks across the three containers against 216 KB in the resident
 executable. Even discounting it heavily for packed data, the content dwarfs the
 engine.
 
-## The unit map for the card overlay (2026-11-01)
+## The unit map for the card overlay
 
 `tools/assertmap.py` turns the twin into a translation-unit map for the live
 `0x80020000` overlay. It is the overlay replacement for `tools/tuscan.py`,
@@ -448,11 +450,7 @@ different method.
   `0x80020000` overlay is what gets decompiled; the twin exists to say what
   the units are.
 
-## Building the card overlay: the flags, and the first function (2026-11-01)
-
-`main.bin`'s `0x80020000` overlay is now a `c` subsegment in the build, with
-one function compiled from C and `main.bin` still byte-identical. All four
-containers stay byte-identical.
+## Building an overlay as C: the flags
 
 ### The overlays are -G0, and that is forced, not chosen
 
@@ -508,19 +506,21 @@ checked, and masks the fields an unlinked candidate object cannot have filled
 in -- `jal` targets and `%hi`/`%lo` -- the way advise.py's aligned verdict
 does.)
 
-### `.rodata` WITH the dot, once a C sibling exists
+### The rodata dot
 
-town.bin.yaml and dungeon.bin.yaml both carry a hard-won note saying to use
-`rodata` and **not** `.rodata`, because the dot "routes a subsegment to a
-sibling C object and extracts nothing". Converting this overlay to `c` makes
-splat refuse the undotted form outright: *"The `rodata` section was not
+An overlay still split as `asm` must say `rodata` and **not** `.rodata`,
+because the dot "routes a subsegment to a sibling C object and extracts
+nothing": with no `csrc/ovl_<name>.c` to route to, nothing is emitted and every
+reference into the overlay's own rodata comes out undefined, which is all
+`undefined reference to jtbl_80089900` ever was. Converting an overlay to `c`
+makes splat refuse the undotted form outright: *"The `rodata` section was not
 prefixed with a dot, which is required for the rodata migration feature to
 work properly and avoid build errors due to duplicated symbols at link-time."*
 
-Both are the same rule from opposite sides. The dot routes rodata to a sibling
-C unit, so it is wrong when there is no such unit and required when there is.
-The earlier note is right for town and dungeon, which are still `asm`, and
-stops being right the moment either of them is converted.
+Both are the same rule from opposite sides: the dot is wrong when there is no
+sibling C unit and required when there is. So the conversion from `asm` to `c`
+adds the dot in the same change that creates the C file, and an overlay left at
+`asm` must not carry it.
 
 With the dot, splat migrates each rodata symbol into the nonmatching listing
 of the single function that uses it, which is what puts `jtbl_80020060` where
@@ -553,20 +553,19 @@ symbol so it keeps its own re-materialised `lui $v0`, which is what the
 listing has. The local costs no instruction -- combine folds the `%lo` back
 into the stores.
 
-Two of the overlay's 241 functions were free: `func_80021904` and
-`func_8002519C` are `jr $ra; nop`, and splat emits them as real C rather than
-`INCLUDE_ASM`. So the overlay stands at 3 of 241.
+Worth knowing when a sweep starts: splat emits a `jr $ra; nop` function as
+real C rather than `INCLUDE_ASM`, so the trivial ones are free -- here
+`func_80021904` and `func_8002519C`.
 
-## Sweeping the card overlay (2026-11-01)
+## Sweeping an overlay
 
-**81 of 241 functions, 902 of 7487 words, `make containers` byte-identical on
-all four.** `tools/decomp/ovlverify.py` for the fast loop, `make build/main.bin`
-as the gate.
+`tools/decomp/ovlverify.py` is the fast loop; the container build
+(`make build/main.bin`, `make build/town.bin`, ...) is the gate.
 
-### The carve is not possible yet, and does not block the sweep
+### The sweep produces the anchors that pin the carve, not the other way round
 
-The plan said to carve the file into the nine units first. That was the wrong
-order, and the rodata is what shows it.
+The card overlay's plan said to carve the file into its nine units first. That
+was the wrong order, and the rodata is what shows it.
 
 A unit emits one contiguous `.rodata`, so the 11 rodata labels in
 `0x80020000..0x80020924` must partition across the units in text order. They
@@ -652,23 +651,13 @@ and pays a load-delay nop), and two initialisers in a row want the cheaper one
 first, since `s32 sum = 0;` ahead of `s32 *q = gsw + 0x82;` is the whole
 difference between 0 and 2 differing words in `func_80021EB8`.
 
-### The one near-miss left
-
-`func_80022B48` and its five siblings (40 words each, 240 words together) are
-the arrayed form of the 37-word initialiser, at six base offsets with six
-counts (`0x8B0`/7, `0x184`/18, `0x240`/10, `0xB20`/21, `0x44`/4, `0xD4`/4) and
-an identical internal layout at all six. The shape is worked out and recorded
-in `csrc/ovl_main_80020000.c`; three spellings have been measured (38w/40
-DIFF, 39w/37, 39w/40) and the open question is which induction variables the
-target derives, since it keeps the base in `$t3` with only `$a3 = 0` above the
-loop guard and everything else in the preheader.
-
-## The levers this sweep keeps needing
+## Levers overlay code keeps needing
 
 These are not overlay-specific -- they are ordinary gcc 2.7.2 behaviour that
-the engine's own functions happened not to exercise much -- but each has now
-cost two or more iterations in this unit, so they are collected here. Counts
-are how many functions in `csrc/ovl_main_80020000.c` each one landed.
+the engine's own functions happened not to exercise much -- but each cost two
+or more iterations in the card overlay, so they are collected here. The count
+in brackets on each is how many functions in `csrc/ovl_main_80020000.c` it
+landed, i.e. how much weight it has carried.
 
 **1. Put the table base in a local before indexing it.** (5 functions)
 `&TBL[i]` written directly lets gcc fold a constant field offset into the
@@ -732,12 +721,9 @@ places first follows the source's test sense. func_800254E4 is one word short
 with `if (x != 0) A else B` and exact with `if (x == 0) B else A`, because the
 target reaches A by a taken `bnez` rather than by falling through.
 
-## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
+## Findings from the card overlay's second sweep
 
-The sweep that follows the one above took the card overlay from 192 of 241
-functions to **all 241**, and from roughly 54% to **100.0% of its 7487
-words** -- which COMPLETES THE PROJECT at 1,293 of 1,293 functions and 100.0%
-of its words, with no `INCLUDE_ASM` left anywhere in `csrc/`.
+The pass that finished the card overlay landed 82 functions at once.
 
 The last function to fall, `func_80022774`, took four passes and about a
 thousand compiled variants. Its park spent three of those passes believing a

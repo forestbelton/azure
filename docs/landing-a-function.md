@@ -175,8 +175,8 @@ In order. Do not skip to step 3.
    casually mid-task.
 4. `python3 tools/decomp/guard.py` -- it prints `N known, N accounted for` and
    names anything missing.
-5. Delete the park file. Leave `docs/carved-sweep.md`, `docs/where-we-are.md`
-   and `TODO.md` alone: their counts come from `progress.py` and `guard.py`,
+5. Delete the park file. Leave `docs/carved-sweep.md` and
+   `docs/where-we-are.md` alone: their counts come from `progress.py` and `guard.py`,
    and whoever integrates your change runs those once for every function that
    landed rather than once per function.
 6. If the landing established a new mechanism -- a measured one, not a
@@ -318,8 +318,8 @@ fall in one day.
 - Do not run `parkstats.py --check`, `nmcheck.py`, `triage.py` or anything else
   that sweeps every park. You were given one function, and every tool here
   takes a path or a name.
-- Do not edit a project-wide document. `docs/carved-sweep.md`,
-  `docs/where-we-are.md` and `TODO.md` are bookkeeping for the caller.
+- Do not edit a project-wide document. `docs/carved-sweep.md` and
+  `docs/where-we-are.md` are bookkeeping for the caller.
   `docs/matching-levers.md` is NOT one of these: a new measured mechanism is
   wanted there whether the function landed or parked, as its own heading. Only
   the index is the caller's, so do not run `leverindex.py`.
