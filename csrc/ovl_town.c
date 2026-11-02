@@ -237,6 +237,17 @@ typedef struct UnkTownSlot
     s32 unk_00;
 } UnkTownSlot;
 
+/* A 0x10-byte vector: one family adds two of these componentwise into a
+   six-word UnkVec on the stack and hands that to a solver. Only the first
+   three words have a witness; the fourth is the stride's remainder. */
+typedef struct UnkTownVec16
+{
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+} UnkTownVec16;
+
 /* The third argument of the func_800C3050 wrapper family: an s16 at +0x12
    each wrapper sets to a small constant, and a u16 flag word at +0x14 that
    one of the families clears bit 8 of. */
@@ -607,7 +618,14 @@ void func_800CB060();
 /* The second parameter is an UnkTown2AE8 and not the s32 the
    pass-through wrappers implied; the countdown-and-advance family
    below is the witness. */
-void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+/* The third parameter is an UnkTownRend. Until now every caller only
+   FORWARDED it, so `s32` was a placeholder; the scale family below writes
+   +0x1C/+0x1E through it before passing it on, which is the first witness.
+   func_800C2E84's second parameter is probably the same object by the same
+   reasoning -- the bind families only forward it -- but nothing has used it
+   yet, so it stays `s32` rather than become a guess with a type name on
+   it. */
+void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
 void func_80094984(void *d, UnkTownTask *t);
 extern u8 D_800D5360[];
 extern u8 D_800D5388[];
@@ -886,7 +904,25 @@ s32 abs(s32 x);
    `if (o == 0) return 0;` the function is 49 words and materialises a literal
    zero; the target returns the VARIABLE on every path, with the failure arm
    assigning `o = 0` and falling through to a single `return o`. */
+/* Two more families, 204 words, and one of them turned up a lever the index
+   did not have.
+
+   docs/overlays.md's lever 11 says `addu` operand order follows RTL
+   canonicalisation and that pre-scaling the offset fixes it. That is not
+   enough on its own: the 42-word family needs `addu $s0, $a2, $a1` with the
+   SCALED value first, and `&q[i]`, `(u8 *)q + i * 0x10`, `i * 0x10 + (u8 *)q`
+   and `(i << 4) + (u8 *)q` all produce the operands the other way round. The
+   reason is that POINTER ARITHMETIC NORMALISES the order -- `int + pointer`
+   and `pointer + int` are the same tree to the front end, so writing the
+   scaled term first changes nothing. Making both operands the same type is
+   what preserves source order: `(UnkTownVec16 *)(i * 0x10 + (s32)q)` matches.
+   So the rule is narrower than lever 11 states -- to control the order of a
+   commutative op you must take the pointer out of the expression. */
 s32 func_8003BD84(s32 x, s32 y);
+s32 func_8008CF80(UnkVec *v);
+s32 func_8008CFB4(UnkVec *v);
+s32 func_8008D01C(UnkVec *v);
+s32 func_800644B8(s32);
 void func_800940D0();
 void func_800942B0();
 void func_800C9C94();
@@ -1137,13 +1173,61 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C374);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C3B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C420);
+s16 func_8008C420(UnkTownVec16 *p, UnkTownVec16 *q, s32 i)
+{
+    UnkVec buf;
+    UnkTownVec16 *e;
+    s32 r;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C4C8);
+    e = (UnkTownVec16 *)(i * 0x10 + (s32)q);
+    buf.unk_00 = p->unk_00 + e->unk_00;
+    buf.unk_04 = p->unk_04 + e->unk_04;
+    buf.unk_08 = p->unk_08 + e->unk_08;
+    r = func_8008CF80(&buf);
+    if ((s16)r == -0x7FFF)
+    {
+        return -0x7FFF;
+    }
+    return (s16)(r - e->unk_08 / 0x10000);
+}
+
+s16 func_8008C4C8(UnkTownVec16 *p, UnkTownVec16 *q, s32 i)
+{
+    UnkVec buf;
+    UnkTownVec16 *e;
+    s32 r;
+
+    e = (UnkTownVec16 *)(i * 0x10 + (s32)q);
+    buf.unk_00 = p->unk_00 + e->unk_00;
+    buf.unk_04 = p->unk_04 + e->unk_04;
+    buf.unk_08 = p->unk_08 + e->unk_08;
+    r = func_8008CFB4(&buf);
+    if ((s16)r == 0x7FFF)
+    {
+        return 0x7FFF;
+    }
+    return (s16)(r - e->unk_00 / 0x10000);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C570);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C610);
+s16 func_8008C610(UnkTownVec16 *p, UnkTownVec16 *q, s32 i)
+{
+    UnkVec buf;
+    UnkTownVec16 *e;
+    s32 r;
+
+    e = (UnkTownVec16 *)(i * 0x10 + (s32)q);
+    buf.unk_00 = p->unk_00 + e->unk_00;
+    buf.unk_04 = p->unk_04 + e->unk_04;
+    buf.unk_08 = p->unk_08 + e->unk_08;
+    r = func_8008D01C(&buf);
+    if ((s16)r == 0x7FFF)
+    {
+        return 0x7FFF;
+    }
+    return (s16)(r - e->unk_04 / 0x10000);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C6B8);
 
@@ -4896,7 +4980,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3988);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3A98);
 
-void func_800C3B7C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3B7C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -4916,12 +5000,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3BF4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3C28);
 
-void func_800C3C5C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3C5C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C4174(a, b, c);
 }
 
-void func_800C3C7C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3C7C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
     if (--a->unk_6C < 0)
@@ -4934,7 +5018,7 @@ void func_800C3C7C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-void func_800C3D08(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3D08(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
     if (--a->unk_6C < 0)
@@ -4947,7 +5031,7 @@ void func_800C3D08(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-void func_800C3D94(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3D94(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
     if (--a->unk_6C < 0)
@@ -4960,7 +5044,7 @@ void func_800C3D94(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-void func_800C3E20(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C3E20(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
     if (--a->unk_6C < 0)
@@ -5112,7 +5196,7 @@ void func_800C4644(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x15;
 }
 
-void func_800C46A8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C46A8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80082660 *e;
 
@@ -5165,7 +5249,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C4D20);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C4D80);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C4E30);
+void func_800C4E30(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_800C4174(a, b, r);
+    }
+    else
+    {
+        r->unk_1C = 0x1000 - func_800644B8(a->unk_6C * 409) / 4;
+        r->unk_1E = func_800644B8(a->unk_6C * 409) / 4 + 0x1000;
+    }
+}
 
 void func_800C4F08(UnkTownActor *a, s32 b, s32 c)
 {
@@ -5202,7 +5299,20 @@ void func_800C53B0(void *arg0)
     func_800C3050(arg0, 0x1, D_800D51F8, D_800D51FC, D_800D51C8, D_800D51D0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C53F8);
+void func_800C53F8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_800C4174(a, b, r);
+    }
+    else
+    {
+        r->unk_1C = 0x1000 - func_800644B8(a->unk_6C * 409) / 4;
+        r->unk_1E = func_800644B8(a->unk_6C * 409) / 4 + 0x1000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C54D0);
 
@@ -5226,7 +5336,7 @@ void func_800C55D8(void *arg0)
     func_800C3050(arg0, 0x16, D_800D53F4, D_800D53F8, D_800D53C4, D_800D53CC);
 }
 
-void func_800C5620(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C5620(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5408,7 +5518,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C6544);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C65C8);
 
-void func_800C6644(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C6644(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5442,7 +5552,7 @@ void func_800C67B4(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x5;
 }
 
-void func_800C6814(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C6814(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5462,7 +5572,7 @@ void func_800C6880(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x5;
 }
 
-void func_800C68E0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C68E0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5482,7 +5592,7 @@ void func_800C694C(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x9;
 }
 
-void func_800C69AC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C69AC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5502,7 +5612,7 @@ void func_800C6A18(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x7;
 }
 
-void func_800C6A78(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C6A78(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5522,7 +5632,7 @@ void func_800C6AE4(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x5;
 }
 
-void func_800C6B44(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C6B44(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5788,7 +5898,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7C88);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7CAC);
 
-void func_800C7CB4(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C7CB4(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5804,7 +5914,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7E70);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7EB0);
 
-void func_800C7EF0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C7EF0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C4174(a, b, c);
 }
@@ -5880,7 +5990,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C83F0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8454);
 
-void func_800C84B8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C84B8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -5946,7 +6056,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8928);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C895C);
 
-void func_800C899C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C899C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6292,7 +6402,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9D80);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9DB8);
 
-void func_800C9F1C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800C9F1C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6321,7 +6431,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA214);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA308);
 
-void func_800CA3EC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CA3EC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C4174(a, b, c);
 }
@@ -6543,7 +6653,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB0F0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB168);
 
-void func_800CB1E0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB1E0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6564,7 +6674,7 @@ void func_800CB27C(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x7;
 }
 
-void func_800CB2DC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB2DC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6584,7 +6694,7 @@ void func_800CB348(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x6;
 }
 
-void func_800CB3A8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB3A8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6604,7 +6714,7 @@ void func_800CB414(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x7;
 }
 
-void func_800CB474(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB474(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6625,7 +6735,7 @@ void func_800CB510(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x7;
 }
 
-void func_800CB570(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB570(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6645,7 +6755,7 @@ void func_800CB5DC(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0xA;
 }
 
-void func_800CB63C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CB63C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -6833,7 +6943,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC41C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC4B0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC524);
+void func_800CC524(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_800C4174(a, b, r);
+    }
+    else
+    {
+        r->unk_1C = 0x1000 - func_800644B8(a->unk_6C * 409) / 4;
+        r->unk_1E = func_800644B8(a->unk_6C * 409) / 4 + 0x1000;
+    }
+}
 
 void func_800CC5FC(void *arg0)
 {
@@ -6948,7 +7071,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCC34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCC70);
 
-void func_800CCCAC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CCCAC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C4174(a, b, c);
 }
@@ -7150,7 +7273,7 @@ void func_800CE04C(UnkTownActor *a, s32 b, s32 c)
     a->unk_50 = func_800CDCA8;
 }
 
-void func_800CE08C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CE08C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -7228,7 +7351,7 @@ void func_800CE3FC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CE4C4);
 
-void func_800CE538(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+void func_800CE538(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C4174(a, b, c);
 }

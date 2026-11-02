@@ -819,8 +819,17 @@ func_80022B48 family, where the base is a parameter: gcc keeps a parameter in
 its incoming register unless a higher-priority allocno wants it, and no source
 spelling raises the competitor enough.
 
-**11. `addu` operand order follows RTL canonicalisation, so pre-scale the
-offset.** (func_800269B4) gcc canonicalises `(plus (mult ...) (reg))` with the
+**11. `addu` operand order follows RTL canonicalisation, and pre-scaling the
+offset is NOT enough -- the pointer has to leave the expression.** Corrected
+in town.bin's overlay, where a family needed `addu $s0, $a2, $a1` with the
+scaled value first and `&q[i]`, `(u8 *)q + i * 0x10`, `i * 0x10 + (u8 *)q` and
+`(i << 4) + (u8 *)q` all produced the operands the other way round. Pointer
+arithmetic NORMALISES the order: `int + pointer` and `pointer + int` are the
+same tree to the front end, so which one you write changes nothing. Making
+both operands the same type is what preserves source order --
+`(UnkTownVec16 *)(i * 0x10 + (s32)q)` matched. The original note, below, is
+the same mechanism seen through a case where the cast happened to be there
+already. (func_800269B4) gcc canonicalises `(plus (mult ...) (reg))` with the
 shift first, so `p[26 + k]` gives `addu $v0, $v0, $s2` where the target has
 `addu $v0, $s2, $v0`. Four base-first spellings of the same index all leave
 that word wrong; only applying the scale first, `(u8 *)p + k * 4` with the
