@@ -735,10 +735,20 @@ target reaches A by a taken `bnez` rather than by falling through.
 ## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
 
 The sweep that follows the one above took the card overlay from 192 of 241
-functions to **222**, and from roughly 54% to **87.2% of its 7487 words (6528
+functions to **229**, and from roughly 54% to **91.7% of its 7487 words (6866
 landed)**. Every function in the unit that had not been looked at before is
-now either landed or parked; the 28 remaining stubs are all near-misses with
+now either landed or parked; the 12 remaining stubs are all near-misses with
 measurement tables in `docs/near-misses/`.
+
+Its last stretch -- seven functions, no permuter -- was worked a different
+way, and the way generalises: open the compiler's per-pass RTL dumps
+(`cpppsx` then `cc1psx -O2 -G0 -da`, dumps under
+`~/.cache/azure-psyq/.../Temp/`) and find the pass that makes the decision,
+rather than searching spellings. In all seven, the park's MEASUREMENT TABLE
+was sound and the park's STATED CAUSE was wrong -- "reload artifact" and
+"scheduling" being the two attributions that misled most often. A park's
+numbers are fact; its diagnosis is a guess that has been wrong seven times
+running.
 
 Two findings did most of the work, and both are worth knowing before touching
 another overlay.

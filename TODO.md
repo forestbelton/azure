@@ -97,10 +97,14 @@ The queue, in order:
       sites (all `c_server.c`) agree with the propagated map wherever they
       overlap.
 
-      **Sweeping: 222 of 241 functions, 6,528 of 7,487 words (87.2%) as of
-      2026-11-01.** Every function in the unit has now been worked; the 28
+      **Sweeping: 229 of 241 functions, 6,866 of 7,487 words (91.7%) as of
+      2026-11-01.** Every function in the unit has now been worked; the 12
       remaining stubs are all near-misses with measurement tables in
-      `docs/near-misses/`. The six-function family that shared one residue was
+      `docs/near-misses/`. The second sweep landed seven by hand from the
+      compiler's per-pass RTL dumps (`cc1psx -O2 -G0 -da`) with no permuter
+      at all, and in every one of those seven the PARK'S STATED CAUSE was
+      wrong rather than its spelling -- read a park's measurement table as
+      fact and its attribution as a guess. The six-function family that shared one residue was
       cracked by decomp-permuter: give it a base whose SHAPE is right and let
       it search orderings. Work the FAMILIES -- grouping stubs by masked
       instruction signature found 15 of them, and decoding one member of a
