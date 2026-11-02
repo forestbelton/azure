@@ -215,6 +215,7 @@ Which dump answers which question, as established so far:
 | a duplicated tail merged too far | `.jump` | how many insns the cross-jump absorbed |
 | a value in the wrong register | `.lreg` / `.greg` | the quantity's reference count and birth/death |
 | a constant that keeps or loses a copy | `.cse` | whether two constant pseudos were unified |
+| cse reached, or failed to reach, across a branch | `.cse` | the `;; Processing block from A to B, N sets.` headers -- cse's actual run boundaries, which decide whether an equivalence survives to the use |
 | something in a branch delay slot | `.dbr` | whether it was stolen from the jump's target |
 
 Four cautions learned the hard way.

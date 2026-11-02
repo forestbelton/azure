@@ -1210,9 +1210,19 @@ const u8 D_80020084[28] = "*\0\0\0TMP\0"
                           "01\0\0"
                           "00\0\0";
 
-/* NEAR MISS: 18 words against 19: the target copies the materialised base into the induction variable ('addu $v1, $v0, $zero') and seeds the sum from the counter's zero ('addu $a1, $a2, $zero'); every spelling folds one of the two away. Four measured (indexed against pointer-walk, counter declared first or not, guarded do/while), all 18 words.
-   Source in docs/near-misses/func_800219B8.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800219B8);
+s32 func_800219B8(s32 n)
+{
+    s32(*p)[10] = D_80028570;
+    s32 sum = 0;
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        sum += p[i][6];
+    }
+    sum = sum / 0x2000;
+    return 0xF - sum;
+}
 
 s32 func_80021A04(s32 n, u8 *s)
 {
