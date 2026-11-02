@@ -160,6 +160,19 @@ In order. Do not skip to step 3.
    function defined twice and another not at all.
 3. `make check > /tmp/check.log 2>&1; echo rc=$?` then `make containers`. Read
    the hashes, not the exit status, and never pipe make through `head`/`tail`.
+   **Count the `OK  byte-identical` lines: there must be FOUR.** A pipe makes
+   the shell report the filter's exit status, not make's, so a failed link can
+   read as success -- and `make containers` will happily build `slus_006.14`,
+   print one OK and stop. The line count is the check that does not lie.
+   Related trap: do NOT `rm -rf build` to force a rebuild. splat generates the
+   linker scripts into `build/`, so removing it leaves the project unlinkable
+   until `make splat` runs again (the Makefile says so at its `build/%.ld`
+   rule, and the pattern rule does not reliably regenerate them mid-build).
+   To force a comparison, remove just the four outputs:
+   `rm -f build/slus_006.14 build/main.bin build/town.bin build/dungeon.bin`.
+   `make splat` is deterministic and leaves `asm/` and `splat/` unchanged if
+   you do need it -- verified 2026-11-01 -- but it is not something to run
+   casually mid-task.
 4. `python3 tools/decomp/guard.py` -- it prints `N known, N accounted for` and
    names anything missing.
 5. Delete the park file. Leave `docs/carved-sweep.md`, `docs/where-we-are.md`
