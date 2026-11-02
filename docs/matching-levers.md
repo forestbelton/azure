@@ -11033,3 +11033,78 @@ Read in reverse: a listing whose loop walks a pointer AND keeps an upcounting
 the source. Its sibling func_80021EB8, which differs only in storing the sum
 instead of comparing it, DOES have the reversed form and is spelled as the
 downcount.
+
+## A SYMBOL ARRAY REFERENCE EMITS ITS `lui` FIRST AS A *MEM*, ITS `sll` FIRST AS A *POINTER VALUE* -- and the join block's first insn is what reorg puts in the delay slot
+
+The "Statement granularity is what orders the pieces of an address" lever says
+one expression emits the INDEX first and the symbol after. For a two-
+dimensional **symbol** array under a split (-G0) address that is the wrong way
+round, and the contrast is not load-vs-store but MEM-vs-pointer-value.
+
+Measured in isolation (`extern s32 D_80083E98[][32];`, cc1psx -O2 -G0):
+
+```c
+D_80083E98[idx][0] = 1;              /* lui, addiu, sll, addu, sw */
+return D_80083E98[idx][0];           /* lui, addiu, sll, addu, lw */
+s32 *row = D_80083E98[idx];
+row[0] = 1;                          /* sll, lui, addiu, addu, sw */
+```
+
+The `addu` names the `sll` register first either way, so only the POSITION of
+the symbol pair moves -- and with it every register number after it, because
+the pseudos are born in the other order.
+
+No spelling of the one-expression form moves it. Eleven were compiled and all
+eleven produced a BYTE-IDENTICAL `.s` (same `-da` RTL, same md5 after the
+`.file` line): `D_80083E98[idx][0]`, `*D_80083E98[idx]`,
+`*(s32 *)(D_80083E98[idx])`, `*(s32 *)&D_80083E98[idx][0]`,
+`*(s32 *)(&D_80083E98[idx])`, `((s32 *)D_80083E98)[idx * 32]`,
+`*(s32 *)((u8 *)D_80083E98 + idx * 0x80)` in three operand orders, the same
+with `(s32)` instead of `(u8 *)`, `idx * sizeof(D_80083E98[0])`, and the
+`UnkSaveRow`/`D_80083E98_s` struct alias. Six spellings of the
+pointer-in-its-own-statement form all give the `sll` first: the array decay,
+`&D_80083E98[idx][0]`, a `s32 (*)[32]` row pointer, declaration-with-
+initialiser, separate declaration and assignment, and a byte-offset cast. An
+offset local (`s32 o = idx * 0x80;`) does it too.
+
+Why: the two forms are different TREES, not different expansions of one tree.
+`-da`'s `.rtl` dump for the MEM form is `high`, `lo_sum`, copy, `ashift`,
+`(plus lo_sum ashift)` -- `expand_expr`'s binop path expands `TREE_OPERAND 0`
+first, so the ADDR_EXPR is operand 0 there. For the pointer assignment it is
+copy, `ashift`, `high`, `lo_sum`, `(plus lo_sum ashift)` into the user's own
+`reg/v` -- the scaled index is operand 0. `combine` then rewrites the `plus`
+to index-first in both, which is why the `addu`'s operand order is no witness.
+The pre-reload scheduler does not touch either block: the `.sched` dump is
+insn-for-insn the `.combine` dump.
+
+The visible consequence, and how to read it off a listing: reorg fills an
+unconditional `j`'s delay slot with the FIRST insn of the block it jumps to
+and bumps the label past it, leaving that insn duplicated -- once in the slot,
+once in the fall-through. So in
+
+```
+    j      .L80021EA0
+     sll   $v0, $t1, 7      <- delay slot
+  ...
+    sll    $v0, $t1, 7      <- fall-through copy
+  .L80021EA0:
+    lui    $v1, %hi(D_80083E98)
+```
+
+the delay slot is naming the join block's first insn. A `lui` there instead of
+the `sll` is this lever and nothing to do with scheduling.
+
+Measured on func_80021DF4 (ovl_main_80020000), 7 of 49 words: the
+one-expression store is 7 DIFF in all eleven spellings above, and
+
+```c
+s32 *row;
+*(UnkRow *)D_80083E98[idx] = *(UnkRow *)(src + 0x200);
+row = D_80083E98[idx];
+row[0] = 1;
+```
+
+is MATCH. Note the block copy on the line above KEEPS the one-expression form:
+its address is a MEM and the target wants `lui`/`addiu`/`sll` there. The two
+row addresses in that function are the same arithmetic written two ways, which
+is exactly what a park note read as "the two orders cannot both be had".

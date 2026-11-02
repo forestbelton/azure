@@ -1283,9 +1283,23 @@ s32 func_80021D54(s32 idx)
     return r;
 }
 
-/* NEAR MISS: 49 words, 7 DIFF: the function is an 0x80-byte block copy of one D_80083E98 row from src+0x200, through a byte-aligned struct so gcc emits its unknown-alignment expansion (the (src|dst)&3 test plus both a lwl/lwr and a lw loop), then sets row[0] = 1. What differs is only the ORDER of the SECOND row-address computation: the target emits 'sll' then 'lui'/'addiu' then 'addu' (and reorg pulls the sll into the preceding j's delay slot), while every spelling here emits the base first. Three measured: the plain 2D index, a byte offset for the second access, and byte offsets for both. The FIRST computation's order (base first) already matches, so the two differ in the target and no single spelling gives both.
-   Source in docs/near-misses/func_80021DF4.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80021DF4);
+void func_80021DF4(s32 idx, u8 *src)
+{
+    s32 *row;
+
+    /* The second row address must be computed in its own statement: as a
+       MEM address (`D_80083E98[idx][0] = 1;`) gcc's memory_address forces
+       the symbol into a register BEFORE the index shift, giving
+       lui/addiu/sll; assigning the row pointer first expands the shift in
+       its own statement and the symbol materialises after it, which is the
+       target's sll/lui/addiu order. Ruled out at 7 DIFF, all identical
+       code: the plain 2-D index, a byte offset on either or both accesses,
+       `*D_80083E98[idx]`, `&D_80083E98[idx][0]`, the D_80083E98_s struct
+       alias, and `((s32 *)D_80083E98)[idx * 32]`. */
+    *(UnkRow *)D_80083E98[idx] = *(UnkRow *)(src + 0x200);
+    row = D_80083E98[idx];
+    row[0] = 1;
+}
 
 void func_80021EB8(s32 *gsw)
 {
