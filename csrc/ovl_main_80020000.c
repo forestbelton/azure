@@ -17,7 +17,7 @@
    it positionally here because main.bin has no symbol_addrs file yet. */
 void func_80069C28(s32 chan);
 
-void func_800213C4(s32 arg0);
+s32 func_800213C4(s32 arg0);
 /* No arguments: func_80020A0C calls it with no $a0 set up at all, and its own
    listing never reads $a0 (it works off D_80028550 and up). func_80020924's
    call looks like it passes arg0 only because $a0 still holds the incoming
@@ -929,9 +929,38 @@ s32 func_800213A0(void)
     return r;
 }
 
-/* NEAR MISS: 18 words against 19: the target carries an extra 'addu $v1, $v0, $zero' copy before storing 1 into D_800287C8, with the constant materialised back in the loop's branch delay slot. Three spellings measured (a local for the 1, 'while' against 'do/while', the two stores swapped), all 18 words and 10-11 DIFF. Reload artifact; permuter.
-   Source in docs/near-misses/func_800213C4.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_800213C4);
+/* Returns 1, and that return value is what the extra word is for. The unit's
+   own matched twin of this tail -- func_800210F0's st==1 block, same
+   `D_800287E0 = 0; D_800287C8 = <const>;' after the same call-and-spin -- comes
+   out `lui' in the delay slot, `lui', `sw $zero', `addiu $v0, $zero, 3',
+   `sw $v0'. Here the target instead materialises the 1 FIRST (into the delay
+   slot) and copies it, `addu $v1, $v0, $zero', before the store. That is
+   because $v0 is pinned: the return value's hard-register set is
+   `(set (reg:SI 2 v0) (const_int 1))', cse2 unifies it with the store's
+   constant, so the one pseudo holding 1 lives in $v0 up to the `jr' and the
+   store's source has to be a second register. Three regs are live at the peak
+   ($v0 = 1, $v1 = %hi(D_800287E0), $a0 = %hi(D_800287C8)), which is also why
+   the second `lui' lands in $a0 rather than reusing $v0.
+
+   Declaring it `void' is what parked it: with no return value the constant is
+   an ordinary statement-level quantity, the allocator puts it straight in the
+   store's register and there is no copy -- 18 words, 10 DIFF, whatever the tail
+   is spelled like (`t = 1; ... D_800287C8 = t;' 18w/11; `while' for `do/while'
+   and the two stores swapped 18w/10-11). `s32 t = 1; ... return t;' is worse
+   still at 21w/19: `t' then spans the calls and takes $s1.
+
+   The three callers in this unit discard the result, so the prototype change
+   from `void' is invisible to them -- all four containers stay byte-identical. */
+s32 func_800213C4(s32 a)
+{
+    func_800214A4();
+    do
+    {
+    } while (func_80069BF8(a) == 0);
+    D_800287E0 = 0;
+    D_800287C8 = 1;
+    return 1;
+}
 
 s32 func_80021410(void)
 {
