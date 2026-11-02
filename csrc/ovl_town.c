@@ -1074,6 +1074,14 @@ s32 func_8008CFE8(UnkVec *v);
 s32 func_8008D050(UnkVec *v);
 void func_80098B30(void *p, UnkTown2AE8 *q, void *r);
 void func_80098B70(void *p, UnkTown2AE8 *q, void *r);
+extern u8 D_800D64F0[];
+extern u8 D_800D00E8[];
+extern u8 D_800D0188[];
+void func_80033D08(u8 *p);
+void func_80092698();
+void func_80093524();
+void func_800CE2D4();
+void func_800CE4C4();
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -2097,7 +2105,13 @@ void func_80094088(UnkTownTask *t)
     t->unk_0A = 0x6;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800940D0);
+void func_800940D0(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80053DA8(0x510);
+    func_80094984(D_800D00E8, t, c);
+    t->unk_00 = func_80091AF0;
+    t->unk_0A = 0xC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094130);
 
@@ -2157,7 +2171,13 @@ void func_80094474(UnkTownTask *t)
     t->unk_0A = 0x6;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800944BC);
+void func_800944BC(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80053DA8(0x511);
+    func_80094984(D_800D0120, t, c);
+    t->unk_00 = func_80092698;
+    t->unk_0A = 0x6;
+}
 
 /* Three parameters, not the one its own body uses: the 73-word pair below
    calls it with (actor, mover, c) like every other handler here, and a
@@ -2206,7 +2226,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800947BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800947CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094834);
+void func_80094834(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80053DA8(0x500);
+    func_80094984(D_800D0188, t, c);
+    t->unk_00 = func_80093524;
+    t->unk_0A = 0x1E;
+}
 
 void func_80094894(UnkTownTask *t)
 {
@@ -2665,7 +2691,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800982EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800983BC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800984AC);
+void func_800984AC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    n = func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= (s16)n)
+    {
+        func_80095A94(b, (s16)n, D_800FE488);
+        func_80098928(a, b, c);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098544);
 
@@ -3176,7 +3216,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AA2C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AAB8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AB74);
+void func_8009AB74(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    n = func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= (s16)n)
+    {
+        func_80095A94(b, (s16)n, D_800FE488);
+        func_80098928(a, b, c);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AC0C);
 
@@ -5047,7 +5101,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B512C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5174);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5264);
+void func_800B5264(UnkTownCardPair *a, u8 *name, s32 b, s16 x, s32 y)
+{
+    if (a->unk_00 != 0)
+    {
+        func_8004E99C(a->unk_00);
+        a->unk_00 = 0;
+    }
+    a->unk_04->unk_08 = x;
+    a->unk_04->unk_0A = y;
+    a->unk_00 = func_8004DC14(name, b);
+    a->unk_04->unk_0E = 2;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089268);
 
@@ -5059,7 +5124,18 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892C0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B52F4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B53BC);
+void func_800B53BC(UnkTownCardPair *a, u8 *name, s32 b, s16 x, s32 y)
+{
+    if (a->unk_00 != 0)
+    {
+        func_8004B1A4(a->unk_00);
+        a->unk_00 = 0;
+    }
+    a->unk_04->unk_08 = x;
+    a->unk_04->unk_0A = y;
+    a->unk_00 = func_8004E928(name, b);
+    a->unk_04->unk_0E = 1;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892CC);
 
@@ -5388,9 +5464,61 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9CB8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9D64);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9EDC);
+void func_800B9EDC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (*(u8 *)p->unk_98 == 0)
+    {
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        /* The rotation is written twice and read back in between -- see
+           docs/matching-levers.md, "A store that gcc deletes as dead is a
+           VOLATILE field". Unqualified, cse1 forwards the just-stored value
+           into the second statement's load and flow then drops the first
+           `sh` as dead: 35 words, 10 differing. `volatile` on the first
+           store alone keeps both the `sh` and the reload. Measured, all at
+           38 words / 0 differing: volatile on this store only, on the mask
+           statement only, on both, and through a block-scope
+           `volatile s16 *`. Non-volatile spellings that do NOT work, all
+           35 words / 10 differing: `r->unk_1A &= 0xFFF` as the second
+           statement, the same mask through `*(s16 *)((u8 *)r + 0x1A)` or
+           `*(u16 *)((u8 *)r + 0x1A)` (MEM_IN_STRUCT_P does not separate
+           them), and `r->unk_1A = r->unk_1A & 0xFFF`. */
+        *(volatile s16 *)&r->unk_1A += p->unk_9C->unk_97;
+        r->unk_1A &= 0xFFF;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9F74);
+void func_800B9F74(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (*(u8 *)p->unk_98 == 0)
+    {
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        /* The rotation is written twice and read back in between -- see
+           docs/matching-levers.md, "A store that gcc deletes as dead is a
+           VOLATILE field". Unqualified, cse1 forwards the just-stored value
+           into the second statement's load and flow then drops the first
+           `sh` as dead: 35 words, 10 differing. `volatile` on the first
+           store alone keeps both the `sh` and the reload. Measured, all at
+           38 words / 0 differing: volatile on this store only, on the mask
+           statement only, on both, and through a block-scope
+           `volatile s16 *`. Non-volatile spellings that do NOT work, all
+           35 words / 10 differing: `r->unk_1A &= 0xFFF` as the second
+           statement, the same mask through `*(s16 *)((u8 *)r + 0x1A)` or
+           `*(u16 *)((u8 *)r + 0x1A)` (MEM_IN_STRUCT_P does not separate
+           them), and `r->unk_1A = r->unk_1A & 0xFFF`. */
+        *(volatile s16 *)&r->unk_1A += p->unk_9C->unk_97;
+        r->unk_1A &= 0xFFF;
+    }
+}
 
 /* THE BIGGEST PAIR LEFT, and now an ALLOC PARK rather than an unknown:
    func_800BA00C and func_800BA468, 279 words each, 558 together. The source
@@ -6622,7 +6750,15 @@ void func_800C6644(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C6680);
+void func_800C6680(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C2E84(a, (s32)c, D_800D5944);
+        a->unk_54 = func_800C6644;
+        a->unk_6C = 0x5;
+    }
+}
 
 void func_800C66E0(UnkTownActor *a, s32 b, s32 c)
 {
@@ -7525,7 +7661,12 @@ void func_800C9B44(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9C0C);
+void func_800C9C0C(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D64C8);
+    a->unk_50 = func_800C97F4;
+    a->unk_6C = 0x15;
+}
 
 void func_800C9C54(UnkTownActor *a, s32 b, s32 c)
 {
@@ -7533,7 +7674,12 @@ void func_800C9C54(UnkTownActor *a, s32 b, s32 c)
     a->unk_50 = func_800C9864;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9C94);
+void func_800C9C94(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D64F0);
+    a->unk_50 = func_800C9A98;
+    a->unk_6C = 0x4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9CDC);
 
@@ -7836,7 +7982,15 @@ void func_800CB1E0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB21C);
+void func_800CB21C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C2E84(a, (s32)c, D_800D6938);
+        a->unk_54 = func_800CB1E0;
+        a->unk_6C = 0x6;
+    }
+}
 
 void func_800CB27C(UnkTownActor *a, s32 b, s32 c)
 {
@@ -7897,7 +8051,15 @@ void func_800CB474(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB4B0);
+void func_800CB4B0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C2E84(a, (s32)c, D_800D6938);
+        a->unk_54 = func_800CB474;
+        a->unk_6C = 0xA;
+    }
+}
 
 void func_800CB510(UnkTownActor *a, s32 b, s32 c)
 {
@@ -8759,7 +8921,12 @@ void func_800CEA40(UnkTownActor *a, s32 b, s32 c)
     a->unk_54 = func_800CE20C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CEA80);
+void func_800CEA80(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D72AC);
+    a->unk_54 = func_800CE2D4;
+    a->unk_6C = 0x10;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CEAC8);
 
@@ -8776,7 +8943,12 @@ void func_800CEB54(UnkTownActor *a, s32 b, s32 c)
     a->unk_54 = func_800CE3FC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CEB94);
+void func_800CEB94(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D72AC);
+    a->unk_54 = func_800CE4C4;
+    a->unk_72 = 0x400;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CEBDC);
 
