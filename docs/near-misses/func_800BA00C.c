@@ -41,7 +41,12 @@
      `fold` reassociates 0xA8 onto the symbol and the hoisted base becomes
      D_80083160+0xA8, after which the other two come out as `lbu 1` and
      `lbu 2` instead of `lbu 0xA9`/`lbu 0xAA`.
-   * `v->unk_98 = s->unk_98` NEEDS A TEMP, in all four blocks. The load cannot
+   * A LOAD AFTER A STORE THROUGH ANOTHER POINTER NEEDS A TEMP, in five
+     places. Block 1's third colour byte is one: written
+     `p->unk_0E = col[0xAA]` after the `p->unk_08` store the load cannot hoist
+     over it, where the target reads it first. The permuter found that one and
+     it was worth five words. And `v->unk_98 = s->unk_98` needs one in all
+     four blocks. The load cannot
      move above the stores through `v` -- same pointer type, so gcc must assume
      they alias -- and each block pays a load-delay nop. Reading it into a
      local before the stores was worth 4 words. Block 3's `p->unk_1A` has the
@@ -52,19 +57,30 @@
      load delay), not at the assignment. Both spellings compile identically,
      so the choice is cosmetic.
 
-   THE ONE THING THAT IS NOT SETTLED, and it is why loop 1 is written with a
-   `goto`. As a `for` loop, loop.c hoists the 2-instruction `(s8)dir`
-   truncation into the preheader, which costs 2 there and saves only 1 at the
-   use, and the function comes out 280 words. A goto loop carries no
-   LOOP_BEG, loop.c never sees it and nothing is hoisted -- the lever
-   func_8005B4D0 established -- and that is what makes the length exact. But
-   the three address initialisations before the loop are then source
-   statements rather than loop.c hoists, and a `for` loop with inline uses
-   would explain those just as well. So one of two things is true and this
-   park does not know which: either the original is a goto loop, or it is a
-   `for` loop and something else stops loop.c hoisting that one movable.
-   Worth settling from a `-da` dump of loop.c's decisions before the permuter
-   runs, because it may also be what moves the two register pairs. */
+   WHAT THE PERMUTER DID AND DID NOT DO, recorded as the protocol asks:
+   142,531 candidates in 30 minutes at 79.2/s took its score from 2595 to
+   1675 and did NOT match. In this file's terms that is 114 differing words
+   down to 59, and of that, five words came from the `blue` temp above --
+   legal, and adopted -- while the other fifty came from wrapping five
+   statements of block 3 in a `do { ... } while (0)`. That is a DEVICE, not a
+   source shape: it buys a basic-block boundary that moves the allocation. It
+   is NOT adopted, because a device that still leaves 59 differing words buys
+   nothing. It does say where the hinge is -- the allocator here is sensitive
+   to a block boundary in block 3 -- and 142K candidates is evidence that this
+   residue is not one statement away.
+
+   THE ONE THING THAT IS NOT SETTLED, and it may be why the search floored.
+   Loop 1 is written with a `goto`. As a `for` loop, loop.c hoists the
+   2-instruction `(s8)dir` truncation into the preheader, costing 2 there to
+   save 1 at the use, and the function comes out 280 words. A goto loop
+   carries no LOOP_BEG, loop.c never sees it and nothing is hoisted -- the
+   lever func_8005B4D0 established -- and that is what makes the length
+   exact. But it also makes the three address initialisations before the loop
+   source statements rather than loop.c hoists, and a `for` loop with inline
+   uses would explain those equally well. The permuter mutates statements; it
+   will not turn a goto loop back into a `for`, so if the `for` reading is the
+   true one then this entire search ran from a wrong base. Settle that from a
+   loop.c `-da` dump BEFORE spending more CPU here. */
 
 typedef struct UnkTownSpawn
 {
@@ -118,6 +134,7 @@ void func_800BA00C(UnkTownSpawn *s, UnkVec *m)
     UnkVec *x;
     u8 *col;
     u8 *col2;
+    u8 blue;
     u32 n;
     s16 ang;
     void (*h)();
@@ -150,8 +167,9 @@ loop1:
             p->unk_20 = 0xAAA;
             p->unk_0C = col[0xA8];
             p->unk_0D = col[0xA9];
+            blue = col[0xAA];
             p->unk_08 = i + 0x1A;
-            p->unk_0E = col[0xAA];
+            p->unk_0E = blue;
             x = o->unk_08;
             x->unk_00 = m->unk_00;
             x->unk_04 = m->unk_04;
