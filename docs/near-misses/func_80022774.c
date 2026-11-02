@@ -76,7 +76,16 @@
    `w` declared `s32` with `(u32)` casts on the other three halvings,
    `h = (unk_17 << 4) + unk_17`, a separate `u8 *p = pp` walked pointer,
    `for (i = 0; ...)` instead of a pre-loop `i = 0`, an extra empty
-   `__asm__("")` after the buf copy, `w8`/`h8` pre-loop locals.
+   `__asm__("")` after the buf copy, `w8`/`h8` pre-loop locals,
+   `for (; i < 4;)` with `p[0] = buf[i++];` on the LAST buf read, and the same
+   with a bare `i++;` statement before the final `p += 0x18`.
+
+   The last two are worth calling out as a NEGATIVE, because they are the
+   lever that landed the sibling func_800242D8 (where `i++`'s position
+   relative to the pointer bump decides which of two priority-1 insns takes
+   sched1's load-delay filler -- see docs/matching-levers.md). It does not
+   transfer: this residue is in the PREHEADER, not the body, and the body here
+   has no free slot for the tie to be decided in. Measured 2026-11-01.
 
    Inert at 11 (the `hh` marker's reference is what moves the allocation, and
    only a reference that survives flow counts): `__asm__("" : "=r"(dum) :
@@ -92,7 +101,8 @@
    leaves one word behind -- combine folds it only when the first term is a
    MULT); `q[6]`/`q[7]` swapped 12; the buf copy moved after the row reads 76;
    an empty `__asm__("")` just before the loop 31; `__asm__("" ::"r"(w))` 12;
-   `__asm__("" ::"r"(h))` 13.
+   `__asm__("" ::"r"(h))` 13; `i++` moved into the MIDDLE of the body (just
+   after the first `p += 0xC`) 91 at 103 words.
 
    search.py: 37 variants compiled on the 11-DIFF body, none better.
    The permuter was not used (hand work, by request).
