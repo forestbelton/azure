@@ -1928,9 +1928,123 @@ void func_800226E0(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-/* NEAR MISS: 102 words -- the right count -- but 84 differing, nearly all of it register names cascading from one hoisting decision. This is func_80022A30's bigger sibling (same unaligned D_800200A0 copy, same four iterations, same 'p[-0x18] |= 0x80' and return) with THREE primitives per iteration instead of two: 0xC, 0xC and then 0x18 bytes, the last one a D_80027F48 template copied through a 24-byte alignment-1 struct and then patched with four 0x90D0E0 words. The width and height come from D_800280B4[q[2]].unk_16 * 4 and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite bytes. Declaring w and h as u32 is right -- it turns three of the four halvings from 'sra' into the 'srl' the target has, and the fourth, (w + 0xA) >> 1, really is 'sra' there. What is left: loop.c hoists all FOUR halvings out of the loop here, where the target hoists only three and leaves 'h + 0xA' unshifted in $t4, doing the 'srl' inside the loop each iteration -- a move_movables threshold decision, so the register pressure differs by one quantity. Seven spellings measured: >>1 and /2 on u32 and on s32 with casts (all 102w/84), and three shapes that hoist a, b and c into explicit locals and shift d inline (102w/88, and 111w/102 when the UnkStrSet row is re-indexed per value instead of cached in w/h).
-   Source in docs/near-misses/func_80022774.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022774);
+/* func_80022A30's bigger sibling: the same unaligned D_800200A0 copy, the
+   same four iterations, the same `p[-0x18] |= 0x80` and return, but THREE
+   primitives per iteration (0xC, 0xC, 0x18 bytes), the last a D_80027F48
+   template copied through a 24-byte alignment-1 struct and then patched with
+   four 0x90D0E0 words. Width and height come from D_800280B4[q[2]].unk_16 * 4
+   and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite
+   bytes; `(w + 0xA) >> 1` is the one signed halving.
+
+   Shape notes (each measured, none a device): `i = 0` before the loop rather
+   than in the `for` (4); `bh = h + 0xA` AFTER the `(w + 0xA) >> 1` store, the
+   natural order -- written before it the `h + 0xA` movable is hoisted ahead
+   of the `w + 0xA`/`sra` pair and those three preheader words rotate (3);
+   `h = (hh << 4) + hh` rather than `hh * 17` (11, see the pin below). */
+u8 *func_80022774(u8 *p, s32 *q)
+{
+    u8 buf[4];
+    u32 w;
+    u32 h;
+    u32 bh;
+    /* DEVICE: a hard-register pin on the unk_17 byte, worth 11 words
+       (11 -> 0). Without it `hh` is a three-reference block-0 quantity that
+       local-alloc prices (`qty_compare_1`, local-alloc.c:1598,
+       `floor_log2(refs)*refs/(death-birth)` over the SCHED1 order) below the
+       seven-reference unk_16/w chain, so w takes $v1 and hh $a0: 11 differing
+       words, all register names in the preheader. Three references cannot win
+       at any live length this block admits; four can, but the only free fourth
+       reference is a `__asm__("" ::"r"(hh))` marker, and that marker is then
+       the load's last consumer in sched1's backward schedule: it is what
+       launches the `lbu` (sched.c `adjust_priority`, LAUNCH_PRIORITY), and to
+       launch it late enough to sit above the `sll`/`addiu` of w the marker
+       must take sched1's one priority-1 hole at T-13 -- the hole the giv
+       initialiser `p + 0xB` needs in order to end up above the `lo_sum` in
+       sched2's LUID tie-break (`rank_for_schedule`, sched.c:2425). The two
+       cannot share it: every marker form measured is 3 at best (two markers),
+       and 0 only with a THIRD marker holding the `lo_sum` back
+       (`"r"((u8 *)&D_800280B4[q[2]] - q[2] * 24)`, which cse folds to the
+       lo_sum pseudo), declined as a third device. The pin removes the pricing
+       question entirely, leaves the load's launch to the `sll` so the giv gets
+       the hole, and sched2 then orders the two `lbu` by priority on its own.
+       `(hh << 4) + hh` is required with it: `hh * 17` goes through
+       expand_mult, which copies $3 into a pseudo that combine substitutes back
+       into both uses, and the pin is lost (11, the same words).
+       Legal spellings ruled out: no pin at all 11; `hh * 17` with the pin 11;
+       `register u8 hh` 11; `__asm__("" ::"r"(hh))` alone 3 (giv permutation);
+       `"r"(hh), "r"(w + 8)` 3 (the rotation); `"r"(hh), "r"(w)` 11;
+       `__asm__("" : "+r"(p) : "r"(hh), "r"(hh), "r"(hh))` 8; two markers
+       `"r"(hh)` + `"r"(w + 8)` 7; the volatile and `"memory"` forms 28..62.
+       Warns under -Wall? No. */
+    register u32 hh __asm__("$3");
+    s32 g;
+    s32 i;
+
+    *(UnkFour *)buf = *(UnkFour *)D_800200A0;
+    i = 0;
+    w = D_800280B4[q[2]].unk_16 * 4;
+    hh = D_800280B4[q[2]].unk_17;
+    h = (hh << 4) + hh;
+    q[6] = w + 8;
+    q[7] = h + 8;
+    for (; i < 4; i++)
+    {
+        p[0xA] = (w + 8) >> 1;
+        p[0xB] = (h + 8) >> 1;
+        p[1] = 0x48;
+        *(s32 *)(p + 4) = 0x104058;
+        p[0] = buf[i];
+        p += 0xC;
+        p[0xA] = (s32)(w + 0xA) >> 1;
+        bh = h + 0xA;
+        p[0xB] = bh >> 1;
+        p[1] = 0x48;
+        *(s32 *)(p + 4) = 0x104058;
+        p[0] = buf[i];
+        p += 0xC;
+        *(UnkBlock24 *)p = *(UnkBlock24 *)D_80027F48;
+        g = 0x90D0E0;
+        /* DEVICE: one marker doing three jobs, worth 85 words (85 -> 0).
+           (a) `"+r"(g)` is a SECOND set of g in the loop whose source is not
+           invariant, so `consec_sets_invariant_p` (loop.c) fails and
+           `g = 0x90D0E0` never becomes a movable: the lui/ori stays in the
+           loop where the target has it. The threshold cannot do this job --
+           cse1 merges the four stores onto one pseudo of lifetime 4 and
+           `threshold*1*4 >= insn_count` always holds. `"r"(i)` is what makes
+           the asm variant; without it (`"+r"(g)` alone) loop.c moves BOTH
+           insns out as a two-insn consec movable (84), and `volatile`
+           instead is 68.
+           (b) `"r"(bh)` makes the asm the last use of `h + 0xA`, so
+           force_movables finds no movable at `regno_last_uid[bh]` and does
+           not link the `srl` to the `addiu`; the addiu is hoisted on its own
+           merit and the shift is left in the loop on the threshold, as the
+           target has it. Written `p[0xB] = (h + 0xA) >> 1;` the shift rides
+           out free on the addiu's link (36 on the park body).
+           (c) `"r"(bh)` is also bh's THIRD reference, which keeps its
+           global-alloc priority above the two hoisted constants so it takes
+           $t4; a dead second assignment `g = bh ^ i;` does (a) and (b) for
+           free but is deleted by flow before the references are counted, bh
+           drops to $t8 and t5..t8 shift down (15).
+           Re-measured on the landed body: dropping `"r"(bh)` with the shift
+           inline 27, dropping the marker entirely 85.
+           Legal spellings ruled out for (a): four separate `s32` locals, one
+           per store (85 -- cse1 collapses them anyway); `g` assigned 0 before
+           the loop (85 -- the gate also needs maybe_never, which a rotated
+           for-loop never gives); the dead assignment above (15).
+           Warns under -Wall? No -- g is initialised. */
+        __asm__("" : "+r"(g) : "r"(i), "r"(bh));
+        *(s32 *)(p + 4) = g;
+        *(s32 *)(p + 0xC) = g;
+        *(s32 *)(p + 0x10) = g;
+        *(s32 *)(p + 0x14) = g;
+        p[0xA] = (w + 8) >> 1;
+        p[0xB] = (h + 8) >> 1;
+        p[0] = buf[i];
+        p += 0x18;
+    }
+    p[-0x18] |= 0x80;
+    return p;
+}
 
 void func_8002290C(s32 *p)
 {
