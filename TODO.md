@@ -97,14 +97,23 @@ The queue, in order:
       sites (all `c_server.c`) agree with the propagated map wherever they
       overlap.
 
-      **Sweeping: 229 of 241 functions, 6,866 of 7,487 words (91.7%) as of
-      2026-11-01.** Every function in the unit has now been worked; the 12
-      remaining stubs are all near-misses with measurement tables in
-      `docs/near-misses/`. The second sweep landed seven by hand from the
-      compiler's per-pass RTL dumps (`cc1psx -O2 -G0 -da`) with no permuter
-      at all, and in every one of those seven the PARK'S STATED CAUSE was
-      wrong rather than its spelling -- read a park's measurement table as
-      fact and its attribution as a guess. The six-function family that shared one residue was
+      **DONE but for one: 240 of 241 functions, 7,385 of 7,487 words (98.6%)
+      as of 2026-11-01**, which takes the whole project to 1,292 of 1,293
+      functions and 99.8% of its words. The single remaining stub is
+      `func_80022774`, parked at 102 words / 3 DIFF with two annotated
+      devices; its header carries ~90 measurements and an argument for why
+      the residue is closed rather than merely unsearched.
+
+      The second sweep landed EIGHTEEN functions by hand with no permuter at
+      all, working from the compiler's per-pass RTL dumps (section 4b of
+      `docs/landing-a-function.md` has the invocation). Two things to carry
+      forward. First: in every one of those eighteen the park's MEASUREMENT
+      TABLE was sound and its STATED CAUSE was wrong -- read a park's numbers
+      as fact and its diagnosis as a guess, and that goes for a reviewer's
+      guess too. Second: SWEEP BEFORE READING. Compiling alone is ~0.4s
+      against ~4.5s for a verify cycle, so a grid over the two or three
+      expressions in doubt costs seconds and repeatedly beat hours of dump
+      reading; use the dumps to explain a residue already cornered. The six-function family that shared one residue was
       cracked by decomp-permuter: give it a base whose SHAPE is right and let
       it search orderings. Work the FAMILIES -- grouping stubs by masked
       instruction signature found 15 of them, and decoding one member of a

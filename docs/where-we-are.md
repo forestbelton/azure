@@ -128,12 +128,13 @@ Three things about the overlays that change how they are worked, all in
   project (symbolic vs split addressing, the out-of-image constant base
   pointer) does not arise. `main.bin`'s overlay is a `c` subsegment as of
   2026-11-01 with per-unit `CFLAGS`/`MASPSXFLAGS` overrides in the Makefile,
-  and stands at **229 of 241 functions, 6,866 of 7,487 words (91.7%)**, with
-  all four containers byte-identical. The 12 remaining stubs are all parked
-  near-misses, every one of which compiles standalone so it can be handed to
-  the permuter -- though the seven landed in the second sweep were all read
-  out of `cc1psx -O2 -G0 -da` dumps by hand instead, and all seven had a
-  wrong stated cause in the park rather than a wrong spelling.
+  and stands at **240 of 241 functions, 7,385 of 7,487 words (98.6%)**, with
+  all four containers byte-identical. That puts the project as a whole at
+  **1,292 of 1,293 functions and 99.8% of its words**. One stub remains
+  anywhere: `func_80022774`, parked at 102 words / 3 DIFF with two annotated
+  devices. The eighteen landed in the second sweep were all read out of
+  `cc1psx -O2 -G0 -da` dumps by hand, with no permuter, and in all eighteen
+  the park's stated cause was wrong rather than its spelling.
 * **`main.bin+0x269000` is the same source at `-G8`**, with more of its
   asserts compiled in, and its rodata names nine original translation units.
   Unit boundaries are where four previous dead ends turned out to be. One C

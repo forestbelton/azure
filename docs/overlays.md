@@ -735,10 +735,10 @@ target reaches A by a taken `bnez` rather than by falling through.
 ## The second sweep: 82 of the overlay's functions in one pass (2026-11-01)
 
 The sweep that follows the one above took the card overlay from 192 of 241
-functions to **229**, and from roughly 54% to **91.7% of its 7487 words (6866
-landed)**. Every function in the unit that had not been looked at before is
-now either landed or parked; the 12 remaining stubs are all near-misses with
-measurement tables in `docs/near-misses/`.
+functions to **240**, and from roughly 54% to **98.6% of its 7487 words (7385
+landed)** -- which leaves the whole project at 1,292 of 1,293 functions and
+99.8% of its words. ONE stub remains anywhere: `func_80022774`, parked at 102
+words / 3 DIFF with two annotated devices and ~90 measurements in its header.
 
 Its last stretch -- seven functions, no permuter -- was worked a different
 way, and the way generalises: open the compiler's per-pass RTL dumps
