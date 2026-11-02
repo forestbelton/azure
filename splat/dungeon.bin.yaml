@@ -64,10 +64,36 @@ segments:
   # main.bin's overlay occupies; +0x9f000 and +0x4a3000 are texture records.
   #
   # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
+  #
+  # KNOWN WRONG BY 58 WORDS, and not yet corrected because this overlay is
+  # still `asm` and a re-split of this 26 MB container is not free. The text
+  # really starts at +0xa3d40 (vram 0x800894A0). What sits in 0x800894A0..
+  # 0x80089588 is one entire function -- `addiu $sp, $sp, -0x20`, $s0/$s1/$ra
+  # saved, eight `jal`s (0x80040190, 0x800401FC, 0x8004027C, 0x8004D70C,
+  # 0x800D13B8, 0x800CF8E4, 0x800897E4 and, last, 0x80089588 which is the
+  # declared text start), then the matching restores, `addiu $sp, $sp, 0x20`
+  # and `jr $ra`. The data genuinely ends at +0xa3d40: 0x80089490..0x8008949C
+  # is the tail of a repeating 2-word record pattern.
+  #
+  # The reason the fingerprinting missed it is the same reason it missed four
+  # functions in town.bin (see that yaml): the boundary was placed where the
+  # CONFIRMED prologue run began, and a function below that run casts no vote
+  # of its own unless something inside the split text `jal`s to it. Nothing
+  # here does -- this one is reached from outside the block -- so no `func_`
+  # symbol was ever created for it and it reads as rodata.
+  #
+  # Fixing it is `[0xa3d40, rodata...]`/`[0xa3d40, asm, ovl_dungeon]` plus
+  # `splat split splat/dungeon.bin.yaml` and `make build/dungeon.bin` to
+  # confirm byte-identical; it takes the overlay to 863 functions / 85,616
+  # words. Do it when dungeon work starts, and re-run the same two checks
+  # then -- a `func_` label inside the rodata listing, and a decode of the
+  # last data block's tail -- because the second one is what caught this.
   # The three corrections eec0572 worked out on town.bin apply here unchanged:
-  # `rodata` and not `.rodata` (the dot routes the subsegment to a sibling C
-  # object and extracts nothing, so every reference into the overlay's own
-  # rodata comes out undefined); a FOLLOWING segment, or the code subsegment
+  # `rodata` and not `.rodata` while this overlay is `asm` -- the dot routes
+  # the subsegment to a sibling C object and extracts nothing, so every
+  # reference into the overlay's own rodata comes out undefined, and the rule
+  # INVERTS the moment a csrc/ovl_dungeon.c exists, because splat then refuses
+  # the undotted form outright (docs/overlays.md, "The rodata dot"); a FOLLOWING segment, or the code subsegment
   # runs to the end of the container; and a text end on a 16-byte boundary,
   # because splat emits `__romPos = ALIGN(__romPos, 16)` after a code segment
   # and a boundary off that grid pads the container.

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""verify.py's job for an OVERLAY function, whose asm is one big `asm` segment.
+"""verify.py's job for an OVERLAY function.
 
-`tools/decomp/verify.py` reads its target from `asm/nonmatchings/<unit>/<func>.s`,
-which splat only emits for a `c` subsegment. The overlays are `asm`
-subsegments in one file each, so there is nothing there to read and the target
-has to come out of the single listing.
+An overlay still split as `asm` is ONE big listing with every function in it,
+and `tools/decomp/verify.py` cannot read that -- it wants
+`asm/nonmatchings/<unit>/<func>.s`, which splat emits only for a `c`
+subsegment. So this tool takes the target from whichever of the two exists:
+the per-function listing when the overlay has been converted to `c`, and the
+single listing otherwise. Either way it supplies the -G0 the overlays need,
+which is the other half of why verify.py is not enough.
 
 The overlays are -G0, NOT the -G8 the resident executable is built with, and
 that is not a style choice: at -G8 cc1psx records `.extern SYM,4` and the
@@ -47,7 +50,10 @@ PROJ = asmlib.PROJ
 OVERLAYS = [
     ("ovl_main_80020000", 0x80020000, 0x80027E20),
     ("ovl_main_80400000", 0x80400000, 0x804089E0),
-    ("ovl_town", 0x8008AD90, 0x800CF720),
+    # Town's text starts at 0x8008AC84, NOT the 0x8008AD90 the prologue
+    # fingerprinting reported: four frameless leaf functions build no stack
+    # frame and so cast no vote. See splat/town.bin.yaml.
+    ("ovl_town", 0x8008AC84, 0x800CF720),
     ("ovl_dungeon", 0x80089588, 0x800DCE60),
 ]
 ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
@@ -61,9 +67,24 @@ def overlay_for(func):
     raise SystemExit(f"{func} is in none of the split overlays")
 
 
+def listing(func):
+    """The listing holding `func`: per-function if the overlay is `c`, else the
+    overlay's single `asm` listing. A per-function listing can open with a
+    migrated rodata block, but that uses `dlabel`, so the `glabel` scan below
+    is unaffected."""
+    ovl = overlay_for(func)
+    per_fn = os.path.join(PROJ, "asm", "nonmatchings", ovl, func + ".s")
+    if os.path.exists(per_fn):
+        return per_fn
+    whole = os.path.join(PROJ, "asm", ovl + ".s")
+    if os.path.exists(whole):
+        return whole
+    raise SystemExit(f"no listing for {func}: neither {per_fn} nor {whole}")
+
+
 def target(func):
-    """[(word, text)] for one function, out of the overlay's single listing."""
-    path = os.path.join(PROJ, "asm", overlay_for(func) + ".s")
+    """[(word, text)] for one function, out of its overlay listing."""
+    path = listing(func)
     out, inside = [], False
     for ln in open(path):
         if ln.startswith("glabel "):
@@ -78,7 +99,7 @@ def target(func):
             out.append((int.from_bytes(bytes.fromhex(m.group(2)), "little"),
                         m.group(3).strip()))
     if not out:
-        raise SystemExit(f"{func} not found in asm/{overlay_for(func)}.s")
+        raise SystemExit(f"{func} not found in {path}")
     return out
 
 

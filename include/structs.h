@@ -252,7 +252,7 @@ typedef struct Unk44D24SP
    Unk463ECSP, Unk44D24SP and Unk3CCB0SP. Kept separate for the standing
    reason: each function sees a different subset of the region at different
    widths, and retyping a field to merge them risks an existing match for a
-   cosmetic gain. The merge is on TODO.md. */
+   cosmetic gain. The merge stays deferred. */
 typedef struct Unk45CC4SP
 {
    s16 unk_00;
@@ -1014,7 +1014,13 @@ typedef struct Unk80082660
 {
    u8 unk_00;
    s8 unk_01;
-   u8 pad_02[2];
+   /* Hand-split out of pad_02 on a witness in town.bin's overlay:
+      func_8008AC84 resets one entry of its own array of these and writes
+      +0x02 with `sh $zero, 0x2($a0)`, so it is a halfword field and not
+      filler. Layout-identical to the pad it replaces -- same offset, same
+      size, same alignment -- and no engine unit referenced pad_02, so no
+      existing match can move. */
+   s16 unk_02;
    u32 unk_04;
 } Unk80082660;
 

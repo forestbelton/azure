@@ -25,6 +25,11 @@ options:
   o_as_suffix: True
   use_legacy_include_asm: False
 
+  # Without this splat writes the overlay's C file to the default src/, which
+  # here is the azure python package, and the Makefile's CFILES (a find over
+  # csrc/) would never pick it up.
+  src_path: csrc
+
   symbol_addrs_path: splat/town.bin_symbol_addrs.txt
   reloc_addrs_path: splat/town.bin_reloc_addrs.txt
 
@@ -39,7 +44,7 @@ segments:
   # - [0x6f681e, az_string, STR_ANGEL_GREETING]
   # - [0x6f69fe, bin]
   - [0x0, bin]
-  # The town overlay: 536 functions at 0x80088760, which is the first byte
+  # The town overlay: 1815 functions at 0x80088760, which is the first byte
   # after the resident engine's last (0x8008875F) -- the layout
   # docs/overlays.md predicted but could not place. dungeon.bin's overlay
   # loads at the SAME address, so the two are mutually exclusive at runtime
@@ -49,23 +54,39 @@ segments:
   # slus_006.14_undefined_funcs_auto.txt against this file's
   # `addiu sp,sp,-N` prologues (15/49 at this delta, next best 6), then
   # confirmed by the block's own jal targets landing on its own prologues
-  # (536 hits, noise floor 0). +0xb000 is the sector-aligned offset that maps
+  # (536 votes, noise floor 0). +0xb000 is the sector-aligned offset that maps
   # to 0x80088760, and the game seeks exactly there (LBA 3099) when loading
   # the town -- caught in a PCSX-Redux CD-ROM command log.
   #
-  # rodata first, code from +0xd630 (gcc -G8 data-before-functions), which is
+  # rodata first, code from +0xd524 (gcc -G8 data-before-functions), which is
   # why the block opens on Shift-JIS text.
+  #
+  # +0xd524 and NOT the +0xd630 the prologue fingerprinting reported. The
+  # vote scans for `addiu $sp, $sp, -N`, so it cannot see a FRAMELESS LEAF
+  # FUNCTION, and four of them sit at the bottom of the text: func_8008AC84,
+  # func_8008ACAC, func_8008ACE8 and func_8008AD1C, 67 words in all, each
+  # with its own `jr $ra` and each the target of a `jal` from inside the
+  # overlay. At +0xd630 they came out as `.word` blocks in the rodata stream
+  # -- byte-identical either way, but unreachable from C forever. The data
+  # really does end at +0xd524: the Shift-JIS block D_8008998C runs
+  # 0x8008998C..0x8008AC80 inclusive and stops there. Expect the same class of
+  # error at dungeon.bin's +0xa3e28, which was found the same way.
   # Three things had to be right before this could be in the build; the
   # earlier attempt got all three wrong and failed with
   # `undefined reference to jtbl_80089900`.
   #
-  # 1. `rodata`, NOT `.rodata`. The leading dot routes a subsegment to a
-  #    SIBLING C OBJECT and extracts nothing (see the note on the slus
-  #    segment's own `.rodata` entries). There is no csrc/ovl_town.c, so
-  #    nothing was emitted and every reference into the overlay's own rodata
-  #    was undefined. With the plain form splat writes
-  #    asm/data/ovl_town.rodata.s with 73 `dlabel`s in it, jtbl_80089900 and
-  #    D_80089960 among them, and the link resolves.
+  # 1. `.rodata` WITH the dot -- because csrc/ovl_town.c now exists. The dot
+  #    routes a subsegment to a SIBLING C OBJECT (see the note on the slus
+  #    segment's own `.rodata` entries), so it is WRONG without one and
+  #    REQUIRED with one: splat refuses the undotted form on a `c` subsegment
+  #    outright. While this overlay was `asm` the plain form was correct and
+  #    wrote asm/data/ovl_town.rodata.s with 73 `dlabel`s in it (jtbl_80089900
+  #    and D_80089960 among them); dungeon.bin, still `asm`, keeps that form.
+  #    With the dot splat instead migrates each rodata symbol into the
+  #    nonmatching listing of the one function that references it, which is
+  #    what places the jump tables without any manual work. The failure mode
+  #    of getting this backwards is `undefined reference to jtbl_80089900`.
+  #    See docs/overlays.md, "The rodata dot".
   # 2. The code subsegment needs a FOLLOWING segment. Without one it runs to
   #    the end of the container and splat disassembles the remaining 16 MB as
   #    a single 4.3-million-line file.
@@ -83,8 +104,8 @@ segments:
     start: 0xb000
     vram: 0x80088760
     subsegments:
-      - [0xb000, rodata, ovl_town]
-      - [0xd630, asm, ovl_town]
+      - [0xb000, .rodata, ovl_town]
+      - [0xd524, c, ovl_town]
   # The rest of the container: assets, and the overlay's own data beyond its
   # code. splat suggests rodata file splits at 0xc14c and 0xc1a0 (jump tables
   # that are not file-aligned), which is the next step whenever this overlay's

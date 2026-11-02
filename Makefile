@@ -139,6 +139,9 @@ MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
 build/csrc/ovl_main_80020000.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/ovl_main_80020000.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
+build/csrc/ovl_town.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/ovl_town.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # Units whose functions reach their globals $gp-relatively rather than
 # absolutely, carved out of the units splat lumps together. See
 # docs/addressing-and-translation-units.md for how a cluster is identified and
