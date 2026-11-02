@@ -216,12 +216,21 @@ typedef struct UnkTownSpawn
 
 typedef struct UnkTownRend
 {
-    u8 pad_00[0x8];
+    /* +0x00/+0x04/+0x05 and +0x10/+0x12/+0x14 split out of two pads by the
+       function that initialises a whole record rather than touching one
+       field of one. No existing field moved. */
+    u32 unk_00;
+    u8 unk_04;
+    u8 unk_05;
+    u8 pad_06[0x2];
     u32 unk_08;
     u8 unk_0C;
     u8 unk_0D;
     u8 unk_0E;
-    u8 pad_0F[0x7];
+    u8 pad_0F[0x1];
+    s16 unk_10;
+    s16 unk_12;
+    s16 unk_14;
     s16 unk_16;
     s16 unk_18;
     /* +0x1A is a rotation and +0x1C/+0x1E/+0x20 a 0x1000-based scale. */
@@ -247,6 +256,18 @@ typedef struct UnkTownVec16
     s32 unk_08;
     s32 unk_0C;
 } UnkTownVec16;
+
+/* A RESIDENT symbol (splat/town.bin_undefined_syms_auto.txt), declared
+   nowhere in include/structs.h or csrc/. Only its +0x08 pointer has a
+   witness, and that pointee's type is inferred from three s16 reads at
+   +0x02/+0x06/+0x0A -- a convenience, not a finding. */
+typedef struct UnkTownCam
+{
+    u8 pad_00[0x8];
+    UnkTown2AE8 *unk_08;
+} UnkTownCam;
+
+extern UnkTownCam D_80083498;
 
 /* The third argument of the func_800C3050 wrapper family: an s16 at +0x12
    each wrapper sets to a small constant, and a u16 flag word at +0x14 that
@@ -942,7 +963,68 @@ s32 abs(s32 x);
    unread, which costs nothing. The alternative -- a one-parameter definition
    with callers passing three -- needs an unprototyped declaration and hides
    the mismatch instead of recording it. */
+/* EIGHTEEN functions in this batch, twelve of them from six parallel agents
+   given one function each and no context beyond the docs -- and all twelve
+   were independently re-measured here before landing, which is the only
+   reason to trust them. Each agent's function came with its sibling's
+   varying words, so the six landings carried six more for free.
+
+   Four mechanisms came back that the lever list did not have, all of them
+   measured rather than argued:
+
+   * EMISSION ORDER IS SOURCE ORDER in a function that initialises a whole
+     record. The 50-word initialiser reaches 25 differing words with its
+     fields written in ascending offset order, every differing word a
+     permutation and every opcode already right; writing the statements in
+     the listing's own order -- the 0x1C/0x1E/0x20 group first, then
+     +0x12, +0x14, +0x10 in that sequence -- takes it to zero. Ascending
+     order demonstrably emits ascending, so the target's order is the
+     source's and not a scheduling artefact.
+   * A CONSTANT ON THE SUBTRAHEND SIDE GETS FOLDED ONTO THE RESULT.
+     `(p - (x - 0x10)) / 2` is rewritten by fold to `(p - x) + 0x10`, which
+     biases the wrong operand and costs a word and a nop (54 words, 26
+     differing). An `s32` local for the biased operand is what keeps the
+     `addiu` where the target has it. An `s16` local does not -- it adds a
+     sign-extend round trip (16 differing) -- and nor does an inline
+     `(s32)(s16)` cast of the same expression.
+   * TWO INLINE memcpys with ALIGNMENT-1 SOURCES explain a whole 57-word
+     function: 0x30 bytes exceeds twice MAX_MOVE_BYTES so mips.c emits the
+     runtime `(dst|src) & 3` test with an lwl/lwr body and an lw/sw body,
+     while the 0xC-byte tail is straight-line unaligned ops with no second
+     test, which is why both paths converge.
+   * A `bgtz` GUARD NEED NOT COVER THE WHOLE BODY. One function's branch
+     target is thirteen words in, so only two of its five statements are
+     inside the test; with all five inside, everything else was already
+     exact at 1 differing -- the branch offset alone.
+
+   Also worth recording as method: the agents cost about 70K tokens each for
+   a function in the 50-57 word range, against a reading of my own that
+   costs a turn of this conversation. Six at once is the right shape for
+   functions that need an individual reading and have a sibling.
+
+   The parked 279-word spawner paid for itself here too: three of its settled
+   notes -- the interior pointer, the handler store before the call, and the
+   `col` local plus a temp for the third colour byte -- were used verbatim by
+   the initialiser agent and all three were needed. */
 s32 func_8003BD84(s32 x, s32 y);
+extern u8 D_80046398[];
+extern u8 D_800D16D8[];
+extern u8 D_800D16FC[];
+extern u8 D_800D172C[];
+extern s32 D_800D0414;
+extern s32 D_800D041C;
+extern s32 D_800FE5CC;
+extern s32 D_800FE5D0;
+s32 func_8008CABC(UnkTown2AE8 *v, s32 b, s32 n);
+s32 func_8008CBF4(UnkTown2AE8 *v, s32 b, s32 n);
+void func_800B9998();
+extern u8 D_800D6220[];
+extern u8 D_800D6244[];
+extern u8 D_800D62C4[];
+extern u8 D_800D62D8[];
+extern u8 D_800D62E0[];
+extern u8 D_800D6308[];
+extern u8 D_800D630C[];
 extern u8 D_800D00A8[];
 extern u8 D_800D0198[];
 extern u8 D_800D01C8[];
@@ -2061,11 +2143,57 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800962B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096368);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096440);
+s16 func_80096440(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
+    s32 r1;
+    s32 r2;
+    s32 d;
+
+    v.unk_00 = b->unk_00;
+    v.unk_04 = b->unk_04;
+    v.unk_08 = b->unk_08;
+    r1 = func_8008CABC(&v, D_800D0414, 6);
+    d = D_800FE5CC;
+    if ((d < 0 ? -d : d) <= 0x140000)
+    {
+        return (s16)r1;
+    }
+    v.unk_00 = b->unk_00 - d / 2;
+    r2 = func_8008CABC(&v, D_800D0414, 6);
+    if ((s16)r1 < (s16)r2)
+    {
+        return (s16)r2;
+    }
+    return (s16)r1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096518);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800965F0);
+s16 func_800965F0(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
+    s32 r1;
+    s32 r2;
+    s32 d;
+
+    v.unk_00 = b->unk_00;
+    v.unk_04 = b->unk_04;
+    v.unk_08 = b->unk_08;
+    r1 = func_8008CBF4(&v, D_800D041C, 6);
+    d = D_800FE5D0;
+    if ((d < 0 ? -d : d) <= 0x140000)
+    {
+        return (s16)r1;
+    }
+    v.unk_04 = b->unk_04 - d / 2;
+    r2 = func_8008CBF4(&v, D_800D041C, 6);
+    if ((s16)r1 < (s16)r2)
+    {
+        return (s16)r2;
+    }
+    return (s16)r1;
+}
 
 void func_800966C8(UnkTown2AE8 *a, s32 b)
 {
@@ -2419,7 +2547,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099754);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099764);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099790);
+void func_80099790(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+    if (--a->unk_0A <= 0)
+    {
+        *(s16 *)((u8 *)b + 0x2) = *(s16 *)((u8 *)a + 0x30);
+        *(s16 *)((u8 *)b + 0x6) = *(s16 *)((u8 *)a + 0x32);
+        a->unk_10 = *(s16 *)((u8 *)a + 0xE);
+        func_80098928(a, b, c);
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 0x2) += (*(s16 *)((u8 *)a + 0x30) - *(s16 *)((u8 *)b + 0x2)) / a->unk_0A;
+        *(s16 *)((u8 *)b + 0x6) += (*(s16 *)((u8 *)a + 0x32) - *(s16 *)((u8 *)b + 0x6)) / a->unk_0A;
+    }
+}
 
 void func_80099874(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -3760,17 +3903,44 @@ void func_800AF234(u8 *a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF254);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF2F8);
+void func_800AF2F8(UnkTownGrid **p)
+{
+    s32 i;
+
+    for (i = 0x1A; i < 0x24; i++)
+    {
+        p[i]->unk_04->unk_08 = (i - 0x1A) / 5 * 0x80 + 0x58;
+        p[i]->unk_04->unk_0A = (i - 0x1A) % 5 * 0x10 + 0x88;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF36C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF448);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF4AC);
+void func_800AF4AC(UnkTownGrid **p)
+{
+    s32 i;
+
+    for (i = 0x6; i < 0x10; i++)
+    {
+        p[i]->unk_04->unk_08 = (i - 0x6) / 5 * 0x80 + -0x30;
+        p[i]->unk_04->unk_0A = (i - 0x6) % 5 * 0x10 + 0x16;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF520);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF600);
+void func_800AF600(UnkTownGrid **p)
+{
+    s32 i;
+
+    for (i = 0x10; i < 0x1A; i++)
+    {
+        p[i]->unk_04->unk_08 = (i - 0x10) / 5 * 0x80 + 0x60;
+        p[i]->unk_04->unk_0A = (i - 0x10) % 5 * 0x10 + 0x88;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF674);
 
@@ -4238,9 +4408,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3FB8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B40E0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4188);
+void func_800B4188(u8 *p)
+{
+    memcpy(p, D_800D16FC, 0x30);
+    memcpy(p + 0x30, D_800D16D8, 0xC);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B426C);
+void func_800B426C(u8 *p)
+{
+    memcpy(p, D_800D172C, 0x30);
+    memcpy(p + 0x30, D_800D16D8, 0xC);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4350);
 
@@ -4689,9 +4867,63 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B98B4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9998);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9B28);
+void func_800B9B28(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    u8 *col;
+    u8 blue;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9BF0);
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800B9998;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80046398);
+    p->unk_66 = 0;
+    r->unk_1C = 0x1000;
+    r->unk_1E = 0x1000;
+    r->unk_20 = 0x1000;
+    col = (u8 *)&D_80083160;
+    r->unk_12 = 0;
+    r->unk_14 = 0;
+    r->unk_10 = 0;
+    r->unk_16 = 0;
+    r->unk_18 = 0;
+    r->unk_1A = 0;
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    r->unk_0C = col[0xA8];
+    r->unk_0D = col[0xA9];
+    blue = col[0xAA];
+    r->unk_08 = 0x1F;
+    r->unk_0E = blue;
+    q->unk_08 = 0xFF600000;
+}
+
+void func_800B9BF0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    u8 *col;
+    u8 blue;
+
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800B9998;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80046398);
+    p->unk_66 = 0;
+    r->unk_1C = 0x1000;
+    r->unk_1E = 0x1000;
+    r->unk_20 = 0x1000;
+    col = (u8 *)&D_80083160;
+    r->unk_12 = 0;
+    r->unk_14 = 0;
+    r->unk_10 = 0;
+    r->unk_16 = 0;
+    r->unk_18 = 0;
+    r->unk_1A = 0;
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    r->unk_0C = col[0xA8];
+    r->unk_0D = col[0xA9];
+    blue = col[0xAA];
+    r->unk_08 = 6;
+    r->unk_0E = blue;
+    q->unk_08 = 0xFF600000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9CB8);
 
@@ -5344,7 +5576,22 @@ void func_800C3960(UnkTownDispatch *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3988);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3A98);
+void func_800C3A98(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
+    if (--a->unk_6C <= 0)
+    {
+        *(s16 *)((u8 *)b + 0x2) = a->unk_84;
+        *(s16 *)((u8 *)b + 0x6) = a->unk_86;
+        a->unk_72 = *(s16 *)((u8 *)a + 0x6E);
+        func_800C4174(a, b, c);
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 0x2) += (a->unk_84 - *(s16 *)((u8 *)b + 0x2)) / a->unk_6C;
+        *(s16 *)((u8 *)b + 0x6) += (a->unk_86 - *(s16 *)((u8 *)b + 0x6)) / a->unk_6C;
+    }
+}
 
 void func_800C3B7C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -6388,11 +6635,23 @@ void func_800C8330(u8 *a, s32 b, u8 *c)
     func_800C3050(a, 0x2, D_800D61F4, D_800D6200, D_800D61C4, D_800D61CC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C838C);
+void func_800C838C(UnkTownActor *a)
+{
+    func_800C3050(a, 0xA, D_800D6308, D_800D630C, D_800D62D8, D_800D62E0);
+    a->unk_80->unk_04 = D_800D6244;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C83F0);
+void func_800C83F0(UnkTownActor *a)
+{
+    func_800C3050(a, 0xA, D_800D6308, D_800D630C, D_800D62D8, D_800D62E0);
+    a->unk_80->unk_04 = D_800D62C4;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8454);
+void func_800C8454(UnkTownActor *a)
+{
+    func_800C3050(a, 0xA, D_800D6308, D_800D630C, D_800D62D8, D_800D62E0);
+    a->unk_80->unk_04 = D_800D6220;
+}
 
 void func_800C84B8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -7559,9 +7818,79 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCCE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCD24);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCD68);
+void func_800CCD68(UnkTownActor *a)
+{
+    switch (a->unk_6A)
+    {
+    case 0:
+        a->unk_72 = 0xC00;
+        a->unk_6C = 3;
+        a->unk_6A++;
+        break;
+    case 1:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0x800;
+            a->unk_6C = 3;
+            a->unk_6A++;
+        }
+        break;
+    case 2:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0x400;
+            a->unk_6C = 3;
+            a->unk_6A++;
+        }
+        break;
+    case 3:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0;
+            a->unk_6C = 3;
+            a->unk_6A = 0;
+            a->unk_68++;
+        }
+        break;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCE40);
+void func_800CCE40(UnkTownActor *a)
+{
+    switch (a->unk_6A)
+    {
+    case 0:
+        a->unk_72 = 0x400;
+        a->unk_6C = 3;
+        a->unk_6A++;
+        break;
+    case 1:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0x800;
+            a->unk_6C = 3;
+            a->unk_6A++;
+        }
+        break;
+    case 2:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0xC00;
+            a->unk_6C = 3;
+            a->unk_6A++;
+        }
+        break;
+    case 3:
+        if (--a->unk_6C == 0)
+        {
+            a->unk_72 = 0;
+            a->unk_6C = 3;
+            a->unk_6A = 0;
+            a->unk_68++;
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCF18);
 
@@ -7785,7 +8114,20 @@ void func_800CE08C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CE0C8);
+void func_800CE0C8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 y;
+
+    if (--a->unk_6C <= 0)
+    {
+        a->unk_90 = 1;
+        func_800CE9EC(a, b, c);
+    }
+    *(s16 *)((u8 *)b + 2) += (*(s16 *)((u8 *)D_80083498.unk_08 + 2) - *(s16 *)((u8 *)b + 2)) / 2;
+    y = *(s16 *)((u8 *)b + 6) - 0x10;
+    *(s16 *)((u8 *)b + 6) += (*(s16 *)((u8 *)D_80083498.unk_08 + 6) - y) / 2;
+    *(s16 *)((u8 *)b + 0xA) += (*(s16 *)((u8 *)D_80083498.unk_08 + 0xA) - *(s16 *)((u8 *)b + 0xA)) / 2;
+}
 
 void func_800CE19C(void *a, UnkTown2AE8 *b, s32 c)
 {
@@ -7860,7 +8202,20 @@ void func_800CE538(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     func_800C4174(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CE558);
+void func_800CE558(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    s32 y;
+
+    if (--a->unk_6C <= 0)
+    {
+        a->unk_90 = 1;
+        func_800C4174(a, b, c);
+    }
+    *(s16 *)((u8 *)b + 2) += (*(s16 *)((u8 *)D_80083498.unk_08 + 2) - *(s16 *)((u8 *)b + 2)) / 2;
+    y = *(s16 *)((u8 *)b + 6) - 0x10;
+    *(s16 *)((u8 *)b + 6) += (*(s16 *)((u8 *)D_80083498.unk_08 + 6) - y) / 2;
+    *(s16 *)((u8 *)b + 0xA) += (*(s16 *)((u8 *)D_80083498.unk_08 + 0xA) - *(s16 *)((u8 *)b + 0xA)) / 2;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CE62C);
 
