@@ -1611,24 +1611,36 @@ void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z)
     } while (++i <= a);
 }
 
-/* NEAR MISS, 15 words -- the right length and the right instruction set, with
-   11 of 15 in the wrong order or register. Source in
-   docs/near-misses/func_80022300.c. The target reads p[0] at word 4, between
-   the two halves of `(n << 3) + 4`, keeps it in $v1 across the whole body and
-   writes it back from the `jr` delay slot, and computes the return value
-   `p + 0xC` in the middle at word 9; every spelling tried reads p[0] at word 7
-   and computes the return value in the delay slot instead. Seven measured: an
-   explicit temp for p[0] or the OR folded into it, the return value in a local
-   declared first, the word store moved before or after the `p[0xA]` byte
-   store, and `u32 *` against `s32 *` for it.
+/* The statement order is load-bearing, and only one thing about it is: the
+   `p[0xA]` store has to come SECOND, before the 0x13 and the word store.
+   sched1 schedules this block backward and fills the `lbu p[0]` load delay
+   with whatever insn pair is still unplaced; written here, the `(n << 3) + 4`
+   pair is consumed early and the 0x13 constant becomes the filler, which puts
+   its one-insn live range INSIDE the p[0] quantity's. local-alloc then prices
+   the 0x13 pair at 2 refs / 1 insn = 1.0 against the p[0] quantity's 4 refs /
+   5 insns = 0.8, so 0x13 takes $v0 and p[0] is pushed to $v1; the 0xA04010
+   constant, now spanning insns 1..11, is blocked from $v0 by both byte
+   constants and from $v1 by p[0], and lands in $a0, free because the first
+   parameter is dead. With p[0] in $v1 the return value no longer collides with
+   it, so sched2 hoists `addiu $v0, $a1, 0xC` to word 9 and reorg takes the
+   `sb $v1, 0($a1)` for the `jr` delay slot instead of the return value. All
+   three differences in the old park were that one local-alloc flip.
 
-   The first parameter really is unused -- $a0 is overwritten by the 0xA04010
-   constant at word 0 while $a1 and $a2 are read, so there are three
-   parameters and the first is dead. This is very likely a PSY-Q primitive
-   macro (the byte at 0x1 is 0x28, the byte at 0xB is 0x13, the word at 0x4 is
-   0xA04010), in which case the shape comes from the macro rather than from
-   anything spellable here. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80022300);
+   The four stores other than `p[0] |= 0x80` must be in the order p[1], p[0xA],
+   p[0xB], p+4; `p[0] |= 0x80` matches at any of the five positions. Measured
+   (all 15 words): all 120 permutations of the five statements scored, five
+   match, the next best is 3 differing. The parked order (p[1], p[0xB], p+4,
+   p[0xA], p[0]) was 12, as were an explicit `u8`/`s32` temp for p[0] first, a
+   local for the return value, and `u32 *` for the word store. */
+u8 *func_80022300(s32 *a, u8 *p, s32 n)
+{
+    p[1] = 0x28;
+    p[0xA] = (n << 3) + 4;
+    p[0xB] = 0x13;
+    *(s32 *)(p + 4) = 0xA04010;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
 void func_8002233C(u8 *p, s32 idx, s32 n)
 {

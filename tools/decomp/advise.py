@@ -845,7 +845,10 @@ def greg_report(src):
             lrows.append((n, refs, live, local_priority(refs, live), '-'))
         print(wrap("""priority is local-alloc.c's own qty_compare_1,
         floor_log2(refs) * refs * size / live_length, with size taken as 4 --
-        read out of gcc 2.7.2 rather than guessed, and the final tie-break is
+        read out of gcc 2.7.2 rather than guessed. `size` is uniform (gcc
+        stores it in WORDS via PSEUDO_REGNO_SIZE, local-alloc.c:1999 and
+        regs.h:65, so every single-word quantity has 1 and the value 4 here
+        just scales every row alike), and the final tie-break is
         the QUANTITY NUMBER, so among equals birth order decides. floor_log2
         means a quantity has to cross a power of two in its reference count to
         move far: 4 and 5 refs both give 2, 7 and 8 give 2 and 3.
@@ -854,12 +857,16 @@ def greg_report(src):
         - THE ROWS ARE PER-PSEUDO AND THE ALLOCATOR PRICES QUANTITIES.
           `block_alloc` ties an insn's destination into the quantity of a
           source that DIES in it (`combine_regs`, ~1850-1893), and when it
-          does it ADDS their reference counts and takes the LARGER mode's
-          size. So a `lbu` feeding one `sll`, or a chain of `addu`s each
-          consuming the last, is ONE row's worth of register but several rows
-          here, and its real priority is the SUM of their refs at size 4 --
-          typically the highest in its block, not the 2-ref QImode entry this
-          table prints. Two consequences worth knowing before trusting a
+          does it ADDS their reference counts (local-alloc.c:1870). So a `lbu`
+          feeding one `sll`, or a chain of `addu`s each consuming the last, is
+          ONE row's worth of register but several rows here, and its real
+          priority is the SUM of their refs -- typically the highest in its
+          block, not the 2-ref entry this table prints. (The same function
+          also copies the larger mode's size, but that is inert here: `usize`
+          and `ssize` are both `REG_SIZE`, i.e. WORDS, so the copy never fires
+          for a byte tied into a word, and `qty_size` is 1 for every
+          single-word quantity. Taking size as 4 uniformly is therefore right
+          -- the factor cancels out of every comparison.) Two consequences worth knowing before trusting a
           margin: a byte load tied to a wider consumer is never the cheap
           quantity it looks like (func_800565D8), and a statement split that
           buys references can DISSOLVE the tie and lose more than it gains
