@@ -174,9 +174,22 @@ headline from 84.6% to 82.7% and read as lost work.
 
 ## 4b. Reading the compiler instead of guessing spellings
 
-The permuter searches spellings. When the residue is small and structural --
-a permutation, one extra or missing word, a register swap -- it is usually
-cheaper to open the compiler and find the pass that makes the decision. The
+**Sweep before you read, when the SHAPE is still in doubt.** This section
+used to open by sending you straight to the dumps, and that is wrong for a
+park whose structure is uncertain rather than whose last word is missing.
+Compiling alone costs ~0.4s (no assembly, no comparison), so a mechanical
+grid over the two or three expressions you are unsure about -- 24 points over
+{first-group expression} x {shared-call expression} x {tail expression} x
+{if-form} -- runs in ten seconds and tells you which quadrant to think in.
+On func_80025F0C that grid found 60 words / 2 DIFF in one shot, after half a
+day of reorg.c reading had produced only a provably-impossible model. Read
+the dumps to explain a residue you have cornered, not to guess which corner
+it is in.
+
+With that said: the permuter searches spellings, and when the residue is
+small and structural -- a permutation, one extra or missing word, a register
+swap -- it is usually cheaper to open the compiler and find the pass that
+makes the decision. The
 `ovl_main_80020000` sweep of 2026-11-01 landed nine functions by hand with no
 permuter at all, the later ones worked this way from the dumps; and in all
 nine the park's MEASUREMENT TABLE was sound while its stated CAUSE was wrong.
