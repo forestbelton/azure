@@ -3678,9 +3678,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9EDC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9F74);
 
-/* THE BIGGEST PAIR LEFT, and its structure is mapped even though no source is
-   written yet: func_800BA00C and func_800BA468, 279 words each, 558 together.
-   Start here, and start from this rather than from the listing.
+/* THE BIGGEST PAIR LEFT, and now an ALLOC PARK rather than an unknown:
+   func_800BA00C and func_800BA468, 279 words each, 558 together. The source
+   is written and measures 279 of 279 words with EVERY differing word a
+   register assignment -- two swapped pairs and nothing else. It is in
+   docs/near-misses/func_800BA00C.c with what is settled, what is not, and
+   why loop 1 is written with a `goto`. Start from that file, not from the
+   listing, and not from this summary.
 
    It is an entity spawner with FOUR construction blocks, all the same recipe:
    func_8003FD64(type, base) to allocate, func_8004491C(obj, template) to
