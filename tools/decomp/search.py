@@ -8,6 +8,23 @@ of compute and no model tokens -- which is the point: enumerating variants and
 reading their word counts was the single largest cost in this project's
 decompilation sessions, and it is pure search over a scalar oracle.
 
+WHERE THE TIME GOES, measured on ovl_main_80020000 2026-11-01: a full verify
+cycle on that unit is about 4.5s, and COMPILING ALONE is 0.36s -- the other
+92% is maspsx plus gas plus the comparison. A cycle there is far from the 0.7s
+this docstring quotes for the resident exe, so a 37-variant sweep took over
+two minutes.
+
+That split leaves an optimisation on the table, not taken here: `score()`
+caches on SOURCE TEXT, and distinct spellings routinely compile to
+byte-identical assembly (func_80022300 had a temp for the byte read and a
+return-value local both produce the same stream). Keying a second cache on the
+generated assembly would make a duplicate cost 0.36s instead of 4.5s. It is
+not done because it also adds 0.36s to every UNIQUE candidate, and the
+duplicate rate has never been measured -- if you measure it and it is high,
+the change is about six lines in `score()`, or better, move the oracle
+in-process through asmlib.compile_asm/assemble and drop the verify.py
+subprocess entirely.
+
 It does NOT derive logic. Deciding what the function *does* from the listing is
 the part a search cannot do, and a candidate that is structurally wrong will
 not be rescued by any combination of these rewrites.
