@@ -11171,3 +11171,95 @@ preheader is positive evidence that the counter's initialisation and the
 constants are all plain statements, which also fixes where the loop body
 begins. A hoist and a statement are distinguishable at a glance only when the
 hoisted set has no copy.
+
+### loop.c's HOIST TEST IS `threshold * savings * lifetime >= insn_count` WITH threshold 60 HERE -- SO AN INVARIANT STAYS IN THE LOOP ONLY IF EARLIER MOVABLES SPEND THE THRESHOLD, A FORCED SHIFT RIDES OUT FREE WHATEVER YOU DO, AND A FOUR-USE CONSTANT CANNOT BE BLOCKED AT ALL
+
+MEASURED on func_80022774 (ovl_main_80020000, -G0), 2026-11-01: 102 words /
+84 DIFF to 102 / 3, the whole of it read out of `cc1psx -da`'s `.loop` and
+`.sched` dumps. The park's stated cause -- "loop.c hoists all FOUR halvings
+here, the target hoists three, a move_movables threshold decision" -- named
+the right pass and the wrong lever, and three separate facts were needed.
+
+**The arithmetic, and the one number you need.** `move_movables` moves a
+movable when
+
+    already_moved[regno]
+    || (threshold * savings * m->lifetime) >= insn_count
+    || (m->forces && m->forces->done && n_times_used[m->forces->regno] == 1)
+
+(loop.c:1631), with `threshold = (loop_has_call ? 1 : 2) * (1 +
+n_non_fixed_regs)` (:532) decremented by 3 after every move (:1719, :1904),
+`savings = n_times_used[regno]` -- which is a copy of the number of SETS, so
+it is 1 for anything set once (:837, :597) -- and `lifetime` the luid span
+between the register's first and last mention. `insn_count` is the number the
+`.loop` dump prints as "Loop from A to B: N real insns".
+
+**threshold starts at 60 in this compiler.** Bracketed from one dump: in a
+38-insn loop the 8th move (lifetime 1, savings 1) still happened and the 9th
+did not, so `threshold - 21 >= 38` and `threshold - 24 < 38`, and threshold is
+even, so `2 * (1 + n_non_fixed_regs) = 60`. Nothing in the source moves it,
+except that a CALL in the loop would halve it.
+
+Two consequences worth having in hand:
+
+* With threshold 60 and a loop of 35-40 insns, **everything invariant moves**
+  until about seven moves have gone by. The lever is not "persuade loop.c",
+  it is "spend the threshold earlier, in body order". Writing `0x48` and
+  `0x104058` as inline literals rather than pre-loop locals added two movables
+  AND two insns to `insn_count`, and that alone turned `%hi(D_80027F48)`, the
+  `0x90D0E0` load and one `srl` from `moved to N` into `not desirable` in the
+  dump. The movables are considered in RTL order, so a movable you want kept
+  must sit AFTER the ones you are willing to lose.
+* The gate before the threshold (:694) can only ever reject a USER variable:
+  its three escape clauses are `!maybe_never && !loop_reg_used_before_p`,
+  `!REG_USERVAR_P && !REG_LOOP_TEST_P`, and `reg_in_basic_block_p`, and the
+  middle one passes every compiler temp unconditionally. And `maybe_never` is
+  0 throughout a rotated `for` body -- it is set only past a CODE_LABEL or a
+  JUMP_INSN (:930) -- so the uservar route needs a branch in the body. A dead
+  pre-loop `g = 0;` to break `reg_in_basic_block_p` is inert on its own
+  (measured, 85).
+
+**A shift of a hoisted sum ALWAYS rides out free.** `force_movables` (:1245)
+walks each movable's register to `regno_last_uid`, and if that insn is also a
+movable whose `set_src` is not the bare register, it sets `m->forces` -- and
+the third disjunct above then moves the dependent at no threshold cost.
+`addiu $t4, $v0, 0xA` hoisted with `srl $v0, $t4, 1` left in the loop is
+therefore impossible while both are movables, however small the threshold:
+measured at 36 DIFF with `p[0xB] = (h + 0xA) >> 1;` written inline. Two cures,
+both measured: make the sum a pre-loop STATEMENT, so only the shift is a
+movable and it faces the threshold on its own (85 -> the schedule then puts
+the sum early, 26 DIFF); or give the sum's register a later use in a
+NON-movable insn, so the walk finds nothing and no link is made -- an
+`__asm__("" ::"r"(bh))`-style reference does it, and that was worth 25 words
+here. The condition is on the register's last mention, not on its uses' kind,
+so one extra reference is enough.
+
+**A constant stored four times cannot be blocked by the threshold.** cse1
+collapses `*(s32 *)(p + k) = 0x90D0E0;` written four times onto ONE pseudo
+(the `.rtl` dump has four `(set (reg N) (const_int 9490656))`, the `.cse` dump
+one), and its `lifetime` is then 4, so `threshold * 1 * 4 >= insn_count` holds
+for any reachable threshold -- it would take a 145-insn loop. Four separate
+`s32` locals do not help (85): cse1 rewrites the later stores onto the first
+pseudo and deletes the redundant sets. What does work is a SECOND set of the
+same register whose source is not invariant, which makes
+`n_times_set[regno] == 1` fail and `consec_sets_invariant_p` fail with it:
+
+    g = 0x90D0E0;
+    __asm__("" : "+r"(g) : "r"(i));          /* i varies: the asm is not invariant */
+
+`"+r"(g)` alone is NOT enough -- an `asm_operands` whose only operand is an
+invariant register is itself invariant, and the dump then reads `consec 1 ...
+moved to 237 moved to 238`, hoisting the pair (84 DIFF). `volatile` instead of
+the varying input is 68. With the varying input the lui/ori stays in the loop
+where the target has it, at a cost of zero words.
+
+**Reading the dumps.** `cpppsx` then `cc1psx -O2 -G0 -da` on a standalone
+candidate; the dumps land in
+`~/.cache/azure-psyq/drive_c/users/case/AppData/Local/Temp/PQ2.*` and are
+overwritten per run, so pin `AZURE_WINEPREFIX=$HOME/.cache/azure-psyq` and
+compile one candidate at a time. `PQ2.loop`'s first twenty lines are the whole
+hoist decision -- one line per movable, `moved to N` or `not desirable`, with
+its lifetime and savings -- and `PQ2.sched` prints every ready list, which is
+how you learn that sched1 here schedules a block BACKWARD from its end
+("ready list at T-1" is the last slot) and that a priority-1 insn with no
+in-block dependents is taken whenever nothing else is hazard-boosted.
