@@ -3940,9 +3940,50 @@ s32 func_80025ECC(void)
     return sum;
 }
 
-/* NEAR MISS: 57 words against 60: the target keeps the parameter p ITSELF in a fourth callee-saved register ($s3) as well as p+4 in $s0, and RECOMPUTES p+4 once after the if/else join -- which is where the three words go. Five spellings measured: p+4 in one local (57w/58), p+4 written inline at all eleven call sites (61w/31), the local reassigned after the join (61w/32), and the D_80028294 base hoisted into a local for indices 1..3 or for all four (both 57w/58). The body is right: strcpy from D_80028294[0], then func_8003AD08(n+1) into a stack buffer and a chain of strcats with D_80028294[3] twice, the 0x8001020C literal, D_80028294[1] or [2] on the 0x80010208 halfword, D_800282A0, and finally func_8003AD08 of the word at 0x8001022C.
-   Source in docs/near-misses/func_80025F0C.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_80025F0C);
+/* Two levers here, and the long-standing park had both backwards.
+
+   0x80010208 and 0x8001022C are CONSTANT addresses, not symbols. Through a
+   symbol the address is split into a separate `high` pseudo, so the word load
+   comes out as `lui $v0, %hi` + `lw $a0, %lo($v0)` -- two registers. A constant
+   address materialises 0x80010000 into the DESTINATION and puts 0x22C in the
+   load's displacement, which is the listing's `lui $a0` + `lw $a0, 0x22C($a0)`.
+   ovlverify's mask cannot see the difference (the immediate is the masked
+   field), so this one only shows up in the link.
+
+   `p + 4` is written inline at every call site, not kept in a local. cse1
+   gives it one pseudo per extended basic block, so the uses before the `if`
+   are one block-local quantity and the two after the join are another; both
+   are local-alloc's, and because the first outranks `n` it takes $s0 and
+   pushes `n` to $s1. A single local for p+4 spans the branch, becomes
+   global-alloc's, and the two end up the other way round (61w/31).
+
+   The ternary -- rather than an `if`/`else` over a local -- is what buys the
+   last word. expand_call computes arg0 before expanding the COND_EXPR, so
+   `p + 4` lands in a fresh pseudo BEFORE the branch; cse1 rewrites it to a
+   copy of the first quantity, and that copy survives into sched1 because
+   combine cannot propagate across the block boundary. The copy's only use is
+   `$a0 = <copy>` at the shared call, so local-alloc hands the copy $a0 itself:
+   the copy becomes `addu $a0, $s0, $zero` in the block ABOVE the branch, where
+   the beqz's backward scan takes it for the delay slot, and the argument move
+   in the join block collapses to a self-move and disappears. The join then
+   begins with the call, so its backward scan stops at the label and its slot
+   is filled forwards with the next `addiu $s0, $s3, 0x4`. Writing the test as
+   a statement leaves both insns in the join and costs the word (60w/4). */
+void func_80025F0C(u8 *p, s32 n)
+{
+    u8 buf[0x10];
+
+    func_80069E78(p + 4, D_80028294[0]);
+    func_8003AD08(n + 1, buf);
+    func_80069E38(p + 4, buf);
+    func_80069E38(p + 4, D_80028294[3]);
+    func_80069E38(p + 4, (u8 *)0x8001020C);
+    func_80069E38(p + 4, D_80028294[3]);
+    func_80069E38(p + 4, *(s16 *)0x80010208 != 0 ? D_80028294[1] : D_80028294[2]);
+    func_80069E38(p + 4, D_800282A0);
+    func_8003AD08(*(s32 *)0x8001022C, buf);
+    func_80069E38(p + 4, buf);
+}
 
 /* A three-pass VRAM upload. 0x80010080 is a constant address, not a symbol --
    the `lui` + `ori` pair is the tell (see docs/addressing-and-translation-units.md).

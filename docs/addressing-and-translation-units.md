@@ -541,10 +541,28 @@ half rides along as the load's displacement. Write these as
 
 Two consequences:
 
-* An access with no index is indistinguishable -- `lui $at,%hi(SYM)` /
+* An unindexed **store** is indistinguishable -- `lui $at,%hi(SYM)` /
   `sb $v0,%lo(SYM)($at)` is byte-identical to `lui $at,0x800E` /
   `sb $v0,0x2968($at)` -- so either spelling matches, and `func_8004397C`
   uses the `extern u8 D_800E2968;` spelling.
+
+  **CORRECTED 2026-11-01: this holds for a store and NOT for a load into a
+  register, and stating it generally cost func_80025F0C's park a run of wrong
+  diagnoses.** The difference is which register the `lui` targets, and that
+  field is not the immediate. A store goes through the assembler's `$at`
+  either way, so both forms agree. A load does not: through a SYMBOL the
+  address becomes its own pseudo that the allocator gives a temp --
+  `lui $v0,%hi(SYM)` / `lw $a0,%lo(SYM)($v0)` -- whereas a CONSTANT
+  materialises the high half straight into the load's own destination and
+  carries the low half as the displacement -- `lui $a0,0x8001` /
+  `lw $a0,0x22C($a0)`. Same two words, different base register.
+
+  So the `lui`'s destination register is the tell, and `ovlverify.py` DOES
+  see it: its mask is `w & 0xFFFF0000` (ovlverify.py:107), which drops the
+  imm16 and keeps both register fields. Do not conclude "symbol" from the
+  presence of a `%hi`/`%lo` pair in the splat listing -- splat prints the
+  relocation it found, and for a constant address there is none to print.
+  Check whether the `lui` and the load name the same register.
 * decomp-permuter cannot score a function that uses the constant-address
   form. Its `target.o` comes from splat's assembly and carries an
   `R_MIPS_LO16` relocation against the symbol, where the constant form has no
