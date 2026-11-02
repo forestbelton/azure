@@ -1049,9 +1049,63 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020034);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020048);
 
-/* NEAR MISS: 82 words, 11 DIFF, and all eleven sit in one region -- the two switch arms that zero a word and the shared store they cross-jump into. It is the overlay's only function with a real JUMP TABLE: jtbl_80020060 has five entries for st 1..5, grouped 1+2, 3, 4+5, which a plain switch reproduces exactly. The target gives each arm its own 'sll $v1, $a0, 2' and cross-jumps only the two-word 'addu'/'sw' tail, so the shift stays live into the shared 'D_80028530[i] >= 0xB' check; every spelling here cross-jumps the shift as well, leaving the arms to pass only the symbol base and swapping $v0 and $v1 through the whole region. Four arm spellings measured (two direct stores, a pointer local in either arm, separate pointer locals in both) all give 82w/11, and so does declaring D_80028530/D_80028538 as arrays rather than scalars. Two things ARE load-bearing and right: the st==0 exit must be an enclosing 'if (st != 0)' with a single 'return st' at the end, because the target's early branch jumps to the shared 'addu $v0, $s0, $zero' instead of materialising a zero (as 'return st' early it is 82 words but 46 DIFF), and the two zeroing arms must reach the check through a 'goto', not each carry their own copy of it -- duplicated, cse forwards the stored 0 into arm 3's comparison and folds it away (83w/36).
-   Source in docs/near-misses/func_8002168C.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80020000", func_8002168C);
+/* The st==3 arm carries its own COPY of the D_80028530[i] >= 0xB check rather
+   than a goto into the st==4/5 arm's copy: jump.c's post-reload cross-jump
+   then merges the two copies from the `addu $a1, $v1, $v0` backwards
+   (jump.c:1978, minimum==1 for an unconditional j), leaving the st==3 block
+   with just the `lui`/`addiu` of D_80028530 and its own `sll $v1, $a0, 2`,
+   which reorg.c:2907's backward scan moves into the jump's delay slot. The
+   `goto` spelling instead collapses the arm to a bare jump and the table
+   entry for st==3 is retargeted at the shared check: 79 words. Note st==3
+   does NOT clear D_80028530[i] -- that store only exists in the >= 0xB body.
+   The st==0 exit must be this enclosing `if (st != 0)` with one `return st`
+   at the end; an early `return st` is 82 words but 46 DIFF, because the
+   target's branch goes to the shared `addu $v0, $s0, $zero`. */
+s32 func_8002168C(void)
+{
+    s32 st = func_80021594();
+    s32 i = func_8002190C();
+
+    if (st != 0)
+    {
+        if ((&D_80028538)[i] == st)
+        {
+            (&D_80028530)[i]++;
+        }
+        else
+        {
+            (&D_80028530)[i] = 0;
+        }
+        (&D_80028538)[i] = st;
+        switch (st)
+        {
+        case 1:
+        case 2:
+            (&D_800287D0)[i] = st;
+            break;
+        case 3:
+            if ((&D_80028530)[i] >= 0xB)
+            {
+                (&D_800287D0)[i] = st;
+                (&D_80028530)[i] = 0;
+                (&D_80028538)[i] = 0;
+            }
+            break;
+        case 4:
+        case 5:
+            (&D_80084118)[i] = 0;
+            if ((&D_80028530)[i] >= 0xB)
+            {
+                (&D_800287D0)[i] = st;
+                (&D_80028530)[i] = 0;
+                (&D_80028538)[i] = 0;
+            }
+            break;
+        }
+        func_80020924(i);
+    }
+    return st;
+}
 
 /* A button-repeat counter over the two-entry D_80028540/D_80028548 pair. It
    RETURNS &D_800287D8, which is why the target computes that address on both
