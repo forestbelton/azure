@@ -191,6 +191,21 @@ again:
                     else
                     {
                         addr = addr | 0x80000000;
+                        /* DEVICE: a full memory barrier, the project's
+                           first and for a long time only one. It emits no
+                           instruction. Recorded as worth 13 words when this
+                           function was a park (see docs/landing-a-function.md);
+                           that figure cannot be re-measured now, because a
+                           landed function has no nonmatchings listing to score
+                           against. What IS re-verified, 2026-11-01: it is
+                           still load-bearing. Deleting it builds
+                           slus_006.14 at 0x7FFF4 bytes instead of 0x80000 --
+                           twelve bytes, three words short -- with a different
+                           hash, so the clobber is what stops the second
+                           `q[0]` being folded onto the first load.
+                           Warns under -Wall? No.
+                           Marker retrofitted 2026-11-01 so that a device
+                           census is a single grep for the marker rather than two. */
                         __asm__ volatile("" ::"r"(q) : "memory");
                         nsec = q[0] >> 23;
                     }

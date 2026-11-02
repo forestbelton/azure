@@ -131,10 +131,16 @@ Conditions, all of them:
   is the only thing a device is allowed to be justified by.
 - Annotate it `/* DEVICE: ... */` so every one is greppable. Say what the
   construct is, what it is worth in words, and what the function does without
-  it. The barrier in `unk_11F0C.c` predates the marker and does not carry it
-  yet, so a census means grepping for both until it is retrofitted.
+  it. The barrier in `unk_11F0C.c` predated the marker; it was retrofitted on
+  2026-11-01, so a census is now a single grep for the marker over `csrc/` --
+  30 of them across eleven units at that date. Do not write the marker string
+  a second time inside a marker comment: the first attempt at this retrofit
+  explained the census in prose that contained it, and counted itself.
 - Record the legal spellings you ruled out, with their scores, in the same
   comment. A later attempt starts where you stopped rather than re-measuring.
+  A device's word value can only be measured while the function is a PARK:
+  once it is landed there is no nonmatchings listing left to score against,
+  and all you can still check is that deleting it breaks the build.
 - If the device warns under `-Wall` -- an uninitialised read does -- say so in
   the comment. The default `CFLAGS` has no `-Wall`, so the build is silent, and
   the note is what stops somebody "fixing" it later.
