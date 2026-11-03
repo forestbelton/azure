@@ -347,6 +347,15 @@ def main():
         return 2
     src, unit, func = args[0:3]
     gasG = asmlib.gas_g_for_unit(unit)
+    # cc1psx's OWN -G is a separate number from gas's and must come from the
+    # unit too -- see asmlib.cc1_g_for_unit. This tool used to pass no cflags
+    # at all, so cc1psx ran at asmlib.CFLAGS' -G8 for every unit: on 2026-11-02
+    # that reported `VERDICT: LENGTH, built 151, target 148` for an ovl_town
+    # function that ovlverify.py measured at 148 words and 0 differing, i.e.
+    # every verdict this tool gave on an overlay was built with the wrong
+    # small-data model. verify.py already did it correctly; asmlib exists so
+    # the two cannot drift, and they drifted anyway.
+    cc1G = asmlib.cc1_g_for_unit(unit)
     for a in flags:
         if a == '--g8':
             gasG = 8
@@ -354,6 +363,8 @@ def main():
             gasG = int(a.split('=', 1)[1])
         elif a == '--g0':
             gasG = 0
+        elif a.startswith('--cc1-G='):
+            cc1G = int(a.split('=', 1)[1])
 
     miss = asmlib.missing_size_syms(src, unit)
     if miss:
@@ -367,7 +378,7 @@ def main():
         print()
 
     try:
-        words, relocs = asmlib.build(src, gasG)
+        words, relocs = asmlib.build(src, gasG, cflags=('-G%d' % cc1G,))
     except CompileError as e:
         print(e)
         return 2
