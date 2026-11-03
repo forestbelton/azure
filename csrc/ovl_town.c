@@ -553,6 +553,18 @@ typedef struct UnkTownItemRec
     u8 pad_04[0x50];
 } UnkTownItemRec;
 
+/* The ten bytes func_8003C06C's record hands over, into +0x34 of the record
+   just filled. ALIGNMENT 1 IS LOAD-BEARING: +0x34 is word-aligned, so a type
+   with any word member makes gcc emit lw/sw here, where the target has the
+   runtime-safe lwl/lwr pair plus two byte moves. Deliberately distinct from
+   UnkTownItemRec above, whose leading u32 raises its alignment to 4 and is
+   what makes the whole-record assignment come out as the four-word lw/sw loop
+   plus one trailing word. */
+typedef struct UnkTownName10
+{
+    u8 unk_00[0xA];
+} UnkTownName10;
+
 /* The INTEGER-HALF view of a UnkTown2AE8's six 16.16 words. This unit spells
    those halves `*(s16 *)((u8 *)b + N)` everywhere else, because a named s16
    field cannot coexist with the word it lives inside -- still true, which is
@@ -1506,6 +1518,7 @@ void func_8009B828();
 void func_8009B8E8();
 void func_8009B9BC();
 extern UnkTownItemRec D_80100AF8;
+extern Unk42710 D_80100A10;
 extern void *D_80100B0C;
 extern u8 D_8006E240[];
 extern u8 D_800D073C[];
@@ -1650,6 +1663,12 @@ void func_800A7DF8();
 void func_800C2CB0(u8 *a, s32 c, void *s, s32 z);
 void func_80033CD8(u8 *p, u32 tag);
 extern u8 D_80045340[];
+void func_80069EE8(u8 *p, s32 v, s32 n);
+void func_800422DC(u8 *arg0, u8 *arg1);
+void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
+u32 func_8003C06C(s32 i);
+void func_8003E188(s16 arg0, s16 arg1);
+void func_8009F374();
 s32 func_8008D5C4(s32 x, s32 y, s32 z);
 s32 func_8008DA80(s32 x, s32 y, s32 z);
 s32 func_8008DFB4(s32 x, s32 y, s32 z);
@@ -4962,7 +4981,70 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F374);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F48C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F4C0);
+/* Installs an item (type 0x13) into the actor's slot. Two tables live at the
+   out-of-image constant base 0x80010000, which is why the base is a one-set
+   pointer local and the offsets stay in the load/store displacements: a
+   four-byte record array at +0x980 (+0x01 a type, +0x03 two flag bits over a
+   six-bit record index) and the 0x54-byte record array at +0xA80. The pair is
+   cross-linked here -- the slot's +0x03 gets the record index and the record's
+   +0x43 gets the slot.
+
+   Two bases, b and c, not one: with a single pointer local its `lui` is held
+   in a callee-saved register across all five calls, where the target
+   materialises 0x80010000 twice, once either side of the record copy's loop
+   (which is also cse's block boundary). 112 differing with one base.
+
+   `m = i` where the two are equal is not cosmetic. The record index and the
+   slot index are separate quantities in the target: the X-table index comes
+   from the `lbu` ($s5) and the 0x54-record index from a copy of it ($s3), and
+   the copy is what cse canonicalises on. Which one wins is decided by
+   make_regs_eqv (cse.c): the copy's register becomes the quantity's canonical
+   register only if its LAST mention is later than the original's, which is why
+   `m` must also be the variable the +0x3F index is read back into at the end
+   -- spelled as a separate `j`, the canonical register flips and 15 words
+   differ, every one of them a register. The copy's own position is measured
+   too: before func_80042640 it is 2 words out (reorg puts the `$a0` setup in
+   that call's delay slot instead), before the 0x981 store 6, and only here
+   does it land in func_80042640's delay slot as the target has it.
+
+   The record's destination addresses are CONSTANTS (`lui`/`ori`), not offsets
+   off b or c: emit_block_move forces a block move's address into a register,
+   so 0x80010A80 and 0x80010AB4 come out whole, while the scalar accesses keep
+   their %lo in the displacement off the base. Both spellings are in this one
+   function because that is what the listing shows. */
+void func_8009F4C0(UnkTownActor *a, s32 arg1, s32 arg2, UnkTownRend *r)
+{
+    u8 *b;
+    u8 *c;
+    s32 i;
+    s32 m;
+    void *d;
+    UnkTownName10 *p;
+
+    i = *((u8 *)a + 0x95);
+    b = (u8 *)0x80010000;
+    func_80033CD8((u8 *)a, (u32)D_80045340);
+    *(u8 *)(b + i * 4 + 0x981) = 0x13;
+    func_80069EE8((u8 *)&D_80100A10, 0, 0x54);
+    func_80042640(&D_80100A10, *((u8 *)a + 0x4C));
+    func_800423C0((u8 *)&D_80100A10, *((u8 *)a + 0x4C), NULL);
+    func_800422DC((u8 *)&D_80100AF8, (u8 *)&D_80100A10);
+    m = i;
+    ((UnkTownItemRec *)0x80010A80)[m] = D_80100AF8;
+    p = (UnkTownName10 *)((u8 *)0x80010AB4 + m * 0x54);
+    *p = *(UnkTownName10 *)func_8003C06C(*((u8 *)a + 0x4C));
+    c = (u8 *)0x80010000;
+    *(u8 *)(c + i * 4 + 0x983) = (*(u8 *)(c + i * 4 + 0x983) & 0xC0) | m;
+    *(u8 *)(c + m * 0x54 + 0xAC3) = i;
+    *((u8 *)a + 0x4D) = *(u8 *)(c + i * 4 + 0x981);
+    *((u8 *)a + 0x4F) = *(u8 *)(c + i * 4 + 0x983);
+    m = *(u8 *)(c + *((u8 *)a + 0x95) * 4 + 0x983) & 0x3F;
+    d = *(void **)(c + m * 0x54 + 0xA94);
+    func_8003E188(*((u8 *)a + 0x4C), 1);
+    func_8009DC8C((UnkTownSpawn *)a, r, *((u8 *)a + 0x4C), d);
+    a->unk_50 = func_8009F374;
+    a->unk_6C = 0xA;
+}
 
 void func_8009F6D4(void) {
 }
