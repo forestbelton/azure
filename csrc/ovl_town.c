@@ -67,7 +67,12 @@ typedef struct UnkTownActor
     s16 unk_68;
     s16 unk_6A;
     s16 unk_6C;
-    u8 pad_6E[0x4];
+    /* +0x6E is the FACING THIS FAMILY RESTORES: func_800CDCA8 walks +0x72
+       forward by 0x400 a frame and, when its countdown expires, copies
+       +0x6E back into +0x72 -- so +0x6E is the resting facing and +0x72 the
+       animated one. */
+    s16 unk_6E;
+    u8 pad_70[0x2];
     /* +0x72 is a FACING, in PSX angle units where 0x1000 is a full turn: the
        wander family writes 0, 0x400, 0x800 and 0xC00 into it, which are the
        four quarter turns, and the step family divides it by 0x400 to get a
@@ -17668,13 +17673,85 @@ void func_800CDA6C(void *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDADC);
+/* THE func_800CDF54 / func_800CE04C INSTALL TWINS, the two handlers those
+   two bind at +0x50.  Both are the countdown-and-advance shape this unit
+   already carries a dozen times (func_800CE20C is the nearest landed
+   relative, and its body is this one with the inner else replaced): advance
+   the 16.16 height at +0x08 by its delta at +0x14, ask func_800C2AE8 for the
+   floor, and when the mover has sunk to or below it either fire the next
+   state or hand the frame to func_800C30E0.
+
+   Arity: all three parameters are witnessed.  `a` by the +0x90 countdown,
+   `b` by +0x08/+0x14/+0x0A, `c` only by being forwarded into
+   func_800C30E0/func_800CDF94/func_800CDF00 -- forwarded-only, so its TYPE
+   is a placeholder (`s32`, the unit's convention) and only its presence is
+   witnessed, by $a2 being live at the calls.  The installers
+   func_800CDF54/func_800CE04C only TAKE the address, so they witness nothing.
+
+   The inner arm is `else if (...== 0)` and not an inverted early return:
+   measured, writing the countdown arm first costs words (see
+   func_800CD87C's note -- a conditional return inside an arm is not an arm
+   that leaves the function). */
+void func_800CDADC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2AE8(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if (--a->unk_90 <= 0)
+        {
+            b->unk_14 = 0;
+            func_800CDF94(a, b, c);
+        }
+        else if (func_800C30E0(a, b, c) == 0)
+        {
+            func_800CDF00(a, b, c);
+        }
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDBB8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDC2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDCA8);
+/* The twin of func_800CDADC above, with a FACING animation wrapped around
+   it: +0x72 walks a quarter turn forward every frame on the way in, and the
+   expiry arm restores the resting facing from +0x6E before advancing.  The
+   two extra statements are the only shape difference; the callee pair is
+   func_800CDE9C/func_800CDFF8 for func_800CDF94/func_800CDF00.
+
+   `a->unk_72 += 0x400;` is the in-place form and emits `lhu`/`addiu`/`sh`:
+   the truncating store makes the load's extension irrelevant, so gcc picks
+   the cheaper zero-extending load by itself and no `(u16)` cast is needed
+   (docs/matching-levers.md, "`lhu` FEEDING A `mult`...").  The same is true
+   of `a->unk_72 = a->unk_6E;`. */
+void func_800CDCA8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    a->unk_72 += 0x400;
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2AE8(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if (--a->unk_90 <= 0)
+        {
+            b->unk_14 = 0;
+            a->unk_72 = a->unk_6E;
+            func_800CDE9C(a, b, c);
+        }
+        else if (func_800C30E0(a, b, c) == 0)
+        {
+            func_800CDFF8(a, b, c);
+        }
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 void func_800CDD98(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
