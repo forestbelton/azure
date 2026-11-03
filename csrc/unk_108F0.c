@@ -372,7 +372,18 @@ void func_8003D8B0(void)
     func_8004425C(0);
 }
 
-__asm__(".sdata\n\t.size D_80080ABC,2\n\t.size D_80080ABE,2\n\t.text");
+/* File-scope definitions of the small-data objects this unit reaches
+   $gp-relatively -- the definitions the original translation unit had. cc1psx
+   emits a `.comm` for each, maspsx records it in sbss_entries, and every load
+   and store of the symbol in this unit becomes %gp_rel while an address
+   materialisation stays absolute. Nothing is allocated: these objects are
+   already defined in asm/data/gp_data.data.s and placed by the linker script,
+   and a tentative definition is a COMMON symbol, which merges with that
+   definition rather than claiming storage of its own. A definition is
+   file-scope and changes every access to its symbol in the whole unit, so
+   grep this file before adding one. */
+s16 D_80080ABC;
+s16 D_80080ABE;
 
 /* The "wait for the disc to be ready, then restart audio" tick. Returns 1 only
  * on the frame it actually performs the restart.

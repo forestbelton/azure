@@ -20,6 +20,23 @@
    have been removed. A record is file-scope and changes every access to its
    symbol in the unit, so it belongs only in a piece that has one. */
 
+/* The one size record left in the project, and it cannot become a definition.
+   func_80052CE0 stores to D_80081568+4 -- an ADDEND access -- and maspsx's
+   `_uses_gp` refuses %gp_rel for an addend whose symbol is in `comm_symbols`:
+
+       gp_allowed = self.gp_allow_offset or symbol not in self.comm_symbols
+
+   `gp_allow_offset` is False for ASPSX 2.56, so a tentative definition (which
+   is a `.comm`, hence in comm_symbols) sends that store to an absolute
+   `lui $at` / `sw` pair and costs a word, while a bare `.size` record inside
+   `.sdata` -- which populates sdata_entries and not comm_symbols -- keeps it
+   $gp-relative. Measured 2026-11-02 on this unit: identical with the record,
+   one word longer with a definition.
+
+   Everything else in the project is a definition now; see the note in
+   csrc/unk_12DEC.c. The two addend accesses of a $gp symbol anywhere in the
+   tree are this one and D_800814D0+1 in csrc/unk_11B9C.c, and that unit
+   defines nothing, so the access is already absolute there. */
 __asm__(".sdata\n\t.size D_80081568,4\n\t.text");
 
 void func_80048C3C(s32);

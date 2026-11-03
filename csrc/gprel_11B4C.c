@@ -2,13 +2,12 @@
  *
  * **This unit stays at the project default -G0 and must NOT be added to the
  * MASPSXFLAGS_G8 list**, unlike the other gprel_* units. Its four $gp accesses
- * are asked for individually by the size records below; at -G8 the three
+ * are asked for individually by the definitions below; at -G8 the three
  * absolute bytes D_800814D1/D2/D3 would go $gp-relative too, since they are
  * one byte each and sit inside gp +/- 0x8000.
  *
- * WHY THE CARVE IS NECESSARY, and it is not the usual -G reason. The size
- * record is a FILE-SCOPE directive: maspsx applies it to every access in the
- * translation unit. func_8003E39C, which sat four lines below this function in
+ * WHY THE CARVE IS NECESSARY, and it is not the usual -G reason. A definition
+ * is FILE-SCOPE: maspsx applies it to every access in the translation unit. func_8003E39C, which sat four lines below this function in
  * unk_11940, reaches D_800814D0 ABSOLUTELY -- it materialises &D_800814D0[1]
  * with an `la` and keeps it across its loop -- so leaving the two functions
  * together rewrote func_8003E39C's accesses to %gp_rel as well and cost it 5
@@ -35,8 +34,10 @@ s32 func_8003F270(void);
 void func_8003E758(void);
 u32 func_8003E240(s32);
 
-__asm__(".sdata\n\t.size D_800814D0,1\n\t.size D_80080AD0,1\n"
-        "\t.size D_80080AD4,2\n\t.size D_80080ADC,4\n\t.text");
+u8 D_800814D0[4];
+u8 D_80080AD0;
+u16 D_80080AD4;
+u32 D_80080ADC;
 
 /* Resets the command queue and the audio state: twelve zero stores plus two
  * constants, in listing order.

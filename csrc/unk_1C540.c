@@ -12,15 +12,35 @@
    without touching the declaration unk_12DEC depends on. */
 extern u32 D_800814A0a[] __asm__("D_800814A0");
 
-/* Bare file-scope size records: they put each symbol in maspsx's sdata_entries
-   while DEFINING nothing, so .sdata stays 0 bytes, the symbols stay undefined
-   and the linker script's own assignments resolve them -- and maspsx rewrites
-   every load and store of them in this unit to %gp_rel, which is what these
-   functions' listings have. Address materialisation stays absolute, so
-   D_80080B18 is deliberately NOT here: func_80048DA0 indexes it through a
-   materialised base. Adding a symbol here changes every access to it in this
-   whole unit, so check `grep` before adding one. */
-__asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n\t.size D_80081548,4\n\t.size D_8008154C,4\n\t.size D_80081558,4\n\t.size D_80080B94,4\n\t.size D_80080B98,4\n\t.size D_80081540,4\n\t.size D_80080B58,4\n\t.size D_80080B5C,4\n\t.size D_80080B60,4\n\t.size D_80080B64,4\n\t.size D_80080B80,4\n\t.size D_80080B84,4\n\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n\t.size D_80080B30,1\n\t.text");
+/* File-scope definitions of the small-data objects this unit reaches
+   $gp-relatively -- the definitions the original translation unit had. cc1psx
+   emits a `.comm` for each, maspsx records it in sbss_entries, and every load
+   and store of them in this unit becomes %gp_rel, which is what these
+   functions' listings have. Nothing is allocated: these objects are already
+   defined in asm/data/gp_data.data.s and placed by the linker script, and a
+   tentative definition is a COMMON symbol, which merges with that definition
+   rather than claiming storage of its own. Address materialisation stays
+   absolute, so D_80080B18 is deliberately NOT here: func_80048DA0 indexes it
+   through a materialised base. A definition is file-scope and changes every
+   access to its symbol in this whole unit, so check `grep` before adding
+   one. */
+u32 D_80081550;
+u32 D_80081554;
+u32 D_80081548;
+u32 D_8008154C;
+u32 D_80081558;
+u32 D_80080B94;
+s32 D_80080B98;
+u8 *D_80081540;
+u32 D_80080B58;
+u32 D_80080B5C;
+u32 D_80080B60;
+u32 D_80080B64;
+u32 D_80080B80;
+u32 D_80080B84;
+u8 D_80080B1B;
+u8 D_80080B1C;
+u8 D_80080B30;
 
 void func_80048C3C(s32);
 

@@ -4,24 +4,24 @@
    func_80033D44 and func_80033D54 -- the last two functions in this file --
    reach D_8008099C $gp-relatively, while func_80034EF8 and
    func_8003C0C8, further down the old unit, reach the same word ABSOLUTELY
-   and are matched that way. maspsx's size record is file-scope, so no single
+   and are matched that way. A definition is file-scope, so no single
    translation unit can give one symbol both forms; the __asm__-alias trick
    that gives one symbol two spellings elsewhere in this project does not lift
    it either (measured 2026-10-27, see the note at the top of csrc/unk_72A8.c).
    So the unit is cut immediately after func_80033D54, which is also the
-   earliest cut that separates the two groups, and this piece asks for the
-   size record the stubs need.
+   earliest cut that separates the two groups, and this piece carries the
+   definition the stubs need.
 
    This unit stays at the project default -G0, like gprel_11B4C and unlike the
-   other gprel_* units: the one access it wants is asked for by the size
-   record below, and nothing here reaches a small object absolutely.
+   other gprel_* units: the one access it wants is asked for by the
+   definition below, and nothing here reaches a small object absolutely.
 
    The twelve functions above them came along because they are on this
    side of the cut, not because they need anything from it -- none of them
-   touches D_8008099C or any of the old unit's other size-recorded symbols,
+   touches D_8008099C or any of the old unit's other defined symbols,
    which is why the carve moves no matched code. See
    docs/addressing-and-translation-units.md. */
-__asm__(".sdata\n\t.size D_8008099C,4\n\t.text");
+u32 D_8008099C;
 
 /* The bitmap set, clear and test on the out-of-image words at 0x80012D70,
    whose base 0x80010000 has no low half, so 0x2D70 stays in the load and store

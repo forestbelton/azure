@@ -39,28 +39,30 @@ void func_8003F5EC(void) {
  * there).
  *
  * maspsx can express it, because its %gp_rel rewrite fires on a load or store
- * and leaves an address materialisation alone. What blocked that route was
- * that it was written as a .sdata DEFINITION -- `.globl` + `.type` + `.size` +
- * a label + `.byte 0` -- which makes the symbol a defined OBJECT in a 1-byte
- * .sdata section, and splat's legacy linker-script generation cannot place one
- * object's .sdata at a distant fixed address.
+ * and leaves an address materialisation alone. All it needs is to see the
+ * object DEFINED in this unit, and the `u8 D_800814D4;` below is exactly that
+ * -- the tentative definition the original file had. cc1psx emits a `.comm`,
+ * maspsx records it in sbss_entries, the store goes $gp-relative and
+ * `&D_800814D4` stays absolute.
  *
- * It does not need to be a definition. maspsx's `_uses_gp` only consults its
- * `sdata_entries` table, which the `.size` record alone populates, so:
- *
- *     __asm__(".sdata\n\t.size D_800814D4,1\n\t.text");
- *
- * gives the identical 25 words while DEFINING NOTHING -- `readelf -sS` shows
- * .sdata at 0 bytes and D_800814D4 still UND with size 1, so the linker
- * script's own `D_800814D4 = 0x800814D4;` resolves it and there is no
- * placement to arrange. Verified both ways: definition route MATCH, size-record
- * route MATCH, and the object differs only in whether the symbol is defined.
+ * NOTHING IS ALLOCATED AND NOTHING HAS TO BE PLACED, which is what this note
+ * used to get wrong. It argued that a definition was unavailable here, because
+ * writing one as an explicit .sdata block -- `.globl` + `.type` + `.size` + a
+ * label + `.byte 0` -- makes the symbol a defined OBJECT in a 1-byte .sdata
+ * section that splat's legacy linker-script generation cannot place at a
+ * distant fixed address, and so it settled on a bare
+ * `__asm__(".sdata\n\t.size D_800814D4,1\n\t.text");` record instead. That is
+ * true of an explicit .sdata definition and false of a C tentative definition:
+ * D_800814D4 is already defined in asm/data/gp_data.data.s and placed by the
+ * linker script, and a tentative definition is a COMMON symbol, which merges
+ * with that definition rather than claiming storage of its own. Measured
+ * 2026-11-02: identical 25 words, image byte-identical.
  *
  * The `goto done` is load-bearing in the usual way (section 8): the retry
  * exhaustion path has to fall through to func_8003E70C while the success path
  * jumps past it, and an inline `return` in the arm costs a `j` plus a second
  * epilogue. */
-__asm__(".sdata\n\t.size D_800814D4,1\n\t.text");
+u8 D_800814D4;
 
 void func_8003F624(void) {
     s32 i;

@@ -999,12 +999,13 @@ void func_80047054(u32 *p, s16 arg1, s32 arg2, s32 arg3)
  * decides per symbol SIZE and an `.extern` override per SYMBOL, and both apply
  * to every access alike -- so this unit could not simply be carved at -G8.
  * maspsx can, because its %gp_rel rewrite fires on a load or store and leaves
- * an address materialisation alone, and the bare size record below asks for it
- * while DEFINING NOTHING: .sdata stays 0 bytes and both symbols stay UND, so
- * the linker script's own assignments resolve them and there is no placement
- * to arrange. See the longer note on func_8003F624 in csrc/unk_12DEC.c; these
- * two symbols are the only $gp references anywhere in this unit, so no carve
- * was needed at all.
+ * an address materialisation alone, and the definitions below ask for it: they
+ * are the tentative definitions the original unit had, cc1psx emits a `.comm`
+ * for each, and nothing is allocated -- both objects are already defined in
+ * asm/data/gp_data.data.s and a common merges with that definition, so there
+ * is no placement to arrange. See the longer note on func_8003F624 in
+ * csrc/unk_12DEC.c; these two symbols are the only $gp references anywhere in
+ * this unit, so no carve was needed at all.
  *
  * THE ONE LOAD-BEARING SHAPE is where `r` is declared, and it is worth 4 words
  * plus a register. Three things in the body are loop-invariant -- the RECT
@@ -1027,7 +1028,8 @@ void func_80047054(u32 *p, s16 arg1, s32 arg2, s32 arg3)
  * competes with the loop's other invariants. Declaring `y` separately and
  * early, to try to lose `arg1 << 6` that way instead, gives 49 words and
  * 7 DIFF -- the right word count with the wrong registers. */
-__asm__(".sdata\n\t.size D_80080B08,2\n\t.size D_80080B0A,2\n\t.text");
+u16 D_80080B08;
+u16 D_80080B0A;
 
 void func_8004713C(u32 *arg0, u16 arg1, u16 arg2)
 {

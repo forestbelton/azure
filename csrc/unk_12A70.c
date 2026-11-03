@@ -10,13 +10,17 @@ void func_8003F624(void);
 s32 func_8003F688(s32);
 u8 func_8003F240(void);
 
-/* One file-scope size record for the whole unit: func_8003F2A4 and
+/* File-scope definitions for the whole unit: func_8003F2A4 and
  * func_8003F368 reach these four objects $gp-relatively while reaching others
- * absolutely, which no -G value can express. It defines nothing -- .sdata stays
- * 0 bytes and every symbol stays UND -- so there is no linker placement to
- * arrange. See the longer note on func_8003F624 in csrc/unk_12DEC.c.
+ * absolutely, which no -G value can express. These are the definitions the
+ * original translation unit had; cc1psx emits a `.comm` for each and maspsx
+ * rewrites this unit's loads and stores of them to %gp_rel. Nothing is
+ * allocated -- the objects are already defined in asm/data/gp_data.data.s and
+ * a tentative definition is a COMMON symbol that merges with that definition
+ * -- so there is no linker placement to arrange. See the longer note on
+ * func_8003F624 in csrc/unk_12DEC.c.
  *
- * The record is FILE-SCOPE, so it was checked against every function in the
+ * A definition is FILE-SCOPE, so it was checked against every function in the
  * unit: func_8003F270 reaches D_800814D0's second byte and is therefore spelled
  * through the D_800814D1 scalar below, func_8003F320 touches none of the four,
  * func_8003F55C uses D_800814B8 and func_8003F534/func_8003F540 use D_8006CE34.
@@ -26,11 +30,17 @@ u8 func_8003F240(void);
  * functions and gaudit will ask for it to be checked; both want it
  * $gp-relative, so that report will be expected rather than a problem.
  *
+ * D_800814D0 is also defined in csrc/gprel_11B4C.c and csrc/unk_11F0C.c, which
+ * reach it $gp-relatively too. Several commons for one symbol is fine: they
+ * merge with each other and with the real definition in the data file.
+ *
  * This unit stays at the project default -G0 and must NOT join the
  * MASPSXFLAGS_G8 list: at -G8 the one-byte D_800814D1 and D_800814D3 would go
- * $gp-relative too, the same reason csrc/gprel_11B4C.c records. */
-__asm__(".sdata\n\t.size D_800814D0,1\n\t.size D_80081450,4\n"
-        "\t.size D_800814B0,4\n\t.size D_800814B4,4\n\t.text");
+ * $gp-relative too, the same reason csrc/gprel_11B4C.c gives. */
+u8 D_800814D0[4];
+u8 D_80081450[4];
+u32 D_800814B0[1];
+u32 D_800814B4[1];
 
 s32 func_8003F270(void) {
     /* The target materialises the address of element 1 and reaches element 0

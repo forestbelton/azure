@@ -1,10 +1,15 @@
 #include "common.h"
 
-/* Bare file-scope size records: each symbol lands in maspsx's sdata_entries
-   while nothing is DEFINED, so maspsx rewrites every load and store of it in
-   this unit to %gp_rel while leaving address materialisation absolute. See the
-   $gp section of docs/carved-sweep.md; adding a symbol changes every access to
-   it in this whole unit, so grep this file first.
+/* File-scope definitions of the small-data objects this unit reaches
+   $gp-relatively -- the definitions the original translation unit had. cc1psx
+   emits a `.comm` for each, maspsx records it in sbss_entries, and every load
+   and store of the symbol in this unit becomes %gp_rel while an address
+   materialisation stays absolute. Nothing is allocated: these objects are
+   already defined in asm/data/gp_data.data.s and placed by the linker script,
+   and a tentative definition is a COMMON symbol, which merges with that
+   definition rather than claiming storage of its own. See the $gp section of
+   docs/carved-sweep.md; a definition is file-scope and changes every access to
+   its symbol in this whole unit, so grep this file first.
    D_8008099C is deliberately NOT here, and cannot be: func_80034EF8 and
    func_8003C0C8 in this unit reach it ABSOLUTELY and match that way, while
    func_80033D44 and func_80033D54 need it $gp-relatively. One unit cannot
@@ -14,7 +19,7 @@
 
    THE __asm__-ALIAS TRICK WAS TRIED FIRST AND DOES NOT LIFT IT, 2026-10-27,
    which is why the carve was needed. The idea was the one that gives one
-   symbol two spellings elsewhere in this project: add the size record, leave
+   symbol two spellings elsewhere in this project: define the object, leave
    the two blocked functions on the scalar declaration (bare symbol -> maspsx
    rewrites to %gp_rel) and give the two landed ones
    `extern u32 D_8008099Ca[] __asm__("D_8008099C")` with `[0]`
@@ -23,12 +28,14 @@
    `sw $zero, 0x99c($at)`, i.e. GAS expanding a bare symbol through the
    assembler temp, and the array spelling makes cc1psx emit the pair itself
    through a real register ($v0). The absolute form those two match is
-   specifically "bare symbol, not in sdata_entries, expanded by gas", which no
-   C spelling reproduces once the symbol IS in sdata_entries. */
-__asm__(".sdata\n\t.size D_80080A6C,4\n\t.size D_80081440,4\n"
-        "\t.size D_80081448,4\n\t.size D_80081460,4\n"
-        "\t.size D_800809B8,4\n\t.size D_800809BC,4\n"
-        "\t.text");
+   specifically "bare symbol, not in sbss_entries, expanded by gas", which no
+   C spelling reproduces once the object IS defined in the unit. */
+s32 D_80080A6C;
+s32 D_80081440;
+u32 D_80081448;
+u32 D_80081460;
+u32 D_800809B8;
+u32 D_800809BC;
 
 extern Unk6CD30 D_8006CD10[];
 extern Unk6CD30 D_8006A84C[];

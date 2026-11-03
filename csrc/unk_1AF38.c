@@ -1,14 +1,25 @@
 #include "common.h"
 
-/* Bare file-scope size records: each symbol lands in maspsx's sdata_entries
-   while nothing is DEFINED, so maspsx rewrites every load and store of it in
-   this unit to %gp_rel while leaving address materialisation absolute. See the
-   $gp section of docs/carved-sweep.md; adding a symbol changes every access to
-   it in this whole unit, so grep this file first. */
-__asm__(".sdata\n\t.size D_8008152C,4\n\t.size D_80081528,4\n"
-        "\t.size D_80080B10,2\n\t.size D_80080B12,2\n"
-        "\t.size D_80080B14,2\n\t.size D_80081530,2\n"
-        "\t.text");
+/* File-scope definitions of the small-data objects this unit reaches
+   $gp-relatively -- the definitions the original translation unit had. cc1psx
+   emits a `.comm` for each, maspsx records it in sbss_entries, and every load
+   and store of the symbol in this unit becomes %gp_rel while an address
+   materialisation stays absolute. Nothing is allocated: these objects are
+   already defined in asm/data/gp_data.data.s and placed by the linker script,
+   and a tentative definition is a COMMON symbol, which merges with that
+   definition rather than claiming storage of its own. See the $gp section of
+   docs/carved-sweep.md; a definition is file-scope and changes every access to
+   its symbol in this whole unit, so grep this file first.
+
+   D_8008152C is declared `extern u8 D_8008152C[];` in structs.h, so its
+   definition has to supply an extent; `[4]` is the record's old size and
+   leaves the generated code unchanged. */
+u8 D_8008152C[4];
+u32 D_80081528;
+u16 D_80080B10;
+u16 D_80080B12;
+u16 D_80080B14;
+u16 D_80081530;
 
 void func_80047738(u8 *p, s16 a, s16 b) {
     u8 *q = *(u8 **) (*(u8 **) *(u8 **) *(u8 **) (p + 0x28) + a * 4) + b * 8;

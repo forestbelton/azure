@@ -9,10 +9,24 @@ void func_8003F624(void);
 void func_8003F5EC(void);
 u8 func_8003F240(void);
 
-__asm__(".sdata\n\t.size D_800814D0,1\n\t.size D_800814CC,4\n"
-        "\t.size D_800814D4,1\n\t.size D_80081450,4\n"
-        "\t.size D_80080AD0,1\n\t.size D_80080AD2,2\n"
-        "\t.size D_80080AD4,2\n\t.size D_80080AD8,4\n\t.text");
+/* File-scope definitions of the small-data objects this unit reaches
+   $gp-relatively -- the definitions the original translation unit had. cc1psx
+   emits a `.comm` for each, maspsx records it in sbss_entries, and every load
+   and store of the symbol in this unit becomes %gp_rel while an address
+   materialisation stays absolute. Nothing is allocated: these objects are
+   already defined in asm/data/gp_data.data.s and placed by the linker script,
+   and a tentative definition is a COMMON symbol, which merges with that
+   definition rather than claiming storage of its own. A definition is
+   file-scope and changes every access to its symbol in the whole unit, so
+   grep this file before adding one. */
+u8 D_800814D0[4];
+u32 D_800814CC;
+u8 D_800814D4;
+u8 D_80081450[4];
+u8 D_80080AD0;
+u16 D_80080AD2;
+u16 D_80080AD4;
+u32 D_80080AD8;
 
 void func_8003E70C(void)
 {

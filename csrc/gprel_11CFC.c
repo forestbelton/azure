@@ -12,18 +12,24 @@ u32 func_8003E240(s32);
  * `--dont-force-G0 -G8` -- where gas turns a small extern into a one-insn
  * %gp_rel access anyway -- the pair `lw $v0,0x4($a1)` + the store in case 6
  * silently loses its nop and the unit comes out one word short, with every
- * later branch offset off by one. This directive tells maspsx the symbol is
- * small data and DEFINES NOTHING: `readelf -sS` shows .sdata at 0 bytes and
- * D_80080ADC still UND with size 4, so there is no linker placement to arrange
- * and nothing to collide with the linker script's own `D_80080ADC = ...`.
- * Unlike the `.sdata` recipe in annotate.py's gp-relative lever there is no
- * `.globl`, no `.type`, no label and no `.word`.
+ * later branch offset off by one. The definition below tells maspsx the symbol
+ * is small data -- cc1psx emits a `.comm` for it, which `_uses_gp` does read --
+ * and costs nothing: D_80080ADC is already defined in asm/data/gp_data.data.s
+ * and placed by the linker script, and a tentative definition is a COMMON
+ * symbol, which merges with that definition rather than claiming storage of
+ * its own, so there is no placement to arrange.
+ *
+ * This is the one definition in the project that is NOT about choosing the
+ * addressing mode: this unit is built with MASPSXFLAGS_G8, so gas makes the
+ * access %gp_rel from cc1psx's `.extern` whatever maspsx thinks. It is here
+ * purely so maspsx's nop logic knows.
  *
  * The principled fix is in vendor/maspsx: record `.extern SYM,size` and let
  * `_uses_gp` consider those symbols when gas is left at a nonzero -G, gated on
  * `--dont-force-G0` so the -G0 bulk of the game is unaffected. If that lands,
- * this line comes straight back out. */
-__asm__(".sdata\n\t.size D_80080ADC,4\n\t.text");
+ * this definition comes straight back out -- nothing else in this unit wants
+ * it. */
+u32 D_80080ADC;
 
 /* The command dispatcher: turns a command byte into one or more func_8003E39C
  * queue entries and returns that call's entry, or NULL for a command it does
