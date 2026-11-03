@@ -1675,7 +1675,9 @@ s32 func_800B5E10(s32 a);
 u8 *func_800A652C(u8 *p);
 u8 *func_800B512C(u8 *q, s16 n);
 void func_800B66E8(u8 *p);
-void func_800B6E3C(u8 *p);
+s32 func_800B6E3C(u8 *p);
+s32 func_800B6F54(u8 *p);
+void func_800B5B20(void);
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
 void func_80067014(s32 n);
@@ -9218,7 +9220,30 @@ void func_800B65D8(u8 *p, s32 n)
     func_800B6580(*(u8 **)*(u8 ***)(p + 0x5C), w);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B66E8);
+/* The task's per-frame tick while it is opening: five frames of func_800B65D8
+   driven by the counter at +0x0E, then one func_800B6508 and a hand-over to
+   func_800B6578, which is a two-word `jr $ra` stub -- the idle handler.
+
+   The counter is read SIGNED for the guard (`lh`) and UNSIGNED for the
+   increment (`lhu`), which is two reads of one field and not one value reused;
+   the signed read is also what func_800B65D8 receives, without a reload.
+
+   Both arms are calls falling into a shared tail, so they are emitted in
+   SOURCE order and no inversion lever applies -- see the comment on
+   func_800B6508 for the discriminator. */
+void func_800B66E8(u8 *s)
+{
+    if (*(s16 *)(s + 0xE) < 5)
+    {
+        func_800B65D8(*(u8 **)(s + 0x98), *(s16 *)(s + 0xE));
+        *(s16 *)(s + 0xE) = *(u16 *)(s + 0xE) + 1;
+    }
+    else
+    {
+        func_800B6508(s);
+        *(u32 *)s = (u32)func_800B6578;
+    }
+}
 
 void func_800B6754(UnkTownDispatch *d)
 {
@@ -9382,11 +9407,103 @@ s32 func_800B6990(u8 *s, s32 n)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6A0C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6B10);
+/* The generic releaser for the 0x18-entry card/prim table at +0xB8 of the
+   func_800B6BC4/func_800B6C30 node: each entry's kind byte at +0x0E of its
+   prim selects the freer -- 2 is the func_800B5264 family, 1 the
+   func_800B53BC family -- then the handle and the kind byte are zeroed.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6BC4);
+   THE ZEROING TAIL IS WRITTEN TWICE, ONCE IN EACH ARM, and jump.c cross-jumps
+   the copies; the `j` out of the first arm is the merge. Factoring it out
+   below the if/else-if with a `continue` in the default path is the reader's
+   spelling and it is wrong by three words: 48 words, 39 differing. Fourteen
+   other spellings of that shape were measured and every one with a factored
+   tail is 39 to 46 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6C30);
+   The mechanism was read off the `.loop` dumps and is worth keeping as a
+   number. Duplicating the tail takes the loop from 25 real insns to 28.
+   move_movables tests `threshold * savings * lifetime >= insn_count` and does
+   `threshold -= 3` after each move, so with savings and lifetime both 1 the
+   test is just `threshold >= insn_count`: at 25 BOTH equality constants are
+   hoisted and the `1` eats a fourth call-saved register, while at 28 the
+   second hoist is refused ("Insn 91: regno 111 (life 1), move-insn savings 1
+   not desirable") and reorg steals the rematerialised `1` into the first
+   bne's delay slot. That brackets this -G0 -O2 build's threshold at 28..30.
+
+   The same insn-count change leaves biv 81 un-eliminated, so the exit test
+   stays `slti` on the counter rather than a pointer compare against a hoisted
+   `a + 96`. Hence the diagnostic: a loop with BOTH an `slti` counter test and
+   an `addiu $sN, $sN, 4` has two live induction variables because the body was
+   too big for biv elimination -- it is NOT evidence of a source pointer walk.
+   Spelling the walk as `a++` makes it the parameter copy, which assign_parms
+   emits before move_movables' hoists: 45 words, 6 differing, all six in that
+   prologue ordering. */
+void func_800B6B10(UnkTownCardPair **a)
+{
+    s32 i;
+
+    for (i = 0; i < 0x18; i++)
+    {
+        if (a[i]->unk_04->unk_0E == 2)
+        {
+            func_8004E99C(a[i]->unk_00);
+            a[i]->unk_00 = 0;
+            a[i]->unk_04->unk_0E = 0;
+        }
+        else if (a[i]->unk_04->unk_0E == 1)
+        {
+            func_8004B1A4(a[i]->unk_00);
+            a[i]->unk_00 = 0;
+            a[i]->unk_04->unk_0E = 0;
+        }
+    }
+}
+
+/* Tears the task down and marks the node dead. func_800B3A80 is the template
+   for the shape -- the null guard, the `v = (u8 *)o + 0x20` actor view, the
+   func_8004B248 on a +0xBC/+0xCC field, then the releaser, then the two
+   0x8000 bits. */
+void func_800B6BC4(UnkNode *o)
+{
+    u8 *v;
+
+    if (o == 0)
+    {
+        return;
+    }
+    v = (u8 *)o + 0x20;
+    func_8004B248((u32 *)((u8 *)o + 0xBC));
+    func_800B6B10(*(UnkTownCardPair ***)(v + 0x98));
+    func_800B6F54(v);
+    o->unk_1E |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
+
+/* Re-enters the task on an existing node: release what is there, re-seed
+   +0x04 and +0x08 from the two arguments, then run the dispatcher and the
+   rebuild. Same null guard and +0x20 actor view as func_800B6BC4.
+
+   NOTHING IN THE OVERLAY CALLS THIS FUNCTION, so its arity is consistent
+   rather than witnessed: $a1 and $a2 are both saved into callee-saved
+   registers in the prologue before any call, which makes them real incoming
+   arguments, but nothing fixes their WIDTHS. The third is declared `s32`
+   although it is stored with `sh`, on the rule that a narrow declaration is
+   invisible here and costs a `sll`/`sra` pair in every caller -- see the
+   comment on func_800B68C8. Re-check when a caller lands. */
+void func_800B6C30(UnkNode *o, u32 b, s32 c)
+{
+    u8 *v;
+
+    if (o == 0)
+    {
+        return;
+    }
+    v = (u8 *)o + 0x20;
+    func_800B6B10(*(UnkTownCardPair ***)(v + 0x98));
+    *(s16 *)(v + 8) = c;
+    *(u32 *)(v + 4) = b;
+    func_800B6508(v);
+    func_800B6E3C(v);
+}
 
 /* Writes a coordinate pair into the prim hanging off +0x0C, if there is an
    object at all. +0x0C is re-dereferenced for the second store -- the target
@@ -9492,7 +9609,68 @@ void func_800B6D94(u8 *p)
     func_80067014(0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6E3C);
+/* The task's rebuild, and the function that decides whether a rebuild is
+   needed at all: it refreshes the glyph at +0x0A and the value at +0x10, then
+   compares both against the two-halfword cache record D_80083D78[slot] and
+   returns 0 if they still agree. Otherwise it invalidates the record, tears
+   the primitives down and builds them again, and returns 1.
+
+   The `||` is the shape: the first test branches TO the rebuild and the second
+   branches past it, with -1 preloaded in BOTH branch delay slots. func_800B6F54
+   returning nonzero invalidates the record's first half BEFORE the comparison,
+   which is a separate statement from the invalidation inside the rebuild.
+
+   THE SECOND INVALIDATION NEEDS ITS OWN POINTER LOCAL, and that is the only
+   word this function argued about. The target recomputes `slot * 4 + base` for
+   the +0x02 store with the INDEX as the addu's first operand, the same way the
+   two earlier occurrences do; written as a plain subscript off the symbol,
+   `D_80083D78[slot * 2 + 1] = -1`, the base is already in a pseudo by then and
+   gcc emits `addu $v1, $a1, $v1` instead -- 70 words, 1 differing, one operand
+   order. Seven spellings of the index expression all stayed at 1 (the `+ 1`
+   inside the subscript, a cast to u8 *, pointer-plus-one, integer arithmetic
+   with the symbol cast to s32, the index in a local). What fixes it is giving
+   the second store its own pointer variable, at which point the PLUS is built
+   index-first again. A base-pointer local (`t = D_80083D78; t[slot * 2 + 1]`)
+   is also 0 differing, so which of the two the original used is not pinned --
+   only that one of them is needed.
+
+   func_8003E4FC is left implicitly declared, as it is at every other call site
+   in the project; it has no prototype anywhere. func_800B5B20's address is
+   taken here and nothing else in the unit uses it, so its `(void)` declaration
+   is a placeholder -- it will have to change when that stub (80 words) lands,
+   and the build will say so. */
+s32 func_800B6E3C(u8 *s)
+{
+    s16 *q;
+    s16 *r;
+    s32 n;
+
+    *(s16 *)(s + 0xA) = func_800B6CEC(*(u8 **)(s + 4));
+    n = func_80049984(*(u8 **)(s + 4));
+    *(u32 *)(s + 0x10) = n;
+    if (n == 3)
+    {
+        *(u32 *)(s + 0x10) = 0;
+    }
+    if (func_800B6F54(s) != 0)
+    {
+        D_80083D78[*(s16 *)(s + 8) * 2] = -1;
+    }
+    q = &D_80083D78[*(s16 *)(s + 8) * 2];
+    if (q[0] != *(s16 *)(s + 0xA) || q[1] != *(u32 *)(s + 0x10))
+    {
+        q[0] = -1;
+        r = &D_80083D78[*(s16 *)(s + 8) * 2];
+        r[1] = -1;
+        func_800B6D94(*(u8 **)(s + 0x14));
+        *(u32 *)(s + 0xDC) = 0;
+        func_800B6D54(s);
+        *(u32 *)(s + 0xD0) = func_8003E4FC(6, s + 0xD8, 0);
+        *(u32 *)(s + 0xD4) = func_8003E4FC(0xFF, func_800B5B20, s);
+        return 1;
+    }
+    return 0;
+}
 
 /* Releases the two handles at +0xD0 and +0xD4 and reports whether anything
    was released. The return value is ONE accumulator seeded 0 in the first
