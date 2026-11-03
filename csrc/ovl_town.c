@@ -1613,6 +1613,19 @@ void func_800AE2A4(UnkTownADD80 *s, void *b, void *c);
 void func_800B2C6C(UnkTown260C *s, void *b, void *c);
 void func_800B06C4();
 void func_800B1664();
+/* The result record. func_8008FAC0 is the only reference in the overlay's
+   listings, so only the two words it writes have a witness: +0x00 takes the
+   axis index 0/1/2 and +0x04 the signed penetration on that axis. The
+   function returns its ADDRESS, which is why the %lo lands in $v0 as well as
+   in the stores' displacement. */
+typedef struct UnkTownCFE60
+{
+    s32 unk_00;
+    s32 unk_04;
+} UnkTownCFE60;
+
+extern UnkTownCFE60 D_800CFE60;
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -2447,7 +2460,151 @@ void func_8008F60C(UnkTownColl *a, UnkTown2AE8 *b, UnkTownSweep *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F664);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FAC0);
+/* AABB overlap of two nodes, each carrying a position at +0x08 and a box at
+   +0x0C (minimum at +0x00/+0x04/+0x08, extent at +0x0C/+0x10/+0x14).  Returns
+   NULL when the boxes miss on any axis or when two of the three penetrations
+   are zero, and otherwise records the axis of least penetration. */
+UnkTownCFE60 *func_8008FAC0(UnkNode *a, UnkNode *b)
+{
+    UnkVec *pa = a->unk_08;
+    UnkVec *ba = (UnkVec *)a->unk_0C;
+    UnkVec *pb = b->unk_08;
+    UnkVec *bb = (UnkVec *)b->unk_0C;
+    s32 ax0;
+    s32 ay0;
+    s32 az0;
+    s32 bx0;
+    s32 by0;
+    s32 bz0;
+    s32 dx;
+    s32 dy;
+    s32 dz;
+    s32 ex;
+    s32 ey;
+    s32 ez;
+
+    ax0 = pa->unk_00 + ba->unk_00;
+    bx0 = pb->unk_00 + bb->unk_00;
+    dx = ax0 - (bx0 + bb->unk_0C);
+    /* DEVICE: the `do { } while (0)` is a reference weight, not control flow.
+       flow.c counts `reg_n_refs[regno] += loop_depth`, so wrapping this one
+       test lifts `dx` from 7 references to 8; floor_log2 steps 2 -> 3 and its
+       global-alloc priority goes 0.212 -> 0.364, which is the window
+       (0.308, 0.375) between pseudo 140 and `ba` that hands `dx` $t0 and
+       rotates {ay0,ey}/{pa,az0}/pb/ex onto $t1/$t2/$t3/$t4. Worth 32 words of
+       pure register names; without it the function is 136 words / 32
+       differing with every opcode, immediate, displacement and branch arm
+       already exact. It emits nothing and warns under nothing.
+       Legal spellings ruled out, all at 136 words: declaration order, all six
+       permutations tried -- 32 (no tie to break, the priorities are distinct);
+       `abs(ex) < abs(dx)` for `abs(dx) > abs(ex)` -- 43;
+       `dx = (abs(dx) > abs(ex)) ? ex : dx;` -- 56;
+       an `else { dx = dx; }` arm -- 32 (gcc drops the self-copy before flow);
+       `dx = bx0 + bb->unk_0C; dx = ax0 - dx;` -- 35 (the split puts the
+       intermediate in dx's own register);
+       `ex = dx + bb->unk_0C + ba->unk_0C;` -- 135 words / 129;
+       `if (dz == 0 && dx == 0)` for the middle zero test -- 138 words / 55.
+       Free-reference PAIRS reach the same place but overshoot, because a pair
+       is +4 references: `dx = dx + ax0; dx = dx - ax0;` puts dx at 0.485 and
+       in $a3 -- 19. The wrapper is the only lift measured that is +1.
+       Other wrapper placements, for the record: around `dx = ex;` -- 9;
+       around the whole x-axis reduction -- 42; around dx's definition --
+       137 words; around the `unk_04 = dx` store -- 137 words.
+       `__asm__ volatile("" ::"r"(dx));` here or before the zero tests also
+       MATCHES; the wrapper is preferred per matching-levers:717. */
+    do
+    {
+        if (dx > 0)
+        {
+            return NULL;
+        }
+    } while (0);
+    ex = ax0 + ba->unk_0C - bx0;
+    if (ex < 0)
+    {
+        return NULL;
+    }
+
+    ay0 = pa->unk_04 + ba->unk_04;
+    by0 = pb->unk_04 + bb->unk_04;
+    dy = ay0 - (by0 + bb->unk_10);
+    if (dy > 0)
+    {
+        return NULL;
+    }
+    ey = ay0 + ba->unk_10 - by0;
+    if (ey < 0)
+    {
+        return NULL;
+    }
+
+    az0 = pa->unk_08 + ba->unk_08;
+    bz0 = pb->unk_08 + bb->unk_08;
+    dz = az0 - (bz0 + bb->unk_14);
+    if (dz > 0)
+    {
+        return NULL;
+    }
+    ez = az0 + ba->unk_14 - bz0;
+    if (ez < 0)
+    {
+        return NULL;
+    }
+
+    if (abs(dx) > abs(ex))
+    {
+        dx = ex;
+    }
+    if (abs(dy) > abs(ey))
+    {
+        dy = ey;
+    }
+    if (abs(dz) > abs(ez))
+    {
+        dz = ez;
+    }
+
+    /* "at least two of the three are zero". jump.c threads the second test's
+       `dx == 0`, which is why the listing tests dx once and then shares the
+       dy/dz pair between both paths. */
+    if (dx == 0 && dy == 0)
+    {
+        return NULL;
+    }
+    if (dx == 0 && dz == 0)
+    {
+        return NULL;
+    }
+    if (dy == 0 && dz == 0)
+    {
+        return NULL;
+    }
+
+    /* The axis-2 arm is written ONCE, after the chain, not as an `else` in
+       each branch: the target reaches it by falling out of the first arm and
+       by the else-if's false edge, and reorg steals its `addiu` into the
+       delay slot at 8008FCB0. Spelled as two nested if/else pairs the two
+       copies cross-jump into the middle of the function instead and the arms
+       come out swapped -- 38 differing. */
+    if (abs(dx) < abs(dy))
+    {
+        if (abs(dy) < abs(dz) || abs(dx) < abs(dz))
+        {
+            D_800CFE60.unk_00 = 0;
+            D_800CFE60.unk_04 = dx;
+            return &D_800CFE60;
+        }
+    }
+    else if (abs(dy) < abs(dz))
+    {
+        D_800CFE60.unk_00 = 1;
+        D_800CFE60.unk_04 = dy;
+        return &D_800CFE60;
+    }
+    D_800CFE60.unk_00 = 2;
+    D_800CFE60.unk_04 = dz;
+    return &D_800CFE60;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FCE0);
 
