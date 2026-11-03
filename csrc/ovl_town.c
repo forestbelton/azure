@@ -920,6 +920,7 @@ extern u8 D_800D6330[];
 extern u8 D_800D6338[];
 extern u8 D_800D6360[];
 extern u8 D_800D6364[];
+extern s32 D_800D636C[2];
 extern u8 D_800D63BC[];
 extern u8 D_800D63C4[];
 extern u8 D_800D63EC[];
@@ -1210,10 +1211,6 @@ extern u8 D_800D43B8[];
 extern u8 D_800D4740[];
 extern u8 D_800D4748[];
 extern u8 D_800D4750[];
-extern u8 D_800D6360[];
-extern u8 D_800D6364[];
-extern u8 D_800D6330[];
-extern u8 D_800D6338[];
 extern u8 D_800D6A0C[];
 extern u8 D_800D6A10[];
 extern u8 D_800D69DC[];
@@ -1233,7 +1230,6 @@ extern u8 D_800D539C[];
 extern u8 D_800D53B0[];
 extern u8 D_800D5FE8[];
 extern u8 D_800D64C8[];
-extern u8 D_800D64DC[];
 extern u8 D_800D6504[];
 extern u8 D_800D652C[];
 extern u8 D_800D6554[];
@@ -1705,7 +1701,6 @@ void func_800CD87C();
 void func_800C283C();
 void func_800C28E8();
 extern u8 D_800D0108[];
-extern u8 D_800D0138[];
 extern u8 D_800717D0[];
 extern u8 D_800D4284[];
 extern u8 D_800D42CC[];
@@ -2090,6 +2085,8 @@ extern u8 D_800D232C[];
 extern u32 D_800D2344;
 extern u8 D_800D2348[];
 extern u32 D_800D2360;
+void func_800A7308(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C8B5C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -2215,10 +2212,6 @@ extern u8 D_800D5958[];
 extern u8 D_800D5960[];
 extern u8 D_800D5988[];
 extern u8 D_800D598C[];
-extern u8 D_800D6988[];
-extern u8 D_800D6990[];
-extern u8 D_800D69B8[];
-extern u8 D_800D69BC[];
 void func_800C7E70();
 void func_800C7EB0();
 void func_800CA094();
@@ -7943,9 +7936,63 @@ void func_800A6BEC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6C4C);
+/* The slot-handler form of func_800A7B14/func_800A7DF8 (csrc/ovl_town.c):
+   same func_8009CFE0 probe, same `clear the +0x98 byte, unlink, set the two
+   0x8000 flags` arm; only the else arm differs -- instead of
+   func_800478B8((s32)r) it forwards to the actor's own +0x50 slot when one is
+   installed.  41 of 41 words, 0 differing.
+   The +0x50 slot is reached through the UnkTownDispatch cast because
+   UnkTownSpawn stops at +0x9C with no handler fields and UnkTownActor stops at
+   +0x92 with no +0x98; the two casts are what keeps both types unchanged.
+   Measured: `((UnkTownDispatch *)p)->unk_50` written twice = 41/0 (cse folds
+   the second load); the same thing through a `void (*fn)()` local = 41/0; and
+   a `UnkTownActor *a` signature with `func_8009CFE0((UnkTownSpawn *)a, ...)`
+   and raw +0x98 casts = 41/0 as well -- the UnkTownSpawn spelling is kept
+   because the landed near-siblings func_800A7B14 and func_800A7DF8 use it.
+   Writing the else arm first (inverted test) is 42 words / 30 differing:
+   neither arm leaves the function, so source order is emission order. */
+void func_800A6C4C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q, r))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if (((UnkTownDispatch *)p)->unk_50 != NULL)
+    {
+        ((UnkTownDispatch *)p)->unk_50(p, q, r);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6CF0);
+/* func_800A6C4C above plus two differences, and they are the whole of it: a
+   func_8008F134(p) at the head of the taken arm, and the +0x50 slot called
+   with FOUR arguments `(p, p, q, r)` instead of three -- the same four-argument
+   slot call func_800A6684 makes (`a->unk_50(a, a, q, r)`), which is why
+   `addu $a1, $a0, $zero` copies the already-set $a0 rather than $s0.
+   44 of 44 words, 0 differing. */
+void func_800A6CF0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q, r))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if (((UnkTownDispatch *)p)->unk_50 != NULL)
+    {
+        ((UnkTownDispatch *)p)->unk_50(p, p, q, r);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6DA0);
 
@@ -7970,7 +8017,40 @@ void func_800A7338(UnkTownDispatch *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7360);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A73E0);
+/* The countdown-and-advance shape func_800CDADC documents
+   (csrc/ovl_town.c), with all three 16.16 words advanced by their own deltas
+   instead of only the height, and a different expiry pair: on expiry it
+   unlinks with func_80033D08 and hands the frame to the actor's OWN +0x54
+   slot, otherwise to func_800A7308.  62 of 62 words, 0 differing, first
+   compile.
+   The countdown test is `< 0` and not func_800CDADC's `<= 0`: the listing
+   branches AWAY on `bgez`, so the inline arm is the negative one (`<= 0`
+   would be `blez`).
+   The `a->unk_54` load comes out off $a0 rather than $s1 because $a0 already
+   holds `a` for the call; no cast or temporary is needed. */
+void func_800A73E0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2AE8(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if (--a->unk_90 < 0)
+        {
+            func_80033D08((u8 *)a);
+            a->unk_54(a, b, c);
+        }
+        else
+        {
+            func_800A7308(a, b, c);
+        }
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A74D8);
 
@@ -16623,7 +16703,43 @@ void func_800C8B8C(UnkTownDispatch *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8BB4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8C3C);
+/* func_800A73E0's twin: the +0x00/+0x04 deltas come from the
+   global pair at D_800D636C instead of the object's own +0x0C/+0x10, and the
+   expiry pair is func_800C8D34 (landed, two lines down) / func_800C8B5C.
+   62 of 62 words, 0 differing.
+   THE LISTING'S STORE ORDER IS NOT THE SOURCE ORDER HERE.  It stores +0x00,
+   +0x08, +0x04, but writing the statements in that order is 16 differing; the
+   natural +0x00/+0x04/+0x08 order is 0.  sched2 sinks the +0x04 store past
+   the +0x08 one because the +0x04 addend waits on the `lo_sum` of
+   D_800D636C's address (`lui`, then `addiu`, then `lw 0x4`), while the +0x08
+   addend is an ordinary `lw` off $s0.  All six permutations measured:
+   00/04/08 = 0, 04/00/08 = 12, 04/08/00 = 15, 00/08/04 = 16, 08/00/04 = 16,
+   08/04/00 = 18.
+   D_800D636C is a two-word global the unit did not declare; `[2]`, `[]` and
+   `[8]` all measure identically, as -G0 predicts. */
+void func_800C8C3C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_00 += D_800D636C[0];
+    b->unk_04 += D_800D636C[1];
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2AE8(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if (--a->unk_90 < 0)
+        {
+            func_80033D08((u8 *)a);
+            func_800C8D34((UnkTownSpawn *)a, (UnkVec *)b, (UnkTownRend *)c);
+        }
+        else
+        {
+            func_800C8B5C(a, b, c);
+        }
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 void func_800C8D34(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
