@@ -2703,6 +2703,26 @@ extern s32 D_800D1080[];
 extern u16 D_80100D40;
 extern u16 D_80100D42;
 void func_800AA10C(UnkTownAA10C *a, UnkTown2AE8 *b);
+/* The two UnkTown2AE8 sentinels func_800917EC (:5617) rings puffs with:
+   D_800FE4E0 is the latched position it builds from the mover, D_800D043C
+   the per-axis spread func_800A895C randomises inside.  Both are
+   out-of-image (splat/town.bin_undefined_syms_auto.txt:946 and :272) and
+   both are reached symbolically, `lui %hi` + `addiu %lo`, so a plain
+   complete-type extern is what produces the listing's addressing. */
+extern UnkTown2AE8 D_800D043C;
+extern UnkTown2AE8 D_800FE4E0;
+
+/* func_800917EC (:5617) is func_80094048's ONLY caller anywhere -- no other
+   csrc call site and no other `jal` under asm/nonmatchings/ovl_town/ -- and
+   it sets all three argument registers, so the handler convention is the
+   witness and func_80094048's one-parameter definition (:6696) is the
+   narrower guess.  Without this declaration the call rides the implicit one
+   and costs three warnings (`previously implicitly declared to return int`
+   and its pair); declared `()` like func_80093ED8 (:2539) they go away and
+   both functions stay at 0 differing.  Widening the DEFINITION instead does
+   not help -- the implicit declaration still precedes it (measured). */
+void func_80094048();
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -5118,7 +5138,106 @@ void func_80090A64(void) {
 void func_80090A6C(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80090A74);
+/* The D_80083160 dispatcher family's probe-less member: func_80091260's head
+   and 0x10 / 0x40 / func_8009567C spine word for word -- with the family's own
+   func_80095094 where func_80091260 and func_80091528 call func_800951B4 --
+   and a two-line tail, `g->unk_08 & 0xF000` selecting func_80093ED8 with no
+   func_80093D48 fallback.  Both the 0x10 and the 0x40 test read `g->unk_10`
+   plainly: cse keeps the one `lw $v1, 0x10($s4)` because no call sits between
+   them, exactly as in func_80091260.  func_80095840's `$a0` setup is likewise
+   missing at its call site -- the 0x10 test's `beqz` carries
+   `addu $a0, $s1, $zero` in its delay slot because both successors start with
+   that insn and jump2 cross-jumps it.
+
+   func_8009567C's result is the same THREE-way: -1 takes the func_80098868
+   teardown, any other non-zero takes func_800943B8, and 0 falls through to the
+   g->unk_08 selector, which is why the 0 case is the tail and not an `else`.
+
+   Third parameter `s32 c`, not the `void *c` func_80091260 and
+   func_80091528 carry: five of the six landed callers pass an `s32`, so
+   `void *c` costs five "makes pointer from integer" warnings against the
+   one `s32 c` costs at func_80090F84 (:5286), and the bytes are identical
+   either way (both measured 125 words / 0 differing).  The `(void *)c`
+   casts are only for the four callees whose prototypes declare `void *c`;
+   func_80093ED8 is declared `()` and needs none.
+
+   125 words -- its header reads `nonmatching func_80090A74, 0x1F4`, and
+   0x1F4/4 = 125.  Measured 0 differing, first compile, every relocated word
+   checked against this listing's own `%hi`/`%lo`/`jal` text. */
+void func_80090A74(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 r;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, c);
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        r = func_80095840(a, &D_800CFCB4);
+        if (r != 0)
+        {
+            if (r == 2)
+            {
+                func_8009451C(a, b, (void *)c);
+            }
+            else
+            {
+                func_800944BC(a, b, (void *)c);
+            }
+        }
+        else
+        {
+            if (func_80033B2C(0xA4) != 0)
+            {
+                func_80094088(a, b, (void *)c);
+            }
+        }
+        return;
+    }
+    r = func_8009567C(&D_800CFCB4);
+    if (r != 0)
+    {
+        if (r == -1)
+        {
+            func_80094C1C(a);
+            func_80098868(a, b, c);
+            *(s32 *)((u8 *)a + 0x2C) = 0;
+            func_8008B158(D_800CFCB4.unk_10);
+        }
+        else
+        {
+            func_800943B8(a, b, (void *)c);
+        }
+        return;
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_80093ED8(a, b, c);
+    }
+}
 
 /* func_80090DF0 / func_80090E78 / func_80090F00 / func_80090F84's shape
    (immediately below) with a D_80083160 flag gate in front of the two arms:
@@ -5298,7 +5417,48 @@ void func_80090F84(UnkTownTask *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091000);
+/* The family's shortest member: func_80090A74's head verbatim (func_80095C80,
+   func_80095094, the `n - b+0xA >= 4` / D_800CFCEF split) and then only the
+   0x10 and 0xF000 selectors -- no 0x40 arm, no func_8009567C probe, and
+   func_80094C1C alone in the 0xF000 tail where func_80090A74 calls
+   func_80093ED8.  Installed by func_80091114 (:5321) and func_800911D4.
+
+   69 words -- its header reads `nonmatching func_80091000, 0x114`, and
+   0x114/4 = 69.  Measured 0 differing, first compile. */
+void func_80091000(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, c);
+        return;
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_80094C1C(a);
+    }
+}
 
 /* The func_80091000 half of the same shape, installed by func_80093E58
    (:5503).  The flag gate is D_80083160's 0x20 bit, and its CLEAR arm is the
@@ -5614,7 +5774,72 @@ void func_80091528(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     func_80093D48(a, b, (s32)c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800917EC);
+/* func_80091528's head (func_800951B4 included) and countdown, with a
+   different reseed and a different tail.  Installed at +0x00 by func_80091990
+   (:5625), which is also its only caller.
+
+   The countdown is `--a->unk_0A <= 0`, not `< 0`: the target's test is
+   `sll $v0, $v0, 16` + `bgtz`, the stored halfword re-signed WITHOUT an `sra`.
+   On expiry it reseeds `func_800374F4(4) + 3`, latches the mover's position
+   into the D_800FE4E0 sentinel with the z axis pulled up 0x500000, and rings
+   puffs through func_800A895C with D_800D043C as the spread.  The `andi $v0,
+   $v0, 0xFFFF` before `addiu $a2, $v0, 2` is what the `(u16)` cast is for --
+   func_800374F4 returns u32, so without it the `+ 2` is a bare `addiu` and the
+   word is gone; the reseed's own `+ 3` takes no cast because it is stored
+   through a truncating `sh`.  The sentinel's +0x00 store folds its `%lo` into
+   the `sw` while +0x04 and +0x08 take the `addiu` base, which is the same
+   split func_800954C4..func_800954F4 (:7059) document for D_800FE5C0.
+
+   The tail's two gates are ONE load of g->unk_08: `andi 0xF000` then
+   `andi 0x20` off the same `$v1`, because the second is only reachable by the
+   first's `beqz` and no call sits between them.  Written as one `&&`.
+
+   105 words -- its header reads `nonmatching func_800917EC, 0x1A4`, and
+   0x1A4/4 = 105.  Measured 0 differing, first compile. */
+void func_800917EC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_800951B4(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, (s32)c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (--a->unk_0A <= 0)
+    {
+        a->unk_0A = func_800374F4(4) + 3;
+        D_800FE4E0.unk_00 = b->unk_00;
+        D_800FE4E0.unk_04 = b->unk_04;
+        D_800FE4E0.unk_08 = b->unk_08 - 0x500000;
+        func_800A895C(&D_800FE4E0, &D_800D043C, (u16)func_800374F4(2) + 2);
+    }
+    if ((g->unk_08 & 0xF000) && (g->unk_08 & 0x20))
+    {
+        u16 *p = (u16 *)((u8 *)a + 0x3E);
+
+        *p -= 1;
+        func_80094944((s16)*p, 8);
+        func_80094C1C(a);
+        func_8009503C(b);
+        return;
+    }
+    func_80094048(a, b, c);
+}
 
 /* The func_80094984 binder's two-statement minimum (func_80093704,
    func_80094048) put under func_800C3BF4's REND +0x14 gate, with the tail
