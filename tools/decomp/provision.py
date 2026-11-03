@@ -423,7 +423,13 @@ def main():
     missing = [f for f in targets if f not in witnessed and listing(unit, f)]
     if missing:
         print("\n  *** NO ARITY WITNESS ANYWHERE for: %s" % ', '.join(missing))
-        print("      No jal, no %hi, no C reference -- checked across the whole unit.")
+        # The old wording said "no %hi", which CONTRADICTED this tool's own
+        # INSTALLED HANDLERS section four lines earlier when a function is
+        # address-taken. The conclusion was right and the stated reason was
+        # false, which is worse than saying less.
+        print("      No jal and no C call site -- checked across the whole unit. If the")
+        print("      INSTALLED HANDLERS or route (d) sections above name this function,")
+        print("      those are ADDRESS-TAKES, which constrain nothing about arity.")
         print("      This is a FACT, not a gap in the search: go straight to register")
         print("      reads in the target's own body (an argument register READ before")
         print("      it is written is a real parameter). Note a dead MIDDLE parameter")

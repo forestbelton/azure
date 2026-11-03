@@ -107,7 +107,7 @@ LANDED-ABOVE versus LANDED-BELOW matters: an arity mismatch on a callee defined 
     print("## REQUIRED READING")
     print("`docs/town-sweep.md` -- method, traps, and the pre-send checklist, which is a list")
     print("of defects *my own briefs* have had. `docs/where-we-are.md`.\n")
-    print(HARD % dict(pre=pre, unit=unit))
+    print(HARD.replace('%(pre)s', pre).replace('%(unit)s', unit))
     print(TRAPS)
     print(BACK)
 
