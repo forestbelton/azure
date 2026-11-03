@@ -9,7 +9,9 @@ forbids. It also picks up only the first step of this project's pipeline
 fails with "file format not recognized".
 
 This writes the five files directly instead, from the park source and the
-splat listing:
+splat listing -- or, with --source, from any candidate file you already have,
+so a function that has never been parked can be permuted without inventing a
+park for it:
 
     base.c        the park source, preprocessed with -DPERMUTER
     target.o      the splat listing assembled at the unit's own gas -G
@@ -18,7 +20,14 @@ splat listing:
     function.txt  the function name
 
     python3 tools/decomp/permimport.py func_8004D880
+    python3 tools/decomp/permimport.py func_800CC644 --source scratch/cand.c
     python3 tools/decomp/permrun.py func_8004D880 --minutes 60
+
+--source takes any file that DEFINES the function and compiles: a scratch
+candidate, or the whole merged unit copy an agent measured in. Without it the
+source is docs/near-misses/FUNC.c as before. On 2026-11-02 an agent had to
+hand-write all five files because its candidate was 44 words of 46 with no
+park, which is exactly the case this flag is for.
 """
 import io
 import os
@@ -104,7 +113,27 @@ compiler_type = "gcc"
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv = sys.argv[1:]
+    source = None
+    rest = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--source":
+            if i + 1 >= len(argv):
+                print("permimport: --source needs a path")
+                return 2
+            source = argv[i + 1]
+            i += 2
+            continue
+        if a.startswith("--source="):
+            source = a.split("=", 1)[1]
+            i += 1
+            continue
+        if not a.startswith("--"):
+            rest.append(a)
+        i += 1
+    args = rest
     if not args:
         print((__doc__ or "").strip().split("\n\n")[0])
         return 2
@@ -113,10 +142,22 @@ def main():
     if not unit:
         print("permimport: no INCLUDE_ASM stub for %s in csrc/" % func)
         return 1
-    park = os.path.join(PROJ, "docs/near-misses", func + ".c")
-    if not os.path.exists(park):
-        print("permimport: no park source at %s" % os.path.relpath(park, PROJ))
-        return 1
+    if source:
+        park = source if os.path.isabs(source) else os.path.join(PROJ, source)
+        if not os.path.exists(park):
+            print("permimport: no source at %s" % source)
+            return 1
+        txt = io.open(park, encoding="utf-8", errors="replace").read()
+        if func not in txt:
+            print("permimport: %s does not mention %s" % (source, func))
+            return 1
+    else:
+        park = os.path.join(PROJ, "docs/near-misses", func + ".c")
+        if not os.path.exists(park):
+            print("permimport: no park source at %s -- pass --source FILE to "
+                  "permute a candidate that has never been parked"
+                  % os.path.relpath(park, PROJ))
+            return 1
 
     d = os.path.join(PROJ, "nonmatchings", func)
     os.makedirs(d, exist_ok=True)
@@ -151,8 +192,9 @@ def main():
     io.open(os.path.join(d, "function.txt"), "w", encoding="utf-8").write(
         func + "\n")
 
-    print("%s: unit %s, cc1psx -G%d, gas -G%d -> %s" % (
-        func, unit, cc1G, gasG, os.path.relpath(d, PROJ)))
+    print("%s: unit %s, cc1psx -G%d, gas -G%d, source %s -> %s" % (
+        func, unit, cc1G, gasG, os.path.relpath(park, PROJ),
+        os.path.relpath(d, PROJ)))
     return 0
 
 

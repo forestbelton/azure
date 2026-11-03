@@ -2038,6 +2038,13 @@ void func_8008F27C(UnkTownColl *a, UnkTown2AE8 *b, s32 c);
 void func_8008F294(UnkTownColl *a, UnkTown2AE8 *b);
 void func_8008F664(UnkTownColl *a, UnkTown2AE8 *b);
 void func_8009539C(UnkTown2AE8 *b);
+/* D_8008267C: a RESIDENT pointer (splat/town.bin_undefined_syms_auto.txt),
+   referenced in this unit only by func_800CC644/func_800CC8AC, both as
+   `lui %hi / lw %lo` -- so it is a POINTER VARIABLE in memory, not an
+   address-taken object (compare D_80083498, which is lui/addiu). Its +0x08 is
+   the same UnkTown2AE8 * UnkTownCam's is, read here for its integer halves at
+   +0x02/+0x06. Typed UnkTownCam * on that witness alone. */
+extern UnkTownCam *D_8008267C;
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -17286,7 +17293,38 @@ void func_800CC5FC(void *arg0)
     func_800C3050(arg0, 0xB, D_800D6E28, D_800D6E2C, D_800D6DF8, D_800D6E00);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC644);
+/* 46 words, 0 differing. THE TWO `addu rD, rS, $zero` COPIES ARE THE WHOLE
+   FUNCTION: `u = x << 16; x = u;` as TWO statements, with `u` read in the
+   snap arm and `x` in the interpolating arm. Writing the shift once as
+   `x = (h + 0x60) << 16` and reading `x` in both arms is 44 words / 39
+   differing; `x = u = x << 16;` chained is 44 / 34; keeping the shift in
+   each arm (`x` holding the half, `x << 16` at both uses) is 45 / 35.
+   Only the split pair keeps both pseudos alive -- see the lever
+   "A COPY SURVIVES WHEN ITS TWO ENDS ARE READ IN DIFFERENT ARMS". */
+void func_800CC644(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    UnkTown2AE8 *p = D_8008267C->unk_08;
+    s32 x = *(s16 *)((u8 *)p + 2) + 0x60;
+    s32 y = *(s16 *)((u8 *)p + 6) + 0x20;
+    s32 u;
+    s32 v;
+
+    u = x << 16;
+    x = u;
+    v = y << 16;
+    y = v;
+    if (--a->unk_6C <= 0)
+    {
+        b->unk_00 = u;
+        b->unk_04 = v;
+        func_800C4174(a, b, c);
+    }
+    else
+    {
+        b->unk_00 += (x - b->unk_00) / a->unk_6C;
+        b->unk_04 += (y - b->unk_04) / a->unk_6C;
+    }
+}
 
 void func_800CC6FC(UnkTownActor *a, s32 b, s32 c)
 {
@@ -17334,7 +17372,33 @@ void func_800CC864(void *arg0)
     func_800C3050(arg0, 0x1, D_800D6EC0, D_800D6EC4, D_800D6E90, D_800D6E98);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC8AC);
+/* 45 words, 0 differing. func_800CC644's twin: the x offset is 0 (no `addiu`
+   on the +0x02 half at all) and the y offset is 0x60 for its 0x20. Same
+   split-copy device, same measurements. */
+void func_800CC8AC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    UnkTown2AE8 *p = D_8008267C->unk_08;
+    s32 x = *(s16 *)((u8 *)p + 2);
+    s32 y = *(s16 *)((u8 *)p + 6) + 0x60;
+    s32 u;
+    s32 v;
+
+    u = x << 16;
+    x = u;
+    v = y << 16;
+    y = v;
+    if (--a->unk_6C <= 0)
+    {
+        b->unk_00 = u;
+        b->unk_04 = v;
+        func_800C4174(a, b, c);
+    }
+    else
+    {
+        b->unk_00 += (x - b->unk_00) / a->unk_6C;
+        b->unk_04 += (y - b->unk_04) / a->unk_6C;
+    }
+}
 
 void func_800CC960(UnkTownActor *a, s32 b, s32 c)
 {

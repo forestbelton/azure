@@ -452,6 +452,14 @@ standalone) after three wrong guesses about which prototype had done it.
   Measured on `func_800CD70C`/`func_800CD87C` -- writing that arm first is
   93 words against 92 with 35 differing, and 95 against 94 with 39.
 
+* **A PERMUTER NO LONGER NEEDS A PARK.** `permimport.py FUNC --source FILE`
+  takes any file that defines the function and compiles -- a scratch candidate
+  or a whole merged unit copy -- so a function that has never been parked can
+  be permuted without inventing a park for it. Added 2026-11-02 after an agent
+  hand-wrote all five scaffold files because its 44-of-46-word candidate had no
+  park and `docs/` was forbidden to it. Without `--source` the behaviour is
+  unchanged: `docs/near-misses/FUNC.c`. Output still lands in the gitignored
+  `nonmatchings/FUNC/`, and `permrun.py FUNC --minutes N` drives it.
 * **A CANDIDATE THAT IS SHORT CANNOT BE A cse-FORWARDING PROBLEM.**
   `func_800B683C` came in at 26 words against 28, 9 differing, with the target
   loading an address its own previous statement had stored to and `nop`s in
