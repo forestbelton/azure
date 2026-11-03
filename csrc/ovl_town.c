@@ -2015,6 +2015,7 @@ extern u8 D_800F8A1C[];
 extern u8 D_800F8A28[];
 void func_800B9CB8();
 void func_800BA8C4();
+void func_800B9D64();
 extern u8 D_80078CDC[];
 void func_800AFFA8(u8 *s);
 extern s16 D_8006CCD8[];
@@ -13284,9 +13285,271 @@ void func_800B9F74(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    * ONLY TWO CONSTANTS DIFFER between the two members: 0x1A against 0xA at
      w84 and 0x19 against 0x9 at w258, both stored to the third object's
      +0x08. Everything else is identical, so landing one lands both. */
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA00C);
+void func_800BA00C(UnkTownSpawn *s, UnkVec *m)
+{
+    s32 i;
+    s8 dir;
+    UnkTownSpawn *v;
+    UnkNode *o;
+    UnkTownRend *p;
+    UnkVec *x;
+    u8 *col;
+    u8 *col2;
+    u8 blue;
+    u32 n;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA468);
+    *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
+    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_97 = func_80069EF8() % 9 + 0xC;
+    dir = s->unk_66 / 0x200 % 4;
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9D64;
+            func_8004491C(o, (u32)D_80046398);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_66 = 0;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_1C = 0x1000;
+            p->unk_1E = 0x1000;
+            p->unk_20 = 0xAAA;
+            col = (u8 *)&D_80083160;
+            p->unk_0C = col[0xA8];
+            p->unk_0D = col[0xA9];
+            blue = col[0xAA];
+            p->unk_08 = i + 0x1A;
+            p->unk_0E = blue;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04;
+            if (v->unk_97 == dir)
+            {
+                x->unk_08 = -((func_800644B8((s16)(v->unk_9C->unk_66 % 0x200) * 2) >> 4) * 0x1E00);
+                v->unk_66 = 0x1E;
+            }
+            else
+            {
+                x->unk_08 = 0;
+            }
+            func_8008F104(v, x, D_800D1BCC[i]);
+        }
+    }
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9EDC;
+            func_8004491C(o, (u32)D_80045C34);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_08 = (u32)D_800F8A1C;
+            p->unk_0E = 0x80;
+            p->unk_0D = 0x80;
+            p->unk_0C = 0x80;
+            p->unk_16 = 0x370;
+            p->unk_18 = 0;
+            p->unk_1A = s->unk_66 + i * 0x400;
+            p->unk_1E = 0x1000;
+            p->unk_1C = 0x1000;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04 + 0x200000;
+            x->unk_08 = 0xFF2C0000;
+        }
+    }
+    o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9EDC;
+        func_8004491C(o, (u32)D_80045C34);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_08 = (u32)D_800F8A28;
+        p->unk_0E = 0x80;
+        p->unk_0D = 0x80;
+        p->unk_0C = 0x80;
+        p->unk_16 = 0x370;
+        p->unk_18 = 0;
+        p->unk_1A = s->unk_66;
+        p->unk_1E = 0x1000;
+        p->unk_1C = 0x1000;
+        x = o->unk_08;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04 + 0x200000;
+        x->unk_08 = 0xFF2C0000;
+    }
+    o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9F74;
+        func_8004491C(o, (u32)D_80046398);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_1C = 0x1000;
+        p->unk_1E = 0x1000;
+        p->unk_20 = 0x1000;
+        p->unk_1A = s->unk_66;
+        col2 = (u8 *)&D_80083160;
+        p->unk_0C = col2[0xA8];
+        p->unk_0D = col2[0xA9];
+        p->unk_0E = col2[0xAA];
+        x = o->unk_08;
+        p->unk_08 = 0x19;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04;
+        x->unk_08 = 0;
+    }
+}
+
+void func_800BA468(UnkTownSpawn *s, UnkVec *m)
+{
+    s32 i;
+    s8 dir;
+    UnkTownSpawn *v;
+    UnkNode *o;
+    UnkTownRend *p;
+    UnkVec *x;
+    u8 *col;
+    u8 *col2;
+    u8 blue;
+    u32 n;
+
+    *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
+    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_97 = func_80069EF8() % 9 + 0xC;
+    dir = s->unk_66 / 0x200 % 4;
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9D64;
+            func_8004491C(o, (u32)D_80046398);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_66 = 0;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_1C = 0x1000;
+            p->unk_1E = 0x1000;
+            p->unk_20 = 0xAAA;
+            col = (u8 *)&D_80083160;
+            p->unk_0C = col[0xA8];
+            p->unk_0D = col[0xA9];
+            blue = col[0xAA];
+            p->unk_08 = i + 0xA;
+            p->unk_0E = blue;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04;
+            if (v->unk_97 == dir)
+            {
+                x->unk_08 = -((func_800644B8((s16)(v->unk_9C->unk_66 % 0x200) * 2) >> 4) * 0x1E00);
+                v->unk_66 = 0x1E;
+            }
+            else
+            {
+                x->unk_08 = 0;
+            }
+            func_8008F104(v, x, D_800D1BCC[i]);
+        }
+    }
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9EDC;
+            func_8004491C(o, (u32)D_80045C34);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_08 = (u32)D_800F8A1C;
+            p->unk_0E = 0x80;
+            p->unk_0D = 0x80;
+            p->unk_0C = 0x80;
+            p->unk_16 = 0x370;
+            p->unk_18 = 0;
+            p->unk_1A = s->unk_66 + i * 0x400;
+            p->unk_1E = 0x1000;
+            p->unk_1C = 0x1000;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04 + 0x200000;
+            x->unk_08 = 0xFF2C0000;
+        }
+    }
+    o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9EDC;
+        func_8004491C(o, (u32)D_80045C34);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_08 = (u32)D_800F8A28;
+        p->unk_0E = 0x80;
+        p->unk_0D = 0x80;
+        p->unk_0C = 0x80;
+        p->unk_16 = 0x370;
+        p->unk_18 = 0;
+        p->unk_1A = s->unk_66;
+        p->unk_1E = 0x1000;
+        p->unk_1C = 0x1000;
+        x = o->unk_08;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04 + 0x200000;
+        x->unk_08 = 0xFF2C0000;
+    }
+    o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9F74;
+        func_8004491C(o, (u32)D_80046398);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_1C = 0x1000;
+        p->unk_1E = 0x1000;
+        p->unk_20 = 0x1000;
+        p->unk_1A = s->unk_66;
+        col2 = (u8 *)&D_80083160;
+        p->unk_0C = col2[0xA8];
+        p->unk_0D = col2[0xA9];
+        p->unk_0E = col2[0xAA];
+        x = o->unk_08;
+        p->unk_08 = 9;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04;
+        x->unk_08 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA8C4);
 
