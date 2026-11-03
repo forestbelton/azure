@@ -13139,9 +13139,236 @@ void func_800ABD74(UnkTown2AE8 *q)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABE60);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABEEC);
+/* 177 words, 0 differing.  The fog-of-war flood that func_800AC1B0 drives:
+   from one tile it walks TWO rays at once -- one at direction `dir + 2` and
+   one at `dir - 2`, i.e. the two 90-degree sides of the caller's ray -- for
+   up to ten steps each, setting bit 0x4000 ("seen") on every tile whose bit
+   0x8000 ("open") is set and reporting how many tiles that was.  The two
+   `s16` counters are summed and returned narrowed, which is the `sll`/`sra`
+   pair on `$v0` at the end.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC1B0);
+   D_8008333C is the map block, declared both ways (include/structs.h:2084):
+   `(s16 *)D_8008333C` reads the width/height shifts at `[10]`/`[11]`
+   (= +0x14/+0x16) and `D_8008333C[0]` is the tile array.  BOTH VIEWS COME OFF
+   ONE `lui`, and only with `sh` assigned BEFORE `map` -- this is
+   func_80043A68's rule (csrc/unk_154BC.c:1286-1295) holding in a second
+   function: the halfword base gets the `addiu` and the word read gets its
+   `%lo` riding on the `lw`.
+
+   Five spellings were measured here; all five are LENGTH or layout, not
+   cosmetics:
+
+   * `s16 blockedA` / `s16 blockedB`, NOT `s32`.  Worth TWO WORDS.  With `s32`
+     flags gcc branches on the flag register itself (`bnez $s4`) and the
+     function is 175 words; with `s16` it materialises `addu $v0, $s4, $zero`
+     at the head of the test's own block, and reorg then copies that into the
+     preceding `bnez`'s delay slot and redirects past it -- which is the
+     target's `addu $v0, $s4, $zero` / `addiu $s4, $zero, 0x1` /
+     `addu $v0, $s4, $zero` / `bnez $v0` quartet, twice over.  `u8` flags give
+     the same 177 words but 89 differing, and `!flag`, `flag < 1` and a
+     hand-written temporary (`t = blockedA; if (t == 0)`) are all 175/157 --
+     the temporary is NOT a substitute, combine folds it away.
+
+   * `s16 dirA` AS WELL AS `s16 dirB`.  This is the whole second half of the
+     match and it is a loop.c decision, not a layout one.  The loop reads four
+     table entries, `D_8006CCD8/E8[dirA]` and `D_8006CCD8/E8[dirB]`, and every
+     one of the four addresses is loop-invariant.  The target hoists exactly
+     TWO things: `dirA * 2` (spilled to 0x30($sp)) and `&D_8006CCD8[dirA]`
+     (0x34($sp)); D_8006CCE8's `%hi`/`%lo` pair and its `addu` stay INSIDE the
+     loop, and so does everything for dirB.  With `s32 dirA` loop.c hoists
+     D_8006CCE8's address too: 0x30/0x34 hold the two full addresses, the
+     preheader is three words longer and the body three shorter, 177 words and
+     87-89 differing with every word from 0x50 on displaced.  `-dL` on the
+     candidate (`tools/cdkgcc -O2 -G0 -dL`) prints the decision directly --
+     "Insn 175: regno 150 (life 5), move-insn savings 4  moved to 399" for
+     `high(D_8006CCE8)` -- and the gate is move_movables'
+     `(threshold * savings * m->lifetime) >= insn_count`
+     (scratch/gcc-src/cdk-gcc-b18/loop.c:1730) with `threshold -= 3` per move
+     (:1818, :2003).  Narrowing dirA to `s16` is what takes that movable below
+     the line.  MEASURED NEGATIVES on the same point, all 177 words: `s32`
+     dirA with the two adds in either order (87/89), the dy read spelled
+     `*(s16 *)((u8 *)D_8006CCE8 + dirA * 2)` (89), an explicit
+     `s32 offA = ((arg0 + 2) & 7) * 2` byte offset (89), `u16 dirB` (89), dx/dy
+     into locals first (86), and `dirA` initialised before `dirB` (89).  Only
+     the type changes it.  Writing `(arg0 + 2) & 7` INLINE at both uses with no
+     dirA variable at all is the one tie: 177 words / 0 differing.
+
+   * THE TILE POINTER MUST BE ITS OWN LOCAL.  `p = &map[x + (y << sh[10])];`
+     then `*p & 0x8000` / `*p |= 0x4000`.  Writing the subscript twice gives
+     `addu $v0, $v0, $t0` -- index first -- where the target has
+     `addu $v0, $t0, $v0`; the same residue appears on func_800AC1B0 and the
+     pointer local is what fixes both (measured there: 1 differing becomes 0).
+     A plain index temporary (`idx = x + (y << sh[10]); map[idx]`) does NOT
+     fix it, nor does a `u8 *` map with an explicit `* 2`, nor
+     `(arg2 << sh[10]) + arg1` -- that last one also flips the inner `addu`.
+
+   * `(u16)` ON BOTH ARGUMENTS of the func_800ABE60 call.  func_800ABE60 is
+     still an INCLUDE_ASM stub with no declaration anywhere, so the call rides
+     an implicit declaration and the default argument promotions apply: the
+     `s16` coordinates would sign-extend, while the target's words are
+     `andi $a0, $s2, 0xFFFF` / `andi $a1, $s0, 0xFFFF`.
+
+   * THE THREE CHAINED INITIALISERS, right-to-left.  `blockedA = blockedB = 0`
+     emits `addu $s5, $zero, $zero` and then `addu $s4, $s5, $zero` -- the
+     second copy reads $s5, which two separate `= 0` statements cannot give.
+     Same for `xA = xB = arg1` / `yA = yB = arg2` (B's copy first, A's second)
+     and `cntA = cntB = 0` (0x28($sp) zeroed before 0x20($sp)).
+
+   The `s16` return type is load-bearing for the CALLER: func_800AC1B0's
+   `sll`/`sra` on the result only appears because this definition precedes it
+   and declares the narrow return. */
+s16 func_800ABEEC(s32 arg0, s16 arg1, s16 arg2)
+{
+    s16 *sh;
+    u16 *map;
+    u16 *p;
+    s16 dirA;
+    s16 dirB;
+    s16 xA;
+    s16 yA;
+    s16 xB;
+    s16 yB;
+    u16 cntA;
+    u16 cntB;
+    s16 blockedA;
+    s16 blockedB;
+    s32 i;
+
+    sh = (s16 *)D_8008333C;
+    blockedA = blockedB = 0;
+    xA = xB = arg1;
+    yA = yB = arg2;
+    map = (u16 *)D_8008333C[0];
+    cntA = cntB = 0;
+    dirB = (arg0 - 2) & 7;
+    dirA = (arg0 + 2) & 7;
+
+    for (i = 0; i < 10; i++)
+    {
+        if (xA < 0 || xA >= (1 << sh[10]))
+        {
+            blockedA = 1;
+        }
+        if (yA < 0 || yA >= (1 << sh[11]))
+        {
+            blockedA = 1;
+        }
+        if (blockedA == 0)
+        {
+            p = &map[xA + (yA << sh[10])];
+            if (*p & 0x8000)
+            {
+                *p |= 0x4000;
+                func_800ABE60((u16)xA, (u16)yA);
+                cntA++;
+                xA += D_8006CCD8[dirA];
+                yA += D_8006CCE8[dirA];
+            }
+            else
+            {
+                blockedA = 1;
+            }
+        }
+        if (xB < 0 || xB >= (1 << sh[10]))
+        {
+            blockedB = 1;
+        }
+        if (yB < 0 || yB >= (1 << sh[11]))
+        {
+            blockedB = 1;
+        }
+        if (blockedB == 0)
+        {
+            p = &map[xB + (yB << sh[10])];
+            if (*p & 0x8000)
+            {
+                *p |= 0x4000;
+                func_800ABE60((u16)xB, (u16)yB);
+                cntB++;
+                xB += D_8006CCD8[dirB];
+                yB += D_8006CCE8[dirB];
+            }
+            else
+            {
+                blockedB = 1;
+            }
+        }
+    }
+    return cntA + cntB;
+}
+
+/* 115 words, 0 differing.  The ray half of the same reveal: walk up to ten
+   tiles from (arg1, arg2) along direction arg0, and at every OPEN tile call
+   func_800ABEEC to splay the two side rays.  Stop early when a side splay
+   reported 2 or more tiles, or as soon as the ray leaves the map.  Arity and
+   both coordinate expressions come from the ASM caller func_800AC3EC, which
+   passes `pos.x >> 6`, `pos.y >> 6` and a direction built from +0xB0.
+
+   Three spellings, all measured against the same body:
+
+   * `p = &map[arg1 + (arg2 << sh[10])];` with the test on `*p`.  Writing the
+     subscript inline is 115 words / 1 differing, and that one word is
+     `addu $v0, $v0, $t0` against the target's `addu $v0, $t0, $v0`: the map
+     pointer has to be the LEFT operand of the final `addu`.  An index
+     temporary (`idx = arg1 + (arg2 << sh[10])`) is still 1 differing, a `u8 *`
+     map with an explicit `* 2` is 1, inlining `D_8008333C[0]` at the use is
+     114/110, and `(arg2 << sh[10]) + arg1` is 7 -- it also flips the inner
+     `addu $v0, $a1, $v0` to index-first.  Only the POINTER local fixes it.
+     (`*(u16 *)(map + (...) * 2)` off a `u8 *` map is a tie at 1 differing, so
+     the lever is the temporary, not the cast.)
+
+   * `i = 10;` AND `count = 0;` BEFORE the bounds guard, with the walk as a
+     `do { } while (--i > 0)`.  As `for (i = 10; i > 0; i--)` after the guard
+     the counter's `addiu $s1, $zero, 0xA` sinks past the early return, $s0
+     and $s1 swap roles for the whole function and the prologue's
+     `sw`/initialise pairs reorder: 115 words / 40 differing.
+
+   * The result test is `>= 2` on the raw call, which is where the `sll`/`sra`
+     pair after the `jal` comes from -- func_800ABEEC is defined ABOVE this
+     function and returns `s16`, so the caller narrows.  Compiled against
+     func_800ABEEC still an INCLUDE_ASM stub (implicit `int` return) the same
+     source is 113 words: those two words are the proof that the callee's
+     narrow return type is visible here. */
+s16 func_800AC1B0(s16 arg0, s16 arg1, s16 arg2)
+{
+    s16 *sh;
+    u16 *map;
+    s32 count;
+    s32 i;
+    u16 *p;
+
+    i = 10;
+    count = 0;
+    sh = (s16 *)D_8008333C;
+    map = (u16 *)D_8008333C[0];
+    if (arg1 < 0 || arg1 >= (1 << sh[10]) || arg2 < 0 || arg2 >= (1 << sh[11]))
+    {
+        return 0;
+    }
+    do
+    {
+        p = &map[arg1 + (arg2 << sh[10])];
+        if (*p & 0x8000)
+        {
+            count++;
+            if (func_800ABEEC(arg0, arg1, arg2) >= 2)
+            {
+                break;
+            }
+        }
+        arg1 += D_8006CCD8[arg0];
+        if (arg1 < 0 || arg1 >= (1 << sh[10]))
+        {
+            break;
+        }
+        arg2 += D_8006CCE8[arg0];
+        if (arg2 < 0 || arg2 >= (1 << sh[11]))
+        {
+            break;
+        }
+    } while (--i > 0);
+    return count;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC37C);
 

@@ -348,6 +348,33 @@ def main():
     print("      listing (a field expression, a constant, a global) rather than a callee")
     print("      name. e.g. grep -n 'D_800814A0 |= 0x8000' csrc/%s.c" % unit)
 
+    print("\n=== ROUTE (h): YOUR RAREST GLOBALS, ACROSS THE WHOLE csrc/ TREE ===")
+    print("    A global that is ABSENT from this unit is the strongest signal that")
+    print("    the template lives in ANOTHER unit -- and neither the C-file-neighbour")
+    print("    route nor an idiom grep can reach it, because both are unit-scoped.")
+    print("    One agent's decisive template (a dual-view rule plus a declaration-order")
+    print("    requirement) was in csrc/unk_154BC.c and was found exactly this way.")
+    anyh = False
+    for f in targets:
+        for g in sorted(globs.get(f, ())):
+            here = len(re.findall(r'\b' + g + r'\b', txt))
+            hits = []
+            for d2, _, fs in os.walk(os.path.join(PROJ, 'csrc')):
+                for fn in fs:
+                    if not fn.endswith('.c') or fn == unit + '.c': continue
+                    fp = os.path.join(d2, fn)
+                    try: o = io.open(fp, encoding='utf-8', errors='replace').read()
+                    except Exception: continue
+                    n = len(re.findall(r'\b' + g + r'\b', o))
+                    if n: hits.append((n, os.path.relpath(fp, PROJ)))
+            if hits and here <= 2:
+                anyh = True
+                print("  %-15s %s: %d use(s) HERE, elsewhere -> %s"
+                      % (f, g, here, ', '.join('%s (%d)' % (p2, n) for n, p2 in sorted(hits, reverse=True)[:3])))
+                print("      grep -rn %s include/ csrc/" % g)
+    if not anyh:
+        print("  none of your globals is rare here AND present elsewhere")
+
     print("\n=== ROUTE (f): LANDED CALL SITES OF YOUR CALLEES, WITH THEIR ARGUMENTS ===")
     print("    Line-level identity, which the rarity score cannot see: a landed")
     print("    function that passes the SAME CONSTANTS to the same callee is a")
