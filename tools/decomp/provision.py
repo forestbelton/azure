@@ -526,6 +526,44 @@ def main():
             print("      csrc/%s.c:%-6d %s(%s)" % (unit, lines[d], c, a[:66]))
     if not anyf: print("  no landed call site of any of your callees passes a constant")
 
+    print("\n=== ROUTE (l): LANDED SIBLINGS DRIVEN BY THE SAME CALLER ===")
+    print("    A function that drives your target AND a landed function from the SAME")
+    print("    BODY is very often driving two cut-downs of one recipe. No other route")
+    print("    scores that edge. It was decisive for func_800A2AF8, whose template")
+    print("    func_800AA10C route (a) buried in a '50 MORE below the cut, NOT shown'")
+    print("    bucket -- and route (k) would have missed it too, because the two call")
+    print("    different projection helpers so neither callee set contains the other.")
+    anyl = False
+    for f in targets:
+        seen = []
+        for d in sorted(callers.get(f, ())):
+            if d in landed:
+                dc = set(body.get(d, ()))
+                where = 'LANDED caller csrc/%s.c:%d' % (unit, lines.get(d, 0))
+            else:
+                dt = listing(unit, d)
+                if dt is None:
+                    continue
+                dc = set(re.findall(r'jal\s+(\w+)', dt))
+                where = 'STUB caller, read %s/%s.s' % (
+                    D(unit).replace(PROJ + '/', ''), d)
+            sibs = sorted(c for c in dc
+                          if c != f and c not in targets and c in landed)
+            if sibs:
+                seen.append((d, where, sibs))
+        for d, where, sibs in seen[:3]:
+            print("  %-15s driven by %s alongside:" % (f, d))
+            print("                  %s" % where)
+            for c in sibs[:4]:
+                print("                  LANDED SIBLING %-15s csrc/%s.c:%d"
+                      % (c, unit, lines.get(c, 0)))
+            if len(sibs) > 4:
+                print("                  ... and %d more: %s"
+                      % (len(sibs) - 4, ', '.join(sibs[4:])))
+            anyl = True
+    if not anyl:
+        print("  no caller of any target also calls a landed function")
+
     print("\n=== ROUTE (k): CALLEE-SET CONTAINMENT, WHICH RARITY CANNOT SEE ===")
     print("    Route (a) weights each shared callee by 1/freq, so a family whose callees")
     print("    are all COMMON weights to ~0 and the metric reports nothing. That has now")
