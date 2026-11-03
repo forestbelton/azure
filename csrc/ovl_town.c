@@ -506,6 +506,20 @@ typedef struct UnkTownA1080SP
     VECTOR unk_44;
 } UnkTownA1080SP;
 
+/* The plane/normal triple func_8008CF48 writes through its out-parameter.
+   Witnessed by func_8008C3B8's lh 0/2 and func_8008C758's lh 0/2/4, and the
+   only thing known about the shape is that +0x04 is a DIVISOR: func_8008C758
+   computes (unk_00 * dx + unk_02 * dy) / unk_04, i.e. a dot-product numerator
+   over it. The out-parameter really is T ** and not an inline struct --
+   func_8008CF48 forwards it untouched as $a3 to func_8008D0B8, where one
+   `sw $v0, 0x0($s6)` is the only write. */
+typedef struct UnkTownPlane
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+} UnkTownPlane;
+
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
    csrc/unk_1C540.c:1080, so it is not a device.
@@ -1554,6 +1568,8 @@ MATRIX *func_80064B90(MATRIX *m, VECTOR *v);
 MATRIX *func_80064BC0(MATRIX *m, VECTOR *v);
 MATRIX *func_80065820(SVECTOR *r, MATRIX *m);
 void func_800A1354(UnkTownA1080 *s);
+s32 func_8008C3B8(UnkTownVec16 *q, s32 i, UnkTownPlane *pl);
+s32 func_8008CF48(UnkVec *v, UnkTownPlane **out);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -2060,7 +2076,57 @@ s32 func_8008C6B8(UnkTownVec16 *p, UnkTownVec16 *q, s32 i)
     return (s16)(r - e->unk_04 / 0x10000);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C758);
+s32 func_8008C758(UnkTownVec16 *p, UnkTownVec16 *q, s32 n, UnkTownPlane **out, s16 best, UnkTownPlane *cur)
+{
+    UnkVec buf;
+    UnkTownPlane *hit;
+    s32 i;
+    s32 x;
+    s32 y;
+    s32 m;
+    s32 d;
+    s32 r;
+
+    *out = cur;
+    for (i = 0; i < n; i++)
+    {
+        if (func_8008C3B8(q, i, cur) < 0)
+        {
+            continue;
+        }
+        buf.unk_00 = p->unk_00 + q[i].unk_00;
+        buf.unk_04 = p->unk_04 + q[i].unk_04;
+        x = q[i].unk_00;
+        y = abs(q[i].unk_04);
+        m = abs(x);
+        if (m < y)
+        {
+            m = y;
+        }
+        buf.unk_08 = p->unk_08 - (m << 1);
+        func_8008CF48(&buf, &hit);
+        if (func_8008C3B8(q, i, hit) < 0)
+        {
+            d = (hit->unk_00 * ((-q[i].unk_00) / 0x10000) + hit->unk_02 * ((-q[i].unk_04) / 0x10000)) / hit->unk_04;
+        }
+        else
+        {
+            d = 0;
+        }
+        buf.unk_08 = p->unk_08 + q[i].unk_08 + (d << 16);
+        r = func_8008CF48(&buf, &hit);
+        if ((s16)r != 0x7FFF)
+        {
+            r = r - (q[i].unk_08 / 0x10000 + d);
+        }
+        if ((s16)r < best)
+        {
+            best = r;
+            *out = hit;
+        }
+    }
+    return best;
+}
 
 s32 func_8008C984(UnkTown2AE8 *v, s32 b, s32 n)
 {
