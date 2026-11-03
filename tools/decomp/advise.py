@@ -639,9 +639,12 @@ def main():
 # live range, quantity A needs to overtake quantity B. That turns "try
 # something" into "this needs +1 ref", which is a directed edit.
 #
-# Both formulas were read out of gcc 2.7.2 (scratch/gcc-src), not guessed:
+# Both formulas were read out of the compiler's source, not guessed:
 #   global.c   allocno_compare: floor_log2(refs) * refs / live_length
 #   local-alloc.c qty_compare_1: floor_log2(refs) * refs * size / live_length
+# Re-verified 2026-11-02 against scratch/gcc-src/cdk-gcc-b18, the SN tree the
+# build actually compiles: identical arithmetic, though local-alloc's is spelled
+# as the QTY_CMP_PRI macro there rather than inline in qty_compare_1.
 # The caveats live with the printout, because a margin is only meaningful when
 # the two quantities are decided by the formula at all.
 

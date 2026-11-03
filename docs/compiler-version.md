@@ -188,7 +188,8 @@ the shift instead of the `li`.
 **Local vs global allocnos (`local-alloc.c`, `global.c`).** A variable declared
 *inside a block* is a block-local quantity, and local-alloc assigns it before
 `global-alloc` runs at all. **How it orders them was read out of
-local-alloc.c on 2026-10-26** (the tree is at scratch/gcc-src), and the short
+local-alloc.c on 2026-10-26** (the tree is at scratch/gcc-src; see the note on
+WHICH tree below), and the short
 version in this document used to be wrong in a way that cost a wrong write-up,
 so here it is exactly.
 
@@ -273,47 +274,88 @@ files land in the CURRENT DIRECTORY, named after the input:
 the wine prefix's `drive_c/users/*/AppData/Local/Temp/PQ*.<suffix>`, which is
 why `dump.sh` used to be so much more complicated than it is.)
 
-**There are sixteen dumps, and three of them do not exist in upstream 2.7.2.**
-Measured from a cleared temp directory, cc1psx emits `rtl jump cse loop cse2
-flow combine regmove lreg greg sched sched2 bp dbr shorten`, all headed with the
-compiled function's name. Upstream 2.7.2's `toplev.c` knows only `.rtl .jump
-.cse .loop .cse2 .flow .combine .lreg .greg .sched .sched2 .dbr .stack`, and
-there is **no `regmove.c` in the upstream 2.7.2 tarball at all** -- that pass
-arrived later. So `regmove` and `bp` are passes the Cygnus/SN build carries and
-upstream does not, and `.stack` is one upstream has that cc1psx does not emit.
+**THE COMPILER'S OWN SOURCE IS READABLE, 2026-11-02.** It is the tarball
+`vendor/old-gcc`'s Dockerfile builds from, unpacked and patched the same way at
 
-Two consequences. First, **upstream 2.7.2 source is a good reference for the
-passes it has and no reference at all for `regmove`** -- treat a conclusion that
-depends on the pass list as resting on an assumption, in the sense
-`docs/where-we-are.md`'s context audit means. Second, `regmove` rewrites
-register copies and in later gcc adjusts `REG_N_REFS` and `REG_LIVE_LENGTH`,
-which are exactly the inputs to `global.c`'s priority formula that several
-near-miss bounds are computed from -- so it looked worth diffing `.combine`
-against `.regmove` before trusting such a bound.
+    scratch/gcc-src/cdk-gcc-b18/
 
-**Measured, and it is a no-op.** On func_8003F368, func_80041E70, func_8004437C,
-func_800407C0 and func_80047054 the two dumps are byte-identical apart from the
-combiner's own statistics header and footer: same insn count, same RTL, same
-registers. So regmove explains none of the register permutations, and no bound
-computed from `REG_N_REFS` / `REG_LIVE_LENGTH` is disturbed by it. Only the two
-functions an agent was holding at the time are untested.
+and its `version.c` reads `cygnus-2.7.2-970404 SN32.3.7.0004`. Read that tree.
+`scratch/gcc-src/gcc-2.7.2.3` is upstream FSF and is what everything cited
+before this date was read against.
 
-The likely reason, offered as inference rather than fact since there is no
-source for this pass: regmove of that era exists to coalesce for **two-address**
-targets, making an insn's destination share a register with one of its inputs.
-MIPS is three-address, so it has nothing to do. Consistent with a no-op on every
-function tested, but not verified.
+**That closes the three-dump gap.** cc1psx emits sixteen dumps -- `rtl jump cse
+loop cse2 flow combine regmove lreg greg sched sched2 bp dbr shorten jump2` --
+where upstream's `toplev.c` knows only thirteen and has no `regmove.c` at all.
+All three now have source:
 
-**So do not decompile cc1psx to recover regmove.** The idea is sound in
-principle -- cc1psx is a GCC derivative, its source is GPL, and there is no
-upstream 2.7.2 source for this pass -- but the pass demonstrably does nothing
-here, and the binary is largely stripped (only `except.c` and `expr.c` survive as
-assert strings, and "regmove" appears only as the dump suffix), so it would be
-expensive as well as unrewarding. If some future function ever shows a live
-`.combine` -> `.regmove` difference, the cheap route is still not the binary:
-read `regmove.c` from gcc 2.8.0 or egcs-1.0.x, the trunk era this 1997-04-04
-Cygnus snapshot would have backported it from, and only then consider
-disassembly.
+| dump | source, present only in the SN tree | lines |
+|------|-------------------------------------|-------|
+| `.regmove` | `regmove.c` | 983 |
+| `.shorten` | `shorten-life.c` | 352 |
+| `.bp` | `profile.c` | 1634 |
+
+So **the "resting on an assumption" caveat is lifted**: a conclusion that
+depends on the pass list can now be checked rather than assumed.
+
+**And it confirms the regmove no-op.** The measurement stands -- on
+func_8003F368, func_80041E70, func_8004437C, func_800407C0 and func_80047054
+the `.combine` and `.regmove` dumps are byte-identical apart from the
+combiner's statistics header, so regmove explains no register permutation and
+no bound computed from `REG_N_REFS` / `REG_LIVE_LENGTH` is disturbed by it.
+What used to be inference is now the module's own first comment:
+
+    /* This module looks for cases where matching constraints would force
+       an instruction to need a reload, and this reload would be a register
+       to register move.  It then attempts to change the registers used by the
+       instruction to avoid the move instruction.  */
+
+and the body is driven entirely by `insn_operand_constraint` digits and the
+`commutative` operand index. MIPS is three-address and its constraints have no
+matching digits, so the scan finds nothing to do. The old note here said "do
+not decompile cc1psx to recover regmove" -- that is moot, but the conclusion it
+was protecting is now verified rather than merely consistent.
+
+## The citation audit, 2026-11-02
+
+Every `file.c:NNN` citation in `docs/` and `csrc/` was checked against both
+trees by matching the cited line's content: **293 citations, 278 of which point
+at code that exists verbatim in the SN tree.** No conclusion recorded in this
+project was derived from code the real compiler does not have. Two of the
+remaining fifteen are real differences and the rest are formatting or anchoring
+artifacts (the priority formula, for instance, is identical arithmetic spelled
+as the `QTY_CMP_PRI` macro).
+
+**The two real ones:**
+
+* **`prune_preferences` tests the conflict BOTH WAYS.** Upstream has
+  `if (CONFLICTP (allocno, allocno_order[j]))`; the SN tree has
+  `if (CONFLICTP (allocno, allocno_order[j]) || CONFLICTP (allocno_order[j], allocno))`.
+  `CONFLICTP` is a triangular lookup, so upstream's single test misses
+  conflicts depending on allocno order. The documented size escape is
+  unchanged and still reads as written -- but MORE rivals reach it in the real
+  compiler, so the pruning is stronger, not weaker, than the write-up assumed.
+* **`REG_USERVAR_P` is set from a different place.** Upstream sets it inline in
+  `stmt.c` and `function.c`; the SN tree has neither, having extracted
+  `mark_user_reg` into `emit-rtl.c`, called from `stmt.c` and `function.c`.
+  The claim -- a declared variable's or parameter's pseudo carries the flag --
+  holds, and holds more cleanly, since `mark_user_reg` handles the CONCAT case
+  that upstream open-coded for `COMPLEX_TYPE`. The three citations behind the
+  "complete list of what it switches on" are all stale, and that list is the
+  one thing here worth re-deriving against the SN tree before it is leaned on
+  again.
+
+**The line numbers in existing citations are stale, and were left alone
+deliberately.** A mechanical rewrite was tried and reverted: the citation
+surface is not just `file.c:NNN` but also ranges (`cse.c:7476-7498`) and bare
+continuations that inherit the file from the surrounding prose (`:1858-1870`),
+and rewriting only the first form leaves a document mixing two trees'
+numbering, which is worse than one tree's consistently-stale numbering. Find
+cited code by its content. Drift is roughly +100 lines in `loop.c`, +50 in
+`sched.c`, +500 in `toplev.c`, and zero in places.
+
+If some future function ever shows a live `.combine` -> `.regmove` difference,
+read `scratch/gcc-src/cdk-gcc-b18/regmove.c`. It is the pass this compiler
+actually runs, so there is nothing to infer and nothing to disassemble.
 
 A trap this cost once: a dump collector that deletes a LIST of suffixes before
 compiling left the unlisted three behind, and the next run collected a previous

@@ -10885,10 +10885,29 @@ survives; loop.c hoists only the `high` (scan_loop's `n_times_set == 1` arm,
 loop.c:705) out through both loops, which is the target's `lui $t1` at word
 6; and the `addiu $a1,$t1,%lo(D)` is output_block_move's OWN output into
 the fourth scratch -- no insn for it exists in the `sched2` or `dbr` dumps.
-The arm of output_block_move that does this is NOT in the upstream 2.7.2.3
-tree: there the only pointer-temp arm is `CONSTANT_P (src_reg)`
-(mips.c:2497-2510), which a LO_SUM is not. WHY that arm exists in cc1psx is
-not established; the measured fact is the `addiu` into scratch 4.
+**ESTABLISHED 2026-11-02 from the real compiler's source.** This was recorded
+as "WHY is not established", because the arm does not exist in the upstream
+2.7.2.3 tree -- there the only pointer-temp arm is `CONSTANT_P (src_reg)`,
+which a LO_SUM is not. The SN tree has it explicitly, in
+`output_block_move`, and it says why:
+
+    /* ??? We really shouldn't get any LO_SUM addresses here, because they
+       are not offsettable, however, offsettable_address_p says they are
+       offsettable.  I think this is a bug in offsettable_address_p.
+       For expediency, we fix this by just loading the address into a
+       register if we happen to get one.  */
+
+    if (GET_CODE (src_reg) == LO_SUM)
+      {
+        src_reg = operands[ 3 + num_regs-- ];
+        ...
+              output_asm_insn ("addiu\t%0,%1,%%lo(%2)", xoperands);
+
+So the `addiu` is a deliberate workaround for a bug they believed was in
+`offsettable_address_p`, and -- the part that matters here -- `num_regs--`
+means it CONSUMES one of the block move's scratches. That is the register
+pressure this whole landing turns on, and it was invisible while the only
+readable source was upstream's.
 
 THE ALLOCATION IT BUYS, which no legal spelling of the stores could.
 local-alloc allocates the four SCRATCHes (block_alloc,

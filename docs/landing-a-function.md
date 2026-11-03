@@ -273,10 +273,19 @@ it was a dead end, and the 11-DIFF body was the one with a future. Score tells
 you how far apart two instruction streams are, not whether you are on the
 right road.
 
-The gcc 2.7.2 source this compiler descends from is unpacked at
-`scratch/gcc-src`. Cite `file:line` for anything you conclude from it --
-`loop.c`, `jump.c`, `sched.c`, `local-alloc.c`, `reorg.c` and `cse.c` are the
-ones that have mattered.
+**The compiler's own source is at `scratch/gcc-src/cdk-gcc-b18`** -- the SN
+tree the build compiles, patched as `vendor/old-gcc` patches it. Read that one.
+Cite `file:line` for anything you conclude from it -- `loop.c`, `jump.c`,
+`sched.c`, `local-alloc.c`, `reorg.c` and `cse.c` are the ones that have
+mattered.
+
+`scratch/gcc-src/gcc-2.7.2.3` is upstream FSF 2.7.2.3, which is what every
+citation written before 2026-11-02 was read against. The two trees agree on
+almost everything that has been cited, but **the line numbers drift** -- by
+~100 lines in `loop.c`, ~50 in `sched.c`, none at all in parts of `global.c`.
+An existing `file.c:NNN` citation is therefore a citation into the OLD tree;
+find the code by its content, not by jumping to the line. See the audit in
+`docs/compiler-version.md`.
 
 ## 5. If it does not match
 
