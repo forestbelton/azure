@@ -1807,8 +1807,9 @@ one between, the pair is maspsx's, so the object must be small: a SIZED alias
 of 8 bytes or fewer (`extern u8 D_80080B48s[8] __asm__("D_80080B48")`) puts the
 address back into the one-insn `la` form that nothing can split. That is
 func_8004B634's 2 DIFF -- an `addiu $a0, 6` scheduled into the middle of the
-pair. The symbol only becomes $gp-relative if it is also in the unit's
-`sdata_entries`, so a sized alias on its own is safe.
+pair. The symbol only becomes $gp-relative if the unit also DEFINES it (a
+tentative definition, or the one surviving `.size` record), so a sized alias
+on its own is safe.
 
 **THAT LAST SENTENCE ONLY HOLDS OUT OF $gp RANGE, measured 2026-10-30 on
 func_8004437C.** `extern u32 *D_80080AF4s[2] __asm__("D_80080AF4")` -- 8 bytes,
@@ -5135,9 +5136,21 @@ spelling measured 2 words worse.
 Worth knowing what this is standing in for: ASPSX did not use a size threshold
 at all. It emitted `$gp`-relative only for symbols **defined in the same
 translation unit**, which is why the original build's imports are all absolute.
-The faithful reproduction is therefore the `.sdata` definition route, not a
-`-G` value -- and that is blocked on linker placement splat cannot express, so
-the override is the pragmatic stand-in.
+The faithful reproduction is therefore a definition in the unit, not a `-G`
+value.
+
+**CORRECTED 2026-11-02: that definition is available, and free.** This passage
+said the definition route was blocked on linker placement splat cannot
+express. That is true of an explicit `.sdata` block and false of a C
+tentative definition: these objects are already defined in
+`asm/data/gp_data.data.s`, and a tentative definition is a COMMON symbol,
+which merges with that definition and is allocated nothing. So
+`u32 D_80081508;` at file scope in the unit does it, with no placement and no
+`-G` override. Measured on `gprel_148FC` and on all twelve units that used to
+carry `.size` records. See the correction at the top of
+`docs/addressing-and-translation-units.md`; the `-G` and `.extern` overrides
+below remain accurate about gas's behaviour, but they are stand-ins for a
+definition that can now simply be written.
 
 **An out-of-image global is NOT always a constant address, and the second
 instruction tells you which.** This project's rule of thumb -- that a global
@@ -5242,8 +5255,8 @@ whose VALUE was also used (written out byte-wise, passed, shifted) before the
 call:
 
 ```c
-extern u32 D_80081548;                  /* scalars, + .size for maspsx */
-extern u32 D_8008154C;
+extern u32 D_80081548;                  /* scalars; the unit DEFINES both, */
+extern u32 D_8008154C;                  /* which is what makes %gp_rel fire  */
 q = &D_8008154C;  p[0] = (u32) q; ... ; f();
 q[-1] = 0x2300030C;                     /* sw $v0, -4($s2)              */
 q[0]  = 0x2300040C;                     /* sw $v0, %gp_rel(D_8008154C)  */
@@ -8369,18 +8382,23 @@ closed idea.**
   (`in_sdata = False; continue`), so it concludes there is no `$at` expansion
   and no real nop -- while gas, left at a nonzero `-G`, turns the small extern
   into a one-insn `%gp_rel` access anyway. gcc's own output has the `#nop` in
-  the right place; maspsx is what loses it. The in-source workaround, which is
-  the `.sdata` recipe minus the definition:
+  the right place; maspsx is what loses it. The in-source workaround is to
+  DEFINE the object at file scope in the unit, which is what the original file
+  did anyway:
 
-      __asm__(".sdata\n\t.size D_80080ADC,4\n\t.text");   /* file scope */
+      u32 D_80080ADC;                                    /* file scope */
 
-  That puts the symbol in maspsx's `sdata_entries`, so maspsx does the
-  `%gp_rel` rewrite itself *and* emits the nop, while defining nothing --
-  `readelf -sS` shows `.sdata` at 0 bytes and the symbol still `UND` with size
-  4. Unlike annotate.py's gp-relative lever there is no `.globl`, no `.type`,
-  no label and no `.word`, so there is no linker placement to arrange and
-  nothing to collide with the linker script's own assignment. Worth one word in
-  func_8003E4FC (131 against 132, with 59 differing). The principled fix is in
+  cc1psx emits a `.comm` for it, which `_uses_gp` does read, so maspsx does the
+  `%gp_rel` rewrite itself *and* emits the nop. It costs nothing: D_80080ADC is
+  already defined in `asm/data/gp_data.data.s` and placed by the linker script,
+  and a tentative definition is a COMMON symbol, which merges with that
+  definition rather than claiming storage of its own -- so there is no
+  placement to arrange and nothing to collide with the linker script's own
+  assignment. Worth one word in func_8003E4FC (131 against 132, with 59
+  differing). (Until 2026-11-02 this was written as a bare
+  `__asm__(".sdata\n\t.size D_80080ADC,4\n\t.text")` record, on the belief
+  that a definition had to be placed; see the correction at the top of
+  `docs/addressing-and-translation-units.md`.) The principled fix is in
   `vendor/maspsx`: record `.extern SYM,size` and let `_uses_gp` consider those
   symbols when gas is left at a nonzero `-G`, gated on `--dont-force-G0` so the
   `-G0` bulk of the game is unaffected.

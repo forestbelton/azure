@@ -1,5 +1,67 @@
 # Global addressing, and what it reveals about the original files
 
+## CORRECTED 2026-11-02: the answer is a C definition, and it is free
+
+Most of what follows was written while the only known way to get a
+`%gp_rel` access for an undefined symbol was to forge maspsx's bookkeeping by
+hand, with a bare file-scope record:
+
+    __asm__(".sdata\n\t.size D_800814D4,1\n\t.text");   /* no longer needed */
+
+**The honest spelling works, costs nothing, and is what the original source
+had**: a tentative definition at file scope in the unit that reaches the
+object.
+
+    u8 D_800814D4;
+
+cc1psx emits `.comm` for it, which lands in maspsx's `sbss_entries`, and
+`_uses_gp` rewrites this unit's loads and stores of the symbol exactly as the
+`.size` record did, while leaving an address materialisation absolute.
+
+**Nothing is allocated and nothing has to be placed.** This document argued at
+length (see "Proved: one unit CAN mix both modes" and the window sections) that
+a definition would force the window to be carved out of the closing blob and
+placed from the linker script, because "a tentative definition becomes `.comm`
+and lands in `.sbss`, which is NOBITS". That is true only of a symbol nothing
+else defines. **Every one of these objects is already defined** -- each is its
+own `dlabel` in `asm/data/gp_data.data.s`, `GLOBAL`, placed by the linker
+script from the `[0x5426c, data, gp_data]` subsegment -- and a C tentative
+definition is a **COMMON** symbol, which merges with that definition and is
+allocated nothing. `readelf` shows the common merged away and no `.sdata`
+section at all. So there is no carving, no linker placement, no splat change,
+and the window work in the sections below is **not needed**.
+
+Measured 2026-11-02: all 52 live records converted, `.text` byte-identical in
+all twelve units, and all four containers byte-identical.
+
+**One exception, and it is the only `.size` record left in the project.** An
+ADDEND access -- `sw $3,D_80081568+4` in `func_80052CE0` -- is refused by
+`_uses_gp`:
+
+    gp_allowed = self.gp_allow_offset or symbol not in self.comm_symbols
+
+`gp_allow_offset` is `False` for ASPSX 2.56, and a tentative definition is a
+`.comm`, hence in `comm_symbols`, so that store falls back to `lui $at` and
+costs a word. The `.size`-inside-`.sdata` record populates `sdata_entries`
+and *not* `comm_symbols`, so it keeps the addend access `$gp`-relative. Scan
+the compiler output for `SYM+N` before converting: the only two such accesses
+in the tree are that one, in `csrc/unk_264E0.c`, and `D_800814D0+1` in
+`csrc/unk_11B9C.c`, whose unit defines nothing and is already absolute.
+
+**The `-G8`/`-G2` carve-outs are the same forgery and come out the same way.**
+At `-G8` gas makes any small *undefined* symbol `$gp`-relative, which is
+behaviour real ASPSX did not have; the carve-out exploits that divergence where
+the honest statement is "this unit defined the object". Measured on
+`gprel_148FC`: built at the project default `-G0` with `s32 *D_800814E0;` it is
+byte-identical to its `-G8` build, and the image is byte-identical. Eleven
+units still carry `MASPSXFLAGS_G8`/`_G2`; converting each needs its own
+`$gp` symbols identified, and none of it has been done yet.
+
+Read the rest of this document for the evidence about original file
+membership, which all still holds -- the addressing mode still tells you which
+translation unit defined a global. Ignore its conclusions about *how* to ask
+for the mode.
+
 ## The observation
 
 A global access in this game compiles two different ways, and which one is
@@ -167,7 +229,12 @@ encoding depends only on the final `$gp` offset, not on the symbol name, so the
 C side does not need the original names: one struct covering a window, with the
 fields at the right offsets, produces identical instructions.
 
-**Define them in `.sdata`, not as C tentative definitions.** A tentative
+**Define them in `.sdata`, not as C tentative definitions.**
+*(WRONG -- see the correction at the top of this document. The reasoning below
+holds only for a symbol nothing else defines; these are all defined already in
+`asm/data/gp_data.data.s`, so a tentative definition is a common that merges
+with that definition and never reaches `.sbss`.)*
+A tentative
 definition becomes `.comm` and lands in `.sbss`, which is NOBITS: it occupies
 vram without occupying ROM, so splitting the bin blob around it would shorten
 the image by the window's size and shift everything after it. These windows are
@@ -195,10 +262,11 @@ is advice for the **assembly definition and the linker script only**; on the C
 side, one small scalar declaration per object, which is what `include/structs.h`
 already has.
 
-**A PARK FILE DOES NOT INHERIT ITS UNIT'S `.size` BLOCK, and that is a whole
-word of mis-measurement.** The `.size` records a carved unit needs live in one
-`__asm__(".sdata\n\t.size SYM,4\n\t.text")` block at the top of the unit's
-`.c` file. A candidate compiled standalone by `verify.py` has only what is in
+**A PARK FILE DOES NOT INHERIT ITS UNIT'S DEFINITIONS, and that is a whole
+word of mis-measurement.** The small globals a unit reaches `$gp`-relatively
+are defined at file scope in the unit's `.c` file -- `u32 D_80081550;` and the
+like (a bare `__asm__(".sdata\n\t.size SYM,4\n\t.text")` block until
+2026-11-02). A candidate compiled standalone by `verify.py` has only what is in
 that file, so a reference to one of those symbols comes out as the two-word
 absolute form where the unit gets a one-word `%gp_rel`. func_8004DE88 was
 parked at "64 of 65 words, one word SHORT" for two sessions on this: the shape
@@ -385,7 +453,10 @@ for months was that it was written as a `.sdata` **definition**:
 That puts a real 1-byte object in `.sdata`, and splat's legacy linker-script
 generation cannot place one object's `.sdata` at a distant fixed address.
 
-**It does not have to be a definition.** maspsx's `_uses_gp` consults only its
+**It does not have to be a definition.** *(Superseded: it should be one, and a
+C tentative definition costs nothing -- see the correction at the top. What
+follows is still the right account of why the EXPLICIT `.sdata` definition was
+rejected.)* maspsx's `_uses_gp` consults only its
 `sdata_entries` table, and the `.size` record alone populates that. So:
 
     __asm__(".sdata\n\t.size D_800814D4,1\n\t.text");   /* file scope */
@@ -426,6 +497,10 @@ The principled fix is in `vendor/maspsx`: record `.extern SYM,size` and let
 
 ### Window B's layout, derived and assembled
 
+*(NOT NEEDED -- see the correction at the top. Kept because the widths and
+offsets here are measured evidence about the small-data region, independent of
+what they were derived for.)*
+
 The widths below are what the accesses prove, counted over every listing in
 `asm/nonmatchings`:
 
@@ -455,6 +530,8 @@ right relative offset (D_800814B0 at +0x60, D_800814C8 at +0x78, D_80081526 at
 func_80045340's `sw $zero, %gp_rel(D_80081510)($gp)` encodes.
 
 ### Window A, for later
+
+*(NOT NEEDED -- see the correction at the top.)*
 
 108 bytes at 0x80080AA4, with eighteen referenced symbols: halfwords at
 +0xAA4, +0xAA6, +0xAA8, +0xAAC, +0xABC, +0xABE, +0xAD2, +0xAD4, +0xAFC,
@@ -572,7 +649,7 @@ Two consequences:
 
 ## When the same symbol needs both modes: cut the unit
 
-The size record is file-scope, so a unit can mix the two modes **across
+A definition is file-scope, so a unit can mix the two modes **across
 symbols** (previous section) but never **within one**. Twice now a carved unit
 has held one word reached both ways, and both times the answer was to split the
 unit at the function boundary between the two groups:
@@ -592,9 +669,10 @@ The second one is the mechanical recipe, and it cost nothing:
    files and its `carved-sweep.md` rows, and renaming the bulk touched 16 park
    files and 34 doc lines for no gain.
 2. Move that piece's functions into the new `csrc/<name>.c`, repoint their
-   `INCLUDE_ASM` paths, and give the new file only the size records its own
-   side wants. Check first that no function moving across needs any of the old
-   unit's other size-recorded symbols: `grep` each one in the moved range.
+   `INCLUDE_ASM` paths, and give the new file only the definitions its own
+   side wants -- only the piece that references a symbol needs it. Check first
+   that no function moving across needs any of the old unit's other defined
+   symbols: `grep` each one in the moved range.
    None of the thirteen moved here did, which is why no matched code changed.
 3. `splat split`, then `git checkout` the `*_undefined_syms_auto.txt` it
    rewrites (it added a line for an already-placed jump table), and delete the
@@ -625,7 +703,7 @@ end below.
   produces" above.
 * **One symbol cannot be given two spellings to get two modes.** The
   `__asm__("SYM")` alias trick that works elsewhere in this project does not
-  work here, measured 2026-10-27 on D_8008099C: add the size record, leave the
+  work here, measured 2026-10-27 on D_8008099C: define the object, leave the
   functions that want `%gp_rel` on the scalar declaration, and give the ones
   that want absolute an `extern u32 SYMa[] __asm__("SYM")` accessed as `[0]`.
   It builds, and it is not byte-identical. The absolute form those functions

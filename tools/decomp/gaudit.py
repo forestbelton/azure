@@ -25,8 +25,10 @@ its offset. An earlier version of this rule had that backwards.
 This only looks at functions still in assembly. A landed function's addressing
 is already proven by `make check`, which is the real authority.
 
-CHECK 2: the `__asm__(".sdata\n\t.size SYM,N\n\t.text")` size records, which
-are FILE-SCOPE. maspsx applies one to every access of that symbol in the
+CHECK 2: the file-scope DEFINITIONS of small globals -- `u32 D_80080ADC;` and
+the like, plus the one surviving `__asm__(".sdata\n\t.size SYM,N\n\t.text")`
+record in csrc/unk_264E0.c. Either one puts the symbol in a maspsx table, and
+that is FILE-SCOPE: maspsx then rewrites every access to that symbol in the
 translation unit, so a unit cannot have the symbol $gp-relative in one function
 and absolute in another -- and if a second function in the unit wanted it
 absolute, its accesses are silently rewritten and that function loses a word
@@ -35,8 +37,8 @@ unit: func_8003E39C lost 5 words, the whole image shifted by -0x14 and the
 jump-table contents changed. `make check` caught it; `verify.py` could not,
 because it compiles one function at a time.
 
-So for each size record, this reports every OTHER function in the same unit
-that mentions the symbol. Each one is a site to check by hand -- some will
+So for each such symbol, this reports every OTHER function in the same unit
+that mentions it. Each one is a site to check by hand -- some will
 genuinely want $gp-relative addressing too, so the report is a prompt rather
 than a verdict. It reads the pre-maspsx compiler output under build/csrc/, so
 it needs a build; it says so rather than guessing if one is missing.
@@ -56,6 +58,12 @@ GP = 0x80080994
 
 SDATA_RE = re.compile(r'__asm__\s*\(\s*"\.sdata(.*?)\.text"\s*\)', re.S)
 SIZE_RE = re.compile(r"\.size\s+(D_[0-9A-Fa-f]+)\s*,\s*(\d+)")
+# A file-scope tentative definition: `u32 D_80080ADC;`, `u8 D_800814D0[4];`,
+# `u8 *D_80081540;`. Anchored at column 0, and `extern` excluded, so a local
+# or a header-style declaration cannot match.
+DEF_RE = re.compile(
+    r"^(?!extern\b)([A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*\**)\s*"
+    r"(D_[0-9A-Fa-f]+)\s*(\[[^\]]*\])?\s*;", re.M)
 
 
 def carved_units(makefile):
@@ -123,12 +131,18 @@ def check_carved_units():
     return problems
 
 
-def size_records():
-    """{unit: {symbol: size}} for every file-scope size record in csrc/."""
+def gp_definitions():
+    """{unit: {symbol: size}} for every file-scope small-global definition."""
     out = {}
     for path in sorted(glob.glob(os.path.join(PROJ, "csrc", "*.c"))):
+        txt = open(path).read()
         syms = {}
-        for block in SDATA_RE.findall(open(path).read()):
+        for ty, sym, arr in DEF_RE.findall(txt):
+            n = SIZES.get(ty.strip().rstrip("*").strip(), 4)
+            if arr.strip("[]").isdigit():
+                n *= int(arr.strip("[]"))
+            syms[sym] = n
+        for block in SDATA_RE.findall(txt):
             for sym, size in SIZE_RE.findall(block):
                 syms[sym] = int(size)
         if syms:
@@ -160,9 +174,9 @@ def functions_mentioning(unit, syms):
     return hits
 
 
-def check_size_records():
+def check_gp_definitions():
     """CHECK 2 -- see the module docstring."""
-    records = size_records()
+    records = gp_definitions()
     if not records:
         return 0
     print()
@@ -176,24 +190,24 @@ def check_size_records():
         for sym, fns in sorted(hits.items()):
             if len(fns) > 1:
                 problems += 1
-                print("%s: size record on %s, but %d functions mention it:"
+                print("%s: defines %s, but %d functions mention it:"
                       % (unit, sym, len(fns)))
                 for fn in fns:
                     print("    %s" % fn)
-                print("    the record is FILE-SCOPE -- check that every one of those")
+                print("    a definition is FILE-SCOPE -- check that every one of those")
                 print("    wants %s $gp-relative, or carve them apart" % sym)
                 print()
     if missing:
         print("no build/csrc/*.s for %s -- run make, then re-run this check"
               % ", ".join(missing))
     nsyms = sum(len(s) for s in records.values())
-    print("%d size record(s) over %d unit(s), %d to check by hand"
+    print("%d small-global definition(s) over %d unit(s), %d to check by hand"
           % (nsyms, len(records), problems))
     return problems
 
 
 def main():
-    return 1 if (check_carved_units() + check_size_records()) else 0
+    return 1 if (check_carved_units() + check_gp_definitions()) else 0
 
 
 if __name__ == "__main__":

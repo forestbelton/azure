@@ -66,15 +66,16 @@ for a in sys.argv[1:]:
         gasG = 0
     elif a.startswith('--cc1-G='):
         cc1G = int(a.split('=', 1)[1])
-miss = asmlib.missing_size_syms(src, unit)
+miss = asmlib.missing_gp_defs(src, unit)
 if miss:
     print('WARNING: this source references %s.' % ', '.join(miss))
-    print('         %s gives each of those a `.size` and this source does not,'
+    print('         %s DEFINES each of those and this source does not, so'
           % unit)
-    print('         so every reference costs a word MORE here than it does in')
-    print('         the unit. Add, above the function:')
-    print('           __asm__(".sdata\\n\\t%s\\n\\t.text");'
-          % '\\n\\t'.join('.size %s,4' % s for s in miss))
+    print('         maspsx leaves the accesses absolute here and every')
+    print('         reference costs a word MORE than it does in the unit.')
+    print('         Add, above the function:')
+    for line in miss.values():
+        print('           %s' % line)
     print()
 try:
     words, relocs = asmlib.build(src, gasG, cflags=('-G%d' % cc1G,))

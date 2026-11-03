@@ -472,9 +472,12 @@ fails on a missing `build/assets/<off>.o`.
 The **second** table does need `unk_1C540` split into separate translation
 units, one per run, with the boundaries at the function addresses the run order
 implies. Codegen per function does not depend on which other functions share
-the file, but the file-scope `__asm__(".sdata\n\t.size ...")` size records and
-the `extern u32 D_800814A0a[] __asm__("D_800814A0")` alias at the top of
-`csrc/unk_1C540.c` are file-scope and must be copied into every piece.
+the file, but the file-scope definitions of the small globals the unit reaches
+`$gp`-relatively, and the `extern u32 D_800814A0a[] __asm__("D_800814A0")`
+alias at the top of `csrc/unk_1C540.c`, are file-scope and must be carried into
+whichever piece needs them. **Only the piece that references a symbol needs its
+definition** -- copying the whole list into every piece was the earlier
+practice and left 88 dead records, removed 2026-11-02.
 
 **The const arrays immediately before each table are not an obstacle.**
 D_8002E5D8/D_8002E5E8 (before jtbl_8002E5F8), D_8002E950 (before jtbl_8002E964)
@@ -648,13 +651,17 @@ reading was impossible on its face: it put func_80041588's and func_80042BDC's
 tables in one unit, with `gprel_152E4` sitting between them in the text.
 
 **The addressing half needed no split, no window definition and no data move.**
-`__asm__(".sdata\n\t.size SYM,N\n\t.text");` populates maspsx's
-`sdata_entries` table while defining nothing, so loads and stores of SYM become
-`%gp_rel` and an address materialisation of it stays absolute -- and because the
-symbol stays undefined there is no `.sdata` to place and nothing has to be
-contiguous. See `docs/addressing-and-translation-units.md`. The project now
-carries 122 such records across 15 units; they are FILE-SCOPE, which is the one
-hazard, and `tools/decomp/gaudit.py` audits them. Where a unit wants every
+A file-scope tentative definition in the unit -- `u32 D_80081550;`, the
+definition the original translation unit had -- becomes a `.comm`, which lands
+in maspsx's `sbss_entries`, so loads and stores of the symbol become `%gp_rel`
+while an address materialisation of it stays absolute. Nothing is allocated and
+nothing has to be contiguous: the objects are already defined in
+`asm/data/gp_data.data.s` and a common merges with that definition. See the
+correction at the top of `docs/addressing-and-translation-units.md`. The
+project carries 52 such definitions across 12 units, plus one surviving
+`.size` record in `csrc/unk_264E0.c` for an addend access; they are
+FILE-SCOPE, which is the one hazard, and `tools/decomp/gaudit.py` audits
+them. Where a unit wants every
 access `$gp`-relative instead, the cheaper route is a `-G8` carve of the
 consecutive run that shares the object -- the `csrc/gprel_*.c` units, one per
 original translation unit.
@@ -664,7 +671,7 @@ original translation unit.
 This section listed 32 stubs: five reaching their globals only `$gp`-relatively
 (func_8003E4FC, func_8003F5E0, func_80044618, func_80044698, func_800448BC) and
 27 doing both. All five landed by carve -- `gprel_11CFC`, `gprel_12DD4`,
-`gprel_17B7C` -- and the mixed ones landed on the size record above, as did the
+`gprel_17B7C` -- and the mixed ones landed on the definition above, as did the
 eleven functions once parked in `docs/near-misses/gp-window-batch.c`; that park
 file has been deleted, its mechanism having moved into
 `docs/addressing-and-translation-units.md` and the `csrc/` unit headers.

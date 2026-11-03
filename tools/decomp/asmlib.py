@@ -86,39 +86,72 @@ def cc1_g_for_unit(unit):
     return _CC1_G_BY_UNIT.get(unit, 8)
 
 
-_SIZES_BY_UNIT = {}
+_GP_DEFS_BY_UNIT = {}
+
+# A file-scope tentative definition of a small global: `u32 D_80080ADC;`,
+# `u8 D_800814D0[4];`, `u8 *D_80081540;`. Anchored at column 0, so a local
+# declaration inside a function body cannot match, and `extern` excluded.
+_GP_DEF_RE = re.compile(
+    r'^(?!extern\b)([A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*\**)\s*'
+    r'(D_[0-9A-Fa-f]+)\s*(\[[^\]]*\])?\s*;', re.M)
+# The one remaining `.sdata` size record (see csrc/unk_264E0.c).
+_GP_SIZE_RE = re.compile(r'\.size (D_[0-9A-Fa-f]+),(\d+)')
 
 
-def size_syms_for_unit(unit):
-    """The symbols the unit gives a `.size` to, from its own __asm__ block.
+def _gp_defs_in_text(txt):
+    """{symbol: the source line that puts it in maspsx's tables}."""
+    out = {}
+    for ty, sym, arr in _GP_DEF_RE.findall(txt):
+        ty = ty.strip()
+        out[sym] = '%s%s%s%s;' % (ty, '' if ty.endswith('*') else ' ', sym, arr)
+    for sym, size in _GP_SIZE_RE.findall(txt):
+        out.setdefault(
+            sym, '__asm__(".sdata\\n\\t.size %s,%s\\n\\t.text");' % (sym, size))
+    return out
 
-    cc1psx emits `.extern SYM,size` from a DECLARED type, and gas goes
-    $gp-relative only for a symbol whose size is in (0, G]. A carved unit
-    therefore carries an `__asm__(".sdata\n\t.size SYM,4\n\t.text")` block
-    naming every small global it wants $gp-relative. A park file compiled
-    standalone does NOT inherit that block, so every reference to one of
-    these symbols costs a word more than it does in the unit -- which is a
-    whole word of mis-measurement, and it bit func_8004DE88 for two sessions.
+
+def gp_defs_for_unit(unit):
+    """{symbol: definition line} for the small globals the unit DEFINES.
+
+    cc1psx emits a bare-symbol load or store for a small global and leaves the
+    addressing to the assembler. maspsx rewrites it to %gp_rel only for a
+    symbol it saw defined in this translation unit: a C tentative definition
+    becomes `.comm`, which lands in its `sbss_entries`, and a `.size` inside
+    `.sdata` lands in `sdata_entries`. A unit therefore DEFINES every small
+    global it wants $gp-relative -- which is what the original translation
+    unit did. A park file compiled standalone has none of those definitions,
+    so every reference to one costs a word more than it does in the unit:
+    a whole word of mis-measurement, and it bit func_8004DE88 for two
+    sessions.
     """
-    if unit not in _SIZES_BY_UNIT:
+    if unit not in _GP_DEFS_BY_UNIT:
         try:
             txt = open(os.path.join(PROJ, 'csrc', unit + '.c')).read()
         except OSError:
             txt = ''
-        _SIZES_BY_UNIT[unit] = set(re.findall(r'\.size (\w+),', txt))
-    return _SIZES_BY_UNIT[unit]
+        _GP_DEFS_BY_UNIT[unit] = _gp_defs_in_text(txt)
+    return _GP_DEFS_BY_UNIT[unit]
 
 
-def missing_size_syms(src, unit):
-    """Symbols `src` references that its unit sizes and `src` does not."""
+def missing_gp_defs(src, unit):
+    """{symbol: line} that `src` references, its unit defines, and `src` lacks."""
     try:
         body = open(src).read()
     except OSError:
-        return []
-    if '.size' in body:
-        return []
-    return sorted(s for s in size_syms_for_unit(unit)
-                  if re.search(r'\b' + s + r'\b', body))
+        return {}
+    have = _gp_defs_in_text(body)
+    return {s: line for s, line in sorted(gp_defs_for_unit(unit).items())
+            if s not in have and re.search(r'\b' + s + r'\b', body)}
+
+
+def size_syms_for_unit(unit):
+    """Back-compatible alias: just the symbol names."""
+    return set(gp_defs_for_unit(unit))
+
+
+def missing_size_syms(src, unit):
+    """Back-compatible alias: just the symbol names."""
+    return sorted(missing_gp_defs(src, unit))
 
 
 class CompileError(Exception):

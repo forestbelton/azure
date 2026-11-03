@@ -118,14 +118,22 @@
   cost: "the whole function: without it you get an absolute lui/%lo pair
          (4 words against 3 in func_8003F5E0)"
   options:
-    - "define the object in a .sdata block in the same translation unit:
-       __asm__(\".sdata\\n\\t.globl D_x\\n\\t.type D_x,@object\\n\"
-               \"\\t.size D_x,4\\nD_x:\\n\\t.word 0\\n\\t.text\");
-       The `.size` line is the load-bearing one -- it is what puts the symbol
-       in maspsx's sdata_entries, and maspsx rewrites the access, not gas."
+    - "define the object at file scope in the same translation unit, with the
+       tentative definition the original file had: `u32 D_x;`. cc1psx emits a
+       `.comm`, which lands in maspsx's sbss_entries, and maspsx rewrites the
+       access -- not gas. Nothing is allocated: these objects are already
+       defined in asm/data/gp_data.data.s, and a common merges with that
+       definition, so there is no placement to arrange."
   negative:
     - "a top-level __asm__(\".extern D_x,4\") -- `.extern` terminates maspsx's
        scan rather than producing an entry"
+    - "a .comm for a symbol the function reaches with an ADDEND (`D_x+4`):
+       maspsx's `gp_allowed` is `gp_allow_offset or symbol not in
+       comm_symbols`, and gp_allow_offset is False at ASPSX 2.56, so the
+       addend access falls back to lui $at/%lo. That case wants the old bare
+       `__asm__(\".sdata\\n\\t.size D_x,4\\n\\t.text\")` record, which
+       populates sdata_entries and not comm_symbols -- the one place in the
+       project that still uses it is csrc/unk_264E0.c."
     - "declaring the object as a struct or array larger than -G8 and reaching a
        field through it: cc1psx then emits the compiler-split pair and maspsx
        never sees a bare-symbol candidate"
