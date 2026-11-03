@@ -26,10 +26,15 @@ HARD = """## HARD RULES -- violating any destroys shared state
 ## HOW TO VERIFY
 1. `scratch/%(pre)smerge.py`: read `csrc/%(unit)s.c` **fresh**, `assert text.count(old) == 1` per anchor, write `scratch/%(pre)sunit.c`.
 2. `python3 tools/decomp/ovlverify.py scratch/%(pre)sunit.c <names>` -- it compiles once for all of them.
-3. **`advise.py` needs literally ONE function per file**; invocation `advise.py FILE UNIT FUNC`. On a merged unit it FABRICATES `CALLEE-SAVED`/`DELAY-NOPS` findings and a wrong `--greg` table. Its ALLOC verdict is the useful one: it means stop rewriting the logic.
-4. **Sweep the whole unit in your copy**, from the **C definitions** (`awk` recipe in `docs/town-sweep.md`), never `nm` -- every stub verifies against itself. Expect **`progress.py`'s landed count, plus yours, plus one benign off-by-one**; absolute numbers go stale within the hour.
-5. `ovlverify` **MASKS every relocated word**. Decode the `jal`s yourself and read every `%hi`/`%lo` off each target's **own** listing. A `%hi` on a FUNCTION has no `jal` to decode and is invisible to both standard checks; that class has already broken one build. Also: `*((u8 *)&SYM + N)` folds the offset into the RELOCATION and the mask hides the addend, so check the reloc list rather than the printed displacement.
-6. Word counts off the listing header.
+3. **RE-RUN `provision.py` NEAR THE END, not only at step 0.** It has no cache --
+   it reads `csrc/%(unit)s.c` fresh every time -- but in a parallel campaign a
+   sibling may land your line-for-line template WHILE you work. That happened:
+   a target's exact template was absent from the relatives table at step 0 and
+   ranked 0.499 an hour later, and the agent found it by idiom grep instead.
+4. **`advise.py` needs literally ONE function per file**; invocation `advise.py FILE UNIT FUNC`. On a merged unit it FABRICATES `CALLEE-SAVED`/`DELAY-NOPS` findings and a wrong `--greg` table. Its ALLOC verdict is the useful one: it means stop rewriting the logic.
+5. **Sweep the whole unit in your copy**, from the **C definitions** (`awk` recipe in `docs/town-sweep.md`), never `nm` -- every stub verifies against itself. Expect **`progress.py`'s landed count, plus yours, plus one benign off-by-one**; absolute numbers go stale within the hour.
+6. `ovlverify` **MASKS every relocated word**. Decode the `jal`s yourself and read every `%hi`/`%lo` off each target's **own** listing. A `%hi` on a FUNCTION has no `jal` to decode and is invisible to both standard checks; that class has already broken one build. Also: `*((u8 *)&SYM + N)` folds the offset into the RELOCATION and the mask hides the addend, so check the reloc list rather than the printed displacement.
+7. Word counts off the listing header.
 """
 
 TRAPS = """## LEVERS AND TRAPS -- try these before anything exotic
