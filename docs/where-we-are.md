@@ -332,17 +332,58 @@ size, the `-G` value, the struct layout, the flags.
    session, against roughly a thousand twinless functions. The unit of work is
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
+
+   **State on 2026-11-02, after the clusters:** ovl_town is 799 of 1819
+   functions and 24,957 of 70,311 words, **35.5%**, up from 26.7% in one
+   session; the project total is 62.1%. The whole unit sweeps clean at 799 of
+   799 and `make build/town.bin` is byte-identical. `nearsibs.py --groups`
+   still lists **16 sets, 2,515 words** of unread candidates, so the cluster
+   seam has not run out yet.
+
+   The three biggest landings of that session all came from CLUSTERS whose
+   members were handed to one agent together, and the pattern is worth
+   repeating: the collision sweep's -Z and +Z members plus their forwarder
+   (**640 words**, `func_8008D0B8`/`func_8008D5C4`/`func_8008CF48`), the window
+   draw with eleven looked-up callee prototypes (**466 words**,
+   `func_800970FC`), and a twin pair that is one source with a `-` written `+`
+   (**192 words**, `func_80097AD0`/`func_800A895C`). None of the three needed a
+   permuter.
+
+   The richest remaining cluster is the one where the CALLERS are already
+   landed and so are the callees: `func_800B0024`/`func_800B3734`/`func_800B4D64`
+   each have a landed `s32 f(u8 *s, void *p)` caller and seven or eight landed
+   callees, which is as much context as this unit ever gives you.
 2. Devices stay in a number of landed functions, each deliberate and each
    documented at its site with what it is worth and what was ruled out.
-   `grep -rn "DEVICE:" csrc/` is the index -- 27 comments as of 2026-11-01,
+   `grep -rn "DEVICE:" csrc/` is the index -- 34 markers as of 2026-11-02,
    fewer than that distinct devices, since a paired device is marked in both
    arms. Many are plain C (a phantom zero, a duplicated arm, a degenerate
    `do/while(0)` placed for its `NOTE_INSN_LOOP_BEG`); the ones spelled with
-   `__asm__` are the ones to revisit if a better shape turns up. Only
-   func_8003E758's has a recorded fallback -- item 3.
-3. A decision on func_8003E758's decomp device: it ships
-   `__asm__ volatile ("" :: "r" (q) : "memory")`, worth 13 words. The fallback
-   is 698 words / 11 DIFF with the memory clobber alone.
+   `__asm__` are the ones to revisit if a better shape turns up.
+
+   **A LANDED DEVICE'S WORTH IS RE-MEASURABLE**, and the contract in
+   `docs/landing-a-function.md` saying it is not -- repeated in several of the
+   comments -- is wrong. Build the container and diff the one function against
+   the reference, taking its range from the linked elf's symbol table: output
+   offset is `lma + (vram - vma)`, NOT objdump's "File off"; `make`'s recipe
+   runs `tools/check.py` and fails the target on a mismatch, so use `-k` and
+   test a real failure by whether the binary came out older than the sources;
+   and a function's end is the next STRICTLY GREATER symbol address, because
+   `nm -n` lists the `func_8004437Cw` aliases at the same address.
+
+   Doing that on 2026-11-02 found four comments' figures had drifted with
+   their unit's context (unk_2879C 3 -> 6 DIFF, unk_154BC 1 -> 4,
+   unk_2CDC0's `zz` 2 -> 11) and **one device no longer load-bearing at all**
+   -- func_8005B4D0's dead `v = D_80085458`, removed. Re-run the removal
+   before trusting any "worth N words" in a DEVICE comment.
+3. Two device comments have been WRONG about what C can express, so read a
+   "not expressible" note as a record of what was tried. func_8003E758's
+   memory clobber -- this item used to be the open decision on it -- is gone:
+   a `volatile` re-read does the reload and the instruction order, a
+   degenerate loop around it supplies the reference weight on `q`, and the
+   pair MATCHes. func_8004A574's `"+r"(v)` operand, which its comment called
+   impossible in C, is a `do { } while (0)` around the call; only the `$4`
+   clobber is left there.
 4. Deferred type merges, each held back for a stated reason -- read the reason
    first: four scratchpad typedefs (Unk3DBD0SP/Unk463ECSP/Unk44D24SP/
    Unk3CCB0SP), Unk800E3E48 into Unk42710, and the RotAverage4 prototype
