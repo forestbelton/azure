@@ -1527,6 +1527,23 @@ extern UnkTownCFCB4 D_800CFCB4;
 extern void (*D_800FE5D8)();
 void func_800945B8(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_800946A0(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80092320();
+void func_80092FF0();
+void func_800CD70C();
+void func_800CD87C();
+void func_800C283C();
+void func_800C28E8();
+extern u8 D_800D0108[];
+extern u8 D_800D0138[];
+extern u8 D_800717D0[];
+extern u8 D_800D4284[];
+extern u8 D_800D42CC[];
+extern u8 D_800D42E4[];
+extern u8 D_800D4398[];
+extern void (*D_800D6B28[])();
+extern void (*D_800D6FBC[])();
+extern void (*D_800D70A0[])();
+void func_8003AF58(u8 *p, u8 *q);
 s32 func_80095760(UnkTownCFCB4 *p);
 void func_8009567C(UnkTownCFCB4 *p);
 s32 func_8009FF50(void);
@@ -3595,7 +3612,19 @@ void func_80094378(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     t->unk_00 = func_8009221C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800943B8);
+/* A family of 2: run the task setup, bind a per-member descriptor, then install
+   the per-member handler at +0x00 and a countdown of 6 at +0x0A.
+
+   func_80094C1C takes ONE parameter, which the unit already declares; this
+   call site emits no argument setup because the incoming $a0 is already right,
+   which is the documented trap read correctly. func_80094984 stays K&R. */
+void func_800943B8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80094C1C(t);
+    func_80094984(D_800D0108, t, c);
+    t->unk_00 = func_80092320;
+    t->unk_0A = 6;
+}
 
 void func_80094414(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
@@ -3650,7 +3679,13 @@ void func_80094660(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_00 = func_80092ECC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800946A0);
+void func_800946A0(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80094C1C(t);
+    func_80094984(D_800D0138, t, c);
+    t->unk_00 = func_80092FF0;
+    t->unk_0A = 6;
+}
 
 void func_800946FC(UnkTownTask *t)
 {
@@ -11848,7 +11883,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C181C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1854);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C18CC);
+/* A family of 4: one engine call with a fixed first argument and a
+   per-member table. */
+void func_800C18CC(void)
+{
+    func_8003AF58(D_800717D0, D_800D4284);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C18F8);
 
@@ -11860,14 +11900,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C19C4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1A0C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1A44);
+void func_800C1A44(void)
+{
+    func_8003AF58(D_800717D0, D_800D42CC);
+}
 
 void func_800C1A70(void)
 {
     func_8008B408(0x3);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1A90);
+void func_800C1A90(void)
+{
+    func_8003AF58(D_800717D0, D_800D42E4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1ABC);
 
@@ -11881,7 +11927,10 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1B64);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1B74);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1BA4);
+void func_800C1BA4(void)
+{
+    func_8003AF58(D_800717D0, D_800D4398);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1BD0);
 
@@ -11994,13 +12043,27 @@ void func_800C2780(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 void func_800C27DC(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C27E4);
+/* A family of 2: bind the descriptor D_800D4F88 names for this actor's +0x94
+   kind byte, set the +0x14 flag, and install the per-member handler at +0x50.
+   The `((u8 *)a)[0x94]` and `(u8 *)D_800D4F88[...]` casts are the idiom two
+   landed functions at the end of this file already use for the same table. */
+void func_800C27E4(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_8008FD48((u8 *)a, b, (u8 *)D_800D4F88[((u8 *)a)[0x94]]);
+    *(u8 *)((u8 *)a + 0x14) = 1;
+    a->unk_50 = func_800C283C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C283C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2864);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2890);
+void func_800C2890(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_8008FD48((u8 *)a, b, (u8 *)D_800D4F88[((u8 *)a)[0x94]]);
+    *(u8 *)((u8 *)a + 0x14) = 1;
+    a->unk_50 = func_800C28E8;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C28E8);
 
@@ -14374,7 +14437,15 @@ void func_800CBF48(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     a->unk_6C = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CBFAC);
+/* A family of 3: dispatch through a per-member function-pointer table on the
+   actor's stride-8 step index at +0x68, read with `lh`. The callee takes the
+   actor in $a0 by inheritance -- the `jalr` has a `nop` delay slot and nothing
+   sets $a0 up -- so the table's element type carries no arity information and
+   is declared `void (*)()`. */
+void func_800CBFAC(UnkTownActor *a)
+{
+    D_800D6B28[a->unk_68]();
+}
 
 void func_800CBFE8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
@@ -14607,9 +14678,15 @@ void func_800CCBD0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     a->unk_6C = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCC34);
+void func_800CCC34(UnkTownActor *a)
+{
+    D_800D6FBC[a->unk_68]();
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CCC70);
+void func_800CCC70(UnkTownActor *a)
+{
+    D_800D70A0[a->unk_68]();
+}
 
 void func_800CCCAC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -14880,9 +14957,25 @@ void func_800CDD98(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     a->unk_6C = (u16)func_800374F4(4) * 21 + 0x15;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDDFC);
+/* A family of 2: bind the shared D_800D72AC descriptor, then install the
+   per-member handler at +0x50 with a 0x50 half-extent at +0x84 and a 0xD2
+   countdown at +0x6C. func_800C2E84's second parameter is the third argument
+   forwarded, which the unit declares `s32`. */
+void func_800CDDFC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C2E84(a, c, D_800D72AC);
+    a->unk_50 = func_800CD70C;
+    a->unk_84 = 0x50;
+    a->unk_6C = 0xD2;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDE4C);
+void func_800CDE4C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C2E84(a, c, D_800D72AC);
+    a->unk_50 = func_800CD87C;
+    a->unk_84 = 0x50;
+    a->unk_6C = 0xD2;
+}
 
 void func_800CDE9C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {

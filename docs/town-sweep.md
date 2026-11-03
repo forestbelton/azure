@@ -171,6 +171,18 @@ standalone) after three wrong guesses about which prototype had done it.
 
 ## The traps, each of which has cost something
 
+* **`ovlverify` MASKS EVERY RELOCATED WORD, NOT JUST `jal`.** A wrong
+  ADDRESS-TAKEN symbol -- the `lui`/`addiu` pair of a handler install like
+  `a->unk_50 = func_800C28E8;` -- is invisible to it, and invisible to a
+  hand-decode of the `jal` words too, because there is no `jal`. On 2026-11-02
+  a family-of-2 landing guessed `func_800C2938` for its sibling's handler, a
+  symbol that does not exist; both members measured 0 differing and the
+  container build failed with `undefined reference`. **Read the varying symbol
+  out of the sibling's own listing** -- `grep -oE 'func_800C2[0-9A-F]{3}'
+  asm/nonmatchings/ovl_town/func_800C2890.s` -- rather than extrapolating it
+  from the base member's address. `families.py --show` prints it when it
+  groups the pair; when it does not, the listing does.
+
 * **`ovlverify` MASKS `jal` TARGETS.** It cannot see a wrong callee, so a
   function can measure 0 differing and still be wrong. When `families.py`
   shows a varying word that is a `jal`, that is a REAL call difference in the
