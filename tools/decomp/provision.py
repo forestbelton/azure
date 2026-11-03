@@ -322,6 +322,22 @@ def main():
                 anye = True; witnessed.add(f)
     if not anye: print("  none")
 
+    # UNCONDITIONAL. This advice used to be gated behind a LOW top score, so a
+    # group scoring 1.959 never saw it -- and that was the group whose decisive
+    # relatives the rows[:4] cut had hidden. The two routes below have found the
+    # right template SIX times where the metric did not.
+    print("\n=== DO THIS REGARDLESS OF WHAT ROUTE (a) RANKED ===")
+    print("    The score cannot see POSITION (a first-call entry point scores like any")
+    print("    other) or LINE-LEVEL IDENTITY (a shared call expression WITH its constant")
+    print("    arguments). Two cheap routes have beaten it six times:")
+    for f in targets:
+        n = incasm.get(f)
+        if n: print("      sed -n '%d,%dp' csrc/%s.c    # %s's C-file neighbours"
+                    % (max(1, n - 40), n + 40, unit, f))
+    print("      ...and an IDIOM GREP: grep a distinctive STATEMENT shape out of the")
+    print("      listing (a field expression, a constant, a global) rather than a callee")
+    print("      name. e.g. grep -n 'D_800814A0 |= 0x8000' csrc/%s.c" % unit)
+
     print("\n=== ROUTE (f): LANDED CALL SITES OF YOUR CALLEES, WITH THEIR ARGUMENTS ===")
     print("    Line-level identity, which the rarity score cannot see: a landed")
     print("    function that passes the SAME CONSTANTS to the same callee is a")
@@ -397,16 +413,19 @@ def main():
         print("          a shared call expression WITH ITS CONSTANT ARGUMENTS. One")
         print("          global had 11 landed call sites, so it scored as 'common',")
         print("          but only 2 passed the same `(x - 0x20)` form.")
-        print("      So READ the top entries anyway, and also: read each target's")
-        print("      immediate C-file neighbours, and grep a distinctive STATEMENT from")
-        print("      the listing rather than a callee name (an idiom grep). Both found")
-        print("      the right template where this metric did not.")
+        print("      So READ the top entries anyway.")
     for f in targets:
         rows = per.get(f, [])
         print("  -- for %s --%s" % (f, '' if rows else '  NO RELATIVE AT ANY SCORE'))
-        for s, d, sc, sg in rows[:4]:
+        for s, d, sc, sg in rows[:6]:
             print("  %6.3f  %-15s csrc/%s.c:%-6d" % (s, d, unit, lines[d]))
             print("          callees %s   globals %s" % (','.join(sc) or '-', ','.join(sg) or '-'))
+        if len(rows) > 6:
+            print("      ... %d MORE below %.3f -- NOT shown. The cut has already hidden"
+                  % (len(rows) - 6, rows[5][0]))
+            print("      functions whose comments carried the decisive lever, so if the")
+            print("      shown rows do not explain your target, ask for more rather than")
+            print("      concluding the metric has nothing.")
     if not hits: print("  none -- hand-decode, and say so in the brief")
 
     print("\n=== LANDED CALLERS (route (c): settles arity AND constant arguments) ===")
