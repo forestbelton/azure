@@ -2410,6 +2410,9 @@ extern u8 D_800D6EE8[];
 extern u8 D_800D7284[];
 void func_80098608();
 void func_8009AA2C();
+void func_8009AAB8();
+void func_8009AB74();
+void func_80094620();
 void func_8009AD70();
 void func_800CBFAC();
 void func_800CCC34();
@@ -2558,6 +2561,8 @@ void func_8009B218(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r, void *d);
 u32 func_800491F4(s32, u8 *, s32);
 extern UnkTownList D_800891F8;
 extern UnkTownList D_8008926C;
+extern u8 D_800CFCEE;
+extern UnkTown2AE8 D_800D0608;
 extern u8 D_800CFCEF;
 extern UnkTownPlane D_800CFCAC;
 extern s32 D_800FE480;
@@ -5222,7 +5227,44 @@ void func_80091F64(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009204C);
+/* The bare member of func_80092DA8/func_80092ECC's family: the
+   same four-call head and the same D_800CFCEE gate, with no heading
+   recomputation and no D_80083160 flag test -- so no `Unk80083160 *g` local
+   at all, and the frame is one saved register smaller.
+
+   Both arms of the D_800CFCEE gate fall into the shared tail, so they are
+   emitted in SOURCE order and the gate is written `!= 0` with the
+   `q->unk_14 = 0` arm first; `== 0` with the arms swapped is 42 words with
+   6 differing (the `j` plus both arms' bodies), which is the "do not invert
+   an if/else unless an arm returns" rule measured once more.
+
+   func_80096810 and func_8009431C have no declaration in this unit or in
+   include/ and their INCLUDE_ASM lines are BELOW this one,
+   so both calls ride implicit declarations -- the same arrangement as
+   func_80099754 throughout this file.
+
+   42 words -- its header reads `nonmatching func_8009204C, 0xA8`, and
+   0xA8/4 = 42.  Measured 0 differing. */
+void func_8009204C(void *p, UnkTown2AE8 *q, void *r)
+{
+    func_80096810(q);
+    func_80095C80(q);
+    func_80094C1C(p);
+    func_80094C74(q);
+    if (D_800CFCEE != 0)
+    {
+        q->unk_14 = 0;
+        func_800954F4(q);
+    }
+    else
+    {
+        func_80095388(q);
+    }
+    if (q->unk_14 >= 0)
+    {
+        func_8009431C(p, q, r);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800920F4);
 
@@ -5688,7 +5730,62 @@ void func_80092A84(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092CD4);
+/* func_8009204C above with the D_80083160 flag gate of
+   func_80092DA8/func_80092ECC below bolted on, and no heading
+   recomputation: the 0x40 bit picks func_80094714, and only when it is clear
+   does the mover's own +0x14 decide func_80094620.  The `j` after
+   func_80094714 is what makes that an `else if` and not a second plain `if`.
+
+   THE `Unk80083160 *g` LOCAL IS REQUIRED AND ITS POSITION IS PINNED, and the
+   two failures look nothing alike.  Reading `D_80083160.unk_10` inline is
+   50 words with 48 differing -- three words short, because with no quantity
+   there is no `$sN` to hold the address across the three calls.  Keeping the
+   local but assigning it AFTER func_80095C80 is 53 words with 6 differing:
+   the `lui`/`addiu` pair slides past the `jal` and its delay slot, since
+   block_alloc still prices `g` as crossing a CALL_INSN either way and still
+   hands it $s2 (local-alloc.c:1142).  So the -3 words the levers record for
+   this family is the local-versus-inline lever; the before-versus-after-call
+   placement is a 6-word scheduling difference at the SAME length here.
+
+   The D_800CFCEE gate is func_8009204C's, with the same measurement: `== 0`
+   with the arms swapped is 53 words with 6 differing.
+
+   func_80094620 IS DEFINED BELOW WITH ONE PARAMETER and is called
+   here with three -- all of $a0/$a1/$a2 are set in the listing -- exactly as
+   the note above func_80092FF0 records for func_800946FC.  Widening its
+   definition to three parameters is byte-neutral (16 of 16, 0 differing) and
+   so is the `void func_80094620();` forward declaration added to the
+   declaration block, which is what keeps the unit's warning set identical to
+   before this landing.
+
+   53 words -- its header reads `nonmatching func_80092CD4, 0xD4`, and
+   0xD4/4 = 53.  Measured 0 differing. */
+void func_80092CD4(void *p, UnkTown2AE8 *q, void *r)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    func_80095C80(q);
+    func_80094C1C(p);
+    func_80094C74(q);
+    if (D_800CFCEE != 0)
+    {
+        q->unk_14 = 0;
+        func_800954F4(q);
+    }
+    else
+    {
+        func_80095388(q);
+    }
+    if (g->unk_10 & 0x40)
+    {
+        func_80094714(p, q, r);
+    }
+    else if (q->unk_14 >= 0)
+    {
+        func_80094620(p, q, r);
+    }
+}
 
 void func_80092DA8(void *p, UnkTown2AE8 *q, void *r)
 {
@@ -8210,9 +8307,103 @@ void func_8009A8EC(s32 a, s32 b, s32 c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A99C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AA2C);
+/* The Z half of a two-stage ease-to-target pair with func_8009AAB8 below:
+   each frame the mover's +0x14 delta is set to HALF the remaining distance to
+   D_800D0608, and when the task's +0x0A countdown goes negative the mover is
+   snapped onto the target and the next stage installed.  D_800D0608 is a
+   UnkTown2AE8 used as that target: this function takes its +0x08 word,
+   func_8009AAB8 takes +0x00 and +0x04, and nothing here touches +0x0C..+0x14
+   of it.  func_80098F48 installs this function at +0x04 after setting
+   `t->unk_0A = 0xA`, which is the same 0xA this function reloads.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AAB8);
+   The halving is signed `/ 2`, not `>> 1`: the `srl 31`/`addu`/`sra 1`
+   round-toward-zero fixup is three of the words (`>> 1` is 43 against 47 on
+   func_8009AAB8, 34 differing).
+
+   THE THIRD PARAMETER HAS NO WITNESS.  Nothing calls this function -- its
+   address is only taken, in func_80098F48 -- and the body never reads $a2, so a
+   two-parameter definition also measures 35 words, 0 differing.  It is
+   written with three to match the handler convention and its own
+   continuation func_8009AB74, which really does forward one.
+
+   The two stores after func_80099754 are ordered: `t->unk_0A = 0xA` before
+   the handler install.  Swapped is 35 words with 5 differing.
+
+   The address spellings are a three-way tie, all 0 differing:
+   `extern UnkTown2AE8 D_800D0608;` with this `&`-and-pointer-local form,
+   `extern UnkTown2AE8 D_800D0608[];` with `g = D_800D0608;`, and direct
+   `D_800D0608.unk_08` member references with no local at all.  At -G0 the
+   declared-size lever cannot fire, so only the pointer local's own
+   allocation is observable, and here it is not.  (Offset 0 folds into the
+   `lo_sum` -- `lw %lo(D_800D0608)($a1)` in func_8009AAB8 -- while nonzero
+   offsets have to go through the `addiu` base, which is why one symbol shows
+   both addressing shapes in one function.)
+
+   35 words -- its header reads `nonmatching func_8009AA2C, 0x8C`, and
+   0x8C/4 = 35.  Measured 0 differing. */
+void func_8009AA2C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTown2AE8 *g;
+
+    g = &D_800D0608;
+    b->unk_14 = (g->unk_08 - b->unk_08) / 2;
+    if (--a->unk_0A < 0)
+    {
+        b->unk_08 = g->unk_08;
+        func_80099754(b);
+        a->unk_0A = 0xA;
+        a->unk_04 = func_8009AAB8;
+    }
+}
+
+/* func_8009AA2C's second stage, and the X/Y half of the same ease-to-target:
+   the identical half-the-remaining-distance step on D_800D0608's +0x00 and
+   +0x04 words into the mover's +0x0C and +0x10 deltas, with a 0x200-per-frame
+   spin on the task's +0x10 that is CLEARED when the stage ends.  The
+   continuation installed here, func_8009AB74, is landed.
+
+   `a->unk_10 += 0x200` IS PINNED FIRST, ahead of both delta stores, and the
+   lever is the two LOAD-DELAY NOPS, not allocation: moving it down next to
+   the `--a->unk_0A` countdown is 45 words with 42 differing, because the two
+   halfword read-modify-writes then stand adjacent and each `lhu`'s next insn
+   belongs to the OTHER one.  cc1psx emits no nop of its own; FINAL decides
+   per pair, emitting `#nop` only when the next insn mentions the register
+   just loaded -- `reg_mentioned_p (mips_load_reg, pattern)` in
+   `final_prescan_insn`, scratch/gcc-src/cdk-gcc-b18/config/mips/mips.c:4509.
+   Separated by the two divide sequences, as the target has them, each `lhu`
+   is followed by its own `addiu` and both nops survive.
+
+   The two stores that end the stage are ordered handler-then-clear:
+   `a->unk_10 = 0` before the install is 47 words with 2 differing.  The clear
+   is one word only because the value is ZERO (`sh $zero`): `a->unk_10 = 1;`
+   is 48 words with 8 differing.
+
+   Same two findings as func_8009AA2C above: the third parameter is unread and
+   has no witness (two parameters is also 47 words, 0 differing), and the
+   three D_800D0608 spellings tie.  Note the two addressing shapes on ONE
+   symbol here -- `lw %lo(D_800D0608)($a1)` for the +0x00 word, where the
+   offset folds into the `lo_sum` the compiler propagated into the memory
+   operand, and `0x4($a2)` for +0x04, where it cannot.
+
+   47 words -- its header reads `nonmatching func_8009AAB8, 0xBC`, and
+   0xBC/4 = 47.  Measured 0 differing. */
+void func_8009AAB8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTown2AE8 *g;
+
+    g = &D_800D0608;
+    a->unk_10 += 0x200;
+    b->unk_0C = (g->unk_00 - b->unk_00) / 2;
+    b->unk_10 = (g->unk_04 - b->unk_04) / 2;
+    if (--a->unk_0A < 0)
+    {
+        b->unk_00 = g->unk_00;
+        b->unk_04 = g->unk_04;
+        func_80099754(b);
+        a->unk_04 = func_8009AB74;
+        a->unk_10 = 0;
+    }
+}
 
 void func_8009AB74(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
