@@ -297,9 +297,9 @@ then read only the section you need.
   - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:13146`
   - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:13161`
   - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:13196`
-  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13274`
-  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13308`
-  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13317`
+  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13300`
+  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13334`
+  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13343`
 
 <!-- END INDEX -->
 
@@ -13225,10 +13225,36 @@ stub build against the literal spelling:
 differing in .text either way. So this is invisible to `ovlverify`, invisible
 to a whole-unit sweep, AND invisible to a section-size check.
 
-The fix is the declared size: `const u8 D_80089340[4] = "\nw";`. Plain `[]`
-gives the literal's three bytes and does NOT work. The definition must sit
-exactly where the `INCLUDE_ASM` was, since that is where gcc puts a function's
-own constants in the rodata stream.
+The fix is the declared size: `const u8 D_80089340[4] = "\nw";`. The
+definition must sit exactly where the `INCLUDE_ASM` was, since that is where
+gcc puts a function's own constants in the rodata stream.
+
+**CORRECTED 2026-11-02, after measuring three functions in this family: `[]`
+does not ALWAYS break. What decides is the directive of the record that
+FOLLOWS yours in the rodata stream.** `[4]` emits `.ascii "\nw\000"` plus
+`.space 1`; `[]` emits only the three bytes. Whether that missing pad matters
+depends on whether the next record re-establishes alignment by itself:
+
+  * next record is bare `.byte`s, or an `.asciz` with no `.align` -- GAS does
+    NOT auto-align these, so the byte loss propagates and every later record
+    shifts. This is `func_800B5E28`, whose follower `D_80089344.s` is four
+    `.byte` directives. `[]` is destructive there.
+  * next record is `.word` or `.half` -- GAS auto-aligns them, so the pad comes
+    back and `[]` is harmless. This is `func_800B544C`, whose follower
+    `D_800892E8.s` is `.word 0x00000083`. Verified byte-identical at the object
+    level with `[]`.
+  * next record is a gcc-emitted constant -- it carries its own
+    `.rdata / .align 2` and absorbs the loss. This is `func_800B5D70`, whose
+    follower is `func_800B5E28`'s now-landed `D_80089340`. Also verified
+    byte-identical with `[]`.
+
+**Write `[4]` regardless.** It matches what the listing declares, it measures
+identically in the cases where `[]` happens to survive, and it does not depend
+on a neighbour that a later landing may replace -- the third case above only
+became safe BECAUSE the sibling landed, which is exactly the kind of coupling
+not to rely on. The rule "note the byte count and the trailing align, declare
+at that exact size" gives the right answer every time; it is only the
+explanation of what goes wrong that needed narrowing.
 
 Related, same function: `extern const u32 D_80089308[]` and not
 `extern const u8 D_80089308[]`. `move_by_pieces` takes MIN(src_align,

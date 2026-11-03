@@ -1663,11 +1663,18 @@ u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
 s32 func_800B5E10(s32 a);
+extern const u32 D_800892C0[];
+u8 *func_800B5D30(u8 *p);
 extern const u32 D_80089308[];
 extern u8 D_80089310[];
 extern u8 D_80089318[];
 extern u8 D_8008931C[];
 extern u8 D_80089324[];
+u8 *func_8004E634(u32 n, u8 *s);
+s32 func_80043868(u8 *p);
+extern u8 D_800892DC[];
+extern u8 D_800892E8[];
+extern u8 D_800892EC[];
 /* The primitive func_800B1DCC fades: an RGB triple at +0x00 (g and b are
    copied from r) and a signed screen coordinate at +0x0C. */
 typedef struct UnkTownB1DCCPrim
@@ -8045,7 +8052,49 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892D8);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892DC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B544C);
+/* The experience line of the monster panel, and func_800B557C's sibling:
+   memcpy the literal "EXP\x08" (D_800892DC) to the head of the caller's
+   buffer, append a decimal through the font renderer, then draw
+   func_80043868(p)'s 0..0x14 progress value as n/2 filled bar cells with
+   D_800892E8 for the odd half.
+
+   `n` MUST be s16 and the bound MUST be written `i < n / 2` rather than
+   hoisted into a local. The target computes `sra $v1,$v1,1`, `blez $v1`, then
+   a SEPARATE `addu $s1,$v1,$zero`; a named `half` local folds the `sra`
+   straight into $s1 and loses that copy -- 67 words, one short. Writing `n` as
+   s32 with a `(s16)n / 2` cast is 68 words but swaps $s3/$s4 (5 differing), so
+   the declared width is load-bearing, not cosmetic.
+
+   func_8004E634 is `void` in csrc/unk_1C540.c:4129, but this TU uses its $v0
+   as a pointer and no header declares it, so it is declared `u8 *` here --
+   separate translation units, no conflict.
+
+   D_800892E4 ("m") is referenced only from this listing, so splat migrated it
+   here and replacing the INCLUDE_ASM loses it; declared [4] for the trailing
+   pad. The three other D_8008 records keep their own INCLUDE_RODATA lines. */
+const u8 D_800892E4[4] = "m";
+
+u8 *func_800B544C(u8 *s, u8 *p)
+{
+    u8 buf[0x40];
+    s16 n;
+    s32 i;
+
+    memcpy(s, D_800892DC, 5);
+    func_80069E38(s, func_8004E634(1, buf));
+    n = func_80043868(p);
+    for (i = 0; i < n / 2; i++)
+    {
+        func_80069E38(s, (u8 *)D_800892E4);
+    }
+    if (n & 1)
+    {
+        func_80069E38(s, D_800892E8);
+    }
+    func_80069E38(s, D_800892EC);
+    func_80069E38(s, func_8004E634(0, buf));
+    return s;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B555C);
 
@@ -8140,7 +8189,44 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_8008931C);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089324);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5D70);
+/* The smallest member of func_800B5E28's family: one 0x40-byte text buffer
+   seeded by an inline 5-byte block move, then the record's own name appended
+   and a single text sprite placed through func_800B5264.
+
+   - The seed is gcc's builtin expansion of a 5-byte copy (lw/lb then sw/sb),
+     not a call. It must go through the existing D_800892C0 symbol, whose
+     INCLUDE_RODATA survives: `memcpy(buf, "\t8\t8", 5)` also measures 0
+     differing but emits a SECOND padded copy of those bytes and grows the
+     object's .rodata by 8, shifting every later record. D_800892C0 also needs
+     a 4-byte element type -- through `extern const u8` move_by_pieces takes
+     MIN(src, dst) alignment and the copy comes out lwl/lwr + swl/swr, 42
+     words and 32 differing.
+
+   - func_800B5D30 reads no parameter of its own, but this call site's
+     `addu $a0, $s1, $zero` sits in the jal's delay slot and the next
+     instruction already reloads $a0, so the argument is real. This is the
+     inverse of the "a missing argument move is just CSE" trap: here a PRESENT
+     move forces the arity. LANDING func_800B5D30 MUST KEEP AN UNUSED FIRST
+     PARAMETER or this function stops matching.
+
+   - D_8008933C ("\n\n") is referenced only from here, so splat migrated it
+     into this function's listing and replacing the INCLUDE_ASM loses it.
+     Declared [4] to match the listing's four bytes and trailing `.align 2`.
+     Unlike func_800B5E28's D_80089340, `[]` happens to be harmless here --
+     the gcc-emitted constant that follows carries its own `.align 2` and
+     absorbs the lost pad byte -- but [4] does not depend on that. */
+const u8 D_8008933C[4] = "\n\n";
+
+void func_800B5D70(u8 *p, UnkTownCardPair **b)
+{
+    u8 buf[0x40];
+
+    memcpy(buf, D_800892C0, 5);
+    func_80069E38(buf, p + 0x34);
+    func_80069E38(buf, (u8 *)D_8008933C);
+    func_80069E38(buf, func_800B5D30(p));
+    func_800B5264(b[4], buf, 0, 0x47, 0x88);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5E10);
 
