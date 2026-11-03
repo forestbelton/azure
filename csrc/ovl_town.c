@@ -1804,9 +1804,18 @@ void func_8009FE84();
 void func_800A496C();
 void func_800AE56C();
 void func_800B2E3C();
-void func_800B3440();
+void func_800B3440(u8 *s);
+void func_800B2D00(u32 *a, u8 *b, u32 *c);
+void func_800B2FF8(u32 *a, u8 *b, u32 *c);
+void func_800B3178(u32 *a, u8 *b, u32 *c);
+void func_800B39E4(UnkTownSlot **a);
+void func_800B5020(UnkTownSlot **a);
+void func_800B4AB0(u8 *s);
+void func_8004CB2C(u8 *p);
+void func_800497F4(u8 *p, s32 a);
+extern u8 D_80071244[];
 void func_800B47BC();
-void func_800B4B7C();
+void func_800B4B7C(u8 *s);
 void func_800C22A4();
 void func_800C23A8();
 void func_800C2444();
@@ -7556,7 +7565,28 @@ void func_800B2CE8(void *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2D00);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2DA0);
+/* Two copies of one source. 0x800B2D00..0x800B35xx and
+   0x800B4720..0x800B4C38 are the same translation unit compiled twice over a
+   different object layout -- the record pointer sits at +0xA8 in the first and
+   +0x5C in the second, and the inner record's fields are at +0x1C/+0x3C
+   against +0x2C/+0x40. Every function below has a twin in the other half, and
+   the twin is the same C with those four offsets substituted; func_800B2D00,
+   func_800B2FF8 and func_800B3178 are SHARED by both halves rather than
+   duplicated, which is what makes the two halves one unit and not two.
+
+   families.py groups five of these seven pairs. It does not group the other
+   two -- func_800B2DA0/func_800B4720 and func_800B30D8/func_800B4978, 11 and
+   12 words -- only because they fall below worklist.py's reporting cut, not
+   because their shapes differ. All fourteen measured 0 differing on the first
+   compile, from one reading of each pair. */
+
+/* A pure forward: the inner record is dereferenced once, its +0x3C word read,
+   and the record itself advanced to +0x1C. $a0 is untouched and passed
+   straight through, which is why the 11 words hold no argument move for it. */
+void func_800B2DA0(u32 *a, u8 **b)
+{
+    func_800B2D00(a, *b + 0x1C, *(u32 **)(*b + 0x3C));
+}
 
 void func_800B2DCC(UnkTownGrid **p)
 {
@@ -7587,7 +7617,15 @@ void func_800B2F18(u8 *a)
     func_800B2E3C(a + 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2F38);
+/* Installs the row's primitive block and then plants a resident callback
+   through a DOUBLE indirection: +0x14 of the record holds a pointer to the
+   slot that receives D_80071244's address. The record pointer is loaded twice,
+   once per statement. */
+void func_800B2F38(u8 *s)
+{
+    func_8004CBFC((u32 *)(s + 0x1C), D_800792DC, *(u32 **)(*(u8 **)(s + 0xA8) + 0x10));
+    **(u32 **)(*(u8 **)(s + 0xA8) + 0x14) = (u32)D_80071244;
+}
 
 void func_800B2F88(UnkTownGrid **p)
 {
@@ -7602,7 +7640,14 @@ void func_800B2F88(UnkTownGrid **p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2FF8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B30D8);
+/* func_800B2DA0 one level in: the same three arguments, but the first comes
+   from the outer object's record pointer at +0xA8 rather than from the
+   caller. */
+void func_800B30D8(u8 *s)
+{
+    func_800B2FF8((u32 *)(*(u8 **)(s + 0xA8) + 0x18), *(u8 **)s + 0x1C,
+                  *(u32 **)(*(u8 **)s + 0x3C));
+}
 
 void func_800B3108(UnkTownGrid **p)
 {
@@ -7617,7 +7662,16 @@ void func_800B3108(UnkTownGrid **p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3178);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B32D4);
+/* Releases the slot handles and then rebinds the row. The record pointer at
+   +0xA8 is RE-DEREFERENCED for the second call rather than cached across the
+   first: the target loads 0xA8($s0) twice, which is the unit's standing
+   "re-dereference rather than cache" shape and not a missed optimisation. */
+void func_800B32D4(u8 *s)
+{
+    func_800B39E4(*(UnkTownSlot ***)(s + 0xA8));
+    func_800B3178((u32 *)(*(u8 **)(s + 0xA8) + 0x40), *(u8 **)s + 0x1C,
+                  *(u32 **)(*(u8 **)s + 0x3C));
+}
 
 void func_800B331C(UnkTownGrid **p)
 {
@@ -7651,16 +7705,61 @@ void func_800B336C(u8 *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3440);
+/* The half's per-frame driver: three one-argument calls on the object and
+   then the forward through func_800B2DA0 with the record's +0x68 subobject.
+   func_800B3488 calls it as func_800B3440(a + 0x20), the actor-view idiom. */
+void func_800B3440(u8 *s)
+{
+    func_800B30D8(s);
+    func_800B336C(s);
+    func_800B32D4(s);
+    func_800B2DA0((u32 *)(*(u8 **)(s + 0xA8) + 0x68), (u8 **)s);
+}
 
 void func_800B3488(u8 *a)
 {
     func_800B3440(a + 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B34A8);
+/* The teardown handler func_800B34FC installs: drops the primitive block and
+   releases the two sprite handles at +0x98 and +0x9C of the record. The second
+   argument to both func_800497F4 calls is a literal 0, which is why `addu
+   $a1, $zero, $zero` fills each jal's delay slot. */
+void func_800B34A8(u8 *s)
+{
+    func_8004CB2C(s + 0x1C);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0xA8) + 0x98), 0);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0xA8) + 0x9C), 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B34FC);
+/* A six-frame open animation that hands over to the teardown handler on the
+   last frame. The counter at +0x08 drives a width: (i << 12) / 5 is written as
+   an s16 at +0x06 of the record at +0x9C, which is the 0x66666667 magic with
+   post_shift 1 (tools/decomp/magic.py). The divide is SIGNED -- the
+   `sra $v0, $v0, 31` before the subtract is the sign correction -- even though
+   the counter only ever runs 0..5, so the source says `/ 5` on an s32 and not
+   a shift.
+
+   The counter is read a SECOND time for the increment rather than reused from
+   the divide: the target has `lw $v0, 0x8($a1)` twice with a nop between, so
+   the store is its own statement and the incremented value goes through a
+   local, which is also what gives the `slti` its register.
+
+   The handler slot is at s - 0x10, a NEGATIVE offset: the parameter points
+   into the middle of its object (func_800B3488 passes a + 0x20), so the slot
+   being written is +0x10 of the object proper. */
+void func_800B34FC(u8 *s)
+{
+    s32 i;
+
+    *(s16 *)(*(u8 **)(s + 0x9C) + 6) = (*(s32 *)(s + 8) << 12) / 5;
+    i = *(s32 *)(s + 8) + 1;
+    *(s32 *)(s + 8) = i;
+    if (i >= 6)
+    {
+        *(u32 *)(s - 0x10) = (u32)func_800B34A8;
+    }
+}
 
 void func_800B3558(u8 *p)
 {
@@ -7851,7 +7950,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4648);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B46CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4720);
+/* func_800B2DA0's twin; see the cluster note on that function. */
+void func_800B4720(u32 *a, u8 **b)
+{
+    func_800B2D00(a, *b + 0x2C, *(u32 **)(*b + 0x40));
+}
 
 void func_800B474C(UnkTownGrid **p)
 {
@@ -7882,7 +7985,15 @@ void func_800B4898(u8 *a)
     func_800B47BC(a + 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B48B8);
+/* func_800B2F38's twin; see the cluster note on func_800B2DA0. Note the
+   first argument is s + 0x14 here against s + 0x1C there, so the +0x1C/+0x2C
+   substitution that governs the inner record does NOT govern this offset --
+   the two objects differ in more than one field. */
+void func_800B48B8(u8 *s)
+{
+    func_8004CBFC((u32 *)(s + 0x14), D_800792DC, *(u32 **)(*(u8 **)(s + 0x5C) + 0x10));
+    **(u32 **)(*(u8 **)(s + 0x5C) + 0x14) = (u32)D_80071244;
+}
 
 void func_800B4908(UnkTownGrid **p)
 {
@@ -7895,7 +8006,12 @@ void func_800B4908(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4978);
+/* func_800B30D8's twin; see the cluster note on func_800B2DA0. */
+void func_800B4978(u8 *s)
+{
+    func_800B2FF8((u32 *)(*(u8 **)(s + 0x5C) + 0x18), *(u8 **)s + 0x2C,
+                  *(u32 **)(*(u8 **)s + 0x40));
+}
 
 void func_800B49A8(UnkTownGrid **p)
 {
@@ -7908,7 +8024,15 @@ void func_800B49A8(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4A18);
+/* func_800B32D4's twin; see the cluster note on func_800B2DA0. The releaser
+   differs -- func_800B5020 for func_800B39E4 -- because each half has its own
+   copy of that one, while func_800B3178 is shared. */
+void func_800B4A18(u8 *s)
+{
+    func_800B5020(*(UnkTownSlot ***)(s + 0x5C));
+    func_800B3178((u32 *)(*(u8 **)(s + 0x5C) + 0x40), *(u8 **)s + 0x2C,
+                  *(u32 **)(*(u8 **)s + 0x40));
+}
 
 void func_800B4A60(UnkTownGrid **p)
 {
@@ -7920,16 +8044,46 @@ void func_800B4A60(UnkTownGrid **p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4AB0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4B7C);
+/* func_800B3440's twin; see the cluster note on func_800B2DA0. Its second
+   call is func_800B4AB0, the twin of func_800B336C -- which is the one
+   position where the two halves' call lists are not parallel in NAME, because
+   func_800B336C is shared by nothing and func_800B4AB0 is its copy. */
+void func_800B4B7C(u8 *s)
+{
+    func_800B4978(s);
+    func_800B4A18(s);
+    func_800B4AB0(s);
+    func_800B4720((u32 *)(*(u8 **)(s + 0x5C) + 0x68), (u8 **)s);
+}
 
 void func_800B4BC4(u8 *a)
 {
     func_800B4B7C(a + 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4BE4);
+/* func_800B34A8's twin; see the cluster note on func_800B2DA0. */
+void func_800B4BE4(u8 *s)
+{
+    func_8004CB2C(s + 0x14);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0x5C) + 0x98), 0);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0x5C) + 0x9C), 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4C38);
+/* func_800B34FC's twin; see the cluster note on func_800B2DA0. The record
+   pointer it writes through is at +0x50 here against +0x9C there -- a third
+   offset that does not follow the +0xA8/+0x5C substitution. */
+void func_800B4C38(u8 *s)
+{
+    s32 i;
+
+    *(s16 *)(*(u8 **)(s + 0x50) + 6) = (*(s32 *)(s + 8) << 12) / 5;
+    i = *(s32 *)(s + 8) + 1;
+    *(s32 *)(s + 8) = i;
+    if (i >= 6)
+    {
+        *(u32 *)(s - 0x10) = (u32)func_800B4BE4;
+    }
+}
 
 u32 func_800B4C94(s32 a)
 {
