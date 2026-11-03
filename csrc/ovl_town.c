@@ -1693,6 +1693,7 @@ extern u8 D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
 extern u8 D_800D2EA4[];
+void func_800B8E08(u16 *p);
 extern u16 *D_800D17D8[];
 extern u16 *D_800D1868[];
 extern s16 D_80111FA8[];
@@ -9863,7 +9864,21 @@ void func_800B73D0(void)
     func_800B8248();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B73F0);
+/* Clears the tile surface and then rebuilds it: func_800B7384 zeroes the
+   0x80x0x80 halfword buffer the caller hands in, and func_800B8E08 -- still a
+   park, at 139 words and 5 DIFF -- redraws into it.
+
+   The declaration of func_800B8E08 here is `u16 *`, not the `s32` its park
+   file carries. Both are 0 differing at this call site, and the park was
+   measured to stay at 5 DIFF either way; `u16 *` is what func_800B7A6C's and
+   func_800B7978's landings established the destination surface to be.
+   nmcheck.py tracks the disagreement as a signature to correct when the park
+   lands, which is not an error. */
+void func_800B73F0(u16 *p)
+{
+    func_800B7384((s16 *)p);
+    func_800B8E08(p);
+}
 
 void func_800B7420(void) {
 }
