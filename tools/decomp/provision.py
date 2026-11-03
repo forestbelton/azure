@@ -36,10 +36,17 @@ def words(unit, f):
 def defs_and_protos(src):
     txt = open(src).read()
     landed, cur, depth, body = {}, None, 0, {}
+    lines, lineno = {}, 0
     for ln in txt.split('\n'):
+        lineno += 1
         m = re.match(r'^[A-Za-z_][\w \*]*?(func_[0-9A-Fa-f]{8})\s*\(', ln)
         if m and ';' not in ln:
             cur = m.group(1); landed[cur] = ln.strip(); body[cur] = set(); depth = 0
+            # Record the line HERE. Searching for the text later finds the
+            # single-line PROTOTYPE instead, because the definition line is a
+            # prefix of it -- that sent a brief's reader to :2206 (a
+            # declaration) rather than :19205 (the definition).
+            lines[cur] = lineno
         if cur:
             body[cur].update(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', ln))
             depth += ln.count('{') - ln.count('}')
@@ -48,12 +55,12 @@ def defs_and_protos(src):
     for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;]*\);)', txt, re.M):
         protos.setdefault(m.group(2), m.group(1).strip())
     for k in body: body[k].discard(k)
-    return landed, protos, body, txt
+    return landed, protos, body, txt, lines
 
 def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
-    landed, protos, body, txt = defs_and_protos(src)
+    landed, protos, body, txt, lines = defs_and_protos(src)
     allcallees, installs, globs = {}, {}, {}
     print("=== PER-FUNCTION FACTS (never describe a union as shared) ===")
     tot = 0
@@ -126,7 +133,7 @@ def main():
         print("      that is the mistake that ranked four groups backwards. Use route")
         print("      (b)/(c) above, or say plainly that there is no template.")
     for s, d, f, sc, sg in ranked[:8]:
-        ln = txt[:txt.index(landed[d])].count('\n') + 1
+        ln = lines[d]
         print("  %6.3f  %-15s csrc/%s.c:%-6d vs %s" % (s, d, unit, ln, f))
         print("          callees %s   globals %s" % (','.join(sc) or '-', ','.join(sg) or '-'))
     if not hits: print("  none -- hand-decode, and say so in the brief")
@@ -136,7 +143,7 @@ def main():
     for f in targets:
         for d, dc in body.items():
             if f in dc and d not in targets:
-                ln = txt[:txt.index(landed[d])].count('\n') + 1
+                ln = lines[d]
                 for m in re.finditer(re.escape(f) + r'\s*\(([^;)]*)\)', txt):
                     print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)" % (f, d, unit, ln, f, m.group(1)[:50])); anyc=True
                     break
