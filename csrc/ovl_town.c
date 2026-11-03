@@ -1673,7 +1673,21 @@ extern u8 D_800892F4[];
 extern u8 D_80089304[];
 s32 func_800B5E10(s32 a);
 u8 *func_800A652C(u8 *p);
-u8 *func_800B512C(u8 *q, s32 n);
+u8 *func_800B512C(u8 *q, s16 n);
+void func_800B66E8(u8 *p);
+void func_800B6E3C(u8 *p);
+s16 func_80042900(s8 *p, s8 n);
+u32 *func_80040574(s32 n);
+void func_80067014(s32 n);
+void func_800672D8(void *p, void *q);
+void func_8003F2A4(Unk80083968 *p);
+extern u32 D_8002E5D8[];
+extern u32 D_8002E5E8[];
+extern u32 D_800D17C8[];
+extern u8 D_80089344[];
+s32 func_80048DA0(s32 i, s32 n);
+u32 func_80048DCC(s32 i);
+s32 func_80048DE8(s32 i);
 u8 *func_800B6030(s32 a, u8 *s);
 s32 func_800439BC(s16 a);
 u32 func_800498EC(s32 i);
@@ -8183,7 +8197,34 @@ void func_800B5020(UnkTownSlot **a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B50BC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B512C);
+/* The gauge-width helper func_800B5174 initialises each of its two 0xC-byte
+   D_800D1794 records with: a value below 300 scales to v = n / 4 + 1 and
+   anything at or above it clamps to 0x40, then +0x02 gets 0x40 - v and +0x0A
+   gets v. The record pointer comes back in $v0.
+
+   The parameter is `s16`: the `sll`/`sra 16` pair at words 0-1 is its
+   sign-extension, sitting at entry because the `slti` is its first int use.
+   Both `s16` and `s32` measure 0 differing at func_800B5174's call site, which
+   passes an `lbu` result, so the callee's own entry shifts are the only
+   witness -- see the lever on a narrow parameter witnessed at the call site,
+   which is this case running the other way. The divide is signed, which is
+   where the `bgez`/`addiu 3` bias pair comes from. */
+u8 *func_800B512C(u8 *q, s16 n)
+{
+    s32 v;
+
+    if (n < 300)
+    {
+        v = n / 4 + 1;
+    }
+    else
+    {
+        v = 0x40;
+    }
+    q[2] = 0x40 - v;
+    q[0xA] = v;
+    return q;
+}
 
 /* The first of func_800B5AC8's four panel builders, and the only one that
    configures the panel rather than filling it with text: a size pair and an
@@ -9017,16 +9058,165 @@ u32 func_800B6464(s32 a)
     return func_800491F4(a, D_800D17AC, 0x18);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B648C);
+/* Appends a card record to the tail of a +0x0C-linked list and parks the
+   head at +0x0C of its first argument. func_800B6508 is the arity witness:
+   `lw $a1, 0x98($s0)` sits before the jal and `addiu $a0, $s0, 0x88` in its
+   delay slot, so both arguments are set explicitly and neither is inherited.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6508);
+   The guard test is hoisted out of the loop -- `lw $v0, 0xC($s1)` / `beqz`
+   before the body, then the body re-tests at the bottom with `bnez` -- which
+   is a plain rotated `while`, not two loops. The second parameter is only
+   forwarded to func_800B6464 and func_800B677C, so it carries no type
+   information; `s32` would compile identically. */
+void func_800B648C(u8 *q, UnkTownCardPair **b)
+{
+    UnkTownCardPair *t;
+
+    t = (UnkTownCardPair *)func_800B6464((s32)b);
+    *(u32 *)(q + 0xC) = (u32)t;
+    while (t->unk_0C != 0)
+    {
+        t = (UnkTownCardPair *)t->unk_0C;
+    }
+    t->unk_0C = func_800B677C((s32)b);
+}
+
+/* The two-way dispatcher at the top of the 0x800B5xxx panel cluster: it
+   refreshes the +0x88 sub-record and then runs ONE of the two panel drivers
+   over the same (record, card array, index) triple.
+
+   THIS IS THE ARITY WITNESS FOR BOTH DRIVERS' THIRD PARAMETER, and the only
+   one there is. func_800B5AC8 and func_800B640C each forward their third
+   argument into their own FIRST call, so no argument-setup insn is emitted
+   there and neither driver's word count changes between two parameters and
+   three. Here the forward is visible: `lw $a2, 0x14($s0)` ahead of each jal,
+   in both arms. See the comment on func_800B5174.
+
+   It also pins func_800B648C at two parameters.
+
+   THE ARMS ARE AS WRITTEN, NOT INVERTED, and that is not luck. The target
+   `beqz`-branches to func_800B5AC8 and falls through to func_800B640C, so the
+   non-zero test comes first. func_800B5D30 needed the opposite -- there the
+   obvious order gave the same 16 instructions reordered, 5 differing -- and
+   the discriminator is that ONE OF ITS ARMS RETURNS. gcc lays an early
+   `return` out inline, which forces the other arm out of line; when both arms
+   are plain calls falling into a shared tail, the arms stay in source order.
+   Inverting this one gives 28 words and reads as 1 differing under ovlverify,
+   which is a trap: the two jal targets swap as well and the mask hides them,
+   so it is really 3. */
+void func_800B6508(u8 *p)
+{
+    func_800B648C(p + 0x88, *(UnkTownCardPair ***)(p + 0x98));
+    if (*(s16 *)(p + 8) != 0)
+    {
+        func_800B640C(*(u8 **)(p + 4), *(UnkTownCardPair ***)(p + 0x98),
+                      *(s32 *)(p + 0x14));
+    }
+    else
+    {
+        func_800B5AC8(*(u8 **)(p + 4), *(UnkTownCardPair ***)(p + 0x98),
+                      *(s32 *)(p + 0x14));
+    }
+}
 
 void func_800B6578(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6580);
+/* Binds a 0xC6/6/0x76 descriptor plus one caller-supplied word to the object
+   and sets the +0x3C ready bit. The four halfwords are a stack struct handed
+   to func_80048E00 by address, which is the same call the landed
+   func_800B3558 makes against the static D_800D1650 -- here the descriptor is
+   built per call because its last field varies.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B65D8);
+   `n` is `s32`, not `s16`, although it is stored with `sh` and both widths are
+   0 differing here. func_800B65D8 passes an `s32` accumulator straight in, and
+   an `s16` prototype would put a `sll`/`sra 16` pair at that call site.
+   func_800B683C's call passes a literal 0 and witnesses nothing. */
+void func_800B6580(u8 *s, s32 n)
+{
+    s16 buf[4];
+
+    buf[0] = 0xC6;
+    buf[1] = 6;
+    buf[2] = 0x76;
+    buf[3] = n;
+    func_80048E00(s, (u8 *)buf);
+    s[0x3C] |= 0x80;
+}
+
+/* Lays the two card/prim pairs at p+0x50 and p+0x54 out left to right from
+   the engine's width table. func_80048DA0 returns D_80080B18[n] and sets two
+   global colour bytes as a side effect; func_80048DCC and func_80048DE8 then
+   look the chosen index up for the pair's +0x00 word and its width. A width
+   of the full 0x10 means "no offset"; otherwise the pair goes at the running
+   total minus 8 per slot and the total advances.
+
+   Five things are measured:
+
+   - func_80048DA0 and func_80048DE8 must be declared returning `s32`, not the
+     `u8` their definitions in csrc/unk_1C540.c carry. The `u8` prototypes make
+     gcc truncate each result with `andi $s0, $v0, 0xff`: 67 words, 24
+     differing. Nothing else in this unit calls them, so the local prototypes
+     cost nothing.
+
+   - `q` must be cached BEFORE the func_80048DA0 call. Swapped, the
+     `lw $s1, 0x50($s4)` lands after the jal instead of in front of it: 68
+     words, 3 differing. Dropping the local and writing the double indirection
+     at all three uses is 69 words, 65 differing -- the func_800B6094 rule.
+
+   - The pair array is indexed off `p` with 0x50 left in the MEMORY
+     DISPLACEMENT. Hoisting the base (`b = (UnkTownCardPair **)(p + 0x50)`,
+     then `b[i]`) makes loop.c's reduced giv start at p+0x50 with a zero MEM
+     offset and costs an `addiu $s4, $s7, 0x50`: 68 words, 2 differing.
+
+   - `w` IS REUSED for the tail's delta, and that rename is the whole last
+     three words. With a separate local the two disjoint live ranges get two
+     pseudos, global.c hands the width $a0 -- the first free call-clobbered
+     register, since the CDK tree's config/mips/mips.h defines no
+     REG_ALLOC_ORDER and the order is plain 0..31 -- and the delta $a1 as the
+     outgoing argument: 68 words, 3 differing, with every other word exact.
+     One local puts both ranges in $a1. Nothing else moved it off that floor:
+     `u32`, `u16` and `u8` for `w` are all 3, as are moving its declaration
+     and writing the delta as an if/else instead of `?:`. `s16 w` is 69 words,
+     36 differing, and inverting the width test is 69 / 34.
+
+   - D_80089344 keeps its own INCLUDE_RODATA, so it is `extern`, and its
+     declared size carries no information here: the address is loop-invariant
+     and hoisted into $s6 whether it is `[]` or `[4]`, both 0 differing. */
+void func_800B65D8(u8 *p, s32 n)
+{
+    UnkTownCardPair *q;
+    s32 total;
+    s32 idx;
+    s32 w;
+    s32 i;
+
+    total = 0;
+
+    for (i = 0; i < 2; i++)
+    {
+        q = *(UnkTownCardPair **)(p + 0x50 + i * 4);
+        idx = func_80048DA0(n, D_80089344[i]);
+        if (i == 0 && n == 4)
+        {
+            idx--;
+        }
+        q->unk_00 = func_80048DCC(idx);
+        w = func_80048DE8(idx);
+        if (w == 0x10)
+        {
+            q->unk_04->unk_0A = 0;
+        }
+        else
+        {
+            q->unk_04->unk_0A = total - i * 8;
+            total += w;
+        }
+    }
+
+    w = total != 0 ? total - 0x14 : 0;
+    func_800B6580(*(u8 **)*(u8 ***)(p + 0x5C), w);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B66E8);
 
@@ -9040,15 +9230,138 @@ u32 func_800B677C(s32 a)
     return func_800491F4(a, D_800D17C4, 0x18);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B67A4);
+/* Same template-copy shape as func_800AFF00 and func_800B4CBC above, with the
+   three prim coordinates passed in instead of written as literals: the two
+   resident templates D_8002E5D8 (4 words) and D_8002E5E8 (3 words) are copied
+   into the caller's two buffers, the pair's two prim pointers are aimed at
+   them, and then the coordinates are written THROUGH p->unk_04 rather than
+   through the local.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B683C);
+   Four spellings are load-bearing, each measured:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B68AC);
+   - The templates need POINTER LOCALS. Copying as `a[i] = D_8002E5D8[i]` emits
+     a fresh %hi per element: 40 words, 36 differing. With the locals the
+     lui/lw %lo/addiu appears once per template.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B68C8);
+   - The four trailing stores must RE-READ `p->unk_04`. Carrying them on a
+     named `UnkTownCardPrim *q = (UnkTownCardPrim *)a` gives 32 words, 13
+     differing; spelling only the first through `a` gives 37 words, 14. The
+     intervening `sh` may alias `p->unk_04`, so cse cannot keep the
+     equivalence, and only the FIRST store gets $v0 from the `sw` that just
+     executed.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B691C);
+   - `p->unk_00 = 0` goes AFTER both pointer stores: before them is 38 words,
+     2 differing, purely the `sw $zero` moving up.
+
+   - The 5th and 6th parameters are `s32`, NOT `s16`. Both widths are 0
+     differing HERE -- the stores are `sh` either way -- so the callee cannot
+     witness it; the caller can. An `s16` prototype makes cc1psx emit a
+     `sll`/`sra 16` pair per argument at every call site, and func_800B691C's
+     listing has the bare `lw 0x38($sp)` / `sw 0x10($sp)` instead. The trailing
+     `addiu $v0, $zero, 0x4` is the byte store's own constant and not a return
+     value: `s32` with `return 4` is 39 words, 3 differing. */
+void func_800B67A4(UnkTownCardPair *p, u32 *a, u32 *b, s32 x, s32 y, s32 z)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = x;
+    p->unk_04->unk_0A = y;
+    p->unk_04->unk_0C = z;
+    p->unk_04->unk_0F = 4;
+}
+
+/* Clears two slot pointers through the +0x98 record, points its +0x5C target
+   back at the object's +0x18 view, and binds that target through
+   func_800B6580.
+
+   The last argument needs THREE dereference levels, and getting it wrong
+   produces a 26-word body at 9 differing that looks like a cse problem and is
+   not. The target reads `0x98`, then `0x5C`, then `0x00` -- and that third
+   load is of the very address the preceding statement STORED to, with nothing
+   between. That is the documented signature of a volatile re-read, and reaching
+   for `volatile` here is the wrong move: writing the chain out at its true
+   depth is 0 differing with no qualifier, and the 9-differing version was
+   simply one `*` short. CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A
+   FORWARDED STORE.
+
+   The loop re-loads +0x98 on every iteration -- the branch target is the `lw`,
+   not the body after it -- so the base is NOT hoisted and the source reads it
+   inside the loop. */
+void func_800B683C(u8 *p)
+{
+    s32 i;
+
+    for (i = 0x14; i < 0x16; i++)
+    {
+        *((u32 **)*(u8 **)(p + 0x98))[i] = 0;
+    }
+    **(u32 **)(*(u8 **)(p + 0x98) + 0x5C) = (u32)(p + 0x18);
+    func_800B6580(**(u8 ***)(*(u8 **)(p + 0x98) + 0x5C), 0);
+}
+
+/* A word lookup in the town-private table D_800D17C8. The symbol's address is
+   materialised FIRST and the scaled index added to it, which is the shape a
+   subscript on a declared array gives at -G0. */
+u32 func_800B68AC(s32 i)
+{
+    return D_800D17C8[i];
+}
+
+/* Initialises the task header: handler func_800B66E8 at +0x00, the caller's
+   word at +0x04, the mode at +0x08, two zeroed halfwords at +0x0C/+0x0E, and
+   the D_800D17C8 lookup for that mode at +0x14, then runs func_800B6E3C.
+
+   The third parameter is `s32`, not `s16`, even though it is stored with `sh`
+   and both widths are 0 differing here. func_800B691C forwards its own third
+   argument straight in, and with `s16` anywhere in that chain cc1psx emits a
+   `sll`/`sra 16` pair at the call site: func_800B691C then comes out 30 words,
+   15 differing. The callee cannot witness this; only the caller can.
+
+   +0x08 is written and then read BACK with `lh` to feed func_800B68AC, rather
+   than the parameter being reused -- the `sh` is in the way, so cse does not
+   forward it, and the source reads the field. */
+void func_800B68C8(u8 *p, u32 a, s32 m)
+{
+    *(s16 *)(p + 8) = m;
+    *(u32 *)(p + 4) = a;
+    *(s16 *)(p + 0xC) = 0;
+    *(s16 *)(p + 0xE) = 0;
+    *(u32 *)p = (u32)func_800B66E8;
+    *(u32 *)(p + 0x14) = func_800B68AC(*(s16 *)(p + 8));
+    func_800B6E3C(p);
+}
+
+/* The task's whole construction in three calls: build the prim pair at +0x88
+   over the buffers at +0x60 and +0x70, wire the slots, then fill the header.
+   func_800AFF00's call site at the +0x98/+0x70/+0x80 offsets is the same shape
+   one object out.
+
+   SIX parameters, and the last four are all `s32`. The fourth arrives in $a3
+   and is forwarded to func_800B67A4 with no insn at all -- the register is
+   already right -- so nothing here witnesses it; func_800B67A4's own body
+   does. The THIRD must be `s32` as well: declared `s16` it is sign-extended
+   at its first int use, which is the forward into func_800B68C8, giving 30
+   words and 15 differing with a `sll`/`sra 16` pair and $s1/$s2 exchanged.
+   That is one narrow declaration costing two extra words and an allocation
+   swap three statements away. */
+void func_800B691C(u8 *s, u32 b, s32 c, s32 x, s32 y, s32 z)
+{
+    func_800B67A4((UnkTownCardPair *)(s + 0x88), (u32 *)(s + 0x60),
+                  (u32 *)(s + 0x70), x, y, z);
+    func_800B683C(s);
+    func_800B68C8(s, b, c);
+}
 
 s32 func_800B6990(u8 *s, s32 n)
 {
@@ -9075,19 +9388,135 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6BC4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6C30);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6C94);
+/* Writes a coordinate pair into the prim hanging off +0x0C, if there is an
+   object at all. +0x0C is re-dereferenced for the second store -- the target
+   has `lw 0xC` / `lw 0x4` twice -- which is this unit's standing shape. */
+void func_800B6C94(u8 *p, s16 x, s16 y)
+{
+    if (p != NULL)
+    {
+        (*(UnkTownCardPair **)(p + 0xC))->unk_04->unk_08 = x;
+        (*(UnkTownCardPair **)(p + 0xC))->unk_04->unk_0A = y;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6CCC);
+/* Fills a two-word GPU primitive header: +0x04 gets a code selected by the
+   first argument (0x42E6 or 0x42DB off a base) and +0x00 gets the fourth
+   argument plus 0x80800000.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6CEC);
+   The ternary is the spelling. The `bnez` branches over the FALSE value with
+   the TRUE value in its delay slot, which is cc1psx's `dst = cond ? A : B`
+   shape; the two-arm if/else form that func_800B5918 needs would put the
+   store in each arm. 0x80800000 is a constant materialised with lui -- not a
+   symbol, which would be lui/addiu. */
+void func_800B6CCC(s32 a, s32 b, u32 *c, u32 d)
+{
+    c[1] = b + (a != 0 ? 0x42E6 : 0x42DB);
+    c[0] = d + 0x80800000;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6D54);
+/* Picks the glyph index for the object's +0x13 slot: nothing there gives
+   func_80049E88's answer, otherwise a nonzero low halfword from
+   func_80042900(p, 0xA) forces 0x2F and anything else goes through
+   func_800B5E10's one-entry remap.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6D94);
+   func_80049E88 IS DELIBERATELY NOT DECLARED IN THIS UNIT. Its real definition
+   returns `u8`, and declaring it so makes gcc zero-extend the tail call's
+   result: 27 words, 6 differing, the extra word being `andi $v0, $v0, 0xff`.
+   The target has no such mask, so the original translation unit had no
+   prototype for it and the implicit `int` is what matches. Several other
+   callees in this file are implicit for the same reason.
+
+   The `sll $v0, $v0, 16` with no `sra` before the `beqz` is a low-halfword
+   test, not a shift in the source: the cast is `(s16)`.
+
+   The arms are the way round they are written. The `p[0x13] == 0` arm is the
+   branch TARGET and so laid out last, which is why the `!= 0` test comes
+   first even though the zero case reads like the early return. */
+s32 func_800B6CEC(u8 *p)
+{
+    s32 r;
+
+    r = p[0x13];
+    if (r != 0)
+    {
+        if ((s16)func_80042900((s8 *)p, 0xA) != 0)
+        {
+            r = 0x2F;
+        }
+        else
+        {
+            r = func_800B5E10(r);
+        }
+        return r;
+    }
+    return func_80049E88((s8 *)p);
+}
+
+/* Seeds the object's trailing primitive: +0xE0 takes the constant 0x8002B800
+   and the pair at +0xD8 is built by func_800B6CCC from the +0x08/+0x0A
+   coordinates and that same constant.
+
+   0x8002B800 is materialised TWICE, once per occurrence, with lui/ori each --
+   a constant address, not a symbol, which would be lui/addiu. Writing it as
+   one local would give one materialisation. */
+void func_800B6D54(u8 *p)
+{
+    *(u32 *)(p + 0xE0) = 0x8002B800;
+    func_800B6CCC(*(s16 *)(p + 8), *(s16 *)(p + 0xA), (u32 *)(p + 0xD8),
+                  0x8002B800);
+}
+
+/* Allocates a 0x200-byte scratch, clears it, and hands func_800672D8 a
+   four-halfword descriptor packed out of the object's +0x04..+0x0B, bracketed
+   by two func_80067014(0) calls.
+
+   The two packings are the interesting part and both are measured: +0x10 is
+   `(p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0)` and +0x12 is
+   `p[9] + ((*(u16 *)(p + 4) << 4) & 0x100)`. The +0x04 halfword is read twice
+   rather than held, which is why there are two `lhu 0x4`; the shifts are
+   unsigned (`srl`, not `sra`) because the byte fields are `u8`. */
+void func_800B6D94(u8 *p)
+{
+    s16 buf[4];
+    u32 *q;
+
+    q = func_80040574(0x200);
+    func_80069EC8(q, 0x200);
+    func_80067014(0);
+    buf[0] = (p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0);
+    buf[1] = p[9] + ((*(u16 *)(p + 4) << 4) & 0x100);
+    buf[2] = p[0xA] >> 2;
+    buf[3] = p[0xB];
+    func_800672D8(buf, q);
+    func_80067014(0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6E3C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6F54);
+/* Releases the two handles at +0xD0 and +0xD4 and reports whether anything
+   was released. The return value is ONE accumulator seeded 0 in the first
+   branch's delay slot and set to 1 in each arm, with a single exit -- the
+   func_800B555C shape, which is what a RETURNED flag wants; a stored flag
+   would want the two-arm form func_800B5918 needs. */
+s32 func_800B6F54(u8 *p)
+{
+    s32 r = 0;
+
+    if (*(u32 *)(p + 0xD0) != 0)
+    {
+        func_8003F2A4(*(Unk80083968 **)(p + 0xD0));
+        *(u32 *)(p + 0xD0) = 0;
+        r = 1;
+    }
+    if (*(u32 *)(p + 0xD4) != 0)
+    {
+        func_8003F2A4(*(Unk80083968 **)(p + 0xD4));
+        *(u32 *)(p + 0xD4) = 0;
+        r = 1;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6FB8);
 
