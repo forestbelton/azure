@@ -1517,6 +1517,8 @@ u32 func_8004A658(s32 i, s32 j);
 void func_8009C1B4();
 void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d);
 void func_8009DEBC();
+void func_8009DD40();
+void func_8009F148(UnkTownSpawn *p, UnkTownSpawn *p2, UnkVec *q, UnkTownRend *r);
 void func_800B2244();
 extern s32 D_800D0B14;
 extern s16 D_80100D18;
@@ -4820,7 +4822,92 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E4BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E4EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E504);
+/* The tail from func_8009DFD8 (the landed entity constructor) almost verbatim:
+   the same D_800D073C / D_800D076C / D_800D0788 tables, the same
+   `0x12 || 0x13` range test writing D_800D0754 to p+0xC, and the same
+   0x12 -> D_8006E240 / 0x13 -> func_8009DC8C / else -> func_8004A658 chain
+   into r->unk_08. p-0x10 is the UnkNode update hook that func_8009DFD8
+   spells `n->unk_10`, re-pointed at func_8009DD40 or func_8009DEBC.
+
+   THE TWO TABLES AT 0x80010980 AND 0x80010A94 ARE ONE CONSTANT BASE, AND THE
+   BASE LOCAL MUST BE PER-BLOCK. Both are outside the loaded image, so they
+   are the constant 0x80010000 with the whole offset inside the index -- see
+   docs/matching-levers.md, "A %lo in the displacement with a REGISTER index
+   means a constant base". mips.h's LEGITIMIZE_ADDRESS only splits a constant
+   address into a register high plus a displacement low when the address is
+   plus(REG, CONST_INT); an array or struct base makes it plus(ashift, ...),
+   code0 != REG, and force_operand materialises the whole address, one word
+   too many every time.
+
+   What is new here: ONE base local per basic block, declared and assigned
+   INSIDE the arm and AFTER the calls. A single function-scope base shared by
+   the else-arm and the 0x13-arm is 132 words / 5 differing on register names
+   alone; assigning it at the top of the block instead hoists the `lui` above
+   the calls, which buys it a callee-saved register (`lui $s3`, an extra
+   `sw $s3`, frame 0x28 not 0x20) and costs 135 words / 127 differing.
+
+   Arity 3 is what the body witnesses ($s0/$s1/$s2 all used) but is NOT
+   falsifiable: this function has no caller anywhere in the repo and its
+   address is never taken, so a fourth unused pointer parameter would be
+   invisible. */
+void func_8009E504(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (*((u8 *)p + 0x94) == 0)
+    {
+        func_8008F0D4(p, q, D_800D073C);
+        func_8009B218(p, q, r, D_800D076C);
+        *((u8 *)p + 0x4C) = *((u8 *)p + 0x95);
+        *((u8 *)p + 0x4D) = *((u8 *)p + 0x96);
+    }
+    else if (*((s8 *)p + 0x94) == -1)
+    {
+        func_8008F104(p, q, D_800D073C);
+        func_8009B218(p, q, r, 0);
+        *((u8 *)p + 0x4C) = *((u8 *)p + 0x95);
+        *((u8 *)p + 0x4D) = *((u8 *)p + 0x96);
+    }
+    else
+    {
+        u8 *b;
+
+        func_8008F0D4(p, q, D_800D073C);
+        func_8009B218(p, q, r, D_800D0788);
+        b = (u8 *)0x80010000;
+        *((u8 *)p + 0x4C) = b[*((u8 *)p + 0x95) * 4 + 0x980];
+        *((u8 *)p + 0x4D) = b[*((u8 *)p + 0x95) * 4 + 0x981];
+        *((u8 *)p + 0x4E) = b[*((u8 *)p + 0x95) * 4 + 0x982];
+        *((u8 *)p + 0x4F) = b[*((u8 *)p + 0x95) * 4 + 0x983];
+        func_8009F148(p, p, q, r);
+    }
+    if (func_8009FF50() == 0)
+    {
+        *(u32 *)((u8 *)p - 0x10) = (u32)func_8009DD40;
+    }
+    else
+    {
+        *(u32 *)((u8 *)p - 0x10) = (u32)func_8009DEBC;
+    }
+    if (*((u8 *)p + 0x4D) == 0x12 || *((u8 *)p + 0x4D) == 0x13)
+    {
+        *(u8 **)((u8 *)p + 0xC) = D_800D0754;
+    }
+    if (*((u8 *)p + 0x4D) == 0x12)
+    {
+        r->unk_08 = (u32)D_8006E240;
+    }
+    else if (*((u8 *)p + 0x4D) == 0x13)
+    {
+        u8 *c;
+
+        c = (u8 *)0x80010000;
+        func_8009DC8C(p, r, *((u8 *)p + 0x4C),
+                      *(void **)(c + (c[*((u8 *)p + 0x95) * 4 + 0x983] & 0x3F) * 0x54 + 0xA94));
+    }
+    else
+    {
+        r->unk_08 = func_8004A658(*((u8 *)p + 0x4D), *((u8 *)p + 0x4C));
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E714);
 

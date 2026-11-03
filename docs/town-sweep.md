@@ -187,6 +187,25 @@ standalone) after three wrong guesses about which prototype had done it.
   signatures in the unit. `func_800C4174`'s third parameter is an
   `UnkTownRend *` because a family writes through it; `func_800C2E84`'s second
   probably is too, and it stays `s32` until something uses it.
+* **SCREEN FOR A JUMP TABLE BEFORE YOU START.** If the listing has a `jtbl_`
+  symbol, the switch has at least 5 cases and cc1psx emits a real table with
+  `.align 3`. If the function ALSO owns a rodata constant, and the table's
+  address is not 8-aligned, the body can reach 0 differing and the overlay will
+  still fail with `size differs by +0x10` from four bytes of padding that no C
+  spelling can remove:
+
+      grep -l 'jtbl_' asm/nonmatchings/ovl_town/func_XXXX.s
+      # table address 4 mod 8 AND a rodata constant of its own -> unlandable now
+
+  `func_800BF1C8` is parked for exactly this, at 0 DIFF with .text identical in
+  content and size. It is the unit's only gcc-emitted jump table so far, so the
+  next one attempted is the next one to hit it. See
+  docs/matching-levers.md, "cc1psx emits `.align 3` for jump tables".
+* **A whole-unit 0-differing sweep does NOT mean the build passes.** ovlverify
+  compares function TEXT. Rodata size and layout, jump-table padding and
+  alignment are invisible to it. `make build/town.bin` is the only authority,
+  and it is the step that catches a rodata regression three thousand words from
+  anything you touched.
 
 ## The agent brief
 
