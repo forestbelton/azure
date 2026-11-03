@@ -7305,7 +7305,233 @@ s16 func_80095C50(UnkTown2AE8 *v, s32 i)
     return (s16)func_8008C6B8((UnkTownVec16 *)v, (UnkTownVec16 *)D_800D041C, i);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095C80);
+/* The diagonal collision resolver: with the frame's motion latched in
+   D_800FE5C0's +0x0C/+0x10, probe the two axis walls separately and decide
+   whether func_800961A8 or func_800961D8 gets to resolve the move.  The probe
+   pair is chosen by the SIGNS of the delta -- +x/-x pick func_80095BC0 /
+   func_80095BF0, +y/-y pick func_80095C20 / func_80095C50 -- and each probe's
+   second argument is the OTHER axis's direction.  A probe returns an s16 cell
+   coordinate, so `<< 16` puts it in the record's 16.16 units, and the
+   comparison's sense follows that axis's sign (`>=` moving +, `<=` moving -).
+
+   When neither axis is blocked the tie-break is the position inside the 0x40
+   cell -- `*(s16 *)((u8 *)q + 2)` against `+ 6` masked to 0x3F, with abs() on
+   whichever axis is moving NEGATIVE; when either is blocked, the move is
+   re-probed with both axes shifted.  The dx<0 && dy<0 arm takes that
+   tie-break's two calls the other way round, which is not symmetry noise: it
+   is in the listing, where that `beqz` goes to .L80096164 and the other
+   three go to .L80096184.
+
+   Every arm ends in the same pair of calls and cross-jumping unifies all nine
+   call sites into the two at the tail, which is why a 4x3 structure costs 330
+   words.  A call does not end a basic block, so one arm's two probes, both
+   flags and both branches are a single ~26-insn block, and the flags' live
+   ranges are what the scheduler and the allocator trade against there.
+
+   THE THREE FLAGS' SCOPES ARE LOAD-BEARING, each one measured:
+   `xhit` must be declared INSIDE the arm, so that reg_basic_block >= 0 and
+   reg_n_deaths == 1 give it reg_qty -2 (local-alloc.c:470-477) and
+   combine_regs may tie it to the `slt` that sets it -- the tie is refused
+   outright for reg_qty == -1 (local-alloc.c:1842).  That tie pulls
+   `lw`/`slt`/`xori` into ONE quantity, which crosses the second probe and so
+   must be callee-saved: it is the fourth saved register.  At function scope
+   the function is 328 words / 326 differing.  `yhit` must STAY at function
+   scope so one allocno covers all four arms and global-alloc gives them one
+   register ($v0); per-arm it is 330 words / 4 differing, two arms taking
+   $v1.  And the re-probe needs its own block-local `dhit`: reusing `xhit`
+   there makes `xhit` multi-block and costs the tie, 328 words / 325
+   differing. */
+void func_80095C80(UnkTown2AE8 *q)
+{
+    UnkTown2AE8 v;
+    s32 yhit;
+
+    if (D_800FE5C0.unk_0C > 0)
+    {
+        if (D_800FE5C0.unk_10 > 0)
+        {
+            s32 xhit;
+
+            v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+            v.unk_04 = q->unk_04;
+            v.unk_08 = q->unk_08;
+            xhit = q->unk_00 >= (func_80095BC0(&v, 0) << 16);
+            v.unk_00 = q->unk_00;
+            v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+            v.unk_08 = q->unk_08;
+            yhit = q->unk_04 >= (func_80095C20(&v, 0) << 16);
+            if (!xhit && !yhit)
+            {
+                if ((*(s16 *)((u8 *)q + 2) & 0x3F) < (*(s16 *)((u8 *)q + 6) & 0x3F))
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            else
+            {
+                s32 dhit;
+
+                v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+                v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+                v.unk_08 = q->unk_08 - D_800FE5C0.unk_10;
+                dhit = q->unk_00 >= (func_80095BC0(&v, 0) << 16);
+                if (dhit)
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            return;
+        }
+        if (D_800FE5C0.unk_10 < 0)
+        {
+            s32 xhit;
+
+            v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+            v.unk_04 = q->unk_04;
+            v.unk_08 = q->unk_08;
+            xhit = q->unk_00 >= (func_80095BC0(&v, 1) << 16);
+            v.unk_00 = q->unk_00;
+            v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+            v.unk_08 = q->unk_08;
+            yhit = q->unk_04 <= (func_80095C50(&v, 0) << 16);
+            if (!xhit && !yhit)
+            {
+                if ((*(s16 *)((u8 *)q + 2) & 0x3F) < (abs(*(s16 *)((u8 *)q + 6)) & 0x3F))
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            else
+            {
+                s32 dhit;
+
+                v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+                v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+                v.unk_08 = q->unk_08 - D_800FE5C0.unk_10;
+                dhit = q->unk_00 >= (func_80095BC0(&v, 1) << 16);
+                if (dhit)
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            return;
+        }
+    }
+    if (D_800FE5C0.unk_0C < 0)
+    {
+        if (D_800FE5C0.unk_10 > 0)
+        {
+            s32 xhit;
+
+            v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+            v.unk_04 = q->unk_04;
+            v.unk_08 = q->unk_08;
+            xhit = q->unk_00 <= (func_80095BF0(&v, 0) << 16);
+            v.unk_00 = q->unk_00;
+            v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+            v.unk_08 = q->unk_08;
+            yhit = q->unk_04 >= (func_80095C20(&v, 1) << 16);
+            if (!xhit && !yhit)
+            {
+                if ((abs(*(s16 *)((u8 *)q + 2)) & 0x3F) < (*(s16 *)((u8 *)q + 6) & 0x3F))
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            else
+            {
+                s32 dhit;
+
+                v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+                v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+                v.unk_08 = q->unk_08 - D_800FE5C0.unk_10;
+                dhit = q->unk_00 <= (func_80095BF0(&v, 0) << 16);
+                if (dhit)
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            return;
+        }
+        if (D_800FE5C0.unk_10 < 0)
+        {
+            s32 xhit;
+
+            v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+            v.unk_04 = q->unk_04;
+            v.unk_08 = q->unk_08;
+            xhit = q->unk_00 <= (func_80095BF0(&v, 1) << 16);
+            v.unk_00 = q->unk_00;
+            v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+            v.unk_08 = q->unk_08;
+            yhit = q->unk_04 <= (func_80095C50(&v, 1) << 16);
+            if (!xhit && !yhit)
+            {
+                if ((abs(*(s16 *)((u8 *)q + 2)) & 0x3F) < (abs(*(s16 *)((u8 *)q + 6)) & 0x3F))
+                {
+                    func_800961D8(q);
+                }
+                else
+                {
+                    func_800961A8(q);
+                }
+            }
+            else
+            {
+                s32 dhit;
+
+                v.unk_00 = q->unk_00 - D_800FE5C0.unk_0C;
+                v.unk_04 = q->unk_04 - D_800FE5C0.unk_10;
+                v.unk_08 = q->unk_08 - D_800FE5C0.unk_10;
+                dhit = q->unk_00 <= (func_80095BF0(&v, 1) << 16);
+                if (dhit)
+                {
+                    func_800961A8(q);
+                }
+                else
+                {
+                    func_800961D8(q);
+                }
+            }
+            return;
+        }
+    }
+    if (D_800FE5C0.unk_0C != 0)
+    {
+        if (D_800FE5C0.unk_10 == 0)
+        {
+            func_800961A8(q);
+        }
+    }
+    else if (D_800FE5C0.unk_10 != 0)
+    {
+        func_800961D8(q);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800961A8);
 
