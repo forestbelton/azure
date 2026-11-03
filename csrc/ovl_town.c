@@ -2365,6 +2365,21 @@ void func_800C1F8C();
 s32 func_800C21F8();
 extern s32 D_80083788;
 extern s32 D_800D0428;
+/* func_800BC840 installs func_800BC764 at the UnkNode's +0x10.  It is an
+   INCLUDE_ASM stub in this unit and only its address is taken, so it is
+   declared unprototyped the way func_800BF1C8 and func_800BF4CC above are.
+   D_800D20CC is address-taken (`lui`/`addiu`) and handed to func_8008F074;
+   D_800D20E4 is LOADED (`lui`/`lw %lo`) and stored at the actor view's +0x48
+   -- the same 0x18-byte-record-plus-pointer-word pair shape the
+   D_800D232C/D_800D2344 comment above records.  D_800F15E4 is a bind
+   descriptor handed to func_8003DB94 exactly as D_800F15AC is at the
+   func_800ABB20 definition.  All four are read out of
+   asm/nonmatchings/ovl_town/func_800BC840.s itself. */
+void func_800BC764();
+extern u8 D_800D20CC[];
+extern u32 D_800D20E4;
+extern u8 D_800F15E4[];
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -17568,11 +17583,80 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC45C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC574);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC6CC);
+/* Installed at the UnkNode's +0x10 by func_800BC574 and reached only through
+   func_80040190's cast (csrc/unk_12DEC.c), which calls it as
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- three parameters, the first being the node's +0x20 actor view.  Body:
+   let the engine run the renderable, advance the mover's x/y by their own
+   per-frame deltas, and retire the node on func_800C3BF4's REND +0x14 gate
+   with the unit's standard two-flag kill (a - 0x2 is UnkNode.unk_1E).
+
+   Order-pinned three ways: the func_800478B8 call must come FIRST (after the
+   adds it is 35 words / 36 differing -- with nothing live across a call, `q`
+   needs no callee-saved register at all and the four mover loads go off the
+   incoming $a1, which is what removes the three words), the two adds must
+   precede the gate (after it, 38 / 26), and they must be in 0x00-then-0x04
+   order (swapped, 38 / 6 -- the target interleaves all four loads, so the
+   pairing is visible).  The
+   third axis is NOT advanced here: adding `q->unk_08 += q->unk_14` is
+   42 / 29.
+
+   38 words -- its header reads `nonmatching func_800BC6CC, 0x98`, and
+   0x98/4 = 38.  0 differing, first compile. */
+void func_800BC6CC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    func_800478B8((s32)r);
+    q->unk_00 += q->unk_0C;
+    q->unk_04 += q->unk_10;
+    if ((r->unk_14 & 0x6000) != 0)
+    {
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC764);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC840);
+/* NOTHING CALLS THIS AND NOTHING TAKES ITS ADDRESS -- there is no `jal
+   func_800BC840` and no `%hi(func_800BC840)` anywhere under
+   asm/nonmatchings/, and the name appears nowhere in csrc/ or include/.  The
+   arity is settled by its own body instead: all three argument registers are
+   READ before they are written ($a0 as the actor view, $a1 forwarded to
+   func_8008F074, $a2 as the func_8003DB94 renderable).
+
+   It is the spawner tail the func_800A7D48/func_800A7DA0 pair writes: install
+   the continuation func_800BC764 at the UnkNode's +0x10, zero the actor's
+   +0x50 dispatch slot, tag the node with func_8004491C, park D_800D20E4 at
+   the actor view's +0x48 and bind the renderable, then run func_8008F074 over
+   the D_800D20CC descriptor.
+
+   THE INSTALL IS SPELLED OFF THE ACTOR VIEW, NOT OFF A NODE LOCAL.  The
+   target's store is `sw $v0, -0x10($s0)`, so the node pointer exists only as
+   func_8004491C's argument; materialising it into an `UnkNode *o` first and
+   writing `o->unk_10` gives `sw $v0, 0x10($a0)` -- 36 words, 1 differing, the
+   closest near-miss measured on this function.  `(u8 *)p` with raw casts and
+   an `UnkTownSpawn *p` with `(u8 *)p` at every use are both 36 / 0.
+
+   The three-argument call to func_8008F074 is real and is spelled as a cast,
+   the idiom func_800BF3F0/func_800BF654/func_800C2664 already use: the target
+   materialises &D_800D20CC into $a2 and keeps the +0x08 mover in $a1, and
+   calling the one-parameter prototype is 30 words / 32 differing.  Order is
+   pinned at both ends: the +0x50 zero must follow the install (before it the
+   two stores simply exchange, one of them landing in func_8004491C's delay
+   slot -- 36 words, 2 differing), and the +0x48 store must sit between the
+   two calls (after func_8003DB94, 36 / 9; before func_8004491C, 36 / 15).
+
+   36 words -- its header reads `nonmatching func_800BC840, 0x90`, and
+   0x90/4 = 36.  0 differing, first compile. */
+void func_800BC840(u8 *p, UnkVec *q, UnkTownRend *r)
+{
+    *(u32 *)(p - 0x10) = (u32)func_800BC764;
+    *(s32 *)(p + 0x50) = 0;
+    func_8004491C((UnkNode *)(p - 0x20), (u32)D_80045340);
+    *(u32 *)(p + 0x48) = D_800D20E4;
+    func_8003DB94(r, D_800F15E4, 0);
+    ((void (*)(void *, void *, void *))func_8008F074)(p, q, D_800D20CC);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC8D0);
 
@@ -17714,7 +17798,37 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BEAD0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BEBA4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BF15C);
+/* func_800BC6CC's bare form: the same +0x10 handler shape installed by
+   func_800BEBA4, with no mover advance at all -- run the renderable, then
+   retire the node on the REND +0x14 gate.
+
+   THE UNREAD SECOND PARAMETER IS WITNESSED HERE, which the "an unread
+   parameter costs no words in the callee" lever does not predict: dropping it
+   and taking the renderable second is 27 words / 1 differing, and the one
+   word is `move $s0, $a1` for the target's `move $s0, $a2`.  An unread
+   parameter is free only when nothing after it is read.  Typing the third
+   parameter `s32` and casting at the use is 27 / 0, so the pointer spelling
+   is the house convention's and not this body's witness.
+
+   The gate must follow the call (before it, 21 words / 27 differing) and the
+   +0x1E OR must precede the D_800814A0 one (swapped, 27 / 6).  That swap is a
+   pure emission-order difference -- both read-modify-writes stay the same six
+   words and the D_800814A0 `lui` stays in the `beqz`'s delay slot either way,
+   so it is the ordinary "neither arm leaves, source order is emission order"
+   fact and NOT the `lui`-sharing mechanism func_800C6CE4's comment records
+   for its own swap.
+
+   27 words -- its header reads `nonmatching func_800BF15C, 0x6C`, and
+   0x6C/4 = 27.  0 differing, first compile. */
+void func_800BF15C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    func_800478B8((s32)r);
+    if ((r->unk_14 & 0x6000) != 0)
+    {
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800898C4);
 
@@ -17858,7 +17972,33 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BFB8C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BFD14);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BFF7C);
+/* func_800BF15C with one statement added, and the same +0x10 handler shape
+   installed by func_800BFD14: fade the renderable by subtracting 0x10 from
+   each of its +0x0C/+0x0D/+0x0E bytes AS ONE WORD, then retire the node on
+   the REND +0x14 gate.
+
+   The fade is a single word add, which is why the three bytes are not
+   touched individually: `r->unk_0C -= 0x10; r->unk_0D -= 0x10;
+   r->unk_0E -= 0x10;` is 34 words / 25 differing.  Spelling of the constant
+   does not matter -- `*(s32 *)&r->unk_0C += 0xFFEFEFF0`, `-= 0x101010` and
+   the `(u32 *)` cast are all 30 / 0 -- because the materialisation is
+   `lui 0xFFEF`/`ori 0xEFF0` either way.  Its POSITION is pinned between the
+   call and the gate: before the call it is 32 / 26 and after the gate 32 / 24,
+   both two words long because the constant's `lui`/`ori` pair stops sharing
+   the call's argument register $a0.
+
+   30 words -- its header reads `nonmatching func_800BFF7C, 0x78`, and
+   0x78/4 = 30.  0 differing, first compile. */
+void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    func_800478B8((s32)r);
+    *(s32 *)&r->unk_0C += 0xFFEFEFF0;
+    if ((r->unk_14 & 0x6000) != 0)
+    {
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BFFF4);
 
@@ -19526,7 +19666,28 @@ void func_800C64C8(void *a, UnkTown2AE8 *b, s32 c)
     func_800C641C(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C6544);
+/* func_800C64C8 and func_800C65C8 above, line for line, with func_800C6440
+   for func_800C641C/func_800C645C and one extra statement: the func_800C6C10
+   effect func_800C6740 also runs.  Like them it has NO caller and NO
+   address-taker anywhere (no `jal func_800C6544`, no `%hi(func_800C6544)`),
+   so the arity comes from its own body -- all three argument registers are
+   read and forwarded to func_800C6440.
+
+   func_800C6440 takes THREE arguments here where func_800C6740 calls it with
+   one; the prototype is unprototyped `void func_800C6440()`, so both
+   type-check, and the target sets $a0/$a1/$a2 from $s0/$s1/$s2 before the
+   `jal`.  Calling it with one is 25 words / 29 differing.  The two tail calls
+   are order-pinned (swapped, 33 / 5) and func_800C3050 must come first
+   (last, 25 / 30).
+
+   33 words -- its header reads `nonmatching func_800C6544, 0x84`, and
+   0x84/4 = 33.  0 differing, first compile. */
+void func_800C6544(void *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C3050(a, 0x9, D_800D5988, D_800D598C, D_800D5958, D_800D5960);
+    func_800C6440(a, b, c);
+    func_800C6C10(a);
+}
 
 void func_800C65C8(void *a, UnkTown2AE8 *b, s32 c)
 {
