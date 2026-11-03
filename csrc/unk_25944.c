@@ -13,19 +13,11 @@
 
    Everything above the first function is copied verbatim from the head of
    csrc/unk_1C540.c plus every file-scope declaration that stood above this
-   point in the undivided file. The `.size` records are file-scope and change
-   every access to those symbols in whichever unit they appear, so every
-   piece carries the whole list. */
+   point in the undivided file -- except the head's `.size` records, which
+   registered seventeen symbols no function in this piece touches. A record is
+   file-scope and changes every access to its symbol in the unit, so it belongs
+   only in a piece that has one; this block has been removed. */
 
-__asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
-        "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
-        "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
-        "\t.size D_80081568,4\n\t.size D_8008156C,4\n"
-        "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
-        "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
-        "\t.size D_80080B80,4\n\t.size D_80080B84,4\n"
-        "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n"
-        "\t.size D_80080B30,1\n\t.text");
 
 void func_80048C3C(s32);
 

@@ -13,28 +13,9 @@
    uses none of its typedefs, none of its five `__asm__`-aliased declarations,
    and every function it calls it declares itself (the two names that appear
    only above the cut, func_80051548 and func_80051D18, occur here inside
-   comments and nowhere else). The size records below are the exception and
-   are copied verbatim -- they are file-scope and change every access to those
-   symbols in whichever unit they appear. */
-
-/* Bare file-scope size records: they put each symbol in maspsx's sdata_entries
-   while DEFINING nothing, so .sdata stays 0 bytes, the symbols stay undefined
-   and the linker script's own assignments resolve them -- and maspsx rewrites
-   every load and store of them in this unit to %gp_rel, which is what these
-   functions' listings have. Address materialisation stays absolute, so
-   D_80080B18 is deliberately NOT here: func_80048DA0 indexes it through a
-   materialised base. Adding a symbol here changes every access to it in this
-   whole unit, so check `grep` before adding one. */
-__asm__(".sdata\n\t.size D_80081550,4\n\t.size D_80081554,4\n"
-        "\t.size D_80081548,4\n\t.size D_8008154C,4\n"
-        "\t.size D_80081558,4\n\t.size D_80080B94,4\n"
-        "\t.size D_80080B98,4\n\t.size D_80081540,4\n"
-        "\t.size D_80081568,4\n\t.size D_8008156C,4\n"
-        "\t.size D_80080B58,4\n\t.size D_80080B5C,4\n"
-        "\t.size D_80080B60,4\n\t.size D_80080B64,4\n"
-        "\t.size D_80080B80,4\n\t.size D_80080B84,4\n"
-        "\t.size D_80080B1B,1\n\t.size D_80080B1C,1\n"
-        "\t.size D_80080B30,1\n\t.text");
+   comments and nowhere else). It needs none of the head's `.size` records
+   either: the block the cut copied here registered nineteen symbols that no
+   function in this piece touches, and it has been removed. */
 
 /* func_80051548's bigger sibling: the same cutscene camera driver, eight
    states instead of four, dispatched through jtbl_8002E964 on the `s32` copy
