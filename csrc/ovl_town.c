@@ -2672,6 +2672,19 @@ typedef struct UnkTownBB218SP
     u32 *unk_10;
     SVECTOR unk_14;
 } UnkTownBB218SP;
+extern u8 D_80033D54[];
+extern u8 D_80037714[];
+extern u8 D_80072210[];
+extern u8 D_80072214[];
+extern s32 D_80082ABC;
+extern u8 D_800794AC[];
+extern u8 *D_800CFB74[];
+extern u8 D_800CFC38[];
+extern s32 D_800CFC44[];
+extern u8 D_800FC418;
+void func_8008B9D8(UnkTownDispatch *d);
+void func_8008BA00();
+void func_8008BED8();
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -3029,14 +3042,110 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B7F4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B808);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B818);
+/* The town actor constructor: eleven of these are built in a row by
+   func_8008B654, which passes the slot index, the previous slot's mover (or
+   NULL), the node and the 0x64-byte engine record from func_80033BE4, and
+   which has already written the actor view's +0x74/+0x78/+0x7C before the
+   call.  The recipe is the one in csrc/unk_72A8.c:1871 (func_8003FF2C /
+   func_8004491C / func_80033C1C / func_800375C0) line for line, including
+   writing the +0x20 slot through the NODE -- `*(u32 *)((u8 *)n + 0x20)` --
+   while everything else goes through the `m` view, and installing the +0x10
+   continuation BEFORE func_8004491C, which is why that store lands in the
+   jal's delay slot.
+   D_80033D54 and D_80037714 are FUNCTIONS (csrc/unk_72A8.c declares both),
+   but only the D_ spellings are defined in
+   splat/town.bin_undefined_syms_auto.txt, so the func_ names would not link.
+   `s` is load-bearing: writing `func_800375C0(m, D_800CFB74[a])` re-loads the
+   slot after the intervening +0x8 store and costs a word (113 against 112). */
+void func_8008B818(s32 a, UnkTownMover *b, UnkNode *n, u8 *d)
+{
+    u8 *m;
+    u8 *s;
+    UnkVec *v;
+    UnkTownRend *r;
+    u32 x;
+
+    n->unk_10 = (u32)func_8008B9D8;
+    func_8004491C(n, (u32)D_80033D54);
+    v = n->unk_08;
+    r = (UnkTownRend *)n->unk_0C;
+    m = (u8 *)n + 0x20;
+    x = 0;
+    if (b != NULL)
+    {
+        x = (u32)b->unk_00;
+    }
+    func_80033C1C(d, x);
+    *(u32 *)((u8 *)n + 0x20) = (u32)d;
+    *(u32 *)(d + 0x60) = 2;
+    *(u32 *)(m + 0x4) = 0;
+    *(s16 *)(m + 0x66) = a;
+    s = D_800CFB74[a];
+    if (s != NULL)
+    {
+        *(u32 *)(m + 0x8) = (u32)D_80037714;
+        func_800375C0(m, s);
+    }
+    else
+    {
+        *(u32 *)(m + 0x8) = 0;
+    }
+    *(s16 *)(m + 0x60) = 0;
+    *(u32 *)&r->unk_0C = 0x808080;
+    if (a == 9 || a == 0xA)
+    {
+        func_8003DB94(r, D_800794AC, 0);
+    }
+    else
+    {
+        r->unk_08 = 0;
+    }
+    if (a == 0)
+    {
+        *(s16 *)((u8 *)v + 0x2) = 0x20;
+        *(s16 *)((u8 *)v + 0x6) = -0x20;
+        *(s16 *)((u8 *)v + 0xA) = 0x200;
+    }
+    if (a == 0xA)
+    {
+        *(u32 *)(m + 0x74) = 0;
+        D_80082ABC = **(u8 **)(m + 0x7C);
+    }
+    *(u32 *)(m + 0x68) = (u32)func_8008BA00;
+    *(s16 *)(m + 0x64) = (s8)D_800CFC38[a];
+    *(u32 *)(m + 0x6C) = D_800CFC44[a];
+    if (a == 9)
+    {
+        func_80033D08(m);
+    }
+}
 
 void func_8008B9D8(UnkTownDispatch *d)
 {
     d->unk_68();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BA00);
+/* The mover's countdown state: tick +0x64 down and, when it goes negative,
+   promote the pending handler at +0x6C into the live slot at +0x68 and run
+   it.  The local `f` is NOT load-bearing and the comment that said so was
+   wrong: measured, `m->unk_68 = (void (*)())m->unk_6C; m->unk_68();` is also
+   17 words / 0 differing, because cse forwards the +0x68 store to the +0x68
+   load and the store still falls into the jalr's delay slot.
+   Installed at +0x68 by both func_8008B818 and func_8008BED8; the trailing
+   two parameters are the +0x68 slot's convention (func_8008BA44 and the three
+   steppers below carry the same unread pair) and have no witness here. */
+void func_8008BA00(UnkTownMover *m, UnkTown2AE8 *b, s32 c)
+{
+    void (*f)();
+
+    m->unk_64--;
+    if (m->unk_64 < 0)
+    {
+        f = (void (*)())m->unk_6C;
+        m->unk_68 = f;
+        f();
+    }
+}
 
 void func_8008BA44(UnkTownMover *m, UnkTown2AE8 *b, void *c)
 {
@@ -3087,9 +3196,122 @@ void func_8008BBD4(UnkTownMover *m, UnkTown2AE8 *b, void *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BC58);
+/* The town actor's per-frame tick, installed at the mover's +0x68 by the four
+   steppers above and re-installed by func_8008BED8.  Three states off +0x66:
+   0 is the idle/input state, 9 re-centres the record from the camera halfword
+   pair at D_80083780+2/+6 (a signed divide by 64), and 0xA walks the frame
+   list at +0x7C with the cursor at +0x74 bounded by +0x78.
+   Three local base pointers are each worth a word or an allocation: `g` for
+   D_80083160 (its four +0x10 reads straddle a call, so the base has to live
+   in a callee-saved register -- written as `D_80083160.unk_10` it is 157
+   words with 153 differing), `p` for D_80083780 (without it the %lo folds
+   into the lh displacement and the function is 159 words), and `q` for
+   D_800D2EA4 (without it the base lands in $v1 and seven words differ by
+   register only).  Each +0x10 read is a real re-load: the intervening
+   halfword store through `b` invalidates it.  The third parameter is
+   witnessed by the two bare `jal func_800478B8`s, whose $a0 is the copy
+   reorg parks in the first branch's delay slot. */
+void func_8008BC58(UnkTownMover *m, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    u8 *t;
+    u8 *p;
+    u8 *q;
+    s32 v;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BED8);
+    g = &D_80083160;
+    t = *(u8 **)((u8 *)m + 0x7C);
+    if (D_800FC418 != 0)
+    {
+        m->unk_68 = func_8008BED8;
+        return;
+    }
+    if (m->unk_66 == 0)
+    {
+        m->unk_64--;
+        if (m->unk_64 > 0)
+        {
+            return;
+        }
+        m->unk_64 = 0;
+        if (g->unk_10 & 0x10000000)
+        {
+            *(s16 *)((u8 *)b + 0xA) += 0x10;
+        }
+        if (g->unk_10 & 0x40000000)
+        {
+            *(s16 *)((u8 *)b + 0xA) -= 0x10;
+        }
+        if (g->unk_10 & 0x40)
+        {
+            D_800FC418 = 1;
+            func_80035208((s32)D_80072214);
+            return;
+        }
+        if (g->unk_10 & 0x20)
+        {
+            D_800FC418 = 1;
+            func_80035208((s32)D_80072210);
+            return;
+        }
+        return;
+    }
+    if (m->unk_66 == 9)
+    {
+        func_800478B8(c);
+        p = D_80083780;
+        *(s32 *)((u8 *)m->unk_00 + 0x30) = *(s16 *)(p + 2) / 64 - 0x18;
+        *(s32 *)((u8 *)m->unk_00 + 0x34) = *(s16 *)(p + 6) / 64 - 0x40;
+        return;
+    }
+    if (m->unk_66 != 0xA)
+    {
+        return;
+    }
+    func_800478B8(c);
+    v = g->unk_10;
+    if (v & 0x6000)
+    {
+        *(s32 *)((u8 *)m + 0x74) += 1;
+        if (*(s32 *)((u8 *)m + 0x74) >= *(s32 *)((u8 *)m + 0x78))
+        {
+            *(s32 *)((u8 *)m + 0x74) = 0;
+        }
+        func_8008B620(t[*(s32 *)((u8 *)m + 0x74)]);
+    }
+    else if (v & 0x9000)
+    {
+        *(s32 *)((u8 *)m + 0x74) -= 1;
+        if (*(s32 *)((u8 *)m + 0x74) < 0)
+        {
+            *(s32 *)((u8 *)m + 0x74) = *(s32 *)((u8 *)m + 0x78) - 1;
+        }
+        func_8008B620(t[*(s32 *)((u8 *)m + 0x74)]);
+    }
+    q = D_800D2EA4;
+    *(s32 *)((u8 *)m->unk_00 + 0x30) = q[t[*(s32 *)((u8 *)m + 0x74)] * 8] - 0x18;
+    *(s32 *)((u8 *)m->unk_00 + 0x34) = q[t[*(s32 *)((u8 *)m + 0x74)] * 8 + 1] - 0x40;
+    D_80082ABC = t[*(s32 *)((u8 *)m + 0x74)];
+}
+
+/* The one-shot re-arm func_8008BC58 installs when the D_800FC418 lock is
+   held: 0xFF hands the slot to func_8008BA00's countdown, 0 hands it back to
+   func_8008BC58, and any other value leaves the slot alone.  The two stores
+   are written as separate arms and cross-jumping unifies them into the single
+   `sw` at +0x68 the target has.  Measured: hoisting the handler into a local
+   and storing once, with an explicit `else return;`, is also 13 words /
+   0 differing, so this one is a free choice. */
+void func_8008BED8(UnkTownMover *m, UnkTown2AE8 *b, s32 c)
+{
+    if (D_800FC418 == 0xFF)
+    {
+        m->unk_68 = func_8008BA00;
+    }
+    else if (D_800FC418 == 0)
+    {
+        m->unk_68 = func_8008BC58;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BF0C);
 
