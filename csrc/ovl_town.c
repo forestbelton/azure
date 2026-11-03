@@ -210,7 +210,13 @@ typedef struct UnkTownSpawn
 {
     u8 pad_00[0x66];
     s16 unk_66;
-    u8 pad_68[0x2F];
+    u8 pad_68[0x1C];
+    /* Split out of pad_68 by func_8009CFE0, which subtracts this pair as a
+       common origin from four D_80082D08 coordinate pairs. Size unchanged at
+       0xA0 either way. */
+    u16 unk_84;
+    u16 unk_86;
+    u8 pad_88[0xF];
     s8 unk_97;
     u32 unk_98;
     struct UnkTownSpawn *unk_9C;
@@ -366,6 +372,16 @@ typedef struct UnkTownCFCB4
     u8 pad_00[0x10];
     s32 unk_10;
 } UnkTownCFCB4;
+
+/* The record D_800CFCC4 points at. func_800927EC reads the u8 at +0x14 and
+   compares it against 4; func_8009E258 reads an s8 at +0x4E off the same
+   pointer. Nothing else has a witness yet. About eleven more functions in
+   asm/nonmatchings/ovl_town/ use this pointer, so expect it to grow. */
+typedef struct UnkTownCFCC4
+{
+    u8 pad_00[0x14];
+    u8 unk_14;
+} UnkTownCFCC4;
 
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
@@ -1379,6 +1395,13 @@ void func_800A48B0(u8 *a, UnkTown2AE8 *b);
 void func_8009550C(UnkTown2AE8 *b);
 void func_80033AE8(s32 a);
 void func_800AB084(void);
+extern UnkTownCFCC4 *D_800CFCC4;
+extern s32 D_800FE518;
+void func_80094774(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+extern s16 D_800D4258[4];
+extern s16 D_800D4260[4];
+extern s16 D_800D4268[4];
+s32 func_8008CC90(s16 a, s16 b, s16 c, s16 d, s16 e, s16 f, s16 g, s16 h);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -2450,7 +2473,92 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800924EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092698);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800927EC);
+void func_800927EC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 r;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80094C1C(a);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094660(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800945B8(a, b, c);
+        return;
+    }
+    if (g->unk_10 & 0x80)
+    {
+        if (D_800CFCC4 != 0 && D_800CFCC4->unk_14 == 4)
+        {
+            func_8009550C(b);
+            /* Three arguments: the dump sets $a0/$a1/$a2 before the jal. The
+               unit defines func_80094774 with one parameter, which an
+               implicit declaration here tolerates; widening it to three the
+               way func_80094660 was widened is equivalent (both measured). */
+            func_80094774(a, b, c);
+            D_800FE518 = 1;
+            return;
+        }
+        func_80099754(b);
+        func_8009550C(b);
+        if (func_80094B0C((u8 *)a - 0x20) != 0)
+        {
+            func_80093D38(a, b, c);
+            D_800FE5D8 = func_80093B00;
+        }
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        func_800946A0(a, b, c);
+        return;
+    }
+    if (func_80095760(&D_800CFCB4) == -1 && func_8009FF50() == 0)
+    {
+        func_8009567C(&D_800CFCB4);
+        func_80094C1C(a);
+        func_800988C8(a, b, c);
+        if ((*(UnkTownDispatch **)((u8 *)a + 0x2C))->unk_50 != func_8009B828 &&
+            (*(UnkTownDispatch **)((u8 *)a + 0x2C))->unk_50 != func_8009B8E8 &&
+            (*(UnkTownDispatch **)((u8 *)a + 0x2C))->unk_50 != func_8009B9BC)
+        {
+            *(s32 *)((u8 *)a + 0x2C) = 0;
+        }
+        r = func_800A9D74(D_800CFCB4.unk_10, *(s32 *)((u8 *)a + 0x2C));
+        if (r != 0)
+        {
+            func_80035208(r);
+        }
+        else
+        {
+            func_8008B158(D_800CFCB4.unk_10);
+        }
+        D_800FE5D8 = func_80093B00;
+        return;
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_8009455C(a, b, c);
+    }
+}
 
 void func_80092A84(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {
@@ -2864,7 +2972,13 @@ void func_80094714(void *p, UnkTown2AE8 *q, void *r)
     ((UnkTownTask *)p)->unk_00 = func_80093250;
 }
 
-void func_80094774(UnkTownTask *t)
+/* Widened from one parameter: func_800927EC calls it with three. That call
+   would have compiled anyway, because this definition FOLLOWS it and there is
+   no forward prototype, so the call site sees an implicit declaration -- the
+   same accident func_80094660 and func_80094378 were relying on. Widening it
+   makes the call explicit. The extra two go unread; measured 16 words,
+   0 differing. */
+void func_80094774(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D0120, t);
     t->unk_00 = func_80093328;
@@ -4166,7 +4280,51 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEA8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEE8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CFE0);
+s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    u8 *s;
+
+    s = (u8 *)p->unk_98;
+    if (s != NULL)
+    {
+        if ((s[1] & 1) == 0)
+        {
+            if (func_80033B2C(*(s16 *)(s + 2)) == 0)
+            {
+                return 1;
+            }
+        }
+        else
+        {
+            if (func_80033B2C(*(s16 *)(s + 2)) == 1)
+            {
+                return 1;
+            }
+        }
+        if (s[1] & 0x10)
+        {
+            return 0;
+        }
+        if (D_8006ADD4 == 0xC)
+        {
+            return 0;
+        }
+    }
+    if (func_8008CC90(*(u16 *)(D_80082D08 + 0x0) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x2) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x8) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0xA) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x10) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x12) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x18) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x1A) - *(u16 *)((u8 *)q + 6)) == 0)
+    {
+        if (func_8008CC90(*(u16 *)(D_80082D08 + 0x0) - p->unk_84, *(u16 *)(D_80082D08 + 0x2) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x8) - p->unk_84, *(u16 *)(D_80082D08 + 0xA) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x10) - p->unk_84, *(u16 *)(D_80082D08 + 0x12) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x18) - p->unk_84, *(u16 *)(D_80082D08 + 0x1A) - p->unk_86) == 0)
+        {
+            return 2;
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D20C);
 
@@ -7123,7 +7281,91 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1034);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1150);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C122C);
+void func_800C122C(void)
+{
+    if (D_800D4258[1] == -5)
+    {
+        D_800D4258[1] = -1;
+        D_800D4260[1] = -1;
+    }
+    if (D_800D4258[2] == -5)
+    {
+        D_800D4258[2] = -1;
+        D_800D4260[2] = -1;
+    }
+    if (D_800D4258[3] == -5)
+    {
+        D_800D4258[3] = -1;
+        D_800D4260[3] = -1;
+    }
+    if (D_800D4258[1] != -1)
+    {
+        D_800D4260[1] = D_800D4258[1];
+    }
+    if (D_800D4258[2] != -1)
+    {
+        D_800D4260[2] = D_800D4258[2];
+    }
+    if (D_800D4258[3] != -1)
+    {
+        D_800D4260[3] = D_800D4258[3];
+    }
+    if (D_800D4260[2] != -1)
+    {
+        if (D_800D4268[2] != D_800D4260[2])
+        {
+            func_80053DA8(0x71);
+            func_800542BC();
+            func_8004437C(D_800D4260[2], 0);
+            if (D_800D4260[3] != -1)
+            {
+                func_80053DA8(D_800D4260[3]);
+            }
+        }
+        else if (D_800D4260[3] != -1)
+        {
+            if (D_800D4268[3] != D_800D4260[3])
+            {
+                func_80053DA8(0x71);
+                func_800542BC();
+                func_80053DA8(D_800D4260[3]);
+            }
+            else if (D_80080A88 == 0)
+            {
+                func_80053DA8(0x71);
+                func_800542BC();
+                func_80053DA8(D_800D4260[3]);
+            }
+        }
+        else
+        {
+            func_80053DA8(0x71);
+            func_800542BC();
+        }
+    }
+    else
+    {
+        func_80053DA8(0x71);
+        func_800542BC();
+        if (D_800D4260[3] != -1)
+        {
+            func_80053DA8(D_800D4260[3]);
+        }
+    }
+    if (D_800D4260[1] != -1)
+    {
+        func_80053DA8(D_800D4260[1]);
+    }
+    D_800D4258[0] = -1;
+    D_800D4258[1] = -1;
+    D_800D4258[2] = -1;
+    D_800D4258[3] = -1;
+    D_800D4268[0] = D_800D4260[0];
+    D_80080A88 = 0;
+    D_800D4268[1] = D_800D4260[1];
+    D_800D4268[2] = D_800D4260[2];
+    D_800D4268[3] = D_800D4260[3];
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1464);
 
