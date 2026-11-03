@@ -111,7 +111,35 @@ matters more as the sweep goes on, because the family pool drains while the
 ~1000 singletons do not, and some unknown fraction of those singletons are
 near-siblings of something already landed.
 
-`tools/decomp/landedshapes.py` mechanises the part of this that can be:
+**`tools/decomp/nearsibs.py` MECHANISES THE SEARCH, and it is the first thing
+to run on this unit now.** It compares the MNEMONIC STREAM of every stub
+against every other stub of similar length and reports the pairs above a
+similarity threshold -- which is precisely the thing `families.py` cannot see,
+because masking `jal` targets and i-type immediates does not hide an operator,
+a branch condition, a register allocation or a systematic field-offset swap.
+
+    python3 tools/decomp/nearsibs.py ovl_town           # pairs, best first
+    python3 tools/decomp/nearsibs.py ovl_town --groups  # transitive sets
+    python3 tools/decomp/nearsibs.py ovl_town --ratio 0.88 --min-words 24
+
+It found the four-function collision sweep at 0x8008DA80 -- **1,334 words,
+landed from one reading plus substitution**, which `families.py` reported as
+four separate "family of 1" entries -- and on 2026-11-02 it reported **18 sets
+totalling 2,820 words** in this unit, the largest being
+`func_800BA930`/`func_800BACB0` at 448. It takes seconds: it buckets by length
+so the comparison never approaches O(n^2) over a thousand stubs.
+
+A high ratio is a strong lead, not a promise. 1.000 means the same mnemonics in
+the same order, which is what a twin looks like and also what two functions
+built from one macro look like. Read both dumps before promising a word count,
+and diff them with the register and immediate columns stripped -- that is what
+shows the substitution:
+
+    diff <(python3 tools/decomp/ovlverify.py --dump A | awk '{$1="";$2="";print}') \
+         <(python3 tools/decomp/ovlverify.py --dump B | awk '{$1="";$2="";print}')
+
+`tools/decomp/landedshapes.py` mechanises the other half of this -- a stub
+whose shape is ALREADY LANDED:
 
     python3 tools/decomp/landedshapes.py ovl_town            # shape match
     python3 tools/decomp/landedshapes.py ovl_town --exact    # raw-word match
