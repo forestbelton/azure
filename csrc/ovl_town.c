@@ -1692,6 +1692,8 @@ extern u8 D_80111F68[];
 extern u8 D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
+extern u8 D_800D2EA4[];
+extern u16 *D_800D17D8[];
 extern u16 *D_800D1868[];
 extern s16 D_80111FA8[];
 extern u8 D_80110EC8[];
@@ -10106,11 +10108,31 @@ void func_800B7428(s16 x0, s16 y0, u16 *src)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B783C);
+/* A plain forward to func_800B7428. The first two parameters are `s32`/int
+   here and `s16` there, which is what the `sll`/`sra 16` pair before the jal
+   is -- the conversion, not a cast in the source. The THIRD parameter has no
+   witness in this listing at all: it is a pure forward, so no insn sets it,
+   and it has to be there for the arity. That is the trap in
+   docs/town-sweep.md's "a stored argument register the prototype does not
+   have", seen from the forwarder's side. */
+void func_800B783C(s32 x, s32 y, u16 *src)
+{
+    func_800B7428(x, y, src);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7868);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7934);
+/* func_800B7B48's byte-identical twin: the same forward to func_800B7428 with
+   the pattern looked up in D_800D17D8 by a `u8` index. The `andi $a2, $a2,
+   0xFF` is the QImode-to-int promotion of the incoming `u8` parameter, not a
+   mask in the source -- func_800B833C feeds it an `lbu` with no masking of its
+   own. One body lands both, and families.py groups them, but note that the
+   varying word it would show is a `jal` to the SAME target in both, so there
+   is no callee substitution to make. */
+void func_800B7934(s32 x, s32 y, u8 c)
+{
+    func_800B7428(x, y, D_800D17D8[c]);
+}
 
 /* func_800B7A6C's twin, and the delta is exactly six words: this one looks the
    sprite record up in D_800D1868 instead of being handed it. Words 0-5 are the
@@ -10231,7 +10253,11 @@ void func_800B7A6C(s16 x, s16 y, u16 *src, u16 *dst)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7B48);
+/* func_800B7934's twin; see the comment there. */
+void func_800B7B48(s32 x, s32 y, u8 c)
+{
+    func_800B7428(x, y, D_800D17D8[c]);
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089344);
 
@@ -10547,7 +10573,46 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B81AC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8248);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B833C);
+/* Walks the 0x21-entry pending-tile table at 0x800133A4 and, for every
+   non-zero entry, stamps the pattern named by its D_800D2644 record's byte +0
+   at the coordinates held in the matching stride-8 D_800D2EA4 slot, then marks
+   the record done by setting its +0x0A halfword to 1.
+
+   0x800133A4 is out of the loaded image, so it is a constant address through a
+   base pointer with the offset in the index expression, as in func_800B8A40
+   and func_800B8A9C. The counter is zeroed BEFORE the two symbol bases are
+   taken, which is the same statement-order rule those two record.
+
+   Both the table entry and the record index are RE-READ for the second
+   statement rather than held -- the target has `lbu %lo(D_800133A4)($s0)`
+   twice with the `sll 5` and `addu $s3` recomputed -- which is this unit's
+   standing re-dereference shape. D_800D2644 keeps its `s16 [][0x10]`
+   declaration so the 0x20 stride stays in the pointer and the 0xA in the
+   displacement; the byte read at +0 needs the cast because the declared
+   element type is `s16`.
+
+   The `addiu $s0, $s0, %lo(D_80010002)` in the listing is a splat artefact: it
+   is `base += 2` on the 0x80010000 base pointer, rendered as a symbol because
+   splat paired the word with a `%hi` it could see. */
+void func_800B833C(void)
+{
+    u8 *base;
+    u8 *q;
+    s32 i;
+
+    i = 0;
+    q = D_800D2EA4;
+    base = (u8 *)0x80010000;
+    for (; i < 0x21; i++)
+    {
+        if (base[i * 2 + 0x33A4] != 0)
+        {
+            func_800B7B48(q[i * 8], q[i * 8 + 1],
+                          *(u8 *)&D_800D2644[base[i * 2 + 0x33A4]][0]);
+            D_800D2644[base[i * 2 + 0x33A4]][5] = 1;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B83DC);
 
