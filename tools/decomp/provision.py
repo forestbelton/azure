@@ -19,7 +19,7 @@ This encodes the fixes rather than relying on remembering them:
     does not mean its signature is unavailable -- and one callee with no
     declaration at all went unmentioned in a brief.
 """
-import os, re, sys, subprocess
+import io, os, re, sys, subprocess
 
 PROJ = '/home/case/projects/azure'
 def D(unit): return os.path.join(PROJ, 'asm/nonmatchings', unit)
@@ -33,14 +33,49 @@ def words(unit, f):
     m = t and re.search(r'nonmatching \S+, (0x[0-9A-F]+)', t)
     return int(m.group(1), 16) // 4 if m else None
 
-def defs_and_protos(src):
+def include_protos():
+    """Declarations in include/, not just in the unit.
+
+    A callee declared in include/structs.h is NOT undeclared, and saying so is
+    the exact func_80053DA8 trap this tool warns about: an agent took the
+    marker at face value, wrote the obvious prototype, and got an immediate
+    conflicting-types error. func_8004491C is s32 (UnkNode *, u32) at
+    include/structs.h:1963 and func_80064584 is s32 (s32) at :2004.
+    """
+    out = {}
+    for d, _, fs in os.walk(os.path.join(PROJ, 'include')):
+        for fn in fs:
+            if not fn.endswith('.h'): continue
+            fp = os.path.join(d, fn)
+            try: txt = io.open(fp, encoding='utf-8', errors='replace').read()
+            except Exception: continue
+            for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;{]*\);)',
+                                 txt, re.M):
+                out.setdefault(m.group(2), (m.group(1).strip(),
+                                            os.path.relpath(fp, PROJ),
+                                            txt[:m.start()].count('\n') + 1))
+    return out
+
+
+def defs_and_protos(src, unitname):
     txt = open(src).read()
+    whole = txt
     landed, cur, depth, body = {}, None, 0, {}
     lines, lineno = {}, 0
     for ln in txt.split('\n'):
         lineno += 1
         m = re.match(r'^[A-Za-z_][\w \*]*?(func_[0-9A-Fa-f]{8})\s*\(', ln)
-        if m and ';' not in ln:
+        # A DEFINITION's first line ends in `)` or `)  {`. A one-line
+        # prototype ends in `;` and a MULTI-LINE prototype's first line ends in
+        # `,` -- and that second case produced a FABRICATED landed caller:
+        # func_800C3050's two-line declaration was read as a definition, so
+        # every later declaration line was swallowed as part of its "body" and
+        # reported as a call. A wrong landed caller is the worst provisioning
+        # error there is, because it reads as an arity-and-constants witness.
+        # Belt and braces: a name with an INCLUDE_ASM line is a stub, never
+        # landed, whatever the text looks like.
+        if m and ';' not in ln and re.search(r'\)\s*\{?\s*$', ln) \
+                and ('INCLUDE_ASM("asm/nonmatchings/%s", %s)' % (unitname, m.group(1))) not in whole:
             cur = m.group(1); landed[cur] = ln.strip(); body[cur] = set(); depth = 0
             # Record the line HERE. Searching for the text later finds the
             # single-line PROTOTYPE instead, because the definition line is a
@@ -52,7 +87,7 @@ def defs_and_protos(src):
             depth += ln.count('{') - ln.count('}')
             if depth <= 0 and '}' in ln: cur = None
     protos = {}
-    for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;]*\);)', txt, re.M):
+    for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;{]*\);)', txt, re.M):
         protos.setdefault(m.group(2), m.group(1).strip())
     for k in body: body[k].discard(k)
     return landed, protos, body, txt, lines
@@ -60,7 +95,8 @@ def defs_and_protos(src):
 def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
-    landed, protos, body, txt, lines = defs_and_protos(src)
+    landed, protos, body, txt, lines = defs_and_protos(src, unit)
+    inc = include_protos()
     allcallees, installs, globs = {}, {}, {}
     print("=== PER-FUNCTION FACTS (never describe a union as shared) ===")
     tot = 0
@@ -77,7 +113,8 @@ def main():
         allcallees[f], installs[f], globs[f] = set(cal), set(ins), set(gl)
         print("  %s  %d words  jumptable=%d  owns-rodata=%s" % (f, w, jt, rod))
         print("      callees : %s" % (', '.join(cal) or 'NONE'))
-        print("      installs: %s" % (', '.join(ins) or 'none   <- %hi on a FUNCTION: masked, no jal'))
+        print("      installs: %s" % (', '.join(ins) + '   <- %hi on a FUNCTION: masked, no jal, VERIFY BY RELOC'
+                                        if ins else 'none'))
         print("      globals : %s" % (', '.join(gl) or 'none'))
     print("  TOTAL %d words" % tot)
 
@@ -88,9 +125,74 @@ def main():
         if c in landed:   cls = 'LANDED-HERE'
         elif listing(unit, c) is not None: cls = 'STUB-HERE'
         else: cls = '*** NOT IN THIS UNIT (resident) ***'
-        pr = protos.get(c) or ('(definition) ' + landed[c] if c in landed else None)
+        pr = protos.get(c)
+        if not pr and c in landed:
+            d = landed[c]
+            pr = '(definition) ' + (d[:d.rindex(')')+1] if ')' in d else d)
         print("  %-15s %-34s called by: %s" % (c, cls, ','.join(who)))
-        print("      proto: %s" % (pr if pr else '*** NO DECLARATION ANYWHERE IN THE UNIT ***'))
+        if pr:
+            print("      proto: %s" % pr)
+        elif c in inc:
+            d, f, l = inc[c]
+            print("      proto: %s   <- from %s:%d, NOT the unit" % (d, f, l))
+        else:
+            print("      proto: *** NO DECLARATION IN THE UNIT OR include/ ***")
+
+    # The defect class that has cost this sweep the most, hit independently by
+    # two agents in one batch: a callee whose PROTOTYPE IS NARROWER than the
+    # call site. It compiles silently when the definition sits after the call
+    # (implicit declaration) and is a hard error when it sits before, and it is
+    # invisible to ovlverify and to families.py. Count the $aN registers the
+    # caller sets before each jal and compare.
+    print("\n=== ARITY LEADS -- THIS OVER-COUNTS. A LEAD, NOT A WITNESS. ===")
+    print("    A narrower prototype is checklist item 3: it either needs widening or")
+    print("    rides an implicit declaration, and getting it wrong is a hard error or")
+    print("    a silent one depending on whether the definition precedes the call.")
+    print("    BUT a backward scan over-counts, for three reasons already in the")
+    print("    sweep doc, and an agent confirmed four false 3-arg callees in one pair:")
+    print("      * reorg parks an unrelated $aN set in a branch delay slot, so the")
+    print("        scan picks up the NEXT call's argument;")
+    print("      * cross-jumping hoists an $a0 set out of the block entirely, so a")
+    print("        correct count here can be right only by accident of layout;")
+    print("      * the scan crosses basic blocks, the same reason sched cannot be")
+    print("        blamed for a moved insn.")
+    print("    So VERIFY each line below by walking the control flow to the jal before")
+    print("    acting on it. Do not put one of these in a brief as a witness.")
+    flagged = False
+    for f in targets:
+        lt = listing(unit, f)
+        if lt is None: continue
+        rows = lt.split('\n')
+        jal_at = [(i, m.group(1)) for i, ln in enumerate(rows)
+                  for m in [re.search(r'jal\s+(func_\w+)', ln)] if m]
+        for i, callee in jal_at:
+            # Scan back to the previous jal OR the previous label, whichever
+            # is nearer: a $aN write before either is another call's setup.
+            regs = set()
+            for j in range(max(0, i - 14), i + 2):          # +2: the delay slot
+                if j != i and (re.search(r'jal\s+func_', rows[j])
+                               or re.match(r'\s*(\.L|glabel|endlabel)', rows[j])):
+                    regs = set()
+                m = re.search(r'^\s*/\*[^*]*\*/\s+\S+\s+\$(a[0-3])\s*,', rows[j])
+                if m: regs.add(m.group(1))
+            # Infer arity from the HIGHEST register set, not the count: $a0 is
+            # often already live and never moved (the documented
+            # missing-argument-move trap), so {a1,a2} still means three args.
+            pr = protos.get(callee) or (landed.get(callee) or '')
+            if callee in inc and not protos.get(callee): pr = inc[callee][0]
+            if not pr or '(' not in pr: continue
+            args = pr[pr.index('(') + 1:pr.rindex(')')].strip()
+            n = 0 if args in ('', 'void') else args.count(',') + 1
+            if args == '' and '()' in pr:
+                continue                                     # K&R, unconstrained
+            implied = (max(int(r[1]) for r in regs) + 1) if regs else 0
+            if implied and n < implied:
+                flagged = True
+                print("  *** %s calls %s with >=%d arg(s) (sets %s) but its prototype"
+                      % (f, callee, implied, ','.join('$' + r for r in sorted(regs))))
+                print("      declares %d: %s" % (n, pr))
+    if not flagged:
+        print("  no narrower prototype found among the callees with real prototypes")
 
     print("\n=== INSTALLED HANDLERS (route (b): what the target installs) ===")
     anyi = False
