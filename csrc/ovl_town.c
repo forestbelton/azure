@@ -11818,7 +11818,111 @@ fail:
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2AF8);
+/* func_800AA10C's loop body, unrolled to ONE primitive and TWO corners: a
+   LINE_G2 in the OT with two random gouraud colours, its two endpoints
+   seeded from the two UnkTown2AE8 movers func_800A9E68 hands it and
+   projected one at a time.  Same recipe as func_800AA10C down to the
+   constants -- the 0x00FFFFFF colour mask, the -0x30 otz bias, the 0x1E0
+   clamp pair, the two DR_MODEs around the primitive -- which is why it
+   landed in one compile off that function's body.
+
+   The primitive is a LINE_G2 and that is witnessed three ways, as
+   func_800AA10C's LINE_G4 was: the allocator steps 0x14 (five words), the
+   two random words land at +0x04 and +0x0C (r0 and r1), and the four `sh`s
+   land at +0x08/+0x0A and +0x10/+0x12, its two xy pairs.  func_800667D0 is
+   therefore SetLineG2, which is also what splat names it; it has no
+   declaration anywhere in the tree and rides an implicit one, as
+   func_80066844 does in func_800AA10C.
+
+   Where it differs from func_800AA10C, each read off this listing:
+
+   - the corners are projected with func_80065420 (RotTransPers, one vertex)
+     called TWICE, not func_800654B0 (RotAverageNclip4, four) called once,
+     and both calls share the same `p`/`flag` outputs at +0x94/+0x98.  Only
+     the FIRST call's return value is kept; the second's is discarded, which
+     the delay slot proves -- `sw $v0, (0x1F8000C4)($s3)` sits in the second
+     `jal`'s delay slot and so stores the FIRST call's $v0.
+
+   - **the -0x30 is a SEPARATE STATEMENT, not folded into the assignment.**
+     The tell is the re-read: `lw $v0, (0x1F8000C4)($s3)` / `addiu -0x30` /
+     `sw` after the second call.  Spelled `sp->unk_C4 = func_80065420(...) -
+     0x30;` the `addiu` lands in front of the second `jal` instead, because
+     $v0 is still live there.
+
+   - func_80067F20's second argument is 1 at both sites here (it is 1 and
+     then 1 in func_800AA10C too), and the two func_80066460 calls differ
+     only in their abr: (0, 0, 0x140, 0) then (0, 1, 0x140, 0).
+
+   0x00FFFFFF is materialised ONCE, in $s5, and shared between the two
+   random colour masks and addPrim's `getaddr` mask; 0xFF000000 gets its own
+   $s0 for the `setaddr` side.  That sharing is free -- it falls out of
+   writing the mask as the literal 0xFFFFFF rather than through a variable,
+   as func_800AA10C has to because its masks come out of the descriptor.
+
+   ARGUMENT ORDER IS LOAD-BEARING AND IS WITNESSED IN THE CALLER.  $a0 feeds
+   the SECOND func_800A130C (the +0x7C corner) and $a1 the FIRST (+0x74), and
+   func_800A9E68 calls this as `func_800A2AF8(c, b)` -- so the +0x74 corner is
+   seeded from that function's `b` and the +0x7C corner from its `c`.
+   Swapping the two parameter names measures 190 words and **4 differing**
+   here -- the two `addu $s1`/`$s2` entry copies and the two `addu $a1`
+   argument copies exchange registers -- and func_800A9E68 stays 0 differing
+   either way, so the order is witnessed on BOTH sides: locally by those four
+   words, and in the caller, which goes to 41 words / 40 differing if its own
+   call is reversed instead.
+
+   190 words -- its header reads `nonmatching func_800A2AF8, 0x2F8`, and
+   0x2F8/4 = 190.  Measured 0 differing on the first compile, and the
+   relocation arithmetic closes: `--raw` reports 18 differing against exactly
+   18 relocation words (1 HI16 + 3 LO16 on D_80083160 and 14 R_MIPS_26) and
+   no intra-function `j`, with every one of the 18 matched to the listing by
+   word index, kind and symbol.  The 0x1F800000 addresses carry no relocation
+   on either side -- splat renders them as `(0x1F800074 & 0xFFFF)` literals
+   here rather than the auto-named `D_1F8xxxxx` symbols func_800AA10C's
+   in-loop addresses produce -- so this one costs the merged object no
+   relocation records at all. */
+void func_800A2AF8(UnkTown2AE8 *c, UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    UnkTownA17CCSP *sp;
+    LINE_G2 *ln;
+    DR_MODE *dm;
+
+    g = &D_80083160;
+    sp = (UnkTownA17CCSP *)0x1F800000;
+    sp->unk_24 = (u32 *)(g->unk_00 + 0xB0);
+    ln = (LINE_G2 *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
+    *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+    *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+    func_800667D0(ln);
+    func_80066640(ln, 1);
+    func_800A130C(&sp->unk_74[0], b);
+    func_800A130C(&sp->unk_74[1], c);
+    sp->unk_C4 = func_80065420(&sp->unk_74[0], (s32 *)&sp->unk_E8[0], &sp->unk_94, &sp->unk_98);
+    func_80065420(&sp->unk_74[1], (s32 *)&sp->unk_E8[1], &sp->unk_94, &sp->unk_98);
+    sp->unk_C4 -= 0x30;
+    ln->x0 = sp->unk_E8[0].vx;
+    ln->y0 = sp->unk_E8[0].vy;
+    ln->x1 = sp->unk_E8[1].vx;
+    ln->y1 = sp->unk_E8[1].vy;
+    if (sp->unk_C4 >= 0x1E0)
+    {
+        sp->unk_C4 = 0x1DF;
+    }
+    if (sp->unk_C4 < 0)
+    {
+        sp->unk_C4 = 0;
+    }
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 0, 0x140, 0), 0);
+    addPrim(sp->unk_24 + sp->unk_C4, dm);
+    addPrim(sp->unk_24 + sp->unk_C4, ln);
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+    addPrim(sp->unk_24 + sp->unk_C4, dm);
+}
 
 /* The fifth member of the func_800A130C family at :10301, and the only one
    that ACCUMULATES: same three offsets as func_800A130C -- 0x2/0x6/0xA, the
@@ -11843,7 +11947,129 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
     d->vz += *(u16 *)((u8 *)b + 0xA);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2E30);
+/* One quad of func_800A2FCC's 16-step ring: a POLY_G4 in the OT, two of its
+   four corners lit by the caller's colour and the other two black, the four
+   positions coming in as FOUR SVECTORs BY VALUE and going straight to
+   func_800654B0.  func_800A2FCC's own note above already read the prototype
+   off this listing when it landed, and this definition confirms it
+   unchanged.
+
+   The primitive is a POLY_G4: the allocator steps 0x24 (nine words), the six
+   `sb`s of the colour land at +0x04/+0x05/+0x06 and +0x14/+0x15/+0x16
+   (r0/g0/b0 and r2/g2/b2), the six zeros at +0x0C..+0x0E and +0x1C..+0x1E
+   (r1/g1/b1 and r3/g3/b3), and the eight `sh`s at +0x08/+0x0A, +0x10/+0x12,
+   +0x18/+0x1A and +0x20/+0x22 are its four xy pairs.  func_80066708 is
+   therefore SetPolyG4, which is what splat names it; it has no declaration
+   anywhere in the tree and rides an implicit one.
+
+   Each colour run is ONE CHAINED ASSIGNMENT WRITTEN ASCENDING.  A chain
+   emits right-to-left, so `r0 = g0 = b0 = r2 = g2 = b2 = col` stores +0x16,
+   +0x15, +0x14, +0x06, +0x05, +0x04 in that order, which is the listing.
+   The `col` reads come out `lhu` because the destination is a byte store and
+   the truncation erases the signedness of the `s16` parameter.
+
+   **THE DEAD otz CLAMP NEEDS ITS DEAD PARTNER -- and this is the finding.**
+   Words 67/70/71/73 (`addu $a0, $v0, $zero` / `slti $v0, $a0, 0x1E0` /
+   `bnez` / `addiu $a0, 0x1DF`) write a register that NOTHING ever reads
+   again: the branch target's first insn is `lw $a0, %lo(D_80083160)($s1)`,
+   which overwrites it.  otz is dead because, unlike func_800AA10C and
+   func_800A2AF8, this function hands func_8006658C a FIXED OT slot
+   (`g->unk_00 + 0xD8`) instead of the otz-indexed `addPrim(sp->unk_24 +
+   sp->unk_C4, ...)`, so the clamped depth is never used.
+
+   Write the one clamp the listing shows and the whole thing disappears: 101
+   words, 34 differing, with the copy and the `slti` reduced to load-delay
+   `nop`s and no `bnez`/`addiu` pair at all.  Writing BOTH clamps
+   func_800AA10C has -- `>= 0x1E0` then `< 0` -- is 103 words and 0
+   differing, because the SECOND clamp's compare reads otz and that is what
+   keeps the FIRST clamp's store alive.
+
+   The RTL dumps locate it exactly (tools/decomp/dump.sh over both
+   candidates, then the per-pass trace of `(const_int 479)` inside
+   `;; Function func_800A2E30`).  Both candidates still carry the store at
+   `cse2`; at `flow` the one-clamp build has LOST it and the two-clamp build
+   still has it.  That is dead-store elimination:
+   scratch/gcc-src/cdk-gcc-b18/flow.c:1538-1544, "If an instruction consists
+   of just dead store(s) on final pass, `delete` it by turning it into a NOTE
+   of type NOTE_INSN_DELETED", gated on `insn_dead_p` at :1530.  With two
+   clamps propagate_block's backward walk finds the SECOND clamp's `otz = 0`
+   dead and deletes that one instead, and the second clamp's compare then
+   holds otz live across the first clamp's block so :1530 fails there.  The
+   second clamp's own compare and branch -- now a branch whose two edges go
+   to the same place -- are still present at `flow`, `combine`, `sched` and
+   `greg` and are both gone by `jump2`, which is why the second clamp costs
+   ZERO words.  (The first draft of this note blamed flow.c for deleting the
+   compare too, and the scheduler dump falsified it: `sched.py` shows five
+   basic blocks for the winning candidate and three for the lone clamp, so
+   the compare and branch outlive flow in both.)
+
+   Order is load-bearing the same way: `< 0` first is 102 words and 34
+   differing.  Every lone spelling vanishes identically -- `>= 0x1E0` alone,
+   `< 0` alone and `otz = otz >= 0x1E0 ? 0x1DF : otz;` are all 101 words and
+   34 differing; two ternaries are 106 and 37; no clamp at all is 101 and 49.
+
+   The frame is read off the listing rather than guessed: func_800654B0 takes
+   ten arguments, so the outgoing argument area is 0x28 bytes and the locals
+   start at +0x28.  The four screen points sit at +0x28/+0x30/+0x38/+0x40 --
+   8-byte spacing for a 4-byte DVECTOR, which is each aggregate local's slot
+   rounded up to 8 -- and the two address-taken scalars func_800654B0 fills
+   follow at +0x48/+0x4C, so the declaration order is the four points, then
+   `p`, then `flag`.  The four by-value SVECTORs are spilled to their own
+   incoming argument slots and `&a`..`&d` are `$sp+0x60`, `+0x68`, `+0x70`,
+   `+0x78`; `col` is the ninth word at `$sp+0x80`.
+
+   func_80067F20's second argument is 0 here, against the 1 func_800A2AF8 and
+   func_800AA10C pass at both of their sites; its tpage is
+   func_80066460(0, 1, 0x140, 0).
+
+   103 words -- its header reads `nonmatching func_800A2E30, 0x19C`, and
+   0x19C/4 = 103.  Measured 0 differing, and the relocation arithmetic
+   closes: `--raw` reports 12 differing against exactly 12 relocation words
+   (1 HI16 + 4 LO16 on D_80083160 and 7 R_MIPS_26) and no intra-function
+   `j`, with all 12 matched to the listing by word index, kind and symbol. */
+void func_800A2E30(SVECTOR a, SVECTOR b, SVECTOR c, SVECTOR d, s16 col)
+{
+    Unk80083160 *g;
+    POLY_G4 *pg;
+    DR_MODE *dm;
+    DVECTOR s0;
+    DVECTOR s1;
+    DVECTOR s2;
+    DVECTOR s3;
+    s32 p;
+    s32 flag;
+    s32 otz;
+
+    g = &D_80083160;
+    pg = (POLY_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
+    pg->r0 = pg->g0 = pg->b0 = pg->r2 = pg->g2 = pg->b2 = col;
+    pg->r1 = pg->g1 = pg->b1 = pg->r3 = pg->g3 = pg->b3 = 0;
+    func_80066708(pg);
+    func_80066640(pg, 1);
+    otz = func_800654B0(&a, &b, &c, &d, (u32 *)&s0, (u32 *)&s1, (u32 *)&s2, (u32 *)&s3, &p, &flag);
+    pg->x0 = s0.vx;
+    pg->y0 = s0.vy;
+    pg->x1 = s1.vx;
+    pg->y1 = s1.vy;
+    pg->x2 = s2.vx;
+    pg->y2 = s2.vy;
+    pg->x3 = s3.vx;
+    pg->y3 = s3.vy;
+    if (otz >= 0x1E0)
+    {
+        otz = 0x1DF;
+    }
+    if (otz < 0)
+    {
+        otz = 0;
+    }
+    func_8006658C(g->unk_00 + 0xD8, pg);
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0x140, 0), 0);
+    func_8006658C(g->unk_00 + 0xD8, dm);
+}
 
 /* func_800A2E30 TAKES FOUR SVECTORs BY VALUE, and that prototype -- not any
    statement in func_800A2FCC -- is what generates words 108..143 of
