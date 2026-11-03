@@ -2461,6 +2461,26 @@ extern u8 D_80100B3B;
 extern UnkTownScrCtx *D_80100900;
 void func_8009ED7C();
 s32 func_800A00E8(s32 i);
+/* The 0x800BCxxx walker pair's animation tables, each handed straight to
+   func_8003DB94 as its second argument, and the four-entry table of such
+   pointers the direction state indexes.  Element type unknown; only the fact
+   that D_800D210C's slots are word-sized has a witness (`lw` at a stride of
+   4). */
+extern u8 *D_800D210C[];
+extern u8 D_800E9CD4[];
+extern u8 D_800E9CFC[];
+extern u8 D_800E9D0C[];
+extern u8 D_800E9D34[];
+extern u8 D_800E9D54[];
+extern u8 D_800E9D8C[];
+extern u8 D_800E9DAC[];
+extern u8 D_800E9DD4[];
+extern u8 D_800E9DEC[];
+extern u8 D_800E9E14[];
+extern u8 D_800E9E34[];
+extern u8 D_800E9E54[];
+extern u8 D_800E9E7C[];
+extern u8 D_800E9ECC[];
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -2745,7 +2765,6 @@ void func_8009E2C0();
 void func_8009E348();
 void func_8009E370();
 void func_8009E3D4();
-u32 func_800491F4(s32, u8 *, s32);
 
 /* Reset one entry. The index is written inline, not through a base local:
    that is what puts the `sll` ahead of the `lui`/`addiu` the way the target
@@ -19258,11 +19277,488 @@ void func_800BC840(u8 *p, UnkVec *q, UnkTownRend *r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC8D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC990);
+/* Installed at UnkNode.unk_10 by func_800BCDCC and reached only through
+   func_80040190's cast (csrc/unk_12DEC.c), which calls it as
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- three parameters, the first being the node's +0x20 actor view.  The
+   sibling func_800BCE78 below is the same head and tail around a different,
+   bigger state machine, and func_800BD5B0 installs that one the way
+   func_800BCDCC installs this.
+
+   A seven-state walker on the actor view's +0x68.  State 0 draws a 0..15 roll
+   and branches on it: under 4 it idles (0x40), exactly 4 or under 8 it picks a
+   coin-flip pose (0x60 / 0x80), and from 8 up it REJECTS random cardinal
+   directions until the chosen one keeps both +0xA0 and +0xA2 inside +/-1 of
+   the origin, then commits to walking (0xA0).  +0xA4 records the state the
+   frame ended in and +0xA6 the direction index.  The tail sets REND +0x14 bit
+   0 from +0xA6 (so the sprite is flipped only in direction 0) and binds
+   whichever table the frame selected.
+
+   D_8006CCD8 / D_8006CCE8 are the engine's eight-way direction tables, the
+   same pair func_8009792C and func_800A878C index; this function uses only the
+   four CARDINAL entries, which is what `(func_80069EF8() & 3) * 2` says and
+   what makes the byte offset `t << 2` while the index itself is `t << 1`.
+   `i >> 1` -- not `i / 2` -- is what recovers the 0..3 index: a signed `/ 2`
+   costs the `srl 31` / `addu` / `sra` triple and the listing has one bare
+   `sra`.
+
+   THE ONE SPELLING THAT MATTERED was the operand order of the second half of
+   the direction test.  Written `*(s16 *)((u8 *)a + 0xA6) != (i >> 1)` it is
+   271 words and 1 differing, and the one word is `beq $v1, $v0` for the
+   target's `beq $v0, $v1` -- the registers are already right, only the
+   commuted operands differ, so the `>> 1` has to be the LEFT operand.  That is
+   the comparison-flip lever measured at the right length, which is the only
+   time the lever list says to reach for it.
+
+   `a->unk_6C--` sits between the func_800478B8 call and the switch and its
+   value is reused by three cases; the `sll 16` / `bgtz` pairs are cse's
+   sign-extension of the halfword it just stored, not a separate test.
+   The +0xAC flag head is the unit's standard one: `&= ~1` on a WORD needs
+   `li -2` / `and` rather than an `andi`, which is how the field's width is
+   witnessed.
+
+   271 words -- its header reads `nonmatching func_800BC990, 0x43C`, and
+   0x43C/4 = 271.  Measured 0 differing on the second compile, and its 38
+   relocation records match the listing's `jal`/`%hi`/`%lo` sequence
+   one for one. */
+void func_800BC990(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
+{
+    u8 *anim;
+    s32 i;
+
+    anim = NULL;
+    if (func_800352FC() != 0 && func_800C2AB4(a) != 0)
+    {
+        if ((*(s32 *)((u8 *)a + 0xAC) & 1) == 0)
+        {
+            func_80053DA8(0x601);
+            *(s32 *)((u8 *)a + 0xAC) |= 1;
+        }
+    }
+    else
+    {
+        *(s32 *)((u8 *)a + 0xAC) &= ~1;
+    }
+    func_800478B8((s32)r);
+    a->unk_6C--;
+    switch (a->unk_68)
+    {
+    case 0:
+        i = func_80069EF8() & 0xF;
+        if (i < 4 && *(s16 *)((u8 *)a + 0xA4) == 0x40)
+        {
+            i += 4;
+        }
+        a->unk_6C = (func_80069EF8() & 0x1F) + 0x28;
+        if (i < 4)
+        {
+            anim = D_800E9CD4;
+            a->unk_68 = 0x40;
+        }
+        if (i == 4)
+        {
+            *(s16 *)((u8 *)a + 0xA6) = func_80069EF8() & 1;
+            anim = D_800E9D34;
+            a->unk_68 = 0x60;
+        }
+        else if (i < 8)
+        {
+            *(s16 *)((u8 *)a + 0xA6) = func_80069EF8() & 1;
+            anim = D_800E9DAC;
+            a->unk_68 = 0x80;
+        }
+        else
+        {
+            do
+            {
+                i = (func_80069EF8() & 3) * 2;
+            } while (abs(*(s16 *)((u8 *)a + 0xA2) + D_8006CCD8[i]) >= 2 ||
+                     abs(*(s16 *)((u8 *)a + 0xA0) + D_8006CCE8[i]) >= 2);
+            a->unk_6C = 0x40;
+            *(s16 *)((u8 *)a + 0xA2) += D_8006CCD8[i];
+            *(s16 *)((u8 *)a + 0xA0) += D_8006CCE8[i];
+            b->unk_0C = D_8006CCD8[i] << 16;
+            b->unk_10 = D_8006CCE8[i] << 16;
+            a->unk_68 = 0xA0;
+            if (*(s16 *)((u8 *)a + 0xA4) != 0xA0 || (i >> 1) != *(s16 *)((u8 *)a + 0xA6))
+            {
+                *(s16 *)((u8 *)a + 0xA6) = i >> 1;
+                anim = D_800D210C[i >> 1];
+            }
+        }
+        *(s16 *)((u8 *)a + 0xA4) = a->unk_68;
+        break;
+    case 0x40:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9CFC;
+        }
+        if (a->unk_6C <= 0)
+        {
+            anim = D_800E9D0C;
+            a->unk_68 = 0;
+        }
+        break;
+    case 0x60:
+        if (a->unk_6C <= 0)
+        {
+            anim = D_800E9D54;
+            a->unk_68 = 0x61;
+        }
+        break;
+    case 0x61:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9D8C;
+            a->unk_68 = 0xF0;
+        }
+        break;
+    case 0x80:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9DD4;
+        }
+        if (a->unk_6C <= 0)
+        {
+            anim = D_800E9DEC;
+            a->unk_68 = 0xF0;
+        }
+        break;
+    case 0xA0:
+        b->unk_00 += b->unk_0C;
+        b->unk_04 += b->unk_10;
+        if (a->unk_6C <= 0)
+        {
+            a->unk_68 = 0;
+        }
+        break;
+    case 0xF0:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            a->unk_68 = 0;
+        }
+        break;
+    }
+    if (*(s16 *)((u8 *)a + 0xA6) != 0)
+    {
+        r->unk_14 &= ~1;
+    }
+    else
+    {
+        r->unk_14 |= 1;
+    }
+    if (anim != NULL)
+    {
+        func_8003DB94(r, anim, 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BCDCC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BCE78);
+/* Installed at UnkNode.unk_10 by func_800BD5B0 and reached through
+   func_80040190's cast, so three parameters with the first being the node's
+   +0x20 actor view -- see func_800BC990 above, which is this function's
+   smaller twin: identical +0xAC flag head (a different func_80053DA8 id,
+   0x60B against 0x601), identical `func_800478B8` + optional
+   `func_8003DB94(r, anim, 0)` tail, and a state machine on +0x68 in between.
+   The ONE structural difference in the frame is that func_800BC990 runs
+   func_800478B8 BEFORE its switch and this one runs it after.
+
+   Ten states.  State 0 is the only one that chooses: on the REND +0x6000 gate
+   it rolls `func_80069EF8() % 4` and dispatches to four sub-states -- idle
+   (0x10), a horizontal dash whose sign is the coin flip when the target is
+   near and AWAY from the target when it is far (0x20), a randomly-scaled
+   version of the same (0x30), and a timed 0x40.  0x20 and 0x30..0x34 are the
+   flight arc: each advances +0x00 by +0x0C and +0x08 by +0x14, and 0x32
+   retargets +0x14 so the remaining +0x6C frames land the body back on
+   +0x08 + 0x100000.  0xFF is the unit's kill idiom.
+
+   Note the inner `case 4:` is DEAD -- `% 4` on a signed draw yields -3..3 --
+   and it is in the source anyway: the dispatch tree tests 0, 1, 2 and 4, and
+   the 0x40/0x14 pair it sets is reachable from nowhere else.
+
+   THREE MECHANISMS, each measured, each worth a word or more:
+
+   (1) THE SELF-ASSIGNING ARM OF A SIGN CHOICE HAS TO BE A TERNARY.  Inner
+   state 2 negates +0x0C on one coin-flip arm and leaves it alone on the other,
+   and the target's "leave it alone" arm is a real `lw`/`sw` pair.  Written as
+   an `if`/`else` whose then-arm is `b->unk_0C = b->unk_0C;` the store is gone
+   and the `j`'s delay slot is a `nop` -- 462 words, 1 differing.  TEN
+   spellings of that arm are byte-identical to each other and all keep the nop:
+   `b->unk_0C = b->unk_0C`, the same with a `(s32)` cast, with a
+   `*(s32 *)((u8 *)b + 0xC)` cast on the left, on the right, on both,
+   `+= 0`, `| 0`, `>> 0`, `* 1`, `-(-x)` and unary `+`.  The ternary
+   `b->unk_0C = (cond) ? b->unk_0C : -b->unk_0C;` emits the store and matches.
+   What the -S dumps show, and all that is claimed here, is WHERE the two
+   forms branch: the if/else arm compiles to `lw $2,12($16)` / `j $L65`,
+   jumping PAST the join's own `lw` of the same word, while the ternary arm
+   compiles to `lw $2,12($16)` / `j $L22` with `sw $2,12($16)` in the delay
+   slot, landing ON that `lw`.  So in the if/else form the self-store is
+   dropped and the reload skipped because the value is provably already in the
+   register; in the ternary form it is not.  The structural reason the ternary
+   differs is that a COND_EXPR is expanded by storing each arm SEPARATELY into
+   the same target -- `store_expr (TREE_OPERAND (exp, 1), temp, 0)` and
+   `store_expr (TREE_OPERAND (exp, 2), temp, 0)`,
+   scratch/gcc-src/cdk-gcc-b18/expr.c:6885 and :6899 -- and store_expr emits
+   the move whenever the value rtx is not the target rtx itself: "If value was
+   not generated in the target, store it there", expr.c:3250.  WHICH pass
+   removes it in the if/else form was NOT identified; only the branch-target
+   difference above was measured.  (Dropping the arm entirely is 459 words /
+   280 differing, so it is not optional.)
+
+   (2) `A - K - B` IS THE SOURCE FORM OF `A - (B + K)`.  State 0x32's
+   retarget divides `(func_800C2AE8(b) << 16) - 0x100000 - b->unk_08` by the
+   countdown, and the listing forms `b->unk_08 + 0x100000` FIRST
+   (`lw`/`lui 0x10`/`addu`) and subtracts the sum.  Writing it that way --
+   `A - (b->unk_08 + 0x100000)` -- does NOT compile to that: fold's associate
+   pass splits the right operand on its constant and returns `(A - K) - B`,
+   giving `lui 0xfff0`/`addu`/`lw`/`subu`, 6 differing.  Writing `A - K - B`
+   instead splits the LEFT operand, so
+   scratch/gcc-src/cdk-gcc-b18/fold-const.c:4233 takes the other arm --
+   "Otherwise return VAR +- (ARG1 +- CON)", `tem = fold (build (code, type,
+   arg1, con)); t = build (code, type, var, tem);` -- and rebuilds exactly
+   `A - (B - -K)`, which expands as the sum.  Eleven other spellings of the
+   subtrahend are all 6 differing and all the same instruction stream: the
+   constant first, `- -K`, a `(u32)` cast on either side or both, an `(s32)`
+   cast, a `(u8 *)` pointer add, a comma expression, `-(-x)`, and `0x10 << 16`
+   for the constant -- split_tree strips same-mode conversions
+   (fold-const.c:1001-1007) and TREE_CONSTANT catches every form of the
+   literal, so none of them can block the split.  `A - B + K` and `A - B - K`
+   do block it, but they emit the subtract first and are 4 and 5 differing.
+
+   (3) THE 0x20 COMPARISON VALUE HAS TO SHARE `d` WITH STATE 0.  With a
+   variable of its own, state 0x20's truncated func_800C2AE8 result takes $v0
+   where the target has $a0 -- three words, every one a register rename, and
+   NONE of six declaration orders of (`anim`, `d`, `n`) moves it, nor does a
+   block-local declaration, nor the reversed comparison.  Reusing `d` -- the
+   same local state 0's two range tests use for `b->unk_00 - a->unk_A0` -- is
+   0 differing.  Same shape as func_800BD688's note below: sharing a local
+   makes the pseudo multi-block, which hands it to global-alloc instead of
+   local-alloc and changes which hard register it wins.  (Reusing `d` for
+   state 0x32's shifted call result instead is 7 differing, and reusing it for
+   the 0x100000 sum is 171.)
+
+   Also measured: both `abs()` range tests must be written with the NEAR case
+   as the `if` body and the far case as the `else` (`abs(d) <= K`), not the
+   other way round -- inverted they are 466 words, 339 differing, because the
+   far block becomes the fall-through.  `d` survives the `abs()` as a separate
+   register because it is read again afterwards, which is the ternary-writes-a-
+   separate-variable half of the expand_abs lever.
+
+   462 words -- its header reads `nonmatching func_800BCE78, 0x738`, and
+   0x738/4 = 462.  Measured 0 differing, and its 39 relocation records match
+   the listing's `jal`/`%hi`/`%lo` sequence one for one. */
+void func_800BCE78(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    u8 *anim;
+    s32 d;
+
+    anim = NULL;
+    if (func_800352FC() != 0 && func_800C2AB4(a) != 0)
+    {
+        if ((*(s32 *)((u8 *)a + 0xAC) & 1) == 0)
+        {
+            func_80053DA8(0x60B);
+            *(s32 *)((u8 *)a + 0xAC) |= 1;
+        }
+    }
+    else
+    {
+        *(s32 *)((u8 *)a + 0xAC) &= ~1;
+    }
+    switch (a->unk_68)
+    {
+    case 0:
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            switch (func_80069EF8() % 4)
+            {
+            case 0:
+                anim = D_800E9E7C;
+                a->unk_68 = 0x10;
+                a->unk_6C = func_80069EF8() % 2 + 2;
+                break;
+            case 1:
+                a->unk_68 = 0x20;
+                r->unk_14 |= 0x800;
+                a->unk_6C = (func_80069EF8() & 1) + 2;
+                b->unk_14 = -0x30000;
+                d = b->unk_00 - *(s32 *)((u8 *)a + 0xA0);
+                if (abs(d) <= 0x1FFFFF)
+                {
+                    b->unk_0C = 0x10000;
+                    if ((func_80069EF8() & 1) != 0)
+                    {
+                        b->unk_0C = -b->unk_0C;
+                    }
+                }
+                else if (d >= 0)
+                {
+                    b->unk_0C = -0x10000;
+                }
+                else
+                {
+                    b->unk_0C = 0x10000;
+                }
+                if (b->unk_0C > 0)
+                {
+                    r->unk_14 |= 1;
+                }
+                else
+                {
+                    r->unk_14 &= ~1;
+                }
+                break;
+            case 2:
+                anim = D_800E9ECC;
+                a->unk_68 = 0x30;
+                b->unk_0C = (func_80069EF8() & 0x1FF) << 8;
+                d = b->unk_00 - *(s32 *)((u8 *)a + 0xA0);
+                if (abs(d) <= 0xFFFFF)
+                {
+                    b->unk_0C = ((func_80069EF8() & 1) != 0) ? b->unk_0C : -b->unk_0C;
+                }
+                else if (d > 0)
+                {
+                    b->unk_0C = -b->unk_0C;
+                }
+                if (b->unk_0C > 0)
+                {
+                    r->unk_14 |= 1;
+                }
+                else
+                {
+                    r->unk_14 &= ~1;
+                }
+                b->unk_14 = -0x20000;
+                break;
+            case 4:
+                a->unk_68 = 0x40;
+                a->unk_6C = 0x14;
+                r->unk_14 |= 0x800;
+                break;
+            }
+        }
+        break;
+    case 0x10:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            if (--a->unk_6C <= 0)
+            {
+                a->unk_68 = 0;
+            }
+            anim = D_800E9E7C;
+        }
+        break;
+    case 0x20:
+        b->unk_00 += b->unk_0C;
+        b->unk_08 += b->unk_14;
+        b->unk_14 += 0x10000;
+        d = (s16)func_800C2AE8(b);
+        if (d < *(s16 *)((u8 *)b + 0xA))
+        {
+            *(s16 *)((u8 *)b + 0xA) = d;
+            if (--a->unk_6C <= 0)
+            {
+                b->unk_14 = 0;
+                b->unk_0C = 0;
+                r->unk_14 &= ~0x800;
+                a->unk_68 = 0;
+            }
+            else
+            {
+                b->unk_14 = -0x30000;
+            }
+        }
+        break;
+    case 0x30:
+        b->unk_00 += b->unk_0C;
+        b->unk_08 += b->unk_14;
+        b->unk_14 -= 0x4000;
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9E34;
+            a->unk_68 = 0x31;
+            a->unk_6C = 3;
+        }
+        break;
+    case 0x31:
+        b->unk_00 += b->unk_0C;
+        b->unk_08 += b->unk_14;
+        if ((r->unk_14 & 0x6000) != 0 && --a->unk_6C <= 0)
+        {
+            anim = D_800E9E34;
+            b->unk_14 = -0x10000;
+            b->unk_0C >>= 1;
+            a->unk_68 = 0x32;
+            a->unk_6C = (func_80069EF8() & 3) + 3;
+        }
+        break;
+    case 0x32:
+        b->unk_00 += b->unk_0C;
+        b->unk_08 += b->unk_14;
+        if ((r->unk_14 & 0x6000) != 0 && --a->unk_6C <= 0)
+        {
+            a->unk_6C = 8;
+            b->unk_0C = -b->unk_0C;
+            if (b->unk_0C > 0)
+            {
+                r->unk_14 |= 1;
+            }
+            else
+            {
+                r->unk_14 &= ~1;
+            }
+            b->unk_14 = ((func_800C2AE8(b) << 16) - 0x100000 - b->unk_08) / a->unk_6C;
+            anim = D_800E9E14;
+            a->unk_68 = 0x33;
+        }
+        break;
+    case 0x33:
+        b->unk_00 += b->unk_0C;
+        b->unk_08 += b->unk_14;
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9E14;
+        }
+        if (--a->unk_6C <= 0)
+        {
+            anim = D_800E9E54;
+            b->unk_14 = 0;
+            b->unk_0C = 0;
+            a->unk_68 = 0x34;
+        }
+        break;
+    case 0x34:
+        b->unk_00 += b->unk_0C;
+        *(s16 *)((u8 *)b + 0xA) += ((s16)func_800C2AE8(b) - *(s16 *)((u8 *)b + 0xA)) >> 1;
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            anim = D_800E9E7C;
+            a->unk_68 = 0;
+        }
+        break;
+    case 0x40:
+        if (--a->unk_6C <= 0)
+        {
+            a->unk_68 = 0;
+            r->unk_14 &= ~0x800;
+        }
+        break;
+    case 0xFF:
+        func_8008F134(a);
+        func_80033D08((u8 *)a);
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+    func_800478B8((s32)r);
+    if (anim != NULL)
+    {
+        func_8003DB94(r, anim, 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD5B0);
 
