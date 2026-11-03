@@ -2017,6 +2017,15 @@ void func_800B9CB8();
 void func_800BA8C4();
 extern u8 D_80078CDC[];
 void func_800AFFA8(u8 *s);
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+extern u8 D_800D1464[];
+extern u8 D_800F15AC[];
+void func_800ABB20();
+void func_800A86BC();
+void func_800AE630();
+void func_800AEEF0(u8 *s, void *a, s32 b, s32 c, s32 d, s32 e, s32 f);
+void func_800B13D4(u8 *s, u32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5478,7 +5487,63 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097844);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009792C);
+/* 105 words, 0 differing.  The spawner behind func_80097AD0: allocate a 0x212
+   object, install func_800ABB20 as its update hook and D_80045340 as its
+   list tag, then seed the mover from the template and the renderer from
+   D_800D1464.  func_800A878C is this same source with func_800A86BC /
+   D_800F15AC substituted and eleven more words of tail; see it for the rest.
+
+   Two measured spellings matter here:
+
+   - `- D_8006CCD8[i] * 16` and NOT `- (D_8006CCD8[i] << 4)`.  The shift
+     spelling narrows the sign-extended table load to `lhu`: the store is
+     `sh`, so only the low 16 bits are live, and with a shift in the way
+     cc1psx propagates that mask back into the load.  The multiply spelling
+     keeps `lh`.  Measured 2 differing against 0 on the two table reads.
+   - the body is `if (n != NULL) { ... } return n;`, not an early
+     `if (n == NULL) return NULL;`.  The early return costs the `j` to the
+     epilogue and a `move $v0, $zero`: 107 words against 105.
+
+   `t->unk_02`/`unk_06`/`unk_0A` are read through `*(u16 *)` casts because the
+   target loads them with `lhu`; the UnkTownPuff fields are s16 and a
+   COMPONENT_REF would give `lh`. */
+UnkNode *func_8009792C(UnkTownPuff *t, s16 ang)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkTownRend *r;
+    u8 *v;
+    s32 i;
+    s32 x;
+
+    i = (ang >> 9) & 7;
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        r = (UnkTownRend *)n->unk_0C;
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_800ABB20;
+        func_8004491C(n, (u32)D_80045340);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
+        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2)) / 16;
+        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2)) / 16;
+        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        func_8003DB94(r, D_800D1464, 0);
+        r->unk_0E = 0xFF;
+        r->unk_0D = 0xFF;
+        r->unk_0C = 0xFF;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        r->unk_10 = 0x60;
+        r->unk_14 |= 0xC;
+        x = func_800374F4(7) + func_800374F4(7);
+        *(s16 *)(v + 0x2) = x;
+    }
+    return n;
+}
 
 /* Scatter `count` particles evenly around the circle from `src`, each at a
    random offset inside `spread` and with a (cos, sin) * 0x20 velocity; the
@@ -5487,7 +5552,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009792C);
    func_800A878C for func_8009792C; both call sites are in func_800A8ADC.
 
    `t.unk_0A` is assigned before the loop AND inside it, which is the target's
-   `sh $v1, 0x1A($sp)` at the blez's delay slot; it is not a hoist. */
+   `sh $v1, 0x1A($sp)` at the blez's delay slot; it is not a hoist.
+
+   SETTLED when func_8009792C and func_800A878C landed: both spawners return
+   the allocated node, and the `n->unk_08->unk_14` write here is the SAME slot
+   func_800A878C overwrites in its own tail (`m->unk_14 = -(x << 16);`), which
+   func_8009792C does not write at all. So this caller's write is a correction
+   of the spawner's value in one half of the pair and the only writer of it in
+   the other -- that asymmetry, not just the two symbol substitutions, is the
+   real functional difference between the halves. */
 void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
 {
     UnkTownPuff t;
@@ -7752,7 +7825,56 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A85C0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A86BC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A878C);
+/* 116 words, 0 differing.  func_8009792C with func_800A86BC for
+   func_800ABB20, D_800F15AC for D_800D1464, and eleven words of extra tail:
+   the mover's own +0x14 gets the random spin as a negated 16.16, and the
+   actor view's +0x04 gets half the square of the spin.  See func_8009792C
+   for the two spelling notes that body carries.
+
+   `*(s32 *)(v + 0x4)` re-reads `*(s16 *)(v + 0x2)` rather than squaring `x`,
+   which is the target's `lh $v0, 0x2($s3)` with a load-delay `nop` after a
+   store to the very same halfword -- the stored value is truncated to 16 bits
+   and the square is of the truncated value, so the reload is semantic and not
+   a volatile device. */
+UnkNode *func_800A878C(UnkTownPuff *t, s16 ang)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkTownRend *r;
+    u8 *v;
+    s32 i;
+    s32 x;
+
+    i = (ang >> 9) & 7;
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        r = (UnkTownRend *)n->unk_0C;
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_800A86BC;
+        func_8004491C(n, (u32)D_80045340);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
+        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2)) / 16;
+        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2)) / 16;
+        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        func_8003DB94(r, D_800F15AC, 0);
+        r->unk_0E = 0xFF;
+        r->unk_0D = 0xFF;
+        r->unk_0C = 0xFF;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        r->unk_10 = 0x60;
+        r->unk_14 |= 0xC;
+        x = func_800374F4(7) + func_800374F4(7);
+        *(s16 *)(v + 0x2) = x;
+        m->unk_14 = -(x << 16);
+        *(s32 *)(v + 0x4) = *(s16 *)(v + 0x2) * *(s16 *)(v + 0x2) / 2;
+    }
+    return n;
+}
 
 /* func_80097AD0 with two edits: the z offset ADDS its random term instead of
    subtracting it, and the spawner is func_800A878C.  See func_80097AD0. */
@@ -8594,7 +8716,57 @@ s32 func_800AEF5C(u8 *s, s32 n)
     return ok;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AEFD8);
+/* Allocate-and-wire constructor, third of three near-siblings with
+   func_800B14B0 and func_800B6A0C: allocate the node, build the +0x20 view's
+   slot table, look the mode record up, run the big initialiser, then bind the
+   object; on a failed slot table, tear down and return 0. 66 words, 0
+   differing. Its template is func_800B0214 above, with three differences --
+   it allocates through func_8003FD64 (so it takes a parent pointer), it
+   installs a handler at +0x10, and it carries five more parameters.
+
+   SIX parameters, and the call to func_800AEEF0 PERMUTES them: the listing's
+   argument setup is $a1=p1, $a2=p4, $a3=p5, 0x10($sp)=p2, 0x14($sp)=p3,
+   0x18($sp)=p6, which is (v, p1, p4, p5, p2, p3, p6) and not the in-order
+   list its two siblings pass. Writing it in order is 67 words, 45 differing.
+   func_800AEEF0's own listing corroborates the split: it forwards its args
+   1/2/3/4/7 into func_800AEEBC and its args 5/6 into func_800AEBC4.
+
+   THE HANDLER STORE GOES *AFTER* func_8004491C HERE and *BEFORE* it in
+   func_800B6A0C, and the listing says which: reorg fills a call's delay slot
+   by scanning BACKWARD from the call (reorg.c:3086), so a store written
+   before the call lands in the `jal`'s own slot, and one written after it can
+   only reach the following `j`'s slot. Here the `sw $v0, 0x10($s0)` is in the
+   `j`'s slot and `addiu $a1, $a1, %lo` is in the `jal`'s, so the store
+   follows. Written before the call it is 67 words, 30 differing -- one word
+   more, because the `j` then has to take a duplicate `move $v0, $s0` from its
+   target and the shared copy survives for the other path. */
+UnkNode *func_800AEFD8(void *p, s32 b, s32 c, s32 d, s32 e, s32 f)
+{
+    UnkNode *o;
+    u8 *v;
+
+    o = func_8003FD64(0, p);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        if (func_800AEF5C(v, 0x1A) != 0)
+        {
+            o->unk_0C = (u32)((u8 *)o + 0xE8);
+            *(u32 *)(v + 0xD4) = func_800AEB9C(*(s32 *)(v + 0xD8));
+            func_800AEEF0(v, p, d, e, b, c, f);
+            func_8004491C(o, (u32)D_8004CAA0);
+            o->unk_10 = (u32)func_800AE630;
+        }
+        else
+        {
+            func_8004B248((u32 *)((u8 *)o + 0xFC));
+            o->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            o = 0;
+        }
+    }
+    return o;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF0E0);
 
@@ -8998,7 +9170,47 @@ s32 func_800B1434(u8 *s, s32 n)
     return ok;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B14B0);
+/* The same constructor as func_800AEFD8 below and func_800B6A0C, over the
+   0x1F-entry slot table: 66 words, 0 differing. No handler is installed here
+   -- the listing has no `lui` of a function symbol at all -- and the
+   allocation is func_8003FC64(0), so the first parameter is only forwarded.
+
+   SEVEN parameters, all seven forwarded to func_800B13D4 in order, and all
+   seven witnessed at the one call site: func_800AE1AC loads $a1/$a2/$a3 from
+   +0x4/+0x8/+0xC of its own view and stores three more at 0x10/0x14/0x18($sp)
+   with nothing at 0x1C. Every one is an explicit load or move, so none is a
+   pure forward.
+
+   The teardown arm must assign `o = 0` and fall into the shared `return o`,
+   not `return 0`: the early return is 65 words, 46 differing. Lifting the
+   null check out as `if (o == 0) return 0;` is likewise wrong -- measured on
+   the sibling at 66 words against 65, 49 differing. */
+UnkNode *func_800B14B0(u32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g)
+{
+    UnkNode *o;
+    u8 *v;
+
+    o = func_8003FC64(0);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        if (func_800B1434(v, 0x1F) != 0)
+        {
+            o->unk_0C = (u32)((u8 *)o + 0xDC);
+            *(u32 *)(v + 0xC8) = func_800B091C(*(s32 *)(v + 0xCC));
+            func_800B13D4(v, a, b, c, d, e, f, g);
+            func_8004491C(o, (u32)D_8004CAA0);
+        }
+        else
+        {
+            func_8004B248((u32 *)((u8 *)o + 0xF0));
+            o->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            o = 0;
+        }
+    }
+    return o;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B15B8);
 
@@ -11292,7 +11504,53 @@ s32 func_800B6990(u8 *s, s32 n)
     return ok;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6A0C);
+/* The task constructor, same shape as func_800AEFD8 and func_800B14B0 above:
+   65 words, 0 differing. func_800B6990 builds the 0x18-entry slot table,
+   func_800B677C looks the mode record up, func_800B691C does the whole
+   construction, and the +0x10 handler is func_800B6754.
+
+   THE HANDLER STORE IS BEFORE func_8004491C here and AFTER it in
+   func_800AEFD8. The listing is what says so: the `sw $v0, 0x10($s0)` sits in
+   the `jal func_8004491C` delay slot, which reorg can only fill by scanning
+   backward from the call (reorg.c:3086), so the store precedes it in source.
+   Moving it after the call is 64 words, 30 differing.
+
+   NO CALLER AND NO ADDRESS REFERENCE ANYWHERE in asm/, so the five parameters
+   have no external witness. They are firm only up to 5: all five are read and
+   forwarded into func_800B691C's six-argument signature, and the fifth comes
+   out of the incoming stack slot at 0x48($sp) = 0x38 + 0x10, which only a
+   parameter can be. A sixth would be invisible; if a caller is landed later
+   and passes six, this is the cascade to expect.
+
+   The local `v` for the +0x20 view is load-bearing: spelling every access as
+   `(u8 *)o + 0x20` with absolute offsets off `o` is 64 words, 45 differing. */
+UnkNode *func_800B6A0C(u32 a, s32 b, s32 c, s32 d, s32 e)
+{
+    UnkNode *o;
+    u8 *v;
+
+    o = func_8003FC64(0);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        if (func_800B6990(v, 0x18) != 0)
+        {
+            o->unk_0C = (u32)((u8 *)o + 0xA8);
+            *(u32 *)(v + 0x94) = func_800B677C(*(s32 *)(v + 0x98));
+            func_800B691C(v, a, b, c, d, e);
+            o->unk_10 = (u32)func_800B6754;
+            func_8004491C(o, (u32)D_8004CAA0);
+        }
+        else
+        {
+            func_8004B248((u32 *)((u8 *)o + 0xBC));
+            o->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            o = 0;
+        }
+    }
+    return o;
+}
 
 /* The generic releaser for the 0x18-entry card/prim table at +0xB8 of the
    func_800B6BC4/func_800B6C30 node: each entry's kind byte at +0x0E of its
