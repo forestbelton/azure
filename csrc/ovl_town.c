@@ -1663,6 +1663,10 @@ u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
 s32 func_800B555C(s32 a, s32 b);
+void func_800B5174(u8 *p, UnkTownCardPair **b);
+void func_800B52F4(u8 *p, UnkTownCardPair **b);
+void func_800B59A4(u8 *p, UnkTownCardPair **b);
+void func_800B5C60(u8 *p, UnkTownCardPair **b);
 extern u8 D_800892D8[];
 extern u8 D_800892F0[];
 extern u8 D_800892F4[];
@@ -8101,7 +8105,33 @@ u8 *func_800B544C(u8 *s, u8 *p)
     return s;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B555C);
+/* The font-colour selector func_800B557C uses twice: a three-way compare of
+   a current value against its maximum. Equal gives 0 (the default colour),
+   current below maximum gives 4 and current above it gives 3, and the
+   comparison is SIGNED (`slt`, not `sltu`).
+
+   The shape is load-bearing: one variable seeded 0 with a nested if/else and
+   a single `return d`, not three early returns. Three `return`s give nine
+   words with a `j` to a shared tail (8 differing); the accumulator form puts
+   0 in the first branch's delay slot, 3 in the second's, and leaves the one
+   `addu $v0, $v1, $zero` in the jr's slot. */
+s32 func_800B555C(s32 a, s32 b)
+{
+    s32 d = 0;
+
+    if (a != b)
+    {
+        if (a < b)
+        {
+            d = 4;
+        }
+        else
+        {
+            d = 3;
+        }
+    }
+    return d;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892E8);
 
@@ -8240,7 +8270,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5918);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B59A4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5AC8);
+/* One of the two panel drivers for this cluster, and func_800B640C's twin:
+   four calls of the same two arguments in source order, nothing else. The
+   incoming $a0/$a1 serve the FIRST call directly -- gcc keeps them live and
+   copies them to $s0/$s1 in the jal's delay slot -- which is why only three
+   of the four call sites have an argument-setup pair.
+
+   The arity comes from this function, not from its callees: it pins
+   func_800B5174, func_800B52F4 and func_800B59A4 at two parameters each, and
+   it is the only witness any of the three has. */
+void func_800B5AC8(u8 *p, UnkTownCardPair **b)
+{
+    func_800B5174(p, b);
+    func_800B52F4(p, b);
+    func_800B5774(p, b);
+    func_800B59A4(p, b);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5B20);
 
@@ -8386,12 +8431,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B61C0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B62A4);
 
-void func_800B63EC(void)
+void func_800B63EC(u8 *p, UnkTownCardPair **b)
 {
     func_800B62A4();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B640C);
+/* func_800B5AC8's twin over the other four panel builders. It is the arity
+   witness for func_800B5C60 and -- less obviously -- for func_800B63EC,
+   which reads neither parameter: this call site sets up both, so the landed
+   func_800B63EC carries two unused ones. An unused parameter costs no words,
+   and func_800B63EC still measures 0 differing with them. */
+void func_800B640C(u8 *p, UnkTownCardPair **b)
+{
+    func_800B5C60(p, b);
+    func_800B5D70(p, b);
+    func_800B5E28(p, b);
+    func_800B63EC(p, b);
+}
 
 u32 func_800B6464(s32 a)
 {
