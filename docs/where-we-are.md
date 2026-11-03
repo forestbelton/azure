@@ -333,12 +333,37 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-02, after the clusters:** ovl_town is 799 of 1819
-   functions and 24,957 of 70,311 words, **35.5%**, up from 26.7% in one
-   session; the project total is 62.1%. The whole unit sweeps clean at 799 of
-   799 and `make build/town.bin` is byte-identical. `nearsibs.py --groups`
-   still lists **16 sets, 2,515 words** of unread candidates, so the cluster
-   seam has not run out yet.
+   **State on 2026-11-03, after two more cluster batches:** ovl_town is 879 of
+   1819 functions and 30,021 of 70,311 words, **42.7%**, up from 26.7% two
+   sessions ago; the project total is **66.3%**. The whole unit sweeps clean at
+   879 of 879, and both `make build/town.bin` and `make check` are
+   byte-identical. `docs/matching-levers.md` is at 371 levers.
+
+   The cluster seam has NOT run out, and the way to reopen it when it looks
+   drained is to lower the threshold: `nearsibs.py` at its default ratio had
+   fallen to 3 sets / 326 words, and `--ratio 0.88 --min-words 24` opened
+   **32 sets / 3,494 words** -- including the thirteen-member bind family (356
+   words, the largest single landing of the sweep). After the 2026-11-03 batch
+   it still lists roughly **20 sets and ~1,500 words**.
+
+   Two batch-level lessons from 2026-11-03, both expensive to relearn:
+
+   * **Six of six clusters landed, and six of six agents found an error in
+     their brief.** None was in the analysis; all were in the provisioning --
+     a template of the wrong arity, a function named as landed that lives in
+     another unit, a misattributed source comment, a miscounted symbol class,
+     a broken tool invocation, and a discriminator asserted without being
+     measured. There is now a pre-send checklist in `docs/town-sweep.md`.
+     Budget for the brief being the weak link, not the matching.
+   * **This repo can have another session working in it.** On 2026-11-03 a peer
+     session refactored the eleven carved `gprel_*` units and the Makefile
+     concurrently (landed as `3b58483`), including `tools/decomp/asmlib.py`,
+     which is the compile path every measurement goes through. A whole-tree
+     checksum tripwire flagged all of it as an agent rule violation and nearly
+     got it reverted. **Scope a tripwire to the files you own**, check mtimes
+     before concluding anything, and verify a shared tool's change is
+     comment-only (tokenise HEAD vs worktree with comments and layout
+     stripped) rather than assuming either way.
 
    The three biggest landings of that session all came from CLUSTERS whose
    members were handed to one agent together, and the pattern is worth

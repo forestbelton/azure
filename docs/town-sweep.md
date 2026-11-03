@@ -489,6 +489,82 @@ standalone) after three wrong guesses about which prototype had done it.
   grep, then the CALLER grep, then families.py. The caller grep settled arity
   for three functions in that batch and gave a fourth its object layout.
 
+### A FAMILY TEMPLATE CAN CROSS AN ARITY BOUNDARY -- CHECK THE DECLARATION FIRST
+
+2026-11-03. `nearsibs.py` and `families.py` group on **opcode shape**, which is
+blind to arity. The `func_80098928` four-member set was briefed with
+`func_80098B9C` as its template; that is a **two**-argument
+`func_80094984(desc, t)` form with `func_80099754` late, and all four targets
+are **three**-argument with `func_80099754` first. The correct relatives,
+`func_80098D60` and `func_80098DC0`, sit immediately after `func_80098CF0`'s own
+`INCLUDE_ASM` and the brief never mentioned them.
+
+The witness that settles it was already in the file: a full prototype at
+`csrc/ovl_town.c:2322` plus **sixteen** landed three-argument call sites. So:
+**before trusting a family template, read the unit's declaration for the target
+and check the stub's immediate neighbours in the C file for a closer relative.**
+A one-line `grep` beats the grouping.
+
+### SWEEPING `nm` OUTPUT IS A FALSE-POSITIVE FACTORY
+
+`INCLUDE_ASM` pulls every stub into the same object, so `nm` on a merged
+object lists all 1819 names and **a stub verifies against itself**. Enumerate
+the sweep from the **C definitions** (the `awk` recipe above), never from the
+symbol table.
+
+### `advise.py` NEEDS ONE FUNCTION PER FILE -- AND IS ACTIVELY MISLEADING OTHERWISE
+
+2026-11-03, hit independently by four agents in one batch. Given a merged
+whole-unit copy it compares all 70,311 built words against the one function's
+target and prints
+
+    built 70311 words, target 66 words
+    VERDICT: LENGTH
+      LENGTH  built 70311, target 66 (+70245)
+      CALLEE-SAVED  80091BD8  built saves $fp,$s4,$s5,$s6,$s7, target does not
+
+The `CALLEE-SAVED` and `DELAY-NOPS` findings are **fabricated** -- artefacts of
+the length mismatch -- and `--greg` printed a two-pseudo allocation table for a
+function that has five. It is not merely unhelpful, it will send you after a
+defect that does not exist.
+
+One function per file, not one unit per file: a *two*-function solo file still
+printed `built 111 words, target 55 words / VERDICT: LENGTH`. Build a minimal
+one-function `.c` with its own `extern` declarations. `ovlverify.py` on the
+merged copy is unaffected and remains the measurement.
+
+### A BRIEF'S RODATA INVENTORY MUST NAME THE ADDRESS-TAKEN FUNCTIONS
+
+A `%hi`/`%lo` pair on a *function* symbol -- a handler being installed into a
+slot -- is masked by `ovlverify` and has **no `jal` to decode**, so it is
+invisible to both of the usual checks. The `func_80092320` cluster's brief
+omitted `%hi(func_8009204C)` and `%hi(func_80092CD4)` entirely, which is exactly
+the case this doc records as having already cost one broken build. List them
+with the data symbols, and read each one off the member's **own** listing.
+
+### MY OWN BRIEFS WERE THE BATCH'S MAIN DEFECT SOURCE -- A CHECKLIST
+
+In the 2026-11-03 batch of six clusters, every cluster landed and **every
+cluster's agent found at least one error in its brief**. None was in the
+analysis; all were in the provisioning. Before sending a brief, check:
+
+1. **Is every function I call "landed in this unit" actually in this unit?**
+   `func_80033B2C` was listed among "nine landed at 0 differing"; it is
+   declaration-only at `:2211` with no listing in `asm/nonmatchings/ovl_town/`
+   and lives in the resident.
+2. **Does the named template have the target's arity?** See above.
+3. **Do the callees I describe as "landed, read their prototypes" have
+   prototypes that can serve the call sites?** `func_80094088`/`func_80094474`
+   are defined with one parameter and called with three.
+4. **Are my symbol counts per class, not totals?** `%hi(D_800837xx) x4` was
+   really `%hi` x3 plus `%lo` x1.
+5. **Is a source comment I am quoting about the function I think it is?** The
+   block at `:4645` documents `func_800930E4`, the function defined *below* it.
+   **This file's convention is that a comment block documents what follows.**
+6. **Am I asserting a discriminator I have not measured?** The cast-placement
+   "discriminator" was asserted twice, once as a mid-task correction, and does
+   not exist.
+
 ## The agent brief
 
 Copy verbatim, substituting the function name and its word count. Agents must
