@@ -367,6 +367,26 @@ typedef struct UnkTownCFCB4
     s32 unk_10;
 } UnkTownCFCB4;
 
+/* The 0x54-byte item record array at the constant base 0x800102F0. The
+   constant-base spelling is the project's own, already landed at
+   csrc/unk_1C540.c:1080, so it is not a device.
+
+   ALIGNMENT IS LOAD-BEARING, which is why this is NOT the same typedef as
+   that unit's `Unk800102F0`: its copy is built entirely from u8, so alignment
+   1, and a whole-struct assignment through it cannot assume either side is
+   word-aligned -- gcc expands the 0x54-byte copy as the runtime-safe
+   lwl/lwr + swl/swr pair of loops, 54 words where func_8009DFD8's target
+   spends 26 (measured: 172 candidate words against 144). One u32 member
+   raises the alignment to 4 and the copy comes out as the target's four-word
+   lw/sw loop plus a single trailing word. Same object, same size, two copy
+   expansions -- so a cross-unit typedef is only reusable if its alignment
+   suits how THIS unit uses it. */
+typedef struct UnkTownItemRec
+{
+    u32 unk_00;
+    u8 pad_04[0x50];
+} UnkTownItemRec;
+
 /* A RESIDENT symbol (splat/town.bin_undefined_syms_auto.txt), declared
    nowhere in include/structs.h or csrc/. Only its +0x08 pointer has a
    witness, and that pointee's type is inferred from three s16 reads at
@@ -1242,6 +1262,28 @@ void func_80093B00();
 void func_8009B828();
 void func_8009B8E8();
 void func_8009B9BC();
+extern UnkTownItemRec D_80100AF8;
+extern void *D_80100B0C;
+extern u8 D_8006E240[];
+extern u8 D_800D073C[];
+extern u8 D_800D0754[];
+extern u8 D_800D076C[];
+extern u8 D_800D0788[];
+UnkNode *func_8003FD64(s32 type, void *base);
+u32 func_8004A658(s32 i, s32 j);
+void func_8009C1B4();
+void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d);
+void func_8009DEBC();
+void func_800B2244();
+extern s32 D_800D0B14;
+extern s16 D_80100D18;
+extern s32 D_80100D1C;
+extern s32 D_80100D60;
+extern s16 D_80100D80;
+extern s16 D_80100D82;
+void func_80094378(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_800AAA58(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_800A9F14(UnkTown2AE8 *b);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -1906,10 +1948,15 @@ void func_8008F0A4(u8 *a)
     a[0x14] = 0x2;
 }
 
-void func_8008F0D4(u8 *a)
+/* Widened from the one-parameter `(u8 *a)` it was landed with: func_8009DFD8
+   calls it with three (target words 76-80 are the $a0/$a1/$a2 setup), and it
+   has no other caller in the unit. Same shape as its sibling func_8008F104 one
+   definition below. The extra two go unread and it re-measures 12 words,
+   0 differing. */
+void func_8008F0D4(UnkTownSpawn *p, UnkVec *q, void *t)
 {
-    func_8008F01C(a);
-    a[0x14] = 0x4;
+    func_8008F01C(p);
+    *((u8 *)p + 0x14) = 0x4;
 }
 
 void func_8008F104(UnkTownSpawn *p, UnkVec *q, void *t)
@@ -2282,7 +2329,14 @@ void func_80092A84(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     }
     if (g->unk_08 & 0xF000)
     {
-        func_80094944((s16)--*(u16 *)((u8 *)a + 0x3E), 0xC);
+        /* Spelled with a local and a separate decrement rather than
+           `(s16)--*(u16 *)(...)`: clang-format rewrites `--*` to `-- *`, which
+           would make this the only line in the file that format-on-save
+           changes. Measured identical. */
+        u16 *n = (u16 *)((u8 *)a + 0x3E);
+
+        *n -= 1;
+        func_80094944((s16)*n, 0xC);
         func_80094C1C(a);
         func_80094C74(b);
     }
@@ -2542,7 +2596,14 @@ void func_80094330(UnkTownTask *t)
     t->unk_0A = 0x6;
 }
 
-void func_80094378(UnkTownTask *t)
+/* Widened from the one-parameter `(UnkTownTask *t)` it was landed with. Four
+   callers pass THREE arguments -- the three at lines ~2164/2192/2228 and
+   func_800AA5F8 -- and those three only compiled because they PRECEDE this
+   definition and so saw an implicit declaration; func_800AA5F8 follows it and
+   would not compile at all. Widening makes all four legal and explicit. The
+   extra two go unread; measured 10 words, 0 differing, and all three existing
+   callers unmoved. */
+void func_80094378(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D00B8, t);
     t->unk_00 = func_8009221C;
@@ -3951,7 +4012,76 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DEBC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DF84);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DFD8);
+UnkNode *func_8009DFD8(u8 *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkNode *n;
+    UnkTownSpawn *p;
+    UnkVec *q;
+    UnkTownRend *r;
+
+    n = func_8003FD64(0x136, &D_80083498);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    q = n->unk_08;
+    r = (UnkTownRend *)n->unk_0C;
+    *(u16 *)((u8 *)q + 0x2) = *(u16 *)((u8 *)b + 0x2);
+    *(u16 *)((u8 *)q + 0x6) = *(u16 *)((u8 *)b + 0x6);
+    *(u16 *)((u8 *)q + 0xA) = *(u16 *)((u8 *)b + 0xA);
+    p = (UnkTownSpawn *)((u8 *)n + 0x20);
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    *(s32 *)((u8 *)r + 0xC) = 0x808080;
+    *(s32 *)((u8 *)p + 0x48) = 0;
+    p->unk_98 = 0;
+    *((u8 *)p + 0x93) = 0;
+    *((u8 *)p + 0x4C) = a[0];
+    *((u8 *)p + 0x4D) = a[1];
+    *((u8 *)p + 0x4E) = a[2];
+    *((u8 *)p + 0x4F) = a[3];
+    if (*((u8 *)p + 0x4D) == 0x13)
+    {
+        /* The subscript MUST be read back out of the field just stored, not
+           taken from `a[3]`. Reading `a[3]` again puts a second `lbu
+           0x3($s4)` in the block (the intervening byte stores through `p`
+           invalidate cse's memory table, so the first load cannot be
+           reused), and the shift chain then feeds off $v1 instead of the $a1
+           the store left behind. Reading p+0x4F forwards the stored value,
+           because nothing has been written since. Measured: `a[3] & 0x1F`
+           costs one extra word and misaligns the whole block. */
+        D_80100AF8 = ((UnkTownItemRec *)0x800102F0)[*((u8 *)p + 0x4F) & 0x1F];
+    }
+    func_8008F0D4(p, q, D_800D073C);
+    if (c)
+    {
+        func_8009B218(p, q, r, D_800D0788);
+    }
+    else
+    {
+        func_8009B218(p, q, r, D_800D076C);
+    }
+    if (*((u8 *)p + 0x4D) == 0x12 || *((u8 *)p + 0x4D) == 0x13)
+    {
+        *(u8 **)((u8 *)p + 0xC) = D_800D0754;
+    }
+    if (*((u8 *)p + 0x4D) == 0x12)
+    {
+        r->unk_08 = (u32)D_8006E240;
+    }
+    else if (*((u8 *)p + 0x4D) == 0x13)
+    {
+        func_8009DC8C(p, r, *((u8 *)p + 0x4C), D_80100B0C);
+    }
+    else
+    {
+        r->unk_08 = func_8004A658(*((u8 *)p + 0x4D), *((u8 *)p + 0x4C));
+    }
+    n->unk_10 = (u32)func_8009DEBC;
+    func_8009C1B4(p, p, q, r);
+    func_800B2244(a);
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E218);
 
@@ -4824,13 +4954,128 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA068);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA10C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA5F8);
+void func_800AA5F8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g = &D_80083160;
+    s32 n;
+    s32 ang;
+    s32 base;
+    u8 *p;
+
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            /* func_80094378 is widened to three parameters in csrc/ovl_town.c, so this
+                 is a plain call rather than the function-pointer cast the
+                 agent originally needed. */
+            func_80094378(a, b, c);
+            D_800D0B14 = 0;
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if ((g->unk_10 & 0x40) && (D_80100D1C >= 0x800))
+    {
+        func_800AAA58(a, b, c);
+        D_800D0B14 = 0;
+        return;
+    }
+    if (g->unk_08 & 0x2000)
+    {
+        if (D_80100D80 < 0x100)
+        {
+            D_80100D80 += 8;
+        }
+        else
+        {
+            D_80100D80 = 0x100;
+        }
+    }
+    if (g->unk_08 & 0x8000)
+    {
+        if (D_80100D80 > -0x100)
+        {
+            D_80100D80 -= 8;
+        }
+        else
+        {
+            D_80100D80 = -0x100;
+        }
+    }
+    if (g->unk_08 & 0x4000)
+    {
+        if (D_80100D82 < 0x100)
+        {
+            D_80100D82 += 8;
+        }
+        else
+        {
+            D_80100D82 = 0x100;
+        }
+    }
+    if (g->unk_08 & 0x1000)
+    {
+        if (D_80100D82 > -0x100)
+        {
+            D_80100D82 -= 8;
+        }
+        else
+        {
+            D_80100D82 = -0x100;
+        }
+    }
+    p = (u8 *)&D_80100D60;
+    /* Split across three statements on purpose.  Written as the one
+       expression `D_80100D60 = D_80100D60 + 0x500000 - (func_80064584(...)
+       << 10);` gcc's fold reassociates it to `A - (B - 0x500000)` and emits
+       `lui -0x500000; addu` into the SUBTRAHEND: 6 differing words (113-118).
+       Hoisting only the shifted term into a temp leaves 2 differing, the
+       `sll` and the `lui 0x500000` swapped in the schedule.  Keeping the
+       `+ 0x500000` in its own statement (so the final tree holds no literal
+       for fold to move) and the `<< 10` at its USE site is 0 differing. */
+    ang = func_80064584(*(s16 *)(p + 2) - 0x400);
+    base = D_80100D60 + 0x500000;
+    D_80100D60 = base - (ang << 10);
+    a->unk_10 = *(s16 *)(p + 2);
+    if (D_80100D1C < 0x800)
+    {
+        D_80100D1C += 0x80;
+    }
+    else
+    {
+        D_80100D1C = 0x800;
+    }
+    if (D_80100D18 < 0x1000)
+    {
+        D_80100D18 += 0x100;
+    }
+    else
+    {
+        D_80100D18 = 0x1000;
+    }
+    func_800A9F14(b);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA844);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA998);
 
-void func_800AAA58(UnkTownTask *t)
+/* Widened from one parameter: func_800AA5F8 calls it with three. That call
+   compiled before only because this definition FOLLOWS it, so the call site
+   saw an implicit declaration -- widening makes it explicit instead, and lets
+   the declaration block carry a real prototype rather than an unprototyped
+   one. The extra two go unread; measured 18 words, 0 differing. */
+void func_800AAA58(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0138, t);
     t->unk_00 = func_800AA844;
