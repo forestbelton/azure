@@ -4302,7 +4302,54 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092320);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800924EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092698);
+/* The third of the five-member `mover update, then the countdown` set, and the
+   only one whose expiry picks between two task setups.  Head identical to
+   func_80091A08 / func_80091AF0 / func_80091F64; the tail reads D_800CFCC4's
+   +0x14 against 2 exactly as func_800927EC reads it against 4.
+
+   85 words -- its header reads `nonmatching func_80092698, 0x154`, and
+   0x154/4 = 85.  Measured 0 differing. */
+void func_80092698(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (--a->unk_0A < 0)
+    {
+        if (D_800CFCC4 != 0 && D_800CFCC4->unk_14 == 2)
+        {
+            func_80093D48(a, b, c);
+        }
+        else
+        {
+            func_8009451C(a, b, (void *)c);
+        }
+        return;
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, c);
+    }
+}
 
 void func_800927EC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {
@@ -4547,7 +4594,63 @@ idle2:
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092FF0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800930E4);
+/* Same set, with func_8009FF50 -- the zero-argument predicate func_800927EC
+   also tests -- gating the whole mover update.  Its `else` arm repeats the
+   countdown and the func_80093D48 tail; cross-jumping merges the two copies of
+   that call, which is why the first arm's `bltz` branches FORWARD into the
+   second arm's block instead of carrying an inline copy.
+
+   91 words -- its header reads `nonmatching func_800930E4, 0x16C`, and
+   0x16C/4 = 91.  Measured 0 differing. */
+void func_800930E4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    if (func_8009FF50() == 0)
+    {
+        n = (s16)func_80095978(b, D_800FE488);
+        if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+        {
+            if (D_800CFCEF == 0)
+            {
+                func_80094378(a, b, c);
+                return;
+            }
+        }
+        else
+        {
+            if (D_800CFCEF == 0)
+            {
+                func_80095A94(b, n, D_800FE488);
+            }
+        }
+        if (--a->unk_0A < 0)
+        {
+            func_80093D48(a, b, c);
+            return;
+        }
+        if (g->unk_08 & 0xF000)
+        {
+            func_80093ED8(a, b, c);
+            return;
+        }
+        if (g->unk_10 & 0x10)
+        {
+            func_800942B0(a, b, c);
+        }
+    }
+    else
+    {
+        if (--a->unk_0A < 0)
+        {
+            func_80093D48(a, b, c);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093250);
 
@@ -4597,7 +4700,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093D18);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093D38);
 
-void func_80093D48(UnkTownTask *t)
+void func_80093D48(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0078, t);
     t->unk_00 = func_80090C68;
@@ -8616,7 +8719,53 @@ void func_800AA5F8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_800A9F14(b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA844);
+/* The same set's longest unconditional chain: the countdown, then the two
+   Unk80083160 flag words in func_800930E4's order, then func_800A9F14 on the
+   mover as the default arm.
+
+   85 words -- its header reads `nonmatching func_800AA844, 0x154`, and
+   0x154/4 = 85.  Measured 0 differing. */
+void func_800AA844(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80083160 *g;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (--a->unk_0A < 0)
+    {
+        func_80093D48(a, b, c);
+        return;
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_80093ED8(a, b, c);
+        return;
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, c);
+        return;
+    }
+    func_800A9F14(b);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA998);
 
