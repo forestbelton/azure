@@ -33,6 +33,25 @@ def words(unit, f):
     m = t and re.search(r'nonmatching \S+, (0x[0-9A-F]+)', t)
     return int(m.group(1), 16) // 4 if m else None
 
+def splat_names():
+    """func_ADDR -> the real name splat knows, from symbol_addrs.
+
+    Two callees reported as "no declaration anywhere" were SetLightMatrix and
+    SetColorMatrix. A real name is worth more than a prototype: it says what
+    the function DOES, which is what lets you type its arguments.
+    """
+    out = {}
+    import glob as _g
+    for fp in _g.glob(os.path.join(PROJ, 'splat', '*symbol_addrs*.txt')):
+        try: txt = io.open(fp, encoding='utf-8', errors='replace').read()
+        except Exception: continue
+        for m in re.finditer(r'^(\w+)\s*=\s*0x([0-9A-Fa-f]{8})\s*;', txt, re.M):
+            nm, ad = m.group(1), m.group(2).upper()
+            if not nm.startswith(('func_', 'D_', 'jtbl_')):
+                out.setdefault('func_' + ad, nm)
+    return out
+
+
 def include_protos():
     """Declarations in include/, not just in the unit.
 
@@ -98,6 +117,7 @@ def main():
     landed, protos, body, txt, lines = defs_and_protos(src, unit)
     src_txt = txt
     inc = include_protos()
+    snames = splat_names()
     incasm = {}
     for m in re.finditer(r'INCLUDE_ASM\("[^"]*", *(func_[0-9A-Fa-f]{8})\)', txt):
         incasm[m.group(1)] = txt[:m.start()].count('\n') + 1
@@ -172,6 +192,11 @@ def main():
         elif c in inc:
             d, f, l = inc[c]
             print("      proto: %s   <- from %s:%d, NOT the unit" % (d, f, l))
+        elif c in snames:
+            print("      proto: *** NO DECLARATION *** but splat NAMES it: %s"
+                  % snames[c])
+            print("             -- a real name says what it DOES, which is how you")
+            print("                type its arguments. grep it in include/ and psyq/.")
         else:
             print("      proto: *** NO DECLARATION IN THE UNIT OR include/ ***")
 
