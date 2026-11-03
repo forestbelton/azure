@@ -13,3 +13,6 @@
 [submodule "vendor/kdt-tool"]
 	path = vendor/kdt-tool
 	url = https://github.com/Nisto/kdt-tool
+[submodule "vendor/old-gcc"]
+	path = vendor/old-gcc
+	url = https://github.com/decompals/old-gcc
