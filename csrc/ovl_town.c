@@ -2393,7 +2393,17 @@ s32 func_80049DE8(s32 a, s32 b, s32 c);
 s32 func_80049E6C(s32 a);
 s32 func_800AE4E4(s32 a);
 void func_800AE854(u8 *s);
+void func_8004E9E4(void);
+void func_8004E994(u8 *p);
+u32 func_8004DA74(u8 *a, void *b, s32 c);
+void func_800BC1DC(u8 *rec, void (*fn)(), u32 payload);
+void func_800BC390();
+extern u8 D_8008961C[];
+extern u8 D_80053A88[];
+extern u8 D_800782EC[];
+extern u8 D_80111FB0[];
 s32 func_8003BD84(s32 x, s32 y);
+extern s16 D_80083228;
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
 extern u8 D_800D16FC[];
@@ -2471,6 +2481,11 @@ extern u8 D_800CFCEA;
 extern u8 D_800CFCEB;
 extern u8 D_800CFCEC;
 extern u8 D_800CFCED;
+extern u8 D_800CFCE9;
+extern u8 D_800CFCF0;
+extern u8 D_800CFCF1;
+extern u8 D_800CFCF2;
+extern u8 D_800CFCF3;
 void func_80020298();
 void func_80020300();
 void func_80020A20();
@@ -2486,8 +2501,8 @@ void func_800254A4();
 s32 func_80033B2C();
 void func_8008B408();
 void func_800930E4();
-void func_800954C4();
-void func_800954DC();
+void func_800954C4(UnkTown2AE8 *b);
+void func_800954DC(UnkTown2AE8 *b);
 void func_8009CEE8();
 void func_8009FDBC();
 void func_8009FE84();
@@ -6452,25 +6467,153 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095094);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800951B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095360);
+/* A cell index from a world coordinate: the grid origin D_80083228 minus the
+   query coordinate, wrapped to 12 bits and divided by 0x200.  The `srl` in the
+   listing is NOT a sign that the division is unsigned -- the `bgez`/`addiu
+   0x1FF` round-toward-zero fixup is only emitted for a SIGNED divide, and
+   combine then rewrites the ASHIFTRT as an LSHIFTRT because `significant_bits`
+   of `(and x 0xFFF)` has the sign bit clear.  So `& 0xFFF` then `/ 0x200` on a
+   signed int is the spelling; `(u32)` anywhere in the chain drops the fixup. */
+s32 func_80095360(s32 p)
+{
+    s32 x;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095388);
+    x = p - 0x500;
+    return ((D_80083228 - x) & 0xFFF) / 0x200;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009539C);
+/* The +0x14 bump every one of the fifty-odd landed callers makes before it
+   hands the record on.  +0x20000 is the same one-unit 16.16 step the clamp
+   families use. */
+void func_80095388(UnkTown2AE8 *b)
+{
+    b->unk_14 += 0x20000;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800953D0);
+/* Integrate: add the per-frame delta triple at +0x0C/+0x10/+0x14 into the
+   position triple at +0x00/+0x04/+0x08.  All three deltas are loaded before
+   the first store -- which is what the source order gives for free, because
+   the first statement's store cannot be reordered past the later loads once
+   they have been hoisted into its delay slots. */
+void func_8009539C(UnkTown2AE8 *b)
+{
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095460);
+/* func_8009539C's other half: integrate the delta triple of the record the
+   D_800CFCB4 slot table's n=1 entry points at, rather than the record's own.
+   The +0x3B gate and the +0x20 slot are the same two arrays func_8009567C
+   walks -- flags at +0x3A+n, pointers at +0x1C+n*4 -- so this is slot 1 with
+   its index spelled out.
+   The chain is re-dereferenced at every statement because the store through
+   `b` invalidates cse's memory table; writing `m = p->unk_20->unk_08;` once
+   caches it in a register and loses the two reloads.  Inside the +0x14 block
+   there is no store between the test and the add, so that load IS shared. */
+void func_800953D0(UnkTown2AE8 *b)
+{
+    UnkTownCFCB4 *p;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800954C4);
+    p = &D_800CFCB4;
+    if (*((u8 *)p + 0x3B) != 0)
+    {
+        b->unk_00 += ((UnkNode **)((u8 *)p + 0x1C))[1]->unk_08->unk_0C;
+        b->unk_04 += ((UnkNode **)((u8 *)p + 0x1C))[1]->unk_08->unk_10;
+        if (((UnkNode **)((u8 *)p + 0x1C))[1]->unk_08->unk_14 > 0)
+        {
+            b->unk_08 += ((UnkNode **)((u8 *)p + 0x1C))[1]->unk_08->unk_14;
+        }
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800954DC);
+/* Latch the frame's motion into the D_800FE5C0 sentinel: its +0x0C/+0x10/+0x14
+   become the delta from the previous latched position, and +0x00/+0x04/+0x08
+   become the new one.  All three deltas are written before any of the three
+   positions, which is why the listing reads the old +0x00 twice. */
+void func_80095460(UnkTown2AE8 *b)
+{
+    D_800FE5C0.unk_0C = b->unk_00 - D_800FE5C0.unk_00;
+    D_800FE5C0.unk_10 = b->unk_04 - D_800FE5C0.unk_04;
+    D_800FE5C0.unk_14 = b->unk_08 - D_800FE5C0.unk_08;
+    D_800FE5C0.unk_00 = b->unk_00;
+    D_800FE5C0.unk_04 = b->unk_04;
+    D_800FE5C0.unk_08 = b->unk_08;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800954F4);
+/* The three per-axis "stop" helpers, one per 16.16 word: zero the sentinel's
+   delta for that axis and latch the record's current position into it.  The
+   register shape differs between them only because the +0x00 access folds its
+   `%lo` into the store while +0x04 and +0x08 need the `addiu` base. */
+void func_800954C4(UnkTown2AE8 *b)
+{
+    D_800FE5C0.unk_0C = 0;
+    D_800FE5C0.unk_00 = b->unk_00;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009550C);
+void func_800954DC(UnkTown2AE8 *b)
+{
+    D_800FE5C0.unk_10 = 0;
+    D_800FE5C0.unk_04 = b->unk_04;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095544);
+void func_800954F4(UnkTown2AE8 *b)
+{
+    D_800FE5C0.unk_14 = 0;
+    D_800FE5C0.unk_08 = b->unk_08;
+}
+
+/* All three axes at once.  The first call needs no `move`: gcc 2.7.2 keeps the
+   incoming `$a0` live across the prologue and the `$s0` copy, so only the
+   second and third calls set up the argument. */
+void func_8009550C(UnkTown2AE8 *b)
+{
+    func_800954C4(b);
+    func_800954DC(b);
+    func_800954F4(b);
+}
+
+/* The collision resolve: six independent gates, one per direction, each one a
+   flag byte off D_800CFCB4's +0x3A..+0x3F array paired with the sign of the
+   delta it blocks.  +0x3C/+0x3D guard +0x0C, +0x3E/+0x3F guard +0x10 and
+   +0x3A/+0x3B guard +0x14 -- note the last pair is in the OPPOSITE order from
+   the first two, positive before negative, which is read off the listing's
+   `blez`/`bgez` and not inferred.
+   Each `lui` for the next gate's flag lands in the previous gate's branch
+   delay slot; that is reorg, not source order. */
+void func_80095544(UnkTown2AE8 *b)
+{
+    if (D_800CFCF0 != 0 && b->unk_0C < 0)
+    {
+        b->unk_0C = 0;
+        func_800954C4(b);
+    }
+    if (D_800CFCF1 != 0 && b->unk_0C > 0)
+    {
+        b->unk_0C = 0;
+        func_800954C4(b);
+    }
+    if (D_800CFCF2 != 0 && b->unk_10 < 0)
+    {
+        b->unk_10 = 0;
+        func_800954DC(b);
+    }
+    if (D_800CFCF3 != 0 && b->unk_10 > 0)
+    {
+        b->unk_10 = 0;
+        func_800954DC(b);
+    }
+    if (D_800CFCEF != 0 && b->unk_14 > 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    if (D_800CFCEE != 0 && b->unk_14 < 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+}
 
 /* The town-cursor hit test: ask func_80094BC8 which screen cell the camera's
    +0xC8 angle picks out of D_80083160.unk_08, turn that into one of eight
@@ -6611,7 +6754,45 @@ s32 func_80095978(UnkTown2AE8 *q, u8 *t)
     return (s16)best;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095A94);
+/* Slide along the plane func_80095978 left in `*t`: set the record's +0x08 to
+   the clearance `n` in 16.16, then project the blocked horizontal delta onto
+   the plane normal to get a vertical one, clamped to +/-0xCC000.
+   The axis the projection divides by is the one with the LARGER absolute
+   normal component, which is the `slt` on the two `abs()` results; the
+   `addu $v1, $a3, $zero` copy before the `negu` is expand_abs's, and it
+   survives because each abs() feeds its own operand of the comparison. */
+void func_80095A94(UnkTown2AE8 *q, s32 n, u8 *t)
+{
+    UnkTownPlane *p;
+
+    D_800CFCE9 = 1;
+    q->unk_08 = n << 16;
+    p = *(UnkTownPlane **)t;
+    if ((p->unk_00 == 0 && p->unk_02 == 0) || p->unk_04 == 0)
+    {
+        q->unk_14 = 0;
+    }
+    else
+    {
+        if (abs(p->unk_02) < abs(p->unk_00))
+        {
+            q->unk_14 = ((-q->unk_0C << 8) / p->unk_04) * p->unk_00 / 0x100;
+        }
+        else
+        {
+            q->unk_14 = ((-q->unk_10 << 8) / p->unk_04) * p->unk_02 / 0x100;
+        }
+        if (q->unk_14 > 0xCC000)
+        {
+            q->unk_14 = 0xCC000;
+        }
+        else if (q->unk_14 < -0xCC000)
+        {
+            q->unk_14 = -0xCC000;
+        }
+    }
+    func_800954F4(q);
+}
 
 s16 func_80095BC0(UnkTown2AE8 *v, s32 i)
 {
@@ -18166,15 +18347,233 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BBC1C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BBCA0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC00C);
+/* Installed at the UnkNode's +0x10 by func_800BBCA0 (both of its spawn loops
+   do `sw $s7, 0x10($s0)` with $s7 = %hi/%lo(func_800BC00C)) and reached only
+   through func_80040190's cast (csrc/unk_12DEC.c), which calls it as
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- three parameters, the first being the node's +0x20 actor view.  All
+   three argument registers are read before they are written here anyway.
+
+   THE ACTOR VIEW'S +0x48/+0x4C PAIR IS A COUNTDOWN AND A STATE, and
+   func_800BBCA0 is the witness for both: it writes 6 / 0xF to +0x48 and 1 to
+   +0x4C on the records it spawns, and +0x0C/+0x0E/+0x10 get the mover's three
+   integer parts (`lhu 0x2($s4)` -> `sh 0xC($s2)`), so those three are the
+   TARGET position this function eases towards.  func_800BC290 and
+   func_800BC390 below are the same state machine one record smaller, with the
+   pair at +0x00/+0x02 instead.
+
+   Three states: 0 eases the mover's three integer parts a quarter of the way
+   to the target each frame while brightening the renderable, 1 runs ballistic
+   (position += velocity, velocity decays by an eighth) while darkening it,
+   and 0xFF is the unit's standard kill (p - 0x2 is UnkNode.unk_1E).  Both
+   working states hand over to 0xFF on their own gate.
+
+   FOUR SPELLINGS ARE PINNED, all measured against the uniform `*(s16 *)`
+   field spelling this body uses:
+
+   * THE SIGNEDNESS OF THE INTERPOLATION'S TWO READS OF THE SAME HALFWORD IS
+     NOT A CHOICE, AND IT IS WHY THERE ARE TWO LOADS.  `*(s16 *)x += (t -
+     *(s16 *)x) >> 2` emits `lh` for the subtrahend and `lhu` for the
+     accumulator off ONE source spelling: the accumulator's sign extension is
+     dead (only the low halfword is stored back), so combine takes the
+     unsigned load, while the subtrahend's is live.  The two are different
+     RTL expressions over the same MEM, so cse does not unify them and
+     gcc 2.7.2's sched keeps two same-address memory references in order.
+     Spelling the subtrahend `*(u16 *)` instead is 116 words / 7 differing;
+     spelling the accumulator `*(s16 *)` or `*(u16 *)` are both 0.  The same
+     mechanism is why `*(s16 *)((u8 *)p + 0x48) -= 1` emits `lhu` at the top
+     and `lh` at the gate -- the gate's read is a RELOAD, forced by
+     func_800478B8 clobbering memory, and its extension is live.
+   * The counter decrement must PRECEDE func_800478B8 (after it, 5 differing:
+     its `sh` leaves the call's delay slot).
+   * The +0x1C/+0x1E chain must precede the +0x0C brighten (swapped, 7
+     differing) and must be written DESCENDING -- `r->unk_1C = r->unk_1E =
+     ...` -- because a chained assignment emits its stores right-to-left.
+     `r->unk_1E += 0x80; r->unk_1C = r->unk_1E;` is also 0 (cse forwards the
+     store); the ascending chain `r->unk_1E = r->unk_1C = ...` is 2.
+   * Case 1's six mover statements are in position-then-velocity order
+     (velocity first, 5 differing), and its gate reads the renderable's +0x0C
+     as the `u8` UnkTownRend declares (as `*(u32 *)&r->unk_0C & 0xFF` it is
+     115 words / 23 differing).
+
+   116 words -- its header reads `nonmatching func_800BC00C, 0x1D0`, and
+   0x1D0/4 = 116.  0 differing, first compile. */
+void func_800BC00C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    *(s16 *)((u8 *)p + 0x48) -= 1;
+    func_800478B8((s32)r);
+    switch (*(s16 *)((u8 *)p + 0x4C))
+    {
+    case 0:
+        r->unk_1C = r->unk_1E = r->unk_1E + 0x80;
+        *(u32 *)&r->unk_0C += 0x80808;
+        *(s16 *)((u8 *)q + 0x2) += (*(s16 *)((u8 *)p + 0xC) - *(s16 *)((u8 *)q + 0x2)) >> 2;
+        *(s16 *)((u8 *)q + 0x6) += (*(s16 *)((u8 *)p + 0xE) - *(s16 *)((u8 *)q + 0x6)) >> 2;
+        *(s16 *)((u8 *)q + 0xA) += (*(s16 *)((u8 *)p + 0x10) - *(s16 *)((u8 *)q + 0xA)) >> 2;
+        if (*(s16 *)((u8 *)p + 0x48) <= 0)
+        {
+            *(s16 *)((u8 *)p + 0x4C) = 0xFF;
+        }
+        break;
+    case 1:
+        q->unk_00 += q->unk_0C;
+        q->unk_04 += q->unk_10;
+        q->unk_08 += q->unk_14;
+        q->unk_0C -= q->unk_0C >> 3;
+        q->unk_10 -= q->unk_10 >> 3;
+        q->unk_14 -= q->unk_14 >> 3;
+        *(u32 *)&r->unk_0C += 0xFFF7F7F8;
+        if (r->unk_0C == 0)
+        {
+            *(s16 *)((u8 *)p + 0x4C) = 0xFF;
+        }
+        break;
+    case 0xFF:
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC1DC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC290);
+/* func_800BC00C's state machine one record smaller, and the handler
+   func_800BC1DC installs at the UnkNode's +0x10 (`sw $s1, 0x10($s0)` with
+   $s1 its second argument, which func_800BC45C below passes as
+   %hi/%lo(func_800BC290) twice).  Reached through func_80040190's cast, so
+   three parameters with the first being the node's +0x20 actor view.
+
+   THE DEAD MIDDLE PARAMETER IS WITNESSED by the gap it leaves in the $aN
+   sequence: $a0 is the actor view and $a2 is read as the renderable at +0x0C
+   and +0x14 without ever being written, while $a1 is never referenced.  An
+   unread parameter costs no words, but a dead MIDDLE one cannot be dropped.
+   NOTHING ELSE CONSTRAINS THE ARITY -- there is no `jal func_800BC290` and no
+   C reference anywhere in the unit; only the two address-takes in
+   func_800BC45C, and an address-take constrains nothing.
+
+   Here the state/counter pair sits at the actor view's +0x00/+0x02, which is
+   also where func_800BC1DC seeds the counter with 0x1E and where
+   func_800BC45C seeds its own node's.  Three states: 0 waits out the
+   countdown then sets the renderable to a flat 0xC0C0C0 grey and restarts the
+   counter at 0xC, 1 fades that grey down by 0x101010 a frame while the
+   counter runs and then rings func_8004E994, and 2 is the standard kill.
+
+   THE `sll 16` / `bgtz` ON THE DECREMENTED VALUE IN CASE 0, AGAINST THE `lh`
+   RELOAD IN CASE 1, IS AN ALIASING ARTEFACT AND NOT TWO SPELLINGS.  Case 0
+   has no intervening store, so cse rewrites the gate's `sign_extend(mem:HI)`
+   into `sign_extend(subreg:HI)` of the decrement's own pseudo and the `> 0`
+   folds the `sra` away; case 1's `sw` to the renderable may alias, so the
+   halfword has to be re-read.  One source spelling produces both.
+
+   Pinned: the two `p->unk_00 + 1` tails are cross-jumped into one, so writing
+   case 1's state bump before the func_8004E994 call costs a word and the
+   sharing (65 words / 52 differing); +0x02's reset must FOLLOW the two
+   renderable stores (before them, 63 / 44); and r->unk_14 must precede
+   r->unk_0C (swapped, 2 differing).  Not discriminators, both 0 differing:
+   the counter decrement spelled `*(u16 *)`, and either polarity of each gate.
+
+   64 words -- its header reads `nonmatching func_800BC290, 0x100`, and
+   0x100/4 = 64.  0 differing, first compile. */
+void func_800BC290(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    *(s16 *)((u8 *)p + 0x2) -= 1;
+    switch (*(s16 *)p)
+    {
+    case 0:
+        if (*(s16 *)((u8 *)p + 0x2) <= 0)
+        {
+            r->unk_14 = 0xC;
+            *(u32 *)&r->unk_0C = 0xC0C0C0;
+            *(s16 *)((u8 *)p + 0x2) = 0xC;
+            *(s16 *)p += 1;
+        }
+        break;
+    case 1:
+        if (r->unk_0C >= 0x10)
+        {
+            *(u32 *)&r->unk_0C += 0xFFEFEFF0;
+        }
+        if (*(s16 *)((u8 *)p + 0x2) <= 0)
+        {
+            func_8004E994(D_80111FB0);
+            *(s16 *)p += 1;
+        }
+        break;
+    case 2:
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC390);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC45C);
+/* The one-shot spawner for the func_800BC290/func_800BC390 pair above and
+   below: copy an 8-byte two-u16-coordinate template out of D_8008961C, bias
+   its first coordinate, hand each half to func_800BC1DC (which allocates a
+   0x136 node, seeds the mover's +0x02/+0x06 from the record and installs the
+   handler it is given), then allocate one more node for func_800BC390 and
+   fill the actor view by hand.
+
+   ARITY IS SETTLED BY A REAL CALLER, not by the register scan: the stub
+   func_800C0DE8 does `lw $a0, 0x4($a1)` / `lh $a1, 0x8($a1)` and `jal
+   func_800BC45C` with nothing in $a2.  THE SECOND PARAMETER'S WIDTH IS NOT
+   WITNESSED, though -- that caller's argument is already an `s16` lvalue, so
+   `s16 b` with `b * 4` and `s32 b` with `(s16)b * 4` give identical bytes in
+   BOTH functions (both 70 words / 0 differing here).  `s16` is written
+   because the `sll 16` / `sra 14` pair is the parameter's own sign extension
+   fused with the `* 4`.
+
+   THE UNALIGNED COPY COMES FROM THE SOURCE'S DECLARED TYPE, NOT THE LOCAL'S.
+   `extern u8 D_8008961C[]` is alignment 1, so move_by_pieces takes the
+   lwl/lwr + swl/swr path for all 8 bytes; `u16 t[4]` for the destination is
+   also 70 words / 0 differing, because the pass uses the MINIMUM of the two
+   alignments.  `u8 t[8]` is written to match func_800B2834's house idiom and
+   because the second record is reached as `t + 4`.  No local initialiser is
+   used, so the unit's .rodata is untouched and the INCLUDE_RODATA for
+   D_8008961C above stays.
+
+   THE INTERIOR POINTER MUST BE TAKEN BEFORE func_8004491C.  With `v = (u8 *)o
+   + 0x20` after the call, `o` survives it in $s0 and the node pointer has to
+   be moved into $a0 -- 71 words / 30 differing.  Taken before, `o` dies at
+   the call, stays in $a0 for it, and $s0 carries the actor view, which is the
+   target's allocation.  The install itself must also precede the call (after
+   it, 71 / 31), and it is spelled off the NODE (`o->unk_10`, `sw $v0,
+   0x10($a0)`) and not off the actor view -- the opposite of func_800BC840
+   below, whose target stores `sw $v0, -0x10($s0)`.  The seven actor-view
+   stores are in listing order, +0x08 before +0x02 at the end (swapped, 2
+   differing).
+
+   70 words -- its header reads `nonmatching func_800BC45C, 0x118`, and
+   0x118/4 = 70.  0 differing. */
+void func_800BC45C(UnkTownSpawn *p, s16 b)
+{
+    u8 t[8];
+    UnkNode *o;
+    u8 *v;
+    u32 n;
+
+    memcpy(t, D_8008961C, 8);
+    func_8004E9E4();
+    *(u16 *)t += b * 4;
+    n = func_8004DA74(D_80111FB0, p, 0);
+    func_800BC1DC(t, func_800BC290, n);
+    func_800BC1DC(t + 4, func_800BC290, (u32)D_800782EC);
+    o = func_8003FC64(1);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        o->unk_10 = (u32)func_800BC390;
+        func_8004491C(o, (u32)D_80053A88);
+        *(s16 *)(v + 0xC) = 0x64;
+        *(s16 *)(v + 0xE) = 0x34;
+        *(s16 *)(v + 0x10) = 0x7C;
+        *(s16 *)(v + 0x12) = 0x18;
+        *(s16 *)(v + 0x16) = 1;
+        *(u32 *)(v + 0x8) = 0x402020;
+        *(s16 *)(v + 0x2) = 0x1E;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC574);
 
