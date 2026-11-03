@@ -1063,6 +1063,14 @@ void func_800CB060();
    it. */
 void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
 void func_8003F320(void);
+void func_800C78A8();
+void func_800C7A00();
+void func_800C5864(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
+void func_800CA88C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
+void func_8006733C(void *r, void *src);
+extern s32 D_80113220;
+extern u8 D_800D43B0[];
+extern u8 D_800D43B8[];
 extern u8 D_800D4740[];
 extern u8 D_800D4748[];
 extern u8 D_800D4750[];
@@ -11987,9 +11995,29 @@ void func_800C1BA4(void)
     func_8003AF58(D_800717D0, D_800D4398);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1BD0);
+/* A family of 2: two VRAM transfers to fixed addresses, each followed by
+   func_80067014(0). The two members differ only in which transfer entry point
+   they use -- func_800672D8 against func_8006733C -- which families.py shows
+   as two varying `jal`s, both real call differences.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1C1C);
+   0x80020000 is materialised with a bare `lui` because its low half is zero,
+   while 0x80024000 needs the `lui`/`ori` pair; both are constant addresses and
+   neither is a symbol. */
+void func_800C1BD0(void)
+{
+    func_800672D8(D_800D43B0, (void *)0x80020000);
+    func_80067014(0);
+    func_800672D8(D_800D43B8, (void *)0x80024000);
+    func_80067014(0);
+}
+
+void func_800C1C1C(void)
+{
+    func_8006733C(D_800D43B0, (void *)0x80020000);
+    func_80067014(0);
+    func_8006733C(D_800D43B8, (void *)0x80024000);
+    func_80067014(0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1C68);
 
@@ -12764,7 +12792,20 @@ void func_800C5620(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C565C);
+/* A family of 2: count the actor's +0x6C countdown down and, when it reaches
+   zero, run the per-member body and clear the +0x72 facing. The countdown is
+   read with `lhu` and tested as `s16` -- `sll 16` then `bgtz`, with no `sra`,
+   which is the in-place narrow test -- so `if (--a->unk_6C <= 0)` is the
+   spelling, the same one the landed func_8009803C uses. The +0x72 store is
+   AFTER the call, not in its delay slot. */
+void func_800C565C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C5864(a, b, c);
+        a->unk_72 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C56A8);
 
@@ -13359,9 +13400,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7A6C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7AC4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7BF0);
+/* A family of 2, the same shape as the landed func_800C7F10 group below: bind a
+   per-member descriptor through func_800C2E84, install the per-member handler
+   at +0x50, and seed the global D_80113220 with a per-member count. Three
+   varying words, all three per-member. */
+void func_800C7BF0(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D5FE8);
+    a->unk_50 = func_800C78A8;
+    D_80113220 = 0x10;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7C3C);
+void func_800C7C3C(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D5FA0);
+    a->unk_50 = func_800C7A00;
+    D_80113220 = 0x15;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7C88);
 
@@ -14048,7 +14103,14 @@ void func_800CA3EC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     func_800C4174(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA40C);
+void func_800CA40C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800CA88C(a, b, c);
+        a->unk_72 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA458);
 
