@@ -579,6 +579,64 @@ analysis; all were in the provisioning. Before sending a brief, check:
    `grep -c 'func_800C30E0(a, b, c) == 0' csrc/ovl_town.c` -- finds seven real
    candidates including the two exact ones.
 
+### RUN `provision.py`; DO NOT HAND-WRITE A PROVISIONING PARAGRAPH
+
+2026-11-03. `tools/decomp/provision.py` computes a brief's whole provisioning
+block: per-function callee lists, each callee classified LANDED-HERE /
+STUB-HERE / NOT-IN-THIS-UNIT with its prototype (searching `include/` too) and
+a marker when there is none, the `%hi`-on-a-function installs, relatives by
+five routes, landed callers, ASM callers, address-takers, and an arity lead.
+
+**Put its output in the brief, or tell the agent to run it. Do not paraphrase
+it.** In the batch where I wrote "worth knowing in advance" paragraphs by hand
+on top of the tool, my prose was wrong **three times in six briefs** and the
+tool was right every time:
+
+* I named `func_80095094` in a shared head where both targets call
+  `func_800951B4`. **Substituting the wrong callee measures 177 words,
+  0 DIFFERING**, because `ovlverify` masks the `jal` — only the relocation
+  decode caught it, and the container would have been wrong by a word.
+* I said two functions install `func_800A73E0`/`func_800C8C3C`. They install
+  `func_800A7338`/`func_800C8B8C`; I had carried the names forward from the
+  **previous batch's pair**. A wrong address-taken symbol is the one error
+  class that survives a clean `ovlverify`.
+* I swapped a pair's word counts.
+
+The failure mode is always the same: a paragraph written from memory of the
+last batch rather than from this batch's data. The tool has no memory.
+
+### DO NOT TRUST A LOW RELATIVE SCORE, OR A TOOL'S "NOTHING FOUND"
+
+Same batch, the other direction. `provision.py`'s rarity weighting is right to
+discount a callee the whole unit calls, but it cannot see **position** (a
+first-call entry point scores like any other) or **line-level identity** (what
+makes a template is often a shared call expression *with its constant
+arguments* — one global had 11 landed call sites but only 2 passed the same
+`(x - 0x20)` form).
+
+Twice the metric's bottom entries were the line-for-line template, and once I
+briefed a group as having **no template** on a 0.156 top score — that 0.156 hit
+*was* the template, and reading it anyway landed two functions on the first
+compile. Two cheap complements found the right relative where the metric did
+not, and both cost one command:
+
+* the target's **immediate C-file neighbours**;
+* an **IDIOM GREP** — grep a distinctive *statement* out of the listing rather
+  than a callee name, e.g. `grep -n 'D_800814A0 |= 0x8000' csrc/ovl_town.c`.
+
+### WHEN A PLATEAU IS BROAD, SUSPECT A VARIABLE YOU ARE HOLDING FIXED
+
+The `func_800C1F8C` park recorded 49 spellings on a plateau at 15 differing and
+a permuter run that floored on the base score. It is now landed, and the answer
+was a **two-lever interaction**: a folding ternary abs *plus* removing a field
+hoist the park held fixed. Each lever alone is neutral or worse, and the park's
+own source reproduces its plateau exactly — the measurements were sound, only
+the frame was wrong.
+
+So a park is a statement about a search space, not about a function. Before
+spending a permuter on one, list what the park holds constant and vary one of
+those instead.
+
 ### NEVER DESCRIBE A GROUP'S CALLEE **UNION** AS SHARED -- RECOMPUTE THE INTERSECTION
 
 2026-11-03, and it happened **twice in one batch** after I hand-edited a
