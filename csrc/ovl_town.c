@@ -605,8 +605,17 @@ typedef struct UnkTownA3B80
     s16 unk_00;
     u8 pad_02[0x4];
     u8 unk_06;
-    u8 pad_07[0x5];
+    u8 pad_07[0x1];
+    /* Split out of pad_07, and +0x16 added past unk_0C, for func_800A41D8,
+       which reads both with `lhu`: +0x08 seeds the strip's two base .vz
+       values (-0x6200 and -0x5400) and +0x16 is the brightness ramp's base,
+       used as a plain u16 in an `addu` with no extension.  No existing field
+       moved. */
+    u16 unk_08;
+    u8 pad_0A[0x2];
     s16 unk_0C;
+    u8 pad_0E[0x8];
+    u16 unk_16;
 } UnkTownA3B80;
 
 /* The 0x1F800000 scratchpad as func_800A3B80 lays it out, and the same
@@ -616,11 +625,31 @@ typedef struct UnkTownA3B80
    +0x118 pointer this function parks the render record's +0x08 in. */
 typedef struct UnkTownA3B80SP
 {
-    u8 pad_00[0x20];
+    u8 pad_00[0x8];
+    /* Split out of pad_00 and pad_90 for func_800A41D8.  +0x08..+0x17 are
+       the four UV scalars it builds each quad's texture window in, stored
+       with `sw` and read back both with `lw` and through `(u16)` casts --
+       the same word/halfword asymmetry Unk3DBD0W and Unk3CCB0SP's
+       unk_08..unk_14 model for this region.  +0x90, +0x94 and +0xC0 are
+       RotAverageNclip4's `p`, `flag` and `otz` out-parameters, which is
+       Unk463ECSP's unk_90/unk_94/unk_C0 field-for-field, and +0xF0 is the
+       four projected screen points.  unk_20 and unk_118 keep both their
+       offsets and their `u32` types, so this is additive. */
+    u32 unk_08;
+    u32 unk_0C;
+    u32 unk_10;
+    u32 unk_14;
+    u8 pad_18[0x8];
     u32 unk_20;
     u8 pad_24[0x4C];
     SVECTOR unk_70[4];
-    u8 pad_90[0x88];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+    u8 pad_C4[0x2C];
+    DVECTOR unk_F0[4];
+    u8 pad_100[0x18];
     u32 unk_118;
 } UnkTownA3B80SP;
 
@@ -11447,13 +11476,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3B1C);
    records decoded against the listing and all ten internal `j` targets
    checked by index. */
 
+POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp, POLY_FT4 *p, s16 flag);
+
 s32 func_800A3B80(UnkTownA3B80 *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80083160 *g = &D_80083160;
     UnkTownA3B80SP *sp = (UnkTownA3B80SP *)0x1F800000;
     u8 *base = D_80083160.unk_00;
-    u32 *ot = *(u32 **)(base + 0x8D0);
-    u32 *t;
+    POLY_FT4 *ot = *(POLY_FT4 **)(base + 0x8D0);
+    POLY_FT4 *t;
     u8 *e;
     u16 cx = D_80100D88;
     u16 cy = D_80100D8A;
@@ -11604,19 +11635,24 @@ s32 func_800A3B80(UnkTownA3B80 *a, UnkTown2AE8 *b, UnkTownRend *c)
         }
         ot = t;
     }
-    *(u32 **)(g->unk_00 + 0x8D0) = ot;
+    *(POLY_FT4 **)(g->unk_00 + 0x8D0) = ot;
     return 0;
 }
 
-/* RotNclip4: ELEVEN arguments -- the four input SVECTORs, the four screen-xy
-   outputs, then `p`, `otz` and `flag`.  psyq/include/libgte.h:381 has the
-   order; that arity is what makes this function's outgoing-argument area
-   0x1C bytes and so its frame 0x70. */
+/* ELEVEN arguments -- the four input SVECTORs, the four screen-xy outputs,
+   then `p`, `otz` and `flag`.  That arity is what makes this function's
+   outgoing-argument area 0x1C bytes and so its frame 0x70.  It does NOT
+   settle which of the two libgte entry points this is: RotNclip4
+   (psyq/include/libgte.h:381, splat's name) and RotAverageNclip4 (:387,
+   func_800A3B80's note) have identical prototypes, and nothing in either
+   caller distinguishes them.  Declared under the raw name for that reason. */
 s32 func_80065610(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, u32 *, u32 *, u32 *, u32 *, s32 *, s32 *, s32 *);
 
-/* The 12-byte texture record b->unk_08 points at: tpage, clut and the four
-   u/v/w/h bytes.  +0x00..+0x03 are never read here; the caller
-   func_800A3B80 reads byte +0x01 of the first one into its own +0x0F. */
+/* The 0xC-byte texture record the scratchpad's +0x118 points at: tpage, clut
+   and the four u/v/w/h bytes.  func_800A3B80 parks the base here and reads
+   byte +0x01 of the first one into the render record's +0x0F; +0x00..+0x03
+   are never read as fields by either function.  Indexed
+   [flag * 4 + (step & 1) * 2 + half]. */
 typedef struct UnkTownA41D8T
 {
     u8 pad_00[0x4];
@@ -11628,56 +11664,14 @@ typedef struct UnkTownA41D8T
     u8 unk_0B;
 } UnkTownA41D8T;
 
-typedef struct UnkTownA41D8
-{
-    u8 pad_00[0x8];
-    u16 unk_08;
-    u8 pad_0A[0xC];
-    u16 unk_16;
-} UnkTownA41D8;
-
-typedef struct UnkTownA41D8B
-{
-    u8 pad_00[0x8];
-    UnkTownA41D8T *unk_08;
-    u8 pad_0C[0x3];
-    u8 unk_0F;
-} UnkTownA41D8B;
-
-/* The 0x1F800000 scratchpad as this function and its caller func_800A3B80
-   use it.  The SEVENTH typedef for this region, and the one that agrees most
-   closely with Unk463ECSP: SVECTOR unk_70[4], unk_90/unk_94 as RotNclip4's
-   `p` and `flag` and unk_C0 as its `otz` are that struct field-for-field.
-   What it adds is the four screen points at +0xF0 and the record-array base
-   at +0x118, both inside Unk463ECSP's pad_C4. */
-typedef struct UnkTownA41D8SP
-{
-    u8 pad_00[0x8];
-    u32 unk_08;
-    u32 unk_0C;
-    u32 unk_10;
-    u32 unk_14;
-    u8 pad_18[0x8];
-    u32 *unk_20;
-    u8 pad_24[0x4C];
-    SVECTOR unk_70[4];
-    s32 unk_90;
-    s32 unk_94;
-    u8 pad_98[0x28];
-    s32 unk_C0;
-    u8 pad_C4[0x2C];
-    DVECTOR unk_F0[4];
-    u8 pad_100[0x18];
-    UnkTownA41D8T *unk_118;
-} UnkTownA41D8SP;
-
-/* The vertical strip of textured quads a tall object (a tree, a pole) is
-   drawn as: fourteen RotNclip4 passes up one 0xE00-per-step column of the
+/* The vertical strip of textured quads one ring segment is drawn as:
+   fourteen RotAverageNclip4 passes up one 0xE00-per-step column of the
    scratchpad quad, each visible pass emitting TWO POLY_FT4s split across the
-   mid-edge plus two DR_MODEs, and returning the advanced primitive pointer
-   (or NULL when nothing was emitted).  func_800A3B80 is the only caller and
-   passes `sp` as the literal 0x1F800000 scratchpad, `p` as
-   D_80083160.unk_00[0x8D0] and 0 for `e`.
+   mid-edge plus two DR_MODEs, and returning the advanced primitive cursor (or
+   NULL when nothing was emitted).  func_800A3B80 is the only caller; the
+   fourth argument and the return value are the D_80083160.unk_00[0x8D0]
+   primitive cursor, not an OT pointer -- the OT this adds to is the
+   scratchpad's own +0x20 base, indexed below.
 
    372 words, 0 differing, and all SIX relocation records (R_MIPS_26 on
    func_80065610, func_800666F4, func_8006658C, func_80066460, func_80067F20
@@ -11699,7 +11693,8 @@ typedef struct UnkTownA41D8SP
      (convert.c:269-316 rebuilds the PLUS in the narrow type, and
      optabs.c:331's paradoxical SUBREG makes the load plain rather than an
      extension -- the same mechanism func_800A17CC's note records).  The
-     midpoint sums read the same fields as ints and so come out `lh`.
+     midpoint sums read the SAME fields as ints and so come out `lh`, which
+     is what witnesses them signed.
 
    - **The midpoints are `>> 1`, not `/ 2`.**  A signed divide adds the
      `srl 31`/`addu` correction; the target has a bare `sra 1`.
@@ -11714,9 +11709,9 @@ typedef struct UnkTownA41D8SP
      test the natural way round (`if (c > 0x80) ... else if (c < 0)`) gives
      `bnez` where the target has `beqz`.
 
-   - **`(t - sp->unk_118) / sizeof(UnkTownA41D8T)` divides by twelve TWICE,
-     and that is what the target does.**  The pointer subtraction is already
-     an EXACT_DIV_EXPR by 12 -- c-typeck.c's pointer_diff builds it, and
+   - **`(t - base) / sizeof(UnkTownA41D8T)` divides by twelve TWICE, and that
+     is what the target does.**  The pointer subtraction is already an
+     EXACT_DIV_EXPR by 12 -- c-typeck.c's pointer_diff builds it, and
      expmed.c:3545-3555 expands it as a multiply by `invert_mod2n(3)` =
      0xAAAAAAAB (synthesised as `negu` of *0x55555555) followed by
      `sra post_shift=2` -- and `sizeof` is unsigned, so the second divide is
@@ -11727,11 +11722,14 @@ typedef struct UnkTownA41D8SP
    - **`sp->unk_14 = (sp->unk_0C + sp->unk_14) * 0x100;` -- unk_0C FIRST.**
      With `sp->unk_14 + sp->unk_0C` cse forwards the just-stored
      `sp->unk_14 = t->unk_0B` into the sum and the `lw 0x14` disappears: 371
-     words.  Reading unk_0C first is the only spelling of the three
-     statements and two operand orders measured that reaches 0; the table of
-     all twelve is in the agent report.  Everything else in the block is
-     plain source order, and the two `addu rX, rY, $zero` copies plus the
-     apparently shuffled store order are sched1 and the allocator.
+     words.  cse's memory invalidation is range-based (cse.c:1628 ->
+     refers_to_mem_p, cse.c:2450-2453 "If the base addresses are not equal,
+     there is no chance of the memory addresses conflicting"), so the
+     intervening store to +0x10 does not evict +0x14 and only the lookup
+     ORDER breaks the forward.  Reading unk_0C first is the one spelling of
+     the three statements and two operand orders that reaches 0; all twelve
+     were measured.  NOT a rule, though: the same model says +0x08 and +0x0C
+     should forward too, and in both builds they are real loads.
 
    - the UV words are built in the four scratchpad scalars and then written
      as one `(u32 *)&p->u0` / `(u32 *)&p->u1` pair and two `(u16 *)&p->u2` /
@@ -11745,23 +11743,37 @@ typedef struct UnkTownA41D8SP
      four midpoint pairs and `sp->unk_70[0].vz = sp->unk_70[1].vz = ...` for
      the two seeds.
 
-   - `e` is `s16`: the fifth argument arrives in the stack slot at 0x80 as a
-     promoted word, assign_parms re-narrows it into its own HImode slot
-     (`lhu 0x80($sp)` / `sh 0x38($sp)`), and its one use is `e * 4`, where
-     MIPS's register extendhisi2 is `sll 16`/`sra 16` and combine folds the
-     scale in to give `sll 16`/`sra 14`.  `a->unk_16` is `u16` for the
-     mirror-image reason: its reload is a bare `lhu` feeding an `addu` with
-     no extension. */
-POLY_FT4 *func_800A41D8(UnkTownA41D8 *a, UnkTownA41D8B *b, UnkTownA41D8SP *sp,
-                        POLY_FT4 *p, s16 e)
+   - `flag` is `s16`, read off THIS listing and not off the caller, where it
+     has no witness: the fifth argument arrives in the stack slot at 0x80 of
+     a 0x70 frame, assign_parms re-narrows the promoted word into its own
+     HImode slot (`lhu 0x80($sp)` / `sh 0x38($sp)`), and its one use is
+     `flag * 4`, where MIPS's register extendhisi2 is `sll 16`/`sra 16` and
+     combine folds the scale in to give the target's `sll 16`/`sra 14`.
+     `s32 flag` is 369 words / 371 differing -- and 0 differing in
+     func_800A3B80 either way, so this listing is the ONLY witness for the
+     width.  `a->unk_16` is `u16` for the mirror-image reason: its reload is
+     a bare `lhu` feeding an `addu` with no extension.
+
+   - **the fourth parameter has to BE the `POLY_FT4 *`, not a `u32 *` cast
+     into a local.**  func_800A3B80's forward declaration had it as `u32 *`;
+     taking that verbatim and opening with `p = (POLY_FT4 *)ot;` is 372 words
+     but 3 differing, because the extra statement creates `p`'s pseudo after
+     `t`'s and loop.c then emits the inner loop's three induction increments
+     in the order s3/s2/s0 where the target has s2/s0/s3.  FIVE declaration
+     orders of the local (first, after z, before t, after dm, last) all
+     measure the same 3, so it is the statement and not the declaration.
+     Retyping the parameter and the caller's two cursor locals to `POLY_FT4 *`
+     is 0 differing in BOTH functions. */
+POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
+                        POLY_FT4 *p, s16 flag)
 {
     s32 i;
     s32 j;
     s32 n;
     s32 z;
-    u32 *ot[2];
+    u32 *o[2];
     u16 h;
-    s16 c;
+    s16 d;
     s16 v;
     UnkTownA41D8T *t;
     DR_MODE *dm;
@@ -11806,22 +11818,22 @@ POLY_FT4 *func_800A41D8(UnkTownA41D8 *a, UnkTownA41D8B *b, UnkTownA41D8SP *sp,
                     (sp->unk_F0[2].vy + sp->unk_F0[3].vy) >> 1;
                 sp->unk_90 = sp->unk_70[0].vz % 0xE00;
                 sp->unk_90 = sp->unk_90 / 0x100;
-                c = h + i * 14 - 0x40;
+                d = h + i * 14 - 0x40;
                 v = 0x80;
-                if (c <= 0x80)
+                if (d <= 0x80)
                 {
-                    v = c;
-                    if (c < 0)
+                    v = d;
+                    if (d < 0)
                     {
                         v = 0;
                     }
                 }
                 p[1].r0 = p[0].r0 = p[1].g0 = p[0].g0 = p[1].b0 = p[0].b0 = v;
-                t = &sp->unk_118[(i & 1) * 2 + e * 4];
+                t = &((UnkTownA41D8T *)sp->unk_118)[(i & 1) * 2 + flag * 4];
                 for (j = 0; j < 2; j++)
                 {
                     func_800666F4(p);
-                    p->code |= b->unk_0F & 2;
+                    p->code |= c->unk_0F & 2;
                     sp->unk_08 = t->unk_08;
                     sp->unk_0C = t->unk_09;
                     sp->unk_10 = t->unk_0A;
@@ -11839,11 +11851,13 @@ POLY_FT4 *func_800A41D8(UnkTownA41D8 *a, UnkTownA41D8B *b, UnkTownA41D8SP *sp,
                     p->u3--;
                     p->v2--;
                     p->v3--;
-                    func_8006658C(sp->unk_20 + (t - sp->unk_118) /
-                                                   sizeof(UnkTownA41D8T),
+                    func_8006658C((u32 *)sp->unk_20 +
+                                      (t - (UnkTownA41D8T *)sp->unk_118) /
+                                          sizeof(UnkTownA41D8T),
                                   p);
-                    ot[j] = sp->unk_20 +
-                            (t - sp->unk_118) / sizeof(UnkTownA41D8T);
+                    o[j] = (u32 *)sp->unk_20 +
+                           (t - (UnkTownA41D8T *)sp->unk_118) /
+                               sizeof(UnkTownA41D8T);
                     p++;
                     t++;
                 }
@@ -11852,7 +11866,7 @@ POLY_FT4 *func_800A41D8(UnkTownA41D8 *a, UnkTownA41D8B *b, UnkTownA41D8SP *sp,
                 {
                     func_80067F20((u32 *)dm, 1, 0,
                                   func_80066460(0, 0, 0x140, 0), 0);
-                    func_8006658C(ot[j], dm);
+                    func_8006658C(o[j], dm);
                     dm++;
                 }
                 p = (POLY_FT4 *)dm;
