@@ -20876,7 +20876,290 @@ void func_800BE214(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BE4D4);
+/* The town's event spawner: a 31-case dispatch on its second argument that
+   builds one UnkVec at (x, y) and hands it to func_800BDB20 or func_800BDBD0
+   with the +0x10 handler the case wants, then runs the shared tail -- copy a
+   script string out of D_80073600's record array into this slot's 0x82-byte
+   buffer in D_80112070, append the two control bytes 0x11/0x01, hang the
+   buffer off the actor view's +0x48 and bind the descriptor through
+   func_8008F074.  It is the function that installs func_800BDE7C,
+   func_800BDF98, func_800BDFA0, func_800BE0D4 and func_800BE214 -- all five
+   are `%hi`/`%lo` on a FUNCTION with no `jal`, so ovlverify masks every one of
+   them and they were read off this function's own listing with
+   `grep -oE '%(hi|lo)\((func_|D_)[0-9A-Fa-f]{8}\)'`.
+
+   THE CASE LABELS ARE THE RAW ARGUMENT, 1..31, NOT arg1 - 1.  The listing
+   subtracts 1 with `addiu $a1, $a1, -0x1` and only THEN sign-extends
+   (`sll 16` / `sra 16`), which is the wrong order for any cast written in the
+   source: c-typeck.c:6647-6656 default-converts the switch quantity and then
+   calls `get_unwidened` on it, so `index_type` goes back to `short` while
+   `nominal_type` stays `int`; stmt.c:5264 builds `MINUS_EXPR (index_type,
+   index_expr, minval)` -- in HImode, needing no extension of the operand --
+   and only the `convert` to nominal_type emits the sll/sra.  So a plain
+   `switch (arg1)` over a `s16` parameter with minval 1 is exactly the target's
+   three insns, and `switch ((s16)(arg1 - 1))` with labels 0..30 is not.
+
+   THE SHARED TAIL IS A `goto` LABEL INSIDE THE SWITCH, and that is forced.
+   The jump table sends its nine unused indices (11, 12, 13, 24..29) to
+   .L800BEA58, the EPILOGUE, and the `sltiu`/`beqz` range check goes there too
+   -- but `break` from cases 1/2, 8 and 6/7 goes there as well.  With the tail
+   written after the switch, stmt.c:5013-5020 ("If we don't have a
+   default-label, create one here, after the body of the switch") puts the
+   created default label and the break label at the SAME place, so the default
+   would fall into the tail.  A `default: return;` cannot work either: its
+   `j <ret>` has to sit somewhere in the body and no position in the listing
+   has one.  A label after case 18's body, reached by `goto` from the six
+   case groups that need it, is what puts the tail at .L800BE9B8 between the
+   last case body and the break label.
+
+   FIVE LEVERS, EACH MEASURED (full table in scratch/n6_measurements.txt):
+
+   * `*((s16 *)&v + 5)` AND NOT `*(s16 *)((u8 *)&v + 0xA)` -- 29 words
+     differing, in four identical clusters.  This is the documented
+     MEM_IN_STRUCT_P lever, and expr.c:5344-5351 says exactly why the two
+     spellings differ: the flag is set when `TREE_CODE (TREE_OPERAND (exp, 0))
+     == PLUS_EXPR`, i.e. when the PLUS is the OUTERMOST node of the address.
+     `*((s16 *)&v + 5)` has it there; `*(s16 *)((u8 *)&v + 0xA)` wraps it in
+     the pointer cast's NOP_EXPR, which matches neither that test nor the
+     ADDR_EXPR/AGGREGATE_TYPE_P one below it, so the store is NOT in-struct
+     and the `lw` out of D_800D21B4 hoists over it.  In-struct, the store
+     schedules BEFORE the table load, func_800C2AE8's return dies there and
+     $v0 is free for the index chain; not in-struct, the return value stays
+     live into the call's delay slot and the whole chain shifts to $a1/$v1.
+     `((s16 *)&v)[5]` is also 0 -- build_array_ref gives the same
+     INDIRECT_REF(PLUS_EXPR) -- so the lever is the cast, not the subscript.
+     Both spellings are 363 words.
+
+   * TWO SEPARATE LOOP COUNTERS, `j` for case 7 and `j2` for case 9.  They are
+     $s1 and $s2 in the target, each sharing with a variable dead in that arm
+     (arg1 and i), so they cannot be one pseudo: one variable for both is 363
+     words / 148 differing against 363 / 2 for two.
+
+   * THE THREE TABLES ARE 2-D, `D_800D214C[i][j]` and not
+     `D_800D214C[i * 2 + j]`.  Flat indexing costs the strength reduction in
+     case 7's loop and re-materialises the row base for every element in cases
+     3 and 21 -- `base + i*8` and `base + (i*8 + 4)` come out with SWAPPED
+     `addu` operands, so cse never unifies them.  Flat is 365 / 170, a pointer
+     local 363 / 60, two-dimensional 363 / 29.
+
+   * THE TAIL'S STRING LENGTH GOES BACK INTO `i`, THE CASE COUNTER, and is
+     spelled `buf[i++] = 0x11; buf[i] = 1;`.  Reusing `i` is what makes the
+     length a multi-block pseudo: global-alloc gives it $s2, which forces the
+     `addu $s2, $v0, $zero` copy of func_80069E98's return AND evicts `w` from
+     $s2 into $s4, which is in turn what lets cases 3 and 21 keep one row base
+     in a caller-saved register.  A private `s32 n` with `buf[n] = 0x11;
+     buf[n + 1] = 1;` is 363 / 148.  The `i++` is also what gives the second
+     address its reversed `addu $v1, $s2, $s0`.
+
+   * CASE 10's RENDERABLE GOES THROUGH `r`, CASE 9's DOES NOT.  Case 10's
+     pointer is $a0, shared with cases 19 and 23, so it is the same pseudo as
+     theirs and global-alloc places it; case 9's is $v1, a block-local temp.
+     Writing case 9 through `r` too is 363 / 4, writing case 10 without it
+     363 / 2.
+
+   `v.unk_08 = 0xFF800000;` AFTER the two coordinate statements is also
+   witnessed: ahead of them the `sw` schedules before the two `lh`s, $v0 is
+   free for the first of them, and `p` coalesces into $a0 instead of taking
+   the target's `addu $t0, $a0, $zero` -- 363 / 319 with the whole register
+   file rotated one place.
+
+   The three-argument call to func_8008F074 is the cast idiom func_800BF3F0
+   and func_800C2664 already use; its own prototype stays `(u8 *a)`.
+   D_800D2134's row ADDRESS is what goes to the actor view's +0xA0 in case 14
+   (`sw $s0`, the register the `lw $a3` loaded through), not its contents.
+
+   Its jump table is jtbl_80089830, 31 entries, and 0x80089830 is 0 MOD 8, so
+   the `.align 3` cc1psx emits ahead of a table (final.c:1634-1638) lays down
+   exactly the 4 bytes of pad that func_800BE214's comment above already
+   attributes to this function -- func_800BE214's table ends at 0x8008982C.
+   Verified at the object level against the stub build (both `-G0`, same
+   `tools/cdkgcc` driver): every section size identical, .rodata BYTE-identical
+   at 0x2524 -- the stub's own `.section .rodata` already carried the pad and
+   the table -- and the whole 14415-entry relocation table identical but for
+   the two expected `jtbl_80089830` -> `.rodata` entries at 0x338AC/0x338B0,
+   the known-benign stub-to-C class.  .text differs in exactly ONE word, the
+   `addiu %lo` of the table, whose 0x10D0 addend moves from the relocation
+   into the instruction field; `nm` puts jtbl_80089830 at .rodata+0x10D0 in the
+   stub build, so the address is the same.
+
+   363 words -- its header reads `nonmatching func_800BE4D4, 0x5AC`, and
+   0x5AC/4 = 363.  0 differing. */
+UnkNode *func_800BDB20(UnkVec *v, void *fn, u32 d);
+UnkNode *func_800BDBD0(UnkVec *v, void *fn, s32 c, u32 d);
+void func_800BDC98(s16 x, s16 y, s16 a, s16 b);
+void func_800BDDD0(s16 x, s16 y, s16 a);
+void func_800BDE7C();
+void func_80069E78(u8 *dst, u8 *src);
+s32 func_80069E98(u8 *s);
+/* D_80073600 is a resident POINTER VARIABLE (`lui %hi` + `lw %lo`), not an
+   address-taken object; it points at 20-byte records whose +0x08 is the
+   script string.  The rest are lui/addiu, so they are symbols and not
+   out-of-image constants. */
+extern u8 *D_80073600;
+extern u8 D_80112070[];
+extern u32 D_800D2134[];
+extern u32 D_800D214C[][2];
+extern u32 D_800D215C[];
+extern u32 D_800D216C[][2];
+extern u32 D_800D219C[][3];
+extern u32 D_800D21B4[];
+extern s8 D_800D2238[];
+extern u8 D_800D225C[];
+
+void func_800BE4D4(u8 *p, s16 arg1, s16 arg2)
+{
+    UnkVec v;
+    UnkNode *o;
+    UnkTownRend *r;
+    u8 *w;
+    u8 *buf;
+    s32 x;
+    s32 y;
+    s32 i;
+    s32 j;
+    s32 j2;
+    s32 d;
+
+    i = 0;
+    x = *(s16 *)p + 8;
+    y = *(s16 *)(p + 2) + 8;
+    v.unk_08 = 0xFF800000;
+    switch (arg1)
+    {
+    case 1:
+    case 2:
+        func_800BDC98(x, y, arg1, arg2);
+        break;
+    case 8:
+        func_800BDDD0(x, y, arg2);
+        break;
+    case 16:
+        i++;
+    case 15:
+        i++;
+    case 14:
+        d = *(s16 *)(p + 6);
+        if (d < 2)
+        {
+            x++;
+        }
+        if (d == 1)
+        {
+            y++;
+        }
+        v.unk_00 = (x * 64 - D_8006CCE8[d * 2] * 8) << 16;
+        v.unk_04 = (y * 64 + D_8006CCD8[d * 2] * 8) << 16;
+        v.unk_08 = 0;
+        o = func_800BDBD0(&v, (void *)func_800BDE7C, d << 10, D_800D2134[i * 2]);
+        w = (u8 *)o + 0x20;
+        *(u32 *)(w + 0xA0) = (u32)&D_800D2134[i * 2];
+        goto done;
+    case 6:
+        i++;
+    case 7:
+        v.unk_00 = x << 22;
+        v.unk_04 = y << 22;
+        v.unk_08 = 0xFFF80000;
+        for (j = 1; j >= 0; j--)
+        {
+            func_800BDBD0(&v, (void *)func_800BDF98, 0, D_800D214C[i][j]);
+        }
+        break;
+    case 9:
+        v.unk_00 = x << 22;
+        v.unk_04 = y << 22;
+        v.unk_08 = 0xFFF80000;
+        for (j2 = 3; j2 >= 0; j2--)
+        {
+            func_800BDBD0(&v, (void *)func_800BDF98, 0, D_800D215C[j2]);
+        }
+        v.unk_00 = (x << 22) + 0x1000000;
+        v.unk_04 = (y << 22) + 0x1600000;
+        *((s16 *)&v + 5) = 0;
+        o = func_800BDB20(&v, (void *)func_800BDF98, D_800D21B4[arg1]);
+        w = (u8 *)o + 0x20;
+        *(s16 *)((u8 *)o->unk_0C + 0x6) = 0x18;
+        goto done;
+    case 4:
+    case 10:
+    case 17:
+    case 30:
+    case 31:
+        v.unk_00 = (x << 22) + 0x200000;
+        v.unk_04 = (y << 22) + 0x200000;
+        *((s16 *)&v + 5) = func_800C2AE8((UnkTown2AE8 *)&v);
+        if (v.unk_08 > 0)
+        {
+            v.unk_08 = 0;
+        }
+        o = func_800BDB20(&v, (void *)func_800BDF98, D_800D21B4[arg1]);
+        w = (u8 *)o + 0x20;
+        if (arg1 == 10)
+        {
+            r = (UnkTownRend *)o->unk_0C;
+            *(s16 *)((u8 *)r + 0x6) = 0x20;
+        }
+        goto done;
+    case 20:
+        i++;
+    case 19:
+        i++;
+    case 22:
+        i++;
+    case 5:
+        i++;
+    case 3:
+        v.unk_00 = (x << 22) + 0x200000;
+        v.unk_04 = (y << 22) + 0x200000;
+        *((s16 *)&v + 5) = func_800C2AE8((UnkTown2AE8 *)&v);
+        o = func_800BDB20(&v, (void *)func_800BDFA0, D_800D21B4[arg1]);
+        w = (u8 *)o + 0x20;
+        *(u32 *)(w + 0xA0) = D_800D216C[i][0];
+        *(u32 *)(w + 0xA4) = D_800D216C[i][1];
+        if (arg1 == 19)
+        {
+            r = (UnkTownRend *)o->unk_0C;
+            r->unk_10 = 0;
+            r->unk_14 |= 0xC;
+        }
+        goto done;
+    case 21:
+        i++;
+    case 23:
+        v.unk_00 = (x << 22) + 0x200000;
+        v.unk_04 = (y << 22) + 0x200000;
+        *((s16 *)&v + 5) = func_800C2AE8((UnkTown2AE8 *)&v);
+        o = func_800BDB20(&v, (void *)func_800BE0D4, D_800D21B4[arg1]);
+        w = (u8 *)o + 0x20;
+        *(u32 *)(w + 0xA0) = D_800D219C[i][0];
+        *(u32 *)(w + 0xA4) = D_800D219C[i][1];
+        *(u32 *)(w + 0xA8) = D_800D219C[i][2];
+        if (arg1 == 23)
+        {
+            r = (UnkTownRend *)o->unk_0C;
+            r->unk_10 = 0x20;
+            r->unk_14 |= 0xC;
+        }
+        goto done;
+    case 18:
+        v.unk_00 = (x << 22) + 0x200000;
+        v.unk_04 = (y << 22) + 0x200000;
+        *((s16 *)&v + 5) = func_800C2AE8((UnkTown2AE8 *)&v);
+        o = func_800BDB20(&v, (void *)func_800BE214, D_800D21B4[arg1]);
+        w = (u8 *)o + 0x20;
+        *(u32 *)(w + 0xA0) = *((s16 *)&v + 5);
+    done:
+        buf = &D_80112070[arg1 * 0x82];
+        func_80069E78(buf, *(u8 **)(D_80073600 + arg1 * 20 + 8));
+        i = func_80069E98(buf);
+        buf[i++] = 0x11;
+        buf[i] = 1;
+        *(u32 *)(w + 0x48) = (u32)buf;
+        ((void (*)(void *, void *, void *))func_8008F074)(
+            w, o->unk_08, &D_800D225C[D_800D2238[arg1] * 24]);
+        break;
+    }
+}
 
 void func_800BEA80(void) {
 }
