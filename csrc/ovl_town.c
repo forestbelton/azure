@@ -1651,7 +1651,7 @@ void func_80091990();
    2026-11-03 on func_8009DD40's landing, where the two-parameter form was
    tried first and is wrong. */
 void func_800478B8(s32);
-s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q);
 extern u8 D_800D5FA0[];
 extern u8 D_800D72C0[];
 void func_800B9260();
@@ -2234,6 +2234,10 @@ void func_8009ACFC();
 void func_80093D48();
 void func_800CA60C();
 extern s32 D_800D0620;
+
+/* func_800C26C0's gate: still an INCLUDE_ASM stub in this unit, and its
+   `beqz $v0` at 0x800C26E4 is the only witness that it returns a value. */
+s32 func_800C2A60(UnkTownActor *a);
 
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
@@ -7708,7 +7712,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B120);
    52 words, 0 differing. */
 void func_8009B148(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    if (func_8009CFE0(p, q, r))
+    if (func_8009CFE0(p, q))
     {
         func_8008F134((UnkTownActor *)p);
         if (p->unk_98 != 0)
@@ -8015,7 +8019,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEA8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEE8);
 
-s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+/* THE THIRD ARGUMENT IS NOT PASSED, and this is not a cosmetic choice.
+   The body never reads it, so this function's own bytes are identical at
+   either arity -- but a third argument costs the CALLER a `(set (reg $a2) ..)`
+   insn that survives to sched1, and reg_n_sets[$a2] == 2 then blocks
+   birthing_insn_p from bumping a four-argument slot call's own `$a2 = q`
+   move.  That is worth a word plus 12 differing in func_800A0708; see the
+   comment there. */
+s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q)
 {
     u8 *s;
 
@@ -8633,7 +8644,48 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0668);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A06A4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0708);
+/* The func_800A6CF0 / func_8009B148 probe family with the slot call
+   UNGUARDED: no `!= NULL` test, so the handler pointer is loaded straight
+   into the `jalr`.  Pair with func_800C25C0 below, which is this body plus a
+   func_8008F134 at the head of the taken arm and a THREE-argument slot call.
+
+   THE FOUR-ARGUMENT SLOT CALL IS WHAT MAKES THE LOAD'S POSITION VISIBLE, and
+   it is why func_8009CFE0 is called with TWO arguments here.  Pre-sched RTL
+   puts the handler load first (calls.c:1843's prepare_call_address runs ahead
+   of the argument-register loop at :1845ff), sched1 bumps it to max_priority
+   as a single-set birthing insn -- scratch/gcc-src/cdk-gcc-b18/sched.c:2513
+   and the `case 0:` arm of adjust_priority at :2583 -- and it then sinks as
+   late as its two-cycle load latency allows, which is T-3.  The only thing
+   that can stop it one slot earlier is ANOTHER insn at max_priority at T-3,
+   and the candidate is the slot call's own `$a2 = q`: it qualifies only while
+   `reg_n_sets[$a2] == 1`.  A third argument to func_8009CFE0 is a second set
+   of $a2 and costs exactly that -- 40 words / 12 differing, with the extra
+   word a load-delay `nop`.  Measured, every one at 40 / 12: the slot call as
+   a cast-deref, as `((UnkTownActor *)p)->unk_50`, unprototyped, through a
+   `void (*f)()` local, with the actor as the parameter type, with an early
+   `return` in the taken arm, with a redundant fourth parameter, with a
+   `volatile` slot, and with a `void (*f[1])()` array.  A degenerate
+   `do { } while (0)` between the load and the call reaches 39 words but
+   leaves the load in the EARLIER block, ahead of `$a1 = $a0`: 39 / 2.
+
+   39 of 39 words, 0 differing. */
+void func_800A0708(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        (*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A07A4);
 
@@ -9523,7 +9575,7 @@ void func_800A6BEC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    neither arm leaves the function, so source order is emission order. */
 void func_800A6C4C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    if (func_8009CFE0(p, q, r))
+    if (func_8009CFE0(p, q))
     {
         if (p->unk_98 != 0)
         {
@@ -9547,7 +9599,7 @@ void func_800A6C4C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    44 of 44 words, 0 differing. */
 void func_800A6CF0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    if (func_8009CFE0(p, q, r))
+    if (func_8009CFE0(p, q))
     {
         func_8008F134((UnkTownActor *)p);
         if (p->unk_98 != 0)
@@ -9758,7 +9810,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7AC0);
 
 void func_800A7B14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    if (func_8009CFE0(p, q, r))
+    if (func_8009CFE0(p, q))
     {
         if (p->unk_98 != 0)
         {
@@ -9812,7 +9864,7 @@ void func_800A7DA0(u8 *a, s32 b, s32 c)
 
 void func_800A7DF8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    if (func_8009CFE0(p, q, r))
+    if (func_8009CFE0(p, q))
     {
         if (p->unk_98 != 0)
         {
@@ -16354,7 +16406,27 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB218);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB4A0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB508);
+/* The same probe family with NO else arm at all: func_8009B148's taken arm
+   on its own.  Three parameters, witnessed by the stub func_800BB640, whose
+   `jal func_800BB508` leaves $a0/$a1/$a2 untouched and then reads the
+   renderer's +0x1A off $a2 -- so all three are forwarded, and the landed
+   forwarder func_800BB6C4 is widened above to pass them.
+
+   29 of 29 words, 0 differing. */
+void func_800BB508(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB57C);
 
@@ -16367,9 +16439,9 @@ void func_800BB688(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     r->unk_08 = 0x1E;
 }
 
-void func_800BB6C4(void)
+void func_800BB6C4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
-    func_800BB508();
+    func_800BB508(p, q, r);
 }
 
 void func_800BB6E4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
@@ -17085,7 +17157,34 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C24FC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C258C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C25C0);
+/* func_800A0708 above plus a func_8008F134 at the head of the taken arm, and
+   the slot called with THREE arguments instead of four -- which is why `$a1`
+   takes `$s1` here and the already-set `$a0` there, and why this one keeps
+   the load-delay `nop` the four-argument form does not.  Same body as the
+   landed func_8009B148 minus its else arm's trailing `0x8000` re-test and
+   func_800970AC forward.
+
+   41 of 41 words, 0 differing -- and unchanged by func_8009CFE0's arity,
+   because a three-argument slot call's last register move goes into the
+   `jalr` delay slot and never competes with the load. */
+void func_800C25C0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        (*(void (**)(UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, q, r);
+    }
+}
 
 void func_800C2664(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
@@ -17095,7 +17194,22 @@ void func_800C2664(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     a->unk_50 = func_800C26C0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C26C0);
+/* The +0x50 handler func_800C2664 installs.  Same tail as func_800BB508
+   above -- func_8008F134 then both 0x8000 flags -- behind a different gate:
+   the resident's func_800352FC and then func_800C2A60 on the actor, with no
+   +0x98 unlink and no func_80033D08.  Two branches to one label, so the two
+   tests are `&&`; nested `if`s are the same bytes.
+
+   26 of 26 words, 0 differing. */
+void func_800C26C0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    if (func_800352FC() && func_800C2A60(a))
+    {
+        func_8008F134(a);
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2728);
 
@@ -17855,7 +17969,31 @@ void func_800C565C(UnkTownActor *a, s32 b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C56A8);
+/* A +0x54 handler installed by func_800C5864, and the twin of func_800CA458
+   below: drift the mover's 16.16 x and y, then on the countdown's expiry fire
+   a sound and tear the actor down.  The two differ only in the x delta
+   (-0x15555 against -0x3333) and the sound id (0x54 against 0x49), and the
+   bigger delta is the extra two words: -0x15555 does not fit an `addiu`, so
+   it costs `lui` + `ori` + `addu` where -0x3333 costs one `addiu`.  That also
+   reorders the prologue, which is why `lui $v1` lands between the two `sw`s
+   here and nowhere in the twin.
+
+   The landed func_800CA020 (:18493) and func_800CE4C4 (:19970) are the same
+   source with the axes swapped (+0x40000 on +0x00, +/-0x15555 on +0x04) and a
+   renderer flag test for the countdown, and they fix the shape of the arm.
+
+   31 of 31 words, 0 differing. */
+void func_800C56A8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    b->unk_00 -= 0x15555;
+    b->unk_04 += 0x40000;
+    if (--a->unk_6C <= 0)
+    {
+        func_80033AA8(0x54);
+        func_8008F134(a);
+        func_800C30A4(a);
+    }
+}
 
 void func_800C5724(UnkTownActor *a, s32 b, s32 c)
 {
@@ -19399,7 +19537,22 @@ void func_800CA40C(UnkTownActor *a, s32 b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA458);
+/* func_800C56A8's twin, installed at +0x54 by func_800CA88C: -0x3333 for
+   -0x15555 and sound 0x49 for 0x54.  See the comment there for why the
+   smaller delta is two words shorter.
+
+   29 of 29 words, 0 differing. */
+void func_800CA458(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    b->unk_00 -= 0x3333;
+    b->unk_04 += 0x40000;
+    if (--a->unk_6C <= 0)
+    {
+        func_80033AA8(0x49);
+        func_8008F134(a);
+        func_800C30A4(a);
+    }
+}
 
 void func_800CA4CC(UnkTownActor *a, s32 b, s32 c)
 {
