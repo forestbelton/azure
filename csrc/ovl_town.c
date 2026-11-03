@@ -1063,6 +1063,16 @@ extern u8 D_800D7844[];
 
 void func_800C2E84(UnkTownActor *a, s32 b, void *c);
 void func_800C3B7C();
+extern u8 D_800D0158[];
+extern u8 D_800D54C4[];
+void func_800917EC();
+void func_800C591C();
+void func_800C6440();
+void func_800C6C10();
+void func_800CB8CC();
+void func_800CBB68();
+void func_8009AFF4(void);
+void func_800CB708(UnkTownActor *a);
 
 /* Three more families, each written from its `families.py --show` table and
    each verified 0 differing on every member:
@@ -4195,7 +4205,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091528);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800917EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091990);
+/* The func_80094984 binder's two-statement minimum (func_80093704,
+   func_80094048) put under func_800C3BF4's REND +0x14 gate, with the tail
+   call to the very handler it installs following the `if`.  The gate reads
+   the THIRD parameter, so this is the first task-side witness that the
+   third parameter is an UnkTownRend and not the s32 the forwarding wrappers
+   implied.  30 words, 0 differing. */
+void func_80091990(UnkTownTask *t, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if ((c->unk_14 & 0x6000) != 0)
+    {
+        func_80094984(D_800D0158, t);
+        t->unk_00 = func_800917EC;
+    }
+    func_800917EC(t, b, c);
+}
 
 void func_80091A08(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -6633,7 +6657,36 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AD70);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AE88);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AF74);
+/* func_80091990's countdown twin: the same binder minimum and tail call,
+   gated on the TASK's +0x0A countdown instead of the rend's flag bits, and
+   installing at +0x04 rather than +0x00.  func_8009AFF4 is already landed as
+   a `(void)` forwarder, so the handler stored here is the near neighbour and
+   not this function itself.
+
+   The THIRD PARAMETER GOES THROUGH A LOCAL COPY MADE AHEAD OF THE GUARD, and
+   that copy is NECESSARY here where func_80091990's is not: with both
+   forwarded parameters referenced exactly twice, local-alloc prices them
+   2/28 against 2/30 and hands $s1 to the SECOND, which is one $s register
+   short of the target in six words.  Copying the third into a local before
+   the `if` drops the parameter to a block-0 quantity and gives the local
+   2 refs / 13 insns -- 0.154 against the second parameter's 0.071 -- so the
+   local is allocated first and takes $s1.  func_80091990 needs no copy
+   because its gate reads the third parameter, which is the third reference
+   that wins it the same exchange for free.  The copy must sit BEFORE the
+   guard: after it, the parameter stays live across the block and the order
+   is unchanged (measured, 6 differing).  32 words, 0 differing. */
+void func_8009AF74(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    s32 d;
+
+    d = c;
+    if (--t->unk_0A <= 0)
+    {
+        func_80094984(D_800D0078, t);
+        t->unk_04 = func_8009AFF4;
+    }
+    func_8009AE88(t, b, d);
+}
 
 void func_8009AFF4(void)
 {
@@ -16119,7 +16172,20 @@ void func_800C5A54(UnkTownActor *a, s32 b, s32 c)
     a->unk_54 = func_800C3BF4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C5ADC);
+/* func_800C3BF4's gate over func_800C5944's bind: the REND's +0x14 flag bits
+   guard a bind to the descriptor THIS function names and a hand-on to
+   func_800C591C, which reinstalls +0x54.  Unlike the func_800C5C70 pair there
+   is no D_80082660 slot clear here, so no pointer local -- the measured
+   "sufficient, not necessary" spelling has nothing to be sufficient for.
+   27 words, 0 differing. */
+void func_800C5ADC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if ((c->unk_14 & 0x6000) != 0)
+    {
+        func_800C2E84(a, (s32)c, D_800D54C4);
+        func_800C591C(a, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C5B48);
 
@@ -16333,7 +16399,20 @@ void func_800C66E0(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x6;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C6740);
+/* func_800C3B7C's countdown with two statements in front of the advance:
+   rewrite the +0x7C/+0x80 descriptor pair through func_800C6440 and run the
+   func_800C6C10 effect.  func_800C6440 reads 0x7C($a0) and func_800C6C10
+   reads $a0, so both take the actor; the first call's delay slot is a `nop`
+   because $a0 still holds it from the prologue.  29 words, 0 differing. */
+void func_800C6740(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C6440(a);
+        func_800C6C10(a);
+        func_800C4174(a, b, c);
+    }
+}
 
 void func_800C67B4(UnkTownActor *a, s32 b, s32 c)
 {
@@ -17690,7 +17769,21 @@ void func_800CB074(void *a, UnkTown2AE8 *b, s32 c)
     func_800CB028(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB0F0);
+/* func_800C6740's near-sibling against the other descriptor installer: swap
+   func_800C6440 for func_800CB708 and the one-argument effect for
+   func_800CB8CC, which reads $a0 AND $a1 and so takes the +0x96 byte beside
+   the actor.  +0x96 is past UnkTownActor's end and is read `lbu`, so it is
+   spelled as an unsigned byte through a cast rather than by growing the
+   struct.  30 words, 0 differing. */
+void func_800CB0F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800CB708(a);
+        func_800CB8CC(a, *((u8 *)a + 0x96));
+        func_800C4174(a, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB168);
 
@@ -17852,7 +17945,19 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB770);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB7D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB7EC);
+/* func_800CB0F0's near-sibling one descriptor over: func_800CB73C for
+   func_800CB708, and a THREE-argument effect whose arguments are all read
+   off the actor -- the +0x96 byte SIGNED here (`lb`, against func_800CB8CC's
+   `lbu`) and the +0x88/+0x8A target pair.  32 words, 0 differing. */
+void func_800CB7EC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800CB73C(a);
+        func_800CBB68(*(s8 *)((u8 *)a + 0x96), a->unk_88, a->unk_8A);
+        func_800C4174(a, b, c);
+    }
+}
 
 void func_800CB86C(UnkTownActor *a, s32 b, s32 c)
 {
