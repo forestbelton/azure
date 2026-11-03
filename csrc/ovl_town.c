@@ -1509,6 +1509,11 @@ void func_800B2394(UnkTown260C *s, s32 a);
 s32 func_800B2400(UnkTown260C *s);
 void func_800B25D8(UnkTown260C *s);
 void func_800B2CE8(void *p);
+extern s32 D_800834A8;
+s32 func_800352FC(void);
+void func_800AAF5C(void);
+void func_800AAFE0(UnkTown2AE8 *v, s32 b);
+void func_800C2C80(UnkTownActor *a, UnkTownRend *b, s32 c, s32 d);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5666,7 +5671,69 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB084);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB158);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB1E0);
+void func_800AB1E0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTown2AE8 v;
+    s32 idx;
+
+    if (D_800834A8 == 0)
+    {
+        func_80033D08((u8 *)a);
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    func_800AAFE0(&v, 0);
+    if (*(s16 *)((u8 *)&v + 0x2) != TOWN_PT->unk_02 || *(s16 *)((u8 *)&v + 0x6) != TOWN_PT->unk_06 ||
+        *(s16 *)((u8 *)&v + 0xA) != TOWN_PT->unk_0A || func_800352FC() != 0 || (g->unk_08 & 0xF000) != 0)
+    {
+        func_800AAF5C();
+        a->unk_90 = 0;
+    }
+    else
+    {
+        a->unk_90++;
+        if (a->unk_90 >= 0x65)
+        {
+            a->unk_90 = 0x64;
+        }
+    }
+    a->unk_50(a, b, c);
+    if (*(u16 *)((u8 *)a - 0x2) & 0x8000)
+    {
+        return;
+    }
+    idx = func_800C2E1C(a->unk_72, *(s16 *)((u8 *)a + 0x64));
+    if (*(s16 *)((u8 *)a + 0x74) != idx)
+    {
+        func_800C2CB0((u8 *)a, (s32)c, (*(void ***)((u8 *)a + 0x78))[idx], *(s8 *)((u8 *)c + 0x4));
+        *(s16 *)((u8 *)a + 0x74) = idx;
+    }
+    if ((*(u8 *)((u8 *)a + 0x71) & 1) == 0)
+    {
+        if (func_800C2F14(a->unk_72, *(s16 *)((u8 *)a + 0x64)))
+        {
+            c->unk_14 |= 1;
+        }
+        else
+        {
+            c->unk_14 &= ~1;
+        }
+    }
+    else
+    {
+        if (func_800C2F14(a->unk_72, *(s16 *)((u8 *)a + 0x64)))
+        {
+            c->unk_14 &= ~1;
+        }
+        else
+        {
+            c->unk_14 |= 1;
+        }
+    }
+    func_800C2C80(a, c, 0, 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB408);
 

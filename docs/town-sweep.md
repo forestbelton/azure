@@ -158,6 +158,15 @@ standalone) after three wrong guesses about which prototype had done it.
   `csrc/ovl_town.c` itself, not only against the scratch file, which is what
   the whole-unit sweep above does for free.
 
+* **A MISSING ARGUMENT MOVE IS NOT EVIDENCE OF A ZERO-ARITY CALL.** gcc 2.7.2
+  keeps the incoming `$a0` live across the prologue and reuses it when the
+  first call's first argument is the function's own first parameter -- so
+  `func_80033D08((u8 *)a)` compiles to a bare `jal` with a `nop` delay slot and
+  no `move $a0, $sN`, even though `a` lives in a saved register throughout.
+  One agent nearly talked itself out of a correct spelling over this. Read the
+  CALLEE's own landed definition or listing for its arity, not the absence of a
+  setup move at the call site.
+
 * **`make build/town.bin` is the only authority.** `ovlverify` compares one
   function's words and is blind to a jump table landing at the wrong address
   and to rodata order.
