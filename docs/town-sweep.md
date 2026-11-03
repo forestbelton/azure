@@ -579,6 +579,26 @@ analysis; all were in the provisioning. Before sending a brief, check:
    `grep -c 'func_800C30E0(a, b, c) == 0' csrc/ovl_town.c` -- finds seven real
    candidates including the two exact ones.
 
+### NEVER DESCRIBE A GROUP'S CALLEE **UNION** AS SHARED -- RECOMPUTE THE INTERSECTION
+
+2026-11-03, and it happened **twice in one batch** after I hand-edited a
+machine-generated grouping. A clustering script printed, per group, the UNION of
+its pairs' callees plus a `SHARED BY ALL` line computed over the pairs the
+script itself had grouped. I then hand-expanded two groups with extra pairs and
+**carried both lines across without recomputing them**. Results:
+
+* "`func_80098928` and `func_800C4174` are shared by all four pairs" -- false.
+  One pair called neither, and one lone function called neither.
+* "All three pairs share the callee `func_8008F134`" -- false. One function's
+  only two `jal`s were to something else entirely, so the two members of the
+  pair did not even share the callee the group was named for.
+
+Neither error cost a landing, but both sent an agent looking for a relationship
+that was not there. **If you change the membership of a generated group, re-run
+the generator -- do not edit its output.** And state per-function callee lists,
+not per-group ones; a union reads as a shared set and there is no wording that
+fixes that.
+
 ### RANK PROVISIONING BY CALLERS AND BY WHAT A FUNCTION *INSTALLS*, NOT ONLY BY CALLEES
 
 2026-11-03, second batch. I rated six pairs excellent / moderate / thin on

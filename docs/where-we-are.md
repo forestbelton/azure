@@ -333,11 +333,11 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-03, after two more cluster batches:** ovl_town is 879 of
-   1819 functions and 30,021 of 70,311 words, **42.7%**, up from 26.7% two
-   sessions ago; the project total is **66.3%**. The whole unit sweeps clean at
+   **State on 2026-11-03, after three cluster batches:** ovl_town is 911 of
+   1819 functions and 31,060 of 70,311 words, **44.2%**, up from 26.7% two
+   sessions ago; the project total is **67.2%**. The whole unit sweeps clean at
    879 of 879, and both `make build/town.bin` and `make check` are
-   byte-identical. `docs/matching-levers.md` is at **373 levers**, as `leverindex.py` itself
+   byte-identical. `docs/matching-levers.md` is at **380 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
