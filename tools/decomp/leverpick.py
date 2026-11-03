@@ -624,14 +624,100 @@ SKIP_TITLE = re.compile(
     r"|^read the scheduler|^which of two givs")
 
 
-def headings():
-    """Every lever heading with its CURRENT line number, via leverindex."""
+TAG_LINE = re.compile(r"^\s*<!--\s*lp:\s*([a-z0-9 _-]*?)\s*-->\s*$")
+PROFILES = os.path.join(HERE, "levertags.txt")
+_PROF = {}
+
+
+def profiles():
+    """heading text -> [shape tag, ...], from tools/decomp/levertags.txt.
+
+    DERIVED, not judged: `leverpick_eval.py --propose-tags` reads the
+    functions each lever's section body names, fingerprints them, and keeps
+    the signals they agree on more often than chance. Keyed by heading TEXT,
+    never by line number, so it survives every doc edit.
+
+    These are a SHAPE PROFILE OF THE FUNCTIONS THE LEVER LANDED ON, not a
+    statement about the lever. Measured leave-one-out, 27.2 of the 30.4
+    points of recall@8 come from profile entries whose own heading does not
+    contain that word at all -- the feature is nearest-neighbour similarity,
+    and reading `abs div` on a halfword-store lever as a semantic claim about
+    that lever is reading it wrong. That is why it lives here and not in
+    `docs/matching-levers.md`: it would be misleading prose in a document
+    people maintain by hand, for no measured gain over this file.
+
+    A hand-written `<!-- lp: ... -->` in the doc OVERRIDES the profile for
+    that lever, because a human judgement beats a derivation.
+    """
+    if _PROF:
+        return _PROF
+    _PROF["//loaded"] = []
+    try:
+        text = io.open(PROFILES, encoding="utf-8").read()
+    except (IOError, OSError):
+        return _PROF
+    title = None
+    for line in text.split("\n"):
+        if line.startswith("#"):
+            continue
+        if "\t" not in line:
+            continue
+        k, v = line.split("\t", 1)
+        if k == "lever":
+            title = v.strip()
+        elif k == "shape" and title:
+            _PROF[title] = [x for x in v.split() if x in PREVALENCE]
+    return _PROF
+
+
+def headings(use_profiles=True):
+    """-> [(title, lineno, [tag, ...]), ...] for every lever in the doc.
+
+    Line numbers come from `leverindex.build()` on every call, so they track
+    the document; a stored one went stale within the hour of being written.
+
+    A lever may declare its shape with a comment on the line AFTER its
+    heading, which is what `leverpick_eval.py --propose-tags` emits:
+
+        ### A `switch` ON A `short` SUBJECT PUTS THE SIGN EXTENSION ...
+        <!-- lp: jumptable s16cast -->
+
+    A lever with no comment falls back to its derived shape profile from
+    `levertags.txt` (see `profiles()`); `use_profiles=False` turns that off,
+    which is how `leverpick_eval.py` measures the keyword-only baseline.
+
+    `leverindex.build()` only matches `^#{2,3} `, so the comment is invisible
+    to the index and `--check` stays green once the index is regenerated for
+    the shifted line numbers (verified, not assumed -- see
+    `leverpick_eval.py --check-index`). An unknown tag name is dropped with a
+    warning rather than scored, so a typo cannot silently mean "no shape".
+    Most of the 391 levers are expected to stay untagged, and an untagged
+    lever scores exactly as it did before tags existed.
+    """
     lines = io.open(DOC, encoding="utf-8").read().split("\n")
     out = []
     for item in leverindex.build(lines):
         m = re.match(r"^\s*- (.*?)\s+`:(\d+)`$", item)
-        if m:
-            out.append((m.group(1), int(m.group(2))))
+        if not m:
+            continue
+        ln = int(m.group(2))
+        tags = []
+        for probe in (ln, ln + 1):      # blank line between is tolerated
+            if probe < len(lines):
+                tm = TAG_LINE.match(lines[probe])
+                if tm:
+                    tags = [x for x in tm.group(1).split() if x]
+                    break
+        good, bad = [], []
+        for x in tags:
+            (good if x in PREVALENCE else bad).append(x)
+        if bad:
+            sys.stderr.write("leverpick: unknown lp tag(s) " + " ".join(bad)
+                             + " at docs/matching-levers.md:" + str(ln + 1)
+                             + "\n")
+        if not good and use_profiles:
+            good = profiles().get(m.group(1), [])
+        out.append((m.group(1), ln, good))
     return out
 
 
@@ -671,15 +757,52 @@ def specificity(titles):
 SPEC_A, SPEC_B, REST = 0.25, 1.75, 0.30
 FLOOR = 0.9
 
+# An explicit `<!-- lp: ... -->` tag is a statement by a human (or by
+# leverpick_eval's derivation) that this lever IS about that shape. The
+# largest reachable keyword score is under 40, so TAG_BONUS * log(1/p) puts
+# any tag match above every keyword match, as required. TAG_MISS demotes a
+# lever that declared its shape and does NOT match: it has told us it is
+# about jump tables and this target has none. It is a demotion, not an
+# exclusion, because a tag derived from three functions can still be wrong.
+TAG_BONUS, TAG_MISS = 100.0, 20.0
 
-def score_one(title, sig, spec):
+# ...but a tag that outranks everything STARVES the untagged levers, and most
+# of the 391 will always be untagged. Measured leave-one-out: with no quota,
+# recall@8 on levers attested by a single function fell from 17.4% to ZERO,
+# because any tagged lever that matched out-scored every keyword match. So
+# only TAG_QUOTA of the printed slots may be filled by tag matches; the rest
+# go to the best keyword matches. The measured trade-off, leave-one-out, is
+#   quota 2 -> 27.2% @8   untagged-lever bucket 17.4%  (baseline 17.4%)
+#   quota 3 -> 28.6% @8   untagged-lever bucket 15.9%   <-- shipped
+#   quota 5 -> 30.4% @8   untagged-lever bucket 11.6%
+#   quota 8 -> 29.5% @8   untagged-lever bucket  1.4%
+# 3 buys all but 1.8 points of the best number while costing the 318 levers
+# that will never be attested almost nothing, which is the right side of that
+# trade for a document whose levers keep arriving.
+TAG_QUOTA = 3
+
+
+_MM = {}
+
+
+def match_map(title, spec):
+    """title -> {tag: (keyword value, pattern)} -- TARGET-INDEPENDENT.
+
+    This is the expensive half (37 tags x ~10 patterns per heading), and it
+    does not depend on the function being scored, so it is computed once per
+    heading and cached. Scoring a target is then a dict walk over its own
+    signals. Splitting it out is what makes leverpick_eval.py runnable at all:
+    224 pairs x 391 headings was 23 million regex searches before.
+    """
+    key = (title, id(spec))
+    hit = _MM.get(key)
+    if hit is not None:
+        return hit
     low = title.lower()
-    parts = []
-    for tag, _witness in sig.items():
-        mult, kws = TAGS.get(tag, (0.0, []))
+    mm = {}
+    for tag, (mult, kws) in TAGS.items():
         if mult <= 0:
             continue
-        tw = mult * math.log(1.0 / PREVALENCE.get(tag, 0.3))
         best, bestpat = 0.0, None
         for pat, kw in kws:
             if re.search(pat, low):
@@ -688,20 +811,40 @@ def score_one(title, sig, spec):
                 if v > best:
                     best, bestpat = v, pat
         if best:
-            parts.append((tw * best, tag, bestpat))
-    if not parts:
+            mm[tag] = (mult * math.log(1.0 / PREVALENCE.get(tag, 0.3)) * best,
+                       bestpat)
+    if len(_MM) > 4000:
+        _MM.clear()
+    _MM[key] = mm
+    return mm
+
+
+def score_from(low, mm, sig, tags=()):
+    """(lowercased title, its match_map, a target's signals, its lp tags)."""
+    parts = [(v, tag, pat) for tag, (v, pat) in mm.items() if tag in sig]
+    taghit = [x for x in tags if x in sig]
+    if not parts and not taghit:
         return 0.0, []
     parts.sort(reverse=True)
     # The RAREST signal that speaks to this heading dominates; the rest only
     # corroborate. Summing instead rewards a long heading for containing many
     # ordinary words, which is what made the first version rank by verbosity.
-    total = parts[0][0] + REST * sum(p[0] for p in parts[1:])
+    total = (parts[0][0] + REST * sum(p[0] for p in parts[1:])) if parts else 0.0
     if "leaf" in sig and LEAF_PENALTY.search(low):
         total -= 3.0
     if "loop" not in sig and NOLOOP_PENALTY.search(low):
         total -= 5.0
     if "jumptable" not in sig and "switch" in low:
         total -= 2.0
+    if tags:
+        if taghit:
+            total += TAG_BONUS * sum(
+                math.log(1.0 / PREVALENCE.get(x, 0.3)) for x in taghit)
+            parts = ([(TAG_BONUS, x, "lp-tag") for x in taghit]
+                     + [p for p in parts if p[1] not in taghit])
+            parts.sort(reverse=True)
+        else:
+            total -= TAG_MISS
     # MEASURED AND DROPPED: dividing by heading length, on the theory that a
     # long heading accumulates incidental vocabulary. Both directions moved
     # recall@8 by under two labelled pairs either way -- it is noise, and the
@@ -709,23 +852,51 @@ def score_one(title, sig, spec):
     return total, parts
 
 
+def score_one(title, sig, spec, tags=()):
+    return score_from(title.lower(), match_map(title, spec), sig, tags)
+
+
+def rank_rows(sig, cand, spec, tagmap=None, floor=FLOOR):
+    """The one ordering both the brief and leverpick_eval.py use.
+
+    cand is [(title, lineno, doc tags)]. tagmap overrides a lever's tags by
+    title, which is how the eval harness runs leave-one-out against exactly
+    the code that ships. Returns [(score, title, lineno, why, tagged)].
+    """
+    rows = []
+    for title, ln, tg in cand:
+        tags = tagmap.get(title, tg) if tagmap is not None else tg
+        s, hits = score_from(title.lower(), match_map(title, spec), sig, tags)
+        if s < floor:
+            continue
+        why = [(tag, sig.get(tag, "lp: tag")) for _v, tag, _p in hits[:3]]
+        rows.append((s, title, ln, why, any(x in sig for x in tags)))
+    rows.sort(key=lambda r: (-r[0], r[2]))
+    tagged = [r for r in rows if r[4]]
+    plain = [r for r in rows if not r[4]]
+    return tagged[:TAG_QUOTA] + plain + tagged[TAG_QUOTA:]
+
+
 def pick(listing_text, limit=8, floor=FLOOR):
-    """-> [(score, title, lineno, [(tag, witness), ...]), ...], best first."""
+    """-> [(score, title, lineno, [(tag, witness), ...], tagged), ...].
+
+    De-duplicated by heading, because the doc has a few repeated ones.
+    """
     sig = signals(listing_text)
     if not sig:
         return []
-    cand = [(ti, ln) for ti, ln in headings()
+    cand = [(ti, ln, tg) for ti, ln, tg in headings()
             if not SKIP_TITLE.search(ti.lower())]
-    spec = specificity([ti.lower() for ti, _ in cand])
-    out = []
-    for title, ln in cand:
-        s, hits = score_one(title, sig, spec)
-        if s < floor:
+    spec = specificity([ti.lower() for ti, _, _ in cand])
+    out, seen = [], set()
+    for row in rank_rows(sig, cand, spec, floor=floor):
+        if row[1] in seen:
             continue
-        why = [(tag, sig[tag]) for _, tag, _ in hits[:3]]
-        out.append((s, title, ln, why))
-    out.sort(key=lambda r: (-r[0], r[2]))
-    return out[:limit]
+        seen.add(row[1])
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
 
 
 # ------------------------------------------------------------------- rendering
@@ -741,14 +912,7 @@ def render(targets, limit=8):
     lines, tops = [], []
     for name, text in targets:
         sig = signals(text)
-        rows, seen = [], set()
-        for row in pick(text, limit=limit * 3):
-            if row[1] in seen:      # the doc has a few duplicated headings
-                continue
-            seen.add(row[1])
-            rows.append(row)
-            if len(rows) >= limit:
-                break
+        rows = pick(text, limit=limit)
         shown = [k for k in sorted(sig, key=lambda k: PREVALENCE.get(k, .3))
                  if PREVALENCE.get(k, .3) <= 0.45][:7]
         lines.append("`" + name + "` -- "
@@ -758,9 +922,12 @@ def render(targets, limit=8):
                          "there is, which is the expected case for a plain "
                          "leaf function)")
             continue
-        for _s, title, ln, why in rows:
+        for row in rows:
+            _s, title, ln, why, tg = row
             trig = "/".join(tag for tag, _w in why)
-            lines.append("  - `:" + str(ln) + "` " + title + "  [" + trig + "]")
+            mark = "lp:" if tg else ""
+            lines.append("  - `:" + str(ln) + "` " + title
+                         + "  [" + mark + trig + "]")
         tops.append((name, rows[0][2]))
     if tops:
         lines.append("")
