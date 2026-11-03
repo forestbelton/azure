@@ -1907,6 +1907,38 @@ extern u8 D_800D162C[][2];
 extern u8 D_800D1630[][4];
 void func_80044AAC(UnkNode *, UnkNode *);
 s32 func_80069EF8();
+/* The particle template func_80097AD0/func_800A895C build on the stack and
+   hand to func_8009792C/func_800A878C: a THIRD view over the same six 16.16
+   words as UnkTown2AE8, and the only one that needs to exist, because this
+   object's witnessed fields do not collide -- the INTEGER HALVES of words
+   0/1/2/5 (at +0x02/+0x06/+0x0A/+0x16) and the WHOLE words 3/4 (at
+   +0x0C/+0x10, the per-frame delta pair).  UnkTown2AE8Int cannot serve: it
+   stops at +0x0A and has no word members.
+
+   IT MUST BE A NAMED-FIELD STRUCT AND NOT THE `*(s16 *)((u8 *)&t + N)` IDIOM
+   THIS UNIT USES ELSEWHERE.  The halves are stored to a FIXED stack address
+   here while the addends are loaded through a pointer, so the cast spelling
+   clears MEM_IN_STRUCT_P and sched.c:854's exclusion drops the dependence:
+   the next group's argument load floats above the store, the store lands in
+   the following jal's delay slot, and the function comes out 94 words instead
+   of 96.  A COMPONENT_REF keeps the dependence.  Measured both ways. */
+typedef struct UnkTownPuff
+{
+    s16 pad_00;
+    s16 unk_02;
+    s16 pad_04;
+    s16 unk_06;
+    s16 pad_08;
+    s16 unk_0A;
+    s32 unk_0C;
+    s32 unk_10;
+    s16 pad_14;
+    s16 unk_16;
+} UnkTownPuff;
+UnkNode *func_8009792C(UnkTownPuff *t, s16 ang);
+UnkNode *func_800A878C(UnkTownPuff *t, s16 ang);
+void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
+void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -4769,7 +4801,45 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097844);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009792C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097AD0);
+/* Scatter `count` particles evenly around the circle from `src`, each at a
+   random offset inside `spread` and with a (cos, sin) * 0x20 velocity; the
+   node's own vector gets -abs(sin) * 0x20 at +0x14.  func_800A895C is this
+   same source with `- func_800374F4(spread->unk_08)` written `+` and
+   func_800A878C for func_8009792C; both call sites are in func_800A8ADC.
+
+   `t.unk_0A` is assigned before the loop AND inside it, which is the target's
+   `sh $v1, 0x1A($sp)` at the blez's delay slot; it is not a hoist. */
+void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
+{
+    UnkTownPuff t;
+    UnkNode *n;
+    s32 step;
+    s32 ang;
+    s32 i;
+
+    if (count == 0)
+    {
+        return;
+    }
+    step = 0x1000 / count;
+    ang = func_80069EF8();
+    t.unk_0A = *(u16 *)((u8 *)src + 0xA);
+    t.unk_16 = -4;
+    for (i = 0; i < count; i++)
+    {
+        t.unk_02 = *(u16 *)((u8 *)src + 0x2) + func_800374F4(spread->unk_00) - spread->unk_00 / 2;
+        t.unk_06 = *(u16 *)((u8 *)src + 0x6) + func_800374F4(spread->unk_04) - spread->unk_04 / 2;
+        t.unk_0A = *(u16 *)((u8 *)src + 0xA) - func_800374F4(spread->unk_08) - spread->unk_08 / 2;
+        t.unk_0C = func_80064584(ang) * 0x20;
+        t.unk_10 = func_800644B8(ang) * 0x20;
+        n = func_8009792C(&t, ang);
+        if (n != NULL)
+        {
+            n->unk_08->unk_14 = -abs(func_800644B8(ang) * 0x20);
+        }
+        ang += step;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097C50);
 
@@ -7005,7 +7075,39 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A86BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A878C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A895C);
+/* func_80097AD0 with two edits: the z offset ADDS its random term instead of
+   subtracting it, and the spawner is func_800A878C.  See func_80097AD0. */
+void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
+{
+    UnkTownPuff t;
+    UnkNode *n;
+    s32 step;
+    s32 ang;
+    s32 i;
+
+    if (count == 0)
+    {
+        return;
+    }
+    step = 0x1000 / count;
+    ang = func_80069EF8();
+    t.unk_0A = *(u16 *)((u8 *)src + 0xA);
+    t.unk_16 = -4;
+    for (i = 0; i < count; i++)
+    {
+        t.unk_02 = *(u16 *)((u8 *)src + 0x2) + func_800374F4(spread->unk_00) - spread->unk_00 / 2;
+        t.unk_06 = *(u16 *)((u8 *)src + 0x6) + func_800374F4(spread->unk_04) - spread->unk_04 / 2;
+        t.unk_0A = *(u16 *)((u8 *)src + 0xA) + func_800374F4(spread->unk_08) - spread->unk_08 / 2;
+        t.unk_0C = func_80064584(ang) * 0x20;
+        t.unk_10 = func_800644B8(ang) * 0x20;
+        n = func_800A878C(&t, ang);
+        if (n != NULL)
+        {
+            n->unk_08->unk_14 = -abs(func_800644B8(ang) * 0x20);
+        }
+        ang += step;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8ADC);
 
