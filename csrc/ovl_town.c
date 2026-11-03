@@ -707,6 +707,44 @@ typedef struct UnkTown2AE8Int
     s16 unk_0A;
 } UnkTown2AE8Int;
 
+/* The func_800C1EA4 state machine's record: a 0x18-byte array element whose
+   +0x00 is the handler slot four states ping-pong between.  The stride is
+   witnessed, not guessed -- func_800C1DD8 and func_800C202C both walk the
+   arrays at D_800D4668 and D_800D4710 with `addiu $s0, $s0, 0x18` and stop on
+   a zero +0x00, so the record is 0x18 bytes and +0x00 is both the handler and
+   the array terminator.
+
+   +0x04/+0x06 are an integer target position (the same s16-at-+2 view of a
+   32-bit coordinate that UnkTown2AE8Int takes of D_80083780), +0x08/+0x0A a
+   per-axis half-extent used by func_800C1EA4/func_800C2124 and +0x0C/+0x0E a
+   second, wider pair used by func_800C1F8C/func_800C21F8 -- the two states
+   test the SAME distance against different boxes, which is what makes the
+   machine hysteretic.  +0x10/+0x12/+0x14 are three ids whose roles differ per
+   state: func_800C1EA4 passes +0x10 to func_80053DA8 and +0x12 to
+   func_80033B2C, func_800C2124 passes +0x10 and +0x12 to func_800C15C0 and
+   +0x14 to func_80033B2C.
+
+   +0x10 is s16, NOT u16, although func_800C1EA4 and func_800C1F8C read it
+   with `lhu`.  Those two pass it to func_80053DA8, whose parameter is `u16`
+   (include/structs.h), and convert.c's trunc1: narrowing turns the s16 load
+   into a halfword load because the value is truncated to 16 bits anyway.
+   func_800C2124 passes the same field to an unprototyped callee and gets
+   `lh`.  Spelling it u16 and casting at func_800C2124's call site measures
+   identically; s16 is the spelling that needs no cast anywhere. */
+typedef struct UnkTownC1F8C
+{
+    void (*unk_00)();
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+    s16 unk_0E;
+    s16 unk_10;
+    s16 unk_12;
+    s16 unk_14;
+} UnkTownC1F8C;
+
 /* D_80082E80, cleared as 0xC words == 0x30 bytes. Almost certainly an
    extension of UnkTownRend -- +0x0C is an 0x808080 RGB triple and +0x1C/+0x1E
    the same 0x1000-based scale -- but UnkTownRend spells +0x0C as three u8 and
@@ -2312,6 +2350,17 @@ void func_800A22D0();
 void func_800A24A8();
 void func_800A33E8();
 
+/* func_8009C148 and func_800C15C0 had no declaration anywhere in the unit.
+   func_800C1F8C and func_800C21F8 are ADDRESS-TAKEN by func_800C1EA4 and
+   func_800C2124 (`%hi`/`%lo` on a function symbol -- no `jal`, and ovlverify
+   masks it), so they need one here even while they are stubs. */
+void func_8009C148();
+void func_800C15C0();
+void func_800C170C();
+void func_800C1F8C();
+s32 func_800C21F8();
+extern s32 D_80083788;
+extern s32 D_800D0428;
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -8255,9 +8304,64 @@ void func_8009B6B4(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B828);
+/* 48 words, 0 differing.  Four parameters, all four read: $a0..$a3 are
+   copied to $s1/$s2/$s0/$s3 in the prologue and $s3 is forwarded to
+   func_8009C148 without ever being read, so the fourth is real.  There is no
+   caller and no `jal` to this symbol anywhere in the unit -- the landed
+   dispatcher comparisons that name it only take its address -- so the arity
+   comes from the register use in its own body.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B8E8);
+   D_80083788 is TOWN_PT + 8 by address, and `((UnkTown2AE8 *)D_80083780)
+   ->unk_08` measures identically (0 differing), but the listing's relocation
+   is against D_80083788, so that is the spelling kept.  Both are declared
+   scalars rather than arrays: at -G0 that does not change the addressing
+   form, but it does make the `%hi` pseudo die into the `%lo` so the pair
+   shares one register, which is what the target has.
+
+   The countdown is `--a->unk_6C <= 0`: an s16 field, read `lhu` because the
+   sign extension is dead into the subtract and the `sh`, and then one `sll
+   $v0, $v0, 16` with `bgtz` -- no `sra`, because `(x << 16) > 0` already
+   decides `(s16)x > 0`.  Identical to the landed func_800AB4A8's `< 0`
+   form with the branch polarity flipped. */
+void func_8009B828(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c,
+                   UnkTownRend *d)
+{
+    c->unk_14 = (D_80083788 + D_800D0428 - c->unk_08) / 2;
+    func_8009539C(c);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (--a->unk_6C <= 0)
+    {
+        func_8009C148(a, b, c, d);
+    }
+}
+
+/* 53 words, 0 differing.  func_8009B828's sibling: the same four
+   parameters, the same countdown tail, a different handoff
+   (func_8009C1B4) and two midpoint steps instead of one -- +0x00 towards
+   TOWN_PT's +0x00 into +0x0C, and +0x04 towards TOWN_PT's +0x04 into +0x10.
+   func_8009B828 does the +0x08 axis into +0x14 instead, with D_800D0428 added
+   to the target, so the three together are one halve-the-remaining-distance
+   tracker split across two states.
+
+   The two D_80083780 reads go through the cast expression directly and NOT
+   through a pointer local: that is what gives the target's shape, where the
+   `%hi` lands in $a0, the +0x00 read folds into it as `lw %lo(D_80083780)
+   ($a0)`, and only the +0x04 read needs the `addiu` lo_sum.  A pointer local
+   materialises the address once and reads `0x0($a0)` / `0x4($a0)`. */
+void func_8009B8E8(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c,
+                   UnkTownRend *d)
+{
+    c->unk_0C = (((UnkTown2AE8 *)D_80083780)->unk_00 - c->unk_00) / 2;
+    c->unk_10 = (((UnkTown2AE8 *)D_80083780)->unk_04 - c->unk_04) / 2;
+    func_8009539C(c);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (--a->unk_6C <= 0)
+    {
+        func_8009C1B4(a, b, c, d);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B9BC);
 
@@ -18043,17 +18147,181 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1DD8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1E50);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1EA4);
+/* 58 words, 0 differing.  One of four states of one machine; the other
+   three are func_800C1F8C, func_800C2124 and func_800C21F8, and the four
+   ping-pong the record's +0x00 slot in two pairs.  This one is the WAITING
+   state of its pair: once the mover at D_80083780 is inside the
+   +0x08/+0x0A box and func_80033B2C agrees, it fires a sound and installs
+   func_800C1F8C, which watches the wider +0x0C/+0x0E box and installs this
+   one back.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C1F8C);
+   THE ABSOLUTE VALUE IS THE WHOLE FUNCTION.  `adx = dx >= 0 ? dx : -dx;`
+   into its OWN variable is what puts the `addu $s1, $a0, $zero` in the
+   `bgez` delay slot; `if (dx < 0) { dx = -dx; }` negates in place, leaves
+   that slot a `nop`, and costs this function two words and twenty-six
+   differing.  In scratch/gcc-src/cdk-gcc-b18, fold-const.c:5459 recognises
+   `A op 0 ? A : -A` and builds the ABS_EXPR at fold-const.c:5476 for the
+   GE_EXPR/GT_EXPR arms, and expand_abs (optabs.c:2102) opens with
+   `emit_move_insn (target, op0)` at optabs.c:2152 -- that move IS the
+   delay-slot insn.  It survives because expand_abs then compares TARGET, not
+   op0 (`compare_from_rtx (target, CONST0_RTX (mode), GE, ...)` at
+   optabs.c:2162), so cse rewrites the branch's operand back to op0, op0
+   stays live ACROSS the move, the two pseudos conflict in global.c and two
+   hard registers are forced.  Writing the second variable by hand --
+   `adx = dx; if (dx < 0) { adx = -adx; }` -- puts the branch on the COPY's
+   destination instead, op0 then dies at the move, the two share a register
+   and reload deletes it as a no-op: 57 words.  This is the same
+   `(set temp op0)` / compare / in-place-op skeleton as the divide-by-power-
+   of-two lever in docs/matching-levers.md, and the same one `=` decides it.
+
+   And the four field reads must be written as two plain differences, with
+   NOTHING hoisted.  Lifting `pt->unk_06` into a local ahead of the first
+   abs, which is the obvious way to explain the target's block 1 holding both
+   of dy's operands, is 58 words / 15 differing: the hoist is what stops the
+   copies forming.  Hoisting `a->unk_14` as well is 26.  sched1 puts
+   `lh $v0, 0x6($s0)` in block 1 on its own.
+
+   func_80033B2C is called in BOTH arms of the +0x14 test, with opposite
+   result polarity, and the `== 0` arm is written first: that is the
+   fall-through arm in the target, and the `sll $v0, $s1, 16` duplicated into
+   both arms' delay slots is the join block's first insn, not source. */
+void func_800C1EA4(UnkTownC1F8C *a)
+{
+    UnkTown2AE8Int *pt = (UnkTown2AE8Int *)D_80083780;
+    s32 dy;
+    s32 dx;
+    s32 adx;
+    s32 ady;
+
+    dx = a->unk_04 - pt->unk_02;
+    adx = dx >= 0 ? dx : -dx;
+    dy = a->unk_06 - pt->unk_06;
+    ady = dy >= 0 ? dy : -dy;
+    if (a->unk_14 == 0)
+    {
+        if (func_80033B2C(a->unk_12) == 0)
+        {
+            return;
+        }
+    }
+    else
+    {
+        if (func_80033B2C(a->unk_12) != 0)
+        {
+            return;
+        }
+    }
+    if ((s16)adx > a->unk_08)
+    {
+        return;
+    }
+    if ((s16)ady > a->unk_0A)
+    {
+        return;
+    }
+    func_80053DA8(a->unk_10);
+    a->unk_00 = func_800C1F8C;
+}
+
+/* 40 words, 0 differing.  Was parked at 15 differing (the park file
+   docs/near-misses/func_800C1F8C.c); the missing device is func_800C1EA4's
+   `adx = dx >= 0 ? dx : -dx;` into its own variable, with NOTHING hoisted.
+   The park's own spelling, `dy = pt->unk_06;` lifted ahead of the first abs
+   plus `if (dx < 0) { dx = -dx; }`, is the 40/15 plateau; the hoist is what
+   prevented the copies, not the abs spelling alone.  See func_800C1EA4 for
+   the mechanism and the CDK citations.
+
+   The park's orientation caution also dissolves: `(s16)adx > a->unk_0C` is
+   needed here, and the reason is now ordinary.  With the folding ternary the
+   two sign extensions are `sll`/`sra` pairs split across blocks exactly as
+   in func_800C1EA4, so the comparison carries no extra structure. */
+void func_800C1F8C(UnkTownC1F8C *a)
+{
+    UnkTown2AE8Int *pt = (UnkTown2AE8Int *)D_80083780;
+    s32 dy;
+    s32 dx;
+    s32 adx;
+    s32 ady;
+
+    dx = a->unk_04 - pt->unk_02;
+    adx = dx >= 0 ? dx : -dx;
+    dy = a->unk_06 - pt->unk_06;
+    ady = dy >= 0 ? dy : -dy;
+    if ((s16)adx > a->unk_0C || (s16)ady > a->unk_0E)
+    {
+        func_80053DA8(a->unk_10 | 0x1000);
+        a->unk_00 = func_800C1EA4;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C202C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2074);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2124);
+/* 53 words, 0 differing.  func_800C1EA4's near-sibling and the other
+   pair's waiting state: the same two absolute differences against the same
+   +0x08/+0x0A box, one func_80033B2C test instead of two, a two-argument
+   handoff to func_800C15C0 instead of func_80053DA8, and a 0/1 return.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C21F8);
+   The arity and the return ARE witnessed, by the stub func_800C172C:
+   `jal func_800C2124` with `$a0 = %lo(D_800D4710)` as its only argument
+   register and `bnez $v0` on the result.  One parameter, returns s32.
+
+   `func_80033B2C(a->unk_14)` with the call written AFTER both abs
+   expressions is what hoists `lh $a0, 0x14($s0)` into the prologue block;
+   nothing else is needed for it. */
+s32 func_800C2124(UnkTownC1F8C *a)
+{
+    UnkTown2AE8Int *pt = (UnkTown2AE8Int *)D_80083780;
+    s32 dy;
+    s32 dx;
+    s32 adx;
+    s32 ady;
+
+    dx = a->unk_04 - pt->unk_02;
+    adx = dx >= 0 ? dx : -dx;
+    dy = a->unk_06 - pt->unk_06;
+    ady = dy >= 0 ? dy : -dy;
+    if (func_80033B2C(a->unk_14) == 0)
+    {
+        return 0;
+    }
+    if ((s16)adx > a->unk_08)
+    {
+        return 0;
+    }
+    if ((s16)ady > a->unk_0A)
+    {
+        return 0;
+    }
+    func_800C15C0(a->unk_10, a->unk_12);
+    a->unk_00 = (void (*)())func_800C21F8;
+    return 1;
+}
+
+/* 43 words, 0 differing.  func_800C1F8C's sibling, as the park said it
+   was: the same body with the wider box, func_800C170C for the sound, the
+   install back to func_800C2124 and a 0/1 return. */
+s32 func_800C21F8(UnkTownC1F8C *a)
+{
+    UnkTown2AE8Int *pt = (UnkTown2AE8Int *)D_80083780;
+    s32 dy;
+    s32 dx;
+    s32 adx;
+    s32 ady;
+
+    dx = a->unk_04 - pt->unk_02;
+    adx = dx >= 0 ? dx : -dx;
+    dy = a->unk_06 - pt->unk_06;
+    ady = dy >= 0 ? dy : -dy;
+    if ((s16)adx > a->unk_0C || (s16)ady > a->unk_0E)
+    {
+        func_800C170C();
+        a->unk_00 = (void (*)())func_800C2124;
+        return 1;
+    }
+    return 0;
+}
 
 /* A family of 3: one func_8003E4FC bind with a per-member descriptor, then
    func_8003F320. func_8003E4FC is left implicitly declared, as it is at every
