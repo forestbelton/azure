@@ -11,9 +11,11 @@ to run it, so the provisioning is fresh when the agent reads it rather than as
 of whenever the brief was written. csrc/ovl_town.c moves under agents several
 times per batch.
 """
-import os, re, sys
+import io, os, re, sys
 
 PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import leverpick
 
 HARD = """## HARD RULES -- violating any destroys shared state
 - Do **NOT** touch `csrc/`, `include/` or `docs/`. You produce a merge script; I own the merge, the build gate and the commit.
@@ -38,7 +40,9 @@ HARD = """## HARD RULES -- violating any destroys shared state
 """
 
 TRAPS = """## LEVERS AND TRAPS -- try these before anything exotic
-Read `docs/matching-levers.md` via `python3 tools/decomp/leverindex.py` (390 levers; GENERATED, never hand-edit, `--check` is read-only). The ones that have paid most often in this sweep:
+Read `docs/matching-levers.md` via `python3 tools/decomp/leverindex.py` (%LEVERS% levers; GENERATED, never hand-edit, `--check` is read-only).
+
+### ALWAYS -- the ones that have paid most often across this sweep
 - **Statement order is a lead, not a rule.** Across two families, three of thirteen and four of four members needed the *opposite* order from their template. Permute mechanically when a few words off at the right length.
 - **`sched1`/`sched2` are strictly per-basic-block** (`sched.c:3220-3221`, `:3389`), so an insn in a different block than your candidate puts it can only have been moved by **`reorg`, which steals from two insns back** (`reorg.c:3067-3077`).
 - **Where a variable is DECLARED decides which allocator sees it** (`:2263`), and **a pointer-to-global local must be assigned as a STATEMENT, not a declaration initialiser** (`c-decl.c:3947-3948`) and **before any intervening call** (`local-alloc.c:1142`). Fingerprint for the allocator ones: every differing word is a register rename.
@@ -54,6 +58,15 @@ Read `docs/matching-levers.md` via `python3 tools/decomp/leverindex.py` (390 lev
 - `grep -rl func_XXXX asm/` can hit `asm/ovl_dungeon.s` -- unrelated functions at the same vram.
 """
 
+MATCHED_HEAD = """### MATCHED BY THIS TARGET'S SHAPE
+Picked by `tools/decomp/leverpick.py` from each target's OWN listing: the
+signal in brackets is what triggered the suggestion, so when the signal is a
+false positive for your function, dismiss the lever. These are CANDIDATES, not
+findings -- measured recall is about one brief in five carrying the lever that
+eventually paid, so the ALWAYS list above and your own reading still come
+first. Headings and line numbers only; read a section with the `sed` below.
+"""
+
 BACK = """## WHAT TO HAND BACK
 1. The merge script path.
 2. **A table of EVERY spelling measured**, with word and differing counts -- not just winners.
@@ -67,12 +80,18 @@ Do not stop to ask permission. If you run long, land what you can and report the
 """
 
 def main():
-    unit, pre = sys.argv[1], sys.argv[2]
-    fns = sys.argv[3:]
+    av = [a for a in sys.argv[1:] if a != '--no-levers']
+    # The shape-matched block is additive and capped, but its measured recall
+    # of the lever that ACTUALLY paid is 18%, not the 50% that would justify
+    # it outright. `--no-levers` drops it and leaves the ALWAYS list alone.
+    want_levers = '--no-levers' not in sys.argv
+    unit, pre = av[0], av[1]
+    fns = av[2:]
     D = os.path.join(PROJ, 'asm/nonmatchings', unit)
-    rows, tot, haz = [], 0, []
+    rows, tot, haz, listings = [], 0, [], []
     for f in fns:
         t = open(os.path.join(D, f + '.s')).read()
+        listings.append((f, t))
         hx = re.search(r'nonmatching \S+, (0x[0-9A-F]+)', t).group(1)
         w = int(hx, 16) // 4; tot += w
         jt = len(re.findall(r'jr\s+\$(?!ra)', t))
@@ -113,7 +132,31 @@ LANDED-ABOVE versus LANDED-BELOW matters: an arity mismatch on a callee defined 
     print("`docs/town-sweep.md` -- method, traps, and the pre-send checklist, which is a list")
     print("of defects *my own briefs* have had. `docs/where-we-are.md`.\n")
     print(HARD.replace('%(pre)s', pre).replace('%(unit)s', unit))
-    print(TRAPS)
+    # The count was hardcoded at 390 and was stale within the day -- the same
+    # line-number drift leverpick.py avoids by calling leverindex.build() every
+    # time. Take it from the tool.
+    try:
+        import leverindex
+        n = str(len(leverindex.build(
+            io.open(leverindex.DOC, encoding='utf-8').read().split("\n"))))
+    except Exception:
+        n = "390+"
+    print(TRAPS.replace('%LEVERS%', n))
+    # NEVER %-format a lever heading: they are full of literal `%hi`/`%lo`,
+    # and `%hi` parses as an `h` length modifier plus an `i` conversion. That
+    # crashed this file on every invocation for eight agent runs.
+    block = ""
+    if want_levers:
+        try:
+            per = max(1, min(8, 14 // max(1, len(fns))))
+            block = leverpick.render(listings, limit=per)
+        except Exception as e:
+            block = ("leverpick.py failed (" + type(e).__name__ + ": "
+                     + str(e) + ") -- read the index with `leverindex.py`.")
+    if block.strip():
+        print(MATCHED_HEAD)
+        print(block)
+        print("")
     print(BACK)
 
 if __name__ == '__main__':
