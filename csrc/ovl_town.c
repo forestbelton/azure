@@ -1678,6 +1678,9 @@ void func_800B66E8(u8 *p);
 s32 func_800B6E3C(u8 *p);
 s32 func_800B6F54(u8 *p);
 void func_800B5B20(void);
+void func_800B7B8C(void);
+extern s16 D_80162004[];
+extern s16 D_800D2644[][0x10];
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
 void func_80067014(s32 n);
@@ -9702,9 +9705,52 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B70EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B72B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7314);
+/* Clears the 0x80x0x80 halfword surface D_80162004 holds, addressed as a
+   two-dimensional index rather than a walked pointer: the target recomputes
+   `(i << 7) + j` scaled by 2 inside the inner loop, which is what a plain
+   `p[i * 0x80 + j]` subscript gives. `sll 16 / sra 9` is gcc's fused
+   sign-extend-then-scale-by-128 on the `s16` outer counter.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7384);
+   Both counters are `s16` -- each test is a `sll`/`sra 16` pair before the
+   `slti` -- and `i = 0` must be written BEFORE the base pointer is taken, not
+   in the `for`'s init clause: the other way round the lui/addiu pair comes out
+   ahead of the counter's zeroing, 3 differing. That is the same statement
+   order the landed func_80043568 uses in csrc/unk_154BC.c. */
+void func_800B7314(void)
+{
+    s16 i;
+    s16 j;
+    s16 *p;
+
+    i = 0;
+    p = D_80162004;
+    for (; i < 0x80; i++)
+    {
+        for (j = 0; j < 0x80; j++)
+        {
+            p[i * 0x80 + j] = 0;
+        }
+    }
+}
+
+/* The same 0x80x0x80 clear as func_800B7314 over a caller-supplied surface,
+   and the contrast is instructive: with the base a PARAMETER rather than a
+   symbol the pointer is walked (`*p++`, with the `addiu` in the inner loop's
+   branch delay slot) instead of re-indexed, and the inner counter is reset at
+   the top of the outer loop body. Both counters are `s16`. */
+void func_800B7384(s16 *p)
+{
+    s16 i;
+    s16 j;
+
+    for (i = 0; i < 0x80; i++)
+    {
+        for (j = 0; j < 0x80; j++)
+        {
+            *p++ = 0;
+        }
+    }
+}
 
 void func_800B73D0(void)
 {
@@ -9726,7 +9772,67 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7934);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7978);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7A6C);
+/* A transparent 16-bit blit. `src` is a sprite record -- `u16 w, h, ox, oy`
+   followed by w*h halfwords -- copied into a STRIDE-128 halfword surface at
+   (x - ox, y - oy), with 0 as the transparent key. func_800B8E08 calls it
+   three times with literal coordinates and a long-lived $s1 destination.
+
+   WHERE `src++` SITS IS THE WHOLE FUNCTION, and it is the only thing a 20-row
+   spelling grid found to be wrong:
+
+   - `t = *src++;` at the top of the body puts the `addiu $a2, $a2, 2` inside
+     the body, right after the load's own branch, and leaves the loop-closing
+     `bnez` a `nop` delay slot: 56 words, 27 differing, the whole body shifted
+     by one.
+   - `t = *src;` at the top with a bare `src++;` as the LAST statement makes
+     that `addiu` the backward branch's delay slot: 0 differing.
+   - `for (ix = 0; ix < w; ix++, src++)` is identical to the post-increment
+     form, 56 words / 27 differing. The increment clause does NOT get the slot.
+
+   So an `addiu` on a cursor sitting in a backward branch's delay slot is
+   positive evidence for a bare `p++` written at the end of the body, and it is
+   the only one of the three spellings that produces it.
+
+   The widths are all witnessed inside the function, because every call site
+   passes a literal: `s32 x, y` is 54 words / 55 differing, `u16 w, h` is 51 /
+   45, `s32 ix, iy` is 45 / 47. Reading the header as `src[0..3]` then
+   `src += 4` is 52 / 54, and a `do/while` inner loop 50 / 47. Hoisting the row
+   address per outer iteration -- `row = &dst[(iy + y) * 128]` then `row[ix +
+   x]` -- is 55 / 21, so the row pointer must NOT be hoisted. The index terms'
+   ORDER matters where their grouping does not: `... + ix + x` is 0 and
+   `... + x + ix` is 17, `(iy + y)` is 0 and `(y + iy)` is 1, and swapping the
+   two `-=` header statements is 2.
+
+   Free, and so not witnessed at all: `if (t)` for `if (t != 0)`, `<< 7` for
+   `* 128`, `while` for `for`, dropping the `t` local, `s16 *dst`, separate
+   locals for the adjusted coordinates, and inverting the inner test with a
+   `continue`. */
+void func_800B7A6C(s16 x, s16 y, u16 *src, u16 *dst)
+{
+    s16 w;
+    s16 h;
+    s16 ix;
+    s16 iy;
+    u16 t;
+
+    w = *src++;
+    h = *src++;
+    x -= *src++;
+    y -= *src++;
+
+    for (iy = 0; iy < h; iy++)
+    {
+        for (ix = 0; ix < w; ix++)
+        {
+            t = *src;
+            if (t != 0)
+            {
+                dst[(iy + y) * 128 + ix + x] = t;
+            }
+            src++;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7B48);
 
@@ -9738,7 +9844,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7E78);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7F8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8170);
+/* Installs func_800B7B8C as a node's +0x10 handler and zeroes the two
+   halfwords at +0x20/+0x22 -- past the end of UnkNode, in the Unk44144
+   payload that follows it, which is why they are written through a cast and
+   not a field. */
+void func_800B8170(void)
+{
+    UnkNode *n;
+
+    n = func_8003FC64(0);
+    if (n != 0)
+    {
+        n->unk_10 = (u32)func_800B7B8C;
+        *(s16 *)((u8 *)n + 0x20) = 0;
+        *(s16 *)((u8 *)n + 0x22) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B81AC);
 
@@ -9754,9 +9875,70 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8834);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B89C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8A40);
+/* Commits one frame of a 0x22-entry pending-event queue at 0x800133A4 and
+   then copies two bytes from 0x8001360A to 0x80013608. Both tables are OUT OF
+   THE LOADED IMAGE (0x8002d000..0x80088760), so they are constant addresses
+   reached through a base pointer with the offsets written into the index
+   expressions, exactly as the landed func_80043568 does in csrc/unk_154BC.c --
+   one `u8 *base = (u8 *)0x80010000;` per block, which is why the listing has
+   two `lui`s of 0x8001 and shares a `%hi` between D_80013608 and D_8001360A.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8A9C);
+   The counter must be zeroed BEFORE the base is taken, not in the `for`'s
+   init clause: the other way round the lui comes out first, 2 differing.
+   Same ordering rule as func_800B7314. */
+void func_800B8A40(void)
+{
+    u8 *base;
+    u8 *base2;
+    s32 i;
+
+    base = (u8 *)0x80010000;
+    for (i = 0; i < 0x22; i++)
+    {
+        if (base[i * 2 + 0x33A5] != 0)
+        {
+            base[i * 2 + 0x33A4] = base[i * 2 + 0x33A5];
+            base[i * 2 + 0x33A5] = 0;
+        }
+    }
+    i = 0;
+    base2 = (u8 *)0x80010000;
+    for (; i < 2; i++)
+    {
+        base2[i + 0x3608] = base2[i + 0x360A];
+    }
+}
+
+/* Clears the +0x0A halfword of all 0x43 D_800D2644 records, walking DOWNWARD
+   from the last, then sets it to 1 for every record named by a non-zero byte
+   in the 0x22-entry table at 0x800133A4 -- the same out-of-image base pointer
+   func_800B8A40 uses.
+
+   D_800D2644 is declared `s16 [][0x10]` so that the index keeps its 0x20
+   stride in the POINTER and the 0xA stays in the memory displacement.
+   Flattening it to `*(s16 *)(D_800D2644 + i * 0x20 + 0xA)` folds the 0xA into
+   the pointer and gives `sh $zero, 0x0($v0)` where the target has
+   `sh $zero, 0xA($v0)`: 2 differing. Only the 0x20 stride and the `s16` at
+   +0x0A are witnessed; the rest of the shape is padding. */
+void func_800B8A9C(void)
+{
+    u8 *base;
+    s32 i;
+
+    for (i = 0x42; i >= 0; i--)
+    {
+        D_800D2644[i][5] = 0;
+    }
+    i = 0;
+    base = (u8 *)0x80010000;
+    for (; i < 0x22; i++)
+    {
+        if (base[i * 2 + 0x33A4] != 0)
+        {
+            D_800D2644[base[i * 2 + 0x33A4]][5] = 1;
+        }
+    }
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800894D0);
 
