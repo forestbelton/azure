@@ -593,6 +593,68 @@ typedef struct UnkTownA1080SP
     VECTOR unk_44;
 } UnkTownA1080SP;
 
+/* The 0x1F800000 scratchpad as func_800A17CC and the still-stubbed
+   func_800A1354 use it: the OT base at +0x24 (D_80083160.unk_00 + 0xB0, which
+   func_800A1354 installs there too, at 0x800A13D8), the four
+   RotAverageNclip4 input SVECTORs at +0x74, its `p` and `flag` outputs at
+   +0x94/+0x98, the returned otz at +0xC4 and the four projected screen points
+   at +0xE8.
+
+   A SIXTH typedef for this region after Unk3DBD0SP, Unk463ECSP, Unk44D24SP,
+   Unk3CCB0SP and Unk45CC4SP, and the second one in this file after
+   UnkTown970SP.  It is NOT Unk463ECSP retyped: that one's `SVECTOR unk_70[4]`
+   with its unk_90/unk_94 outputs and unk_C0 z runs four bytes LOWER than the
+   quadruple here, so the two really are different placements of the same
+   RotAverage4 argument block and no field-for-field merge exists.
+
+   +0x24 is `u32 *` rather than the `u32` Unk463ECSP's +0x20 uses so that
+   `sp->unk_24 + sp->unk_C4` scales the otz index; spelling it as a scalar
+   with an explicit `* 4` and a `(void *)` cast measures 0 differing too.
+   The two u16 halves of each +0xE8 point are read with `lhu`, but s16
+   measures 0 differing as well, so their signedness has no witness here. */
+typedef struct UnkTownA17CCSP
+{
+    u8 pad_00[0x24];
+    u32 *unk_24;
+    u8 pad_28[0x4C];
+    SVECTOR unk_74[4];
+    s32 unk_94;
+    s32 unk_98;
+    u8 pad_9C[0x28];
+    s32 unk_C4;
+    u8 pad_C8[0x20];
+    DVECTOR unk_E8[4];
+} UnkTownA17CCSP;
+
+/* The actor func_800A12B4 ticks and hands straight on to func_800A17CC.  The
+   same object UnkTownA1080 describes -- +0x12 is the brightness func_800A12B4
+   counts down by 4 and clamps at 4, and that function's `lhu`/`sh`/`sll 16`/
+   `sra 16`/`slti 4` is what types it s16 -- but every field func_800A17CC
+   uses (+0x6C..+0x7A) falls inside UnkTownA1080's pad_54, so this is a second
+   view rather than a retyping of a landed one.
+
+   Signedness that IS witnessed: +0x6C and +0x6E must be s16, because their
+   `% 0x80` / `% 0x100` is the bgez/addiu/sra/sll/subu dance and an unsigned
+   operand collapses it to one `andi` (285 and 290 words against 304).  +0x7A
+   must be s16 too: u16 flips its `lh` to `lhu`, 1 differing.  +0x70, +0x72,
+   +0x78 and +0x12 have NO witness here -- every read of them is narrowed to
+   the width of the u_char or short field it is stored into, so +0x12 reads
+   `lbu` even though the caller proves it is a halfword. */
+typedef struct UnkTownA17CC
+{
+    u8 pad_00[0x12];
+    s16 unk_12;
+    u8 pad_14[0x58];
+    s16 unk_6C;
+    s16 unk_6E;
+    u8 unk_70;
+    u8 pad_71[0x1];
+    u8 unk_72;
+    u8 pad_73[0x5];
+    u16 unk_78;
+    s16 unk_7A;
+} UnkTownA17CC;
+
 /* The plane/normal triple func_8008CF48 writes through its out-parameter.
    Witnessed by func_8008C3B8's lh 0/2 and func_8008C758's lh 0/2/4, and the
    only thing known about the shape is that +0x04 is a DIVISOR: func_8008C758
@@ -2415,6 +2477,7 @@ void func_800C6CE4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
    `addu`, then `lw 0x0($v1)`. */
 extern u32 D_800D68B0[];
 extern s32 D_800D0A48[];
+extern RECT D_800D0A40;
 
 void func_8009F1C0();
 void func_8009F48C();
@@ -10574,7 +10637,174 @@ void func_800A1330(SVECTOR *d, UnkTown2AE8 *b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1354);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A17CC);
+/* RotAverageNclip4: TEN arguments -- the four input SVECTORs, the four
+   DVECTOR outputs, then `p` and `flag`.  That arity is not cosmetic: it is
+   what makes this function's outgoing-argument area 0x28 bytes and so its
+   frame exactly 0x50, with the RECT local landing at +0x28 just above it. */
+s32 func_800654B0(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, u32 *, u32 *, u32 *, u32 *, s32 *, s32 *);
+/* GetClut(x, y).  Two arguments; the u16 result is stored straight to a
+   POLY_FT4's clut, which is the only constraint on it. */
+u16 func_8006649C(s32 x, s32 y);
+
+/* The actor's shadow (or ground decal): one textured quad lit by the actor's
+   +0x12 brightness, drawn over a flat POLY_F4 of the same four projected
+   corners, with the draw mode saved and restored around it by three DR_MODEs.
+   func_800A12B4 is the per-frame tick that fades +0x12 and advances the +0x6E
+   texture row before handing both of its own arguments straight on
+   (asm/nonmatchings/ovl_town/func_800A12B4.s:24 `jal`s this with $a1
+   UNTOUCHED, which is how the second parameter is witnessed: a pass-through
+   needs no insn).
+
+   The quad is built in the 0x1F800000 scratchpad, not on the stack, and the
+   four +0x74 SVECTORs are seeded by three func_800A130C copies of the actor
+   position plus one func_800A1330 copy of the FIRST of them -- the target
+   really does fill the fourth corner from the scratchpad and not from `b`.
+
+   What had to be spelled a particular way:
+
+   - **Every paired store is a CHAINED assignment, and the chain is what
+     makes the texcoords cheap.**  `s->unk_6E % 0x100` is NOT an int
+     expression: c-typeck.c's TRUNC_MOD_EXPR arm sets `shorten` whenever the
+     divisor is a constant other than -1 (scratch/gcc-src/cdk-gcc-b18/
+     c-typeck.c:2073-2080, "We shorten only if unsigned or if dividing by
+     something we know != -1"), and the `arg1 == INTEGER_CST` branch of the
+     shortening block at :2406-2413 then sets `result_type` to the s16
+     operand's own type.  So the modulus has type `short`.  Through an `s32`
+     temporary that short has to be widened and each of the two `% 0x100`
+     groups costs an extra `sll 16`/`sra 16` pair -- 308 words, measured.
+     Assigned through `ft->v0 = ft->v1 = ...` the inner assignment's type is
+     `u_char`, the widening never happens, and for the `+ s->unk_72` group
+     convert.c's `trunc1` narrowing (convert.c:269-316, PLUS_EXPR falls into
+     it and the add is rebuilt in the narrow type) puts the add itself in
+     QImode, which is why the `lbu` feeds an `addu` with no extension
+     between.  A `u8` temporary measures 0 differing as well; an `s32` one
+     does not.  The two `% 0x80 / 2` groups are unaffected either way,
+     because the `/ 2` promotes the short back and the `sll 16`/`sra 16`
+     there IS in the target -- it is the HImode sign extraction the divide
+     needs, with `srl $v0, $v0, 31` reading bit 15 off the shifted copy.
+
+   - **Store order inside each pair is descending**, u2 before u0 and v3
+     before v2, which a chain gives for free (a chained assignment emits
+     right-to-left).  Ascending costs 8 differing, one per store.
+
+   - **The scratchpad edits are the same chain lever, not the compound
+     operator.**  I drafted `-=` as the thing that makes these reads `lhu`
+     on `short` SVECTOR fields and MY OWN MEASUREMENT FALSIFIED IT: spelling
+     all four as plain chains, `a = b = b - 0x30`, measures 0 differing too.
+     What matters is only that the value never passes through a wider
+     object -- an `s16` temporary is also 0 differing, an `s32` one is 312
+     words and 199 differing, eight words of `sll 16`/`sra 16`, two per
+     group.  The `lhu` on a `short` field then falls out of the narrowing:
+     convert.c:269-316 rebuilds the subtract in HImode and widen_operand
+     returns a paradoxical SUBREG of a plain HImode load rather than an
+     extension (optabs.c:331), the same mechanism func_800A58CC's note
+     records for its +0xC4 field.  u16 fields instead of SVECTOR's `short`
+     also measure 0 differing, so the scratchpad quadruple's signedness has
+     no witness here and SVECTOR is used because Unk463ECSP already does.
+     +0x74/+0x84 and +0x7C/+0x8C are ASCENDING pairs, so the modified member
+     has to be the INNER one: `a = (b -= x)`, not `b -= x; a = b;`.
+
+   - **`tw.w = 0x80; tw.h = 0x80;` as two statements.**  Chaining those two
+     reverses them and costs 2 differing; the x/y pair above them is
+     descending and does not care.
+
+   - the third func_80067F20's tpage argument is the SAME `u16 tpage` the
+     POLY_FT4 got, held in $s1 across the whole body with ONE `andi 0xFFFF`
+     shared between its two uses; the second one's is a nested
+     func_80066460 call whose result goes straight into $a3.
+
+   304 words -- its header reads `nonmatching func_800A17CC, 0x4C0`, and
+   0x4C0/4 = 304.  Measured 0 differing, and all 27 relocation records
+   (1 HI16 + 5 LO16 on D_80083160, HI16/LO16 on D_800D0A40, 20 R_MIPS_26)
+   decoded by offset and symbol against the listing; .text and .rodata of
+   the whole unit are byte-identical to the stub build. */
+void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownA17CCSP *sp = (UnkTownA17CCSP *)0x1F800000;
+    POLY_FT4 *ft;
+    POLY_F4 *f4;
+    DR_MODE *dm;
+    RECT tw;
+    u16 tpage;
+
+    tw.x = tw.y = 0;
+    tw.w = 0x80;
+    tw.h = 0x80;
+
+    ft = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ft + 1);
+    *(u32 *)&ft->r0 = 0x808080;
+    func_800666F4(ft);
+    tpage = func_80066460(1, 0, s->unk_6C & 0xFF80, s->unk_6E);
+    ft->tpage = tpage;
+    ft->clut = func_8006649C(0, 0x1EF);
+
+    ft->u0 = ft->u2 = s->unk_6C % 0x80 / 2;
+    ft->u1 = ft->u3 = s->unk_6C % 0x80 / 2 + s->unk_70;
+    ft->v0 = ft->v1 = s->unk_6E % 0x100;
+    ft->v2 = ft->v3 = s->unk_6E % 0x100 + s->unk_72;
+
+    func_800A130C(&sp->unk_74[0], b);
+    func_800A130C(&sp->unk_74[1], b);
+    func_800A130C(&sp->unk_74[2], b);
+    func_800A1330(&sp->unk_74[3], (UnkTown2AE8 *)&sp->unk_74[0]);
+
+    sp->unk_74[0].vy = sp->unk_74[1].vy = sp->unk_74[2].vy =
+        sp->unk_74[3].vy -= 0x30;
+    sp->unk_74[2].vx = sp->unk_74[0].vx -= s->unk_78;
+    sp->unk_74[3].vx = sp->unk_74[1].vx += s->unk_78;
+    sp->unk_74[1].vz = sp->unk_74[0].vz -= s->unk_7A * 2;
+
+    sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1], &sp->unk_74[2],
+                               &sp->unk_74[3], (u32 *)&sp->unk_E8[0],
+                               (u32 *)&sp->unk_E8[1], (u32 *)&sp->unk_E8[2],
+                               (u32 *)&sp->unk_E8[3], &sp->unk_94,
+                               &sp->unk_98) -
+                 8;
+    ft->x0 = sp->unk_E8[0].vx;
+    ft->y0 = sp->unk_E8[0].vy;
+    ft->x1 = sp->unk_E8[1].vx;
+    ft->y1 = sp->unk_E8[1].vy;
+    ft->x2 = sp->unk_E8[2].vx;
+    ft->y2 = sp->unk_E8[2].vy;
+    ft->x3 = sp->unk_E8[3].vx;
+    ft->y3 = sp->unk_E8[3].vy;
+
+    f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
+    f4->r0 = s->unk_12;
+    f4->g0 = s->unk_12;
+    f4->b0 = s->unk_12;
+    func_800666E0(f4);
+    func_80066640(f4, 1);
+    f4->x0 = sp->unk_E8[0].vx;
+    f4->y0 = sp->unk_E8[0].vy;
+    f4->x1 = sp->unk_E8[1].vx;
+    f4->y1 = sp->unk_E8[1].vy;
+    f4->x2 = sp->unk_E8[2].vx;
+    f4->y2 = sp->unk_E8[2].vy;
+    f4->x3 = sp->unk_E8[3].vx;
+    f4->y3 = sp->unk_E8[3].vy;
+
+    sp->unk_24 = (u32 *)(g->unk_00 + 0xB0);
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 1, 0, tpage, (s32)&D_800D0A40);
+    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+    func_8006658C(sp->unk_24 + sp->unk_C4, f4);
+
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+    func_8006658C(sp->unk_24 + sp->unk_C4, ft);
+
+    dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+    func_80067F20((u32 *)dm, 1, 0, tpage, (s32)&tw);
+    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+}
 
 void func_800A1C8C(void) {
 }
