@@ -383,6 +383,64 @@ typedef struct UnkTownCFCC4
     u8 unk_14;
 } UnkTownCFCC4;
 
+/* The record the func_800ADD80 / func_800ADB5C grid-cursor handlers receive.
+   The pointer points 0x20 bytes INTO its owning object: func_800AE090 stores
+   the handler at -0x10 and the handlers hand -0x20 to func_800AE30C, so these
+   are positive offsets from the handler's own view. The +0x20 table is the
+   same (unk_04 << 2) + unk_20 4-byte-stride array func_800ADB30 indexes.
+   Town-private, so it lives here rather than in include/structs.h. */
+typedef struct UnkTownADD80
+{
+    u8 pad_00[0x4];
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    u8 pad_10[0x4];
+    s32 unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u8 pad_24[0x4];
+    s32 unk_28;
+} UnkTownADD80;
+
+/* The 0x1F800000 scratchpad object func_800A8CA8 projects through. Modelled on
+   csrc/unk_72A8.c:40's Unk345B8SP rather than guessed from pads: the SVECTORs
+   at +0x74/+0x7C/+0x84/+0x8C, unk_94/unk_98 as RotTransPers' p/flag, and
+   unk_C4 as the otz accumulator are that unit's layout for the same object.
+   func_80065420 IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
+   it is spelled func_80065420 here because that is the name
+   splat/town.bin_undefined_funcs_auto.txt provides and so the one the town
+   container definitely defines. */
+typedef struct UnkTownSP
+{
+    u8 pad_00[0x74];
+    s16 unk_74;
+    s16 unk_76;
+    s16 unk_78;
+    u8 pad_7A[0x2];
+    s16 unk_7C;
+    s16 unk_7E;
+    s16 unk_80;
+    u8 pad_82[0x2];
+    s16 unk_84;
+    s16 unk_86;
+    s16 unk_88;
+    u8 pad_8A[0xA];
+    s32 unk_94;
+    s32 unk_98;
+    u8 pad_9C[0x28];
+    s32 unk_C4;
+    u8 pad_C8[0x20];
+    s32 unk_E8;
+    s32 unk_EC;
+    u8 pad_F0[0x24];
+    u8 unk_114;
+    u8 unk_115;
+    u8 unk_116;
+    u8 pad_117[0xD];
+    s32 unk_124;
+} UnkTownSP;
+
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
    csrc/unk_1C540.c:1080, so it is not a device.
@@ -1402,6 +1460,13 @@ extern s16 D_800D4258[4];
 extern s16 D_800D4260[4];
 extern s16 D_800D4268[4];
 s32 func_8008CC90(s16 a, s16 b, s16 c, s16 d, s16 e, s16 f, s16 g, s16 h);
+void func_800AE30C(void *p);
+s32 func_80049E1C(s32 a, s32 d, s32 m);
+void func_800B1778(s32 a, s32 b, s32 c);
+void func_800B17C0(s32 a, s32 b);
+void func_800ADB30(UnkTownADD80 *s);
+s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
+void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5210,7 +5275,33 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8BBC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8C84);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8CA8);
+void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
+{
+    s32 a = (s16)(ang + 0x800);
+    s32 a2 = a << 1;
+    s32 dx;
+    s32 dy;
+
+    p->unk_114 = (func_800644B8(*(s16 *)((u8 *)mv + 0xE) + a2) + 0x1000) / 0x80;
+    p->unk_115 = (func_800644B8(*(s16 *)((u8 *)mv + 0x12) + a2) + 0x1000) / 0x80;
+    p->unk_116 = (func_800644B8(*(s16 *)((u8 *)mv + 0x16) + a2) + 0x1000) / 0x80;
+    func_800A8C84((SVECTOR *)&p->unk_74, mv);
+    func_800A8C84((SVECTOR *)&p->unk_7C, mv);
+    func_800A8C84((SVECTOR *)&p->unk_84, mv);
+    dx = func_800644B8(a) * (u16)r->unk_1C / 0x1000;
+    dy = func_80064584(a) * (u16)r->unk_1E / 0x1000;
+    p->unk_74 += dx;
+    p->unk_76 += dy;
+    p->unk_C4 = func_80065420((SVECTOR *)&p->unk_74, &p->unk_E8, &p->unk_94, &p->unk_98);
+    p->unk_7C += dx;
+    p->unk_7E += dy;
+    p->unk_80 += r->unk_20 / 2;
+    p->unk_C4 = (p->unk_C4 + func_80065420((SVECTOR *)&p->unk_7C, &p->unk_EC, &p->unk_94, &p->unk_98)) / 2 - 8;
+    p->unk_84 += dx;
+    p->unk_86 += dy;
+    p->unk_88 += r->unk_20;
+    func_80065420((SVECTOR *)&p->unk_84, &p->unk_124, &p->unk_94, &p->unk_98);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8EE8);
 
@@ -5552,7 +5643,114 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADB30);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADB5C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADD80);
+void func_800ADD80(UnkTownADD80 *s, void *b, void *c)
+{
+    Unk80083160 *g = &D_80083160;
+    s32 d = 0;
+    s32 n;
+    s32 m;
+
+    if (g->unk_08 == 0)
+    {
+        return;
+    }
+    /* The 0x515 arm is written twice; jump.c cross-jumps the two copies and
+       the first becomes the `j .L800ADDF0` the listing has. */
+    if (s->unk_08 == 0)
+    {
+        if (g->unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            D_80082AB8[0] = 0;
+            func_800AE30C((u8 *)s - 0x20);
+        }
+        return;
+    }
+    if (g->unk_10 & 0x20)
+    {
+        func_80053DA8(0x515);
+        D_80082AB8[0] = 0;
+        func_800AE30C((u8 *)s - 0x20);
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        func_80053DA8(0x514);
+        D_80082AB8[0] = 1;
+        func_800AE30C((u8 *)s - 0x20);
+        s->unk_20[s->unk_04 * 4 + 3] |= 0x20;
+        return;
+    }
+    if ((g->unk_08 & 0xF000) == 0)
+    {
+        return;
+    }
+    if (g->unk_10 & 0xF000)
+    {
+        s->unk_14 = 0;
+        if (g->unk_10 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_10 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_10 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_10 & 0x4000)
+        {
+            d = 1;
+        }
+    }
+    /* `>= 9` with the increment in the ELSE arm, not `< 9` with an early
+       return: the early return has to be laid out AFTER the decrement block
+       so that block ends in `j .L800ADF28` instead of falling through.
+       `if (s->unk_14 < 9) { s->unk_14 = s->unk_14 + 1; return; }` ahead of
+       the chain measured 142 words / 65 differing; this is 143 / 0. */
+    else if (s->unk_14 >= 9)
+    {
+        if (g->unk_08 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_08 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_08 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_08 & 0x4000)
+        {
+            d = 1;
+        }
+        s->unk_14 = s->unk_14 - 1;
+    }
+    else
+    {
+        s->unk_14 = s->unk_14 + 1;
+        return;
+    }
+    n = func_80049E1C(s->unk_04, d, s->unk_08);
+    m = n / 5;
+    if (n == s->unk_04)
+    {
+        return;
+    }
+    func_80053DA8(0x502);
+    s->unk_04 = n;
+    if (m != s->unk_0C)
+    {
+        s->unk_0C = m;
+        func_800B1778(s->unk_28, m, n);
+    }
+    func_800B17C0(s->unk_28, n);
+    func_800ADB30(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADFBC);
 
