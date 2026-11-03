@@ -159,22 +159,52 @@ unfinished work the family tools cannot see.
 
 ## The loop
 
-1. `worklist.py ovl_town --count 6` for the next round.
-2. For each item, either read it yourself or hand it to an agent (brief below).
+0. `nearsibs.py ovl_town --groups` FIRST, then `worklist.py ovl_town --count 6`.
+   The near-sibling sets are worth more per reading than anything the worklist
+   ranks, and the worklist cannot see them.
+1. Pick a batch and **group it by relatedness, not by size** — see the cluster
+   section above.
+2. **Before writing any C, read the declaration block for every function and
+   symbol you are about to name.** Four times on 2026-11-02 a signature that
+   had been guessed was already declared there with landed callers, and each
+   time it surfaced as a hard `conflicting types` error in the probe rather
+   than as a byte difference. `grep -nE '^[a-zA-Z_].*func_XXXX\(' csrc/ovl_town.c`
+   costs one call and the guess costs a compile and a rewrite. The same goes
+   for the local convention: a neighbour four lines up often has the exact
+   signature, and two of mine had to be corrected a commit later for ignoring
+   one.
+3. For each item, either read it yourself or hand it to an agent (brief below).
    Agents are worth it for anything needing an individual reading — measured
-   ~70K tokens for a function in the 50-80 word range, six in parallel.
-3. **Re-measure every agent result yourself** before landing it:
-   `python3 tools/decomp/ovlverify.py <file> <func>`. A handed-back report is
-   model output; the measurement is the evidence.
-4. Derive the siblings from `families.py --show`. Substitute the varying words
-   and verify each sibling too.
-5. Merge into `csrc/ovl_town.c`: replace each
+   77K to 420K tokens each over twenty-two runs on 2026-11-02, median ~110K,
+   with the spread set almost entirely by the LEAD. Six in parallel do not
+   contend, and the main session can land small families by hand meanwhile.
+4. **Re-measure every agent result yourself** before landing it, IN A MERGED
+   COPY of the unit and not only against its scratch file:
+   `python3 tools/decomp/ovlverify.py csrc/ovl_town.c <func>`. A handed-back
+   report is model output; the measurement is the evidence. Twenty-two reports
+   on 2026-11-02 were all accurate, and the re-measurement still caught three
+   signature CONFLICTS between agents working in parallel, each of which
+   measured 0 differing in isolation.
+5. Derive the siblings. Use `families.py --show` for a grouped family and the
+   stripped-column dump diff above for a `nearsibs.py` pair. Substitute the
+   varying words and verify each sibling too — and **read every varying SYMBOL
+   out of its own member's listing**, never extrapolated from the base's.
+6. Merge into `csrc/ovl_town.c`: replace each
    `INCLUDE_ASM("asm/nonmatchings/ovl_town", func_XXXX);` with the body, and add
    any new declarations. The declaration block is anchored on
    `s32 func_8003BD84(s32 x, s32 y);` — inserting before that line keeps the
    file's one ordering rule, which is that declarations precede all definitions.
-6. `make build/town.bin`. **This is the gate.** It must print `OK byte-identical`.
-7. Commit. Say what was measured, not what was hoped.
+7. `make build/town.bin`. **This is the gate.** It must print `OK byte-identical`.
+   It is the ONLY thing that catches a wrong address-taken symbol, a rodata
+   shift or a jump-table pad, all of which `ovlverify` masks.
+8. Check the clang-format complaint set against HEAD:
+   `clang-format --output-replacements-xml csrc/ovl_town.c | grep -c '<replacement '`.
+   It was 37 all through 2026-11-02 and every rise was a real slip of mine —
+   `void * c` for `void *c` once.
+9. Commit. Say what was measured, not what was hoped, and record the spellings
+   that did NOT work with their numbers: a later session reads those to avoid
+   re-deriving them, and three of today's landings came out of another
+   function's rejected list.
 
 Scripted merges are worth it at this volume, but write them to the scratchpad,
 assert every anchor occurs exactly once, and never let one run partially: a
