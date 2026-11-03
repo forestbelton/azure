@@ -7,10 +7,11 @@ WIP decompilation of Azure Dreams
     - [Submodules](#submodules)
     - [CD image](#cd-image)
     - [PSY-Q](#psy-q)
+    - [The compiler](#the-compiler)
     - [Toolchain](#toolchain)
       - [Ubuntu](#ubuntu)
       - [Fedora](#fedora)
-    - [uv](#uv)
+    - [Python](#python)
   - [Build](#build)
   - [Decompiling](#decompiling)
 
@@ -137,9 +138,9 @@ $ apt-get -y install \
 $ dnf -y install gcc-mips64-linux-gnu
 ```
 
-### uv
+### Python
 
-Make sure you have [uv](https://docs.astral.sh/uv/) installed.
+Make sure you have Python and [uv](https://docs.astral.sh/uv/) installed.
 
 ## Build
 
