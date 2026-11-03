@@ -292,28 +292,28 @@ then read only the section you need.
   - A BACK-TO-BACK DOUBLE CALL IS AN ARITY WITNESS  `:13017`
   - TWO OUT-OF-IMAGE GLOBALS WITH ONE SHARED %hi ARE ONE BASE POINTER  `:13052`
   - cc1psx EMITS `.align 3` FOR JUMP TABLES, WHICH CAN BLOCK A PERFECT BODY  `:13101`
-  - A BLOCK MOVE FORCES ITS ADDRESS WHOLE; A SCALAR ACCESS KEEPS ITS %lo  `:13125`
-  - WHICH OF TWO EQUAL LOCALS cse CANONICALISES ON IS DECIDED BY LAST MENTION  `:13152`
-  - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:13179`
-  - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:13194`
-  - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:13229`
-  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13355`
-  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13389`
-  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13398`
-  - CITATIONS RE-ANCHORED TO THE CDK TREE, AND TWO TIE-BREAKS UPSTREAM LACKS  `:13433`
-  - A GLOBAL THAT *HOLDS* AN ADDRESS IS NOT A GLOBAL THAT *IS* AN ARRAY  `:13507`
-  - A STORED ARGUMENT REGISTER THE PROTOTYPE DOES NOT HAVE IS A FORWARDED PARAMETER -- AND ITS WITNESS IS THE GRANDCALLER  `:13527`
-  - A SYMMETRIC TWO-CALL `if/else` KEEPS SOURCE ORDER; ONLY AN ARM THAT *RETURNS* INVERTS  `:13572`
-  - A NARROW PARAMETER THAT IS ONLY EVER TRUNCATED IS WITNESSED AT THE CALL SITE, NOT IN THE CALLEE  `:13607`
-  - A VALUE THAT IS *STORED* WANTS A TWO-ARM `if/else`; A VALUE THAT IS *RETURNED* WANTS AN ACCUMULATOR  `:13641`
-  - TWO DISJOINT LIVE RANGES IN ONE DECLARED LOCAL SHARE A REGISTER; TWO LOCALS DO NOT  `:13668`
-  - A DUPLICATED TAIL IS NOT ONLY A CROSS-JUMP -- IT CHANGES WHICH LOOP INVARIANTS ARE HOISTED  `:13690`
-  - loop.c's `combine_givs` MERGES ADDRESS GIVS, SO ONE `addiu $sN, $sN, 4` IS NOT A SOURCE POINTER WALK  `:13728`
-  - DECLARATION ORDER FIXES *AGGREGATE* STACK SLOTS ONLY, AND A SLOT IS ROUNDED TO 8 BYTES  `:13748`
-  - A STRUCT-ARRAY REFERENCE WHOSE SUBSCRIPT IS A MEMORY LOAD MUST BE CACHED IN A LOCAL POINTER  `:13774`
-  - gcc EVALUATES AN ASSIGNMENT'S *DESTINATION ADDRESS* BEFORE ITS RHS  `:13800`
-  - CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A FORWARDED STORE  `:13814`
-  - AN IMPLICITLY DECLARED CALLEE IS SOMETIMES THE MATCHING ONE  `:13830`
+  - A BLOCK MOVE FORCES ITS ADDRESS WHOLE; A SCALAR ACCESS KEEPS ITS %lo  `:13156`
+  - WHICH OF TWO EQUAL LOCALS cse CANONICALISES ON IS DECIDED BY LAST MENTION  `:13183`
+  - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:13210`
+  - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:13225`
+  - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:13260`
+  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13386`
+  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13420`
+  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13429`
+  - CITATIONS RE-ANCHORED TO THE CDK TREE, AND TWO TIE-BREAKS UPSTREAM LACKS  `:13464`
+  - A GLOBAL THAT *HOLDS* AN ADDRESS IS NOT A GLOBAL THAT *IS* AN ARRAY  `:13538`
+  - A STORED ARGUMENT REGISTER THE PROTOTYPE DOES NOT HAVE IS A FORWARDED PARAMETER -- AND ITS WITNESS IS THE GRANDCALLER  `:13558`
+  - A SYMMETRIC TWO-CALL `if/else` KEEPS SOURCE ORDER; ONLY AN ARM THAT *RETURNS* INVERTS  `:13603`
+  - A NARROW PARAMETER THAT IS ONLY EVER TRUNCATED IS WITNESSED AT THE CALL SITE, NOT IN THE CALLEE  `:13638`
+  - A VALUE THAT IS *STORED* WANTS A TWO-ARM `if/else`; A VALUE THAT IS *RETURNED* WANTS AN ACCUMULATOR  `:13672`
+  - TWO DISJOINT LIVE RANGES IN ONE DECLARED LOCAL SHARE A REGISTER; TWO LOCALS DO NOT  `:13699`
+  - A DUPLICATED TAIL IS NOT ONLY A CROSS-JUMP -- IT CHANGES WHICH LOOP INVARIANTS ARE HOISTED  `:13721`
+  - loop.c's `combine_givs` MERGES ADDRESS GIVS, SO ONE `addiu $sN, $sN, 4` IS NOT A SOURCE POINTER WALK  `:13759`
+  - DECLARATION ORDER FIXES *AGGREGATE* STACK SLOTS ONLY, AND A SLOT IS ROUNDED TO 8 BYTES  `:13779`
+  - A STRUCT-ARRAY REFERENCE WHOSE SUBSCRIPT IS A MEMORY LOAD MUST BE CACHED IN A LOCAL POINTER  `:13805`
+  - gcc EVALUATES AN ASSIGNMENT'S *DESTINATION ADDRESS* BEFORE ITS RHS  `:13831`
+  - CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A FORWARDED STORE  `:13845`
+  - AN IMPLICITLY DECLARED CALLEE IS SOMETIMES THE MATCHING ONE  `:13861`
 
 <!-- END INDEX -->
 
@@ -13114,9 +13114,40 @@ both content and size (0x44a9c either way) and every function in the unit read
 0 differing, but `.rodata` grew 0x2524 -> 0x252c and the overlay 0x101b800 ->
 0x101b810, failing with `size differs by +0x10`.
 
+**CORRECTED AND NARROWED 2026-11-02, after screening every jump-table stub in
+the unit.** The sentence this lever was read as -- "the next jump table
+attempted is the next one to hit it" -- is wrong, and it was blocking about
+900 words of ordinary work. `.align 3` only ADDS anything when the table's
+address is 4 mod 8; at 0 mod 8 it emits nothing at all and the trap cannot
+fire. The screen is one command:
+
+    for f in $(grep -l 'jtbl_' asm/nonmatchings/ovl_town/func_*.s \
+                 | xargs -n1 basename | sed 's/.s$//'); do
+      grep -q "INCLUDE_ASM(\"asm/nonmatchings/ovl_town\", $f)" csrc/ovl_town.c || continue
+      a=$(grep -oE 'dlabel jtbl_[0-9A-F]+' asm/nonmatchings/ovl_town/$f.s \
+            | head -1 | grep -oE '[0-9A-F]{8}')
+      printf '%-16s jtbl_%s  addr%%8=%d\n' $f $a $(( 0x$a % 8 ))
+    done
+
+Run over `ovl_town` on 2026-11-02 it reported **fifteen stubs at 0 mod 8 and
+only two at 4 mod 8** -- `func_800BEBA4` and `func_800BF1C8`, the park. So
+`func_800B7B8C` (187 words), `func_800B83DC` (131), `func_800B7F8C` (121),
+`func_800B8B00` (100), `func_800B7E78` (69), `func_800B85E8` (147, parked),
+`func_800B8E08` (139, parked) and the rest are ordinary work. It also settles
+what the park section had flagged as an open question: `func_800B8E08` is at 0
+mod 8, so its 5 DIFF is searchable and not toolchain-blocked.
+
+Note also that `func_800BF1C8`'s own listing carries NO `dlabel D_...` in its
+rodata block -- the constant that pushes its table is a local `s16 box[2][4]`
+INITIALISER, which gcc emits into `.rdata` and splat never names. So "does it
+own a rodata constant" cannot be answered by grepping the listing for
+`dlabel`; the alignment test can, and is the one to run.
+
 **How to apply.** Before taking on a stub whose listing has a `jtbl_` symbol,
-check whether it also owns a rodata constant and whether the table's address
-is 8-aligned. If the table is at 4 mod 8, no C spelling will land it: the
+run the screen above. At 0 mod 8 proceed normally. At 4 mod 8, check whether
+the function emits a constant of its own -- including a local array
+initialiser, which the listing does not show -- and if it does, no C spelling
+will land it: the
 array must be a gcc-emitted initialiser for the `lwl`/`lwr` stack copy to
 appear, so the table always follows at the same offset and always gets padded.
 Park it and note that the fix is in the toolchain. This unit had no other

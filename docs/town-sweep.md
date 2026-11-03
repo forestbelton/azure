@@ -241,10 +241,19 @@ standalone) after three wrong guesses about which prototype had done it.
       grep -l 'jtbl_' asm/nonmatchings/ovl_town/func_XXXX.s
       # table address 4 mod 8 AND a rodata constant of its own -> unlandable now
 
-  `func_800BF1C8` is parked for exactly this, at 0 DIFF with .text identical in
-  content and size. It is the unit's only gcc-emitted jump table so far, so the
-  next one attempted is the next one to hit it. See
-  docs/matching-levers.md, "cc1psx emits `.align 3` for jump tables".
+  **MEASURED AND NARROWED 2026-11-02: this threatens two stubs in the unit, not
+  all of them.** `.align 3` only adds anything when the table's address is 4
+  mod 8; at 0 mod 8 it emits nothing. Screening all seventeen jump-table stubs
+  found FIFTEEN at 0 mod 8 and only `func_800BEBA4` and the parked
+  `func_800BF1C8` at 4 mod 8 -- so func_800B7B8C (187 words), func_800B83DC
+  (131), func_800B7F8C (121), func_800B8B00 (100) and func_800B7E78 (69) are
+  ordinary work, and the parks func_800B85E8 and func_800B8E08 are searchable
+  rather than blocked. The one-command screen is in
+  docs/matching-levers.md under "cc1psx EMITS `.align 3` FOR JUMP TABLES";
+  run it rather than skipping a function for having a table. Note too that
+  func_800BF1C8's blocking constant is a LOCAL array initialiser that never
+  appears as a `dlabel` in its listing, so grepping for one answers nothing --
+  the alignment test is what to run.
 * **A whole-unit 0-differing sweep does NOT mean the build passes.** ovlverify
   compares function TEXT. Rodata size and layout, jump-table padding and
   alignment are invisible to it. `make build/town.bin` is the only authority,
