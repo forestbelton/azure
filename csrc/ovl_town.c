@@ -1672,6 +1672,8 @@ extern u8 D_800892F0[];
 extern u8 D_800892F4[];
 extern u8 D_80089304[];
 s32 func_800B5E10(s32 a);
+u8 *func_800A652C(void);
+extern u8 *D_800D1790;
 extern const u32 D_800892C0[];
 u8 *func_800B5D30(u8 *p);
 extern const u32 D_80089308[];
@@ -8264,7 +8266,47 @@ void func_800B5774(u8 *p, UnkTownCardPair **b)
     func_800B53BC(b[5], func_800B544C(buf, p), 0, 0x48, 0xC0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B58B8);
+/* Collects up to three live display-list pointers out of a record into a
+   caller-supplied array, skipping the null ones. func_800B59A4 and
+   func_800B62A4 both call it; it is the cluster's "which primitives does this
+   record have" gatherer.
+
+   +0x4C and +0x50 are tested and stored unconditionally-in-order, each bump of
+   the cursor guarded by its own value being non-null. The third slot is
+   conditional on the record being the ACTIVE one: D_800814A8 is the engine's
+   current-record pointer, so +0xD8 is only harvested for it.
+
+   The cursor is walked with `*q = v; q++;` rather than `*q++ = v`, and the
+   third store reuses `p` as the temporary because the target loads +0xD8 back
+   into $a1, the register p arrived in. Writing the third value into a fresh
+   local gives a `move` the target does not have. The parameter types are
+   provisional: nothing yet witnesses the element type of the array beyond its
+   word-sized stores. */
+void func_800B58B8(u32 *q, u8 *p)
+{
+    u32 v;
+
+    v = *(u32 *)(p + 0x4C);
+    if (v != 0)
+    {
+        *q = v;
+        q++;
+    }
+    v = *(u32 *)(p + 0x50);
+    if (v != 0)
+    {
+        *q = v;
+        q++;
+    }
+    if ((u32)p == D_800814A8)
+    {
+        p = *(u8 **)(p + 0xD8);
+        if (p != NULL)
+        {
+            *q = (u32)p;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5918);
 
@@ -8291,7 +8333,31 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5B20);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5C60);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5D30);
+/* Picks the string func_800B5D70 appends last: a town-private pointer when
+   the game-mode byte D_80082E6A is 1, and func_800A652C's result otherwise.
+
+   TWO THINGS ARE LOAD-BEARING HERE.
+
+   The parameter is REAL AND UNUSED, and it has to stay. This body reads
+   neither it nor anything derived from it -- func_800A652C takes no argument,
+   its own listing never reads an incoming $a0 -- but func_800B5D70's call site
+   sets $a0 up in the jal's delay slot and reloads it immediately after, so the
+   argument is passed. An unused parameter costs no words; dropping it makes
+   the container build fail on func_800B5D70 with "too many arguments".
+
+   The ARMS ARE INVERTED relative to the obvious reading. The target branches
+   on `bne` to the call and falls through to the pointer load, so the `!= 1`
+   arm is the one written first: `if (D_80082E6A == 1) return D_800D1790;`
+   with the call second lays the pointer load out of line and gives 16 words,
+   5 differing -- the same instructions in the other order. */
+u8 *func_800B5D30(u8 *p)
+{
+    if (D_80082E6A != 1)
+    {
+        return func_800A652C();
+    }
+    return D_800D1790;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089304);
 
@@ -8344,7 +8410,14 @@ void func_800B5D70(u8 *p, UnkTownCardPair **b)
     func_800B5264(b[4], buf, 0, 0x47, 0x88);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5E10);
+/* A one-entry remap on the index func_800B5E28 hands func_8004AC18: 0x39
+   becomes 2 and everything else passes through. The ternary is the spelling --
+   the target keeps the value in $v1 and moves it to $v0 once in the jr's delay
+   slot, which is the accumulator form, not two returns. */
+s32 func_800B5E10(s32 a)
+{
+    return a == 0x39 ? 2 : a;
+}
 
 /* Owned by func_800B5E28; see the comment on that function for why the
    declared size is 4 and not [].  */
