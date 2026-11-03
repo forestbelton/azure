@@ -2648,6 +2648,16 @@ extern s16 D_800D2324[];
 extern u8 D_80113138[];
 extern u8 D_8007789C[];
 
+/* p6: the 0x1F800000 scratchpad as func_800BB218 uses it. */
+typedef struct UnkTownBB218SP
+{
+    DVECTOR unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    u32 *unk_10;
+    SVECTOR unk_14;
+} UnkTownBB218SP;
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -20132,11 +20142,117 @@ void func_800BACB0(UnkTownSpawn *s, UnkVec *m)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB030);
+void func_800BB030(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    *(u16 *)((u8 *)p + 0x6C) += 1;
+    switch (*(s16 *)((u8 *)p + 0x68))
+    {
+    case 0:
+        p->unk_66 = *(s16 *)((u8 *)p + 0x6C) / 4 * 3;
+        p->unk_97 = *(s16 *)((u8 *)p + 0x6C) / 2;
+        if (*(s16 *)((u8 *)p + 0x6C) >= 0x40)
+        {
+            *(s16 *)((u8 *)p + 0x6C) = 0;
+            *(s16 *)((u8 *)p + 0x68) += 1;
+        }
+        break;
+    case 1:
+        p->unk_66 = 0x30 - *(s16 *)((u8 *)p + 0x6C) / 4 * 3;
+        p->unk_97 = 0x20;
+        if (*(s16 *)((u8 *)p + 0x6C) >= 0x40)
+        {
+            *(s16 *)((u8 *)p + 0x6C) = 0;
+            *(s16 *)((u8 *)p + 0x68) += 1;
+        }
+        break;
+    case 2:
+        p->unk_66 = *(s16 *)((u8 *)p + 0x6C) / 4 * 3;
+        p->unk_97 = 0x20 - *(s16 *)((u8 *)p + 0x6C) / 2;
+        if (*(s16 *)((u8 *)p + 0x6C) >= 0x40)
+        {
+            *(s16 *)((u8 *)p + 0x6C) = 0;
+            *(s16 *)((u8 *)p + 0x68) += 1;
+        }
+        break;
+    case 3:
+        p->unk_66 = 0x30 - *(s16 *)((u8 *)p + 0x6C) / 4 * 3;
+        p->unk_97 = 0;
+        if (*(s16 *)((u8 *)p + 0x6C) >= 0x40)
+        {
+            *(s16 *)((u8 *)p + 0x6C) = 0;
+            *(s16 *)((u8 *)p + 0x68) = 0;
+        }
+        break;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB218);
+s32 func_800BB218(UnkTownSpawn *p, UnkTown2AE8 *q, UnkSlot *r)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownBB218SP *sp = (UnkTownBB218SP *)0x1F800000;
+    UnkNode *n;
+    TILE_1 *t;
+    s32 i;
+    s32 ang;
+    s32 sn;
+    s32 k;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB4A0);
+    sp->unk_10 = (u32 *)(g->unk_00 + 0xB0);
+    while (1)
+    {
+        for (i = 0; i < 0x180; i++)
+        {
+            t = (TILE_1 *)*(u32 *)(g->unk_00 + 0x8D0);
+            *(u32 *)(g->unk_00 + 0x8D0) = (u32)(t + 1);
+            setTile1(t);
+            setRGB0(t, 0xFF, 0xFF, 0xFF);
+            ang = (s16)(func_80069EF8() % 0x1000);
+            sn = func_800644B8(ang) >> 4;
+            sp->unk_14.vx = *(u16 *)((u8 *)q + 0x2) + (sn * (p->unk_97 + (k = i / 8 % 12 + 0x48)) >> 8);
+            sp->unk_14.vy = *(u16 *)((u8 *)q + 0x6) + ((func_80064584(ang) >> 4) * (p->unk_97 + k) >> 8);
+            sp->unk_14.vz = *(u16 *)((u8 *)q + 0xA) - ((func_800644B8(i % 16 * 0x40) >> 4) * (p->unk_66 + 0x10) >> 8);
+            sp->unk_04 = func_80065420(&sp->unk_14, (s32 *)&sp->unk_00, &sp->unk_08, &sp->unk_0C);
+            t->x0 = sp->unk_00.vx;
+            t->y0 = sp->unk_00.vy;
+            if (sp->unk_04 < 0x1E0)
+            {
+                addPrim(sp->unk_10 + sp->unk_04, t);
+            }
+        }
+        n = *(UnkNode **)((u8 *)p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (UnkTownSpawn *)((u8 *)n + 0x20);
+        q = (UnkTown2AE8 *)n->unk_08;
+    }
+    return 0;
+}
+
+void func_800BB4A0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    UnkNode *o;
+
+    o = (UnkNode *)((u8 *)p - 0x20);
+    o->unk_10 = (u32)func_800BB030;
+    func_8004491C(o, (u32)func_800BB218);
+    p->unk_97 = 0x48;
+    *(s16 *)((u8 *)p + 0x68) = 0;
+    *(s16 *)((u8 *)p + 0x6C) = 0;
+    p->unk_66 = 0;
+    q->unk_08 = 0xFFA00000;
+}
 
 /* The same probe family with NO else arm at all: func_8009B148's taken arm
    on its own.  Three parameters, witnessed by the stub func_800BB640, whose
