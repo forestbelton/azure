@@ -9866,7 +9866,245 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B73F0);
 void func_800B7420(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7428);
+/* Stamps a tile pattern onto the 0x80x0x80 halfword surface D_80162004 at
+   (x0, y0), autotiling six groups of tiles as it goes: a tile in one of those
+   groups is replaced by the member of its own group that matches the
+   CHECKERBOARD PARITY of the destination cell, so a stamp of alternating
+   floor tiles stays in phase with the surface it lands on. A 0 in the source
+   is transparent and every tile outside the six groups is copied through
+   unchanged.
+
+   `src` is a u16 run: width, then height, then width*height tiles. Width and
+   height are read with `*src++` twice (two separate `addiu $a2, $a2, 2`, not
+   one `addiu 4` with displacements), and the tiles with a third `src++` at
+   the END of the loop body -- see the spelling table below, the increment's
+   placement is worth 3 words.
+
+   Both parameters are `s16`: func_800B783C, func_800B7934 and func_800B7B48
+   all sign-extend their own arguments with a `sll`/`sra 16` pair before the
+   `jal`, which is what an `s16` prototype costs a caller. func_800B7934 and
+   func_800B7B48 also pass a third argument, `D_800D17D8[(u8) c]`, loaded with
+   `lw`; func_800B783C forwards its own $a2 untouched, so all three agree on
+   arity 3. No caller reads $v0. The width is witnessed HERE too, not only
+   in the callers: `s32 x0, s32 y0` is 255 words / 256 differing, because the
+   index is narrow and the parity is not, so both widths are load-bearing
+   inside the body.
+
+   `src` is `u16 *` and not `s16 *`: the switch value is a bare `lhu` with no
+   extension, which is the zero-extending load of an `unsigned short` promoted
+   to int. An `s16 *` gives `lh` there. The counters and the index ARE signed
+   (`sll`/`sra 16` on every compare).
+
+   Two measured mechanisms, both load-bearing at this size:
+
+   * THE INDEX MUST BE WRITTEN `<< 7`, NOT `* 128`. `i` is `s16`, so
+     convert.c's convert_to_integer distributes the narrowing into the
+     expression and the whole index is computed in HImode -- which is why
+     `y + y0` is added here WITHOUT the sign-extension the parity test uses,
+     and why a second copy of $a1 is live. `* 128` blocks that distribution
+     (convert.c's MULT_EXPR arm requires both operands to fit the narrow
+     type and the literal 128 has type int), so the index gets cse'd with the
+     parity's SImode sum: 259 words / 255 differing.
+   * `src++` IS THE LAST STATEMENT OF THE BODY, not a third clause of the
+     `for`. Both spellings leave `addiu $a2, $a2, 0x2` in the inner branch's
+     delay slot, but they give dbr different first insns at the `case 0`
+     branch's target: in the `for`-clause form the case-0 `beqz` steals
+     `addiu $v0, $a3, 0x1` from its target and retargets past it, where the
+     target steals `sll $v0, $a0, 16` from its FALL-THROUGH (the default arm,
+     reached through the `j`) and the `j` then takes the `sra` behind it.
+     3 differing at words 45/46/48, everything else already exact.
+
+   Spellings measured, all against the merged unit (words / differing):
+     src++ as the LAST statement of the body, index `<< 7`   261 / 0   <- this
+     src++ as a third clause of the `for`                     261 / 3
+     `for (x = 0; x < w; src++, x++)`                         261 / 3
+     the same, with `case 0: continue;`                       261 / 3
+     `case 0:` written last, just before `default:`           261 / 3
+     `default:` arm with no trailing `break`                  261 / 3
+     index `((y0 + y) << 7) + x0 + x`                         261 / 3
+     `s16 *src` instead of `u16 *src`                         261 / 1
+     parity written `(y0 + y) & 1` / `(x0 + x) & 1`           261 / 12
+     index `(y + y0) * 128 + x + x0`                          259 / 255
+     index `(y + y0) * 0x80 + x + x0`                         259 / 255
+     `u16 w, h`                                               259 / 254
+     `s32 x0, s32 y0` parameters                              255 / 256
+     `s32 i`                                                  227 / 253
+     src++ as the FIRST statement of the body                 263 / 239
+     `default:` written FIRST in the switch                   264 / 261 */
+void func_800B7428(s16 x0, s16 y0, u16 *src)
+{
+    s16 w;
+    s16 h;
+    s16 x;
+    s16 y;
+    s16 i;
+
+    w = *src++;
+    h = *src++;
+
+    for (y = 0; y < h; y++)
+    {
+        for (x = 0; x < w; x++)
+        {
+            i = ((y + y0) << 7) + x + x0;
+            switch (*src)
+            {
+            case 0:
+                break;
+            case 0x135:
+            case 0x137:
+            case 0x154:
+            case 0x15E:
+                if ((y + y0) & 1)
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x15E;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x137;
+                    }
+                }
+                else
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x154;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x135;
+                    }
+                }
+                break;
+            case 0x136:
+            case 0x138:
+            case 0x153:
+            case 0x15D:
+                if ((y + y0) & 1)
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x138;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x15D;
+                    }
+                }
+                else
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x136;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x153;
+                    }
+                }
+                break;
+            case 0x141:
+            case 0x142:
+                if ((x + x0) & 1)
+                {
+                    D_80162004[i] = 0x142;
+                }
+                else
+                {
+                    D_80162004[i] = 0x141;
+                }
+                break;
+            case 0x143:
+            case 0x144:
+            case 0x15B:
+            case 0x15C:
+                if ((y + y0) & 1)
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x144;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x143;
+                    }
+                }
+                else
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x15C;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x15B;
+                    }
+                }
+                break;
+            case 0x13D:
+            case 0x13E:
+            case 0x13F:
+            case 0x140:
+                if ((y + y0) & 1)
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x140;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x13F;
+                    }
+                }
+                else
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x13E;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x13D;
+                    }
+                }
+                break;
+            case 0x149:
+            case 0x14A:
+            case 0x14B:
+            case 0x14C:
+                if ((y + y0) & 1)
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x14C;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x14B;
+                    }
+                }
+                else
+                {
+                    if ((x + x0) & 1)
+                    {
+                        D_80162004[i] = 0x14A;
+                    }
+                    else
+                    {
+                        D_80162004[i] = 0x149;
+                    }
+                }
+                break;
+            default:
+                D_80162004[i] = *src;
+                break;
+            }
+            src++;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B783C);
 
