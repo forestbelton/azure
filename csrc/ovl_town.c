@@ -2380,6 +2380,7 @@ extern u8 D_800D20CC[];
 extern u32 D_800D20E4;
 extern u8 D_800F15E4[];
 
+extern u8 D_800CFFF0[];
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5990,7 +5991,15 @@ void func_80093D48(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     t->unk_0A = 0x54;
 }
 
-void func_80093D90(UnkTownTask *t)
+/* Widened from the one-parameter `(UnkTownTask *t)` it was landed with, the
+   way func_80093E18 and func_80093E58 below were: func_80097D54 is its only
+   caller anywhere (the one `jal` to it under asm/nonmatchings/ovl_town/) and
+   sets $a0/$a1/$a2 before the call, with `addu $a2, $s2, $zero` in the jal's
+   own delay slot.  The extra two go unread, so the bytes here do not move.
+   The third is spelled `s32` rather than func_80093E18's `void *` because the
+   sole caller's own third parameter is `s32`; `void *` links and measures the
+   same but costs a "makes pointer from integer" warning at that one site. */
+void func_80093D90(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0180, t);
     t->unk_00 = func_80090C68;
@@ -7214,7 +7223,75 @@ void func_80097D2C(UnkTownDispatch *d)
     d->unk_04();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097D54);
+/* The task layer's gate on func_800352FC, with a SHARED TAIL both exits fall
+   into.  Run the +0x0A countdown only while func_800352FC reports 0, and on
+   expiry advance to func_80093D90 -- but only for the task whose +0x1C is
+   D_800CFFF0; anything else, and any frame func_800352FC claims, goes to
+   func_80098988 instead.
+
+   `func_80098988(t, b, c)` is written ONCE: both the `bnez` at word 9 and the
+   `bne` at word 20 target it, and reorg has stolen one insn from the top of
+   that shared block into each of their delay slots -- `addu $a0, $s0` into the
+   `bnez`'s (which is why word 22 sets $a0 a second time on the fall-through)
+   and `addu $a1, $s1` into the `bne`'s, each branch retargeted one word
+   further in.  Two reorg steals from one block is the fingerprint of a shared
+   tail, not of two copies: `reorg` steals from two insns back
+   (scratch/gcc-src/cdk-gcc-b18/gcc/reorg.c:3067-3077).
+
+   BUT WRITING THE TAIL TWICE IS A MEASURED TIE HERE, and that is worth
+   recording against the "a tail duplicated into both arms is still two copies
+   when the allocator prices the pseudos" lever: duplicating
+   `func_80098988(t, b, c); return;` into the func_800352FC arm gives 37 words
+   and 0 differing, and a -S dump shows ONE `jal func_80098988` -- cross-jumping
+   unified the copies because they are identical tails ending in a return, with
+   no pseudo priced differently.  The lever is about a tail that the allocator
+   sees as two live ranges; a bare duplicated call statement is not that.
+   Writing the +0x1C test inverted (func_80098988 in the `!=` arm,
+   func_80093D90 last) is also 37 / 0 and generates the IDENTICAL stream,
+   `jal`s included -- checked on the -S output, not on ovlverify's masked
+   compare.  So does the nested `if/else` form with the countdown's `return` in
+   an `else`.  Four spellings, one instruction stream.
+
+   D_800CFFF0 has exactly one referrer in the whole tree -- this `lui`/`addiu`
+   pair -- so nothing else says what it is.  +0x1C falls inside UnkTownTask's
+   pad_12, so it is reached by a cast rather than by adding a field; a real
+   `void *unk_1C` field at that offset is a MEASURED tie at 37 / 0, so the cast
+   is a choice not to disturb the struct, not a requirement.  The `lui` sits in
+   the `bgtz`'s delay slot (word
+   17) because it is the comparison's own address materialisation, hoisted
+   there by reorg, which is also why the `lw` of +0x1C lands between the `lui`
+   and the `addiu`.
+
+   `if (--t->unk_0A > 0) return;` -- the in-place narrow test, `lhu`/`addiu
+   -1`/`sh`/`sll 16`/`bgtz`, as func_80097EC0 and func_8009803C spell it.
+   This one IS an early return (the arm leaves the function unconditionally),
+   unlike func_800CD87C's, so writing it inverted is correct here.
+
+   Arity: `t` is witnessed by +0x0A and +0x1C, `b` and `c` only by being
+   forwarded, but $a2 is read before it is written, so all three are real.
+   func_80098988 stays K&R-declared (see func_800988C8's note) and accepts the
+   three arguments; func_80093D90 had to be WIDENED to three -- this is its
+   only caller anywhere.  No `jal` reaches func_80097D54; func_80090210 takes
+   its address.
+
+   37 words -- its header reads `nonmatching func_80097D54, 0x94`, and
+   0x94/4 = 37.  Measured 0 differing, first compile. */
+void func_80097D54(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    if (func_800352FC() == 0)
+    {
+        if (--t->unk_0A > 0)
+        {
+            return;
+        }
+        if (*(void **)((u8 *)t + 0x1C) == D_800CFFF0)
+        {
+            func_80093D90(t, b, c);
+            return;
+        }
+    }
+    func_80098988(t, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097DE8);
 
@@ -19133,7 +19210,56 @@ void func_800C3EAC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3F44);
+/* func_800CDA6C's actor-side twin (csrc/ovl_town.c, the func_800CDF54
+   installer's handler): the same sink-and-gate head -- advance the 16.16
+   height at +0x08 by its delta at +0x14, hand the mover to func_80095388, and
+   fire only once the delta has gone negative -- with a BIND plus a handler
+   install for the tail call.  Word for word the same thirteen-word head,
+   including `sw $v0, 0x8($s0)` in the `jal`'s delay slot and the RELOAD of
+   +0x14 after the call (func_80095388 writes through `b`, so the cached value
+   is dead: cse's HImode-store rule, scratch/gcc-src/cdk-gcc-b18/gcc/cse.c
+   :7618-7623 feeding invalidate_memory's test at :1725-1728).
+
+   The bind is the 29-member func_800C2E84 wrapper form documented in the declaration block above func_800C2E84's prototype, here off +0x80's tenth slot -- `a->unk_80->unk_20`,
+   the only use of +0x20 on UnkTownArg80 so far; its neighbours +0x1C and +0x24
+   already have landed users in func_800C4644 and func_800C50CC.  The install is written
+   AFTER the call, which is what the listing says: the `lui`/`addiu` pair for
+   %hi/%lo(func_800C3EAC) is at words 23-24, after the `jal`, not in its delay
+   slot (the delay slot carries `addu $a1, $s2`, the forwarded third
+   parameter).  The order is load-bearing -- putting `a->unk_54 =
+   func_800C3EAC;` ahead of the bind is 32 WORDS AND 16 DIFFERING, because the
+   address then materialises before the call and has to survive it.
+
+   AND THE +0x14 RELOAD MUST BE WRITTEN AS A RE-READ, not cached: holding it in
+   an `s32 d` across func_80095388 is 30 words and 29 differing.  That is the
+   cse HImode-store rule measured from the other side -- the candidate keeps
+   `d` in a register where the target reloads, and three words vanish.
+   Rejected ties, both at 33 / 0: `s32 c` for `UnkTownRend *c` (`c` is
+   forwarded only, so its type has no witness; UnkTownRend * is kept because
+   func_800C3EAC, the handler this installs into the same +0x54 slot, has it),
+   and `if (b->unk_14 < 0) return;` with the body after it.
+
+   func_800C3EAC is the advance-and-re-aim gate landed directly above; this is
+   its installer, so the two are one state transition.  func_800C3FC8 takes
+   this function's address (into +0x54) and that is its only
+   referrer -- no `jal` anywhere -- so nothing constrains the arity from
+   outside.  `a` is witnessed by +0x80 and +0x54, `b` by +0x08/+0x14, `c` only
+   by being forwarded as func_800C2E84's `s32 b`, which is the same
+   forwarded-renderer shape as func_800C4174's own `func_800C2E84(a, (s32)c,
+   a->unk_80->unk_04)`.
+
+   33 words -- its header reads `nonmatching func_800C3F44, 0x84`, and
+   0x84/4 = 33.  Measured 0 differing, first compile. */
+void func_800C3F44(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    b->unk_08 += b->unk_14;
+    func_80095388(b);
+    if (b->unk_14 >= 0)
+    {
+        func_800C2E84(a, (s32)c, a->unk_80->unk_20);
+        a->unk_54 = func_800C3EAC;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3FC8);
 
@@ -22497,7 +22623,70 @@ void func_800CD608(void *arg0)
     func_800C3050(arg0, 0x5, D_800D732C, D_800D7338, D_800D72FC, D_800D7304);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD650);
+/* The func_800CDDFC / func_800CDE4C BRANCH POINT: the state the pair of
+   spinners below it (func_800CD70C / func_800CD87C) runs down to, and the
+   thing that picks which of the two comes next.  Give the frame to
+   func_800C30E0 first; if it took nothing, ask func_8008FAC0 for a collision
+   against D_800CFCB4, and run the +0x6C countdown only when there is NO
+   collision or the collision is on axis 2.  On expiry a coin flip --
+   `(u16)func_800374F4(2)` -- chooses the clockwise spinner's installer
+   (func_800CDDFC, which binds func_800CD70C) or the anticlockwise one
+   (func_800CDE4C, func_800CD87C).
+
+   The short-circuit `||` is what the two branches say, and the order matters:
+   `beqz $v0` on the func_8008FAC0 result jumps INTO the countdown
+   (.L800CD6A0, word 20) while the `bne $v1, 2` jumps OUT to the epilogue --
+   so the null test is the arm that admits, not the arm that rejects.  This is
+   the exact COMPLEMENT of func_800CD70C / func_800CD87C's `h != NULL &&
+   h->unk_00 != 2`, and all three ways of writing that complement are MEASURED
+   TIES at 47 words / 0 differing: the `||` here, the de Morgan form
+   `!(h != NULL && h->unk_00 != 2)`, and func_800CD70C's own predicate with an
+   early `return` and the countdown after it.  The `||` reads the way the two
+   branches are laid out, so it is the one kept.
+
+   `if (--a->unk_6C <= 0)` is the in-place narrow test func_800CD9F4's comment
+   records: `lhu`, `addiu -1`, `sh`, then `sll 16` with no `sra` and `bgtz`
+   branching away.  The `(u16)` on func_800374F4's result is the `andi $v0,
+   $v0, 0xFFFF` at word 29 -- the declared return is `u32`, so the cast is the
+   only thing that puts the `andi` there and DROPPING IT IS 46 WORDS AND 21
+   DIFFERING; csrc/ovl_town.c:4983 writes the same cast.  Swapping the coin
+   flip's arms (`== 0` first, func_800CDE4C in the fall-through) is 1 differing
+   -- the branch sense -- but it also swaps the two `jal`s, which ovlverify
+   masks, so that 1 is a 3-word error: the listing's own relocations put
+   func_800CDDFC at 0x800CD6D4 (the fall-through arm) and func_800CDE4C at
+   0x800CD6E8 (the branch target), which is what settles the direction.
+
+   Arity: `a` is witnessed by +0x6C, `b` and `c` only by being forwarded, but
+   $a2 IS read before it is written (`addu $s2, $a2, $zero` in the
+   func_800C30E0 call's delay slot), so all three are real.  There is no `jal`
+   to this function anywhere under asm/nonmatchings/ovl_town/; its only
+   referrer, func_800CDD98, stores its address into +0x50.
+
+   47 words -- its header reads `nonmatching func_800CD650, 0xBC`, and
+   0xBC/4 = 47.  Measured 0 differing, first compile. */
+void func_800CD650(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTownCFE60 *h;
+
+    if (func_800C30E0(a, b, c) == 0)
+    {
+        h = func_8008FAC0((UnkNode *)a, (UnkNode *)&D_800CFCB4);
+        if (h == NULL || h->unk_00 == 2)
+        {
+            if (--a->unk_6C <= 0)
+            {
+                if ((u16)func_800374F4(2) != 0)
+                {
+                    func_800CDDFC(a, b, c);
+                }
+                else
+                {
+                    func_800CDE4C(a, b, c);
+                }
+            }
+        }
+    }
+}
 
 /* A NEAR-SIBLING PAIR, the two members of the func_800CDDFC/func_800CDE4C
    install twins: a spinner that walks its facing a quarter-degree per frame
@@ -22706,7 +22895,41 @@ void func_800CDBB8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDC2C);
+/* func_800CDA6C above with a facing spin prepended and func_800CE04C for
+   func_800CDF54 -- so it is the func_800CDCA8 side of the same pair
+   func_800CDBB8/func_800CD9F4 split, exactly the callee substitution
+   func_800CDBB8's comment describes one state earlier.  `a->unk_72 += 0x400;`
+   is the quarter-turn-a-frame spin of the animated facing (+0x6E is the
+   resting one the state after this restores), and its three words -- `lhu`,
+   `addiu 0x400`, `sh` -- are the whole difference from func_800CDA6C's 28.
+
+   Writing the spin first is what the listing says: the `lhu` is at word 7,
+   ahead of the mover's +0x08/+0x14 loads, and it pushes `addu $s2, $a2` out
+   of word 6 into word 8.  Measured: the spin written SECOND (after
+   `b->unk_08 += b->unk_14;`) is 31 words and 8 differing, and after the
+   func_80095388 call it is 32 words and 27.  The +0x14 RELOAD after
+   func_80095388 is the same store-invalidation as in func_800CDA6C and is also
+   load-bearing: caching it in an `s32` is 31 words -- the right length -- with
+   26 DIFFERING, so a length match here says nothing.  func_800CD70C's `t =
+   (u16)a->unk_72` temp form, `a->unk_72 = (u16)a->unk_72 + 0x400;`, is a tie
+   at 31 / 0; `+= 0x400` is the shorter spelling of the same thing.
+
+   28 words of this are func_800CDA6C's body; the spin makes 31 -- its header
+   reads `nonmatching func_800CDC2C, 0x7C`, and 0x7C/4 = 31.  Measured
+   0 differing, first compile.  Arity as func_800CDA6C: `a` by +0x72, `b` by
+   +0x08/+0x14, `c` forwarded only, with $a2 read before written.  Its only
+   referrer is the landed func_800CDFF8, which stores its address into +0x50;
+   there is no `jal` to it. */
+void func_800CDC2C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    a->unk_72 += 0x400;
+    b->unk_08 += b->unk_14;
+    func_80095388(b);
+    if (b->unk_14 >= 0)
+    {
+        func_800CE04C(a, b, c);
+    }
+}
 
 /* The twin of func_800CDADC above, with a FACING animation wrapped around
    it: +0x72 walks a quarter turn forward every frame on the way in, and the
