@@ -748,6 +748,15 @@ typedef struct UnkTown2AE8Int
     s16 unk_06;
     s16 pad_08;
     s16 unk_0A;
+    s16 pad_0C;
+    /* The integer halves of the SECOND triple (+0x0C/+0x10/+0x14), which is a
+       velocity: func_800B9998 squares +0x0E and +0x12 and sums them, i.e. a
+       squared planar speed, and uses it as a per-frame spin increment. */
+    s16 unk_0E;
+    s16 pad_10;
+    s16 unk_12;
+    s16 pad_14;
+    s16 unk_16;
 } UnkTown2AE8Int;
 
 /* The func_800C1EA4 state machine's record: a 0x18-byte array element whose
@@ -18162,7 +18171,98 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9890);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B98B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9998);
+/* 100 words, 0 differing.  The handler func_800B9B28 and func_800B9BF0
+   install at `-0x10($a0)`, so func_80040190 supplies the arity:
+   (actor view, node->unk_08, node->unk_0C), and all three are read here.
+
+   Its taken arm is the func_800A7B14 / func_800A7DF8 probe arm verbatim --
+   func_8009CFE0 hit, clear the +0x98 byte, unlink with func_80033D08, set the
+   two 0x8000 flags.  The else arm is a spin-up: the +0x66 charge decays in
+   two coarse steps, gains the PLAYER's squared planar speed while the player
+   is inside a +/-0x80 box around this renderable, saturates at 0x600, and
+   then drives the renderable's +0x1A rotation with a 0x80 floor.
+
+   Three spellings carry the whole function:
+
+   * THE TWO ABSOLUTE VALUES ARE func_800C1EA4's IDIOM EXACTLY -- `adx = dx >=
+     0 ? dx : -dx;` into its OWN variable, with NOTHING hoisted, and the
+     comparison on `(s16)adx`.  fold-const.c:5459 folds `A >= 0 ? A : -A` to
+     ABS_EXPR and expand_abs (optabs.c:2102) then compares TARGET rather than
+     op0 (optabs.c:2162), which is what splits each `sll`/`sra` pair across
+     the abs's two blocks and leaves `lh $a0, 0x6($s1)` in block 1 for sched1
+     to hoist.  `if (dx < 0) { dx = -dx; }` with the same four reads is 100
+     words / 18 differing; adding a hand hoist of `*(s16 *)((u8 *)q + 0x6)`
+     into a local brings that to 20 and does NOT recover the layout.  With the
+     ternary the hoist is neutral-to-harmful: 0 differing without it, 6 with
+     it -- the OPPOSITE sign from func_800C1EA4's note, where the hoist
+     destroyed the copies; here there are no copies to destroy and the hoist
+     only moves `lh 0x6($a1)` into the wrong block.  `dx > 0 ? dx : -dx` and
+     writing the abs back into `dx` itself are both ties.
+
+   * `(s16)` ON BOTH COMPARISONS IS LOAD-BEARING, exactly as in
+     func_800C1EA4/func_800C1F8C: without it the function is 96 words / 49
+     differing (it loses the four sign extensions and the two `lh`s become
+     `lhu`).  The operands are s32 locals, which is what makes the four field
+     reads `lh` rather than `lhu` -- `s16 dx` narrows the subtraction and
+     costs the two surviving expand_abs copies as well (104 words).
+
+   * THE +0x1A UPDATE IS func_800B9EDC's VOLATILE PAIR, with the addend
+     NARROWED: `(s16)(p->unk_66 + 0x80)`.  Without the cast the sum is an
+     SImode add and the +0x66 read is `lh`, which is the single differing word
+     at 100/1; the cast hands the add to expand_binop in HImode and the read
+     is `lhu`.  `s16 n = p->unk_66 + 0x80;` as a statement and `u16 n` are
+     ties; `(u16)(...)` inline is 2 differing because it reorders the two
+     loads.  Moving the `volatile` to the mask statement, to both, or through
+     a `volatile s16 *` local are all 2 differing HERE (they only reorder the
+     two loads), so this function does not reproduce func_800B9EDC's
+     four-way tie. */
+void func_800B9998(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 dx;
+    s32 dz;
+    s32 adx;
+    s32 adz;
+
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        if (p->unk_66 >= 0x100)
+        {
+            p->unk_66 -= 0x20;
+        }
+        else if (p->unk_66 >= 0x10)
+        {
+            p->unk_66 -= 0x10;
+        }
+        else
+        {
+            p->unk_66 = 0;
+        }
+        dx = TOWN_PT->unk_02 - *(s16 *)((u8 *)q + 0x2);
+        adx = dx >= 0 ? dx : -dx;
+        dz = TOWN_PT->unk_06 - *(s16 *)((u8 *)q + 0x6);
+        adz = dz >= 0 ? dz : -dz;
+        if ((s16)adx <= 0x80 && (s16)adz <= 0x80)
+        {
+            p->unk_66 += (TOWN_PT->unk_0E * TOWN_PT->unk_0E + TOWN_PT->unk_12 * TOWN_PT->unk_12) / 2;
+        }
+        if (p->unk_66 > 0x600)
+        {
+            p->unk_66 = 0x600;
+        }
+        *(volatile s16 *)&r->unk_1A += (s16)(p->unk_66 + 0x80);
+        r->unk_1A &= 0xFFF;
+    }
+}
 
 void func_800B9B28(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
@@ -18222,9 +18322,115 @@ void func_800B9BF0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     q->unk_08 = 0xFF600000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9CB8);
+/* 43 words, 0 differing on the first compile.  The PARENT handler of the
+   func_800BA00C / func_800BA468 spawner -- those two install it at
+   `-0x10($a0)` on the object whose +0x66 they seed with
+   `func_80069EF8() % 0x1000` and whose +0x97 they seed with
+   `func_80069EF8() % 9 + 0xC`.  So +0x66 is a 0..0xFFF angle and +0x97 its
+   per-frame step, and the whole else arm is one step of that angle.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9D64);
+   The taken arm is func_800A7B14 / func_800A7DF8's probe arm verbatim.
+
+   THE TWO +0x66 STORES BOTH SURVIVE WITH NO `volatile`, which is the
+   opposite of func_800B9EDC four hundred bytes below -- a neighbour's rule
+   really does invert.  The reason is the modulus: `%= 0x1000` expands to
+   bgez/`addiu 0xFFF`/`sra 12`/`sll 12`/`subu`, so the second store is in a
+   DIFFERENT basic block from the `+=`'s store, and gcc 2.7.2's redundant-MEM
+   test is BLOCK-LOCAL.  In scratch/gcc-src/cdk-gcc-b18, flow.c:283 declares
+   `static rtx last_mem_set;`, propagate_block clears it per block at
+   flow.c:1443 (`last_mem_set = 0;`), mark_used_regs records each store at
+   flow.c:2029 (`last_mem_set = reg;`) and insn_dead_p's only MEM arm is
+   flow.c:1779-1781 --
+       `if (GET_CODE (r) == MEM && last_mem_set && ! MEM_VOLATILE_P (r)
+            && rtx_equal_p (r, last_mem_set))  return 1;`
+   -- so a store can only be killed by a later store in the SAME block, and
+   that same line is why `volatile` suppresses the kill.  func_800B9EDC's
+   second statement is a plain `&= 0xFFF` in the same block, which is why
+   that one needs the qualifier and this one does not.  cse1 still forwards
+   the stored value, so there is no reload between the two stores --
+   `sll $v0, $v1, 16` reads the `sh`'s source register. */
+void func_800B9CB8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        p->unk_66 += p->unk_97;
+        p->unk_66 %= 0x1000;
+    }
+}
+
+/* 94 words, 0 differing on the first compile.  The CHILD handler of the
+   func_800BA00C / func_800BA468 spawner: one of the four 0x136 objects whose
+   +0x9C points back at the parent func_800B9CB8 drives and whose +0x97 is its
+   index 0..3.  Every constant here is already in func_800BA00C's own source,
+   which is where this was read from rather than from the listing:
+   `dir = s->unk_66 / 0x200 % 4` for the quadrant test and
+   `x->unk_08 = -((func_800644B8((s16)(v->unk_9C->unk_66 % 0x200) * 2) >> 4) *
+   0x1E00); v->unk_66 = 0x1E;` for the taken arm, verbatim.
+
+   Its probe is NOT func_8009CFE0 -- it is the resident `*(u8 *)p->unk_98 == 0`
+   that func_800B9EDC uses, and the taken arm calls func_8008F134 FIRST with
+   the incoming $a0 still live, which is why that `jal` has a `nop` delay slot
+   and the func_80033D08 that follows has to reload $a0 from $s0.
+
+   The arm chain is a single if / else if / else if / else, not nested: the
+   quadrant hit sets the launch velocity, the miss decays +0x66 by 3 and
+   scales the velocity by what is left, and the exhausted case zeroes it.
+
+   `(s8)` on the quadrant is the `sll 24`/`sra 24` against the `lb` at +0x97,
+   as in func_800BA00C; `>> 4` and not `/ 16` for both helper results, since
+   neither has a sign fix-up; and `* 24` is the `sll 1`/`addu`/`sll 3` pair.
+
+   THE LAST ARM IS A `-abs()` WRITTEN AS TWO STORES.  `q->unk_08 = -(n << 8);`
+   then `if (q->unk_08 > 0) { q->unk_08 = n << 8; }` gives the target's
+   `sw` in the `blez` delay slot, the `j`, and the second `sw`: cse1 forwards
+   the just-stored value into the test so there is no reload, and the first
+   store survives because the second is in another basic block (see
+   func_800B9CB8 above for the flow.c citation).  The unit's own
+   `-abs(func_800644B8(ang) * 0x20)` spelling, which func_80097AD0 and
+   func_800A895C use, would be the obvious guess and is NOT what this is --
+   expand_abs would give a `bgez` on the product, not a `blez` on its
+   negation with a store already in the delay slot. */
+void func_800B9D64(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 n;
+
+    if (*(u8 *)p->unk_98 == 0)
+    {
+        func_8008F134((UnkTownActor *)p);
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if ((s8)(p->unk_9C->unk_66 / 0x200 % 4) == p->unk_97)
+    {
+        q->unk_08 = -((func_800644B8((s16)(p->unk_9C->unk_66 % 0x200) * 2) >> 4) * 0x1E00);
+        p->unk_66 = 0x1E;
+    }
+    else if (p->unk_66 != 0)
+    {
+        p->unk_66 -= 3;
+        n = (func_80064584((s16)(p->unk_9C->unk_66 % 0x200) * 24) >> 4) * p->unk_66;
+        q->unk_08 = -(n << 8);
+        if (q->unk_08 > 0)
+        {
+            q->unk_08 = n << 8;
+        }
+    }
+    else
+    {
+        q->unk_08 = 0;
+    }
+}
 
 void func_800B9EDC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {

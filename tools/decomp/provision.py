@@ -363,6 +363,14 @@ def main():
     print("\n=== LANDED RELATIVES, route (a): shared callees+globals, WEIGHTED BY RARITY ===")
     print("    (score = sum 1/freq over shared callees, +2/freq per shared global;")
     print("     a callee the whole unit calls scores ~0, a rare one dominates)")
+    # Macro aliases for globals: `#define NAME (... D_XXXXXXXX ...)`. Without
+    # these, a landed body that reaches a global through a macro scores 0 on
+    # that global, which hid the decisive template for one group entirely.
+    alias = {}
+    for m in re.finditer(r'^#define\s+(\w+)\s+(.*)$', txt, re.M):
+        for g in re.findall(r'\b(D_[0-9A-F]{6,8})\b', m.group(2)):
+            alias.setdefault(g, set()).add(m.group(1))
+
     body_src = {}
     for d in landed:
         i = txt.index(landed[d]); j = txt.find('\n}', i)
@@ -373,8 +381,12 @@ def main():
         best = None
         for f in targets:
             sc = dc & allcallees.get(f, set())
-            sg = set(g for g in globs.get(f, ()) if g in body_src.get(d, ''))
-            gfreq = {g: max(1, sum(1 for b in body_src.values() if g in b)) for g in sg}
+            bs = body_src.get(d, '')
+            sg = set(g for g in globs.get(f, ())
+                     if g in bs or any(a in bs for a in alias.get(g, ())))
+            gfreq = {g: max(1, sum(1 for b in body_src.values()
+                                    if g in b or any(a in b for a in alias.get(g, ()))))
+                     for g in sg}
             s = (sum(1.0 / freq.get(c, 1) for c in sc)
                  + sum(2.0 / gfreq[g] for g in sg))
             # CONJUNCTION BONUS: how many landed bodies contain BOTH a shared
