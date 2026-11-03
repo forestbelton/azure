@@ -10750,11 +10750,119 @@ fail:
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2AF8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2DF0);
+/* The fifth member of the func_800A130C family at :10301, and the only one
+   that ACCUMULATES: same three offsets as func_800A130C -- 0x2/0x6/0xA, the
+   integer halves of the 16.16 words at +0x00/+0x04/+0x08 -- but `+=` instead
+   of `=`.  The reads are `lhu`, not `lh`, for the reason the func_800A58CC
+   note records: convert.c's trunc1 narrowing hands a `+=` on a short to
+   expand_binop in HImode, expand_binop sets no_extend for add_optab and
+   widen_operand returns a paradoxical SUBREG of a plain HImode load
+   (optabs.c:331) rather than an extension.
+
+   Arity 2 is WITNESSED, not inferred: func_800AA10C `jal`s it four times in
+   a row (asm/nonmatchings/ovl_town/func_800AA10C.s:147/151/154/157) setting
+   only $a0 and $a1 each time.
+
+   16 words -- its header reads `nonmatching func_800A2DF0, 0x40`, and
+   0x40/4 = 16.  Measured 0 differing on the first compile, and it has no
+   relocations at all, so the measurement is complete. */
+void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
+{
+    d->vx += *(u16 *)((u8 *)b + 0x2);
+    d->vy += *(u16 *)((u8 *)b + 0x6);
+    d->vz += *(u16 *)((u8 *)b + 0xA);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2E30);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2FCC);
+/* func_800A2E30 TAKES FOUR SVECTORs BY VALUE, and that prototype -- not any
+   statement in func_800A2FCC -- is what generates words 108..143 of
+   func_800A2FCC's listing.  The shape is read off func_800A2E30's own
+   listing: it spills $a0..$a3 into its four incoming argument slots at
+   +0x60..+0x6C and then hands func_800654B0 the ADDRESSES of the four 8-byte
+   pairs &sp+0x60, &sp+0x68, &sp+0x70, &sp+0x78 (0x800A2EAC..0x800A2EB8), so
+   its first eight words are four 8-byte objects, and `lhu $v1, 0x80($sp)` is
+   a ninth, halfword-wide argument -- the colour it `sb`s to +0x04/+0x05/+0x06
+   and +0x14/+0x15/+0x16.
+
+   SVECTOR is `short vx, vy, vz, pad`, so size 8 and ALIGNMENT 2, and the
+   sub-word alignment is what makes the call site look hand-written:
+
+   - the two register-bound vectors are assembled a halfword at a time
+     (`lhu`/`lhu`/`sll 16`/`or`, words 127..143) instead of with two `lw`s.
+     expmed.c:1603 `extract_split_bit_field` sets
+     `unit = MIN (align * BITS_PER_UNIT, BITS_PER_WORD)` = 16, so the SImode
+     word is extracted as two 16-bit units, shifted and `ior`'d
+     (expmed.c:1683-1687, "Combine the parts with bitwise or").
+   - the two stack-bound vectors are block-moved with `lwl`/`lwr`/`swl`/`swr`
+     (words 108..123), the unaligned word move, not `lw`/`sw`.
+   - `lui $s0, 0xFFFF0000` at word 56 IS DEAD -- nothing in the function ever
+     reads $s0 again.  It is the loop-invariant hoist of the insert mask
+     `mask_rtx (mode, bitpos, bitsize, 1)` from expmed.c:691 in
+     store_fixed_bit_field ("Now clear the chosen bits in OP0"), which for
+     bitpos 0 / bitsize 16 in SImode is ~0xFFFF = 0xFFFF0000; loop runs
+     before combine, combine then deletes the `and` the constant was for and
+     nothing removes the dead set.  Probed in isolation in
+     scratch/m34_probe_align.c and scratch/m34_probe_align2.c: the same
+     by-value call OUTSIDE a loop emits the identical 36-word tail with NO
+     such constant, and a two-SVECTOR callee (register arguments only, no
+     stack block move) inside a loop emits it -- so it belongs to the
+     register-bound path and to loop.c, not to the block move.
+
+   Nothing of that is spellable; get the prototype wrong and `ovlverify`
+   still says 0 differing, because the `jal` is masked.
+
+   The body itself is a 16-step ring emitter.  func_800644B8 / func_80064584
+   are the sine/cosine pair, 0x1000 to the revolution, and the loop advances
+   its angle by 0x100 sixteen times, so the two radii rx and ry trace a full
+   turn as an inner and an outer edge; each step hands func_800A2E30 the
+   PREVIOUS pair of points and the new one, i.e. one quad per segment.  The
+   `(f(ang) * r) >> 16` is the 16.16 scale, `mult`/`mflo`/`sra 16`.
+
+   `ang` is a SEPARATE induction variable from the loop counter `i`: the
+   target carries both ($s2 stepping 0x100 and $s3 stepping 1) and tests only
+   $s3 against 0x10, so a single counter with `i * 0x100` is not what this
+   is.  `ang += 0x100` sits between the two func_800A1330 copies and the two
+   that reload from the centre, which is where its `addiu $s2, $s2, 0x100`
+   lands (word 68).
+
+   159 words -- its header reads `nonmatching func_800A2FCC, 0x27C`, and
+   0x27C/4 = 159.  Measured 0 differing on the first compile, all 16
+   R_MIPS_26 records decoded against the listing. */
+void func_800A2E30(SVECTOR a, SVECTOR b, SVECTOR c, SVECTOR d, s16 col);
+
+void func_800A2FCC(UnkTown2AE8 *b, s32 rx, s32 ry, s16 col)
+{
+    SVECTOR v;
+    SVECTOR p0;
+    SVECTOR p1;
+    SVECTOR c0;
+    SVECTOR c1;
+    s32 ang;
+    s32 i;
+
+    func_800A130C(&v, b);
+    func_800A1330(&c0, (UnkTown2AE8 *)&v);
+    func_800A1330(&c1, (UnkTown2AE8 *)&v);
+    c0.vx += func_800644B8(0) * rx >> 16;
+    c0.vy += func_80064584(0) * rx >> 16;
+    c1.vx += func_800644B8(0) * ry >> 16;
+    c1.vy += func_80064584(0) * ry >> 16;
+    ang = 0;
+    for (i = 0; i < 0x10; i++)
+    {
+        func_800A1330(&p0, (UnkTown2AE8 *)&c0);
+        func_800A1330(&p1, (UnkTown2AE8 *)&c1);
+        ang += 0x100;
+        func_800A1330(&c0, (UnkTown2AE8 *)&v);
+        func_800A1330(&c1, (UnkTown2AE8 *)&v);
+        c0.vx += func_800644B8(ang) * rx >> 16;
+        c0.vy += func_80064584(ang) * rx >> 16;
+        c1.vx += func_800644B8(ang) * ry >> 16;
+        c1.vy += func_80064584(ang) * ry >> 16;
+        func_800A2E30(p0, p1, c0, c1, col);
+    }
+}
 
 /* A near-sibling pair with func_800A3450 below, and the same allocate-and-
    wire recipe the landed func_8009DFD8 uses: func_8003FD64(type, &D_80083498)
@@ -10794,9 +10902,83 @@ void func_800A32C8(UnkTownDispatch *d)
     d->unk_00();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A32F0);
+/* func_800A3248's +0x20 slot (:10589 writes `*(u32 *)((u8 *)n + 0x20) =
+   (u32)func_800A32F0;`), so $a0 is the VIEW, not the node -- the same
+   interior-pointer convention func_800A21EC's note records -- and this is
+   the one-shot initialiser for the ring burst: a 20-frame countdown at +0x08,
+   a 16.16 radius pair at +0x10/+0x14 and +0x18/+0x1C seeded to 0 with per-
+   frame deltas 0xC0 and 0x60, and its own per-frame handler at +0x00.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3320);
+   The `%hi`/`%lo(func_800A3320)` pair at words 6/7 is the install.  It has
+   no `jal`, `ovlverify` masks both words, and the whole-unit sweep cannot
+   see it: VERIFIED by relocation, R_MIPS_HI16 + R_MIPS_LO16 on
+   func_800A3320 and on nothing else (scratch/m34_reloc.py).
+
+   The lui/addiu for that pointer is scheduled AHEAD of the two zero stores
+   even though the assignment is written last; the whole body is one basic
+   block, so that is sched1, and `sw $v0, 0x0($a0)` takes the `jr` delay slot.
+
+   12 words -- its header reads `nonmatching func_800A32F0, 0x30`, and
+   0x30/4 = 12.  Measured 0 differing on the first compile. */
+void func_800A3320(UnkTownDispatch *p, UnkTown2AE8 *q);
+
+void func_800A32F0(UnkTownDispatch *p)
+{
+    *(s32 *)((u8 *)p + 0x14) = 0xC0;
+    *(s32 *)((u8 *)p + 0x1C) = 0x60;
+    *(s16 *)((u8 *)p + 0x8) = 0x14;
+    *(s32 *)((u8 *)p + 0x10) = 0;
+    *(s32 *)((u8 *)p + 0x18) = 0;
+    p->unk_00 = func_800A3320;
+}
+
+/* func_800A32F0's continuation, installed at the view's +0x00, and the
+   per-frame step of the ring burst: count the +0x08 timer down, and when it
+   runs past zero raise 0x8000 in the owner's halfword at -0x02 and in
+   D_800814A0 -- the retire idiom this unit has at :10359 (func_800A2180) and
+   eleven other places.  Otherwise advance both 16.16 radii by their deltas,
+   decay the first delta by 0x10, and emit the ring.
+
+   The +0x20 field is the fade: `timer * 0xFF / 20`, with 20 the value
+   func_800A32F0 seeds the timer with, so it is 255 at the first frame and 0
+   at the last.  gcc synthesises `* 0xFF` as `(x << 8) - x` and `/ 20` as the
+   0x66666667 multiply with `mfhi` shifted RIGHT BY 3 (2^35/20 rounds up to
+   0x66666667); the same magic with a shift of 2 would be `/ 10`, which is
+   how to tell the two apart in a listing.
+
+   TWO PARAMETERS.  $a1 is READ before it is written (`addu $t0, $a1, $zero`
+   in the `bgez` delay slot) and is what func_800A2FCC gets as its
+   UnkTown2AE8, so it is a real parameter.  The slot's call convention is
+   `p->unk_00(p, q, r)` (func_800A2180), so there is a THIRD, unread
+   UnkTownRend argument -- a dead TRAILING parameter, which is invisible and
+   costs nothing either way.
+
+   The `*(s16 *)((u8 *)p + 0x20)` read at the call site re-sign-extends the
+   stored register (`sh`, then `sll 16`/`sra 16`) rather than reloading, which
+   is cse2 on the store it just made; the `*(s32 *)((u8 *)p + 0x10)` read
+   DOES reload, because the intervening halfword store to +0x20 kills it.
+   Both are what the plain field reads give -- no local is needed.
+
+   50 words -- its header reads `nonmatching func_800A3320, 0xC8`, and
+   0xC8/4 = 50.  Measured 0 differing on the first compile. */
+void func_800A3320(UnkTownDispatch *p, UnkTown2AE8 *q)
+{
+    *(s16 *)((u8 *)p + 0x8) -= 1;
+    if (*(s16 *)((u8 *)p + 0x8) < 0)
+    {
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        *(s32 *)((u8 *)p + 0x10) += *(s32 *)((u8 *)p + 0x14);
+        *(s32 *)((u8 *)p + 0x18) += *(s32 *)((u8 *)p + 0x1C);
+        *(s32 *)((u8 *)p + 0x14) -= 0x10;
+        *(s16 *)((u8 *)p + 0x20) = *(s16 *)((u8 *)p + 0x8) * 0xFF / 20;
+        func_800A2FCC(q, *(s32 *)((u8 *)p + 0x10), *(s32 *)((u8 *)p + 0x18),
+                      *(s16 *)((u8 *)p + 0x20));
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A33E8);
 
