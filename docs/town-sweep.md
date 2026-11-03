@@ -477,9 +477,9 @@ that come up constantly:
 
 ## The parks
 
-**There are FIVE, not two.** This section said "Both" until 2026-11-02 and
-listed only the last two below; `ls docs/near-misses/` is the authority, and
-`worklist.py` excludes all of them.
+**There are SIX.** This section said "Both" until 2026-11-02 and listed only
+the last two below; `ls docs/near-misses/` is the authority, and `worklist.py`
+excludes all of them.
 
     python3 tools/decomp/parkstats.py --check    # must stay at 0 problems
     python3 tools/decomp/nmcheck.py              # the same
@@ -506,6 +506,18 @@ Ordered by what they are worth attempting next:
   0x800B8618/0x800B867C and an OPCODE difference at 0x800B8724. Flagged as
   permuter work and never given one. Read the LENGTH line first: the +1 is the
   thing to fix, and the 94 is positional noise downstream of it.
+* **`func_800B6FB8.c` -- 76 of 77 words, verdict LENGTH (-1), and the
+  diagnosis is a compiler fact rather than a spelling.** Parked 2026-11-02
+  after ~2,900 compiles. The target materialises the constant 7 TWICE for two
+  adjacent halfword stores while parking its other two constants in one
+  register each, and cse unifies the pair under every spelling reachable from
+  C. Everything else in the function is pinned: a two-pointer variant reaches
+  77 words with the wrong instruction and is byte-exact from word 38 to 76, so
+  the search space is four lines. **func_800B72B8 (23 words, still a stub) has
+  the same residue and the same cause** -- the same six halfwords off the same
+  base, stuck at 22 of 23 -- so whatever lands one lands both. The park records
+  what is ruled out and why, including a correction to the `do { } while (0)`
+  lever, and the next move is the permuter, which has never been run on it.
 * **`func_800BA00C.c`** and **`func_800CE2D4.c`** -- described below; both have
   real diagnoses already written down.
 
