@@ -209,6 +209,39 @@ def main():
     freq = {}
     for dc in body.values():
         for c in dc: freq[c] = freq.get(c, 0) + 1
+    print("\n=== ROUTE (d): WHO TAKES MY TARGET'S ADDRESS (the reverse install edge) ===")
+    print("    Named by two agents as the most valuable fact their brief lacked: the")
+    print("    installer's own declaration settles the target's arity when nothing")
+    print("    calls it. An address-taker is NOT a caller and constrains nothing by")
+    print("    itself -- it is the installer's DECLARATION that is the witness.")
+    anyd = False
+    for f in targets:
+        for sf in sorted(os.listdir(D(unit))):
+            if not sf.endswith('.s') or sf[:-2] in targets: continue
+            try: st = open(os.path.join(D(unit), sf)).read()
+            except Exception: continue
+            if '%hi(' + f + ')' in st:
+                nm = sf[:-2]
+                decl = protos.get(nm) or (inc[nm][0] if nm in inc else None)
+                print("  %-15s address taken by %-15s %s" % (f, nm,
+                      ('declared: ' + decl) if decl else 'NO DECLARATION -- read its listing'))
+                anyd = True
+    if not anyd: print("  none")
+
+    print("\n=== ROUTE (e): ASM CALLERS (route (c) only sees LANDED callers) ===")
+    anye = False
+    for f in targets:
+        for sf in sorted(os.listdir(D(unit))):
+            if not sf.endswith('.s') or sf[:-2] in targets: continue
+            try: st = open(os.path.join(D(unit), sf)).read()
+            except Exception: continue
+            if re.search(r'jal\s+' + f + r'\b', st):
+                nm = sf[:-2]
+                print("  %-15s jal'd by STUB %-15s -- read %s/%s to settle arity"
+                      % (f, nm, D(unit).replace(PROJ + '/', ''), sf))
+                anye = True
+    if not anye: print("  none")
+
     print("\n=== LANDED RELATIVES, route (a): shared callees+globals, WEIGHTED BY RARITY ===")
     print("    (score = sum 1/freq over shared callees, +2/freq per shared global;")
     print("     a callee the whole unit calls scores ~0, a rare one dominates)")
@@ -229,11 +262,26 @@ def main():
         if best: hits.append((best[0], d) + best[1:])
     ranked = sorted(hits, reverse=True)
     if ranked and ranked[0][0] < 0.15:
-        print("  *** ROUTE (a) FOUND NOTHING. Best score %.3f is noise (a callee the"
+        # The earlier wording here said "ROUTE (a) FOUND NOTHING ... do NOT name
+        # these as relatives". That produced a FALSE NEGATIVE as costly as the
+        # false positives it was added to prevent: on one group the 0.156 top
+        # hit WAS the line-for-line template, and saying so landed two
+        # functions on the first compile. A low score means the METRIC has
+        # nothing, not that the unit has nothing.
+        print("  *** LOW SCORES (best %.3f). The metric has nothing here -- but that is"
               % ranked[0][0])
-        print("      whole unit calls). Do NOT name these in a brief as relatives --")
-        print("      that is the mistake that ranked four groups backwards. Use route")
-        print("      (b)/(c) above, or say plainly that there is no template.")
+        print("      NOT proof the unit has nothing. It cannot see two things:")
+        print("        POSITION -- a callee that is the FIRST call, before any gate, is")
+        print("          a family's shared entry point and far more diagnostic than a")
+        print("          rare callee in a tail, yet it scores 1/freq like any other.")
+        print("        LINE-LEVEL IDENTITY -- what makes a function a template is often")
+        print("          a shared call expression WITH ITS CONSTANT ARGUMENTS. One")
+        print("          global had 11 landed call sites, so it scored as 'common',")
+        print("          but only 2 passed the same `(x - 0x20)` form.")
+        print("      So READ the top entries anyway, and also: read each target's")
+        print("      immediate C-file neighbours, and grep a distinctive STATEMENT from")
+        print("      the listing rather than a callee name (an idiom grep). Both found")
+        print("      the right template where this metric did not.")
     for s, d, f, sc, sg in ranked[:8]:
         ln = lines[d]
         print("  %6.3f  %-15s csrc/%s.c:%-6d vs %s" % (s, d, unit, ln, f))
