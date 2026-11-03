@@ -2304,6 +2304,14 @@ void func_800C6CE4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
    array: `lui/addiu` the whole address into one register, `sll idx, 2`,
    `addu`, then `lw 0x0($v1)`. */
 extern u32 D_800D68B0[];
+extern s32 D_800D0A48[];
+
+void func_8009F1C0();
+void func_8009F48C();
+void func_800A22D0();
+void func_800A24A8();
+void func_800A33E8();
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -8933,7 +8941,68 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009ECF0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009ED7C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EE9C);
+/* A camera-step handler, installed by func_8009F148 (which takes its address
+   and nothing else -- there is no `jal` to it anywhere, so its four
+   parameters have no call-site witness).  It advances the actor's +0x6C angle
+   by 0x40, recomputes the vector at q->unk_08 from the actor's +0xA0 base and
+   the cosine table, records the delta in q->unk_14, and then -- only while
+   D_800CFCC4 is still the object it was handed -- forwards to whichever of
+   two continuations matches the camera task's current +0x00 handler.
+
+   THE SECOND PARAMETER IS COMPARED AGAINST D_800CFCC4 AND FORWARDED, and
+   nothing else, so its type is not witnessed; `void *` is the honest
+   spelling.  D_800CFCC4 itself is read ONCE into `c` and reused as the
+   second argument of both continuations, which is what keeps it in $a1 across
+   the whole dispatch (no call intervenes here, unlike in func_8009F2A8 where
+   the same value has to survive three and lands in $s2).
+
+   D_800834B8 IS D_80083498.unk_20.unk_00 -- the +0x00 handler of the camera
+   task embedded by value in UnkTownCam, the same identity func_80093C70
+   records and relies on.  %lo(D_80083498) + 0x20 == 0x34B8 with no carry, so
+   one %hi/%lo pair covers it.
+
+   THE `-0x40000` IS A `lui`/`addu` PAIR, not an `addiu`: the constant's low
+   half is zero, so cc1psx materialises 0xFFFC0000 with a bare `lui` and adds
+   it.  It is not a relocation and nothing is masked there.
+
+   *** THE TWO CAST STORES ARE LOAD-BEARING AND NOT COSMETIC. ***
+   `*(s16 *)((u8 *)a + 0x6C) += 0x40;` and `*(s32 *)((u8 *)q + 0x14) = ...;`
+   must be written through an OUTER CAST so their MEMs do not get
+   MEM_IN_STRUCT_P.  Written as the struct members `a->unk_6C` and
+   `q->unk_14` the function is 56 words / 33 differing: sched1's
+   true_dependence (scratch/gcc-src/cdk-gcc-b18/gcc/sched.c:834, the
+   disambiguation clause at :854-857) treats an in-struct store at a varying
+   address and a load at a constant address as independent, so the
+   `lui`/`lw` of D_800CFCC4 hoists into the two load-delay slots and the
+   target's two `nop`s disappear.  See func_8009F2A8's comment for the four
+   measured spellings and why the cast, and only the cast, clears the bit.
+   The barrier only has to sit on the LAST store before the global load:
+   casting +0x6C alone is still 56 / 33.
+
+   59 words -- its header reads `nonmatching func_8009EE9C, 0xEC`, and
+   0xEC/4 = 59.  Measured 0 differing. */
+void func_8009EE9C(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
+{
+    UnkTownCFCC4 *c;
+    s32 old;
+
+    old = q->unk_08;
+    q->unk_08 = *(s32 *)((u8 *)a + 0xA0) + func_800644B8(a->unk_6C) * 0x40 - 0x40000;
+    *(s16 *)((u8 *)a + 0x6C) += 0x40;
+    *(s32 *)((u8 *)q + 0x14) = q->unk_08 - old;
+    c = D_800CFCC4;
+    if (c == b)
+    {
+        if (D_80083498.unk_20.unk_00 == func_80093328)
+        {
+            func_8009F1C0(a, c, q, r);
+        }
+        else if (D_80083498.unk_20.unk_00 == func_80093524)
+        {
+            func_8009F48C(a, c, q, r);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EF88);
 
@@ -8943,7 +9012,66 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F1C0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F270);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F2A8);
+/* func_8009EE9C's near-sibling, installed by func_8009F48C the same way (its
+   address is taken and never called).  Same angle step and same guard; the
+   vector step is *0x80 instead of *0x40 with no bias, there is no delta
+   store, and the single continuation tears the old node down
+   (func_800A33E8), builds the new one (func_800A3248), fires sound 0x513 and
+   runs func_8009F4C0.
+
+   D_800CFCC4 MUST BE A LOCAL HERE.  Three calls stand between the test and
+   func_8009F4C0's second argument, so the value has to survive them in $s2;
+   spelled as the global twice, cse1's memory table is invalidated at the
+   first call and the second mention reloads it.
+
+   *** THE CAST ON THE +0x6C STORE IS THE WHOLE MATCH, and it is a bit in the
+   RTL rather than anything visible in C. ***  All four of these are the same
+   store of the same mode to the same address, and they split 2-2:
+
+       a->unk_6C += 0x40;                  49 words, 35 differing
+       ((s16 *)a)[0x36] += 0x40;           49 words, 35 differing
+       *((s16 *)a + 0x36) += 0x40;         49 words, 35 differing
+       *(s16 *)((u8 *)a + 0x6C) += 0x40;   51 words,  0 differing
+       s16 *t = (s16 *)((u8 *)a + 0x6C);
+       *t += 0x40;                         51 words,  0 differing
+
+   The bit is MEM_IN_STRUCT_P.  expr.c:4192 and :5748 set it for a
+   COMPONENT_REF, and expr.c:5343-5351 sets it for an INDIRECT_REF whose
+   OPERAND IS A `PLUS_EXPR` -- which is exactly what `((s16 *)a)[0x36]` and
+   `*((s16 *)a + 0x36)` build, and why they behave like the struct member.
+   Interposing a cast of a DIFFERENT pointer type makes that operand a
+   NOP_EXPR instead, the PLUS_EXPR test fails, and the bit stays clear; a
+   pointer local reaches the same place through a VAR_DECL operand.
+
+   With the bit SET, sched.c:834 `true_dependence` returns 0 for this store
+   against the `lw` of D_800CFCC4 -- clause :854-857 discharges an in-struct
+   store at a varying address against a non-struct load at a constant one --
+   so sched1 hoists the `lui`/`lw` pair into the two unfilled load-delay
+   slots and reorg then takes the `sh` for the `bne`'s slot.  That is the
+   whole two-word difference.  Note the clause also requires
+   `GET_MODE (mem) != QImode`, so a BYTE store through a struct field is a
+   barrier whatever it is spelled as.
+
+   51 words -- its header reads `nonmatching func_8009F2A8, 0xCC`, and
+   0xCC/4 = 51.  Measured 0 differing. */
+void func_8009F2A8(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
+{
+    UnkTownCFCC4 *c;
+
+    q->unk_08 = *(s32 *)((u8 *)a + 0xA0) + func_800644B8(a->unk_6C) * 0x80;
+    *(s16 *)((u8 *)a + 0x6C) += 0x40;
+    c = D_800CFCC4;
+    if (c == b)
+    {
+        if (D_80083498.unk_20.unk_00 == func_800935BC)
+        {
+            func_800A33E8(q);
+            func_800A3248(q);
+            func_80053DA8(0x513);
+            func_8009F4C0(a, (s32)c, (s32)q, r);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F374);
 
@@ -9371,7 +9499,59 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A20D8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2180);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A21EC);
+/* The first of a near-sibling pair with func_800A23D0 below: the +0x20 actor
+   view's own +0x00 entry handler for one node type.  It clears the renderer
+   record's first three fields, re-initialises the containing UnkNode through
+   func_8004491C's D_80046398 template, copies the node's +0x14 vector into
+   the caller's, installs its continuation at the view's +0x00, and then leans
+   the vector one way or the other on the view's +0x20 selector.
+
+   THE FIRST PARAMETER POINTS AT THE VIEW, NOT THE NODE.  It is used at -0x20
+   (`addiu $a0, $s0, -0x20` into func_8004491C) and at +0x00/+0x14/+0x20, which
+   is the same interior-pointer convention func_800BA00C's park records and
+   that func_800A3248 writes from the other side (`*(u32 *)((u8 *)n + 0x20) =
+   (u32)func_800A32F0;` is this function's slot).  UnkTownDispatch is the type
+   that gives the +0x00 handler slot a name; +0x14 and +0x20 are casts because
+   nothing else in the unit witnesses them.
+
+   `r->unk_08 = 1;` IS WRITTEN IN BOTH ARMS, which is what the listing has
+   (`addiu $v0, $zero, 1` at 800A2278 and `addiu $v1, $zero, 1` at 800A2290).
+   Only the `sh $v0, 0x2($s2)` tail is shared, and that is jump2's cross-jump
+   merging the two identical last insns, not a source-level merge.
+
+   p->unk_14 IS DEREFERENCED THREE TIMES RATHER THAN THROUGH A LOCAL: the
+   target reloads `lw $v0, 0x14($s0)` before each of the three copies, because
+   the intervening store to the caller's vector may alias it and cse1 cannot
+   prove otherwise.  A pointer local loads it once.
+
+   The `*(s16 *)((u8 *)q + 0x2)` halfword is the integer half of the 16.16
+   word at +0x00, the idiom UnkTown2AE8's comment records.
+
+   57 words -- its header reads `nonmatching func_800A21EC, 0xE4`, and
+   0xE4/4 = 57.  Measured 0 differing. */
+void func_800A21EC(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80046398);
+    q->unk_00 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_00;
+    q->unk_04 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_04;
+    q->unk_08 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_08;
+    p->unk_00 = func_800A22D0;
+    if (*(s16 *)((u8 *)p + 0x20) == 0)
+    {
+        r->unk_08 = 1;
+        *(s16 *)((u8 *)q + 0x2) += 0x90;
+    }
+    else
+    {
+        r->unk_08 = 1;
+        *(u16 *)((u8 *)r + 0x14) |= 1;
+        *(s16 *)((u8 *)q + 0x2) -= 0x90;
+    }
+    r->unk_1A = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A22D0);
 
@@ -9379,7 +9559,39 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2304);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2338);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A23D0);
+/* func_800A21EC's near-sibling, and the simpler of the two: ONE basic block,
+   no branch at all.  Same prologue -- clear the renderer's +0x00/+0x04/+0x05,
+   re-initialise the node through D_80046398, copy the +0x14 vector -- then
+   r->unk_08 comes out of the resident word table D_800D0A48 indexed by the
+   view's +0x20 selector, and the vector is leaned by +0x28 on one axis and
+   -8 on the other instead of +/-0x90 on one.
+
+   D_800D0A48 is declared `extern s32 D_800D0A48[]` and NOT as a constant
+   address: the listing materialises it as a `lui`/`addiu` %hi/%lo pair
+   (800A2440 / 800A2458) with the index `addu`ed on top, which is the symbolic
+   form.  A constant base would show as `lui`/`ori`.
+
+   The two halfword leans are loaded, then added, then stored
+   (`lhu`/`lhu`/`addiu`/`addiu`/`sh`/`sh`): that is sched1 interleaving inside
+   the one block and needs no help from the source order.
+
+   54 words -- its header reads `nonmatching func_800A23D0, 0xD8`, and
+   0xD8/4 = 54.  Measured 0 differing on the first compile. */
+void func_800A23D0(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80046398);
+    q->unk_00 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_00;
+    q->unk_04 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_04;
+    q->unk_08 = ((UnkTown2AE8 *)*(u32 *)((u8 *)p + 0x14))->unk_08;
+    p->unk_00 = func_800A24A8;
+    r->unk_08 = D_800D0A48[*(s16 *)((u8 *)p + 0x20)];
+    *(s16 *)((u8 *)q + 0x2) += 0x28;
+    *(s16 *)((u8 *)q + 0x6) -= 8;
+    r->unk_1A = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A24A8);
 
