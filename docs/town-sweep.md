@@ -45,13 +45,24 @@ singletons -- fell to the same body in one compile each: `+0x08` with `+=` and
 `> 0` for the first, and `-0x100` plus one trailing store for the second. 67
 words for two compiles and no reading.
 
-So when a family lands, spend two minutes on the functions immediately around
-its members in the unit:
+So when a family lands, spend two minutes looking for a landed relative. TRY
+THE CALLEE GREP FIRST -- it has been the productive one:
 
+    # 1. a landed CALLER of one of your callees is often the same recipe
+    python3 tools/decomp/ovlverify.py --dump func_XXXX | grep jal
+    grep -n 'func_<a distinctive callee>' csrc/ovl_town.c
+
+    # 2. only then the listing neighbours
     grep -n 'INCLUDE_ASM' csrc/ovl_town.c | grep -A3 -B3 func_XXXX
 
-and try the landed body against each with the obvious operator or offset
-changed. The cost is one compile; `ovlverify` answers in seconds. This
+On func_800B260C both listing neighbours and every callee were still stubs, so
+route 2 was a dead end -- and route 1, grepping `func_80053DA8`, found the
+recipe 300 lines away in the landed `func_800ADD80`. The two are the SAME
+SOURCE with a different callee set and one different constant, and it landed in
+one compile. `landedshapes.py` cannot group such a pair, because the callee set
+differs entirely; only the callee grep finds them.
+
+Then try the landed body with the obvious operator or offset changed. The cost is one compile; `ovlverify` answers in seconds. This
 matters more as the sweep goes on, because the family pool drains while the
 ~1000 singletons do not, and some unknown fraction of those singletons are
 near-siblings of something already landed.

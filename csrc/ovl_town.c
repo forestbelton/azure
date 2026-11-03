@@ -403,6 +403,17 @@ typedef struct UnkTownADD80
     s32 unk_28;
 } UnkTownADD80;
 
+/* The record the func_800B260C grid-cursor handler receives -- the sibling of
+   UnkTownADD80 above, and the SAME SOURCE with different callees. The pointer
+   points 0x20 bytes INTO its owning object (func_800B2BA0 stores the handler
+   at -0x10 and the handler hands -0x20 to func_800B2CE8, the func_800AE30C
+   twin). Only +0x10, a repeat-delay counter, has a witness. */
+typedef struct UnkTown260C
+{
+    u8 pad_00[0x10];
+    s32 unk_10;
+} UnkTown260C;
+
 /* The 0x1F800000 scratchpad object func_800A8CA8 projects through. Modelled on
    csrc/unk_72A8.c:40's Unk345B8SP rather than guessed from pads: the SVECTORs
    at +0x74/+0x7C/+0x84/+0x8C, unk_94/unk_98 as RotTransPers' p/flag, and
@@ -1491,6 +1502,13 @@ s32 func_8009D424();
 void func_800AD8CC(UnkTownADD80 *s);
 void func_800ADA1C(UnkTownADD80 *s);
 void func_800ADB04(UnkTownADD80 *s);
+void func_800B1DCC(UnkTown260C *s);
+void func_800B1F80(UnkTown260C *s, s32 d);
+void func_800B2068(UnkTown260C *s);
+void func_800B2394(UnkTown260C *s, s32 a);
+s32 func_800B2400(UnkTown260C *s);
+void func_800B25D8(UnkTown260C *s);
+void func_800B2CE8(void *p);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -6429,7 +6447,105 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2400);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B25D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B260C);
+void func_800B260C(UnkTown260C *s, void *b, void *c)
+{
+    Unk80083160 *g = &D_80083160;
+    s32 d = 0;
+    s32 r;
+
+    if (g->unk_08 != 0)
+    {
+        if (g->unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            func_800B2CE8((u8 *)s - 0x20);
+        }
+        else if (g->unk_10 & 0x40)
+        {
+            r = func_800B2400(s);
+            if (r == 0)
+            {
+                func_80053DA8(0x503);
+                func_800B2068(s);
+            }
+            else if (r == 3)
+            {
+                func_80053DA8(0x506);
+            }
+        }
+        else if (g->unk_10 & 0x80)
+        {
+            func_80053DA8(0x503);
+        }
+        else if (g->unk_10 & 0x10)
+        {
+            func_80053DA8(0x503);
+            func_800B25D8(s);
+            func_800B2068(s);
+        }
+        else if (g->unk_10 & 0x4)
+        {
+            func_800B2394(s, 0);
+        }
+        else if (g->unk_10 & 0x1)
+        {
+            func_800B2394(s, 1);
+        }
+        else if (g->unk_08 & 0xF000)
+        {
+            if (g->unk_10 & 0xF000)
+            {
+                s->unk_10 = 0;
+                if (g->unk_10 & 0x8000)
+                {
+                    d = -5;
+                }
+                else if (g->unk_10 & 0x2000)
+                {
+                    d = 5;
+                }
+                else if (g->unk_10 & 0x1000)
+                {
+                    d = -1;
+                }
+                else if (g->unk_10 & 0x4000)
+                {
+                    d = 1;
+                }
+            }
+            else if (s->unk_10 >= 5)
+            {
+                if (g->unk_08 & 0x8000)
+                {
+                    d = -5;
+                }
+                else if (g->unk_08 & 0x2000)
+                {
+                    d = 5;
+                }
+                else if (g->unk_08 & 0x1000)
+                {
+                    d = -1;
+                }
+                else if (g->unk_08 & 0x4000)
+                {
+                    d = 1;
+                }
+                s->unk_10 = s->unk_10 - 1;
+            }
+            else
+            {
+                s->unk_10 = s->unk_10 + 1;
+            }
+            if (d != 0)
+            {
+                func_80053DA8(0x502);
+                func_800B1F80(s, d);
+            }
+        }
+    }
+    func_800B1DCC(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2834);
 
