@@ -1959,6 +1959,13 @@ extern u8 D_8008931C[];
 extern u8 D_80089324[];
 u8 *func_8004E634(u32 n, u8 *s);
 s32 func_80043868(u8 *p);
+/* func_800B2834's 4-byte template.  It HAS its own
+   asm/nonmatchings/ovl_town/D_8008925C.s (`.word 0x00030201`) and keeps its
+   INCLUDE_RODATA, so it is `extern` and the function copies FROM it; writing
+   the literal would emit a second copy of the bytes.  `u8` and not `u32`:
+   move_by_pieces takes MIN(src_align, dst_align) and the target's copy is the
+   unaligned lwl/lwr + swl/swr pair, which needs alignment 1 on both sides. */
+extern u8 D_8008925C[];
 extern u8 D_800892DC[];
 extern u8 D_800892E8[];
 extern u8 D_800892EC[];
@@ -9217,11 +9224,123 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A62E8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A630C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6328);
+/* A near-sibling pair with func_800A63C8 below.  Both walk a NULL/0-terminated
+   outer table and, for each entry, an inner run of 12-byte records, storing v
+   into +0x8 of every record whose bit 0x20 is set and stopping after the
+   record whose byte 0 has bit 0x80 set.  Here the outer element is a bare
+   pointer, stride 4; in func_800A63C8 it is an 8-byte { u16; ptr } and the
+   pointer is at +0x4.
+
+   Three things are source rather than scheduling, and all three were measured:
+
+   - THE RECORD ADDRESS IS AN INTEGER SUM, `i + (s32)*p` AND NOT `*p + i`.
+     The target's two adds are `addu $v1, $a2, $v0` -- the INDEX first.
+     C pointer arithmetic cannot produce that order.
+     scratch/gcc-src/cdk-gcc-b18/c-typeck.c:1985-1988 routes BOTH `p + i` and
+     `i + p` into pointer_int_sum with the pointer as `ptrop`, and
+     pointer_int_sum builds `build (PLUS_EXPR, result_type, ptrop, intop)` at
+     c-typeck.c:2698 -- pointer first, always.  expr.c:5993's PLUS_EXPR case
+     then expands operand 0 into the first register.  Casting the base to an
+     integer puts both operands on the ordinary integer common_type path
+     (c-typeck.c:1990, `common = 1`) and the source order survives.
+     `*p + i` is 2 differing, both of them the add's operand swap.
+
+   - `*p` IS RELOADED TWICE PER INNER ITERATION and must be re-derived from
+     `*p` each time rather than hoisted into a record pointer.  The
+     `sw $a1, 0x8($v1)` through a derived address invalidates the cse entry
+     for the MEM `*p`, which is docs/matching-levers.md's "an HImode struct
+     store DOES invalidate a field read off a pointer local".  A record-pointer
+     walk (`r = *p; do { ... r++; }`) never reloads and does not match.
+
+   - THE INNER LOOP IS A do/while WHOSE TERMINATOR IS CAPTURED IN A TEMP, with
+     `i += 0xC` as the last statement of the body.  Spelled
+     `for (i = 0;; i += 0xC) { ...; if (term) break; }` the words are identical
+     except the OUTER loop's bottom branch: reorg steals the inner loop's
+     `i = 0` init into its delay slot and retargets the branch one insn later
+     (-20 instead of -22), 2 differing.  Six spellings measured, see the note
+     on func_800A63C8.
+
+   29 words -- its header reads `nonmatching func_800A6328, 0x74`, and
+   0x74/4 = 29.  Measured 0 differing.  No callers are landed: the three
+   `jal func_800A6328` sites (func_800A652C, func_800A68C0, func_800A6994) are
+   all still INCLUDE_ASM, so the arity comes from the body -- $a0 is read and
+   $a1 is stored as a word. */
+void func_800A6328(u8 **p, s32 v)
+{
+    s32 i;
+    s32 t;
+
+    while (*p != NULL)
+    {
+        i = 0;
+        do
+        {
+            if (*(u32 *)(i + (s32)*p) & 0x20)
+            {
+                *(s32 *)(i + (s32)*p + 8) = v;
+            }
+            t = *(u8 *)(i + (s32)*p) & 0x80;
+            i += 0xC;
+        } while (t == 0);
+        p++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A639C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A63C8);
+/* func_800A6328's near-sibling; see the note there for the record walk, the
+   integer-sum addressing and the do/while inner loop.  The outer element here
+   is an 8-byte struct: a u16 terminator at +0x0 (`lhu 0x0($a0)`) and the
+   record pointer at +0x4 (`lw 0x4($a0)`), stride 8.
+
+   THE OUTER LOOP MUST BE SPELLED WITH `goto`, AND THAT IS WORTH 2 WORDS.
+   Written as `while (*(u16 *)p != 0) { ...; p += 8; }` -- or as a `do`/`while`,
+   or over a `struct { u16; u8 *; } *` with `p++`, all three measured -- loop.c
+   strength-reduces the DEST_ADDR giv `p + 4` into a second induction register
+   and the function comes out 31 words: a `move $a3, $a0` plus an
+   `addiu $a0, $a0, 0x4` in the preheader and two separate `addiu ..., 0x8`
+   bumps, against the target's single `$a0` carrying both `0x0($a0)` and
+   `0x4($a0)`.  A `goto` back-edge emits no NOTE_INSN_LOOP_BEG --
+   scratch/gcc-src/cdk-gcc-b18/stmt.c:2214, in expand_start_loop at :2188,
+   is the only place that note is emitted -- and loop_optimize enumerates
+   loops solely from those notes
+   (scratch/gcc-src/cdk-gcc-b18/loop.c:415-421 counts them and :535-537 scans
+   them), so the outer loop is invisible to loop.c and nothing is reduced.
+   The cost test that would have declined the reduction anyway in a bigger
+   loop is loop.c:3996.  func_800A6328 does not need this because ITS inner
+   base is `*p` at offset 0, which is the biv itself and has nothing to
+   reduce; it measures 0 differing with either outer spelling.
+
+   29 words -- its header reads `nonmatching func_800A63C8, 0x74`, and
+   0x74/4 = 29.  Measured 0 differing.  Arity from func_800A643C's listing,
+   still a stub: it passes func_800A639C's return value (a pointer loaded out
+   of a stride-4 table) in $a0 and its own second argument in $a1. */
+void func_800A63C8(u8 *p, s32 v)
+{
+    s32 i;
+    s32 t;
+
+    if (*(u16 *)p == 0)
+    {
+        return;
+    }
+top:
+    i = 0;
+    do
+    {
+        if (*(u32 *)(i + *(s32 *)(p + 4)) & 0x20)
+        {
+            *(s32 *)(i + *(s32 *)(p + 4) + 8) = v;
+        }
+        t = *(u8 *)(i + *(s32 *)(p + 4)) & 0x80;
+        i += 0xC;
+    } while (t == 0);
+    p += 8;
+    if (*(u16 *)p != 0)
+    {
+        goto top;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A643C);
 
@@ -11165,7 +11284,47 @@ u32 func_800B091C(s32 a)
     return func_800491F4(a, D_800D15CC, 0x1F);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0944);
+/* The fourth member of func_800AFF00's set (with func_800B4CBC and
+   func_800B67A4): copies the two resident prim templates into the caller's
+   two buffers, binds them into the pair record and then overwrites six
+   fields.  Everything load-bearing is already recorded at func_800B67A4 --
+   the four trailing stores RE-READ `p->unk_04` because the intervening `sh`
+   may alias it, and `p->unk_00 = 0` goes AFTER both pointer stores.
+
+   WHAT IS PER-MEMBER IS THE ORDER OF THE SIX STORES, and this member does not
+   agree with func_800AFF00.  Here +0x0F comes third and +0x06 fourth, with
+   the +0x08 of the 12-byte prim last; func_800AFF00 and func_800B3688 put
+   +0x06 third, the 12-byte prim's +0x08 fourth and +0x0F last.  The constants
+   are 0 / -108 / 0x200 / 4 / 0 / 0x30.  +0x08 being 0 is why this member is
+   42 words with no `addiu` of its own for that store, the same count
+   func_800AFF00 reaches by sharing one -60 between +0x08 and +0x0A.
+
+   42 words -- its header reads `nonmatching func_800B0944, 0xA8`, and
+   0xA8/4 = 42.  Measured 0 differing.  Its one caller, func_800B13D4, is
+   still a stub; the signature is func_800AFF00's, which has a landed call
+   site. */
+void func_800B0944(UnkTownCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = 0;
+    p->unk_04->unk_0A = -108;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+    p->unk_04->unk_06 = 0;
+    p->unk_08->unk_08 = 0x30;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B09EC);
 
@@ -11625,7 +11784,52 @@ void func_800B260C(UnkTown260C *s, void *b, void *c)
     func_800B1DCC(s);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2834);
+/* A near-sibling pair with func_800B28A0 below.  Both copy a short byte
+   template onto the stack and return the index of the first byte equal to one
+   out-of-image flag, or the template's length if there is none.  The index is
+   what the callers subscript a table with: csrc/unk_72A8.c:5243 declares this
+   one `s32 func_800B2834(void)` and uses it as `D_8006AFDC[func_800B2834()]`,
+   which is where the signature comes from.
+
+   THE FLAG IS A CONSTANT ADDRESS CAST TO A POINTER, NOT A SYMBOL, and that is
+   the whole difference between 0 and 4 differing.  Both spellings emit the
+   same two instructions -- `lui` plus `lbu %lo(...)` -- so the listing cannot
+   tell them apart, and splat symbolised it as D_800133BA.  But
+   `extern u8 D_800133BA;` puts the `%hi` in a scratch register ($v0) and the
+   loaded byte in another, and sched1 then runs the pair AHEAD of the loop's
+   duplicated `s[0]` pre-test; the integer constant ties the `lui` and the
+   `lbu` to one register ($a1) and schedules the pair into the pre-test load's
+   delay slot, which is the target's order.  Four differing either way is the
+   same three words permuted.  Same convention as func_800B8C90 and the
+   0x800133xx stores above it.
+
+   The loop is INDEX-based, not pointer-based: `for (i = 0; s[i] != 0; i++)`
+   with the compare inside.  gcc strength-reduces it to the target's
+   `addiu $v1, $v1, 0x1` pointer walk; writing the pointer walk by hand puts
+   `i` and `q` in the other two argument registers, 5 differing with the
+   constant-address flag and 13 with the symbol.  Both `return i` paths are
+   cross-jumped into the one `addiu $sp` epilogue by themselves; no shared
+   `goto` exit is needed.
+
+   27 words -- its header reads `nonmatching func_800B2834, 0x6C`, and
+   0x6C/4 = 27.  Measured 0 differing. */
+s32 func_800B2834(void)
+{
+    u8 s[4];
+    s32 i;
+    s32 t;
+
+    memcpy(s, D_8008925C, 4);
+    t = *(u8 *)0x800133BA;
+    for (i = 0; s[i] != 0; i++)
+    {
+        if (s[i] == t)
+        {
+            return i;
+        }
+    }
+    return i;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_8008917C);
 
@@ -11635,7 +11839,55 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800891F8);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_8008925C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B28A0);
+/* func_800B2834's near-sibling -- see the note there for the constant-address
+   flag and the index loop.  Its template is 6 bytes rather than 4, so the copy
+   is the unaligned word plus two single bytes, and its flag is at 0x800133E6.
+   csrc/unk_72A8.c:5147 declares it `s32 func_800B28A0(void)`.
+
+   THIS ONE OWNS ITS RODATA AND THE DECLARED SIZE IS LOAD-BEARING.  D_80089260
+   has no `.s` file of its own: the block lives inside func_800B28A0.s as
+   `.asciz "%&'()"` -- 6 bytes, 25 26 27 28 29 00 -- followed by `.align 2`,
+   so the record occupies 8 bytes and the next record, D_80089268, starts at
+   0x80089268.  D_80089268.s is four bare `.byte` directives with no `.align`
+   of its own, so GAS will NOT put the two pad bytes back: this is case one of
+   docs/matching-levers.md's "A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER
+   .rodata SURVIVES", where losing the pad shifts every later record.
+
+   Hence the two-step spelling.  A LOCAL ARRAY INITIALISER (`u8 s[6] =
+   "%&'()";`) is 0 differing in text but emits only `.align 2` + six
+   `.ascii` bytes with no trailing pad -- destructive.  A plain
+   `memcpy(s, D_80089260, 6)` off the definition gives the array
+   4-byte alignment, so move_by_pieces takes the ALIGNED path and the copy
+   collapses to lw/lh/sw/sh: 26 words, 27 differing.  Loading the address into
+   a `const u8 *` first keeps the 8-byte definition AND the unaligned copy,
+   because get_pointer_alignment resolves a plain pointer VAR_DECL to its
+   pointee type's alignment (1) instead of the array's DECL_ALIGN.
+   `__attribute__((aligned(1)))` on the definition does not help -- the
+   directive is unchanged and the copy is still 26 words.
+
+   30 words -- its header reads `nonmatching func_800B28A0, 0x78`, and
+   0x78/4 = 30.  Measured 0 differing, and the unit's .rodata is
+   byte-identical to the stub build at the object level. */
+const u8 D_80089260[8] = "%&'()";
+
+s32 func_800B28A0(void)
+{
+    u8 s[6];
+    s32 i;
+    s32 t;
+    const u8 *src = D_80089260;
+
+    memcpy(s, src, 6);
+    t = *(u8 *)0x800133E6;
+    for (i = 0; s[i] != 0; i++)
+    {
+        if (s[i] == t)
+        {
+            return i;
+        }
+    }
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2918);
 
@@ -11873,7 +12125,38 @@ u32 func_800B3598(s32 a)
     return func_800491F4(a, buf.unk_00, 0x28);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3688);
+/* func_800AFF00's set again; see the note on func_800B0944.  This member keeps
+   func_800AFF00's statement order exactly and differs only in the two
+   constants: +0x08 is -60 and +0x0A is -92, where func_800AFF00 has -60 for
+   both.  That is the whole of the one-word difference -- func_800AFF00 shares
+   a single `addiu $v1, $zero, -0x3C` between the two stores and comes out 42
+   words, this one needs a second `addiu` and comes out 43.
+
+   43 words -- its header reads `nonmatching func_800B3688, 0xAC`, and
+   0xAC/4 = 43.  Measured 0 differing.  The signature is witnessed by the
+   landed call site below in func_800B37D4. */
+void func_800B3688(UnkTownCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -60;
+    p->unk_04->unk_0A = -92;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_06 = 0;
+    p->unk_08->unk_08 = 0x30;
+    p->unk_04->unk_0F = 4;
+}
 
 s32 func_800B3734(u8 *s)
 {
