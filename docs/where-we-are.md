@@ -314,12 +314,24 @@ size, the `-G` value, the struct layout, the flags.
    `docs/overlays.md` has the mechanisms; `progress.py` has the state.
 
    `town.bin`'s overlay is the one in progress and has its own operating
-   procedure in **`docs/town-sweep.md`**: the work ranking
-   (`tools/decomp/worklist.py`), the verbatim subagent brief, the traps, and
-   what is already established about its types. Start there rather than here
-   when continuing it. `main.bin`'s overlay is complete; `dungeon.bin`'s is
-   still an `asm` subsegment and its yaml records a boundary error to fix
-   before converting it.
+   procedure in **`docs/town-sweep.md`**: the nine-step loop, the work ranking,
+   the verbatim subagent brief with a measured list of what in it is
+   load-bearing, the traps, the seven parks, and what is established about its
+   types. Start there rather than here when continuing it. `main.bin`'s overlay
+   is complete; `dungeon.bin`'s is still an `asm` subsegment and its yaml
+   records a boundary error to fix before converting it.
+
+   **Two things about the ranking, as of 2026-11-02.** Run
+   `tools/decomp/nearsibs.py <unit> --groups` BEFORE `worklist.py`: it finds
+   the sets that are one source with small edits, which `families.py` masks
+   only `jal` targets and i-type immediates and so cannot see. It found a
+   four-function collision sweep that landed as **1,334 words from one reading
+   plus substitution** and reported 2,820 more words of candidates in the same
+   run. And the FAMILY pool is nearly drained -- `worklist.py --summary` went
+   from 69 families of 2+ totalling 1,892 words to 37 totalling 675 over one
+   session, against roughly a thousand twinless functions. The unit of work is
+   now a CLUSTER: functions sharing a caller, a callee, a record layout or a
+   near-identical shape.
 2. Devices stay in a number of landed functions, each deliberate and each
    documented at its site with what it is worth and what was ruled out.
    `grep -rn "DEVICE:" csrc/` is the index -- 27 comments as of 2026-11-01,
