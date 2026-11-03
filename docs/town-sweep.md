@@ -302,6 +302,13 @@ standalone) after three wrong guesses about which prototype had done it.
   `a->unk_50(a, b, c)` with **three** (`:8232`), and
   `a->unk_50(a, a, q, r)` with **four** (`:7517`). Every one of those
   type-checks against every handler, so none of them constrains anything.
+  **AND A REFERRER IS NOT A CALLER.** Before treating a name in
+  `grep -rl 'func_XXXX' asm/nonmatchings/ovl_town/` as a call site, check
+  WHICH: `grep -oE 'jal *func_XXXX|%hi\(func_XXXX\)'` on it. On 2026-11-02 I
+  briefed an agent that `func_8009B6B4`'s three referrers were callers whose
+  landing would settle its arity. All three only TAKE THE ADDRESS, there is no
+  `jal` to either target anywhere under `asm/nonmatchings/ovl_town/`, and
+  landing those three would add no witness at all.
   **The arity of a slot-installed handler comes from register usage in its OWN
   body**, and there are two usable forms: an argument register READ before it
   is written, and -- the sharper one -- a register the body never writes at all
