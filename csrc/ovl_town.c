@@ -1062,6 +1062,22 @@ void func_800CB060();
    yet, so it stays `s32` rather than become a guess with a type name on
    it. */
 void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
+void func_8003F320(void);
+extern u8 D_800D4740[];
+extern u8 D_800D4748[];
+extern u8 D_800D4750[];
+extern u8 D_800D6360[];
+extern u8 D_800D6364[];
+extern u8 D_800D6330[];
+extern u8 D_800D6338[];
+extern u8 D_800D6A0C[];
+extern u8 D_800D6A10[];
+extern u8 D_800D69DC[];
+extern u8 D_800D69E4[];
+extern u8 D_800D69B8[];
+extern u8 D_800D69BC[];
+extern u8 D_800D6988[];
+extern u8 D_800D6990[];
 /* Called with TWO args by 46 sites here and with THREE by func_8009A674 /
    func_8009A8EC (the dead-otherwise addu $a2 in the jal delay slot). The
    callee only reads lh 0x16($a1), so the third argument is unused; this
@@ -4732,9 +4748,22 @@ void func_8009A56C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_80098928(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A58C);
+/* A family of 3: zero the engine record D_80082660 names for this object's
+   stride-8 index, then run the per-member body. The store is in the jal's
+   delay slot, so it precedes the call in source. Two members differ only in
+   which field holds the index -- +0x40 against +0x60 -- which is why
+   families.py reports two varying words rather than one. */
+void func_8009A58C(u8 *s, UnkTown2AE8 *b, void *c)
+{
+    D_80082660[*(s32 *)(s + 0x40)].unk_00 = 0;
+    func_80098988(s, b, c);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A5C0);
+void func_8009A5C0(u8 *s, UnkTown2AE8 *b, void *c)
+{
+    D_80082660[*(s32 *)(s + 0x40)].unk_00 = 0;
+    func_80098988(s, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A5F4);
 
@@ -5731,9 +5760,25 @@ void func_800A12AC(void) {
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A12B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A130C);
+/* A family of 4, nine words each and no frame: copy three halfwords out of the
+   source into a packed s16 triple. The per-member offsets say which halves of
+   a 16.16 vector each takes -- 2/6/0xA are the INTEGER halves of the words at
+   0/4/8, 0/4/8 are the FRACTIONAL halves, and 0/2/4 is an already-packed
+   triple. That is four readings of the same UnkTown2AE8 layout and is why the
+   family has three distinct offset sets across four members. */
+void func_800A130C(SVECTOR *d, UnkTown2AE8 *b)
+{
+    d->vx = *(u16 *)((u8 *)b + 0x2);
+    d->vy = *(u16 *)((u8 *)b + 0x6);
+    d->vz = *(u16 *)((u8 *)b + 0xA);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1330);
+void func_800A1330(SVECTOR *d, UnkTown2AE8 *b)
+{
+    d->vx = *(u16 *)((u8 *)b + 0x0);
+    d->vy = *(u16 *)((u8 *)b + 0x2);
+    d->vz = *(u16 *)((u8 *)b + 0x4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1354);
 
@@ -6289,7 +6334,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8B98);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8BBC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8C84);
+void func_800A8C84(SVECTOR *d, UnkTown2AE8 *b)
+{
+    d->vx = *(u16 *)((u8 *)b + 0x2);
+    d->vy = *(u16 *)((u8 *)b + 0x6);
+    d->vz = *(u16 *)((u8 *)b + 0xA);
+}
 
 void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
 {
@@ -6397,7 +6447,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9E68);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9F14);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA044);
+void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
+{
+    d->vx = *(u16 *)((u8 *)b + 0x0);
+    d->vy = *(u16 *)((u8 *)b + 0x4);
+    d->vz = *(u16 *)((u8 *)b + 0x8);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA068);
 
@@ -11958,7 +12013,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2124);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C21F8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C22A4);
+/* A family of 3: one func_8003E4FC bind with a per-member descriptor, then
+   func_8003F320. func_8003E4FC is left implicitly declared, as it is at every
+   other call site in the project -- it has no prototype anywhere. */
+void func_800C22A4(void)
+{
+    func_8003E4FC(6, D_800D4740, 0);
+    func_8003F320();
+}
 
 void func_800C22D8(void)
 {
@@ -11984,7 +12046,11 @@ void func_800C2374(void)
     func_80022C8C(0, 0, 0, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C23A8);
+void func_800C23A8(void)
+{
+    func_8003E4FC(6, D_800D4748, 0);
+    func_8003F320();
+}
 
 void func_800C23DC(void)
 {
@@ -11998,7 +12064,11 @@ void func_800C2410(void)
     func_800212B8(0, 0, 0, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C2444);
+void func_800C2444(void)
+{
+    func_8003E4FC(6, D_800D4750, 0);
+    func_8003F320();
+}
 
 void func_800C2478(void)
 {
@@ -12302,9 +12372,25 @@ void func_800C3BB8(UnkTownActor *a)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3BF4);
+/* A family of 3: run the per-member body only if two flag bits are set in the
+   REND's +0x14 halfword. func_800C71F8 shares func_800C3BF4's callee exactly,
+   so the three members are two distinct bodies -- which families.py shows as a
+   varying `jal` and is a real call difference, not relocation noise. */
+void func_800C3BF4(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if ((c->unk_14 & 0x6000) != 0)
+    {
+        func_800C4174(a, b, c);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3C28);
+void func_800C3C28(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if ((c->unk_14 & 0x6000) != 0)
+    {
+        func_800C41D4(a, b, c);
+    }
+}
 
 void func_800C3C5C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -12609,7 +12695,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C4F6C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C5064);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C50CC);
+void func_800C50CC(u8 *s, UnkTown2AE8 *b, void *c)
+{
+    D_80082660[*(s32 *)(s + 0x60)].unk_00 = 0;
+    func_800C4174(s, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C5100);
 
@@ -13111,7 +13201,13 @@ void func_800C71A0(UnkTownActor *a, s32 b, s32 c)
     a->unk_54 = func_800C7138;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C71F8);
+void func_800C71F8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if ((c->unk_14 & 0x6000) != 0)
+    {
+        func_800C4174(a, b, c);
+    }
+}
 
 void func_800C722C(UnkTownActor *a, s32 b, s32 c)
 {
@@ -13506,7 +13602,16 @@ void func_800C88E0(void *arg0)
     func_800C3050(arg0, 0xA, D_800D6360, D_800D6364, D_800D6330, D_800D6338);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8928);
+/* A family of 3: four per-member descriptor pointers into the actor, at +0x58,
+   +0x5C and the +0x7C/+0x80 pair docs/town-sweep.md names. A leaf with no
+   frame -- the last store is in the jr's delay slot. */
+void func_800C8928(UnkTownActor *a)
+{
+    a->unk_58 = D_800D6360;
+    a->unk_5C = D_800D6364;
+    a->unk_7C = (UnkTownArg80 *)D_800D6330;
+    a->unk_80 = (UnkTownArg80 *)D_800D6338;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C895C);
 
@@ -14334,9 +14439,21 @@ void func_800CB6A8(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x7;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB708);
+void func_800CB708(UnkTownActor *a)
+{
+    a->unk_58 = D_800D6A0C;
+    a->unk_5C = D_800D6A10;
+    a->unk_7C = (UnkTownArg80 *)D_800D69DC;
+    a->unk_80 = (UnkTownArg80 *)D_800D69E4;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB73C);
+void func_800CB73C(UnkTownActor *a)
+{
+    a->unk_58 = D_800D69B8;
+    a->unk_5C = D_800D69BC;
+    a->unk_7C = (UnkTownArg80 *)D_800D6988;
+    a->unk_80 = (UnkTownArg80 *)D_800D6990;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB770);
 
