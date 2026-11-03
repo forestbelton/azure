@@ -536,6 +536,49 @@ object lists all 1819 names and **a stub verifies against itself**. Enumerate
 the sweep from the **C definitions** (the `awk` recipe above), never from the
 symbol table.
 
+### TWO AGENTS ON A CALLER/CALLEE PAIR WILL TYPE THE SAME RECORDS TWICE
+
+Hit on 2026-11-03 with `func_800A3B80` and `func_800A41D8`, which are adjacent
+in the image and are a caller/callee pair. Run in parallel, they landed an hour
+apart, and the second merge **did not compile**: the caller's landing had added
+a forward declaration
+
+    u32 *func_800A41D8(UnkTownA3B80 *, UnkTownRend *, UnkTownA3B80SP *, u32 *, s16);
+
+while the callee's own definition is
+
+    POLY_FT4 *func_800A41D8(UnkTownA41D8 *, UnkTownA41D8B *, UnkTownA41D8SP *, POLY_FT4 *, s16);
+
+Conflicting return type and three differently-named typedefs **for the same
+three records** -- the callee's `UnkTownA41D8B` duplicates the existing
+`UnkTownRend`, and its scratchpad typedef was the seventh to agree with
+`Unk463ECSP` field for field.
+
+**This is not a defect in either agent.** Neither can see the other's work, and
+a pointer parameter's pointee type is unobservable from the function itself
+(measured separately: three different pointee types, six measurements, all 0
+differing), so each one necessarily invents a name.
+
+**The resolution rule, in order:**
+1. **Prefer the DEFINITION over the forward declaration.** A caller's forward
+   declaration of a stub is almost always free -- the caller's own ablation
+   table will usually already say so; this one measured 406/0 with the
+   declaration omitted entirely. The definition is where the field accesses
+   are, so it is the expensive one to change.
+2. The unit rides an implicit declaration for a callee defined BELOW its call
+   site **18 times**, so dropping the declaration is the established shape, not
+   a compromise.
+3. Re-measure BOTH functions after the resolution, not just the one you are
+   landing. The gate that catches this is the pair, not the sweep.
+4. Record the duplicate typing as cleanup rather than unifying it during a
+   landing. Merging `Unk*SP` typedefs touches every function that uses them.
+
+**And brief the second agent of a known pair** about what the first added: the
+message that would have prevented this says which typedefs now exist and that
+the forward declaration is a constraint it may contradict with numbers. I sent
+exactly that message and it arrived after the agent had finished -- so send it
+when you LAUNCH the pair, not when the first one lands.
+
 ### `grep -c dlabel` IS NOT A RODATA SCREEN -- `endlabel` CONTAINS `dlabel`
 
 Every splat listing ends with `endlabel func_XXXXXXXX`, and the substring
