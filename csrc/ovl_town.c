@@ -257,7 +257,9 @@ typedef struct UnkTownRend
     u8 unk_0C;
     u8 unk_0D;
     u8 unk_0E;
-    u8 pad_0F[0x1];
+    /* Split out of pad_0F: func_800A3B80 writes +0x0F from byte 1 of the
+       +0x08 pointer.  No existing field moved. */
+    u8 unk_0F;
     s16 unk_10;
     s16 unk_12;
     s16 unk_14;
@@ -592,6 +594,35 @@ typedef struct UnkTownA1080SP
     VECTOR unk_34;
     VECTOR unk_44;
 } UnkTownA1080SP;
+
+/* The view func_800A3B1C walks (node + 0x20, the interior-pointer convention
+   this unit uses) as func_800A3B80 reads it: a facing-like halfword at +0x00
+   scaled by 32 into the ring's sine argument, a byte at +0x06 that seeds the
+   ring's start angle, and a halfword at +0x0C that picks which way the ring's
+   vertical offset is applied.  +0x00 and +0x0C are `lh`, +0x06 is `lbu`. */
+typedef struct UnkTownA3B80
+{
+    s16 unk_00;
+    u8 pad_02[0x4];
+    u8 unk_06;
+    u8 pad_07[0x5];
+    s16 unk_0C;
+} UnkTownA3B80;
+
+/* The 0x1F800000 scratchpad as func_800A3B80 lays it out, and the same
+   placement include/structs.h's Unk463ECSP already has: the OT base at +0x20
+   and the four RotAverageNclip4 input SVECTORs at +0x70, whose .vz
+   func_800A41D8 steps.  The one field Unk463ECSP has no name for is the
+   +0x118 pointer this function parks the render record's +0x08 in. */
+typedef struct UnkTownA3B80SP
+{
+    u8 pad_00[0x20];
+    u32 unk_20;
+    u8 pad_24[0x4C];
+    SVECTOR unk_70[4];
+    u8 pad_90[0x88];
+    u32 unk_118;
+} UnkTownA3B80SP;
 
 /* The 0x1F800000 scratchpad as func_800A17CC and the still-stubbed
    func_800A1354 use it: the OT base at +0x24 (D_80083160.unk_00 + 0xB0, which
@@ -1917,6 +1948,8 @@ extern UnkVec *D_80100D20;
 extern s32 D_80100D60;
 extern s16 D_80100D80;
 extern s16 D_80100D82;
+extern u16 D_80100D88;
+extern u16 D_80100D8A;
 void func_80094378(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 void func_800AAA58(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 void func_800A9F14(UnkTown2AE8 *b);
@@ -11336,7 +11369,245 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3918);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3B1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3B80);
+/* The town's ring emitter for one actor's skirt, driven by func_800A3B1C over
+   a linked list of these views: two sweeps of a circle, the first stepping the
+   ring angle UP by 0x80 a quad at a time and the second stepping it DOWN from
+   the same start, each stopping when func_800A41D8 hands back a null OT
+   pointer.  The pointer it last handed back goes into D_80083160.unk_00 +
+   0x8D0 at the end, and the function always returns 0.
+
+   The quad is built in the 0x1F800000 scratchpad as four SVECTORs at +0x70 --
+   the same placement include/structs.h's Unk463ECSP already has, its OT base
+   at +0x20 agreeing too -- and func_800A41D8 steps the four .vz at +0x74,
+   +0x7C, +0x84 and +0x8C before handing the four pointers to func_80065610,
+   which its eleven arguments make RotAverageNclip4.  This function writes only
+   .vx/.vy and writes each point TWICE, into [0] and [2] or into [1] and [3],
+   so each quad is one ring segment's two points extruded in z by the callee.
+   The reverse sweep writes the same two pairs in the opposite order, which is
+   the only difference between the two loops besides the sign of the step.
+
+   ONE DEAD PARAMETER, the middle one: func_800A3B1C passes three arguments
+   (`a1 = node->unk_08`, `a2 = node->unk_0C`) and $a1 is overwritten by the
+   first `%hi` before it is ever read -- the gap in the $aN sequence that
+   witnesses a dead MIDDLE parameter.  The third is the UnkTownRend, whose
+   +0x0F byte this function fills from byte 1 of its +0x08 pointer; that pad
+   is split for it here.
+
+   What is load-bearing, each measured against 406 words / 0 differing:
+
+   * `cur`, `up`, `x` and `y` are `s16` LOCALS, not s32 with `(s16)` casts.
+     s32 `cur`/`up` with casts is 402 words / 381 differing: combine turns the
+     angle into a shifted-left-16 representation (`lui 0x80`/`addu`/`sra`) and
+     drops the target's `addiu`/`addu`/`sll`/`sra` quartet.  s32 `x`/`y` is
+     390 / 342.
+
+   * `h = y;` as its own statement ahead of each `if`.  Written `y - (...)`
+     inside the arms it is 423 words / 359 differing: with the sign-extension
+     in the same basic block as its only consumer -- a 16-bit store --
+     combine's force_to_mode strips it.  As a separate statement it lands in
+     the block ABOVE the branch, which no LOG_LINK reaches.
+
+   * the two `if`/`else` results go into TWO SEPARATE locals with ONE store
+     pair after the join, not duplicated stores inside the arms.  One shared
+     local is 22 differing: the two live ranges want different registers ($v1
+     for the first pair, $v0 for the second) and gcc 2.7 splits no pseudo's
+     range.
+
+   * `cur * 4` is the LEFT operand of the sine argument.  Swapped it is 40
+     differing -- local-alloc ties the sum's output to the first input that
+     dies, so the swap moves $a0 onto the wrong half.
+
+   * `x` is stored AFTER `y` is computed, i.e. both calls then the store.
+     Storing between them is 48 differing; a store cannot be scheduled past
+     the second call.
+
+   * `cur = up = ...`, not `cur = ...; up = cur;` (2 differing) -- the chain
+     stores right-to-left, which is the `addu $s7` before the `addu $s6`.
+
+   * `e` is a LOCAL assigned as a STATEMENT (initialising it in its
+     declaration is 405 words / 397 differing): the load has to sit next to
+     its use for the load-delay `nop` to appear.
+
+   * the scratchpad goes through STRUCT FIELDS, not `*(s16 *)((u8 *)sp + N)`
+     casts (403 words / 364 differing) -- the non-in-struct MEMs let sched1
+     shuffle the stores, the same finding csrc/unk_113D0.c's note records.
+
+   * `g` is declared FIRST so its `lui` is shared with the symbolic
+     `D_80083160.unk_00`; D_80083160 is reached both ways here, the shape
+     csrc/unk_1811C.c's func_80044D24 note records.
+
+   Measured and NOT load-bearing, so do not re-derive them: where
+   `cur += 0x80;` sits relative to the first .vy store (0 differing on either
+   side of it), and whether `g->unk_C8` is read through a `(u16)` cast (0
+   either way -- `& 0xF00` lets force_to_mode turn the `lh` into the target's
+   `lhu` by itself).
+
+   406 words -- its header reads `nonmatching func_800A3B80, 0x658`, and
+   0x658/4 = 406.  0 differing, with all 32 R_MIPS_26 and all 10 %hi/%lo
+   records decoded against the listing and all ten internal `j` targets
+   checked by index. */
+u32 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp, u32 *ot, s16 flag);
+
+s32 func_800A3B80(UnkTownA3B80 *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownA3B80SP *sp = (UnkTownA3B80SP *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    u32 *ot = *(u32 **)(base + 0x8D0);
+    u32 *t;
+    u8 *e;
+    u16 cx = D_80100D88;
+    u16 cy = D_80100D8A;
+    s16 cur;
+    s16 up;
+    s16 x;
+    s16 y;
+    s32 h;
+    s32 ya;
+    s32 yb;
+
+    sp->unk_20 = (u32)(base + 0x8B0);
+    e = (u8 *)c->unk_08;
+    sp->unk_118 = (u32)e;
+    c->unk_0F = e[1];
+    cur = up = a->unk_06 + 0xC00 - ((g->unk_C8 + 0x80) & 0xF00);
+    x = func_80064584(cur) * 6 - cx;
+    y = func_800644B8(cur) * 6 - cy;
+    for (;;)
+    {
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            ya = h - (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            ya = h + (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        cur += 0x80;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = ya;
+        x = func_80064584(cur) * 6 - cx;
+        y = func_800644B8(cur) * 6 - cy;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            yb = h - (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            yb = h + (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        sp->unk_70[1].vy = sp->unk_70[3].vy = yb;
+        t = func_800A41D8(a, c, sp, ot, 0);
+        if (t == NULL)
+        {
+            break;
+        }
+        ot = t;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            ya = h - (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            ya = h + (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        cur += 0x80;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = ya;
+        x = func_80064584(cur) * 6 - cx;
+        y = func_800644B8(cur) * 6 - cy;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            yb = h - (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            yb = h + (func_800644B8(cur * 4 + a->unk_00 * 32) >> 1);
+        }
+        sp->unk_70[1].vy = sp->unk_70[3].vy = yb;
+        t = func_800A41D8(a, c, sp, ot, 1);
+        if (t == NULL)
+        {
+            break;
+        }
+        ot = t;
+    }
+    x = func_80064584(up) * 6 - cx;
+    y = func_800644B8(up) * 6 - cy;
+    for (;;)
+    {
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            ya = h - (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            ya = h + (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        up -= 0x80;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = ya;
+        x = func_80064584(up) * 6 - cx;
+        y = func_800644B8(up) * 6 - cy;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            yb = h - (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            yb = h + (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        sp->unk_70[0].vy = sp->unk_70[2].vy = yb;
+        t = func_800A41D8(a, c, sp, ot, 1);
+        if (t == NULL)
+        {
+            break;
+        }
+        ot = t;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            ya = h - (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            ya = h + (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        up -= 0x80;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = ya;
+        x = func_80064584(up) * 6 - cx;
+        y = func_800644B8(up) * 6 - cy;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        h = y;
+        if (a->unk_0C != 0)
+        {
+            yb = h - (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        else
+        {
+            yb = h + (func_800644B8(up * 4 + a->unk_00 * 32) >> 1);
+        }
+        sp->unk_70[0].vy = sp->unk_70[2].vy = yb;
+        t = func_800A41D8(a, c, sp, ot, 0);
+        if (t == NULL)
+        {
+            break;
+        }
+        ot = t;
+    }
+    *(u32 **)(g->unk_00 + 0x8D0) = ot;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A41D8);
 
