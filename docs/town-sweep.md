@@ -32,6 +32,30 @@ you write the generator from.
 Roughly 300 of the remaining functions are in families of 2+; the other ~1000
 have no twin and cost one reading each. Do the families first.
 
+## A family's NEIGHBOURS are often near-siblings it does not group
+
+`families.py` masks `jal` targets and i-type immediates to group, but it does
+NOT mask the operator or the branch condition. So a function that is the same
+source with `+=` for `-=`, or `> 0` for `< 0`, lands in no family at all and is
+counted among the "no twin" singletons.
+
+This is worth money. After landing `func_8008BACC` (33 words, family of 2), its
+two listing neighbours `func_8008BB50` and `func_8008BA44` -- both reported as
+singletons -- fell to the same body in one compile each: `+0x08` with `+=` and
+`> 0` for the first, and `-0x100` plus one trailing store for the second. 67
+words for two compiles and no reading.
+
+So when a family lands, spend two minutes on the functions immediately around
+its members in the unit:
+
+    grep -n 'INCLUDE_ASM' csrc/ovl_town.c | grep -A3 -B3 func_XXXX
+
+and try the landed body against each with the obvious operator or offset
+changed. The cost is one compile; `ovlverify` answers in seconds. This
+matters more as the sweep goes on, because the family pool drains while the
+~1000 singletons do not, and some unknown fraction of those singletons are
+near-siblings of something already landed.
+
 ## The loop
 
 1. `worklist.py ovl_town --count 6` for the next round.
@@ -63,6 +87,19 @@ failed assert should leave `csrc/` untouched so you can fix and re-run.
   sibling, not relocation noise — substitute the callee too. This cost two
   bytes in the container on 2026-11-02 and is the one trap that survives a
   clean verify.
+* **A PARAMETER THAT IS NEVER READ HAS NO WITNESS, so a 0-differing
+  definition can still have the wrong ARITY.** `ovlverify` cannot see it and
+  neither can `families.py`; only a caller can. On 2026-11-02 the
+  `func_800B0158` family came back with one parameter, measured 0 differing on
+  all four members, and the container build then failed with "too many
+  arguments to function" because four landed callers pass two. An unused
+  `void *` second parameter fixed it and all four still measured 0 differing,
+  because an unused parameter costs no words. Check the arity BEFORE landing:
+  `grep -n 'func_XXXX' csrc/<unit>.c` for landed callers, and when there are
+  none, `grep -rl 'jal.*func_XXXX' asm/nonmatchings/ovl_town/` and read the
+  caller's `$a0`/`$a1`/`$a2` setup. A function whose address is only TAKEN (a
+  handler installed in a slot) has no arity witness at all, and any arity
+  compiles.
 * **`make build/town.bin` is the only authority.** `ovlverify` compares one
   function's words and is blind to a jump table landing at the wrong address
   and to rodata order.
@@ -117,6 +154,16 @@ NOT inherit context — spawn fresh ones.
 > - `tools/decomp/magic.py <constant>` turns a division magic number back into
 >   its divisor.
 >
+> IMPORTANT — SIGNATURE ARITY: a parameter that is never read has no witness in
+> the listing, so a definition that measures 0 differing can still have the
+> wrong number of parameters, and only the container build will catch it.
+> Before you settle on a signature, `grep -n 'FUNC' csrc/ovl_town.c` and check
+> how any EXISTING CALLER calls it and how many arguments it passes. If there
+> are none, `grep -rl 'jal.*FUNC' asm/nonmatchings/ovl_town/` and read the
+> caller's argument setup. Report what you found, including "no callers
+> anywhere" if that is the case, and say which parameters your body actually
+> reads.
+>
 > WRITE your candidate to `scratch/agent_FUNC.c` as a standalone file:
 > `#include "common.h"`, then copies of whatever typedefs/declarations you need
 > (taken from csrc/ovl_town.c), then the function. Nothing else.
@@ -162,7 +209,21 @@ that come up constantly:
   onto the symbol, so `D_80082660[4].unk_00 = 0` is how the `+0x20` slot is
   written, not a separate symbol.
 
-## The one park
+## The parks
+
+Both are excluded from `worklist.py`. `parkstats.py --check` and `nmcheck.py`
+must stay at 0 problems; a park with no parseable `func_XXXXXXXX (unit)` header
+line fails both, and because `parkstats.py` treats the FIRST comment block as
+the header, running it on such a file REPLACES the prose with generated stats.
+Keep the one-line header stub at the top of every park and the documentation
+below it, in the body, where `normalise_body` preserves it.
+
+`docs/near-misses/func_800CE2D4.c` — 46 words, 92 with its byte-identical twin
+func_800CE62C, at 13 DIFF. It deliberately carries the 13-DIFF spelling rather
+than an 8-DIFF one that is structurally wrong; the park explains why, says
+plainly that the generated verdict is SHAPE and not ALLOC, and names the
+local-alloc `qty_order` decision a permuter run should aim at. No permuter has
+been run on it.
 
 `docs/near-misses/func_800BA00C.c` — a 279-word entity spawner, 558 words with
 its twin, at 109 differing words with every difference a register assignment.
