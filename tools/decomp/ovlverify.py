@@ -76,10 +76,21 @@ def listing(func):
     per_fn = os.path.join(PROJ, "asm", "nonmatchings", ovl, func + ".s")
     if os.path.exists(per_fn):
         return per_fn
+    # An overlay can be split across SEVERAL translation units, and then its
+    # listings live under the unit's directory, not the overlay's --
+    # overlay_for() maps an address range to ONE name and cannot know that.
+    # ovl_town was carved into three units on 2026-11-03 and every function in
+    # the carved range stopped resolving. Search the sibling unit directories
+    # before giving up.
+    import glob as _glob
+    for cand in sorted(_glob.glob(os.path.join(
+            PROJ, "asm", "nonmatchings", ovl + "_*", func + ".s"))):
+        return cand
     whole = os.path.join(PROJ, "asm", ovl + ".s")
     if os.path.exists(whole):
         return whole
-    raise SystemExit(f"no listing for {func}: neither {per_fn} nor {whole}")
+    raise SystemExit(f"no listing for {func}: not in {ovl} or any {ovl}_* unit, "
+                     f"and no {whole}")
 
 
 def target(func):

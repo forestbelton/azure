@@ -105,7 +105,33 @@ segments:
     vram: 0x80088760
     subsegments:
       - [0xb000, .rodata, ovl_town]
+      # The two rodata splits this file's own note below predicted. They are
+      # NOT cosmetic: cc1psx emits `.align 3` for every jump table, and
+      # jtbl_800898AC sits at rodata offset 0x114C, which is 4 mod 8 -- so
+      # compiled inside one big unit it gains four bytes of pad the reference
+      # does not have, .rodata goes 0x2524 -> 0x252C, and the container is
+      # eight bytes long. The reference has no missing alignment: the whole
+      # ORIGINAL translation unit sat at 4 mod 8, and `subalign: 4` above (plus
+      # SUBALIGN(4) in the generated linker script) is what reproduces that.
+      # So the fix is to give those functions their own unit whose rodata
+      # STARTS at 0x114C, where `.align 3` is a no-op.
+      #
+      # 0xc1a0 is the boundary condition and is not optional: the middle unit's
+      # rodata must END at 0x80089900 so the tail unit begins with
+      # func_800BF4CC's table at tail-offset 0. Put the split anywhere later
+      # and jtbl_80089900 lands at 4 mod 8 and gets padded instead -- the same
+      # bug one symbol further on. With it here, every later `.align 3` in the
+      # tail lands 0 mod 8: D_80089918 at 0x18, jtbl_80089930 at 0x30,
+      # D_80089944 at 0x44, D_80089960 at 0x60, jtbl_80089978 at 0x78,
+      # D_8008998C at 0x8C. The unit's other fifteen tables are all below
+      # 0x800898AC and unaffected.
+      #
+      # Evidence and the measurement trail: docs/near-misses/func_800BEBA4.c.
+      - [0xc14c, .rodata, ovl_town_800BEBA4]
+      - [0xc1a0, .rodata, ovl_town_800BF3F0]
       - [0xd524, c, ovl_town]
+      - [0x41444, c, ovl_town_800BEBA4]
+      - [0x41c90, c, ovl_town_800BF3F0]
   # The rest of the container: assets, and the overlay's own data beyond its
   # code. splat suggests rodata file splits at 0xc14c and 0xc1a0 (jump tables
   # that are not file-aligned), which is the next step whenever this overlay's

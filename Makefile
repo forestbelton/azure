@@ -154,11 +154,17 @@ endif
 MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                   --run-assembler --gnu-as-path=$(AS) --use-comm-section -G0
 
-build/csrc/ovl_main_80020000.o: CFLAGS := $(CFLAGS_G0)
-build/csrc/ovl_main_80020000.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
-
-build/csrc/ovl_town.o: CFLAGS := $(CFLAGS_G0)
-build/csrc/ovl_town.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+# EVERY overlay translation unit is -G0, so this is a PATTERN rule rather than
+# one pair of lines per unit. It used to be per-unit, and carving ovl_town into
+# three units on 2026-11-03 showed why that is a trap: the two new units
+# silently inherited the default (resident) flags, the container came out 0xC0
+# bytes long, and the first symptom was a landed 27-word function compiling to
+# 29 words -- with cc1psx's own output IDENTICAL in both contexts, because the
+# difference was entirely in CFLAGS/MASPSXFLAGS. carve.py printed "the new unit
+# needs NO Makefile change", which is true for a resident unit and wrong for an
+# overlay one; it now says so.
+build/csrc/ovl_%.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/ovl_%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.

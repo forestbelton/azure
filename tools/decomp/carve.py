@@ -32,15 +32,45 @@ PROJ = os.environ.get(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
 
-DEF = r"^[A-Za-z_][A-Za-z0-9_ \*]*\b%s\s*\([^;]*\)\s*\{"
 STUB = r'^INCLUDE_ASM\("[^"]+",\s*%s\)\s*;'
+
+# A signature's opening line, brace or no brace. The old DEF pattern required
+# `{` on the SAME line, which this project never writes: its style is Allman
+# (see the clang-format config), so the brace is always on its own line.
+# Consequence, found on 2026-11-03 by carving ovl_town: preamble_end() matched
+# no definition at all, fell through to the first INCLUDE_ASM, and swallowed
+# every Allman definition above it into the "preamble" -- which carve.py then
+# COPIED INTO ALL THREE UNITS. func_8008AC84 ended up defined three times and
+# the link would have failed on a duplicate symbol. find_start() and find_end()
+# had the same blindness, so carve.py could only ever cut at a STUB; a landed
+# function was not carvable.
+SIG = r"^[A-Za-z_][A-Za-z0-9_ \*]*\b(func_[0-9A-Fa-f]+)\s*\("
+
+
+def is_def(lines, i, func=None):
+    """Does lines[i] open a function DEFINITION (not a declaration)?
+
+    Decided by what comes first scanning forward: a `{` means definition, a
+    `;` means it was a declaration. Both forms can run over several lines --
+    this unit has a declaration whose first line carries no `;` at all, which
+    is the benign off-by-one the sweep recipe documents, and it must NOT be
+    read as a definition here.
+    """
+    m = re.match(SIG, lines[i])
+    if not m or (func is not None and m.group(1) != func):
+        return False
+    for j in range(i, min(i + 12, len(lines))):
+        if "{" in lines[j]:
+            return True
+        if ";" in lines[j]:
+            return False
+    return False
 
 
 def preamble_end(lines):
     """Index of the first function definition or stub -- the preamble ends there."""
     for i, l in enumerate(lines):
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_ \*]*\bfunc_[0-9A-Fa-f]+\([^;]*\)\s*\{", l) \
-                or re.match(r'^INCLUDE_ASM\(', l):
+        if is_def(lines, i) or re.match(r'^INCLUDE_ASM\(', l):
             return i
     return 0
 
@@ -49,7 +79,7 @@ def find_start(lines, func):
     """Line index where `func` begins, including a comment block above it."""
     at = None
     for i, l in enumerate(lines):
-        if re.match(DEF % re.escape(func), l) or re.match(STUB % re.escape(func), l):
+        if is_def(lines, i, func) or re.match(STUB % re.escape(func), l):
             at = i
             break
     if at is None:
@@ -71,7 +101,7 @@ def find_end(lines, func):
     """Line index just past `func`'s body (its closing brace at column 0)."""
     at = None
     for i, l in enumerate(lines):
-        if re.match(DEF % re.escape(func), l) or re.match(STUB % re.escape(func), l):
+        if is_def(lines, i, func) or re.match(STUB % re.escape(func), l):
             at = i
             break
     if at is None:
@@ -141,7 +171,32 @@ def main():
     if tailunit:
         print("      - [0x?????, c, %s]" % tailunit)
     print()
-    print("the new unit needs NO Makefile change. If it was carved because its")
+    print("CHECK THESE THREE THINGS, each of which silently broke the ovl_town")
+    print("carve on 2026-11-03 before it was caught:")
+    print()
+    print("1. AN OVERLAY UNIT NEEDS THE -G0 OVERRIDE. The Makefile now carries a")
+    print("   `build/csrc/ovl_%.o:` PATTERN rule for CFLAGS and MASPSXFLAGS, so a")
+    print("   new ovl_* unit is covered automatically -- but a unit named anything")
+    print("   else is NOT, and inherits the resident's -G8. The first symptom was a")
+    print("   landed 27-word function compiling to 29 words with cc1psx's own")
+    print("   output IDENTICAL in both contexts, and the container 0xC0 bytes long.")
+    print("   (A RESIDENT unit needs no Makefile change; that part was always true.)")
+    print()
+    print("2. THE NEW UNITS NEED DECLARATIONS FOR WHAT THEY CALL ACROSS THE CUT.")
+    print("   A callee DEFINED above the cut is only a definition, not a")
+    print("   declaration, so the unit that keeps the call sites loses its")
+    print("   prototype. Taking an ADDRESS fails loudly (`undeclared`); a plain")
+    print("   CALL rides an implicit declaration and SILENTLY CHANGES CODEGEN.")
+    print("   After carving, build each unit and add a prototype for every")
+    print("   `undeclared` name, then re-measure every landed function in all")
+    print("   three units -- not just the one you were aiming at.")
+    print()
+    print("3. SPLAT NEEDS .rodata SUBSEGMENTS, NOT JUST `c` ONES, if the unit owns")
+    print("   rodata. Each new unit's rodata must start and end on the boundaries")
+    print("   its own symbols imply; splat's own `find_file_boundaries` suggestions")
+    print("   in the yaml comments are usually exactly right. Then `make splat`.")
+    print()
+    print("If it was carved because its")
     print("functions reach a global $gp-relatively, say so in C instead: give")
     print("the unit a file-scope tentative definition of that object, e.g.")
     print("      u32 D_80081234;          /* no extern, no initialiser */")

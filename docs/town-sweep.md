@@ -902,11 +902,41 @@ for leaf code. Two cheaper routes, each one `sed` or `grep` away:
 
 ### MEASURING THE CLANG-FORMAT COMPLAINT COUNT
 
-Run it from the project directory so `.clang-format` is found:
-`clang-format --dry-run csrc/ovl_town.c 2>&1 | grep -c "warning:"` -> must be
-**37**. `--assume-filename` does **not** pick up the repo's `.clang-format` and
-reports 10,965; `-style=file:.clang-format` does. And `--dry-run -Werror`
-returns 0 for that grep because `-Werror` changes the output text.
+Run it from the project directory so `.clang-format` is found, and **over all
+THREE units**, because ovl_town was carved on 2026-11-03:
+
+    for u in ovl_town ovl_town_800BEBA4 ovl_town_800BF3F0; do
+      clang-format --dry-run csrc/$u.c 2>&1 | grep -c "warning:"
+    done            # 31 + 0 + 5 = 36
+
+**The total is 36, not the 37 it was before the carve**, and the arithmetic is
+worth knowing because it is not a coincidence. The carve duplicates the
+unit's 3,026-line preamble into each new unit, so any complaint IN THE PREAMBLE
+is counted once per unit: 37 became 39 the moment the carve landed, all of it
+one doubled blank line after `} UnkTown2AE8;`. Fixing that one line in all
+three files -- the `MaxEmptyLinesToKeep` class, which has cost this sweep three
+separate regressions -- took it to 36. So **a preamble complaint now costs 3,
+and a body complaint costs 1.**
+
+`--assume-filename` does **not** pick up the repo's `.clang-format` and reports
+10,965; `-style=file:.clang-format` does. And `--dry-run -Werror` returns 0 for
+that grep because `-Werror` changes the output text.
+
+### THE UNIT IS NOW THREE UNITS, AND EVERY WHOLE-UNIT CHECK HAS TO LOOP
+
+`ovl_town` was carved into `ovl_town` (to 0x800BEBA4), `ovl_town_800BEBA4`
+(0x800BEBA4..0x800BF3F0) and `ovl_town_800BF3F0` (the rest). The sweep, the
+format count and `progress.py` all report per unit now:
+
+    for u in ovl_town ovl_town_800BEBA4 ovl_town_800BF3F0; do
+      awk '/^[A-Za-z_].*func_[0-9A-Fa-f]{8}\(/ && !/;/' csrc/$u.c \
+        | grep -oE 'func_[0-9A-Fa-f]{8}' | sort -u > /tmp/l_$u.txt
+      python3 tools/decomp/ovlverify.py csrc/$u.c $(cat /tmp/l_$u.txt | tr '\n' ' ')
+    done
+
+**And the benign off-by-one is now THREE off-by-ones**, because the multi-line
+declaration of `func_800C3050` lives in the duplicated preamble. Expect
+`progress.py`'s per-unit landed counts plus one per unit.
 
 ## The agent brief
 

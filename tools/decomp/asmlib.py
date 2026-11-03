@@ -42,23 +42,54 @@ CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include']
 _G_BY_UNIT = None
 
 
+def _makefile_g_map(var):
+    """{unit: -G} from the Makefile's per-object `VAR := $(VAR_G<n>)` rules.
+
+    Handles PATTERN rules as well as explicit targets, and that is not
+    optional: on 2026-11-03 the per-unit overlay lines were replaced by one
+    `build/csrc/ovl_%.o:` pattern, this parser stopped matching, and
+    cc1_g_for_unit fell back to its default of 8 for every overlay -- which is
+    precisely the failure its own docstring calls "silent in the worst way".
+    Two parks silently re-measured 10 words longer before it was caught.
+    Explicit targets win over patterns; the longest pattern prefix wins among
+    patterns.
+    """
+    exact, pats = {}, []
+    try:
+        mk = open(os.path.join(PROJ, 'Makefile')).read()
+    except OSError:
+        return exact, pats
+    # join the backslash continuations so one rule is one line
+    mk = mk.replace('\\\n', ' ')
+    for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
+                         r'\s*:\s*' + var + r'\s*:?=\s*\$\(' + var + r'_G(\d+)\)',
+                         mk, re.M):
+        for o in m.group(1).split():
+            stem = os.path.basename(o)[:-2]
+            if '%' in stem:
+                pats.append((stem, int(m.group(2))))
+            else:
+                exact[stem] = int(m.group(2))
+    pats.sort(key=lambda kv: -len(kv[0]))
+    return exact, pats
+
+
+def _g_lookup(exact, pats, unit, default):
+    if unit in exact:
+        return exact[unit]
+    import fnmatch
+    for pat, g in pats:
+        if fnmatch.fnmatchcase(unit, pat.replace('%', '*')):
+            return g
+    return default
+
+
 def gas_g_for_unit(unit):
     """The gas -G this unit is built with, from the Makefile's own rules."""
     global _G_BY_UNIT
     if _G_BY_UNIT is None:
-        _G_BY_UNIT = {}
-        try:
-            mk = open(os.path.join(PROJ, 'Makefile')).read()
-        except OSError:
-            mk = ''
-        # join the backslash continuations so one rule is one line
-        mk = mk.replace('\\\n', ' ')
-        for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
-                             r'\s*:\s*MASPSXFLAGS\s*:?=\s*\$\(MASPSXFLAGS_G(\d+)\)',
-                             mk, re.M):
-            for o in m.group(1).split():
-                _G_BY_UNIT[os.path.basename(o)[:-2]] = int(m.group(2))
-    return _G_BY_UNIT.get(unit, 0)
+        _G_BY_UNIT = _makefile_g_map('MASPSXFLAGS')
+    return _g_lookup(_G_BY_UNIT[0], _G_BY_UNIT[1], unit, 0)
 
 
 _CC1_G_BY_UNIT = None
@@ -77,18 +108,8 @@ def cc1_g_for_unit(unit):
     """
     global _CC1_G_BY_UNIT
     if _CC1_G_BY_UNIT is None:
-        _CC1_G_BY_UNIT = {}
-        try:
-            mk = open(os.path.join(PROJ, 'Makefile')).read()
-        except OSError:
-            mk = ''
-        mk = mk.replace('\\\n', ' ')
-        for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
-                             r'\s*:\s*CFLAGS\s*:?=\s*\$\(CFLAGS_G(\d+)\)',
-                             mk, re.M):
-            for o in m.group(1).split():
-                _CC1_G_BY_UNIT[os.path.basename(o)[:-2]] = int(m.group(2))
-    return _CC1_G_BY_UNIT.get(unit, 8)
+        _CC1_G_BY_UNIT = _makefile_g_map('CFLAGS')
+    return _g_lookup(_CC1_G_BY_UNIT[0], _CC1_G_BY_UNIT[1], unit, 8)
 
 
 _GP_DEFS_BY_UNIT = {}
@@ -252,6 +273,17 @@ def _listing_rows(unit, func):
     with no glabel at all falls back to every row.
     """
     path = '%s/asm/nonmatchings/%s/%s.s' % (PROJ, unit, func)
+    if not os.path.exists(path):
+        # An overlay split across several translation units keeps each
+        # function's listing under its UNIT's directory, not the overlay's.
+        # ovl_town was carved into three on 2026-11-03 and every caller that
+        # passes the overlay name stopped resolving; the park for
+        # func_800CE2D4 failed with a bare FileNotFoundError.
+        import glob as _glob
+        alt = sorted(_glob.glob('%s/asm/nonmatchings/%s_*/%s.s'
+                                % (PROJ, unit, func)))
+        if alt:
+            path = alt[0]
     lines = open(path).readlines()
     start = next((i + 1 for i, ln in enumerate(lines)
                   if re.match(r'\s*glabel\s+%s\s*$' % re.escape(func), ln)), None)
