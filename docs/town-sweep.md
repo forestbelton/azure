@@ -489,7 +489,7 @@ that come up constantly:
 
 ## The parks
 
-**There are SIX.** This section said "Both" until 2026-11-02 and listed only
+**There are SEVEN.** This section said "Both" until 2026-11-02 and listed only
 the last two below; `ls docs/near-misses/` is the authority, and `worklist.py`
 excludes all of them.
 
@@ -518,6 +518,18 @@ Ordered by what they are worth attempting next:
   0x800B8618/0x800B867C and an OPCODE difference at 0x800B8724. Flagged as
   permuter work and never given one. Read the LENGTH line first: the +1 is the
   thing to fix, and the 94 is positional noise downstream of it.
+* **`func_800B83DC.c` -- 131 of 131 words, verdict ALLOC, TWO register-only
+  differences, and the closest park in the unit.** Parked 2026-11-02 after
+  about 63 measured spellings. Two of its three switch arms are word-exact
+  INCLUDING every register; the residue is that the target puts a `high` pseudo
+  and its load's destination in one register where the candidate gives the
+  `high` the lowest free one. The cause is read off the `.lreg`/`.greg` dumps
+  and written into the park: the hard `$v0` set by the arm's `return 1` overlaps
+  the load's live range but not the `high`'s, sched1 cannot reorder because the
+  dependence is an anti-dependence with cost 0, and local-alloc's `combine_regs`
+  never sees the pair because its operand loop strips `PLUS` and `MULT` but not
+  `LO_SUM`. **This is the one to give the permuter first** -- it is the ALLOC
+  class the protocol is for and the search space is one `if` statement.
 * **`func_800B6FB8.c` -- 76 of 77 words, verdict LENGTH (-1), and the
   diagnosis is a compiler fact rather than a spelling.** Parked 2026-11-02
   after ~2,900 compiles. The target materialises the constant 7 TWICE for two
