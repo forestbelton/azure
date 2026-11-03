@@ -114,7 +114,12 @@ typedef struct UnkTownTask
     s16 unk_0A;
     u8 pad_0C[0x4];
     s16 unk_10;
-    u8 pad_12[0x24];
+    u8 pad_12[0x1A];
+    /* The UnkTownColl the camera task is currently bound to: func_8009B9BC
+       reads it in its prologue and compares it against its own second
+       parameter to decide whether to suppress the +0x50 poll. */
+    void *unk_2C;
+    u8 pad_30[0x6];
     /* A target position: one pair computes the angle from here to the mover
        with func_8003BD84 and steers by it. The actor twin of that function
        uses +0x88/+0x8A for the same thing. */
@@ -136,7 +141,15 @@ typedef struct UnkTownDispatch
 {
     void (*unk_00)();
     void (*unk_04)();
-    u8 pad_08[0x48];
+    /* +0x08..+0x18: five more slots, witnessed by func_8009B9BC (+0x08,
+       +0x0C, +0x10, +0x14) and func_8009B2C4 (+0x00, +0x18), both of which
+       dispatch through a->unk_58 with all four of their own parameters. */
+    void (*unk_08)();
+    void (*unk_0C)();
+    void (*unk_10)();
+    void (*unk_14)();
+    void (*unk_18)();
+    u8 pad_1C[0x34];
     void (*unk_50)();
     void (*unk_54)();
     u8 pad_58[0x10];
@@ -402,6 +415,17 @@ typedef struct UnkTownCFCB4
 {
     u8 pad_00[0x10];
     s32 unk_10;
+    u8 pad_14[0x4];
+    /* +0x18 is an index into D_800CFDD8, and +0x1C/+0x3A have exactly
+       UnkTownColl's layout -- func_8009B2C4 reads b->unk_3A[k] and
+       D_800CFCB4.unk_3A[i] off the same two shapes, and tests
+       b->unk_1C[1] == &D_800CFCB4 against D_800CFCB4.unk_1C[0] == b, so the
+       two objects are linked both ways.  NOT merged with UnkTownColl: that
+       would move unk_10, which six landed call sites read. */
+    s32 unk_18;
+    void *unk_1C[6];
+    u8 pad_34[0x6];
+    u8 unk_3A[6];
 } UnkTownCFCB4;
 
 /* The record D_800CFCC4 points at. func_800927EC reads the u8 at +0x14 and
@@ -1764,6 +1788,7 @@ s16 func_800C2F14(s16 a, s16 b);
 void func_800A6A94(UnkVec *p);
 void func_800A6B70(UnkVec *p);
 extern UnkTownCFCB4 D_800CFCB4;
+extern s32 D_800CFDD8[];
 extern void (*D_800FE5D8)();
 void func_800945B8(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_800946A0(UnkTownTask *t, UnkTown2AE8 *b, void *c);
@@ -2382,6 +2407,15 @@ void func_800C15C0();
 void func_800C170C();
 void func_800C1F8C();
 s32 func_800C21F8();
+/* func_8009B2C4 and func_8009B9BC compare the camera task's +0x00 handler
+   against these three.  Same case as the five above: the address is taken
+   with no `jal`, so ovlverify masks the word and only the container build
+   can see a wrong symbol.  func_800AA5F8 is LANDED further down, so this is
+   a forward declaration of its real signature rather than an unprototyped
+   placeholder -- an implicit declaration at the use site would not compile. */
+void func_800920F4();
+void func_800933FC();
+void func_800AA5F8(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
 extern s32 D_80083788;
 extern s32 D_800D0428;
 /* func_800BC840 installs func_800BC764 at the UnkNode's +0x10.  It is an
@@ -8787,7 +8821,75 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B218);
 void func_8009B2BC(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B2C4);
+/* 100 words -- its header reads `nonmatching func_8009B2C4, 0x190`, and
+   0x190/4 = 100.  Measured 0 differing.  No jump table, no rodata of its own.
+
+   FOUR parameters, and the last two are REAL even though the body never
+   writes or reads them: both ASM callers (func_8009B454 word 51, func_8009B594
+   word 44) set $a0..$a3 and `jal` here, and all three calls out of this
+   function forward all four -- which costs no setup insn, because $a0..$a3 are
+   still the incoming values at every one of them.  The arity is ALSO witnessed
+   inside this function, by register PRESSURE rather than by a read: with two
+   parameters $a2/$a3 are free and local-alloc puts the D_800CFCB4 address and
+   its index in them instead of $t0/$t1, which is 100 words / 5 differing.
+   `find_free_reg` unions `regs_live_at[]` across a quantity's live range into
+   its `used` set (local-alloc.c:2180-2181) and that set is seeded from
+   `basic_block_live_at_start` (:1269), which at entry holds one argument
+   register per declared parameter.
+
+   D_800CFCB4.unk_18 is read twice, once off the materialised lo_sum
+   (`lw 0x18($t1)`) and once with the %lo folded (`lui %hi(D_800CFCCC)` /
+   `lw %lo(D_800CFCCC)`).  Both are THIS spelling: splat names a relocation by
+   the address it resolves to, and D_800CFCB4 + 0x18 == D_800CFCCC.  The second
+   read is a reload rather than a reuse of $t0 because word 38 is a join of two
+   branches, where cse1's table is reset.
+
+   The `unk_3A[i] == 1` test guards ONLY the func_800924EC arm -- word 22
+   branches to word 38, the func_80092698 test, not past the whole chain. */
+s32 func_8009B2C4(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    if ((UnkTownColl *)D_800CFCB4.unk_10 == b)
+    {
+        if (b->unk_3A[D_800CFDD8[D_800CFCB4.unk_18]] != 0)
+        {
+            if (D_800CFCB4.unk_3A[D_800CFCB4.unk_18] == 1 &&
+                D_80083498.unk_20.unk_00 == func_800924EC)
+            {
+                ((UnkTownDispatch *)a->unk_58)->unk_00(a, b, c, d);
+                return 1;
+            }
+            if (D_80083498.unk_20.unk_00 == func_80092698)
+            {
+                func_8009C120(a, b, c, d);
+                return 1;
+            }
+            if (D_80083498.unk_20.unk_00 == func_800927EC && D_800CFCB4.unk_18 == 0)
+            {
+                func_8009C148(a, b, c, d);
+                return 1;
+            }
+        }
+    }
+    if (D_800CFCB4.unk_3A[0] == 0 || D_800CFCB4.unk_1C[0] != b)
+    {
+        if (b->unk_3A[1] == 0)
+        {
+            return 0;
+        }
+        if (b->unk_1C[1] != &D_800CFCB4)
+        {
+            return 0;
+        }
+    }
+    if (D_80083498.unk_20.unk_00 != func_80091F64 &&
+        D_80083498.unk_20.unk_00 != func_800920F4 &&
+        D_80083498.unk_20.unk_00 != func_8009204C)
+    {
+        return 0;
+    }
+    ((UnkTownDispatch *)a->unk_58)->unk_18(a, b, c, d);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B454);
 
@@ -8895,7 +8997,104 @@ void func_8009B8E8(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c,
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B9BC);
+/* 162 words -- its header reads `nonmatching func_8009B9BC, 0x288`, and
+   0x288/4 = 162.  Measured 0 differing.  No jump table, no rodata of its own.
+
+   Four parameters, all four witnessed: the prologue copies $a0..$a3 into
+   $s4/$s3/$s2/$s5 and $s5 is forwarded as the fourth argument of every slot
+   call and of func_8009C340.  No landed caller and no `jal` to this symbol
+   exists -- the two dispatcher comparisons at the `->unk_50` tests are
+   REFERRERS that only take its address -- so the arity comes from its own
+   register use, and the slot calls' `(a, b, c, d)` shape from the landed
+   func_8009B6B4 / func_8009BC44 pair twenty lines away.
+
+   *** t->unk_00, NOT D_80083498.unk_20.unk_00, AND THAT IS FOUR WORDS. ***
+   The task pointer local is read ONCE, for +0x2C, so it needs the lo_sum in a
+   register ($v1, caller-saved, dead before the first call) -- while every
+   +0x00 read folds the %lo and goes through the symbol's own %hi register,
+   which is therefore what has to survive the three calls in $s6.  Spelled as
+   the member expression the two share one lo_sum in $s6 and the +0x00 read
+   becomes `lw 0x0($s6)`: 162 words, 4 differing, all four register-or-
+   displacement only.  This is the same per-site split the landed
+   func_80093C70 relies on (`addiu $s0, $s2, %lo(D_800834B8)` for the pointer,
+   `sw $v0, %lo(D_800834B8)($s2)` for the handler, with both registers live).
+   Writing `t` as a declaration initialiser instead of a statement measures
+   identically here (0 differing), unlike the cases the lever list records.
+
+   *** D_800D0420 MUST BE A POINTER LOCAL, and that is one word. ***
+   `*(s32 *)(D_800D0420 + 8)` written inline at both sites folds the %lo into
+   the load and never materialises the lo_sum: 161 words, 147 differing.  The
+   declared scalar `D_800D0428` is the same 161 / 147 AND relocates against
+   the wrong symbol -- the target's reloc is D_800D0420 with 0x8 as a load
+   displacement, which is the opposite of what func_8009B828 four functions up
+   needed, so this one cannot be copied from that one.
+
+   *** THE LAST ARM IS WRITTEN INVERTED, and that is one word plus 32. ***
+   The slot call is the THEN and `poll = 0` the ELSE, which puts the call in
+   the fall-through at word 132 and `poll = 0` at 141 behind a `j`/`nop` pair.
+   The natural conjunction -- `if ((h == f1 || ... ) && o == b) poll = 0; else
+   call;` -- swaps them, and `poll = 0` then fits in the `j`'s delay slot: 161
+   words, 32 differing.  Neither arm returns, so this is NOT the "early return
+   is laid out inline" lever; it is the de Morgan spelling that makes the
+   nine `beq`s land on the `o == b` test (word 130) and the func_800352FC
+   `beqz` land on the call (word 132), which is what the target has. */
+void func_8009B9BC(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    UnkTownTask *t;
+    UnkTown2AE8 *pd;
+    void *o;
+    s32 n;
+    s32 poll;
+
+    t = &D_80083498.unk_20;
+    pd = (UnkTown2AE8 *)D_800D0420;
+    o = t->unk_2C;
+    c->unk_00 = ((UnkTown2AE8 *)D_80083780)->unk_00;
+    c->unk_04 = ((UnkTown2AE8 *)D_80083780)->unk_04;
+    c->unk_08 = ((UnkTown2AE8 *)D_80083780)->unk_08 + pd->unk_08;
+    func_8008F170(c, D_800FE488);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    n = ((UnkTown2AE8 *)D_80083780)->unk_08 + pd->unk_08;
+    if (n - c->unk_08 >= 0x10)
+    {
+        c->unk_08 = n + *(s32 *)(*(u8 **)((u8 *)b + 0xC) + 0x14);
+    }
+    poll = 1;
+    if (t->unk_00 == func_800930E4 || t->unk_00 == func_80093250)
+    {
+        ((UnkTownDispatch *)a->unk_58)->unk_08(a, b, c, d);
+    }
+    else if (t->unk_00 == func_800AA5F8)
+    {
+        ((UnkTownDispatch *)a->unk_58)->unk_14(a, b, c, d);
+    }
+    else if (t->unk_00 == func_80093328)
+    {
+        ((UnkTownDispatch *)a->unk_58)->unk_0C(a, b, c, d);
+    }
+    else if (t->unk_00 == func_80093638)
+    {
+        func_8009C340(a, b, c, d);
+    }
+    else if ((t->unk_00 != func_80092698 && t->unk_00 != func_800927EC &&
+              t->unk_00 != func_80092A84 && t->unk_00 != func_80092FF0 &&
+              t->unk_00 != func_80092CD4 && t->unk_00 != func_80092DA8 &&
+              t->unk_00 != func_80092ECC && t->unk_00 != func_800933FC &&
+              t->unk_00 != func_80090A6C && func_800352FC() == 0) ||
+             o != b)
+    {
+        ((UnkTownDispatch *)a->unk_58)->unk_10(a, b, c, d);
+    }
+    else
+    {
+        poll = 0;
+    }
+    if (poll && func_8009B120((u8 *)a + 0x4C))
+    {
+        func_800C172C();
+    }
+}
 
 void func_8009BC44(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
 {
