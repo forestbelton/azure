@@ -10783,7 +10783,157 @@ void func_800B8A9C(void)
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800894D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8B00);
+/* The event-flag setter: a 66-entry jump table over an event id, biased by 1,
+   that either claims a slot in the 0x800133A4 pair table (the first arm) or
+   writes the id -- or a constant standing in for it -- to one of seven flag
+   bytes. 32 of the 66 indices are holes and fall to the epilogue, so no
+   `default:` is written. The arms are in SOURCE order, which is the listing's
+   block order, and whether a constant arm falls through into its shared store
+   or reaches it with a `j` is decided by that order alone: case 55 and 56
+   precede their stores and fall in, case 57 and 63 follow theirs and get the
+   `j` with the constant in the delay slot.
+
+   FOUR THINGS ARE LOAD-BEARING, and the first is worth 14 words.
+
+   - THE SHARED STORE VALUE MUST BE ONE VARIABLE, not a literal per arm.
+     Writing each arm independently is 114 words, 97 differing. A single
+     `s16 v = arg;` reassigned in the constant arms is 0. Cross-jumping runs in
+     jump2, AFTER sched2 and so after register allocation, so the merge fires
+     only when the constant and the default value already occupy the same hard
+     register -- and making them one pseudo in the source is the only reliable
+     way to arrange that. This is the positive counterpart to func_800B7E78's
+     shared case labels: shared LABELS are a source-level fact, shared TAILS
+     are a post-allocation one, and both have to be right.
+
+   - `v` MUST BE DECLARED BEFORE `ids`. Declaration order fixes the order of
+     the INITIALISATION CODE as well as aggregate stack slots: the
+     parameter-save `addu $t0, $a0, $zero` lands at word 1, ahead of the
+     10-word block copy, only in that order. Swapped, or with `v` declared
+     last, it is 33 differing at the same word count -- pure SHAPE at the top
+     of the function, easy to misread as a scheduling problem.
+
+   - `v = 9;` must be the loop arm's FIRST statement, even though it is only
+     read in the second loop: moved to between the two loops it is 20
+     differing.
+
+   - Each loop needs its own base local and its own `i = 0;` ahead of it.
+     Sharing one base across the two loops is 5 differing, and putting the
+     counter in the `for`'s init clause is 2 differing per loop -- two more
+     measurements of the rule func_800B8A40 established.
+
+   The subject is `s16`, witnessed strongly: `s32 arg` is 98 words / 93
+   differing with no `sll`/`sra` at all, and `u16 arg` is 99 / 96 with an
+   `andi 0xffff`. The `addiu -0x1` / `sll 16` / `sra 16` / `sltiu` sequence is
+   NOT a cast -- stmt.c folds `index - minval` in the index type, so for HImode
+   the subtract is free and narrowing, and do_tablejump then sign-extends
+   HImode to SImode. Bias FIRST, extension SECOND is what identifies a plain
+   `switch` on a `short`; a source-level `(s16)(x - 1)` would put them the same
+   way round but a source-level `s16` used directly extends before any
+   arithmetic.
+
+   Left unwitnessed, so that nobody re-measures them: `u8 v` and `s16 v` are
+   both 0 differing (both truncating moves from the parameter) while `s32 v` is
+   101 / 100, so only "narrower than int" is pinned; and `== 9` and `== v` in
+   the loop tests are both 0, so the target holding 9 in two registers does not
+   discriminate the literal from the variable.
+
+   `ids` reads the shared D_800894D0 as a struct copy for the reason
+   func_800B8C90's comment gives. */
+void func_800B8B00(s16 arg)
+{
+    s16 v = arg;
+    UnkTownRo5 ids = D_800894D0;
+    u8 *base;
+    u8 *base2;
+    s32 i;
+
+    switch (arg)
+    {
+    case 6:
+    case 8:
+    case 9:
+    case 11:
+    case 12:
+    case 42:
+    case 43:
+        v = 9;
+        i = 0;
+        base = (u8 *)0x80010000;
+        for (; i < 5; i++)
+        {
+            if (base[ids.v[i] * 2 + 0x33A4] == 9)
+            {
+                return;
+            }
+            if (base[ids.v[i] * 2 + 0x33A5] == 9)
+            {
+                return;
+            }
+        }
+        i = 0;
+        base2 = (u8 *)0x80010000;
+        for (; i < 5; i++)
+        {
+            if (base2[ids.v[i] * 2 + 0x33A5] == 0)
+            {
+                base2[ids.v[i] * 2 + 0x33A5] = v;
+                return;
+            }
+        }
+        break;
+    case 55:
+        v = 10;
+        *(u8 *)0x800133A7 = v;
+        break;
+    case 10:
+    case 44:
+        *(u8 *)0x800133A7 = v;
+        break;
+    case 17:
+    case 18:
+        *(u8 *)0x800133A9 = v;
+        break;
+    case 56:
+        v = 3;
+        *(u8 *)0x800133BB = v;
+        break;
+    case 1:
+    case 2:
+    case 3:
+    case 64:
+    case 65:
+    case 66:
+        *(u8 *)0x800133BB = v;
+        break;
+    case 57:
+        v = 2;
+        *(u8 *)0x800133BB = v;
+        break;
+    case 63:
+        v = 1;
+        *(u8 *)0x800133BB = v;
+        break;
+    case 4:
+    case 5:
+        *(u8 *)0x800133C5 = v;
+        break;
+    case 15:
+    case 16:
+        *(u8 *)0x800133C7 = v;
+        break;
+    case 7:
+    case 45:
+        *(u8 *)0x800133C9 = v;
+        break;
+    case 37:
+    case 38:
+    case 39:
+    case 40:
+    case 41:
+        *(u8 *)0x800133E7 = v;
+        break;
+    }
+}
 
 /* The town event gate: 1 only if four out-of-image flag pairs are all set and
    every one of the four ids in D_800895F0 appears somewhere in the 0x22-entry
