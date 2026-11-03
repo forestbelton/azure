@@ -1127,7 +1127,7 @@ void func_80097DE8();
 void func_80098928();
 void func_80098988();
 void func_8009AE88();
-void func_800B62A4();
+void func_800B62A4(u8 *p, UnkTownCardPair **b);
 void func_800B8248();
 void func_800BB508();
 void func_800C0C88();
@@ -9053,19 +9053,106 @@ void func_800B61C0(u8 *p, UnkTownCardPair **b, s32 i)
     b[i + 14]->unk_04->unk_0A = i * 0x10 + 0x66;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B62A4);
+/* The card-panel slot filler: it fills the three destination slots 0..2 from
+   three sources in order and then blanks whatever is left. `c` is the
+   destination cursor every callee is handed, and it advances ONLY for a source
+   that was present, so the three phases compact into the slots. Phase 1 walks
+   the three 3-byte records at p+8/p+11/p+14 -- the stride-3 loop
+   func_800B6094's comment describes, and its 8/11/14 is this function's $s3.
+   Phase 2 is func_800B59A4's recipe. Phase 3 is the single record at p+0x48,
+   guarded by p[0x49], so the record is at least 0x4A bytes. Phase 4 zeroes
+   b[i + 14]->unk_00 for every slot the first three did not fill.
+
+   Four things are load-bearing, each measured over about forty spellings:
+
+   - The first argument must be `&p[i * 3 + 8]`, an ARRAY REF whose address is
+     taken, NOT `p + i * 3 + 8`. The subscript is its own giv (8, 11, 14 in
+     $s3) added to the parameter at the use; the left-associated pointer form
+     folds that giv into the LOAD's address giv and emits `addiu $a0, $s2, 8`
+     instead: 80 words, 80 differing. The two forms differ only in whether the
+     +8 lands in the giv's initial value or in the MEM's displacement.
+
+   - Phase 2's bound is `i + n < 3` with the COUNTER FIRST. `n + i < 3` emits
+     the addu's operands the other way round, 1 differing; `i < 3 - n` hoists
+     the subtraction into a register, 16 differing.
+
+   - list must be 3 or 4 pointers -- both 0 differing, the same 8-byte rounding
+     bucket as func_800B59A4's buf -- and `u8 *list[2]` is 16 differing, from
+     the frame dropping to 0x38.
+
+   - THE SECOND `n = c;` IS NOT REDUNDANT DECORATION. Without it the function is
+     82 words and 1 differing, the phase-3 guard's `beqz` landing at +0xF4 where
+     the target has +0xCC, with every other word already exact and immovable:
+     twenty spellings of the loop and eleven of the following `if` all stay at
+     that displacement. The target's label sits BETWEEN the compare and the
+     branch that uses it, which is a rotated loop's entry guard that was only
+     HALF threaded, and getting there needs thread_jumps to fail before it
+     reaches the label. One insn between the loop-end label and the test's
+     compare does that -- and it must then vanish, or it costs a word. A dead
+     re-snapshot does both, since flow deletes it long after thread_jumps has
+     run. `n = c;`, `n = 0;`, `n = i;` and `n++;` are all 0 differing; `n = n;`
+     is 1, because it emits no insn at all. See docs/matching-levers.md, "A
+     HALF-THREADED GUARD EDGE NEEDS AN INSN THAT BREAKS thread_jumps' WALK AND
+     THEN DISAPPEARS", which also records why an empty `__asm__ volatile` is
+     NOT a substitute here and why a LIVE copy is worse.
+
+   Insensitive, all 0 differing: `continue` for the null slot, nested ifs for
+   phase 3's `&&`, `p + 0x48` for `&p[0x48]`, phase 4 as a `while`, phase 2
+   hand-rotated, and any declaration order of c/n/i, since only `list` claims a
+   stack slot. Phase 4 must index a SEPARATE variable: running it on `c` itself
+   is 81 words, 42 differing. */
+void func_800B62A4(u8 *p, UnkTownCardPair **b)
+{
+    u8 *list[3];
+    s32 c;
+    s32 n;
+    s32 i;
+
+    c = 0;
+    for (i = 0; i < 3; i++)
+    {
+        if (p[i * 3 + 8] != 0)
+        {
+            func_800B6094(&p[i * 3 + 8], b, c);
+            c++;
+        }
+    }
+    func_80069EC8(list, 0xC);
+    func_800B58B8((u32 *)list, p);
+    n = c;
+    for (i = 0; i + n < 3; i++)
+    {
+        if (list[i] != NULL)
+        {
+            func_800B61C0(list[i], b, c);
+            c++;
+        }
+    }
+    n = c;
+    if (n < 3 && p[0x49] != 0)
+    {
+        func_800B61C0(&p[0x48], b, c);
+        c++;
+    }
+    for (i = c; i < 3; i++)
+    {
+        b[i + 14]->unk_00 = 0;
+    }
+}
 
 void func_800B63EC(u8 *p, UnkTownCardPair **b)
 {
-    func_800B62A4();
+    func_800B62A4(p, b);
 }
 
 /* func_800B5AC8's twin over the other four panel builders, with the same
    forwarded third parameter into the same first-call position.
 
-   It is the arity witness for func_800B63EC, which reads neither parameter:
-   this call site sets up both, so the landed func_800B63EC carries two unused
-   ones, which cost no words. It is NOT the witness for func_800B5C60's third
+   It is the arity witness for func_800B63EC, which forwards both parameters
+   into func_800B62A4 -- and that forward costs no instruction, so the two
+   arguments were already in place when func_800B63EC was landed calling
+   func_800B62A4 with none. The container build did not catch it either,
+   because a K&R `void func_800B62A4();` declaration accepts any call. It is NOT the witness for func_800B5C60's third
    parameter -- that forward is free and invisible here; func_800B6508 is. */
 void func_800B640C(u8 *p, UnkTownCardPair **b, s32 c)
 {
