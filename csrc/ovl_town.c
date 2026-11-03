@@ -18376,11 +18376,253 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089634);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089660);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BE0D4);
+/* func_800BE214's constant pool: nine animation-descriptor pointers, 0x24
+   bytes at 0x80089684.  It HAS its own asm/nonmatchings/ovl_town/D_80089684.s
+   and keeps its INCLUDE_RODATA, so it is `extern` and the function copies
+   FROM it -- the D_800894D0/D_800895F0 configuration, not the func_800B5E28
+   one.  THE LINE MUST STAY BETWEEN THE TWO FUNCTIONS BELOW: 0x80089684 is
+   exactly where it lands when it follows func_800BE0D4's jump table and
+   precedes func_800BE214's, and nothing else puts it there.
+
+   WRITING IT AS A LOCAL ARRAY INITIALISER IS THE TRAP THIS SWEEP HAS ALREADY
+   LOST A BUILD TO, AND IT IS INVISIBLE TO EVERY CHECK BUT THE BUILD.
+   Measured 2026-11-03: `void *tbl[9] = {(void *)0x800F9B58, ...};` is 176
+   words / 0 differing and sweeps clean, and it grows the unit's .rodata from
+   0x2524 to 0x254C -- 0x24 of duplicated pool plus 0x4 of realignment ahead
+   of the jump table -- shifting every record from 0x80089684 on.  The struct
+   copy emits no rodata at all and is byte-identical at the object level.
+
+   0x24 bytes is past cc1psx's straight-line limit, so the block move comes
+   out as a LOOP (two 0x10 iterations) plus a 0x4 leftover, which is the
+   fingerprint to look for in the other pool copies in this overlay. */
+typedef struct
+{
+    void *v[9];
+} UnkTownRo9;
+
+extern const UnkTownRo9 D_80089684;
+extern void *D_800F9D80;
+
+/* One of the UnkNode +0x10 handlers func_800BDB20 installs (func_800BE4D4
+   passes its address, and func_800BC8D0 stores it to the node's -0x10 off the
+   actor view), so it is reached through func_80040190's cast in
+   csrc/unk_12DEC.c -- `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20,
+   p->unk_08, p->unk_0C)`, three parameters, the first being the node's +0x20
+   actor view.  `q` is a DEAD MIDDLE PARAMETER, witnessed by the gap in the
+   $aN sequence: the prologue reads $a0 and $a2 and never touches $a1.
+
+   A five-state ribbon: run the renderable, then on each state either bind the
+   next descriptor out of the actor view's +0xA0/+0xA4/+0xA8 and step the
+   state, or stall.  func_800352FC is the resident "is something else driving
+   the frame" gate and func_800C2AB4 the "is this actor the one the camera
+   task is following" gate; the pair is spelled `&&` throughout, and cases 2
+   and 4 are the same pair NEGATED, which is what puts their `beqz`es on the
+   fallthrough side.
+
+   The +0xA0/+0xA4/+0xA8 trio is DESCRIPTOR POINTERS here (three `lw`s handed
+   straight to func_8003DB94) and NOT the s16/s32 pair func_800BE214 reads at
+   the same offsets, so the two bodies view different objects through the same
+   actor-view prefix and neither one's spelling transfers to the other.  Both
+   are out past UnkTownActor's 0x92, hence the casts.
+
+   80 words -- its header reads `nonmatching func_800BE0D4, 0x140`, and
+   0x140/4 = 80.  0 differing, first compile. */
+void func_800BE0D4(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
+{
+    func_800478B8((s32)r);
+    switch (a->unk_68)
+    {
+    case 0:
+        if (func_800352FC() && func_800C2AB4(a))
+        {
+            func_8003DB94(r, *(void **)((u8 *)a + 0xA4), 0);
+            a->unk_68++;
+        }
+        break;
+    case 1:
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            func_8003DB94(r, *(void **)((u8 *)a + 0xA8), 0);
+            a->unk_68++;
+        }
+        break;
+    case 2:
+        if (!(func_800352FC() && func_800C2AB4(a)))
+        {
+            a->unk_68++;
+        }
+        break;
+    case 3:
+        if (func_800352FC() && func_800C2AB4(a))
+        {
+            func_8003DB94(r, *(void **)((u8 *)a + 0xA0), 0);
+            a->unk_68++;
+        }
+        break;
+    case 4:
+        if (!(func_800352FC() && func_800C2AB4(a)))
+        {
+            a->unk_68 = 0;
+        }
+        break;
+    }
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089684);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BE214);
+/* func_800BE0D4's bigger sibling -- the other address func_800BE4D4 hands
+   func_800BDB20, so the same func_80040190 three-parameter cast applies, and
+   here all three parameters are read (`q` takes the integer half of its +0x08
+   at +0xA, the idiom this unit already uses for a 16.16 word).
+
+   A 97-case switch over the actor view's +0x68 with only eleven live arms (0,
+   0x20..0x27, 0x40, 0x60), which is why cc1psx emits a 97-entry table at
+   0x800896A8 with 85 entries pointing at the default.  THE TABLE'S ADDRESS IS
+   0 MOD 8, so the `.align 3` cc1psx puts before a jump table (final.c:1634-1638)
+   emits nothing here and this is not one of the two blocked functions.
+
+   The trailing `.word 0x00000000` splat shows inside jtbl_800896A8's dlabel
+   is NOT part of this table: the table is 97 words and ends at 0x8008982C,
+   and that word is the pad func_800BE4D4's own `.section .rodata / .align 3`
+   lays down ahead of jtbl_80089830.  It comes back by itself while that
+   function is still INCLUDE_ASM -- verified at the object level, .rodata
+   byte-identical.
+
+   case 0 draws a state out of func_80069EF8: the `& 7` result goes to +0x68
+   AND to +0xA4 from the SAME register, so it is a local, while the descriptor
+   index is a RELOAD of +0x68 (`lh`) and so is written as the field.  Both
+   halves of that are witnessed -- indexing with the local instead,
+   `tbl.v[t]`, is 175 words / 129 differing.
+
+   THE 0x6000 GATE IS WRITTEN SEVEN TIMES IN SOURCE -- once in each of the six
+   0x20..0x27 arms, once in the shared tail -- AND SIX COPIES SURVIVE.  Each
+   arm's false edge lands on the EPILOGUE at .L800BE4B8 and not on the tail's
+   own test at .L800BE488, and that is NOT an early `return` in the source:
+   jump.c's thread_jumps (scratch/gcc-src/cdk-gcc-b18/jump.c:4485, algorithm
+   comment at :4490) finds the arm's `beqz`, the label it branches to, and the
+   branch after that label, walks back from both until the patterns differ or
+   a label is hit, and -- reaching the first branch's target with no pending
+   register equivalents (:4622) -- rewrites the first branch's destination.
+   Measured both ways, 2026-11-03: plain `break` and an explicit `return;` in
+   all six arms are 176 words / 0 differing EACH, so the early return is not
+   witnessed and the ordinary `break` is kept.  Do not re-measure this.
+
+   WHICH IDENTICAL ARMS GET UNIFIED IS NOT UNIFORM, and both halves of that
+   have to be written the way they are.  33/34 and 38/39 are four separate
+   case labels over two source bodies of identical text and gcc collapses them
+   to the single block at .L800BE3E0 by itself.  36 and 37 are the same
+   situation and gcc does NOT: it cross-jumps only their two-insn tail (into
+   .L800BE45C, which case 0x40 also reaches) and leaves the eleven insns above
+   duplicated.  So they must stay TWO case bodies with identical text;
+   collapsing them to one `case 36: case 37:` label is 165 words / 74
+   differing.  The one structural difference between the two pairs is that
+   36/37's bodies contain a call with a %hi/%lo pair in them.
+
+   case 0x40 sweeps a facing: `(+0x6C << 12) / 22` -- the divisor is read off
+   the magic, 0x2E8BA2E9 == floor(2^34 / 22) + 1 with post-shift 2 -- and the
+   counter runs to 0xDC == 10 * 22, so ten full 0x1000 turns.  The post-
+   increment is real: the `slti` tests the OLD value sign-extended while the
+   `sh` stores old + 1.
+
+   +0xA0 is read as `u16` to get the `lhu`, but that is NOT witnessed: `s16`
+   is also 176 / 0, because both reads feed a halfword store and cc1psx
+   narrows the whole expression to HImode either way.  Left unwitnessed so
+   nobody re-measures it.  (func_800BE4D4 stores a WORD there, so the field is
+   probably s32 and this is its low half; nothing here can tell.)
+
+   176 words -- its header reads `nonmatching func_800BE214, 0x2C0`, and
+   0x2C0/4 = 176.  0 differing, first compile. */
+void func_800BE214(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
+{
+    UnkTownRo9 tbl = D_80089684;
+    s32 t;
+
+    func_800478B8((s32)r);
+    switch (a->unk_68)
+    {
+    case 0:
+        if (func_800352FC() && func_800C2AB4(a))
+        {
+            t = func_80069EF8() & 0x7;
+            a->unk_68 = t;
+            *(s32 *)((u8 *)a + 0xA4) = t;
+            func_8003DB94(r, tbl.v[a->unk_68], 0);
+            a->unk_68 += 0x20;
+        }
+        break;
+    case 32:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        func_8003DB94(r, tbl.v[0], 0);
+        *(s16 *)((u8 *)a + 0x6C) = 0;
+        *(s32 *)((u8 *)a + 0xA4) = 0;
+        *(s16 *)((u8 *)q + 0xA) = *(u16 *)((u8 *)a + 0xA0);
+        a->unk_68 = 0x60;
+        break;
+    case 33:
+    case 34:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        a->unk_68 = 0x60;
+        break;
+    case 35:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        *(s16 *)((u8 *)a + 0x6C) = 6;
+        *(s32 *)((u8 *)a + 0xA4) = 8;
+        func_8003DB94(r, tbl.v[8], 0);
+        a->unk_68 = 0x40;
+        break;
+    case 36:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        func_8003DB94(r, &D_800F9D80, 0);
+        a->unk_68 = 0x20;
+        break;
+    case 37:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        func_8003DB94(r, &D_800F9D80, 0);
+        a->unk_68 = 0x20;
+        break;
+    case 38:
+    case 39:
+        if ((r->unk_14 & 0x6000) == 0)
+        {
+            break;
+        }
+        a->unk_68 = 0x60;
+        break;
+    case 64:
+        *(s16 *)((u8 *)q + 0xA) =
+            *(u16 *)((u8 *)a + 0xA0) + (func_80064584((a->unk_6C << 12) / 22) >> 8);
+        if (a->unk_6C++ >= 0xDC)
+        {
+            a->unk_68 = 0x20;
+        }
+        break;
+    case 96:
+        if (!(func_800352FC() && func_800C2AB4(a)))
+        {
+            a->unk_68 = 0;
+        }
+        break;
+    }
+    if ((r->unk_14 & 0x6000) != 0)
+    {
+        func_8003DB94(r, tbl.v[*(s32 *)((u8 *)a + 0xA4)], 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BE4D4);
 
