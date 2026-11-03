@@ -555,6 +555,70 @@ typedef struct UnkTownPlane
     s16 unk_04;
 } UnkTownPlane;
 
+typedef struct UnkTownCastPoly
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+    u8 pad_08[0x8];
+    u16 unk_10;
+    u8 pad_12[0x4];
+    u8 unk_16;
+    u8 unk_17;
+} UnkTownCastPoly;
+
+typedef struct UnkTownCastGeo
+{
+    u16 *unk_00;
+    UnkTownCastPoly **unk_04;
+    SVECTOR *unk_08;
+    SVECTOR *unk_0C;
+    u8 pad_10[0x4];
+    s16 unk_14;
+    u8 pad_16[0x2];
+    u16 unk_18;
+    u16 unk_1A;
+} UnkTownCastGeo;
+
+typedef struct UnkTownCastSP
+{
+    u8 pad_00[0x4];
+    u16 unk_04;
+    u8 pad_06[0x12];
+    SVECTOR *unk_18;
+    u16 unk_1C;
+    u16 unk_1E;
+    u16 unk_20;
+    u8 pad_22[0xE];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    s32 unk_3C;
+    s32 unk_40;
+    s32 unk_44;
+    u16 unk_48;
+    u16 unk_4A;
+    u16 unk_4C;
+    u16 unk_4E;
+    u16 unk_50;
+    u16 unk_52;
+    s32 unk_54;
+    s32 unk_58;
+    s32 unk_5C;
+    s32 unk_60;
+    s32 unk_64;
+    s32 unk_68;
+    s16 unk_6C;
+    s16 unk_6E;
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    s16 unk_76;
+    s16 unk_78;
+    s16 unk_7A;
+} UnkTownCastSP;
+
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
    csrc/unk_1C540.c:1080, so it is not a device.
@@ -1896,6 +1960,7 @@ void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
 u32 func_8003C06C(s32 i);
 void func_8003E188(s16 arg0, s16 arg1);
 void func_8009F374();
+s32 func_8008CE08(void *p);
 s32 func_8008D5C4(s32 x, s32 y, s32 z);
 s32 func_8008DA80(s32 x, s32 y, s32 z);
 s32 func_8008DFB4(s32 x, s32 y, s32 z);
@@ -2017,6 +2082,8 @@ u32 func_800491F4(s32, u8 *, s32);
 extern UnkTownList D_800891F8;
 extern UnkTownList D_8008926C;
 extern u8 D_800CFCEF;
+extern s32 D_800FE480;
+extern s32 D_800FE484;
 extern u8 D_800FE488[];
 extern u8 D_800D6ABC[];
 extern u8 D_800D6AD0[];
@@ -2603,13 +2670,493 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D0B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D5C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008DA80);
+s32 func_8008DA80(s32 x, s32 y, s32 z)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPoly *p;
+    s32 ab = (s16)(x & -0x40);
+    s16 cx = x;
+    s16 cy = y;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008DFB4);
+    SP->unk_30 = 0x7FFF;
+    SP->unk_34 = (s16)x - ab - 0x14;
+    SP->unk_38 = ab;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_20 = z;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_4E = y & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008E4EC);
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008EA20);
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_1E = SP->unk_4E - SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_48 = SP->unk_64;
+                p = m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                for (;;)
+                {
+                    if (SP->unk_18[p->unk_10].vx < 0)
+                    {
+                        if ((p->unk_17 & 1) == 0)
+                        {
+                            SP->unk_6C = verts[p->unk_00].vy - SP->unk_1E;
+                            SP->unk_6E = verts[p->unk_00].vz - SP->unk_20;
+                            SP->unk_70 = verts[p->unk_02].vy - SP->unk_1E;
+                            SP->unk_72 = verts[p->unk_02].vz - SP->unk_20;
+                            SP->unk_74 = verts[p->unk_06].vy - SP->unk_1E;
+                            SP->unk_76 = verts[p->unk_06].vz - SP->unk_20;
+                            SP->unk_78 = verts[p->unk_04].vy - SP->unk_1E;
+                            SP->unk_7A = verts[p->unk_04].vz - SP->unk_20;
+                            if (func_8008CE08(SP) != 0)
+                            {
+                                SP->unk_1C =
+                                    (SP->unk_18[p->unk_10].vy *
+                                         (verts[p->unk_00].vy - (s16)SP->unk_1E) +
+                                     SP->unk_18[p->unk_10].vz *
+                                         (verts[p->unk_00].vz - (s16)SP->unk_20) +
+                                     SP->unk_18[p->unk_10].vx * verts[p->unk_00].vx) /
+                                    SP->unk_18[p->unk_10].vx;
+                                SP->unk_1C = SP->unk_1C + SP->unk_48;
+                                if ((s16)SP->unk_1C >= SP->unk_34)
+                                {
+                                    if ((s16)SP->unk_1C < SP->unk_30)
+                                        SP->unk_30 = (s16)SP->unk_1C;
+                                }
+                            }
+                        }
+                    }
+                    if ((*(u16 *)&p->unk_16 & 0x80FF) == 0x8001)
+                        break;
+                    p++;
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    if (SP->unk_30 == 0x7FFF)
+        return 0x7FFF;
+    return (s16)(SP->unk_38 + SP->unk_30);
+}
+
+s32 func_8008DFB4(s32 x, s32 y, s32 z)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPoly *p;
+    s32 ab = (s16)(x & -0x40);
+    s16 cx = x;
+    s16 cy = y;
+
+    SP->unk_30 = 0;
+    SP->unk_34 = (s16)x - ab + 0x14;
+    SP->unk_38 = ab;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_20 = z;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_4E = y & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
+
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
+
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_1E = SP->unk_4E - SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_48 = SP->unk_64;
+                p = m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                for (;;)
+                {
+                    if (SP->unk_18[p->unk_10].vx > 0)
+                    {
+                        if ((p->unk_17 & 1) == 0)
+                        {
+                            SP->unk_6C = verts[p->unk_04].vy - SP->unk_1E;
+                            SP->unk_6E = verts[p->unk_04].vz - SP->unk_20;
+                            SP->unk_70 = verts[p->unk_06].vy - SP->unk_1E;
+                            SP->unk_72 = verts[p->unk_06].vz - SP->unk_20;
+                            SP->unk_74 = verts[p->unk_02].vy - SP->unk_1E;
+                            SP->unk_76 = verts[p->unk_02].vz - SP->unk_20;
+                            SP->unk_78 = verts[p->unk_00].vy - SP->unk_1E;
+                            SP->unk_7A = verts[p->unk_00].vz - SP->unk_20;
+                            if (func_8008CE08(SP) != 0)
+                            {
+                                SP->unk_1C =
+                                    (SP->unk_18[p->unk_10].vy *
+                                         (verts[p->unk_00].vy - (s16)SP->unk_1E) +
+                                     SP->unk_18[p->unk_10].vz *
+                                         (verts[p->unk_00].vz - (s16)SP->unk_20) +
+                                     SP->unk_18[p->unk_10].vx * verts[p->unk_00].vx) /
+                                    SP->unk_18[p->unk_10].vx;
+                                SP->unk_1C = SP->unk_1C + SP->unk_48;
+                                if ((s16)SP->unk_1C <= SP->unk_34)
+                                {
+                                    if (SP->unk_30 < (s16)SP->unk_1C)
+                                        SP->unk_30 = (s16)SP->unk_1C;
+                                }
+                            }
+                        }
+                    }
+                    if ((*(u16 *)&p->unk_16 & 0x80FF) == 0x8001)
+                        break;
+                    p++;
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    if (SP->unk_30 == 0)
+        return 0;
+    return (s16)(SP->unk_38 + SP->unk_30);
+}
+
+s32 func_8008E4EC(s32 x, s32 y, s32 z)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPoly *p;
+    s32 ab = (s16)(y & -0x40);
+    s16 cx = x;
+    s16 cy = y;
+
+    SP->unk_3C = 0x7FFF;
+    SP->unk_40 = (s16)y - ab - 0x14;
+    SP->unk_44 = ab;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_20 = z;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_4C = x & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
+
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
+
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_4A = SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_1C = SP->unk_4C - SP->unk_64;
+                p = m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                for (;;)
+                {
+                    if (SP->unk_18[p->unk_10].vy < 0)
+                    {
+                        if ((p->unk_17 & 1) == 0)
+                        {
+                            SP->unk_6C = verts[p->unk_04].vx - SP->unk_1C;
+                            SP->unk_6E = verts[p->unk_04].vz - SP->unk_20;
+                            SP->unk_70 = verts[p->unk_06].vx - SP->unk_1C;
+                            SP->unk_72 = verts[p->unk_06].vz - SP->unk_20;
+                            SP->unk_74 = verts[p->unk_02].vx - SP->unk_1C;
+                            SP->unk_76 = verts[p->unk_02].vz - SP->unk_20;
+                            SP->unk_78 = verts[p->unk_00].vx - SP->unk_1C;
+                            SP->unk_7A = verts[p->unk_00].vz - SP->unk_20;
+                            if (func_8008CE08(SP) != 0)
+                            {
+                                SP->unk_1E =
+                                    (SP->unk_18[p->unk_10].vx *
+                                         (verts[p->unk_00].vx - (s16)SP->unk_1C) +
+                                     SP->unk_18[p->unk_10].vz *
+                                         (verts[p->unk_00].vz - (s16)SP->unk_20) +
+                                     SP->unk_18[p->unk_10].vy * verts[p->unk_00].vy) /
+                                    SP->unk_18[p->unk_10].vy;
+                                SP->unk_1E = SP->unk_1E + SP->unk_4A;
+                                if ((s16)SP->unk_1E >= SP->unk_40)
+                                {
+                                    if ((s16)SP->unk_1E < SP->unk_3C)
+                                        SP->unk_3C = (s16)SP->unk_1E;
+                                }
+                            }
+                        }
+                    }
+                    if ((*(u16 *)&p->unk_16 & 0x80FF) == 0x8001)
+                        break;
+                    p++;
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    if (SP->unk_3C == 0x7FFF)
+        return 0x7FFF;
+    return (s16)(SP->unk_44 + SP->unk_3C);
+}
+
+s32 func_8008EA20(s32 x, s32 y, s32 z)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPoly *p;
+    s32 ab = (s16)(y & -0x40);
+    s16 cx = x;
+    s16 cy = y;
+
+    SP->unk_3C = 0;
+    SP->unk_40 = (s16)y - ab + 0x14;
+    SP->unk_44 = ab;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_20 = z;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_4C = x & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
+
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
+
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_4A = SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_1C = SP->unk_4C - SP->unk_64;
+                p = m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                for (;;)
+                {
+                    if (SP->unk_18[p->unk_10].vy > 0)
+                    {
+                        if ((p->unk_17 & 1) == 0)
+                        {
+                            SP->unk_6C = verts[p->unk_00].vx - SP->unk_1C;
+                            SP->unk_6E = verts[p->unk_00].vz - SP->unk_20;
+                            SP->unk_70 = verts[p->unk_02].vx - SP->unk_1C;
+                            SP->unk_72 = verts[p->unk_02].vz - SP->unk_20;
+                            SP->unk_74 = verts[p->unk_06].vx - SP->unk_1C;
+                            SP->unk_76 = verts[p->unk_06].vz - SP->unk_20;
+                            SP->unk_78 = verts[p->unk_04].vx - SP->unk_1C;
+                            SP->unk_7A = verts[p->unk_04].vz - SP->unk_20;
+                            if (func_8008CE08(SP) != 0)
+                            {
+                                SP->unk_1E =
+                                    (SP->unk_18[p->unk_10].vx *
+                                         (verts[p->unk_00].vx - (s16)SP->unk_1C) +
+                                     SP->unk_18[p->unk_10].vz *
+                                         (verts[p->unk_00].vz - (s16)SP->unk_20) +
+                                     SP->unk_18[p->unk_10].vy * verts[p->unk_00].vy) /
+                                    SP->unk_18[p->unk_10].vy;
+                                SP->unk_1E = SP->unk_1E + SP->unk_4A;
+                                if ((s16)SP->unk_1E <= SP->unk_40)
+                                {
+                                    if (SP->unk_3C < (s16)SP->unk_1E)
+                                        SP->unk_3C = (s16)SP->unk_1E;
+                                }
+                            }
+                        }
+                    }
+                    if ((*(u16 *)&p->unk_16 & 0x80FF) == 0x8001)
+                        break;
+                    p++;
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    if (SP->unk_3C == 0)
+        return 0;
+    return (s16)(SP->unk_44 + SP->unk_3C);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008EF58);
 
