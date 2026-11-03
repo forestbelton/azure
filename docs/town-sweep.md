@@ -56,6 +56,24 @@ matters more as the sweep goes on, because the family pool drains while the
 ~1000 singletons do not, and some unknown fraction of those singletons are
 near-siblings of something already landed.
 
+`tools/decomp/landedshapes.py` mechanises the part of this that can be:
+
+    python3 tools/decomp/landedshapes.py ovl_town            # shape match
+    python3 tools/decomp/landedshapes.py ovl_town --exact    # raw-word match
+
+It indexes every listing in the unit by opcode shape (registers and immediates
+masked) and reports stubs whose shape is ALREADY LANDED, naming the function to
+start from. `--exact` compares raw words with jal fields included, so a hit
+there lands verbatim under a new name.
+
+It found 5 stubs and 71 words on 2026-11-02, including func_8008C984, which is
+the max-search mirror of the landed func_8008CA20 and needed only the seed
+(-0x7FFF for 0x7FFF) and the comparison direction changed. It reports 0 once
+those land. Expect it to be empty whenever families have been landed whole --
+its value is as a check after a PARTIAL landing, and the number to watch is
+the "mixed" count: a shape group holding both landed functions and stubs is
+unfinished work the family tools cannot see.
+
 ## The loop
 
 1. `worklist.py ovl_town --count 6` for the next round.
