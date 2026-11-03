@@ -222,9 +222,18 @@ def main():
             except Exception: continue
             if '%hi(' + f + ')' in st:
                 nm = sf[:-2]
-                decl = protos.get(nm) or (inc[nm][0] if nm in inc else None)
+                decl = protos.get(nm)
+                src = 'declared'
+                if not decl and nm in landed:
+                    d0 = landed[nm]
+                    decl = d0[:d0.rindex(')') + 1] if ')' in d0 else d0
+                    src = 'LANDED definition'
+                if not decl and nm in inc:
+                    decl, fn, l0 = inc[nm][0], inc[nm][1], inc[nm][2]
+                    src = 'from %s:%d' % (fn, l0)
                 print("  %-15s address taken by %-15s %s" % (f, nm,
-                      ('declared: ' + decl) if decl else 'NO DECLARATION -- read its listing'))
+                      ('%s: %s' % (src, decl)) if decl
+                      else 'NO DECLARATION ANYWHERE -- read its listing'))
                 anyd = True
     if not anyd: print("  none")
 
@@ -260,6 +269,14 @@ def main():
             if s > 0 and (best is None or s > best[0]):
                 best = (s, f, sorted(sc), sorted(sg))
         if best: hits.append((best[0], d) + best[1:])
+    # Emit top-N PER TARGET, not a flat global top-N. As a flat list, eight rows
+    # for seven targets named only TWO of them -- five targets got no relative at
+    # all, and the cut discarded a line-for-line one-word-away template that
+    # scored identically to the rows that were printed. The section's whole
+    # purpose is a relative per target.
+    per = {}
+    for s, d, f, sc, sg in sorted(hits, reverse=True):
+        per.setdefault(f, []).append((s, d, sc, sg))
     ranked = sorted(hits, reverse=True)
     if ranked and ranked[0][0] < 0.15:
         # The earlier wording here said "ROUTE (a) FOUND NOTHING ... do NOT name
@@ -282,10 +299,12 @@ def main():
         print("      immediate C-file neighbours, and grep a distinctive STATEMENT from")
         print("      the listing rather than a callee name (an idiom grep). Both found")
         print("      the right template where this metric did not.")
-    for s, d, f, sc, sg in ranked[:8]:
-        ln = lines[d]
-        print("  %6.3f  %-15s csrc/%s.c:%-6d vs %s" % (s, d, unit, ln, f))
-        print("          callees %s   globals %s" % (','.join(sc) or '-', ','.join(sg) or '-'))
+    for f in targets:
+        rows = per.get(f, [])
+        print("  -- for %s --%s" % (f, '' if rows else '  NO RELATIVE AT ANY SCORE'))
+        for s, d, sc, sg in rows[:4]:
+            print("  %6.3f  %-15s csrc/%s.c:%-6d" % (s, d, unit, lines[d]))
+            print("          callees %s   globals %s" % (','.join(sc) or '-', ','.join(sg) or '-'))
     if not hits: print("  none -- hand-decode, and say so in the brief")
 
     print("\n=== LANDED CALLERS (route (c): settles arity AND constant arguments) ===")
