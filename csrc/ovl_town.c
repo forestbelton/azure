@@ -1626,6 +1626,17 @@ void func_800BB640();
 void func_8009503C(UnkTown2AE8 *b);
 void func_80091528();
 void func_80091990();
+/* ONE parameter HERE, and DO NOT "FIX" IT. The same symbol is DEFINED with
+   TWO in csrc/unk_1AF38.c:92 -- `void func_800478B8(UnkSlot *s, s32 b)` --
+   landed and byte-identical in the resident image, so the function really does
+   take two. But all four of this overlay's call sites set up only $a0 and
+   leave $a1 holding whatever the preceding call left, so the original
+   overlay's translation unit must have seen a one-parameter declaration too.
+   C does not check across translation units, so NOTHING in the build catches
+   the disagreement: declaring it with two parameters here would add an $a1
+   setup to four landed call sites and break every one of them. Verified
+   2026-11-03 on func_8009DD40's landing, where the two-parameter form was
+   tried first and is wrong. */
 void func_800478B8(s32);
 s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 extern u8 D_800D5FA0[];
@@ -1727,7 +1738,7 @@ u32 func_8004A658(s32 i, s32 j);
 void func_8009C1B4();
 void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d);
 void func_8009DEBC();
-void func_8009DD40();
+void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_8009F148(UnkTownSpawn *p, UnkTownSpawn *p2, UnkVec *q, UnkTownRend *r);
 void func_800B2244();
 extern s32 D_800D0B14;
@@ -6399,7 +6410,35 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B0EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B120);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B148);
+/* The UnkNode +0x10 handler installed by func_8009B218 (`sw $v0, -0x10($s0)`
+   on the actor's +0x20 view), so it is reached through func_80040190's
+   three-parameter cast.  func_8009DD40 is the same source with two extra
+   statements; see the comment there.
+
+   52 words, 0 differing. */
+void func_8009B148(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q, r))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        (*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r);
+        if (*(u16 *)((u8 *)p - 0x2) & 0x8000)
+        {
+            return;
+        }
+        func_800970AC(func_80096FF4(q), (UnkTownActor *)p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B218);
 
@@ -6881,7 +6920,37 @@ void func_8009DA50(UnkTownScrRec *p, u8 *b, s32 a2, s32 a3)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DC8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DD40);
+/* func_8009B148 (0x8009B148) with func_8009D20C -- the TWO-parameter member of
+   the probe family -- for func_8009CFE0, plus a trailing `+0x4D == 0x13` arm.
+   Another UnkNode +0x10 handler: func_8009E504 stores its address at
+   `-0x10($s0)` beside func_8009DEBC.  58 words, 0 differing. */
+void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009D20C(p, q))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        (*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r);
+        if (*(u16 *)((u8 *)p - 0x2) & 0x8000)
+        {
+            return;
+        }
+        func_800970AC(func_80096FF4(q), (UnkTownActor *)p);
+        if (*((u8 *)p + 0x4D) == 0x13)
+        {
+            func_800478B8((s32)r);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DE28);
 

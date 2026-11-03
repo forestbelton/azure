@@ -452,6 +452,20 @@ standalone) after three wrong guesses about which prototype had done it.
   Measured on `func_800CD70C`/`func_800CD87C` -- writing that arm first is
   93 words against 92 with 35 differing, and 95 against 94 with 39.
 
+* **NEVER `rm -rf build`, AND NEVER RUN `splat split --modes ld`.** Two
+  operational traps, both of which cost time on 2026-11-03.
+  `build/town.bin.ld` and `build/slus_006.14.ld` are GENERATED, their only
+  rule is `build/%.ld: splat/%.yaml` -> `splat split $<`, and
+  `expected/build/town.bin.ld` is a stale 459-byte copy that links to the
+  wrong length. So deleting `build/` makes the overlay gate unrunnable until
+  splat is re-run, which is the one thing the sweep forbids. To clean, delete
+  `build/*.o` and `build/town.bin`, never the directory.
+  And if you must regenerate only the linker script, `splat split
+  splat/town.bin.yaml --modes ld` does produce it -- but it also **EMPTIES**
+  `splat/town.bin_undefined_funcs_auto.txt` (187 lines) and
+  `splat/town.bin_undefined_syms_auto.txt` (1039 lines), because the symbol
+  collection pass is skipped. Both are tracked and both are linker inputs;
+  `git checkout` them immediately afterwards and re-run both gates.
 * **A PERMUTER NO LONGER NEEDS A PARK.** `permimport.py FUNC --source FILE`
   takes any file that defines the function and compiles -- a scratch candidate
   or a whole merged unit copy -- so a function that has never been parked can

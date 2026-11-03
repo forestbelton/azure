@@ -126,10 +126,47 @@ s32 func_800C2AB4(UnkTownActor *a);
  * always gets padded. Spelling the array as an extern blob read through
  * INCLUDE_RODATA does not help: the table still follows at the same offset.
  *
- * To land this, the toolchain has to stop emitting `.align 3` for jump tables
- * (or maspsx has to drop it). That is a tools/ change, not a source change,
- * and tools/decomp plus vendor/maspsx were being edited by another session
- * when this was measured, so it is left alone here.
+ * TRIED AND DISPROVED, 2026-11-03. The obvious route -- stop emitting the
+ * `.align 3` -- is WRONG, and this is the measurement so nobody spends the day
+ * on it again.
+ *
+ * The directive comes from `final.c:1634-1638`, which does
+ * `readonly_data_section (); ASM_OUTPUT_ALIGN (file, exact_log2
+ * (BIGGEST_ALIGNMENT / BITS_PER_UNIT));` with no hook to suppress it --
+ * there is no `ADDR_VEC_ALIGN` in this gcc and the MIPS config sets nothing
+ * that guards the call. BIGGEST_ALIGNMENT is 64 bits, so it is always
+ * `.align 3`.
+ *
+ * I wrote a filter that strips exactly that directive and only that one (an
+ * `.align 3` whose next two lines are a local label and a `.word` of a local
+ * label, so a `double`'s alignment is untouched), wired it into the
+ * `build/%.o: %.c` rule between cc1psx and maspsx, and rebuilt from clean.
+ * **`make check` FAILS.** The RESIDENT executable needs the padding: it is
+ * 100% byte-identical today WITH the `.align 3`, and `csrc/unk_11F0C.c`,
+ * `csrc/unk_14934.c`, `csrc/unk_154BC.c`, `csrc/unk_1C540.c`,
+ * `csrc/unk_24FCC.c`, `csrc/unk_25944.c`, `csrc/unk_264E0.c`,
+ * `csrc/unk_2879C.c` (three of them), `csrc/unk_2CDC0.c` and
+ * `csrc/ovl_main_80020000.c` all emit it. The first difference appears at
+ * 0x00000e60 in a pointer table.
+ *
+ * So the original toolchain DID eight-align jump tables, and the `.align 3`
+ * is genuine. ovl_town's own four landed gcc-emitted tables also match with
+ * it in place -- the park's claim that this is "the ONLY gcc-emitted jump
+ * table in the whole unit" was true when written and is no longer: four more
+ * have landed since and all four happen to sit at 0 mod 8, where the directive
+ * emits nothing.
+ *
+ * WHAT THAT LEAVES. jtbl_800898D4 is at 4 mod 8 in the reference, which
+ * `.align 3` cannot produce, while every other table in the project is at
+ * 0 mod 8. So the padding is not the thing to remove -- something about THIS
+ * table's position is different, and the open question is why the sixteen
+ * bytes before it sit at 4 mod 8 in the reference. Two readings not yet
+ * falsified: the array may not be this function's `$LC0` at all (a file-scope
+ * `static const` would be emitted elsewhere in .rdata and leave the table at
+ * its own natural offset), or the original unit's .rdata may have been
+ * assembled in a different ORDER than cc1psx emits it. Measure the second one
+ * by checking what offset jtbl_800898D4 would land at if $LC0 were moved after
+ * it rather than before. Do NOT touch the alignment again.
  *
  * NOTE FOR WHOEVER LANDS IT: deleting
  * `INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800898C4);` IS correct and
