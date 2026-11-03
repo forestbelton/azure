@@ -1682,6 +1682,11 @@ void func_800B7B8C(void);
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
 extern u16 *D_800D1868[];
+extern s16 D_80111FA8[];
+extern u8 D_80110EC8[];
+extern u8 D_801110C8[];
+extern u8 D_801112C8[];
+extern u8 D_801114C8[];
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
 void func_80067014(s32 n);
@@ -9896,7 +9901,96 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089344);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7B8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7E78);
+/* An UnkNode.unk_10 handler, so its first parameter is the node's actor view
+   (node + 0x20) -- func_80040190's cast in csrc/unk_12DEC.c calls these as
+   `(void (*)(void *, UnkVec *, u32))` with node + 0x20, p->unk_08, p->unk_0C.
+   +0x00 is the frame counter func_800B81AC zeroes when it installs the
+   handler; this advances it, wraps at 24, and swaps one of four texture pages
+   every fourth frame. `p[0] % 24` is redundant against the wrap directly above
+   it, but the divide is in the target: 0x2AAAAAAB with `sra 2` is / 24.
+
+   THIS IS THE FIRST gcc-EMITTED JUMP TABLE LANDED IN THIS UNIT, and it
+   confirms the alignment finding from the inside. Its table is 21 entries,
+   0x54 bytes, so it ENDS at 4 mod 8 -- but the pad always comes from the
+   FOLLOWING table's own `.align 3`, whether that follower is still an
+   INCLUDE_ASM or already gcc-emitted C. splat attributes that pad word
+   backwards into this table's dlabel, which is why the listing shows 22 words.
+   Verified byte-identical at the object level after merging.
+
+   TWO JUMP-TABLE ENTRIES WITH THE SAME TARGET ARE SHARED CASE LABELS, NOT TWO
+   IDENTICAL ARMS. `.L800B7F20` appears at indices 4 and 20 and `.L800B7F34` at
+   8 and 16. Written as six separate arms with character-identical bodies it is
+   74 words, 20 differing, AND a different rodata table -- gcc cross-jumped
+   exactly one of the two duplicate pairs, the one where the earlier arm could
+   jump into the later arm's fall-through block, and left 8 and 16 as two
+   independent labels. Cross-jumping merges only the longest common TAIL and
+   stops at the first differing insn, which here is each arm's own
+   `addiu ..., %lo(SYM)`.
+
+   The table's "default" target is this function's own epilogue, which is also
+   where every arm falls after the call, so no `default:` label is needed and
+   none is written.
+
+   The descriptor stores go DIRECTLY to D_80111FA8[0..3] with no pointer local:
+   that is what produces the asymmetric `sh $v0, %lo(D_80111FA8)($v1)` for
+   element 0 against `2($a0)`/`4($a0)`/`6($a0)` for 1..3, because gcc
+   materialises `&D_80111FA8` for the call argument and rewrites the later
+   element addresses off it. A pointer local also reaches 0 differing and is a
+   word of nothing.
+
+   `s16 *p` with NO casts anywhere is the spelling. `u16 *p` with `(s16)` on
+   both uses is byte-identical, so the pointee's signedness is unwitnessed --
+   but a cast on only ONE of the two uses is 65 words / 57 differing or 68 / 63.
+   The `lhu` + `sll 16` + `sra 16` triple is NOT evidence of a `u16` field
+   explicitly cast: gcc's MIPS HImode load is always `lhu` and the extension is
+   a separate pattern, so the triple just means "a 16-bit value used as an
+   int". Binding the field through a differently-typed local alias is not free:
+   `u8 *pp` plus `u16 *p = (u16 *)pp;` is 70 words / 59 differing. The cast has
+   to be at the parameter.
+
+   Parameters 2 and 3 are never read, so they carry no witness; the dispatcher
+   cast is the witness and an unused parameter costs no words. */
+void func_800B7E78(s16 *p, UnkVec *b, u32 c)
+{
+    p[0]++;
+    if (p[0] >= 0x18)
+    {
+        p[0] = 0;
+    }
+    switch (p[0] % 24)
+    {
+    case 0:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_80110EC8);
+        break;
+    case 4:
+    case 20:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801110C8);
+        break;
+    case 8:
+    case 16:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801112C8);
+        break;
+    case 12:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801114C8);
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7F8C);
 
