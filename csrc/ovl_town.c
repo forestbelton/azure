@@ -1756,6 +1756,7 @@ void func_800B2244();
 extern s32 D_800D0B14;
 extern s16 D_80100D18;
 extern s32 D_80100D1C;
+extern UnkVec *D_80100D20;
 extern s32 D_80100D60;
 extern s16 D_80100D80;
 extern s16 D_80100D82;
@@ -2011,6 +2012,36 @@ typedef struct UnkTownPuff
     s16 pad_14;
     s16 unk_16;
 } UnkTownPuff;
+
+/* The circular body list func_8008FE90 walks and func_80095910 drives.  The
+   argument is the list's sentinel, so the walk ends when the cursor comes back
+   to it.  +0x08 and +0x0C are the position and the extent record the
+   func_8008FD9C overlap test takes (that pairing is witnessed: the head's pair
+   goes in as arguments 1-2 and the cursor's as 3-4).  +0x10 is where
+   func_80095910 stores the node that was hit, which is what types it as a
+   pointer back into the same record.  +0x14 is a kind byte compared against 2
+   and 3, +0x15 an enable flag, +0x16 a packed angle masked to 12 bits.
+
+   Size is a floor and the layout is PARTLY A GUESS, so second-guess this
+   before building on it.  Witnessed by a use: +0x04 (the list link),
+   +0x08, +0x0C, +0x10, +0x14, +0x15, +0x16 -- seven fields.  +0x00 is NOT
+   witnessed by anything; nothing in the five functions landed here reads or
+   writes it, and `s32 unk_00` is a placeholder chosen to make the +0x04 link
+   land at its measured offset.  Nothing beyond +0x18 is known at all, and
+   the other ~950 unlanded listings in this unit were not searched for
+   further uses. */
+typedef struct UnkTownBody
+{
+    s32 unk_00;
+    struct UnkTownBody *unk_04;
+    UnkVec *unk_08;
+    UnkVec *unk_0C;
+    struct UnkTownBody *unk_10;
+    u8 unk_14;
+    u8 unk_15;
+    s16 unk_16;
+} UnkTownBody;
+
 UnkNode *func_8009792C(UnkTownPuff *t, s16 ang);
 UnkNode *func_800A878C(UnkTownPuff *t, s16 ang);
 UnkNode *func_800ABC00(UnkTownPuff *t, s16 ang);
@@ -4095,11 +4126,138 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FD20);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FD48);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FD9C);
+/* Three-axis AABB overlap between two (origin, extent) pairs: A's origin is
+   b + a->unk_00.. with extent a->unk_0C.., B's is d + c->unk_00.. with extent
+   c->unk_0C.., and the test is the usual "separated on any axis means miss".
+   Near-sibling of func_800A2A18, which tests the SAME three axes in the
+   OPPOSITE order within each axis and takes its second record from a global;
+   the two are not substitutions of each other and neither body was written by
+   editing the other.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FE78);
+   The six failures are `goto fail` rather than `return 0`, and that is
+   load-bearing rather than style.  With `return 0` in each arm the sixth test
+   comes out as `slt`/`xori`/`j` instead of a branch -- 7 differing -- by two
+   jump.c transforms in sequence: :927-1016 rewrites `if (...) { x = a; goto
+   l; } x = b;` into `x = a; if (...) goto l; x = b;`, inverting the sixth
+   branch and hoisting the `return 1` constant above it, and then :1200-1502's
+   store-flag case 1 converts the result.  That second transform is reachable
+   at BRANCH_COST 1 (mips.h:3178 gives 1 for the R3000) only through
+   :1350-1361's `exact_log2` arm, so a power-of-two `uval` is enough and the
+   cost model does not block it.  What blocks it in the original is :1204-1206,
+   `GET_CODE (temp = next_nonnote_insn (insn)) == INSN`: with ONE shared `fail`
+   exit the other five branches keep LABEL_NUSES above zero, so :1015's
+   `delete_insn (prev_label)` does not fire, the label survives immediately
+   after the inverted branch, `next_nonnote_insn` returns a CODE_LABEL and the
+   store-flag never matches.  Six separate `return 0`s give the sixth arm a
+   label of its own, it gets deleted, and the transform fires.  55 words,
+   0 differing; the `return 0` spelling is 55 words, 7 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FE90);
+   `t` and `u` are function-scope on purpose: one allocno each, which is what
+   puts them in $t0/$a0 for all three axes.  Block-scoped per axis is 3
+   differing.  Writing the sums inline, with no locals at all, is 31.
+   b and d are declared UnkVec * only for uniformity -- VECTOR * and s32 * with
+   b[0]/b[1]/b[2] are byte-identical, since nothing but three loads at constant
+   offsets is ever asked of them. */
+s32 func_8008FD9C(UnkVec *a, UnkVec *b, UnkVec *c, UnkVec *d)
+{
+    s32 t;
+    s32 u;
+
+    t = b->unk_00 + a->unk_00;
+    u = d->unk_00 + c->unk_00;
+    if (u + c->unk_0C < t)
+    {
+        goto fail;
+    }
+    if (t + a->unk_0C < u)
+    {
+        goto fail;
+    }
+
+    t = b->unk_04 + a->unk_04;
+    u = d->unk_04 + c->unk_04;
+    if (u + c->unk_10 < t)
+    {
+        goto fail;
+    }
+    if (t + a->unk_10 < u)
+    {
+        goto fail;
+    }
+
+    t = b->unk_08 + a->unk_08;
+    u = d->unk_08 + c->unk_08;
+    if (u + c->unk_14 < t)
+    {
+        goto fail;
+    }
+    if (t + a->unk_14 < u)
+    {
+        goto fail;
+    }
+
+    return 1;
+fail:
+    return 0;
+}
+
+/* "are these two 12-bit angles within half a turn of 0x200 of each other".
+   The listing's `addiu 0x1FF` / `sltiu 0x3FF` is fold-const's range test on
+   the two-sided compare, not something to write by hand. 6 words, 0 differing. */
+s32 func_8008FE78(s32 x, s32 y)
+{
+    s32 d;
+
+    d = (x & 0xFFF) - (y & 0xFFF);
+    return d > -0x200 && d < 0x200;
+}
+
+/* func_8008FD9C's only caller, and the witness for its arity: the head's
+   +0x0C/+0x08 pair goes in as arguments 1-2 and the cursor's as 3-4, and the
+   result is used as a boolean.  Walks the circular list at +0x04 from the
+   sentinel and returns the first enabled body whose box overlaps the
+   sentinel's, or NULL.
+
+   The five locals are what the six callee-saved registers are: `pa`/`pb` are
+   NOT loop invariants loop.c could hoist -- two calls inside the loop clobber
+   memory -- so they have to be read before the loop in the source, and the
+   target's preheader order (+0x04, then +0x0C, then +0x08) is the source
+   order of the three assignments.  Written without them the function is 43
+   words against 51.  51 words, 0 differing. */
+UnkTownBody *func_8008FE90(UnkTownBody *p)
+{
+    UnkTownBody *n;
+    UnkVec *pa;
+    UnkVec *pb;
+    UnkVec *nb;
+    UnkVec *na;
+
+    n = p->unk_04;
+    pa = p->unk_0C;
+    pb = p->unk_08;
+    while (n != p)
+    {
+        nb = n->unk_08;
+        na = n->unk_0C;
+        if (n->unk_15 != 0)
+        {
+            if (n->unk_14 == 2 || n->unk_14 == 3)
+            {
+                if (func_8008FE78(n->unk_16, p->unk_16) == 0)
+                {
+                    goto next;
+                }
+            }
+            if (func_8008FD9C(pa, pb, na, nb) != 0)
+            {
+                return n;
+            }
+        }
+    next:
+        n = n->unk_04;
+    }
+    return NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FF5C);
 
@@ -5609,7 +5767,13 @@ s32 func_80095760(UnkTownCFCB4 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095840);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095910);
+/* The one-line driver, and the witness that func_8008FE90 returns a pointer
+   into the same record: the result is stored to the sentinel's +0x10.
+   11 words, 0 differing. */
+void func_80095910(UnkTownBody *p)
+{
+    p->unk_10 = func_8008FE90(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009593C);
 
@@ -8402,7 +8566,68 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A25CC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2690);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2A18);
+/* func_8008FD9C's near-sibling, and NOT a substitution of it.  Three
+   differences, all read off the listing: the second record comes from the
+   D_80100D20 pointer with an early null return, it has no origin offset of its
+   own (c->unk_00.. IS the origin), and the two tests within each axis are in
+   the OPPOSITE order -- A's max against B's min FIRST.  Writing them in the
+   sibling's order is 53 words against 56, so the order is not a rotation of
+   the same code: with c->unk_00 tested second cse keeps the three loads it
+   shares with the first test and the function comes out three words short.
+
+   One shared `fail` exit for the same jump.c reason spelled out on
+   func_8008FD9C above.  The per-axis sum is written inline rather than into a
+   local: a function-scope `s32 t` makes it one allocno, it wins $a2 from
+   global-alloc and pushes `c` out to $a3 -- 21 differing, every row a register
+   rename and nothing else.  Block-scoping `t` inside each axis is also
+   0 differing and measures identically; inline is kept because it needs no
+   scoping device.  b's declared type is unobservable here too (UnkVec *,
+   VECTOR * and s32 * are byte-identical).
+
+   No referrer anywhere in the overlay's listings, so the arity is from
+   register use alone: $a0 and $a1 read, $a2/$a3 written as scratch.
+   56 words, 0 differing. */
+s32 func_800A2A18(UnkVec *a, UnkVec *b)
+{
+    UnkVec *c;
+
+    c = D_80100D20;
+    if (c == NULL)
+    {
+        return 0;
+    }
+
+    if ((b->unk_00 + a->unk_00) + a->unk_0C < c->unk_00)
+    {
+        goto fail;
+    }
+    if (c->unk_00 + c->unk_0C < (b->unk_00 + a->unk_00))
+    {
+        goto fail;
+    }
+
+    if ((b->unk_04 + a->unk_04) + a->unk_10 < c->unk_04)
+    {
+        goto fail;
+    }
+    if (c->unk_04 + c->unk_10 < (b->unk_04 + a->unk_04))
+    {
+        goto fail;
+    }
+
+    if ((b->unk_08 + a->unk_08) + a->unk_14 < c->unk_08)
+    {
+        goto fail;
+    }
+    if (c->unk_08 + c->unk_14 < (b->unk_08 + a->unk_08))
+    {
+        goto fail;
+    }
+
+    return 1;
+fail:
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2AF8);
 
