@@ -37,10 +37,20 @@ following SHA256:
 ### PSY-Q
 
 The game was built using PSY-Q 4.1's `cc1psx` although its runtime libraries
-are from PSY-Q 4.0. Ensure you have a `psyq/` directory in the project root
-with the following contents:
+are from PSY-Q 4.0.
+
+**The build does not run those binaries.** The compiler is built from source
+instead -- see [The compiler](#the-compiler) below -- so what `psyq/` is needed
+for is its **headers** (`include/`, which the build compiles against) and its
+**libraries** (`lib/`, which the `azure libmatch` and `azure libscan` analysis
+tools read). The `.exe`s are only needed by `tools/ccpsx`, the fallback path,
+and are the only way to reach the real ASPSX for comparison.
+
+Ensure you have a `psyq/` directory in the project root with the following
+contents:
 
 ```
+include/
 aspsx-2.67.exe
 aspsx.exe
 cc1plpsx.exe
@@ -82,10 +92,32 @@ $ python tools/validate-psyq.py
 OK
 ```
 
+### The compiler
+
+The game's compiler is PSY-Q 4.1's `cc1psx`, which is SN Systems' build of a
+Cygnus GCC 2.7.2 snapshot. It is built from source, natively, out of the
+`vendor/old-gcc` submodule:
+
+```
+$ git submodule update --init vendor/old-gcc
+$ make cdk-gcc
+```
+
+That runs the submodule's `gcc-2.7.2-cdk` Dockerfile and installs `cc1`, `cpp`
+and `gcc` into `scratch/cdk-gcc/`. It needs **docker** and takes about 20
+seconds. `make` builds it on demand, so this step is optional.
+
+The result is the same compiler the game was built with, not a substitute: its
+`cc1` reports the identical version string (`cygnus-2.7.2-970404
+SN32.3.7.0004`), and every unit in `csrc/` compiles to byte-identical assembly
+against `psyq/cc1psx.exe` run under wine. A stock FSF GCC cannot be used --
+upstream 2.7.2 has no MIPS split-address support and so cannot emit the shape
+most of the game's global accesses use. See `docs/compiler-version.md`.
+
 ### Toolchain
 
 GNU binutils handle assembly and linking. Some Linux distributions have packages
-for this; otherwise, you may have to build the compiler from source yourself.
+for this; otherwise, you may have to build it from source yourself.
 
 #### Ubuntu
 

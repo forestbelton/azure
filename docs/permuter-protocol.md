@@ -13,13 +13,15 @@ MATCH on the result.
 
 ## Setup, once
 
-    make permuter-prefixes            # POOL=N, default one per core
+    git submodule update --init vendor/decomp-permuter vendor/old-gcc
+    make cdk-gcc                      # the compiler, built in docker
 
-`vendor/decomp-permuter` is a submodule. The prefix pool is required, not
-optional: concurrent `ccpsx` runs in one wine prefix silently swap each other's
+Nothing else. This section used to require `make permuter-prefixes`, because
+concurrent `ccpsx` runs in one wine prefix silently swapped each other's
 output -- measured 3 of 80 at 8-way, each a *wrong answer that assembles* --
-and a search selecting the minimum score turns that into false winners.
-`tools/ccpsx` claims a pooled prefix per compile whenever the pool exists.
+and a search selecting the minimum score turns that into false winners. The
+native compiler is a plain process with no shared mutable state, so parallel
+searches need no setup and `permrun.py` no longer caps `--jobs`.
 
 Also needed: `~/.local/bin/mips-linux-gnu-{as,objdump}` shims, because the
 permuter hardcodes that prefix while Fedora ships mips64 binutils.

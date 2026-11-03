@@ -12,7 +12,6 @@ conversation again. Start the search before you start thinking.
 
 ## 0. Setup and orientation
 
-    make permuter-prefixes                        # once per machine; needed
     python3 tools/decomp/parkstats.py docs/near-misses/$FUNC.c
 
 Always pass that path. Bare `parkstats.py`, and `parkstats.py --check`,
@@ -66,10 +65,10 @@ information". What to do instead: the run appends exactly one row to
 or bracket the pattern (`pgrep -f "[p]ermrun.py $FUNC"`) to stop it matching
 itself.
 
-`--jobs` must also not exceed the prefix pool; `permrun.py` refuses otherwise,
-because concurrent compiles in one wine prefix swap outputs and manufacture
-false winners -- so oversubscribing the budget is a correctness bug and not
-just a slow machine.
+`--jobs` used to be capped by the wine prefix pool, because concurrent
+compiles in one prefix swapped outputs and manufactured false winners. The
+compiler is native now and has no shared mutable state, so the cap is gone and
+oversubscribing is only a slow machine.
 
 ## 2. While it runs, do the cheap mechanical checks
 

@@ -342,7 +342,69 @@ When comparing built bytes against a listing, pass `objdump -z`: without it
 objdump elides runs of zero words as `...` and hides the hazard `nop`s maspsx
 inserts after `mflo`/`mult`.
 
-## Installing it
+## It runs natively; the .exe is no longer in the build
+
+Measured 2026-11-02. `decompals/old-gcc` (vendored as the `vendor/old-gcc`
+submodule, pinned at 0.17) has a `gcc-2.7.2-cdk` target that builds SN
+Systems' own CDK release, `cdk-gcc-b18`, for `--target=mips-sony-psx`. **It is
+this compiler**, not an approximation:
+
+| | `psyq/cc1psx.exe` | `vendor/old-gcc` `gcc-2.7.2-cdk` |
+|---|---|---|
+| version string | `cygnus-2.7.2-970404 SN32.3.7.0004` | identical |
+| `lui %0,%%hi(%1) # high` | present | present |
+| `addiu %0,%1,%%lo(%2) # low` | present | present |
+| pass list | `combine flow jump loop regmove sched sched2` | identical |
+| `-da` dumps | 16, incl. regmove/bp/shorten | identical |
+
+`make cdk-gcc` builds it into `scratch/cdk-gcc/` and `tools/cdkgcc` drives it;
+`CC` in the Makefile points there and nothing in the build touches wine.
+
+**The evidence is output equivalence, not resemblance.** All 40 units in
+`csrc/` compile to byte-identical assembly -- the only difference anywhere is
+the `# options passed:` comment, which records `-G8 -O2` where the driver
+reordered the flags -- and all four containers come out byte-identical. A full
+rebuild is 4.9s against wine's 8.7s.
+
+**The Docker build is reproducible**, which is why this is a submodule rather
+than a downloaded binary: `make -C vendor/old-gcc VERSION=2.7.2-cdk` produces
+`cc1`, `cpp` and `gcc` bit-identical to the 0.17 release's own assets (sha256
+`90db2db7...`, `d8005743...`, `7a571911...`), because the image pins the host
+toolchain at `ubuntu:focal`. So "built it myself" and "downloaded it" are the
+same artifact, and the measurements above apply to both.
+
+Two adaptations are needed, neither about code generation:
+
+* **`psyq/include` is CRLF**, and a `\` line continuation followed by CRLF
+  does not splice under GNU cpp -- it sees `\` then `\r`. cpppsx tolerates
+  it. `libgpu.h`'s `setVector`/`addVector` are the macros that break, with
+  `stray '\' in program`. `tools/cdkgcc` rewrites `-Ipsyq/include` to a
+  generated LF copy under `scratch/`, regenerated when the originals change.
+* **There is no install tree** (the build is configured `--prefix=/opt/cross`),
+  so the driver needs `-B` to find its own `cpp` and `cc1`.
+
+**What it does NOT remove:** `psyq/include` is still required to compile, and
+`psyq/lib` is still required by `azure libmatch`/`libscan`. What goes away is
+the compiler itself -- and with it the wine prefix pool, the per-invocation
+`flock`, and the output cross-contamination at parallelism that motivated
+both. `tools/ccpsx` is kept as the fallback and as the only way to reach the
+real ASPSX for comparison.
+
+**A vanilla GCC cannot substitute, and the reason is structural.** Upstream
+2.7.2.3's `config/mips/` has no `SPLIT_ADDRESSES` support at all and no
+`regmove.c`, so it physically cannot emit the `lui %hi` + separate `%lo` shape
+that 73 of the game's 184 absolute global loads use -- the same argument this
+document makes against PSY-Q 4.0 above. Note also that old-gcc's
+`gcc-2.7.2-psx` is NOT this compiler: it reports plain `2.7.2`, has zero
+split-address templates and no regmove. It is vanilla 2.7.2 plus PSX patches,
+and it is the obviously-named trap. Only `-cdk` is the SN compiler.
+
+## Installing the SDK
+
+`psyq/` is still needed -- for its headers, and for the libraries the
+`libmatch`/`libscan` tools read -- even though the build no longer runs its
+compiler. The compiler binaries below are what `tools/ccpsx` drives, and are
+now only a fallback.
 
 The compiler is not in the repository (`psy-q/` is ignored). It comes from
 track 1 of the 4.1 disc image, which is MODE2/2352: strip each sector to its

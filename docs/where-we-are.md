@@ -257,13 +257,14 @@ size, the `-G` value, the struct layout, the flags.
   keeps getting linked. Link failures on symbols from a deleted segment mean
   orphans in `asm/`.
 - **Do not run `make splat` while anything reads those listings.**
-- **Concurrent `ccpsx` runs under one wine prefix cross-contaminate.** Measured
-  2026-10-29: at 8-way parallelism with distinct inputs, 2 of 80 outputs were
-  *another input's* object, complete with its `.file` symbol -- a wrong answer
-  that assembles. A per-invocation `TEMP` does not fix it (5/80 to 2/80); one
-  prefix per parallel slot does (0/80). `tools/ccpsx` claims one from the pool
-  with `flock`; `make permuter-prefixes` creates it.
-- **Every tool that shells out to `tools/ccpsx` must pass `-Ipsyq/include`**,
+- **FIXED 2026-11-02 by going native: concurrent `ccpsx` runs under one wine
+  prefix cross-contaminate.** Measured 2026-10-29: at 8-way parallelism with
+  distinct inputs, 2 of 80 outputs were *another input's* object, complete with
+  its `.file` symbol -- a wrong answer that assembles. A per-invocation `TEMP`
+  does not fix it (5/80 to 2/80); one prefix per parallel slot does (0/80).
+  The build no longer runs the compiler under wine at all (`tools/cdkgcc`), so
+  this cannot happen; the pool machinery is kept only for `tools/ccpsx` itself.
+- **Every tool that shells out to the compiler must pass `-Ipsyq/include`**,
   not just `-Iinclude`. The failure is a misleading
   `gnu/stubs-32.h: No such file or directory` from the host headers, on every
   file at once, with `make` still green.
