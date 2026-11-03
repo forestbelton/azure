@@ -12148,7 +12148,46 @@ void func_800AF234(u8 *a)
     func_800AE56C(a + 0x20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF254);
+/* func_800AF674's sibling for slot range 0x1A..0x24, with the slot array
+   handed in rather than read off the object: both ASM callers load it
+   themselves (`lw $a0, 0xA8($s0)` / `addu $a1, $s0, $zero`), so the array is
+   $a0 and the object is $a1.  That is also why a[i] IS strength-reduced here
+   -- the base is a parameter and therefore loop-invariant, so loop.c walks it
+   from a + 0x68 (= &a[0x1A]) while $s2 keeps the plain counter.  The +0xA8
+   sibling cannot do that because it re-reads its base.
+
+   func_80049790 replaces the func_8004AC3C/func_8004DC14 pair of the +0x10
+   range: one call, the entry word straight in.
+
+   BOTH increments must sit in the for-increment, `i++, j++`, IN THAT ORDER.
+   The two bumps are zero-latency and mutually independent, so sched1 ranks
+   them equal and falls through to INSN_LUID -- original source order
+   (sched.c:2470-2473) -- which decides which one reorg can reach: the one
+   sched1 puts at the FRONT of the block goes into the exit beqz's delay slot
+   off the fall-through thread, and the one left immediately before the jal
+   goes into ITS slot by reorg's backward scan (reorg.c:3066-3077).  Measured:
+   `j++` as the body's last statement is 3 differing (the two increments
+   swapped between the two slots, plus the `sll $v0, $s0, 2` that then fills
+   the beqz slot instead), `j++, i++` is the same 3, `[j++]` in the subscript
+   is 3, and `do { } while (++i < 0x24)` is 3.
+
+   41 words -- its header reads `nonmatching func_800AF254, 0xA4`, and
+   0xA4/4 = 41.  No jump table, no rodata of its own. */
+void func_800AF254(UnkTownSlot **a, u8 *s)
+{
+    s32 i;
+    s32 j;
+
+    j = *(s32 *)(*(u8 **)s + 0x10) * 5 * 2;
+    for (i = 0x1A; i < 0x24; i++, j++)
+    {
+        if (j >= *(s32 *)(*(u8 **)s + 0x1C))
+        {
+            break;
+        }
+        a[i]->unk_00 = func_80049790((*(u32 **)(*(u8 **)s + 0x20))[j]);
+    }
+}
 
 void func_800AF2F8(UnkTownGrid **p)
 {
@@ -12200,7 +12239,44 @@ void func_800AF600(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF674);
+/* The 0x800AFxxx scene's name-sprite refill for slot range 0x10..0x1A --
+   func_800AF254's sibling one range down, and func_800B0318's inverse: that
+   function frees and zeroes BOTH ranges (+0x10..0x1A and +0x1A..0x24), and
+   this one calls it and then re-fills the first range from the list record.
+
+   The object's slot-pointer array is at +0xA8, the same place the scene's
+   grid array lives (func_800AF784), and it is RE-READ at every access, which
+   is why the loop carries sll $v1, $s1, 2 / addu rather than a walking
+   pointer -- same rule as the +0xCC scene's note on func_800B1188.
+
+   The list record is *(u8 **)s: +0x10 is a page index, +0x1C the live count
+   and +0x20 the entry array.  j starts at page * 5 * 2, which gcc builds as
+   sll 2 / addu / sll 1 and then re-uses the x5 for the x40 byte offset in
+   &entries[j] -- one multiply, two shifts, no second constant.
+
+   48 words -- its header reads `nonmatching func_800AF674, 0xC0`, and
+   0xC0/4 = 48.  No jump table, no rodata of its own.  Arity 1: both ASM
+   callers func_800AF860 and func_800AFFA8 set only $a0 (addu $a0, $s0, $zero
+   in the jal's delay slot). */
+void func_800AF674(u8 *s)
+{
+    s32 i;
+    s32 j;
+    s32 n;
+
+    func_800B0318(*(UnkTownSlot ***)(s + 0xA8));
+    j = *(s32 *)(*(u8 **)s + 0x10) * 5 * 2;
+    for (i = 0x10; i < 0x1A; i++)
+    {
+        if (j >= *(s32 *)(*(u8 **)s + 0x1C))
+        {
+            break;
+        }
+        (*(UnkTownSlot ***)(s + 0xA8))[i]->unk_00 = func_8004DC14(
+            (u8 *)func_8004AC3C((*(u32 **)(*(u8 **)s + 0x20))[j], &n), n);
+        j++;
+    }
+}
 
 void func_800AF734(UnkTownGrid **p)
 {
@@ -12480,7 +12556,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0BD0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0C68);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0D0C);
+/* The +0xCC scene's two-slot placement for grid entries 29 and 30, called
+   from func_800B1188's successor at :12538.  func_800B4350 is the same
+   function in the +0x5C scene.  Both unk_0A values are 0x30, which is why the
+   second one is `sh $a1` off the register the first one materialised and why
+   the final store rides the jr delay slot.
+
+   28 words -- its header reads `nonmatching func_800B0D0C, 0x70`, and
+   0x70/4 = 28.  No jump table, no rodata of its own.  Arity 1, witnessed by
+   the landed call `func_800B0D0C(s)` at :12538. */
+void func_800B0D0C(u8 *s)
+{
+    (*(UnkTownGrid ***)(s + 0xCC))[29]->unk_04->unk_08 = -0x5F;
+    (*(UnkTownGrid ***)(s + 0xCC))[29]->unk_04->unk_0A = 0x30;
+    (*(UnkTownGrid ***)(s + 0xCC))[30]->unk_04->unk_08 = 0x61;
+    (*(UnkTownGrid ***)(s + 0xCC))[30]->unk_04->unk_0A = 0x30;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0D7C);
 
@@ -13061,7 +13152,43 @@ void func_800B2CE8(void *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2D00);
+/* The twin unit's shared refill loop -- the func_800AF254 recipe with every
+   operand passed in instead of read off the object, which is what lets BOTH
+   halves call it (see the two-copies note below).  Its landed callers
+   func_800B2DA0 and func_800B4B3C hand it `*b + 0x1C` / `*b + 0x2C` for the
+   list record and `*(u32 **)(*b + 0x3C)` / `+ 0x40` for the entry array, so
+   the record's page index is at the parameter's +0x00 and its live count at
+   +0xC -- the same two fields func_800AF254 reads at +0x10 and +0x1C, 0x10
+   lower.
+
+   The destination walks a[i] and the source walks c[j]; only ten slots, and
+   the counter is a third induction variable because neither pointer carries
+   it.
+
+   `i++, j++` in the for-increment, in that order, for the same INSN_LUID
+   reason written up on func_800AF254: `j++` as the body's last statement
+   swaps the two increments between the beqz and jal delay slots (2
+   differing), `j++, i++` is the same 2, and `c[j++]` is 41 words / 22
+   differing because the post-increment keeps j live across the call.
+
+   40 words -- its header reads `nonmatching func_800B2D00, 0xA0`, and
+   0xA0/4 = 40.  No jump table, no rodata of its own.  The declaration at the
+   top of the file already pins the arity at three. */
+void func_800B2D00(u32 *a, u8 *b, u32 *c)
+{
+    s32 i;
+    s32 j;
+
+    j = *(s32 *)b * 5 * 2;
+    for (i = 0; i < 10; i++, j++)
+    {
+        if (j >= *(s32 *)(b + 0xC))
+        {
+            break;
+        }
+        *(u32 *)a[i] = func_80049790(c[j]);
+    }
+}
 
 /* Two copies of one source. 0x800B2D00..0x800B35xx and
    0x800B4720..0x800B4C38 are the same translation unit compiled twice over a
@@ -13076,7 +13203,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2D00);
    two -- func_800B2DA0/func_800B4720 and func_800B30D8/func_800B4978, 11 and
    12 words -- only because they fall below worklist.py's reporting cut, not
    because their shapes differ. All fourteen measured 0 differing on the first
-   compile, from one reading of each pair. */
+   compile, from one reading of each pair.
+
+   "All fourteen" means the SEVEN PAIRS, i.e. the twinned functions only -- not
+   the three SHARED functions named above, which have no twin and were still
+   stubs when this was written. An agent read the sentence as covering them and
+   was briefly puzzled that func_800B2D00 was unlanded; it landed later, in the
+   loop-counter group, and func_800B2FF8 and func_800B3178 are still stubs. */
 
 /* A pure forward: the inner record is dereferenced once, its +0x3C word read,
    and the record itself advanced to +0x1C. $a0 is untouched and passed
@@ -13455,7 +13588,29 @@ void func_800B426C(u8 *p)
     memcpy(p + 0x30, D_800D16D8, 0xC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4350);
+/* The +0x5C scene's two-slot placement for grid entries 30 and 31, and
+   func_800B0D0C's twin in the +0xCC scene: same four halfword writes with the
+   second unk_0A sharing the first's constant register, plus the +0x00 pointer
+   write each slot gets here.  The pointer is *(u8 **)(s + 0x20) -- the same
+   source func_800B474C's caller uses at :13710 -- offset by 0x48 and 0x90.
+
+   The array base is re-read at every access (eight times), which is the
+   measured rule for this vocabulary, not a style choice; see the func_800B1188
+   note.  The last store is in the jr delay slot because -0x18 is still live in
+   $a1 from slot 30's unk_0A.
+
+   38 words -- its header reads `nonmatching func_800B4350, 0x98`, and
+   0x98/4 = 38.  No jump table, no rodata of its own.  Arity 1: its only ASM
+   caller func_800B43E8 sets only $a0. */
+void func_800B4350(u8 *s)
+{
+    *(u8 **)(*(UnkTownGrid ***)(s + 0x5C))[30] = *(u8 **)(s + 0x20) + 0x48;
+    (*(UnkTownGrid ***)(s + 0x5C))[30]->unk_04->unk_08 = -0x20;
+    (*(UnkTownGrid ***)(s + 0x5C))[30]->unk_04->unk_0A = -0x18;
+    *(u8 **)(*(UnkTownGrid ***)(s + 0x5C))[31] = *(u8 **)(s + 0x20) + 0x90;
+    (*(UnkTownGrid ***)(s + 0x5C))[31]->unk_04->unk_08 = -0x70;
+    (*(UnkTownGrid ***)(s + 0x5C))[31]->unk_04->unk_0A = -0x18;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B43E8);
 
