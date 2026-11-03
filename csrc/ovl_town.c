@@ -1681,6 +1681,7 @@ void func_800B5B20(void);
 void func_800B7B8C(void);
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
+extern u16 *D_800D1868[];
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
 void func_80067014(s32 n);
@@ -9770,7 +9771,62 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7868);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7934);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7978);
+/* func_800B7A6C's twin, and the delta is exactly six words: this one looks the
+   sprite record up in D_800D1868 instead of being handed it. Words 0-5 are the
+   lookup -- `sll $a2, $a2, 16` / `sra $a2, $a2, 14`, gcc's sign-extend fused
+   with the *4 array scale -- and words 6-60 are func_800B7A6C's words 0-54.
+   Everything load-bearing is on that function; `src++` as the body's LAST
+   statement is the part to keep.
+
+   THE THIRD PARAMETER IS `s32` WITH THE CAST IN THE BODY, NOT `s16`, and this
+   is the mirror image of the narrow-parameter rule recorded on func_800B68C8.
+   The fused sll/sra reads exactly like a `short` parameter subscripted
+   plainly, and the callee cannot tell the two apart: `s16 arg2`, `s32 arg2`
+   with `D_800D1868[(s16)arg2]`, and an `s16 idx = arg2;` local are all 61
+   words / 0 differing. The CALLER separates them. func_800B8E08 -- a park at 5
+   DIFF -- passes a `u8` local, and an `s16` third parameter takes that park
+   from 5 differing to 16, measured by substituting the prototype alone. A `u8`
+   argument widens to `s32` and to `u16` for free but NOT to `s16`.
+
+   Two orderings in the index are each worth a word, which is unusual and is
+   worth knowing for call-free bodies: `(i + y) * 128 + j + x` is 0 differing,
+   `(y + i) * 128 + j + x` is 1, `(i + y) * 128 + (j + x)` is 2 and
+   `x + j + (i + y) * 128` is 6. Swapping the loop nesting is 17. Every local's
+   width is sensitive -- `s32 i, j` is 51 words / 47 differing, `s32 x, y` is
+   59 / 55, all-`s32` is 40 / 46 -- while `if (v)` for `if (v != 0)`, the
+   inverted two-arm form, `while` for `for`, dropping the `v` temp, separate
+   `ox`/`oy` locals and `0x80` for `128` are all 0 differing and carry no
+   information at all. */
+void func_800B7978(s32 arg0, s32 arg1, s32 arg2, u16 *arg3)
+{
+    u16 *p;
+    s16 w;
+    s16 h;
+    s16 x;
+    s16 y;
+    s16 i;
+    s16 j;
+    u16 v;
+
+    p = D_800D1868[(s16)arg2];
+    w = *p++;
+    h = *p++;
+    x = arg0 - *p++;
+    y = arg1 - *p++;
+
+    for (i = 0; i < h; i++)
+    {
+        for (j = 0; j < w; j++)
+        {
+            v = *p;
+            if (v != 0)
+            {
+                arg3[(i + y) * 128 + j + x] = v;
+            }
+            p++;
+        }
+    }
+}
 
 /* A transparent 16-bit blit. `src` is a sprite record -- `u16 w, h, ox, oy`
    followed by w*h halfwords -- copied into a STRIDE-128 halfword surface at
