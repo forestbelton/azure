@@ -3486,7 +3486,11 @@ void func_8009A1E8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A344);
+void func_8009A344(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    func_80094984(a->unk_44->unk_24, a, c);
+    func_8009A1E8(a, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A3A4);
 
