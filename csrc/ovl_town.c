@@ -2123,6 +2123,23 @@ void func_80098764();
 void func_80099874(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
 s32 func_800C2B88();
 s32 func_800C2BE8();
+/* Arity 3 read off func_80094AA0's OWN listing: it reads $a0, $a1 and $a2
+   with no prologue and returns in $v0 (asm/nonmatchings/ovl_town/
+   func_80094AA0.s, 22 words).  An angle-slew helper: both operands are
+   masked to 0xFFF and the third is the per-frame step. */
+s32 func_80094AA0(s32 cur, s32 tgt, s32 step);
+/* One parameter: the body reads only +0x8 (lw) and +0xA (lh) off $a0 and
+   returns in $v0.  The pointer is the UnkTown2AE8 its two call sites pass. */
+s32 func_800A5894(UnkTown2AE8 *q);
+/* Three parameters: func_800A55CC sets neither $a1 nor $a2 before its first
+   jal (func_800942B0), so both are incoming, and func_800A5DF8 fills all
+   three registers at its call site.  Types taken from the func_800942B0
+   call sites in this unit. */
+void func_800A55CC(UnkTownTask *a, UnkTown2AE8 *b, void *c);
+/* Address-taken only, as func_80093B00 is. */
+void func_800A5A98();
+void func_800A5FDC();
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -8305,11 +8322,194 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A573C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5894);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A58CC);
+/* A near-sibling pair with func_800A5DF8 below: a camera state that runs the
+   shared UnkTown2AE8 helper set (func_80095C80 / func_80095978 /
+   func_80095A94 / func_800954F4 / func_80095388 / func_80095094 -- the same
+   set func_80092DA8 and func_800927EC drive), slews the camera yaw at +0xC8
+   towards a target angle, eases the camera distance at +0xC4 towards a
+   limit over the task's remaining +0x0A frames, and installs the next state
+   once both have arrived.
+
+   Three things here are source, not scheduling:
+
+   - `g = &D_80083160;` into a LOCAL, as in func_80092DA8: that is what puts
+     the `%hi(D_80083160)` in the prologue where the target has it.
+   - the two accesses to D_80083780 go through the TOWN_PT MACRO, so cse
+     materialises the `%hi`/`%lo` pair at the first use -- which here is AFTER
+     the three-way if/else merges, so its `lui` is what fills all three
+     branch delay slots.
+   - the countdown's reset arm is spelled with a goto and the `g->unk_C4`
+     store placed BELOW the division, which is what gives the target's
+     four-block layout: [test][clear the timer, j reset][divide][reset:
+     load the limit][merged `sh` of +0xC4].  Cross-jumping merges the two
+     +0xC4 stores (jump.c:2179-2210 in scratch/gcc-src/cdk-gcc-b18, the
+     simplejump_p arm of jump_optimize -- `find_cross_jump` at 2188 and
+     `do_cross_jump` at 2208).  Both plain if/else spellings measure 12
+     differing, and moving `*c = 0` down into the reset block costs a word
+     (114 of 115) because its store no longer has the forward `j`'s delay
+     slot to sit in.
+
+   The `-= func_800A5894(b)` and the two back-to-back func_80095094 calls are
+   both literal: the target really does call func_80095094 twice.
+
+   The `lh` then `lhu` on the SAME +0xC4 field inside one expression is
+   not a typing inconsistency.  `-0x2B0 - g->unk_C4` is a word-wide result,
+   so its read sign-extends; the `+=`'s read feeds nothing but the halfword
+   store, so convert.c's `trunc1:` narrowing (convert.c:275-316) hands the
+   add to expand_binop in HImode, expand_binop sets `no_extend = 1` for
+   add_optab (optabs.c:555-564) and `widen_operand` then returns a
+   paradoxical SUBREG of a plain HImode load (optabs.c:331) instead of a
+   `convert_modes` extension -- which on MIPS is `lhu`.  The two reads are
+   different rtl, so cse does not merge them.  Probed in isolation:
+   `sink = G.unk_C4 + d` gives `lh`, `G.unk_C4 += d` gives `lhu`.
+
+   115 words -- its header reads `nonmatching func_800A58CC, 0x1CC`, and
+   0x1CC/4 = 115.  Measured 0 differing. */
+void func_800A58CC(UnkTownTask *a, UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 t;
+    s32 d;
+    u16 *c;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= n)
+    {
+        func_80095A94(b, n, D_800FE488);
+    }
+    else if (D_800CFCEF != 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+    if (func_800C1D44(func_8008C180(TOWN_PT->unk_02, TOWN_PT->unk_06)) != 0)
+    {
+        b->unk_14 -= func_800A5894(b);
+    }
+    func_80095094(b);
+    func_80095094(b);
+    t = (a->unk_10 - 0x800) & 0xFFF;
+    d = func_80094AA0(g->unk_C8, t, 0x80);
+    g->unk_C8 = d;
+    d = (d & 0xFFF) - t;
+    if (d < 0)
+    {
+        d = -d;
+    }
+    if (d < 0x80)
+    {
+        g->unk_C8 = t;
+    }
+    c = (u16 *)((u8 *)a + 0xA);
+    *c -= 1;
+    if ((s16)*c <= 0)
+    {
+        *c = 0;
+        goto reset;
+    }
+    g->unk_C4 += (-0x2B0 - g->unk_C4) / (s16)*c;
+    goto cont;
+
+reset:
+    g->unk_C4 = -0x2B0;
+
+cont:
+    if (*(s16 *)((u8 *)a + 0xA) == 0 && g->unk_C8 == t)
+    {
+        *(s16 *)((u8 *)a + 0xA) = 0;
+        a->unk_00 = func_800A5A98;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5A98);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5DF8);
+/* func_800A58CC's near-sibling, and genuinely not a pure substitution of it
+   -- nearsibs.py rates the pair 0.881, the loosest in its batch, and three
+   things differ:
+
+   - it takes the THIRD task argument, because its exit hands all three on to
+     func_800A55CC (hence the extra $s4 save/restore);
+   - its yaw target is a literal 0 rather than the task's +0x10 field, so the
+     settle test is `(yaw & 0xFFF) < 0x80` with no subtract and no abs -- six
+     words less than func_800A58CC's;
+   - its exit is two-way: with the task's +0x08 flag set it calls
+     func_800A55CC, and only otherwise installs func_800A5FDC.
+
+   Everything else, including the goto-spelled countdown reset and the
+   TOWN_PT macro, is func_800A58CC's; see the note there for why each is
+   spelled the way it is.
+
+   121 words -- its header reads `nonmatching func_800A5DF8, 0x1E4`, and
+   0x1E4/4 = 121.  Measured 0 differing. */
+void func_800A5DF8(UnkTownTask *a, UnkTown2AE8 *b, void *r)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 d;
+    u16 *c;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= n)
+    {
+        func_80095A94(b, n, D_800FE488);
+    }
+    else if (D_800CFCEF != 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+    if (func_800C1D44(func_8008C180(TOWN_PT->unk_02, TOWN_PT->unk_06)) != 0)
+    {
+        b->unk_14 -= func_800A5894(b);
+    }
+    func_80095094(b);
+    func_80095094(b);
+    d = func_80094AA0(g->unk_C8, 0, 0x80);
+    g->unk_C8 = d;
+    if ((d & 0xFFF) < 0x80)
+    {
+        g->unk_C8 = 0;
+    }
+    c = (u16 *)((u8 *)a + 0xA);
+    *c -= 1;
+    if ((s16)*c <= 0)
+    {
+        *c = 0;
+        goto reset;
+    }
+    g->unk_C4 += (-0x280 - g->unk_C4) / (s16)*c;
+    goto cont;
+
+reset:
+    g->unk_C4 = -0x280;
+
+cont:
+    if (*(s16 *)((u8 *)a + 0xA) == 0 && g->unk_C8 == 0)
+    {
+        if (*(s16 *)((u8 *)a + 0x8) != 0)
+        {
+            func_800A55CC(a, b, r);
+        }
+        else
+        {
+            *(s16 *)((u8 *)a + 0xA) = 0;
+            a->unk_00 = func_800A5FDC;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5FDC);
 
