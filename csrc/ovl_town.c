@@ -2239,6 +2239,28 @@ extern s32 D_800D0620;
    `beqz $v0` at 0x800C26E4 is the only witness that it returns a value. */
 s32 func_800C2A60(UnkTownActor *a);
 
+/* The func_800A07E8 pair's three stub callees and the handler it installs.
+   func_800A0668 reads only its own $a0 (lw 0x98, lbu 0x95) and returns a 0/1
+   flag; func_800A0F10 takes the actor and the second slot argument, which it
+   forwards to func_8008FAC0 against D_800CFCB4, and returns 0/1;
+   func_800A0B74 takes the actor and a POINTER TABLE whose index comes from
+   func_800B2834/func_800B28A0.  func_800A0884 is only ever address-taken into
+   the +0x50 slot, so it is declared unprototyped the way the slot is. */
+s32 func_800A0668(UnkTownActor *a);
+s32 func_800A0F10(UnkTownActor *a, void *b);
+void func_800A0B74(UnkTownActor *a, void *tbl);
+void func_800A0884();
+
+/* The func_800A3248 pair's four installed handlers.  Both pair bodies PRECEDE
+   func_800A32C8's and func_800A34E0's definitions, and the other two are
+   still stubs, so all four need a declaration here: these are ADDRESS-TAKEN
+   (`%hi`/`%lo` on a function symbol, which ovlverify masks and which has no
+   `jal` to decode), not called. */
+void func_800A32C8();
+void func_800A32F0();
+void func_800A34E0();
+void func_800A3508();
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -8689,7 +8711,49 @@ void func_800A0708(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A07A4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A07E8);
+/* A near-sibling pair with func_800A0AC8 below: an actor +0x50 handler that
+   gates on the wrap counter at +0x68, calls func_800A0668 with the OPPOSITE
+   sense in each arm of that gate, then func_800A0F10, and on success installs
+   the next handler and hands the frame to the task layer through
+   func_8009A674 -- which takes the actor's PSX-angle facing at +0x72 and the
+   mover's two integer halves at +0x2/+0x6, exactly as the landed
+   func_8009A674/func_8009A8EC pair is called from everywhere else.
+
+   The slot is called `a->unk_50(a, a, q, r)` (func_800A6684, func_800A6CF0),
+   so the second parameter is the SAME object as the first -- which is why
+   func_800A0F10 gets `b` and func_800A0AC8 reads `b`'s +0x48.  Three
+   parameters, all three read ($a0/$a1/$a2 are all read before being written);
+   the fourth slot argument is unread and so has no witness either way.
+
+   No `move $a0` before the first `jal func_800A0668`: the incoming $a0 is
+   still live, which is the documented missing-argument-move trap and not a
+   zero-arity call -- func_800A0668's own listing reads $a0.
+
+   39 words -- its header reads `nonmatching func_800A07E8, 0x9C`, and
+   0x9C/4 = 39.  Measured 0 differing on the first compile. */
+void func_800A07E8(UnkTownActor *a, UnkTownActor *b, UnkTown2AE8 *c)
+{
+    if (a->unk_68 == 0)
+    {
+        if (func_800A0668(a))
+        {
+            return;
+        }
+    }
+    else
+    {
+        if (!func_800A0668(a))
+        {
+            return;
+        }
+    }
+    if (!func_800A0F10(a, b))
+    {
+        return;
+    }
+    a->unk_50 = func_800A0884;
+    func_8009A674(a->unk_72, *(s16 *)((u8 *)c + 2), *(s16 *)((u8 *)c + 6));
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0884);
 
@@ -8715,7 +8779,37 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0A54);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0A88);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0AC8);
+/* func_800A07E8's near-sibling: the same body with one extra call before the
+   handler install -- func_800A0B74 with the pointer table at `b`'s +0x48 --
+   the already-landed empty func_800A08E8 as the installed handler, and
+   func_8009A8EC for func_8009A674.
+
+   43 words -- its header reads `nonmatching func_800A0AC8, 0xAC`, and
+   0xAC/4 = 43.  Measured 0 differing on the first compile. */
+void func_800A0AC8(UnkTownActor *a, UnkTownActor *b, UnkTown2AE8 *c)
+{
+    if (a->unk_68 == 0)
+    {
+        if (func_800A0668(a))
+        {
+            return;
+        }
+    }
+    else
+    {
+        if (!func_800A0668(a))
+        {
+            return;
+        }
+    }
+    if (!func_800A0F10(a, b))
+    {
+        return;
+    }
+    func_800A0B74(a, *(void **)((u8 *)b + 0x48));
+    a->unk_50 = func_800A08E8;
+    func_8009A8EC(a->unk_72, *(s16 *)((u8 *)c + 2), *(s16 *)((u8 *)c + 6));
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0B74);
 
@@ -8931,7 +9025,38 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2E30);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2FCC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3248);
+/* A near-sibling pair with func_800A3450 below, and the same allocate-and-
+   wire recipe the landed func_8009DFD8 uses: func_8003FD64(type, &D_80083498)
+   for the node, bail with 0 on a null one, copy a three-word vector into the
+   node's +0x08 UnkVec, then install the UnkNode +0x10 dispatch handler and
+   the actor view's own +0x00 handler.  The view is reached as `n + 0x20`
+   through a cast rather than a pointer local, which is what keeps the 0x20 in
+   the store's displacement.
+
+   ONE parameter: func_8009F2A8 calls it `addu $a0, $s3, $zero` with no $a1
+   set, and the vector it passes is the same $s3 it hands func_800A33E8 one
+   `jal` earlier.
+
+   32 words -- its header reads `nonmatching func_800A3248, 0x80`, and
+   0x80/4 = 32.  Measured 0 differing on the first compile. */
+UnkNode *func_800A3248(UnkVec *a)
+{
+    UnkNode *n;
+    UnkVec *q;
+
+    n = func_8003FD64(0x10, &D_80083498);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    q = n->unk_08;
+    q->unk_00 = a->unk_00;
+    q->unk_04 = a->unk_04;
+    q->unk_08 = a->unk_08;
+    n->unk_10 = (u32)func_800A32C8;
+    *(u32 *)((u8 *)n + 0x20) = (u32)func_800A32F0;
+    return n;
+}
 
 void func_800A32C8(UnkTownDispatch *d)
 {
@@ -8944,7 +9069,35 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3320);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A33E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3450);
+/* func_800A3248's near-sibling: node type 0x136 for 0x10, its own two
+   handlers, and one extra store -- the second parameter as a halfword at the
+   node's +0x42 (the view's +0x22), after both handler stores.
+
+   The second parameter is `s32` and not `s16`: func_800A33E8 drives this in a
+   0..0xB loop and passes the counter with a bare `addu $a1, $s0, $zero`, with
+   no `sll`/`sra 16` pair at the call site.
+
+   36 words -- its header reads `nonmatching func_800A3450, 0x90`, and
+   0x90/4 = 36.  Measured 0 differing on the first compile. */
+UnkNode *func_800A3450(UnkVec *a, s32 b)
+{
+    UnkNode *n;
+    UnkVec *q;
+
+    n = func_8003FD64(0x136, &D_80083498);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    q = n->unk_08;
+    q->unk_00 = a->unk_00;
+    q->unk_04 = a->unk_04;
+    q->unk_08 = a->unk_08;
+    n->unk_10 = (u32)func_800A34E0;
+    *(u32 *)((u8 *)n + 0x20) = (u32)func_800A3508;
+    *(s16 *)((u8 *)n + 0x42) = b;
+    return n;
+}
 
 void func_800A34E0(UnkTownDispatch *d)
 {
