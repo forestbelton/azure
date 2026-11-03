@@ -8059,7 +8059,60 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892F4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B557C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5774);
+/* The equipment detail panel, and func_800B5E28's near-sibling: one 0x40-byte
+   text buffer assembled from byte fields of the record plus the font
+   renderer's escape strings, then text sprites placed through func_800B53BC.
+   Three sprites here against that one's five, and no func_800B5264 call, so
+   every text sprite goes through func_800B53BC.
+
+   Everything load-bearing is already explained in the comment on
+   func_800B5E28; it holds here, and each piece was re-measured on this
+   function:
+
+   - The first write into `buf` is gcc's INLINE 5-byte block move (lw/lb then
+     sw/sb) of the string D_80089308 holds, not a call. The original source
+     was `strcpy(buf, "\t7\f4")` and that spelling also measures 0 differing
+     in .text -- but D_80089308 only exists as a standalone rodata symbol
+     because splat could not attribute the literal that this function and
+     func_800B5E28 share, so the INCLUDE_RODATA survives and the literal emits
+     a SECOND copy of those bytes. Measured at the object level on the merged
+     unit: .rodata grows 0x2524 -> 0x252c and every record from 0xBA0 on
+     shifts, which no .text sweep can see. Hence `memcpy(buf, D_80089308, 5)`
+     against the existing symbol.
+
+   - D_80089308 must be declared with a 4-byte element type. move_by_pieces
+     takes MIN(src_align, dst_align), so `extern u8 D_80089308[]` turns that
+     lw/sw pair into lwl/lwr + swl/swr: 83 words, 73 differing.
+
+   - `num` must be declared BEFORE `buf`. Locals are assigned upward in
+     declaration order, so num takes the sp+0x18 slot and buf the sp+0x58 one;
+     swapping the declarations gives 84 words, 81 differing.
+
+   Unlike the sibling this function owns no rodata of its own -- no
+   `.section .rodata` block and no jump table in its listing -- so none of
+   that family's declared-size or `.align 3` traps apply. 0x98, 0xB8 and 0xC0
+   are each used once as the fifth argument, which is why all three are
+   materialised in $v0 rather than parked in a saved register.  */
+void func_800B5774(u8 *p, UnkTownCardPair **b)
+{
+    u8 num[0x40];
+    u8 buf[0x40];
+
+    memcpy(buf, D_80089308, 5);
+    func_8004E5A0(p[0x11], 2, num);
+    func_8004E69C(num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, D_80089310);
+    func_80069E38(buf, D_80089318);
+    func_8004E5A0(p[0x28], 3, num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, D_8008931C);
+    func_8004E5A0(p[0x29], 3, num);
+    func_80069E38(buf, num);
+    func_800B53BC(b[4], buf, 0, 0x6C, 0x98);
+    func_800B53BC(b[19], D_80089324, 0, 0x48, 0xB8);
+    func_800B53BC(b[5], func_800B544C(buf, p), 0, 0x48, 0xC0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B58B8);
 

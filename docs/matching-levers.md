@@ -297,9 +297,9 @@ then read only the section you need.
   - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:13146`
   - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:13161`
   - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:13196`
-  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13253`
-  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13287`
-  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13296`
+  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13274`
+  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13308`
+  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13317`
 
 <!-- END INDEX -->
 
@@ -13234,6 +13234,27 @@ Related, same function: `extern const u32 D_80089308[]` and not
 `extern const u8 D_80089308[]`. `move_by_pieces` takes MIN(src_align,
 dst_align), so the u8 spelling turns an inline 5-byte lw/sw copy into
 lwl/lwr + swl/swr, 132 words against 130.
+
+**The SAME family of bug fails in the opposite direction when the symbol is
+SHARED.** Measured on `func_800B5774`, the sibling, 2026-11-02. Where splat
+could not attribute a literal because TWO functions use it, the symbol's
+`INCLUDE_RODATA` survives the landing of either one -- so writing the literal
+in C emits a SECOND copy of those bytes beside the surviving record. Here
+`strcpy(buf, "\t7\f4")` is 0 differing in .text and grows `.rodata` from
+0x2524 to **0x252c**, shifting every record from offset 0xBA0 on. The fix is to
+copy from the existing symbol instead: `memcpy(buf, D_80089308, 5)`.
+
+So the two cases are opposites and the grep decides which you are in:
+
+  * symbol referenced by ONLY your listing -> splat migrated it into your
+    listing, it disappears when you land, DEFINE it in C at the exact declared
+    size (the `[4]` case above; .rodata would otherwise SHRINK or shift)
+  * symbol referenced by another listing too -> its `INCLUDE_RODATA` survives,
+    so declare it `extern` and copy FROM it; writing the literal duplicates the
+    bytes and .rodata GROWS
+
+Both are 0 differing in .text and both pass a whole-unit sweep. Run the grep
+before writing the line, and confirm with the object-level .rodata diff after.
 
 **How to apply.** Before landing any stub whose listing contains a
 `.section .rodata` block of its own, note that block's byte count and whether
