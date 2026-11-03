@@ -1694,6 +1694,10 @@ extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
 extern u8 D_800D2EA4[];
 void func_800B8E08(u16 *p);
+void func_8009CDB4(void);
+void func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
+void func_8009CE34(void);
+extern u8 D_800D43F0[];
 extern u16 *D_800D17D8[];
 extern u16 *D_800D1868[];
 extern s16 D_80111FA8[];
@@ -10586,7 +10590,60 @@ void func_800B8170(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B81AC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8248);
+/* Rebuilds the whole tile overlay: one full-screen func_8009CDCC with
+   D_800D43F0, then one per non-zero entry of the 0x21-entry pending table at
+   0x800133A4, each marking its D_800D2644 record done and handing
+   func_8009CDCC the four bytes of the matching stride-8 D_800D2EA4 slot plus a
+   pointer into the record at +0x0C.
+
+   TWO POINTER LOCALS, AND WHICH IS DERIVED FROM WHICH IS LOAD-BEARING. The
+   target holds &D_800D2644 in one register and that register plus 0xC in
+   another (`addiu $s2, $s1, 0xC`), so the +0x0C pointer is DERIVED from the
+   base. Writing it the other way round -- `r = &D_800D2644[0][6]` as the
+   primary with the `[5] = 1` store going through the array name -- gives
+   `addiu $s2, $s1, -12` and 3 differing, the same instructions with the two
+   roles exchanged.
+
+   THE FIFTH ARGUMENT'S ADDRESS IS INTEGER ARITHMETIC, NOT POINTER ARITHMETIC,
+   and that is the last word. The target computes `addu $v0, $v0, $s2` --
+   INDEX first, base second -- where pointer arithmetic on a pointer VARIABLE
+   is always base-first. Four pointer spellings are each 1 differing:
+   `&r[v * 0x10]`, `r + v * 0x10`, `v * 0x10 + r`, and `(u8 *)r + v * 0x20`.
+   Writing the sum as integers with the index first, `v * 0x20 + (s32)r`, is 0.
+   The `[5] = 1` store does not need it, because its index carries a constant
+   addend and that already flips the order.
+
+   The counter is `u8` -- `andi 0xFF` before each use and an UNSIGNED `sltiu`
+   bound -- and the table entry is re-read for the second statement rather than
+   held, which is this unit's standing shape. 0x800133A4 is out of the loaded
+   image, so it is a constant address through a base pointer with the offset in
+   the index expression, as in func_800B8A40, func_800B8A9C and func_800B833C. */
+void func_800B8248(void)
+{
+    u8 *base;
+    u8 *q;
+    s16 *t;
+    s16 *r;
+    u8 i;
+
+    func_8009CDB4();
+    func_8009CDCC(0x3F, 0, 0x10, 0x10, D_800D43F0);
+    i = 0;
+    base = (u8 *)0x80010000;
+    q = D_800D2EA4;
+    t = &D_800D2644[0][0];
+    r = t + 6;
+    for (; i < 0x21; i++)
+    {
+        if (base[i * 2 + 0x33A4] != 0)
+        {
+            t[base[i * 2 + 0x33A4] * 0x10 + 5] = 1;
+            func_8009CDCC(q[i * 8], q[i * 8 + 1], q[i * 8 + 2], q[i * 8 + 3],
+                          (u8 *)(base[i * 2 + 0x33A4] * 0x20 + (s32)r));
+        }
+    }
+    func_8009CE34();
+}
 
 /* Walks the 0x21-entry pending-tile table at 0x800133A4 and, for every
    non-zero entry, stamps the pattern named by its D_800D2644 record's byte +0
