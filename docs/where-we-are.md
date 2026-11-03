@@ -333,10 +333,17 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-03, after four cluster batches:** ovl_town is 939 of
-   1819 functions and 32,762 of 70,311 words, **46.6%**, up from 26.7% two
-   sessions ago; the project total is **68.6%**, and there are **6 parks** --
+   **State on 2026-11-03, after five cluster batches:** ovl_town is 964 of
+   1819 functions and 33,634 of 70,311 words, **47.8%**, up from 26.7% two
+   sessions ago; the project total is **69.3%**, and there are **6 parks** --
    two were RETIRED by solving them, not by giving up on them.
+
+   `tools/decomp/provision.py` now builds a brief's whole provisioning block
+   (six routes to a relative, callee classification with position markers, the
+   masked address-taken symbols, arity leads). It has had **fourteen defects
+   found by the agents using it**, which is the point: a wrong provisioning fact
+   is cheap to emit and expensive to act on, so it is worth having one place to
+   fix instead of a habit to remember.
 
    The 0.88 nearsibs seam is exhausted. Lowering it to
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
@@ -344,7 +351,7 @@ size, the `-G` value, the struct layout, the flags.
    largest "component" is 66 members chained together and is not a family.
    Work the tight components. The whole unit sweeps clean at
    879 of 879, and both `make build/town.bin` and `make check` are
-   byte-identical. `docs/matching-levers.md` is at **384 levers**, as `leverindex.py` itself
+   byte-identical. `docs/matching-levers.md` is at **387 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.

@@ -579,6 +579,34 @@ analysis; all were in the provisioning. Before sending a brief, check:
    `grep -c 'func_800C30E0(a, b, c) == 0' csrc/ovl_town.c` -- finds seven real
    candidates including the two exact ones.
 
+### THE RULE ABOVE WORKS: THREE BATCHES WITH PROSE, THREE ERRORS; ONE WITHOUT, NONE
+
+2026-11-03, stated as a measurement rather than an exhortation. Across three
+batches where I wrote "worth knowing in advance" paragraphs on top of
+`provision.py`, **every brief contained at least one error**. In the batch where
+the briefs carried only facts I had verified off the listings myself -- word
+counts, no jump table, no own rodata -- and delegated everything else to the
+tool, **all six agents reported no errors in their brief.**
+
+What survived as useful non-tool content, and why it is different: a trap that
+had already cost *me* something. One brief warned its agent not to transfer a
+diagnosis from a neighbouring function with a matching differing count, because
+I had done exactly that earlier in the sweep; the agent reported that the
+caution "paid for itself" when the neighbour's recorded number turned out not to
+generalise. So the line is not "say less" -- it is **say only what you measured
+or what you got wrong**.
+
+### A NEAR-MISS MUST SAY WHAT THE CANDIDATE HELD FIXED
+
+Added after retiring a park that had 49 spellings and a permuter run floored on
+its own plateau. The answer was a second lever interacting with a field hoist
+the park held constant, and the park's own source reproduced its plateau
+exactly -- so its measurements were sound and only its frame was wrong.
+
+**A park is a statement about a search space, not about a function.** Every
+near-miss should list the variables the candidate did not vary; without that, a
+later reader cannot tell a hard wall from a corner of the grid.
+
 ### RUN `provision.py`; DO NOT HAND-WRITE A PROVISIONING PARAGRAPH
 
 2026-11-03. `tools/decomp/provision.py` computes a brief's whole provisioning
