@@ -209,6 +209,39 @@ def main():
     freq = {}
     for dc in body.values():
         for c in dc: freq[c] = freq.get(c, 0) + 1
+    # Extract each landed body's TEXT once, so the argument list is read from
+    # the CALLER'S BODY and not from the whole file. Searching `txt` made the
+    # first match win, and the first match is normally the target's own forward
+    # DECLARATION -- which rendered as `as func_X()` and read as a measured
+    # ZERO-ARITY call site. That is worse than omitting the field: an agent
+    # that believed it would declare `void func_X(void)`, reach 0 differing
+    # (the callee cannot see its own arity), and fail the container build with
+    # "too many arguments to function".
+    btext = {}
+    for d in landed:
+        i = txt.index(landed[d]); j = txt.find('\n}', i)
+        btext[d] = txt[i:j if j > 0 else i + 2000]
+
+    def arglist(hay, name):
+        """The full argument text, with parens balanced.
+
+        `[^;)]*` cannot cross a nested `)`, so it truncated
+        `a, *((u8 *)a + 0x96))` to `a, *((u8 *` -- enough to count a comma but
+        not enough to settle a constant argument, which is half of what this
+        section claims to do."""
+        for m in re.finditer(re.escape(name) + r'\s*\(', hay):
+            k = m.end(); depth = 1
+            while k < len(hay) and depth:
+                if hay[k] == '(': depth += 1
+                elif hay[k] == ')': depth -= 1
+                k += 1
+            if depth: continue
+            inner = hay[m.end():k-1]
+            if '\n' in inner: continue
+            return inner
+        return None
+
+    witnessed = set()
     print("\n=== ROUTE (d): WHO TAKES MY TARGET'S ADDRESS (the reverse install edge) ===")
     print("    Named by two agents as the most valuable fact their brief lacked: the")
     print("    installer's own declaration settles the target's arity when nothing")
@@ -234,7 +267,7 @@ def main():
                 print("  %-15s address taken by %-15s %s" % (f, nm,
                       ('%s: %s' % (src, decl)) if decl
                       else 'NO DECLARATION ANYWHERE -- read its listing'))
-                anyd = True
+                anyd = True; witnessed.add(f)
     if not anyd: print("  none")
 
     print("\n=== ROUTE (e): ASM CALLERS (route (c) only sees LANDED callers) ===")
@@ -248,8 +281,30 @@ def main():
                 nm = sf[:-2]
                 print("  %-15s jal'd by STUB %-15s -- read %s/%s to settle arity"
                       % (f, nm, D(unit).replace(PROJ + '/', ''), sf))
-                anye = True
+                anye = True; witnessed.add(f)
     if not anye: print("  none")
+
+    print("\n=== ROUTE (f): LANDED CALL SITES OF YOUR CALLEES, WITH THEIR ARGUMENTS ===")
+    print("    Line-level identity, which the rarity score cannot see: a landed")
+    print("    function that passes the SAME CONSTANTS to the same callee is a")
+    print("    template even when it shares nothing else. One such pair was scored")
+    print("    0.225 while a wrong-shape relative scored 2.000.")
+    anyf = False
+    for c in sorted(every):
+        rows = []
+        for d in landed:
+            if d in targets or c not in body.get(d, ()): continue
+            a = arglist(btext.get(d, ''), c)
+            if a is None: continue
+            rows.append((d, a))
+        # only interesting when a constant or global appears in the arguments
+        rows = [(d, a) for d, a in rows if re.search(r'\b(0x[0-9A-Fa-f]+|D_[0-9A-F]{6,8})\b', a)]
+        if not rows: continue
+        anyf = True
+        print("  %s, as called by landed code:" % c)
+        for d, a in rows[:5]:
+            print("      csrc/%s.c:%-6d %s(%s)" % (unit, lines[d], c, a[:66]))
+    if not anyf: print("  no landed call site of any of your callees passes a constant")
 
     print("\n=== LANDED RELATIVES, route (a): shared callees+globals, WEIGHTED BY RARITY ===")
     print("    (score = sum 1/freq over shared callees, +2/freq per shared global;")
@@ -309,38 +364,6 @@ def main():
 
     print("\n=== LANDED CALLERS (route (c): settles arity AND constant arguments) ===")
     anyc = False
-    # Extract each landed body's TEXT once, so the argument list is read from
-    # the CALLER'S BODY and not from the whole file. Searching `txt` made the
-    # first match win, and the first match is normally the target's own forward
-    # DECLARATION -- which rendered as `as func_X()` and read as a measured
-    # ZERO-ARITY call site. That is worse than omitting the field: an agent
-    # that believed it would declare `void func_X(void)`, reach 0 differing
-    # (the callee cannot see its own arity), and fail the container build with
-    # "too many arguments to function".
-    btext = {}
-    for d in landed:
-        i = txt.index(landed[d]); j = txt.find('\n}', i)
-        btext[d] = txt[i:j if j > 0 else i + 2000]
-
-    def arglist(hay, name):
-        """The full argument text, with parens balanced.
-
-        `[^;)]*` cannot cross a nested `)`, so it truncated
-        `a, *((u8 *)a + 0x96))` to `a, *((u8 *` -- enough to count a comma but
-        not enough to settle a constant argument, which is half of what this
-        section claims to do."""
-        for m in re.finditer(re.escape(name) + r'\s*\(', hay):
-            k = m.end(); depth = 1
-            while k < len(hay) and depth:
-                if hay[k] == '(': depth += 1
-                elif hay[k] == ')': depth -= 1
-                k += 1
-            if depth: continue
-            inner = hay[m.end():k-1]
-            if '\n' in inner: continue
-            return inner
-        return None
-
     for f in targets:
         for d, dc in body.items():
             if f in dc and d not in targets:
@@ -348,9 +371,18 @@ def main():
                 if a is None: continue
                 print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)"
                       % (f, d, unit, lines[d], f, a[:60]))
-                anyc = True
+                anyc = True; witnessed.add(f)
                 break
-    if not anyc: print("  none -- no call site constrains arity")
+    if not anyc: print("  none -- no LANDED call site constrains arity")
+    missing = [f for f in targets if f not in witnessed and listing(unit, f)]
+    if missing:
+        print("\n  *** NO ARITY WITNESS ANYWHERE for: %s" % ', '.join(missing))
+        print("      No jal, no %hi, no C reference -- checked across the whole unit.")
+        print("      This is a FACT, not a gap in the search: go straight to register")
+        print("      reads in the target's own body (an argument register READ before")
+        print("      it is written is a real parameter). Note a dead MIDDLE parameter")
+        print("      IS witnessed, by the gap it leaves in the $aN sequence; only a")
+        print("      dead TRAILING parameter is invisible.")
 
 if __name__ == '__main__':
     main()
