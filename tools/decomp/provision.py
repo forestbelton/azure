@@ -223,6 +223,25 @@ def main():
         print("      callees : %s" % (', '.join(cal) or 'NONE'))
         print("      installs: %s" % (', '.join(ins) + '   <- %hi on a FUNCTION: masked, no jal, VERIFY BY RELOC'
                                         if ins else 'none'))
+        # AN ADDRESS-TAKE DOES NOT RIDE AN IMPLICIT DECLARATION the way a call
+        # does. This unit rides 18 implicit declarations for CALLS to functions
+        # defined below their call site, and none of them covers taking an
+        # address: the compile dies with "undeclared" at the install. Cost an
+        # agent a compile on func_800BEBA4 (installing func_800BF15C, defined
+        # below), and it reported that the tool flags the install but not the
+        # declaration it needs.
+        mypos = incasm.get(f) or lines.get(f) or 0
+        need = [i for i in ins
+                if (lines.get(i) or incasm.get(i) or 0) > mypos]
+        if need:
+            print("                *** EACH OF THESE IS DEFINED BELOW YOU, SO THE INSTALL")
+            print("                NEEDS A FORWARD DECLARATION -- an address-take does NOT")
+            print("                ride an implicit declaration the way a CALL does, and")
+            print("                this unit's 18 implicit-declaration rides are all calls:")
+            for i in need:
+                pr = protos.get(i)
+                print("                  %-15s %s" % (
+                    i, pr.strip() if pr else 'no declaration in the unit either -- write one'))
         if gl:
             tags = []
             for g in gl:
