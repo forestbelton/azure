@@ -1145,12 +1145,34 @@ void func_8004A574(u8 *p, s32 w) {
        which is the shape that would put the product in a GR -- is 39 words,
        17 DIFF: dbr pulls that mult into the beqz's delay slot rather than
        copying it into the `j`'s, so the listing's duplicated `mult` never
-       appears. A GR-constrained use with no instruction behind it is not
-       expressible in C, which is why this is a device. */
-    __asm__ volatile("" : "+r"(v) : : "$4");
-    if (*(u32 *) (e + 8) != 0) {
-        (*(void (**)(s32, u8 *)) (e + 8))(v, p);
-    }
+       appears.
+
+       THE `"+r"(v)` HALF IS EXPRESSIBLE IN C after all, and this comment
+       said otherwise until 2026-11-02. A `do { } while (0)` around the call
+       does that job: its LOOP_BEG note is a block boundary at the join, the
+       LO->GR copy lands there, and the device is down to the bare clobber.
+       Measured on the landed body, all 41 of 41 words:
+         wrapper + `__asm__("" : : : "$4")`                     MATCH
+         the same with `volatile` on the asm                    MATCH
+         wrapper alone, no asm                                  2 DIFF
+         `v = v + w; v = v - w;` at the join, no asm            2 DIFF
+         bare clobber alone, no wrapper                         5 DIFF
+       The residual 2 DIFF of the device-free forms is the register, not the
+       position: built is `mflo $a0` with a nop in the beqz's delay slot where
+       the listing has `mflo $v0` and `move $a0, $v0` hoisted into it. Nothing
+       plain reaches it -- also 2 DIFF, with the wrapper: a `t = v` copy
+       either side of the wrapper, the arms writing `t` and passing it, a
+       block-local `v`, a free-reference pair on `p`, two nested wrappers, and
+       one extra mention of `s` after the join; `v = v + s - s` and a pair on
+       `s` are 12. So the clobber stays: it says the one thing C cannot, that
+       the product must not sit in the register the argument copy prefers. */
+    __asm__("" : : : "$4");
+    do
+    {
+        if (*(u32 *) (e + 8) != 0) {
+            (*(void (**)(s32, u8 *)) (e + 8))(v, p);
+        }
+    } while (0);
 }
 
 void func_8004A618(s32 a) {

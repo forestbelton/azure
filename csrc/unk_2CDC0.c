@@ -1988,12 +1988,18 @@ found:
            Ruled out, all 103/103: the pinned copy without the asm, 1 DIFF
            (`sw $a1,0x8`); `__asm__ volatile("")` instead of the asm, 1 DIFF;
            the copy before the `do {} while (0)`, 11 DIFF (it floats to the
-           block top); no loop at all, 11 DIFF. A plain `register u32 zz = c;`
-           with the same asm also MATCHES, by a different route (reload
-           materialises the copy for the asm's matching constraint); the
-           pinned form is the one whose dump was read. Silent under -Wall; no
-           uninitialised read. */
-        register u32 zz __asm__("$5") = c;
+           block top); no loop at all, 11 DIFF. Silent under -Wall; no
+           uninitialised read.
+           Re-measured on the landed body 2026-11-02, all 103 of 103 words:
+           the HARD-REGISTER PIN IS NOT NEEDED -- a plain `register u32 zz`
+           with this asm MATCHES, by a different route (reload materialises
+           the copy for the asm's matching constraint), and the pin was
+           dropped on that measurement. `volatile` on the asm also MATCHES.
+           Removing the asm as well is 11 DIFF, not the 2 recorded here from
+           the park. The nearest device-free form measured is `u8 zz = c`
+           (a narrower copy cse cannot coalesce) at 2 DIFF -- not taken,
+           because it also truncates the argument. */
+        register u32 zz = c;
         __asm__("" : "=r"(zz) : "0"(zz));
         e->unk_18 = 0x7F;
         e->unk_00 = i;
@@ -2486,9 +2492,11 @@ void func_8005EC0C(SpuVoiceAttr *);
      insn_count 280 (loop.c:1631; threshold 31 = 1 + 30 non-fixed regs: the
      scan loop's own dump prints -124 = 1*62*-2 for a 2-benefit giv), before
      the busy loop's hoists cost 3 per move and double insn_count
-     (loop.c:1719, :1609-1611). That is the dead `v = D_80085458` at the body
-     top: DEVICE, worth 18 DIFF (without it the head is evaluated after four
-     doublings and stays local, `lui v0` at every site). The hoisted high then
+     (loop.c:1719, :1609-1611). This used to need a dead `v = D_80085458` at
+     the body top, measured at 18 DIFF while the function was a park. IT IS
+     NO LONGER LOAD-BEARING: re-measured 2026-11-02 on the landed body, the
+     store removed is 376 of 376 words, 0 DIFF, and all four containers stay
+     byte-identical, so the device is gone. The hoisted high then
      loses $fp to `prog` on refs (global.c:587-608, 3 refs vs 11) exactly as
      the listing has it. (3) The per-site lo_sums `pN = D_80085458` MATCH the
      scan loop's regenerated lo_sum (.loop "regno 100, done move-insn matches
@@ -2596,14 +2604,6 @@ void func_8005B4D0(s32 a, s32 b, u16 volx, u16 panx, s32 force)
         do
         {
             e = bs2 + ((cnt * 0x10 + layer) * 0x20 + 0x820);
-            /* DEVICE: dead store. Its `(high D_80085458)` is the first in the
-             * loop, so the three voice-pointer highs below merge into it and
-             * are hoisted before the busy loop's moves tax the threshold;
-             * flow deletes the store. Without it: 18 DIFF (local highs in
-             * $v0 at all three sites). The r-biv scan loop with this store
-             * 366 (+3 words): its high merges too and the scan site becomes
-             * `lui t1`. -Wall is silent. */
-            v = D_80085458;
             if (key >= e[6] && e[7] >= key)
             {
                 ch = 0;
@@ -2991,15 +2991,22 @@ s16 func_8005BBFC(s16 ch0, s16 bank, s16 prog, s16 key, s16 vel, s16 fine, s16 v
                  * shifts read it, cse.c:853-857); `r = x * (a << 1) >> 7`
                  * no change (cse rewrites `a` to `l`); an identical-arm
                  * `if (a)` at the join 104-122; `a = unk_18; a = a * ...`
-                 * 39/41; one-argument func_8005EC0C 102. No -Wall warning. */
-                __asm__("" : "=r"(a), "=r"(r) : "1"(r));
+                 * 39/41; one-argument func_8005EC0C 102. No -Wall warning.
+                 * Re-measured 2026-11-02 on the landed body: the tied second
+                 * output is NOT needed. `__asm__ volatile("" : "=r"(a));` in
+                 * each arm MATCHES at 333 of 333 words, so both arms now
+                 * carry the same single-output fence and neither mentions
+                 * `r` or `l`. Dropping the pair entirely is 332 words /
+                 * 114 DIFF; dropping all three asms in this function is
+                 * 332 / 125. */
+                __asm__ volatile("" : "=r"(a));
                 l = (0x40 - (x & 0x3F)) * (r << 1) >> 7;
             }
             else
             {
                 l = a;
                 /* DEVICE: the else arm's half of the pair above. */
-                __asm__("" : "=r"(a), "=r"(l) : "1"(l));
+                __asm__ volatile("" : "=r"(a));
                 r = x * (l << 1) >> 7;
             }
 

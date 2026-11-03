@@ -137,9 +137,14 @@ Conditions, all of them:
   explained the census in prose that contained it, and counted itself.
 - Record the legal spellings you ruled out, with their scores, in the same
   comment. A later attempt starts where you stopped rather than re-measuring.
-  A device's word value can only be measured while the function is a PARK:
-  once it is landed there is no nonmatchings listing left to score against,
-  and all you can still check is that deleting it breaks the build.
+  A device's word value is measured with `tools/decomp/verify.py` while the
+  function is a PARK and with `tools/decomp/devmeasure.py` once it is LANDED.
+  This contract used to say the landed case was impossible, because a landed
+  function has no nonmatchings listing left; that is wrong, and the claim
+  bought a month of stale figures in the comments. `devmeasure.py` builds the
+  container and scores the one function against the reference out of the
+  linked elf's symbol table, so a rejected spelling can be re-run at any time
+  -- and should be, because a device's worth drifts with its unit's context.
 - If the device warns under `-Wall` -- an uninitialised read does -- say so in
   the comment. The default `CFLAGS` has no `-Wall`, so the build is silent, and
   the note is what stops somebody "fixing" it later.

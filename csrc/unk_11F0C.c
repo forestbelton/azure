@@ -93,16 +93,38 @@ void func_8003E70C(void)
  * symbol and ignores the addend, so that spelling sends the +3 access
  * $gp-relative as well; see the comment on func_8003E34C.
  *
- * THE BARRIER IN case 6. `__asm__ volatile ("" :: "r" (q) : "memory")` emits
- * nothing and does three measured jobs at once, all in the `addr != 0` arm:
- * the memory clobber stops cse reusing the entry block's `q[0]` across the
- * branch, so the arm reloads it and shifts again (3 words); it keeps the `or`
- * ahead of that reload, which is what leaves the load-delay nop (1 word); and
- * the `"r" (q)` operand is a reference to `q` that costs no instruction,
- * lifting its allocno priority from 4/34 above nsec's 5/41 so `q` takes $s1
- * and nsec $s2 rather than the other way round (9 words). Dropping it costs
- * 13 words; a `volatile u32 *` read in its place gets the reload but not the
- * order or the priority.
+ * THE RELOAD IN case 6. The `addr != 0` arm re-reads `q[0]` where the entry
+ * block has already read it, and three separate things have to hold for that
+ * to come out as the listing's `lw`/`nop`/`srl`: the read must survive cse
+ * (3 words), the `or` of PHYS_TO_K0 must stay ahead of it, which is what
+ * leaves the load-delay nop (1 word), and `q`'s allocno priority must clear
+ * nsec's so `q` takes $s1 and nsec $s2 rather than the other way round
+ * (9 words). Dropping all three costs 13 words -- 695 of 698, and the whole
+ * image shifts three words.
+ *
+ * Until 2026-11-02 that was one `__asm__ volatile ("" :: "r" (q) : "memory")`.
+ * It is now plain C: a `volatile` read does the first two jobs and a
+ * degenerate loop around it does the third. Measured on the landed body
+ * (698 words throughout unless noted):
+ *   do { nsec = *(volatile u32 *) q >> 23; } while (0);        MATCH
+ *   the same wrapped `while (1) { ...; break; }`               MATCH
+ *   the old asm, memory clobber and all                        MATCH
+ *   `__asm__ volatile ("" ::: "memory")` alone, no wrapper      9 DIFF
+ *     (a pure $s1/$s2 swap -- the clobber does both reload jobs
+ *      and the `"r" (q)` operand did nothing but the priority)
+ *   the same clobber WITH the wrapper                          MATCH
+ *   `nsec = *(volatile u32 *) q >> 23;` with no wrapper   697w, 564 DIFF
+ *   ditto via `volatile u32 *vq = q`, or `((volatile u32 *) q)[0]`
+ *                                                        697w, 564 DIFF
+ *   the same read wrapped `for (;;) { ...; break; }`      697w, 564 DIFF
+ *     (`for` does not emit the LOOP_BEG note the other two do)
+ *   the volatile read TWICE, for q's extra reference            5 DIFF
+ *   both arms computing nsec themselves, volatile in the else
+ *                                                        696w, 560 DIFF
+ *   wrapping the entry block's `nsec =` or `addr =` instead    14, 15 DIFF
+ * So the wrapper is a reference weight on `q`, exactly as in the
+ * func_8008FAC0 case documented at matching-levers:717, and the read being
+ * volatile is what a DMA'd sector header wants anyway.
  *
  * SMALLER SHAPES, each measured:
  *   - case 0xFF reaches unk_08 as `*(s32 *) ((u8 *) D_80083968 + i * 24 + 8)`
@@ -205,23 +227,23 @@ again:
                     else
                     {
                         addr = PHYS_TO_K0(addr);
-                        /* DEVICE: a full memory barrier, the project's
-                           first and for a long time only one. It emits no
-                           instruction. Recorded as worth 13 words when this
-                           function was a park (see docs/landing-a-function.md);
-                           that figure cannot be re-measured now, because a
-                           landed function has no nonmatchings listing to score
-                           against. What IS re-verified, 2026-11-01: it is
-                           still load-bearing. Deleting it builds
-                           slus_006.14 at 0x7FFF4 bytes instead of 0x80000 --
-                           twelve bytes, three words short -- with a different
-                           hash, so the clobber is what stops the second
-                           `q[0]` being folded onto the first load.
-                           Warns under -Wall? No.
-                           Marker retrofitted 2026-11-01 so that a device
-                           census is a single grep for the marker rather than two. */
-                        __asm__ volatile("" ::"r"(q) : "memory");
-                        nsec = q[0] >> 23;
+                        /* DEVICE: the degenerate loop is a reference weight on `q`,
+                           not control flow -- flow.c:440 counts the
+                           LOOP_BEG/END notes and propagate_block does
+                           `reg_n_refs[regno] += loop_depth`, which lifts q's
+                           allocno priority past nsec's so q takes $s1. The
+                           `volatile` is not a device: this is a re-read of a
+                           sector header the drive has written, and it is what
+                           stops cse folding the read onto the entry block's.
+                           Together worth 13 words. Without either, 695 of 698
+                           words and the image is three words short.
+                           See the unit header for every spelling measured.
+                           This replaced the project's first and longest-lived
+                           asm device on 2026-11-02; `-Wall` is silent. */
+                        do
+                        {
+                            nsec = *(volatile u32 *)q >> 23;
+                        } while (0);
                     }
                     if (nsec == 0)
                     {

@@ -138,6 +138,23 @@ shows the substitution:
     diff <(python3 tools/decomp/ovlverify.py --dump A | awk '{$1="";$2="";print}') \
          <(python3 tools/decomp/ovlverify.py --dump B | awk '{$1="";$2="";print}')
 
+**AND GREP THE PARKS FOR A NEAR-SIBLING BEFORE YOU READ A DUMP.** It is one
+command and it has been worth a whole reading:
+
+    grep -l 'func_8003FD64' docs/near-misses/*.c    # a callee the pair shares
+
+On 2026-11-02 `nearsibs.py`'s 0.964 pair `func_800BA930`/`func_800BACB0` turned
+out to be the 224-word cut-down of the parked 279-word
+`func_800BA00C`/`func_800BA468` pair -- same recipe minus a second random call,
+a direction selector and a lean. The park's prose WAS the reading: its six
+settled facts, its two varying constants (`0x1A`/`0xA` and `0x19`/`9`) and even
+its `UnkTownRend` field list transferred verbatim, and the 448 words landed
+without a permuter. The only two things the park got wrong for the shorter pair
+were three statement orders and the number of renderable pointers.
+
+A park is a written-up reading of a function nobody has landed yet. When a
+`nearsibs.py` set shares a distinctive callee with one, read the park first.
+
 `tools/decomp/landedshapes.py` mechanises the other half of this -- a stub
 whose shape is ALREADY LANDED:
 

@@ -3965,8 +3965,15 @@ void func_80057A48b(u8, u8, u8) __asm__("func_80057A48");
 void func_8005848Cb(u8, u8) __asm__("func_8005848C");
 void func_80058494b(u8, u8, u8) __asm__("func_80058494");
 
-/* DEVICE: `*(u32 *)(void *)D_800869B4n` instead of `D_800869B4n[0]`, worth 1
-   word and 131 of the 131 differing words.
+/* DEVICE: `*(const u32 *)D_800869B4n` instead of `D_800869B4n[0]`, worth 1
+   word and 131 of the 131 differing words. (It was `*(u32 *)(void *)` until
+   2026-11-02; re-measured then on the landed body, any cast through a type
+   the array does not already decay to does the same job, and a single one
+   reads better. All 204 of 204 words, 0 DIFF: `(const u32 *)`, `(u32 *)(u8 *)`,
+   `(s32 *)(void *)`, `(u32 *)(u16 *)`. The control, `D_800869B4n[0]`, is now
+   206 words / 136 DIFF. A LOCAL POINTER does NOT work -- `u32 *cnt =
+   D_800869B4n` read as `*cnt` or `cnt[0]` is 206 / 196 -- so the cast is not
+   standing in for a pointer variable the original might have had.)
 
    gcc 2.7.2's alias heuristic (sched.c `true_dependence`, and `invariant_p`
    via loop.c:2779) says a MEM_IN_STRUCT reference at a varying address, in a
@@ -4030,7 +4037,7 @@ void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
                 if (D_800869B8[0] != 0)
                 {
                     i = 0;
-                    while (i < *(u32 *)(void *)D_800869B4n)
+                    while (i < *(const u32 *)D_800869B4n)
                     {
                         D_80085FA8s[i].unk_04 = D_80085FA8s[i].unk_00;
                         D_80085FA8s[i].unk_08 = 0x14;
@@ -4058,7 +4065,7 @@ void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
                     if (D_800869B8[0] != 0)
                     {
                         i = 0;
-                        while (i < *(u32 *)(void *)D_800869B4n)
+                        while (i < *(const u32 *)D_800869B4n)
                         {
                             D_80085FA8s[i].unk_00 = D_80085FA8s[i].unk_04;
                             D_80085FA8s[i].unk_10 = D_80085FA8s[i].unk_14;
@@ -4082,7 +4089,7 @@ void func_8005914C(Unk80085FA8 *p, u8 st, u8 d1, u8 d2)
                 if (D_800869B8[0] != 0)
                 {
                     i = 0;
-                    while (i < *(u32 *)(void *)D_800869B4n)
+                    while (i < *(const u32 *)D_800869B4n)
                     {
                         D_80085FA8s[i].unk_08 = d2;
                         i++;

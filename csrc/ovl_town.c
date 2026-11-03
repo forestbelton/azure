@@ -2009,6 +2009,12 @@ void func_80067E2C(DR_AREA *p, RECT *r);          /* SetDrawArea */
 void func_80067EF4(void *p, s32 a, s32 b);        /* the 0xE6 mask primitive */
 u16 func_8008C180(s16 x, s16 y);
 s32 func_800C1D44(s32 id);
+extern u8 D_80045C34[];
+extern void *D_800D1BCC[];
+extern u8 D_800F8A1C[];
+extern u8 D_800F8A28[];
+void func_800B9CB8();
+void func_800BA8C4();
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -12955,9 +12961,347 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA468);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA8C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BA930);
+/* The two 224-word siblings of the parked 279-word spawner func_800BA00C:
+   same four-block recipe, but with no second random call (+0x97 is just
+   zeroed), no `dir` and no func_800644B8 lean in block 1. nearsibs.py found
+   the pair at mnemonic ratio 0.964; the ONLY semantic difference between the
+   two is the renderable's +0x08 id -- `i + 0x1A`/0x19 here against
+   `i + 0xA`/9 in func_800BACB0.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BACB0);
+   Each block: func_8003FD64(type, node) allocates, func_8004491C(obj, tag)
+   initialises, a handler goes into obj->unk_10, obj+0x20 is the actor view
+   that gets the parent and the parent's +0x98, obj->unk_0C is the renderable
+   and obj->unk_08 an UnkVec seeded from the second parameter. Blocks 1 and 2
+   are 4-iteration loops (types 0x136 and 0x36), blocks 3 and 4 are single
+   (0x36 and 0x136).
+
+   THE FIRST PARAMETER IS AN INTERIOR POINTER: it is used at -0x10 (the node's
+   unk_10 handler slot) and -0x20 (the node itself), so callers pass the +0x20
+   actor view. Neither function has a caller or an address-taken reference
+   anywhere -- `grep -rn 800BA930 asm/` finds only its own listing -- so the
+   two-parameter arity is CONSISTENT (only $a0 and $a1 are read) and not
+   witnessed.
+
+   Six spellings measured, each the whole 224 words (see the report in the
+   commit for the table):
+     * TWO renderable pointers, one for the 0x136 blocks and one for the 0x36
+       blocks. One shared pointer is a global-alloc quantity and lands in $a1
+       everywhere (66 differing); two quantities land in $a2 and $a0 as the
+       target does. Four separate pointers is worse still (225 words).
+     * `p->unk_1A` is the SEVENTH renderable store, before +0x1E/+0x1C, in
+       blocks 2 and 3. Its `lhu` of s->unk_66 then issues where the target
+       issues it and sched fills the two load-delay slots with the +0x1E/+0x1C
+       stores. Written after them it needs an `ang` temp and still rotates
+       (61 differing with the temp).
+     * The UnkVec stores are written +0x00, +0x04, +0x08 in all four blocks.
+       The +0x08 store is the one sched moves, into the `lw` of m->unk_04's
+       load-delay slot. Writing +0x08 before +0x04 (as func_800BA00C's park
+       does) costs six words in each of blocks 2 and 3.
+     * In block 4 ONLY, `x = o->unk_08` is read between `p->unk_0E` and
+       `p->unk_08`. A load cannot move above a store through another pointer,
+       so that position is forced by the target's `nop` at +0x324; and it is
+       what makes p's and x's live ranges overlap, which is why global-alloc
+       cannot give p the $a1 it gives x.
+     * `D_800D1BCC[i]` as a plain subscript. loop.c strength-reduces it and
+       puts the `addiu $s3, $s3, 4` in the backward branch's delay slot
+       without a source `tab++`.
+     * `col = (u8 *)&D_80083160;` INSIDE loop 1, where loop.c hoists it. The
+       preheader's order -- i=0, handler, col, table -- is loop.c's hoist
+       order, which is the order the loop body mentions them in. */
+void func_800BA930(UnkTownSpawn *s, UnkVec *m)
+{
+    s32 i;
+    UnkTownSpawn *v;
+    UnkNode *o;
+    UnkTownRend *p;
+    UnkTownRend *q;
+    UnkVec *x;
+    u8 *col;
+    u8 *col2;
+    u8 blue;
+    u32 n;
+
+    *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
+    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_97 = 0;
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800BA8C4;
+            func_8004491C(o, (u32)D_80046398);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_66 = 0;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_1C = 0x1000;
+            p->unk_1E = 0x1000;
+            p->unk_20 = 0xAAA;
+            col = (u8 *)&D_80083160;
+            p->unk_0C = col[0xA8];
+            p->unk_0D = col[0xA9];
+            blue = col[0xAA];
+            p->unk_08 = i + 0x1A;
+            p->unk_0E = blue;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04;
+            x->unk_08 = 0;
+            func_8008F104(v, x, D_800D1BCC[i]);
+        }
+    }
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9EDC;
+            func_8004491C(o, (u32)D_80045C34);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            q = (UnkTownRend *)o->unk_0C;
+            q->unk_08 = (u32)D_800F8A1C;
+            q->unk_0E = 0x80;
+            q->unk_0D = 0x80;
+            q->unk_0C = 0x80;
+            q->unk_16 = 0x370;
+            q->unk_18 = 0;
+            q->unk_1A = s->unk_66 + i * 0x400;
+            q->unk_1E = 0x1000;
+            q->unk_1C = 0x1000;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04 + 0x200000;
+            x->unk_08 = 0xFF2C0000;
+        }
+    }
+    o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9EDC;
+        func_8004491C(o, (u32)D_80045C34);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        q = (UnkTownRend *)o->unk_0C;
+        q->unk_08 = (u32)D_800F8A28;
+        q->unk_0E = 0x80;
+        q->unk_0D = 0x80;
+        q->unk_0C = 0x80;
+        q->unk_16 = 0x370;
+        q->unk_18 = 0;
+        q->unk_1A = s->unk_66;
+        q->unk_1E = 0x1000;
+        q->unk_1C = 0x1000;
+        x = o->unk_08;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04 + 0x200000;
+        x->unk_08 = 0xFF2C0000;
+    }
+    o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9F74;
+        func_8004491C(o, (u32)D_80046398);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        col2 = (u8 *)&D_80083160;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_1C = 0x1000;
+        p->unk_1E = 0x1000;
+        p->unk_20 = 0x1000;
+        p->unk_1A = s->unk_66;
+        p->unk_0C = col2[0xA8];
+        p->unk_0D = col2[0xA9];
+        p->unk_0E = col2[0xAA];
+        x = o->unk_08;
+        p->unk_08 = 0x19;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04;
+        x->unk_08 = 0;
+    }
+}
+
+/* func_800BA930 with the renderable id 0xA/9 where it has 0x1A/0x19, plus the
+   scheduling barrier below. Everything else -- every symbol, every offset,
+   every statement order -- is the same source. */
+void func_800BACB0(UnkTownSpawn *s, UnkVec *m)
+{
+    s32 i;
+    UnkTownSpawn *v;
+    UnkNode *o;
+    UnkTownRend *p;
+    UnkTownRend *q;
+    UnkVec *x;
+    u8 *col;
+    u8 *col2;
+    u8 blue;
+    u32 n;
+
+    *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
+    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_97 = 0;
+    /* DEVICE: an empty volatile asm, worth 39 of this function's 224 words.
+       It is a pure scheduling barrier -- no operands, no clobbers, no
+       instruction emitted -- and all it does is give the two stores above a
+       dependent, so sched.c's schedule_select cannot pull either of them into
+       the last slot of the block that also holds loop 1's preheader.
+
+       Without it this function is 224 words / 39 differing and its first
+       thirty words read as func_800BA930's: loop 1's four preheader insns
+       (i = 0 and the lui/addiu pairs for func_800BA8C4, D_80083160 and
+       D_800D1BCC) are emitted BEFORE the `sra`/`sll`/`subu` of the modulo
+       instead of after it, which in turn clobbers $v0 across the modulo, so
+       the divide's `t = x` copy survives as `addu $a0, $v1, $zero` and reorg
+       fills the `bgez` delay slot with it rather than stealing the `sra` from
+       the branch target. func_800BA930 wants exactly that; this one does not,
+       and the two sources are otherwise identical.
+
+       The mechanism, read out of scratch/gcc-src/cdk-gcc-b18/sched.c
+       (schedule_select, the "largest potential hazard" group pass) and
+       confirmed in the .sched dumps: sched1 schedules this block backward, so
+       its T-1 slot is the LAST word emitted. All twelve insns in the block
+       have priority 1, so they form one group, and schedule_select hands T-1
+       to the group member with the greatest potential_hazard -- the `sb` at
+       +0x97. With a dependent, neither store is ready at T-1 and the four
+       preheader insns take the last slots instead, which is the target.
+
+       Legal spellings ruled out, all 224 words: plain (39 differing);
+       `s->unk_97 = 0` before the modulo statement (11 -- fixes the schedule
+       but then reorg puts the `sb` in the call's delay slot and the handler
+       store before the call); `volatile` on either store or both (39 -- the
+       two MEMs are 0x66+2 and 0x97+1 off one base, so memrefs_conflict_p
+       answers no whatever the qualifiers); the same two stores through
+       non-struct `*(s16 *)`/`*(s8 *)` casts (39); a temp for the random value,
+       declared first or last (39); `i` declared last, `x` declared before
+       `p`, an extra leading s32 (39 each); loop 1 as `do/while` (39), as a
+       `goto` loop (82), with a `tab` cursor instead of the subscript (39),
+       and with the handler in a local (226 words). A barrier BEFORE the two
+       stores is 225 words / 214 differing, so the position is the point.
+       `__asm__ volatile("" ::: "memory")` in the same place is also 0
+       differing; the clobber is not needed, because a volatile asm is
+       already a full barrier in sched_analyze_insn.
+
+       This warns under -Wall only if the string is non-empty; it does not.
+       The default CFLAGS has no -Wall either way. */
+    __asm__ volatile("");
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800BA8C4;
+            func_8004491C(o, (u32)D_80046398);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_66 = 0;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            p = (UnkTownRend *)o->unk_0C;
+            p->unk_1C = 0x1000;
+            p->unk_1E = 0x1000;
+            p->unk_20 = 0xAAA;
+            col = (u8 *)&D_80083160;
+            p->unk_0C = col[0xA8];
+            p->unk_0D = col[0xA9];
+            blue = col[0xAA];
+            p->unk_08 = i + 0xA;
+            p->unk_0E = blue;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04;
+            x->unk_08 = 0;
+            func_8008F104(v, x, D_800D1BCC[i]);
+        }
+    }
+    for (i = 0; i < 4; i++)
+    {
+        o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+        if (o != 0)
+        {
+            o->unk_10 = (u32)func_800B9EDC;
+            func_8004491C(o, (u32)D_80045C34);
+            n = s->unk_98;
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            v->unk_9C = s;
+            v->unk_97 = i;
+            v->unk_98 = n;
+            q = (UnkTownRend *)o->unk_0C;
+            q->unk_08 = (u32)D_800F8A1C;
+            q->unk_0E = 0x80;
+            q->unk_0D = 0x80;
+            q->unk_0C = 0x80;
+            q->unk_16 = 0x370;
+            q->unk_18 = 0;
+            q->unk_1A = s->unk_66 + i * 0x400;
+            q->unk_1E = 0x1000;
+            q->unk_1C = 0x1000;
+            x = o->unk_08;
+            x->unk_00 = m->unk_00;
+            x->unk_04 = m->unk_04 + 0x200000;
+            x->unk_08 = 0xFF2C0000;
+        }
+    }
+    o = func_8003FD64(0x36, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9EDC;
+        func_8004491C(o, (u32)D_80045C34);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        q = (UnkTownRend *)o->unk_0C;
+        q->unk_08 = (u32)D_800F8A28;
+        q->unk_0E = 0x80;
+        q->unk_0D = 0x80;
+        q->unk_0C = 0x80;
+        q->unk_16 = 0x370;
+        q->unk_18 = 0;
+        q->unk_1A = s->unk_66;
+        q->unk_1E = 0x1000;
+        q->unk_1C = 0x1000;
+        x = o->unk_08;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04 + 0x200000;
+        x->unk_08 = 0xFF2C0000;
+    }
+    o = func_8003FD64(0x136, (UnkNode *)((u8 *)s - 0x20));
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800B9F74;
+        func_8004491C(o, (u32)D_80046398);
+        n = s->unk_98;
+        v = (UnkTownSpawn *)((u8 *)o + 0x20);
+        v->unk_9C = s;
+        v->unk_98 = n;
+        col2 = (u8 *)&D_80083160;
+        p = (UnkTownRend *)o->unk_0C;
+        p->unk_1C = 0x1000;
+        p->unk_1E = 0x1000;
+        p->unk_20 = 0x1000;
+        p->unk_1A = s->unk_66;
+        p->unk_0C = col2[0xA8];
+        p->unk_0D = col2[0xA9];
+        p->unk_0E = col2[0xAA];
+        x = o->unk_08;
+        p->unk_08 = 9;
+        x->unk_00 = m->unk_00;
+        x->unk_04 = m->unk_04;
+        x->unk_08 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BB030);
 
