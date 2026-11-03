@@ -6,8 +6,16 @@ from typing import TextIO
 # The string body may carry the escapes `splat/ext/shiftjis.py` writes, so it
 # is matched as "either a plain character or a backslash pair" rather than
 # with a non-greedy `.*?`, which would stop at the first escaped quote.
+#
+# `.shiftjisz` is the same directive plus the layout every string table in this
+# game uses: a NUL terminator and then padding to the next 4-byte boundary, so
+# the run is `4 - (len % 4)` zero bytes -- 1, 2, 3 or 4, never none. Measured
+# on the item/spell pool at file offset 0x2810, which is uniformly laid out
+# this way. It makes an entry self-contained: a label, a string, and the bytes
+# that carry the next label to its boundary, with no state kept between
+# entries and nothing to close at the end of the listing.
 SHIFTJIS_DIRECTIVE_PATTERN = re.compile(
-    r"^(\s*)\.shiftjis \"((?:[^\"\\]|\\.)*)\"(\s*)$"
+    r"^(\s*)\.shiftjis(z?) \"((?:[^\"\\]|\\.)*)\"(\s*)$"
 )
 ESCAPE_PATTERN = re.compile(r"\\(\\|\"|x[0-9a-fA-F]{2})")
 
@@ -28,11 +36,20 @@ def convert_shiftjis(f: TextIO) -> None:
         if match is None:
             print(line, end="")
             continue
-        encoded = unescape(match.group(2)).encode("shift-jis")
+        indent, terminate, body, trailing = match.groups()
+        encoded = unescape(body).encode("shift-jis")
+        if terminate:
+            encoded += b"\x00"
         literals = ", ".join("0x{:02x}".format(byte) for byte in encoded)
-        print(match.group(1), end="")
+        print(indent, end="")
         print(f".byte {literals}", end="")
-        print(match.group(3), end="")
+        print(trailing, end="")
+        if terminate:
+            # `.balign` pads a data section with zeros, and emits nothing when
+            # the terminator already landed on the boundary.
+            if not trailing.endswith("\n"):
+                print()
+            print(f"{indent}.balign 4, 0")
 
 
 def setup_parser(prog: str) -> argparse.ArgumentParser:

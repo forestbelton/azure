@@ -189,7 +189,16 @@ BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
 # asm/nonmatchings/ holds per-function assembly that C files pull in via
 # INCLUDE_ASM. Those files have no macro.inc of their own, so they must not be
 # assembled standalone.
-SFILES := $(shell find asm -type f -name '*.s' \
+#
+# asrc/ is the hand-owned half of the same picture: assembly WE maintain, as
+# csrc/ is C we maintain. splat's `hrodata` subsegment type (splat/ext/
+# hrodata.py) seeds a file there once and then never rewrites it, and `clean`
+# does not delete the tree the way it deletes asm/. Same glob, same
+# `build/%.o: %.s` rule below -- so `azure shiftjis` runs over these files too
+# and `.shiftjis "..."` is available in them. The directory does not exist in a
+# fresh checkout until the first such subsegment is split, which is what the
+# pre-existing 2>/dev/null covers.
+SFILES := $(shell find asm asrc -type f -name '*.s' \
             -not -path 'asm/nonmatchings/*' 2>/dev/null)
 CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
