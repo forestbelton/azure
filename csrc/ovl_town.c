@@ -1678,7 +1678,18 @@ void func_800B66E8(u8 *p);
 s32 func_800B6E3C(u8 *p);
 s32 func_800B6F54(u8 *p);
 void func_800B5B20(void);
-void func_800B7B8C(void);
+void func_800B7B8C(s16 *p, UnkVec *b, u32 c);
+extern u8 D_801116C8[];
+extern u8 D_801118C8[];
+extern u8 D_80111AC8[];
+extern u8 D_80111CC8[];
+extern u8 D_80111EC8[];
+extern u8 D_80111EE8[];
+extern u8 D_80111F08[];
+extern u8 D_80111F28[];
+extern u8 D_80111F48[];
+extern u8 D_80111F68[];
+extern u8 D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
 extern u16 *D_800D1868[];
@@ -9899,7 +9910,126 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7B48);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089344);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7B8C);
+/* The same animated-texture handler as func_800B7E78, three times over: an
+   UnkNode.unk_10 handler whose frame counter at +0x00 wraps at 48 and which
+   then runs THREE sequential switches on it -- % 24 through the jump table,
+   then % 16 and % 8 through comparison trees, each swapping one of four
+   texture pages into its own VRAM rect. See func_800B7E78 for everything
+   load-bearing; this landed on the first compile from that function's comment
+   and its own table.
+
+   The first switch has six case labels (two pairs sharing a body) so it gets a
+   real table at CASE_VALUES_THRESHOLD; the second and third have four each and
+   get trees. The counter is read fresh with `lh` before each of the later two
+   divides rather than held, and each divide is signed -- the `bgez`/`addiu
+   0xF`/`sra 4` and `bgez`/`addiu 7`/`sra 3` pairs are the sign bias for % 16
+   and % 8, which is how you read a power-of-two modulus on a signed value.
+
+   All twelve arms share a rect-then-call tail per switch, and cross-jumping
+   merges them; the arms differ only in which page they pass. */
+void func_800B7B8C(s16 *p, UnkVec *b, u32 c)
+{
+    p[0]++;
+    if (p[0] >= 0x30)
+    {
+        p[0] = 0;
+    }
+    switch (p[0] % 24)
+    {
+    case 0:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_80110EC8);
+        break;
+    case 4:
+    case 20:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801110C8);
+        break;
+    case 8:
+    case 16:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801112C8);
+        break;
+    case 12:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801114C8);
+        break;
+    }
+    switch (p[0] % 16)
+    {
+    case 0:
+        D_80111FA8[0] = 0x330;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801116C8);
+        break;
+    case 4:
+        D_80111FA8[0] = 0x330;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801118C8);
+        break;
+    case 8:
+        D_80111FA8[0] = 0x330;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_80111AC8);
+        break;
+    case 12:
+        D_80111FA8[0] = 0x330;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_80111CC8);
+        break;
+    }
+    switch (p[0] % 8)
+    {
+    case 0:
+        D_80111FA8[0] = 0;
+        D_80111FA8[1] = 0x1FB;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111EC8);
+        break;
+    case 2:
+        D_80111FA8[0] = 0;
+        D_80111FA8[1] = 0x1FB;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111EE8);
+        break;
+    case 4:
+        D_80111FA8[0] = 0;
+        D_80111FA8[1] = 0x1FB;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111F08);
+        break;
+    case 6:
+        D_80111FA8[0] = 0;
+        D_80111FA8[1] = 0x1FB;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111F28);
+        break;
+    }
+}
 
 /* An UnkNode.unk_10 handler, so its first parameter is the node's actor view
    (node + 0x20) -- func_80040190's cast in csrc/unk_12DEC.c calls these as
@@ -9992,7 +10122,84 @@ void func_800B7E78(s16 *p, UnkVec *b, u32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7F8C);
+/* func_800B7E78's recipe with a second switch after it: the counter wraps at
+   24 as there, the % 24 jump table swaps the same four texture pages, and then
+   a % 6 comparison tree swaps one of three more into a different rect. Landed
+   on the first compile from func_800B7E78's comment and its own table.
+
+   The % 6 divide is the 0x2AAAAAAB magic with post_shift 0 -- the SAME magic
+   word as the % 24 above it, which uses post_shift 2 (tools/decomp/magic.py
+   prints 6, 12 and 24 for it). Two divides by different constants sharing one
+   magic materialisation is why the `lui`/`ori` pair appears twice rather than
+   being hoisted: each divide re-materialises it.
+
+   Three cases is below CASE_VALUES_THRESHOLD so the second switch is a tree,
+   and its holes fall straight to the epilogue, so it needs no `default:`. */
+void func_800B7F8C(s16 *p, UnkVec *b, u32 c)
+{
+    p[0]++;
+    if (p[0] >= 0x18)
+    {
+        p[0] = 0;
+    }
+    switch (p[0] % 24)
+    {
+    case 0:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_80110EC8);
+        break;
+    case 4:
+    case 20:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801110C8);
+        break;
+    case 8:
+    case 16:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801112C8);
+        break;
+    case 12:
+        D_80111FA8[0] = 0x328;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x20;
+        func_800672D8(D_80111FA8, D_801114C8);
+        break;
+    }
+    switch (p[0] % 6)
+    {
+    case 0:
+        D_80111FA8[0] = 0x10;
+        D_80111FA8[1] = 0x1C1;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111F48);
+        break;
+    case 2:
+        D_80111FA8[0] = 0x10;
+        D_80111FA8[1] = 0x1C1;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111F68);
+        break;
+    case 4:
+        D_80111FA8[0] = 0x10;
+        D_80111FA8[1] = 0x1C1;
+        D_80111FA8[2] = 0x10;
+        D_80111FA8[3] = 1;
+        func_800672D8(D_80111FA8, D_80111F88);
+        break;
+    }
+}
 
 /* Installs func_800B7B8C as a node's +0x10 handler and zeroes the two
    halfwords at +0x20/+0x22 -- past the end of UnkNode, in the Unk44144
