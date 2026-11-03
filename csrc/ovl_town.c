@@ -2736,6 +2736,8 @@ extern u8 D_800F8FD8[];
 extern u8 D_800F8FF0[];
 void func_8009CB64(void *a, void *b, u8 *c, void *d);
 void func_800A7DF8();
+void func_800A9624();
+void func_800A970C();
 void func_800C2CB0(u8 *a, s32 c, void *s, s32 z);
 void func_80033CD8(u8 *p, u32 tag);
 extern u8 D_80045340[];
@@ -13643,13 +13645,137 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8EE8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9358);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9528);
+/* The render callback func_800A957C files under func_80033CD8's tag, and the
+   fourth known member of the resident `(u8 *p, UnkVec *v, UnkSlot *s)` family:
+   it is LINE-FOR-LINE csrc/unk_19434.c's landed func_80045C34 with the guarded
+   body replaced by one unconditional call.  Walk the UnkNode.unk_18 chain off
+   the +0x20 view (`*(UnkNode **)(p - 8)`), re-deriving v and s from each node's
+   +0x08/+0x0C, and return 0 when the chain ends.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A957C);
+   Arity and return come from the install chain, not from a caller -- nothing
+   calls this.  func_80033CD8 (csrc/gprel_72A8.c:167) forwards the tag to
+   func_8004491C, and func_800402F4 (csrc/unk_12DEC.c:611) casts the slot to
+   `void (*)(u8 *, UnkVec *, UnkSlot *)` and calls it, so three parameters.  The
+   `s32` return is the target's own `addu $v0, $zero, $zero`; the dispatcher's
+   cast discards it, exactly as it does for func_80045C34.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9624);
+   `func_800A9358(s, v)` is in that order -- swapping it is 22 words / 19
+   differing.  The loop is order-free between `for (;;)` + `return 0`,
+   `while (1)` + `break`, and a `goto` back edge: all three 0 differing. */
+s32 func_800A9528(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    for (;;)
+    {
+        UnkNode *n;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A970C);
+        func_800A9358(s, v);
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+}
+
+/* The installer for this cluster, and the func_800A7C98 family's shape (:13057)
+   with the +0x50 slot carrying a handler instead of a zero: file func_800A9624
+   in the UnkNode +0x10 slot through the view's -0x10, func_800A970C in the
+   actor's +0x50, seed the renderable's scale pair and +0x20, give the mover's
+   three per-frame deltas a random integer half each, and register
+   func_800A9528 as the draw tag.  Nothing anywhere takes this function's
+   address -- no caller in csrc/ and no referrer under asm/ -- so its three
+   parameters come from its own body reading $a0, $a1 and $a2.
+
+   `*(u16 *)&c->unk_20 = 0xFF00` is load-bearing: UnkTownRend.unk_20 is s16, so
+   `c->unk_20 = 0xFF00` narrows the constant at compile time to -256 and emits
+   `addiu` where the target has `ori` -- 1 differing, and `= -0x100` is the same
+   1.  Writing through a u16 lvalue keeps the value 65280, which only `ori` can
+   materialise.
+
+   The two installs must come FIRST and in this order.  Swapped is 2 differing,
+   moved after the three rend stores is 12, moved to the end past both calls is
+   32.  Their SPELLING is free, though: `(UnkNode *)(a - 0x20)` with
+   `o->unk_10 = (u32)func_800A9624` is also 0 differing, which is the
+   narrowed install lever -- the local matters only when the stored value is
+   also an argument to a following call, and here it is not.  Swapping the two
+   tail calls is 18 differing, and unk_1E before unk_1C is 2. */
+void func_800A957C(u8 *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    *(u32 *)(a - 0x10) = (u32)func_800A9624;
+    *(u32 *)(a + 0x50) = (u32)func_800A970C;
+    c->unk_1C = 0x37;
+    c->unk_1E = 0x37;
+    *(u16 *)&c->unk_20 = 0xFF00;
+    *(s16 *)((u8 *)b + 0xE) = func_800374F4(0xFFFF);
+    *(s16 *)((u8 *)b + 0x12) = func_800374F4(0xFFFF);
+    *(s16 *)((u8 *)b + 0x16) = func_800374F4(0xFFFF);
+    func_80033CD8(a, (u32)func_800A9528);
+    func_800A8BBC(0x10, 0x11, 0x12, 0x13, b);
+}
+
+/* The UnkNode +0x10 handler func_800A957C installs, so func_80040190's cast
+   supplies `(actor view, node->unk_08, node->unk_0C)` -- three parameters, all
+   three read.  A three-way switch on the probe func_8009D20C, whose first arm
+   is func_8009DD40's (:9962) and func_800A7DF8's (:13089) retire arm verbatim
+   with a leading func_800A8BBC burst, and whose last arm re-registers the draw
+   tag and then runs the actor's own +0x50 handler.
+
+   All three arms fall into the shared epilogue, so they are emitted in source
+   order and must be written in it: testing `t == 2` first is 30 differing.
+   The func_800A8BBC call precedes the +0x98 clear -- after it is 57 words / 46
+   differing.  `D_800814A0 |= 0x8000` must follow the -0x2 flag: before it is
+   59 words / 34.  The +0x50 call is order-free between the inline
+   double-dereference below and a local function pointer tested against NULL --
+   both 0 differing, because cse forwards the load either way. */
+void func_800A9624(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 t;
+
+    t = func_8009D20C(p, q);
+    if (t == 1)
+    {
+        func_800A8BBC(0x1B, 0x1C, 0x1D, 0x1E, q);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if (t == 2)
+    {
+        func_80033D08((u8 *)p);
+    }
+    else
+    {
+        func_80033CD8((u8 *)p, (u32)func_800A9528);
+        if (*(u32 *)((u8 *)p + 0x50) != 0)
+        {
+            (*(void (**)(UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, q, r);
+        }
+    }
+}
+
+/* The actor's +0x50 handler, installed by func_800A957C and called through the
+   slot by func_800A9624 with (view, mover, rend) -- which is where the arity
+   comes from, since the body only reads $a1.  Three independent read-modify-
+   writes on the integer halves of the mover's per-frame deltas, the same
+   +0xE/+0x12/+0x16 triple func_800A8CA8 reads just above (:13388).
+
+   Source order is 0xE, 0x12, 0x16; the listing's store order is 0xE, 0x16,
+   0x12 because sched1 interleaves three independent RMWs, and writing the
+   source in the listing's order is 6 differing.  Signedness is free here --
+   `(u16 *)` lvalues and `+= -0x1E` for `-= 0x1E` are both 0 differing. */
+void func_800A970C(u8 *a, UnkTown2AE8 *b, s32 c)
+{
+    *(s16 *)((u8 *)b + 0xE) += 0x20;
+    *(s16 *)((u8 *)b + 0x12) += 0x4E;
+    *(s16 *)((u8 *)b + 0x16) -= 0x1E;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9734);
 
