@@ -1691,7 +1691,7 @@ s32 func_800C2D94(s32 angle);
 extern u8 D_800D0110[];
 extern s32 D_800D4F88[];
 void func_800924EC();
-void func_80093250();
+void func_80093250(void *p, UnkTown2AE8 *q, void *r);
 void func_800981D4();
 void func_80098244();
 void func_800C26C0(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
@@ -2383,7 +2383,7 @@ void func_80090DF0();
 void func_80090F84();
 void func_80091114();
 void func_800911D4();
-void func_8009221C();
+void func_8009221C(void *p, UnkTown2AE8 *q, void *r);
 void func_800927EC();
 void func_80092DA8();
 void func_80092ECC();
@@ -4384,7 +4384,65 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009204C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800920F4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009221C);
+/* func_80092DA8's shape without the D_80083160 gate: run the three updates,
+   ask func_80095978 for the target value and either settle onto it or, if
+   D_800CFCEF says the mover is still allowed to move, zero +0x14 and keep
+   going.  Neither this function nor func_80093250 touches D_80083160, so
+   neither carries func_80092DA8's `g` local, and that is the ten words of
+   difference between 73 and 63.
+
+   THE TAIL CALL IS WRITTEN TWICE, ONCE IN EACH ARM, AND THAT IS WHAT PLACES
+   THE REGISTERS.  Cross-jumping is jump2, `jump_optimize (insns, 1, 1, 0)` at
+   toplev.c:3690 -- the only call in the file with cross_jump set, and it runs
+   after local_alloc (toplev.c:3585), global_alloc (toplev.c:3617), reload and
+   sched2.  So at the moment global-alloc prices the pseudos there are still
+   TWO copies of `func_80093D48(p, q, r)`, and p, q and r each carry one extra
+   reference that the emitted words never show.  global.c:587's
+   `allocno_compare` sorts on floor_log2(refs) * refs / live_length, so that
+   one reference is the whole allocation: p goes from 3 refs over 64 insns
+   (0.0469) to 4 over 64 (0.1250), which TIES the D_800FE488 pointer's 3 over
+   24, and global.c:608's `return v1 - v2` tie-break hands the lower allocno
+   -- the parameter, born first -- the lower register.  q goes 11 refs to 12,
+   crossing floor_log2's step from 3*11/68 = 0.4853 to 3*12/70 = 0.5143, which
+   is what puts it ahead of `n`'s 0.5000 and into $s0.  Written with a single
+   tail the function is 63 of 63 words with 25 registers wrong and no
+   rewriting of the logic moves them.
+
+   The early-return block still has to be a `goto` to a label at the very
+   BOTTOM of the function, exactly as func_80092DA8 records -- writing
+   `func_80095388(q); return;` inline inside the `else` costs 11 words of
+   difference even with the duplicated tail.  63 words, 0 differing. */
+void func_8009221C(void *p, UnkTown2AE8 *q, void *r)
+{
+    s32 n;
+
+    func_80095C80(q);
+    func_80094C1C(p);
+    func_80094C74(q);
+    n = func_80095978(q, D_800FE488);
+    if (*(s16 *)((u8 *)q + 0xA) >= (s16)n)
+    {
+        func_80094910();
+        func_80095A94(q, (s16)n, D_800FE488);
+        func_800ABD74(q);
+        func_80093D48(p, q, r);
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            goto idle3;
+        }
+        func_80094910();
+        q->unk_14 = 0;
+        func_800954F4(q);
+        func_80093D48(p, q, r);
+    }
+    return;
+
+idle3:
+    func_80095388(q);
+}
 
 void func_80092318(void) {
 }
@@ -4784,7 +4842,42 @@ void func_800930E4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093250);
+/* func_8009221C's body minus func_80094910 and func_800ABD74, which collapses
+   the first arm to a single call.  The duplicated tail and the bottom label
+   are both still load-bearing: the two parameters' registers come out of the
+   extra reference cross-jumping has not yet removed (see func_8009221C), and
+   here p wins on priority outright rather than on the tie-break -- 4 refs
+   over 56 insns is 0.1429 against the D_800FE488 pointer's 3 over 22, 0.1364,
+   a 4.6% margin.  Collapsing the arm does NOT let the label move up: the
+   inline spelling is 10 words of difference.  54 words, 0 differing. */
+void func_80093250(void *p, UnkTown2AE8 *q, void *r)
+{
+    s32 n;
+
+    func_80095C80(q);
+    func_80094C1C(p);
+    func_80094C74(q);
+    n = func_80095978(q, D_800FE488);
+    if (*(s16 *)((u8 *)q + 0xA) >= (s16)n)
+    {
+        func_80095A94(q, (s16)n, D_800FE488);
+        func_80093D48(p, q, r);
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            goto idle4;
+        }
+        q->unk_14 = 0;
+        func_800954F4(q);
+        func_80093D48(p, q, r);
+    }
+    return;
+
+idle4:
+    func_80095388(q);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093328);
 
