@@ -76,6 +76,37 @@ def include_protos():
     return out
 
 
+def parks():
+    """Every near-miss park, keyed by the function it parks.
+
+    Added 2026-11-03. An agent's single most valuable document was the park for
+    its target's CALLER, and it found that park by accident mid-run: no route
+    surfaced it. It reported that four of the facts it had already paid for
+    separately were already written down there. A park is not a failure note --
+    it is a worked document carrying the family's field mapping, every spelling
+    already measured and rejected, and what the candidate HELD FIXED.
+    """
+    out = {}
+    d = os.path.join(PROJ, 'docs/near-misses')
+    try:
+        names = sorted(os.listdir(d))
+    except Exception:
+        return out
+    for sf in names:
+        if not sf.endswith('.c'):
+            continue
+        try:
+            head = open(os.path.join(d, sf)).read(4000)
+        except Exception:
+            continue
+        m = re.search(r'(func_[0-9A-Fa-f]{8})\s*\((\w+)\)\s*--\s*'
+                      r'(\d+) of (\d+) words, (\d+) DIFF', head)
+        if m:
+            out[m.group(1)] = (sf, m.group(2), int(m.group(3)),
+                               int(m.group(4)), int(m.group(5)))
+    return out
+
+
 def defs_and_protos(src, unitname):
     txt = open(src).read()
     whole = txt
@@ -128,7 +159,16 @@ def main():
         t = listing(unit, f)
         if t is None:
             print("  %-15s *** NO LISTING IN %s ***" % (f, unit)); continue
-        w = words(unit, f); tot += w
+        # words() returns None when a listing carries no sized `nonmatching`
+        # header. Adding that to `tot` crashed the whole tool AFTER it had
+        # printed partial output, which is the worst failure mode for something
+        # agents read top to bottom. Say so and keep going.
+        w = words(unit, f)
+        if w is None:
+            print("  %-15s *** LISTING HAS NO SIZED `nonmatching` HEADER -- read it by"
+                  " hand, every word count below is suspect ***" % f)
+            w = 0
+        tot += w
         cal = sorted(set(re.findall(r'jal\s+(\w+)', t)))
         ins = sorted(set(re.findall(r'%hi\((func_[0-9A-Fa-f]+)\)', t)))
         gl  = sorted(set(re.findall(r'%hi\((D_[0-9A-F]+)\)', t)))
@@ -338,6 +378,7 @@ def main():
 
     print("\n=== ROUTE (e): ASM CALLERS (route (c) only sees LANDED callers) ===")
     anye = False
+    callers = {}
     for f in targets:
         for sf in sorted(os.listdir(D(unit))):
             if not sf.endswith('.s') or sf[:-2] in targets: continue
@@ -345,6 +386,7 @@ def main():
             except Exception: continue
             if re.search(r'jal\s+' + f + r'\b', st):
                 nm = sf[:-2]
+                callers.setdefault(f, set()).add(nm)
                 if nm in landed:
                     d0 = landed[nm]
                     print("  %-15s jal'd by LANDED %-15s csrc/%s.c:%d -- read the C, it has"
@@ -356,6 +398,36 @@ def main():
                           % (f, nm, D(unit).replace(PROJ + '/', ''), sf))
                 anye = True; witnessed.add(f)
     if not anye: print("  none")
+
+    print("\n=== ROUTE (i): PARKS IN YOUR CALL GRAPH -- READ THESE BEFORE MEASURING ===")
+    print("    A park is a worked document, not a failure note: the family's field")
+    print("    mapping, every spelling already measured AND REJECTED, and what the")
+    print("    candidate held FIXED. The agent on func_800AD138 found its caller's park")
+    print("    by accident mid-run and reported that four facts it had already paid for")
+    print("    separately were written down in it. A park on a CALLER or CALLEE usually")
+    print("    shares the record layout; a park on the TARGET is your baseline to beat.")
+    pk = parks()
+    anyp = False
+    for f in targets:
+        rel = []
+        if f in pk:
+            rel.append(('** THE TARGET ITSELF **', f))
+        for c in sorted(allcallees.get(f, ())):
+            if c in pk:
+                rel.append(('a CALLEE', c))
+        for c in sorted(callers.get(f, ())):
+            if c in pk:
+                rel.append(('a CALLER', c))
+        for why, nm in rel:
+            sf, u, built, tgt, diff = pk[nm]
+            print("  %-15s %s %s is PARKED at %d of %d words, %d DIFF (%s)"
+                  % (f, why, nm, built, tgt, diff, u))
+            print("                  docs/near-misses/%s" % sf)
+            anyp = True
+    if not anyp:
+        print("  none in the call graph. %d park(s) exist overall; `ls docs/near-misses/`"
+              % len(pk))
+        print("  if your target looks like a family member of one of them.")
 
     # UNCONDITIONAL. This advice used to be gated behind a LOW top score, so a
     # group scoring 1.959 never saw it -- and that was the group whose decisive

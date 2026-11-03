@@ -391,6 +391,30 @@ standalone) after three wrong guesses about which prototype had done it.
   exact commands. Use it whenever a function owns rodata, and under any hold
   that forbids writing to csrc/. It must use the SAME driver the build uses
   (`tools/cdkgcc`); a comparison built with a stale driver proves nothing.
+* **TWO KNOWN-BENIGN RELOCATION-TABLE DIFFERENCES, and a count that goes DOWN
+  is one of them.** An object-level comparison compares `.rel.text` record
+  counts, and a landing legitimately changes them. Both classes seen so far
+  are the stub-to-C conversion, not a defect:
+  1. A **jump table** moving from a `jtbl_XXXXXXXX` symbol to a
+     `.rodata`-section-relative reloc. The record count is unchanged; one
+     `addiu %lo` word moves its addend from the relocation into the
+     instruction field. Verify with `nm` that the symbol sits at the same
+     `.rodata` offset.
+  2. **Scratchpad addresses lose their relocations entirely.** splat renders a
+     computed 0x1F800000 address as `addiu $a0, $s0, %lo(D_1F800078)` against
+     an auto-named symbol; the C form writes the immediate and emits NO
+     relocation. Measured 2026-11-03 on `func_800AD138`: baseline 14,409
+     records against 14,397 merged -- **exactly 12 fewer**, all `R_MIPS_LO16`
+     on auto-named scratchpad symbols, with `.text` and `.rodata` sizes
+     identical.
+
+  In both cases **the relocated words are masked, so a clean `ovlverify` run
+  is a false positive on exactly these words** -- hand-decode each one against
+  the listing. On `func_800AD138` all twelve were hand-checked identical. And
+  note the asymmetry with the memory note on constant addresses: because the
+  C form produces no `R_MIPS_LO16` where splat's `target.o` carries one,
+  **decomp-permuter can never score zero on a function that touches the
+  scratchpad.** Final bytes are the only authority there.
 * **If the stub's listing has a `.section .rodata` block of its own, the C
   source must define that symbol, at its exact declared size.** splat migrates
   a constant into a function's own listing when it cannot attribute it
