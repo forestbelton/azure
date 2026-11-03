@@ -19,9 +19,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "build" / "ghidra_symbols.tsv"
 GP_VALUE = 0x80080994  # set by crt0 at 0x800339ac, not by the PS-EXE header
 
+Symbol = tuple[str, int, str]
 
-def from_symbol_addrs(path):
-    out = []
+
+def from_symbol_addrs(path: pathlib.Path) -> list[Symbol]:
+    out: list[Symbol] = []
     if not path.exists():
         return out
     for line in path.read_text().splitlines():
@@ -39,8 +41,8 @@ def from_symbol_addrs(path):
     return out
 
 
-def from_nonmatchings(root):
-    out = []
+def from_nonmatchings(root: pathlib.Path) -> list[Symbol]:
+    out: list[Symbol] = []
     for f in sorted(root.glob("*/*.s")):
         m = re.fullmatch(r"func_([0-9A-Fa-f]{8})", f.stem)
         if m:
@@ -55,7 +57,7 @@ def main():
     if not game:
         sys.stderr.write("note: no asm/nonmatchings yet -- run `make splat`\n")
 
-    seen = {}
+    seen: dict[str, tuple[int, str]] = {}
     for name, addr, kind in syms + game:
         seen.setdefault(name, (addr, kind))
     seen["_gp"] = (GP_VALUE, "label")
@@ -68,8 +70,10 @@ def main():
             fh.write("%s\t0x%08x\t%s\n" % (name, addr, kind))
 
     funcs = sum(1 for v in seen.values() if v[1] == "func")
-    print("wrote %s: %d symbols (%d functions, %d labels)"
-          % (OUT.relative_to(ROOT), len(seen), funcs, len(seen) - funcs))
+    print(
+        "wrote %s: %d symbols (%d functions, %d labels)"
+        % (OUT.relative_to(ROOT), len(seen), funcs, len(seen) - funcs)
+    )
     return 0
 
 
