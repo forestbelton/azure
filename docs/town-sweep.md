@@ -205,7 +205,36 @@ standalone) after three wrong guesses about which prototype had done it.
   compares function TEXT. Rodata size and layout, jump-table padding and
   alignment are invisible to it. `make build/town.bin` is the only authority,
   and it is the step that catches a rodata regression three thousand words from
-  anything you touched.
+  anything you touched. The strongest check short of the build is an
+  OBJECT-level byte comparison -- see docs/matching-levers.md, "a string
+  constant's declared size decides whether .rodata survives", which has the
+  exact commands. Use it whenever a function owns rodata, and under any hold
+  that forbids writing to csrc/. It must use the SAME driver the build uses
+  (`tools/cdkgcc`); a comparison built with a stale driver proves nothing.
+* **If the stub's listing has a `.section .rodata` block of its own, the C
+  source must define that symbol, at its exact declared size.** splat migrates
+  a constant into a function's own listing when it cannot attribute it
+  elsewhere, so replacing the INCLUDE_ASM deletes it. `const u8 X[4] = "\nw";`
+  works where `X[] = "\nw"` silently drops the trailing pad and shifts every
+  later record by a byte, with .rodata's SIZE unchanged and the sweep clean.
+* **UnkNode.unk_10 handlers are reached through func_80040190's cast**
+  (csrc/unk_12DEC.c), which calls them as
+
+      ((void (*)(void *, UnkVec *, u32)) fn)((u8 *) p + 0x20, p->unk_08, p->unk_0C)
+
+  so THREE parameters, the first being `node + 0x20` -- the actor view, not the
+  node. That is a reusable arity-and-offset witness for every remaining
+  `n->unk_10 = (u32)func_XXXX;` stub (func_800903FC, func_8009DEBC,
+  func_800B9260, func_800B90F0, ...), and it explains otherwise baffling
+  `-0x2($s2)` / `0x20($s2)` accesses in such a body: `UnkNode.unk_1E` and the
+  actor view's own fields off one pointer. The other +0x20 dispatcher,
+  func_800402F4, goes through D_80083360[i] and is a DIFFERENT slot.
+* **Do not spend a tool call on landedshapes.py for ovl_town.** It correctly
+  reports 0 groups and will keep doing so while families are landed whole --
+  which is what its own docstring says it is for. Two agents in one batch spent
+  a call on it and got nothing. The productive routes, in order: the callee
+  grep, then the CALLER grep, then families.py. The caller grep settled arity
+  for three functions in that batch and gave a fourth its object layout.
 
 ## The agent brief
 

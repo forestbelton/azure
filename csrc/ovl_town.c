@@ -356,6 +356,28 @@ typedef struct UnkTownMover
     s32 unk_6C;
 } UnkTownMover;
 
+/* The +0x20 actor view of the UnkNode that func_800BD980 builds. Witnessed
+   fields only: an ARRAY of two UnkTown2AE8 pointers at +0x00/+0x04 (the two
+   child nodes' UnkNode.unk_08 movers, which func_800BD980 stores there as
+   obj+0x24 then obj+0x20), an s32 at +0x08 (the first word of the six-word
+   mover the same caller copies into +0x08..+0x1C), a state selector at +0x20
+   and a mod-8 frame counter at +0x22.
+
+   The array spelling at +0x00/+0x04 is load-bearing, not cosmetic: both loops
+   below walk it with a decrementing index, and gcc's loop strength reduction
+   puts the derived pointer's initialisation at the END of the loop preheader
+   (`addiu $s1, $zero, 1` before `addiu $s0, $s2, 0x4`). Two named pointer
+   fields walked with an explicit `UnkTown2AE8 **q` put the pointer init
+   FIRST and cost a word. */
+typedef struct UnkTownBD688
+{
+    UnkTown2AE8 *unk_00[2];
+    s32 unk_08;
+    u8 pad_0C[0x14];
+    s16 unk_20;
+    u16 unk_22;
+} UnkTownBD688;
+
 /* A NULL-terminated table of word-sized pointers at 0x8001029C, outside the
    loaded image. Each record's first two bytes are the id pair func_8009EBE0 /
    func_8009F830 match on; nothing else about the record has a witness. */
@@ -1626,6 +1648,48 @@ typedef struct UnkTownCFE60
 
 extern UnkTownCFE60 D_800CFE60;
 
+extern u8 D_800788E0[];
+extern u8 D_800792DC[];
+extern u8 D_800D15F4[];
+void func_8004CBFC(u32 *p, u8 *q, u32 *r);
+void func_800B08D4();
+void func_800B0C68();
+void func_800B0D0C();
+void func_800B0FD4();
+void func_8004E5A0(s32 v, s32 n, u8 *out);
+void func_8004E69C(u8 *q);
+void func_80069E38(u8 *dst, u8 *src);
+u32 func_8004AC18(s32 i);
+u8 *func_800B544C(u8 *s, u8 *p);
+u8 *func_800B557C(u8 *s, u8 *p);
+s32 func_800B5E10(s32 a);
+extern const u32 D_80089308[];
+extern u8 D_80089310[];
+extern u8 D_80089318[];
+extern u8 D_8008931C[];
+extern u8 D_80089324[];
+/* The primitive func_800B1DCC fades: an RGB triple at +0x00 (g and b are
+   copied from r) and a signed screen coordinate at +0x0C. */
+typedef struct UnkTownB1DCCPrim
+{
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+    u8 pad_03[0x9];
+    s16 unk_0C;
+} UnkTownB1DCCPrim;
+
+/* What each UnkNode's unk_0C points at here; +0x04 is the primitive above. */
+typedef struct UnkTownB1DCCObj
+{
+    u8 pad_00[0x4];
+    UnkTownB1DCCPrim *unk_04;
+} UnkTownB1DCCObj;
+
+extern u8 D_800D162C[][2];
+extern u8 D_800D1630[][4];
+void func_80044AAC(UnkNode *, UnkNode *);
+s32 func_80069EF8();
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -7050,7 +7114,67 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0F94);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0FD4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1188);
+/* The 0x800B1xxx scene's layout pass. The object's grid-pointer array lives at
+   +0xCC here, where the 0x800AFxxx and 0x800B2xxx scenes keep theirs at +0xA8
+   (func_800AF784) and +0x5C (func_800B474C); otherwise this is the same
+   vocabulary -- UnkTownGrid **, element +0x00 a pointer written through the
+   u8 *** idiom and element->unk_04 the UnkTownPos whose unk_08/unk_0A are the
+   on-screen x/y.
+
+   Three things about the spelling are measured rather than chosen:
+
+   * The array base is re-read as (*(UnkTownGrid ***)(s + 0xCC)) at EVERY
+     access, 24 times, because that is what the target does. Binding it to a
+     local would let gcc keep it in a register and drop 23 of the
+     lw 0xCC($s0)s; the stores through the loaded pointers do not invalidate a
+     register copy.
+
+   * The loop counts DOWN from 4 and the three y expressions are written
+     i * 0x10 + k. gcc 2.7.2 strength-reduces each of those into its own
+     induction variable -- $a3 from 0x58, $t0 from 0x55 and $a1 from 0xC8, each
+     -= 0x10 at the bottom -- while leaving the subscript as a plain
+     sll $a0, $a2, 2 at the top, since the array base is reloaded each
+     iteration and only i * 4 is loop-invariant. The two groups that share
+     0x88 share $a1 by CSE.
+
+   * func_800B08D4 takes the argument. Its own listing reads $a0 (into $s1,
+     then $s1 + 0x48), and the call site has no argument move only because
+     s + 0x34 is already in $a0 from the store two statements earlier. Writing
+     the call with no argument measures 3 differing, so the argument is
+     witnessed after all -- this is the inverse of the "a missing argument move
+     is not evidence of a zero-arity call" trap.
+
+   Arity: the sole caller is func_800B13D4 (still a stub), whose
+   jal func_800B1188 has addu $a0, $s0, $zero in the delay slot and no other
+   argument setup -- $a1/$a2 still hold the leftovers of its preceding
+   func_800B0944 call. One parameter; the return value is discarded. */
+void func_800B1188(u8 *s)
+{
+    s32 i;
+
+    **(u8 ***)(*(u8 **)(s + 0xCC)) = D_800788E0;
+    **(u8 ***)(*(u8 **)(s + 0xCC) + 0x4) = s + 0x34;
+    (*(UnkTownGrid ***)(s + 0xCC))[1]->unk_04->unk_0A = 0x2F;
+    func_800B08D4(s + 0x34);
+    func_800B0C68(s);
+    func_8004CBFC((u32 *)(s + 0x28), D_800792DC, (u32 *)(*(u8 ***)(s + 0xCC))[2]);
+    **(u8 ***)(*(u8 **)(s + 0xCC) + 0xC) = D_800D15F4;
+    for (i = 4; i >= 0; i--)
+    {
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 4]->unk_04->unk_08 = -0x50;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 4]->unk_04->unk_0A = i * 0x10 + 0x18;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 9]->unk_04->unk_08 = 0x56;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 9]->unk_04->unk_0A = i * 0x10 + 0x15;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 14]->unk_04->unk_08 = 0x3C;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 14]->unk_04->unk_0A = i * 0x10 + 0x88;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 19]->unk_04->unk_08 = 0x8C;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 19]->unk_04->unk_0A = i * 0x10 + 0x88;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 24]->unk_04->unk_08 = 0x34;
+        (*(UnkTownGrid ***)(s + 0xCC))[i + 24]->unk_04->unk_0A = i * 0x10 + 0x88;
+    }
+    func_800B0D0C(s);
+    func_800B0FD4(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1390);
 
@@ -7128,7 +7252,86 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1D00);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1DBC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1DCC);
+void func_800B1DCC(UnkTown260C *s)
+{
+    s32 v[2];
+    s32 i;
+    s32 j;
+    u8(*t)[2];
+    u8(*u)[4];
+    UnkTownB1DCCObj *o;
+    UnkTownB1DCCPrim *p1;
+    UnkTownB1DCCPrim *p2;
+    u8 n1;
+    u8 n2;
+    s32 c1;
+    u8 c2;
+    s32 d;
+
+    /* Three spellings here are load-bearing, all measured against the 81-word
+       listing; each is worth the words named.
+       1. The two table addresses must be held in LOCALS assigned before the
+          loop (4 words). Left to loop.c they are hoisted as movables, which
+          lands them AFTER the loop's own preamble statements, so `j = 0` comes
+          out before the two lui/addiu pairs instead of after them: 5 differing.
+       2. `j` must be an explicit byte offset, not `v[i]` (4 words). `v[i]`
+          leaves loop.c's `4 * i` giv at benefit 0 ("not worth while", loop.c
+          line 3823: 2 for the shift minus add_cost * biv_count), so it is
+          recomputed with an in-loop `sll`: 4 differing with `v[i]`.
+       3. `n1`, `n2` and `c2` must be `u8`, not `s32` (the whole function).
+          loop runs before combine, so each zero-extension is still a separate
+          RTL insn and the loop measures 59 real insns rather than 56. That is
+          what keeps move_movables from hoisting the frame address `$fp + 16`
+          out of the loop (threshold * savings * lifetime >= insn_count, with
+          savings and lifetime both 1 and the threshold measured between 58 and
+          63): hoisted, the array reference becomes a reduced DEST_ADDR giv and
+          the store is `sw 0(t2)` off an `addiu t2, sp, 16` instead of
+          `sw 0x10(v0)` off an in-loop `addu v0, sp, t2`. 82 words with any two
+          of the three as `s32`, 84 if `c1` is narrowed too. */
+    i = 0;
+    t = D_800D162C;
+    u = D_800D1630;
+    j = 0;
+    for (; i < 2; j += 4, i++)
+    {
+        n1 = t[s->unk_0C][i];
+        o = (UnkTownB1DCCObj *)((UnkNode *)s->unk_00[i])->unk_0C;
+        c1 = o->unk_04->unk_0C;
+        /* Two statements, not one: as `n1 * 40 + 0x200 - c1` fold
+           reassociates it to `n1 * 40 - (c1 - 0x200)` and the `addiu 0x200`
+           becomes an `addiu -512` on c1 instead. */
+        d = n1 * 40 + 0x200;
+        d -= c1;
+        p1 = o->unk_04;
+        if (n1 != 0)
+        {
+            d++;
+        }
+        p1->unk_0C = c1 + (d >> 1);
+        *(s32 *)((u8 *)v + j) = o->unk_04->unk_0C;
+
+        n2 = t[s->unk_0C][i];
+        p2 = o->unk_04;
+        c2 = p2->unk_00;
+        d = u[n2][0] - c2;
+        if (n2 == 0)
+        {
+            d++;
+        }
+        p2->unk_00 = c2 + (d >> 1);
+        o->unk_04->unk_01 = o->unk_04->unk_00;
+        o->unk_04->unk_02 = o->unk_04->unk_00;
+    }
+    /* `v[0] > v[1]`, not `v[1] < v[0]`: the loads come out in source order. */
+    if (v[0] > v[1])
+    {
+        func_80044AAC((UnkNode *)s->unk_00[1], (UnkNode *)s->unk_00[0]);
+    }
+    else
+    {
+        func_80044AAC((UnkNode *)s->unk_00[0], (UnkNode *)s->unk_00[1]);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1F10);
 
@@ -7888,7 +8091,82 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5D70);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5E10);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B5E28);
+/* Owned by func_800B5E28; see the comment on that function for why the
+   declared size is 4 and not [].  */
+const u8 D_80089340[4] = "\nw";
+
+/* The monster detail panel: one 0x40-byte text buffer assembled from five
+   byte fields of the record and the font renderer's escape strings, then five
+   text sprites placed through func_800B53BC / func_800B5264. func_800B5774 is
+   the near-sibling -- the same recipe with three sprites and the same five
+   shared rodata strings, so landing this reads most of that one too.
+
+   Four things are load-bearing, three of them measured against alternatives:
+
+   - The first write into `buf` is an INLINE 5-byte block move (lw/lb then
+     sw/sb), not a call. The original is gcc's builtin expansion of
+     `strcpy(buf, "\t7\f4")`; D_80089308 only became a standalone rodata
+     symbol because func_800B5774 uses the identical literal and splat could
+     not attribute a merged string constant to one function. Spelling it as a
+     literal here would emit a SECOND copy of those bytes beside the surviving
+     INCLUDE_RODATA, so it is written as `memcpy(buf, D_80089308, 5)` against
+     the existing symbol instead. Calling strcpy on the symbol instead of
+     memcpy gives a real `jal` and 128 words, 124 differing.
+
+   - D_80089308 HAS to be declared with a 4-byte element type. move_by_pieces
+     uses MIN(src, dst) alignment, and through `extern u8 D_80089308[]` the
+     copy comes out lwl/lwr + swl/swr: 132 words, 120 differing. That is the
+     same mechanism that makes func_800B544C's copy unaligned on both sides --
+     there the DESTINATION is a plain pointer parameter, so alignment 1 wins.
+
+   - `num` must be declared BEFORE `buf`: locals are assigned upward in
+     declaration order, so num is the sp+0x18 slot and buf the sp+0x58 one.
+     Swapping the two declarations gives 133 words, 129 differing.
+
+   - D_80089340 ("\nw") is referenced only from here, so splat migrated it
+     into this function's listing and replacing the INCLUDE_ASM loses it.
+     Writing it as a bare string literal reaches 0 differing in .text but
+     silently LOSES a byte of .rodata: gcc emits `.rdata / .align 2 / .ascii
+     "\nw\000"` with no TRAILING align, and the next item in the stream
+     (D_80089344, whose splat listing carries no `.align`) then starts one
+     byte early -- measured as .rodata differing at 0xBE3 with the section
+     size unchanged, which is exactly the kind of regression ovlverify cannot
+     see. Declaring the array `[4]` restores the pad and makes the whole
+     object's .rodata byte-identical to the stub build's. `[]` would not.
+
+   0x98 and 0xB8 each appear twice as the fifth argument and 0xC8 once; that,
+   and nothing in the source, is why two of them live in $s0 across calls and
+   the third in $v0. The third argument to func_800B5264 reads the same either
+   way -- `p[0x43] >= 0x41 ? 3 : 0` also measures 0 differing. */
+void func_800B5E28(u8 *p, UnkTownCardPair **b)
+{
+    u8 num[0x40];
+    u8 buf[0x40];
+
+    memcpy(buf, D_80089308, 5);
+    func_8004E5A0(p[0x11], 2, num);
+    func_8004E69C(num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, D_80089310);
+    func_80069E38(buf, D_80089318);
+    func_8004E5A0(p[0x28], 3, num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, D_8008931C);
+    func_8004E5A0(p[0x29], 3, num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, (u8 *)D_80089340);
+    func_8004E5A0(p[0x25], 3, num);
+    func_80069E38(buf, num);
+    func_80069E38(buf, D_8008931C);
+    func_8004E5A0(p[0x66], 3, num);
+    func_80069E38(buf, num);
+    func_800B53BC(b[5], buf, 0, 0x6C, 0x98);
+    func_800B5264(b[6], (u8 *)func_8004AC18(func_800B5E10(p[0x13])),
+                  p[0x43] < 0x41 ? 0 : 3, 0x68, 0x98);
+    func_800B53BC(b[19], D_80089324, 0, 0x48, 0xB8);
+    func_800B53BC(b[7], func_800B544C(buf, p), 0, 0x48, 0xC8);
+    func_800B53BC(b[18], func_800B557C(buf, p), 0, 0x48, 0xB8);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6030);
 
@@ -8384,7 +8662,93 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BCE78);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD5B0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD688);
+/* Installed at UnkNode.unk_10 by func_800BD980 and reached only through
+   func_80040190's cast (csrc/unk_12DEC.c), which calls it as
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- so three parameters, the first being the node's +0x20 actor view. `b`
+   and `c` are never read here, so their types are the dispatcher's and the
+   house convention's, not this function's witness.
+   func_80069EF8 is the engine's out-of-image random source (all four `jal`s
+   are that one symbol); `& 0x1FF` makes each draw 0..511.
+   `*(u16 *)((u8 *)a - 0x2) |= 0x8000; D_800814A0 |= 0x8000;` is the unit's
+   existing kill-this-node idiom -- a - 0x2 is UnkNode.unk_1E.
+
+   THE ONE NON-OBVIOUS SPELLING is that the abs() result reuses `t`, the
+   loop body's random temporary, rather than taking a variable of its own.
+   It is worth 8 words. With its own block-local variable the function is at
+   8 differing, every difference a register assignment inside the range-check
+   block, and no spelling of that block moves it (measured: abs() once, abs()
+   twice, an explicit `if (d < 0) d = -d;`, a (u32) cast, the two values or
+   the two pointers hoisted into locals, reversed operands, reversed ||,
+   de Morgan, the subtraction pre-folded, the range test as
+   `(u32)(d - 0x200000) > 0x200000`, and three declaration orders -- all 8).
+   The mechanism is local-alloc's combine_regs: at `addu` the allocator walks
+   the input operands for one that dies there and ties the output to it
+   (local-alloc.c:1239ff), but it bails out when that input's pseudo is not
+   block-local (`reg_qty[ureg] < 0`, local-alloc.c:472 / 1762). With a private
+   variable the chain val0 -> subu -> abs -> addu becomes ONE 8-reference
+   quantity, which outranks the `sltu` pair, takes $v1 across words 23..33,
+   and pushes the second mover pointer out of $v1 into $a0. Sharing `t` makes
+   the abs destination multi-block, so the tie is refused, the addu's output
+   joins the CONSTANT instead, the val0 chain stays a 6-reference quantity at
+   $v0 and the second pointer gets $v1 -- the listing's allocation exactly.
+   Reusing `n` (the frame counter) for it also measures 0; reusing `lim` gives
+   9 and reusing `i` gives 16. */
+void func_800BD688(UnkTownBD688 *a, UnkVec *b, s32 c)
+{
+    UnkTown2AE8 *p;
+    s32 i;
+    s32 t;
+    s32 lim;
+    s32 n;
+
+    n = (a->unk_22 + 1) & 7;
+    a->unk_22 = n;
+    switch (a->unk_20)
+    {
+    case 0:
+        if (n == 0)
+        {
+            t = abs(a->unk_00[0]->unk_00 - a->unk_00[1]->unk_00);
+            if (t < 0x200000 || t > 0x400000)
+            {
+                for (i = 1; i >= 0; i--)
+                {
+                    t = (func_80069EF8() & 0x1FF) << 8;
+                    if (a->unk_00[i]->unk_0C > 0x7FFFF)
+                    {
+                        t = -t;
+                    }
+                    a->unk_00[i]->unk_0C = t;
+                    a->unk_00[i]->unk_0C -= 0x80000;
+                }
+            }
+            for (i = 1; i >= 0; i--)
+            {
+                a->unk_00[i]->unk_10 = ((func_80069EF8() & 0x1FF) - 0x100) << 9;
+            }
+            a->unk_00[0]->unk_14 = ((func_80069EF8() & 0x1FF) - 0x100) << 8;
+            a->unk_00[1]->unk_14 = (func_80069EF8() & 0x1FF) << 7;
+            if (a->unk_00[0]->unk_08 < a->unk_00[1]->unk_08)
+            {
+                a->unk_00[1]->unk_14 = -a->unk_00[1]->unk_14;
+            }
+        }
+        p = a->unk_00[0];
+        lim = a->unk_08 - 0x1400000;
+        if (p->unk_00 < lim && a->unk_00[1]->unk_00 < lim)
+        {
+            a->unk_00[1]->unk_0C = 0;
+            p->unk_0C = 0;
+            a->unk_20 = a->unk_20 + 1;
+        }
+        break;
+    case 1:
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD898);
 
