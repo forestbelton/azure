@@ -1065,8 +1065,22 @@ void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
 void func_8003F320(void);
 void func_800C78A8();
 void func_800C7A00();
-void func_800C5864(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
-void func_800CA88C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
+void func_800C5864(UnkTownActor *a, s32 b, s32 c);
+void func_800CA88C(UnkTownActor *a, s32 b, s32 c);
+void func_800C56A8();
+void func_800CA458();
+void func_8009C7A8();
+void func_80041094();
+extern u8 D_800D64DC[];
+extern u8 D_800D06F8[];
+extern u8 D_800D071C[];
+extern u8 D_800F8BCC[];
+extern u8 D_800F8BD8[];
+extern u8 D_800F8D10[];
+extern u8 D_800F8D1C[];
+extern u16 D_80082E76;
+extern void (*D_800D1638[])();
+extern void (*D_800D1640[])();
 void func_8006733C(void *r, void *src);
 extern s32 D_80113220;
 extern u8 D_800D43B0[];
@@ -4956,7 +4970,16 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009C648);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009C7A8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009C83C);
+/* A family of 2: park a per-member descriptor at the actor's +0x7C and call
+   func_8009C7A8 with SIX arguments, the last two on the stack at sp+0x10 and
+   sp+0x14. The first three are the incoming ones, passed through with no
+   setup. func_8009C7A8 stays K&R-declared -- nothing else in the unit calls
+   it, so its parameter types have no witness. */
+void func_8009C83C(UnkTownActor *a, s32 b, s32 c)
+{
+    a->unk_7C = (UnkTownArg80 *)D_800D06F8;
+    func_8009C7A8(a, b, c, D_800F8BCC, D_800F8BD8, D_800CFD00);
+}
 
 void func_8009C884(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
@@ -4981,7 +5004,11 @@ void func_8009C974(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     func_8009B218(p, q, r, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009C9DC);
+void func_8009C9DC(UnkTownActor *a, s32 b, s32 c)
+{
+    a->unk_7C = (UnkTownArg80 *)D_800D071C;
+    func_8009C7A8(a, b, c, D_800F8D10, D_800F8D1C, D_800CFD00);
+}
 
 void func_8009CA24(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
@@ -7657,9 +7684,19 @@ void func_800B1DCC(UnkTown260C *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1F10);
+/* A family of 2: dispatch through a per-member function-pointer table on the
+   SECOND parameter, with the first inherited in $a0 by the callee -- the
+   `jalr` has a `nop` delay slot and nothing sets $a0 up, so the table's
+   element type carries no arity information. */
+void func_800B1F10(s32 a, s32 i)
+{
+    D_800D1638[i]();
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1F48);
+void func_800B1F48(s32 a, s32 i)
+{
+    D_800D1640[i]();
+}
 
 void func_800B1F80(UnkTown260C *s, s32 d)
 {
@@ -11313,9 +11350,19 @@ void func_800B93FC(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9430);
+/* A family of 2: one func_80041094 call with a per-member id and the inverted
+   D_80082E76 flag as its fifth argument, on the stack at sp+0x10. The three
+   zero arguments all come from one `addu $a1, $zero, $zero` copied twice,
+   which is why only the id varies. */
+void func_800B9430(void)
+{
+    func_80041094(0x16, 0, 0, 0, D_80082E76 ^ 1);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B946C);
+void func_800B946C(void)
+{
+    func_80041094(0x17, 0, 0, 0, D_80082E76 ^ 1);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B94A8);
 
@@ -12798,7 +12845,7 @@ void func_800C5620(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
    which is the in-place narrow test -- so `if (--a->unk_6C <= 0)` is the
    spelling, the same one the landed func_8009803C uses. The +0x72 store is
    AFTER the call, not in its delay slot. */
-void func_800C565C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void func_800C565C(UnkTownActor *a, s32 b, s32 c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -12841,7 +12888,17 @@ void func_800C5814(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C5864);
+/* A family of 2, the func_800C5814 shape immediately above: bind a per-member
+   descriptor, set the +0x6C countdown to 0x28, install the per-member handler
+   at +0x54. families.py reports THREE varying words but there are only two
+   source differences -- the third is the handler symbol's `lui`, whose high
+   half differs because the two handlers sit in different 64K pages. */
+void func_800C5864(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D5388);
+    a->unk_6C = 0x28;
+    a->unk_54 = func_800C56A8;
+}
 
 void func_800C58AC(void *arg0)
 {
@@ -14103,7 +14160,7 @@ void func_800CA3EC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     func_800C4174(a, b, c);
 }
 
-void func_800CA40C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void func_800CA40C(UnkTownActor *a, s32 b, s32 c)
 {
     if (--a->unk_6C <= 0)
     {
@@ -14216,7 +14273,12 @@ void func_800CA83C(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CA88C);
+void func_800CA88C(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C2E84(a, c, D_800D64DC);
+    a->unk_6C = 0x28;
+    a->unk_54 = func_800CA458;
+}
 
 void func_800CA8D4(u8 *a, s32 b, u8 *c)
 {
