@@ -4572,7 +4572,59 @@ s32 func_8009CFE0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D20C);
+/* func_8009CFE0 above, minus its leading `D_8006ADD4 == 0xC` guard: same two
+   func_8008CC90 probes against the same four D_80082D08 coordinate pairs, same
+   two return values, 139 - 5 = 134 words.
+
+   Arity is 2, not 3, even though the sibling takes three. The witness is the
+   unlanded caller func_8009E714, which calls this twice back to back
+   (0x8009E730, 0x8009E744): it saves its own $a2 into $s2 in the first call's
+   delay slot precisely because $a2 is call-clobbered, then sets up only
+   $a0/$a1 before the second jal. A third parameter would force an
+   `addu $a2, $s2, $zero` there that the target does not contain. The sibling's
+   three params are untestable -- both its landed callers forward a0/a1/a2 in
+   place -- so they are not evidence against this. */
+s32 func_8009D20C(UnkTownSpawn *p, UnkVec *q)
+{
+    u8 *s;
+
+    s = (u8 *)p->unk_98;
+    if (s != NULL)
+    {
+        if ((s[1] & 1) == 0)
+        {
+            if (func_80033B2C(*(s16 *)(s + 2)) == 0)
+            {
+                return 1;
+            }
+        }
+        else
+        {
+            if (func_80033B2C(*(s16 *)(s + 2)) == 1)
+            {
+                return 1;
+            }
+        }
+        if (s[1] & 0x10)
+        {
+            return 0;
+        }
+    }
+    if (func_8008CC90(*(u16 *)(D_80082D08 + 0x0) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x2) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x8) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0xA) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x10) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x12) - *(u16 *)((u8 *)q + 6),
+                      *(u16 *)(D_80082D08 + 0x18) - *(u16 *)((u8 *)q + 2), *(u16 *)(D_80082D08 + 0x1A) - *(u16 *)((u8 *)q + 6)) == 0)
+    {
+        if (func_8008CC90(*(u16 *)(D_80082D08 + 0x0) - p->unk_84, *(u16 *)(D_80082D08 + 0x2) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x8) - p->unk_84, *(u16 *)(D_80082D08 + 0xA) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x10) - p->unk_84, *(u16 *)(D_80082D08 + 0x12) - p->unk_86,
+                          *(u16 *)(D_80082D08 + 0x18) - p->unk_84, *(u16 *)(D_80082D08 + 0x1A) - p->unk_86) == 0)
+        {
+            return 2;
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D424);
 
