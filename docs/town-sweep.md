@@ -599,6 +599,28 @@ the generator -- do not edit its output.** And state per-function callee lists,
 not per-group ones; a union reads as a shared set and there is no wording that
 fixes that.
 
+### THE PRODUCTIVE RELATIVE SCREEN IS ONE SHARED CALLEE **PLUS ONE SHARED GLOBAL**
+
+2026-11-03. A two-or-more-shared-callees threshold reported "no landed function
+shares two or more callees with these pairs, so there is no family template",
+and that conclusion was wrong: `func_8009DFD8` (`csrc/ovl_town.c:8010`, landed)
+is a line-for-line template for one of the pairs, which then landed in one
+compile each. It shares exactly **one** callee plus **one** global
+(`D_80083498`), so the threshold could not see it.
+
+Screen on one shared callee plus one shared global. It costs one `grep`, e.g.
+`grep -n 'func_8003FD64' csrc/ovl_town.c`.
+
+### STATE SWEEP EXPECTATIONS AS A FORMULA, NOT A NUMBER
+
+A brief that says "expect 879 of 879" is stale the moment any sibling group in
+the same batch lands. In the 2026-11-03 batches `progress.py`'s count moved
+879 -> 891 -> 905 -> 911 while agents were running, and two of them reported a
+short sweep as a possible regression before working out it was my stale figure.
+Write it as **"`progress.py`'s landed count, plus yours, plus the one benign
+off-by-one"** and it stays true. Same for the lever count: cite
+`leverindex.py`, not a number.
+
 ### RANK PROVISIONING BY CALLERS AND BY WHAT A FUNCTION *INSTALLS*, NOT ONLY BY CALLEES
 
 2026-11-03, second batch. I rated six pairs excellent / moderate / thin on
