@@ -168,6 +168,29 @@ s32 func_800C2AB4(UnkTownActor *a);
  * by checking what offset jtbl_800898D4 would land at if $LC0 were moved after
  * it rather than before. Do NOT touch the alignment again.
  *
+ * ANSWERED 2026-11-03, AND THE PREMISE ABOVE IS WRONG. Neither reading was
+ * right: the sixteen bytes IS this function's $LC0, and the order is the one
+ * cc1psx emits. The table sits at 4 mod 8 because THE WHOLE TRANSLATION UNIT
+ * DOES, and every `.align 3` inside it is therefore a no-op. So "something
+ * about this table's position is different" was the wrong question -- nothing
+ * about the table is different; the unit's base is.
+ *
+ * Measured on func_800BEBA4 (the sibling park, same rodata span): compiling
+ * func_800BEBA4 + func_800BF1C8 + the trailing blob as ONE unit at -G0 gives
+ * .rodata = 0x54 with ZERO padding anywhere and the four blobs at
+ * 0x00 / 0x18 / 0x28 / 0x40, which is the reference layout exactly; both
+ * blobs' bytes match their own .s files, and .text comes out 504 words =
+ * 366 + 138, both listing counts. And build/town.bin.ld line 20 carries
+ * `SUBALIGN(4)`, which a two-object probe confirms defeats an input .rodata's
+ * 8-byte alignment -- so a 4-mod-8 unit base is what the linker script is
+ * built to produce.
+ *
+ * THE ROUTE IS THEREFORE A CARVE, NOT A SPELLING, and it unblocks BOTH parks
+ * at once. It is written out in full, with its one boundary condition, in
+ * docs/near-misses/func_800BEBA4.c -- including that the new unit must also
+ * carry INCLUDE_RODATA(D_800898EC), or the same bug reappears one symbol
+ * further on. Do not search this body again.
+ *
  * NOTE FOR WHOEVER LANDS IT: deleting
  * `INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800898C4);` IS correct and
  * necessary -- those 16 bytes are this function's own local-array initialiser
