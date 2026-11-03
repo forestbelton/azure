@@ -268,9 +268,10 @@ expression.
 `cc1psx` honours gcc's dump flags -- `-dS` (post-sched1), `-dR` (post-sched2),
 `-dl` (local-alloc), `-dg` (global-alloc), `-dr` (initial RTL) -- and `-da`
 dumps all of them at once, which is what `tools/decomp/dump.sh` passes. The
-files land in the wine temp directory, under the prefix `tools/ccpsx` chose
-(`$AZURE_WINEPREFIX` if set, else `~/.cache/azure-psyq`), as
-`drive_c/users/*/AppData/Local/Temp/PQ*.<suffix>`.
+files land in the CURRENT DIRECTORY, named after the input:
+`gprel_148FC.c.greg`, `gprel_148FC.c.lreg` and so on. (Under wine they went to
+the wine prefix's `drive_c/users/*/AppData/Local/Temp/PQ*.<suffix>`, which is
+why `dump.sh` used to be so much more complicated than it is.)
 
 **There are sixteen dumps, and three of them do not exist in upstream 2.7.2.**
 Measured from a cleared temp directory, cc1psx emits `rtl jump cse loop cse2
@@ -315,11 +316,12 @@ Cygnus snapshot would have backported it from, and only then consider
 disassembly.
 
 A trap this cost once: a dump collector that deletes a LIST of suffixes before
-compiling leaves the unlisted three behind, and the next run collects a previous
+compiling left the unlisted three behind, and the next run collected a previous
 function's dump under the new function's name -- a `.regmove` was collected
 headed `;; Function func_80041344` while a different function was being
-compiled. `dump.sh` now wipes `PQ*.*` wholesale and resolves the wine prefix
-the same way `tools/ccpsx` does, which it previously did not. The `.sched` dump prints the ready list
+compiled. That whole failure mode went away with wine: the native compiler
+names each dump after its input, so there is nothing to collide.
+The `.sched` dump prints the ready list
 and each insn's priority per cycle, and `.greg` prints each allocno with the
 hard registers it conflicts with; between them they explain any ordering or
 register difference without guessing.
@@ -387,8 +389,11 @@ Two adaptations are needed, neither about code generation:
 `psyq/lib` is still required by `azure libmatch`/`libscan`. What goes away is
 the compiler itself -- and with it the wine prefix pool, the per-invocation
 `flock`, and the output cross-contamination at parallelism that motivated
-both. `tools/ccpsx` is kept as the fallback and as the only way to reach the
-real ASPSX for comparison.
+both. There is no fallback path left: `tools/ccpsx` and the pool are deleted,
+and with them the only way to drive the real ASPSX for comparison. The
+measurements that used it are recorded in the Makefile and in
+docs/addressing-and-translation-units.md; redoing one means driving
+`psyq/aspsx.exe` under wine by hand.
 
 **A vanilla GCC cannot substitute, and the reason is structural.** Upstream
 2.7.2.3's `config/mips/` has no `SPLIT_ADDRESSES` support at all and no
@@ -402,9 +407,10 @@ and it is the obviously-named trap. Only `-cdk` is the SN compiler.
 ## Installing the SDK
 
 `psyq/` is still needed -- for its headers, and for the libraries the
-`libmatch`/`libscan` tools read -- even though the build no longer runs its
-compiler. The compiler binaries below are what `tools/ccpsx` drives, and are
-now only a fallback.
+`libmatch`/`libscan` tools read -- even though nothing runs its compiler any
+more. The compiler binaries below are kept as the provenance reference: they
+are what the native build was verified byte-for-byte against, and
+`tools/validate-psyq.py` records their hashes.
 
 The compiler is not in the repository (`psy-q/` is ignored). It comes from
 track 1 of the 4.1 disc image, which is MODE2/2352: strip each sector to its

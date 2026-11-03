@@ -37,7 +37,6 @@ PROTO = r'^[A-Za-z_][\w \*]*?\b%s\s*\([^;{]*\);\s*$'
 
 
 def verify(path):
-    os.environ.setdefault("AZURE_WINEPREFIX", "/tmp/azure-wine-reuse")
     cands = runpy.run_path(path)["CANDS"]
     ok = []
     for name, unit, body in cands:

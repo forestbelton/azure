@@ -761,10 +761,11 @@ because the dead ends are worth not retrying and because the shapes recur.
 
 ## Toolchain
 
-The build is the two-step pipeline described in the Makefile: `tools/ccpsx`
-(wine) runs `cc1psx`, then maspsx emulates ASPSX on top of GNU as:
+The build is the two-step pipeline described in the Makefile: `tools/cdkgcc`
+runs the native build of `cc1psx`, then maspsx emulates ASPSX on top of GNU
+as:
 
-    tools/ccpsx -O2 -G8 -Iinclude -S -o build/csrc/UNIT.s csrc/UNIT.c
+    tools/cdkgcc -O2 -G8 -Iinclude -Ipsyq/include -S -o build/csrc/UNIT.s csrc/UNIT.c
     python3 maspsx.py --aspsx-version=2.56 --force-stdin --run-assembler \
         --gnu-as-path=mips64-linux-gnu-as --use-comm-section -G8 \
         -EL -32 -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 \
@@ -773,8 +774,8 @@ The build is the two-step pipeline described in the Makefile: `tools/ccpsx`
 `make check` is the only authority: instruction counts can agree while bytes
 differ. decomp-permuter is set up (`tools/permuter_compile.sh` is the real
 pipeline); after `import.py`, copy that script over the generated
-`compile.sh`, which only runs `ccpsx -S` and leaves assembler text at the
-`.o` path.
+`compile.sh`, which only runs the compiler's `-S` and leaves assembler text
+at the `.o` path.
 
 ---
 

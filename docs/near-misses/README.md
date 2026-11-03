@@ -41,8 +41,10 @@ For the `VERDICT: ALLOC` and shape-search cases, run the permuter instead of
 sweeping shapes by hand -- see `docs/permuter-protocol.md`. `unname.py <func>`
 deletes each local in turn and re-scores; re-run it after adopting a hit.
 
-Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq` if anything
-else in the repo is compiling at the same time.
+Set `AZURE_SCRATCH` to a private directory if anything else in the repo is
+compiling at the same time, so the two runs do not overwrite each other's
+`.s` files. (This used to need a private wine prefix as well; the native
+compiler has no shared state.)
 
 ## Landing gate
 

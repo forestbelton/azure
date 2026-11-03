@@ -6095,9 +6095,9 @@ were written as read-backs -- not that one of them was spelled differently.
 
 ### Read the scheduler's own decisions -- it is not "priority, then LUID"
 
-`cc1psx` is gcc 2.7.2 and still honours gcc's `-d` dump letters. The `ccpsx`
-driver swallows them, so `tools/decomp/sched.py` runs `cc1psx` directly on
-preprocessed input and prints the dump for one function:
+`cc1psx` is gcc 2.7.2 and still honours gcc's `-d` dump letters.
+`tools/decomp/sched.py` goes through `dump.sh` to collect them and prints the
+dump for one function:
 
     python3 tools/decomp/sched.py cand.c func_8003719C          # sched2
     python3 tools/decomp/sched.py cand.c func_8003719C --sched1
@@ -8364,11 +8364,11 @@ closed idea.**
   D_80083858/D_8008385C and D_800838D8/D_800838DC), and the container spelling
   is what keeps the symbol out of the `-G8` hazard, so the flag is the price of
   doing it right.
-* **wine's filesystem is case-insensitive.** Two scratch files whose names
-  differ only in case are one file to `ccpsx`, which then exits 0 having written
-  the other one. `verify.py` diagnoses this now; name variants so they differ by
-  more than case.
-* **A tool that invokes `tools/ccpsx` needs `-Ipsyq/include` as well as
+* **GONE with wine, 2026-11-02:** wine's filesystem was case-insensitive, so
+  two scratch files whose names differed only in case were one file to
+  `ccpsx`, which then exited 0 having written the other one. The native
+  compiler writes the path given to `-o`.
+* **A tool that invokes the compiler needs `-Ipsyq/include` as well as
   `-Iinclude`.** `include/common.h` pulls in `sys/types.h`, `libcd.h`,
   `libgte.h` and `libgpu.h`, which exist only under `psyq/include`. The
   Makefile passes both paths; the decomp tools passed only the first, so
@@ -8378,10 +8378,11 @@ closed idea.**
   header, and not the real cause. Fixed 2026-10-26.
   **`python3 tools/decomp/nmcheck.py` is the one-command check that the fast
   loop works**; run it before concluding a candidate is wrong.
-* **Concurrent `ccpsx` runs share one wine prefix** and can lose an output.
-  Retry before believing a compile failure.
-  Set `AZURE_WINEPREFIX` to a private copy of `~/.cache/azure-psyq` when more
-  than one line of work is compiling at once; `tools/ccpsx` honours it.
+* **GONE with wine, 2026-11-02:** concurrent `ccpsx` runs shared one wine
+  prefix and could lose an output, so a compile failure was worth retrying and
+  parallel work needed a private prefix. The native compiler is a plain
+  process; only `AZURE_SCRATCH` still needs separating, so two runs do not
+  overwrite each other's `.s` files.
 * **maspsx drops the load-delay nop before a `%gp_rel` STORE of a symbol it
   knows only from an `.extern` record**, which costs exactly one word per site
   in a `-G8`/`-G2` unit and throws off every later branch offset. Its
@@ -8432,17 +8433,17 @@ tool output compounds. Two things dominate:
 applies to a BACKGROUND SWEEP in your own session too, not just to subagents:
 a sweep left running while you measure anything by hand is two concurrent
 `ccpsx` runs on one prefix, and the loser exits 0 having written nothing.
-Concurrent `ccpsx` runs share one prefix and silently lose an output -- the
-compile exits 0 having written nothing, or having written another run's file --
-and with several agents going at once that is not a rare race, it is the normal
-case. Put this in the brief verbatim:
+This used to be the single biggest hazard of running several agents at once:
+concurrent `ccpsx` runs shared one wine prefix and silently lost an output --
+the compile exited 0 having written nothing, or having written another run's
+file. The native compiler removed it, so the only thing left to separate is
+the scratch directory. Put this in the brief verbatim:
 
-    cp -a ~/.cache/azure-psyq /tmp/azure-wine-$$ && export AZURE_WINEPREFIX=/tmp/azure-wine-$$
+    export AZURE_SCRATCH=/tmp/azure-decomp-$$
 
-`tools/ccpsx` honours `AZURE_WINEPREFIX`, and it has to be exported in every
-shell command the agent runs, not just the first. `AZURE_SCRATCH` is worth
-setting the same way if the agent will use `dump.sh`, since that writes to a
-shared `/tmp/azure-decomp` by default. An agent that measures a number under a
+`dump.sh` and `asmlib` both write there, defaulting to a shared
+`/tmp/azure-decomp`, and it has to be exported in every shell command the
+agent runs, not just the first. An agent that measures a number under a
 shared prefix cannot tell a lost output from a real regression, and will report
 the regression.
 
@@ -9191,9 +9192,9 @@ the target computes the second test IN PLACE:
 
 The obvious C puts the second mask in `$v1` as well, and nothing short of a
 pinned register moved it. The chain, read off the `.lreg`/`.greg` dumps
-(`AZURE_WINEPREFIX=$HOME/.cache/azure-psyq python3 tools/decomp/advise.py ...
---greg` -- dump.sh collects from the SHARED prefix, so without that variable
-`ccpsx` claims a pool prefix and the dumps are silently missing):
+(`python3 tools/decomp/advise.py ... --greg`; this once needed
+`AZURE_WINEPREFIX` pinned, because dump.sh read the shared wine prefix while
+`ccpsx` wrote to a pooled one and the dumps came back silently missing):
 
 1. The first test's zero-extend lands in a *block-local* pseudo, so local-alloc
    assigns it, and it picks `$v1`.
@@ -11903,13 +11904,14 @@ moved to 237 moved to 238`, hoisting the pair (84 DIFF). `volatile` instead of
 the varying input is 68. With the varying input the lui/ori stays in the loop
 where the target has it, at a cost of zero words.
 
-**Reading the dumps.** `cpppsx` then `cc1psx -O2 -G0 -da` on a standalone
-candidate; the dumps land in
-`~/.cache/azure-psyq/drive_c/users/case/AppData/Local/Temp/PQ2.*` and are
-overwritten per run, so pin `AZURE_WINEPREFIX=$HOME/.cache/azure-psyq` and
-compile one candidate at a time. `PQ2.loop`'s first twenty lines are the whole
+**Reading the dumps.** `tools/cdkgcc -O2 -G0 -da -S` on a standalone
+candidate, or `dump.sh`, which does it for you; the dumps land in the current
+directory named after the input. (They used to land in the wine prefix's
+`Temp` as `PQ2.*`, overwritten per run, which is why this said to pin
+`AZURE_WINEPREFIX` and compile one candidate at a time.) The `.loop` dump's
+first twenty lines are the whole
 hoist decision -- one line per movable, `moved to N` or `not desirable`, with
-its lifetime and savings -- and `PQ2.sched` prints every ready list, which is
+its lifetime and savings -- and `.sched` prints every ready list, which is
 how you learn that sched1 here schedules a block BACKWARD from its end
 ("ready list at T-1" is the last slot) and that a priority-1 insn with no
 in-block dependents is taken whenever nothing else is hazard-boosted.

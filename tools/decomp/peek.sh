@@ -11,6 +11,7 @@ set -e
 cd "$AZURE_ROOT"
 out="$AZURE_SCRATCH"/$1.s
 tools/cdkgcc -O2 -G8 -Iinclude -Ipsyq/include -S -o "$out" csrc/"$1".c >/dev/null
-# cc1psx runs under wine, so the listing has CRLF line endings; strip the CR
-# before matching or the function label never compares equal.
+# The CR strip is a no-op for the native compiler, which emits LF. It is kept
+# because it costs nothing and cc1psx under wine emitted CRLF, which made the
+# function label never compare equal.
 tr -d '\r' < "$out" | awk -v f="$2:" '$1==f{p=1} p{print} p&&/\.end/{exit}'

@@ -213,31 +213,26 @@ permuter at all, the later ones worked this way from the dumps; and in all
 nine the park's MEASUREMENT TABLE was sound while its stated CAUSE was wrong.
 Read a park's numbers as fact and its diagnosis as a guess.
 
-The two stages are Windows binaries, so they go through wine -- `psyq/*.exe`
-is not executable on its own, and `tools/ccpsx` drives the `ccpsx` DRIVER
-rather than the stages. `WINEPATH` has to name `psyq/` or `cpppsx` fails with
-"could not execute".
+`tools/decomp/dump.sh` collects all sixteen for you. To do it by hand it is
+one command, because the compiler is a native binary and the driver forwards
+`-da` to `cc1` itself:
 
 ```sh
 cd /tmp/.../scratch                      # dumps are written to the CWD
 PROJ=/home/case/projects/azure
-export WINEPREFIX=$HOME/.cache/azure-psyq WINEDEBUG=-all
-export WINEPATH=$(winepath -w "$PROJ/psyq")
-
-wine "$PROJ/psyq/cpppsx.exe" -I"$PROJ/include" -I"$PROJ/psyq/include" \
-    -DPERMUTER f.c > f.i
-wine "$PROJ/psyq/cc1psx.exe" -O2 -G0 -da -quiet f.i -o f.s
-#                                 ^^^ -G0 for an overlay, -G8 resident
+"$PROJ"/tools/cdkgcc -O2 -G0 -I"$PROJ/include" -I"$PROJ/psyq/include" \
+    -DPERMUTER -da -S -o f.s f.c
+#            ^^^ -G0 for an overlay, -G8 resident
 ```
 
-**The dumps land next to the `.i` file**, one per pass, in pass order:
-`f.i.rtl`, `.jump`, `.cse`, `.loop`, `.flow`, `.combine`, `.regmove`, `.sched`,
+**The dumps land in the CWD named after the input** -- `f.c.rtl`, `f.c.jump`
+and so on -- one per pass, in pass order:
+`.rtl`, `.jump`, `.cse`, `.loop`, `.flow`, `.combine`, `.regmove`, `.sched`,
 `.lreg`, `.greg`, `.cse2`, `.bp`, `.sched2`, `.jump2`, `.shorten`, `.dbr` --
 note `.jump2` runs AFTER `.sched2`, which is why a reordering done to break a
-cross-jump merge is also the order that gets emitted.
-They only appear in wine's `Temp` as `PQ2.*` when `ccpsx` names the temporary
-itself, so invoke the two stages yourself and read them in place. Verified
-2026-11-01.
+cross-jump merge is also the order that gets emitted. Verified 2026-11-01
+under wine, where the dumps arrived as `PQ2.*` in the wine prefix's `Temp`;
+re-verified 2026-11-02 natively, where they are named after the input.
 
 Which dump answers which question, as established so far:
 
@@ -326,9 +321,7 @@ fall in one day.
   changes, keep searching or park it with the measurement.
 - Do not use `--full`, `--greg` or `dump.sh` unless the header's findings have
   run out; they are large.
-- Name scratch files so they differ by more than case: wine's filesystem is
-  case-insensitive and `ccpsx` will write the wrong one and exit 0.
-- Every tool shelling out to `tools/ccpsx` needs `-Ipsyq/include` as well as
+- Every tool shelling out to the compiler needs `-Ipsyq/include` as well as
   `-Iinclude`.
 
 ## Report back

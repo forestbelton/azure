@@ -262,8 +262,8 @@ size, the `-G` value, the struct layout, the flags.
   distinct inputs, 2 of 80 outputs were *another input's* object, complete with
   its `.file` symbol -- a wrong answer that assembles. A per-invocation `TEMP`
   does not fix it (5/80 to 2/80); one prefix per parallel slot does (0/80).
-  The build no longer runs the compiler under wine at all (`tools/cdkgcc`), so
-  this cannot happen; the pool machinery is kept only for `tools/ccpsx` itself.
+  Nothing runs the compiler under wine any more (`tools/cdkgcc`), so this
+  cannot happen; `tools/ccpsx` and the pool were deleted on 2026-11-02.
 - **Every tool that shells out to the compiler must pass `-Ipsyq/include`**,
   not just `-Iinclude`. The failure is a misleading
   `gnu/stubs-32.h: No such file or directory` from the host headers, on every
@@ -288,11 +288,13 @@ size, the `-G` value, the struct layout, the flags.
   constant and does not change the ranking. Only `func_8004AC3C` among the
   parks uses the idiom. `objdump_command` in a function's `settings.toml`
   resolves it if the zero floor is wanted.
-- **cc1psx output has CRLF line endings.** Strip the CR before matching labels.
-- **wine's filesystem is case-insensitive**, so `zz_gA.s` and `zz_ga.s` are one
-  file to `ccpsx`: it writes the wrong one, exits 0, and the caller dies with
-  FileNotFoundError on a file the compiler "wrote". Name scratch variants so
-  they differ by more than case.
+- **Both of these died with wine on 2026-11-02** and are kept only so a
+  stale listing or an old scratch file is recognisable: `cc1psx` output had
+  CRLF line endings, so the CR had to be stripped before matching labels; and
+  wine's filesystem was case-insensitive, so `zz_gA.s` and `zz_ga.s` were one
+  file, the compiler wrote the wrong one, exited 0, and the caller died with
+  FileNotFoundError on a file it had "written". The native compiler emits LF
+  and writes the path given to `-o`.
 - **grep needs `-a` on the psyq headers** (CRLF plus extended ASCII makes grep
   treat them as binary and find nothing silently).
 - **Scratch belongs in `scratch/`.** `.gitignore` covers `scratch/`, `zz*.c`

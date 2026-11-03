@@ -82,7 +82,7 @@ physically live in `.sdata` or `.sbss`:
 
 ## Why
 
-`ccpsx` does not choose. It emits a symbolic access and leaves the decision to
+The compiler does not choose. It emits a symbolic access and leaves the decision to
 the assembler:
 
     lw  $2,D_80080A7C

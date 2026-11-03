@@ -58,8 +58,10 @@ CHECK = python tools/check.py
 # (sha256 90db2db7.../d8005743.../7a571911...), since the image pins the host
 # toolchain at ubuntu:focal.
 #
-# tools/ccpsx is kept as the fallback and as the only way to reach the real
-# ASPSX; nothing in the build uses it now. See docs/compiler-version.md.
+# The wine path is gone entirely: there is no tools/ccpsx and no prefix pool.
+# psyq/ is still needed for its headers and its libraries, and the .exes are
+# kept as the provenance reference the native build was verified against --
+# tools/validate-psyq.py records their hashes. See docs/compiler-version.md.
 CC             = tools/cdkgcc
 ASPSX_VERSION  = 2.56
 CFLAGS        += -O2 -G8 -Iinclude -Ipsyq/include
@@ -70,7 +72,7 @@ CFLAGS        += -O2 -G8 -Iinclude -Ipsyq/include
 ifdef PERMUTER
 CFLAGS        += -DPERMUTER
 endif
-# -G8 is ccpsx's default and the game uses small-data addressing: there are 245
+# -G8 is the compiler's default and the game uses small-data addressing: 245
 # genuine $gp-relative loads/stores in the game's own code, against
 # $gp = 0x80080994 (set by crt0 at 0x800339ac, not by the PS-EXE header, whose
 # gp0 field is 0). Getting -G wrong mismatches every small-data access.
@@ -88,16 +90,16 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 #   --force-stdin      fail loudly instead of silently falling back to a file
 #   -G8                maspsx's own small-data limit; it emits explicit
 #                      %gp_rel for symbols it knows are small
-#   --use-comm-section put common symbols in .comm, which is ccpsx's behaviour
+#   --use-comm-section put common symbols in .comm, the compiler's behaviour
 #
 # Do NOT add --dont-force-G0 here. maspsx forces -G0 on GNU as by default and
 # that is what the bulk of the game wants, because at a nonzero -G gas emits
 # GPREL16 for any symbol whose `.extern SYM,size` gives a size in (0, G] -- and
 # cc1psx emits that `.extern` from the declared type, so every small extern
 # would go $gp-relative. ASPSX instead expands lui/%hi + %lo for an import.
-# Verified by assembling the same ccpsx output with the real ASPSX 2.56 via
-# `ccpsx -c`: it produces the lui/%lo pair, and so does maspsx once gas is left
-# at -G0. maspsx still emits %gp_rel where it belongs, so nothing is lost.
+# Verified, back when tools/ccpsx existed, by assembling the same compiler
+# output with the real ASPSX 2.56 via `ccpsx -c`: it produces the lui/%lo pair,
+# and so does maspsx once gas is left at -G0. maspsx still emits %gp_rel where it belongs, so nothing is lost.
 #
 # (An earlier version of this comment said gas "assumes an undefined symbol is
 # small data". It does not -- with no `.extern` record at all the access comes
@@ -216,7 +218,7 @@ $(CDK_CC1):
 cdk-gcc: $(CDK_CC1)
 
 .PHONY: all containers clean splat check expected ctx ghidra-syms extract \
-        cdk-gcc permuter-prefixes permuter-prefixes-clean
+        cdk-gcc
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -278,8 +280,8 @@ build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
 	$(AZURE) shiftjis $< | $(AS) $(ASFLAGS) -o $@
 
-# C goes ccpsx -S -> maspsx -> GNU as, so that aspsx's quirks are reproduced
-# while still using modern binutils for the actual assembly.
+# C goes compiler -S -> maspsx -> GNU as, so that aspsx's quirks are
+# reproduced while still using modern binutils for the actual assembly.
 build/%.o: %.c
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(CFLAGS) -S -o $(@:.o=.s) $<
@@ -291,32 +293,6 @@ build/%.o: %.bin
 
 # Report where the build diverges from the original, and which subsegment
 # owns that offset. A whole-file checksum cannot tell you that.
-# LEGACY, and no longer needed by anything: one wine prefix per concurrent
-# ccpsx run. Two runs sharing a prefix can swap each other's output (see
-# tools/ccpsx), which a parallel permuter would turn into false winners. The
-# native compiler has no such hazard, so the pool is only of use if something
-# is driven back through tools/ccpsx. Kept because the hazard it works around
-# is measured and worth not rediscovering. The copies are reflinked, so on
-# btrfs each 1.8 GB prefix costs ~0 bytes and 0.15s; POOL=N to size it
-# (default: one per core).
-POOL ?= $(shell nproc)
-PREFIX_POOL := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq-pool
-PREFIX_BASE := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq
-
-permuter-prefixes:
-	@test -d "$(PREFIX_BASE)" || { echo "no $(PREFIX_BASE); run any build first"; exit 1; }
-	@mkdir -p "$(PREFIX_POOL)"
-	@for i in $$(seq 1 $(POOL)); do \
-		d="$(PREFIX_POOL)/p$$i"; \
-		if [ ! -d "$$d" ]; then \
-			cp -a --reflink=auto "$(PREFIX_BASE)" "$$d" || exit 1; \
-		fi; \
-	done
-	@echo "prefix pool: $$(ls -d $(PREFIX_POOL)/*/ | wc -l) prefixes in $(PREFIX_POOL)"
-
-permuter-prefixes-clean:
-	rm -rf "$(PREFIX_POOL)"
-
 check: build/$(SLUS)
 	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
 

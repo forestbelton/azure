@@ -43,8 +43,9 @@ are from PSY-Q 4.0.
 instead -- see [The compiler](#the-compiler) below -- so what `psyq/` is needed
 for is its **headers** (`include/`, which the build compiles against) and its
 **libraries** (`lib/`, which the `azure libmatch` and `azure libscan` analysis
-tools read). The `.exe`s are only needed by `tools/ccpsx`, the fallback path,
-and are the only way to reach the real ASPSX for comparison.
+tools read). The `.exe`s are not used by anything; they are kept as the
+provenance reference the native compiler was verified against, and
+`tools/validate-psyq.py` records their hashes.
 
 Ensure you have a `psyq/` directory in the project root with the following
 contents:
