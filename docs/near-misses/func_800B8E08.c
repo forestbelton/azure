@@ -15,6 +15,34 @@
 
 #include "common.h"
 
+/* RE-MEASURED 2026-11-02, after func_800B8C90 landed next door. The 5 DIFF is
+   at words 116-120, i.e. 0x800B8FD8-0x800B8FE8, exactly where this park's
+   generated findings already point -- and four more spellings leave it there:
+
+     - a second `q = (u8 *)0x80010000;` between the two ifs in the 0x26 arm:
+       5. This was the suggestion func_800B8C90's landing produced, from its own
+       "a constant-base pointer must be re-assigned per `if`" lever, and it is
+       aimed at the wrong region -- that lever is real but this residue is not
+       in an `if` run over 0x8001xxxx flags at all.
+     - a pointer local `t = D_800D3814;` carrying all three tail reads: 5.
+     - the same with `[0]` left on the symbol: 5.
+     - the same with `[6]` left on the symbol: 5.
+
+   What the target actually does there is read D_800D3814[0] through the
+   SYMBOL (`lbu $a0, %lo(D_800D3814)($v0)`) while holding the symbol's address
+   in $v1 for [1] and [6] -- both forms of the same symbol live at once, with
+   the address materialised BEFORE the first read. That asymmetry is what no
+   spelling has reproduced. Twenty spellings now land on the same five-word
+   permutation, which is the park's own verdict: a sched1 tie-break, and the
+   next move is the permuter rather than more source shapes.
+
+   One thing this did settle: the `tbl[i * 2 + 0x33A4]` idiom this park uses is
+   CONFIRMED correct by func_800B8C90's landing, so that part is no longer
+   suspect. func_800B7A6C's and func_800B7978's landings also confirm the
+   sprite-record declarations here, and fix the prototypes: func_800B7A6C is
+   `(s16, s16, u16 *, u16 *)` and func_800B7978's third parameter must stay
+   `s32` -- narrowing it to `s16` takes this park from 5 differing to 16. */
+
 typedef struct
 {
     u16 unk_00;
