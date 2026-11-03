@@ -596,6 +596,17 @@ def main():
             if d in targets or not dc:
                 continue
             dc = set(dc)
+            # FLOOR, added after the route's first noise report. On a target
+            # with eight callees, containment-by-one names everything that
+            # calls the unit's commonest callee: func_800BD688's set is
+            # {func_80069EF8}, i.e. rand(), which is containment by the single
+            # most common symbol in the unit and carries no information.
+            # Unweighted is the POINT of this route, so the fix is a size
+            # floor, not a weight: a contained set of one says nothing.
+            # Checked against the case the route was built for, where the
+            # decisive contained set has seven members.
+            if min(len(mine), len(dc)) < 2:
+                continue
             if mine <= dc:
                 rows.append((0, len(dc) - len(mine), 'YOURS IS A SUBSET of   ', d, ''))
             elif dc <= mine:
