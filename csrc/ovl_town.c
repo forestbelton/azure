@@ -690,13 +690,23 @@ typedef struct UnkTownA17CCSP
    &D_800D1178 and &D_800D119C, 0x24 apart, so the record is 0x24 bytes.
    +0x00 is the SVECTOR vertex table, +0x04 the index quads (four s16 each,
    terminated by -1 in the first), +0x20 the four colour masks the random
-   gouraud words are ANDed with.  +0x08/+0x0A/+0x10/+0x14/+0x18 are written
-   by func_800A9E68 and read by func_800AA068, not here. */
+   gouraud words are ANDed with.
+
+   +0x08 and +0x10 were pad until func_800A9E68 and func_800AA068 landed.
+   They are an SVECTOR rotation and a VECTOR scale, and the witness is the
+   pair of libgte calls in func_800AA068 -- `func_80065820(&a->unk_08, m)`
+   (RotMatrix, SVECTOR *) and `func_80064BC0(m, &a->unk_10)` (ScaleMatrix,
+   VECTOR *) -- against func_800A1080, which builds the same matrix from the
+   same three calls in the same order over its own SVECTOR/VECTOR pair.
+   func_800A9E68 writes only unk_08.vy on &D_800D1178 and only unk_08.vx on
+   &D_800D119C, so unk_08.vz has no witness; the VECTOR's +0x1C pad is the
+   record's last word before unk_20. */
 typedef struct UnkTownAA10C
 {
     SVECTOR *unk_00;
     s16 *unk_04;
-    u8 pad_08[0x18];
+    SVECTOR unk_08;
+    VECTOR unk_10;
     u32 *unk_20;
 } UnkTownAA10C;
 
@@ -2685,6 +2695,14 @@ extern u8 D_800FC418;
 void func_8008B9D8(UnkTownDispatch *d);
 void func_8008BA00();
 void func_8008BED8();
+extern UnkTownAA10C D_800D1178;
+extern UnkTownAA10C D_800D119C;
+extern VECTOR D_800D11C0;
+extern s8 D_800D1074[];
+extern s32 D_800D1080[];
+extern u16 D_80100D40;
+extern u16 D_80100D42;
+void func_800AA10C(UnkTownAA10C *a, UnkTown2AE8 *b);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -13813,7 +13831,61 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9970);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A99D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9A38);
+/* The town's keyboard-ish table lookup: walk a -1-terminated s8 table for
+   the byte at the caller's p[1], and when it matches, bucket
+   func_8004A618()'s value against the two thresholds in D_800D1080.
+   Returns 0/1/2 for the three buckets and 3 for "not in the table"; its
+   caller func_800A9B2C uses the result as a `<< 2` index.
+
+   THE TABLE WALK MUST BE WRITTEN AS AN INDEXED ARRAY REF, NOT A POINTER.
+   With `q = D_800D1074` and `while (*q != -1)` the body is byte-exact from
+   word 11 on, but the entry block is 10 differing: the pointer's
+   `addiu` lands BEFORE the guard branch, in the entry block, so the `high`
+   has to survive it and takes a second register (`lui $v0` / `addiu $a1,
+   $v0, %lo`).  The target computes the address AFTER the branch, in the
+   loop pre-header, and in the SAME register as the `high` (`lui $a1` /
+   ... / `addiu $a1, $a1, %lo`) -- which is loop.c strength-reducing the
+   subscript into an address giv whose initial value it drops in the
+   pre-header, exactly the `combine_givs` shape docs/matching-levers.md
+   records.  Hoisting the pointer out of the source cannot reach it: five
+   pointer spellings (while / for / explicit guard + do-while, with
+   D_800D1074 declared both as an array and as a scalar taken by `&`) all
+   measured the same 10.  Three index spellings (for / while / guard +
+   do-while) all measure 0.
+
+   D_800D1080 is the array spelling and D_800D1074 would not be: the target
+   keeps `lui $s0, %hi(D_800D1080)` and `addiu $s1, $s0, %lo(D_800D1080)` in
+   DIFFERENT registers and then reads [0] through the `high` ($s0) and [1]
+   through the full address ($s1).  That is the two-quantity shape an
+   `extern T X[]` declaration gives; spelling the two thresholds as separate
+   `extern s32 D_800D1080` / `D_800D1084` scalars is 37 words and 37
+   differing.
+
+   41 words -- its header reads `nonmatching func_800A9A38, 0xA4`, and
+   0xA4/4 = 41.  Measured 0 differing. */
+s32 func_800A9A38(u8 *p)
+{
+    s32 i;
+    s32 r;
+
+    for (i = 0; D_800D1074[i] != -1; i++)
+    {
+        if (D_800D1074[i] == p[1])
+        {
+            r = func_8004A618();
+            if (r < D_800D1080[0])
+            {
+                return 0;
+            }
+            if (r < D_800D1080[1])
+            {
+                return 1;
+            }
+            return 2;
+        }
+    }
+    return 3;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9ADC);
 
@@ -13839,7 +13911,58 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9D00);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9D74);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9E68);
+/* func_800AA10C's driver: per frame it runs the four-point gouraud line
+   effect over the two static descriptors &D_800D1178 and &D_800D119C after
+   handing the mover pair to func_800A2AF8.  The descriptor fields it writes
+   are the ones func_800AA068 reads back out of them -- the SVECTOR rotation
+   at +0x08 and the VECTOR scale at +0x10 -- so this function is what sizes
+   and shapes UnkTownAA10C's former pad_08.
+
+   The two descriptors are driven DIFFERENTLY and that is the whole content:
+   the first gets the half-size scale `D_80100D18 / 2` and a rotation of
+   `-D_80100D40` about Y (unk_08.vy), the second the full `D_80100D18` and
+   `D_80100D42` about X (unk_08.vx), UNNEGATED -- adding the second `negu`
+   is 44 words and 14 differing, so the asymmetry is real.
+
+   D_80100D40 and D_80100D42 are declared u16 to match their only other
+   reader, func_800A9F14, but that is a choice and not a witness: both end
+   in a truncating `sh`, so combine takes the `lhu` either way and `extern
+   s16` measures 0 differing too.
+
+   `D_80100D18 / 2` is where this function spends six words, and the shape
+   is not the four-word `lh`/`srl 31`/`addu`/`sra 1` an s16 signed halving
+   looks like: it is `lhu`/`sll 16`/`sra 16`/`srl 31`/`addu`/`sra 1`,
+   because the division needs the sign bit and bit 31 of `x << 16` is the
+   same bit as bit 31 of `(x << 16) >> 16`, so combine keeps the `sll`
+   alive for both consumers instead of folding the pair into an `lh`.  An
+   explicit `(s16)` cast on the source measures 0 differing (the cast is
+   already there), and `>> 1` is 40 words and 32 differing.
+
+   The four writes per descriptor go through the address in $a0, which is
+   also the `jal`'s first argument: cse1 unifies the descriptor's
+   `(lo_sum (high sym) sym)` across the stores and the call, so the direct
+   `D_800D1178.unk_10.vx = ...` spelling costs `lui`/`addiu` plus four
+   displaced stores (6 words) and no separate address materialisation.  The
+   three scale stores are three separate ASCENDING statements, not a chained
+   assignment: a chain emits right-to-left, so `vx = vy = vz = v` would
+   store +0x18, +0x14, +0x10 in that order.
+
+   43 words -- its header reads `nonmatching func_800A9E68, 0xAC`, and
+   0xAC/4 = 43.  Measured 0 differing on the first compile. */
+void func_800A9E68(UnkTown2AE8 *b, UnkTown2AE8 *c)
+{
+    func_800A2AF8(c, b);
+    D_800D1178.unk_10.vx = D_80100D18 / 2;
+    D_800D1178.unk_10.vy = D_80100D18 / 2;
+    D_800D1178.unk_10.vz = D_80100D18 / 2;
+    D_800D1178.unk_08.vy = -D_80100D40;
+    func_800AA10C(&D_800D1178, b);
+    D_800D119C.unk_10.vx = D_80100D18;
+    D_800D119C.unk_10.vy = D_80100D18;
+    D_800D119C.unk_10.vz = D_80100D18;
+    D_800D119C.unk_08.vx = D_80100D42;
+    func_800AA10C(&D_800D119C, b);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9F14);
 
@@ -13850,7 +13973,58 @@ void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
     d->vz = *(u16 *)((u8 *)b + 0x8);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA068);
+/* func_800AA10C's per-corner rotate-and-project, called four times a quad.
+   It builds the descriptor's matrix in the scratchpad at 0x1F800054 --
+   TransMatrix from &D_800D11C0, RotMatrix from the descriptor's SVECTOR at
+   +0x08, ScaleMatrix by its VECTOR at +0x10 -- installs it with
+   SetRotMatrix/SetTransMatrix, runs RotTrans on the corner into the VECTOR
+   the caller passes (the scratchpad's +0x44), and copies the three truncated
+   halves back into the SVECTOR with func_800AA044.
+
+   func_800A1080 is the line-for-line witness for the first three calls: the
+   same func_80064B90 / func_80065820 / func_80064BC0 triple in the same
+   order, over an SVECTOR rotation and a VECTOR scale, which is what types
+   UnkTownAA10C's +0x08 and +0x10.  The difference is only that this one's
+   matrix lives in the scratchpad rather than in the object.
+
+   The matrix is spelled as a CONSTANT ADDRESS in a local, `m =
+   (MATRIX *)0x1F800054;` -- reload gives it reg_equiv_constant and
+   rematerialises the `lui`/`ori` pair at each of the five uses, which is the
+   ten words the listing has.  It is `ori`, not `addiu`, because the address
+   is a CONST_INT split after reload rather than a symbol; splat renders it
+   `(0x1F800054 >> 16)` / `(0x1F800054 & 0xFFFF)` and so carries NO
+   relocation on it, and the C form carries none either -- unlike the
+   auto-named `D_1F8xxxxx` symbols func_800AA10C's in-loop addresses produce.
+   The only relocations in this function are its seven R_MIPS_26 `jal`s and
+   the one `%hi`/`%lo` pair on D_800D11C0, so unlike its caller this one
+   costs the merged object no relocation records at all.  Three other
+   spellings of the same address measure 0 differing and were not taken:
+   the constant inline at all five use sites, the constant in the
+   declaration initialiser, and `m = (MATRIX *)((u8 *)sp + 0x54)` off a
+   `UnkTownA17CCSP *sp = (UnkTownA17CCSP *)0x1F800000` -- the last being the
+   shape func_800AA10C uses because it needs six offsets off one base, where
+   this function needs one.
+
+   func_80064CF0 / func_80064D80 / func_80065450 have no declaration anywhere
+   in the tree (splat names them SetRotMatrix / SetTransMatrix / RotTrans)
+   and ride implicit ones, as func_800AA10C does for func_80066844.
+
+   41 words -- its header reads `nonmatching func_800AA068, 0xA4`, and
+   0xA4/4 = 41.  Measured 0 differing on the first compile. */
+void func_800AA068(UnkTownAA10C *a, SVECTOR *v, VECTOR *out)
+{
+    MATRIX *m;
+    s32 flag;
+
+    m = (MATRIX *)0x1F800054;
+    func_80064B90(m, &D_800D11C0);
+    func_80065820(&a->unk_08, m);
+    func_80064BC0(m, &a->unk_10);
+    func_80064CF0(m);
+    func_80064D80(m);
+    func_80065450(v, out, &flag);
+    func_800AA044(v, (UnkTown2AE8 *)out);
+}
 
 /* The town's four-point gouraud line effect: for every quad in a static
    descriptor's index list, four random masked vertex colours, the four
