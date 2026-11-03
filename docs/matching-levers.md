@@ -297,9 +297,9 @@ then read only the section you need.
   - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:13146`
   - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:13161`
   - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:13196`
-  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13300`
-  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13334`
-  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13343`
+  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:13322`
+  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:13356`
+  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:13365`
 
 <!-- END INDEX -->
 
@@ -13270,14 +13270,36 @@ in C emits a SECOND copy of those bytes beside the surviving record. Here
 0x2524 to **0x252c**, shifting every record from offset 0xBA0 on. The fix is to
 copy from the existing symbol instead: `memcpy(buf, D_80089308, 5)`.
 
-So the two cases are opposites and the grep decides which you are in:
+So the two cases are opposites, and which one you are in is decided by
+**whether the symbol has its own `.s` file** -- NOT by how many listings
+reference it:
 
-  * symbol referenced by ONLY your listing -> splat migrated it into your
-    listing, it disappears when you land, DEFINE it in C at the exact declared
-    size (the `[4]` case above; .rodata would otherwise SHRINK or shift)
-  * symbol referenced by another listing too -> its `INCLUDE_RODATA` survives,
-    so declare it `extern` and copy FROM it; writing the literal duplicates the
-    bytes and .rodata GROWS
+  * no `asm/nonmatchings/<unit>/D_XXXX.s` and no `INCLUDE_RODATA` -> the bytes
+    live inside your function's own `.section .rodata` block and disappear when
+    you land, so DEFINE the symbol in C at the exact declared size (the `[4]`
+    case above; .rodata would otherwise shrink or shift)
+  * it has its own `.s` listing and an `INCLUDE_RODATA` -> that record
+    survives your landing, so declare it `extern` and copy FROM it; writing the
+    literal duplicates the bytes and .rodata GROWS
+
+**CORRECTED 2026-11-02: "referenced only by your listing" is NOT the test, and
+using it will make you define a symbol that already has a surviving record.**
+`func_800B557C` references `D_800892F0` and `D_800892F4` from nowhere else in
+the repo, and splat gave both their own listings anyway; meanwhile the same
+function's `D_800892F8` and `D_800892FC` have no listing and had to be defined.
+One function, both cases, same reference count. The one-liner:
+
+    ls asm/nonmatchings/ovl_town/D_XXXX.s 2>/dev/null   # exists -> extern
+    sed -n '/^\.section \.rodata/,/^\.set noat/p' <func>.s | grep dlabel
+    # ^ the symbols listed there are the ones YOU must define
+
+A function can own several: `func_800B557C` owns two, at declared sizes 4 and 8,
+and the sizes are read off the listing's own byte comments
+(`20000000`, `2020202000000000`), not guessed from the string length.
+
+Both cases are 0 differing in .text and both pass a whole-unit sweep. Read the
+`.s` before writing the line, and confirm with the object-level .rodata diff
+after.
 
 Both are 0 differing in .text and both pass a whole-unit sweep. Run the grep
 before writing the line, and confirm with the object-level .rodata diff after.

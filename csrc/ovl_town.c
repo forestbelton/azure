@@ -1662,6 +1662,11 @@ void func_80069E38(u8 *dst, u8 *src);
 u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
+s32 func_800B555C(s32 a, s32 b);
+extern u8 D_800892D8[];
+extern u8 D_800892F0[];
+extern u8 D_800892F4[];
+extern u8 D_80089304[];
 s32 func_800B5E10(s32 a);
 extern const u32 D_800892C0[];
 u8 *func_800B5D30(u8 *p);
@@ -8106,7 +8111,73 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892F0);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892F4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B557C);
+/* A two-row stat panel written into the caller's buffer: "  ", then the two
+   current values p[0x26]/p[0x27] colourised against their maxima
+   p[0x68]/p[0x69] and separated by D_800892F8 (" ") and D_800892FC ("    "),
+   then D_800892D8 ("\n") and D_80089304 ("   "), then the two maxima plain.
+   D_800892F4 is the single byte 0x08, the font's colour-escape prefix, and
+   func_8004E634(n, out) renders the colour index after it, so "\b"+d sets a
+   colour and "\b"+"0" resets it. func_800B555C(max, cur) picks it: 0 when
+   they match, 3 when cur < max, 4 when cur > max. The caller's D_80089320
+   header reads "ATK    DEF\nMAX    MAX", the same two-row geometry.
+
+   THIS LISTING OWNS TWO SYMBOLS AND BORROWS FOUR. D_800892F8 and D_800892FC
+   have no .s file of their own, so they live inside this function's
+   `.section .rodata` block and are lost when the INCLUDE_ASM goes -- they are
+   defined below at the listing's declared sizes, 4 and 8 (0x800892FC + 8 ==
+   0x80089304, the next record). D_800892D8, D_800892F0, D_800892F4 and
+   D_80089304 all keep their own surviving INCLUDE_RODATA lines and are
+   externs. Note D_800892F0 and D_800892F4 are referenced ONLY from here and
+   splat still gave them their own listings, so "referenced once" is not the
+   test -- whether the symbol has its own .s file is.
+
+   `num` must be u8[0x10]: u8[0x40] or u8[0x8] gives frame 0x68 or too small
+   against the target's 0x38, moving every sw/lw displacement (14 differing).
+   The seed copy must go through D_800892F0, not a literal -- `strcpy(s, "  ")`
+   is 0 differing in .text and emits a second copy of those bytes beside the
+   surviving INCLUDE_RODATA, growing .rodata by 8. Unlike func_800B5E28 the
+   source element type is irrelevant here: the destination is a u8 * parameter,
+   so move_by_pieces' MIN(src,dst) alignment is 1 either way. */
+const u8 D_800892F8[4] = " ";
+const u8 D_800892FC[8] = "    ";
+
+u8 *func_800B557C(u8 *s, u8 *p)
+{
+    u8 num[0x10];
+    s32 d;
+
+    memcpy(s, D_800892F0, 3);
+    d = func_800B555C(p[0x68], p[0x26]);
+    if (d != 0)
+    {
+        func_80069E38(s, D_800892F4);
+        func_80069E38(s, func_8004E634(d, num));
+    }
+    func_80069E38(s, (u8 *)D_800892F8);
+    func_8004E5A0(p[0x26], 3, num);
+    func_80069E38(s, num);
+    func_80069E38(s, D_800892F4);
+    func_80069E38(s, func_8004E634(0, num));
+    func_80069E38(s, (u8 *)D_800892FC);
+    d = func_800B555C(p[0x69], p[0x27]);
+    if (d != 0)
+    {
+        func_80069E38(s, D_800892F4);
+        func_80069E38(s, func_8004E634(d, num));
+    }
+    func_8004E5A0(p[0x27], 3, num);
+    func_80069E38(s, num);
+    func_80069E38(s, D_800892F4);
+    func_80069E38(s, func_8004E634(0, num));
+    func_80069E38(s, D_800892D8);
+    func_80069E38(s, D_80089304);
+    func_8004E5A0(p[0x68], 3, num);
+    func_80069E38(s, num);
+    func_80069E38(s, (u8 *)D_800892FC);
+    func_8004E5A0(p[0x69], 3, num);
+    func_80069E38(s, num);
+    return s;
+}
 
 /* The equipment detail panel, and func_800B5E28's near-sibling: one 0x40-byte
    text buffer assembled from byte fields of the record plus the font
