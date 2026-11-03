@@ -6046,7 +6046,31 @@ void func_80099B00(void *a, UnkTown2AE8 *b, s32 c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099B70);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099C18);
+/* The interpolating move-to-target member of the countdown family: the
+   sibling pair func_80099790 / func_800C3A98 does the same thing on the
+   REND's +2/+6 halfwords; this pair does it on the MOVER's +0x00/+0x04
+   fixed-point words, hence the `<< 16` on each target coordinate.  The
+   `bgtz` to the interpolating arm means the snap-and-advance arm is the
+   source's `if`, so the test is written `<= 0`, not `> 0` with the arms
+   swapped.  The second divisor is RELOADED (`lh 0xA($a3)`) because the
+   store to b->unk_00 may alias a, which kills gcc's memo of a->unk_0A --
+   so both divisors are plain `a->unk_0A`, not one cached copy.  50 words,
+   0 differing. */
+void func_80099C18(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    if (--a->unk_0A <= 0)
+    {
+        b->unk_00 = a->unk_36 << 16;
+        b->unk_04 = a->unk_38 << 16;
+        func_80098928(a, b, c);
+    }
+    else
+    {
+        b->unk_00 += ((a->unk_36 << 16) - b->unk_00) / a->unk_0A;
+        b->unk_04 += ((a->unk_38 << 16) - b->unk_04) / a->unk_0A;
+    }
+    *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+}
 
 void func_80099CE0(UnkTownTask *t)
 {
@@ -14883,7 +14907,28 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3F44);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3FC8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3FFC);
+/* func_80099C18's ACTOR twin -- same body against +0x6C/+0x88/+0x8A and
+   func_800C4174, plus the `+= -0x40` pre-bias on the MOVER's +0xA that
+   its installer func_800C46A8 also writes before the same advance call.
+   The bias's `sh` lands in the jal's delay slot and the return value's
+   `sh` right after it, so the two stores to +0xA are two source
+   statements, not one.  53 words, 0 differing. */
+void func_800C3FFC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        b->unk_00 = a->unk_88 << 16;
+        b->unk_04 = a->unk_8A << 16;
+        func_800C4174(a, b, c);
+    }
+    else
+    {
+        b->unk_00 += ((a->unk_88 << 16) - b->unk_00) / a->unk_6C;
+        b->unk_04 += ((a->unk_8A << 16) - b->unk_04) / a->unk_6C;
+    }
+    *(s16 *)((u8 *)b + 0xA) += -0x40;
+    *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C40D0);
 

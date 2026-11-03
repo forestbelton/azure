@@ -293,6 +293,23 @@ standalone) after three wrong guesses about which prototype had done it.
   caller's `$a0`/`$a1`/`$a2` setup. A function whose address is only TAKEN (a
   handler installed in a slot) has no arity witness at all, and any arity
   compiles.
+* **AND THE DISPATCHER IS NOT A WITNESS EITHER, IN THIS UNIT.** It is tempting
+  to read the arity of a handler off the call through its slot. Do not: the
+  slots are declared `void (*unk_50)()` and `void (*unk_54)()` --
+  UNPROTOTYPED -- and this unit calls them with THREE different argument counts
+  at five different sites. `d->unk_50();` and `d->unk_54();` with **zero**
+  arguments (`csrc/ovl_town.c:6409`, `:7690`, `:16109`, `:14765`),
+  `a->unk_50(a, b, c)` with **three** (`:8232`), and
+  `a->unk_50(a, a, q, r)` with **four** (`:7517`). Every one of those
+  type-checks against every handler, so none of them constrains anything.
+  **The arity of a slot-installed handler comes from register usage in its OWN
+  body**, and there are two usable forms: an argument register READ before it
+  is written, and -- the sharper one -- a register the body never writes at all
+  that a landed N-argument callee then reads. `func_80099C18` never touches
+  `$a2` anywhere, yet calls a three-parameter `func_80098928`; that makes `$a2`
+  incoming and the third parameter real, and dropping it is 51 words against 50
+  with 43 differing. A slot assignment proves only WHICH SLOT the function
+  occupies.
 * **AN AGENT'S STANDALONE FILE CAN DECLARE A SYMBOL DIFFERENTLY THAN `csrc/`
   DOES, so its 0 differing does not transfer.** The agent writes its own
   `extern` for everything, and if the unit declares the same symbol as a
