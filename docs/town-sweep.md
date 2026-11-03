@@ -536,6 +536,33 @@ object lists all 1819 names and **a stub verifies against itself**. Enumerate
 the sweep from the **C definitions** (the `awk` recipe above), never from the
 symbol table.
 
+### THE TOOL INVENTORY -- AGENTS KEEP RE-DERIVING TOOLS THAT ALREADY EXIST
+
+This doc and the generated brief named `provision.py`, `ovlverify.py` and
+`advise.py` and nothing else, so agents re-built the rest by hand. Measured
+cost: **six** separate agents hand-rolled a relocation dump, and one hand-rolled
+the scheduler dump with `-dS` and reported it as a "recipe worth adding" --
+`sched.py` had done exactly that for weeks. Both are now named in the brief's
+HOW TO VERIFY. The full set under `tools/decomp/`:
+
+| tool | what it answers |
+|---|---|
+| `provision.py UNIT FUNC...` | everything about a target's context: callees with position markers, installs, relatives (routes a/f/h/j), landed and ASM callers, address-takers, arity leads, parks in the call graph |
+| `ovlverify.py FILE FUNC...` | word and differing counts, one compile for many names. **Masks every relocated word**; `--raw` leaves them |
+| `relocdump.py FILE [FUNC...]` | the candidate's relocations at `-G0`, flagging the ones on a FUNCTION symbol -- the masked, build-breaking class |
+| `sched.py FILE FUNC [--sched1]` | cc1psx's own scheduler dump: priorities, ready lists, hazard decisions, scheduled RTL; `--insn N` reads a number back |
+| `aligndiff.py FILE FUNC` | shape-aligned diff printing EVERY row, where `advise.py` truncates at 12 |
+| `advise.py FILE UNIT FUNC` | SHAPE/ALLOC/LENGTH verdict. **One function per file**, or it fabricates findings |
+| `batcher.py UNIT` | partitions the remaining stubs into groups |
+| `brief.py UNIT PREFIX FUNC...` | generates the agent brief; `--no-levers` drops the shape-matched block |
+| `leverpick.py` / `leverpick_eval.py` | shape-matched lever selection, and its leave-one-out recall harness |
+| `leverindex.py` | regenerates the lever index. **GENERATED -- never hand-edit; `--check` is read-only** |
+| `parkstats.py` | regenerates each park's stats header; `--check` must stay clean |
+| `nearsibs.py`, `worklist.py`, `progress.py`, `guard.py`, `magic.py`, `permimport.py`/`permrun.py` | the older seam-finding and permuter set |
+
+**If you are about to write a script to answer a question about the compiler,
+check this table first.**
+
 ### A SYMBOL THE LISTING SPELLS `D_` MAY BE A FUNCTION -- AND `D_` IS STILL THE ONLY SPELLING THAT LINKS
 
 Hit on 2026-11-03 landing `func_8008B818`. Its listing takes the addresses of
