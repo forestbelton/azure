@@ -472,6 +472,40 @@ typedef struct UnkTownScrRec
     u16 unk_12;
 } UnkTownScrRec;
 
+/* The spinning actor at D_80100B70 and the 0x1F800000 scratchpad as
+   func_800A1080 uses it. The scratchpad members are reached as &p->unk_2C etc
+   rather than as literal (void *)0x1F80002C constants -- see the lever
+   "address-of a MEMBER, not a literal constant" in docs/matching-levers.md;
+   the literal form is 3 words short here, which is the opposite of what
+   csrc/unk_1811C.c's note says for the main binary. */
+typedef struct UnkTownA1080
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    s16 unk_0A;
+    s32 unk_0C;
+    s16 unk_10;
+    s16 unk_12;
+    MATRIX unk_14;
+    MATRIX unk_34;
+    u8 pad_54[0x26];
+    s16 unk_7A;
+} UnkTownA1080;
+
+/* The 0x1F800000 scratchpad as this function uses it: an SVECTOR of Euler
+   angles at +0x2C, the uniform scale VECTOR at +0x34 and the translation
+   VECTOR at +0x44. */
+typedef struct UnkTownA1080SP
+{
+    u8 pad_00[0x2C];
+    SVECTOR unk_2C;
+    VECTOR unk_34;
+    VECTOR unk_44;
+} UnkTownA1080SP;
+
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
    csrc/unk_1C540.c:1080, so it is not a device.
@@ -1514,6 +1548,12 @@ s32 func_800352FC(void);
 void func_800AAF5C(void);
 void func_800AAFE0(UnkTown2AE8 *v, s32 b);
 void func_800C2C80(UnkTownActor *a, UnkTownRend *b, s32 c, s32 d);
+void func_800649A0(void);
+void func_80064A40(void);
+MATRIX *func_80064B90(MATRIX *m, VECTOR *v);
+MATRIX *func_80064BC0(MATRIX *m, VECTOR *v);
+MATRIX *func_80065820(SVECTOR *r, MATRIX *m);
+void func_800A1354(UnkTownA1080 *s);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -4832,7 +4872,62 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0F10);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0F9C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1080);
+s32 func_800A1080(UnkTownA1080 *s, UnkTown2AE8 *b, s32 arg2)
+{
+    UnkTownA1080SP *p = (UnkTownA1080SP *)0x1F800000;
+
+    s->unk_02 += 0x16;
+    s->unk_10 += 5;
+    s->unk_0C += 5;
+    if (s->unk_0C >= 0xFF)
+    {
+        s->unk_0C = 0xFF;
+    }
+    if (s->unk_0C < 0xC1)
+    {
+        s->unk_10 = func_800644B8(s->unk_0C * 5) / 0x10;
+    }
+    else
+    {
+        s->unk_10 = func_800644B8(s->unk_0C * 0x10 - 0x400) / 0x10;
+    }
+    if (s->unk_10 >= 0xFF)
+    {
+        s->unk_10 = 0xFF;
+    }
+    s->unk_08 -= 6;
+    if (s->unk_08 < 0)
+    {
+        s->unk_08 = 0;
+    }
+    func_800649A0();
+    p->unk_44.vx = *(s16 *)((u8 *)b + 0x2);
+    p->unk_44.vy = *(s16 *)((u8 *)b + 0x6);
+    p->unk_44.vz = *(s16 *)((u8 *)b + 0xA) - s->unk_7A / 2;
+    p->unk_34.vx = s->unk_08;
+    p->unk_34.vy = s->unk_08;
+    p->unk_34.vz = s->unk_08;
+    p->unk_2C.vx = s->unk_00;
+    p->unk_2C.vy = s->unk_02;
+    p->unk_2C.vz = s->unk_04;
+    func_80064B90(&s->unk_14, &p->unk_44);
+    func_80065820(&p->unk_2C, &s->unk_14);
+    func_80064BC0(&s->unk_14, &p->unk_34);
+    p->unk_2C.vx = -s->unk_00;
+    p->unk_2C.vy = -s->unk_02;
+    p->unk_2C.vz = -s->unk_04;
+    func_80064B90(&s->unk_34, &p->unk_44);
+    func_80065820(&p->unk_2C, &s->unk_34);
+    func_80064BC0(&s->unk_34, &p->unk_34);
+    func_80064A40();
+    func_800A1354(s);
+    if (s->unk_08 == 0)
+    {
+        s->unk_0A = 1;
+        return 1;
+    }
+    return 0;
+}
 
 void func_800A12AC(void) {
 }
