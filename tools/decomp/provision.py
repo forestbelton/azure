@@ -242,13 +242,46 @@ def main():
 
     print("\n=== LANDED CALLERS (route (c): settles arity AND constant arguments) ===")
     anyc = False
+    # Extract each landed body's TEXT once, so the argument list is read from
+    # the CALLER'S BODY and not from the whole file. Searching `txt` made the
+    # first match win, and the first match is normally the target's own forward
+    # DECLARATION -- which rendered as `as func_X()` and read as a measured
+    # ZERO-ARITY call site. That is worse than omitting the field: an agent
+    # that believed it would declare `void func_X(void)`, reach 0 differing
+    # (the callee cannot see its own arity), and fail the container build with
+    # "too many arguments to function".
+    btext = {}
+    for d in landed:
+        i = txt.index(landed[d]); j = txt.find('\n}', i)
+        btext[d] = txt[i:j if j > 0 else i + 2000]
+
+    def arglist(hay, name):
+        """The full argument text, with parens balanced.
+
+        `[^;)]*` cannot cross a nested `)`, so it truncated
+        `a, *((u8 *)a + 0x96))` to `a, *((u8 *` -- enough to count a comma but
+        not enough to settle a constant argument, which is half of what this
+        section claims to do."""
+        for m in re.finditer(re.escape(name) + r'\s*\(', hay):
+            k = m.end(); depth = 1
+            while k < len(hay) and depth:
+                if hay[k] == '(': depth += 1
+                elif hay[k] == ')': depth -= 1
+                k += 1
+            if depth: continue
+            inner = hay[m.end():k-1]
+            if '\n' in inner: continue
+            return inner
+        return None
+
     for f in targets:
         for d, dc in body.items():
             if f in dc and d not in targets:
-                ln = lines[d]
-                for m in re.finditer(re.escape(f) + r'\s*\(([^;)]*)\)', txt):
-                    print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)" % (f, d, unit, ln, f, m.group(1)[:50])); anyc=True
-                    break
+                a = arglist(btext.get(d, ''), f)
+                if a is None: continue
+                print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)"
+                      % (f, d, unit, lines[d], f, a[:60]))
+                anyc = True
                 break
     if not anyc: print("  none -- no call site constrains arity")
 
