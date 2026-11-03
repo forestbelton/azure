@@ -215,10 +215,17 @@ failed assert should leave `csrc/` untouched so you can fix and re-run.
 `ovlverify.py` takes MANY function names and compiles the file once, so
 checking every landed function in the unit costs one compile:
 
-    grep -oE '^[a-zA-Z_][a-zA-Z0-9_ ]*\**(func_[0-9A-Fa-f]{8})\(' csrc/ovl_town.c \
+    # The DEFINITION list. Use awk, not a grep for a line ending in `)`:
+    # 30 of this unit's definitions are written `void func_8008B2BC(void) {`
+    # with the brace on the signature line, and a `)$` pattern silently drops
+    # every one of them. On 2026-11-02 that under-reported a whole session's
+    # sweeps as 762 of 762 when the real count was 792.
+    awk '/^[A-Za-z_].*func_[0-9A-Fa-f]{8}\(/ && !/;[[:space:]]*$/' csrc/ovl_town.c \
       | grep -oE 'func_[0-9A-Fa-f]{8}' | sort -u > /tmp/landed.txt
+    wc -l < /tmp/landed.txt            # POSITIVE CONTROL: compare against
+                                       # progress.py's landed count for the unit
     python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(cat /tmp/landed.txt | tr '\n' ' ') \
-      | grep -v ' 0 differing'
+      | grep -E '^func_[0-9A-Fa-f]{8}:' | grep -v ' 0 differing'
 
 Run it whenever `make build/town.bin` fails and the diff is in rodata or a jump
 table, which is what a size change looks like from the outside. On 2026-11-02
@@ -495,8 +502,15 @@ worth:
    copy** -- with the exact commands, and a POSITIVE CONTROL. Ask for both the
    `grep -v ' 0 differing'` output (which must be empty) and the
    `grep -c ' 0 differing'` count, so an empty result is distinguishable from a
-   silently dropped list. Agents reported this count unprompted once asked for
-   it and it caught nothing -- which is the point.
+   silently dropped list. **And check the count against `progress.py`'s landed
+   figure for the unit**, because that is what catches the list being too
+   SHORT. On 2026-11-02 the brief handed out a `grep` for a signature line
+   ending in `)`, which silently drops the 30 definitions in this unit written
+   `void func_8008B2BC(void) {` with the brace on the signature line -- every
+   sweep that session reported "762 of 762" when the real count was 792. An
+   agent spotted it and swept both lists. Nothing was broken, because
+   `make build/town.bin` covers every function either way, but the claim was
+   narrower than it sounded. Use the `awk` form above.
 6. **"Decode the jal words yourself"**, with the formula
    `0x80000000 | ((w & 0x3FFFFFF) << 2)` and the reminder that a NESTED call is
    evaluated before its enclosing one. `ovlverify` masks the targets.

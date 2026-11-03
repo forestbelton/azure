@@ -1647,7 +1647,10 @@ extern void (*D_800D6FBC[])();
 extern void (*D_800D70A0[])();
 void func_8003AF58(u8 *p, u8 *q);
 s32 func_80095760(UnkTownCFCB4 *p);
-void func_8009567C(UnkTownCFCB4 *p);
+s32 func_8009567C(UnkTownCFCB4 *p);
+s32 func_80094BC8(u32 a, s32 b);
+extern s16 D_800D0464[];
+extern s32 D_800D046C[];
 s32 func_8009FF50(void);
 void func_800988C8(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 s32 func_800A9D74(s32 a, s32 b);
@@ -4376,9 +4379,103 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009550C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095544);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009567C);
+/* The town-cursor hit test: ask func_80094BC8 which screen cell the camera's
+   +0xC8 angle picks out of D_80083160.unk_08, turn that into one of eight
+   facings -- (cell + 0x100) / 0x200 is a SIGNED divide by 0x200 on the biased
+   value, which is why the dump has bgez / addiu 0x2FF / sra 9 rather than a
+   plain shift -- and look that facing up in the parallel tables D_800D0464
+   (four s16 facings) and D_800D046C (four s32 slot indices, and the table
+   starts at D_800D0464 + 8, which is what fixes the trip count at 4).
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095760);
+   A slot counts only if its p->unk_3A[n] flag byte is set; the record is then
+   p->unk_1C[n], and the return says whether that record's +0x14 is 1.
+   func_80095760 is this function with the two commit stores removed -- it is
+   the query, this one is the commit -- and the caller at func_800927EC runs
+   them in exactly that order:
+
+       if (func_80095760(&D_800CFCB4) == -1 && func_8009FF50() == 0)
+       { func_8009567C(&D_800CFCB4); ... D_800CFCB4.unk_10 ... }
+
+   `i = 0` must be sequenced BEFORE the divide, not by the `for`'s own init
+   clause: reorg.c fills the bgez's delay slot with the counter init, and with
+   the divide first there is nothing in that block to move down, so it
+   duplicates the `sra` from the branch target and the function comes out one
+   word long (58/57, 41 differing). Measured: `idx = ...;` then
+   `for (i = 0; ...)` = 58 words; `i = 0;` then `idx = ...;` then `while` = 0
+   differing; this comma form = 0 differing. */
+s32 func_8009567C(UnkTownCFCB4 *p)
+{
+    Unk80083160 *g;
+    UnkTownCFCC4 *q;
+    s32 v;
+    s32 idx;
+    s32 i;
+    s32 n;
+
+    g = &D_80083160;
+    v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+    if (v == -1)
+    {
+        return 0;
+    }
+    for (i = 0, idx = ((v + 0x100) / 0x200) & 7; i < 4; i++)
+    {
+        if (idx == D_800D0464[i])
+        {
+            n = D_800D046C[i];
+            if (*((u8 *)p + n + 0x3A) != 0)
+            {
+                q = *(UnkTownCFCC4 **)((u8 *)p + n * 4 + 0x1C);
+                *(s32 *)((u8 *)p + 0x18) = n;
+                p->unk_10 = (s32)q;
+                if (q->unk_14 == 1)
+                {
+                    return -1;
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* func_8009567C without the two commit stores -- see its comment. The whole
+   difference is `p->unk_18 = n; p->unk_10 = q;`, worth the one word the two
+   functions differ by (57 against 56); the `nop` at the target's word 38 is
+   the load-delay stall those stores were filling. */
+s32 func_80095760(UnkTownCFCB4 *p)
+{
+    Unk80083160 *g;
+    UnkTownCFCC4 *q;
+    s32 v;
+    s32 idx;
+    s32 i;
+    s32 n;
+
+    g = &D_80083160;
+    v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+    if (v == -1)
+    {
+        return 0;
+    }
+    for (i = 0, idx = ((v + 0x100) / 0x200) & 7; i < 4; i++)
+    {
+        if (idx == D_800D0464[i])
+        {
+            n = D_800D046C[i];
+            if (*((u8 *)p + n + 0x3A) != 0)
+            {
+                q = *(UnkTownCFCC4 **)((u8 *)p + n * 4 + 0x1C);
+                if (q->unk_14 == 1)
+                {
+                    return -1;
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095840);
 
