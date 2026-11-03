@@ -96,6 +96,7 @@ def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
     landed, protos, body, txt, lines = defs_and_protos(src, unit)
+    src_txt = txt
     inc = include_protos()
     incasm = {}
     for m in re.finditer(r'INCLUDE_ASM\("[^"]*", *(func_[0-9A-Fa-f]{8})\)', txt):
@@ -118,7 +119,16 @@ def main():
         print("      callees : %s" % (', '.join(cal) or 'NONE'))
         print("      installs: %s" % (', '.join(ins) + '   <- %hi on a FUNCTION: masked, no jal, VERIFY BY RELOC'
                                         if ins else 'none'))
-        print("      globals : %s" % (', '.join(gl) or 'none'))
+        if gl:
+            tags = []
+            for g in gl:
+                if re.search(r'^\s*extern\b[^;]*\b' + g + r'\b', src_txt, re.M):
+                    tags.append(g)
+                else:
+                    tags.append(g + ' *** NO DECLARATION, you must add one ***')
+            print("      globals : %s" % ', '.join(tags))
+        else:
+            print("      globals : none")
     print("  TOTAL %d words" % tot)
 
     print("\n=== YOUR TARGETS' OWN EXISTING DECLARATIONS ===")
