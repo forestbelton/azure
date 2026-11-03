@@ -4303,7 +4303,48 @@ void func_80091AF0(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091BD8);
+/* The same `mover update, then the countdown` head as func_80091A08 /
+   func_80091AF0 / func_80091F64, with one extra gate before the countdown:
+   the task re-binds itself to D_800D00E0 on the frame its counter reads zero
+   (`lh 0xA($s1)`, so the signed field, tested against 0) and the countdown's
+   own test is `<= 0` here (`sll`/`bgtz`) where the three relatives use `< 0`
+   (`sll`/`bgez`).  func_800941D8 is DEFINED below with one parameter and has
+   no forward prototype, so this three-argument call sees an implicit
+   declaration -- the same accident func_80094660 / func_80094774 rely on.
+
+   66 words -- its header reads `nonmatching func_80091BD8, 0x108`, and
+   0x108/4 = 66.  Measured 0 differing. */
+void func_80091BD8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (a->unk_0A == 0)
+    {
+        func_80094984(D_800D00E0, a, c);
+    }
+    if (--a->unk_0A <= 0)
+    {
+        func_800941D8(a, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091CE0);
 
@@ -4642,7 +4683,48 @@ idle2:
     func_80095388(q);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092FF0);
+/* The same set as func_800930E4 below, and the simplest member of it:
+   func_8009FF50 gates the whole mover update and the countdown is the SHARED
+   tail of both arms, so there is only ONE copy of it in the source.  (The
+   note on func_800930E4 below is about that function, whose `else` arm really
+   does repeat the countdown; nothing here is cross-jumped -- the `bnez $v0`
+   on the predicate and the `bnez` on D_800CFCEF both branch forward to the
+   one countdown block, which is ordinary fall-through.)  func_800946FC is
+   defined below with one parameter and has no forward prototype, so this
+   three-argument call sees an implicit declaration.
+
+   61 words -- its header reads `nonmatching func_80092FF0, 0xF4`, and
+   0xF4/4 = 61.  Measured 0 differing. */
+void func_80092FF0(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    func_80095C80(b);
+    func_80095094(b);
+    if (func_8009FF50() == 0)
+    {
+        n = (s16)func_80095978(b, D_800FE488);
+        if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+        {
+            if (D_800CFCEF == 0)
+            {
+                func_80094378(a, b, c);
+                return;
+            }
+        }
+        else
+        {
+            if (D_800CFCEF == 0)
+            {
+                func_80095A94(b, n, D_800FE488);
+            }
+        }
+    }
+    if (--a->unk_0A < 0)
+    {
+        func_800946FC(a, b, c);
+    }
+}
 
 /* Same set, with func_8009FF50 -- the zero-argument predicate func_800927EC
    also tests -- gating the whole mover update.  Its `else` arm repeats the
