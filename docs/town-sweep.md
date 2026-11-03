@@ -14,7 +14,51 @@ Read `docs/overlays.md` before writing any C. It carries the lever list, the
 `-G0` facts, and the per-lever corrections this sweep has made. `docs/landing-a-function.md`
 is the contract for one function.
 
-## The unit of work is a FAMILY
+## THE UNIT OF WORK IS NO LONGER A FAMILY -- IT IS A CLUSTER
+
+**Read this before `worklist.py`'s ranking persuades you otherwise.** As of
+2026-11-02 the family pool is drained: `worklist.py ovl_town --summary` reports
+69 families of 2+ totalling 1,892 words against 986 twinless functions
+totalling 49,009, and the largest family left is 48 words. The family-per-reading
+economics below is still true and still worth taking when a family is offered,
+but it can no longer be the plan.
+
+What pays now is a CLUSTER: a set of functions sharing a caller, a callee, or a
+record layout. Two measured examples from 2026-11-02, both landed in one
+session:
+
+* **The 0x800B2D00/0x800B4720 twin unit, 14 functions and 244 words, all
+  fourteen 0 differing on the FIRST compile with no agent.** Two halves of one
+  translation unit compiled twice over a different object layout: the record
+  pointer at +0xA8 against +0x5C, the inner record's fields at +0x1C/+0x3C
+  against +0x2C/+0x40. Substituting those four offsets turns any function in
+  one half into its twin. `families.py` grouped five of the seven pairs; the
+  other two, at 11 and 12 words, fall below `worklist.py`'s reporting cut and
+  would never have been offered. They came out of the shared caller.
+* **The 0x800B5xxx/0x800B6xxx panel and task cluster, 29 functions and over
+  1,000 words.** Here the leverage compounds: each landed function's comment and
+  each agent's report pinned the next one's arity, types and call-site shape, and
+  three functions landed from a recipe handed over in another function's report
+  without the dump being read at all.
+
+So: pick with `worklist.py` (it excludes the parks), but GROUP THE BATCH BY
+RELATEDNESS, NOT BY SIZE. The screen that costs one command and pays every time:
+
+    # word count from the listing HEADER, not from counting lines
+    grep -oE "nonmatching FUNC, 0x[0-9A-Fa-f]+" asm/nonmatchings/ovl_town/FUNC.s
+    # jump table? rodata of its own? -- both are landing-blockers, see below
+    grep -c 'jtbl_' asm/nonmatchings/ovl_town/FUNC.s
+    sed -n '/^\.section \.rodata/,/^\.section \.text/p' asm/nonmatchings/ovl_town/FUNC.s | grep dlabel
+    # the callee set, and which of them are already landed C
+    python3 tools/decomp/ovlverify.py --dump FUNC | grep -oE 'jal +\S+'
+
+A frontier where every callee is landed is worth more than a bigger function
+whose callees are all stubs, because the landed callees carry their signatures
+AND the comments explaining the family's mechanisms.
+
+## The family economics, for when a family IS offered
+
+`tools/decomp/families.py` groups the remaining stubs by instruction shape with
 
 `tools/decomp/families.py` groups the remaining stubs by instruction shape with
 `jal` targets and i-type immediates masked. Members of one family are the same
@@ -229,6 +273,53 @@ standalone) after three wrong guesses about which prototype had done it.
   `-0x2($s2)` / `0x20($s2)` accesses in such a body: `UnkNode.unk_1E` and the
   actor view's own fields off one pointer. The other +0x20 dispatcher,
   func_800402F4, goes through D_80083360[i] and is a DIFFERENT slot.
+* **AN ARITY QUESTION HAS TO BE CHASED UP THE CHAIN.** The parameter trap
+  above has a third form that cost two wrong landings on 2026-11-02. A function
+  can STORE an argument register its body never writes -- `sw $a2, 0x0($v0)` --
+  which means a forwarded parameter. Its caller forwards that argument into its
+  own FIRST call, so the register is already correct at entry and gcc emits NO
+  argument-setup insn: the caller measures identically with and without the
+  parameter and cannot witness it in either direction. Only a call site that is
+  not a pure forward can. `func_800B5174` and `func_800B5C60` were both landed
+  at 0 differing with the wrong arity this way, and `func_800B6508` -- two
+  levels out -- is what settled them. Two spellings that reach 0 differing
+  without the parameter are both wrong and both were measured: a
+  `register s32 c __asm__("$6")` device, and a bare uninitialised local, which
+  is UB that merely happens to allocate to `$a2`. See
+  docs/matching-levers.md, "A STORED ARGUMENT REGISTER THE PROTOTYPE DOES NOT
+  HAVE IS A FORWARDED PARAMETER".
+
+* **A NARROW PARAMETER'S WIDTH IS WITNESSED IN THE CALLER, AND THE BUILD WILL
+  NOT CATCH IT.** When a parameter's only use is a store narrower than a word,
+  `s16` and `s32` give identical callee bytes -- both 0 differing -- but an
+  `s16` prototype costs a `sll`/`sra 16` pair per argument in EVERY caller.
+  Three declarations in one batch were wrong this way on 2026-11-02, and on
+  `func_800B691C` the wrong width in the function's own signature was worth two
+  words plus an allocation swap three statements away (30 words / 15 differing
+  against 29 / 0). Unlike an unread parameter this links and produces identical
+  callee bytes, so `make build/town.bin` passes and only the caller's own match
+  catches it. Read the caller: shift pair present means `s16`, bare `lw`/`sw`
+  means `s32`.
+
+* **DO NOT INVERT AN if/else UNLESS AN ARM RETURNS.** The "early `return` is
+  laid out inline" lever reads like "a `beqz` to the second arm means write the
+  inverted test first", and this sweep over-applied it. It holds only when one
+  arm LEAVES the function. When both arms fall into a shared tail they are
+  emitted in source order. Measured both ways: `func_800B5D30` (one arm
+  returns) needs the inversion, 5 differing without it; `func_800B6508` (two
+  plain calls) does not, and inverting it is wrong. Worse, inverting an
+  `if/else` whose arms are calls swaps the `jal` targets too, and `ovlverify`
+  masks those -- so a 3-word structural error reports as **1 differing** and
+  reads like a near-miss worth polishing.
+
+* **A CANDIDATE THAT IS SHORT CANNOT BE A cse-FORWARDING PROBLEM.**
+  `func_800B683C` came in at 26 words against 28, 9 differing, with the target
+  loading an address its own previous statement had stored to and `nop`s in
+  both load-delay slots -- the documented signature of a volatile re-read.
+  `volatile` changed nothing: the expression was one `*` short. Count the loads
+  in the target's chain against the stars in yours before reaching for a
+  device.
+
 * **Do not spend a tool call on landedshapes.py for ovl_town.** It correctly
   reports 0 groups and will keep doing so while families are landed whole --
   which is what its own docstring says it is for. Two agents in one batch spent
@@ -296,10 +387,61 @@ NOT inherit context — spawn fresh ones.
 > quantified near-miss is a useful result; a narrative is not. Do not claim a
 > match you did not measure.
 
-Six of six matched on the first round with this brief. Two things in it are
-load-bearing: pointing them at `csrc/ovl_town.c` for types stops them inventing
-a parallel type vocabulary, and asking for a quantified near-miss rather than a
-verdict stops the reports that say "this appears to require a device".
+### What is load-bearing in it, measured
+
+Six of six matched on the first round with the brief above. On 2026-11-02
+twelve of twelve matched across two batches, eight of them on the first
+compile, and two agents returned a SECOND landed function they were not asked
+for. The additions that produced that, in descending order of what they were
+worth:
+
+1. **A LANDED RELATIVE, named with its line number.** This is the single
+   highest-value thing in a brief and the difference is an order of magnitude:
+   measured, an agent handed one spent 74K tokens, one that found its own 93K,
+   one reading cold 294K. `func_800B5774` landed on the FIRST compile purely
+   from its sibling's body and comment. Quote the relative's body in the brief
+   and point at the comment; do not just name it.
+2. **THE WORD COUNT READ OFF THE LISTING HEADER, and the arithmetic shown.**
+   `nonmatching FUNC, 0x1F8` is 126 words. Three of four briefs in one session
+   had it wrong because the author counted lines instead. Write
+   "**N words** -- its header reads `nonmatching FUNC, 0xHH`, and 0xHH/4 = N".
+3. **THE HAZARD SCREEN, DONE FOR THEM.** State explicitly that the listing has
+   no `jtbl_` and no `.section .rodata` block of its own -- or, if it has one,
+   quote the block, say whether the symbol has its own `.s` file, and give the
+   exact declared size. Agents do not reliably run this check and both hazards
+   are silent until the container build.
+4. **A UNIQUE SCRATCH FILENAME, stated as mandatory.** Subagents share the
+   scratchpad and have clobbered each other's merged copies. Name the file.
+5. **VERIFY IN A MERGED COPY OF THE UNIT, then sweep the whole unit in that
+   copy** -- with the exact commands, and a POSITIVE CONTROL. Ask for both the
+   `grep -v ' 0 differing'` output (which must be empty) and the
+   `grep -c ' 0 differing'` count, so an empty result is distinguishable from a
+   silently dropped list. Agents reported this count unprompted once asked for
+   it and it caught nothing -- which is the point.
+6. **"Decode the jal words yourself"**, with the formula
+   `0x80000000 | ((w & 0x3FFFFFF) << 2)` and the reminder that a NESTED call is
+   evaluated before its enclosing one. `ovlverify` masks the targets.
+7. **A TABLE OF EVERY SPELLING MEASURED, demanded explicitly.** One agent
+   returned a 28-point grid, another an 18-row table; both tables contained
+   levers worth more than the landing. Asking for a quantified near-miss
+   rather than a verdict is what stops the reports that say "this appears to
+   require a device".
+8. **The arity cautions, all three forms** -- missing move, present move,
+   pure forward -- because the pure-forward form cost two wrong landings in
+   one batch. See the traps above.
+
+Two things to keep OUT: do not tell them to run `landedshapes.py` (it reports
+zero for this unit and two agents wasted a call on it), and do not assert a
+signature as "already settled" unless a non-forwarding call site witnesses it.
+A brief that said "signature already settled, do not re-derive" was wrong
+twice on 2026-11-02, and one agent correctly ignored it.
+
+**Re-measure every result yourself before landing it.** Twelve of twelve
+agent reports were accurate on 2026-11-02, and the re-measurement still caught
+two signature CONFLICTS between agents working in parallel -- `func_800B5918`
+reported as `s8 *` by one and `u8 *` by another, `func_800B6580` as `s16` by
+one and `s32` by another. Both pairs measured 0 differing in isolation; only
+the merge could choose.
 
 ## What is already established
 
@@ -326,12 +468,46 @@ that come up constantly:
 
 ## The parks
 
-Both are excluded from `worklist.py`. `parkstats.py --check` and `nmcheck.py`
-must stay at 0 problems; a park with no parseable `func_XXXXXXXX (unit)` header
-line fails both, and because `parkstats.py` treats the FIRST comment block as
-the header, running it on such a file REPLACES the prose with generated stats.
-Keep the one-line header stub at the top of every park and the documentation
-below it, in the body, where `normalise_body` preserves it.
+**There are FIVE, not two.** This section said "Both" until 2026-11-02 and
+listed only the last two below; `ls docs/near-misses/` is the authority, and
+`worklist.py` excludes all of them.
+
+    python3 tools/decomp/parkstats.py --check    # must stay at 0 problems
+    python3 tools/decomp/nmcheck.py              # the same
+
+Ordered by what they are worth attempting next:
+
+* **`func_800BF1C8.c` -- 138 of 138 words, 0 DIFF, and TOOLCHAIN-BLOCKED.**
+  The .text is identical in content and size. It is parked because the function
+  owns a rodata constant AND a gcc-emitted jump table whose address is 4 mod 8,
+  so `.align 3` adds four bytes of padding no C spelling can remove and the
+  overlay fails on `size differs by +0x10`. This is the unit's only gcc-emitted
+  jump table so far, so the next one attempted is the next one to hit it. See
+  docs/matching-levers.md, "cc1psx EMITS `.align 3` FOR JUMP TABLES". Nothing
+  to search; it needs the container's layout to change.
+* **`func_800B8E08.c` -- 139 of 139 words, 5 DIFF, verdict SHAPE, and it has a
+  jump table.** Three of the five are an `addiu`/`lui` pair plus a MISSING and
+  an EXTRA around 0x800B8FD8-0x800B8FEC -- one address materialisation in the
+  wrong place -- and two are register-only. Flagged as permuter work and never
+  given a permuter run. Screen the jump table's alignment before spending CPU:
+  if it lands 4 mod 8 and the function also owns rodata, it is
+  `func_800BF1C8`'s problem and no search can reach it.
+* **`func_800B85E8.c` -- 148 built against 147 target, 94 DIFF, verdict
+  LENGTH.** One word too long, with two COMMUTED `addu` operand orders at
+  0x800B8618/0x800B867C and an OPCODE difference at 0x800B8724. Flagged as
+  permuter work and never given one. Read the LENGTH line first: the +1 is the
+  thing to fix, and the 94 is positional noise downstream of it.
+* **`func_800BA00C.c`** and **`func_800CE2D4.c`** -- described below; both have
+  real diagnoses already written down.
+
+`parkstats.py --check` and `nmcheck.py` must stay at 0 problems; a park with no
+parseable `func_XXXXXXXX (unit)` header line fails both, and because
+`parkstats.py` treats the FIRST comment block as the header, running it on such
+a file REPLACES the prose with generated stats. **Keep the one-line header stub
+at the top of every park and put all prose BELOW it, in the body, where
+`normalise_body` preserves it.**
+
+The two with written-up diagnoses:
 
 `docs/near-misses/func_800CE2D4.c` — 46 words, 92 with its byte-identical twin
 func_800CE62C, at 13 DIFF. It deliberately carries the 13-DIFF spelling rather

@@ -349,3 +349,30 @@ read, and an explicit instruction not to run `make splat`, not to touch
 
 Do not kill a long-running agent -- its measurements are in its context. Ask it
 to report what it has, which caps its remaining turns and still yields them.
+
+**Measured again on 2026-11-02, over twelve agents in two batches of six, all
+twelve of which landed.** Cost per agent ran 77K-127K tokens (median ~100K),
+17-44 tool calls, 2.5-12 minutes wall clock, for functions of 25-82 words. The
+spread is almost entirely the LEAD: the cheapest runs were the ones handed a
+landed relative with its line number and a hazard screen already done, the
+dearest were the ones that had to settle an arity from a grandcaller or search
+a 28-point spelling grid. Six in parallel is the right width -- they do not
+contend, and the main session can land small functions by hand meanwhile, which
+is how 29 functions came out of two agent batches.
+
+Two things that only show up at that width. **Agents working in parallel
+produce signature CONFLICTS that each of them measures as 0 differing**, because
+a narrow parameter or a pointer type can be invisible inside one function and
+decided only by the other -- two such conflicts in one batch, both resolved at
+merge time by re-measuring in the unit. And **a landed function's agent REPORT
+is worth more than its code**, because it carries the call-site readings: three
+functions landed from recipes handed over in another agent's report without
+their dumps being read at all. Ask every agent, explicitly, what it established
+about its callees and callers.
+
+`docs/town-sweep.md` carries the brief and a measured list of what in it is
+load-bearing. The short version: a landed relative quoted with its line number,
+the word count read off the listing header, the jump-table and rodata screen
+done for them, a unique scratch filename, verification in a merged copy of the
+unit with a positive-control count, and a demand for a table of every spelling
+measured rather than a verdict.
