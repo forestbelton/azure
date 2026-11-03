@@ -337,7 +337,10 @@ size, the `-G` value, the struct layout, the flags.
    1819 functions and 30,021 of 70,311 words, **42.7%**, up from 26.7% two
    sessions ago; the project total is **66.3%**. The whole unit sweeps clean at
    879 of 879, and both `make build/town.bin` and `make check` are
-   byte-identical. `docs/matching-levers.md` is at 371 levers.
+   byte-identical. `docs/matching-levers.md` is at **373 levers**, as `leverindex.py` itself
+   reports. Take that number from the tool, not from a `grep -c` of headings --
+   the two count differently and a heading grep over-reports (it said 371 when
+   the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
 
    The cluster seam has NOT run out, and the way to reopen it when it looks
    drained is to lower the threshold: `nearsibs.py` at its default ratio had

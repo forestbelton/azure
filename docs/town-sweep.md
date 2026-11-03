@@ -564,6 +564,49 @@ analysis; all were in the provisioning. Before sending a brief, check:
 6. **Am I asserting a discriminator I have not measured?** The cast-placement
    "discriminator" was asserted twice, once as a mid-task correction, and does
    not exist.
+7. **Does the inventory LIST the address-taken function symbols, not just warn
+   about them?** 2026-11-03, second batch: a brief carried the `%hi`-on-a-
+   function trap in prose but left `%hi/%lo(func_800A73E0)` and
+   `%hi/%lo(func_800C8C3C)` out of the symbol inventory -- and those two installs
+   were the entire point of both functions. The trap text tells the agent to go
+   looking; the inventory hands it over. Run
+   `grep -oE '%hi\(func_[0-9A-F]+\)' asm/nonmatchings/ovl_town/FUNC.s` per
+   target and paste the result.
+8. **Does the named template have the target's BODY, not just its arity?**
+   Checklist item 2 asks about arity and that is not enough. A brief named
+   `func_800CDCA8`/`func_800CDADC` as relatives for `func_800CD9F4`; they are the
+   states it *transitions into*. One line --
+   `grep -c 'func_800C30E0(a, b, c) == 0' csrc/ovl_town.c` -- finds seven real
+   candidates including the two exact ones.
+
+### RANK PROVISIONING BY CALLERS AND BY WHAT A FUNCTION *INSTALLS*, NOT ONLY BY CALLEES
+
+2026-11-03, second batch. I rated six pairs excellent / moderate / thin on
+shared-callee count and **the ranking came out backwards twice in one batch**:
+both pairs I labelled "thin" were the best-provisioned, and both I labelled
+"excellent" needed the most re-derivation. Shared callees are the wrong axis
+for leaf code. Two cheaper routes, each one `sed` or `grep` away:
+
+* **What the target INSTALLS.** `grep -oE '%hi\(func_[0-9A-F]+\)'` on the
+  target's listing, then look up that function. `func_800A7360` and
+  `func_800C8BB4` each install their own continuation, and both continuations
+  were landed, adjacent in the file, and themselves a twin pair differing the
+  same way -- one even carried a measured six-permutation store-order table
+  that transferred verbatim and saved five compiles.
+* **Landed CALLERS.** `func_800B44F0`/`func_800B4ED8` were rated thin because
+  all four of their callees are resident, which predicted nothing. Their landed
+  callers `func_800B4588` (`:11690`) and `func_800B4F60` (`:11919`) settle both
+  arity *and* the second argument -- `func_800B44F0(v, 0x21)` and
+  `func_800B4ED8(v, 0x29)` -- which no callee could have told me. And they are
+  the fifth and sixth members of a landed family of four in the same unit.
+
+### MEASURING THE CLANG-FORMAT COMPLAINT COUNT
+
+Run it from the project directory so `.clang-format` is found:
+`clang-format --dry-run csrc/ovl_town.c 2>&1 | grep -c "warning:"` -> must be
+**37**. `--assume-filename` does **not** pick up the repo's `.clang-format` and
+reports 10,965; `-style=file:.clang-format` does. And `--dry-run -Werror`
+returns 0 for that grep because `-Werror` changes the output text.
 
 ## The agent brief
 
