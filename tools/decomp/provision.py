@@ -76,6 +76,34 @@ def include_protos():
     return out
 
 
+def include_globals():
+    """`extern`-declared GLOBALS in include/, keyed by symbol.
+
+    The exact bug include_protos()'s own docstring warns about, in the globals
+    path instead of the callee path: on 2026-11-03 this tool told an agent that
+    `D_80083160` had NO DECLARATION and it must add one, while
+    include/structs.h:1800 declares it `extern Unk80083160 D_80083160;` with a
+    dozen landed users. Adding a second declaration is a conflicting-types
+    compile error, not a byte difference -- the agent checked instead of
+    believing the tool, and said so.
+    """
+    out = {}
+    for d, _, fs in os.walk(os.path.join(PROJ, 'include')):
+        for fn in fs:
+            if not fn.endswith('.h'):
+                continue
+            fp = os.path.join(d, fn)
+            try:
+                txt = io.open(fp, encoding='utf-8', errors='replace').read()
+            except Exception:
+                continue
+            for m in re.finditer(r'^\s*extern\b[^;]*?\b(D_[0-9A-Fa-f]{6,8})\b[^;]*;',
+                                 txt, re.M):
+                out.setdefault(m.group(1), (os.path.relpath(fp, PROJ),
+                                            txt[:m.start()].count('\n') + 1))
+    return out
+
+
 def parks():
     """Every near-miss park, keyed by the function it parks.
 
@@ -149,6 +177,7 @@ def main():
     src_txt = txt
     inc = include_protos()
     snames = splat_names()
+    incglob = include_globals()
     incasm = {}
     for m in re.finditer(r'INCLUDE_ASM\("[^"]*", *(func_[0-9A-Fa-f]{8})\)', txt):
         incasm[m.group(1)] = txt[:m.start()].count('\n') + 1
@@ -184,6 +213,9 @@ def main():
             for g in gl:
                 if re.search(r'^\s*extern\b[^;]*\b' + g + r'\b', src_txt, re.M):
                     tags.append(g)
+                elif g in incglob:
+                    fp, ln = incglob[g]
+                    tags.append('%s (declared %s:%d -- do NOT redeclare)' % (g, fp, ln))
                 else:
                     tags.append(g + ' *** NO DECLARATION, you must add one ***')
             print("      globals : %s" % ', '.join(tags))
