@@ -1125,6 +1125,7 @@ extern u8 D_800D0118[];
 extern u8 D_800D0120[];
 extern u8 D_800D0138[];
 extern u8 D_800D0180[];
+extern u8 D_800D0178[];
 extern u8 D_800D54BC[];
 extern u8 D_800D54D4[];
 extern u8 D_800D5B90[];
@@ -1290,6 +1291,7 @@ extern u8 D_800D787C[];
 extern u8 D_800D7880[];
 void func_8008FFC8();
 void func_80097DE8();
+void func_80098180();
 void func_80098928();
 void func_80098988();
 void func_8009AE88();
@@ -6076,13 +6078,44 @@ void func_800988C8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     D_800FE5D8 = func_80093D48;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098928);
+/* Four more members of the func_80094984 bind family, in the THREE-argument
+   sub-form whose nearest landed relatives are func_80098D60 and func_80098DC0
+   -- the two functions immediately after func_80098CF0's stub -- and NOT the
+   two-argument func_80098B9C shape: here `func_80099754(b)` comes FIRST and
+   the bind is `func_80094984(desc, t, c)` with the third parameter passed on.
+   func_80099790's call `func_80098928(a, b, c)` is the arity witness and the
+   inline declaration above already carried the types.  In all four the
+   listing's word order IS the source statement order, one statement to one
+   contiguous run of words, with no reordering -- which is why func_80098CF0
+   clears the D_80082660 byte BEFORE installing its handler while the other
+   three install the handler first.  24 / 26 / 26 / 28 words, 0 differing. */
+void func_80098928(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80099754(b);
+    func_80094984(D_800D0078, t, c);
+    t->unk_04 = func_80097DE8;
+    D_80082660[1].unk_01 = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098988);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800989C8);
+void func_800989C8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80099754(b);
+    func_80094984(D_800D0178, t, c);
+    t->unk_04 = func_80097DE8;
+    D_80082660[1].unk_00 = 0;
+    D_80082660[1].unk_01 = 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098A30);
+void func_80098A30(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80099754(b);
+    func_80094984(D_800D0178, t, c);
+    t->unk_04 = func_80097EC0;
+    D_80082660[1].unk_00 = 0;
+    t->unk_0A = 0x18;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098A98);
 
@@ -6120,7 +6153,15 @@ void func_80098CD8(UnkTownTask *t)
     t->unk_10 = 0x400;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098CF0);
+void func_80098CF0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80099754(b);
+    func_80094984(D_800D0090, t, c);
+    D_80082660[1].unk_00 = 0;
+    t->unk_04 = func_80098180;
+    t->unk_0A = 0x10;
+    t->unk_10 = 0x400;
+}
 
 void func_80098D60(UnkTownTask *t, s32 b, s32 c)
 {
