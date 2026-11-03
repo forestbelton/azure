@@ -686,6 +686,20 @@ typedef struct UnkTownA17CCSP
     DVECTOR unk_E8[4];
 } UnkTownA17CCSP;
 
+/* The static descriptor func_800A9E68 hands to func_800AA10C: two of them,
+   &D_800D1178 and &D_800D119C, 0x24 apart, so the record is 0x24 bytes.
+   +0x00 is the SVECTOR vertex table, +0x04 the index quads (four s16 each,
+   terminated by -1 in the first), +0x20 the four colour masks the random
+   gouraud words are ANDed with.  +0x08/+0x0A/+0x10/+0x14/+0x18 are written
+   by func_800A9E68 and read by func_800AA068, not here. */
+typedef struct UnkTownAA10C
+{
+    SVECTOR *unk_00;
+    s16 *unk_04;
+    u8 pad_08[0x18];
+    u32 *unk_20;
+} UnkTownAA10C;
+
 /* The actor func_800A12B4 ticks and hands straight on to func_800A17CC.  The
    same object UnkTownA1080 describes -- +0x12 is the brightness func_800A12B4
    counts down by 4 and clamps at 4, and that function's `lhu`/`sh`/`sll 16`/
@@ -13264,7 +13278,170 @@ void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA068);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AA10C);
+/* The town's four-point gouraud line effect: for every quad in a static
+   descriptor's index list, four random masked vertex colours, the four
+   positions pulled out of the descriptor's SVECTOR table, run through
+   func_800AA068's rotate-and-project per corner, then RotAverageNclip4 and
+   two DR_MODEs around the line in the OT.  func_800A9E68 drives it twice a
+   frame, over &D_800D1178 and &D_800D119C.
+
+   The primitive is a LINE_G4 and that is witnessed three ways: the allocator
+   steps 0x28 (ten words, which POLY_G4's nine are not), the four stores that
+   take the random words land at +0x04/+0x0C/+0x14/+0x1C -- LINE_G4's r0/r1/
+   r2/r3 -- and the eight `sh`s land at +0x08/+0x0A/+0x10/+0x12/+0x18/+0x1A/
+   +0x20/+0x22, its four xy pairs.  func_80066844 is therefore SetLineG4;
+   it has no declaration anywhere in the tree and rides an implicit one, as
+   func_800AA068 does.  Both were also measured WITH prototypes: 315 words
+   and 0 differing either way, so the declarations are free and are left out
+   rather than pre-empting the names a later landing of func_800AA068 will
+   want for the same three records.
+
+   The scratchpad is UnkTownA17CCSP, not a new typedef: every field this
+   function touches is already named there -- the OT base at +0x24 (the same
+   `D_80083160.unk_00 + 0xB0` func_800A17CC and func_800A1354 install), the
+   four RotAverageNclip4 inputs at +0x74, its `p`/`flag` at +0x94/+0x98, the
+   returned otz at +0xC4 and the four screen points at +0xE8.  The one field
+   it has no name for is the VECTOR at +0x44 that func_800AA068 hands to
+   func_80065450 and then reads back with func_800AA044, so that one is
+   spelled `(VECTOR *)((u8 *)sp + 0x44)` at each of the four call sites.
+   Through a LOCAL it is 312 words and 275 differing: three words and a
+   whole-body reallocation, so the inline form is a real finding and not a
+   style choice.
+
+   Why the listing computes the same kind of scratchpad address two different
+   ways, which is NOT two source spellings: `sp` is one pointer holding
+   0x1F800000.  The five addresses needed as loop invariants (+0x74, +0x7C,
+   +0x84, +0x8C, +0x44) are computed in the pre-header, where cse1 still
+   knows `sp`'s constant and folds `(plus sp lo)` to a CONST_INT.  A CONST_INT
+   that needs both halves is then split AFTER reload into the `lui`/`ori` pair
+   -- scratch/gcc-src/cdk-gcc-b18/config/mips/mips.md:3463-3476,
+   `(set (match_dup 0) (match_dup 2))` plus
+   `(set (match_dup 0) (ior:SI (match_dup 0) (match_dup 3)))` with
+   `operands[2] = INTVAL & 0xffff0000` -- and the first of those two is a set
+   of a register to a non-register value, which is exactly what
+   `reload_cse_simplify_set` rewrites: "if we set a register to a value which
+   is not a register, we try to find that value in some other register and
+   change the set into a register copy" (reload1.c:8142-8182, run from
+   reload1.c:2140).  $s2 already holds 0x1F800000, so the `lui` becomes
+   `addu $rX, $s2, $zero` and the pair reads `move`/`ori`.  $s3's 0x00FFFFFF
+   keeps its own `lui` because no register holds 0x00FF0000.  The six computed
+   INSIDE the loop (+0xE8..+0xF4, +0x94, +0x98) sit in a block cse cannot
+   reach `sp`'s value from, so they stay `(plus $s2 lo)` and cost one `addiu`
+   each.  Those six are also the whole of this function's missing-relocation
+   class: splat renders them `addiu $v0, $s2, %lo(D_1F8000E8)` against an
+   auto-named symbol and the C form emits no R_MIPS_LO16, so the merged
+   object carries SIX fewer records than the stub build -- cf. the twelve
+   measured on func_800AD138.  All six raw words are identical to the
+   listing's by hand (0x264200E8 / 0xEC / 0xF0 / 0xF4, 0x26420094, 0x26420098)
+   because ovlverify masks them.
+
+   What else had to be spelled a particular way, each measured:
+
+   - `g = &D_80083160;` into a LOCAL, as func_800A17CC does.  It gets no hard
+     register here (s0-s7 and fp are all taken), so reload gives it
+     reg_equiv_constant and rematerialises `lui %hi`/`addiu %lo` at each of
+     the three in-loop uses -- which is the three-word form the listing has,
+     against the two-word `lui %hi`/`lw %lo($r)` of a direct access.
+     Spelling it `D_80083160.unk_00` throughout is 310 words, 289 differing.
+     Assigning it in the declaration instead measures identically.
+
+   - **`addPrim`'s `ot` expression must stay written out.**  The macro names
+     `ot` twice, so each use recomputes `sp->unk_24 + sp->unk_C4`; hoisting it
+     into one local is 300 words and 307 differing.  This is the opposite of
+     func_800A17CC, which reaches the OT through the func_8006658C call and so
+     computes it once per call.
+
+   - `v`, `q` and `m` are read off `a` ONCE, above the loop: `v` and `m` then
+     live in the frame at +0x28/+0x2C and are reloaded per use.  Left as
+     `a->unk_00[...]` / `a->unk_20[...]` at their use sites it is 309 words
+     and 290 differing.
+
+   - each corner stores x before y (`ln->y0` first costs 16 differing), and
+     the two otz clamps are two separate `if`s on two separate reads -- an
+     `else if` reuses the register and costs 9 differing.
+
+   315 words -- its header reads `nonmatching func_800AA10C, 0x4EC`, and
+   0x4EC/4 = 315.  Measured 0 differing, with all 38 relocation records
+   (5 HI16 + 4 LO16 on D_80083160 -- the fifth HI16 is the copy reorg parked
+   in the loop's `bne` delay slot and shares the loop head's `%lo` -- plus 29
+   R_MIPS_26) decoded by word index and symbol against the listing.  At the
+   OBJECT level the merged unit's .text size and .rodata bytes are identical
+   to the stub build's and the whole unit's relocation count goes 14406 ->
+   14400, the six scratchpad LO16s above and nothing else. */
+void func_800AA10C(UnkTownAA10C *a, UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    UnkTownA17CCSP *sp;
+    SVECTOR *v;
+    s16 *q;
+    u32 *m;
+    LINE_G4 *ln;
+    DR_MODE *dm;
+
+    g = &D_80083160;
+    sp = (UnkTownA17CCSP *)0x1F800000;
+    v = a->unk_00;
+    q = a->unk_04;
+    m = a->unk_20;
+    sp->unk_24 = (u32 *)(g->unk_00 + 0xB0);
+    while (q[0] != -1)
+    {
+        ln = (LINE_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
+        *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & m[0];
+        *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & m[1];
+        *(u32 *)&ln->r2 = func_80069EF8() * func_80069EF8() & m[2];
+        *(u32 *)&ln->r3 = func_80069EF8() * func_80069EF8() & m[3];
+        func_80066844(ln);
+        func_80066640(ln, 1);
+        func_800A1330(&sp->unk_74[0], (UnkTown2AE8 *)&v[q[0]]);
+        func_800A1330(&sp->unk_74[1], (UnkTown2AE8 *)&v[q[1]]);
+        func_800A1330(&sp->unk_74[2], (UnkTown2AE8 *)&v[q[2]]);
+        func_800A1330(&sp->unk_74[3], (UnkTown2AE8 *)&v[q[3]]);
+        func_800649A0();
+        func_800AA068(a, &sp->unk_74[0], (VECTOR *)((u8 *)sp + 0x44));
+        func_800AA068(a, &sp->unk_74[1], (VECTOR *)((u8 *)sp + 0x44));
+        func_800AA068(a, &sp->unk_74[2], (VECTOR *)((u8 *)sp + 0x44));
+        func_800AA068(a, &sp->unk_74[3], (VECTOR *)((u8 *)sp + 0x44));
+        func_80064A40();
+        func_800A2DF0(&sp->unk_74[0], b);
+        func_800A2DF0(&sp->unk_74[1], b);
+        func_800A2DF0(&sp->unk_74[2], b);
+        func_800A2DF0(&sp->unk_74[3], b);
+        sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1],
+                                   &sp->unk_74[2], &sp->unk_74[3],
+                                   (u32 *)&sp->unk_E8[0], (u32 *)&sp->unk_E8[1],
+                                   (u32 *)&sp->unk_E8[2], (u32 *)&sp->unk_E8[3],
+                                   &sp->unk_94, &sp->unk_98) -
+                     0x30;
+        ln->x0 = sp->unk_E8[0].vx;
+        ln->y0 = sp->unk_E8[0].vy;
+        ln->x1 = sp->unk_E8[1].vx;
+        ln->y1 = sp->unk_E8[1].vy;
+        ln->x2 = sp->unk_E8[2].vx;
+        ln->y2 = sp->unk_E8[2].vy;
+        ln->x3 = sp->unk_E8[3].vx;
+        ln->y3 = sp->unk_E8[3].vy;
+        if (sp->unk_C4 >= 0x1E0)
+        {
+            sp->unk_C4 = 0x1DF;
+        }
+        if (sp->unk_C4 < 0)
+        {
+            sp->unk_C4 = 0;
+        }
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 0, 0x140, 0), 0);
+        addPrim(sp->unk_24 + sp->unk_C4, dm);
+        addPrim(sp->unk_24 + sp->unk_C4, ln);
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+        addPrim(sp->unk_24 + sp->unk_C4, dm);
+        q += 4;
+    }
+}
 
 void func_800AA5F8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
