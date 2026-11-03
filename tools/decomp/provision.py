@@ -104,6 +104,21 @@ def include_globals():
     return out
 
 
+# Dispatcher casts that settle arity for a whole class of handlers. Each was
+# read out of the source by an agent that provision.py had told there was no
+# witness; the file:line is quoted so the next reader can check it rather than
+# trust this table. ADD TO THIS when another install route is verified.
+DISPATCHERS = [
+    ("UnkNode.unk_10 (+0x10)", "func_80040190, csrc/unk_12DEC.c:567",
+     "((void (*)(void *, UnkVec *, u32)) fn)((u8 *)p + 0x20, p->unk_08, p->unk_0C)",
+     "first argument is the node + 0x20, i.e. the ACTOR VIEW, not the node"),
+    ("func_8004491C tag", "func_800402F4, csrc/unk_12DEC.c:611",
+     "void (*f)(u8 *, UnkVec *, UnkSlot *)",
+     "the 'tag' passed to func_8004491C IS the callback -- but only when it is a"
+     " function; the same binder also carries DATA templates, so check first"),
+]
+
+
 def parks():
     """Every near-miss park, keyed by the function it parks.
 
@@ -787,14 +802,32 @@ def main():
         # INSTALLED HANDLERS section four lines earlier when a function is
         # address-taken. The conclusion was right and the stated reason was
         # false, which is worse than saying less.
-        print("      No jal and no C call site -- checked across the whole unit. If the")
-        print("      INSTALLED HANDLERS or route (d) sections above name this function,")
-        print("      those are ADDRESS-TAKES, which constrain nothing about arity.")
-        print("      This is a FACT, not a gap in the search: go straight to register")
-        print("      reads in the target's own body (an argument register READ before")
-        print("      it is written is a real parameter). Note a dead MIDDLE parameter")
-        print("      IS witnessed, by the gap it leaves in the $aN sequence; only a")
-        print("      dead TRAILING parameter is invisible.")
+        print("      No jal and no C call site in this unit.")
+        # CORRECTED AGAIN 2026-11-03. This block used to say an address-take
+        # "constrains nothing about arity" and that the absence of a witness
+        # was "a FACT, not a gap in the search". BOTH ARE FALSE, and three
+        # agents reported it wrong in one day -- each of them found the witness
+        # the tool had declared not to exist. An install at a known dispatcher
+        # slot constrains arity COMPLETELY, through the dispatcher's own cast,
+        # and this tool does not follow that edge out of the unit.
+        print("      *** BUT AN ADDRESS-TAKE IS NOT NOTHING, AND THIS TOOL DOES NOT")
+        print("      FOLLOW IT. If any section above names your target as INSTALLED or")
+        print("      address-taken, find which SLOT the installer writes and read that")
+        print("      slot\'s dispatcher. Each cast below was read out of the source, and")
+        print("      each settles arity AND parameter types for every handler in its")
+        print("      class. Three agents in one day found a witness here after this")
+        print("      tool told them none existed:")
+        for slot, where, sig, note in DISPATCHERS:
+            print("        %-22s %s" % (slot, where))
+            print("            %s" % sig)
+            print("            %s" % note)
+        print("      Also: a group member that `jalr`s through a slot it was handed by")
+        print("      another member IS a call site, and route (g) only looks for a direct")
+        print("      `jal`, so it does not see that either.")
+        print("      THEN fall back to register reads in the target\'s own body (an")
+        print("      argument register READ before it is written is a real parameter).")
+        print("      A dead MIDDLE parameter IS witnessed, by the gap it leaves in the")
+        print("      $aN sequence; only a dead TRAILING parameter is invisible.")
 
 if __name__ == '__main__':
     main()
