@@ -97,6 +97,23 @@ Scripted merges are worth it at this volume, but write them to the scratchpad,
 assert every anchor occurs exactly once, and never let one run partially: a
 failed assert should leave `csrc/` untouched so you can fix and re-run.
 
+## VERIFY THE WHOLE UNIT, not just the function you landed
+
+`ovlverify.py` takes MANY function names and compiles the file once, so
+checking every landed function in the unit costs one compile:
+
+    grep -oE '^[a-zA-Z_][a-zA-Z0-9_ ]*\**(func_[0-9A-Fa-f]{8})\(' csrc/ovl_town.c \
+      | grep -oE 'func_[0-9A-Fa-f]{8}' | sort -u > /tmp/landed.txt
+    python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(cat /tmp/landed.txt | tr '\n' ' ') \
+      | grep -v ' 0 differing'
+
+Run it whenever `make build/town.bin` fails and the diff is in rodata or a jump
+table, which is what a size change looks like from the outside. On 2026-11-02
+the container came out +0x20 bytes with the only visible difference being
+`func_800A4A58`'s switch table shifted by 0x18 -- the above found the real
+cause in one command (`func_8008FFC8`: 152 words in the unit against 146
+standalone) after three wrong guesses about which prototype had done it.
+
 ## The traps, each of which has cost something
 
 * **`ovlverify` MASKS `jal` TARGETS.** It cannot see a wrong callee, so a
@@ -118,6 +135,18 @@ failed assert should leave `csrc/` untouched so you can fix and re-run.
   caller's `$a0`/`$a1`/`$a2` setup. A function whose address is only TAKEN (a
   handler installed in a slot) has no arity witness at all, and any arity
   compiles.
+* **AN AGENT'S STANDALONE FILE CAN DECLARE A SYMBOL DIFFERENTLY THAN `csrc/`
+  DOES, so its 0 differing does not transfer.** The agent writes its own
+  `extern` for everything, and if the unit declares the same symbol as a
+  STRUCT where the agent wrote `extern u8 x[]`, a call `f(x, ...)` passes the
+  struct BY VALUE in the unit and a decayed pointer in the scratch file.
+  `func_8008FFC8` measured 146 words standalone and 152 in the unit for exactly
+  that reason, on `D_800CFCB4`, and the fix was `&D_800CFCB4`. So when a body
+  mentions a symbol the unit already declares, CHECK THE UNIT'S DECLARATION
+  against the agent's before merging -- and re-measure the function against
+  `csrc/ovl_town.c` itself, not only against the scratch file, which is what
+  the whole-unit sweep above does for free.
+
 * **`make build/town.bin` is the only authority.** `ovlverify` compares one
   function's words and is blind to a jump table landing at the wrong address
   and to rodata order.

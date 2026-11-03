@@ -387,6 +387,83 @@ typedef struct UnkTownItemRec
     u8 pad_04[0x50];
 } UnkTownItemRec;
 
+/* The INTEGER-HALF view of a UnkTown2AE8's six 16.16 words. This unit spells
+   those halves `*(s16 *)((u8 *)b + N)` everywhere else, because a named s16
+   field cannot coexist with the word it lives inside -- still true, which is
+   why this is a SECOND typedef over the same bytes rather than fields added to
+   UnkTown2AE8. Use it only in a function that touches the halves and never
+   the words.
+
+   The view is not cosmetic; on func_8008FFC8 it is worth 11 words.
+   gcc 2.7.2's true_dependence / anti_dependence (sched.c:817) DROP a
+   dependence between two MEMs when one is MEM_IN_STRUCT_P at a varying
+   address and the other is not in a struct at a fixed address.
+   `*(s16 *)((u8 *)b + 2)` is an INDIRECT_REF of scalar type, so
+   MEM_IN_STRUCT_P is clear and the store floats freely past loads that ARE
+   in-struct at a varying address -- the second load group gets hoisted above
+   the first store and the schedule is wrong (36 differing). A COMPONENT_REF
+   sets MEM_IN_STRUCT_P, the exclusion stops applying, and the dependence
+   survives. So the `*(s16 *)` idiom is the WRONG one whenever a store to one
+   of these halves must stay ordered against a load through a pointer. */
+typedef struct UnkTown2AE8Int
+{
+    s16 pad_00;
+    s16 unk_02;
+    s16 pad_04;
+    s16 unk_06;
+    s16 pad_08;
+    s16 unk_0A;
+} UnkTown2AE8Int;
+
+/* D_80082E80, cleared as 0xC words == 0x30 bytes. Almost certainly an
+   extension of UnkTownRend -- +0x0C is an 0x808080 RGB triple and +0x1C/+0x1E
+   the same 0x1000-based scale -- but UnkTownRend spells +0x0C as three u8 and
+   has nothing at +0x28, and casting +0x0C to u32 would clear MEM_IN_STRUCT_P
+   on that store (see UnkTown2AE8Int), so it keeps its own typedef. */
+typedef struct UnkTownScene
+{
+    u8 pad_00[0xC];
+    u32 unk_0C;
+    u8 pad_10[0xC];
+    s16 unk_1C;
+    s16 unk_1E;
+    u8 pad_20[0x8];
+    u32 unk_28;
+    u8 pad_2C[0x4];
+} UnkTownScene;
+
+/* D_8006ADBC, a resident `extern u8 []`. Witnessed fields only: a u16 at
+   +0x0C, an s16 flag at +0x0E, a pointer at +0x10 to a u16 pair, two u16 at
+   +0x14/+0x16 added to that pair, and an s32 at +0x18 compared to 0x37000C.
+   D_8006ADD4 is the low half of that same word (0x8006ADBC + 0x18), but it
+   gets its OWN %hi/%lo rather than an `lh 0x18($s1)`, so it is a separate
+   symbol in the source. */
+typedef struct Unk8006ADBCSub
+{
+    u16 unk_00;
+    u16 unk_02;
+} Unk8006ADBCSub;
+
+typedef struct Unk8006ADBCRec
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    s16 unk_0E;
+    Unk8006ADBCSub *unk_10;
+    u16 unk_14;
+    u16 unk_16;
+    s32 unk_18;
+} Unk8006ADBCRec;
+
+/* MACROS and not local pointer variables on purpose: a local's INITIALISER
+   materialises the %hi/%lo pair in the prologue, where the target has neither
+   (60 differing for the D_8006ADBC one), while the cast expression lets cse
+   place it at the first use. Compare D_80082E80 in func_8008FFC8, which must
+   be a local because its last store is after an if/else merge -- but assigned
+   as a statement, not an initialiser, for the same prologue reason. */
+#define TOWN_PT ((UnkTown2AE8Int *)D_80083780)
+#define TOWN_REC ((Unk8006ADBCRec *)D_8006ADBC)
+
 /* A RESIDENT symbol (splat/town.bin_undefined_syms_auto.txt), declared
    nowhere in include/structs.h or csrc/. Only its +0x08 pointer has a
    witness, and that pointee's type is inferred from three s16 reads at
@@ -1284,6 +1361,24 @@ extern s16 D_80100D82;
 void func_80094378(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 void func_800AAA58(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 void func_800A9F14(UnkTown2AE8 *b);
+extern UnkTownScene D_80082E80;
+extern s32 D_80100DB0;
+extern s32 D_80100E18;
+extern s16 D_8006ADD4;
+extern u8 D_800D0420[];
+extern u8 D_800FE490[];
+extern u8 D_80100D98[];
+void func_8008EF58(void);
+void func_8008FCE0(void);
+void func_8008FD48(u8 *a, UnkTown2AE8 *b, u8 *c);
+void func_8008FF5C(void);
+void func_800903FC(void);
+void func_800C01DC(void);
+UnkNode *func_8003FE78(s32, UnkNode *, s16);
+void func_800A48B0(u8 *a, UnkTown2AE8 *b);
+void func_8009550C(UnkTown2AE8 *b);
+void func_80033AE8(s32 a);
+void func_800AB084(void);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -1359,7 +1454,11 @@ void func_800224E0();
 void func_80022C8C();
 void func_80024100();
 void func_800254A4();
-void func_80033B2C();
+/* Returns a value: func_8008FFC8 tests it with `if (func_80033B2C(...) == 0)`.
+   The two callers at func_800A9C6C / func_800A9C8C discard it, which is why
+   the placeholder was `void`; this is the same "only a caller can falsify a
+   signature" case as the arity cascades. Measured: both of those unmoved. */
+s32 func_80033B2C();
 void func_8008B408();
 void func_800930E4();
 void func_800954C4();
@@ -2079,7 +2178,92 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FF5C);
 void func_8008FFC0(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008FFC8);
+void func_8008FFC8(void)
+{
+    UnkNode *n;
+    UnkTownScene *sc;
+    UnkTownRend *r;
+    u16 t;
+    UnkTown2AE8 *b = (UnkTown2AE8 *)D_80083780;
+
+    D_80100E18 = 0;
+    D_80100DB0 = 0;
+    func_8003DB4C((int *)b, 6);
+    /* assigned HERE and not in the initialiser: the target materialises
+       %lo(D_80082E80) at word 16, after the first func_8003DB4C call, and an
+       initialiser would put it in the prologue. It has to be a variable
+       rather than plain `D_80082E80.unk_NN` references, because the last
+       store to it is after the if/else merge, where a fresh cse block would
+       re-materialise the address instead of reusing $s3 (3 words). */
+    sc = &D_80082E80;
+    func_8003DB4C((int *)sc, 0xC);
+    sc->unk_28 = D_80080A80;
+    func_8008EF58();
+    /* &D_800CFCB4, not D_800CFCB4: this unit declares it as the struct
+       UnkTownCFCB4, so the bare name passes it BY VALUE. The agent's
+       standalone file had it as `extern u8 D_800CFCB4[]`, which decays to a
+       pointer, which is why that file measured 146 words and this one measured
+       152 until the address was taken. */
+    func_8008F01C(&D_800CFCB4, b, D_800D0420);
+    func_8008FCE0();
+    func_8008FD48(D_800FE490, b, D_800D0420);
+    if (TOWN_REC->unk_18 == 0x37000C)
+    {
+        func_800C01DC();
+        return;
+    }
+    n = func_8003FE78(0, (UnkNode *)&D_80083498, 0x22);
+    n->unk_08 = (UnkVec *)b;
+    n->unk_0C = (u32)sc;
+    if (TOWN_REC->unk_0E != 0)
+    {
+        n->unk_10 = (u32)func_8008FFC0;
+        TOWN_PT->unk_02 = TOWN_REC->unk_14 + TOWN_REC->unk_10->unk_00;
+        TOWN_PT->unk_06 = TOWN_REC->unk_16 + TOWN_REC->unk_10->unk_02;
+        TOWN_PT->unk_0A = 0;
+        func_800A48B0(D_80100D98, b);
+        return;
+    }
+    n->unk_10 = (u32)func_800903FC;
+    func_8004491C(n, (u32)func_800970FC);
+    sc->unk_1E = 0x1000;
+    sc->unk_1C = 0x1000;
+    TOWN_PT->unk_02 = TOWN_REC->unk_14 + TOWN_REC->unk_10->unk_00;
+    /* this store sits BETWEEN the +0x02 and +0x06 stores: it is the filler
+       the scheduler puts in the load-delay slot of `lhu 0x0($a1)`, and no
+       other position in this statement group reaches 0 (grid of all 60
+       order-preserving interleavings: here 1, next best 8). */
+    sc->unk_0C = 0x808080;
+    TOWN_PT->unk_06 = TOWN_REC->unk_16 + TOWN_REC->unk_10->unk_02;
+    TOWN_PT->unk_0A = -0x80;
+    TOWN_PT->unk_0A = func_800C2AE8(b);
+    func_8008FF5C();
+    func_8009550C(b);
+    r = (UnkTownRend *)((u8 *)n + 0x20);
+    r->unk_12 = -1;
+    /* one u16 temp, not two reads: the store to r->unk_10 in between stops
+       cse re-using the load, and a second `lhu 0xC($s1)` is 2 words. */
+    t = TOWN_REC->unk_0C;
+    r->unk_10 = t;
+    r->unk_18 = t;
+    func_80033AE8(0xA4);
+    if (func_80033B2C(0x1202) == 0)
+    {
+        r->unk_16 = 0;
+    }
+    else
+    {
+        r->unk_16 = 1;
+    }
+    sc->unk_28 = D_80080A80;
+    if (D_8006ADD4 != 0xC)
+    {
+        if (func_8009F830(2, 0x13) != 0)
+        {
+            func_800AB084();
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80090210);
 
