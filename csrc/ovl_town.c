@@ -2192,6 +2192,12 @@ void func_80094414(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_80094474(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_800944BC(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 
+/* The two continuation handlers the func_800A7360 / func_800C8BB4 pair
+   installs into +0x50.  Both are defined further down (:9247 and :18117) and
+   both are referenced by ADDRESS, which no implicit declaration can cover. */
+void func_800A73E0(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800C8C3C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -4411,9 +4417,73 @@ void func_80090E78(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80090F00);
+/* The third and fourth members of func_80090DF0 / func_80090E78's shape
+   (immediately above): save the task's own +0x00 handler, give the frame to
+   func_80090A74, and act only if the handler is STILL the same one -- i.e.
+   only if func_80090A74 did not re-point the task at another state.  The two
+   landed members gate on `(b->unk_0C == 0) && (b->unk_10 == 0)` after that;
+   this member gates on the +0x0A countdown instead and func_80090F84 below on
+   the REND's +0x14 bits.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80090F84);
+   `--a->unk_0A <= 0` is the same in-place narrow test as func_800CD9F4's
+   (`sll 16`, `bgtz`, no `sra`); spelled `< 0` it is 1 differing.  Whether the
+   handler test is its own `if` or a second `&&` term is a MEASURED TIE --
+   `if ((f == a->unk_00) && (--a->unk_0A <= 0))` is also 0 differing, because
+   `&&` over a side-effecting right operand emits the same two blocks.  The
+   nested form is kept to match func_80090DF0/func_80090E78 above, whose two
+   extra terms are side-effect-free and so really are one `if`.
+
+   Arity: `a` witnessed by +0x00 and +0x0A, `b`/`c` forwarded only, but $a2 is
+   read into $s3 in func_80090A74's delay slot, so three parameters are real.
+   The only referrer is func_80094330 (:5455), which stores the address into
+   +0x00; no `jal` to this function exists anywhere.
+
+   33 words -- its header reads `nonmatching func_80090F00, 0x84`, and
+   0x84/4 = 33.  Measured 0 differing, first compile. */
+void func_80090F00(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    void (*f)();
+
+    f = a->unk_00;
+    func_80090A74(a, b, c);
+    if (f == a->unk_00)
+    {
+        if (--a->unk_0A <= 0)
+        {
+            func_80093D48(a, b, c);
+        }
+    }
+}
+
+/* func_80090F00's near-sibling: the same handler-unchanged gate with
+   func_800C3BF4's REND +0x14 bit test (`andi 0x6000`, `beqz`) in place of the
+   countdown.  That gate READS the third parameter, so this is a second
+   task-side witness -- after func_80091990's, recorded at :4429 -- that the
+   third parameter is an `UnkTownRend *` and not the `s32` the forwarding
+   wrappers imply.  It also explains the register swap against func_80090F00:
+   `c` is read here and `b` only forwarded, so `c` takes $s2 and `b` $s3,
+   where func_80090F00 has them the other way round.
+
+   The TYPE is not witnessed in this body: declaring the third parameter
+   `s32` and casting at the use (`((UnkTownRend *)c)->unk_14`) is also 0
+   differing.  func_80091990's precedent is why it is spelled as the pointer.
+
+   31 words -- its header reads `nonmatching func_80090F84, 0x7C`, and
+   0x7C/4 = 31.  Measured 0 differing, first compile. */
+void func_80090F84(UnkTownTask *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    void (*f)();
+
+    f = a->unk_00;
+    func_80090A74(a, b, c);
+    if (f == a->unk_00)
+    {
+        if ((c->unk_14 & 0x6000) != 0)
+        {
+            func_80093D48(a, b, c);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091000);
 
@@ -9231,7 +9301,47 @@ void func_800A7338(UnkTownDispatch *d)
     d->unk_50();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7360);
+/* The ENTRY frame of func_800A73E0 below: advance all three 16.16 words by
+   their own deltas, render once through func_80095388, and -- unless the
+   +0x14 delta is negative -- replace itself at +0x50 with func_800A73E0, the
+   countdown-and-advance state that does the same advance with an expiry arm.
+   So the +0x14 sign is a one-shot gate: a negative vertical delta leaves
+   func_800A7360 installed and it runs again next frame.
+
+   `if (b->unk_14 >= 0)` and not an inverted early return: the listing's
+   `bltz` branches AWAY to the epilogue and the install is laid out inline,
+   which is the plain one-armed `if`.  `lui %hi(func_800A73E0)` sits in that
+   `bltz`'s delay slot by itself.
+
+   THE %hi/%lo PAIR ON func_800A73E0 IS A FUNCTION SYMBOL, so ovlverify masks
+   it and there is no `jal` to decode -- it was read off this function's own
+   listing (asm/nonmatchings/ovl_town/func_800A7360.s), which carries exactly
+   one `%hi`, one `%lo` and one `jal`.
+
+   Arity: $a2 is never touched by this body, so the third parameter has NO
+   witness here; it is declared to match func_800A73E0's own three-parameter
+   signature and the +0x50 handler convention.  Nothing calls this function
+   anywhere -- func_800A7308 only stores its address into +0x50 -- so no call
+   site can constrain it in either direction.
+
+   Measured and rejected: moving the func_80095388 call ahead of the three
+   advances is 31 words against 32 with 26 differing.  Spelling the gate as
+   `if (b->unk_14 < 0) { return; } a->unk_50 = ...;` is a MEASURED TIE at 0
+   differing; the one-armed `if` is kept.
+
+   32 words -- its header reads `nonmatching func_800A7360, 0x80`, and
+   0x80/4 = 32.  Measured 0 differing, first compile. */
+void func_800A7360(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+    func_80095388(b);
+    if (b->unk_14 >= 0)
+    {
+        a->unk_50 = func_800A73E0;
+    }
+}
 
 /* The countdown-and-advance shape func_800CDADC documents
    (csrc/ovl_town.c), with all three 16.16 words advanced by their own deltas
@@ -18098,7 +18208,34 @@ void func_800C8B8C(UnkTownDispatch *d)
     d->unk_50();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8BB4);
+/* func_800A7360's twin, standing in the same relation to func_800C8C3C
+   below that func_800A7360 does to func_800A73E0: the +0x00/+0x04 deltas come
+   from the two-word global at D_800D636C instead of the object's own
+   +0x0C/+0x10, exactly as func_800C8C3C's comment records for the state that
+   follows.
+
+   THE LISTING'S STORE ORDER IS AGAIN NOT THE SOURCE ORDER -- it stores +0x00,
+   +0x08, +0x04, and the natural +0x00/+0x04/+0x08 source order is what
+   produces it, for the reason func_800C8C3C's comment gives: the +0x04 addend
+   waits on the `lo_sum` of D_800D636C's address (`lui`, `addiu`, `lw 0x4`)
+   while the +0x08 addend is an ordinary `lw` off $s0, so sched2 sinks the
+   +0x04 store past the +0x08 one.  Re-measured here on the shorter entry
+   frame: the listing's own 00/08/04 order is 13 differing, the natural
+   00/04/08 order is 0.
+
+   34 words -- its header reads `nonmatching func_800C8BB4, 0x88`, and
+   0x88/4 = 34.  Measured 0 differing, first compile. */
+void func_800C8BB4(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_00 += D_800D636C[0];
+    b->unk_04 += D_800D636C[1];
+    b->unk_08 += b->unk_14;
+    func_80095388(b);
+    if (b->unk_14 >= 0)
+    {
+        a->unk_50 = func_800C8C3C;
+    }
+}
 
 /* func_800A73E0's twin: the +0x00/+0x04 deltas come from the
    global pair at D_800D636C instead of the object's own +0x0C/+0x10, and the
@@ -19719,7 +19856,49 @@ void func_800CD87C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     func_800CDD98(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD9F4);
+/* A near-sibling pair with func_800CDBB8 below: hand the frame to
+   func_800C30E0 and, if it took nothing, run the +0x6C countdown down and on
+   expiry seed +0x90 and move to the next state.  This is the func_800C34EC /
+   func_800C7604 gate shape (already landed, :16494 and :17724) with one
+   `a->unk_90 = N;` store added ahead of the tail call -- so the countdown
+   this pair runs is +0x6C and the one it SEEDS is +0x90, which is the
+   countdown func_800CDADC / func_800CDCA8 then spend.
+
+   `if (--a->unk_6C <= 0)` is the in-place narrow test: `lhu`, `addiu -1`,
+   `sh`, then `sll 16` with no `sra` and `bgtz` branching away, exactly as
+   func_800C565C's comment records.  The store of the constant 3 is NOT moved
+   into the branch's delay slot by hand -- `addiu $v0, $zero, 0x3` lands there
+   because it is the constant's own materialisation, which is also why this
+   member's listing is one word longer than func_800CDBB8's, whose `sh $zero`
+   needs none.
+
+   Arity: `a` is witnessed by +0x6C and +0x90, `b` and `c` only by being
+   forwarded, but $a2 IS read before it is written (`addu $s2, $a2, $zero` in
+   the func_800C30E0 call's delay slot), so all three parameters are real.
+   There is no `jal` to this function anywhere under
+   asm/nonmatchings/ovl_town/ -- its only referrer, func_800CDE9C, stores its
+   address into +0x50 -- so no call site constrains the arity either way.
+
+   Measured and rejected: `a->unk_90 = 3;` written AFTER the call is 6
+   differing; `--a->unk_6C < 0` is 1 differing.  Writing the gate as an
+   inverted early `return` instead of the nested `if` is a MEASURED TIE at 0
+   differing -- the `== 0` arm is empty, so both spellings emit the same
+   `bnez` to the epilogue and neither moves a `jal`.  The nested form matches
+   func_800C34EC / func_800C7604.
+
+   30 words -- its header reads `nonmatching func_800CD9F4, 0x78`, and
+   0x78/4 = 30.  Measured 0 differing, first compile. */
+void func_800CD9F4(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    if (func_800C30E0(a, b, c) == 0)
+    {
+        if (--a->unk_6C <= 0)
+        {
+            a->unk_90 = 3;
+            func_800CDF00(a, b, c);
+        }
+    }
+}
 
 void func_800CDA6C(void *a, UnkTown2AE8 *b, s32 c)
 {
@@ -19772,7 +19951,26 @@ void func_800CDADC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDBB8);
+/* func_800CD9F4's near-sibling: the same body with +0x90 seeded to 0 instead
+   of 3 and func_800CDFF8 for func_800CDF00 -- the same callee substitution
+   that distinguishes func_800CDCA8 from func_800CDADC one state later.
+   Writing the `sh $zero` costs no materialisation, which is why the expiry
+   arm here is one word shorter and `addu $a0, $s0, $zero` fills the `bgtz`
+   delay slot instead.
+
+   29 words -- its header reads `nonmatching func_800CDBB8, 0x74`, and
+   0x74/4 = 29.  Measured 0 differing, first compile. */
+void func_800CDBB8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    if (func_800C30E0(a, b, c) == 0)
+    {
+        if (--a->unk_6C <= 0)
+        {
+            a->unk_90 = 0;
+            func_800CDFF8(a, b, c);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CDC2C);
 
