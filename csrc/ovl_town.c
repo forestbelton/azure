@@ -22981,7 +22981,352 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089944);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089960);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C035C);
+/* p9: the 20-byte descriptor case 4 copies onto the stack and hands to
+   func_8003BAF8.  Only the SIZE (0x14) and the 4-byte alignment have a
+   witness -- they are what make the copy plain lw/sw instead of the lwl/lwr
+   pair a `u8 *` source would force; five plain `s32`s measure 0 differing too.
+   The field split below is read off the bytes
+   (000C/000A, 01A0/0100, 800D23B0, 0, 3) and is a GUESS: a size pair, a
+   screen position, a pointer and two counts.  The rodata blob is 0x18 bytes,
+   not 0x14 -- the sixth word is the pad that `.align 3` leaves in front of
+   this function's jump table, and it stays in D_80089960's INCLUDE_RODATA. */
+typedef struct UnkTown89960
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    s16 unk_06;
+    void *unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+} UnkTown89960;
+extern UnkTown89960 D_80089960;
+extern u8 D_8006CCF8[];
+void func_80022F34(UnkTown2AE8 *a, s16 *b);
+void func_800239A0(u8 *a, s16 *b, s32 c);
+void func_80033B9C(s16 a);
+void func_8003BAF8(u32 a);
+void func_800489F4(u8 *a, s32 b, s32 c, s32 d);
+void func_80048AC8(u8 *a, s32 b);
+void func_8008B550(s32 a);
+
+/* The UnkNode.unk_10 tick func_800C02C4 installs at `p - 0x10`, so arg0 is the
+   node's +0x20 actor view and the three parameters are func_80040190's cast.
+   It drives the camera: it integrates the mover by the pair at +0x58/+0x5C and
+   halves them, asks func_800C2AE8 for a height off a STACK COPY of the mover
+   (with +0x08 forced to 0xFE000000 on two of the ride states), accelerates and
+   decays the +0x48 boom length on D_80083160's +0x08/+0x10 flag words, leans
+   the yaw at +0x10 and the camera yaw D_80083160.unk_C8 toward each other, and
+   finally dispatches on the +0x08 state and refreshes the +0x2C renderable.
+
+   SIX THINGS ARE PINNED, every one of them measured:
+
+   * `n` MUST BE `s32` WITH AN EXPLICIT `(s16)` AT EACH EXTENDING USE.  As
+     `s16 n` the function is 475 words with ONE differing: the clamp reads the
+     call's return register (`sll $v0, $v0, 16`) where the target reads `n`
+     (`sll $v0, $s6, 16`).  The mechanism is cse's `make_regs_eqv`
+     (cse.c:849-874, scratch/gcc-src/cdk-gcc-b18): a SAME-MODE copy out of the
+     hard return register makes the PSEUDO the quantity's `qty_first_reg`,
+     because `firstr < FIRST_PSEUDO_REGISTER` is the branch that promotes
+     `new`, so `canon_reg` substitutes the pseudo and the sign extension reads
+     $s6.  An `s16` destination is not a copy but `(set (reg:HI) (subreg:HI
+     (reg:SI)))`, which goes in the hash table as an EXPRESSION, and cse then
+     substitutes the cheaper `(subreg:HI (reg:SI 2))` -- the return register --
+     back into the extension.  So the signedness of a local fed by a call is
+     observable even when every arithmetic use is identical.
+
+   * BOTH THREE-TERM SUMS NEED AN INTERMEDIATE STATEMENT, `e` and `f`.
+     `*(s16 *)(p + 0x10) - (g->unk_C8 - 0x800)` is 4 differing and
+     `(g->unk_C8 - (*(s16 *)(p + 0x10) - 0x1500)) & 0xFFF` is 12, both because
+     fold's `associate:` arm (fold-const.c:4257-4283) rewrites them to
+     `(p10 + 0x800) - C8` and `(C8 + 0x1500) - p10` and emits the `addiu` on
+     the wrong operand.  A statement is all it takes here -- the embedded
+     assignment func_800BB218 needed is only required when the subtree must
+     also stay cse'd.
+
+   * `d` IS ONE VARIABLE FOR THREE VALUES: the yaw error, case 3's saved
+     index, and the cell index at the bottom.  That is what gives it a
+     callee-saved register and the frame nine saved words; split into three
+     locals it is 474 words / 438 differing, because the yaw error then lives
+     in $a0 and every later register shifts.
+
+   * THE LEAN'S LAST TWO ARMS ARE IN THAT ORDER, `abs(d) >= 8` first.  Swapped
+     (`abs(d) < 8` first) the `+0x800` arm stops being the fall-through, its
+     copy inside the gate no longer cross-jumps onto it, and the function is
+     478 words / 255 differing.
+
+   * THE TWO COMPARISONS AGAINST `n` ARE WRITTEN WITH `n` ON THE SIDE THE
+     TARGET EVALUATES FIRST: `(s16)n <= +0xA + 2` (reversed: 6 differing) and
+     `+0xA > (s16)n` (reversed: 4).  `do_compare_and_jump` expands operand 0
+     first and both insns land in one basic block, so the source order is what
+     places the registers.
+
+   * THE AGGREGATES' DECLARATION ORDER IS REAL AND THE SCALARS' IS NOT.
+     `t` before `w` fixes the stack slots at +0x10 and +0x28; swapping just
+     those two is 14 differing (every one an sp displacement) while reversing
+     all six scalars is 0.  And `w` MUST BE ASSIGNED AS A STATEMENT: as
+     `UnkTown89960 w = D_80089960;` the function is 392 differing
+     (c-decl.c:3947-3948) -- the lever recorded for a pointer-to-global local
+     applies to an aggregate block copy just as hard.
+
+   Two spellings are TIES and the listing cannot tell them apart: cases 0/1/2's
+   shared `goto clear` tail written out three times instead (cross-jumping
+   unifies it, 0 differing), and the yaw normaliser as `while (1) { ... break; }`
+   instead of the `goto norm` back edge (0 differing).  Also 0: five plain
+   `s32`s for the descriptor, and `* 0x20` for case 1's `<< 5`.  Measured and
+   rejected: case 0's +0x50/+0x52 pair ascending (2 differing), and the case 3
+   counter read back out of the field instead of through `u` (476 / 96).
+
+   0x800135B4 is out of the loaded image and is a CONSTANT, not a symbol: the
+   listing's `lui`/`ori` pair is the tell, and the object carries no relocation
+   there -- the same test the addressing-shapes note describes.
+
+   475 words -- its header reads `nonmatching func_800C035C, 0x76C`, and
+   0x76C/4 = 475.  0 differing.  The jump table lands at .rodata+0x1218, which
+   is 0 mod 8, so cc1psx's `.align 3` emits nothing: object-level `.rodata` is
+   byte-identical to the stub build at 0x2524 and the five table words keep
+   their R_MIPS_32 records. */
+void func_800C035C(u8 *p, UnkTown2AE8 *b, u8 *r)
+{
+    Unk80083160 *g;
+    u8 *m;
+    s16 *q;
+    UnkTown2AE8 t;
+    UnkTown89960 w;
+    s32 n;
+    s16 u;
+    s32 d;
+    s32 e;
+    s32 f;
+    s32 v;
+
+    g = &D_80083160;
+    m = *(u8 **)(p + 0x54);
+    q = (s16 *)(p + 0x50);
+    func_800953D0(b);
+    func_80095910((UnkTownBody *)D_800FE490);
+    func_8009539C(b);
+    b->unk_00 += *(s32 *)(p + 0x58);
+    b->unk_04 += *(s32 *)(p + 0x5C);
+    *(s32 *)(p + 0x58) >>= 1;
+    *(s32 *)(p + 0x5C) >>= 1;
+    t = *b;
+    if (*(s16 *)(m + 0x3C) == 2 || *(s16 *)(m + 0x3C) == 6)
+    {
+        t.unk_08 = 0xFE000000;
+    }
+    n = func_800C2AE8(&t);
+    if ((s16)n > 0)
+    {
+        n = 0;
+    }
+    if ((g->unk_10 & 0x20) != 0 && *(s32 *)(p + 0x48) <= 0x200000)
+    {
+        func_800ABD74(b);
+        *(s32 *)(p + 0x48) += 0x80000;
+    }
+    if ((g->unk_10 & 0x40) != 0 && *(s32 *)(p + 0x48) >= -0x200000)
+    {
+        *(s32 *)(p + 0x48) -= 0x80000;
+    }
+    if ((g->unk_08 & 0x20) != 0)
+    {
+        if (*(s32 *)(p + 0x48) < 0)
+        {
+            *(s32 *)(p + 0x48) += 0x20000;
+        }
+        else if (*(s32 *)(p + 0x48) < 0x100000)
+        {
+            *(s32 *)(p + 0x48) += 0x18000;
+        }
+    }
+    else if ((g->unk_08 & 0x40) != 0)
+    {
+        if (*(s32 *)(p + 0x48) > 0)
+        {
+            *(s32 *)(p + 0x48) -= 0x20000;
+        }
+        else if (*(s32 *)(p + 0x48) > -0x100000)
+        {
+            *(s32 *)(p + 0x48) -= 0x18000;
+        }
+    }
+    if (*(s32 *)(p + 0x48) < -0x10000)
+    {
+        *(s32 *)(p + 0x48) += 0x10000;
+    }
+    else if (*(s32 *)(p + 0x48) > 0x10000)
+    {
+        *(s32 *)(p + 0x48) -= 0x10000;
+    }
+    else
+    {
+        *(s32 *)(p + 0x48) = 0;
+    }
+    if ((g->unk_08 & 0x8000) != 0)
+    {
+        *(s16 *)(p + 0x10) = (*(s16 *)(p + 0x10) + 0x20) & 0xFFF;
+    }
+    else if ((g->unk_08 & 0x2000) != 0)
+    {
+        *(s16 *)(p + 0x10) = (*(s16 *)(p + 0x10) + 0xFE0) & 0xFFF;
+    }
+    b->unk_0C = func_800644B8(*(s16 *)(p + 0x10)) * (*(s32 *)(p + 0x48) >> 12);
+    b->unk_10 = func_80064584(*(s16 *)(p + 0x10)) * (*(s32 *)(p + 0x48) >> 12);
+    e = g->unk_C8 - 0x800;
+    d = *(s16 *)(p + 0x10) - e;
+norm:
+    if (d > 0x800)
+    {
+        d -= 0x1000;
+        goto norm;
+    }
+    if (d < -0x800)
+    {
+        d += 0x1000;
+        goto norm;
+    }
+    if (abs(*(s32 *)(p + 0x48)) > 0x3FFFF && (g->unk_08 & 0xA000) != 0)
+    {
+        if (d < -0x180)
+        {
+            g->unk_C8 = *(s16 *)(p + 0x10) + 0x980;
+        }
+        else if (d > 0x180)
+        {
+            g->unk_C8 = *(s16 *)(p + 0x10) + 0x680;
+        }
+        else if (d < 0)
+        {
+            g->unk_C8 = g->unk_C8 - 0x10;
+        }
+        else if (d > 0)
+        {
+            g->unk_C8 = g->unk_C8 + 0x10;
+        }
+        else
+        {
+            g->unk_C8 = *(s16 *)(p + 0x10) + 0x800;
+        }
+    }
+    else if (abs(d) >= 8)
+    {
+        g->unk_C8 = g->unk_C8 + (d >> 3);
+    }
+    else
+    {
+        g->unk_C8 = *(s16 *)(p + 0x10) + 0x800;
+    }
+    g->unk_C8 = (g->unk_C8 + 0x1000) & 0xFFF;
+    if (abs(d) >= 0xA0 && (s16)n <= *(s16 *)((u8 *)b + 0xA) + 2 && *(s32 *)(p + 0x48) > 0xC0000)
+    {
+        func_800ABD74(b);
+    }
+    if (D_800CFCEE != 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    if (*(s16 *)((u8 *)b + 0xA) > (s16)n)
+    {
+        *(s16 *)((u8 *)b + 0xA) = n;
+        if (b->unk_14 >= 0)
+        {
+            b->unk_14 = 0;
+        }
+        if ((*(s32 *)(p + 0x4C) & 0x1) != 0)
+        {
+            func_800ABD74(b);
+        }
+        *(s32 *)(p + 0x4C) &= ~0x1;
+    }
+    else
+    {
+        *(s32 *)(p + 0x4C) |= 0x1;
+    }
+    if ((g->unk_10 & 0x10) != 0 && (s16)n == *(s16 *)((u8 *)b + 0xA))
+    {
+        b->unk_14 = 0xFFEC0000;
+    }
+    b->unk_14 += 0x20000;
+    switch (*(s16 *)(p + 0x8))
+    {
+    case 0:
+        *(s16 *)(p + 0x10) = 0xC00;
+        b->unk_08 = 0;
+        q[1] = 0;
+        q[0] = 0;
+        g->unk_C8 = 0xC00;
+        goto clear;
+    case 1:
+        g->unk_C8 = ((0x20 - *(u16 *)(m + 0x2E)) << 5) + 0xC00;
+        *(s16 *)(p + 0x10) = 0xC00;
+        goto clear;
+    case 2:
+        g->unk_C8 = (0x10 - *(u16 *)(m + 0x2E)) << 5;
+        if (q[0] < 4)
+        {
+            *(u16 *)(m + q[0] * 2 + 0x30) += 1;
+        }
+    clear:
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        break;
+    case 3:
+        d = q[0];
+        func_80022F34(b, q);
+        func_800239A0(m, q, 0);
+        if (q[0] != d)
+        {
+            v = *(s16 *)(m + d * 2 + 0x30);
+            if (v < *(s32 *)0x800135B4)
+            {
+                *(s32 *)0x800135B4 = v;
+                *(s16 *)(m + 0x38) = v;
+                func_80033B9C(0x596);
+            }
+        }
+        if (q[0] < 4)
+        {
+            u = *(u16 *)(m + q[0] * 2 + 0x30);
+            *(u16 *)(m + q[0] * 2 + 0x30) = u + 1;
+            if (u >= 0x7530)
+            {
+                *(u16 *)(m + q[0] * 2 + 0x30) = 0x7530;
+            }
+        }
+        break;
+    case 4:
+        w = D_80089960;
+        func_8008B550(2);
+        func_8003BAF8((u32)&w);
+        *(s16 *)(p + 0x8) += 1;
+        break;
+    }
+    f = *(s16 *)(p + 0x10) - 0x1500;
+    d = ((g->unk_C8 - f) & 0xFFF) >> 9;
+    *(s16 *)(p + 0x10) = (*(s16 *)(p + 0x10) + 0x2000) & 0xFFF;
+    if (*(s16 *)(p + 0x12) != d)
+    {
+        if (*(s32 *)(r + 0x2C) != 0)
+        {
+            func_800489F4(r, *(u8 *)(*(u8 **)(p + 0x1C) + d), *(s8 *)(r + 0x4), 0);
+        }
+        *(s16 *)(p + 0x12) = d;
+    }
+    if (D_8006CCF8[d] != 0)
+    {
+        *(u16 *)(r + 0x14) |= 0x1;
+    }
+    else
+    {
+        *(u16 *)(r + 0x14) &= ~0x1;
+    }
+    func_80048AC8(r, 0);
+    func_800A48B0(D_80100D98, b);
+    *(s32 *)(D_80100D98 + 0x8) = 0;
+}
 
 void func_800C0AC8(void)
 {
