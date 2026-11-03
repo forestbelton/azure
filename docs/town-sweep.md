@@ -536,6 +536,53 @@ object lists all 1819 names and **a stub verifies against itself**. Enumerate
 the sweep from the **C definitions** (the `awk` recipe above), never from the
 symbol table.
 
+### A SYMBOL THE LISTING SPELLS `D_` MAY BE A FUNCTION -- AND `D_` IS STILL THE ONLY SPELLING THAT LINKS
+
+Hit on 2026-11-03 landing `func_8008B818`. Its listing takes the addresses of
+`D_80033D54` and `D_80037714`. Both are **functions**: `csrc/unk_72A8.c:1044`
+declares `void func_80033D54(void);` and `:1045` `void func_80037714(u8 *);`.
+
+Writing the semantically correct `(u32)func_80037714` **compiles, measures 0
+differing, and then fails the link with an undefined reference.** The reason is
+which file defines the symbol for THIS overlay:
+
+    splat/town.bin_undefined_syms_auto.txt:68   D_80033D54 = 0x80033D54;
+    splat/town.bin_undefined_syms_auto.txt:70   D_80037714 = 0x80037714;
+
+and neither `func_` name appears in `town.bin_undefined_funcs_auto.txt` or
+`town.bin_undefined_syms_auto.txt` at all -- they exist only in the resident's
+own yaml. So for an overlay, **the `D_` spelling is mandatory even when you can
+prove the symbol is a function.** Note the trap's shape: the correct-looking
+change is invisible to `ovlverify` AND to a clean whole-unit sweep, because
+both compare text and the text is identical. Only `make build/town.bin` sees
+it.
+
+**Check the two `town.bin_undefined_*_auto.txt` files before renaming any
+`D_` to a `func_`**, and say in a comment at the point of use why the ugly
+spelling stays. (Those two files are also the ones `splat split --modes ld`
+EMPTIES, which is why that command is forbidden.)
+
+### AN ARGUMENT-REGISTER MOVE AT ENTRY THAT NOTHING NEARBY READS IS A REAL PARAMETER
+
+The converse of "A MISSING ARGUMENT MOVE IS NOT EVIDENCE OF A ZERO-ARITY CALL",
+and it settles arity where no other route can.
+
+`func_8008BC58` word 12 is `addu $a0, $a2, $zero`, sitting in the delay slot of
+the function's FIRST branch, and nothing reads `$a0` again for forty words. It
+reads as a dead copy. It is in fact the argument for two **bare**
+`jal func_800478B8` at words 69 and 92, both with `nop` delay slots and no
+`$a0` setup of their own: the parameter's pseudo is allocated to `$a0` and its
+live range reaches both calls with no intervening call on either path.
+
+That function has **no arity witness by any route `provision.py` checks** -- it
+is installed at a handler slot, and the four landed steppers that take its
+address leave their own third parameter unread. The entry move is the whole
+witness, and it gives three parameters with `s32 c`.
+
+**Fingerprint:** an `addu $aN, $aM, $zero` early, no nearby reader, and a later
+`jal` with a `nop` delay slot and no argument setup. Look for the consumer
+before concluding the move is dead.
+
 ### TWO AGENTS ON A CALLER/CALLEE PAIR WILL TYPE THE SAME RECORDS TWICE
 
 Hit on 2026-11-03 with `func_800A3B80` and `func_800A41D8`, which are adjacent
