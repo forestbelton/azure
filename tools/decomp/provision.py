@@ -97,6 +97,9 @@ def main():
     src = os.path.join(PROJ, 'csrc', unit + '.c')
     landed, protos, body, txt, lines = defs_and_protos(src, unit)
     inc = include_protos()
+    incasm = {}
+    for m in re.finditer(r'INCLUDE_ASM\("[^"]*", *(func_[0-9A-Fa-f]{8})\)', txt):
+        incasm[m.group(1)] = txt[:m.start()].count('\n') + 1
     allcallees, installs, globs = {}, {}, {}
     print("=== PER-FUNCTION FACTS (never describe a union as shared) ===")
     tot = 0
@@ -122,7 +125,20 @@ def main():
     every = set().union(*allcallees.values()) if allcallees else set()
     for c in sorted(every):
         who = [f for f in targets if c in allcallees.get(f, ())]
-        if c in landed:   cls = 'LANDED-HERE'
+        if c in landed:
+            # An arity mismatch on a callee defined BELOW its call site rides an
+            # implicit declaration (this unit does that 18 times); one defined
+            # ABOVE is a hard "too many arguments to function". Same mismatch,
+            # opposite consequence, so print which.
+            # The call site is the TARGET's position, and a target is still a
+            # stub -- so look up its INCLUDE_ASM line, not `lines`, which only
+            # holds landed definitions. Getting this backwards reported a hard
+            # error as benign.
+            sites = [incasm[x] for x in who if x in incasm]
+            first = min(sites) if sites else None
+            cls = ('LANDED-ABOVE (mismatch = HARD ERROR)'
+                   if first is not None and lines[c] < first
+                   else 'LANDED-BELOW (mismatch rides implicit decl)')
         elif listing(unit, c) is not None: cls = 'STUB-HERE'
         else: cls = '*** NOT IN THIS UNIT (resident) ***'
         pr = protos.get(c)
@@ -199,7 +215,11 @@ def main():
     for f in targets:
         for h in sorted(installs.get(f, ())):
             anyi = True
-            st = 'LANDED at ' + (landed[h][:60] if h in landed else '') if h in landed else ('stub' if listing(unit,h) else 'NOT IN UNIT')
+            if h in landed:
+                d0 = landed[h]
+                st = 'LANDED at ' + (d0[:d0.rindex(')') + 1] if ')' in d0 else d0)
+            else:
+                st = 'stub' if listing(unit, h) else 'NOT IN UNIT'
             print("  %s installs %-15s -> %s" % (f, h, st))
     if not anyi: print("  none")
 
@@ -279,8 +299,15 @@ def main():
             except Exception: continue
             if re.search(r'jal\s+' + f + r'\b', st):
                 nm = sf[:-2]
-                print("  %-15s jal'd by STUB %-15s -- read %s/%s to settle arity"
-                      % (f, nm, D(unit).replace(PROJ + '/', ''), sf))
+                if nm in landed:
+                    d0 = landed[nm]
+                    print("  %-15s jal'd by LANDED %-15s csrc/%s.c:%d -- read the C, it has"
+                          % (f, nm, unit, lines[nm]))
+                    print("                  argument TYPES a listing does not: %s"
+                          % (d0[:d0.rindex(')') + 1] if ')' in d0 else d0))
+                else:
+                    print("  %-15s jal'd by STUB %-15s -- read %s/%s to settle arity"
+                          % (f, nm, D(unit).replace(PROJ + '/', ''), sf))
                 anye = True; witnessed.add(f)
     if not anye: print("  none")
 
@@ -372,7 +399,6 @@ def main():
                 print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)"
                       % (f, d, unit, lines[d], f, a[:60]))
                 anyc = True; witnessed.add(f)
-                break
     if not anyc: print("  none -- no LANDED call site constrains arity")
     missing = [f for f in targets if f not in witnessed and listing(unit, f)]
     if missing:
