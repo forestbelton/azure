@@ -441,6 +441,26 @@ typedef struct UnkTownSP
     s32 unk_124;
 } UnkTownSP;
 
+/* The 0x14-byte script record the town entity tables are built from. The
+   tables live outside the loaded image -- the caller func_8009CEE8 walks a
+   NULL-terminated table of pointers at D_801007F8 / D_80100900 -- and each
+   list is terminated by (unk_01 & 0xC0) == 0x80. unk_00 is the only field
+   func_8009DA50 writes: a "fired" flag. */
+typedef struct UnkTownScrRec
+{
+    u8 unk_00;
+    u8 unk_01;
+    s16 unk_02;
+    u8 unk_04;
+    u8 unk_05;
+    u8 unk_06;
+    u8 unk_07;
+    u32 unk_08;
+    u32 unk_0C;
+    u16 unk_10;
+    u16 unk_12;
+} UnkTownScrRec;
+
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
    constant-base spelling is the project's own, already landed at
    csrc/unk_1C540.c:1080, so it is not a device.
@@ -1467,6 +1487,10 @@ void func_800B17C0(s32 a, s32 b);
 void func_800ADB30(UnkTownADD80 *s);
 s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
 void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
+s32 func_8009D424();
+void func_800AD8CC(UnkTownADD80 *s);
+void func_800ADA1C(UnkTownADD80 *s);
+void func_800ADB04(UnkTownADD80 *s);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -4407,7 +4431,84 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D940);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D9E4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DA50);
+void func_8009DA50(UnkTownScrRec *p, u8 *b, s32 a2, s32 a3)
+{
+    /* THE LOCAL COPIES ARE LOAD-BEARING, and only a3's is: they are worth the
+       last 6 words (4 register-allocation words plus the two addu operand
+       orders).  ox and oz tie exactly in global.c's priority
+       (floor_log2(n_refs)*n_refs*size/live_length -- both 3 refs, both live
+       all 214 insns, so both score 140), and allocno_compare breaks the tie by
+       allocno number, which for parameters is declaration order: a2 always got
+       $s5 and a3 $s6, where the target has them the other way round.  Copying
+       a3 into a local moves its birth out of the prologue, shortens its live
+       range, and flips the tie -- and the copy costs no word, because it
+       replaces the prologue's own parameter move.  Measured: with both
+       parameters used directly, 143 words / 6 differing; copying a3 only, or
+       both (either as a statement or as an initialiser), 143 / 0. */
+    s32 ox = a2;
+    s32 oz = a3;
+    /* tx/tz are the int sums; x/z are the s16 values func_8009D424 is passed.
+       Both pairs are needed.  The int sum is what the subtractions use, and it
+       must be an int: assigning the sum straight to an s16 makes gcc shorten
+       the addition into HImode (convert.c's trunc1 path), and the shortened
+       add comes out with the operands the other way round --
+       `addu $t0,$t0,$s5` for the target's `addu $t0,$s6,$t0` (143 / 6).  The
+       s16 copy is what produces the target's `addu $s2,$t0,$zero`: it is the
+       HImode truncation.  Spelling the last two arguments `(s16)tx, (s16)tz`
+       off the int sums instead drops both copies and the function is 141. */
+    s32 tx;
+    s32 tz;
+    s16 x;
+    s16 z;
+
+    for (; (p->unk_01 & 0xC0) != 0x80; p++)
+    {
+        if (p->unk_00 != 0)
+        {
+            continue;
+        }
+        if ((p->unk_01 & 1) == 0)
+        {
+            if (func_80033B2C(p->unk_02) == 0)
+            {
+                continue;
+            }
+        }
+        else
+        {
+            if (func_80033B2C(p->unk_02) == 1)
+            {
+                continue;
+            }
+        }
+        tx = ox + p->unk_10;
+        tz = oz + p->unk_12;
+        x = tx;
+        z = tz;
+        if (func_8008CC90((s16)(*(u16 *)(b + 0x00) - tx), (s16)(*(u16 *)(b + 0x02) - tz),
+                          (s16)(*(u16 *)(b + 0x08) - tx), (s16)(*(u16 *)(b + 0x0A) - tz),
+                          (s16)(*(u16 *)(b + 0x10) - tx), (s16)(*(u16 *)(b + 0x12) - tz),
+                          (s16)(*(u16 *)(b + 0x18) - tx), (s16)(*(u16 *)(b + 0x1A) - tz)) == 0)
+        {
+            if (D_8006ADD4 != 0xC)
+            {
+                if ((p->unk_01 & 0x10) == 0)
+                {
+                    continue;
+                }
+            }
+        }
+        if (func_8009D424(p->unk_0C, p->unk_04, p->unk_05, p->unk_06, p->unk_07,
+                          p->unk_01 & 0x20, p->unk_08, x, z, p) != 0)
+        {
+            p->unk_00 = 1;
+        }
+        while ((p->unk_01 & 0xC0) == 0)
+        {
+            p++;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DC8C);
 
@@ -5641,7 +5742,105 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADB04);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADB30);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADB5C);
+void func_800ADB5C(UnkTownADD80 *s, void *b, void *c)
+{
+    Unk80083160 *g = &D_80083160;
+    s32 d = 0;
+    s32 n;
+    s32 m;
+
+    if (g->unk_08 == 0)
+    {
+        return;
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_80053DA8(0x514);
+        func_800AD8CC(s);
+        func_800AE30C((u8 *)s - 0x20);
+        return;
+    }
+    if (g->unk_10 & 0x20)
+    {
+        func_80053DA8(0x515);
+        D_80082AB8[0] = 0;
+        func_800AE30C((u8 *)s - 0x20);
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        func_800ADA1C(s);
+        return;
+    }
+    if ((g->unk_08 & 0xF000) == 0)
+    {
+        return;
+    }
+    if (g->unk_10 & 0xF000)
+    {
+        s->unk_14 = 0;
+        if (g->unk_10 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_10 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_10 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_10 & 0x4000)
+        {
+            d = 1;
+        }
+    }
+    else if (s->unk_14 >= 9)
+    {
+        if (g->unk_08 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_08 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_08 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_08 & 0x4000)
+        {
+            d = 1;
+        }
+        s->unk_14 = s->unk_14 - 1;
+    }
+    else
+    {
+        s->unk_14 = s->unk_14 + 1;
+        return;
+    }
+    n = func_80049E1C(s->unk_04, d, s->unk_08);
+    m = n / 5;
+    if (n == s->unk_04)
+    {
+        return;
+    }
+    func_80053DA8(0x502);
+    s->unk_04 = n;
+    if (m != s->unk_0C)
+    {
+        s->unk_0C = m;
+        func_800B1778(s->unk_28, m, n);
+    }
+    func_800B17C0(s->unk_28, n);
+    if (g->unk_08 & 0x40)
+    {
+        func_800ADA1C(s);
+    }
+    func_800ADB04(s);
+}
 
 void func_800ADD80(UnkTownADD80 *s, void *b, void *c)
 {
