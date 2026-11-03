@@ -2140,6 +2140,27 @@ void func_800A55CC(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 void func_800A5A98();
 void func_800A5FDC();
 
+/* The func_80092320 cluster: the two task descriptors its bind pair installs,
+   the two handlers those pair bodies store at +0x00, and the two stubs they
+   call.  func_800948DC reads no incoming argument register at all (its own
+   listing writes $a0 and never reads one), so it takes none; func_80095840
+   returns 0, 1 or 2 and takes (task, &D_800CFCB4).
+
+   The four task setups the func_80092320 pair dispatches to are declared here
+   rather than left to an implicit declaration: both pair bodies PRECEDE all
+   four definitions, so without these the unit gains four more
+   `type mismatch with previous implicit declaration` warnings. */
+extern u8 D_800D00B0[];
+extern u8 D_800D0140[];
+void func_8009204C();
+void func_80092CD4();
+void func_800948DC(void);
+s32 func_80095840(UnkTownTask *t, UnkTownCFCB4 *p);
+void func_80094088(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094414(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094474(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_800944BC(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -4464,9 +4485,190 @@ idle3:
 void func_80092318(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80092320);
+/* The sixth and seventh members of the `mover update, then dispatch on
+   D_80083160`s flag word` family (func_80091A08 / func_80091AF0 /
+   func_80091F64 / func_80092698 / func_800927EC / func_80092A84).  Head
+   identical to func_800927EC's, func_80094C1C included; the tail is the
+   D_800CFCB4 room probe func_80095840, whose 0 / 2 / other result picks
+   between three task setups.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800924EC);
+   TWO loads of `g->unk_10` for the 0x10 and the 0x40 test, where
+   func_800924EC below has one load and two `andi`s.  The `sh` of the
+   decremented countdown between them is what forces the second read, and it
+   is measured, not assumed: spell the countdown as a bare `a->unk_0A < 0`
+   test with no store and the second `lw 0x10($s4)` disappears (111 words).
+   This REFINES docs/matching-levers.md's "an HImode struct store does not
+   wipe cse's whole memory table" -- it does not set `all`
+   (cdk-gcc-b18/cse.c:7618-7622 suppresses it for a MEM_IN_STRUCT_P non-QImode
+   store), but it does set `nonscalar` at cse.c:7623, and
+   `invalidate_memory`'s removal test at cse.c:1725-1728 drops every entry
+   that is `in_memory` and either `in_struct` under `nonscalar` OR has a
+   varying address.  `g->unk_10` is a COMPONENT_REF off a pointer local, so it
+   is both, and it goes.  A MEM at a fixed address would have survived.
+
+   Forcing one load with an `s32 f = g->unk_10;` local shared by both tests is
+   114 words against 115 with 56 differing.
+
+   The `r == 0` arm is written as the `else` of `r != 0` because the target
+   branches TO its block (`beqz $v1`) and lays it out LAST; written first as
+   `if (r == 0) { ...; return; }` it is 115 words with 16 differing.  A
+   `switch (r)` over case 0 / case 2 / default is 116 words, 40 differing, and
+   calling func_80095840 twice instead of keeping `r` is 118 words, 57.
+
+   `g` must be a LOCAL: reading `D_80083160.unk_10` inline at all three sites
+   is 115 words with 99 differing.  func_80094C1C belongs between
+   func_80095C80 and func_80095094 -- moved after func_80095094 it is 2
+   differing.
+
+   115 words -- its header reads `nonmatching func_80092320, 0x1CC`, and
+   0x1CC/4 = 115.  Measured 0 differing. */
+void func_80092320(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 r;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80094C1C(a);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, (s32)c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, (s32)c);
+        return;
+    }
+    if (--a->unk_0A < 0)
+    {
+        func_80094414(a, b, c);
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        r = func_80095840(a, &D_800CFCB4);
+        if (r != 0)
+        {
+            if (r == 2)
+            {
+                func_8009451C(a, b, c);
+            }
+            else
+            {
+                func_800944BC(a, b, c);
+            }
+        }
+        else
+        {
+            if (func_80033B2C(0xA4) != 0)
+            {
+                func_80094088(a, b, c);
+            }
+        }
+        return;
+    }
+    if (func_8009567C(&D_800CFCB4) <= 0)
+    {
+        func_80094474(a, b, c);
+    }
+}
+
+/* func_80092320's near-sibling (nearsibs 0.892): the same probe tail without
+   func_80094C1C in the head and without the countdown, and with a
+   `g->unk_08 & 0xF000` gate on the func_8009567C bail ahead of the shared
+   func_80094474 setup.  One load of `g->unk_10` feeds both the 0x10 and the
+   0x40 test here, because no store sits between them.
+
+   func_80095840's `$a0` setup is missing at its call site and the 0x10 test's
+   branch carries `addu $a0, $s1, $zero` in its delay slot instead: both
+   successors of that branch start with the same insn, so cross-jumping hoists
+   it.  That is a compiler decision and needs nothing in the source.
+
+   Taking func_80092320's head verbatim -- its func_80094C1C(a) included -- is
+   109 words against 107 with 95 differing, and forcing a second
+   `g->unk_10` load with a store between the two tests is 110 words, 76.  The
+   `g->unk_08 & 0xF000` gate measures identically written as an explicit
+   `goto` over it or as an if/else with the func_80094474 setup in both arms.
+
+   107 words -- its header reads `nonmatching func_800924EC, 0x1AC`, and
+   0x1AC/4 = 107.  Measured 0 differing. */
+void func_800924EC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 r;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    func_80095094(b);
+    n = (s16)func_80095978(b, D_800FE488);
+    if (n - *(s16 *)((u8 *)b + 0xA) >= 4)
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80094378(a, b, (s32)c);
+            return;
+        }
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            func_80095A94(b, n, D_800FE488);
+        }
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_800942B0(a, b, (s32)c);
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        r = func_80095840(a, &D_800CFCB4);
+        if (r != 0)
+        {
+            if (r == 2)
+            {
+                func_8009451C(a, b, c);
+            }
+            else
+            {
+                func_800944BC(a, b, c);
+            }
+        }
+        else
+        {
+            if (func_80033B2C(0xA4) != 0)
+            {
+                func_80094088(a, b, c);
+            }
+        }
+        return;
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_80094C1C(a);
+        if (func_8009567C(&D_800CFCB4) > 0)
+        {
+            return;
+        }
+    }
+    func_80094474(a, b, c);
+}
 
 /* The third of the five-member `mover update, then the countdown` set, and the
    only one whose expiry picks between two task setups.  Head identical to
@@ -5008,7 +5210,12 @@ void func_80094048(UnkTownTask *t)
     t->unk_00 = func_80090F84;
 }
 
-void func_80094088(UnkTownTask *t)
+/* Widened from the one-parameter `(UnkTownTask *t)` it was landed with, the
+   way func_80094378 and func_80094660 were: the func_80092320 pair calls it
+   with THREE arguments (both listings set $a0/$a1/$a2 before the `jal`) and
+   nothing else in the unit calls it at all.  The extra two go unread;
+   measured 10 words, 0 differing, with the pair's bytes unchanged. */
+void func_80094088(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D00D0, t);
     t->unk_00 = func_80091A08;
@@ -5059,7 +5266,28 @@ void func_80094268(UnkTownTask *t)
     t->unk_0A = 0x3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800942B0);
+/* A near-sibling pair with func_800945B8 below (nearsibs 0.981): fire the
+   scene sound, slam the mover's +0x14 delta to -17.0 in 16.16, bind the
+   per-member task descriptor and install the per-member handler at +0x00.
+   This member also clears the countdown at +0x0A; func_800945B8 does not.
+
+   func_800948DC takes NO arguments -- the absence of an argument-setup move
+   before its `jal` is not the witness (that trap is documented), its own
+   listing is: it never reads $a0/$a1/$a2 and writes $a0 itself.  The
+   `b->unk_14` store is written BEFORE the func_80094984 call, which is what
+   puts its `lui` ahead of the descriptor's and leaves the `sw` for reorg to
+   drop into the `jal`'s delay slot.
+
+   27 words -- its header reads `nonmatching func_800942B0, 0x6C`, and
+   0x6C/4 = 27.  Measured 0 differing. */
+void func_800942B0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_800948DC();
+    b->unk_14 = 0xFFEF0000;
+    func_80094984(D_800D00B0, t, c);
+    t->unk_00 = func_8009204C;
+    t->unk_0A = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009431C);
 
@@ -5105,7 +5333,10 @@ void func_80094414(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_00 = func_800924EC;
 }
 
-void func_80094474(UnkTownTask *t)
+/* Widened from one parameter for the same reason as func_80094088 above: the
+   func_80092320 pair calls it with three and nothing else calls it at all.
+   Measured 10 words, 0 differing. */
+void func_80094474(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D0118, t);
     t->unk_00 = func_80090E78;
@@ -5132,7 +5363,16 @@ void func_8009451C(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009455C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800945B8);
+/* func_800942B0's near-sibling: the same body with a different descriptor and
+   handler and no +0x0A clear.  26 words -- its header reads
+   `nonmatching func_800945B8, 0x68`, and 0x68/4 = 26.  Measured 0 differing. */
+void func_800945B8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_800948DC();
+    b->unk_14 = 0xFFEF0000;
+    func_80094984(D_800D0140, t, c);
+    t->unk_00 = func_80092CD4;
+}
 
 void func_80094620(UnkTownTask *t)
 {
