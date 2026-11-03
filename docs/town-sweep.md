@@ -423,6 +423,10 @@ standalone) after three wrong guesses about which prototype had done it.
   `if/else` whose arms are calls swaps the `jal` targets too, and `ovlverify`
   masks those -- so a 3-word structural error reports as **1 differing** and
   reads like a near-miss worth polishing.
+  And the arm must leave UNCONDITIONALLY: an arm spelled `if (x) return;` that
+  then falls into the shared tail is a FALL-THROUGH arm for layout purposes.
+  Measured on `func_800CD70C`/`func_800CD87C` -- writing that arm first is
+  93 words against 92 with 35 differing, and 95 against 94 with 39.
 
 * **A CANDIDATE THAT IS SHORT CANNOT BE A cse-FORWARDING PROBLEM.**
   `func_800B683C` came in at 26 words against 28, 9 differing, with the target

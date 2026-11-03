@@ -16999,9 +16999,96 @@ void func_800CD608(void *arg0)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD650);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD70C);
+/* A NEAR-SIBLING PAIR, the two members of the func_800CDDFC/func_800CDE4C
+   install twins: a spinner that walks its facing a quarter-degree per frame
+   (+0x40 here, -0x40 in func_800CD87C), places the mover on a circle of
+   radius 0x1000 / (the actor's +0x84 half-extent) around the actor, and on a
+   collision pushes the mover back out along the hit axis.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD87C);
+   TWO THINGS ARE COPY-PASTE ASYMMETRIES IN THE ORIGINAL, not misreadings:
+   the x half takes +0x84 + sin while the y half takes +0x86 + cos - +0x84,
+   and the same +0x84 feeds both divisors.
+
+   The ONLY shape difference between the two members is the last collision
+   arm: this one takes any non-0, non-2 axis, func_800CD87C takes axis 1 only.
+   Measured: giving this body func_800CD87C's `else if (h->unk_00 == 1)` is 94
+   words against 92 and 35 differing, and the reverse is the same both ways.
+   `t` can equally be written `a->unk_86 += 0x40; a->unk_72 = a->unk_86 +
+   0x400;` -- byte-identical, because cse puts the stored-to MEM in the
+   SET_SRC's class (cse.c:7402) and folds 0x40 + 0x400 off the pre-store
+   value, while the call argument needs the sign-extended halfword and stays
+   an `lh` reload. */
+void func_800CD70C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTownCFE60 *h;
+    s32 t;
+
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    t = (u16)a->unk_86;
+    a->unk_86 = t + 0x40;
+    a->unk_72 = t + 0x440;
+    *(s16 *)((u8 *)b + 0x2) = (u16)a->unk_84 + func_800644B8(a->unk_86) / (0x1000 / a->unk_84);
+    *(s16 *)((u8 *)b + 0x6) = (u16)a->unk_86 + func_80064584(a->unk_86) / (0x1000 / a->unk_84) - (u16)a->unk_84;
+    h = func_8008FAC0((UnkNode *)a, (UnkNode *)&D_800CFCB4);
+    if (h != NULL && h->unk_00 != 2)
+    {
+        if (h->unk_00 == 0)
+        {
+            b->unk_00 -= h->unk_04;
+        }
+        else
+        {
+            b->unk_04 -= h->unk_04;
+        }
+    }
+    else if (--a->unk_6C > 0)
+    {
+        return;
+    }
+    func_800CDD98(a, b, c);
+}
+
+/* The counter-rotating twin of func_800CD70C above: -0x40 / -0x440 for
+   +0x40 / +0x440, and the second collision arm narrowed to axis 1. Writing
+   the countdown arm FIRST (the inverted outer test) costs a word and 39
+   differing here -- a CONDITIONAL return inside an arm does not make it an
+   arm that leaves the function, so the "early return is laid out inline"
+   lever does not apply. */
+void func_800CD87C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTownCFE60 *h;
+    s32 t;
+
+    if (func_800C30E0(a, b, c) != 0)
+    {
+        return;
+    }
+    t = (u16)a->unk_86;
+    a->unk_86 = t - 0x40;
+    a->unk_72 = t - 0x440;
+    *(s16 *)((u8 *)b + 0x2) = (u16)a->unk_84 + func_800644B8(a->unk_86) / (0x1000 / a->unk_84);
+    *(s16 *)((u8 *)b + 0x6) = (u16)a->unk_86 + func_80064584(a->unk_86) / (0x1000 / a->unk_84) - (u16)a->unk_84;
+    h = func_8008FAC0((UnkNode *)a, (UnkNode *)&D_800CFCB4);
+    if (h != NULL && h->unk_00 != 2)
+    {
+        if (h->unk_00 == 0)
+        {
+            b->unk_00 -= h->unk_04;
+        }
+        else if (h->unk_00 == 1)
+        {
+            b->unk_04 -= h->unk_04;
+        }
+    }
+    else if (--a->unk_6C > 0)
+    {
+        return;
+    }
+    func_800CDD98(a, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CD9F4);
 
