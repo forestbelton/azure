@@ -1698,6 +1698,28 @@ void func_8009CDB4(void);
 void func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
 void func_8009CE34(void);
 extern u8 D_800D43F0[];
+
+/* The two compiler constant pools func_800B8C90 and func_800B8B00 share. They
+   are LOCAL INITIALISED ARRAYS in the original -- `s32 a[5] = {4, 5, 7, 0x1C,
+   0x1F}` and `s32 b[4] = {6, 8, 0xB, 0xC}` -- and that spelling also reaches 0
+   differing, but it emits its own $LC labels and so would duplicate the two
+   surviving INCLUDE_RODATA blocks while func_800B8B00 is still asm. Read as
+   aggregates instead: identical text, zero rodata. Switch BOTH functions to
+   the local-array spelling and delete BOTH INCLUDE_RODATA lines in the same
+   commit when func_800B8B00 lands -- that is the only configuration in which
+   the rodata comes out at the right addresses. */
+typedef struct
+{
+    s32 v[5];
+} UnkTownRo5;
+
+typedef struct
+{
+    s32 v[4];
+} UnkTownRo4;
+
+extern const UnkTownRo5 D_800894D0;
+extern const UnkTownRo4 D_800895F0;
 extern u16 *D_800D17D8[];
 extern u16 *D_800D1868[];
 extern s16 D_80111FA8[];
@@ -10763,7 +10785,94 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800894D0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8B00);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8C90);
+/* The town event gate: 1 only if four out-of-image flag pairs are all set and
+   every one of the four ids in D_800895F0 appears somewhere in the 0x22-entry
+   stride-2 pair table at 0x800133A4, under one of the five ids in D_800894D0.
+   The flag bytes this pins down are 0x33A6/A7 == 0xA, 0x33BA/BB == 3,
+   0x33C8/C9 == 7 and 0x33E6/E7 == 0x29.
+
+   A CONSTANT-BASE POINTER MUST BE RE-ASSIGNED PER `if`, NOT PER BASIC BLOCK,
+   and that is this function's whole content. The standing rule "one base local
+   per block" is too coarse for a run of independent `if`s over 0x8001xxxx
+   flags, and the mechanism is a DELAY SLOT rather than a `lui` count:
+
+   - inline `*(u8 *)0x800133BA` constant addresses: the second `lui` allocates
+     to $v0, the register the `beq` above it reads, so `eligible_for_delay`
+     rejects it and the slot stays `nop` -- four pairs, four wasted words, 98
+     words / 66 differing;
+   - ONE shared base for the whole run: cse unifies to a single `lui` and it
+     comes out four words SHORT, 90 / 58;
+   - `extern u8 D_800133BA;` real symbols: same bytes available, still four
+     unfilled slots, 94 / 31;
+   - `p = (u8 *)0x80010000;` immediately before each `if`: the second `lui`
+     takes $v1, the compare constant moves to $a0, all four slots fill, 94 / 0.
+
+   The diagnostic: a `lui` in the delay slot of a `beq` whose operand is $v0
+   means the base needs its own assignment statement for that `if`. Both of the
+   losing spellings read like ordinary allocation noise and the cause is one
+   statement.
+
+   Two more measured: the counter must be zeroed BEFORE the table base is taken
+   (3 differing the other way, the same rule as func_800B8A40), and the loop's
+   exhaustion test must be `j == 5` and not `j >= 5` (23 differing) or a found
+   flag (96 words / 28). The `s32` return is witnessed by the body -- five early
+   exits put `addu $v0, $zero, $zero` in a branch delay slot and the fall-out
+   is `addiu $v0, $zero, 0x1` -- and `void` costs 7 words, 87 / 60.
+
+   The parameter list is merely CONSISTENT, not witnessed: nothing in the
+   project calls this function and no table holds its address, so any arity
+   would compile. */
+s32 func_800B8C90(void)
+{
+    UnkTownRo5 a = D_800894D0;
+    UnkTownRo4 b = D_800895F0;
+    u8 *tbl;
+    s32 i;
+    s32 j;
+    u8 *p;
+
+    p = (u8 *)0x80010000;
+    if (p[0x33BA] != 3 && p[0x33BB] != 3)
+    {
+        return 0;
+    }
+    p = (u8 *)0x80010000;
+    if (p[0x33E6] != 0x29 && p[0x33E7] != 0x29)
+    {
+        return 0;
+    }
+    p = (u8 *)0x80010000;
+    if (p[0x33C8] != 7 && p[0x33C9] != 7)
+    {
+        return 0;
+    }
+    p = (u8 *)0x80010000;
+    if (p[0x33A6] != 0xA && p[0x33A7] != 0xA)
+    {
+        return 0;
+    }
+    i = 0;
+    tbl = (u8 *)0x80010000;
+    for (; i < 4; i++)
+    {
+        for (j = 0; j < 5; j++)
+        {
+            if (tbl[a.v[j] * 2 + 0x33A4] == b.v[i])
+            {
+                break;
+            }
+            if (tbl[a.v[j] * 2 + 0x33A5] == b.v[i])
+            {
+                break;
+            }
+        }
+        if (j == 5)
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800895F0);
 
