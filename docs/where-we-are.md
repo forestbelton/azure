@@ -333,15 +333,51 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-03, after the autonomous campaign:** ovl_town is 1,028
-   of 1819 functions and 38,114 of 70,311 words, **54.2%**, up from 26.7%
-   three sessions ago; the project total is **73.1%**, and there are **7
-   parks** -- two were RETIRED by solving them, not by giving up on them.
+   **State on 2026-11-03, after the autonomous campaign and the carve:**
+   ovl_town is **1,058 of 1,819 functions and 42,551 of 70,311 words, 60.5%**,
+   up from 26.7% four sessions ago; the project total is **76.8%**, and there
+   are **7 parks** -- four have been RETIRED by solving them, not by giving up
+   on them.
 
-   The campaign is now driven by `tools/decomp/batcher.py`, which partitions
+   **The town overlay is now THREE translation units, not one.** A park that
+   matched at 366/366 words with zero differing instructions, and another at
+   138/138, were blocked by nothing in their own code: `cc1psx` emits
+   `.align 3` before every jump table, and one table sat at rodata offset
+   0x114C, which is 4 mod 8, so compiled inside one big unit it gained four
+   bytes of pad the reference does not have and the container came out eight
+   bytes long. The reference is not missing an alignment -- the whole ORIGINAL
+   translation unit sat at 4 mod 8, which is what `subalign: 4` and
+   `SUBALIGN(4)` in the generated linker script reproduce. Splitting those
+   functions into a unit whose rodata STARTS at 0x114C makes every `.align 3`
+   inside it a no-op and both land. The split points, 0xc14c and 0xc1a0, are
+   the two `splat` had suggested in `town.bin.yaml` from the beginning;
+   0xc1a0 is a boundary CONDITION, not a choice, and the yaml says why.
+
+   So: `csrc/ovl_town.c` (to 0x800BEBA4), `csrc/ovl_town_800BEBA4.c`
+   (0x800BEBA4..0x800BF3F0), `csrc/ovl_town_800BF3F0.c` (the rest). Four
+   consequences that bite:
+
+   - `brief.py UNIT PREFIX FUNC...` must be given the RIGHT unit per target.
+   - Overlay units compile **`-G0`**, and the new ones silently inherited the
+     resident's `-G8` at first: a landed 27-word function compiled to 29 with
+     `cc1psx`'s output IDENTICAL in both contexts, because the whole
+     difference was in the flags. The Makefile now carries an `ovl_%` pattern
+     rule so a fourth unit needs no edit. Teaching `asmlib.py`'s two `-G`
+     parsers to read pattern rules was NOT optional: they parse only explicit
+     targets, so the pattern made them default to 8 for every overlay and
+     silently re-measure two parks ten words longer -- the failure their own
+     docstring calls "silent in the worst way".
+   - Carving separates a call site from a callee defined across the cut. An
+     address-take fails loudly; a plain call rides an implicit declaration and
+     silently changes codegen.
+   - The clang-format total is **36**, not 37: the carve duplicates the
+     3,026-line preamble, so one preamble complaint now costs 3. A single
+     doubled blank line took the total to 39 before it was fixed at the root.
+
+   The campaign is driven by `tools/decomp/batcher.py`, which partitions
    every remaining stub into groups by shared callees and globals weighted by
-   rarity, slot-chain edges and address locality. It reports **784 stubs,
-   30,722 words, 137 groups** at a 200-word target. The groups at the head of
+   rarity, slot-chain edges and address locality. It reports **582 stubs,
+   21,260 words, 101 groups** at a 200-word target. The groups at the head of
    that list are single large functions, not families -- the largest remaining
    stub is 475 words -- so the batch economics have inverted since the family
    era: one agent per function, with the templates coming from
@@ -359,9 +395,10 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. The whole unit sweeps clean at
-   1029 of 1029, and both `make build/town.bin` and `make check` are
-   byte-identical. `docs/matching-levers.md` is at **391 levers**, as `leverindex.py` itself
+   Work the tight components. All three units sweep clean -- **0 nonzero** --
+   and both `make build/town.bin` and `make check` are byte-identical. The
+   sweep's benign off-by-one is now one PER UNIT, three in all.
+   `docs/matching-levers.md` is at **399 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
