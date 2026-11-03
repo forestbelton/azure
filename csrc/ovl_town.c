@@ -715,6 +715,35 @@ typedef struct UnkTownScene
     u8 pad_2C[0x4];
 } UnkTownScene;
 
+/* The 0x1F800000 scratchpad as func_800970FC uses it: the position pair
+   func_80044D24 reads back at +0x00/+0x02 (Unk44D24SP's unk_00/unk_02) and
+   the word func_800453E0 reads at +0x13C (Unk453E0SP's unk_13C).  A fifth
+   typedef for the region, as Unk3CCB0SP's comment anticipates -- it is here
+   and not Unk44D24SP because that one stops at +0x8E, and the stores have to
+   be COMPONENT_REFs: through `u16 *scratch = (u16 *)0x1F800000` they are
+   INDIRECT_REFs of scalar type, MEM_IN_STRUCT_P is clear, and sched2 floats
+   both halfword stores past the in-struct loads that follow them (4 words). */
+typedef struct UnkTown970SP
+{
+    s16 unk_00;
+    s16 unk_02;
+    u8 pad_04[0x138];
+    u32 unk_13C;
+} UnkTown970SP;
+
+/* The two 8-byte VRAM rects at D_800D04D0 (the window's source rect in VRAM,
+   split into a tpage by `& ~0xFF` and texcoords by `% 0x100`) and D_800D04D8
+   (its destination rect on screen).  u16 fields with (s16) casts at the signed
+   uses: the texcoord modulus needs a signed operand (`lh` + the bgez/addiu
+   0xFF/sra dance) while the coordinate sums are `lhu`. */
+typedef struct UnkTownRect
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+} UnkTownRect;
+
 /* D_8006ADBC, a resident `extern u8 []`. Witnessed fields only: a u16 at
    +0x0C, an s16 flag at +0x0E, a pointer at +0x10 to a u16 pair, two u16 at
    +0x14/+0x16 added to that pair, and an s32 at +0x18 compared to 0x37000C.
@@ -1616,7 +1645,7 @@ extern u8 D_800D0710[];
 extern u8 D_800D06AC[];
 extern u8 D_800F8C44[];
 extern u8 D_800F8C80[];
-void func_800970FC();
+s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2);
 void func_800AB408(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 void func_800AB50C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 void func_800AB708(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
@@ -1958,6 +1987,28 @@ UnkNode *func_8009792C(UnkTownPuff *t, s16 ang);
 UnkNode *func_800A878C(UnkTownPuff *t, s16 ang);
 void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
+extern UnkTownRect D_800D04D0;
+extern UnkTownRect D_800D04D8;
+extern UnkSlot D_800D04E0;
+extern s32 D_800D0460;
+extern u16 D_800D0504;
+extern s16 D_800D45AA[];
+/* D_80082E80 under its UnkSlot face.  The unit declares the same address as
+   UnkTownScene for func_8008FFC8; a second DECL with the same asm name is what
+   keeps cse from unifying the two `&D_80082E80` pointer locals func_800970FC
+   needs (2 words, and the whole second half's register assignment). */
+extern UnkSlot D_80082E80_b __asm__("D_80082E80");
+void func_80044D24(u8 *, UnkSlot *, s16);
+void func_800453E0(u8 *, UnkVec *, UnkSlot *, s16);
+u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y); /* GetTPage */
+void func_8006658C(void *ot, void *p);            /* AddPrim */
+void func_80066640(void *p, s32 abe);             /* SetSemiTrans */
+void func_800666E0(POLY_F4 *p);                   /* SetPolyF4 */
+void func_800666F4(POLY_FT4 *p);                  /* SetPolyFT4 */
+void func_80067E2C(DR_AREA *p, RECT *r);          /* SetDrawArea */
+void func_80067EF4(void *p, s32 a, s32 b);        /* the 0xE6 mask primitive */
+u16 func_8008C180(s16 x, s16 y);
+s32 func_800C1D44(s32 id);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5140,7 +5191,282 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009706C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800970AC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800970FC);
+/* The town message window: a textured panel (one POLY_FT4 from the VRAM rect
+   at D_800D04D0 into the screen rect at D_800D04D8, plus three POLY_F4
+   borders), the text drawn twice through func_80044D24 for a shadow, and a
+   DR_AREA/0xE6-mask pair around each half.  Reached through func_800402F4's
+   cast of D_80083360[i], so the arity is (u8 *node+0x20, UnkVec *, UnkSlot *)
+   and all three are unused: the body takes the mover from D_80083780 and the
+   slot from D_80082E80 directly.  Returns 0 (three explicit `return 0`s; the
+   dispatcher's cast discards it).
+
+   Measured, in descending order of what it was worth:
+
+   - `s16 flag` (or `s8`), not `s32`.  The comparison's result has
+     nonzero_bits == 1, so combine drops the sign-extension and the
+     variable-assignment copy survives as a plain `addu $t0, $fp, $zero` that
+     cse cannot propagate away; reload then spills the COPY (slot 0x10) and
+     leaves the expression in $fp, which is what puts the spill store in the
+     first `if (flag)`'s delay slot at 0x80097430 instead of in the prologue.
+     `s32`/`u32`: 465 words, 25 differing.  `u8`/`u16`: 466 / 11 -- the
+     zero-extension stays as an `andi 0xFF`.
+
+   - One temporary `w` for every rect field that is ADDED to a coordinate.
+     Read inline, the sum is `(plus (zero_extend (mem)) (reg))` and combine's
+     "complex expression first" rule emits `addu $v0, $v0, $sN`; through a
+     temporary the load is its own insn and the source order survives as
+     `addu $v0, $sN, $v0`.  16 words, measured 29 -> 11 differing.  The
+     texcoord sums do NOT want it (their field is already truncated to a byte
+     by the `sb`).
+
+   - A SEPARATE `y2` for the second half's y.  One shared `y` puts it in the
+     same register as the first half's and costs the whole second half's
+     allocation: 70 differing against 29.  x is one variable for both halves
+     (it lands in $s3 either way).
+
+   - The scratchpad halves must be COMPONENT_REFs.  Through
+     `u16 *scratch = (u16 *)0x1F800000` they are INDIRECT_REFs of scalar type,
+     MEM_IN_STRUCT_P is clear, and sched2 floats both `sh`es past the
+     in-struct loads that follow (4 words, 11 -> 1 differing).
+
+   - The two early exits are `return 0`, not an `if (...) { everything }`.
+     The explicit return leaves a BARRIER in front of the `if`'s end label,
+     which is what makes cse_end_of_basic_block follow that jump; the path
+     budget (PATHLENGTH-1 == 9 followed jumps) is then spent by the 8 texcoord
+     `bgez`es and the first `if (flag)`, so cse's first extended block ends at
+     0x80097434 and the later `g->unk_00` and `r1->unk_00` loads keep their
+     `0(reg)` form instead of being folded back to `%lo(sym)($hi)`.  Without
+     it: 480 words.  Splitting `if (n != 0) { ... }` into an `if (n == 0)`
+     early exit with its own copy of the tail is the same lever and was worth
+     74 differing against 81.
+
+   - `(u16)(hw - 1) < 0x3F` with `hw` assigned first, so both `hw` and the
+     test's `hw - 1` fold off the same `/2` result in one block.
+
+   - `D_800D0460 = 0` before the func_8008C180/func_800C1D44 pair and
+     `D_800D0460 = 1` inside: one shared `%hi` in $s5.
+
+   - A signed `% 0x100` on `(s16)rect->unk_00` -- the bgez / addiu 0xFF / sra 8
+     / sll 8 / subu dance, eight times, each re-loading the field because the
+     intervening `sb`s invalidate it.  `(s16)` is load-bearing: a u16 operand
+     would be a plain `andi 0xFF`.
+
+   - `(s16)(tx & ~0xFF)` off `s32 tx = r1->unk_00;` locals, not off the field
+     inline: with the field inline combine's nonzero_bits narrows the mask to
+     `andi 0xff00`, where the target parks 0xFFFFFF00 in a register and shares
+     it between the two GetTPage arguments. */
+s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTown970SP *sp = (UnkTown970SP *)0x1F800000;
+    UnkSlot *sl = (UnkSlot *)&D_80082E80;
+    UnkTown2AE8Int *pt;
+    UnkTownRect *r1;
+    UnkTownRect *r2;
+    POLY_FT4 *ft;
+    POLY_F4 *f4;
+    DR_AREA *da;
+    UnkSlot *s2;
+    s8 flag;
+    u16 base;
+    s32 n;
+    s32 hw;
+    s32 tx;
+    s32 ty;
+    s32 x;
+    s32 y;
+    s32 w;
+    s32 y2;
+    s32 px;
+    s32 py;
+    u16 savT;
+    u16 savF;
+
+    flag = (g->unk_00 != D_801C9E40);
+    base = sl->unk_06;
+    if (sl->unk_14 & 0x80)
+    {
+        return 0;
+    }
+    pt = (UnkTown2AE8Int *)D_80083780;
+    D_800D0460 = 0;
+    n = func_800C1D44(func_8008C180(pt->unk_02, pt->unk_06));
+    if (n == 0)
+    {
+        sp->unk_13C = 0;
+        func_800453E0((u8 *)&D_80083498.unk_20, (UnkVec *)pt, sl,
+                      base + D_800D0504);
+        return 0;
+    }
+    hw = (pt->unk_0A - D_800D45AA[n]) / 2 + 6;
+    if ((u16)(hw - 1) < 0x3F)
+    {
+        D_800D0460 = 1;
+        sp->unk_13C = 0;
+        func_800453E0(NULL, (UnkVec *)pt, &D_800D04E0, base + D_800D0504);
+        sp->unk_13C = 0;
+        func_800453E0((u8 *)&D_80083498.unk_20, (UnkVec *)pt, sl,
+                      base + D_800D0504);
+
+        da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
+        func_80067E2C(da, (RECT *)g->unk_00);
+        func_8006658C(g->unk_00 + 0x830, da);
+
+        ft = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ft + 1);
+        r1 = &D_800D04D0;
+        *(u32 *)&ft->r0 = 0x808080;
+        func_800666F4(ft);
+        tx = r1->unk_00;
+        ty = r1->unk_02;
+        ft->tpage = func_80066460(2, 2, (s16)(tx & ~0xFF), (s16)(ty & ~0xFF));
+        func_80066640(ft, 1);
+        ft->u0 = (s16)r1->unk_00 % 0x100;
+        ft->v0 = (s16)r1->unk_02 % 0x100;
+        ft->u1 = (s16)r1->unk_00 % 0x100 + r1->unk_04;
+        ft->v1 = (s16)r1->unk_02 % 0x100;
+        ft->u2 = (s16)r1->unk_00 % 0x100;
+        ft->v2 = (s16)r1->unk_02 % 0x100 + r1->unk_06;
+        ft->u3 = (s16)r1->unk_00 % 0x100 + r1->unk_04;
+        ft->v3 = (s16)r1->unk_02 % 0x100 + r1->unk_06;
+
+        r2 = &D_800D04D8;
+        x = r2->unk_00;
+        y = (s16)r2->unk_02;
+        if (flag)
+        {
+            y -= 0xE0;
+        }
+        ft->x0 = x;
+        ft->y0 = y;
+        w = r2->unk_04;
+        ft->x1 = x + w;
+        ft->y1 = y;
+        ft->x2 = x;
+        w = r2->unk_06;
+        ft->y2 = y + w;
+        w = r2->unk_04;
+        ft->x3 = x + w;
+        w = r2->unk_06;
+        ft->y3 = y + w;
+        func_8006658C(g->unk_00 + 0x830, ft);
+
+        f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
+        f4->r0 = 0x40;
+        f4->g0 = 0x40;
+        f4->b0 = 0xC0;
+        func_800666E0(f4);
+        func_80066640(f4, 0);
+        f4->x0 = x;
+        w = r2->unk_06;
+        f4->y0 = y + w - hw;
+        w = r2->unk_04;
+        f4->x1 = x + w;
+        w = r2->unk_06;
+        f4->y1 = y + w - hw;
+        f4->x2 = x;
+        w = r2->unk_06;
+        f4->y2 = y + w;
+        w = r2->unk_04;
+        f4->x3 = x + w;
+        w = r2->unk_06;
+        f4->y3 = y + w;
+        func_8006658C(g->unk_00 + 0x830, f4);
+
+        f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
+        f4->b0 = 0;
+        f4->g0 = 0;
+        f4->r0 = 0;
+        func_800666E0(f4);
+        func_80066640(f4, 0);
+        f4->x0 = x;
+        f4->y0 = y;
+        w = r2->unk_04;
+        f4->x1 = x + w;
+        f4->y1 = y;
+        f4->x2 = x;
+        w = r2->unk_06;
+        f4->y2 = y + w;
+        w = r2->unk_04;
+        f4->x3 = x + w;
+        w = r2->unk_06;
+        f4->y3 = y + w;
+        func_8006658C(g->unk_00 + 0x830, f4);
+
+        da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
+        func_80067E2C(da, (RECT *)r2);
+        func_8006658C(g->unk_00 + 0x830, da);
+
+        s2 = &D_80082E80_b;
+        x = r1->unk_00;
+        y2 = (s16)r1->unk_02;
+        savF = s2->unk_14;
+        savT = s2->unk_10;
+        if (flag)
+        {
+            y2 -= 0xE0;
+        }
+        px = x + 0x20;
+        py = y2 + 0x39;
+        sp->unk_00 = px;
+        sp->unk_02 = py;
+        s2->unk_10 = 0x40;
+        s2->unk_14 |= 0xC;
+        func_80044D24(NULL, s2, 0x1F0);
+        sp->unk_00 = px;
+        sp->unk_02 = py;
+        s2->unk_10 = 0x20;
+        s2->unk_14 &= ~0xC;
+        func_80044D24(NULL, s2, 0x1F0);
+        s2->unk_14 = savF;
+        s2->unk_10 = savT;
+
+        da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
+        func_80067EF4(da, 0, 0);
+        func_8006658C(g->unk_00 + 0x830, da);
+
+        f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
+        f4->b0 = 0xFF;
+        f4->g0 = 0xFF;
+        f4->r0 = 0xFF;
+        func_800666E0(f4);
+        func_80066640(f4, 0);
+        f4->x0 = x;
+        f4->y0 = y2;
+        w = r1->unk_04;
+        f4->x1 = x + w;
+        f4->y1 = y2;
+        f4->x2 = x;
+        w = r1->unk_06;
+        f4->y2 = y2 + w;
+        w = r1->unk_04;
+        f4->x3 = x + w;
+        w = r1->unk_06;
+        f4->y3 = y2 + w;
+        func_8006658C(g->unk_00 + 0x830, f4);
+
+        da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
+        func_80067EF4(da, 0, 1);
+        func_8006658C(g->unk_00 + 0x830, da);
+
+        da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
+        func_80067E2C(da, (RECT *)r1);
+        func_8006658C(g->unk_00 + 0x830, da);
+        return 0;
+    }
+    sp->unk_13C = 0;
+    func_800453E0((u8 *)&D_80083498.unk_20, (UnkVec *)pt, sl,
+                  base + D_800D0504);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80097844);
 

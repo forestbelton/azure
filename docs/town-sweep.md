@@ -220,10 +220,19 @@ checking every landed function in the unit costs one compile:
     # with the brace on the signature line, and a `)$` pattern silently drops
     # every one of them. On 2026-11-02 that under-reported a whole session's
     # sweeps as 762 of 762 when the real count was 792.
-    awk '/^[A-Za-z_].*func_[0-9A-Fa-f]{8}\(/ && !/;[[:space:]]*$/' csrc/ovl_town.c \
+    # And exclude any line containing a `;` at all, not just one ending in it:
+    # a declaration with a trailing comment -- `u16 func_80066460(s32, s32,
+    # s32, s32); /* GetTPage */` -- does not end in `;` and otherwise gets
+    # swept as a definition, reported as `not defined in csrc/ovl_town.c`.
+    awk '/^[A-Za-z_].*func_[0-9A-Fa-f]{8}\(/ && !/;/' csrc/ovl_town.c \
       | grep -oE 'func_[0-9A-Fa-f]{8}' | sort -u > /tmp/landed.txt
     wc -l < /tmp/landed.txt            # POSITIVE CONTROL: compare against
                                        # progress.py's landed count for the unit
+    # Expect ONE more than progress.py: a multi-line DECLARATION's first line
+    # (`void func_800C3050(void *a, s32 id, void *a2, void *a3, void *a4,`)
+    # has no `;` on it either. That name is still a stub, so it sweeps at 0
+    # differing and costs nothing -- but know which off-by-one is benign, and
+    # chase any larger gap.
     python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(cat /tmp/landed.txt | tr '\n' ' ') \
       | grep -E '^func_[0-9A-Fa-f]{8}:' | grep -v ' 0 differing'
 
