@@ -1980,6 +1980,12 @@ void func_8009451C(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_80099C18();
 void func_800C3FFC();
 void func_80098928(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
+void func_80098834(UnkTownTask *a, UnkTown2AE8 *b);
+void func_8008BF0C(UnkTownMover *m, UnkTown2AE8 *b, void *c);
+extern u8 D_800CFD58[];
+extern u8 D_800CFD78[];
+extern u8 D_800CFD98[];
+extern u8 D_800CFDB8[];
 u32 func_800374F4(u16 n);
 extern s32 D_800D4FE8[];
 extern s32 D_800D4FF8[];
@@ -2186,13 +2192,65 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BED8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BF0C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BF5C);
+/* One of four clamping steppers on the mover's 16.16 position: the Y half steps by 0x100 and clamps at -0x400, then hands off to func_8008BF0C INSIDE the `if`. The record pointer at m->unk_00 is RE-DEREFERENCED at all three uses --
+   the target has `lw $v0, 0x0($a0)` twice -- and the field is the integer half
+   of a 16.16 word, so it is `*(s16 *)((u8 *)m->unk_00 + 0xA)`, read as `lhu`
+   for the arithmetic and `lh` for the compare. func_8008BACC above is the same
+   family without the clamp constant. */
+void func_8008BF5C(UnkTownMover *m, UnkTown2AE8 *b, void *c)
+{
+    *(s16 *)((u8 *)m->unk_00 + 0xA) -= 0x100;
+    if (*(s16 *)((u8 *)m->unk_00 + 0xA) < -0x400)
+    {
+        *(s16 *)((u8 *)m->unk_00 + 0xA) = -0x400;
+        func_8008BF0C(m, b, c);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BFB0);
+/* One of four clamping steppers on the mover's 16.16 position: the Y half steps by 0x200 and clamps at 0x800, then hands off to func_8008BF0C INSIDE the `if`. The record pointer at m->unk_00 is RE-DEREFERENCED at all three uses --
+   the target has `lw $v0, 0x0($a0)` twice -- and the field is the integer half
+   of a 16.16 word, so it is `*(s16 *)((u8 *)m->unk_00 + 0xA)`, read as `lhu`
+   for the arithmetic and `lh` for the compare. func_8008BACC above is the same
+   family without the clamp constant. */
+void func_8008BFB0(UnkTownMover *m, UnkTown2AE8 *b, void *c)
+{
+    *(s16 *)((u8 *)m->unk_00 + 0xA) += 0x200;
+    if (*(s16 *)((u8 *)m->unk_00 + 0xA) > 0x800)
+    {
+        *(s16 *)((u8 *)m->unk_00 + 0xA) = 0x800;
+        func_8008BF0C(m, b, c);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C004);
+/* One of four clamping steppers on the mover's 16.16 position: the X half steps by 0x200 and clamps at -0x800, then hands off to func_8008BF0C INSIDE the `if`. The record pointer at m->unk_00 is RE-DEREFERENCED at all three uses --
+   the target has `lw $v0, 0x0($a0)` twice -- and the field is the integer half
+   of a 16.16 word, so it is `*(s16 *)((u8 *)m->unk_00 + 0x8)`, read as `lhu`
+   for the arithmetic and `lh` for the compare. func_8008BACC above is the same
+   family without the clamp constant. */
+void func_8008C004(UnkTownMover *m, UnkTown2AE8 *b, void *c)
+{
+    *(s16 *)((u8 *)m->unk_00 + 0x8) -= 0x200;
+    if (*(s16 *)((u8 *)m->unk_00 + 0x8) < -0x800)
+    {
+        *(s16 *)((u8 *)m->unk_00 + 0x8) = -0x800;
+        func_8008BF0C(m, b, c);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C058);
+/* One of four clamping steppers on the mover's 16.16 position: the X half steps by 0x200 and clamps at 0x800, then hands off to func_8008BF0C INSIDE the `if`. The record pointer at m->unk_00 is RE-DEREFERENCED at all three uses --
+   the target has `lw $v0, 0x0($a0)` twice -- and the field is the integer half
+   of a 16.16 word, so it is `*(s16 *)((u8 *)m->unk_00 + 0x8)`, read as `lhu`
+   for the arithmetic and `lh` for the compare. func_8008BACC above is the same
+   family without the clamp constant. */
+void func_8008C058(UnkTownMover *m, UnkTown2AE8 *b, void *c)
+{
+    *(s16 *)((u8 *)m->unk_00 + 0x8) += 0x200;
+    if (*(s16 *)((u8 *)m->unk_00 + 0x8) > 0x800)
+    {
+        *(s16 *)((u8 *)m->unk_00 + 0x8) = 0x800;
+        func_8008BF0C(m, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C0AC);
 
@@ -2577,13 +2635,57 @@ void func_8008F350(UnkTownColl *a, UnkTown2AE8 *b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F3CC);
+/* Four wrappers over the min/max vector searches: copy three of the caller's
+   six 16.16 words into a LOCAL UnkTown2AE8, with one component offset by a
+   later field, and hand the result to one of func_8008CA20's family with a
+   count of 2.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F41C);
+   THE LOCAL IS SIX WORDS, NOT THREE, even though only three are written. The
+   frame is 0x30 with the buffer at sp+0x10, so sp+0x10..sp+0x28 is 0x18 bytes;
+   a three-word buffer gives a 0x28 frame and 4 differing -- the two `addiu $sp`
+   words and the two `$ra` displacements -- with every other word exact. That is
+   the whole content of these four, and it is the stack-slot rounding rule read
+   backwards: a declared size IS witnessed when it moves the frame across an
+   8-byte boundary. */
+s16 func_8008F3CC(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F46C);
+    v.unk_00 = b->unk_00 - b->unk_0C;
+    v.unk_04 = b->unk_04;
+    v.unk_08 = b->unk_08;
+    return func_8008CA20(&v, (s32)D_800CFD58, 2);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F4BC);
+s16 func_8008F41C(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
+
+    v.unk_00 = b->unk_00 - b->unk_0C;
+    v.unk_04 = b->unk_04;
+    v.unk_08 = b->unk_08;
+    return func_8008CABC(&v, (s32)D_800CFD78, 2);
+}
+
+s16 func_8008F46C(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
+
+    v.unk_00 = b->unk_00;
+    v.unk_04 = b->unk_04 - b->unk_10;
+    v.unk_08 = b->unk_08;
+    return func_8008CB58(&v, (s32)D_800CFD98, 2);
+}
+
+s16 func_8008F4BC(UnkTown2AE8 *b)
+{
+    UnkTown2AE8 v;
+
+    v.unk_00 = b->unk_00;
+    v.unk_04 = b->unk_04 - b->unk_10;
+    v.unk_08 = b->unk_08;
+    return func_8008CBF4(&v, (s32)D_800CFDB8, 2);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F50C);
 
@@ -4084,9 +4186,29 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098764);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098834);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098868);
+/* A family of 2 whose only varying word is the second jal: set the task up
+   through func_80098834, run one of two bodies, and install func_80093D48 as
+   the global continuation at D_800FE5D8.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800988C8);
+   func_80098834 takes TWO parameters, not three: its listing never references
+   $a2, and this call site emits no setup for it because the incoming $a0/$a1
+   are already right. func_80098988 stays K&R-declared -- two landed callers,
+   func_80098078 and func_80098140, call it with NO arguments and rely on the
+   incoming registers being live, so giving it a real prototype would break
+   them. A K&R declaration accepts the three arguments passed here. */
+void func_80098868(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80098834(t, b);
+    func_80098928(t, b, c);
+    D_800FE5D8 = func_80093D48;
+}
+
+void func_800988C8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    func_80098834(t, b);
+    func_80098988(t, b, c);
+    D_800FE5D8 = func_80093D48;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098928);
 
