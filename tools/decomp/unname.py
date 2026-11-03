@@ -50,13 +50,15 @@ written AFTER the sweep proposed a wrong program with good numbers:
     -- but with no local gcc walks the base as a CURSOR (`addiu $v1, $v1, 0x4`
     then `sw $v0, -0x4($v1)`) where the listing holds one base throughout. Read
     the diff before adopting a hit.
-  * GIVE IT ITS OWN WINE PREFIX if anything else is compiling. Concurrent
-    `ccpsx` runs share one prefix and the loser exits 0 having written nothing,
-    so a sweep run beside hand measurements corrupts both:
+  * GIVE IT ITS OWN SCRATCH DIR if anything else is compiling, so the two
+    runs do not overwrite each other's .s files:
 
-        cp -a ~/.cache/azure-psyq /tmp/azure-wine-sweep
-        AZURE_WINEPREFIX=/tmp/azure-wine-sweep AZURE_SCRATCH=/tmp/azure-decomp-sweep \\
-            python3 tools/decomp/unname.py
+        AZURE_SCRATCH=/tmp/azure-decomp-sweep python3 tools/decomp/unname.py
+
+    It no longer needs a wine prefix of its own: concurrent `ccpsx` runs used
+    to share one prefix with the loser exiting 0 having written nothing, which
+    corrupted a sweep run beside hand measurements. The native compiler has no
+    such hazard.
 
 With no arguments it sweeps every park in docs/near-misses. Name one or more
 functions to sweep only those.

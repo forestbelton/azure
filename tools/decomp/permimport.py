@@ -5,7 +5,7 @@ decomp-permuter's own import.py derives the compile command from
 `make --always-make --dry-run`, so the source has to be a build input: for a
 parked function that means dropping it into csrc/, which the landing gate
 forbids. It also picks up only the first step of this project's pipeline
-(`ccpsx -S`) and writes assembly text to the .o path, so every objdump then
+(the compiler's `-S`) and writes assembly text to the .o path, so every objdump then
 fails with "file format not recognized".
 
 This writes the five files directly instead, from the park source and the
@@ -13,7 +13,7 @@ splat listing:
 
     base.c        the park source, preprocessed with -DPERMUTER
     target.o      the splat listing assembled at the unit's own gas -G
-    compile.sh    the full ccpsx -> maspsx -> as pipeline for that unit
+    compile.sh    the full compiler -> maspsx -> as pipeline for that unit
     settings.toml func_name and compiler_type
     function.txt  the function name
 
@@ -49,7 +49,7 @@ def unit_for(func):
 def preprocess(park, out):
     """cpppsx the park source so pycparser sees no project macros."""
     r = subprocess.run(
-        [os.path.join(PROJ, "tools/ccpsx"), "-E", "-G8",
+        [os.path.join(PROJ, "tools/cdkgcc"), "-E", "-G8",
          "-Iinclude", "-Ipsyq/include", "-DPERMUTER", park],
         cwd=PROJ, capture_output=True, text=True)
     if r.returncode or not r.stdout.strip():
@@ -90,7 +90,7 @@ PROJ="{proj}"
 cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
-tools/ccpsx -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
+tools/cdkgcc -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
 python3 vendor/maspsx/maspsx.py \\
     --aspsx-version=2.56 --force-stdin --run-assembler \\
     --gnu-as-path="${{AS:-{as_}}}" --use-comm-section {gflags} \\

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """permrun.py FUNC [--minutes N] [--jobs N] -- run decomp-permuter on one park.
 
-Needs the wine prefix pool (`make permuter-prefixes`): concurrent ccpsx runs
-in one prefix silently swap each other's output, which a search selecting the
-minimum score turns into false winners. tools/ccpsx claims a pooled prefix per
-compile when the pool exists, measured 0 wrong in 80 at 8-way against 3 wrong
-in 80 shared, at the same speed.
+Parallel searches are safe with no setup. This used to need the wine prefix
+pool (`make permuter-prefixes`), because concurrent ccpsx runs in one prefix
+silently swapped each other's output -- measured 3 wrong in 80 at 8-way --
+which a search selecting the minimum score turns into false winners. The
+native compiler has no shared mutable state, so the pool is gone from the
+requirements.
 
 Prints ONE line and appends it to nonmatchings/permlog.tsv. A run costs CPU and
 no context, so let it run long and read only the verdict.
@@ -20,9 +21,8 @@ make check on a cleaned-up version.
 JOBS ARE A MACHINE-WIDE BUDGET OF 20, not a per-run setting. This script
 counts the jobs every other running permuter already holds and clamps
 `--jobs` to what is left, because the jobs are what compete for the machine
-the user is also using, and because concurrent compiles beyond the prefix
-pool swap outputs and manufacture false winners. If the budget is already
-spent, it refuses rather than queueing -- run ONE search at a time.
+the user is also using. If the budget is already spent, it refuses rather
+than queueing -- run ONE search at a time.
 """
 import datetime
 import io
@@ -35,8 +35,6 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
-CACHE = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-POOL = os.path.join(CACHE, "azure-psyq-pool")
 PERMUTER = os.path.join(PROJ, "vendor/decomp-permuter/permuter.py")
 LOG = os.path.join(PROJ, "nonmatchings/permlog.tsv")
 
@@ -104,13 +102,6 @@ def new_session_and_die_with_parent():
         pass            # a missing prctl costs promptness, not the deadline
 
 
-def pool_size():
-    if not os.path.isdir(POOL):
-        return 0
-    return len([n for n in os.listdir(POOL)
-                if n.startswith("p") and os.path.isdir(os.path.join(POOL, n))])
-
-
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
@@ -129,9 +120,8 @@ def main():
     if "--jobs" in sys.argv:
         jobs = int(sys.argv[sys.argv.index("--jobs") + 1])
 
-    npool = pool_size()
     if not jobs:
-        jobs = max(1, min(8, npool))
+        jobs = max(1, min(8, os.cpu_count() or 1))
 
     held = jobs_in_flight()
     free = MAX_JOBS - held
@@ -145,13 +135,6 @@ def main():
               "by other permuters)." % (jobs, free, held, MAX_JOBS))
         jobs = free
 
-    if jobs > 1 and npool < jobs:
-        print("permrun: REFUSING -j %d with %d pooled prefixes. Concurrent "
-              "compiles in one prefix swap outputs and manufacture false "
-              "winners; run `make permuter-prefixes POOL=%d` or pass --jobs 1."
-              % (jobs, npool, jobs))
-        return 1
-
     d = os.path.join(PROJ, "nonmatchings", func)
     if not os.path.isdir(d):
         print("permrun: no %s -- run permimport.py %s first"
@@ -159,7 +142,6 @@ def main():
         return 1
 
     env = dict(os.environ)
-    env.pop("AZURE_WINEPREFIX", None)   # let tools/ccpsx claim per compile
 
     before = set(os.listdir(d))
     # The deadline is enforced TWICE on purpose. The loop below kills the

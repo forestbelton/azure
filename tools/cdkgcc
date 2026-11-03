@@ -1,0 +1,59 @@
+#!/bin/sh
+# Drive the native cygnus-2.7.2-970404 build of the PSY-Q 4.1 compiler.
+#
+# scratch/cdk-gcc/ holds cpp/cc1/gcc built from the vendor/old-gcc submodule
+# (decompals/old-gcc, pinned at 0.17) by `make cdk-gcc`, which runs its
+# gcc-2.7.2-cdk Dockerfile. That compiles SN Systems' own CDK release
+# (cdk-gcc-b18) for --target=mips-sony-psx. Its cc1 reports the identical
+# version string to psyq/cc1psx.exe -- "cygnus-2.7.2-970404 SN32.3.7.0004" --
+# and the identical codegen templates and pass list, because it IS that
+# compiler, built natively rather than run as a Windows binary under wine.
+# Measured 2026-11-02: all 40 units in csrc/ compile to byte-identical
+# assembly, and all four containers stay byte-identical.
+#
+# The Docker build is reproducible: the binaries come out bit-identical to the
+# 0.17 release's own assets, because the image pins the host toolchain at
+# ubuntu:focal.
+#
+# Two adaptations are needed, neither of them about code generation:
+#
+#  1. psyq/include is CRLF, and a `\` line continuation followed by CRLF does
+#     not splice under GNU cpp -- it sees `\` then `\r`. cpppsx tolerates it.
+#     So -Ipsyq/include is rewritten to a generated LF copy. libgpu.h's
+#     setVector/addVector macros are the ones that break without this.
+#  2. There is no install tree (the build was configured --prefix=/opt/cross),
+#     so the driver needs -B to find its own cpp and cc1.
+#
+# Interface is tools/ccpsx's, so `make CC=tools/cdkgcc` is the whole switch.
+set -eu
+
+PROJ=$(cd "$(dirname "$0")/.." && pwd)
+CDK=${CDK_DIR:-$PROJ/scratch/cdk-gcc}
+INC=${CDK_PSYQ_INC:-$PROJ/scratch/psyq-include-lf}
+
+if [ ! -x "$CDK/gcc" ]; then
+    echo "tools/cdkgcc: no gcc under $CDK" >&2
+    echo "  run 'make cdk-gcc' (needs docker and the vendor/old-gcc submodule;" >&2
+    echo "  'git submodule update --init vendor/old-gcc' if it is empty)" >&2
+    exit 1
+fi
+
+# Regenerate the LF include tree whenever it is missing or stale.
+if [ ! -d "$INC" ] || [ -n "$(find "$PROJ/psyq/include" -newer "$INC" -print -quit 2>/dev/null)" ]; then
+    rm -rf "$INC"
+    (cd "$PROJ/psyq/include" && find . -type d -exec mkdir -p "$INC/{}" \;)
+    (cd "$PROJ/psyq/include" && find . -type f | while read -r f; do
+        tr -d '\r' < "$f" > "$INC/$f"
+    done)
+fi
+
+args=""
+for a in "$@"; do
+    case "$a" in
+        -Ipsyq/include|-I"$PROJ"/psyq/include) a="-I$INC" ;;
+    esac
+    args="$args $a"
+done
+
+# shellcheck disable=SC2086
+exec "$CDK/gcc" -B"$CDK/" $args

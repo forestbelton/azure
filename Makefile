@@ -44,8 +44,23 @@ CHECK = python tools/check.py
 # simple functions identically but cannot emit the hoisted-lui global access
 # shape the game uses everywhere; see docs/compiler-version.md. The libraries
 # are still 4.0's. aspsx 2.56 and 2.67 emulations both match so far.
-# tools/ccpsx drives the compiler under wine.
-CC             = tools/ccpsx
+# tools/cdkgcc drives a NATIVE build of that same compiler. decompals/old-gcc
+# builds SN Systems' own CDK release (cdk-gcc-b18) for --target=mips-sony-psx,
+# and its cc1 reports the identical version string, codegen templates and pass
+# list, because it is the same compiler -- compiled for Linux instead of run as
+# a Windows binary under wine. Measured 2026-11-02: all 40 units in csrc/
+# compile to byte-identical assembly and all four containers stay
+# byte-identical, and a full rebuild is 4.9s against wine's 8.7s.
+#
+# The build is reproducible, which is why this is a submodule and a Dockerfile
+# rather than a downloaded binary: `make -C vendor/old-gcc VERSION=2.7.2-cdk`
+# produces cc1, cpp and gcc BIT-IDENTICAL to that release's own assets
+# (sha256 90db2db7.../d8005743.../7a571911...), since the image pins the host
+# toolchain at ubuntu:focal.
+#
+# tools/ccpsx is kept as the fallback and as the only way to reach the real
+# ASPSX; nothing in the build uses it now. See docs/compiler-version.md.
+CC             = tools/cdkgcc
 ASPSX_VERSION  = 2.56
 CFLAGS        += -O2 -G8 -Iinclude -Ipsyq/include
 
@@ -178,15 +193,30 @@ CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
           $(CFILES:%.c=build/%.o)
 
-# Coarse header dependency: ccpsx is too old to emit .d files conveniently, so
-# rebuild every C object when any header changes. Without this, editing
-# include/common.h leaves stale objects behind and the build silently keeps
-# using them.
+# Coarse header dependency: the compiler is too old to emit .d files
+# conveniently, so rebuild every C object when any header changes. Without
+# this, editing include/common.h leaves stale objects behind and the build
+# silently keeps using them.
 HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
+# The compiler itself, built on demand from the vendor/old-gcc submodule. It
+# lives under scratch/ rather than build/ because `clean` wipes build/ and a
+# Docker rebuild is 20s of churn for something that only changes when the
+# submodule pin moves.
+CDK_DIR := scratch/cdk-gcc
+CDK_CC1 := $(CDK_DIR)/cc1
+$(CFILES:%.c=build/%.o): $(CDK_CC1)
+
+$(CDK_CC1):
+	$(MAKE) -C vendor/old-gcc VERSION=2.7.2-cdk
+	@mkdir -p $(CDK_DIR)
+	cp vendor/old-gcc/build-gcc-2.7.2-cdk/* $(CDK_DIR)/
+
+cdk-gcc: $(CDK_CC1)
+
 .PHONY: all containers clean splat check expected ctx ghidra-syms extract \
-        permuter-prefixes permuter-prefixes-clean
+        cdk-gcc permuter-prefixes permuter-prefixes-clean
 
 all: build/$(SLUS) build/$(TOWN)
 
@@ -261,10 +291,14 @@ build/%.o: %.bin
 
 # Report where the build diverges from the original, and which subsegment
 # owns that offset. A whole-file checksum cannot tell you that.
-# One wine prefix per concurrent ccpsx run. Two runs sharing a prefix can swap
-# each other's output (see tools/ccpsx), which a parallel permuter would turn
-# into false winners. The copies are reflinked, so on btrfs each 1.8 GB prefix
-# costs ~0 bytes and 0.15s; POOL=N to size it (default: one per core).
+# LEGACY, and no longer needed by anything: one wine prefix per concurrent
+# ccpsx run. Two runs sharing a prefix can swap each other's output (see
+# tools/ccpsx), which a parallel permuter would turn into false winners. The
+# native compiler has no such hazard, so the pool is only of use if something
+# is driven back through tools/ccpsx. Kept because the hazard it works around
+# is measured and worth not rediscovering. The copies are reflinked, so on
+# btrfs each 1.8 GB prefix costs ~0 bytes and 0.15s; POOL=N to size it
+# (default: one per core).
 POOL ?= $(shell nproc)
 PREFIX_POOL := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq-pool
 PREFIX_BASE := $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/azure-psyq

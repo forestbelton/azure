@@ -2,10 +2,10 @@
 # Full compile pipeline for decomp-permuter, producing a real object.
 #
 # import.py derives its compile command from the Makefile and picks up only the
-# first step, `ccpsx -S`, which emits assembly -- it then writes that text to
-# the .o path and every objdump fails with "file format not recognized". Doing
-# the whole ccpsx -> maspsx -> as pipeline here also means the permuter scores
-# against the same toolchain the real build uses.
+# first step, the compiler's `-S`, which emits assembly -- it then writes that
+# text to the .o path and every objdump fails with "file format not
+# recognized". Doing the whole compiler -> maspsx -> as pipeline here also
+# means the permuter scores against the same toolchain the real build uses.
 set -euo pipefail
 
 INPUT="$(realpath "$1")"
@@ -13,10 +13,10 @@ OUTPUT="$(realpath "$3")"
 # import.py copies this script into nonmatchings/<func>/, so its own location
 # is not the project root. Walk up until the root is recognisable instead.
 PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-while [ "$PROJ" != "/" ] && [ ! -x "$PROJ/tools/ccpsx" ]; do
+while [ "$PROJ" != "/" ] && [ ! -x "$PROJ/tools/cdkgcc" ]; do
     PROJ="$(dirname "$PROJ")"
 done
-if [ ! -x "$PROJ/tools/ccpsx" ]; then
+if [ ! -x "$PROJ/tools/cdkgcc" ]; then
     echo "permuter_compile.sh: cannot locate the project root" >&2
     exit 1
 fi
@@ -33,7 +33,7 @@ cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
 
-tools/ccpsx -O2 -G8 -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
+tools/cdkgcc -O2 -G8 -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
 python3 "$MASPSX_DIR/maspsx.py" \
     --aspsx-version=2.56 --force-stdin --run-assembler \
     --gnu-as-path="$AS" --use-comm-section -G8 \

@@ -3,7 +3,7 @@
 listing, and decode MIPS words into comparable fields.
 
 This exists so `verify.py` and `advise.py` cannot drift apart on HOW a
-candidate is built -- that pipeline (ccpsx's include paths, maspsx's aspsx
+candidate is built -- that pipeline (the compiler's include paths, maspsx's aspsx
 version and -G, gas's flags) is the part that has broken silently before.
 Adding `-Ipsyq/include` to one caller and not the others is exactly the bug
 this file prevents a repeat of.
@@ -159,44 +159,28 @@ class CompileError(Exception):
 
 
 def compile_asm(src, cflags=()):
-    """ccpsx -S the candidate; return the assembly text.
+    """Compile the candidate to assembly with tools/cdkgcc; return the text.
 
-    Wine's filesystem is case-insensitive, so the name ccpsx writes is not
-    always the name we asked for: `I1.c` gets its output written as `i1.s`,
-    and a stale `zz_gA.s` in the scratch directory is the same file as
-    `zz_ga.s`. Both are handled by clearing every case-variant of the target
-    name first and then accepting whichever case actually appeared -- there can
-    only be one such file, and it is ours.
+    This used to carry two workarounds for driving cc1psx under wine, both of
+    which the native compiler makes unnecessary. Wine's filesystem is
+    case-insensitive, so the name it wrote was not always the name we asked
+    for -- `I1.c` came back as `i1.s` -- and concurrent runs sharing one wine
+    prefix could leave a compile exiting 0 having written nothing at all. A
+    native compiler writes exactly the path given to -o, so a missing output
+    is now a real error rather than something to retry.
 
-    Raises CompileError if nothing was written under any spelling.
+    Raises CompileError if the compile fails or writes nothing.
     """
     os.makedirs(SP, exist_ok=True)
     base = os.path.splitext(os.path.basename(src))[0]
     s = os.path.join(SP, base + '.s')
-    want = os.path.basename(s).lower()
-    for f in os.listdir(SP):
-        if f.lower() == want:
-            try:
-                os.remove(os.path.join(SP, f))
-            except OSError:
-                pass
-    r = subprocess.run([os.path.join(PROJ, 'tools/ccpsx')] + CFLAGS + list(cflags)
+    r = subprocess.run([os.path.join(PROJ, 'tools/cdkgcc')] + CFLAGS + list(cflags)
                        + ['-S', '-o', s, src], cwd=PROJ,
                        capture_output=True, text=True)
     if r.returncode:
         raise CompileError(r.stdout + r.stderr)
     if not os.path.exists(s):
-        # wine may have written our output under a different case, e.g. i1.s
-        # for I1.c. We cleared every case-variant above, so any that exists now
-        # is this run's output.
-        variant = [f for f in os.listdir(SP) if f.lower() == want]
-        if variant:
-            s = os.path.join(SP, variant[0])
-        else:
-            raise CompileError(
-                'ccpsx exited 0 but wrote no %s under any spelling of the name;'
-                '\n  try again (concurrent ccpsx runs share one wine prefix and'
-                '\n  can lose an output).' % s)
+        raise CompileError('the compiler exited 0 but wrote no %s' % s)
     return open(s).read()
 
 

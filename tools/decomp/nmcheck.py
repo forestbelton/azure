@@ -76,7 +76,7 @@ def compile_only(path, text):
         with os.fdopen(fd, "w") as fh:
             fh.write(text)
         r = subprocess.run(
-            [os.path.join(PROJ, "tools/ccpsx"), "-O2", "-G8", "-Iinclude", "-Ipsyq/include", "-S",
+            [os.path.join(PROJ, "tools/cdkgcc"), "-O2", "-G8", "-Iinclude", "-Ipsyq/include", "-S",
              "-o", "/dev/null", os.path.basename(tmp)],
             cwd=PROJ, capture_output=True, text=True)
     finally:
