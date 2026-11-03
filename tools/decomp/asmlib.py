@@ -26,14 +26,19 @@ PROJ = os.environ.get(
 CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include']
 
 
-# A unit built with MASPSXFLAGS_G8 or _G2 leaves gas at a nonzero -G, so an
-# UNDEFINED symbol whose `.extern SYM,size` size falls in (0, G] goes
-# $gp-relative. Getting this wrong is silent: the function simply does not
-# match, and nothing says why. The Makefile is the authority -- these are the
+# A unit left at a nonzero gas -G sends an UNDEFINED symbol whose
+# `.extern SYM,size` size falls in (0, G] $gp-relative. Getting this wrong is
+# silent: the function simply does not match, and nothing says why. The
+# Makefile is the authority -- these are the
 # `build/csrc/<unit>.o: MASPSXFLAGS := ...` lines -- so read it rather than
-# guessing from the unit's name. A unit with no such rule gets the default
-# MASPSXFLAGS, which forces -G0, and that includes some gprel_ units: the
-# prefix records why the unit was carved out, not how it is assembled.
+# guessing from the unit's name.
+#
+# As of 2026-11-03 NO unit has such a rule for a nonzero -G: MASPSXFLAGS_G8 and
+# MASPSXFLAGS_G2 were deleted when the eleven carved gprel_* units were
+# converted to file-scope definitions of their $gp objects, which get the same
+# %gp_rel at the forced -G0. So this returns 0 for everything, which is right,
+# and will pick a rule up again by itself if one is ever added. The `gprel_`
+# prefix records why a unit was carved out, not how it is assembled.
 _G_BY_UNIT = None
 
 
@@ -187,8 +192,9 @@ def compile_asm(src, cflags=()):
 def assemble(asm, name, gasG=0):
     """maspsx + gas the assembly; return the object path.
 
-    gasG models a unit carved out with MASPSXFLAGS_G8/_G2 -- gas then emits
-    GPREL16 for a symbol whose `.extern SYM,size` size is in (0, G].
+    gasG models a unit left at a nonzero gas -G -- gas then emits GPREL16 for
+    a symbol whose `.extern SYM,size` size is in (0, G]. No unit is built that
+    way any more; see the note on gas_g_for_unit above.
     """
     o = os.path.join(SP, name + '.o')
     cmd = ['python3', MASPSX, '--aspsx-version=2.56', '--force-stdin',

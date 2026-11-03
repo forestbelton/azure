@@ -1,28 +1,55 @@
 /* A carved-out translation unit: these functions reach D_80080AF3, D_80080AFC,
- * D_80080B00 and D_80081508 $gp-relatively, so gas is left at -G8 here rather
- * than maspsx's forced -G0 (MASPSXFLAGS_G8 in the Makefile). No window
- * definition and no linker placement -- see gprel_17504 and
+ * D_80080B00 and D_80081508 $gp-relatively, which is the same as saying this
+ * unit DEFINED them. Three are the tentative definitions below -- cc1psx emits
+ * a `.comm` for each, maspsx's `--use-comm-section` files them under
+ * `sbss_entries`, and `_uses_gp` rewrites this unit's accesses to %gp_rel at
+ * the project default gas -G0, with nothing allocated because each object is
+ * already a GLOBAL dlabel in asm/data/gp_data.data.s and a COMMON merges with
+ * it. No window definition and no linker placement -- see gprel_17504 and
  * docs/addressing-and-translation-units.md.
  *
- * The two decompiled functions in the middle of the run were audited before
- * carving, which is the step that matters: at -G8 gas makes any small
- * UNDEFINED symbol $gp-relative, so every symbol reached absolutely must
- * either sit outside gp +/- 0x8000 or be declared so cc1psx compiler-splits
- * the address itself. func_800445E0 reaches no global at all; func_80044724
- * reaches D_80083178 (a 0x94+ struct) and D_80083CE8 (an array of 4), both
- * split by their declared size. func_8004491C's D_80083360/D_800833E0 are
- * u32[0x20] and would also have been safe, but it is left outside the carve
- * because it needs no $gp access.
+ * D_80080AFC IS THE EXCEPTION, and it is the second size record in the
+ * project. func_80044618 reaches D_80080AFC+2 twice, an ADDEND access, and
+ * maspsx's `_uses_gp` refuses %gp_rel for an addend whose symbol is in
+ * `comm_symbols`:
+ *
+ *     gp_allowed = self.gp_allow_offset or symbol not in self.comm_symbols
+ *
+ * `gp_allow_offset` is False for ASPSX 2.56, so a tentative definition would
+ * send those two halfwords to absolute `lui $at` pairs. A bare `.size` record
+ * inside `.sdata` populates `sdata_entries` and NOT `comm_symbols`, so it asks
+ * for exactly the same rewrite without the addend refusal. See the identical
+ * case in csrc/unk_264E0.c; those are the only two records left in the tree.
+ *
+ * The two decompiled functions in the middle of the run were audited back when
+ * this unit was built at -G8, where gas made any small UNDEFINED symbol
+ * $gp-relative, so every symbol reached absolutely had to either sit outside
+ * gp +/- 0x8000 or be declared so cc1psx compiler-splits the address itself.
+ * func_800445E0 reaches no global at all; func_80044724 reaches D_80083178 (a
+ * 0x94+ struct) and D_80083CE8 (an array of 4), both split by their declared
+ * size. func_8004491C's D_80083360/D_800833E0 are u32[0x20] and would also
+ * have been safe, but it is left outside the carve because it needs no $gp
+ * access. The audit is moot at -G0 -- gas makes no small-data decision of its
+ * own there, and only the four symbols asked for above go $gp-relative -- but
+ * the findings are kept as evidence that the carve is right.
+ *
+ * Two declaration devices in this unit exist only because of the old -G8 build
+ * and are now REDUNDANT, though both are left in place because they are
+ * harmless and removing them is a separate measurement:
+ *
+ *  - the `.extern D_80081480, 16` / `.extern D_8008148C, 16` records in
+ *    func_8004450C, which kept those two in-window scalars from going
+ *    $gp-relative. At -G0 gas ignores the size records entirely.
+ *  - the 16-byte `D_80080AF4big` decoy in func_8004437C. Its job was to put
+ *    `.extern D_80080AF4, 16` at the head of the unit's record list so gas at
+ *    -G8 would not collapse the `la` to `addiu $a1,$gp,0`; at -G0 there is
+ *    nothing to collapse. The 8-byte `D_80080AF4s` alias is still REQUIRED --
+ *    it carries SYMBOL_REF_FLAG, which is what makes cc1psx emit the `la` at
+ *    all, and cc1psx is still -G8.
  *
  * Still to watch when the stubs here are decompiled: func_8004450C reaches
- * D_80081480 and D_8008148C, small scalars INSIDE the $gp window that the
- * target reaches absolutely. They are harmless while the function is asm --
- * the listing carries its own %hi/%lo and -G does not touch it -- but each
- * will need an incomplete-array declaration, as D_80082E6E did. (func_8004437C
- * was the same case for D_80080AF4, and landed the other way: its target has
- * the one-insn `la` form, which the incomplete array cannot give, so it
- * carries two block-scope aliases -- see the DEVICE note on the function --
- * and this unit's .extern record for D_80080AF4 now says 16.)
+ * D_80081480 and D_8008148C, small scalars inside the $gp window that the
+ * target reaches absolutely. At -G0 that needs no declaration shim at all.
  */
 /* The tail of the original unk_14934 split, carved off when gprel_17504 was
  * taken out of the middle of it: a $gp cluster cannot be compiled with the
@@ -31,6 +58,14 @@
  * docs/addressing-and-translation-units.md.
  */
 #include "common.h"
+
+/* See the header comment: a record rather than a definition, because
+ * func_80044618 reaches D_80080AFC+2. */
+__asm__(".sdata\n\t.size D_80080AFC,2\n\t.text");
+
+u8 D_80080AF3;
+u16 D_80080B00;
+u32 D_80081508;
 
 void func_800423C0(u8 *, s32, u8 *);
 void func_80041E70(void *);

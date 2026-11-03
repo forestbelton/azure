@@ -4,13 +4,22 @@ r"""gaudit.py -- two addressing checks that `verify.py` structurally cannot do.
 CHECK 1: the carved -G8/-G2 units, for symbols that would come out
 $gp-relative where the target reaches them absolutely.
 
+**THIS CHECK IS VACUOUS AS OF 2026-11-03** and is kept against the day a unit
+needs a nonzero -G again. MASPSXFLAGS_G8 and MASPSXFLAGS_G2 were deleted from
+the Makefile when all eleven carved gprel_* units were converted to file-scope
+definitions of their $gp objects; at -G0 gas makes no small-data decision of
+its own, so there is nothing for the declared size to get wrong. The two units
+the check still reports are the overlays, built with MASPSXFLAGS_G0, where
+(0, G] is empty. CHECK 2 below is the live one.
+
 The mechanism, from docs/addressing-and-translation-units.md: gas emits a
 GPREL16 relocation for any symbol whose `.extern SYM,size` record gives a size
 in (0, G], and cc1psx emits that record from the C declaration. **gas never
 sees the symbol's address** -- the symbol is undefined at assembly time -- so
-the declared SIZE is the whole of the decision. A unit built with
-MASPSXFLAGS_G8 therefore turns every <=8-byte extern it names into a
-$gp-relative access, including ones the original reached absolutely.
+the declared SIZE is the whole of the decision. A unit built at -G8 therefore
+turned every <=8-byte extern it named into a $gp-relative access, including
+ones the original reached absolutely -- which is what this check looked for
+while the MASPSXFLAGS_G8 escape hatch existed.
 
 So for each function still left as assembly in a carved unit, this finds the
 symbols it reaches through a %hi/%lo pair (i.e. absolutely, in the original)
@@ -26,8 +35,10 @@ This only looks at functions still in assembly. A landed function's addressing
 is already proven by `make check`, which is the real authority.
 
 CHECK 2: the file-scope DEFINITIONS of small globals -- `u32 D_80080ADC;` and
-the like, plus the one surviving `__asm__(".sdata\n\t.size SYM,N\n\t.text")`
-record in csrc/unk_264E0.c. Either one puts the symbol in a maspsx table, and
+the like, plus the two surviving `__asm__(".sdata\n\t.size SYM,N\n\t.text")`
+records, in csrc/unk_264E0.c and csrc/gprel_17B7C.c (each needed because its
+symbol has an ADDEND access, which maspsx refuses to make $gp-relative for a
+`.comm`). Either one puts the symbol in a maspsx table, and
 that is FILE-SCOPE: maspsx then rewrites every access to that symbol in the
 translation unit, so a unit cannot have the symbol $gp-relative in one function
 and absolute in another -- and if a second function in the unit wanted it

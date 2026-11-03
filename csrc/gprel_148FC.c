@@ -1,7 +1,12 @@
 /* A carved-out translation unit: these functions reach D_800814E0
- * $gp-relatively, so gas has to be left at -G8 rather than maspsx's forced
- * -G0 (see the MASPSXFLAGS_G8 line in the Makefile and
- * docs/addressing-and-translation-units.md).
+ * $gp-relatively, which is the same as saying this unit DEFINED it. The
+ * tentative definition below is that statement, and it is all the unit needs:
+ * cc1psx emits `.comm D_800814E0,4`, maspsx's `--use-comm-section` files it
+ * under `sbss_entries`, and `_uses_gp` rewrites this unit's loads and stores
+ * of the symbol to %gp_rel at the project default gas -G0. Nothing is
+ * allocated -- the object is already a GLOBAL dlabel in
+ * asm/data/gp_data.data.s and a C tentative definition is a COMMON, which
+ * merges with it. See docs/addressing-and-translation-units.md.
  *
  * The unit's extent is evidence, not a guess. Of the 38 $gp-relative symbols
  * the blocked functions reach, only two are referenced from more than one of
@@ -16,6 +21,8 @@
  * It is named for its start offset, like the other provisional units.
  */
 #include "common.h"
+
+s32 *D_800814E0;
 
 /* Registers a callback: store it at the write pointer, then clear the new
  * tail. The pointer is bumped by func_80041110 and backed off by

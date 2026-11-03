@@ -103,29 +103,30 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 #
 # (An earlier version of this comment said gas "assumes an undefined symbol is
 # small data". It does not -- with no `.extern` record at all the access comes
-# out absolute. The size record is the whole mechanism, and it is what makes
-# the per-unit -G2 below work.)
+# out absolute. The size record was the whole mechanism, and it is what made
+# the per-unit -G8/-G2 escape hatches work before they were removed; see the
+# note below.)
 MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
                 --run-assembler --gnu-as-path=$(AS) \
                 --use-comm-section -G8
 
-# Per-file escape hatch. A translation unit whose functions reach their globals
-# $gp-relatively rather than absolutely needs gas left at -G8 instead of the
-# forced -G0 above; see docs/addressing-and-translation-units.md. Use as:
-#     build/csrc/some_unit.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
-MASPSXFLAGS_G8 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
-                  --run-assembler --gnu-as-path=$(AS) --use-comm-section \
-                  --dont-force-G0 -G8
-
-# Same, with a smaller small-data limit. The -G value is not a style choice:
-# gas emits GPREL16 for a symbol whose `.extern SYM,size` gives a size in
-# (0, G], and cc1psx emits that size from the declared type. So -G2 keeps
-# 2-byte objects $gp-relative while sending 4-byte ones to the absolute
-# bare-symbol form -- which is what two of the carved units need, because they
-# reach a u16 $gp-relatively and a u32 absolutely in the same function.
-MASPSXFLAGS_G2 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
-                  --run-assembler --gnu-as-path=$(AS) --use-comm-section \
-                  --dont-force-G0 -G2
+# THERE IS NO LONGER A PER-FILE -G ESCAPE HATCH, and that is the point. Two
+# variables used to live here, MASPSXFLAGS_G8 and MASPSXFLAGS_G2, which left
+# gas at a nonzero -G for eleven carved `gprel_*` units so that their globals
+# would come out $gp-relative. Both are gone as of 2026-11-03: a unit that
+# reaches an object $gp-relatively is a unit that DEFINED that object, and a
+# file-scope tentative definition says so directly -- cc1psx emits `.comm`,
+# maspsx files it under `sbss_entries`, and `_uses_gp` rewrites that unit's
+# accesses at the forced -G0 above. Nothing is allocated, because every one of
+# these objects is already a GLOBAL dlabel in asm/data/gp_data.data.s and a
+# COMMON merges with it. All eleven units converted with .text byte-identical
+# and all four containers byte-identical.
+#
+# The one case a definition cannot cover is an ADDEND access (`SYM+N`), which
+# maspsx's `_uses_gp` refuses for a symbol in `comm_symbols`. Those use a bare
+# `.size` record inside `.sdata`, which populates `sdata_entries` instead;
+# there are exactly two left in the tree, in csrc/unk_264E0.c and
+# csrc/gprel_17B7C.c. See docs/addressing-and-translation-units.md.
 
 # The OVERLAYS are built at cc1psx -G0, not the -G8 the resident executable
 # uses, and that is a measurement rather than a guess. There are 0 $gp-relative
@@ -158,23 +159,6 @@ build/csrc/ovl_main_80020000.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
 build/csrc/ovl_town.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/ovl_town.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
-
-# Units whose functions reach their globals $gp-relatively rather than
-# absolutely, carved out of the units splat lumps together. See
-# docs/addressing-and-translation-units.md for how a cluster is identified and
-# carved.
-build/csrc/gprel_10308.o build/csrc/gprel_11CFC.o build/csrc/gprel_12A40.o \
- build/csrc/gprel_12DAC.o build/csrc/gprel_12DD4.o build/csrc/gprel_148FC.o \
- build/csrc/gprel_17B7C.o build/csrc/gprel_18B40.o \
- build/csrc/gprel_1AB38.o: MASPSXFLAGS := $(MASPSXFLAGS_G8)
-
-# These two need -G2 rather than -G8: each reaches a u16 ($gp-relative) and
-# D_80081480/D_8008148C as u32 (absolute, assembler-expanded) in one function,
-# and -G8 would make the u32s $gp-relative too -- 44 of 45 words wrong in
-# func_80041AE4. Verified that their existing contents assemble identically at
-# -G2 and -G8, so the switch moves nothing that already matched. The other four
-# units above DO differ between the two and must stay at -G8.
-build/csrc/gprel_152E4.o build/csrc/gprel_17504.o: MASPSXFLAGS := $(MASPSXFLAGS_G2)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.

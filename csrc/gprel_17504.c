@@ -1,6 +1,9 @@
 /* A carved-out translation unit: these four functions reach D_80081500
- * $gp-relatively, so gas is left at -G8 here rather than maspsx's forced -G0
- * (see MASPSXFLAGS_G8 in the Makefile).
+ * $gp-relatively, which is the same as saying this unit DEFINED it. The
+ * tentative definition below is that statement, and all this unit needs:
+ * cc1psx emits `.comm`, maspsx's `--use-comm-section` files it under
+ * `sbss_entries`, and `_uses_gp` rewrites this unit's loads and stores of the
+ * symbol to %gp_rel at the project default gas -G0.
  *
  * They are one original translation unit on the evidence: of the 38
  * $gp-relative symbols in the game, 36 are referenced from exactly one of the
@@ -12,8 +15,15 @@
  *
  * Carving it is what makes these matchable. The unit needs BOTH addressing
  * modes only because unk_14934 lumps several original units together; split
- * out, this one needs only $gp-relative and the existing -G8 carve-out
- * mechanism covers it, with no window definition and no linker placement.
+ * out, this one needs only $gp-relative for D_80081500, which the definition
+ * states directly. Nothing is allocated and nothing has to be placed: the
+ * object is already a GLOBAL dlabel in asm/data/gp_data.data.s and a C
+ * tentative definition is a COMMON, which merges with it.
+ *
+ * It used to be built at -G2, for the same reason gprel_152E4 was -- it also
+ * reaches a u32 absolutely in the bare-symbol form, which a nonzero -G would
+ * have made $gp-relative. Asking for the one symbol by defining it makes the
+ * -G value irrelevant; see the history in gprel_152E4.c.
  */
 #include "common.h"
 
@@ -30,6 +40,8 @@ void func_80040FDC(u16);
 void func_80041038(u16);
 void func_800411FC(u16);
 s32  func_80040F2C(u16);
+
+u16 D_80081500;
 
 /* func_80041AE4's twin for this mode, and the difference is load-bearing: the
  * `D_80082E60.unk_00 &= ~1;` comes AFTER the func_8003F794 call here where the

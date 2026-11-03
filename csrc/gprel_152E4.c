@@ -1,25 +1,32 @@
 /* A carved-out translation unit: these four consecutive functions reach
  * D_800814E8 $gp-relatively and nothing else does, so they were one original
- * translation unit. gas is left at -G8 here rather than maspsx's forced -G0
- * (see MASPSXFLAGS_G8 in the Makefile); no window definition and no linker
- * placement are needed. Same reasoning as gprel_17504 -- see that file and
+ * translation unit -- a $gp-relative reference means the unit DEFINED the
+ * object, which is the tentative definition below. cc1psx emits `.comm`,
+ * maspsx's `--use-comm-section` files it under `sbss_entries`, and `_uses_gp`
+ * rewrites this unit's accesses to %gp_rel at the project default gas -G0; no
+ * window definition and no linker placement are needed, because the object is
+ * already a GLOBAL dlabel in asm/data/gp_data.data.s and a COMMON merges with
+ * it. Same reasoning as gprel_17504 -- see that file and
  * docs/addressing-and-translation-units.md.
  *
- * Audited before carving, which is the step to repeat: every symbol these
- * functions reach ABSOLUTELY must either sit outside gp +/- 0x8000 or be
- * declared so cc1psx compiler-splits the address itself, because at -G8 gas
- * makes any small undefined symbol $gp-relative. Here that is D_80083120 and
- * D_80082E60 (both already split -- an incomplete array of structs and a
- * 0x19-byte struct), and D_80082E6E in func_80041BE4, which is why structs.h
- * declares that one as an incomplete array. That check on func_80041AE4's D_80081480 and
- * D_8008148C is now DONE, and the answer changed this unit's build: they are
- * u32 reached absolutely in the bare-symbol form, which no declaration can
- * give at -G8, so the unit is built at **-G2** instead. gas emits GPREL16 only
- * for a symbol whose `.extern SYM,size` is in (0, G], and cc1psx emits that
- * size from the declared type -- so -G2 keeps the u16 $gp objects
- * $gp-relative and sends the u32s absolute. Plain scalar declarations, nothing
- * added to structs.h, and no incomplete-array shim: that shim gives the
- * compiler-split form and is 9 words wrong here.
+ * THIS UNIT USED TO BE BUILT AT -G2, and the history is worth keeping because
+ * it is the clearest case against the old mechanism. At a nonzero -G, gas
+ * makes any small UNDEFINED symbol $gp-relative, so every symbol these
+ * functions reached absolutely had to be audited: D_80083120 and D_80082E60
+ * (both already compiler-split -- an incomplete array of structs and a
+ * 0x19-byte struct), D_80082E6E in func_80041BE4 (which is why structs.h
+ * declares that one as an incomplete array), and func_80041AE4's D_80081480
+ * and D_8008148C, which are u32 reached absolutely in the BARE-SYMBOL form.
+ * No declaration can give that form at -G8, so the unit was built at -G2:
+ * gas emits GPREL16 only for a symbol whose `.extern SYM,size` is in (0, G],
+ * and cc1psx emits that size from the declared type, so -G2 kept the u16
+ * $gp-relative and sent the u32s absolute. The definition below asks for the
+ * one symbol directly, so the -G value stops mattering: at -G0 gas makes no
+ * small-data decision at all and the u32s get the bare-symbol absolute form
+ * unconditionally. What survives from the audit is the declaration advice --
+ * plain scalar declarations, nothing added to structs.h, and no
+ * incomplete-array shim, which gives the compiler-split form and is 9 words
+ * wrong here.
  */
 #include "common.h"
 
@@ -36,6 +43,8 @@ void func_80041038(u16);
 void func_800411FC(u16);
 s32  func_80040F2C(u16);
 s32  func_8003F794(s16, s16);
+
+u16 D_800814E8;
 
 /* Enters the mode whose callback is func_80041B98: snapshot the frame counter,
  * run the three per-mode setup calls on the same byte, and either hand off to

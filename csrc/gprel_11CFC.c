@@ -1,5 +1,12 @@
 /* Carved out of unk_11940; see docs/addressing-and-translation-units.md.
- * Replace this header with the evidence for the split. */
+ * Replace this header with the evidence for the split.
+ *
+ * The unit reaches D_80080AD4 and D_80080ADC $gp-relatively, which is the same
+ * as saying it DEFINED them: both tentative definitions are below, cc1psx
+ * emits `.comm` for each, maspsx's `--use-comm-section` files them under
+ * `sbss_entries`, and `_uses_gp` rewrites this unit's accesses to %gp_rel at
+ * the project default gas -G0. Nothing is allocated -- each object is already
+ * a GLOBAL dlabel in asm/data/gp_data.data.s and a COMMON merges with it. */
 #include "common.h"
 
 s32 func_8003F270(void);
@@ -19,16 +26,18 @@ u32 func_8003E240(s32);
  * symbol, which merges with that definition rather than claiming storage of
  * its own, so there is no placement to arrange.
  *
- * This is the one definition in the project that is NOT about choosing the
- * addressing mode: this unit is built with MASPSXFLAGS_G8, so gas makes the
- * access %gp_rel from cc1psx's `.extern` whatever maspsx thinks. It is here
- * purely so maspsx's nop logic knows.
- *
- * The principled fix is in vendor/maspsx: record `.extern SYM,size` and let
+ * HISTORY, because it is the clearest illustration of why the forgery was
+ * worse than the honest spelling. This definition was once the one in the
+ * project that was NOT about choosing the addressing mode: the unit was built
+ * with MASPSXFLAGS_G8, so gas made the access %gp_rel from cc1psx's `.extern`
+ * whatever maspsx thought, and the definition was here purely so maspsx's nop
+ * logic knew. The unit now builds at the project default -G0, where the
+ * definition is the ONLY reason the access is %gp_rel at all -- so the two
+ * roles have collapsed into one and the maspsx divergence above can no longer
+ * bite this unit. The principled maspsx fix (record `.extern SYM,size` and let
  * `_uses_gp` consider those symbols when gas is left at a nonzero -G, gated on
- * `--dont-force-G0` so the -G0 bulk of the game is unaffected. If that lands,
- * this definition comes straight back out -- nothing else in this unit wants
- * it. */
+ * `--dont-force-G0`) is therefore no longer needed by anything here. */
+u16 D_80080AD4;
 u32 D_80080ADC;
 
 /* The command dispatcher: turns a command byte into one or more func_8003E39C

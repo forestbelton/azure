@@ -140,8 +140,16 @@ def main():
     print("      - [0x?????, c, %s]" % newunit)
     if tailunit:
         print("      - [0x?????, c, %s]" % tailunit)
-    print("and to the MASPSXFLAGS_G8 list in the Makefile: build/csrc/%s.o"
-          % newunit)
+    print()
+    print("the new unit needs NO Makefile change. If it was carved because its")
+    print("functions reach a global $gp-relatively, say so in C instead: give")
+    print("the unit a file-scope tentative definition of that object, e.g.")
+    print("      u32 D_80081234;          /* no extern, no initialiser */")
+    print("cc1psx emits .comm, maspsx files it under sbss_entries and rewrites")
+    print("this unit's accesses to %gp_rel at the project default -G0. The")
+    print("MASPSXFLAGS_G8/_G2 escape hatches were removed on 2026-11-03.")
+    print("An ADDEND access (SYM+N) needs a .size record instead; see")
+    print("docs/addressing-and-translation-units.md.")
     return 0
 
 

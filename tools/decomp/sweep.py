@@ -29,9 +29,15 @@ landing a definition for a callee already declared inline, and both at once.
 """
 import io, os, re, runpy, subprocess, sys
 
-# Units whose objects are assembled at -G8 (Makefile's MASPSXFLAGS_G8 list).
-G8 = {"gprel_10308", "gprel_11CFC", "gprel_12A40", "gprel_12DAC", "gprel_12DD4",
-      "gprel_148FC", "gprel_17B7C", "gprel_18B40", "gprel_1AB38"}
+# Units whose objects are assembled at a nonzero gas -G. EMPTY as of
+# 2026-11-03: MASPSXFLAGS_G8 and MASPSXFLAGS_G2 were deleted from the Makefile
+# when all eleven carved gprel_* units were converted to file-scope definitions
+# of their $gp objects, which get the same %gp_rel at the project default -G0.
+# Passing --g8 for a unit that is no longer built that way models the wrong
+# assembler and reports false failures, so this must stay in step with the
+# Makefile -- see docs/addressing-and-translation-units.md. (asmlib's
+# gas_g_for_unit() reads the Makefile directly and needs no such list.)
+G8 = set()
 
 PROTO = r'^[A-Za-z_][\w \*]*?\b%s\s*\([^;{]*\);\s*$'
 

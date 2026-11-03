@@ -34,9 +34,11 @@ u8 func_8003F240(void);
  * reach it $gp-relatively too. Several commons for one symbol is fine: they
  * merge with each other and with the real definition in the data file.
  *
- * This unit stays at the project default -G0 and must NOT join the
- * MASPSXFLAGS_G8 list: at -G8 the one-byte D_800814D1 and D_800814D3 would go
- * $gp-relative too, the same reason csrc/gprel_11B4C.c gives. */
+ * D_800814D1 and D_800814D3 must NOT be given definitions of their own: they
+ * are one byte each and inside the $gp window, and this unit reaches them
+ * absolutely. (This is also why the unit never joined the old MASPSXFLAGS_G8
+ * list, which was deleted on 2026-11-03 once every gprel_* unit asked for its
+ * objects by definition instead.) Same reason csrc/gprel_11B4C.c gives. */
 u8 D_800814D0[4];
 u8 D_80081450[4];
 u32 D_800814B0[1];

@@ -1,7 +1,13 @@
 /* The D_80080AA4..D_80080AB0 $gp cluster, carved out of unk_102A8: these two
  * consecutive functions reach that run $gp-relatively and nothing else in
- * unk_102A8 does, so they were their own original translation unit. Built with
- * MASPSXFLAGS_G8; see docs/addressing-and-translation-units.md.
+ * unk_102A8 does, so they were their own original translation unit -- a
+ * $gp-relative reference means the unit DEFINED the object, which is the six
+ * tentative definitions below. cc1psx emits a `.comm` for each, maspsx's
+ * `--use-comm-section` files them under `sbss_entries`, and `_uses_gp`
+ * rewrites this unit's accesses to %gp_rel at the project default gas -G0.
+ * Nothing is allocated -- every one of the six is already a GLOBAL dlabel in
+ * asm/data/gp_data.data.s and a C tentative definition is a COMMON, which
+ * merges with it. See docs/addressing-and-translation-units.md.
  */
 #include "common.h"
 
@@ -9,6 +15,13 @@ void func_8003D7DC(void);
 void func_8003D0F0(void);
 void func_8003CCB0(s32);
 s8 *func_8004E298(u8 *, u8 *, s32);
+
+u16 D_80080AA4;
+u16 D_80080AA6;
+u16 D_80080AA8;
+u8 D_80080AAA;
+u16 D_80080AAC;
+u32 D_80080AB0;
 
 /* The per-frame tick for the overworld compass trail: advances the VSync
  * stamp, flips the display buffer, shifts the 0x3F-entry x/y history down by

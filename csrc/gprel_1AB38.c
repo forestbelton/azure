@@ -1,17 +1,27 @@
 /* A carved-out translation unit: these two consecutive functions own the two
  * texture-atlas cursors -- D_80081518/1A/1C/1E and D_80081520/22/24/26 -- which
- * nothing else reaches, so they were one original translation unit. Built at
- * -G8 (MASPSXFLAGS_G8); no window definition, no linker placement.
+ * nothing else reaches, so they were one original translation unit -- a
+ * $gp-relative reference means the unit DEFINED the object, which is the eight
+ * tentative definitions below. cc1psx emits a `.comm` for each, maspsx's
+ * `--use-comm-section` files them under `sbss_entries`, and `_uses_gp`
+ * rewrites this unit's accesses to %gp_rel at the project default gas -G0. No
+ * window definition and no linker placement: each cursor is already a GLOBAL
+ * dlabel in asm/data/gp_data.data.s and a COMMON merges with it.
  *
  * They are near-twins: the same cursor bookkeeping with the other quartet, two
  * different thresholds and four constant biases. The second was derived from
  * the first by substitution and matched on the first compile.
  *
- * Audited before carving: the only symbol reached absolutely is D_80083164,
- * which had no declaration at all and now has an incomplete-array one in
- * include/structs.h -- it sits inside the $gp window, so a scalar declaration
- * would wrongly go $gp-relative at -G8. The eight u16 cursor objects are
- * (0, 8] by declared size and come out GPREL16 as wanted.
+ * Audited back when this unit was built at -G8: the only symbol reached
+ * absolutely is D_80083164, which had no declaration at all and now has an
+ * incomplete-array one in include/structs.h -- it sat inside the $gp window,
+ * so a scalar declaration would have wrongly gone $gp-relative at -G8, and the
+ * eight cursor objects came out GPREL16 because they are (0, 8] by declared
+ * size. Both halves of that are moot at -G0: gas makes no small-data decision
+ * of its own, so D_80083164 would be safe either way and the cursors are
+ * %gp_rel because they are defined here, not because of their size. The
+ * incomplete-array declaration stays -- it is also what gives D_80083164 the
+ * compiler-split address this code wants.
  *
  * KEEP D_80081518, D_8008151A, D_80081520 and D_80081522 declared as one-field
  * structs. That spelling is what sets MEM_IN_STRUCT_P on the four sites that
@@ -52,6 +62,15 @@ UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
 s32  func_8003F794(s16, s16);
 void func_80040454(void);
+
+Unk80081518 D_80081518;
+Unk8008151A D_8008151A;
+u16 D_8008151C;
+u16 D_8008151E;
+Unk80081520 D_80081520;
+Unk80081522 D_80081522;
+u16 D_80081524;
+u16 D_80081526;
 
 /* Links the node into one of the 0x20 tag slots at D_80083360/D_800833E0,
  * pushing any existing head down, or claims a free slot. Returns 0 only when

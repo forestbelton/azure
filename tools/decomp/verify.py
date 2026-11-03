@@ -33,10 +33,14 @@ from asmlib import CompileError
 argv = [a for a in sys.argv[1:] if a != '--full']
 full = len(argv) != len(sys.argv) - 1
 src, unit, func = argv[0:3]
-# --g8 models a unit carved out with MASPSXFLAGS_G8 (gas left at -G8 rather
-# than maspsx's forced -G0), which is how gprel_12DD4 and gprel_14910 are
-# built: gas then assumes an *undefined* symbol is small data and emits
-# GPREL16. Use it to check a function before moving it into a carved unit.
+# --g8 models a unit built with gas left at -G8 rather than maspsx's forced
+# -G0: gas then emits GPREL16 for an *undefined* symbol whose `.extern
+# SYM,size` size is in (0, G]. NO UNIT IS BUILT THAT WAY ANY MORE -- the
+# MASPSXFLAGS_G8/_G2 escape hatches were deleted on 2026-11-03 when the eleven
+# carved gprel_* units were converted to file-scope definitions of their $gp
+# objects. The flag is kept because the model is still the way to test what a
+# nonzero -G would do to a declaration, and because the default below reads the
+# Makefile, so it comes back by itself if a rule is ever added again.
 # The carved units are built with a nonzero gas -G. Which value matters: gas
 # goes $gp-relative only for a symbol whose `.extern SYM,size` gives a size in
 # (0, G], and cc1psx emits that size from the declared type -- so -G2 keeps

@@ -20,7 +20,8 @@
    have been removed. A record is file-scope and changes every access to its
    symbol in the unit, so it belongs only in a piece that has one. */
 
-/* The one size record left in the project, and it cannot become a definition.
+/* One of the two size records left in the project, and it cannot become a
+   definition.
    func_80052CE0 stores to D_80081568+4 -- an ADDEND access -- and maspsx's
    `_uses_gp` refuses %gp_rel for an addend whose symbol is in `comm_symbols`:
 
@@ -34,9 +35,17 @@
    one word longer with a definition.
 
    Everything else in the project is a definition now; see the note in
-   csrc/unk_12DEC.c. The two addend accesses of a $gp symbol anywhere in the
-   tree are this one and D_800814D0+1 in csrc/unk_11B9C.c, and that unit
-   defines nothing, so the access is already absolute there. */
+   csrc/unk_12DEC.c. The addend accesses of a $gp symbol anywhere in the tree
+   are, as of 2026-11-03:
+
+     - this one, D_80081568+4 in func_80052CE0;
+     - D_80080AFC+2, twice, in func_80044618 -- the second size record, in
+       csrc/gprel_17B7C.c, added when that unit's -G8 carve-out was converted;
+     - D_800814D0+1 in csrc/unk_11B9C.c, whose unit defines nothing, so the
+       access is already absolute there and needs no record.
+
+   Rescan with `grep -E 'D_[0-9A-F]+\+[0-9]' build/csrc/*.s` after a build
+   before converting anything else. */
 __asm__(".sdata\n\t.size D_80081568,4\n\t.text");
 
 void func_80048C3C(s32);

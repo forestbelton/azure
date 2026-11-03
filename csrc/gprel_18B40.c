@@ -1,14 +1,18 @@
 /* A carved-out translation unit: these two consecutive functions reach
  * D_80081510 $gp-relatively and nothing else does, so they were one original
- * translation unit. gas is left at -G8 here rather than maspsx's forced -G0
- * (MASPSXFLAGS_G8 in the Makefile); no window definition and no linker
- * placement needed -- see docs/addressing-and-translation-units.md.
+ * translation unit -- a $gp-relative reference means the unit DEFINED the
+ * object, which is the tentative definition below. cc1psx emits `.comm`,
+ * maspsx files it under `sbss_entries`, and `_uses_gp` rewrites this unit's
+ * accesses to %gp_rel at the project default gas -G0; no window definition and
+ * no linker placement needed, because the object is already a GLOBAL dlabel in
+ * asm/data/gp_data.data.s and a COMMON merges with it.
  *
- * Audited before carving: the only symbol reached absolutely is D_80083160,
- * already `extern Unk80083160` at 0x1F2 bytes and therefore compiler-split, so
- * -G8 does not touch it. (At -G8 gas makes any small UNDEFINED symbol
- * $gp-relative, so every absolutely-reached symbol in a carved unit must be
- * checked.) */
+ * Audited back when this unit was built at -G8: the only symbol reached
+ * absolutely is D_80083160, already `extern Unk80083160` at 0x1F2 bytes and
+ * therefore compiler-split, so -G8 did not touch it. That audit is moot now --
+ * at -G0 gas makes no small-data decision of its own, and only the symbol
+ * defined below goes $gp-relative -- but the finding is kept as evidence that
+ * the carve is right. See docs/addressing-and-translation-units.md. */
 /* Another piece of the original unk_14934 chain, carved off when the
  * gprel_17B7C $gp cluster was taken out of the middle of unk_176B8. Named for
  * its start offset. See docs/addressing-and-translation-units.md.
@@ -41,6 +45,8 @@ UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
 s32 func_8003F794(s16, s16);
 void func_80040454(void);
+
+u32 D_80081510;
 
 /* Links the node into one of the 0x20 tag slots at D_80083360/D_800833E0,
  * pushing any existing head down, or claims a free slot. Returns 0 only when

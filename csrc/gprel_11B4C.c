@@ -1,10 +1,13 @@
 /* func_8003E34C alone, carved out of the middle of unk_11940.
  *
- * **This unit stays at the project default -G0 and must NOT be added to the
- * MASPSXFLAGS_G8 list**, unlike the other gprel_* units. Its four $gp accesses
- * are asked for individually by the definitions below; at -G8 the three
- * absolute bytes D_800814D1/D2/D3 would go $gp-relative too, since they are
- * one byte each and sit inside gp +/- 0x8000.
+ * **This unit's four $gp accesses are asked for individually by the
+ * definitions below, and the three absolute bytes D_800814D1/D2/D3 must NOT
+ * be given definitions of their own.** They are one byte each and sit inside
+ * gp +/- 0x8000, so a nonzero gas -G would have sent them $gp-relative as
+ * well -- which is why this unit never joined the old MASPSXFLAGS_G8 list.
+ * That list no longer exists (every gprel_* unit asks by definition now, as of
+ * 2026-11-03), so the hazard is now only the one below: a definition is
+ * file-scope.
  *
  * WHY THE CARVE IS NECESSARY, and it is not the usual -G reason. A definition
  * is FILE-SCOPE: maspsx applies it to every access in the translation unit. func_8003E39C, which sat four lines below this function in

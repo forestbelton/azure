@@ -34,9 +34,9 @@ and the window work in the sections below is **not needed**.
 Measured 2026-11-02: all 52 live records converted, `.text` byte-identical in
 all twelve units, and all four containers byte-identical.
 
-**One exception, and it is the only `.size` record left in the project.** An
-ADDEND access -- `sw $3,D_80081568+4` in `func_80052CE0` -- is refused by
-`_uses_gp`:
+**The one exception is an ADDEND access**, and there are two `.size` records
+left in the project because of it. `sw $3,D_80081568+4` in `func_80052CE0` is
+refused by `_uses_gp`:
 
     gp_allowed = self.gp_allow_offset or symbol not in self.comm_symbols
 
@@ -44,23 +44,84 @@ ADDEND access -- `sw $3,D_80081568+4` in `func_80052CE0` -- is refused by
 `.comm`, hence in `comm_symbols`, so that store falls back to `lui $at` and
 costs a word. The `.size`-inside-`.sdata` record populates `sdata_entries`
 and *not* `comm_symbols`, so it keeps the addend access `$gp`-relative. Scan
-the compiler output for `SYM+N` before converting: the only two such accesses
-in the tree are that one, in `csrc/unk_264E0.c`, and `D_800814D0+1` in
-`csrc/unk_11B9C.c`, whose unit defines nothing and is already absolute.
+the compiler output for `SYM+N` before converting anything:
 
-**The `-G8`/`-G2` carve-outs are the same forgery and come out the same way.**
-At `-G8` gas makes any small *undefined* symbol `$gp`-relative, which is
-behaviour real ASPSX did not have; the carve-out exploits that divergence where
-the honest statement is "this unit defined the object". Measured on
-`gprel_148FC`: built at the project default `-G0` with `s32 *D_800814E0;` it is
-byte-identical to its `-G8` build, and the image is byte-identical. Eleven
-units still carry `MASPSXFLAGS_G8`/`_G2`; converting each needs its own
-`$gp` symbols identified, and none of it has been done yet.
+    grep -E 'D_[0-9A-F]+\+[0-9]' build/csrc/*.s
+
+As of 2026-11-03 that finds three accesses over two symbols: `D_80081568+4`
+(the record in `csrc/unk_264E0.c`), `D_80080AFC+2` twice in `func_80044618`
+(the record in `csrc/gprel_17B7C.c`), and -- not in the compiler output, since
+the function is still asm -- `D_800814D0+1` in `csrc/unk_11B9C.c`, whose unit
+defines nothing and is already absolute. An earlier version of this section
+listed only the first and last of those and called the inventory complete; it
+was not.
+
+### DONE 2026-11-03: the `-G8`/`-G2` carve-outs are gone
+
+They were the same forgery and came out the same way. At `-G8` gas makes any
+small *undefined* symbol `$gp`-relative, which is behaviour real ASPSX did not
+have; the carve-out exploited that divergence where the honest statement is
+"this unit defined the object". All eleven units are converted, each gated on
+its `.text` being byte-identical before and after plus all four containers,
+and `MASPSXFLAGS_G8` and `MASPSXFLAGS_G2` have been deleted from the Makefile.
+There is no per-file `-G` escape hatch any more.
+
+| unit | was | `$gp` symbols asked for by name |
+| --- | --- | --- |
+| `gprel_10308` | `-G8` | `D_80080AA4` `AA6` `AA8` `AAA` `AAC` `AB0` (6) |
+| `gprel_11CFC` | `-G8` | `D_80080AD4`, `D_80080ADC` |
+| `gprel_12A40` | `-G8` | `D_800814D0[4]` |
+| `gprel_12DAC` | `-G8` | `D_80080AD4` |
+| `gprel_12DD4` | `-G8` | `D_800814C8` |
+| `gprel_148FC` | `-G8` | `D_800814E0` |
+| `gprel_152E4` | `-G2` | `D_800814E8` |
+| `gprel_17504` | `-G2` | `D_80081500` |
+| `gprel_17B7C` | `-G8` | `D_80080AF3`, `D_80080B00`, `D_80081508`, and `D_80080AFC` **as a `.size` record** |
+| `gprel_18B40` | `-G8` | `D_80081510` |
+| `gprel_1AB38` | `-G8` | `D_80081518` `1A` `1C` `1E` `20` `22` `24` `26` (8) |
+
+Twenty-seven symbols over eleven units, every one of them already a `GLOBAL`
+`dlabel` in `asm/data/gp_data.data.s`, so every one is the free merge case:
+`readelf` on the linked image shows no `.sdata` or `.sbss` section and no
+remaining `COMMON`.
+
+Three things worth knowing from doing it:
+
+  - **`-G2` disappeared entirely.** Both `-G2` units have exactly one `$gp`
+    symbol each, so the "reaches a u16 `$gp`-relatively and a u32 absolutely in
+    the same function" asymmetry that forced the smaller limit was just the u16
+    being the unit's own object and the u32 being someone else's extern. Naming
+    the u16 directly makes the `-G` value irrelevant: at `-G0` gas makes no
+    small-data decision at all and the u32s get the bare-symbol absolute form
+    unconditionally.
+  - **`gprel_17B7C` needed the record, not a definition**, for `D_80080AFC`
+    alone -- see the addend rule above. Its other three symbols are ordinary
+    definitions, and the two mechanisms coexist in one unit because they
+    populate different maspsx tables.
+  - **Declaration shims written to survive `-G8` are now redundant**, because
+    at `-G0` gas never judges an undefined symbol small. The
+    `.extern D_80081480, 16` / `.extern D_8008148C, 16` records in
+    `func_8004450C` and the 16-byte `D_80080AF4big` decoy in `func_8004437C`
+    had no job left; they are kept in place (harmless, and removing them is a
+    separate measurement) with comments saying so. The 8-byte `D_80080AF4s`
+    alias in the same function is still **required** -- it carries
+    `SYMBOL_REF_FLAG`, which is what makes cc1psx emit the `la` at all, and
+    cc1psx is still `-G8`. Likewise the incomplete-array declarations added for
+    `D_80082E6E` and `D_80083164` stay, because they also give the
+    compiler-split address the code wants.
+
+The `gprel_*` filenames are now historical: the units themselves stay, because
+the addressing mode is the evidence for original file membership and that
+evidence is unchanged -- only the per-file gas override is gone.
 
 Read the rest of this document for the evidence about original file
 membership, which all still holds -- the addressing mode still tells you which
 translation unit defined a global. Ignore its conclusions about *how* to ask
-for the mode.
+for the mode: the window-carving and linker-placement sections are not needed
+(a COMMON merges), and every mention below of `MASPSXFLAGS_G8`,
+`MASPSXFLAGS_G2` or a per-file `-G` override describes variables that no longer
+exist. The "Per-file override" section is kept only as the record of what was
+removed.
 
 ## The observation
 
@@ -563,9 +624,12 @@ forms are proved; nothing yet confirms that a carved window plus linker
 placement reproduces the image byte-for-byte. Do that on one function --
 func_800410FC is the smallest -- before touching the rest.
 
-## Per-file override
+## Per-file override (REMOVED 2026-11-03 -- historical)
 
-`MASPSXFLAGS` is a normal make variable, so a single file can opt out:
+`MASPSXFLAGS_G8` and `MASPSXFLAGS_G2` no longer exist; see the DONE section at
+the top of this document. What follows is what they were.
+
+`MASPSXFLAGS` is a normal make variable, so a single file could opt out:
 
     # This unit's functions reach their globals $gp-relatively, so gas has to
     # be left at -G8 rather than maspsx's forced -G0.

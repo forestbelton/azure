@@ -1,13 +1,28 @@
 /* func_8003F5AC alone, carved out of the tail of unk_12A70: it reaches
  * D_80080AD4 and D_80083958 $gp-relatively and nothing absolutely at all, so
- * it was its own original translation unit. Built with MASPSXFLAGS_G8; see
- * docs/addressing-and-translation-units.md.
+ * it was its own original translation unit -- a $gp-relative reference means
+ * the unit DEFINED the object, which is the tentative definition below.
+ * cc1psx emits `.comm`, maspsx files it under `sbss_entries`, and `_uses_gp`
+ * rewrites this unit's accesses to %gp_rel at the project default gas -G0;
+ * the object is already a GLOBAL dlabel in asm/data/gp_data.data.s, so the
+ * COMMON merges with it and allocates nothing.
+ *
+ * NOTE ON THE D_80083958 PARAGRAPH BELOW: its "as its own `extern u8` it is
+ * small data in this -G8 unit" reasoning described gas's behaviour at -G8.
+ * The unit now builds at -G0, where an undefined small symbol is NOT made
+ * $gp-relative, so a separate `extern u8` at 0x8008395C would no longer
+ * collapse the pair on its own -- but the member spelling is still the right
+ * one, and it is still what keeps the %lo reloc reading `D_80083958+4`.
+ *
+ * See docs/addressing-and-translation-units.md.
  */
 #include "common.h"
 
 s32 func_8003F270(void);
 void func_8003E758(void);
 u32 func_8003E240(s32);
+
+u16 D_80080AD4;
 
 /* Returns the status byte at D_8008395C, with bit 2 set while the D_80080AD4
  * counter is nonzero.
