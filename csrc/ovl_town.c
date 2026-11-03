@@ -1082,6 +1082,7 @@ extern u8 D_800D5944[];
 extern u8 D_800D59C4[];
 extern u8 D_800D6110[];
 extern u8 D_800D62A4[];
+extern u8 D_800D62AC[];
 extern u8 D_800D62BC[];
 extern u8 D_800D68FC[];
 extern u8 D_800D6910[];
@@ -1366,6 +1367,7 @@ void func_800C6A78();
 void func_800C6B44();
 void func_800C8524();
 void func_800C899C();
+void func_800C8FF0();
 void func_800CB21C();
 void func_800CB2DC();
 void func_800CB3A8();
@@ -1373,6 +1375,7 @@ void func_800CB4B0();
 void func_800CB570();
 void func_800CB63C();
 void func_800CB7EC();
+void func_800CC524();
 void func_800CC644();
 void func_800CC8AC();
 
@@ -1473,6 +1476,7 @@ extern u8 D_800D61C4[];
 extern u8 D_800D61CC[];
 extern u8 D_800D61F4[];
 extern u8 D_800D6200[];
+extern u8 D_800D6268[];
 extern u8 D_800D627C[];
 extern u8 D_800D6518[];
 extern u8 D_800D6674[];
@@ -19449,7 +19453,14 @@ void func_800C60DC(void *arg0)
     func_800C3050(arg0, 0xD, D_800D5618, D_800D561C, D_800D55E8, D_800D55F0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C6124);
+/* func_800C6094's one-argument wrapper shape against the D_800D5624 quad,
+   with the func_800C5C70 pair's `a->unk_70 = 1` after it.  23 words,
+   0 differing. */
+void func_800C6124(UnkTownActor *a)
+{
+    func_800C3050(a, 0xD, D_800D5654, D_800D5658, D_800D5624, D_800D562C);
+    a->unk_70 = 1;
+}
 
 void func_800C6180(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
@@ -20184,7 +20195,22 @@ void func_800C84B8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8524);
+/* The countdown state func_800C85A0 installs at +0x54, and it reinstalls
+   func_800C84B8 -- the state that installed IT -- so the two alternate.
+   `--a->unk_6C <= 0` is the unit's settled countdown spelling (see
+   func_8009B828).  Parameter 2 is the mover: func_800C8A68 takes it as its
+   only argument, which is why `addu $a0, $a1, $zero` sits in the prologue
+   ahead of the countdown.  31 words, 0 differing. */
+void func_800C8524(UnkTownActor *a, UnkVec *b, s32 c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C8A68(b);
+        func_800C2E84(a, c, D_800D62AC);
+        a->unk_54 = func_800C84B8;
+        a->unk_6C = 0x15;
+    }
+}
 
 void func_800C85A0(UnkTownActor *a, s32 b, s32 c)
 {
@@ -20458,7 +20484,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8DC0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8E9C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8F80);
+/* The countdown state func_800C8DC0 installs; unlike its siblings it installs
+   its continuation into +0x50 rather than +0x54, faces the actor at 0xC00 and
+   rearms the countdown from the +0x96 byte beside the actor times three
+   (`sll 1` + `addu`).  The `lbu` of +0x96 is pulled up between the
+   handler's `lui` and `addiu` by the load-delay scheduler, so the three
+   stores are in source order.  28 words, 0 differing. */
+void func_800C8F80(UnkTownActor *a, s32 b, s32 c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C2E84(a, c, D_800D6268);
+        a->unk_50 = func_800C8FF0;
+        a->unk_72 = 0xC00;
+        a->unk_6C = *((u8 *)a + 0x96) * 3;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C8FF0);
 
@@ -21080,7 +21121,15 @@ void func_800CAAE8(void *a, s32 b, UnkTownArg2 *c)
     c->unk_12 = 0x2;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CAB44);
+/* The func_800C3050 wrapper family's +0x12 variant with a +0x70 byte beside
+   it: func_800CAAE8's body (same descriptor quad, same `c->unk_12 = N`) with
+   id 0x4F and the actor's +0x70 set to 2 after it.  28 words, 0 differing. */
+void func_800CAB44(UnkTownActor *a, s32 b, UnkTownArg2 *c)
+{
+    func_800C3050(a, 0x4F, D_800D6718, D_800D671C, D_800D66E8, D_800D66F0);
+    c->unk_12 = 0x3;
+    a->unk_70 = 2;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CABB4);
 
@@ -21348,7 +21397,15 @@ void func_800CB73C(UnkTownActor *a)
     a->unk_80 = (UnkTownArg80 *)D_800D6990;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB770);
+/* func_800CB074's shape against the other descriptor quad, with the
+   func_800CB8CC effect call in place of func_800CB028 -- so the second
+   argument is the unsigned +0x96 byte beside the actor, read through a cast
+   the way func_800CB0F0 reads it.  24 words, 0 differing. */
+void func_800CB770(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C3050(a, 0x8, D_800D6A0C, D_800D6A10, D_800D69DC, D_800D69E4);
+    func_800CB8CC(a, *((u8 *)a + 0x96));
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CB7D0);
 
@@ -21483,7 +21540,16 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CBAE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CBB68);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CBC1C);
+/* func_800CBC80's body with id 0x27 and the +0x12 store ZEROED -- which is
+   the whole one-word difference between 25 words here and that sibling's 26:
+   `sh $zero` needs no constant register, so the `addiu $v1, $zero, N` goes
+   away.  25 words, 0 differing. */
+void func_800CBC1C(void *a, s32 b, UnkTownArg2 *c)
+{
+    func_800C3050(a, 0x27, D_800D6B14, D_800D6B18, D_800D6AE4, D_800D6AEC);
+    c->unk_12 = 0;
+    c->unk_14 &= 0xFEFF;
+}
 
 void func_800CBC80(void *a, s32 b, UnkTownArg2 *c)
 {
@@ -21648,7 +21714,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC384);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC41C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800CC4B0);
+/* The countdown state func_800CC41C installs at +0x54; it arms +0x6C at 0xA,
+   installs its continuation func_800CC524 and paints the renderable's RGB
+   triple at +0x0C/+0x0D/+0x0E mid-grey.  The three `sb`s are emitted
+   HIGH-OFFSET-FIRST, which is source order here and not a sort.  29 words,
+   0 differing. */
+void func_800CC4B0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_80033AA8(0x97);
+        a->unk_54 = func_800CC524;
+        a->unk_6C = 0xA;
+        c->unk_0E = 0x80;
+        c->unk_0D = 0x80;
+        c->unk_0C = 0x80;
+    }
+}
 
 void func_800CC524(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
 {
