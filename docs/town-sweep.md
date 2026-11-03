@@ -607,6 +607,22 @@ exactly -- so its measurements were sound and only its frame was wrong.
 near-miss should list the variables the candidate did not vary; without that, a
 later reader cannot tell a hard wall from a corner of the grid.
 
+### A HELPER COPIED OUT OF `scratch/` MAY BE COMPILING AT `-G8`
+
+2026-11-03, and `scratch/` is gitignored so this warning has to live here.
+Agents copy relocation/dump helpers from each other's `scratch/` files. One of
+them called `asmlib.compile_asm(src)` **with no cflags, i.e. at the default
+`-G8`**, while the overlays are built at `-G0`. It therefore dumped a *different
+compilation* from the one `ovlverify` measures: one function rendered as **30
+words with an assembler-expanded `lui $at`/`sw 0($at)` pair instead of 27 with
+`lui $v1`**.
+
+The symbol names stay correct, so the check such a script is used for does not
+visibly fail -- it silently reports word counts and an instruction stream the
+build never produces. **Any helper that compiles must pass
+`cflags=('-G0',)`.** Check that before copying one, and before trusting a word
+count that came out of one.
+
 ### RUN `provision.py`; DO NOT HAND-WRITE A PROVISIONING PARAGRAPH
 
 2026-11-03. `tools/decomp/provision.py` computes a brief's whole provisioning
