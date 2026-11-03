@@ -2244,6 +2244,9 @@ void func_800C86EC();
 void func_800CE6E4();
 void func_800CE800();
 extern u8 D_800CFD00[];
+extern UnkTownVec16 D_800CFD18[];
+extern UnkTown2AE8 D_800FE5C0;
+extern UnkTownVec16 *D_800D0408;
 extern u8 D_800D0648[];
 extern u8 D_800D0660[];
 extern u8 D_800F8A40[];
@@ -3702,7 +3705,34 @@ void func_8008F104(UnkTownSpawn *p, UnkVec *q, void *t)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F134);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F170);
+s32 func_8008F170(UnkTown2AE8 *q, u8 *t)
+{
+    UnkVec buf;
+    UnkTownPlane *hit;
+    s32 best;
+    s32 r;
+
+    buf.unk_00 = q->unk_00;
+    buf.unk_04 = q->unk_04;
+    buf.unk_08 = q->unk_08 - q->unk_14;
+    best = func_8008CF48(&buf, &hit);
+    *(UnkTownPlane **)t = hit;
+    buf.unk_00 = q->unk_00;
+    buf.unk_04 = q->unk_04;
+    buf.unk_08 = q->unk_08 - q->unk_14;
+    r = func_8008C758((UnkTownVec16 *)&buf, D_800CFD18, 4, &hit,
+                      (s16)best, *(UnkTownPlane **)t);
+    if ((s16)r < (s16)best)
+    {
+        best = r;
+        *(UnkTownPlane **)t = hit;
+    }
+    if ((s16)best >= 0x80)
+    {
+        best = 0x80;
+    }
+    return (s16)best;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F27C);
 
@@ -4985,7 +5015,34 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095910);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009593C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095978);
+s32 func_80095978(UnkTown2AE8 *q, u8 *t)
+{
+    UnkVec buf;
+    UnkTownPlane *hit;
+    s32 best;
+    s32 r;
+
+    buf.unk_00 = q->unk_00;
+    buf.unk_04 = q->unk_04;
+    buf.unk_08 = q->unk_08 - D_800FE5C0.unk_14;
+    best = func_8008CF48(&buf, &hit);
+    *(UnkTownPlane **)t = hit;
+    buf.unk_00 = q->unk_00;
+    buf.unk_04 = q->unk_04;
+    buf.unk_08 = q->unk_08 - D_800FE5C0.unk_14;
+    r = func_8008C758((UnkTownVec16 *)&buf, D_800D0408, 4, &hit,
+                      (s16)best, *(UnkTownPlane **)t);
+    if ((s16)r < (s16)best)
+    {
+        best = r;
+        *(UnkTownPlane **)t = hit;
+    }
+    if ((s16)best >= 0x40)
+    {
+        best = 0x40;
+    }
+    return (s16)best;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095A94);
 
@@ -8182,7 +8239,55 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A84D0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A85C0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A86BC);
+/* 52 words, 0 differing.  The update hook func_800A878C installs in the
+   node's +0x10 slot, so func_80040190 (csrc/unk_12DEC.c) reaches it as
+   `fn((u8 *)node + 0x20, node->unk_08, node->unk_0C)` -- `p` is the actor
+   view, not the node, which is why the kill flag is at `p - 0x2`
+   (UnkNode.unk_1E).  func_800ABB20 is this same body with the +0x14 addend
+   read as an `s16 << 11` and bumped each frame instead of read as a whole
+   word; the two are the pair func_800A878C / func_8009792C are.
+
+   `p + 0x4` and `p + 0x2` are spelled off a `u8 *` because that is exactly
+   how func_800A878C writes them: `v = (u8 *)n + 0x20; *(s16 *)(v + 0x2) = x;
+   *(s32 *)(v + 0x4) = ...`.  Typing `p` as `UnkTownSpawn *` and casting also
+   measures 52 words / 0 differing, so the type is not witnessed here.
+
+   Three measured spellings matter:
+
+   - the colour fade is ONE CHAINED assignment with `unk_0D` OUTERMOST.  C
+     assigns right to left, so the chain stores 0xC, 0xE, 0xD -- the target's
+     order -- from one register.  Three separate statements re-read the field
+     cse cannot forward across its own store and cost a `move`: 53 words / 25
+     differing.  The chain written `unk_0E = unk_0D = unk_0C = ...` stores
+     0xC, 0xD, 0xE and is 52 / 2.  A `u8 c` local carried into three stores
+     also reaches 52 / 0, at the price of a local.
+   - `--*(s16 *)(p + 0x2) <= 0` gives `lhu`/`addiu -1`/`sh`/`sll 16`/`bgtz`:
+     the `<< 16` the comparison needs propagates the 16-bit mask back into the
+     load, which is the lh->lhu lever, and the `sll` with no `sra` is the
+     narrow compare.  `-= 1` as its own statement, `< 1` for `<= 0`, and
+     `(s16)--*(u16 *)` all measure 52 / 0 as well.
+   - the +0x14 addend is a WHOLE word: `*(s16 *)` for `*(s32 *)` is 52 / 8.
+     The four vector updates are order-pinned -- swapping the 0x04 and 0x08
+     adds is 52 / 10, moving the +0x14 addend after them 52 / 13 -- because
+     the last add re-reads the 0x14 this statement stored.
+   - the fade guard is real: dropping it is 51 words / 26 differing. */
+void func_800A86BC(u8 *p, UnkVec *q, UnkTownRend *r)
+{
+    q->unk_14 += *(s32 *)(p + 0x4);
+    q->unk_00 += q->unk_0C;
+    q->unk_04 += q->unk_10;
+    q->unk_08 += q->unk_14;
+    func_800478B8((s32)r);
+    if (r->unk_0C != 0)
+    {
+        r->unk_0D = r->unk_0E = r->unk_0C = r->unk_0C - 0x10;
+    }
+    if (--*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* 116 words, 0 differing.  func_8009792C with func_800A86BC for
    func_800ABB20, D_800F15AC for D_800D1464, and eleven words of extra tail:
@@ -8673,7 +8778,41 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089128);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABA1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABB20);
+/* 56 words, 0 differing.  func_800A86BC with four extra words at the top: the
+   +0x14 addend is a HALFWORD at `p + 0x4` scaled by 0x800 and bumped by one
+   each frame, where func_800A86BC reads a whole word that its installer wrote
+   once.  Installed in the node's +0x10 slot by func_8009792C (:5623) and by
+   func_800ABC00, which is still a stub.  See func_800A86BC for the fade and
+   countdown spellings; they are identical here and measured there.
+
+   `*(s16 *)(p + 0x4) << 11` keeps `lh` because the destination of the add is
+   a WORD -- the lh->lhu lever needs a NARROWING store downstream, and there
+   is none.  `* 0x800` is identical (56 / 0); reading the same load as
+   `*(u16 *)` is 56 words / 1 differing, which is that one `lh`/`lhu`.
+   The bump that follows it loads `lhu`, because its own `sh` IS the narrowing
+   store, so `*(s16 *)`, `*(u16 *)` and a postfix `++` are all 56 / 0.
+
+   The bump's POSITION is pinned between the +0x14 add and the three vector
+   adds: after them it is 56 / 22, and folding it ahead of the scale as
+   `(*(s16 *)(p + 0x4) - 1) << 11` is 57 / 54. */
+void func_800ABB20(u8 *p, UnkVec *q, UnkTownRend *r)
+{
+    q->unk_14 += *(s16 *)(p + 0x4) << 11;
+    *(s16 *)(p + 0x4) += 1;
+    q->unk_00 += q->unk_0C;
+    q->unk_04 += q->unk_10;
+    q->unk_08 += q->unk_14;
+    func_800478B8((s32)r);
+    if (r->unk_0C != 0)
+    {
+        r->unk_0D = r->unk_0E = r->unk_0C = r->unk_0C - 0x10;
+    }
+    if (--*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABC00);
 
