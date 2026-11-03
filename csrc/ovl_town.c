@@ -568,6 +568,22 @@ typedef struct UnkTownCastPoly
     u8 unk_17;
 } UnkTownCastPoly;
 
+/* The COMPACT polygon record the +Z sweep walks: six halfwords, four vertex
+   indices then the normal index then the flag halfword, against
+   UnkTownCastPoly's 0x18 bytes with its normal index at +0x10 and its flags at
+   +0x16.  Same flag bits in the top byte: bit 0 (= 0x100 of the halfword) is
+   the per-polygon skip and bit 7 (= 0x8000) is the end-of-run marker. */
+typedef struct UnkTownCastPolyS
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+    u16 unk_08;
+    u8 unk_0A;
+    u8 unk_0B;
+} UnkTownCastPolyS;
+
 typedef struct UnkTownCastGeo
 {
     u16 *unk_00;
@@ -583,14 +599,17 @@ typedef struct UnkTownCastGeo
 
 typedef struct UnkTownCastSP
 {
-    u8 pad_00[0x4];
+    UnkTownPlane *unk_00;
     u16 unk_04;
     u8 pad_06[0x12];
     SVECTOR *unk_18;
     u16 unk_1C;
     u16 unk_1E;
     u16 unk_20;
-    u8 pad_22[0xE];
+    u8 pad_22[0x2];
+    s32 unk_24;
+    s32 unk_28;
+    s32 unk_2C;
     s32 unk_30;
     s32 unk_34;
     s32 unk_38;
@@ -1996,6 +2015,7 @@ u32 func_8003C06C(s32 i);
 void func_8003E188(s16 arg0, s16 arg1);
 void func_8009F374();
 s32 func_8008CE08(void *p);
+s32 func_8008D0B8(s32 x, s32 y, s32 z, UnkTownPlane **out);
 s32 func_8008D5C4(s32 x, s32 y, s32 z);
 s32 func_8008DA80(s32 x, s32 y, s32 z);
 s32 func_8008DFB4(s32 x, s32 y, s32 z);
@@ -2117,6 +2137,7 @@ u32 func_800491F4(s32, u8 *, s32);
 extern UnkTownList D_800891F8;
 extern UnkTownList D_8008926C;
 extern u8 D_800CFCEF;
+extern UnkTownPlane D_800CFCAC;
 extern s32 D_800FE480;
 extern s32 D_800FE484;
 extern u8 D_800FE488[];
@@ -2667,7 +2688,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008CC90);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008CE08);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008CF48);
+s32 func_8008CF48(UnkVec *v, UnkTownPlane **out)
+{
+    return (s16)func_8008D0B8(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
+                              *(s16 *)((u8 *)v + 0xA), out);
+}
 
 s32 func_8008CF80(UnkVec *v)
 {
@@ -2701,9 +2726,329 @@ s32 func_8008D050(UnkVec *v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D084);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D0B8);
+/* The -Z member of the tile-grid collision sweep (func_8008DA80's family):
+   AXIS = Z, DIRECTION = min, WINDING = unk_00/unk_02/unk_06/unk_04.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D5C4);
+   Being the Z sweep is what moves both accumulator statements out of the
+   polygon loop: there is no 64x64 cell along Z, so there is no `ab` base to
+   add back and no per-cell correction to the answer.  Both probes shift
+   instead -- SP->unk_1E in the outer loop and SP->unk_1C in the inner one --
+   and the result slot triple is +0x24/+0x28/+0x2C with +0x28 the extreme and
+   no base added to it on the way out.  Because the silhouette is built from
+   .vx/.vy, which are the first WORD of an SVECTOR, each vertex arrives as one
+   lw/sw pair and is then corrected in place; the X and Y members use .vy/.vz
+   and .vx/.vz, which are not one word, so they read the two components
+   separately.
+
+   Its fourth parameter is the plane, and it is a real out-parameter: the
+   normal of the polygon that WON the min (SP->unk_00, seeded with
+   &D_800CFCAC) is handed back through it with the one `sw $v0, 0x0($s6)` after
+   the loops, and `func_8008CF48` forwards its own out-parameter straight into
+   $a3.  The plane store sits inside the innermost `if`, not after it: all four
+   skip branches jump PAST it to .L8008D4C4, which is 5 words below the store,
+   and putting it after the `if` instead costs 4 branch displacements.
+
+   Two measured spellings in here, neither of them obvious:
+
+   - `px`/`py` are NOT cosmetic.  Writing the eight corrections as
+     `SP->unk_6C = SP->unk_6C - SP->unk_1C;` and so on gives the identical 323
+     instructions with $s0 and $s1 EXCHANGED -- SP in $s0 and the polygon
+     pointer in $s1 -- i.e. 98 differing words of pure allocation.  reg_n_refs
+     and reg_live_length are both taken at flow time, which in this compiler is
+     before combine and before sched1 and is never recomputed, so the eight
+     redundant SP reads still count toward SP's priority in global.c's
+     allocno_compare even though cse later removes them.  Two short locals move
+     them off SP and the order of the two allocnos flips.  In func_8008D5C4 the
+     same two locals are worth NOTHING (0 differing either way), because there
+     the polygon pointer's references are split between it and loop.c's biased
+     giv, so SP wins $s0 by a wide enough margin.
+   - the prologue's store order is `unk_1C, unk_1E, unk_2C, unk_4C, unk_4E,
+     unk_18`.  Moving the bound (`unk_2C`) one slot later, after `unk_4C`,
+     emits the same six stores in the same order but rotates the `lw` of
+     `m->unk_0C` and the `addiu` of the bound: 2 differing words here and 5 in
+     func_8008D5C4. */
+s32 func_8008D0B8(s32 x, s32 y, s32 z, UnkTownPlane **out)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPoly *p;
+    s16 px;
+    s16 py;
+    s16 cx = x;
+    s16 cy = y;
+
+    SP->unk_28 = 0x400;
+    SP->unk_00 = &D_800CFCAC;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_2C = (s16)z - 0x14;
+    SP->unk_4C = x & 0x3F;
+    SP->unk_4E = y & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
+
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
+
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_1E = SP->unk_4E - SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_1C = SP->unk_4C - SP->unk_64;
+                p = m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                while (SP->unk_18[p->unk_10].vz < 0)
+                {
+                    if ((p->unk_17 & 1) == 0)
+                    {
+                        px = SP->unk_1C;
+                        py = SP->unk_1E;
+                        *(s32 *)&SP->unk_6C = *(s32 *)&verts[p->unk_00];
+                        SP->unk_6C = SP->unk_6C - px;
+                        SP->unk_6E = SP->unk_6E - py;
+                        *(s32 *)&SP->unk_70 = *(s32 *)&verts[p->unk_02];
+                        SP->unk_70 = SP->unk_70 - px;
+                        SP->unk_72 = SP->unk_72 - py;
+                        *(s32 *)&SP->unk_74 = *(s32 *)&verts[p->unk_06];
+                        SP->unk_74 = SP->unk_74 - px;
+                        SP->unk_76 = SP->unk_76 - py;
+                        *(s32 *)&SP->unk_78 = *(s32 *)&verts[p->unk_04];
+                        SP->unk_78 = SP->unk_78 - px;
+                        SP->unk_7A = SP->unk_7A - py;
+                        if (func_8008CE08(SP) != 0)
+                        {
+                            SP->unk_24 =
+                                (SP->unk_18[p->unk_10].vx *
+                                     (verts[p->unk_00].vx - (s16)SP->unk_1C) +
+                                 SP->unk_18[p->unk_10].vy *
+                                     (verts[p->unk_00].vy - (s16)SP->unk_1E) +
+                                 SP->unk_18[p->unk_10].vz * verts[p->unk_00].vz) /
+                                SP->unk_18[p->unk_10].vz;
+                            if (SP->unk_24 >= SP->unk_2C)
+                            {
+                                if (SP->unk_24 < SP->unk_28)
+                                {
+                                    SP->unk_28 = SP->unk_24;
+                                    SP->unk_00 =
+                                        (UnkTownPlane *)&SP->unk_18[p->unk_10];
+                                }
+                            }
+                        }
+                    }
+                    if ((p->unk_16 & 0xF) == 1)
+                    {
+                        if (*(s8 *)&p->unk_17 < 0)
+                            break;
+                        if ((p->unk_16 & 0xF0) != 0)
+                        {
+                            p = p + ((p->unk_16 >> 4) + 1);
+                            continue;
+                        }
+                    }
+                    p++;
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    *out = SP->unk_00;
+    return (s16)SP->unk_28;
+}
+
+/* The +Z member of the same family: AXIS = Z, DIRECTION = max,
+   WINDING = reversed (unk_04/unk_06/unk_02/unk_00).  See func_8008D0B8 for
+   what being the Z sweep costs.  The min member's seed is 0x400, not the
+   0x7FFF the X and Y mins use -- a ceiling height rather than a coordinate
+   sentinel -- while this one's max seed is the usual -0x7FFF.  Two further differences from its -Z twin,
+   both read off the listing:
+
+   - it walks the COMPACT UnkTownCastPolyS record BACKWARD from the pointer the
+     cell list gives, one record at a time, and the whole walk is gated on bit
+     6 of the flag byte 0x17 past that pointer -- `p[1].unk_0B & 0x40` in
+     UnkTownCastPolyS terms, which is UnkTownCastPoly's own unk_17 bit 6;
+   - the face test is on .vz > 0 rather than .vz < 0, and there is no plane
+     out-parameter.
+
+   It needs no miss return: the -0x7FFF seed is what it hands back.
+
+   The backward walk is spelled `p = (UnkTownCastPolyS *)p - 1;` before the
+   loop with `p--` as the LAST statement of the body, which is the family's
+   `p++`-last shape run in reverse.  Spelling it `for (;;) { p--; ... }`
+   instead costs one word: the peeled decrement then applies only to the
+   biased giv, so `$s2` is copied rather than decremented and the guard's
+   delay slot goes empty (304 words / 171 differing). */
+s32 func_8008D5C4(s32 x, s32 y, s32 z)
+{
+    UnkTownCastSP *SP = (UnkTownCastSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells;
+    SVECTOR *verts;
+    UnkTownCastPolyS *p;
+    s16 cx = x;
+    s16 cy = y;
+
+    SP->unk_28 = -0x7FFF;
+    SP->unk_1C = x & 0x3F;
+    SP->unk_1E = y & 0x3F;
+    SP->unk_2C = (s16)z + 0x14;
+    SP->unk_4C = x & 0x3F;
+    SP->unk_4E = y & 0x3F;
+    SP->unk_18 = m->unk_0C;
+    cells = (u16 *)g->unk_1DC;
+    verts = m->unk_08;
+
+    if ((s16)SP->unk_1C >= 0x20)
+        SP->unk_54 = 0x40;
+    else
+        SP->unk_54 = -0x40;
+
+    if ((s16)SP->unk_1E >= 0x20)
+        SP->unk_58 = 0x40;
+    else
+        SP->unk_58 = -0x40;
+
+    SP->unk_50 = cx;
+    SP->unk_52 = cy;
+    SP->unk_60 = 0;
+    SP->unk_68 = 0;
+
+    while (SP->unk_60 < 2)
+    {
+        cy = SP->unk_52 + SP->unk_68;
+        if (SP->unk_58 >= 0)
+        {
+            if (cy >= D_800FE484)
+                break;
+        }
+        else
+        {
+            if (cy < 0)
+                break;
+        }
+        SP->unk_1E = SP->unk_4E - SP->unk_68;
+        SP->unk_5C = 0;
+        SP->unk_64 = 0;
+        while (SP->unk_5C < 2)
+        {
+            cx = SP->unk_50 + SP->unk_64;
+            if (SP->unk_54 >= 0)
+            {
+                if (cx >= D_800FE480)
+                    break;
+            }
+            else
+            {
+                if (cx < 0)
+                    break;
+            }
+            SP->unk_04 = m->unk_18 & (cx / 64);
+            SP->unk_04 = SP->unk_04 + ((s16)(m->unk_1A & (cy / 64)) << m->unk_14);
+            if (cells[(s16)SP->unk_04] != 0)
+            {
+                SP->unk_1C = SP->unk_4C - SP->unk_64;
+                p = (UnkTownCastPolyS *)m->unk_04[cells[(s16)SP->unk_04] & 0x3FFF];
+                if ((p[1].unk_0B & 0x40) == 0)
+                {
+                    p--;
+                    for (;;)
+                    {
+                        if (SP->unk_18[p->unk_08].vz > 0)
+                        {
+                            if ((p->unk_0B & 1) == 0)
+                            {
+                                *(s32 *)&SP->unk_6C = *(s32 *)&verts[p->unk_04];
+                                SP->unk_6C = SP->unk_6C - SP->unk_1C;
+                                SP->unk_6E = SP->unk_6E - SP->unk_1E;
+                                *(s32 *)&SP->unk_70 = *(s32 *)&verts[p->unk_06];
+                                SP->unk_70 = SP->unk_70 - SP->unk_1C;
+                                SP->unk_72 = SP->unk_72 - SP->unk_1E;
+                                *(s32 *)&SP->unk_74 = *(s32 *)&verts[p->unk_02];
+                                SP->unk_74 = SP->unk_74 - SP->unk_1C;
+                                SP->unk_76 = SP->unk_76 - SP->unk_1E;
+                                *(s32 *)&SP->unk_78 = *(s32 *)&verts[p->unk_00];
+                                SP->unk_78 = SP->unk_78 - SP->unk_1C;
+                                SP->unk_7A = SP->unk_7A - SP->unk_1E;
+                                if (func_8008CE08(SP) != 0)
+                                {
+                                    SP->unk_24 =
+                                        (SP->unk_18[p->unk_08].vx *
+                                             (verts[p->unk_00].vx - (s16)SP->unk_1C) +
+                                         SP->unk_18[p->unk_08].vy *
+                                             (verts[p->unk_00].vy - (s16)SP->unk_1E) +
+                                         SP->unk_18[p->unk_08].vz * verts[p->unk_00].vz) /
+                                        SP->unk_18[p->unk_08].vz;
+                                    if (SP->unk_24 <= SP->unk_2C)
+                                    {
+                                        if (SP->unk_24 > SP->unk_28)
+                                            SP->unk_28 = SP->unk_24;
+                                    }
+                                }
+                            }
+                        }
+                        if (*(s8 *)&p->unk_0B < 0)
+                            break;
+                        p--;
+                    }
+                }
+            }
+            SP->unk_5C = SP->unk_5C + 1;
+            SP->unk_64 = SP->unk_64 + SP->unk_54;
+        }
+        SP->unk_60 = SP->unk_60 + 1;
+        SP->unk_68 = SP->unk_68 + SP->unk_58;
+    }
+
+    return (s16)SP->unk_28;
+}
 
 s32 func_8008DA80(s32 x, s32 y, s32 z)
 {
