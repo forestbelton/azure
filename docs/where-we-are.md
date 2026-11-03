@@ -333,14 +333,24 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-03, after five cluster batches:** ovl_town is 973 of
-   1819 functions and 33,898 of 70,311 words, **48.2%**, up from 26.7% two
-   sessions ago; the project total is **69.5%**, and there are **6 parks** --
-   two were RETIRED by solving them, not by giving up on them.
+   **State on 2026-11-03, after the autonomous campaign:** ovl_town is 1,028
+   of 1819 functions and 38,114 of 70,311 words, **54.2%**, up from 26.7%
+   three sessions ago; the project total is **73.1%**, and there are **7
+   parks** -- two were RETIRED by solving them, not by giving up on them.
+
+   The campaign is now driven by `tools/decomp/batcher.py`, which partitions
+   every remaining stub into groups by shared callees and globals weighted by
+   rarity, slot-chain edges and address locality. It reports **784 stubs,
+   30,722 words, 137 groups** at a 200-word target. The groups at the head of
+   that list are single large functions, not families -- the largest remaining
+   stub is 475 words -- so the batch economics have inverted since the family
+   era: one agent per function, with the templates coming from
+   `provision.py`'s relatives, the C-file neighbours and idiom greps rather
+   than from a sibling.
 
    `tools/decomp/provision.py` now builds a brief's whole provisioning block
    (six routes to a relative, callee classification with position markers, the
-   masked address-taken symbols, arity leads). It has had **fourteen defects
+   masked address-taken symbols, arity leads). It has had **nineteen defects
    found by the agents using it**, which is the point: a wrong provisioning fact
    is cheap to emit and expensive to act on, so it is worth having one place to
    fix instead of a habit to remember.
@@ -350,8 +360,8 @@ size, the `-G` value, the struct layout, the flags.
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
    Work the tight components. The whole unit sweeps clean at
-   879 of 879, and both `make build/town.bin` and `make check` are
-   byte-identical. `docs/matching-levers.md` is at **390 levers**, as `leverindex.py` itself
+   1029 of 1029, and both `make build/town.bin` and `make check` are
+   byte-identical. `docs/matching-levers.md` is at **391 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.

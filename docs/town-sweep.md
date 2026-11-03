@@ -512,6 +512,21 @@ object lists all 1819 names and **a stub verifies against itself**. Enumerate
 the sweep from the **C definitions** (the `awk` recipe above), never from the
 symbol table.
 
+### `grep -c dlabel` IS NOT A RODATA SCREEN -- `endlabel` CONTAINS `dlabel`
+
+Every splat listing ends with `endlabel func_XXXXXXXX`, and the substring
+`dlabel` sits inside the word `endlabel`. So an ad-hoc
+`grep -c 'dlabel' asm/nonmatchings/ovl_town/func_XXXX.s` returns **1 on every
+listing in the unit**, hazard or not, and screens nothing. Hit on 2026-11-03
+pre-screening two 400-word stubs; it reported both as owning rodata when
+neither does.
+
+`brief.py` is not affected -- its test is `re.search(r'^dlabel D_', t, re.M)`,
+anchored and typed. **Copy that form, or grep for `.section .rodata`**, which
+has no such collision. More generally: when screening these listings, anchor
+the pattern. `glabel`/`dlabel`/`endlabel`/`enddlabel` all share tails and
+heads with each other.
+
 ### `advise.py` NEEDS ONE FUNCTION PER FILE -- AND IS ACTIVELY MISLEADING OTHERWISE
 
 2026-11-03, hit independently by four agents in one batch. Given a merged
