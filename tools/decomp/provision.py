@@ -121,6 +121,17 @@ def main():
         print("      globals : %s" % (', '.join(gl) or 'none'))
     print("  TOTAL %d words" % tot)
 
+    print("\n=== YOUR TARGETS' OWN EXISTING DECLARATIONS ===")
+    print("    An arity change must be made in BOTH places or the compile fails on a")
+    print("    type mismatch instead of on the thing you are testing. One agent's")
+    print("    probe died exactly this way.")
+    anyt = False
+    for f in targets:
+        d = protos.get(f)
+        if d:
+            print("  %-15s already declared: %s" % (f, d)); anyt = True
+    if not anyt: print("  none of your targets is declared in the unit")
+
     print("\n=== CALLEE CLASSIFICATION (per callee, across the group) ===")
     every = set().union(*allcallees.values()) if allcallees else set()
     for c in sorted(every):
@@ -347,7 +358,16 @@ def main():
         for f in targets:
             sc = dc & allcallees.get(f, set())
             sg = set(g for g in globs.get(f, ()) if g in body_src.get(d, ''))
-            s = sum(1.0/freq.get(c, 1) for c in sc) + sum(2.0/max(1, sum(1 for b in body_src.values() if g in b)) for g in sg)
+            gfreq = {g: max(1, sum(1 for b in body_src.values() if g in b)) for g in sg}
+            s = (sum(1.0 / freq.get(c, 1) for c in sc)
+                 + sum(2.0 / gfreq[g] for g in sg))
+            # CONJUNCTION BONUS: how many landed bodies contain BOTH a shared
+            # callee and a shared global? That pair is what makes a template,
+            # and it is far rarer than either element.
+            if sc and sg:
+                pair = sum(1 for b in body_src.values()
+                           if any(c in b for c in sc) and any(g in b for g in sg))
+                s += 3.0 / max(1, pair)
             if s > 0 and (best is None or s > best[0]):
                 best = (s, f, sorted(sc), sorted(sg))
         if best: hits.append((best[0], d) + best[1:])
