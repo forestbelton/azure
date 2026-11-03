@@ -34,6 +34,7 @@
 #endif /* !M2CTX && !PERMUTER */
 
 #include "sys/types.h"
+#include "r3000.h"
 #include "libcd.h"
 #include "libgte.h"
 #include "libgpu.h"

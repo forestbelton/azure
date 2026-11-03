@@ -36,10 +36,10 @@ void func_80041AB0(void);
 void func_80041AE4(void);
 void func_80043CD0(void);
 void func_80043D04(void);
-s32  func_80042518(s8 *, s8);
+s32 func_80042518(s8 *, s8);
 UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
-s32  func_8003F794(s16, s16);
+s32 func_8003F794(s16, s16);
 void func_80040454(void);
 
 /* Links the node into one of the 0x20 tag slots at D_80083360/D_800833E0,
@@ -83,26 +83,31 @@ void func_80040454(void);
  * appears to skip the `sw $zero, %gp_rel(D_80081510)` while still returning 0.
  * And `*(u32 *) 0x1F80013C = 0;` is a single-use constant address, so it
  * collapses to the two-word absolute form (matching-levers section 6). */
-s32 func_80045340(u8 *p, UnkVec *v, UnkSlot *s) {
+s32 func_80045340(u8 *p, UnkVec *v, UnkSlot *s)
+{
     D_80081510 = 0;
-    *(u32 *) 0x1F80013C = 0;
-    for (;;) {
+    *(u32 *)0x1F80013C = 0;
+    for (;;)
+    {
         UnkNode *n;
 
-        if (!(s->unk_14 & 0x80)) {
+        if (!(s->unk_14 & 0x80))
+        {
             func_800453E0(p, v, s, s->unk_06);
-            if (func_80045310(*(u32 *) (D_80083160.unk_00 + 0x8D0)) != 0) {
+            if (func_80045310(*(u32 *)(D_80083160.unk_00 + 0x8D0)) != 0)
+            {
                 return 0;
             }
         }
-        n = *(UnkNode **) (p - 8);
-        if (n == NULL) {
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
             D_80081510 = 0;
             return 0;
         }
-        p = (u8 *) n + 0x20;
+        p = (u8 *)n + 0x20;
         v = n->unk_08;
-        s = (UnkSlot *) n->unk_0C;
+        s = (UnkSlot *)n->unk_0C;
     }
 }
 
@@ -143,9 +148,10 @@ s32 func_80045340(u8 *p, UnkVec *v, UnkSlot *s) {
  * address in both statements is the plain three-term sum -- the `cc4 =
  * p->unk_CC * 4` hoist that an earlier near-miss needed is not wanted here and
  * costs 2 words. */
-void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
+void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3)
+{
     Unk80083160 *g = &D_80083160;
-    Unk453E0SP *p = (Unk453E0SP *) 0x1F800000;
+    Unk453E0SP *p = (Unk453E0SP *)0x1F800000;
     u8 *base = D_80083160.unk_00;
     Unk453E0P *q;
     Unk44D24E *e;
@@ -158,17 +164,18 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
     p->unk_7C = 0;
     p->unk_74 = 0;
     p->unk_20 = base + 0xB0;
-    p->unk_00 = ((u16 *) v)[1];
-    p->unk_02 = ((u16 *) v)[3];
-    p->unk_04 = ((u16 *) v)[5];
-    q = *(Unk453E0P **) (base + 0x8D0);
-    p->unk_C0 = RotTransPers((void *) 0x1F800000, (void *) 0x1F8000B8,
-                             (void *) 0x1F800090, (void *) 0x1F800094);
+    p->unk_00 = ((u16 *)v)[1];
+    p->unk_02 = ((u16 *)v)[3];
+    p->unk_04 = ((u16 *)v)[5];
+    q = *(Unk453E0P **)(base + 0x8D0);
+    p->unk_C0 = RotTransPers((void *)0x1F800000, (void *)0x1F8000B8,
+                             (void *)0x1F800090, (void *)0x1F800094);
     s->unk_14 |= 0x8000;
     w = p->unk_C0 - 0xA;
     D_8006CD30.unk_1C = p->unk_C0 * 4;
     p->unk_C0 = w - arg3;
-    if ((u32) p->unk_C0 < 0x1D6) {
+    if ((u32)p->unk_C0 < 0x1D6)
+    {
         PushMatrix();
         p->unk_B8 = p->unk_B8 - 0xA0;
         p->unk_BA = p->unk_BA - 0x78;
@@ -181,18 +188,20 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
         p->unk_102 = h + ((p->unk_38.h + 0x100) & 0x1FF);
         p->unk_108 = p->unk_E4 = s->unk_20;
         p->unk_10A = p->unk_E8 = s->unk_22;
-        RotMatrix((void *) 0x1F800100, (void *) 0x1F8000D0);
+        RotMatrix((void *)0x1F800100, (void *)0x1F8000D0);
         p->unk_30.w = s->unk_1C;
         p->unk_34.w = s->unk_1E;
         p->unk_38.w = 0x1000;
-        ScaleMatrix((void *) 0x1F8000D0, (void *) 0x1F800030);
-        CompMatrix(&D_8006CD30, (void *) 0x1F8000D0, (void *) 0x1F800050);
-        SetTransMatrix((void *) 0x1F800050);
-        SetRotMatrix((void *) 0x1F800050);
-        e = (Unk44D24E *) s->unk_08;
+        ScaleMatrix((void *)0x1F8000D0, (void *)0x1F800030);
+        CompMatrix(&D_8006CD30, (void *)0x1F8000D0, (void *)0x1F800050);
+        SetTransMatrix((void *)0x1F800050);
+        SetRotMatrix((void *)0x1F800050);
+        e = (Unk44D24E *)s->unk_08;
         p->unk_24 = s->unk_14;
-        for (;;) {
-            if ((e->unk_00 & 0x20) == 0) {
+        for (;;)
+        {
+            if ((e->unk_00 & 0x20) == 0)
+            {
                 s32 x;
                 s32 y;
                 s16 a;
@@ -202,40 +211,48 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                 p->unk_08.w = x;
                 y = e->unk_0A;
                 p->unk_10.w = y;
-                if (x + y >= 0x100 || s->unk_1A != 0) {
+                if (x + y >= 0x100 || s->unk_1A != 0)
+                {
                     p->unk_10.w = y - 1;
                 }
                 x = e->unk_09;
                 p->unk_0C.w = x;
                 y = e->unk_0B;
                 p->unk_14.w = y;
-                if (x + y >= 0x100 || s->unk_1A != 0) {
+                if (x + y >= 0x100 || s->unk_1A != 0)
+                {
                     p->unk_14.w = y - 1;
                 }
-                if ((e->unk_00 ^ p->unk_24) & 1) {
-                    a = -(s8) ((u8 *) e)[2] - p->unk_108;
+                if ((e->unk_00 ^ p->unk_24) & 1)
+                {
+                    a = -(s8)((u8 *)e)[2] - p->unk_108;
                     p->unk_80 = a;
                     p->unk_70 = a;
                     a = a - p->unk_10.h;
                     p->unk_88 = a;
                     p->unk_78 = a;
-                } else {
-                    a = (s8) ((u8 *) e)[2] - p->unk_108;
+                }
+                else
+                {
+                    a = (s8)((u8 *)e)[2] - p->unk_108;
                     p->unk_80 = a;
                     p->unk_70 = a;
                     a = a + p->unk_10.h;
                     p->unk_88 = a;
                     p->unk_78 = a;
                 }
-                if ((e->unk_00 ^ p->unk_24) & 2) {
-                    a = -(s8) ((u8 *) e)[3] - p->unk_10A + p->unk_13C;
+                if ((e->unk_00 ^ p->unk_24) & 2)
+                {
+                    a = -(s8)((u8 *)e)[3] - p->unk_10A + p->unk_13C;
                     p->unk_7A = a;
                     p->unk_72 = a;
                     a = a - p->unk_14.h;
                     p->unk_8A = a;
                     p->unk_82 = a;
-                } else {
-                    a = (s8) ((u8 *) e)[3] - p->unk_10A + p->unk_13C;
+                }
+                else
+                {
+                    a = (s8)((u8 *)e)[3] - p->unk_10A + p->unk_13C;
                     p->unk_7A = a;
                     p->unk_72 = a;
                     a = a + p->unk_14.h;
@@ -253,100 +270,126 @@ void func_800453E0(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3) {
                 q->unk_1A = p->unk_FA + p->unk_BA;
                 q->unk_20 = p->unk_FC + p->unk_B8;
                 q->unk_22 = p->unk_FE + p->unk_BA;
-                if ((((u16) (q->unk_08 + 0x20) < 0x181 &&
-                      (u16) (q->unk_0A + 0x20) < 0x121) |
-                     ((u16) (q->unk_10 + 0x20) < 0x181 &&
-                      (u16) (q->unk_12 + 0x20) < 0x121) |
-                     ((u16) (q->unk_18 + 0x20) < 0x181 &&
-                      (u16) (q->unk_1A + 0x20) < 0x121) |
-                     ((u16) (q->unk_20 + 0x20) < 0x181 &&
-                      (u16) (q->unk_22 + 0x20) < 0x121)) != 0) {
-                    u8 t; u8 f;
+                if ((((u16)(q->unk_08 + 0x20) < 0x181 &&
+                      (u16)(q->unk_0A + 0x20) < 0x121) |
+                     ((u16)(q->unk_10 + 0x20) < 0x181 &&
+                      (u16)(q->unk_12 + 0x20) < 0x121) |
+                     ((u16)(q->unk_18 + 0x20) < 0x181 &&
+                      (u16)(q->unk_1A + 0x20) < 0x121) |
+                     ((u16)(q->unk_20 + 0x20) < 0x181 &&
+                      (u16)(q->unk_22 + 0x20) < 0x121)) != 0)
+                {
+                    u8 t;
+                    u8 f;
 
-                    ((u8 *) &q->unk_00)[3] = 9;
+                    ((u8 *)&q->unk_00)[3] = 9;
                     s->unk_14 &= 0x7FFF;
                     p->unk_10.w = p->unk_10.w + p->unk_08.w;
                     p->unk_14.w = (p->unk_14.w + p->unk_0C.w) << 8;
                     p->unk_0C.w = p->unk_0C.w << 8;
-                    if (p->unk_24 & 0x100) {
+                    if (p->unk_24 & 0x100)
+                    {
                         q->unk_0E = s->unk_12;
-                    } else {
+                    }
+                    else
+                    {
                         q->unk_0E = s->unk_12 + e->unk_06;
                     }
                     q->unk_0C = p->unk_0C.h + p->unk_08.h;
                     q->unk_14.h = p->unk_0C.h + p->unk_10.h;
-                    if (s->unk_10 != 0) {
+                    if (s->unk_10 != 0)
+                    {
                         q->unk_16 = s->unk_10 + (e->unk_04 & 0xFF9F);
-                    } else {
+                    }
+                    else
+                    {
                         q->unk_16 = e->unk_04;
                     }
                     q->unk_1C.h = p->unk_14.h | p->unk_08.h;
                     q->unk_24.h = p->unk_14.h | p->unk_10.h;
-                    if ((s16) p->unk_50 >= 0x1800) {
+                    if ((s16)p->unk_50 >= 0x1800)
+                    {
                         t = q->unk_24.b[0];
                         q->unk_24.b[0] = t + 0xFF;
                         q->unk_14.b[0] = t;
                     }
-                    if ((s16) p->unk_58 >= 0x1800) {
+                    if ((s16)p->unk_58 >= 0x1800)
+                    {
                         t = q->unk_24.b[1];
                         q->unk_24.b[1] = t + 0xFF;
                         q->unk_1C.b[1] = t;
                     }
-                    if ((s16) q->unk_08 > (s16) q->unk_20) {
+                    if ((s16)q->unk_08 > (s16)q->unk_20)
+                    {
                         t = q->unk_24.b[0];
                         q->unk_24.b[0] = t + 0xFF;
                         q->unk_14.b[0] = t;
                     }
-                    if ((s16) q->unk_0A > (s16) q->unk_22) {
+                    if ((s16)q->unk_0A > (s16)q->unk_22)
+                    {
                         t = q->unk_24.b[1];
                         q->unk_24.b[1] = t + 0xFF;
                         q->unk_1C.b[1] = t;
                     }
                     f = e->unk_01;
                     s->unk_0C[3] = f;
-                    if (p->unk_24 & 8) {
-                        if (p->unk_24 & 4) {
+                    if (p->unk_24 & 8)
+                    {
+                        if (p->unk_24 & 4)
+                        {
                             s->unk_0C[3] = f | 2;
-                        } else {
+                        }
+                        else
+                        {
                             s->unk_0C[3] = f & 0xFD;
                         }
                     }
-                    q->unk_04 = *(u32 *) s->unk_0C;
-                    n = -((D_80081510 * (s8) ((u8 *) e)[3]) >> 14);
+                    q->unk_04 = *(u32 *)s->unk_0C;
+                    n = -((D_80081510 * (s8)((u8 *)e)[3]) >> 14);
                     p->unk_CC = n;
-                    if (n > 0) {
+                    if (n > 0)
+                    {
                         p->unk_CC = 0;
                     }
-                    if ((u32) (p->unk_C0 + p->unk_CC) < 0x1D6) {
-                        ((Unk453E0T *) q)->addr = ((Unk453E0T *) (p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4))->addr;
-                        ((Unk453E0T *) (p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4))->addr = (u32) q;
+                    if ((u32)(p->unk_C0 + p->unk_CC) < 0x1D6)
+                    {
+                        ((Unk453E0T *)q)->addr = ((Unk453E0T *)(p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4))->addr;
+                        ((Unk453E0T *)(p->unk_20 + p->unk_C0 * 4 + p->unk_CC * 4))->addr = (u32)q;
                     }
                     q++;
                 }
-            } else {
+            }
+            else
+            {
                 s32 (*f)(u8 *, UnkVec *, UnkSlot *, Unk44D24E *, Unk453E0P *);
 
-                f = *(s32 (**)(u8 *, UnkVec *, UnkSlot *, Unk44D24E *,
-                               Unk453E0P *)) &e->unk_08;
-                if (f != NULL) {
+                f = *(s32(**)(u8 *, UnkVec *, UnkSlot *, Unk44D24E *,
+                              Unk453E0P *)) &
+                    e->unk_08;
+                if (f != NULL)
+                {
                     s32 r;
 
                     p->unk_CC = p->unk_C0;
                     r = f(arg0, v, s, e, q);
-                    if (r > 0) {
-                        e = (Unk44D24E *) (r | 0x80000000);
-                    } else {
-                        q = (Unk453E0P *) r;
+                    if (r > 0)
+                    {
+                        e = (Unk44D24E *)PHYS_TO_K0(r);
+                    }
+                    else
+                    {
+                        q = (Unk453E0P *)r;
                     }
                     p->unk_C0 = p->unk_CC;
                 }
             }
-            if ((s8) e->unk_00 < 0) {
+            if ((s8)e->unk_00 < 0)
+            {
                 break;
             }
             e++;
         }
         PopMatrix();
     }
-    *(u32 *) (g->unk_00 + 0x8D0) = (u32) q;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
 }

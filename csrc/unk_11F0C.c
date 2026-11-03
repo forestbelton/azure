@@ -204,7 +204,7 @@ again:
                     }
                     else
                     {
-                        addr = addr | 0x80000000;
+                        addr = PHYS_TO_K0(addr);
                         /* DEVICE: a full memory barrier, the project's
                            first and for a long time only one. It emits no
                            instruction. Recorded as worth 13 words when this

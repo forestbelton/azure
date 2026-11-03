@@ -16,10 +16,10 @@ void func_80041AB0(void);
 void func_80041AE4(void);
 void func_80043CD0(void);
 void func_80043D04(void);
-s32  func_80042518(s8 *, s8);
+s32 func_80042518(s8 *, s8);
 UnkNode *func_8003FC64(s32);
 void func_80043FD0(Unk44144 *);
-s32  func_8003F794(s16, s16);
+s32 func_8003F794(s16, s16);
 void func_80040454(void);
 void func_800400B8(void);
 void func_8003F6F4(void);
@@ -27,31 +27,38 @@ void func_8003E758(void);
 void func_8003E2D8(void);
 void func_80042B68(s8 *, s8);
 
-void func_800411AC(void) {
+void func_800411AC(void)
+{
     void (**p)(void) = D_80083C68;
 
-    while (*p != NULL) {
+    while (*p != NULL)
+    {
         (*p++)();
     }
 }
 
-void func_800411FC(u16 arg0) {
+void func_800411FC(u16 arg0)
+{
     Unk8006CE80 *e = &D_8006CE80[arg0];
     u32 *p = e->unk_04;
     u32 **q;
 
-    if (p == NULL) {
+    if (p == NULL)
+    {
         return;
     }
-    q = (u32 **) p[3];
-    if (q == NULL) {
+    q = (u32 **)p[3];
+    if (q == NULL)
+    {
         return;
     }
-    if (*q == NULL) {
+    if (*q == NULL)
+    {
         return;
     }
-    do {
-        func_80041284((Unk41284 *) *q);
+    do
+    {
+        func_80041284((Unk41284 *)*q);
         q++;
     } while (*q != NULL);
 }
@@ -76,22 +83,26 @@ void func_800411FC(u16 arg0) {
  *    above the store, and local-alloc rewrites the store's source. That is
  *    what gives arm 2 its `lw`/`or`/`addu`/`lui`/`sw` and the empty
  *    func_8003F320 delay slot. */
-void func_80041284(Unk41284 *p) {
+void func_80041284(Unk41284 *p)
+{
     u32 x;
     u32 y;
 
     DrawSync(0);
     x = p->unk_00 & 0x7FFFFF;
-    if (x == 0) {
+    if (x == 0)
+    {
         x = D_80081480 = D_8008148C;
         y = x + ((p->unk_00 & 0xFF800000) >> 12);
-    } else {
-        x |= 0x80000000;
+    }
+    else
+    {
+        x |= K0BASE;
         y = D_80081480 = D_8008148C;
     }
-    func_8003E4FC(6, (u8 *) p, 0);
+    func_8003E4FC(6, (u8 *)p, 0);
     func_8003F320();
-    func_80041344((u8 *) x, (u32 *) y);
+    func_80041344((u8 *)x, (u32 *)y);
 }
 
 /* Walks a command stream, applying one record at a time: DMA a texture, patch
@@ -146,7 +157,8 @@ void func_80041284(Unk41284 *p) {
  *
  * See docs/matching-levers.md for the shared shapes: the walking pointer in
  * case 8, the chained store, and the separate record pointer `e`. */
-void func_80041344(u8 *base, u32 *arg1) {
+void func_80041344(u8 *base, u32 *arg1)
+{
     u8 *p = base;
     u16 size;
     s32 op;
@@ -155,80 +167,87 @@ void func_80041344(u8 *base, u32 *arg1) {
     u16 *q;
     u16 *w;
 
-    for (;;) {
-        Unk41344 *e = (Unk41344 *) p;
+    for (;;)
+    {
+        Unk41344 *e = (Unk41344 *)p;
 
-        op = *(u16 *) p - 1;
-        switch (op) {
+        op = *(u16 *)p - 1;
+        switch (op)
+        {
         case 0:
-            func_8004068C(base + e->unk_04, (u8 *) arg1);
+            func_8004068C(base + e->unk_04, (u8 *)arg1);
             LoadImage((RECT *)(p + 8), arg1);
             DrawSync(0);
             break;
         case 4:
-            LoadImage((RECT *)(p + 8), (u32 *) (base + e->unk_04));
+            LoadImage((RECT *)(p + 8), (u32 *)(base + e->unk_04));
             DrawSync(0);
             break;
         case 1:
-            func_8003F80C((u32) (base + e->unk_04), *(u16 *) (p + 8),
-                          *(u16 *) (p + 0xA), *(s16 *) (p + 0xC));
+            func_8003F80C((u32)(base + e->unk_04), *(u16 *)(p + 8),
+                          *(u16 *)(p + 0xA), *(s16 *)(p + 0xC));
             DrawSync(0);
             break;
         case 5:
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 2;
-            func_8003F80C((u32) (base + e->unk_04), *(u16 *) (p + 8),
-                          *(u16 *) (p + 0xA), (s16) op);
+            func_8003F80C((u32)(base + e->unk_04), *(u16 *)(p + 8),
+                          *(u16 *)(p + 0xA), (s16)op);
             DrawSync(0);
             break;
         case 6:
-            q = (u16 *) (base + e->unk_04);
-            op = *(u16 *) (p + 0xA) << 4;
-            for (i = 1; i < op; i++) {
+            q = (u16 *)(base + e->unk_04);
+            op = *(u16 *)(p + 0xA) << 4;
+            for (i = 1; i < op; i++)
+            {
                 q[i] |= 0x8000;
             }
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 4;
-            func_8003F80C((u32) q, *(u16 *) (p + 8), *(u16 *) (p + 0xA),
-                          (s16) op);
+            func_8003F80C((u32)q, *(u16 *)(p + 8), *(u16 *)(p + 0xA),
+                          (s16)op);
             DrawSync(0);
             break;
         case 7:
-            q = (u16 *) (base + e->unk_04);
+            q = (u16 *)(base + e->unk_04);
             w = q;
-            op = *(u16 *) (p + 0xA);
-            for (i = 0; i < op; i++) {
+            op = *(u16 *)(p + 0xA);
+            for (i = 0; i < op; i++)
+            {
                 w++;
-                for (j = 1; j < 16; j++) {
+                for (j = 1; j < 16; j++)
+                {
                     *w |= 0x8000;
                     w++;
                 }
             }
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 2;
-            func_8003F80C((u32) q, *(u16 *) (p + 8), *(u16 *) (p + 0xA),
-                          (s16) op);
+            func_8003F80C((u32)q, *(u16 *)(p + 8), *(u16 *)(p + 0xA),
+                          (s16)op);
             DrawSync(0);
             break;
         case 2:
-            func_8004068C(base + e->unk_04, (u8 *) (D_80080A8C + e->unk_08));
+            func_8004068C(base + e->unk_04, (u8 *)(D_80080A8C + e->unk_08));
             break;
         case 3:
-            memcpy((void *) D_80080A8C, base + e->unk_04,
+            memcpy((void *)D_80080A8C, base + e->unk_04,
                    e->unk_0C + e->unk_08);
             break;
         case 8:
-            op = (s32) base;
+            op = (s32)base;
             op += e->unk_04;
-            for (i = *(u16 *) (p + 8); i > 0; i--) {
-                ((u32 *) op)[1] = (u32) (base + ((u32 *) op)[1]);
+            for (i = *(u16 *)(p + 8); i > 0; i--)
+            {
+                ((u32 *)op)[1] = (u32)(base + ((u32 *)op)[1]);
             }
             break;
         default:
             return;
         }
-        size = *(u16 *) (p + 2);
-        if (size == 0) {
+        size = *(u16 *)(p + 2);
+        if (size == 0)
+        {
             break;
         }
         p += size;
@@ -262,7 +281,8 @@ void func_80041344(u8 *base, u32 *arg1) {
  * `addu $a1,$a0,$zero` / `addiu $a1,$a1,2` pair that loop.c creates in the
  * preheader after cse; and func_8003F80C's fourth argument must be s16, so
  * case 2 gets a bare `lh` and cases 6/7/8 get `sll 16`/`sra 16`. */
-void func_80041588(Unk41284 *arg0, s8 *arg1, s32 arg2) {
+void func_80041588(Unk41284 *arg0, s8 *arg1, s32 arg2)
+{
     u8 *p;
     u8 *base;
     u32 dst;
@@ -273,87 +293,97 @@ void func_80041588(Unk41284 *arg0, s8 *arg1, s32 arg2) {
     u16 *q;
     u16 *w;
 
-    if (arg2 == 0) {
-        func_8003E4FC(6, (u8 *) arg0, 0);
+    if (arg2 == 0)
+    {
+        func_8003E4FC(6, (u8 *)arg0, 0);
         *arg1 = 0;
-        func_8003E4FC(0xFF, (u8 *) func_8003E140, (s32) arg1);
+        func_8003E4FC(0xFF, (u8 *)func_8003E140, (s32)arg1);
         return;
     }
 
-    base = (u8 *) (arg0->unk_00 & 0x7FFFFF);
-    p = (u8 *) ((u32) base | 0x80000000);
+    base = (u8 *)(arg0->unk_00 & 0x7FFFFF);
+    p = (u8 *)PHYS_TO_K0(base);
     base = p;
     DrawSync(0);
     dst = D_80081480 = D_8008148C;
 
-    for (;;) {
-        Unk41344 *e = (Unk41344 *) p;
+    for (;;)
+    {
+        Unk41344 *e = (Unk41344 *)p;
 
-        op = *(u16 *) p - 1;
-        switch (op) {
+        op = *(u16 *)p - 1;
+        switch (op)
+        {
         case 0:
-            func_8004068C(base + e->unk_04, (u8 *) dst);
-            LoadImage((RECT *)(p + 8), (u32 *) dst);
+            func_8004068C(base + e->unk_04, (u8 *)dst);
+            LoadImage((RECT *)(p + 8), (u32 *)dst);
             DrawSync(0);
             break;
         case 4:
-            LoadImage((RECT *)(p + 8), (u32 *) (base + e->unk_04));
+            LoadImage((RECT *)(p + 8), (u32 *)(base + e->unk_04));
             DrawSync(0);
             break;
         case 1:
-            func_8003F80C((u32) (base + e->unk_04), *(u16 *) (p + 8),
-                          *(u16 *) (p + 0xA), *(s16 *) (p + 0xC));
+            func_8003F80C((u32)(base + e->unk_04), *(u16 *)(p + 8),
+                          *(u16 *)(p + 0xA), *(s16 *)(p + 0xC));
             DrawSync(0);
             break;
         case 5:
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 2;
-            func_8003F80C((u32) (base + e->unk_04), *(u16 *) (p + 8),
-                          *(u16 *) (p + 0xA), (s16) op);
+            func_8003F80C((u32)(base + e->unk_04), *(u16 *)(p + 8),
+                          *(u16 *)(p + 0xA), (s16)op);
             DrawSync(0);
             break;
-        case 6: {
-            q = (u16 *) (base + e->unk_04);
-            op = *(u16 *) (p + 0xA) << 4;
-            for (i = 1; i < op; i++) {
+        case 6:
+        {
+            q = (u16 *)(base + e->unk_04);
+            op = *(u16 *)(p + 0xA) << 4;
+            for (i = 1; i < op; i++)
+            {
                 q[i] |= 0x8000;
             }
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 2;
-            func_8003F80C((u32) q, *(u16 *) (p + 8), *(u16 *) (p + 0xA),
-                          (s16) op);
+            func_8003F80C((u32)q, *(u16 *)(p + 8), *(u16 *)(p + 0xA),
+                          (s16)op);
             DrawSync(0);
             break;
         }
-        case 7: {
-            q = (u16 *) (base + e->unk_04);
+        case 7:
+        {
+            q = (u16 *)(base + e->unk_04);
             w = q;
-            op = *(u16 *) (p + 0xA);
-            for (i = 0; i < op; i++) {
+            op = *(u16 *)(p + 0xA);
+            for (i = 0; i < op; i++)
+            {
                 w++;
-                for (j = 1; j < 16; j++) {
+                for (j = 1; j < 16; j++)
+                {
                     *w |= 0x8000;
                     w++;
                 }
             }
-            op = *(u16 *) (p + 0xC);
+            op = *(u16 *)(p + 0xC);
             op |= 2;
-            func_8003F80C((u32) q, *(u16 *) (p + 8), *(u16 *) (p + 0xA),
-                          (s16) op);
+            func_8003F80C((u32)q, *(u16 *)(p + 8), *(u16 *)(p + 0xA),
+                          (s16)op);
             DrawSync(0);
             break;
         }
         case 2:
-            func_8004068C(base + e->unk_04, (u8 *) e->unk_08);
+            func_8004068C(base + e->unk_04, (u8 *)e->unk_08);
             break;
         case 3:
-            memcpy((void *) e->unk_08, base + e->unk_04, e->unk_0C);
+            memcpy((void *)e->unk_08, base + e->unk_04, e->unk_0C);
             break;
-        case 8: {
-            u32 *r = (u32 *) (base + e->unk_04);
+        case 8:
+        {
+            u32 *r = (u32 *)(base + e->unk_04);
 
-            for (i = *(u16 *) (p + 8); i > 0; i--) {
-                r[1] = r[1] + ((u32) base | 0x80000000);
+            for (i = *(u16 *)(p + 8); i > 0; i--)
+            {
+                r[1] = r[1] + PHYS_TO_K0(base);
                 r += 2;
             }
             break;
@@ -361,29 +391,34 @@ void func_80041588(Unk41284 *arg0, s8 *arg1, s32 arg2) {
         default:
             return;
         }
-        size = *(u16 *) (p + 2);
-        if (size == 0) {
+        size = *(u16 *)(p + 2);
+        if (size == 0)
+        {
             break;
         }
         p += size;
     }
 }
 
-void func_80041818(void) {
+void func_80041818(void)
+{
     Unk8006CE80 *e = &D_8006CE80[D_80082E60.unk_0B];
 
     func_801768AC();
     D_80082E60.unk_08.h = e->unk_02;
     func_80040B88();
     e = &D_8006CE80[D_80082E60.unk_0B];
-    if (e->unk_00 != 4) {
+    if (e->unk_00 != 4)
+    {
         func_800411FC(0);
         func_800499BC();
     }
 }
 
-void func_800418B4(void) {
-    if (D_80080A89 != 0) {
+void func_800418B4(void)
+{
+    if (D_80080A89 != 0)
+    {
         return;
     }
     func_8003E4FC(6, &D_80080C50, 0);
@@ -391,44 +426,56 @@ void func_800418B4(void) {
     D_80080A89 = 1;
 }
 
-void func_80041900(u8 *arg0) {
+void func_80041900(u8 *arg0)
+{
     Unk80083160 *s = &D_80083160;
     Unk80083CA8 *sh = &D_80083CA8;
     Unk80083CA8 *t;
 
-    if (sh->unk_08 == 0) {
+    if (sh->unk_08 == 0)
+    {
         return;
     }
-    if (s->unk_04 & 2) {
-        *(s32 *) (arg0 + 0x18) += (s16) sh->unk_06 >> 1;
-    } else {
-        *(s32 *) (arg0 + 0x18) -= (s16) sh->unk_06 >> 1;
+    if (s->unk_04 & 2)
+    {
+        *(s32 *)(arg0 + 0x18) += (s16)sh->unk_06 >> 1;
     }
-    if (s->unk_04 & 1) {
-        *(s32 *) (arg0 + 0x14) += (s16) D_80083CAE[0] >> 2;
-    } else {
-        *(s32 *) (arg0 + 0x14) -= (s16) D_80083CAE[0] >> 2;
+    else
+    {
+        *(s32 *)(arg0 + 0x18) -= (s16)sh->unk_06 >> 1;
+    }
+    if (s->unk_04 & 1)
+    {
+        *(s32 *)(arg0 + 0x14) += (s16)D_80083CAE[0] >> 2;
+    }
+    else
+    {
+        *(s32 *)(arg0 + 0x14) -= (s16)D_80083CAE[0] >> 2;
     }
     t = &D_80083CA8;
     t->unk_08 = t->unk_08 - 1;
-    if (t->unk_08 != 0) {
-        s32 v = *(s32 *) &t->unk_04 - D_80083CA8.unk_00;
+    if (t->unk_08 != 0)
+    {
+        s32 v = *(s32 *)&t->unk_04 - D_80083CA8.unk_00;
 
-        *(s32 *) &t->unk_04 = v;
-        if (v >= 0) {
+        *(s32 *)&t->unk_04 = v;
+        if (v >= 0)
+        {
             return;
         }
     }
-    *(s32 *) &t->unk_04 = 0;
+    *(s32 *)&t->unk_04 = 0;
 }
 
-void func_800419EC(u16 arg0, u32 arg1) {
+void func_800419EC(u16 arg0, u32 arg1)
+{
     D_80083CA8.unk_08 = arg0;
     D_80083CA8.unk_06 = arg1;
     D_80083CA8.unk_00 = arg1 / arg0;
 }
 
-void func_80041A10(void) {
+void func_80041A10(void)
+{
     D_80082E60.unk_00 |= 1;
     D_80081480 = D_8008148C;
     func_8003FAD4();
@@ -436,13 +483,14 @@ void func_80041A10(void) {
     D_80083160.unk_00 = D_801C9E40;
     ClearOTagR(D_801C9E40 + 0x70, 0x218);
     ClearOTagR(&D_801DA784, 0x218);
-    *(u8 **) (D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
+    *(u8 **)(D_80083160.unk_00 + 0x8D0) = D_80083160.unk_00 + 0x8D4;
     SetDispMask(1);
     func_8003F7E4();
     func_80040A88(func_80041AB0);
 }
 
-void func_80041AB0(void) {
+void func_80041AB0(void)
+{
     D_80081480 = D_8008148C;
     func_80040A88(func_80041AE4);
 }
