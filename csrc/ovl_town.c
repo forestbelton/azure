@@ -2213,6 +2213,21 @@ void func_800A6EA4();
 s32 func_80048FBC(u8 *p, s32 n);
 u32 func_8004B404(s32 n);
 
+/* Three forward references the bind-and-dispatch group needs: both handlers
+   are DEFINED further down the file than the function that installs or calls
+   them, and an ADDRESS-TAKEN name cannot be reached by an implicit
+   declaration the way a call can.  Spelled unprototyped, the way the
+   address-taken-only func_80093B00 above is, so the real definitions below
+   stay the prototypes.
+
+   D_800D0620 is a word func_8009AC0C clears; its store is the split
+   `lui %hi` + `sw $zero, %lo(...)($v0)` form, which is what a declared-size
+   scalar gives at -G0. */
+void func_8009ACFC();
+void func_80093D48();
+void func_800CA60C();
+extern s32 D_800D0620;
+
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -5384,7 +5399,43 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093C40);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093C58);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093C70);
+/* func_8009A674's entry-point shape, which is landed twenty lines from here
+   twice over (func_8009A674 and func_8009A8EC): bind the embedded camera task
+   through UnkTownCam's +0x08/+0x0C pair and install the per-member
+   continuation.  Words 0-16 are func_8009A674's words 7-21 verbatim apart
+   from register numbers.
+
+   NO parameters: the prologue saves only $s0/$s1/$s2, none of which is an
+   argument copy, and no argument register is read anywhere in the body --
+   where func_8009A674 reads all three.  Nothing in the overlay calls this
+   function or takes its address, so there is no arity witness in either
+   direction.
+
+   The +0x00 handler is stored through the symbol's own `%hi` register
+   (`sw $v0, %lo(D_800834B8)($s2)`) while func_8009A674's +0x04 store uses the
+   pointer local's `0x4($s0)` -- the same per-site split this unit records for
+   a global's bound.
+
+   Three measured alternatives: swapping the two tail stores is 5 differing,
+   declaring the three locals in the listing's load order (p, q, t) is 28
+   words with 30 differing, and dropping the task local for
+   `&D_80083498.unk_20` written inline at both sites is the same 28/30 -- so
+   the task POINTER LOCAL is load-bearing and its DECLARATION ORDER is too.
+   A three-parameter signature measures identically (0 differing).
+
+   31 words -- its header reads `nonmatching func_80093C70, 0x7C`, and
+   0x7C/4 = 31.  Measured 0 differing. */
+void func_80093C70(void)
+{
+    UnkTownTask *t = &D_80083498.unk_20;
+    UnkTown2AE8 *p = D_80083498.unk_08;
+    void *q = D_80083498.unk_0C;
+
+    func_80099754(p);
+    func_80094984(D_800D0078, t, q);
+    t->unk_00 = func_8008FFC0;
+    D_800FE5D8 = func_80093D48;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093CEC);
 
@@ -7158,7 +7209,38 @@ void func_80099B00(void *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099B70);
+/* The task-layer twin of func_800C3EAC above: func_8009AB74's body with the
+   `b->unk_08 += b->unk_14;` advance of its own listing neighbour
+   func_80099B00 in front of it.  Here the heading is computed once and kept,
+   because func_80095A94 wants it as an argument -- and the argument IS the
+   truncated value (the `sra` writes $a1 and the `slt` reads it).
+
+   Four rejected spellings, all at 42 words unless noted: the family's own
+   `if (b->unk_0A >= (s16)n)` direction is 2 differing (see func_800C3EAC
+   above), the advance written after the heading call is 7, and a BARE `n` as
+   func_80095A94's argument is 43 words with 25 differing -- the one place a
+   cast IS observable here, and it is the argument, not the compare.
+   `n = (s16)f(...)` with a bare `n` everywhere else is byte-identical to
+   `n = f(...)` with `(s16)n` at each use, as the levers record.
+
+   42 words -- its header reads `nonmatching func_80099B70, 0xA8`, and
+   0xA8/4 = 42.  Measured 0 differing. */
+void func_80099B70(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    b->unk_08 += b->unk_14;
+    n = func_80095978(b, D_800FE488);
+    if ((s16)n < *(s16 *)((u8 *)b + 0xA))
+    {
+        func_80095A94(b, (s16)n, D_800FE488);
+        func_80098928(a, b, c);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 /* The interpolating move-to-target member of the countdown family: the
    sibling pair func_80099790 / func_800C3A98 does the same thing on the
@@ -7355,7 +7437,46 @@ void func_8009A344(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_8009A1E8(a, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A3A4);
+/* func_8009A494's shape with func_8009A41C's descriptor bind in front of it:
+   both of those are landed and both sit within twenty lines of here.  The
+   `lw 0x40` of the index reads through $a0 rather than $s0 because the three
+   outgoing copies for func_80098928 are already emitted when the record
+   address is built.
+
+   THE BIND TAKES THREE ARGUMENTS, and the witness is a missing insn plus a
+   register exchange, not an argument setup -- the two-argument spelling
+   func_8009A41C uses is 29 words against 30 with 27 differing, all
+   positional.  The third argument costs NO instruction: `$a2` still holds the
+   incoming `c` at that call, so jump2 deletes the argument copy
+   (scratch/gcc-src/cdk-gcc-b18/jump.c:484-493, `find_equiv_reg` at
+   reload.c:5554, under toplev.c:3690's `jump_optimize (insns, 1, 1, 0)`).
+   But the copy is still THERE when global-alloc prices the allocnos, and the
+   reference it adds is what exchanges `$s1`/`$s2` between `b` and `c`.  Read
+   out of `.lreg` and checked against `allocno_compare` (global.c:587-609,
+   `floor_log2 (refs) * refs / live_length`):
+
+     three arguments: 80 `a` 4 refs/16 -> 5000 ($s0), 82 `c` 3/16 -> 1875
+                      ($s1), 81 `b` 2/14 -> 1428 ($s2)   <- the target
+     two arguments:   80 `a` 4/13 -> 6153 ($s0), 81 `b` 2/12 -> 1666 ($s1),
+                      82 `c` 2/26 -> 769 ($s2)
+
+   `c`'s 26 in the two-argument version is the `REG_EQUIV` live-length
+   doubling a purely forwarded parameter carries (local-alloc.c:1102); the
+   third reference is the free way out of it, and the spare prologue copy it
+   consumes is also what filled the `lw 0x44` load delay, which is the missing
+   30th word.
+
+   30 words -- its header reads `nonmatching func_8009A3A4, 0x78`, and
+   0x78/4 = 30.  Measured 0 differing. */
+void func_8009A3A4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80082660 *p;
+
+    func_80094984(a->unk_44->unk_14, a, c);
+    p = D_80082660;
+    p[a->unk_40].unk_00 = 0;
+    func_80098928(a, b, c);
+}
 
 void func_8009A41C(UnkTownTask *t, s32 b)
 {
@@ -7486,7 +7607,31 @@ void func_8009AB74(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AC0C);
+/* func_80093C70's near-sibling, and func_8009A674's shape again: the same
+   bind, then a word clear and BOTH task handlers installed -- the +0x00 one
+   through the symbol's `%hi` register and the +0x04 one off the pointer
+   local, exactly as func_8009A674 emits them.  Same no-parameter finding as
+   func_80093C70 above.
+
+   The clear's position is pinned and the handlers' order with it, all at 32
+   words: the clear last is 7 differing, between the two handler stores 4, and
+   the two handler stores swapped 2.  `*(s32 *)&D_800D0620 = 0;` and a
+   three-parameter signature both measure 0.
+
+   32 words -- its header reads `nonmatching func_8009AC0C, 0x80`, and
+   0x80/4 = 32.  Measured 0 differing. */
+void func_8009AC0C(void)
+{
+    UnkTownTask *t = &D_80083498.unk_20;
+    UnkTown2AE8 *p = D_80083498.unk_08;
+    void *q = D_80083498.unk_0C;
+
+    func_80099754(p);
+    func_80094984(D_800D0078, t, q);
+    D_800D0620 = 0;
+    t->unk_00 = func_80097D2C;
+    t->unk_04 = func_8009ACFC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009AC8C);
 
@@ -17018,7 +17163,38 @@ void func_800C3E20(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3EAC);
+/* func_800C86EC's near-sibling: the same advance-and-re-aim gate on
+   func_800C2B38 instead of func_800C2AE8 and without the `b->unk_14 = 0;`
+   the arm there also carries.  The heading call is written INLINE in the test
+   and again in the arm -- two calls, which is what the two `jal`s say -- and
+   the `sw` of the sum sits in the first `jal`'s delay slot, so the `+=` is
+   written ahead of the test.
+
+   THE COMPARE DIRECTION IS NOT INHERITED from func_8009AB74 / func_800984AC /
+   func_80097F9C, which all write `if (b->unk_0A >= (s16)n)`.  Both members of
+   this pair need func_800C86EC's `<` with the call on the LEFT: the `>=`
+   spelling is 2 differing at the right word count, the `slt`'s operands
+   swapped and the branch sense with them.  ("Which side of a comparison the
+   struct field sits on is not observable" is about one operator; changing the
+   operator too is observable.)  Keeping `n` in a local measures identically
+   (0 differing); writing the advance inside the arm is 17 differing, and
+   inverting the gate so the func_80095388 arm comes first is 9.
+
+   38 words -- its header reads `nonmatching func_800C3EAC, 0x98`, and
+   0x98/4 = 38.  Measured 0 differing. */
+void func_800C3EAC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2B38(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2B38(b);
+        func_800C4174(a, b, c);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C3F44);
 
@@ -17912,7 +18088,33 @@ void func_800C7070(void *arg0)
     func_800C3050(arg0, 0x3, D_800D5D48, D_800D5D4C, D_800D5D18, D_800D5D20);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C70B8);
+/* The ACTOR twin of func_8009A3A4 above, and func_800C41FC's body with a
+   facing store instead of a countdown and a hand-on instead of a handler
+   install.  Its first call is func_800C4174's own first statement spelled
+   identically -- `func_800C2E84(a, (s32)c, a->unk_80->unk_04)` -- with no
+   `$a0` setup because the incoming first parameter is already there.  The
+   `sh` of 0x200 sits in the second `jal`'s delay slot, so it is written
+   BEFORE the hand-on.
+
+   The three statements between the calls are order-visible: the facing store
+   ahead of the slot clear is 8 differing and after the hand-on 5, both at 32
+   words.  `D_80082660[a->unk_60]` written inline instead of through the
+   pointer local measures identically (0 differing); the local is
+   func_800C41FC's style, not a requirement.  Passing `b` where the listing
+   passes `c` to func_800C2E84 is 31 words with 29 differing.
+
+   32 words -- its header reads `nonmatching func_800C70B8, 0x80`, and
+   0x80/4 = 32.  Measured 0 differing. */
+void func_800C70B8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    Unk80082660 *t;
+
+    func_800C2E84(a, (s32)c, a->unk_80->unk_04);
+    t = D_80082660;
+    t[a->unk_60].unk_00 = 0;
+    a->unk_72 = 0x200;
+    func_800C4174(a, b, c);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C7138);
 
@@ -18798,9 +19000,64 @@ void func_800C9F1C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9F58);
+/* func_800CA094's countdown with a second arm, and the one place the two
+   differ in source order: there the facing snap is written BEFORE the
+   hand-on (its `sh` fills the `jal`'s delay slot), here AFTER it (the `sh`
+   fills the following `j`'s slot), which is also why this member needs the
+   actor in a callee-saved register and func_800CA094 does not.  The `bgtz`
+   to the block at the bottom makes the step arm the `else`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800C9FBC);
+   Writing the snap before the call, func_800CA094's own order, is 22 words
+   against 25 with 24 differing; inverting the two arms is 24 with 14.
+   `a->unk_6C--;` then the test, `if (--a->unk_6C <= 0)`, `a->unk_6E` and
+   `*(s16 *)((u8 *)a + 0x6E)` all measure 0 -- those are free choices here.
+   A one-parameter signature does not compile: func_800C4174's prototype pins
+   the forward at three.
+
+   25 words -- its header reads `nonmatching func_800C9F58, 0x64`, and
+   0x64/4 = 25.  Measured 0 differing. */
+void func_800C9F58(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    a->unk_6C--;
+    if (a->unk_6C <= 0)
+    {
+        func_800C4174(a, b, c);
+        a->unk_72 = a->unk_6E;
+    }
+    else
+    {
+        a->unk_72 -= 0x400;
+    }
+}
+
+/* func_800C9F58's near-sibling: the same countdown and two arms with a
+   biased snap and a forward step instead of a backward one.  Both arms end
+   in a store to +0x72 and here the two `sh`s CROSS-JUMP into one -- the
+   `j` lands on the shared store -- where in func_800C9F58 the `j`'s delay
+   slot eats the first arm's store instead and the merge does not happen.
+   That is a compiler decision; the source shape is the same.
+
+   Three parameters, forwarded to func_800CA60C with no setup at all, so its
+   `(UnkTownActor *, s32, s32)` prototype is what fixes their types here.
+
+   Same two rejections as func_800C9F58: the snap before the call is 24 words
+   with 20 differing, and inverting the arms is 25 with 8.
+
+   25 words -- its header reads `nonmatching func_800C9FBC, 0x64`, and
+   0x64/4 = 25.  Measured 0 differing. */
+void func_800C9FBC(UnkTownActor *a, s32 b, s32 c)
+{
+    a->unk_6C--;
+    if (a->unk_6C <= 0)
+    {
+        func_800CA60C(a, b, c);
+        a->unk_72 = a->unk_6E + 0x800;
+    }
+    else
+    {
+        a->unk_72 += 0x100;
+    }
+}
 
 void func_800CA020(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
