@@ -2015,6 +2015,8 @@ extern u8 D_800F8A1C[];
 extern u8 D_800F8A28[];
 void func_800B9CB8();
 void func_800BA8C4();
+extern u8 D_80078CDC[];
+void func_800AFFA8(u8 *s);
 s32 func_8003BD84(s32 x, s32 y);
 extern u8 D_80046398[];
 extern u8 D_800D16D8[];
@@ -8745,7 +8747,28 @@ void func_800AFF00(UnkTownCardPair *p, u32 *a, u32 *b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AFFA8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0024);
+s32 func_800B0024(u8 *s)
+{
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0xA8))[i] = D_80078CDC;
+        (*(UnkTownGrid ***)(s + 0xA8))[i]->unk_04->unk_08 = i * 0x80;
+    }
+    func_800AFDD0(s + 0x28);
+    for (i = 2; i < 4; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0xA8))[i] = s + 0x28;
+        (*(UnkTownGrid ***)(s + 0xA8))[i]->unk_04->unk_08 = (i - 2) * 0x80;
+    }
+    func_800AF36C(s);
+    func_800AF4AC(*(UnkTownGrid ***)(s + 0xA8));
+    func_800AF600(*(UnkTownGrid ***)(s + 0xA8));
+    func_800AF734(*(UnkTownGrid ***)(s + 0xA8));
+    func_800AF2F8(*(UnkTownGrid ***)(s + 0xA8));
+    func_800AFFA8(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0134);
 
@@ -8901,7 +8924,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0FD4);
      access, 24 times, because that is what the target does. Binding it to a
      local would let gcc keep it in a register and drop 23 of the
      lw 0xCC($s0)s; the stores through the loaded pointers do not invalidate a
-     register copy.
+     register copy. MEASURED on the +0xA8 sibling func_800B0024, 2026-11-02:
+     binding the base to a local costs SIX words -- 62 of 68, 63 differing --
+     being the four in-loop reload lws and two of the load-delay nops. So the
+     re-read is not a stylistic choice and the cost of getting it wrong is
+     known before you try it.
 
    * The loop counts DOWN from 4 and the three y expressions are written
      i * 0x10 + k. gcc 2.7.2 strength-reduces each of those into its own
@@ -9534,7 +9561,29 @@ u32 func_800B3598(s32 a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3688);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3734);
+s32 func_800B3734(u8 *s)
+{
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0xA8))[i] = D_80078CDC;
+        (*(UnkTownGrid ***)(s + 0xA8))[i]->unk_04->unk_08 = i * 0x80;
+    }
+    func_800B3558(s + 0x28);
+    for (i = 2; i < 4; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0xA8))[i] = s + 0x28;
+        (*(UnkTownGrid ***)(s + 0xA8))[i]->unk_04->unk_08 = (i - 2) * 0x80;
+    }
+    func_800B2E3C(s);
+    func_800B2F88(*(UnkTownGrid ***)(s + 0xA8) + 6);
+    func_800B3108(*(UnkTownGrid ***)(s + 0xA8) + 0x10);
+    func_800B331C(*(UnkTownGrid ***)(s + 0xA8));
+    func_800B2DCC(*(UnkTownGrid ***)(s + 0xA8) + 0x1A);
+    func_800B2F38(s);
+    func_800B3440(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B384C);
 
@@ -9870,7 +9919,29 @@ void func_800B4CBC(UnkTownCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4D64);
+s32 func_800B4D64(u8 *s)
+{
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0x5C))[i] = D_80078CDC;
+        (*(UnkTownGrid ***)(s + 0x5C))[i]->unk_04->unk_08 = i * 0x80;
+    }
+    func_800B3558(*(u8 **)(s + 0x20));
+    for (i = 2; i < 4; i++)
+    {
+        *(u8 **)(*(UnkTownGrid ***)(s + 0x5C))[i] = *(u8 **)(s + 0x20);
+        (*(UnkTownGrid ***)(s + 0x5C))[i]->unk_04->unk_08 = (i - 2) * 0x80;
+    }
+    func_800B47BC(s);
+    func_800B4908(*(UnkTownGrid ***)(s + 0x5C) + 6);
+    func_800B49A8(*(UnkTownGrid ***)(s + 0x5C) + 0x10);
+    func_800B4A60(*(UnkTownGrid ***)(s + 0x5C));
+    func_800B474C(*(UnkTownGrid ***)(s + 0x5C) + 0x1A);
+    func_800B48B8(s);
+    func_800B4B7C(s);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4E7C);
 
