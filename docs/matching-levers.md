@@ -315,10 +315,10 @@ then read only the section you need.
   - CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A FORWARDED STORE  `:13850`
   - AN IMPLICITLY DECLARED CALLEE IS SOMETIMES THE MATCHING ONE  `:13866`
   - cse CANNOT BE STOPPED FROM UNIFYING TWO IDENTICAL SMALL CONSTANTS, AND THE `do { } while (0)` BOUNDARY IS NOT ENOUGH FOR ONE  `:13882`
-  - A FLAT FUNCTION-POINTER TABLE IS AN ARITY WITNESS WHEN ITS OTHER ENTRIES ARE LANDED  `:13943`
-  - A HALF-THREADED GUARD EDGE NEEDS AN INSN THAT BREAKS `thread_jumps`' WALK AND THEN DISAPPEARS  `:13966`
-  - `<< 7` AND `* 128` ARE NOT THE SAME STATEMENT WHEN THE RESULT IS NARROW  `:14035`
-  - WHERE A LOOP'S POINTER INCREMENT IS WRITTEN CHANGES THE DELAY SLOT OF AN EARLY `break`, NOT THE LOOP  `:14061`
+  - A FLAT FUNCTION-POINTER TABLE IS AN ARITY WITNESS WHEN ITS OTHER ENTRIES ARE LANDED  `:13946`
+  - A HALF-THREADED GUARD EDGE NEEDS AN INSN THAT BREAKS `thread_jumps`' WALK AND THEN DISAPPEARS  `:13969`
+  - `<< 7` AND `* 128` ARE NOT THE SAME STATEMENT WHEN THE RESULT IS NARROW  `:14038`
+  - WHERE A LOOP'S POINTER INCREMENT IS WRITTEN CHANGES THE DELAY SLOT OF AN EARLY `break`, NOT THE LOOP  `:14064`
 
 <!-- END INDEX -->
 
@@ -13882,8 +13882,11 @@ be a claim about the callee rather than about this unit.
 ### cse CANNOT BE STOPPED FROM UNIFYING TWO IDENTICAL SMALL CONSTANTS, AND THE `do { } while (0)` BOUNDARY IS NOT ENOUGH FOR ONE
 
 Established on `func_800B6FB8` (parked at 76 of 77 words) and independently on
-`func_800B72B8` (22 of 23), ovl_town, 2026-11-02, over roughly 2,900 compiles
-and a read of the CDK tree's `cse.c`.
+`func_800B72B8` (22 of 23) and `func_800B70EC` (115 words, the same
+`addiu $vN, $zero, 0x7` pair at words 12 and 21), ovl_town, 2026-11-02, over
+roughly 2,900 compiles and a read of the CDK tree's `cse.c`. **All three write
+the same six halfwords off the same base, so they are one source fragment three
+times over and are worth 215 words between them.**
 
 **Symptom.** The listing materialises the same small constant TWICE, one use
 each, while other constants in the same basic block each get one register with

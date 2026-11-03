@@ -86,10 +86,18 @@
    a value FORWARD and is NOT good for keeping a duplicate constant
    materialisation.
 
-   FUNC_800B72B8 (23 words) HAS THE SAME RESIDUE AND THE SAME CAUSE. It writes
-   the same six halfwords at the same offsets off the same base, and it is
-   stuck at 22 words against 23 on the same duplicated 7, measured over ten
-   spellings. Whatever lands this one lands that one.
+   TWO OTHER FUNCTIONS HAVE THE SAME RESIDUE AND THE SAME CAUSE, and together
+   they are what a permuter run here is worth: 215 words, not 77.
+
+     * func_800B72B8 (23 words), stuck at 22 against 23, measured over ten
+       spellings.
+     * func_800B70EC (115 words), whose words 12 and 21 are the same
+       `addiu $vN, $zero, 0x7` pair.
+
+   All three write the same six halfwords -- 7, 7, 0x7F, 0x7F, 0x2000, 0x2000
+   at +0x14..+0x1E -- off the same `&D_80083160 + 0x1DC` base, so they are the
+   same source fragment three times over. Whatever lands one should land all
+   three; check the other two before concluding a fix is specific.
 
    WHAT TO DO NEXT: the permuter, which has never been run on it. This park
    file is what permimport.py reads. It mutates C in ways a person would not
