@@ -19,7 +19,7 @@ This encodes the fixes rather than relying on remembering them:
     does not mean its signature is unavailable -- and one callee with no
     declaration at all went unmentioned in a brief.
 """
-import io, os, re, sys, subprocess
+import glob, io, os, re, sys, subprocess
 
 PROJ = '/home/case/projects/azure'
 def D(unit): return os.path.join(PROJ, 'asm/nonmatchings', unit)
@@ -525,6 +525,60 @@ def main():
         for d, a in rows[:5]:
             print("      csrc/%s.c:%-6d %s(%s)" % (unit, lines[d], c, a[:66]))
     if not anyf: print("  no landed call site of any of your callees passes a constant")
+
+    print("\n=== ROUTE (j): CROSS-UNIT RELATIVES BY SHARED CALLEE SET ===")
+    print("    Route (f) and route (a) are UNIT-SCOPED, and for code that mostly calls")
+    print("    RESIDENT functions that is the wrong boundary. On func_8008B818 the")
+    print("    decisive template was csrc/unk_72A8.c:1871 -- line for line, eight")
+    print("    statements -- and route (a) scored 0.101, route (h) correctly reported")
+    print("    no rare shared global, and route (f) printed this unit's call sites and")
+    print("    stopped at the unit boundary. The agent found it by grepping a callee")
+    print("    across csrc/*.c by hand. This is that grep, scored.")
+    xfun, xfreq = {}, {}
+    for fp in sorted(glob.glob(os.path.join(PROJ, 'csrc', '*.c'))):
+        if os.path.basename(fp) == unit + '.c':
+            continue
+        try:
+            xt = io.open(fp, encoding='utf-8', errors='replace').read()
+        except Exception:
+            continue
+        rel = os.path.relpath(fp, PROJ)
+        # Definitions only: a line starting in column 0 with a func_ name and
+        # no `;` -- the same test the sweep recipe uses, for the same reason.
+        defs = [(m.group(1), m.start(), xt[:m.start()].count('\n') + 1)
+                for m in re.finditer(
+                    r'^[A-Za-z_][^;\n]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;\n]*$',
+                    xt, re.M)]
+        for i, (nm, st, ln) in enumerate(defs):
+            end = defs[i + 1][1] if i + 1 < len(defs) else len(xt)
+            called = set(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', xt[st:end]))
+            called.discard(nm)
+            if called:
+                xfun[(rel, nm, ln)] = called
+                for c in called:
+                    xfreq[c] = xfreq.get(c, 0) + 1
+    anyj = False
+    for f in targets:
+        mine = allcallees.get(f, set())
+        if not mine:
+            continue
+        rows = []
+        for (rel, nm, ln), called in xfun.items():
+            sh = mine & called
+            if not sh:
+                continue
+            rows.append((sum(1.0 / xfreq[c] for c in sh), rel, nm, ln, sh))
+        rows.sort(reverse=True)
+        if not rows:
+            continue
+        anyj = True
+        print("  %s:" % f)
+        for sc, rel, nm, ln, sh in rows[:3]:
+            print("      %.3f  %s:%-5d %s" % (sc, rel, ln, nm))
+            print("             shares: %s" % ', '.join(sorted(sh)))
+            print("             sed -n '%d,%dp' %s" % (ln, ln + 40, rel))
+    if not anyj:
+        print("  none of your callees is called by a landed function in another unit")
 
     print("\n=== LANDED RELATIVES, route (a): shared callees+globals, WEIGHTED BY RARITY ===")
     print("    (score = sum 1/freq over shared callees, +2/freq per shared global;")
