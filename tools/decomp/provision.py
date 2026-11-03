@@ -420,6 +420,22 @@ def main():
                       % (f, d, unit, lines[d], f, a[:60]))
                 anyc = True; witnessed.add(f)
     if not anyc: print("  none -- no LANDED call site constrains arity")
+    print("\n=== ROUTE (g): YOUR OWN GROUP MEMBERS AS WITNESSES ===")
+    print("    A group member that calls another is a witness, and the search used to")
+    print("    miss it entirely -- one batch had a member calling a sibling with four")
+    print("    arguments while the sibling was listed as having no witness at all.")
+    anyg = False
+    for f in targets:
+        for o in targets:
+            if o == f: continue
+            lt = listing(unit, o)
+            if lt and re.search(r'jal\s+' + f + r'\b', lt):
+                rel = ('BELOW it in the file, so a too-narrow spelling is a HARD ERROR'
+                       if incasm.get(o, 0) > incasm.get(f, 0) else 'above it')
+                print("  %-15s is jal'd by group member %-15s (%s)" % (f, o, rel))
+                anyg = True; witnessed.add(f)
+    if not anyg: print("  no group member calls another")
+
     missing = [f for f in targets if f not in witnessed and listing(unit, f)]
     if missing:
         print("\n  *** NO ARITY WITNESS ANYWHERE for: %s" % ', '.join(missing))

@@ -516,6 +516,25 @@ typedef struct UnkTownScrRec
     u16 unk_12;
 } UnkTownScrRec;
 
+/* The two levels func_800A00E8 and func_8009FF8C reach the UnkTownScrRec
+   table through: D_80100900 is a POINTER (func_8009CDB4 clears it with
+   `sw $zero, %lo(D_80100900)`), its +0x0C points at a header whose +0x04 is
+   the base of the stride-0x14 record array, and its own +0x00/+0x02 are a
+   u16 origin pair added to each record's +0x10/+0x12. */
+typedef struct UnkTownScrHdr
+{
+    u8 pad_00[0x4];
+    UnkTownScrRec *unk_04;
+} UnkTownScrHdr;
+
+typedef struct UnkTownScrCtx
+{
+    u16 unk_00;
+    u16 unk_02;
+    u8 pad_04[0x8];
+    UnkTownScrHdr *unk_0C;
+} UnkTownScrCtx;
+
 /* The spinning actor at D_80100B70 and the 0x1F800000 scratchpad as
    func_800A1080 uses it. The scratchpad members are reached as &p->unk_2C etc
    rather than as literal (void *)0x1F80002C constants -- see the lever
@@ -2402,6 +2421,12 @@ extern u8 D_8008961C[];
 extern u8 D_80053A88[];
 extern u8 D_800782EC[];
 extern u8 D_80111FB0[];
+extern u8 D_80100B50[];
+extern s32 D_80100B68;
+extern u8 D_80100B3B;
+extern UnkTownScrCtx *D_80100900;
+void func_8009ED7C();
+s32 func_800A00E8(s32 i);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -9519,13 +9544,87 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E714);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E85C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E994);
+/* 71 words, 0 differing.  Installed at UnkTownActor.unk_50 by func_8009EB20
+   below (`%hi`/`%lo(func_8009E994)`), so the slot is unprototyped and nothing
+   witnesses the arity -- but all four argument registers are read: $a0..$a3
+   go to $s1/$s3/$s0/$s4 in the prologue and all four are forwarded to
+   func_8009EB9C.
+
+   The head is the landed func_8009B8E8's halve-the-remaining-distance
+   tracker extended to the third axis, read off D_80083780 through the cast
+   expression (NOT a pointer local) so that the `%hi` lands in $a0, the +0x00
+   read folds into it as `lw %lo(D_80083780)($a0)`, and one `addiu` lo_sum in
+   the callee-saved $s2 serves +0x04 and +0x08 -- $s2 because the +0x08 read
+   recurs after the func_8009EB9C call.
+
+   `z` HAS TO BE ITS OWN STATEMENT.  Written inline as
+   `(TOWN->unk_08 - (c->unk_08 + 0x200000)) / 2`, fold-const.c's
+   split_tree/associate path rewrites `X - (VAR + CON)` to `(X - CON) - VAR`
+   (fold-const.c:4232 "Otherwise return VAR +- (ARG1 +- CON)"), which
+   materialises -0x200000 and adds it to the TOWN read instead: 71 words,
+   6 differing, the five around the third axis plus the `lui` constant.  The
+   local blocks the reassociation; assigning it before the first axis or
+   before the third both measure 0.
+
+   The 24-byte local handed to func_8009EB9C as a FIFTH argument
+   (`sw $v0, 0x10($sp)`, the fifth outgoing slot of an 0x18-byte argument
+   area) is a size witness only -- func_8009EB9C's own body never reads it,
+   and the other two call sites (func_8009EAB0, func_8009EF88) pass the same
+   `$sp + 0x18` out of the same 0x48 frame.  UnkTown2AE8 is the 24-byte type
+   this family already has; the TYPE is a guess, the SIZE is not. */
+void func_8009E994(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    UnkTown2AE8 v;
+    s32 z;
+
+    c->unk_0C = (((UnkTown2AE8 *)D_80083780)->unk_00 - c->unk_00) / 2;
+    c->unk_10 = (((UnkTown2AE8 *)D_80083780)->unk_04 - c->unk_04) / 2;
+    z = c->unk_08 + 0x200000;
+    c->unk_14 = (((UnkTown2AE8 *)D_80083780)->unk_08 - z) / 2;
+    func_8009539C(c);
+    if (--a->unk_6C <= 0)
+    {
+        if (func_8009EB9C(a, b, c, d, &v) == 0)
+        {
+            c->unk_08 = ((UnkTown2AE8 *)D_80083780)->unk_08 + D_800D0428;
+            func_8009BFD8(a, b, c, d);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EAB0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EB20);
+/* 7 words, 0 differing.  The minimal member of this unit's bind family --
+   compare func_8009EC3C, which adds the three delta clears and a second
+   slot -- and the ONLY function in the batch with no referrer of any kind:
+   no `jal`, no `%hi`, no C reference anywhere under asm/nonmatchings/ovl_town
+   or in this file.  Its body reads $a0 and $a1 only, so the last two
+   parameters are the family convention and not a witness. */
+void func_8009EB20(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    *((u8 *)b + 0x15) = 0;
+    a->unk_50 = func_8009E994;
+    a->unk_6C = 8;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EB3C);
+/* 24 words, 0 differing.  TWO parameters, settled by its only caller, the
+   stub func_8009EB9C: `func_8009F6E4($a0)`, and on a return other than -1
+   `func_8009EB3C($s0, $v0)`.  The tail is the unit's kill-this-node idiom,
+   `*(u16 *)((u8 *)a - 0x2) |= 0x8000; D_800814A0 |= 0x8000;` (37 landed
+   sites; see func_800C25C0).
+
+   provision.py reads this as calling func_8008F134 with two arguments
+   because it sees `addiu $a1, $s0, 0x4C` ahead of the `jal`.  That word is
+   func_8009FA14's SECOND argument sitting in the previous call's branch
+   delay slot -- the documented backward-scan over-count. */
+void func_8009EB3C(UnkTownActor *a, s32 b)
+{
+    func_8009FA14(b, (u8 *)a + 0x4C);
+    func_8008F134(a);
+    func_80033D08((u8 *)a);
+    *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EB9C);
 
@@ -9546,11 +9645,87 @@ UnkTownIdPair *func_8009EBE0(s32 a, s32 b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EC3C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EC70);
+/* 32 words, 0 differing.  The bind half of the pair: clears the mover's
+   three deltas, installs func_8009ED7C with a 0xA countdown, and picks the
+   script row to centre on.  FOUR parameters, and here the fourth is
+   witnessed after all -- func_8009ECF0 above calls it with four arguments and
+   is defined BELOW it, so a three-parameter spelling is a hard "too many
+   arguments" rather than a silent one.  $a3 is unread in this body.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009ECF0);
+   `n` is a real local and not two duplicated tail calls: the value reaches
+   func_800A00E8 in $v0 from both arms (`lbu $v0, %lo(D_80100B3B)($v0)` on one
+   and func_8009FF8C's return on the other) with the `addu $a0, $v0, $zero`
+   in the shared `jal`'s delay slot. */
+void func_8009EC70(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    s32 n;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009ED7C);
+    *((u8 *)b + 0x15) = 0;
+    c->unk_0C = 0;
+    c->unk_10 = 0;
+    c->unk_14 = 0;
+    a->unk_50 = func_8009ED7C;
+    a->unk_6C = 0xA;
+    if (*((u8 *)a + 0x4D) == 0x13)
+    {
+        n = D_80100B3B;
+    }
+    else
+    {
+        n = func_8009FF8C(func_800B28A0(), c);
+    }
+    func_800A00E8(n);
+}
+
+/* 35 words, 0 differing.  func_8009B828's countdown shape with no midpoint
+   step: both collision calls, then `--a->unk_6C <= 0` handing off to the
+   bind function above.  Its own address is taken by the stub func_8009EC3C,
+   which installs it at UnkTownActor.unk_50, and that is not an arity
+   witness -- the four parameters come from its own body, which forwards all
+   four of $a0..$a3 to func_8009EC70. */
+void func_8009ECF0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (--a->unk_6C <= 0)
+    {
+        func_8009EC70(a, b, c, d);
+    }
+}
+
+/* 72 words, 0 differing.  func_8009E994's twin over a different target: the
+   same three-axis halve-the-distance head and the same `--a->unk_6C <= 0`
+   countdown, but tracking D_80100B50 -- the position func_800A00E8 below
+   writes -- with no 0x200000 bias on the third axis, so there is nothing for
+   fold to reassociate and the three statements can stay inline.  Same
+   cast-expression addressing as the D_80083780 form: `%hi` in $a0, the +0x00
+   read folded into its `%lo`, one `addiu` lo_sum for +0x04 and +0x08.
+
+   Installed at UnkTownActor.unk_50 by func_8009EC70 above, so nothing
+   witnesses the arity; $a0/$a1/$a2 are read and $a3 is a dead trailing
+   parameter carried for the family's (actor, coll, mover, rend) convention.
+
+   provision.py reads the `addu $a3, $zero, $zero` ahead of the func_8008F134
+   `jal` as a fourth argument to it.  It is func_800A0150's fourth argument in
+   the previous call's delay slot. */
+void func_8009ED7C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    c->unk_0C = (((UnkTown2AE8 *)D_80100B50)->unk_00 - c->unk_00) / 2;
+    c->unk_10 = (((UnkTown2AE8 *)D_80100B50)->unk_04 - c->unk_04) / 2;
+    c->unk_14 = (((UnkTown2AE8 *)D_80100B50)->unk_08 - c->unk_08) / 2;
+    func_8009539C(c);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (--a->unk_6C <= 0)
+    {
+        func_800A0150(D_80100B68, (u8 *)a + 0x4C, &D_80100AF8, 0);
+        func_8008F134(a);
+        func_80033D08((u8 *)a);
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        func_800C0C88();
+    }
+}
 
 /* A camera-step handler, installed by func_8009F148 (which takes its address
    and nothing else -- there is no `jal` to it anywhere, so its four
@@ -9816,7 +9991,55 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009FF50);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009FF8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A00E8);
+/* 26 words, 0 differing.  Centres D_80100B50 on script row `i`: records the
+   row in D_80100B68, sets the 16.16 word at each axis to zero and its INTEGER
+   half (the `*(s16 *)` two bytes in, here through the UnkTown2AE8Int view so
+   that both stores are COMPONENT_REFs sharing one lo_sum) to the row's
+   +0x10/+0x12 offset plus D_80100900's own origin pair, and parks the third
+   axis at -0x200000.
+
+   THREE SPELLINGS ARE LOAD-BEARING, each measured:
+
+   - `return i`, although func_8009EC70 discards the result.  Without it the
+     parameter's pseudo takes its suggested $a0, the entry copy is deleted and
+     the function is 25 words -- one short -- with every later register
+     shifted (25/26 differing).  The return copy reserves $v0 for the
+     parameter instead, $a0 falls to D_80100900's value, and the surviving
+     `addu $v0, $a0, $zero` is the 26th word.  $v0 is dead after word 6 in the
+     target, which is why holding it to the end costs nothing and is
+     invisible.
+
+   - `i * 0x14 + (s32)...unk_04`, not `&...unk_04[i]`.  Indexing always builds
+     PLUS_EXPR(pointer, offset) -- c-typeck.c's pointer_int_sum ends
+     `result = build (resultcode, result_type, ptrop, intop)` whichever way
+     the source writes it -- so the record address comes out
+     `addu $a2, $a2, $v1` (base first).  local-alloc ties an `addu`'s output
+     to the first input that dies there, so base-first puts `rec` in the base
+     register and the target's offset-first `addu $v1, $v1, $a2` puts it in
+     the offset register.  Integer arithmetic is the only way to write the
+     operands in that order: 5 differing with the index form, all five
+     register-only and all in the record-read chain.
+
+   - the two origin reads in locals.  At their use points they are reloaded
+     either side of the D_80100B50 stores (22 differing); hoisted they land in
+     $a3/$t0 before the first store, which is the target's schedule. */
+s32 func_800A00E8(s32 i)
+{
+    UnkTownScrRec *rec;
+    s32 x;
+    s32 y;
+
+    D_80100B68 = i;
+    rec = (UnkTownScrRec *)(i * 0x14 + (s32)D_80100900->unk_0C->unk_04);
+    x = D_80100900->unk_00;
+    y = D_80100900->unk_02;
+    ((UnkTown2AE8 *)D_80100B50)->unk_00 = 0;
+    ((UnkTown2AE8Int *)D_80100B50)->unk_02 = rec->unk_10 + x;
+    ((UnkTown2AE8 *)D_80100B50)->unk_04 = 0;
+    ((UnkTown2AE8Int *)D_80100B50)->unk_06 = rec->unk_12 + y;
+    ((UnkTown2AE8 *)D_80100B50)->unk_08 = -0x200000;
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0150);
 
