@@ -131,72 +131,31 @@ segments:
     align: 4
     subsegments:
       - [0x2164, .rodata, unk_24FCC]
+  # The staff-credits roll, as one hand-owned listing: asrc/credits.s, placed
+  # by the `hrodata` subsegment type. 53 strings, the whole of this segment,
+  # replacing 53 one-per-string `shiftjis` subsegments that `azure findstr`
+  # generated.
+  #
+  # Every one of the 53 starts 4-aligned and carries exactly `4 - (len % 4)`
+  # trailing zeros -- the same 160 bytes of inter-string padding the previous
+  # comment counted, now emitted by `.shiftjisz` in the listing rather than
+  # absorbed by 53 subsegments. Nothing needs a `bin` filler, which is just as
+  # well: a `bin` is `.data` and would be emitted ahead of this segment's whole
+  # `.rodata` group.
+  #
+  # The strings are named in slus_006.14_symbol_addrs.txt, which matters here in
+  # a way it did not for the item pool. `hrodata` scans its range, so splat
+  # knows a symbol lives at each address game_data's credits table points to and
+  # writes those words as symbol references; the symbol_addrs entries make them
+  # the names asrc/credits.s defines, so the table reads as
+  # `.word STR_CREDITS_*` instead of resolving to invented D_ names that nothing
+  # would define.
   - type: code
     start: 0x2184
     vram: 0x8002E984
     align: 4
     subsegments:
-      # The staff-credits string pool, the whole of this segment. Every one of
-      # the 53 strings starts 4-aligned and every one of the 160 bytes between
-      # them is zero, so each `shiftjis` subsegment absorbs its own trailing
-      # pad and nothing needs a `bin` filler -- which matters, because a `bin`
-      # is `.data` and would be emitted after this segment's whole `.rodata`
-      # group. That is also why this works here and not in the other text
-      # blobs: 0x2184 is already its own segment, so the `.rodata` group
-      # starts exactly at the segment's vram. Generated from `azure findstr`.
-      - [0x2184, shiftjis, str/credits/presented_by]
-      - [0x21a0, shiftjis, str/credits/kitaue_kazumi]
-      - [0x21bc, shiftjis, str/credits/produced_by]
-      - [0x21d4, shiftjis, str/credits/yoneoka_masaki]
-      - [0x21f4, shiftjis, str/credits/supervised_by]
-      - [0x2210, shiftjis, str/credits/harada_masaaki]
-      - [0x2230, shiftjis, str/credits/special_thanks_to]
-      - [0x2254, shiftjis, str/credits/kasai_hideki]
-      - [0x2270, shiftjis, str/credits/flatline]
-      - [0x2284, shiftjis, str/credits/sound_edited_by]
-      - [0x22a4, shiftjis, str/credits/kiyohiko_yamane]
-      - [0x22c4, shiftjis, str/credits/music_driver_by]
-      - [0x22e4, shiftjis, str/credits/noritada_matsukawa]
-      - [0x230c, shiftjis, str/credits/sound_management_by]
-      - [0x2334, shiftjis, str/credits/sound_programming_by]
-      - [0x2360, shiftjis, str/credits/imohore_imai]
-      - [0x237c, shiftjis, str/credits/movie_se_by]
-      - [0x2394, shiftjis, str/credits/hiroe_noguchi]
-      - [0x23b0, shiftjis, str/credits/sound_effects_by]
-      - [0x23d4, shiftjis, str/credits/hiroshi_tamawari]
-      - [0x23f8, shiftjis, str/credits/music_by]
-      - [0x240c, shiftjis, str/credits/tadano_tsuguo]
-      - [0x2428, shiftjis, str/credits/imaizumi_kenichiro]
-      - [0x2450, shiftjis, str/credits/nakano_kazuaki]
-      - [0x2470, shiftjis, str/credits/movie_by]
-      - [0x2484, shiftjis, str/credits/tajima_teruto]
-      - [0x24a0, shiftjis, str/credits/aoki_yoko]
-      - [0x24b4, shiftjis, str/credits/additional_design_by]
-      - [0x24e0, shiftjis, str/credits/masako_yashima]
-      - [0x2500, shiftjis, str/credits/kaneguchi_kenji]
-      - [0x2520, shiftjis, str/credits/satoh_hiroki]
-      - [0x253c, shiftjis, str/credits/iwakura_kousuke]
-      - [0x255c, shiftjis, str/credits/koma]
-      - [0x2568, shiftjis, str/credits/hagihara_toru]
-      - [0x2584, shiftjis, str/credits/scenario_coded_by]
-      - [0x25a8, shiftjis, str/credits/katana_1]
-      - [0x25bc, shiftjis, str/credits/kikuchi_yuji]
-      - [0x25d8, shiftjis, str/credits/ishikawa_kazuo]
-      - [0x25f8, shiftjis, str/credits/ogiso_kazumasa]
-      - [0x2618, shiftjis, str/credits/hakodate_ziro]
-      - [0x2634, shiftjis, str/credits/programming_by]
-      - [0x2654, shiftjis, str/credits/inaba_haruhiko]
-      - [0x2674, shiftjis, str/credits/assistant_directed_by]
-      - [0x26a0, shiftjis, str/credits/background_design_by]
-      - [0x26cc, shiftjis, str/credits/hattori_k_suke]
-      - [0x26ec, shiftjis, str/credits/monster_design_by]
-      - [0x2710, shiftjis, str/credits/character_design_by]
-      - [0x2738, shiftjis, str/credits/yamada_koji]
-      - [0x2750, shiftjis, str/credits/scenario_written_by]
-      - [0x2778, shiftjis, str/credits/horio_kenichiro]
-      - [0x2798, shiftjis, str/credits/directed_by]
-      - [0x27b0, shiftjis, str/credits/credits]
-      - [0x27c0, shiftjis, str/credits/azure_dreams]
+      - [0x2184, hrodata, credits]
   # The run at 0x8002EFDC, supplied by TWO objects: jtbl_8002EFDC is
   # func_80052144's, in unk_25944, and jtbl_8002EFF0 is func_80052CE0's, in
   # unk_264E0. Two contiguous `.rodata` subsegments in two adjacent segments,
