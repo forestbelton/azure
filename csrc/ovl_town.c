@@ -580,7 +580,15 @@ typedef struct UnkTownA1080
     s16 unk_12;
     MATRIX unk_14;
     MATRIX unk_34;
-    u8 pad_54[0x26];
+    /* Split out of pad_54 for func_800A1354, which walks six of these as an
+       INDEXED subscript -- `s->unk_54[i]`, i stepping 3 -- and reads each
+       one's UnkNode.unk_08 as the UnkTown2AE8 it hands to func_800A130C.
+       The subscript is load-bearing: the same six loads spelled as a walked
+       `UnkNode **q` with `q += 3` are 286 words and 26 differing, because
+       loop.c's address giv is only reachable from the subscript form.  No
+       existing field moved; +0x6C..+0x79 stays pad. */
+    UnkNode *unk_54[6];
+    u8 pad_6C[0xE];
     s16 unk_7A;
 } UnkTownA1080;
 
@@ -714,7 +722,7 @@ typedef struct UnkTownAA10C
    same object UnkTownA1080 describes -- +0x12 is the brightness func_800A12B4
    counts down by 4 and clamps at 4, and that function's `lhu`/`sh`/`sll 16`/
    `sra 16`/`slti 4` is what types it s16 -- but every field func_800A17CC
-   uses (+0x6C..+0x7A) falls inside UnkTownA1080's pad_54, so this is a second
+   uses (+0x6C..+0x7A) falls inside UnkTownA1080's pad_6C, so this is a second
    view rather than a retyping of a landed one.
 
    Signedness that IS witnessed: +0x6C and +0x6E must be s16, because their
@@ -11417,7 +11425,120 @@ void func_800A1330(SVECTOR *d, UnkTown2AE8 *b)
     d->vz = *(u16 *)((u8 *)b + 0x4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1354);
+/* func_800A17CC's loop sibling and func_800AA10C's near-twin: two passes over
+   a six-entry pointer table, each pass drawing one random-coloured LINE_G4
+   quad through the actor's three nodes plus a fourth corner copied from the
+   first.  func_800AA10C's body transferred almost line for line -- the random
+   colour words, func_80066844/func_80066640, the -0x30 otz bias, the corner
+   stores, the two separate otz clamps and the trailing DR_MODE -- so this
+   landed on the first compile.  Three things are this function's own, each
+   measured:
+
+   - **`h` must be a `u32` LOCAL read above the loop.**  The nine colour
+     scalings divide by 255 with `multu`/`mfhi`/`srl 7` and NO sign
+     correction, so the dividend is unsigned, yet +0x10 is read with `lh`.
+     `u32 h = s->unk_10;` is both at once: an s16 source makes the load `lh`
+     and the u32 destination makes `ln->r0 * h` unsigned.  `s32 h` is 313
+     words / 265 differing (three words of sign fix-up per divide), the field
+     inline is 325 / 285, and `(u32)s->unk_10` inline is 298 / 252 -- the
+     cast is re-done per use where the local is loaded once.
+
+   - **`Unk80083160 *g` is required even though the global is named only
+     inside the loop**, for the reason func_800AA10C's note records: with
+     s0-s7 and fp all taken, reload gives `g` reg_equiv_constant and
+     rematerialises `lui %hi`/`addiu %lo` at each in-loop use -- three words
+     against the two-word `lui %hi`/`lw %lo($r)` of a direct access.
+     `D_80083160.unk_00` throughout is 284 words, TWO SHORT, 273 differing.
+     Declaring it with the initialiser measures identically.
+
+   - **the OT expression must stay written out at both func_8006658C calls.**
+     Hoisting `sp->unk_24 + sp->unk_C4` into a local is 285 words / 47
+     differing.  Unlike func_800AA10C this reaches the OT through the real
+     func_8006658C rather than the addPrim macro -- the macro form is 315
+     words / 300 differing, and the listing's two `jal func_8006658C` settle
+     it outright.
+
+   Store orders, all measured: the three +0x1C corner copies are written
+   r3/g3/b3 even though the listing stores 0x1D/0x1E/0x1C (sched2's doing;
+   g3/b3/r3 costs 6 differing and b3/g3/r3 costs 4), each corner stores x
+   before y (y first costs 16, as in func_800AA10C), and the two otz clamps
+   are two `if`s on two reads (an `else if` costs 9, the same 9 that function
+   measured).  Scalar declaration order does not matter here: swapping `i`
+   and `h` is 0 differing.
+
+   286 words -- its header reads `nonmatching func_800A1354, 0x478`, and
+   0x478/4 = 286.  Measured 0 differing, and all 26 relocation records
+   (4 HI16 + 3 LO16 on D_80083160 -- the fourth HI16 is reorg's copy in the
+   loop's `bnez` delay slot, which shares the loop head's `%lo` -- plus 19
+   R_MIPS_26) decoded in word order against the listing, which is also what
+   `ovlverify --raw`'s 26 differing closes against.  The six `addiu $v0, $s2,
+   %lo(D_1F8000xx)` scratchpad addresses inside the loop are this function's
+   missing-relocation class, exactly as func_800AA10C's six: the C form emits
+   no R_MIPS_LO16 there, the raw words are identical anyway, and the merged
+   object therefore carries six fewer records than the stub build. */
+void func_800A1354(UnkTownA1080 *s)
+{
+    Unk80083160 *g;
+    UnkTownA17CCSP *sp;
+    LINE_G4 *ln;
+    DR_MODE *dm;
+    s32 i;
+    u32 h;
+
+    g = &D_80083160;
+    sp = (UnkTownA17CCSP *)0x1F800000;
+    h = s->unk_10;
+    sp->unk_24 = (u32 *)(g->unk_00 + 0xB0);
+    for (i = 0; i < 6; i += 3)
+    {
+        ln = (LINE_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
+        *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+        *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+        *(u32 *)&ln->r2 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+        *(u32 *)&ln->r3 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+        ln->r0 = ln->r0 * h / 255;
+        ln->g0 = ln->g0 * h / 255;
+        ln->b0 = ln->b0 * h / 255;
+        ln->r1 = ln->r1 * h / 255;
+        ln->g1 = ln->g1 * h / 255;
+        ln->b1 = ln->b1 * h / 255;
+        ln->r2 = ln->r2 * h / 255;
+        ln->g2 = ln->g2 * h / 255;
+        ln->b2 = ln->b2 * h / 255;
+        ln->r3 = ln->r0;
+        ln->g3 = ln->g0;
+        ln->b3 = ln->b0;
+        func_80066844(ln);
+        func_80066640(ln, 1);
+        func_800A130C(&sp->unk_74[0], (UnkTown2AE8 *)s->unk_54[i]->unk_08);
+        func_800A130C(&sp->unk_74[1], (UnkTown2AE8 *)s->unk_54[i + 1]->unk_08);
+        func_800A130C(&sp->unk_74[2], (UnkTown2AE8 *)s->unk_54[i + 2]->unk_08);
+        func_800A1330(&sp->unk_74[3], (UnkTown2AE8 *)&sp->unk_74[0]);
+        sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1], &sp->unk_74[2], &sp->unk_74[3], (u32 *)&sp->unk_E8[0], (u32 *)&sp->unk_E8[1], (u32 *)&sp->unk_E8[2], (u32 *)&sp->unk_E8[3], &sp->unk_94, &sp->unk_98) - 0x30;
+        ln->x0 = sp->unk_E8[0].vx;
+        ln->y0 = sp->unk_E8[0].vy;
+        ln->x1 = sp->unk_E8[1].vx;
+        ln->y1 = sp->unk_E8[1].vy;
+        ln->x2 = sp->unk_E8[2].vx;
+        ln->y2 = sp->unk_E8[2].vy;
+        ln->x3 = sp->unk_E8[3].vx;
+        ln->y3 = sp->unk_E8[3].vy;
+        if (sp->unk_C4 >= 0x1E0)
+        {
+            sp->unk_C4 = 0x1DF;
+        }
+        if (sp->unk_C4 < 0)
+        {
+            sp->unk_C4 = 0;
+        }
+        func_8006658C(sp->unk_24 + sp->unk_C4, ln);
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+        func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+    }
+}
 
 /* RotAverageNclip4: TEN arguments -- the four input SVECTORs, the four
    DVECTOR outputs, then `p` and `flag`.  That arity is not cosmetic: it is
