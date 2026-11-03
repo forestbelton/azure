@@ -526,6 +526,61 @@ def main():
             print("      csrc/%s.c:%-6d %s(%s)" % (unit, lines[d], c, a[:66]))
     if not anyf: print("  no landed call site of any of your callees passes a constant")
 
+    print("\n=== ROUTE (k): CALLEE-SET CONTAINMENT, WHICH RARITY CANNOT SEE ===")
+    print("    Route (a) weights each shared callee by 1/freq, so a family whose callees")
+    print("    are all COMMON weights to ~0 and the metric reports nothing. That has now")
+    print("    been reported ELEVEN times. The worst case: route (a) said 'NO RELATIVE AT")
+    print("    ANY SCORE' for func_80091000 while its head was func_80091260's verbatim")
+    print("    and its whole body a strict SUBSET of its own sibling's. Containment is a")
+    print("    structural fact and needs no weighting, so it is reported unweighted here.")
+    anyk = False
+    for f in targets:
+        mine = allcallees.get(f, set())
+        if not mine:
+            continue
+        rows = []
+        for d, dc in body.items():
+            if d in targets or not dc:
+                continue
+            dc = set(dc)
+            if mine <= dc:
+                rows.append((0, len(dc) - len(mine), 'YOURS IS A SUBSET of   ', d, ''))
+            elif dc <= mine:
+                rows.append((0, len(mine) - len(dc), 'IS A SUBSET of yours:  ', d, ''))
+            else:
+                # NEAR-SUBSET: all but ONE of your callees is covered. The
+                # tolerance is on `mine - theirs` ALONE, deliberately -- a first
+                # version tested the SYMMETRIC difference, which can never fire
+                # for the case that motivated this route (func_80091000 has 7
+                # callees, func_80091260 has 26, and their head is verbatim
+                # identical; the symmetric difference is 20). What matters is
+                # that a template covers all but one of YOUR calls; how much
+                # else it does is irrelevant.
+                only_mine = mine - dc
+                if len(only_mine) == 1:
+                    d1 = only_mine.pop()
+                    rows.append((1, len(dc - mine), 'ALL BUT ONE OF YOURS:  ', d,
+                                 '  (not covered: %s)' % d1))
+        # exact containment first, then near; within each, the tightest fit
+        rows.sort(key=lambda r: (r[0], r[1]))
+        for _, _, why, d, extra in rows[:5]:
+            print("  %-15s %s %s   csrc/%s.c:%d%s"
+                  % (f, why, d, unit, lines.get(d, 0), extra))
+            print("                  sed -n '%d,%dp' csrc/%s.c"
+                  % (lines.get(d, 1), lines.get(d, 1) + 60, unit))
+            anyk = True
+        # Say what is below the cut. Measured on the case that motivated this
+        # route: 9 candidates, the sibling the agent actually diffed against at
+        # rank 4 (printed) and the two family HEADS at ranks 8 and 9 (not).
+        # Route (a) reported zero candidates for the same function.
+        if len(rows) > 5:
+            print("                  ... %d MORE below the cut, and route (a) scored this"
+                  % (len(rows) - 5))
+            print("                  function at NOTHING -- read them if the five miss:")
+            print("                  %s" % ', '.join(r[3] for r in rows[5:]))
+    if not anyk:
+        print("  no landed function's callee set contains, or is contained by, any target's")
+
     print("\n=== ROUTE (j): CROSS-UNIT RELATIVES BY SHARED CALLEE SET ===")
     print("    Route (f) and route (a) are UNIT-SCOPED, and for code that mostly calls")
     print("    RESIDENT functions that is the wrong boundary. On func_8008B818 the")
