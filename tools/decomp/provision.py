@@ -79,6 +79,41 @@ def _forwarding(def_line, arglist_text):
     return ''
 
 
+def classify_addr_takes(listing, names):
+    """Split %hi-on-a-function symbols into the ones this listing STORES (real
+    installs) and the ones it only COMPARES (inspectors).
+
+    Takes the destination register off the `%lo` line and looks ahead a few
+    instructions for a `sw` of it (install) or a branch on it (test). A symbol
+    that shows neither, or both, is reported as an install -- the conservative
+    side, since a missed install is the expensive error.
+    """
+    lines = listing.split('\n')
+    stored, tested = [], []
+    for n in names:
+        verdict = None
+        for i, ln in enumerate(lines):
+            if '%lo(' + n + ')' not in ln:
+                continue
+            m = re.search(r'\$(\w+),\s*\$\w+,\s*%lo\(', ln) or \
+                re.search(r'\$(\w+),\s*%lo\(', ln)
+            if not m:
+                verdict = 'store'
+                break
+            reg = m.group(1)
+            for ahead in lines[i + 1:i + 10]:
+                if re.search(r'\bs[bhw]\s+\$%s\b' % reg, ahead):
+                    verdict = 'store'
+                    break
+                if re.search(r'\b(beq|bne)\s+.*\$%s\b' % reg, ahead):
+                    verdict = 'test'
+                    break
+            if verdict:
+                break
+        (tested if verdict == 'test' else stored).append(n)
+    return stored, tested
+
+
 def nargs(arglist_text):
     """Argument count for a call's argument text, counting only TOP-LEVEL
     commas. A naive `count(',')` overcounts as soon as one argument is itself
@@ -354,6 +389,7 @@ def main():
         tot += w
         cal = sorted(set(re.findall(r'jal\s+(\w+)', t)))
         ins = sorted(set(re.findall(r'%hi\((func_[0-9A-Fa-f]+)\)', t)))
+        stored, tested = classify_addr_takes(t, ins)
         # BOTH %hi AND %lo. Matching only %hi loses every symbol that shares
         # one materialised base with another -- which is exactly the
         # constant-base idiom this overlay is full of, where one `lui` serves
@@ -366,11 +402,36 @@ def main():
         gl  = sorted(set(re.findall(r'%(?:hi|lo)\((D_[0-9A-F]+)\)', t)))
         jt  = len(re.findall(r'jr\s+\$(?!ra)', t))
         rod = 'YES' if '.section .rodata' in t or 'dlabel D_' in t else 'no'
-        allcallees[f], installs[f], globs[f] = set(cal), set(ins), set(gl)
+        # `installs` feeds the group-level install heuristics, so it must hold
+        # only the STORED ones.
+        allcallees[f], installs[f], globs[f] = set(cal), set(stored), set(gl)
         print("  %s  %d words  jumptable=%d  owns-rodata=%s" % (f, w, jt, rod))
         print("      callees : %s" % (', '.join(cal) or 'NONE'))
-        print("      installs: %s" % (', '.join(ins) + '   <- %hi on a FUNCTION: masked, no jal, VERIFY BY RELOC'
-                                        if ins else 'none'))
+        if ins:
+            # AN ADDRESS-TAKE IS NOT NECESSARILY AN INSTALL. A function-address
+            # COMPARE (`beq`/`bne` against the materialised address) is
+            # indistinguishable from a STORE in a %hi/%lo grep, and this line
+            # used to call both "installs". On 2026-11-03 that made
+            # func_800A0F10 -- which only TESTS the camera task's current
+            # handler against two addresses -- look like a second installer of
+            # a handler func_80093ED8 really does install, and the bogus
+            # "two installers of one handler" pairing went into a brief as its
+            # strongest lead. It cost the agent a detour.
+            if stored:
+                print("      installs: %s   <- %%hi on a FUNCTION: masked, "
+                      "no jal, VERIFY BY RELOC" % ', '.join(stored))
+            else:
+                print("      installs: none")
+            if tested:
+                print("      TESTS a handler address (NOT an install): %s"
+                      % ', '.join(tested))
+                print("          It materialises the address and COMPARES it"
+                      " -- beq/bne, no store. That constrains nothing about")
+                print("          the named function and makes this an"
+                      " inspector, not an installer. Do not pair it with a")
+                print("          real installer of the same handler.")
+        else:
+            print("      installs: none")
         # AN ADDRESS-TAKE DOES NOT RIDE AN IMPLICIT DECLARATION the way a call
         # does. This unit rides 18 implicit declarations for CALLS to functions
         # defined below their call site, and none of them covers taking an
