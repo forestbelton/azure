@@ -24,6 +24,18 @@ import glob, io, os, re, sys, subprocess
 PROJ = '/home/case/projects/azure'
 def D(unit): return os.path.join(PROJ, 'asm/nonmatchings', unit)
 
+
+# The loaded image, as include/structs.h records it. A global outside it is
+# usually a constant address in the original rather than a symbol.
+IMAGE_LO, IMAGE_HI = 0x8002D000, 0x80088760
+
+
+def in_image(sym):
+    try:
+        return IMAGE_LO <= int(sym.split('_')[1], 16) < IMAGE_HI
+    except (IndexError, ValueError):
+        return True
+
 def listing(unit, f):
     p = os.path.join(D(unit), f + '.s')
     return open(p).read() if os.path.exists(p) else None
@@ -224,7 +236,16 @@ def main():
         tot += w
         cal = sorted(set(re.findall(r'jal\s+(\w+)', t)))
         ins = sorted(set(re.findall(r'%hi\((func_[0-9A-Fa-f]+)\)', t)))
-        gl  = sorted(set(re.findall(r'%hi\((D_[0-9A-F]+)\)', t)))
+        # BOTH %hi AND %lo. Matching only %hi loses every symbol that shares
+        # one materialised base with another -- which is exactly the
+        # constant-base idiom this overlay is full of, where one `lui` serves
+        # several `%lo` displacements. On 2026-11-03 this reported
+        # D_80010983 for func_8009EF88 and omitted D_80010AC4, the arm's whole
+        # payload; for func_8009E85C it reported D_80010980 and omitted
+        # D_80010981, D_80010983 and D_80010A94 -- three of its four accesses,
+        # including the one supplying a callee's fourth argument. Two agents
+        # reported it independently.
+        gl  = sorted(set(re.findall(r'%(?:hi|lo)\((D_[0-9A-F]+)\)', t)))
         jt  = len(re.findall(r'jr\s+\$(?!ra)', t))
         rod = 'YES' if '.section .rodata' in t or 'dlabel D_' in t else 'no'
         allcallees[f], installs[f], globs[f] = set(cal), set(ins), set(gl)
@@ -252,16 +273,51 @@ def main():
                 print("                  %-15s %s" % (
                     i, pr.strip() if pr else 'no declaration in the unit either -- write one'))
         if gl:
-            tags = []
+            tags, outside = [], []
             for g in gl:
                 if re.search(r'^\s*extern\b[^;]*\b' + g + r'\b', src_txt, re.M):
                     tags.append(g)
                 elif g in incglob:
                     fp, ln = incglob[g]
                     tags.append('%s (declared %s:%d -- do NOT redeclare)' % (g, fp, ln))
+                elif not in_image(g):
+                    # DEMANDING A DECLARATION HERE IS THE WRONG INSTRUCTION,
+                    # and following it changes the addressing. A global whose
+                    # base is outside the loaded image is usually an integer
+                    # constant cast to a pointer in the original, reached
+                    # through a `(u8 *)0x...` local with the offset in the
+                    # index. Declare the symbol instead and the address
+                    # becomes plus(symbol_ref, reg) rather than
+                    # plus(reg, const_int), which changes the instruction
+                    # count. The tell in the listing is whether the `lui`'s
+                    # destination register EQUALS the load's: if it does, only
+                    # the constant form reaches it. Two agents hit this on the
+                    # same day -- D_80012D5C in func_800B180C (2 differing as
+                    # a symbol) and the D_80010xxx page in func_8009EF88.
+                    outside.append(g)
+                    tags.append(g + ' [OUT OF IMAGE]')
                 else:
                     tags.append(g + ' *** NO DECLARATION, you must add one ***')
             print("      globals : %s" % ', '.join(tags))
+            if outside:
+                # One note for all of them, not one per symbol: this used to
+                # repeat a whole paragraph per global and the line became
+                # unreadable, which defeats the point for something agents
+                # read top to bottom.
+                base = min(int(g.split('_')[1], 16) for g in outside)
+                print("      [OUT OF IMAGE] %s -- do NOT declare these."
+                      % ', '.join(outside))
+                print("          Outside 0x8002D000..0x8008875F these are"
+                      " usually integer constants cast to pointers in the")
+                print("          original. Try a `(u8 *)0x%08X` base local"
+                      " with the offsets in the index. Declaring the symbol"
+                      % (base & 0xFFFF0000))
+                print("          makes the address plus(symbol_ref, reg)"
+                      " instead of plus(reg, const_int) and changes the")
+                print("          instruction count. The tell in the listing:"
+                      " if the `lui`'s destination register EQUALS the")
+                print("          load's, only the constant form reaches it."
+                      " Several %lo off one %hi is the same idiom.")
         else:
             print("      globals : none")
     print("  TOTAL %d words" % tot)
