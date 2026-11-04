@@ -436,6 +436,67 @@ def install_slots(unit, func, landed, btext):
     return sorted(out)
 
 
+def container_refs(unit, addr, span=4):
+    """Where the BUILT container stores `addr` as a 32-bit word.
+
+    THE DISPATCH TABLE IS CONTAINER DATA, AND NO SOURCE-LEVEL ROUTE READS IT.
+    Reported 2026-11-04 by the group that landed func_800AE4xx: provision said
+    "NO ARITY WITNESS ANYWHERE" for five names, and four of them were
+    witnessed by the table at D_800D157C -- a run of their own addresses, read
+    out of build/town.bin, indexed by a sibling with `sll 2` / `lw` /
+    `jalr $v0` and one argument in the delay slot. Three of that group's
+    fourteen signatures came from this and from nothing else.
+
+    Returns [(vram_of_the_slot, [neighbouring words])], so the STRIDE and the
+    siblings are visible: a run of sibling handler addresses is what tells you
+    the table is a dispatch table and not one stray pointer.
+    """
+    cont = ('town.bin' if unit.startswith('ovl_town') else
+            'dungeon.bin' if unit.startswith('ovl_dungeon') else
+            'main.bin' if unit.startswith('ovl_main') else None)
+    if not cont:
+        return []
+    binp = os.path.join(PROJ, 'build', cont)
+    yml = os.path.join(PROJ, 'splat', cont + '.yaml')
+    if not (os.path.exists(binp) and os.path.exists(yml)):
+        return []
+    # (file_start, vram) anchors, each `vram:` taking the nearest `start:`
+    # above it. Read with a regex rather than a yaml parse because the
+    # commented-out `# start:` / `# vram:` lines in this tree are load-bearing
+    # documentation and a parser drops them -- a regex that requires the line
+    # to begin with whitespace-then-`start` skips them for the same reason.
+    segs, cur = [], None
+    for ln in open(yml):
+        m = re.match(r'\s+start:\s*(0x[0-9A-Fa-f]+|\d+)\s*$', ln)
+        if m:
+            cur = int(m.group(1), 0)
+            continue
+        m = re.match(r'\s+vram:\s*(0x[0-9A-Fa-f]+|\d+)\s*$', ln)
+        if m and cur is not None:
+            segs.append((cur, int(m.group(1), 0)))
+    if not segs:
+        return []
+    data = open(binp, 'rb').read()
+    needle = addr.to_bytes(4, 'little')
+    out, i = [], 0
+    while True:
+        i = data.find(needle, i)
+        if i < 0 or len(out) >= 8:
+            break
+        if i % 4 == 0:
+            # file offset -> vram, through the segment whose start is the
+            # largest one at or below it
+            seg = max((s for s in segs if s[0] <= i), default=None,
+                      key=lambda s: s[0])
+            vram = seg[1] + (i - seg[0]) if seg else None
+            lo = max(0, i - span * 4)
+            words = [int.from_bytes(data[j:j + 4], 'little')
+                     for j in range(lo, min(len(data), i + (span + 1) * 4), 4)]
+            out.append((vram, i, words))
+        i += 4
+    return out
+
+
 def slot_casts(txt, off):
     """Prototyped indirect-call casts in this unit through byte offset `off`.
 
@@ -448,9 +509,17 @@ def slot_casts(txt, off):
     pat = re.compile(r'\(\s*\*\s*\(\s*([\w ]+?)\s*\(\s*\*\*\s*\)\s*'
                      r'\(([^)]*)\)\s*\)\s*\(([^;]*?0x%X[^;]*?)\)\s*\)\s*\(' % off,
                      re.I)
+    # AND RETURN THE BASE EXPRESSION. Without it this function answers "is
+    # there a cast through this OFFSET" while the banner above it claims to
+    # answer "is there a cast through this SLOT" -- and +0x10 is the busiest
+    # offset in this unit. Reported 2026-11-04: the two casts offered as the
+    # witness for a handler installed into an UnkNode are on D_80082BC0, a
+    # different record entirely. All the arities agreed, so it cost nothing
+    # that time, but the banner read like a settled fact.
     for m in pat.finditer(txt):
         hits.append((txt[:m.start()].count('\n') + 1,
-                     m.group(1).strip(), m.group(2).strip()))
+                     m.group(1).strip(), m.group(2).strip(),
+                     ' '.join(m.group(3).split())))
     return hits
 
 
@@ -2226,10 +2295,24 @@ def main():
                 print("      *** WITNESS FOUND: %s is installed at +0x%X by %s"
                       " (%s)%s, and this unit dispatches that slot through a"
                       " PROTOTYPED cast:" % (f, off, who, how, norm))
-                for ln, ret, args in casts:
-                    print("            csrc/%s.c:%-6d  %s (*)(%s)"
-                          % (unit, ln, ret, args or 'void'))
-                sigs = set((ret, args) for _ln, ret, args in casts)
+                for ln, ret, args, base in casts:
+                    encl = [d for d, dl in lines.items() if dl <= ln]
+                    encl.sort(key=lambda d: lines[d])
+                    print("            csrc/%s.c:%-6d  %s (*)(%s)   through"
+                          " `%s`%s"
+                          % (unit, ln, ret, args or 'void', base,
+                             '   in %s' % encl[-1] if encl else ''))
+                print("          *** THE SEARCH MATCHED ON THE OFFSET, NOT ON"
+                      " THE RECORD. Read the base expression and the")
+                print("          enclosing function above and satisfy yourself"
+                      " the cast dispatches YOUR record before")
+                print("          you take the types from it. Reported"
+                      " 2026-11-04: the casts offered for a handler")
+                print("          installed into an UnkNode were on"
+                      " D_80082BC0, and +0x10 is the busiest offset in")
+                print("          this unit. Every arity agreed that time, so"
+                      " it cost nothing -- but it was not a witness.")
+                sigs = set((ret, args) for _ln, ret, args, _b in casts)
                 if len(sigs) > 1:
                     print("          *** %d DIFFERENT SIGNATURES cast through"
                           " this one offset, so only the ARITY is settled"
@@ -2249,6 +2332,101 @@ def main():
                           " the safer half.")
                 print("          Read the dispatcher before falling back to"
                       " register reads.")
+        # ROUTE (q): the built container's own data.
+        for f in missing:
+            # The name IS the address in this tree, and taking it from the
+            # name rather than from the listing means this route still works
+            # for a symbol whose listing has been carved into another unit.
+            m = re.match(r'func_([0-9A-Fa-f]{8})$', f)
+            if not m:
+                continue
+            va = int(m.group(1), 16)
+            refs = container_refs(unit, va)
+            if not refs:
+                continue
+            found_any = True
+            print("      *** ROUTE (q) WITNESS: %s's OWN ADDRESS (0x%08X) is"
+                  " STORED IN THE BUILT CONTAINER:" % (f, va))
+            # NOT `words` -- that is this module's own function, and
+            # binding it as a loop variable anywhere in main() makes it a
+            # local for the WHOLE function, so the per-function facts section
+            # 1,600 lines above died with UnboundLocalError.
+            for vram, off_, nbrs in refs:
+                print("            at 0x%08X (file +0x%X), with its"
+                      " neighbours:" % (vram or 0, off_))
+                print("              %s" % ' '.join(
+                    ('[%08X]' % w) if w == va else ('%08X' % w)
+                    for w in nbrs))
+            # NAME THE REAL SYMBOL, not the %hi page. `vram & ~0xFFFF` is
+            # D_800D0000, which is not a symbol in this tree and greps to
+            # nothing -- the first version of this banner printed exactly
+            # that.
+            base = None
+            try:
+                sf = os.path.join(PROJ, 'splat',
+                                  ('town.bin' if unit.startswith('ovl_town')
+                                   else 'main.bin')
+                                  + '_undefined_syms_auto.txt')
+                cands = []
+                for ln in open(sf):
+                    mm = re.match(r'(\w+)\s*=\s*(0x[0-9A-Fa-f]+)', ln)
+                    if mm and int(mm.group(2), 0) <= (refs[0][0] or 0):
+                        cands.append((int(mm.group(2), 0), mm.group(1)))
+                if cands:
+                    base = max(cands)
+            except OSError:
+                pass
+            print("          A RUN OF SIBLING HANDLER ADDRESSES AROUND YOURS"
+                  " IS A DISPATCH TABLE, and whoever indexes it")
+            # DO THE SEARCH, DO NOT SUGGEST IT. The first version printed
+            # `grep -l '%hi(D_800D06AC)'` -- the symbol splat emitted AT the
+            # hit address -- and that grep returns NOTHING, because the
+            # indexer materialises an EARLIER symbol and reaches the table
+            # through a displacement. A suggested command that finds nothing
+            # reads as "there is no indexer", which is the opposite of what
+            # this route established.
+            hit = refs[0][0] or 0
+            near = sorted(s for s in cands if hit - 0x400 <= s[0] <= hit)
+            idx = []
+            for sv, sn in reversed(near[-12:]):
+                for lt in glob.glob(os.path.join(
+                        PROJ, 'asm/nonmatchings', unit, '*.s')):
+                    try:
+                        if '%%hi(%s)' % sn in open(lt).read():
+                            idx.append((sn, sv, os.path.basename(lt)[:-2]))
+                    except OSError:
+                        pass
+                if idx:
+                    break
+            if idx:
+                print("          settles your arity, and THESE FUNCTIONS"
+                      " MATERIALISE THE TABLE'S BASE:")
+                for sn, sv, who in idx[:6]:
+                    print("            %-15s via %s (0x%08X), your slot is"
+                          " %s + 0x%X" % (who, sn, sv, sn, hit - sv))
+                print("          Read one of them: its `sll`/`lw`/`jalr` and"
+                      " the argument registers it sets up are the")
+                print("          witness. NOTE the symbol that names your"
+                      " slot exactly may be materialised by NOBODY -- the")
+                print("          indexer reaches the table off an earlier"
+                      " symbol, which is why this searched instead of")
+                print("          printing a grep.")
+            elif base:
+                print("          settles your arity -- but NO listing in this"
+                      " unit materialises any symbol in the")
+                print("          0x400 below 0x%08X, so the indexer is not"
+                      " here: look in the sister carved units" % hit)
+                print("          and in the resident code. The nearest"
+                      " declared symbol is %s (0x%08X), your slot"
+                      % (base[1], base[0]))
+                print("          being %s + 0x%X." % (base[1], hit - base[0]))
+            else:
+                print("          settles your arity: find whoever"
+                      " materialises the table's base symbol.")
+            print("          and read its `sll`/`lw`/`jalr` and the argument"
+                  " registers it sets. A table of ONE is")
+            print("          a stray pointer and witnesses nothing -- read the"
+                  " neighbours before believing it.")
         if found_any:
             print("      (The banner above is therefore too strong for at least"
                   " one of those names.)")
