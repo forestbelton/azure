@@ -685,6 +685,50 @@ it.
 spelling stays. (Those two files are also the ones `splat split --modes ld`
 EMPTIES, which is why that command is forbidden.)
 
+**And the same trap fires with a REAL LIBRARY NAME, which is worse, because
+nothing warns.** Hit on 2026-11-03 landing `func_800951B4`. `provision.py`
+route (c) prints, correctly, that splat names `func_800652AC` as
+`OuterProduct0` -- and `OuterProduct0` is **already declared** by
+`psyq/include/libgte.h:359`, which `include/common.h:39` includes. So
+`OuterProduct0(&dir, &vel, &cp)` needs no declaration, produces no
+diagnostic, and measures **107/107 at 0 differing** with an
+`R_MIPS_26 OuterProduct0` relocation. It appears **0 times** in both
+`town.bin_undefined_funcs_auto.txt` and `town.bin_undefined_syms_auto.txt`;
+what this overlay links is `func_800652AC = 0x800652AC`
+(`town.bin_undefined_funcs_auto.txt:155`), with `OuterProduct0 = 0x800652ac`
+living only in `splat/slus_006.14_symbol_addrs.txt:107`. The useful rule:
+**when a route prints a splat NAME, grep the overlay's two `*_auto.txt` files
+and use the spelling that is in them**, whatever the psyq headers declare.
+
+### A CANDIDATE MAY LEGITIMATELY RELOCATE AGAINST A DIFFERENT SYMBOL THAN THE LISTING NAMES
+
+The ordered relocation-sequence check will flag it, and it is not always a
+defect. Measured 2026-11-03 on `func_80098834`: splat's listing prints
+`%hi(D_80082668)` / `%lo(D_80082668)`, while the landed candidate relocates
+against **`D_80082660`** because it uses the unit's established
+`D_80082660[1].unk_00 = 0;` idiom (~20 call sites) and the `+8` folds into the
+instruction's displacement field -- `sb $zero, 8($v0)` with
+`R_MIPS_LO16 D_80082660`.
+
+Both resolve to the same words: `%hi` is `0x8008` either way, and the `%lo`
+value is `0x2660 + 8 == 0x2668`, giving `3c028008` / `a0402668` -- exactly the
+target's bytes. **So a symbol mismatch in the sequence check is a question,
+not a verdict**: decode the resolved immediate by hand, and let
+`make build/town.bin` settle it. Both symbols existed in
+`town.bin_undefined_syms_auto.txt` (`:130` and `:131`), so either links; if
+the one the candidate uses is NOT in those files, see the trap above.
+
+### DO NOT DECLARE A STUB'S RETURN TYPE IF A CAST AT THE POINT OF USE MEASURES THE SAME
+
+A declaration is an assertion about a function nobody has read yet, and a
+later landing can contradict it. Measured 2026-11-03 in the `func_80096924`
+landing: `u8 *func_80096A30();` and `(u8 *)func_80096A30(...)` on the implicit
+declaration are both 67 words at 0 differing. The cast form was taken, with
+the reason in a comment, because `func_80096A30` is still a stub -- the same
+rule a brief already states for a callee's ARITY, applied to its return type.
+A declaration that merely COPIES a landed definition's signature is a
+different thing and is required when the symbol's address is taken.
+
 ### AN ARGUMENT-REGISTER MOVE AT ENTRY THAT NOTHING NEARBY READS IS A REAL PARAMETER
 
 The converse of "A MISSING ARGUMENT MOVE IS NOT EVIDENCE OF A ZERO-ARITY CALL",

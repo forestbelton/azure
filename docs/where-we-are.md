@@ -334,10 +334,12 @@ size, the `-G` value, the struct layout, the flags.
    near-identical shape.
 
    **State on 2026-11-03, after the autonomous campaign and the carve:**
-   ovl_town is **1,210 of 1,819 functions and 49,428 of 70,311 words, 70.3%**,
-   up from 26.7% five sessions ago; the project total is **82.6%**, and there
-   are **8 parks** -- SEVEN have been RETIRED by solving them, not by giving up
-   on them.
+   the three ovl_town units together are **1,277 of 1,819 functions and 52,238
+   of 70,311 words, 74.3%**, up from 26.7% six sessions ago; the project total
+   is **84.9%**, and there are **9 parks** -- SEVEN have been RETIRED by
+   solving them, not by giving up on them. Take these from `progress.py`, which
+   now also counts old-style (K&R) definitions; `DEF_RE` requires `\)\s*\{`
+   and was missing two of them, 132 uncounted words.
 
    **The most recent two were retired by a function that shares no call-graph
    edge with either of them**, and that is the most reusable fact in this
@@ -412,15 +414,16 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. All three units sweep clean -- **1,211 names
-   verified, 0 nonzero** -- and both `make build/town.bin` and `make check` are
-   byte-identical. Read that number, not just the absence of failures: until
+   Work the tight components. All three units sweep clean -- **1,277 names
+   verified, 0 nonzero** apart from the documented benign `func_800C3050`
+   off-by-one (its multi-line declaration's first line) -- and both
+   `make build/town.bin` and `make check` are byte-identical. Read that number, not just the absence of failures: until
    2026-11-03 the sweep was verifying ONE function out of 618 and reporting
    clean, because splat prunes a landed function's listing and the recipe's
    closing `grep -v ' 0 differing'` swallowed the hard exit. `ovlverify.py` now
    falls back to the reference binary via the ELF's section LMA, and the recipe
    prints its own coverage. See docs/town-sweep.md, "A sweep that verified
-   nothing". `docs/matching-levers.md` is at **406 levers**, as `leverindex.py` itself
+   nothing". `docs/matching-levers.md` is at **412 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
