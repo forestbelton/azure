@@ -763,6 +763,61 @@ the trap keeps being rediscovered: `endlabel func_XXXX` CONTAINS the substring
 rodata" on every listing in the tree. The anchored pattern `^dlabel D_` is the
 screen; `provision.py` and `brief.py` both use it.
 
+### THE ORDER OF `||`-CHAINED HANDLER TESTS IS WITNESSED BY NOTHING BUT THE ORDERED RELOCATION SEQUENCE
+
+Not a hazard to avoid but a measurement to run, and the control is
+reproducible in one command. On `func_8009065C` (209 words, four handler
+addresses compared against the task's current `+0x00`):
+
+| variant | `ovlverify` masked | `raw == relocdump` | `seqcheck` |
+|---|---|---|---|
+| the landed order | 0 differing | 42 == 42 | `seq=OK` |
+| two tail handlers swapped | **0 differing** | **42 == 42** | `seq=FAIL` at index 23 |
+| two head handlers swapped | **0 differing** | **42 == 42** | `seq=FAIL` at index 5 |
+
+Read the middle column: **the `raw == relocdump total` arithmetic closes for
+the WRONG order too**, because the same words are relocated either way and
+only the symbols differ. So neither the masked run nor the arithmetic can see
+a swapped test. `tools/decomp/seqcheck.py` can, because it compares the
+ordered sequence symbol by symbol against the listing.
+
+I reproduced both swaps myself rather than taking them on report. The practical
+rule: **on any function that compares a stored handler against two or more
+addresses, the ordered check is the only verification of the test order** --
+and the same applies to two adjacent calls with identical delay slots, which
+is the older form of this trap.
+
+### A BRANCH THAT COMPARES A REGISTER AGAINST ITSELF IS A DUPLICATED `if` IN THE ORIGINAL -- DO NOT "FIX" IT
+
+Measured on `func_800A027C`, 2026-11-04. Its listing contains
+
+```
+    lbu   $a0, 0x4D($s0)
+    addiu $v0, $zero, 0x12
+    bne   $a0, $v0, .L800A0384
+    addu  $v1, $a0, $zero
+    bne   $v1, $a0, .L800A0380     <- $v1 == $a0, can never branch
+```
+
+which is the source's **second, separate** `if (*((u8 *)p + 0x4D) == 0x12)`
+written INSIDE the first one's taken arm: the test survives, with its constant
+operand replaced by the register already known equal to it.
+
+Both tidier readings are ruled out by measurement: merging the two `if`s is 86
+words against 88 with 32 differing -- two words short, the degenerate compare
+and its copy gone -- and the sibling function's `== 0x12 || == 0x13` range
+test is 91 / 36. So the redundancy is in the original, exactly as
+`func_8009E714`'s dead `t == 2` arm is.
+
+**The mechanism is NOT established.** An agent drafted it as cse recording the
+branch equivalence through `record_jump_equiv` and then falsified its own
+second half: `scratch/gcc-src/cdk-gcc-b18/cse.c:1375` says in its own words
+that a constant is cheaper than a register and therefore heads the
+equivalence class, so cse's substitution should go register-to-constant and
+re-emit the original compare -- the opposite of what the bytes show. Treat the
+shape as a recognisable signature with a measurement behind it, not as an
+explained transformation.
+
 ### AN ODD ADDRESS-TAKE COUNT IS NOT A DEFECT -- reorg DUPLICATES A `lui` ACROSS A THREAD IT DOES NOT OWN
 
 A brief's address-take column counts `%hi`/`%lo` OCCURRENCES on a function
