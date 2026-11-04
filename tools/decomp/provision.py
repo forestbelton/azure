@@ -845,6 +845,66 @@ def main():
     print("      listing (a field expression, a constant, a global) rather than a callee")
     print("      name. e.g. grep -n 'D_800814A0 |= 0x8000' csrc/%s.c" % unit)
 
+    # ------------------------------------------------------------------ (n)
+    print("\n=== ROUTE (n): WHAT THIS UNIT ALREADY SAYS ABOUT YOUR TARGET ===")
+    print("    Every mention of the target's own name in the C file, except its")
+    print("    INCLUDE_ASM. This is one grep and no route scores it, and TWO agents")
+    print("    asked for it independently after finding their decisive lead in a")
+    print("    COMMENT that names the target in prose. One of them had the fixed")
+    print("    neighbour window printed above START TWENTY LINES BELOW the template,")
+    print("    so the load-bearing comment block was outside it; the other found a")
+    print("    sentence that gave it both callees and the table base, and its")
+    print("    function landed on the first compile from that one line.")
+    # Classify each line by tracking block-comment state across the file. A
+    # line's own text cannot tell you: a continuation line inside a /* */ block
+    # starts with ordinary prose, and my first version labelled those "code".
+    in_c, lineclass = False, {}
+    for i, ln in enumerate(txt.split('\n'), 1):
+        lineclass[i] = 'comment' if in_c else 'code'
+        j = 0
+        while j < len(ln):
+            if in_c:
+                e = ln.find('*/', j)
+                if e < 0:
+                    break
+                in_c = False
+                j = e + 2
+            else:
+                s = ln.find('/*', j)
+                d = ln.find('//', j)
+                if d >= 0 and (s < 0 or d < s):
+                    break
+                if s < 0:
+                    break
+                if lineclass[i] == 'code' and not ln[:s].strip():
+                    lineclass[i] = 'comment'
+                in_c = True
+                j = s + 2
+    anyn = False
+    for f in targets:
+        hits = []
+        for i, ln in enumerate(txt.split('\n'), 1):
+            if f not in ln or 'INCLUDE_ASM' in ln:
+                continue
+            kind = lineclass[i]
+            if kind == 'code' and re.match(
+                    r'^[A-Za-z_][\w \*]*\b%s\s*\([^;]*\);' % f, ln):
+                kind = 'declaration'
+            elif kind == 'code' and '/*' in ln.split(f)[0]:
+                kind = 'comment'
+            hits.append((i, kind, ln.strip()))
+        if hits:
+            anyn = True
+            print("  %s -- %d mention(s):" % (f, len(hits)))
+            for i, kind, ln in hits[:8]:
+                print("      :%-6d %-11s %s" % (i, kind, ln[:92]))
+            if len(hits) > 8:
+                print("      ... %d more; grep -n '%s' csrc/%s.c"
+                      % (len(hits) - 8, f, unit))
+    if not anyn:
+        print("  none -- this unit never names any of your targets outside its"
+              " INCLUDE_ASM")
+
     print("\n=== ROUTE (h): YOUR RAREST GLOBALS, ACROSS THE WHOLE csrc/ TREE ===")
     print("    A global that is ABSENT from this unit is the strongest signal that")
     print("    the template lives in ANOTHER unit -- and neither the C-file-neighbour")
