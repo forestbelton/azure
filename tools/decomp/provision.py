@@ -1255,16 +1255,34 @@ def main():
                                       " +0x%X:" % (a2 - a3))
                                 print("            %s   (%s.%s)"
                                       % (fld[0], other, fld[1]))
-                                print("          That declaration settles it,"
-                                      " and it OUTRANKS \"the symbol the")
-                                print("          listing names\" -- a separate"
-                                      " symbol inside a declared object's")
-                                print("          extent would overlap it."
-                                      " Check the field's TYPE against what")
-                                print("          your function does with the"
-                                      " bytes; if they agree, write")
-                                print("          %s.%s and ignore the rest of"
-                                      " this note." % (other, fld[1]))
+                                # DO NOT SAY THIS OUTRANKS THE LISTING'S
+                                # SYMBOL. That wording lasted one hour on
+                                # 2026-11-04 before two groups measured it:
+                                # for ONE field the spellings TIE, and for
+                                # TWO fields of the member the member needs
+                                # its own symbol (35 words / 6 differing,
+                                # recorded at csrc/ovl_town.c:22379). Offset
+                                # 0 is a legitimate (lo_sum) address and a
+                                # nonzero offset is not.
+                                print("          For ONE field of that member"
+                                      " the two spellings TIE, so this only")
+                                print("          tells you a seq=FAIL on it"
+                                      " would be benign -- it does NOT")
+                                print("          outrank the symbol the"
+                                      " listing names. For TWO fields of the")
+                                print("          member the member needs ITS"
+                                      " OWN SYMBOL: the field spelling puts")
+                                print("          one lo_sum in a register and"
+                                      " reaches both by displacement, which")
+                                print("          measured 35 words / 6"
+                                      " differing (csrc/ovl_town.c:22379).")
+                                print("          PREFER THE LISTING'S SYMBOL."
+                                      " Use %s.%s only if you have a reason"
+                                      % (other, fld[1]))
+                                print("          beyond this line -- and if a"
+                                      " sister unit already declares the")
+                                print("          member's symbol, copy that"
+                                      " declaration instead.")
                             print("          WHAT HAS DISCRIMINATED is the"
                                   " unit's OWN PRACTICE near these addresses:")
                             print("            %d landed body/bodies use %s%s"
