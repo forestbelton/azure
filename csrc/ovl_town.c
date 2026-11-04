@@ -3359,6 +3359,14 @@ void func_800A7B14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800A7EC0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800A8070(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800A833C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+/* func_800AF9C4's page-change tint, a single 0x00E0E0E0 word.  It keeps its
+   own INCLUDE_RODATA and is a dlabel of its own, so it is `extern` and not
+   D_8008917C + 0x78 -- the %hi is the same either way and the 0x78 would fold
+   into the R_MIPS_LO16 addend, but the listing names D_800891F4 and the bytes
+   are a separate record.  A complete scalar, not `[]`: the target folds the
+   low half into the load (`lw $v0, %lo(D_800891F4)($v1)`), which an incomplete
+   array would compiler-split into its own `addiu`. */
+extern u32 D_800891F4;
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -27163,7 +27171,198 @@ void func_800AF96C(u8 *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF9C4);
+/* The 0x800AFxxx list scene's input dispatcher -- the handler func_800AFD00
+   and func_800AFD5C hand back to with their `func_800AF9C4(s)` tails, and the
+   one func_800AF96C restores from +0x04.  Two gates (the pad word at
+   D_80083160+0x08 and the scene's own enable at +0x10), then four arms off
+   D_80083160's +0x10 edge word: 0x20 confirms the entry (0x515 plus
+   func_800AE484 on the handle at +0x18), 0x40 starts func_800AF8B0's cursor
+   animation and parks the live unk_10 handler at +0x04 while func_800AF96C
+   runs, 0x10 opens the 0x8001029C table list, and 0xF000 is the d-pad.  The
+   two d-pad arms -- edge, and auto-repeat off the counter at +0x0C -- share
+   the move through func_80049E1C and the page recompute.
+
+   Five things are source rather than scheduling, and all five were measured:
+
+   - `g = &D_80083160;` INTO A LOCAL, the landed family's device (:5307 and
+     the note at :6970): that is what puts the `%hi` in the prologue with the
+     `addiu $a2` beside it and every read at a displacement off $a2.  `g` is
+     NOT live across any call here, which is why it gets the caller-saved $a2
+     rather than the $s0 the dispatcher family's members get.
+     `g->unk_08` and `g->unk_10` are both written INLINE and cse does the
+     rest: the ONLY reload of +0x10 is the one after `*(s32 *)(s + 0xC) = 0`,
+     which may alias the global.
+
+   - THE PAGE TINT IS STORED IN BOTH ARMS, not once after the `if`.  The
+     duplicated store is free -- cross-jumping merges the suffix
+     `lw $a0, 0x4($v0)` / `lw $v0, %lo(D_800891F4)($v1)` / `sw`, stopping at
+     the 0x98-versus-0x9C load -- and it is what gets the `lui %hi` out of the
+     join block and into the `beqz`'s delay slot.  Hoisted to one store after
+     the `if` the function is still 207 words but 8 differing: reorg then
+     steals the join's `lui` into the `j`'s delay slot and DUPLICATES it for
+     the fall-through, so the two load-delay `nop`s at 0x800AFCB4/0x800AFCC8
+     become `lui`s and the branch's own slot is the `nop`.  `u32 *c =
+     &D_800891F4;` before the `if` does get the `lui` out early but costs the
+     `addiu` as well -- 209 words -- and the ternary spelling of the pointer
+     is the same 209.
+
+   - THE AUTO-REPEAT ARMS ARE `>= 5` FIRST.  `if (*(s32 *)(s + 0xC) < 5) { +=
+     1; return; }` ahead of the chain is 206 words: the `< 5` arm then falls
+     through and the `addiu $v0, $v1, 0x1` loses the `bnez`'s delay slot.
+     Written `>= 5` first the `+= 1` arm goes out of line at 0x800AFBCC,
+     which is where the target has it.
+
+   - THE PAGE DIVISOR IS 10, not 5.  `mfhi` + `sra 2` on 0x66666667 is /10;
+     func_800AFD5C's /5 is the same magic with `sra 1`.  func_800AF8B0 reads
+     the same cursor `% 10` and splits it 5x2, so the page is ten entries.
+
+   - THE TABLE ADDRESS IS THE CONSTANT `(u32 *)0x8001029C`, as at :25595 and
+     :27793 -- `lui`/`ori`, no relocation.  `extern u32 D_8001029C[]` is the
+     spelling :27773 records as 9 differing elsewhere in this unit.
+
+   The 0x40 arm is func_800AF96C's inverse and its note at :27009 is the whole
+   reading: the guard re-reads `*(u8 **)s + 0x4` rather than reusing
+   func_800AF8B0's return value, and the save into +0x04 is written BEFORE the
+   `%hi(func_800AF96C)` store into `s - 0x10` even though the stores come out
+   the other way round.  func_800AF96C is defined immediately above, so no
+   forward declaration is needed for the address-take.
+
+   207 words -- its header reads `nonmatching func_800AF9C4, 0x33C`, and
+   0x33C/4 = 207.  No jump table, no rodata of its own.  0 differing masked,
+   34 raw against relocdump's own 34 with 2 on a function symbol, and
+   seqcheck's ordered sequence OK.  One parameter, witnessed by both landed
+   callers' forwarding `func_800AF9C4(s)`. */
+void func_800AF9C4(u8 *s)
+{
+    Unk80083160 *g;
+    s32 d;
+    s32 n;
+    s32 page;
+
+    d = 0;
+    g = &D_80083160;
+    if (g->unk_08 == 0)
+    {
+        return;
+    }
+    if (*(s32 *)(s + 0x10) == 0)
+    {
+        return;
+    }
+    if (*(s32 *)(*(u8 **)s + 0x1C) == 0)
+    {
+        if (g->unk_10 & 0x20)
+        {
+            func_80053DA8(0x515);
+            func_800AE484(*(u8 **)(s + 0x18));
+        }
+        return;
+    }
+    if (g->unk_10 & 0x20)
+    {
+        func_80053DA8(0x515);
+        func_800AE484(*(u8 **)(s + 0x18));
+        return;
+    }
+    if (g->unk_10 & 0x40)
+    {
+        func_80053DA8(0x514);
+        *(s32 *)(*(u8 **)s + 0x4) = func_800AF8B0(s);
+        if (*(s32 *)(*(u8 **)s + 0x4) != 0)
+        {
+            return;
+        }
+        *(u32 *)(s + 0x4) = *(u32 *)(s - 0x10);
+        *(u32 *)(s - 0x10) = (u32)func_800AF96C;
+        return;
+    }
+    if (g->unk_10 & 0x10)
+    {
+        func_80053DA8(0x503);
+        func_8004B08C((u32 *)0x8001029C);
+        func_800AF860(s);
+        func_80049490((*(u32 **)(*(u8 **)s + 0x20))[*(s32 *)(*(u8 **)s + 0x18)]);
+        return;
+    }
+    if (!(g->unk_08 & 0xF000))
+    {
+        return;
+    }
+    if (g->unk_10 & 0xF000)
+    {
+        *(s32 *)(s + 0xC) = 0;
+        if (g->unk_10 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_10 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_10 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_10 & 0x4000)
+        {
+            d = 1;
+        }
+    }
+    else if (*(s32 *)(s + 0xC) >= 5)
+    {
+        if (g->unk_08 & 0x8000)
+        {
+            d = -5;
+        }
+        else if (g->unk_08 & 0x2000)
+        {
+            d = 5;
+        }
+        else if (g->unk_08 & 0x1000)
+        {
+            d = -1;
+        }
+        else if (g->unk_08 & 0x4000)
+        {
+            d = 1;
+        }
+        *(s32 *)(s + 0xC) -= 1;
+    }
+    else
+    {
+        *(s32 *)(s + 0xC) += 1;
+        return;
+    }
+    n = func_80049E1C(*(s32 *)(*(u8 **)s + 0x18), d, *(s32 *)(*(u8 **)s + 0x1C));
+    if (n >= *(s32 *)(*(u8 **)s + 0x1C))
+    {
+        *(s32 *)(*(u8 **)s + 0x18) = n;
+        return;
+    }
+    if (n == *(s32 *)(*(u8 **)s + 0x18))
+    {
+        return;
+    }
+    func_80053DA8(0x502);
+    *(s32 *)(*(u8 **)s + 0x18) = n;
+    page = *(s32 *)(*(u8 **)s + 0x18) / 10;
+    func_800AF36C(s);
+    func_80049490((*(u32 **)(*(u8 **)s + 0x20))[*(s32 *)(*(u8 **)s + 0x18)]);
+    if (page == *(s32 *)(*(u8 **)s + 0x10))
+    {
+        return;
+    }
+    if (page < *(s32 *)(*(u8 **)s + 0x10))
+    {
+        **(u32 **)(*(u8 **)(*(u8 **)(s + 0xA8) + 0x98) + 4) = D_800891F4;
+    }
+    else
+    {
+        **(u32 **)(*(u8 **)(*(u8 **)(s + 0xA8) + 0x9C) + 4) = D_800891F4;
+    }
+    *(s32 *)(*(u8 **)s + 0x10) = page;
+    func_800AF860(s);
+}
 
 /* func_800B34A8 verbatim -- the teardown handler that drops the primitive
    block at +0x1C and releases the two sprite handles at +0x98/+0x9C of the
@@ -27179,8 +27378,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF9C4);
    0x5C/4 = 23.  No jump table, no rodata of its own.  One parameter: it is an
    unk_10 handler, installed at `s - 0x10` by func_800AFD5C below and at
    `o->unk_10` by func_800B02D4; no `jal` to it exists anywhere.
-   func_800AF9C4 is still a stub with no declaration, so this call rides the
-   implicit declaration. */
+   func_800AF9C4 is defined immediately above, so this call is checked
+   against its real signature. */
 void func_800AFD00(u8 *s)
 {
     func_8004CB2C(s + 0x1C);
