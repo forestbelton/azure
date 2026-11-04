@@ -470,7 +470,10 @@ typedef struct UnkTownADD80
 typedef struct UnkTown260CE
 {
     s32 unk_00;
-    u8 pad_04[0x4];
+    /* Split out by the func_800B2A38 group in csrc/ovl_town.c;
+       mirrored here so the three carved units agree on the field map.
+       Size-preserving, no existing field moved. */
+    s32 unk_04;
     s32 unk_08;
     s32 unk_0C;
 } UnkTown260CE;
@@ -480,7 +483,10 @@ typedef struct UnkTown260C
     s32 unk_00[3];
     s32 unk_0C;
     s32 unk_10;
-    u8 pad_14[0x4];
+    /* Split out by the func_800B2A38 group in csrc/ovl_town.c;
+       mirrored here so the three carved units agree on the field map.
+       Size-preserving, no existing field moved. */
+    s32 unk_14;
     s32 unk_18;
     UnkTown260CE unk_1C[3];
 } UnkTown260C;

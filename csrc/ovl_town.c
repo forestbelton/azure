@@ -485,7 +485,9 @@ typedef struct UnkTownADD80
 typedef struct UnkTown260CE
 {
     s32 unk_00;
-    u8 pad_04[0x4];
+    /* The page index func_800B23C0 recomputes as `(unk_0C - 1) / 10`; both of
+       func_800B2400's call sites pass `&s->unk_1C[idx]`. */
+    s32 unk_04;
     s32 unk_08;
     s32 unk_0C;
 } UnkTown260CE;
@@ -495,7 +497,13 @@ typedef struct UnkTown260C
     s32 unk_00[3];
     s32 unk_0C;
     s32 unk_10;
-    u8 pad_14[0x4];
+    /* The selector func_800B2394 latches out of D_800D162C's row, and the
+       index func_800B25D8 and func_800B2400 subscript the +0x3C entry-list
+       array with.  unk_1C really has TWO elements, not three: +0x3C starts
+       that list array (two entries), +0x44 is func_800B2A38's live count and
+       +0x48 is func_800B2BA0's latched caller pointer.  Left declared [3] so
+       no landed reader moves; the new accesses are byte offsets. */
+    s32 unk_14;
     s32 unk_18;
     UnkTown260CE unk_1C[3];
 } UnkTown260C;
@@ -2315,6 +2323,12 @@ s32 func_80043868(u8 *p);
    move_by_pieces takes MIN(src_align, dst_align) and the target's copy is the
    unaligned lwl/lwr + swl/swr pair, which needs alignment 1 on both sides. */
 extern u8 D_8008925C[];
+/* func_800B2918's 3-byte template, the record after D_80089260 above.  It
+   keeps its own INCLUDE_RODATA, so it is `extern` and the function copies
+   FROM it.  `u8` and not `u32` or `s8`-with-align: `output_block_move` takes
+   the `lh` branch at mips.c:2825 once align >= 2, and the target's copy is
+   three `lb`/`sb` pairs, which needs alignment 1. */
+extern u8 D_80089268[];
 /* func_8009F77C's 4-byte template, the same device as D_8008925C above: it
    keeps its own INCLUDE_RODATA, so it is `extern` and the function copies
    FROM it; writing the literal would emit a second copy of the bytes.  `u8`
@@ -2351,8 +2365,21 @@ typedef struct UnkTownB1DCCObj
     UnkTownB1DCCPrim *unk_04;
 } UnkTownB1DCCObj;
 
+/* The 4-byte entry record func_800B2A38 shuffles through the table at the
+   constant address 0x80011F80.  ALL-`u8` MEMBERS, so the struct's alignment is
+   1 and a whole-record assignment goes through `movstrsi`'s unaligned
+   lwl/lwr + swl/swr pair; +0x01 is the live/type byte func_800B2964 tests. */
+typedef struct UnkTown11F80
+{
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+    u8 unk_03;
+} UnkTown11F80;
+
 extern u8 D_800D162C[][2];
 extern u8 D_800D1630[][4];
+extern UnkTown11F80 *D_800D1648[];
 void func_80044AAC(UnkNode *, UnkNode *);
 s32 func_80069EF8();
 /* The particle template func_80097AD0/func_800A895C build on the stack and
@@ -28573,19 +28600,124 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2214);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2244);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2280);
+/* Allocates the lowest free record out of pool `idx` and returns its address.
+   It marks a 0x100-byte stack bitmap through func_80069EC8, sets a byte per
+   record the caller's list already holds -- the record's index being
+   `(entry - pool_base) / 4` -- and returns the pool slot for the first clear
+   byte.  Its stub caller func_800B2400 (0x800B24F4) hands it the +0x3C entry
+   list, the list index and func_800B2130's count, then copies a template
+   record into the returned slot and appends the pointer to the list.
+
+   THE SHIFT IS `srl`, SO THE SUBTRACTION IS UNSIGNED.  A pointer difference
+   would be the signed `sra`; the target divides the raw byte distance by 4 as
+   `u32`, which is why both operands are cast rather than subtracted as
+   pointers.
+
+   THE SECOND LOOP MUST BE A `for`, NOT `i = 0;` AHEAD OF A `while`.  With the
+   initialiser as its own statement, `i = 0` lands in the block BEFORE loop.c's
+   copied guard, so reorg's forward scan fills the `beqz`'s delay slot with
+   the preheader's `addiu $a0, $sp, 0x10` instead and the four words
+   0x800B22F4..0x800B2300 rotate: 49 words, 4 differing.  As a `for`
+   initialiser it lands at the head of the preheader and reorg takes IT.
+   Moving `i = 0` further away, to the top of the function, is 46 words / 44
+   differing.
+
+   49 words -- its header reads `nonmatching func_800B2280, 0xC4`, and
+   0xC4/4 = 49.  No jump table, no rodata of its own.  Its only data symbol is
+   D_800D1648, %hi once and %lo once; the third relocation is the `jal`.
+   Measured 0 differing. */
+UnkTown11F80 *func_800B2280(UnkTown11F80 **list, s32 idx, s32 n)
+{
+    u8 buf[0x100];
+    UnkTown11F80 *base;
+    s32 i;
+
+    func_80069EC8(buf, n);
+    base = D_800D1648[idx];
+    while (*list != NULL)
+    {
+        buf[((u32)*list - (u32)base) >> 2] = 1;
+        list++;
+    }
+    for (i = 0; buf[i] != 0; i++)
+    {
+    }
+    return base + i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2344);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2370);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2394);
+/* Latches the cursor's layout selector and the row/column pair that goes with
+   it.  D_800D162C is already declared `extern u8 D_800D162C[][2];` for
+   func_800B1DCC above, which reads the same table as `t[s->unk_0C][i]`, so
+   both bytes come off one row.  Its two landed callers pass 0 and 1
+   (func_800B260C) and 0 (func_800B2BA0), which is why UnkTown260C.unk_1C and
+   the +0x3C list array both have two entries.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B23C0);
+   +0x14 WAS `u8 pad_14[0x4]` -- this is its first witness; it is the index
+   func_800B25D8 and func_800B2400 subscript the +0x3C list array with.
+
+   11 words -- its header reads `nonmatching func_800B2394, 0x2C`, and
+   0x2C/4 = 11.  No jump table, no rodata of its own.  Its only data symbol is
+   D_800D162C, %hi once and %lo once.  Measured 0 differing. */
+void func_800B2394(UnkTown260C *s, s32 a)
+{
+    s->unk_0C = a;
+    s->unk_14 = D_800D162C[a][0];
+    s->unk_18 = D_800D162C[a][1];
+}
+
+/* Recomputes one list element's page index from its item count: ten per page,
+   so the last page is `(n - 1) / 10` and an empty list is page 0.  The
+   division is the 0x66666667 magic multiply, the same one func_800B2068 above
+   emits for `n / 10`.
+
+   ITS PARAMETER IS A UnkTown260CE ELEMENT, NOT THE WHOLE RECORD.  Both of
+   func_800B2400's call sites build the argument as
+   `addiu $a0, (idx << 4), 0x1C; addu $a0, $s1, $a0` (0x800B256C and
+   0x800B25A4), which is `&s->unk_1C[idx]` exactly -- so +0xC is unk_0C and
+   the store at +0x4 is unk_04, previously `u8 pad_04[0x4]`.
+
+   BOTH ARMS MUST BE WRITTEN OUT.  The `else` arm's `sw $zero` is what the
+   target's `j .L800B23F8` jumps over; folding it to a single store of a
+   conditional expression loses the jump.
+
+   16 words -- its header reads `nonmatching func_800B23C0, 0x40`, and
+   0x40/4 = 16.  No jump table, no rodata of its own.  Its one relocation is
+   the R_MIPS_26 of the intra-function `j` against `.text`; no data symbol. */
+void func_800B23C0(UnkTown260CE *e)
+{
+    if (e->unk_0C != 0)
+    {
+        e->unk_04 = (e->unk_0C - 1) / 10;
+    }
+    else
+    {
+        e->unk_04 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2400);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B25D8);
+/* Hands the currently selected entry list to the resident releaser.  The list
+   array sits at +0x3C with a stride of 4 and is subscripted by unk_14, the
+   same addressing func_800B2400 uses at 0x800B24CC and 0x800B2494; it
+   overlaps the tail of the declared `unk_1C[3]`, because that array really
+   has two elements, so the access is written as a byte offset rather than by
+   restructuring a record eight landed functions already read.
+
+   func_8004B08C has no declaration in this unit or in include/, so this rides
+   an implicit declaration -- fine, the result is discarded.
+
+   13 words -- its header reads `nonmatching func_800B25D8, 0x34`, and
+   0x34/4 = 13.  No jump table, no rodata of its own, no data symbol; its one
+   relocation is the `jal`. */
+void func_800B25D8(UnkTown260C *s)
+{
+    func_8004B08C(*(UnkTown11F80 ***)((u8 *)s + s->unk_14 * 4 + 0x3C));
+}
 
 void func_800B260C(UnkTown260C *s, void *b, void *c)
 {
@@ -28792,15 +28924,186 @@ s32 func_800B28A0(void)
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2918);
+/* The third member of the func_800B2834 / func_800B28A0 near-sibling family
+   above: copy a short byte template onto the stack, then subscript it with
+   func_800B2834's index.  D_80089268 keeps its own INCLUDE_RODATA (four bare
+   `.byte`s, 0x0A 0x1E 0x3C 0x2C), so it is `extern` and only the first three
+   bytes are copied.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2964);
+   IT IS A `memcpy`, AND THAT IS WHAT THE `lb`s PROVE.  A plain QImode move is
+   always `lbu`: mips.md's `movqi_internal2` calls `mips_move_1word` with
+   unsignedp = TRUE and mips.c:1280 then picks `lbu`.  Only
+   `output_block_move`'s byte case emits the SIGNED form --
+   `load_store[num].load = "lb\t%0,%1"` at mips.c:2839 -- so three `lb`/`sb`
+   pairs off one base register are an inline block move of 3 bytes at
+   alignment 1, not three C assignments.  Three assignments through `u8` are
+   17 words / 18 differing (`lbu`, and the first load folds its own `%lo` so
+   the symbol is reached twice); adding `s32` temporaries and
+   `extern s8 D_80089268[]` buys the `lb`s but is still 17 / 18, because the
+   single base register and the `jal`'s empty delay slot come from the block
+   move too.  `extern u8` and not `s8` here: `align >= 2` would take the `lh`
+   branch at mips.c:2825 instead.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B29A4);
+   19 words -- its header reads `nonmatching func_800B2918, 0x4C`, and
+   0x4C/4 = 19.  No jump table, no rodata of its own.  Its only data symbol is
+   D_80089268, %hi once and %lo once; the third relocation is the `jal`.
+   Measured 0 differing. */
+u8 func_800B2918(void)
+{
+    u8 s[3];
+
+    memcpy(s, D_80089268, 3);
+    return s[func_800B2834()];
+}
+
+/* Rebuilds an entry list from the global pool at the constant address
+   0x80011F80: every one of the first `n` records whose +0x01 type byte is
+   non-zero, then a NULL terminator.  The pool is a CONSTANT ADDRESS, not a
+   symbol -- the target materialises it with `lui`+`ori` (0x800B296C), and the
+   memory note's rule is that `ori` where a symbol would give `addiu` settles
+   it.  func_800B2A38 below walks the same pool and func_800B2400 reads a
+   record's +0x01 against 0x13 (0x800B24B0).
+
+   THE RECORD POINTER MUST BE ASSIGNED FROM `i` INSIDE THE LOOP BODY, not
+   walked with a `p += 4` ahead of the loop.  A pointer initialised before the
+   `for` is loop-invariant, so its `lui`/`ori` pair is emitted BEFORE the
+   `blez` guard instead of in the preheader where the target has it: 16 words,
+   9 differing, every one of them that reordering plus the register rename it
+   drags along.  Written as `(UnkTown11F80 *)0x80011F80 + i` in the body, the
+   address becomes a strength-reduced giv whose init loop.c places in the
+   preheader, and cse unifies the two uses -- the type test and the stored
+   value -- into the one register.  Subscripting both uses separately
+   (`p[i * 4 + 1]` and `(u8 *)0x80011F80 + i * 4`) gives TWO givs: 19 words,
+   18 differing.
+
+   16 words -- its header reads `nonmatching func_800B2964, 0x40`, and
+   0x40/4 = 16.  No jump table, no rodata of its own, and NO relocations at
+   all.  Measured 0 differing. */
+void func_800B2964(UnkTown11F80 **out, s32 n)
+{
+    UnkTown11F80 *p;
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        p = (UnkTown11F80 *)0x80011F80 + i;
+        if (p->unk_01 != 0)
+        {
+            *out = p;
+            out++;
+        }
+    }
+    *out = NULL;
+}
+
+/* Counts the live entries in one of UnkTown260C's two NULL-terminated entry
+   lists.  Its stub caller func_800B2400 passes
+   `*(UnkTown11F80 ***)((u8 *)s + s->unk_18 * 4 + 0x3C)` (0x800B24D0) and uses
+   the result as the index of the list's free slot, which is where the
+   signature comes from.  func_800B0718 at the top of this unit is the same
+   loop over the constant-address list at 0x8001029C.
+
+   11 words -- its header reads `nonmatching func_800B29A4, 0x2C`, and
+   0x2C/4 = 11.  No jump table, no rodata of its own, no relocations at all.
+   Measured 0 differing. */
+s32 func_800B29A4(UnkTown11F80 **e)
+{
+    s32 n;
+
+    n = 0;
+    while (*e != NULL)
+    {
+        e++;
+        n++;
+    }
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B29D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2A38);
+/* func_800B2C6C's teardown step: pull every live record out of the object's
+   +0x40 entry list into a stack scratch buffer, write them back over the head
+   of the global pool at 0x80011F80, clear the pool slots the list no longer
+   fills, and release the list itself.  The +0x40 list and its +0x44 count are
+   written as byte offsets for the same reason as func_800B25D8's +0x3C.
+
+   THE LIST BASE AND THE COUNT MUST NOT BE HOISTED INTO LOCALS.  Both are
+   re-loaded on every iteration of all three loops because the inline record
+   copy stores through a pointer that may alias them; reading them off `s`
+   each time is what reproduces that.
+
+   THE COPY IS A WHOLE-RECORD ASSIGNMENT, NOT `memcpy`, AND THAT IS THE WHOLE
+   DIFFERENCE IN LOOP 1.  `memcpy(q, p, 4)` with `q` walked by `q += 4` leaves
+   `q = buf` loop-invariant and emitted before the `blez`, where reorg steals
+   it into the first `beqz`'s delay slot -- the target has a `nop` there,
+   because ITS first fall-through insn is `lw $v0, 0x44($t1)`, which sets the
+   very register the `beqz` tests and so is rejected by
+   `fill_slots_from_thread`'s `insn_sets_resource_p (trial, &needed)`.  That
+   spelling is 74 words / 26 differing, the whole body correct but shifted one
+   word.  Writing `buf[i] = *p` over a 4-byte all-`u8` struct makes the
+   destination a DEST_ADDR giv, so loop.c puts `addiu $t0, $sp, 0x10` in the
+   PREHEADER and nothing is left for the delay slot.  `&buf[i * 4]` passed to
+   `memcpy` is 74 / 39: combine_givs merges it with the list's own `4 * i` and
+   the walk becomes `addu $a2, $t2, $v1`.  A separate byte-offset biv is
+   75 / 67.
+
+   LOOP 2'S DESTINATION IS A `(u8 *) 0x80010000` BASE POINTER WITH 0x1F80 IN
+   THE INDEX, and that is worth the last word.  mips.h's LEGITIMIZE_ADDRESS
+   (:2652) splits `(plus REG CONST_INT)` into `const & ~0x7fff` in a register
+   and `const & 0x7fff` as the displacement, which is exactly the target's
+   `lui $a2, 0x8001` plus `swl 0x1F83`/`swr 0x1F80` -- ONE word of giv init.
+   Any spelling that hands the full 0x80011F80 to the address expression makes
+   loop.c's giv carry it instead, costing the `ori`: 75 words / 44 differing
+   for `((UnkTown11F80 *)0x80011F80)[i]`, and the same for
+   `*(UnkTown11F80 *)(0x80011F80 + i * 4)` and `*((UnkTown11F80 *)0x80011F80
+   + i)`.  Loop 3 keeps the plain constant on purpose: its giv starts at a
+   non-zero `i`, so the init has to materialise the whole address anyway and
+   cse folds base-plus-0x1F80 back to the `lui`/`ori` pair the target has.
+
+   The `%hi(D_80011F83)`, `%lo(D_80011F83)`, `%lo(D_80011F80)` and
+   `%lo(D_80010004)` splat prints on those four words are MIS-SYMBOLISATIONS:
+   relocdump reports no relocation on any of them and the raw comparison has
+   them byte-identical.  0x80010004's low half of 4 is the loop's `addiu
+   $a2, $a2, 4`.
+
+   74 words -- its header reads `nonmatching func_800B2A38, 0x128`, and
+   0x128/4 = 74.  No jump table, no rodata of its own, no data symbol; its one
+   relocation is the `jal`.  Measured 0 differing. */
+void func_800B2A38(UnkTown260C *s)
+{
+    UnkTown11F80 buf[0x40];
+    UnkTown11F80 *p;
+    u8 *t;
+    s32 i;
+
+    if (*(UnkTown11F80 ***)((u8 *)s + 0x40) == NULL)
+    {
+        return;
+    }
+    for (i = 0; i < *(s32 *)((u8 *)s + 0x44); i++)
+    {
+        p = (*(UnkTown11F80 ***)((u8 *)s + 0x40))[i];
+        if (p == NULL)
+        {
+            break;
+        }
+        buf[i] = *p;
+    }
+    t = (u8 *)0x80010000;
+    for (i = 0; i < *(s32 *)((u8 *)s + 0x44); i++)
+    {
+        if ((*(UnkTown11F80 ***)((u8 *)s + 0x40))[i] == NULL)
+        {
+            break;
+        }
+        *(UnkTown11F80 *)(t + i * 4 + 0x1F80) = buf[i];
+    }
+    for (; i < *(s32 *)((u8 *)s + 0x44); i++)
+    {
+        ((u32 *)0x80011F80)[i] = 0;
+    }
+    func_8004B1A4(*(UnkTown11F80 ***)((u8 *)s + 0x40));
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2B60);
 
