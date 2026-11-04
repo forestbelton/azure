@@ -9282,11 +9282,130 @@ s32 func_80094B0C(u8 *a)
     return func_800AE324(a);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094B58);
+/* The 8-way d-pad compass: turn the four direction bits of
+   D_80083160.unk_08 into an angle in 0x1000-per-revolution units, or -1 for
+   "nothing held".  0x4000 is angle 0 and the units run 0x2000 -> 0x400,
+   0x1000 -> 0x800, 0x8000 -> 0xC00, with each diagonal the average of its
+   two sides (0x200, 0x600, 0xA00, 0xE00).  0x1000 wins over 0x4000 and
+   0x8000 wins over 0x2000 when opposite bits are held together, which is
+   why the ladder tests 0x1000 first, then 0x4000, then 0x8000.  The
+   `g->unk_08 & 0xF000` gate this unit uses in a dozen places is exactly
+   "any of these four", i.e. the -1 arm is the unguarded-call case.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094BC8);
+   The 0x4000-without-0x8000 arm is a SHIFTED STORE FLAG, not a ternary: the
+   target's `sltu $v0, $zero, $v0` / `sll $v0, $v0, 9` pair is
+   `((pad & 0x2000) != 0) << 9`.  `(pad & 0x2000) ? 0x200 : 0` would branch.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094C1C);
+   Its only caller is func_80094BC8, immediately below, so it needs no
+   declaration in the block above.
+
+   28 words -- its header reads `nonmatching func_80094B58, 0x70`, and
+   0x70/4 = 28.  Measured 0 differing, first compile; `--raw` 3 differing
+   against relocdump's 3 relocation words (three intra-function `j`, all to
+   +0x68, checked against the listing), none of them on a function symbol. */
+s32 func_80094B58(u32 pad)
+{
+    if (pad & 0x1000)
+    {
+        if (pad & 0x8000)
+        {
+            return 0xA00;
+        }
+        if (pad & 0x2000)
+        {
+            return 0x600;
+        }
+        return 0x800;
+    }
+    if (pad & 0x4000)
+    {
+        if (pad & 0x8000)
+        {
+            return 0xE00;
+        }
+        return ((pad & 0x2000) != 0) << 9;
+    }
+    if (pad & 0x8000)
+    {
+        return 0xC00;
+    }
+    if (pad & 0x2000)
+    {
+        return 0x400;
+    }
+    return -1;
+}
+
+/* The camera-relative cell direction: take func_80094B58's d-pad compass
+   angle, add the camera yaw and wrap to 0xFFF, passing -1 straight through.
+   Six landed call sites spell it `(s16)func_80094BC8(g->unk_08, g->unk_C8)`
+   -- func_80094C74, func_80094DA8, func_800951B4, func_8009567C,
+   func_80095760 and func_800A5FDC -- which is what fixes the two
+   parameters and the `(s16)` at the use.
+
+   THE FIRST PARAMETER IS DEAD, and that is not a reading error: the target
+   overwrites the incoming `$a0` with `lw $a0, %lo(D_80083168)` before any
+   use.  D_80083168 IS `D_80083160.unk_08`, the same word those call sites
+   pass, so the function re-reads the global and ignores the argument.  An
+   unread parameter costs no words here, and dropping it would be a hard
+   error at all six sites.  `extern u32 D_80083168[]` (include/structs.h) is
+   the declared spelling, so the body says `D_80083168[0]`;
+   `D_80083160.unk_08` would relocate against D_80083160 + 8 and resolve to
+   the same two words, but the listing names D_80083168.
+
+   The `(s16)` sits at the COMPARISON only, not on the assignment: the
+   target compares the sign-extended `$v0` and then adds the RAW `$a0` to
+   `b`, so this is one `s32` local with one `(s16)` use -- func_80094DA8's
+   idiom.  `v = (s16)func_80094B58(...)` would re-sign the addend too.
+
+   21 words -- its header reads `nonmatching func_80094BC8, 0x54`, and
+   0x54/4 = 21.  Measured 0 differing, first compile; `--raw` 4 differing
+   against relocdump's 4 relocation words (%hi/%lo on D_80083168, `jal
+   func_80094B58`, one intra-function `j` to +0x40, in the listing's order),
+   none of them on a function symbol. */
+s32 func_80094BC8(u32 a, s32 b)
+{
+    s32 v;
+
+    v = func_80094B58(D_80083168[0]);
+    if ((s16)v == -1)
+    {
+        return -1;
+    }
+    return (v + b) & 0xFFF;
+}
+
+/* Latch the camera-relative d-pad direction into the object's +0x10 yaw
+   target, leaving it alone when nothing is held.  Every landed call site
+   passes one argument and forwards its own first parameter, so the `void *`
+   of the existing declaration is all the type information there is; the
+   store is a halfword at +0x10.
+
+   The head is func_80094C74's word for word -- one `g = &D_80083160` local
+   assigned as a STATEMENT and `func_80094BC8(g->unk_08, g->unk_C8)` -- and
+   as there the `(s16)` is at the comparison while the RAW result is what
+   gets stored; `sh` truncates it anyway.
+
+   func_8009503C, below, is this function's twin over the other field: same
+   head, and `func_80094F58(v, 0x120000, b)` where this one stores.
+
+   22 words -- its header reads `nonmatching func_80094C1C, 0x58`, and
+   0x58/4 = 22.  Measured 0 differing, first compile; `--raw` 3 differing
+   against relocdump's 3 relocation words (%hi/%lo on D_80083160 and `jal
+   func_80094BC8`, in the listing's order), none of them on a function
+   symbol. */
+void func_80094C1C(void *p)
+{
+    Unk80083160 *g;
+    s32 v;
+
+    g = &D_80083160;
+    v = func_80094BC8(g->unk_08, g->unk_C8);
+    if ((s16)v != -1)
+    {
+        *(s16 *)((u8 *)p + 0x10) = v;
+    }
+}
 
 /* The mover's steering accelerate-and-clamp: add 1/64th of the camera-cell
    direction to the (unk_0C, unk_10) delta, then renormalise the delta back to
@@ -9425,11 +9544,202 @@ void func_80094DA8(UnkTown2AE8 *b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094F58);
+/* Accelerate the mover along a given angle and clamp the result to a given
+   length: add 1/64th of the (cos, sin) pair of `dir` to the (unk_0C,
+   unk_10) delta, then, if the delta is now longer than `limit`, scale it
+   back to `limit`.  It is func_80094C74's second half with the floor
+   replaced by a parameter -- there is no leading func_8003BD84 and no
+   `len < 0x80000` clamp, because `limit` arrives ready-made.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009503C);
+   The third parameter's type comes from the two landed call sites, both of
+   which spell it `func_80094F58(<yaw>, D_80100E20, b)` on an
+   `UnkTown2AE8 *b` (func_800A5A98 and func_800A5FDC); func_8009503C, below,
+   passes the LITERAL 0x120000 for the same argument, which is why that word
+   is a bare `lui $a1, 0x12` with no relocation and not a load of
+   D_80100E20.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095094);
+   `dir` is an `s32` with the `(s16)` written at each USE, not an `s16`
+   parameter: both landed callers pass a full word and are landed at 0
+   differing against an implicit declaration, so narrowing the parameter
+   would move the truncation into them.  cse keeps the one `sll`/`sra` pair.
+
+   The divisor `(n + 0xFFF) / 0x1000` and the multiplier `limit / 0x1000`
+   are each written out in BOTH statements and cse keeps one copy apiece --
+   func_80094C74's note applies verbatim, including that the `addiu $a0,
+   $v1, 0xFFF` in the `beqz`'s delay slot and the `addiu $a1, $v1, 0x1FFE`
+   on the negative arm are that ONE expression with the signed-divide bias
+   folded onto the `+ 0xFFF`.
+
+   The predicate is written `n > limit`, which is what puts `$s2` first in
+   `slt $v0, $s2, $v1`.  Both `lw`s land before both `sw`s because sched1
+   hoists them, and func_8003BD84's arguments are the just-stored registers
+   rather than reloads, which is cse.
+
+   57 words -- its header reads `nonmatching func_80094F58, 0xE4`, and
+   0xE4/4 = 57.  Measured 0 differing, first compile; `--raw` 3 differing
+   against relocdump's 3 relocation words (`jal func_800644B8`, `jal
+   func_80064584`, `jal func_8003BD84`, in the listing's order), none of
+   them on a function symbol. */
+void func_80094F58(s32 dir, s32 limit, UnkTown2AE8 *b)
+{
+    s32 dx;
+    s32 dy;
+    s32 n;
+
+    dx = func_800644B8((s16)dir) << 6;
+    dy = func_80064584((s16)dir) << 6;
+    b->unk_0C += dx;
+    b->unk_10 += dy;
+    n = func_8003BD84(b->unk_0C, b->unk_10);
+    if (n > limit)
+    {
+        b->unk_0C = b->unk_0C / ((n + 0xFFF) / 0x1000) * (limit / 0x1000);
+        b->unk_10 = b->unk_10 / ((n + 0xFFF) / 0x1000) * (limit / 0x1000);
+    }
+}
+
+/* Steer the mover with the d-pad: func_80094C1C's head over the same two
+   camera fields, but instead of latching the direction it hands it to
+   func_80094F58 with a 0x120000 speed cap.  func_800A5FDC contains these
+   four lines verbatim with D_80100E20 where this function has the literal
+   0x120000, and that call site is what settles func_80094F58's arity.
+
+   Here the `(s16)` is on the ASSIGNMENT, not at the uses: the target
+   sign-extends into `$a0` once and both compares it and passes it, so one
+   truncated value used twice -- the opposite placement from func_80094C1C
+   and func_80094BC8, and func_80094C74's spelling.
+
+   22 words -- its header reads `nonmatching func_8009503C, 0x58`, and
+   0x58/4 = 22.  Measured 0 differing, first compile; `--raw` 4 differing
+   against relocdump's 4 relocation words (%hi/%lo on D_80083160, `jal
+   func_80094BC8`, `jal func_80094F58`, in the listing's order), none of
+   them on a function symbol. */
+void func_8009503C(UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    s32 v;
+
+    g = &D_80083160;
+    v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+    if (v != -1)
+    {
+        func_80094F58(v, 0x120000, b);
+    }
+}
+
+/* Brake the mover: find the bearing of the (unk_0C, unk_10) delta, then pull
+   each axis toward zero by 1/8th of that bearing's own cosine/sine,
+   stopping at zero rather than overshooting.  Nineteen landed callers reach
+   it, all forwarding one argument.
+
+   THE 0x80000001 PAIR IS `max(-0x7FFFFFFF, field)` AND THE PREDICATE MUST BE
+   NON-STRICT.  fold turns `A op B ? A : B` into MAX_EXPR(A, B) for GE/GT
+   (fold-const.c:5499-5526), and expr.c's MAX_EXPR expansion stores
+   OPERAND 0 into the target first and only then compares and conditionally
+   moves operand 1 (expr.c:6385-6408, `op0 = expand_expr (TREE_OPERAND (exp,
+   0), target, ...)` then `if (target != op0) emit_move_insn (target, op0)`).
+   So the operand that must come FIRST is the constant: the target
+   materialises 0x80000001 into `$a0`/`$a1` and overwrites it with the field,
+   which is MAX_EXPR(const, field).  Writing it the other way round --
+   `b->unk_0C > -0x7FFFFFFF ? b->unk_0C : -0x7FFFFFFF`, the natural order --
+   is MAX_EXPR(field, const), loads the field straight into `$a0` and
+   materialises the constant on the conditional arm instead: 72 words with
+   16 differing, every one of them in these two clamps.  And the STRICT form
+   `b->unk_0C < -0x7FFFFFFF ? -0x7FFFFFFF : b->unk_0C` is 4 differing,
+   because it reaches MAX_EXPR through fold's "C1 is C2 - 1" arm
+   (fold-const.c:5565-5573) with the other constant.  Four spellings measure
+   0: `C >= f ? C : f`, `f <= C ? C : f`, and the if/else forms
+   `if (f > C) v = f; else v = C;` and `if (C >= f) v = C; else v = f;` --
+   the if/else pair does not care whether the predicate is strict, because
+   there the "assign one, branch, assign the other" shape comes from jump.c
+   rather than from the MIN/MAX fold (expr.c:6797-6829 is the `#if 0`'d
+   copy, with the comment saying it now lives in jump.c).  The constant must
+   be written `-0x7FFFFFFF`, not `0x80000001`, which is `unsigned` in C89
+   and would make both compares `sltu`.
+
+   `-0x7FFFFFFF` is INT_MIN + 1, so the clamp only ever changes INT_MIN: it
+   keeps the bearing helper's input negatable.
+
+   `abs()`, NOT A TERNARY, and the copy in the delay slot is NOT reorg's.
+   abssi2's output template branches on `REGNO (operands[0]) == REGNO
+   (operands[1])` (config/mips/mips.md:1766-1788) and the different-register
+   arm returns `%(bgez\t%1,1f\n\tmove\t%0,%1\n\tsubu\t%0,%z2,%0\n1:%)`
+   -- three words inside a `.set noreorder` block, so the `move` IS the
+   delay slot by construction.  Both halves here take that arm (`$s0` from
+   `$v0`, `$a0` from `$v0`), which is why both carry a real insn in the slot
+   where func_80094DA8's field-abs, taking the same-register arm, carries a
+   `nop`.  `subu %0,%z2,%0` is what splat prints as `negu`.
+
+   THE TWO HALVES ARE THE SAME SOURCE; THEIR ASYMMETRY IS ALLOCATION.  In the
+   unk_0C half reorg hoists `subu $v0, $v1, $s0` into the `bgez`'s delay
+   slot because the field sits in `$v1` and the result in `$v0`; in the
+   unk_10 half the field IS `$v0`, so the `subu` would destroy the
+   fall-through arm's own input and the slot stays a `nop`.  Reading that as
+   two different spellings invents a difference that is not in the source.
+
+   The head is `b->unk_0C == 0 && b->unk_10 == 0`, one `&&`: the first load
+   is cse'd into the first clamp's compare (`$v1` survives the branch) while
+   the second is reloaded, because the `&&` puts it in a block the join kills.
+
+   Each axis stores the new value and then stores zero over it on the
+   overshoot arm; the `if` after the `+=` tests the computed register, not a
+   reload, which is cse forwarding the store.
+
+   72 words -- its header reads `nonmatching func_80095094, 0x120`, and
+   0x120/4 = 72.  Measured 0 differing; `--raw` 5 differing against
+   relocdump's 5 relocation words (`jal func_80065F90`, `jal func_800644B8`,
+   `jal func_80064584` and two intra-function `j`, to +0xD4 and +0x108, in
+   the listing's order), none of them on a function symbol. */
+void func_80095094(UnkTown2AE8 *b)
+{
+    s32 x;
+    s32 y;
+    s32 ang;
+    s32 dx;
+    s32 dy;
+
+    if (b->unk_0C == 0 && b->unk_10 == 0)
+    {
+        return;
+    }
+    x = b->unk_0C <= -0x7FFFFFFF ? -0x7FFFFFFF : b->unk_0C;
+    y = b->unk_10 <= -0x7FFFFFFF ? -0x7FFFFFFF : b->unk_10;
+    ang = func_80065F90(x, y);
+    dx = abs(func_800644B8(ang) << 5);
+    dy = abs(func_80064584(ang) << 5);
+    if (b->unk_0C < 0)
+    {
+        b->unk_0C += dx;
+        if (b->unk_0C > 0)
+        {
+            b->unk_0C = 0;
+        }
+    }
+    else
+    {
+        b->unk_0C -= dx;
+        if (b->unk_0C < 0)
+        {
+            b->unk_0C = 0;
+        }
+    }
+    if (b->unk_10 < 0)
+    {
+        b->unk_10 += dy;
+        if (b->unk_10 > 0)
+        {
+            b->unk_10 = 0;
+        }
+    }
+    else
+    {
+        b->unk_10 -= dy;
+        if (b->unk_10 < 0)
+        {
+            b->unk_10 = 0;
+        }
+    }
+}
 
 /* The func_80091260 / func_80091528 pair's second mover update -- the slot the
    rest of the D_80083160 family fills with func_80095094 -- and the one that
