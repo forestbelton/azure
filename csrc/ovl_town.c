@@ -2777,6 +2777,8 @@ extern u8 D_800794AC[];
 extern u8 *D_800CFB74[];
 extern u8 D_800CFC38[];
 extern s32 D_800CFC44[];
+extern s32 D_800CFBA0[];
+extern u8 D_800CFC24[];
 extern u8 D_800FC418;
 void func_8008B9D8(UnkTownDispatch *d);
 void func_8008BA00();
@@ -3368,7 +3370,79 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AFB0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B0E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B158);
+/* Republish the town module record at D_801131B8 from the room's +0x98 tile
+   descriptor, then hand an address to func_80035208: the record's own
+   published address at 0x80016000 plus the descriptor's low halfword when a
+   descriptor exists, or the room's +0x48 fallback when it does not.  Five
+   landed callers pass `D_800CFCB4.unk_10`, an `s32`, which is why the
+   parameter stays `s32` and every field is reached by a cast.
+   D_801131B8's fields are the same ones func_8009D5C0 (:11957) fills; the
+   first store takes the %lo-folded form and the base pointer is derived
+   after it, which is the order the target has.
+
+   FUNC_8008B0E8 TAKES THREE ARGUMENTS AND THAT IS THE WHOLE REGISTER
+   ALLOCATION.  Its `jal` has a `nop` delay slot and no argument setup, which
+   reads like a zero-arity call -- but its own listing
+   (asm/nonmatchings/ovl_town/func_8008B0E8.s) copies $a0, $a1 and $a2 into
+   $s0, $s1, $s2 before writing any of them, so all three are incoming and
+   they are already in place.  Passing the three extracted fields to it is
+   what gives them $a0/$a1/$a2 and pushes the long-lived mask and the two
+   `lui` constants out to $t0/$t1/$t2.  Without the arguments every opcode,
+   immediate and displacement still matches and 21 words differ by register
+   only.
+
+   THE TAIL CALL IS ONE CALL WITH A SHARED ARGUMENT LOCAL, not a duplicated
+   call in each arm.  `w` is live across the join, so local-alloc's
+   combine_regs refuses to tie the `addu` into it (`reg_qty[sreg] >= -1`,
+   local-alloc.c:1912) and the halfword load keeps $v0 while the constant
+   takes $v1 -- the target's `addu $a0, $v0, $v1`.  Writing
+   `func_80035208(...)` in both arms and letting cross-jumping unify it is
+   the same 57 words with 4 differing, every one of them in that one `addu`
+   and its two operands; six spellings of the argument expression (a local
+   for the load, for the constant, for the sum, a `u32`, a `u16`, and a
+   `(u8 *)0x80016000` pointer) all measure 4.
+   `(*(u32 *)(s + 0x8) & 0xC0000000)` is written out twice on purpose: cse
+   carries the first test's equality into the second block, which is why
+   $t0 serves as the 0xC0000000 constant at `and $v0, $a3, $t0`.
+   Hoisting the three extractions above their stores collapses the four
+   reloads of `*(u32 *)(s + 0x8)` into one and the function becomes 54 words.
+   57 words -- `nonmatching func_8008B158, 0xE4`, and 0xE4/4 = 57.  No jump
+   table, no rodata of its own.  %hi(D_801131B8) once and %lo twice; no
+   function address is taken. */
+void func_8008B158(s32 a)
+{
+    u8 *s;
+    u8 *d;
+    s32 x;
+    s32 y;
+    s32 z;
+    s32 w;
+
+    s = *(u8 **)(a + 0x98);
+    if (s != NULL && (*(u32 *)(s + 0x8) & 0xC0000000) == 0xC0000000)
+    {
+        *(s32 *)D_801131B8 = *(s32 *)(a + 0x60);
+        d = D_801131B8;
+        x = (*(u32 *)(s + 0x8) >> 23) & 1;
+        *(s32 *)(d + 0x4) = x;
+        y = (*(u32 *)(s + 0x8) & 0x3F000000) >> 24;
+        *(s32 *)(d + 0x8) = y;
+        z = (*(u32 *)(s + 0x8) & 0x7F0000) >> 16;
+        *(s32 *)(d + 0xC) = z;
+        if ((*(u32 *)(s + 0xC) & 0xC0000000) == 0xC0000000)
+        {
+            *(s32 *)(d + 0x10) = (*(u32 *)(s + 0xC) & 0x3F000000) >> 24;
+            *(s32 *)(d + 0x14) = (*(u32 *)(s + 0xC) & 0x7F0000) >> 16;
+        }
+        func_8008B0E8(x, y, z);
+        w = *(u16 *)(s + 0x8) + 0x80016000;
+    }
+    else
+    {
+        w = *(s32 *)(a + 0x48);
+    }
+    func_80035208(w);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B23C);
 
@@ -3401,15 +3475,68 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B550);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B55C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B5D8);
+/* Publish a 32-bit value into D_800CFC24+2..+5 a byte at a time, tag +6, and
+   hand the record to func_80035208 -- the same `func_80035208((s32)SYM)`
+   idiom as :3493 and :10600, with the base pointer the stores already hold
+   doubling as the argument, so there is no `move $a0`.
+   THE PROTOTYPE'S OWN ARITY LEAD IS A FALSE POSITIVE: provision.py reports
+   func_80035208 called with $a0 AND $a1 set, but $a1 is this function's own
+   second parameter being STORED in the jal's delay slot (`sb $a1, 0x6($a0)`)
+   and is never written here, so the one-parameter declaration at
+   csrc/ovl_town.c is correct.  Arity is witnessed by func_8008B620 below
+   (two arguments) and by the two ASM callers func_80093894/func_80093BAC.
+   The listing's store order is +3, +2, +4, +5, +6; that is sched1 moving the
+   `sra 8` ahead of the raw byte, and ascending source order reproduces it.
+   18 words -- `nonmatching func_8008B5D8, 0x48`, and 0x48/4 = 18.  No jump
+   table, no rodata of its own.  %hi/%lo(D_800CFC24) once each. */
+void func_8008B5D8(s32 a, s32 b)
+{
+    D_800CFC24[2] = a;
+    D_800CFC24[3] = a >> 8;
+    D_800CFC24[4] = a >> 16;
+    D_800CFC24[5] = a >> 24;
+    D_800CFC24[6] = b;
+    func_80035208((s32)D_800CFC24);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B620);
+/* Look the frame id up in D_800CFBA0 and raise sound event 0x23 for it.  The
+   index is written inline rather than through a base local, which is what
+   puts the `sll` between the `addiu %lo` and the `addu` the way the target
+   has it.  One parameter, witnessed by the landed caller func_8008BC58
+   (:3493) -- `func_8008B620(t[*(s32 *)((u8 *)m + 0x74)])`.
+   13 words -- `nonmatching func_8008B620, 0x34`, and 0x34/4 = 13.  No jump
+   table, no rodata of its own.  %hi/%lo(D_800CFBA0) once each. */
+void func_8008B620(s32 a)
+{
+    func_8008B5D8(D_800CFBA0[a], 0x23);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B654);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B7F4);
+/* The two one-line setters for the D_800FC418 input lock that func_8008BC58
+   tests and func_8008BED8 dispatches on: 0xFF parks the slot on
+   func_8008BA00's countdown and 0 hands it back.  Both return 1, which is the
+   `addiu $v0, $zero, 0x1` in the `jr $ra` delay slot; nothing calls either
+   one anywhere in csrc/ or asm/, so the void argument list and the s32 return
+   are unwitnessed -- the return value is the only thing the listing proves.
+   5 words -- its header reads `nonmatching func_8008B7F4, 0x14`, and
+   0x14/4 = 5.  No jump table, no rodata of its own.  %hi/%lo(D_800FC418)
+   once each; no function address is taken. */
+s32 func_8008B7F4(void)
+{
+    D_800FC418 = 0xFF;
+    return 1;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B808);
+/* The 0 half of the pair above.  A store of zero needs no constant register,
+   so this is 4 words against func_8008B7F4's 5.
+   4 words -- `nonmatching func_8008B808, 0x10`, and 0x10/4 = 4.  No jump
+   table, no rodata of its own.  %hi/%lo(D_800FC418) once each. */
+s32 func_8008B808(void)
+{
+    D_800FC418 = 0;
+    return 1;
+}
 
 /* The town actor constructor: eleven of these are built in a row by
    func_8008B654, which passes the slot index, the previous slot's mover (or
@@ -3682,7 +3809,38 @@ void func_8008BED8(UnkTownMover *m, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008BF0C);
+/* The shared tail of the four clamping steppers below (func_8008BF5C,
+   func_8008BFB0, func_8008C004, func_8008C058, which all call it as
+   `func_8008BF0C(m, b, c)`): retire the record, raise 0x8000 in the node's
+   own flag halfword at m - 0x2, clear the node's +0x10 continuation and mark
+   the engine dirty.  Only the first parameter is read.
+
+   `((s32 *)m)[-4] = 0` IS LOAD-BEARING AND THE CAST PLACEMENT IS THE WHOLE
+   POINT.  The target fills D_800814A0's load-delay slot with this store, and
+   that is only legal if sched can prove the two do not alias.  sched.c's
+   true_dependence/output_dependence (:835, :900) exempt a pair only when one
+   MEM is MEM_IN_STRUCT_P with a varying address in a non-QImode and the other
+   is neither -- and D_800814A0's `(lo_sum reg sym)` address counts as NOT
+   varying, because rtx_varies_p treats a LO_SUM's register operand as
+   constant (rtlanal.c, `case LO_SUM`).  So the local store has to carry
+   MEM_IN_STRUCT_P, which expr.c sets when the INDIRECT_REF's operand is a
+   PLUS_EXPR -- i.e. for the ARRAY_REF spelling, where the cast is inside.
+   Measured: `((s32 *)m)[-4] = 0` is 20 words / 0 differing;
+   `*(s32 *)((u8 *)m - 0x10) = 0`, `*((s32 *)m - 4) = 0` and
+   `*(s32 *)((u8 *)m + -0x10) = 0` are all 21 words with a load-delay `nop`,
+   because a MINUS_EXPR is not a PLUS_EXPR and an outer cast hides the PLUS.
+   Writing it as the node's own field -- `n = (UnkNode *)((u8 *)m - 0x20);
+   n->unk_1E |= 0x8000; n->unk_10 = 0;` -- is 20 words but 9 differing.
+   20 words -- `nonmatching func_8008BF0C, 0x50`, and 0x50/4 = 20.  No jump
+   table, no rodata of its own.  %hi(D_800814A0) once and %lo twice; no
+   function address is taken. */
+void func_8008BF0C(UnkTownMover *m, UnkTown2AE8 *b, void *c)
+{
+    func_80033C84(m->unk_00);
+    *(u16 *)((u8 *)m - 0x2) |= 0x8000;
+    ((s32 *)m)[-4] = 0;
+    D_800814A0 |= 0x8000;
+}
 
 /* One of four clamping steppers on the mover's 16.16 position: the Y half steps by 0x100 and clamps at -0x400, then hands off to func_8008BF0C INSIDE the `if`. The record pointer at m->unk_00 is RE-DEREFERENCED at all three uses --
    the target has `lw $v0, 0x0($a0)` twice -- and the field is the integer half
