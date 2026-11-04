@@ -334,9 +334,9 @@ size, the `-G` value, the struct layout, the flags.
    near-identical shape.
 
    **State on 2026-11-03, after the autonomous campaign and the carve:**
-   the three ovl_town units together are **1,437 of 1,819 functions and 58,416
-   of 70,311 words, 83.1%**, up from 26.7% six sessions ago; the project total
-   is **89.7%**, and there are **9 parks** -- SEVEN have been RETIRED by
+   the three ovl_town units together are **1,456 of 1,819 functions and 59,184
+   of 70,311 words, 84.2%**, up from 26.7% six sessions ago; the project total
+   is **90.1%**, and there are **10 parks** -- SEVEN have been RETIRED by
    solving them, not by giving up on them. Take these from `progress.py`, which
    now also counts old-style (K&R) definitions; `DEF_RE` requires `\)\s*\{`
    and was missing two of them, 132 uncounted words.
@@ -414,7 +414,7 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. All three units sweep clean -- **1,437 names
+   Work the tight components. All three units sweep clean -- **1,456 names
    verified, 0 nonzero** apart from the documented benign `func_800C3050`
    off-by-one (its multi-line declaration's first line) -- and both
    `make build/town.bin` and `make check` are byte-identical. Read that number, not just the absence of failures: until

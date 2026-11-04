@@ -725,6 +725,18 @@ def main():
         mypos = incasm.get(f) or lines.get(f) or 0
         need = [i for i in ins
                 if (lines.get(i) or incasm.get(i) or 0) > mypos]
+        # A SYMBOL THIS UNIT DOES NOT CONTAIN AT ALL ALWAYS NEEDS ONE, and
+        # the old test could never say so: it compared positions, and a
+        # sister-unit symbol has no position here, so `0 > mypos` is false
+        # and the banner printed NOTHING. Its silence reads as "no
+        # declarations needed", and in the case that triggered this
+        # (2026-11-04) the honest answer was three of three -- all three
+        # tested symbols live in csrc/ovl_town_800BF3F0.c. That is precisely
+        # where the declaration is mandatory, because a CALL can ride an
+        # implicit declaration and an address-take cannot.
+        elsewhere = [i for i in ins
+                     if i not in lines and i not in incasm]
+        need = need + [i for i in elsewhere if i not in need]
         if need:
             # SAY "ADDRESS-TAKE", NOT "INSTALL". This banner said INSTALL for
             # every entry, including the ones the per-function lines above had
@@ -750,8 +762,14 @@ def main():
                 k = ('install' if i in stored else
                      'TEST' if i in tested else
                      'TAG' if i in tagged else '?')
-                print("                  %-15s [%s] %s" % (
-                    i, k,
+                where = ''
+                if i not in lines and i not in incasm:
+                    sis = sister_of(unit, i)
+                    where = (' -- NOT IN THIS UNIT (it is in csrc/%s.c), so the'
+                             ' declaration is mandatory' % sis) if sis else \
+                            ' -- NOT IN THIS UNIT AT ALL, so the declaration is mandatory'
+                print("                  %-15s [%s]%s %s" % (
+                    i, k, where,
                     pr.strip() if pr else 'no declaration in the unit either -- write one'))
         if gl:
             tags, outside, needdecl = [], [], []
