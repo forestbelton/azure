@@ -9546,11 +9546,111 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098180);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800981D4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098244);
+/* Walk the mover's +0x02 integer coordinate to 0x4C2 by 4 a frame from either
+   side, and on arrival clamp it, play 0x12 and hand off.  func_80098DC0
+   installs this at t->unk_04.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800982EC);
+   THE FIRST ARM'S CONTINUATION IS A `goto`, NOT A `return`.  Spelled as the
+   symmetric `if (x < 0x4C2) return;` in both arms the function is 42 words
+   with 2 differing: the inner branch comes out `bnez` to the epilogue with
+   the unconditional `j` going to the clamp block and stealing its `sh` into
+   the delay slot, where the target branches TO the clamp and `j`s to the
+   epilogue with an empty delay slot.  The second arm keeps its `return`,
+   because there the clamp block is its fall-through.  42 words -- its header
+   reads `nonmatching func_80098244, 0xA8`, and 0xA8/4 = 42.  0 differing. */
+void func_80098244(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    if (*(s16 *)((u8 *)b + 0x2) < 0x4C2)
+    {
+        *(s16 *)((u8 *)b + 0x2) += 4;
+        if (*(s16 *)((u8 *)b + 0x2) >= 0x4C2)
+        {
+            goto arrive;
+        }
+        return;
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 0x2) -= 4;
+        if (*(s16 *)((u8 *)b + 0x2) > 0x4C2)
+        {
+            return;
+        }
+    }
+arrive:
+    *(s16 *)((u8 *)b + 0x2) = 0x4C2;
+    func_80033AA8(0x12);
+    func_80098928(a, b, c);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800983BC);
+/* func_800984AC's neighbour with the heading step made conditional: run the
+   heading update only while the OTHER collider is still moving.
+   D_800CFCB4.unk_3A[1] is the claim flag for slot 1 and D_800CFCB4.unk_1C[1]
+   the UnkTownColl it points at (the comment on UnkTownCFCB4 records that the
+   two objects are linked both ways); that record's +0x08 position vector's
+   +0x0C/+0x10/+0x14 are the per-frame deltas, so all three zero means
+   stationary and the heading call is skipped.
+
+   THE SHORT-CIRCUIT `||` CHAIN IS THE SHAPE, not an if/else with the tail
+   call duplicated: the three repeated `->unk_08` reads are written out and
+   cse unifies them to the single `lw 0x20` / `lw 0x8` pair the listing has.
+   The if/else form with `func_80098928(a, b, c); return;` in the early arm is
+   53 words against 52 with 16 differing.  52 words -- its header reads
+   `nonmatching func_800982EC, 0xD0`, and 0xD0/4 = 52.  0 differing. */
+void func_800982EC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+
+    if (D_800CFCB4.unk_3A[1] == 0 ||
+        ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_0C != 0 ||
+        ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_10 != 0 ||
+        ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_14 != 0)
+    {
+        n = func_80095978(b, D_800FE488);
+        func_80095A94(b, (s16)n, D_800FE488);
+    }
+    func_80098928(a, b, c);
+}
+
+/* The countdown family's step function for the four quarter turns: the
+   func_80099894 / func_80099920 / func_800999AC / func_80099A38 set each
+   advance ONE axis by a fixed +/-0x20000, and this one picks the axis and the
+   sign out of t->unk_10 -- 0x400 and 0xC00 move +0x00, 0 and anything else
+   move +0x04, by 0x12 in 16.16.
+
+   FOUR CASES, SO NO JUMP TABLE: cc1psx needs five before it emits one, and
+   the listing's comparison tree is beq 0x400 / slti 0x401 / beq 0xC00 /
+   beqz 0.  THE FOURTH ARM IS `default`, NOT `case 0x800`: writing 0x800 as a
+   fifth label costs the test it would need and is 63 words against 60 with 28
+   differing, so 0x800 is only reaching the default arm.  60 words -- its
+   header reads `nonmatching func_800983BC, 0xF0`, and 0xF0/4 = 60.
+   0 differing. */
+void func_800983BC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+    if (--a->unk_0A < 0)
+    {
+        func_80098988(a, b, c);
+    }
+    else
+    {
+        switch (a->unk_10)
+        {
+        case 0x400:
+            b->unk_00 += 0x120000;
+            break;
+        case 0xC00:
+            b->unk_00 += -0x120000;
+            break;
+        case 0:
+            b->unk_04 += 0x120000;
+            break;
+        default:
+            b->unk_04 += -0x120000;
+            break;
+        }
+    }
+}
 
 void func_800984AC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -9727,7 +9827,18 @@ void func_80098EC0(UnkTownTask *t)
     t->unk_0A = 0x15;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80098F10);
+/* The install half of a pair with func_800982EC below: two parameters, not
+   three -- $a2 is never touched in the listing, which is the two-argument
+   sub-form of this bind family (func_80098F48, func_80099294, ...).  The
+   %hi/%lo pair is on the FUNCTION func_800982EC, so it is masked by
+   ovlverify and has no jal to decode; relocdump.py names it.  14 words --
+   its header reads `nonmatching func_80098F10, 0x38`, and 0x38/4 = 14.
+   0 differing. */
+void func_80098F10(UnkTownTask *t, s32 b)
+{
+    func_80099754(b);
+    t->unk_04 = func_800982EC;
+}
 
 void func_80098F48(UnkTownTask *t, s32 b)
 {
@@ -9809,7 +9920,19 @@ void func_800991C0(UnkTownTask *t, s32 b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099238);
+/* func_8009A344's body with a rodata descriptor in place of
+   `a->unk_44->unk_24`.  THE BIND TAKES THREE ARGUMENTS here too, and the
+   witness is the register exchange rather than an argument setup: $a2 still
+   holds `c` at the call so jump2 deletes the copy, but the copy is there when
+   global-alloc prices the allocnos, and the two-argument spelling comes out
+   with $s1 and $s2 swapped -- 23 words, 6 differing, all of them the three
+   entry copies and the two outgoing ones.  23 words -- its header reads
+   `nonmatching func_80099238, 0x5C`, and 0x5C/4 = 23.  0 differing. */
+void func_80099238(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    func_80094984(D_800D0130, a, c);
+    func_8009A1E8(a, b, c);
+}
 
 void func_80099294(UnkTownTask *t, s32 b)
 {
@@ -9820,7 +9943,40 @@ void func_80099294(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800992F8);
+/* The install half of a pair with func_800983BC below, and the richest member
+   of the func_80094984 bind family's TWO-argument sub-form ($a2 is never
+   touched): it also seeds the handler's starting facing out of the two
+   parallel tables.  D_80082660[t->unk_40].unk_02's low byte is a 0..3
+   direction index -- the same `*(s8 *)((u8 *)e + 2)` read the landed
+   func_8009A1E8 does off this record -- and D_800D5070 is the four quarter
+   turns, so t->unk_10 starts at the facing that record already holds.
+   `(s8)p[t->unk_40].unk_02` is byte-identical: gcc 2.7.2 narrows an s16 load
+   under an (s8) cast straight to `lb`.
+
+   THE FACING MUST BE A LOCAL COMPUTED BEFORE THE HANDLER STORE.  Four
+   spellings at the correct 38 words: the chain written in place at
+   `t->unk_10 = ...` is 19 differing, and so is dropping the base local and
+   writing `D_80082660[1]` (19); with the bare array and the local, 11; only
+   the base local PLUS the facing local reaches 0.  The chain's RTL has to
+   come first so sched2 ranks it ahead of the %hi/%lo of func_800983BC -- the
+   same LUID ordering func_800991C0's device buys, but here a statement order
+   is enough.  38 words -- its header reads `nonmatching func_800992F8,
+   0x98`, and 0x98/4 = 38.  0 differing. */
+void func_800992F8(UnkTownTask *t, s32 b)
+{
+    Unk80082660 *p;
+    s32 n;
+
+    func_80094984(D_800D0158, t);
+    p = D_80082660;
+    p[1].unk_00 = 0;
+    n = D_800D5070[*(s8 *)((u8 *)&p[t->unk_40] + 2)];
+    t->unk_04 = func_800983BC;
+    t->unk_0A = 0x3;
+    t->unk_10 = n;
+    func_80099754(b);
+    func_80053DA8(0x519);
+}
 
 void func_80099390(UnkTownTask *t, s32 b)
 {

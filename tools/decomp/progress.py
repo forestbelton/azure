@@ -32,6 +32,45 @@ STUB_RE = re.compile(r'INCLUDE_ASM\("[^"]+",\s*(\w+)\)')
 # regex this is. Greedy matching swallows a run of bodyless definitions whole
 # and reports all but the first as missing.
 DEF_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', re.M)
+# AN OLD-STYLE (K&R) DEFINITION PUTS ITS PARAMETER DECLARATIONS BETWEEN `)`
+# AND `{`, so DEF_RE's `\)\s*\{` cannot see it and the function is counted as
+# a stub. Found 2026-11-03: func_8009C7A8 is landed K&R on purpose -- a
+# prototyped definition is byte-identical but adds three
+# incompatible-pointer-type warnings, because the unit already disagrees with
+# itself about that handler slot's types -- and ovl_town's landed count was
+# one LOW for it. The whole-unit sweep's `awk` recipe does catch it, so the
+# sweep expectation became "progress.py's count, plus yours, plus TWO" and
+# only one of the two showed up as a failure line, which is how it surfaced.
+#
+# The K&R signature's parameter list is BARE IDENTIFIERS with no types, and
+# the line ends without `;` or `{`.
+#
+# `void` IS a bare identifier, which my first version of this missed: it
+# matched every `void func_X(void)` definition line -- 44 in ovl_town alone --
+# and inflated the function total by 13 before the filter below was added.
+# DEF_RE already handles those, because its `\)\s*\{` spans the newline.
+# So the identifiers are filtered against the C type keywords, which is what
+# makes the K&R form unambiguous.
+KNR_RE = re.compile(
+    r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\('
+    r'(\s*[A-Za-z_]\w*\s*(?:,\s*[A-Za-z_]\w*\s*)*)\)\s*$', re.M)
+TYPE_WORDS = {
+    'void', 'int', 'char', 'short', 'long', 'float', 'double', 'signed',
+    'unsigned', 'const', 'volatile', 'struct', 'union', 'enum',
+    's8', 's16', 's32', 's64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64',
+}
+
+
+def knr_defs(text):
+    """Names defined in the old-style form, excluding anything whose
+    'parameter list' is really a type."""
+    out = []
+    for name, params in KNR_RE.findall(text):
+        ids = [q.strip() for q in params.split(',')]
+        if any(q in TYPE_WORDS for q in ids):
+            continue
+        out.append(name)
+    return out
 ALIAS_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*'
                       r'__asm__\s*\(\s*"(\w+)"\s*\)\s*;', re.M)
 
@@ -42,7 +81,8 @@ def units():
     for f in sorted(glob.glob(PROJ + '/csrc/*.c')):
         t = open(f).read()
         stubs = STUB_RE.findall(t)
-        done = [n for n in DEF_RE.findall(t) if n not in stubs]
+        found = DEF_RE.findall(t) + knr_defs(t)
+        done = [n for n in dict.fromkeys(found) if n not in stubs]
         # A definition may be emitted under an __asm__ label, so its C name is
         # not the assembler name (matching-levers section 7). Count the label.
         for name, label in ALIAS_RE.findall(t):
