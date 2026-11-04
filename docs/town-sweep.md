@@ -719,6 +719,20 @@ not a verdict**: decode the resolved immediate by hand, and let
 `town.bin_undefined_syms_auto.txt` (`:130` and `:131`), so either links; if
 the one the candidate uses is NOT in those files, see the trap above.
 
+### AN ODD ADDRESS-TAKE COUNT IS NOT A DEFECT -- reorg DUPLICATES A `lui` ACROSS A THREAD IT DOES NOT OWN
+
+A brief's address-take column counts `%hi`/`%lo` OCCURRENCES on a function
+symbol, and that number can be ODD. Measured 2026-11-04 on `func_800A75E4`:
+two `%hi(func_800A76F0)` and one `%lo`, three words for ONE install, because
+the inner `beqz`'s target thread is the outer `beqz`'s fall-through, so
+`fill_slots_from_thread` copies the insn into the delay slot rather than
+moving it (`reorg.c:3637`, `temp = own_thread ? trial : copy_rtx (trial);`).
+The full mechanism is in `docs/matching-levers.md`.
+
+So do not read two `%hi`s as two installers, and do not treat an odd count as
+a counting bug in the brief. It is also why the column is defined as
+occurrences and not as (install targets x 2).
+
 ### A CONSTANT ADDRESS MAKES THE CANDIDATE'S RELOCATION LIST A *SUBSEQUENCE* OF THE LISTING'S, AND THAT IS THE PASS CONDITION
 
 A constant address emits no relocation at all, so splat's listing shows
