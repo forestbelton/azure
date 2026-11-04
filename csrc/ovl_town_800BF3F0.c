@@ -429,6 +429,11 @@ typedef struct UnkTownCFCB4
     void *unk_1C[6];
     u8 pad_34[0x6];
     u8 unk_3A[6];
+    /* Six more flag bytes beside unk_3A, scanned together with it by
+       func_8009B594's `for (i = 0; i < 6; i++)` break loop off ONE
+       lo_sum in $a1.  0x800CFCF4 has no symbol of its own, so the field
+       is what makes the listing's single %hi/%lo(D_800CFCB4) possible. */
+    u8 unk_40[6];
 } UnkTownCFCB4;
 
 /* The record D_800CFCC4 points at. func_800927EC reads the u8 at +0x14 and
