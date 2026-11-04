@@ -804,7 +804,10 @@ typedef struct UnkTownCastGeo
     SVECTOR *unk_0C;
     u8 pad_10[0x4];
     s16 unk_14;
-    u8 pad_16[0x2];
+    /* The Z grid shift, beside unk_14's X one: func_8008D084 reads both with
+       `lh` off (&D_80083160)->unk_1DC and publishes 0x40 << shift into
+       D_800FE480/D_800FE484.  Was pad_16 until that function was read. */
+    s16 unk_16;
     u16 unk_18;
     u16 unk_1A;
 } UnkTownCastGeo;
@@ -848,6 +851,19 @@ typedef struct UnkTownCastSP
     s16 unk_76;
     s16 unk_78;
     s16 unk_7A;
+    /* func_8008CE08's angular-span block, all `lw`/`sw`.  The four +0x6C..
+       +0x7A halfword pairs are (x, z) deltas; ratan2 of each lands here.
+       unk_7C is the reference angle and unk_80/unk_84/unk_88 are the other
+       three made relative to it, while unk_90/unk_94/unk_98 are the three
+       consecutive gaps that get range-checked.  +0x8C has no witness. */
+    s32 unk_7C;
+    s32 unk_80;
+    s32 unk_84;
+    s32 unk_88;
+    u8 pad_8C[0x4];
+    s32 unk_90;
+    s32 unk_94;
+    s32 unk_98;
 } UnkTownCastSP;
 
 /* The 0x54-byte item record array at the constant base 0x800102F0. The

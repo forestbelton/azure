@@ -824,7 +824,10 @@ typedef struct UnkTownCastGeo
     SVECTOR *unk_0C;
     u8 pad_10[0x4];
     s16 unk_14;
-    u8 pad_16[0x2];
+    /* The Z grid shift, beside unk_14's X one: func_8008D084 reads both with
+       `lh` off (&D_80083160)->unk_1DC and publishes 0x40 << shift into
+       D_800FE480/D_800FE484.  Was pad_16 until that function was read. */
+    s16 unk_16;
     u16 unk_18;
     u16 unk_1A;
 } UnkTownCastGeo;
@@ -868,6 +871,19 @@ typedef struct UnkTownCastSP
     s16 unk_76;
     s16 unk_78;
     s16 unk_7A;
+    /* func_8008CE08's angular-span block, all `lw`/`sw`.  The four +0x6C..
+       +0x7A halfword pairs are (x, z) deltas; ratan2 of each lands here.
+       unk_7C is the reference angle and unk_80/unk_84/unk_88 are the other
+       three made relative to it, while unk_90/unk_94/unk_98 are the three
+       consecutive gaps that get range-checked.  +0x8C has no witness. */
+    s32 unk_7C;
+    s32 unk_80;
+    s32 unk_84;
+    s32 unk_88;
+    u8 pad_8C[0x4];
+    s32 unk_90;
+    s32 unk_94;
+    s32 unk_98;
 } UnkTownCastSP;
 
 /* The 0x54-byte item record array at the constant base 0x800102F0. The
@@ -3233,7 +3249,7 @@ void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
 u32 func_8003C06C(s32 i);
 void func_8003E188(s16 arg0, s16 arg1);
 void func_8009F374();
-s32 func_8008CE08(void *p);
+s32 func_8008CE08(UnkTownCastSP *p);
 s32 func_8008D0B8(s32 x, s32 y, s32 z, UnkTownPlane **out);
 s32 func_8008D5C4(s32 x, s32 y, s32 z);
 s32 func_8008DA80(s32 x, s32 y, s32 z);
@@ -4437,7 +4453,40 @@ void func_8008C374(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C3B8);
+/* The sign of a 2D dot product, used by func_8008C758 to drop back-facing
+   silhouette edges before it probes them: `(pl->unk_00 * ex + pl->unk_02 *
+   ez)` with each 16.16 edge component shifted down by 12, returning -1/0/1.
+
+   The `/ 0x1000` pair is cc1psx's signed-division-by-a-power-of-two dance
+   (`bgez`/`addiu 0xFFF`/`sra 12`), not a shift -- a `>> 12` would be one
+   word and would not round toward zero.  Both quotients are computed off
+   one base: `q[i]` is addressed once (`sll 4`/`addu`) and the two `lw` sit
+   at 0x0 and 0x4 of it, so writing `q[i]` twice costs nothing.
+
+   Its caller's own body at the second probe site already writes the same
+   expression over 0x10000 instead of 0x1000, which is what gave the field
+   mapping here; see the func_8008C758 comment.
+
+   The three-way return is the plain `== 0` / `< 0` / fall-through order:
+   each test's constant lands in the branch's delay slot, so nothing is
+   cheaper than writing the comparisons out.
+
+   26 words -- its header reads `nonmatching func_8008C3B8, 0x68`, and
+   0x68/4 = 26.  0 differing on the first compile. */
+s32 func_8008C3B8(UnkTownVec16 *q, s32 i, UnkTownPlane *pl)
+{
+    s32 d = pl->unk_00 * (q[i].unk_00 / 0x1000) + pl->unk_02 * (q[i].unk_04 / 0x1000);
+
+    if (d == 0)
+    {
+        return 0;
+    }
+    if (d < 0)
+    {
+        return -1;
+    }
+    return 1;
+}
 
 s32 func_8008C420(UnkTownVec16 *p, UnkTownVec16 *q, s32 i)
 {
@@ -4671,9 +4720,172 @@ s32 func_8008CBF4(UnkTown2AE8 *v, s32 b, s32 n)
     return best;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008CC90);
+/* Does the viewer sit inside the quad whose four corner deltas are the eight
+   parameters?  Each (x, z) pair goes through func_80065F90 (ratan2; splat
+   leaves it unnamed and the unit rides an implicit declaration for it, as at
+   the func_800A24FC call site), the four angles are made relative to the
+   first, and the test is that all four consecutive gaps are <= 0x800, i.e.
+   that the corners wind monotonically around the origin.  A degenerate
+   corner -- both components zero, so the angle is undefined -- returns 1
+   early, which is the "treat as inside" answer the three landed callers
+   want.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008CE08);
+   THE LOAD-BEARING SPELLING IS THAT THE RELATIVE ANGLES ARE WRITTEN BACK
+   INTO a1/a2/a3 WHILE THE GAPS GET FRESH LOCALS, and that is a scheduler
+   fact, not a style choice.  sched1's adjust_priority
+   (scratch/gcc-src/cdk-gcc-b18/sched.c:2550-2592) raises an insn to
+   max_priority when birthing_insn_p says it makes a register live, and that
+   test is
+
+       if (bb_live_regs[offset] & bit)
+         return (reg_n_sets[i] == 1);
+
+   (:2528-2529) -- so ONLY A SINGLE-ASSIGNMENT PSEUDO gets the boost.  Since
+   the scheduler runs backward, a boosted definition is placed as LATE as it
+   can go, which shortens the live range.  Written as six separate
+   single-set locals (`A = (a3 - a0) & 0xFFF;` and so on) every one of the
+   four `andi $vN, $v0, 0xFFF` result masks is boosted past the NEXT call's
+   argument setup, so it lands in that call's delay slot instead of
+   immediately after its own call: 94 words, 27 differing, with the first
+   three jal delay slots wrong.  Reassigning a1/a2/a3 takes reg_n_sets to 2
+   and the boost with it, and the masks stay in source order -- 14 differing.
+   The remaining 14 were the same mechanism one level down: `a3 = 0x1000 -
+   a3` makes a3's pseudo multiply-set as well, which drags the three gap
+   computations out of order, while a fresh `d3` leaves them alone.  So the
+   rule here is per-variable, and both directions of it are needed in the
+   same function.
+
+   Measured, all 94 words: six single-set locals 27 differing; reassigning
+   a1/a2/a3 and also a3 for the last gap 14; reassigning a1/a2/a3 plus
+   `d1 = d1;` 14; `a0` reused as the first gap 19; `a0` reused plus a fresh
+   d2 25; the four tests written as four `if (... >= 0x801) return 0;`
+   statements 92 words / 31 differing.  This spelling is 0.
+
+   The parameters are s16 and the implicit declaration of func_80065F90
+   promotes them, which is where every `sll 16`/`sra 16` pair comes from; the
+   four stack parameters arrive `lhu` because the caller's word-wide argument
+   slot is read at the declared width.  The declaration at the top of this
+   file already had the arity and the widths from the three landed callers.
+
+   94 words -- its header reads `nonmatching func_8008CC90, 0x178`, and
+   0x178/4 = 94. */
+s32 func_8008CC90(s16 x0, s16 z0, s16 x1, s16 z1, s16 x2, s16 z2, s16 x3, s16 z3)
+{
+    s32 a0;
+    s32 a1;
+    s32 a2;
+    s32 a3;
+    s32 d1;
+    s32 d2;
+    s32 d3;
+
+    if (z0 == 0 && x0 == 0)
+    {
+        return 1;
+    }
+    if (z1 == 0 && x1 == 0)
+    {
+        return 1;
+    }
+    if (z2 == 0 && x2 == 0)
+    {
+        return 1;
+    }
+    if (z3 == 0 && x3 == 0)
+    {
+        return 1;
+    }
+
+    a0 = func_80065F90(z0, x0) & 0xFFF;
+    a1 = func_80065F90(z1, x1) & 0xFFF;
+    a2 = func_80065F90(z2, x2) & 0xFFF;
+    a3 = func_80065F90(z3, x3) & 0xFFF;
+
+    a3 = (a3 - a0) & 0xFFF;
+    a2 = (a2 - a0) & 0xFFF;
+    a1 = (a1 - a0) & 0xFFF;
+    d1 = (a2 - a1) & 0xFFF;
+    d2 = (a3 - a2) & 0xFFF;
+    d3 = 0x1000 - a3;
+
+    if (a1 < 0x801 && d1 < 0x801 && d2 < 0x801 && d3 < 0x801)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+/* The same winding test as func_8008CC90, one layer in: the four (x, z)
+   deltas are already in the scratchpad record at +0x6C..+0x7A and every
+   intermediate is written back to it rather than kept in a local, so the six
+   landed callers can read the angles and the gaps afterwards.  Order of the
+   corners is 6C, 78, 74, 70 -- not address order, and that is what the
+   `lw 0x78` / `lw 0x74` / `lw 0x70` gates say.
+
+   A corner's two halfwords are tested as ONE WORD: `*(s32 *)&p->unk_6C == 0`
+   is the single `lw`/`beqz` the listing has, where the two s16 comparisons
+   func_8008CC90 uses would be two `sll 16` pairs.  The pair has to stay s16
+   for the `lh` arguments -- the landed +Z sweep family already writes
+   `SP->unk_6C` as a halfword -- so the word read is the cast, the same way
+   round as UnkTown2AE8's 16.16 words.
+
+   Every `& 0xFFF`-free subtraction is deliberate: unk_88 and unk_84 are
+   stored unmasked (`p->unk_88 = p->unk_88 - p->unk_7C;`) and only unk_80 is
+   masked, which is what the listing's single `andi` before `sw 0x80($s0)`
+   says.  The reloads are the readable part of the shape: each
+   `p->unk_7C`/`p->unk_88` read after a call comes back as a `lw` because the
+   call clobbered $v0, while the read of the field the statement is also
+   WRITING forwards from the register -- which is why `p->unk_88 = p->unk_88
+   - p->unk_7C;` emits one `lw` and not two.
+
+   The function's own result is the last comparison, not a branch:
+   `return p->unk_90 < 0x801;` is the `slti $v0` in the delay-slot `j`, where
+   an `if (...) return 1; return 0;` would add a branch.
+
+   80 words -- its header reads `nonmatching func_8008CE08, 0x140`, and
+   0x140/4 = 80.  0 differing on the first compile. */
+s32 func_8008CE08(UnkTownCastSP *p)
+{
+    if (*(s32 *)&p->unk_6C == 0)
+    {
+        return 1;
+    }
+    if (*(s32 *)&p->unk_78 == 0)
+    {
+        return 1;
+    }
+    p->unk_7C = func_80065F90(p->unk_6E, p->unk_6C);
+    p->unk_88 = func_80065F90(p->unk_7A, p->unk_78);
+    p->unk_88 = p->unk_88 - p->unk_7C;
+    p->unk_98 = (0x1000 - p->unk_88) & 0xFFF;
+    if (p->unk_98 >= 0x801)
+    {
+        return 0;
+    }
+    if (*(s32 *)&p->unk_74 == 0)
+    {
+        return 1;
+    }
+    p->unk_84 = func_80065F90(p->unk_76, p->unk_74);
+    p->unk_84 = p->unk_84 - p->unk_7C;
+    p->unk_94 = (p->unk_88 - p->unk_84) & 0xFFF;
+    if (p->unk_94 >= 0x801)
+    {
+        return 0;
+    }
+    if (*(s32 *)&p->unk_70 == 0)
+    {
+        return 1;
+    }
+    p->unk_80 = func_80065F90(p->unk_72, p->unk_70);
+    p->unk_80 = (p->unk_80 - p->unk_7C) & 0xFFF;
+    if (p->unk_80 >= 0x801)
+    {
+        return 0;
+    }
+    p->unk_90 = (p->unk_84 - p->unk_80) & 0xFFF;
+    return p->unk_90 < 0x801;
+}
 
 s32 func_8008CF48(UnkVec *v, UnkTownPlane **out)
 {
@@ -4711,7 +4923,29 @@ s32 func_8008D050(UnkVec *v)
                       *(s16 *)((u8 *)v + 0xA));
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008D084);
+/* Publishes the tile-grid extents the +Z collision sweep family compares
+   against: D_800FE480 and D_800FE484 are the X and Z cell counts, each
+   0x40 << the matching shift in the +0x1DC geometry record.  Its only
+   caller, func_8009CE34, calls it once at map setup.
+
+   The address chain is the landed family's, verbatim: `Unk80083160 *g =
+   &D_80083160;` compiler-splits the symbol into `lui`/`addiu` and
+   `(UnkTownCastGeo *)&g->unk_1DC` adds the 0x1DC as its own `addiu`, which
+   is the three-word head the listing opens with.  Writing
+   `(UnkTownCastGeo *)((u8 *)&D_80083160 + 0x1DC)` would fold the offset onto
+   the symbol instead.  unk_16 was `pad_16` until this function; it is the
+   witness for the second shift.
+
+   13 words -- its header reads `nonmatching func_8008D084, 0x34`, and
+   0x34/4 = 13.  0 differing on the first compile. */
+void func_8008D084(void)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+
+    D_800FE480 = 0x40 << m->unk_14;
+    D_800FE484 = 0x40 << m->unk_16;
+}
 
 /* The -Z member of the tile-grid collision sweep (func_8008DA80's family):
    AXIS = Z, DIRECTION = min, WINDING = unk_00/unk_02/unk_06/unk_04.
