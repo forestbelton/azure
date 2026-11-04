@@ -1062,6 +1062,27 @@ def main():
                       " byte-exact, so there the tying is a consequence of")
                 print("          the surrounding allocation, not of"
                       " constant-vs-symbol.")
+                print("          BUT IT DISCRIMINATED ON A BIG ONE. 2026-11-04,"
+                      " func_800B94FC, 183 words: the three tells")
+                print("          above ALL READ ABSENT -- no `lui $at`, no"
+                      " `ori`, one `%lo` per `%hi` -- and the constant")
+                print("          was still right, worth 2 words plus a"
+                      " register tie. The mechanism is that a declared")
+                print("          symbol's address is a LO_SUM, which"
+                      " local-alloc's combine_regs does NOT strip (its")
+                print("          operand loop takes PLUS and MULT only), so"
+                      " the `high` gets its own register; a constant")
+                print("          address is a PLUS, which it DOES strip,"
+                      " tying the `high` to the load's destination. So")
+                print("          the test is sound where nothing else"
+                      " competes for those registers and drowned out")
+                print("          where something does.")
+                print("          *** THE RULE THAT MATTERS: ALL THREE TELLS"
+                      " ABSENT IS NOT A VERDICT FOR THE DECLARED")
+                print("          SYMBOL. On the function that reported this,"
+                      " trusting their absence would have kept a")
+                print("          declaration that costs 2 words. The note"
+                      " says MEASURE BOTH SPELLINGS, and that is why. ***")
         else:
             print("      globals : none")
     print("  TOTAL %d words" % tot)

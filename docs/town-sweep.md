@@ -855,6 +855,35 @@ harmless to the output -- but it is a format complaint, it is a lie in the
 source about what the unit needs, and an agent that notices the tool
 contradicting itself three lines on spends a compile proving it wrong.
 
+### THE CONSTANT-ADDRESS TELLS READING *ABSENT* IS NOT A VERDICT FOR THE DECLARED SYMBOL
+
+`provision.py` lists three tells for an out-of-image global that wants to be
+a constant address: a `lui $at` (decisive), an `ori` where the target has
+`addiu`, and several `%lo` off one `%hi`. Measured 2026-11-04 on
+`func_800B94FC`, 183 words: **all three read absent and the constant address
+was still right**, worth 2 words plus a register tie. An agent that trusted
+their absence would have kept a declaration the function does not want. The
+note says MEASURE BOTH SPELLINGS, and this is why it says it.
+
+The fourth test -- whether the `%hi`'s destination register IS the load's
+destination -- has now been measured in both directions, and its reliability
+tracks whether anything else competes for those registers. A declared
+symbol's address is a `LO_SUM`, which `local-alloc`'s `combine_regs` does not
+strip (its operand loop takes `PLUS` and `MULT` only), so the `high` gets its
+own register; a constant address is a `PLUS`, which it does strip, tying the
+`high` to the load. On `func_800B94FC` that tie discriminated. On the short
+leaf `func_800B9034` the registers tie for every spelling and all three are
+byte-exact, so there the tying says nothing. Read it as evidence, not as a
+test.
+
+**AND THE PERMUTER IS STILL USEFUL ON A CONSTANT-ADDRESS FUNCTION.** The
+recorded caution against permuting one is about the SCORE FLOOR, not about
+usefulness: for `func_800B94FC` the score could never reach 0, because the
+constant form cannot produce the three `R_MIPS_HI16` + three `R_MIPS_LO16`
+the target's listing carries, and the relative drop still handed over the
+answer -- a `do { } while (0)` wrapper, found in a few minutes after ~25 hand
+spellings had sat flat on one plateau.
+
 ### A CONSTANT ADDRESS MAKES THE CANDIDATE'S RELOCATION LIST A *SUBSEQUENCE* OF THE LISTING'S, AND THAT IS THE PASS CONDITION
 
 A constant address emits no relocation at all, so splat's listing shows
