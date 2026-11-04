@@ -2058,7 +2058,7 @@ void func_8008EF58(void);
 void func_8008FCE0(void);
 void func_8008FD48(u8 *a, UnkTown2AE8 *b, u8 *c);
 void func_8008FF5C(void);
-void func_800903FC(void);
+void func_800903FC(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 void func_800C01DC(void);
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
 void func_800A48B0(u8 *a, UnkTown2AE8 *b);
@@ -3089,6 +3089,11 @@ extern Unk41284 D_80080EA8;
    `s32 func_80047E78(s32 a)` is also 0 differing, but the honest statement is
    that this unit's original source did not have the narrow prototype. */
 s32 func_80047E78();
+void func_80090A64(void);
+void func_80097D2C(UnkTownDispatch *d);
+void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c);
+extern s32 D_80100E20;
+extern u8 D_800D0C50[];
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -6180,7 +6185,64 @@ void func_800903DC(void)
     func_8008FFC8();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800903FC);
+void func_800903FC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    u8 *m;
+    u8 *q;
+    s32 n;
+
+    if (a->unk_00 != func_80097D2C || a->unk_00 != func_80090A64)
+    {
+        func_800953D0(b);
+    }
+    func_8009539C(b);
+    if (a->unk_00 != func_80097D2C || a->unk_00 != func_80090A64)
+    {
+        func_80096FF4((UnkVec *)b);
+    }
+    if (b->unk_08 > 0 && D_8006ADD4 != 0xC && b->unk_04 > 0x3FFFFFF &&
+        func_800C1D44(func_8008C180(*(s16 *)((u8 *)b + 0x2), *(s16 *)((u8 *)b + 0x6))) == 0)
+    {
+        b->unk_08 = 0;
+    }
+    func_80095460(b);
+    q = D_800FE490;
+    *(s16 *)(q + 0x16) = a->unk_10;
+    func_80095910((UnkTownBody *)q);
+    if (func_8009593C(q) != 0)
+    {
+        *(s32 *)((u8 *)a + 0x2C) = 0;
+        func_8008B158(*(s32 *)(q + 0x10));
+        m = D_80082BC0;
+        (*(void (**)(u8 *, s32, s32))(m + 0x10))(m + 0x20, 0, 0);
+        if (func_800352FC() != 0)
+        {
+            if (D_800CFCB4.unk_3A[1] == 0 ||
+                ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_0C != 0 ||
+                ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_10 != 0 ||
+                ((UnkTownColl *)D_800CFCB4.unk_1C[1])->unk_08->unk_14 != 0)
+            {
+                n = func_80095978(b, D_800FE488);
+                func_80095A94(b, (s16)n, D_800FE488);
+            }
+            func_8009550C(b);
+            if (a->unk_00 != func_80097D2C)
+            {
+                func_80098868(a, b, (s32)c);
+            }
+        }
+    }
+    func_8008F664((UnkTownColl *)&D_800CFCB4, b);
+    a->unk_00(a, b, c);
+    if (*(u32 *)((u8 *)a - 0x10) == (u32)func_800A5638)
+    {
+        func_800A573C(a, b, c);
+    }
+    else
+    {
+        func_8009065C(a, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009065C);
 
@@ -16883,13 +16945,50 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A549C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A54FC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A553C);
+void func_800A553C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_800A5638;
+    func_80094A38(D_800D0C50, a);
+    a->unk_00 = func_800A5FDC;
+    D_800D0460 = 0;
+    func_80033D08((u8 *)a);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5598);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A55CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5638);
+void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    func_800953D0(b);
+    func_80095910((UnkTownBody *)D_800FE490);
+    func_8009539C(b);
+    func_80096FF4((UnkVec *)b);
+    func_80095460(b);
+    func_8008F664((UnkTownColl *)&D_800CFCB4, b);
+    a->unk_00(a, b, c);
+    if (*(u16 *)((u8 *)a - 0x2) & 0x8000)
+    {
+        return;
+    }
+    if (b->unk_04 <= 0x6500000)
+    {
+        b->unk_04 = 0x6500000;
+        b->unk_10 = 0x180000;
+        if (b->unk_08 > 0)
+        {
+            b->unk_08 = 0;
+        }
+    }
+    if (*(u32 *)((u8 *)a - 0x10) == (u32)func_800903FC)
+    {
+        func_8009065C(a, b, c);
+    }
+    else
+    {
+        func_800A573C(a, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A573C);
 
@@ -17084,7 +17183,89 @@ cont:
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5FDC);
+void func_800A5FDC(UnkTownTask *a, UnkTown2AE8 *b, void *r)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 v;
+    s32 d;
+    s32 t;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    if (--a->unk_0A <= 0)
+    {
+        a->unk_0A = func_800374F4(3) + 5;
+        func_80097844(b, (u16)func_800374F4(2) + 2);
+    }
+    if (g->unk_08 & 0xF000)
+    {
+        func_80094C1C(a);
+        v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+        if (v != -1)
+        {
+            func_80094F58(v, D_80100E20, b);
+        }
+        func_80097844(b, (u16)func_800374F4(1));
+    }
+    else
+    {
+        if (g->unk_08 & 0x10)
+        {
+            func_80095094(b);
+        }
+        func_80095094(b);
+    }
+    n = func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= (s16)n)
+    {
+        func_80095A94(b, (s16)n, D_800FE488);
+    }
+    else if (D_800CFCEF != 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+    if (func_800C1D44(func_8008C180(TOWN_PT->unk_02, TOWN_PT->unk_06)) != 0)
+    {
+        b->unk_14 -= func_800A5894(b);
+    }
+    d = func_8003BD84(b->unk_0C, b->unk_10);
+    if (D_80100E20 != 0)
+    {
+        t = abs(D_80100E20 - d);
+        if (g->unk_04 % (t * 7 / D_80100E20 + 2) == 0)
+        {
+            func_80053DA8(0x60A);
+        }
+    }
+    if (d == 0)
+    {
+        g->unk_C8 = (g->unk_C8 + 8) & 0xFFF0;
+    }
+    d = d / 0x10000;
+    if (g->unk_08 & 4)
+    {
+        g->unk_C8 += 0x10 + d;
+    }
+    if (g->unk_08 & 8)
+    {
+        g->unk_C8 -= 0x10 + d;
+    }
+    if ((g->unk_10 & 0x10) && D_800CFCEE == 0)
+    {
+        func_800A55CC(a, b, r);
+    }
+    else if (g->unk_10 & 0x100)
+    {
+        a->unk_00 = func_800A58CC;
+        a->unk_0A = 8;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A62E8);
 
