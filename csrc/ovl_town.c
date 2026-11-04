@@ -3035,6 +3035,23 @@ extern UnkTown100E40 D_80100E40[];
    guard and with `lhu` for the `+= 1` beside it, which is the documented
    convert.c trunc1 pair and not a typing inconsistency. */
 extern s16 D_80080B04;
+/* The 12-byte UV/clut block at 0x800D1548 -- exactly up to D_800D1554, its
+   next symbol.  func_800AC488 writes four (u,v) corner pairs 0x1F apart plus
+   the two halfwords at +0x02 and +0x06. */
+typedef struct UnkTownD1548
+{
+    u8 unk_00;
+    u8 unk_01;
+    u16 unk_02;
+    u8 unk_04;
+    u8 unk_05;
+    u16 unk_06;
+    u8 unk_08;
+    u8 unk_09;
+    u8 unk_0A;
+    u8 unk_0B;
+} UnkTownD1548;
+extern UnkTownD1548 D_800D1548;
 extern u8 D_800D1200[];
 /* csrc/gprel_17B7C.c:337 DEFINES this `s32 func_800448BC(u16, u16)`, and the
    parameter types are taken from there.  The RETURN type is narrower here on
@@ -23678,21 +23695,104 @@ s16 func_800AC1B0(s16 arg0, s16 arg1, s16 arg2)
     return count;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC37C);
+void func_800AC37C(void)
+{
+    s16 *sh;
+    u16 *map;
+    u8 *p;
+    u16 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC3EC);
+    p = (u8 *)D_80081508;
+    sh = (s16 *)D_8008333C;
+    map = (u16 *)D_8008333C[0];
+    while (p[0] != 0)
+    {
+        q = &map[p[0] + (p[1] << sh[10])];
+        *q &= 0xBFFF;
+        p += 4;
+    }
+    D_80080B04 = 0;
+    *(u8 *)D_80081508 = 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC454);
+void func_800AC3EC(void)
+{
+    u8 *p;
+    s32 x;
+    s32 y;
+    s32 a;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC488);
+    p = (u8 *)&D_80083178;
+    func_800AC37C();
+    x = *(u16 *)(p + 0xA4) >> 6;
+    y = *(u16 *)(p + 0xA6) >> 6;
+    a = *(u16 *)(p + 0xB0);
+    if ((a & 0x3FF) != 0)
+    {
+        func_800AC1B0((((0x400 - a) & 0xFFF) >= 0x400 && ((0x400 - a) & 0xFFF) <= 0xC00) << 2, x, y);
+    }
+}
+
+void func_800AC454(void)
+{
+    u8 *p;
+
+    p = (u8 *)func_8003FC64(0);
+    D_80081508 = (u32)(p + 0x20);
+    p[0x20] = 0;
+    D_80080B04 = 0;
+}
+
+void func_800AC488(s32 a, s32 b, s32 u, s32 v)
+{
+    D_800D1548.unk_08 = u;
+    D_800D1548.unk_00 = u;
+    u += 0x1F;
+    D_800D1548.unk_05 = v;
+    D_800D1548.unk_01 = v;
+    v += 0x1F;
+    D_800D1548.unk_0A = u;
+    D_800D1548.unk_04 = u;
+    D_800D1548.unk_0B = v;
+    D_800D1548.unk_09 = v;
+    D_800D1548.unk_06 = a;
+    D_800D1548.unk_02 = b;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC4C4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD138);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD7F8);
+void func_800AD7F8(UnkTownADD80 *s)
+{
+    if ((s->unk_20[s->unk_04 * 4 + 3] & 0x80) == 0)
+    {
+        s->unk_20[s->unk_04 * 4 + 3] ^= 0x20;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD828);
+s32 func_800AD828(u8 *p, s32 b)
+{
+    s32 n;
+
+    n = 0;
+    while (p[1] != 0)
+    {
+        if (p[3] & 0x20)
+        {
+            if (b == 0)
+            {
+                n += func_8004A638(p);
+            }
+            else
+            {
+                n += func_8004A618(p);
+            }
+        }
+        p += 4;
+    }
+    return n;
+}
 
 void func_800AD8CC(UnkTownADD80 *s)
 {
@@ -23706,11 +23806,55 @@ void func_800AD8CC(UnkTownADD80 *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD914);
+s32 func_800AD914(u8 *p)
+{
+    s32 n;
+    u8 t;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD968);
+    n = 0;
+    while ((t = p[1]) != 0)
+    {
+        if ((p[3] & 0x20) && (t != 0x17 && t != 0x18))
+        {
+            n++;
+        }
+        p += 4;
+    }
+    return n;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD99C);
+s32 func_800AD968(void)
+{
+    s32 *p;
+    s32 n;
+
+    p = (s32 *)0x8001029C;
+    n = 0;
+    while (*p != 0)
+    {
+        n++;
+        p++;
+    }
+    return n;
+}
+
+s32 func_800AD99C(UnkTownADD80 *s)
+{
+    s32 n;
+    u8 t;
+
+    if (s->unk_18 == 0)
+    {
+        t = s->unk_20[s->unk_04 * 4 + 1];
+        if (t != 0x17 && t != 0x18)
+        {
+            n = func_800AD968();
+            n += func_800AD914(s->unk_20);
+            return n < 0x14;
+        }
+    }
+    return 1;
+}
 
 void func_800ADA1C(UnkTownADD80 *s)
 {
@@ -23965,7 +24109,18 @@ void func_800ADD80(UnkTownADD80 *s, void *b, void *c)
     func_800ADB30(s);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADFBC);
+s32 func_800ADFBC(u8 *p)
+{
+    s32 n;
+
+    n = 0;
+    while (p[1] != 0)
+    {
+        n++;
+        p += 4;
+    }
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ADFE8);
 
