@@ -2782,6 +2782,9 @@ extern UnkTownBox D_800FE508;
 extern UnkTownBox D_800FE520[];
 extern s16 D_8006ADD6;
 void func_80096A90(UnkTownBox *box, s16 *pts);
+extern u8 D_800D00F0[];
+extern u8 D_800D00F8[];
+extern s16 D_800D0454[];
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -6174,11 +6177,156 @@ void func_80091BD8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091CE0);
+/* func_80091BD8's tail with none of its head: one func_80095C80 mover update,
+   the same `re-bind to D_800D00E0 on the frame the counter reads zero` gate,
+   and the same `<= 0` countdown -- so func_80091BD8 (:6143) is a strict
+   superset and this is the three-statement cut-down of it.  func_80094190
+   (:7171) installs this one at +0x00 with unk_0A = 1, so the counter is at
+   zero for exactly the frame the D_800D00E0 gate fires, and the hand-off
+   installer func_800941D8 (:7178) is what puts func_80091D6C in its place.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091D6C);
+   The countdown test is `<= 0` (`sll`/`bgtz`), not `< 0`: spelled `< 0` it is
+   35 words with exactly 1 differing, the branch opcode itself.  The third
+   argument of func_80094984 is real -- dropped, it is 34 words / 21 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80091EB4);
+   35 words -- its header reads `nonmatching func_80091CE0, 0x8C`, and
+   0x8C/4 = 35.  Measured 0 differing. */
+void func_80091CE0(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    func_80095C80(b);
+    if (a->unk_0A == 0)
+    {
+        func_80094984(D_800D00E0, a, c);
+    }
+    if (--a->unk_0A <= 0)
+    {
+        func_800941D8(a, b, c);
+    }
+}
+
+/* The 0x15-frame approach cut of func_80091CE0's family: ease the mover's
+   +0x08 towards the task's own target height at +0x34, firing three scripted
+   func_80094984 re-binds on the way (at counter 0x13, 0xF and 0xC), and hand
+   off to func_80094220 on the frame the counter runs out.
+
+   `h`, the 16.16 target height, MUST be computed as a statement in the head,
+   before the three gates: it is what puts `lh 0x34($s0)` and the `sll 16` in
+   the entry block, where only the `--unk_0A > 0` arm reads it.  Dropped and
+   written inline in that arm it is 62 words against 82 with 76 differing.
+   D_800D0454 is an s16 table indexed by `0x15 - unk_0A`, which is the `sll 1`;
+   spelled `*(s16 *)((u8 *)D_800D0454 + (0x15 - a->unk_0A) * 2)` instead it is
+   also 82 / 0, so the two addressing shapes tie here.  Writing the `h` gate as
+   one ternary over the `<< 16` is 82 / 0 as well.
+
+   The three re-bind gates are INDEPENDENT `if`s, not an `else if` chain -- the
+   target re-loads `lh 0xA($s0)` after the first gate's call and falls through
+   into the second test, which is cross-jumping unifying the two tails.  As an
+   `else if` chain it is 75 words with 48 differing.  And the countdown's
+   `<= 0` arm is written FIRST even though it does not return, because the
+   target branches to the other arm; inverted it is 81 / 21.
+
+   82 words -- its header reads `nonmatching func_80091D6C, 0x148`, and
+   0x148/4 = 82.  Measured 0 differing. */
+void func_80091D6C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 h;
+
+    func_80095C80(b);
+    if (a->unk_0A >= 0xF)
+    {
+        h = (*(s16 *)((u8 *)a + 0x34) + D_800D0454[0x15 - a->unk_0A]) << 16;
+    }
+    else
+    {
+        h = *(s16 *)((u8 *)a + 0x34) << 16;
+    }
+    if (a->unk_0A == 0x13)
+    {
+        func_80094984(D_800D00E8, a, c);
+    }
+    if (a->unk_0A == 0xF)
+    {
+        func_80094984(D_800D00F0, a, c);
+    }
+    if (a->unk_0A == 0xC)
+    {
+        func_80094984(D_800D00F8, a, c);
+    }
+    if (--a->unk_0A <= 0)
+    {
+        b->unk_0C = 0;
+        b->unk_10 = 0;
+        b->unk_14 = 0;
+        func_80094220(a, b, c);
+    }
+    else
+    {
+        b->unk_14 = h - b->unk_08;
+    }
+}
+
+/* func_80091D6C's arrival step, and the one member of the group that DIVIDES:
+   with `n` frames left, set the per-frame delta +0x14 to the remaining
+   distance over n, and on the last frame snap +0x08 onto the target height,
+   zero all three deltas and hand off to func_80093D48.
+
+   The two reads of `*(s16 *)((u8 *)a + 0x34)` are BOTH REAL, and that is the
+   measured mechanism here.  `h` has to be a head statement -- that is what
+   puts `lh 0x34($s1)` in the entry block and its `sll 16` in the `bgtz` delay
+   slot, where only the `n > 0` arm reads it; without it the arm computes its
+   own and it is 44 words with 17 differing.  But the `b->unk_08 = ...` store
+   in the other arm is a SECOND textual read, not `h`: re-using `h` there lets
+   cse unify the pair and costs the `lh`/`sll`, giving 42 words against 44 with
+   24 differing.  So the head local is required and sharing it is wrong.
+
+   WHAT FORCES THE RELOAD IS THE THREE `b->unk_0C/0x10/0x14 = 0` STORES, AND
+   THE BINDING CLAUSE IS THE VARYING ADDRESS, NOT `nonscalar`.  Measured:
+   move the `b->unk_08 = ...` statement ABOVE those three stores and cse folds
+   it into `h` again -- 42 words, 24 differing, the same numbers as writing
+   `b->unk_08 = h` outright.  Below them it reloads.  cse.c:8025-8028 calls
+   `invalidate_memory` for ANY memory write (`note_mem_written` sets `.var`),
+   and cse.c:1726-1729 then drops every cached MEM that matches
+
+       if (p->in_memory
+           && (all
+               || (nonscalar && p->in_struct)
+               || cse_rtx_addr_varies_p (p->exp)))
+         remove_from_table (p, i);
+
+   `a + 0x34` varies, so the THIRD disjunct removes it whatever the written
+   MEM's mode or MEM_IN_STRUCT_P say.  This refines func_80092DA8's note above:
+   its `nonscalar`/`in_struct` derivation (cse.c:7623) is the right one only
+   for a MEM at a FIXED address, which is why that note's own closing line --
+   "a MEM at a fixed address would have survived" -- is consistent with this.
+   For a pointer-dereferenced field, any intervening store at all is enough.
+
+   The `n <= 0` arm is written first, as in func_80091D6C; inverted it is
+   42 / 27.  The `(s16)` on `n` is free (44 / 0 either way) and is kept because
+   it is what the `sll`/`sra 16` pair in the listing is.
+
+   44 words -- its header reads `nonmatching func_80091EB4, 0xB0`, and
+   0xB0/4 = 44.  Measured 0 differing. */
+void func_80091EB4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 n;
+    s32 h;
+
+    func_80095C80(b);
+    n = (s16)(--a->unk_0A);
+    h = *(s16 *)((u8 *)a + 0x34) << 16;
+    if (n <= 0)
+    {
+        b->unk_0C = 0;
+        b->unk_10 = 0;
+        b->unk_14 = 0;
+        b->unk_08 = *(s16 *)((u8 *)a + 0x34) << 16;
+        func_80093D48(a, b, c);
+    }
+    else
+    {
+        b->unk_14 = (h - b->unk_08) / n;
+    }
+}
 
 void func_80091F64(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -6247,7 +6395,66 @@ void func_8009204C(void *p, UnkTown2AE8 *q, void *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800920F4);
+/* func_8009221C (:6278) with its own head: the same four-call update, the same
+   func_80095978 clearance probe and the same D_800CFCEF gate, preceded by a
+   counter that counts UP and fires one func_80094984 re-bind on the frame it
+   reads 6, and tailing into func_80094330 instead of func_80093D48.
+
+   func_8009221C's `goto` to a label at the very BOTTOM transfers verbatim and
+   is worth the same amount: spelled `func_80095388(q); return;` inline inside
+   the `else` it is 74 words with 11 differing, the same 11 func_8009221C
+   records.
+
+   Where it DIVERGES from func_8009221C: the duplicated tail call is NOT
+   load-bearing here.  func_8009221C needs `func_80093D48(p, q, r)` written
+   once in each arm or the allocator prices the pseudos differently (63/63 with
+   25 registers wrong).  Writing func_80094330 ONCE after the `if`/`else` here
+   is 74 words, 0 differing -- byte-identical, registers included.  The extra
+   saved register this function carries for `r` ($s4, set in the head `bne`'s
+   delay slot by reorg) changes the allocation enough that the duplicated-tail
+   lever does not bite.  The duplicated form is kept for the family's sake, but
+   the single-tail form is equally correct and that is measured, not assumed.
+
+   The `(s16)` on `++p->unk_0A` is redundant and free (74 / 0 without it); it
+   is kept because it is what the `sll`/`sra 16` pair is.
+
+   74 words -- its header reads `nonmatching func_800920F4, 0x128`, and
+   0x128/4 = 74.  Measured 0 differing. */
+void func_800920F4(UnkTownTask *p, UnkTown2AE8 *q, void *r)
+{
+    s32 n;
+
+    if ((s16)(++p->unk_0A) == 0x6)
+    {
+        func_80094984(D_800D00B8, p);
+    }
+    func_80095C80(q);
+    func_80094C1C(p);
+    func_80094C74(q);
+    n = func_80095978(q, D_800FE488);
+    if (*(s16 *)((u8 *)q + 0xA) >= (s16)n)
+    {
+        func_80094910();
+        func_80095A94(q, (s16)n, D_800FE488);
+        func_800ABD74(q);
+        func_80094330(p, q, r);
+    }
+    else
+    {
+        if (D_800CFCEF == 0)
+        {
+            goto idle4;
+        }
+        func_80094910();
+        q->unk_14 = 0;
+        func_800954F4(q);
+        func_80094330(p, q, r);
+    }
+    return;
+
+idle4:
+    func_80095388(q);
+}
 
 /* func_80092DA8's shape without the D_80083160 gate: run the three updates,
    ask func_80095978 for the target value and either settle onto it or, if
