@@ -412,9 +412,38 @@ def defs_and_protos(src, unitname):
     addr = {}
     lines, lineno = {}, 0
     pos = 0          # byte offset of `ln` within txt; see defoff[] below
-    for ln in txt.split('\n'):
+    all_lines = txt.split('\n')
+
+    def logical(i):
+        r'''The first LOGICAL line of the construct starting at all_lines[i],
+        joined across a wrapped parameter list, or None if it does not
+        terminate within a few lines.
+
+        A DEFINITION whose parameter list wraps has a first line ending in
+        `,`, which is exactly the shape the `)\s*\{?$` test below rejects --
+        that test exists to keep func_800C3050's two-line DECLARATION from
+        being read as a definition.  So a wrapped definition was being
+        classified as a stub with no declaration at all.  Measured
+        2026-11-03: func_800A2000 (csrc/ovl_town.c:15301, a six-parameter
+        definition wrapping after `void (*h10)(),`) printed as
+        `STUB-HERE ... *** NO DECLARATION IN THE UNIT OR include/ ***`, and
+        that signature was the entire provisioning for two targets in the
+        same batch.  Joining the continuation lines first tells the two apart
+        by the terminator -- `;` is a declaration, `)` or `) {` a
+        definition -- instead of by where the author happened to wrap.'''
+        out = all_lines[i].rstrip()
+        for k in range(1, 6):
+            if ';' in out or re.search(r'\)\s*\{?\s*$', out):
+                return out
+            if i + k >= len(all_lines):
+                return None
+            out = out + ' ' + all_lines[i + k].strip()
+        return None
+
+    for idx, ln in enumerate(all_lines):
         lineno += 1
         m = re.match(r'^[A-Za-z_][\w \*]*?(func_[0-9A-Fa-f]{8})\s*\(', ln)
+        head = logical(idx) if m else None
         # A DEFINITION's first line ends in `)` or `)  {`. A one-line
         # prototype ends in `;` and a MULTI-LINE prototype's first line ends in
         # `,` -- and that second case produced a FABRICATED landed caller:
@@ -424,9 +453,9 @@ def defs_and_protos(src, unitname):
         # error there is, because it reads as an arity-and-constants witness.
         # Belt and braces: a name with an INCLUDE_ASM line is a stub, never
         # landed, whatever the text looks like.
-        if m and ';' not in ln and re.search(r'\)\s*\{?\s*$', ln) \
+        if m and head and ';' not in head and re.search(r'\)\s*\{?\s*$', head) \
                 and ('INCLUDE_ASM("asm/nonmatchings/%s", %s)' % (unitname, m.group(1))) not in whole:
-            cur = m.group(1); landed[cur] = ln.strip(); body[cur] = set()
+            cur = m.group(1); landed[cur] = head.strip(); body[cur] = set()
             addr[cur] = set(); depth = 0
             # Record the line HERE. Searching for the text later finds the
             # single-line PROTOTYPE instead, because the definition line is a
@@ -1395,7 +1424,6 @@ def main():
     hits = []
     for d, dc in body.items():
         if d in targets: continue
-        best = None
         for f in targets:
             sc = dc & allcallees.get(f, set())
             bs = body_src.get(d, '')
@@ -1413,9 +1441,22 @@ def main():
                 pair = sum(1 for b in body_src.values()
                            if any(c in b for c in sc) and any(g in b for g in sg))
                 s += 3.0 / max(1, pair)
-            if s > 0 and (best is None or s > best[0]):
-                best = (s, f, sorted(sc), sorted(sg))
-        if best: hits.append((best[0], d) + best[1:])
+            # ONE ROW PER (relative, target), not one per relative. The
+            # earlier code kept only each relative's single best target and
+            # broke ties with a strict `>`, which went to whichever target
+            # came FIRST on the command line. So a target whose relative set
+            # TIES or is a SUBSET of a sibling's printed "NO RELATIVE AT ANY
+            # SCORE" while its line-for-line template sat in the sibling's
+            # list, and reversing the argument order moved the whole section.
+            # Reported independently by two agents in one batch:
+            # func_800951B4 (ties with func_80094DA8 at 1.364 on
+            # func_8009567C, the verbatim 4-statement head of all three) and
+            # func_800B1960 (identical global set to func_800B3EEC, every
+            # relative tying at 0.487, including func_800B67A4, its own
+            # line-for-line template). This is a located cause for the
+            # "ranking reported inverted or empty" class.
+            if s > 0:
+                hits.append((s, d, f, sorted(sc), sorted(sg)))
     # Emit top-N PER TARGET, not a flat global top-N. As a flat list, eight rows
     # for seven targets named only TWO of them -- five targets got no relative at
     # all, and the cut discarded a line-for-line one-word-away template that
