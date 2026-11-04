@@ -1207,6 +1207,64 @@ def main():
                                       " a RECORD; two different shapes are")
                                 print("          two objects, whatever the"
                                       " addresses allow.")
+                            # AND THE ANSWER IS SOMETIMES ONE LINE AWAY: if
+                            # the candidate base is a DECLARED STRUCT with a
+                            # declared field at exactly the required offset,
+                            # that field settles it and OUTRANKS "the symbol
+                            # the listing names". Reported 2026-11-04 on
+                            # D_800834A0: the base D_80083498 is
+                            # `extern UnkTownCam D_80083498;` whose +0x08 is
+                            # `UnkTown2AE8 *unk_08;` -- exactly the pointer
+                            # the function reads -- and six landed bodies in
+                            # the unit already spell it `D_80083498.unk_08`.
+                            # The note's 25 lines of prose were answerable
+                            # from that one declaration.
+                            fld = None
+                            dm2 = re.search(
+                                r'^\s*extern\s+(\w+)\s+%s\s*;' % other,
+                                txt, re.M)
+                            if dm2:
+                                tdm = re.search(
+                                    r'typedef struct %s\s*\{(.*?)\}\s*%s\s*;'
+                                    % (re.escape(dm2.group(1)),
+                                       re.escape(dm2.group(1))), txt, re.S)
+                                if tdm:
+                                    off2, want = 0, a2 - a3
+                                    SZ2 = {'u8': 1, 's8': 1, 'char': 1,
+                                           'u16': 2, 's16': 2, 'u32': 4,
+                                           's32': 4, 'f32': 4}
+                                    for ln2 in tdm.group(1).split('\n'):
+                                        mm2 = re.match(
+                                            r'\s*([\w ]+?)\s*(\*?)\s*'
+                                            r'(\w+)\s*(\[(\d+|0x[0-9A-Fa-f]+)\])?\s*;',
+                                            ln2)
+                                        if not mm2:
+                                            continue
+                                        base_t = mm2.group(1).strip()
+                                        sz = 4 if mm2.group(2) else \
+                                            SZ2.get(base_t, 4)
+                                        if mm2.group(5):
+                                            sz *= int(mm2.group(5), 0)
+                                        if off2 == want:
+                                            fld = (ln2.strip(), mm2.group(3))
+                                            break
+                                        off2 += sz
+                            if fld:
+                                print("          *** THE CANDIDATE BASE IS A"
+                                      " DECLARED STRUCT WITH A FIELD AT"
+                                      " +0x%X:" % (a2 - a3))
+                                print("            %s   (%s.%s)"
+                                      % (fld[0], other, fld[1]))
+                                print("          That declaration settles it,"
+                                      " and it OUTRANKS \"the symbol the")
+                                print("          listing names\" -- a separate"
+                                      " symbol inside a declared object's")
+                                print("          extent would overlap it."
+                                      " Check the field's TYPE against what")
+                                print("          your function does with the"
+                                      " bytes; if they agree, write")
+                                print("          %s.%s and ignore the rest of"
+                                      " this note." % (other, fld[1]))
                             print("          WHAT HAS DISCRIMINATED is the"
                                   " unit's OWN PRACTICE near these addresses:")
                             print("            %d landed body/bodies use %s%s"
