@@ -1510,14 +1510,21 @@ def main():
         # users and a comment block recording the decisive lever ("THE TABLE
         # ADDRESS MUST BE THE CONSTANT, NOT THE SYMBOL ... also 13 words but
         # 9 differing"), and both agents had to find it by hand.
-        addrs = set(
-            int(g[2:], 16) for g in re.findall(r'%(?:hi|lo)\((D_[0-9A-Fa-f]+)\)', lt)
-            if constaddr_candidate(g))
-        addrs |= set(int(h, 16) for h in
-                     re.findall(r'\((0x[0-9A-Fa-f]{8})\s*>>\s*16\)', lt))
-        addrs |= set(int(h, 16) for h in
-                     re.findall(r'\((0x[0-9A-Fa-f]{8})\s*&\s*0xFFFF\)', lt))
-        addrs = sorted(addrs)
+        # KEEP THE PROVENANCE. The two renderings need different prose, and
+        # conflating them is a defect reported 2026-11-04: a hex harvested
+        # from a LITERAL `lui $v1, (0xFF800000 >> 16)` was described as a
+        # "splat MIS-SYMBOLISATION ... splat paired one lui with a small
+        # immediate", which sent an agent hunting for a `%lo(D_FF800000)`
+        # that does not exist. Nothing is symbolised in that rendering at all.
+        src_of = {}
+        for g in re.findall(r'%(?:hi|lo)\((D_[0-9A-Fa-f]+)\)', lt):
+            if constaddr_candidate(g):
+                src_of.setdefault(int(g[2:], 16), 'symbol')
+        for h in re.findall(r'\((0x[0-9A-Fa-f]{8})\s*>>\s*16\)', lt):
+            src_of.setdefault(int(h, 16), 'literal')
+        for h in re.findall(r'\((0x[0-9A-Fa-f]{8})\s*&\s*0xFFFF\)', lt):
+            src_of.setdefault(int(h, 16), 'literal')
+        addrs = sorted(src_of)
         if not addrs:
             continue
         for a in addrs:
@@ -1529,10 +1536,24 @@ def main():
             # and searching for `0x4` matched 178 bodies and 162 comment
             # blocks, which is noise that also legitimises a fake symbol.
             if (a & 0xFFFF) < 0x100:
-                print("  %-15s 0x%08X: low half 0x%X is almost certainly a splat"
-                      " MIS-SYMBOLISATION" % (f, a, a & 0xFFFF))
-                print("      (splat paired one `lui` with a small immediate or"
-                      " displacement). Do NOT declare it; read the instruction.")
+                if src_of.get(a) == 'literal':
+                    # Harvested from a raw `lui`/`ori`, so there is no symbol
+                    # to be mis-symbolised -- it is a plain constant whose low
+                    # half happens to be small, e.g. a sign-extension mask or
+                    # a negative bias.
+                    print("  %-15s 0x%08X: a LITERAL constant in the listing"
+                          " (`lui ... (0x%08X >> 16)`), low half 0x%X"
+                          % (f, a, a, a & 0xFFFF))
+                    print("      Nothing is symbolised here -- there is no"
+                          " `%%lo(D_%08X)` to look for. It is most likely an"
+                          " immediate" % a)
+                    print("      rather than an address (a mask or a negative"
+                          " bias), so do not declare it; read the insn.")
+                else:
+                    print("  %-15s 0x%08X: low half 0x%X is almost certainly a splat"
+                          " MIS-SYMBOLISATION" % (f, a, a & 0xFFFF))
+                    print("      (splat paired one `lui` with a small immediate or"
+                          " displacement). Do NOT declare it; read the instruction.")
                 continue
             # Search for the raw hex in the spellings an author would write:
             # the full address, and the low half only when it is wide enough
@@ -1573,7 +1594,11 @@ def main():
                                                for n in prose[:6])))
             print("      grep -n '0x%X' csrc/%s.c" % (a & 0xFFFF, unit))
     if not anyp:
-        print("  no target of yours materialises a constant address with another user")
+        # "with another user" -- the addresses themselves may well have been
+        # listed above; what is absent is a CO-USER. Printing the old wording
+        # straight after three listed addresses read as self-contradiction.
+        print("  none of the constant addresses above has a CO-USER in this"
+              " unit (no landed body and no comment block mentions it)")
 
     # ------------------------------------------------------------------ (m)
     print("\n=== ROUTE (m): RARE FIELD OFFSETS -- THE DISCRIMINATOR ROUTE (h) CANNOT SEE ===")
@@ -2037,16 +2062,39 @@ def main():
         found_any = False
         for f in missing:
             for off, who, how in install_slots(unit, f, landed, btext):
-                casts = slot_casts(txt, off)
+                # NORMALISE A NEGATIVE DISPLACEMENT BEFORE LOOKING UP THE
+                # CAST. The offset comes straight off the installer's `sw`,
+                # and when its base register is a `+0x20` ACTOR VIEW the
+                # displacement is negative: the slot this unit dispatches is
+                # the ABSOLUTE node offset, off + 0x20. Reported 2026-11-04 --
+                # the tool printed "installed at +0x-10 ... no prototyped cast
+                # through that offset in this unit" while its own hand-written
+                # table three lines below listed the cast for UnkNode +0x10,
+                # which is exactly that slot. It could not connect them.
+                cands = [off] if off >= 0 else [off, off + 0x20]
+                casts, used = [], off
+                for c in cands:
+                    casts = slot_casts(txt, c)
+                    if casts:
+                        used = c
+                        break
                 if not casts:
                     print("      %s is installed at +0x%X by %s (%s) -- no"
                           " prototyped cast through that offset in this unit"
                           % (f, off, who, how))
+                    if off < 0:
+                        print("          (that displacement is NEGATIVE, so the"
+                              " installer's base is probably a +0x20 actor")
+                        print("          view and the absolute slot is +0x%X;"
+                              " no cast was found for either.)" % (off + 0x20))
                     continue
                 found_any = True
+                norm = ('' if used == off else
+                        ' -- the displacement is negative off a +0x20 view, so'
+                        ' the ABSOLUTE slot is +0x%X' % used)
                 print("      *** WITNESS FOUND: %s is installed at +0x%X by %s"
-                      " (%s), and this unit dispatches that slot through a"
-                      " PROTOTYPED cast:" % (f, off, who, how))
+                      " (%s)%s, and this unit dispatches that slot through a"
+                      " PROTOTYPED cast:" % (f, off, who, how, norm))
                 for ln, ret, args in casts:
                     print("            csrc/%s.c:%-6d  %s (*)(%s)"
                           % (unit, ln, ret, args or 'void'))

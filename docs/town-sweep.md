@@ -1207,6 +1207,38 @@ measure the state you are about to commit, not the state you merged from. An
 agent reported 29 for a copy that measured 37 under my hand, because it had
 measured before its last body edit.
 
+### THE OBVIOUS WAY TO BUILD `advise.py`'s ONE-FUNCTION FILE GIVES YOU TWO FUNCTIONS
+
+`advise.py` needs literally one function per file, and the natural shortcut --
+take `csrc/ovl_town.c` up to its first `INCLUDE_ASM` and append your body --
+**silently gives two**, because `void func_8008AC84(s32 idx)` is DEFINED at
+`csrc/ovl_town.c:3700`, ten lines above the first `INCLUDE_ASM` at `:3710`.
+I verified it: exactly one function definition sits above that line.
+
+The symptom is a fabricated verdict. `advise.py` reports
+`built 114 words, target 104 / VERDICT: LENGTH` with an `EXTRA ... built has
+sll a0,a0` finding that is really the other function's prologue -- and
+114 − 104 = 10 is exactly that function's word count. `ovlverify` on the SAME
+file says 104 / 0 differing, so the file is fine and only `advise.py` is
+fooled, which is what makes it convincing.
+
+**Cut the preamble at the first function DEFINITION, not at the first
+`INCLUDE_ASM`**, or build the file from the declarations your body actually
+needs. Reported 2026-11-04 by an agent that followed the documented recipe
+and lost a call to it.
+
+### A PROBE HARNESS THAT EDITS BY STRING REPLACEMENT NEEDS `assert t != orig`
+
+A one-line rule that nearly cost a wrong table row, reported 2026-11-04. An
+agent's probe runner applied `str.replace` with an anchor that did not exist
+in the text, so the edit was a silent no-op, it measured the UNCHANGED winner,
+and it was about to report "the order is not witnessed" for something that is
+4 differing. With the assertion it got the real number.
+
+**Without it a no-op is indistinguishable from a tie** -- which is the same
+failure shape as the sweep that verified nothing, and the same remedy:
+make the tool prove it did the work rather than infer it from a clean result.
+
 ### A RESIDUE advise.py CALLS **ALLOCATION** GOES TO THE PERMUTER IMMEDIATELY
 
 The existing rule is "a park whose residue is an ORDERING should go to the
