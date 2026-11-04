@@ -3188,6 +3188,13 @@ void func_800A54FC(u8 *a);
    handler slot against it.  Signature copied verbatim from the definition. */
 void func_800A58CC(UnkTownTask *a, UnkTown2AE8 *b);
 
+/* One parameter, read off func_800AE734's OWN listing
+   (asm/nonmatchings/ovl_town/func_800AE734.s, 72 words): it reads $a0 at
+   +0x28 and +0xD8 and WRITES $a1/$a2/$a3/$t0/$t1/$t2 before reading any of
+   them, so $a0 is the only incoming register.  It is the per-row initialiser
+   loop whose constants func_800AE854 below then overrides for two rows --
+   the same 0x68 / 0x60 / 0x9 / 0x39 / 0x20 literals appear in both. */
+void func_800AE734(u8 *s);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -24058,7 +24065,97 @@ void func_800AE630(u8 *s)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AE734);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AE854);
+/* The two-row highlight pass over the +0xD8 grid-pointer array, run right
+   after func_800AE734 above has initialised every row from the same
+   constants.  Same vocabulary as func_800AECA4 just below and func_800B1188:
+   UnkTownGrid **, element->unk_04 the UnkTownPos whose unk_08/unk_0A are the
+   on-screen x/y -- plus, new here, that UnkTownPos's first three BYTES, which
+   func_800AE734 writes too (0x68 at +0x00 and +0x01, 0x60 at +0x02) and which
+   are reached through pad_00[0..2].
+
+   The array has four row blocks of six, at element 2, 8, 14 and 20
+   (displacements 0x8, 0x20, 0x38, 0x50), exactly as func_800AECA4 indexes
+   them; +0x20 and +0x1C are the two row numbers being highlighted and
+   +0x8 / +0x4 are the animation's frame and frame count.  Element 1 is the
+   cursor, whose unk_0A is interpolated between the two rows.
+
+   FOUR things about the spelling are measured, not chosen:
+
+   - `(*(s32 *)(s + 0x8) << 4)` AND NOT `* 0x10`.  fold's `split_tree`
+     (fold-const.c:1008 in scratch/gcc-src/cdk-gcc-b18, `if (TREE_CODE (in)
+     == code ...)`) matches only the operator being folded, so in
+     `D * (frame * 0x10)` it splits arg1 and :4277-4278 rewrites the whole
+     thing as `(D * 0x10) * frame` -- an `sll` on the row DIFFERENCE and a
+     `mult` by the frame, where the target shifts the frame and multiplies by
+     the difference.  An LSHIFT_EXPR is not a MULT_EXPR, so split_tree cannot
+     match it and the grouping survives.  `* 0x10` is 13 differing; `<< 4`
+     is 0.
+
+   - THE `+ 0xA` MUST BE WRITTEN ON THE LEFT, beside `* 0x10`, and the
+     division last.  fold moves an additive constant to the OTHER side,
+     whichever side you write it on: the arg0 branch (fold-const.c:4201,
+     rewrite at :4234-4235) turns `(VAR + CON) + ARG1` into
+     `VAR + (ARG1 + CON)`, which is the target's `addiu $v0, $v0, 0xA` on the
+     quotient followed by `addu $a0, $a0, $v0`.  Writing it the way it reads,
+     `row * 0x10 + (D * (frame << 4) / n + 0xA)`, hits the MIRROR branch at
+     :4258 / :4277-4278 and comes out `(row * 0x10 + 0xA) + quotient` -- 209
+     words, 191 differing, because the `addiu` then fits the load-delay slot
+     after `lw 0xD8($s0)` that the target fills with a `nop`.  So the two
+     spellings are each other's images and only one of them exists.
+
+   - `t` IS A LOCAL and is assigned AFTER the cursor statement, not before.
+     Inlining it at all eight sites is 245 words / 217 differing: the `div`
+     is a two-SET parallel, so cse cannot unify eight copies of it.  Moving
+     the assignment above the cursor statement is 209 words / 199 differing.
+
+   - THE SIX BYTE STORES' SOURCE ORDER IS THE EMITTED ORDER and it is
+     per-object, 0/1/2 then 0/1/2.  Each store reaches its MEM through a
+     base register of its own, and `memrefs_conflict_p` returns 1 for two
+     different base registers (sched.c:704-707), so sched1 may not reorder
+     them.  Measured: reversed within each object 90 differing, interleaved
+     by byte offset 52, all six reversed 92.  The eight halfword stores are
+     the same -- swapping each row pair is 41 differing and grouping the four
+     +0x20 rows ahead of the four +0x1C rows is 24.
+
+   Also measured and rejected: binding the array base to a local is 78
+   differing at an unchanged 210 words, which is the same finding
+   func_800B1188's comment records for the +0xCC sibling.
+
+   210 words -- its header reads `nonmatching func_800AE854, 0x348`, and
+   0x348/4 = 210.  No jump table, no rodata of its own, and ONE relocation in
+   the whole function (`jal func_800AE734`); no `%hi`/`%lo` on anything.
+   Measured 0 differing, raw 1 == relocdump 1. */
+void func_800AE854(u8 *s)
+{
+    s32 t;
+
+    func_800AE734(s);
+    (*(UnkTownGrid ***)(s + 0xD8))[1]->unk_04->unk_0A =
+        *(s32 *)(s + 0x20) * 0x10 + 0xA +
+        (*(s32 *)(s + 0x1C) - *(s32 *)(s + 0x20)) * (*(s32 *)(s + 0x8) << 4) /
+            *(s32 *)(s + 0x4);
+    t = *(s32 *)(s + 0x8) * 8 / *(s32 *)(s + 0x4);
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 14]->unk_04->unk_08 = 0x28 - t;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 14]->unk_04->unk_08 = t + 0x20;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 20]->unk_04->unk_08 = 0x97 - t;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 20]->unk_04->unk_08 = t + 0x8F;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 2]->unk_04->unk_08 = 0x11 - t;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 2]->unk_04->unk_08 = t + 0x9;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 8]->unk_04->unk_08 = 0x41 - t;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 8]->unk_04->unk_08 = t + 0x39;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 14]->unk_04->pad_00[0] =
+        (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 24 / *(s32 *)(s + 0x4) + 0x68;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 14]->unk_04->pad_00[1] =
+        (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 24 / *(s32 *)(s + 0x4) + 0x68;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x20) + 14]->unk_04->pad_00[2] =
+        (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 32 / *(s32 *)(s + 0x4) + 0x60;
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 14]->unk_04->pad_00[0] =
+        -0x80 - (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 24 / *(s32 *)(s + 0x4);
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 14]->unk_04->pad_00[1] =
+        -0x80 - (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 24 / *(s32 *)(s + 0x4);
+    (*(UnkTownGrid ***)(s + 0xD8))[*(s32 *)(s + 0x1C) + 14]->unk_04->pad_00[2] =
+        -0x80 - (*(s32 *)(s + 0x4) - *(s32 *)(s + 0x8)) * 32 / *(s32 *)(s + 0x4);
+}
 
 u32 func_800AEB9C(s32 a)
 {
