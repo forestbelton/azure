@@ -3299,13 +3299,14 @@ void func_800A0DAC();
    implicit declaration.  Both are declared rather than ridden, because the
    implicit `int` return is visible in the source: func_800A07A4 compares
    func_800A2304's result against NULL (`comparison between pointer and
-   integer` without this line), and func_800A12AC's own definition is
+   integer` without this line).  func_800A12AC used to be declared
+   UNPROTOTYPED here to paper over a definition that read
    `void func_800A12AC(void)` while func_800A0CF8 calls it with THREE
-   arguments -- so it is declared UNPROTOTYPED, which is compatible with that
-   definition and lets the three-argument call through without the
-   `type mismatch with previous implicit declaration` triple.  Neither line
-   changes a word: both functions' results reach only a `beqz`/nothing. */
-void func_800A12AC();
+   arguments; the definition has since been corrected to its witnessed arity
+   (:17455), so the declaration is now a real prototype that agrees with it.
+   Neither line changes a word: both functions' results reach only a
+   `beqz`/nothing. */
+void func_800A12AC(UnkTownA1080 *a, UnkTown2AE8 *b, void *c);
 UnkNode *func_800A2304(void *a, void *b, void *c, s32 d);
 
 /* The group's three data symbols.  All three are
@@ -17141,12 +17142,13 @@ void func_800A0CC0(UnkTownActor *a)
    `sll $v0, 16` + `bnez` on the same register is the truncation of the
    stored value, not a reload.
 
-   func_800A12AC IS CALLED WITH THREE ARGUMENTS although its own landed
-   definition below reads `void func_800A12AC(void)` and its body is empty.
-   That is not a mis-decode -- the `jal`'s target word is 0x0C0284AB, which
-   is 0x800A12AC -- so it is declared UNPROTOTYPED above: compatible with
-   that definition, and it keeps the three-argument call off an implicit
-   declaration without changing a word.
+   func_800A12AC IS CALLED WITH THREE ARGUMENTS and its body is empty, so
+   its own two words cannot witness its arity -- the `(void)` its landed
+   definition used to carry was a guess that this call site contradicts.
+   That is not a mis-decode: the `jal`'s target word is 0x0C0284AB, which is
+   0x800A12AC, and the three `addu`s into $a0/$a1/$a2 sit in the three slots
+   around the `jal` itself.  The definition now reads the three parameters
+   this call witnesses, and both functions still measure 0 differing.
 
    func_8003F540's four arguments are $a0 = 0, $a1 = the word at
    D_8006CD58, $a2 = 0x600065E and $a3 = 0x30008B6; the two large constants
@@ -17443,7 +17445,18 @@ s32 func_800A1080(UnkTownA1080 *s, UnkTown2AE8 *b, s32 arg2)
     return 0;
 }
 
-void func_800A12AC(void) {
+/* ITS OWN BYTES CANNOT WITNESS ITS ARITY, and `(void)` was a guess that the
+   call site contradicts.  The body is empty -- two words, `jr $ra` and a
+   `nop` -- so no argument register is read and no spelling of the parameter
+   list changes a byte.  The only caller is func_800A0CF8 (:17166), whose
+   listing sets $a0, $a1 and $a2 in the three slots immediately around the
+   `jal` (`addu $a0, $s1` at 0x800A0D40, `addu $a1, $s2` at 0x800A0D44,
+   `addu $a2, $s3` in the delay slot at 0x800A0D4C) -- three fresh moves at
+   the call, not leftovers a backward scan swept up.  So three parameters,
+   typed from that call's own arguments.  There is no other caller anywhere in
+   csrc/ or under asm/nonmatchings/, and nothing takes its address. */
+void func_800A12AC(UnkTownA1080 *a, UnkTown2AE8 *b, void *c)
+{
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A12B4);
