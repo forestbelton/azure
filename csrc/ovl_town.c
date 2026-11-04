@@ -2072,7 +2072,22 @@ void func_800B17C0(s32 a, s32 b);
 void func_800ADB30(UnkTownADD80 *s);
 s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
 void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
-s32 func_8009D424();
+s32 func_8009D424(u32 a, u8 b, u8 c, u8 d, u8 e, u8 f, s32 g, s16 h, s16 i, UnkTownScrRec *j);
+/* The 0xC0000000-marked indirection table func_8009D424 looks a node handler
+   up in, subscripted by the low halfword of the marked value. */
+extern u32 D_800D3950[];
+/* D_80082A38 + 0x48 -- the five-slot queue include/structs.h documents at that
+   offset, under its own splat symbol.  func_8009D5C0 needs this spelling and
+   not `(u8 *)D_80082A38 + 0x48` so the %hi/%lo relocation pair matches the
+   target's symbol and addend exactly; both measure 0 differing. */
+extern u8 D_80082A80[];
+extern u8 D_80082BC0[];
+extern u8 D_800D381C[];
+extern u8 D_800D3CC8[];
+extern u8 D_800D401C[];
+/* The town's module record: func_8009D5C0 fills eleven words of it and
+   publishes its address at 0x80016000. */
+extern u8 D_801131B8[];
 void func_800AD8CC(UnkTownADD80 *s);
 void func_800ADA1C(UnkTownADD80 *s);
 void func_800ADB04(UnkTownADD80 *s);
@@ -11018,11 +11033,239 @@ s32 func_8009D20C(UnkTownSpawn *p, UnkVec *q)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D424);
+/* Spawns one script-table entity: allocate a type-0x136 node on D_80083498,
+   point its +0x10 handler at `a`, stamp the mover and the renderable the node
+   came with, then call that handler once with the (actor, mover, rend) triple
+   this overlay's handler convention uses.  func_8009DA50 is the only caller and
+   it drives one UnkTownScrRec per entity, which is where every argument comes
+   from -- `a` is the record's unk_0C, b..e are unk_04..unk_07, `f` is
+   unk_01 & 0x20, `g` is unk_08, h/z are the record's world position already
+   truncated to s16, and `j` is the record itself, parked at the actor's +0x98
+   so the handler can clear the record's "fired" byte later.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D5C0);
+   0xC0000000 in `a` is a MARKER, not an address: the low halfword is then a
+   subscript into the D_800D3950 handler table.  The 0xC0000000 constant lives
+   in a register because gcc materialises it in the `bnez`'s delay slot, which
+   is what `(a & 0xC0000000) == 0xC0000000` gives -- the compare is against the
+   register, not an immediate.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D73C);
+   func_8009DFD8 (:10936 before this landed) is the line-for-line template for
+   the node/mover/renderable block: same func_8003FD64(0x136, &D_80083498)
+   head, same `(UnkTownSpawn *)((u8 *)n + 0x20)` view, same 0x1000/0x1000/
+   0x808080 renderable stamp, and the same `*(s32 *)((u8 *)p + 0x48)` and
+   `*((u8 *)p + 0x93)` spellings.  func_8008FFC8 (:5240) carries the other half:
+   the `unk_0A = constant; unk_0A = func_800C2AE8(mover);` pair, where the
+   constant store is not dead -- func_800C2AE8 reads the field it just wrote.
+
+   EVERY NARROW PARAMETER IS LOAD-BEARING, and in both directions.  b, c, d and
+   e as s32 are 102 words / 72, 51, 48 and 102 differing (the argument slot is
+   read with lbu, not lw, and `d` additionally spills to a ONE-byte stack slot
+   at 0x10($sp) across the func_8003FD64 call); `f` as s32 is 103 / 8.  In the
+   other direction h and i must be s16 and NOT u16: as u16 this function is
+   still 0 differing but the CALLER drops the two HImode copies its own comment
+   says are load-bearing and goes 143 -> 141 words, 47 differing.  The s16
+   parameters still load with `lhu` because their only use is a halfword store
+   (convert.c's trunc1, the same narrowing UnkTownC1F8C's +0x10 records).
+   The pre-existing unprototyped `s32 func_8009D424();` in the declaration
+   block cannot stay: against this definition it is a hard `conflicting types`,
+   so it is replaced by the prototype.
+
+   THE +0x98 STORE SITS BETWEEN THE +0x48 STORE AND THE THREE ZERO BYTES, and
+   that is the whole of the tail's order.  Its reload of `j` from 0x64($sp) is
+   what the scheduler puts after `sw 0x48` so the 0x93/0x70/0x71 run stays
+   behind both stack reloads instead of filling the 0x58($sp) load-delay slot.
+   Measured: writing +0x98 last (the obvious order) is 102 words / 28 differing
+   when +0x48 precedes the trio and 103 / 8 when it follows it, and an
+   exhaustive sweep of all 840 orders of the other seven tail statements
+   (0x94/0x95/0x96 held in sequence) floors at 8 differing -- no permutation
+   that keeps +0x98 at the end reaches 0.  Also measured, all 0 differing:
+   `*((s32 *)p + 0x12)` and `*(u32 *)` for the +0x48 store, `volatile` on
+   either the +0x48 store or the +0x93 store (102 / 28 -- a volatile does not
+   create the output dependence, because sched.c:895's output_dependence needs
+   BOTH mems volatile and memrefs_conflict_p already disambiguates +0x48 from
+   +0x93 off one base).
+
+   103 words, 0 differing. */
+s32 func_8009D424(u32 a, u8 b, u8 c, u8 d, u8 e, u8 f, s32 g, s16 h, s16 i, UnkTownScrRec *j)
+{
+    UnkNode *n;
+    UnkTownSpawn *p;
+    UnkTown2AE8Int *q;
+    UnkTownRend *r;
+    u16 t;
+
+    n = func_8003FD64(0x136, &D_80083498);
+    if (n == NULL)
+    {
+        return 0;
+    }
+    if ((a & 0xC0000000) == 0xC0000000)
+    {
+        n->unk_10 = D_800D3950[a & 0xFFFF];
+    }
+    else
+    {
+        n->unk_10 = a;
+    }
+    q = (UnkTown2AE8Int *)n->unk_08;
+    r = (UnkTownRend *)n->unk_0C;
+    q->unk_02 = h;
+    p = (UnkTownSpawn *)((u8 *)n + 0x20);
+    q->unk_06 = i;
+    q->unk_0A = (f == 0) ? -0x40 : -0xC0;
+    q->unk_0A = func_800C2AE8((UnkTown2AE8 *)q);
+    p->unk_84 = q->unk_02;
+    p->unk_86 = q->unk_06;
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    *(s32 *)((u8 *)r + 0xC) = 0x808080;
+    t = D_800D5070[b & 3];
+    *((u8 *)p + 0x94) = c;
+    *((u8 *)p + 0x95) = d;
+    *((u8 *)p + 0x96) = e;
+    *(s32 *)((u8 *)p + 0x48) = g;
+    p->unk_98 = (u32)j;
+    *((u8 *)p + 0x93) = 0;
+    *((u8 *)p + 0x70) = 0;
+    *((u8 *)p + 0x71) = 0;
+    *(s16 *)((u8 *)p + 0x72) = t;
+    *(s16 *)((u8 *)p + 0x6E) = t;
+    ((void (*)(UnkTownSpawn *, UnkTown2AE8Int *, UnkTownRend *))n->unk_10)(p, q, r);
+    return 1;
+}
+
+/* The town's module-table init pass, and the first of two functions
+   func_8009CEA8 drives over the same NULL-terminated table of pointers at
+   D_80100900: publish the 0x801131B8 module record, hand it to the engine, then
+   call each listed module's own init hook at its +0x10.  func_8009D73C below is
+   the teardown half and walks the same table.
+
+   Every out-of-image RAM address this function plants is a LITERAL and not a
+   symbol, which is what the listing says: 0x80012D70, 0x80013188, 0x80010000
+   and 0x80016004 all come out as lui/ori constant materialisations with no
+   relocation.  0x80016000 has to be a literal too, and that one is not a style
+   choice.  splat renders the pair as `lui $at, %hi(D_80016000)` /
+   `sw $s0, %lo(D_80016000)($at)` because it recognises the hi/lo address shape,
+   but $at is FIXED_REGISTERS[1] in the mips port, so cc1psx cannot allocate it:
+   the pair is the ASSEMBLER expanding a macro-form `sw $s0, <address>`, and the
+   only thing that emits that macro form at -G0 is a CONSTANT address.  A store
+   through the symbol -- `extern u32 D_80016000s __asm__("D_80016000")` or
+   `*(u32 *)D_80016000` -- is instead split by mips.h's LEGITIMIZE_ADDRESS into
+   a HIGH in a general register (`lui $v0` / `sw %lo($v0)`), which the scheduler
+   then separates: 22 differing.  The literal's two words are byte-identical to
+   the target's relocated pair, so nothing is lost but the relocation record.
+
+   `q` IS D_80082A38, REACHED AS D_80082A80 - 0x48, and the subtraction is not
+   an obfuscation: cse's use_related_value derives the second address from the
+   first, so whichever of the two the source materialises FIRST gets the
+   %hi/%lo pair.  The target materialises D_80082A80 (for the +0x1C store) and
+   derives the base, so `q = D_80082A80 - 0x48;` must come AFTER that store --
+   assigning it first is 7 differing with `addiu $v0, $s1, 0x48` for the
+   target's `addiu $s1, $v0, -0x48`.  `(u8 *)D_80082A38 + 0x48` for the stored
+   value and `(u8 *)D_80082A38` for the base also measures 0 differing and
+   needs no new declaration, but it folds the 0x48 into the relocation's
+   addend, so the spelling above is the one whose reloc table matches the
+   target's symbol for symbol.
+
+   TWO POINTER LOCALS FOR ONE SYMBOL, and the ASSIGNMENT order is what settles
+   their registers: `s = D_801131B8;` before `rec = D_8006ADBC;` is 0 differing
+   and the other way round is 10 -- every one of those ten is a $v1/$a0 rename
+   in the head.  The DECLARATION order of the two makes no difference (0 either
+   way), which is the opposite of the usual aggregate-slot rule.  A second
+   asm-aliased declaration of D_801131B8 (the D_80082E80_b device at :2360) is
+   NOT needed here: the if-block's own `d` gets its own `lui`/`addiu` pair
+   because it is a different basic block, 0 differing with one declaration.
+   `m` for D_80082BC0 is load-bearing (2 differing inlined: the +0x20 argument
+   is then derived from the +0x10 function-pointer address instead of the base).
+
+   95 words, 0 differing. */
+void func_8009D5C0(u8 **p)
+{
+    u8 *s;
+    u8 *rec;
+    u8 *d;
+    u8 *q;
+    u8 *m;
+    s32 n;
+    void (*fn)();
+
+    s = D_801131B8;
+    rec = D_8006ADBC;
+    n = *(s16 *)(rec + 0x18);
+    *(s32 *)(s + 0x4) = (n == 0xC);
+    if (n == 0xC)
+    {
+        *(s32 *)(s + 0x8) = *(s16 *)(rec + 0x1A);
+    }
+    else
+    {
+        *(s32 *)(s + 0x8) = 0;
+    }
+    if (D_8006ADC0[0] != 0)
+    {
+        d = D_801131B8;
+        *(u8 **)(d + 0x1C) = D_80082A80;
+        q = D_80082A80 - 0x48;
+        *(u8 **)(d + 0x20) = D_800D3CC8;
+        *(u8 **)(d + 0x24) = D_800D401C;
+        *(u8 **)(d + 0x30) = D_800D381C;
+        *(u32 *)(d + 0x38) = 0x80010000;
+        *(u32 *)(d + 0x18) = 0x80012D70;
+        *(u32 *)(d + 0x40) = 0x80013188;
+        *(u8 **)(d + 0x3C) = D_800D2EA4;
+        *(u32 *)0x80016000 = (u32)d;
+        func_80034F88(q, 0x80016004);
+        *(u32 *)(q + 0x84) = 0;
+        m = D_80082BC0;
+        (*(void (**)(u8 *, s32, s32))(m + 0x10))(m + 0x20, 0, 0);
+        func_8008AC84(0);
+        func_8008B23C(*(u32 *)(d + 0x34));
+    }
+    while (*p != NULL)
+    {
+        fn = *(void (**)())(*p + 0x10);
+        if (fn != NULL)
+        {
+            fn();
+        }
+        p++;
+    }
+    func_80034F88((u32 *)D_80082A38, *(u32 *)((u8 *)D_80082A38 + 0x88));
+}
+
+/* The teardown half of func_8009D5C0 above, over the same D_80100900 table
+   func_8009CEA8 passes to both: for each module in the table, walk the
+   NULL-terminated list of handles at its +0x0C and release each one through
+   func_8009D7D0.  Both loops are `while (*p)` with the test rotated to the
+   bottom, and the outer body RE-READS `*p` because the func_8009D7D0 call
+   invalidates it -- that reload is the target's second `lw $v0, 0x0($s1)` and
+   not a redundancy to spell away.
+
+   func_8009D7D0 is the next stub in the file, so the call rides the implicit
+   declaration this unit already uses 18 times rather than inventing a
+   prototype a later landing would have to contradict.  The element type is
+   left as a bare pointer: nothing here reads a second field, so the only
+   witnessed facts are the +0x0C list head and the NULL terminators.
+
+   37 words, 0 differing on the first compile. */
+void func_8009D73C(u8 **p)
+{
+    u8 **q;
+
+    while (*p != NULL)
+    {
+        q = *(u8 ***)(*p + 0xC);
+        if (q != NULL)
+        {
+            while (*q != NULL)
+            {
+                func_8009D7D0(*q);
+                q++;
+            }
+        }
+        p++;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D7D0);
 
