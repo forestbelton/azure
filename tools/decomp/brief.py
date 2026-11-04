@@ -96,8 +96,18 @@ def main():
         hx = re.search(r'nonmatching \S+, (0x[0-9A-F]+)', t).group(1)
         w = int(hx, 16) // 4; tot += w
         jt = len(re.findall(r'jr\s+\$(?!ra)', t))
-        rod = 1 if ('.section .rodata' in t or re.search(r'^dlabel D_', t, re.M)) else 0
-        if jt or rod: haz.append((f, jt, rod))
+        # OWN RODATA MEANS A MIGRATED `dlabel D_`, NOT ANY `.section .rodata`.
+        # Every jump-table listing has a .rodata block for the table itself,
+        # so the old test said YES for a function whose only rodata IS its
+        # table -- and jumptable + own-rodata is exactly the conjunction the
+        # func_800BF1C8 park was blocked on, so the brief reported the
+        # park-blocking shape for functions that cannot have it. Said so for
+        # func_800ABA1C on 2026-11-03, which landed byte-identical with its
+        # table; provision.py was fixed for the same conflation in 6da6df0.
+        # Anchored, because `enddlabel` contains `dlabel`.
+        rod = 1 if re.search(r'^dlabel D_', t, re.M) else 0
+        jtr = 1 if re.search(r'^dlabel jtbl_', t, re.M) else 0
+        if jt or rod or jtr: haz.append((f, jt, rod, jtr, t))
         rows.append((f, hx, w))
     print("Land %d MIPS R3000 PSX function(s) in /home/case/projects/azure, overlay `%s`, "
           "to BYTE-IDENTICAL output. %d words.\n" % (len(fns), unit, tot))
@@ -117,8 +127,26 @@ LANDED-ABOVE versus LANDED-BELOW matters: an arity mismatch on a callee defined 
     if haz:
         print("\n**HAZARD -- these own rodata or have a jump table, so the build gate is the")
         print("only authority and a clean whole-unit sweep will NOT show a rodata shift:**")
-        for f, jt, rod in haz:
-            print("- `%s`: jump table %d, own rodata %s" % (f, jt, 'YES' if rod else 'no'))
+        for f, jt, rod, jtr, lt in haz:
+            print("- `%s`: jump table %d, own rodata %s" % (
+                f, jt, 'YES' if rod else ('jump table only' if jtr else 'no')))
+            if jtr:
+                # The one computation that decides whether a jump-table
+                # function is safe to write naturally. Doing it by hand for
+                # two briefs is what prompted putting it here.
+                a = re.search(r'^dlabel (jtbl_[0-9A-Fa-f]+)', lt, re.M).group(1)
+                off = int(a.split('_')[1], 16) - 0x80088760
+                ent = len(re.findall(r'^\s*/\* [0-9A-F]+ [0-9A-F]+ [0-9A-F]{8} \*/\s+\.word',
+                                     lt, re.M)) or len(re.findall(r'\.word', lt))
+                print("    %s: %d entries, rodata offset 0x%X, %d mod 8 -- %s"
+                      % (a, ent, off, off % 8,
+                         "`.align 3` is a NO-OP, the table costs nothing"
+                         if off % 8 == 0 else
+                         "*** 4 mod 8: `.align 3` WILL PAD it and the container "
+                         "comes out long -- the class that forced the carve ***"))
+                print("    The ENTRY COUNT is load-bearing, not cosmetic: with no `addiu`")
+                print("    subtraction before the `sltiu` range check it pins minval 0, which")
+                print("    is what tells you whether `case 0:` is in the source.")
         print("\nIf a local array initialiser or a jump table is involved, report the exact")
         print("bytes and alignment your C emits versus the listing, and hand it back")
         print("unlanded if you cannot make them agree -- I adjudicate with the build.")
