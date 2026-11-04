@@ -1207,6 +1207,23 @@ measure the state you are about to commit, not the state you merged from. An
 agent reported 29 for a copy that measured 37 under my hand, because it had
 measured before its last body edit.
 
+### THE `scratch/` PREFIX SCHEME HAS WRAPPED ROUND -- USE A DATED PREFIX
+
+Two agents reported this in one batch, and one of them **overwrote another
+session's work**: its `q5_merge.py` and `q5_unit.c` replaced files a
+2026-11-03 run had left under the same names. `scratch/` now holds 336 files
+beginning `q3_` and a `scratch/q3.c` from 2026-10-27.
+
+The single letter-plus-digit prefix (`w1_`, `x2_`, `q3_`) was unique within a
+batch and is no longer unique across sessions: the alphabet has been round
+more than once. **Assign dated prefixes instead** -- `r1104a_`, `r1104b_` --
+which keeps a batch's files together, keeps them sortable, and cannot collide
+with a previous session's.
+
+The cost of the old scheme is not hypothetical: a merge script and a merged
+unit are exactly the two files a park or a re-measurement needs months later,
+and they are the two that get clobbered.
+
 ### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
 
 Two merge scripts in one batch left a blank line too many where a body
