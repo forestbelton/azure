@@ -993,6 +993,73 @@ def main():
                             print("          %s may be %s + 0x%X, which this unit"
                                   " ALREADY declares%s." % (g2, other, a2 - a3,
                                   ' as `%s`' % decl if decl else ''))
+                            # THE TEST AN AGENT WILL PROPOSE, AND IT DOES NOT
+                            # WORK. Suggested 2026-11-04 after this note was
+                            # wrong twice in one group: "check
+                            # town.bin_undefined_syms_auto.txt first and say
+                            # 'both are splat symbols, so declare both'".
+                            # Measured against every case on record --
+                            # D_801131B8/D_801131E4 (one base was RIGHT),
+                            # D_80082660/D_80082668 (an addend was RIGHT),
+                            # D_800D1650/D_800D1658 and D_800D172C/D_800D175C
+                            # (independent was right), D_800D16D8/D_800D16E4
+                            # (geometry right, conclusion wrong) -- and ALL
+                            # TEN addresses are their own auto symbol. splat
+                            # mints one per referenced address, so the test
+                            # cannot discriminate; saying so here is cheaper
+                            # than the next agent re-deriving it.
+                            print("          THE SPLAT-SYMBOL TEST DOES NOT"
+                                  " DECIDE THIS. Both addresses are their own")
+                            print("          auto symbol in every case on"
+                                  " record, including the ones where the")
+                            print("          single base was right -- splat"
+                                  " mints one symbol per referenced ADDRESS,")
+                            print("          so it cannot tell a field of one"
+                                  " record from two objects.")
+                            # WHAT HAS DISCRIMINATED: the unit's own practice.
+                            # NOT btext -- it is built 600 lines below this
+                            # point in main(), and using it here is an
+                            # UnboundLocalError. Slice the bodies from defoff,
+                            # which defs_and_protos already recorded for
+                            # exactly this reason.
+                            users_y = []
+                            for _d, _o in sorted(defoff.items(),
+                                                 key=lambda kv: kv[1]):
+                                _e = txt.find('\n}', _o)
+                                if _e < 0:
+                                    _e = _o
+                                if re.search(r'\b%s\b' % other, txt[_o:_e]):
+                                    users_y.append(_d)
+                            nbr = []
+                            for o2 in set(re.findall(r'\b(D_[0-9A-Fa-f]{6,8})\b',
+                                                     txt)):
+                                try:
+                                    a4 = int(o2[2:], 16)
+                                except ValueError:
+                                    continue
+                                if o2 not in (g2, other) and abs(a4 - a2) <= 0x40 \
+                                        and re.search(r'^\s*extern\b[^;\n]*\b%s\b'
+                                                      % o2, txt, re.M):
+                                    nbr.append(o2)
+                            print("          WHAT HAS DISCRIMINATED is the"
+                                  " unit's OWN PRACTICE near these addresses:")
+                            print("            %d landed body/bodies use %s%s"
+                                  % (len(users_y), other,
+                                     ': ' + ', '.join(users_y[:4]) if users_y
+                                     else ''))
+                            if nbr:
+                                print("            and this unit ALREADY"
+                                      " declares %d independent symbol(s)"
+                                      " within 0x40 of %s: %s"
+                                      % (len(nbr), g2,
+                                         ', '.join(sorted(nbr)[:6])))
+                                print("            -- which is the shape a"
+                                      " sibling landing chose for the same")
+                                print("            neighbourhood. Read one of"
+                                      " those bodies and follow it.")
+                            else:
+                                print("            and this unit declares no"
+                                      " other symbol within 0x40 of %s." % g2)
                             print("          Both spellings LINK TO THE SAME"
                                   " BYTES -- the %hi is identical when neither")
                             print("          low half carries, and the offset"
@@ -1050,6 +1117,32 @@ def main():
                           " asm/nonmatchings/%s/*.s -- note the `+`, a" % unit)
                     print("          single-space pattern silently returns"
                           " nothing. ***")
+                print("          *** AND THE TELL FOR THE *INDEXED* SHAPE,"
+                      " which none of the three below covers:")
+                print("          A `%lo` SITTING IN A LOAD/STORE DISPLACEMENT"
+                      " OFF A REGISTER THAT AN `addu` COMPUTED")
+                print("          IS A CONSTANT BASE, FULL STOP"
+                      " (docs/matching-levers.md:2115). With a declared symbol")
+                print("          and a REGISTER index the address can only be"
+                      " high + lo_sum + addu + a ZERO")
+                print("          displacement -- four words -- because"
+                      " mips_check_split accepts a bare SYMBOL_REF, a")
+                print("          CONST(sym+int) or a LABEL_REF and never a"
+                      " PLUS of a symbol and a register")
+                print("          (config/mips/mips.c:893-898,"
+                      " mips.md:3488), while reg + const_int gets the high and")
+                print("          the displacement in THREE"
+                      " (mips.h:2703-2718). That is a proof, not a plateau.")
+                print("          Two things are then load-bearing and only"
+                      " two: the base must be a LOCAL (inline is")
+                print("          +1 word) and its low half must be ZERO so it"
+                      " collapses to a bare `lui` -- writing the")
+                print("          full 0x800103xx gives `lui`+`ori`, because"
+                      " the PLUS arm's mask is & ~0x7fff and a")
+                print("          small offset never reaches it. Measured"
+                      " 2026-11-04 on func_800B2164: 11 words / 0")
+                print("          differing against 12 / 10 for every symbol"
+                      " spelling. ***")
                 print("          Tells, in order of reliability: a `lui $at`"
                       " (above) is decisive; an `ori` where the target has")
                 print("          `addiu` means you declared a symbol that"
@@ -1565,6 +1658,74 @@ def main():
     print("      +/-40 missed one target's verbatim template by 43 lines and its")
     print("      comment block by 74. If it still does not hold the template, widen")
     print("      it -- the cost is reading, and the comment blocks are the point.")
+    # ------------------------------------------------------------------ (r)
+    # ROUTE (a) IS STRUCTURALLY BLIND TO AN INSTALL-ONLY LEAF. Reported
+    # 2026-11-04: func_800B384C got "NO RELATIVE AT ANY SCORE" while
+    # func_800B4494 is its line-for-line twin AND its comment block carries
+    # the complete answer, the arity trap included. Neither function has a
+    # callee or a global, so every scored route has nothing to score. This is
+    # the same hole route (p) was written for, one class over: an INSTALL pair
+    # rather than a constant address. There are few such functions in the
+    # unit and they are nearly all the same 7-word shape.
+    def _reloc_kinds(lt):
+        return (bool(re.search(r'%hi\(func_', lt)),
+                bool(re.search(r'%hi\(D_', lt)),
+                bool(re.search(r'\bjal\b', lt)))
+    inst_only = [f for f in targets
+                 if listing(unit, f) and _reloc_kinds(listing(unit, f))
+                 == (True, False, False)]
+    if inst_only:
+        pool = []
+        for lt_path in sorted(glob.glob(os.path.join(
+                PROJ, 'asm/nonmatchings', unit, 'func_*.s'))):
+            nm = os.path.basename(lt_path)[:-2]
+            if nm in targets or nm not in lines:
+                continue
+            try:
+                body = open(lt_path).read()
+            except OSError:
+                continue
+            if _reloc_kinds(body) == (True, False, False):
+                pool.append((nm, lines[nm], body.count('/* ')))
+        print("\n=== ROUTE (r): INSTALL-ONLY LEAVES, WHICH NO SCORE CAN RANK ===")
+        for f in inst_only:
+            print("    %s's ONLY relocation is a %%hi/%%lo on a FUNCTION"
+                  " symbol -- no callee, no global, so" % f)
+            print("    route (a) has nothing to score and will say NO"
+                  " RELATIVE AT ANY SCORE. These landed")
+            print("    functions have the SAME relocation shape, which in"
+                  " this unit means the same 7-to-9-word")
+            print("    install leaf, and one of them is usually a"
+                  " line-for-line template:")
+            if pool:
+                # BY ADDRESS DISTANCE, not by line number. The first cut of
+                # this route sorted by position in the file and the twin that
+                # reported it -- func_800B4494, 0x448 away -- fell outside
+                # the top eight, which is the one function the route exists
+                # to surface. Address locality has been the best template
+                # predictor in this sweep all along.
+                try:
+                    me = int(f[5:], 16)
+                except ValueError:
+                    me = 0
+                def _dist(r):
+                    try:
+                        return abs(int(r[0][5:], 16) - me)
+                    except ValueError:
+                        return 1 << 30
+                for nm, ln, _n in sorted(pool, key=_dist)[:8]:
+                    print("      %-15s csrc/%s.c:%-6d  0x%X away"
+                          % (nm, unit, ln, _dist((nm, ln, _n))))
+                print("      READ THE COMMENT BLOCK, not just the code: on"
+                      " the function that reported this route")
+                print("      the twin's block stated the arity trap outright"
+                      " ('the one-argument call site written")
+                print("      while this was a stub is now too few"
+                      " arguments'), which settled whether to widen the")
+                print("      call site or spell the definition K&R.")
+            else:
+                print("      none landed yet -- you are the first of this"
+                      " shape in this unit.")
     print("      ...and an IDIOM GREP: grep a distinctive STATEMENT shape out of the")
     print("      listing (a field expression, a constant, a global) rather than a callee")
     print("      name. e.g. grep -n 'D_800814A0 |= 0x8000' csrc/%s.c" % unit)
