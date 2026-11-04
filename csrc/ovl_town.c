@@ -2762,6 +2762,25 @@ extern UnkTown2AE8 D_800FE4E0;
    not help -- the implicit declaration still precedes it (measured). */
 void func_80094048();
 
+/* The town's static collision rectangles.  One record is {x0, x1, y0, y1}:
+   func_80096A90 keeps a MINIMUM at +0x00/+0x08 and a MAXIMUM at +0x04/+0x0C,
+   and func_80096E9C tests +0x00/+0x04 against its first pointer argument and
+   +0x08/+0x0C against its second, so +0x00/+0x04 is one axis and
+   +0x08/+0x0C the other.  D_800FE520 is the array of them, closed by a record
+   whose x0 is 0x80000000; D_800FE508 is the single running box func_80096B50
+   accumulates with func_80096A90 and func_80096C3C presets. */
+typedef struct UnkTownBox
+{
+    s32 unk_00;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+} UnkTownBox;
+
+extern UnkTownBox D_800FE508;
+extern UnkTownBox D_800FE520[];
+extern s16 D_8006ADD6;
+void func_80096A90(UnkTownBox *box, s16 *pts);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -8211,17 +8230,270 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096A5C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096A90);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096B50);
+/* 59 words -- its header reads `nonmatching func_80096B50, 0xEC`, and
+   0xEC/4 = 59.  Measured 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096C3C);
+   The list pointer is the PARAMETER, not a local copy: `addu $s0, $a0, $zero`
+   sits at word 2, in the prologue, which is where gcc parks an argument that
+   has to survive a call.  A local `p = list;` after the four D_800FE508
+   stores puts that copy at word 4 instead -- 59 words, 7 differing, with the
+   `addiu $s0, $s0, 0x4` also moving from word 21 to 19.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096D58);
+   The four preset stores are written x0, y0, x1, y1 -- offsets 0, 8, 4, 0xC --
+   which is the order the target emits and the same order func_80096C3C needs
+   for this record. */
+void func_80096B50(s16 **p)
+{
+    D_800FE508.unk_00 = 0x1FFFFFFF;
+    D_800FE508.unk_08 = 0x1FFFFFFF;
+    D_800FE508.unk_04 = 0;
+    D_800FE508.unk_0C = 0;
+    while (*p != NULL)
+    {
+        func_80096A90(&D_800FE508, *p);
+        p++;
+    }
+    if (D_8006ADD6 == 8)
+    {
+        D_800FE520[0].unk_00 = 0x3000000;
+        D_800FE520[0].unk_04 = 0x4000000;
+        D_800FE520[0].unk_0C = 0x2A00000;
+        D_800FE520[0].unk_08 = 0;
+        D_800FE520[1].unk_00 = 0x80000000;
+    }
+    else if (D_8006ADD6 == 0xB)
+    {
+        D_800FE520[0].unk_00 = 0;
+        D_800FE520[0].unk_04 = 0x4A00000;
+        D_800FE520[0].unk_0C = 0x3B00000;
+        D_800FE520[0].unk_08 = 0;
+        D_800FE520[1].unk_00 = 0x80000000;
+    }
+    else
+    {
+        D_800FE520[0].unk_00 = 0x80000000;
+    }
+}
+
+/* 71 words -- its header reads `nonmatching func_80096C3C, 0x11C`, and
+   0x11C/4 = 71.  Measured 0 differing.
+
+   TWO DEVICES HERE, AND THEY ONLY WORK TOGETHER; each alone is worse than
+   neither.  Both come out of sched2's dependence graph, read off
+   `tools/decomp/sched.py`:
+
+   (a) The stores are spelled `*(s32 *)((u8 *)SYM + N)` and NOT
+       `SYM[k].unk_NN`, because that cast clears MEM_IN_STRUCT_P
+       (expr.c:5343-5351 -- the INDIRECT_REF's operand is a NOP_EXPR, not a
+       PLUS_EXPR).  sched.c:881-889's `anti_dependence` drops the dependence
+       between the D_800133A6 read and a store exactly when the store is
+       MEM_IN_STRUCT_P with a varying address and the read is neither.  With
+       the struct spelling there is no dependence, so the 19 trailing stores
+       are all ready the moment the `bne` is placed, they beat the `%hi` and
+       the `li 0xA` on `schedule_select`'s potential_hazard tie-break
+       (sched.c:2450-2470: a store is on the "memory" function unit, a
+       `high` is on none), and `sw 0x60` plus the `%hi` get dragged to the
+       FRONT of the run: 71 words, 32 differing.  With the cast the read
+       depends on every store, so nothing is ready until it is placed and the
+       run comes out in plain ascending source order.
+
+   (b) The gate reads `*(u8 *)0x800133A6`, a constant address, not the
+       symbol.  D_800133A6 is outside the loaded image, both spellings assemble
+       to the same two words, and the low half is folded into the `lbu`
+       displacement so there is no lui/ori-versus-lui/addiu tell -- but the
+       constant form is ONE rtl insn whose two words share `$v1`, where the
+       symbol form is a separate `high` insn that local-alloc gives its own
+       register.  The separate `high` is what sched2 can hoist.  Symbol
+       spellings with the cast stores: `extern u8 D_800133A6;` is 71/21 and
+       `extern u8 D_800133A6[];` is also 71/21, both with the `%hi` at word 37
+       instead of 55.  Constant address with the STRUCT stores is 71/46.
+
+   The D_800FE508 preset is x0, y0, x1, y1 (offsets 0, 8, 4, 0xC); every one
+   of the 24 uniform per-record field permutations of the D_800FE520 run was
+   measured and plain ascending is the best of them (the next best, 0/4/0xC/8,
+   is 31 differing and 0x48/0xC/0/4 is 59). */
+void func_80096C3C(void)
+{
+    *(s32 *)((u8 *)&D_800FE508 + 0x0) = 0x25FFFFF;
+    *(s32 *)((u8 *)&D_800FE508 + 0x8) = 0x1000000;
+    *(s32 *)((u8 *)&D_800FE508 + 0x4) = 0x1DA00000;
+    *(s32 *)((u8 *)&D_800FE508 + 0xC) = 0x1DA00000;
+    *(s32 *)((u8 *)D_800FE520 + 0x0) = 0xF0000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x4) = 0xFE00000;
+    *(s32 *)((u8 *)D_800FE520 + 0x8) = 0;
+    *(s32 *)((u8 *)D_800FE520 + 0xC) = 0x4000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x10) = 0x10200000;
+    *(s32 *)((u8 *)D_800FE520 + 0x14) = 0x30000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x18) = 0;
+    *(s32 *)((u8 *)D_800FE520 + 0x1C) = 0x4000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x20) = 0xF0000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x24) = 0xF500000;
+    *(s32 *)((u8 *)D_800FE520 + 0x28) = 0;
+    *(s32 *)((u8 *)D_800FE520 + 0x2C) = 0x65FFFFF;
+    *(s32 *)((u8 *)D_800FE520 + 0x30) = 0x10B00000;
+    *(s32 *)((u8 *)D_800FE520 + 0x34) = 0x30000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x38) = 0;
+    *(s32 *)((u8 *)D_800FE520 + 0x3C) = 0x65FFFFF;
+    *(s32 *)((u8 *)D_800FE520 + 0x40) = 0xF0000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x44) = 0xF980000;
+    *(s32 *)((u8 *)D_800FE520 + 0x48) = 0x5E80000;
+    *(s32 *)((u8 *)D_800FE520 + 0x4C) = 0x65FFFFF;
+    *(s32 *)((u8 *)D_800FE520 + 0x50) = 0x10680000;
+    *(s32 *)((u8 *)D_800FE520 + 0x54) = 0x30000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x58) = 0x5E80000;
+    *(s32 *)((u8 *)D_800FE520 + 0x5C) = 0x65FFFFF;
+    *(s32 *)((u8 *)D_800FE520 + 0x60) = 0x1A100000;
+    *(s32 *)((u8 *)D_800FE520 + 0x64) = 0x30000000;
+    *(s32 *)((u8 *)D_800FE520 + 0x68) = 0;
+    *(s32 *)((u8 *)D_800FE520 + 0x6C) = 0x9EFFFFF;
+    if (*(u8 *)0x800133A6 == 0xA)
+    {
+        *(s32 *)((u8 *)D_800FE520 + 0x70) = 0xF0000000;
+        *(s32 *)((u8 *)D_800FE520 + 0x74) = 0x5F00000;
+        *(s32 *)((u8 *)D_800FE520 + 0x78) = 0;
+        *(s32 *)((u8 *)D_800FE520 + 0x7C) = 0x9EFFFFF;
+        *(s32 *)((u8 *)D_800FE520 + 0x80) = 0x80000000;
+    }
+    else
+    {
+        *(s32 *)((u8 *)D_800FE520 + 0x70) = 0x80000000;
+    }
+}
+
+/* 28 words -- its header reads `nonmatching func_80096D58, 0x70`, and
+   0x70/4 = 28.  Measured 0 differing.  func_80096FF4 calls it with one
+   argument, its own `UnkVec *`.
+
+   Both arms re-read `q->unk_04`: the store through D_800FE520 in between may
+   alias it, so gcc reloads, which is what the target's second `lw 0x4($a1)`
+   is.  The `<=` arm is written FIRST because the target's `slt`/`bnez` pair
+   branches to the computed arm. */
+void func_80096D58(UnkVec *q)
+{
+    if (D_8006ADD4 == 0xC)
+    {
+        return;
+    }
+    if (q->unk_04 <= 0x3FFFFFF)
+    {
+        D_800FE520[2].unk_04 = 0xF500000;
+        D_800FE520[3].unk_00 = 0x10B00000;
+    }
+    else
+    {
+        D_800FE520[2].unk_04 = 0x13500000 - q->unk_04;
+        D_800FE520[3].unk_00 = q->unk_04 + 0xCB00000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096DC8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096E08);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096E9C);
+/* 86 words -- its header reads `nonmatching func_80096E9C, 0x158`, and
+   0x158/4 = 86.  Measured 0 differing.  func_80096FF4 calls it as
+   func_80096E9C(q, &q->unk_04), and clears q->unk_0C when the result has
+   0x11 set and q->unk_10 when it has 0x1100, which is what pairs bit 0x1/0x10
+   with the FIRST pointer and 0x100/0x1000 with the second.
+
+   THE RECORD WALK MUST BE A SUBSCRIPT ON THE STRUCT ARRAY, not a pointer.
+   The target reads all four fields as displacements off ONE register that
+   `addiu $a3, $a3, 0x10` advances, i.e. loop.c reduced the index to a single
+   giv.  `s32 *p` with `p[0]..p[3]` and `p += 4` makes loop.c reduce `p + 1`
+   as a SECOND giv and keep the biv for `p[0]`: 87 words, 84 differing, with
+   the extra word being a duplicate `addiu $t0, $t0, 0x10`.  Other spellings
+   measured: `UnkTownBox *p` with `p->unk_00` and `p++` is also 87/84; the
+   same two with a `goto` back-edge are 83 words (loop.c then cannot hoist the
+   `2` into the preheader either); a flat `s32` array with `D_800FE520[i]`
+   and `i += 4` is 92/85 and `D_800FE520[n * 4 + k]` with `n++` is 92/85, both
+   because loop.c reduces the four subscripts to four separate givs.
+
+   The two inner comparisons are written with the larger value on the LEFT
+   (`d[2] > d[3]`, `d[0] > d[2]`) although the generated `slt` reads the other
+   way round: gcc evaluates a comparison's operands in source order and then
+   canonicalises GT to LT by swapping them, so the source order decides which
+   of the two stack slots is loaded first.  Written `d[3] < d[2]` and
+   `d[2] < d[0]` the function is 86 words with 4 differing -- two swapped
+   `lw` pairs and nothing else.
+
+   sel[] is an array and not two scalars because both selectors live in stack
+   slots below the distance array, and two arrays are assigned upward in
+   declaration order. */
+u32 func_80096E9C(s32 *px, s32 *py)
+{
+    s32 sel[2];
+    s32 d[4];
+    s32 n;
+    u32 flags;
+
+    flags = 0;
+    n = 0;
+    while (D_800FE520[n].unk_00 != 0x80000000)
+    {
+        d[0] = *px - D_800FE520[n].unk_00;
+        if (d[0] > 0)
+        {
+            d[1] = D_800FE520[n].unk_04 - *px;
+            if (d[1] > 0)
+            {
+                d[2] = *py - D_800FE520[n].unk_08;
+                if (d[2] > 0)
+                {
+                    d[3] = D_800FE520[n].unk_0C - *py;
+                    if (d[3] > 0)
+                    {
+                        if (d[1] < d[0])
+                        {
+                            d[0] = d[1];
+                            sel[0] = 1;
+                        }
+                        else
+                        {
+                            sel[0] = 0;
+                        }
+                        if (d[2] > d[3])
+                        {
+                            d[2] = d[3];
+                            sel[1] = 3;
+                        }
+                        else
+                        {
+                            sel[1] = 2;
+                        }
+                        if (d[0] > d[2])
+                        {
+                            if (sel[1] == 2)
+                            {
+                                *py = D_800FE520[n].unk_08;
+                                flags |= 0x100;
+                            }
+                            else
+                            {
+                                *py = D_800FE520[n].unk_0C;
+                                flags |= 0x1000;
+                            }
+                        }
+                        else
+                        {
+                            if (sel[0] == 0)
+                            {
+                                *px = D_800FE520[n].unk_00;
+                                flags |= 0x1;
+                            }
+                            else
+                            {
+                                *px = D_800FE520[n].unk_04;
+                                flags |= 0x10;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        n++;
+    }
+    return flags;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80096FF4);
 
