@@ -746,7 +746,33 @@ def main():
         # `installs` feeds the group-level install heuristics, so it must hold
         # only the STORED ones.
         allcallees[f], installs[f], globs[f] = set(cal), set(stored), set(gl)
-        print("  %s  %d words  jumptable=%d  owns-rodata=%s" % (f, w, jt, rod))
+        # NO `jr` AT ALL MEANS THE LISTING IS NOT A FUNCTION, and that is a
+        # landing-blocker invisible until someone reads the listing. Found
+        # 2026-11-04: func_800A64C0's 27-word listing has no `jr`, its last
+        # word is a bare `lui`, and two of its branches target the NEXT
+        # listing -- splat split one 113-word function in the middle of a
+        # lui/addiu pair. Exactly one function in this overlay is like that,
+        # but the check is one anchored regex. `jr` cannot collide with
+        # `endlabel` the way `dlabel` does, so a plain count is safe.
+        has_jr = bool(re.search(r'\bjr\b', t)) if t else True
+        print("  %s  %d words  jumptable=%d  owns-rodata=%s%s"
+              % (f, w, jt, rod,
+                 '' if has_jr else
+                 '  *** NO `jr` ANYWHERE IN THIS LISTING ***'))
+        if not has_jr:
+            print("      *** THIS LISTING IS NOT A FUNCTION. A C function"
+                  " cannot compile to a body with no `jr $ra`.")
+            print("      Read its last word and its branch targets: if the"
+                  " last word is a bare `lui`, or a branch")
+            print("      lands outside the listing, splat split ONE function"
+                  " into two symbols -- in the only case")
+            print("      on record, in the middle of a lui/addiu pair, so"
+                  " NEITHER half is landable on its own.")
+            print("      Do not measure a spelling: a word count against a"
+                  " non-function reads like a near-miss.")
+            print("      See func_800A64C0 in docs/open-matching-problems.md,"
+                  " including why landing the combined")
+            print("      run deletes a symbol that landed call sites need.")
         if jt_rod and not own_rod:
             a = re.search(r'^dlabel (jtbl_[0-9A-Fa-f]+)', t, re.M).group(1)
             off = int(a.split('_')[1], 16) - RODATA_BASE

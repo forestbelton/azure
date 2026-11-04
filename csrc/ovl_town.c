@@ -3508,6 +3508,13 @@ extern void (*D_800D0438)();
    +0x04 handler slot) and the definition is below, at :13167.  An
    address-take does not ride an implicit declaration the way a call does. */
 void func_80097D54(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+/* s1104h group declarations. */
+extern s32 D_800D0CC0;
+extern s32 D_80100E2C;
+extern s32 D_800D0DF8[];
+extern s16 D_800D1064[];
+s16 *func_8008C0F0(s16 x, s16 y);
+void func_800A7360(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 s32 func_8003BD84(s32 x, s32 y);
 
 /* The func_8009AD70 chain's three undeclared symbols and its two
@@ -23639,7 +23646,13 @@ void func_800A553C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5598);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A55CC);
+void func_800A55CC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_800903FC;
+    func_800942B0(a, b, (s32)c);
+    b->unk_08 += 0x10000 - D_800D0CC0;
+    func_80033CD8((u8 *)a, (u32)func_800970FC);
+}
 
 void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {
@@ -23764,7 +23777,14 @@ void func_800A573C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     *(s32 *)(D_80100D98 + 0x8) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5894);
+s32 func_800A5894(UnkTown2AE8 *q)
+{
+    if (q->unk_08 > -0x400000)
+    {
+        return *(s16 *)((u8 *)q + 0xA) * 0xC00 + 0x30000;
+    }
+    return 0;
+}
 
 /* A near-sibling pair with func_800A5DF8 below: a camera state that runs the
    shared UnkTown2AE8 helper set (func_80095C80 / func_80095978 /
@@ -24193,7 +24213,11 @@ void func_800A5FDC(UnkTownTask *a, UnkTown2AE8 *b, void *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A62E8);
+s32 func_800A62E8(s32 a, s32 b, s32 c, s32 d)
+{
+    D_80100E2C = d;
+    return (*(s32 *)((u8 *)&D_80082E80 + 0x8) - 0xC) & 0x7FFFFFFF;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A630C);
 
@@ -24259,7 +24283,10 @@ void func_800A6328(u8 **p, s32 v)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A639C);
+u8 *func_800A639C(s32 a)
+{
+    return (**(u8 ****)D_80082E80.unk_28)[(s16)a];
+}
 
 /* func_800A6328's near-sibling; see the note there for the record walk, the
    integer-sum addressing and the do/while inner loop.  The outer element here
@@ -24315,9 +24342,17 @@ top:
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A643C);
+void func_800A643C(s32 a, s32 b)
+{
+    func_800A63C8(func_800A639C(a & 0xFF), b);
+    D_80100E2C = 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A647C);
+void func_800A647C(s32 a, s32 b)
+{
+    func_800A63C8((**(u8 ****)D_80081458)[(s16)a], b);
+    D_80100E2C = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A64C0);
 
@@ -24871,7 +24906,11 @@ UnkNode *func_800A71F0(UnkVec *a, void (*fn)(), void *t)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7308);
+void func_800A7308(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    b->unk_14 = D_800D0DF8[a->unk_90];
+    a->unk_50 = func_800A7360;
+}
 
 void func_800A7338(UnkTownDispatch *d)
 {
@@ -26118,9 +26157,23 @@ void func_800A8ADC(UnkTownSpawn *p, UnkTown2AE8 *b, UnkTownRend *r)
     func_80097AD0(&src, &spread, (u16)func_800374F4(2) + 2);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8B98);
+void func_800A8B98(UnkTownSpawn *p, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800A8ADC;
+    b->unk_08 = *(s8 *)((u8 *)p + 0x96) << 16;
+    *(s16 *)((u8 *)p + 0x6C) = 5;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8BBC);
+void func_800A8BBC(s32 a, s32 b, s32 c, s32 d, void *p)
+{
+    *func_8008C0F0(*(s16 *)((u8 *)p + 0x2) - 0x40,
+                   *(s16 *)((u8 *)p + 0x6) - 0x40) = a;
+    *func_8008C0F0(*(s16 *)((u8 *)p + 0x2),
+                   *(s16 *)((u8 *)p + 0x6) - 0x40) = b;
+    *func_8008C0F0(*(s16 *)((u8 *)p + 0x2) - 0x40,
+                   *(s16 *)((u8 *)p + 0x6)) = c;
+    *func_8008C0F0(*(s16 *)((u8 *)p + 0x2), *(s16 *)((u8 *)p + 0x6)) = d;
+}
 
 void func_800A8C84(SVECTOR *d, UnkTown2AE8 *b)
 {
@@ -26698,7 +26751,10 @@ s32 func_800A9878(s32 k)
     return -1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A98C4);
+s32 func_800A98C4(s32 a)
+{
+    return func_80033B2C(D_800D1064[a]);
+}
 
 /* The entry-id dispatcher func_800A99D8 asks after func_800A98C4 declines:
    map the caller's index onto a flag query and return it, with index 3
@@ -26791,7 +26847,22 @@ s32 func_800A9970(s32 a)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A99D8);
+s32 func_800A99D8(s32 a)
+{
+    if (func_800A98C4(a) != 0)
+    {
+        return 3;
+    }
+    if (func_800A98F8(a) != 0)
+    {
+        return 0;
+    }
+    if (func_800A9970(a) != 0)
+    {
+        return 2;
+    }
+    return 1;
+}
 
 /* The town's keyboard-ish table lookup: walk a -1-terminated s8 table for
    the byte at the caller's p[1], and when it matches, bucket

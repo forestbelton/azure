@@ -106,6 +106,80 @@ the start of the `unk_102A8` subsegment. Fixing it means extending the `main`
 asm subsegment to 0x102c4 and starting the C unit there; it is a spec change,
 not a matching problem.
 
+## func_800A64C0 (ovl_town) -- A SPLAT MIS-SPLIT, not a matching problem
+
+**Blocked on a symbol question, not on a spelling.** Found 2026-11-04 by the
+group that landed the other eleven functions of its batch, and every fact
+below I re-verified myself.
+
+`asm/nonmatchings/ovl_town/func_800A64C0.s` has a 27-word header
+(`nonmatching func_800A64C0, 0x6C`) and is **not a function**:
+
+* **It contains no `jr` instruction at all** -- `grep -c 'jr '` returns 0 --
+  and its last word is a bare `lui $v0, (0x800D0000 >> 16)` at `0x800A6528`,
+  with nothing after it. No C function compiles to a body ending in a `lui`.
+* **Two of its branches leave the listing.** `j .L800A654C` at `0x800A6520`
+  targets word 8 of `func_800A652C.s`, and `beqz $v0, .L800A665C` at
+  `0x800A64E8` targets that listing's **epilogue** -- the restore of the
+  frame `func_800A64C0` itself allocates with `addiu $sp, $sp, -0x30` at its
+  first word.
+* **`func_800A652C.s` has no prologue and reads `$v0`/`$v1` incoming.** Its
+  first word is `addiu $v0, $v0, 0xCC4`, which consumes the `lui $v0, 0x800D`
+  that is `func_800A64C0`'s last word; its second consumes a
+  `lui $v1, %hi(D_80100E28)` parked in the `beqz`'s delay slot. **Neither
+  symbol is landable on its own, in either direction.**
+* The ROM bytes are contiguous (`0x28DC8` -> `0x28DCC`), so the two listings
+  are one 27 + 86 = **113-word** run, `0x800A64C0`--`0x800A6680`.
+
+**WHY IT CANNOT SIMPLY BE LANDED AS 113 WORDS.** `0x800A652C` is a real `jal`
+target in the ORIGINAL binary. Decoded from `data/town/town.bin` directly:
+the word `0x0C02994B` (`jal 0x800A652C`) sits at ROM `0x37C10` and `0x385F8`,
+i.e. vram `0x800B5370` and `0x800B5D58` -- inside the LANDED `func_800B52F4`
+and `func_800B5D30`, which call it from C today, against the declaration
+`u8 *func_800A652C(u8 *p);`. So the game genuinely calls into the middle of
+this function, which is also why one landed comment correctly reasons that
+"func_800A652C never reads its incoming `$a0`": at that address there is no
+incoming `$a0`. Landing the 113 words as one `func_800A64C0` DELETES the
+symbol those two call sites need, and the link fails.
+
+**TWO ROUTES OUT, both touching shared state, so neither was taken:**
+
+1. Land the combined 113 words as `func_800A64C0`, drop `func_800A652C`'s
+   `INCLUDE_ASM`, and give the overlay's linker inputs a
+   `func_800A652C = 0x800A652C` so the two landed call sites still resolve.
+   This is a build-structure change, not a matching change.
+2. Leave both parked, which is where they are.
+
+**THE CLASS IS EXACTLY ONE FUNCTION IN THE WHOLE OVERLAY.** Screened across
+all three carved units: `ovl_town` 588 listings, **1** with no `jr`
+(`func_800A64C0`); `ovl_town_800BEBA4` 2 listings, 0; `ovl_town_800BF3F0` 173
+listings, 0. So this is a one-off, not a systematic splat problem -- but the
+check is one anchored regex and it is a landing-blocker that is invisible
+until someone reads the listing, so `provision.py` now prints it beside
+`jumptable=` and `owns-rodata=`.
+
+**THE FINGERPRINT, worth recognising elsewhere:** an UNSYMBOLISED `lui` of a
+plausible data base with no `%lo` partner in the same listing. `provision.py`
+route (p) reported `0x800D0000` and `0x80100000` here as "most likely an
+immediate rather than an address, so do not declare it" -- both are in fact
+`%hi` halves of real symbols (`D_800D0CC4` and `D_80100E20`) whose `%lo`
+partner splat put in the *other* listing, which is exactly why splat could
+not symbolise them.
+
+**The reading of the combined 113 words**, recorded so it is not lost:
+`if (!func_80033B2C(0xD)) return;` then `if (func_80033B2C(0xE))` sets
+`D_80100E24 = &D_800D0D0C`, `D_80100E28 = &D_800D0D30`,
+`D_80100E20 = 0x260000`, else the `D_800D0CC4`/`D_800D0CE8`/`0x1C0000` arm
+(the two arms merge at the `D_80100E20` store, which is why the `j` crosses
+the split). Then `n = func_8009C390(D_80083498, 0, func_800A6684, 0);` with
+`func_800A6684` held in a local across the whole body, views
+`mv = n->unk_08`, `r = n->unk_0C`, `p = (u8 *)n + 0x20`, the three-word copy
+from `D_800D0C78`, `*(s16 *)((u8 *)mv + 0xA) = func_800C2AE8(mv);`, a re-seed
+from `D_800D0C60` when `(u32)(mv->unk_08 + 0x300000) > 0x400000`, and the
+tail `func_8008F01C(p, mv, D_800D0CAC); func_8009B218(p, mv, r, D_800D0C90);
+func_800C2E84(p, r, D_80100E24); *(u32 *)(p - 0x10) = func_800A6684;
+func_800A6328(D_800D0D54, 0);`.
+
 ## Functions blocked by jump-table placement
 
 **All four of the functions this section was written about are now landed, and
