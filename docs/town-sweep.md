@@ -1445,9 +1445,20 @@ format count and `progress.py` all report per unit now:
       python3 tools/decomp/ovlverify.py csrc/$u.c $(cat /tmp/l_$u.txt | tr '\n' ' ')
     done
 
-**And the benign off-by-one is now THREE off-by-ones**, because the multi-line
-declaration of `func_800C3050` lives in the duplicated preamble. Expect
-`progress.py`'s per-unit landed counts plus one per unit.
+**The benign off-by-one is GONE as of 2026-11-04.** For weeks every
+whole-unit sweep ended `clean = N-1` with `func_800C3050: not defined` as its
+single failure, because that function's multi-line declaration lives in the
+duplicated preamble and its first line carries no `;`, so the `awk` recipe
+swept the DECLARATION as though it were a definition -- in all three units.
+
+`func_800C3050` has now landed in `csrc/ovl_town_800BF3F0.c`, so in that unit
+the declaration and the definition fold together under `sort -u` and the sweep
+closes exactly: `progress.py`'s landed count plus the group's own, with no
+spare name. **In the other two units the declaration is still only a
+declaration, so they still carry their one spare name each.**
+
+If a sweep of `ovl_town_800BF3F0` reports a failure now, it is real. Do not
+reach for the off-by-one to explain it.
 
 ## The agent brief
 
