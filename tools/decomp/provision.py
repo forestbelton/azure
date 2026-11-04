@@ -1650,12 +1650,55 @@ def main():
     inc_rod = {}
     for m in re.finditer(r'^.*INCLUDE_RODATA\([^)]*?(D_[0-9A-Fa-f]+)\s*\).*$', txt, re.M):
         inc_rod.setdefault(m.group(1), txt[:m.start()].count('\n') + 1)
+    # AN `__asm__` ALIAS IS THE SAME OBJECT UNDER A SECOND NAME, AND EVERY
+    # COUNT HERE KEYS ON THE SPELLING. Reported 2026-11-04: route (o) said
+    # "D_80082A38: 1 LANDED user(s) in this unit", and the unit has three more
+    # reaching the same bytes through `D_80082A38w`. The one that mattered was
+    # func_8009A5F4, whose comment block carries that record's field map and a
+    # pointer-local lever, and the agent found it by grepping the address by
+    # hand. The alias is also what the rarity cut is measured against, so an
+    # aliased global can be called rare when it is not.
+    # AND THE ALIAS IS USUALLY NOT IN THE UNIT. The case that reported this
+    # is declared in include/structs.h:1504, so a scan of `txt` alone finds
+    # nothing and the route stays silently wrong.
+    ALIAS_RE = re.compile(r'^\s*extern\b[^;\n]*?\b(\w+)\s*(?:\[[^\]]*\])?\s*'
+                          r'__asm__\s*\(\s*"([^"]+)"\s*\)', re.M)
+    alias = {}
+
+    def _scan_alias(body, where):
+        for m in ALIAS_RE.finditer(body):
+            ln = body[:m.start()].count('\n') + 1
+            alias.setdefault(m.group(2), []).append((m.group(1), where, ln))
+            alias.setdefault(m.group(1), []).append((m.group(2), where, ln))
+
+    _scan_alias(txt, 'csrc/%s.c' % unit)
+    for _d, _sub, _fs in os.walk(os.path.join(PROJ, 'include')):
+        for _fn in _fs:
+            if not _fn.endswith('.h'):
+                continue
+            _fp = os.path.join(_d, _fn)
+            try:
+                _b = io.open(_fp, encoding='utf-8', errors='replace').read()
+            except Exception:
+                continue
+            _scan_alias(_b, os.path.relpath(_fp, PROJ))
     for f in targets:
         for g in sorted(globs.get(f, ())):
+            # SPELLINGS of this one object: the symbol plus every alias.
+            spell = [g] + [a for a, _w, _ln in alias.get(g, [])]
+            if len(spell) > 1:
+                print("  %-15s %s IS ALSO SPELLED %s -- an __asm__ alias, so"
+                      " it is the SAME OBJECT and"
+                      % (f, g, ', '.join('%s (%s:%d)' % (a, w, ln)
+                                         for a, w, ln in alias[g])))
+                print("      every count below is over ALL of those"
+                      " spellings. A landed body or comment using the")
+                print("      alias is about YOUR record.")
             # USERS IN THIS UNIT = landed bodies that reference it. Not a raw
             # count over `txt`, which double-counts a declaration and every
             # mention in prose.
-            users = sorted(d for d, b in btext.items() if re.search(r'\b' + g + r'\b', b))
+            pat_g = r'\b(?:' + '|'.join(re.escape(s) for s in spell) + r')\b'
+            users = sorted(d for d, b in btext.items() if re.search(pat_g, b))
             if len(users) > 3:
                 continue
             # Does any LANDED COMMENT name it? Comments are where this unit
@@ -1663,7 +1706,7 @@ def main():
             # cannot see one.
             prose = []
             for m in re.finditer(r'/\*(?:[^*]|\*(?!/))*\*/', txt, re.S):
-                if re.search(r'\b' + g + r'\b', m.group(0)):
+                if re.search(pat_g, m.group(0)):
                     prose.append(txt[:m.start()].count('\n') + 1)
             rod = inc_rod.get(g)
             if not users and not prose and rod is None:
@@ -1683,7 +1726,7 @@ def main():
                 print("      READ THOSE BLOCKS. A comment naming your global is prose a")
                 print("      previous landing wrote about this exact record, and it has")
                 print("      carried the decisive lead five times.")
-            print("      grep -n %s csrc/%s.c" % (g, unit))
+            print("      grep -nE '%s' csrc/%s.c" % ('|'.join(spell), unit))
     if not anyo:
         print("  no global of yours is rare in this unit AND carried by prose or rodata")
 

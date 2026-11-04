@@ -66,10 +66,30 @@
    the arm into `if (A != v) return 0; if (B != a) return 1; return 0;`
    collapses the tail into `xor`/`sltu` and is 6.
 
-   WHAT TO DO NEXT: the permuter, which has never been run on it. The residue
-   is a local-alloc ordering decision that no source shape in this family
-   reaches, which is exactly the ALLOC class the permuter protocol is for, and
-   the search space is one `if` statement.
+   THE PERMUTER HAS NOW BEEN RUN, AND IT FOUND NOTHING. 2026-11-04, 45
+   minutes at 6 jobs, **271,618 candidates**, base 40 -> best 40, `found=none`
+   (`nonmatchings/permlog.tsv`). That is the largest search this project has
+   spent on one function -- for comparison, func_800A9358's park fell at
+   154,184 candidates and func_8008B654's improved at 71,151 -- and it did not
+   move the score by one point. So the one lever this park had left is spent,
+   and the next move is NOT another search of source shapes.
+
+   WHAT THAT NEGATIVE IS WORTH. The mechanism section below predicts exactly
+   this: the residue needs `v0 = 1` to precede the `high` insn, sched1's
+   forward schedule cannot produce that ordering from any source shape, and
+   local-alloc's combine_regs never ties H to R because the loop strips PLUS
+   and MULT but not LO_SUM. A source-shape search cannot reach an ordering the
+   scheduler will not emit, so the permuter returning nothing over a quarter
+   of a million candidates is the predicted result rather than a surprise --
+   and it is now measured instead of argued. Compare func_8009CDB4's park,
+   whose residue was also unreachable within one basic block: there the escape
+   was a different BLOCK COUNT, not a different spelling.
+
+   WHAT TO DO NEXT, then: change the frame, not the spelling. The untried
+   variable is whether arm 16 is one basic block at all -- the same move that
+   func_8009CDB4's park identifies and declines. A DIFFERENT MODEL is the
+   other standing lever for a park that has accumulated an impossibility
+   argument, and this park now has one.
 
    SEVEN LEVERS CAME OUT OF THIS FUNCTION and are in docs/matching-levers.md;
    the two worth reading before touching it are "CASE_VALUES_THRESHOLD IS 5 ON
