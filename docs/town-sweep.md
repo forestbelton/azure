@@ -328,9 +328,30 @@ standalone) after three wrong guesses about which prototype had done it.
 
 ## The traps, each of which has cost something
 
-* **TWO ADJACENT CALLS WITH IDENTICAL DELAY SLOTS ARE BYTE-INDISTINGUISHABLE
-  TO `ovlverify`, SO THEIR ORDER IS ONLY CHECKABLE AGAINST THE RELOCATION
-  LIST.** Measured 2026-11-03 on `func_800AF860` and `func_800AFFA8`: both are
+* **TWO ADJACENT CALLS TAKING THE SAME ARGUMENTS ARE BYTE-INDISTINGUISHABLE
+  TO `ovlverify`, SO THEIR ORDER IS ONLY CHECKABLE AGAINST THE ORDERED
+  RELOCATION LIST.**
+
+  **"IDENTICAL DELAY SLOTS" IS TOO NARROW, and I briefed four agents with the
+  narrow form on 2026-11-04 before one of them falsified it.** I then
+  reproduced it myself on the landed `func_8008F294`, whose two calls take the
+  same `(a, b)` and whose delay slots are plainly NOT identical --
+  `addu $s1, $a1, $zero` on the first `jal` and `addu $a1, $s1, $zero` on the
+  second. Swapping the two statements measures **16 words, 0 differing masked,
+  `raw == relocdump` closing at 2 == 2, `arith=OK`** -- and `seqcheck` catches
+  it alone, `seq=FAIL` at position 0. The reason is simpler than the old
+  wording: **each call carries its own delay-slot fill with it**, so the swap
+  permutes only the MASKED `jal` words and every unmasked position still holds
+  the same word. Identical slots are one special case of that, not the
+  requirement.
+
+  So the condition to watch for is **any `f(a, b); g(a, b);` pair**, not a
+  coincidence of delay-slot contents -- and the narrow form is worse than no
+  rule, because it invites an agent to look at two differing slots and
+  conclude the order is verified.
+
+  The original measurement, 2026-11-03 on `func_800AF860` and `func_800AFFA8`:
+  both are
   driver chains over the same `u8 *s`, both call `func_800AF674` and
   `func_800AF784` back to back with the same `addu $a0, $s0, $zero` in each
   delay slot, and SWAPPING THAT PAIR IS 0 DIFFERING IN BOTH. The `jal` word is
@@ -784,8 +805,9 @@ ordered sequence symbol by symbol against the listing.
 I reproduced both swaps myself rather than taking them on report. The practical
 rule: **on any function that compares a stored handler against two or more
 addresses, the ordered check is the only verification of the test order** --
-and the same applies to two adjacent calls with identical delay slots, which
-is the older form of this trap.
+and the same applies to two adjacent calls taking the same arguments, which
+is the older form of this trap -- note that form does NOT require the two
+delay slots to be identical, which is the narrowing corrected above.
 
 ### A BRANCH THAT COMPARES A REGISTER AGAINST ITSELF IS A DUPLICATED `if` IN THE ORIGINAL -- DO NOT "FIX" IT
 
