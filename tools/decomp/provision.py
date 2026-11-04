@@ -59,6 +59,26 @@ def _excluded_syms():
 _EXCLUDED = _excluded_syms()
 
 
+def _forwarding(def_line, arglist_text):
+    """A suffix flag when a call site's arguments are all the CALLER's own
+    parameters in order, which is the shape where the count is least
+    informative: every one of them is already in the right register, so the
+    source could have passed fewer and nothing would move."""
+    m = re.search(r'\(([^)]*)\)\s*\{?\s*$', def_line.strip())
+    if not m:
+        return ''
+    names = [re.findall(r'[A-Za-z_]\w*', q)[-1]
+             for q in m.group(1).split(',')
+             if q.strip() and q.strip() != 'void' and re.findall(r'[A-Za-z_]\w*', q)]
+    args = [q.strip() for q in arglist_text.split(',') if q.strip()]
+    if args and all(a in names for a in args) and \
+            [names.index(a) for a in args] == sorted(names.index(a) for a in args):
+        return (" -- FORWARDING CALL SITE (every argument is one of %s's own "
+                "parameters, in order), so this is the WEAKEST kind of lower "
+                "bound" % re.search(r'(func_[0-9A-Fa-f]{8})', def_line).group(1))
+    return ''
+
+
 def nargs(arglist_text):
     """Argument count for a call's argument text, counting only TOP-LEVEL
     commas. A naive `count(',')` overcounts as soon as one argument is itself
@@ -1080,7 +1100,21 @@ def main():
                 print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)"
                       % (f, d, unit, lines[d], f,
                          a if len(a) <= 240 else a[:240] + ' ...TRUNCATED'))
-                print("      %d argument(s) at that call site" % nargs(a))
+                # THE COUNT IS A LOWER BOUND, NOT THE ARITY. A parameter
+                # the caller already holds in the right ABI register emits no
+                # setup move, so it is invisible at the call site AND costs
+                # nothing to omit from the source. Measured 2026-11-03:
+                # func_800B0134 takes TWO parameters, func_800B0158 calls it
+                # as `func_800B0134(s)`, and the caller measures 16 words / 0
+                # differing with and without the second argument -- because
+                # its own `void *p` is already in $a1. A one-parameter
+                # func_800B0134 that reads the pointer back out of s + 0x18
+                # is 8 differing. The sweep doc records this trap in the
+                # CALLEE direction; this is the CALLER direction.
+                n = nargs(a)
+                fwd = _forwarding(landed.get(d, ''), a)
+                print("      %d argument(s) at that call site -- a LOWER"
+                      " BOUND on arity, not the arity%s" % (n, fwd))
                 anyc = True; witnessed.add(f)
     if not anyc: print("  none -- no LANDED call site constrains arity")
     print("\n=== ROUTE (g): YOUR OWN GROUP MEMBERS AS WITNESSES ===")
