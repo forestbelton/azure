@@ -3403,6 +3403,24 @@ extern s32 D_80100E38;
 void func_800C25C0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800C3174();
 void func_800C321C();
+/* Five Shift-JIS message strings func_80093894 hands to func_8008B5D8 with
+   event 0x11, and one more for func_80093BAC.  The bytes are this unit's own
+   INCLUDE_RODATA block (:20984 and on), so each is declared, not referenced
+   out of another unit.  Spelled `u8 []` because every use is
+   `func_8008B5D8((s32)SYM, 0x11)`. */
+extern u8 D_80088C0C[];
+extern u8 D_80088C48[];
+extern u8 D_80088C8C[];
+extern u8 D_80088CCC[];
+extern u8 D_80088D04[];
+extern u8 D_80088D44[];
+/* func_80093894's selector record: a 4-byte descriptor POINTER at +0x00 and
+   an s32 mode at +0x08 that the function tests against 3.  Declared as an
+   ARRAY, not a scalar: the listing's `lui $a1, %hi(..)` / `addiu $v1, $a1,
+   %lo(..)` writes the addiu to a DIFFERENT register than the lui, which is
+   the array spelling's fingerprint (the address is its own quantity), and the
+   +0x08 read then comes out as a displacement off that materialised base. */
+extern s32 D_80110EB8[];
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -3688,7 +3706,7 @@ void func_800927EC();
 void func_80092DA8();
 void func_80092ECC();
 void func_80093638();
-void func_80093C40();
+s32 func_80093C40();
 /* func_80093C58 installs this at D_800FE5D8 and the definition is below;
    an address-take needs a real declaration.  Copied from the definition. */
 void func_800947CC(UnkTownTask *t, UnkTown2AE8 *b);
@@ -9251,13 +9269,247 @@ s32 func_800937F8(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093864);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093894);
+/* The town camera's spawn gate: when D_80110EB8's +0x08 mode is 3, copy the
+   4-byte descriptor its +0x00 pointer names into a local, refuse the spawn
+   with one of five Shift-JIS messages if any guard fires, and otherwise build
+   a three-word UnkTown2AE8 from the camera's own mover and hand it to
+   func_8009DFD8.
+
+   NO PARAMETERS and no return value: no argument register is read before it
+   is written ($a0 is written with 3 and $a1 with a `%hi` in the prologue) and
+   $v0 is never set at any exit.  Its one caller is the stub func_800AE414.
+
+   THE MESSAGE TAIL IS DUPLICATED AND THE TWO COPIES ARE NOT THE SAME SHAPE,
+   which is what the 155 words buy over 145.  Arm A (the `func_8009FF50() != 1`
+   side) has its three `func_8008B5D8` calls in the ARMS and ONE shared tail
+   after them; arm B has two WHOLE copies, call and tail together.  Both forms
+   print the same ten words, and cross-jumping then merges arm A's three heads
+   into the shared tail's block, so the listing shows the same block shape for
+   both arms -- but the two blocks get DIFFERENT REGISTERS, and that is the
+   only thing that stops cross-jumping merging arm A into arm B as well.  A
+   block holding the message symbol's own `lui`/`addiu` allocates
+   %hi(D_800FE5D8) to $v1 and func_80093D48's address to $v0; a block that
+   does not (arm A's shared tail, whose `$a0` is set in its predecessors)
+   allocates them the other way round, $v0 and $v1, which is exactly what the
+   two arms print.  find_cross_jump's backward walk compares each pair with
+   `|| ! rtx_renumbered_equal_p (p1, p2))` (jump.c:2692) and that predicate
+   compares HARD registers after reload, so the swapped pair is a real
+   mismatch and the walk stops on its very first compare, the `sw`.  All it
+   merges is `D_800FE518 = 0;` and the return, which is the shared
+   .L80093A28 block both arms reach.  Measured: five whole copies (either with the FE518 store
+   inline or with it in a join after the if/else -- both give the same bytes)
+   is 145 words, exactly those ten short, and advise.py reports LENGTH with
+   the span bracketed to this block.
+
+   `D_80110EB8` is declared `extern s32 []`, not a scalar or a struct: the
+   listing materialises its address with `lui $a1` / `addiu $v1, $a1` -- the
+   addiu writing a DIFFERENT register than the lui, which is the array
+   spelling's fingerprint -- and the +0x08 read is then a displacement off
+   that base while the +0x00 read keeps the `%lo` in its own load.  The +0x00
+   pointer is read inline at both sites rather than kept in a local: the
+   second read re-lowers its own `lui`, so a local would have cost a
+   callee-saved register.
+
+   `u = (func_8009FF50() == 1);` must be ONE statement.  Splitting it into
+   `u = func_8009FF50(); u = (u == 1);` buys the pseudo a fourth reference and
+   allocno_compare (global.c:587) then ranks it above `c`, which costs 9 words
+   of pure register names ($s1/$s2 swapped on `c` and `u`).  That split IS the
+   fix for a different defect and was load-bearing in the five-copy shape,
+   where it put `t` in $s3 and `u` in $s2 -- so it is a per-shape lever, not a
+   rule.
+
+   `k && u` is the third argument's real spelling: `addu $a2, $zero, $zero` /
+   `beqz $s4` / `sltu $a2, $zero, $s2` is `&&`'s own expansion.  `k & u` would
+   be one `and`, and `f = k ? u : 0` the same three words -- unmeasured.
+   `k = (d[1] == 0x12 || d[1] == 0x13)` folds to the one `addiu -0x12` /
+   `sltiu 0x2` range test, so the two compares cost nothing.
+
+   The local `UnkTown2AE8 v` is DECLARED BEFORE `u8 d[4]`: v takes 0x10..0x27
+   (24 bytes, the whole struct, of which only three words are written) and d
+   takes 0x28, which is the listing's layout.
+
+   0x80010980 is a CONSTANT ADDRESS, not a symbol -- `lui`/`ori`, no
+   relocation.  The whole call is func_8009F9D4's (:16926) line verbatim,
+   `func_8009F71C((u8 *)0x80010980, (u8 *)D_800D0728[func_800B28A0()])`; that
+   function landed WHILE this one was being measured and was absent from
+   provision.py's step-0 relatives table, where the end-of-run re-run scores
+   it 3.417 and reports this function as a strict callee-set superset of it.
+
+   155 words -- its header reads `nonmatching func_80093894, 0x26C`, and
+   0x26C/4 = 155.  No jump table, no rodata of its own.  Measured 0 differing;
+   `--raw` 56 against relocdump's 56, FOUR of them on the FUNCTION symbol
+   func_80093D48 (%hi and %lo twice each) -- masked, with no `jal` to decode.
+   seqcheck's ordered (jal, %hi/%lo, j offset) comparison passes, which is
+   what settles the ORDER of the two installs.  D_800D0428 carries THREE %hi
+   against one %lo: reorg copied that `lui` into three branch delay slots, so
+   the odd count is not a second reference. */
+void func_80093894(void)
+{
+    UnkTownCam *g;
+    UnkTown2AE8 *b;
+    void *c;
+    s32 u;
+    UnkTownTask *t;
+    s32 k;
+    UnkTown2AE8 v;
+    u8 d[4];
+    u8 *p;
+    UnkNode *n;
+
+    g = &D_80083498;
+    b = g->unk_08;
+    c = g->unk_0C;
+    t = &g->unk_20;
+    if (D_80110EB8[2] == 3)
+    {
+        p = (u8 *)D_80110EB8[0];
+        d[0] = p[0];
+        d[1] = p[1];
+        d[2] = p[2];
+        d[3] = p[3];
+        k = (d[1] == 0x12 || d[1] == 0x13);
+        u = (func_8009FF50() == 1);
+        if (u == 0)
+        {
+            if (func_800937F8() != 0)
+            {
+                func_8008B5D8((s32)D_80088C0C, 0x11);
+            }
+            else if (func_800A0608() >= 0x12)
+            {
+                func_8008B5D8((s32)D_80088C48, 0x11);
+            }
+            else if (d[1] == 0x13)
+            {
+                func_8008B5D8((s32)D_80088C8C, 0x11);
+            }
+            else
+            {
+                goto spawn;
+            }
+            func_800947BC(t, b, c);
+            D_800FE5D8 = func_80093D48;
+            D_800FE518 = 0;
+            return;
+        }
+        else if (d[1] != 0x13)
+        {
+            if (d[1] == 0x12)
+            {
+                if (func_8009F71C((u8 *)0x80010980,
+                                  (u8 *)D_800D0728[func_800B28A0()]) == -1)
+                {
+                    func_8008B5D8((s32)D_80088CCC, 0x11);
+                    func_800947BC(t, b, c);
+                    D_800FE5D8 = func_80093D48;
+                    D_800FE518 = 0;
+                    return;
+                }
+            }
+            else
+            {
+                func_8008B5D8((s32)D_80088D04, 0x11);
+                func_800947BC(t, b, c);
+                D_800FE5D8 = func_80093D48;
+                D_800FE518 = 0;
+                return;
+            }
+        }
+    spawn:
+        v.unk_00 = b->unk_00;
+        v.unk_04 = b->unk_04;
+        v.unk_08 = b->unk_08 + D_800D0428;
+        n = func_8009DFD8((u8 *)D_80110EB8[0], &v, k && u);
+        if (n != 0)
+        {
+            t->unk_2C = (u8 *)n + 0x20;
+            D_800CFCB4.unk_10 = (s32)((u8 *)n + 0x20);
+            D_800CFCB4.unk_18 = 0;
+            func_8009451C(t, b, c);
+        }
+        else
+        {
+            func_80093D48(t, b, (s32)c);
+        }
+    }
+    else
+    {
+        D_800FE5D8(t, b, c);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093B00);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093BAC);
+/* The D_800FE5D8 continuation that asks func_8009F6E4 for a free pool slot:
+   on -1 (the pool is full) it raises message D_80088D44 as event 0x11,
+   re-runs func_800947BC and re-arms itself through func_80093D48; otherwise
+   it hands off to func_80094774 and clears D_800FE518.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093C40);
+   THREE PARAMETERS, witnessed by the body itself: $a0, $a1 and $a2 are each
+   copied into a saved register in the prologue before any of them is written,
+   and $a3 is never touched.  Nothing in this unit calls it and nothing but
+   func_80093C40 takes its address -- into the unprototyped
+   `void (*D_800FE5D8)()` slot, which settles no arity -- but func_80093894
+   above `jalr`s that slot with exactly (task, mover, rend), which is where
+   the three come from.  The third is spelled `void *` to match the
+   func_80094774 declaration this unit already type-checks the call against.
+
+   func_8009F6E4 TAKES NO ARGUMENTS: the `addu $s2, $a2, $zero` in its `jal`'s
+   delay slot is this function's own third parameter being saved, not an
+   argument, which is the same false positive the unit records at :16760.
+
+   D_80088D44 is declared `extern u8 []` and passed `(s32)D_80088D44`, because
+   func_8008B5D8's landed prototype is `(s32, s32)`.
+
+   37 words -- its header reads `nonmatching func_80093BAC, 0x94`, and
+   0x94/4 = 37.  No jump table, no rodata of its own.  Measured 0 differing;
+   `--raw` 13 against relocdump's 13, TWO of them %hi/%lo on the FUNCTION
+   symbol func_80093D48 -- masked, with no `jal` to decode -- read off this
+   function's own listing. */
+void func_80093BAC(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    if (func_8009F6E4() == -1)
+    {
+        func_8008B5D8((s32)D_80088D44, 0x11);
+        func_800947BC(t, b, c);
+        D_800FE5D8 = func_80093D48;
+    }
+    else
+    {
+        func_80094774(t, b, c);
+        D_800FE518 = 0;
+    }
+}
+
+/* The func_80093C58 (:9266 before this merge) tail verbatim with a different
+   handler: park func_80093BAC in the D_800FE5D8 continuation slot, return 0.
+
+   IT RETURNS 0 -- `addu $v0, $zero, $zero` sits in the `jr`'s delay slot --
+   so the unit's `void func_80093C40();` forward declaration is WIDENED to
+   `s32` by this merge, exactly as func_80093C58's was.  A `void` body would
+   otherwise be a conflicting-types hard error, not a byte difference.
+
+   NO ARITY WITNESS ANYWHERE: nothing in this unit or in the sister carved
+   units calls it, and nothing takes its address, so `void` is a choice and
+   not a finding -- func_80093C58 next door got its four parameters from a
+   sister unit's call site and this one has no such caller.  An unread
+   parameter costs nothing here either way.
+
+   func_80093BAC is DEFINED ABOVE this point (its INCLUDE_ASM is the line
+   before, and this merge lands both), so the address-take needs no forward
+   declaration; the merge script asserts that ordering before writing.
+
+   6 words -- its header reads `nonmatching func_80093C40, 0x18`, and
+   0x18/4 = 6.  No jump table, no rodata of its own.  Measured 0 differing;
+   `--raw` 4 against relocdump's 4, TWO of them %hi/%lo on the FUNCTION
+   symbol func_80093BAC -- masked, with no `jal` to decode.  The four
+   interleave %hi(D_800FE5D8), %hi(func_80093BAC), %lo(func_80093BAC),
+   %lo(D_800FE5D8), and that ORDER was checked positionally by seqcheck. */
+s32 func_80093C40(void)
+{
+    D_800FE5D8 = func_80093BAC;
+    return 0;
+}
 
 /* The func_80093C70 (:8287) tail on its own: park func_800947CC in the
    D_800FE5D8 continuation slot.
@@ -9360,7 +9612,40 @@ void func_80093CEC(u8 *a)
     func_80094984(a, t, o->unk_0C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093D18);
+/* func_80093D38's (:9357) installer shape with func_80093C70's tail store
+   after it: park func_80090A64 in the task's +0x00 handler slot and
+   func_80093D48 in the D_800FE5D8 continuation slot.
+
+   NO CONDITION AND NO SELECTION.  It installs two different handlers but it
+   does not choose between them: the whole body is two stores, straight line,
+   with the second in the `jr`'s delay slot.  The slot is +0x00; +0x04 would
+   be one differing word, as func_80093D38 records.
+
+   THREE PARAMETERS from the two landed callers func_80090C68 (:7304) and
+   func_80090D44 (:7338), both of which forward their own (a, b, c) -- so that
+   is a lower bound and the weakest kind.  $a1 and $a2 are never read here, so
+   the bytes do not witness them; the `(task, mover, rend)` triple is the
+   convention every sibling in this family carries, and the third is `s32` to
+   match func_80093D48's own declaration.  It is also `jal`'d by the stub
+   func_80093328.
+
+   func_80090A64 is DEFINED ABOVE at :7167 and declared at :3216, and
+   func_80093D48 is declared at :2650, so NEITHER address-take needs a new
+   forward declaration -- provision.py's install banner asks for one for
+   func_80093D48 and is wrong about it; its own callee table says
+   "DECLARED at csrc/ovl_town.c" two sections later.
+
+   8 words -- its header reads `nonmatching func_80093D18, 0x20`, and
+   0x20/4 = 8.  No jump table, no rodata of its own.  Measured 0 differing;
+   `--raw` 6 against relocdump's 6, FOUR of them %hi/%lo on the FUNCTION
+   symbols func_80090A64 and func_80093D48 -- masked, with no `jal` to decode
+   -- and seqcheck's ordered comparison is what settles which of the two is
+   installed first. */
+void func_80093D18(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    t->unk_00 = func_80090A64;
+    D_800FE5D8 = func_80093D48;
+}
 
 /* An installer and nothing else, in the func_80093D48 (:8305) shape.  Its one
    landed caller func_800927EC passes three arguments; that is a forwarding
