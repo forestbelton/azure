@@ -81,6 +81,68 @@ def _forwarding(def_line, arglist_text):
     return ''
 
 
+def park_offset_is_on(park_text, sym, off):
+    """True when the PARK reaches `off` off `sym` -- not merely mentions both.
+
+    This is the other half of the 2026-11-03 false positive: tightening only
+    the listing side still fired, because the park's own `+0xC8` is on the
+    0x1F800000 scratchpad while it ALSO names D_80083160 elsewhere. A park
+    reaches a global either directly (`D_X.unk_NN`) or through a local it
+    assigns from that global (`g = &D_X;` ... `g->unk_NN`), so look for both
+    and attribute nothing else.
+    """
+    fld = r'(?:unk_%s|pad_%s)' % (off.upper(), off.upper())
+    if re.search(r'\b%s\s*\.\s*%s\b' % (sym, fld), park_text):
+        return True
+    locals_ = set(re.findall(
+        r'\b([A-Za-z_]\w*)\s*=\s*&\s*%s\b' % sym, park_text))
+    for v in locals_:
+        if re.search(r'\b%s\s*->\s*%s\b' % (re.escape(v), fld), park_text):
+            return True
+        if re.search(r'\b%s\s*\[[^\]]*\]\s*\.\s*%s\b' % (re.escape(v), fld),
+                     park_text):
+            return True
+    return False
+
+
+def offsets_by_global(listing):
+    """{global: {offsets seen as a displacement off THAT global's own base}}.
+
+    Follows the `%lo(SYM)` line's destination register and one level of
+    `addiu`/`addu` derivation from it, which is how this codebase forms a
+    base-plus-offset pointer. Anything not traceable to a global's own chain is
+    simply not attributed -- an offset off the scratchpad or off a parameter
+    must not be reported as a field of a global, which is the defect this
+    function exists to prevent.
+    """
+    lines = listing.split('\n')
+    out = {}
+    for i, ln in enumerate(lines):
+        m = re.search(r'%lo\((D_[0-9A-F]+)\)', ln)
+        if not m:
+            continue
+        sym = m.group(1)
+        d = re.search(r'\b(?:addiu|lw|lhu|lh|lbu|lb)\s+\$(\w+)', ln)
+        if not d:
+            continue
+        regs = {d.group(1)}
+        # the displacement on the %lo line itself, when it is a load/store
+        own = out.setdefault(sym, set())
+        for ahead in lines[i + 1:i + 60]:
+            # one level of derivation: addiu $new, $base, N  /  addu $new, $base, $zero
+            dm = re.search(r'\b(?:addiu|addu)\s+\$(\w+),\s*\$(\w+)', ahead)
+            if dm and dm.group(2) in regs:
+                regs.add(dm.group(1))
+            for om in re.finditer(r'0x([0-9A-Fa-f]{2,4})\(\$(\w+)\)', ahead):
+                if om.group(2) in regs:
+                    own.add(om.group(1))
+            am = re.search(r'\baddiu\s+\$\w+,\s*\$(\w+),\s*0x([0-9A-Fa-f]{2,4})\b',
+                           ahead)
+            if am and am.group(1) in regs:
+                own.add(am.group(2))
+    return {k: v for k, v in out.items() if v}
+
+
 def classify_addr_takes(listing, names):
     """Split %hi-on-a-function symbols into the ones this listing STORES (real
     installs) and the ones it only COMPARES (inspectors).
@@ -518,7 +580,7 @@ def main():
                 print("                  %-15s %s" % (
                     i, pr.strip() if pr else 'no declaration in the unit either -- write one'))
         if gl:
-            tags, outside = [], []
+            tags, outside, needdecl = [], [], []
             for g in gl:
                 if re.search(r'^\s*extern\b[^;]*\b' + g + r'\b', src_txt, re.M):
                     tags.append(g)
@@ -542,8 +604,23 @@ def main():
                     outside.append(g)
                     tags.append(g + ' [MAYBE A CONSTANT]')
                 else:
-                    tags.append(g + ' *** NO DECLARATION, you must add one ***')
+                    needdecl.append(g)
+                    tags.append(g + ' [NEEDS A DECLARATION]')
             print("      globals : %s" % ', '.join(tags))
+            if needdecl:
+                # THE MARKER USED TO BE APPENDED TO THE COMMA-JOINED LIST, so
+                # it read as applying to every symbol on the line. Two agents
+                # reported it on 2026-11-03: one was told three globals needed
+                # a declaration when only the trailing one did, and said that
+                # believing it would have walked them into the by-value/decay
+                # trap the sweep doc records. The tool already does this right
+                # in the declared case ("declared include/structs.h:1636 -- do
+                # NOT redeclare"), so the per-symbol form is carried into the
+                # undeclared case and the ones that need it are named again on
+                # their own line.
+                print("      *** NEEDS A DECLARATION -- exactly these %d, not the"
+                      " whole line above: %s ***"
+                      % (len(needdecl), ', '.join(needdecl)))
             if outside:
                 # One note for all of them, not one per symbol: this used to
                 # repeat a whole paragraph per global and the line became
@@ -886,10 +963,16 @@ def main():
             ls = open(lp).read()
         except Exception:
             continue
-        mine = set(re.findall(r'0x([0-9A-Fa-f]{2,4})\(', ls)) | \
-            set(m.group(1) for m in re.finditer(
-                r'addiu\s+\$\w+,\s*\$(?!zero\b)\w+,\s*0x([0-9A-Fa-f]{2,4})\b', ls))
-        mysyms = set(re.findall(r'%hi\((D_[0-9A-F]+)\)', ls))
+        # THE OFFSET MUST BE ON THAT GLOBAL'S OWN ADDRESSING CHAIN. My first
+        # version matched the global and the offset INDEPENDENTLY, so any
+        # function mentioning D_80083160 anywhere and 0xC8 anywhere scored --
+        # and on 2026-11-03 that sent an agent to read two parks in full whose
+        # +0xC8 is on the 0x1F800000 SCRATCHPAD, a different record entirely.
+        # Neither park reads that global at +0xC8 at all. The precision figure
+        # I quoted when adding the route (6 of 60 stubs, 2 parks each) measured
+        # selectivity, not correctness.
+        bysym = offsets_by_global(ls)
+        mysyms = set(bysym)
         for nm, (sf, u, built, tgt, diff) in sorted(pk.items()):
             if nm in edge_reported.get(f, ()):
                 continue   # route (i) already reported it on the call graph
@@ -899,18 +982,22 @@ def main():
             except Exception:
                 continue
             psyms = set(re.findall(r'\b(D_[0-9A-F]+)\b', pt))
-            shared_sym = mysyms & psyms
-            shared_off = sorted(
-                o for o in mine
-                if int(o, 16) >= 0x40
-                and re.search(r'(?:0x%s\b|\bunk_%s\b)' % (o.upper(), o.upper()),
-                              pt, re.I))
-            if shared_sym and shared_off:
+            # Report only a (global, offset) pair where BOTH the global and
+            # that offset OFF THAT GLOBAL appear in the park.
+            pairs = []
+            for sym in sorted(mysyms & psyms):
+                for o in sorted(bysym[sym]):
+                    if int(o, 16) < 0x40:
+                        continue
+                    if park_offset_is_on(pt, sym, o):
+                        pairs.append((sym, o))
+            if pairs:
                 print("  %-15s %s is PARKED at %d of %d words, %d DIFF (%s)"
                       % (f, nm, built, tgt, diff, u))
-                print("      shares global(s) %s AND offset(s) %s with your listing"
-                      % (', '.join(sorted(shared_sym)[:3]),
-                         ', '.join('+0x' + o.upper() for o in shared_off[:4])))
+                for sym, o in pairs[:4]:
+                    print("      %s + 0x%s -- on THAT global's own addressing"
+                          " chain in your listing, and reached off THAT global"
+                          " in the park too" % (sym, o.upper()))
                 print("      docs/near-misses/%s" % sf)
                 anyp2 = True
     if not anyp2:
