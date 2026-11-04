@@ -787,9 +787,18 @@ def main():
         except Exception: continue
         # Displacements and addiu constants big enough to be a field offset
         # rather than a small immediate or a frame slot.
-        offs = set()
+        # TWO SOURCES, AND THEY ARE NOT EQUALLY TRUSTWORTHY. A displacement
+        # `0xNNN(reg)` in a load or store IS a field offset. An `addiu`
+        # immediate MIGHT be one -- it is how a base+offset pointer is formed,
+        # which is the +0x1DC case this route exists for -- but it is equally
+        # an arithmetic addend. On 2026-11-03 this route reported
+        # "func_800A378C +0x2000: 3 landed function(s) use it" where 0x2000 is
+        # the addend in `(x * 2 + 0x2000) * 16` and the three users all test it
+        # as a FLAG. Nothing in the instruction tells them apart, so report
+        # which source each came from and let the reader discount accordingly.
+        disp, arith = set(), set()
         for m in re.finditer(r'0x([0-9A-Fa-f]{2,4})\(', ls):
-            offs.add(int(m.group(1), 16))
+            disp.add(int(m.group(1), 16))
         # NOT `$zero` as the source: `addiu $a1, $zero, 0x2000` is a CONSTANT
         # LOAD, not a field offset, and the first version of this route ranked
         # one of those top for func_800B72B8 and never printed the +0x1DC it
@@ -797,7 +806,9 @@ def main():
         for m in re.finditer(
                 r'addiu\s+\$\w+,\s*\$(?!zero\b)\w+,\s*0x([0-9A-Fa-f]{2,4})\b',
                 ls):
-            offs.add(int(m.group(1), 16))
+            arith.add(int(m.group(1), 16))
+        arith -= disp
+        offs = sorted(disp) + sorted(arith)
         rows = []
         for o in offs:
             if o < 0x40 or o % 2:
@@ -818,12 +829,17 @@ def main():
                 if re.search(pat, txt[i:j], re.I):
                     sites.append(nm)
             if sites and len(sites) <= 8:
-                rows.append((len(sites), o, sites))
-        for n, o, sites in sorted(rows)[:4]:
+                # Displacement-derived first: those are certainly offsets.
+                rows.append((0 if o in disp else 1, len(sites), o, sites))
+        for kind, n, o, sites in sorted(rows)[:4]:
             anym = True
-            print("  %-15s +0x%X: %d landed function(s) use it: %s"
-                  % (f, o, n, ', '.join('%s (:%d)' % (s, lines.get(s, 0))
-                                        for s in sites[:4])))
+            print("  %-15s +0x%X: %d landed function(s) use it%s: %s"
+                  % (f, o, n,
+                     '' if kind == 0 else
+                     '  [from an addiu IMMEDIATE, so it may be an arithmetic'
+                     ' addend rather than a field offset -- check the opcode]',
+                     ', '.join('%s (:%d)' % (s, lines.get(s, 0))
+                               for s in sites[:4])))
             print("      grep -nE 'unk_%02X|0x%X' csrc/%s.c" % (o, o, unit))
     if not anym:
         print("  no rare field offset with a landed user")
