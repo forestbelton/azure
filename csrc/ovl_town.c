@@ -2085,7 +2085,7 @@ void func_8009ECF0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
 void func_8009E714();
 extern s32 D_800D09C8;
 void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
-void func_8009F148(UnkTownSpawn *p, UnkTownSpawn *p2, UnkVec *q, UnkTownRend *r);
+void func_8009F148(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r);
 void func_800B2244();
 extern s32 D_800D0B14;
 extern s16 D_80100D18;
@@ -2118,6 +2118,15 @@ void func_8009550C(UnkTown2AE8 *b);
 void func_80033AE8(s32 a);
 void func_800AB084(void);
 extern UnkTownCFCC4 *D_800CFCC4;
+/* The 4-byte table func_8009E258 indexes with D_800CFCC4's +0x4C byte.
+   `extern u32 X[]` with a plain `X[i]` subscript, which is what the
+   target's `lui`/`addiu %lo` into a register followed by `sll`/`addu`/
+   `lw 0(...)` is: a variable index makes the address plus(ASHIFT,
+   SYMBOL), so mips.h's LEGITIMIZE_ADDRESS does not split the %lo into
+   the load displacement the way it does for plus(REG, CONST_INT).
+   Measured 0 differing on the first compile; no other spelling of the
+   declaration was tried. */
+extern u32 D_800D0910[];
 extern s32 D_800FE518;
 void func_80094774(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 extern s16 D_800D4258[4];
@@ -3846,9 +3855,15 @@ s32 func_80093C40();
 void func_800947CC(UnkTownTask *t, UnkTown2AE8 *b);
 s32 func_80093C58();
 void func_8009E218();
-void func_8009E258();
+s32 func_8009E258();
 s32 func_8009E2C0();
-void func_8009E348();
+s32 func_8009E348();
+/* func_8009E348's only statement is a call to this, and the definition
+   is far below; the implicit declaration an overlay call usually rides
+   would make it return `int` and the definition then warns three times
+   about the mismatch, so this one is spelled out.  Copied from the
+   definition. */
+void func_800B6BC4(UnkNode *n);
 s32 func_8009E370();
 s32 func_8009E3D4();
 
@@ -17314,7 +17329,28 @@ UnkNode *func_8009DFD8(u8 *a, UnkTown2AE8 *b, s32 c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E218);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E258);
+/* 26 words -- its header reads `nonmatching func_8009E258, 0x68`, and
+   0x68/4 = 26.  No jump table and no rodata of its own.
+
+   func_8009E370 above is the index template: the same
+   `D_800CFCC4->unk_4F & 0x3F` record index and the same out-of-image
+   0x80010AB4 + i * 0x54 UnkTownName10 slot, materialised whole as a
+   `lui`/`ori` pair because it is pointer ARITHMETIC and not a dereference.
+   The three destinations are D_80082A38 + 0x48/0x4C/0x50 -- the five-slot
+   u32 queue include/structs.h documents at +0x48, reached through the
+   D_80082A38w alias the way func_8009A5F4 reaches it. */
+s32 func_8009E258(void)
+{
+    u8 *p;
+    u32 *d;
+
+    p = (u8 *)D_800CFCC4;
+    d = D_80082A38w;
+    d[18] = *(s8 *)(p + 0x4E);
+    d[19] = D_800D0910[*(p + 0x4C)];
+    d[20] = (u32)((u8 *)0x80010AB4 + (*(p + 0x4F) & 0x3F) * 0x54);
+    return 0;
+}
 
 /* 34 words -- its header reads `nonmatching func_8009E2C0, 0x88`, and
    0x88/4 = 34.  Measured 0 differing.  No jump table and no rodata of its own.
@@ -17348,7 +17384,18 @@ s32 func_8009E2C0(void)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E348);
+/* 10 words -- its header reads `nonmatching func_8009E348, 0x28`, and
+   0x28/4 = 10.  No jump table and no rodata of its own.  func_8009E2C0
+   above is the family: a zero-argument `s32` returning 0 whose whole body is
+   one engine call over the D_80100AF4 node that function publishes.  The
+   pre-existing `void func_8009E348();` declaration has to become `s32`, the
+   same change func_8009E3D4 records: the trailing
+   `addu $v0, $zero, $zero` IS the return value. */
+s32 func_8009E348(void)
+{
+    func_800B6BC4(D_80100AF4);
+    return 0;
+}
 
 /* 25 words -- its header reads `nonmatching func_8009E370, 0x64`, and
    0x64/4 = 25.  Measured 0 differing.  No jump table and no rodata of its own.
@@ -17793,7 +17840,22 @@ void func_8009E994(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EAB0);
+/* 28 words -- its header reads `nonmatching func_8009EAB0, 0x70`, and
+   0x70/4 = 28.  No jump table and no rodata of its own.  func_8009E994
+   above is the superset: the same `*((u8 *)b + 0x15) = 0`, the same
+   24-byte local handed to func_8009EB9C as a fifth argument out of the same
+   0x48-byte frame, and the same func_8009BFD8 continuation on a zero
+   return -- without the three-axis tracker head or the countdown. */
+void func_8009EAB0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    UnkTown2AE8 v;
+
+    *((u8 *)b + 0x15) = 0;
+    if (func_8009EB9C(a, b, c, d, &v) == 0)
+    {
+        func_8009BFD8(a, b, c, d);
+    }
+}
 
 /* 7 words, 0 differing.  The minimal member of this unit's bind family --
    compare func_8009EC3C, which adds the three delta clears and a second
@@ -17827,7 +17889,24 @@ void func_8009EB3C(UnkTownActor *a, s32 b)
     D_800814A0 |= 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EB9C);
+/* 17 words -- its header reads `nonmatching func_8009EB9C, 0x44`, and
+   0x44/4 = 17.  No jump table and no rodata of its own.  FIVE parameters,
+   from its two landed call sites func_8009E994 (:17778) and func_8009EF88
+   (:18035), both `func_8009EB9C(a, b, c, d, &v)`; only the first is read
+   here, the rest are the family convention.  func_8009EB3C above records
+   this function as its only caller and the two-argument shape it needs. */
+s32 func_8009EB9C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d, UnkTown2AE8 *e)
+{
+    s32 i;
+
+    i = func_8009F6E4();
+    if (i == -1)
+    {
+        return 0;
+    }
+    func_8009EB3C(a, i);
+    return 1;
+}
 
 UnkTownIdPair *func_8009EBE0(s32 a, s32 b)
 {
@@ -18090,7 +18169,67 @@ void func_8009EF88(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F148);
+/* 30 words -- its header reads `nonmatching func_8009F148, 0x78`, and
+   0x78/4 = 30.  Measured 0 differing.  No jump table and no rodata of its
+   own.  FOUR parameters, from the two landed forwarding call sites
+   func_8009E504 (:17546) and func_8009EF88 (:18078) and from the group
+   member func_8009F374 below; the pre-existing declaration's
+   `UnkTownSpawn *, UnkTownSpawn *` had to become `UnkTownActor *, void *`
+   because this body reads +0x50/+0x60/+0x6C off the first parameter, which
+   is past UnkTownSpawn's 0xA0 and is UnkTownActor's field set.
+   It installs func_8009EE9C, defined immediately above, so the assignment
+   needs no forward prototype -- that `%hi`/`%lo` pair on a FUNCTION symbol
+   is the class ovlverify masks and that has no `jal` to decode.
+   The constant 1 serves both +0x14/+0x15 bytes and 0xFFE00000 both words,
+   exactly as func_8009E85C writes the same 0xFFE00000 pair, and the +0xA0
+   store precedes q->unk_08 there too.
+
+   *** THE +0x60 STORE IS DUPLICATED IN BOTH ARMS, AND THAT IS THE WHOLE
+   MATCH. ***  Every spelling that stores ONCE from a value the arms select
+   is 30 words / 3 differing, all three words a register: the target puts the
+   selected constant in $v0 and the candidate in $a0.  Measured flat at 3:
+     a->unk_60 = (+0x4D == 0x12) ? 0x58 : 0x59;        3 differing
+     *(s32 *)((u8 *)a + 0x60) = that ternary            3
+     s32 n; if/else into n; a->unk_60 = n;              3
+     s32 n; n = 0x59; if (== 0x12) n = 0x58;            3
+     n reused from the func_800374F4 result             3
+     the same if/else written with goto/labels          3
+     do { } while (0) around the ternary                5
+     (+0x4D != 0x12) ? 0x59 : 0x58                      4
+     a->unk_60 = 0x59; if (== 0x12) a->unk_60 = 0x58;  31 words / 11
+   The cause is jump.c's `if (...) x = a; else x = b;` -> `x = b; if (...)
+   x = a;` hoist (jump.c:789-920).  It requires the insn before the arm's
+   `goto` to be a `single_set` whose SET_DEST is a REG
+   (`GET_CODE (temp1 = SET_DEST (temp4)) == REG`, :818), and it moves the
+   else arm's `li` to `PREV_INSN` of the condjump -- i.e. PAST the compare
+   constant's own `li`.  The selected pseudo is then live across that
+   constant, `.greg` records `;; 91 conflicts: 80 91 2 3 29`, and $v0 is
+   excluded by a real conflict rather than by priority, so no allocation
+   lever can reach it.  With the STORE as each arm's last insn, SET_DEST is
+   a MEM, the hoist is skipped, cross-jumping unifies the two identical
+   `sw`s instead, and reorg takes the else arm's `li` for the `bne`'s delay
+   slot after allocation -- when the pseudo is born inside each arm and
+   conflicts with nothing. */
+void func_8009F148(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
+{
+    *((u8 *)b + 0x14) = 1;
+    *((u8 *)b + 0x15) = 1;
+    q->unk_0C = 0;
+    q->unk_10 = 0;
+    q->unk_14 = 0;
+    *(s32 *)((u8 *)a + 0xA0) = 0xFFE00000;
+    q->unk_08 = 0xFFE00000;
+    a->unk_50 = func_8009EE9C;
+    a->unk_6C = func_800374F4(0x1000);
+    if (*((u8 *)a + 0x4D) == 0x12)
+    {
+        a->unk_60 = 0x58;
+    }
+    else
+    {
+        a->unk_60 = 0x59;
+    }
+}
 
 /* 44 words -- its header reads `nonmatching func_8009F1C0, 0xB0`, and
    0xB0/4 = 44.  Measured 0 differing.  No jump table and no rodata of its own.
@@ -18137,7 +18276,25 @@ void func_8009F1C0(UnkTownActor *a, UnkTownCFCC4 *b, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F270);
+/* 14 words -- its header reads `nonmatching func_8009F270, 0x38`, and
+   0x38/4 = 14.  No jump table and no rodata of its own.  No caller and no
+   address-take in any source file: its address is in the built container at
+   0x800D3FC4, a run of sibling zero-argument handlers off D_800D3CC8 that
+   func_8009D5C0 materialises, so the arity comes from the body (no argument
+   register is read) and the return TYPE is unwitnessed.
+   The guard is func_800927EC's `D_800CFCC4 != 0 && D_800CFCC4->unk_14 == 4`
+   verbatim. */
+u8 *func_8009F270(void)
+{
+    UnkTownCFCC4 *p;
+
+    p = D_800CFCC4;
+    if (p != NULL && p->unk_14 == 4)
+    {
+        return (u8 *)p + 0x4C;
+    }
+    return NULL;
+}
 
 /* func_8009EE9C's near-sibling, installed by func_8009F48C the same way (its
    address is taken and never called).  Same angle step and same guard; the
@@ -18200,9 +18357,38 @@ void func_8009F2A8(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F374);
+/* 70 words -- its header reads `nonmatching func_8009F374, 0x118`, and
+   0x118/4 = 70.  No jump table and no rodata of its own.  Installed at
+   UnkTownActor.unk_50 by func_8009F4C0 below, so the slot is unprototyped
+   and nothing witnesses the arity; all four argument registers are read
+   ($a0..$a3 go to $s0/$s3/$s2/$s1) and all four are forwarded to
+   func_8009F148 above.  The head is func_8009EE9C's shape: the +0xA0 base
+   plus a scaled engine value into the mover's +0x08. */
+void func_8009F374(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
+{
+    q->unk_08 = *(s32 *)((u8 *)a + 0xA0) + (((u16)func_800374F4(0x10) - 8) << 16);
+    r->unk_1C = func_800644B8(a->unk_6C * 409) / 4 + 0x1000;
+    r->unk_1E = 0x1000 - func_800644B8(a->unk_6C * 409) / 4;
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_8009F148(a, b, q, r);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F48C);
+/* 13 words -- its header reads `nonmatching func_8009F48C, 0x34`, and
+   0x34/4 = 13.  No jump table and no rodata of its own.  FOUR parameters,
+   from its landed caller func_8009EE9C above: `func_8009F48C(a, c, q, r)`.
+   It installs func_8009F2A8, which is DEFINED IMMEDIATELY ABOVE, so the
+   assignment needs no forward prototype.  func_80033D08's argument is the
+   incoming `$a0` itself, which is why there is no `move` -- the delay slot
+   carries the parameter's save into $s0 instead. */
+void func_8009F48C(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
+{
+    func_80033D08((u8 *)a);
+    a->unk_50 = func_8009F2A8;
+}
 
 /* Installs an item (type 0x13) into the actor's slot. Two tables live at the
    out-of-image constant base 0x80010000, which is why the base is a one-set
@@ -18275,7 +18461,34 @@ void func_8009F6D4(void) {
 void func_8009F6DC(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F6E4);
+/* 14 words -- its header reads `nonmatching func_8009F6E4, 0x38`, and
+   0x38/4 = 14.  Measured 0 differing.  No jump table and no rodata of its
+   own.  NO ARGUMENTS: both landed call sites (func_80093BAC :9963,
+   func_8009FCF0 :18551) pass none, and the body writes $a0 before reading
+   it.  0x8001029C is an out-of-image CONSTANT address -- the `lui`/`ori`
+   pair, not `lui`/`addiu` -- so it emits no relocation.
+
+   THE `>= 0x14` ARM MUST BE WRITTEN FIRST, and that is the 14th word.  It
+   is the "an early return is laid out inline" lever with one arm leaving
+   the function, so the FALL-THROUGH arm is the one written second:
+     if (i >= 0x14) return -1; return i;    14 words, 0 differing
+     if (i < 0x14) return i; return -1;     13 words, 8 differing -- gcc
+       leaves the callee's result in $v0 and the copy into $a0 disappears
+     return (i < 0x14) ? i : -1;            14 words, 7 differing (register)
+     r = -1; if (i < 0x14) r = i; return r; 14 words, 7 differing (register)
+   The missing word in the second row is the `addu $a0, $v0, $zero` that
+   frees $v0 for the `addiu $v0, $zero, -0x1` in the branch's delay slot. */
+s32 func_8009F6E4(void)
+{
+    s32 i;
+
+    i = func_800B29A4((UnkTown11F80 **)0x8001029C);
+    if (i >= 0x14)
+    {
+        return -1;
+    }
+    return i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F71C);
 
