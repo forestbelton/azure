@@ -2059,6 +2059,8 @@ u32 func_8004A658(s32 i, s32 j);
 void func_8009C1B4();
 void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d);
 void func_8009DEBC();
+void func_8009DF84();
+void func_8009ECF0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
 void func_8009E714();
 extern s32 D_800D09C8;
 void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
@@ -15036,11 +15038,53 @@ void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DE28);
+void func_8009DE28(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    (*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r);
+    if (*(u16 *)((u8 *)p - 0x2) & 0x8000)
+    {
+        return;
+    }
+    func_800970AC(func_8009706C(q), (UnkTownActor *)p);
+    if (*((u8 *)p + 0x4D) == 0x13)
+    {
+        func_800478B8((s32)r);
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DEBC);
+void func_8009DEBC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009D20C(p, q) == 2)
+    {
+        func_80033D08((u8 *)p);
+        *((u8 *)p + 0xAC) = *((u8 *)p + 0x15);
+        *((u8 *)p + 0x15) = 0;
+        *(u32 *)((u8 *)p - 0x10) = (u32)func_8009DF84;
+    }
+    else
+    {
+        (*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r);
+        if (*(u16 *)((u8 *)p - 0x2) & 0x8000)
+        {
+            return;
+        }
+        func_800970AC(func_8009706C(q), (UnkTownActor *)p);
+        if (*((u8 *)p + 0x4D) == 0x13)
+        {
+            func_800478B8((s32)r);
+        }
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DF84);
+void func_8009DF84(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009D20C(p, q) != 2)
+    {
+        func_80033CD8((u8 *)p, (u32)D_80045340);
+        *(u32 *)((u8 *)p - 0x10) = (u32)func_8009DEBC;
+        *((u8 *)p + 0x15) = *((u8 *)p + 0xAC);
+    }
+}
 
 UnkNode *func_8009DFD8(u8 *a, UnkTown2AE8 *b, s32 c)
 {
@@ -15645,7 +15689,16 @@ UnkTownIdPair *func_8009EBE0(s32 a, s32 b)
     return NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EC3C);
+void func_8009EC3C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    *((u8 *)b + 0x15) = 0;
+    c->unk_0C = 0;
+    c->unk_10 = 0;
+    c->unk_14 = 0;
+    a->unk_50 = func_8009ECF0;
+    a->unk_6C = 7;
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_8009DE28;
+}
 
 /* 32 words, 0 differing.  The bind half of the pair: clears the mover's
    three deltas, installs func_8009ED7C with a 0xA countdown, and picks the
@@ -16438,7 +16491,52 @@ void func_800A022C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     a->unk_50 = func_8009BC44;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A027C);
+UnkNode *func_800A027C(u8 *a, UnkTown2AE8 *b)
+{
+    UnkNode *n;
+    UnkTownSpawn *p;
+    UnkVec *q;
+    UnkTownRend *r;
+
+    n = func_8003FD64(0x136, &D_80083498);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    q = n->unk_08;
+    r = (UnkTownRend *)n->unk_0C;
+    *(u16 *)((u8 *)q + 0x2) = *(u16 *)((u8 *)b + 0x2);
+    *(u16 *)((u8 *)q + 0x6) = *(u16 *)((u8 *)b + 0x6);
+    *(u16 *)((u8 *)q + 0xA) = *(u16 *)((u8 *)b + 0xA);
+    p = (UnkTownSpawn *)((u8 *)n + 0x20);
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    *(s32 *)((u8 *)r + 0xC) = 0x808080;
+    *(s32 *)((u8 *)p + 0x48) = 0;
+    p->unk_98 = 0;
+    *((u8 *)p + 0x93) = 0;
+    *((u8 *)p + 0x4C) = a[0];
+    *((u8 *)p + 0x4D) = a[1];
+    *((u8 *)p + 0x4E) = a[2];
+    *((u8 *)p + 0x4F) = a[3];
+    func_8008F0D4(p, q, D_800D073C);
+    func_8009B218(p, q, r, D_800D076C);
+    if (*((u8 *)p + 0x4D) == 0x12)
+    {
+        *(u8 **)((u8 *)p + 0xC) = D_800D0754;
+    }
+    if (*((u8 *)p + 0x4D) == 0x12)
+    {
+        r->unk_08 = (u32)D_8006E240;
+    }
+    else
+    {
+        r->unk_08 = func_8004A658(*((u8 *)p + 0x4D), *((u8 *)p + 0x4C));
+    }
+    n->unk_10 = (u32)func_8009DEBC;
+    func_800A022C((UnkTownActor *)p, (UnkTownColl *)p, (UnkTown2AE8 *)q, r);
+    return n;
+}
 
 /* 10 words, 0 differing on the first spelling.  Clears all 20 words of the
    D_80100AA0 ring func_800A0404 below appends to.  The DESCENDING subscript
