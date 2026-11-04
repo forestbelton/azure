@@ -2794,7 +2794,32 @@ def main():
             o = io.open(fp, encoding='utf-8', errors='replace').read()
         except Exception:
             continue
-        olines = o.split('\n')
+        # STRIP COMMENTS FIRST. Route (s) scanned raw lines and reported
+        # `func_800CBAE0 called at csrc/ovl_town.c:2736 with 1 argument(s)`
+        # off the PROSE "func_800CBAE0 (still a stub) indexes by the actor's
+        # +0x96." -- the parenthesis after the name was read as an argument
+        # list, and neither sister unit calls that function anywhere.
+        # Reported 2026-11-04, on a route I added this afternoon. This module
+        # already has code_only() for precisely this, one function over; the
+        # cheap fix here is to blank every comment span while keeping the line
+        # structure so the reported line numbers stay right.
+        def _decomment(s):
+            out, i, n = [], 0, len(s)
+            while i < n:
+                j = s.find('/*', i)
+                if j < 0:
+                    out.append(s[i:])
+                    break
+                out.append(s[i:j])
+                k = s.find('*/', j + 2)
+                if k < 0:
+                    out.append('\n' * s.count('\n', j))
+                    break
+                out.append('\n' * s.count('\n', j, k))
+                i = k + 2
+            return ''.join(out)
+
+        olines = _decomment(o).split('\n')
         for f in targets:
             for i, ln in enumerate(olines):
                 m = re.search(r'\b%s\s*\(([^;)]*)\)' % f, ln)
