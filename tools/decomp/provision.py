@@ -927,8 +927,40 @@ def main():
                 print("  *** %s calls %s with >=%d arg(s) (sets %s) but its prototype"
                       % (f, callee, implied, ','.join('$' + r for r in sorted(regs))))
                 print("      declares %d: %s" % (n, pr))
+            elif n and implied and n > implied:
+                # THE REVERSE CASE, and it cost a wrong compile before this
+                # existed. A callee's prototype can be CORRECT and still be
+                # WIDER than this caller's own call site -- func_800AE2A4 is
+                # a +0x10 handler the engine dispatches with three arguments,
+                # declared with three, while func_800AE1AC's `jal` to it sets
+                # $a0 ALONE. Passing three cost 64 words against 62, with 19
+                # differing; a cast at the point of use is the 0-differing
+                # spelling and leaves the prototype alone, which matters when
+                # a sibling agent owns that declaration.
+                flagged = True
+                print("  *** %s calls %s but sets only %s -- its prototype is WIDER"
+                      % (f, callee, ','.join('$' + r for r in sorted(regs)) or 'nothing'))
+                print("      (%d parameter(s)): %s" % (n, pr))
+                print("      THE PROTOTYPE MAY BE RIGHT AND THIS CALL STILL NARROW."
+                      " Passing the extra arguments costs a move each unless")
+                print("      they are already live in those registers, so measure"
+                      " BOTH: the full call, and a cast at the point of use --")
+                print("      ((void (*)(T))%s)(x) -- which emits a plain jal with no"
+                      " relocation change and needs NO edit to the" % callee)
+                print("      declaration, which matters when a sibling agent owns"
+                      " it.")
+                print("      *** THIS DIRECTION UNDER-COUNTS, and the cause is this"
+                      " scan, not the code: it RESETS AT A LABEL, so any")
+                print("      argument set BEFORE the label is invisible -- whether"
+                      " reorg parked it in the previous branch's delay slot")
+                print("      or the value was simply already live from an earlier"
+                      " block. Measured on func_8009B454's call to")
+                print("      func_8008F27C: the scan sees only $a1, from the jal's"
+                      " own delay slot, while an `addu $a0, $s3, $zero` sits")
+                print("      one insn above the label. So READ UP PAST THE LABEL"
+                      " before believing this line.")
     if not flagged:
-        print("  no narrower prototype found among the callees with real prototypes")
+        print("  no prototype mismatch found among the callees with real prototypes")
 
     print("\n=== INSTALLED HANDLERS (route (b): what the target installs) ===")
     anyi = False
