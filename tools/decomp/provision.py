@@ -154,6 +154,9 @@ def defs_and_protos(src, unitname):
     txt = open(src).read()
     whole = txt
     landed, cur, depth, body = {}, None, 0, {}
+    # Address-TAKES inside a landed body, which `body` cannot hold because it
+    # matches only `func_X(`. Route (d) needs these: see the comment there.
+    addr = {}
     lines, lineno = {}, 0
     for ln in txt.split('\n'):
         lineno += 1
@@ -169,7 +172,8 @@ def defs_and_protos(src, unitname):
         # landed, whatever the text looks like.
         if m and ';' not in ln and re.search(r'\)\s*\{?\s*$', ln) \
                 and ('INCLUDE_ASM("asm/nonmatchings/%s", %s)' % (unitname, m.group(1))) not in whole:
-            cur = m.group(1); landed[cur] = ln.strip(); body[cur] = set(); depth = 0
+            cur = m.group(1); landed[cur] = ln.strip(); body[cur] = set()
+            addr[cur] = set(); depth = 0
             # Record the line HERE. Searching for the text later finds the
             # single-line PROTOTYPE instead, because the definition line is a
             # prefix of it -- that sent a brief's reader to :2206 (a
@@ -177,18 +181,23 @@ def defs_and_protos(src, unitname):
             lines[cur] = lineno
         if cur:
             body[cur].update(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', ln))
+            # A name NOT followed by `(` is being used as a VALUE: `(u32)func_X`,
+            # `&func_X`, or a bare assignment into a slot. That is an install.
+            addr[cur].update(re.findall(
+                r'\b(func_[0-9A-Fa-f]{8})\b(?!\s*\()', ln))
             depth += ln.count('{') - ln.count('}')
             if depth <= 0 and '}' in ln: cur = None
     protos = {}
     for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;{]*\);)', txt, re.M):
         protos.setdefault(m.group(2), m.group(1).strip())
     for k in body: body[k].discard(k)
-    return landed, protos, body, txt, lines
+    for k in addr: addr[k].discard(k)
+    return landed, protos, body, txt, lines, addr
 
 def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
-    landed, protos, body, txt, lines = defs_and_protos(src, unit)
+    landed, protos, body, txt, lines, addr = defs_and_protos(src, unit)
     src_txt = txt
     inc = include_protos()
     snames = splat_names()
@@ -420,6 +429,9 @@ def main():
     print("    calls it. An address-taker is NOT a caller and constrains nothing by")
     print("    itself -- it is the installer's DECLARATION that is the witness.")
     anyd = False
+    # Capture the C file's name BEFORE the loop below, which rebinds `src` to
+    # the string 'declared' and would otherwise print that as the filename.
+    cfile = os.path.basename(src)
     for f in targets:
         for sf in sorted(os.listdir(D(unit))):
             if not sf.endswith('.s') or sf[:-2] in targets: continue
@@ -440,6 +452,23 @@ def main():
                       ('%s: %s' % (src, decl)) if decl
                       else 'NO DECLARATION ANYWHERE -- read its listing'))
                 anyd = True; witnessed.add(f)
+        # AND THE LANDED C, which the loop above cannot see. splat emits a
+        # listing only for a function still carried by INCLUDE_ASM and prunes
+        # it on the next run, so a LANDED installer has no `.s` file at all and
+        # this route printed `none` for it. On 2026-11-03 that lost
+        # func_800A1C94 -- landed C, 23 lines above its targets' own
+        # INCLUDE_ASMs, installing BOTH func_800A1D1C and func_800A1F00 -- for
+        # the group whose arity it settles. Route (d)'s own header calls this
+        # the most valuable fact agents said their brief lacked, so printing
+        # `none` when the answer is in the same file is the worst case.
+        for nm in sorted(addr):
+            if nm in targets or f not in addr[nm]:
+                continue
+            d0 = landed[nm]
+            decl = d0[:d0.rindex(')') + 1] if ')' in d0 else d0
+            print("  %-15s address taken by %-15s LANDED C %s:%d: %s" % (
+                f, nm, cfile, lines.get(nm, 0), decl))
+            anyd = True; witnessed.add(f)
     if not anyd: print("  none")
 
     print("\n=== ROUTE (e): ASM CALLERS (route (c) only sees LANDED callers) ===")
