@@ -3645,15 +3645,208 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008ACAC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008ACE8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AD1C);
+/* Look one (a, b, c) key up in the overlay's own Unk80082660 table at
+   D_800CF720, an MRU list terminated by a -1 in +0x01.  Returns the index
+   when the key is present and `count - 0x80000000` -- a negative value whose
+   low 31 bits are the live entry count -- when it is not.  The ASM caller
+   func_8008B0E8 is the witness for all of it: it calls this with its own
+   three parameters, takes `bgez $v0` to skip the insert, and passes
+   `$v0 & 0x7FFFFFFF` to func_8008AFB0 as the entry count.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AD90);
+   +0x00 IS READ AS A SIGNED BYTE, so the cast is load-bearing: include/
+   declares `u8 unk_00` (func_8008AC84's `sb $zero` is the only other
+   witness) and without the `(s8)` the load is `lbu` where the target has
+   `lb` -- 1 differing.  `*(s8 *)&D_800CF720[i]` measures the same; the cast
+   is the smaller change, and retyping the shared struct is not an option
+   while 0x800CF720 is the only witness that it is signed.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AE4C);
+   29 words -- `nonmatching func_8008AD1C, 0x74`, and 0x74/4 = 29.  No jump
+   table, no rodata of its own, and no function address is taken. */
+s32 func_8008AD1C(s32 a, s32 b, s32 c)
+{
+    s32 i;
+
+    for (i = 0; D_800CF720[i].unk_01 != -1; i++)
+    {
+        if (a == (s8)D_800CF720[i].unk_00 && b == D_800CF720[i].unk_01 && c == D_800CF720[i].unk_02)
+        {
+            return i;
+        }
+    }
+    return i - 0x80000000;
+}
+
+/* Open a hole at the front of the D_800CF720 MRU table: copy entries 0..n-1
+   up to 1..n and slide each entry's payload `d` bytes further into the heap
+   whose base is D_801131B8's +0x2C word.  func_8008ACE8(i) is the running
+   byte offset of entry i's payload, func_8008ACAC is the descending-word
+   block move the overlap needs.  Called by func_8008AE4C and func_8008AFB0,
+   both below, with (index, size).
+
+   `s = D_801131B8;` IS INSIDE THE LOOP ON PURPOSE.  The target materialises
+   both bases in the loop PREHEADER, after the `beqz $a0` guard, so loop.c
+   has to be the thing that hoists them: written as a statement before the
+   loop the pair lands in the PROLOGUE instead, ahead of the guard, which is
+   8 differing in the first thirteen words at the same 47.  Written inline as
+   `*(u8 **)(D_801131B8 + 0x2C)` it is a constant address and costs two words
+   in the loop instead of one, 44 words against 47.  The field copies use the
+   struct's own types, so they are narrow-mode moves (`lbu`/`lbu`/`lhu`), not
+   the sign-extending loads func_8008AE4C's `s32` locals force.
+
+   47 words -- `nonmatching func_8008AD90, 0xBC`, and 0xBC/4 = 47.  No jump
+   table, no rodata of its own, and no function address is taken. */
+void func_8008AD90(s32 n, s32 d)
+{
+    s32 i;
+    u32 len;
+    u8 *heap;
+    u8 *s;
+
+    for (i = n; i != 0; i--)
+    {
+        D_800CF720[i].unk_00 = D_800CF720[i - 1].unk_00;
+        D_800CF720[i].unk_01 = D_800CF720[i - 1].unk_01;
+        D_800CF720[i].unk_02 = D_800CF720[i - 1].unk_02;
+        len = D_800CF720[i - 1].unk_04;
+        D_800CF720[i].unk_04 = len;
+        s = D_801131B8;
+        heap = *(u8 **)(s + 0x2C) + func_8008ACE8(i - 1);
+        func_8008ACAC(heap + d, heap, len);
+    }
+}
+
+/* Promote entry `i` of the D_800CF720 table to the front: stash its four
+   fields and its payload in a 0x8000 scratch block from func_80040574, slide
+   everything up one with func_8008AD90, then write the payload back at the
+   heap base and the fields into entry 0.  func_80069ED8 is splat's `memcpy`
+   -- spelled `func_80069ED8` because that is the name in
+   splat/town.bin_undefined_funcs_auto.txt:185; the overlay does not link
+   `memcpy`.  One parameter: the ASM caller func_8008B0E8 passes the index
+   func_8008AD1C or func_8008AFB0 returned.
+
+   `off = func_8008ACE8(i);` IS A STATEMENT OF ITS OWN, and that is the whole
+   difference between 0 and 3 differing.  With the call left inside the
+   func_80069ED8 argument the D_801131B8 base is materialised BEFORE the
+   call, so reorg fills the `jal`'s delay slot with the `addiu %lo` one insn
+   back instead of the `addu $s4, $v0, $zero` two insns back
+   (scratch/gcc-src/cdk-gcc-b18/reorg.c:3067-3077); same 56 words, words
+   23-25 permuted.  `s = D_801131B8;` as a statement is what gives the base
+   its own register and the two `lw 0x2C($s0)` -- the constant-address form
+   is one word shorter but shares a `%hi` instead.  The `(s8)` on +0x00 is
+   func_8008AD1C's cast for the same reason: `lb`, not `lbu`.
+
+   56 words -- `nonmatching func_8008AE4C, 0xE0`, and 0xE0/4 = 56.  No jump
+   table, no rodata of its own, and no function address is taken. */
+void func_8008AE4C(s32 i)
+{
+    s32 a;
+    s32 b;
+    s32 c;
+    u32 len;
+    u32 *tmp;
+    u8 *s;
+    s32 off;
+
+    a = (s8)D_800CF720[i].unk_00;
+    b = D_800CF720[i].unk_01;
+    c = D_800CF720[i].unk_02;
+    len = D_800CF720[i].unk_04;
+    tmp = func_80040574(0x8000);
+    off = func_8008ACE8(i);
+    s = D_801131B8;
+    func_80069ED8(tmp, *(u8 **)(s + 0x2C) + off, len);
+    func_8008AD90(i, len);
+    func_80069ED8(*(u8 **)(s + 0x2C), tmp, len);
+    D_800CF720[0].unk_00 = a;
+    D_800CF720[0].unk_01 = b;
+    D_800CF720[0].unk_02 = c;
+    D_800CF720[0].unk_04 = len;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AF2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AFB0);
+/* Insert the (a, b, c) key func_8008AD1C did not find at the front of the
+   D_800CF720 table, evicting from the tail until the record's 0x800-rounded
+   size fits in the 0x8000 heap.  `n` is the live entry count the ASM caller
+   func_8008B0E8 passes as `func_8008AD1C(...) & 0x7FFFFFFF`; it returns 0 on
+   both paths, which is why that caller's `beqz $v0` skips func_8008AE4C
+   after an insert.  func_8008AF2C gets this function's own first three
+   parameters -- there is no argument setup before its `jal` because gcc
+   keeps the incoming $a0/$a1/$a2 live across the prologue, and its own
+   listing reads all three.  Its return type stays an implicit int with a
+   cast at the point of use, because func_8008AF2C is still a stub.
+
+   THE FIRST EVICTION IS PEELED IN THE SOURCE AND CROSS-JUMPING PUTS IT BACK.
+   The target enters the loop at `.L8008B058` with a `j` that skips the
+   `addiu $s2, $s2, -0x1` at `.L8008B054`, i.e. the decrement happens between
+   iterations and NOT after the last one -- which is why `n` itself, not
+   `n + 1`, is what reaches func_8008AD90.  Every single-copy spelling of
+   that is one or two words short: `while (avail < size) { ...; n--; }` is
+   76/39, the same with the decrement in the call argument 77/38, and a
+   `break` before the decrement 77/41, all of them missing the entry `j` and
+   the `addiu $s0, $s0, 0x8` after the loop.  Writing the first iteration out
+   and letting jump.c's cross_jump merge the common SUFFIX
+   (scratch/gcc-src/cdk-gcc-b18/jump.c:2599-2601, which walks both candidates
+   backward) turns the peeled copy into exactly that `j`.  The compensating
+   `addiu $s0, $s0, 0x8` is then reorg's, not loop.c's: with the back edge
+   landing on the loop's own start label -- the label NOTE_INSN_LOOP_BEG sits
+   in front of, so `mostly_true_jump` returns 2 and `likely` is set
+   (reorg.c, fill_eager_delay_slots) -- and the slot still empty, reorg takes
+   the giv update at the branch target into the slot and emits the negated
+   insn after the jump: `new_arith = gen_rtx (GET_CODE (src), GET_MODE (src),
+   dest, negate_rtx (GET_MODE (src), other));` (reorg.c:3762-3764).  A goto
+   loop reaches the same layout at 78 words and 23 differing, but loses
+   loop.c -- no NOTE_INSN_LOOP_BEG means `likely` is 0, the slot stays a
+   `nop`, and an explicit pointer local emits the `sll` ahead of the
+   `lui`/`addiu` instead of behind it.
+
+   `D_801131B8 + 0x2C` is the same word splat's listing calls D_801131E4:
+   %hi is 0x8011 either way and the `+0x2C` folds into the R_MIPS_LO16
+   addend, giving `3c028011` / `8c4531e4` -- the target's bytes.  It is
+   spelled through D_801131B8 to match func_8008AD90 and func_8008AE4C above,
+   which reach the same field at `0x2C` off the record base; the
+   `extern s32 D_801131E4;` spelling also measures 78/0.
+
+   78 words -- `nonmatching func_8008AFB0, 0x138`, and 0x138/4 = 78.  No jump
+   table, no rodata of its own, and no function address is taken. */
+s32 func_8008AFB0(s32 a, s32 b, s32 c, s32 n)
+{
+    u32 *rec;
+    s32 size;
+    s32 avail;
+
+    rec = (u32 *)func_8008AF2C(a, b, c);
+    if (rec == NULL)
+    {
+        return 0;
+    }
+    size = ((*rec >> 11) + 1) << 11;
+    avail = 0x8000 - func_8008ACE8(n);
+    if (size > 0x7FFF)
+    {
+        n = 0;
+        func_8008AC84(n);
+    }
+    else if (avail < size)
+    {
+        avail += D_800CF720[n].unk_04;
+        func_8008AC84(n);
+        while (avail < size)
+        {
+            n--;
+            avail += D_800CF720[n].unk_04;
+            func_8008AC84(n);
+        }
+    }
+    func_8008AD90(n, size);
+    func_8008AC84(n + 1);
+    D_800CF720[0].unk_00 = a;
+    D_800CF720[0].unk_01 = b;
+    D_800CF720[0].unk_02 = c;
+    D_800CF720[0].unk_04 = size;
+    func_80053CFC(rec, *(u8 **)(D_801131B8 + 0x2C));
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B0E8);
 
