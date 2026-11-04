@@ -18806,7 +18806,38 @@ s32 func_8009F6E4(void)
     return i;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F71C);
+/* 13 words -- its header reads `nonmatching func_8009F71C, 0x34`, and
+   0x34/4 = 13.  Measured 0 differing on the first spelling.  No jump table,
+   no rodata of its own and NO RELOCATIONS AT ALL: raw 0 against relocdump's
+   own 0, nothing masked, nothing on a function symbol.
+
+   func_8009F970 below is the same function at a different stride: the first
+   slot of a 4-byte-stride table whose +0x01 type byte is 0, or -1.  TWO
+   parameters and the base, from its two landed callers func_80093894 (:9918)
+   and func_8009F9D4 (:18747), which both pass the constant 0x80010980 and
+   `D_800D0728[func_800B28A0()]` -- the same 4-byte descriptor array
+   func_8009FDBC sweeps at +0x981/+0x983 off a 0x80010000 pointer local.  The
+   count is `s32`: `blez $a1` and `slt $v0, $v1, $a1` are both SIGNED, which is
+   why the callers' `(u8 *)` cast on the second argument is only a
+   makes-integer-from-pointer warning and not the parameter's type.
+
+   `addiu $a0, $a0, 0x4` is the strength-reduced subscript, not a source
+   pointer walk (docs/matching-levers.md:14146), and `blez $a1` is the `i < n`
+   guard.  `p[i * 4 + 0x1]` and `*(u8 *)(p + i * 4 + 0x1)` are both 0
+   differing -- `p` is already a `u8 *`, so there is no cast to place. */
+s32 func_8009F71C(u8 *p, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        if (*(u8 *)(p + i * 4 + 0x1) == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
 
 /* 11 words, 0 differing on the first spelling.  Which slot of a 4-byte-stride
    table a record occupies: the comparison is on the ADDRESS and there is no
@@ -19063,9 +19094,174 @@ void func_8009F9D4(void)
     func_8009F71C((u8 *)0x80010980, (u8 *)D_800D0728[func_800B28A0()]);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009FA14);
+/* 70 words -- its header reads `nonmatching func_8009FA14, 0x118`, and
+   0x118/4 = 70.  Measured 0 differing.  No jump table and no rodata of its
+   own; four relocations (the two `jal`s plus D_80100AF8's `%hi`/`%lo` pair),
+   raw 4 against relocdump's own 4, nothing on a function symbol.  seqcheck
+   reports the four remaining masked words as constant-address: two
+   `%hi(D_8001029C)` (reorg duplicated the one `lui` into the `bne`'s delay
+   slot, the odd-count trap docs/town-sweep.md:821 records) plus
+   `%lo(D_8001029C)` and `%lo(D_800102A0)`, which are the 0x29C/0x2A0
+   displacements off the 0x80010000 base.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009FB2C);
+   TWO parameters, from its landed caller func_8009EB3C (:17885):
+   `func_8009FA14(b, (u8 *)a + 0x4C)`, a slot index and the actor's 4-byte
+   descriptor.  func_8009FB2C below is the same function with the item-record
+   build-out added, and the two share this head and this tail word for word;
+   func_8009FA14 returns VOID and func_8009FB2C returns the record, which is
+   the whole reason FB2C pays an `addu $v0, $s3, $zero` at the join where this
+   one stores $s1 straight out.
+
+   Appends a pool record: func_800B2344 hands out the UnkTown11F80 slot, the
+   four descriptor bytes are copied in, and the slot is published at
+   0x8001029C with its 0x800102A0 companion word cleared.
+
+   THE 0x13 TEST MUST READ THE FIELD BACK, NOT THE SOURCE.  `src[1] == 0x13`
+   is 71 words / 52 differing: the intervening byte stores through `p`
+   invalidate cse's memory table, so the reload cannot be reused, and the
+   `lbu $v1, 0x1($s1)` that the target schedules into the third store's
+   load-delay slot becomes a second `lbu` off $s0.  Same mechanism
+   func_8009DFD8 (:17297) records for its `p + 0x4F` read-back.
+
+   THE 0x8001029C/0x800102A0 PAIR IS A CONSTANT BASE WITH THE OFFSET IN THE
+   DISPLACEMENT, AND THE BASE LOCAL MUST BE ASSIGNED IMMEDIATELY BEFORE THE
+   STORES.  Written as whole constants (`slot * 4 + 0x8001029C`) each address
+   needs its own `lui`/`ori` and its own `addu`: 74 words, 17 differing.
+   Assigned at the TOP of the function instead, the function is still 70 words
+   but 3 differing -- the source statement puts the `lui` BELOW the
+   `sll $v0, $s2, 2` where the target has it above, and reorg then steals the
+   `sll` into the `bne`'s delay slot instead of the `lui`.  `((UnkTown11F80 **)b)[slot + 0xA7]` / `((s32 *)b)[slot +
+   0xA8]` is a third 0-differing spelling of the same two stores.
+
+   The record copy is a whole-struct assignment -- UnkTownItemRec's leading u32
+   makes alignment 4, so movstrsi emits the four-word lw/sw loop plus one
+   trailing word for 0x54 bytes.  Both
+   `((UnkTownItemRec *)0x800102F0)[k] = D_80100AF8` and
+   `*(UnkTownItemRec *)(k * 0x54 + 0x800102F0) = D_80100AF8` are 0 differing:
+   emit_block_move forces the address into a register either way, so the
+   constant comes out whole as a `lui`/`ori` pair, the second one in the
+   function because cse's table does not cross func_8009F970's call.  Writing
+   the four byte stores and the flag update through the `u8 *` view instead of
+   UnkTown11F80's fields is also 0 differing. */
+void func_8009FA14(s32 slot, u8 *src)
+{
+    UnkTown11F80 *p;
+    s32 k;
+    u8 *b;
+
+    p = (UnkTown11F80 *)func_800B2344();
+    p->unk_00 = src[0];
+    p->unk_01 = src[1];
+    p->unk_02 = src[2];
+    p->unk_03 = src[3];
+    if (p->unk_01 == 0x13)
+    {
+        k = func_8009F970((u8 *)0x800102F0, 0x14);
+        ((UnkTownItemRec *)0x800102F0)[k] = D_80100AF8;
+        p->unk_03 = (p->unk_03 & 0xC0) | k;
+    }
+    b = (u8 *)0x80010000;
+    *(UnkTown11F80 **)(b + slot * 4 + 0x29C) = p;
+    *(s32 *)(b + slot * 4 + 0x2A0) = 0;
+}
+
+/* 113 words -- its header reads `nonmatching func_8009FB2C, 0x1C4`, and
+   0x1C4/4 = 113.  Measured 0 differing.  No jump table and no rodata of its
+   own; eleven relocations (seven `jal`s plus D_80100A10's and D_80100AF8's
+   `%hi`/`%lo` pairs), raw 11 against relocdump's own 11, NOTHING on a function
+   symbol.  seqcheck's ORDERED sequence passes and is the only check on the
+   call order: the remaining three masked words are constant-address
+   (`%hi(D_8001029C)` plus the `%lo` 0x29C/0x2A0 displacements off the
+   0x80010000 base) and there is no intra-function `j`.
+
+   TWO parameters, from its landed caller func_8009FCF0 (:18786):
+   `return func_8009FB2C(i, s)`, the pool slot func_8009F6E4 handed out and the
+   4-byte stack record.  It RETURNS the record pointer -- that is what the two
+   `addu $v0, $s3, $zero` are, one of them reorg's copy of the join block's
+   first insn into the `bne`'s delay slot.  Both `s32` with `return (s32)p` and
+   `UnkTown11F80 *` with `return p` are 0 differing; `s32` is written here so
+   that func_8009FCF0's `return func_8009FB2C(i, s)` from an `s32` function
+   stays warning-free.
+
+   func_8009FA14 above is this function with the item-record build-out
+   removed: same head, same `p->unk_01 == 0x13` gate, same tail, and the same
+   0x800102F0 record array.  The then-arm is func_8009F4C0's (:18424) recipe
+   over 0x800102F0 instead of 0x80010A80 -- zero the D_80100A10 scratch
+   record, let func_80042640 / func_800423C0 fill it, copy it out with
+   func_800422DC, take the first free 0x54-stride slot, store the record, copy
+   func_8003C06C's ten-byte name block to the slot's +0x34, and cross-link the
+   index into the descriptor's +0x03 flag byte.  0x80010324 is
+   0x800102F0 + 0x34, exactly as 0x80010AB4 is 0x80010A80 + 0x34 there.
+
+   THE NAME-COPY DESTINATION MUST BE A LOCAL ASSIGNED AS ITS OWN STATEMENT.
+   The `q = ...` statement is what puts the `lui`/`ori` and the stride chain
+   AHEAD of func_8003C06C's `jal`, with the final `addu $s0, $s0, $v0` filling
+   its delay slot.  Written inline at the store instead --
+   `*(UnkTownName10 *)(k * 0x54 + 0x80010324) = *(UnkTownName10 *)
+   func_8003C06C(...)` -- the function is 112 words and 103 differing: the
+   whole chain comes out BELOW the `jal`, which then carries a `nop`, the
+   destination lands in the caller-saved $v1 instead of $s0, and one fewer
+   callee-saved register is needed so the frame shrinks to 0x20 and $s2/$s3/$s4
+   all rename down.  NOT an evaluation-order effect: expand_assignment expands
+   the LHS first either way (`to_rtx = expand_expr (to, NULL_RTX, VOIDmode,
+   0);`, expr.c:2952, before `store_expr (from, to_rtx, want_value)` at :2991),
+   so the cause is that the named local gives the address a pseudo that is live
+   across the call -- the drafted "the address is evaluated after the call"
+   reading was measured and is wrong.  Offset-first and base-first spellings of
+   the address itself (`k * 0x54 + 0x80010324` against `(u8 *)0x80010324 +
+   k * 0x54`) are both 0 differing.  UnkTownName10's alignment 1 is what keeps
+   the copy on the lwl/lwr + swl/swr path.
+
+   THE 0x13 TEST MUST READ THE FIELD BACK, NOT THE SOURCE: `src[1] == 0x13` is
+   114 words / 92 differing, the func_8009DFD8 (:17297) read-back rule.
+
+   THE 0x8001029C/0x800102A0 TAIL IS A CONSTANT BASE WITH THE OFFSET IN THE
+   DISPLACEMENT, AND THE BASE LOCAL MUST BE ASSIGNED IMMEDIATELY BEFORE THE
+   STORES.  Whole constants are 117 words / 20 differing (two `lui`/`ori` pairs
+   and two `addu`); the same assignment at the TOP of the function is 113 words
+   / 2 differing, the `lui` landing BELOW the `sll $v1, $s4, 2` instead of
+   above it.  `((UnkTown11F80 **)b)[slot + 0xA7]` / `((s32 *)b)[slot + 0xA8]`
+   is a third 0-differing spelling.
+
+   SWAPPING func_80042640 AND func_800423C0 is 5 differing and seqcheck catches
+   it at position 4 -- the two `jal`s are adjacent but their delay slots are
+   not identical (`addu $a0, $s0, $zero` against `addu $a2, $zero, $zero`), so
+   this pair is not the invisible case docs/town-sweep.md:331 records.
+
+   No base local is needed for &D_80100A10 or &D_80100AF8: each gets one
+   `lui`/`addiu %lo` pair in a callee-saved register, and $s1 (D_80100AF8)
+   doubles as the block move's source pointer.  Writing the four byte stores
+   and the flag update through the `u8 *` view instead of UnkTown11F80's fields
+   is 0 differing. */
+s32 func_8009FB2C(s32 slot, u8 *src)
+{
+    UnkTown11F80 *p;
+    UnkTownName10 *q;
+    s32 k;
+    u8 *b;
+
+    p = (UnkTown11F80 *)func_800B2344();
+    p->unk_00 = src[0];
+    p->unk_01 = src[1];
+    p->unk_02 = src[2];
+    p->unk_03 = src[3];
+    if (p->unk_01 == 0x13)
+    {
+        func_80069EE8((u8 *)&D_80100A10, 0, 0x54);
+        func_80042640(&D_80100A10, p->unk_00);
+        func_800423C0((u8 *)&D_80100A10, p->unk_00, NULL);
+        func_800422DC((u8 *)&D_80100AF8, (u8 *)&D_80100A10);
+        k = func_8009F970((u8 *)0x800102F0, 0x14);
+        ((UnkTownItemRec *)0x800102F0)[k] = D_80100AF8;
+        q = (UnkTownName10 *)(k * 0x54 + 0x80010324);
+        *q = *(UnkTownName10 *)func_8003C06C(p->unk_00);
+        p->unk_03 = (p->unk_03 & 0xC0) | k;
+    }
+    b = (u8 *)0x80010000;
+    *(UnkTown11F80 **)(b + slot * 4 + 0x29C) = p;
+    *(s32 *)(b + slot * 4 + 0x2A0) = 0;
+    return (s32)p;
+}
 
 /* 30 words, 0 differing.  Packs its four bytes into a 4-byte stack record and
    appends it at the slot func_8009F6E4 hands out, or returns 0 when the pool
@@ -19104,7 +19300,33 @@ s32 func_8009FCF0(u8 a, u8 b, u8 c, u8 d)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009FD68);
+/* 21 words -- its header reads `nonmatching func_8009FD68, 0x54`, and
+   0x54/4 = 21.  Measured 0 differing on the first spelling.  No jump table
+   and no rodata of its own; five relocations (three `jal`s plus
+   D_80100A10's `%hi`/`%lo` pair), raw 5 against relocdump's own 5, nothing on
+   a function symbol, and seqcheck's ordered sequence passes -- which is the
+   only check on the 80041E28/800AB9A0/800422DC ORDER, since the first two
+   `jal`s carry the same `addu $a0, $s0, $zero`.
+
+   ONE parameter, from its two landed callers func_8009FDBC (:18842) and
+   func_8009FE84 (:18909), which both pass `(u8 *)(index * 0x54 + <table>)` --
+   the 0x54-byte UnkTownItemRec slot.  Spelled `u8 *` rather than
+   `UnkTownItemRec *` so that both landed call sites stay warning-free; the
+   cast then goes on func_80041E28's argument, where the resident prototype
+   wants the record type.
+
+   Unloads the record into the D_80100A10 scratch object func_8009E2C0 and
+   func_8009F4C0 use, lets func_800AB9A0 edit it, and copies it back.  NO BASE
+   LOCAL IS NEEDED for &D_80100A10 even though it crosses three calls --
+   func_8009E2C0's measured rule -- gcc puts the `lui`/`addiu %lo` pair in $s0
+   by itself and the frame grows to 0x20 for it.  An explicit
+   `Unk42710 *r = &D_80100A10` statement is also 21 words, 0 differing. */
+void func_8009FD68(u8 *p)
+{
+    func_80041E28(&D_80100A10, (UnkTownItemRec *)p);
+    func_800AB9A0(&D_80100A10);
+    func_800422DC(p, (u8 *)&D_80100A10);
+}
 
 /* 50 words -- its header reads `nonmatching func_8009FDBC, 0xC8`, and
    0xC8/4 = 50.  Measured 0 differing.  No jump table and no rodata of its own;
