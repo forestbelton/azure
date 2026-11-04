@@ -337,6 +337,73 @@ DISPATCHERS = [
 ]
 
 
+def install_slots(unit, func, landed, btext):
+    """Byte offsets this function's address is STORED to, with the installer.
+
+    An install at a dispatcher slot settles arity completely, through the
+    dispatcher's own cast -- so the slot is the key to the only witness some
+    functions have. This finds it from both kinds of installer:
+
+      * a STUB installer, by reading its listing: take the `%lo(func)` line's
+        destination register and look ahead for a `sw` of it;
+      * a LANDED installer, by reading its body for `= func` and taking the
+        offset off the store's left-hand side.
+
+    Returns a sorted list of (offset, installer, how) tuples.
+    """
+    out = set()
+    for d, b in btext.items():
+        for m in re.finditer(r'(?:\*\s*\(\s*\w[\w \*\(\)]*\)\s*)?'
+                             r'\(?\s*\(\s*u8\s*\*\s*\)?\s*(\w+)'
+                             r'\s*\+\s*(0x[0-9A-Fa-f]+)\s*\)?\s*=\s*'
+                             + func + r'\b', b):
+            out.add((int(m.group(2), 16), d, 'landed C store'))
+        for m in re.finditer(r'->\s*unk_([0-9A-Fa-f]+)\s*=\s*' + func + r'\b', b):
+            out.add((int(m.group(1), 16), d, 'landed C store'))
+    # stub installers: every listing in the unit that materialises this address
+    for fp in sorted(glob.glob(os.path.join(PROJ, 'asm/nonmatchings', unit, '*.s'))):
+        try:
+            lt = io.open(fp, encoding='utf-8', errors='replace').read()
+        except Exception:
+            continue
+        if '%lo(' + func + ')' not in lt:
+            continue
+        who = os.path.basename(fp)[:-2]
+        lines_ = lt.split('\n')
+        for i, ln in enumerate(lines_):
+            if '%lo(' + func + ')' not in ln:
+                continue
+            m = re.search(r'\$(\w+),\s*\$\w+,\s*%lo\(', ln) or \
+                re.search(r'\$(\w+),\s*%lo\(', ln)
+            if not m:
+                continue
+            reg = m.group(1)
+            for ahead in lines_[i + 1:i + 10]:
+                mm = re.search(r'\bsw\s+\$%s,\s*(-?0x[0-9A-Fa-f]+|0)\s*\(' % reg, ahead)
+                if mm:
+                    out.add((int(mm.group(1), 16), who, 'stub listing `sw`'))
+                    break
+    return sorted(out)
+
+
+def slot_casts(txt, off):
+    """Prototyped indirect-call casts in this unit through byte offset `off`.
+
+    This is the witness the NO-ARITY-WITNESS banner used to deny existed: a
+    cast like `(*(void (**)(u8 *))(q + 0x1C))(q)` states the arity AND the
+    parameter types of every handler installed at that slot. Four agents have
+    now found one after the tool told them there was none.
+    """
+    hits = []
+    pat = re.compile(r'\(\s*\*\s*\(\s*([\w ]+?)\s*\(\s*\*\*\s*\)\s*'
+                     r'\(([^)]*)\)\s*\)\s*\(([^;]*?0x%X[^;]*?)\)\s*\)\s*\(' % off,
+                     re.I)
+    for m in pat.finditer(txt):
+        hits.append((txt[:m.start()].count('\n') + 1,
+                     m.group(1).strip(), m.group(2).strip()))
+    return hits
+
+
 def parks():
     """Every near-miss park, keyed by the function it parks.
 
@@ -1279,18 +1346,37 @@ def main():
             if sites and len(sites) <= 8:
                 # Displacement-derived first: those are certainly offsets.
                 rows.append((0 if o in disp else 1, len(sites), o, sites))
-        for kind, n, o, sites in sorted(rows)[:4]:
+        ranked_m = sorted(rows)
+        for kind, n, o, sites in ranked_m[:4]:
             anym = True
-            print("  %-15s +0x%X: %d landed function(s) use it%s: %s"
+            # SAY WHEN THE LIST IS CUT. This printed "+0x74: 8 landed
+            # function(s) use it:" followed by FOUR names, so the count and
+            # the list disagreed by construction and silently -- and this
+            # route exists precisely for the case where the fifth name is the
+            # discriminator. Route (a) already says "N MORE below the cut";
+            # this one did not.
+            shown = sites[:4]
+            print("  %-15s +0x%X: %d landed function(s) use it%s: %s%s"
                   % (f, o, n,
                      '' if kind == 0 else
                      '  [from an addiu IMMEDIATE, so it may be an arithmetic'
                      ' addend rather than a field offset -- check the opcode]',
                      ', '.join('%s (:%d)' % (s, lines.get(s, 0))
-                               for s in sites[:4])))
+                               for s in shown),
+                     '' if len(sites) <= len(shown) else
+                     '  ... and %d MORE, NOT shown -- ask for them if these'
+                     ' do not explain your target' % (len(sites) - len(shown))))
             print("      grep -nE 'unk_%02X|0x%X' csrc/%s.c" % (o, o, unit))
+        if len(ranked_m) > 4:
+            print("      ... %d MORE OFFSET(S) for %s below the cut, NOT shown."
+                  % (len(ranked_m) - 4, f))
     if not anym:
         print("  no rare field offset with a landed user")
+    print("    NOTE: for a SCRATCHPAD record (a 0x1F800000 base) this route's")
+    print("    offset grep crosses into whatever the unit's busiest struct")
+    print("    uses at the same offsets and returns noise. One group's")
+    print("    +0x74/+0x76/+0x7A/+0x84 hits were all UnkTownActor fields in")
+    print("    unrelated functions, nowhere near the record being typed.")
 
     print("\n=== ROUTE (f): LANDED CALL SITES OF YOUR CALLEES, WITH THEIR ARGUMENTS ===")
     print("    Line-level identity, which the rarity score cannot see: a landed")
@@ -1644,10 +1730,40 @@ def main():
         # the tool had declared not to exist. An install at a known dispatcher
         # slot constrains arity COMPLETELY, through the dispatcher's own cast,
         # and this tool does not follow that edge out of the unit.
-        print("      *** BUT AN ADDRESS-TAKE IS NOT NOTHING, AND THIS TOOL DOES NOT")
-        print("      FOLLOW IT. If any section above names your target as INSTALLED or")
-        print("      address-taken, find which SLOT the installer writes and read that")
-        print("      slot\'s dispatcher. Each cast below was read out of the source, and")
+        # FOLLOW THE EDGE instead of only telling the agent to. This banner
+        # has now been wrong for FOUR agents, each of whom found the witness
+        # the tool said did not exist -- the last one through
+        # `(*(void (**)(u8 *))(q + 0x1C))(q);` at csrc/ovl_town.c:18351, a
+        # prototyped cast through the very slot route (b) had already named as
+        # the install target. The slot was known; nothing looked for the cast.
+        found_any = False
+        for f in missing:
+            for off, who, how in install_slots(unit, f, landed, btext):
+                casts = slot_casts(txt, off)
+                if not casts:
+                    print("      %s is installed at +0x%X by %s (%s) -- no"
+                          " prototyped cast through that offset in this unit"
+                          % (f, off, who, how))
+                    continue
+                found_any = True
+                print("      *** WITNESS FOUND: %s is installed at +0x%X by %s"
+                      " (%s), and this unit dispatches that slot through a"
+                      " PROTOTYPED cast:" % (f, off, who, how))
+                for ln, ret, args in casts:
+                    print("            csrc/%s.c:%-6d  %s (*)(%s)"
+                          % (unit, ln, ret, args or 'void'))
+                print("          A prototyped cast states the arity AND the"
+                      " parameter types of every handler at that slot, so this"
+                      " IS an arity witness. Read the dispatcher before")
+                print("          falling back to register reads.")
+        if found_any:
+            print("      (The banner above is therefore too strong for at least"
+                  " one of those names.)")
+        print("      *** AN ADDRESS-TAKE IS NOT NOTHING. If any section above names")
+        print("      your target as INSTALLED or address-taken, find which SLOT the")
+        print("      installer writes and read that slot's dispatcher. The search")
+        print("      above does this automatically now; the casts below are the ones")
+        print("      known by hand, each read out of the source, and")
         print("      each settles arity AND parameter types for every handler in its")
         print("      class. Three agents in one day found a witness here after this")
         print("      tool told them none existed:")
