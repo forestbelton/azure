@@ -2842,7 +2842,7 @@ s32 func_8008DA80(s32 x, s32 y, s32 z);
 s32 func_8008DFB4(s32 x, s32 y, s32 z);
 s32 func_8008E4EC(s32 x, s32 y, s32 z);
 s32 func_8008EA20(s32 x, s32 y, s32 z);
-void func_800CCF74(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
+void func_800CCF74(s32 a, s32 b, s32 c, s32 d, s16 e, s16 f);
 /* Called with ONE argument by func_8008F074/F0A4/F0D4 and with THREE by
    func_8008F104 and func_800C6180, which set $a0/$a1/$a2 before the jal. A
    1-param prototype cannot express the 3-arg sites and a 3-param one would
@@ -2940,6 +2940,7 @@ extern u8 D_800D675C[];
 void func_800C86EC();
 void func_800CE6E4();
 void func_800CE800();
+void func_800CE8CC();
 extern u8 D_800CFD00[];
 extern UnkTownVec16 D_800CFD18[];
 extern UnkTown2AE8 D_800FE5C0;
@@ -8242,9 +8243,75 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CCF48);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CCF60);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CCF74);
+/* The two-phase nudge the func_800CD014 wrappers drive: on step 0 latch the
+   countdown and a per-frame delta pair into the mover's +0x0E/+0x12, then on
+   every step walk the countdown down and add the deltas into +0x02/+0x06
+   until it expires, at which point the step counter resets and +0x68 counts
+   the wrap.  Case 0 FALLS THROUGH into case 1, which is what makes the latch
+   frame also a step frame.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CD014);
+   THE 5th AND 6th PARAMETERS MUST BE DECLARED s16, NOT s32, AND THE
+   DECLARATION ABOVE HAD TO BE CHANGED WITH THEM.  s32 is 42 words against
+   40: the two extra words are load-delay nops in case 0, because with s32
+   the entry `lw` of each stack argument is DELETED and the load sinks to its
+   single use.  MIPS defines PROMOTE_PROTOTYPES, so an s16 parameter is still
+   PASSED as a word -- the four landed call sites re-measure 0 differing --
+   but inside the callee `nominal_mode != passed_mode`, which sets
+   did_conversion in assign_parms and so SUPPRESSES the REG_EQUIV note on the
+   entry load (function.c, "Mark the register as eliminable if we did no
+   conversion").  Without that note update_equiv_regs cannot take its
+   `reg_n_refs[regno] == 2 && reg_basic_block[regno] < 0` path, which is the
+   one that deletes a parameter's entry load and replaces its one use with
+   the stack MEM (local-alloc.c, "If the register is referenced exactly
+   twice ... This case normally occurs when a parameter is read from memory
+   and then used exactly once, not in a loop").  The two loads then survive
+   as ordinary allocnos and get $a1 and $v0.
+
+   Also measured, all 42 words and 41 differing: `s32 dx = e; s32 dy = f;`
+   hoisted above the switch (cse folds the locals straight back into the
+   stack MEMs, so the lever is the TYPE and not the hoist), and the same body
+   with the actor and mover reached through inline casts rather than locals.
+
+   The third parameter is dead -- `addu $a2, $a1, $zero` overwrites it in the
+   first insn -- and is witnessed only by the gap it leaves, so its presence
+   comes from the four landed call sites, not from the body.
+
+   40 words, 0 differing. */
+void func_800CCF74(s32 a, s32 b, s32 c, s32 d, s16 e, s16 f)
+{
+    UnkTownActor *s = (UnkTownActor *)a;
+    UnkTown2AE8 *p = (UnkTown2AE8 *)b;
+
+    switch (s->unk_6A)
+    {
+    case 0:
+        s->unk_6C = d;
+        *(s16 *)((u8 *)p + 0xE) = e;
+        *(s16 *)((u8 *)p + 0x12) = f;
+        s->unk_6A++;
+        /* fallthrough */
+    case 1:
+        if (--s->unk_6C > 0)
+        {
+            *(s16 *)((u8 *)p + 0x2) += *(s16 *)((u8 *)p + 0xE);
+            *(s16 *)((u8 *)p + 0x6) += *(s16 *)((u8 *)p + 0x12);
+        }
+        else
+        {
+            s->unk_6A = 0;
+            s->unk_68++;
+        }
+        break;
+    }
+}
+
+/* The func_800CCF74 wrapper family, four of whose six members were already
+   landed; these three are the remaining 0x8C-stride siblings and differ only
+   in the three trailing constants. */
+void func_800CD014(s32 a, s32 b, s32 c)
+{
+    func_800CCF74(a, b, c, 0x20, 0, -0x4);
+}
 
 void func_800CD040(s32 a, s32 b, s32 c)
 {
@@ -8256,7 +8323,10 @@ void func_800CD070(s32 a, s32 b, s32 c)
     func_800CCF74(a, b, c, 0x10, 0x8, -0x4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CD0A0);
+void func_800CD0A0(s32 a, s32 b, s32 c)
+{
+    func_800CCF74(a, b, c, 0x10, -0x8, 0);
+}
 
 void func_800CD0CC(s32 a, s32 b, s32 c)
 {
@@ -8268,7 +8338,10 @@ void func_800CD0FC(s32 a, s32 b, s32 c)
     func_800CCF74(a, b, c, 0x10, -0x4, -0x8);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CD12C);
+void func_800CD12C(s32 a, s32 b, s32 c)
+{
+    func_800CCF74(a, b, c, 0x20, 0, 0x4);
+}
 
 void func_800CD158(UnkTownActor *a, UnkTown2AE8 *b, s32 c, s16 d)
 {
@@ -8908,7 +8981,39 @@ void func_800CE558(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     *(s16 *)((u8 *)b + 0xA) += (*(s16 *)((u8 *)D_80083498.unk_08 + 0xA) - *(s16 *)((u8 *)b + 0xA)) / 2;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CE62C);
+/* The halve-the-gap handler: when the countdown at +0x6C expires hand off to
+   func_800C4174, then -- on every frame, expired or not -- move the mover
+   half way towards the actor's +0x84/+0x86 on x and y and half way towards
+   zero on the +0x0A axis.  Same `+= (target - current) / divisor` idiom as
+   the landed func_800C3A98, with a constant 2 for the divisor, which is why
+   each one is srl/addu/sra and not a plain sra.
+
+   THE SOURCE ORDER IS +0x02, +0x06, +0x0A AND THE LISTING'S STORE ORDER IS
+   +0x02, +0x0A, +0x06 -- sched1 reorders the last two stores, so reading the
+   order off the listing costs a word.  All six permutations were measured
+   against the listing, same three statements, nothing else varied:
+     +0x02 +0x06 +0x0A   46 words, 0 differing   <- this one
+     +0x06 +0x02 +0x0A   46 words, 8 differing
+     +0x02 +0x0A +0x06   47 words, 32 differing
+     +0x0A +0x02 +0x06   47 words, 33 differing
+     +0x0A +0x06 +0x02   49 words, 34 differing
+     +0x06 +0x0A +0x02   49 words, 34 differing
+   Also measured on the +0x02/+0x0A/+0x06 order, before the permutation: the
+   three signed reads hoisted into s32 locals above the three stores (47 and
+   33), the same with s16 locals (50 and 35), and the in-struct spelling
+   `*((s16 *)b + N)` (47 and 32).  None of them is the lever; the order is.
+
+   46 words, 0 differing. */
+void func_800CE62C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C4174(a, b, c);
+    }
+    *(s16 *)((u8 *)b + 0x2) += (a->unk_84 - *(s16 *)((u8 *)b + 0x2)) / 2;
+    *(s16 *)((u8 *)b + 0x6) += (a->unk_86 - *(s16 *)((u8 *)b + 0x6)) / 2;
+    *(s16 *)((u8 *)b + 0xA) += (0 - *(s16 *)((u8 *)b + 0xA)) / 2;
+}
 
 void func_800CE6E4(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -8936,7 +9041,43 @@ void func_800CE780(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CE800);
+/* func_800CE3FC's shape with a different pair of arms: advance the mover,
+   and while func_800C2AE8's halfword keeps falling below +0x0A, latch it and
+   walk the +0x90 countdown.  On expiry stop the mover and hand off to
+   func_800C4174; otherwise re-arm the delta and re-install func_800CE8CC,
+   which installs this function back -- the two are each other's handler.
+
+   The arm that LEAVES is written first, as in func_800CE3FC, so the `<= 0`
+   test is the one spelled and the `lui 0xFFF6` of the other arm lands in the
+   bgtz's delay slot.
+
+   func_800CE8CC's definition sits two bodies BELOW this install, and an
+   address-take does not ride an implicit declaration the way a call does, so
+   `void func_800CE8CC();` was added to the declaration block.
+
+   51 words, 0 differing. */
+void func_800CE800(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    b->unk_08 += b->unk_14;
+    if ((s16)func_800C2AE8(b) < *(s16 *)((u8 *)b + 0xA))
+    {
+        *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
+        if (--a->unk_90 <= 0)
+        {
+            b->unk_14 = 0;
+            func_800C4174(a, b, c);
+        }
+        else
+        {
+            b->unk_14 = -0xA0000;
+            a->unk_54 = func_800CE8CC;
+        }
+    }
+    else
+    {
+        func_80095388(b);
+    }
+}
 
 void func_800CE8CC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
@@ -8985,7 +9126,19 @@ void func_800CEA80(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x10;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CEAC8);
+/* A pure forward to func_800CEB00 -- no argument is reorganised, so the jal
+   needs no setup -- followed by the slot reset and a 4-frame countdown at
+   +0x90.  func_800CEB00's definition sits below this one with no declaration
+   in the unit, exactly as it does for the landed func_800CE3FC two bodies
+   up, so the call rides the same implicit declaration.
+
+   14 words, 0 differing. */
+void func_800CEAC8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800CEB00(a, b, c);
+    D_80082660[5].unk_00 = 0;
+    a->unk_90 = 4;
+}
 
 void func_800CEB00(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
@@ -9031,11 +9184,70 @@ void func_800CEC78(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x10;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CECC8);
+/* func_800CE9EC's and func_800CEB00's wrapper shape plus the shared slot
+   reset: bind the descriptor, clear D_80082660[5], install the +0x54 handler
+   and set the mover's per-frame delta to -0xA0000.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CED24);
+   23 words, 0 differing. */
+void func_800CECC8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C2E84(a, c, D_800D72D4);
+    D_80082660[5].unk_00 = 0;
+    a->unk_54 = func_800CE780;
+    b->unk_14 = -0xA0000;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CEDA4);
+/* The only member of the func_800C2E84 wrapper family that also seeds the
+   actor's +0x90 countdown from its own D_80082660 slot: the LOW BYTE of that
+   slot's +0x02 halfword, sign-extended, which is the `lbu` plus sll/sra 24
+   pair and the reason the read is spelled `(s8)(*(u8 *)...)` rather than
+   `e->unk_02` -- Unk80082660's +0x02 is s16.  Same reading func_800C4A88
+   records for the same field.
+
+   THE BASE MUST BE ITS OWN LOCAL, shared by the index-5 reset and the
+   variable index.  Writing both slot references inline as `D_80082660[...]`
+   is 32 of 32 words and 9 differing -- every differing word is a $v0/$v1
+   rename plus the handler install scheduled two insns early -- and reaching
+   the byte as `*(u8 *)((u8 *)D_80082660 + a->unk_60 * 8 + 0x2)` is the same
+   32 and 9.  `t = D_80082660;` with a second local for the slot pointer, the
+   two-step the func_800C41FC family writes, is also 0 differing.
+
+   Also measured, 32 words and 11 differing: the +0x90 seed written AFTER the
+   +0x54 install instead of before it.
+
+   32 words, 0 differing. */
+void func_800CED24(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    Unk80082660 *t;
+
+    func_800C2E84(a, c, D_800D72D4);
+    t = D_80082660;
+    t[5].unk_00 = 0;
+    a->unk_90 = (s8)(*(u8 *)((u8 *)&t[a->unk_60] + 0x2));
+    a->unk_54 = func_800CE8CC;
+    b->unk_14 = -0xA0000;
+}
+
+/* Reset the shared D_80082660 slot and park the resting facing at a quarter
+   turn.  Only $a0 is read; the second and third parameters are dead and
+   TRAILING, so they are invisible and come from the family convention the
+   surrounding dispatch-table siblings use (func_800CE94C, func_800CEC28,
+   func_800CEC78), not from the listing.
+
+   `D_80082660[5].unk_00 = 0;` relocates D_80082660 with the 0x28 in the
+   instruction field where splat's listing names the auto symbol
+   D_80082688; 0x2660 + 0x28 == 0x2688 with no carry, so the two words are
+   identical and seqcheck's ordered comparison reports the difference
+   benignly.  The unit's own practice settles the spelling: five landed
+   neighbours a few lines either side of this one write index 5 of
+   D_80082660 for the same address.
+
+   5 words, 0 differing. */
+void func_800CEDA4(UnkTownActor *a, s32 b, s32 c)
+{
+    D_80082660[5].unk_00 = 0;
+    a->unk_6E = 0x400;
+}
 
 void func_800CEDB8(void *a, s32 b, UnkTownArg2 *c)
 {

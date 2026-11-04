@@ -3699,7 +3699,7 @@ s32 func_8008DA80(s32 x, s32 y, s32 z);
 s32 func_8008DFB4(s32 x, s32 y, s32 z);
 s32 func_8008E4EC(s32 x, s32 y, s32 z);
 s32 func_8008EA20(s32 x, s32 y, s32 z);
-void func_800CCF74(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
+void func_800CCF74(s32 a, s32 b, s32 c, s32 d, s16 e, s16 f);
 /* Called with ONE argument by func_8008F074/F0A4/F0D4 and with THREE by
    func_8008F104 and func_800C6180, which set $a0/$a1/$a2 before the jal. A
    1-param prototype cannot express the 3-arg sites and a 3-param one would
