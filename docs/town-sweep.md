@@ -365,6 +365,40 @@ standalone) after three wrong guesses about which prototype had done it.
   `func_800C1854` holds all three shapes in one function -- two symbol-address
   pairs and one immediate pair -- if a regression fixture is ever wanted.
 
+  **WIDEST FORM, measured 2026-11-04 on `func_800C885C`, and it is NOT a case
+  of the relocation screen above.** Its body is exactly
+  `func_800A7B98(a, b, c); func_800C3FFC(a, b, c);` -- two calls passing the
+  function's OWN THREE PARAMETERS and nothing else. Swapping them is
+  **20 words, 0 differing masked, `raw == relocdump` closing at 2 == 2,
+  `arith=OK`, and only `seq=FAIL` at index 0** (reproduced by hand before being
+  written down, not taken on report). No argument here is a
+  symbol address, so "is every argument word relocated?" does not explain it.
+  The real reason is stronger: **no argument word belongs to either call
+  individually.** Read the listing --
+
+      jal func_800A7B98
+       addu $s2, $a2, $zero        <- spill the third parameter
+      addu $a0, $s0, $zero
+      addu $a1, $s1, $zero
+      jal func_800C3FFC
+       addu $a2, $s2, $zero        <- reload it
+
+  whichever call is first takes the incoming `$a0/$a1/$a2` untouched and needs
+  no setup at all; whichever is second reloads the same three from
+  `$s0/$s1/$s2`. The spill/reload scaffolding is therefore ORDER-SYMMETRIC and
+  the two masked `jal` words are the only words that move. Note the two delay
+  slots here are **`addu $s2, $a2` and `addu $a2, $s2`, which are DIFFERENT
+  instructions** -- a fourth independent falsification of the
+  "identical delay slots" wording, and the one place where it is most tempting,
+  because the slots look like each other's mirror.
+
+  **So the screen to apply, in order of coverage:** two adjacent calls are
+  order-invisible if (1) both take only the function's own parameters, OR
+  (2) every argument word is relocated. Either way `ovlverify` and the
+  arithmetic both pass and `seqcheck` is the only witness. Case (1) is the
+  common one in this unit's dispatch leaves, which is why it kept slipping
+  past the earlier wordings.
+
   The original measurement, 2026-11-03 on `func_800AF860` and `func_800AFFA8`:
   both are
   driver chains over the same `u8 *s`, both call `func_800AF674` and
@@ -1416,6 +1450,44 @@ thing the lever is about. A probe that adds a local asserts the use count; a
 probe that reorders statements asserts the two statements swapped positions;
 a probe that changes a cast asserts the cast count. A dead binding is the
 easiest vacuous probe to write because the compiler silently agrees with you.
+
+### "PERMUTE THE STORE ORDER" IS ONLY A LEVER WHERE A CALL OR A BRANCH SPLITS THE BLOCK
+
+I have put "for a run of near-identical leaves the store order is usually the
+only variable, so permute it exhaustively" in brief after brief. It is wrong
+for a leaf that is a SINGLE BASIC BLOCK, and the v1104c group falsified it on
+four consecutive functions.
+
+`func_800CCF18` is the whole demonstration:
+
+```c
+void func_800CCF18(UnkTownActor *a)
+{
+    a->unk_72 = 0xC00;
+    a->unk_68++;
+}
+```
+
+Six words, no call, no branch, no symbol, no relocation at all. **Swapping the
+two statements is 0 differing** (reproduced by hand). Both statements are in
+one basic block, so the scheduler is free to order the two stores however it
+likes and the source order is not witnessed in EITHER direction. The same held
+for `func_800CCF30`, `func_800CCF48`, `func_800CCF60` and `func_800CCCCC`.
+
+**The complement held everywhere there was a call or a branch** in that same
+group: every order in `func_800CC41C`, `func_800CCA18`, `func_800C5D38` and
+`func_800C7DB8` is pinned, at 4 to 27 differing. So the rule is not about
+"near-identical leaves" at all -- it is about whether anything splits the
+block:
+
+* a **call** pins the stores, because a store written after it cannot reach its
+  delay slot and the argument setup cannot move across it;
+* a **branch** pins them, because the store has to be on one side or the other;
+* **neither** means the order is free, and permuting it is wasted compiles.
+
+Where the order is free, pick the spelling that matches the landed neighbour
+and say in the comment block that it is a TIE -- otherwise the next reader
+takes a scheduler artefact for a measured fact.
 
 ### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
 
