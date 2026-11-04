@@ -56,6 +56,14 @@ OVERLAYS = [
     ("ovl_town", 0x8008AC84, 0x800CF720),
     ("ovl_dungeon", 0x80089588, 0x800DCE60),
 ]
+# Which container each overlay lives in. Both ovl_main_* overlays are in
+# main.bin, so this cannot be derived from the name by splitting on "_".
+CONTAINER = {
+    "ovl_main_80020000": "main.bin",
+    "ovl_main_80400000": "main.bin",
+    "ovl_town": "town.bin",
+    "ovl_dungeon": "dungeon.bin",
+}
 ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
 
 
@@ -89,13 +97,92 @@ def listing(func):
     whole = os.path.join(PROJ, "asm", ovl + ".s")
     if os.path.exists(whole):
         return whole
-    raise SystemExit(f"no listing for {func}: not in {ovl} or any {ovl}_* unit, "
-                     f"and no {whole}")
+    return None
+
+
+def rom_target(func):
+    """[(word, "")] for `func`, taken from the REFERENCE BINARY.
+
+    Why this exists: splat emits `asm/nonmatchings/<unit>/<func>.s` only for a
+    function still carried by `INCLUDE_ASM`, and PRUNES it the next time it
+    runs. So every already-landed function loses its listing, and on 2026-11-03
+    `asm/nonmatchings/ovl_town*/` held 763 listings against 1,058 landed
+    functions -- the whole-unit sweep in docs/town-sweep.md could verify ONE of
+    the 618 definitions it collected, and because the recipe ends in
+    `grep -v ' 0 differing'` the hard exit came out as EMPTY OUTPUT, which is
+    indistinguishable from a clean sweep. Several reported clean sweeps were
+    vacuous for that reason.
+
+    The reference bytes do not need splat. `build/<container>.elf` carries every
+    function's address and size, and its sections carry the vram->rom map in the
+    LMA: .B000 is VMA 0x80088760, LMA 0xb000. Use the LMA, NOT `File off` --
+    that is 0x28760 here and would read the wrong bytes.
+
+    This is sound only while `make build/<container>` is byte-identical, since
+    the ELF supplies the LAYOUT. That is the gate every landing already passes,
+    and if it ever fails, make fails first and loudly.
+
+    POSITIVE CONTROL, and re-runnable: for all 763 ovl_town functions that
+    still had a listing, the words derived this way equalled the listing's
+    words exactly -- 763 checked, 0 mismatches, 0 missing symbols.
+
+    One asymmetry to know about: a listing carries TEXT, and report() uses it
+    to decide which target words carry a relocation. The ROM carries only
+    words, so this returns "" for every text and masking falls to the
+    CANDIDATE's own reloc table alone. That errs in the safe direction -- a
+    word relocated in the target but not in the candidate is a real difference
+    and stays visible -- but the printed table has no target text column.
+    """
+    ovl = overlay_for(func)
+    container = CONTAINER[ovl]
+    stem = container[:-4]
+    elf = os.path.join(PROJ, "build", container + ".elf")
+    ref = os.path.join(PROJ, "data", stem, container)
+    if not os.path.exists(elf) or not os.path.exists(ref):
+        raise SystemExit(
+            f"no listing for {func} and no reference fallback: need both "
+            f"{elf} and {ref}. Build the container first.")
+
+    addr = size = None
+    for ln in subprocess.run(
+            ["mips64-linux-gnu-nm", "-S", "--defined-only", elf],
+            capture_output=True, text=True).stdout.splitlines():
+        p = ln.split()
+        # Skip the `.NON_MATCHING` aliases, which share an address and size.
+        if len(p) == 4 and p[2] in "tT" and p[3] == func:
+            addr, size = int(p[0], 16), int(p[1], 16)
+            break
+    if addr is None:
+        raise SystemExit(f"no listing for {func}, and no such text symbol "
+                         f"in {elf}")
+
+    off = None
+    for ln in subprocess.run(["mips64-linux-gnu-objdump", "-h", elf],
+                             capture_output=True, text=True).stdout.splitlines():
+        p = ln.split()
+        if len(p) >= 6 and p[0].isdigit():
+            vma, lma, sz = int(p[3], 16), int(p[4], 16), int(p[2], 16)
+            if vma <= addr < vma + sz:
+                off = addr - vma + lma
+                break
+    if off is None:
+        raise SystemExit(f"{func} at {addr:08X} is in no section of {elf}")
+
+    with open(ref, "rb") as f:
+        f.seek(off)
+        blob = f.read(size)
+    if len(blob) != size:
+        raise SystemExit(f"{func}: reference {ref} is short at {off:#x}")
+    return [(int.from_bytes(blob[i:i + 4], "little"), "")
+            for i in range(0, size, 4)]
 
 
 def target(func):
-    """[(word, text)] for one function, out of its overlay listing."""
+    """[(word, text)] for one function, out of its overlay listing -- or out of
+    the reference binary when splat has pruned the listing. See rom_target."""
     path = listing(func)
+    if path is None:
+        return rom_target(func)
     out, inside = [], False
     for ln in open(path):
         if ln.startswith("glabel "):
@@ -110,7 +197,9 @@ def target(func):
             out.append((int.from_bytes(bytes.fromhex(m.group(2)), "little"),
                         m.group(3).strip()))
     if not out:
-        raise SystemExit(f"{func} not found in {path}")
+        # The listing exists but does not hold this function -- e.g. a sibling
+        # unit's file matched the glob. Fall back rather than dying.
+        return rom_target(func)
     return out
 
 

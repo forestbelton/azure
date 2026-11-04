@@ -217,7 +217,9 @@ unfinished work the family tools cannot see.
 8. Check the clang-format complaint set against HEAD:
    `clang-format --output-replacements-xml csrc/ovl_town.c | grep -c '<replacement '`.
    It was 37 all through 2026-11-02 and every rise was a real slip of mine —
-   `void * c` for `void *c` once.
+   `void * c` for `void *c` once. Since the carve it is **31 for
+   `csrc/ovl_town.c` alone and 36 across the three units** (31 + 0 + 5): count
+   all three, because one complaint in the DUPLICATED preamble now costs 3.
 9. Commit. Say what was measured, not what was hoped, and record the spellings
    that did NOT work with their numbers: a later session reads those to avoid
    re-deriving them, and three of today's landings came out of another
@@ -250,11 +252,52 @@ checking every landed function in the unit costs one compile:
     # has no `;` on it either. That name is still a stub, so it sweeps at 0
     # differing and costs nothing -- but know which off-by-one is benign, and
     # chase any larger gap.
-    python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(cat /tmp/landed.txt | tr '\n' ' ') \
-      | grep -E '^func_[0-9A-Fa-f]{8}:' | grep -v ' 0 differing'
+    # PRINT THE VERIFIED COUNT, not just the failures.  `grep -v ' 0 differing'`
+    # alone turns ANY hard exit into EMPTY OUTPUT, which is indistinguishable
+    # from a clean sweep -- see "A sweep that verified nothing" below.  Always
+    # compare `verified-clean` against progress.py's landed count.
+    out=$(python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(tr '\n' ' ' < /tmp/landed.txt) 2>&1)
+    echo "verified-clean $(echo "$out" | grep -cE '^func_[0-9A-Fa-f]{8}: .* 0 differing')"
+    echo "$out" | grep -E '^func_[0-9A-Fa-f]{8}:' | grep -v ' 0 differing'
+    echo "$out" | grep -E 'no listing|not defined|Traceback'
 
-Run it whenever `make build/town.bin` fails and the diff is in rodata or a jump
-table, which is what a size change looks like from the outside. On 2026-11-02
+## A sweep that verified nothing, and how to tell
+
+**On 2026-11-03 this sweep was verifying ONE function out of 618 and reporting
+clean.** splat emits `asm/nonmatchings/<unit>/<func>.s` only for a function
+still carried by `INCLUDE_ASM`, and PRUNES it the next time it runs -- so every
+already-landed function loses its listing. `asm/nonmatchings/ovl_town*/` held
+763 listings against 1,059 landed functions, `ovlverify.py` hard-exited on the
+first name it could not resolve (`func_8008AC84`), and the recipe's closing
+`grep -v ' 0 differing'` swallowed the exit message. Empty output. Several
+sweeps reported as "clean" in this doc's own history were vacuous, including
+ones taken as evidence after the carve.
+
+Two things were wrong and both are fixed:
+
+1. **`ovlverify.py` now falls back to the REFERENCE BINARY** when a listing is
+   gone. It needs no listing at all: `build/<container>.elf` carries every
+   function's address and size, and the vram->rom map is the section **LMA**
+   (`.B000` is VMA 0x80088760, LMA 0xb000). Use the LMA, **not `File off`** --
+   that is 0x28760 and reads the wrong bytes. Positive control, re-runnable:
+   for all 763 functions that still had a listing, the reference-derived words
+   equalled the listing's words exactly, 763 checked, 0 mismatches. The sweep
+   then verified **1,060 names clean across the three units** -- the first
+   non-vacuous whole-unit sweep since the pruning started.
+2. **The recipe prints its own coverage**, so an empty failure list can no
+   longer be read as success.
+
+The fallback is sound only while `make build/<container>` is byte-identical,
+because the ELF supplies the layout -- which is the gate every landing already
+passes, and if it ever fails, make fails first and loudly. One asymmetry: a
+listing carries TEXT and `report()` uses it to decide which TARGET words carry
+a relocation; the reference carries only words, so masking falls to the
+candidate's own reloc table alone. That errs safely -- a word relocated in the
+target but not in the candidate is a real difference and stays visible -- but
+the printed table has no target-text column for a fallback function.
+
+Run the sweep whenever `make build/town.bin` fails and the diff is in rodata or
+a jump table, which is what a size change looks like from the outside. On 2026-11-02
 the container came out +0x20 bytes with the only visible difference being
 `func_800A4A58`'s switch table shifted by 0x18 -- the above found the real
 cause in one command (`func_8008FFC8`: 152 words in the unit against 146

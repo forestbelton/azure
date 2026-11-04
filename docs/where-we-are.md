@@ -395,10 +395,15 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. All three units sweep clean -- **0 nonzero** --
-   and both `make build/town.bin` and `make check` are byte-identical. The
-   sweep's benign off-by-one is now one PER UNIT, three in all.
-   `docs/matching-levers.md` is at **399 levers**, as `leverindex.py` itself
+   Work the tight components. All three units sweep clean -- **1,060 names
+   verified, 0 nonzero** -- and both `make build/town.bin` and `make check` are
+   byte-identical. Read that number, not just the absence of failures: until
+   2026-11-03 the sweep was verifying ONE function out of 618 and reporting
+   clean, because splat prunes a landed function's listing and the recipe's
+   closing `grep -v ' 0 differing'` swallowed the hard exit. `ovlverify.py` now
+   falls back to the reference binary via the ELF's section LMA, and the recipe
+   prints its own coverage. See docs/town-sweep.md, "A sweep that verified
+   nothing". `docs/matching-levers.md` is at **401 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.

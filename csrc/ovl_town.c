@@ -691,6 +691,11 @@ typedef struct UnkTownA17CCSP
     s32 unk_C4;
     u8 pad_C8[0x20];
     DVECTOR unk_E8[4];
+    u8 pad_F8[0x1C];
+    u32 unk_114;
+    u32 unk_118;
+    u8 pad_11C[0x8];
+    DVECTOR unk_124[2];
 } UnkTownA17CCSP;
 
 /* The static descriptor func_800A9E68 hands to func_800AA10C: two of them,
@@ -14233,7 +14238,131 @@ void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
     func_80065420((SVECTOR *)&p->unk_84, &p->unk_124, &p->unk_94, &p->unk_98);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8EE8);
+/* The actor's two-segment motion-trail ribbon: two gouraud quads over the
+   three points func_800A8CA8 projects this frame plus the same three from the
+   previous frame, which func_800A9358 keeps by copying +0xE8 -> +0xF0,
+   +0xEC -> +0xF4, +0x124 -> +0x128 and +0x114 -> +0x118 at the bottom of its
+   loop.  So UnkTownA17CCSP's `unk_E8[4]` is {cur0, cur1, prev0, prev1} and the
+   two points added here at +0x124 are {cur2, prev2}: the upper quad spans
+   E8[0..3] and the lower one E8[1], unk_124[0], E8[3], unk_124[1].  The two
+   `if`s are SEQUENTIAL, not an else-if -- the first body falls straight into
+   the second test at 0x800A9120.
+
+   The scratchpad is UnkTownA17CCSP, not a new typedef, and not the UnkTownSP
+   func_800A8CA8 uses: this function needs the OT base at +0x24 and the otz at
+   +0xC4, which UnkTownA17CCSP already models and UnkTownSP does not.  Its
+   +0x114/+0x118 are read as WORDS here (`lw`/`sw` straight into a POLY_G4's
+   r/g/b/code group) where func_800A8CA8 writes them a byte at a time, so they
+   are typed `u32` rather than as a second u8 triple.
+
+   What had to be spelled a particular way, each measured:
+
+   - **The on-screen test is a bitwise `|` of four `&&` pairs, not `||`.**  All
+     four sub-results are materialised and ORed (`or $a1,$a1,$v1` /
+     `or $a0,$a1,$a0` / `or $v0,$a0,$v1`, reorg having parked the first two in
+     branch delay slots); `||` short-circuits into branches instead and is 290
+     words / 254 differing.  Left-to-right association is what puts the three
+     `or`s in that register order.
+
+   - **The 16-bit window must be a `(u16)` CAST, not an `& 0xFFFF` mask.**
+     `(u16)(pt.vx + 0x20) < 0x181` has unsigned short type throughout, so the
+     field load is `lhu` and the compare `sltiu`.  Written
+     `((pt.vx + 0x20) & 0xFFFF) < 0x181` the expression stays `int`, the load
+     becomes `lh` and the compare `slti` -- two words per predicate, 16
+     predicates, 32 differing at the same 284 words.
+
+   - **`addPrim` goes BEFORE the eight corner stores**, which is where the
+     listing puts the two `0xFFFFFF`/`0xFF000000` mask groups; after them it is
+     278 words / 204 differing.  It really is the macro and not a call: the
+     POLY_G4 is linked with the inline `setaddr(p, getaddr(ot)), setaddr(ot, p)`
+     pair while only the trailing DR_MODE goes through `func_8006658C`.
+     Spelling the POLY_G4's link as `func_8006658C` too is 252 words / 208
+     differing.  The `ot` expression stays written out at all three sites;
+     writing it `p->unk_C4 + p->unk_24` instead measures 0 differing as well.
+
+   - **The four colour-group stores are in ASCENDING r0/r1/r2/r3 order.**  That
+     is what lets sched1 fill each `lw +0x114`/`lw +0x118` load delay with the
+     next group's store, which is how the listing interleaves them.  r0/r2/r1/r3
+     -- the order the stores appear in at 0x800A8FF0 -- is 285 words / 219
+     differing, and so is `*(u32 *)&pg->r2 = *(u32 *)&pg->r0 = 0x383838;` as one
+     chain.  In the second quad, descending r3/r2/r1/r0 is 7 differing.
+
+   - **Each corner stores x before y.**  y first is 32 differing, two per pair.
+
+   `func_80066708` (SetPolyG4) rides an implicit declaration, as
+   `func_80066844` and `func_800667D0` already do in this unit; giving it
+   `void func_80066708(POLY_G4 *p);` measures 0 differing too.
+
+   284 words -- its header reads `nonmatching func_800A8EE8, 0x470`, and
+   0x470/4 = 284.  Measured 0 differing, and the relocation arithmetic closes:
+   `--raw` reports 15 differing against exactly 15 relocation words
+   (1 HI16 at +0x34 and 4 LO16 at +0xF0/+0x1EC/+0x30C/+0x408 on D_80083160,
+   plus 10 R_MIPS_26 -- func_80066708, func_80066640, func_80066460,
+   func_80067F20, func_8006658C twice each, in that order) and no
+   intra-function `j`.  No `%hi` on a function symbol, no jump table and no
+   rodata of its own. */
+void func_800A8EE8(UnkTownA17CCSP *p)
+{
+    Unk80083160 *g;
+    POLY_G4 *pg;
+    DR_MODE *dm;
+
+    g = &D_80083160;
+    if (((u16)(p->unk_E8[0].vx + 0x20) < 0x181 && (u16)(p->unk_E8[0].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_E8[1].vx + 0x20) < 0x181 && (u16)(p->unk_E8[1].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_E8[2].vx + 0x20) < 0x181 && (u16)(p->unk_E8[2].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_E8[3].vx + 0x20) < 0x181 && (u16)(p->unk_E8[3].vy + 0x20) < 0x121))
+    {
+        pg = (POLY_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
+        *(u32 *)&pg->r0 = 0x383838;
+        *(u32 *)&pg->r1 = p->unk_114;
+        *(u32 *)&pg->r2 = 0x383838;
+        *(u32 *)&pg->r3 = p->unk_118;
+        func_80066708(pg);
+        func_80066640(pg, 1);
+        addPrim(p->unk_24 + p->unk_C4, pg);
+        pg->x0 = p->unk_E8[0].vx;
+        pg->y0 = p->unk_E8[0].vy;
+        pg->x1 = p->unk_E8[1].vx;
+        pg->y1 = p->unk_E8[1].vy;
+        pg->x2 = p->unk_E8[2].vx;
+        pg->y2 = p->unk_E8[2].vy;
+        pg->x3 = p->unk_E8[3].vx;
+        pg->y3 = p->unk_E8[3].vy;
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+        func_8006658C(p->unk_24 + p->unk_C4, dm);
+    }
+    if (((u16)(p->unk_E8[1].vx + 0x20) < 0x181 && (u16)(p->unk_E8[1].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_124[0].vx + 0x20) < 0x181 && (u16)(p->unk_124[0].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_E8[3].vx + 0x20) < 0x181 && (u16)(p->unk_E8[3].vy + 0x20) < 0x121) |
+        ((u16)(p->unk_124[1].vx + 0x20) < 0x181 && (u16)(p->unk_124[1].vy + 0x20) < 0x121))
+    {
+        pg = (POLY_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
+        *(u32 *)&pg->r0 = p->unk_114;
+        *(u32 *)&pg->r1 = 0;
+        *(u32 *)&pg->r2 = p->unk_118;
+        *(u32 *)&pg->r3 = 0;
+        func_80066708(pg);
+        func_80066640(pg, 1);
+        addPrim(p->unk_24 + p->unk_C4, pg);
+        pg->x0 = p->unk_E8[1].vx;
+        pg->y0 = p->unk_E8[1].vy;
+        pg->x1 = p->unk_124[0].vx;
+        pg->y1 = p->unk_124[0].vy;
+        pg->x2 = p->unk_E8[3].vx;
+        pg->y2 = p->unk_E8[3].vy;
+        pg->x3 = p->unk_124[1].vx;
+        pg->y3 = p->unk_124[1].vy;
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+        func_8006658C(p->unk_24 + p->unk_C4, dm);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9358);
 
