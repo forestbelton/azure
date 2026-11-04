@@ -2181,6 +2181,8 @@ extern u8 D_801118C8[];
 extern u8 D_80111AC8[];
 extern u8 D_80111CC8[];
 extern u8 D_80111EC8[];
+/* func_800B6FB8's final blit source; its park carried this extern. */
+extern u8 D_8012F004[];
 extern u8 D_80111EE8[];
 extern u8 D_80111F08[];
 extern u8 D_80111F28[];
@@ -3026,6 +3028,29 @@ void func_800A790C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 void func_800A79C8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
 void func_800A7950(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
 void func_800A79F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
+typedef struct UnkTown8333C
+{
+    u32 unk_00;
+    u8 pad_04[0x10];
+    u16 unk_14;
+    u16 unk_16;
+    u16 unk_18;
+    u16 unk_1A;
+    u16 unk_1C;
+    u16 unk_1E;
+} UnkTown8333C;
+
+/* The 0x20-stride town table func_800B70EC, func_800B81AC and
+   csrc/unk_1C540.c's func_80051228 all index by D_800D381A; byte +0 of the
+   selected row is the area id the comparison trees switch on.  Declared
+   [][0x20] rather than flat so the `sll 5` stays in the index and the two
+   `lui`s come out in the listing's order -- flat with `[D_800D381A * 0x20]`
+   is 4 differing in func_800B70EC, all of it the two %hi words swapped. */
+extern u8 D_800D2FB4[][0x20];
+extern u8 D_800D381A;
+extern u8 D_8012F004[];
+extern u16 D_8014F004[];
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -25259,11 +25284,186 @@ s32 func_800B6F54(u8 *p)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B6FB8);
+/* Retired from docs/near-misses/func_800B6FB8.c on 2026-11-03. The six halfwords at
+   +0x14..+0x1E are three PAIRS, and the source writes the FIRST element of all
+   three pairs, then the SECOND of all three -- not each pair consecutively.
+   Both parks held the pairing constant and permuted within it, which is why
+   720 orders each bottomed out at 13 and 11; all 720 were measured again here
+   on three functions and this order is the only one at 0 on all three (the
+   next best is 2). The `k = 7` SImode-statement trick is still required: it is
+   what duplicates the constant, and the pair-major order is what overlaps the
+   other two constants' live ranges so the allocator gives them their own
+   registers. See the commit for sched.c's birthing_insn_p. */
+void func_800B6FB8(void)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTown8333C *t = (UnkTown8333C *)&g->unk_1DC;
+    s32 k;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B70EC);
+    t->unk_14 = 7;
+    t->unk_18 = 0x7F;
+    t->unk_1C = 0x2000;
+    k = 7;
+    t->unk_16 = k;
+    t->unk_1A = 0x7F;
+    t->unk_1E = 0x2000;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B72B8);
+    D_80111FA8[0] = 0x328;
+    D_80111FA8[1] = 0x80;
+    D_80111FA8[2] = 8;
+    D_80111FA8[3] = 0x80;
+    D_80082E60.unk_16 &= 0xFFFE;
+    func_8006733C(D_80111FA8, D_80110EC8);
+
+    D_80111FA8[0] = 0x330;
+    D_80111FA8[1] = 0x80;
+    D_80111FA8[2] = 8;
+    D_80111FA8[3] = 0x80;
+    func_8006733C(D_80111FA8, D_801116C8);
+
+    D_80111FA8[0] = 0;
+    D_80111FA8[1] = 0x1FB;
+    D_80111FA8[2] = 0x40;
+    D_80111FA8[3] = 1;
+    func_8006733C(D_80111FA8, D_80111EC8);
+
+    func_80067014(0);
+    g->unk_1DC = (u32)D_80162004;
+    func_800B73D0();
+    func_80046E38(0, D_8012F004);
+}
+
+/* The 0x20-byte block at Unk80083160's unk_1DC (0x8008333C) that
+   func_800B6FB8, func_800B70EC and func_800B72B8 all stamp the same six
+   halfwords into: a u32 at +0x00 holding the surface pointer, then three
+   PAIRS of halfwords at +0x14/+0x16, +0x18/+0x1A and +0x1C/+0x1E carrying
+   7, 0x7F and 0x2000.  The pair layout is why the source writes the first
+   element of all three pairs and then the second -- see func_800B70EC. */
+
+/* Builds the town's tile surface: stamps the six-halfword header above,
+   blits the fixed 0x328 panel strip, then one of two area-dependent strip
+   sets, clears and redraws the 0x80x0x80 surface D_8014F004 holds, and
+   finally hands the area id to func_80046E38 unless it is 0x29.
+   func_800B6FB8 and func_800B72B8 are the other two members of the header
+   family and are still parked.
+
+   THREE THINGS ARE LOAD-BEARING, each measured:
+
+   (a) The header is written PAIR-MAJOR: unk_14, unk_18, unk_1C, then the
+       second element of each pair.  gcc's sched1 glues a `(set (reg)
+       (const_int))` to its first use when flow says the pseudo has exactly
+       one set (`birthing_insn_p`, sched.c:2513-2540, reached from
+       `adjust_priority` at :2583 which raises the priority to
+       LAUNCH_PRIORITY), so writing each pair consecutively keeps one
+       register and re-materialises each constant at its store.  Splitting
+       the pairs lengthens all three live ranges across the 7-pair and the
+       allocator has to give 0x7F and 0x2000 their own registers ($a2 and
+       $v1), which is what the target does.  All 720 orders of the six
+       stores were measured: this one and the same with the last two
+       exchanged are 0 differing, the next best is 2.
+
+   (b) `k = 7` as an SImode local in a statement of its OWN is what stops
+       cse1 unifying the two HImode `(const_int 7)` sets -- the
+       cse.c:6603-6606 lever that docs/near-misses/func_800B6FB8.c records.
+       Without it the function is one word short.
+
+   (c) The area id is RE-READ for the trailing func_80046E38 call rather
+       than held from the comparison: holding it in a local is 114 words
+       against 115, the missing word being the target's `addu $a0, $v1,
+       $zero`.  This is the unit's standing re-dereference shape.
+
+   The two area arms are a SWITCH, written 0x26..0x28 FIRST and 0x21
+   second: `expand_end_case` reorders the dispatch tree to the top of the
+   switch (stmt.c:5337) while the case bodies stay in source order, and the
+   target's layout has the 0x26..0x28 body ahead of the 0x21 body with a
+   cross-jumped `.w/.h/call` tail.  An `if`/`else if` chain folds the three
+   bounds into one `addiu -0x26`/`sltiu 3` range test, 3 words short. */
+void func_800B70EC(void)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTown8333C *t = (UnkTown8333C *)&g->unk_1DC;
+    u16 *p;
+    s32 k;
+    s32 h;
+
+    t->unk_14 = 7;
+    t->unk_18 = 0x7F;
+    t->unk_1C = 0x2000;
+    k = 7;
+    t->unk_16 = k;
+    t->unk_1A = 0x7F;
+    t->unk_1E = 0x2000;
+
+    h = 1;
+    p = D_8014F004;
+    D_80111FA8[0] = 0x328;
+    D_80111FA8[1] = 0x80;
+    D_80111FA8[2] = 8;
+    D_80111FA8[3] = 0x80;
+    D_80082E60.unk_16 |= 1;
+    func_8006733C(D_80111FA8, D_80110EC8);
+
+    switch (D_800D2FB4[D_800D381A][0])
+    {
+    case 0x26:
+    case 0x27:
+    case 0x28:
+        D_80111FA8[0] = 0x330;
+        D_80111FA8[1] = 0x80;
+        D_80111FA8[2] = 8;
+        D_80111FA8[3] = 0x80;
+        func_8006733C(D_80111FA8, D_801116C8);
+
+        D_80111FA8[0] = 0;
+        D_80111FA8[1] = 0x1FB;
+        D_80111FA8[2] = 0x40;
+        D_80111FA8[3] = h;
+        func_8006733C(D_80111FA8, D_80111EC8);
+        break;
+    case 0x21:
+        D_80111FA8[0] = 0x10;
+        D_80111FA8[1] = 0x1C1;
+        D_80111FA8[2] = 0x30;
+        D_80111FA8[3] = h;
+        func_8006733C(D_80111FA8, D_80111F48);
+        break;
+    }
+
+    func_80067014(0);
+    t->unk_00 = (u32)p;
+    func_800B73F0(p);
+    if (D_800D2FB4[D_800D381A][0] != 0x29)
+    {
+        func_80046E38(D_800D2FB4[D_800D381A][0], D_8012F004);
+    }
+}
+
+/* Retired from docs/near-misses/func_800B72B8.c on 2026-11-03. The six halfwords at
+   +0x14..+0x1E are three PAIRS, and the source writes the FIRST element of all
+   three pairs, then the SECOND of all three -- not each pair consecutively.
+   Both parks held the pairing constant and permuted within it, which is why
+   720 orders each bottomed out at 13 and 11; all 720 were measured again here
+   on three functions and this order is the only one at 0 on all three (the
+   next best is 2). The `k = 7` SImode-statement trick is still required: it is
+   what duplicates the constant, and the pair-major order is what overlaps the
+   other two constants' live ranges so the allocator gives them their own
+   registers. See the commit for sched.c's birthing_insn_p. */
+void func_800B72B8(void)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTown8333C *t = (UnkTown8333C *)&g->unk_1DC;
+    s32 k;
+
+    t->unk_14 = 7;
+    t->unk_18 = 0x7F;
+    t->unk_1C = 0x2000;
+    k = 7;
+    t->unk_16 = k;
+    t->unk_1A = 0x7F;
+    t->unk_1E = 0x2000;
+    g->unk_1DC = (u32)D_80162004;
+    func_800B7420();
+}
 
 /* Clears the 0x80x0x80 halfword surface D_80162004 holds, addressed as a
    two-dimensional index rather than a walked pointer: the target recomputes
@@ -26037,7 +26237,48 @@ void func_800B8170(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B81AC);
+/* The state dispatcher for the three stepper handlers above: zeroes the
+   node's frame counter at +0x20, records the area id at +0x22 and installs
+   the handler that area wants.  func_800B8170 is the same install without
+   the selection.
+
+   Same switch as func_800B70EC's, with the 0x26..0x28 case written first so
+   that the dispatch tree (hoisted to the top by stmt.c:5337) tests 0x21
+   first while the bodies stay in source order; cross-jumping then unifies
+   the three arms' `sw` into the single store at .L800B8234.
+
+   `x` is `s16`, and that is worth two words: the switch index is then
+   HImode, `expand_end_case` widens it to SImode (stmt.c:5113-5126) and the
+   widening comes out as the target's `addu $v1, $v0, $zero` plus the
+   load-delay `nop`, while the +0x22 store keeps the `lbu`'s own register.
+   `s32` is 37 words against 39 and `u8` is 39 with 1 differing. */
+void func_800B81AC(void)
+{
+    UnkNode *n;
+    s16 x;
+
+    n = func_8003FC64(0);
+    if (n != 0)
+    {
+        *(s16 *)((u8 *)n + 0x20) = 0;
+        x = D_800D2FB4[D_800D381A][0];
+        *(s16 *)((u8 *)n + 0x22) = x;
+        switch (x)
+        {
+        case 0x26:
+        case 0x27:
+        case 0x28:
+            n->unk_10 = (u32)func_800B7B8C;
+            break;
+        case 0x21:
+            n->unk_10 = (u32)func_800B7F8C;
+            break;
+        default:
+            n->unk_10 = (u32)func_800B7E78;
+            break;
+        }
+    }
+}
 
 /* Rebuilds the whole tile overlay: one full-screen func_8009CDCC with
    D_800D43F0, then one per non-zero entry of the 0x21-entry pending table at
@@ -26485,7 +26726,62 @@ void func_800B90BC(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B90F0);
+/* Scans the 0x21-entry pending-tile table at 0x800133A4 from the top down
+   for the entry whose id equals D_800D3814[6] and fires one func_80041094
+   0xB at the matching stride-8 D_800D2EA4 slot's coordinates; if nothing
+   matches it fires the same call for slot 0 and clears D_800D381A instead.
+   0x800133A4 is out of the loaded image, so the table is a constant address
+   through a base pointer with the offset in the index expression, as in
+   func_800B8248 and func_800B833C.
+
+   TWO POINTER LOCALS, BOTH `= D_800D2EA4`, AND THAT IS THE LAST TWO WORDS.
+   loop.c strength-reduces `q[i * 8 + n]` into the `$t0` that walks down by
+   8, so `q` itself dies at the loop head; the post-loop call re-materialises
+   the symbol (`lui`/`addiu` at words 42-43) rather than keeping it live.
+   Reusing `q` after the loop holds it in $a2 across the loop and is 67 words
+   against 69; REASSIGNING `q = D_800D2EA4;` after the loop is 69 words with
+   11 differing; a second local is 0.  Reaching the post-loop slot as
+   `&D_800D2EA4[i * 8]` with `r[0..3]` is 69/3 -- the index `sll` then comes
+   out ahead of the base's `lui` -- so the index has to stay in the
+   SUBSCRIPT, exactly as in the loop.
+
+   The flag is ONE location spelled two ways, which is what the relocations
+   say: inside the loop `D_80082E60.unk_16` lets loop.c hoist the struct base
+   into $t1 and leaves the 0x16 in the displacement, while after the loop
+   D_80082E76 is its own symbol with a zero addend (`lhu %lo(D_80082E76)`).
+   Same for D_800D3814[6] in the loop against D_800D381A after it.
+
+   `i` counts DOWN from 0x20 and is seeded BEFORE the two bases are taken,
+   the statement order func_800B833C records; the post-loop block then reads
+   slot `i`, which is 0 on that path, and the target recomputes `sll $v1,
+   $a1, 3` rather than reusing the walked `$t0` because the giv is only
+   valid inside the loop. */
+void func_800B90F0(void)
+{
+    u8 *base;
+    u8 *q;
+    u8 *r;
+    s32 i;
+
+    i = 0x20;
+    q = D_800D2EA4;
+    base = (u8 *)0x80010000;
+    for (; i > 0; i--)
+    {
+        if (base[i * 2 + 0x33A4] == D_800D3814[6])
+        {
+            func_80041094(0xB, ((q[i * 8] + (q[i * 8 + 2] >> 1)) << 6) | 0x20,
+                          ((q[i * 8 + 1] + q[i * 8 + 3]) << 6) | 0x20, 0,
+                          D_80082E60.unk_16 ^ 1);
+            D_800D3814[6] = 0;
+            return;
+        }
+    }
+    r = D_800D2EA4;
+    func_80041094(0xB, ((r[i * 8] + (r[i * 8 + 2] >> 1)) << 6) | 0x20,
+                  ((r[i * 8 + 1] + r[i * 8 + 3]) << 6) | 0x20, 0, D_80082E76 ^ 1);
+    D_800D381A = 0;
+}
 
 void func_800B9204(u8 a)
 {
