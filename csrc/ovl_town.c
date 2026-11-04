@@ -2663,6 +2663,7 @@ u32 func_8004DA74(u8 *a, void *b, s32 c);
 void func_800BC1DC(u8 *rec, void (*fn)(), u32 payload);
 void func_800BC390();
 extern u8 D_8008961C[];
+extern u8 D_80089660[];
 extern u8 D_80053A88[];
 extern u8 D_800782EC[];
 extern u8 D_80111FB0[];
@@ -23672,13 +23673,306 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD980);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDB20);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDBD0);
+/* The four-argument half of func_800BE4D4's node spawner -- func_800BDB20
+   above is the three-argument one: allocate a 0x136 node, bind it through
+   D_80046398, install the caller's UnkNode +0x10 handler, seed the renderable
+   with a rotation, a 0x1000 scale on all three axes, the unit's 0x808080 grey
+   and the descriptor word the caller hands it, then copy the caller's
+   three-component vector into the node's mover.  Returns the node;
+   func_800BE4D4 reads the actor view at +0x20 off it.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDC98);
+   ARITY, PARAMETER TYPES AND THE RETURN ARE SETTLED BY THE LANDED CALLER
+   func_800BE4D4 -- `o = func_800BDBD0(&v, (void *)func_800BDE7C, d << 10,
+   D_800D2134[i * 2])` -- together with this region's own declaration.  A
+   `void` return cannot even be measured: it is a hard `conflicting types`
+   against that declaration, which is the trap docs/town-sweep.md records.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDDD0);
+   THE HANDLER STORE GOES *AFTER* func_8004491C HERE, which is the opposite of
+   func_800BEAD0's finding further down this file: the bind call's delay slot
+   holds the second argument's `addiu $a1, $a1, %lo(D_80046398)` and the `sw
+   $s2, 0x10($s0)` is a plain insn behind it.  Written before the call it is
+   50 words / 14 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDE7C);
+   The renderable's six stores are in the order +0x1A, +0x1C, +0x1E, +0x20,
+   +0x0C, +0x08 and the mover copy follows all of them: the descriptor and the
+   grey moved to the front is 50 / 15, and the whole mover copy moved ahead of
+   the renderable is 48 / 32.  The mover copy is THREE component stores and
+   not `*m = *v;` -- UnkVec is 0x18 bytes and only its first 0xC is copied, so
+   the struct assignment is 53 / 35.
+
+   `*(u32 *)&r->unk_0C = 0x808080;` is func_800BEAD0's idiom for the same
+   three colour bytes.  `c` reaches memory as a halfword (`sh $s3, 0x1A($v1)`),
+   so the `s32` third parameter the caller's `d << 10` wants costs nothing.
+
+   50 words -- its header reads `nonmatching func_800BDBD0, 0xC8`, and
+   0xC8/4 = 50.  0 differing, first compile. */
+UnkNode *func_800BDBD0(UnkVec *v, void *fn, s32 c, u32 d)
+{
+    UnkNode *o;
+    UnkVec *m;
+    UnkTownRend *r;
+
+    o = func_8003FC64(0x136);
+    if (o != 0)
+    {
+        func_8004491C(o, (u32)D_80046398);
+        o->unk_10 = (u32)fn;
+        r = (UnkTownRend *)o->unk_0C;
+        r->unk_1A = c;
+        r->unk_1C = 0x1000;
+        r->unk_1E = 0x1000;
+        r->unk_20 = 0x1000;
+        *(u32 *)&r->unk_0C = 0x808080;
+        r->unk_08 = d;
+        m = o->unk_08;
+        m->unk_00 = v->unk_00;
+        m->unk_04 = v->unk_04;
+        m->unk_08 = v->unk_08;
+    }
+    return o;
+}
+
+/* func_800BE4D4's cases 1 and 2: stamp a 2x1 tile PAIR onto the same
+   wrap-masked cell grid func_800BDDD0 below writes, with the pair chosen out
+   of the 16-byte table D_80089660.  That table is four rows of two u16 tile
+   ids -- {0x4D,0x4E}, {0x63,0x62}, {0x79,0x78}, {0x4B,0x4C} -- `k` picks the
+   row and `i - x` the column, so the four rows are the four facings and the
+   function lays down one of them.  `a` is func_800BE4D4's own case value
+   (1 or 2): at 2 the row index is the fourth argument, otherwise the row is 3
+   and a non-zero fourth argument means "nothing to stamp" and returns.
+
+   THE TABLE IS COPIED WITH memcpy OFF `extern u8 D_80089660[]`, which is
+   func_800BC45C's idiom in this same unit: alignment 1 makes move_by_pieces
+   take the `lwl`/`lwr` + `swl`/`swr` path for all 16 bytes, which is what the
+   listing has.  `u16 t[8]` for the destination is also 78 / 0 -- the pass uses
+   the MINIMUM of the two alignments -- and a local array INITIALISER must not
+   be used: it would duplicate the 16 bytes into this unit's .rodata, shift
+   every record from 0x80089660 on, and still measure 0 differing in text.
+   The INCLUDE_RODATA for D_80089660 below therefore stays.
+
+   `h` IS A VARIABLE AND THE 2 IS A LITERAL, and that asymmetry is the
+   listing's: the outer bound is `addiu $v1, $a3, 0x2` with an immediate while
+   the inner bound is `addu $v1, $a2, $t7` off a pseudo holding 1.  A pseudo
+   there means a source variable -- combine cannot substitute a constant across
+   a basic-block boundary and the inner bound is recomputed inside the outer
+   loop -- while the outer bound is computed in the entry region, where cse
+   does fold it.  `j < y + 1` is 77 words / 74 differing.  `h = 1` must also
+   sit AHEAD of the `a != 2` gate (the target's `addiu $t7, $zero, 0x1` is in
+   that gate's branch delay slot, so reorg took it from in front): after the
+   gate it is 78 / 37.
+
+   `k` IS `s16`.  The target's `sll $v0, $t1, 16` / `sra $v0, $v0, 14` pair is
+   the variable's own sign extension fused with the `* 4`; `s32 k` is 76 / 48.
+   `k = b;` is the FIRST statement, ahead of the memcpy (swapped: 77 / 77), and
+   the gate reassigns it rather than an if/else choosing between `b` and 3
+   (the if/else is 77 / 77).  Whether `k = 3` precedes or follows the `return`
+   inside the gate does not matter (both 78 / 0), because reorg fills the
+   `bnez`'s delay slot with it either way.
+
+   `j = y;` IS A STATEMENT OF ITS OWN, AHEAD OF THE `row` ASSIGNMENT, and the
+   inner `for` has an empty first clause.  This is loop.c's discovery order
+   (docs/matching-levers.md, "The PREHEADER's order is the order the invariants
+   are FIRST USED"): scan_loop appends each movable as it finds it walking the
+   outer body and move_movables emits them with emit_insn_before (loop_start),
+   so the invariant used FIRST ends up FURTHEST from the loop.  With the
+   ordinary `for (j = y; ...)` after `row`, the `k * 4` chain is discovered
+   first and `sll $a1, $t5, 16` lands behind it instead of in the outer guard's
+   delay slot: 78 / 4.
+
+   `row` IS ASSIGNED INSIDE THE OUTER LOOP so that loop.c hoists it into the
+   preheader, which sits AFTER the outer guard.  Assigned ahead of both loops
+   its three insns come out before the guard: 78 / 7.  Assigned in the INNER
+   loop instead: 78 / 11.  Folded into the store's value expression,
+   `*(u16 *)(t + k * 4 + (i - x) * 2)`: 78 / 14.
+
+   `row = (u8 *)(k * 4 + (s32)t);` AND NOT `t + k * 4`.  The target's `addu
+   $t6, $v0, $sp` has the INDEX register first, which no spelling of C pointer
+   arithmetic emits (docs/matching-levers.md, "C POINTER ARITHMETIC CANNOT EMIT
+   AN INDEX-FIRST ADD"); the pointer form is 78 / 1, the whole function
+   otherwise exact.  `&t[k * 4]` and `(s16)k * 4 + (s32)t` are also 0.
+
+   Unlike func_800BDDD0 below, the cell store does NOT care which spelling it
+   takes: `cells[idx]` and `*(s16 *)(cells + idx)` are both 78 / 0, as is
+   `((u16 *)row)[i - x]` for the value.  The mask cast placement does care, the
+   same way it does there: `(s16)(j & m->unk_1A)` is 80 / 24.
+
+   78 words -- its header reads `nonmatching func_800BDC98, 0x138`, and
+   0x138/4 = 78.  0 differing. */
+void func_800BDC98(s16 x, s16 y, s16 a, s16 b)
+{
+    u8 t[16];
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells = (u16 *)g->unk_1DC;
+    u8 *row;
+    s16 k;
+    s32 h;
+    s32 i;
+    s32 j;
+
+    k = b;
+    memcpy(t, D_80089660, 16);
+    h = 1;
+    if (a != 2)
+    {
+        k = 3;
+        if (b != 0)
+        {
+            return;
+        }
+    }
+    for (i = x; i < x + 2; i++)
+    {
+        j = y;
+        row = (u8 *)(k * 4 + (s32)t);
+        for (; j < y + h; j++)
+        {
+            cells[(s16)((m->unk_18 & i) + ((j & (s16)m->unk_1A) << m->unk_14))] = *(u16 *)(row + (i - x) * 2);
+        }
+    }
+}
+
+/* func_800BE4D4's case 8: stamp a 4x4 block of tile ids 1..16 onto the town's
+   wrap-masked cell grid, at (x, y) in cell units.  The grid is
+   Unk80083160's +0x1DC record, which csrc/ovl_town.c already types as
+   `UnkTownCastGeo` for the +Z sweep at func_8008D0B8 -- +0x00 is the u16 cell
+   array, +0x14 the row shift and +0x18/+0x1A the x and y wrap masks -- and the
+   index idiom `m->unk_18 & cx` plus `(s16)(m->unk_1A & cy) << m->unk_14` is
+   that family's, read off csrc/ovl_town.c:3838.  Two spellings of the base are
+   both 0 differing: `(u16 *)g->unk_1DC` (the landed family's, kept) and
+   `m->unk_00`.
+
+   `a` IS A DEAD TRAILING PARAMETER -- $a2 is never touched -- so it has no
+   witness in the body at all; the arity comes from this region's existing
+   declaration and from the landed caller, `func_800BDDD0(x, y, arg2)`, where
+   the argument is func_800BE4D4's second parameter and not its case value.
+   An unread trailing parameter costs no words here either way.
+
+   THE CAST GOES ON THE MASK FIELD AND NOT ON THE `and`.  `(j & (s16)m->unk_1A)`
+   is the target's bare `lh 0x1A` / `and` / `sllv`; func_8008D0B8's
+   `(s16)(m->unk_1A & cy)` is 80 words / 24 differing here, because the
+   sign extension then survives as its own `sll`/`sra` pair.
+
+   THE `+ 1` MUST BE PARENTHESISED INSIDE THE j TERM: `(i - x) + ((j - y) * 4
+   + 1)`.  The natural `(i - x) + 1 + (j - y) * 4` is 43 / 6, with the `addiu
+   ,1` inside the inner loop instead of beside the outer loop's `subu`, so the
+   hoisted invariant degrades from `(i - x) + 1` to `i - x`.
+
+   FOLD SWAPS WHICH SIDE THE CONSTANT IS ON, so the source must write it on the
+   side it is NOT wanted.  `fold`'s `associate:` arm tries `split_tree` on
+   arg0 and then on arg1, and each arm moves the constant to the OTHER operand:
+     * `((i-x)+1) + (j-y)*4` -- arg0 splits (var `i-x`, con 1) and
+       scratch/gcc-src/cdk-gcc-b18/fold-const.c:4233 says
+       "Otherwise return VAR +- (ARG1 +- CON)", giving `(i-x) + ((j-y)*4 + 1)`;
+     * `(i-x) + ((j-y)*4 + 1)` -- arg0 cannot split, because split_tree's
+       PLUS/MINUS clause at :1014 accepts `i - x` but then finds no constant
+       operand in it, so :4257's `split_tree (arg1, ...)` fires instead and
+       :4277 builds `build (TREE_CODE (t), type, fold (build (code, ..., arg0,
+       con)), var)` -- i.e. `((i-x)+1) + (j-y)*4`, which is the tree loop.c can
+       hoist.
+   `((j - y) << 2)` for `* 4` is 44 / 39.
+
+   THE STORE MUST BE `*(s16 *)(cells + idx)` AND NOT `cells[idx]`.  Both are 43
+   words; the array form is 6 differing.  expand_assignment emits the LHS
+   address before the RHS value, and the cast-through-INDIRECT_REF form is what
+   puts the target's value chain (`sra`/`subu`/`sll`/`addu`, words 18-21) ahead
+   of the index chain instead of behind it.  Note that the sibling
+   func_800BDC98 above does NOT care -- there the array form is also 0 -- so
+   this is a fact about this function, not a house rule.
+
+   The nesting is x-outer / y-inner, witnessed: swapping the two loops is
+   43 / 37.  Declaration initialisers and plain statements for g/m/cells are
+   both 0 differing.
+
+   43 words -- its header reads `nonmatching func_800BDDD0, 0xAC`, and
+   0xAC/4 = 43.  0 differing. */
+void func_800BDDD0(s16 x, s16 y, s16 a)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    u16 *cells = (u16 *)g->unk_1DC;
+    s32 i;
+    s32 j;
+
+    for (i = x; i < x + 4; i++)
+    {
+        for (j = y; j < y + 4; j++)
+        {
+            *(s16 *)(cells + (s16)((m->unk_18 & i) + ((j & (s16)m->unk_1A) << m->unk_14))) = (i - x) + ((j - y) * 4 + 1);
+        }
+    }
+}
+
+/* The UnkNode +0x10 handler func_800BE4D4's cases 14/15/16 install (`o =
+   func_800BDBD0(&v, (void *)func_800BDE7C, d << 10, D_800D2134[i * 2])`), so
+   it is reached through func_80040190's cast in csrc/unk_12DEC.c -- three
+   parameters, the first being the node's +0x20 actor view.  A four-state
+   cut-down of func_800BDFA0 just below: the same `func_800352FC() &&
+   func_800C2AB4(a)` camera gate, but instead of calling func_8003DB94 it
+   writes the descriptor straight into the renderable's +0x08, and instead of
+   func_800BDFA0's lone `a->unk_68 = 0;` reset BOTH odd states wrap the counter
+   with `& 3`.
+
+   `q` IS A DEAD MIDDLE PARAMETER, witnessed by the gap in the $aN sequence:
+   the prologue copies $a0 and $a2 into $s0/$s2 and never touches $a1.
+   Dropping it is 71 words / 1 differing, the one word being `move $s1, $a1`
+   for the target's `move $s1, $a2`.  Same witness as func_800BDFA0 and
+   func_800BC6CC.
+
+   `t` IS THE +0xA0 ROW POINTER, HOISTED ABOVE THE SWITCH, and that is not
+   cse's doing: func_800BE4D4's case 14 stores `(u32)&D_800D2134[i * 2]` there,
+   so it is a two-u32 row and the two arms read its [1] and [0].  Written as
+   `(*(u32 **)((u8 *)a + 0xA0))[k]` inside the arms it is 72 / 43 -- the loads
+   land inside the gated blocks where the target's `lw $s1, 0xA0($s0)` is in
+   the entry block beside the `lh` of +0x68.  The two subscripts are witnessed
+   by displacement and not masked: swapping them is 71 / 2.
+
+   `case 1:` AND `case 3:` MUST SHARE ONE LABEL.  Four cases, so cc1psx emits
+   the balanced if/else tree (`== 1`, `slti 2`, `== 0`, `== 2`, `== 3`) and
+   both odd states branch to the same `.L800BDF0C`.  Written as two case
+   bodies of identical text gcc does NOT unify them here -- 73 / 41, two words
+   long -- which is the non-uniformity func_800BE214's comment records from the
+   other side.  The unmasked `a->unk_68++` of cases 0 and 2 IS cross-jumped,
+   which is why one `lhu`/`addiu` pair sits after case 2's store and the `sh`
+   is shared by all three arms.
+
+   Measured and NOT witnessed, so that nobody re-measures them: `A == 0 || B ==
+   0` for `!(A && B)` with `A != 0 && B != 0` for `A && B` (71 / 0),
+   `switch (*(s16 *)((u8 *)a + 0x68))` for `switch (a->unk_68)` (71 / 0), and
+   `a->unk_68 = ++a->unk_68 & 3;` for the wrap (71 / 0).
+
+   71 words -- its header reads `nonmatching func_800BDE7C, 0x11C`, and
+   0x11C/4 = 71.  0 differing. */
+void func_800BDE7C(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
+{
+    u32 *t;
+
+    t = *(u32 **)((u8 *)a + 0xA0);
+    switch (a->unk_68)
+    {
+    case 0:
+        if (func_800352FC() && func_800C2AB4(a))
+        {
+            r->unk_08 = t[1];
+            a->unk_68++;
+        }
+        break;
+    case 1:
+    case 3:
+        if (!(func_800352FC() && func_800C2AB4(a)))
+        {
+            a->unk_68 = (a->unk_68 + 1) & 3;
+        }
+        break;
+    case 2:
+        if (func_800352FC() && func_800C2AB4(a))
+        {
+            r->unk_08 = t[0];
+            a->unk_68++;
+        }
+        break;
+    }
+}
 
 void func_800BDF98(void) {
 }
