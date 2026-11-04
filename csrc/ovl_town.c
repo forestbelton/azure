@@ -38331,11 +38331,208 @@ void func_800BD688(UnkTownBD688 *a, UnkVec *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD898);
+/* The UnkNode +0x10 handler func_800BD980 installs on both of its child
+   nodes, reached through func_80040190's cast in csrc/unk_12DEC.c --
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- so three parameters, the first being the node's +0x20 actor view and the
+   third the renderable, the same shape as func_800BDFA0 and func_800BE0D4
+   just below.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BD980);
+   Advance the mover by its own per-frame delta, then every eighth frame
+   rebind the animation, choosing between D_800E9E14 and D_800E9E34 on the
+   sign of the +0x14 delta; when the +0x0C delta has reached zero, kill the
+   node with the unit's `|= 0x8000` pair.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BDB20);
+   THE TWO func_8003DB94 CALLS ARE ONE `jal`: cross-jumping unifies the
+   suffix, which is why the listing has a bare `j` out of the first arm into
+   the second arm's own call.  The two descriptors must be written in THIS
+   order.  Testing `>= 0` first and swapping the arms is **1 differing** --
+   which reads like a near-miss and is a three-word structural error, exactly
+   the trap docs/town-sweep.md records -- and `seqcheck.py` is what sees it:
+   it fails at index 1 with `target 'HI16 D_800E9E34' candidate 'HI16
+   D_800E9E14'`, and the `raw == relocdump` arithmetic fails too (11 vs 10).
+   Folding the two calls into one with a ternary on the descriptor is 14
+   differing.
+
+   The mover advance must be in ASCENDING field order; +0x08 first is 6
+   differing.  The `n` local is free: re-reading +0x48 in the test instead of
+   keeping the value is also 0, as are `s16 n` and the in-struct cast
+   `*((u16 *)a + 0x24)`.  `n` is kept because it is func_800BD688's idiom for
+   the same mod-8 counter one record out. */
+void func_800BD898(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
+{
+    s32 n;
+
+    func_800478B8((s32)r);
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+    n = (*(u16 *)((u8 *)a + 0x48) + 1) & 7;
+    *(u16 *)((u8 *)a + 0x48) = n;
+    if (n == 0)
+    {
+        if (b->unk_14 < 0)
+        {
+            func_8003DB94(r, D_800E9E34, 0);
+        }
+        else
+        {
+            func_8003DB94(r, D_800E9E14, 0);
+        }
+    }
+    if (b->unk_0C == 0)
+    {
+        *(u16 *)((u8 *)a - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* Build the two-mover pair func_800BD688 drives: one 0x202 parent node whose
+   +0x20 actor view is the UnkTownBD688 record, then two 0x312 child nodes
+   whose movers are stored into that record's +0x00/+0x04 array, each child
+   carrying func_800BD898 at its UnkNode +0x10.
+
+   `v` is the caller's six-word mover template: its whole 0x18 bytes are
+   copied into the parent record's +0x08..+0x1C, and the INTEGER HALF of each
+   of its first three words (the s16 two bytes in, UnkTown2AE8's documented
+   spelling) is stamped into each child's actor view at +0x0C/+0x0E/+0x10.
+
+   `a = NULL;` BEFORE the allocation is the listing's `addu $s3, $zero, $zero`
+   at word 5, and it is what makes the store into the array safe to write
+   outside the `if`: the loop runs whether or not the parent node was
+   allocated.  The array spelling `a->unk_00[i]` is load-bearing, per
+   UnkTownBD688's own typedef comment -- loop.c's strength reduction puts the
+   derived pointer's init at the END of the preheader (`addiu $s1, $zero, 1`
+   first, `addiu $s3, $s3, 0x4` last), which is exactly the listing.
+
+   ONLY THE 0x300000 TERM IS STRENGTH-REDUCED, and the discriminator is the
+   CONSTANT, not how it is spelled.  `i * 0x300000` becomes the giv $s4
+   (initialised to 0x300000 in the preheader and walked down by 0x300000),
+   while `i << 21`, `i << 19` and `i << 16` stay as `sll` inside the loop --
+   and writing the +0x04 term as `v->unk_04 + i * 0x200000` instead of
+   `(i << 21)` is also 0 differing, so a power-of-two multiply is NOT reduced
+   however it is written.  Conversely, spelling the 0x300000 term as the
+   shift pair `(i << 20) + (i << 21)` loses the giv and is 101 words / 79
+   differing.  Candidate mechanism, consistent with but not proved by those
+   three measurements: loop.c prices a giv at `rtx_cost` of its own source
+   expression (`benefit += rtx_cost (orig_x, SET);`,
+   scratch/gcc-src/cdk-gcc-b18/loop.c:5305) and reduces it only when
+   `v->lifetime * threshold * benefit >= insn_count` (loop.c:3996), while
+   config/mips/mips.h prices SImode ASHIFT at `COSTS_N_INSNS (1)` (:2965-2971)
+   against `COSTS_N_INSNS (12)` for an R3000 SImode MULT (:3030).
+
+   THE FOUR MOVER STORES ARE IN OFFSET ORDER +0x00, +0x04, +0x08, +0x0C AND
+   EACH WRITES ITS CONSTANT OFFSET BEFORE ITS PER-INDEX TERM.  Both halves
+   are worth measuring, because fold reassociates a three-term sum and only
+   this grouping survives into the operand order the allocator then sees:
+   `v->unk_00 + (i * 0x300000 + 0x1400000)` -- the constant bound to the
+   index term -- is 25 differing, and putting +0x0C third instead of last is
+   18.  Writing the +0x0C value as `-(0x78000 + (i << 16))` is 106 words and
+   64 differing, because the negation becomes its own insn.
+
+   104 words -- its header reads `nonmatching func_800BD980, 0x1A0`, and
+   0x1A0/4 = 104. */
+s32 func_800BD980(UnkVec *v)
+{
+    UnkTownBD688 *a;
+    UnkNode *n;
+    UnkVec *m;
+    UnkTownRend *r;
+    UnkTownActor *c;
+    s32 i;
+
+    a = NULL;
+    n = func_8003FD64(0x202, &D_80083498);
+    if (n != 0)
+    {
+        a = (UnkTownBD688 *)((u8 *)n + 0x20);
+        n->unk_10 = (u32)func_800BD688;
+        *(UnkVec *)&a->unk_08 = *v;
+    }
+    for (i = 1; i >= 0; i--)
+    {
+        n = func_8003FD64(0x312, &D_80083498);
+        if (n != 0)
+        {
+            func_8004491C(n, (u32)D_80045340);
+            n->unk_10 = (u32)func_800BD898;
+            m = n->unk_08;
+            a->unk_00[i] = (UnkTown2AE8 *)m;
+            r = (UnkTownRend *)n->unk_0C;
+            c = (UnkTownActor *)((u8 *)n + 0x20);
+            *(s16 *)((u8 *)c + 0xC) = *(s16 *)((u8 *)v + 0x2);
+            *(s16 *)((u8 *)c + 0xE) = *(s16 *)((u8 *)v + 0x6);
+            *(s16 *)((u8 *)c + 0x10) = *(s16 *)((u8 *)v + 0xA);
+            m->unk_00 = v->unk_00 + 0x1400000 + i * 0x300000;
+            m->unk_04 = v->unk_04 + (i << 21);
+            m->unk_08 = v->unk_08 - 0x800000 + (i << 19);
+            m->unk_0C = -0x78000 - (i << 16);
+            r->unk_1C = r->unk_1E = 0x1000;
+            *(u32 *)&r->unk_0C = 0x808080;
+            func_8003DB94(r, D_800E9E14, 0);
+        }
+    }
+    return 0;
+}
+
+/* The three-argument half of func_800BE4D4's node spawner -- func_800BDBD0
+   below is the four-argument one, and the two are the same recipe with a
+   different node type and a different use for the last argument: allocate a
+   0x132 node, bind it through D_80045340, install the caller's UnkNode +0x10
+   handler, copy the caller's three-component vector into the node's mover,
+   stamp the unit's 0x808080 grey and a 0x1000 scale on two axes, then hand
+   the renderable and the caller's descriptor to func_8003DB94.  Returns the
+   node; func_800BE4D4 reads the actor view at +0x20 off it.
+
+   ARITY, PARAMETER TYPES AND THE RETURN ARE SETTLED BY THE LANDED CALLER
+   func_800BE4D4 -- `o = func_800BDB20(&v, (void *)func_800BDF98,
+   D_800D21B4[arg1])` -- together with this region's own declaration.
+
+   `d` is a DESCRIPTOR POINTER, not a field value: func_800BDBD0 stores its
+   fourth argument into the renderable's +0x08, while here the third argument
+   goes straight out as func_8003DB94's second argument, which is the same
+   animation-descriptor slot func_800BD5B0 and func_800BE0D4 pass through.
+   The `u32` in the declaration is the caller's table element type, hence the
+   cast at the call.
+
+   THE TWO 0x1000 SCALES COME OUT +0x1E BEFORE +0x1C, and that is a CHAINED
+   assignment, not two ascending statements: `r->unk_1C = r->unk_1E = 0x1000;`
+   emits its stores right to left.  Two separate DESCENDING statements also
+   measure 0; two ASCENDING ones are 2 differing.
+
+   Also measured and rejected: the handler store written BEFORE func_8004491C
+   is 5 differing (the same finding func_800BDBD0's note records, and the
+   opposite of func_800BEAD0's); the grey and the two scales moved ahead of
+   the mover copy is 45 words / 29; and `*m = *v;` for the mover copy is 50
+   words / 38, because UnkVec is 0x18 bytes and only its first 0xC is wanted.
+   A `void` return is also 0 differing -- `$v0` already holds the node -- but
+   this region's own declaration makes it a hard conflicting-types error, so
+   the return type is not a free choice here.
+
+   44 words -- its header reads `nonmatching func_800BDB20, 0xB0`, and
+   0xB0/4 = 44. */
+UnkNode *func_800BDB20(UnkVec *v, void *fn, u32 d)
+{
+    UnkNode *o;
+    UnkVec *m;
+    UnkTownRend *r;
+
+    o = func_8003FC64(0x132);
+    if (o != 0)
+    {
+        func_8004491C(o, (u32)D_80045340);
+        o->unk_10 = (u32)fn;
+        r = (UnkTownRend *)o->unk_0C;
+        m = o->unk_08;
+        m->unk_00 = v->unk_00;
+        m->unk_04 = v->unk_04;
+        m->unk_08 = v->unk_08;
+        *(u32 *)&r->unk_0C = 0x808080;
+        r->unk_1C = r->unk_1E = 0x1000;
+        func_8003DB94(r, (void *)d, 0);
+    }
+    return o;
+}
 
 /* The four-argument half of func_800BE4D4's node spawner -- func_800BDB20
    above is the three-argument one: allocate a 0x136 node, bind it through
