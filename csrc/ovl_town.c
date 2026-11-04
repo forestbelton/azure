@@ -3345,6 +3345,11 @@ extern u32 D_8006CD58;
 extern u8 D_800D09E0[];
 extern u8 D_800D4404[];
 
+extern u8 D_800F838C[];
+void func_800A7B14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800A7EC0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800A8070(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800A833C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -22516,7 +22521,12 @@ void func_800A79F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7AC0);
+void func_800A7AC0(u8 *a, s32 b, s32 c)
+{
+    *(u32 *)(a - 0x10) = (u32)func_800A7B14;
+    func_800C2CB0(a, c, D_800F838C, 0);
+    func_80033CD8(a, (u32)D_80045340);
+}
 
 void func_800A7B14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
@@ -22662,7 +22672,13 @@ void func_800A7DF8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7E7C);
+void func_800A7E7C(u8 *a, s32 b, UnkTownRend *c)
+{
+    *(u32 *)(a - 0x10) = (u32)func_800A7EC0;
+    *(s32 *)(a + 0x60) = *(u8 *)(a + 0x96);
+    c->unk_08 = (u32)D_8006E240;
+    func_80033CD8(a, (u32)D_80045340);
+}
 
 /* A near-sibling pair with func_800A8070 below, and the func_800A7B14 /
    func_800A6C4C probe family's taken arm verbatim: on a func_8009CFE0 hit,
@@ -22727,7 +22743,25 @@ void func_800A7EC0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7FD8);
+void func_800A7FD8(s32 a)
+{
+    UnkNode *n;
+    UnkTownSpawn *p;
+    UnkVec *q;
+    UnkTownRend *r;
+
+    n = func_8009C390(0, 0, func_800A8070, 0);
+    if (n != NULL)
+    {
+        p = (UnkTownSpawn *)((u8 *)n + 0x20);
+        q = n->unk_08;
+        r = (UnkTownRend *)n->unk_0C;
+        *(s32 *)((u8 *)p + 0x60) = a;
+        r->unk_08 = func_8004A658(0xB, 2);
+        func_80033CD8((u8 *)p, (u32)D_80045340);
+        func_800A8070(p, q, r);
+    }
+}
 
 /* func_800A7EC0 above with four substitutions and nothing else: the probe is
    the resident `func_800352FC() == 0` instead of func_8009CFE0, so the taken
@@ -22872,7 +22906,13 @@ void func_800A8248(u8 *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A82F0);
+void func_800A82F0(u8 *a, s32 b, UnkTownRend *c)
+{
+    *(u32 *)(a - 0x10) = (u32)func_800A833C;
+    D_800D0E44 = 0x14;
+    c->unk_08 = (u32)&D_800F8A70[D_800D0E44 * 12];
+    func_80033CD8(a, (u32)D_80045340);
+}
 
 /* func_800A7C0C's (:19253) near-sibling, and NOT a member of the pair group
    it was batched with: it shares no callee and no global with func_800A75E4
@@ -22925,11 +22965,33 @@ void func_800A833C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8408);
+s32 func_800A8408(s32 a)
+{
+    return D_800D0E44 = a;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8418);
+s32 func_800A8418(void)
+{
+    if (--D_800D0E44 < 0)
+    {
+        D_800D0E44 = 0;
+    }
+    return D_800D0E44;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8440);
+void func_800A8440(u8 *p, UnkVec *q, UnkTownRend *r)
+{
+    func_800478B8((s32)r);
+    if (r->unk_0C != 0)
+    {
+        r->unk_0D = r->unk_0E = r->unk_0C = r->unk_0C - 0x10;
+    }
+    if (--*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* 60 words, 0 differing.  func_8009792C (:9288) cut down to the plain spawner:
    no angle parameter and so no D_8006CCD8/D_8006CCE8 offsets, no mover deltas
@@ -22991,7 +23053,26 @@ UnkNode *func_800A84D0(UnkTownPuff *t)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A85C0);
+void func_800A85C0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
+{
+    UnkTownPuff t;
+    s32 i;
+
+    if (count == 0)
+    {
+        return;
+    }
+    func_80069EF8();
+    t.unk_0A = *(u16 *)((u8 *)src + 0xA);
+    t.unk_16 = -4;
+    for (i = 0; i < count; i++)
+    {
+        t.unk_02 = *(u16 *)((u8 *)src + 0x2) + func_800374F4(spread->unk_00) - spread->unk_00 / 2;
+        t.unk_06 = *(u16 *)((u8 *)src + 0x6) + func_800374F4(spread->unk_04) - spread->unk_04 / 2;
+        t.unk_0A = *(u16 *)((u8 *)src + 0xA) - func_800374F4(spread->unk_08) - spread->unk_08 / 2;
+        func_800A84D0(&t);
+    }
+}
 
 /* 52 words, 0 differing.  The update hook func_800A878C installs in the
    node's +0x10 slot, so func_80040190 (csrc/unk_12DEC.c) reaches it as
