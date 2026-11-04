@@ -2023,6 +2023,8 @@ u32 func_8004A658(s32 i, s32 j);
 void func_8009C1B4();
 void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d);
 void func_8009DEBC();
+void func_8009E714();
+extern s32 D_800D09C8;
 void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_8009F148(UnkTownSpawn *p, UnkTownSpawn *p2, UnkVec *q, UnkTownRend *r);
 void func_800B2244();
@@ -11324,7 +11326,81 @@ void func_8009E504(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E714);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E85C);
+/* 78 words -- its header reads `nonmatching func_8009E85C, 0x138`, and
+   0x138/4 = 78.  Measured 0 differing.  No jump table and no rodata of its
+   own.  Another UnkNode +0x10 handler in func_8009E504's family: three
+   parameters, all three read, and the one it installs at `-0x10($s0)` is the
+   one it then calls back through at the end.
+
+   func_8009E714 HAD NO DECLARATION ANYWHERE IN THE REPO.  It is a stub whose
+   address is taken here and never `jal`ed, and the call below goes through the
+   slot, so nothing constrains its arity; `void func_8009E714();` follows
+   func_8009DEBC's established unprototyped form at :2025 and deliberately
+   claims nothing.  The `%hi`/`%lo` pair on it is the masked, no-`jal` class:
+   verified with tools/decomp/relocdump.py (2 address-take words, on
+   func_8009E714).
+
+   THE HEAD AND THE 0x12 ARM ARE func_8009E504's (:11055) VERBATIM -- same
+   0x80010000 constant base, same `*((u8 *)p + 0x4C)` / `+0x4D` pair out of the
+   +0x980/+0x981 record, same `r->unk_08 = (u32)D_8006E240` on 0x12 and the
+   same func_8009DC8C call with the +0x983 index into the 0x54-byte array at
+   +0xA94 otherwise.  ONE function-scope base local is right here, unlike
+   func_8009E504's per-block pair, because no call stands between the `lui` and
+   its last use so the value never needs a callee-saved register.  The arms
+   must be written in source order: 0x12 first, inverted it is 79 words /
+   53 differing.
+
+   `r->unk_14 |= 0x1C` IS THE PLAIN s16 FIELD.  UnkTownRend.unk_14 is signed
+   and the target loads it with `lhu`, which reads like a u16 lvalue -- but the
+   value is immediately truncated back to a halfword store, so gcc takes the
+   cheaper unsigned load for the signed field too.  Forcing it with
+   `*(u16 *)&r->unk_14 |= 0x1C` is 79 words / 28 differing.
+
+   THE HANDLER POINTER MUST BE LOADED BEFORE `D_800D09C8 = 0`, and that is the
+   whole last word.  Both orders are semantically identical and both leave the
+   store in the `jalr`'s delay slot in principle, but reorg can only steal
+   backwards: with the global store emitted first the `lw -0x10($a0)` lands in
+   the load-delay slot with a `nop` after it and the slot goes unfilled --
+   79 words / 13 differing, the same number whether the pointer goes through a
+   local or is dereferenced inline.  Loading it into `fn` first puts the
+   `lui`/`sw` pair after the `lw`, and reorg takes the `sw` for the delay slot.
+
+   The +0xA0 store precedes `q->unk_08`; swapped it is 2 differing. */
+void func_8009E85C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    u8 *b;
+    void (*fn)(UnkTownSpawn *, UnkVec *, UnkTownRend *);
+
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_8009E714;
+    *(s32 *)((u8 *)p + 0xA0) = 0xFFE00000;
+    q->unk_08 = 0xFFE00000;
+    b = (u8 *)0x80010000;
+    *((u8 *)p + 0x4C) = *(u8 *)(b + *((u8 *)p + 0x95) * 4 + 0x980);
+    *((u8 *)p + 0x4D) = *(u8 *)(b + *((u8 *)p + 0x95) * 4 + 0x981);
+    if (*((u8 *)p + 0x4D) == 0x12)
+    {
+        r->unk_08 = (u32)D_8006E240;
+    }
+    else
+    {
+        func_8009DC8C(p, r, *((u8 *)p + 0x4C),
+                      *(void **)(b + (*(u8 *)(b + *((u8 *)p + 0x95) * 4 + 0x983) & 0x3F) * 0x54 + 0xA94));
+    }
+    func_80033CD8((u8 *)p, (u32)D_80045340);
+    r->unk_10 = 0x20;
+    r->unk_14 |= 0x1C;
+    if (D_800D09C8 == 0)
+    {
+        *(s16 *)((u8 *)p + 0x6C) = func_800374F4(0x1000);
+    }
+    else
+    {
+        *(s16 *)((u8 *)p + 0x6C) = 0;
+    }
+    fn = *(void (**)(UnkTownSpawn *, UnkVec *, UnkTownRend *))((u8 *)p - 0x10);
+    D_800D09C8 = 0;
+    fn(p, q, r);
+}
 
 /* 71 words, 0 differing.  Installed at UnkTownActor.unk_50 by func_8009EB20
    below (`%hi`/`%lo(func_8009E994)`), so the slot is unprototyped and nothing
@@ -11572,11 +11648,142 @@ void func_8009EE9C(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009EF88);
+/* 112 words -- its header reads `nonmatching func_8009EF88, 0x1C0`, and
+   0x1C0/4 = 112.  Measured 0 differing.  No jump table and no rodata of its
+   own.  Installed at UnkTownActor.unk_50 by func_8009F1C0 below
+   (`%hi`/`%lo(func_8009EF88)`), so the slot is unprototyped and nothing
+   witnesses the arity; all four argument registers are read ($a0..$a3 go to
+   $s2/$s3/$s0/$s4) and all four are forwarded to func_8009EB9C and
+   func_8009F148, which is the same witness func_8009E994 has.
+
+   THE HEAD IS func_8009E994's VERBATIM, including `z`.  Same three-axis
+   halve-the-remaining-distance tracker off D_80083780 through the cast
+   expression (not a pointer local), same 0x200000 bias on the third axis, and
+   the bias HAS to be its own statement: inline it and fold-const's
+   split_tree/associate path rewrites `X - (VAR + CON)` to `(X - CON) - VAR`
+   and materialises -0x200000, 112 words / 10 differing.  The one difference
+   from func_8009E994 is that the lo_sum lands in the caller-saved $a2 here
+   rather than its callee-saved $s2, because this body's last D_80083780 read
+   is before the func_8009539C call rather than after func_8009EB9C's.
+
+   `i` IS A LOCAL READ BEFORE THE CALL, not an inline read in each arm.  The
+   `lbu $s1, 0x95($s2)` sits in func_8009EB9C's argument setup and the value
+   has to survive the call in a callee-saved register; read inline in the two
+   arms instead it is 111 words / 74 differing.
+
+   THE TWO TABLES AT 0x80010000 ARE CONSTANT BASES, AND THE TWO ARMS SPELL
+   THEM DIFFERENTLY -- which is what the listing shows, so both spellings are
+   here.  The 0x13 arm's base is a pointer LOCAL (one `lui $a0, 0x8001`, the
+   whole offset in the displacement, serving both the +0x983 index read and the
+   +0xAC4 record store); the else arm's is the WHOLE constant 0x80010980 in a
+   `lui`/`ori` pair, because `((s32 *)0x80010980)[i]` makes the address
+   plus(ashift, CONST_INT), code0 != REG, and force_operand materialises it
+   entire -- see func_8009E504's comment and docs/matching-levers.md, "A %lo in
+   the displacement with a REGISTER index means a constant base".  Giving the
+   else arm the pointer-local form too is 111 words / 35 differing.  Neither
+   table is a declared symbol; splat's `%hi(D_80010983)` / `%lo(D_80010AC4)`
+   rendering is derived from the pairing, and there is no relocation on either
+   in the C form.
+
+   THE +0x98 CLEAR IS DUPLICATED IN BOTH ARMS ON PURPOSE.  Hoisted to a single
+   copy after the inner if/else it is 113 words / 43 differing: cross-jumping
+   unifies the shared `jal func_800C0C88` tail and nothing else, so the target
+   really does carry two `lw 0x98($s2)` / `beqz` / `sb $zero` triples.  Reading
+   the pointer into a block-scope local first is also 0 differing. */
+void func_8009EF88(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    UnkTown2AE8 v;
+    s32 z;
+    s32 i;
+
+    c->unk_0C = (((UnkTown2AE8 *)D_80083780)->unk_00 - c->unk_00) / 2;
+    c->unk_10 = (((UnkTown2AE8 *)D_80083780)->unk_04 - c->unk_04) / 2;
+    z = c->unk_08 + 0x200000;
+    c->unk_14 = (((UnkTown2AE8 *)D_80083780)->unk_08 - z) / 2;
+    func_8009539C(c);
+    if (--a->unk_6C <= 0)
+    {
+        i = *((u8 *)a + 0x95);
+        if (func_8009EB9C(a, b, c, d, &v) != 0)
+        {
+            if (*((u8 *)a + 0x4D) == 0x13)
+            {
+                u8 *p = (u8 *)0x80010000;
+
+                *(u8 *)(p + (*(u8 *)(p + i * 4 + 0x983) & 0x3F) * 0x54 + 0xAC4) = 1;
+                if (*(u8 **)((u8 *)a + 0x98) != NULL)
+                {
+                    **(u8 **)((u8 *)a + 0x98) = 0;
+                }
+                D_800D09C8 = 0;
+            }
+            else
+            {
+                ((s32 *)0x80010980)[i] = 0;
+                if (*(u8 **)((u8 *)a + 0x98) != NULL)
+                {
+                    **(u8 **)((u8 *)a + 0x98) = 0;
+                }
+            }
+            func_800C0C88();
+        }
+        else
+        {
+            c->unk_00 = 0;
+            c->unk_04 = 0;
+            *(s16 *)((u8 *)c + 0x2) = a->unk_84;
+            *(s16 *)((u8 *)c + 0x6) = a->unk_86;
+            func_8009F148(a, b, c, d);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F148);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F1C0);
+/* 44 words -- its header reads `nonmatching func_8009F1C0, 0xB0`, and
+   0xB0/4 = 44.  Measured 0 differing.  No jump table and no rodata of its own.
+   FOUR parameters, settled by its landed caller func_8009EE9C above:
+   `func_8009F1C0(a, c, q, r)` with `c` an UnkTownCFCC4 *.  $a2 and $a3 are
+   unread here and carried for that call site.
+
+   It installs func_8009EF88, which is DEFINED IMMEDIATELY ABOVE, so the
+   assignment sees the definition and needs no forward prototype -- the
+   pre-existing unprototyped `void func_8009F1C0();` at :2600 stays as is and
+   the unit's own `void (*unk_50)()` slot type absorbs the four-parameter
+   handler exactly as func_8009EB20 does for func_8009E994.  The `%hi`/`%lo`
+   pair on that function symbol is the class ovlverify masks and that has no
+   `jal` to decode: verified with tools/decomp/relocdump.py, 2 address-take
+   words on func_8009EF88 and nothing else relocated but D_80100AF8.
+
+   THE TWO CONSTANT BASES ARE DIFFERENT CONSTANTS, not one base plus offsets.
+   The +0x983 index read goes through a 0x80010000 pointer local (one bare
+   `lui`, the offset in the displacement); the 0x54-byte record copy's SOURCE
+   is the whole constant 0x80010A80 in a `lui`/`ori` pair, because
+   emit_block_move forces a block move's address into a register -- the same
+   split func_8009F4C0 records for the store direction.  Spelled as
+   `*(UnkTownItemRec *)(c + idx * 0x54 + 0xA80)` off the pointer local it is
+   43 words / 31 differing.
+
+   The record copy is a whole-struct assignment: UnkTownItemRec's u32 member
+   gives it alignment 4, so the 0x54 bytes come out as the four-word lw/sw
+   loop plus one trailing word rather than the lwl/lwr pair an all-u8 typedef
+   would force.
+
+   The +0x14/+0x15 stores must come FIRST: moved after the install and the
+   countdown they are 44 words / 9 differing. */
+void func_8009F1C0(UnkTownActor *a, UnkTownCFCC4 *b, UnkVec *q, UnkTownRend *r)
+{
+    *((u8 *)b + 0x14) = 4;
+    *((u8 *)b + 0x15) = 0;
+    a->unk_50 = func_8009EF88;
+    a->unk_6C = 8;
+    if (*((u8 *)a + 0x4D) == 0x13)
+    {
+        u8 *c = (u8 *)0x80010000;
+
+        D_80100AF8 = ((UnkTownItemRec *)0x80010A80)[*(u8 *)(c + *((u8 *)a + 0x95) * 4 + 0x983) & 0x3F];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009F270);
 
