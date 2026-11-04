@@ -1707,12 +1707,24 @@ def main():
             nm = os.path.basename(lt_path)[:-2]
             if nm in targets or nm not in lines:
                 continue
+            # NOT `body` -- that is main()'s function-to-callees DICT, built
+            # 1,000 lines above, and binding it to a string here killed every
+            # route that reads it: routes (a), (c), (f), (g), (j), (k) and (l)
+            # all died with "'str' object has no attribute 'get'" for any
+            # group containing an install-only leaf, which is the ONE case
+            # route (r) exists for. Reported 2026-11-04 by the group that had
+            # two of them; its route (k) line turned out to be the single most
+            # valuable line in its whole provisioning, and it only saw it by
+            # sed-patching a private copy of this file. Second time today a
+            # local in main() has shadowed something at module or function
+            # scope (see the `words` and `btext` notes elsewhere); in a
+            # 2,700-line main() a fresh name is the cheap habit.
             try:
-                body = open(lt_path).read()
+                ltbody = open(lt_path).read()
             except OSError:
                 continue
-            if _reloc_kinds(body) == (True, False, False):
-                pool.append((nm, lines[nm], body.count('/* ')))
+            if _reloc_kinds(ltbody) == (True, False, False):
+                pool.append((nm, lines[nm], ltbody.count('/* ')))
         print("\n=== ROUTE (r): INSTALL-ONLY LEAVES, WHICH NO SCORE CAN RANK ===")
         for f in inst_only:
             print("    %s's ONLY relocation is a %%hi/%%lo on a FUNCTION"

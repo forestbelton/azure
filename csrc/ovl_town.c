@@ -2960,6 +2960,13 @@ extern u8 D_800D1600[];
 extern u8 D_800D160C[];
 extern u8 D_800133C4;
 extern u8 D_800133E2;
+/* The pair at index 0x21 of the stride-2 table at 0x800133A4 -- the one
+   entry past the 0x21-entry scan -- read by func_800B83DC's type-16 arm.
+   Declared as symbols, not constant addresses: a constant byte address is
+   a two-word assembler macro in one insn, and the target has each `lui`
+   split from its `lbu` by a delay slot (docs/matching-levers.md:14908). */
+extern u8 D_800133E6;
+extern u8 D_800133E7;
 extern u8 D_800D3814[];
 extern u8 D_800D1BDC[];
 extern Unk41284 D_800D1B64;
@@ -38459,7 +38466,226 @@ void func_800B833C(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B83DC);
+/* Is record `a` of D_800D2644 (stride 0x20) paired with someone else?  Only
+   if func_80033B2C accepts the record's +0x08 halfword; then by the record's
+   type byte +3:
+
+     2        -- no.
+     4, 8     -- the partner id at +6 must be non-zero, and some entry of the
+                 0x21-entry stride-2 table at 0x800133A4 must name it in its
+                 first byte with a second byte that is not `a`.
+     16       -- as above, but against the single pair at 0x800133E6/E7,
+                 which is the table entry at index 0x21.
+     1        -- no if either half of any table entry names `a`; otherwise
+                 yes if some entry's stride-8 D_800D2EA4 slot has bytes +2/+3
+                 equal to the record's +4/+5 while the entry's first byte is
+                 >= 0x2D and != 0x30 and its second byte is 0.
+
+   131 words -- its header reads `nonmatching func_800B83DC, 0x20C`, and
+   0x20C/4 = 131.  Measured 0 differing, seqcheck arith=OK seq=OK.
+
+   The table reads use the constant base `(u8 *)0x80010000` with the offset
+   in the index (the VARIABLE-index idiom of func_800B833C above); the two
+   fixed bytes of the type-16 arm are `extern u8` symbols, because a
+   constant byte address is an atomic two-word macro and the target has each
+   `lui` split from its `lbu` by a branch delay slot.  `v` is s32, not u8:
+   with u8 the hoisted zero_extend in the loop arm becomes a real `addu`
+   (132 words).  Both of those are in docs/matching-levers.md:14908.
+
+   THE TYPE-16 ARM CARRIES TWO DEVICES, worth the last 2 words of 131, and
+   they only work together.  The residue they clear is a register: the arm
+   is `if (E6 == v && E7 != a) return 1; return 0;`, and that plain spelling
+   builds `lui $v0,%hi(E7); lbu $v1,%lo(E7)($v0)` where the target has
+   `lui $v1; lbu $v1,($v1)` -- the `high` and the load's destination in ONE
+   register.  Everything else is word-exact.  (The citations are into
+   scratch/gcc-src/cdk-gcc-b18.)
+
+   WHY NO SPELLING OF THE ARM CAN REACH IT.  jump.c:927-1009 ("if (...)
+   { x = a; goto l; } x = b" -> "x = a; if (...) goto l; x = b") is the only
+   transform that gives the target's polarity (`bne -> ret` with `v0 = 1` in
+   the slot), and it inserts `v0 = 1` at `prev_nonnote_insn (temp)`
+   (jump.c:985) -- immediately before the second compare, AFTER the `high`
+   and the load.  So block 15 is always [high][lbu][v0 = 1][bne]; sched1
+   cannot reorder it (the load's latency pins the bne two slots after it,
+   so `v0 = 1` is the only insn ready in the slot before the bne), and
+   local-alloc's find_free_reg (local-alloc.c:2142, `used` is the union of
+   regs_live_at over the quantity's birth..death at :2181) therefore sees $v0
+   busy for the load but FREE for the `high`, and the scan with no
+   REG_ALLOC_ORDER hands the `high` $v0.  The two never tie: the tie loop at
+   local-alloc.c:1324-1409 only tries operands that are REG/SUBREG and this
+   operand is the MEM.  The permuter confirmed the space is empty: 271,618
+   candidates, base 40 -> best 40, found=none (nonmatchings/permlog.tsv,
+   2026-11-04).
+
+   WHAT THE TARGET NEEDS INSTEAD is the `high` of E7 OUTSIDE block 15, as a
+   global-alloc quantity whose range overlaps the first pair (both in $v0):
+   global.c's find_reg then gives it the lowest non-conflicting register, $v1,
+   and the load, a local quantity born where the `high` dies, takes $v1 as
+   well because `v0 = 1` makes $v0 busy for it.  That is what the two devices
+   manufacture, and the .lreg/.greg dumps show it: `Register 134 used 3 times
+   across 6 insns` with no `in block N` suffix (global), `134 conflicts: ...
+   2 29`, `134 in 3`.
+
+   DEVICE 1, `w = *(u16 *)&D_800133E7;` before the first test: a dead
+   halfword read of the same symbol.  cse1 runs blocks 14 and 15 as one
+   extended block, finds the second `(high D_800133E7)` already in its table
+   and replaces it with the first's register (cse.c canon_reg), so the only
+   surviving `high` insn is the dead read's, in block 14 before the first
+   compare.  The read itself is a (mem:HI), a different expression from the
+   live (mem:QI), so the live load is NOT unified away; flow then deletes
+   the dead load and its lo_sum.  A u32 read works the same (measured
+   MATCH); an s8 read is a (mem:QI) and unifies the live load too (73
+   differing).  The read has to be in block 14 -- inside the `if` it is in
+   block 15 and the whole thing is block-local again (2 differing).
+
+   DEVICE 2, the `do { } while (0)` around the second test: loop notes with
+   no loop (loop.c:672 reports it "phony" and leaves it alone).  Without
+   them update_equiv_regs moves the orphaned `high` back to just before its
+   use (local-alloc.c:1181-1210, the `depth == 0` arm at :1191), which
+   re-creates the block-15 shape.  With them flow weights the use by
+   loop_depth (flow.c:2122 `reg_n_refs[regno] += loop_depth`), so the
+   `reg_n_refs == 2` test at local-alloc.c:1121 fails, reg_equiv_replace
+   is never set, and the `high` stays where cse left it.  The nesting
+   `if (E6 == v) { do {...} while (0); }` rather than two separate ifs is
+   load-bearing: it keeps the first compare's else-label in front of the
+   `v0 = 0`, and jump.c:1183-1239's store-flag transform needs
+   `next_nonnote_insn (insn)` (jump.c:1205) to be that set -- a label blocks
+   it; with the label gone the tail collapses into `xor`/`sltu` (64
+   differing).  `for (;;) { ...; break; }` and `while (1) { ...; break; }`
+   measure the same MATCH; the do-while is the form this unit already uses
+   for a loop-note device (func_80093744).
+
+   Measured, 2026-11-04, same body otherwise:
+     both devices                               131 words / MATCH
+     dead read only (no loop)                   131 / 2   (high moved back)
+     loop only (no dead read)                   131 / 2
+     neither (the plain `&&`)                   131 / 2
+     dead read as *(s8 *)                       73 differing
+     dead read inside the `if`                  131 / 2
+     result local `r = 1; if (E7 == a) r = 0`   65 (store flag)
+     `goto` to a shared `return r` label        64-68 (cse folds r, or r
+                                                 is not $v0)
+   The 63 single-block spellings in the former park (types of `v`, operand
+   orders, &&/nested/||/three-term, break-vs-return, extern forms, base
+   locals, a u8 copy, pointer-vs-integer arithmetic, constant addresses)
+   all measured 2 or worse; the park's table is in git history under
+   docs/near-misses/func_800B83DC.c.  Silent under -Wall (measured). */
+s32 func_800B83DC(u8 a)
+{
+    s32 found;
+    u8 *base;
+    u8 *p;
+    u8 i;
+    s32 v;
+
+    found = 0;
+    base = (u8 *)D_800D2644;
+    p = base + a * 0x20;
+    if (func_80033B2C(*(s16 *)(p + 8)) == 0)
+    {
+        return 0;
+    }
+    switch (p[3])
+    {
+    case 2:
+        break;
+    case 4:
+    case 8:
+    {
+        u8 *b;
+        u8 *q;
+        u8 *tbl;
+        u8 w;
+
+        b = (u8 *)D_800D2644;
+        q = b + a * 0x20;
+        w = q[6];
+        if (w == 0)
+        {
+            return 0;
+        }
+        i = 0;
+        tbl = (u8 *)0x80010000;
+        v = w;
+        for (; i < 0x21; i++)
+        {
+            if (tbl[i * 2 + 0x33A4] == v && tbl[i * 2 + 0x33A5] != a)
+            {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    case 16:
+    {
+        u8 *b;
+        u8 *q;
+        u16 w;
+
+        b = (u8 *)D_800D2644;
+        q = b + a * 0x20;
+        v = q[6];
+        if (v == 0)
+        {
+            return 0;
+        }
+        /* DEVICE: a dead halfword read of D_800133E7, worth 2 words with the
+           do-while below (2 differing without either; see the header).  It
+           exists so cse1 canonicalises the live load's `high` onto THIS
+           insn, which sits in the block before the first compare and so
+           becomes a global-alloc quantity that lands in $v1. */
+        w = *(u16 *)&D_800133E7;
+        if (D_800133E6 == v)
+        {
+            /* DEVICE: loop notes with no loop.  They stop update_equiv_regs
+               moving the orphaned `high` back next to its use
+               (local-alloc.c:1121 and :1191 in the CDK tree).  The nesting
+               inside `if (D_800133E6 == v)` is also load-bearing: it keeps
+               that compare's else-label in front of the `return 0`, which
+               blocks jump.c's store-flag collapse of the tail. */
+            do
+            {
+                if (D_800133E7 != a)
+                {
+                    return 1;
+                }
+            } while (0);
+        }
+        return 0;
+    }
+    case 1:
+    {
+        u8 *b4;
+        u8 *e4;
+        u8 *tbl;
+
+        i = 0;
+        tbl = (u8 *)0x80010000;
+        for (; i < 0x21; i++)
+        {
+            if (tbl[i * 2 + 0x33A4] == a)
+            {
+                return 0;
+            }
+            if (tbl[i * 2 + 0x33A5] == a)
+            {
+                return 0;
+            }
+            b4 = (u8 *)D_800D2644;
+            e4 = D_800D2EA4;
+            if (e4[i * 8 + 2] == (b4 + a * 0x20)[4] &&
+                e4[i * 8 + 3] == (b4 + a * 0x20)[5] &&
+                tbl[i * 2 + 0x33A4] >= 0x2D && tbl[i * 2 + 0x33A4] != 0x30 &&
+                tbl[i * 2 + 0x33A5] == 0)
+            {
+                found = 1;
+            }
+        }
+        return found;
+    }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B85E8);
 
