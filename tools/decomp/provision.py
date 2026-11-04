@@ -567,6 +567,65 @@ def main():
     if not anyh:
         print("  none of your globals is rare here AND present elsewhere")
 
+    # ------------------------------------------------------------------ (m)
+    print("\n=== ROUTE (m): RARE FIELD OFFSETS -- THE DISCRIMINATOR ROUTE (h) CANNOT SEE ===")
+    print("    Route (h) ranks the SYMBOL. When your target's only global is a")
+    print("    COMMON one, every scored route reports nothing -- and the")
+    print("    discriminator is then the DISPLACEMENT, not the symbol. On")
+    print("    2026-11-03 func_800BDC98 and func_800BDDD0 reached D_80083160 (39")
+    print("    users, so route (h) said nothing) at +0x1DC, which has six users")
+    print("    all in ONE landed family; csrc/ovl_town.c already typed that record")
+    print("    and wrote the index idiom out verbatim. The agent found it by")
+    print("    grepping the offset by hand after route (a), (h), (j) and (k) all")
+    print("    came back empty. This route is that grep.")
+    anym = False
+    for f in targets:
+        lp = os.path.join(D(unit), f + '.s')
+        try: ls = open(lp).read()
+        except Exception: continue
+        # Displacements and addiu constants big enough to be a field offset
+        # rather than a small immediate or a frame slot.
+        offs = set()
+        for m in re.finditer(r'0x([0-9A-Fa-f]{2,4})\(', ls):
+            offs.add(int(m.group(1), 16))
+        # NOT `$zero` as the source: `addiu $a1, $zero, 0x2000` is a CONSTANT
+        # LOAD, not a field offset, and the first version of this route ranked
+        # one of those top for func_800B72B8 and never printed the +0x1DC it
+        # was written to find.
+        for m in re.finditer(
+                r'addiu\s+\$\w+,\s*\$(?!zero\b)\w+,\s*0x([0-9A-Fa-f]{2,4})\b',
+                ls):
+            offs.add(int(m.group(1), 16))
+        rows = []
+        for o in offs:
+            if o < 0x40 or o % 2:
+                continue
+            pat = r'(?:0x%X\b|\bunk_%02X\b|\bpad_%02X\b)' % (o, o, o)
+            # Rank by how many LANDED FUNCTIONS use it, not by how many times
+            # the text occurs. A field name appears once per declaration and
+            # once per use, so +0x1DC reads as 18 textual hits while being the
+            # property of six functions -- and a raw-text threshold filtered
+            # out the very case this route exists for.
+            sites = []
+            for nm in landed:
+                if nm in targets: continue
+                i = txt.find(landed[nm])
+                if i < 0: continue
+                j = txt.find('\n}', i)
+                if j < 0: j = i
+                if re.search(pat, txt[i:j], re.I):
+                    sites.append(nm)
+            if sites and len(sites) <= 8:
+                rows.append((len(sites), o, sites))
+        for n, o, sites in sorted(rows)[:4]:
+            anym = True
+            print("  %-15s +0x%X: %d landed function(s) use it: %s"
+                  % (f, o, n, ', '.join('%s (:%d)' % (s, lines.get(s, 0))
+                                        for s in sites[:4])))
+            print("      grep -nE 'unk_%02X|0x%X' csrc/%s.c" % (o, o, unit))
+    if not anym:
+        print("  no rare field offset with a landed user")
+
     print("\n=== ROUTE (f): LANDED CALL SITES OF YOUR CALLEES, WITH THEIR ARGUMENTS ===")
     print("    Line-level identity, which the rarity score cannot see: a landed")
     print("    function that passes the SAME CONSTANTS to the same callee is a")
