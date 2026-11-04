@@ -23701,7 +23701,59 @@ u32 func_800B1938(s32 a)
     return func_800491F4(a, D_800D1624, 0x4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1960);
+/* The same template-copy constructor as func_800B67A4, func_800B4CBC and
+   func_800AFF00: copy the two resident templates D_8002E5D8 (4 words) and
+   D_8002E5E8 (3 words) into the caller's two buffers, aim the pair's two prim
+   pointers at them, and then write the prim's own fields THROUGH p->unk_04.
+   func_800B1B10 hands it the +0x38 pair with the +0x10 and +0x20 buffers.
+
+   Read func_800B67A4's note for the four measured rules this shares -- the
+   pointer locals, the re-read of p->unk_04, `p->unk_00 = 0` after both pointer
+   stores, and `s32` rather than `s16` for the coordinate parameters.  Two
+   things are specific to this member:
+
+   - unk_0F IS WRITTEN FIRST, and it is the one store cse forwards: the
+     listing's `addu $v1, $a1, $zero` is the `a` pseudo standing in for the
+     `lw 0x4($a0)` that cse eliminated, because nothing has stored through
+     p->unk_04 yet.  The three stores after it each reload, since the
+     preceding `sb`/`sh` may alias the slot.  Moving it to the END, which is
+     func_800B67A4's order, is 37 words with 16 differing, and writing it
+     through the local as `((UnkTownCardPrim *)a)->unk_0F = 4` is the same
+     37 / 16 -- the copy insn is the tell that it is a forwarded LOAD.
+     `p->unk_00 = 0` before both pointer stores is 38 words with 2 differing,
+     the same `sw $zero` move func_800B67A4's note records.
+
+   - The 4th and 5th parameters are `s32`, not `s16`.  Both widths are 0
+     differing HERE (the store is `sh` either way) so the callee cannot witness
+     it; the caller can, and this is the one group member where the witness was
+     actually taken: declaring both `s16` leaves func_800B1960 at 38 words / 0
+     differing and takes func_800B1B10 from 24 words to 27 with 24 differing,
+     the `sll`/`sra 16` pair per argument.
+
+   38 words -- its header reads `nonmatching func_800B1960, 0x98`, and
+   0x98/4 = 38.  No jump table, no rodata of its own.  Five parameters: the
+   only caller is the stub func_800B1B10, which sets $a0..$a3 and stores the
+   fifth to 0x10($sp). */
+void func_800B1960(UnkTownCardPair *p, u32 *a, u32 *b, s32 x, s32 y)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_0F = 4;
+    p->unk_04->unk_08 = x + 0x80;
+    p->unk_04->unk_0A = y;
+    p->unk_04->unk_0C = 0x200;
+}
 
 /* The 0x800B18xx object's panel layout: point the four UnkTownGrid slots at
    +0x48..+0x54 at their payloads and place each one's renderable.  +0x48 gets
@@ -23755,9 +23807,103 @@ void func_800B1B04(u8 *v, s32 a, s32 b)
     *(s32 *)(v + 0x4) = b;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1B10);
+/* The 0x800B18xx object's constructor tail, called by func_800B1BEC with its
+   own three arguments forwarded unchanged: stash (a, b) in the node's first
+   two words, build the +0x38 card pair over the +0x10 and +0x20 buffers, and
+   then place the four panel slots func_800B1B70 wired.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B1B70);
+   `b` is passed TWICE -- once to func_800B1B04 as its third argument and once
+   to func_800B1960 as its fourth -- which is why it is the one argument held
+   in a callee-saved register ($s2) across the first call; `c` is held in $s1
+   only because it has to be stored to 0x10($sp) after $a3 is clobbered.
+
+   24 words -- its header reads `nonmatching func_800B1B10, 0x60`, and
+   0x60/4 = 24.  No jump table, no rodata of its own.  Four parameters, settled
+   by the landed caller func_800B1BEC below: `func_800B1B10(v, a, b, c)`. */
+void func_800B1B10(u8 *v, s32 a, s32 b, s32 c)
+{
+    func_800B1B04(v, a, b);
+    func_800B1960((UnkTownCardPair *)(v + 0x38), (u32 *)(v + 0x10),
+                  (u32 *)(v + 0x20), b, c);
+    func_800B19F8(v);
+}
+
+/* The four-slot panel wiring for the 0x800B18xx object: point the four
+   UnkTownCardPair slots at +0x48..+0x54 at the four 0x10-byte pair records
+   starting at +0x58, give each one its own 0x10-byte prim record at +0x98 and
+   up, aim all four at the SHARED 12-byte prim at +0x20, and seed each prim
+   from the resident D_8002E5D8 template.  func_800B19F8 reads the same four
+   slots back through *(UnkTownGrid **)(s + 0x48).
+
+   THREE SPELLINGS ARE LOAD-BEARING, each measured:
+
+   - The two stored pointers must be written `v + (i * 0x10 + K)`, with the
+     INTEGER sum PARENTHESISED.  Left-associated `v + i * 0x10 + K` is 27 words
+     and 30 differing, and the cause is in the C front end, not in loop.c:
+
+         "If what we are about to multiply by the size of the elements
+          contains a constant term, apply distributive law and multiply that
+          constant term separately.  This helps produce common
+          subexpressions."       -- cdk-gcc-b18/c-typeck.c:2648-2651
+
+     `pointer_int_sum` fires that block only when the integer operand is a
+     PLUS/MINUS whose second operand is constant (`:2653-2656`), and it then
+     rewrites `v + (i * 0x10 + K)` into `(v + K) + i * 0x10` (`:2674-2676`).
+     So the PARENTHESISED spelling gets a base of `v + K` -- distinct from the
+     `v + i * 0x10` of the four stores -- and three separate 0x10-stride registers
+     survive strength reduction, which is the listing's `addu $v1, $a0, $a3` /
+     `addu $v0, $a0, $t0` and why $a0 still holds `v` at the bottom of the
+     loop.  Left-associated, the outer `+ K` has a CONSTANT intop, the
+     `! TREE_CONSTANT (intop)` guard rejects it, and the tree keeps the source's
+     own `v + i * 0x10` subexpression -- shared with all four store addresses,
+     so one giv serves everything and the two pointers become `addiu` off it.
+     Note the direction: this is the front end distributing over a
+     parenthesised sum, NOT fold-const's `associate:` block, and a statement
+     boundary does not prevent it -- hoisting the integer sum into a local
+     instead blocks the block a third way (operand 1 is then a VAR_DECL) and
+     measures 31 words with 13 differing.
+
+   - The second and third stores must RE-READ the slot, not carry the pair
+     pointer in a local.  cse forwards the `sw` to the +0x04 write (hence
+     `sw $v0, 0x4($v1)` with no reload) and then the +0x04 write may alias the
+     slot, so the +0x08 write reloads `0x48($a2)` -- exactly the one reload the
+     listing has.  Hoisting the pair pointer into a local instead is 31 words
+     with 4 differing: it makes the +0x58 giv the FIRST one loop.c creates, and
+     the preheader then emits `$a2` before `$a3` and the loop increments them
+     in the other order.
+
+   - `s1 = D_8002E5D8;` is a STATEMENT INSIDE THE LOOP, after the three slot
+     stores.  Only then does loop invariant motion hoist `lui`/`addiu %lo`
+     AFTER `addiu $t4, $a0, 0x20`, and only then does the lui's own register
+     stay live so `s1[0]` can fold to `lw %lo(D_8002E5D8)($t3)`.  As a
+     declaration initialiser, or as a statement before the loop, both pairs are
+     emitted ahead of the preheader: 31 words, 6 differing.  Dropping the local
+     and writing `D_8002E5D8[j]` is 32 words, 32 differing -- a fresh %hi per
+     element, the same cost func_800B67A4's note records.
+
+   31 words -- its header reads `nonmatching func_800B1B70, 0x7C`, and
+   0x7C/4 = 31.  No jump table, no rodata of its own.  One parameter: its only
+   caller, func_800B1BEC, passes the +0x20 view and nothing else. */
+void func_800B1B70(u8 *v)
+{
+    u32 *s1;
+    s32 i;
+
+    for (i = 0; i < 4; i++)
+    {
+        *(UnkTownCardPair **)(v + i * 4 + 0x48) =
+            (UnkTownCardPair *)(v + (i * 0x10 + 0x58));
+        (*(UnkTownCardPair **)(v + i * 4 + 0x48))->unk_04 =
+            (UnkTownCardPrim *)(v + (i * 0x10 + 0x98));
+        (*(UnkTownCardPair **)(v + i * 4 + 0x48))->unk_08 =
+            (UnkTownCardPrim12 *)(v + 0x20);
+        s1 = D_8002E5D8;
+        *(u32 *)(v + i * 0x10 + 0x98) = s1[0];
+        *(u32 *)(v + i * 0x10 + 0x9C) = s1[1];
+        *(u32 *)(v + i * 0x10 + 0xA0) = s1[2];
+        *(u32 *)(v + i * 0x10 + 0xA4) = s1[3];
+    }
+}
 
 /* The same allocate-and-wire constructor as func_800B14B0 above and
    func_800AEFD8 / func_800B6A0C, over a pair of 0xCC-byte buffers instead of a
@@ -24887,9 +25033,101 @@ u32 func_800B3EC4(s32 a)
     return func_800491F4(a, D_800D16BC, 0x21);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3EEC);
+/* func_800B4CBC's near-twin -- the same template-copy constructor over the
+   same +0x4C pair and +0x24/+0x34 buffers, reached from the same
+   `func_800B4494` / `func_800B3EEC` / `func_800B43E8` call trio in
+   func_800B44B0 -- plus three zero BYTES at the prim's +0x00..+0x02 that
+   func_800B4CBC does not write, and with (0, 0) where func_800B4CBC writes
+   (-60, -60).  Read func_800B67A4's note for the four measured rules.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3FB8);
+   The three byte stores are the whole difference from func_800B4CBC's 42
+   words: dropping them is 42 words and 23 differing here.  They must be
+   written THROUGH p->unk_04, not through the local -- `*(u8 *)a = 0` and
+   friends is 46 words with 29 differing -- and the FIRST of them is the one
+   cse forwards, the listing's `addu $v0, $a1, $zero` being the `a` pseudo
+   standing in for the eliminated `lw 0x4($a0)`.  Every store after it reloads
+   p->unk_04, because the preceding narrow store may alias the slot.  The two
+   `sh $zero` stores are the cheaper-than-a-constant form, and unk_0C must
+   precede unk_06: swapping them is 51 words with 4 differing.
+
+   51 words -- its header reads `nonmatching func_800B3EEC, 0xCC`, and
+   0xCC/4 = 51.  No jump table, no rodata of its own.  Three parameters,
+   settled by the landed caller func_800B44B0 below. */
+void func_800B3EEC(UnkTownCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    *((u8 *)p->unk_04 + 0x0) = 0;
+    *((u8 *)p->unk_04 + 0x1) = 0;
+    *((u8 *)p->unk_04 + 0x2) = 0;
+    p->unk_04->unk_08 = 0;
+    p->unk_04->unk_0A = 0;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_06 = 0x1000;
+    p->unk_08->unk_08 = 0x30;
+    p->unk_04->unk_0F = 4;
+}
+
+/* One row of the +0x5C scene's five-row card grid: for row `i`, place four of
+   the 32 UnkTownGrid slots -- i, i+6, i+12, i+18 -- from a 0x14-byte
+   descriptor.  Its only caller, the stub func_800B43E8, walks
+   `D_800D1658 + i * 0x14` for i = 0..4 with `addu $a2, $s1, $zero` as the
+   index, so the descriptor stride is 0x14 and the third parameter is the row.
+
+   Slot i and slot i+12 get a pointer the descriptor or the object already
+   holds; slots i+6 and i+18 get a fresh one from func_8004DC14 over the
+   descriptor's first word, with 1 and 0x90 as the second argument.  The last
+   pair reuses the SAME two descriptor halfwords as slot i+6, biased -1 and +1.
+
+   THE SLOT POINTER MUST LIVE IN A LOCAL, re-assigned per slot, and that is
+   the one thing in this function with real leverage.  Spelling the accesses
+   inline the way func_800B4350 does -- which is the measured rule for the
+   eight-access form in that vocabulary -- re-reads `0x5C($s2)` AND the table
+   element at every access and measures 115 words with 111 differing.  Here
+   the listing re-reads 0x5C exactly four times, once per slot, and keeps the
+   element in $s3 across that slot's three stores.  The 0x5C re-read survives
+   only because the `*(u8 **)g` store may alias it: hoisting the table base
+   into its own local too is 64 words with 74 differing.  And the prim pointer
+   must NOT be hoisted -- `r = g->unk_04;` per slot is 71 words with 56
+   differing, because the target re-reads `0x4($s3)` for each halfword store.
+   `i * 4` is materialised once, in $s1, and added to each re-read base.
+
+   74 words -- its header reads `nonmatching func_800B3FB8, 0x128`, and
+   0x128/4 = 74.  No jump table, no rodata of its own.  Three parameters;
+   func_8004DC14 rides an implicit declaration, as the three landed call sites
+   at :21483, :21889 and :22845 already do. */
+void func_800B3FB8(u8 *s, u8 *q, s32 i)
+{
+    UnkTownGrid *g;
+
+    g = (*(UnkTownGrid ***)(s + 0x5C))[i];
+    *(u8 **)g = *(u8 **)(s + 0x20);
+    g->unk_04->unk_08 = *(u16 *)(q + 0x4);
+    g->unk_04->unk_0A = *(u16 *)(q + 0x6);
+    g = (*(UnkTownGrid ***)(s + 0x5C))[i + 12];
+    *(u8 **)g = *(u8 **)(q + 0x10);
+    g->unk_04->unk_08 = *(u16 *)(q + 0x8);
+    g->unk_04->unk_0A = *(u16 *)(q + 0xA);
+    g = (*(UnkTownGrid ***)(s + 0x5C))[i + 6];
+    *(u32 *)g = func_8004DC14(*(u8 **)q, 1);
+    g->unk_04->unk_08 = *(u16 *)(q + 0xC);
+    g->unk_04->unk_0A = *(u16 *)(q + 0xE);
+    g = (*(UnkTownGrid ***)(s + 0x5C))[i + 18];
+    *(u32 *)g = func_8004DC14(*(u8 **)q, 0x90);
+    g->unk_04->unk_08 = *(u16 *)(q + 0xC) - 1;
+    g->unk_04->unk_0A = *(u16 *)(q + 0xE) + 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B40E0);
 
