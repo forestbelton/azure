@@ -350,6 +350,21 @@ standalone) after three wrong guesses about which prototype had done it.
   rule, because it invites an agent to look at two differing slots and
   conclude the order is verified.
 
+  **WIDER STILL, measured 2026-11-04 on `func_800C1954`: the arguments do not
+  have to be THE SAME, only RELOCATED.** Its two `func_80041284` calls take
+  DIFFERENT arguments -- `&D_80080E28` against `&D_800D1D54` -- and swapping
+  them is still 28 words, 0 differing, with `raw == relocdump` closing at
+  14 == 14; `seqcheck` fails it at index 8. The reason is that both arguments
+  are SYMBOL ADDRESSES, so each one's `%hi` and `%lo` are both relocated and
+  therefore masked, and nothing unmasked moves.
+
+  **The complement is in the function next door.** `func_800C1854`'s
+  `func_8008B408(6); func_8008B408(3);` pair swaps to **2 differing**, because
+  `addiu $a0, $zero, 6` is an immediate and is not masked. So the screen is
+  **"is every argument word relocated?"**, not "are the arguments equal?".
+  `func_800C1854` holds all three shapes in one function -- two symbol-address
+  pairs and one immediate pair -- if a regression fixture is ever wanted.
+
   The original measurement, 2026-11-03 on `func_800AF860` and `func_800AFFA8`:
   both are
   driver chains over the same `u8 *s`, both call `func_800AF674` and

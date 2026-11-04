@@ -2923,6 +2923,42 @@ def main():
                   " trusting the site for types.")
             witnessed.add(f)
 
+    # BEFORE FIRING "NO ARITY WITNESS ANYWHERE", GREP THE WHOLE csrc/ TREE
+    # FOR A DECLARATION OF THE NAME. Reported 2026-11-04: the banner named
+    # three functions whose arity AND parameter widths are stated by
+    # `void func_800C17A0(s32, s32);` in csrc/unk_72A8.c -- a file route (j)
+    # had already printed eight lines earlier as a relative. One grep finds
+    # it, and it matters because the alternative spelling was a 7/0 tie that
+    # the bytes could never choose.
+    for f in list(targets):
+        if f in witnessed or not listing(unit, f):
+            continue
+        found_decl = []
+        for fp in glob.glob(os.path.join(PROJ, 'csrc', '*.c')) + \
+                glob.glob(os.path.join(PROJ, 'include', '*.h')):
+            if os.path.basename(fp)[:-2] == unit:
+                continue
+            try:
+                body = io.open(fp, encoding='utf-8', errors='replace').read()
+            except Exception:
+                continue
+            for m in re.finditer(
+                    r'^[A-Za-z_][\w \*]*?\b%s\s*\([^;{]*\);' % f, body, re.M):
+                found_decl.append((os.path.relpath(fp, PROJ),
+                                   body[:m.start()].count('\n') + 1,
+                                   m.group(0).strip()))
+        if found_decl:
+            print("\n  *** %s IS DECLARED ELSEWHERE IN THE TREE, so it is NOT"
+                  " unwitnessed:" % f)
+            for fp, ln, d in found_decl[:4]:
+                print("        %s:%-6d %s" % (fp, ln, d))
+            print("      Copy that declaration rather than guessing -- it"
+                  " states the arity AND the parameter")
+            print("      widths, which the bytes often cannot choose between."
+                  " Check it against your")
+            print("      listing's own argument registers before trusting it.")
+            witnessed.add(f)
+
     missing = [f for f in targets if f not in witnessed and listing(unit, f)]
     if missing:
         print("\n  *** NO ARITY WITNESS ANYWHERE for: %s" % ', '.join(missing))
