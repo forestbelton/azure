@@ -2225,6 +2225,7 @@ extern u16 D_800D5070[];
    the use. */
 s32 func_800C2B6C(s16 a);
 extern u8 D_800D2EA4[];
+extern u8 D_800D1BF4[];
 void func_800B8E08(u16 *p);
 void func_8009CDB4(void);
 u8 **func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
@@ -30439,9 +30440,174 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B83DC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B85E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8834);
+/* Can tile `y` be queued at slot `x`?  Rejects unless func_80033B2C accepts the
+   record's +0x08 halfword, the slot's bytes +2/+3 match the record's +4/+5 and
+   the 0x800133A5 half of the stride-2 table at 0x800133A4 is clear, then
+   answers per the slot's mode byte +4: mode 0 no, mode 1 only if the record's
+   +3 bit 0 is set and neither half of the 0x21-entry table already names `y`,
+   modes 2 and 3 only if the record named by the table's 0x33A4 half has `y` at
+   its byte +7, any other mode yes.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B89C4);
+   THE MODE TEST IS A `switch`, not an if-chain: `beq 1` / `slti 2` / `beqz`
+   for case 0 / `slti 4` is `emit_case_nodes` over the three nodes {0}, {1},
+   {2,3} with the root at 1, and `case 2: case 3:` must `break` to the single
+   trailing `return 1` -- ending that arm with its own `return 1` lets jump.c
+   fold `if (p) return 0; return 1;` into `xor`/`sltiu 1` and returns a boolean
+   where the target branches.
+
+   THE THREE GUARDS ARE NOT THREE `if`s.  The +2/+3 pair must be ONE condition
+   joined by `||` and the 0x33A5 test its own `if`.  All six `return 0` bodies
+   are the identical `addu $v0, $zero, $zero` + return, so jump.c cross-jumps
+   them onto ONE survivor and reorg then steals that block's `$v0 = 0` into each
+   branch's delay slot.  With three separate `if`s the survivor lands at the
+   +0x03 guard: its block becomes that branch's FALL-THROUGH, so the branch
+   cannot steal from it, the `lui` of 0x8001 goes into the delay slot instead,
+   and the loop's own copy dies -- 99 words, 59 differing, with the 2 words of
+   `.L800B8950` missing from inside the loop.  Joining the +2/+3 pair kills that
+   copy and the loop's becomes the survivor: 100 words, 0 differing.  Joining
+   all THREE with `||` is 100 words and 4 differing -- the 0x33A5 arm is then a
+   separate basic block, so the 0x80010000 base is rematerialised AFTER the
+   index `sll` instead of before it.  THE LOOP'S OWN TWO TESTS MUST ALSO BE
+   JOINED BY `||`: as two separate `if`s the survivor moves PAST the latch (100
+   words, 11 differing -- `.L800B8950` lands after the `bnez` and the loop's
+   second test becomes `beq` to it instead of `bne` to `.L800B8958`), and with
+   `||` the then-block sits between the body and the latch where the target has
+   it.
+
+   EVERY POINTER BASE IS MATERIALISED BY ITS OWN STATEMENT AND THE INDEX IS
+   WRITTEN AS INTEGER ARITHMETIC WITH THE INDEX FIRST, which is func_800B8248's
+   rule.  `rec = &D_800D2644[y][0]` as one expression is `plus(mult, symbol)`
+   after fold swaps the constant to the back, so the index `andi`/`sll` comes
+   out AHEAD of the base's `lui`/`addiu`; `t = (s16 *)D_800D2644;` followed by
+   `rec = (s16 *)(y * 0x20 + (s32)t);` puts the `lui`/`addiu` first and still
+   gives `addu $s0, $v1, $v0` with the index as the first operand.  Writing `t`
+   as `&D_800D2644[0][0]` instead of the cast splits the `lui` and `addiu`
+   across two registers ($v0/$v1) and costs three renames.  Case 2/3 needs its
+   OWN `t2` and base: both are rematerialised in that block, which is why the
+   `lui %hi(D_800D2644)` sits in the `j .L800B8970` delay slot.
+
+   0x800133A4 and 0x800133A5 are out of the loaded image, so the base is a
+   constant address and each of the three sites gets its own local -- the
+   listing has three `lui`s of 0x8001.  `x` and `y` are `u8`: `andi 0xFF` before
+   every use, `y & 0xFF` held in $s1 across the call and recomputed in case 2/3,
+   and the loop counter's `sltiu 0x21` bound.  The loop is not strength-reduced
+   because the `u8` counter's `andi` breaks the giv. */
+s32 func_800B8834(u8 x, u8 y)
+{
+    u8 *base;
+    u8 *base2;
+    u8 *base3;
+    u8 *p;
+    u8 *q;
+    s16 *t;
+    s16 *t2;
+    s16 *rec;
+    u8 i;
+
+    t = (s16 *)D_800D2644;
+    rec = (s16 *)(y * 0x20 + (s32)t);
+    if (func_80033B2C(rec[4]) == 0)
+    {
+        return 0;
+    }
+    p = D_800D2EA4;
+    q = (u8 *)(x * 8 + (s32)p);
+    if (q[2] != *((u8 *)rec + 4) || q[3] != *((u8 *)rec + 5))
+    {
+        return 0;
+    }
+    base = (u8 *)0x80010000;
+    if (base[x * 2 + 0x33A5] != 0)
+    {
+        return 0;
+    }
+    switch (q[4])
+    {
+    case 0:
+        return 0;
+    case 1:
+        if ((*((u8 *)rec + 3) & 1) == 0)
+        {
+            return 0;
+        }
+        i = 0;
+        base2 = (u8 *)0x80010000;
+        for (; i < 0x21; i++)
+        {
+            if (base2[i * 2 + 0x33A4] == y || base2[i * 2 + 0x33A5] == y)
+            {
+                return 0;
+            }
+        }
+        return 1;
+    case 2:
+    case 3:
+        t2 = (s16 *)D_800D2644;
+        base3 = (u8 *)0x80010000;
+        if (*(u8 *)(base3[x * 2 + 0x33A4] * 0x20 + (s32)t2 + 7) != y)
+        {
+            return 0;
+        }
+        break;
+    }
+    return 1;
+}
+
+/* Records event `b` for tile `a`: ids 1..3 only stamp the +0x33A5 byte of the
+   stride-2 table at 0x800133A4, ids 0x25..0x29 go to the single byte at
+   0x800133E7, and everything else stamps the table AND pushes 0x8001360A down
+   to 0x8001360B.  A `switch` with two case GROUPS and the `default` arm FIRST:
+   `emit_case_nodes` for the two ranges is exactly the listing's test order --
+   `b < 1` -> default, `b <= 3` -> arm 1, `b > 0x29` -> default, `b >= 0x25` ->
+   arm 2, else default -- and the arms are laid out default, 1..3, 0x25..0x29,
+   which is their source order.
+
+   THE `lui $at` IS THE TELL THAT THESE ARE CONSTANT ADDRESSES, NOT SYMBOLS.
+   $at is FIXED_REGISTERS[1] in the mips port so cc1psx cannot allocate it; the
+   pair at 0x800133E7 is the assembler expanding a macro-form `sb reg, <addr>`,
+   which at -G0 only a constant address emits.  Same reading as func_8009D5C0
+   and func_8009F8EC.
+
+   ONE `u8 *base` FOR ALL THREE ARMS IS 29 WORDS, NOT 31: gcc keeps it in $a2
+   across the switch and emits ONE `lui`, where the target has three.  THREE
+   SEPARATE LOCALS, one assigned per arm, is 0 differing -- one local reassigned
+   in each arm is 31 words and 12 differing, every one a register rename plus
+   the arm-1 `lui` stolen into the `bnez`'s delay slot instead of the `sll`.
+   Writing the addresses as bare literals (`*(u8 *)(a * 2 + 0x800133A5)`) is 37
+   words: 0x33A5 has a non-zero low half, so each one costs a `lui`/`ori` pair
+   instead of a `lui` of 0x8001 with 0x33A5 in the displacement.  `s32`
+   parameters are 23 words / 31 differing -- the `sll`/`sra 16` pair at entry
+   and the `sra 15` are what `s16` buys. */
+void func_800B89C4(s16 a, s16 b)
+{
+    u8 *base;
+    u8 *base2;
+    u8 *base3;
+
+    switch (b)
+    {
+    default:
+        base = (u8 *)0x80010000;
+        base[a * 2 + 0x33A5] = b;
+        base[0x360B] = base[0x360A];
+        base[0x360A] = b;
+        break;
+    case 1:
+    case 2:
+    case 3:
+        base2 = (u8 *)0x80010000;
+        base2[a * 2 + 0x33A5] = b;
+        break;
+    case 0x25:
+    case 0x26:
+    case 0x27:
+    case 0x28:
+    case 0x29:
+        base3 = (u8 *)0x80010000;
+        base3[0x33E7] = b;
+        break;
+    }
+}
 
 /* Commits one frame of a 0x22-entry pending-event queue at 0x800133A4 and
    then copies two bytes from 0x8001360A to 0x80013608. Both tables are OUT OF
@@ -30923,14 +31089,100 @@ void func_800B97D8(u32 a)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9830);
+/* Seeds the 0x22-entry pending-tile table at 0x800133A4 from bytes +6/+7 of
+   each stride-8 D_800D2EA4 slot, then clears the two bytes at 0x80013608 and
+   0x8001360A.  Line for line func_800B8A40's two blocks with the first loop's
+   body replaced: same 0x22 bound, same `base[i * 2 + 0x33A5]` pair, same
+   second block over 0x3608/0x360A, and 0 differing on the first compile.
+
+   0x800133A4 and 0x80013608 are out of the loaded image, so both are constant
+   addresses through a base pointer with the offset in the index expression;
+   one `u8 *` per block is what gives the listing its two `lui`s of 0x8001 and
+   the shared `%hi` between D_80013608 and D_8001360A.  The counter is zeroed
+   BEFORE the bases are taken and `q = D_800D2EA4` comes between them, which is
+   func_800B833C's statement order.  `addiu $a0, $a0, %lo(D_80010002)` in the
+   listing is `base += 2` on the 0x80010000 base, a splat artefact. */
+void func_800B9830(void)
+{
+    u8 *base;
+    u8 *base2;
+    u8 *q;
+    s32 i;
+
+    i = 0;
+    q = D_800D2EA4;
+    base = (u8 *)0x80010000;
+    for (; i < 0x22; i++)
+    {
+        base[i * 2 + 0x33A4] = q[i * 8 + 6];
+        base[i * 2 + 0x33A5] = q[i * 8 + 7];
+    }
+    i = 0;
+    base2 = (u8 *)0x80010000;
+    for (; i < 2; i++)
+    {
+        base2[i + 0x3608] = 0;
+        base2[i + 0x360A] = 0;
+    }
+}
 
 void func_800B9890(void)
 {
     func_80041284(&D_800D1B64);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B98B4);
+/* One frame of the 0x21-entry pending-tile queue at 0x800133A4: for every
+   non-zero entry, draw the tile through func_800B7934 at the matching stride-8
+   D_800D2EA4 slot's coordinates when its D_800D2644 record's byte +1 is set,
+   then re-read the entry and fire func_80033AA8(0x12C3) when the record's byte
+   +0 is 1.  func_800B833C's loop with a second test added.
+
+   Both the table entry and the record index are RE-READ for the second test --
+   the listing has `lbu %lo(D_800133A4)($s0)` twice with the `sll 5` and
+   `addu $s3` recomputed -- which is this unit's standing re-dereference shape
+   and is forced here anyway by the intervening call.
+
+   THE RECORD POINTER MUST BE A LOCAL FOR THE FIRST TEST, because the byte at
+   +1 has to stay in the DISPLACEMENT.  Written inline as
+   `*((u8 *)&D_800D2644[e][0] + 1)`, fold reassociates `(sym + e * 0x20) + 1`
+   into `(sym + 1) + e * 0x20`, so the candidate carries TWO related bases --
+   `addiu $s4, $v0, 1` with `addiu $s3, $s4, -1` derived off it -- a fifth saved
+   register and 60 words against 57.  A `u8 *t` assigned inside the `if` keeps
+   `lbu 0x1($v1)` / `lbu 0x0($v1)` off one base; the SECOND test still has to
+   be written out through the array name, because reusing `t` there would let
+   cse forward it and lose the re-read.
+
+   `i = 0` sits between the func_8003E4FC and func_8003F320 calls: that is what
+   puts `addu $s2, $zero, $zero` in func_8003F320's delay slot. */
+void func_800B98B4(void)
+{
+    u8 *base;
+    u8 *q;
+    u8 *t;
+    s32 i;
+
+    func_8003E4FC(6, D_800D1BF4, 0);
+    i = 0;
+    func_8003F320();
+    func_80033AE8(0x12C3);
+    q = D_800D2EA4;
+    base = (u8 *)0x80010000;
+    for (; i < 0x21; i++)
+    {
+        if (base[i * 2 + 0x33A4] != 0)
+        {
+            t = (u8 *)&D_800D2644[base[i * 2 + 0x33A4]][0];
+            if (t[1] != 0)
+            {
+                func_800B7934(q[i * 8], q[i * 8 + 1], t[0]);
+            }
+            if (*(u8 *)&D_800D2644[base[i * 2 + 0x33A4]][0] == 1)
+            {
+                func_80033AA8(0x12C3);
+            }
+        }
+    }
+}
 
 /* 100 words, 0 differing.  The handler func_800B9B28 and func_800B9BF0
    install at `-0x10($a0)`, so func_80040190 supplies the arity:
