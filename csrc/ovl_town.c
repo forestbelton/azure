@@ -17985,20 +17985,184 @@ void func_800AF784(u8 *s)
     }
 }
 
-void func_800AF858(void) {
+/* WIDENED from `void func_800AF858(void)` when its two callers
+   func_800AF860 and func_800AFFA8 landed.  Both set $a0 = *(u8 **)(s +
+   0xA8) and $a1 = s explicitly in the `jal`'s delay slot, so the second
+   argument is real: declaring and calling it with one argument is 1
+   differing in BOTH callers.  This function is defined ABOVE them, so a
+   2-argument call against the old signature is a hard "too many
+   arguments" error rather than a byte difference.  The body reads
+   neither parameter, so it stays 2 words / 0 differing; the parameter
+   types are func_800AF254's, which both call sites share verbatim. */
+void func_800AF858(UnkTownSlot **a, u8 *s)
+{
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF860);
+/* The 0x800AFxxx list scene's full refresh: the two fill loops, the
+   arrow-visibility pass and the two slot-table passes, in source order.  Its
+   two ASM call sites are both in func_800AF9C4 (`jal func_800AF860` with
+   `addu $a0, $s1, $zero`), so one parameter.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF8B0);
+   func_800AF674 AND func_800AF784 CAN BE WRITTEN EITHER WAY ROUND AND BOTH
+   MEASURE 0 DIFFERING, because both calls are a bare `jal` with the same
+   `addu $a0, $s0, $zero` delay slot and ovlverify masks the `jal` target.
+   The order here is read off the relocation list, not off the word diff:
+   AF520, AF784, AF674, AF254, AF858.  func_800AFFA8 below has the other
+   order, and that too is from its own relocations.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF96C);
+   20 words -- its header reads `nonmatching func_800AF860, 0x50`, and
+   0x50/4 = 20.  No jump table, no rodata of its own. */
+void func_800AF860(u8 *s)
+{
+    func_800AF520(s);
+    func_800AF784(s);
+    func_800AF674(s);
+    func_800AF254(*(UnkTownSlot ***)(s + 0xA8), s);
+    func_800AF858(*(UnkTownSlot ***)(s + 0xA8), s);
+}
+
+/* Starts the per-entry cursor animation: the list cursor at +0x18 of the
+   descriptor is reduced mod 10 to a page-local index, split into a row
+   (/5) and a column (%5), and the row picks one of two y positions while the
+   column scales to an x.  func_800B05DC gets five arguments, the fifth on the
+   stack at 0x10($sp).
+
+   THE `*(s32 *)(s + 0x10) = 0` MUST BE WRITTEN AFTER THE row SELECTION.
+   Before it, the descriptor load that feeds the fifth argument can no longer
+   be re-read into $a1 at the join and the whole tail re-allocates: 48 words,
+   31 differing.
+
+   THE ROW IS A REAL SIGNED DIVISION, not a comparison.  `if (i >= 5)` for
+   `if (i / 5 != 0)` is 48 words / 32 differing -- the quotient is live into
+   the column's `i - i / 5 * 5`, so cse keeps one `mult`/`mfhi` pair and both
+   the 0x66666667 materialisations the target has.  The if/else and both
+   ternary spellings (`i / 5 ? :` and `i / 5 != 0 ? :`) are all 0 differing;
+   writing the test inverted, `-0xB4` arm first, is 3 differing, because the
+   delay-slot value is the branch-TAKEN one.
+
+   47 words -- its header reads `nonmatching func_800AF8B0, 0xBC`, and
+   0xBC/4 = 47.  No jump table, no rodata of its own.  One parameter,
+   witnessed twice: func_800AF96C below and func_800AF9C4 both `jal` it with
+   `addu $a0, $sN, $zero` and no other live argument register.  func_800B05DC
+   is still a stub with no declaration anywhere, so this rides the implicit
+   declaration the unit already uses eighteen times. */
+s32 func_800AF8B0(u8 *s)
+{
+    s32 i;
+    s32 y;
+
+    i = *(s32 *)(*(u8 **)s + 0x18) % 10;
+    if (i / 5 != 0)
+    {
+        y = 0x28;
+    }
+    else
+    {
+        y = -0xB4;
+    }
+    *(s32 *)(s + 0x10) = 0;
+    return func_800B05DC(*(s32 *)(s + 0x18), *(s32 *)(*(u8 **)s + 0x18), y,
+                         i % 5 * 0x18 - 0x80,
+                         (*(u32 **)(*(u8 **)s + 0x20))[*(s32 *)(*(u8 **)s + 0x18)]);
+}
+
+/* The self-replacing step func_800AF9C4 installs at the node's unk_10 while
+   the cursor animation runs: re-arm it, and when it reports done restore the
+   handler func_800AF9C4 parked at +0x04.
+
+   func_800AF9C4's own listing is the whole reading.  At 0x800AFA74 it has
+
+       jal func_800AF8B0 ; addu $a0, $s1, $zero
+       lw $v1, 0x0($s1) ; nop ; sw $v0, 0x4($v1)
+       lw $v0, 0x0($s1) ; nop ; lw $v0, 0x4($v0) ; nop
+       bnez $v0, .L800AFCE8 ; lui $v0, %hi(func_800AF96C)
+       lw $v1, -0x10($s1) ; addiu $v0, $v0, %lo(func_800AF96C)
+       sw $v0, -0x10($s1) ; j ... ; sw $v1, 0x4($s1)
+
+   -- the same two statements, with the saved handler going INTO +0x04 and
+   func_800AF96C into the node's unk_10 at `s - 0x10`; this function is the
+   inverse.  So the `!= 0` sense is witnessed, not guessed.
+
+   THE GUARD MUST RE-READ `*(u8 **)s + 0x4` rather than reuse the value just
+   stored: the store can alias `*(u8 **)s`, which is why the target reloads
+   both the descriptor and the field with a `nop` in each load-delay slot.
+   Reusing the returned value is 16 words / 13 differing.  `== 0` with an
+   early `return`, and a local for the returned value, are both 0 differing.
+
+   22 words -- its header reads `nonmatching func_800AF96C, 0x58`, and
+   0x58/4 = 22.  No jump table, no rodata of its own.  One parameter: nothing
+   calls it, and the only reference anywhere is func_800AF9C4's
+   `%hi(func_800AF96C)` store into `-0x10($s1)`, so it is an unk_10 handler
+   like the landed func_800AE630, func_800B1890 and func_800B6754 -- all
+   declared with one parameter, the dispatcher's second and third being dead
+   trailing ones. */
+void func_800AF96C(u8 *s)
+{
+    *(s32 *)(*(u8 **)s + 0x4) = func_800AF8B0(s);
+    if (*(s32 *)(*(u8 **)s + 0x4) != 0)
+    {
+        *(u32 *)(s - 0x10) = *(u32 *)(s + 0x4);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF9C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AFD00);
+/* func_800B34A8 verbatim -- the teardown handler that drops the primitive
+   block at +0x1C and releases the two sprite handles at +0x98/+0x9C of the
+   +0xA8 record -- plus a `func_800AF9C4(s)` tail, which is this scene's
+   dispatcher rather than a plain return.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AFD5C);
+   THE TWO RELEASES ARE ORDERED: +0x98 then +0x9C is 0 differing, the other
+   way round is 2 differing.  AND THE +0xA8 RECORD IS RE-READ for the second
+   release -- hoisting it into a local is 18 differing, because the local
+   would have to survive the func_800497F4 call in a callee-saved register.
+
+   23 words -- its header reads `nonmatching func_800AFD00, 0x5C`, and
+   0x5C/4 = 23.  No jump table, no rodata of its own.  One parameter: it is an
+   unk_10 handler, installed at `s - 0x10` by func_800AFD5C below and at
+   `o->unk_10` by func_800B02D4; no `jal` to it exists anywhere.
+   func_800AF9C4 is still a stub with no declaration, so this call rides the
+   implicit declaration. */
+void func_800AFD00(u8 *s)
+{
+    func_8004CB2C(s + 0x1C);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0xA8) + 0x98), 0);
+    func_800497F4(*(u8 **)(*(u8 **)(s + 0xA8) + 0x9C), 0);
+    func_800AF9C4(s);
+}
+
+/* func_800B34FC verbatim -- the six-frame open animation whose counter at
+   +0x08 drives `(i << 12) / 5` as an s16 at +0x06 of the +0x9C record, and
+   which hands over to its teardown handler on the last frame -- plus the same
+   `func_800AF9C4(s)` tail func_800AFD00 above carries.  func_800B34FC's
+   comment has the division's reading: 0x66666667 with post_shift 1, signed
+   because of the `sra $v0, $v0, 31`.
+
+   THE TAIL CALL IS LAST.  Moving `func_800AF9C4(s)` above the `if` is 32
+   words / 32 differing: the counter then has to live across the call and the
+   whole function grows a callee-saved register.  Four spellings of the
+   counter are all 0 differing -- the local `i` (func_800B34FC's), an in-place
+   `+= 1` with a re-read guard, `if (i < 6) {} else {...}`, and `* 0x1000`
+   for `<< 12`.
+
+   29 words -- its header reads `nonmatching func_800AFD5C, 0x74`, and
+   0x74/4 = 29.  No jump table, no rodata of its own.  One parameter: it is
+   installed at `s - 0x10` by func_800B0134 below and has no `jal` anywhere.
+   The `%hi`/`%lo` pair is on func_800AFD00 -- read off this function's own
+   listing at 0x800AFDAC/0x800AFDB0 and confirmed by relocdump.py. */
+void func_800AFD5C(u8 *s)
+{
+    s32 i;
+
+    *(s16 *)(*(u8 **)(s + 0x9C) + 6) = (*(s32 *)(s + 8) << 12) / 5;
+    i = *(s32 *)(s + 8) + 1;
+    *(s32 *)(s + 8) = i;
+    if (i >= 6)
+    {
+        *(u32 *)(s - 0x10) = (u32)func_800AFD00;
+    }
+    func_800AF9C4(s);
+}
 
 void func_800AFDD0(u8 *p)
 {
@@ -18037,7 +18201,34 @@ void func_800AFF00(UnkTownCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AFFA8);
+/* func_800AF860's refresh with func_800AF448 prepended and a cursor-sound
+   call appended -- the scene's first-time build, called from func_800B0024.
+
+   As with func_800AF860, THE ORDER OF func_800AF674 AND func_800AF784 IS
+   INVISIBLE TO ovlverify (both are a bare `jal` with the same `addu $a0, $s0,
+   $zero` delay slot, and the `jal` word is masked); it is read off this
+   function's own relocation list, which is AF448, AF520, AF674, AF784, AF254,
+   AF858, 49490 -- the reverse of func_800AF860's middle pair.
+
+   The provisioning tool's arity lead for func_80049490 (`sets $a0,$a1`) is a
+   FALSE POSITIVE: the `addu $a1, $s0, $zero` it picks up is func_800AF858's
+   second argument, sitting in that call's own delay slot two instructions
+   earlier.  One argument, as the resident prototype says.
+
+   31 words -- its header reads `nonmatching func_800AFFA8, 0x7C`, and
+   0x7C/4 = 31.  No jump table, no rodata of its own.  Signature already
+   declared at the top of this file and witnessed by the landed
+   `func_800AFFA8(s)` in func_800B0024. */
+void func_800AFFA8(u8 *s)
+{
+    func_800AF448(s);
+    func_800AF520(s);
+    func_800AF674(s);
+    func_800AF784(s);
+    func_800AF254(*(UnkTownSlot ***)(s + 0xA8), s);
+    func_800AF858(*(UnkTownSlot ***)(s + 0xA8), s);
+    func_80049490((*(u32 **)(*(u8 **)s + 0x20))[*(s32 *)(*(u8 **)s + 0x18)]);
+}
 
 s32 func_800B0024(u8 *s)
 {
@@ -18062,11 +18253,40 @@ s32 func_800B0024(u8 *s)
     func_800AFFA8(s);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0134);
+/* Binds the list scene to its parent: the parent node at +0x18, the parent's
+   own +0x20 actor view as this scene's descriptor at +0x00, the live flag at
+   +0x10, and func_800AFD5C as the node's first step handler at `s - 0x10`.
+
+   TWO PARAMETERS, and the second is the FORWARDED-ARGUMENT trap in its purest
+   form.  func_800B0158's only call is `func_800B0134(s)` -- one argument --
+   yet this listing reads $a1 twice.  func_800B0158's own second parameter is
+   already in $a1 at the call, so gcc emits no setup move and the caller
+   measures 16 words / 0 differing either way; only this listing witnesses the
+   argument.  Spelling it with one parameter and reading the pointer back out
+   of `s + 0x18` is 9 words / 8 differing.  `u8 *p` for `void *p` is also 0
+   differing; `void *` matches func_800B0158 and func_800B0214 above.
+
+   STATEMENT ORDER IS WITNESSED AND IS NOT THE READER'S.  All 24 permutations
+   of the four stores were measured: only +0x18, then +0x00, then +0x10, then
+   the handler is 0 differing.  Writing +0x10 second (the reader's order) is 3
+   differing -- the `li $v0, 1` is then scheduled ahead of the first store.
+   The next best are 3 (ABCD, BACD, CABD, CBAD) and the worst 8.
+
+   9 words -- its header reads `nonmatching func_800B0134, 0x24`, and
+   0x24/4 = 9.  No jump table, no rodata of its own, no stack frame.  The
+   `%hi`/`%lo` pair is on func_800AFD5C, read off this function's own listing
+   at 0x800B0144/0x800B0148. */
+void func_800B0134(u8 *s, void *p)
+{
+    *(void **)(s + 0x18) = p;
+    *(u8 **)s = (u8 *)p + 0x20;
+    *(s32 *)(s + 0x10) = 1;
+    *(u32 *)(s - 0x10) = (u32)func_800AFD5C;
+}
 
 s32 func_800B0158(u8 *s, void *p)
 {
-    func_800B0134(s);
+    func_800B0134(s, p);
     func_800AFF00((UnkTownCardPair *)(s + 0x98), (u32 *)(s + 0x70), (u32 *)(s + 0x80));
     return func_800B0024(s);
 }
@@ -18115,7 +18335,44 @@ UnkNode *func_800B0214(void *p)
     return o;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B02D4);
+/* func_800B0214's public entry point: allocate and wire the list scene, then
+   install func_800AFD00 as the node's step handler and seed the +0xBC
+   record's +0x06 to a full 0x1000.
+
+   ONE PARAMETER, forwarded.  The `jal func_800B0214` has a `nop` delay slot
+   and no $a0 setup of its own, which is the documented "missing argument move
+   is not evidence of a zero-arity call": gcc keeps the incoming $a0 live
+   across the prologue because the first call's first argument IS the
+   function's first parameter.  Measured both ways -- a zero-parameter version
+   passing a literal 0 is 17 words / 1 differing, that one word being
+   `addu $a0, $zero, $zero` where the target has the `nop`.  func_800B0214's
+   `p` reaches func_800B0134's second argument, so the type is `void *`.
+
+   THE HANDLER STORE COMES FIRST.  Writing the +0xBC halfword first is 6
+   differing: the target interleaves `lw $v1, 0xBC($a0)` between the `lui` and
+   the `addiu` of the handler address, which sched2 can only do when the
+   address materialisation is already the earlier statement.  An early
+   `return` on the null branch instead of the `if` is 11 differing -- that is
+   the "do not invert an if/else unless an arm returns" rule from the other
+   side: here the null arm falls into the shared `return o` tail.
+
+   17 words -- its header reads `nonmatching func_800B02D4, 0x44`, and
+   0x44/4 = 17.  No jump table, no rodata of its own.  Nothing in the overlay
+   calls it and nothing takes its address, so the arity is consistent rather
+   than witnessed from outside.  The `%hi`/`%lo` pair is on func_800AFD00,
+   read off this function's own listing at 0x800B02F0/0x800B02F8. */
+UnkNode *func_800B02D4(void *p)
+{
+    UnkNode *o;
+
+    o = func_800B0214(p);
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800AFD00;
+        *(s16 *)(*(u8 **)((u8 *)o + 0xBC) + 6) = 0x1000;
+    }
+    return o;
+}
 
 void func_800B0318(UnkTownSlot **a)
 {
@@ -18227,7 +18484,46 @@ void func_800B0944(UnkTownCardPair *p, u32 *a, u32 *b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B09EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0BD0);
+/* The +0xCC scene's per-page row refresh, the same break-then-zero shape as
+   func_800AF520 and func_800AF674: fill up to five rows from the page base
+   `*(s32 *)(s + 0x10) * 5`, stop at the live count at +0x0C, and zero the
+   slots the `break` left behind.  The tail slots start at index 9 of the
+   +0xCC slot table, which is the 0x24 displacement in the listing.
+
+   THE PAGE BASE IS RE-READ INSIDE THE LOOP.  Hoisting
+   `*(s32 *)(s + 0x10) * 5` into a local before the loop is 39 words / 15
+   differing -- loop.c then has an invariant to hoist and the guard grows a
+   word.  Written twice inside the body, cse unifies the two uses into the one
+   `sll`/`addu` pair the target has and the sum is already in $a1 for the
+   call.  A local assigned INSIDE the body is equally 0 differing, as are a
+   `while` tail and an if/else-with-break guard; the `(s + 0xCC)[i + 9]` and
+   the `+ i * 4 + 0x24` spellings are both 0 differing too.
+
+   The two live induction variables (the `slti` counter and no pointer walk)
+   are what func_800B6B10's comment predicts for a body this size.
+
+   38 words -- its header reads `nonmatching func_800B0BD0, 0x98`, and
+   0x98/4 = 38.  No jump table, no rodata of its own.  One parameter,
+   witnessed by the landed `func_800B0BD0(s)` in func_800B0FD4.
+   func_800B09EC is still a stub with no declaration, so the two-argument call
+   rides the implicit declaration. */
+void func_800B0BD0(u8 *s)
+{
+    s32 i;
+
+    for (i = 0; i < 5; i++)
+    {
+        if (*(s32 *)(s + 0x10) * 5 + i >= *(s32 *)(s + 0xC))
+        {
+            break;
+        }
+        func_800B09EC(s, *(s32 *)(s + 0x10) * 5 + i);
+    }
+    for (; i < 5; i++)
+    {
+        (*(UnkTownSlot ***)(s + 0xCC))[i + 9]->unk_00 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0C68);
 

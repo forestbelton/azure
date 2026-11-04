@@ -328,6 +328,36 @@ standalone) after three wrong guesses about which prototype had done it.
 
 ## The traps, each of which has cost something
 
+* **TWO ADJACENT CALLS WITH IDENTICAL DELAY SLOTS ARE BYTE-INDISTINGUISHABLE
+  TO `ovlverify`, SO THEIR ORDER IS ONLY CHECKABLE AGAINST THE RELOCATION
+  LIST.** Measured 2026-11-03 on `func_800AF860` and `func_800AFFA8`: both are
+  driver chains over the same `u8 *s`, both call `func_800AF674` and
+  `func_800AF784` back to back with the same `addu $a0, $s0, $zero` in each
+  delay slot, and SWAPPING THAT PAIR IS 0 DIFFERING IN BOTH. The `jal` word is
+  masked and nothing else moves. The two functions' real orders are OPPOSITE --
+  `func_800AF860` is AF520, **AF784, AF674**, AF254, AF858 while
+  `func_800AFFA8` is AF448, AF520, **AF674, AF784**, AF254, AF858 -- so a brief
+  that called them "the same driver chain" and let an agent copy one into the
+  other would have shipped a wrong word with a clean verify. Check it like
+  this, per function, and expect the two lists to match exactly:
+
+      grep -oE '\bjal\s+func_[0-9A-Fa-f]+' asm/nonmatchings/<unit>/FUNC.s \
+        | awk '{print $2}'
+      python3 tools/decomp/relocdump.py CAND.c FUNC \
+        | grep -oE 'R_MIPS_26\s+func_[0-9A-Fa-f]+' | awk '{print $2}'
+
+* **A LANDED CALLEE'S PROTOTYPE CAN BE TOO NARROW FOR THE CALL SITE YOU ARE
+  ABOUT TO WRITE, and when it is defined ABOVE you that is a COMPILE FAILURE,
+  not a measurement.** `func_800AF858` was landed as `void func_800AF858(void)`
+  -- correct for its own 2 words, which read nothing -- while both
+  `func_800AF860` and `func_800AFFA8` set `$a0` AND `$a1` in its `jal`'s delay
+  slot. Calling it with one argument is 1 differing in each caller; calling it
+  with two against the old prototype is "too many arguments". The fix is to
+  WIDEN the landed callee (unread parameters cost it nothing: it stayed 2 words
+  at 0 differing) and that edit is outside the group's own INCLUDE_ASMs, so it
+  has to be in the merge script and called out at hand-back. Re-measure the
+  widened function AND its other callers, not just your own.
+
 * **`ovlverify` MASKS EVERY RELOCATED WORD, NOT JUST `jal`.** A wrong
   ADDRESS-TAKEN symbol -- the `lui`/`addiu` pair of a handler install like
   `a->unk_50 = func_800C28E8;` -- is invisible to it, and invisible to a
