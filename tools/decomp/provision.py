@@ -695,14 +695,33 @@ def main():
         need = [i for i in ins
                 if (lines.get(i) or incasm.get(i) or 0) > mypos]
         if need:
-            print("                *** EACH OF THESE IS DEFINED BELOW YOU, SO THE INSTALL")
+            # SAY "ADDRESS-TAKE", NOT "INSTALL". This banner said INSTALL for
+            # every entry, including the ones the per-function lines above had
+            # just classified as a TEST or a TAG -- so it contradicted itself
+            # three lines on, and the misnomer is the exact confusion the
+            # install/TEST/TAG split exists to remove. Reported 2026-11-04 by
+            # the agent whose group had a tag. The REQUIREMENT is unchanged:
+            # a test and a tag materialise the address just as an install
+            # does, so all three need the declaration.
+            kinds = []
+            if any(i in stored for i in need): kinds.append('INSTALL')
+            if any(i in tested for i in need): kinds.append('TEST')
+            if any(i in tagged for i in need): kinds.append('TAG')
+            print("                *** EACH OF THESE IS DEFINED BELOW YOU, SO THE"
+                  " ADDRESS-TAKE (%s)" % '/'.join(kinds or ['ADDRESS-TAKE']))
             print("                NEEDS A FORWARD DECLARATION -- an address-take does NOT")
             print("                ride an implicit declaration the way a CALL does, and")
-            print("                this unit's 18 implicit-declaration rides are all calls:")
+            print("                this unit's 18 implicit-declaration rides are all calls.")
+            print("                A TEST and a TAG materialise the address exactly as an")
+            print("                install does, so the requirement is the same for all three:")
             for i in need:
                 pr = protos.get(i)
-                print("                  %-15s %s" % (
-                    i, pr.strip() if pr else 'no declaration in the unit either -- write one'))
+                k = ('install' if i in stored else
+                     'TEST' if i in tested else
+                     'TAG' if i in tagged else '?')
+                print("                  %-15s [%s] %s" % (
+                    i, k,
+                    pr.strip() if pr else 'no declaration in the unit either -- write one'))
         if gl:
             tags, outside, needdecl = [], [], []
             for g in gl:
