@@ -3155,6 +3155,22 @@ extern u8 D_800F8A70[];
 void func_800A76F0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800A7C0C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 
+/* Out-of-image (splat/town.bin_undefined_syms_auto.txt), indexed `sll 1`
+   off func_80095360's return and read with `lh`, so an s16 table.  The
+   address comes out `lui %hi` + `addiu %lo`, not `lui`/`ori`, so it is a
+   SYMBOL and not a constant address. */
+extern s16 D_800D01F8[];
+/* The four handlers of the D_80100DB8 +0x1C slot, which func_800A496C calls
+   as `(*(void (**)(u8 *))(q + 0x1C))(q)` -- ONE parameter, a `u8 *`.  All
+   four install each other, and an address-take needs a real declaration. */
+void func_800A5340(u8 *a);
+void func_800A5440(u8 *a);
+void func_800A549C(u8 *a);
+void func_800A54FC(u8 *a);
+/* Defined below; func_800A5340 and func_800A5440 TEST the camera task's
+   handler slot against it.  Signature copied verbatim from the definition. */
+void func_800A58CC(UnkTownTask *a, UnkTown2AE8 *b);
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -18563,13 +18579,157 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A51CC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A526C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5340);
+/* The idle/approach state of the D_80100DB8 camera record's +0x1C slot, and
+   the hub of a four-way mutual-install cycle: it installs func_800A5440 (the
+   "camera task is already running a cutscene state" arm), func_800A549C (the
+   "player is far away" arm) and func_800A54FC (the "a script is running" arm),
+   and each of those three installs it back.  The three handler stores are ONE
+   `sw $v0, 0x1C($s0)` in the target: cross-jumping unifies the identical tail
+   insn of all three arms (jump.c:2179-2210 in scratch/gcc-src/cdk-gcc-b18),
+   leaving each arm only its own `lui`/`addiu` pair and a `j` to the merged
+   store.  So the three stores ARE written out three times in the source.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5440);
+   Two things are source rather than scheduling:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A549C);
+   - `cam = &D_80083498;` into a local.  The two reads are at +0x10 and +0x20
+     off ONE materialised base; written out as `D_80083498.unk_20.unk_00` each
+     `%lo` folds into its own load displacement, the `lui` and the `addiu`
+     stop being a pair, and the function is 63 words with 59 differing.
+   - `p = D_80100D98;` is a statement placed BETWEEN the func_800A5440 arm and
+     the func_8003BD84 call, not at the top of the function.  At the top it is
+     63 words with 57 differing -- the pointer becomes a global pseudo, takes a
+     callee-saved register and its `%hi` moves into the prologue.  Written
+     inline as `*(s32 *)(D_80100D98 + 0xC)` cse keeps the first load's own
+     `%lo` and reaches the second as `addiu $v1, $v0, 0xC` / `lw $a1, 4($v1)`:
+     64 words, 2 differing, exactly those two words.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A54FC);
+   Also measured and rejected: the 0x448/0x380 pick as a ternary feeding one
+   store is 65 words with 15 differing (the if/else with two stores is what
+   cross-jumping merges onto the single `sh`); hoisting the three handler
+   values into one `u32 h` with a `goto install` is 63 words with 50
+   differing, so the merge really is cross-jumping and not a shared local.
+   Spelling the second arm as a nested `if` instead of an `&&` is
+   indistinguishable, 0 differing either way.
+
+   D_8006ADD4 is read as an `lh` once and as a WORD once, the latter being the
+   `*(s32 *)&D_8006ADD4 == 0x38000C` idiom this unit already uses at
+   func_8008BA44 (`== 0x13000C`): the unit declares the symbol `s16` and the
+   word pairs it with D_8006ADD6.
+
+   64 words -- its header reads `nonmatching func_800A5340, 0x100`, and
+   0x100/4 = 64.  Measured 0 differing. */
+void func_800A5340(u8 *a)
+{
+    UnkTownCam *cam;
+    u8 *p;
+
+    cam = &D_80083498;
+    if (*(u32 *)((u8 *)cam + 0x10) == (u32)func_800A5638)
+    {
+        if ((u32)cam->unk_20.unk_00 == (u32)func_800A5A98 ||
+            (u32)cam->unk_20.unk_00 == (u32)func_800A58CC)
+        {
+            *(s16 *)(a + 0x2) = 0x80;
+            *(s16 *)(a + 0x4) = 0x300;
+            *(u32 *)(a + 0x1C) = (u32)func_800A5440;
+            return;
+        }
+    }
+    p = D_80100D98;
+    if (func_8003BD84(*(s32 *)(p + 0xC), *(s32 *)(p + 0x10)) > 0xDFFFF &&
+        D_8006ADD4 != 0xC)
+    {
+        *(s16 *)(a + 0x4) = 0x448;
+        *(u32 *)(a + 0x1C) = (u32)func_800A549C;
+        return;
+    }
+    if (func_800352FC() != 0)
+    {
+        if (*(s32 *)&D_8006ADD4 == 0x38000C)
+        {
+            *(s16 *)(a + 0x4) = 0x448;
+        }
+        else
+        {
+            *(s16 *)(a + 0x4) = 0x380;
+        }
+        *(u32 *)(a + 0x1C) = (u32)func_800A54FC;
+    }
+}
+
+/* func_800A5340's exact test, inverted, and the only leaf of the four: with
+   the camera task running func_800A5A98 or func_800A58CC it does nothing, and
+   otherwise re-arms the slot back to func_800A5340.  The guard really is
+   written as one `&&` of the outer test and the two-way `||`, with a bare
+   `return`: the target's two `beq`s both jump straight to the `jr $ra`.
+
+   `cam = &D_80083498;` for the same reason as in func_800A5340 (inline it is
+   2 differing here), and here the `addiu` lands in $a1 rather than in the
+   `lui`'s own $v0 because the parameter still occupies $a0 -- no frame, no
+   saved register, nothing to schedule.
+
+   The guard's shape is NOT witnessed: the nested-`if` spelling and the
+   positive `!=`/`&&` spelling with the body inside the `if` both measure 0
+   differing.  Only the `cam` local is load-bearing.
+
+   23 words -- its header reads `nonmatching func_800A5440, 0x5C`, and
+   0x5C/4 = 23.  Measured 0 differing. */
+void func_800A5440(u8 *a)
+{
+    UnkTownCam *cam;
+
+    cam = &D_80083498;
+    if (*(u32 *)((u8 *)cam + 0x10) == (u32)func_800A5638 &&
+        ((u32)cam->unk_20.unk_00 == (u32)func_800A5A98 ||
+         (u32)cam->unk_20.unk_00 == (u32)func_800A58CC))
+    {
+        return;
+    }
+    *(s16 *)(a + 0x2) = 0x20;
+    *(s16 *)(a + 0x4) = 0x400;
+    *(u32 *)(a + 0x1C) = (u32)func_800A5340;
+}
+
+/* The "player is far away" state: it polls the same distance as
+   func_800A5340's second arm and re-arms the slot back to func_800A5340 once
+   the player is close again.  `p = D_80100D98;` is a statement for the reason
+   recorded on func_800A5340; inline it is 24 words with 4 differing, all four
+   in the address pair and the two loads.  A `u8 *` with +0xC/+0x10, an
+   `s32 *` with `p[3]`/`p[4]`, the initialiser form, the flipped comparison
+   `0xDFFFF >= ...` and the inverted `if (... > 0xDFFFF) return;` all measure
+   0 differing -- only the pointer local is load-bearing.
+
+   24 words -- its header reads `nonmatching func_800A549C, 0x60`, and
+   0x60/4 = 24.  Measured 0 differing. */
+void func_800A549C(u8 *a)
+{
+    u8 *p;
+
+    p = D_80100D98;
+    if (func_8003BD84(*(s32 *)(p + 0xC), *(s32 *)(p + 0x10)) <= 0xDFFFF)
+    {
+        *(s16 *)(a + 0x4) = 0x400;
+        *(u32 *)(a + 0x1C) = (u32)func_800A5340;
+    }
+}
+
+/* The "a script is running" state: func_800352FC is the same predicate
+   func_800A5340's third arm polls, and this re-arms the slot back to
+   func_800A5340 once it clears.  The parameter copy `addu $s0, $a0, $zero`
+   sits in the `jal`'s delay slot, which is reorg, not source.  The inverted
+   `if (func_800352FC() != 0) return;` measures the same, 0 differing, but the
+   STORE ORDER is witnessed: +0x04 before +0x1C, reversed is 5 differing.
+
+   16 words -- its header reads `nonmatching func_800A54FC, 0x40`, and
+   0x40/4 = 16.  Measured 0 differing. */
+void func_800A54FC(u8 *a)
+{
+    if (func_800352FC() == 0)
+    {
+        *(s16 *)(a + 0x4) = 0x400;
+        *(u32 *)(a + 0x1C) = (u32)func_800A5340;
+    }
+}
 
 void func_800A553C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {
@@ -18616,7 +18776,96 @@ void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A573C);
+/* The non-player leg of func_800A5638's exit: func_800903FC's own leg goes to
+   func_8009065C and this one runs for every other owner.  It slews the task's
+   +0x18 facing towards its +0x10 target, converts the result to an 8-way
+   index with func_80095360, and when the index CHANGES pushes the new frame
+   out of the task's +0x1C byte table through func_800489F4.  It is NOT an
+   installer: its one `%hi`/`%lo` pair on func_800A5A98 feeds a `bne`.
+
+   Three things are source rather than scheduling:
+
+   - `g = &D_80083160;` into a local, as in func_800A58CC and func_80092DA8 --
+     that is what puts the `%hi(D_80083160)` ahead of the func_80095544 call
+     with its `addiu` in the `jal`'s delay slot, for one read of +0x08.
+     `D_80083160.unk_08` at the use site is 84 words with 76 differing.
+   - THE func_80094AA0 CALL IS WRITTEN OUT FOUR TIMES, once per arm, and
+     cross-jumping merges all of them at the `jal` (jump.c:2179-2210 in
+     scratch/gcc-src/cdk-gcc-b18) -- which is why each arm reloads BOTH +0x18
+     and +0x10 and why the two unbiased arms share one block.  A local holding
+     the target angle and ONE call is seven words shorter: 79 words, 71
+     differing.
+   - THE `*(s16 *)((u8 *)a + 0x12) = n;` STORE IS BELOW THE func_800489F4
+     CALL, not above it.  Above is 86 words with 25 differing.
+   - `D_80100D98` is handed to func_800A48B0 as a VALUE and then written
+     through at +0x08, so cse keeps the one address in $s0 across the call
+     with no pointer local needed; this is the inline spelling that
+     func_800A5340 and func_800A549C could NOT use.  A pointer local measures
+     the same here, 0 differing.
+
+   The `|= 1` / `&= 0xFFFE` pair on the third argument's +0x14 is one merged
+   `sh`, again cross-jumping, with the `ori` in the forward `j`'s delay slot.
+
+   Two things that are NOT observable and were measured rather than assumed:
+   the `t = g->unk_08` local (cse merges two reads of the field, 0 differing
+   either way) and the in-struct cast form -- `*((s16 *)a + 0xC)` for +0x18
+   and `*((s16 *)a + 0x9)` for +0x12 is also 0 differing, so
+   MEM_IN_STRUCT_P buys nothing here.  Testing 0x8000 before 0x2000 is 4
+   differing, so the arm order IS witnessed.
+
+   86 words -- its header reads `nonmatching func_800A573C, 0x158`, and
+   0x158/4 = 86.  Measured 0 differing. */
+void func_800A573C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 n;
+    u32 t;
+
+    g = &D_80083160;
+    func_80095544(b);
+    if ((u32)a->unk_00 == (u32)func_800A5A98)
+    {
+        t = g->unk_08;
+        if (t & 0x2000)
+        {
+            *(s16 *)((u8 *)a + 0x18) = func_80094AA0(
+                *(s16 *)((u8 *)a + 0x18), a->unk_10 - 0x200, 0x200);
+        }
+        else if (t & 0x8000)
+        {
+            *(s16 *)((u8 *)a + 0x18) = func_80094AA0(
+                *(s16 *)((u8 *)a + 0x18), a->unk_10 + 0x200, 0x200);
+        }
+        else
+        {
+            *(s16 *)((u8 *)a + 0x18) =
+                func_80094AA0(*(s16 *)((u8 *)a + 0x18), a->unk_10, 0x200);
+        }
+    }
+    else
+    {
+        *(s16 *)((u8 *)a + 0x18) =
+            func_80094AA0(*(s16 *)((u8 *)a + 0x18), a->unk_10, 0x200);
+    }
+    n = func_80095360(*(s16 *)((u8 *)a + 0x18));
+    if (*(s16 *)((u8 *)a + 0x12) != n)
+    {
+        func_800489F4(c, (*(u8 **)((u8 *)a + 0x1C))[n], *(s8 *)((u8 *)c + 0x4),
+                      0);
+        *(s16 *)((u8 *)a + 0x12) = n;
+    }
+    if (D_800D01F8[n] != 0)
+    {
+        *(u16 *)((u8 *)c + 0x14) |= 1;
+    }
+    else
+    {
+        *(u16 *)((u8 *)c + 0x14) &= 0xFFFE;
+    }
+    func_80048AC8(c, 0);
+    func_800A48B0(D_80100D98, b);
+    *(s32 *)(D_80100D98 + 0x8) = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5894);
 
