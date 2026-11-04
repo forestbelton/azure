@@ -1900,6 +1900,11 @@ void func_80096728(UnkTown2AE8 *a, s32 b);
 void func_80096758(UnkTown2AE8 *a, s32 b);
 void func_8009A724();
 void func_8009A81C();
+void func_8009A8A8(void);
+/* The two func_80094984 bind descriptors this group names.  Same `extern u8
+   []` shape as the other ~40 descriptors declared in this block. */
+extern u8 D_800D01C0[];
+extern u8 D_800D05E0[];
 s32 func_8008CFE8(UnkVec *v);
 s32 func_8008D050(UnkVec *v);
 void func_80098B30(void *p, UnkTown2AE8 *q, void *r);
@@ -12346,7 +12351,39 @@ void func_80099468(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800994DC);
+/* A func_80094984 bind entry point in the TWO-argument sub-form, and the
+   handler install sits BETWEEN the engine slot's two byte clears -- which is
+   not a scheduling artefact but the source order, pinned three ways:
+
+     bind / unk_00 / handler / unk_01 / call   24 words,  0 differing  <- this
+     bind / handler / unk_00 / unk_01 / call   24 words,  7 differing
+     bind / unk_00 / unk_01 / handler / call   23 words, 16 differing
+     bind / unk_01 / unk_00 / handler / call   23 words, 16 differing
+
+   The two 23-word rows are the tell: with the clears ADJACENT the second `sb`
+   shares everything with the first and a word disappears, so the +1 is itself
+   evidence for the interleaved order.
+
+   The bind's arity is witnessed by LENGTH here, unusually -- a third argument
+   `func_80094984(D_800D01C0, t, 0)` is 25 words with 20 differing, so this is
+   one of the 46 two-argument sites the declaration at the top of the file
+   describes and not one of the two three-argument ones.
+
+   func_800A8184 is defined BELOW this (:21108) so its call rides an implicit
+   declaration, the arrangement this unit uses 18 times; its own comment block
+   already records that its ASM caller func_800994DC passes `lh 0x36($s0)` and
+   `lh 0x38($s0)`.
+
+   24 words -- its header reads `nonmatching func_800994DC, 0x60`, and
+   0x60/4 = 24.  Measured 0 differing, first compile. */
+void func_800994DC(UnkTownTask *t)
+{
+    func_80094984(D_800D01C0, t);
+    D_80082660[1].unk_00 = 0;
+    t->unk_04 = func_80097EA0;
+    D_80082660[1].unk_01 = 0;
+    func_800A8184(t->unk_36, t->unk_38);
+}
 
 void func_8009953C(UnkTownTask *t, s32 b)
 {
@@ -12398,9 +12435,48 @@ void func_800996E8(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099754);
+/* The mover's three per-frame deltas cleared, and the most-called leaf in this
+   unit: 40 call sites here, all of them `func_80099754(b)`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099764);
+   The ASCENDING store order is what the listing has and it is a TWO-SPELLING
+   TIE: three separate statements in +0xC/+0x10/+0x14 order, and the chain
+   `b->unk_14 = b->unk_10 = b->unk_0C = 0;`, which emits RIGHT-TO-LEFT and so
+   produces the same ascending run.  Both wrong directions are 2 differing --
+   descending separate statements, and the chain written the other way round.
+   A `u8 *` parameter with `*(s32 *)(s + N)` casts also measures 0.
+
+   4 words -- its header reads `nonmatching func_80099754, 0x10`, and
+   0x10/4 = 4.  Measured 0 differing, first compile. */
+void func_80099754(UnkTown2AE8 *b)
+{
+    b->unk_0C = 0;
+    b->unk_10 = 0;
+    b->unk_14 = 0;
+}
+
+/* func_80090210 drives this between two func_80094984 binds (one argument,
+   `addu $a0, $s1, $zero` and nothing else in the jal's delay slot): point the
+   task's descriptor table at D_800D05E0, set its stride-8 index to 1, and
+   publish the task's OWNING OBJECT -- `(u8 *)t - 0x20`, the inverse of the
+   +0x20 actor/task view this overlay projects everywhere -- into engine slot
+   D_80082660[1], clearing that slot's +0x00 byte beside it.
+
+   All four statements are pinned and each is witnessed on its own: the two
+   slot stores moved ahead of the two task stores is 6 differing, the slot's
+   `unk_00` clear before its `unk_04` publish is 2, and `unk_40` before
+   `unk_44` is 5.  A `u8 *` parameter with casts, and a `Unk80082660 *p =
+   D_80082660;` local indexed `p[1]`, both measure 0 -- the slot base gets its
+   own `addiu` either way because two nonzero displacements hang off it.
+
+   11 words -- its header reads `nonmatching func_80099764, 0x2C`, and
+   0x2C/4 = 11.  Measured 0 differing, first compile. */
+void func_80099764(UnkTownTask *t)
+{
+    t->unk_44 = (UnkTownArg80 *)D_800D05E0;
+    t->unk_40 = 1;
+    D_80082660[1].unk_04 = (u32)((u8 *)t - 0x20);
+    D_80082660[1].unk_00 = 0;
+}
 
 void func_80099790(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -12476,7 +12552,28 @@ void func_80099A38(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80099AC4);
+/* func_8009A128 installs this at the task's +0x04 with `t->unk_0A = 0x20`:
+   the family's plain countdown step, firing func_8009A18C below when the
+   counter goes negative.  `--a->unk_0A < 0` is the unit's established in-place
+   narrow test (`lhu`, `addiu -1`, `sh`, `sll 16`, `bgez`) -- `<= 0` is 1
+   differing.  Two byte-identical ties: the decrement hoisted out into its own
+   statement, and the whole body inverted as `if (--a->unk_0A >= 0) return;`
+   with the call after it.
+
+   The third parameter is FORWARDED, not read, so it has no witness in either
+   function: a two-parameter func_8009A18C with this call site cut to
+   `func_8009A18C(a, b)` is 15/15 and 6/6 words, both 0 differing.  Three to
+   match the handler convention and the slot this occupies.
+
+   15 words -- its header reads `nonmatching func_80099AC4, 0x3C`, and
+   0x3C/4 = 15.  Measured 0 differing, first compile. */
+void func_80099AC4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    if (--a->unk_0A < 0)
+    {
+        func_8009A18C(a, b, c);
+    }
+}
 
 void func_80099B00(void *a, UnkTown2AE8 *b, s32 c)
 {
@@ -12679,9 +12776,45 @@ void func_8009A128(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A18C);
+/* func_80099AC4's expiry arm, and the smallest install in the unit: hand the
+   task to func_80099B00 (landed, :12449) and kick the mover's +0x14 delta to
+   -0xA0000, i.e. -10.0 in 16.16, which is what func_80099B00 then integrates
+   until it turns non-negative.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A1A4);
+   The two stores are ORDERED handler-then-delta: swapped is 4 differing.
+   `0xFFF60000` for `-0xA0000` is byte-identical (the constant is a bare `lui`
+   either way, since its low half is zero).
+
+   6 words -- its header reads `nonmatching func_8009A18C, 0x18`, and
+   0x18/4 = 6.  Measured 0 differing, first compile. */
+void func_8009A18C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    a->unk_04 = func_80099B00;
+    b->unk_14 = -0xA0000;
+}
+
+/* func_80099B00's continuation (`func_8009A1A4(a, b, c)` at :12455): the
+   func_8009A060 / func_8009A0C4 / func_8009A128 bind-and-install shape again,
+   reaching the SEVENTH descriptor slot -- `t->unk_44->unk_20` -- and handing
+   over to func_80099B70, landed above at :12475.
+
+   The bind must come FIRST: install-then-bind is 14 words with 16 differing,
+   because the handler's address then materialises inside the call's own
+   prologue instead of after it.
+
+   Two things here are NOT witnessed and are written to the family's
+   convention: a one-parameter signature is also 17 words / 0 differing (only
+   $a0 is read), and so is a three-argument bind `func_80094984(..., t, c)` --
+   `c` is already in $a2 at entry and the bind is the first call, so gcc emits
+   no argument move either way.  The sibling trio above all pass two.
+
+   17 words -- its header reads `nonmatching func_8009A1A4, 0x44`, and
+   0x44/4 = 17.  Measured 0 differing, first compile. */
+void func_8009A1A4(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    func_80094984(t->unk_44->unk_20, t);
+    t->unk_04 = func_80099B70;
+}
 
 void func_8009A1E8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
@@ -12816,7 +12949,58 @@ void func_8009A5C0(u8 *s, UnkTown2AE8 *b, void *c)
     func_80098988(s, b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A5F4);
+/* A fourth D_80082A38 publisher, and the sister unit's func_800C4BE0
+   (csrc/ovl_town_800BF3F0.c:5112) is its line-for-line template: follow engine
+   slot D_80082660[1]'s +0x04 to a UnkNode, project the actor view at +0x20,
+   and publish func_800C2B6C of one of its halfwords into D_80082A38's
+   five-slot queue at +0x48.  The differences from func_800C4BE0 are that the
+   slot index is the CONSTANT 1 rather than a parameter, the outer guard is the
+   slot's own `unk_01 == 0` byte instead of `i != 0`, and the halfword read is
+   the actor view's +0x10.
+
+   Both of func_800C4BE0's recorded levers reproduce exactly:
+     * the D_80082A38 base MUST be a local assigned BEFORE the outer `if` --
+       that is what puts it in callee-saved $s0 across the func_800C2B6C call,
+       and what puts its `lui` at word 1 with its `addiu` in the `bnez`'s delay
+       slot.  Assigned inside the `if` it is 23 words with 22 differing.
+     * the actor view has ONE use, so its +0x20 folds into the load's
+       displacement (`lh $a0, 0x30($v1)`); writing the load as
+       `*(s16 *)((u8 *)n + 0x30)` with no view local is byte-identical.
+
+   THE SLOT BASE NEEDS ITS OWN POINTER LOCAL, and that is the whole +1 word.
+   `&D_80082660[1]` written directly -- or `D_80082660[1].unk_01` inline, or
+   `(Unk80082660 *)((u8 *)D_80082660 + 8)` -- folds the +8 into the relocation
+   and emits ONE `addiu`: 23 words, 21 differing.  The target materialises the
+   symbol into a pseudo and then adds 8 (`addiu $v1, $v1, %lo(D_80082660)` then
+   `addiu $a0, $v1, 0x8`), which is what `q = D_80082660; e = &q[1];` expands
+   to, because `PLUS_EXPR` over a pointer VALUE is an add while `ADDR_EXPR` of
+   a constant-index `ARRAY_REF` is folded into the address.  `e = q + 1;` is
+   the same 0 differing.
+   Joining the two guards with `&&` is also 0 differing.
+
+   24 words -- its header reads `nonmatching func_8009A5F4, 0x60`, and
+   0x60/4 = 24.  Measured 0 differing. */
+void func_8009A5F4(void)
+{
+    UnkNode *n;
+    UnkTownActor *p;
+    Unk80082660 *q;
+    Unk80082660 *e;
+    u32 *d;
+
+    d = D_80082A38w;
+    q = D_80082660;
+    e = &q[1];
+    if (e->unk_01 == 0)
+    {
+        n = (UnkNode *)e->unk_04;
+        if (n != NULL)
+        {
+            p = (UnkTownActor *)((u8 *)n + 0x20);
+            d[18] = func_800C2B6C(*(s16 *)((u8 *)p + 0x10));
+        }
+    }
+}
 
 void func_8009A654(void)
 {
@@ -12839,14 +13023,126 @@ void func_8009A674(s32 a, s32 b, s32 c)
     t->unk_0A = 8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A724);
+/* func_8009A674's first stage (`t->unk_04 = func_8009A724`, `t->unk_0A = 8`),
+   and func_8009A81C below is the SAME FUNCTION with the two offsets dropped:
+   each frame, ease the rend's +0x02/+0x06 halfwords one countdown-step closer
+   to the task's +0x36/+0x38 target through the shared leaf func_8009A8B0, then
+   hand over when the countdown expires.  What this stage adds is a per-axis
+   OFFSET taken off the task's +0x10 angle: func_800644B8 and func_80064584 are
+   the sin/cos pair, and each result is divided by 48 (magic 0x2AAAAAAB with
+   `sra 3`, i.e. /6 then /8; `/16/3` is byte-identical since cse folds it back).
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A81C);
+   THE OFFSET MUST BE SUBTRACTED IN THE SAME STATEMENT AS THE DIVIDE, and the
+   locals must be `s16`:
+
+     s16 x; x = a->unk_36 - f(...) / 48;   62 words,  0 differing  <- this
+     s32 x; x = a->unk_36 - f(...) / 48;   62 words,  2 differing
+     s32 x; x = f(...) / 48;  (s16)(a->unk_36 - x) at the call
+                                           62 words, 30 differing
+     no locals, both divides inline at the call sites
+                                           60 words, 62 differing
+
+   The 2-differing row is the whole lever and both its words are the same
+   thing: with an `s32` local the two `lh 0x36/0x38($s3)` stay SIGNED, while
+   the target has `lhu`.  An `s16` local makes the subtraction's result HImode,
+   so combine knows the load's high bits are dead and narrows it -- the same
+   mechanism as the `<< k`-between-a-load-and-a-narrowing-store lever, with the
+   assignment's own truncation standing in for the `<< k`.  The 30-differing
+   row is what the value LIVE ACROSS func_80064584 is: the target keeps the
+   finished difference in $s0 (`subu $s0, $s0, $v1` in that jal's delay slot),
+   not the quotient.
+
+   Declaring `y` before `x` is byte-identical.  The two tail stores are
+   ORDERED countdown-then-install: swapped is 5 differing.  `a->unk_0A < 1`
+   ties with `<= 0`.
+
+   62 words -- its header reads `nonmatching func_8009A724, 0xF8`, and
+   0xF8/4 = 62.  Measured 0 differing. */
+void func_8009A724(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    s16 x;
+    s16 y;
+
+    x = a->unk_36 - func_800644B8(a->unk_10 - 0x80) / 48;
+    y = a->unk_38 - func_80064584(a->unk_10 - 0x80) / 48;
+    *(s16 *)((u8 *)b + 0x2) = func_8009A8B0(a->unk_0A -= 1, *(s16 *)((u8 *)b + 0x2), x);
+    *(s16 *)((u8 *)b + 0x6) = func_8009A8B0(a->unk_0A, *(s16 *)((u8 *)b + 0x6), y);
+    if (a->unk_0A <= 0)
+    {
+        a->unk_0A = 0x10;
+        a->unk_04 = func_8009A81C;
+    }
+}
+
+/* func_8009A724's continuation and func_8009A8EC's own first stage: the same
+   two eased halfwords with the sin/cos offset dropped, a 0x20 reload instead
+   of 0x10, and the empty func_8009A8A8 as the terminator.
+
+   THE SECOND CALL'S DIVISOR IS A RELOAD, not a cached copy: hoisting it into
+   `n = a->unk_0A -= 1;` and passing `n` to both calls is 37 words with 33
+   differing.  The `sh` to the rend may alias the task, which kills gcc's memo
+   of +0x0A -- the same finding func_80099790's block records.
+
+   Three byte-identical spellings of the first argument: `a->unk_0A -= 1`,
+   `--a->unk_0A`, and the decrement hoisted into its own leading statement.
+   The two calls' order is a REAL witness here and not masked: swapping them is
+   6 differing.  The two tail stores swapped is 5.  A two-parameter signature
+   is also 0 differing -- the third is unread and only its slot witnesses it.
+
+   35 words -- its header reads `nonmatching func_8009A81C, 0x8C`, and
+   0x8C/4 = 35.  Measured 0 differing, first compile. */
+void func_8009A81C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+{
+    *(s16 *)((u8 *)b + 0x2) = func_8009A8B0(a->unk_0A -= 1, *(s16 *)((u8 *)b + 0x2), a->unk_36);
+    *(s16 *)((u8 *)b + 0x6) = func_8009A8B0(a->unk_0A, *(s16 *)((u8 *)b + 0x6), a->unk_38);
+    if (a->unk_0A <= 0)
+    {
+        a->unk_0A = 0x20;
+        a->unk_04 = func_8009A8A8;
+    }
+}
 
 void func_8009A8A8(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009A8B0);
+/* The shared easing leaf of the pair above: one countdown-step of a linear
+   approach, `b + (c - b) / a`, with the remaining step count as the divisor
+   and a zero count passing the current value through untouched.
+
+   THE ARMS MUST BE WRITTEN WITH THE DIVIDE FIRST -- `if (a != 0) { return
+   b + (c - b) / a; } return b;` -- although the target's `bnez` branches TO
+   the divide.  Written the natural way round, `if (a == 0) { return b; }
+   return b + (c - b) / a;`, it is 12 differing at the same 15 words: the two
+   arms' blocks come out in the opposite ORDER, and with them which copy of the
+   shared `sra $v0, $v0, 16` tail cross-jumping keeps and which `j` and delay
+   slot every other branch then gets.  An explicit `if`/`else` with both arms
+   returning is byte-identical to the fall-through form.
+
+   The signature is witnessed by LENGTH in two places, which is unusual for a
+   leaf nothing in the unit declares:
+     s16 f(s32, s16, s16)   15 words,  0 differing  <- this
+     s16 f(s16, s16, s16)   17 words, 17 differing   (+2: $a0 re-extended
+                                                      before the `bnez`/`div`)
+     s32 f(s32, s16, s16)   15 words, 13 differing   (the trailing `sll`/`sra`
+                                                      pair IS the s16 return)
+     ternary, one statement 14 words, 15 differing
+   `s32` second and third parameters with explicit `(s16)` casts on both uses
+   of each are byte-identical, as is binding `(c - b) / a` to a local first.
+
+   Both callers are ABOVE this definition, so their calls ride implicit
+   declarations -- the arrangement this unit uses 18 times -- and each one's
+   `(s16)` narrowings are written out at the call site as a result.
+
+   15 words -- its header reads `nonmatching func_8009A8B0, 0x3C`, and
+   0x3C/4 = 15.  Measured 0 differing. */
+s16 func_8009A8B0(s32 a, s16 b, s16 c)
+{
+    if (a != 0)
+    {
+        return b + (c - b) / a;
+    }
+    return b;
+}
 
 void func_8009A8EC(s32 a, s32 b, s32 c)
 {
