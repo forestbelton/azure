@@ -334,10 +334,27 @@ size, the `-G` value, the struct layout, the flags.
    near-identical shape.
 
    **State on 2026-11-03, after the autonomous campaign and the carve:**
-   ovl_town is **1,058 of 1,819 functions and 42,551 of 70,311 words, 60.5%**,
-   up from 26.7% four sessions ago; the project total is **76.8%**, and there
-   are **7 parks** -- four have been RETIRED by solving them, not by giving up
+   ovl_town is **1,210 of 1,819 functions and 49,428 of 70,311 words, 70.3%**,
+   up from 26.7% five sessions ago; the project total is **82.6%**, and there
+   are **8 parks** -- SEVEN have been RETIRED by solving them, not by giving up
    on them.
+
+   **The most recent two were retired by a function that shares no call-graph
+   edge with either of them**, and that is the most reusable fact in this
+   section. func_800B6FB8 and func_800B72B8 write six halfwords off one record;
+   both had the word count right and both had permuted all 720 orders of those
+   six stores, bottoming out at 13 and 11. Those figures reproduced exactly --
+   their measurements were sound. Their FRAME was wrong: the six fields are
+   three PAIRS, each park held the pairing consecutive and searched inside it,
+   and the answer writes the FIRST element of all three pairs and then the
+   SECOND of all three. One of them had cost about 2,900 compiles.
+
+   So: **a park is a statement about a search space, and the thing to question
+   is what it held constant.** That has now paid three times. And a park on a
+   SIBLING -- same record, same source fragment, no caller and no callee in
+   common -- was invisible to every provisioning route until
+   `provision.py`'s route (i2), which now reports a park sharing a global and a
+   field offset with the target.
 
    **The town overlay is now THREE translation units, not one.** A park that
    matched at 366/366 words with zero differing instructions, and another at
@@ -376,8 +393,8 @@ size, the `-G` value, the struct layout, the flags.
 
    The campaign is driven by `tools/decomp/batcher.py`, which partitions
    every remaining stub into groups by shared callees and globals weighted by
-   rarity, slot-chain edges and address locality. It reports **582 stubs,
-   21,260 words, 101 groups** at a 200-word target. The groups at the head of
+   rarity, slot-chain edges and address locality. It reports **429 stubs,
+   14,381 words, 71 groups** at a 200-word target. The groups at the head of
    that list are single large functions, not families -- the largest remaining
    stub is 475 words -- so the batch economics have inverted since the family
    era: one agent per function, with the templates coming from
@@ -395,7 +412,7 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. All three units sweep clean -- **1,060 names
+   Work the tight components. All three units sweep clean -- **1,211 names
    verified, 0 nonzero** -- and both `make build/town.bin` and `make check` are
    byte-identical. Read that number, not just the absence of failures: until
    2026-11-03 the sweep was verifying ONE function out of 618 and reporting
@@ -403,7 +420,7 @@ size, the `-G` value, the struct layout, the flags.
    closing `grep -v ' 0 differing'` swallowed the hard exit. `ovlverify.py` now
    falls back to the reference binary via the ELF's section LMA, and the recipe
    prints its own coverage. See docs/town-sweep.md, "A sweep that verified
-   nothing". `docs/matching-levers.md` is at **401 levers**, as `leverindex.py` itself
+   nothing". `docs/matching-levers.md` is at **406 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
