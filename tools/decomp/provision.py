@@ -843,6 +843,7 @@ def main():
     print("    shares the record layout; a park on the TARGET is your baseline to beat.")
     pk = parks()
     anyp = False
+    edge_reported = {}
     for f in targets:
         rel = []
         if f in pk:
@@ -853,6 +854,7 @@ def main():
         for c in sorted(callers.get(f, ())):
             if c in pk:
                 rel.append(('a CALLER', c))
+        edge_reported[f] = {nm for _, nm in rel}
         for why, nm in rel:
             sf, u, built, tgt, diff = pk[nm]
             print("  %-15s %s %s is PARKED at %d of %d words, %d DIFF (%s)"
@@ -860,9 +862,61 @@ def main():
             print("                  docs/near-misses/%s" % sf)
             anyp = True
     if not anyp:
-        print("  none in the call graph. %d park(s) exist overall; `ls docs/near-misses/`"
+        print("  none in the call graph.")
+
+    # A PARK ON A SIBLING -- same record, same source fragment, NO CALL-GRAPH
+    # EDGE -- was invisible to every route, and on 2026-11-03 that relationship
+    # produced the single most valuable lead of the campaign: func_800B70EC
+    # shares no caller and no callee with func_800B6FB8 and func_800B72B8, so
+    # route (i) correctly reported "none in the call graph" and route (a)
+    # buried the relation at 0.033, yet landing it RETIRED BOTH PARKS (+100
+    # words and the answer they had each spent hundreds of compiles failing to
+    # find). The relation was a shared FIELD OFFSET off a shared global, which
+    # is exactly what route (m) already computes. The agent asked for this
+    # route by name; here it is.
+    print("\n=== ROUTE (i2): PARKS THAT SHARE A FIELD OFFSET WITH YOU (NO EDGE NEEDED) ===")
+    print("    A park with no call-graph edge to you can still be the same source")
+    print("    fragment over the same record. That is how the func_800B6FB8 and")
+    print("    func_800B72B8 parks were retired -- by a function that shares neither")
+    print("    a caller nor a callee with either of them.")
+    anyp2 = False
+    for f in targets:
+        lp = os.path.join(D(unit), f + '.s')
+        try:
+            ls = open(lp).read()
+        except Exception:
+            continue
+        mine = set(re.findall(r'0x([0-9A-Fa-f]{2,4})\(', ls)) | \
+            set(m.group(1) for m in re.finditer(
+                r'addiu\s+\$\w+,\s*\$(?!zero\b)\w+,\s*0x([0-9A-Fa-f]{2,4})\b', ls))
+        mysyms = set(re.findall(r'%hi\((D_[0-9A-F]+)\)', ls))
+        for nm, (sf, u, built, tgt, diff) in sorted(pk.items()):
+            if nm in edge_reported.get(f, ()):
+                continue   # route (i) already reported it on the call graph
+            try:
+                pt = io.open(os.path.join(PROJ, 'docs/near-misses', sf),
+                             encoding='utf-8', errors='replace').read()
+            except Exception:
+                continue
+            psyms = set(re.findall(r'\b(D_[0-9A-F]+)\b', pt))
+            shared_sym = mysyms & psyms
+            shared_off = sorted(
+                o for o in mine
+                if int(o, 16) >= 0x40
+                and re.search(r'(?:0x%s\b|\bunk_%s\b)' % (o.upper(), o.upper()),
+                              pt, re.I))
+            if shared_sym and shared_off:
+                print("  %-15s %s is PARKED at %d of %d words, %d DIFF (%s)"
+                      % (f, nm, built, tgt, diff, u))
+                print("      shares global(s) %s AND offset(s) %s with your listing"
+                      % (', '.join(sorted(shared_sym)[:3]),
+                         ', '.join('+0x' + o.upper() for o in shared_off[:4])))
+                print("      docs/near-misses/%s" % sf)
+                anyp2 = True
+    if not anyp2:
+        print("  none. %d park(s) exist overall; `ls docs/near-misses/` if your target"
               % len(pk))
-        print("  if your target looks like a family member of one of them.")
+        print("  looks like a family member of one of them.")
 
     # UNCONDITIONAL. This advice used to be gated behind a LOW top score, so a
     # group scoring 1.959 never saw it -- and that was the group whose decisive
