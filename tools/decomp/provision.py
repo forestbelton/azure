@@ -42,6 +42,8 @@ def D(unit): return os.path.join(PROJ, 'asm/nonmatchings', unit)
 # That keeps kernel/BIOS space (D_80010xxx, D_80012xxx, D_80013xxx) in and the
 # overlay's own data out.
 RESIDENT_LO = 0x8002D000
+# ovl_town's rodata base: jtbl_800898AC is at offset 0x114C (town.bin.yaml).
+RODATA_BASE = 0x80088760
 
 
 def _excluded_syms():
@@ -401,11 +403,35 @@ def main():
         # reported it independently.
         gl  = sorted(set(re.findall(r'%(?:hi|lo)\((D_[0-9A-F]+)\)', t)))
         jt  = len(re.findall(r'jr\s+\$(?!ra)', t))
-        rod = 'YES' if '.section .rodata' in t or 'dlabel D_' in t else 'no'
+        # A JUMP TABLE IS NOT "OWNING RODATA". Every jump-table listing has a
+        # `.section .rodata` block for the table itself, so the old test
+        # (`'.section .rodata' in t or 'dlabel D_' in t`) said YES for any
+        # function whose only rodata IS its table -- and jumptable + own-rodata
+        # is exactly the conjunction the func_800BF1C8 park was blocked on, so
+        # the tool reported the blocking shape for functions that cannot have
+        # it. func_800A4A58 landed byte-identical with its table on
+        # 2026-11-03; its rodata needed nothing but the right alignment.
+        #
+        # Own rodata means a `dlabel D_...` -- a DATA label migrated into this
+        # listing. Anchored, because `enddlabel` contains `dlabel`, which is
+        # the trap docs/town-sweep.md already records for the ad-hoc grep.
+        own_rod = bool(re.search(r'^dlabel D_', t, re.M))
+        jt_rod = bool(re.search(r'^dlabel jtbl_', t, re.M))
+        rod = 'YES' if own_rod else ('jumptable only' if jt_rod else 'no')
         # `installs` feeds the group-level install heuristics, so it must hold
         # only the STORED ones.
         allcallees[f], installs[f], globs[f] = set(cal), set(stored), set(gl)
         print("  %s  %d words  jumptable=%d  owns-rodata=%s" % (f, w, jt, rod))
+        if jt_rod and not own_rod:
+            a = re.search(r'^dlabel (jtbl_[0-9A-Fa-f]+)', t, re.M).group(1)
+            off = int(a.split('_')[1], 16) - RODATA_BASE
+            print("      %s is at rodata offset 0x%X, %d mod 8 -- %s"
+                  % (a, off, off % 8,
+                     "`.align 3` is a NO-OP, the table costs nothing"
+                     if off % 8 == 0 else
+                     "*** 4 mod 8: cc1psx's `.align 3` will PAD it and the "
+                     "container comes out long. This is the class that forced "
+                     "the three-unit carve; see splat/town.bin.yaml ***"))
         print("      callees : %s" % (', '.join(cal) or 'NONE'))
         if ins:
             # AN ADDRESS-TAKE IS NOT NECESSARILY AN INSTALL. A function-address
