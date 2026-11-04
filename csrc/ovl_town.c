@@ -3057,6 +3057,38 @@ extern u16 D_8014F004[];
 
 extern u8 D_80078D6C[];
 extern u8 D_800D1560[];
+/* The town's "active module" list, at D_800CF828 and D_800CF838.  Eight
+   functions (func_8008B23C..func_8008B55C) are the whole interface and they
+   agree on the shape:
+
+   * D_800CF828 is a 15-entry list of u8 INDICES, zero-terminated: every
+     walker is `for (i = 0; i < 15; i++)` over `lbu`, and func_8008B408
+     appends with `D_800CF828[i] = n; D_800CF828[i + 1] = 0;`.
+   * D_800CF838 is the table those indices select, of word-sized elements that
+     func_8008B4B0 hands straight to func_80041284 -- so `Unk41284 *`, the
+     type include/structs.h:1945 already gives that parameter.  The only other
+     thing done with an element is an identity comparison, in func_8008B3AC
+     against &D_80080EA8 (which is the same `Unk41284` class as the engine's
+     own D_80080B9C / D_80080C1C at include/structs.h:1463) and in
+     func_8008B2E4 against the entries of D_800CF85C, a second zero-terminated
+     table of the same element type.
+   * D_800CF874 is a separate one-entry-plus-table object: [0] is an index into
+     itself and func_8008B550 is its only writer. */
+extern u8 D_800CF828[];
+extern Unk41284 *D_800CF838[];
+extern Unk41284 *D_800CF85C[];
+extern s32 D_800CF874[];
+/* A SECOND declaration of D_800CF874, and it is load-bearing in
+   func_8008B55C -- see the comment there. */
+extern s32 D_800CF874_b[] __asm__("D_800CF874");
+extern Unk41284 D_80080EA8;
+/* UNPROTOTYPED ON PURPOSE.  csrc/unk_1AF38.c:294 defines this as
+   `u8 *func_80047E78(u16 a)`, and that prototype in scope here converts the
+   argument: the `andi $a0, $a0, 0xffff` lands in the jal's delay slot where
+   the target has a `nop`, 1 differing in func_8008B55C.  Measured both ways;
+   `s32 func_80047E78(s32 a)` is also 0 differing, but the honest statement is
+   that this unit's original source did not have the narrow prototype. */
+s32 func_80047E78();
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -3448,7 +3480,36 @@ void func_8008B158(s32 a)
     func_80035208(w);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B23C);
+/* Walk an 8-byte-stride record list until a record's +0x04 word is zero, and
+   republish each record's packed +0x00 word through func_8008B0E8.  The three
+   extractions are func_8008B158's (:3412) verbatim -- `(w >> 23) & 1`,
+   `(w & 0x3F000000) >> 24`, `(w & 0x7F0000) >> 16` -- and they settle
+   func_8008B0E8's arity at three the same way: its `jal` has a `nop` delay
+   slot and no argument setup, which reads like a zero-arity call, but its own
+   listing copies $a0/$a1/$a2 into $s0/$s1/$s2 before writing any of them.
+   Here, unlike in func_8008B158, there is no store between the extractions,
+   so cse collapses the three reads of `*(u32 *)a` into the single
+   `lw $a2, 0x0($s0)` the target has and the two mask constants hoist to
+   $s2/$s1 as loop invariants.
+
+   THE CURSOR IS THE `s32` PARAMETER ITSELF, NOT A `u8 *` LOCAL.  The landed
+   caller func_8009D5C0 (:12536) passes `*(u32 *)(d + 0x34)`, so the parameter
+   stays `s32` and every access is a cast -- and that is also the matching
+   spelling: adding a `u8 *s; s = (u8 *)a;` local is 31 words against 32,
+   because sched1 then hoists the `addiu $s0, $s0, 0x8` into the load-delay
+   slot of `lw $a2, 0x0($s0)` instead of leaving it after the call.  A `u8 *`
+   PARAMETER is also 0 differing, but it makes the landed call site pass an
+   integer to a pointer.
+   32 words -- `nonmatching func_8008B23C, 0x80`, and 0x80/4 = 32.  No jump
+   table, no rodata of its own, no %hi/%lo at all. */
+void func_8008B23C(s32 a)
+{
+    while (*(s32 *)(a + 0x4) != 0)
+    {
+        func_8008B0E8((*(u32 *)a >> 23) & 1, (*(u32 *)a & 0x3F000000) >> 24, (*(u32 *)a & 0x7F0000) >> 16);
+        a += 8;
+    }
+}
 
 void func_8008B2BC(void) {
 }
@@ -3465,19 +3526,209 @@ void func_8008B2D4(void) {
 void func_8008B2DC(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B2E4);
+/* Is `p` in the zero-terminated table at D_800CF85C?
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B328);
+   AN INDEX, NOT A POINTER WALK, and that is the whole function.  The pointer
+   spelling (`q = D_800CF85C; while (*q != NULL) { ... q++; }`) is the same 17
+   words with 13 differing: every one of the thirteen is a register rename
+   downstream of ONE reorg decision.  With the index, the entry test's block
+   holds nothing movable, so reorg fills both branch delay slots by copying the
+   `$v0 = 0` of the shared `return 0` and retargeting past it -- the target's
+   `addu $v0, $zero, $zero` at 0x8008B2F4 and 0x8008B31C.  With the pointer,
+   the preheader's `addiu` sits in the entry block and takes the first delay
+   slot instead, which pushes the `return 0` out to a real insn and moves the
+   loop pointer to $a1.  An explicit early `return 0` plus a `do`/`while` is 19
+   words.
+   17 words -- `nonmatching func_8008B2E4, 0x44`, and 0x44/4 = 17.  No jump
+   table, no rodata of its own.  %hi(D_800CF85C) once, %lo twice. */
+s32 func_8008B2E4(Unk41284 *p)
+{
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B3AC);
+    for (i = 0; D_800CF85C[i] != NULL; i++)
+    {
+        if (p == D_800CF85C[i])
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B408);
+/* Does any entry of the active list name a module that is also in
+   D_800CF85C?  The `D_800CF838[D_800CF828[i]]` double index is written out at
+   the call, not through a local: one `lbu` feeds the `sll 2`, which is the
+   target's pair at 0x8008B354/0x8008B35C.  The `return 1` arm leaves the
+   function, so it is written first and laid out inline (the intra-function
+   `j` at 0x8008B378 is its jump to the shared epilogue).
+   33 words -- `nonmatching func_8008B328, 0x84`, and 0x84/4 = 33.  No jump
+   table, no rodata of its own.  %hi/%lo(D_800CF828) and %hi/%lo(D_800CF838)
+   once each. */
+s32 func_8008B328(void)
+{
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B4B0);
+    for (i = 0; i < 15; i++)
+    {
+        if (func_8008B2E4(D_800CF838[D_800CF828[i]]) != 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B550);
+/* Which active-list slot holds D_80080EA8, or -1.  Same double index as
+   func_8008B328 above; the comparison is an identity test against the
+   address, which is why the listing materialises %hi/%lo(D_80080EA8) into
+   $a0 with an `addiu` rather than loading from it.
+   23 words -- `nonmatching func_8008B3AC, 0x5C`, and 0x5C/4 = 23.  No jump
+   table, no rodata of its own.  %hi/%lo of D_80080EA8, D_800CF828 and
+   D_800CF838, once each. */
+s32 func_8008B3AC(void)
+{
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B55C);
+    for (i = 0; i < 15; i++)
+    {
+        if (D_800CF838[D_800CF828[i]] == &D_80080EA8)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Add module `a` to the active list.  If it is one of D_800CF85C's and
+   func_8008B3AC finds a slot already holding D_80080EA8, overwrite that slot
+   and leave; otherwise append at the first zero and re-terminate.
+
+   BOTH PATHS FALL INTO ONE `for`, which is what puts `addu $a0, $zero, $zero`
+   in the `beqz` delay slot at 0x8008B438 AND again as a real insn at
+   0x8008B46C: reorg copied the loop's `i = 0` out of the preheader into the
+   delay slot and advanced that branch past it.  The overwrite arm RETURNS, so
+   it is written first and the `bltz` tests the inverted condition -- the
+   "early return is laid out inline" lever in its valid form, an arm that
+   leaves the function unconditionally.
+   42 words -- `nonmatching func_8008B408, 0xA8`, and 0xA8/4 = 42.  No jump
+   table, no rodata of its own.  %hi/%lo(D_800CF828) twice,
+   %hi/%lo(D_800CF838) once. */
+void func_8008B408(s32 a)
+{
+    s32 i;
+
+    if (func_8008B2E4(D_800CF838[a]) != 0)
+    {
+        i = func_8008B3AC();
+        if (i >= 0)
+        {
+            D_800CF828[i] = a;
+            return;
+        }
+    }
+    for (i = 0; i < 15; i++)
+    {
+        if (D_800CF828[i] == 0)
+        {
+            D_800CF828[i] = a;
+            D_800CF828[i + 1] = 0;
+            return;
+        }
+    }
+}
+
+/* Hand every active module to func_80041284, then reset the list: to the
+   one-entry list {1} when func_8008B328 still reports a match, or to empty
+   when it does not.  The `lui $v0, %hi(D_800CF828)` in the `beqz` delay slot
+   at 0x8008B518 is cross-jumping hoisting the address out of both arms.
+   40 words -- `nonmatching func_8008B4B0, 0xA0`, and 0xA0/4 = 40.  No jump
+   table, no rodata of its own.  %hi(D_800CF828) twice with %lo four times,
+   %hi/%lo(D_800CF838) once. */
+void func_8008B4B0(void)
+{
+    s32 i;
+
+    for (i = 0; i < 15; i++)
+    {
+        if (D_800CF828[i] != 0)
+        {
+            func_80041284(D_800CF838[D_800CF828[i]]);
+        }
+    }
+    if (func_8008B328() != 0)
+    {
+        D_800CF828[0] = 1;
+        D_800CF828[1] = 0;
+    }
+    else
+    {
+        D_800CF828[0] = 0;
+    }
+}
+
+/* The only writer of D_800CF874[0].  3 words -- `nonmatching func_8008B550,
+   0xC`.  No jump table, no rodata of its own.  %hi/%lo(D_800CF874) once. */
+void func_8008B550(s32 a)
+{
+    D_800CF874[0] = a;
+}
+
+/* Consume one D_800CF874 entry: publish func_80047E78 of the entry [0]
+   selects into D_80081458, then step [0] down to 1, or to 0 when it was
+   already 1.
+
+   TWO DECLARATIONS OF D_800CF874, AND THE SECOND ONE IS WHAT MAKES THIS
+   MATCH.  The scalar reads of [0] all go through one long-lived
+   `lui $s0, %hi(D_800CF874)` in $s0, while the INDEXED read needs the base in
+   a register of its own and the target builds it fresh after the call:
+   `lui $v1, %hi(D_800CF874)` / `addiu $v1, $v1, %lo(D_800CF874)` at
+   0x8008B580/0x8008B588, a SECOND `%hi` of a symbol that is already in a
+   register.  Through one declaration cse unifies the two highs, because it
+   compares a SYMBOL_REF by the POINTER IDENTITY of its name string --
+   cse.c:2121 `case SYMBOL_REF: return XSTR (x, 0) == XSTR (y, 0);` in
+   exp_equiv_p, and rtlanal.c:971 in rtx_equal_p -- and one declaration gives
+   one interned string.  The base then becomes `addiu $sN, $s0, %lo(...)`,
+   lives across both calls, and costs a second callee-saved register and a
+   0x20 frame: 31 words, 20 differing.  An `__asm__("...")` alias escapes it
+   for a reason rather than by luck: make_decl_rtl takes the asmspec branch
+   (varasm.c:660-663) and builds the name in FRESH obstack memory --
+   `name = (char *) obstack_alloc (saveable_obstack, strlen (asmspec) + 2);
+   name[0] = '*'; strcpy (&name[1], asmspec);` -- so the two SYMBOL_REFs hold
+   different pointers to equal text and nothing in cse unifies them.  This is
+   the `D_80082E80_b` device at :2382, with its mechanism.  Three
+   one-declaration
+   spellings were measured and all are 32 words / 15 differing: a `s32 *`
+   local assigned inside the `if`, `*(s32 *)((u8 *)D_800CF874 + ... * 4)`, and
+   D_800CF874 declared as a scalar with `(&D_800CF874)[D_800CF874]`.
+
+   THE RESULT GOES THROUGH A LOCAL.  Assigning the call's value straight into
+   D_80081458 lets sched1 hoist `lui %hi(D_80081458)` above the `jal`, which
+   makes that pseudo cross a call and take $s0 -- again two saved registers
+   and a 0x20 frame, 20 differing.  With `r` the `lui` stays after the call
+   and gets $v1, which is the register the target then reuses for the
+   constant 1.
+   31 words -- `nonmatching func_8008B55C, 0x7C`, and 0x7C/4 = 31.  No jump
+   table, no rodata of its own.  %hi(D_800CF874) twice with %lo six times,
+   %hi/%lo(D_80081458) once. */
+void func_8008B55C(void)
+{
+    s32 r;
+
+    if (D_800CF874[0] != 0)
+    {
+        func_80067014(0);
+        r = func_80047E78(D_800CF874_b[D_800CF874[0]]);
+        D_80081458 = r;
+        if (D_800CF874[0] == 1)
+        {
+            D_800CF874[0] = 0;
+        }
+        else
+        {
+            D_800CF874[0] = 1;
+        }
+    }
+}
 
 /* Publish a 32-bit value into D_800CFC24+2..+5 a byte at a time, tag +6, and
    hand the record to func_80035208 -- the same `func_80035208((s32)SYM)`
