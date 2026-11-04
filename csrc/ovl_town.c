@@ -2635,6 +2635,18 @@ void func_800A22D0();
 void func_800A24A8();
 void func_800A33E8();
 
+/* w6: address-taken below their installers (`%hi`/`%lo` on a FUNCTION
+   symbol, no `jal`, so ovlverify masks the words), plus func_800A25CC,
+   which func_800A24FC calls from above its definition. */
+extern u8 D_80100BF0[];
+void func_800A2180();
+void func_800A21EC();
+void func_800A2338();
+void func_800A23D0();
+void func_800A24FC();
+UnkNode *func_800A25CC();
+void func_800A2690();
+
 /* func_8009C148 and func_800C15C0 had no declaration anywhere in the unit.
    func_800C1F8C and func_800C21F8 are ADDRESS-TAKEN by func_800C1EA4 and
    func_800C2124 (`%hi`/`%lo` on a function symbol -- no `jal`, and ovlverify
@@ -15337,7 +15349,52 @@ UnkNode *func_800A2000(void *a, void *b, void *c, s32 d, void (*h10)(),
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A20D8);
+/* func_800A2304's retrying sibling: the same four forwarded arguments into
+   func_800A2000 with func_800A2180/func_800A21EC as the handlers, walked
+   DOWNWARDS from d-1 and stopping at the first slot func_800A2000 cannot
+   allocate.  It returns that slot's index plus one, or 0 if every slot down
+   to zero was taken.  FOUR parameters, read off the ASM caller
+   func_800A0BE4 ($a1 = `lw 0x98($s0)`, $a3 = `lh 0x90($s0)`, $a0/$a2 flowing
+   through); the result goes back as `sh $v0, 0x90($s0)`, so the caller
+   stores it narrow but this function returns it word-wide.
+
+   THREE THINGS ARE PINNED, each measured:
+   - **`i = d;` and the `i--` INSIDE the loop, not `i = d - 1` in the init.**
+     The folded form is 40 words and 27 differing.  The target keeps the
+     parameter's own `addu $s0, $a3, $zero` copy at word 8 and a separate
+     `addiu $s0, $s0, -0x1` at word 16, which is the loop head; reorg then
+     copies that head into the back-branch's delay slot and advances the
+     branch target past it, which is why the decrement appears twice.
+   - **The `i++` lives INSIDE the break arm and the tail is a bare
+     `return i`.**  `return i + 1` after the loop is 40 words / 18 differing:
+     it computes `addiu $v0, $s0, 1` once per exit instead of adjusting $s0
+     and sharing one `addu $v0, $s0, $zero`.  `i++; return i;` written after
+     the loop folds back to `return i + 1` and measures the same 40/18.
+   - The bottom test is `while (i != 0)`, which the back branch reads BEFORE
+     the delay-slot decrement; the fall-through's spurious decrement is
+     undone by the duplicated `addiu $s0, $s0, 0x1`.
+
+   Both handler addresses are `%hi`/`%lo` on a FUNCTION symbol: four masked
+   words, verified by relocdump rather than by any `jal`.
+
+   42 words -- its header reads `nonmatching func_800A20D8, 0xA8`, and
+   0xA8/4 = 42.  Measured 0 differing. */
+s32 func_800A20D8(void *a, void *b, void *c, s32 d)
+{
+    s32 i;
+
+    i = d;
+    do
+    {
+        i--;
+        if (func_800A2000(a, b, c, i, func_800A2180, func_800A21EC) == NULL)
+        {
+            i++;
+            break;
+        }
+    } while (i != 0);
+    return i;
+}
 
 void func_800A2180(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
 {
@@ -15406,9 +15463,59 @@ void func_800A21EC(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
     r->unk_1A = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A22D0);
+/* func_800A24A8's branching twin, and the +0x00 continuation func_800A21EC
+   installs -- the same pairing as func_800A21EC/func_800A23D0 one layer up:
+   the member that leans on the view's +0x20 selector gets the two-armed
+   form, the one that reads a table gets the straight-line form.  Same
+   -0x6E-negated rotation, picked by the selector.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2304);
+   THE +0x10 POINTER MUST BE A LOCAL.  Dereferenced in both arms it is
+   17 words and 14 differing -- the target hoists `lw $v1, 0x10($a0)` above
+   the `beqz` and keeps BOTH `lhu`s, so cse shares the pointer load and not
+   the halfword load.
+
+   Neither arm returns, so they are emitted in SOURCE order and the
+   non-zero arm is written first (docs/town-sweep.md's "do not invert an
+   if/else unless an arm returns"): writing the `== 0` arm first is 10 words
+   and 7 differing.
+
+   13 words -- its header reads `nonmatching func_800A22D0, 0x34`, and
+   0x34/4 = 13.  Measured 0 differing. */
+void func_800A22D0(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    u8 *t;
+
+    t = *(u8 **)((u8 *)p + 0x10);
+    if (*(s16 *)((u8 *)p + 0x20) != 0)
+    {
+        r->unk_1A = *(u16 *)(t + 0x6E);
+    }
+    else
+    {
+        r->unk_1A = -*(u16 *)(t + 0x6E);
+    }
+}
+
+/* func_800A20D8's single-shot sibling: the same four forwarded arguments into
+   func_800A2000, but with func_800A2338/func_800A23D0 as the two handlers and
+   no retry loop.  FOUR parameters, read off the ASM caller func_800A07A4,
+   which sets only $a1 (`lw 0x98($s0)`) and $a3 (`lbu 0x94($s0)`) and leaves
+   $a0/$a2 to flow through -- exactly func_800A2000's (a, b, c, d).
+
+   The two handler addresses go to 0x10/0x14($sp), func_800A2000's fifth and
+   sixth arguments, and both are `%hi`/`%lo` on a FUNCTION symbol: four
+   masked, build-breaking words that no `jal` decode can see.
+
+   It returns func_800A2000's node -- func_800A07A4 tests $v0 with `beqz`
+   straight after the `jal`.  A `void` return measures identically (the
+   value is already in $v0), so the return type comes from the caller.
+
+   13 words -- its header reads `nonmatching func_800A2304, 0x34`, and
+   0x34/4 = 13.  Measured 0 differing on the first compile. */
+UnkNode *func_800A2304(void *a, void *b, void *c, s32 d)
+{
+    return func_800A2000(a, b, c, d, func_800A2338, func_800A23D0);
+}
 
 void func_800A2338(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
 {
@@ -15463,13 +15570,163 @@ void func_800A23D0(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
     r->unk_1A = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A24A8);
+/* func_800A22D0's unconditional twin, and the +0x00 continuation func_800A23D0
+   installs.  Three parameters by the family convention -- $a0 and $a2 are
+   read, $a1 is a DEAD MIDDLE parameter witnessed by the gap it leaves in the
+   $aN sequence, and $a3 is never touched.  No frame, no callees: the `sh`
+   rides the `jr` delay slot the way func_800A1FEC's does.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A24C4);
+   The +0x6E halfword is read with `lhu` because its only consumer is a
+   halfword store (matching-levers :16312); `*(s16 *)` also measures
+   0 differing here, so the field's signedness is NOT witnessed.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A24FC);
+   7 words -- its header reads `nonmatching func_800A24A8, 0x1C`, and
+   0x1C/4 = 7.  Measured 0 differing on the first compile. */
+void func_800A24A8(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    r->unk_1A = -*(u16 *)(*(u8 **)((u8 *)p + 0x10) + 0x6E);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A25CC);
+/* The one-shot installer for the func_800A24FC/func_800A25CC/func_800A2690
+   flare chain: it builds a 0x136 node over D_80100BF0, parks func_800A24FC
+   at the node's +0x10 and zeroes the view's +0x0C countdown, which is the
+   field func_800A24FC then counts down to spawn the flare.
+
+   NO PARAMETERS and no referrer anywhere -- no `jal`, no `%hi`, nothing in
+   csrc/.  $a0/$a1/$a2 are all written before any read.
+
+   D_80100BF0 is materialised `lui`/`addiu`, the SYMBOLIC form, so it is
+   declared `extern u8 D_80100BF0[]` and passed without an `&` -- the same
+   shape func_8009CE34 uses for D_801006D0.  A constant address would show
+   as `lui`/`ori`.
+
+   `%hi`/`%lo(func_800A24FC)` is an address-take with no `jal`: two masked,
+   build-breaking words.
+
+   14 words -- its header reads `nonmatching func_800A24C4, 0x38`, and
+   0x38/4 = 14.  Measured 0 differing on the first compile. */
+void func_800A24C4(void)
+{
+    UnkNode *n;
+
+    n = func_8003FE78(0x136, (UnkNode *)D_80100BF0, 0x49);
+    n->unk_10 = (u32)func_800A24FC;
+    *(s16 *)((u8 *)n + 0x2C) = 0;
+}
+
+/* The per-frame step of the node func_800A24C4 builds, and the other half of
+   the record func_800A2690's comment maps: it refreshes the camera-relative
+   origin at +0x00/+0x02, the two drift angles at +0x04/+0x06 and the scale
+   word at +0x08, then counts the +0x0C countdown down and, when it runs past
+   zero, reloads it with 0xF and spawns a flare through func_800A25CC.
+
+   THREE PARAMETERS for the same reason func_800A2690 has three: it is stored
+   at the node's +0x10 by func_800A24C4 and func_80040190
+   (csrc/unk_12DEC.c:567) calls a +0x10 handler as
+   `((void (*)(void *, UnkVec *, u32)) fn)((u8 *)p + 0x20, p->unk_08, p->unk_0C)`,
+   so `p` is the node's +0x20 view and the other two are dead TRAILING
+   parameters, invisible either way.
+
+   WHAT IS PINNED, each measured:
+   - **`ang` is a 16-BIT local.**  It is stored with `sh` and read back for
+     func_80065F90 through the `sll 16`/`sra 16` pair at 0x800A2568; `s32` is
+     50 words and 27 differing.
+   - **The +0x04/+0x06 stores are written BEFORE the `if`.**  Moving the
+     +0x06 store after it is 24 differing -- the `sh $v1, 0x6($s1)` sits in
+     the `bgtz`'s delay slot, and reorg's scan is backward, so it can only
+     have come from above the branch.
+   - The `g` pointer local is NOT load-bearing here, unlike in func_800A2000
+     and func_800A2690: spelling all four reads `D_80083160.unk_XX` inline is
+     also 0 differing.
+   - `--*(s16 *)(p + 0xC) <= 0` and `*(s16 *)(p + 0xC) -= 1;` followed by a
+     separate test both measure 0 differing.
+   - unk_C8 is `s16` (`lh`) and unk_BC/unk_BE are `u16` (`lhu`), straight off
+     Unk80083160; the +0x0C countdown loads `lhu` and compares `sll 16`/
+     `bgtz`, which is matching-levers :16312's narrowing-store case.
+
+   The divisor 24 is read off the magic multiply, not guessed: 0x2AAAAAAB
+   with `mfhi` shifted right by 2 and the `sra 31` correction subtracted is
+   2^34 / 0x2AAAAAAB = 24.
+
+   52 words -- its header reads `nonmatching func_800A24FC, 0xD0`, and
+   0xD0/4 = 52.  Measured 0 differing on the first compile. */
+void func_800A24FC(u8 *p, UnkVec *b, u32 d)
+{
+    Unk80083160 *g;
+    s16 ang;
+
+    g = &D_80083160;
+    *(s32 *)(p + 0x8) = (func_80064584(g->unk_C8) + 0x1000) / 2;
+    ang = -func_80064584(g->unk_C8) / 24;
+    *(s16 *)(p + 0x0) = ang;
+    *(s16 *)(p + 0x2) = func_80065F90(ang, 0xA0);
+    *(u16 *)(p + 0x4) = g->unk_BC;
+    *(u16 *)(p + 0x6) = g->unk_BE;
+    if (--*(s16 *)(p + 0xC) <= 0)
+    {
+        *(s16 *)(p + 0xC) = 0xF;
+        func_800A25CC(p);
+    }
+}
+
+/* The flare spawner func_800A24FC fires every 0xF frames: a 0x136 node whose
+   +0x10 handler is func_800A2690, with the random record that function then
+   reads laid out across the view at +0x20.
+
+   THE FIELD MAP, read off this listing, and it CORRECTS func_800A2690's
+   comment in two places.  +0x04 AND +0x06 BOTH get `rand(0xB4) + 0x3C` --
+   the same value from one draw, not a second `rand(0x28)` draw -- which is
+   what makes func_800A2690's `(p->unk_04 << 11) / p->unk_06` the fraction of
+   the life remaining.  And the +0x10 radius word is `(u16)rand(0x28) + 0x80`,
+   not `rand(0x40) + 0x80`: 0x28 is the `$a0` of the call at 0x800A2618,
+   whose `andi`/`addiu 0x80` pair feeds the `sw`.  +0x14 is the caller's own
+   view, and +0x08/+0x0A/+0x0C are the three phase offsets, the first of them
+   `rand(0x40) + rand(0x40) - 0x40` and the other two a bare `rand(0x40)`.
+
+   ONE parameter, read into $s0 before the first call and stored at the
+   view's +0x14; the only call site is func_800A24FC, which ignores the
+   returned node.
+
+   WHAT IS PINNED, each measured:
+   - **The interior `v = (u8 *)n + 0x20` pointer is load-bearing**, as it is
+     in func_800A2000: spelling every store `*(...)((u8 *)n + 0x24)` etc. is
+     46 words and 45 differing, because the single `addiu $s1, $s2, 0x20`
+     disappears.
+   - **The +0x04/+0x06 pair is a DESCENDING chain.**  `*(v+0x6) = *(v+0x4) =
+     e;` emits right-to-left, so +0x04 then +0x06 -- the listing.  The
+     ascending chain is 2 differing; an `s16 t` local with two separate
+     descending statements is also 0 differing.
+   - **The `(u16)` cast on the 0x28 draw is the `andi $v0, $v0, 0xFFFF`.**
+     Dropping it is 48 words and 28 differing: the result feeds a WORD store,
+     so without the cast there is nothing to zero-extend.
+   - `rand(0x40) + rand(0x40) - 0x40` must associate that way; writing it
+     `rand(0x40) - 0x40 + rand(0x40)` is 50 words and 20 differing.
+
+   `%hi`/`%lo(func_800A2690)` is an address-take with no `jal`: two masked,
+   build-breaking words.
+
+   49 words -- its header reads `nonmatching func_800A25CC, 0xC4`, and
+   0xC4/4 = 49.  Measured 0 differing on the first compile. */
+UnkNode *func_800A25CC(u8 *a)
+{
+    UnkNode *n;
+    u8 *v;
+
+    n = func_8003FC64(0x136);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    n->unk_10 = (u32)func_800A2690;
+    v = (u8 *)n + 0x20;
+    *(s16 *)(v + 0x6) = *(s16 *)(v + 0x4) = func_800374F4(0xB4) + 0x3C;
+    *(u32 *)(v + 0x10) = (u16)func_800374F4(0x28) + 0x80;
+    *(u32 *)(v + 0x14) = (u32)a;
+    *(s16 *)(v + 0x8) = func_800374F4(0x40) + func_800374F4(0x40) - 0x40;
+    *(s16 *)(v + 0xA) = func_800374F4(0x40);
+    *(s16 *)(v + 0xC) = func_800374F4(0x40);
+    return n;
+}
 
 /* The per-frame step of the 0x136 node func_800A25CC spawns: a one-triangle
    gouraud flare whose brightness is a six-harmonic noise sum, bracketed by
@@ -15488,9 +15745,16 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A25CC);
    function: no caller, no asm caller, and func_800A25CC only stores it.
 
    The field map is read off func_800A25CC and func_800A24FC, which seed the
-   same record: +0x04 is the life in frames (`rand(0xB4) + 0x3C`), +0x06 its
-   full span (`rand(0x28)`), +0x08/+0x0A/+0x0C three random phase offsets,
-   +0x10 the radius word (`rand(0x40) + 0x80`), and +0x14 the pointer
+   same record.  Two entries here were a reading at a distance and are WRONG;
+   func_800A25CC has since landed and its own comment carries the corrected
+   values with their instruction addresses.  +0x04 and +0x06 both take
+   `rand(0xB4) + 0x3C` from ONE draw -- a single `addiu $v0, $v0, 0x3C` at
+   0x800A2610, `sh` to +0x04 at 0x800A2614 and `sh` to +0x06 in the next
+   `jal`'s delay slot at 0x800A261C, so there is no `rand(0x28)` at +0x06 and
+   the `(unk_04 << 11) / unk_06` below is the fraction of life remaining.
+   +0x08/+0x0A/+0x0C are three random phase offsets, +0x10 the radius word
+   (`(u16)rand(0x28) + 0x80`, not `rand(0x40) + 0x80` -- 0x28 is the `$a0` of
+   the call at 0x800A2618), and +0x14 the pointer
    func_800A24FC fills with the camera-relative origin at +0x00/+0x02, the two
    drift angles at +0x04/+0x06 and a scale word at +0x08.
 
@@ -16142,7 +16406,40 @@ void func_800A3320(UnkTownDispatch *p, UnkTown2AE8 *q)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A33E8);
+/* The teardown half of func_8009F2A8's swap: it copies the caller's vector
+   into a LOCAL UnkVec, drops the third axis by 0x240000, and feeds that copy
+   to func_800A3450 for indices 0..0xB, stopping at the first null node.
+
+   ONE parameter, settled by the landed caller func_8009F2A8, which calls
+   `func_800A33E8(q)` on the same `UnkVec *q` it hands func_800A3248 one
+   `jal` later.  The second argument of func_800A3450 is `s32` and not `s16`
+   for the reason that function's own comment records: the counter arrives
+   as a bare `addu $a1, $s0, $zero` with no `sll`/`sra 16` pair.
+
+   **THE LOCAL IS A UnkVec AGGREGATE, NOT THREE SCALARS.**  UnkVec is 0x18
+   bytes, which is exactly the 0x10..0x27 hole the frame leaves below the
+   `$s0` save at 0x28 -- an `s32 v[3]` is 26 words and 6 differing.
+   `- 0x240000` is a `lui`/`addu` pair because the constant's low half is
+   zero; `- 0x24 * 0x10000` measures identically.
+
+   26 words -- its header reads `nonmatching func_800A33E8, 0x68`, and
+   0x68/4 = 26.  Measured 0 differing on the first compile. */
+void func_800A33E8(UnkVec *a)
+{
+    UnkVec v;
+    s32 i;
+
+    v.unk_00 = a->unk_00;
+    v.unk_04 = a->unk_04;
+    v.unk_08 = a->unk_08 - 0x240000;
+    for (i = 0; i < 0xC; i++)
+    {
+        if (func_800A3450(&v, i) == NULL)
+        {
+            break;
+        }
+    }
+}
 
 /* func_800A3248's near-sibling: node type 0x136 for 0x10, its own two
    handlers, and one extra store -- the second parameter as a halfword at the
