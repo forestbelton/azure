@@ -3364,9 +3364,267 @@ void func_800BFB00(s32 a, s32 b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800BFB8C);
+/* func_800BFD14 and func_800BFFF4 are both defined BELOW and both have their
+   ADDRESS taken here, which does not ride an implicit declaration the way a
+   call does, so each needs a forward declaration; func_800BFF7C is the same
+   case at func_800BFD14's definition.  func_800BFFF4's signature is the one
+   its own landing records (a func_8004491C tag callback), func_800BFF7C's the
+   one its own definition carries. */
+void func_800BFD14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+s32 func_800BFFF4(u8 *p, UnkVec *q, UnkSlot *s);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800BFD14);
+/* The UnkNode +0x10 handler func_800BFB00 installs (`n->unk_10 =
+   (u32)func_800BFB8C` on the 0x2 / &D_80083498 node it allocates above), so
+   it is reached through func_80040190's cast (csrc/unk_12DEC.c) --
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- three parameters, the first being the node's +0x20 actor view.  Only $a0
+   is read; $a1 and $a2 are never touched, and the arity is unconstrained
+   anyway (nothing calls it and the slot is unprototyped), so the three are the
+   family convention.
+
+   func_800BFB00 IS THE FIELD WITNESS for every offset read here: it seeds the
+   view's +0x0/+0x2/+0x4 from TOWN_PT, +0x8 and +0xA from its own two
+   arguments and +0xE to 6.  So +0x8/+0xA are a y origin and a y spread,
+   +0xC is the state and +0xE the count-then-lifetime halfword.
+
+   Per frame it bursts `(+0xE >> 1) + 1` nodes of type 0x202, each one tagged
+   with func_800BFFF4 (the LINE_G2 drawer) and handed func_800BFD14 as its own
+   +0x10 handler, then runs a two-state machine on +0xC: state 0 waits for
+   func_80033BC0(0xA1) and advances, state 1 counts +0xE down and kills the
+   node with the unit's standard two-flag idiom (p - 0x2 is UnkNode.unk_1E).
+
+   THE NEW VIEW'S +0x1E/+0x22/+0x26 STORES ARE HALFWORDS INTO THE HIGH HALVES
+   of the 16.16 words at +0x1C/+0x20/+0x24 -- the same offsets func_800BFFF4's
+   note calls "the integer halves of the 16.16 triple at the actor view's
+   +0x1C" -- and +0xC/+0xE/+0x10 are the packed s16 copy of the same position.
+   func_800BFD14 reads the words at +0x1C and +0x24 and integrates them.
+
+   FOUR THINGS ARE PINNED, all measured:
+
+   * `(s16)g->unk_BC` -- THE CAST IS WORTH TWO WORDS.  Unk80083160 declares
+     +0xBC `u16` (include/structs.h, hand-split there as the first of three
+     consecutive halfwords) and the listing reads it with `lh`.  Without the
+     cast the function is 100 words / 96 differing.
+   * `g = &D_80083160;` AS A STATEMENT BEFORE THE LOOP.  The target
+     materialises the record base in the ENTRY block, ahead of the `bltz $s1`
+     loop guard (`lui $v0,%hi` at 800BFBBC with reorg stealing
+     `addiu $s4,$v0,%lo` into the guard's delay slot).  Reaching the field as
+     `(s16)D_80083160.unk_BC` inside the loop instead leaves it to loop
+     invariant motion, which puts the pair in the PREHEADER after the guard:
+     98 words / 4 differing, the two words swapped with the preheader's
+     `%hi`/`%lo(func_800BFD14)` pair.
+   * `*(s16 *)((u8 *)p + 0xE) >> 1` AND NOT `/ 2`: the signed division is
+     101 words / 89 differing.  The shift's own shape is the combine idiom --
+     `lhu` + `sll 16` + `sra 17`, not `lh` + `sra 1` -- because
+     LOAD_EXTEND_OP(HImode) is ZERO_EXTEND on this target, so combine does not
+     treat a SIGN_EXTEND of a MEM:HI as free and rewrites it into the shift
+     pair, which then absorbs the `>> 1`.
+   * ONE `t` FOR BOTH RANDOM VALUES.  Both are stored twice and the target
+     keeps each in one register across its pair of `sh`s, so the expression
+     cannot be written out twice (that would call func_80069EF8 four times).
+
+   Ties, measured: `*(s16 *)((u8 *)v + 0x1E) = *(s16 *)((u8 *)v + 0xC) = t;`
+   as a chained assignment (right-to-left stores, so the same +0xC-then-+0x1E
+   order), the -0x180 pair AFTER the +0xE/+0x22 pair, the actor-view take
+   AFTER the `o->unk_10` store, and the state-1 gate written as
+   `if ((*(s16 *)((u8 *)p + 0xE) -= 1) <= 0)` -- all 98 / 0.
+
+   `func_80033BC0` has no prototype in this unit or in include/ and rides an
+   implicit declaration while still returning a value in $v0, exactly as
+   func_800BBCA0 (csrc/ovl_town.c) records; do NOT give it the `void`
+   prototype csrc/gprel_72A8.c carries or the `beqz $v0` disappears.
+
+   98 words -- its header reads `nonmatching func_800BFB8C, 0x188`, and
+   0x188/4 = 98.  No jump table, no rodata of its own.  0 differing, FIRST
+   COMPILE; raw 18 == relocdump's 18, FOUR of them `%hi`/`%lo` on a FUNCTION
+   symbol (func_800BFD14 and func_800BFFF4 -- masked, with no `jal` to
+   decode), and seqcheck matches the ordered sequence. */
+void func_800BFB8C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 i;
+    UnkNode *o;
+    UnkTownSpawn *v;
+    Unk80083160 *g;
+    s32 t;
+
+    g = &D_80083160;
+    for (i = *(s16 *)((u8 *)p + 0xE) >> 1; i >= 0; i--)
+    {
+        o = func_8003FD64(0x202, &D_80083498);
+        if (o != 0)
+        {
+            v = (UnkTownSpawn *)((u8 *)o + 0x20);
+            o->unk_10 = (u32)func_800BFD14;
+            func_8004491C(o, (u32)func_800BFFF4);
+            t = (s16)g->unk_BC + func_80069EF8() % 0x400 - 0x200;
+            *(s16 *)((u8 *)v + 0xC) = t;
+            *(s16 *)((u8 *)v + 0x1E) = t;
+            t = *(s16 *)((u8 *)p + 0x8) + func_80069EF8() % *(s16 *)((u8 *)p + 0xA);
+            *(s16 *)((u8 *)v + 0x10) = -0x180;
+            *(s16 *)((u8 *)v + 0x26) = -0x180;
+            *(s16 *)((u8 *)v + 0xE) = t;
+            *(s16 *)((u8 *)v + 0x22) = t;
+        }
+    }
+    switch (*(s16 *)((u8 *)p + 0xC))
+    {
+    case 0:
+        if (func_80033BC0(0xA1) != 0)
+        {
+            *(s16 *)((u8 *)p + 0xC) += 1;
+        }
+        break;
+    case 1:
+        *(s16 *)((u8 *)p + 0xE) -= 1;
+        if (*(s16 *)((u8 *)p + 0xE) <= 0)
+        {
+            *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
+
+/* The UnkNode +0x10 handler func_800BFB8C installs on every node it bursts
+   (`sw $s3, 0x10($a0)` with $s3 = `%hi`/`%lo(func_800BFD14)` hoisted out of the
+   loop), so the same func_80040190 cast applies -- three parameters, the first
+   being the node's +0x20 actor view.  Only $a0 is read.
+
+   func_800BFB8C IS THE FIELD WITNESS for the whole record: it writes
+   +0xC/+0xE/+0x10 as a packed s16 position AND +0x1E/+0x22/+0x26 as the
+   integer halves of the 16.16 words at +0x1C/+0x20/+0x24, so this function's
+   `lw 0x1C` / `lw 0x24` reads are those words and +0x28/+0x30 are their
+   per-frame deltas.  +0x48 is the countdown and +0x4C the state -- the same
+   pair func_800BC00C and func_800BBCA0 (csrc/ovl_town.c) document -- and
+   +0x2A/+0x32 are the two drift rates case 0 seeds (-4 and 0x14).
+
+   FIVE states, and FIVE case nodes is exactly CASE_VALUES_THRESHOLD, but the
+   0 .. 0xFF span is far too sparse for a table, so cc1psx emits the balanced
+   compare tree (root 2, then `< 3`) and the function owns no rodata.  CASE 0
+   FALLS THROUGH INTO CASE 1 -- there is no `break` and no second copy of the
+   two 16.16 integrations.
+
+   THE WHOLE RENDERABLE BLOCK MUST GO THROUGH A `u8 *` WITH FLAT CASTS, AND
+   THAT IS THE ONLY LEVER IN THIS FUNCTION.  func_800BC574's note
+   (csrc/ovl_town.c) records the mechanism for its +0x00 store alone; here it
+   applies to FIVE of the nine stores at once.  `D_800F15AC[1]` is a CONSTANT
+   address with MEM_IN_STRUCT_P clear, and `true_dependence` cancels the
+   conflict between it and any named-field store
+   (scratch/gcc-src/cdk-gcc-b18/sched.c:854-861):
+
+        && ! (MEM_IN_STRUCT_P (mem) && rtx_addr_varies_p (mem)
+              && GET_MODE (mem) != QImode
+              && GET_CODE (XEXP (mem, 0)) != AND
+              && ! MEM_IN_STRUCT_P (x) && ! rtx_addr_varies_p (x))
+
+   With the dependence gone sched1 hoists `lw 0x4($v1)` over the stores, the
+   symbol's register stays live and the ori/sh pair of the +0x14 read-modify-
+   write sinks past the two `sb`s.  Measured per field, each one named and the
+   rest flat: +0x1E/+0x1C named is 14 differing, +0x10 is 13, +0x14 is 10,
+   +0x00 is 9, and all five named at once is 6.  The three that are FREE are
+   exactly the three the clause cannot reach: +0x04 and +0x05 are QImode
+   (`GET_MODE (mem) != QImode` fails) and +0x08 and +0x0C already go through a
+   raw `*(u32 *)` cast, so `((UnkTownRend *)d)->unk_04`, `->unk_05`, `->unk_08`
+   and `*(u32 *)&((UnkTownRend *)d)->unk_0C` are all 0 differing.  Fingerprint
+   for this class: the loaded word lands in a SECOND register and the store
+   that materialised the symbol sinks below the load.
+
+   THE RENDERABLE'S STORE ORDER IS +0x1E, +0x1C, +0x10, +0x0C, +0x00, +0x14,
+   +0x08, +0x04, +0x05, which is NOT func_800BBCA0's +0x00/+0x08/+0x04/+0x05/
+   +0x0C.  With the named fields in place the whole block sits on a plateau at
+   6 differing across twelve orderings of the last five statements (every one
+   that keeps +0x0C and +0x00 in front and the +0x08 store last; moving +0x08
+   ahead of +0x05 is 15, putting +0x14 last is 18, +0x00 before +0x0C is 8),
+   which is what said the residue was a spelling and not an order.  Once the
+   casts are flat, +0x08 may sit third or last and +0x0C anywhere in front.
+
+   Case 2's four accumulations go +0xC, +0x10, +0x24, +0x1C -- the 16.16 pair
+   in the OPPOSITE order from case 1's +0x1C-then-+0x24, which is visible
+   because the target's two `sw`s come out that way round.
+
+   `(x * 3) >> 2` with `lh` on +0x2A/+0x32 and `lhu` on the +0xC/+0x10
+   accumulators off ONE `*(s16 *)` spelling each, which is func_800BC00C's
+   recorded rule: the accumulator's sign extension is dead because only the
+   low halfword is stored back, so combine takes the unsigned load.  The same
+   asymmetry is why `*(s16 *)((u8 *)p + 0x48) -= 1` loads with `lhu` at the top
+   and the three gates reload with `lh`.
+
+   154 words -- its header reads `nonmatching func_800BFD14, 0x268`, and
+   0x268/4 = 154.  No jump table, no rodata of its own.  0 differing; raw 18 ==
+   relocdump's 18, TWO of them `%hi`/`%lo` on the FUNCTION symbol
+   func_800BFF7C (masked, with no `jal` to decode), and seqcheck matches the
+   ordered sequence: `%hi`/`%lo(D_800814A0)` split across the dispatch tree and
+   the kill arm, `%hi`/`%lo(D_80083498)` + `jal` func_8003FD64,
+   `%hi`/`%lo(D_80045340)`, `%hi`/`%lo(func_800BFF7C)` + `jal` func_8004491C,
+   `%hi`/`%lo(D_800F15AC)`, and five intra-function `j`. */
+void func_800BFD14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    UnkNode *o;
+    u8 *d;
+
+    *(s16 *)((u8 *)p + 0x48) -= 1;
+    switch (*(s16 *)((u8 *)p + 0x4C))
+    {
+    case 0:
+        *(s16 *)((u8 *)p + 0x48) = 3;
+        *(s16 *)((u8 *)p + 0x2A) = -4;
+        *(s16 *)((u8 *)p + 0x32) = 0x14;
+        *(s16 *)((u8 *)p + 0x4C) += 1;
+        /* fallthrough */
+    case 1:
+        *(s32 *)((u8 *)p + 0x1C) += *(s32 *)((u8 *)p + 0x28);
+        *(s32 *)((u8 *)p + 0x24) += *(s32 *)((u8 *)p + 0x30);
+        if (*(s16 *)((u8 *)p + 0x48) <= 0)
+        {
+            *(s16 *)((u8 *)p + 0x4C) += 1;
+        }
+        break;
+    case 2:
+        *(s16 *)((u8 *)p + 0xC) += (*(s16 *)((u8 *)p + 0x2A) * 3) >> 2;
+        *(s16 *)((u8 *)p + 0x10) += (*(s16 *)((u8 *)p + 0x32) * 3) >> 2;
+        *(s32 *)((u8 *)p + 0x24) += *(s32 *)((u8 *)p + 0x30);
+        *(s32 *)((u8 *)p + 0x1C) += *(s32 *)((u8 *)p + 0x28);
+        if (*(s16 *)((u8 *)p + 0x26) > 0)
+        {
+            *(s16 *)((u8 *)p + 0x26) = 0;
+            o = func_8003FD64(0x312, &D_80083498);
+            if (o != 0)
+            {
+                o->unk_10 = (u32)func_800BFF7C;
+                func_8004491C(o, (u32)D_80045340);
+                d = (u8 *)o->unk_0C;
+                o->unk_08->unk_00 = *(s32 *)((u8 *)p + 0x1C);
+                o->unk_08->unk_04 = *(s32 *)((u8 *)p + 0x20);
+                o->unk_08->unk_08 = *(s32 *)((u8 *)p + 0x24);
+                *(s16 *)(d + 0x1E) = 0xC00;
+                *(s16 *)(d + 0x1C) = 0xC00;
+                *(s16 *)(d + 0x10) = 0x60;
+                *(u32 *)(d + 0xC) = 0xA0A0A0;
+                *(u32 *)(d + 0x0) = (u32)D_800F15AC;
+                *(s16 *)(d + 0x14) |= 0xC;
+                *(u32 *)(d + 0x8) = *(u32 *)&D_800F15AC[4];
+                *(d + 0x4) = 0;
+                *(d + 0x5) = 0;
+            }
+            *(s16 *)((u8 *)p + 0x48) = 4;
+            *(s16 *)((u8 *)p + 0x4C) += 1;
+        }
+        break;
+    case 3:
+        *(s16 *)((u8 *)p + 0xC) += (*(s16 *)((u8 *)p + 0x2A) * 3) >> 2;
+        *(s16 *)((u8 *)p + 0x10) += (*(s16 *)((u8 *)p + 0x32) * 3) >> 2;
+        if (*(s16 *)((u8 *)p + 0x48) <= 0)
+        {
+            *(s16 *)((u8 *)p + 0x4C) = 0xFF;
+        }
+        break;
+    case 0xFF:
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 /* func_800BF15C with one statement added, and the same +0x10 handler shape
    installed by func_800BFD14: fade the renderable by subtracting 0x10 from
