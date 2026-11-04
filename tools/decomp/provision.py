@@ -668,10 +668,32 @@ def main():
                       " plus(reg, const_int), which can change the")
                 print("          instruction count -- but it often does NOT,"
                       " so this is a lever to try, not an instruction.")
-                print("          Tells, in order of reliability: an `ori`"
-                      " where the target has `addiu` means you declared a")
-                print("          symbol that wants to be a constant; several"
-                      " %lo off one %hi is the constant-base idiom. The")
+                # The SHARPEST tell, and the only one that works from a
+                # single instruction pair. Added 2026-11-04 after it decided
+                # func_8009F8EC with no measurement at all (the declared
+                # symbol was 19 words / 2 differing, the constant 19 / 0).
+                if re.search(r'lui +\$at', t):
+                    print("          *** THIS LISTING HAS A `lui $at` -- the"
+                          " SHARPEST tell, and the only one that works")
+                    print("          from a single instruction pair."
+                          " `$at` is FIXED_REGISTERS[1] in the mips port, so")
+                    print("          cc1psx CANNOT allocate it: a `lui $at`"
+                          " carrying the memory reference's own `%lo`,")
+                    print("          with no `ori`/`addiu` anywhere, is the"
+                          " ASSEMBLER expanding a macro-form")
+                    print("          `sb/sw reg, <address>`, and at -G0 only a"
+                          " CONSTANT ADDRESS emits that macro form.")
+                    print("          Write the constant. Index of the others:"
+                          " grep -lE 'lui +[$]at'"
+                          " asm/nonmatchings/%s/*.s -- note the `+`, a" % unit)
+                    print("          single-space pattern silently returns"
+                          " nothing. ***")
+                print("          Tells, in order of reliability: a `lui $at`"
+                      " (above) is decisive; an `ori` where the target has")
+                print("          `addiu` means you declared a symbol that"
+                      " wants to be a constant; several")
+                print("          %lo off one %hi is the constant-base idiom."
+                      " The")
                 print("          lui-destination-equals-the-load test is NOT"
                       " reliable on a short leaf -- on func_800B9034 the")
                 print("          registers tie and all three spellings are"
@@ -1142,6 +1164,58 @@ def main():
                 print("      grep -rn %s include/ csrc/" % g)
     if not anyh:
         print("  none of your globals is rare here AND present elsewhere")
+
+    # ------------------------------------------------------------------ (o)
+    print("\n=== ROUTE (o): A GLOBAL THAT IS RARE *IN THIS UNIT* AND CARRIED BY PROSE ===")
+    print("    Route (h) asks whether a global lives in ANOTHER unit, which is a")
+    print("    different question and answers `none` for the case that matters most:")
+    print("    a global with one or two LANDED users right here, whose comment block")
+    print("    or INCLUDE_RODATA line is the template. That is where func_8009F77C's")
+    print("    whole head came from -- `u8 s[4]; memcpy(s, <rodata>, 4);` with the")
+    print("    alignment-1 lwl/lwr copy -- and route (h) said `none of your globals is")
+    print("    rare here AND present elsewhere`, which was true and useless. The agent")
+    print("    found it with one grep and asked for this route by name.")
+    anyo = False
+    # Every INCLUDE_RODATA line in the unit, by symbol.
+    inc_rod = {}
+    for m in re.finditer(r'^.*INCLUDE_RODATA\([^)]*?(D_[0-9A-Fa-f]+)\s*\).*$', txt, re.M):
+        inc_rod.setdefault(m.group(1), txt[:m.start()].count('\n') + 1)
+    for f in targets:
+        for g in sorted(globs.get(f, ())):
+            # USERS IN THIS UNIT = landed bodies that reference it. Not a raw
+            # count over `txt`, which double-counts a declaration and every
+            # mention in prose.
+            users = sorted(d for d, b in btext.items() if re.search(r'\b' + g + r'\b', b))
+            if len(users) > 3:
+                continue
+            # Does any LANDED COMMENT name it? Comments are where this unit
+            # keeps its field maps, and a comment is not a body, so `users`
+            # cannot see one.
+            prose = []
+            for m in re.finditer(r'/\*(?:[^*]|\*(?!/))*\*/', txt, re.S):
+                if re.search(r'\b' + g + r'\b', m.group(0)):
+                    prose.append(txt[:m.start()].count('\n') + 1)
+            rod = inc_rod.get(g)
+            if not users and not prose and rod is None:
+                continue
+            anyo = True
+            print("  %-15s %s: %d LANDED user(s) in this unit%s"
+                  % (f, g, len(users),
+                     (' -- ' + ', '.join(users)) if users else ''))
+            if rod is not None:
+                print("      *** INCLUDE_RODATA at csrc/%s.c:%d -- the BYTES are in"
+                      " this unit, so the template is a copy, not a reference ***"
+                      % (unit, rod))
+            if prose:
+                print("      named in %d comment block(s): %s"
+                      % (len(prose), ', '.join('csrc/%s.c:%d' % (unit, n)
+                                               for n in prose[:6])))
+                print("      READ THOSE BLOCKS. A comment naming your global is prose a")
+                print("      previous landing wrote about this exact record, and it has")
+                print("      carried the decisive lead five times.")
+            print("      grep -n %s csrc/%s.c" % (g, unit))
+    if not anyo:
+        print("  no global of yours is rare in this unit AND carried by prose or rodata")
 
     # ------------------------------------------------------------------ (m)
     print("\n=== ROUTE (m): RARE FIELD OFFSETS -- THE DISCRIMINATOR ROUTE (h) CANNOT SEE ===")
