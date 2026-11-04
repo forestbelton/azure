@@ -617,7 +617,11 @@ typedef struct UnkTownA1080SP
 typedef struct UnkTownA3B80
 {
     s16 unk_00;
-    u8 pad_02[0x4];
+    /* Split out of pad_02 for func_800A3918 in csrc/ovl_town.c, which drives
+       this record; mirrored here so the three carved units agree on the field
+       map. Size-preserving, no existing field moved. */
+    s16 unk_02;
+    u8 pad_04[0x2];
     u8 unk_06;
     u8 pad_07[0x1];
     /* Split out of pad_07, and +0x16 added past unk_0C, for func_800A41D8,
@@ -628,7 +632,9 @@ typedef struct UnkTownA3B80
     u16 unk_08;
     u8 pad_0A[0x2];
     s16 unk_0C;
-    u8 pad_0E[0x8];
+    u8 pad_0E[0x4];
+    u16 unk_12;
+    s16 unk_14;
     u16 unk_16;
 } UnkTownA3B80;
 
