@@ -3588,6 +3588,41 @@ extern void *D_80100E28;
    below it; an address-take does not ride an implicit declaration the way a
    call does. */
 void func_800A6994(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+/* w1104a group declarations, all seven for func_800A64C0. */
+/* The PRISTINE template D_800D0C78 above is re-seeded from: the SAME six
+   16.16 words, {0x0DA00000, 0x0E600000, 0, 0, 0, 0}, verified with
+   `objdump -s -j ._51FC0 build/town.bin.elf` at 0x800D0C60 against 0x800D0C78.
+   Declared as a RECORD and not as D_800D0C50 + 0x10 (provision.py's top-ranked
+   base): the listing reads +0x00 through a folded `lw %lo(D_800D0C60)($v0)`
+   and +0x04/+0x08 through one `addiu` lo_sum, which is the declared-size
+   mechanism func_800AA998's block records, and D_800D0C50 is a u8 array of
+   BYTE values (0xE1 0xE0 0xDF ...) -- a different object. */
+extern UnkTown2AE8 D_800D0C60;
+/* func_8009B218's fourth argument: seven handler pointers at 0x800D0C90
+   (func_800A68C0, func_8009BFD8, func_8009C20C, func_8009BFD8 x3,
+   func_800A68C0), the same object class as D_800D0690 / D_800D06AC and
+   declared the same way the unit already declares those -- a u8 array, so the
+   bare name decays to the `lui`/`addiu` address-take the listing shows. */
+extern u8 D_800D0C90[];
+/* func_8008F01C's third argument: the 16.16 parameter blob at 0x800D0CAC
+   (0xFFE80000, 0xFFE80000, 0xFFCE0000, 0x00300000, 0x00300000), the class
+   D_800D0420 / D_800CFD00 are.  Its run ENDS at 0x800D0CBC: the next word is
+   the separately declared `extern s32 D_800D0CC0`. */
+extern u8 D_800D0CAC[];
+/* Four CONSECUTIVE nine-word tables of data pointers -- eight entries plus a
+   NULL terminator each, 0x24 apart, so 0x800D0CC4 + 0x24 == 0x800D0CE8,
+   + 0x24 == 0x800D0D0C, + 0x24 == 0x800D0D30, and + 0x24 == D_800D0D54, which
+   this unit already declares as `extern u8 *D_800D0D54[]`.  Same declaration
+   for all four; the bytes are the boundary witness, not provision.py's base
+   ranking, which offered D_800D0CC0 + 0x4 for the first of them. */
+extern u8 *D_800D0CC4[];
+extern u8 *D_800D0CE8[];
+extern u8 *D_800D0D0C[];
+extern u8 *D_800D0D30[];
+/* func_800A64C0 passes this as func_8009C390's third argument AND stores it in
+   the new node's +0x10 handler slot, and the definition is below it at :26895;
+   an address-take does not ride an implicit declaration the way a call does. */
+void func_800A6684(UnkTownActor *a, UnkVec *q, UnkTownRend *r);
 /* s1104t: func_80097C50's spread template, six words reading
    {0x20, 0x20, 0, 0, 0, 0} -- the same object D_80089128 is for func_800A8ADC,
    whose own block records why the declared size matters.  This unit's OWN
@@ -26889,8 +26924,141 @@ void func_800A647C(s32 a, s32 b)
    which is a real `jal` target in the original binary but an INTERIOR address
    of this function -- see splat/town.bin_symbol_addrs.txt for the full
    reading and splat/town.bin_extra_syms.txt for where the name
-   func_800A652C now comes from.  The listing is 113 words. */
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A64C0);
+   func_800A652C now comes from.  0x800A652C is the word at +0x6C, the
+   `addiu $v0, $v0, %lo(D_800D0CC4)` that completes the `lui` before it in the
+   ELSE arm below, so the game jumping there enters mid-expression; the name
+   must NOT appear in this file's C and this body does not contain it.
+
+   The town's first-frame scene-setter, gated on flag 0xD, and func_800A68C0's
+   (:27167) opposite number: that one BINDS an existing actor to the
+   D_80100E28 descriptor, this one publishes BOTH descriptor slots and then
+   spawns the node whose +0x10 handler is func_800A6684.  Flag 0xE picks
+   between two pairs of the four consecutive nine-word pointer tables that run
+   0x800D0CC4 / 0x800D0CE8 / 0x800D0D0C / 0x800D0D30 and end at D_800D0D54.
+
+   `D_80100E20 = <const>;` IS WRITTEN IN EACH ARM, NOT ONCE AFTER THE MERGE,
+   AND THAT IS A WORD.  Both spellings reach the same shared
+   `sw $v0, %lo(D_80100E20)($v1)`, but only the duplicated store puts the
+   `lui $v1, %hi(D_80100E20)` INSIDE each arm: cross-jumping unifies the
+   longest common SUFFIX, and the two `lui $v0, 0x26` / `lui $v0, 0x1c` value
+   words differ, so the suffix is the one `sw` and the `%hi` stays duplicated.
+   Via an `s32` local stored after the merge the `%hi` is materialised once in
+   the join block, each constant is hoisted to the TOP of its arm into $a0,
+   and the arms' trailing `addiu`/`sw` pair cross-jumps instead: 112 words
+   with 93 differing.  (The merged store is what func_8008FFC8's local at
+   :7904 needs for the opposite reason -- there the LAST store is after the
+   merge, so the address must not be re-materialised.)
+
+   The ARMS ARE IN SOURCE ORDER AS WRITTEN: the target's `beqz $v0` goes to
+   the 0x800D0CC4 arm, so the D_800D0D0C arm falls through and is first.
+   Swapping them and inverting the test is 3 differing.
+
+   `*(s32 *)(p + 0xA0) = *(s32 *)(p + 0xA4) = mv->unk_04;` IS A CHAIN AND IT
+   IS A WORD.  C assigns right to left, so +0xA4 stores first, which is the
+   target's order; as two statements the store to +0xA4 flushes cse's entry
+   and the second one re-loads `mv->unk_04`: 114 words with 35 differing.
+
+   `*(u32 *)((u8 *)p - 0x10) = (u32)func_800A6684;` is the UnkNode +0x10
+   handler slot reached off the actor's +0x20 view, the form func_800AAAA0
+   (:30660) documents, and it goes BEFORE the func_800A6328 call -- reorg
+   steals it into that `jal`'s delay slot.  After the call it is 2 differing.
+   The node pointer itself is dead by then, which is why the store is spelled
+   off `p` and not as `n->unk_10`.
+
+   func_800A6684 IS WRITTEN AT BOTH USES, not carried in a local.  cse shares
+   one `high`/`lo_sum` pair and the allocator gives the lo_sum $s5, live
+   across the whole body.  A `void (*h)();` local assigned once at the top is
+   113 words with 38 differing: a user variable is live from its assignment,
+   so the pair moves above the 0xD gate.
+
+   The seven new declarations were settled from the container's own bytes
+   (`objdump -s -j ._51FC0 build/town.bin.elf`), not from provision.py's base
+   ranking, and the ranking was wrong again: D_800D0C60 as `D_800D0C50 + 0x10`
+   -- its top candidate -- is 111 words with 49 differing, because D_800D0C50
+   is a u8 array of byte values and the record read loses its folded `%lo`.
+   D_800D0C60 holds the SAME six words as D_800D0C78 ({0x0DA00000, 0x0E600000,
+   0, 0, 0, 0}): it is the pristine template and D_800D0C78 the live copy,
+   which is what the re-seed arm restores.  Declared as a record it gives the
+   listing's folded `lw %lo(D_800D0C60)($v0)` for +0x00 and one `addiu` lo_sum
+   for +0x04/+0x08, the mechanism func_800AA998's block (:30609) records.
+
+   FREE TIES, all measured at 113/0, so each is convention and not evidence:
+   `extern u32 D_800D0C60[]` with the constant subscripts `[0]/[1]/[2]`
+   (a constant subscript folds exactly like a scalar's -- see the 2026-11-04
+   correction in docs/matching-levers.md at "A `%lo` INSIDE THE LOAD MEANS A
+   DECLARED SCALAR"); `extern void *D_800D0C90` / `D_800D0CAC` passed with
+   `&`; `extern u8 D_800D0CC4[]` for the four tables; reading the re-seed
+   arm's `mv->` values back out of D_800D0C78 instead of D_800D0C60;
+   `if (n != NULL) { ... }` around the body instead of the early return;
+   `((UnkTown2AE8Int *)mv)->unk_0A` for the +0xA store; the comparison as
+   `0x400000 < (u32)(...)`; and `!func_80033B2C(0xD)`.
+
+   113 words -- its header reads `nonmatching func_800A64C0, 0x1C4`, and
+   0x1C4/4 = 113.  No jump table, no rodata of its own.  Measured 0 differing;
+   46 raw against relocdump's 46, which INCLUDES the one intra-function `j`
+   (an R_MIPS_26 against `.text`, offset +0x60, decoding to 0x800A654C, the
+   arms' merge point).  All EIGHT `jal`s decode in order against this listing:
+   func_80033B2C +0x20, func_80033B2C +0x30, func_8009C390 +0xA8,
+   func_800C2AE8 +0xE4, func_8008F01C +0x154, func_8009B218 +0x16C,
+   func_800C2E84 +0x180, func_800A6328 +0x194.  Every %hi/%lo read off this
+   listing: D_80100E24 (two hi, three lo), D_80100E28 (two hi, two lo),
+   D_80100E20 (two hi, one lo), D_800D0D0C, D_800D0D30, D_800D0CC4,
+   D_800D0CE8, D_80083498, func_800A6684, D_800D0C78 (hi + two lo + the
+   re-seed's lo), D_800D0C60 (hi + two lo), D_800D0CAC, D_800D0C90,
+   D_800D0D54.  TWO of those words are an ADDRESS-TAKE ON A FUNCTION SYMBOL --
+   func_800A6684, the handler -- the class ovlverify masks and a `jal` decode
+   cannot see; verified by name and zero addend.  seqcheck: seq=OK. */
+void func_800A64C0(void)
+{
+    UnkNode *n;
+    UnkVec *mv;
+    UnkTownSpawn *p;
+    UnkTownRend *r;
+
+    if (func_80033B2C(0xD) == 0)
+    {
+        return;
+    }
+    if (func_80033B2C(0xE))
+    {
+        D_80100E24 = D_800D0D0C;
+        D_80100E28 = D_800D0D30;
+        D_80100E20 = 0x260000;
+    }
+    else
+    {
+        D_80100E24 = D_800D0CC4;
+        D_80100E28 = D_800D0CE8;
+        D_80100E20 = 0x1C0000;
+    }
+    n = func_8009C390(&D_80083498, 0, func_800A6684, 0);
+    if (n == NULL)
+    {
+        return;
+    }
+    mv = n->unk_08;
+    r = (UnkTownRend *)n->unk_0C;
+    p = (UnkTownSpawn *)((u8 *)n + 0x20);
+    mv->unk_00 = D_800D0C78.unk_00;
+    mv->unk_04 = D_800D0C78.unk_04;
+    mv->unk_08 = D_800D0C78.unk_08;
+    *(s16 *)((u8 *)mv + 0xA) = func_800C2AE8((UnkTown2AE8 *)mv);
+    if ((u32)(mv->unk_08 + 0x300000) > 0x400000)
+    {
+        D_800D0C78.unk_00 = D_800D0C60.unk_00;
+        mv->unk_00 = D_800D0C60.unk_00;
+        D_800D0C78.unk_04 = D_800D0C60.unk_04;
+        mv->unk_04 = D_800D0C60.unk_04;
+        D_800D0C78.unk_08 = D_800D0C60.unk_08;
+        mv->unk_08 = D_800D0C60.unk_08;
+    }
+    *(s32 *)((u8 *)p + 0xA0) = *(s32 *)((u8 *)p + 0xA4) = mv->unk_04;
+    func_8008F01C(p, mv, D_800D0CAC);
+    func_8009B218(p, mv, r, D_800D0C90);
+    func_800C2E84((UnkTownActor *)p, (s32)r, D_80100E24);
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800A6684;
+    func_800A6328(D_800D0D54, 0);
+}
 
 void func_800A6684(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
 {
@@ -38933,10 +39101,20 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800892C0);
      be harmless here -- the follower D_800892CC.s is three `.word` directives
      and GAS re-aligns those -- but [4] does not depend on a neighbour.
 
-   - func_800A652C never reads its incoming $a0, but this call site's
-     `addu $a0, $s1, $zero` sits in the jal's delay slot and the very next
-     instruction reloads $a0 from $s0, so the argument is real. That is why
-     the unit declares it with a parameter and func_800B5D30 forwards one. */
+   - func_800A652C IS NOT A FUNCTION. 0x800A652C is an INTERIOR address of
+     func_800A64C0 -- the `addiu $v0, $v0, %lo(D_800D0CC4)` 27 words into it --
+     and the original binary really does `jal` there, entering mid-expression
+     with $v0/$v1 carrying whatever the caller left, running the whole else-arm
+     tail and returning through the shared epilogue. This bullet used to say
+     "func_800A652C never reads its incoming $a0", which was a true observation
+     about the splat mis-split's second half and is now a statement about a
+     function that does not exist; the splat fix of 2026-11-04 joined the two
+     halves and the name is defined as an absolute address in
+     splat/town.bin_extra_syms.txt. THE CONCLUSION STILL HOLDS, on the call
+     site alone: this site's `addu $a0, $s1, $zero` sits in the jal's delay
+     slot and the very next instruction reloads $a0 from $s0, so the argument
+     is real, which is why the unit declares it with a parameter and
+     func_800B5D30 forwards one. */
 const u8 D_800892C8[4] = "\n\t8";
 
 void func_800B52F4(u8 *p, UnkTownCardPair **b)
@@ -39466,11 +39644,19 @@ void func_800B5C60(u8 *p, UnkTownCardPair **b, s32 c)
    TWO THINGS ARE LOAD-BEARING HERE.
 
    The parameter is REAL AND UNUSED, and it has to stay. This body reads
-   neither it nor anything derived from it -- func_800A652C takes no argument,
-   its own listing never reads an incoming $a0 -- but func_800B5D70's call site
-   sets $a0 up in the jal's delay slot and reloads it immediately after, so the
+   neither it nor anything derived from it, but func_800B5D70's call site sets
+   $a0 up in the jal's delay slot and reloads it immediately after, so the
    argument is passed. An unused parameter costs no words; dropping it makes
    the container build fail on func_800B5D70 with "too many arguments".
+
+   The clause this paragraph used to carry -- "func_800A652C takes no
+   argument, its own listing never reads an incoming $a0" -- is gone, and so
+   is the listing it appealed to. 0x800A652C is an INTERIOR address of
+   func_800A64C0, reached by a real `jal` into the middle of that function;
+   splat had cut it in half there and the second half, having no entry, had no
+   $a0 convention to read. See splat/town.bin_symbol_addrs.txt for the fix.
+   None of the reasoning above depends on it: the call site is the whole
+   evidence for the parameter.
 
    The ARMS ARE INVERTED relative to the obvious reading. The target branches
    on `bne` to the call and falls through to the pointer load, so the `!= 1`
