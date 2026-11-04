@@ -1,0 +1,34 @@
+// Hand-maintained symbol declarations for town.bin.
+//
+// splat/town.bin.yaml has pointed `symbol_addrs_path` here from the start; the
+// file did not exist until it was needed, which is why nothing in it predates
+// 2026-11-04.
+//
+// func_800A64C0 -- THE OVERLAY'S ONE SPLAT MIS-SPLIT, fixed here.
+//
+// 0x800A652C is a real `jal` target in the original binary: the word
+// 0x0C02994B sits at ROM 0x37C10 and 0x385F8, inside the landed func_800B52F4
+// and func_800B5D30, which call it from C. spimdisasm therefore started a
+// function there and cut one 113-word function in half, producing two
+// listings that are each unlandable on their own:
+//
+//   * asm/nonmatchings/ovl_town/func_800A64C0.s had no `jr` at all and ended
+//     on a bare `lui $v0, (0x800D0000 >> 16)`, whose `%lo` partner --
+//     `addiu $v0, $v0, 0xCC4`, i.e. &D_800D0CC4 -- was the FIRST word of the
+//     other listing. Two of its branches left the listing: `j .L800A654C`
+//     into word 8 of the second half, and `beqz $v0, .L800A665C` into that
+//     half's epilogue, which restores the frame this half allocates.
+//   * func_800A652C.s had no prologue and read $v0/$v1 incoming.
+//
+// Giving the real function its true size (0x800A6684 - 0x800A64C0 = 0x1C4,
+// 113 words) makes splat emit it as one listing, and banning a symbol in the
+// word at 0x800A652C stops the jal target from splitting it again. The name
+// func_800A652C still has to exist for those two landed call sites, and it is
+// now defined as an absolute address in splat/town.bin_extra_syms.txt rather
+// than by a `glabel` in the asm.
+//
+// The class is exactly one function in the whole overlay: screened over all
+// three carved units, 588 + 2 + 173 listings, func_800A64C0 is the only one
+// with no `jr`.
+func_800A64C0 = 0x800A64C0; // type:func size:0x1C4
+func_800A652C = 0x800A652C; // ignore:True size:0x4

@@ -106,10 +106,68 @@ the start of the `unk_102A8` subsegment. Fixing it means extending the `main`
 asm subsegment to 0x102c4 and starting the C unit there; it is a spec change,
 not a matching problem.
 
-## func_800A64C0 (ovl_town) -- A SPLAT MIS-SPLIT, not a matching problem
+## func_800A64C0 (ovl_town) -- A SPLAT MIS-SPLIT. **FIXED 2026-11-04.**
 
-**Blocked on a symbol question, not on a spelling.** Found 2026-11-04 by the
-group that landed the other eleven functions of its batch, and every fact
+**RESOLVED, and the fix is in the tree.** Kept in full because the reading of
+the mis-split is what makes the fix reusable, and because the fingerprint is
+worth recognising in another overlay.
+
+**THE FIX, in three files and one regeneration:**
+
+1. `splat/town.bin_symbol_addrs.txt` -- a new file, although
+   `splat/town.bin.yaml` had pointed `symbol_addrs_path` at it from the start.
+   It declares the function's true size and bans a symbol in the word that was
+   splitting it:
+
+   ```
+   func_800A64C0 = 0x800A64C0; // type:func size:0x1C4
+   func_800A652C = 0x800A652C; // ignore:True size:0x4
+   ```
+
+   The second line is the load-bearing one and the mechanism is specific:
+   `ignore:True` **with a size** does not merely drop the symbol, it calls
+   spimdisasm's `addBannedSymbolRangeBySize` (splat 0.50.1,
+   `splat/util/symbols.py:278-284`), which stops a symbol being created in
+   that range at all. `ignore:True` **without** a size only adds the address
+   to `ignored_addresses`, which is not enough -- the `jal` target would
+   re-create the function split.
+
+2. `splat/town.bin_extra_syms.txt` -- a new hand-maintained linker script
+   holding `func_800A652C = 0x800A652C;`, wired into the town link rule in the
+   `Makefile` beside splat's two generated `*_auto.txt` scripts. The name still
+   has to resolve for the two landed C call sites, and once the 113 words are
+   one function there is no `glabel` defining it.
+
+3. `csrc/ovl_town.c` -- the second `INCLUDE_ASM` dropped, the first one left
+   pulling in the whole 113 words.
+
+Then `splat split splat/town.bin.yaml` (NOT `--modes ld`, which empties the two
+`*_auto.txt` files) and `rm asm/nonmatchings/ovl_town/func_800A652C.s`, because
+splat only adds listings and never removes them.
+
+**RESULT, measured:** the listing is now one file whose header reads
+`nonmatching func_800A64C0, 0x1C4` = 113 words with a proper `endlabel`, and
+all four containers relink byte-identical. The no-`jr` class is now EMPTY:
+587 / 173 / 2 function listings across the three carved units, zero without a
+`jr`. splat also now symbolises `D_800D0CC4` by itself, which is the
+confirmation that the missing `%lo` partner was the whole cause -- it appears
+in `splat/town.bin_undefined_syms_auto.txt` for the first time.
+
+**One side effect, checked and benign:** the regeneration also DROPPED
+`D_800D185D = 0x800D185D;` from `town.bin_undefined_syms_auto.txt`, a
+byte-offset symbol inside `D_800D185C`. Nothing in `csrc/`, `include/` or any
+listing references it, and all four containers are byte-identical without it.
+
+**WHEN RUNNING THE SCREEN BY HAND, RESTRICT IT TO `func_*.s`.** A bare
+`grep -L 'jr '` over `asm/nonmatchings/<unit>/*.s` reports **45** hits across
+the three town units and every one is a `D_*` data listing, which legitimately
+has no `jr`. `provision.py`'s own check is safe: it only ever loads the named
+target's own listing.
+
+The original entry follows, unchanged except for this header.
+
+**Was blocked on a symbol question, not on a spelling.** Found 2026-11-04 by
+the group that landed the other eleven functions of its batch, and every fact
 below I re-verified myself.
 
 `asm/nonmatchings/ovl_town/func_800A64C0.s` has a 27-word header
@@ -142,18 +200,23 @@ this function, which is also why one landed comment correctly reasons that
 incoming `$a0`. Landing the 113 words as one `func_800A64C0` DELETES the
 symbol those two call sites need, and the link fails.
 
-**TWO ROUTES OUT, both touching shared state, so neither was taken:**
+**TWO ROUTES OUT, both touching shared state, so neither was taken at the
+time. Route 1 is what was then done, on the user's instruction:**
 
 1. Land the combined 113 words as `func_800A64C0`, drop `func_800A652C`'s
    `INCLUDE_ASM`, and give the overlay's linker inputs a
    `func_800A652C = 0x800A652C` so the two landed call sites still resolve.
-   This is a build-structure change, not a matching change.
-2. Leave both parked, which is where they are.
+   This is a build-structure change, not a matching change. **TAKEN** -- and
+   it turned out to need one thing this note did not anticipate: splat has to
+   be told the function's size as well, or the next regeneration splits it
+   again.
+2. Leave both parked. Not taken.
 
 **THE CLASS IS EXACTLY ONE FUNCTION IN THE WHOLE OVERLAY.** Screened across
-all three carved units: `ovl_town` 588 listings, **1** with no `jr`
-(`func_800A64C0`); `ovl_town_800BEBA4` 2 listings, 0; `ovl_town_800BF3F0` 173
-listings, 0. So this is a one-off, not a systematic splat problem -- but the
+all three carved units over FUNCTION listings only: `ovl_town` 588 listings,
+**1** with no `jr` (`func_800A64C0`); `ovl_town_800BEBA4` 2 listings, 0;
+`ovl_town_800BF3F0` 173 listings, 0. (After the fix the first count is 587 --
+`func_800A652C.s` is gone -- and all three are 0.) So this is a one-off, not a systematic splat problem -- but the
 check is one anchored regex and it is a landing-blocker that is invisible
 until someone reads the listing, so `provision.py` now prints it beside
 `jumptable=` and `owns-rodata=`.

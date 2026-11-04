@@ -26885,9 +26885,12 @@ void func_800A647C(s32 a, s32 b)
     D_80100E2C = 0;
 }
 
+/* ONE function, not two.  splat used to cut this in half at 0x800A652C,
+   which is a real `jal` target in the original binary but an INTERIOR address
+   of this function -- see splat/town.bin_symbol_addrs.txt for the full
+   reading and splat/town.bin_extra_syms.txt for where the name
+   func_800A652C now comes from.  The listing is 113 words. */
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A64C0);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A652C);
 
 void func_800A6684(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
 {

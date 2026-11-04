@@ -1,0 +1,12 @@
+/* Hand-maintained extra linker symbols for town.bin, passed to ld alongside
+   splat's two generated `*_auto.txt` scripts (see the Makefile's town rule).
+   Nothing here is generated; splat never writes this file.
+
+   func_800A652C is an INTERIOR address of func_800A64C0, not a function of
+   its own -- see the header of splat/town.bin_symbol_addrs.txt for how the
+   mis-split arose. The original binary really does `jal 0x800A652C` from two
+   places, both now landed in C (func_800B52F4 and func_800B5D30 in
+   csrc/ovl_town.c), so the name has to resolve; with the 113 words landed as
+   one C function there is no longer an asm `glabel` to define it. The overlay
+   is loaded at a fixed vram, so an absolute address is the whole definition. */
+func_800A652C = 0x800A652C;

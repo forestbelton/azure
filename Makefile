@@ -245,11 +245,17 @@ build/$(SLUS): $(OFILES) build/$(SLUS).ld
 	@echo ""
 	@$(CHECK) build/$(SLUS) data/$(SLUS) --yaml splat/$(SLUS).yaml
 
-build/$(TOWN): $(OFILES)
+# town.bin takes one extra, HAND-MAINTAINED linker script. It defines
+# func_800A652C, which is an interior address of func_800A64C0 rather than a
+# function of its own and so has no defining `glabel` anywhere now that those
+# 113 words are landed as one C function -- see the file's own header and
+# splat/town.bin_symbol_addrs.txt.
+build/$(TOWN): $(OFILES) splat/$(TOWN)_extra_syms.txt
 	$(LD) $(LDFLAGS) \
 		--script=build/$(TOWN).ld \
 		--script=splat/$(TOWN)_undefined_funcs_auto.txt \
 		--script=splat/$(TOWN)_undefined_syms_auto.txt \
+		--script=splat/$(TOWN)_extra_syms.txt \
 		--output=build/$(TOWN).elf
 	$(OBJCOPY) -O binary build/$(TOWN).elf build/$(TOWN)
 	@echo ""

@@ -1746,6 +1746,69 @@ that come up constantly:
   onto the symbol, so `D_80082660[4].unk_00 = 0` is how the `+0x20` slot is
   written, not a separate symbol.
 
+### FIXING A SPLAT MIS-SPLIT: `size:` PLUS `ignore:True` WITH A SIZE
+
+Done 2026-11-04 for `func_800A64C0`, the overlay's only one. The full reading
+is in `docs/open-matching-problems.md`; this is the recipe.
+
+**The shape.** A `jal` in the original binary targets an address INSIDE a
+function, so spimdisasm starts a function there and emits two listings. Each
+half is unlandable: the first has no `jr` and ends on a bare `lui` whose `%lo`
+partner is the other half's first word; the second has no prologue and reads
+registers incoming. Branches cross between them.
+
+**The fix, in the unit's `symbol_addrs` file:**
+
+```
+func_800A64C0 = 0x800A64C0; // type:func size:0x1C4
+func_800A652C = 0x800A652C; // ignore:True size:0x4
+```
+
+**`ignore:True` MUST CARRY A SIZE.** That is the whole trick and it is not
+obvious from the attribute's name. In splat 0.50.1,
+`splat/util/symbols.py:278-284` branches on it: with a size it calls
+spimdisasm's `addBannedSymbolRangeBySize`, which prevents a symbol being
+CREATED in that range; without one it only adds the address to
+`ignored_addresses`, which drops the name but lets the `jal` target re-create
+the function boundary on the next run. Declaring the real function's `size:`
+alone is also not enough for the same reason.
+
+**Then three more steps, each of which bites if skipped:**
+
+1. `splat split splat/<container>.yaml` -- the whole thing, **never**
+   `--modes ld`, which empties `*_undefined_funcs_auto.txt` and
+   `*_undefined_syms_auto.txt`. Both files are tracked in git, so a mistake is
+   recoverable with `git checkout`; check their line counts after every run.
+2. **Delete the stale listing by hand.** splat only ADDS listings. The old
+   second-half `.s` stays on disk, and if its `INCLUDE_ASM` is still in the C
+   file you get the same words twice.
+3. **Give the interior address a linker symbol.** The name is still called from
+   landed C, and once the halves are one function nothing defines it. A new
+   hand-maintained script passed to `ld` beside splat's generated ones is the
+   clean place -- `splat/town.bin_extra_syms.txt` here, wired into the
+   Makefile's town rule. The overlay loads at a fixed vram, so an absolute
+   assignment is the whole definition.
+
+**What to verify afterwards, in this order:** the header's word count and a
+closing `endlabel`; that splat now symbolises whatever `%hi`/`%lo` pair the
+split had orphaned (a NEW line in `*_undefined_syms_auto.txt` is the tell, and
+`D_800D0CC4` was exactly that here); the two auto files' line counts; and every
+container relinking byte-identical, not just the one you touched.
+
+**The screen for the class, and its one trap:** a function listing with no
+`jr` anywhere is not a function. Run it over **`func_*.s` only** --
+`grep -L 'jr ' asm/nonmatchings/<unit>/*.s` reports 45 hits across the three
+town units and all 45 are `D_*` data listings, which have no `jr` quite
+legitimately. `provision.py` prints the check per target and is not exposed to
+that, because it only loads the named target's own listing.
+
+**The fingerprint, worth recognising before the listing is read at all:** an
+UNSYMBOLISED `lui` of a plausible data base with no `%lo` partner in the same
+listing. `provision.py` route (p) called `0x800D0000` and `0x80100000` here
+"most likely an immediate rather than an address, so do not declare it", and
+both were `%hi` halves of real symbols whose `%lo` splat had put in the other
+file.
+
 ### KNOWN RESIDUE: "X IS STILL A STUB" COMMENTS IN `csrc/ovl_town.c`
 
 Every such claim in `csrc/ovl_town_800BF3F0.c` and in the preamble duplicated
