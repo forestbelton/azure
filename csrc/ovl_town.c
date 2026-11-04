@@ -2494,6 +2494,10 @@ s32 func_800A5894(UnkTown2AE8 *q);
 void func_800A55CC(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 /* Address-taken only, as func_80093B00 is. */
 void func_800A5A98();
+/* Defined below, at the bottom of this family.  func_800A5A98 INSTALLS it --
+   two `%hi`/`%lo` pairs on the symbol, four words -- and an address-take needs
+   a real declaration.  Signature copied verbatim from the definition. */
+void func_800A5DF8(UnkTownTask *a, UnkTown2AE8 *b, void *r);
 void func_800A5FDC();
 
 /* The func_80092320 cluster: the two task descriptors its bind pair installs,
@@ -17358,7 +17362,161 @@ cont:
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5A98);
+/* The third member of the func_800A58CC / func_800A5DF8 / func_800A5FDC
+   camera-state family, and the one func_800A58CC installs.  It shares
+   func_800A5FDC's whole middle -- the countdown-and-rumble head, the
+   func_80095978/func_80095A94/func_800954F4/func_80095388 three-way, the
+   func_800C1D44 gate over func_800A5894, the func_8003BD84 bearing, the
+   `abs`/`%` chime test and the two 0x10-plus-d yaw nudges -- and differs at
+   both ends: the head writes the task's +0x10 yaw target from the camera's
+   own yaw rather than reading it, and the exit installs func_800A5DF8 with
+   the task's +0x08 flag set or clear instead of calling func_800A55CC.
+   `provision.py` route (k) reports this body as a strict SUBSET of
+   func_800A5FDC's callee set, which is what it is.
+
+   Four things are source rather than scheduling, and all four were measured:
+
+   - THE func_80094F58 ARGUMENT IS THE FIELD READ BACK, `a->unk_10`, not a
+     local holding the same value.  Both the store and the argument come out
+     of ONE `andi $a0, $v0, 0xFFF` in the target: the yaw is computed in the
+     block that ends with the `& 0x20` test and consumed in the next one, so a
+     local is a GLOBAL pseudo, global-alloc gives it `$v0`, and the argument
+     then costs a `move $a0, $v0` -- 217 words against 216 with the rest of
+     the function shifted one word (183 differing).  Reading the field back
+     lets cse forward the stored register (the intervening `lw` of
+     `g->unk_08` invalidates nothing), and the `s16` field's sign-extension
+     folds into the existing `& 0xFFF` mask, so no extension survives.  An
+     explicitly `s16` local measures identically; an `s32` or `u16` one does
+     not.
+
+   - THE SECOND func_80095094 CALL IS NESTED INSIDE THE FIRST ARM, and the
+     two calls are written out twice because cross-jumping unifies them.
+     The target's `beqz` on `g->unk_08 & 0x10` jumps STRAIGHT TO a
+     `jal func_80095094`, not to the `(g->unk_08 & 0x30) == 0x20` test, so the
+     plain two-statement spelling -- `if (x & 0x10) f(b); if ((x & 0x30) ==
+     0x20) f(b);` -- is 1 differing on exactly that branch word.  The inner
+     test is unreachable at runtime (inside the `& 0x10` arm `g->unk_08 &
+     0x30` can never be 0x20) and the compiler emits it anyway; the family's
+     other members have the same conditional-plus-unconditional pair here
+     with no guard on the second.
+
+   - `g->unk_C8 -= 0x10 + d` AND `g->unk_C8 += 0x10 + d` ARE NOT THE SAME AS
+     THEIR WRITTEN-OUT FORMS.  The target does `addiu $v0, $v0, -0x10` then
+     `subu $v0, $v0, $s0`, i.e. `(C8 - 0x10) - d`: the compound assignment's
+     arg0 is a NOP_EXPR across the HImode widening, so split_tree declines and
+     fold takes the arg1 arm, leaving the constant on the inside.
+     `g->unk_C8 = g->unk_C8 - 0x10 - d` and `... + 0x10 + d` instead build
+     `C8 + (d + K)` and measure 215 words with 47 differing.  Writing the
+     operands the other way round inside the compound (`-= d + 0x10`) is
+     identical, because fold canonicalises the constant last either way.
+
+   - `abs()`, NOT A TERNARY OR AN `if`.  The target's `bgez $v1` has a real
+     `nop` in its delay slot, which only expand_abs produces; the ternary
+     `>= 0 ? x : -x` form is 3 differing and `if (t < 0) t = -t;` is 2,
+     both because reorg fills that always-taken slot.
+
+   Store order in the exit arms is witnessed: +0x00, then +0x0A, then +0x08.
+   Reversing it is 7 differing.  And the second arm's `sh $zero, 0x8($s3)` is
+   the zero-to-a-halfword-field saving -- one word where arm one needs an
+   `addiu $v0, $zero, 0x1` first.
+
+   216 words -- its header reads `nonmatching func_800A5A98, 0x360`, and
+   0x360/4 = 216.  Measured 0 differing masked, 48 raw differing against 48
+   relocation words (22 `jal`, 22 `%hi`/`%lo` -- four of them the
+   `func_800A5DF8` install -- and 4 intra-function `j`), with the `jal`
+   symbol order, the `%hi`/`%lo` symbol multiset and all four `j` offsets
+   checked against the listing. */
+void func_800A5A98(UnkTownTask *a, UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    s32 n;
+    s32 d;
+    s32 t;
+
+    g = &D_80083160;
+    func_80095C80(b);
+    if (--a->unk_0A <= 0)
+    {
+        a->unk_0A = func_800374F4(3) + 5;
+        func_80097844(b, (u16)func_800374F4(2) + 2);
+    }
+    a->unk_10 = (g->unk_C8 + 0x800) & 0xFFF;
+    if (g->unk_08 & 0x20)
+    {
+        func_80094F58(a->unk_10, D_80100E20, b);
+        func_80097844(b, (u16)func_800374F4(1));
+    }
+    if (g->unk_08 & 0x10)
+    {
+        func_80095094(b);
+        if ((g->unk_08 & 0x30) == 0x20)
+        {
+            func_80095094(b);
+        }
+    }
+    else
+    {
+        func_80095094(b);
+    }
+    n = func_80095978(b, D_800FE488);
+    if (*(s16 *)((u8 *)b + 0xA) >= (s16)n)
+    {
+        func_80095A94(b, (s16)n, D_800FE488);
+    }
+    else if (D_800CFCEF != 0)
+    {
+        b->unk_14 = 0;
+        func_800954F4(b);
+    }
+    else
+    {
+        func_80095388(b);
+    }
+    if (func_800C1D44(func_8008C180(TOWN_PT->unk_02, TOWN_PT->unk_06)) != 0)
+    {
+        b->unk_14 -= func_800A5894(b);
+    }
+    d = func_8003BD84(b->unk_0C, b->unk_10);
+    if (D_80100E20 != 0)
+    {
+        t = abs(D_80100E20 - d);
+        if (g->unk_04 % (t * 7 / D_80100E20 + 2) == 0)
+        {
+            func_80053DA8(0x60A);
+        }
+    }
+    if (d == 0)
+    {
+        g->unk_C8 = (g->unk_C8 + 8) & 0xFFF0;
+    }
+    else if ((g->unk_08 & 0x30) == 0x10)
+    {
+        d = D_80100E20 * 3 / 2;
+    }
+    d = d / 0x10000;
+    if (g->unk_08 & 0x2000)
+    {
+        g->unk_C8 -= 0x10 + d;
+        func_80097844(b, (u16)func_800374F4(1));
+    }
+    if (g->unk_08 & 0x8000)
+    {
+        g->unk_C8 += 0x10 + d;
+        func_80097844(b, (u16)func_800374F4(1));
+    }
+    if ((g->unk_10 & 0x10) && D_800CFCEE == 0)
+    {
+        a->unk_00 = func_800A5DF8;
+        a->unk_0A = 8;
+        *(s16 *)((u8 *)a + 0x8) = 1;
+    }
+    else if (g->unk_10 & 0x100)
+    {
+        a->unk_00 = func_800A5DF8;
+        a->unk_0A = 8;
+        *(s16 *)((u8 *)a + 0x8) = 0;
+    }
+}
 
 /* func_800A58CC's near-sibling, and genuinely not a pure substitution of it
    -- nearsibs.py rates the pair 0.881, the loosest in its batch, and three
