@@ -1284,6 +1284,83 @@ def main():
     if not anyo:
         print("  no global of yours is rare in this unit AND carried by prose or rodata")
 
+    # ------------------------------------------------------------------ (p)
+    print("\n=== ROUTE (p): CONSTANT ADDRESSES -- WHO ELSE USES THE SAME RAW HEX ===")
+    print("    Every scored route keys on a DECLARED SYMBOL, so a function whose")
+    print("    shared thing is a CONSTANT ADDRESS is invisible to all of them. That")
+    print("    is a structural hole, not a tuning problem: func_800B8A40 is a")
+    print("    line-for-line template for func_800B9830 -- same bound, same")
+    print("    `base[i*2 + 0x33A5]` pair, same second block -- and appeared in NO")
+    print("    route at any score, because 0x800133A4 is not a symbol. This route")
+    print("    is the grep that finds it.")
+    anyp = False
+    for f in targets:
+        lt = listing(unit, f)
+        if not lt:
+            continue
+        # The addresses a CONSTANT-ADDRESS function materialises, as raw hex.
+        # Take them from the out-of-image globals the listing names, since
+        # splat renders a constant the same way it renders a symbol.
+        addrs = sorted(set(
+            int(g[2:], 16) for g in re.findall(r'%(?:hi|lo)\((D_[0-9A-Fa-f]+)\)', lt)
+            if constaddr_candidate(g)))
+        if not addrs:
+            continue
+        for a in addrs:
+            # SKIP THE MIS-SYMBOLISATION CLASS. splat pairs a `lui` with any
+            # following `addiu`/load displacement, so "D_80010004" can be the
+            # integer 4 and "D_80010002" the integer 2 -- both measured in
+            # this unit, and declaring either blocks the landing. A low half
+            # under 0x100 is that class far more often than it is an address,
+            # and searching for `0x4` matched 178 bodies and 162 comment
+            # blocks, which is noise that also legitimises a fake symbol.
+            if (a & 0xFFFF) < 0x100:
+                print("  %-15s 0x%08X: low half 0x%X is almost certainly a splat"
+                      " MIS-SYMBOLISATION" % (f, a, a & 0xFFFF))
+                print("      (splat paired one `lui` with a small immediate or"
+                      " displacement). Do NOT declare it; read the instruction.")
+                continue
+            # Search for the raw hex in the spellings an author would write:
+            # the full address, and the low half only when it is wide enough
+            # to be distinctive.
+            pats = ['0x%08X' % a, '0x%X' % a]
+            if (a & 0xFFFF) >= 0x1000:
+                pats.append('0x%X' % (a & 0xFFFF))
+            users = {}
+            for d, b in btext.items():
+                for pat in pats:
+                    if re.search(re.escape(pat), b, re.I):
+                        users.setdefault(d, set()).add(pat)
+            # And comment text, which is where this unit keeps its field maps
+            # and where route (n) cannot look, because it greps NAMES.
+            prose = []
+            for m in re.finditer(r'/\*(?:[^*]|\*(?!/))*\*/', txt, re.S):
+                if any(re.search(re.escape(pt), m.group(0), re.I) for pt in pats):
+                    prose.append(txt[:m.start()].count('\n') + 1)
+            if not users and not prose:
+                continue
+            # A hex half the unit uses is not a discriminator. Say so rather
+            # than printing a page of names: route (a)'s own lesson.
+            if len(users) > 20:
+                print("  %-15s 0x%08X: %d landed bodies use that hex -- TOO COMMON"
+                      " to discriminate, not listed" % (f, a, len(users)))
+                continue
+            anyp = True
+            print("  %-15s 0x%08X (%s):" % (f, a, ', '.join(pats)))
+            if users:
+                print("      %d landed body/bodies use that hex: %s"
+                      % (len(users), ', '.join('%s (:%d)' % (d, lines.get(d, 0))
+                                               for d in sorted(users)[:6])))
+                if len(users) > 6:
+                    print("      ... and %d MORE, NOT shown" % (len(users) - 6))
+            if prose:
+                print("      named in %d comment block(s): %s"
+                      % (len(prose), ', '.join('csrc/%s.c:%d' % (unit, n)
+                                               for n in prose[:6])))
+            print("      grep -n '0x%X' csrc/%s.c" % (a & 0xFFFF, unit))
+    if not anyp:
+        print("  no target of yours materialises a constant address with another user")
+
     # ------------------------------------------------------------------ (m)
     print("\n=== ROUTE (m): RARE FIELD OFFSETS -- THE DISCRIMINATOR ROUTE (h) CANNOT SEE ===")
     print("    Route (h) ranks the SYMBOL. When your target's only global is a")

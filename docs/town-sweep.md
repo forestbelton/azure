@@ -719,6 +719,36 @@ not a verdict**: decode the resolved immediate by hand, and let
 `town.bin_undefined_syms_auto.txt` (`:130` and `:131`), so either links; if
 the one the candidate uses is NOT in those files, see the trap above.
 
+### EVERY SCORED ROUTE IS BLIND TO A FUNCTION WHOSE SHARED THING IS A CONSTANT ADDRESS
+
+A structural hole, not a tuning problem, and it affects every out-of-image
+constant-address function in this unit. Reported 2026-11-04 by the agent that
+landed the `func_800B8834` group: `func_800B8A40` is a **line-for-line
+template** for one of its targets -- same 0x22 bound, same `base[i*2 + 0x33A5]`
+pair, same second block over 0x3608/0x360A -- and it appears in **no route at
+any score**, because what the two share is a raw address rather than a declared
+symbol. Routes (a), (h), (m), (k) and (j) all key on `D_` symbols and cannot
+see it.
+
+Route (n) made it worse by answering truthfully: "this unit never names any of
+your targets outside its INCLUDE_ASM" is true of the NAMES while two decisive
+comment blocks named the *globals* in prose. The cheap complement is one
+command:
+
+    grep -n '0x33A4' csrc/ovl_town.c
+
+**So when a target's listing shows constant addresses, grep their raw hex
+across `csrc/` before concluding the routes have nothing.** Route (p) now does
+this automatically; the lesson stands for any address class it misses.
+
+### `grep -c dlabel` ON A LISTING RETURNS 1 FOR EVERY FUNCTION
+
+Confirmed again 2026-11-04, and it is worth stating as its own line because
+the trap keeps being rediscovered: `endlabel func_XXXX` CONTAINS the substring
+`dlabel`, so a bare `grep -c dlabel` is a guaranteed false positive for "owns
+rodata" on every listing in the tree. The anchored pattern `^dlabel D_` is the
+screen; `provision.py` and `brief.py` both use it.
+
 ### AN ODD ADDRESS-TAKE COUNT IS NOT A DEFECT -- reorg DUPLICATES A `lui` ACROSS A THREAD IT DOES NOT OWN
 
 A brief's address-take column counts `%hi`/`%lo` OCCURRENCES on a function
