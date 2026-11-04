@@ -14142,7 +14142,155 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A24FC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A25CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2690);
+/* The per-frame step of the 0x136 node func_800A25CC spawns: a one-triangle
+   gouraud flare whose brightness is a six-harmonic noise sum, bracketed by
+   two DR_MODEs.  It counts the +0x04 life down and, when it runs past zero,
+   raises 0x8000 in the owner's halfword at -0x02 and in D_800814A0 -- the
+   retire idiom this unit has at :10359 and thirty-odd other places.
+
+   THREE PARAMETERS, and the install settles it.  func_800A25CC stores
+   func_800A2690 at the node's +0x10 (`sw $v0, 0x10($s2)` with $s2 the
+   func_8003FC64 node) and func_80040190 (csrc/unk_12DEC.c:567) calls a +0x10
+   handler as
+   `((void (*)(void *, UnkVec *, u32)) fn)((u8 *)p + 0x20, p->unk_08, p->unk_0C)`,
+   so `p` is the node's +0x20 view -- which is why the kill flag is at
+   `p - 0x2` (UnkNode.unk_1E) -- and the second and third arguments are dead
+   TRAILING parameters, invisible either way.  Nothing else references this
+   function: no caller, no asm caller, and func_800A25CC only stores it.
+
+   The field map is read off func_800A25CC and func_800A24FC, which seed the
+   same record: +0x04 is the life in frames (`rand(0xB4) + 0x3C`), +0x06 its
+   full span (`rand(0x28)`), +0x08/+0x0A/+0x0C three random phase offsets,
+   +0x10 the radius word (`rand(0x40) + 0x80`), and +0x14 the pointer
+   func_800A24FC fills with the camera-relative origin at +0x00/+0x02, the two
+   drift angles at +0x04/+0x06 and a scale word at +0x08.
+
+   The prim is NINE words (`addiu $v0, $s6, 0x24`) but only three vertices are
+   written and func_800666B8 -- SetPolyG3, which splat names and which has no
+   declaration anywhere, so it rides an implicit one -- tags it, so the
+   allocation over-reserves a POLY_G4's worth for a G3.  `POLY_G3 *` with an
+   explicit `(u8 *)pg + 0x24` step measures identically; `POLY_G4 *` with the
+   unit's `(u32)(pg + 1)` idiom is kept.
+
+   The divisor 0x9000 is read off the magic multiply, not guessed: 0x38E38E39
+   with `mfhi` shifted right by 13 and the `sra 31` correction subtracted is
+   2^45 / 0x38E38E39 = 36864 = 0x9000, and the same magic with a shift of 1
+   would be `/ 9`.  Writing it `9 * 0x1000` measures identically.
+
+   WHAT HAD TO BE SPELLED A PARTICULAR WAY, each measured:
+
+   - **The first 0x2400 is written AFTER the third harmonic, and the emitted
+     code is the mirror of that.**  The target adds it to the FOURTH call's
+     result (`addiu $s2, $s2, 0x2400`, word 82) before folding that into the
+     accumulator; writing `(func_800644B8(ry * 2) + 0x2400)` with the
+     parenthesis where the listing appears to put it is 226 words / 1
+     differing, and the one differing word is that `addiu` with $s0 for $s2.
+     fold-const.c does the swap: `split_tree` pulls the constant out of
+     `(VAR + CON)` on the LEFT operand and
+     scratch/gcc-src/cdk-gcc-b18/fold-const.c:4233-4235 rebuilds the node --
+     "Otherwise return VAR +- (ARG1 +- CON). / tem = fold (build (code, type,
+     arg1, con)); / t = build (code, type, var, tem);" -- so
+     `((A+B+C) + 0x2400) + D` becomes `(A+B+C) + (D + 0x2400)`, which is the
+     target, and the source form that LOOKS like the target becomes the other
+     one.  The two 0x2400s do not merge because after that rewrite neither
+     operand of any later `+` is a constant, so split_tree returns 0 on both
+     (fold-const.c:4201/:4257) and the trailing 0x2400 stays its own `addiu`;
+     folding them by hand into one trailing 0x4800 is 225 words / 144
+     differing.  0x2400 anywhere else in the chain is 226 / 9.
+   - **`g = &D_80083160;` is a STATEMENT at the TOP, outside the `if`.**
+     Moved into the `else` arm it is 13 differing, and dropping the local and
+     spelling `D_80083160.unk_00` at all nine uses is also 13.
+   - **rx, ry and ang are 16-BIT locals.**  Each is read back with the
+     `sll 16`/`sra 16` pair the listing shows at 0x800A277C, 0x800A27A4 and
+     0x800A28B8; declaring rx/ry `s32` is 222 words / 166 differing and `ang`
+     `s32` is 223 / 93.  `cx` by contrast is unobservable -- `s16` also
+     measures 0 differing, because it is only ever consumed by an `sh`.
+   - **The four leading local assignments are order-pinned.**  ang, then cx,
+     then rx, then ry: cx before ang is 225 words / 210 differing, rx/ry
+     before them is 225 / 211, and swapping rx with ry is 226 / 6.
+   - **The record's halfwords are `u16`, not `s16`** -- `s16` turns one of
+     the plain `lhu` loads into an `lh`: 1 differing on p's +0x08/+0x0A/+0x0C
+     and 1 differing on the +0x14 record's four.
+   - **`/ 4` is its own divide.**  Folding it into the previous one as
+     `/ 0x4000` is 222 words / 124 differing and `>> 2` is 222 / 123, because
+     each `/` emits its own `bgez`/bias/`sra` and the `/ 4`'s dividend and
+     quotient are the same pseudo, so its `addu $v0, $s5, $zero` copy
+     survives (matching-levers :12497).  The two `/ 32` are divides too:
+     `>> 5` is 218 / 103.
+   - **The first DR_MODE is linked BEFORE the triangle.**  Swapping the two
+     adjacent func_8006658C calls is 2 differing; the two `jal`s are masked
+     but their second arguments are not.
+   - **Each corner stores x before y.**  y first is 37 differing.
+   - The colour chain's order is only half pinned: one chain
+     `r0 = g0 = b0 = r1 = g1 = b1 = col` (which emits right-to-left, so
+     +0x0E/+0x0D/+0x0C then +0x06/+0x05/+0x04 -- the listing), two chains, and
+     six descending statements are all 0 differing, while the ascending chain
+     `r1 = g1 = b1 = r0 = g0 = b0` is 6 differing.
+   - `p` typed `UnkTownDispatch *` with `(u8 *)` casts, and every field read
+     through the `*((s16 *)p + N)` index form, both measure 0 differing, so
+     neither the parameter type nor the cast shape is witnessed here.
+
+   226 words -- its header reads `nonmatching func_800A2690, 0x388`, and
+   0x388/4 = 226.  Measured 0 differing, and the relocation arithmetic
+   closes: `--raw` reports 34 differing against exactly 34 relocation words
+   -- 6 HI16 + 6 LO16 on D_80083160 (0x800A2734/38, 292C/34, 2968/6C,
+   297C/80, 2998/9C, 29D0/D4), 1 HI16 + 2 LO16 on D_800814A0
+   (0x800A2714, 2720, 2730), 18 R_MIPS_26 (func_800644B8 x8,
+   func_800666B8, func_80066640, func_80064584, func_80066460 x2,
+   func_80067F20 x2, func_8006658C x3, in the listing's order) and one
+   R_MIPS_26 on `.text` for the intra-function `j .L800A29E4`.  No `%hi` on
+   a function symbol, no jump table and no rodata of its own. */
+void func_800A2690(u8 *p, UnkVec *b, u32 d)
+{
+    Unk80083160 *g;
+    POLY_G4 *pg;
+    DR_MODE *dm;
+    s32 cx;
+    s16 ang;
+    s16 rx;
+    s16 ry;
+    s32 col;
+
+    g = &D_80083160;
+    ang = *(u16 *)(*(u8 **)(p + 0x14) + 0x2);
+    cx = *(u16 *)(*(u8 **)(p + 0x14) + 0x0) + *(u16 *)(p + 0x8) + 0xA0;
+    rx = *(u16 *)(*(u8 **)(p + 0x14) + 0x4) + *(u16 *)(p + 0xA);
+    ry = *(u16 *)(*(u8 **)(p + 0x14) + 0x6) + *(u16 *)(p + 0xC);
+    if (--*(s16 *)(p + 0x4) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        pg = (POLY_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
+        col = func_800644B8((*(s16 *)(p + 0x4) << 11) / *(s16 *)(p + 0x6)) / 16;
+        col = col * (func_800644B8(rx * 2) + func_800644B8(rx * 4) + func_800644B8(rx * 8) + 0x2400 + func_800644B8(ry * 2) + func_800644B8(ry * 4) + func_800644B8(ry * 8) + 0x2400) /
+              0x9000;
+        col = col * *(s32 *)(*(u8 **)(p + 0x14) + 0x8) / 0x1000;
+        col = col / 4;
+        pg->r0 = pg->g0 = pg->b0 = pg->r1 = pg->g1 = pg->b1 = col;
+        pg->r2 = pg->g2 = pg->b2 = 0;
+        func_800666B8(pg);
+        func_80066640(pg, 1);
+        pg->x0 = cx - *(s32 *)(p + 0x10) / 32;
+        pg->y0 = 0;
+        pg->x1 = cx + *(s32 *)(p + 0x10) / 32;
+        pg->y1 = 0;
+        pg->x2 = cx - *(s32 *)(p + 0x10) * func_800644B8(ang) / 0x1000;
+        pg->y2 = *(s32 *)(p + 0x10) * func_80064584(ang) / 0x1000;
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 0, 0x140, 0), 0);
+        func_8006658C(g->unk_00 + 0xD8, dm);
+        func_8006658C(g->unk_00 + 0xD8, pg);
+        dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
+        func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0x140, 0), 0);
+        func_8006658C(g->unk_00 + 0xD8, dm);
+    }
+}
 
 /* func_8008FD9C's near-sibling, and NOT a substitution of it.  Three
    differences, all read off the listing: the second record comes from the
