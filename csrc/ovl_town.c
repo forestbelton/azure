@@ -2643,6 +2643,12 @@ extern u8 D_8006CADE[];
 void func_800A77D0();
 void func_800A1D1C();
 void func_800A1F00();
+void func_800A1FEC(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r);
+extern u8 D_800345B8[];
+extern u8 D_800F148C[];
+extern s16 D_800D0A10[];
+extern s32 D_800D0A1C[];
+extern u16 D_800D0A34[];
 void func_800BFB8C();
 extern u8 D_80077E84[];
 extern u8 D_80077EF0[];
@@ -11914,13 +11920,243 @@ UnkNode *func_800A1C94(void *a, s32 b, s32 c)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1D1C);
+/* The UnkNode.unk_10 handler func_800A1C94 installs, reached through
+   func_80040190's cast -- so (view, mover, rend) with the view at node + 0x20,
+   which is why +0x10/+0x22/+0x24/+0x3C are read off `p` and -0x2 reaches the
+   node's own UnkNode.unk_1E.  func_800A1C94 is the whole provenance: it parks
+   the UnkTownA1080 at the view's +0x10 and func_800A1F00 at the view's +0x00,
+   and this function is what calls that slot -- `p->unk_00(p, q, r)` here is
+   therefore the only real ARITY WITNESS for func_800A1F00 and for the
+   func_800A1FEC it installs in its own place.  provision.py's route (g) cannot
+   see that edge: it looks for a direct `jal`, and this is a `jalr` through a
+   slot.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1F00);
+   The retire idiom is written FIRST, even though neither arm returns: `beqz`
+   branches to the main arm, so the source order is
+   `if (s->unk_0A != 0) { retire } else { work }`.  Inverting it is 118 words
+   and 98 differing, so this is not the "do not invert unless an arm returns"
+   case -- what decides it is which arm the `beqz` skips, and here it skips the
+   long one.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A1FEC);
+   THE 0x1F800000 SCRATCHPAD IS REACHED TWO DIFFERENT WAYS IN ONE FUNCTION,
+   and both are load-bearing.  Through the UnkTownA1080SP pointer local the
+   angles at +0x2C come out as 0x2C($s3) displacements and `&sp->unk_2C` as
+   `addiu $a0, $s3, 0x2C`; the func_80065320 flag out-parameter at +0x98 is
+   PAST that typedef and is reached as `(u8 *)sp + 0x98`, which cc1psx folds
+   against the already-materialised high half and emits as `ori $a2, $s3, 0x98`
+   -- the lui/ori constant shape, not a lo_sum.  Writing that argument as the
+   literal `(s32 *)0x1F800098` instead emits its own `lui` and is 122 words
+   with 23 differing.  `(s32 *)sp + 0x26` is byte-identical to the chosen form.
+   +0x98 is the `flag` func_800AA068 spells as a stack `s32` for func_80065450
+   (RotTrans); splat names func_80065320 RotTransSV.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A2000);
+   THE MATRIX SELECTOR MUST BE A SEPARATE LOCAL, ASSIGNED BEFORE
+   func_800649A0().  `m = &s->unk_14 + (*(s16 *)((u8 *)p + 0x22) != 0)` inline
+   compiles the select to a BRANCH (120 words, 35 differing); hoisting the
+   comparison into `k` gives the `sltu $zero, $s0` the target has, and reorg
+   then parks it in the call's delay slot.  Computing `k` AFTER the call is 2
+   differing -- a load cannot cross a call, so the read has to precede it.
+   MATRIX pointer arithmetic is what produces the `sll 5` plus `addiu 0x14`;
+   `(u8 *)&s->unk_14 + k * 0x20` is byte-identical, and the explicit
+   `k ? &s->unk_34 : &s->unk_14` ternary is 3 differing.
+
+   `s->unk_10 * 3 / 4` is the three-quarters fade in each of the three colour
+   arms; `/ 4 * 3` is 18 differing.  The direct arm's `lbu` and the fade arm's
+   `lh` on the same s16 field are correct, not an inconsistency: the direct
+   store narrows to a byte, the fade needs the sign.  The angle casts at
+   +0x24/+0x28/+0x2C have NO witness -- s32, u16 and s16 all measure 0
+   differing, because a halfword store truncates either way -- and s32 is kept
+   because func_800A1F00 writes those three slots with `sw`.
+
+   121 words -- its header reads `nonmatching func_800A1D1C, 0x1E4`, and
+   0x1E4/4 = 121.  Measured 0 differing. */
+void func_800A1D1C(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    UnkTownA1080 *s;
+    UnkTownA1080SP *sp;
+    MATRIX *m;
+    s32 k;
+
+    sp = (UnkTownA1080SP *)0x1F800000;
+    s = (UnkTownA1080 *)*(u32 *)((u8 *)p + 0x10);
+    if (s->unk_0A != 0)
+    {
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        p->unk_00(p, q, r);
+        if (*(u8 *)((u8 *)p + 0x3C))
+        {
+            r->unk_0C = s->unk_10;
+        }
+        else
+        {
+            r->unk_0C = s->unk_10 * 3 / 4;
+        }
+        if (*(u8 *)((u8 *)p + 0x3D))
+        {
+            r->unk_0D = s->unk_10;
+        }
+        else
+        {
+            r->unk_0D = s->unk_10 * 3 / 4;
+        }
+        if (*(u8 *)((u8 *)p + 0x3E))
+        {
+            r->unk_0E = s->unk_10;
+        }
+        else
+        {
+            r->unk_0E = s->unk_10 * 3 / 4;
+        }
+        sp->unk_2C.vx = *(s32 *)((u8 *)p + 0x24);
+        sp->unk_2C.vy = *(s32 *)((u8 *)p + 0x28);
+        sp->unk_2C.vz = *(s32 *)((u8 *)p + 0x2C);
+        k = (*(s16 *)((u8 *)p + 0x22) != 0);
+        func_800649A0();
+        m = &s->unk_14 + k;
+        func_80064CF0(m);
+        func_80064D80(m);
+        func_80065320(&sp->unk_2C, &sp->unk_2C, (s32 *)((u8 *)sp + 0x98));
+        func_80064A40();
+        *(s16 *)((u8 *)q + 0x2) = sp->unk_2C.vx;
+        *(s16 *)((u8 *)q + 0x6) = sp->unk_2C.vy;
+        *(s16 *)((u8 *)q + 0xA) = sp->unk_2C.vz;
+    }
+}
+
+/* The +0x20 view's own +0x00 entry handler, installed by func_800A1C94 and
+   called through func_800A1D1C's `p->unk_00(p, q, r)` -- three arguments, so
+   the second is a DEAD MIDDLE parameter and is witnessed by the gap it leaves:
+   $a1 is overwritten with %hi(D_800345B8) before anything reads it.  Same
+   prologue as func_800A21EC and func_800A23D0 -- clear the renderer's
+   +0x00/+0x04/+0x05 and re-initialise the containing UnkNode through
+   func_8004491C -- but with a DIFFERENT template (D_800345B8, not D_80046398),
+   its own +0x08 descriptor D_800F148C, and no +0x14 vector copy.
+
+   It then reads the view's +0x20 selector once and uses it to index three
+   resident tables: D_800D0A10 (halfwords, read TWICE off one cse'd address
+   and fed to func_800644B8 and func_80064584), D_800D0A1C (words) and
+   D_800D0A34 (halfwords).  THE SELECTOR MUST BE AN s32 LOCAL READ BEFORE THE
+   r-> STORES: `s16 i` costs the sll/sra 16 pair and is 61 words / 43
+   differing, writing the subscript out three times is 61 / 52, and reading it
+   after the stores is 13 differing because a load cannot be hoisted over a
+   may-aliasing store.
+
+   D_800D0A10 must be declared s16 (u16 is 2 differing, the two `lh` become
+   `lhu`).  D_800D0A34's signedness has NO witness -- its value is only stored
+   back as a halfword -- and `extern s16` measures 0 differing too.
+
+   THE INSTALL IS LAST, and that is the only order that works: the three tail
+   statements permute six ways and only +0x3C, +0x22, install reaches 0 (the
+   others are 11, 17, 20, 22 and 30 differing at 59 or 60 words).
+   func_800A1FEC is defined BELOW this function and an address-take does NOT
+   ride an implicit declaration, so the forward declaration above is
+   mandatory: omitting it is `func_800A1FEC undeclared` and a wrong arity or
+   return type is `conflicting types`, not a silent codegen change.
+   `void func_800A1FEC();` measures identically.
+
+   59 words -- its header reads `nonmatching func_800A1F00, 0xEC`, and
+   0xEC/4 = 59.  Measured 0 differing. */
+void func_800A1F00(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    s32 i;
+
+    i = *(s16 *)((u8 *)p + 0x20);
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    r->unk_08 = (u32)D_800F148C;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_800345B8);
+    r->unk_10 = 0x20;
+    *(u16 *)((u8 *)r + 0x14) |= 0x1C;
+    *(s32 *)((u8 *)p + 0x24) = func_800644B8(D_800D0A10[i]);
+    *(s32 *)((u8 *)p + 0x28) = 0;
+    *(s32 *)((u8 *)p + 0x2C) = func_80064584(D_800D0A10[i]);
+    *(s32 *)((u8 *)p + 0x3C) = D_800D0A1C[i];
+    *(s16 *)((u8 *)p + 0x22) = D_800D0A34[i];
+    p->unk_00 = func_800A1FEC;
+}
+
+/* func_800A1F00's continuation, installed in its own +0x00 slot and reached
+   through func_800A1D1C's `p->unk_00(p, q, r)` -- which is what gives it three
+   parameters even though it reads only the third.  No frame, no callees.
+   r->unk_18 is an s16 but the read is `lhu` because the result is truncated
+   back into a halfword; the `sh` rides the `jr` delay slot.
+
+   5 words -- its header reads `nonmatching func_800A1FEC, 0x14`, and
+   0x14/4 = 5.  Measured 0 differing on the first compile. */
+void func_800A1FEC(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    r->unk_18 -= 4;
+}
+
+/* The parameterised twin of func_800A1C94: the same 0x136 spawn, the same two
+   handler installs and the same +0x20 view initialisation, but with the two
+   handlers and four payload values passed in instead of written inline.  SIX
+   parameters, and the last two are function pointers -- read off both ASM
+   callers: func_800A20D8 passes func_800A2180 and func_800A21EC
+   (`sw $s2, 0x10($sp)` / `sw $s1, 0x14($sp)`) and func_800A2304 passes
+   func_800A2338 and func_800A23D0.  The two stack slots at 0x38/0x3C($sp) are
+   those arguments; `d` is witnessed as s32 in the CALLEE as well as the caller
+   (s16 is 10 differing).
+
+   The first parameter is itself a +0x20 view: it is both the payload parked at
+   the new view's +0x10 and, at -0x20, the node func_8003FD64 builds from --
+   where func_800A1C94 passes &D_80083498.
+
+   THE INTERIOR `v` POINTER IS LOAD-BEARING, as it is in func_800A1C94: the
+   four stores come off `addiu $v0, $a1, 0x20` once.  Writing them as
+   `(u8 *)n + 0x30` etc. is 52 words and 35 differing.  So is `g`: the
+   D_80083160 colour triple must come off a pointer local assigned WHERE IT IS
+   (hoisting `g` to the top is 56 words / 55 differing, inlining the casts is
+   53 / 23) -- the same shape func_800A2338 uses.
+
+   THE STORE ORDERS ARE MEASURED, NOT GUESSED.  The 0x1000 scale triple is
+   descending 0x20/0x1E/0x1C (ascending is 2 differing) and the zero triple is
+   0x12/0x14/0x10 (ascending 3, descending 2).  AND r->unk_14 IS ZEROED TWICE,
+   once with the other two and once after the colours: dropping the duplicate
+   is 53 words and 11 differing, so it is in the source, not a scheduling
+   artefact.
+
+   54 words -- its header reads `nonmatching func_800A2000, 0xD8`, and
+   0xD8/4 = 54.  Measured 0 differing. */
+UnkNode *func_800A2000(void *a, void *b, void *c, s32 d, void (*h10)(),
+                       void (*h20)())
+{
+    UnkNode *n;
+    UnkTownRend *r;
+    u8 *v;
+    u8 *g;
+
+    n = func_8003FD64(0x136, (u8 *)a - 0x20);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    n->unk_10 = (u32)h10;
+    r = (UnkTownRend *)n->unk_0C;
+    *(u32 *)((u8 *)n + 0x20) = (u32)h20;
+    v = (u8 *)n + 0x20;
+    *(u32 *)(v + 0x10) = (u32)a;
+    *(u32 *)(v + 0x14) = (u32)c;
+    *(s16 *)(v + 0x20) = d;
+    *(u32 *)(v + 0x40) = (u32)b;
+    r->unk_20 = 0x1000;
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    r->unk_12 = 0;
+    r->unk_14 = 0;
+    r->unk_10 = 0;
+    g = (u8 *)&D_80083160;
+    r->unk_0C = g[0xA8];
+    r->unk_0D = g[0xA9];
+    r->unk_0E = g[0xAA];
+    r->unk_14 = 0;
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A20D8);
 
