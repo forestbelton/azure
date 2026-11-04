@@ -423,7 +423,7 @@ size, the `-G` value, the struct layout, the flags.
    closing `grep -v ' 0 differing'` swallowed the hard exit. `ovlverify.py` now
    falls back to the reference binary via the ELF's section LMA, and the recipe
    prints its own coverage. See docs/town-sweep.md, "A sweep that verified
-   nothing". `docs/matching-levers.md` is at **425 levers**, as `leverindex.py` itself
+   nothing". `docs/matching-levers.md` is at **432 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
