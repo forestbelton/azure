@@ -3225,6 +3225,29 @@ void func_800A58CC(UnkTownTask *a, UnkTown2AE8 *b);
    loop whose constants func_800AE854 below then overrides for two rows --
    the same 0x68 / 0x60 / 0x9 / 0x39 / 0x20 literals appear in both. */
 void func_800AE734(u8 *s);
+/* The two +0x50 continuation handlers this group installs: func_800A6EA4
+   installs func_800A6EE4 and func_800A6F48 installs func_800A70EC, and in both
+   cases the handler is DEFINED further down the file than the installer.  An
+   address-take cannot ride an implicit declaration the way a call can, and the
+   `%hi`/`%lo` pair it emits is a FUNCTION symbol that ovlverify masks, so both
+   names have to be declared here.
+
+   D_800D0DD8 is the descriptor func_800A6F48 binds into the actor's +0x0C and
+   then reads two s32s out of (+0x04 and +0x10); it sits beside D_800D0DA8 and
+   D_800D0DC0, which the same family's two bind bodies pass to func_8008F104. */
+void func_800A6EE4(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r);
+void func_800A70EC(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r);
+extern UnkVec D_800D0DD8;
+
+/* func_800A6EE4's one callee and func_800A6F48's node spawner, both DEFINED
+   further down than their call site.  Both would otherwise ride an implicit
+   declaration -- which the unit does 18 times for calls and which is harmless
+   for the bytes -- but func_800A75B8's RETURN VALUE is assigned to an
+   `UnkNode *` twice, so an implicit `int` return costs two `assignment makes
+   pointer from integer without a cast` warnings.  Declared here instead: both
+   functions re-measure 0 differing with the declarations and without them. */
+void func_800A6F48(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r);
+UnkNode *func_800A75B8(UnkVec *a);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -20564,13 +20587,222 @@ void func_800A6E1C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     r->unk_16 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6EA4);
+/* The +0x50 state func_800A6E1C installs (:20231): a one-shot gate on
+   func_80033B2C(0x99) that arms the fade-in by zeroing the actor's +0x90
+   accumulator and handing the slot on to func_800A6EE4, which is the only
+   thing that reads +0x90 afterwards.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6EE4);
+   `%hi`/`%lo` on func_800A6EE4 is a FUNCTION address-take: ovlverify masks
+   both words and there is no `jal` to decode.  Read off this function's own
+   listing (asm/nonmatchings/ovl_town/func_800A6EA4.s), which carries exactly
+   one `%hi`/`%lo` pair and one `jal`; relocdump reports 3 relocation words
+   here, 2 of them on a function symbol.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A6F48);
+   The +0x90 zero goes BEFORE the install: the other order is 2 differing.
+   The `lui` sits in the `beqz`'s delay slot either way -- reorg takes the
+   fall-through block's first insn, and a store is not movable there.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A70EC);
+   Arity: only $a0 is read.  The three trailing parameters have NO witness in
+   this body; they are declared to match the +0x50 slot's four-argument
+   dispatch -- `(*(void (**)(UnkTownSpawn *, UnkTownSpawn *, UnkVec *,
+   UnkTownRend *))((u8 *)p + 0x50))(p, p, q, r)` at :13078, :14463 and :16019
+   -- and the handler installed here, which does read $a3.  A dead TRAILING
+   parameter is invisible, so that is a convention and not a measurement.
+
+   Measured TIES at 0 differing, all rejected in favour of the form below:
+   `if (func_80033B2C(0x99) == 0) { return; }` with both stores inline; the
+   bare truthiness test with no `!= 0`; func_800A6E1C's own
+   `*(u32 *)((u8 *)a + 0x50) = (u32)func_800A6EE4`; and
+   `*(s16 *)((u8 *)a + 0x90) = 0`.
+
+   16 words -- its header reads `nonmatching func_800A6EA4, 0x40`, and
+   0x40/4 = 16.  Measured 0 differing, first compile. */
+void func_800A6EA4(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r)
+{
+    if (func_80033B2C(0x99) != 0)
+    {
+        a->unk_90 = 0;
+        a->unk_50 = func_800A6EE4;
+    }
+}
+
+/* The state func_800A6EA4 installs: walk the actor's +0x90 accumulator up by 4
+   a frame, add it into the renderable's +0x16, clamp that at 0x400 and -- once
+   it is exactly 0x400 -- hand the frame on to func_800A6F48.  So +0x16 is
+   eased from 0 to 0x400 over the accumulator's own ramp and the hand-over
+   fires exactly once, on the frame the clamp first bites.
+
+   BOTH READS OF +0x16 ARE UNSIGNED AND BOTH CASTS ARE LOAD-BEARING, even
+   though UnkTownRend.unk_16 is declared `s16`.  The clamp test is `sltiu`:
+   signed is 26 words against 25 with 16 differing.  The equality test is
+   `lhu`: dropping the cast there alone is 1 differing (`lh`).
+   `*(u16 *)((u8 *)r + 0x16)` for both is a measured TIE at 0.
+
+   `r->unk_16 += (a->unk_90 += 4);` as one statement is also a TIE at 0 -- the
+   add reuses the just-stored +0x90 value out of $v1 either way.  The second
+   read of +0x16 is a real reload because its value is known in only one arm
+   of the clamp.
+
+   Arity: $a0 and $a3 are read, $a1 and $a2 are never touched -- a dead MIDDLE
+   pair, witnessed by the gap in the $aN sequence.  $a2 is a real parameter
+   all the same: it is FORWARDED to func_800A6F48, which reads it, and a pure
+   forward needs no setup insn, which is why the `jal`'s delay slot carries
+   only `addu $a1, $a0, $zero`.
+
+   25 words -- its header reads `nonmatching func_800A6EE4, 0x64`, and
+   0x64/4 = 25.  Measured 0 differing, first compile. */
+void func_800A6EE4(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r)
+{
+    a->unk_90 += 4;
+    r->unk_16 += a->unk_90;
+    if ((u16)r->unk_16 >= 0x400)
+    {
+        r->unk_16 = 0x400;
+    }
+    if ((u16)r->unk_16 == 0x400)
+    {
+        func_800A6F48(a, a, q, r);
+    }
+}
+
+/* The hand-over func_800A6EE4 fires on its clamp, and the only real body in
+   this group: bind the actor's +0x0C descriptor to D_800D0DD8, then spawn TWO
+   nodes through func_800A75B8 from one stack UnkVec built off the caller's
+   position -- the first pushed FORWARD by half the descriptor's +0x04/+0x10
+   span, the second pulled BACK by a third of it -- give each node's mover a
+   +0x0C kick (0x10000 forward, -0x8000 back) and damp its remaining deltas,
+   zero each new node's actor-view countdown, burst both with func_800ABD74,
+   and finally install func_800A70EC with a 0xA countdown and paint the
+   renderable mid-grey.
+
+   THE +0x0C FIELD IS RE-READ, NOT CACHED.  Both halves read the descriptor
+   back out of the field.  The first half gets the stored pointer forwarded out
+   of the `%lo` register by cse; the second half emits a real `lw 0xC($s0)`,
+   because the stack store of `v.unk_00` -- whose address escapes to
+   func_800A75B8 -- invalidates that cse entry.  Caching the descriptor VALUE
+   in a local instead (`d = &D_800D0DD8;` and then `d->unk_04`) is 102 words
+   against 105 with 103 differing: the pointer then lives in a callee-saved
+   register across both calls.  A local holding the ADDRESS OF THE FIELD,
+   assigned as a STATEMENT, is a TIE at 0 and is what is written here.  Typing
+   the second parameter `UnkNode *` and spelling the field `b->unk_0C` is also
+   a TIE at 0, but the second parameter is the dispatcher's `p` again -- the
+   node's +0x20 ACTOR VIEW, not a node -- so the cast off the actor is the
+   honest form.
+
+   The tail, 0x800A70A8..0x800A70C8, is func_800A79C8's body verbatim with
+   func_800A70EC for func_800A79F0 and 0xA for 0x16, and that function's own
+   note re-measures here: the +0x50 install goes BEFORE the +0x6C seed (the
+   other order is 5 differing) and the three byte stores are DESCENDING
+   (ascending is 2 differing).
+
+   `%hi`/`%lo` on func_800A70EC is a FUNCTION address-take -- ovlverify masks
+   both words and there is no `jal` to decode.  Read off this function's own
+   listing (asm/nonmatchings/ovl_town/func_800A6F48.s), which carries exactly
+   two `%hi`/`%lo` pairs -- D_800D0DD8 (DATA) and func_800A70EC (FUNCTION) --
+   and four `jal`s, in the order func_800A75B8, func_800ABD74, func_800A75B8,
+   func_800ABD74.  relocdump reports 8 relocation words, 2 on a function
+   symbol.
+
+   Each new node's countdown is written through the +0x20 ACTOR VIEW -- the
+   same +0x90 field func_800A6EA4 zeroes and func_800A71F0 arms at 2.  The
+   displacement folds to 0xB0 off the node, so `*(s16 *)((u8 *)n + 0xB0) = 0`
+   is a TIE at 0 and the view spelling is kept for what it says.  Moving the
+   zero AFTER the func_800ABD74 call is 107 words with 98 differing: it is the
+   insn reorg lifts into each `jal`'s delay slot.
+
+   `/ 2`, `/ 4` and `/ 3` are all SIGNED divisions and their fix-ups are real
+   words -- the `srl 31`/`addu`/`sra 1` triple, two `bgez`/`addiu 3`/`sra 2`
+   pairs, and the 0x55555556 magic multiply, which cse materialises ONCE and
+   which global-alloc then puts in $s0, over the second parameter, because it
+   is live across both calls.
+
+   105 words -- its header reads `nonmatching func_800A6F48, 0x1A4`, and
+   0x1A4/4 = 105.  Measured 0 differing, first compile. */
+void func_800A6F48(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r)
+{
+    UnkVec v;
+    UnkNode *n;
+    UnkVec **d;
+
+    d = (UnkVec **)((u8 *)b + 0xC);
+    *d = &D_800D0DD8;
+    v.unk_00 = q->unk_00 + ((*d)->unk_04 + (*d)->unk_10) / 2;
+    v.unk_04 = q->unk_04 + (*d)->unk_04 + (*d)->unk_10;
+    v.unk_08 = q->unk_08;
+    n = func_800A75B8(&v);
+    n->unk_08->unk_0C = 0x10000;
+    n->unk_08->unk_10 /= 4;
+    n->unk_08->unk_14 /= 4;
+    ((UnkTownActor *)((u8 *)n + 0x20))->unk_90 = 0;
+    func_800ABD74((UnkTown2AE8 *)&v);
+    v.unk_00 = q->unk_00 - ((*d)->unk_04 + (*d)->unk_10) / 3;
+    n = func_800A75B8(&v);
+    n->unk_08->unk_0C = -0x8000;
+    n->unk_08->unk_10 /= 3;
+    ((UnkTownActor *)((u8 *)n + 0x20))->unk_90 = 0;
+    func_800ABD74((UnkTown2AE8 *)&v);
+    a->unk_50 = func_800A70EC;
+    a->unk_6C = 0xA;
+    r->unk_0E = 0x80;
+    r->unk_0D = 0x80;
+    r->unk_0C = 0x80;
+}
+
+/* The state func_800A6F48 installs, and the one that closes this group: walk
+   the actor's +0x6C countdown down from 0xA and drive the renderable's three
+   scale axes off a sine of 204 times what is left -- +0x1C and +0x1E opening
+   upward from 0x1000 and +0x20 closing downward from it -- then, on expiry,
+   snap +0x1C/+0x1E back to 0x1000 and CLEAR the +0x50 slot, which leaves the
+   actor with no state at all.
+
+   THE `<= 0` ARM IS WRITTEN FIRST AND THAT IS LOAD-BEARING, exactly as in
+   func_800A79F0: that arm leaves through the shared epilogue by an explicit
+   `j`, so the listing's `bgtz` branches AWAY to the positive arm and the
+   expiry arm is laid out inline.  Writing `> 0` first is 65 of 65 words with
+   47 differing.
+
+   The countdown test is `<= 0` and not `< 0`: the re-sign is a full
+   `sll 16`/`sra 16` pair, where `< 0` needs only the `sll` -- which is the
+   other side of the test func_800A7950 and func_800A79F0 record.  The `lhu`
+   on the decrement beside the two `lh`s on the plain reads is correct for one
+   `s16` field and not a typing inconsistency.
+
+   `/ 8` AND NOT `>> 3`: the signed division's `bgez`/`addiu 7` fix-up is real
+   on all three axes, and `>> 3` is 56 words with 40 differing.
+
+   `* 204` is what gives the `sll 1`/`addu`/`sll 4`/`addu`/`sll 2` chain;
+   `* 51 * 4` folds to the same thing and is a TIE at 0.
+
+   The first expression uses the value `--a->unk_6C` just stored, and the next
+   two RELOAD the field with `lh`, because func_800644B8 sits between them and
+   may alias it -- so writing `a->unk_6C` in all three is correct and hoisting
+   it into a local is 53 words with 57 differing.
+
+   In the expiry arm the two scales stay DESCENDING (+0x1E then +0x1C;
+   ascending is 2 differing) and the +0x50 clear goes LAST, where it fills the
+   forward `j`'s delay slot -- written first it is 3 differing.
+
+   Arity: $a0 and $a3 are read, $a1 and $a2 never touched -- the same dead
+   MIDDLE pair func_800A6EE4 carries, and the same four-argument +0x50
+   dispatch.
+
+   65 words -- its header reads `nonmatching func_800A70EC, 0x104`, and
+   0x104/4 = 65.  Measured 0 differing, first compile. */
+void func_800A70EC(UnkTownActor *a, UnkTownActor *b, UnkVec *q, UnkTownRend *r)
+{
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        a->unk_50 = NULL;
+    }
+    else
+    {
+        r->unk_1C = func_800644B8(a->unk_6C * 204) / 8 + 0x1000;
+        r->unk_1E = func_800644B8(a->unk_6C * 204) / 8 + 0x1000;
+        r->unk_20 = 0x1000 - func_800644B8(a->unk_6C * 204) / 8;
+    }
+}
 
 /* The func_8009DFD8 / func_800A3450 allocate-and-wire recipe -- node type
    0x136 out of func_8003FD64 against &D_80083498, bail with 0 on a null one,
