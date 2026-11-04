@@ -2830,6 +2830,11 @@ extern u8 D_800133E2;
 extern u8 D_800D3814[];
 extern u8 D_800D1BDC[];
 extern Unk41284 D_800D1B64;
+extern s16 D_800D0B18[];
+extern void *D_800D0B20[];
+extern u32 D_800D0B50[];
+void func_800A378C(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r);
+void func_800A38A8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -13812,9 +13817,198 @@ void func_800A34E0(UnkTownDispatch *d)
     d->unk_00();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A3508);
+/* The launcher of the 0x136 burst node func_800A3450 builds: it dresses the
+   renderable, draws two random PSX angles, turns them into a 16.16 velocity
+   triple on the mover, divides that triple by 23 into the view's own
+   +0x2C/+0x30/+0x34 as a per-frame decay, and installs func_800A378C as the
+   view's +0x00 continuation with a 0x18-frame countdown at +0x24.  The
+   three-link chain is func_800A3508 -> func_800A378C -> func_800A38A8, each
+   installed into the same +0x00 slot by its predecessor.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A378C);
+   THREE PARAMETERS, settled by the chain and not by the install.  The slot is
+   `void (*unk_00)()` -- UNPROTOTYPED -- so the install type-checks against any
+   arity and says nothing.  What settles it: func_800A3450 stores func_800A34E0
+   at the node's +0x10, func_80040190 (csrc/unk_12DEC.c:567) calls a +0x10
+   handler as
+   `((void (*)(void *, UnkVec *, u32)) fn)((u8 *)p + 0x20, p->unk_08, p->unk_0C)`,
+   and func_800A34E0's whole body is a bare `d->unk_00()` -- so $a0/$a1/$a2
+   reach this function untouched.  The body then reads all three into saved
+   registers before writing any of them and never touches $a3.  The first
+   parameter is the node's +0x20 actor view, which is why `p - 0x20` is the
+   UnkNode and `p + 0x22` is the selector func_800A3450 wrote from its own
+   second parameter.
+
+   The selector indexes three resident tables, and their addresses give their
+   lengths: D_800D0B18 (s16) runs 0x800D0B18..0x800D0B20, exactly FOUR entries,
+   which is the `< 4` test; D_800D0B20 (pointers) runs to 0x800D0B50, twelve.
+   D_800D0B18 must be `s16`: `u16` turns the `lh` into an `lhu`.
+
+   THE SELECTOR IS SPELLED OUT AT EVERY USE, NOT CACHED -- the opposite of
+   func_800A1F00 two hundred lines up, which caches the same +0x20-view
+   selector in an s32 local.  Here the target reloads `lh 0x22($s5)` three
+   times because the r-> stores between the uses invalidate cse's memory
+   table.  One `s32 i` read at the top is 156 words / 157 differing; read
+   after the r-> stores instead, 158 / 114.
+
+   WHAT IS LOAD-BEARING, each measured against 161 words / 0 differing:
+
+   * THE SEVEN OPENING STORES.  ALL 5040 permutations of them were compiled,
+     and exactly TWO reach 0: this one and the same thing with the colour word
+     moved up between the two scales.  What both have in common is that the
+     D_800D0B50 lookup goes BEFORE the three zeroes -- that is what lets
+     sched1 park the zeroes in the lookup's load-delay shadow -- and that the
+     scale pair leads.  The natural reading (colour, 0x1E, 0x1C, 0, 4, 5,
+     +0x08) is 18 differing; the best order with the colour word first is 9,
+     and the floor over the other 5038 is 2.
+
+   * The duplicated stores.  `q->unk_14 = func_80064584(b);` and the three
+     `q->unk_?? = q->unk_?? * n;` are separate statements; folding unk_14's
+     two into one is 157 words / 69 differing, and interleaving each `* n`
+     with its own `/ 23` is 160 / 63.  The three `/ 23` stores must all follow
+     the three `* n` stores, because the store through `p + 0x2C` kills cse's
+     memory table and forces the reloads of q->unk_10 and q->unk_14 that the
+     target has (q->unk_0C is still forwarded in a register).
+
+   * `b = 0x400;` AFTER `a = ...` in the short arm (swapped: 160 / 113), and
+     `D_800D0B18[...]` as the LEFT addend (swapped: 1 differing).
+
+   * `n` drawn AFTER the if/else (before it: 52 differing), and `/ 32` not
+     `>> 5` (159 words / 95 differing) -- the `addiu $v1, $v0, 0x101F` is the
+     division's +31 fixup folded into the +0x1000, i.e. the constant migrating
+     through a left-associated chain.
+
+   * the two cosine/sine products' operand order (either swap is 2 differing),
+     `/ 0x1000` not `>> 12` (156 / 94), the (u16) truncation of
+     func_800374F4's u32 result (no cast: a word shorter), the install AFTER
+     the +0x24 countdown store (before it: 5 differing; last of all: 13), the
+     colour as ONE word store (three byte stores: 162 words / 154 differing),
+     the 0x1C/0x1E scales descending (ascending: 2 differing) and BOTH
+     func_8009539C calls (one: 158 / 67).
+
+   Measured and NOT load-bearing, so do not re-derive: the `(s32)` cast inside
+   `n`, `extern void *D_800D0B50[]` with a `(u32)` cast on the store, and
+   spelling the D_800D0B20 gate as an inverted empty-then if/else -- all three
+   are 0 differing either way.
+
+   161 words -- its header reads `nonmatching func_800A3508, 0x284`, and
+   0x284/4 = 161.  0 differing, with all 13 R_MIPS_26 and all 10 %hi/%lo
+   records decoded against the listing: D_800D0B50, D_800D0B20, D_80045340,
+   D_800D0B18 and the address-take of func_800A378C.  Raw differing closes
+   exactly: 24 against 23 relocation words plus the one intra-function `j`. */
+void func_800A3508(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    s32 a;
+    s32 b;
+    s32 n;
+
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    *(u32 *)((u8 *)r + 0xC) = 0x808080;
+    r->unk_08 = D_800D0B50[*(s16 *)((u8 *)p + 0x22)];
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    if (D_800D0B20[*(s16 *)((u8 *)p + 0x22)] != NULL)
+    {
+        func_8003DB94(r, D_800D0B20[*(s16 *)((u8 *)p + 0x22)], 0);
+    }
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80045340);
+    if (*(s16 *)((u8 *)p + 0x22) < 4)
+    {
+        a = D_800D0B18[*(s16 *)((u8 *)p + 0x22)] + (u16)func_800374F4(0x1000);
+        b = 0x400;
+    }
+    else
+    {
+        a = (u16)func_800374F4(0x1000);
+        b = (u16)func_800374F4(0x1000);
+    }
+    n = ((s32)(u16)func_800374F4(0x1000) + 0x1000) / 32;
+    q->unk_0C = func_800644B8(a) * func_800644B8(b) / 0x1000;
+    q->unk_10 = func_80064584(a) * func_800644B8(b) / 0x1000;
+    q->unk_14 = func_80064584(b);
+    q->unk_0C = q->unk_0C * n;
+    q->unk_10 = q->unk_10 * n;
+    q->unk_14 = q->unk_14 * n;
+    *(s32 *)((u8 *)p + 0x2C) = q->unk_0C / 23;
+    *(s32 *)((u8 *)p + 0x30) = q->unk_10 / 23;
+    *(s32 *)((u8 *)p + 0x34) = q->unk_14 / 23;
+    *(s32 *)((u8 *)p + 0x24) = 0x18;
+    p->unk_00 = func_800A378C;
+    func_8009539C(q);
+    func_8009539C(q);
+}
+
+/* func_800A3508's continuation, installed in the +0x20 view's own +0x00 slot
+   and reached the same way, so the same three parameters -- $a0/$a1/$a2 are
+   all read into saved registers before any is written and $a3 is never
+   touched.  It runs func_800A3508's 0x18-frame countdown at the view's +0x24
+   down, decaying the mover's velocity triple by the per-frame step
+   func_800A3508 parked at +0x2C/+0x30/+0x34 and integrating it, and on expiry
+   it re-dresses the renderable (grey 0x40 triple, scale 0x20, the same
+   `|= 0x1C` flag set func_800A1F00 writes), stops the mover, throws it upward
+   by a fresh random amount and installs func_800A38A8 -- which is the fade
+   that ends the chain.
+
+   Only the SECOND arm renders: func_800478B8 runs only while the gate pointer
+   D_800D0B20[selector] is non-null, the same table func_800A3508 feeds to
+   func_8003DB94.
+
+   What is load-bearing, each measured against 71 words / 0 differing:
+
+   * BOTH zeroings of the mover.  The arm zeroes +0x0C/+0x10/+0x14, dresses
+     the renderable, installs, and then zeroes +0x0C/+0x10 AGAIN before
+     writing +0x14 with the random throw.  Dropping the second pair is 69
+     words / 44 differing; dropping the first triple is 68 / 58.  This is the
+     same duplicated-store shape func_800A2000's note records for r->unk_14.
+   * the install BETWEEN the two groups (moved to the end of the arm: 28
+     differing), and r->unk_0E/0D/0C descending (ascending: 2 differing).
+   * the (u16) truncation of func_800374F4's u32 result (without it the
+     `andi` goes and it is 70 words / 41 differing), and the throw written
+     `(x * 2 + 0x2000) * 16` rather than `x * 32 + 0x20000` (3 differing) --
+     fold-const will not re-associate the first form.
+
+   Measured and NOT load-bearing: `& 0xFFFF` for the `(u16)` cast, `<< 4` for
+   `* 16`, the order of `r->unk_10 = 0x20` against the `|= 0x1C`, writing the
+   `|= 0x1C` through the plain s16 field instead of a `(u16)` cast, spelling
+   the gate as an early `return`, and `q->unk_0C = q->unk_0C - ...` for `-=`.
+   All of those are 0 differing either way.
+
+   71 words -- its header reads `nonmatching func_800A378C, 0x11C`, and
+   0x11C/4 = 71.  0 differing on the first compile, with all 3 R_MIPS_26 and
+   both %hi/%lo pairs decoded against the listing: D_800D0B20 and the
+   address-take of func_800A38A8.  Raw differing closes exactly: 8 against 7
+   relocation words plus the one intra-function `j`. */
+void func_800A378C(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
+{
+    *(s32 *)((u8 *)p + 0x24) -= 1;
+    if (*(s32 *)((u8 *)p + 0x24) < 0)
+    {
+        q->unk_0C = 0;
+        q->unk_10 = 0;
+        q->unk_14 = 0;
+        r->unk_0E = 0x40;
+        r->unk_0D = 0x40;
+        r->unk_0C = 0x40;
+        r->unk_10 = 0x20;
+        *(u16 *)((u8 *)r + 0x14) |= 0x1C;
+        p->unk_00 = func_800A38A8;
+        q->unk_0C = 0;
+        q->unk_10 = 0;
+        q->unk_14 = ((u16)func_800374F4(0x1000) * 2 + 0x2000) * 16;
+    }
+    else
+    {
+        q->unk_0C -= *(s32 *)((u8 *)p + 0x2C);
+        q->unk_10 -= *(s32 *)((u8 *)p + 0x30);
+        q->unk_14 -= *(s32 *)((u8 *)p + 0x34);
+        func_8009539C(q);
+        if (D_800D0B20[*(s16 *)((u8 *)p + 0x22)] != NULL)
+        {
+            func_800478B8((s32)r);
+        }
+    }
+}
 
 void func_800A38A8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 {
