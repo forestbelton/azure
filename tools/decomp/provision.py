@@ -1317,9 +1317,22 @@ def main():
             # agent trusting the label would have shipped a bare `&v` and
             # taken an incompatible-pointer warning or an arity error.
             if protos.get(c):
-                cls = ('LANDED-BELOW but DECLARED at %s -- the call IS'
-                       ' type-checked, so a mismatch is a HARD ERROR'
-                       % ('csrc/%s.c' % unit))
+                # SAY WHICH DIRECTION. This branch hard-coded "LANDED-BELOW"
+                # and never consulted the position, so it mislabelled every
+                # DECLARED callee that happens to sit ABOVE its caller --
+                # reported 2026-11-04 for func_800BB508, defined at :43189
+                # above func_800BB640. The conclusion (declared, so the call
+                # is type-checked) is right either way, but the brief tells
+                # agents the ABOVE/BELOW direction is what decides whether an
+                # arity mismatch is a hard error, so a wrong direction is
+                # exactly the kind of thing they act on.
+                where_rel = ('LANDED-ABOVE' if first is not None
+                             and lines[c] < first else
+                             'LANDED-BELOW' if first is not None
+                             else 'LANDED')
+                cls = ('%s and DECLARED at %s -- the call IS'
+                       ' type-checked either way, so a mismatch is a'
+                       ' HARD ERROR' % (where_rel, 'csrc/%s.c' % unit))
             else:
                 cls = ('LANDED-ABOVE (mismatch = HARD ERROR)'
                        if first is not None and lines[c] < first
