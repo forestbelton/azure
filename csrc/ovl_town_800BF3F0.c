@@ -2075,6 +2075,28 @@ s32 func_800A62E8(s32 a, s32 b, s32 c, s32 d);
 s32 func_800A630C(s32 a, s32 b, s32 c, s32 d);
 extern void (*D_800D0438)();
 extern u8 D_800D0C58[];
+/* func_800C2F88 below compares the +0x10 hook of every D_80081498 node against
+   these two handlers, and func_800C3174 compares its own actor's +0x50 against
+   func_800C3960; an address-take does not ride an implicit declaration the way
+   a call does, so all three need one above the take.  func_800C3960 is defined
+   at the usual place below. */
+void func_800C321C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c);
+void func_800C3174(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800C3960(UnkTownDispatch *d);
+/* Three 0x18-byte descriptor records func_800C321C binds to the actor's +0xC
+   by its +0x70 kind byte.  They are THREE INDEPENDENT SYMBOLS and not
+   D_800D5018 + 0x10/0x28/0x40: D_800D4FE8/D_800D4FF8/D_800D5008/D_800D5018 are
+   four FOUR-element direction tables 0x10 apart (func_800C355C and three more
+   index all four by the same `dir`), so D_800D5018's object ends exactly at
+   0x800D5028 -- and the listing names these three.  The indexed spelling is
+   byte-identical after linking (R_MIPS_LO16 D_800D5018 with 0x10/0x28/0x40 in
+   the instruction field, %hi 0x800D either way) and measures 88/88 0 differing,
+   so only the symbol the listing names and the unit's own object boundaries
+   decide it.  All three are in splat/town.bin_undefined_syms_auto.txt
+   (:497-:499), and func_800C3438 reaches D_800D5028 as a base too. */
+extern u8 D_800D5028[];
+extern u8 D_800D5040[];
+extern u8 D_800D5058[];
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
 void func_800A48B0(u8 *a, UnkTown2AE8 *b);
 void func_8009550C(UnkTown2AE8 *b);
@@ -5325,7 +5347,75 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C2E84);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C2F14);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C2F88);
+/* func_800A0988's node walk (csrc/ovl_town.c:21900) with a different gate:
+   find the first D_80081498 node whose +0x10 hook is negative, whose +0x1E
+   flags lack 0x400, whose hook is EITHER of this family's two steppers
+   (func_800C3174 or func_800C321C), whose ACTOR VIEW's +0x60 slot index is the
+   caller's argument, and which the resident's func_80033D38 then accepts.
+   Returns the NODE, not the +0x20 view.
+
+   Both of func_800A0988's load-bearing spellings apply here and both were
+   re-measured:
+
+   1. THE NEXT POINTER IS READ AT THE TOP OF THE BODY.  The target's
+      `lw $s1, 0x0($s0)` is word 17, beside the +0x10 load and inside the
+      loop's header block; spelled `n = n->unk_00;` at the end of the body it
+      is 49 words and 44 differing.  sched1/sched2 are per-basic-block, so
+      nothing could have moved it there -- and $s1 is callee-saved because the
+      value has to survive func_80033D38.
+   2. THE +0x20 VIEW MUST BE A POINTER LOCAL ASSIGNED IN THE BLOCK BEFORE THE
+      ONE THAT USES IT -- after the 0x400 test and before the hook test.  That
+      is why reorg can steal `addiu $a0, $s0, 0x20` into the first hook
+      compare's delay slot from two insns back.  Folded into the uses
+      (`*(s32 *)((u8 *)n + 0x80)`, `func_80033D38((u8 *)n + 0x20)`) it is 50
+      words and 3 differing.
+
+   The `bgez $v1` is a real source test on the hook -- every handler address is
+   0x8xxxxxxx and so negative as `s32` -- and it is redundant with the two
+   `==` tests six insns later; dropping it is 48 words / 31 differing, and
+   putting the 0x400 test first is 9 differing.  The two handler addresses are
+   loop-invariant and loop.c hoists both lui/addiu pairs into the preheader,
+   which is why they get $s4 and $s3.  ONE FLAT `&&` CHAIN (no nested `if`) is
+   2 differing: the view local then lands in the loop header block.
+
+   ONE PARAMETER, from the body: $a0 is read before it is written and $a1/$a2
+   are never touched.  `s16`, because the only use is sign-extended with
+   `sll`/`sra 16` -- and `s32 i` with a `(s16)i` cast at the test measures the
+   same 0 differing, so the width is the declaration and not a byte.  Nothing
+   in C calls it or takes its address; its address sits in the built container's
+   table at 0x800D3F8C beside func_800A0A88's, which is the same class of search
+   helper.
+
+   50 words -- its header reads `nonmatching func_800C2F88, 0xC8`, and
+   0xC8/4 = 50.  No jump table, no rodata of its own.  Measured 0 differing;
+   `--raw` 7 against relocdump's own total of 7, FOUR of them %hi/%lo on a
+   FUNCTION symbol (func_800C3174, func_800C321C) plus %hi/%lo(D_80081498) and
+   one plain `jal`; ordered sequence OK.  THE `||` ORDER OF THE TWO HOOK TESTS
+   IS MASKED -- swapping them is 0 differing and `arith=OK`; seqcheck is the
+   only check that sees it, and the listing names func_800C3174 first. */
+UnkNode *func_800C2F88(s16 i)
+{
+    UnkNode *n;
+    UnkNode *next;
+    u8 *v;
+
+    n = D_80081498;
+    while (n != NULL)
+    {
+        next = n->unk_00;
+        if ((s32)n->unk_10 < 0 && (n->unk_1E & 0x400) == 0)
+        {
+            v = (u8 *)n + 0x20;
+            if ((n->unk_10 == (u32)func_800C3174 || n->unk_10 == (u32)func_800C321C) &&
+                *(s32 *)(v + 0x60) == i && func_80033D38(v))
+            {
+                return n;
+            }
+        }
+        n = next;
+    }
+    return NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C3050);
 
@@ -5333,9 +5423,148 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C30A4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C30E0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C3174);
+/* The landed func_800C25C0 above with its teardown tail changed and
+   its slot call replaced by a direct call: poll func_8009CFE0, and unless the
+   poll says 0 -- or says 2 while the actor's +0x50 is still func_800C3960 --
+   tear the spawn down (func_8008F134, clear the byte the +0x98 renderable
+   points at, the resident func_80033D08 unlink, then func_800C30A4).
+   Otherwise step it with func_800C321C.  No 0x8000 flag pair, unlike
+   func_800C25C0 and func_800BB508.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C321C);
+   The poll's result MUST be a local: the `addu $v1, $v0, $zero` copy is word
+   6, and spelling the condition with two calls is 43 words / 30 differing.
+   Written the other way round (the func_800C321C arm first, with the test
+   inverted) it is 19 differing -- the shape docs/town-sweep.md records as
+   "DO NOT INVERT AN if/else UNLESS AN ARM RETURNS", and here neither arm
+   does.  Testing `t != 2` before `t != 0` is 43 / 34.
+
+   TWO ADJACENT ONE-ARGUMENT CALLS, so their ORDER IS ONLY VISIBLE TO
+   seqcheck: swapping func_80033D08 and func_800C30A4 measures 42/42 words,
+   0 DIFFERING and `arith=OK`, and `seqcheck` alone catches it (seq=FAIL at
+   index 4).  Both delay slots are `addu $a0, $s0, $zero`; the listing's order
+   is func_80033D08 then func_800C30A4 and that is what is written.  Moving the
+   +0x98 clear ahead of func_8008F134 is 6 differing.
+
+   `*(u32 *)((u8 *)p + 0x50)` and `(u32)func_800C3960`; the same test written
+   through a prototyped function-pointer cast is also 0 differing, and the
+   `(u32)` form follows func_800A0988's `p->unk_10 == (u32)func_800A0708`.
+
+   THREE PARAMETERS: $a0, $a1 and $a2 are all read before being written, and
+   func_800C321C below takes the same three.  func_800C3050 takes this
+   function's address; that settles only which slot it occupies.
+
+   42 words -- its header reads `nonmatching func_800C3174, 0xA8`, and
+   0xA8/4 = 42.  No jump table, no rodata of its own.  Measured 0 differing on
+   the first compile; `--raw` 8 against relocdump's own total of 8 -- five
+   plain `jal` (func_8009CFE0, func_8008F134, func_80033D08, func_800C30A4,
+   func_800C321C), one intra-function `j` against `.text`, and TWO %hi/%lo
+   words on the FUNCTION symbol func_800C3960, read off this listing; ordered
+   sequence OK. */
+void func_800C3174(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 t;
+
+    t = func_8009CFE0(p, q);
+    if (t != 0 && (t != 2 || *(u32 *)((u8 *)p + 0x50) != (u32)func_800C3960))
+    {
+        func_8008F134((UnkTownActor *)p);
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        func_800C30A4((UnkTownActor *)p);
+    }
+    else
+    {
+        func_800C321C((UnkTownActor *)p, (UnkTown2AE8 *)q, r);
+    }
+}
+
+/* The sister unit's landed func_800AB1E0 (csrc/ovl_town.c:31029) from its slot
+   call onward, word for word -- the 0x8000 early out, the func_800C2E1C frame
+   index against +0x74 with the func_800C2CB0 rebind, the +0x71 bit choosing
+   which way func_800C2F14's answer drives the renderable's +0x14 bit 0, and
+   the closing func_800C2C80(a, c, 0, 0) -- behind a different head: bind one of
+   three descriptor records to the actor's +0xC by its +0x70 kind byte.
+
+   The three arms reach ONE `sw $v0, 0xC($s1)`: cross-jumping unifies the
+   identical store tails and leaves each arm its own lui/addiu plus a `j`.
+   Writing the store once after the chain, with the address in a pointer local,
+   is 87 words / 74 differing; a `switch` is 90 / 77; testing `== 1` before
+   `== 0` is 87 / 79.  The +0x70 byte is read twice in the source and cse
+   unifies the two `lbu`s, exactly as func_800A06A4 (csrc/ovl_town.c:21593)
+   records for its own +0x94 chain -- which is also where the
+   `*(u32 *)((u8 *)a + 0xC) = (u32)SYM` idiom comes from.
+
+   `idx` MUST be a local: inlining func_800C2E1C's call at its three uses is
+   96 words / 63 differing.  The +0x71 arms are order-pinned -- writing the
+   bit-set arm first with the test inverted is 4 differing.
+
+   THREE PARAMETERS, witnessed by func_800C3174 above, which `jal`s this
+   function with $a0/$a1/$a2 set; func_800C5064 takes its address.  $a1 is
+   never read here -- it is forwarded straight into the +0x50 slot call, whose
+   `jalr` delay slot holds `addu $a2, $s2, $zero` and leaves the incoming $a1
+   in place.
+
+   88 words -- its header reads `nonmatching func_800C321C, 0x160`, and
+   0x160/4 = 88.  No jump table, no rodata of its own.  Measured 0 differing on
+   the first compile; `--raw` 15 against relocdump's own total of 15 -- five
+   plain `jal` (func_800C2E1C, func_800C2CB0, func_800C2F14 twice,
+   func_800C2C80), four intra-function `j` words against `.text`, and six
+   %hi/%lo words on D_800D5028, D_800D5040 and D_800D5058, all read off this
+   listing; NO address-take on a function symbol; ordered sequence OK. */
+void func_800C321C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    s32 idx;
+
+    if (a->unk_70 == 0)
+    {
+        *(u32 *)((u8 *)a + 0xC) = (u32)D_800D5028;
+    }
+    else if (a->unk_70 == 1)
+    {
+        *(u32 *)((u8 *)a + 0xC) = (u32)D_800D5040;
+    }
+    else
+    {
+        *(u32 *)((u8 *)a + 0xC) = (u32)D_800D5058;
+    }
+    a->unk_50(a, b, c);
+    if (*(u16 *)((u8 *)a - 0x2) & 0x8000)
+    {
+        return;
+    }
+    idx = func_800C2E1C(a->unk_72, *(s16 *)((u8 *)a + 0x64));
+    if (*(s16 *)((u8 *)a + 0x74) != idx)
+    {
+        func_800C2CB0((u8 *)a, (s32)c, (*(void ***)((u8 *)a + 0x78))[idx], *(s8 *)((u8 *)c + 0x4));
+        *(s16 *)((u8 *)a + 0x74) = idx;
+    }
+    if ((*(u8 *)((u8 *)a + 0x71) & 1) == 0)
+    {
+        if (func_800C2F14(a->unk_72, *(s16 *)((u8 *)a + 0x64)))
+        {
+            c->unk_14 |= 1;
+        }
+        else
+        {
+            c->unk_14 &= ~1;
+        }
+    }
+    else
+    {
+        if (func_800C2F14(a->unk_72, *(s16 *)((u8 *)a + 0x64)))
+        {
+            c->unk_14 &= ~1;
+        }
+        else
+        {
+            c->unk_14 |= 1;
+        }
+    }
+    func_800C2C80(a, c, 0, 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C337C);
 
@@ -6146,7 +6375,67 @@ void func_800C4C3C(s32 i)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C4C88);
+/* The fourth D_80082A38 publisher, func_800C4BE0's body with the
+   facing CHOSEN rather than read: same `d = D_80082A38w;` base before the
+   `if`, same slot-+0x04 node, same `(u8 *)n + 0x20` actor view with the base
+   used twice so the `addiu ... 0x20` survives, and the same +0x48 slot -- but
+   the halfword handed to func_800C2B6C is the actor's +0x10 when this is slot
+   1 and the node's hook is NEITHER of the two town steppers, and the actor's
+   +0x72 facing otherwise.
+
+   THE HALFWORD MUST GO THROUGH A LOCAL.  Written as two
+   `d[18] = func_800C2B6C(*(u16 *)...)` statements the whole call tail
+   cross-jumps into one block and combine folds the load and the `(s16)`
+   conversion into a single `lh`: 36 words / 15 differing.  With an `s16`
+   local the load is a plain `movhi` (`lhu`) in each arm and the
+   `sll`/`sra 16` pair is the prototype's conversion in the JOIN block, where
+   no LOG_LINK reaches it -- combine.c only follows LOG_LINKS and flow builds
+   them within a block.  reorg then copies the shared `sll` into the first
+   arm's `j` delay slot, which is why the `sll` appears twice and the `sra`
+   once.  `u16 t` and `s32 t` measure the same 0 differing; `s16` is written
+   because the two reads are halfwords.
+
+   The two arms are order-pinned: writing the +0x72 arm first with the test
+   inverted is 5 differing.
+
+   ONE PARAMETER: $a1 and $a2 are never read, $a0 is read before it is
+   written, and the landed func_8009A654 calls the trio's func_800C4D20 with
+   one argument.
+
+   38 words -- its header reads `nonmatching func_800C4C88, 0x98`, and
+   0x98/4 = 38.  No jump table, no rodata of its own.  `--raw` 10 against
+   relocdump's own total of 10 -- %hi/%lo(D_80082A38), %hi/%lo(D_80082660),
+   one intra-function `j`, one plain `jal func_800C2B6C`, and FOUR %hi/%lo
+   words on the FUNCTION symbols func_800C3174 and func_800C321C, read off this
+   listing; ordered sequence OK.  THE ORDER OF THE TWO HOOK TESTS IS MASKED --
+   swapping them is 0 differing with `arith=OK`, and the listing names
+   func_800C3174 first. */
+void func_800C4C88(s32 i)
+{
+    UnkNode *n;
+    UnkTownActor *p;
+    u32 *d;
+    s16 t;
+
+    d = D_80082A38w;
+    if (i != 0)
+    {
+        n = (UnkNode *)D_80082660[i].unk_04;
+        if (n != NULL)
+        {
+            p = (UnkTownActor *)((u8 *)n + 0x20);
+            if (i == 1 && n->unk_10 != (u32)func_800C3174 && n->unk_10 != (u32)func_800C321C)
+            {
+                t = *(u16 *)((u8 *)p + 0x10);
+            }
+            else
+            {
+                t = p->unk_72;
+            }
+            d[18] = func_800C2B6C(t);
+        }
+    }
+}
 
 /* The third D_80082A38 publisher, and the only one with a call site:
    the landed func_8009A654 calls `func_800C4D20(0x1)`, which settles the
@@ -6176,7 +6465,72 @@ void func_800C4D20(s32 i)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C4D80);
+/* func_800C4C88's write side, over the same slot/node/actor-view chain and the
+   same two-stepper hook test: look a facing up in D_800D5070 by the second
+   argument, and -- only while the actor still believes it owns slot `i` --
+   store it into the actor's +0x10 when the node's hook is neither town
+   stepper, or into +0x6E and +0x72 and re-bind through func_800C2E84 when it
+   is.  The actor view is `(u8 *)n + 0x20` and the third func_800C2E84
+   argument is `p->unk_80->unk_04`, the same descriptor slot func_800C4F08
+   reaches through +0x80.
+
+   THE SLOT POINTER IS READ TWICE and that is what the extra word is.  The
+   target's `addu $a3, $a0, $zero` at word 16 is cse replacing the second
+   `D_80082660[i].unk_04` read with a register copy, and local-alloc keeps both
+   registers because `n` outlives the test.  The sibling spelling
+   `n = (UnkNode *)D_80082660[i].unk_04; if (n != NULL)` -- which is what
+   func_800C4BE0/func_800C4C3C/func_800C4D20/func_800C4C88 all write -- has no
+   copy to make and is 43 of 44 words, every later word shifted by one.
+   `m = slot; if (m != NULL) { n = m; ... }` is the same 0 differing, so what is
+   load-bearing is the COPY and not where it is written.
+
+   THREE MORE SPELLINGS ARE PINNED, all measured at 44 words: `v` must be
+   assigned BEFORE `n` and `p` (`n, p, v` order is 9 differing); the slot test
+   must be `i == p->unk_60` and not `p->unk_60 == i` (43 / 37 -- the operand
+   order is worth the copy); and the +0x6E store precedes the +0x72 store
+   (swapped, 2 differing).  Inverting the inner `if` and swapping its arms is
+   45 / 18.
+
+   BOTH PARAMETERS ARE `s8`.  Each is sign-extended with `sll 24`, and the
+   SECOND one's extension is COMBINED with the array's `*2` into one
+   `sra $v0, $v0, 23` because it has a single use, while the first keeps its
+   own `sra 24` because it is also compared twice.  `s32 i, s32 j` is 41 words
+   / 42 differing.  No caller and no address-take in C; its address sits in the
+   built container at 0x800D3FCC.
+
+   44 words -- its header reads `nonmatching func_800C4D80, 0xB0`, and
+   0xB0/4 = 44.  No jump table, no rodata of its own.  `--raw` 10 against
+   relocdump's own total of 10 -- %hi/%lo(D_80082660), %hi/%lo(D_800D5070), one
+   intra-function `j`, one plain `jal func_800C2E84`, and FOUR %hi/%lo words on
+   the FUNCTION symbols func_800C3174 and func_800C321C, read off this listing;
+   ordered sequence OK.  The hook-test order is masked here too, and the
+   listing names func_800C3174 first. */
+void func_800C4D80(s8 i, s8 j)
+{
+    UnkNode *n;
+    UnkTownActor *p;
+    s16 v;
+
+    if (D_80082660[i].unk_04 != 0)
+    {
+        v = D_800D5070[j];
+        n = (UnkNode *)D_80082660[i].unk_04;
+        p = (UnkTownActor *)((u8 *)n + 0x20);
+        if (i == p->unk_60)
+        {
+            if (i == 1 && n->unk_10 != (u32)func_800C3174 && n->unk_10 != (u32)func_800C321C)
+            {
+                *(u16 *)((u8 *)p + 0x10) = v;
+            }
+            else
+            {
+                p->unk_6E = v;
+                p->unk_72 = v;
+                func_800C2E84(p, n->unk_0C, p->unk_80->unk_04);
+            }
+        }
+    }
+}
 
 void func_800C4E30(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
 {
