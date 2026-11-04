@@ -153,6 +153,9 @@ def classify_addr_takes(listing, names):
     side, since a missed install is the expensive error.
     """
     lines = listing.split('\n')
+    # A function with no call at all cannot pass an argument, which is the
+    # decisive half of the tag test below.
+    has_call = bool(re.search(r'\b(jal|jalr)\b', listing))
     stored, tested, tagged = [], [], []
     for n in names:
         # A SYMBOL CAN BE IN MORE THAN ONE CLASS, so collect EVERY
@@ -175,27 +178,43 @@ def classify_addr_takes(listing, names):
                 verdict = 'store'
                 break
             reg = m.group(1)
-            # AN ADDRESS MATERIALISED STRAIGHT INTO AN ARGUMENT REGISTER IS A
-            # TAG, NOT AN INSTALL. Reported 2026-11-04: func_800A47A8 STORES
-            # func_800A3918 at +0x10 but passes func_800A3B1C in $a1 to
-            # func_8004491C, which never stores it here -- and this function
-            # reported both as "installs", one class. The witnesses are then
-            # different functions (the slot's dispatcher for one, the tag
-            # binder for the other), so the distinction decides which one to
-            # read. Route (d) already carries this prose; route (b) did not.
-            if re.match(r'a[0-3]$', reg):
-                verdicts.add('tag')
-                continue
-            for ahead in lines[i + 1:i + 10]:
+            # AN ADDRESS MATERIALISED INTO AN ARGUMENT REGISTER IS A TAG ONLY
+            # IF SOMETHING CALLS. This branch used to fire on the destination
+            # register ALONE and `continue` before the lookahead ran, which
+            # misclassified a COMPARISON operand as a tag: func_800A0988 has
+            # ZERO `jal` in its whole listing, `addiu $a3, $v0,
+            # %lo(func_800A0708)` at 0x800A099C is the right operand of
+            # `bne $a1, $a3` eleven lines later, and the tool called it a tag
+            # and sent an agent off to read a "binder" that does not exist.
+            # Reported 2026-11-04 with the measurement. In a leaf function an
+            # $aN cannot be an outgoing argument, so the register is not
+            # evidence by itself -- the consumer is.
+            arg_dest = bool(re.match(r'a[0-3]$', reg))
+            # And the window has to be wide enough to reach the consumer: the
+            # branch above is 11 lines past the `addiu`, just outside the old
+            # 10-line window, so widening it is what makes the TEST visible at
+            # all. Stop at a redefinition of the register instead of at a
+            # fixed count, which is the real boundary.
+            seen = None
+            for ahead in lines[i + 1:i + 40]:
                 if re.search(r'\bs[bhw]\s+\$%s\b' % reg, ahead):
-                    verdicts.add('store')
-                    break
-                if re.search(r'\b(beq|bne)\s+.*\$%s\b' % reg, ahead):
-                    verdicts.add('test')
-                    break
+                    seen = 'store'; break
+                if re.search(r'\b(beq|bne|beqz|bnez)\b.*\$%s\b' % reg, ahead):
+                    seen = 'test'; break
                 if re.search(r'\baddu\s+\$a[0-3],\s*\$%s,\s*\$zero\b' % reg, ahead):
-                    verdicts.add('tag')
+                    seen = 'tag'; break
+                if arg_dest and re.search(r'\b(jal|jalr)\b', ahead):
+                    seen = 'tag'; break
+                # the register is written again: anything later is a different
+                # value and tells us nothing about this materialisation.
+                if re.search(r'^\s*/\*[^*]*\*/\s+\S+\s+\$%s\s*,' % reg, ahead):
                     break
+            if seen:
+                verdicts.add(seen)
+            elif arg_dest and has_call:
+                # An $aN destination in a function that DOES call, with no
+                # other consumer found: still the conservative tag reading.
+                verdicts.add('tag')
         # No verdict at all stays an INSTALL, the conservative side, since a
         # missed install is the expensive error.
         if not verdicts:
