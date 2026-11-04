@@ -3134,6 +3134,27 @@ extern u8 D_800D0AFC[];
 void func_80096924(UnkTownTask *a, UnkTown2AE8 *b, UnkTownRend *c);
 void func_80096918(void);
 void func_800A8248(u8 *p, UnkVec *q, UnkTownRend *r);
+/* Out of image, all four lui/addiu (a SYMBOL, not a constant address: the
+   lui's destination register differs from the dependent load's).
+   D_800D0E24 and D_800D0E3C are 4-byte-element tables indexed by
+   func_800A75E4's second and third parameters; D_800D0E3C holds +0x50
+   handlers, which is why it is spelled as an array of function pointers.
+   D_800D0E44 is a scalar frame/variant index func_800A82F0 seeds with 0x14
+   and func_800A833C clamps to 0..0x14. */
+extern u32 D_800D0E24[];
+extern void (*D_800D0E3C[])();
+extern s32 D_800D0E44;
+/* Out of image. Stride 12 by the `sll 1`/`addu`/`sll 2` chain in
+   func_800A833C; func_800A82F0 reaches element 0x14 as +0xF0. */
+extern u8 D_800F8A70[];
+/* Both are UnkNode +0x10 handlers INSTALLED by a function defined above
+   them (func_800A75E4 and func_800A7B98 respectively), and an address-take
+   does not ride an implicit declaration the way a call does, so each needs a
+   real forward declaration here.  Arity 3 by func_80040190's cast
+   (csrc/unk_12DEC.c:567). */
+void func_800A76F0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800A7C0C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -19303,9 +19324,127 @@ UnkNode *func_800A75B8(UnkVec *a)
     return func_800A71F0(a, func_800A74D8, D_800D0E04);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A75E4);
+/* The spawner half of a pair with func_800A76F0 just below, which it
+   installs as the new node's UnkNode +0x10 handler.  Optionally parents the
+   new node on an existing actor -- D_80082660[id].unk_04 is that actor's
+   node, and its mover is handed to func_8009C390 as the seed position -- then
+   picks the renderable's +0x08 descriptor out of D_800D0E24 by the second
+   parameter and the actor's +0x50 continuation out of D_800D0E3C by the
+   third, records both selectors as bytes at +0x95/+0x96, lifts the mover's
+   +0x08 axis integer half by 0x62 and arms the +0x6C and +0x90 countdowns.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A76F0);
+   `n` and `m` are declared and initialised NULL at the top and set only
+   inside the NESTED if through the temporary `t`, which is what puts
+   `addu $a0, $v0, $zero` AFTER the inner `beqz` instead of before it.
+   Flattening it to `n = D_80082660[id].unk_04; if (n != NULL) m =
+   n->unk_08;` hoists that copy above the branch and is 66 words with 48
+   differing.  Measured ties: `*(u16 *)` for the +0xA lift, the lift spelled
+   out as `x = x - 0x62`, the two countdown stores swapped, `*(D_800D0E24 +
+   b)` for the subscript, and D_800D0E3C declared `u32[]` with a cast at the
+   store.  The orders that are NOT free: the +0x50 install ahead of the
+   +0x95/+0x96 bytes is 66/15, the +0x95/+0x96 pair swapped is 67/2, the
+   descriptor store moved after the func_80033CD8 call is 68/56, and the
+   +0xA lift moved below the two countdowns is 67/10.
+
+   FOUR parameters and the last two are both read, so the arity is
+   witnessed by the body: $a2 -> $s3 -> the D_800D0E3C index and the +0x96
+   byte, $a3 -> $s4 -> the +0x6C countdown.  provision.py's arity LEAD
+   ("func_80033CD8 with >=4 args") is a false positive of all three
+   documented kinds at once: $a3 is the zero set for the EARLIER
+   func_8009C390 call and never rewritten, and $a2 is `lw $a2, 0xC($a2)` --
+   the renderable used as the BASE of the delay-slot store, not an argument.
+   Two arguments, as the landed prototype says.
+
+   THREE address-take words on ONE symbol, not two, and that is reorg, not
+   two installs: the inner `beqz`'s target thread (.L800A7644) is the OUTER
+   `beqz`'s fall-through, so the inner branch does not OWN it and
+   `fill_slots_from_thread` COPIES the `lui` into the delay slot instead of
+   moving it -- `temp = own_thread ? trial : copy_rtx (trial);`
+   (scratch/gcc-src/cdk-gcc-b18/reorg.c:3637) -- then emits a label after the
+   original and retargets the branch past it,
+   `label = get_label_before (new_thread); reorg_redirect_jump (insn, label);`
+   (:3829, :3831).  Hence %hi x2 + %lo x1 on func_800A76F0 and nothing else.
+
+   67 words -- its header reads `nonmatching func_800A75E4, 0x10C`, and
+   0x10C/4 = 67.  No jump table, no rodata of its own.  Measured 0
+   differing. */
+void func_800A75E4(s32 id, s32 b, s32 c, s32 d)
+{
+    UnkNode *n;
+    UnkNode *t;
+    UnkVec *m;
+    UnkNode *o;
+    UnkVec *v;
+    UnkTownActor *k;
+    UnkTownRend *s;
+
+    n = NULL;
+    m = NULL;
+    if (id != 0)
+    {
+        t = (UnkNode *)D_80082660[id].unk_04;
+        if (t != NULL)
+        {
+            n = t;
+            m = t->unk_08;
+        }
+    }
+    o = func_8009C390(n, m, func_800A76F0, 0);
+    if (o != NULL)
+    {
+        k = (UnkTownActor *)((u8 *)o + 0x20);
+        v = o->unk_08;
+        s = (UnkTownRend *)o->unk_0C;
+        s->unk_08 = D_800D0E24[b];
+        func_80033CD8((u8 *)k, (u32)D_80045340);
+        *(s16 *)((u8 *)v + 0xA) -= 0x62;
+        k->unk_90 = 0xA;
+        k->unk_6C = d;
+        *((u8 *)k + 0x95) = b;
+        *((u8 *)k + 0x96) = c;
+        k->unk_50 = D_800D0E3C[c];
+    }
+}
+
+/* The handler func_800A75E4 above installs at the node's +0x10 slot: run the
+   +0x6C countdown and, when it expires, unlink with func_80033D08 and set
+   the two 0x8000 flags (func_800A7B14's / func_800A6C4C's taken arm
+   verbatim); otherwise poll the +0x50 continuation func_800A75E4 chose out
+   of D_800D0E3C.
+
+   THE `<= 0` ARM IS WRITTEN FIRST.  Its `bgtz` branches AWAY to the +0x50
+   poll and the expiry arm is laid out inline ahead of an explicit `j` to the
+   epilogue -- the same shape as func_800A79F0 (:19215), where writing `> 0`
+   first measured 41 differing.
+
+   Three parameters by func_80040190's cast (csrc/unk_12DEC.c:567), and the
+   body reads only $a0, so arity is NOT witnessed here: one, two and three
+   parameters all measure 33/0.  The +0x50 poll forwards all three, which
+   costs nothing because $a1 and $a2 are untouched incoming registers at that
+   point -- `p->unk_50(p)` is a measured tie at 33/0, while `p->unk_50()` is
+   33 words / 4 differing (the `addu $a0, $s0, $zero` in the `jalr`'s delay
+   slot is real) and `p->unk_50(p, p, q, r)` is 35/32.  Dropping the null
+   test on +0x50 is 31 words / 9 differing.
+
+   `--x <= 0` and `x--; if (x <= 0)` are a measured tie at 33/0; `< 0` for
+   `<= 0` is 33 words / 1 differing (the `bgtz`/`bgez` word).
+
+   33 words -- its header reads `nonmatching func_800A76F0, 0x84`, and
+   0x84/4 = 33.  No jump table, no rodata of its own, and NO address-take.
+   Measured 0 differing. */
+void func_800A76F0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (--((UnkTownActor *)p)->unk_6C <= 0)
+    {
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if (((UnkTownDispatch *)p)->unk_50 != NULL)
+    {
+        ((UnkTownDispatch *)p)->unk_50(p, q, r);
+    }
+}
 
 void func_800A7774(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
 {
@@ -19579,9 +19718,81 @@ void func_800A7B14(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7B98);
+/* The spawner half of a pair with func_800A7C0C just below, which it
+   installs as the new node's UnkNode +0x10 handler.  Takes the (actor,
+   mover, rend) handler triple, re-parents on its OWN node -- `(u8 *)a - 0x20`,
+   the func_8009C390 first-argument idiom func_8009C648 (:12788) uses -- and
+   copies the caller's renderable descriptor (+0x08) and its +0x14 onto the
+   new node's renderable, then arms the new actor's +0x6C at 5.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7C0C);
+   The second argument of func_8009C390 is the INCOMING $a1 passed straight
+   through, so there is no setup insn for it; `b` is witnessed only by that
+   forward.  The +0x6C store is AFTER the func_80033CD8 call and the two
+   renderable copies are before it (the +0x14 `sh` sits in the `jal`'s delay
+   slot): moving the +0x6C store ahead of the call is 26 words with 25
+   differing, and swapping the two renderable copies is 29/4.  The `- 0x20`
+   node bias is load-bearing -- passing `a` unbiased is 28 words / 26
+   differing, not the one `addiu` it looks like.
+
+   TWO address-take words: %hi/%lo on func_800A7C0C, masked by ovlverify with
+   no `jal` to decode, read off this function's own listing.
+
+   29 words -- its header reads `nonmatching func_800A7B98, 0x74`, and
+   0x74/4 = 29.  No jump table, no rodata of its own.  Measured 0
+   differing. */
+void func_800A7B98(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
+{
+    UnkNode *n;
+    UnkTownActor *k;
+    UnkTownRend *s;
+
+    n = func_8009C390((u8 *)a - 0x20, b, func_800A7C0C, 0);
+    if (n != NULL)
+    {
+        k = (UnkTownActor *)((u8 *)n + 0x20);
+        s = (UnkTownRend *)n->unk_0C;
+        s->unk_08 = r->unk_08;
+        s->unk_14 = r->unk_14;
+        func_80033CD8((u8 *)k, (u32)D_80045340);
+        k->unk_6C = 5;
+    }
+}
+
+/* The handler func_800A7B98 above installs at the node's +0x10 slot, and
+   func_800A7B14's (:19218) probe family with a SECOND retire condition
+   instead of a second arm: func_8009CFE0 hitting retires the node, and so
+   does the +0x6C countdown expiring.  Both arms are the same three-statement
+   retire, and cross-jumping unifies them into the single block at
+   0x800A7C5C -- which is why the taken arm ends in `j .L800A7C5C` and the
+   countdown arm falls into it.  The mechanism is the simplejump arm of
+   `jump_optimize` (scratch/gcc-src/cdk-gcc-b18/jump.c:2179,
+   `if (cross_jump && simplejump_p (insn))`, with `find_cross_jump` at :2188
+   and `do_cross_jump` at :2208), so writing the retire block out twice and
+   writing it once with a `goto` into the second arm are the SAME bytes --
+   both 35/0, measured.  `< 0` for `<= 0` is 35 words / 1 differing.
+
+   35 words -- its header reads `nonmatching func_800A7C0C, 0x8C`, and
+   0x8C/4 = 35.  No jump table, no rodata of its own, and NO address-take.
+   Measured 0 differing. */
+void func_800A7C0C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else if (--((UnkTownActor *)p)->unk_6C <= 0)
+    {
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 void func_800A7C98(u8 *a, s32 b, s32 c)
 {
@@ -19845,7 +20056,56 @@ void func_800A8248(u8 *p, UnkVec *q, UnkTownRend *r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A82F0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A833C);
+/* func_800A7C0C's (:19253) near-sibling, and NOT a member of the pair group
+   it was batched with: it shares no callee and no global with func_800A75E4
+   or func_800A7B98, but it shares func_80033D08 + func_8009CFE0 + D_800814A0
+   with func_800A7C0C and its taken arm is byte-identical to it.  The else arm
+   is the new part: clamp the D_800D0E44 selector into 0..0x14 and point the
+   renderable's +0x08 descriptor at that element of the stride-12 D_800F8A70
+   table.  func_800A82F0, which installs this function at the node's +0x10
+   slot, seeds D_800D0E44 at 0x14 and the descriptor at D_800F8A70 + 0xF0 --
+   the same element, which is what fixes the stride.
+
+   The clamp is `< 0` FIRST with the `bgez` branching away, then `> 0x14`
+   (canonicalised to `slti 0x15`; writing `>= 0x15` is a tie), and then
+   D_800D0E44 is RE-READ -- a fresh `lui %hi` and `lw %lo` at 0x800A83C8 --
+   because the stores are in other basic blocks.  Testing the two bounds the
+   other way round is 51 words / 10 differing, dropping the `else` so both
+   tests run is 51/16, and caching the selector in a local instead of
+   re-reading it is 49 words / 26 differing.  D_800D0E44 must be a SYMBOL:
+   as a constant address (`*(s32 *)0x800D0E44`) it is 51 words / 16
+   differing, because the `lui` and the dependent `lw` then share a register.
+   `(u32)(D_800F8A70 + D_800D0E44 * 12)` and a real 12-byte record array are
+   both measured ties.
+
+   51 words -- its header reads `nonmatching func_800A833C, 0xCC`, and
+   0xCC/4 = 51.  No jump table, no rodata of its own, and NO address-take.
+   Measured 0 differing. */
+void func_800A833C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    if (func_8009CFE0(p, q))
+    {
+        if (p->unk_98 != 0)
+        {
+            *(u8 *)p->unk_98 = 0;
+        }
+        func_80033D08((u8 *)p);
+        *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        if (D_800D0E44 < 0)
+        {
+            D_800D0E44 = 0;
+        }
+        else if (D_800D0E44 > 0x14)
+        {
+            D_800D0E44 = 0x14;
+        }
+        r->unk_08 = (u32)&D_800F8A70[D_800D0E44 * 12];
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8408);
 
