@@ -652,6 +652,7 @@ HOW TO VERIFY. The full set under `tools/decomp/`:
 | `batcher.py UNIT` | partitions the remaining stubs into groups |
 | `brief.py UNIT PREFIX FUNC...` | generates the agent brief; `--no-levers` drops the shape-matched block |
 | `leverpick.py` / `leverpick_eval.py` | shape-matched lever selection, and its leave-one-out recall harness |
+| `seqcheck.py FILE FUNC...` | decodes the words `ovlverify` MASKS: the ORDERED sequence of (jal symbol, `%hi`/`%lo` symbol, intra-function `j` offset) off the listing against the candidate's relocations, plus the `raw == relocdump total` arithmetic. Passes the constant-address subsequence case with a note; fails a symbol MISMATCH for hand decoding |
 | `leverindex.py` | regenerates the lever index. **GENERATED -- never hand-edit; `--check` is read-only** |
 | `parkstats.py` | regenerates each park's stats header; `--check` must stay clean |
 | `nearsibs.py`, `worklist.py`, `progress.py`, `guard.py`, `magic.py`, `permimport.py`/`permrun.py` | the older seam-finding and permuter set |
