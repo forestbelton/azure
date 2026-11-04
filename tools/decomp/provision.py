@@ -863,6 +863,38 @@ def main():
             for i in already:
                 print("                  %-15s declared at csrc/%s.c:%-6d %s"
                       % (i, unit, protopos[i], protos[i]))
+        # A LANDED CALLER *ABOVE* YOU ALSO NEEDS A DECLARATION, and this
+        # block only ever covered the address-take case. Reported 2026-11-04
+        # by the func_800A4E1C group, which had to add one declaration the
+        # tooling did not predict: func_800A4B40 CALLS func_800A4CE8 from
+        # above, and today that rides an implicit declaration SILENTLY --
+        # because func_800A4CE8 has no definition. The moment it has one, gcc
+        # emits "previous implicit declaration of 'func_800A4CE8'" and "was
+        # previously implicitly declared to return 'int'". The edge was
+        # already in this tool's own route (c)/(e) output; only the
+        # declaration check did not consult it.
+        above = []
+        for d, dc in body.items():
+            if f in dc and d not in targets and d in lines \
+                    and lines[d] < mypos and not protos.get(f) \
+                    and f not in inc:
+                above.append((d, lines[d]))
+        if above:
+            print("                *** A LANDED CALLER SITS ABOVE YOU AND THIS"
+                  " UNIT DOES NOT DECLARE YOU:")
+            for d, ln in sorted(above, key=lambda r: r[1])[:4]:
+                print("                  %-15s csrc/%s.c:%-6d calls %s"
+                      % (d, unit, ln, f))
+            print("                That call rides an IMPLICIT declaration"
+                  " today, and it does so silently only")
+            print("                because you are still a stub. Define you,"
+                  " and gcc emits \"previous implicit")
+            print("                declaration\" plus \"was previously"
+                  " implicitly declared to return 'int'\" at that")
+            print("                site. Write the forward declaration with"
+                  " the body you land -- the unit's own")
+            print("                note beside func_800A4A4C/func_800A4A58"
+                  " records the convention.")
         if need:
             # SAY "ADDRESS-TAKE", NOT "INSTALL". This banner said INSTALL for
             # every entry, including the ones the per-function lines above had

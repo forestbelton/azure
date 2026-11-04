@@ -3081,6 +3081,7 @@ typedef struct UnkTownA4C10
     s32 unk_20;
     void (*unk_24)();
     void (*unk_28)();
+    s32 *unk_2C;
 } UnkTownA4C10;
 extern UnkTownA4C10 D_80100DE0;
 /* The second driven record, at D_80100DE0 - 0x28, with its own two handler
@@ -3104,6 +3105,10 @@ void func_8004D0C8(u32 a);
    is this unit's form for a handler whose arity nothing here settles --
    asm/nonmatchings/ovl_town/func_800A4B94.s reads only $a0. */
 void func_800A4B94();
+void func_800A4C10(UnkTownA4C10 *p);
+void func_800A4CE8(UnkTownA4C10 *p);
+void func_800A4D4C(UnkTownA4C10 *p);
+void func_800A4E1C(UnkTownA4C10 *p);
 /* Both landed in this batch, declared rather than left to the implicit
    declaration their call sites would otherwise ride: each is called from a
    function defined ABOVE it. */
@@ -23659,7 +23664,25 @@ void func_800A4B40(UnkTownA4C10 *p)
     func_800A4CE8(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4B94);
+void func_800A4B94(UnkTownA4C10 *p)
+{
+    if (p->unk_00 != p->unk_04)
+    {
+        p->unk_20 = 9;
+        p->unk_28 = func_800A4C10;
+        p->unk_14 = 0;
+        p->unk_18 = 0;
+        p->unk_1C = 0;
+        p->unk_04 = p->unk_00;
+        func_800A4C10(p);
+    }
+    else
+    {
+        p->unk_08 = p->unk_00[0];
+        p->unk_0C = p->unk_00[1];
+        p->unk_10 = p->unk_00[2];
+    }
+}
 
 /* The camera-path interpolator, and the other half of a two-state ping-pong
    with func_800A4B94: each installs the other at +0x28.
@@ -23707,11 +23730,61 @@ void func_800A4C10(UnkTownA4C10 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4CE8);
+void func_800A4CE8(UnkTownA4C10 *p)
+{
+    p->unk_28 = func_800A4D4C;
+    p->unk_00 = (s32 *)D_80100D98;
+    p->unk_04 = (s32 *)D_80100D98;
+    p->unk_2C = (s32 *)D_80100D98;
+    p->unk_08 = ((UnkTown2AE8 *)p->unk_2C)->unk_00;
+    p->unk_0C = ((UnkTown2AE8 *)p->unk_2C)->unk_04;
+    p->unk_10 = ((UnkTown2AE8 *)p->unk_2C)->unk_08;
+    func_800A48F8((UnkTown2AE8Int *)((u8 *)p + 8));
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4D4C);
+void func_800A4D4C(UnkTownA4C10 *p)
+{
+    if (p->unk_00 != p->unk_04)
+    {
+        p->unk_20 = 9;
+        p->unk_28 = func_800A4E1C;
+        p->unk_14 = 0;
+        p->unk_18 = 0;
+        p->unk_1C = 0;
+        p->unk_04 = p->unk_00;
+        func_800A4E1C(p);
+    }
+    else
+    {
+        p->unk_08 = (p->unk_00[0] + p->unk_2C[0]) / 2;
+        p->unk_0C = (p->unk_00[1] + p->unk_2C[1]) / 2;
+        p->unk_10 = (p->unk_00[2] + p->unk_2C[2]) / 2;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4E1C);
+void func_800A4E1C(UnkTownA4C10 *p)
+{
+    if (p->unk_00 != p->unk_04)
+    {
+        p->unk_20 = 9;
+        p->unk_14 = 0;
+        p->unk_18 = 0;
+        p->unk_1C = 0;
+        p->unk_04 = p->unk_00;
+        func_800A4D4C(p);
+    }
+    else
+    {
+        p->unk_08 += (((p->unk_00[0] + p->unk_2C[0]) / 2) - p->unk_08) / p->unk_20;
+        p->unk_0C += (((p->unk_00[1] + p->unk_2C[1]) / 2) - p->unk_0C) / p->unk_20;
+        p->unk_10 += (((p->unk_00[2] + p->unk_2C[2]) / 2) - p->unk_10) / p->unk_20;
+        p->unk_20 -= 1;
+        if (p->unk_20 <= 0)
+        {
+            p->unk_28 = func_800A4D4C;
+        }
+    }
+}
 
 /* The idle half of the +0x24 slot's two-state ping-pong with func_800A4F84:
    while a script is running it does nothing, and it hands the slot back to
@@ -23813,13 +23886,30 @@ void func_800A4F84(UnkTownA4C10 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5080);
+void func_800A5080(void)
+{
+    D_80100DE0.unk_00 = (s32 *)D_80100D98;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5094);
+void func_800A5094(void)
+{
+    D_80100DE0.unk_28 = func_800A4B94;
+    D_80100DE0.unk_00 = (s32 *)D_80100D98;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A50B8);
+void func_800A50B8(void)
+{
+    D_80100DE0.unk_28 = func_800A4D4C;
+    D_80100DE0.unk_2C = D_80100DE0.unk_00 = (s32 *)D_80100D98;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A50E0);
+void func_800A50E0(void)
+{
+    D_800D0C48[0] = D_80100DE0.unk_24;
+    D_800D0C48[1] = D_80100DE0.unk_28;
+    D_80100DE0.unk_24 = NULL;
+    D_80100DE0.unk_28 = NULL;
+}
 
 /* Re-arms BOTH of D_80100DE0's handler slots from the pair of addresses at
    D_800D0C48.  D_800D0C48 is declared as an ARRAY and not as two scalars,
