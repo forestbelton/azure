@@ -1207,6 +1207,26 @@ measure the state you are about to commit, not the state you merged from. An
 agent reported 29 for a copy that measured 37 under my hand, because it had
 measured before its last body edit.
 
+### A RESIDUE advise.py CALLS **ALLOCATION** GOES TO THE PERMUTER IMMEDIATELY
+
+The existing rule is "a park whose residue is an ORDERING should go to the
+permuter immediately". Generalise it: **so should one `advise.py` calls
+ALLOCATION**, and the tool will tell you when hand-written spellings cannot
+reach the answer.
+
+Measured 2026-11-04 on `func_800A9358`. Ninety-five hand-written spellings sat
+flat on a 21-differing plateau and never touched the variable that mattered,
+because the agent was varying STATEMENTS while the answer was a DECLARATION
+(`s32 ang` to `s16 ang` -- see the lever). A 25-minute permuter run over
+154,184 candidates went 135 to 20, and its find took four more measurements to
+reach 0, retiring the park.
+
+**`advise.py --greg`'s own MARGINS table was the signal to stop writing
+hypotheses**: it showed the required priority change was arithmetically out of
+reach of anything being varied. When the margin table says the gap cannot be
+closed by the quantity you are moving, the next move is the permuter, not
+another spelling.
+
 ### THE `scratch/` PREFIX SCHEME HAS WRAPPED ROUND -- USE A DATED PREFIX
 
 Two agents reported this in one batch, and one of them **overwrote another

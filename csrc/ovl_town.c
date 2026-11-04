@@ -3217,6 +3217,9 @@ void func_80090A64(void);
 void func_80097D2C(UnkTownDispatch *d);
 void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 extern s32 D_80100E20;
+/* func_800A9358's ribbon segment count, loaded out of D_800D0E48 and
+   then re-read at every use. */
+extern s32 D_80100E30;
 extern u8 D_800D0C50[];
 /* The resident's OuterProduct0 (splat/slus_006.14_symbol_addrs.txt:107),
    `v2 = v0 x v1`.  Spelled func_800652AC because that is the name
@@ -3247,6 +3250,9 @@ extern void (*D_800D0E3C[])();
 extern s32 D_800D0E44;
 /* func_800A9734's func_8008F104 descriptor, the same class as
    D_800CFD00 / D_800D0DA8 / D_800D0DC0. */
+/* func_800A9358's 4-byte-element table, indexed by func_800B28A0()'s
+   return; the element it reads is the ribbon's segment count. */
+extern s32 D_800D0E48[];
 extern u8 D_800D0E60[];
 /* Out of image. Stride 12 by the `sll 1`/`addu`/`sll 2` chain in
    func_800A833C; func_800A82F0 reaches element 0x14 as +0xF0. */
@@ -23966,7 +23972,128 @@ void func_800A8EE8(UnkTownA17CCSP *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9358);
+/* The actor's two-segment motion-trail ribbon driver, called by the landed
+   func_800A9528 as `func_800A9358(s, v)`: project the actor once at angle 0,
+   keep that frame's +0x114 word and its three screen points, walk the ribbon
+   once round 0x1000 in D_80100E30 steps -- drawing func_800A8EE8's two gouraud
+   quads at every step whose otz is under 0x1E0 -- and restore the kept values
+   before the last one.  The scratchpad is UnkTownA17CCSP, the typedef
+   func_800A8EE8 above and func_800A1354 / func_800AA10C already use, and the
+   copies are the ones func_800A8EE8's own comment block predicts:
+   `unk_E8[4]` is {cur0, cur1, prev0, prev1} and `unk_124[2]` is {cur2, prev2},
+   so +0xE8 -> +0xF0, +0xEC -> +0xF4, +0x124 -> +0x128 and +0x114 -> +0x118.
+
+   Five things had to be spelled a particular way, each measured:
+
+   - **`ang` MUST BE A 16-BIT LOCAL.**  `s32 ang` is 115 words / 73 differing,
+     and it is not one word of truncation: with `s32` the `sll`/`sra` pair
+     belongs to the CALL ARGUMENT (func_800A8CA8's parameter is `s16`), which
+     gives `ang` a third in-loop reference and pushes its global-alloc priority
+     above both `i` and the `%hi(D_80100E30)` pseudo -- `ang`, `i` and that
+     `%hi` then take $s1/$s2/$s3 in the wrong rotation and every one of the 73
+     differing words is a register NAME.  As an `s16` the truncation belongs to
+     `ang` itself, the reference disappears, and
+     `floor_log2(n_refs) * n_refs / live_length` (global.c:587,
+     `allocno_compare`) orders them i, `%hi`, `ang` as the target does.
+     `u16 ang` measures 0 differing too; `s16` is kept to match the callee's
+     own parameter.  This one declaration was the whole of a 21-differing
+     plateau that 95 hand-written spellings did not move: 24 save orders, 24
+     declaration orders, 6 loop forms, 5 angle-step spellings, 5 positions for
+     `ang = 0`, an `s16` truncation local, `u32 i`, `sp` inline.
+     decomp-permuter found it (base 135 -> 20 in 25 minutes at 6 jobs, 154,184
+     candidates), which is the measurement the protocol says to take: the
+     residue was an ALLOCATION, and that is CPU's job, not another hypothesis.
+
+   - **THE FOUR CARRY-FORWARD COPIES COME BEFORE THE FOUR SAVES.**  Saves first
+     is 112 words / 84 differing -- four words short, because cse then uses ONE
+     pseudo per field for both the copy's store and the save, where the target
+     loads into a temp, copies that to a callee-saved register and stores the
+     temp.
+
+   - **THE COPIES MUST BE `*(u32 *)` CASTS, NOT DVECTOR STRUCT ASSIGNMENTS.**
+     `sp->unk_E8[2] = sp->unk_E8[0]` with DVECTOR save locals is 164 words /
+     161 differing and casts on the copies alone is 145 / 118: a 4-byte struct
+     is BLKmode here, so every copy goes through memory.
+
+   - **`(u32)sp->unk_C4 < 0x1E0` -- the otz test is UNSIGNED.**  Without the
+     cast it is `slti` where the target has `sltiu`, 1 differing at each of the
+     two sites.
+
+   - **The saved locals are declared p0, p1, p2, c and saved c, p0, p1, p2.**
+     That pair of orders is what spills `c` (the +0x114 word) to 0x10($sp) and
+     gives +0xE8/+0xEC/+0x124 the registers $s7/$fp/$s6.  All 24 of each were
+     measured: c/p0/p1/p2 is the UNIQUE 0-differing save order (next best 10,
+     and six orders are 115 words), and the declaration order needs `c` after
+     both p0 and p1 -- four orders are 0, four more are 4, and the other
+     sixteen are 115 words with 72-75 differing.
+
+   Free: `i = 0` in the `for` initialiser instead of a statement, `D_80083160`
+   through an `Unk80083160 *g` local, and `func_800B28A0()`'s result through a
+   local.  `sp` must be a pointer LOCAL holding 0x1F800000 (inline at the use
+   sites is 115 words / 111 differing), and the bound stays `D_80100E30 - 1`
+   (`i != D_80100E30 - 1` is 115 / 58, `i + 1 < D_80100E30` is 117 / 74).
+   The two parameters stay `(UnkSlot *s, UnkVec *v)` with casts at the
+   func_800A8CA8 call sites, so the landed caller needs no edit.
+
+   116 words -- its header reads `nonmatching func_800A9358, 0x1D0`, and
+   0x1D0/4 = 116.  Measured 0 differing.  No `%hi` on a function symbol, no
+   jump table and no rodata of its own; raw differing 17 against relocdump's
+   own total of 17 (1 HI16 + 1 LO16 on D_800D0E48, 2 HI16 + 4 LO16 on
+   D_80100E30 -- the second HI16 is the post-loop re-materialisation -- 1 HI16
+   + 1 LO16 on D_80083160, and 7 R_MIPS_26: func_800B28A0, func_800A8CA8,
+   func_800A8CA8, func_800A8EE8, func_800A8CA8, func_800A8EE8 in that order),
+   and the ordered sequence matches the listing.  Unlike func_800AA10C and
+   func_800A1354 this one loses NO relocation to the scratchpad: every
+   0x1F8000xx access is `$s0` plus a small displacement with no symbol in the
+   listing. */
+void func_800A9358(UnkSlot *s, UnkVec *v)
+{
+    UnkTownA17CCSP *sp;
+    s32 i;
+    s16 ang;
+    u32 p0;
+    u32 p1;
+    u32 p2;
+    u32 c;
+
+    sp = (UnkTownA17CCSP *)0x1F800000;
+    i = 0;
+    ang = 0;
+    D_80100E30 = D_800D0E48[func_800B28A0()];
+    sp->unk_24 = (u32 *)(D_80083160.unk_00 + 0xB0);
+    func_800A8CA8((UnkTownSP *)sp, 0, (UnkTown2AE8 *)v, (UnkTownRend *)s);
+    sp->unk_118 = sp->unk_114;
+    *(u32 *)&sp->unk_E8[2] = *(u32 *)&sp->unk_E8[0];
+    *(u32 *)&sp->unk_E8[3] = *(u32 *)&sp->unk_E8[1];
+    *(u32 *)&sp->unk_124[1] = *(u32 *)&sp->unk_124[0];
+    c = sp->unk_114;
+    p0 = *(u32 *)&sp->unk_E8[0];
+    p1 = *(u32 *)&sp->unk_E8[1];
+    p2 = *(u32 *)&sp->unk_124[0];
+    for (; i < D_80100E30 - 1; i++)
+    {
+        ang += 0x1000 / D_80100E30;
+        func_800A8CA8((UnkTownSP *)sp, ang, (UnkTown2AE8 *)v, (UnkTownRend *)s);
+        if ((u32)sp->unk_C4 < 0x1E0)
+        {
+            func_800A8EE8(sp);
+        }
+        sp->unk_118 = sp->unk_114;
+        *(u32 *)&sp->unk_E8[2] = *(u32 *)&sp->unk_E8[0];
+        *(u32 *)&sp->unk_E8[3] = *(u32 *)&sp->unk_E8[1];
+        *(u32 *)&sp->unk_124[1] = *(u32 *)&sp->unk_124[0];
+    }
+    ang += 0x1000 / D_80100E30;
+    func_800A8CA8((UnkTownSP *)sp, ang, (UnkTown2AE8 *)v, (UnkTownRend *)s);
+    sp->unk_114 = c;
+    *(u32 *)&sp->unk_E8[0] = p0;
+    *(u32 *)&sp->unk_E8[1] = p1;
+    *(u32 *)&sp->unk_124[0] = p2;
+    if ((u32)sp->unk_C4 < 0x1E0)
+    {
+        func_800A8EE8(sp);
+    }
+}
 
 /* The render callback func_800A957C files under func_80033CD8's tag, and the
    fourth known member of the resident `(u8 *p, UnkVec *v, UnkSlot *s)` family:
