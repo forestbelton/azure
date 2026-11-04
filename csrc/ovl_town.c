@@ -2892,6 +2892,9 @@ void func_8008BED8();
 extern UnkTownAA10C D_800D1178;
 extern UnkTownAA10C D_800D119C;
 extern VECTOR D_800D11C0;
+/* The -1-terminated s16 id table func_800A9878 searches and
+   func_800A9970 indexes. */
+extern s16 D_800D1054[];
 extern s8 D_800D1074[];
 extern s32 D_800D1080[];
 extern u16 D_80100D40;
@@ -3242,6 +3245,9 @@ void func_800A8248(u8 *p, UnkVec *q, UnkTownRend *r);
 extern u32 D_800D0E24[];
 extern void (*D_800D0E3C[])();
 extern s32 D_800D0E44;
+/* func_800A9734's func_8008F104 descriptor, the same class as
+   D_800CFD00 / D_800D0DA8 / D_800D0DC0. */
+extern u8 D_800D0E60[];
 /* Out of image. Stride 12 by the `sll 1`/`addu`/`sll 2` chain in
    func_800A833C; func_800A82F0 reaches element 0x14 as +0xF0. */
 extern u8 D_800F8A70[];
@@ -24094,7 +24100,44 @@ void func_800A970C(u8 *a, UnkTown2AE8 *b, s32 c)
     *(s16 *)((u8 *)b + 0x16) -= 0x1E;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9734);
+/* func_800A6DA0's bind form (:22250 and func_800A6E1C below it) with the
+   func_8009CD18 registration dropped and a zero into the mover's +0x08 after
+   the descriptor bind: install func_800A6CF0 as the UnkNode +0x10 handler
+   through the view's -0x10, zero the actor's +0x50 dispatch slot, bind
+   D_800D0E60, then clear the mover's +0x08.
+
+   `%hi`/`%lo` on func_800A6CF0 is a FUNCTION address-take: ovlverify masks
+   both words and there is no `jal` to decode.  Read off this function's own
+   listing (asm/nonmatchings/ovl_town/func_800A9734.s), which carries exactly
+   one `%hi`/`%lo` pair on a function; relocdump reports 5 relocation words
+   here, 2 of them on a function symbol.  No forward declaration is needed:
+   func_800A6CF0 is DEFINED ABOVE this point (:22210).
+
+   D_800D0E60 is `extern u8 D_800D0E60[]`, the same class as the D_800CFD00 /
+   D_800D0DA8 / D_800D0DC0 descriptors the other func_8008F104 call sites pass
+   -- the listing materialises it with `lui %hi` + `addiu %lo` and no
+   displacement, which is the array-decay shape.
+
+   The two slot stores come FIRST and in this order, as in func_800A6DA0 and
+   func_800A957C -- swapped is 2 differing, and moving the mover's clear ahead
+   of the call is 14 words / 16 differing (the call no longer needs $s0); the `sw $zero, 0x50($a0)` in the `jal`'s delay slot is the
+   +0x50 zero, not part of the call.  `q` is saved into $s0 across the call
+   only because the clear follows it.  The third parameter is unread and is
+   declared to match func_800A6CF0's own signature and the rest of the family
+   -- a dead TRAILING parameter is invisible, so that is a convention and not
+   a measurement.
+
+   17 words -- its header reads `nonmatching func_800A9734, 0x44`, and
+   0x44/4 = 17.  Measured 0 differing, first compile; raw differing 5 against
+   relocdump's own total of 5, and the ordered (jal, %hi/%lo, j) sequence
+   matches the listing. */
+void func_800A9734(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800A6CF0;
+    *(s32 *)((u8 *)p + 0x50) = 0;
+    func_8008F104(p, q, D_800D0E60);
+    q->unk_08 = 0;
+}
 
 void func_800A9778(u8 *p)
 {
@@ -24106,7 +24149,35 @@ void func_800A9778(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A97D8);
+/* func_800A9734's bind form above with no descriptor bind at all and a
+   HANDLER in the +0x50 slot instead of a zero -- func_800A957C's shape
+   (:24086) with func_800A6CF0 at -0x10.  A near-twin of func_800A9858 below:
+   same three stores, same 8 words, and only the +0x50 handler differs
+   (func_800A9778 here, func_800A97F8 there), which is the same pairing their
+   two handlers have -- both are one-shot func_8009F88C gates that retire the
+   actor, on (0xC, 0xF)/0xAB here and (0x1, 0x12)/0xAD there.
+
+   FOUR of the eight words are `%hi`/`%lo` on a FUNCTION symbol -- the masked,
+   build-breaking class with no `jal` to decode.  Read off this function's own
+   listing: `%hi`/`%lo(func_800A6CF0)` and `%hi`/`%lo(func_800A9778)`, and
+   relocdump reports 4 relocation words, all 4 on a function symbol.  Neither
+   needs a forward declaration: func_800A6CF0 (:22210) and func_800A9778
+   (:24199) are both DEFINED ABOVE this point.
+
+   Store order is -0x10, +0x50, mover +0x08, which is func_800A957C's order;
+   the mover's clear sits in the `jr`'s delay slot.  Swapping the two installs
+   is 2 differing, as it is in func_800A957C and func_800A6DA0, and putting the
+   mover's clear first is 5.
+
+   8 words -- its header reads `nonmatching func_800A97D8, 0x20`, and
+   0x20/4 = 8.  Measured 0 differing, first compile; raw differing 4 against
+   relocdump's own total of 4, ordered sequence OK. */
+void func_800A97D8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800A6CF0;
+    *(u32 *)((u8 *)p + 0x50) = (u32)func_800A9778;
+    q->unk_08 = 0;
+}
 
 void func_800A97F8(u8 *p)
 {
@@ -24118,15 +24189,137 @@ void func_800A97F8(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9858);
+/* func_800A97D8's near-twin; see the comment there.  Byte for byte the same
+   three stores with func_800A97F8 in the +0x50 slot instead of func_800A9778,
+   and the two handlers differ only in their func_8009F88C pair and their
+   func_80033AA8 id.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9878);
+   FOUR `%hi`/`%lo` words on FUNCTION symbols, read off this function's own
+   listing: `%hi`/`%lo(func_800A6CF0)` and `%hi`/`%lo(func_800A97F8)`.
+   relocdump reports 4 relocation words, all 4 on a function symbol.  Both
+   definitions are ABOVE this point (:22210 and :24238), so neither needs a
+   forward declaration.
+
+   8 words -- its header reads `nonmatching func_800A9858, 0x20`, and
+   0x20/4 = 8.  Measured 0 differing, first compile; raw differing 4 against
+   relocdump's own total of 4, ordered sequence OK. */
+void func_800A9858(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800A6CF0;
+    *(u32 *)((u8 *)p + 0x50) = (u32)func_800A97F8;
+    q->unk_08 = 0;
+}
+
+/* The -1-terminated s16 id table at D_800D1054, searched for the caller's id:
+   returns the matching index or -1.  func_800A9B2C is the ASM caller;
+   func_800A9970 below indexes the SAME table by a caller-supplied index, which
+   is the second witness for the element width (`sll 1`, `lh`).
+
+   THE WALK MUST BE AN INDEXED ARRAY REF, NOT A POINTER, exactly as the landed
+   func_800A9A38 below records for its own D_800D1074 walk.  The target's
+   `addiu $v1, $a2, %lo(D_800D1054)` lands AFTER the guard branch, in the loop
+   pre-header, and the guard itself reads `lh %lo(D_800D1054)($a2)` through the
+   bare `%hi` register -- that is loop.c strength-reducing the subscript into an
+   address giv whose initial value it drops in the pre-header, the
+   `combine_givs` shape docs/matching-levers.md records.  A hoisted
+   `q = D_800D1054` pointer cannot reach it: the pointer's `addiu` is born in
+   the ENTRY block instead -- 19 words / 13 differing, the same residue
+   func_800A9A38 records for its own walk.  The `while` spelling with `i++` at
+   the bottom is a byte-identical tie.
+
+   D_800D1054 is declared `extern s16 D_800D1054[]`, not a scalar taken by `&`:
+   the array spelling is what gives the `%hi`-register guard load plus the
+   separate pre-header `addiu`.
+
+   The parameter is `s32`, not `s16`: an `s16` prototype is 21 words / 17
+   differing -- the `sll`/`sra` pair lands in the CALLEE here, because the
+   value is compared against an `lh` rather than stored.  The ASM caller
+   func_800A9B2C forwards its own `$a0` with no setup insn, which is the usual
+   "a missing argument move is not a zero-arity call" shape.
+
+   The return value is the loop index, and the two `-1`s are the same constant:
+   the entry guard's `addiu $v0, $zero, -1` is reused as the loop-bottom
+   terminator compare in $a3, which is cse unifying them -- there is no source
+   spelling that separates them.
+
+   19 words -- its header reads `nonmatching func_800A9878, 0x4C`, and
+   0x4C/4 = 19.  Measured 0 differing, first compile; raw differing 3 against
+   relocdump's own total of 3 (1 HI16 + 2 LO16 on D_800D1054, no `jal`, no
+   intra-function `j`), ordered sequence OK. */
+s32 func_800A9878(s32 k)
+{
+    s32 i;
+
+    for (i = 0; D_800D1054[i] != -1; i++)
+    {
+        if (D_800D1054[i] == k)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A98C4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A98F8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9970);
+/* The gate func_800A99D8 asks before running an entry: look the caller's index
+   up in the same D_800D1054 id table func_800A9878 above searches, read that
+   id's byte out of the 4-byte-element table at 0x800135C4, and allow the entry
+   once that byte has reached 3 -- or, for index 3 only, when
+   func_80033B2C(0x4FB) says the flag is clear.  func_800A9C18 below is what
+   bumps the same byte, and csrc/unk_72A8.c:5939 reaches the same array as
+   `((u32 *)0x800135C4)[i]`, which is where the stride of 4 comes from.
+
+   0x800135C4 IS A CONSTANT ADDRESS, NOT A SYMBOL, and it has to be reached
+   through a BASE LOCAL holding 0x80010000 with the whole offset inside the
+   index -- `b[D_800D1054[a] * 4 + 0x35C4]`, the spelling func_8009E3EC
+   (:15708) already uses for its own 0x80010000 tables.  mips.h's
+   LEGITIMIZE_ADDRESS splits a constant address into a register plus a `%lo`
+   displacement only for `plus(REG, CONST_INT)`, and a base of 0x80010000 is
+   ONE insn because its low half is zero.  `extern u8 D_800135C4[]` with
+   `D_800135C4[idx * 4]` is 28 words / 27 differing (a second `addiu` for the
+   symbol's low half and a zero displacement on the `lbu`), and
+   `((u8 *)0x800135C4)[idx * 4]` is the same 28 / 27 the other way: `plus(MULT, CONST_INT)` has no REG, so force_operand
+   materialises the whole address as `lui`/`ori`.  See func_800A9C18 below for
+   the mechanism and its citation.
+
+   THE `a == 3` ARM IS WRITTEN FIRST AND `return 0` LAST.  The other order --
+   `if (a != 3) return 0; return func_80033B2C(...) == 0;` -- is 28 words / 9
+   differing: it puts the call block in the branch's FALL-THROUGH, so the
+   `return 0` block needs its own `j` to the epilogue and a `nop` in the
+   branch's delay slot.  In this order the `return 0` is the branch's own
+   target thread, reorg moves its `addu $v0, $zero, $zero` into the delay slot
+   and redirects the branch to the epilogue, and the call block falls through:
+   two words cheaper.
+
+   `>= 3` on the byte is `sltiu`, and `> 2` is a byte-identical tie; the `addiu $v0, $zero, 0x3` that reorg parks
+   in the first branch's delay slot is the register operand of the LATER
+   `a == 3` compare, not a second copy of the clamp constant.
+
+   26 words -- its header reads `nonmatching func_800A9970, 0x68`, and
+   0x68/4 = 26.  Measured 0 differing; raw differing 4 against relocdump's own
+   total of 4 (1 HI16 + 1 LO16 on D_800D1054, the intra-function `j` as an
+   R_MIPS_26 against .text, and `jal func_80033B2C`), and the two
+   `%hi`/`%lo(D_800135C4)` words the listing shows are the CONSTANT-ADDRESS
+   class: the candidate emits no relocation there and the raw comparison is
+   what proves those words right. */
+s32 func_800A9970(s32 a)
+{
+    u8 *b;
+
+    b = (u8 *)0x80010000;
+    if (b[D_800D1054[a] * 4 + 0x35C4] >= 3)
+    {
+        return 1;
+    }
+    if (a == 3)
+    {
+        return func_80033B2C(0x4FB) == 0;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A99D8);
 
@@ -24190,7 +24383,54 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9ADC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9B2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9C18);
+/* The bump side of func_800A9970's gate above: increment the caller's entry in
+   the 4-byte-element table at 0x800135C4 and clamp it at 3.  The in-place
+   narrow update is the unit's established shape -- `lbu`, `addiu 1`, `sb`,
+   then `andi 0xFF` on the STORED value for the compare, with no re-read.
+
+   0x800135C4 IS A CONSTANT ADDRESS reached through a base local holding
+   0x80010000, with the whole offset inside the index.  The mechanism, and it
+   is the reason three other spellings are a word longer:
+   `((u8 *)0x800135C4)[a * 4]` expands the address as
+   `plus(CONST_INT, mult(REG, 4))`, and expr.c:6198-6212 returns that MULT
+   un-evaluated under EXPAND_SUM ("Attempt to return something suitable for
+   generating an indexed address") -- so mips.h's LEGITIMIZE_ADDRESS sees no
+   REG in the PLUS, its `code0 == REG && code1 == CONST_INT && !SMALL_INT`
+   arm cannot fire, and explow.c's memory_address falls through to
+   `force_operand` on the whole sum: `lui`/`ori` for the full constant plus a
+   zero displacement on the `lbu`, 15 words / 14 differing.  With the offset
+   inside the index the address arrives as `plus(REG, CONST_INT)` and the macro
+   splits it into `int_reg = INTVAL & ~0x7fff` (one `lui`, because 0x80010000's
+   low half is zero), an `addu`, and `INTVAL & 0x7fff` = 0x35C4 as the
+   displacement -- which is the target's four words exactly.
+   `extern u8 D_800135C4[]` is the same 15 / 14 with `addiu` where the constant
+   form has `ori`.
+
+   The base local also fixes the ORDER: its `lui` is born at the assignment, so
+   it precedes the index `sll`, where the target has it.  Written without the
+   local -- `*(u8 *)(0x800135C4 + (a << 2))`, which produces the same four
+   instructions -- the `lui` is emitted by LEGITIMIZE_ADDRESS after the already
+   computed index and the two words swap: 14 words / 2 differing.
+
+   Three byte-identical ties, none taken: `b` assigned in its declaration
+   initialiser rather than as a statement, `> 3` for `>= 4`, and the increment
+   split out as `b[...]++;` ahead of the test.
+
+   14 words -- its header reads `nonmatching func_800A9C18, 0x38`, and
+   0x38/4 = 14.  Measured 0 differing.  relocdump reports NO relocations at
+   all; the four `%hi`/`%lo(D_800135C4)` words the listing shows are the
+   constant-address class, and `ovlverify --raw` closes at 0 differing against
+   relocdump's total of 0, which is what proves them. */
+void func_800A9C18(s32 a)
+{
+    u8 *b;
+
+    b = (u8 *)0x80010000;
+    if (++b[a * 4 + 0x35C4] >= 4)
+    {
+        b[a * 4 + 0x35C4] = 3;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9C50);
 
