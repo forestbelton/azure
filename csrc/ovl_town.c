@@ -3962,9 +3962,71 @@ void func_8008AC84(s32 idx)
     p->unk_04 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008ACAC);
+/* The descending-word block move func_8008AD90's heap slide needs: both
+   pointers are advanced by the FULL byte count first and the copy then runs
+   backwards, which is what makes an overlapping slide away from the base
+   safe.  Its only caller is func_8008AD90 below, with (heap + d, heap, len).
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008ACE8);
+   `n / 4`, NOT `n >> 2`: the `bgez` / `addiu $a2, $a2, 0x3` / `sra 2` triple
+   is the signed division's rounding correction, and `n >> 2` is 13 words
+   with 14 differing.  The DESTINATION is advanced before the source --
+   swapping the two statements commutes both `addu`s into the other registers
+   for 2 differing.  `*d-- = *s--;` as one statement, and declaration
+   initialisers for `d` and `s`, both measure 0 differing.
+
+   15 words -- its header reads `nonmatching func_8008ACAC, 0x3C`, and
+   0x3C/4 = 15.  No jump table, no rodata of its own, and NO RELOCATION AT
+   ALL: 0 raw differing against relocdump's 0, no %hi/%lo, no `jal`, no
+   intra-function `j`, no function address taken. */
+void func_8008ACAC(u8 *dst, u8 *src, s32 n)
+{
+    s32 *d;
+    s32 *s;
+    s32 i;
+
+    d = (s32 *)(dst + n);
+    s = (s32 *)(src + n);
+    for (i = n / 4; i > 0; i--)
+    {
+        *d = *s;
+        d--;
+        s--;
+    }
+}
+
+/* The running byte offset of entry `n`'s payload in the 0x8000 heap: the sum
+   of the first `n` entries' +0x04 sizes in the D_800CF720 MRU table.  Three
+   landed callers use it -- func_8008AD90 as `func_8008ACE8(i - 1)`,
+   func_8008AE4C as the stash offset and func_8008AFB0 as `0x8000 - ...`.
+
+   `s32 sum;` IS DECLARED BEFORE `s32 i;` AND THAT IS THE WHOLE ALLOCATION.
+   The target keeps the counter in $a2 and the accumulator in $a1, and writes
+   `sum = 0` as `addu $a1, $a2, $zero` -- cse sharing the counter's zero.
+   Declared the other way round every one of those six words comes out with
+   the two registers exchanged: 13 words, 6 differing, all register-only.  A
+   `while` loop and a `u32 sum` both measure 0 differing.
+
+   The `lui`/`addiu %lo` pair sits in the loop PREHEADER, after the `blez`
+   guard, because loop.c strength-reduces the array index into the
+   `addiu $v1, $v1, 0x8` giv -- the same mechanism func_8008AD90's comment
+   records for its two bases.
+
+   13 words -- its header reads `nonmatching func_8008ACE8, 0x34`, and
+   0x34/4 = 13.  No jump table, no rodata of its own.  Relocations: just
+   %hi/%lo(D_800CF720) -- 2 raw differing against relocdump's 2, none on a
+   function symbol, and no intra-function `j`. */
+s32 func_8008ACE8(s32 n)
+{
+    s32 sum;
+    s32 i;
+
+    sum = 0;
+    for (i = 0; i < n; i++)
+    {
+        sum += D_800CF720[i].unk_04;
+    }
+    return sum;
+}
 
 /* Look one (a, b, c) key up in the overlay's own Unk80082660 table at
    D_800CF720, an MRU list terminated by a -1 in +0x01.  Returns the index
@@ -4084,7 +4146,50 @@ void func_8008AE4C(s32 i)
     D_800CF720[0].unk_04 = len;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008AF2C);
+/* Look the (a, b, c) key up in the room's OTHER table -- the 8-byte-stride
+   list of (packed descriptor word, record pointer) pairs hanging off
+   D_801131B8's +0x34 word, terminated by a zero pointer -- and return the
+   record pointer, or 0 when the key is absent.  The three extractions are
+   func_8008B158's (:4352) and func_8008B23C's (:4409) verbatim, and all three reads
+   of `*p` collapse into the one `lw $v1, 0x0($t0)` the target has because
+   nothing stores between them.  Its only caller is func_8008AFB0 below,
+   which casts the result (`rec = (u32 *)func_8008AF2C(a, b, c);`) rather
+   than this declaring a pointer return.
+
+   THE RELOCATION SEQUENCE LEGITIMATELY NAMES A DIFFERENT SYMBOL, and the
+   words are identical.  splat's listing prints %hi/%lo(D_801131EC); this
+   relocates D_801131B8 with the +0x34 in the `lw`'s displacement field.
+   %hi is 0x8011 either way and %lo 0x31B8 + 0x34 == 0x31EC, giving
+   `3c028011` / `8c4831ec` -- the target's bytes, hand-decoded.  It is
+   spelled off D_801131B8 to match func_8008AD90, func_8008AE4C and
+   func_8008AFB0, which reach the same record's +0x2C word the same way (see
+   func_8008AFB0's comment); `extern u32 *D_801131EC;` is also 33 words at 0
+   differing and makes seqcheck's ordered check pass outright.
+
+   The plain `for` is what produces the peeled `lw $v0, 0x4($t0)` / `beqz`
+   pre-test -- jump.c's duplicate_loop_exit_test -- while the `addiu $a3,
+   $t0, 0x4` is loop.c's giv for the two in-loop +0x04 reads.  Writing that
+   peel out by hand as a guard plus a `do`/`while` is 32 words with 25
+   differing.
+
+   33 words -- its header reads `nonmatching func_8008AF2C, 0x84`, and
+   0x84/4 = 33.  No jump table, no rodata of its own, and no function address
+   is taken.  3 raw differing against relocdump's 3: %hi + %lo on the global
+   plus the intra-function `j`, whose R_MIPS_26 lands at +0x7C -- the
+   `.L8008AFA8` the listing names. */
+s32 func_8008AF2C(s32 a, s32 b, s32 c)
+{
+    u32 *p;
+
+    for (p = *(u32 **)(D_801131B8 + 0x34); p[1] != 0; p += 2)
+    {
+        if (a == ((*p >> 23) & 1) && b == ((*p & 0x3F000000) >> 24) && c == ((*p & 0x7F0000) >> 16))
+        {
+            return p[1];
+        }
+    }
+    return 0;
+}
 
 /* Insert the (a, b, c) key func_8008AD1C did not find at the front of the
    D_800CF720 table, evicting from the tail until the record's 0x800-rounded
@@ -4169,7 +4274,41 @@ s32 func_8008AFB0(s32 a, s32 b, s32 c, s32 n)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B0E8);
+/* Publish one (a, b, c) key into the D_800CF720 MRU table: look it up, insert
+   it when it is absent, and promote it to the front unless it is already
+   there.  func_8008AD1C returns the index when the key is present and
+   `count - 0x80000000` when it is not, so `i < 0` is the miss and
+   `i & 0x7FFFFFFF` is the live entry count func_8008AFB0 wants; func_8008AFB0
+   returns 0 on both of its paths, which is why the `beqz` after the join
+   skips func_8008AE4C after an insert.
+
+   THREE PARAMETERS, and this body is the witness both landed callers'
+   comments name (:4326, :4391): $a0, $a1 and $a2 are copied into $s0, $s1 and
+   $s2 before any of them is written, and the first `jal` has a `nop` delay
+   slot with no argument setup only because gcc keeps the incoming registers
+   live across the prologue.  func_8008B158 and func_8008B23C both pass three.
+   An empty-then-arm `if (i >= 0) {} else { ... }` measures the same 0
+   differing.
+
+   28 words -- its header reads `nonmatching func_8008B0E8, 0x70`, and
+   0x70/4 = 28.  No jump table, no rodata of its own, no %hi/%lo at all and no
+   function address taken.  3 raw differing against relocdump's 3, all three
+   `jal`s, decoded in order against the listing: func_8008AD1C,
+   func_8008AFB0, func_8008AE4C. */
+void func_8008B0E8(s32 a, s32 b, s32 c)
+{
+    s32 i;
+
+    i = func_8008AD1C(a, b, c);
+    if (i < 0)
+    {
+        i = func_8008AFB0(a, b, c, i & 0x7FFFFFFF);
+    }
+    if (i != 0)
+    {
+        func_8008AE4C(i);
+    }
+}
 
 /* Republish the town module record at D_801131B8 from the room's +0x98 tile
    descriptor, then hand an address to func_80035208: the record's own
@@ -4922,15 +5061,156 @@ void func_8008C058(UnkTownMover *m, UnkTown2AE8 *b, void *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C0AC);
+/* The address of one cell of the +0x1DC geometry record's tile grid: wrap x
+   and y with the record's two masks, pack them with its X shift, and index
+   the u16 cell map.  func_8008C0F0 just below is its /64 wrapper, and
+   func_8008C134 is this same body with the cell READ instead of its address
+   returned.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C0F0);
+   The address chain is the landed +0x1DC family's verbatim (func_8008D084
+   :5866, func_8008D0B8, func_800BDC98, func_800BDDD0): `Unk80083160 *g =
+   &D_80083160;` compiler-splits the symbol into `lui`/`addiu` and
+   `(UnkTownCastGeo *)&g->unk_1DC` adds the 0x1DC as its own `addiu`, which is
+   the three-word head.  Dropping `g` for `(UnkTownCastGeo *)((u8
+   *)&D_80083160 + 0x1DC)` folds the offset onto the symbol and is 16 words
+   with 16 differing.  `m->unk_00` is re-based onto the symbol's register by
+   cse, so it emits `lw $v1, 0x1DC($a3)` and not `lw $v1, 0x0($a2)`; reading
+   the same word as `g->unk_1DC` measures identically.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C134);
+   `s16 i` IS THE INDEX'S TYPE AND IT IS WORTH A WORD: the target's `sll 16` /
+   `sra 15` pair is that narrowing folded with the halfword scale, and `s32 i`
+   is 16 words with 5 differing.  The INNER `(s16)` on the y term is
+   separately load-bearing, because truncating after a left shift is not the
+   same as truncating before it and the outer narrowing cannot absorb it:
+   without it, 15 words with 11 differing.  The x term needs no cast for
+   exactly the converse reason.  Flipping both `&` operand orders, writing the
+   whole thing as one expression with two casts, and adding `s16 cx`/`cy`
+   locals all measure 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C180);
+   17 words -- its header reads `nonmatching func_8008C0AC, 0x44`, and
+   0x44/4 = 17.  No jump table, no rodata of its own, and no function address
+   is taken.  Relocations: %hi/%lo(D_80083160) -- 2 raw differing against
+   relocdump's 2, and no intra-function `j`. */
+s16 *func_8008C0AC(s32 x, s32 y)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    s16 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008C1C4);
+    i = (m->unk_18 & x) + ((s16)(m->unk_1A & y) << m->unk_14);
+    return (s16 *)m->unk_00 + i;
+}
+
+/* func_8008C0AC in 64-unit world coordinates.  Its four call sites in the
+   landed func_800A8BBC (:28461) write through the returned address, which is
+   where the `s16 *` return comes from.
+
+   `s16 x, s16 y` IS PINNED IN BOTH DIRECTIONS by the declaration at :3556.
+   The entry `sll`/`sra 16` pair per parameter is that narrowing, and
+   `(s32, s32)` is 13 words with 16 differing HERE as well as taking
+   func_800A8BBC from 50 words / 0 differing to 42 / 36 -- its four call sites
+   lose the `lhu` + `addiu -0x40` + `sll`/`sra` group.
+
+   `x / 64`, NOT `x >> 6`: the per-argument `bgez` / `addiu 0x3F` / `sra 6`
+   triple is the signed division's rounding correction, and `>> 6` is 11 words
+   with 16 differing.
+
+   17 words -- its header reads `nonmatching func_8008C0F0, 0x44`, and
+   0x44/4 = 17.  No jump table, no rodata of its own, no %hi/%lo at all and no
+   function address taken.  1 raw differing against relocdump's 1: the one
+   `jal func_8008C0AC`, decoded. */
+s16 *func_8008C0F0(s16 x, s16 y)
+{
+    return func_8008C0AC(x / 64, y / 64);
+}
+
+/* func_8008C0AC's body with the cell READ and masked to 14 bits instead of
+   its address returned -- the tile id at (x, y).  Called by func_8008C180
+   just below and by the landed func_8008C214 (:5262).
+
+   Every fact in func_8008C0AC's comment above applies unchanged: the
+   `g`/`m` address chain, `s16 i`, and the inner `(s16)` on the y term.
+
+   THE RETURN TYPE STAYS A PLAIN `s32` so that func_8008C214's `& 0xFFFF`
+   keeps emitting its `andi` and func_8008C180 below gets its own truncation
+   from its `u16` return.  `u16 func_8008C134(s16, s16)` is 0 differing in all
+   three functions -- as func_8008C214's own comment records -- but it makes
+   both the `(s16)` casts and the mask at that call site redundant, and those
+   are the two things that comment calls load-bearing.
+
+   19 words -- its header reads `nonmatching func_8008C134, 0x4C`, and
+   0x4C/4 = 19.  No jump table, no rodata of its own, and no function address
+   is taken.  Relocations: %hi/%lo(D_80083160) -- 2 raw differing against
+   relocdump's 2, and no intra-function `j`. */
+s32 func_8008C134(s32 x, s32 y)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    s16 i;
+
+    i = (m->unk_18 & x) + ((s16)(m->unk_1A & y) << m->unk_14);
+    return m->unk_00[i] & 0x3FFF;
+}
+
+/* func_8008C134 in 64-unit world coordinates -- func_8008C0F0's sibling, and
+   this unit's most-used tile lookup: twelve landed call sites, all of them
+   `func_800C1D44(func_8008C180(pt->unk_02, pt->unk_06))`.
+
+   `u16` RETURN AND `s16` PARAMETERS ARE BOTH PINNED by the declaration at
+   :2497 and by those call sites.  The `u16` is what emits
+   `andi $v0, $v0, 0xFFFF` after the call: declared `s32` it is 2 differing.
+   `x / 64` rather than `x >> 6` is func_8008C0F0's fact -- `>> 6` is 11 words
+   with 16 differing.
+
+   17 words -- its header reads `nonmatching func_8008C180, 0x44`, and
+   0x44/4 = 17.  No jump table, no rodata of its own, no %hi/%lo at all and no
+   function address taken.  1 raw differing against relocdump's 1: the one
+   `jal func_8008C134`, decoded. */
+u16 func_8008C180(s16 x, s16 y)
+{
+    return func_8008C134(x / 64, y / 64);
+}
+
+/* Write one 4-bit value into the `i`-th nibble of a packed buffer, `w`
+   nibbles to the row: the even index takes the low nibble and the odd index
+   the high one.  Its only caller is the landed func_8008C214 (:5262), whose
+   `func_8008C1C4(..., i, 0x80, b)` is why `div $zero, $a1, $a2` gets a
+   register divisor instead of a constant.
+
+   THE EVEN-NIBBLE ARM IS WRITTEN FIRST.  Both arms fall into the shared
+   `sb $v0, 0x0($a3)` in the `jr`'s delay slot, so they are emitted in source
+   order and the `bnez $v1` is the inverted test of the arm that is laid out
+   inline; writing `if (n & 1)` first is the same 20 words with 7 differing --
+   the `beqz`/`bnez` plus both arm bodies exchanged.
+
+   `b += n / 2;` sits BEFORE the `if`, in the branch's delay slot; folding it
+   into both arms as `b[n / 2]` is 27 words with 25 differing.  A shared
+   temporary with one store after the `if` measures the same 0 differing as
+   the duplicated store cross-jumping unifies.  `n % 2 == 0` also measures 0:
+   gcc reduces the signed remainder's test against zero to the same
+   `andi $v1, $v1, 0x1` on a value it has already corrected for the `/ 2`.
+
+   20 words -- its header reads `nonmatching func_8008C1C4, 0x50`, and
+   0x50/4 = 20.  No jump table, no rodata of its own, no %hi/%lo at all and no
+   function address taken.  1 raw differing against relocdump's 1: the
+   intra-function `j`, whose R_MIPS_26 lands at +0x48 -- the `.L8008C20C` the
+   listing names. */
+void func_8008C1C4(s32 v, s32 i, s32 w, u8 *b)
+{
+    s32 n;
+
+    n = i % w;
+    v &= 0xF;
+    b += n / 2;
+    if ((n & 1) == 0)
+    {
+        *b = (*b & 0xF0) | v;
+    }
+    else
+    {
+        *b = (*b & 0xF) | (v << 4);
+    }
+}
 
 /* 30 words -- its header reads `nonmatching func_8008C214, 0x78`, and
    0x78/4 = 30.  Measured 0 differing.  No jump table and no rodata of its
@@ -25458,7 +25738,35 @@ void func_800A553C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     func_80033D08((u8 *)a);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5598);
+/* Hand the camera task and its mover/renderer pair to func_800A553C
+   immediately above, which is the one-line entry point func_800A68C0
+   (:26618) calls with no arguments at all.
+
+   THE CAM POINTER IS DERIVED FROM THE TASK, NOT THE OTHER WAY ROUND.
+   `t = &D_800834B8;` then `(UnkTownCam *)((u8 *)t - 0x20)` is func_80093CEC's
+   head verbatim (:10829), and it is what gives the single
+   `lui`/`addiu %lo(D_800834B8)` with `addiu $v0, $a0, -0x20` off it.  The
+   `&D_80083498.unk_20` / `D_80083498.unk_08` spelling func_80093C70 (:10799)
+   and func_8009A674 use is ALSO 13 words at 0 differing and links to the same
+   bytes -- %hi is 0x8008 either way and %lo 0x3498 + 0x20 == 0x34B8 -- but it
+   relocates against D_80083498 and so fails the ordered relocation-sequence
+   check against THIS listing, which names D_800834B8.  Both locals as
+   declaration initialisers measure 0 differing; collapsing them to one local
+   with the two casts written inline is 12 words with 10 differing.
+
+   13 words -- its header reads `nonmatching func_800A5598, 0x34`, and
+   0x34/4 = 13.  No jump table, no rodata of its own, and no function address
+   is taken.  3 raw differing against relocdump's 3: %hi/%lo(D_800834B8) plus
+   the one `jal func_800A553C`, decoded; no intra-function `j`. */
+void func_800A5598(void)
+{
+    UnkTownTask *t;
+    UnkTownCam *g;
+
+    t = &D_800834B8;
+    g = (UnkTownCam *)((u8 *)t - 0x20);
+    func_800A553C(t, g->unk_08, g->unk_0C);
+}
 
 void func_800A55CC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {

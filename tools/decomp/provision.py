@@ -999,16 +999,55 @@ def main():
                     # one found: taking the first gave D_80113138 + 0xAC for a
                     # symbol whose real base is D_801131B8 + 0x2C, which is a
                     # worse lead than none.
-                    cand = None
+                    # THE DECLARATION TEST HAS TO BE A DECLARATION LINE.
+                    # `\bSYM\b[^;\n]*;` matched PROSE: on func_8008AF2C the
+                    # note said "D_801131EC may be D_801131E4 + 0x8, which
+                    # this unit ALREADY declares", and D_801131E4 is declared
+                    # NOWHERE -- the match was a comment line reading
+                    # "`extern s32 D_801131E4;` spelling also measures 78/0."
+                    # inside func_8008AFB0's block, which contains the symbol
+                    # and a semicolon. Reported 2026-11-04. Worse than the
+                    # false clause was what it crowded out: the base that IS
+                    # declared, D_801131B8, sits 0x34 below and is what three
+                    # landed bodies in that family already use -- and is what
+                    # landed.
+                    DECL_RE = (r'^\s*extern\b[^;\n]*\b%s\s*'
+                               r'(?:\[[^\]]*\])?\s*(?:__asm__[^;]*)?;')
+                    cands2 = []
                     for other in set(re.findall(r'\b(D_[0-9A-Fa-f]{6,8})\b', txt)):
                         try:
                             a3 = int(other[2:], 16)
                         except ValueError:
                             continue
                         if 0 < a2 - a3 <= 0xFF and re.search(
-                                r'\b%s\b[^;\n]*;' % other, txt):
-                            if cand is None or a3 > cand[1]:
-                                cand = (other, a3)
+                                DECL_RE % other, txt, re.M):
+                            cands2.append((other, a3))
+                    # AND OFFER EVERY DECLARED BASE IN RANGE, RANKED BY HOW
+                    # MANY LANDED BODIES REACH THAT RECORD -- not just the
+                    # nearest. The nearest-only rule was itself a fix for a
+                    # first-found rule, and it is still the wrong question:
+                    # what decides the spelling is the unit's own practice.
+                    def _users(sym):
+                        n = 0
+                        for _d, _o in defoff.items():
+                            _e = txt.find('\n}', _o)
+                            if _e > 0 and re.search(r'\b%s\b' % sym,
+                                                    txt[_o:_e]):
+                                n += 1
+                        return n
+                    ranked2 = sorted(cands2, key=lambda r: (-_users(r[0]),
+                                                            -r[1]))
+                    if len(ranked2) > 1:
+                        print("          %d DECLARED BASES are within 0xFF of"
+                              " %s. Ranked by how many landed bodies"
+                              % (len(ranked2), g2))
+                        print("          reach that record, which is what has"
+                              " actually decided the spelling:")
+                        for _s, _a in ranked2[:4]:
+                            print("            %-14s + 0x%-4X  %d landed"
+                                  " body/bodies use it"
+                                  % (_s, a2 - _a, _users(_s)))
+                    cand = ranked2[0] if ranked2 else None
                     for other, a3 in ([cand] if cand else []):
                         # CHECK THE BASE'S DECLARED SIZE BEFORE OFFERING IT.
                         # Reported 2026-11-04: this note offered
