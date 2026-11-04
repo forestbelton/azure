@@ -257,9 +257,14 @@ checking every landed function in the unit costs one compile:
     # from a clean sweep -- see "A sweep that verified nothing" below.  Always
     # compare `verified-clean` against progress.py's landed count.
     out=$(python3 tools/decomp/ovlverify.py csrc/ovl_town.c $(tr '\n' ' ' < /tmp/landed.txt) 2>&1)
-    echo "verified-clean $(echo "$out" | grep -cE '^func_[0-9A-Fa-f]{8}: .* 0 differing')"
+    # Compare BOTH counts. `reported` against the number of names catches a
+    # sweep that stopped early; `verified-clean` against progress.py catches a
+    # sweep that ran but measured the wrong set.
+    echo "names      $(wc -l < /tmp/landed.txt)"
+    echo "reported   $(echo "$out" | grep -cE '^func_[0-9A-Fa-f]{8}:')"
+    echo "clean      $(echo "$out" | grep -cE '^func_[0-9A-Fa-f]{8}: .* 0 differing')"
     echo "$out" | grep -E '^func_[0-9A-Fa-f]{8}:' | grep -v ' 0 differing'
-    echo "$out" | grep -E 'no listing|not defined|Traceback'
+    echo "$out" | grep -E 'NO TARGET|no listing|not defined|Traceback'
 
 ## A sweep that verified nothing, and how to tell
 
@@ -286,6 +291,24 @@ Two things were wrong and both are fixed:
    non-vacuous whole-unit sweep since the pruning started.
 2. **The recipe prints its own coverage**, so an empty failure list can no
    longer be read as success.
+
+**THE SAME DEFECT RECURRED ONE LEVEL DOWN, on the same day.** An agent's sweep
+reported `verified-clean=327` with an empty failure list -- a short, silent
+run. The cause was not the pruning: `ovlverify` hard-exited in the MIDDLE of
+the sweep with "`func_800A21EC` at 800A21EC is in no section of
+build/town.bin.elf", because a PARALLEL `make build/town.bin` was rewriting
+`build/town.bin.elf` at that instant and one address fell outside the
+half-written file's sections. **A hard exit mid-sweep is indistinguishable
+from a clean sweep once the failure grep runs**, which is exactly the shape
+this section was written about.
+
+Fixed: an unresolvable target is now reported as `FUNC: NO TARGET -- <reason>`
+and the run CARRIES ON through the remaining names, so the count is honest;
+and the message names the concurrent-build cause, since that is the one seen.
+The recipe above now prints `names` / `reported` / `clean`, and `reported`
+short of `names` is the tell that the run stopped early. **When another
+session may be building, re-run the sweep after that build finishes rather
+than trusting a number taken during it.**
 
 The fallback is sound only while `make build/<container>` is byte-identical,
 because the ELF supplies the layout -- which is the gate every landing already

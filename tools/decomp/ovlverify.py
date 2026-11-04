@@ -166,7 +166,10 @@ def rom_target(func):
                 off = addr - vma + lma
                 break
     if off is None:
-        raise SystemExit(f"{func} at {addr:08X} is in no section of {elf}")
+        raise SystemExit(
+            f"{func} at {addr:08X} is in no section of {elf}. If a build is "
+            f"running concurrently, this file is half-written -- re-run once "
+            f"it finishes rather than trusting the sweep.")
 
     with open(ref, "rb") as f:
         f.seek(off)
@@ -305,7 +308,25 @@ def main():
         later = sorted(v for v in syms.values() if v > lo)
         hi = later[0] if later else max(a for a, _, _ in words) + 4
         body = [(a, w, t) for a, w, t in words if lo <= a < hi]
-        total += report(f, body, relocs, target(f), not args.raw)
+        # A FUNCTION WHOSE TARGET CANNOT BE RESOLVED MUST NOT END THE RUN.
+        # This used to SystemExit out of the middle of a whole-unit sweep, and
+        # the recipe's own `grep` then showed a SHORT list with no failures in
+        # it -- which reads exactly like a clean sweep. That is the same defect
+        # as the one the reference-binary fallback was added to fix, one level
+        # down, and it bit on 2026-11-03: an agent's sweep reported
+        # "verified-clean=327" with an empty failure list because a PARALLEL
+        # `make build/town.bin` was rewriting build/town.bin.elf at that
+        # instant, so one address fell in no section of the half-written file.
+        # Report it as a failure, in the same shape as the other failure lines,
+        # and carry on through the remaining names.
+        try:
+            tgt = target(f)
+        except SystemExit as e:
+            print(f"{f}: NO TARGET -- {e}")
+            total += 1
+            print()
+            continue
+        total += report(f, body, relocs, tgt, not args.raw)
         print()
     sys.exit(1 if total else 0)
 
