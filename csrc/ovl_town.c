@@ -2126,6 +2126,7 @@ extern u8 D_800788E0[];
 extern u8 D_800792DC[];
 extern u8 D_800D15F4[];
 void func_8004CBFC(u32 *p, u8 *q, u32 *r);
+void func_80049D80(u8 *p, u8 *b);
 void func_800B08D4();
 void func_800B0C68();
 void func_800B0D0C();
@@ -3043,6 +3044,7 @@ extern u8 D_800D01A8[];
 extern u8 D_800D01E8[];
 extern u8 D_800D01F0[];
 extern u8 D_800D1594[];
+extern u8 D_800D15B0[];
 extern u8 D_800D15CC[];
 extern u8 D_800D1624[];
 extern u8 D_800D16BC[];
@@ -16807,7 +16809,66 @@ u32 func_800AEB9C(s32 a)
     return func_800491F4(a, D_800D1594, 0x1A);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AEBC4);
+/* func_800AFF00's template-copy shape (see func_800B67A4 for the four
+   load-bearing spellings) with THREE additions: the two resident templates
+   land in the caller's buffers and the pair's two prim pointers are aimed at
+   them, then a -0x400 goes into the 12-byte prim, the two coordinates and
+   0x400 go through p->unk_04, and finally six halfwords are written into the
+   object the FIRST parameter points at.
+
+   Three things are per-member here and each was measured:
+
+   - The -0x400 must be stored THROUGH `p->unk_08`, not through the `b`
+     parameter it was just assigned from.  Through `b` is 55 words / 32
+     differing: the re-read is what buys the `addu $v1, $a3, $zero`, exactly
+     the "only the FIRST store gets the register the `sw` just executed"
+     mechanism recorded at func_800B67A4.  +0x02 is inside the 12-byte prim's
+     +0x00 word, so it has to be a cast; `*(s16 *)((u8 *)p->unk_08 + 0x2)`
+     and the in-struct `*((s16 *)p->unk_08 + 1)` are both 0 differing.
+
+   - `p->unk_00 = 0` goes AFTER both pointer stores (before them is 2
+     differing, the same residue func_800B67A4 records).  The ORDER of the two
+     pointer stores is free: unk_04-then-unk_08 and unk_08-then-unk_04 are
+     both 0 differing, because sched1 reorders the two independent `sw`s.
+
+   - The +0x14 ternary must be spelled with the NEGATIVE test:
+     `(e < 0 ? 0x30 : -0x60) - e`.  Writing it `(e >= 0 ? -0x60 : 0x30) - e`
+     is 3 differing -- a `bltz` for the target's `bgez` and the two `li`s
+     swapped around it.
+
+   The 5th and 6th parameters are s32, not s16: func_800AEEF0 forwards them
+   with a bare `lw 0x38($sp)` / `sw 0x10($sp)` and `bgez $t1` reads the whole
+   word.  SIX parameters, witnessed by the in-unit call at func_800AEEF0.
+
+   56 words -- its header reads `nonmatching func_800AEBC4, 0xE0`, and
+   0xE0/4 = 56.  No jump table, no rodata of its own.  Measured 0 differing. */
+void func_800AEBC4(u8 *s, UnkTownCardPair *p, u32 *a, u32 *b, s32 e, s32 f)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkTownCardPrim *)a;
+    p->unk_08 = (UnkTownCardPrim12 *)b;
+    p->unk_00 = 0;
+    *(s16 *)((u8 *)p->unk_08 + 0x2) = -0x400;
+    p->unk_04->unk_08 = e;
+    p->unk_04->unk_0A = f;
+    p->unk_04->unk_0C = 0x400;
+    p->unk_04->unk_0F = 4;
+    *(s16 *)(s + 0xC) = e;
+    *(s16 *)(s + 0xE) = f;
+    *(s16 *)(s + 0x10) = 0x400;
+    *(s16 *)(s + 0x14) = (e < 0 ? 0x30 : -0x60) - e;
+    *(s16 *)(s + 0x16) = -0x40 - f;
+    *(s16 *)(s + 0x18) = -0x200;
+}
 
 void func_800AECA4(u8 *s)
 {
@@ -16833,11 +16894,57 @@ void func_800AECA4(u8 *s)
     func_800AE854(s);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AEE98);
+/* One forwarded call.  D_800D15B0 is a DATA symbol
+   (splat/town.bin_undefined_syms_auto.txt:365) and had no declaration in this
+   unit; `extern u8 D_800D15B0[];` is new.  func_80049D80 is the resident
+   csrc/unk_1C540.c:755 `void func_80049D80(u8 *p, s32 b)`, which this unit
+   had no declaration for either -- declared here as `(u8 *, u8 *)` so the
+   template address passes without a cast.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AEEBC);
+   9 words -- its header reads `nonmatching func_800AEE98, 0x24`, and
+   0x24/4 = 9.  Arity 1, witnessed by func_800AEEBC's `func_800AEE98(s + 0x40)`.
+   Measured 0 differing. */
+void func_800AEE98(u8 *s)
+{
+    func_80049D80(s, D_800D15B0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AEEF0);
+/* Four parameters parked in the +0x20 view and then the +0x40 sub-view
+   initialised.  THE STORE ORDER IS LOAD-BEARING and it is not the offsets'
+   order: 0x3C, 0x34, 0x28, 0x38.  Writing them ascending (0x28, 0x34, 0x38,
+   0x3C) is 2 differing.  The 5th argument's `lw $v0, 0x28($sp)` sits second
+   in the listing only because sched1 hoisted it out of its own load-delay.
+
+   FIVE parameters, settled by func_800AEEF0's call site, which forwards its
+   own args 1/2/3/4 untouched and its SEVENTH as the fifth here -- passing its
+   fifth instead is 26 words / 20 differing.
+
+   13 words -- its header reads `nonmatching func_800AEEBC, 0x34`, and
+   0x34/4 = 13.  Measured 0 differing. */
+void func_800AEEBC(u8 *s, void *a, s32 b, s32 c, s32 d)
+{
+    *(void **)(s + 0x3C) = a;
+    *(s32 *)(s + 0x34) = b;
+    *(s32 *)(s + 0x28) = c;
+    *(s32 *)(s + 0x38) = d;
+    func_800AEE98(s + 0x40);
+}
+
+/* The splitter func_800AEFD8's comment above already describes: args 1/2/3/4
+   and 7 go to func_800AEEBC, args 5/6 to func_800AEBC4.  The three buffer
+   addresses func_800AEBC4 works on are all off this view -- the pair record at
+   +0xC8, the 4-word prim at +0xA0 and the 12-byte prim at +0xB0 -- which is
+   why they are `addiu` off $s0 rather than loads.
+
+   27 words -- its header reads `nonmatching func_800AEEF0, 0x6C`, and
+   0x6C/4 = 27.  Signature was already declared in the preamble and is
+   unchanged.  Measured 0 differing. */
+void func_800AEEF0(u8 *s, void *a, s32 b, s32 c, s32 d, s32 e, s32 f)
+{
+    func_800AEEBC(s, a, b, c, f);
+    func_800AEBC4(s, (UnkTownCardPair *)(s + 0xC8), (u32 *)(s + 0xA0), (u32 *)(s + 0xB0), d, e);
+    func_800AECA4(s);
+}
 
 s32 func_800AEF5C(u8 *s, s32 n)
 {
@@ -16908,9 +17015,67 @@ UnkNode *func_800AEFD8(void *p, s32 b, s32 c, s32 d, s32 e, s32 f)
     return o;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF0E0);
+/* func_800B0318's release loop with a RUN-TIME length and no zeroing: one
+   range starting at slot 0x14, and the count is a parameter.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF148);
+   THE BOUND MUST STAY INSIDE THE TEST.  `n += 0x14;` as its own statement and
+   then `i < n` is 25 words / 22 differing -- loop.c then has nothing invariant
+   left to hoist and the whole guard/giv shape changes.  Written as
+   `i < n + 0x14` the `addiu $a1, $a1, 0x14` is hoisted once ahead of the entry
+   test, and combine_givs merges the address giv so `a[i]` walks from
+   `a + 0x50` (= &a[0x14]) while $s0 keeps the plain counter -- the same
+   strength reduction func_800AF254 records, and for the same reason: the base
+   is a parameter and therefore loop-invariant.
+
+   The array typing is NOT witnessed here: spelling it `u8 *p` with
+   `((UnkTownSlot **)(p + 0x50))[i - 0x14]` is also 0 differing.  `a[i]` with
+   i from 0x14 is the family's spelling (func_800B0318, func_800B39E4,
+   func_800B5020) and the caller passes the slot array itself.
+
+   26 words -- its header reads `nonmatching func_800AF0E0, 0x68`, and
+   0x68/4 = 26.  Arity 2, witnessed by func_800AF148's call.  0 differing. */
+void func_800AF0E0(UnkTownSlot **a, s32 n)
+{
+    s32 i;
+
+    for (i = 0x14; i < n + 0x14; i++)
+    {
+        func_8004E99C(a[i]->unk_00);
+    }
+}
+
+/* func_800B03B4's teardown over the +0xD8 slot table, with two differences
+   from it and both are measured:
+
+   - THE TWO CALLS ARE THE OTHER WAY ROUND.  func_800AF0E0 first and
+     func_8004B248 second; func_800B03B4's order is 25 words / 27 differing.
+
+   - THE RETIRE FLAG MUST BE REACHED THROUGH `v`, i.e.
+     `*(u16 *)(v - 0x2) |= 0x8000;` and not `o->unk_1E |= 0x8000;`.  The
+     `o->unk_1E` spelling is 24 words / 26 differing: `v` then dies at the last
+     call, the function needs only two saved registers instead of three and the
+     frame shrinks from 0x20 to 0x18.  Reading the flag off `v` keeps `v` live
+     past both calls, which is what puts it in $s0 with `o` in $s1.  (The
+     `o->unk_1E` spelling is correct in func_800B03B4, which uses `v` once.)
+
+   27 words -- its header reads `nonmatching func_800AF148, 0x6C`, and
+   0x6C/4 = 27.  No jump table, no rodata of its own.  Arity 1, witnessed by
+   the still-stubbed func_800B06C4, which calls it with $a0 = `lw 0x4($a0)`.
+   Measured 0 differing. */
+void func_800AF148(UnkNode *o)
+{
+    u8 *v;
+
+    if (o == 0)
+    {
+        return;
+    }
+    v = (u8 *)o + 0x20;
+    func_800AF0E0(*(UnkTownSlot ***)(v + 0xD8), *(s32 *)(v + 0x28));
+    func_8004B248((u32 *)((u8 *)o + 0xFC));
+    *(u16 *)(v - 0x2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
 
 void func_800AF1B4(u8 *s, s32 b, s32 c)
 {
@@ -16999,7 +17164,23 @@ void func_800AF36C(u8 *s)
         (*(UnkTownGrid ***)(s + 0xA8))[4]->unk_04->unk_0A - 0x9;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF448);
+/* func_800B2F38's body under a guard on the descriptor's +0x1C count; the
+   double indirection through +0x14 is explained there.  Both guard spellings
+   are 0 differing -- the `if (x != 0) { ... }` block and the
+   `if (x == 0) return;` early exit -- because the arm does not leave the
+   function, so there is nothing for the inversion lever to bite on.
+
+   25 words -- its header reads `nonmatching func_800AF448, 0x64`, and
+   0x64/4 = 25.  Arity 1, witnessed by the still-stubbed func_800AFFA8, which
+   calls it with the incoming $a0 and nothing else.  Measured 0 differing. */
+void func_800AF448(u8 *s)
+{
+    if (*(s32 *)(*(u8 **)s + 0x1C) != 0)
+    {
+        func_8004CBFC((u32 *)(s + 0x1C), D_800792DC, *(u32 **)(*(u8 **)(s + 0xA8) + 0x10));
+        **(u32 **)(*(u8 **)(s + 0xA8) + 0x14) = (u32)D_80071244;
+    }
+}
 
 void func_800AF4AC(UnkTownGrid **p)
 {
@@ -17012,7 +17193,51 @@ void func_800AF4AC(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AF520);
+/* func_800AF254's fill loop for slot range 6..0x10 off the +0xA8 table, with
+   TWO additions: the entry's two bytes feed func_8004A658 (higher offset
+   first, the same argument order as the landed sites at :10999 and :11110),
+   and a second loop zeroes whatever the `break` left behind.
+
+   Unlike func_800AF254, THE INCREMENT PLACEMENT HERE IS FREE: `i++, j++` in
+   the for-increment, and `j++` as the body's last statement, are both 0
+   differing, as is spelling the tail `while (i < 0x10) { ...; i++; }` instead
+   of `for (; i < 0x10; i++)`.  func_800AF254's recorded 3-differing result for
+   that permutation does NOT transfer -- there both increments are the only
+   things in the exit branch's and the jal's delay slots, while here the `jal`
+   slot is taken by `addiu $s1, $s1, 1` regardless and the exit branch's slot
+   is filled by the tail loop's own `sll $v0, $s0, 2`.
+
+   The descriptor `*(u8 **)s` is re-read at the top of every iteration and both
+   the limit (+0x1C) and the table (+0x20) come off that one load, which is why
+   the two `lw`s share $v1.  The +0xA8 slot table is re-read per iteration in
+   both loops, as func_800AF254's note predicts for a base that is not a
+   parameter.
+
+   56 words -- its header reads `nonmatching func_800AF520, 0xE0`, and
+   0xE0/4 = 56.  No jump table, no rodata of its own.  Arity 1, witnessed by
+   two still-stubbed callers, func_800AF860 and func_800AFFA8, both of which
+   call it with a bare `addu $a0, $s0, $zero`.  Measured 0 differing. */
+void func_800AF520(u8 *s)
+{
+    s32 i;
+    s32 j;
+
+    j = *(s32 *)(*(u8 **)s + 0x10) * 5 * 2;
+    for (i = 0x6; i < 0x10; i++, j++)
+    {
+        if (j >= *(s32 *)(*(u8 **)s + 0x1C))
+        {
+            break;
+        }
+        (*(UnkTownSlot ***)(s + 0xA8))[i]->unk_00 =
+            func_8004A658((*(u8 ***)(*(u8 **)s + 0x20))[j][1],
+                          (*(u8 ***)(*(u8 **)s + 0x20))[j][0]);
+    }
+    for (; i < 0x10; i++)
+    {
+        (*(UnkTownSlot ***)(s + 0xA8))[i]->unk_00 = 0;
+    }
+}
 
 void func_800AF600(UnkTownGrid **p)
 {
