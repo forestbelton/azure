@@ -59,6 +59,25 @@ def _excluded_syms():
 _EXCLUDED = _excluded_syms()
 
 
+def nargs(arglist_text):
+    """Argument count for a call's argument text, counting only TOP-LEVEL
+    commas. A naive `count(',')` overcounts as soon as one argument is itself
+    a call or carries a bracketed subscript -- and a wrong arity is the worst
+    provisioning error there is, because it reads as a witness."""
+    s = arglist_text.strip()
+    if not s or s == 'void':
+        return 0
+    n, depth = 1, 0
+    for ch in s:
+        if ch in '([':
+            depth += 1
+        elif ch in ')]':
+            depth -= 1
+        elif ch == ',' and depth == 0:
+            n += 1
+    return n
+
+
 def constaddr_candidate(sym):
     """True when `sym` is a plausible integer-constant address in the original.
 
@@ -210,6 +229,40 @@ def defs_and_protos(src, unitname):
     txt = open(src).read()
     whole = txt
     landed, cur, depth, body = {}, None, 0, {}
+    in_comment = [False]
+
+    def code_only(ln):
+        '''`ln` with comment spans removed, so a name MENTIONED IN PROSE is not
+        read as a call or an install.
+
+        Route (d) reported 42 of these before 2026-11-03, and one of them
+        mattered: func_8009DA50's comment says "x/z are the s16 values
+        func_8009D424 is passed", which came out as
+        "func_8009D424 address taken by func_8009DA50" -- it is a CALLER, not
+        an installer. Comments in this tree also quote code verbatim
+        (`*(u32 *)(m + 0x68) = (u32)func_8008BA00;` appears inside a comment),
+        so a prose scan cannot be fixed by pattern alone.'''
+        out, i = [], 0
+        while i < len(ln):
+            if in_comment[0]:
+                e = ln.find('*/', i)
+                if e < 0:
+                    return ''.join(out)
+                in_comment[0] = False
+                i = e + 2
+                continue
+            s = ln.find('/*', i)
+            d = ln.find('//', i)
+            if d >= 0 and (s < 0 or d < s):
+                out.append(ln[i:d])
+                return ''.join(out)
+            if s < 0:
+                out.append(ln[i:])
+                return ''.join(out)
+            out.append(ln[i:s])
+            in_comment[0] = True
+            i = s + 2
+        return ''.join(out)
     # Address-TAKES inside a landed body, which `body` cannot hold because it
     # matches only `func_X(`. Route (d) needs these: see the comment there.
     addr = {}
@@ -235,12 +288,13 @@ def defs_and_protos(src, unitname):
             # prefix of it -- that sent a brief's reader to :2206 (a
             # declaration) rather than :19205 (the definition).
             lines[cur] = lineno
+        code = code_only(ln)
         if cur:
-            body[cur].update(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', ln))
+            body[cur].update(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', code))
             # A name NOT followed by `(` is being used as a VALUE: `(u32)func_X`,
             # `&func_X`, or a bare assignment into a slot. That is an install.
             addr[cur].update(re.findall(
-                r'\b(func_[0-9A-Fa-f]{8})\b(?!\s*\()', ln))
+                r'\b(func_[0-9A-Fa-f]{8})\b(?!\s*\()', code))
             depth += ln.count('{') - ln.count('}')
             if depth <= 0 and '}' in ln: cur = None
     protos = {}
@@ -527,8 +581,15 @@ def main():
                 k += 1
             if depth: continue
             inner = hay[m.end():k-1]
-            if '\n' in inner: continue
-            return inner
+            # A MULTI-LINE ARGUMENT LIST IS STILL AN ARGUMENT LIST. This used
+            # to `continue` on any newline, so route (c) printed "none -- no
+            # LANDED call site constrains arity" for a call it had already
+            # found. On 2026-11-03 that hid func_8009DA50's ten-argument call
+            # of func_8009D424 -- the single most load-bearing provisioning
+            # fact in its group, giving the arity, the argument order and
+            # every parameter type -- and the agent recovered it with a plain
+            # grep in its first minute. Collapse the whitespace instead.
+            return re.sub(r'\s+', ' ', inner).strip()
         return None
 
     witnessed = set()
@@ -1014,8 +1075,12 @@ def main():
             if f in dc and d not in targets:
                 a = arglist(btext.get(d, ''), f)
                 if a is None: continue
+                # 60 characters truncated a ten-argument call to six, which
+                # hides the ARITY -- the thing this route exists to settle.
                 print("  %-15s called by LANDED %s (csrc/%s.c:%d) as %s(%s)"
-                      % (f, d, unit, lines[d], f, a[:60]))
+                      % (f, d, unit, lines[d], f,
+                         a if len(a) <= 240 else a[:240] + ' ...TRUNCATED'))
+                print("      %d argument(s) at that call site" % nargs(a))
                 anyc = True; witnessed.add(f)
     if not anyc: print("  none -- no LANDED call site constrains arity")
     print("\n=== ROUTE (g): YOUR OWN GROUP MEMBERS AS WITNESSES ===")
