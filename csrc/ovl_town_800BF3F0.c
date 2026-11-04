@@ -558,7 +558,12 @@ typedef struct UnkTownScrCtx
 {
     u16 unk_00;
     u16 unk_02;
-    u8 pad_04[0x8];
+    u8 pad_04[0x4];
+    /* Split out of pad_04 by func_8009CDCC, which writes this pair as s16
+       next to +0x00/+0x02; func_8009D940 reads +0x00/+0x04/+0x08 and
+       +0x02/+0x06/+0x0A as three s16 pairs.  No existing field moved. */
+    s16 unk_08;
+    s16 unk_0A;
     UnkTownScrHdr *unk_0C;
 } UnkTownScrCtx;
 

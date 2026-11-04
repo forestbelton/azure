@@ -573,7 +573,12 @@ typedef struct UnkTownScrCtx
 {
     u16 unk_00;
     u16 unk_02;
-    u8 pad_04[0x8];
+    u8 pad_04[0x4];
+    /* Split out of pad_04 by func_8009CDCC, which writes this pair as s16
+       next to +0x00/+0x02; func_8009D940 reads +0x00/+0x04/+0x08 and
+       +0x02/+0x06/+0x0A as three s16 pairs.  No existing field moved. */
+    s16 unk_08;
+    s16 unk_0A;
     UnkTownScrHdr *unk_0C;
 } UnkTownScrCtx;
 
@@ -2202,7 +2207,7 @@ s32 func_800C2B6C(s16 a);
 extern u8 D_800D2EA4[];
 void func_800B8E08(u16 *p);
 void func_8009CDB4(void);
-void func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
+u8 **func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
 void func_8009CE34(void);
 extern u8 D_800D43F0[];
 
@@ -2878,6 +2883,15 @@ extern UnkTownC648Ent D_800D06C8[];
 void func_8009C340(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
 void func_8009C4E8(UnkTownActor *a, UnkTown2AE8 *q, UnkTownRend *r);
 void func_8009C5D8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+extern u8 **D_801007F4;
+extern UnkTownScrCtx *D_801007F8;
+extern u8 D_801006D0[];
+extern u8 D_800F8A4C[];
+extern u8 D_800F8A58[];
+void func_8009CE80(void);
+void func_8009D5C0(u8 **p);
+void func_8009D73C(u8 **p);
+void func_8009DA50(UnkTownScrRec *p, u8 *b, s32 a2, s32 a3);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -11185,7 +11199,39 @@ void func_8009C648(UnkTownActor *a, UnkVec *b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009C7A8);
+/* The generic form of the func_8009C884/func_8009C8FC pair below: the
+   spawn's +0x94 byte selects between the two, and cross-jumping unifies the
+   shared func_8009B218 tail call.
+
+   The DEFINITION is old-style on purpose.  A prototyped definition sits
+   above func_8009C83C and func_8009C9DC, whose own parameters are declared
+   (UnkTownActor *, s32, s32), and above func_8009CB64's (void *, void *,
+   u8 *) -- so any prototype here adds three "incompatible pointer type"
+   warnings at call sites whose argument types this function cannot
+   contradict.  The bytes are identical either way (measured 37 words /
+   0 differing both ways); the old-style form keeps the unit's existing
+   `void func_8009C7A8();` declaration the only word on its signature. */
+void func_8009C7A8(p, q, r, d, e, f)
+    UnkTownSpawn *p;
+UnkVec *q;
+UnkTownRend *r;
+u8 *d;
+u8 *e;
+u8 *f;
+{
+    if (*((u8 *)p + 0x94) != 0)
+    {
+        r->unk_08 = (u32)e;
+        func_8008F104(p, q, f);
+        func_8009B218(p, q, r, 0);
+    }
+    else
+    {
+        r->unk_08 = (u32)d;
+        func_8008F01C(p, q, f);
+        func_8009B218(p, q, r, D_800D0690);
+    }
+}
 
 /* A family of 2: park a per-member descriptor at the actor's +0x7C and call
    func_8009C7A8 with SIX arguments, the last two on the stack at sp+0x10 and
@@ -11251,11 +11297,20 @@ void func_8009CAFC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     func_8009B218(p, q, r, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CB64);
+void func_8009CB64(void *a, void *b, u8 *c, void *d)
+{
+    func_8009C7A8(a, b, c, d, d, D_800D0678);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CB90);
+void func_8009CB90(void *a, void *b, u8 *c)
+{
+    func_8009CB64(a, b, c, D_800F8A4C);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CBB4);
+void func_8009CBB4(void *a, void *b, u8 *c)
+{
+    func_8009CB64(a, b, c, D_800F8A58);
+}
 
 void func_8009CBD8(void *a, void *b, u8 *c)
 {
@@ -11292,13 +11347,85 @@ void func_8009CCD8(void *a, void *b, u8 *c)
     *(u16 *)(c + 0x14) |= 0x1C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CD18);
+void func_8009CD18(void *a, UnkTownRend *r, s32 id)
+{
+    u8 *col;
+    u8 blue;
+
+    r->unk_20 = 0x1000;
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    col = (u8 *)&D_80083160;
+    r->unk_12 = 0;
+    r->unk_14 = 0;
+    r->unk_10 = 0;
+    r->unk_0C = col[0xA8];
+    r->unk_0D = col[0xA9];
+    blue = col[0xAA];
+    r->unk_14 = 0;
+    r->unk_1A = 0;
+    r->unk_18 = 0;
+    r->unk_16 = 0;
+    r->unk_00 = 0;
+    r->unk_04 = 0;
+    r->unk_05 = 0;
+    r->unk_0E = blue;
+    func_8004491C((UnkNode *)((u8 *)a - 0x20), (u32)D_80046398);
+    r->unk_08 = id;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CDB4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CDCC);
+/* Returns the D_801007F4 cursor: the tail `lui`/`lw` pair is live on BOTH
+   paths (the e == NULL branch lands on it), so a `void` return is 24 words
+   against the target's 26.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CE34);
+   THE STORES MUST GO THROUGH A `UnkTownScrCtx *`, NOT THROUGH `e`.  A
+   COMPONENT_REF sets MEM_IN_STRUCT_P (expr.c:5351) while `*(s16 *)(e + N)`
+   does not, and sched.c's anti_dependence (:886-889) drops the store/load
+   conflict only when one side is in-struct with a varying address and the
+   other is neither -- and the global's `(lo_sum (reg) (symbol_ref))` address
+   does NOT vary, because rtx_varies_p treats a LO_SUM's operand 0 as
+   constant (rtlanal.c:105-108).  Spelled through `e`, all four `sh` stores
+   carry a REG_DEP_ANTI on the cursor load, so sched2 cannot sink the `lw`
+   past them and it lands in the FIRST shift group instead of the fourth:
+   26 words, 10 differing, every other word and register already identical.
+
+   `p = D_801007F4;` must also be the first statement in the block: it is
+   what births the %hi pseudo early enough to take $a0, which is what forces
+   the `addu $v0, $a0, $zero` copy of `a` into the branch delay slot.  Moved
+   after any of the four stores, the copy disappears and the function is 25
+   words. */
+u8 **func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e)
+{
+    u8 **p;
+    UnkTownScrCtx *s;
+
+    if (e != NULL)
+    {
+        p = D_801007F4;
+        s = (UnkTownScrCtx *)e;
+        s->unk_00 = (s16)a * 64;
+        s->unk_02 = (s16)b * 64;
+        s->unk_08 = (s16)c * 64;
+        s->unk_0A = (s16)d * 64;
+        *p = e;
+        p++;
+        D_801007F4 = p;
+        *p = NULL;
+    }
+    return D_801007F4;
+}
+
+void func_8009CE34(void)
+{
+    UnkNode *n;
+
+    n = func_8003FE78(0x11, (UnkNode *)D_801006D0, 0x49);
+    n->unk_10 = (u32)func_8009CE80;
+    func_80096DC8(&D_80100900);
+    func_8008D084();
+}
 
 void func_8009CE80(void)
 {
@@ -11306,9 +11433,48 @@ void func_8009CE80(void)
     func_800A496C();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEA8);
+void func_8009CEA8(void)
+{
+    func_8009D5C0((u8 **)&D_80100900);
+    func_8009D73C((u8 **)&D_80100900);
+    D_801007F8 = NULL;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CEE8);
+void func_8009CEE8(void)
+{
+    s16 lo[2];
+    s16 hi[2];
+    UnkTownScrCtx **t;
+    UnkTownScrRec **l;
+    UnkTownScrCtx *c;
+    u8 *base;
+    u16 x;
+    u16 z;
+
+    base = D_80082D08;
+    func_8009D808(base, lo, hi);
+    func_8009D940(lo, hi, &D_80100900, &D_801007F8);
+    if (D_801007F8 != NULL)
+    {
+        t = &D_801007F8;
+        do
+        {
+            c = *t;
+            l = (UnkTownScrRec **)c->unk_0C;
+            if (l != NULL)
+            {
+                x = c->unk_00;
+                z = c->unk_02;
+                while (*l != NULL)
+                {
+                    func_8009DA50(*l, base, (s16)x, (s16)z);
+                    l++;
+                }
+            }
+            t++;
+        } while (*t != NULL);
+    }
+}
 
 /* THE THIRD ARGUMENT IS NOT PASSED, and this is not a cosmetic choice.
    The body never reads it, so this function's own bytes are identical at
