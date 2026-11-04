@@ -15401,11 +15401,191 @@ void func_800AB55C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB5C0);
+/* 82 words, 0 differing.  The second half of a ping-pong pair with
+   func_800AB708 (below): each installs the other at +0x50, which is why
+   func_800AB708's declaration in the preamble is load-bearing here and
+   func_800AB5C0 needs none -- it is defined above its own installer.
+   func_800AB4A8 (:15068) and func_800AB55C (:15087) are the landed witnesses
+   for the `if (a->unk_90 < 100) a->unk_50 = func_800AB708;` gate and for
+   `if (--a->unk_6C < 0)` with the 0x96 reload.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB708);
+   THE ONE LEVER IN BOTH MEMBERS, and it is worth 5 words here and 26 differing
+   in func_800AB708: the subtraction into the probe's third integer half MUST be
+   a COMPONENT_REF.  Written `*(s16 *)((u8 *)&v + 0xA) -= ...` the MEM is not
+   MEM_IN_STRUCT_P, cse forwards the stored pseudo into every later read of
+   +0xA and the reloads (`lhu 0x1A($sp)` in this arm, `lh` in the averaging
+   one) disappear -- 77 of 82 words, 58 differing.  Through UnkTown2AE8Int the
+   access is a COMPONENT_REF, the forwarding stops and both arms reload.
+   `((s16 *)&v)[5] -= ...` is the same 0 differing (measured); the typedef is
+   the spelling this unit already has for the integer-half view.
+   The READ idiom does not matter -- `*(s16 *)((u8 *)&v + N)` and
+   `((s16 *)&v)[N]` both measure 0.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB7FC);
+   Both arms fall into the shared epilogue, so they are emitted in source
+   order and the `< 0` arm is written first; the snap arm's two stores per axis
+   are a chain whose RIGHT-hand store (b + 0x2) is emitted first. */
+void func_800AB5C0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTown2AE8 v;
+
+    if (a->unk_90 < 100)
+    {
+        a->unk_50 = func_800AB708;
+    }
+    func_800AAFE0(&v, 4);
+    ((UnkTown2AE8Int *)&v)->unk_0A -= func_800AAE98(b) + func_800AB030(a);
+    if (--a->unk_6C < 0)
+    {
+        *(s16 *)((u8 *)b + 0xE) = *(s16 *)((u8 *)b + 0x2) = *(s16 *)((u8 *)&v + 0x2);
+        *(s16 *)((u8 *)b + 0x12) = *(s16 *)((u8 *)b + 0x6) = *(s16 *)((u8 *)&v + 0x6);
+        *(s16 *)((u8 *)b + 0x16) = *(s16 *)((u8 *)b + 0xA) = *(s16 *)((u8 *)&v + 0xA);
+        a->unk_50 = func_800AB408;
+        a->unk_6C = 0x96;
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 0x2) = (*(s16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)&v + 0x2)) / 2;
+        *(s16 *)((u8 *)b + 0x6) = (*(s16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)&v + 0x6)) / 2;
+        *(s16 *)((u8 *)b + 0xA) = (*(s16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)&v + 0xA)) / 2;
+    }
+}
+
+/* 61 words, 0 differing.  func_800AB5C0's partner: the same probe, the same
+   COMPONENT_REF lever (see that comment -- the `*(s16 *)` spelling is 61 words
+   and 26 differing here, all of it the missing `lh 0x1A($sp)` reload and the
+   sll/sra pair cse substitutes for it), and the averaging arm unconditional.
+   The +0x50 install is the INVERSE gate: `>= 100` here against `< 100` in
+   func_800AB5C0 and in the two landed steppers. */
+void func_800AB708(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    UnkTown2AE8 v;
+
+    func_800AAFE0(&v, 4);
+    ((UnkTown2AE8Int *)&v)->unk_0A -= func_800AAE98(b) + func_800AB030(a);
+    *(s16 *)((u8 *)b + 0x2) = (*(s16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)&v + 0x2)) / 2;
+    *(s16 *)((u8 *)b + 0x6) = (*(s16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)&v + 0x6)) / 2;
+    *(s16 *)((u8 *)b + 0xA) = (*(s16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)&v + 0xA)) / 2;
+    func_800AB014(a, 4);
+    if (a->unk_90 >= 100)
+    {
+        a->unk_50 = func_800AB5C0;
+        a->unk_72 = 0;
+        a->unk_6C = 0xA;
+    }
+}
+
+/* 105 words, 0 differing.  The town's GTE/draw-environment reset: it has no
+   caller and no address-taker anywhere under asm/ or csrc/, so `void (void)` is
+   a choice and not a witness -- no argument register is read before it is
+   written.  func_80027D7C (csrc/ovl_main_80020000.c:5210) is the line-level
+   relative: `D_80083200 = 0x200; func_80064F20(0x200); func_80064F00(0xA0,
+   0x78);` is this function's first and last pair, and D_80083200 is the
+   `p + 0x88` written here.  The resident callees are splat-named
+   SetGeomScreen / SetFarColor / SetColorMatrix / SetLightMatrix /
+   SetBackColor / SetGeomOffset and ride implicit declarations.
+
+   THREE ADDRESSING FACTS, each measured:
+
+   1. TWO pointer locals over one symbol.  `g` is &D_80083160 and `p` is
+      `g + 0x18`; the matrix arguments go through `g` (`addiu $a0, $s1, 0x50`
+      / `0x70`) while the stores go through `p` at +0x38 / +0x58.  With only
+      `p` and the arguments written `(u8 *)&D_80083160 + 0x70`, cse rewrites
+      them as `p + 0x58` and the second register never appears: 102 words,
+      102 differing.  Both must be assigned as STATEMENTS -- `u8 *r =
+      D_8006ADBC` as an initialiser instead of a statement is 107 words and
+      99 differing, the documented prologue-materialisation lever.
+   2. The light matrix's SECOND ROW comes from s32 temporaries, and that is
+      worth exactly the two missing words.  The target materialises -0x800 and
+      0x800 TWICE each (four `addiu $vN, $zero, K` for six stores), split on
+      the row boundary: {0x38,0x3C} and {0x3A} share one pair, {0x3E,0x42} and
+      {0x40} share another.  Six literal stores in any order -- ascending,
+      target store order, chained pairs, `MATRIX`/`SVECTOR`/`s16[]` views, a
+      `do {} while (0)` between the rows -- give two materialisations and 103
+      words, because cse cannot be stopped from unifying two identical small
+      constants (docs/matching-levers.md:14197).  What DOES reach it is that
+      lever's own escape clause: HImode-first then SImode-second misses the
+      merge.  The first row's literal stores are HImode const_ints; the second
+      row's values live in `s32` locals, so their materialisations are SImode
+      and cse leaves them alone.  Putting BOTH rows in s32 locals is 103 words
+      again (the first SImode set absorbs the second), which is the control.
+   3. D_8006ADBC's two halfwords are read off a POINTER LOCAL.  Written
+      `((s16 *)D_8006ADBC)[0xC]` / `[0xD]` the first load folds %lo+0x18 into
+      its own displacement and gcc builds a second base for the other --
+      105 words, 2 differing, plus a relocation ADDEND difference the mask
+      hides.  `u8 *r = D_8006ADBC;` as a statement gives one lo_sum base and
+      plain 0x18 / 0x1A displacements.  0x18 and 0x1A are the two halves of
+      Unk8006ADBCRec's +0x18 word, the one compared against 0x37000C
+      elsewhere, so the test is "low half == 0xC and high half != 0x34".
+
+   The 0xA0/0xA0/0xA0 and 0xB0/0xB0/0xB0 SetBackColor calls are duplicated in
+   both arms and cross-jumping unifies them into the one `jal` at +0x11C. */
+void func_800AB7FC(void)
+{
+    u8 *g;
+    u8 *p;
+    s32 lo;
+    s32 hi;
+    u8 *r;
+
+    g = (u8 *)&D_80083160;
+    p = g + 0x18;
+    *(s32 *)(p + 0x88) = 0x200;
+    func_80064F20(0x200);
+    *(s32 *)(p + 0x78) = 0;
+    *(s32 *)(p + 0x7C) = 0;
+    *(s32 *)(p + 0x80) = 0;
+    func_80064EE0(0, 0, 0);
+    *(s16 *)(p + 0x5A) = -0x100;
+    *(s16 *)(p + 0x60) = -0x100;
+    *(s16 *)(p + 0x66) = -0x100;
+    *(s16 *)(p + 0x5C) = 0;
+    *(s16 *)(p + 0x62) = 0;
+    *(s16 *)(p + 0x68) = 0;
+    func_80064D50(g + 0x70);
+    *(s16 *)(p + 0x38) = -0x800;
+    *(s16 *)(p + 0x3A) = 0x800;
+    *(s16 *)(p + 0x3C) = -0x800;
+    lo = 0x800;
+    hi = -0x800;
+    *(s16 *)(p + 0x3E) = lo;
+    *(s16 *)(p + 0x40) = hi;
+    *(s16 *)(p + 0x42) = lo;
+    *(s16 *)(p + 0x44) = 0;
+    *(s16 *)(p + 0x46) = 0;
+    *(s16 *)(p + 0x48) = 0;
+    func_80064D20(g + 0x50);
+    *(s32 *)(p + 0x84) = 0x1000;
+    func_80064624(0x1000, *(s32 *)(p + 0x88));
+    r = D_8006ADBC;
+    if (*(s16 *)(r + 0x18) == 0xC && *(s16 *)(r + 0x1A) != 0x34)
+    {
+        *(s16 *)(p + 0x58) = 0x200;
+        *(s16 *)(p + 0x5E) = 0x200;
+        *(s16 *)(p + 0x64) = 0x200;
+        func_80064EC0(0xA0, 0xA0, 0xA0);
+    }
+    else
+    {
+        *(s16 *)(p + 0x58) = 0x3C0;
+        *(s16 *)(p + 0x5E) = 0x3C0;
+        *(s16 *)(p + 0x64) = 0x3C0;
+        func_80064EC0(0xB0, 0xB0, 0xB0);
+    }
+    func_80064F00(0xA0, 0x78);
+    *(s16 *)(g + 0x18) = -0xBC;
+    *(s16 *)(g + 0x1A) = -0x88;
+    *(s16 *)(g + 0x1C) = 0x172;
+    *(s16 *)(g + 0x1E) = 0x19A;
+    *(u8 *)(p + 0x90) = 0x80;
+    *(u8 *)(p + 0x91) = 0x80;
+    *(u8 *)(p + 0x92) = 0x80;
+    D_801C9E40[0x19] = 0;
+    D_801C9E40[0x1A] = 0;
+    D_801C9E40[0x1B] = 0;
+    D_801DA714.r0 = 0;
+    D_801DA714.g0 = 0;
+    D_801DA714.b0 = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB9A0);
 
