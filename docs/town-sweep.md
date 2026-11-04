@@ -389,15 +389,29 @@ standalone) after three wrong guesses about which prototype had done it.
   caller's `$a0`/`$a1`/`$a2` setup. A function whose address is only TAKEN (a
   handler installed in a slot) has no arity witness at all, and any arity
   compiles.
-* **AND THE DISPATCHER IS NOT A WITNESS EITHER, IN THIS UNIT.** It is tempting
-  to read the arity of a handler off the call through its slot. Do not: the
-  slots are declared `void (*unk_50)()` and `void (*unk_54)()` --
-  UNPROTOTYPED -- and this unit calls them with THREE different argument counts
-  at five different sites. `d->unk_50();` and `d->unk_54();` with **zero**
+* **AN UNPROTOTYPED DISPATCHER IS NOT A WITNESS -- BUT A PROTOTYPED CAST IS,
+  AND BOTH FORMS EXIST SIDE BY SIDE IN THIS UNIT.** This entry used to say
+  flatly that the dispatcher is not a witness "in this unit", and that is too
+  broad: it is true of the `UnkTownDispatch`-typed slots and false of the
+  explicitly cast sites. Narrowed 2026-11-04, after `provision.py`'s own
+  witness search -- which reads the install slot off the installer and then
+  greps the unit for a cast through that offset -- printed four prototyped
+  casts that agreed with an agent's register reads, while this entry told it
+  they could not exist.
+  **NOT a witness:** a slot declared `void (*unk_50)()` or `void (*unk_54)()`,
+  UNPROTOTYPED, which this unit calls with THREE different argument counts at
+  five different sites. `d->unk_50();` and `d->unk_54();` with **zero**
   arguments (`csrc/ovl_town.c:6409`, `:7690`, `:16109`, `:14765`),
   `a->unk_50(a, b, c)` with **three** (`:8232`), and
   `a->unk_50(a, a, q, r)` with **four** (`:7517`). Every one of those
   type-checks against every handler, so none of them constrains anything.
+  **IS a witness:** an explicitly PROTOTYPED cast through the slot, such as
+  `(*(void (**)(u8 *))(q + 0x1C))(q);` at `csrc/ovl_town.c:18351`. That states
+  the arity AND the parameter types of every handler installed at that offset.
+  Four agents found such a cast after the old wording -- and `provision.py`'s
+  old NO-ARITY-WITNESS banner -- told them none existed. So the test is not
+  "is it a dispatcher" but **"is the call through the slot prototyped"**: read
+  the call, do not assume the class.
   **AND A REFERRER IS NOT A CALLER.** Before treating a name in
   `grep -rl 'func_XXXX' asm/nonmatchings/ovl_town/` as a call site, check
   WHICH: `grep -oE 'jal *func_XXXX|%hi\(func_XXXX\)'` on it. On 2026-11-02 I

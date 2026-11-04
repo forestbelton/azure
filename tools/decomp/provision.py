@@ -797,9 +797,24 @@ def main():
             # error as benign.
             sites = [incasm[x] for x in who if x in incasm]
             first = min(sites) if sites else None
-            cls = ('LANDED-ABOVE (mismatch = HARD ERROR)'
-                   if first is not None and lines[c] < first
-                   else 'LANDED-BELOW (mismatch rides implicit decl)')
+            # AND A REAL FORWARD DECLARATION BEATS THE POSITION. A callee
+            # defined below its call site rides an implicit declaration only
+            # when there is no declaration to ride: with a prototype in the
+            # unit the call is type-checked and a mismatch is a hard error
+            # exactly as if the definition were above. This block printed
+            # "rides implicit decl" for func_800ABD74 while the SAME block
+            # printed its real prototype from :3457 two lines later -- an
+            # agent trusting the label would have shipped a bare `&v` and
+            # taken an incompatible-pointer warning or an arity error.
+            if protos.get(c):
+                cls = ('LANDED-BELOW but DECLARED at %s -- the call IS'
+                       ' type-checked, so a mismatch is a HARD ERROR'
+                       % ('csrc/%s.c' % unit))
+            else:
+                cls = ('LANDED-ABOVE (mismatch = HARD ERROR)'
+                       if first is not None and lines[c] < first
+                       else 'LANDED-BELOW, no declaration in the unit, so the'
+                            ' mismatch rides an implicit one')
         elif listing(unit, c) is not None: cls = 'STUB-HERE'
         else:
             # A CARVE CONSEQUENCE I did not anticipate: this used to call
