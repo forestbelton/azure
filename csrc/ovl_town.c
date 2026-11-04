@@ -1912,7 +1912,9 @@ void func_800BB57C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800BB640();
 void func_800BB894(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800BBA98(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800BC00C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 extern u32 D_800F162C[];
+extern u32 D_800F1654[];
 void func_8009503C(UnkTown2AE8 *b);
 void func_80091528();
 void func_80091990();
@@ -28449,7 +28451,168 @@ void func_800BBA98(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BBC1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BBCA0);
+/* The spawner behind func_800BC00C, installed on every record it allocates
+   (`sw $s7, 0x10($s0)` in both loops, with $s7 = %hi/%lo(func_800BC00C)
+   hoisted out of each loop).  Itself installed at an UnkNode's +0x10 by
+   func_800BBC1C, so reached through func_80040190's cast
+   (csrc/unk_12DEC.c), `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20,
+   p->unk_08, p->unk_0C)` -- three parameters, the first being the node's
+   +0x20 actor view.  The third is read nowhere here, a dead TRAILING
+   parameter and so invisible to ovlverify; it is written because the
+   dispatcher supplies it.
+
+   Its own +0x48/+0x4C are the same countdown/state pair func_800BC00C
+   documents, decremented once per frame before the switch.  State 0 bursts
+   8 records that ease towards a target (func_800BC00C's state 0, so
+   +0x0C/+0x0E/+0x10 get the mover's three integer parts), 0x101010 grey and
+   a 6-frame countdown, then advances when func_80033BC0(0x97) says so.
+   State 1 bursts 0x65 BALLISTIC records -- position AND velocity are random,
+   no target is written, and the new record's own +0x4C is seeded to 1 so
+   func_800BC00C runs its state 1 -- 0x808080 grey and an 0xF countdown, then
+   reseeds this view's countdown to 0x10 and advances.  State 2 just waits
+   out that countdown and then kills the node with the unit's standard
+   two-flag idiom (p - 0x2 is UnkNode.unk_1E).
+
+   `func_80033BC0` IS DECLARED `void` IN csrc/gprel_72A8.c AND STILL RETURNS A
+   VALUE: it is a one-line tail call to `s32 func_80033B2C(s32)`, whose $v0
+   survives.  So the gate here rides an implicit declaration, as this unit's
+   other 18 undeclared callees do.  Do NOT give it a prototype from the
+   gprel unit or the `beqz $v0` disappears.
+
+   `D_800F1654` MUST BE DECLARED `extern u32 D_800F1654[]`, exactly like
+   D_800F162C: the listing materialises it as a `lui`/`addiu` %hi/%lo pair
+   with +0x4 read as a displacement off the base, which is the symbolic
+   form -- a constant address would show as `lui`/`ori`.  It lives in
+   splat/town.bin_undefined_syms_auto.txt:910.
+
+   THE ACTOR-VIEW POINTER IS TAKEN FIRST IN BOTH BLOCKS, and that is
+   load-bearing in state 1 only.  The whole block after the null check is one
+   basic block, so reorg fills the `beqz $s0` delay slot from its first insn
+   (reorg.c:3067-3077): state 1's slot holds `addiu $s2, $s0, 0x20` and state
+   0's holds `addu $a0, $s0, $zero`, the arg set-up that sched1 puts first
+   there instead.  Moving state 1's view take down to after `d = o->unk_0C`
+   is 218 words / 104 differing; moving state 0's up to the front is 0, so
+   the uniform spelling is free and is the one written.  Unlike
+   func_800BB894's `o++`, the node register stays live here (`lw $a0,
+   0x8($s0)` after every call), so view and node are two variables.
+
+   FOUR MORE ORDERS ARE PINNED, all measured:
+   * The renderable's five stores go +0x00, +0x08, +0x04, +0x05, +0x0C --
+     func_800BB894's order.  sched1 hoists the `lw 0x4($s6)` clear of the two
+     `sb`s only when it is early in the RTL; with +0x08 after them it is 8
+     differing.
+   * The scale pair is descending, +0x1E then +0x1C (ascending, 4 differing).
+   * The new view's countdown seed must sit between `d->unk_14 |= 0xC` and
+     the +0x00 store (moved to the end of the block, 9 differing).
+   * State 1's three position adds precede its three velocity writes
+     (velocity first, 42 differing).
+
+   The mover must be re-dereferenced as `o->unk_08` at each use: a local for
+   it is 214 words / 209 differing, all eight callee-saved registers being
+   spoken for already (p, q, i, the handler, the D_800F1654 base, the node,
+   the view and the renderable).  The descending loops are load-bearing --
+   `for (i = 0; i < 8; i++)` / `i < 0x65` is 221 words / 127 differing -- and
+   so is the switch: an if/else-if chain is 212 words / 204.
+
+   NOT DISCRIMINATORS, all 0 differing: the state-1 tail's two stores in
+   either order, the countdown decrement spelled out as `x = x - 1`, the
+   state-2 gate as `<= -1`, and the target-position copies reading the mover
+   as `*(u16 *)`.
+
+   THE STATE-2 GATE READS THE DECREMENTED VALUE, NOT A RELOAD -- there is no
+   call between them, so cse forwards the stored halfword and the sign
+   extension it still needs collapses into `sll $v0, $a0, 16` + `bgez`.  That
+   is the same mechanism func_800BC00C's comment records in reverse: there the
+   gate is a reload (`lh`) because func_800478B8 clobbers memory in between.
+
+   219 words -- its header reads `nonmatching func_800BBCA0, 0x36C`, and
+   0x36C/4 = 219.  0 differing, first compile; 37 raw differing against 37
+   relocation words, each checked by offset and symbol, including both
+   %hi/%lo pairs on func_800BC00C. */
+void func_800BBCA0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    s32 i;
+    UnkNode *o;
+    UnkTownSpawn *v;
+    UnkTownRend *d;
+
+    *(s16 *)((u8 *)p + 0x48) -= 1;
+    switch (*(s16 *)((u8 *)p + 0x4C))
+    {
+    case 0:
+        for (i = 7; i >= 0; i--)
+        {
+            o = func_8003FD64(0x312, &D_80083498);
+            if (o != 0)
+            {
+                v = (UnkTownSpawn *)((u8 *)o + 0x20);
+                o->unk_10 = (u32)func_800BC00C;
+                func_8004491C(o, (u32)D_80045340);
+                d = (UnkTownRend *)o->unk_0C;
+                o->unk_08->unk_00 = q->unk_00 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_04 = q->unk_04 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_08 = q->unk_08 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
+                *(s16 *)((u8 *)v + 0xC) = *(s16 *)((u8 *)q + 0x2);
+                *(s16 *)((u8 *)v + 0xE) = *(s16 *)((u8 *)q + 0x6);
+                *(s16 *)((u8 *)v + 0x10) = *(s16 *)((u8 *)q + 0xA);
+                d->unk_1E = 0x100;
+                d->unk_1C = 0x100;
+                d->unk_10 = 0x20;
+                d->unk_14 |= 0xC;
+                *(s16 *)((u8 *)v + 0x48) = 6;
+                d->unk_00 = (u32)D_800F1654;
+                d->unk_08 = D_800F1654[1];
+                d->unk_04 = 0;
+                d->unk_05 = 0;
+                *(u32 *)&d->unk_0C = 0x101010;
+            }
+        }
+        if (func_80033BC0(0x97) != 0)
+        {
+            *(s16 *)((u8 *)p + 0x4C) += 1;
+        }
+        break;
+    case 1:
+        for (i = 0x64; i >= 0; i--)
+        {
+            o = func_8003FD64(0x312, &D_80083498);
+            if (o != 0)
+            {
+                v = (UnkTownSpawn *)((u8 *)o + 0x20);
+                o->unk_10 = (u32)func_800BC00C;
+                func_8004491C(o, (u32)D_80045340);
+                d = (UnkTownRend *)o->unk_0C;
+                o->unk_08->unk_00 = q->unk_00 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_04 = q->unk_04 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_08 = q->unk_08 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_0C = ((func_80069EF8() & 0x1FF) - 0x100) << 14;
+                o->unk_08->unk_10 = ((func_80069EF8() & 0x1FF) - 0x100) << 14;
+                o->unk_08->unk_14 = ((func_80069EF8() & 0x1FF) - 0x100) << 12;
+                d->unk_1E = 0x200;
+                d->unk_1C = 0x200;
+                d->unk_10 = 0x20;
+                d->unk_14 |= 0xC;
+                *(s16 *)((u8 *)v + 0x48) = 0xF;
+                *(s16 *)((u8 *)v + 0x4C) = 1;
+                d->unk_00 = (u32)D_800F1654;
+                d->unk_08 = D_800F1654[1];
+                d->unk_04 = 0;
+                d->unk_05 = 0;
+                *(u32 *)&d->unk_0C = 0x808080;
+            }
+        }
+        *(s16 *)((u8 *)p + 0x48) = 0x10;
+        *(s16 *)((u8 *)p + 0x4C) += 1;
+        break;
+    case 2:
+        if (*(s16 *)((u8 *)p + 0x48) < 0)
+        {
+            *(u16 *)((u8 *)p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 /* Installed at the UnkNode's +0x10 by func_800BBCA0 (both of its spawn loops
    do `sw $s7, 0x10($s0)` with $s7 = %hi/%lo(func_800BC00C)) and reached only
