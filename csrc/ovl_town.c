@@ -2697,6 +2697,27 @@ s32 func_800A00E8(s32 i);
    that D_800D210C's slots are word-sized has a witness (`lw` at a stride of
    4). */
 extern u8 *D_800D210C[];
+/* s5 batch (func_800BC574/764/8D0/DCC).  Read out of the four listings:
+   D_80089634 is ADDRESS-TAKEN (`lui`/`addiu` %hi/%lo) and stored at the actor
+   view's +0x48 by func_800BC8D0, so an incomplete array; D_800D20E8 is a
+   three-word record LOADED through a split base (`lui $s0,%hi` /
+   `lw %lo($s0)` / `addiu $s0,%lo` then +0x4 and +0x8 displacements) whose
+   third word is also handed to func_8003DB94; D_800D20F4 is address-taken and
+   handed to func_8008F104 as its descriptor; D_800D211C is the four-entry
+   word table func_800BCDCC indexes by the actor view's +0xA6, the same shape
+   as D_800D210C above; D_800D212C is LOADED (`lui`/`lw %lo`) and stored at
+   +0x48, the same shape as D_800D20E4.
+   func_800BC6CC and func_800BE0D4 are DEFINED BELOW and only have their
+   address taken (`%hi`/`%lo` on a function symbol, no `jal`), and an
+   address-take does not ride an implicit declaration the way a call does, so
+   they need forward declarations of their real signatures here. */
+extern u8 D_80089634[];
+extern u32 D_800D20E8[];
+extern u8 D_800D20F4[];
+extern u8 *D_800D211C[];
+extern u32 D_800D212C;
+void func_800BC6CC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+void func_800BE0D4(UnkTownActor *a, UnkVec *q, UnkTownRend *r);
 extern u8 D_800E9CD4[];
 extern u8 D_800E9CFC[];
 extern u8 D_800E9D0C[];
@@ -24750,7 +24771,90 @@ void func_800BC45C(UnkTownSpawn *p, s16 b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC574);
+/* The 0x800BC574 spawner: allocate a 0x312 node, install func_800BC6CC on it,
+   tag it with D_80045340, copy the caller's mover position across, give the
+   copy a velocity of 48 units along the camera-relative heading `b`, and
+   stamp the node's renderable with the D_800F15E4 bind descriptor, a 0x1000
+   scale and the unit's flat 0x808080 grey.  func_800BB798 / func_800BB894
+   (above) are the line-for-line template -- same 0x312 / &D_80083498
+   allocation, same `o->unk_10 = <handler>` + func_8004491C(o, D_80045340)
+   pair, same `d = (UnkTownRend *)o->unk_0C` and the same descending
+   +0x1E/+0x1C scale chain.
+
+   NOTHING CALLS THIS AND NOTHING TAKES ITS ADDRESS, so the arity comes out of
+   the body: $a0 and $a1 are both READ before they are written, $a2 is never
+   touched, and `b` arrives as a halfword ($a1 sign-extended once with
+   `sll 16` / `sra 16` into $s0 and reused for both trig calls).  `return 0`
+   is real -- the `addu $v0, $zero, $zero` at the merge label is the only
+   value the function ever produces, and it is func_800BB798's shape too.
+
+   `g = &D_80083160` IS A STATEMENT, NOT A DECLARATION INITIALISER
+   (c-decl.c:3947-3948), and it has to precede the func_8003FD64 call: the
+   target materialises the record base into the callee-saved $s4 BEFORE the
+   call (`lui $v0,%hi` / `addiu $s4,$v0,%lo` at 800BC594/800BC59C) and reads
+   `lh 0xC8($s4)` twice afterwards, once per trig call, because the
+   intervening call forces the field to be re-read.  +0xC8 is the camera's
+   third position component (include/structs.h), and route (m) names six
+   landed users of it.
+
+   THE +0x00 STORE MUST BE SPELLED `*(u32 *)d`, NOT `d->unk_00`, AND THAT CAST
+   IS WORTH FOUR WORDS.  As a named field the store is MEM_IN_STRUCT_P with a
+   varying address while the D_800F15E4 load is a constant address with the
+   flag clear, which is exactly the pair `true_dependence` discards
+   (scratch/gcc-src/cdk-gcc-b18/sched.c:854-861: the conflict is cancelled when
+   `MEM_IN_STRUCT_P (mem) && rtx_addr_varies_p (mem) && ! MEM_IN_STRUCT_P (x)
+   && ! rtx_addr_varies_p (x)`).  With no dependence sched1 hoists `lw 0x4` up
+   over the store, so the symbol's register has to stay live and the loaded
+   word lands in a second register -- 86 words / 4 differing, with
+   `sw $v1, 0x0($s2)` sinking two words and `lw $a0` for the target's
+   `lw $v1`.  The raw cast clears the flag, restores the dependence, and the
+   target's `sw $v1, 0x0($s2)` / `lw $v1, 0x4($v1)` register reuse falls out.
+   `*(u32 *)((u8 *)d + 0x0)` and an all-raw `u8 *d` are both 0 as well; the
+   named fields are kept everywhere the flag does not matter.  Fixing this
+   also fixed the two words at 800BC5BC/800BC5C0, where the candidate put
+   func_8004491C's `$a0` copy ahead of D_80045340's `%hi` -- the sched2 LUID
+   tie of docs/matching-levers.md:16225, which here needed no device.
+
+   The install must PRECEDE func_8004491C (after it, 86 words / 12 differing),
+   and the renderable's five stores go +0x00, +0x08, +0x04, +0x05, +0x0C --
+   +0x08 last is 8 differing and +0x08 third is 6.
+
+   86 words -- its header reads `nonmatching func_800BC574, 0x158`, and
+   0x158/4 = 86.  0 differing.  Its 14 relocation words (including the
+   `%hi`/`%lo` pair on func_800BC6CC, which has no `jal` and which ovlverify
+   masks) match the listing's sequence one for one. */
+s32 func_800BC574(UnkVec *a, s16 b)
+{
+    Unk80083160 *g;
+    UnkNode *o;
+    UnkTownRend *d;
+
+    g = &D_80083160;
+    o = func_8003FD64(0x312, &D_80083498);
+    if (o != 0)
+    {
+        o->unk_10 = (u32)func_800BC6CC;
+        func_8004491C(o, (u32)D_80045340);
+        d = (UnkTownRend *)o->unk_0C;
+        o->unk_08->unk_00 = a->unk_00;
+        o->unk_08->unk_04 = a->unk_04;
+        o->unk_08->unk_08 = a->unk_08;
+        o->unk_08->unk_0C = func_80064584(b + g->unk_C8) * 48;
+        o->unk_08->unk_10 = func_800644B8(b + g->unk_C8) * 48;
+        d->unk_1E = 0x1000;
+        d->unk_1C = 0x1000;
+        if (o->unk_08->unk_0C > 0)
+        {
+            d->unk_14 |= 1;
+        }
+        *(u32 *)d = (u32)D_800F15E4;
+        d->unk_08 = *(u32 *)(D_800F15E4 + 4);
+        d->unk_04 = 0;
+        d->unk_05 = 0;
+        *(u32 *)&d->unk_0C = 0x808080;
+    }
+    return 0;
+}
 
 /* Installed at the UnkNode's +0x10 by func_800BC574 and reached only through
    func_80040190's cast (csrc/unk_12DEC.c), which calls it as
@@ -24784,7 +24888,65 @@ void func_800BC6CC(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC764);
+/* The continuation func_800BC840 (above) installs at the UnkNode's +0x10, so
+   it is reached only through func_80040190's cast (csrc/unk_12DEC.c:567),
+   `(void (*)(void *, UnkVec *, u32))fn((u8 *)p + 0x20, p->unk_08, p->unk_0C)`
+   -- three parameters, the first being the node's +0x20 actor view.  That
+   install is the whole arity witness: there is no `jal func_800BC764`
+   anywhere, and provision.py prints "NO ARITY WITNESS ANYWHERE" for it.
+
+   THE DEAD MIDDLE PARAMETER IS WITNESSED BY THE GAP IN THE $aN SEQUENCE.
+   $a0 becomes $s0 and $a2 becomes $s1; $a1 is never read.  A two-parameter
+   `(a, r)` spelling is 55 words and 1 differing -- `r` moves into $a1 and the
+   `addu $s1, $a2, $zero` in the first branch's delay slot becomes
+   `addu $s1, $a1, $zero` -- so the dead middle parameter costs no words here
+   but is visible, exactly as docs/matching-levers.md says.
+
+   A three-state walker on the actor view's +0x68 with case 0 FALLING THROUGH
+   into case 1: case 0 arms the 0x3C-frame countdown at +0x6C and advances the
+   state, case 1 runs the countdown down and advances again on expiry, and
+   case 2 lets the engine finish the renderable and, on the REND +0x6000 gate,
+   rebinds D_800F15E4 and restarts at state 0.  The fall-through is real: a
+   case 0 that duplicates case 1's body is 62 words / 42 differing, and the
+   shared `.L800BC7C8` entry is what both `beq $v1, $v0` arms target.
+
+   `a->unk_6C--` then `if (a->unk_6C <= 0)` is the unit's standard spelling:
+   the `sll $v0, 16` / `bgtz` pair is cse's sign-extension of the halfword the
+   `sh` just stored, not a second load, the same note func_800BC990 carries.
+
+   Two orders are pinned: case 0's +0x6C store must precede the +0x68 advance
+   (swapped, 55 words / 21 differing -- the `sh $v1, 0x6C($s0)` interleaves
+   into the +0x68 read-modify-write), and case 2's `a->unk_68 = 0` must FOLLOW
+   the func_8003DB94 call (before it, 55 / 5).
+
+   55 words -- its header reads `nonmatching func_800BC764, 0xDC`, and
+   0xDC/4 = 55.  0 differing, first compile.  Its seven relocation words are
+   four symbol records (the `%hi`/`%lo` pair on D_800F15E4 and the two `jal`s)
+   plus the three intra-function `j .L800BC828` words. */
+void func_800BC764(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
+{
+    switch (a->unk_68)
+    {
+    case 0:
+        a->unk_6C = 0x3C;
+        a->unk_68++;
+    case 1:
+        a->unk_6C--;
+        if (a->unk_6C <= 0)
+        {
+            a->unk_68++;
+        }
+        break;
+    case 2:
+        func_800478B8((s32)r);
+        if ((r->unk_14 & 0x6000) != 0)
+        {
+            func_8003DB94(r, D_800F15E4, 0);
+            a->unk_68 = 0;
+        }
+        break;
+    }
+}
 
 /* NOTHING CALLS THIS AND NOTHING TAKES ITS ADDRESS -- there is no `jal
    func_800BC840` and no `%hi(func_800BC840)` anywhere under
@@ -24827,7 +24989,60 @@ void func_800BC840(u8 *p, UnkVec *q, UnkTownRend *r)
     ((void (*)(void *, void *, void *))func_8008F074)(p, q, D_800D20CC);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BC8D0);
+/* func_800BC840's sibling, one slot further along: the same spawner tail --
+   install a continuation at the UnkNode's +0x10, zero the actor's +0x50
+   dispatch slot, park a descriptor at the actor view's +0x48, tag the node
+   with func_8004491C and D_80045340, then run the engine's setup over a
+   descriptor and bind the renderable -- but it installs func_800BE0D4 rather
+   than func_800BC764, hands the work to func_8008F104 rather than
+   func_8008F074, and copies a three-word D_800D20E8 record into the actor
+   view's +0xA0..+0xA8 first.
+
+   NOTHING CALLS IT AND NOTHING TAKES ITS ADDRESS; the arity is settled by its
+   own body, where all three argument registers are READ before they are
+   written ($a0 the actor view, $a1 forwarded to func_8008F104, $a2 the
+   func_8003DB94 renderable).  `UnkTownSpawn *` is func_8008F104's own
+   declared first parameter type, so `p` is written that way and the fields
+   past the typedef's 0xA0 are reached by raw casts.
+
+   THE INSTALL IS SPELLED OFF THE ACTOR VIEW, NOT OFF A NODE LOCAL, exactly as
+   in func_800BC840: the target's store is `sw $v0, -0x10($s1)`, so the node
+   pointer exists only as func_8004491C's argument.
+
+   D_80089634 is ADDRESS-TAKEN here (`lui`/`addiu` %hi/%lo into $v0, then
+   `sw $v0, 0x48($s1)` in the call's delay slot), where func_800BC840 LOADS
+   D_800D20E4 into the same slot -- a different shape at the same field, read
+   out of this listing rather than carried over.  D_800D20E8 is a three-word
+   record reached through a split base: the target takes the `%hi` into the
+   callee-saved $s0, reads element 0 with the `%lo` as the load's
+   displacement, forms the `lo_sum` into $s0 for +0x4 and +0x8, and keeps $s0
+   live across func_8008F104 so that func_8003DB94's second argument is a
+   fourth read of the same word.  `extern u32 D_800D20E8[];` is what produces
+   that shape at -G0.
+
+   The +0x14 flag OR must come FIRST (last, 48 words / 14 differing).  The
+   +0x48 store must precede func_8004491C (after it, 48 / 7) and must FOLLOW
+   the +0x50 zero (swapped, 48 / 2); the install and the +0x50 zero are a
+   measured TIE, 0 either way, because the two stores simply exchange and one
+   of them lands in the call's delay slot regardless.
+
+   48 words -- its header reads `nonmatching func_800BC8D0, 0xC0`, and
+   0xC0/4 = 48.  0 differing, first compile.  All 14 relocation words were
+   checked against the listing, including the `%hi`/`%lo` pair on
+   func_800BE0D4, which has no `jal` and which ovlverify masks. */
+void func_800BC8D0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
+{
+    r->unk_14 |= 0x1C;
+    *(u32 *)((u8 *)p - 0x10) = (u32)func_800BE0D4;
+    *(s32 *)((u8 *)p + 0x50) = 0;
+    *(u32 *)((u8 *)p + 0x48) = (u32)D_80089634;
+    func_8004491C((UnkNode *)((u8 *)p - 0x20), (u32)D_80045340);
+    *(u32 *)((u8 *)p + 0xA0) = D_800D20E8[0];
+    *(u32 *)((u8 *)p + 0xA4) = D_800D20E8[1];
+    *(u32 *)((u8 *)p + 0xA8) = D_800D20E8[2];
+    func_8008F104(p, q, D_800D20F4);
+    func_8003DB94(r, (void *)D_800D20E8[2], 0);
+}
 
 /* Installed at UnkNode.unk_10 by func_800BCDCC and reached only through
    func_80040190's cast (csrc/unk_12DEC.c), which calls it as
@@ -25005,7 +25220,52 @@ void func_800BC990(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800BCDCC);
+/* The third member of the func_800BC840 spawner-tail family, and the one that
+   installs the 271-word walker func_800BC990 above: install at the UnkNode's
+   +0x10, zero the actor's +0x50 dispatch slot, tag the node with D_80045340,
+   seed the walker's direction index at +0xA6 with 2, run func_8008F074 over
+   the D_800D20CC descriptor, bind the animation that index selects, and park
+   D_800D212C at the actor view's +0x48.
+
+   `UnkTownActor *` is func_800BC990's own first parameter type and +0xA6 is
+   the field that walker reads, which route (m) names as this function's one
+   rare offset with a single landed user.  NOTHING CALLS IT AND NOTHING TAKES
+   ITS ADDRESS, so the arity comes out of the body: $a0, $a1 and $a2 are all
+   READ before they are written ($a1 only as func_8008F074's second argument,
+   which is why it is typed `UnkVec *` after func_800BC990's own `b`).
+
+   The three-argument call to func_8008F074 is real and is spelled as a cast,
+   the idiom func_800BC840 and func_800BF3F0 already use: the one-parameter
+   prototype is 37 words / 39 differing.
+
+   D_800D211C IS THE FOUR-ENTRY WORD TABLE BESIDE D_800D210C, indexed by the
+   +0xA6 the previous statement just stored, and it must be RE-READ rather
+   than folded to the constant 2 -- `D_800D211C[2]` is 39 words / 19
+   differing, because the target's `lh $v0, 0xA6($s0)` / `sll 2` /
+   `addu` / `lw` chain is four words the constant collapses.  The store and
+   the re-read are what pin the +0xA6 statement between func_8004491C and
+   func_8008F074: after func_8008F074 it is 39 / 24, before func_8004491C
+   48 / 7 in the sibling's shape.
+
+   The +0x48 store must come LAST, after the bind (before the bind, 42 words /
+   20 differing; before +0xA6, 42 / 23) -- the opposite of func_800BC840,
+   where it sits between the two calls.  The install must precede the +0x50
+   zero (swapped, 43 / 2).
+
+   43 words -- its header reads `nonmatching func_800BCDCC, 0xAC`, and
+   0xAC/4 = 43.  0 differing, first compile.  All 13 relocation words were
+   checked against the listing, including the `%hi`/`%lo` pair on
+   func_800BC990, which has no `jal` and which ovlverify masks. */
+void func_800BCDCC(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
+{
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_800BC990;
+    *(s32 *)((u8 *)a + 0x50) = 0;
+    func_8004491C((UnkNode *)((u8 *)a - 0x20), (u32)D_80045340);
+    *(s16 *)((u8 *)a + 0xA6) = 2;
+    ((void (*)(void *, void *, void *))func_8008F074)(a, b, D_800D20CC);
+    func_8003DB94(r, D_800D211C[*(s16 *)((u8 *)a + 0xA6)], 0);
+    *(u32 *)((u8 *)a + 0x48) = D_800D212C;
+}
 
 /* Installed at UnkNode.unk_10 by func_800BD5B0 and reached through
    func_80040190's cast, so three parameters with the first being the node's
