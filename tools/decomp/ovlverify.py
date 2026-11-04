@@ -18,10 +18,14 @@ hoisted-lui shape the live overlay uses. Measured on func_80020924: -G8 gives
 (The debug twin at 0x80400000 uses the `lui $at` shape throughout, so IT looks
 like a -G8 build of the same source. Do not assume one -G fits both blocks.)
 
-ONE FALSE POSITIVE TO KNOW ABOUT: run on a function that is still an
-INCLUDE_ASM stub, this reports 0 differing. The stub's own assembly defines
-the symbol in the object, so the candidate IS the target. A 0 only means
-something for a function you have actually written in C.
+THE FALSE POSITIVE THAT USED TO BE HERE IS NOW REFUSED. Run on a function
+still carried by `INCLUDE_ASM` in SRC, this reported 0 differing -- the stub's
+own assembly defines the symbol in the object, so the candidate IS the target.
+It now prints a failure line instead, in the same shape as the other failure
+lines so a whole-unit sweep catches it, and `--allow-stub` overrides. It cost
+an agent nine consecutive false "0 differing" readings on 2026-11-04; a
+per-anchor `assert text != orig` in its own harness could not catch it,
+because the anchor was never attempted.
 
 WHAT THIS CANNOT SEE, and it has already cost one broken build: it compares
 ONE FUNCTION'S words. It says nothing about the unit's .rodata. A C function
@@ -277,6 +281,9 @@ def main():
                     help="cc1psx -G (default 0, which is what the overlays are)")
     ap.add_argument("--raw", action="store_true",
                     help="compare raw words, without masking unresolved fields")
+    ap.add_argument("--allow-stub", action="store_true",
+                    help="measure even a function still carried by INCLUDE_ASM "
+                         "in SRC (the result is the stub against itself)")
     args = ap.parse_args()
 
     if args.dump:
@@ -298,8 +305,31 @@ def main():
         m = re.match(r"([0-9a-f]+) [Tt] (\S+)", ln)
         if m:
             syms[m.group(2)] = int(m.group(1), 16)
+    # THE DOCSTRING'S "ONE FALSE POSITIVE" IS NOW AN ERROR, because
+    # documenting it was not enough. On 2026-11-04 an agent dropped a name
+    # from its merge script's list and kept probing that name with the same
+    # script: the merge silently left the INCLUDE_ASM in place, the stub's own
+    # assembly defined the symbol in the object, and this tool reported
+    # "20 words, 20 words, 0 differing" for NINE consecutive spellings. It
+    # believed it had landed the function. Re-measured properly those nine are
+    # 21-24 words and 15-20 differing.
+    #
+    # Its own per-anchor `assert text != orig` could not catch it, because the
+    # anchor was never attempted -- so the guard belongs HERE, once, rather
+    # than in every agent's harness.
+    try:
+        src_txt = open(args.src, encoding="utf-8", errors="replace").read()
+    except OSError:
+        src_txt = ""
     total = 0
     for f in args.funcs:
+        if not args.allow_stub and re.search(
+                r'INCLUDE_ASM\("[^"]*",\s*%s\s*\)' % re.escape(f), src_txt):
+            print(f"{f}: STILL AN INCLUDE_ASM STUB in {args.src} -- refusing "
+                  f"to measure the stub against itself (it would report 0 "
+                  f"differing). Merge the body first, or pass --allow-stub.")
+            total += 1
+            continue
         if f not in syms:
             print(f"{f}: not defined in {args.src}")
             total += 1
