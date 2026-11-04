@@ -2909,6 +2909,57 @@ extern UnkTown2AE8 D_80100D28;
 extern UnkTown2AE8 D_80100D68;
 
 extern s16 D_800D15C0[];
+/* The camera-path animator's record, 0x38 bytes (D_80100DE0 runs to
+   D_80100E18).  func_800A4C10 below is where every field is witnessed:
+   +0x00 is a pointer to the three-word TARGET position and +0x04 the same
+   pointer latched, so the equality test at the top is "has the target been
+   consumed yet"; +0x08/+0x0C/+0x10 are the three animated words; +0x14..+0x1C
+   are cleared when a new target arrives; +0x20 is the remaining frame count
+   (set to 9 and counted down one per call); +0x24 and +0x28 are the two
+   handler slots func_800A496C drives, written by func_800A4B40 and
+   func_800A4CE8 respectively. */
+typedef struct UnkTownA4C10
+{
+    s32 *unk_00;
+    s32 *unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+    s32 unk_18;
+    s32 unk_1C;
+    s32 unk_20;
+    void (*unk_24)();
+    void (*unk_28)();
+} UnkTownA4C10;
+extern UnkTownA4C10 D_80100DE0;
+/* The second driven record, at D_80100DE0 - 0x28, with its own two handler
+   slots at +0x1C/+0x20.  Declared as bytes rather than as a struct because
+   nothing in this batch establishes the rest of its layout. */
+extern u8 D_80100DB8[];
+/* The fade state selector: 0 means idle, 1..5 pick one of func_800A4A58's
+   five arms.  s32 from the `lw` in func_800A4A58 and from its two writers'
+   callers, which pass small constants in $a0
+   (asm/nonmatchings/ovl_town/func_800B2BA0.s passes 5, func_800B2C6C.s 3). */
+extern s32 D_80100D94;
+/* The three-word position func_800A4CE8 copies into its record at +0x08 and
+   hands here; func_800A496C reads the integer half of its SECOND word. */
+extern UnkTown2AE8Int *D_80100D90;
+extern u8 D_800D1554;
+/* csrc/unk_1C540.c:3080 -- `void func_8004D0C8(u32 a)`, which latches the
+   address into D_80083178's +0xD8 and installs func_8004D09C at +0xB4. */
+void func_8004D0C8(u32 a);
+/* Address-taken by func_800A4C10 as its own continuation, and an
+   address-take does NOT ride an implicit declaration.  Unprototyped, which
+   is this unit's form for a handler whose arity nothing here settles --
+   asm/nonmatchings/ovl_town/func_800A4B94.s reads only $a0. */
+void func_800A4B94();
+/* Both landed in this batch, declared rather than left to the implicit
+   declaration their call sites would otherwise ride: each is called from a
+   function defined ABOVE it. */
+void func_800A4A4C(void);
+void func_800A4A58(void);
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -15569,21 +15620,137 @@ POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A47A8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A488C);
+/* One of four 3-word setters at the head of this block (func_800A488C,
+   func_800A4898, func_800A48A4, func_800A4A4C), each a single `sw` of an
+   argument -- or of zero -- to one global, with the store in the `jr $ra`
+   delay slot.  s32 for all of them: the stores are full words, and
+   func_800A48A4's two ASM callers pass small constants in $a0
+   (`addiu $a0, $zero, 0x5` in func_800B2BA0, `0x3` in func_800B2C6C). */
+void func_800A488C(s32 a)
+{
+    D_80100E18 = a;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4898);
+void func_800A4898(s32 a)
+{
+    D_80100DB0 = a;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A48A4);
+void func_800A48A4(s32 a)
+{
+    D_80100D94 = a;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A48B0);
+/* SIX FIELD ASSIGNMENTS, NOT `*(UnkTown2AE8 *)a = *b;`, and the five words
+   between them are not a scheduling accident.  At 0x18 bytes the whole-record
+   assignment is inside `2*MAX_MOVE_BYTES` (MAX_MOVE_REGS is 4, so
+   MAX_MOVE_BYTES is 16 -- mips.c:2392/2393 in scratch/gcc-src/cdk-gcc-b18),
+   so expand_block_move takes the `bytes <= 2*MAX_MOVE_BYTES` arm at
+   mips.c:2537 and emits ONE `movstrsi_internal` insn.  That insn prints its
+   own batched sequence -- four `lw` into $v0/$v1/$a2/$a3, four `sw`, then two
+   and two -- and the comment above block_move_loop says why: "This way, no
+   NOP's are needed" (mips.c:2385).  Measured: 13 words of 18, 17 differing.
+   Six separate SImode moves instead keep one `lw`/`sw` pair per field, and
+   because the two bases are different registers memrefs_conflict_p
+   (sched.c:629) cannot disambiguate them, so true_dependence holds each store
+   ahead of the next load and the load-delay `nop`s survive.  0 differing. */
+void func_800A48B0(u8 *a, UnkTown2AE8 *b)
+{
+    UnkTown2AE8 *d;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A48F8);
+    d = (UnkTown2AE8 *)a;
+    d->unk_00 = b->unk_00;
+    d->unk_04 = b->unk_04;
+    d->unk_08 = b->unk_08;
+    d->unk_0C = b->unk_0C;
+    d->unk_10 = b->unk_10;
+    d->unk_14 = b->unk_14;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4928);
+/* The three animated words of the camera-path record (its +0x08..+0x10) are
+   handed here by func_800A4CE8 as `p + 8`, and latched both into the
+   resident's D_80083178 (+0xD8) and into D_80100D90, where func_800A496C
+   below reads the integer half of the SECOND word.  That read is `lh 0x6`,
+   which is UnkTown2AE8Int's unk_06, so this is the s16-at-+2 view of a
+   16.16 triple rather than a record of its own. */
+void func_800A48F8(UnkTown2AE8Int *p)
+{
+    func_8004D0C8((u32)p);
+    D_80100D90 = p;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A496C);
+/* `q = D_80100DB8;` is a STATEMENT ahead of the first call, and that is the
+   whole function.  Written inline as `func_800A5178(D_80100DB8)` the address
+   is materialised into $a0 between the two calls, nothing needs a
+   callee-saved register, and the function is 14 words against 17 (14
+   differing): the `sw $s0`/`lw $s0` pair and the `addu $a0, $s0, $zero` all
+   disappear.  Assigning it before the call forces the pointer's live range
+   across func_800A4B40, so it lands in $s0 with its `lui` in the prologue
+   and its `addiu` in the first `jal`'s delay slot. */
+void func_800A4928(void)
+{
+    u8 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4A4C);
+    q = D_80100DB8;
+    func_800A4B40(&D_80100DE0);
+    func_800A5178(q);
+    func_800A4A4C();
+}
+
+/* The per-frame pump for the two camera records: it runs each one's two
+   handler slots if they are installed, advances the fade state machine, and
+   publishes a proximity flag.
+
+   Both bases are pointer locals assigned as statements at the top, which is
+   what puts &D_80100DE0 in $s0 and &D_80100DB8 in $s1 with their `addiu`s in
+   the prologue and the first branch's delay slot.  D_80100DB8 is spelled with
+   casts rather than a typedef because nothing in this batch establishes the
+   rest of its layout -- only its two slots at +0x1C/+0x20 are witnessed.
+
+   The four calls alternate between the two records in the order
+   A+0x24, B+0x1C, A+0x28, B+0x20; those four `lw`s are unrelocated, so the
+   order is checked by the measurement and not only by the relocation list. */
+void func_800A496C(void)
+{
+    UnkTownA4C10 *p;
+    u8 *q;
+
+    p = &D_80100DE0;
+    q = D_80100DB8;
+    if (p->unk_24 != NULL)
+    {
+        p->unk_24(p);
+    }
+    if (*(void **)(q + 0x1C) != NULL)
+    {
+        (*(void (**)(u8 *))(q + 0x1C))(q);
+    }
+    if (p->unk_28 != NULL)
+    {
+        p->unk_28(p);
+    }
+    if (*(void **)(q + 0x20) != NULL)
+    {
+        (*(void (**)(u8 *))(q + 0x20))(q);
+    }
+    func_800A4A58();
+    if (D_8006ADD4 != 0xC)
+    {
+        if (D_80100D90->unk_06 < 0x600)
+        {
+            D_800D1554 = 1;
+        }
+        else
+        {
+            D_800D1554 = 0;
+        }
+    }
+}
+
+void func_800A4A4C(void)
+{
+    D_80100D94 = 0;
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80088760);
 
@@ -15605,13 +15772,139 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80088D78);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_8008910C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4A58);
+/* The screen-fade state machine.  D_80100D94 selects one of five arms:
+   three snap the fade colour at D_80083160+0xA8..+0xAA to a constant, two
+   slew it towards one through func_80094AA0 with a step of 8 and clear the
+   selector only once it has arrived.
+
+   THE `case 0:` ARM IS UNREACHABLE AND IS STILL IN THE SOURCE.  It has to be:
+   the dispatch is `sll $a0, 2` added straight to %lo(jtbl_80089110) with the
+   range check `sltiu $v0, $a0, 0x6`, i.e. minval 0 and range 5 in
+   stmt.c:5071/expr.c:11368 terms, and the table is six words.  gcc 2.7.2 has
+   no "index jumptables from zero" transform -- expand_end_case subtracts
+   minval literally (stmt.c:5266, `index_expr - minval`) -- so a 1..5 switch
+   would have cost an `addiu $a0, $a0, -1` and a five-word table.  The leading
+   `if (D_80100D94 == 0) return;` is a separate test and the one `lw` serves
+   both, cse merging the two reads.
+
+   `D_80100D94 = 0;` is written in EVERY arm rather than once after the
+   switch, because the out-of-range default leaves through the epilogue
+   (`beqz $v0, .L800A4B28`) and must not run it.  Cross-jumping merges the
+   four copies onto one `sw`, and case 1's arm keeps its own `lui` because it
+   fills that arm's `j` delay slot -- which is why the listing has two labels,
+   .L800A4B20 (lui) and .L800A4B24 (sw), one word apart.
+
+   `t` and `c` are u8, not s32.  The two `andi reg, reg, 0xFF` words are
+   MIPS's zero_extendqisi2 on a QImode pseudo: one promotes `t` for the
+   argument, the other promotes the returned `c` for the comparison.  With
+   s32 locals neither exists.
+
+   JUMP TABLE: six words, 0x18 bytes, emitted with `.align 3` at .rodata
+   offset 0x9B0 (0x80089110 - 0x80088760), which is 0 mod 8 -- so the align
+   pads nothing and the table fills exactly the gap between D_8008910C and
+   D_80089128.  Checked at the object level: the candidate's only .rodata
+   change against HEAD is this one 6-word table. */
+void func_800A4A58(void)
+{
+    u8 *g;
+    u8 t;
+    u8 c;
+
+    g = (u8 *)&D_80083160;
+    if (D_80100D94 == 0)
+    {
+        return;
+    }
+    switch (D_80100D94)
+    {
+    case 0:
+        g[0xA8] = 0x80;
+        g[0xA9] = 0x80;
+        g[0xAA] = 0x80;
+        D_80100D94 = 0;
+        break;
+    case 1:
+        g[0xA8] = 0;
+        g[0xA9] = 0;
+        g[0xAA] = 0;
+        D_80100D94 = 0;
+        break;
+    case 2:
+        g[0xA8] = 0x40;
+        g[0xA9] = 0x40;
+        g[0xAA] = 0x40;
+        D_80100D94 = 0;
+        break;
+    case 3:
+        t = 0x80;
+        goto step;
+    case 4:
+        t = 0;
+        goto step;
+    case 5:
+        t = 0x40;
+    step:
+        c = func_80094AA0(g[0xA8], t, 8);
+        g[0xA8] = c;
+        g[0xA9] = c;
+        g[0xAA] = c;
+        if (c == t)
+        {
+            D_80100D94 = 0;
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4B40);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4B94);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4C10);
+/* The camera-path interpolator, and the other half of a two-state ping-pong
+   with func_800A4B94: each installs the other at +0x28.
+
+   With the latch at +0x04 not yet equal to the target pointer at +0x00 a new
+   move starts -- 9 frames, the three accumulators cleared, the latch taken --
+   and func_800A4B94 is called directly.  Otherwise each of the three words
+   moves one ninth, one eighth, ... of the remaining distance to
+   p->unk_00[0..2], the frame count is decremented, and func_800A4B94 goes
+   back into the slot on the last frame.
+
+   The inequality arm is written FIRST because both arms fall into the shared
+   epilogue, so source order is layout order; the target reaches the second
+   arm with `beq $v1, $v0`.
+
+   The four `lw 0x20($a1)` are not a missed cse.  Three are the divisor, each
+   after a store to +0x08 or +0x0C that invalidates the previous value; the
+   fourth is the decrement's own read, and it looks un-cse'd only because
+   sched hoisted it above the `sw 0x10($a1)` it follows in source order --
+   `memrefs_conflict_p` folds two constant displacements off ONE base into
+   its offset accumulator and compares it against the access size
+   (sched.c:629, the recursion at :724/:734), so +0x20 against a 4-byte store
+   at +0x10 is no conflict and the load is free to move. */
+void func_800A4C10(UnkTownA4C10 *p)
+{
+    if (p->unk_00 != p->unk_04)
+    {
+        p->unk_20 = 9;
+        p->unk_14 = 0;
+        p->unk_18 = 0;
+        p->unk_1C = 0;
+        p->unk_04 = p->unk_00;
+        func_800A4B94(p);
+    }
+    else
+    {
+        p->unk_08 += (p->unk_00[0] - p->unk_08) / p->unk_20;
+        p->unk_0C += (p->unk_00[1] - p->unk_0C) / p->unk_20;
+        p->unk_10 += (p->unk_00[2] - p->unk_10) / p->unk_20;
+        p->unk_20 -= 1;
+        if (p->unk_20 <= 0)
+        {
+            p->unk_28 = func_800A4B94;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4CE8);
 
