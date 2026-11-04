@@ -3271,6 +3271,52 @@ extern u8 *D_8008274C;
    (`sll 16`/`sra 14`) and stores the word into the render record's +0x08. */
 extern u32 D_800D0C40[];
 
+/* The z3 install web: ten functions that store a handler address into the
+   actor's +0x50 slot (and func_800A06A4 also into the UnkNode +0x10 hook at
+   -0x10).  Each is ADDRESS-TAKEN rather than called, and each definition
+   listed here sits BELOW the install that names it -- which is why the line
+   is needed at all: an address-take does not ride an implicit declaration
+   the way a call does.  They are
+   declared UNPROTOTYPED, the way the +0x50 slot itself is declared
+   (`void (*unk_50)()`), which is the same convention func_800A0884 and the
+   func_800A3248 block above follow.  func_800A0CC0 -> func_800A0C30 and
+   func_800A0958 -> func_800A07E8 are NOT in this list: both definitions are
+   above their address-take.  func_800A07E8 IS in it, for the OTHER installer:
+   func_800A07A4 sits above it. */
+void func_800A0708();
+void func_800A07A4();
+void func_800A07E8();
+void func_800A092C();
+void func_800A0958();
+void func_800A0AC8();
+void func_800A0BE4();
+void func_800A0C30();
+void func_800A0CC0();
+void func_800A0CF8();
+void func_800A0DAC();
+
+/* The two LANDED-BELOW callees this group would otherwise reach through an
+   implicit declaration.  Both are declared rather than ridden, because the
+   implicit `int` return is visible in the source: func_800A07A4 compares
+   func_800A2304's result against NULL (`comparison between pointer and
+   integer` without this line), and func_800A12AC's own definition is
+   `void func_800A12AC(void)` while func_800A0CF8 calls it with THREE
+   arguments -- so it is declared UNPROTOTYPED, which is compatible with that
+   definition and lets the three-argument call through without the
+   `type mismatch with previous implicit declaration` triple.  Neither line
+   changes a word: both functions' results reach only a `beqz`/nothing. */
+void func_800A12AC();
+UnkNode *func_800A2304(void *a, void *b, void *c, s32 d);
+
+/* The group's three data symbols.  All three are
+   undefined-sym addresses (splat/town.bin_undefined_syms_auto.txt), and all
+   three are materialised %hi/%lo, so a plain extern is the right shape:
+   D_8006CD58 is loaded as a WORD (`lw %lo(D_8006CD58)($v0)`) and the other
+   two only have their ADDRESS taken (`lui`/`addiu`). */
+extern u32 D_8006CD58;
+extern u8 D_800D09E0[];
+extern u8 D_800D4404[];
+
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -16636,7 +16682,69 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0608);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0668);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A06A4);
+/* The CONSTRUCTOR of the whole func_800A0708 actor family, and the root of
+   this group's install graph: it points the UnkNode +0x10 update hook at
+   func_800A0708 (the already-landed unguarded slot dispatcher at :12346) and
+   then picks the actor's FIRST +0x50 state out of the kind byte at +0x94 --
+   1 -> func_800A0BE4, 0 -> func_800A0AC8, anything else -> func_800A07A4.
+   Eight of this group's twenty-eight masked address-take words are here.
+
+   TWO PARAMETERS: $a0 and $a1 are read and $a2/$a3 are never touched.  No
+   `jal` to this function and no address-take of it exists anywhere in the
+   repo (`grep -rl func_800A06A4 asm/` finds only its own listing), so a
+   third unused parameter would be invisible -- 2 is what the body witnesses.
+
+   THE HANDLER MUST BE STORED IN EACH ARM, NOT THROUGH A LOCAL.  A
+   `void (*f)();` assigned per arm with one `a->unk_50 = f;` after the
+   if/else is the same control flow and does NOT match: `f` then spans basic
+   blocks, so global-alloc gives it $v1 while local-alloc has already handed
+   the `(high)` pseudo $v0, and every materialisation becomes
+   `lui $v0` / `addiu $v1, $v0` in TWO registers instead of the listing's one
+   -- 25 words / 12 differing.  Storing in each arm makes each handler value
+   block-local, local-alloc ties the high and the lo_sum into $v0, and the
+   POST-RELOAD cross-jumping pass then unifies the three identical
+   `sw $v0, 0x50($a0)` tails into .L800A06EC and the two identical
+   `sh $zero, 0x6E($a0)` into .L800A06E8 -- which is exactly why one arm
+   jumps to .L800A06E8, one falls into it, and the +0x94 == 0 arm jumps
+   straight past it to .L800A06EC.
+
+   THE SECOND TEST IS `== 0`, NOT `!= 0`.  Spelled `!= 0` with the arms
+   swapped the test comes out `beqz` with the 07A4 arm as the fall-through,
+   so BOTH surviving arms reach the shared `sh $zero, 0x6E` by a `j`, reorg
+   fills both delay slots by copying that store, and the shared block dies --
+   26 words / 19 differing, one word long with the `sh` duplicated.
+
+   Caching +0x94 in an `s32` local measures the same 0 differing (cse unifies
+   the two `lbu`s either way); the field is read directly here because
+   nothing stores to it in between.
+
+   25 words -- its header reads `nonmatching func_800A06A4, 0x64`, and
+   0x64/4 = 25.  No jump table, no rodata of its own.  12 raw against 12
+   relocation words, 8 of them %hi/%lo on a FUNCTION symbol
+   (func_800A0708, func_800A0BE4, func_800A0AC8, func_800A07A4) and 2 intra-
+   function `j` relocations against `.text`; 0 differing. */
+void func_800A06A4(UnkTownActor *a, void *b)
+{
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_800A0708;
+    if (*((u8 *)a + 0x94) == 1)
+    {
+        a->unk_90 = 2;
+        a->unk_6E = 0;
+        a->unk_50 = func_800A0BE4;
+    }
+    else if (*((u8 *)a + 0x94) == 0)
+    {
+        a->unk_50 = func_800A0AC8;
+    }
+    else
+    {
+        a->unk_6E = 0;
+        a->unk_50 = func_800A07A4;
+    }
+    *(void **)((u8 *)a + 0x8) = b;
+    *(u32 *)((u8 *)a + 0xC) = (u32)D_800D09E0;
+    a->unk_68 = 0;
+}
 
 /* The func_800A6CF0 / func_8009B148 probe family with the slot call
    UNGUARDED: no `!= NULL` test, so the handler pointer is loaded straight
@@ -16681,7 +16789,36 @@ void func_800A0708(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A07A4);
+/* func_800A0BE4's near-sibling, and the state func_800A06A4 installs for
+   every +0x94 kind except 0 and 1: hand the actor, its +0x98 pointer, the
+   mover and the +0x94 kind to func_800A2304 (the single-shot allocator at
+   :13437, whose own comment reads this call site for its arity) and, if a
+   node came back, advance to func_800A07E8.
+
+   THREE PARAMETERS, THE SECOND DEAD -- witnessed by the gap in the $aN
+   sequence, which is the func_800A0E3C rule: $a0 is read (and copied to
+   $s0), $a1 is overwritten with `lw 0x98($s0)` without ever being read, and
+   $a2 flows through UNTOUCHED into func_800A2304's third argument.  The
+   fourth slot argument is unread and so has no witness either way.
+
+   No `move $a0` before the `jal`: the incoming $a0 is still live, which is
+   the documented missing-argument-move trap, not a short argument list.
+
+   func_800A2304 is declared above rather than ridden on an implicit
+   declaration, because the `!= NULL` on its result is a pointer comparison;
+   the declaration changes no word (the test is a bare `beqz $v0`).
+
+   17 words -- its header reads `nonmatching func_800A07A4, 0x44`, and
+   0x44/4 = 17.  No jump table, no rodata of its own.  3 raw against 3
+   relocation words: 1 plain `jal func_800A2304` plus the masked
+   %hi/%lo(func_800A07E8) install; 0 differing on the first compile. */
+void func_800A07A4(UnkTownActor *a, void *b, UnkTown2AE8 *c)
+{
+    if (func_800A2304(a, *(void **)((u8 *)a + 0x98), c, *((u8 *)a + 0x94)) != NULL)
+    {
+        a->unk_50 = func_800A07E8;
+    }
+}
 
 /* A near-sibling pair with func_800A0AC8 below: an actor +0x50 handler that
    gates on the wrap counter at +0x68, calls func_800A0668 with the OPPOSITE
@@ -16732,11 +16869,80 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0884);
 void func_800A08E8(void) {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A08F0);
+/* The first of three tiny no-frame counter ticks that are line-for-line
+   near-siblings (func_800A08F0 -> func_800A092C -> func_800A0958, one
+   install edge each and no call between them): walk the actor's +0x6E
+   facing UP by 0x40 a frame, clamp at 0x400 -- a quarter turn in the PSX
+   angle units the +0x72/+0x6E comment above describes -- and hand over on
+   the clamp.  func_800A09F4 installs this one; the chain ends by restoring
+   func_800A07E8.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A092C);
+   ONE PARAMETER: only $a0 is read.  Declaring the family's three measures
+   the same 0 differing, because a dead TRAILING parameter is invisible --
+   so 1 is what the listing witnesses and 3 would be invention.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0958);
+   THE COMPARISON IS ON THE ASSIGNMENT'S VALUE, not a reload: the listing
+   reuses the `addiu`'s $v0 through `sll`/`sra`/`slti`, which is the
+   sign-extension of the halfword it just stored.  Writing the clamp as a
+   separate `if (a->unk_6E >= 0x400)` after the `+=` is the same thing here
+   because nothing intervenes, and gcc keeps the value in $v0 -- which is
+   why the `lhu` load and the signed `slti` sit in one function and are NOT
+   a typing inconsistency (docs/matching-levers.md :16352).
+
+   15 words -- its header reads `nonmatching func_800A08F0, 0x3C`, and
+   0x3C/4 = 15.  No jump table, no rodata of its own.  2 raw against 2
+   relocation words, both %hi/%lo(func_800A092C) -- the install, masked,
+   with no `jal` to decode; 0 differing on the first compile. */
+void func_800A08F0(UnkTownActor *a)
+{
+    a->unk_6E += 0x40;
+    if (a->unk_6E >= 0x400)
+    {
+        a->unk_6E = 0x400;
+        a->unk_50 = func_800A092C;
+    }
+}
+
+/* The middle tick: hold at the clamped facing for +0x6C frames, then hand
+   over to func_800A0958.  The same `lhu` / `addiu` / `sh` / `sll` shape as
+   func_800A08F0 above, with the comparison against 0 -- and because the
+   test is against zero the `sra` is unnecessary, so `sll 16` + `bgtz` IS
+   the `(s16) <= 0` test and not a missing sign-extension.
+
+   ONE PARAMETER (only $a0 read); three measure the same 0 differing.
+
+   11 words -- its header reads `nonmatching func_800A092C, 0x2C`, and
+   0x2C/4 = 11.  No jump table, no rodata of its own.  2 raw against 2
+   relocation words, both %hi/%lo(func_800A0958), masked; 0 differing. */
+void func_800A092C(UnkTownActor *a)
+{
+    a->unk_6C -= 1;
+    if (a->unk_6C <= 0)
+    {
+        a->unk_50 = func_800A0958;
+    }
+}
+
+/* The last tick: walk +0x6E back DOWN by 0x40, zero it on arrival and
+   return the actor to func_800A07E8 (:12370), which func_800A07A4 also
+   installs -- two installers of one handler, and both set up the same
+   record.  func_800A07E8's definition sits ABOVE this one, so this install
+   needs no declaration, while func_800A07A4's does.
+
+   ONE PARAMETER (only $a0 read); three measure the same 0 differing.
+
+   12 words -- its header reads `nonmatching func_800A0958, 0x30`, and
+   0x30/4 = 12.  No jump table, no rodata of its own.  2 raw against 2
+   relocation words, both %hi/%lo(func_800A07E8), masked; 0 differing. */
+void func_800A0958(UnkTownActor *a)
+{
+    a->unk_6E -= 0x40;
+    if (a->unk_6E <= 0)
+    {
+        a->unk_6E = 0;
+        a->unk_50 = func_800A07E8;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0988);
 
@@ -16749,7 +16955,42 @@ void func_800A0A34(void *a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0A54);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0A88);
+/* func_800A09F4's sibling over the same search helper: ask func_800A0988
+   for the live node whose +0x10 hook is func_800A0708 and whose actor-view
+   +0x48 is D_800D4404, and if there is one, arm its +0x90 countdown at 6
+   and install func_800A0CF8.  func_800A09F4 (:12278, still a stub) is the
+   same five insns with `sh $s0, 0x6C` instead -- it writes the OTHER
+   countdown and installs func_800A08F0.
+
+   NO PARAMETERS: no argument register is read, and the only `lui`/`addiu`
+   into $a0 is D_800D4404's own address.
+
+   THE +0x20 IS THE ACTOR VIEW OF THE NODE func_800A0988 RETURNS, not part
+   of the returned pointer: the `beqz` tests the RAW $v0 and the
+   `addiu $v1, $v0, 0x20` that reorg parked in its delay slot is the view
+   adjustment, dead on the taken path.  So the null test is on the node and
+   both stores go through the view.  func_800A0988's return type is left
+   implicit and cast at the point of use, which measures the same as
+   declaring it.
+
+   16 words -- its header reads `nonmatching func_800A0A88, 0x40`, and
+   0x40/4 = 16.  No jump table, no rodata of its own.  5 raw against 5
+   relocation words: 1 plain `jal func_800A0988`, %hi/%lo(D_800D4404) on a
+   DATA symbol, and the masked %hi/%lo(func_800A0CF8) install; 0 differing
+   on the first compile. */
+void func_800A0A88(void)
+{
+    u8 *n;
+    UnkTownActor *a;
+
+    n = (u8 *)func_800A0988(D_800D4404);
+    if (n != NULL)
+    {
+        a = (UnkTownActor *)(n + 0x20);
+        a->unk_90 = 6;
+        a->unk_50 = func_800A0CF8;
+    }
+}
 
 /* func_800A07E8's near-sibling: the same body with one extra call before the
    handler install -- func_800A0B74 with the pointer table at `b`'s +0x48 --
@@ -16785,13 +17026,150 @@ void func_800A0AC8(UnkTownActor *a, UnkTownActor *b, UnkTown2AE8 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0B74);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0BE4);
+/* func_800A07A4's near-sibling, and the state func_800A06A4 installs for
+   +0x94 == 1: the same four forwarded arguments, but into the RETRYING
+   allocator func_800A20D8 (:13388) and with the actor's +0x90 as both the
+   slot bound going in and the result coming back.  func_800A20D8's own
+   comment reads its arity off THIS call site.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0C30);
+   THREE PARAMETERS, THE SECOND DEAD, witnessed by the $aN gap exactly as in
+   func_800A07A4: $a1 is overwritten with `lw 0x98($s0)` without being read
+   and $a2 flows through untouched.  Dropped to two it is 20 words / 17
+   differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0CC0);
+   THE TEST IS ON THE ASSIGNMENT'S VALUE.  The listing stores $v0 narrow
+   (`sh 0x90`) and then tests the SAME register through `sll 16` -- the
+   truncation of what was just stored, not a reload -- so the result must
+   go into +0x90 before the comparison.  No `sra` is needed because the
+   comparison is against zero.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0CF8);
+   19 words -- its header reads `nonmatching func_800A0BE4, 0x4C`, and
+   0x4C/4 = 19.  No jump table, no rodata of its own.  3 raw against 3
+   relocation words: 1 plain `jal func_800A20D8` plus the masked
+   %hi/%lo(func_800A0C30) install; 0 differing on the first compile. */
+void func_800A0BE4(UnkTownActor *a, void *b, UnkTown2AE8 *c)
+{
+    a->unk_90 = func_800A20D8(a, *(void **)((u8 *)a + 0x98), c, a->unk_90);
+    if (a->unk_90 == 0)
+    {
+        a->unk_50 = func_800A0C30;
+    }
+}
+
+/* The func_800A07E8 / func_800A0AC8 gate func_800A0F10 reused as a state of
+   its own, with func_8009F9A4's count deciding which way the machine goes:
+   under 6 it arms +0x90 at 6, installs func_800A0CF8 and hands the frame to
+   func_8009A8EC; at 6 or more it installs func_800A0CC0 -- the retry that
+   comes straight back here -- and calls func_8009A99C with only the facing.
+   Both task calls take the actor's PSX-angle facing at +0x72 and, for
+   func_8009A8EC, the mover's two integer halves at +0x2/+0x6, which is how
+   the landed func_8009A674/func_8009A8EC pair is called everywhere else.
+
+   THREE PARAMETERS, ALL WITNESSED: $a0 -> $s0, $a2 -> $s1, and $a1 flows
+   through UNTOUCHED into func_800A0F10's second argument -- the same
+   `func_800A0F10(a, b)` the slot convention `a->unk_50(a, a, q, r)` makes,
+   which is why func_800A07E8 and func_800A0AC8 pass `b` there too.
+
+   `addiu $v0, $zero, 0x6` sits in the `beqz`'s delay slot and is the taken
+   arm's own constant, which reorg stole; the `slti $v0, $v0, 0x6` ahead of
+   it is `< 6`, so the ELSE arm is the >= 6 one.
+
+   36 words -- its header reads `nonmatching func_800A0C30, 0x90`, and
+   0x90/4 = 36.  No jump table, no rodata of its own.  9 raw against 9
+   relocation words: 4 plain `jal`s, 1 intra-function `j` against `.text`,
+   and 4 masked %hi/%lo on FUNCTION symbols (func_800A0CF8,
+   func_800A0CC0) -- the most address-take words of any member but
+   func_800A06A4; 0 differing on the first compile. */
+void func_800A0C30(UnkTownActor *a, UnkTownActor *b, UnkTown2AE8 *c)
+{
+    if (!func_800A0F10(a, b))
+    {
+        return;
+    }
+    if (func_8009F9A4() < 6)
+    {
+        a->unk_90 = 6;
+        a->unk_50 = func_800A0CF8;
+        func_8009A8EC(a->unk_72, *(s16 *)((u8 *)c + 2), *(s16 *)((u8 *)c + 6));
+    }
+    else
+    {
+        a->unk_50 = func_800A0CC0;
+        func_8009A99C(a->unk_72);
+    }
+}
+
+/* func_800A0C30's retry: poll the resident func_800352FC and, while it
+   reports nothing, put func_800A0C30 back in the slot to try the whole gate
+   again next frame.  This is the one install in the group whose target is
+   defined ABOVE it, so it needs no declaration of its own -- the one
+   provision.py does NOT mark "DEFINED BELOW YOU".
+
+   ONE PARAMETER: only $a0 is read, and it is read AFTER the call -- the
+   `move $s0, $a0` sits in the `jal`'s delay slot, which is also the
+   evidence that func_800352FC takes none.  The family's three parameters
+   measure the same 0 differing, so 1 is what the listing witnesses.
+
+   14 words -- its header reads `nonmatching func_800A0CC0, 0x38`, and
+   0x38/4 = 14.  No jump table, no rodata of its own.  3 raw against 3
+   relocation words: 1 plain `jal func_800352FC` plus the masked
+   %hi/%lo(func_800A0C30) install; 0 differing on the first compile. */
+void func_800A0CC0(UnkTownActor *a)
+{
+    if (!func_800352FC())
+    {
+        a->unk_50 = func_800A0C30;
+    }
+}
+
+/* The state func_800A0C30 and func_800A0A88 both install: spin up the
+   D_80100B70 object through func_800A0F9C, and on the frame it reports
+   finished, initialise it through func_800A12AC, hand the actor to
+   func_800A0DAC (:12495, which ticks the same object through
+   func_800A12B4) and fire the sound/effect burst.
+
+   FOUR PARAMETERS, THE SECOND DEAD -- the same shape as func_800A0DAC
+   itself, witnessed by the gap in the prologue's $aN sequence: $a0 -> $s0,
+   $a2 -> $s2, $a3 -> $s3 and $a1 is never read.  Dropped to three it is 44
+   words / 37 differing.
+
+   BOTH CALLS TAKE `&D_80100B70` and its `lui`/`addiu` land in ONE register
+   ($s1), which is the scalar-declaration shape the extern already has for
+   func_800A0DAC's sake.
+
+   THE RESULT GOES INTO +0x90 BEFORE THE TEST: `sh $v0, 0x90($s0)` then
+   `sll $v0, 16` + `bnez` on the same register is the truncation of the
+   stored value, not a reload.
+
+   func_800A12AC IS CALLED WITH THREE ARGUMENTS although its own landed
+   definition below reads `void func_800A12AC(void)` and its body is empty.
+   That is not a mis-decode -- the `jal`'s target word is 0x0C0284AB, which
+   is 0x800A12AC -- so it is declared UNPROTOTYPED above: compatible with
+   that definition, and it keeps the three-argument call off an implicit
+   declaration without changing a word.
+
+   func_8003F540's four arguments are $a0 = 0, $a1 = the word at
+   D_8006CD58, $a2 = 0x600065E and $a3 = 0x30008B6; the two large constants
+   are `lui`/`ori` pairs, so they are CONSTANTS and not symbols.
+
+   45 words -- its header reads `nonmatching func_800A0CF8, 0xB4`, and
+   0xB4/4 = 45.  No jump table, no rodata of its own.  11 raw against 11
+   relocation words: 5 plain `jal`s, %hi/%lo(D_80100B70) and
+   %hi/%lo(D_8006CD58) on DATA symbols, and the masked
+   %hi/%lo(func_800A0DAC) install -- the one symbol here a clean ovlverify
+   cannot vouch for; 0 differing on the first compile. */
+void func_800A0CF8(UnkTownActor *a, void *b, UnkTown2AE8 *c, void *d)
+{
+    a->unk_90 = func_800A0F9C(&D_80100B70, c, a->unk_90);
+    if (a->unk_90 == 0)
+    {
+        func_800A12AC(&D_80100B70, c, d);
+        a->unk_50 = func_800A0DAC;
+        func_8003E1C4(0);
+        func_8003F540(0, D_8006CD58, 0x600065E, 0x30008B6);
+        func_80053DA8(0x300);
+    }
+}
 
 /* The actor +0x50 handler func_800A0CF8 installs: tick D_80100B70 through
    func_800A12B4, advance the actor's +0x6E by 0x10, and when
