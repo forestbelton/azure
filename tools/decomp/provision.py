@@ -1099,6 +1099,49 @@ def main():
                                         and re.search(r'^\s*extern\b[^;\n]*\b%s\b'
                                                       % o2, txt, re.M):
                                     nbr.append(o2)
+                            # AND THE ONE TEST THAT IS DECISIVE WHEN BOTH
+                            # ADDRESSES OWN RODATA: read the bytes. Reported
+                            # 2026-11-04 on D_80088D44/D_80088D60, where the
+                            # note's own instruction test was INCONCLUSIVE --
+                            # the listing holds one lo_sum, the indexed
+                            # spelling measures 0 differing, and %hi is 0x8009
+                            # either way with the 0x1C folding into the
+                            # R_MIPS_LO16 addend, so NO instruction test can
+                            # separate them. The bytes can: D_80088D44 is 0x1C
+                            # bytes of Shift-JIS text the unit passes as a
+                            # message id, and D_80088D60 is six 16.16 words
+                            # {0x20, 0x20, 0, 0, 0, 0}. A string and a
+                            # six-word record are not one record.
+                            rods = []
+                            for sym in (g2, other):
+                                lp = os.path.join(PROJ, 'asm/nonmatchings',
+                                                  unit, sym + '.s')
+                                if not os.path.exists(lp):
+                                    continue
+                                try:
+                                    ws = re.findall(
+                                        r'\.word (0x[0-9A-Fa-f]+)',
+                                        open(lp).read())
+                                except OSError:
+                                    continue
+                                rods.append((sym, ws))
+                            if len(rods) == 2:
+                                print("          *** BOTH ADDRESSES OWN A"
+                                      " RODATA BLOCK, SO READ THE BYTES --"
+                                      " that is")
+                                print("          decisive where the"
+                                      " instruction tests are not:")
+                                for sym, ws in rods:
+                                    print("            %-14s %d word(s): %s%s"
+                                          % (sym, len(ws),
+                                             ' '.join(ws[:6]),
+                                             ' ...' if len(ws) > 6 else ''))
+                                print("          A run of Shift-JIS pairs"
+                                      " (0x81xx/0x82xx bytes) is a STRING and")
+                                print("          a short run of small words is"
+                                      " a RECORD; two different shapes are")
+                                print("          two objects, whatever the"
+                                      " addresses allow.")
                             print("          WHAT HAS DISCRIMINATED is the"
                                   " unit's OWN PRACTICE near these addresses:")
                             print("            %d landed body/bodies use %s%s"
