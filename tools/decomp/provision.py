@@ -942,9 +942,47 @@ def main():
                             if cand is None or a3 > cand[1]:
                                 cand = (other, a3)
                     for other, a3 in ([cand] if cand else []):
+                        # CHECK THE BASE'S DECLARED SIZE BEFORE OFFERING IT.
+                        # Reported 2026-11-04: this note offered
+                        # `D_800D0508 may be D_800D0504 + 0x4` where
+                        # D_800D0504 is declared `extern u16 D_800D0504;` --
+                        # a 2-byte SCALAR, so +4 is past its end and there is
+                        # no indexable spelling through it at all. The real
+                        # answer was a new array declaration. The companion
+                        # case the same hour (D_80082669 = D_80082660 + 0x9)
+                        # WAS the answer, so the note fires both ways; the
+                        # declared size is what separates them.
+                        dm = re.search(
+                            r'^\s*extern\s+([^;\n]*?)\b%s\s*(\[[^\]]*\])?\s*;'
+                            % other, txt, re.M)
+                        decl = dm.group(0).strip() if dm else None
+                        arrayish = bool(dm and (dm.group(2) or '*' in dm.group(1)))
+                        SZ = {'u8': 1, 's8': 1, 'char': 1, 'u16': 2, 's16': 2,
+                              'u32': 4, 's32': 4, 'f32': 4, 'void': 4}
+                        size = None
+                        if dm and not arrayish:
+                            for k, v in SZ.items():
+                                if re.search(r'\b%s\b' % k, dm.group(1)):
+                                    size = v
+                                    break
+                        if size is not None and (a2 - a3) >= size:
+                            print("          %s is NOT reachable through %s:"
+                                  " that base is declared" % (g2, other))
+                            print("            %s" % decl)
+                            print("          -- a %d-byte SCALAR, and your"
+                                  " offset is 0x%X, past its end. There is no"
+                                  % (size, a2 - a3))
+                            print("          indexable spelling through it, so"
+                                  " %s needs its OWN declaration." % g2)
+                            print("          (The address arithmetic alone"
+                                  " would have said yes here; the declared")
+                                 
+                            print("          size is what says no.)")
+                            continue
                         if True:
                             print("          %s may be %s + 0x%X, which this unit"
-                                  " ALREADY declares." % (g2, other, a2 - a3))
+                                  " ALREADY declares%s." % (g2, other, a2 - a3,
+                                  ' as `%s`' % decl if decl else ''))
                             print("          Both spellings LINK TO THE SAME"
                                   " BYTES -- the %hi is identical when neither")
                             print("          low half carries, and the offset"
@@ -2184,19 +2222,71 @@ def main():
                       " BOUND on arity, not the arity%s" % (n, fwd))
                 sitecounts.append((n, d, lines[d]))
                 anyc = True; witnessed.add(f)
+        # A SITE BELOW YOU IS A CEILING ON AN ANSI DEFINITION, EVEN WITH NO
+        # DISAGREEMENT TO SEE. The disagreement test below needs two landed
+        # sites, and func_80097DE8 has ONE -- func_80097EA0 at :12851, below
+        # it, passing none -- while its real arity is three, read off its own
+        # $aN registers. So that function's forced K&R was invisible here even
+        # after the position fix: the ceiling, not the disagreement, is the
+        # fact. Reported 2026-11-04.
+        below_all = [s for s in sitecounts
+                     if s[2] > (incasm.get(f) or lines.get(f) or 0)]
+        if below_all:
+            least = min(below_all)
+            print("      *** A LANDED CALL SITE SITS BELOW YOUR DEFINITION AND"
+                  " PASSES %d: %s (csrc/%s.c:%d)."
+                  % (least[0], least[1], unit, least[2]))
+            print("          An ANSI definition taking MORE than %d parameter"
+                  "(s) is a hard \"too few arguments\"" % least[0])
+            print("          there, whatever the registers say your arity is."
+                  " If your arity exceeds %d, the" % least[0])
+            print("          definition MUST be old-style (K&R) -- or that"
+                  " caller has to be rewritten, which is")
+            print("          someone else's landed function. A shorter site"
+                  " ABOVE you is harmless: it binds to")
+            print("          the unit's own declaration.")
         if len({n for n, _, _ in sitecounts}) > 1:
             lo = min(sitecounts)
             hi = max(sitecounts)
-            print("      *** ITS LANDED CALL SITES DISAGREE ON ARGUMENT COUNT"
-                  " (%s), SO %s MUST BE AN"
-                  % (', '.join('%d at %s' % (n, d)
-                               for n, d, _ in sorted(sitecounts)), f))
+            # THE POSITION OF THE SHORTER SITE IS THE WHOLE RULE, and the
+            # first version of this banner left it out. Narrowed 2026-11-04 by
+            # the func_80098690 group: "disagreeing call sites => K&R" is TOO
+            # WIDE. func_80098988 has sites passing three and sites passing
+            # none, and an ANSI three-parameter definition compiles AND
+            # measures 16 words / 0 differing -- because every zero-argument
+            # caller PRECEDES the definition and binds to the unit's
+            # `void func_80098988();` instead. Only a SHORTER SITE BELOW the
+            # definition is a hard error. The forced case in the same group
+            # was func_80097DE8, whose caller func_80097EA0 is below it.
+            mypos = incasm.get(f) or lines.get(f) or 0
+            below = [s for s in sitecounts if s[0] < hi[0] and s[2] > mypos]
+            if below:
+                worst = min(below)
+                print("      *** A SHORTER CALL SITE BELOW YOUR DEFINITION"
+                      " (%s), SO %s MUST BE AN"
+                      % (', '.join('%d at %s (:%d)' % (n, d, ln)
+                                   for n, d, ln in sorted(sitecounts)), f))
+            else:
+                print("      ITS LANDED CALL SITES DISAGREE ON ARGUMENT COUNT"
+                      " (%s), BUT EVERY SHORTER"
+                      % ', '.join('%d at %s (:%d)' % (n, d, ln)
+                                  for n, d, ln in sorted(sitecounts)))
+                print("      SITE IS ABOVE YOUR DEFINITION, so each binds to"
+                      " the unit's own declaration and an")
+                print("      ANSI definition COMPILES. Measured 2026-11-04 on"
+                      " func_80098988: the ANSI form is 0")
+                print("      differing there too, so this is a choice -- K&R"
+                      " to agree with the declaration, ANSI")
+                print("      to state the types. It is NOT the forced case"
+                      " below.")
+            if not below:
+                continue
             print("          OLD-STYLE (K&R) DEFINITION. An ANSI definition"
                   " taking %d is a hard" % hi[0])
             print("          \"too few arguments to function '%s'\" at"
-                  " csrc/%s.c:%d, where %s" % (f, unit, lo[2], lo[1]))
+                  " csrc/%s.c:%d, where %s" % (f, unit, worst[2], worst[1]))
             print("          passes %d -- and a definition taking %d cannot"
-                  " read the arguments %s" % (lo[0], lo[0], hi[1]))
+                  " read the arguments %s" % (worst[0], worst[0], hi[1]))
             print("          does pass. Keep the unit's existing"
                   " `void %s();` the only word on its" % f)
             # DO NOT HARD-CODE THE PRECEDENT'S LINE. Every other stale
