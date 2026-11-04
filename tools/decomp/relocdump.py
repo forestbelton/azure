@@ -10,7 +10,18 @@ symbol, which has no `jal` to decode -- is invisible to both standard checks
 and has already broken a build in this sweep. Six separate agents hand-rolled
 this same dump before it was promoted; it is here so the seventh does not.
 
-Two traps baked in, each of which cost someone a run:
+Read the SUMMARY LINE carefully, because it reports two different things and
+only one of them is a hazard. `R_MIPS_26 against a func_ symbol` is an
+ordinary CALL -- benign, and present in almost every function. The dangerous
+class is an ADDRESS-TAKE: `R_MIPS_HI16`/`R_MIPS_LO16` against a func_ symbol,
+which is what an install compiles to and what has broken a build here. Until
+2026-11-03 this tool counted both as "ON A FUNCTION SYMBOL -- the masked,
+build-breaking class", so it said 3 for func_8008F664, which has no install
+at all and three plain `jal`s, and 5 for func_800BB798, where the real answer
+is the 2 words of its one install. A warning that fires on almost every
+function is not a warning. The two are now counted and named separately.
+
+Three traps baked in, each of which cost someone a run:
 
 * **`-G0` is mandatory.** The overlays build at `-G0`, and `asmlib.compile_asm`
   defaults to `-G8`. A `-G8` dump is a different compilation and proves
@@ -90,7 +101,7 @@ def dump(src, want=()):
         shown += 1
         end = syms[i + 1][0] if i + 1 < len(syms) else max(rows) + 4
         print('=== %s  (base 0x%x, %d words) ===' % (n, a, (end - a) // 4))
-        nrel, byfunc = 0, 0
+        nrel, installs, calls = 0, 0, 0
         for addr in sorted(rows):
             if not (a <= addr < end):
                 continue
@@ -98,13 +109,32 @@ def dump(src, want=()):
             print('  %04x %s %s' % (addr - a, w, txt))
             for r in rl:
                 nrel += 1
+                # THE TYPE MATTERS, and conflating the two made this warning
+                # useless. R_MIPS_26 on a func_ symbol is an ORDINARY CALL --
+                # every function that calls anything has them, and they are
+                # entirely benign. The dangerous class is an ADDRESS-TAKE:
+                # R_MIPS_HI16/LO16 against a func_ symbol, which is what an
+                # install compiles to and what ovlverify masks. Until
+                # 2026-11-03 this counted both, so it reported
+                # "3 ON A FUNCTION SYMBOL -- the masked, build-breaking class"
+                # for func_8008F664, whose three relocations are three plain
+                # `jal`s and which has no install at all; and 5 for
+                # func_800BB798, where the real answer is the 2 words of one
+                # install. A warning that fires on almost every function is
+                # not a warning.
                 if r[1].startswith('func_'):
-                    byfunc += 1
+                    if r[0] in ('R_MIPS_HI16', 'R_MIPS_LO16'):
+                        installs += 1
+                    elif r[0] == 'R_MIPS_26':
+                        calls += 1
                 print('        RELOC %-18s %s' % r)
-        print('  -> %d relocation word(s)%s' % (
-            nrel,
-            ', %d ON A FUNCTION SYMBOL -- the masked, build-breaking class'
-            % byfunc if byfunc else ''))
+        tail = ''
+        if installs:
+            tail += (', %d ON A FUNCTION SYMBOL AS AN ADDRESS-TAKE -- the '
+                     'masked, build-breaking class' % installs)
+        if calls:
+            tail += ', %d plain jal (benign)' % calls
+        print('  -> %d relocation word(s)%s' % (nrel, tail))
     if want and not shown:
         print('relocdump: none of %s is in this object; it has: %s'
               % (', '.join(want), ', '.join(n for _, n in syms[:12])))

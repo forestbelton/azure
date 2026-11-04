@@ -330,9 +330,24 @@ typedef struct UnkTownCardPair
    word array would have let the two overlap. */
 typedef struct UnkTownColl
 {
-    u8 pad_00[0x1C];
+    u8 pad_00[0x4];
+    /* The ring func_8008F664 walks: it starts at a->unk_04 and stops when it
+       comes back to `a` itself, so every list element has this same layout and
+       `a` is one of them.  +0x08 is the element's own position and +0x0C its
+       (min, extent) box; for `a` the position comes from the UnkTown2AE8
+       argument instead, which is what makes it the moving one. */
+    struct UnkTownColl *unk_04;
+    UnkVec *unk_08;
+    UnkVec *unk_0C;
+    u8 pad_10[0x5];
+    u8 unk_15;
+    u8 pad_16[0x6];
     void *unk_1C[6];
-    u8 pad_34[0x6];
+    /* Hand-split out of pad_34: func_8008F664 clears all six in its closing
+       loop (`sb $zero, 0x34($v0)` for idx 0..5) and reads one per axis arm,
+       always at `idx ^ 1` -- the OPPOSITE direction's flag for the axis it
+       just chose. */
+    u8 unk_34[6];
     u8 unk_3A[6];
 } UnkTownColl;
 
@@ -343,9 +358,10 @@ typedef struct UnkTownColl
    Named here rather than in include/structs.h because only this unit uses it. */
 typedef struct UnkTownSweep
 {
-    u8 pad_00[0x4];
-    void *unk_04;
-    u8 pad_08[0x8];
+    UnkVec *unk_00;
+    struct UnkTownColl *unk_04;
+    UnkVec *unk_08;
+    UnkVec *unk_0C;
     s32 unk_10;
     s32 unk_14;
     s32 unk_18;
@@ -359,6 +375,7 @@ typedef struct UnkTownSweep
     s32 unk_2C;
     s32 unk_30;
     s32 unk_34;
+    s32 unk_38;
 } UnkTownSweep;
 
 /* The mover/state object the func_8008BA44..func_8008BBD4 handlers drive. Not
@@ -4742,7 +4759,165 @@ void func_8008F60C(UnkTownColl *a, UnkTown2AE8 *b, UnkTownSweep *c)
     a->unk_1C[c->unk_34] = c->unk_04;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008F664);
+/* The broad-phase sweep that drives func_8008F55C/func_8008F5B4/func_8008F60C:
+   walk the ring of collidable objects hanging off `a->unk_04`, AABB-test each
+   one against `a`'s box placed at the candidate position `b`, and hand the
+   axis of least penetration to that axis's resolver.
+
+   Every local lives in the 0x1F800000 scratchpad object rather than in the
+   frame -- including the two clearing loops' index, which is why each
+   iteration reloads it.  See UnkTownSweep. */
+void func_8008F664(UnkTownColl *a, UnkTown2AE8 *b)
+{
+    UnkTownSweep *c = (UnkTownSweep *)0x1F800000;
+    u8 t;
+
+    c->unk_00 = a->unk_0C;
+    for (c->unk_38 = 0; c->unk_38 < 6; c->unk_38++)
+    {
+        a->unk_3A[c->unk_38] = 0;
+    }
+
+    for (c->unk_04 = a->unk_04; c->unk_04 != a; c->unk_04 = c->unk_04->unk_04)
+    {
+        c->unk_08 = c->unk_04->unk_08;
+        c->unk_0C = c->unk_04->unk_0C;
+        if (c->unk_04->unk_15 == 0)
+        {
+            continue;
+        }
+
+        c->unk_10 = (b->unk_00 + c->unk_00->unk_00) -
+                    (c->unk_08->unk_00 + c->unk_0C->unk_00 + c->unk_0C->unk_0C);
+        if (c->unk_10 > 0)
+        {
+            continue;
+        }
+        c->unk_14 = (b->unk_00 + c->unk_00->unk_00 + c->unk_00->unk_0C) -
+                    (c->unk_08->unk_00 + c->unk_0C->unk_00);
+        if (c->unk_14 < 0)
+        {
+            continue;
+        }
+
+        c->unk_18 = (b->unk_04 + c->unk_00->unk_04) -
+                    (c->unk_08->unk_04 + c->unk_0C->unk_04 + c->unk_0C->unk_10);
+        if (c->unk_18 > 0)
+        {
+            continue;
+        }
+        c->unk_1C = (b->unk_04 + c->unk_00->unk_04 + c->unk_00->unk_10) -
+                    (c->unk_08->unk_04 + c->unk_0C->unk_04);
+        if (c->unk_1C < 0)
+        {
+            continue;
+        }
+
+        c->unk_20 = (b->unk_08 + c->unk_00->unk_08) -
+                    (c->unk_08->unk_08 + c->unk_0C->unk_08 + c->unk_0C->unk_14);
+        if (c->unk_20 > 0)
+        {
+            continue;
+        }
+        c->unk_24 = (b->unk_08 + c->unk_00->unk_08 + c->unk_00->unk_14) -
+                    (c->unk_08->unk_08 + c->unk_0C->unk_08);
+        if (c->unk_24 < 0)
+        {
+            continue;
+        }
+
+        if (abs(c->unk_10) < abs(c->unk_14))
+        {
+            t = a->unk_34[3];
+            c->unk_2C = 2;
+        }
+        else
+        {
+            c->unk_10 = c->unk_14;
+            t = a->unk_34[2];
+            c->unk_2C = 3;
+        }
+        c->unk_28 = t;
+        if (abs(c->unk_18) < abs(c->unk_1C))
+        {
+            t = a->unk_34[5];
+            c->unk_30 = 4;
+        }
+        else
+        {
+            c->unk_18 = c->unk_1C;
+            t = a->unk_34[4];
+            c->unk_30 = 5;
+        }
+        c->unk_29 = t;
+        if (abs(c->unk_20) < abs(c->unk_24))
+        {
+            u8 f;
+
+            f = a->unk_34[1];
+            c->unk_34 = 0;
+            c->unk_2A = f;
+        }
+        else
+        {
+            u8 f;
+
+            c->unk_20 = c->unk_24;
+            f = a->unk_34[0];
+            c->unk_34 = 1;
+            c->unk_2A = f;
+        }
+
+        if (c->unk_10 == 0 && c->unk_18 == 0)
+        {
+            continue;
+        }
+        if (c->unk_10 == 0 && c->unk_20 == 0)
+        {
+            continue;
+        }
+        if (c->unk_18 == 0 && c->unk_20 == 0)
+        {
+            continue;
+        }
+
+        if (c->unk_20 > 0 && c->unk_20 <= b->unk_14 && c->unk_10 != 0 &&
+            c->unk_18 != 0)
+        {
+            func_8008F60C(a, b, c);
+            continue;
+        }
+
+        if (abs(c->unk_10) < abs(c->unk_18))
+        {
+            if (abs(c->unk_18) < abs(c->unk_20) ||
+                abs(c->unk_10) < abs(c->unk_20))
+            {
+                func_8008F55C(a, b, c);
+            }
+            else
+            {
+                func_8008F60C(a, b, c);
+            }
+        }
+        else
+        {
+            if (abs(c->unk_18) >= abs(c->unk_20))
+            {
+                func_8008F60C(a, b, c);
+            }
+            else
+            {
+                func_8008F5B4(a, b, c);
+            }
+        }
+    }
+
+    for (c->unk_38 = 0; c->unk_38 < 6; c->unk_38++)
+    {
+        a->unk_34[c->unk_38] = 0;
+    }
+}
 
 /* AABB overlap of two nodes, each carrying a position at +0x08 and a box at
    +0x0C (minimum at +0x00/+0x04/+0x08, extent at +0x0C/+0x10/+0x14).  Returns
