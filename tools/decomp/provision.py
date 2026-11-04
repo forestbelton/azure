@@ -153,7 +153,7 @@ def classify_addr_takes(listing, names):
     side, since a missed install is the expensive error.
     """
     lines = listing.split('\n')
-    stored, tested = [], []
+    stored, tested, tagged = [], [], []
     for n in names:
         verdict = None
         for i, ln in enumerate(lines):
@@ -165,6 +165,17 @@ def classify_addr_takes(listing, names):
                 verdict = 'store'
                 break
             reg = m.group(1)
+            # AN ADDRESS MATERIALISED STRAIGHT INTO AN ARGUMENT REGISTER IS A
+            # TAG, NOT AN INSTALL. Reported 2026-11-04: func_800A47A8 STORES
+            # func_800A3918 at +0x10 but passes func_800A3B1C in $a1 to
+            # func_8004491C, which never stores it here -- and this function
+            # reported both as "installs", one class. The witnesses are then
+            # different functions (the slot's dispatcher for one, the tag
+            # binder for the other), so the distinction decides which one to
+            # read. Route (d) already carries this prose; route (b) did not.
+            if re.match(r'a[0-3]$', reg):
+                verdict = 'tag'
+                break
             for ahead in lines[i + 1:i + 10]:
                 if re.search(r'\bs[bhw]\s+\$%s\b' % reg, ahead):
                     verdict = 'store'
@@ -172,10 +183,18 @@ def classify_addr_takes(listing, names):
                 if re.search(r'\b(beq|bne)\s+.*\$%s\b' % reg, ahead):
                     verdict = 'test'
                     break
+                if re.search(r'\baddu\s+\$a[0-3],\s*\$%s,\s*\$zero\b' % reg, ahead):
+                    verdict = 'tag'
+                    break
             if verdict:
                 break
-        (tested if verdict == 'test' else stored).append(n)
-    return stored, tested
+        if verdict == 'test':
+            tested.append(n)
+        elif verdict == 'tag':
+            tagged.append(n)
+        else:
+            stored.append(n)
+    return stored, tested, tagged
 
 
 def sister_of(unit, func):
@@ -589,7 +608,7 @@ def main():
         tot += w
         cal = sorted(set(re.findall(r'jal\s+(\w+)', t)))
         ins = sorted(set(re.findall(r'%hi\((func_[0-9A-Fa-f]+)\)', t)))
-        stored, tested = classify_addr_takes(t, ins)
+        stored, tested, tagged = classify_addr_takes(t, ins)
         # BOTH %hi AND %lo. Matching only %hi loses every symbol that shares
         # one materialised base with another -- which is exactly the
         # constant-base idiom this overlay is full of, where one `lui` serves
@@ -646,6 +665,15 @@ def main():
                       "no jal, VERIFY BY RELOC" % ', '.join(stored))
             else:
                 print("      installs: none")
+            if tagged:
+                print("      PASSES a function address AS AN ARGUMENT (a TAG,"
+                      " NOT an install): %s" % ', '.join(tagged))
+                print("          It goes straight into an $aN and no store of"
+                      " it appears here, so the callee decides what happens")
+                print("          to it. The arity witness is then the BINDER"
+                      " it is passed to, not this function's slot -- read")
+                print("          that callee before typing the named"
+                      " function.")
             if tested:
                 print("      TESTS a handler address (NOT an install): %s"
                       % ', '.join(tested))
@@ -1851,10 +1879,26 @@ def main():
                 for ln, ret, args in casts:
                     print("            csrc/%s.c:%-6d  %s (*)(%s)"
                           % (unit, ln, ret, args or 'void'))
-                print("          A prototyped cast states the arity AND the"
-                      " parameter types of every handler at that slot, so this"
-                      " IS an arity witness. Read the dispatcher before")
-                print("          falling back to register reads.")
+                sigs = set((ret, args) for _ln, ret, args in casts)
+                if len(sigs) > 1:
+                    print("          *** %d DIFFERENT SIGNATURES cast through"
+                          " this one offset, so only the ARITY is settled"
+                          % len(sigs))
+                    print("          here, not the parameter types. Reported"
+                          " 2026-11-04: two casts of one slot disagreed on")
+                    print("          the types while agreeing on the count."
+                          " Read every site above and prefer the one whose")
+                    print("          argument EXPRESSIONS show the real"
+                          " shape.")
+                else:
+                    print("          A prototyped cast states the arity AND"
+                          " the parameter types of every handler at that")
+                    print("          slot, so this IS an arity witness -- but"
+                          " check for a second cast of the same offset")
+                    print("          before trusting the TYPES; the count is"
+                          " the safer half.")
+                print("          Read the dispatcher before falling back to"
+                      " register reads.")
         if found_any:
             print("      (The banner above is therefore too strong for at least"
                   " one of those names.)")
