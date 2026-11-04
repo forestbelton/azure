@@ -25,16 +25,60 @@ PROJ = '/home/case/projects/azure'
 def D(unit): return os.path.join(PROJ, 'asm/nonmatchings', unit)
 
 
-# The loaded image, as include/structs.h records it. A global outside it is
-# usually a constant address in the original rather than a symbol.
-IMAGE_LO, IMAGE_HI = 0x8002D000, 0x80088760
+# Symbols that are CANDIDATES for the constant-address spelling.
+#
+# My first version of this tested the address against the resident
+# executable's range, 0x8002D000..0x8008875F, and called everything outside it
+# out-of-image. That is wrong in the direction that costs most: an OVERLAY's
+# OWN DATA sits just above its text -- the town overlay's at 0x800D1xxx and
+# 0x800D3xxx -- and is loaded with it, so it is addressed by SYMBOL. Measured
+# on the func_800B9260 group, declaring them is 0 differing and the constant
+# form costs 6, 3, 1 and 22 differing on four separate symbols, plus 79 words
+# against 73 on a fifth. The coarse test told an agent to do the wrong thing
+# for four of the five out-of-image symbols in one group.
+#
+# So use the CURATED list in include/structs.h instead, which is empirical and
+# maintained, and fall back to "below the resident base" only if it is gone.
+# That keeps kernel/BIOS space (D_80010xxx, D_80012xxx, D_80013xxx) in and the
+# overlay's own data out.
+RESIDENT_LO = 0x8002D000
 
 
-def in_image(sym):
+def _excluded_syms():
     try:
-        return IMAGE_LO <= int(sym.split('_')[1], 16) < IMAGE_HI
+        h = io.open(os.path.join(PROJ, 'include', 'structs.h'),
+                    encoding='utf-8', errors='replace').read()
+    except Exception:
+        return None
+    m = re.search(r'excluded, base outside the loaded image[^:]*:([^*]*)\*/', h)
+    if not m:
+        return None
+    return set(re.findall(r'D_[0-9A-F]+', m.group(1)))
+
+
+_EXCLUDED = _excluded_syms()
+
+
+def constaddr_candidate(sym):
+    """True when `sym` is a plausible integer-constant address in the original.
+
+    The UNION of two tests, because neither alone is right. Below the resident
+    base is kernel/BIOS space and always a candidate -- and the curated list
+    does NOT cover all of it: it has D_80010A93 and D_80010A94 but not
+    D_80010980/981/983 or D_80010AC4, which is the exact page func_8009EF88
+    and func_8009E85C reach through a `(u8 *)0x80010000` local. The curated
+    list then adds the high outliers an address test cannot know about
+    (D_800E2968, D_801C9E40, D_801DA72C and the rest).
+
+    What neither test may include is an overlay's OWN data, which sits above
+    the resident base and is addressed by symbol.
+    """
+    try:
+        if int(sym.split('_')[1], 16) < RESIDENT_LO:
+            return True
     except (IndexError, ValueError):
-        return True
+        pass
+    return _EXCLUDED is not None and sym in _EXCLUDED
 
 def listing(unit, f):
     p = os.path.join(D(unit), f + '.s')
@@ -280,7 +324,7 @@ def main():
                 elif g in incglob:
                     fp, ln = incglob[g]
                     tags.append('%s (declared %s:%d -- do NOT redeclare)' % (g, fp, ln))
-                elif not in_image(g):
+                elif constaddr_candidate(g):
                     # DEMANDING A DECLARATION HERE IS THE WRONG INSTRUCTION,
                     # and following it changes the addressing. A global whose
                     # base is outside the loaded image is usually an integer
@@ -295,7 +339,7 @@ def main():
                     # same day -- D_80012D5C in func_800B180C (2 differing as
                     # a symbol) and the D_80010xxx page in func_8009EF88.
                     outside.append(g)
-                    tags.append(g + ' [OUT OF IMAGE]')
+                    tags.append(g + ' [MAYBE A CONSTANT]')
                 else:
                     tags.append(g + ' *** NO DECLARATION, you must add one ***')
             print("      globals : %s" % ', '.join(tags))
@@ -305,19 +349,28 @@ def main():
                 # unreadable, which defeats the point for something agents
                 # read top to bottom.
                 base = min(int(g.split('_')[1], 16) for g in outside)
-                print("      [OUT OF IMAGE] %s -- do NOT declare these."
+                print("      [MAYBE A CONSTANT] %s -- outside the resident"
+                      " image, so MEASURE BOTH SPELLINGS."
                       % ', '.join(outside))
-                print("          Outside 0x8002D000..0x8008875F these are"
-                      " usually integer constants cast to pointers in the")
-                print("          original. Try a `(u8 *)0x%08X` base local"
-                      " with the offsets in the index. Declaring the symbol"
+                print("          These are often integer constants cast to"
+                      " pointers in the original: try a `(u8 *)0x%08X` base"
                       % (base & 0xFFFF0000))
-                print("          makes the address plus(symbol_ref, reg)"
-                      " instead of plus(reg, const_int) and changes the")
-                print("          instruction count. The tell in the listing:"
-                      " if the `lui`'s destination register EQUALS the")
-                print("          load's, only the constant form reaches it."
-                      " Several %lo off one %hi is the same idiom.")
+                print("          local with the offsets in the index as well"
+                      " as the declared symbol. Declaring it makes the")
+                print("          address plus(symbol_ref, reg) rather than"
+                      " plus(reg, const_int), which can change the")
+                print("          instruction count -- but it often does NOT,"
+                      " so this is a lever to try, not an instruction.")
+                print("          Tells, in order of reliability: an `ori`"
+                      " where the target has `addiu` means you declared a")
+                print("          symbol that wants to be a constant; several"
+                      " %lo off one %hi is the constant-base idiom. The")
+                print("          lui-destination-equals-the-load test is NOT"
+                      " reliable on a short leaf -- on func_800B9034 the")
+                print("          registers tie and all three spellings are"
+                      " byte-exact, so there the tying is a consequence of")
+                print("          the surrounding allocation, not of"
+                      " constant-vs-symbol.")
         else:
             print("      globals : none")
     print("  TOTAL %d words" % tot)
