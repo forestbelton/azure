@@ -286,6 +286,7 @@ def defs_and_protos(src, unitname):
     txt = open(src).read()
     whole = txt
     landed, cur, depth, body = {}, None, 0, {}
+    defoff = {}
     in_comment = [False]
 
     def code_only(ln):
@@ -324,6 +325,7 @@ def defs_and_protos(src, unitname):
     # matches only `func_X(`. Route (d) needs these: see the comment there.
     addr = {}
     lines, lineno = {}, 0
+    pos = 0          # byte offset of `ln` within txt; see defoff[] below
     for ln in txt.split('\n'):
         lineno += 1
         m = re.match(r'^[A-Za-z_][\w \*]*?(func_[0-9A-Fa-f]{8})\s*\(', ln)
@@ -345,6 +347,19 @@ def defs_and_protos(src, unitname):
             # prefix of it -- that sent a brief's reader to :2206 (a
             # declaration) rather than :19205 (the definition).
             lines[cur] = lineno
+            # AND THE BYTE OFFSET, for the same reason the line number is
+            # recorded here: a later `txt.index(landed[d])` finds the earlier
+            # single-line PROTOTYPE, because the definition's first line is a
+            # PREFIX of it (`void f(T *a, s32 b)` against `...b);`). The
+            # comment above already says so for lines[], but the body-text
+            # slices below were still doing the search -- so routes (c) and
+            # (f) sliced the DECLARATION BLOCK, found no call in it, and
+            # printed "none -- no LANDED call site constrains arity".
+            # Measured 2026-11-03: 147 of 729 landed definitions in
+            # csrc/ovl_town.c are prefixes of an earlier prototype, so both
+            # routes were blind to 20% of the landed callers -- including both
+            # of func_800ABC00's, which a plain grep finds in one command.
+            defoff[cur] = pos
         code = code_only(ln)
         if cur:
             body[cur].update(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', code))
@@ -354,17 +369,18 @@ def defs_and_protos(src, unitname):
                 r'\b(func_[0-9A-Fa-f]{8})\b(?!\s*\()', code))
             depth += ln.count('{') - ln.count('}')
             if depth <= 0 and '}' in ln: cur = None
+        pos += len(ln) + 1
     protos = {}
     for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;{]*\);)', txt, re.M):
         protos.setdefault(m.group(2), m.group(1).strip())
     for k in body: body[k].discard(k)
     for k in addr: addr[k].discard(k)
-    return landed, protos, body, txt, lines, addr
+    return landed, protos, body, txt, lines, addr, defoff
 
 def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
-    landed, protos, body, txt, lines, addr = defs_and_protos(src, unit)
+    landed, protos, body, txt, lines, addr, defoff = defs_and_protos(src, unit)
     src_txt = txt
     inc = include_protos()
     snames = splat_names()
@@ -670,7 +686,7 @@ def main():
     # "too many arguments to function".
     btext = {}
     for d in landed:
-        i = txt.index(landed[d]); j = txt.find('\n}', i)
+        i = defoff.get(d, txt.index(landed[d])); j = txt.find('\n}', i)
         btext[d] = txt[i:j if j > 0 else i + 2000]
 
     def arglist(hay, name):
@@ -1124,7 +1140,7 @@ def main():
 
     body_src = {}
     for d in landed:
-        i = txt.index(landed[d]); j = txt.find('\n}', i)
+        i = defoff.get(d, txt.index(landed[d])); j = txt.find('\n}', i)
         body_src[d] = txt[i:j if j > 0 else i+400]
     hits = []
     for d, dc in body.items():
