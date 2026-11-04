@@ -1379,10 +1379,54 @@ def main():
     print("    The score cannot see POSITION (a first-call entry point scores like any")
     print("    other) or LINE-LEVEL IDENTITY (a shared call expression WITH its constant")
     print("    arguments). Two cheap routes have beaten it six times:")
+    # THE WINDOW USED TO BE A FLAT +/-40 LINES, AND THAT MISSED THE DECISIVE
+    # TEMPLATE. Reported 2026-11-04: func_8009AD70's verbatim line-for-line
+    # template, func_8009AAB8, is defined 43 lines above the window's first
+    # line and its comment block -- which pre-settled `/ 2` vs `>> 1`, two
+    # tie-ing address spellings and the store order -- starts 74 lines above
+    # it. Neither route (a) nor route (k) surfaced that function either, so
+    # the flat window was the only route that COULD have, and it was 43 lines
+    # short. A fixed line count is the wrong unit: what the agent needs is
+    # WHOLE NEIGHBOURING FUNCTIONS, comment blocks included, and in this unit
+    # one function with its comment block runs 40-120 lines.
+    all_lines_n = txt.split('\n')
+
+    def block_start(ln):
+        '''The first line of the comment block above the definition at `ln`
+        (1-based), or `ln` itself. The comment is the valuable half: a landed
+        neighbour's block has repeatedly pre-recorded the exact tie the next
+        function hits.'''
+        i = ln - 2
+        while i >= 0 and not all_lines_n[i].strip():
+            i -= 1
+        if i >= 0 and all_lines_n[i].rstrip().endswith('*/'):
+            while i >= 0 and '/*' not in all_lines_n[i]:
+                i -= 1
+            return max(1, i + 1)
+        return ln
+
+    defpos = sorted(set(lines.values()))
+    NEIGH = 3
     for f in targets:
         n = incasm.get(f)
-        if n: print("      sed -n '%d,%dp' csrc/%s.c    # %s's C-file neighbours"
-                    % (max(1, n - 40), n + 40, unit, f))
+        if not n: continue
+        before = [d for d in defpos if d < n][-NEIGH:]
+        after = [d for d in defpos if d > n][:NEIGH]
+        lo = block_start(before[0]) if before else max(1, n - 40)
+        hi = after[-1] if after else n + 40
+        # Walk to the end of the last included definition's body, so the
+        # window never stops in the middle of a function.
+        i = hi
+        while i < len(all_lines_n) and not all_lines_n[i - 1].startswith('}'):
+            i += 1
+        hi = min(len(all_lines_n), i + 1)
+        print("      sed -n '%d,%dp' csrc/%s.c    # %s's %d C-file neighbours"
+              " each way, COMMENT BLOCKS INCLUDED (%d lines)"
+              % (lo, hi, unit, f, NEIGH, hi - lo + 1))
+    print("      That window is whole FUNCTIONS, not a line count, because a flat")
+    print("      +/-40 missed one target's verbatim template by 43 lines and its")
+    print("      comment block by 74. If it still does not hold the template, widen")
+    print("      it -- the cost is reading, and the comment blocks are the point.")
     print("      ...and an IDIOM GREP: grep a distinctive STATEMENT shape out of the")
     print("      listing (a field expression, a constant, a global) rather than a callee")
     print("      name. e.g. grep -n 'D_800814A0 |= 0x8000' csrc/%s.c" % unit)
@@ -2038,6 +2082,13 @@ def main():
     print("\n=== LANDED CALLERS (route (c): settles arity AND constant arguments) ===")
     anyc = False
     for f in targets:
+        # DRAW THE INFERENCE, DO NOT ONLY PRINT THE FACTS. This section used
+        # to print "3 argument(s)" and "0 argument(s)" two lines apart and
+        # leave it there. That disagreement is the whole reason func_8009AE88
+        # has to be an OLD-STYLE definition, and the agent that landed it
+        # spent a compile on the hard error first, then said so: "the facts
+        # were both there; only the inference was mine to make."
+        sitecounts = []
         for d, dc in body.items():
             if f in dc and d not in targets:
                 a = arglist(btext.get(d, ''), f)
@@ -2062,7 +2113,38 @@ def main():
                 fwd = _forwarding(landed.get(d, ''), a)
                 print("      %d argument(s) at that call site -- a LOWER"
                       " BOUND on arity, not the arity%s" % (n, fwd))
+                sitecounts.append((n, d, lines[d]))
                 anyc = True; witnessed.add(f)
+        if len({n for n, _, _ in sitecounts}) > 1:
+            lo = min(sitecounts)
+            hi = max(sitecounts)
+            print("      *** ITS LANDED CALL SITES DISAGREE ON ARGUMENT COUNT"
+                  " (%s), SO %s MUST BE AN"
+                  % (', '.join('%d at %s' % (n, d)
+                               for n, d, _ in sorted(sitecounts)), f))
+            print("          OLD-STYLE (K&R) DEFINITION. An ANSI definition"
+                  " taking %d is a hard" % hi[0])
+            print("          \"too few arguments to function '%s'\" at"
+                  " csrc/%s.c:%d, where %s" % (f, unit, lo[2], lo[1]))
+            print("          passes %d -- and a definition taking %d cannot"
+                  " read the arguments %s" % (lo[0], lo[0], hi[1]))
+            print("          does pass. Keep the unit's existing"
+                  " `void %s();` the only word on its" % f)
+            # DO NOT HARD-CODE THE PRECEDENT'S LINE. Every other stale
+            # citation in this sweep was a hard-coded line number that drifted
+            # under an insertion.
+            knr = lines.get('func_8009C7A8')
+            print("          signature and spell the definition like"
+                  " func_8009C7A8%s:"
+                  % (' at csrc/%s.c:%d' % (unit, knr) if knr else
+                     ' (grep the unit for a definition whose parentheses hold'
+                     ' bare names)'))
+            print("          name list in the parentheses, first parameter"
+                  " declaration indented, the rest")
+            print("          at column zero, which is what clang-format"
+                  " produces. progress.py counts")
+            print("          K&R definitions, so the landed count still"
+                  " moves.")
     if not anyc: print("  none -- no LANDED call site constrains arity")
     print("\n=== ROUTE (g): YOUR OWN GROUP MEMBERS AS WITNESSES ===")
     print("    A group member that calls another is a witness, and the search used to")
