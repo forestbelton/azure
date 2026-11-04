@@ -1340,6 +1340,22 @@ another group's. The directory looks private and is not. Use the same dated
 prefix there, and treat an unexplained diff between two of your own runs as a
 clobber before treating it as drift.
 
+### A K&R DEFINITION'S FIRST PARAMETER DECLARATION INDENTS BY THE RETURN TYPE
+
+clang-format, not gcc, and measured on this repo's own `.clang-format` with
+three return types over one body (2026-11-04):
+
+* `void func(a, b)` and `s32 func(a, b)` want the first parameter declaration
+  **indented four spaces**, the rest at column zero -- the `func_8009C7A8`
+  shape recorded above.
+* `u8 *func(a, b)` -- a POINTER return -- wants the first declaration at
+  **column zero** as well.
+
+Getting it the other way round costs one complaint per definition, and it bit
+one agent twice in one batch (once on a pointer return, then on two `void`
+ones). If you are writing a K&R definition, run clang-format on it rather
+than copying the shape from a differently-typed neighbour.
+
 ### `assert t != orig` PROVES THE TEXT CHANGED, NOT THAT THE PROGRAM CHANGED
 
 The probe rule in this document -- assert the replacement actually altered the

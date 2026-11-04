@@ -2610,10 +2610,29 @@ def main():
             below = [s for s in sitecounts if s[0] < hi[0] and s[2] > mypos]
             if below:
                 worst = min(below)
+                # LIST ONLY THE SITES THE SENTENCE IS ABOUT. Reported
+                # 2026-11-04: this printed "A SHORTER CALL SITE BELOW YOUR
+                # DEFINITION" and then rolled up ALL 104 sites, 47 of them
+                # ABOVE the definition -- the conclusion was right and the
+                # evidence was twice too long, so anyone checking it by hand
+                # had to re-derive the filter the sentence depends on. Same
+                # defect shape as the address-take banner's headline this
+                # morning: the prose was narrowed and the list was not.
+                shown = sorted(below)
                 print("      *** A SHORTER CALL SITE BELOW YOUR DEFINITION"
-                      " (%s), SO %s MUST BE AN"
+                      " (%s%s), SO %s MUST BE AN"
                       % (', '.join('%d at %s (:%d)' % (n, d, ln)
-                                   for n, d, ln in sorted(sitecounts)), f))
+                                   for n, d, ln in shown[:6]),
+                         ' ... and %d more BELOW you' % (len(shown) - 6)
+                         if len(shown) > 6 else '', f))
+                above_n = len(sitecounts) - len(below)
+                if above_n:
+                    print("          (%d further site(s) are ABOVE your"
+                          " definition and are NOT evidence for this:"
+                          % above_n)
+                    print("          each binds to the unit's own"
+                          " declaration. They are listed under LANDED")
+                    print("          CALLERS above.)")
             else:
                 print("      ITS LANDED CALL SITES DISAGREE ON ARGUMENT COUNT"
                       " (%s), BUT EVERY SHORTER"
