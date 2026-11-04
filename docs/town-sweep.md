@@ -1199,7 +1199,31 @@ THREE units**, because ovl_town was carved on 2026-11-03:
 
     for u in ovl_town ovl_town_800BEBA4 ovl_town_800BF3F0; do
       clang-format --dry-run csrc/$u.c 2>&1 | grep -c "warning:"
-    done            # 31 + 0 + 5 = 36
+    done            # 29 + 0 + 5 = 34 as of 2026-11-04
+
+The `--output-replacements-xml | grep -c '<replacement '` form gives the SAME
+numbers (checked 2026-11-04: 29/0/5 both ways), so either is fine -- but
+measure the state you are about to commit, not the state you merged from. An
+agent reported 29 for a copy that measured 37 under my hand, because it had
+measured before its last body edit.
+
+### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
+
+Two merge scripts in one batch left a blank line too many where a body
+replaced its `INCLUDE_ASM`, and it costs one `MaxEmptyLinesToKeep` complaint
+PER BODY -- 1 in one group, 8 in an eight-function group. It is invisible in
+the body file and in `ovlverify`, and it does not change a byte, so only the
+format count catches it.
+
+**After applying any merge, before the build gate:**
+
+    python3 -c "import re,sys; p='csrc/ovl_town.c'; t=open(p).read(); \
+      n=t.count(chr(10)*3); open(p,'w').write(re.sub(r'\n\n\n+','\n\n',t)); \
+      print('collapsed',n)"
+
+A double blank line is always a complaint in this tree, so collapsing is
+safe. Agents should also leave no trailing blank line on a body file, but the
+merge is mine, so the check belongs here.
 
 **The total is 36, not the 37 it was before the carve**, and the arithmetic is
 worth knowing because it is not a coincidence. The carve duplicates the
