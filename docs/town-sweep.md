@@ -1460,6 +1460,17 @@ format count and `progress.py` all report per unit now:
       python3 tools/decomp/ovlverify.py csrc/$u.c $(cat /tmp/l_$u.txt | tr '\n' ' ')
     done
 
+**WRITE THE NAME LIST AS A COMMAND SUBSTITUTION, NEVER AS A BARE `$VAR` --
+THIS REPO'S SHELL IS zsh AND A BARE PARAMETER DOES NOT WORD-SPLIT.** Reported
+2026-11-04: `ovlverify.py FILE $NAMES` passed eighteen names as ONE argument
+and printed a single line, `func_800C24FC func_800C24C8 ...: not defined in
+<file>` -- which a `grep -v ' 0 differing'` shows as one odd-looking failure
+rather than as a run that measured nothing. Given this document's own history
+of sweeps that verified nothing, the only two forms worth writing down are the
+`$( ... )` above (command substitution DOES split in zsh) and `${=NAMES}`.
+The guard is the same one the recipe already carries: check that `reported`
+equals `names`, and treat any count below it as a short run.
+
 **The benign off-by-one is GONE as of 2026-11-04.** For weeks every
 whole-unit sweep ended `clean = N-1` with `func_800C3050: not defined` as its
 single failure, because that function's multi-line declaration lives in the

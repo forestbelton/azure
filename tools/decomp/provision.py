@@ -1283,6 +1283,27 @@ def main():
                                       " sister unit already declares the")
                                 print("          member's symbol, copy that"
                                       " declaration instead.")
+                            # AND THE CHEAPEST ANSWER IS OFTEN THE CONTAINER'S
+                            # OWN BYTES. Reported twice on 2026-11-04: an
+                            # `objdump -s` of the address range shows the
+                            # OBJECT BOUNDARY directly, and it settled four
+                            # symbols in one group where this ranking put the
+                            # wrong base first for all four. Three data
+                            # pointers followed by six function addresses is
+                            # three objects, not one indexed base.
+                            print("          *** CHEAPEST TEST: DUMP THE BYTES"
+                                  " AND LOOK FOR THE OBJECT BOUNDARY.")
+                            print("            objdump -s -j <section>"
+                                  " build/<container>.elf | grep -A2 '%x'"
+                                  % ((a2 & ~0xF),))
+                            print("          A run of function addresses, a"
+                                  " run of data pointers, and a run of")
+                            print("          small values are DIFFERENT"
+                                  " OBJECTS even when they abut -- and the")
+                            print("          boundary tells you which symbol"
+                                  " owns your address. That beats every")
+                            print("          heuristic below when the"
+                                  " neighbours are a table.")
                             print("          WHAT HAS DISCRIMINATED is the"
                                   " unit's OWN PRACTICE near these addresses:")
                             print("            %d landed body/bodies use %s%s"
