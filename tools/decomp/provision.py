@@ -1786,8 +1786,15 @@ def main():
             if o == f: continue
             lt = listing(unit, o)
             if lt and re.search(r'jal\s+' + f + r'\b', lt):
-                rel = ('BELOW it in the file, so a too-narrow spelling is a HARD ERROR'
-                       if incasm.get(o, 0) > incasm.get(f, 0) else 'above it')
+                # SAY WHOSE POSITION THIS IS. The old wording, "BELOW it in
+                # the file", named the CALLER's position but read for a
+                # moment as if the callee were below -- reported by an agent
+                # that had to stop and work out which way round it was.
+                rel = ('its CALLER is BELOW it, so the definition precedes the'
+                       ' call and a too-narrow spelling is a HARD ERROR'
+                       if incasm.get(o, 0) > incasm.get(f, 0)
+                       else 'its CALLER is ABOVE it, so the call rides a'
+                            ' declaration or an implicit one')
                 print("  %-15s is jal'd by group member %-15s (%s)" % (f, o, rel))
                 anyg = True; witnessed.add(f)
     if not anyg: print("  no group member calls another")

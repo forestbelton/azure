@@ -2307,6 +2307,14 @@ extern u8 D_8008925C[];
    the target's copy is the unaligned lwl/lwr + swl/swr pair, which needs
    alignment 1 on both sides. */
 extern u8 D_8008910C[];
+/* func_800B3D04's four-entry colour table, the same device as D_8008925C
+   and D_8008910C above: it keeps its own INCLUDE_RODATA (0x28 bytes, only
+   the first 0x10 of which the function copies), so it is `extern` and the
+   function copies FROM it.  `u8` and not `u32` because move_by_pieces takes
+   MIN(src_align, dst_align) and the target's copy is the unaligned lwl/lwr +
+   swl/swr pair, which needs alignment 1 on the SOURCE; `extern u32
+   D_80089298[]` is 24 words with 29 differing. */
+extern u8 D_80089298[];
 extern u8 D_800892DC[];
 extern u8 D_800892E8[];
 extern u8 D_800892EC[];
@@ -27453,19 +27461,286 @@ void func_800B3A80(UnkNode *o)
     D_800814A0 |= 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3AE4);
+/* The +0x5C card scene's own RGB triple at +0x24..+0x26, eased a quarter of
+   the way to 0x80 once per frame; func_800B3B18 below is the same easing over
+   a prim's +0x00..+0x02 and func_800B3E68 is the caller that clamps the result
+   and re-installs func_800B3E30 when +0x24 passes 0x7D.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3B18);
+   The target's `addu $v1, $v0, $zero` between the +0x24 and +0x25 stores is a
+   forwarded LOAD, not a use of the computed value: both later stores must read
+   `s[0x24]` BACK.  cse forwards the first re-read into the stored register and
+   the second survives as the copy.  Writing it as the chained
+   `s[0x26] = s[0x25] = s[0x24] = ...` is 12 words with 4 differing, and so are
+   a `u8` local, an `s32` local, a chain over the last two stores either way
+   round, and `s[0x26] = s[0x25];` for the third store -- eight spellings, all
+   one word short of the copy.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3C04);
+   13 words -- its header reads `nonmatching func_800B3AE4, 0x34`, and
+   0x34/4 = 13.  No jump table, no rodata of its own.  Arity 1: its only ASM
+   caller func_800B3E68 sets only $a0, and reads +0x24 back off the same
+   object afterwards. */
+void func_800B3AE4(u8 *s)
+{
+    s[0x24] = s[0x24] + (0x80 - s[0x24]) / 4;
+    s[0x25] = s[0x24];
+    s[0x26] = s[0x24];
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3C74);
+/* func_800B3AE4's easing applied to a prim's three colour bytes, with a
+   deadband: each byte moves a quarter of the way to 0x80, but snaps to 0x80
+   once it is within 4.  The head is an early-out when all three are already
+   0x80 -- the word at +0x00 shifted up 8 against 0x80808000, which drops the
+   prim's +0x03 code byte.  func_800B3C74 below calls it with
+   `s->unk_5C[i]->unk_04` for i = 2..4.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3D04);
+   Two levers, each measured, and both are about the ONE copy insn per block
+   that `copy_to_mode_reg` emits for the signed divide by 4
+   (expmed.c:3021-3022, `t1 = copy_to_mode_reg (compute_mode, op0);` then
+   `emit_cmp_insn (t1, const0_rtx, GE, ...)`):
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3D84);
+   - THE ABS MUST BE WRITTEN `d >= 0 ? d : -d`, NOT `d < 0 ? -d : d`.  Only the
+     first folds to ABS_EXPR: fold-const.c:5459 matches `A op 0 ? A : -A` with
+     the NEGATE as the THIRD operand (`TREE_CODE (arg2) == NEGATE_EXPR` at
+     :5464), and only GE/GT return `ABS_EXPR` (:5471-5476).  Folded, expand_abs
+     copies into the target and negates IN PLACE (optabs.c:2155, :2173), giving
+     `negu $v0, $v0`; unfolded, the COND_EXPR's arm negates the source and
+     gives `negu $v0, $v1` -- 1 differing word per block.  `d < 0 ? d : -d` is
+     not the same thing either: :5479 makes that `-abs(d)`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3DC4);
+   - EACH BLOCK NEEDS ITS OWN LOCALS.  Sharing one `d`/`e` pair across the
+     three blocks is 8 differing: in blocks 1 and 2 the divide's copy is
+     propagated into both the `bgez` and the `addiu`, so the copy sinks into
+     the `bgez` delay slot and a `nop` is left in the `bnez`'s.  Block 3 is
+     unaffected either way, which is the tell -- the shared pseudo's live range
+     is what reaches back across the earlier blocks.
+
+   Inverting the deadband test (`if (e < 5) p[i] = 0x80; else ...`) is 30
+   differing even with separate locals: both arms fall into a shared tail, so
+   source order is layout order.  A `q = d;` local for the dividend, assigned
+   before or inside the arm, and re-deriving `0x80 - p[i]` for the abs are all
+   3 differing with separate locals and 11-17 with shared ones.
+
+   59 words -- its header reads `nonmatching func_800B3B18, 0xEC`, and
+   0xEC/4 = 59.  No jump table, no rodata of its own.  Arity 1. */
+void func_800B3B18(u8 *p)
+{
+    s32 d0;
+    s32 e0;
+    s32 d1;
+    s32 e1;
+    s32 d2;
+    s32 e2;
+
+    if ((*(u32 *)p << 8) == 0x80808000)
+    {
+        return;
+    }
+    d0 = 0x80 - p[0];
+    e0 = d0 >= 0 ? d0 : -d0;
+    if (e0 >= 5)
+    {
+        p[0] = p[0] + d0 / 4;
+    }
+    else
+    {
+        p[0] = 0x80;
+    }
+    d1 = 0x80 - p[1];
+    e1 = d1 >= 0 ? d1 : -d1;
+    if (e1 >= 5)
+    {
+        p[1] = p[1] + d1 / 4;
+    }
+    else
+    {
+        p[1] = 0x80;
+    }
+    d2 = 0x80 - p[2];
+    e2 = d2 >= 0 ? d2 : -d2;
+    if (e2 >= 5)
+    {
+        p[2] = p[2] + d2 / 4;
+    }
+    else
+    {
+        p[2] = 0x80;
+    }
+}
+
+/* Picks which of the +0x5C card scene's three fade slots to retrigger from the
+   engine's flag word, writes 4 into that slot's countdown at +0x0C[r] and
+   returns r, or -1 when nothing is selected.  The countdown array is the one
+   func_800B3C74 below walks for i = 2..4, which is where the 2/3/4 come from:
+   bit 0x40 -> 2, 0x10 -> 3, 0x20 -> 4, tested in that order.
+
+   `if (r != -1)` is load-bearing: `if (r >= 0)` is 27 words with 10 differing,
+   because gcc then has no second -1 to materialise and folds the gate into the
+   flag chain's own tail.  The -1 appears TWICE in the listing for that reason
+   and is not a counting error.  Spelling the store `((s32 *)s)[r + 3] = 4`, or
+   hoisting `D_80083160.unk_10` into a local, or taking `g = &D_80083160` first,
+   are all 0 differing too -- three re-reads off one base are what the single
+   `lw 0x10($v1)` already is.  Hoisting the +0x08 gate into an early
+   `return -1` is 30 words with 17 differing.
+
+   28 words -- its header reads `nonmatching func_800B3C04, 0x70`, and
+   0x70/4 = 28.  No jump table, no rodata of its own.  Arity 1 and an s32
+   return, both witnessed by func_800B3D84 below, which compares its $v0
+   against -1 and forwards it. */
+s32 func_800B3C04(u8 *s)
+{
+    s32 r;
+
+    r = -1;
+    if (D_80083160.unk_08 != 0)
+    {
+        if ((D_80083160.unk_10 & 0x40) != 0)
+        {
+            r = 2;
+        }
+        else if ((D_80083160.unk_10 & 0x10) != 0)
+        {
+            r = 3;
+        }
+        else if ((D_80083160.unk_10 & 0x20) != 0)
+        {
+            r = 4;
+        }
+    }
+    if (r != -1)
+    {
+        *(s32 *)(s + r * 4 + 0xC) = 4;
+    }
+    return r;
+}
+
+/* The per-frame half of func_800B3C04's selection: for each of the three fade
+   slots, tick the +0x0C[i] countdown down, and when it reaches 0 ease that
+   slot's prim colour one step towards 0x80 through func_800B3B18.
+
+   The slot-table base must NOT be hoisted.  `t = *(UnkTownGrid ***)(s + 0x5C);`
+   before the loop is 34 words with 32 differing: the target re-reads 0x5C($s2)
+   inside the arm, because the `sw` to +0x0C[i] in the other arm may alias it.
+   The countdown address, by contrast, IS a single giv -- the listing's
+   `addiu $s0, $s0, 4` is loop.c's combine_givs merging the two `+0x0C[i]`
+   accesses, not a source pointer walk -- and spelling it as a `s32 *c` local
+   per iteration is 0 differing, i.e. the same giv either way.  Writing the
+   loop with `goto` is 33 words with 27 differing (no strength reduction at
+   all), and testing `!= 0` first to put the decrement arm ahead of the call is
+   34 words with 24.
+
+   36 words -- its header reads `nonmatching func_800B3C74, 0x90`, and
+   0x90/4 = 36.  No jump table, no rodata of its own.  Arity 1: its only ASM
+   caller func_800B3E30 sets only $a0. */
+void func_800B3C74(u8 *s)
+{
+    s32 i;
+
+    for (i = 2; i < 5; i++)
+    {
+        if (*(s32 *)(s + i * 4 + 0xC) == 0)
+        {
+            func_800B3B18((u8 *)(*(UnkTownGrid ***)(s + 0x5C))[i]->unk_04);
+        }
+        else
+        {
+            (*(s32 *)(s + i * 4 + 0xC))--;
+        }
+    }
+}
+
+/* Reseeds slot `i`'s prim colour from the four-entry table at D_80089298 --
+   0x40/0x00/0xF0, 0x40/0xF0/0x80, 0xF0/0x60/0x10, 0xF0/0x40/0xC0 -- which
+   func_800B3B18's easing then walks back towards 0x80.  `i` is func_800B3C04's
+   2..4 selection, so the table index is `i - 2`.
+
+   D_80089298 KEEPS its own INCLUDE_RODATA (0x28 bytes, the last 0x18 being an
+   unrelated string), so it is `extern` and the function copies FROM it -- and
+   the element type must be `u8`, the same device as D_8008925C and D_8008910C
+   above.  move_by_pieces takes MIN(src_align, dst_align), so `u8` on the
+   SOURCE is what produces the listing's unaligned lwl/lwr + swl/swr pair;
+   `extern u32 D_80089298[]` (const or not) is 24 words with 29 differing.
+   The DESTINATION's alignment is free: `s32 c[4]` measures 0 differing too,
+   and so does reading the entry as `*(u32 *)(c + i * 4 - 8)`.
+
+   The copy must come FIRST.  Taking the grid pointer before the memcpy is 32
+   words with 23 differing; a `g` local for the grid pointer after it is 0.
+
+   32 words -- its header reads `nonmatching func_800B3D04, 0x80`, and
+   0x80/4 = 32.  No jump table, no rodata of its own.  Arity 2, witnessed by
+   func_800B3D84 below, which sets $a1 from func_800B3C04's return. */
+void func_800B3D04(u8 *s, s32 i)
+{
+    u8 c[0x10];
+
+    memcpy(c, D_80089298, 0x10);
+    *(u32 *)(*(UnkTownGrid ***)(s + 0x5C))[i]->unk_04 = ((u32 *)c)[i - 2];
+}
+
+/* Runs func_800B3C04's selection and, when it selected something, reseeds that
+   slot.  `if (r >= 0)` is 14 words with 11 differing -- the explicit -1 in a
+   register is what the target compares against; an early `return` instead of
+   the `if` is 16 words at 0 differing, so the two are the same function.
+
+   16 words -- its header reads `nonmatching func_800B3D84, 0x40`, and
+   0x40/4 = 16.  No jump table, no rodata of its own.  Arity 1: its only ASM
+   caller func_800B3E30 sets only $a0, and the absence of an argument move
+   before the first `jal` is the incoming $a0 being reused, not a zero-arity
+   call. */
+void func_800B3D84(u8 *s)
+{
+    s32 r;
+
+    r = func_800B3C04(s);
+    if (r != -1)
+    {
+        func_800B3D04(s, r);
+    }
+}
+
+/* Paints the +0x5C scene's first two grid slots as the highlighted/dimmed pair
+   -- 0x80 on all three colour bytes for one, 0x40 for the other -- with which
+   slot is which decided by the +0x0C flag off the object the scene's +0x00
+   points at.  Both arms fall into the shared tail, so source order IS layout
+   order: writing the `!= 0` test first is 27 words with 5 differing.
+
+   The two PRIM pointers must live in locals in the tail.  Writing the six
+   stores through `g->unk_04` inline is 34 words with 22 differing, because the
+   target loads 0x4($v1) and 0x4($v0) once each and the preceding byte store
+   would otherwise invalidate the re-read.  Which pointer the locals hold is
+   free: assigning the prims inside the arms is 0 differing too (cross-jumping
+   unifies the duplicated load), and so is the descending chained form
+   `p[2] = p[1] = p[0] = 0x80;`.  The 0x5C re-read in BOTH arms is the target's
+   own shape -- hoisting it is not reachable from a form that keeps the swap.
+
+   27 words -- its header reads `nonmatching func_800B3DC4, 0x6C`, and
+   0x6C/4 = 27.  No jump table, no rodata of its own.  Arity 1: its only ASM
+   caller func_800B3E30 sets only $a0. */
+void func_800B3DC4(u8 *s)
+{
+    UnkTownGrid *g;
+    UnkTownGrid *h;
+    u8 *p;
+    u8 *q;
+
+    if (*(s32 *)(*(u8 **)s + 0xC) == 0)
+    {
+        g = (*(UnkTownGrid ***)(s + 0x5C))[0];
+        h = (*(UnkTownGrid ***)(s + 0x5C))[1];
+    }
+    else
+    {
+        g = (*(UnkTownGrid ***)(s + 0x5C))[1];
+        h = (*(UnkTownGrid ***)(s + 0x5C))[0];
+    }
+    p = (u8 *)g->unk_04;
+    q = (u8 *)h->unk_04;
+    p[0] = 0x80;
+    p[1] = 0x80;
+    p[2] = 0x80;
+    q[0] = 0x40;
+    q[1] = 0x40;
+    q[2] = 0x40;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3E30);
 
