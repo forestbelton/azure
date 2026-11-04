@@ -2128,7 +2128,7 @@ void func_80049490(u8 *a);
 void func_800494B4(u8 *p);
 s32 func_800AD828(u8 *a, s32 b);
 void func_800AE2A4(UnkTownADD80 *s, void *b, void *c);
-void func_800B2C6C(UnkTown260C *s, void *b, void *c);
+void func_800B2C6C();
 void func_800B06C4();
 void func_800B1664();
 /* The result record. func_8008FAC0 is the only reference in the overlay's
@@ -21628,9 +21628,117 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2A38);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2B60);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2BA0);
+/* The grid-cursor object's constructor: allocate a type-0 node, build the
+   three handles into its +0x20 view (UnkTown260C), latch the caller's pointer
+   at +0x48, and install func_800B260C at the node's +0x10.  Any failed step
+   tears the whole thing down through func_800B2C6C and returns NULL.  The
+   UnkTownADD80 half of this pair is the same idea around func_800ADD80.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2C6C);
+   Arity 1 and the return value is used: its one caller func_8009E4BC
+   (asm/nonmatchings/ovl_town/func_8009E4BC.s) calls it with
+   `addu $a0, $zero, $zero` and stores $v0 to D_80100A08.
+
+   THE CLEANUP IS A `goto`, and that is what the layout is about.  The target
+   branches `beqz` from all four tests to ONE out-of-line cleanup block that
+   sits AFTER the shared `return o`, which the `o == 0` path and the success
+   path both reach.  Measured, with everything else held fixed:
+
+     goto fail after `return o`                     51 words,  0 differing
+     four inline `{ func_800B2C6C(v); return 0; }`  51 words, 17 differing
+       -- the LAST test comes out `bnez` and the cleanup goes inline
+     &&-chained tests, cleanup after the if         52 words, 43 differing
+     explicit `else { ... return 0; }` per test     52 words, 18 differing
+       -- right down to word 37, then the cleanup block is emitted BEFORE the
+          shared `return o` and the success arm pays an extra `j` for it
+
+   Each handle store is `(field = f(o)) == 0` so the `sw` lands in the beqz's
+   delay slot and the test reads $v0 directly; a reload of the field instead
+   costs a word.  `v->unk_00[0]` and `*(u32 *)((u8 *)o + 0x20)` are the same
+   address and both emit `sw $v0, 0x20($s1)` -- cse picks the node base for
+   that one store and the view base for the other two -- so the struct
+   spelling is kept.
+
+   func_800B4588 takes ONE argument: the `addu $a1, $zero, $zero` two insns
+   before its `jal` is func_800B2394's second argument, parked in the
+   preceding call's delay slot by reorg.
+
+   51 words -- its header reads `nonmatching func_800B2BA0, 0xCC`, and
+   0xCC/4 = 51.  No jump table, no rodata of its own.  THE ONLY NON-`jal`
+   RELOCATIONS ARE %hi/%lo ON func_800B260C, an address-take that ovlverify
+   masks and that has no `jal` to decode; read off this function's own
+   listing.  Measured 0 differing. */
+UnkNode *func_800B2BA0(void *a)
+{
+    UnkNode *o;
+    UnkTown260C *v;
+
+    o = func_8003FC64(0);
+    if (o != 0)
+    {
+        v = (UnkTown260C *)((u8 *)o + 0x20);
+        func_800B2B60(v);
+        if (func_800B29D0(v) == 0)
+        {
+            goto fail;
+        }
+        func_800B2394(v, 0);
+        if ((v->unk_00[2] = func_800B4588(o)) == 0)
+        {
+            goto fail;
+        }
+        if ((v->unk_00[0] = func_800B3924(o)) == 0)
+        {
+            goto fail;
+        }
+        if ((v->unk_00[1] = func_800B4F60(o)) == 0)
+        {
+            goto fail;
+        }
+        func_800A48A4(5);
+        func_80033D44(1);
+        *(void **)((u8 *)v + 0x48) = a;
+        *(void **)((u8 *)v - 0x10) = func_800B260C;
+    }
+    return o;
+fail:
+    func_800B2C6C(v);
+    return 0;
+}
+
+/* func_800B2BA0's teardown, and the handler func_800B2CE8 below installs at
+   the node's +0x10.  It releases the three handles func_800B2BA0 stored in
+   UnkTown260C.unk_00[0..2] -- one releaser each, in index order -- then marks
+   the owning node dead through the -0x2 flag word, raises the same bit in
+   D_800814A0 (the 37-site idiom), parks the fade selector at 3 and hands off.
+
+   THREE PARAMETERS because of where it is installed: UnkNode.unk_10 handlers
+   are reached through func_80040190's cast
+   `((void (*)(void *, UnkVec *, u32)) fn)((u8 *)p + 0x20, p->unk_08,
+   p->unk_0C)` (csrc/unk_12DEC.c), the same witness that gives its sibling
+   func_800B260C three.  Only the first is read, so b and c cost nothing.
+   func_800B2BA0 calls it with ONE argument, which is why the declaration at
+   the top of the file is the unprototyped `void func_800B2C6C();`.
+
+   Statement order is witnessed: raising D_800814A0 before the -0x2 flag is
+   32 words / 19 differing, and swapping func_800A48A4(3) with
+   func_80033D44(0) is 31 / 2.  The ARITY is not -- a one-parameter definition
+   is 31 words / 0 differing, which is why the install witness above is what
+   decides it.
+
+   31 words -- its header reads `nonmatching func_800B2C6C, 0x7C`, and
+   0x7C/4 = 31.  No jump table, no rodata of its own.  Its only data symbol is
+   D_800814A0, %hi once and %lo twice.  Measured 0 differing. */
+void func_800B2C6C(UnkTown260C *s, void *b, void *c)
+{
+    func_800B3A80(s->unk_00[0]);
+    func_800B50BC(s->unk_00[1]);
+    func_800B46CC(s->unk_00[2]);
+    *(u16 *)((u8 *)s - 0x2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+    func_800A48A4(3);
+    func_80033D44(0);
+    func_800B2A38(s);
+}
 
 void func_800B2CE8(void *p)
 {
@@ -21757,7 +21865,46 @@ void func_800B2F88(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B2FF8);
+/* The twin unit's OTHER shared refill loop: func_800B2D00 above with
+   func_8004A658 for func_80049790 and a second loop that zeroes whatever the
+   `break` left behind -- exactly the pair func_800AF520 (:19883) is, one
+   scene over.  Every operand is passed in rather than read off the object,
+   which is what lets both halves call it.
+
+   The entry is a BYTE PAIR, not a word: `c[j]` is used as an address and its
+   +0x1 and +0x0 bytes feed func_8004A658 in that order, the same argument
+   order as the landed sites at :12172 and :12291.
+
+   `i++, j++` in the for-increment, in that order, per func_800B2D00's own
+   note: `j++` as the body's last statement is 4 differing and `j++, i++` is
+   the same 4.  The tail loop is free either way -- `while (i < 10) { ...;
+   i++; }` is also 0 differing.  Swapping the two byte arguments is 2
+   differing, which is what witnesses the +0x1-then-+0x0 order.
+
+   56 words -- its header reads `nonmatching func_800B2FF8, 0xE0`, and
+   0xE0/4 = 56.  No jump table, no rodata of its own, no %hi/%lo of any
+   symbol: its one relocation is the func_8004A658 `jal`.  Arity 3, pinned by
+   the declaration at the top of the file and by both landed callers
+   func_800B30D8 and func_800B4978.  Measured 0 differing. */
+void func_800B2FF8(u32 *a, u8 *b, u32 *c)
+{
+    s32 i;
+    s32 j;
+
+    j = *(s32 *)b * 5 * 2;
+    for (i = 0; i < 10; i++, j++)
+    {
+        if (j >= *(s32 *)(b + 0xC))
+        {
+            break;
+        }
+        *(u32 *)a[i] = func_8004A658(((u8 *)c[j])[1], ((u8 *)c[j])[0]);
+    }
+    for (; i < 10; i++)
+    {
+        *(u32 *)a[i] = 0;
+    }
+}
 
 /* func_800B2DA0 one level in: the same three arguments, but the first comes
    from the outer object's record pointer at +0xA8 rather than from the
@@ -21779,7 +21926,58 @@ void func_800B3108(UnkTownGrid **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B3178);
+/* The third shared refill loop of the twin unit: func_800B2D00's recipe with
+   func_800AF674's (:19935) func_8004AC3C/func_8004DC14 pair, plus a per-entry
+   tint.  The entry's +0x1 byte selects it -- 0x13 gets 0x40/0x40/0x40 and
+   everything else 0x80/0x80/0x80, written as three bytes at +0x0/+0x1/+0x2 of
+   the slot's +0x04 pointer.
+
+   Both constants are materialised ONCE in the prologue ($s5 = 0x40,
+   $s4 = 0x80) because they are loop-invariant; the slot pointer is NOT, and
+   `a[i]` plus its +0x04 are re-loaded for each of the three stores.  That is
+   six loads for three bytes and it is the unit's standing "re-dereference
+   rather than cache" shape, not a missed optimisation: a hoisted local for
+   the +0x04 pointer is 64 words against 87, 57 differing, and a chained
+   descending assignment is 72 / 43.
+
+   Three separate ascending statements per arm, not a chained assignment and
+   not descending: the stores come out at +0x0, +0x1, +0x2 in source order,
+   and reversing them to +0x2/+0x1/+0x0 is 87 words / 4 differing.
+
+   87 words -- its header reads `nonmatching func_800B3178, 0x15C`, and
+   0x15C/4 = 87.  No jump table, no rodata of its own, no %hi/%lo of any
+   symbol; its three relocations are the two `jal`s and the then-arm's
+   intra-function `j`.  Arity 3, pinned by the declaration at the top of the
+   file and by both landed callers func_800B32D4 and func_800B4A18.
+   Measured 0 differing. */
+void func_800B3178(u32 *a, u8 *b, u32 *c)
+{
+    s32 i;
+    s32 j;
+    s32 n;
+
+    j = *(s32 *)b * 5 * 2;
+    for (i = 0; i < 10; i++, j++)
+    {
+        if (j >= *(s32 *)(b + 0xC))
+        {
+            break;
+        }
+        *(u32 *)a[i] = func_8004DC14((u8 *)func_8004AC3C((u8 *)c[j], &n), n);
+        if (((u8 *)c[j])[1] == 0x13)
+        {
+            ((u8 *)*(u32 *)(a[i] + 0x4))[0] = 0x40;
+            ((u8 *)*(u32 *)(a[i] + 0x4))[1] = 0x40;
+            ((u8 *)*(u32 *)(a[i] + 0x4))[2] = 0x40;
+        }
+        else
+        {
+            ((u8 *)*(u32 *)(a[i] + 0x4))[0] = 0x80;
+            ((u8 *)*(u32 *)(a[i] + 0x4))[1] = 0x80;
+            ((u8 *)*(u32 *)(a[i] + 0x4))[2] = 0x80;
+        }
+    }
+}
 
 /* Releases the slot handles and then rebinds the row. The record pointer at
    +0xA8 is RE-DEREFERENCED for the second call rather than cached across the
