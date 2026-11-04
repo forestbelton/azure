@@ -3452,6 +3452,34 @@ extern void (*D_800D0C48[])();
    UnkTownA4C10 types; its own splat symbol, so the relocation matches. */
 extern s32 D_80100E10;
 /* ---- end s1104f group declarations ---- */
+/* A SECOND declaration of D_80162004, aliased to a one-element row type so
+   that the store in func_800B7868 is an ARRAY_REF with a CONSTANT last
+   index.  It is load-bearing there and the reason is in that function's
+   comment; the plain `extern s16 D_80162004[]` above is what every other
+   user of the surface wants.  Same device as D_800CF874_b. */
+extern s16 D_80162004_r[][1] __asm__("D_80162004");
+/* s1104b: the two module lists func_800B94A8 and func_800B94FC build, and the
+   Unk41284 records they hold.  Same element type as D_800CF838 above. */
+extern Unk41284 *D_800718B0[];
+extern Unk41284 *D_800718E4[];
+extern Unk41284 *D_800D1A0C[][2];
+extern u8 D_80082E78;
+extern Unk41284 D_800D1D1C;
+extern Unk41284 D_800D1D24;
+extern Unk41284 D_800D1D2C;
+extern Unk41284 D_800D1D54;
+extern Unk41284 D_800D1D5C;
+extern Unk41284 D_800D1D64;
+extern Unk41284 D_800D1D6C;
+extern Unk41284 D_800D1DB4;
+extern Unk41284 D_800D1DBC;
+extern Unk41284 D_800D1DC4;
+extern Unk41284 D_800D1DCC;
+extern Unk41284 D_800D1DD4;
+extern Unk41284 D_800D1DDC;
+extern Unk41284 D_800D1DE4;
+extern Unk41284 D_800D1DEC;
+extern Unk41284 D_800D1E7C;
 s32 func_8003BD84(s32 x, s32 y);
 
 /* The func_8009AD70 chain's three undeclared symbols and its two
@@ -36808,7 +36836,63 @@ void func_800B783C(s32 x, s32 y, u16 *src)
     func_800B7428(x, y, src);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B7868);
+/* The plain, non-autotiling sibling of func_800B7428: stamps a u16 tile run
+   onto the 0x80x0x80 halfword surface D_80162004 holds at (x0, y0), copying
+   every non-zero tile through unchanged.  `src` is width, height, then
+   width*height tiles, read with `*src++` twice and then a third `src++` at
+   the END of the body, and the index is `<< 7` -- func_800B7428's spelling
+   and its measured reasons.
+
+   The index is written INSIDE the `if` and NOT through an `s16 i`: the
+   listing adds `(y + y0) << 7`, `x` and `x0` in SImode with no narrowing
+   before the `sll 1` that scales the sum, where func_800B7428's `s16 i`
+   distributes the whole index into HImode.
+
+   THE SURFACE IS REACHED THROUGH THE `D_80162004_r[i][0]` ALIAS, and that is
+   the whole difference between 0 and 23 differing.  Both spellings emit the
+   same six insns; only their ORDER differs, and loop.c's own dump says why.
+   For the plain `D_80162004[i]` form expand_expr's nonconstant-index
+   ARRAY_REF path builds `*(&array + i * 2)` and expands it under
+   EXPAND_SUM, which returns the symbol as a constant summand and emits the
+   `lui`/`addiu` only when `memory_address` splits the final sum -- i.e.
+   AFTER the whole index chain.  The alias gives the ARRAY_REF a CONSTANT
+   last index, so expand_assignment takes its own `get_inner_reference`
+   branch (expr.c:2821) and expands the base MEM FIRST.
+
+   That position decides which invariant escapes the OUTER loop.  loop.c
+   hoists in movables order and charges `threshold -= 3` per move
+   (loop.c:1818), so the LAST invariant in the list loses:
+
+     Insn 157: regno 110 (life 36), savings 1 halved since already moved  moved
+     Insn 160: regno 114 (life 36), move-insn savings 1 halved ... not desirable
+
+   -- `110` is `(s16)x0`, `114` is the `%hi`.  With the base expanded last it
+   is last in the list and stays in the inner preheader while `(s16)x0` goes
+   out; the listing has it the other way round.  (`halved since already
+   moved` is loop.c:1709 doubling insn_count for a reg the inner pass already
+   moved.) */
+void func_800B7868(s16 x0, s16 y0, u16 *src)
+{
+    s16 w;
+    s16 h;
+    s16 x;
+    s16 y;
+
+    w = *src++;
+    h = *src++;
+
+    for (y = 0; y < h; y++)
+    {
+        for (x = 0; x < w; x++)
+        {
+            if (*src != 0)
+            {
+                D_80162004_r[((y + y0) << 7) + x + x0][0] = *src;
+            }
+            src++;
+        }
+    }
+}
 
 /* func_800B7B48's byte-identical twin: the same forward to func_800B7428 with
    the pattern looked up in D_800D17D8 by a `u8` index. The `andi $a2, $a2,
@@ -38029,9 +38113,199 @@ void func_800B946C(void)
     func_80041094(0x17, 0, 0, 0, D_80082E76 ^ 1);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B94A8);
+/* func_800B94FC's cut-down: builds the two- or four-entry module list at
+   D_800718B0 -- one entry, plus two more unless D_80082E78 is 0x17 -- and
+   zero-terminates it.  Same Unk41284 * element type as D_800CF838.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B94FC);
+   TWO THINGS ARE MEASURED:
+
+   (a) `p` IS A LOCAL, not the symbol.  cse substitutes `p`'s `lo_sum` into
+       the FIRST store, which is why `p[0]` comes out as
+       `sw %lo(D_800718B0)($v1)` off the bare `lui` while `p[1]`/`p[2]` and
+       the indexed store go through `$a0`.  Writing all four stores on the
+       symbol re-materialises the base for the indexed one: 23 words
+       against 21, 11 differing.
+
+   (b) `i = 1;` BEFORE A ONE-ARMED `if`, not an `if`/`else`.  The listing has
+       ONE branch, with `addiu $a1, $zero, 0x1` in its delay slot and the
+       `i = 3` block falling through into the tail.  The `if`/`else` form
+       lays the `i = 1` arm out as a block of its own and needs a `j` over
+       the other: 22 words against 21, 14 differing.  Where `i = 1` sits
+       among the first three statements is NOT witnessed -- all four orders
+       (and both declaration orders) are 0 differing. */
+void func_800B94A8(void)
+{
+    Unk41284 **p;
+    s32 i;
+
+    p = D_800718B0;
+    p[0] = &D_800D1D1C;
+    i = 1;
+    if (D_80082E78 != 0x17)
+    {
+        p[1] = &D_800D1D24;
+        p[2] = &D_800D1D2C;
+        i = 3;
+    }
+    p[i] = NULL;
+}
+
+/* Builds the town's module list at D_800718E4 and zero-terminates it: the
+   fixed first entry, two more unless D_80082E78 is 0x16 or 0x17, then one
+   pair chosen by the area id (byte +0 of D_800D2FB4's D_800D381A row) and
+   the sub-area D_800136B8, or -- for every other area -- the two entries
+   D_800D1A0C holds for it.  func_800B94A8 is the cut-down of the head.
+   Element type Unk41284 *, the same as D_800CF838.
+
+   FOUR THINGS ARE MEASURED, three of them worth more than the landing:
+
+   (a) THE BASE IS THE SYMBOL, NOT A POINTER LOCAL.  cse re-materialises
+       D_800718E4 once per extended basic block, which is the six lui/addiu
+       pairs in the arms, the cross-jumped tail and the exit -- ten %hi
+       against eight %lo.  A `p = D_800718E4` local keeps one register live
+       across the whole switch and loses all six: 167 words against 183.
+       (func_800B94A8, whose stores are all in one extended block, wants the
+       local instead -- the two are NOT the same spelling.)
+
+   (b) D_800136B8 IS A CONSTANT ADDRESS, not a declared symbol.  It is out of
+       the loaded image, like the 0x800133A4 table func_800B90F0 and
+       func_800B9830 reach the same way.  As a declared `extern u8` the
+       address is a LO_SUM, which local-alloc's combine_regs does not strip
+       (its operand loop takes PLUS and MULT only), so the `%hi` gets its own
+       register instead of the load's -- and because that register is then
+       not the one the branch compares, reorg steals the `lui` into the
+       branch's delay slot and fills the load delay with the switch constant
+       instead of a `nop`.  181 words against 183, in the case 5 and case
+       0x10 arms.  As a constant the address is a PLUS, combine_regs ties
+       `$v1` to the load, and both words stay.  seqcheck reports the three
+       pairs as constant-address words with no relocation; the raw
+       comparison is what proves them (79 == 79).
+
+   (c) THE INNER SWITCH'S `default:` IS WRITTEN FIRST, before 0xB/0xC/0xD --
+       csrc/unk_1C540.c:6123's func_80051228 is the same dispatch over the
+       same two globals and records why: expand_end_case reorders the
+       decision tree to the top of the switch while the case bodies stay in
+       source order, and the listing lays the four blocks out
+       default/0xB/0xC/0xD.
+
+   (d) THE THREE `do { } while (0)` BLOCKS ARE LOAD-BEARING, and they are an
+       ALLOCATOR device, not a code-shape one: without them every opcode,
+       immediate, displacement and branch offset already matches and 37
+       words differ by ONE register swap, `i` and the base/`j` pair trading
+       $a0 for $a1.  global-alloc orders by
+       floor_log2(n_refs) * n_refs / live_length (global.c:597) and
+       flow.c charges each reference the LOOP DEPTH it sits at, so a
+       `do { } while (0)`'s loop note doubles the references inside it.
+       Measured, from advise.py --greg on the compiler's own dumps:
+
+         without   i: 35 refs, live 199, prio 0.879 -> $a1
+                   j:  9 refs, live  26, prio 1.038 -> $a0
+         with      i: 44 refs, live 199, prio 1.106 -> $a0
+                   j:  9 refs, live  26, prio 1.038 -> $a1
+
+       +9 is three arms x (the store's read + `i++`'s read and write).  ALL
+       THREE arms are needed -- one is 37, two are 37.  Nothing else moved
+       it: the declaration order of `i` and `j`, `j` in its own block,
+       `s32 i = 1`, `i++` folded into the subscript, a do/while or while
+       loop, `u32 j`, the append spelling of the head, dummy parameters in
+       $a0/$a1 (their copies are dead and deleted before global-alloc sees
+       a preference), and duplicating the tail or the NULL store into the
+       arms were all 37 or worse.  The permuter found the wrapper; the greg
+       table says why it works. */
+void func_800B94FC(void)
+{
+    s32 i;
+    s32 j;
+
+    D_800718E4[0] = &D_800D1D1C;
+    i = 1;
+    if (D_80082E78 != 0x16 && D_80082E78 != 0x17)
+    {
+        D_800718E4[1] = &D_800D1D24;
+        D_800718E4[2] = &D_800D1D2C;
+        i = 3;
+    }
+    switch (D_800D2FB4[D_800D381A][0])
+    {
+    case 5:
+        switch (*(u8 *)0x800136B8)
+        {
+        default:
+            D_800718E4[i] = &D_800D1D54;
+            break;
+        case 0xB:
+            D_800718E4[i] = &D_800D1D5C;
+            break;
+        case 0xC:
+            D_800718E4[i] = &D_800D1D64;
+            break;
+        case 0xD:
+            D_800718E4[i] = &D_800D1D6C;
+            break;
+        }
+        i++;
+        do
+        {
+            D_800718E4[i] = &D_800D1E7C;
+            i++;
+        } while (0);
+        break;
+    case 0xF:
+        switch (*(u8 *)0x800136B8)
+        {
+        default:
+            D_800718E4[i] = &D_800D1DB4;
+            break;
+        case 0xB:
+            D_800718E4[i] = &D_800D1DBC;
+            break;
+        case 0xC:
+            D_800718E4[i] = &D_800D1DC4;
+            break;
+        case 0xD:
+            D_800718E4[i] = &D_800D1DCC;
+            break;
+        }
+        i++;
+        do
+        {
+            D_800718E4[i] = &D_800D1E7C;
+            i++;
+        } while (0);
+        break;
+    case 0x10:
+        switch (*(u8 *)0x800136B8)
+        {
+        default:
+            D_800718E4[i] = &D_800D1DD4;
+            break;
+        case 0xB:
+            D_800718E4[i] = &D_800D1DDC;
+            break;
+        case 0xC:
+            D_800718E4[i] = &D_800D1DE4;
+            break;
+        case 0xD:
+            D_800718E4[i] = &D_800D1DEC;
+            break;
+        }
+        i++;
+        do
+        {
+            D_800718E4[i] = &D_800D1E7C;
+            i++;
+        } while (0);
+        break;
+    default:
+        for (j = 0; j < 2; j++)
+        {
+            D_800718E4[i] = D_800D1A0C[D_800D2FB4[D_800D3814[6]][0]][j];
+            i++;
+        }
+        break;
+    }
+    D_800718E4[i] = NULL;
+}
 
 void func_800B97D8(u32 a)
 {
