@@ -2426,11 +2426,13 @@ extern u8 D_800D5654[];
 extern u8 D_800D5658[];
 extern u8 D_800D5590[];
 
-/* Both are INCLUDE_ASM stubs in this unit; only their addresses are taken, by
-   the func_800BF3F0/func_800BF654 pair, so they are declared unprototyped the
-   way func_800B9998 and func_800ABB20 above are. func_800BF1C8 is the park in
-   docs/near-misses/func_800BF1C8.c, which reads its three parameters off
-   func_80040190's cast. */
+/* Both were INCLUDE_ASM stubs when this block was written; only their
+   addresses are taken, by the func_800BF3F0/func_800BF654 pair, so they are
+   declared unprototyped the way func_800B9998 and func_800ABB20 above are.
+   BOTH HAVE SINCE LANDED -- func_800BF1C8 in csrc/ovl_town_800BEBA4.c and
+   func_800BF4CC in csrc/ovl_town_800BF3F0.c -- and the park file this block
+   used to point at is retired, so the three parameters func_80040190's cast
+   gives func_800BF1C8 are now read off its own definition. */
 void func_800BF1C8();
 void func_800BF4CC();
 /* Two descriptor records 0x1C apart, each a 0x18-byte block followed by one
@@ -2554,8 +2556,9 @@ void func_80093D48();
 void func_800CA60C();
 extern s32 D_800D0620;
 
-/* func_800C26C0's gate: still an INCLUDE_ASM stub in this unit, and its
-   `beqz $v0` at 0x800C26E4 is the only witness that it returns a value. */
+/* func_800C26C0's gate: an INCLUDE_ASM stub when this declaration was added
+   and since landed in this unit, and its `beqz $v0` at 0x800C26E4 was the
+   only witness that it returns a value. */
 s32 func_800C2A60(UnkTownActor *a);
 
 /* The func_800A07E8 pair's three stub callees and the handler it installs.
@@ -2584,7 +2587,8 @@ void func_800A3508();
    are at :4562/:4564 and every one of these is defined, or still stubbed,
    below them.  func_800951B4 is this pair's second mover update -- the
    position the rest of the D_80083160 family gives func_80095094 -- and is
-   still an INCLUDE_ASM stub, as are func_80093ED8 and func_80094DA8. */
+   was an INCLUDE_ASM stub when this block was written, as were func_80093ED8
+   and func_80094DA8; all three have since landed in csrc/ovl_town.c. */
 void func_800951B4();
 void func_80093ED8();
 void func_80094DA8();
@@ -2608,7 +2612,8 @@ s32 func_800C648C(UnkTownSpawn *p);
 void func_800CB9B8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_800C6CE4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 /* The sprite-handle table func_800CB8CC indexes by its second argument and
-   func_800CBAE0 (still a stub) indexes by the actor's +0x96.  Read as a word
+   func_800CBAE0 (a stub when this was written, since landed) indexes by the
+   actor's +0x96.  Read as a word
    array: `lui/addiu` the whole address into one register, `sll idx, 2`,
    `addu`, then `lw 0x0($v1)`. */
 extern u32 D_800D68B0[];
@@ -2642,7 +2647,8 @@ void func_800AA5F8(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
 extern s32 D_80083788;
 extern s32 D_800D0428;
 /* func_800BC840 installs func_800BC764 at the UnkNode's +0x10.  It is an
-   INCLUDE_ASM stub in this unit and only its address is taken, so it is
+   INCLUDE_ASM stub in this unit when this block was written -- it has since
+   landed in csrc/ovl_town.c -- and only its address is taken, so it is
    declared unprototyped the way func_800BF1C8 and func_800BF4CC above are.
    D_800D20CC is address-taken (`lui`/`addiu`) and handed to func_8008F074;
    D_800D20E4 is LOADED (`lui`/`lw %lo`) and stored at the actor view's +0x48
@@ -2705,12 +2711,14 @@ extern u8 D_800E9E54[];
 extern u8 D_800E9E7C[];
 extern u8 D_800E9ECC[];
 /* The m29_ group (func_800BDFA0, func_800BEA88, func_800BEAD0, func_800BF4CC).
-   func_800BEBA4 is an INCLUDE_ASM stub BELOW the func_800BEAD0 that installs
-   it at the UnkNode's +0x10, and an address-taken symbol needs a declaration
+   func_800BEBA4 was an INCLUDE_ASM stub BELOW the func_800BEAD0 that installs
+   it at the UnkNode's +0x10 -- it has since landed in
+   csrc/ovl_town_800BEBA4.c -- and an address-taken symbol needs a declaration
    where an implicitly-declared call does not; it is declared unprototyped the
    way func_800BF1C8 and func_800BF4CC are.  func_800673A0 has no declaration
    anywhere in csrc/ or include/ -- the signature is the one the func_800BF1C8
-   park (docs/near-misses/func_800BF1C8.c:82) reads off its own listing.
+   landed definition (csrc/ovl_town_800BEBA4.c, parked when this block was
+   written) reads off its own listing.
    D_800D231C/D_800D2324 are the func_800BEA88 pair's two descriptor blocks,
    D_80113138 its VRAM source and D_8007789C the texture record func_800BEAD0
    stores at the renderable's +0x08 -- all four address-taken (`lui`/`addiu`)

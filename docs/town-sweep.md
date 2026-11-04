@@ -1489,6 +1489,48 @@ Where the order is free, pick the spelling that matches the landed neighbour
 and say in the comment block that it is a TIE -- otherwise the next reader
 takes a scheduler artefact for a measured fact.
 
+**CORRECTED THE SAME DAY, on `func_800C0EAC`.** The rule above as first written
+-- "it is about whether anything splits the block" -- is too strong. That
+function is ONE basic block, no branch, no call until the tail `jalr`, twelve
+stores at distinct constant offsets off `$sp`, and **the order is worth 25
+differing**: only 14 of the 720 permutations of its six statement groups reach
+0. Measured by hand, not taken on report.
+
+What reorders freely is the STORES. What does not is the ALLOCATION of the
+values being stored. `func_800C0EAC` stores two values loaded off a pointer
+local and one address derived from it, and the diff of the plain-ascending
+spelling shows the whole mechanism in its own words:
+
+* the two loads take the target's `$a0`/`$a1` **only if the four parameter
+  stores come first** -- written earlier they are live while `$a0..$a3` still
+  are, so they get `$t0`/`$t1`;
+* the `D_80082A38` base survives in `$t0` **only if `q + 0x48` is written
+  before the last load off `q`** -- written after, that derivation becomes the
+  base's last use and gcc emits a destructive `addiu $v0, $v0, 0x48` instead of
+  the target's `addiu $v0, $t0, 0x48`.
+
+**And the obvious discriminator is wrong too.** "The order matters iff some
+stored value is computed rather than a constant" fails on `func_800CCF18`
+itself: `a->unk_68++` IS a computed value -- an `lhu`, an `addiu` and an `sh`
+-- and both orders there are still 0 differing. The difference is PRESSURE,
+not computation: in the six-word leaf there are two pseudos and nothing to
+compete for, so no reordering changes which values are simultaneously live; in
+`func_800C0EAC` there are twelve stores against four still-live incoming
+parameter registers and several overlapping values, so every reordering
+changes the live set and the allocator follows.
+
+**So the usable form:** permute the store order when reordering would change
+WHICH VALUES ARE LIVE AT ONCE -- in practice, when several stored values are
+computed and the incoming parameters are still live. Skip it for a handful of
+independent stores of leaf constants or of one self-contained read-modify-write.
+When you do sweep it, treat it as an ALLOCATION lever and read the residue
+accordingly: in `func_800C0EAC` the wrong order shows up as `$t0`/`$t1` where
+the target has `$a0`/`$a1`, not as stores in the wrong places.
+
+No mechanism is claimed beyond that: these are measured invariants over
+`func_800CCF18`'s two permutations and `func_800C0EAC`'s 720, and I did not
+open the CDK tree for either.
+
 ### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
 
 Two merge scripts in one batch left a blank line too many where a body
@@ -1703,6 +1745,27 @@ that come up constantly:
 * `D_80082660` is the engine's stride-8 record array; a constant index folds
   onto the symbol, so `D_80082660[4].unk_00 = 0` is how the `+0x20` slot is
   written, not a separate symbol.
+
+### KNOWN RESIDUE: "X IS STILL A STUB" COMMENTS IN `csrc/ovl_town.c`
+
+Every such claim in `csrc/ovl_town_800BF3F0.c` and in the preamble duplicated
+across all three units was corrected on 2026-11-04 when that unit reached its
+last stub. **`csrc/ovl_town.c` still carries about eighteen of them**, and at
+least nine were verified stale that day -- func_8008AF2C, func_800A09F4,
+func_800ABC00, func_800B09EC, func_800B13D4, func_800B1390, func_800B62A4,
+func_800B05DC and func_800ABEEC have all landed since their comment was
+written. They were left alone deliberately: that unit is still mid-sweep at
+96.5%, some of its stub claims are still TRUE (the nine parks, plus the
+func_800A64C0/func_800A652C mis-split), and each site needs its own reading
+rather than a tense substitution.
+
+This matters because the brief tells every agent to read the landed
+neighbours' COMMENT BLOCKS as primary evidence. A stale "still a stub" there
+will send one looking for an INCLUDE_ASM that is not there, or justify an
+implicit declaration that is no longer the only option. **Check the claim
+before relying on it**: `grep -c 'INCLUDE_ASM("[^"]*", func_XXXXXXXX)'` over
+`csrc/` settles it in one command. Sweep the class when that unit reaches its
+own last stub.
 
 ## The parks
 
