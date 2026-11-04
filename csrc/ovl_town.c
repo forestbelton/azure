@@ -3110,6 +3110,12 @@ void func_80097D2C(UnkTownDispatch *d);
 void func_800A5638(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 extern s32 D_80100E20;
 extern u8 D_800D0C50[];
+/* The resident's OuterProduct0 (splat/slus_006.14_symbol_addrs.txt:107),
+   `v2 = v0 x v1`.  Spelled func_800652AC because that is the name
+   splat/town.bin_undefined_funcs_auto.txt:155 gives this overlay's
+   linker; the OuterProduct0 psyq/include/libgte.h declares is defined
+   only by the resident's yaml and does not link here. */
+void func_800652AC(VECTOR *v0, VECTOR *v1, VECTOR *v2);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -8659,9 +8665,142 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094BC8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094C1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094C74);
+/* The mover's steering accelerate-and-clamp: add 1/64th of the camera-cell
+   direction to the (unk_0C, unk_10) delta, then renormalise the delta back to
+   its own previous length so the mover turns without speeding up.
+   func_8003BD84 is the 2D length of an (x, y) pair -- func_80091528 (:6806)
+   uses it on the same two fields.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094DA8);
+   The head is func_8009567C's (:8830) word for word: one `g = &D_80083160`
+   local assigned as a STATEMENT, and `(s16)func_80094BC8(g->unk_08, g->unk_C8)`
+   whose -1 is the "no cell" sentinel.
+
+   The floor is spelled `len < 0x80000`, and the `lui 0x7` / `ori 0xFFFF` pair
+   is that test INVERTED over the skip -- gcc turns `>= 0x80000` into
+   `0x7FFFF < len` -- not an `slti` on 0x80000 and not a separate constant.
+
+   The divisor `(n + 0xFFF) / 0x1000` is written out in both statements and cse
+   keeps one copy, as does `len / 0x1000`.  The target's `addiu $a0, $v1, 0xFFF`
+   in the `beqz`'s delay slot and `addiu $a1, $v1, 0x1FFE` on the negative arm
+   are that ONE expression: the signed-divide bias folded onto the `+ 0xFFF`,
+   not a second constant.
+
+   77 words -- its header reads `nonmatching func_80094C74, 0x134`, and
+   0x134/4 = 77.  Measured 0 differing, first compile; `--raw` 7 differing
+   against relocdump's 7 relocation words (%hi/%lo on D_80083160 plus five
+   `jal`), none of them on a function symbol. */
+void func_80094C74(UnkTown2AE8 *q)
+{
+    Unk80083160 *g;
+    s32 v;
+    s32 dx;
+    s32 dy;
+    s32 len;
+    s32 n;
+
+    g = &D_80083160;
+    v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+    if (v == -1)
+    {
+        return;
+    }
+    dx = func_800644B8(v) << 6;
+    dy = func_80064584(v) << 6;
+    len = func_8003BD84(q->unk_0C, q->unk_10);
+    if (len < 0x80000)
+    {
+        len = 0x80000;
+    }
+    q->unk_0C += dx;
+    q->unk_10 += dy;
+    n = func_8003BD84(q->unk_0C, q->unk_10);
+    if (n > len)
+    {
+        q->unk_0C = q->unk_0C / ((n + 0xFFF) / 0x1000) * (len / 0x1000);
+        q->unk_10 = q->unk_10 / ((n + 0xFFF) / 0x1000) * (len / 0x1000);
+    }
+}
+
+/* func_80094C74's per-axis twin, and func_80091260 (:6678) calls the two back
+   to back.  Instead of renormalising the whole delta it clamps each axis of
+   (unk_0C, unk_10) on its own against 1/128th of the camera-cell direction:
+   while the axis is larger than that step it is pulled back by 1/64th of the
+   step, and if that pull takes it below the step it is snapped to the step.
+
+   `v` is an `s32` and the `(s16)` sits at each USE, not on the assignment.
+   The target copies the raw result to $s3 and re-signs it with a SECOND
+   `sll`/`sra` at 0x80094E94 for the second half, which an `s16` local cannot
+   produce -- one local is one pseudo and one truncation.  Four `(s16)v` uses
+   give two pseudos because 0x80094E94 is a three-predecessor join and cse's
+   table is reset there.
+
+   BOTH abs() COMPARISONS PER HALF ARE `>` WITH THE OPERANDS THE OTHER WAY
+   ROUND, and getting that wrong is worth 16 words.  Spelling the gate
+   `abs(dx) < abs(b->unk_0C)` and the snap `abs(dx) > abs(b->unk_0C)` -- same
+   predicates, read straight off the `slt` operand order -- comes out 108 words
+   with 8 differing in EACH half, all of them in the gate: the field's `lw`
+   lands after the `sll $s1` instead of before it, and the two abs temporaries
+   swap $v0 for $v1.  Swapping the gate's operands to `abs(b->unk_0C) >
+   abs(dx)` is 0 differing.  See docs/matching-levers.md, "COMPARISON OPERAND
+   ORDER IS WORTH A WORD WHEN IT DECIDES A BLOCK'S FIRST INSN".
+
+   The abs() asymmetry in the listing is LIVENESS, not two source forms.
+   `expand_abs` opens with a copy of its operand; it survives for dx/dy, which
+   are live past the comparison, so `bgez $s1` carries `addu $v0, $s1, $zero`
+   in its delay slot, and reload deletes it for the field, which dies at the
+   move, so that `bgez` carries a `nop` and the `negu` is in place.  Both are
+   a plain `abs()`.
+
+   The pull-back gate is `(f < 0 && t < 0) || (f > 0 && t > 0)`, i.e. "same
+   sign and neither zero": four branches on two values, which is exactly the
+   target's bgez/bltz/blez/blez ladder.  Reading that ladder as three tests
+   and a fallthrough invents a branch that is not there.
+
+   108 words -- its header reads `nonmatching func_80094DA8, 0x1B0`, and
+   0x1B0/4 = 108.  Measured 0 differing; `--raw` 7 differing against
+   relocdump's 7 relocation words (%hi/%lo on D_80083160 plus five `jal`, in
+   the listing's order), none of them on a function symbol. */
+void func_80094DA8(UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    s32 v;
+    s32 dx;
+    s32 dy;
+    s32 t;
+
+    g = &D_80083160;
+    v = func_80094BC8(g->unk_08, g->unk_C8);
+    if ((s16)v == -1)
+    {
+        return;
+    }
+    dx = func_800644B8((s16)v) << 7;
+    if (abs(b->unk_0C) > abs(dx))
+    {
+        t = func_800644B8((s16)v) << 6;
+        if ((b->unk_0C < 0 && t < 0) || (b->unk_0C > 0 && t > 0))
+        {
+            b->unk_0C -= t;
+        }
+        if (abs(dx) > abs(b->unk_0C))
+        {
+            b->unk_0C = dx;
+        }
+    }
+    dy = func_80064584((s16)v) << 7;
+    if (abs(b->unk_10) > abs(dy))
+    {
+        t = func_80064584((s16)v) << 6;
+        if ((b->unk_10 < 0 && t < 0) || (b->unk_10 > 0 && t > 0))
+        {
+            b->unk_10 -= t;
+        }
+        if (abs(dy) > abs(b->unk_10))
+        {
+            b->unk_10 = dy;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80094F58);
 
@@ -8669,7 +8808,99 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009503C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095094);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800951B4);
+/* The func_80091260 / func_80091528 pair's second mover update -- the slot the
+   rest of the D_80083160 family fills with func_80095094 -- and the one that
+   steers by a CROSS PRODUCT rather than by an angle.  It crosses the
+   camera-cell direction (sin, cos, 0) with the mover's own delta scaled down
+   by 0x1000, reads the z of the result to learn which side of the direction
+   the mover is on, builds the perpendicular step (+/-cos, -/+sin) << 5 for
+   that side, and commits it only if crossing again with the stepped delta
+   leaves z's SIGN unchanged -- i.e. only while the turn does not overshoot.
+
+   `func_800652AC`, not `OuterProduct0`.  The name exists --
+   splat/slus_006.14_symbol_addrs.txt:107 has `OuterProduct0 = 0x800652ac` and
+   psyq/include/libgte.h declares it -- but only the resident's yaml defines
+   the symbol.  This overlay's linker input is
+   splat/town.bin_undefined_funcs_auto.txt:155, `func_800652AC = 0x800652AC`,
+   so the func_ spelling is the only one that links here.  Same class as the
+   `D_` names that are really functions: the text is identical either way, so
+   ovlverify and a whole-unit sweep are both blind to it and only
+   `make build/town.bin` is not.
+
+   The four VECTORs are declared (dir, step, vel, cp) and that ORDER is what
+   puts them at sp+0x10 / +0x20 / +0x30 / +0x40.  It is declaration order, not
+   use order -- `step` is written last and sits second.
+
+   `vel.vz = 0` is written TWICE, once per func_800652AC setup, which is the
+   target's two `sw $zero, 0x38($sp)`; `dir.vz = 0` once.  `step.vz` and the
+   whole of `cp` are never initialised, and the target never touches them.
+
+   The first z is kept in a local across the second call ($s0) and the second
+   gate is a nested if/else whose arms each `return`, so the target's
+   `j .L80095320` is the jump over the `else`, not a shared tail.  Both
+   intra-function `j` words were checked by position and destination against
+   the listing (+0xC0 -> +0xD8 and +0x154 -> +0x16C).
+
+   107 words -- its header reads `nonmatching func_800951B4, 0x1AC`, and
+   0x1AC/4 = 107.  Measured 0 differing, first compile; `--raw` 9 differing
+   against relocdump's 9 (%hi/%lo on D_80083160, five `jal` in the listing's
+   order, and two R_MIPS_26 on `.text` for the `j`s), none on a function
+   symbol. */
+void func_800951B4(UnkTown2AE8 *b)
+{
+    Unk80083160 *g;
+    VECTOR dir;
+    VECTOR step;
+    VECTOR vel;
+    VECTOR cp;
+    s32 v;
+    s32 z;
+
+    g = &D_80083160;
+    v = (s16)func_80094BC8(g->unk_08, g->unk_C8);
+    if (v == -1)
+    {
+        return;
+    }
+    dir.vx = func_800644B8(v);
+    dir.vy = func_80064584(v);
+    dir.vz = 0;
+    vel.vx = b->unk_0C / 0x1000;
+    vel.vy = b->unk_10 / 0x1000;
+    vel.vz = 0;
+    func_800652AC(&dir, &vel, &cp);
+    z = cp.vz;
+    if (z >= 0)
+    {
+        step.vx = dir.vy << 5;
+        step.vy = -dir.vx << 5;
+    }
+    else
+    {
+        step.vx = -dir.vy << 5;
+        step.vy = dir.vx << 5;
+    }
+    vel.vx = (b->unk_0C + step.vx) / 0x1000;
+    vel.vy = (b->unk_10 + step.vy) / 0x1000;
+    vel.vz = 0;
+    func_800652AC(&dir, &vel, &cp);
+    if (z >= 0)
+    {
+        if (cp.vz < 0)
+        {
+            return;
+        }
+    }
+    else
+    {
+        if (cp.vz >= 0)
+        {
+            return;
+        }
+    }
+    b->unk_0C += step.vx;
+    b->unk_10 += step.vy;
+}
 
 /* A cell index from a world coordinate: the grid origin D_80083228 minus the
    query coordinate, wrapped to 12 bits and divided by 0x200.  The `srl` in the
