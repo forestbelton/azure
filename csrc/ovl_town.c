@@ -31804,7 +31804,53 @@ void func_800B0BD0(u8 *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0C68);
+/* The +0xCC scene's two-slot cursor placement: grid entry 2 takes a fixed x
+   and a y stepped by the live row, entry 3 takes x 0 and entry 2's y less 9.
+   func_800AF36C (:30177) and func_800B47BC (:34640) are the same pair of
+   statements one and two scenes over, with +0xA8 and +0x5C for +0xCC and the
+   grid indices 4/5 for 2/3.
+
+   The division is gcc's, not the source's: one `mult` by 0x66666667 with
+   `sra 1` is a signed divide by five (tools/decomp/magic.py) and the
+   remainder comes back as i - (i / 5) * 5.  The cursor at +0x08 is read
+   SIGNED, which is where the `sra $v0, $a1, 31` correction comes from.
+
+   THE +0xCC BASE IS RE-READ AT EVERY ACCESS, which is the rule this scene's
+   comment at :31555 records -- and it still produces only FOUR `lw 0xCC($a0)`
+   for five accesses.  The pair cse unifies is the one inside the LAST
+   statement, where no store sits between the two reads; every earlier pair is
+   separated by an `sh`, which invalidates the memory load.  So four loads is
+   what a re-read-everywhere source gives here, and it is NOT evidence of a
+   cached base: binding the base to a local and using it at all five accesses
+   drops three reload `lw`s and two load-delay nops -- 36 words against 41,
+   29 differing.
+
+   `lhu` on the s16 unk_0A in the last statement is correct and not a typing
+   slip: the value feeds a narrowing store.  See the lever at
+   docs/matching-levers.md:16432.
+
+   41 words -- its header reads `nonmatching func_800B0C68, 0xA4`, and
+   0xA4/4 = 41.  No jump table, no rodata of its own, and NO relocations at
+   all, so all 41 words are compared raw.  Arity 1, witnessed by the landed
+   `func_800B0C68(s)` in func_800B1188 (:31570) and `func_800B0C68(v)` in
+   func_800B17C0 (:31841); the unit's existing declaration at :2208 is the
+   unprototyped `void func_800B0C68();`, which a one-parameter definition
+   satisfies without changing it.  Measured 0 differing on the first compile.
+   Writing `<< 4` for `* 0x10` is 0 differing too; binding the cursor at +0x08
+   to a LOCAL is not -- 42 words and 42 differing, because the local keeps the
+   loaded value live across the first `sh` where the target schedules its
+   reload after it.  And recomputing the last statement's y from the cursor
+   instead of re-reading entry 2's unk_0A is 47 / 16, so the `lhu` really is a
+   read back of the field just stored. */
+void func_800B0C68(u8 *s)
+{
+    (*(UnkTownGrid ***)(s + 0xCC))[2]->unk_04->unk_08 = -0x58;
+    (*(UnkTownGrid ***)(s + 0xCC))[2]->unk_04->unk_0A =
+        *(s32 *)(s + 0x8) % 5 * 0x10 + 0x8;
+    (*(UnkTownGrid ***)(s + 0xCC))[3]->unk_04->unk_08 = 0;
+    (*(UnkTownGrid ***)(s + 0xCC))[3]->unk_04->unk_0A =
+        (*(UnkTownGrid ***)(s + 0xCC))[2]->unk_04->unk_0A - 0x9;
+}
 
 /* The +0xCC scene's two-slot placement for grid entries 29 and 30, called
    from func_800B1188's successor at :12538.  func_800B4350 is the same
@@ -31823,11 +31869,186 @@ void func_800B0D0C(u8 *s)
     (*(UnkTownGrid ***)(s + 0xCC))[30]->unk_04->unk_0A = 0x30;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0D7C);
+/* The +0xCC scene's arrow-visibility pass, and a CUT-DOWN of func_800AF784
+   (:30324) / func_800B336C (:33650) rather than a twin of either.  Three
+   things differ from both: the page counters are read DIRECTLY off the object
+   at +0x10/+0x14 instead of through `*(u8 **)s`, the grid array is at +0xCC
+   where those two have +0xA8, the two sprite handles are at +0x74/+0x78 for
+   their +0x98/+0x9C and the flag word at +0x1C for their +0x14 -- and the
+   ELSE arms DO NOT CLEAR THE HANDLE.  They only raise the bit, which is why
+   this is 39 words against the twins' 51.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0E18);
+   The statement order inside each arm is witnessed, in OPPOSITE directions,
+   and both were measured:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B0F30);
+   * In the FIRST `if` the handle store precedes `&= ~2`.  Both arms then end
+     in `sw $v0, 0x1C($a0)` and cross-jumping unifies that tail at .L800B0DBC;
+     writing `&= ~2` first is 40 words and 37 differing.
+   * In the SECOND `if` `&= ~1` precedes the handle store.  There the arm's
+     own tail IS the handle store, so nothing unifies and the flag store stays
+     inside each arm; putting the handle store first is 37 words and 16
+     differing.
+
+   Its two data symbols, read off its own listing: %hi/%lo(D_800786DC) once
+   each and %hi/%lo(D_800786E8) once each, in that order, plus two
+   intra-function `j`s.  Nothing on a function symbol.
+
+   39 words -- its header reads `nonmatching func_800B0D7C, 0x9C`, and
+   0x9C/4 = 39.  No jump table, no rodata of its own.  Arity 1, from the
+   landed `func_800B0D7C(s)` at the end of func_800B0FD4 (:31520); that call
+   sits BELOW this definition, so an ANSI definition taking more than one
+   parameter would be a hard "too few arguments" there. */
+void func_800B0D7C(u8 *s)
+{
+    if (*(s32 *)(s + 0x10) > 0)
+    {
+        **(u8 ***)(*(u8 **)(s + 0xCC) + 0x74) = D_800786DC;
+        *(s32 *)(s + 0x1C) &= ~2;
+    }
+    else
+    {
+        *(s32 *)(s + 0x1C) |= 2;
+    }
+    if (*(s32 *)(s + 0x10) < *(s32 *)(s + 0x14))
+    {
+        *(s32 *)(s + 0x1C) &= ~1;
+        **(u8 ***)(*(u8 **)(s + 0xCC) + 0x78) = D_800786E8;
+    }
+    else
+    {
+        *(s32 *)(s + 0x1C) |= 1;
+    }
+}
+
+/* Builds one list row's 0x20-character caption and hands it to
+   func_8004E298.  csrc/unk_1C540.c:445 (`func_8004951C`, 157 words) IS THIS
+   FUNCTION'S TEMPLATE, cut down to two of its five arms: the `k == 1` arm
+   with its 0x6B/0x6C sign character and its `& 0x40` suffix, and the
+   `p[1] == 4` arm.  Everything the template's own comment block records about
+   the shape transfers.  Route (j) scored it 0.867 on the shared callee set;
+   no unit-scoped route could have reached it, because it lives in another
+   translation unit and all four callees are resident.
+
+   The space fill is `func_80069EE8` here, not the `memset` the template
+   writes: the overlay links the `func_` spelling
+   (splat/town.bin_undefined_funcs_auto.txt), and the unit already calls it
+   that way at :17880.  Both argument 2 and 3 are 0x20, which is where the
+   `addu $a2, $a1, $zero` copy in the delay slot comes from.
+
+   Three spellings are measured rather than chosen:
+
+   * `v >= 0 ? v : -v`, with the NEGATE IN THE FALSE ARM, as the template's
+     comment requires: fold-const turns it into ABS_EXPR, whose expansion
+     leaves $a1 and $s0 loaded BEFORE the `bgez`.  `if (v < 0) { v = -v; }` is
+     70 words and 6 differing.  `abs(v)` is 0 differing -- it reaches the same
+     ABS_EXPR and emits no call -- but the ternary is kept so the two copies
+     of this source read alike.
+   * buf[0xA] MUST BE AN if/else, not a ternary.  Both arms store to the same
+     byte, so cross-jumping unifies the one `sb` and only the 0x6B/0x6C
+     `addiu`s stay split; the ternary is 71 words and 46 differing.
+   * The tail is a bare `func_8004E298(dst, buf, 0);` with no `return`, which
+     is the template's spelling and is byte-identical to `return
+     func_8004E298(...)` -- the callee's value is already in $v0.
+
+   `*(s8 *)(p + 2)` is written three times and loaded twice: the `!= 0` and
+   `> 0` reads unify, the third does not cross the buf[0xA] store.
+
+   Its data symbol, read off its own listing: %hi/%lo(D_80073414), once each,
+   between the first and second `jal`.  Nothing on a function symbol.
+   Unk80073414 is 0x14 bytes, which is the `t * 5` then `<< 2` scaling.
+
+   70 words -- its header reads `nonmatching func_800B0E18, 0x118`, and
+   0x118/4 = 70.  No jump table, no rodata of its own.  TWO parameters and an
+   s32 return: func_800B0F30 just below is the only caller, it passes the
+   allocation and its own argument and tests the result against 0, and it sits
+   BELOW this definition, so a too-narrow spelling would be a hard error
+   rather than a byte difference. */
+s32 func_800B0E18(u8 *dst, u8 *p)
+{
+    u8 buf[0x20];
+    Unk80073414 *b;
+    s32 k;
+
+    func_80069EE8(buf, 0x20, 0x20);
+    buf[0x1F] = 0;
+    b = D_80073414;
+    k = b[*(u8 *)(p + 1)].unk_10;
+    if (k == 1)
+    {
+        if (*(s8 *)(p + 2) != 0)
+        {
+            s32 v;
+
+            if (*(s8 *)(p + 2) > 0)
+            {
+                buf[0xA] = 0x6B;
+            }
+            else
+            {
+                buf[0xA] = 0x6C;
+            }
+            v = *(s8 *)(p + 2);
+            func_8004E5A0(v >= 0 ? v : -v, 2, &buf[0xB]);
+            func_8004E69C(&buf[0xB]);
+        }
+        if ((*(u8 *)(p + 3) & 0x40) != 0)
+        {
+            buf[0xD] = 0xA;
+            buf[0xE] = 0x7A;
+        }
+    }
+    else if (*(u8 *)(p + 1) == 4)
+    {
+        func_8004E5A0(*(s8 *)(p + 2), 2, &buf[0xB]);
+        func_8004E69C(&buf[0xB]);
+    }
+    else
+    {
+        return 0;
+    }
+    func_8004E298(dst, buf, 0);
+}
+
+/* Allocates one list row's caption object, fills it with func_800B0E18 and
+   releases it again if the fill fails.  csrc/unk_1C540.c:535
+   (`func_80049790`) is the line-for-line template -- the same
+   allocate/fill/free-on-failure shape with 0x100 for its 0x104 and
+   func_800B0E18 for its func_8004951C -- and it is the caller of
+   func_8004951C exactly as this is the caller of func_800B0E18, so the two
+   pairs are one source fragment compiled twice.
+
+   IT WANTS ONE RETURN, not an early exit: the failure arms assign `p = 0` and
+   fall through to a single `return p`, which is the same note the CONSTRUCTOR
+   family's comment at :1813 records.  Written with `if (p == 0) { return 0; }`
+   plus a second `return 0` on the fill failure it is 24 words and 11
+   differing.
+
+   Declared `s32` rather than `u8 *` because the landed caller writes the
+   result into `UnkTownSlot.unk_00`, which is an s32
+   (func_800B0FD4, :31518); the cast is at the point of return.  Inverting the
+   inner test into an empty true arm, and writing the allocation as a
+   declaration initialiser, are both 0 differing.
+
+   25 words -- its header reads `nonmatching func_800B0F30, 0x64`, and
+   0x64/4 = 25.  No jump table, no rodata of its own.  Its three relocations
+   are all plain `jal`s, in the order func_8004B404, func_800B0E18,
+   func_8004B1A4; nothing on a function symbol as an address.  Arity 1, from
+   that same call site, which sits BELOW this definition. */
+s32 func_800B0F30(u8 *s)
+{
+    u8 *p;
+
+    p = (u8 *)func_8004B404(0x100);
+    if (p != 0)
+    {
+        if (func_800B0E18(p, s) == 0)
+        {
+            func_8004B1A4(p);
+            p = 0;
+        }
+    }
+    return (s32)p;
+}
 
 /* The +0xCC scene's row predicate: 1 unless the entry's type byte at +0x1 says
    otherwise -- type 0x16 is never shown, and type 0x19 is shown only while bit
@@ -35136,7 +35357,56 @@ void func_800B4A60(UnkTownGrid **p)
     p[0x27]->unk_04->unk_0A = 0x30;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B4AB0);
+/* func_800B336C's twin; see the cluster note on func_800B2DA0.  The
+   substitution is the documented one -- +0xA8 to +0x5C for the record
+   pointer, +0x1C to +0x2C for the inner record's live count -- plus two
+   offsets that note does not cover: the flag word is +0xC here for its +0x14,
+   and the second count is +0x30 for its +0x20.
+
+   ONE PLACE WHERE THE TWIN'S STATEMENT ORDER DOES NOT CARRY, and it is the
+   whole residue of the first compile.  In the LAST else arm func_800B336C
+   clears the handle first and raises the bit second; this one is the other way
+   round, and that is worth TWO WORDS.  With the bit first, `lw $v1, 0x5C($a0)`
+   fills the `lw $v0, 0xC($a0)` load-delay slot and `lw $v0, 0x9C($v1)` falls
+   after the flag store, so the arm is six words; the twin's order separates
+   the two chains and needs a nop behind each load -- 53 words, 11 differing.
+   So the two copies of this source really do differ by a statement swap, and
+   `ovlverify` sees it because nothing in this arm is relocated.
+   The other three arms keep the twin's order and every flip costs words:
+   `&= ~2` before the handle store in the first arm is 52 / 47, and `|= 2`
+   before the NULL store in the first else arm is 50 / 38.
+
+   Its two data symbols, read off its own listing: %hi/%lo(D_800786DC) once
+   each and %hi/%lo(D_800786E8) once each, in that order, plus two
+   intra-function `j`s.  Nothing on a function symbol.
+
+   51 words -- its header reads `nonmatching func_800B4AB0, 0xCC`, and
+   0xCC/4 = 51.  No jump table, no rodata of its own.  Arity 1, matching the
+   unit's existing declaration at :3634 and the landed `func_800B4AB0(s)` in
+   func_800B4B7C (:34724) just below. */
+void func_800B4AB0(u8 *s)
+{
+    if (*(s32 *)(*(u8 **)s + 0x2C) > 0)
+    {
+        **(u8 ***)(*(u8 **)(s + 0x5C) + 0x98) = D_800786DC;
+        *(s32 *)(s + 0xC) &= ~2;
+    }
+    else
+    {
+        **(u8 ***)(*(u8 **)(s + 0x5C) + 0x98) = NULL;
+        *(s32 *)(s + 0xC) |= 2;
+    }
+    if (*(s32 *)(*(u8 **)s + 0x2C) < *(s32 *)(*(u8 **)s + 0x30))
+    {
+        *(s32 *)(s + 0xC) &= ~1;
+        **(u8 ***)(*(u8 **)(s + 0x5C) + 0x9C) = D_800786E8;
+    }
+    else
+    {
+        *(s32 *)(s + 0xC) |= 1;
+        **(u8 ***)(*(u8 **)(s + 0x5C) + 0x9C) = NULL;
+    }
+}
 
 /* func_800B3440's twin; see the cluster note on func_800B2DA0. Its second
    call is func_800B4AB0, the twin of func_800B336C -- which is the one

@@ -1340,6 +1340,30 @@ another group's. The directory looks private and is not. Use the same dated
 prefix there, and treat an unexplained diff between two of your own runs as a
 clobber before treating it as drift.
 
+### `assert t != orig` PROVES THE TEXT CHANGED, NOT THAT THE PROGRAM CHANGED
+
+The probe rule in this document -- assert the replacement actually altered the
+file, so a no-op is not reported as a tie -- is necessary and **not
+sufficient**. Reported 2026-11-04 on `func_800B0C68`: a probe grid reported
+"cache the +0xCC base in a local: 0 differing" and "bind the cursor to a
+local: 0 differing", and **both were vacuous**. The edits inserted the
+declaration and the assignment but never replaced the *uses*, so the local was
+dead, gcc deleted it, and the compiled program was identical to the winner.
+The string replacement was real, the assert passed, and the measurement meant
+nothing.
+
+Done properly those two spellings are **36 words / 29 differing** and **42 /
+42** -- so the re-read rule is worth five words on that function, the same
+order as the six `func_800B0024`'s note records, and the probe had reported
+it as free.
+
+**So a probe that introduces a BINDING must also assert that the number of
+USES changed**, not just that the text did. The general form: assert on the
+thing the lever is about. A probe that adds a local asserts the use count; a
+probe that reorders statements asserts the two statements swapped positions;
+a probe that changes a cast asserts the cast count. A dead binding is the
+easiest vacuous probe to write because the compiler silently agrees with you.
+
 ### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
 
 Two merge scripts in one batch left a blank line too many where a body
