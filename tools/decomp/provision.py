@@ -745,6 +745,46 @@ def main():
                 print("      *** NEEDS A DECLARATION -- exactly these %d, not the"
                       " whole line above: %s ***"
                       % (len(needdecl), ', '.join(needdecl)))
+                # AND IT MAY BE A FIELD OF A BASE THE UNIT ALREADY DECLARES,
+                # in which case no second declaration exists to write.
+                # splat mints one auto-symbol per referenced address, so one
+                # record reached at two offsets becomes two D_ names -- which
+                # both manufactures a declaration requirement and depresses
+                # the shared-global count the grouping routes report.
+                # Reported 2026-11-04: D_801131E4 IS D_801131B8 + 0x2C, two
+                # members of one family reaching the same word, and the
+                # landing spelled it through the one base.
+                for g2 in needdecl:
+                    try:
+                        a2 = int(g2[2:], 16)
+                    except ValueError:
+                        continue
+                    # THE NEAREST declared base below it, not the first
+                    # one found: taking the first gave D_80113138 + 0xAC for a
+                    # symbol whose real base is D_801131B8 + 0x2C, which is a
+                    # worse lead than none.
+                    cand = None
+                    for other in set(re.findall(r'\b(D_[0-9A-Fa-f]{6,8})\b', txt)):
+                        try:
+                            a3 = int(other[2:], 16)
+                        except ValueError:
+                            continue
+                        if 0 < a2 - a3 <= 0xFF and re.search(
+                                r'\b%s\b[^;\n]*;' % other, txt):
+                            if cand is None or a3 > cand[1]:
+                                cand = (other, a3)
+                    for other, a3 in ([cand] if cand else []):
+                        if True:
+                            print("          %s may be %s + 0x%X, which this unit"
+                                  " ALREADY declares -- check the listing's"
+                                  % (g2, other, a2 - a3))
+                            print("          displacement before declaring a"
+                                  " second symbol for the same word. The %%hi"
+                                  " is identical when neither low half")
+                            print("          carries, and the offset folds into"
+                                  " the R_MIPS_LO16 addend, so both spellings"
+                                  " link to the same bytes.")
+                            break
             if outside:
                 # One note for all of them, not one per symbol: this used to
                 # repeat a whole paragraph per global and the line became
@@ -910,7 +950,24 @@ def main():
                                or re.match(r'\s*(\.L|glabel|endlabel)', rows[j])):
                     regs = set()
                 m = re.search(r'^\s*/\*[^*]*\*/\s+\S+\s+\$(a[0-3])\s*,', rows[j])
-                if m: regs.add(m.group(1))
+                if not m:
+                    continue
+                # IGNORE AN $aN SET IN SOMEONE ELSE'S DELAY SLOT. This is
+                # cause 1 in the banner above, and it is the dominant false
+                # positive: reorg parks an argument set in a preceding
+                # branch's or call's delay slot, and the backward scan reads
+                # it as ours. Measured 2026-11-04 on func_8008AFB0, where
+                # `addu $a1, $s3, $zero` sits in the delay slot of the
+                # PRECEDING `jal func_8008AD90` and made func_8008AC84 -- a
+                # correct 1-parameter prototype -- read as a 2-argument call.
+                # Our OWN delay slot (j == i + 1) is excluded from the
+                # suppression, because that is where one of our arguments
+                # legitimately lives.
+                if j != i + 1 and j > 0 and re.search(
+                        r'^\s*/\*[^*]*\*/\s+(jal|jalr|j|b|beq|bne|beqz|bnez|'
+                        r'blez|bgez|bltz|bgtz|bc1[tf])\b', rows[j - 1]):
+                    continue
+                regs.add(m.group(1))
             # Infer arity from the HIGHEST register set, not the count: $a0 is
             # often already live and never moved (the documented
             # missing-argument-move trap), so {a1,a2} still means three args.
