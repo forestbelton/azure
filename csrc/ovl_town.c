@@ -3019,6 +3019,13 @@ void func_800AB55C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 extern u8 D_800FC428[];
 extern u8 *D_800CFCA8;
 
+extern u8 D_800F842C[];
+extern UnkTown2AE8 D_80089128;
+void func_800A78AC(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800A790C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
+void func_800A79C8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
+void func_800A7950(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
+void func_800A79F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -17115,7 +17122,31 @@ void func_800A7554(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     func_8009B218(p, q, r, 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A75B8);
+/* A one-call wrapper: spawn through func_800A71F0 with func_800A74D8 as the
+   +0x54 handler and D_800D0E04 as the descriptor table.  func_800A71F0's own
+   comment above already records this call site, which is where its three
+   parameters came from.
+
+   It RETURNS the node.  Its only caller, the stub func_800A6F48, does
+   `addu $a1, $v0, $zero` then `lw $v1, 0x8($a1)` at 0x800A6FCC, so $v0 is
+   read.  `void` with a bare call is a MEASURED TIE at 0 differing -- a
+   function ending in a call leaves the callee's value in $v0 either way --
+   so the return type is the caller's evidence, not the bytes'.
+
+   ONE parameter, passed straight through: func_800A6F48 sets only $a0
+   (`addiu $a0, $sp, 0x10`) at both of its two call sites.
+
+   `%hi`/`%lo` on func_800A74D8 is a FUNCTION address-take: ovlverify masks
+   it and there is no `jal` to decode.  It was read off this function's own
+   listing (asm/nonmatchings/ovl_town/func_800A75B8.s), which carries exactly
+   one `%hi(func_...)` pair, and confirmed in the relocation dump.
+
+   11 words -- its header reads `nonmatching func_800A75B8, 0x2C`, and
+   0x2C/4 = 11.  Measured 0 differing, first compile. */
+UnkNode *func_800A75B8(UnkVec *a)
+{
+    return func_800A71F0(a, func_800A74D8, D_800D0E04);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A75E4);
 
@@ -17141,17 +17172,237 @@ void func_800A77D0(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A782C);
+/* func_800A7C98's bind form (:16791 and its three siblings) with a different
+   descriptor, without the +0x50 clear, and with a tail of its own: zero the
+   mover's +0x0A integer half and hand the frame to func_800A790C, the first
+   state of the group below.  The handler it installs at the node's +0x10 slot
+   is func_800A78AC, the next definition.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A78AC);
+   `%hi`/`%lo` on func_800A78AC is a FUNCTION address-take, masked by
+   ovlverify with no `jal` to decode; read off this function's own listing,
+   which carries exactly one `%hi(func_...)` pair.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A790C);
+   THE STATEMENT ORDER IS PINNED IN BOTH PLACES.  The install store first:
+   moved after the two calls it is 12 differing.  And the `+0x0A` zero store
+   must sit BETWEEN func_80033CD8 and the func_800A790C call -- written ahead
+   of func_80033CD8 it is 11 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7950);
+   WHY THAT STORE READS `$a1` AND NOT `$s2`, which is the one word in it that
+   looks like a different source.  Two passes, both read off `-da` dumps of a
+   one-function copy of this body:
+     * sched1 MOVES the store down past the three argument copies.  In `.rtl`
+       the chain is insn 42 (the `sh`), 45, 47, 49, 51 (the call); in `.lreg`
+       it is 45, 47, 49, 42, 51.  sched.py's dump shows every priority in the
+       block is 1, so `schedule_select` decided it on potential_hazard alone.
+     * `optimize_reg_copy_1` (scratch/gcc-src/cdk-gcc-b18/local-alloc.c:704,
+       the replacement loop at :761-795 -- `validate_replace_rtx (src, dest,
+       q)` at :778 -- reached from `update_equiv_regs` at :1028) then rewrites
+       the store's base.  The argument copy insn 47,
+       `(set (reg:SI 5 a1) (reg/v:SI 81))`, carries `REG_DEAD (reg/v:SI 81)`,
+       so pseudo 81 dies at the copy and every later use of it up to $a1's
+       own death is replaced by $a1.  After sched1 the store is such a use.
+   A FIRST DRAFT OF THIS NOTE BLAMED `reload_cse_regs`, AND THAT IS WRONG:
+   `reload_cse_simplify_set` (reload1.c:8141) only replaces a non-register
+   SET_SRC with an equivalent register and never touches a memory operand's
+   base.  The dump pair above is what settled it.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A79C8);
+   THREE parameters, all three read -- $a0 to $s0, $a1 to $s2, $a2 to $s1.
+   Nothing in the image calls this function and nothing takes its address, so
+   those reads are the whole witness. */
+void func_800A782C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    *(u32 *)((u8 *)a - 0x10) = (u32)func_800A78AC;
+    func_800C2CB0((u8 *)a, c, D_800F842C, 0);
+    func_80033CD8((u8 *)a, (u32)D_80045340);
+    *(s16 *)((u8 *)b + 0xA) = 0;
+    func_800A790C(a, b, c);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A79F0);
+/* The +0x10 handler func_800A782C installs: dispatch through the actor's own
+   +0x50 slot, then -- unless the node's -0x2 flag halfword has 0x8000 set --
+   hand the renderable to func_800478B8.  The two tests are nested and not
+   fused, because the dispatch sits between them.
+
+   `a->unk_50()` WITH ZERO ARGUMENTS AND `a->unk_50(a, b, c)` ARE A MEASURED
+   TIE AT 0 DIFFERING, so this call site witnesses nothing about the
+   installed handler's arity in either direction -- not even that it is a
+   zero-argument call.  a, b and c are all still in $a0/$a1/$a2 at the
+   `jalr`: the body copies $a0 and $a2 into saved registers but never
+   overwrites an argument register.  The three-argument spelling's argument
+   copies are therefore no-op sets and are DELETED, which `-da` dumps of a
+   one-function copy place between global-alloc and jump2 -- i.e. in reload,
+   where `reload_cse_regs` (scratch/gcc-src/cdk-gcc-b18/reload1.c:2140) tests
+   `reload_cse_noop_set_p` (:8049, via `reload_cse_regno_equal_p` at :8022)
+   at :7938 and deletes a set whose destination already holds the source.
+   `$a1`'s copy goes one pass earlier, at local-alloc.  Counted:
+   `.greg` has 3 argument-register sets, `.jump2` has 1.  The zero-argument
+   form is kept to match the four sites docs/town-sweep.md records (:6409,
+   :7690, :16109, :14765).
+
+   Arity: $a0 and $a2 are read, $a1 is never touched -- a dead MIDDLE
+   parameter, witnessed by the gap it leaves in the $aN sequence.  The third
+   parameter is the renderable, handed to func_800478B8 as the s32 its
+   prototype takes.
+
+   24 words -- its header reads `nonmatching func_800A78AC, 0x60`, and
+   0x60/4 = 24.  Measured 0 differing, first compile. */
+void func_800A78AC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    if (a->unk_50 != NULL)
+    {
+        a->unk_50();
+        if ((*(u16 *)((u8 *)a - 0x2) & 0x8000) == 0)
+        {
+            func_800478B8(c);
+        }
+    }
+}
+
+/* The first state of the group's cycle: install the continuation
+   func_800A7950 at +0x50 and arm BOTH countdowns from one random draw.
+   +0x90 holds the start value the next state measures progress against and
+   +0x6C is the live counter.
+
+   `%hi`/`%lo` on func_800A7950 is a FUNCTION address-take, masked by
+   ovlverify with no `jal` to decode; read off this function's own listing,
+   which carries exactly one `%hi(func_...)` pair.
+
+   THE CHAIN IS WRITTEN +0x6C = +0x90 BECAUSE A CHAINED ASSIGNMENT EMITS ITS
+   STORES RIGHT-TO-LEFT: the listing stores +0x90 first.  A local temporary
+   with two descending statements is a measured tie at 0; the chain written
+   the other way round (`a->unk_90 = a->unk_6C = ...`) is 2 differing, and
+   putting the install after the countdowns is 8.
+
+   Arity: only $a0 is read, so parameters 2 and 3 have no witness HERE -- but
+   func_800A782C above sets $a0, $a1 AND $a2 explicitly at its `jal` to this
+   function, which settles three.
+
+   17 words -- its header reads `nonmatching func_800A790C, 0x44`, and
+   0x44/4 = 17.  Measured 0 differing, first compile. */
+void func_800A790C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    a->unk_50 = func_800A7950;
+    a->unk_6C = a->unk_90 = func_800374F4(0x60) + 0xC0;
+}
+
+/* The state func_800A790C installs: drive the renderable's two scales off how
+   far the +0x6C countdown has run from its +0x90 start, walk the countdown,
+   and on expiry hand over to func_800A79C8.  The scales open from a squash
+   (+0x1C large, +0x1E small) back towards 0x1000 as the difference shrinks.
+
+   `* 8` AND `* 2`, NOT `<< 3` AND `<< 1`.  Both scale expressions are
+   assigned to s16 fields, so `convert_to_integer` distributes the narrowing
+   into the operands and the whole expression would be computed in HImode with
+   `lhu` loads.  A literal multiplier has type `int`, so the MULT_EXPR arm at
+   scratch/gcc-src/cdk-gcc-b18/convert.c:251-267 BLOCKS the distribution and
+   the four loads stay `lh` -- its guard is
+   `outprec >= TYPE_PRECISION (TREE_TYPE (arg1))`, and with outprec 16 for the
+   s16 destination against the literal's 32 that is false, so it `break`s
+   instead of reaching `trunc1`.  `LSHIFT_EXPR` at :217 has no such guard.
+   Each
+   shift spelling costs exactly the two words of its own statement: both as
+   shifts is 4 differing, one of the two is 2.  (docs/matching-levers.md,
+   "`<< 7` AND `* 128` ARE NOT THE SAME STATEMENT WHEN THE RESULT IS NARROW".)
+
+   +0x1C before +0x1E: swapped is 14 differing.  The subtraction is written
+   twice rather than cached in a local because the `sh` to the renderable
+   between them may alias the actor's own fields, so cse drops the first value
+   and reloads -- which is why the listing has two identical load pairs.
+
+   The countdown test is `< 0` and not `<= 0`: the listing branches AWAY on
+   `bgez`, and the re-sign is a bare `sll 16` with no `sra`, i.e. the stored
+   halfword tested directly.
+
+   func_800A79C8(a, b, r) is a PURE FORWARD -- no argument setup at the `jal`,
+   `nop` in the delay slot -- so it is not an arity witness in either
+   direction; func_800A79C8's own register reads are.
+
+   Arity: $a0 and $a2 read, $a1 never touched -- a dead MIDDLE parameter.
+
+   30 words -- its header reads `nonmatching func_800A7950, 0x78`, and
+   0x78/4 = 30.  Measured 0 differing. */
+void func_800A7950(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    r->unk_1C = (a->unk_90 - a->unk_6C) * 8 + 0x1000;
+    r->unk_1E = 0x1000 - (a->unk_90 - a->unk_6C) * 2;
+    if (--a->unk_6C < 0)
+    {
+        func_800A79C8(a, b, r);
+    }
+}
+
+/* func_800A6F48's own tail verbatim (asm/nonmatchings/ovl_town/func_800A6F48.s,
+   0x800A70A8..0x800A70C8) with two substitutions and nothing else:
+   func_800A79F0 for func_800A70EC and 0x16 for 0xA.  The same source arms a
+   different state -- install the handler at +0x50, seed the +0x6C countdown,
+   and paint the renderable mid-grey.
+
+   `%hi`/`%lo` on func_800A79F0 is a FUNCTION address-take: ovlverify masks
+   it and there is no `jal` to decode -- this listing carries exactly one
+   `%hi`/`%lo` pair and NO `jal` at all, so the relocation dump is the only
+   check on it.  Read off this function's own listing.
+
+   The install goes before the countdown seed: the other order is 5 differing.
+   The three byte stores are DESCENDING (+0x0E, +0x0D, +0x0C), the same way
+   func_800A895C (:17135) writes its 0xFF triple; ascending is 2 differing,
+   and the chain `r->unk_0C = r->unk_0D = r->unk_0E = 0x80;` is a measured tie
+   at 0.
+
+   Arity: $a0 and $a2 read, $a1 never touched -- a dead MIDDLE parameter.  Its
+   own caller func_800A7950 forwards all three unchanged, so that `jal` adds
+   nothing.
+
+   10 words -- its header reads `nonmatching func_800A79C8, 0x28`, and
+   0x28/4 = 10.  Measured 0 differing, first compile. */
+void func_800A79C8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    a->unk_50 = func_800A79F0;
+    a->unk_6C = 0x16;
+    r->unk_0E = 0x80;
+    r->unk_0D = 0x80;
+    r->unk_0C = 0x80;
+}
+
+/* The state func_800A79C8 installs, and the one that closes this group's
+   cycle: while +0x6C is still positive, drive the renderable's two scales off
+   a sine of 186 times the remaining count -- +0x1C below 0x1000 and +0x1E
+   above it, a breathing squash; on expiry reset both to 0x1000 and re-enter
+   func_800A790C, which installs func_800A7950 again.
+
+   THE `<= 0` ARM IS WRITTEN FIRST AND THAT IS LOAD-BEARING.  Its arm leaves
+   through the shared epilogue by an explicit `j`, so the listing's `bgtz`
+   branches AWAY to the positive arm and the expiry arm is laid out inline.
+   Writing `> 0` first is 53 words with 41 differing.
+
+   `/ 4` AND NOT `>> 2`: the signed division's two `bgez`/`addiu 3` fix-ups
+   are 6 of the 52 words.  `>> 2` is 46 words with 27 differing.
+
+   `* 186` is what gives the `sll 1`/`addu`/`sll 5`/`subu`/`sll 1` chain.  The
+   first expression uses the value `--a->unk_6C` just stored, the second
+   RELOADS the field with `lh`, because func_800644B8 sits between them and
+   may alias it -- so writing `a->unk_6C` in both is correct and a cached
+   local would be wrong.
+
+   Arity: $a0 and $a2 read, $a1 never touched -- a dead MIDDLE parameter.
+   func_800A790C(a, b, (s32)r) is a PURE FORWARD, so it witnesses nothing;
+   func_800A782C's explicit three-argument `jal` is what settled func_800A790C.
+
+   52 words -- its header reads `nonmatching func_800A79F0, 0xD0`, and
+   0xD0/4 = 52.  Measured 0 differing. */
+void func_800A79F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    if (--a->unk_6C <= 0)
+    {
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_800A790C(a, b, (s32)r);
+    }
+    else
+    {
+        r->unk_1C = 0x1000 - func_800644B8(a->unk_6C * 186) / 4;
+        r->unk_1E = func_800644B8(a->unk_6C * 186) / 4 + 0x1000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A7AC0);
 
@@ -17553,7 +17804,57 @@ void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8ADC);
+/* The +0x10 handler func_800A8B98 installs.  It rings two puff bursts off one
+   spread template: one centred on the mover itself through func_800A895C, one
+   on a copy of the mover lifted 0x100000 through func_80097AD0.  Both counts
+   are an independent `func_800374F4(2) + 2`.
+
+   `UnkTown2AE8 spread;` MUST BE DECLARED BEFORE `src`.  Aggregate stack slots
+   are assigned in declaration order, and the target puts the spread copy at
+   sp+0x10 and src at sp+0x28.  Swapped is 11 differing.
+   (docs/matching-levers.md, "DECLARATION ORDER FIXES *AGGREGATE* STACK SLOTS
+   ONLY, AND A SLOT IS ROUNDED TO 8 BYTES".)  `spread = D_80089128;` must also
+   be the FIRST statement: after the three src stores it is 48 words with 45
+   differing.
+
+   D_80089128 is this unit's OWN rodata -- the INCLUDE_RODATA at :18634, six
+   words reading {0x20, 0, 0, 0, 0, 0} -- so it is only DECLARED here, as
+   `extern UnkTown2AE8`, and its data is untouched.  The declared size is what
+   makes the copy come out as `lui`/`addiu` to a base register plus six
+   displacements rather than six symbolic addresses, and the struct assignment
+   is what batches them 3 loads / 3 stores.
+
+   The `(u16)` cast on each count is worth one word each: func_800374F4
+   returns u32, and without the cast the `+ 2` folds into a bare `addiu` and
+   the `andi $v0, $v0, 0xFFFF` disappears -- 46 words with 15 differing.  Same
+   mechanism func_800917EC (:6196) documents for the same call.
+
+   Arity: $a1 is read, $a0 is NEVER read -- a dead FIRST parameter, witnessed
+   by the gap it leaves in the $aN sequence.  Three parameters come from the
+   slot: func_800A8B98 stores this address at `-0x10($a0)`, the UnkNode +0x10
+   slot, whose dispatcher func_80040190 (csrc/unk_12DEC.c) casts it to
+   `(void (*)(void *, UnkVec *, u32))` -- so parameter 1 is the actor view,
+   parameter 2 the node's +0x08 mover and parameter 3 its +0x0C renderable.
+
+   provision.py's arity lead "calls func_800374F4 with >=2 / >=3 arg(s)" is a
+   false positive of the documented kind: the $a0 it sees is the NEXT call's
+   argument parked in a branch delay slot and the $a2 is the previous call's
+   leftover.  func_800374F4 takes one argument at both sites.
+
+   47 words -- its header reads `nonmatching func_800A8ADC, 0xBC`, and
+   0xBC/4 = 47.  Measured 0 differing, first compile. */
+void func_800A8ADC(UnkTownSpawn *p, UnkTown2AE8 *b, UnkTownRend *r)
+{
+    UnkTown2AE8 spread;
+    UnkTown2AE8 src;
+
+    spread = D_80089128;
+    src.unk_00 = b->unk_00;
+    src.unk_04 = b->unk_04;
+    src.unk_08 = b->unk_08 + 0x100000;
+    func_800A895C(b, &spread, (u16)func_800374F4(2) + 2);
+    func_80097AD0(&src, &spread, (u16)func_800374F4(2) + 2);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8B98);
 
