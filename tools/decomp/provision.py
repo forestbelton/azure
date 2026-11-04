@@ -155,7 +155,17 @@ def classify_addr_takes(listing, names):
     lines = listing.split('\n')
     stored, tested, tagged = [], [], []
     for n in names:
-        verdict = None
+        # A SYMBOL CAN BE IN MORE THAN ONE CLASS, so collect EVERY
+        # materialisation's verdict instead of breaking at the first. This
+        # loop used to stop at the first `%lo` and assign one class, which
+        # dropped the second use entirely: func_8009B454 materialises
+        # func_8009B594 twice -- once at 0x8009B500 feeding the store at
+        # 0x8009B510 (an install) and once at 0x8009B53C feeding the `beq` at
+        # 0x8009B540 (a test) -- and the TESTS line omitted it, so the two
+        # lines accounted for 3 of the 4 pairs and 6 of the 8 address-take
+        # words. Reported 2026-11-04, and it is the rare case of the tool
+        # UNDER-counting where it usually over-counts.
+        verdicts = set()
         for i, ln in enumerate(lines):
             if '%lo(' + n + ')' not in ln:
                 continue
@@ -174,26 +184,28 @@ def classify_addr_takes(listing, names):
             # binder for the other), so the distinction decides which one to
             # read. Route (d) already carries this prose; route (b) did not.
             if re.match(r'a[0-3]$', reg):
-                verdict = 'tag'
-                break
+                verdicts.add('tag')
+                continue
             for ahead in lines[i + 1:i + 10]:
                 if re.search(r'\bs[bhw]\s+\$%s\b' % reg, ahead):
-                    verdict = 'store'
+                    verdicts.add('store')
                     break
                 if re.search(r'\b(beq|bne)\s+.*\$%s\b' % reg, ahead):
-                    verdict = 'test'
+                    verdicts.add('test')
                     break
                 if re.search(r'\baddu\s+\$a[0-3],\s*\$%s,\s*\$zero\b' % reg, ahead):
-                    verdict = 'tag'
+                    verdicts.add('tag')
                     break
-            if verdict:
-                break
-        if verdict == 'test':
-            tested.append(n)
-        elif verdict == 'tag':
-            tagged.append(n)
-        else:
+        # No verdict at all stays an INSTALL, the conservative side, since a
+        # missed install is the expensive error.
+        if not verdicts:
+            verdicts.add('store')
+        if 'store' in verdicts:
             stored.append(n)
+        if 'test' in verdicts:
+            tested.append(n)
+        if 'tag' in verdicts:
+            tagged.append(n)
     return stored, tested, tagged
 
 
@@ -795,14 +807,25 @@ def main():
                     for other, a3 in ([cand] if cand else []):
                         if True:
                             print("          %s may be %s + 0x%X, which this unit"
-                                  " ALREADY declares -- check the listing's"
-                                  % (g2, other, a2 - a3))
-                            print("          displacement before declaring a"
-                                  " second symbol for the same word. The %%hi"
-                                  " is identical when neither low half")
-                            print("          carries, and the offset folds into"
-                                  " the R_MIPS_LO16 addend, so both spellings"
-                                  " link to the same bytes.")
+                                  " ALREADY declares." % (g2, other, a2 - a3))
+                            print("          Both spellings LINK TO THE SAME"
+                                  " BYTES -- the %hi is identical when neither")
+                            print("          low half carries, and the offset"
+                                  " folds into the R_MIPS_LO16 addend -- but")
+                            print("          THAT DOES NOT MEAN THE SAME"
+                                  " INSTRUCTIONS. Measured 2026-11-04 on")
+                            print("          func_8009BDC0: the indexed spelling"
+                                  " of two globals 0x18 apart is 127 words")
+                            print("          and 112 differing, because cse"
+                                  " shares ONE lo_sum and derives the second")
+                            print("          base with an `addiu`, where the"
+                                  " target keeps two independent lui/addiu")
+                            print("          pairs live at once. THE WITNESS IS"
+                                  " WHETHER THE LISTING HOLDS TWO LO_SUMS")
+                            print("          LIVE SIMULTANEOUSLY, not the"
+                                  " displacement -- which is 0x0 either way,")
+                            print("          so the displacement test this"
+                                  " note used to recommend settles nothing.")
                             break
             if outside:
                 # One note for all of them, not one per symbol: this used to
@@ -1449,12 +1472,33 @@ def main():
         lt = listing(unit, f)
         if not lt:
             continue
-        # The addresses a CONSTANT-ADDRESS function materialises, as raw hex.
-        # Take them from the out-of-image globals the listing names, since
-        # splat renders a constant the same way it renders a symbol.
-        addrs = sorted(set(
+        # The addresses a CONSTANT-ADDRESS function materialises, as raw hex,
+        # FROM BOTH RENDERINGS.
+        #
+        # Taking them only from `%hi(D_...)`/`%lo(D_...)` made this route
+        # blind to the exact class it exists for, and two agents reported it
+        # independently on 2026-11-04 with the same cause. That pseudo-symbol
+        # form is what splat prints when it MIS-symbolises a constant as a
+        # `lui`/`addiu` pair. When splat gets it RIGHT -- a genuine constant
+        # address is `lui`/`ori` -- it prints the literal instead:
+        #
+        #     lui  $a0, (0x8001029C >> 16)
+        #     ori  $a0, $a0, (0x8001029C & 0xFFFF)
+        #
+        # and the old regex returned [] on a listing that spells the address
+        # out twice. So the route fired only on the mis-symbolised class and
+        # went silent on the common one. 0x8001029C has eight-plus landed
+        # users and a comment block recording the decisive lever ("THE TABLE
+        # ADDRESS MUST BE THE CONSTANT, NOT THE SYMBOL ... also 13 words but
+        # 9 differing"), and both agents had to find it by hand.
+        addrs = set(
             int(g[2:], 16) for g in re.findall(r'%(?:hi|lo)\((D_[0-9A-Fa-f]+)\)', lt)
-            if constaddr_candidate(g)))
+            if constaddr_candidate(g))
+        addrs |= set(int(h, 16) for h in
+                     re.findall(r'\((0x[0-9A-Fa-f]{8})\s*>>\s*16\)', lt))
+        addrs |= set(int(h, 16) for h in
+                     re.findall(r'\((0x[0-9A-Fa-f]{8})\s*&\s*0xFFFF\)', lt))
+        addrs = sorted(addrs)
         if not addrs:
             continue
         for a in addrs:
