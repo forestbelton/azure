@@ -2835,6 +2835,21 @@ extern void *D_800D0B20[];
 extern u32 D_800D0B50[];
 void func_800A378C(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r);
 void func_800A38A8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
+extern u8 D_800D0130[];
+/* D_800834B8 IS D_80083498.unk_20 (UnkTownCam's comment), but func_800A0F10
+   needs the MEMBER'S OWN SYMBOL: with D_80083498 as the base both of its
+   fields go through one lo_sum plus a displacement and the function is 6
+   differing.  See that function's comment. */
+extern UnkTownTask D_800834B8;
+/* func_800A1080 (:12470) types this object; func_800A0F9C initialises it and
+   func_800A0DAC/func_800A0E3C tick it.  Declared as the struct, not `u8 []`,
+   so `&D_80100B70` keeps the one-register `lui`/`addiu` the targets have. */
+extern UnkTownA1080 D_80100B70;
+UnkNode *func_800A1C94(void *a, s32 b, s32 c);
+void func_8009455C(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_800A0E3C(UnkTownActor *a, void *b, UnkTown2AE8 *c, void *d);
+void func_800A0EB8(void);
+void func_800B8A40(void);
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
 extern u8 D_80046398[];
@@ -7371,7 +7386,31 @@ void func_80093E98(UnkTownTask *t)
     t->unk_00 = func_800911D4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80093ED8);
+/* func_80093F48's near-sibling, two INCLUDE_ASMs up: the same
+   `+0x3E = 6; func_80094C1C(t);` head, then func_80094C74 where
+   func_80093F48 has func_8009503C, the func_80094984 bind with
+   D_800D0090, and no +0x0A countdown at the end.
+
+   THE THIRD PARAMETER IS `s32`, not the family's `void *`: of the four
+   landed callers, the two that sit BELOW this definition and so actually
+   type-check against it -- func_800930E4 (:7127) and func_800AA844
+   (:16365) -- both declare `s32 c`, and `void *c` costs a
+   "makes pointer from integer" warning at each.  Only forwarded, so the
+   bytes are the same either way.
+
+   28 words -- its header reads `nonmatching func_80093ED8, 0x70`, and
+   0x70/4 = 28.  No jump table, no rodata of its own.  Measured 0
+   differing on the first compile; 7 raw differing against 7 relocation
+   words and 0 intra-function `j`.  %hi/%lo(func_80091260) is the install
+   and is masked -- read off this function's own listing. */
+void func_80093ED8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+{
+    *(s16 *)((u8 *)t + 0x3E) = 6;
+    func_80094C1C(t);
+    func_80094C74(b);
+    func_80094984(D_800D0090, t, c);
+    t->unk_00 = func_80091260;
+}
 
 void func_80093F48(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
@@ -7550,7 +7589,26 @@ void func_8009451C(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_00 = func_800927EC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009455C);
+/* The same func_80094984 binder as func_80093ED8 above, cut down: no
+   func_80094C74, D_800D0130 for D_800D0090, and func_80092A84 installed.
+
+   THE MIDDLE PARAMETER IS DEAD AND WITNESSED BY THE GAP IT LEAVES: the
+   prologue is `$a0 -> $s0` then `$a2 -> $s1`, and $a1 is never read.
+   Written with two parameters it is 34 words / 28 differing -- the
+   argument registers all shift down one.  Its one caller, func_800927EC
+   (:6780), passes three.
+
+   23 words -- its header reads `nonmatching func_8009455C, 0x5C`, and
+   0x5C/4 = 23.  No jump table, no rodata of its own.  Measured 0
+   differing on the first compile; 6 raw against 6 relocation words and 0
+   intra-function `j`.  %hi/%lo(func_80092A84) is the install, masked. */
+void func_8009455C(UnkTownTask *t, UnkTown2AE8 *b, void *c)
+{
+    *(s16 *)((u8 *)t + 0x3E) = 6;
+    func_80094C1C(t);
+    func_80094984(D_800D0130, t, c);
+    t->unk_00 = func_80092A84;
+}
 
 /* func_800942B0's near-sibling: the same body with a different descriptor and
    handler and no +0x0A clear.  26 words -- its header reads
@@ -12483,15 +12541,220 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0CC0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0CF8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0DAC);
+/* The actor +0x50 handler func_800A0CF8 installs: tick D_80100B70 through
+   func_800A12B4, advance the actor's +0x6E by 0x10, and when
+   func_800A1080 reports the spin finished arm the +0x6C countdown and
+   hand over to func_800A0E3C.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0E3C);
+   FOUR PARAMETERS, THE SECOND DEAD -- and a dead MIDDLE parameter is
+   witnessed by the gap it leaves in the $aN sequence: the prologue is
+   `$a0 -> $s3`, `$a2 -> $s1`, `$a3 -> $s2` and $a1 is never read.  With
+   the dead one removed it is 34 words / 28 differing.  Only its address
+   is taken (func_800A0CF8), so there is no call-site witness.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0EB8);
+   BOTH CALLS TAKE `&D_80100B70`, and its `lui`/`addiu` land in ONE
+   register ($s0) -- the scalar declaration shape.  func_800A1080's own
+   landed definition (:12470) types that object UnkTownA1080, which is why
+   the extern is declared as the struct and not as `u8 []`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0F10);
+   36 words -- its header reads `nonmatching func_800A0DAC, 0x90`, and
+   0x90/4 = 36.  No jump table, no rodata of its own.  Measured 0
+   differing on the first compile; 6 raw against 6 relocation words and 0
+   intra-function `j`.  %hi/%lo(func_800A0E3C) is the install, masked, and
+   it is the one symbol here a clean ovlverify cannot vouch for. */
+void func_800A0DAC(UnkTownActor *a, void *b, UnkTown2AE8 *c, void *d)
+{
+    func_800A12B4(&D_80100B70, c, d);
+    a->unk_6E += 0x10;
+    if (func_800A1080(&D_80100B70, c, d))
+    {
+        a->unk_6C = 0x20;
+        a->unk_50 = func_800A0E3C;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A0F9C);
+/* The handler func_800A0DAC above installs at the actor's +0x50: tick the
+   spinning D_80100B70 object, count +0x6C down, and on expiry hand the
+   actor its pointer table, install the empty func_800A08E8 and tear the
+   effect down through func_800A0EB8.
+
+   FOUR PARAMETERS, ALL WITNESSED by register reads: $a0 and $a1 go to
+   $s0/$s1 in the prologue and $a2/$a3 are read into func_800A12B4's
+   argument registers before anything writes them.  There is no `jal` to
+   this function anywhere -- func_800A0DAC only takes its address -- so the
+   register reads are the whole witness.  Dropped to three parameters it is
+   30 words / 24 differing.
+
+   func_800A0B74's second argument is `b`'s +0x48 pointer table, the same
+   call func_800A0AC8 (:12425) makes.
+
+   31 words -- its header reads `nonmatching func_800A0E3C, 0x7C`, and
+   0x7C/4 = 31.  No jump table, no rodata of its own.  Measured 0
+   differing on the first compile; 7 raw against 7 relocation words and 0
+   intra-function `j`.  %hi/%lo(func_800A08E8) is the install, masked. */
+void func_800A0E3C(UnkTownActor *a, void *b, UnkTown2AE8 *c, void *d)
+{
+    func_800A12B4(&D_80100B70, c, d);
+    if (--a->unk_6C <= 0)
+    {
+        func_800A0B74(a, *(void **)((u8 *)b + 0x48));
+        a->unk_50 = func_800A08E8;
+        func_800A0EB8();
+    }
+}
+
+/* The teardown func_800A0E3C runs when its countdown expires: four bare
+   calls and three global writes.  No parameters -- nothing reads any
+   argument register.
+
+   THE PROVISIONING TOOL'S ARITY LEAD HERE IS A FALSE POSITIVE, of exactly
+   the kind its own warning describes: it reports func_800B8A40 called
+   with >= 1 argument because `addiu $a0, $zero, 0x16` precedes the `jal`.
+   That insn is in the BRANCH DELAY SLOT of `jal func_80033AE8` and is
+   func_80033AE8's argument; func_800B8A40's own `jal` has a `nop` delay
+   slot, and its landed definition below is `void func_800B8A40(void)`.
+
+   THE ORDER OF THE LAST TWO STORES IS NOT OBSERVABLE.  sched hoists the
+   D_80013714 load over the D_80082E76 store either way (two distinct
+   symbols do not alias), so both source orders measure 0 differing.
+   This spelling is a guess; the bytes do not choose.
+
+   22 words -- its header reads `nonmatching func_800A0EB8, 0x58`, and
+   0x58/4 = 22.  No jump table, no rodata of its own.  Measured 0
+   differing on the first compile; 11 raw against 11 relocation words and
+   0 intra-function `j`.  No address-takes here. */
+void func_800A0EB8(void)
+{
+    func_800B074C();
+    func_80033AE8(0x16);
+    func_800B8A40();
+    func_800C24FC();
+    D_8008146C = 1;
+    D_80082E76 = 0;
+    D_80013714 &= 0xFFF8;
+}
+
+/* The gate func_800A07E8 (:12370) and func_800A0AC8 (:12425) both call --
+   two arguments at both landed call sites, and the declaration above
+   already said so.  Returns 1 only when `b` still has a collision record
+   against D_800CFCB4, the actor's facing is within 0x400 of the camera
+   task's +0x10, and that task is running one of two handlers.
+
+   *** D_800834B8 NEEDS ITS OWN extern, even though it IS
+   D_80083498.unk_20. ***  UnkTownCam's comment is right that one %hi/%lo
+   pair covers the member -- but which SYMBOL the %lo names decides the
+   addressing.  Spelled `D_80083498.unk_20.unk_00` / `.unk_10`, cc1psx
+   puts ONE lo_sum of D_80083498 in a register and reaches both fields by
+   displacement (+0x20 and +0x30): 35 words, 6 differing.  The target
+   reaches +0x00 as `lw %lo(D_800834B8)($high)` straight off the `high`
+   and materialises a SECOND lo_sum for +0x10, which is only reachable
+   when the symbol the %lo names is D_800834B8 itself -- offset 0 is a
+   legitimate `(lo_sum)` address, a nonzero offset is not and has to be
+   forced into a register.  Both symbols are in
+   splat/town.bin_undefined_syms_auto.txt, so either links.
+
+   THE GLOBAL OPERAND IS READ INTO A LOCAL FIRST.  Written as one
+   expression, `(a->unk_72 & 0xFFF) - (D_800834B8.unk_10 & 0xFFF)`
+   evaluates the actor field first and the whole compare chain comes out
+   in the other register pair: 35 words, 6 differing, all of them $v0/$v1
+   renames.  The separate statement forces the global load ahead of it.
+
+   The range test is one `addiu 0x3FF` / `sltiu 0x7FF` pair, which is what
+   fold makes of `d > -0x400 && d < 0x400`.
+
+   35 words -- its header reads `nonmatching func_800A0F10, 0x8C`, and
+   0x8C/4 = 35.  No jump table, no rodata of its own.  11 raw differing
+   against 10 relocation words plus the one intra-function `j`.  FOUR of
+   those words are address-takes -- %hi/%lo(func_80091260) and
+   %hi/%lo(func_80091528) -- masked, with no `jal` to decode; both were
+   read off this function's own listing. */
+s32 func_800A0F10(UnkTownActor *a, void *b)
+{
+    s32 g;
+    s32 d;
+
+    if (func_8008FAC0((UnkNode *)b, (UnkNode *)&D_800CFCB4) != NULL)
+    {
+        g = D_800834B8.unk_10 & 0xFFF;
+        d = (a->unk_72 & 0xFFF) - g;
+        if (d > -0x400 && d < 0x400)
+        {
+            if (D_800834B8.unk_00 == func_80091260 || D_800834B8.unk_00 == func_80091528)
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* D_80100B70's initialiser, called once by func_800A0CF8 as
+   `func_800A0F9C(&D_80100B70, q, a->unk_90)` with its s16 result stored
+   back to the actor's +0x90 -- so it returns how many of the `n` nodes
+   are still missing, 0 on success.  func_800A1354 (:12603) walks the same
+   +0x54 table as a subscript, which is where UnkNode *unk_54[6] came
+   from.
+
+   *** THE LOOP TEST IS ON THE TABLE'S ADDRESS, NOT ON THE NODE. ***
+   `bnez $s3` with $s3 = `s + 0x54` set once before the guard: the source
+   compares the DECAYED ARRAY (never null for a non-null `s`, so this is
+   the original's bug, not ours).  The semantically sensible
+   `if (tbl[n] == NULL)` is 55 words / 52 differing -- two words SHORT,
+   because it reuses func_800A1C94's return instead of keeping the
+   invariant base live.  Measured, so it is ruled out rather than assumed.
+
+   THE BASE HAS TO BE A LOCAL POINTER.  `s->unk_54[n] = ...` plus
+   `if (s->unk_54 == NULL)` is 57 words / 7 differing: loop.c then hoists
+   `s + 0x54` into the loop PREHEADER, after the `blez` guard, where the
+   target computes it in the entry block ahead of the guard.  Statement or
+   declaration initialiser makes no difference here (both 0 differing) --
+   unlike the global-pointer case the matching-levers note is about, there
+   is no %hi/%lo to strand in the prologue.
+
+   THE STORE RUN'S ORDER IS LOAD-BEARING IN ONE PLACE.  Written in plain
+   ascending offset order it is 57 words / 4 differing: the four zero
+   stores come out in source order and the target's are +0x10 before
+   +0x0C, with +0x0A LAST, after the 0xA0 store to +0x7A.  sched groups
+   the constant materialisations but keeps this group's relative order, so
+   the source order is readable straight off the listing.
+
+   +0x6C..+0x78 fall inside UnkTownA1080's pad_6C and are written through
+   casts; they are the same fields the UnkTownA17CC view names.
+
+   57 words -- its header reads `nonmatching func_800A0F9C, 0xE4`, and
+   0xE4/4 = 57.  No jump table, no rodata of its own.  2 raw differing
+   against 1 relocation word plus the one intra-function `j`.  No
+   address-takes. */
+s32 func_800A0F9C(UnkTownA1080 *s, UnkTown2AE8 *b, s32 n)
+{
+    UnkNode **tbl;
+
+    tbl = s->unk_54;
+    while (n > 0)
+    {
+        n--;
+        tbl[n] = func_800A1C94(s, n, (s32)b);
+        if (tbl == NULL)
+        {
+            return n + 1;
+        }
+    }
+    s->unk_00 = 0;
+    s->unk_02 = 0x800;
+    s->unk_04 = 0;
+    s->unk_08 = 0x180;
+    s->unk_10 = 0;
+    s->unk_0C = 0;
+    s->unk_12 = 0xFF;
+    *(s16 *)((u8 *)s + 0x6C) = 0x340;
+    *(s16 *)((u8 *)s + 0x6E) = 0;
+    *(s16 *)((u8 *)s + 0x70) = 0x80;
+    *(s16 *)((u8 *)s + 0x72) = 0x80;
+    *(s16 *)((u8 *)s + 0x78) = 0x80;
+    s->unk_7A = 0xA0;
+    s->unk_0A = 0;
+    return 0;
+}
 
 s32 func_800A1080(UnkTownA1080 *s, UnkTown2AE8 *b, s32 arg2)
 {
