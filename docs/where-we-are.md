@@ -333,11 +333,14 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-03, after the autonomous campaign and the carve:**
-   the three ovl_town units together are **1,456 of 1,819 functions and 59,184
-   of 70,311 words, 84.2%**, up from 26.7% six sessions ago; the project total
-   is **90.1%**, and there are **10 parks** -- SEVEN have been RETIRED by
-   solving them, not by giving up on them. Take these from `progress.py`, which
+   **State on 2026-11-04, mid-campaign:** the three ovl_town units together
+   are **1,459 of 1,819 functions and 58,709 of 70,311 words**; `ovl_town`
+   itself is **1,017 of 1,204 functions and 87.2% of its words**, with **187
+   stubs and 9 parks** left, and `ovl_town_800BF3F0` is at 71.2% with 173.
+   The project total is **90.3%** and there are **10 parks** across it --
+   SEVEN have been RETIRED by solving them, not by giving up on them.
+   (The 2026-11-03 figures this paragraph used to carry were 1,456 functions,
+   84.2% of the three units and 90.1% of the project.) Take these from `progress.py`, which
    now also counts old-style (K&R) definitions; `DEF_RE` requires `\)\s*\{`
    and was missing two of them, 132 uncounted words.
 
