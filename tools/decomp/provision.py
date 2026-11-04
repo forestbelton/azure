@@ -424,10 +424,22 @@ def main():
 
     witnessed = set()
     print("\n=== ROUTE (d): WHO TAKES MY TARGET'S ADDRESS (the reverse install edge) ===")
-    print("    Named by two agents as the most valuable fact their brief lacked: the")
-    print("    installer's own declaration settles the target's arity when nothing")
-    print("    calls it. An address-taker is NOT a caller and constrains nothing by")
-    print("    itself -- it is the installer's DECLARATION that is the witness.")
+    print("    Named by two agents as the most valuable fact their brief lacked.")
+    print("    An address-taker is NOT a caller and constrains nothing by itself.")
+    print("    READ WHAT THE INSTALLER ASSIGNS INTO BEFORE TRUSTING IT FOR ARITY.")
+    print("    This route's wording used to say flatly that the installer's own")
+    print("    declaration is the arity witness. That is TRUE only when the")
+    print("    installer calls your target, or assigns it into a slot declared with")
+    print("    a PROTOTYPE. In this codebase the slot is usually `void (*unk_00)();`")
+    print("    -- UNPROTOTYPED, so ANY arity compiles and the install settles")
+    print("    nothing about it. On 2026-11-03 that wording was echoed into a brief")
+    print("    for func_80091CE0/D6C/EB4/920F4, whose four installers are all")
+    print("    one-parameter functions that only store the address; the agent")
+    print("    falsified it and got arity from the listings instead -- every one")
+    print("    reads $a0, $a1 and $a2 into a saved register before writing any of")
+    print("    them, and $a3 is never touched. docs/town-sweep.md records the trap.")
+    print("    What an install DOES settle: which slot, and the first parameter's")
+    print("    type by family convention.")
     anyd = False
     # Capture the C file's name BEFORE the loop below, which rebinds `src` to
     # the string 'declared' and would otherwise print that as the filename.
