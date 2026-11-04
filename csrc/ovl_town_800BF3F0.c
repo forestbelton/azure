@@ -2020,6 +2020,7 @@ extern u8 D_800D4398[];
 extern void (*D_800D6B28[])();
 extern void (*D_800D6FBC[])();
 extern void (*D_800D70A0[])();
+extern void (*D_800D65D8[])();
 void func_8003AF58(u8 *p, u8 *q);
 s32 func_80095760(UnkTownCFCB4 *p);
 s32 func_8009567C(UnkTownCFCB4 *p);
@@ -10184,7 +10185,13 @@ void func_800C9C94(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C9CDC);
+void func_800C9CDC(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    func_800C2E84(a, c, D_800D6504);
+    a->unk_50 = func_800C9AD4;
+    b->unk_14 = -0xA0000;
+    a->unk_90 = func_800374F4(3) + 1;
+}
 
 void func_800C9D40(UnkTownActor *a, s32 b, s32 c)
 {
@@ -10192,9 +10199,71 @@ void func_800C9D40(UnkTownActor *a, s32 b, s32 c)
     a->unk_50 = func_800C9B44;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C9D80);
+void func_800C9D80(UnkTownActor *a, s32 b, s32 c)
+{
+    func_800C9C94(a, b, c);
+    a->unk_90 = func_800374F4(3) + 1;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C9DB8);
+void func_800C9DB8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
+{
+    s32 i;
+    s32 r;
+    u16 q;
+
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    i = 0x10;
+    while (1)
+    {
+        if (--i <= 0)
+        {
+            r = 0;
+            goto out;
+        }
+        r = func_800374F4(3) & 0xFFFF;
+        if (r != 1)
+        {
+            goto out;
+        }
+        q = func_800374F4(4);
+        if (q == 0)
+        {
+            if (*(s16 *)((u8 *)b + 2) < a->unk_84 + a->unk_8C)
+            {
+                a->unk_72 = 0x400;
+                goto out;
+            }
+        }
+        else if (q == 1)
+        {
+            if (*(s16 *)((u8 *)b + 6) < a->unk_86 + a->unk_8E)
+            {
+                a->unk_72 = 0;
+                goto out;
+            }
+        }
+        else if (q == 2)
+        {
+            if (a->unk_84 - a->unk_8C < *(s16 *)((u8 *)b + 2))
+            {
+                a->unk_72 = 0xC00;
+                goto out;
+            }
+        }
+        else
+        {
+            if (a->unk_86 - a->unk_8E < *(s16 *)((u8 *)b + 6))
+            {
+                a->unk_72 = 0x800;
+                goto out;
+            }
+        }
+    }
+
+out:
+    D_800D65D8[r](a, b, c);
+}
 
 void func_800C9F1C(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
@@ -10300,9 +10369,44 @@ void func_800CA114(void)
     func_800CA744();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CA134);
+void func_800CA134(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    s32 z;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CA214);
+    if (--a->unk_6C <= 0)
+    {
+        func_800CA75C(a, b, c);
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 2) += (*(s16 *)((u8 *)D_80083498.unk_08 + 2) - *(s16 *)((u8 *)b + 2)) / 4;
+        *(s16 *)((u8 *)b + 6) += (*(s16 *)((u8 *)D_80083498.unk_08 + 6) - *(s16 *)((u8 *)b + 6)) / 4;
+        z = *(s16 *)((u8 *)b + 0xA) + 0xD0;
+        *(s16 *)((u8 *)b + 0xA) += (*(s16 *)((u8 *)D_80083498.unk_08 + 0xA) - z) / 4;
+    }
+}
+
+void func_800CA214(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    if (a->unk_6C == 8)
+    {
+        *(s16 *)((u8 *)g + 0xA4) = 0x10;
+    }
+    if (--a->unk_6C <= 0)
+    {
+        func_800CA774(a, b, c);
+        func_80053DA8(0x605);
+    }
+    else
+    {
+        *(s16 *)((u8 *)b + 2) += (*(s16 *)((u8 *)D_80083498.unk_08 + 2) - *(s16 *)((u8 *)b + 2)) / 2;
+        *(s16 *)((u8 *)b + 6) += (*(s16 *)((u8 *)D_80083498.unk_08 + 6) - *(s16 *)((u8 *)b + 6)) / 2;
+        *(s16 *)((u8 *)b + 0xA) += (*(s16 *)((u8 *)D_80083498.unk_08 + 0xA) - *(s16 *)((u8 *)b + 0xA)) / 2;
+    }
+}
 
 /* The countdown state func_800CA774 installs at +0x54: while +0x6C is still
    positive it EASES the mover's three integer halves one eighth of the way
