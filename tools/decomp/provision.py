@@ -827,7 +827,13 @@ def main():
     # "too many arguments to function".
     btext = {}
     for d in landed:
-        i = defoff.get(d, txt.index(landed[d])); j = txt.find('\n}', i)
+        # NOT `defoff.get(d, txt.index(...))`: Python evaluates a default
+        # EAGERLY, so the fallback search ran even when defoff had the key --
+        # and once landed[] started holding a definition's first LOGICAL line
+        # (joined across a wrapped parameter list) that search raises
+        # ValueError, because the joined text appears nowhere in the file.
+        i = defoff[d] if d in defoff else txt.index(landed[d])
+        j = txt.find('\n}', i)
         btext[d] = txt[i:j if j > 0 else i + 2000]
 
     def arglist(hay, name):
@@ -1419,7 +1425,13 @@ def main():
 
     body_src = {}
     for d in landed:
-        i = defoff.get(d, txt.index(landed[d])); j = txt.find('\n}', i)
+        # NOT `defoff.get(d, txt.index(...))`: Python evaluates a default
+        # EAGERLY, so the fallback search ran even when defoff had the key --
+        # and once landed[] started holding a definition's first LOGICAL line
+        # (joined across a wrapped parameter list) that search raises
+        # ValueError, because the joined text appears nowhere in the file.
+        i = defoff[d] if d in defoff else txt.index(landed[d])
+        j = txt.find('\n}', i)
         body_src[d] = txt[i:j if j > 0 else i+400]
     hits = []
     for d, dc in body.items():
