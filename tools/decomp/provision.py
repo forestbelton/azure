@@ -850,8 +850,18 @@ def main():
             if any(i in stored for i in need): kinds.append('INSTALL')
             if any(i in tested for i in need): kinds.append('TEST')
             if any(i in tagged for i in need): kinds.append('TAG')
-            print("                *** EACH OF THESE IS DEFINED BELOW YOU, SO THE"
-                  " ADDRESS-TAKE (%s)" % '/'.join(kinds or ['ADDRESS-TAKE']))
+            # "THESE" HAD NO REFERENT BUT THE INSTALLS LINE ABOVE, which
+            # is the UNFILTERED list. Reported 2026-11-04 on func_8009B218:
+            # `installs: func_8009B148, func_8009B2BC` then "EACH OF THESE
+            # ... NEEDS A FORWARD DECLARATION", with only func_8009B2BC
+            # listed underneath -- func_8009B148 is defined 24 lines ABOVE
+            # that function's own INCLUDE_ASM and needs nothing. The detail
+            # line was filtered this morning and the headline was not, so the
+            # two disagreed in the same direction as the bug that fix was
+            # about. Say "the following", and say how many.
+            print("                *** EACH OF THE FOLLOWING %d IS DEFINED"
+                  " BELOW YOU, SO ITS ADDRESS-TAKE (%s)"
+                  % (len(need), '/'.join(kinds or ['ADDRESS-TAKE'])))
             print("                NEEDS A FORWARD DECLARATION -- an address-take does NOT")
             print("                ride an implicit declaration the way a CALL does, and")
             print("                this unit's 18 implicit-declaration rides are all calls.")

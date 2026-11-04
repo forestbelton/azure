@@ -3431,6 +3431,27 @@ extern u8 D_80088D44[];
    +0x08 read then comes out as a displacement off that materialised base. */
 extern s32 D_80110EB8[];
 extern void (*D_800D0508[])();
+/* ---- s1104f group declarations ---- */
+/* Address-taken by func_800A4F4C (defined above it) for the UnkTownA4C10
+   +0x24 slot, which is declared `void (*unk_24)()`; an address-take does not
+   ride an implicit declaration. */
+void func_800A4F84();
+/* Address-taken by func_800A4B40 for the same +0x24 slot. */
+void func_800A4F4C();
+/* Address-taken by func_800A5178 and func_800A526C for the D_80100DB8
+   record's +0x20 slot, which func_800A496C dispatches through
+   `void (*)(u8 *)`. */
+void func_800A51CC(u8 *a);
+/* Address-taken by func_800A51CC for the same +0x20 slot. */
+void func_800A526C(u8 *a);
+/* The two handler addresses func_800A510C copies into D_80100DE0's +0x24 and
+   +0x28 slots.  An ARRAY, not two scalars: the target shares one `high` and
+   reaches the second word as a lo_sum base plus a 4 displacement. */
+extern void (*D_800D0C48[])();
+/* D_80100DE0 + 0x30, inside the 0x38-byte record but outside the part
+   UnkTownA4C10 types; its own splat symbol, so the relocation matches. */
+extern s32 D_80100E10;
+/* ---- end s1104f group declarations ---- */
 s32 func_8003BD84(s32 x, s32 y);
 
 /* The func_8009AD70 chain's three undeclared symbols and its two
@@ -22675,7 +22696,42 @@ void func_800A4A58(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4B40);
+/* The camera-path record's installer: it latches the three animated words of
+   D_80083780's position into D_80100D98, arms the +0x24 slot with
+   func_800A4F4C and clears the +0x30 selector, then hands the record to
+   func_800A4CE8 (which arms +0x28).  Its one caller is func_800A4928, which
+   passes &D_80100DE0.
+
+   Two things are source rather than scheduling:
+
+   - the two globals go through the CAST EXPRESSION `((UnkTown2AE8 *)D_...)`,
+     the idiom this unit already uses on D_80083780 at func_8009B8E8 and
+     func_8009B9BC: each symbol's +0x00 access folds into its own `%hi`
+     (`lw %lo(D_80083780)($v0)` / `sw %lo(D_80100D98)($v1)`) and only +0x04
+     and +0x08 need the `addiu` lo_sum.  TWO POINTER LOCALS measure the same,
+     0 differing -- the lo_sum is forced either way because three
+     displacements share one base.
+   - THE SOURCE STORE ORDER IS +0x00, +0x04, +0x08.  The target EMITS
+     0, 8, 4 because memrefs_conflict_p resolves two constant displacements
+     off one base (sched.c:629) and sched is free to move the +0x08 pair up;
+     writing 0, 8, 4 in the source is 21 words with 4 differing.
+
+   +0x30 is inside the 0x38-byte record but outside the part UnkTownA4C10
+   types, so it is reached with a cast rather than by extending the typedef
+   that func_800A496C and func_800A4C10 share.
+
+   21 words -- its header reads `nonmatching func_800A4B40, 0x54`, and
+   0x54/4 = 21.  Measured 0 differing; raw 9 == relocdump 9, two of them the
+   `%hi`/`%lo`(func_800A4F4C) address-take. */
+void func_800A4B40(UnkTownA4C10 *p)
+{
+    ((UnkTown2AE8 *)D_80100D98)->unk_00 = ((UnkTown2AE8 *)D_80083780)->unk_00;
+    ((UnkTown2AE8 *)D_80100D98)->unk_04 = ((UnkTown2AE8 *)D_80083780)->unk_04;
+    ((UnkTown2AE8 *)D_80100D98)->unk_08 = ((UnkTown2AE8 *)D_80083780)->unk_08;
+    p->unk_24 = func_800A4F4C;
+    *(s32 *)((u8 *)p + 0x30) = 0;
+    func_800A4CE8(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4B94);
 
@@ -22731,9 +22787,105 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4D4C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4E1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4F4C);
+/* The idle half of the +0x24 slot's two-state ping-pong with func_800A4F84:
+   while a script is running it does nothing, and it hands the slot back to
+   func_800A4F84 as soon as func_800352FC clears.  The parameter copy
+   `addu $s0, $a0, $zero` sits in the `jal`'s delay slot, which is reorg, not
+   source -- the same shape func_800A54FC's comment records.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A4F84);
+   14 words -- its header reads `nonmatching func_800A4F4C, 0x38`, and
+   0x38/4 = 14.  Measured 0 differing; raw 3 == relocdump 3, two of them the
+   `%hi`/`%lo`(func_800A4F84) address-take. */
+void func_800A4F4C(UnkTownA4C10 *p)
+{
+    if (func_800352FC() != 0)
+    {
+        p->unk_24 = func_800A4F84;
+    }
+}
+
+/* The running half of the +0x24 slot's ping-pong with func_800A4F4C: it picks
+   the three-word TARGET position the interpolator at +0x00 chases.  With a
+   script running the source is, in order of preference, the record's own
+   +0x30 override, then engine slot D_80082660[scene].unk_04's UnkNode +0x08
+   when the scene byte is in 2..0x54, and otherwise D_80100D98 -- with a
+   nine-call grace counter at +0x34 for the scene-0 case.  With no script it
+   resets to D_80100D98 and parks func_800A4F4C back in the slot.
+
+   Four things are source rather than scheduling:
+
+   - `s = (u8 *)D_80082A38;` IS A POINTER LOCAL, and it is the whole shape of
+     the three `lbu 0x1($a0)`.  Inline as `*((u8 *)D_80082A38 + 1)` the +1
+     folds into the R_MIPS_LO16 addend and the `addiu` lo_sum disappears:
+     62 words, 58 differing.
+   - THE ARMS ARE THIS WAY ROUND.  The `func_800352FC() != 0` arm is the
+     `if` and the reset is the `else`, which is what lays the reset block out
+     LAST (.L800A5050) with the `beqz` jumping forward to it.  The
+     early-return spelling `if (func_800352FC() == 0) { reset; return; }` is
+     61 words with 56 differing.
+   - THE RANGE TEST IS TWO COMPARISONS, `s[1] >= 2 && s[1] < 0x55`.  `fold`
+     turns that into the target's `addiu $v0, $v1, -0x2` / `sltiu $v0, $v0,
+     0x53` itself; writing the fold out by hand as `(u32)(s[1] - 2) < 0x53`
+     is TWO WORDS SHORTER, 61 words with 44 differing, because the hand form
+     loses one of the scene-byte reloads.
+   - `p->unk_00 = (s32 *)D_80100D98;` IS WRITTEN ONCE, at the bottom.  Three
+     paths reach it -- the null-slot path, the `s[1] != 0` path and the
+     grace-counter path -- and the two labels one word apart (.L800A5040 for
+     the `lui`, .L800A5044 for the `addiu`) are reorg duplicating the `lui`
+     into the `bnez $v1` delay slot, not a second materialisation.
+
+   +0x30 and +0x34 are inside the 0x38-byte record but outside the part
+   UnkTownA4C10 types, so they are reached with casts rather than by
+   extending the shared typedef.
+
+   63 words -- its header reads `nonmatching func_800A4F84, 0xFC`, and
+   0xFC/4 = 63.  Measured 0 differing; raw 15 == relocdump 15, two of them the
+   `%hi`/`%lo`(func_800A4F4C) address-take and three of them the
+   intra-function `j` words. */
+void func_800A4F84(UnkTownA4C10 *p)
+{
+    u8 *s;
+    UnkNode *n;
+
+    if (func_800352FC() != 0)
+    {
+        s = (u8 *)D_80082A38;
+        if (s[1] != 0)
+        {
+            *(s32 *)((u8 *)p + 0x34) = 0;
+        }
+        if (*(s32 *)((u8 *)p + 0x30) != 0)
+        {
+            p->unk_00 = *(s32 **)((u8 *)p + 0x30);
+            return;
+        }
+        if (s[1] >= 2 && s[1] < 0x55)
+        {
+            n = (UnkNode *)D_80082660[s[1]].unk_04;
+            if (n != NULL)
+            {
+                p->unk_00 = (s32 *)n->unk_08;
+                return;
+            }
+        }
+        else if (s[1] == 0)
+        {
+            *(s32 *)((u8 *)p + 0x34) += 1;
+            if (*(s32 *)((u8 *)p + 0x34) < 9)
+            {
+                return;
+            }
+            *(s32 *)((u8 *)p + 0x34) = 9;
+        }
+        p->unk_00 = (s32 *)D_80100D98;
+    }
+    else
+    {
+        p->unk_00 = (s32 *)D_80100D98;
+        p->unk_24 = func_800A4F4C;
+        *(s32 *)((u8 *)p + 0x30) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5080);
 
@@ -22743,19 +22895,201 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A50B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A50E0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A510C);
+/* Re-arms BOTH of D_80100DE0's handler slots from the pair of addresses at
+   D_800D0C48.  D_800D0C48 is declared as an ARRAY and not as two scalars,
+   because that is what gives the target's addressing: `D_800D0C48[0]`'s
+   address is `(lo_sum (high sym) sym)`, a legitimate MIPS address, so it
+   folds into the load as `lw %lo(D_800D0C48)($v0)` off the shared `high`,
+   while `[1]` is `(plus (lo_sum ...) 4)`, which is not, so it forces the
+   lo_sum into its own register (`addiu $a0, $v0, %lo(D_800D0C48)` /
+   `lw $a0, 0x4($a0)`).  One `high`, two `%lo`s.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5130);
+   The `UnkTownA4C10 *p` local is NOT load-bearing here -- writing
+   `D_80100DE0.unk_24` / `.unk_28` inline is 9 words and 0 differing as well,
+   because two displacements off one base force the lo_sum either way.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5160);
+   9 words -- its header reads `nonmatching func_800A510C, 0x24`, and
+   0x24/4 = 9.  Measured 0 differing; raw 5 == relocdump 5, no address-take. */
+void func_800A510C(void)
+{
+    UnkTownA4C10 *p;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A516C);
+    p = &D_80100DE0;
+    p->unk_24 = D_800D0C48[0];
+    p->unk_28 = D_800D0C48[1];
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A5178);
+/* func_800A510C plus a reset of the latch at +0x04, which is what makes
+   func_800A4C10's "has the target been consumed yet" test fire on the next
+   call.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A51CC);
+   `p = &D_80100DE0;` IS A STATEMENT AHEAD OF THE CALL, and that is the whole
+   function: it forces the pointer's live range across func_800A510C, so it
+   lands in $s0 with its `lui` in the prologue and its `addiu` in the `jal`'s
+   delay slot -- the shape func_800A4928's comment records for the same
+   record.  Without it (`D_80100DE0.unk_04 = 0;` after the call) there is
+   nothing to save and the function is 9 words against 12, 11 differing: the
+   `sw $s0`/`lw $s0` pair and the `addiu $s0` all disappear.  As a declaration
+   INITIALISER it is the same 12 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A526C);
+   12 words -- its header reads `nonmatching func_800A5130, 0x30`, and
+   0x30/4 = 12.  Measured 0 differing; raw 3 == relocdump 3, no address-take. */
+void func_800A5130(void)
+{
+    UnkTownA4C10 *p;
+
+    p = &D_80100DE0;
+    func_800A510C();
+    p->unk_04 = 0;
+}
+
+void func_800A5160(s32 a)
+{
+    D_80100E10 = a;
+}
+
+void func_800A516C(void)
+{
+    D_80100E10 = 0;
+}
+
+/* The D_80100DB8 record's arming routine, called by func_800A4928 right after
+   func_800A4B40: it seeds both three-halfword vectors (+0x00..+0x04 and
+   +0x10..+0x14) from the resident's camera position at D_80083160 +0xAC, sets
+   the +0xB0 component to 0x400 on the way through, and installs the two
+   handlers func_800A496C dispatches, func_800A5340 at +0x1C and
+   func_800A51CC at +0x20.
+
+   THE PAIRED STORES ARE CHAINED ASSIGNMENTS, which emit RIGHT-TO-LEFT, so
+   `*(s16 *)(a + 0x10) = *(s16 *)(a + 0x0) = g->unk_AC;` stores +0x00 and then
+   +0x10 off ONE `lhu`.  As two separate statements each pair re-reads the
+   field -- the parameter and the global cannot be disambiguated, so the first
+   store invalidates the load -- and the function is 26 words with 20
+   differing.  A `t` temp per pair with the 0x400 written out three times is
+   also 21 words, 0 differing, so the CHAIN is not uniquely witnessed; the
+   single load and the single constant are.
+
+   `g = &D_80083160;` is NOT load-bearing here (inline `D_80083160.unk_AC` is
+   also 0 differing -- three displacements off one base force the lo_sum
+   either way), unlike in func_800A573C and func_800A58CC where a call
+   intervenes.
+
+   21 words -- its header reads `nonmatching func_800A5178, 0x54`, and
+   0x54/4 = 21.  Measured 0 differing; raw 6 == relocdump 6, FOUR of them
+   address-takes: `%hi`/`%lo`(func_800A5340) and `%hi`/`%lo`(func_800A51CC). */
+void func_800A5178(u8 *a)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    *(s16 *)(a + 0x10) = *(s16 *)(a + 0x0) = g->unk_AC;
+    *(s16 *)(a + 0x12) = *(s16 *)(a + 0x2) = g->unk_AE;
+    *(s16 *)(a + 0x14) = *(s16 *)(a + 0x4) = g->unk_B0 = 0x400;
+    *(u32 *)(a + 0x1C) = (u32)func_800A5340;
+    *(u32 *)(a + 0x20) = (u32)func_800A51CC;
+}
+
+/* The idle state of the D_80100DB8 record's +0x20 slot, and the other half of
+   a two-state ping-pong with func_800A526C: it watches the resident's camera
+   position at D_80083160 +0xAC against the record's target vector at +0x00,
+   and when they have drifted apart it starts a nine-frame interpolation by
+   writing the frame count to +0x18 and putting func_800A526C in the slot.
+   With the target already reached it does nothing; with the target equal to
+   the record's own CURRENT vector at +0x10 it just resyncs both from the
+   resident.
+
+   +0x00/+0x02 are read as ONE WORD against D_80083160's +0xAC/+0xAE pair --
+   `lw`, not two `lh`s -- and the +0x04 component separately as a SIGNED
+   halfword, hence `*(s16 *)&g->unk_B0` on a `u16` field.  `(s16)g->unk_B0` is
+   byte-identical, 0 differing, so the cast form is not witnessed; the
+   SIGNEDNESS is (an unsigned read would be `lhu`).
+
+   THE SECOND TEST IS THE `||` SPELLING WITH THE INSTALL IN THE `if` AND THE
+   resync IN THE `else`.  That is what lays the install block out BETWEEN the
+   tests and the resync block, with `beq → .L800A5234` jumping over it and the
+   `bne`'s target being the install's own first word.  Written the other way
+   round -- `if (A == B && C == D) { resync; } else { install; }` -- it is 40
+   words with 19 differing.  The FIRST test's shape is not witnessed: two
+   nested `if`s measure the same 0 differing as the `&&`.
+
+   The resync's paired stores are chained assignments for the reason recorded
+   on func_800A5178.  `addiu $v0, $zero, 0x9` appears in BOTH branch delay
+   slots; that is reorg duplicating one insn, not two constants.
+
+   40 words -- its header reads `nonmatching func_800A51CC, 0xA0`, and
+   0xA0/4 = 40.  Measured 0 differing; raw 5 == relocdump 5, two of them the
+   `%hi`/`%lo`(func_800A526C) address-take and one the intra-function `j`. */
+void func_800A51CC(u8 *a)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    if (*(s32 *)(a + 0x0) == *(s32 *)&g->unk_AC &&
+        *(s16 *)(a + 0x4) == *(s16 *)&g->unk_B0)
+    {
+        return;
+    }
+    if (*(s32 *)(a + 0x0) != *(s32 *)(a + 0x10) ||
+        *(s16 *)(a + 0x4) != *(s16 *)(a + 0x14))
+    {
+        *(s32 *)(a + 0x18) = 9;
+        *(u32 *)(a + 0x20) = (u32)func_800A526C;
+    }
+    else
+    {
+        *(s16 *)(a + 0x10) = *(s16 *)(a + 0x0) = g->unk_AC;
+        *(s16 *)(a + 0x12) = *(s16 *)(a + 0x2) = g->unk_AE;
+        *(s16 *)(a + 0x14) = *(s16 *)(a + 0x4) = g->unk_B0;
+    }
+}
+
+/* The interpolating state of the D_80100DB8 record's +0x20 slot: each call
+   moves the resident's camera position at D_80083160 +0xAC..+0xB0 one
+   remaining-frames'-worth of the way towards the record's target vector at
+   +0x00..+0x04, counts +0x18 down, and on the last frame latches the target
+   into the record's current vector at +0x10 and hands the slot back to
+   func_800A51CC.
+
+   The three steps are func_800A4C10's `+= (target - current) / frames` idiom
+   over HALFWORD fields instead of words, which is why each one reads +0xAC
+   twice: `lh` for the subtraction, because that use needs the value
+   sign-extended, and `lhu` for the read-modify-write, which cse resolves out
+   of the stored class.  That is the recorded behaviour at
+   docs/matching-levers.md:13975, and it is why the explicit
+   `*(s16 *)&g->unk_AC` is needed on a `u16` field -- though `(s16)g->unk_AC`
+   is byte-identical, 0 differing, so only the SIGNEDNESS is witnessed.  The
+   three `lw 0x18($a1)` reloads are not a missed cse either: each `sh` to a
+   D_80083160 field invalidates the previous value, exactly as
+   func_800A4C10's comment records for its four `lw 0x20($a1)`.
+
+   THE TAIL'S CHAINS ARE `g->unk_AC = *(s16 *)(a + 0x10) = *(s16 *)(a + 0x0);`
+   AND NOT THE OTHER WAY ROUND.  Right-to-left emission puts the +0x10 store
+   first and the +0xAC store second, which is the target's order; swapping the
+   two targets of the chain is 51 words with 16 differing.
+
+   `addu $a1, $a0, $zero` at entry is register allocation, not a parameter
+   copy in source -- $a0 is wanted as the scratch for the `lh` loads.
+
+   53 words -- its header reads `nonmatching func_800A526C, 0xD4`, and
+   0xD4/4 = 53.  Measured 0 differing; raw 4 == relocdump 4, two of them the
+   `%hi`/`%lo`(func_800A51CC) address-take. */
+void func_800A526C(u8 *a)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    g->unk_AC += (*(s16 *)(a + 0x0) - *(s16 *)&g->unk_AC) / *(s32 *)(a + 0x18);
+    g->unk_AE += (*(s16 *)(a + 0x2) - *(s16 *)&g->unk_AE) / *(s32 *)(a + 0x18);
+    g->unk_B0 += (*(s16 *)(a + 0x4) - *(s16 *)&g->unk_B0) / *(s32 *)(a + 0x18);
+    *(s32 *)(a + 0x18) -= 1;
+    if (*(s32 *)(a + 0x18) <= 0)
+    {
+        g->unk_AC = *(s16 *)(a + 0x10) = *(s16 *)(a + 0x0);
+        g->unk_AE = *(s16 *)(a + 0x12) = *(s16 *)(a + 0x2);
+        g->unk_B0 = *(s16 *)(a + 0x14) = *(s16 *)(a + 0x4);
+        *(u32 *)(a + 0x20) = (u32)func_800A51CC;
+    }
+}
 
 /* The idle/approach state of the D_80100DB8 camera record's +0x1C slot, and
    the hub of a four-way mutual-install cycle: it installs func_800A5440 (the
