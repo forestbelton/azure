@@ -1328,6 +1328,18 @@ The cost of the old scheme is not hypothetical: a merge script and a merged
 unit are exactly the two files a park or a re-measurement needs months later,
 and they are the two that get clobbered.
 
+**AND THE RULE APPLIES TO THE HARNESS SCRATCHPAD TOO, which is NOT
+session-isolated in practice.** Reported 2026-11-04: an agent found its
+`/tmp/claude-1000/-home-case-projects-azure/<session>/scratchpad/` already
+holding 300-odd files from other sessions dated that day and the day before
+(`a_b218_*.c`, `a_b594_*.c`, `9D74_final.c`), and a concurrent agent
+**overwrote a file it had written under the generic name `prov0.txt`** between
+its step-0 `provision.py` run and its end-of-run re-run -- so its "has
+provisioning drifted under me?" diff silently compared its own output against
+another group's. The directory looks private and is not. Use the same dated
+prefix there, and treat an unexplained diff between two of your own runs as a
+clobber before treating it as drift.
+
 ### THE MERGE-TIME CHECK I KEEP PAYING FOR: COLLAPSE DOUBLE BLANK LINES
 
 Two merge scripts in one batch left a blank line too many where a body
