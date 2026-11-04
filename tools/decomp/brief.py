@@ -108,7 +108,18 @@ def main():
         rod = 1 if re.search(r'^dlabel D_', t, re.M) else 0
         jtr = 1 if re.search(r'^dlabel jtbl_', t, re.M) else 0
         if jt or rod or jtr: haz.append((f, jt, rod, jtr, t))
-        rows.append((f, hx, w))
+        # THE ADDRESS-TAKE WORD COUNT, COMPUTED RATHER THAN PREDICTED.
+        # The masked build-breaking class is %hi/%lo OCCURRENCES on a function
+        # symbol, not (distinct install targets) x 2 -- a handler address can
+        # be materialised more than once in one function, and on 2026-11-03
+        # func_800BBCA0 materialised one target twice, so my hand-written
+        # "expect 2" would have made a correct relocdump reading of 4 look
+        # wrong. Across 40 installing stubs three disagree with the doubling
+        # formula (1 target/4 words, 3/8 and 3/12). relocdump prints the right
+        # number; this puts the same number in the brief so nobody has to take
+        # mine on trust.
+        at = len(re.findall(r'%(?:hi|lo)\(func_[0-9A-Fa-f]+\)', t))
+        rows.append((f, hx, w, at))
     print("Land %d MIPS R3000 PSX function(s) in /home/case/projects/azure, overlay `%s`, "
           "to BYTE-IDENTICAL output. %d words.\n" % (len(fns), unit, tot))
     print("## STEP 0 -- MANDATORY FIRST COMMAND\n")
@@ -120,10 +131,17 @@ def main():
 LANDED-ABOVE versus LANDED-BELOW matters: an arity mismatch on a callee defined ABOVE its call site is a hard "too many arguments", while one defined BELOW rides an implicit declaration, which this unit does 18 times.
 """)
     print("## WHAT I VERIFIED MYSELF (read off the listings; the only facts I assert)\n")
-    print("| function | header | words |")
-    print("|---|---|---|")
-    for f, hx, w in rows:
-        print("| `%s` | `%s` | %d |" % (f, hx, w))
+    print("| function | header | words | address-take words |")
+    print("|---|---|---|---|")
+    for f, hx, w, at in rows:
+        print("| `%s` | `%s` | %d | %d |" % (f, hx, w, at))
+    tot_at = sum(at for *_, at in rows)
+    print("\nThe last column is the MASKED, build-breaking class: `%hi`/`%lo`")
+    print("OCCURRENCES on a FUNCTION symbol, counted off each listing. **%d words"
+          % tot_at)
+    print("across the group.** `relocdump.py` must report exactly this, and it is not")
+    print("(install targets x 2) -- one handler address can be materialised more than")
+    print("once in one function. Report what relocdump prints, not what you expect.")
     if haz:
         print("\n**HAZARD -- these own rodata or have a jump table, so the build gate is the")
         print("only authority and a clean whole-unit sweep will NOT show a rodata shift:**")
