@@ -2601,6 +2601,55 @@ def main():
                 anyg = True; witnessed.add(f)
     if not anyg: print("  no group member calls another")
 
+    # ROUTE (s): A CALLER IN A SISTER CARVED UNIT IS STILL A CALLER.
+    # Routes (c), (e) and (n) are scoped to csrc/<unit>.c and
+    # asm/nonmatchings/<unit>/, which was right before the carve and is wrong
+    # now: since ovl_town was split into three translation units, one of its
+    # functions can be called from a SIBLING unit's C file. Reported
+    # 2026-11-04 -- the banner below said "NO ARITY WITNESS ANYWHERE for
+    # func_8009E218 / No jal and no C call site in this unit" while
+    # csrc/ovl_town_800BF3F0.c:3685 holds
+    # `void func_800C0AC8(void) { func_8009E218(0, 0, 0, 0); }`, a landed
+    # four-argument call site. One grep found it. Routes (h), (j) and (o)
+    # already search the csrc/ tree; these did not.
+    sis_sites = {}
+    base_u = (unit.split('_')[0] + '_' + unit.split('_')[1]
+              if unit.startswith('ovl_') and len(unit.split('_')) > 1 else unit)
+    for fp in sorted(glob.glob(os.path.join(PROJ, 'csrc', base_u + '*.c'))):
+        if os.path.basename(fp)[:-2] == unit:
+            continue
+        try:
+            o = io.open(fp, encoding='utf-8', errors='replace').read()
+        except Exception:
+            continue
+        olines = o.split('\n')
+        for f in targets:
+            for i, ln in enumerate(olines):
+                m = re.search(r'\b%s\s*\(([^;)]*)\)' % f, ln)
+                if not m or re.match(r'^\s*[A-Za-z_][\w \*]*\b%s\s*\(' % f, ln) \
+                        and ln.rstrip().endswith(';') and 'return' not in ln:
+                    continue
+                sis_sites.setdefault(f, []).append(
+                    (os.path.relpath(fp, PROJ), i + 1, ln.strip(), m.group(1)))
+    if sis_sites:
+        print("\n=== ROUTE (s): CALL SITES IN A SISTER CARVED UNIT ===")
+        print("    Routes (c)/(e)/(n) only look in this unit's own C file and"
+              " listings. Since the carve")
+        print("    that is not where all your callers are.")
+        for f, rows in sorted(sis_sites.items()):
+            for fp, ln, txt_ln, args in rows[:4]:
+                n = 0 if not args.strip() else len(
+                    [a for a in re.split(r',(?![^(]*\))', args) if a.strip()])
+                print("  %-15s called at %s:%d with %d argument(s): %s"
+                      % (f, fp, ln, n, txt_ln[:90]))
+            print("      That site rides whatever declaration ITS OWN unit"
+                  " carries, which may differ from this")
+            print("      unit's -- a return-type or arity mismatch across"
+                  " translation units does not fail the")
+            print("      compile, so read that unit's declaration too before"
+                  " trusting the site for types.")
+            witnessed.add(f)
+
     missing = [f for f in targets if f not in witnessed and listing(unit, f)]
     if missing:
         print("\n  *** NO ARITY WITNESS ANYWHERE for: %s" % ', '.join(missing))

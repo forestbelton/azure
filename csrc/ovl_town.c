@@ -3534,6 +3534,8 @@ void func_800A7360(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 /* s1104n: the +0xCC scene's two new data symbols. */
 extern u8 D_800D15C4[];
 extern s32 D_800D15EC[];
+extern void *D_800D07A4[];
+extern s16 D_800D07AC;
 s32 func_8003BD84(s32 x, s32 y);
 
 /* The func_8009AD70 chain's three undeclared symbols and its two
@@ -3854,7 +3856,7 @@ s32 func_80093C40();
    an address-take needs a real declaration.  Copied from the definition. */
 void func_800947CC(UnkTownTask *t, UnkTown2AE8 *b);
 s32 func_80093C58();
-void func_8009E218();
+s32 func_8009E218();
 s32 func_8009E258();
 s32 func_8009E2C0();
 s32 func_8009E348();
@@ -17087,13 +17089,231 @@ void func_8009D73C(u8 **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D7D0);
+/* 14 words -- its header reads `nonmatching func_8009D7D0, 0x38`, and
+   0x38/4 = 14.  Measured 0 differing on the first compile.  No jump table, no
+   rodata of its own, no relocation at all.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D808);
+   func_8009D73C above is the one caller and its comment block already names
+   this function as the per-handle release: the record is the 0x14-byte
+   UnkTownScrRec, the list is terminated by `(unk_01 & 0xC0) == 0x80` exactly
+   as func_8009DA50's own loop test has it, and unk_00 is the "fired" flag
+   func_8009DA50 is documented as the only writer of -- this is the pass that
+   clears it again.  The call site passes a `u8 *` through the implicit
+   declaration this unit rides 18 times, so the typed parameter here costs
+   nothing and contradicts nothing. */
+void func_8009D7D0(UnkTownScrRec *p)
+{
+    while ((p->unk_01 & 0xC0) != 0x80)
+    {
+        p->unk_00 = 0;
+        p++;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D940);
+/* 78 words -- its header reads `nonmatching func_8009D808, 0x138`, and
+   0x138/4 = 78.  Measured 0 differing.  No jump table and no rodata of its
+   own; its only relocation is the `%hi`/`%lo` pair on D_80083160.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009D9E4);
+   The bounds half of func_8009CEE8's two-step, feeding the `lo`/`hi` pair
+   func_8009D940 then culls against.  `base` is D_80082D08 read the way
+   func_8009DA50 reads it -- `u8 *` with `*(u16 *)(b + N)` -- over the same
+   four 8-byte entries at +0x00/+0x08/+0x10/+0x18, two halfwords each.  `lo` is
+   the running MAX and `hi` the running MIN, which is the opposite of what the
+   caller's local names suggest; the clamps settle it.
+
+   THE ADDRESS CHAIN IS THE LANDED FAMILY'S, VERBATIM (see func_8008D084's
+   comment at :5485, which reads the same two shifts): `Unk80083160 *g =
+   &D_80083160;` plus `(UnkTownCastGeo *)&g->unk_1DC` gives lui / addiu %lo /
+   addiu 0x1DC, three words.  Folding it as
+   `(UnkTownCastGeo *)((u8 *)&D_80083160 + 0x1DC)` puts the 0x1DC in the
+   relocation addend and is 77 words / 69 differing.  The clamp ceiling is the
+   same `0x40 << m->unk_14` / `unk_16` that function publishes, minus one.
+
+   THREE THINGS ARE LOAD-BEARING AND ALL THREE WERE MEASURED:
+
+   1. THE LOOP MUST BE A COUNTER STEPPING BY 8 WITH THE ADDRESS WRITTEN OUT
+      INLINE -- no pointer local.  The target's `addiu $v0, $a0, 0x20` sits
+      INSIDE the loop, immediately before the `slt`, and that is the signature
+      of loop.c's `maybe_eliminate_biv_1` emitting its replacement compare
+      operand at `where = p` (loop.c:6296, `where = threshold >= insn_count ?
+      loop_start : p`) -- not of a hoisted invariant.  Elimination needs
+      `all_reduced == 1` (loop.c:4288), so EVERY giv must be reduced, and a
+      pointer local defeats that two different ways:
+        `p = base + i * 8;` with `i++`  -- 77 words / 23 differing.  The
+            intermediate `i * 8` is its own DEST_REG giv with lifetime 1 and
+            benefit 2, and `benefit -= add_cost * biv_count` (loop.c:3961)
+            takes it to 0, so it is "not worth while" and clears all_reduced.
+        `p = base + i;` with `i += 8`   -- 78 / 52.  No intermediate, but the
+            pointer local IS a DEST_REG giv set once and mentioned in the
+            combined address giv's insn, so combine_givs:5844 takes the
+            `g1->benefit = g2->benefit` branch and OVERWRITES the four address
+            givs' accumulated benefit with 2, which the same subtraction then
+            takes to 0.
+      Written inline there is no DEST_REG giv at all, the address givs'
+      benefits accumulate, the combined giv is reduced into one register
+      walking by 8 with the +0x2 accesses as displacements, and `i` is
+      eliminated -- which is also why the compare is a SIGNED `slt` on what
+      look like pointers: it is `i < 0x20`'s own comparison code, carried over.
+      `&base[i + 0x0]` measures identically to `(base + i + 0x0)`.
+      For the record, the pointer-walk spellings: `for (p = base; p < base +
+      0x20; p += 8)` 83 / 61; the same with `(s32)` casts 81 / 59; a
+      `do`/`while ((s32)p < (s32)base + 0x20)` 79 / 57 -- that one gets the
+      loop tail exactly right and then loses the word again, because with the
+      pointer as the biv the `+0x2` accesses become a SECOND reduced giv
+      walking alongside instead of a displacement; a `goto` loop 76 / 53.
+
+   2. `v` HOLDS THE SIGNED READ FOR THE WHOLE BLOCK.  Each block compares the
+      element twice -- once against the bound, once against the clamp -- and
+      the target loads it ONCE into $a3 and keeps it live across the branch.
+      Re-reading `*(s16 *)(base + i + N)` at the second comparison is 88 words
+      / 67 differing: the store to `lo[N]` in between kills cse's memory table,
+      so each re-read is a real `lh` and the register it lands in is then
+      clobbered by the `lhu`.  `s16 v` measures the same as `s32 v`.
+      The separate `lh` and `lhu` on one field are correct and are NOT a typing
+      inconsistency: a signed-halfword read whose only consumer is a halfword
+      store comes out `lhu` (convert.c's trunc1 path), the word-wide one `lh`.
+
+   3. `w` HOLDS `lo[N]` / `hi[N]`, AND ITS ONLY JOB IS LOAD ORDER.  Comparing
+      against the array element directly is 78 / 10 -- every one of the ten is
+      the same swap of two adjacent `lh`s, because `lo[0] < v` expands its
+      left operand at the COMPARE, after `v`'s own load, where the target has
+      the bound's load first.  Binding it one statement earlier puts it first
+      by LUID and sched1 keeps that order.
+
+   `t` is cosmetic (0 differing with the shift expression written out twice). */
+void func_8009D808(u8 *base, s16 *lo, s16 *hi)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkTownCastGeo *m = (UnkTownCastGeo *)&g->unk_1DC;
+    s32 i;
+    s32 t;
+    s32 v;
+    s32 w;
+
+    lo[0] = hi[0] = *(u16 *)(base + 0x0);
+    lo[1] = hi[1] = *(u16 *)(base + 0x2);
+    if (lo[0] < 0)
+    {
+        lo[0] = hi[0] = 0;
+    }
+    if (lo[1] < 0)
+    {
+        lo[1] = hi[1] = 0;
+    }
+    for (i = 0; i < 0x20; i += 8)
+    {
+        w = lo[0];
+        v = *(s16 *)(base + i + 0x0);
+        if (w < v)
+        {
+            lo[0] = *(u16 *)(base + i + 0x0);
+            t = (0x40 << m->unk_14) - 1;
+            if (t < v)
+            {
+                lo[0] = t;
+            }
+        }
+        w = hi[0];
+        v = *(s16 *)(base + i + 0x0);
+        if (v < w)
+        {
+            hi[0] = *(u16 *)(base + i + 0x0);
+            if (v < 0)
+            {
+                hi[0] = 0;
+            }
+        }
+        w = lo[1];
+        v = *(s16 *)(base + i + 0x2);
+        if (w < v)
+        {
+            lo[1] = *(u16 *)(base + i + 0x2);
+            t = (0x40 << m->unk_16) - 1;
+            if (t < v)
+            {
+                lo[1] = t;
+            }
+        }
+        w = hi[1];
+        v = *(s16 *)(base + i + 0x2);
+        if (v < w)
+        {
+            hi[1] = *(u16 *)(base + i + 0x2);
+            if (v < 0)
+            {
+                hi[1] = 0;
+            }
+        }
+    }
+}
+
+/* 41 words -- its header reads `nonmatching func_8009D940, 0xA4`, and
+   0xA4/4 = 41.  Measured 0 differing on the first compile.  No jump table, no
+   rodata of its own, no relocation at all.
+
+   The cull pass of func_8009CEE8's two-step: func_8009D808 above computes the
+   bounds into its `lo`/`hi` pair, and this walks the NULL-terminated
+   UnkTownScrCtx table at D_80100900 copying the entries that survive into
+   D_801007F8, which func_8009CEE8 then iterates.  Both table parameters are
+   `UnkTownScrCtx **` because that is what the landed call site passes
+   (`&D_80100900`, `&D_801007F8`, both declared `UnkTownScrCtx *`).
+
+   The record is read through an `s16 *` view: UnkTownScrCtx's comment block
+   already records that this function reads +0x00/+0x04/+0x08 and
+   +0x02/+0x06/+0x0A as three s16 pairs, and +0x04/+0x06 are still inside its
+   pad_04.  The test is a plain four-term `&&` chain of `>=`, which is why
+   every arm is `slt`/`bnez` to the skip label.
+
+   `*src` IS READ TWICE PER TRIP AND THAT IS NOT A REDUNDANCY: the bottom
+   test's load and the body's load sit in different basic blocks, so cse never
+   sees them together.  The `e` local is cosmetic (0 differing with
+   `((s16 *)*src)[0]` spelled out at every use). */
+void func_8009D940(s16 *lo, s16 *hi, UnkTownScrCtx **src, UnkTownScrCtx **dst)
+{
+    s16 *e;
+
+    while (*src != NULL)
+    {
+        e = (s16 *)*src;
+        if (lo[0] >= e[0] + e[2] && lo[1] >= e[1] + e[3] && e[0] + e[2] + e[4] >= hi[0] &&
+            e[1] + e[3] + e[5] >= hi[1])
+        {
+            *dst = (UnkTownScrCtx *)e;
+            dst++;
+        }
+        src++;
+    }
+    *dst = NULL;
+}
+
+/* 27 words -- its header reads `nonmatching func_8009D9E4, 0x6C`, and
+   0x6C/4 = 27.  Measured 0 differing on the first compile.  No jump table, no
+   rodata of its own, no relocation at all.  Nothing in this unit calls it and
+   nothing takes its address, so the parameter arity comes from the registers:
+   $a0 is read and $a1 is written, and $a2 is only ever a scratch register for
+   a loaded halfword, never read before it is written.
+
+   It expands the three s16 pairs func_8009D940 compares against -- the
+   +0x00/+0x04/+0x08 and +0x02/+0x06/+0x0A triple its comment block in
+   UnkTownScrCtx describes -- into the four corners of the rectangle they
+   describe: X0 = x0+x1, X1 = x0+x1+x2, Y0 = y0+y1, Y1 = y0+y1+y2, written out
+   as (X0,Y0) (X1,Y0) (X0,Y1) (X1,Y1) at +0x0/+0x4/+0x8/+0xC.
+
+   THE CHAINED ASSIGNMENTS ARE THE WHOLE FUNCTION AND THEIR DIRECTION IS
+   WITNESSED.  A chained assignment emits its stores RIGHT-TO-LEFT, so
+   `b+0x0 = b+0x8 = v` is `sh 0x8` then `sh 0x0`, which is the target's order.
+   Writing the eight stores as eight separate statements is 45 words / 40
+   differing (cse cannot share the sum across the intervening store, because
+   the store through `b` may alias the loads through `a` -- which is also why
+   each sum is RE-READ here rather than held in a local).  Swapping one chain's
+   two lvalues is 27 / 2. */
+void func_8009D9E4(u8 *a, u8 *b)
+{
+    *(s16 *)(b + 0x0) = *(s16 *)(b + 0x8) = *(u16 *)(a + 0x0) + *(u16 *)(a + 0x4);
+    *(s16 *)(b + 0x4) = *(s16 *)(b + 0xC) = *(u16 *)(a + 0x0) + *(u16 *)(a + 0x4) + *(u16 *)(a + 0x8);
+    *(s16 *)(b + 0x2) = *(s16 *)(b + 0x6) = *(u16 *)(a + 0x2) + *(u16 *)(a + 0x6);
+    *(s16 *)(b + 0xA) = *(s16 *)(b + 0xE) = *(u16 *)(a + 0x2) + *(u16 *)(a + 0x6) + *(u16 *)(a + 0xA);
+}
 
 void func_8009DA50(UnkTownScrRec *p, u8 *b, s32 a2, s32 a3)
 {
@@ -17174,7 +17394,57 @@ void func_8009DA50(UnkTownScrRec *p, u8 *b, s32 a2, s32 a3)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009DC8C);
+/* 45 words -- its header reads `nonmatching func_8009DC8C, 0xB4`, and
+   0xB4/4 = 45.  Measured 0 differing on the first compile.  No jump table and
+   no rodata of its own; no `%hi`/`%lo` on a function symbol.
+
+   The 0x13 arm of the spawn-dressing chain the comment at :17494 names, with
+   four landed call sites (func_8009DFD8, func_8009E504, func_8009E85C,
+   func_8009F4C0) all passing four arguments, which is the arity and which the
+   unit's existing declaration at :2081 already has.  The fourth parameter is
+   declared `void *` by those call sites and is used here as a BIT MASK --
+   only `& 2` and `& 4` ever touch it -- so the cast is at the point of use
+   rather than in the signature; `(u32)d` measures identically.
+
+   D_800D07A4 is a `void *[]` indexed by the third parameter and D_800D07AC a
+   bare `s16`, declared as two independent symbols because that is what the
+   listing names and what keeps the relocation table symbol-for-symbol.
+   Spelling them off the unit's existing `extern u8 D_800D0788[];` as
+   `*(void **)(D_800D0788 + 0x1C + c * 4)` and `*(s16 *)(D_800D0788 + 0x24)`
+   is ALSO 45 words / 0 differing -- the two addresses are never live at the
+   same time, they sit in opposite arms of the `if` -- but it relocates against
+   D_800D0788 with the offset folded into the addend, so the independent
+   symbols are the spelling kept.
+
+   NO LOCAL IS NEEDED FOR `r` IN THE FIRST ARM even though the target stores
+   through $a0 (`sw $v0, 0x28($a0)`) rather than through the $s0 the parameter
+   lives in: gcc emits the outgoing argument copy before the store on its own
+   and reuses it, so `UnkTownRend *q = r;` is 0 differing and redundant. */
+void func_8009DC8C(UnkTownSpawn *p, UnkTownRend *r, s32 c, void *d)
+{
+    if (c == 2)
+    {
+        *((u8 *)p + 0x93) = 1;
+        *(u32 *)((u8 *)r + 0x28) = D_80081458;
+        func_80047784(r, D_800D07AC, 0);
+    }
+    else
+    {
+        func_8003DB94(r, D_800D07A4[c], 0);
+        if ((s32)d & 2)
+        {
+            r->unk_12 = 0x100;
+        }
+        else if ((s32)d & 4)
+        {
+            r->unk_12 = 0x200;
+        }
+        else
+        {
+            r->unk_12 = 0;
+        }
+    }
+}
 
 /* func_8009B148 (0x8009B148) with func_8009D20C -- the TWO-parameter member of
    the probe family -- for func_8009CFE0, plus a trailing `+0x4D == 0x13` arm.
@@ -17327,7 +17597,42 @@ UnkNode *func_8009DFD8(u8 *a, UnkTown2AE8 *b, s32 c)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009E218);
+/* 16 words -- its header reads `nonmatching func_8009E218, 0x40`, and
+   0x40/4 = 16.  Measured 0 differing.  No jump table and no rodata of its own;
+   six relocation words, none on a function symbol.
+
+   Publishes two fields of the D_800CFCC4 record into the D_80082A38 engine
+   record: the signed byte at +0x4E, and the D_800D0910 entry the unsigned byte
+   at +0x4C selects.  The index idiom is func_8009E370's below
+   (`*((u8 *)D_800CFCC4 + 0x4F)`), so no local for D_800CFCC4 -- that is only
+   load-bearing across a call, and there is none here; binding it measures the
+   same.
+
+   THE BASE LOCAL FOR D_80082A38 IS LOAD-BEARING.  Writing the two stores as
+   `*(s32 *)((u8 *)D_80082A38 + 0x48)` and `+ 0x4C` folds the 0x48 into the
+   relocation addend, cse then derives the second base from the first with an
+   `addiu`, and the function is 15 words / 15 differing.  Assigning the base to
+   `b` first forces the `lo_sum` into a register, which is the target's
+   `addiu $a0, $a0, %lo(D_80082A38)` with both stores as displacements off it.
+   `D_80082A38w[0x12]` / `[0x13]` through the existing asm alias is the same 16
+   words / 0 differing with an identical relocation table; the byte offsets are
+   kept for readability.
+
+   THE PRE-EXISTING `void func_8009E218();` DECLARATION HAD TO BECOME `s32`:
+   the target's `addu $v0, $zero, $zero` in the `jr`'s delay slot IS the return
+   value and a void return cannot reach it -- the same change func_8009E3D4
+   below records.  Nothing in this unit calls it or takes its address, so the
+   change is safe; with the declaration left as `void` the file does not
+   compile. */
+s32 func_8009E218(void)
+{
+    u8 *b;
+
+    b = (u8 *)D_80082A38;
+    *(s32 *)(b + 0x48) = *(s8 *)((u8 *)D_800CFCC4 + 0x4E);
+    *(s32 *)(b + 0x4C) = D_800D0910[*((u8 *)D_800CFCC4 + 0x4C)];
+    return 0;
+}
 
 /* 26 words -- its header reads `nonmatching func_8009E258, 0x68`, and
    0x68/4 = 26.  No jump table and no rodata of its own.
