@@ -2972,6 +2972,31 @@ def main():
                               " installer's base is probably a +0x20 actor")
                         print("          view and the absolute slot is +0x%X;"
                               " no cast was found for either.)" % (off + 0x20))
+                    # JOIN THE CORRECTED SLOT TO THE HAND-KNOWN TABLE. The
+                    # tool computed the +0x20 correction itself and then did
+                    # not look the result up in its OWN DISPATCHERS list four
+                    # blocks lower, so it said "NO ARITY WITNESS ANYWHERE" for
+                    # a function whose witness it was about to print.
+                    # Reported 2026-11-04 for func_800C5064 at +0x-10, whose
+                    # absolute slot +0x10 is the first entry in that list.
+                    for cand_off in ([off] if off >= 0 else [off, off + 0x20]):
+                        hits = [d for d in DISPATCHERS
+                                if ('+0x%X)' % cand_off) in d[0]]
+                        if not hits:
+                            continue
+                        found_any = True
+                        witnessed.add(f)
+                        print("          *** BUT THE HAND-KNOWN TABLE HAS THAT"
+                              " SLOT, so this IS witnessed:")
+                        for slot, where, sig, note in hits:
+                            print("              %-22s %s" % (slot, where))
+                            print("                  %s" % sig)
+                            print("                  %s" % note)
+                        print("          That cast states the arity AND the"
+                              " parameter types of every handler at the")
+                        print("          slot, so do not read the banner above"
+                              " as 'no witness'.")
+                        break
                     continue
                 found_any = True
                 norm = ('' if used == off else
