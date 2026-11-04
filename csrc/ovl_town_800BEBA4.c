@@ -2347,7 +2347,7 @@ typedef struct UnkTownPuff
    further uses. */
 typedef struct UnkTownBody
 {
-    s32 unk_00;
+    struct UnkTownBody *unk_00;
     struct UnkTownBody *unk_04;
     UnkVec *unk_08;
     UnkVec *unk_0C;
