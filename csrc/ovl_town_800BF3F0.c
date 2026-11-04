@@ -2326,7 +2326,7 @@ typedef struct UnkTownBody
 
 UnkNode *func_8009792C(UnkTownPuff *t, s16 ang);
 UnkNode *func_800A878C(UnkTownPuff *t, s16 ang);
-UnkNode *func_800ABC00(UnkTownPuff *t, s16 ang);
+void func_800ABC00(UnkTownPuff *t, s16 ang);
 void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 extern UnkTownRect D_800D04D0;

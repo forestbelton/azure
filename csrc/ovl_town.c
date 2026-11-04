@@ -2364,7 +2364,7 @@ typedef struct UnkTownBody
 
 UnkNode *func_8009792C(UnkTownPuff *t, s16 ang);
 UnkNode *func_800A878C(UnkTownPuff *t, s16 ang);
-UnkNode *func_800ABC00(UnkTownPuff *t, s16 ang);
+void func_800ABC00(UnkTownPuff *t, s16 ang);
 void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count);
 extern UnkTownRect D_800D04D0;
@@ -2404,6 +2404,7 @@ extern u8 D_800D1464[];
 extern u8 D_800F15AC[];
 void func_800ABB20();
 void func_800A86BC();
+void func_800A8440();
 void func_800AE630();
 void func_800AEEF0(u8 *s, void *a, s32 b, s32 c, s32 d, s32 e, s32 f);
 void func_800B13D4(u8 *s, u32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
@@ -16966,7 +16967,65 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8418);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A8440);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A84D0);
+/* 60 words, 0 differing.  func_8009792C (:9288) cut down to the plain spawner:
+   no angle parameter and so no D_8006CCD8/D_8006CCE8 offsets, no mover deltas
+   at all, and func_800A8440 as the update hook.  Everything else -- the 0x212
+   allocation, the D_80045340 bind, the three template copies, the D_800D1464
+   renderer seed, the 0xFF fade, 0x1000/0x1000/0x60/|0xC and the two
+   func_800374F4(7) draws summed into the actor view's +0x22 -- is that body
+   unchanged.  Its ASM caller func_800A85C0 passes one argument.
+
+   func_800A8440 IS A STUB WITH NO DECLARATION ANYWHERE in csrc/ or include/,
+   and an address-take does not ride an implicit declaration, so one had to be
+   added.  `void func_800A8440();` -- unprototyped, like the neighbouring
+   func_800ABB20 and func_800A86BC declarations -- is a GUESS that deliberately
+   says nothing about arity, so landing func_800A8440 later cannot contradict
+   it.  By family convention it is an `(actor, mover, rend)` update hook.
+
+   `v = (u8 *)n + 0x20;` MUST NOT sit next to its single use.  Written
+   immediately before `*(s16 *)(v + 0x2) = x;` combine folds the `addiu` into
+   the store's displacement and the function comes out 59 words / 13 differing
+   with `sh $s0, 0x22($s2)` where the target has `addiu $v1, $s2, 0x20` and
+   `sh $s0, 0x2($v1)`; the no-local spellings `*(s16 *)((u8 *)n + 0x22) = x;`
+   and the same with the calls inline measure the same 59 / 13.  Any
+   separation at all restores it: assigned early as here (which is also
+   func_8009792C's spelling), after the func_8003DB94 call, or one statement
+   before the draws, all 60 words / 0 differing.  Unlike func_8009792C and
+   func_800ABC00 the pointer does NOT get a saved register here -- four saved
+   registers hold t/n/m/r and `$s0` is reused for the sum -- so the `addiu`
+   comes out late in `$v1`. */
+UnkNode *func_800A84D0(UnkTownPuff *t)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkTownRend *r;
+    u8 *v;
+    s32 x;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        r = (UnkTownRend *)n->unk_0C;
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_800A8440;
+        func_8004491C(n, (u32)D_80045340);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
+        func_8003DB94(r, D_800D1464, 0);
+        r->unk_0E = 0xFF;
+        r->unk_0D = 0xFF;
+        r->unk_0C = 0xFF;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        r->unk_10 = 0x60;
+        r->unk_14 |= 0xC;
+        x = func_800374F4(7) + func_800374F4(7);
+        *(s16 *)(v + 0x2) = x;
+    }
+    return n;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A85C0);
 
@@ -18536,11 +18595,119 @@ void func_800AB7FC(void)
     D_801DA714.b0 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AB9A0);
+/* 31 words, 0 differing.  Resets the four 2-byte unk_2C pairs and re-seeds the
+   four clamped byte copies from their sources, then re-derives the record
+   through func_80041E70 -- the same "reinitialise and rebind" shape
+   func_80042640 (csrc/unk_154BC.c:555) has, and the caller func_8009FD68
+   passes &D_80100A10, which the unit already declares `Unk42710`.
+
+   THE STORE ORDER IS PINNED, and it is func_80042640's order: of the 720
+   permutations of these six statements, SIX reach 0 differing and all six put
+   the mask first; +0x28 / +0x25 / +0x24 in that order -- the 0xFF constant
+   LAST of the three -- is the one that also matches func_80042640, where the
+   same constraint was measured and written up.  Every order with the mask
+   after the first byte store is 17 or 18 differing (288 orders each), because
+   the mask's lui/ori then lands between the five hoisted loads and the
+   record pointer loses $t0 for $a3.
+
+   The loop is the plain descending copy: loop.c's combine_givs merges the two
+   element addresses into the single `addiu $v0, $v0, -0x2` over a base of
+   `p + 6`, which is why the displacements read 0x2C/0x2D and not 0x32/0x33. */
+void func_800AB9A0(Unk42710 *p)
+{
+    s32 i;
+
+    for (i = 3; i >= 0; i--)
+    {
+        p->unk_2C[i].unk_00 = 0;
+        p->unk_2C[i].unk_01 = 0;
+    }
+    p->unk_1C &= 0xFBFFE107;
+    p->unk_28 = p->unk_29;
+    p->unk_25 = p->unk_66;
+    p->unk_24 = 0xFF;
+    p->unk_26 = p->unk_68;
+    p->unk_27 = p->unk_69;
+    func_80041E70(p);
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089128);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABA1C);
+/* 65 words, 0 differing.  Picks the two byte fields at +0x2/+0x3 from the kind
+   byte at +0x1, for kinds 4 and 14..18 only; every other kind leaves both at
+   zero.  Nothing calls it anywhere in the image -- no `jal` and no C call site
+   -- so the one parameter is witnessed only by the `$a0` read at entry, and the
+   `Unk42710 *` type is by ADJACENCY to func_800AB9A0 just above (its caller
+   passes &D_80100A10, declared Unk42710) plus the three offsets being u8
+   fields of that record.  It is a type guess, not a witness; the bytes are
+   identical for `u8 *p` with p[1]/p[2]/p[3].
+
+   THE JUMP TABLE IS SAFE.  jtbl_80089140 is 15 words and sits at .rodata
+   offset 0x9E0 (base 0x80088760), which is 0 mod 8, so the `.align 3` cc1psx
+   emits before every table adds nothing -- this is not func_800BF1C8's class.
+   It lands immediately after D_80089128's surviving INCLUDE_RODATA, which ends
+   at 0x80089140, and before D_8008917C whose INCLUDE_RODATA is much further
+   down the file, so source order gives the right .rodata order.
+
+   `a = b = 0;` and not two statements: the chained form emits right-to-left,
+   so `b` takes the literal `addu $s1, $zero, $zero` and `a` takes the copy
+   `addu $s0, $s1, $zero` in the switch guard's delay slot.  Two separate
+   statements in the other order measure the same; `a = 0; b = 0;` is 7
+   differing.
+
+   THE CASE ORDER IS SOURCE ORDER, and 14 is LAST so its arm falls straight
+   into the tail with no `j`: 4, 15/16/17, 18, 14 is 0 differing and the other
+   23 orders of the four arms run 14 to 50 differing.
+
+   `a = t;` sits AFTER the inner `if` and that is load-bearing, worth 3 words
+   of register naming.  Written BEFORE it, cse deletes the copy outright --
+   insn 54 `(set (reg/v:SI 81) (reg/v:SI 83))` is present in the `rtl` and
+   `jump` dumps and gone by `cse`, which substitutes 81 for 83 in the following
+   compare and leaves `addiu $s0, $v0, -0x1` / `bgez $s0` / `nop` where the
+   target has `addiu $v0, $v0, -0x1` / `bgez $v0` / `addu $s0, $v0, $zero`.
+   With the copy after the compare there is no later use of `t` to substitute
+   into, the copy survives, and reorg lifts it out of the branch target into
+   the delay slot.  Declaring `a` as s16/s8/u8/u16 instead also reaches 0
+   differing with the copy written first, for the same reason in reverse -- the
+   mode difference is what stops cse -- but that would be an unwitnessed width
+   claim, so the s32 pair is kept.  */
+void func_800ABA1C(Unk42710 *p)
+{
+    s32 a;
+    s32 b;
+    s32 t;
+
+    a = b = 0;
+    switch (p->unk_01)
+    {
+    case 4:
+        a = (func_80069EF8() & 7) | 4;
+        break;
+    case 15:
+    case 16:
+    case 17:
+        b = -0x80;
+        if ((func_80069EF8() & 3) == 0)
+        {
+            t = (func_80069EF8() & 3) - 1;
+            if (t < 0)
+            {
+                b = -0x40;
+            }
+            a = t;
+        }
+        break;
+    case 18:
+        a = func_80069EF8() % 40 + 0x3C;
+        break;
+    case 14:
+        a = 1;
+        b = 0;
+        break;
+    }
+    p->unk_02 = a;
+    p->unk_03 = b;
+}
 
 /* 56 words, 0 differing.  func_800A86BC with four extra words at the top: the
    +0x14 addend is a HALFWORD at `p + 0x4` scaled by 0x800 and bumped by one
@@ -18578,7 +18745,58 @@ void func_800ABB20(u8 *p, UnkVec *q, UnkTownRend *r)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800ABC00);
+/* 93 words, 0 differing, on the first compile.  func_8009792C (:9288) line for
+   line with four edits: it installs func_800ABB20 the same way but the two
+   mover deltas are NOT divided by 16, the renderer fades from 0x80 instead of
+   0xFF, the tail is one random `(x & 3) | 4` instead of the two func_800374F4
+   draws, and it does NOT return the node.  Read func_8009792C for the two
+   spelling notes (`* 16` and not `<< 4` on the table reads, keeping them `lh`;
+   `if (n != NULL) { ... }` and not an early return).
+
+   IT RETURNS NOTHING, and the declaration at the top of the unit had to change
+   from `UnkNode *` to `void`: there is no `addu $v0, ...` at the join, `n`
+   lives in `$a0` and dies at the func_8004491C call, and both landed call
+   sites -- func_80097844 (:9263) and func_800ABD74 (:17788) -- drop the value.
+   The same declaration line sits in the duplicated preambles of
+   csrc/ovl_town_800BEBA4.c:2329 and csrc/ovl_town_800BF3F0.c:2329.
+
+   `v = (u8 *)n + 0x20;` is assigned EARLY here, as in func_8009792C, and the
+   `addiu $s2, $a0, 0x20` survives in a saved register.  See func_800A84D0 for
+   what happens when the same statement lands next to its single use. */
+void func_800ABC00(UnkTownPuff *t, s16 ang)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkTownRend *r;
+    u8 *v;
+    s32 i;
+
+    i = (ang >> 9) & 7;
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        r = (UnkTownRend *)n->unk_0C;
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_800ABB20;
+        func_8004491C(n, (u32)D_80045340);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
+        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2));
+        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2));
+        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        func_8003DB94(r, D_800D1464, 0);
+        r->unk_0E = 0x80;
+        r->unk_0D = 0x80;
+        r->unk_0C = 0x80;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        r->unk_10 = 0x60;
+        r->unk_14 |= 0xC;
+        *(s16 *)(v + 0x2) = (func_80069EF8() & 3) | 4;
+    }
+}
 
 /* 59 words, 0 differing.  func_80097844 with the ring size chosen here --
    `(func_80069EF8() & 7) | 4`, so 4..11 puffs -- instead of passed in.
