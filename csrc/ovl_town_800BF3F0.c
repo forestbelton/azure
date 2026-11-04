@@ -2108,6 +2108,32 @@ void func_80094774(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 extern s16 D_800D4258[4];
 extern s16 D_800D4260[4];
 extern s16 D_800D4268[4];
+
+/* The town-entrance table func_800C0F60 indexes: five s16 per row.  Fields
+   witnessed by this group -- [0] a nonzero-ness flag, [1]/[2] the pair
+   func_800C14C0 hands to func_8004425C/func_80053DA8, [3]/[4] the pair
+   func_800C15E0 and func_800C1034 publish into D_800D4268 / D_80113200, with
+   [4] also carrying the sentinels -4 and -2.  s16 AND NOT u16, measured: as
+   u16 this group loses func_800C14C0 (34 words / 23 differing, the `lh` the
+   `!= -1` comparisons need), func_800C1034 (2 differing) and func_800C15E0
+   (1 differing).  Every `lhu` off this table is a plain s16-to-s16 halfword
+   move, which MIPS `movhi` loads unsigned, or a narrowed use -- there is no
+   cast anywhere in the group. */
+extern s16 D_800D4094[][5];
+/* The fallback pair func_800B28A0's return indexes, two s16 per row.  Its
+   signedness is NOT witnessed here: u16 is a tie at 0 for all six. */
+extern s16 D_800D4244[][2];
+/* func_800C1034's four-halfword scratch record, which it also RETURNS.  s16
+   is load-bearing (u16 is 1 differing on func_800C1034); the declared SIZE is
+   not -- `extern s16 D_80113200[];` is a tie at 0.  AND IT IS ITS OWN SYMBOL,
+   not D_80113138 + 0xC8, which provision.py offers and which measures 70
+   words / 46 differing: the +0xC8 spelling folds the displacement into one
+   lo_sum and loses the third, independent `lui`/`addiu` of the record's
+   address that func_800C1034's own return value needs. */
+extern s16 D_80113200[4];
+s32 func_800B28A0(void);  /* csrc/ovl_town.c:36805 (sister unit) */
+void func_800540A8(void); /* csrc/unk_264E0.c:1337 */
+s32 func_8004450C(s16);   /* csrc/gprel_17B7C.c:185 */
 s32 func_8008CC90(s16 a, s16 b, s16 c, s16 d, s16 e, s16 f, s16 g, s16 h);
 void func_800AE30C(void *p);
 s32 func_80049E1C(s32 a, s32 d, s32 m);
@@ -4752,11 +4778,155 @@ INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C0F60);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C0FA4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C0FE4);
+/* Publishes the fallback pair into the caller's four-halfword record: the
+   table D_800D4244 is indexed by func_800B28A0()'s return and only its two
+   halfwords land, at the record's +0x04/+0x06.  `p` is func_800C1034's
+   D_80113200 at the only call site, so the parameter is `s16 *` and the two
+   stores are p[2]/p[3].
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C1034);
+   20 words -- `nonmatching func_800C0FE4, 0x50`, 0x50/4 = 20.  No jump table,
+   no rodata of its own.  Both table reads are `lhu` because an s16-to-s16
+   assignment is a plain HImode move and MIPS `movhi` loads with `lhu`; there
+   is no cast anywhere in this function. */
+void func_800C0FE4(s16 *p)
+{
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C1150);
+    i = func_800B28A0();
+    p[2] = D_800D4244[i][0];
+    p[3] = D_800D4244[i][1];
+}
+
+/* Fills the four-halfword record D_80113200 for the current town entrance and
+   RETURNS ITS ADDRESS -- the `lui`/`addiu` pair at the epilogue is the return
+   value, which is how func_800C1150 reads the record back out of `$v0` across
+   the call.  Seed all four to -1, then, only in the 0xC scene
+   (`D_8006ADD4 == 0xC`, the unit's own idiom), look the entrance up in
+   D_800D4094 and copy [1]/[2] into the record's first pair; the second pair
+   comes from D_800D4268 when the row's [4] is -4, from the row itself when it
+   is neither -4 nor -2, and from func_800C0FE4 otherwise.
+
+   THE FIRST PARAMETER IS DEAD.  func_800C1150 passes
+   `*(s16 *)(D_8006ADBC + 0x18)` and this function reads the same halfword as
+   the separate symbol D_8006ADD4 instead; the witness is
+   `addu $a0, $a1, $zero` in the `bne`'s delay slot, which destroys $a0 before
+   anything reads it.
+
+   THE THREE-WAY TEST ON [4] IS A `switch` AND NOT AN `else if` CHAIN, and
+   that is the whole function: the target tests both sentinels out of ONE basic
+   block (`beq -4`, `beq -2`, `j default`), which is what expand_end_case emits
+   for a two-case switch, and it then lets the row pointer die across the
+   dispatch so the default arm RECOMPUTES `&D_800D4094[r]` from the saved index.
+   The `else if` chain keeps the row pointer live in a register and is 63 words
+   / 54 differing -- eight words short, all six of the recompute plus the
+   record's third address.  Putting `case -2` first is 65 / 54.
+
+   Both parameters are s32: `addu $a0, $a1, $zero` into func_800C0F60 is a
+   plain copy, where an s16 pair pays `sll`/`sra` for it (63 / 54 on its own).
+
+   The three `func_800C0FE4(D_80113200)` calls are ONE block in the output --
+   cross-jumping unifies them, so the duplicated tail call is free.
+
+   71 words -- `nonmatching func_800C1034, 0x11C`, 0x11C/4 = 71.  No jump
+   table, no rodata of its own. */
+s16 *func_800C1034(s32 a, s32 b)
+{
+    s32 r;
+
+    D_80113200[0] = -1;
+    D_80113200[1] = -1;
+    D_80113200[2] = -1;
+    D_80113200[3] = -1;
+    if (D_8006ADD4 == 0xC)
+    {
+        r = func_800C0F60(b);
+        if (D_800D4094[r][0] != 0)
+        {
+            D_80113200[0] = D_800D4094[r][1];
+            D_80113200[1] = D_800D4094[r][2];
+            switch (D_800D4094[r][4])
+            {
+            case -4:
+                D_80113200[2] = D_800D4268[2];
+                D_80113200[3] = D_800D4268[3];
+                break;
+            case -2:
+                func_800C0FE4(D_80113200);
+                break;
+            default:
+                D_80113200[2] = D_800D4094[r][3];
+                D_80113200[3] = D_800D4094[r][4];
+                break;
+            }
+        }
+        else
+        {
+            func_800C0FE4(D_80113200);
+        }
+    }
+    else
+    {
+        func_800C0FE4(D_80113200);
+    }
+    return D_80113200;
+}
+
+/* The index-0 cut-down of func_800C122C just below, with a six-call head.
+   func_800C1034's returned record supplies all four D_800D4260 slots, then
+   slot 0 runs the same -5/-1 fixup pair func_800C122C runs on slots 1..3 and
+   is handed to func_8004425C.  The `lh`+`lhu` pair on D_800D4258[0] at the
+   second `if` is func_800C122C's shape exactly: the `lh` is the comparison and
+   the `lhu` is the halfword move into D_800D4260[0].
+
+   D_8006ADBC's +0x18/+0x1A PAIR NEEDS A POINTER LOCAL, and this is the lever
+   all three readers in this group share.  Two raw `*(s16 *)(D_8006ADBC + N)`
+   casts fold each offset into its own LO16 addend, so cse picks the FIRST
+   address referenced as the common base and derives the other from it --
+   `lui`/`lh 0x18(..)`/`addiu +0x18`/`lh 0x2(..)` against the target's
+   `lui`/`addiu`/`lh 0x18`/`lh 0x1A` (3 differing here, and a word SHORT in
+   func_800C14C0 and func_800C15E0).  `((s16 *)D_8006ADBC)[0xC]` folds
+   identically (3 differing), and so does writing the +0x18 read as
+   `0x1A - 2`.  A local `s16 *rec` makes the bare symbol its own quantity, and
+   it must be assigned AS A STATEMENT IMMEDIATELY BEFORE THE FIRST USE: as the
+   function's first statement it is 57 words / 56 differing, because the
+   address is then live across the six-call head.  Unk8006ADBCRec cannot serve
+   -- its +0x18 is the s32 this unit's other reader compares against 0x37000C,
+   the same word that this group reads as two halves -- and extending that
+   typedef would have to be mirrored into both sister units.
+
+   55 words -- `nonmatching func_800C1150, 0xDC`, 0xDC/4 = 55.  No jump table,
+   no rodata of its own. */
+void func_800C1150(void)
+{
+    s16 *p;
+    s16 *rec;
+
+    func_80053DA8(0x72);
+    func_800542BC();
+    func_80053DA8(0x74);
+    func_800542BC();
+    func_8004425C(2);
+    func_8004450C(0);
+    rec = (s16 *)D_8006ADBC;
+    p = func_800C1034(rec[0xC], rec[0xD]);
+    D_800D4260[0] = p[0];
+    D_800D4260[1] = p[1];
+    D_800D4260[2] = p[2];
+    D_800D4260[3] = p[3];
+    if (D_800D4258[0] == -5)
+    {
+        D_800D4258[0] = -1;
+        D_800D4260[0] = -1;
+    }
+    if (D_800D4258[0] != -1)
+    {
+        D_800D4260[0] = D_800D4258[0];
+    }
+    if (D_800D4260[0] != -1)
+    {
+        func_8004425C(D_800D4260[0]);
+    }
+}
 
 void func_800C122C(void)
 {
@@ -4844,15 +5014,133 @@ void func_800C122C(void)
     D_800D4268[3] = D_800D4260[3];
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C1464);
+/* The explicit-pair form of func_800C14C0 below: the two ids arrive as
+   parameters instead of being looked up in D_800D4094, each is skipped when
+   zero, and the return is the same unconditional 1.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C14C0);
+   BOTH PARAMETERS ARE s32 AND NOT s16.  `sll $a0, $s0, 16` / `sra` before
+   func_8004425C(s16) and `andi $a0, $s1, 0xFFFF` before func_80053DA8(u16) are
+   the narrowing a wider parameter needs; an s16 pair is 27 words / 22
+   differing, because each parameter then costs its own entry sign-extension
+   instead.
+
+   23 words -- `nonmatching func_800C1464, 0x5C`, 0x5C/4 = 23.  No jump table,
+   no rodata of its own. */
+s32 func_800C1464(s32 a, s32 b)
+{
+    func_800540A8();
+    if (a != 0)
+    {
+        func_8004425C(a);
+    }
+    if (b != 0)
+    {
+        func_80053DA8(b);
+    }
+    return 1;
+}
+
+/* func_800C1464's table-driven sibling: the pair comes out of D_800D4094 at
+   the entrance func_800C0F60 reports, both guarded against -1, and the whole
+   body is skipped outside the 0xC scene.  Note the two loads of row field [2]:
+   `lh` for the `!= -1` comparison and `lhu` for func_80053DA8's u16 parameter,
+   off the one s16 field -- no cast is involved either way.
+
+   The `s16 *rec` local is func_800C1150's lever -- see its comment; here the
+   raw-cast spelling is 40 words / 38 differing.  `rec` is live across both
+   calls, which is why it lands in $s0.
+
+   41 words -- `nonmatching func_800C14C0, 0xA4`, 0xA4/4 = 41.  No jump table,
+   no rodata of its own. */
+s32 func_800C14C0(void)
+{
+    s16 *rec;
+    s32 r;
+
+    rec = (s16 *)D_8006ADBC;
+    r = func_800C0F60(rec[0xD]);
+    func_800540A8();
+    if (rec[0xC] == 0xC)
+    {
+        if (D_800D4094[r][1] != -1)
+        {
+            func_8004425C(D_800D4094[r][1]);
+        }
+        if (D_800D4094[r][2] != -1)
+        {
+            func_80053DA8(D_800D4094[r][2]);
+        }
+    }
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C1564);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C15C0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C15E0);
+/* The D_800D4268 publisher: inside the 0xC scene the pair comes from
+   D_800D4094's row [3]/[4], outside it from D_800D4244 at func_800B28A0()'s
+   index, and either way the second element is OR-ed with the caller's mask
+   before func_80053DA8.  The two arms' trailing func_80053DA8 call is ONE
+   block in the output -- cross-jumping again -- which is why the then-arm ends
+   in `j`.
+
+   THE TWO ARMS READ THE PAIR BACK DIFFERENTLY, and that asymmetry is the
+   whole function.  The then-arm re-reads THE TABLE (`D_800D4094[r][3]` as a
+   fresh `lh` for func_8004437C, `[4]` as a fresh `lhu` for the OR) because a
+   branch separates the two reads; the else-arm reads THE SLOT IT JUST WROTE
+   (`D_800D4268[2]`, `D_800D4268[3]`), which cse serves out of the halfword
+   still in $v0 -- `sll`/`sra` for the s32 parameter and a bare `or` for the
+   narrowed one -- so one `lhu` feeds both the store and the use and the store
+   schedules down into the gap before the call.  Measured, each change alone:
+   then-arm reading the slot for func_8004437C, 74 words / 47 differing;
+   else-arm reading the table for it, 74 / 27; then-arm reading the slot for
+   the OR, 72 / 41; and reading the TABLE twice in the else arm -- the shape
+   that looks symmetric -- 74 / 36, because the second load pushes the
+   `D_800D4268[3]` store above the `andi` and cross-jumping then swallows the
+   `andi` into the shared tail instead of leaving it in the `j`'s delay slot.
+
+   Three spellings TIE at 0 and the choice is convention, not evidence:
+   `arg0 | field` for the OR, `u16 arg0`, and the then-arm's early exit written
+   as a nested `if (D_800D4268[3] != -1) { ... }`.
+
+   The `s16 *rec` local is func_800C1150's lever -- see its comment; here the
+   raw-cast spelling is 73 words / 68 differing.
+
+   75 words -- `nonmatching func_800C15E0, 0x12C`, 0x12C/4 = 75.  No jump
+   table, no rodata of its own. */
+s32 func_800C15E0(s32 arg0)
+{
+    s16 *rec;
+    s32 r;
+    s32 i;
+
+    rec = (s16 *)D_8006ADBC;
+    r = func_800C0F60(rec[0xD]);
+    if (rec[0xC] == 0xC)
+    {
+        D_800D4268[2] = D_800D4094[r][3];
+        if (D_800D4268[2] != -1)
+        {
+            func_8004437C(D_800D4094[r][3], 0);
+        }
+        D_800D4268[3] = D_800D4094[r][4];
+        if (D_800D4268[3] == -1)
+        {
+            return 1;
+        }
+        func_80053DA8(D_800D4094[r][4] | arg0);
+    }
+    else
+    {
+        i = func_800B28A0();
+        D_800D4268[2] = D_800D4244[i][0];
+        func_8004437C(D_800D4268[2], 0);
+        D_800D4268[3] = D_800D4244[i][1];
+        func_80053DA8(D_800D4268[3] | arg0);
+    }
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800C170C);
 
