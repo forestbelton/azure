@@ -1945,6 +1945,7 @@ extern u32 D_800F162C[];
 extern u32 D_800F1654[];
 void func_8009503C(UnkTown2AE8 *b);
 void func_80091528();
+void func_80091260(UnkTownTask *a, UnkTown2AE8 *b, void *c);
 void func_80091990();
 /* ONE parameter HERE, and DO NOT "FIX" IT. The same symbol is DEFINED with
    TWO in csrc/unk_1AF38.c:92 -- `void func_800478B8(UnkSlot *s, s32 b)` --
@@ -6658,7 +6659,198 @@ void func_800903FC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009065C);
+/* func_800903FC's player leg and func_800A5638's player leg both end here --
+   func_800A573C (:19952) is the other owner's leg and route (k) reports its
+   whole body as a strict SUBSET of this one's callee set, which is what the
+   tail from the `func_80091260`/`func_80091528` test down is: the same
+   func_80094AA0 slew, the same func_80095360 8-way index, the same +0x12
+   change test feeding func_800489F4 out of the +0x1C byte table, and the same
+   `D_80100D98` / func_800A48B0 exit.  The head is the +0xC8 camera-yaw block
+   func_800A5A98 (:20180) runs, with the same `d / 0x10000` and the same
+   `0x10 + d` compounds.
+
+   IT INSTALLS NOTHING.  All four `%hi`/`%lo` pairs on a function symbol --
+   func_80097D2C, func_80090A64, func_80091260, func_80091528 -- feed a
+   `beq`/`bne` with no store anywhere in the body, so this is an inspector of
+   the task's current +0x00 handler.  func_80091260 was the one of the four
+   with no declaration anywhere in the unit; an address-take does not ride an
+   implicit declaration the way a call does, so :1948 now declares it.
+
+   *** THE ORDER OF THE TWO HANDLER TESTS IN EACH PAIR IS WITNESSED ONLY BY
+   THE ORDERED RELOCATION SEQUENCE. ***  Swapping func_80097D2C with
+   func_80090A64, or func_80091260 with func_80091528, is 0 differing MASKED
+   both times -- `ovlverify` masks the relocated word, so the mask hides which
+   symbol each `lui` names.  `seqcheck.py` catches both (first mismatch at
+   index 5 and at index 23).  That is the only check that saw it.
+
+   Five things are source rather than scheduling, and all five were measured:
+
+   - `g = &D_80083160;` INTO A LOCAL, as func_800A573C and func_800A5A98 have
+     it: that is what puts the `%hi(D_80083160)` in the prologue with the
+     `addiu $s0` in the func_80095544 `jal`'s delay slot.  Written
+     `D_80083160.unk_NN` throughout it is 208 words with 200 differing.
+
+   - `(u16)g->unk_C8 >= 0x800`, NOT `g->unk_C8 >= 0x800`.  unk_C8 is `s16`, so
+     the plain form is a signed compare of a sign-extended load -- `lh` plus
+     `slti`, 3 differing.  The cast makes shorten_compare redo the comparison
+     in `unsigned short`, which is what gives the `lhu` plus `sltiu` pair, and
+     cse then feeds the same `lhu` result straight into the `ori 0xF000`.
+     `*(u16 *)((u8 *)g + 0xC8) >= 0x800` is the same bytes.
+     Every other +0xC8 access here is also `lhu`, with no cast needed: each is
+     a read-modify-write whose result is truncated back into the `s16` field,
+     so expand pushes HImode down to the leaf and the load is a plain `movhi`.
+     The `sll`/`sra` pairs after the two `-= 0x20` / `+= 0x20` stores are the
+     sign extension of the cse'd register for the following INT comparison.
+
+   - `g->unk_C8 -= 0x10 + d` AND `g->unk_C8 += 0x10 + d`, the compound forms.
+     Written out as `g->unk_C8 = g->unk_C8 - 0x10 - d` the function is 207
+     words with 104 differing -- the same split_tree/fold mechanism
+     func_800A5A98's comment records, which leaves the constant on the inside
+     (`addiu -0x10` then `subu`).
+
+   - `g->unk_08` IS READ INLINE AT ALL FOUR TESTS, not through a local.  No
+     call sits between the `& 8` and `& 4` tests in either block, so cse keeps
+     the one `lw` and reorg puts the second `andi` in the first `beqz`'s delay
+     slot.  An `s32 t` local in both blocks is 3 differing.
+
+   - THE TWO ARM ORDERS ARE WITNESSED.  Testing `& 4` before `& 8` is 10
+     differing in the clamp block and 7 in the slew block.  And the clamp
+     block's two arms are `if`/`else if` while the slew block's are two plain
+     `if`s: two plain `if`s in the clamp block is 211 words with 144
+     differing.
+
+   The duplicated `func_800909A0();` and `func_80090A04(b);` calls are each
+   written out TWICE, once per arm of the func_800352FC gate, and cross-jumping
+   unifies each pair at its `jal` -- which is why the "not 0xC" arms share one
+   block and why the `& 4` test's `beqz` jumps straight at the other arm's
+   func_800909A0 call.  A single call reached by `goto` is also 0 differing.
+
+   Four more ties, measured rather than assumed: the else arm's
+   `*(u16 *)((u8 *)a + 0x10)` against `a->unk_10` and `(u16)a->unk_10` (the
+   store is a `sh`, so the load's sign does not reach the bytes), `d /=
+   0x10000` against `d = d / 0x10000`, an `(s16)` cast on the clamp compare,
+   `&= ~1` against `&= 0xFFFE`, and the assignment folded into the `d == 0`
+   test.
+
+   209 words -- its header reads `nonmatching func_8009065C, 0x344`, and
+   0x344/4 = 209.  No jump table, no rodata of its own.  Measured 0 differing
+   masked on the first compile; 42 raw differing against 42 relocation words
+   (11 plain `jal`, 8 on a function symbol as an address-take, 8 intra-function
+   `j` against `.text`, and the rest data `%hi`/`%lo`), with the ORDERED
+   sequence of jal symbols, `%hi`/`%lo` symbols and `j` offsets checked against
+   this listing.  D_8006ADD4 gets THREE `%hi` to TWO `%lo`: the `beq` and
+   `beqz` delay slots each carry their own `lui` and the two arms share one
+   `%lo`. */
+void func_8009065C(UnkTownTask *a, UnkTown2AE8 *b, void *c)
+{
+    Unk80083160 *g;
+    s32 d;
+    s32 n;
+
+    g = &D_80083160;
+    func_80095544(b);
+    if (D_80100DB0 == 0)
+    {
+        if ((u16)g->unk_C8 >= 0x800)
+        {
+            g->unk_C8 |= 0xF000;
+        }
+        if (a->unk_00 == func_80097D2C || a->unk_00 == func_80090A64 ||
+            func_800352FC() != 0)
+        {
+            if (D_8006ADD4 == 0xC)
+            {
+                func_800909A0();
+            }
+            else if (*(s16 *)((u8 *)b + 0x6) < 0x400)
+            {
+                func_80090A04(b);
+            }
+        }
+        else
+        {
+            if (D_8006ADD4 == 0xC)
+            {
+                if (g->unk_08 & 0x8)
+                {
+                    g->unk_C8 -= 0x20;
+                    if (g->unk_C8 < -0x1E0)
+                    {
+                        g->unk_C8 = -0x1E0;
+                    }
+                }
+                else if (g->unk_08 & 0x4)
+                {
+                    g->unk_C8 += 0x20;
+                    if (g->unk_C8 > 0x1E0)
+                    {
+                        g->unk_C8 = 0x1E0;
+                    }
+                }
+                else
+                {
+                    func_800909A0();
+                }
+            }
+            else if (*(s16 *)((u8 *)b + 0x6) < 0x400)
+            {
+                func_80090A04(b);
+            }
+            else
+            {
+                d = func_8003BD84(b->unk_0C, b->unk_10);
+                if (d == 0)
+                {
+                    g->unk_C8 = (g->unk_C8 + 8) & 0xFFF0;
+                }
+                d = d / 0x10000;
+                if (g->unk_08 & 0x8)
+                {
+                    g->unk_C8 -= 0x10 + d;
+                }
+                if (g->unk_08 & 0x4)
+                {
+                    g->unk_C8 += 0x10 + d;
+                }
+            }
+        }
+    }
+    if (a->unk_00 == func_80091260 || a->unk_00 == func_80091528)
+    {
+        *(s16 *)((u8 *)a + 0x18) =
+            func_80094AA0(*(s16 *)((u8 *)a + 0x18), a->unk_10, 0x200);
+    }
+    else
+    {
+        *(s16 *)((u8 *)a + 0x18) = *(u16 *)((u8 *)a + 0x10);
+    }
+    n = func_80095360(*(s16 *)((u8 *)a + 0x18));
+    if (*(s16 *)((u8 *)a + 0x12) != n)
+    {
+        func_800489F4(c, (*(u8 **)((u8 *)a + 0x1C))[n], *(s8 *)((u8 *)c + 0x4),
+                      0);
+        *(s16 *)((u8 *)a + 0x12) = n;
+    }
+    if (D_800D01F8[n] != 0)
+    {
+        *(u16 *)((u8 *)c + 0x14) |= 1;
+    }
+    else
+    {
+        *(u16 *)((u8 *)c + 0x14) &= 0xFFFE;
+    }
+    func_80096868(a, b, c);
+    func_80048AC8(c, 0);
+    func_800A48B0(D_80100D98, b);
+    if (D_80100E18 == 0)
+    {
+        *(s32 *)(D_80100D98 + 0x8) = 0;
+    }
+    else if (D_80100E18 == 2)
+    {
+        *(s32 *)(D_80100D98 + 0x8) /= 2;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800909A0);
 
