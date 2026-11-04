@@ -116,6 +116,30 @@ def classify_addr_takes(listing, names):
     return stored, tested
 
 
+def sister_of(unit, func):
+    """The carved sibling unit that defines or stubs `func`, or None.
+
+    An overlay carved into several translation units has siblings named
+    `<unit>_ADDR`; a callee absent from this unit may be in one of them rather
+    than in the resident executable.
+    """
+    base = unit.split('_')[0] + '_' + unit.split('_')[1] \
+        if unit.startswith('ovl_') and len(unit.split('_')) > 1 else unit
+    for fp in sorted(glob.glob(os.path.join(PROJ, 'csrc', base + '*.c'))):
+        name = os.path.basename(fp)[:-2]
+        if name == unit:
+            continue
+        try:
+            o = io.open(fp, encoding='utf-8', errors='replace').read()
+        except Exception:
+            continue
+        if re.search(r'INCLUDE_ASM\("[^"]+",\s*%s\)' % func, o) or \
+           re.search(r'^[A-Za-z_][\w \*]*?\b%s\s*\([^;]*?\)\s*\{?\s*$'
+                     % func, o, re.M):
+            return name
+    return None
+
+
 def nargs(arglist_text):
     """Argument count for a call's argument text, counting only TOP-LEVEL
     commas. A naive `count(',')` overcounts as soon as one argument is itself
@@ -582,7 +606,18 @@ def main():
                    if first is not None and lines[c] < first
                    else 'LANDED-BELOW (mismatch rides implicit decl)')
         elif listing(unit, c) is not None: cls = 'STUB-HERE'
-        else: cls = '*** NOT IN THIS UNIT (resident) ***'
+        else:
+            # A CARVE CONSEQUENCE I did not anticipate: this used to call
+            # anything absent from csrc/<unit>.c "resident", which is wrong for
+            # every address in a SISTER CARVED UNIT. The label matters -- it is
+            # what tells an agent to look in town.bin_undefined_funcs_auto.txt
+            # and to weigh the `D_`-spelling trap, and both are the wrong move
+            # for a sister-unit symbol. Reported 2026-11-03 for func_800C1D20,
+            # which is an INCLUDE_ASM stub in csrc/ovl_town_800BF3F0.c and in
+            # NEITHER auto file.
+            sis = sister_of(unit, c)
+            cls = ('*** IN A SISTER UNIT (%s) ***' % sis if sis
+                   else '*** NOT IN THIS UNIT (resident) ***')
         pr = protos.get(c)
         if not pr and c in landed:
             d = landed[c]
@@ -1150,12 +1185,26 @@ def main():
         except Exception:
             continue
         rel = os.path.relpath(fp, PROJ)
-        # Definitions only: a line starting in column 0 with a func_ name and
-        # no `;` -- the same test the sweep recipe uses, for the same reason.
+        # DEFINITIONS ONLY, and "no `;`" is not enough. A MULTI-LINE
+        # DECLARATION's first line ends in `,` and has no `;` either, so the
+        # old test matched it -- and two agents reported route (j) ranking
+        # `func_800C3050` at csrc/ovl_town_800BF3F0.c:1278 as a top cross-unit
+        # relative, which is that name's DECLARATION in the duplicated
+        # preamble, for a function that is an INCLUDE_ASM STUB in the same
+        # file. Route (j) sits beside landed-only routes, so the row reads as
+        # landed C. Same declaration-line class b5c57a6 fixed for routes (c)
+        # and (f).
+        #
+        # Two gates now: the line must END in `)` or `) {`, which a
+        # declaration's first line cannot, and the name must not be a stub in
+        # that file.
+        stubs_there = set(re.findall(
+            r'INCLUDE_ASM\("[^"]+",\s*(func_[0-9A-Fa-f]{8})\)', xt))
         defs = [(m.group(1), m.start(), xt[:m.start()].count('\n') + 1)
                 for m in re.finditer(
-                    r'^[A-Za-z_][^;\n]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;\n]*$',
-                    xt, re.M)]
+                    r'^[A-Za-z_][^;\n]*?\b(func_[0-9A-Fa-f]{8})\s*\('
+                    r'[^;\n]*\)\s*\{?\s*$', xt, re.M)
+                if m.group(1) not in stubs_there]
         for i, (nm, st, ln) in enumerate(defs):
             end = defs[i + 1][1] if i + 1 < len(defs) else len(xt)
             called = set(re.findall(r'\b(func_[0-9A-Fa-f]{8})\s*\(', xt[st:end]))
