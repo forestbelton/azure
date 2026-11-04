@@ -2020,6 +2020,13 @@ void func_800A6A94(UnkVec *p);
 void func_800A6B70(UnkVec *p);
 extern UnkTownCFCB4 D_800CFCB4;
 extern s32 D_800CFDD8[];
+/* D_800CFDF0 and D_800CFE08 are D_800CFDD8 + 0x18 and + 0x30, so all three are
+   one 6-entry stride-4 table per axis -- but func_8009BDC0 needs them as two
+   SEPARATE symbols, because indexing off D_800CFDD8 lets cse share one base
+   pointer (127 words, 112 differing).  See that function's comment.  Read as
+   u16 at displacement 0: only the low half of each entry has a witness. */
+extern s32 D_800CFDF0[];
+extern s32 D_800CFE08[];
 extern void (*D_800FE5D8)();
 void func_800945B8(UnkTownTask *t, UnkTown2AE8 *b, void *c);
 void func_800946A0(UnkTownTask *t, UnkTown2AE8 *b, void *c);
@@ -2487,6 +2494,8 @@ void func_800AE630();
 void func_800AEEF0(u8 *s, void *a, s32 b, s32 c, s32 d, s32 e, s32 f);
 void func_800B13D4(u8 *s, u32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 void func_8009B454();
+void func_8009B594();
+void func_8009BDC0();
 s32 func_8008F170(UnkTown2AE8 *q, u8 *t);
 void func_8008F27C(UnkTownColl *a, UnkTown2AE8 *b, s32 c);
 void func_8008F294(UnkTownColl *a, UnkTown2AE8 *b);
@@ -13996,7 +14005,54 @@ s32 func_8009B2C4(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B454);
+/* 80 words -- its header reads `nonmatching func_8009B454, 0x140`, and
+   0x140/4 = 80.  Measured 0 differing.  No jump table, no rodata of its own.
+
+   Four parameters, all four real: $a0..$a3 go to $s3/$s2/$s0/$s4 in the
+   prologue and all four are forwarded to func_8009C0C0 and func_8009B2C4.
+   The landed func_800AAC64 calls this as `(a, b, c, d)`.
+
+   *** THE THIRD ARGUMENT OF func_8008F27C IS THE GUARD'S OWN SUBTRAHEND. ***
+   `(s16)n` is both the left operand of the `- c+0xA` test and func_8008F27C's
+   third argument, so cse keeps the one `sra` and local-alloc lands it in $a2 --
+   the third argument register -- and the call costs no setup insn.  That is
+   why provision.py's arity scan sees only $a1 set at the `jal`: $a2 is the
+   compare's register from the block above, and $a0 is in the guard branch's
+   delay slot.  The call is NOT narrow; the prototype's three parameters are all
+   passed.
+
+   The three handler comparisons and the `+0x7C` test are ONE `&&` chain, not a
+   nested if: the single `lw 0x50($s3)` feeding three `beq`s is cse, and all
+   four conditions branch to the same epilogue label. */
+void func_8009B454(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    s32 n;
+
+    n = func_8008F170(c, D_800FE488);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (b->unk_3A[1] == 0)
+    {
+        if ((s16)n - *(s16 *)((u8 *)c + 0xA) >= 4)
+        {
+            func_8009C0C0(a, b, c, d);
+        }
+        else
+        {
+            func_8008F27C(b, c, (s16)n);
+            c->unk_0C = 0;
+            c->unk_10 = 0;
+            c->unk_14 = 0;
+            a->unk_50 = func_8009B594;
+        }
+    }
+    func_8009B2C4(a, b, c, d);
+    if (a->unk_50 != func_8009B454 && a->unk_50 != func_8009B594 &&
+        a->unk_50 != func_8009BDC0 && a->unk_7C != 0)
+    {
+        d->unk_08 = (u32)a->unk_7C->unk_00;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009B594);
 
@@ -14246,7 +14302,94 @@ void func_8009BC44(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009BDC0);
+/* 128 words -- its header reads `nonmatching func_8009BDC0, 0x200`, and
+   0x200/4 = 128.  Measured 0 differing.  No jump table, no rodata of its own.
+
+   func_8009B454's sibling from `n = func_8008F170(...)` down: the same guard,
+   the same func_8009C0C0 / func_8008F27C pair and the same handler chain, minus
+   the func_8009B2C4 call and the func_8009B594 install, plus the head below.
+   An inspector, not an installer: it only COMPARES handler addresses.
+
+   *** THE GATE IS WRITTEN INVERTED, and that is one word plus 102. ***
+   With the func_8009BFD8 call as the THEN and the adds as the ELSE, the two
+   `bne`s and the `beq` all land on the drop-through that `do_jump` builds for a
+   `||` chain, so the func_8009BFD8 arm sits in the fall-through at word 29 and
+   the adds behind the `beq` at word 36 -- which is what the target has.  The
+   natural `if (A && B && C) { adds } else { func_8009BFD8(...); }` is 127 words
+   and 102 differing.
+
+   *** D_800CFDF0 AND D_800CFE08 ARE TWO SYMBOLS, NOT ONE INDEXED ARRAY. ***
+   They are D_800CFDD8 + 0x18 and + 0x30, this unit already declares
+   D_800CFDD8, and `*(u16 *)&D_800CFDD8[g->unk_18 + 6]` / `[+ 12]` assembles to
+   the SAME BYTES -- but cse then shares one lo_sum and derives both bases from
+   it with `addiu ..., 0x18`, which is 127 words and 112 differing.  The target
+   materialises two independent `lui`/`addiu` pairs and keeps both live in
+   $a1/$a2 across all four statements, so the two offsets have to be two
+   declared symbols.
+
+   *** THE CAM POINTER MUST BE SPELLED OFF D_800834B8, NOT AS &D_80083498. ***
+   `(u8 *)&D_800834B8 - 0x20` IS `&D_80083498` by address (see UnkTownCam), and
+   `e = &D_80083498` is the same 128 words -- but 28 differing, because it folds
+   to one `addiu %lo(D_80083498)` and relocates against the wrong symbol.  The
+   target's two insns are `addiu $a3, $v0, %lo(D_800834B8)` then `addiu $a3,
+   $a3, -0x20`, so the subtraction has to apply to a VALUE of D_800834B8.
+
+   *** NO `t = &D_800834B8` POINTER LOCAL, and that is 19 words. ***
+   `D_800834B8.unk_00` folds its %lo onto the symbol's own `lui` (word 24,
+   `lw $v1, %lo(D_800834B8)($v0)`) and both that `lui` and the cam's lo_sum are
+   created inside the THIRD conjunct's block, words 22-24.  A `UnkTownTask *t`
+   local hoists the `lui` into the prologue and leaves the lo_sum in the first
+   `bne`'s delay slot, which also displaces the `addu $s4, $a3, $zero` the
+   target parks there: 128 words, 19 differing, and identical whether `t` is
+   written as a declaration initialiser or as a statement before the `if`.  It
+   is the BLOCK that matters, not the statement form -- unlike the cases
+   `docs/matching-levers.md` records.  Spelling it `(t = &D_800834B8)->unk_00`
+   inside the third conjunct, or declaring `t` in the else arm's own scope, both
+   measure 0 differing too; this spelling just needs no local.
+
+   g->unk_18 is re-read for each of the last three statements because every
+   `sh` through a `(u8 *)` cast is out-of-struct and kills cse's memory table
+   (expr.c:5343-5351), and the cam's `->unk_08` reloads for the same reason --
+   so the four statements are written out with their subexpressions repeated. */
+void func_8009BDC0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
+{
+    UnkTownCFCB4 *g = &D_800CFCB4;
+    UnkTownCam *e;
+    s32 n;
+
+    if ((UnkTownColl *)g->unk_10 != b || g->unk_3A[g->unk_18] != 1 ||
+        D_800834B8.unk_00 != func_800924EC)
+    {
+        func_8009BFD8(a, b, c, d);
+    }
+    else
+    {
+        e = (UnkTownCam *)((u8 *)&D_800834B8 - 0x20);
+        *(u16 *)((u8 *)c + 0x2) += *(u16 *)&D_800CFDF0[g->unk_18];
+        *(u16 *)((u8 *)c + 0x6) += *(u16 *)&D_800CFE08[g->unk_18];
+        *(u16 *)((u8 *)e->unk_08 + 0x2) += *(u16 *)&D_800CFDF0[g->unk_18];
+        *(u16 *)((u8 *)e->unk_08 + 0x6) += *(u16 *)&D_800CFE08[g->unk_18];
+    }
+    n = func_8008F170(c, D_800FE488);
+    func_8008F294(b, c);
+    func_8008F664(b, c);
+    if (b->unk_3A[1] == 0)
+    {
+        if ((s16)n - *(s16 *)((u8 *)c + 0xA) >= 4)
+        {
+            func_8009C0C0(a, b, c, d);
+        }
+        else
+        {
+            func_8008F27C(b, c, (s16)n);
+        }
+    }
+    if (a->unk_50 != func_8009B454 && a->unk_50 != func_8009B594 &&
+        a->unk_50 != func_8009BDC0 && a->unk_7C != 0)
+    {
+        d->unk_08 = (u32)a->unk_7C->unk_00;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009BFC0);
 
