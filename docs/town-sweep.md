@@ -832,6 +832,29 @@ So do not read two `%hi`s as two installers, and do not treat an odd count as
 a counting bug in the brief. It is also why the column is defined as
 occurrences and not as (install targets x 2).
 
+### AN ADDRESS-TAKE NEEDS A DECLARATION *ABOVE THE TAKE*, AND THE UNIT USUALLY ALREADY HAS ONE
+
+An address-take does not ride an implicit declaration the way a call does, so
+the requirement is real -- but the question is **"is there a declaration above
+me"**, not "where does the definition sit", and `provision.py`'s banner asked
+only the second until 2026-11-04. For a handler declared at the top of the
+unit and defined below its installer it printed *NEEDS A FORWARD DECLARATION*
+while the tool's own CALLEE CLASSIFICATION two blocks on printed
+*LANDED-BELOW but DECLARED at csrc/ovl_town.c*. Reported by the
+`func_80093894` group, where it demanded five declarations and **zero** were
+needed.
+
+Measured across every address-taker in `csrc/ovl_town.c` after the fix (172
+functions): **89 of the 104 (taker, symbol) pairs the old banner demanded a
+declaration for already had one**, and only 15 genuinely need one. The banner
+now prints those 89 under *ALREADY DECLARED ABOVE YOU, so write NOTHING for
+these*, with the declaring line number.
+
+Following the old banner cost bytes nowhere -- a duplicate declaration is
+harmless to the output -- but it is a format complaint, it is a lie in the
+source about what the unit needs, and an agent that notices the tool
+contradicting itself three lines on spends a compile proving it wrong.
+
 ### A CONSTANT ADDRESS MAKES THE CANDIDATE'S RELOCATION LIST A *SUBSEQUENCE* OF THE LISTING'S, AND THAT IS THE PASS CONDITION
 
 A constant address emits no relocation at all, so splat's listing shows

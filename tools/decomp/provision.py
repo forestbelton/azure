@@ -603,16 +603,24 @@ def defs_and_protos(src, unitname):
             if depth <= 0 and '}' in ln: cur = None
         pos += len(ln) + 1
     protos = {}
+    # AND THE LINE THE DECLARATION IS ON. The address-take banner needs it:
+    # "is there a declaration" is not the question, "is there a declaration
+    # ABOVE ME" is, and until 2026-11-04 that block asked neither -- it asked
+    # only where the DEFINITION sits. See the banner for what that cost.
+    protopos = {}
     for m in re.finditer(r'^([A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]{8})\s*\([^;{]*\);)', txt, re.M):
-        protos.setdefault(m.group(2), m.group(1).strip())
+        if m.group(2) not in protos:
+            protos[m.group(2)] = m.group(1).strip()
+            protopos[m.group(2)] = txt[:m.start()].count('\n') + 1
     for k in body: body[k].discard(k)
     for k in addr: addr[k].discard(k)
-    return landed, protos, body, txt, lines, addr, defoff
+    return landed, protos, body, txt, lines, addr, defoff, protopos
 
 def main():
     unit, targets = sys.argv[1], sys.argv[2:]
     src = os.path.join(PROJ, 'csrc', unit + '.c')
-    landed, protos, body, txt, lines, addr, defoff = defs_and_protos(src, unit)
+    landed, protos, body, txt, lines, addr, defoff, protopos = \
+        defs_and_protos(src, unit)
     src_txt = txt
     inc = include_protos()
     snames = splat_names()
@@ -737,6 +745,29 @@ def main():
         elsewhere = [i for i in ins
                      if i not in lines and i not in incasm]
         need = need + [i for i in elsewhere if i not in need]
+        # A DECLARATION THAT IS ALREADY THERE BEATS THE POSITION -- the same
+        # rule the CALLEE CLASSIFICATION block below has applied for calls
+        # since func_800ABD74, and this banner was not applying it at all. It
+        # asked ONLY where the definition sits, so for a handler declared at
+        # the top of the unit and defined below the installer it printed
+        # "NEEDS A FORWARD DECLARATION" while its own classification two
+        # blocks on printed "LANDED-BELOW but DECLARED at csrc/ovl_town.c".
+        # Reported 2026-11-04 by the func_80093894 group, where ZERO of five
+        # installs needed a new declaration and the banner demanded five.
+        # Following it writes a duplicate declaration: harmless to the bytes,
+        # but it is a format complaint and a lie in the source about what the
+        # unit needs, and an agent that notices the contradiction spends a
+        # compile proving the tool wrong.
+        already = [i for i in need
+                   if protopos.get(i) is not None and protopos[i] < mypos]
+        need = [i for i in need if i not in already]
+        if already:
+            print("                ALREADY DECLARED ABOVE YOU, so write NOTHING for"
+                  " these -- the")
+            print("                address-take compiles as it stands:")
+            for i in already:
+                print("                  %-15s declared at csrc/%s.c:%-6d %s"
+                      % (i, unit, protopos[i], protos[i]))
         if need:
             # SAY "ADDRESS-TAKE", NOT "INSTALL". This banner said INSTALL for
             # every entry, including the ones the per-function lines above had
