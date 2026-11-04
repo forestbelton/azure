@@ -936,9 +936,35 @@ def main():
                     where = (' -- NOT IN THIS UNIT (it is in csrc/%s.c), so the'
                              ' declaration is mandatory' % sis) if sis else \
                             ' -- NOT IN THIS UNIT AT ALL, so the declaration is mandatory'
+                # "NO DECLARATION -- WRITE ONE" IS NOT ENOUGH WHEN A
+                # DEFINITION EXISTS BELOW YOU: the declaration you write has
+                # to MATCH it, and guessing `void f();` against a non-void
+                # definition is a conflicting-types hard error. Reported
+                # 2026-11-04: route (b) prints "-> LANDED at <signature>" for
+                # an INSTALL but this line did not, so a TAG whose target had
+                # landed two bodies away printed only "write one" and the
+                # agent's guess died on `conflicting types for
+                # 'func_800BFFF4'`. Print the definition's own first line.
+                hint = pr.strip() if pr else None
+                if not hint and i in landed:
+                    d = landed[i]
+                    hint = ('NO DECLARATION, BUT IT IS DEFINED IN THIS UNIT'
+                            ' AT csrc/%s.c:%d -- COPY THAT SIGNATURE, DO NOT'
+                            ' GUESS `void %s();`:  %s'
+                            % (unit, lines.get(i, 0), i,
+                               (d[:d.rindex(')') + 1] if ')' in d else d)))
+                elif not hint and i in inc:
+                    hint = ('declared in %s:%d -- %s'
+                            % (inc[i][1], inc[i][2], inc[i][0]))
+                elif not hint:
+                    sis2 = sister_of(unit, i)
+                    hint = ('no declaration in this unit%s -- write one, and'
+                            ' copy the signature from its definition rather'
+                            ' than guessing'
+                            % (' and it is defined in csrc/%s.c, so read it '
+                               'there' % sis2 if sis2 else ''))
                 print("                  %-15s [%s]%s %s" % (
-                    i, k, where,
-                    pr.strip() if pr else 'no declaration in the unit either -- write one'))
+                    i, k, where, hint))
         if gl:
             tags, outside, needdecl = [], [], []
             for g in gl:
