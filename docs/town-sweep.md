@@ -718,6 +718,44 @@ not a verdict**: decode the resolved immediate by hand, and let
 `town.bin_undefined_syms_auto.txt` (`:130` and `:131`), so either links; if
 the one the candidate uses is NOT in those files, see the trap above.
 
+### A CONSTANT ADDRESS MAKES THE CANDIDATE'S RELOCATION LIST A *SUBSEQUENCE* OF THE LISTING'S, AND THAT IS THE PASS CONDITION
+
+A constant address emits no relocation at all, so splat's listing shows
+`%hi`/`%lo` where the candidate has nothing, and the ordered
+relocation-sequence check comes back with the candidate's sequence SHORTER
+than the target's. Measured 2026-11-04 on the `func_8009F77C` group:
+`func_8009F77C` has 6 masked words and 3 relocations, `func_8009F8EC` has 3
+and 1.
+
+**The raw comparison is what proves those words right.** `raw == relocdump's
+total` means every word the candidate does NOT relocate matched byte for
+byte -- including the ones splat renders as `%hi`/`%lo`. So the pass condition
+is all three of:
+
+1. the candidate's sequence is a SUBSEQUENCE of the target's,
+2. every target-only entry is a `%hi`/`%lo` on a **DATA** symbol -- a missing
+   one on a FUNCTION symbol is a build break, not this class,
+3. `raw differing == relocdump's total`.
+
+Report which words are constant-address and that condition 2 holds, rather
+than reporting either a pass or a failure. And do not reach for
+decomp-permuter on a function that uses a constant address: splat's `target.o`
+carries an `R_MIPS_LO16` the constant form cannot produce, so the score never
+reaches zero.
+
+### A `%lo(D_...)` THE LISTING SHOWS MAY BE SPLAT MIS-SYMBOLISING A SMALL IMMEDIATE
+
+Two in one function, found 2026-11-04 in `func_8009F77C`. `D_80011F80` and
+`D_80010004` do not exist as source symbols: splat paired one
+`lui $v1, 0x8001` with a `lbu` displacement, and paired the same `lui` with the
+giv's `addiu $v1, $v1, 4`. **"`D_80010004`" as a symbol is the integer 4.**
+
+These read exactly like declaration requirements and are not -- declaring
+either would have prevented the landing. The tell is the one `provision.py`
+already prints: several `%lo` off one `%hi` is the constant-base idiom. So when
+a `%lo(D_...)` lands where a small immediate belongs, suspect the pairing
+rather than the symbol.
+
 ### DO NOT DECLARE A STUB'S RETURN TYPE IF A CAST AT THE POINT OF USE MEASURES THE SAME
 
 A declaration is an assertion about a function nobody has read yet, and a

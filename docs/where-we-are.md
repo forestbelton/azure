@@ -334,9 +334,9 @@ size, the `-G` value, the struct layout, the flags.
    near-identical shape.
 
    **State on 2026-11-03, after the autonomous campaign and the carve:**
-   the three ovl_town units together are **1,277 of 1,819 functions and 52,238
-   of 70,311 words, 74.3%**, up from 26.7% six sessions ago; the project total
-   is **84.9%**, and there are **9 parks** -- SEVEN have been RETIRED by
+   the three ovl_town units together are **1,287 of 1,819 functions and 52,460
+   of 70,311 words, 74.6%**, up from 26.7% six sessions ago; the project total
+   is **85.1%**, and there are **9 parks** -- SEVEN have been RETIRED by
    solving them, not by giving up on them. Take these from `progress.py`, which
    now also counts old-style (K&R) definitions; `DEF_RE` requires `\)\s*\{`
    and was missing two of them, 132 uncounted words.
@@ -414,7 +414,7 @@ size, the `-G` value, the struct layout, the flags.
    `--ratio 0.80 --min-words 16` opened **187 pairs / 9,544 words**, of which
    this batch took 1,543. Beware the transitive closure at that ratio: the
    largest "component" is 66 members chained together and is not a family.
-   Work the tight components. All three units sweep clean -- **1,277 names
+   Work the tight components. All three units sweep clean -- **1,287 names
    verified, 0 nonzero** apart from the documented benign `func_800C3050`
    off-by-one (its multi-line declaration's first line) -- and both
    `make build/town.bin` and `make check` are byte-identical. Read that number, not just the absence of failures: until
@@ -423,7 +423,7 @@ size, the `-G` value, the struct layout, the flags.
    closing `grep -v ' 0 differing'` swallowed the hard exit. `ovlverify.py` now
    falls back to the reference binary via the ELF's section LMA, and the recipe
    prints its own coverage. See docs/town-sweep.md, "A sweep that verified
-   nothing". `docs/matching-levers.md` is at **412 levers**, as `leverindex.py` itself
+   nothing". `docs/matching-levers.md` is at **414 levers**, as `leverindex.py` itself
    reports. Take that number from the tool, not from a `grep -c` of headings --
    the two count differently and a heading grep over-reports (it said 371 when
    the tool said 368). Commit `8122e23` carries the wrong figure for that reason.
