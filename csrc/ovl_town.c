@@ -2947,6 +2947,12 @@ extern s32 D_800CFC44[];
 extern s32 D_800CFBA0[];
 extern u8 D_800CFC24[];
 extern u8 D_800FC418;
+extern s8 D_800CFC2C[];
+void *func_80033BE4();
+/* Defined at :4852, below this function, and an address is not taken -- but
+   the four-argument call needs the prototype or the second and third
+   arguments go through as `int`. */
+void func_8008B818(s32 a, UnkTownMover *b, UnkNode *n, u8 *d);
 void func_8008B9D8(UnkTownDispatch *d);
 void func_8008BA00();
 void func_8008BED8();
@@ -4807,7 +4813,140 @@ void func_8008B620(s32 a)
     func_8008B5D8(D_800CFBA0[a], 0x23);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8008B654);
+/* Build eleven town actors. Phase 1 allocates eleven (node, 0x64-byte engine
+   record) pairs and unwinds everything it got on the first failure; phase 2
+   seeds each actor view's frame cursor/bound/list at +0x74/+0x78/+0x7C, picks
+   the slot's parent mover out of D_800CFC2C (a self-reference means no parent)
+   and hands the pair to func_8008B818. Both local arrays are TWELVE entries:
+   the frame is 0x90 with locals 0x10..0x6F, nodes at +0x10 and recs at +0x40,
+   0x30 = 12 pointers apart. No caller exists anywhere in csrc/ or asm/, so the
+   two parameters are witnessed only by the two stores.
+
+   PARKED AT 17 DIFFERING FOR WEEKS, and all 17 were ONE saved-register swap:
+   i and n traded $s2 and $s4, which also swapped their adjacent prologue save
+   slots (0x78/0x80) and commuted an `addu`. Two changes closed it.
+
+   1. THE PARENT-TABLE INDEX IS AN INTEGER ADDITION, NOT A SUBSCRIPT, and it
+      is worth 2 words. The target's `addu $v0, $s2, $s0` is `i + t` --
+      INDEX FIRST -- and no pointer spelling can produce that. c-typeck.c:1986
+      takes ptr+int and :1988 takes int+ptr, and BOTH call
+      `pointer_int_sum (PLUS_EXPR, ptr, int)`, which ends at :2698 with
+      `build (resultcode, result_type, ptrop, intop)`. So `t[i]`, `*(t + i)`,
+      `*(i + t)` and `i[t]` are the same tree and measure identically; only
+      casting the pointer to an integer reaches the other operand order.
+      expr.c:4658's ARRAY_REF case builds PLUS(array_adr, index) too, and
+      nothing downstream canonicalises two pseudos of a commutative op.
+
+   2. THE `while (1)` AROUND PHASE 2 IS A reg_n_refs WEIGHT, not control flow.
+      flow.c:2122 is `reg_n_refs[regno] += loop_depth`, loop_depth comes from
+      basic_block_loop_depth (flow.c:1437) and that counter moves only on
+      NOTE_INSN_LOOP_BEG/END (flow.c:1453-1456), so references inside the loop
+      notes count double. That lifts p 23->28, i 15->22 and q 20->24 while n
+      stays at 6, and allocno_compare's floor_log2(refs)*refs/live_length then
+      orders p > i > q > n, which is the target. Every path out of this block
+      is a `return`, so jump.c deletes the back edge and NO INSTRUCTION IS
+      EMITTED; `do { } while (0)`, `for (;;)` and this `while (1)` all measure
+      0 differing, and `while (1)` is taken because for a block whose every
+      exit is a return it is ordinary C rather than a no-op wrapper. A REAL
+      back-edge `for` over phase 2 reaches the same registers at 105 words --
+      loop.c hoists `$sp + 0x10` and cse2 turns it into a `move` -- so the
+      note without a back edge buys the register AND keeps the word.
+
+      THE PLACEMENT IS THE LEVER AND n IS THE REASON: n has no reference
+      outside loop 1, so a wrapper that does not enclose loop 1 lifts p/i/q
+      past it. Wrapping loop 1 too puts n on top; wrapping the whole body is
+      104/23.
+
+   WHY LOOP 2 IS A `goto` AND BOTH WALKS ARE POINTERS, both still load-bearing:
+   a real loop gets a LOOP_BEG note (stmt.c:2214), loop.c hoists `$sp + 0x10`
+   into a pseudo and cse2 makes it a `move` -- 105 words; and written
+   `nodes[i]`/`recs[i]` loop.c's combine_givs merges the two givs, since the
+   arrays are a constant 0x30 apart, and the recs access becomes
+   `lw $a3, 0x30($s0)` off one register -- 103 words. `i = 0;` also goes before
+   `p = nodes;`, which is worth 4 differing.
+
+   104 words -- its header reads `nonmatching func_8008B654, 0x1A0`, and
+   0x1A0/4 = 104. No jump table, no rodata of its own. 0 differing; raw 13 ==
+   relocdump 13, %hi/%lo on D_800CFC2C and D_800FC418 once each and seven
+   plain `jal`, none on a FUNCTION symbol. seqcheck: arith=OK seq=OK. */
+s32 func_8008B654(u8 *a, s32 b)
+{
+    UnkNode *nodes[12];
+    u8 *recs[12];
+    UnkNode **p;
+    u8 **q;
+    s8 *t;
+    UnkNode *n;
+    u8 *rec;
+    u8 *m;
+    UnkTownMover *prev;
+    s32 i;
+
+    i = 0;
+    p = nodes;
+    q = recs;
+    for (; i < 11; i++)
+    {
+        n = func_8003FC64(0x11);
+        if (n == NULL)
+        {
+            break;
+        }
+        rec = func_80033BE4();
+        if (rec == NULL)
+        {
+            break;
+        }
+        func_80033C1C(rec, 0);
+        *p++ = n;
+        *q++ = rec;
+    }
+    if (i < 11)
+    {
+        while (p != nodes)
+        {
+            p--;
+            func_8003FFF0(*p);
+            func_80040044(*p);
+        }
+        while (q != recs)
+        {
+            q--;
+            func_80033C84(*q);
+        }
+        return 0;
+    }
+    while (1)
+    {
+        p = nodes;
+        q = recs;
+        i = 0;
+        t = D_800CFC2C;
+    loop:
+        if (*(s8 *)(i + (s32)t) == i)
+        {
+            prev = NULL;
+        }
+        else
+        {
+            prev = (UnkTownMover *)((u8 *)nodes[*(s8 *)(i + (s32)t)] + 0x20);
+        }
+        m = (u8 *)*p + 0x20;
+        *(s32 *)(m + 0x74) = 0;
+        *(s32 *)(m + 0x78) = b;
+        *(u8 **)(m + 0x7C) = a;
+        func_8008B818(i, prev, *p, *q);
+        i++;
+        p++;
+        q++;
+        if (i < 11)
+        {
+            goto loop;
+        }
+        D_800FC418 = 0;
+        return 1;
+    }
+}
 
 /* The two one-line setters for the D_800FC418 input lock that func_8008BC58
    tests and func_8008BED8 dispatches on: 0xFF parks the slot on
