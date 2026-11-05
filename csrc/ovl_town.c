@@ -2294,7 +2294,7 @@ extern u16 D_80126E3C[];
 extern u16 D_80127024[];
 extern u16 D_80126494[];
 extern u16 D_80127FA8[];
-void func_8009CDB4(void);
+u8 **func_8009CDB4(void);
 u8 **func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
 void func_8009CE34(void);
 extern u8 D_800D43F0[];
@@ -18440,7 +18440,40 @@ void func_8009CD18(void *a, UnkTownRend *r, s32 id)
     r->unk_08 = id;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_8009CDB4);
+/* Resets the D_801007F4 append cursor to the head of the module table and
+   NUL-terminates it -- the counterpart to func_8009CDCC below (:18465), which
+   walks the same cursor and likewise returns it.
+
+   IT RETURNS THE CURSOR, and that is load-bearing rather than cosmetic. As a
+   `void` function this is 6 of 6 words with FIVE register-only differences and
+   NO spelling reaches the target: block_alloc's hand-rolled three-quantity
+   sort (local-alloc.c:1596-1612) can only produce three of the six
+   permutations, and the target's $v1/$a0/$v0 is not one of them -- see the
+   "A THREE-QUANTITY BLOCK CAN ONLY REACH THREE OF THE SIX REGISTER ORDERS"
+   lever for the sign table and the derivation. The return adds a fourth
+   quantity's worth of machinery: it gives the address pseudo a copy suggestion
+   to $v0, phase 1 (local-alloc.c:1575-1583) places it BEFORE the sort runs,
+   reload then deletes the no-op copy (reload1.c:7858, :7938-7941), and the
+   remaining order comes out $v1/$a0/$v0.
+
+   Both callers -- func_800B8248 (:42316) and func_800B8E08 (:43108) --
+   DISCARD the value, and a discarded pointer return compiles to the same
+   caller words as a void call, so both re-measure at 0 differing with this
+   signature. The listing therefore cannot witness the return either way; it
+   is taken because the file's own neighbour returns the identical cursor and
+   because no `void` spelling exists.
+
+   6 words -- its header reads `nonmatching func_8009CDB4, 0x18`, and
+   0x18/4 = 6. No jump table, no rodata of its own. 0 differing; raw 5 ==
+   relocdump 5, %hi/%lo on D_801007F4 and D_80100900 plus the folded store,
+   none on a FUNCTION symbol, no `jal` and no intra-function `j`. seqcheck:
+   arith=OK seq=OK. */
+u8 **func_8009CDB4(void)
+{
+    D_801007F4 = (u8 **)&D_80100900;
+    D_80100900 = NULL;
+    return D_801007F4;
+}
 
 /* Returns the D_801007F4 cursor: the tail `lui`/`lw` pair is live on BOTH
    paths (the e == NULL branch lands on it), so a `void` return is 24 words

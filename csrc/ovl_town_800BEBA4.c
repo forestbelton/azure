@@ -2201,7 +2201,7 @@ extern u16 D_800D5070[];
 s32 func_800C2B6C(s16 a);
 extern u8 D_800D2EA4[];
 void func_800B8E08(u16 *p);
-void func_8009CDB4(void);
+u8 **func_8009CDB4(void);
 void func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
 void func_8009CE34(void);
 extern u8 D_800D43F0[];
