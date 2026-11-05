@@ -29854,7 +29854,82 @@ s32 func_800A9A38(u8 *p)
     return 3;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800A9ADC);
+/* func_800A9B2C's gate (:27191), a predicate over the two-byte descriptor view
+   `b` that func_8009B120 (:16964) tests as `p[1] == 0xD && p[0] == 4`.  Kind
+   (b[1]) 0xD passes variant (b[0]) 4 or 3; kind 1 passes anything but 8; every
+   other kind passes.  First parameter dead, witnessed by the gap -- the body
+   reads $a1 and never touches $a0, and func_800A9B2C calls it
+   `func_800A9ADC(a, b)`.  `xori`/`sltiu 1` is this compiler's `== K` against a
+   non-zero constant and `xori`/`sltu $zero` is its `!= K`.
+
+   THE TWO SPELLING FACTS THAT DECIDE IT, both about `t` and `r` being reused
+   rather than about the control flow, which is the same in every spelling:
+
+   `t` HOLDS b[1] AND IS THEN REASSIGNED TO 4 inside the 0xD arm, and that is
+   one pseudo, so it is one register: the target's `addiu $v1, $zero, 0x4`
+   takes $v1 because $v1 is where b[1] already lives and b[1] is dead on that
+   path.  Giving the 4 its own local instead makes it a pseudo set ONCE, and
+   `local-alloc.c:1043` gates the REG_EQUIV note on `reg_n_sets[regno] != 1`:
+   with the note it becomes a `reg_equiv_constant` that local-alloc hands the
+   lowest free register, $v0, and the result pseudo is pushed off $v0 and needs
+   a trailing `addu $v0, $v1, $zero`.  20 words, 8 differing.  The same counter
+   also gates sched1's `birthing_insn_p` bump (`sched.c:2513`), so the second
+   set is what keeps the `li 4` from being reordered ahead of the b[0] load.
+
+   `r` IS THE RESULT VARIABLE IN BOTH TAILS -- the 0xD arm and the kind-1 arm.
+   That is its fourth and fifth reference, and `allocno_compare`'s
+   `floor_log2(refs) * refs / live_length` is a STEP in refs: 5 refs over live
+   6 is 1.67 against b[0]'s 3 refs over live 4 at 0.75, so `r` is allocated
+   FIRST and takes $v0, and b[0] then takes $a1 off its own preference.  Spell
+   the kind-1 arm as a bare `return b[0] != 8;`, or with a second variable, and
+   b[0] is allocated first, takes $v0, and `r` lands in $a0 with a `move`: 20
+   words, 9 differing.
+
+   `r = 1;` MUST PRECEDE `t = 4;`.  Both are priority-1 const sets in the same
+   block and sched1's ready-list tie breaks toward the HIGHER INSN_LUID
+   (`rank_for_schedule`, which is scheduling backward), so the later of the two
+   is emitted first in the block.  With `r = 1` written second it is emitted
+   first, the b[0] load follows it, and the `li 4` ends up before the load with
+   a load-delay nop: 21 words, 18 differing.  Written in this order the `r = 1`
+   is emitted first and reorg moves it into the `beq`'s delay slot, leaving
+   `lbu` / `li 4` / `beq` / `li 1` -- the target.  The `b[0]` load may sit
+   either side of `r = 1`; only the `r = 1` / `t = 4` order matters.
+
+   No frame, no jump table, no rodata of its own, NO relocations at all -- no
+   `jal`, no %hi/%lo, no address-take -- so the single masked word is the
+   intra-function `j`.  Hand-decoded: the target's `0802A6C9` resolves to
+   0x800A9B24, which is func_800A9ADC + 0x48, word 18, the `jr $ra`; the
+   candidate's `08000012` is 0x12 << 2 = 0x48 in the standalone object.
+   seqcheck: raw 1 against relocdump's own total of 1, none on a function
+   symbol, ordered sequence OK.
+
+   20 words -- its header reads `nonmatching func_800A9ADC, 0x50`, and
+   0x50/4 = 20.  Measured 0 differing. */
+s32 func_800A9ADC(s32 a, u8 *b)
+{
+    s32 r;
+    s32 u;
+    s32 t;
+
+    t = b[1];
+    if (t == 0xD)
+    {
+        u = b[0];
+        r = 1;
+        t = 4;
+        if (u != t)
+        {
+            r = u == 3;
+        }
+        return r;
+    }
+    if (t == 1)
+    {
+        r = b[0] != 8;
+        return r;
+    }
+    return 1;
+}
 
 /* The message-table lookup behind func_800A9D74 below: turn the caller's id
    into an index with func_800A9878 (:24376), check func_800A9ADC, then pick a

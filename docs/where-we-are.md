@@ -316,7 +316,7 @@ size, the `-G` value, the struct layout, the flags.
    `town.bin`'s overlay is the one in progress and has its own operating
    procedure in **`docs/town-sweep.md`**: the nine-step loop, the work ranking,
    the verbatim subagent brief with a measured list of what in it is
-   load-bearing, the traps, the seven parks, and what is established about its
+   load-bearing, the traps, the parks, and what is established about its
    types. Start there rather than here when continuing it. `main.bin`'s overlay
    is complete; `dungeon.bin`'s is still an `asm` subsegment and its yaml
    records a boundary error to fix before converting it.
@@ -333,14 +333,35 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State on 2026-11-04, mid-campaign:** the three ovl_town units together
-   are **1,459 of 1,819 functions and 58,709 of 70,311 words**; `ovl_town`
-   itself is **1,017 of 1,204 functions and 87.2% of its words**, with **187
-   stubs and 9 parks** left, and `ovl_town_800BF3F0` is at 71.2% with 173.
-   The project total is **90.3%** and there are **10 parks** across it --
-   SEVEN have been RETIRED by solving them, not by giving up on them.
+   **State at the end of 2026-11-04:** the three ovl_town units together are
+   **1,811 of 1,818 functions and 69,086 of 70,311 words**; `ovl_town` itself
+   is **1,197 of 1,203 functions and 97.8% of its words** with **6 stubs
+   left, all of them parks**; `ovl_town_800BF3F0` is **611 of 612 and 99.7%**,
+   its one stub also a park; `ovl_town_800BEBA4` is **100%**.
+   The project total is **99.0%**, 3,105 of 3,112 functions, and the 7
+   remaining stubs across the whole project are exactly the 7 parks --
+   **every non-park stub in the game has landed.**
+
+   TEN parks have now been RETIRED by solving them rather than giving up, and
+   the last four of those went in one session: func_800B8E08 (139 words, 5
+   DIFF, on one extra statement that moved an UNRELATED symbol's high/lo_sum
+   pair), func_800AD138 (432 words, 9 DIFF, the biggest -- its copy turned out
+   to be reload's via update_equiv_regs, not combine's, which the park had
+   argued from for weeks), func_800A9ADC (20 words, 3 DIFF, after 73 earlier
+   spellings and a 142k-candidate permuter run) and, before them, the
+   func_800A64C0 splat mis-split, which was a build-structure problem rather
+   than a matching one.
+
+   Two parks were closed the other way in the same session and the negatives
+   were worth keeping: func_800B9260 (73 words, 2 DIFF) and func_8009CDB4
+   (6 words, 5 DIFF). Both reach 0 only through a tautology with two identical
+   arms, and both refusals are recorded with the mechanism rather than the
+   number. func_8009CDB4's park was also found to be CARRYING A FALSE CLAIM --
+   the device it named as reaching 0 measures 5 -- which is the argument for
+   re-measuring a park's own assertions before building on them.
    (The 2026-11-03 figures this paragraph used to carry were 1,456 functions,
-   84.2% of the three units and 90.1% of the project.) Take these from `progress.py`, which
+   84.2% of the three units and 90.1% of the project; the earlier 2026-11-04
+   ones were 1,459 functions and 90.3%.) Take these from `progress.py`, which
    now also counts old-style (K&R) definitions; `DEF_RE` requires `\)\s*\{`
    and was missing two of them, 132 uncounted words.
 
