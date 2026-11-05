@@ -43253,7 +43253,136 @@ void func_800B9204(u8 a)
     func_80041094(0xC, ((D_800D3814[0] + 1) << 6) | 0x20, ((D_800D3814[1] + 1) << 6) | 0x20, -0x100, D_80082E76);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B9260);
+extern u8 D_800D185C[];
+extern u8 D_800D185D[];
+
+/* WAS 73 of 73 words / 2 DIFF, VERDICT ALLOC (`lw $v0` / `and $v0, $v0, $v1`
+   for the target's `lw $a0` / `and $v0, $a0, $v1`); NOW 73 of 73 / 0, verify
+   0 differing masked, --raw 22 differing on exactly the 22 relocation words
+   (1+1 D_80083160, 3+6 D_800D185C, 3+7 D_800D185D, and the one `jal`, whose
+   target word 0C02E481 hand-decodes to (0x02E481 << 2) | 0x80000000 =
+   0x800B9204 = func_800B9204; there is no intra-function `j`). advise.py
+   MATCH. The change is plain C: the work variable `m` is `u32`, it carries the
+   first counter's remainder, and the second counter is reduced IN `m` before
+   being stored back. No tautology, no loop note, no dead statement.
+
+   The park closed the search on three blockers -- the unk_08 pseudo must
+   CONFLICT with $v0 (an untied block-local lands in $v1), must be a GLOBAL
+   allocno, and the if-body has no room for a second use -- and all three are
+   right. What they miss is that the second use need not come AFTER the `lw`:
+   the target's `lbu $a0` / `subu $a0, $a0, $v0` / `sb $a0` / `lw $a0` are ONE
+   PSEUDO with two ranges, the modulo's dividend-and-remainder and then the
+   flags word. Its first range is live across the magic constant ($v0) and the
+   shift chain ($v1), so it conflicts with both; it dies twice, so it is
+   global; `find_reg` then gives it $a0, and its `and` preference for $v0 is
+   an outright conflict and is ignored. The `and` result and 0x500000 are
+   still two locals in b8 and take $v0 and $v1 as before.
+
+   THREE THINGS HAVE TO HOLD FOR THAT PSEUDO TO EXIST, each measured here:
+
+   1. `m` must be the DIVIDEND, not just the remainder. The park's (b)
+      spelling `m = D_800D185D[0] % 67; D_800D185D[0] = m;` makes m the
+      remainder only, live [subu..sb] where nothing holds $v0: 2 DIFF, m in
+      $v0 with `preferences: 2`. `m = D_800D185D[0]; m %= 67;` is the dividend
+      form; `(u8)m % 67` on an `s32 m` is NOT -- combine folds the `(and m
+      0xff)` back through the `lbu` into a fresh temp and m drops out of the
+      modulo (refs 6, live 3, 2 DIFF). `u32 m` with a plain `m %= 67` is a
+      32-bit unsigned modulo and emits the identical magic sequence: the
+      listing's 0x7A44C6B >> 33 and 0x3E0F83E1 >> 35 are
+      choose_multiplier(d, 32, 32) (expmed.c), so the shortened u8 `%=` was
+      being widened to SImode anyway. `s32 m` is a signed divide: 75 words.
+
+   2. The remainder must land back IN `m`, and expand cannot do that:
+      expand_divmod drops the target when it is mentioned in op0 ("Don't
+      clobber an operand while doing a multi-step calculation", expmed.c:2765),
+      so `m %= 67` is `(set 136 (minus 81 135))` + `(set 81 136)`. The copy is
+      folded by cse1, cse.c:7500-7520 -- "replace REG1 with REG0 in the
+      previous insn that computed their value" -- but ONLY when
+      `qty_first_reg[reg_qty[136]] == 81`, i.e. when m is the canonical
+      register of the equivalence class. `make_regs_eqv` (cse.c:838, test at
+      :865-869) makes the new pseudo canonical only if it lives beyond the
+      current cse basic block: first uid before the block start or last uid
+      after its end. With m first referenced in b8 it is NOT canonical, cse
+      rewrites the `sb` to read 136, the copy is dead and flow deletes it
+      (flow.c:1531), the remainder is a separate local that `combine_regs`
+      refuses to tie into a global (local-alloc.c:1834) and takes $v0, and
+      sched1 hoists the `lw` above the `sb`: 73 words, 4 DIFF (words 59-62),
+      with m already in $a0.
+
+   3. So m needs ONE reference in an earlier block that compiles to nothing.
+      Carrying the FIRST counter's remainder does it: `m = D_800D185C[0] % 33;
+      D_800D185C[0] = m;` puts m's first uid in b4, cse1 then folds the b8
+      copy, combine folds m's own b4 def into the `sb` and deletes it, and
+      b4's code is byte-for-byte the park's. It must be the REMAINDER form in
+      b4: the dividend form there makes m the first counter's `lbu` too, the
+      b4 base pointer slides into the $a0 that M1 used to hold in local-alloc,
+      and m is pushed to $a1 -- 13 register-only DIFF. Both in remainder form
+      is the park's 2 DIFF (m never the b8 dividend).
+
+   MEASURED, all 73 words unless a width is given, u32 m throughout:
+       first % 33 via m (remainder) + second IN m (dividend)      0 diff  LANDED
+       do { m = D_800D185D[0]; m %= 67; } while (0); store       0 diff  (note = cse1
+                                                                 block end, cse.c:8100)
+       m = 0; at the top + second IN m                            0 diff  (control: dead
+                                                                 init, deleted by flow)
+       second IN m alone                                          4 diff
+       first IN m + second IN m                                  13 diff
+       first via m + second via m (both remainder form)           2 diff
+       second via m (remainder form, park (b))                    2 diff
+       (u8)m % 67, s32 or u32 m                                   2 diff
+       m = D_800D185D[0]; D_800D185D[0] = (u8)m % 67              2 diff
+       s32 m, m %= 67                                    75w     23 diff
+       do { m = D_800D185D[0]; } while (0); m %= 67; store       3 diff
+       m = D_800D185D[0]; do { m %= 67; } while (0); store       3 diff
+
+   THE LOOP NOTE AS A WEIGHT (flow.c:2122) WAS THE QUESTION ASKED OF THIS
+   PARK, AND IT IS A MEASURED NEGATIVE on the park's own spelling: thirteen
+   single-note placements -- whole body (do/for/while), first half, the
+   `%= 67`, the `lw`, the tail, the `if`, the if-body, and the `while (cond)
+   { call; break; }` form -- leave pseudo 81 block-local and tied in $v0 with
+   its refs moved from 2 to 3 or 4 (whole-body 5 DIFF, boundary between `lw`
+   and `and` 72w / 14 DIFF with 81 in $v1, the rest 2 DIFF with an identical
+   word hash). A reference weight changes neither conflict nor liveness. The
+   note's OTHER property, a cse1 block boundary, does land it (row 2 above),
+   because what the copy fold needs is m living beyond the cse block.
+
+   Nothing else calls func_800B9260 by name (installed at UnkNode.unk_10 by
+   func_800B9384); the arity has no witness and `(void)` matches. The unit
+   defines func_800B9204 directly above and does not declare either counter,
+   so the two externs travel with the body. */
+void func_800B9260(void)
+{
+    s32 n;
+    u32 m;
+
+    n = D_80083160.unk_10;
+    if (n < 0)
+    {
+        D_800D185C[0] += 0x20;
+    }
+    if (n & 0x20000000)
+    {
+        D_800D185C[0] += 1;
+    }
+    m = D_800D185C[0] % 33;
+    D_800D185C[0] = m;
+    if (n & 0x40000000)
+    {
+        D_800D185D[0] += 0x42;
+    }
+    if (n & 0x10000000)
+    {
+        D_800D185D[0] += 1;
+    }
+    m = D_800D185D[0];
+    m %= 67;
+    D_800D185D[0] = m;
+    m = D_80083160.unk_08;
+    if ((m & 0x500000) == 0x500000)
+    {
+        func_800B9204(D_800D185D[0]);
+    }
+}
 
 void func_800B9384(void)
 {
