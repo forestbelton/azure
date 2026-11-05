@@ -68,4 +68,49 @@
 
 #define gte_stsxy(r0) __asm__ volatile ("swc2 $14, 0(%0)" :: "r"(r0))
 
+/* The func_800AD138 group, added 2026-11-04 when that 432-word park landed:
+   a depth-cued, normal-coloured POLY_FT4 pass over the 0x1F800000 scratchpad.
+   Every COP2 word below is read off func_800AD138's own listing rather than
+   taken from psyq/include/inline_c.h, for the reason this file's header gives
+   -- that header spells its OPERATIONS as a bare `.word` and assembles to the
+   wrong bytes through modern gas, silently.
+
+     nclip  0x4B400006      avsz3  0x4B58002D      ncds  0x4AE80413
+
+   `gte_ncds_b()` is the NO-nop form (inline_c.h:863 names the convention):
+   func_800AD138's listing has mtc2/addiu/sb where gte_ncds()'s two `nop`s
+   would be, so the nop-free spelling is the one that matches. The two `nop`s
+   in gte_nclip() and gte_avsz3() ARE in the listing and are the GTE's own
+   latency.
+
+   gte_stszotz() needs its `$12` scratch declared clobbered and carries the
+   `sra $12, $12, 2` the listing has; the store macros take `: "memory"`
+   because func_800AD138's scratchpad stores must stay ordered against them --
+   without it sched2 sinks them past the following loads. */
+
+#define gte_ldrgb(r0) __asm__ volatile("lwc2 $6, 0(%0)" ::"r"(r0))
+
+#define gte_lddp(r0) __asm__ volatile("mtc2 %0, $8" ::"r"(r0))
+
+#define gte_nclip() __asm__ volatile("nop\n\tnop\n\tc2 0x1400006")
+
+#define gte_avsz3() __asm__ volatile("nop\n\tnop\n\tc2 0x158002D")
+
+#define gte_ncds_b() __asm__ volatile("c2 0xE80413")
+
+#define gte_stopz(r0) __asm__ volatile("swc2 $24, 0(%0)" ::"r"(r0) : "memory")
+
+#define gte_stdp(r0) __asm__ volatile("swc2 $8, 0(%0)" ::"r"(r0) : "memory")
+
+#define gte_stotz(r0) __asm__ volatile("swc2 $7, 0(%0)" ::"r"(r0) : "memory")
+
+#define gte_strgb(r0) __asm__ volatile("swc2 $22, 0(%0)" ::"r"(r0) : "memory")
+
+#define gte_stszotz(r0) __asm__ volatile("mfc2 $12, $19\n\tnop\n\t" \
+                                         "sra $12, $12, 2\n\tsw $12, 0(%0)" ::"r"(r0) : "$12", "memory")
+
+#define gte_stsxy3_ft4(r0) __asm__ volatile("swc2 $12, 8(%0)\n\t"  \
+                                            "swc2 $13, 16(%0)\n\t" \
+                                            "swc2 $14, 24(%0)" ::"r"(r0) : "memory")
+
 #endif

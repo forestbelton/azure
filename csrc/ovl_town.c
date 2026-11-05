@@ -3239,17 +3239,89 @@ void func_800A790C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
 void func_800A79C8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
 void func_800A7950(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
 void func_800A79F0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r);
+/* The halfwords are SIGNED, and that is load-bearing rather than cosmetic:
+   func_800AD138's four reads at +0x14..+0x1A must come out as `lh`, and with
+   `u16` here that function measures 434 words / 408 differing. All three of
+   this type's older users -- func_800B6FB8, func_800B70EC, func_800B72B8 --
+   were re-measured at 0 differing after the change, so one type describes
+   this memory rather than two with contradictory signedness. */
 typedef struct UnkTown8333C
 {
     u32 unk_00;
     u8 pad_04[0x10];
-    u16 unk_14;
-    u16 unk_16;
-    u16 unk_18;
-    u16 unk_1A;
+    s16 unk_14;
+    s16 unk_16;
+    s16 unk_18;
+    s16 unk_1A;
     u16 unk_1C;
     u16 unk_1E;
 } UnkTown8333C;
+
+/* func_800AD138's scratchpad and window types, and the GTE operations it
+   needs.  MOVE THE TEN gte_* MACROS TO include/gte_inline.h -- they are here
+   only so this merge copy compiles standalone.  Every COP2 word in them was
+   read off func_800AD138's own listing, NOT taken from psyq/include/inline_c.h,
+   whose operation macros spell themselves as a bare `.word` and assemble to
+   the wrong bytes through modern gas.
+
+   UnkTown8333C IS UnkTown8333C's LAYOUT WITH SIGNED HALFWORDS, and that is
+   not cosmetic: the four reads at +0x14..+0x1A must come out as `lh`, so
+   reusing UnkTown8333C (u16) gives 434 words / 408 differing.  Decide whether
+   to keep two types or to change UnkTown8333C's halfwords to s16 and re-measure
+   its own users. */
+/* The 0x1F800000 scratchpad as func_800AD138 and its caller func_800AC4C4 lay
+   it out: five scalars below the Unk46C20B[4] edge array func_80046C20 fills
+   at +0x1C, the OT slot pointer at +0xBC, the NCLIP/AVSZ3/depth-cue
+   scratch at +0xC0..+0xDC, the four corner SVECTORs at +0xE0..+0xFF, the
+   tile metrics at +0x114..+0x144, the live-edge count at +0x170, the RTPS
+   light vector at +0x17C and the half-tile UV step at +0x20C. */
+typedef struct UnkTownAD138SP
+{
+    s32 unk_00;
+    u8 pad_04[0x4];
+    s32 unk_08;
+    s32 unk_0C;
+    u8 pad_10[0x4];
+    s32 unk_14;
+    s32 unk_18;
+    Unk46C20B unk_1C[4];
+    u32 *unk_BC;
+    s32 unk_C0;
+    s32 unk_C4;
+    s32 unk_C8;
+    u8 pad_CC[0x8];
+    s32 unk_D4;
+    u8 pad_D8[0x4];
+    s32 unk_DC;
+    SVECTOR unk_E0;
+    SVECTOR unk_E8;
+    SVECTOR unk_F0;
+    SVECTOR unk_F8;
+    u8 pad_100[0x14];
+    s32 unk_114;
+    s32 unk_118;
+    s32 unk_11C;
+    s32 unk_120;
+    s32 unk_124;
+    s32 unk_128;
+    u8 pad_12C[0x8];
+    s32 unk_134;
+    s32 unk_138;
+    u8 pad_13C[0x8];
+    s32 unk_144;
+    u8 pad_148[0x28];
+    u16 unk_170;
+    u8 pad_172[0xA];
+    SVECTOR unk_17C;
+    u8 pad_184[0x88];
+    u8 unk_20C;
+    u8 unk_20D;
+} UnkTownAD138SP;
+
+/* The four halfwords at 0x8008333C+0x14..0x1A, reached through a pointer to
+   D_80083160 + 0x1DC rather than off the symbol: func_800AD138's listing
+   computes `addiu $a3, $s3, 0x1DC` once and reads 0x14/0x16/0x18/0x1A off
+   it, which the %lo form of D_80083160.unk_1F0 cannot produce. */
 
 /* The 0x20-stride town table func_800B70EC, func_800B81AC and
    csrc/unk_1C540.c's func_80051228 all index by D_800D381A; byte +0 of the
@@ -32163,7 +32235,226 @@ void func_800AC488(s32 a, s32 b, s32 u, s32 v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC4C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AD138);
+void func_800AD138(u32 limit)
+{
+    UnkTownAD138SP *p;
+    Unk80083160 *g;
+    UnkTown8333C *w;
+    POLY_FT4 *prim;
+    u16 *tbl;
+    u8 *base;
+    s32 tw[2];
+    s32 i;
+    s32 a;
+    s32 b;
+    s32 cc;
+    s32 dx;
+    s32 e;
+    s32 z;
+    s32 tx;
+    s32 u;
+
+    p = (UnkTownAD138SP *)0x1F800000;
+    g = &D_80083160;
+    w = (UnkTown8333C *)&g->unk_1DC;
+    base = D_80083160.unk_00;
+    p->unk_17C.vx = 0;
+    p->unk_17C.vy = 0;
+    p->unk_17C.vz = -0x1000;
+    p->unk_BC = (u32 *)(base + 0x8AC);
+    p->unk_124 = w->unk_14;
+    p->unk_128 = w->unk_16;
+    p->unk_114 = 0x40 << w->unk_14;
+    p->unk_118 = 0x40 << w->unk_16;
+    p->unk_11C = w->unk_18;
+    p->unk_120 = w->unk_1A;
+    *(u16 *)&p->unk_20C = (g->unk_04 >> 1) & 0x3F;
+    prim = *(POLY_FT4 **)(base + 0x8D0);
+    p->unk_00 = g->unk_A8;
+    tw[0] = 0;
+    tw[1] = 0x1000100;
+    tbl = (u16 *)g->unk_1DC;
+    func_80067F20((u32 *)prim, 0, 0, 0x20, (s32)tw);
+    func_8006658C(p->unk_BC, prim);
+    prim = (POLY_FT4 *)((u8 *)prim + 0xC);
+    p->unk_170 = 4;
+    p->unk_0C = (s16)func_80046C20((Unk46C20A *)((u8 *)g + 0x20),
+                                   (Unk46C20B *)0x1F80001C,
+                                   (u16 *)0x1F800170);
+    if (p->unk_170 != 0)
+    {
+        do
+        {
+            for (i = 3; i >= 0; i--)
+            {
+                if (p->unk_1C[i].unk_1C == 0 && p->unk_1C[i].unk_18 <= p->unk_0C)
+                {
+                    p->unk_1C[i].unk_1C = 1;
+                }
+            }
+            p->unk_14 = 0x7FFF;
+            p->unk_18 = -0x7FFF;
+            for (i = 3; i >= 0; i--)
+            {
+                if (p->unk_1C[i].unk_1C > 0)
+                {
+                    p->unk_08 = p->unk_1C[i].unk_00;
+                    if (p->unk_08 < p->unk_14)
+                    {
+                        p->unk_14 = p->unk_08;
+                    }
+                    if (p->unk_08 > p->unk_18)
+                    {
+                        p->unk_18 = p->unk_08;
+                    }
+                    p->unk_1C[i].unk_10 += p->unk_1C[i].unk_08;
+                    if (p->unk_1C[i].unk_10 >= 0)
+                    {
+                        dx = p->unk_1C[i].unk_14;
+                        e = p->unk_1C[i].unk_04;
+                        do
+                        {
+                            p->unk_1C[i].unk_00 += dx;
+                            p->unk_1C[i].unk_20 -= 0x40;
+                            p->unk_1C[i].unk_10 -= e;
+                        } while (p->unk_1C[i].unk_20 > 0 &&
+                                 p->unk_1C[i].unk_10 >= 0);
+                    }
+                    p->unk_08 = p->unk_1C[i].unk_00;
+                    if (p->unk_08 < p->unk_14)
+                    {
+                        p->unk_14 = p->unk_08;
+                    }
+                    if (p->unk_08 > p->unk_18)
+                    {
+                        p->unk_18 = p->unk_08;
+                    }
+                }
+            }
+            p->unk_14 = (p->unk_14 - 0x20) & -0x40;
+            p->unk_18 = (p->unk_18 + 0x20) & -0x40;
+            p->unk_134 = p->unk_14 / 64;
+            p->unk_138 = p->unk_0C / 64;
+            if (p->unk_138 < 0)
+            {
+                p->unk_138 = 0;
+            }
+            else
+            {
+                b = p->unk_120;
+                if (p->unk_138 >= b)
+                {
+                    p->unk_138 = b << p->unk_124;
+                }
+                else
+                {
+                    p->unk_138 = p->unk_138 << p->unk_124;
+                }
+            }
+            while (p->unk_14 <= p->unk_18)
+            {
+                tx = p->unk_134;
+                if (tx < 0)
+                {
+                    p->unk_144 = p->unk_138 + (tx & 3);
+                }
+                else if (tx >= p->unk_11C)
+                {
+                    p->unk_144 = p->unk_138 + p->unk_11C + (tx & 3) - 3;
+                }
+                else
+                {
+                    p->unk_144 = p->unk_138 + tx;
+                }
+                p->unk_C0 = tbl[p->unk_144];
+                if (p->unk_C0 == 0)
+                {
+                    a = *(u16 *)&p->unk_14;
+                    b = *(u16 *)&p->unk_0C;
+                    p->unk_E0.vz = p->unk_E8.vz = p->unk_F0.vz = p->unk_F8.vz =
+                        0;
+                    cc = *(u16 *)&p->unk_0C;
+                    p->unk_F0.vx = a;
+                    p->unk_E0.vx = a;
+                    a += 0x40;
+                    cc += 0x40;
+                    p->unk_F8.vy = cc;
+                    p->unk_F0.vy = cc;
+                    p->unk_F8.vx = a;
+                    p->unk_E8.vx = a;
+                    p->unk_E8.vy = b;
+                    p->unk_E0.vy = b;
+                    gte_ldv3(&p->unk_E0, &p->unk_E8, &p->unk_F0);
+                    gte_rtpt();
+                    gte_nclip();
+                    gte_stopz(&p->unk_DC);
+                    if (p->unk_DC > 0)
+                    {
+                        gte_stsxy3_ft4(prim);
+                        gte_stdp(&p->unk_C0);
+                        gte_avsz3();
+                        gte_stotz(&p->unk_C8);
+                        gte_ldv0(&p->unk_F8);
+                        gte_rtps();
+                        gte_stsxy(&prim->x3);
+                        gte_stdp(&p->unk_C4);
+                        gte_stszotz(&p->unk_D4);
+                        p->unk_C8 = (p->unk_C8 + p->unk_C8 * 2 + p->unk_D4 + 3) >> 2;
+                        if ((u32)p->unk_C8 >= 0x1E0)
+                        {
+                            p->unk_C8 = 0x1DF;
+                        }
+                        p->unk_C0 = (p->unk_C0 + p->unk_C0 * 2 + p->unk_C4) >> 2;
+                        gte_ldv0(&p->unk_17C);
+                        gte_ldrgb(&p->unk_00);
+                        z = (s16) * (volatile u16 *)&p->unk_F8.vz;
+                        gte_lddp(z > 0 ? z << 2 : 0);
+                        setlen(prim, 9);
+                        gte_ncds_b();
+                        gte_strgb(&prim->r0);
+                        prim->u0 = prim->u2 = p->unk_20C;
+                        prim->u1 = prim->u3 = p->unk_20C + 0x3F;
+                        prim->v0 = prim->v1 = -p->unk_20C;
+                        prim->v2 = prim->v3 = 0x3F - p->unk_20C;
+                        prim->tpage = 0x2D;
+                        prim->clut = 0x75C1;
+                        prim->r0 >>= 1;
+                        prim->g0 >>= 1;
+                        prim->b0 >>= 1;
+                        addPrim(p->unk_BC, prim);
+                        prim++;
+                        if (limit < (u32)prim)
+                        {
+                            goto done;
+                        }
+                    }
+                }
+                p->unk_134 += 1;
+                p->unk_14 += 0x40;
+            }
+            p->unk_0C += 0x40;
+            for (i = 3; i >= 0; i--)
+            {
+                if (p->unk_1C[i].unk_1C > 0)
+                {
+                    p->unk_1C[i].unk_0C -= 0x40;
+                    if (p->unk_1C[i].unk_0C <= 0)
+                    {
+                        p->unk_1C[i].unk_1C = -1;
+                        p->unk_170 = p->unk_170 - 1;
+                    }
+                }
+            }
+        } while (p->unk_170 != 0);
+    }
+done:
+    tw[0] = 0;
+    tw[1] = 0x400040;
+    func_80067F20((u32 *)prim, 0, 0, 0x20, (s32)tw);
+    func_8006658C(p->unk_BC, prim);
+    prim = (POLY_FT4 *)((u8 *)prim + 0xC);
+    *(POLY_FT4 **)(g->unk_00 + 0x8D0) = prim;
+}
 
 void func_800AD7F8(UnkTownADD80 *s)
 {
