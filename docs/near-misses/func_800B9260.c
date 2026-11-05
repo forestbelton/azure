@@ -57,68 +57,187 @@
        so its `high` is its own quantity and keeps $a1 across three blocks --
        and it has to be a DIFFERENT symbol from the first.
 
-       D_800D185D IS NOT IN splat/town.bin_undefined_syms_auto.txt.  This body
-       needs one additive line there:  D_800D185D = 0x800D185D;
-       If that line is unwanted, two spellings measure 73w / 0 diff using
-       symbols the unit already declares as arrays, at the cost of a
-       relocation against the wrong symbol with a nonzero addend (the LINKED
-       words are identical, because %hi/%lo of D_800D1868-0xB equals %hi/%lo
-       of D_800D185C+1 -- but only make build/town.bin can confirm that):
-           ((u8 *)D_800D1868)[-0xB]    (csrc/ovl_town.c:2213)
-           ((u8 *)D_800D17D8)[0x85]    (csrc/ovl_town.c:2215)
+       D_800D185D has no auto symbol -- splat mints one per referenced
+       ADDRESS and there is no reference to 0x800D185D anywhere else in the
+       tree -- so it is supplied by hand from splat/town.bin_extra_syms.txt,
+       the script the 2026-11-04 mis-split fix introduced for exactly this
+       case.  ovlverify masks relocated words, so the symbol does not affect
+       the measurement either way; only the link needs it.  This note used to
+       say the line was in town.bin_undefined_syms_auto.txt and offered two
+       addend-based workarounds against D_800D1868 and D_800D17D8; splat did
+       briefly mint it, the 2026-11-04 regeneration dropped it because nothing
+       referenced it, and the workarounds are no longer needed.
 
-   2.  WHY THIS IS PARKED RATHER THAN LANDED.  The function is 73 of 73 words
-       with exactly TWO register-only differences, both in the last basic
-       block.  A dead `if (m)` with two identical arms closes them, and that
-       spelling is byte-identical -- but it is an allocation DEVICE, a
-       tautology under the enclosing condition, and not something anyone
-       writes.  Landing it would record a source shape the original did not
-       have, so it is deliberately not in this file.  The two words are:
+   2.  WHY THIS IS PARKED RATHER THAN LANDED.  The function is 73 of 73
+       words with exactly TWO register-only differences, both in the last
+       basic block:
 
            word 61   lw   $v0, 0x8($a3)   target  lw   $a0, 0x8($a3)
            word 63   and  $v0, $v0, $v1   target  and  $v0, $a0, $v1
 
        i.e. the target gives the unk_08 load and the `and` result two
-       registers where the candidate ties them into one.  WHAT IS WANTED is
-       the REAL second use of D_80083160.unk_08 the original had in this
-       block -- any genuine second read reaches 0, and the device is only
-       standing in for one.  That is the whole remaining search.  local-alloc.c:1791
+       registers where the candidate ties them into one.  local-alloc.c:1791
        combine_regs ties them because the loaded pseudo "is local to this
-       block and dies exactly once"; the extra read of `m` inside the if-body
-       gives that pseudo a reference in a second basic block, so it is a
-       GLOBAL allocno instead (globals here get $a0..$a3; $v0/$v1 are already
-       taken by block-locals), and it lands in $a0.  The duplicated arms are
-       what make the test cost nothing -- cross-jumping unifies them and
-       jump-opt then deletes the branch, exactly the "a duplicated tail CALL
-       STATEMENT is usually free" lever.  `advise.py` had called this an ALLOC
-       verdict; decomp-permuter found the device in under 14 minutes at
-       4 jobs (its output-50-1, score 50, which is only the D_800D185D-vs-
-       D_800D185C+1 symbol-name residue the permuter can never remove).
+       block and dies exactly once".  A dead `if (m)` with two identical arms
+       closes both words and that spelling is byte-identical -- cross-jumping
+       unifies the arms and jump-opt then deletes the branch -- but it is an
+       allocation DEVICE, a tautology under the enclosing condition, so it is
+       deliberately not in this file.
 
-       Ablations, all 73 words:
-           if (m) { call } else { call }                         0 diff
-           if (D_80083160.unk_08) { call } else { call }         0 diff
-           if (n || m) { call } else { call }                    0 diff
-           if (n) { call } else { call }                         2 diff   <- n is
-                                                  already global, no new role
-           if (m != 0) { call }   (not duplicated)       75 words 10 diff
-           no inner if at all                                   2 diff
+       THE SEARCH FOR A REAL SECOND USE IS NOW CLOSED, NEGATIVELY (2026-11-04),
+       and the three facts that close it are worth more than the device would
+       have been.  This note used to say "any genuine second read reaches 0".
+       That is true but far too weak: THREE conditions have to hold at once,
+       and together they leave only the device.
 
-       And the 2-differing plateau is insensitive to all of these, which is
-       why the device was needed rather than a respelling: tail inline / `s32
-       m` / `u32 m` / `m = x & 0x500000` first; `!= ... return;` early exit;
+       (a) BREAKING THE TIE IS NOT ENOUGH -- THE PSEUDO MUST CONFLICT WITH
+       $v0.  MIPS defines no REG_ALLOC_ORDER, so regclass.c's order is
+       ascending hard-reg number and a free quantity is handed $v0, then $v1,
+       then $a0.  An untied but still block-local unk_08 pseudo therefore does
+       NOT reach $a0: `if (m == (m | 0x500000))` references m twice inside the
+       one block, so it never dies at the binary op and combine_regs cannot
+       tie it -- and it comes out in $v1 with the constant in $v0, 73 words
+       and 4 differing.  The pseudo reaches $a0 only when it CONFLICTS with
+       $v0, i.e. only when it is live across the insn that writes $v0.
+
+       (b) AND IT MUST ALSO BE A global-alloc ALLOCNO.  Making it multi-block
+       without extending it past the `and` is equally useless.  Reusing one
+       scratch variable for the modulo and then for unk_08 --
+       `m = D_800D185D[0] % 67; D_800D185D[0] = m; m = D_80083160.unk_08;` --
+       does give it three references, reg_n_deaths above 1, reg_qty -1 and a
+       place in `.greg`'s `;; regs to allocate`.  `.greg` then prints
+       `81 preferences: 2` and hands it $v0 anyway, because its last range
+       still ends at the `and`: 73 words, 2 differing, no movement at all.
+       Sharing the variable with BOTH counters' modulo is the same 2.
+
+       (a) and (b) together mean the pseudo must be live OUT of the block that
+       holds the `lw`.  There is no use site after the `and` inside that
+       block -- the `bne`'s two operands are the `and` result and the 0x500000
+       constant -- so the second use is in the if-body, or after the if, and
+       nowhere else.
+
+       (c) AND THE IF-BODY HAS NO ROOM FOR IT, WHICH IS WHAT THE TWO `nop`s
+       PROVE.  The target's `bne` delay slot (word 65) and `jal` delay slot
+       (word 68) are both bare `nop`s, and reorg demonstrably FILLS BOTH from
+       the if-body the moment the body has anything to fill them with: putting
+       `D_800D185C[0] = m >> 20;` ahead of the call puts `sra $v0, $a1, 0x14`
+       in word 65 and `sb $v0, 0($a3)` in word 68, and the function is STILL
+       73 words (21 differing).  The `lbu` the real body does have stays out
+       of the `bne` slot only because a MEM may trap and a MIPS branch slot is
+       not annulled.  One statement AFTER the if would likewise fill the `jr`
+       slot at word 72, which is also a bare `nop`.  So the original's if-body
+       is exactly `func_800B9204(D_800D185D[0]);` and nothing else, and any
+       second use of unk_08 in it has to compile to NO INSN AT ALL.
+
+       An insn-free reference has to survive cse and FLOW -- flow is where
+       reg_basic_block and reg_n_deaths are built -- and be removed by a pass
+       after flow.  This compiler has exactly three such removals, and all
+       three were measured here:
+
+         * `combine` folding an arithmetic identity, the free-reference pair.
+           `func_800B9204(D_800D185D[0] + m - m)` is 72 words / 10 differing
+           and is a device in any case.
+         * `jump2`'s CROSS-JUMPING of identical tails.  This is the device, in
+           every shape it takes: inside the enclosing `if`, each of
+           `if (m) C else C`, `if (m & 0x400000) C else C`,
+           `if (m & 0x100000) C else C` and
+           `if (m & 0x400000) { C; return; } C` measures 73 words / 0
+           differing.
+         * `jump2`'s NOOP-MOVE deletion -- the "A REDUNDANT OUTGOING ARGUMENT
+           is a FREE REFERENCE" lever (docs/matching-levers.md).  THIS IS THE
+           ONE NON-DEVICE ROUTE, IT IS MEASURED, AND IT FAILS ON THE REGISTER
+           RATHER THAN ON THE WORD COUNT.  With `void func_800B9204(u8 a,
+           s32 b)` -- which costs func_800B9204 itself nothing, it stays 23
+           words / 0 differing because the second parameter is unused -- the
+           call `func_800B9204(D_800D185D[0], m);` IS free: 73 words, the
+           `move` deleted by jump2.  But a copy into a hard register also
+           NAMES the register.  combine_regs' copy suggestion puts the pseudo
+           in $a1 and pushes the D_800D185C base out to $a2: 6 differing.  As
+           a third argument it is $a2 and 9 differing.  Passing m FIRST gets
+           func_800B9260 to 1 differing and breaks func_800B9204's own body
+           (12 differing).  The one register the target wants, $a0, is the
+           only one this route cannot deliver, because $a0 is the real
+           argument's.
+
+       SO THE REMAINING QUESTION IS NO LONGER "what was the second read of
+       unk_08".  It is "which free reference did the original have that this
+       compiler removes AFTER flow and that does NOT name a register".  On the
+       evidence there is none, and the two words are the price of not writing
+       the tautology.  The most likely history is that the original did have a
+       branch on unk_08 inside the if-body whose arms were identical in the
+       SHIPPED build -- a stripped debug statement in one arm is the obvious
+       candidate, because this is pad-2 debug code: 0x500000 is UP|DOWN on
+       controller 2, and unk_10's 0x80000000/0x20000000 and
+       0x40000000/0x10000000 are SQUARE/CIRCLE and CROSS/TRIANGLE stepping the
+       two cursors by -1 and +1 modulo 33 and modulo 67.  That is a guess
+       about the source, not a fact about the compiler, which is why the
+       device is still not in this file.
+
+       THE HOUSE IDIOM FOR THIS RESIDUE, FOR COMPARISON, and it is the reason
+       the search looked promising.  The one place in this tree with the same `lw $aN` / `and $v0, $aN`
+       shape gets it from a field that is GENUINELY read twice with work to
+       do: landed
+       func_8008B158 (ovl_town, csrc/ovl_town.c:4396) writes
+       `(*(u32 *)(s + 0xC) & 0xC0000000)` out twice on purpose and its second
+       use is the body's first insn, sitting in the `bne` delay slot;.  func_800B9260's if-body has no work in it at all, which is
+       exactly why it cannot be written that way.
+
+       Ablations.  73 words unless a width is given:
+           if (m) { call } else { call }                          0 diff
+           if (D_80083160.unk_08) { call } else { call }          0 diff
+           if (n || m) { call } else { call }                     0 diff
+           if (m & 0x400000) { call } else { call }               0 diff
+           if (m & 0x100000) { call } else { call }               0 diff
+           if (m & 0x400000) { call; return; } call;              0 diff
+           if (n) { call } else { call }                          2 diff
+                                       n is already global, no new role
+           no inner if at all                                     2 diff
+           ((m = D_80083160.unk_08) & 0x500000) == 0x500000       2 diff
+           m shared with D_800D185D[0] % 67                       2 diff
+           m shared with both counters' modulo                    2 diff
+           if (...) { call } then if (m & 0x800000) { }           2 diff
+           if (...) { call } then if (m & 0x800000) { return; }   2 diff
+           if (...) { call; m &= ~0x500000; }                     2 diff
+           switch (m & 0x500000) { case 0x500000: call; break; }  2 diff
+           while ((m & 0x500000) == 0x500000) { call; break; }    2 diff
+           if (...) { do { call } while (0); }                    2 diff
+           func_800B9204((m & 0x100000) ? arg : arg)              2 diff
+           if (m == (m | 0x500000))                               4 diff
+           func_800B9204(D_800D185D[0], m), callee (u8, s32)      6 diff
+           if (!(~m & 0x500000))                                  6 diff
+           func_800B9204(D_800D185D[0], 0, m)                     9 diff
+           D_800D185C[0] = m >> 20; ahead of the call            21 diff
+           func_800B9204(D_800D185D[0] + m - m)          72w     10 diff
+           func_800B9204((m & 0x100000) >> 20)           72w      9 diff
+           m = unk_08; m &= 0x500000; if (m == 0x500000) 72w     26 diff
+           if (m != 0) { if ((m & 0x500000) == ...) }     74w     23 diff
+           if (D_80083160.unk_08 != 0) { if (...) }       74w     23 diff
+           (m & 0x500000) == 0x500000 && m               75w     10 diff
+           if (...) { call } else if (m & 0x500000) { call } 75w  13 diff
+           if (m & 0x400000) { if (m & 0x100000) { call } } 76w   14 diff
+           two gotos to a shared tail                    76w     14 diff
+           switch (m & 0x500000), second empty case      76w     14 diff
+           s32 return with `return m;`                   76w     73 diff
+           two sequential identical ifs                  78w     74 diff
+           both arms calling with D_800D185C[1]/D_800D185D[0] 80w 48 diff
+       Still insensitive, as before: tail inline; `s32 m` / `u32 m`;
+       `m = x & 0x500000` first; `!= ... return;` early exit;
        `0x500000 == (...)`; `(... ^ 0x500000) == 0`; `(...) - 0x500000 == 0`;
        `*(s32 *)((u8 *)&D_80083160 + 8)` (MEM_IN_STRUCT_P off);
-       `(... & 0x400000) && (... & 0x100000)`; an `Unk80083160 *` or `u8 *`
-       pointer local for D_80083160; the three-parameter signature; declaring
-       `m` before `n`; reusing `m` for the call argument; `extern u8 X[1]`;
-       `*D_800D185C` for `D_800D185C[0]`; `s32` return with `return
-       func_800B9204(...)`; an explicit trailing `return;`.
+       `(... & 0x400000) && (... & 0x100000)`, with the global spelled twice
+       as well as through a local; an `Unk80083160 *` or `u8 *` pointer local
+       for D_80083160; the three-parameter signature; declaring `m` before
+       `n`; reusing `m` for the call argument; `extern u8 X[1]`;
+       `*D_800D185C` for `D_800D185C[0]`; `s32` return with
+       `return func_800B9204(...)`; an explicit trailing `return;`; and the
+       real `u8` prototype for func_800B9204 instead of this file's `s32`.
        Worse and ruled out: reading unk_08 EARLY into a local (71w / 7 diff --
        the `lw` then fills the load-delay nop at word 5 and the value lives in
        $a3 all the way down, two words short); reusing `n` for unk_08
        (72w / 20); `(~unk_08 & 0x500000) == 0` (73w / 6); a volatile read
-       (73w / 3); a separate `u8 x` for the call argument (72w / 10).
+       (73w / 3); a separate `u8 x` for the call argument (72w / 10); the
+       whole first half with D_80083160.unk_10 inlined four times instead of
+       `n` (65w / 60 -- cse shares the base and the function collapses).
 
    `ovlverify --raw` is 22 differing against 22 relocation words + 0
    intra-function `j`, so nothing is hiding behind the mask, and the
@@ -131,11 +250,11 @@
 extern u8 D_800D185C[];
 /* NOT a label splat emits: splat spells this `D_800D185C + 0x1` because it has
    no label at 0x800D185D. The second symbol is load-bearing -- see note 1 --
-   and `D_800D185D = 0x800D185D;` is in splat/town.bin_undefined_syms_auto.txt
-   for it. */
+   and `D_800D185D = 0x800D185D;` is supplied by hand from
+   splat/town.bin_extra_syms.txt for it -- see note 1. */
 extern u8 D_800D185D[];
 
-void func_800B9204(s32 a);
+void func_800B9204(u8 a);
 
 void func_800B9260(void)
 {
@@ -164,16 +283,20 @@ void func_800B9260(void)
     m = D_80083160.unk_08;
     if ((m & 0x500000) == 0x500000)
     {
-        /* THE RESIDUE IS HERE, and it is two register names.  The target
-           has `lw $a0` / `and $v0, $a0, $v1`; this has `lw $v0` /
-           `and $v0, $v0, $v1`.  A SECOND READ of `m` anywhere in this block
-           reaches 0 differing -- see note 2 above -- because it gives the
-           loaded pseudo a reference in another basic block and local-alloc
-           stops tying it to the `and`.  Every spelling of that second read
-           measured so far is a tautology with two identical arms, which is
-           an allocation device and not something anyone writes, so it is NOT
-           in this file.  What is wanted is the REAL second use of
-           D_80083160.unk_08 that the original had here. */
+/* THE RESIDUE IS HERE, and it is two register names.  The target has
+           `lw $a0` / `and $v0, $a0, $v1`; this has `lw $v0` /
+           `and $v0, $v0, $v1`.  The unk_08 pseudo reaches $a0 only if it is
+           BOTH live across the `and` (so that it conflicts with $v0, which
+           regclass.c's ascending order would otherwise give it) and a
+           global-alloc allocno.  Both at once means it must be live out of
+           this block, i.e. used inside this if-body -- and the bare `nop`s in
+           the `bne` and `jal` delay slots prove this body holds exactly one
+           statement, because reorg fills both slots from the body as soon as
+           there is anything to fill them with.  So the second use has to
+           compile to no insn at all, and the only such reference this
+           compiler offers that does not name a register is cross-jumping two
+           identical arms -- the tautology.  See note 2: the search is closed
+           negatively, and the device is still not in this file. */
         func_800B9204(D_800D185D[0]);
     }
 }

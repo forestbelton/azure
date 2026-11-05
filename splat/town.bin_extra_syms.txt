@@ -10,3 +10,17 @@
    one C function there is no longer an asm `glabel` to define it. The overlay
    is loaded at a fixed vram, so an absolute address is the whole definition. */
 func_800A652C = 0x800A652C;
+
+/* D_800D185D -- the second of two independent byte counters at 0x800D185C and
+   0x800D185D, needed by docs/near-misses/func_800B9260.c when that park
+   lands. splat mints an auto symbol per referenced ADDRESS, and nothing in
+   the tree references 0x800D185D today, so no amount of regeneration will
+   produce it: splat did briefly mint it from a listing that no longer exists
+   in that form, and the 2026-11-04 regeneration dropped it. The park proves
+   the symbol is load-bearing rather than cosmetic -- every single-symbol
+   spelling of the two counters costs a word, because explow.c's
+   memory_address forces constant addresses through registers and cse.c:6579
+   then rewrites `(const (plus D_800D185C 1))` into `reg + 1` off the register
+   already holding D_800D185C. Two separate incomplete arrays are the only
+   shape that measures 73 words / 0 differing. */
+D_800D185D = 0x800D185D;
