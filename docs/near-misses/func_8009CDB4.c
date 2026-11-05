@@ -26,65 +26,168 @@ typedef struct UnkTownScrCtx
 
 extern UnkTownScrCtx *D_80100900;
 extern u8 **D_801007F4;
-/* WHY THIS IS PARKED: 6 of 6 words, 5 register-only differences, VERDICT
-   ALLOC -- and a spelling that reaches 0 EXISTS and was deliberately not
-   taken. It is `if (D_801007F4 != NULL) { X } else { X }` with two IDENTICAL
-   arms, which is the same shape declined on func_800B9260 earlier the same
-   day: a tautology nobody writes. Landing it would record a source shape the
-   original did not have. 48 spellings were measured; the full table is in the
-   agent's report and the ones that matter are below.
+/* WHY THIS IS PARKED: DECLINED, not unreachable. 6 of 6 words, 5
+   register-only differences, VERDICT ALLOC. A whole FAMILY of spellings
+   reaches 0 differing and every member of it is a source-level tautology, so
+   none was taken -- the same ground as func_800B9260. Re-measured and
+   re-derived 2026-11-04; three claims in the previous note were wrong and are
+   corrected below.
 
-   WHAT IS PROVED, and it is the valuable part. The target's register
-   assignment is UNREACHABLE FROM A ONE-BASIC-BLOCK FUNCTION, so the original
-   had a branch here -- we simply do not know which one.
+   1. THE 0-REACHING SPELLING THIS NOTE USED TO NAME DOES NOT REACH 0. The
+   earlier text named `if (D_801007F4 != NULL) { X } else { X }` with BOTH
+   statements inside each arm. Measured: 6 words, 5 differing -- bit for bit
+   the parked body. Its stated mechanism is also wrong for that shape: it is
+   %hi(D_801007F4), not %hi(D_80100900), that leaves block 0 there, because
+   the condition reads it and both arms store through it (`.lreg`: "Register
+   81 used 4 times across 18 insns; dies in 2 places"), and global-alloc gives
+   it $a0 because `;; 81 conflicts: 81 2 3 29` -- the arms' own locals already
+   hold $v0 and $v1. The forms that do reach 0 keep the FIRST store OUTSIDE
+   the branch. scratch/s3_bodies/func_8009CDB4.c, cited here as "the device
+   file", holds the device-FREE body and a comment pointing back at itself, so
+   the device text and the 48-spelling table were never in the tree.
 
-   A straight-line function hands all its quantities to local-alloc, and
-   `QTY_CMP_PRI` (local-alloc.c:1693-1695) divides
-   floor_log2(n_refs) * n_refs * size by the live length. MIPS defines no
-   REG_ALLOC_ORDER, so find_free_reg scans numerically: the highest-priority
-   quantity takes $v0, the next $v1, the next $a0. The three quantities here
-   are %hi(D_801007F4) at 2 refs, %hi(D_80100900) at 3 (the lo_sum AND the
-   second store), and the address value at 2. Of the five insn orders
-   reachable from C, only `lui(900), lui(7F4), lo_sum, sw(7F4), sw(900)`
-   yields the target's -- and `expand_assignment` expands the destination MEM
-   before the source expression, so `lui %hi(D_801007F4)` always gets the
-   lower INSN_LUID and sched's stable tie-break never swaps two same-priority
-   `high` insns. One block cannot produce it. Two blocks can, immediately:
-   %hi(D_80100900) stops being block-local, global-alloc places it, and jump2
-   cross-jumps identical arms away. `sched.py --sched1` confirms 1 basic block
-   for this body and 4 for the device form.
+   2. THE ONE-BLOCK PROOF IS CORRECT. Here it is in a form that does not
+   depend on `expand_assignment`, which the old version did and which does not
+   hold. advise.py --greg prints local-alloc's own numbers for the parked
+   body:
 
-   WHAT WAS RULED OUT, all at 6 words and all inside ONE basic block: both
-   statement orders; a `u8 **` local as a statement and as an initialiser;
-   `*q = NULL` and `*D_801007F4 = NULL` for the second store; asm-aliased
-   array and struct views of either symbol (so MEM_IN_STRUCT_P does not reach
-   it); `volatile` on either global; `*(u32 *)&D_80100900 = 0`; three comma
-   forms; a two-local `r = q` chain; chained and single-statement assignment;
-   `void *n = NULL` in three positions; two ternaries; a `goto` around the
-   second store; and `do { } while (0)` -- which is the device that landed
-   func_80093744 and does NOT work here, because this needs a BLOCK COUNT and
-   that one needed a reference WEIGHT. 28 of those 48 varied only what is
-   inside the single block, and the proof above says that space is empty.
+       pseudo                 refs  live  priority  got
+       83  (the address)         2     4     2.000  $v0
+       82  (%hi D_80100900)      3     8     1.500  $v1
+       81  (%hi D_801007F4)      2     8     1.000  $a0
 
-   GENERALISABLE, and now a lever: when a near-miss is pure ALLOC on a
-   STRAIGHT-LINE function and no spelling moves it, the variable to vary is
-   the BASIC-BLOCK COUNT, not the statement order.
+   The two `high` quantities have the SAME live length, and necessarily so: in
+   the target's instruction order each is born at its own `lui` and dies at
+   its own `sw`, and the births (luid 0 and 1) and the deaths (luid 3 and 4)
+   are one insn apart on both sides. QTY_CMP_PRI (local-alloc.c:1693-1695)
+   divides floor_log2(refs) * refs * size by that length, so with the lengths
+   equal it collapses to the REFERENCE COUNT -- and %hi(D_80100900) has 3 (its
+   `lui`, the `lo_sum`, the second store) against %hi(D_801007F4)'s 2. 1.5
+   beats 1.0, so it sorts first and takes $v1, and find_free_reg hands
+   %hi(D_801007F4) $a0. The target wants them the other way round.
 
-   A CAUTION THIS FUNCTION EARNED: the 4-differing variant with a local scores
-   LOWER than this 5-differing one and is FURTHER away -- advise.py reports
-   MISSING/EXTRA on it, because the local moves the lo_sum ahead of
-   `lui %hi(D_801007F4)`. On a 6-word function the positional count inverted
+   Neither number is respellable. The ref counts are forced -- the `lo_sum`
+   must read the 900 high and each store must read its own -- and the spans
+   are forced by the instruction ORDER, which is already matched. ARGUE FROM
+   THE MATCHED ORDER, NOT FROM THE FRONT END: the reversed statement order
+   really does give %hi(D_80100900) the lower INSN_LUID, so the old
+   `expand_assignment` premise is simply false; it just emits a different
+   order (`lui v0 / sw zero,0(v0) / addiu v0,v0 / lui v1 / sw v0,0(v1)`).
+
+   And the two cannot be set independently, because SCHED1 RUNS BEFORE
+   LOCAL-ALLOC: toplev.c:3543 against :3585, with global-alloc at :3617 and
+   sched2 at :3661. Inside one block the LUID order that decides the registers
+   IS the order that gets emitted. (tools/decomp/dump.sh's header comment
+   lists the order as "... regmove lreg greg sched sched2 ..." and calls that
+   the pass order; it is the dump-SUFFIX list. The execution order puts sched1
+   before lreg.)
+
+   3. THE DECLARATION LEVER IS VACUOUS HERE, so going to the block count was
+   right -- by necessity, not by luck. matching-levers' CORRECTION says to try
+   the declaration lever before the block-count escalation when a leaf's
+   residue is a pure rename. On a function with ONE basic block there is
+   nothing for it to move: every pseudo is block-local whatever its C scope,
+   so local-alloc sees all of them either way. Measured, all at 6 words: a
+   `u8 **` local at function scope, the same local in a nested `{ }`, as an
+   initialiser, with `register`, and two locals in either declaration order --
+   all five land on the SAME 4-differing shape. Tried on the GLOBALS too,
+   which is the reading the old note did not cover: D_80100900 re-declared as
+   `UnkTownScrCtx *[1]`, as an incomplete `[]`, as `u8 *`, as a one-member
+   struct, and D_801007F4 as `u8 **[1]` -- 5 differing every time.
+
+   SO THE ORDERING ADVICE NEEDS A PRECONDITION: THE DECLARATION LEVER
+   PRESUPPOSES MORE THAN ONE BASIC BLOCK. On a genuinely straight-line leaf it
+   is a no-op, and the block count is the FIRST lever there, not the last.
+
+   4. WHAT REACHES 0, exactly, and why none of it was taken. The requirement
+   is a basic-block boundary strictly BETWEEN the two stores, so that
+   %hi(D_80100900) becomes global-alloc's only allocno while %hi(D_801007F4)
+   and the address stay block-0 locals. local-alloc then gives the address $v0
+   (2 refs over 4) and %hi(D_801007F4) $v1 (2 refs over 8), and global.c's
+   find_reg -- MIPS defines no REG_ALLOC_ORDER, so `int regno = i`,
+   global.c:965-971 -- gives %hi(D_80100900) the lowest hard register it does
+   not conflict with, which is $a0 because $v0 and $v1 are gone. That is
+   deterministic and depends on no priority at all.
+
+   The boundary has to cost no word, and the only deleter that runs after
+   allocation is jump2's cross-jump (toplev.c:3690, after sched2), which
+   merges two arms only when their code is identical. So every 0-reaching form
+   is a two-way branch whose arms both compile to the single `sw $zero`. Five
+   measured, each 6 words and 0 differing, each seqcheck arith=OK seq=OK, all
+   with `D_801007F4 = (u8 **)&D_80100900;` first and outside the branch:
+
+       if (D_801007F4 != NULL) { D_80100900 = NULL; }
+       else                    { D_80100900 = NULL; }
+
+       ... else { D_80100900 = (UnkTownScrCtx *)0; }   (fold collapses the arms,
+                                                       so the SOURCE arms differ)
+
+       if (D_801007F4 != NULL) { *D_801007F4 = NULL; }
+       else                    { D_80100900  = NULL; }      (and its mirror)
+
+       (D_801007F4 != NULL) ? (D_80100900 = NULL) : (D_80100900 = NULL);
+
+       if (D_801007F4 != NULL && D_801007F4 != NULL) { X } else { X }
+
+   The `*D_801007F4` one is the nearest thing to plausible prose -- "clear
+   through the cursor, or else clear the head" -- and it is still a tautology:
+   the test is provably true two lines after the pointer is set, and both arms
+   write NULL to the same object. The arms differing only in something `fold`
+   collapses was the angle most worth trying and it lands squarely in the same
+   class.
+
+   5. AND THE CONDITION CANNOT BE A REAL TEST. This is the sharpest thing
+   measured here and it narrows the branch hypothesis a long way. Block 0 has
+   to hold EXACTLY the three quantities %hi(D_801007F4), %hi(D_80100900) and
+   the address; a branch on anything else adds its own quantities to block 0
+   and they take $v0/$v1 first. `if (D_801007F8 != NULL) { X } else { X }`
+   still has 4 basic blocks and %hi(D_80100900) still leaves block 0 (`.lreg`:
+   "Register 82 used 4 times across 16 insns; dies in 2 places"), but block 0
+   now carries FIVE quantities and the answer is 5 differing. Same for
+   `D_801006D0[0] != 0`. Only a test of the cursor JUST STORED works, because
+   cse supplies it from the address register already in block 0 -- which is
+   why the address's ref count goes 2 -> 3 in every 0-reaching dump.
+
+   So "the original had a branch" is no longer a free hypothesis: it would
+   have had to be a branch on the value this function had just written, with
+   both arms clearing the head. If nobody would write that, the branch
+   hypothesis is itself the thing to doubt, and the next thing to question is
+   the compilation rather than the C.
+
+   6. ZERO-COST BOUNDARIES THAT ARE NOT IDENTICAL ARMS DO NOT EXIST. Measured,
+   each collapsing to one basic block and 5 differing: an empty-then
+   `if (D_801007F4 != NULL) { }` between the stores, a one-case `switch`, and a
+   forward `goto` with its label between the stores. A one-armed `if`, an
+   inverted empty `else` and an early `return` guard all keep the branch and
+   cost two words (8 of 6). Inside one block a deletable insn between the two
+   stores would work in principle, since it lengthens only %hi(D_80100900)'s
+   span -- but the margin needs L(900) > 1.5 * L(7F4) = 12, i.e. THREE of
+   them, and jump2's only other deleter is `noop_moves`.
+
+   7. ALSO RULED OUT at 6 words and 5 differing, on top of the 48 spellings
+   the first pass measured: `((UnkTownScrCtx **)&D_80100900)[0] = NULL`, a
+   `(void *)` hop in the cast, a `+ 0` offset on the address, `*(s32 *)`,
+   `*(u8 ***)&D_801007F4` and its `[0]` form, `volatile` on the destination
+   lvalue, the comma form, and a `do { } while (D_80100900 != NULL)` loop.
+   `*(... volatile *)&D_80100900 = NULL` costs a word (7 of 6).
+
+   8. CAUTION, re-measured and unchanged: the 4-differing variant with a local
+   scores LOWER than this 5-differing one and is FURTHER away -- advise.py
+   reports MISSING/EXTRA, because the local moves the `lo_sum` ahead of
+   `lui %hi(D_801007F4)`. On a 6-word function the positional count inverts
    the ranking. Read advise.py's verdict, not the number.
 
-   The permuter found a 0-score form in 7 minutes over 49,286 candidates; it
-   READS AN UNINITIALISED LOCAL, which is the UB class docs/town-sweep.md
-   already records as a wrong spelling. It was used as a lead to the
-   control-flow mechanism, not as a candidate. */
+   9. The permuter found a 0-score form in 7 minutes over 49,286 candidates;
+   it READS AN UNINITIALISED LOCAL, the UB class docs/town-sweep.md records as
+   a wrong spelling. It was a lead to the control-flow mechanism, never a
+   candidate. Note that csrc has landed exactly one function on that shape --
+   func_8004D880, "a dead `if (c)` with identical arms, reading `c` before it
+   is assigned", carved-sweep.md:396 -- and that one paid for two separate
+   mechanisms at once. This function has no second thing to buy. */
 
-/* The device-free alternative to scratch/s3_bodies/func_8009CDB4.c:
-   6 of 6 words, 5 differing, all five tagged `R` (register-only) by
-   aligndiff, insn order identical to the target.  See the device file's
-   comment for the full ruled-out table and the local-alloc derivation. */
+/* 6 of 6 words, 5 differing, every difference register-only, instruction
+   order already identical to the target. The derivation is in the note
+   above; scratch/s3_bodies/func_8009CDB4.c holds the same body. */
 void func_8009CDB4(void)
 {
     D_801007F4 = (u8 **)&D_80100900;

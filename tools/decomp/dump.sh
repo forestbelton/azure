@@ -19,11 +19,28 @@ SP="$AZURE_SCRATCH"
 # dumps after the input, so that failure mode is gone.
 #
 # Worth keeping from that era: cc1psx emits 16 dumps -- rtl jump cse loop cse2
-# flow combine regmove lreg greg sched sched2 bp dbr shorten jump2 -- and three
+# flow combine regmove sched lreg greg sched2 bp dbr shorten jump2 -- and three
 # of them (regmove, bp, shorten) are NOT in upstream 2.7.2's toplev.c suffix
 # list, which is itself evidence this is the SN compiler and not stock 2.7.2.
 #
-# THAT LIST IS THE PASS ORDER, and it is worth reading before concluding a dump
+# CORRECTED 2026-11-04: this list used to read "... regmove lreg greg sched
+# sched2 ...", putting sched1 AFTER the two allocators, and then asserted the
+# list was the pass order. Both halves were wrong, and the compiler's own
+# source settles it twice over. toplev.c opens the dumps in order at :2352,
+# :2357, :2361, :2365, :2369 -- .regmove, .sched, .lreg, .greg, .sched2 -- and
+# runs the passes in that same order: schedule_insns at :3548 under the
+# flag_schedule_insns guard at :3543, local_alloc at :3585, global_alloc at
+# :3617, sched2 at :3661, jump2 at :3690.
+#
+# SO sched1 RUNS BEFORE BOTH ALLOCATORS, and that is load-bearing rather than
+# trivia: inside a single basic block the INSN_LUID order that decides which
+# quantity local-alloc hands $v0 is the order sched1 has already emitted, so
+# the two cannot be reasoned about independently. Any argument of the form
+# "local-alloc picks the registers and then sched1 reorders them" has the
+# passes backwards. (The reverse direction is fine and is what func_800B8E08's
+# landing rests on: sched1 sets the order, local-alloc then ties on it.)
+#
+# THE LIST IS THE PASS ORDER, and it is worth reading before concluding a dump
 # is mislabelled. An agent reported the labels as non-monotone because its own
 # table printed jump2 above sched2; jump2 runs LAST of the sixteen, so having
 # fewer compares and jumps there than at sched2 is correct, not a defect. If a
