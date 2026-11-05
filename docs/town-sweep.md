@@ -1809,6 +1809,55 @@ listing. `provision.py` route (p) called `0x800D0000` and `0x80100000` here
 both were `%hi` halves of real symbols whose `%lo` splat had put in the other
 file.
 
+### WHEN A PARK NAMES A BYTE-IDENTICAL TWIN, CHECK WHETHER THE TWIN HAS SINCE LANDED
+
+`func_800CE2D4` was parked at 13 differing after about NINETY hand compiles --
+six store permutations, 27 assignment forms, three eager-delta grids, every
+local type and declaration form -- and it landed on 2026-11-04 in ONE compile,
+from source that was already in the tree.
+
+Its own park text said:
+
+> The function is byte-identical to its twin func_800CE62C -- families.py
+> reports the family of 2 with ZERO varying words -- so landing this lands
+> both, 92 words.
+
+That was written when BOTH were stubs. `func_800CE62C` landed later, on its
+own, and nobody went back. Its landed body, copied verbatim with the name
+changed, measures **0 differing** on `func_800CE2D4`.
+
+**And the twin's structure is not what the park was exploring.** The park put
+all four statements inside the `--a->unk_6C <= 0` guard; in the twin only the
+call is inside it and the three `+=` axes are OUTSIDE. Ninety compiles explored
+spellings within a structure that was wrong, which is why every one of them
+plateaued -- and why the park's careful local-alloc reading of *why* it
+plateaued, correct as far as it went, could never have led anywhere.
+
+**So, two checks, both cheap, before spending a single compile on a park:**
+
+1. `grep -c 'INCLUDE_ASM(...", <twin>)'` over `csrc/` for every twin, sibling
+   or "same shape as" function the park names. A park's cross-references are
+   snapshots of the day it was written, and this sweep has been landing
+   hundreds of functions a day around them.
+2. Compare the two listings' word streams directly rather than trusting the
+   park's or `families.py`'s claim:
+
+   ```python
+   re.match(r'^\s+/\* [0-9A-F]+ [0-9A-F]+ ([0-9A-F]{8}) \*/', line)
+   ```
+
+   Field 3 is the WORD; field 2 is the vram address and will differ for every
+   line of two functions at different addresses, which looks exactly like "not
+   identical" if you grab the wrong column. I did grab the wrong column first.
+
+This generalises past twins: **a park is a dated document, and its statements
+about the rest of the tree decay fastest.** The `func_8009CDB4` park was found
+to be carrying a device it claimed reached 0 and does not; the `func_800B9260`
+park cited a symbol as present in a generated file that a later regeneration
+had dropped; this one cited a twin as a stub that had landed. Three of the ten
+parks had a stale external claim, and in this case the stale claim WAS the
+answer.
+
 ### A REGISTER ASYMMETRY BETWEEN TWO NEAR-IDENTICAL ARMS IS NOT SOURCE EVIDENCE
 
 Found 2026-11-04 on `func_80095840`, and it is my own briefing error rather

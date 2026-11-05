@@ -15124,7 +15124,38 @@ void func_800CE20C(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town_800BF3F0", func_800CE2D4);
+/* The twin of func_800CE62C below (:15216) and BYTE-IDENTICAL to it -- the two
+   listings' 46-word streams compare equal word for word, which is how this
+   landed: the twin's own source, verbatim, measures 0 differing here.
+
+   THIS WAS PARKED FOR WEEKS AT 13 DIFFERING ON A WRONG STRUCTURE.  The park
+   put all four statements inside the `if`, and about ninety hand compiles then
+   explored spellings within that shape -- six store permutations, 27
+   assignment forms, eager-delta grids, local types.  The three `+=` axes are
+   OUTSIDE the countdown guard: only the func_800C4174 call is inside it.  The
+   park's own text named this twin and said "landing this lands both", written
+   when the twin was also a stub; the twin landed first and nobody came back.
+
+   Three axes each move half the way to a target -- b+0x2 toward a->unk_84,
+   b+0x6 toward a->unk_86, and b+0xA toward zero, which is why that one is
+   written `(0 - x) / 2` rather than `-x / 2`.  `--a->unk_6C <= 0` on the s16
+   countdown is gcc's lhu/addiu/sh/sll/bgtz shape.  func_800C4174's three
+   parameters pass straight through with no argument setup.
+
+   46 words -- its header reads `nonmatching func_800CE2D4, 0xB8`, and
+   0xB8/4 = 46.  No jump table, no rodata of its own.  0 differing; raw 1 ==
+   relocdump 1, the single `jal func_800C4174`, none on a FUNCTION symbol.
+   seqcheck: arith=OK seq=OK. */
+void func_800CE2D4(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+{
+    if (--a->unk_6C <= 0)
+    {
+        func_800C4174(a, b, c);
+    }
+    *(s16 *)((u8 *)b + 0x2) += (a->unk_84 - *(s16 *)((u8 *)b + 0x2)) / 2;
+    *(s16 *)((u8 *)b + 0x6) += (a->unk_86 - *(s16 *)((u8 *)b + 0x6)) / 2;
+    *(s16 *)((u8 *)b + 0xA) += (0 - *(s16 *)((u8 *)b + 0xA)) / 2;
+}
 
 void func_800CE38C(void *a, UnkTown2AE8 *b, s32 c)
 {
