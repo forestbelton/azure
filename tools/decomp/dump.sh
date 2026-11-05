@@ -65,6 +65,14 @@ SP="$AZURE_SCRATCH"
 #     direction is fine and is what func_800B8E08's and func_800AD138's
 #     landings rest on: sched1 sets the order, local-alloc then prices it.
 #   * A dump's CONTENT is the check, not its name's position in any list.
+#   * THE DUMPS ALSO TELL YOU WHICH SCHEDULER IS LINKED, and that matters
+#     because scratch/gcc-src/cdk-gcc-b18 carries BOTH sched.c and
+#     haifa-sched.c and Makefile.in:1447 builds one via $(SCHED_PREFIX)sched.c.
+#     ";; ready list at T-" and ";; insn N has a greater potential hazard"
+#     appear in sched.c and in haifa-sched.c NOT AT ALL, so cc1psx links
+#     sched.c. Cite sched.c; anything found only in haifa-sched.c -- notably
+#     INSN_REG_WEIGHT, at haifa-sched.c:288 -- belongs to a compiler this
+#     project does not use, and one park cited it as a tie-break for years.
 #     `.bp` still shows pseudos and pre-sched order, which is how its real
 #     position was caught -- after this comment had already been corrected
 #     once. If a dump looks mislabelled, read what is in it and then find the
