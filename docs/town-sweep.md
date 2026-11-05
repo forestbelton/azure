@@ -1858,6 +1858,38 @@ had dropped; this one cited a twin as a stub that had landed. Three of the ten
 parks had a stale external claim, and in this case the stale claim WAS the
 answer.
 
+### A BARE DEAD EXPRESSION STATEMENT IS NOT EMITTED, SO A PROBE THAT ADDS ONE MEASURES NOTHING
+
+Found 2026-11-05 on `func_800B85E8`, where it had invalidated FOUR of a park's
+five recorded measurements without anybody noticing.
+
+The park had tried to transplant a landed twin's device -- a dead
+`*(u16 *)&D_800133E7;` read meant to force a symbol's `high` into existence --
+and recorded four probes showing it "does not buy it", all at the same
+differing count as the base. **The front end expands nothing at all for a bare
+dead expression statement**, so all four were compiling the base body. The
+twin's real device is the ASSIGNED form, `w = *(u16 *)&X;`, which is a
+different experiment.
+
+**An equal DIFF count is exactly what a no-op edit produces, so it cannot
+distinguish "this change does nothing" from "this change was not compiled".**
+The check is to hash the emitted word column:
+
+```python
+cols = [l.split()[1] for l in ovlverify_output.splitlines()
+        if len(l.split()) > 3 and len(l.split()[1]) == 8
+        and all(c in "0123456789ABCDEF" for c in l.split()[1])]
+hashlib.md5(''.join(cols).encode()).hexdigest()
+```
+
+Same md5 as the base means the probe changed no code. That is how this was
+caught, and it is the third member of a family this sweep keeps meeting:
+`assert text != original` proves the TEXT changed, a zsh bare `$VAR` silently
+passes a whole name list as one argument, and now a dead statement compiles to
+nothing. **All three produce plausible-looking output that measures the
+original program.** Prefer the md5 over the DIFF count whenever a probe's whole
+point is that it adds something the compiler might drop.
+
 ### A REGISTER ASYMMETRY BETWEEN TWO NEAR-IDENTICAL ARMS IS NOT SOURCE EVIDENCE
 
 Found 2026-11-04 on `func_80095840`, and it is my own briefing error rather

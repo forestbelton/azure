@@ -173,13 +173,59 @@ s32 func_80033B2C();
    the load in `$v0`. That is the shape func_800B83DC's park works out in
    full: it needs the high to be a GLOBAL quantity born before the compare,
    and it buys that with a dead `*(u16 *)&D_800133E7;` read plus `do { }
-   while (0)` loop notes. HERE THE DEVICE DOES NOT BUY IT. Measured, all
-   still 5 differing: the dead u16 read before the first test, the same as a
-   u32 read, the read in the block between the first and second tests, and
-   the read nested one deeper; with the loop notes added as well it is 5
-   shape rows and 14 register rows. Reading D_800133E7 a second time in the
-   condition is 149 words. So nothing here wants marking as a device, and
-   residue (b) is open.
+   while (0)` loop notes.
+
+   THE FOUR "DEAD READ" MEASUREMENTS ABOVE WERE VACUOUS, corrected 2026-11-05
+   and this is the important correction in this file. A BARE
+   `*(u16 *)&D_800133E7;` STATEMENT IS NOT EMITTED AT ALL -- the front end
+   expands nothing for it, so four of the five probes that "showed the device
+   does not transfer" were compiling the base body. I verified it by hashing
+   the emitted word column rather than comparing DIFF counts: base body and
+   base-plus-bare-read are the same md5. Any probe that varies a dead
+   expression statement must be checked that way, because an equal DIFF is
+   exactly what a no-op edit produces.
+
+   The twin's real device is the ASSIGNED form (`w = *(u16 *)&D_800133E7;`),
+   which does transplant the high; placed where `w` goes unused flow deletes
+   it again, and placed so the note encloses the second test it is 14
+   register rows, because `n` then crosses floor_log2 and takes `$s1` off
+   `rec`.
+
+   RESIDUES (a) AND (b) ARE ONE CONTEST, NOT TWO, which supersedes the
+   "independent" reading above. The target is what a GLOBAL `high` born in
+   the block BETWEEN the two tests and allocated BEFORE `r[6]` produces on
+   its own: it conflicts with the E6 byte and with `r[6]`, so `find_reg`
+   gives it `$v1`; `r[6]` then conflicts with `$v0` and `$v1` and pass 0
+   skips `$a0` (the mask allocno's inherited preference), so it takes `$a1`;
+   and the `%lo` load is a block-local that takes the lowest free register,
+   `$v0`. All five words fall out of one allocation order.
+
+   A 0-DIFFERING SPELLING EXISTS AND IS DELIBERATELY NOT IN THIS FILE.
+   `do { do { p = &D_800133E7; } while (0); } while (0);` in that block is
+   147 words / 0 differing, `VERDICT: MATCH`, `arith=OK`. Measured by hand
+   2026-11-05: nested 0, ONE note 5, no note 5 -- so the inner loop's only
+   function is to take `loop_depth` from 2 to 3 (`flow.c:2122`,
+   `reg_n_refs[regno] += loop_depth`) so the high's count reaches 4 and
+   crosses `floor_log2`. `--greg` shows exactly that: one note gives the high
+   3 refs over a REG_EQUIV-doubled live length, 0.375 against `r[6]`'s 0.600,
+   and it loses; two notes give 4 refs, 1.000, and it wins.
+
+   IT IS DECLINED, and the reasoning is the point rather than the taste. This
+   repo does accept a loop note as a lever -- it landed func_80038CB8, the
+   entry carries its own control list, and a `while (1)` around a phase
+   landed func_8008B654 on 2026-11-04. A single `do { } while (0)` has a
+   rationale a programmer could have had: macro hygiene, scoping, `break` as
+   an early exit. TWO NESTED ONES AROUND A BARE POINTER ASSIGNMENT HAVE NONE
+   -- the inner one exists only because the outer was not enough, which is a
+   dial set to a value, not a spelling recovered from the original. That is
+   the same reason the tautologies were declined on func_800B9260 and
+   func_8009CDB4. Recorded with the measurements so the next reader need not
+   rediscover it, and so the decision can be revisited on evidence rather
+   than on preference.
+
+   With the one-contest reading above, residue (b) is no longer a separate
+   open question: what is open is whether a GLOBAL high can be born in that
+   block without a loop note.
 
    AND THERE IS NO LANDED PRECEDENT TO LIFT, which is worth knowing before
    anyone goes looking for one. Across every built landed C unit in the tree
