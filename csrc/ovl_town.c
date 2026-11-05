@@ -2273,6 +2273,27 @@ s32 func_800C2B6C(s16 a);
 extern u8 D_800D2EA4[];
 extern u8 D_800D1BF4[];
 void func_800B8E08(u16 *p);
+
+/* func_800B8E08's sprite tables and its stride-6 D_800D1910 records: u16 at
+   +0x00 (zero means the slot is absent), u16 at +0x02, u8 at +0x04 and +0x05.
+   The `sll 1 / addu / sll 1` triple in the listing is the sizeof-6 index. */
+typedef struct
+{
+    u16 unk_00;
+    u16 unk_02;
+    u8 unk_04;
+    u8 unk_05;
+} UnkD1910;
+
+extern UnkD1910 D_800D1910[];
+extern u16 D_8012669C[];
+extern u16 D_80126884[];
+extern u16 D_80126A6C[];
+extern u16 D_80126C54[];
+extern u16 D_80126E3C[];
+extern u16 D_80127024[];
+extern u16 D_80126494[];
+extern u16 D_80127FA8[];
 void func_8009CDB4(void);
 u8 **func_8009CDCC(s32 a, s32 b, s32 c, s32 d, u8 *e);
 void func_8009CE34(void);
@@ -40933,15 +40954,14 @@ void func_800B73D0(void)
 }
 
 /* Clears the tile surface and then rebuilds it: func_800B7384 zeroes the
-   0x80x0x80 halfword buffer the caller hands in, and func_800B8E08 -- still a
-   park, at 139 words and 5 DIFF -- redraws into it.
+   0x80x0x80 halfword buffer the caller hands in, and func_800B8E08 -- landed
+   2026-11-04 at 139 words and 0 differing, after sitting at 5 DIFF through
+   twenty spellings -- redraws into it.
 
-   The declaration of func_800B8E08 here is `u16 *`, not the `s32` its park
-   file carries. Both are 0 differing at this call site, and the park was
-   measured to stay at 5 DIFF either way; `u16 *` is what func_800B7A6C's and
-   func_800B7978's landings established the destination surface to be.
-   nmcheck.py tracks the disagreement as a signature to correct when the park
-   lands, which is not an error. */
+   The `u16 *` here is what func_800B7A6C's and func_800B7978's landings
+   established the destination surface to be, and func_800B8E08's own
+   definition now carries it, so the signature disagreement nmcheck.py used to
+   track against that park's `s32` is gone. */
 void func_800B73F0(u16 *p)
 {
     func_800B7384((s16 *)p);
@@ -41285,10 +41305,11 @@ void func_800B7934(s32 x, s32 y, u8 c)
    The fused sll/sra reads exactly like a `short` parameter subscripted
    plainly, and the callee cannot tell the two apart: `s16 arg2`, `s32 arg2`
    with `D_800D1868[(s16)arg2]`, and an `s16 idx = arg2;` local are all 61
-   words / 0 differing. The CALLER separates them. func_800B8E08 -- a park at 5
-   DIFF -- passes a `u8` local, and an `s16` third parameter takes that park
-   from 5 differing to 16, measured by substituting the prototype alone. A `u8`
-   argument widens to `s32` and to `u16` for free but NOT to `s16`.
+   words / 0 differing. The CALLER separates them. func_800B8E08 -- then a
+   park at 5 DIFF, landed 2026-11-04 at 0 -- passes a `u8` local, and an `s16`
+   third parameter took it from 5 differing to 16, measured by substituting
+   the prototype alone. A `u8` argument widens to `s32` and to `u16` for free
+   but NOT to `s16`. That measurement is why this parameter is still `s32`.
 
    Two orderings in the index are each worth a word, which is unusual and is
    worth knowing for call-free bodies: `(i + y) * 128 + j + x` is 0 differing,
@@ -42549,7 +42570,90 @@ s32 func_800B8C90(void)
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_800895F0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B8E08);
+/* Redraws the town's active tile record into the surface the caller hands in:
+   the D_800D2FB4 row selected by D_800D3814[6] decides which sprite overlay
+   goes on top, and func_8009CDCC then blits the row's own (x, y) pair.
+
+   THE ONE NON-OBVIOUS STATEMENT IS `base = D_800D2FB4[0];`.  Without it the
+   function is 139 words and 5 DIFF -- the final block's last seven words, a
+   pure permutation with the instruction multiset already right.  The target
+   holds BOTH forms of D_800D3814 at once there: the raw `(high)` in $v0
+   serving the folded `lbu $a0, %lo(D_800D3814)($v0)`, and a lo_sum base in
+   $v1 serving [1] and [6], with the base materialised BEFORE the folded read
+   so the high is still live across it and the two cannot share a register --
+   which is also what frees $v0 for D_800D2FB4's own `(high)` one insn later.
+   Twenty spellings of the tail statement failed to reproduce that because
+   they all left D_800D2FB4's `(high)`/`lo_sum` pair generated BETWEEN the
+   index `sll` and the row `addu`.  Materialising it in its own statement
+   moves the pair to the FRONT of the block's LUID order, which gives sched1's
+   backward scan one more bumped insn to place in the cycle the $a1 argument
+   move used to take; the [1] load slips one cycle later; and the lo_sum of
+   D_800D3814 then becomes ready in the SAME cycle as the folded [0] load,
+   where `potential_hazard` prefers the LOAD, so the lo_sum is emitted first.
+   The fifth argument must stay off the SYMBOL: taking it off `base` as well
+   is 10 DIFF, and so is `base + ...` for both. */
+void func_800B8E08(u16 *p)
+{
+    s32 idx;
+    u8 kind;
+    u8 *row;
+    u8 *q;
+    u8 *base;
+
+    func_8009CDB4();
+    if (D_800D3814[6] != 0)
+    {
+        idx = D_800D2FB4[D_800D3814[6]][0];
+        kind = idx;
+        func_800B7978(D_800D3814[0], D_800D3814[1], kind, p);
+        if (kind == 0x26)
+        {
+            switch (D_800133E2)
+            {
+            case 6:
+                func_800B7A6C(0x2E, 0x24, D_8012669C, p);
+                break;
+            case 8:
+                func_800B7A6C(0x2E, 0x24, D_80126884, p);
+                break;
+            case 9:
+                func_800B7A6C(0x2E, 0x24, D_80126A6C, p);
+                break;
+            case 11:
+                func_800B7A6C(0x2E, 0x24, D_80126C54, p);
+                break;
+            case 12:
+                func_800B7A6C(0x2E, 0x24, D_80126E3C, p);
+                break;
+            }
+            q = (u8 *)0x80010000;
+            if (q[0x33C8] == 7)
+            {
+                func_800B7A6C(0x40, 0xC, D_80127024, p);
+            }
+            if (q[0x33C4] == 5)
+            {
+                func_800B7A6C(0xE, 0xE, D_80126494, p);
+            }
+        }
+        else if (kind == 0x27)
+        {
+            q = (u8 *)0x80010000;
+            if (q[0x33C4] == 5)
+            {
+                func_800B7A6C(0x38, 0xE, D_80127FA8, p);
+            }
+        }
+        if (D_800D1910[idx].unk_00 != 0)
+        {
+            func_800AC488(D_800D1910[idx].unk_00, D_800D1910[idx].unk_02, D_800D1910[idx].unk_04, D_800D1910[idx].unk_05);
+        }
+        base = D_800D2FB4[0];
+        row = &base[D_800D3814[6] * 0x20];
+        func_8009CDCC(D_800D3814[0], D_800D3814[1], row[4], row[5], &D_800D2FB4[D_800D3814[6]][0xC]);
+    }
+    func_8009CE34();
+}
 
 u8 func_800B9034(void)
 {
