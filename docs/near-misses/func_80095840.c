@@ -22,6 +22,145 @@
  *   800958FC built sw v1,a0 target sw a2,a0
  */
 
+/* MECHANISM: the two-word displacement and the ten register renames are ONE
+ * cause, and the cause is sched1's ready-list tie-break. Measured 2026-11-04;
+ * every number below is out of this file's own dumps
+ * (tools/decomp/dump.sh, -G0).
+ *
+ * 1. THE DISPLACEMENT IS A TRANSPOSITION, NOT AN INSERTION. Nothing is
+ *    emitted between the two stores. At `.regmove` the arm is in source
+ *    order -- insn 50 `83 = p->unk_1C[i]`, 53 `st 0x18`, 56 `st 0x10 = 83`,
+ *    59 `82 = 83` (the `q = c` copy), 63 `lbu off 82` -- and sched1 swaps
+ *    56 and 59. Its own log says so twice, once per arm:
+ *        ready list at T-4: 53 (1) 56 (2) 59 (2), now 59 56 53
+ *        insn 56 has a greater potential hazard, now 56 59 53
+ *    (and the same for 115/118/112 in arm 2). sched1 schedules BACKWARD, so
+ *    the insn selected at T-4 is emitted LATER: 56 moving to the front of
+ *    the ready list is what puts the copy BEFORE the store.
+ *
+ *    Both are priority 2, because `priority` (sched.c:1456, and the formula
+ *    at :1519 `priority(x) + insn_cost(x,prev,insn) - 1`) gives each of them
+ *    1 + 2 - 1 from the load at insn 50. Equal priority puts them in one
+ *    group in `schedule_select` (sched.c:2662-2721), which then picks the
+ *    member with the largest `potential_hazard`: the `sw` takes a memory
+ *    function unit and the reg-to-reg copy takes none, so the store wins
+ *    every time. The ONLY thing in this compiler that can separate them is
+ *    `adjust_priority` (sched.c:2551) bumping the copy to `max_priority`
+ *    via `birthing_insn_p` (sched.c:2513), and that is gated on
+ *    `reg_n_sets[82] == 1`. Here it is 2 -- one set per arm.
+ *
+ * 2. THE RENAMES FOLLOW FROM THE DISPLACEMENT. Because sched1 moved the copy
+ *    above the store, `c` (reg 83) no longer dies in the copy, so
+ *    `update_equiv_regs` takes the `optimize_reg_copy_1` branch
+ *    (local-alloc.c:1028 -> :704) instead of `optimize_reg_copy_2`, finds
+ *    83's death at the store, and REWRITES THE STORE'S SOURCE 83 -> 82
+ *    (`.regmove` has `st 0x10 = 83`, `.lreg` has `st 0x10 = 82`), moving one
+ *    ref per arm off 83 and onto 82. That is also why the candidate's arm 2
+ *    emits `sw $v1, 0x10($a1)` where arm 1 emits `sw $v0` -- arm 1's operand
+ *    is put back to $v0 later, between the `.jump2` and `.dbr` dumps
+ *    (observed, not traced to a routine).
+ *
+ *    `.lreg` then prices reg 82 at `used 8 times across 16 insns`, and
+ *    `allocno_compare`'s `floor_log2(refs)*refs/live_length` makes that
+ *    3*8/16 = 1.50 -- second of nine. `.greg` agrees:
+ *        ;; 9 regs to allocate: 90 82 83 84 85 101 116 81 80
+ *        ;; 82 conflicts: 80 81 82 101 116 2 29
+ *    `find_reg`'s pass 0 (global.c:950-985) offers the call-used GR regs
+ *    minus `hard_reg_conflicts` {$v0} minus `regs_someone_prefers`
+ *    {$a0 from 80, $a1 from 81} (global.c:866-885), so 82 takes the lowest
+ *    left, $v1 -- and the unk_14 byte pseudos 101/116, allocated after it,
+ *    are pushed out to $a1. The target wants 101/116 in $v1 and 82 in $a2,
+ *    which needs 82 allocated AFTER them, i.e. priority below 101's
+ *    1*3/5 = 0.60.
+ *
+ * 3. WHAT THE TARGET'S NUMBERS MUST BE. Work the allocator backwards: with
+ *    reg 82 at 4 refs over live_length 14 its priority is 2*4/14 = 0.57, it
+ *    is allocated after 101/116, they take $v1, `hard_reg_conflicts[82]`
+ *    then holds {$v0,$v1} and `regs_someone_prefers[82]` {$a0,$a1}, and
+ *    pass 0 hands out $a2. Every target register falls out: 83 -> $v0,
+ *    101/116 -> $v1, 82 -> $a2. FOUR refs means the copy's destination is
+ *    used for the `t->unk_2C` store and NOTHING ELSE -- the `q->unk_14`
+ *    load must read `c`, not `q`, in both arms. (The target's arm-1
+ *    `lbu $v1, 0x14($v0)` vs arm-2 `lbu $v1, 0x14($a2)` asymmetry is then a
+ *    late-pass artefact of the same kind as item 2's $v0/$v1 split, not an
+ *    RTL-level difference between the arms. Reading it as evidence of two
+ *    different member reads is what sent this search sideways first.)
+ *
+ * 4. WHY NO SPELLING REACHES IT. The copy only exists because cse makes `q`
+ *    the canonical register of the quantity: `make_regs_eqv` (cse.c:850-870)
+ *    promotes the copy's destination only when its last use is outside cse's
+ *    current extended block AND later than the source's, which holds exactly
+ *    because `q` is set in BOTH arms. Canonical means cse rewrites every use
+ *    it sees to `q` -- which is precisely the 8 refs item 2 needs gone. Make
+ *    `q` per-arm and it is no longer canonical, every use is rewritten to
+ *    `c`, the copy becomes `(set c c)` and cse DELETES it: 51 words. The
+ *    copy's existence and its reference count are therefore the same fact,
+ *    and `birthing_insn_p`'s `reg_n_sets == 1` is on the wrong side of it.
+ *    That is the trilemma: one set gives the schedule but loses the word,
+ *    two sets give the word but lose the registers.
+ *
+ * ABLATION. 95 bodies measured with `ovlverify.py`, this file's head spliced
+ * verbatim onto each; 48 of them come out BYTE-IDENTICAL to this park,
+ * verified by md5 of the word column rather than by an equal DIFF. Grouped:
+ *
+ *   park as written                                      52w  12  --
+ *   lbu through `c`, 0x2C store through `q`              52w  12  same bytes
+ *   lbu through `p->unk_10`, 0x2C store through `q`      52w  12  same bytes
+ *   `q` read back out of `p->unk_10` (the reload idiom)  52w  12  same bytes
+ *   third variable `r = q` for the 0x2C store            52w  12  same bytes
+ *   two `c`, one `q`                                     52w  12  same bytes
+ *   unk_14 byte held in a local (u8 / s32 / declared 1st) 52w 12  same bytes
+ *   `q` as a third parameter (an $a2 preference)         52w  12  same bytes
+ *   `q = NULL` ahead of the chain                        52w  12  same bytes
+ *   `n` as u32 / int                                     52w  12  same bytes
+ *   all 6 declaration orders x the 5 statement orders
+ *     that do not put the copy first (30 bodies)         52w  12  same bytes
+ *   `n` as s16                                           52w  13  worse
+ *   0x10 store before 0x18 store, `q` read back          52w  15  worse
+ *   two `q` (one per arm)                                51w  33  copy deleted at cse
+ *   two `q` and two `c`                                  51w  33  copy deleted at cse
+ *   no `q` (cast at each use)                            51w  33  copy deleted at cse
+ *   no `c` (load straight into `q`)                      51w  33  copy deleted at cse
+ *   block-scoped `q` per arm                             51w  33  copy deleted at cse
+ *   copy written before either store                     51w  33  copy deleted at cse
+ *   0x2C store through `c`, lbu through `q`              51w  33  copy deleted at cse
+ *   0x2C store re-loads `p->unk_1C[i]`                   52w  18  worse
+ *   member read re-loads `p->unk_1C[i]`               53-54w  23-33 extra load
+ *   load into the field, then read the field back        53w  25  extra load
+ *
+ *   Every 52-word row above re-measures IDENTICALLY in `.lreg` and `.greg`:
+ *   `Register 82 used 8 times across 16 insns`,
+ *   `9 regs to allocate: 90 82 83 84 85 101 116 81 80`, 82 in 3, 101/116 in
+ *   5, and both arms' `insn N has a greater potential hazard` lines. The
+ *   fingerprint is invariant under every spelling that keeps 52 words, which
+ *   is the real content of this park: the residue is not a spelling.
+ *
+ * THE REMAINING QUESTION, stated so it can be answered: find a shape in
+ * which the copy's destination is used ONLY by the `t->unk_2C` store. By
+ * item 4 that cannot come from a source-level `q = c` while `q` is cse's
+ * canonical register, so the copy has to come from somewhere cse never
+ * canonicalises -- reload materialising a `REG_EQUIV`
+ * (`update_equiv_regs`, local-alloc.c:960-1100), which is the
+ * "A REG-TO-REG MOVE IS A LOAD cse DID *NOT* EQUATE" lever and is what
+ * func_800AD138 turned on. The concrete sub-question: can the
+ * `t->unk_2C = q` store be put in a basic block that cse's extended block
+ * does not cover, so `c` stays canonical for the member read while `q`'s
+ * single use survives un-rewritten, WITHOUT changing the word count? Every
+ * restructuring tried so far that moves that store also merges the two
+ * arms' tails and changes the count.
+ *
+ * NOT TRIED, and cheap for whoever picks this up: the permuter. A 19-minute
+ * 4-job run on 2026-11-04 reached score 25 from a base above 315 but its
+ * best candidates are devices (`(double)(v != 1)` in the condition), so it
+ * is recorded as not having produced a usable spelling rather than as having
+ * closed the space.
+ *
+ * TYPEDEFS: none of the six copied below has to change. Every 52-word
+ * variant above reproduces the target's opcodes, immediates and
+ * displacements exactly, so the field offsets and widths are all already
+ * right; the residue is entirely register numbers and one transposition.
+ */
+
 #include "common.h"
 
 /* THE TYPEDEFS BELOW ARE COPIED VERBATIM out of csrc/ovl_town.c, IN THE

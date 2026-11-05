@@ -1809,6 +1809,34 @@ listing. `provision.py` route (p) called `0x800D0000` and `0x80100000` here
 both were `%hi` halves of real symbols whose `%lo` splat had put in the other
 file.
 
+### A REGISTER ASYMMETRY BETWEEN TWO NEAR-IDENTICAL ARMS IS NOT SOURCE EVIDENCE
+
+Found 2026-11-04 on `func_80095840`, and it is my own briefing error rather
+than anyone's analysis error, so it is recorded here where briefs get written.
+
+That function has two near-identical arms. In the target, arm 1 reads the
+member as `lbu $v1, 0x14($v0)` and arm 2 reads it as `lbu $v1, 0x14($a2)` --
+off the original in one and off a copy in the other. **I put that asymmetry in
+the brief as evidence, calling it "evidence, not noise".** It is noise. The
+agent chased it as two different member reads before establishing that the
+candidate shows the SAME kind of asymmetry from IDENTICAL RTL: its arm 1 emits
+`sw $v0, 0x10($a1)` and arm 2 emits `sw $v1`, while `.greg` and `.sched2` have
+`$v1` in both arms and `.dbr` has `$v0` in arm 1. Something between `jump2` and
+`dbr` restores it; that was observed and not traced to a routine, which is the
+honest state of it.
+
+**The rule: before reading a per-arm register difference as a source
+difference, find it in a dump.** If `.greg` has the same register in both arms,
+the asymmetry was introduced after allocation and no source spelling addresses
+it. Two near-identical arms are exactly where late passes -- cross-jumping,
+delay-slot filling, whatever restores that register -- have the most freedom,
+so it is the worst place to read registers off the listing alone.
+
+Related and already recorded elsewhere in this file: a `nop` in a delay slot
+IS positive evidence about an arm's contents, and that one holds. The
+difference is that the `nop` is a word count, while a register name late in
+the pipeline is not.
+
 ### KNOWN RESIDUE: "X IS STILL A STUB" COMMENTS IN `csrc/ovl_town.c`
 
 Every such claim in `csrc/ovl_town_800BF3F0.c` and in the preamble duplicated
