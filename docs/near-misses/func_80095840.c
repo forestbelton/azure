@@ -149,11 +149,20 @@
  * restructuring tried so far that moves that store also merges the two
  * arms' tails and changes the count.
  *
- * NOT TRIED, and cheap for whoever picks this up: the permuter. A 19-minute
- * 4-job run on 2026-11-04 reached score 25 from a base above 315 but its
- * best candidates are devices (`(double)(v != 1)` in the condition), so it
- * is recorded as not having produced a usable spelling rather than as having
- * closed the space.
+ * THE PERMUTER HAS NOW RUN TO COMPLETION AND FOUND NOTHING. 50 minutes,
+ * 4 jobs, 261,452 candidates on 2026-11-04 (nonmatchings/permlog.tsv), base
+ * score 320, best 25, and NO ZERO -- `--stop-on-zero` was set and the run
+ * self-terminated on its timeout instead. The paragraph this replaces said
+ * the permuter was "NOT TRIED, and cheap for whoever picks this up" and then
+ * reported an interim 19-minute reading; the full run is above and the
+ * conclusion is unchanged, because its best candidates are devices
+ * (`(double)(v != 1)` in the condition, plus a reused variable).
+ *
+ * So the space is now closed from BOTH sides: the structural argument below
+ * says a source-level copy cannot have fewer references than its
+ * canonicalisation implies, and a quarter of a million random mutations did
+ * not find a way round it either. Note the permuter's score is not the
+ * differing count -- read `ovlverify` on any output before believing one.
  *
  * TYPEDEFS: none of the six copied below has to change. Every 52-word
  * variant above reproduces the target's opcodes, immediates and
