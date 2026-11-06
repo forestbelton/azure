@@ -42627,7 +42627,283 @@ s32 func_800B83DC(u8 a)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800B85E8);
+/* WAS 147 of 147 words / 5 DIFF, VERDICT ALLOC; NOW 147 of 147 / 0,
+   verify.py RESULT: MATCH, advise.py MATCH, seqcheck arith=OK and seq=FAIL
+   only on the benign `HI16 jtbl_80089490` vs `HI16 .rodata` pair (controls
+   func_800A4A58, func_800ABA1C; the base park reports the identical pair).
+   All five words came off in ONE change, and the change is a LOOP NOTE --
+   two of them, nested, around a pointer local -- which is the one lever the
+   brief allows outside plain C. It is flagged again at the site below.
+
+   THE FIVE WORDS WERE ONE CONTEST, NOT TWO. The park read them as (a) `r[6]`
+   in `$v1` for `$a1` and (b) the `%hi(D_800133E7)` pseudo sharing `$v0` with
+   its load, and measured them independent. They are independent only while
+   the `high` is LOCAL to the block after the `bne`; the target's arm is what
+   you get when the `high` is a GLOBAL allocno born in the block BETWEEN the
+   two tests, allocated BEFORE `r[6]`:
+
+     * born after the `beqz`, before the `bne`, it is live while the E6 byte
+       holds `$v0` (local, block 13) and while `r[6]` is live, so it conflicts
+       with `$v0` and with `r[6]`;
+     * allocated first, `find_reg` (global.c:907) gives it the lowest free
+       register, `$v1`;
+     * `r[6]` then conflicts with `$v0` and `$v1`, and pass 0 also skips
+       `$a0` because the arm's mask allocno (lower priority, conflicting,
+       preference `$a0` inherited from the parameter through
+       `expand_preferences`, global.c:783) is in `regs_someone_prefers`
+       (global.c:956) -- so `$a1`;
+     * the `%lo` load is a block-14 local again and takes the lowest free
+       register, `$v0`, because the E6 byte died at the `bne`.
+
+   That is `lbu $a1,6($v0)` / `beqz $a1` / `bne $v0,$a1` / `lui $v1` /
+   `lbu $v0,%lo(E7)($v1)` -- every one of the five.
+
+   THE `lui` IN THE `bne` SLOT IS CONSISTENT WITH THE `high` BEING BEFORE THE
+   `bne`, and the `nop` in the `beqz` slot is consistent too, because of the
+   PASS ORDER in reorg.c: `dbr_schedule` runs `fill_simple_delay_slots` over
+   every slot (reorg.c:4558-4559) BEFORE `fill_eager_delay_slots`
+   (reorg.c:4560). The simple pass fills the `bne` from the insn immediately
+   before it -- the `lui`, which the `bne` does not depend on -- and only then
+   does the eager pass reach the `beqz`'s fall-through thread, which now
+   reads [constant-address `lbu` macro][`bne` SEQUENCE]: the macro is two
+   words and ineligible, `fill_slots_from_thread` marks it and keeps scanning
+   (reorg.c:3664), and the scan stops at the branch. Had the eager pass run
+   first it would have stolen the `lui` into the `beqz` slot -- it may skip
+   an ineligible insn in an owned thread -- and the arm would differ.
+
+   WHAT PUTS A `high` THERE FROM C, AND WHAT PUSHES IT BACK. A pointer local
+   assigned between the tests, `p = &D_800133E7;`, expands to `high` plus
+   `lo_sum` right there; the use `*p` in the next block is `(mem (reg P))`.
+   `find_best_addr` (cse.c:2635, called from cse_insn at :5064) rewrites that
+   address to the cheaper equivalent `(lo_sum H sym)` from P's class, the
+   `lo_sum` insn dies and flow deletes it, and the `high` is left alone in
+   block 13 with its only use in block 14 -- no `addiu`, no extra word. Then
+   `update_equiv_regs` (local-alloc.c:960) undoes it: cse1 gives the `high` a
+   REG_EQUAL note (cse.c:6967; it is absent in .rtl and .jump and present in
+   .cse), the note is CONSTANT_P so it is promoted to REG_EQUIV (:1069), the
+   live length is DOUBLED (:1105), and because `reg_n_refs == 2` (:1121) the
+   set is MOVED to just before its use (:1191, the `depth == 0` arm) -- local
+   again. Measured: `p = &D_800133E7;` plain is 5 differing, the base shape
+   word for word.
+
+   A loop note around the assignment stops the move: flow weights the set by
+   `loop_depth` (flow.c:2122), `reg_n_refs` is 3, `:1121` fails and the
+   `high` stays. But that is not yet enough, and here is the whole of this
+   function's residue in two rows of `advise.py --greg`:
+
+       one note  (set at depth 2):  high  3 refs, live 2x4 = 8, 0.375
+                                    r[6]  3 refs, live 5,       0.600
+       two notes (set at depth 3):  high  4 refs, live 2x4 = 8, 1.000  $v1
+                                    r[6]  3 refs, live 5,       0.600  $a1
+
+   `allocno_compare` (global.c:587) is floor_log2(refs)*refs/live_length. With
+   one note the `high` has 3 refs over a live length the REG_EQUIV doubled,
+   and 3/6 is the best it can do even with the `high` after the E6 load --
+   below `r[6]`'s 0.600, and a tie would still go to `r[6]`, the lower
+   allocno. The live length is at its floor (set, `bne`, load) and `r[6]`'s
+   cannot be lengthened without an insn. The refs axis is the only one left:
+   a second loop note takes the set to depth 3, the `high` to 4 refs, and
+   floor_log2 steps from 1 to 2. So TWO loop notes, both emitting nothing.
+   Nested around the one statement is the compact form and is what is in the
+   body. Two SIBLING notes -- one around `p = &D_800133E7;`, one around a
+   `u8 w = *p;` whose use is `if (w != id)` -- give the same 4 refs (set at
+   depth 2, use at depth 2) and ALSO MATCH, 147 words / 0; recorded in case
+   the nesting reads badly to anyone.
+
+   WHY THE NOTES GO AROUND THE ASSIGNMENT AND NOT THE USE, which is where the
+   twin's landed park puts them: a note around the second test encloses
+   `n++`, and `n` goes from 14 weighted refs to 16, across the floor_log2
+   step, from 0.400 to 0.610 -- past `rec`'s 0.500, so `n` takes `$s1` and
+   `rec` `$s2`, nine register rows through the prologue and all three arms.
+   Measured: the twin's own two-device form (assigned dead `u16` read before
+   the first test plus a do-while around the second test) is 14 register
+   rows here, and the pointer local with the note around the use is the same
+   14 -- in both the `high` is global but LOSES the order (3 refs / 6 live
+   against 0.600) AND `n` has crossed. The note has to weight the `high`
+   without weighting `n`, and only the assignment is free of `n`.
+
+   ON THE PARK'S THREE NEGATIVES. (1) `$a1` via a shared `s32 v`: still the
+   worse park, unchanged. (2) "The twin's device does not transfer, measured
+   five ways": four of the five were a BARE statement, `*(u16 *)&D_800133E7;`
+   and the front end emits nothing for a side-effect-free expression -- the
+   .rtl dump of that body has the same three D_800133E7 references as the
+   base, and its two `mem:HI` are the `*(s16 *)(rec + 8)` read. Those four
+   measured the base body. The fifth, with the loop notes, measured the
+   `n` crossing above. The device form the twin actually landed is
+   `w = *(u16 *)&D_800133E7;`, and that one DOES transplant the `high`; it
+   is simply the wrong tool here, because a dead read is a device and the
+   pointer local is not. (3) No landed precedent for `lbu` into `$a1`
+   followed by a branch: still true, and now explained -- it needs a `high`
+   born between two tests, which no other landed arm has.
+
+   CITATIONS are into scratch/gcc-src/cdk-gcc-b18. The scheduler is sched.c;
+   nothing here depends on it. The REG_EQUIV doubling and the use-side loop
+   note are already levers (docs/matching-levers.md, "update_equiv_regs
+   DOUBLES the live length" and "A high's REGISTER IS DECIDED BY WHETHER
+   update_equiv_regs MOVES IT"); this landing is their composition on the
+   SET side, with cse2 rather than cse1 doing the address fold because cse1's
+   extended block ends at the LOOP_END note (cse.c:8103, the `after_loop`
+   test) -- the .cse dump still shows `(mem:QI (reg P))` and the .cse2 dump
+   shows `(mem:QI (lo_sum ...))`.
+
+   MEASURED ON THIS BODY, 2026-11-04, all 147 words unless stated:
+     base park (plain `&&`)                                  5 differing
+     p = &D_800133E7 in block 13, no note                    5  (high moved back)
+     p assigned after the E6 test (block 14), one note       5  (high local)
+     one note around the assignment                          5  (3/8 vs 0.600)
+     one note around the use (n++ inside)                   14 register rows
+     twin's assigned dead u16 read + note around the use    14 register rows
+     bare `*(u16 *)&D_800133E7;` statement + note            14 (statement not emitted;
+                                                                the rows are the note's)
+     TWO NESTED NOTES around the assignment              MATCH
+     two sibling notes (assignment; `w = *p`)            MATCH
+
+   STILL TRUE FROM THE OLD PARK: the symbol/index order is fold's ADDR_EXPR
+   canonicalisation and wants a pointer variable per block; `u8 id` and
+   `u8 n` are the sub-word levers; the walker is `out` and `q` is the copy;
+   case 1's preheader order is first-use order with the record read inline;
+   0x800133E6 is a constant address and 0x800133E7 a symbol, per byte; the
+   jump table is exact; the `case 2: break;` filler stays. The unit already
+   declares D_800133E7, D_800D2644, D_800D2EA4 and func_80033B2C with these
+   types, nothing calls func_800B85E8 by name in any listing, and the body is
+   silent under -Wall. */
+
+u8 func_800B85E8(u8 id, u8 *out)
+{
+    u8 *q;
+    u8 n;
+    u8 *base;
+    u8 *rec;
+    u8 i;
+
+    q = out;
+    n = 0;
+    base = (u8 *)D_800D2644;
+    rec = base + id * 0x20;
+    if (func_80033B2C(*(s16 *)(rec + 8)) == 0)
+    {
+        return 0;
+    }
+    switch (rec[3])
+    {
+    case 2:
+        break;
+    case 4:
+    case 8:
+    {
+        u8 *b;
+        u8 *r;
+        u8 *tbl;
+
+        b = (u8 *)D_800D2644;
+        r = b + id * 0x20;
+        if (r[6] != 0)
+        {
+            i = 0;
+            tbl = (u8 *)0x80010000;
+            for (; i < 0x21; i++)
+            {
+                u8 *bq;
+                u8 *q2;
+
+                bq = (u8 *)D_800D2644;
+                q2 = bq + id * 0x20;
+                if (tbl[i * 2 + 0x33A4] == q2[6] && tbl[i * 2 + 0x33A5] != id)
+                {
+                    *out++ = i;
+                    n++;
+                }
+            }
+        }
+        break;
+    }
+    case 16:
+    {
+        u8 *b;
+        u8 *r;
+        u8 *p;
+
+        b = (u8 *)D_800D2644;
+        r = b + id * 0x20;
+        if (r[6] != 0)
+        {
+            /* ### ALLOCATION DEVICE -- NOT RECOVERED SOURCE. ###
+               These two nested degenerate loops are a COMPILER DIAL, not
+               something the original programmer wrote, and they are here by
+               an explicit decision of the project owner on 2026-11-05 after
+               the alternative -- leaving the function parked at 5 DIFF -- was
+               first taken and then overruled. Read them as "turn this
+               quantity's reference weight up by two steps", and do not take
+               them as evidence about the original C.
+
+               WHAT THEY DO. `flow.c:2122` is `reg_n_refs[regno] +=
+               loop_depth`, so each enclosing loop note multiplies this
+               assignment's `high` references. At depth 3 it reaches 4 refs
+               and global-alloc prices it 1.000 against `r[6]`'s 0.600, taking
+               `$v1` first -- which is what puts `r[6]` in `$a1` and the `%lo`
+               load in `$v0`, the target's assignment. No instruction is
+               emitted at any depth.
+
+               WHY BOTH ARE NEEDED, and this is the honest tell that it is a
+               dial rather than a spelling: measured by hand, NESTED is 0
+               differing, ONE note is 5, and NO note is 5. The inner loop
+               exists for no reason other than that the outer one was not
+               enough. A single `do { } while (0)` has a rationale a
+               programmer could have had -- macro hygiene, scoping, `break` as
+               an early exit -- and this project accepts one on those grounds
+               (it landed func_80038CB8, and a `while (1)` landed
+               func_8008B654). Stacking them has no such rationale.
+
+               WITH NO NOTE AT ALL, `update_equiv_regs` moves the `high` down
+               to its use; with one, it is 3 refs over a REG_EQUIV-doubled
+               live length, 0.375, and loses. The full `--greg` numbers and
+               the five-word residue this replaces are in the git history at
+               the commit that parked this function. */
+            do
+            {
+                do
+                {
+                    p = &D_800133E7;
+                } while (0);
+            } while (0);
+            if (*(u8 *)0x800133E6 == r[6] && *p != id)
+            {
+                *out++ = 0xB;
+                n++;
+            }
+        }
+        break;
+    }
+    case 1:
+    {
+        u8 *b1;
+        u8 *e4;
+        u8 *tbl;
+
+        i = 0;
+        tbl = (u8 *)0x80010000;
+        for (; i < 0x21; i++)
+        {
+            if (tbl[i * 2 + 0x33A4] == id || tbl[i * 2 + 0x33A5] == id)
+            {
+                out = q;
+                n = 0;
+                break;
+            }
+            b1 = (u8 *)D_800D2644;
+            e4 = D_800D2EA4;
+            if (e4[i * 8 + 2] == (b1 + id * 0x20)[4] && e4[i * 8 + 3] == (b1 + id * 0x20)[5] && tbl[i * 2 + 0x33A4] >= 0x2D && tbl[i * 2 + 0x33A4] != 0x30 && tbl[i * 2 + 0x33A5] == 0)
+            {
+                *out++ = i;
+                n++;
+            }
+        }
+        break;
+    }
+    }
+    *out = 0;
+    return n;
+}
 
 /* Can tile `y` be queued at slot `x`?  Rejects unless func_80033B2C accepts the
    record's +0x08 halfword, the slot's bytes +2/+3 match the record's +4/+5 and
