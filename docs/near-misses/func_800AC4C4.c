@@ -660,4 +660,93 @@ allDone:
  *   + q loads hoisted (t4)                 797/31  (q two-set: lui in $t5)
  *   own BC temp, BC first (t5 = this text) 797/27  md5 7529a50e
  *   BC from g->unk_00 inline (t5b)         797/40 | BC third (t5c) 797/58
+ *
+ * REVISION 2026-11-05b (agent Lac4): STILL 797 of 797 words, 27 aligned
+ *   rows (four artefacts -- words 46, 52, 53, 54, verified identical hex
+ *   3C028001/8C4B3180/904C3184/90423185 -- so 23 real), md5 of the emitted
+ *   word column e665ffef.  NOTHING LANDED.  What IS settled is difference
+ *   (3), the store order: a mechanism, and a counted exhaustion of the
+ *   statement-reordering space.
+ *
+ * DIFFERENCE (3) IS A SCHED1 STORE-PRIORITY TIE, AND THE LEVER IS A LOAD
+ *   THROUGH A BASE OTHER THAN $s1 SITTING BETWEEN THE TWO STORES.
+ *   Name each vertex's two statements Q (`unk_X4 = vt[o->unk_N].unk_04 -
+ *   (u16)sp->unk_12C`) and P (`unk_X0 = ... | (... << 16)`).  In sched1 both
+ *   stores keep their RAW depth: `adjust_priority` (sched.c:2549) bumps an
+ *   insn to LAUNCH_PRIORITY only when `birthing_insn_p` holds, and that
+ *   requires GET_CODE (SET_DEST) == REG (sched.c:2522) -- a store's dest is a
+ *   MEM, so a store is NEVER bumped and meets the other store on depth.
+ *   Measured, block 48 of the sched1 dump:
+ *
+ *     park, D in v1's gap   Q0  6  P0  5  -> P0 loses: emitted (00,04) WRONG
+ *                           Q1 10  P1 10  -> tie, LUID decides: (04,00) RIGHT
+ *     D moved to v0's gap   Q0  6  P0  6  -> tie: RIGHT
+ *                           Q1 11  P1 10  -> WRONG
+ *
+ *   Why P always loses by exactly one: Q's chain is load-index / sll / addu /
+ *   load-field / subu / store, i.e. TWO load-latency steps past the z-store,
+ *   while P's deepest input is a single read-back (0x168 or 0x16A), ONE step.
+ *   So depth(Q's store) = depth(Q's field load) + 1 while depth(P's store)
+ *   >= depth(Q's field load) -- one short, for every spelling of P.  The only
+ *   thing that lifts P is an anti-dependence on a load whose base register is
+ *   not $s1 and that sits between the two stores.  `memrefs_conflict_p`
+ *   cannot compare two different base registers, so such a load conflicts
+ *   with every $s1 store: it is itself true-dependent on the Q store just
+ *   before it, so its depth EQUALS depth(Q's store), and P's store then ties
+ *   exactly.  `rank_for_schedule` (sched.c:2470) breaks the tie on INSN_LUID
+ *   and Q is first in source, so the tie is precisely what yields (04,00).
+ *   `sp->unk_16C = o->unk_14;` is the ONLY such statement in the region and
+ *   the target needs one in BOTH gaps.  CONCLUSION: the target's source does
+ *   not decompose this region into the eleven statements this park uses.
+ *   That, not the scheduler, is what the next revision should attack.
+ *
+ * DIFFERENCE (1), D at words 378/381, IS UNREACHABLE FROM A STANDALONE
+ *   STATEMENT.  For sched2 to emit `lw 0x14($a2)` at 378 and `sw 0x16C` at
+ *   381 the post-reload chain must read index-load, D-load, sll, addu,
+ *   D-store, vt-load, with depth(D's store) = 3 = depth(addu) and
+ *   LUID(addu) < LUID(D's store) < LUID(vt load).  sched1 cannot build that
+ *   chain: in the backward pass a store becomes ready only after EVERY later
+ *   conflicting load is scheduled, and every a2/vt load after it conflicts,
+ *   so D's store is released only at the head of the run before it and is
+ *   taken at the first cycle where no LAUNCH-bumped insn is ready.  With D
+ *   early that cycle lies ahead of the index load -- d_a170's sched1 output
+ *   is plain program order (A-load, A-store, D-load, D-store, index-load) --
+ *   and the index load then picks up a true dependence on `sw 0x16C`, which
+ *   is exactly where the 798th word comes from: the load-delay nop between
+ *   D's load and D's store.  With D late the store is released after
+ *   `sw 0x168`.  There is no source slot between the index load and the sll.
+ *
+ * MEASURED THIS REVISION (scratch/Lac4_v/; harness scratch/Lac4_probe.py +
+ *   scratch/Lac4_blk.py, rounds Lac4_r1..r6.py; md5 is of the emitted word
+ *   column, so a droppable probe cannot read as progress):
+ *   * THE WHOLE CONSTRAINED REORDERING SPACE, 88 orders, swept.  The skeleton
+ *     A,Z0,P0,Z1,P1,Z2,P2 is forced (each P reads the 0x168 its own Z wrote);
+ *     each Q sits either in its vertex's gap or straight after its P (2^3);
+ *     D takes each of the 11 resulting slots.  Only FOUR reach 797 words:
+ *        park (Q0,Q1 in gap, Q2 after P2, D in v1's gap)  797/27  e665ffef
+ *        D in v0's gap (the old b4)                       797/30  8ffda4aa
+ *        D after Q2                                       797/43  cb78be4f
+ *        D after Z2                                       797/45  729ed77d
+ *     Everything else is 795-805 words.  Moving any Q ahead of its own
+ *     z-store -- the one change that WOULD lower Q's chain, by killing the
+ *     `sw 0x168` -> `lhu 0($a2)` memory dependence that pins Q's index load
+ *     at depth 4 -- costs words every time: q0first 801/49, q1first 798/85,
+ *     q0q1first 803/146, and 10 further D-placements on top of q0first all
+ *     798-801.
+ *   * SPELLINGS.  The 12C read as `*(u16 *)((u8 *)sp + 0x12C)` is BYTE-
+ *     IDENTICAL (md5 e665ffef) in one Q or in all three -- one more entry for
+ *     the cast-form class.  P0's `|` operands swapped 798/65; the `+`
+ *     operands inside the `<< 16` term swapped 797/30 (three extra R rows for
+ *     the reversed addu); both 797/58; the same on all three P's 797/44,
+ *     798/104, 800/40, 797/123.
+ *   * DEVICE, FLAGGED, REJECTED.  An operand-less `__asm__("")` is a
+ *     traditional asm, so sched.c:1987 gives it a dependence on every prior
+ *     set and every prior use and calls `flush_pending_lists` -- a full
+ *     scheduling barrier that emits NO word.  It costs words at every site,
+ *     because it also blocks the two hoists the target makes across this
+ *     region (`lhu 0x14($s1)` up to word 375 and `lhu 0x2($a2)` up to word
+ *     400).  Ladder: after Q0 802/38 | after Q1 799/52 | after both 805/106 |
+ *     after A 798/35 | after Z0 799/67 | after D 800/53 | D-in-v0's-gap plus
+ *     a barrier after Q1 801/38, after D 802/55, after A 798/36.
+ *   * No permuter was started (constant addresses vs R_MIPS_LO16).
  */
