@@ -13006,7 +13006,85 @@ s32 func_80095760(UnkTownCFCB4 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_80095840);
+/* The READ-BACK is the whole match, and it costs nothing. Storing the record
+   pointer into p->unk_10 and then reading it back through the SAME base is
+   what puts `q` in $a2 and pins the store/copy order; `reload_cse` turns the
+   read-back into the target's `addu $a2, $v0, $zero`, so the statement is
+   free. Measured 2026-11-05 out of this function's own dumps (-G0).
+
+   1. CSE CANNOT FORWARD THE STORE INTO THE READ-BACK, because the unk_18
+      store sits BETWEEN them and has a varying address: `note_mem_written`
+      (cse.c:7585, 7609-7625) then sets var/nonscalar, and
+      `invalidate_memory` (cse.c:1713-1731) drops EVERY in-memory table entry
+      with a varying address. Offsets are never consulted, so a disjoint
+      unk_18 store kills the unk_10 equivalence outright. The three orders
+      measure: unk_18 BEFORE unk_10 folds the read-back and is the old 52w/5
+      body; unk_18 AFTER the read-back is 51w/33; unk_18 BETWEEN them is this,
+      52w/0.
+
+   2. SO THE READ-BACK REACHES BOTH SCHEDULERS AS A `lw` with a true memory
+      dependence on the store (`true_dependence`, sched.c:833-860) -- `.lreg`
+      insn 64 carries `insn_list 58` -- and neither scheduler can hoist it
+      above the store. That is what retires the old second wall.
+
+   3. ITS ADDRESS USES `p`, so p's REG_DEAD moves off the unk_10 store onto
+      the later unk_18 store (`.lreg` insn 61). p is therefore LIVE when q is
+      born, and `global_conflicts` records 81 in both q allocnos' conflict
+      sets (`.greg`: `82 conflicts: 80 81 82 103 2 29`). p's references also
+      rise 9 -> 11, which lifts its priority 0.540 -> 0.611, above the unk_14
+      pseudos' 0.600, so p is allocated first and takes $a1; the conflict then
+      removes $a1 from q's candidates in `find_reg` (global.c:950-985) and
+      both q's take $a2.
+
+   4. `reload_cse` rewrites `lw $a2, 0x10($a1)` to `move $a2, $v0` because the
+      same base register just stored $v0 there (`reload_cse_mem_conflict_p`,
+      reload1.c:7705), and the memory dependence SURVIVES the rewrite:
+      `.greg` insn 64 is `(set (reg 6 a2) (reg 2 v0))` with `insn_list 58`
+      still attached. sched2's arm-1 block then reads
+      `T-4: 61 (1) 64 (2), now 64 61` -- no tie, so no hazard tie-break, and
+      the emission is lw / sw 0x18 / sw 0x10 / move, which is the target.
+
+   q1 and q2 must be TWO variables: one shared `q` is 52 words, 15 differing.
+   Two byte-identical alternative spellings exist if either reads better --
+   a block-scoped `q` declared inside each arm, and no variable at all with
+   `((UnkTownCFCC4 *)p->unk_10)->unk_14` written out. No dead initialiser and
+   no temporary is needed any more; the 52w/5 body's two `NULL` initialisers
+   are gone. 52 words, 0 differing. */
+s32 func_80095840(UnkTownTask *t, UnkTownCFCB4 *p)
+{
+    UnkTownCFCC4 *q1;
+    UnkTownCFCC4 *q2;
+    s32 n;
+
+    n = D_800D0484[((t->unk_10 + 0x100) / 0x200) & 7];
+    if (n != -1)
+    {
+        if (p->unk_3A[0] != 0)
+        {
+            p->unk_10 = (s32)p->unk_1C[0];
+            p->unk_18 = 0;
+            q1 = (UnkTownCFCC4 *)p->unk_10;
+            if (q1->unk_14 != 1 && q1->unk_14 != 3)
+            {
+                t->unk_2C = q1;
+                return 2;
+            }
+        }
+        else if (p->unk_3A[n] != 0)
+        {
+            p->unk_10 = (s32)p->unk_1C[n];
+            p->unk_18 = n;
+            q2 = (UnkTownCFCC4 *)p->unk_10;
+            if (q2->unk_14 != 1 && q2->unk_14 != 3)
+            {
+                t->unk_2C = q2;
+                return 1;
+            }
+        }
+    }
+    t->unk_2C = NULL;
+    return 0;
+}
 
 /* The one-line driver, and the witness that func_8008FE90 returns a pointer
    into the same record: the result is stored to the sentinel's +0x10.
