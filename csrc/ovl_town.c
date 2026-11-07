@@ -499,7 +499,7 @@ typedef struct UnkTown260CE
 
 typedef struct UnkTown260C
 {
-    s32 unk_00[3];
+    UnkNode *unk_00[3];
     s32 unk_0C;
     s32 unk_10;
     /* The selector func_800B2394 latches out of D_800D162C's row, and the
@@ -516,26 +516,14 @@ typedef struct UnkTown260C
 /* The 0x1F800000 scratchpad object func_800A8CA8 projects through. Modelled on
    csrc/unk_72A8.c:40's Unk345B8SP rather than guessed from pads: the SVECTORs
    at +0x74/+0x7C/+0x84/+0x8C, unk_94/unk_98 as RotTransPers' p/flag, and
-   unk_C4 as the otz accumulator are that unit's layout for the same object.
-   func_80065420 IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
-   it is spelled func_80065420 here because that is the name
-   splat/town.bin_undefined_funcs_auto.txt provides and so the one the town
-   container definitely defines. */
+   unk_C4 as the otz accumulator are that unit's layout for the same object. */
 typedef struct UnkTownSP
 {
     u8 pad_00[0x74];
-    s16 unk_74;
-    s16 unk_76;
-    s16 unk_78;
-    u8 pad_7A[0x2];
-    s16 unk_7C;
-    s16 unk_7E;
-    s16 unk_80;
-    u8 pad_82[0x2];
-    s16 unk_84;
-    s16 unk_86;
-    s16 unk_88;
-    u8 pad_8A[0xA];
+    SVECTOR unk_74;
+    SVECTOR unk_7C;
+    SVECTOR unk_84;
+    u8 pad_8C[0x8];
     s32 unk_94;
     s32 unk_98;
     u8 pad_9C[0x28];
@@ -727,8 +715,8 @@ typedef struct UnkTownA17CCSP
     u32 *unk_24;
     u8 pad_28[0x4C];
     SVECTOR unk_74[4];
-    s32 unk_94;
-    s32 unk_98;
+    long p;
+    long flag;
     u8 pad_9C[0x28];
     s32 unk_C4;
     u8 pad_C8[0x20];
@@ -748,8 +736,8 @@ typedef struct UnkTownA17CCSP
 
    +0x08 and +0x10 were pad until func_800A9E68 and func_800AA068 landed.
    They are an SVECTOR rotation and a VECTOR scale, and the witness is the
-   pair of libgte calls in func_800AA068 -- `func_80065820(&a->unk_08, m)`
-   (RotMatrix, SVECTOR *) and `func_80064BC0(m, &a->unk_10)` (ScaleMatrix,
+   pair of libgte calls in func_800AA068 -- `RotMatrix(&a->unk_08, m)`
+   (RotMatrix, SVECTOR *) and `ScaleMatrix(m, &a->unk_10)` (ScaleMatrix,
    VECTOR *) -- against func_800A1080, which builds the same matrix from the
    same three calls in the same order over its own SVECTOR/VECTOR pair.
    func_800A9E68 writes only unk_08.vy on &D_800D1178 and only unk_08.vx on
@@ -1522,7 +1510,6 @@ extern u8 D_800F8D1C[];
 extern u16 D_80082E76;
 extern void (*D_800D1638[])();
 extern void (*D_800D1640[])();
-void func_8006733C(void *r, void *src);
 extern s32 D_80113220;
 extern u8 D_800D43B0[];
 extern u8 D_800D43B8[];
@@ -2087,7 +2074,7 @@ extern s32 D_800D09C8;
 void func_8009DD40(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
 void func_8009F148(UnkTownActor *a, void *b, UnkVec *q, UnkTownRend *r);
 void func_800B2244();
-extern s32 D_800D0B14;
+extern UnkTown2AE8 *D_800D0B14;
 extern s16 D_80100D18;
 extern s32 D_80100D1C;
 extern UnkVec *D_80100D20;
@@ -2138,8 +2125,11 @@ s32 func_80049E1C(s32 a, s32 d, s32 m);
 void func_800B1778(s32 a, s32 b, s32 c);
 void func_800B17C0(s32 a, s32 b);
 void func_800ADB30(UnkTownADD80 *s);
-s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
 void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
+void func_80093D38(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80093DD8(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_80093E98(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_800941D8(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 s32 func_8009D424(u32 a, u8 b, u8 c, u8 d, u8 e, u8 f, s32 g, s16 h, s16 i, UnkTownScrRec *j);
 /* The 0xC0000000-marked indirection table func_8009D424 looks a node handler
    up in, subscripted by the low halfword of the marked value. */
@@ -2172,16 +2162,11 @@ s32 func_800352FC(void);
 void func_800AAF5C(void);
 void func_800AAFE0(UnkTown2AE8 *v, s32 b);
 void func_800C2C80(UnkTownActor *a, UnkTownRend *b, s32 c, s32 d);
-void func_800649A0(void);
-void func_80064A40(void);
-MATRIX *func_80064B90(MATRIX *m, VECTOR *v);
-MATRIX *func_80064BC0(MATRIX *m, VECTOR *v);
-MATRIX *func_80065820(SVECTOR *r, MATRIX *m);
 void func_800A1354(UnkTownA1080 *s);
 s32 func_8008C3B8(UnkTownVec16 *q, s32 i, UnkTownPlane *pl);
 s32 func_8008CF48(UnkVec *v, UnkTownPlane **out);
-void func_800B1F10(s32 a, s32 i);
-void func_800B1F48(s32 a, s32 i);
+void func_800B1F10(UnkNode *a, s32 i);
+void func_800B1F48(UnkNode *a, s32 i);
 void func_8004DD2C(u8 *p);
 s32 func_800AD99C(UnkTownADD80 *s);
 void func_800AD7F8(UnkTownADD80 *s);
@@ -2219,7 +2204,7 @@ void func_800B0D0C();
 void func_800B0FD4();
 void func_8004E5A0(s32 v, s32 n, u8 *out);
 void func_8004E69C(u8 *q);
-void func_80069E38(u8 *dst, u8 *src);
+void strcat(u8 *dst, u8 *src);
 u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
@@ -2240,19 +2225,19 @@ s32 func_800B6E3C(u8 *p);
 s32 func_800B6F54(u8 *p);
 void func_800B5B20(u8 *s);
 void func_800B7B8C(s16 *p, UnkVec *b, u32 c);
-extern u8 D_801116C8[];
-extern u8 D_801118C8[];
-extern u8 D_80111AC8[];
-extern u8 D_80111CC8[];
-extern u8 D_80111EC8[];
+extern u_long D_801116C8[];
+extern u_long D_801118C8[];
+extern u_long D_80111AC8[];
+extern u_long D_80111CC8[];
+extern u_long D_80111EC8[];
 /* func_800B6FB8's final blit source; its park carried this extern. */
 extern u8 D_8012F004[];
-extern u8 D_80111EE8[];
-extern u8 D_80111F08[];
-extern u8 D_80111F28[];
-extern u8 D_80111F48[];
-extern u8 D_80111F68[];
-extern u8 D_80111F88[];
+extern u_long D_80111EE8[];
+extern u_long D_80111F08[];
+extern u_long D_80111F28[];
+extern u_long D_80111F48[];
+extern u_long D_80111F68[];
+extern u_long D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
 /* Two 0x20-byte-row tables func_800C4AEC selects between on bit 23 of the
@@ -2322,15 +2307,13 @@ extern const UnkTownRo5 D_800894D0;
 extern const UnkTownRo4 D_800895F0;
 extern u16 *D_800D17D8[];
 extern u16 *D_800D1868[];
-extern s16 D_80111FA8[];
-extern u8 D_80110EC8[];
-extern u8 D_801110C8[];
-extern u8 D_801112C8[];
-extern u8 D_801114C8[];
+extern RECT D_80111FA8;
+extern u_long D_80110EC8[];
+extern u_long D_801110C8[];
+extern u_long D_801112C8[];
+extern u_long D_801114C8[];
 s16 func_80042900(s8 *p, s8 n);
-u32 *func_80040574(s32 n);
-void func_80067014(s32 n);
-void func_800672D8(void *p, void *q);
+void *func_80040574(s32 n);
 void func_8003F2A4(Unk80083968 *p);
 extern u32 D_8002E5D8[];
 extern u32 D_8002E5E8[];
@@ -2346,7 +2329,7 @@ u32 func_80049918(s32 i);
 s32 func_80049944(u32 a);
 s32 func_80049984(u8 *p);
 s32 func_8004AC3C(u8 *p, s32 *out);
-void func_80069EC8(void *p, s32 n);
+void bzero(void *p, s32 n);
 extern u8 D_80077FBC[];
 extern u8 D_800892CC[];
 extern u8 D_800D1794[];
@@ -2425,7 +2408,7 @@ extern u8 D_800D162C[][2];
 extern u8 D_800D1630[][4];
 extern UnkTown11F80 *D_800D1648[];
 void func_80044AAC(UnkNode *, UnkNode *);
-s32 func_80069EF8();
+s32 rand();
 /* The particle template func_80097AD0/func_800A895C build on the stack and
    hand to func_8009792C/func_800A878C: a THIRD view over the same six 16.16
    words as UnkTown2AE8, and the only one that needs to exist, because this
@@ -2508,13 +2491,7 @@ extern s16 D_800D45AA[];
 extern UnkSlot D_80082E80_b __asm__("D_80082E80");
 void func_80044D24(u8 *, UnkSlot *, s16);
 void func_800453E0(u8 *, UnkVec *, UnkSlot *, s16);
-u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y); /* GetTPage */
-void func_8006658C(void *ot, void *p);            /* AddPrim */
-void func_80066640(void *p, s32 abe);             /* SetSemiTrans */
-void func_800666E0(POLY_F4 *p);                   /* SetPolyF4 */
-void func_800666F4(POLY_FT4 *p);                  /* SetPolyFT4 */
-void func_80067E2C(DR_AREA *p, RECT *r);          /* SetDrawArea */
-void func_80067EF4(void *p, s32 a, s32 b);        /* the 0xE6 mask primitive */
+void func_80067EF4(void *p, s32 a, s32 b); /* the 0xE6 mask primitive */
 u16 func_8008C180(s16 x, s16 y);
 s32 func_800C1D44(s32 id);
 extern u8 D_80045C34[];
@@ -2910,19 +2887,15 @@ extern u8 D_800E9ECC[];
    it at the UnkNode's +0x10 -- it has since landed in
    csrc/ovl_town_800BEBA4.c -- and an address-taken symbol needs a declaration
    where an implicitly-declared call does not; it is declared unprototyped the
-   way func_800BF1C8 and func_800BF4CC are.  func_800673A0 has no declaration
-   anywhere in csrc/ or include/ -- the signature is the one the func_800BF1C8
-   landed definition (csrc/ovl_town_800BEBA4.c, parked when this block was
-   written) reads off its own listing.
+   way func_800BF1C8 and func_800BF4CC are.
    D_800D231C/D_800D2324 are the func_800BEA88 pair's two descriptor blocks,
    D_80113138 its VRAM source and D_8007789C the texture record func_800BEAD0
    stores at the renderable's +0x08 -- all four address-taken (`lui`/`addiu`)
    and all four resident symbols from splat/town.bin_undefined_syms_auto.txt. */
 void func_800BEBA4();
-void func_800673A0(s16 *r, s32 x, s32 y);
-extern u8 D_800D231C[];
-extern s16 D_800D2324[];
-extern u8 D_80113138[];
+extern RECT D_800D231C;
+extern RECT D_800D2324;
+extern u_long D_80113138[];
 extern u8 D_8007789C[];
 
 /* p6: the 0x1F800000 scratchpad as func_800BB218 uses it. */
@@ -3384,12 +3357,6 @@ extern s32 D_80100E20;
    then re-read at every use. */
 extern s32 D_80100E30;
 extern u8 D_800D0C50[];
-/* The resident's OuterProduct0 (splat/slus_006.14_symbol_addrs.txt:107),
-   `v2 = v0 x v1`.  Spelled func_800652AC because that is the name
-   splat/town.bin_undefined_funcs_auto.txt:155 gives this overlay's
-   linker; the OuterProduct0 psyq/include/libgte.h declares is defined
-   only by the resident's yaml and does not link here. */
-void func_800652AC(VECTOR *v0, VECTOR *v1, VECTOR *v2);
 /* w4 group: the two null-terminated handler tables func_80096868 scans, and
    the two out-of-image vectors func_80096924 reads and writes.  All four are
    lui/addiu (or lui + bare %lo at offset 0), so they are SYMBOLS and not
@@ -3828,7 +3795,6 @@ extern u8 D_80045340[];
 /* The func_8004491C tag func_800BC1DC passes, address-taken
    (`lui`/`addiu` %hi/%lo) exactly as D_80045340 above. */
 extern u8 D_80044BB0[];
-void func_80069EE8(u8 *p, s32 v, s32 n);
 void func_800422DC(u8 *arg0, u8 *arg1);
 void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
 u32 func_8003C06C(s32 i);
@@ -4092,6 +4058,81 @@ UnkNode *func_8004B8DC(void *, s32, s32, s32, s32);
 void func_80094AF8(void);
 UnkNode *func_800B2BA0(void *);
 
+void func_80094220(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_8009431C(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094330(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094660(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_800946FC(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094834(UnkTownTask *t, UnkTown2AE8 *b, void *c);
+void func_80094894(UnkTownTask *t);
+void func_80094A60(u8 *d, UnkTownTask *t, void *c);
+void func_800953D0(UnkTown2AE8 *b);
+void func_80095460(UnkTown2AE8 *b);
+void func_80095544(UnkTown2AE8 *b);
+void func_80095910(UnkTownBody *p);
+void func_800961A8(UnkTown2AE8 *b);
+void func_800961D8(UnkTown2AE8 *b);
+void func_80096208(UnkTown2AE8 *b);
+void func_800962B8(UnkTown2AE8 *b);
+void func_80096810(UnkTown2AE8 *q);
+void func_80096868(UnkTownTask *a, UnkTown2AE8 *b, UnkTownRend *c);
+s32 func_80096A5C(UnkTownRend *a, s16 b, s16 c, s32 d);
+void func_80098D60(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_80098DC0(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
+void func_80099754(UnkTown2AE8 *b);
+void func_80099764(UnkTownTask *t);
+void func_8009A18C(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
+void func_8009A1E8(UnkTownTask *a, UnkTown2AE8 *b, s32 c);
+s16 func_8009A8B0(s32 a, s16 b, s16 c);
+void func_8009BFC0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+void func_8009BFD8(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+void func_8009C0C0(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+void func_8009C120(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+void func_8009C648(UnkTownActor *a, UnkVec *b);
+void func_8009D7D0(UnkTownScrRec *p);
+void func_8009D808(u8 *base, s16 *lo, s16 *hi);
+void func_8009D940(s16 *lo, s16 *hi, UnkTownScrCtx **src, UnkTownScrCtx **dst);
+UnkNode *func_8009DFD8(u8 *a, UnkTown2AE8 *b, s32 c);
+void func_8009F4C0(UnkTownActor *a, s32 arg1, s32 arg2, UnkTownRend *r);
+UnkTownIdPair *func_8009F830(s32 a, s32 b);
+void func_8009FA14(s32 slot, u8 *src);
+void func_800A0150(s32 a, u8 *b, UnkTownItemRec *c, s32 d);
+void func_800A0504(UnkTown2AE8 *b);
+void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b);
+UnkNode *func_800A3248(UnkVec *a);
+UnkNode *func_800A3450(UnkVec *a, s32 b);
+void func_800A4B40(UnkTownA4C10 *p);
+void func_800A5178(u8 *a);
+void func_800A573C(UnkTownTask *a, UnkTown2AE8 *b, void *c);
+void func_800A8184(s32 a, s32 b);
+void func_800AAE30(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d);
+void func_800AB9A0(Unk42710 *p);
+UnkNode *func_800AE324(void *a);
+void func_800AE414(u8 *s);
+UnkNode *func_800B0214(void *p);
+void func_800B0318(UnkTownSlot **a);
+void func_800B03B4(UnkNode *o);
+void func_800B0418(u8 *s);
+void func_800B0700(void *p);
+void func_800B074C(void);
+UnkNode *func_800B14B0(u32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
+void func_800B15B8(u8 *s);
+void func_800B1718(void *p);
+UnkNode *func_800B1BEC(s32 a, s32 b, s32 c);
+void func_800B1DBC(void *p);
+UnkTown11F80 *func_800B2344(void);
+UnkNode *func_800B3924(void *p);
+void func_800B3A80(UnkNode *o);
+UnkNode *func_800B4588(void *p);
+void func_800B46CC(UnkNode *o);
+UnkNode *func_800B4F60(void *p);
+void func_800B50BC(UnkNode *o);
+u32 func_800B677C(s32 a);
+void func_800B73D0(void);
+void func_800B73F0(u16 *p);
+void func_800B7420(void);
+UnkNode *func_80094B0C(u8 *a);
+
 /* Reset one entry. The index is written inline, not through a base local:
    that is what puts the `sll` ahead of the `lui`/`addiu` the way the target
    has it (docs/overlays.md lever 1, read the other way round). */
@@ -4244,15 +4285,15 @@ void func_8008AD90(s32 n, s32 d)
 /* Promote entry `i` of the D_800CF720 table to the front: stash its four
    fields and its payload in a 0x8000 scratch block from func_80040574, slide
    everything up one with func_8008AD90, then write the payload back at the
-   heap base and the fields into entry 0.  func_80069ED8 is splat's `memcpy`
-   -- spelled `func_80069ED8` because that is the name in
+   heap base and the fields into entry 0.  memcpy is splat's `memcpy`
+   -- spelled `memcpy` because that is the name in
    splat/town.bin_undefined_funcs_auto.txt:185; the overlay does not link
    `memcpy`.  One parameter: the ASM caller func_8008B0E8 passes the index
    func_8008AD1C or func_8008AFB0 returned.
 
    `off = func_8008ACE8(i);` IS A STATEMENT OF ITS OWN, and that is the whole
    difference between 0 and 3 differing.  With the call left inside the
-   func_80069ED8 argument the D_801131B8 base is materialised BEFORE the
+   memcpy argument the D_801131B8 base is materialised BEFORE the
    call, so reorg fills the `jal`'s delay slot with the `addiu %lo` one insn
    back instead of the `addu $s4, $v0, $zero` two insns back
    (scratch/gcc-src/cdk-gcc-b18/reorg.c:3067-3077); same 56 words, words
@@ -4280,9 +4321,9 @@ void func_8008AE4C(s32 i)
     tmp = func_80040574(0x8000);
     off = func_8008ACE8(i);
     s = D_801131B8;
-    func_80069ED8(tmp, *(u8 **)(s + 0x2C) + off, len);
+    memcpy(tmp, *(u8 **)(s + 0x2C) + off, len);
     func_8008AD90(i, len);
-    func_80069ED8(*(u8 **)(s + 0x2C), tmp, len);
+    memcpy(*(u8 **)(s + 0x2C), tmp, len);
     D_800CF720[0].unk_00 = a;
     D_800CF720[0].unk_01 = b;
     D_800CF720[0].unk_02 = c;
@@ -4558,19 +4599,24 @@ void func_8008B23C(s32 a)
     }
 }
 
-void func_8008B2BC(void) {
+void func_8008B2BC(void)
+{
 }
 
-void func_8008B2C4(void) {
+void func_8008B2C4(void)
+{
 }
 
-void func_8008B2CC(void) {
+void func_8008B2CC(void)
+{
 }
 
-void func_8008B2D4(void) {
+void func_8008B2D4(void)
+{
 }
 
-void func_8008B2DC(void) {
+void func_8008B2DC(void)
+{
 }
 
 /* Is `p` in the zero-terminated table at D_800CF85C?
@@ -4763,7 +4809,7 @@ void func_8008B55C(void)
 
     if (D_800CF874[0] != 0)
     {
-        func_80067014(0);
+        DrawSync(0);
         r = func_80047E78(D_800CF874_b[D_800CF874[0]]);
         D_80081458 = r;
         if (D_800CF874[0] == 1)
@@ -5567,7 +5613,7 @@ void func_8008C28C(s32 a)
    is why the frame is 0x20 for a function that saves only $ra.  func_8003ADF4
    is resident (splat/town.bin_undefined_funcs_auto.txt:29) and is declared
    nowhere in csrc/ or include/, so it rides an implicit declaration the way
-   func_800666B8 does at :14240.
+   SetPolyG3 does at :14240.
 
    D_8006ADD4 IS READ AS A WORD HERE while the unit declares it `s16` (:2051,
    with five landed `== 0xC` users including func_80096DC8 above), hence the
@@ -6097,31 +6143,31 @@ s32 func_8008CF48(UnkVec *v, UnkTownPlane **out)
 s32 func_8008CF80(UnkVec *v)
 {
     return (s16)func_8008D5C4(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
-                      *(s16 *)((u8 *)v + 0xA));
+                              *(s16 *)((u8 *)v + 0xA));
 }
 
 s32 func_8008CFB4(UnkVec *v)
 {
     return (s16)func_8008DA80(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
-                      *(s16 *)((u8 *)v + 0xA));
+                              *(s16 *)((u8 *)v + 0xA));
 }
 
 s32 func_8008CFE8(UnkVec *v)
 {
     return (s16)func_8008DFB4(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
-                      *(s16 *)((u8 *)v + 0xA));
+                              *(s16 *)((u8 *)v + 0xA));
 }
 
 s32 func_8008D01C(UnkVec *v)
 {
     return (s16)func_8008E4EC(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
-                      *(s16 *)((u8 *)v + 0xA));
+                              *(s16 *)((u8 *)v + 0xA));
 }
 
 s32 func_8008D050(UnkVec *v)
 {
     return (s16)func_8008EA20(*(s16 *)((u8 *)v + 2), *(s16 *)((u8 *)v + 6),
-                      *(s16 *)((u8 *)v + 0xA));
+                              *(s16 *)((u8 *)v + 0xA));
 }
 
 /* Publishes the tile-grid extents the +Z collision sweep family compares
@@ -6989,7 +7035,7 @@ s32 func_8008EA20(s32 x, s32 y, s32 z)
    18 words -- its header reads `nonmatching func_8008EF58, 0x48`, and
    0x48/4 = 18.  No jump table, no rodata of its own.  Measured 0 differing on
    the first compile; raw 4 == relocdump 4 (%hi(D_800CFCB4), two
-   %lo(D_800CFCB4) and one plain `jal func_80069EE8`), none on a function
+   %lo(D_800CFCB4) and one plain `jal memset`), none on a function
    symbol, no intra-function `j`.  seqcheck: arith=OK seq=OK.  func_8008FFC8
    (:7584) is the only caller and passes nothing. */
 void func_8008EF58(void)
@@ -6997,7 +7043,7 @@ void func_8008EF58(void)
     UnkTownColl *h;
 
     h = (UnkTownColl *)&D_800CFCB4;
-    func_80069EE8((u8 *)h, 0, 0x4C);
+    memset((u8 *)h, 0, 0x4C);
     *(UnkTownColl **)h = h;
     h->unk_04 = h;
 }
@@ -7300,6 +7346,9 @@ void func_8008F27C(UnkTownColl *a, UnkTown2AE8 *b, s32 c)
     b->unk_14 = 0;
 }
 
+void func_8008F2D4(UnkTownColl *, UnkTown2AE8 *);
+void func_8008F350(UnkTownColl *, UnkTown2AE8 *);
+
 /* Both axis clamps in one call: run func_8008F2D4 (X, through func_8008F3CC /
    func_8008F41C) and then func_8008F350 (Y, through func_8008F46C /
    func_8008F4BC) over the same (collider, mover) pair.  Nine landed call sites
@@ -7318,11 +7367,6 @@ void func_8008F27C(UnkTownColl *a, UnkTown2AE8 *b, s32 c)
    `f(a, b); g(a, b);` pair, not only on an adjacent pair with one shared
    delay-slot insn.  The order here is read off the listing: `jal` at
    0x8008F2A8 is func_8008F2D4, `jal` at 0x8008F2B4 is func_8008F350.
-
-   Both callees are defined BELOW this body and the unit declares neither, so
-   the two calls ride implicit declarations -- the shape this unit already uses
-   eighteen times.  That costs the usual three warnings per callee and no
-   bytes.
 
    16 words -- its header reads `nonmatching func_8008F294, 0x40`, and
    0x40/4 = 16.  No jump table, no rodata of its own.  Measured 0 differing on
@@ -8113,7 +8157,8 @@ void func_8008FF5C(void)
     D_800D041C = (s32)D_800D03A8;
 }
 
-void func_8008FFC0(void) {
+void func_8008FFC0(void)
+{
 }
 
 void func_8008FFC8(void)
@@ -8332,6 +8377,8 @@ void func_800903DC(void)
     func_8008FFC8();
 }
 
+void func_8009065C(UnkTownTask *a, UnkTown2AE8 *b, void *c);
+
 void func_800903FC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
 {
     u8 *m;
@@ -8390,6 +8437,8 @@ void func_800903FC(UnkTownTask *a, UnkTown2AE8 *b, void *c)
         func_8009065C(a, b, c);
     }
 }
+
+void func_80090A04(UnkTown2AE8 *b);
 
 /* func_800903FC's player leg and func_800A5638's player leg both end here --
    func_800A573C (:19952) is the other owner's leg and route (k) reports its
@@ -8674,10 +8723,12 @@ void func_80090A04(UnkTown2AE8 *b)
     }
 }
 
-void func_80090A64(void) {
+void func_80090A64(void)
+{
 }
 
-void func_80090A6C(void) {
+void func_80090A6C(void)
+{
 }
 
 /* The D_80083160 dispatcher family's probe-less member: func_80091260's head
@@ -8780,6 +8831,8 @@ void func_80090A74(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
         func_80093ED8(a, b, c);
     }
 }
+
+void func_80093D18(UnkTownTask *t, UnkTown2AE8 *b, s32 c);
 
 /* func_80090DF0 / func_80090E78 / func_80090F00 / func_80090F84's shape
    (immediately below) with a D_80083160 flag gate in front of the two arms:
@@ -8949,7 +9002,7 @@ void func_80090F84(UnkTownTask *a, UnkTown2AE8 *b, UnkTownRend *c)
     void (*f)();
 
     f = a->unk_00;
-    func_80090A74(a, b, c);
+    func_80090A74(a, b, (s32)c);
     if (f == a->unk_00)
     {
         if ((c->unk_14 & 0x6000) != 0)
@@ -9837,7 +9890,8 @@ idle3:
     func_80095388(q);
 }
 
-void func_80092318(void) {
+void func_80092318(void)
+{
 }
 
 /* The sixth and seventh members of the `mover update, then dispatch on
@@ -10409,7 +10463,7 @@ void func_80092FF0(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
     if (--a->unk_0A < 0)
     {
-        func_800946FC(a, b, c);
+        func_800946FC(a, b, (void *)c);
     }
 }
 
@@ -11448,7 +11502,7 @@ void func_80093D90(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     t->unk_0A = 0x15;
 }
 
-void func_80093DD8(UnkTownTask *t)
+void func_80093DD8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0080, t);
     t->unk_00 = func_80090D44;
@@ -11472,7 +11526,7 @@ void func_80093E58(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_00 = func_80091114;
 }
 
-void func_80093E98(UnkTownTask *t)
+void func_80093E98(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0168, t);
     t->unk_00 = func_800911D4;
@@ -11524,7 +11578,7 @@ void func_80093FC8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_0A = func_800374F4(2) + 0xC;
 }
 
-void func_80094048(UnkTownTask *t)
+void func_80094048(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D0160, t);
     t->unk_00 = func_80090F84;
@@ -11565,14 +11619,14 @@ void func_80094190(UnkTownTask *t)
     t->unk_0A = 0x1;
 }
 
-void func_800941D8(UnkTownTask *t)
+void func_800941D8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D00E0, t);
     t->unk_00 = func_80091D6C;
     t->unk_0A = 0x15;
 }
 
-void func_80094220(UnkTownTask *t)
+void func_80094220(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0100, t);
     t->unk_00 = func_80091EB4;
@@ -11632,7 +11686,7 @@ void func_8009431C(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_0A = 0;
 }
 
-void func_80094330(UnkTownTask *t)
+void func_80094330(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D00C0, t);
     t->unk_00 = func_80090F00;
@@ -11734,7 +11788,7 @@ void func_800945B8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_00 = func_80092CD4;
 }
 
-void func_80094620(UnkTownTask *t)
+void func_80094620(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     func_80094984(D_800D0148, t);
     t->unk_00 = func_80092DA8;
@@ -11758,7 +11812,7 @@ void func_800946A0(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     t->unk_0A = 6;
 }
 
-void func_800946FC(UnkTownTask *t)
+void func_800946FC(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 {
     t->unk_00 = func_800930E4;
     t->unk_0A = 0x13;
@@ -12196,7 +12250,7 @@ void func_80094AF8(void)
    address-take.  Their ORDER was checked positionally against the listing --
    func_80033B2C, func_80053DA8, func_80094AF8, func_800AE324 -- because
    ovlverify masks every one of them. */
-s32 func_80094B0C(u8 *a)
+UnkNode *func_80094B0C(u8 *a)
 {
     if (func_80033B2C(0xA5) != 0)
     {
@@ -12675,21 +12729,11 @@ void func_80095094(UnkTown2AE8 *b)
    that side, and commits it only if crossing again with the stepped delta
    leaves z's SIGN unchanged -- i.e. only while the turn does not overshoot.
 
-   `func_800652AC`, not `OuterProduct0`.  The name exists --
-   splat/slus_006.14_symbol_addrs.txt:107 has `OuterProduct0 = 0x800652ac` and
-   psyq/include/libgte.h declares it -- but only the resident's yaml defines
-   the symbol.  This overlay's linker input is
-   splat/town.bin_undefined_funcs_auto.txt:155, `func_800652AC = 0x800652AC`,
-   so the func_ spelling is the only one that links here.  Same class as the
-   `D_` names that are really functions: the text is identical either way, so
-   ovlverify and a whole-unit sweep are both blind to it and only
-   `make build/town.bin` is not.
-
    The four VECTORs are declared (dir, step, vel, cp) and that ORDER is what
    puts them at sp+0x10 / +0x20 / +0x30 / +0x40.  It is declaration order, not
    use order -- `step` is written last and sits second.
 
-   `vel.vz = 0` is written TWICE, once per func_800652AC setup, which is the
+   `vel.vz = 0` is written TWICE, once per OuterProduct0 setup, which is the
    target's two `sw $zero, 0x38($sp)`; `dir.vz = 0` once.  `step.vz` and the
    whole of `cp` are never initialised, and the target never touches them.
 
@@ -12726,7 +12770,7 @@ void func_800951B4(UnkTown2AE8 *b)
     vel.vx = b->unk_0C / 0x1000;
     vel.vy = b->unk_10 / 0x1000;
     vel.vz = 0;
-    func_800652AC(&dir, &vel, &cp);
+    OuterProduct0(&dir, &vel, &cp);
     z = cp.vz;
     if (z >= 0)
     {
@@ -12741,7 +12785,7 @@ void func_800951B4(UnkTown2AE8 *b)
     vel.vx = (b->unk_0C + step.vx) / 0x1000;
     vel.vy = (b->unk_10 + step.vy) / 0x1000;
     vel.vz = 0;
-    func_800652AC(&dir, &vel, &cp);
+    OuterProduct0(&dir, &vel, &cp);
     if (z >= 0)
     {
         if (cp.vz < 0)
@@ -14416,18 +14460,18 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
 
         da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
-        func_80067E2C(da, (RECT *)g->unk_00);
-        func_8006658C(g->unk_00 + 0x830, da);
+        SetDrawArea(da, (RECT *)g->unk_00);
+        AddPrim(g->unk_00 + 0x830, da);
 
         ft = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ft + 1);
         r1 = &D_800D04D0;
         *(u32 *)&ft->r0 = 0x808080;
-        func_800666F4(ft);
+        SetPolyFT4(ft);
         tx = r1->unk_00;
         ty = r1->unk_02;
-        ft->tpage = func_80066460(2, 2, (s16)(tx & ~0xFF), (s16)(ty & ~0xFF));
-        func_80066640(ft, 1);
+        ft->tpage = GetTPage(2, 2, (s16)(tx & ~0xFF), (s16)(ty & ~0xFF));
+        SetSemiTrans(ft, 1);
         ft->u0 = (s16)r1->unk_00 % 0x100;
         ft->v0 = (s16)r1->unk_02 % 0x100;
         ft->u1 = (s16)r1->unk_00 % 0x100 + r1->unk_04;
@@ -14456,15 +14500,15 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
         ft->x3 = x + w;
         w = r2->unk_06;
         ft->y3 = y + w;
-        func_8006658C(g->unk_00 + 0x830, ft);
+        AddPrim(g->unk_00 + 0x830, ft);
 
         f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
         f4->r0 = 0x40;
         f4->g0 = 0x40;
         f4->b0 = 0xC0;
-        func_800666E0(f4);
-        func_80066640(f4, 0);
+        SetPolyF4(f4);
+        SetSemiTrans(f4, 0);
         f4->x0 = x;
         w = r2->unk_06;
         f4->y0 = y + w - hw;
@@ -14479,15 +14523,15 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
         f4->x3 = x + w;
         w = r2->unk_06;
         f4->y3 = y + w;
-        func_8006658C(g->unk_00 + 0x830, f4);
+        AddPrim(g->unk_00 + 0x830, f4);
 
         f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
         f4->b0 = 0;
         f4->g0 = 0;
         f4->r0 = 0;
-        func_800666E0(f4);
-        func_80066640(f4, 0);
+        SetPolyF4(f4);
+        SetSemiTrans(f4, 0);
         f4->x0 = x;
         f4->y0 = y;
         w = r2->unk_04;
@@ -14500,12 +14544,12 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
         f4->x3 = x + w;
         w = r2->unk_06;
         f4->y3 = y + w;
-        func_8006658C(g->unk_00 + 0x830, f4);
+        AddPrim(g->unk_00 + 0x830, f4);
 
         da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
-        func_80067E2C(da, (RECT *)r2);
-        func_8006658C(g->unk_00 + 0x830, da);
+        SetDrawArea(da, (RECT *)r2);
+        AddPrim(g->unk_00 + 0x830, da);
 
         s2 = &D_80082E80_b;
         x = r1->unk_00;
@@ -14534,15 +14578,15 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
         da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
         func_80067EF4(da, 0, 0);
-        func_8006658C(g->unk_00 + 0x830, da);
+        AddPrim(g->unk_00 + 0x830, da);
 
         f4 = (POLY_F4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(f4 + 1);
         f4->b0 = 0xFF;
         f4->g0 = 0xFF;
         f4->r0 = 0xFF;
-        func_800666E0(f4);
-        func_80066640(f4, 0);
+        SetPolyF4(f4);
+        SetSemiTrans(f4, 0);
         f4->x0 = x;
         f4->y0 = y2;
         w = r1->unk_04;
@@ -14555,17 +14599,17 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
         f4->x3 = x + w;
         w = r1->unk_06;
         f4->y3 = y2 + w;
-        func_8006658C(g->unk_00 + 0x830, f4);
+        AddPrim(g->unk_00 + 0x830, f4);
 
         da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
         func_80067EF4(da, 0, 1);
-        func_8006658C(g->unk_00 + 0x830, da);
+        AddPrim(g->unk_00 + 0x830, da);
 
         da = (DR_AREA *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(da + 1);
-        func_80067E2C(da, (RECT *)r1);
-        func_8006658C(g->unk_00 + 0x830, da);
+        SetDrawArea(da, (RECT *)r1);
+        AddPrim(g->unk_00 + 0x830, da);
         return 0;
     }
     sp->unk_13C = 0;
@@ -14575,7 +14619,7 @@ s32 func_800970FC(u8 *arg0, UnkVec *vec, UnkSlot *arg2)
 }
 
 /* 58 words, 0 differing.  func_80097AD0 three functions up is the SAME SOURCE:
-   this one draws its own offsets from `func_80069EF8() & 0x1F` instead of
+   this one draws its own offsets from `rand() & 0x1F` instead of
    func_800374F4 over a `spread` record, does NOT re-assign `t.unk_0A` inside
    the loop, and calls the 0x80 - grey spawner func_800ABC00 rather than
    func_8009792C, whose return value it drops.  func_800ABD74 is this source
@@ -14611,13 +14655,13 @@ void func_80097844(UnkTown2AE8 *src, s32 count)
         return;
     }
     step = 0x1000 / count;
-    ang = func_80069EF8();
+    ang = rand();
     t.unk_0A = *(u16 *)((u8 *)src + 0xA);
     t.unk_16 = -4;
     for (i = 0; i < count; i++)
     {
-        t.unk_02 = *(u16 *)((u8 *)src + 0x2) + (func_80069EF8() & 0x1F) - 0x10;
-        t.unk_06 = *(u16 *)((u8 *)src + 0x6) + (func_80069EF8() & 0x1F) - 0x10;
+        t.unk_02 = *(u16 *)((u8 *)src + 0x2) + (rand() & 0x1F) - 0x10;
+        t.unk_06 = *(u16 *)((u8 *)src + 0x6) + (rand() & 0x1F) - 0x10;
         t.unk_0C = func_80064584(ang) * 0x20;
         t.unk_10 = func_800644B8(ang) * 0x20;
         func_800ABC00(&t, ang);
@@ -14666,9 +14710,9 @@ UnkNode *func_8009792C(UnkTownPuff *t, s16 ang)
         *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
         *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
         *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
-        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2)) / 16;
-        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2)) / 16;
-        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        m->unk_0C = -(t->unk_0C * ((rand() & 1) + 2)) / 16;
+        m->unk_10 = -(t->unk_10 * ((rand() & 1) + 2)) / 16;
+        m->unk_14 = (~rand() & 1) << 15;
         func_8003DB94(r, D_800D1464, 0);
         r->unk_0E = 0xFF;
         r->unk_0D = 0xFF;
@@ -14712,7 +14756,7 @@ void func_80097AD0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
         return;
     }
     step = 0x1000 / count;
-    ang = func_80069EF8();
+    ang = rand();
     t.unk_0A = *(u16 *)((u8 *)src + 0xA);
     t.unk_16 = -4;
     for (i = 0; i < count; i++)
@@ -14940,11 +14984,11 @@ void func_80097EA0(void)
     func_80097DE8();
 }
 
-void func_80097EC0(UnkTownTask *t)
+void func_80097EC0(UnkTownTask *t, UnkTown2AE8 *b)
 {
     if (--t->unk_0A <= 0)
     {
-        func_80098ABC();
+        func_80098ABC(t, b);
     }
 }
 
@@ -15048,7 +15092,7 @@ void func_80098180(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     if (--t->unk_0A < 0)
     {
-        func_80098D60();
+        func_80098D60(t, b, c);
     }
     else
     {
@@ -15098,7 +15142,7 @@ void func_800981D4(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
         }
     }
     *(s16 *)((u8 *)b + 0x6) = 0x300;
-    func_80098DC0();
+    func_80098DC0(t, b, c);
 }
 
 /* Walk the mover's +0x02 integer coordinate to 0x4C2 by 4 a frame from either
@@ -15548,10 +15592,10 @@ void func_80098A30(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 
    9 words -- its header reads `nonmatching func_80098A98, 0x24`, and
    0x24/4 = 9.  0 differing. */
-void func_80098A98(void)
+void func_80098A98(UnkTownTask *t, UnkTown2AE8 *b)
 {
     D_80082660[1].unk_00 = 0;
-    func_80098ABC();
+    func_80098ABC(t, b);
 }
 
 /* The func_80094984 bind in its TWO-argument sub-form (func_80098E70's shape,
@@ -15628,7 +15672,7 @@ void func_80098B70(void *p, UnkTown2AE8 *q, void *r)
     func_80099754(q);
 }
 
-void func_80098B9C(UnkTownTask *t, s32 b)
+void func_80098B9C(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0180, t);
     t->unk_04 = func_800980B4;
@@ -15731,7 +15775,7 @@ void func_80098CF0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     t->unk_10 = 0x400;
 }
 
-void func_80098D60(UnkTownTask *t, s32 b, s32 c)
+void func_80098D60(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80099754(b);
     func_80094984(D_800D0090, t, c);
@@ -15739,7 +15783,7 @@ void func_80098D60(UnkTownTask *t, s32 b, s32 c)
     t->unk_10 = 0x800;
 }
 
-void func_80098DC0(UnkTownTask *t, s32 b, s32 c)
+void func_80098DC0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80099754(b);
     func_80094984(D_800D0090, t, c);
@@ -15778,13 +15822,13 @@ void func_80098EC0(UnkTownTask *t)
    ovlverify and has no jal to decode; relocdump.py names it.  14 words --
    its header reads `nonmatching func_80098F10, 0x38`, and 0x38/4 = 14.
    0 differing. */
-void func_80098F10(UnkTownTask *t, s32 b)
+void func_80098F10(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80099754(b);
     t->unk_04 = func_800982EC;
 }
 
-void func_80098F48(UnkTownTask *t, s32 b)
+void func_80098F48(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -15796,7 +15840,7 @@ void func_80098F48(UnkTownTask *t, s32 b)
     t->unk_04 = func_8009AA2C;
 }
 
-void func_80098FBC(UnkTownTask *t, s32 b)
+void func_80098FBC(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01A0, t);
     D_80082660[1].unk_00 = 0;
@@ -15805,7 +15849,7 @@ void func_80098FBC(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_80099020(UnkTownTask *t, s32 b)
+void func_80099020(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E8, t);
     D_80082660[1].unk_00 = 0;
@@ -15814,7 +15858,7 @@ void func_80099020(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_80099084(UnkTownTask *t, s32 b)
+void func_80099084(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01F0, t);
     D_80082660[1].unk_00 = 0;
@@ -15823,7 +15867,7 @@ void func_80099084(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_800990E8(UnkTownTask *t, s32 b)
+void func_800990E8(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01A8, t);
     D_80082660[1].unk_00 = 0;
@@ -15832,7 +15876,7 @@ void func_800990E8(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_8009914C(UnkTownTask *t, s32 b)
+void func_8009914C(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -15878,7 +15922,7 @@ void func_80099238(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_8009A1E8(a, b, c);
 }
 
-void func_80099294(UnkTownTask *t, s32 b)
+void func_80099294(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0150, t);
     D_80082660[1].unk_00 = 0;
@@ -15906,7 +15950,7 @@ void func_80099294(UnkTownTask *t, s32 b)
    same LUID ordering func_800991C0's device buys, but here a statement order
    is enough.  38 words -- its header reads `nonmatching func_800992F8,
    0x98`, and 0x98/4 = 38.  0 differing. */
-void func_800992F8(UnkTownTask *t, s32 b)
+void func_800992F8(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
     s32 n;
@@ -15922,7 +15966,7 @@ void func_800992F8(UnkTownTask *t, s32 b)
     func_80053DA8(0x519);
 }
 
-void func_80099390(UnkTownTask *t, s32 b)
+void func_80099390(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0150, t);
     D_80082660[1].unk_00 = 0;
@@ -15931,7 +15975,7 @@ void func_80099390(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_800993F4(UnkTownTask *t, s32 b)
+void func_800993F4(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -15988,7 +16032,7 @@ void func_800994DC(UnkTownTask *t)
     func_800A8184(t->unk_36, t->unk_38);
 }
 
-void func_8009953C(UnkTownTask *t, s32 b)
+void func_8009953C(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01C8, t);
     D_80082660[1].unk_00 = 0;
@@ -15998,7 +16042,7 @@ void func_8009953C(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_800995A8(UnkTownTask *t, s32 b)
+void func_800995A8(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01D0, t);
     D_80082660[1].unk_00 = 0;
@@ -16008,7 +16052,7 @@ void func_800995A8(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_80099614(UnkTownTask *t, s32 b)
+void func_80099614(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01D8, t);
     D_80082660[1].unk_00 = 0;
@@ -16018,7 +16062,7 @@ void func_80099614(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_80099680(UnkTownTask *t, s32 b)
+void func_80099680(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E0, t);
     D_80082660[1].unk_00 = 0;
@@ -16028,7 +16072,7 @@ void func_80099680(UnkTownTask *t, s32 b)
     func_80099754(b);
 }
 
-void func_800996E8(UnkTownTask *t, s32 b)
+void func_800996E8(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E0, t);
     D_80082660[1].unk_00 = 0;
@@ -16426,7 +16470,8 @@ void func_8009A1E8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     D_80082660[a->unk_40].unk_00 = 0;
     a->unk_04 = func_80099C18;
     a->unk_0A = func_8003BD84((a->unk_36 << 16) - b->unk_00,
-                              (a->unk_38 << 16) - b->unk_04) / 0x20000;
+                              (a->unk_38 << 16) - b->unk_04) /
+                0x20000;
     e = &D_80082660[a->unk_40];
     if (*(s8 *)((u8 *)e + 2) == -0x80)
     {
@@ -16705,7 +16750,8 @@ void func_8009A81C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-void func_8009A8A8(void) {
+void func_8009A8A8(void)
+{
 }
 
 /* The shared easing leaf of the pair above: one countdown-step of a linear
@@ -16924,10 +16970,10 @@ void func_8009AC8C(void)
 
     func_80099754(p);
     func_80094984(D_800D0078, t, q);
-    func_80093D48(t, p, q);
+    func_80093D48(t, p, (s32)q);
 }
 
-void func_8009ACFC(UnkTownTask *t, s32 b)
+void func_8009ACFC(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -17265,7 +17311,7 @@ void func_8009B218(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r, void *d)
     if (d != 0)
     {
         *(void **)((u8 *)p + 0x58) = d;
-        func_8009BFD8(p, p, q, r);
+        func_8009BFD8((UnkTownActor *)p, (UnkTownColl *)p, (UnkTown2AE8 *)q, r);
     }
     else
     {
@@ -17273,7 +17319,8 @@ void func_8009B218(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r, void *d)
     }
 }
 
-void func_8009B2BC(void) {
+void func_8009B2BC(void)
+{
 }
 
 /* 100 words -- its header reads `nonmatching func_8009B2C4, 0x190`, and
@@ -18067,7 +18114,7 @@ void func_8009C20C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
 void func_8009C2C8(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend *d)
 {
     func_80053DA8(0x600);
-    func_8009C648(a, c);
+    func_8009C648(a, (UnkVec *)c);
     func_8008F134(a);
     func_80033D08((u8 *)a);
     *(u16 *)((u8 *)a - 0x2) |= 0x8000;
@@ -18311,7 +18358,7 @@ void func_8009C5D8(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    0x160/4 = 88.  No jump table, no rodata of its own.  Measured 0 differing
    on the first compile; 9 raw against 9 relocation words and 0
    intra-function `j`.  All five `jal`s hand-decoded against this listing
-   (func_8009C390, func_80069EF8 x3, func_8009C46C) and both %hi/%lo pairs
+   (func_8009C390, rand x3, func_8009C46C) and both %hi/%lo pairs
    read off it: D_80088D78 and D_800D06C8.  NO address-takes -- the only
    function symbol relocated here is the `jal` to func_8009C46C. */
 void func_8009C648(UnkTownActor *a, UnkVec *b)
@@ -18334,12 +18381,12 @@ void func_8009C648(UnkTownActor *a, UnkVec *b)
         k = (UnkTownActor *)((u8 *)o + 0x20);
         ((UnkTownRend *)o->unk_0C)->unk_08 = (u32)((void **)a->unk_80)[t.unk_00[i]];
         k->unk_60 = i;
-        m->unk_0C = (func_80069EF8() << 4) + 0xFFFC0000;
-        m->unk_10 = (func_80069EF8() << 4) + 0xFFFC0000;
-        m->unk_14 = 0xFFF00000 - (func_80069EF8() << 4);
+        m->unk_0C = (rand() << 4) + 0xFFFC0000;
+        m->unk_10 = (rand() << 4) + 0xFFFC0000;
+        m->unk_14 = 0xFFF00000 - (rand() << 4);
         m->unk_00 += m->unk_0C * 8;
         m->unk_04 += m->unk_10 * 8;
-        func_8009C46C(k, m, o->unk_0C);
+        func_8009C46C((UnkTownDispatch *)k, m, o->unk_0C);
     }
 }
 
@@ -18424,7 +18471,8 @@ void func_8009CA24(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     func_8009B218(p, q, r, 0);
 }
 
-void func_8009CA8C(void) {
+void func_8009CA8C(void)
+{
 }
 
 void func_8009CA94(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
@@ -18986,7 +19034,7 @@ void func_8009D73C(u8 **p)
         {
             while (*q != NULL)
             {
-                func_8009D7D0(*q);
+                func_8009D7D0((UnkTownScrRec *)*q);
                 q++;
             }
         }
@@ -19715,11 +19763,11 @@ s32 func_8009E424(void)
     f = (u16)(D_80100AF0->unk_1E & 0x8000);
     if (f != 0)
     {
-        func_80069E78((u8 *)0x80010238, (u8 *)0x80010AB4);
+        strcpy((u8 *)0x80010238, (u8 *)0x80010AB4);
         t = (UnkTownIdPair *)func_8009F830(2, 0x13);
         if (t != NULL)
         {
-            func_80069E78((u8 *)0x80010324 + (*((u8 *)t + 0x3) & 0x1F) * 0x54, (u8 *)0x80010AB4);
+            strcpy((u8 *)0x80010324 + (*((u8 *)t + 0x3) & 0x1F) * 0x54, (u8 *)0x80010AB4);
         }
     }
     return f;
@@ -19810,7 +19858,7 @@ void func_8009E504(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
         *((u8 *)p + 0x4D) = b[*((u8 *)p + 0x95) * 4 + 0x981];
         *((u8 *)p + 0x4E) = b[*((u8 *)p + 0x95) * 4 + 0x982];
         *((u8 *)p + 0x4F) = b[*((u8 *)p + 0x95) * 4 + 0x983];
-        func_8009F148(p, p, q, r);
+        func_8009F148((UnkTownActor *)p, p, q, r);
     }
     if (func_8009FF50() == 0)
     {
@@ -20374,7 +20422,7 @@ void func_8009EF88(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
             c->unk_04 = 0;
             *(s16 *)((u8 *)c + 0x2) = a->unk_84;
             *(s16 *)((u8 *)c + 0x6) = a->unk_86;
-            func_8009F148(a, b, c, d);
+            func_8009F148(a, b, (UnkVec *)c, d);
         }
     }
 }
@@ -20644,7 +20692,7 @@ void func_8009F4C0(UnkTownActor *a, s32 arg1, s32 arg2, UnkTownRend *r)
     b = (u8 *)0x80010000;
     func_80033CD8((u8 *)a, (u32)D_80045340);
     *(u8 *)(b + i * 4 + 0x981) = 0x13;
-    func_80069EE8((u8 *)&D_80100A10, 0, 0x54);
+    memset((u8 *)&D_80100A10, 0, 0x54);
     func_80042640(&D_80100A10, *((u8 *)a + 0x4C));
     func_800423C0((u8 *)&D_80100A10, *((u8 *)a + 0x4C), NULL);
     func_800422DC((u8 *)&D_80100AF8, (u8 *)&D_80100A10);
@@ -20665,10 +20713,12 @@ void func_8009F4C0(UnkTownActor *a, s32 arg1, s32 arg2, UnkTownRend *r)
     a->unk_6C = 0xA;
 }
 
-void func_8009F6D4(void) {
+void func_8009F6D4(void)
+{
 }
 
-void func_8009F6DC(void) {
+void func_8009F6DC(void)
+{
 }
 
 /* 14 words -- its header reads `nonmatching func_8009F6E4, 0x38`, and
@@ -20985,7 +21035,7 @@ loop:
    dereference. */
 void func_8009F9D4(void)
 {
-    func_8009F71C((u8 *)0x80010980, (u8 *)D_800D0728[func_800B28A0()]);
+    func_8009F71C((u8 *)0x80010980, D_800D0728[func_800B28A0()]);
 }
 
 /* 70 words -- its header reads `nonmatching func_8009FA14, 0x118`, and
@@ -21141,7 +21191,7 @@ s32 func_8009FB2C(s32 slot, u8 *src)
     p->unk_03 = src[3];
     if (p->unk_01 == 0x13)
     {
-        func_80069EE8((u8 *)&D_80100A10, 0, 0x54);
+        memset((u8 *)&D_80100A10, 0, 0x54);
         func_80042640(&D_80100A10, p->unk_00);
         func_800423C0((u8 *)&D_80100A10, p->unk_00, NULL);
         func_800422DC((u8 *)&D_80100AF8, (u8 *)&D_80100A10);
@@ -22156,7 +22206,8 @@ void func_800A0884(UnkTownActor *a, UnkTownActor *b)
     }
 }
 
-void func_800A08E8(void) {
+void func_800A08E8(void)
+{
 }
 
 /* The first of three tiny no-frame counter ticks that are line-for-line
@@ -22906,7 +22957,7 @@ s32 func_800A1080(UnkTownA1080 *s, UnkTown2AE8 *b, s32 arg2)
     {
         s->unk_08 = 0;
     }
-    func_800649A0();
+    PushMatrix();
     p->unk_44.vx = *(s16 *)((u8 *)b + 0x2);
     p->unk_44.vy = *(s16 *)((u8 *)b + 0x6);
     p->unk_44.vz = *(s16 *)((u8 *)b + 0xA) - s->unk_7A / 2;
@@ -22916,16 +22967,16 @@ s32 func_800A1080(UnkTownA1080 *s, UnkTown2AE8 *b, s32 arg2)
     p->unk_2C.vx = s->unk_00;
     p->unk_2C.vy = s->unk_02;
     p->unk_2C.vz = s->unk_04;
-    func_80064B90(&s->unk_14, &p->unk_44);
-    func_80065820(&p->unk_2C, &s->unk_14);
-    func_80064BC0(&s->unk_14, &p->unk_34);
+    TransMatrix(&s->unk_14, &p->unk_44);
+    RotMatrix(&p->unk_2C, &s->unk_14);
+    ScaleMatrix(&s->unk_14, &p->unk_34);
     p->unk_2C.vx = -s->unk_00;
     p->unk_2C.vy = -s->unk_02;
     p->unk_2C.vz = -s->unk_04;
-    func_80064B90(&s->unk_34, &p->unk_44);
-    func_80065820(&p->unk_2C, &s->unk_34);
-    func_80064BC0(&s->unk_34, &p->unk_34);
-    func_80064A40();
+    TransMatrix(&s->unk_34, &p->unk_44);
+    RotMatrix(&p->unk_2C, &s->unk_34);
+    ScaleMatrix(&s->unk_34, &p->unk_34);
+    PopMatrix();
     func_800A1354(s);
     if (s->unk_08 == 0)
     {
@@ -23026,7 +23077,7 @@ void func_800A1330(SVECTOR *d, UnkTown2AE8 *b)
    a six-entry pointer table, each pass drawing one random-coloured LINE_G4
    quad through the actor's three nodes plus a fourth corner copied from the
    first.  func_800AA10C's body transferred almost line for line -- the random
-   colour words, func_80066844/func_80066640, the -0x30 otz bias, the corner
+   colour words, func_80066844/SetSemiTrans, the -0x30 otz bias, the corner
    stores, the two separate otz clamps and the trailing DR_MODE -- so this
    landed on the first compile.  Three things are this function's own, each
    measured:
@@ -23048,11 +23099,11 @@ void func_800A1330(SVECTOR *d, UnkTown2AE8 *b)
      `D_80083160.unk_00` throughout is 284 words, TWO SHORT, 273 differing.
      Declaring it with the initialiser measures identically.
 
-   - **the OT expression must stay written out at both func_8006658C calls.**
+   - **the OT expression must stay written out at both AddPrim calls.**
      Hoisting `sp->unk_24 + sp->unk_C4` into a local is 285 words / 47
      differing.  Unlike func_800AA10C this reaches the OT through the real
-     func_8006658C rather than the addPrim macro -- the macro form is 315
-     words / 300 differing, and the listing's two `jal func_8006658C` settle
+     AddPrim rather than the addPrim macro -- the macro form is 315
+     words / 300 differing, and the listing's two `jal AddPrim` settle
      it outright.
 
    Store orders, all measured: the three +0x1C corner copies are written
@@ -23090,10 +23141,10 @@ void func_800A1354(UnkTownA1080 *s)
     {
         ln = (LINE_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
-        *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
-        *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
-        *(u32 *)&ln->r2 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
-        *(u32 *)&ln->r3 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
+        *(u32 *)&ln->r0 = rand() * rand() & 0xFFFFFF;
+        *(u32 *)&ln->r1 = rand() * rand() & 0xFFFFFF;
+        *(u32 *)&ln->r2 = rand() * rand() & 0xFFFFFF;
+        *(u32 *)&ln->r3 = rand() * rand() & 0xFFFFFF;
         ln->r0 = ln->r0 * h / 255;
         ln->g0 = ln->g0 * h / 255;
         ln->b0 = ln->b0 * h / 255;
@@ -23107,12 +23158,23 @@ void func_800A1354(UnkTownA1080 *s)
         ln->g3 = ln->g0;
         ln->b3 = ln->b0;
         func_80066844(ln);
-        func_80066640(ln, 1);
+        SetSemiTrans(ln, 1);
         func_800A130C(&sp->unk_74[0], (UnkTown2AE8 *)s->unk_54[i]->unk_08);
         func_800A130C(&sp->unk_74[1], (UnkTown2AE8 *)s->unk_54[i + 1]->unk_08);
         func_800A130C(&sp->unk_74[2], (UnkTown2AE8 *)s->unk_54[i + 2]->unk_08);
         func_800A1330(&sp->unk_74[3], (UnkTown2AE8 *)&sp->unk_74[0]);
-        sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1], &sp->unk_74[2], &sp->unk_74[3], (u32 *)&sp->unk_E8[0], (u32 *)&sp->unk_E8[1], (u32 *)&sp->unk_E8[2], (u32 *)&sp->unk_E8[3], &sp->unk_94, &sp->unk_98) - 0x30;
+        sp->unk_C4 = RotTransPers4(
+                         &sp->unk_74[0],
+                         &sp->unk_74[1],
+                         &sp->unk_74[2],
+                         &sp->unk_74[3],
+                         (long *)&sp->unk_E8[0],
+                         (long *)&sp->unk_E8[1],
+                         (long *)&sp->unk_E8[2],
+                         (long *)&sp->unk_E8[3],
+                         &sp->p,
+                         &sp->flag) -
+                     0x30;
         ln->x0 = sp->unk_E8[0].vx;
         ln->y0 = sp->unk_E8[0].vy;
         ln->x1 = sp->unk_E8[1].vx;
@@ -23129,22 +23191,17 @@ void func_800A1354(UnkTownA1080 *s)
         {
             sp->unk_C4 = 0;
         }
-        func_8006658C(sp->unk_24 + sp->unk_C4, ln);
+        AddPrim(sp->unk_24 + sp->unk_C4, ln);
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
-        func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+        func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
+        AddPrim(sp->unk_24 + sp->unk_C4, dm);
     }
 }
 
-/* RotAverageNclip4: TEN arguments -- the four input SVECTORs, the four
-   DVECTOR outputs, then `p` and `flag`.  That arity is not cosmetic: it is
-   what makes this function's outgoing-argument area 0x28 bytes and so its
-   frame exactly 0x50, with the RECT local landing at +0x28 just above it. */
-s32 func_800654B0(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, u32 *, u32 *, u32 *, u32 *, s32 *, s32 *);
 /* GetClut(x, y).  Two arguments; the u16 result is stored straight to a
    POLY_FT4's clut, which is the only constraint on it. */
-u16 func_8006649C(s32 x, s32 y);
+u16 GetClut(s32 x, s32 y);
 
 /* The actor's shadow (or ground decal): one textured quad lit by the actor's
    +0x12 brightness, drawn over a flat POLY_F4 of the same four projected
@@ -23211,7 +23268,7 @@ u16 func_8006649C(s32 x, s32 y);
    - the third func_80067F20's tpage argument is the SAME `u16 tpage` the
      POLY_FT4 got, held in $s1 across the whole body with ONE `andi 0xFFFF`
      shared between its two uses; the second one's is a nested
-     func_80066460 call whose result goes straight into $a3.
+     GetTPage call whose result goes straight into $a3.
 
    304 words -- its header reads `nonmatching func_800A17CC, 0x4C0`, and
    0x4C0/4 = 304.  Measured 0 differing, and all 27 relocation records
@@ -23235,10 +23292,10 @@ void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b)
     ft = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ft + 1);
     *(u32 *)&ft->r0 = 0x808080;
-    func_800666F4(ft);
-    tpage = func_80066460(1, 0, s->unk_6C & 0xFF80, s->unk_6E);
+    SetPolyFT4(ft);
+    tpage = GetTPage(1, 0, s->unk_6C & 0xFF80, s->unk_6E);
     ft->tpage = tpage;
-    ft->clut = func_8006649C(0, 0x1EF);
+    ft->clut = GetClut(0, 0x1EF);
 
     ft->u0 = ft->u2 = s->unk_6C % 0x80 / 2;
     ft->u1 = ft->u3 = s->unk_6C % 0x80 / 2 + s->unk_70;
@@ -23256,11 +23313,17 @@ void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b)
     sp->unk_74[3].vx = sp->unk_74[1].vx += s->unk_78;
     sp->unk_74[1].vz = sp->unk_74[0].vz -= s->unk_7A * 2;
 
-    sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1], &sp->unk_74[2],
-                               &sp->unk_74[3], (u32 *)&sp->unk_E8[0],
-                               (u32 *)&sp->unk_E8[1], (u32 *)&sp->unk_E8[2],
-                               (u32 *)&sp->unk_E8[3], &sp->unk_94,
-                               &sp->unk_98) -
+    sp->unk_C4 = RotTransPers4(
+                     &sp->unk_74[0],
+                     &sp->unk_74[1],
+                     &sp->unk_74[2],
+                     &sp->unk_74[3],
+                     (long *)&sp->unk_E8[0],
+                     (long *)&sp->unk_E8[1],
+                     (long *)&sp->unk_E8[2],
+                     (long *)&sp->unk_E8[3],
+                     &sp->p,
+                     &sp->flag) -
                  8;
     ft->x0 = sp->unk_E8[0].vx;
     ft->y0 = sp->unk_E8[0].vy;
@@ -23276,8 +23339,8 @@ void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b)
     f4->r0 = s->unk_12;
     f4->g0 = s->unk_12;
     f4->b0 = s->unk_12;
-    func_800666E0(f4);
-    func_80066640(f4, 1);
+    SetPolyF4(f4);
+    SetSemiTrans(f4, 1);
     f4->x0 = sp->unk_E8[0].vx;
     f4->y0 = sp->unk_E8[0].vy;
     f4->x1 = sp->unk_E8[1].vx;
@@ -23291,22 +23354,23 @@ void func_800A17CC(UnkTownA17CC *s, UnkTown2AE8 *b)
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
     func_80067F20((u32 *)dm, 1, 0, tpage, (s32)&D_800D0A40);
-    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
-    func_8006658C(sp->unk_24 + sp->unk_C4, f4);
+    AddPrim(sp->unk_24 + sp->unk_C4, dm);
+    AddPrim(sp->unk_24 + sp->unk_C4, f4);
 
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
-    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
-    func_8006658C(sp->unk_24 + sp->unk_C4, ft);
+    func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
+    AddPrim(sp->unk_24 + sp->unk_C4, dm);
+    AddPrim(sp->unk_24 + sp->unk_C4, ft);
 
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
     func_80067F20((u32 *)dm, 1, 0, tpage, (s32)&tw);
-    func_8006658C(sp->unk_24 + sp->unk_C4, dm);
+    AddPrim(sp->unk_24 + sp->unk_C4, dm);
 }
 
-void func_800A1C8C(void) {
+void func_800A1C8C(void)
+{
 }
 
 UnkNode *func_800A1C94(void *a, s32 b, s32 c)
@@ -23353,17 +23417,17 @@ UnkNode *func_800A1C94(void *a, s32 b, s32 c)
    THE 0x1F800000 SCRATCHPAD IS REACHED TWO DIFFERENT WAYS IN ONE FUNCTION,
    and both are load-bearing.  Through the UnkTownA1080SP pointer local the
    angles at +0x2C come out as 0x2C($s3) displacements and `&sp->unk_2C` as
-   `addiu $a0, $s3, 0x2C`; the func_80065320 flag out-parameter at +0x98 is
+   `addiu $a0, $s3, 0x2C`; the RotTransSV flag out-parameter at +0x98 is
    PAST that typedef and is reached as `(u8 *)sp + 0x98`, which cc1psx folds
    against the already-materialised high half and emits as `ori $a2, $s3, 0x98`
    -- the lui/ori constant shape, not a lo_sum.  Writing that argument as the
    literal `(s32 *)0x1F800098` instead emits its own `lui` and is 122 words
    with 23 differing.  `(s32 *)sp + 0x26` is byte-identical to the chosen form.
-   +0x98 is the `flag` func_800AA068 spells as a stack `s32` for func_80065450
-   (RotTrans); splat names func_80065320 RotTransSV.
+   +0x98 is the `flag` func_800AA068 spells as a stack `s32` for RotTrans
+   (RotTrans); splat names RotTransSV RotTransSV.
 
    THE MATRIX SELECTOR MUST BE A SEPARATE LOCAL, ASSIGNED BEFORE
-   func_800649A0().  `m = &s->unk_14 + (*(s16 *)((u8 *)p + 0x22) != 0)` inline
+   PushMatrix().  `m = &s->unk_14 + (*(s16 *)((u8 *)p + 0x22) != 0)` inline
    compiles the select to a BRANCH (120 words, 35 differing); hoisting the
    comparison into `k` gives the `sltu $zero, $s0` the target has, and reorg
    then parks it in the call's delay slot.  Computing `k` AFTER the call is 2
@@ -23427,12 +23491,12 @@ void func_800A1D1C(UnkTownDispatch *p, UnkTown2AE8 *q, UnkTownRend *r)
         sp->unk_2C.vy = *(s32 *)((u8 *)p + 0x28);
         sp->unk_2C.vz = *(s32 *)((u8 *)p + 0x2C);
         k = (*(s16 *)((u8 *)p + 0x22) != 0);
-        func_800649A0();
+        PushMatrix();
         m = &s->unk_14 + k;
-        func_80064CF0(m);
-        func_80064D80(m);
-        func_80065320(&sp->unk_2C, &sp->unk_2C, (s32 *)((u8 *)sp + 0x98));
-        func_80064A40();
+        SetRotMatrix(m);
+        SetTransMatrix(m);
+        RotTransSV(&sp->unk_2C, &sp->unk_2C, (long *)((u8 *)sp + 0x98));
+        PopMatrix();
         *(s16 *)((u8 *)q + 0x2) = sp->unk_2C.vx;
         *(s16 *)((u8 *)q + 0x6) = sp->unk_2C.vy;
         *(s16 *)((u8 *)q + 0xA) = sp->unk_2C.vz;
@@ -23980,7 +24044,7 @@ UnkNode *func_800A25CC(u8 *a)
    drift angles at +0x04/+0x06 and a scale word at +0x08.
 
    The prim is NINE words (`addiu $v0, $s6, 0x24`) but only three vertices are
-   written and func_800666B8 -- SetPolyG3, which splat names and which has no
+   written and SetPolyG3 -- SetPolyG3, which splat names and which has no
    declaration anywhere, so it rides an implicit one -- tags it, so the
    allocation over-reserves a POLY_G4's worth for a G3.  `POLY_G3 *` with an
    explicit `(u8 *)pg + 0x24` step measures identically; `POLY_G4 *` with the
@@ -24032,7 +24096,7 @@ UnkNode *func_800A25CC(u8 *a)
      survives (matching-levers :12497).  The two `/ 32` are divides too:
      `>> 5` is 218 / 103.
    - **The first DR_MODE is linked BEFORE the triangle.**  Swapping the two
-     adjacent func_8006658C calls is 2 differing; the two `jal`s are masked
+     adjacent AddPrim calls is 2 differing; the two `jal`s are masked
      but their second arguments are not.
    - **Each corner stores x before y.**  y first is 37 differing.
    - The colour chain's order is only half pinned: one chain
@@ -24050,14 +24114,14 @@ UnkNode *func_800A25CC(u8 *a)
    -- 6 HI16 + 6 LO16 on D_80083160 (0x800A2734/38, 292C/34, 2968/6C,
    297C/80, 2998/9C, 29D0/D4), 1 HI16 + 2 LO16 on D_800814A0
    (0x800A2714, 2720, 2730), 18 R_MIPS_26 (func_800644B8 x8,
-   func_800666B8, func_80066640, func_80064584, func_80066460 x2,
-   func_80067F20 x2, func_8006658C x3, in the listing's order) and one
+   SetPolyG3, SetSemiTrans, func_80064584, GetTPage x2,
+   func_80067F20 x2, AddPrim x3, in the listing's order) and one
    R_MIPS_26 on `.text` for the intra-function `j .L800A29E4`.  No `%hi` on
    a function symbol, no jump table and no rodata of its own. */
 void func_800A2690(u8 *p, UnkVec *b, u32 d)
 {
     Unk80083160 *g;
-    POLY_G4 *pg;
+    POLY_G3 *pg;
     DR_MODE *dm;
     s32 cx;
     s16 ang;
@@ -24077,8 +24141,8 @@ void func_800A2690(u8 *p, UnkVec *b, u32 d)
     }
     else
     {
-        pg = (POLY_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
-        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
+        pg = (POLY_G3 *)*(u32 *)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)((u8 *)pg + 0x24);
         col = func_800644B8((*(s16 *)(p + 0x4) << 11) / *(s16 *)(p + 0x6)) / 16;
         col = col * (func_800644B8(rx * 2) + func_800644B8(rx * 4) + func_800644B8(rx * 8) + 0x2400 + func_800644B8(ry * 2) + func_800644B8(ry * 4) + func_800644B8(ry * 8) + 0x2400) /
               0x9000;
@@ -24086,8 +24150,8 @@ void func_800A2690(u8 *p, UnkVec *b, u32 d)
         col = col / 4;
         pg->r0 = pg->g0 = pg->b0 = pg->r1 = pg->g1 = pg->b1 = col;
         pg->r2 = pg->g2 = pg->b2 = 0;
-        func_800666B8(pg);
-        func_80066640(pg, 1);
+        SetPolyG3(pg);
+        SetSemiTrans(pg, 1);
         pg->x0 = cx - *(s32 *)(p + 0x10) / 32;
         pg->y0 = 0;
         pg->x1 = cx + *(s32 *)(p + 0x10) / 32;
@@ -24096,13 +24160,13 @@ void func_800A2690(u8 *p, UnkVec *b, u32 d)
         pg->y2 = *(s32 *)(p + 0x10) * func_80064584(ang) / 0x1000;
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 0, 0x140, 0), 0);
-        func_8006658C(g->unk_00 + 0xD8, dm);
-        func_8006658C(g->unk_00 + 0xD8, pg);
+        func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 0, 0x140, 0), 0);
+        AddPrim(g->unk_00 + 0xD8, dm);
+        AddPrim(g->unk_00 + 0xD8, pg);
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0x140, 0), 0);
-        func_8006658C(g->unk_00 + 0xD8, dm);
+        func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0x140, 0), 0);
+        AddPrim(g->unk_00 + 0xD8, dm);
     }
 }
 
@@ -24180,15 +24244,15 @@ fail:
    The primitive is a LINE_G2 and that is witnessed three ways, as
    func_800AA10C's LINE_G4 was: the allocator steps 0x14 (five words), the
    two random words land at +0x04 and +0x0C (r0 and r1), and the four `sh`s
-   land at +0x08/+0x0A and +0x10/+0x12, its two xy pairs.  func_800667D0 is
+   land at +0x08/+0x0A and +0x10/+0x12, its two xy pairs.  SetLineG2 is
    therefore SetLineG2, which is also what splat names it; it has no
    declaration anywhere in the tree and rides an implicit one, as
    func_80066844 does in func_800AA10C.
 
    Where it differs from func_800AA10C, each read off this listing:
 
-   - the corners are projected with func_80065420 (RotTransPers, one vertex)
-     called TWICE, not func_800654B0 (RotAverageNclip4, four) called once,
+   - the corners are projected with RotTransPers (RotTransPers, one vertex)
+     called TWICE, not RotTransPers4 (RotAverageNclip4, four) called once,
      and both calls share the same `p`/`flag` outputs at +0x94/+0x98.  Only
      the FIRST call's return value is kept; the second's is discarded, which
      the delay slot proves -- `sw $v0, (0x1F8000C4)($s3)` sits in the second
@@ -24196,12 +24260,12 @@ fail:
 
    - **the -0x30 is a SEPARATE STATEMENT, not folded into the assignment.**
      The tell is the re-read: `lw $v0, (0x1F8000C4)($s3)` / `addiu -0x30` /
-     `sw` after the second call.  Spelled `sp->unk_C4 = func_80065420(...) -
+     `sw` after the second call.  Spelled `sp->unk_C4 = RotTransPers(...) -
      0x30;` the `addiu` lands in front of the second `jal` instead, because
      $v0 is still live there.
 
    - func_80067F20's second argument is 1 at both sites here (it is 1 and
-     then 1 in func_800AA10C too), and the two func_80066460 calls differ
+     then 1 in func_800AA10C too), and the two GetTPage calls differ
      only in their abr: (0, 0, 0x140, 0) then (0, 1, 0x140, 0).
 
    0x00FFFFFF is materialised ONCE, in $s5, and shared between the two
@@ -24243,14 +24307,14 @@ void func_800A2AF8(UnkTown2AE8 *c, UnkTown2AE8 *b)
     sp->unk_24 = (u32 *)(g->unk_00 + 0xB0);
     ln = (LINE_G2 *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
-    *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
-    *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & 0xFFFFFF;
-    func_800667D0(ln);
-    func_80066640(ln, 1);
+    *(u32 *)&ln->r0 = rand() * rand() & 0xFFFFFF;
+    *(u32 *)&ln->r1 = rand() * rand() & 0xFFFFFF;
+    SetLineG2(ln);
+    SetSemiTrans(ln, 1);
     func_800A130C(&sp->unk_74[0], b);
     func_800A130C(&sp->unk_74[1], c);
-    sp->unk_C4 = func_80065420(&sp->unk_74[0], (s32 *)&sp->unk_E8[0], &sp->unk_94, &sp->unk_98);
-    func_80065420(&sp->unk_74[1], (s32 *)&sp->unk_E8[1], &sp->unk_94, &sp->unk_98);
+    sp->unk_C4 = RotTransPers(&sp->unk_74[0], (long *)&sp->unk_E8[0], &sp->p, &sp->flag);
+    RotTransPers(&sp->unk_74[1], (long *)&sp->unk_E8[1], &sp->p, &sp->flag);
     sp->unk_C4 -= 0x30;
     ln->x0 = sp->unk_E8[0].vx;
     ln->y0 = sp->unk_E8[0].vy;
@@ -24266,12 +24330,12 @@ void func_800A2AF8(UnkTown2AE8 *c, UnkTown2AE8 *b)
     }
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 0, 0x140, 0), 0);
+    func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 0, 0x140, 0), 0);
     addPrim(sp->unk_24 + sp->unk_C4, dm);
     addPrim(sp->unk_24 + sp->unk_C4, ln);
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-    func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+    func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
     addPrim(sp->unk_24 + sp->unk_C4, dm);
 }
 
@@ -24301,7 +24365,7 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
 /* One quad of func_800A2FCC's 16-step ring: a POLY_G4 in the OT, two of its
    four corners lit by the caller's colour and the other two black, the four
    positions coming in as FOUR SVECTORs BY VALUE and going straight to
-   func_800654B0.  func_800A2FCC's own note above already read the prototype
+   RotTransPers4.  func_800A2FCC's own note above already read the prototype
    off this listing when it landed, and this definition confirms it
    unchanged.
 
@@ -24309,7 +24373,7 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
    `sb`s of the colour land at +0x04/+0x05/+0x06 and +0x14/+0x15/+0x16
    (r0/g0/b0 and r2/g2/b2), the six zeros at +0x0C..+0x0E and +0x1C..+0x1E
    (r1/g1/b1 and r3/g3/b3), and the eight `sh`s at +0x08/+0x0A, +0x10/+0x12,
-   +0x18/+0x1A and +0x20/+0x22 are its four xy pairs.  func_80066708 is
+   +0x18/+0x1A and +0x20/+0x22 are its four xy pairs.  SetPolyG4 is
    therefore SetPolyG4, which is what splat names it; it has no declaration
    anywhere in the tree and rides an implicit one.
 
@@ -24324,7 +24388,7 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
    `bnez` / `addiu $a0, 0x1DF`) write a register that NOTHING ever reads
    again: the branch target's first insn is `lw $a0, %lo(D_80083160)($s1)`,
    which overwrites it.  otz is dead because, unlike func_800AA10C and
-   func_800A2AF8, this function hands func_8006658C a FIXED OT slot
+   func_800A2AF8, this function hands AddPrim a FIXED OT slot
    (`g->unk_00 + 0xD8`) instead of the otz-indexed `addPrim(sp->unk_24 +
    sp->unk_C4, ...)`, so the clamped depth is never used.
 
@@ -24359,11 +24423,11 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
    `< 0` alone and `otz = otz >= 0x1E0 ? 0x1DF : otz;` are all 101 words and
    34 differing; two ternaries are 106 and 37; no clamp at all is 101 and 49.
 
-   The frame is read off the listing rather than guessed: func_800654B0 takes
+   The frame is read off the listing rather than guessed: RotTransPers4 takes
    ten arguments, so the outgoing argument area is 0x28 bytes and the locals
    start at +0x28.  The four screen points sit at +0x28/+0x30/+0x38/+0x40 --
    8-byte spacing for a 4-byte DVECTOR, which is each aggregate local's slot
-   rounded up to 8 -- and the two address-taken scalars func_800654B0 fills
+   rounded up to 8 -- and the two address-taken scalars RotTransPers4 fills
    follow at +0x48/+0x4C, so the declaration order is the four points, then
    `p`, then `flag`.  The four by-value SVECTORs are spilled to their own
    incoming argument slots and `&a`..`&d` are `$sp+0x60`, `+0x68`, `+0x70`,
@@ -24371,7 +24435,7 @@ void func_800A2DF0(SVECTOR *d, UnkTown2AE8 *b)
 
    func_80067F20's second argument is 0 here, against the 1 func_800A2AF8 and
    func_800AA10C pass at both of their sites; its tpage is
-   func_80066460(0, 1, 0x140, 0).
+   GetTPage(0, 1, 0x140, 0).
 
    103 words -- its header reads `nonmatching func_800A2E30, 0x19C`, and
    0x19C/4 = 103.  Measured 0 differing, and the relocation arithmetic
@@ -24387,8 +24451,8 @@ void func_800A2E30(SVECTOR a, SVECTOR b, SVECTOR c, SVECTOR d, s16 col)
     DVECTOR s1;
     DVECTOR s2;
     DVECTOR s3;
-    s32 p;
-    s32 flag;
+    long p;
+    long flag;
     s32 otz;
 
     g = &D_80083160;
@@ -24396,9 +24460,9 @@ void func_800A2E30(SVECTOR a, SVECTOR b, SVECTOR c, SVECTOR d, s16 col)
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(pg + 1);
     pg->r0 = pg->g0 = pg->b0 = pg->r2 = pg->g2 = pg->b2 = col;
     pg->r1 = pg->g1 = pg->b1 = pg->r3 = pg->g3 = pg->b3 = 0;
-    func_80066708(pg);
-    func_80066640(pg, 1);
-    otz = func_800654B0(&a, &b, &c, &d, (u32 *)&s0, (u32 *)&s1, (u32 *)&s2, (u32 *)&s3, &p, &flag);
+    SetPolyG4(pg);
+    SetSemiTrans(pg, 1);
+    otz = RotTransPers4(&a, &b, &c, &d, (long *)&s0, (long *)&s1, (long *)&s2, (long *)&s3, &p, &flag);
     pg->x0 = s0.vx;
     pg->y0 = s0.vy;
     pg->x1 = s1.vx;
@@ -24415,18 +24479,18 @@ void func_800A2E30(SVECTOR a, SVECTOR b, SVECTOR c, SVECTOR d, s16 col)
     {
         otz = 0;
     }
-    func_8006658C(g->unk_00 + 0xD8, pg);
+    AddPrim(g->unk_00 + 0xD8, pg);
     dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-    func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0x140, 0), 0);
-    func_8006658C(g->unk_00 + 0xD8, dm);
+    func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0x140, 0), 0);
+    AddPrim(g->unk_00 + 0xD8, dm);
 }
 
 /* func_800A2E30 TAKES FOUR SVECTORs BY VALUE, and that prototype -- not any
    statement in func_800A2FCC -- is what generates words 108..143 of
    func_800A2FCC's listing.  The shape is read off func_800A2E30's own
    listing: it spills $a0..$a3 into its four incoming argument slots at
-   +0x60..+0x6C and then hands func_800654B0 the ADDRESSES of the four 8-byte
+   +0x60..+0x6C and then hands RotTransPers4 the ADDRESSES of the four 8-byte
    pairs &sp+0x60, &sp+0x68, &sp+0x70, &sp+0x78 (0x800A2EAC..0x800A2EB8), so
    its first eight words are four 8-byte objects, and `lhu $v1, 0x80($sp)` is
    a ninth, halfword-wide argument -- the colour it `sb`s to +0x04/+0x05/+0x06
@@ -25080,7 +25144,7 @@ s16 func_800A3B1C(UnkTownA3B80 *a, UnkTown2AE8 *b, UnkTownRend *c)
    The quad is built in the 0x1F800000 scratchpad as four SVECTORs at +0x70 --
    the same placement include/structs.h's Unk463ECSP already has, its OT base
    at +0x20 agreeing too -- and func_800A41D8 steps the four .vz at +0x74,
-   +0x7C, +0x84 and +0x8C before handing the four pointers to func_80065610,
+   +0x7C, +0x84 and +0x8C before handing the four pointers to RotNclip4,
    which its eleven arguments make RotAverageNclip4.  This function writes only
    .vx/.vy and writes each point TWICE, into [0] and [2] or into [1] and [3],
    so each quad is one ring segment's two points extruded in z by the callee.
@@ -25311,15 +25375,6 @@ s32 func_800A3B80(UnkTownA3B80 *a, UnkTown2AE8 *b, UnkTownRend *c)
     return 0;
 }
 
-/* ELEVEN arguments -- the four input SVECTORs, the four screen-xy outputs,
-   then `p`, `otz` and `flag`.  That arity is what makes this function's
-   outgoing-argument area 0x1C bytes and so its frame 0x70.  It does NOT
-   settle which of the two libgte entry points this is: RotNclip4
-   (psyq/include/libgte.h:381, splat's name) and RotAverageNclip4 (:387,
-   func_800A3B80's note) have identical prototypes, and nothing in either
-   caller distinguishes them.  Declared under the raw name for that reason. */
-s32 func_80065610(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, u32 *, u32 *, u32 *, u32 *, s32 *, s32 *, s32 *);
-
 /* The 0xC-byte texture record the scratchpad's +0x118 points at: tpage, clut
    and the four u/v/w/h bytes.  func_800A3B80 parks the base here and reads
    byte +0x01 of the first one into the render record's +0x0F; +0x00..+0x03
@@ -25346,8 +25401,8 @@ typedef struct UnkTownA41D8T
    scratchpad's own +0x20 base, indexed below.
 
    372 words, 0 differing, and all SIX relocation records (R_MIPS_26 on
-   func_80065610, func_800666F4, func_8006658C, func_80066460, func_80067F20
-   and func_8006658C again) decoded against the listing.  The listing has NO
+   RotNclip4, SetPolyFT4, AddPrim, GetTPage, func_80067F20
+   and AddPrim again) decoded against the listing.  The listing has NO
    %hi/%lo at all: its three `lui`s are the literal division magics
    0x92492493 (/0xE00) and 0xAAAAAAAB (/12, twice).
 
@@ -25389,7 +25444,7 @@ typedef struct UnkTownA41D8T
      `sra post_shift=2` -- and `sizeof` is unsigned, so the second divide is
      the `multu`/`mfhi`/`srl 3` pair.  Both halves are in the listing, twice
      over: the expression is written out at both use sites because the
-     intervening func_8006658C kills the `lw 0x118`/`lw 0x20` loads.
+     intervening AddPrim kills the `lw 0x118`/`lw 0x20` loads.
 
    - **`sp->unk_14 = (sp->unk_0C + sp->unk_14) * 0x100;` -- unk_0C FIRST.**
      With `sp->unk_14 + sp->unk_0C` cse forwards the just-stored
@@ -25461,11 +25516,11 @@ POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
         sp->unk_70[1].vz += 0xE00;
         sp->unk_70[2].vz += 0xE00;
         sp->unk_70[3].vz += 0xE00;
-        if (func_80065610(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2],
-                          &sp->unk_70[3], (u32 *)&sp->unk_F0[0],
-                          (u32 *)&sp->unk_F0[1], (u32 *)&sp->unk_F0[2],
-                          (u32 *)&sp->unk_F0[3], &sp->unk_90, &sp->unk_C0,
-                          &sp->unk_94) > 0)
+        if (RotNclip4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2],
+                      &sp->unk_70[3], (long *)&sp->unk_F0[0],
+                      (long *)&sp->unk_F0[1], (long *)&sp->unk_F0[2],
+                      (long *)&sp->unk_F0[3], (long *)&sp->unk_90, (long *)&sp->unk_C0,
+                      (long *)&sp->unk_94) > 0)
         {
             if (((u16)(sp->unk_F0[0].vx + 0x20) < 0x181 &&
                  (u16)(sp->unk_F0[0].vy + 0x20) < 0x121) |
@@ -25504,7 +25559,7 @@ POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
                 t = &((UnkTownA41D8T *)sp->unk_118)[(i & 1) * 2 + flag * 4];
                 for (j = 0; j < 2; j++)
                 {
-                    func_800666F4(p);
+                    SetPolyFT4(p);
                     p->code |= c->unk_0F & 2;
                     sp->unk_08 = t->unk_08;
                     sp->unk_0C = t->unk_09;
@@ -25523,10 +25578,10 @@ POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
                     p->u3--;
                     p->v2--;
                     p->v3--;
-                    func_8006658C((u32 *)sp->unk_20 +
-                                      (t - (UnkTownA41D8T *)sp->unk_118) /
-                                          sizeof(UnkTownA41D8T),
-                                  p);
+                    AddPrim((u32 *)sp->unk_20 +
+                                (t - (UnkTownA41D8T *)sp->unk_118) /
+                                    sizeof(UnkTownA41D8T),
+                            p);
                     o[j] = (u32 *)sp->unk_20 +
                            (t - (UnkTownA41D8T *)sp->unk_118) /
                                sizeof(UnkTownA41D8T);
@@ -25537,8 +25592,8 @@ POLY_FT4 *func_800A41D8(UnkTownA3B80 *a, UnkTownRend *c, UnkTownA3B80SP *sp,
                 for (j = 0; j < 2; j++)
                 {
                     func_80067F20((u32 *)dm, 1, 0,
-                                  func_80066460(0, 0, 0x140, 0), 0);
-                    func_8006658C(o[j], dm);
+                                  GetTPage(0, 0, 0x140, 0), 0);
+                    AddPrim(o[j], dm);
                     dm++;
                 }
                 p = (POLY_FT4 *)dm;
@@ -29142,7 +29197,7 @@ void func_800A85C0(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
     {
         return;
     }
-    func_80069EF8();
+    rand();
     t.unk_0A = *(u16 *)((u8 *)src + 0xA);
     t.unk_16 = -4;
     for (i = 0; i < count; i++)
@@ -29236,9 +29291,9 @@ UnkNode *func_800A878C(UnkTownPuff *t, s16 ang)
         *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
         *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
         *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
-        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2)) / 16;
-        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2)) / 16;
-        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        m->unk_0C = -(t->unk_0C * ((rand() & 1) + 2)) / 16;
+        m->unk_10 = -(t->unk_10 * ((rand() & 1) + 2)) / 16;
+        m->unk_14 = (~rand() & 1) << 15;
         func_8003DB94(r, D_800F15AC, 0);
         r->unk_0E = 0xFF;
         r->unk_0D = 0xFF;
@@ -29270,7 +29325,7 @@ void func_800A895C(UnkTown2AE8 *src, UnkTown2AE8 *spread, s32 count)
         return;
     }
     step = 0x1000 / count;
-    ang = func_80069EF8();
+    ang = rand();
     t.unk_0A = *(u16 *)((u8 *)src + 0xA);
     t.unk_16 = -4;
     for (i = 0; i < count; i++)
@@ -29376,22 +29431,22 @@ void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
     p->unk_114 = (func_800644B8(*(s16 *)((u8 *)mv + 0xE) + a2) + 0x1000) / 0x80;
     p->unk_115 = (func_800644B8(*(s16 *)((u8 *)mv + 0x12) + a2) + 0x1000) / 0x80;
     p->unk_116 = (func_800644B8(*(s16 *)((u8 *)mv + 0x16) + a2) + 0x1000) / 0x80;
-    func_800A8C84((SVECTOR *)&p->unk_74, mv);
-    func_800A8C84((SVECTOR *)&p->unk_7C, mv);
-    func_800A8C84((SVECTOR *)&p->unk_84, mv);
+    func_800A8C84(&p->unk_74, mv);
+    func_800A8C84(&p->unk_7C, mv);
+    func_800A8C84(&p->unk_84, mv);
     dx = func_800644B8(a) * (u16)r->unk_1C / 0x1000;
     dy = func_80064584(a) * (u16)r->unk_1E / 0x1000;
-    p->unk_74 += dx;
-    p->unk_76 += dy;
-    p->unk_C4 = func_80065420((SVECTOR *)&p->unk_74, &p->unk_E8, &p->unk_94, &p->unk_98);
-    p->unk_7C += dx;
-    p->unk_7E += dy;
-    p->unk_80 += r->unk_20 / 2;
-    p->unk_C4 = (p->unk_C4 + func_80065420((SVECTOR *)&p->unk_7C, &p->unk_EC, &p->unk_94, &p->unk_98)) / 2 - 8;
-    p->unk_84 += dx;
-    p->unk_86 += dy;
-    p->unk_88 += r->unk_20;
-    func_80065420((SVECTOR *)&p->unk_84, &p->unk_124, &p->unk_94, &p->unk_98);
+    p->unk_74.vx += dx;
+    p->unk_74.vy += dy;
+    p->unk_C4 = RotTransPers(&p->unk_74, (long *)&p->unk_E8, (long *)&p->unk_94, (long *)&p->unk_98);
+    p->unk_7C.vx += dx;
+    p->unk_7C.vy += dy;
+    p->unk_7C.vz += r->unk_20 / 2;
+    p->unk_C4 = (p->unk_C4 + RotTransPers(&p->unk_7C, (long *)&p->unk_EC, (long *)&p->unk_94, (long *)&p->unk_98)) / 2 - 8;
+    p->unk_84.vx += dx;
+    p->unk_84.vy += dy;
+    p->unk_84.vz += r->unk_20;
+    RotTransPers(&p->unk_84, (long *)&p->unk_124, (long *)&p->unk_94, (long *)&p->unk_98);
 }
 
 /* The actor's two-segment motion-trail ribbon: two gouraud quads over the
@@ -29431,8 +29486,8 @@ void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
      listing puts the two `0xFFFFFF`/`0xFF000000` mask groups; after them it is
      278 words / 204 differing.  It really is the macro and not a call: the
      POLY_G4 is linked with the inline `setaddr(p, getaddr(ot)), setaddr(ot, p)`
-     pair while only the trailing DR_MODE goes through `func_8006658C`.
-     Spelling the POLY_G4's link as `func_8006658C` too is 252 words / 208
+     pair while only the trailing DR_MODE goes through `AddPrim`.
+     Spelling the POLY_G4's link as `AddPrim` too is 252 words / 208
      differing.  The `ot` expression stays written out at all three sites;
      writing it `p->unk_C4 + p->unk_24` instead measures 0 differing as well.
 
@@ -29445,16 +29500,16 @@ void func_800A8CA8(UnkTownSP *p, s16 ang, UnkTown2AE8 *mv, UnkTownRend *r)
 
    - **Each corner stores x before y.**  y first is 32 differing, two per pair.
 
-   `func_80066708` (SetPolyG4) rides an implicit declaration, as
-   `func_80066844` and `func_800667D0` already do in this unit; giving it
-   `void func_80066708(POLY_G4 *p);` measures 0 differing too.
+   `SetPolyG4` (SetPolyG4) rides an implicit declaration, as
+   `func_80066844` and `SetLineG2` already do in this unit; giving it
+   `void SetPolyG4(POLY_G4 *p);` measures 0 differing too.
 
    284 words -- its header reads `nonmatching func_800A8EE8, 0x470`, and
    0x470/4 = 284.  Measured 0 differing, and the relocation arithmetic closes:
    `--raw` reports 15 differing against exactly 15 relocation words
    (1 HI16 at +0x34 and 4 LO16 at +0xF0/+0x1EC/+0x30C/+0x408 on D_80083160,
-   plus 10 R_MIPS_26 -- func_80066708, func_80066640, func_80066460,
-   func_80067F20, func_8006658C twice each, in that order) and no
+   plus 10 R_MIPS_26 -- SetPolyG4, SetSemiTrans, GetTPage,
+   func_80067F20, AddPrim twice each, in that order) and no
    intra-function `j`.  No `%hi` on a function symbol, no jump table and no
    rodata of its own. */
 void func_800A8EE8(UnkTownA17CCSP *p)
@@ -29475,8 +29530,8 @@ void func_800A8EE8(UnkTownA17CCSP *p)
         *(u32 *)&pg->r1 = p->unk_114;
         *(u32 *)&pg->r2 = 0x383838;
         *(u32 *)&pg->r3 = p->unk_118;
-        func_80066708(pg);
-        func_80066640(pg, 1);
+        SetPolyG4(pg);
+        SetSemiTrans(pg, 1);
         addPrim(p->unk_24 + p->unk_C4, pg);
         pg->x0 = p->unk_E8[0].vx;
         pg->y0 = p->unk_E8[0].vy;
@@ -29488,8 +29543,8 @@ void func_800A8EE8(UnkTownA17CCSP *p)
         pg->y3 = p->unk_E8[3].vy;
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
-        func_8006658C(p->unk_24 + p->unk_C4, dm);
+        func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
+        AddPrim(p->unk_24 + p->unk_C4, dm);
     }
     if (((u16)(p->unk_E8[1].vx + 0x20) < 0x181 && (u16)(p->unk_E8[1].vy + 0x20) < 0x121) |
         ((u16)(p->unk_124[0].vx + 0x20) < 0x181 && (u16)(p->unk_124[0].vy + 0x20) < 0x121) |
@@ -29502,8 +29557,8 @@ void func_800A8EE8(UnkTownA17CCSP *p)
         *(u32 *)&pg->r1 = 0;
         *(u32 *)&pg->r2 = p->unk_118;
         *(u32 *)&pg->r3 = 0;
-        func_80066708(pg);
-        func_80066640(pg, 1);
+        SetPolyG4(pg);
+        SetSemiTrans(pg, 1);
         addPrim(p->unk_24 + p->unk_C4, pg);
         pg->x0 = p->unk_E8[1].vx;
         pg->y0 = p->unk_E8[1].vy;
@@ -29515,8 +29570,8 @@ void func_800A8EE8(UnkTownA17CCSP *p)
         pg->y3 = p->unk_124[1].vy;
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
-        func_8006658C(p->unk_24 + p->unk_C4, dm);
+        func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
+        AddPrim(p->unk_24 + p->unk_C4, dm);
     }
 }
 
@@ -30604,11 +30659,11 @@ void func_800A9F14(UnkTown2AE8 *b)
     func_800A9E68(&D_80100D48, b);
 }
 
-void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
+void func_800AA044(SVECTOR *d, VECTOR *b)
 {
-    d->vx = *(u16 *)((u8 *)b + 0x0);
-    d->vy = *(u16 *)((u8 *)b + 0x4);
-    d->vz = *(u16 *)((u8 *)b + 0x8);
+    d->vx = b->vx;
+    d->vy = b->vy;
+    d->vz = b->vz;
 }
 
 /* func_800AA10C's per-corner rotate-and-project, called four times a quad.
@@ -30620,7 +30675,7 @@ void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
    halves back into the SVECTOR with func_800AA044.
 
    func_800A1080 is the line-for-line witness for the first three calls: the
-   same func_80064B90 / func_80065820 / func_80064BC0 triple in the same
+   same TransMatrix / RotMatrix / ScaleMatrix triple in the same
    order, over an SVECTOR rotation and a VECTOR scale, which is what types
    UnkTownAA10C's +0x08 and +0x10.  The difference is only that this one's
    matrix lives in the scratchpad rather than in the object.
@@ -30643,7 +30698,7 @@ void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
    shape func_800AA10C uses because it needs six offsets off one base, where
    this function needs one.
 
-   func_80064CF0 / func_80064D80 / func_80065450 have no declaration anywhere
+   SetRotMatrix / SetTransMatrix / RotTrans have no declaration anywhere
    in the tree (splat names them SetRotMatrix / SetTransMatrix / RotTrans)
    and ride implicit ones, as func_800AA10C does for func_80066844.
 
@@ -30652,16 +30707,16 @@ void func_800AA044(SVECTOR *d, UnkTown2AE8 *b)
 void func_800AA068(UnkTownAA10C *a, SVECTOR *v, VECTOR *out)
 {
     MATRIX *m;
-    s32 flag;
+    long flag;
 
     m = (MATRIX *)0x1F800054;
-    func_80064B90(m, &D_800D11C0);
-    func_80065820(&a->unk_08, m);
-    func_80064BC0(m, &a->unk_10);
-    func_80064CF0(m);
-    func_80064D80(m);
-    func_80065450(v, out, &flag);
-    func_800AA044(v, (UnkTown2AE8 *)out);
+    TransMatrix(m, &D_800D11C0);
+    RotMatrix(&a->unk_08, m);
+    ScaleMatrix(m, &a->unk_10);
+    SetRotMatrix(m);
+    SetTransMatrix(m);
+    RotTrans(v, out, &flag);
+    func_800AA044(v, out);
 }
 
 /* The town's four-point gouraud line effect: for every quad in a static
@@ -30688,7 +30743,7 @@ void func_800AA068(UnkTownAA10C *a, SVECTOR *v, VECTOR *out)
    four RotAverageNclip4 inputs at +0x74, its `p`/`flag` at +0x94/+0x98, the
    returned otz at +0xC4 and the four screen points at +0xE8.  The one field
    it has no name for is the VECTOR at +0x44 that func_800AA068 hands to
-   func_80065450 and then reads back with func_800AA044, so that one is
+   RotTrans and then reads back with func_800AA044, so that one is
    spelled `(VECTOR *)((u8 *)sp + 0x44)` at each of the four call sites.
    Through a LOCAL it is 312 words and 275 differing: three words and a
    whole-body reallocation, so the inline form is a real finding and not a
@@ -30734,7 +30789,7 @@ void func_800AA068(UnkTownAA10C *a, SVECTOR *v, VECTOR *out)
    - **`addPrim`'s `ot` expression must stay written out.**  The macro names
      `ot` twice, so each use recomputes `sp->unk_24 + sp->unk_C4`; hoisting it
      into one local is 300 words and 307 differing.  This is the opposite of
-     func_800A17CC, which reaches the OT through the func_8006658C call and so
+     func_800A17CC, which reaches the OT through the AddPrim call and so
      computes it once per call.
 
    - `v`, `q` and `m` are read off `a` ONCE, above the loop: `v` and `m` then
@@ -30774,31 +30829,37 @@ void func_800AA10C(UnkTownAA10C *a, UnkTown2AE8 *b)
     {
         ln = (LINE_G4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
-        *(u32 *)&ln->r0 = func_80069EF8() * func_80069EF8() & m[0];
-        *(u32 *)&ln->r1 = func_80069EF8() * func_80069EF8() & m[1];
-        *(u32 *)&ln->r2 = func_80069EF8() * func_80069EF8() & m[2];
-        *(u32 *)&ln->r3 = func_80069EF8() * func_80069EF8() & m[3];
+        *(u32 *)&ln->r0 = rand() * rand() & m[0];
+        *(u32 *)&ln->r1 = rand() * rand() & m[1];
+        *(u32 *)&ln->r2 = rand() * rand() & m[2];
+        *(u32 *)&ln->r3 = rand() * rand() & m[3];
         func_80066844(ln);
-        func_80066640(ln, 1);
+        SetSemiTrans(ln, 1);
         func_800A1330(&sp->unk_74[0], (UnkTown2AE8 *)&v[q[0]]);
         func_800A1330(&sp->unk_74[1], (UnkTown2AE8 *)&v[q[1]]);
         func_800A1330(&sp->unk_74[2], (UnkTown2AE8 *)&v[q[2]]);
         func_800A1330(&sp->unk_74[3], (UnkTown2AE8 *)&v[q[3]]);
-        func_800649A0();
+        PushMatrix();
         func_800AA068(a, &sp->unk_74[0], (VECTOR *)((u8 *)sp + 0x44));
         func_800AA068(a, &sp->unk_74[1], (VECTOR *)((u8 *)sp + 0x44));
         func_800AA068(a, &sp->unk_74[2], (VECTOR *)((u8 *)sp + 0x44));
         func_800AA068(a, &sp->unk_74[3], (VECTOR *)((u8 *)sp + 0x44));
-        func_80064A40();
+        PopMatrix();
         func_800A2DF0(&sp->unk_74[0], b);
         func_800A2DF0(&sp->unk_74[1], b);
         func_800A2DF0(&sp->unk_74[2], b);
         func_800A2DF0(&sp->unk_74[3], b);
-        sp->unk_C4 = func_800654B0(&sp->unk_74[0], &sp->unk_74[1],
-                                   &sp->unk_74[2], &sp->unk_74[3],
-                                   (u32 *)&sp->unk_E8[0], (u32 *)&sp->unk_E8[1],
-                                   (u32 *)&sp->unk_E8[2], (u32 *)&sp->unk_E8[3],
-                                   &sp->unk_94, &sp->unk_98) -
+        sp->unk_C4 = RotTransPers4(
+                         &sp->unk_74[0],
+                         &sp->unk_74[1],
+                         &sp->unk_74[2],
+                         &sp->unk_74[3],
+                         (long *)&sp->unk_E8[0],
+                         (long *)&sp->unk_E8[1],
+                         (long *)&sp->unk_E8[2],
+                         (long *)&sp->unk_E8[3],
+                         &sp->p,
+                         &sp->flag) -
                      0x30;
         ln->x0 = sp->unk_E8[0].vx;
         ln->y0 = sp->unk_E8[0].vy;
@@ -30818,12 +30879,12 @@ void func_800AA10C(UnkTownAA10C *a, UnkTown2AE8 *b)
         }
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 0, 0x140, 0), 0);
+        func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 0, 0x140, 0), 0);
         addPrim(sp->unk_24 + sp->unk_C4, dm);
         addPrim(sp->unk_24 + sp->unk_C4, ln);
         dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-        func_80067F20((u32 *)dm, 1, 0, func_80066460(0, 1, 0x140, 0), 0);
+        func_80067F20((u32 *)dm, 1, 0, GetTPage(0, 1, 0x140, 0), 0);
         addPrim(sp->unk_24 + sp->unk_C4, dm);
         q += 4;
     }
@@ -31042,7 +31103,7 @@ void func_800AA998(UnkTownTask *t, UnkTown2AE8 *b, void *c)
     D_80100D28.unk_00 = b->unk_00;
     D_80100D28.unk_04 = b->unk_04;
     D_80100D28.unk_08 = b->unk_08;
-    D_800D0B14 = (s32)&D_80100D68;
+    D_800D0B14 = &D_80100D68;
 }
 
 /* Widened from one parameter: func_800AA5F8 calls it with three. That call
@@ -31213,13 +31274,13 @@ void func_800AAD3C(UnkTownActor *a, UnkTownColl *b, UnkTown2AE8 *c, UnkTownRend 
     a->unk_72 = D_80100D62;
     if (D_800D0B14 != 0)
     {
-        c->unk_00 = ((UnkTown2AE8 *)D_800D0B14)->unk_00;
-        c->unk_04 = ((UnkTown2AE8 *)D_800D0B14)->unk_04;
-        c->unk_08 = ((UnkTown2AE8 *)D_800D0B14)->unk_08;
+        c->unk_00 = D_800D0B14->unk_00;
+        c->unk_04 = D_800D0B14->unk_04;
+        c->unk_08 = D_800D0B14->unk_08;
     }
     if (D_800834B8.unk_00 != func_800AA5F8)
     {
-        func_800AAE30();
+        func_800AAE30(a, b, c, d);
     }
 }
 
@@ -31866,7 +31927,7 @@ void func_800AB708(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
    caller and no address-taker anywhere under asm/ or csrc/, so `void (void)` is
    a choice and not a witness -- no argument register is read before it is
    written.  func_80027D7C (csrc/ovl_main_80020000.c:5210) is the line-level
-   relative: `D_80083200 = 0x200; func_80064F20(0x200); func_80064F00(0xA0,
+   relative: `D_80083200 = 0x200; SetGeomScreen(0x200); SetGeomOffset(0xA0,
    0x78);` is this function's first and last pair, and D_80083200 is the
    `p + 0x88` written here.  The resident callees are splat-named
    SetGeomScreen / SetFarColor / SetColorMatrix / SetLightMatrix /
@@ -31918,18 +31979,18 @@ void func_800AB7FC(void)
     g = (u8 *)&D_80083160;
     p = g + 0x18;
     *(s32 *)(p + 0x88) = 0x200;
-    func_80064F20(0x200);
+    SetGeomScreen(0x200);
     *(s32 *)(p + 0x78) = 0;
     *(s32 *)(p + 0x7C) = 0;
     *(s32 *)(p + 0x80) = 0;
-    func_80064EE0(0, 0, 0);
+    SetFarColor(0, 0, 0);
     *(s16 *)(p + 0x5A) = -0x100;
     *(s16 *)(p + 0x60) = -0x100;
     *(s16 *)(p + 0x66) = -0x100;
     *(s16 *)(p + 0x5C) = 0;
     *(s16 *)(p + 0x62) = 0;
     *(s16 *)(p + 0x68) = 0;
-    func_80064D50(g + 0x70);
+    SetColorMatrix((MATRIX *)(g + 0x70));
     *(s16 *)(p + 0x38) = -0x800;
     *(s16 *)(p + 0x3A) = 0x800;
     *(s16 *)(p + 0x3C) = -0x800;
@@ -31941,7 +32002,7 @@ void func_800AB7FC(void)
     *(s16 *)(p + 0x44) = 0;
     *(s16 *)(p + 0x46) = 0;
     *(s16 *)(p + 0x48) = 0;
-    func_80064D20(g + 0x50);
+    SetLightMatrix((MATRIX *)(g + 0x50));
     *(s32 *)(p + 0x84) = 0x1000;
     func_80064624(0x1000, *(s32 *)(p + 0x88));
     r = D_8006ADBC;
@@ -31950,16 +32011,16 @@ void func_800AB7FC(void)
         *(s16 *)(p + 0x58) = 0x200;
         *(s16 *)(p + 0x5E) = 0x200;
         *(s16 *)(p + 0x64) = 0x200;
-        func_80064EC0(0xA0, 0xA0, 0xA0);
+        SetBackColor(0xA0, 0xA0, 0xA0);
     }
     else
     {
         *(s16 *)(p + 0x58) = 0x3C0;
         *(s16 *)(p + 0x5E) = 0x3C0;
         *(s16 *)(p + 0x64) = 0x3C0;
-        func_80064EC0(0xB0, 0xB0, 0xB0);
+        SetBackColor(0xB0, 0xB0, 0xB0);
     }
-    func_80064F00(0xA0, 0x78);
+    SetGeomOffset(0xA0, 0x78);
     *(s16 *)(g + 0x18) = -0xBC;
     *(s16 *)(g + 0x1A) = -0x88;
     *(s16 *)(g + 0x1C) = 0x172;
@@ -32061,15 +32122,15 @@ void func_800ABA1C(Unk42710 *p)
     switch (p->unk_01)
     {
     case 4:
-        a = (func_80069EF8() & 7) | 4;
+        a = (rand() & 7) | 4;
         break;
     case 15:
     case 16:
     case 17:
         b = -0x80;
-        if ((func_80069EF8() & 3) == 0)
+        if ((rand() & 3) == 0)
         {
-            t = (func_80069EF8() & 3) - 1;
+            t = (rand() & 3) - 1;
             if (t < 0)
             {
                 b = -0x40;
@@ -32078,7 +32139,7 @@ void func_800ABA1C(Unk42710 *p)
         }
         break;
     case 18:
-        a = func_80069EF8() % 40 + 0x3C;
+        a = rand() % 40 + 0x3C;
         break;
     case 14:
         a = 1;
@@ -32163,9 +32224,9 @@ void func_800ABC00(UnkTownPuff *t, s16 ang)
         *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)t + 0x2) - D_8006CCD8[i] * 16;
         *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)t + 0x6) - D_8006CCE8[i] * 16;
         *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)t + 0xA);
-        m->unk_0C = -(t->unk_0C * ((func_80069EF8() & 1) + 2));
-        m->unk_10 = -(t->unk_10 * ((func_80069EF8() & 1) + 2));
-        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        m->unk_0C = -(t->unk_0C * ((rand() & 1) + 2));
+        m->unk_10 = -(t->unk_10 * ((rand() & 1) + 2));
+        m->unk_14 = (~rand() & 1) << 15;
         func_8003DB94(r, D_800D1464, 0);
         r->unk_0E = 0x80;
         r->unk_0D = 0x80;
@@ -32174,12 +32235,12 @@ void func_800ABC00(UnkTownPuff *t, s16 ang)
         r->unk_1C = 0x1000;
         r->unk_10 = 0x60;
         r->unk_14 |= 0xC;
-        *(s16 *)(v + 0x2) = (func_80069EF8() & 3) | 4;
+        *(s16 *)(v + 0x2) = (rand() & 3) | 4;
     }
 }
 
 /* 59 words, 0 differing.  func_80097844 with the ring size chosen here --
-   `(func_80069EF8() & 7) | 4`, so 4..11 puffs -- instead of passed in.
+   `(rand() & 7) | 4`, so 4..11 puffs -- instead of passed in.
 
    NO `if (count == 0) { return; }`, and that is why the single guard before
    the loop is `beqz $s2` where its twin's is `blez $s2`.  gcc PROVES the bound
@@ -32202,15 +32263,15 @@ void func_800ABD74(UnkTown2AE8 *q)
     s32 ang;
     s32 i;
 
-    count = (func_80069EF8() & 7) | 4;
+    count = (rand() & 7) | 4;
     step = 0x1000 / count;
-    ang = func_80069EF8();
+    ang = rand();
     t.unk_0A = *(u16 *)((u8 *)q + 0xA);
     t.unk_16 = -4;
     for (i = 0; i < count; i++)
     {
-        t.unk_02 = *(u16 *)((u8 *)q + 0x2) + (func_80069EF8() & 0x1F) - 0x10;
-        t.unk_06 = *(u16 *)((u8 *)q + 0x6) + (func_80069EF8() & 0x1F) - 0x10;
+        t.unk_02 = *(u16 *)((u8 *)q + 0x2) + (rand() & 0x1F) - 0x10;
+        t.unk_06 = *(u16 *)((u8 *)q + 0x6) + (rand() & 0x1F) - 0x10;
         t.unk_0C = func_80064584(ang) * 0x20;
         t.unk_10 = func_800644B8(ang) * 0x20;
         func_800ABC00(&t, ang);
@@ -32600,7 +32661,7 @@ void func_800AD138(u32 limit)
     tw[1] = 0x1000100;
     tbl = (u16 *)g->unk_1DC;
     func_80067F20((u32 *)prim, 0, 0, 0x20, (s32)tw);
-    func_8006658C(p->unk_BC, prim);
+    AddPrim(p->unk_BC, prim);
     prim = (POLY_FT4 *)((u8 *)prim + 0xC);
     p->unk_170 = 4;
     p->unk_0C = (s16)func_80046C20((Unk46C20A *)((u8 *)g + 0x20),
@@ -32776,7 +32837,7 @@ done:
     tw[0] = 0;
     tw[1] = 0x400040;
     func_80067F20((u32 *)prim, 0, 0, 0x20, (s32)tw);
-    func_8006658C(p->unk_BC, prim);
+    AddPrim(p->unk_BC, prim);
     prim = (POLY_FT4 *)((u8 *)prim + 0xC);
     *(POLY_FT4 **)(g->unk_00 + 0x8D0) = prim;
 }
@@ -33363,9 +33424,9 @@ UnkNode *func_800AE1AC(s32 a, s32 b, s32 c, u8 *d)
         v->unk_14 = 6;
         func_800ADFE8(v);
         o->unk_10 = (u32)func_800AE090;
-        v->unk_28 = func_800B14B0((u32)o, v->unk_04, v->unk_08, v->unk_0C,
-                                  *(s32 *)((u8 *)v + 0x10), (s32)v->unk_20, b);
-        *(s32 *)((u8 *)v + 0x2C) = func_800B1BEC((s32)o, 0x48, -0xC);
+        v->unk_28 = (s32)func_800B14B0((u32)o, v->unk_04, v->unk_08, v->unk_0C,
+                                       *(s32 *)((u8 *)v + 0x10), (s32)v->unk_20, b);
+        *(UnkNode **)((u8 *)v + 0x2C) = func_800B1BEC((s32)o, 0x48, -0xC);
         if (v->unk_28 == 0 || *(s32 *)((u8 *)v + 0x2C) == 0)
         {
             ((void (*)(UnkTownADD80 *))func_800AE2A4)(v);
@@ -33517,13 +33578,13 @@ UnkNode *func_800AE324(void *a)
         }
         func_8004DCE0(1);
         func_8004DCEC();
-        *(u32 *)((u8 *)o + 0x20) = func_800B0214(o);
+        *(UnkNode **)((u8 *)o + 0x20) = func_800B0214(o);
         if (*(u32 *)((u8 *)o + 0x20) == 0)
         {
             goto fail;
         }
-        *(u32 *)(v + 0x8) = func_800B1BEC((s32)o, 0x48, -0x5C);
-        if (*(u32 *)(v + 0x8) == 0)
+        *(UnkNode **)(v + 0x8) = func_800B1BEC((s32)o, 0x48, -0x5C);
+        if (*(UnkNode **)(v + 0x8) == 0)
         {
             goto fail;
         }
@@ -35227,7 +35288,7 @@ void func_800B0490(u8 *s)
 
 /* The cursor scene's constructor, called only from func_800AF8B0 above with
    five arguments.  func_800B0214/func_800AEFD8's allocate-and-wire shape with
-   a func_80069EC8 clear instead of a slot table: seed the +0x20 view, build
+   a bzero clear instead of a slot table: seed the +0x20 view, build
    the entry, install func_800B0490 as the node's step handler, run the big
    initialiser, and on its failure run the teardown func_800B06C4 and report 0.
 
@@ -35263,7 +35324,7 @@ s32 func_800B05DC(s32 a, s32 b, s32 c, s32 d, u32 e)
         *(s32 *)(v + 0x8) = a;
         *(u32 *)(v + 0xC) = e;
         *(s32 *)(v + 0x14) = b;
-        func_80069EC8(v, 0x4);
+        bzero(v, 0x4);
         *(s32 *)(v + 0x18) = func_800AE500(v, e);
         if (*(s32 *)(v + 0x18) != 0)
         {
@@ -35849,7 +35910,7 @@ void func_800B0D7C(u8 *s)
    no unit-scoped route could have reached it, because it lives in another
    translation unit and all four callees are resident.
 
-   The space fill is `func_80069EE8` here, not the `memset` the template
+   The space fill is `memset` here, not the `memset` the template
    writes: the overlay links the `func_` spelling
    (splat/town.bin_undefined_funcs_auto.txt), and the unit already calls it
    that way at :17880.  Both argument 2 and 3 are 0x20, which is where the
@@ -35889,7 +35950,7 @@ s32 func_800B0E18(u8 *dst, u8 *p)
     Unk80073414 *b;
     s32 k;
 
-    func_80069EE8(buf, 0x20, 0x20);
+    memset(buf, 0x20, 0x20);
     buf[0x1F] = 0;
     b = D_80073414;
     k = b[*(u8 *)(p + 1)].unk_10;
@@ -36076,7 +36137,7 @@ void func_800B0FD4(u8 *s)
             }
             func_8004E5A0(r, 8, buf);
             func_8004E69C(buf);
-            func_80069E38(buf, D_800D1600);
+            strcat(buf, D_800D1600);
             (*(UnkTownSlot ***)(s + 0xCC))[i + 19]->unk_00 =
                 func_8004E928(buf, 0);
         }
@@ -36502,7 +36563,7 @@ void func_800B180C(u8 *s)
 
     func_8004E5A0(*(s32 *)0x80012D5C, 0xA, buf);
     func_8004E69C(buf);
-    func_80069E38(buf, D_800D160C);
+    strcat(buf, D_800D160C);
     func_8004E99C(**(u32 **)(s + 0x50));
     **(u32 **)(s + 0x50) = func_8004E298(*(u8 **)(s + 0x8) + 0x48, buf, 0);
 }
@@ -36980,12 +37041,12 @@ void func_800B1DCC(UnkTown260C *s)
    SECOND parameter, with the first inherited in $a0 by the callee -- the
    `jalr` has a `nop` delay slot and nothing sets $a0 up, so the table's
    element type carries no arity information. */
-void func_800B1F10(s32 a, s32 i)
+void func_800B1F10(UnkNode *a, s32 i)
 {
     D_800D1638[i]();
 }
 
-void func_800B1F48(s32 a, s32 i)
+void func_800B1F48(UnkNode *a, s32 i)
 {
     D_800D1640[i]();
 }
@@ -37185,7 +37246,7 @@ void func_800B2244(u8 *a)
 }
 
 /* Allocates the lowest free record out of pool `idx` and returns its address.
-   It marks a 0x100-byte stack bitmap through func_80069EC8, sets a byte per
+   It marks a 0x100-byte stack bitmap through bzero, sets a byte per
    record the caller's list already holds -- the record's index being
    `(entry - pool_base) / 4` -- and returns the pool slot for the first clear
    byte.  Its stub caller func_800B2400 (0x800B24F4) hands it the +0x3C entry
@@ -37216,7 +37277,7 @@ UnkTown11F80 *func_800B2280(UnkTown11F80 **list, s32 idx, s32 n)
     UnkTown11F80 *base;
     s32 i;
 
-    func_80069EC8(buf, n);
+    bzero(buf, n);
     base = D_800D1648[idx];
     while (*list != NULL)
     {
@@ -39759,11 +39820,11 @@ void func_800B52F4(u8 *p, UnkTownCardPair **b)
     u8 buf[0x40];
 
     memcpy(buf, D_800892C0, 5);
-    func_80069E38(buf, (u8 *)(D_800814A8 + 0x34));
-    func_80069E38(buf, (u8 *)D_800892C8);
-    func_80069E38(buf, D_800892CC);
-    func_80069E38(buf, D_800892D8);
-    func_80069E38(buf, func_800A652C(p));
+    strcat(buf, (u8 *)(D_800814A8 + 0x34));
+    strcat(buf, (u8 *)D_800892C8);
+    strcat(buf, D_800892CC);
+    strcat(buf, D_800892D8);
+    strcat(buf, func_800A652C(p));
     func_800B5264(b[3], buf, 0, 0x47, 0x88);
 }
 
@@ -39815,18 +39876,18 @@ u8 *func_800B544C(u8 *s, u8 *p)
     s32 i;
 
     memcpy(s, D_800892DC, 5);
-    func_80069E38(s, func_8004E634(1, buf));
+    strcat(s, func_8004E634(1, buf));
     n = func_80043868(p);
     for (i = 0; i < n / 2; i++)
     {
-        func_80069E38(s, (u8 *)D_800892E4);
+        strcat(s, (u8 *)D_800892E4);
     }
     if (n & 1)
     {
-        func_80069E38(s, D_800892E8);
+        strcat(s, D_800892E8);
     }
-    func_80069E38(s, D_800892EC);
-    func_80069E38(s, func_8004E634(0, buf));
+    strcat(s, D_800892EC);
+    strcat(s, func_8004E634(0, buf));
     return s;
 }
 
@@ -39905,32 +39966,32 @@ u8 *func_800B557C(u8 *s, u8 *p)
     d = func_800B555C(p[0x68], p[0x26]);
     if (d != 0)
     {
-        func_80069E38(s, D_800892F4);
-        func_80069E38(s, func_8004E634(d, num));
+        strcat(s, D_800892F4);
+        strcat(s, func_8004E634(d, num));
     }
-    func_80069E38(s, (u8 *)D_800892F8);
+    strcat(s, (u8 *)D_800892F8);
     func_8004E5A0(p[0x26], 3, num);
-    func_80069E38(s, num);
-    func_80069E38(s, D_800892F4);
-    func_80069E38(s, func_8004E634(0, num));
-    func_80069E38(s, (u8 *)D_800892FC);
+    strcat(s, num);
+    strcat(s, D_800892F4);
+    strcat(s, func_8004E634(0, num));
+    strcat(s, (u8 *)D_800892FC);
     d = func_800B555C(p[0x69], p[0x27]);
     if (d != 0)
     {
-        func_80069E38(s, D_800892F4);
-        func_80069E38(s, func_8004E634(d, num));
+        strcat(s, D_800892F4);
+        strcat(s, func_8004E634(d, num));
     }
     func_8004E5A0(p[0x27], 3, num);
-    func_80069E38(s, num);
-    func_80069E38(s, D_800892F4);
-    func_80069E38(s, func_8004E634(0, num));
-    func_80069E38(s, D_800892D8);
-    func_80069E38(s, D_80089304);
+    strcat(s, num);
+    strcat(s, D_800892F4);
+    strcat(s, func_8004E634(0, num));
+    strcat(s, D_800892D8);
+    strcat(s, D_80089304);
     func_8004E5A0(p[0x68], 3, num);
-    func_80069E38(s, num);
-    func_80069E38(s, (u8 *)D_800892FC);
+    strcat(s, num);
+    strcat(s, (u8 *)D_800892FC);
     func_8004E5A0(p[0x69], 3, num);
-    func_80069E38(s, num);
+    strcat(s, num);
     return s;
 }
 
@@ -39976,14 +40037,14 @@ void func_800B5774(u8 *p, UnkTownCardPair **b)
     memcpy(buf, D_80089308, 5);
     func_8004E5A0(p[0x11], 2, num);
     func_8004E69C(num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, D_80089310);
-    func_80069E38(buf, D_80089318);
+    strcat(buf, num);
+    strcat(buf, D_80089310);
+    strcat(buf, D_80089318);
     func_8004E5A0(p[0x28], 3, num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, D_8008931C);
+    strcat(buf, num);
+    strcat(buf, D_8008931C);
     func_8004E5A0(p[0x29], 3, num);
-    func_80069E38(buf, num);
+    strcat(buf, num);
     func_800B53BC(b[4], buf, 0, 0x6C, 0x98);
     func_800B53BC(b[19], D_80089324, 0, 0x48, 0xB8);
     func_800B53BC(b[5], func_800B544C(buf, p), 0, 0x48, 0xC0);
@@ -40117,7 +40178,7 @@ u8 *func_800B5918(u8 *q, u8 *s)
 
    Insensitive, all 0 differing: `break` or `return` on the null slot, `while`
    or `for`, hoisting `i * 0x10 + 0xD8` into a local, `sizeof(list)` for the
-   0xC, and a `u8 *e = list[i]` temp. Dropping func_80069EC8's clear is 71
+   0xC, and a `u8 *e = list[i]` temp. Dropping bzero's clear is 71
    words, 70 differing. */
 void func_800B59A4(u8 *p, UnkTownCardPair **b)
 {
@@ -40126,7 +40187,7 @@ void func_800B59A4(u8 *p, UnkTownCardPair **b)
     s32 n;
     s32 i;
 
-    func_80069EC8(list, 0xC);
+    bzero(list, 0xC);
     func_800B58B8((u32 *)list, p);
     for (i = 0; i < 3; i++)
     {
@@ -40171,7 +40232,7 @@ void func_800B5AC8(u8 *p, UnkTownCardPair **b, s32 c)
    +0xD4 still being set.  It drops the two handles at +0xD0/+0xD4,
    INVALIDATES both halves of the D_80083D78[slot] cache record that
    func_800B6E3C compares against -- so the next frame rebuilds -- and then
-   hands func_800672D8 the same four-halfword descriptor func_800B6D94 packs,
+   hands LoadImage the same four-halfword descriptor func_800B6D94 packs,
    once for the +0xE0 primitive and, when the slot is nonzero, once more for a
    second region 0x200 past it.
 
@@ -40185,7 +40246,7 @@ void func_800B5AC8(u8 *p, UnkTownCardPair **b, s32 c)
    them the other way round -- 80 words, 8 differing, all eight a register
    rename.  `t = D_80083D78;` as a STATEMENT is 0; as a declaration
    initialiser, `s16 *t = D_80083D78;`, it is 81 words with 21 differing
-   (c-decl.c:3947-3948), and assigned before the first func_80067014 call --
+   (c-decl.c:3947-3948), and assigned before the first DrawSync call --
    i.e. before an intervening call -- it is 81 with 40 (local-alloc.c:1142).
    Its position among the stores inside the block is free (0 differing either
    side of the two zero stores), and so is `(t + slot * 2)[1]` for the second
@@ -40206,33 +40267,33 @@ void func_800B5AC8(u8 *p, UnkTownCardPair **b, s32 c)
    Measured 0 differing. */
 void func_800B5B20(u8 *s)
 {
-    s16 buf[4];
+    RECT buf;
     u8 *p;
     s16 *t;
 
     if (*(u32 *)(s + 0xD4) != 0)
     {
-        func_80067014(0);
+        DrawSync(0);
         p = *(u8 **)(s + 0x14);
         *(u32 *)(s + 0xD0) = 0;
         *(u32 *)(s + 0xD4) = 0;
         t = D_80083D78;
         t[*(s16 *)(s + 0x8) * 2] = *(u16 *)(s + 0xA);
         t[*(s16 *)(s + 0x8) * 2 + 1] = *(u16 *)(s + 0x10);
-        buf[0] = (p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0);
-        buf[1] = p[9] + ((*(u16 *)(p + 4) << 4) & 0x100);
-        buf[2] = p[0xA] >> 2;
-        buf[3] = p[0xB];
-        func_800672D8(buf, *(void **)(s + 0xE0));
+        buf.x = (p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0);
+        buf.y = p[9] + ((*(u16 *)(p + 4) << 4) & 0x100);
+        buf.w = p[0xA] >> 2;
+        buf.h = p[0xB];
+        LoadImage(&buf, *(void **)(s + 0xE0));
         if (*(s16 *)(s + 0x8) != 0)
         {
-            buf[0] = (*(u16 *)(p + 6) & 0x3F) << 4;
-            buf[1] = *(u16 *)(p + 6) >> 6;
-            buf[2] = 0x10;
-            buf[3] = 1;
-            func_800672D8(buf, *(u8 **)(s + 0xE0) + (*(u32 *)(s + 0x10) * 0x20 + 0x200));
+            buf.x = (*(u16 *)(p + 6) & 0x3F) << 4;
+            buf.y = *(u16 *)(p + 6) >> 6;
+            buf.w = 0x10;
+            buf.h = 1;
+            LoadImage(&buf, *(u8 **)(s + 0xE0) + (*(u32 *)(s + 0x10) * 0x20 + 0x200));
         }
-        func_80067014(0);
+        DrawSync(0);
     }
     *(u32 *)(s + 0xE0) = 0;
 }
@@ -40354,9 +40415,9 @@ void func_800B5D70(u8 *p, UnkTownCardPair **b)
     u8 buf[0x40];
 
     memcpy(buf, D_800892C0, 5);
-    func_80069E38(buf, p + 0x34);
-    func_80069E38(buf, (u8 *)D_8008933C);
-    func_80069E38(buf, func_800B5D30(p));
+    strcat(buf, p + 0x34);
+    strcat(buf, (u8 *)D_8008933C);
+    strcat(buf, func_800B5D30(p));
     func_800B5264(b[4], buf, 0, 0x47, 0x88);
 }
 
@@ -40424,20 +40485,20 @@ void func_800B5E28(u8 *p, UnkTownCardPair **b)
     memcpy(buf, D_80089308, 5);
     func_8004E5A0(p[0x11], 2, num);
     func_8004E69C(num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, D_80089310);
-    func_80069E38(buf, D_80089318);
+    strcat(buf, num);
+    strcat(buf, D_80089310);
+    strcat(buf, D_80089318);
     func_8004E5A0(p[0x28], 3, num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, D_8008931C);
+    strcat(buf, num);
+    strcat(buf, D_8008931C);
     func_8004E5A0(p[0x29], 3, num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, (u8 *)D_80089340);
+    strcat(buf, num);
+    strcat(buf, (u8 *)D_80089340);
     func_8004E5A0(p[0x25], 3, num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, D_8008931C);
+    strcat(buf, num);
+    strcat(buf, D_8008931C);
     func_8004E5A0(p[0x66], 3, num);
-    func_80069E38(buf, num);
+    strcat(buf, num);
     func_800B53BC(b[5], buf, 0, 0x6C, 0x98);
     func_800B5264(b[6], (u8 *)func_8004AC18(func_800B5E10(p[0x13])),
                   p[0x43] < 0x41 ? 0 : 3, 0x68, 0x98);
@@ -40604,7 +40665,7 @@ void func_800B62A4(u8 *p, UnkTownCardPair **b)
             c++;
         }
     }
-    func_80069EC8(list, 0xC);
+    bzero(list, 0xC);
     func_800B58B8((u32 *)list, p);
     n = c;
     for (i = 0; i + n < 3; i++)
@@ -40715,7 +40776,8 @@ void func_800B6508(u8 *p)
     }
 }
 
-void func_800B6578(void) {
+void func_800B6578(void)
+{
 }
 
 /* Binds a 0xC6/6/0x76 descriptor plus one caller-supplied word to the object
@@ -41224,9 +41286,9 @@ void func_800B6D54(u8 *p)
                   0x8002B800);
 }
 
-/* Allocates a 0x200-byte scratch, clears it, and hands func_800672D8 a
+/* Allocates a 0x200-byte scratch, clears it, and hands LoadImage a
    four-halfword descriptor packed out of the object's +0x04..+0x0B, bracketed
-   by two func_80067014(0) calls.
+   by two DrawSync(0) calls.
 
    The two packings are the interesting part and both are measured: +0x10 is
    `(p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0)` and +0x12 is
@@ -41235,18 +41297,18 @@ void func_800B6D54(u8 *p)
    unsigned (`srl`, not `sra`) because the byte fields are `u8`. */
 void func_800B6D94(u8 *p)
 {
-    s16 buf[4];
-    u32 *q;
+    RECT buf;
+    u_long *q;
 
     q = func_80040574(0x200);
-    func_80069EC8(q, 0x200);
-    func_80067014(0);
-    buf[0] = (p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0);
-    buf[1] = p[9] + ((*(u16 *)(p + 4) << 4) & 0x100);
-    buf[2] = p[0xA] >> 2;
-    buf[3] = p[0xB];
-    func_800672D8(buf, q);
-    func_80067014(0);
+    bzero(q, 0x200);
+    DrawSync(0);
+    buf.x = (p[8] >> 2) + ((*(u16 *)(p + 4) << 6) & 0x3C0);
+    buf.y = p[9] + ((*(u16 *)(p + 4) << 4) & 0x100);
+    buf.w = p[0xA] >> 2;
+    buf.h = p[0xB];
+    LoadImage(&buf, q);
+    DrawSync(0);
 }
 
 /* The task's rebuild, and the function that decides whether a rebuild is
@@ -41305,8 +41367,8 @@ s32 func_800B6E3C(u8 *s)
         func_800B6D94(*(u8 **)(s + 0x14));
         *(u32 *)(s + 0xDC) = 0;
         func_800B6D54(s);
-        *(u32 *)(s + 0xD0) = func_8003E4FC(6, s + 0xD8, 0);
-        *(u32 *)(s + 0xD4) = func_8003E4FC(0xFF, func_800B5B20, s);
+        *(Unk80083968 **)(s + 0xD0) = func_8003E4FC(6, s + 0xD8, 0);
+        *(Unk80083968 **)(s + 0xD4) = func_8003E4FC(0xFF, (u8 *)func_800B5B20, (s32)s);
         return 1;
     }
     return 0;
@@ -41360,26 +41422,26 @@ void func_800B6FB8(void)
     t->unk_1A = 0x7F;
     t->unk_1E = 0x2000;
 
-    D_80111FA8[0] = 0x328;
-    D_80111FA8[1] = 0x80;
-    D_80111FA8[2] = 8;
-    D_80111FA8[3] = 0x80;
+    D_80111FA8.x = 0x328;
+    D_80111FA8.y = 0x80;
+    D_80111FA8.w = 8;
+    D_80111FA8.h = 0x80;
     D_80082E60.unk_16 &= 0xFFFE;
-    func_8006733C(D_80111FA8, D_80110EC8);
+    StoreImage(&D_80111FA8, D_80110EC8);
 
-    D_80111FA8[0] = 0x330;
-    D_80111FA8[1] = 0x80;
-    D_80111FA8[2] = 8;
-    D_80111FA8[3] = 0x80;
-    func_8006733C(D_80111FA8, D_801116C8);
+    D_80111FA8.x = 0x330;
+    D_80111FA8.y = 0x80;
+    D_80111FA8.w = 8;
+    D_80111FA8.h = 0x80;
+    StoreImage(&D_80111FA8, D_801116C8);
 
-    D_80111FA8[0] = 0;
-    D_80111FA8[1] = 0x1FB;
-    D_80111FA8[2] = 0x40;
-    D_80111FA8[3] = 1;
-    func_8006733C(D_80111FA8, D_80111EC8);
+    D_80111FA8.x = 0;
+    D_80111FA8.y = 0x1FB;
+    D_80111FA8.w = 0x40;
+    D_80111FA8.h = 1;
+    StoreImage(&D_80111FA8, D_80111EC8);
 
-    func_80067014(0);
+    DrawSync(0);
     g->unk_1DC = (u32)D_80162004;
     func_800B73D0();
     func_80046E38(0, D_8012F004);
@@ -41448,40 +41510,40 @@ void func_800B70EC(void)
 
     h = 1;
     p = D_8014F004;
-    D_80111FA8[0] = 0x328;
-    D_80111FA8[1] = 0x80;
-    D_80111FA8[2] = 8;
-    D_80111FA8[3] = 0x80;
+    D_80111FA8.x = 0x328;
+    D_80111FA8.y = 0x80;
+    D_80111FA8.w = 8;
+    D_80111FA8.h = 0x80;
     D_80082E60.unk_16 |= 1;
-    func_8006733C(D_80111FA8, D_80110EC8);
+    StoreImage(&D_80111FA8, D_80110EC8);
 
     switch (D_800D2FB4[D_800D381A][0])
     {
     case 0x26:
     case 0x27:
     case 0x28:
-        D_80111FA8[0] = 0x330;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x80;
-        func_8006733C(D_80111FA8, D_801116C8);
+        D_80111FA8.x = 0x330;
+        D_80111FA8.y = 0x80;
+        D_80111FA8.w = 8;
+        D_80111FA8.h = 0x80;
+        StoreImage(&D_80111FA8, D_801116C8);
 
-        D_80111FA8[0] = 0;
-        D_80111FA8[1] = 0x1FB;
-        D_80111FA8[2] = 0x40;
-        D_80111FA8[3] = h;
-        func_8006733C(D_80111FA8, D_80111EC8);
+        D_80111FA8.x = 0;
+        D_80111FA8.y = 0x1FB;
+        D_80111FA8.w = 0x40;
+        D_80111FA8.h = h;
+        StoreImage(&D_80111FA8, D_80111EC8);
         break;
     case 0x21:
-        D_80111FA8[0] = 0x10;
-        D_80111FA8[1] = 0x1C1;
-        D_80111FA8[2] = 0x30;
-        D_80111FA8[3] = h;
-        func_8006733C(D_80111FA8, D_80111F48);
+        D_80111FA8.x = 0x10;
+        D_80111FA8.y = 0x1C1;
+        D_80111FA8.w = 0x30;
+        D_80111FA8.h = h;
+        StoreImage(&D_80111FA8, D_80111F48);
         break;
     }
 
-    func_80067014(0);
+    DrawSync(0);
     t->unk_00 = (u32)p;
     func_800B73F0(p);
     if (D_800D2FB4[D_800D381A][0] != 0x29)
@@ -41584,7 +41646,8 @@ void func_800B73F0(u16 *p)
     func_800B8E08(p);
 }
 
-void func_800B7420(void) {
+void func_800B7420(void)
+{
 }
 
 /* Stamps a tile pattern onto the 0x80x0x80 halfword surface D_80162004 at
@@ -42056,104 +42119,68 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089344);
    merges them; the arms differ only in which page they pass. */
 void func_800B7B8C(s16 *p, UnkVec *b, u32 c)
 {
-    p[0]++;
-    if (p[0] >= 0x30)
+    *p = *p + 1;
+    if (*p >= 0x30)
     {
-        p[0] = 0;
+        *p = 0;
     }
-    switch (p[0] % 24)
+    switch (*p % 24)
     {
     case 0:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_80110EC8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, D_80110EC8);
         break;
     case 4:
     case 20:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801110C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, D_801110C8);
         break;
     case 8:
     case 16:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801112C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, D_801112C8);
         break;
     case 12:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801114C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, D_801114C8);
         break;
     }
-    switch (p[0] % 16)
+    switch (*p % 16)
     {
     case 0:
-        D_80111FA8[0] = 0x330;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801116C8);
+        setRECT(&D_80111FA8, 0x330, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_801116C8[0]);
         break;
     case 4:
-        D_80111FA8[0] = 0x330;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801118C8);
+        setRECT(&D_80111FA8, 0x330, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_801118C8[0]);
         break;
     case 8:
-        D_80111FA8[0] = 0x330;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_80111AC8);
+        setRECT(&D_80111FA8, 0x330, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_80111AC8[0]);
         break;
     case 12:
-        D_80111FA8[0] = 0x330;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_80111CC8);
+        setRECT(&D_80111FA8, 0x330, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_80111CC8[0]);
         break;
     }
-    switch (p[0] % 8)
+    switch (*p % 8)
     {
     case 0:
-        D_80111FA8[0] = 0;
-        D_80111FA8[1] = 0x1FB;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111EC8);
+        setRECT(&D_80111FA8, 0, 0x1FB, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111EC8[0]);
         break;
     case 2:
-        D_80111FA8[0] = 0;
-        D_80111FA8[1] = 0x1FB;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111EE8);
+        setRECT(&D_80111FA8, 0, 0x1FB, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111EE8[0]);
         break;
     case 4:
-        D_80111FA8[0] = 0;
-        D_80111FA8[1] = 0x1FB;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111F08);
+        setRECT(&D_80111FA8, 0, 0x1FB, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111F08[0]);
         break;
     case 6:
-        D_80111FA8[0] = 0;
-        D_80111FA8[1] = 0x1FB;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111F28);
+        setRECT(&D_80111FA8, 0, 0x1FB, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111F28[0]);
         break;
     }
 }
@@ -42217,34 +42244,34 @@ void func_800B7E78(s16 *p, UnkVec *b, u32 c)
     switch (p[0] % 24)
     {
     case 0:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_80110EC8);
+        D_80111FA8.x = 0x328;
+        D_80111FA8.y = 0x80;
+        D_80111FA8.w = 8;
+        D_80111FA8.h = 0x20;
+        LoadImage(&D_80111FA8, D_80110EC8);
         break;
     case 4:
     case 20:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801110C8);
+        D_80111FA8.x = 0x328;
+        D_80111FA8.y = 0x80;
+        D_80111FA8.w = 8;
+        D_80111FA8.h = 0x20;
+        LoadImage(&D_80111FA8, D_801110C8);
         break;
     case 8:
     case 16:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801112C8);
+        D_80111FA8.x = 0x328;
+        D_80111FA8.y = 0x80;
+        D_80111FA8.w = 8;
+        D_80111FA8.h = 0x20;
+        LoadImage(&D_80111FA8, D_801112C8);
         break;
     case 12:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801114C8);
+        D_80111FA8.x = 0x328;
+        D_80111FA8.y = 0x80;
+        D_80111FA8.w = 8;
+        D_80111FA8.h = 0x20;
+        LoadImage(&D_80111FA8, D_801114C8);
         break;
     }
 }
@@ -42272,58 +42299,37 @@ void func_800B7F8C(s16 *p, UnkVec *b, u32 c)
     switch (p[0] % 24)
     {
     case 0:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_80110EC8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_80110EC8[0]);
         break;
     case 4:
     case 20:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801110C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_801110C8[0]);
         break;
     case 8:
     case 16:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801112C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_801112C8[0]);
         break;
     case 12:
-        D_80111FA8[0] = 0x328;
-        D_80111FA8[1] = 0x80;
-        D_80111FA8[2] = 8;
-        D_80111FA8[3] = 0x20;
-        func_800672D8(D_80111FA8, D_801114C8);
+        setRECT(&D_80111FA8, 0x328, 0x80, 8, 0x20);
+        LoadImage(&D_80111FA8, &D_801114C8[0]);
         break;
     }
     switch (p[0] % 6)
     {
     case 0:
-        D_80111FA8[0] = 0x10;
-        D_80111FA8[1] = 0x1C1;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111F48);
+        setRECT(&D_80111FA8, 0x10, 0x1C1, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111F48[0]);
         break;
     case 2:
-        D_80111FA8[0] = 0x10;
-        D_80111FA8[1] = 0x1C1;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111F68);
+        setRECT(&D_80111FA8, 0x10, 0x1C1, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111F68[0]);
         break;
     case 4:
-        D_80111FA8[0] = 0x10;
-        D_80111FA8[1] = 0x1C1;
-        D_80111FA8[2] = 0x10;
-        D_80111FA8[3] = 1;
-        func_800672D8(D_80111FA8, D_80111F88);
+        setRECT(&D_80111FA8, 0x10, 0x1C1, 0x10, 1);
+        LoadImage(&D_80111FA8, &D_80111F88[0]);
         break;
     }
 }
@@ -43563,7 +43569,8 @@ void func_800B9054(u8 a)
     func_80041094(0xC, ((D_800D3814[0] + 1) << 6) | 0x20, ((D_800D3814[1] + 1) << 6) | 0x20, -0x100, D_80082E76 ^ 1);
 }
 
-void func_800B90B4(void) {
+void func_800B90B4(void)
+{
 }
 
 void func_800B90BC(void)
@@ -43782,7 +43789,8 @@ void func_800B9384(void)
     }
 }
 
-void func_800B93B8(void) {
+void func_800B93B8(void)
+{
 }
 
 void func_800B93C0(void)
@@ -43796,7 +43804,8 @@ void func_800B93C0(void)
     }
 }
 
-void func_800B93F4(void) {
+void func_800B93F4(void)
+{
 }
 
 void func_800B93FC(void)
@@ -44283,8 +44292,8 @@ void func_800B9BF0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 /* 43 words, 0 differing on the first compile.  The PARENT handler of the
    func_800BA00C / func_800BA468 spawner -- those two install it at
    `-0x10($a0)` on the object whose +0x66 they seed with
-   `func_80069EF8() % 0x1000` and whose +0x97 they seed with
-   `func_80069EF8() % 9 + 0xC`.  So +0x66 is a 0..0xFFF angle and +0x97 its
+   `rand() % 0x1000` and whose +0x97 they seed with
+   `rand() % 9 + 0xC`.  So +0x66 is a 0..0xFFF angle and +0x97 its
    per-frame step, and the whole else arm is one step of that angle.
 
    The taken arm is func_800A7B14 / func_800A7DF8's probe arm verbatim.
@@ -44496,8 +44505,8 @@ void func_800BA00C(UnkTownSpawn *s, UnkVec *m)
     u32 n;
 
     *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
-    s->unk_66 = func_80069EF8() % 0x1000;
-    s->unk_97 = func_80069EF8() % 9 + 0xC;
+    s->unk_66 = rand() % 0x1000;
+    s->unk_97 = rand() % 9 + 0xC;
     dir = s->unk_66 / 0x200 % 4;
     for (i = 0; i < 4; i++)
     {
@@ -44629,8 +44638,8 @@ void func_800BA468(UnkTownSpawn *s, UnkVec *m)
     u32 n;
 
     *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
-    s->unk_66 = func_80069EF8() % 0x1000;
-    s->unk_97 = func_80069EF8() % 9 + 0xC;
+    s->unk_66 = rand() % 0x1000;
+    s->unk_97 = rand() % 9 + 0xC;
     dir = s->unk_66 / 0x200 % 4;
     for (i = 0; i < 4; i++)
     {
@@ -44820,7 +44829,7 @@ void func_800BA930(UnkTownSpawn *s, UnkVec *m)
     u32 n;
 
     *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
-    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_66 = rand() % 0x1000;
     s->unk_97 = 0;
     for (i = 0; i < 4; i++)
     {
@@ -44947,7 +44956,7 @@ void func_800BACB0(UnkTownSpawn *s, UnkVec *m)
     u32 n;
 
     *(u32 *)((u8 *)s - 0x10) = (u32)func_800B9CB8;
-    s->unk_66 = func_80069EF8() % 0x1000;
+    s->unk_66 = rand() % 0x1000;
     s->unk_97 = 0;
     /* DEVICE: an empty volatile asm, worth 39 of this function's 224 words.
        It is a pure scheduling barrier -- no operands, no clobbers, no
@@ -45175,12 +45184,12 @@ s32 func_800BB218(UnkTownSpawn *p, UnkTown2AE8 *q, UnkSlot *r)
             *(u32 *)(g->unk_00 + 0x8D0) = (u32)(t + 1);
             setTile1(t);
             setRGB0(t, 0xFF, 0xFF, 0xFF);
-            ang = (s16)(func_80069EF8() % 0x1000);
+            ang = (s16)(rand() % 0x1000);
             sn = func_800644B8(ang) >> 4;
             sp->unk_14.vx = *(u16 *)((u8 *)q + 0x2) + (sn * (p->unk_97 + (k = i / 8 % 12 + 0x48)) >> 8);
             sp->unk_14.vy = *(u16 *)((u8 *)q + 0x6) + ((func_80064584(ang) >> 4) * (p->unk_97 + k) >> 8);
             sp->unk_14.vz = *(u16 *)((u8 *)q + 0xA) - ((func_800644B8(i % 16 * 0x40) >> 4) * (p->unk_66 + 0x10) >> 8);
-            sp->unk_04 = func_80065420(&sp->unk_14, (s32 *)&sp->unk_00, &sp->unk_08, &sp->unk_0C);
+            sp->unk_04 = RotTransPers(&sp->unk_14, (long *)&sp->unk_00, (long *)&sp->unk_08, (long *)&sp->unk_0C);
             t->x0 = sp->unk_00.vx;
             t->y0 = sp->unk_00.vy;
             if (sp->unk_04 < 0x1E0)
@@ -45480,8 +45489,8 @@ void func_800BB894(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
             func_8004491C(o, (u32)D_80045340);
             d = (UnkTownRend *)o->unk_0C;
             *o->unk_08 = *q;
-            o->unk_08->unk_00 += (func_80069EF8() % 255 - 0x80) << 18;
-            o->unk_08->unk_04 += (func_80069EF8() % 255 - 0x80) << 18;
+            o->unk_08->unk_00 += (rand() % 255 - 0x80) << 18;
+            o->unk_08->unk_04 += (rand() % 255 - 0x80) << 18;
             d->unk_1E = 0x1000;
             d->unk_1C = 0x1000;
             o++;
@@ -45534,7 +45543,7 @@ void func_800BB894(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 
    THE SHARED TAIL IS WHY THERE ARE TWO `j`s AND THEY ARE THE ONLY TWO
    RELOCATED WORDS ovlverify CANNOT NAME: both are R_MIPS_26 against .text
-   at func_800BBA98+0x148, which is the `jal func_80069EF8` at 800BBBE0.
+   at func_800BBA98+0x148, which is the `jal rand` at 800BBBE0.
 
    ORDER-PINNED FOUR WAYS, all measured:
    * The tail's jitter must precede func_800478B8 (swapped, 94 words / 93 --
@@ -45581,7 +45590,7 @@ void func_800BBA98(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
         }
         break;
     }
-    q->unk_08 -= (func_80069EF8() & 7) << 15;
+    q->unk_08 -= (rand() & 7) << 15;
     func_800478B8((s32)r);
 }
 
@@ -45734,9 +45743,9 @@ void func_800BBCA0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
                 o->unk_10 = (u32)func_800BC00C;
                 func_8004491C(o, (u32)D_80045340);
                 d = (UnkTownRend *)o->unk_0C;
-                o->unk_08->unk_00 = q->unk_00 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
-                o->unk_08->unk_04 = q->unk_04 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
-                o->unk_08->unk_08 = q->unk_08 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_00 = q->unk_00 + (((rand() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_04 = q->unk_04 + (((rand() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_08 = q->unk_08 + (((rand() & 0x1FF) - 0x100) << 13);
                 *(s16 *)((u8 *)v + 0xC) = *(s16 *)((u8 *)q + 0x2);
                 *(s16 *)((u8 *)v + 0xE) = *(s16 *)((u8 *)q + 0x6);
                 *(s16 *)((u8 *)v + 0x10) = *(s16 *)((u8 *)q + 0xA);
@@ -45767,12 +45776,12 @@ void func_800BBCA0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
                 o->unk_10 = (u32)func_800BC00C;
                 func_8004491C(o, (u32)D_80045340);
                 d = (UnkTownRend *)o->unk_0C;
-                o->unk_08->unk_00 = q->unk_00 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
-                o->unk_08->unk_04 = q->unk_04 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
-                o->unk_08->unk_08 = q->unk_08 + (((func_80069EF8() & 0x1FF) - 0x100) << 10);
-                o->unk_08->unk_0C = ((func_80069EF8() & 0x1FF) - 0x100) << 14;
-                o->unk_08->unk_10 = ((func_80069EF8() & 0x1FF) - 0x100) << 14;
-                o->unk_08->unk_14 = ((func_80069EF8() & 0x1FF) - 0x100) << 12;
+                o->unk_08->unk_00 = q->unk_00 + (((rand() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_04 = q->unk_04 + (((rand() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_08 = q->unk_08 + (((rand() & 0x1FF) - 0x100) << 10);
+                o->unk_08->unk_0C = ((rand() & 0x1FF) - 0x100) << 14;
+                o->unk_08->unk_10 = ((rand() & 0x1FF) - 0x100) << 14;
+                o->unk_08->unk_14 = ((rand() & 0x1FF) - 0x100) << 12;
                 d->unk_1E = 0x200;
                 d->unk_1C = 0x200;
                 d->unk_10 = 0x20;
@@ -46450,7 +46459,7 @@ void func_800BC8D0(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
 
    D_8006CCD8 / D_8006CCE8 are the engine's eight-way direction tables, the
    same pair func_8009792C and func_800A878C index; this function uses only the
-   four CARDINAL entries, which is what `(func_80069EF8() & 3) * 2` says and
+   four CARDINAL entries, which is what `(rand() & 3) * 2` says and
    what makes the byte offset `t << 2` while the index itself is `t << 1`.
    `i >> 1` -- not `i / 2` -- is what recovers the 0..3 index: a signed `/ 2`
    costs the `srl 31` / `addu` / `sra` triple and the listing has one bare
@@ -46498,12 +46507,12 @@ void func_800BC990(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
     switch (a->unk_68)
     {
     case 0:
-        i = func_80069EF8() & 0xF;
+        i = rand() & 0xF;
         if (i < 4 && *(s16 *)((u8 *)a + 0xA4) == 0x40)
         {
             i += 4;
         }
-        a->unk_6C = (func_80069EF8() & 0x1F) + 0x28;
+        a->unk_6C = (rand() & 0x1F) + 0x28;
         if (i < 4)
         {
             anim = D_800E9CD4;
@@ -46511,13 +46520,13 @@ void func_800BC990(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
         }
         if (i == 4)
         {
-            *(s16 *)((u8 *)a + 0xA6) = func_80069EF8() & 1;
+            *(s16 *)((u8 *)a + 0xA6) = rand() & 1;
             anim = D_800E9D34;
             a->unk_68 = 0x60;
         }
         else if (i < 8)
         {
-            *(s16 *)((u8 *)a + 0xA6) = func_80069EF8() & 1;
+            *(s16 *)((u8 *)a + 0xA6) = rand() & 1;
             anim = D_800E9DAC;
             a->unk_68 = 0x80;
         }
@@ -46525,7 +46534,7 @@ void func_800BC990(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
         {
             do
             {
-                i = (func_80069EF8() & 3) * 2;
+                i = (rand() & 3) * 2;
             } while (abs(*(s16 *)((u8 *)a + 0xA2) + D_8006CCD8[i]) >= 2 ||
                      abs(*(s16 *)((u8 *)a + 0xA0) + D_8006CCE8[i]) >= 2);
             a->unk_6C = 0x40;
@@ -46664,7 +46673,7 @@ void func_800BCDCC(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
    func_800478B8 BEFORE its switch and this one runs it after.
 
    Ten states.  State 0 is the only one that chooses: on the REND +0x6000 gate
-   it rolls `func_80069EF8() % 4` and dispatches to four sub-states -- idle
+   it rolls `rand() % 4` and dispatches to four sub-states -- idle
    (0x10), a horizontal dash whose sign is the coin flip when the target is
    near and AWAY from the target when it is far (0x20), a randomly-scaled
    version of the same (0x30), and a timed 0x40.  0x20 and 0x30..0x34 are the
@@ -46771,23 +46780,23 @@ void func_800BCE78(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
         *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
         if ((r->unk_14 & 0x6000) != 0)
         {
-            switch (func_80069EF8() % 4)
+            switch (rand() % 4)
             {
             case 0:
                 anim = D_800E9E7C;
                 a->unk_68 = 0x10;
-                a->unk_6C = func_80069EF8() % 2 + 2;
+                a->unk_6C = rand() % 2 + 2;
                 break;
             case 1:
                 a->unk_68 = 0x20;
                 r->unk_14 |= 0x800;
-                a->unk_6C = (func_80069EF8() & 1) + 2;
+                a->unk_6C = (rand() & 1) + 2;
                 b->unk_14 = -0x30000;
                 d = b->unk_00 - *(s32 *)((u8 *)a + 0xA0);
                 if (abs(d) <= 0x1FFFFF)
                 {
                     b->unk_0C = 0x10000;
-                    if ((func_80069EF8() & 1) != 0)
+                    if ((rand() & 1) != 0)
                     {
                         b->unk_0C = -b->unk_0C;
                     }
@@ -46812,11 +46821,11 @@ void func_800BCE78(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
             case 2:
                 anim = D_800E9ECC;
                 a->unk_68 = 0x30;
-                b->unk_0C = (func_80069EF8() & 0x1FF) << 8;
+                b->unk_0C = (rand() & 0x1FF) << 8;
                 d = b->unk_00 - *(s32 *)((u8 *)a + 0xA0);
                 if (abs(d) <= 0xFFFFF)
                 {
-                    b->unk_0C = ((func_80069EF8() & 1) != 0) ? b->unk_0C : -b->unk_0C;
+                    b->unk_0C = ((rand() & 1) != 0) ? b->unk_0C : -b->unk_0C;
                 }
                 else if (d > 0)
                 {
@@ -46891,7 +46900,7 @@ void func_800BCE78(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
             b->unk_14 = -0x10000;
             b->unk_0C >>= 1;
             a->unk_68 = 0x32;
-            a->unk_6C = (func_80069EF8() & 3) + 3;
+            a->unk_6C = (rand() & 3) + 3;
         }
         break;
     case 0x32:
@@ -47032,7 +47041,7 @@ void func_800BD5B0(UnkTownActor *a, UnkVec *b, UnkTownRend *r)
    -- so three parameters, the first being the node's +0x20 actor view. `b`
    and `c` are never read here, so their types are the dispatcher's and the
    house convention's, not this function's witness.
-   func_80069EF8 is the engine's out-of-image random source (all four `jal`s
+   rand is the engine's out-of-image random source (all four `jal`s
    are that one symbol); `& 0x1FF` makes each draw 0..511.
    `*(u16 *)((u8 *)a - 0x2) |= 0x8000; D_800814A0 |= 0x8000;` is the unit's
    existing kill-this-node idiom -- a - 0x2 is UnkNode.unk_1E.
@@ -47078,7 +47087,7 @@ void func_800BD688(UnkTownBD688 *a, UnkVec *b, s32 c)
             {
                 for (i = 1; i >= 0; i--)
                 {
-                    t = (func_80069EF8() & 0x1FF) << 8;
+                    t = (rand() & 0x1FF) << 8;
                     if (a->unk_00[i]->unk_0C > 0x7FFFF)
                     {
                         t = -t;
@@ -47089,10 +47098,10 @@ void func_800BD688(UnkTownBD688 *a, UnkVec *b, s32 c)
             }
             for (i = 1; i >= 0; i--)
             {
-                a->unk_00[i]->unk_10 = ((func_80069EF8() & 0x1FF) - 0x100) << 9;
+                a->unk_00[i]->unk_10 = ((rand() & 0x1FF) - 0x100) << 9;
             }
-            a->unk_00[0]->unk_14 = ((func_80069EF8() & 0x1FF) - 0x100) << 8;
-            a->unk_00[1]->unk_14 = (func_80069EF8() & 0x1FF) << 7;
+            a->unk_00[0]->unk_14 = ((rand() & 0x1FF) - 0x100) << 8;
+            a->unk_00[1]->unk_14 = (rand() & 0x1FF) << 7;
             if (a->unk_00[0]->unk_08 < a->unk_00[1]->unk_08)
             {
                 a->unk_00[1]->unk_14 = -a->unk_00[1]->unk_14;
@@ -47618,7 +47627,8 @@ void func_800BDE7C(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
     }
 }
 
-void func_800BDF98(void) {
+void func_800BDF98(void)
+{
 }
 
 /* func_800BE0D4's four-state cut-down, and a line-for-line template match for
@@ -47798,7 +47808,7 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_town", D_80089684);
    function is still INCLUDE_ASM -- verified at the object level, .rodata
    byte-identical.
 
-   case 0 draws a state out of func_80069EF8: the `& 7` result goes to +0x68
+   case 0 draws a state out of rand: the `& 7` result goes to +0x68
    AND to +0xA4 from the SAME register, so it is a local, while the descriptor
    index is a RELOAD of +0x68 (`lh`) and so is written as the field.  Both
    halves of that are witnessed -- indexing with the local instead,
@@ -47853,7 +47863,7 @@ void func_800BE214(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
     case 0:
         if (func_800352FC() && func_800C2AB4(a))
         {
-            t = func_80069EF8() & 0x7;
+            t = rand() & 0x7;
             a->unk_68 = t;
             *(s32 *)((u8 *)a + 0xA4) = t;
             func_8003DB94(r, tbl.v[a->unk_68], 0);
@@ -48003,7 +48013,7 @@ void func_800BE214(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
    * THE TAIL'S STRING LENGTH GOES BACK INTO `i`, THE CASE COUNTER, and is
      spelled `buf[i++] = 0x11; buf[i] = 1;`.  Reusing `i` is what makes the
      length a multi-block pseudo: global-alloc gives it $s2, which forces the
-     `addu $s2, $v0, $zero` copy of func_80069E98's return AND evicts `w` from
+     `addu $s2, $v0, $zero` copy of strlen's return AND evicts `w` from
      $s2 into $s4, which is in turn what lets cases 3 and 21 keep one row base
      in a caller-saved register.  A private `s32 n` with `buf[n] = 0x11;
      buf[n + 1] = 1;` is 363 / 148.  The `i++` is also what gives the second
@@ -48047,8 +48057,6 @@ UnkNode *func_800BDBD0(UnkVec *v, void *fn, s32 c, u32 d);
 void func_800BDC98(s16 x, s16 y, s16 a, s16 b);
 void func_800BDDD0(s16 x, s16 y, s16 a);
 void func_800BDE7C();
-void func_80069E78(u8 *dst, u8 *src);
-s32 func_80069E98(u8 *s);
 /* D_80073600 is a resident POINTER VARIABLE (`lui %hi` + `lw %lo`), not an
    address-taken object; it points at 20-byte records whose +0x08 is the
    script string.  The rest are lui/addiu, so they are symbols and not
@@ -48208,8 +48216,8 @@ void func_800BE4D4(u8 *p, s16 arg1, s16 arg2)
         *(u32 *)(w + 0xA0) = *((s16 *)&v + 5);
     done:
         buf = &D_80112070[arg1 * 0x82];
-        func_80069E78(buf, *(u8 **)(D_80073600 + arg1 * 20 + 8));
-        i = func_80069E98(buf);
+        strcpy(buf, *(u8 **)(D_80073600 + arg1 * 20 + 8));
+        i = strlen(buf);
         buf[i++] = 0x11;
         buf[i] = 1;
         *(u32 *)(w + 0x48) = (u32)buf;
@@ -48219,11 +48227,12 @@ void func_800BE4D4(u8 *p, s16 arg1, s16 arg2)
     }
 }
 
-void func_800BEA80(void) {
+void func_800BEA80(void)
+{
 }
 
 /* func_800C1C1C's shape with a symbol source instead of a constant VRAM
-   address and a third entry point after it.  func_800673A0 has no declaration
+   address and a third entry point after it.  MoveImage has no declaration
    anywhere in the tree; its three parameters are the ones the func_800BF1C8
    park reads off its own listing, and the same (descriptor, x, y) triple fits
    here.
@@ -48232,16 +48241,16 @@ void func_800BEA80(void) {
    own listing: D_800D2324 is D_800D231C + 8 by address, and spelling it as
    `(s16 *)D_800D231C + 4` is 20 words / 18 differing, because the second
    `lui`/`addiu` pair then collapses into an `addiu` off the first.  The
-   func_80067014(0) must sit BETWEEN the two transfers, as it does in
+   DrawSync(0) must sit BETWEEN the two transfers, as it does in
    func_800C1BD0/func_800C1C1C: moved to the front it is 18 / 6.
 
    18 words -- its header reads `nonmatching func_800BEA88, 0x48`, and
    0x48/4 = 18.  0 differing. */
 void func_800BEA88(void)
 {
-    func_8006733C(D_800D231C, D_80113138);
-    func_80067014(0);
-    func_800673A0(D_800D2324, 0x60, 0x1FA);
+    StoreImage(&D_800D231C, &D_80113138[0]);
+    DrawSync(0);
+    MoveImage(&D_800D2324, 0x60, 0x1FA);
 }
 
 /* The third member of the func_800BF3F0/func_800BF654 spawner family, and the

@@ -256,6 +256,7 @@ build/$(TOWN): $(OFILES) splat/$(TOWN)_extra_syms.txt
 		--script=splat/$(TOWN)_undefined_funcs_auto.txt \
 		--script=splat/$(TOWN)_undefined_syms_auto.txt \
 		--script=splat/$(TOWN)_extra_syms.txt \
+		--script=splat/common_syms.txt \
 		--output=build/$(TOWN).elf
 	$(OBJCOPY) -O binary build/$(TOWN).elf build/$(TOWN)
 	@echo ""
