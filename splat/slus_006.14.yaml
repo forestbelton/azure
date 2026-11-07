@@ -702,20 +702,7 @@ segments:
       # Back to the game: the $gp anchor region. _gp = 0x80080994 is file
       # 0x54194, the first word of this piece.
       - [0x54194, data, game_gp]
-      - [0x541d0, shiftjis, str/name/boy]
-      - [0x541d8, shiftjis, str/name/man]
-      - [0x541e0, shiftjis, str/name/cat]
-      - [0x541e8, shiftjis, str/name/dog]
-      - [0x541f0, shiftjis, str/name/pop]
-      - [0x541f8, shiftjis, str/name/see]
-      - [0x54200, shiftjis, str/name/bet]
-      - [0x54208, shiftjis, str/name/dar]
-      - [0x54210, shiftjis, str/name/kay]
-      - [0x54218, shiftjis, str/name/mee]
-      - [0x54220, shiftjis, str/name/dai]
-      - [0x54228, shiftjis, str/name/fon]
-      - [0x54230, shiftjis, str/name/pen]
-      - [0x54238, shiftjis, str/name/mia]
+      - [0x541d0, hrodata, names]
       # NINETEEN names, now all split. Sixteen 8-byte slots run 0x541D0-0x54250
       # (the last two were inside the old 0x54240 blob), then a 4-byte pointer
       # to 0x8002D34C, then three more names: max, zu, kid.
