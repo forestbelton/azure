@@ -64,14 +64,18 @@ CHECK = python tools/check.py
 # tools/validate-psyq.py records their hashes. See docs/compiler-version.md.
 CC             = tools/cdkgcc
 ASPSX_VERSION  = 2.56
-CFLAGS        += -O2 -G8 -Iinclude -Ipsyq/include
 
+CFLAGS += -O2 -Iinclude -Ipsyq/include
 # decomp-permuter invokes make with PERMUTER=1. include_asm.h compiles its
 # INCLUDE_ASM macros away when PERMUTER is defined, so the define has to reach
 # the compiler or the permuter's build pulls in assembly it cannot handle.
 ifdef PERMUTER
-CFLAGS        += -DPERMUTER
+CFLAGS += -DPERMUTER
 endif
+
+CFLAGS_G0 := $(CFLAGS) -G0
+CFLAGS += -G8
+
 # -G8 is the compiler's default and the game uses small-data addressing: 245
 # genuine $gp-relative loads/stores in the game's own code, against
 # $gp = 0x80080994 (set by crt0 at 0x800339ac, not by the PS-EXE header, whose
@@ -106,9 +110,14 @@ MASPSX       ?= python3 $(MASPSX_DIR)/maspsx.py
 # out absolute. The size record was the whole mechanism, and it is what made
 # the per-unit -G8/-G2 escape hatches work before they were removed; see the
 # note below.)
-MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
-                --run-assembler --gnu-as-path=$(AS) \
-                --use-comm-section -G8
+MASPSXFLAGS += --aspsx-version=$(ASPSX_VERSION) \
+				--force-stdin \
+                --run-assembler \
+				--gnu-as-path=$(AS) \
+                --use-comm-section
+
+MASPSXFLAGS_G0 := $(MASPSXFLAGS) -G0
+MASPSXFLAGS += -G8
 
 # THERE IS NO LONGER A PER-FILE -G ESCAPE HATCH, and that is the point. Two
 # variables used to live here, MASPSXFLAGS_G8 and MASPSXFLAGS_G2, which left
@@ -147,12 +156,6 @@ MASPSXFLAGS  += --aspsx-version=$(ASPSX_VERSION) --force-stdin \
 # -G0 and its twin func_804008A0 at -G8, 0 differing words each), which gives
 # every function in this overlay two independent targets. See
 # docs/overlays.md.
-CFLAGS_G0 := -O2 -G0 -Iinclude -Ipsyq/include
-ifdef PERMUTER
-CFLAGS_G0 += -DPERMUTER
-endif
-MASPSXFLAGS_G0 := --aspsx-version=$(ASPSX_VERSION) --force-stdin \
-                  --run-assembler --gnu-as-path=$(AS) --use-comm-section -G0
 
 # EVERY overlay translation unit is -G0, so this is a PATTERN rule rather than
 # one pair of lines per unit. It used to be per-unit, and carving ovl_town into
