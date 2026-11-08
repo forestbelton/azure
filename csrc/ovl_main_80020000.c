@@ -28,15 +28,15 @@
    it keeps its own re-materialised `lui $v0`, which is what the listing has.
    The local costs no instruction: combine folds the `%lo` back into the
    stores. */
-void func_80020924(s32 arg0)
+void func_80020924(s32 use_second_slot)
 {
     s32 *p;
 
-    func_800214A4();
+    reset_sw_events();
     _card_wait(0);
     _card_wait(1);
-    p = &gCardChannel;
-    if (arg0)
+    p = &card_slot;
+    if (use_second_slot)
     {
         *p = 0x10;
     }
@@ -44,27 +44,28 @@ void func_80020924(s32 arg0)
     {
         *p = 0;
     }
-    func_800213C4(gCardChannel);
+    check_card_slot(card_slot);
 }
 
 void func_80020984(void)
 {
-    func_800214A4();
+    reset_sw_events();
     _card_wait(0);
     _card_wait(1);
-    func_800213C4(gCardChannel);
+    check_card_slot(card_slot);
 }
 
+// Same as func_80020984, but swaps the active card slot
 void func_800209C4(void)
 {
-    s32 v;
+    long next_card_slot;
 
-    func_800214A4();
+    reset_sw_events();
     _card_wait(0);
     _card_wait(1);
-    v = 0x10 - gCardChannel;
-    gCardChannel = v;
-    func_800213C4(v);
+    next_card_slot = 0x10 - card_slot;
+    card_slot = next_card_slot;
+    check_card_slot(next_card_slot);
 }
 
 void func_80020A0C(void)
@@ -72,7 +73,7 @@ void func_80020A0C(void)
     s32 *p = &D_800287C8;
 
     *p = 0;
-    func_800214A4();
+    reset_sw_events();
 }
 
 long HandleCardEOF(void)
@@ -115,90 +116,90 @@ void func_80020A80(void)
     gSwCardEOFEvent = OpenEvent(SwCARD, EvSpIOE, EvMdNOINTR, NULL);
     if (gSwCardEOFEvent == -1)
     {
-        printf(D_80020000, D_80020028, 185);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 185);
         exit(1);
     }
     gSwCardErrorEvent = OpenEvent(SwCARD, EvSpERROR, EvMdNOINTR, NULL);
     if (gSwCardErrorEvent == -1)
     {
-        printf(D_80020000, D_80020028, 187);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 187);
         exit(1);
     }
     D_80028558 = OpenEvent(SwCARD, EvSpTIMOUT, EvMdNOINTR, NULL);
     if (D_80028558 == -1)
     {
-        printf(D_80020000, D_80020028, 189);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 189);
         exit(1);
     }
     D_8002855C = OpenEvent(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
     if (D_8002855C == -1)
     {
-        printf(D_80020000, D_80020028, 191);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 191);
         exit(1);
     }
     D_80028560 = OpenEvent(HwCARD, EvSpIOE, EvMdINTR, HandleCardEOF);
     if (D_80028560 == -1)
     {
-        printf(D_80020000, D_80020028, 194);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 194);
         exit(1);
     }
     D_80028564 = OpenEvent(HwCARD, EvSpERROR, EvMdINTR, HandleCardError);
     if (D_80028564 == -1)
     {
-        printf(D_80020000, D_80020028, 196);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 196);
         exit(1);
     }
     D_80028568 = OpenEvent(HwCARD, EvSpTIMOUT, EvMdINTR, HandleCardTimeout);
     if (D_80028568 == -1)
     {
-        printf(D_80020000, D_80020028, 198);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 198);
         exit(1);
     }
     D_8002856C = OpenEvent(HwCARD, EvSpNEW, EvMdINTR, HandleCardNew);
     if (D_8002856C == -1)
     {
-        printf(D_80020000, D_80020028, 200);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 200);
         exit(1);
     }
     ExitCriticalSection();
     if (EnableEvent(gSwCardEOFEvent) == 0)
     {
-        printf(D_80020000, D_80020028, 212);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 212);
         exit(1);
     }
     if (EnableEvent(gSwCardErrorEvent) == 0)
     {
-        printf(D_80020000, D_80020028, 214);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 214);
         exit(1);
     }
     if (EnableEvent(D_80028558) == 0)
     {
-        printf(D_80020000, D_80020028, 216);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 216);
         exit(1);
     }
     if (EnableEvent(D_8002855C) == 0)
     {
-        printf(D_80020000, D_80020028, 218);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 218);
         exit(1);
     }
     if (EnableEvent(D_80028560) == 0)
     {
-        printf(D_80020000, D_80020028, 220);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 220);
         exit(1);
     }
     if (EnableEvent(D_80028564) == 0)
     {
-        printf(D_80020000, D_80020028, 222);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 222);
         exit(1);
     }
     if (EnableEvent(D_80028568) == 0)
     {
-        printf(D_80020000, D_80020028, 224);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 224);
         exit(1);
     }
     if (EnableEvent(D_8002856C) == 0)
     {
-        printf(D_80020000, D_80020028, 226);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 226);
         exit(1);
     }
 }
@@ -235,42 +236,42 @@ void func_80020F18(void)
     EnterCriticalSection();
     if (CloseEvent(gSwCardEOFEvent) == 0)
     {
-        printf(D_80020000, D_80020028, 263);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 263);
         exit(1);
     }
     if (CloseEvent(gSwCardErrorEvent) == 0)
     {
-        printf(D_80020000, D_80020028, 265);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 265);
         exit(1);
     }
     if (CloseEvent(D_80028558) == 0)
     {
-        printf(D_80020000, D_80020028, 267);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 267);
         exit(1);
     }
     if (CloseEvent(D_8002855C) == 0)
     {
-        printf(D_80020000, D_80020028, 269);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 269);
         exit(1);
     }
     if (CloseEvent(D_80028560) == 0)
     {
-        printf(D_80020000, D_80020028, 271);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 271);
         exit(1);
     }
     if (CloseEvent(D_80028564) == 0)
     {
-        printf(D_80020000, D_80020028, 273);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 273);
         exit(1);
     }
     if (CloseEvent(D_80028568) == 0)
     {
-        printf(D_80020000, D_80020028, 275);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 275);
         exit(1);
     }
     if (CloseEvent(D_8002856C) == 0)
     {
-        printf(D_80020000, D_80020028, 277);
+        printf(ASSERT_FMT, FILENAME_C_SERVER, 277);
         exit(1);
     }
     ExitCriticalSection();
@@ -315,7 +316,7 @@ high:
     goto out;
 one:
     t = &D_80084118;
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         t++;
     }
@@ -326,8 +327,8 @@ one:
     }
     else if ((_card_status(0) & 1) != 0 || (_card_status(1) & 1) != 0)
     {
-        func_800214A4();
-        while (_card_load(gCardChannel) == 0)
+        reset_sw_events();
+        while (_card_load(card_slot) == 0)
         {
         }
         D_800287E0 = 0;
@@ -336,7 +337,7 @@ one:
     goto out;
 three:
     u = &D_80084118;
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         u++;
     }
@@ -382,8 +383,8 @@ s32 func_8002121C(void)
 
     if (D_800287C8 == 2)
     {
-        func_800214A4();
-        if (_card_load(gCardChannel) == 0)
+        reset_sw_events();
+        if (_card_load(card_slot) == 0)
         {
             D_800287C8 = 0;
             r = 5;
@@ -443,12 +444,12 @@ s32 func_80021298(void)
     }
     goto def;
 one:
-    func_80021538();
-    if (_card_clear(gCardChannel) == 0)
+    reset_hw_events();
+    if (_card_clear(card_slot) == 0)
     {
         goto fail1;
     }
-    if ((_card_status(gCardChannel != 0) & 4) == 0)
+    if ((_card_status(card_slot != 0) & 4) == 0)
     {
         goto fail2;
     }
@@ -465,7 +466,7 @@ fail2:
     goto out;
 three:
     t = &D_80084118;
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         t++;
     }
@@ -527,12 +528,12 @@ s32 func_800213A0(void)
 
    The three callers in this unit discard the result, so the prototype change
    from `void' is invisible to them -- all four containers stay byte-identical. */
-s32 func_800213C4(s32 a)
+s32 check_card_slot(s32 card_slot)
 {
-    func_800214A4();
+    reset_sw_events();
     do
     {
-    } while (_card_info(a) == 0);
+    } while (_card_info(card_slot) == 0);
     D_800287E0 = 0;
     D_800287C8 = 1;
     return 1;
@@ -561,7 +562,7 @@ s32 func_80021410(void)
     return r;
 }
 
-void func_800214A4(void)
+void reset_sw_events(void)
 {
     TestEvent(gSwCardEOFEvent);
     TestEvent(gSwCardErrorEvent);
@@ -569,20 +570,20 @@ void func_800214A4(void)
     TestEvent(D_8002855C);
 }
 
-s32 func_800214FC(void)
+CARD_STATE func_800214FC(void)
 {
-    CARD_STATE v = gCardState;
-    CARD_STATE r = 0;
+    CARD_STATE state = gCardState;
+    CARD_STATE old_state = CARD_STATE_OK;
 
-    if (v != CARD_STATE_OK)
+    if (state != CARD_STATE_OK)
     {
-        r = v;
-        func_80021538();
+        old_state = state;
+        reset_hw_events();
     }
-    return r;
+    return old_state;
 }
 
-void func_80021538(void)
+void reset_hw_events(void)
 {
     gCardState = CARD_STATE_OK;
     TestEvent(D_80028560);
@@ -617,13 +618,24 @@ s32 func_80021594(void)
     return r;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020000);
+const char ASSERT_FMT[] = "Assertion failed: file \"%s\", line %d\n";
+const char FILENAME_C_SERVER[] = "c_server.c";
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020028);
+const UnkFnTab5 D_80020034 = {{
+    NULL,
+    func_800210F0,
+    func_800213A0,
+    func_8002137C,
+    func_80021298,
+}};
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020034);
-
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020048);
+const UnkFnTab5 D_80020048 = {{
+    NULL,
+    func_8002121C,
+    func_800213A0,
+    func_8002137C,
+    func_80021298,
+}};
 
 /* The st==3 arm carries its own COPY of the D_80028530[i] >= 0xB check rather
    than a goto into the st==4/5 arm's copy: jump.c's post-reload cross-jump
@@ -640,7 +652,7 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020048);
 s32 func_8002168C(void)
 {
     s32 st = func_80021594();
-    s32 i = func_8002190C();
+    s32 i = is_second_card_slot();
 
     if (st != 0)
     {
@@ -695,7 +707,7 @@ s32 *func_800217D4(void)
 
     if (v != 0)
     {
-        i = func_8002190C();
+        i = is_second_card_slot();
         if ((&D_80028548)[i] == v)
         {
             (&D_80028540)[i]++;
@@ -733,21 +745,22 @@ void func_80021904(void)
 {
 }
 
-s32 func_8002190C(void)
+int is_second_card_slot(void)
 {
-    return gCardChannel != 0;
+    return card_slot != 0;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020074);
+const char MEM_CARD1[8] = "bu10:";
+const char MEM_CARD0[8] = "bu00:";
 
 s32 func_8002191C(void)
 {
     u8 name[0x20];
     s32 n = 0;
     struct DIRENTRY *e = D_80028570;
-    char **mem_card_name = &MEM_CARD_NAMES[0];
+    const char **mem_card_name = &MEM_CARD_NAMES[0];
 
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         mem_card_name++;
     }
@@ -779,12 +792,13 @@ s32 func_8002191C(void)
    subsegment to a standalone asm/data file instead of into the sibling C
    object, and then gcc's own constants -- func_800258C8's local
    function-pointer array -- have nowhere correct to land.) */
-const u8 D_80020084[28] = "*\0\0\0TMP\0"
-                          "04\0\0"
-                          "03\0\0"
-                          "02\0\0"
-                          "01\0\0"
-                          "00\0\0";
+const char D_80020084[4] = "*";
+const char D_80020088[4] = "TMP";
+const char D_8002008C[4] = "04";
+const char D_80020090[4] = "03";
+const char D_80020094[4] = "02";
+const char D_80020098[4] = "01";
+const char D_8002009C[4] = "00";
 
 s32 func_800219B8(s32 n)
 {
@@ -841,20 +855,20 @@ s32 func_80021A04(s32 n, u8 *s)
     return ret;
 }
 
-s32 func_80021A84(s32 flag)
+s32 func_80021A84(s32 card_slot)
 {
-    char **t;
+    const char **mem_card;
     s32 r;
 
     _card_wait(0);
     _card_wait(1);
-    func_80021538();
-    t = D_80027F18;
-    if (flag != 0)
+    reset_hw_events();
+    mem_card = MEM_CARD_NAMES;
+    if (card_slot != 0)
     {
-        t++;
+        mem_card++;
     }
-    format(*t);
+    format(*mem_card);
     while ((r = func_800214FC()) == 0)
     {
         VSync(0);
@@ -873,17 +887,22 @@ s32 func_80021A84(s32 flag)
     return r;
 }
 
-void func_80021B18(u8 *s, s32 idx)
+/**
+ * Build the complete filepath for a given file ID.
+ * @param out Where the filepath will be stored
+ * @param file_id ID of file to access
+ */
+void get_card_path(char *out, s32 file_id)
 {
-    char **mem_card_name = &MEM_CARD_NAMES[0];
+    const char **mem_card_name = &MEM_CARD_NAMES[0];
 
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         mem_card_name++;
     }
-    strcpy(s, *mem_card_name);
-    strcat(s, D_80027F20);
-    strcat(s, D_80027F30[idx]);
+    strcpy(out, *mem_card_name);
+    strcat(out, MEM_CARD_PREFIX);
+    strcat(out, MEM_CARD_FILENAMES[file_id]);
 }
 
 s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
@@ -975,9 +994,9 @@ s32 func_80021D54(s32 idx)
     s32(*tbl)[32];
     s32 v;
 
-    func_80021B18(name, idx);
+    get_card_path(name, idx);
     t = (s32 **)D_80084128;
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         t++;
     }
@@ -1063,13 +1082,6 @@ s32 func_80021EE0(s32 *gsw)
     return gsw[0x81] == sum;
 }
 
-void func_80021DF4(s32 idx, u8 *src);
-
-/* rename is almost certainly libapi `rename`: it takes two of the
-   0x20-byte name buffers func_80021B18 builds, and this function uses it to
-   move the real save to the scratch name (slot 5), read it back, and move it
-   home again. The two buffers must be declared nameA-then-nameB to land at
-   sp+0x18 and sp+0x38 in that order; reversed gives 19 DIFF. */
 s32 func_80021F18(s32 idx, u8 *buf)
 {
     u8 nameA[0x20];
@@ -1078,8 +1090,8 @@ s32 func_80021F18(s32 idx, u8 *buf)
     s32 *row;
     s32 r;
 
-    func_80021B18(nameA, idx);
-    func_80021B18(nameB, 5);
+    get_card_path(nameA, idx);
+    get_card_path(nameB, MEM_CARD_FILE_ID_TMP);
     tbl = D_80083E98;
     row = tbl[idx];
     if (row[0] != 0)
@@ -1105,7 +1117,7 @@ s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
     s32 *row;
     s32(*tbl)[32];
 
-    func_80021B18(name, idx);
+    get_card_path(name, idx);
     if (func_80021B98(name, buf, 0xC0, 0) != 0 && func_80021EE0((s32 *)buf) != 0)
     {
         if (flag != 0)
@@ -1131,7 +1143,7 @@ s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
 
 void func_800220DC(void)
 {
-    s32 i = gCardChannel != 0;
+    s32 i = card_slot != 0;
     s32 n;
 
     n = func_8002191C();
@@ -1143,7 +1155,7 @@ s32 func_80022138(void)
 {
     s32 *p = D_80084120;
 
-    if (gCardChannel != 0)
+    if (card_slot != 0)
     {
         p++;
     }
@@ -1171,10 +1183,10 @@ s32 func_8002219C(s32 idx)
     s32(*tbl)[32];
     s32 v;
 
-    func_80021B18(name, idx);
+    get_card_path(name, idx);
     _card_wait(0);
     _card_wait(1);
-    func_80021538();
+    reset_hw_events();
     erase(name);
     while ((v = func_800214FC()) == 0)
     {
@@ -1499,7 +1511,7 @@ u8 *func_80022774(u8 *p, s32 *q)
         *(s32 *)(p + 4) = 0x104058;
         p[0] = buf[i];
         p += 0xC;
-        *(UnkBlock24 *)p = *(UnkBlock24 *)D_80027F48;
+        *(UnkBlock24 *)p = D_80027F48;
         g = 0x90D0E0;
         /* DEVICE: one marker doing three jobs, worth 85 words (85 -> 0).
            (a) `"+r"(g)` is a SECOND set of g in the loop whose source is not
@@ -2552,7 +2564,7 @@ u8 *func_800242D8(u8 *p, s32 w, s32 h)
     return p + 0xC;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200A0);
+const u8 D_800200A0[4] = {0, 1, 2, 3};
 
 /* splat migrated this one-character string into func_80024390's listing, so
    landing that function loses the symbol. Defined here, immediately after
@@ -3460,7 +3472,7 @@ void func_80025BD4(s32 *p)
 {
     s32 n = p[9];
 
-    if (n < 5)
+    if (n < MEM_CARD_FILE_ID_TMP)
     {
         if (func_80021D54(n) != 0)
         {
@@ -3474,7 +3486,7 @@ void func_80025BD4(s32 *p)
             p[-4] = (s32)func_80024F7C;
         }
     }
-    if (n == 5)
+    if (n == MEM_CARD_FILE_ID_TMP)
     {
         p[-4] = (s32)func_80025B60;
     }
@@ -3646,7 +3658,7 @@ void func_80025FFC(s32 *p, s32 n)
     RECT r;
     s32 i;
 
-    r = *(RECT *)D_800200B8;
+    r = D_800200B8;
     *(UnkBlock20 *)((u8 *)p + 0x60) = *(UnkBlock20 *)D_80027E78[n];
     r.y += n * 16;
     for (i = 0; i < 3; i++)
@@ -3944,7 +3956,7 @@ void func_800267C0(s32 *p)
 {
     s32 n = p[10];
 
-    if (n < 5)
+    if (n < MEM_CARD_FILE_ID_TMP)
     {
         if (func_80021D54(n) != 0)
         {
@@ -3958,7 +3970,7 @@ void func_800267C0(s32 *p)
             p[-4] = (s32)func_800261C0;
         }
     }
-    if (n == 5)
+    if (n == MEM_CARD_FILE_ID_TMP)
     {
         p[-4] = (s32)func_80026748;
     }
@@ -4613,7 +4625,7 @@ void func_80027A68(s32 *p, s32 a, s32 b)
 {
     p[5] = a;
     p[0] = b;
-    p[3] = func_8002190C();
+    p[3] = is_second_card_slot();
 }
 
 void func_80027A9C(s32 *p)
@@ -4730,14 +4742,7 @@ void func_80027DF4(s32 *p, s32 v)
     }
 }
 
-/* D_800200A8 is func_800258C8's own local array initialiser, which gcc now
-   emits into this unit's .rodata, so it must NOT also be pulled in by
-   INCLUDE_RODATA -- doing both put 0x10 extra bytes of rodata ahead of the
-   text and moved every function from func_800210F0 on by 0x10, which the
-   function-pointer tables at D_80020034 and D_80020048 then disagreed with.
-   Each per-function ovlverify check still passed; only `make` caught it. */
-
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200B8);
+const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};
 
 /* ------------------------------------------------------------------------- */
 /* The overlay's own .data, which starts at 0x80027E20 immediately after the
@@ -4751,18 +4756,24 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200B8);
    order they are written here, so a new object goes at its address position in
    this block and nowhere else. */
 
-/* The two memory-card device names, as pointers into this unit's own rodata:
-   D_80020074 is "bu10:" and the "bu00:" that follows it at +8 shares the
-   listing, so the second entry is spelled as an offset into the first symbol.
-   Index 0 is "bu00:" and index 1 is "bu10:", which is the opposite of the
-   order the strings sit in. */
-char *D_80027F18[2] = {
-    D_80020074 + 8,
-    D_80020074,
+// D_80027F18
+const char *MEM_CARD_NAMES[2] = {
+    MEM_CARD0,
+    MEM_CARD1,
 };
 
-/* The save-file prefix, pasted after a "bu10:"/"bu00:" device name by
-   func_80021F0C. Sixteen bytes, not thirteen: the four bytes after the NUL are
-   part of the object rather than inter-object padding, and `[]` would drop
-   them and pull every later .data object down by four. */
-char D_80027F20[16] = "BASLUS-00614";
+// D_80027F20
+char MEM_CARD_PREFIX[16] = "BASLUS-00614";
+
+// D_80027F30
+const char *MEM_CARD_FILENAMES[6] = {
+    D_8002009C, // 00
+    D_80020098, // 01
+    D_80020094, // 02
+    D_80020090, // 03
+    D_8002008C, // 04
+    D_80020088, // TMP
+};
+
+UnkBlock24 D_80027F48 = {{0x00, 0x38, 0x00, 0x00, 0xbc, 0xbc, 0x9c, 0x00, 0x00, 0x00, 0xa0, 0x70, 0xbc, 0xbc, 0x9c, 0x00,
+                          0xbc, 0xbc, 0x9c, 0x00, 0xbc, 0xbc, 0x9c, 0x00}};

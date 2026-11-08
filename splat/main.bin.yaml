@@ -174,6 +174,36 @@ segments:
       # exist and extracts nothing. The dot is right exactly when a `c`
       # sibling exists.
       - [0x25d000, .rodata, ovl_main_80020000]
+      # The Shift-JIS UI message pool, 0x864 bytes, carved out of the migrated
+      # rodata as an UNDOTTED `rodata` subsegment with its own name -- the
+      # exact mirror of the `data_pre`/`data_post` chunks below.
+      #
+      # It has to be carved, not left to migration: rodata migration only
+      # emits a symbol it can ATTRIBUTE to a function, and nothing references
+      # the pool. Splitting D_800200B8's 0x86C-byte object into the 8-byte
+      # RECT plus this (see splat/main.bin_symbol_addrs.txt) left the pool
+      # unreferenced, and splat then wrote it NOWHERE -- no listing, no
+      # warning, a container 0x864 bytes short. An undotted subsegment is
+      # disassembled unconditionally, which is the fix.
+      #
+      # `hrodata` and not `rodata`: splat/ext/hrodata.py seeds the file into
+      # asrc/ once and then never rewrites it, which is what lets the pool be
+      # kept as readable `.shiftjisz "..."` text instead of `.word` blobs.
+      # SFILES globs asrc/ alongside asm/ and the `build/%.o: %.s` rule pipes
+      # every asm source through `azure shiftjis`, so the directive expands.
+      # A nonmatchings listing could never do this: those are assembled as
+      # part of the C object, through maspsx, which never sees that filter.
+      #
+      # 59 NUL-terminated Shift-JIS strings, each padded to 4 -- exactly the
+      # `.shiftjisz` layout -- except the LAST, whose three padding bytes are
+      # 05 61 64 rather than zeros, so it is spelled out by hand. One entry,
+      # 0x80020688, is the empty string, and it is referenced three times.
+      #
+      # The 0x1E0-byte table at 0x800280B4 is what indexes into this pool: 121
+      # words in the `bin` at 0x265000 point in here. They are raw bytes with
+      # no relocations today, which is why the per-message labels below are
+      # not yet load-bearing -- claiming that table is what will need them.
+      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
       # `c`, not `asm`: this overlay is being decompiled. The unit is built at
       # cc1psx -G0, NOT the -G8 the resident executable uses, and the Makefile
       # has the per-unit override. -G is not cosmetic here: at -G8 cc1psx
@@ -207,9 +237,26 @@ segments:
       # example.
       - [0x264e20, data, ovl_main_80020000_data_pre]
       - [0x264f18, .data, ovl_main_80020000]
-  # The data above the owned window. Still a blob; make it a second undotted
-  # `data` subsegment if you want its pointers symbolised before claiming it.
-  - [0x264f30, bin]
+      # The data above the owned window, as a second undotted `data`
+      # subsegment rather than a top-level `bin`.
+      #
+      # THIS IS WHY, and it cost a 0x10-long container on 2026-11-08. splat
+      # emits `__romPos = ALIGN(__romPos, 16)` after a code segment, so the
+      # segment's END must sit on a 16-byte boundary -- the same rule the text
+      # end obeys, 150 lines up, applied to the far end of the same segment.
+      # While the tail was a top-level `bin`, the segment ended wherever the
+      # `.data` window ended, so moving the window to 0x264f48 to claim
+      # D_80027F30 (0x18 bytes, ending 8 short of the grid) slipped
+      # `_25D000_ROM_END` to 0x264f50 and then slipped the 0x80400000 segment's
+      # end by another 8 at the second ALIGN, for 0x275810 bytes against
+      # 0x275800. Every boundary INSIDE the overlay was correct; the overshoot
+      # was entirely in the two aligns.
+      #
+      # Ending the segment at 0x265000 fixes it permanently: the boundary you
+      # now move to claim an object is purely internal to the segment, between
+      # this chunk and the `.data` window above it, so segment alignment never
+      # enters into it again.
+      - [0x264f60, data, ovl_main_80020000_data_post]
   - [0x265000, bin]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
   # left it as bin, reporting "only 58 internal jal targets and the best

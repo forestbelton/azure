@@ -1,0 +1,31 @@
+// Hand-maintained symbol declarations for main.bin. The yaml has pointed
+// `symbol_addrs_path` here from the start; nothing needed it until 2026-11-08.
+//
+// D_800200B8 -- SPLITTING ONE ROdata OBJECT IN TWO.
+//
+// spimdisasm found a single reference, from func_80025FFC, and so emitted
+// 0x800200B8..0x80020924 as ONE 0x86C-byte `dlabel`. It is really two things:
+//
+//   * 0x800200B8, eight bytes, a GPU `RECT` {x=0x380, y=0x100, w=4, h=0x10}.
+//     func_80025FFC copies it onto its stack as `*(RECT *)D_800200B8` and
+//     walks it across three StoreImage calls, so the type is witnessed, not
+//     guessed.
+//   * 0x800200C0, the rest, the overlay's Shift-JIS UI message pool -- the
+//     same full-width encoding as the `str/main/*` segments in the yaml. It
+//     opens on 82 65 82 81 82 89 82 8C 82 85 82 84, i.e. "Failed to delete
+//     data." in full-width Latin.
+//
+// Giving the first a `size` is what makes spimdisasm end the object there;
+// declaring the second gives the pool a name of its own so the RECT can be
+// defined in C while the pool stays in assembly.
+//
+// The split alone is not enough. Nothing REFERENCES the pool, and rodata
+// migration only emits what it can attribute to a function, so after this
+// split splat wrote the pool nowhere at all. It needs the undotted `rodata`
+// subsegment in splat/main.bin.yaml as well; that comment has the detail.
+D_800200B8 = 0x800200B8; // size:0x8
+// No `size` on the pool: it is 59 separate strings, and
+// asrc/ovl_main_80020000_rodata_pool.s is the authority on their boundaries.
+// The `size:0x8` above is the one that matters -- it is what ends D_800200B8's
+// object and so creates the pool as a symbol of its own in the first place.
+D_800200C0 = 0x800200C0;

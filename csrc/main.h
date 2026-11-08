@@ -1,6 +1,11 @@
 #ifndef OVERLAY_MAIN_H_
 #define OVERLAY_MAIN_H_
 
+#define MEM_CARD_FILE_ID_TMP 5
+
+void reset_sw_events(void);
+void reset_hw_events(void);
+
 s32 func_800213C4(s32 arg0);
 /* No arguments: func_80020A0C calls it with no $a0 set up at all, and its own
    listing never reads $a0 (it works off D_80028550 and up). func_80020924's
@@ -20,8 +25,8 @@ s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p);
 
 extern s32 D_800287C8;
 
-#define gCardChannel D_800287CC
-extern s32 gCardChannel;
+#define card_slot D_800287CC
+extern s32 card_slot;
 
 typedef enum CARD_STATE
 {
@@ -118,14 +123,6 @@ typedef struct
     u8 b2;
     u8 b3;
 } UnkFour;
-
-/* Eight and 0x20 bytes, alignment 1, for the same reason as UnkFour:
-   func_80025FFC copies D_800200B8 onto its stack and a D_80027E78 row into
-   its argument with lwl/lwr + swl/swr. */
-typedef struct
-{
-    u8 b[8];
-} UnkEight;
 
 typedef struct
 {
@@ -280,8 +277,9 @@ void func_80040AA0(s32 a);
 UnkNode *func_80044144(s16 a, s16 b, u32 c, u32 d);
 void func_800A68F4(void);
 void func_8005863C(void);
-extern u8 D_80020000[];
-extern u8 D_80020028[];
+extern const char ASSERT_FMT[40];
+extern const char FILENAME_C_SERVER[];
+
 s32 *func_80027AFC(s32 a, s32 b);
 u8 *func_80022A30(u8 *p, s32 *q);
 void func_80021538(void);
@@ -310,7 +308,8 @@ void func_80022488(s32 *p);
 void func_80022524(s32 *p);
 void func_8004CBFC(u32 *p, u8 *q, u32 *r);
 void func_800439F8(void);
-extern const u8 D_80020084[];
+
+extern const char D_80020084[];
 
 void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z);
 s32 func_80049E6C(s32 a);
@@ -326,8 +325,8 @@ void func_80026DF0(UnkCardGrp044 *c, s32 n);
 void func_80024C70(UnkCardGrpB20 *c, s32 n);
 void func_8003AD08(s32 n, u8 *buf);
 s32 func_800210F0(void);
-extern UnkFnTab5 D_80020034;
-extern UnkFnTab5 D_80020048;
+extern const UnkFnTab5 D_80020034;
+extern const UnkFnTab5 D_80020048;
 s32 func_80021298(void);
 extern u8 *D_80028294[];
 extern u8 *D_800282A0;
@@ -346,7 +345,7 @@ extern u8 D_80079114[];
 extern s32 D_8002809C[];
 extern u8 D_80028068[][2];
 extern u8 D_80027E78[][0x20];
-extern u8 D_800200B8[];
+extern const RECT D_800200B8;
 s32 func_80049DE8(s32 a, s32 b, s32 c);
 s32 func_80049E1C(s32 a, s32 d, s32 m);
 void func_8002651C(s32 *p);
@@ -366,8 +365,10 @@ s32 *func_800238D4(s32 *p);
 s32 *func_80024D58(s32 *p, s32 a, s32 b);
 extern u8 D_80027FD0[];
 extern u8 D_8002B7E0[];
-extern u8 D_800200A0[];
-extern u8 D_80027F48[];
+extern const u8 D_800200A0[4];
+
+extern UnkBlock24 D_80027F48;
+
 extern u8 D_800282D8[];
 extern u8 D_800282E8[];
 extern u8 *D_800283A8[];
@@ -389,25 +390,11 @@ extern u8 D_800283FC[];
 extern u8 D_80027E68[];
 void func_80025788(s32 *p);
 
-/* DEFINED by this unit, in the .data block at the foot of
-   csrc/ovl_main_80020000.c. {"bu00:", "bu10:"} -- index 0 is the SECOND of the
-   two strings in the rodata listing. */
-#define MEM_CARD_NAMES D_80027F18
-extern char *MEM_CARD_NAMES[2];
-
-/* "bu10:", immediately followed in the same rodata listing by "bu00:" at +8.
-   Declared here so D_80027F18's initialiser can take its address. */
-#define MEM_CARD1 D_80020074
-extern char MEM_CARD1[8];
-extern char MEM_CARD0[8];
-
-/* DEFINED by this unit, in the .data block at the foot of
-   csrc/ovl_main_80020000.c. The declaration stays here because the first use
-   (func_80021F0C) is above the definition, which has to sit at its address
-   position. */
-extern char D_80027F20[16];
-
-extern char *D_80027F30[];
+extern const char MEM_CARD0[8];
+extern const char MEM_CARD1[8];
+extern const char *MEM_CARD_NAMES[2];
+extern char MEM_CARD_PREFIX[16];
+extern const char *MEM_CARD_FILENAMES[6];
 
 void func_80024390(s32 *p);
 void func_80024818(s32 *p);
@@ -455,6 +442,7 @@ extern s32 D_80028568;
 extern s32 D_8002856C;
 extern s32 D_80084128[];
 extern u8 D_80028020[];
+
 extern UnkStrSet D_800280B4[];
 
 extern struct DIRENTRY D_80028570[10];

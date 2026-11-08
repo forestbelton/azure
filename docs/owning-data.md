@@ -13,12 +13,16 @@ and have splat, the generated linker script and the container all agree.
 Everything below was measured on 2026-11-08 against `data/main/main.bin`
 (sha1 `69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d`) with splat 0.50.1 /
 spimdisasm 1.42.4, taking `csrc/ovl_main_80020000.c` from `extern` to owning
-`D_80027F18` and `D_80027F20`. All four containers stayed byte-identical.
-Re-measure rather than trust.
+the data objects `D_80027F18` and `D_80027F20` and the rodata object
+`D_80020074`. All four containers stayed byte-identical. Re-measure rather than
+trust.
 
-This is about **data**. Code is `docs/landing-a-function.md`; rodata needs none
-of this, because splat migrates rodata per symbol and the `INCLUDE_RODATA`
-stubs at the foot of `csrc/ovl_main_80020000.c` are already that mechanism.
+This is mostly about **data**, which is the hard case. Code is
+`docs/landing-a-function.md`. **Rodata** needs none of the yaml work, because
+splat already migrates it per symbol into the `INCLUDE_RODATA` stubs at the
+foot of `csrc/ovl_main_80020000.c` -- but it has two traps of its own, both of
+which cost a broken build on 2026-11-08, so it gets §4.5, §4.6 and the second
+bullet of §6.
 
 ---
 
@@ -29,11 +33,17 @@ difference is the whole reason this document exists.
 
 | section | dotted subsegment writes | per-symbol ownership? |
 |---|---|---|
-| `.rodata` | the symbol into the referencing function's `asm/nonmatchings/.../*.s` listing | **yes** -- replace one `INCLUDE_RODATA` at a time |
+| `.rodata` | each REFERENCED symbol into a `asm/nonmatchings/.../*.s` listing -- and an unreferenced one **nowhere at all** | **yes** -- replace one `INCLUDE_RODATA` at a time |
 | `.text` | one `.s` per function under `asm/nonmatchings/` | **yes** -- replace one `INCLUDE_ASM` at a time |
 | `.data` | **nothing at all** | **no** |
 
-That last row is the constraint. `splat/segtypes/common/data.py`'s
+Two rows to read carefully. The `.rodata` one is a trap rather than a
+constraint: migration is per symbol, which is what makes rodata pleasant, but
+it emits only what it can attribute to a function, so a symbol nothing
+references is silently dropped from the build. §4.6 is how that happens in
+practice and what to do about it.
+
+The `.data` row is the constraint. `splat/segtypes/common/data.py`'s
 `should_self_split()` returns `False` for a type that starts with a dot, and
 `common/c.py`'s migration loop only ever looks at `.rodata` and `.rdata`. So a
 `- [addr, .data, unit]` subsegment emits no assembly and no stub: **the C unit
@@ -202,9 +212,9 @@ characters, a NUL, and three bytes of padding that belong to the object.
 
 ### 4.2 Move the subsegment boundary in the yaml
 
-Carve the data region so the object you are claiming falls inside the C unit's
-`.data` window and everything else stays in an undotted `data` subsegment or a
-`bin` segment:
+Carve the data region into **three** subsegments -- unowned, owned, unowned --
+with the owned window in the middle and *both* neighbours undotted `data`
+subsegments inside the same code segment:
 
 ```yaml
   - type: code
@@ -213,17 +223,27 @@ Carve the data region so the object you are claiming falls inside the C unit's
     subsegments:
       - [0x25d000, .rodata, ovl_main_80020000]
       - [0x25d924, c, ovl_main_80020000]
-      - [0x264e20, data, ovl_main_80020000_data_pre]   # not yet owned
-      - [0x264f18, .data, ovl_main_80020000]           # owned by the C unit
-  - [0x264f30, bin]                                    # not yet owned
+      - [0x264e20, data, ovl_main_80020000_data_pre]    # not yet owned
+      - [0x264f18, .data, ovl_main_80020000]            # owned by the C unit
+      - [0x264f48, data, ovl_main_80020000_data_post]   # not yet owned
+  - [0x265000, bin]
 ```
 
-The window grows in **either** direction, one contiguous range:
+The trailing `data_post` chunk is not optional bookkeeping -- **it is what
+keeps the segment's end on the 16-byte grid that `__romPos = ALIGN(__romPos,
+16)` demands.** Leave the tail as a top-level `bin` and the segment ends
+wherever your `.data` window ends, so every claim whose object does not finish
+on a 16-byte boundary lengthens the container. That cost a 0x10-long build on
+2026-11-08; see §6. With `data_post` running to `0x265000` the segment end is
+fixed and both boundaries you move afterwards are internal to it.
+
+The window then grows in **either** direction, one contiguous range, and
+neither direction touches a segment boundary:
 
 * **down** -- lower the `.data` start, and `_data_pre` shrinks to match.
-* **up** -- raise the `.data` end, which means raising the start of whatever
-  segment follows (here the `bin` at `0x264f30`). Both boundaries are
-  hand-maintained and both have to track the C file.
+* **up** -- raise the `.data` end, and `_data_post` shrinks to match.
+
+Both neighbours are hand-maintained and both have to track the C file.
 
 Shrinking a `bin` segment leaves its extracted blob behind. `OFILES` is built
 from `find assets -name '*.bin'`, so the orphan keeps getting assembled into an
@@ -283,33 +303,159 @@ char D_80027F20[16] = "BASLUS-00614";
 
 ---
 
+### 4.5 Owning a rodata symbol instead
+
+Rodata is the easier half **as long as the symbol is referenced**. The
+`.rodata` subsegment is already dotted and already migrated, every referenced
+symbol already has its own `asm/nonmatchings/.../D_*.s` listing, and the
+`INCLUDE_RODATA` stub in the C file already holds the symbol's address
+position. You delete the stub and write the definition in its place, with no
+yaml change at all:
+
+```c
+/* was: INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020074); */
+const char MEM_CARD1[8] = "bu10:";
+const char MEM_CARD0[8] = "bu00:";
+```
+
+Three things that are **not** like the data case:
+
+* **`const` is load-bearing.** Without it the object is writable and cc1psx
+  emits it under `.data`, which in this overlay is at the *other* end of the
+  segment. See §6.
+* **Position is the stub's old line, not the foot of the file.** The `.rodata`
+  objects are interleaved with the functions, in address order, exactly where
+  the `INCLUDE_RODATA` calls sit now.
+* **One listing can hold several objects.** `D_80020074`'s listing was two
+  `.asciz` plus two `.align 2`, which is two 8-byte objects at `0x80020074`
+  and `0x8002007C`, not one 16-byte one. Read the listing before choosing the
+  type; `enddlabel` is where splat thinks the object ends, and §4.6 is what to
+  do when splat thinks wrong.
+
+The gate is §5 with one substitution: check `_25D000_TEXT_START` instead of the
+`.data` size. It must equal the vram of the `c` subsegment,
+`0x80020000 + (0x25d924 - 0x25d000)` = `0x80020924`. The C unit's `.rodata`
+size is the other half of it, and it must equal the span of the `.rodata`
+subsegment -- `0x25d000..0x25d0c0`, so 192.
+
+---
+
+### 4.6 Splitting one rodata object, and the symbol splat then DELETES
+
+splat sizes a rodata object from where the next *referenced* symbol starts, so
+one `dlabel` routinely covers several unrelated things. `D_800200B8` was the
+worst case in this overlay: a single 0x86C-byte object spanning
+`0x800200B8..0x80020924`, because `func_80025FFC` held its only reference. It
+is really an 8-byte GPU `RECT` followed by 0x864 bytes of Shift-JIS UI
+messages.
+
+**Force the split in `splat/main.bin_symbol_addrs.txt`** (the yaml has pointed
+`symbol_addrs_path` there from the start; the file need not have existed):
+
+```
+D_800200B8 = 0x800200B8; // size:0x8
+D_800200C0 = 0x800200C0;
+```
+
+The `size` is what makes spimdisasm end the first object. Then the RECT is an
+ordinary §4.5 landing -- and its type is *witnessed*, not guessed, because the
+use site reads `*(RECT *)D_800200B8` and walks it across three `StoreImage`
+calls, so the cast can go away:
+
+```c
+const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};   /* in the C unit  */
+...
+    r = D_800200B8;                                 /* was *(RECT *)D_800200B8 */
+```
+
+**Now the trap, and it is silent.** Rodata migration only emits a symbol it
+can ATTRIBUTE to a function. Nothing references the pool, so after the split
+splat wrote those 0x864 bytes **nowhere** -- no listing, no asm file, no
+warning, and a container 0x864 bytes short. The split created the symbol and
+deleted the data in the same step.
+
+The fix is the same shape as `data_pre`/`data_post`: carve the orphan out as a
+subsegment of its own, which is disassembled unconditionally. Here it earns
+`hrodata` rather than plain `rodata`, because the content is text:
+
+```yaml
+      - [0x25d000, .rodata, ovl_main_80020000]
+      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
+      - [0x25d924, c, ovl_main_80020000]
+```
+
+`hrodata` (`splat/ext/hrodata.py`) seeds the file into `asrc/` **once** and
+never rewrites it, so it can be turned into something readable. `SFILES` globs
+`asrc/` alongside `asm/` and the `build/%.o: %.s` rule pipes every asm source
+through `azure shiftjis`, so `.shiftjisz "..."` expands there:
+
+```asm
+dlabel D_800200C0
+    .shiftjisz "Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ．"
+```
+
+`.shiftjisz` emits the string, a NUL, then `.balign 4, 0` -- which is exactly
+the layout all 59 entries use, so the whole pool converts mechanically. Three
+things to know before doing the same elsewhere:
+
+* **A nonmatchings listing could never do this.** Those are assembled as part
+  of the C object, through maspsx, which never sees the `azure shiftjis`
+  filter. `.shiftjis` only works in a file the `build/%.o: %.s` rule builds,
+  i.e. under `asm/` or `asrc/`.
+* **The filter is line-anchored.** `SHIFTJIS_DIRECTIVE_PATTERN` in
+  `src/azure/commands/shiftjis.py` matches start-of-line to end-of-line, so a
+  directive must sit ALONE on its line -- an offset comment in front of it
+  reaches GNU as unexpanded as `unknown pseudo-op: .shiftjis`.
+* **Check the padding bytes, not just the strings.** 58 of the 59 entries pad
+  with zeros, which is what `.balign 4, 0` produces. The last one pads with
+  `05 61 64`, so it needs `.shiftjis` plus an explicit
+  `.byte 0x00, 0x05, 0x61, 0x64`. A decoder that only walks NUL terminators
+  will not notice; verify the pad bytes are zero before trusting `.shiftjisz`.
+
+The gate for an `hrodata` chunk is its object's section size against the
+subsegment span:
+
+    mips64-linux-gnu-size -A build/asrc/ovl_main_80020000_rodata_pool.o | grep '^\.rodata'
+    # 2148 == 0x25d924 - 0x25d0c0
+
+And because the file is frozen, **moving the subsegment in the yaml does not
+move the bytes in the file.** `hrodata` records the seeded rom range in the
+file's header and warns on a later split when the two disagree; that warning is
+the only guard, so read it.
+
+---
+
 ## 5. Verification -- and the gate `make` does not give you
 
 Run, in order:
 
     make build/main.bin                     # the container
-    mips64-linux-gnu-nm build/main.bin.elf | grep -E "_25D000_DATA_(START|END|SIZE)"
+    mips64-linux-gnu-size -A build/csrc/ovl_main_80020000.o | grep '^\.data'
+    mips64-linux-gnu-nm build/main.bin.elf | grep ' D_80027F48$'
 
-`_25D000_DATA_END` must equal the vram of the segment that follows the data,
-`0x80020000 + (next_rom - 0x25d000)`. With the `bin` at `0x264f30` that is
-`0x80027F30`, and `_25D000_DATA_SIZE` is `0x110`.
+**The gate is the C object's `.data` size against the `.data` subsegment's
+span.** With the window at `0x264f18..0x264f48` the span is 0x30, so `size -A`
+must say 48 -- and the first symbol of the `data_post` chunk (`D_80027F48`)
+must land on the boundary, `0x80027F48`. Those two together pin both ends.
+
+Do **not** use `_25D000_DATA_END` for this. It was the gate while the tail was
+a top-level `bin`, but once `data_post` is inside the segment the DATA group
+runs to the segment end and `_25D000_DATA_END` reads `0x80028000` no matter
+what your object does.
 
 **`make` alone will not catch a short object.** Measured: declaring
 `D_80027F20[12]` -- four bytes short -- still built `main.bin` **byte-identical**,
 because the segment ends on `__romPos = ALIGN(__romPos, 16)` and `objcopy`
-zero-fills the gap, which happens to be exactly the three padding bytes the
-object dropped. The only symptom was
-
-    80027f2c T _25D000_DATA_END      # should be 80027f30
-    0000010c A _25D000_DATA_SIZE     # should be 00000110
-
-The error does not bite until the *next* object you claim, which then starts
-four bytes low and shifts everything after it. Check `_25D000_DATA_END` after
+zero-fills the gap, which happened to be exactly the three padding bytes the
+object dropped. The only symptom was `.data` reading 12 against the window's
+16 (measured when the window was `0x264f20..0x264f30`); nothing else said a
+word. The error does not bite until the *next* object you claim, which then
+starts four bytes low and shifts everything after it. Check the size after
 every landing.
 
 Also worth a look once:
 
-    mips64-linux-gnu-nm build/main.bin.elf | grep ' D_80027F20$'   # 80027f20
+    mips64-linux-gnu-nm build/main.bin.elf | grep ' MEM_CARD_PREFIX$'   # 80027f20
     mips64-linux-gnu-objdump -s -j .data -r build/csrc/ovl_main_80020000.o
 
 Then the real gate, because `OFILES` is shared and a yaml edit can move a
@@ -322,6 +468,70 @@ All four must come out byte-identical.
 ---
 
 ## 6. Measured facts and traps
+
+* **THE CODE SEGMENT'S END MUST BE 16-BYTE ALIGNED, AND THE OVERSHOOT IS
+  DOUBLED AND REMOTE.** This broke the build on 2026-11-08. Claiming
+  `D_80027F30` means moving the `.data` window's end to `0x264f48`, and
+  `0x264f48` is 8 bytes off the 16-byte grid. splat emits
+  `__romPos = ALIGN(__romPos, 16)` after *every* code segment, so:
+
+      _25D000_ROM_END   0x264f50   should be 0x264f48   +8
+      _269000_ROM_END   0x2719f0   should be 0x2719e8   +8   (the debug twin)
+      built             0x275810   reference 0x275800   +0x10
+
+  Note what the symptom is **not**. Every boundary inside the overlay was
+  right -- `.rodata` 2340, `_25D000_TEXT_START` `0x80020924`,
+  `_25D000_DATA_END` `0x80027F48`, `.data` 48 -- and the C was correct. The
+  container was simply 0x10 bytes long, and the second 8 came from a segment
+  150 lines further down the yaml that nothing in the change had touched. The
+  text end obeys this same rule and the yaml already says so; what was missing
+  was that it applies to the far end of the segment too.
+
+  The fix is structural, not arithmetic: end the code segment at `0x265000`
+  with a trailing undotted `data` subsegment (§4.2) so the boundary you move to
+  claim an object is internal to the segment. Then alignment never enters into
+  it. The alternative -- only ever claiming objects whose end happens to be
+  16-aligned -- makes the queue in §7 unworkable, since most of those spans are
+  0x4, 0x8, 0xC or 0x18.
+
+* **A RODATA OBJECT MUST BE `const`, AND THE BUILD BLAMES SOMETHING ELSE.**
+  This broke the build on 2026-11-08. `char D_80020074[16] = "bu10:\0\0\0bu00:";`
+  compiles and its bytes are right, but a writable array goes under `.data`:
+
+      	.globl	D_80020074
+      	.data            <<< not .rodata
+      	.align	2
+      D_80020074:
+      	.ascii	"bu10:\000\000\000bu00:\000"
+
+  `.rodata` then came out 16 bytes short (2324 against 2340),
+  `_25D000_TEXT_START` fell from `0x80020924` to `0x80020914`, **every function
+  in the overlay moved down 0x10**, and the symbol itself linked at
+  `0x80027F08` in the middle of the data window. What `make` reported was
+  `FAIL 0x69ac of 0x275800 bytes differ (1.05%); first at 0x25d038` -- a
+  function-pointer table in rodata holding `0x800210E0` where the reference has
+  `0x800210F0`. The first differing byte is nowhere near the object you
+  changed, and the symptom reads like a bad pointer table rather than a missing
+  keyword. `const` is the whole fix.
+
+  The declaration has to agree or it is a conflicting-types error, so
+  `extern const char MEM_CARD1[16];` in `csrc/main.h`. And a non-const pointer
+  table that points into it needs the cast back -- `(char *)D_80020074 + 8` --
+  or you get `initialization discards 'const' from pointer target type` at
+  every entry. It still builds; the alternative is making the `char **` use
+  site in `func_80021A84` const-correct, which is more churn than the cast.
+
+  **Check the section, not just the bytes:**
+
+      grep -n -B4 '^D_80020074:' build/csrc/ovl_main_80020000.s
+      mips64-linux-gnu-size -A build/csrc/ovl_main_80020000.o | grep -E '^\.(text|data|rodata)'
+
+  The directive you want to see above the label is **`.rdata`**, not
+  `.rodata` -- that is cc1psx's ECOFF-era spelling and gas files it under
+  `.rodata` in the object, which is what the linker script asks for. So the two
+  commands disagree on the name by design: `.rdata` in the `.s`, `.rodata` in
+  the `size -A`. Correct looks like `.rdata` / `.rodata 2340`; broken looks
+  like `.data` / `.rodata 2324`.
 
 * **cc1psx pads a data object up to its own alignment, and no further.**
   `char D_80027F20[] = "BASLUS-00614";` emits `.ascii "BASLUS-00614\000"`
@@ -374,28 +584,27 @@ All four must come out byte-identical.
 `0x80027E20` (text end) through `0x8002C000` is one file-backed data region --
 mostly non-zero up to `0x8002852F`, then large mostly-zero arrays with isolated
 live words at `0x8002A98C` and `0x8002B964`, so none of it is safely `bss`.
-Owned so far: `0x80027F18..0x80027F30`. Still referenced-and-unowned, 63
-symbols, with the gap to the next referenced symbol as an upper bound on each
-span:
+Owned by the C unit so far: `0x80027F18..0x80027F48` (`MEM_CARD_NAMES`,
+`MEM_CARD_PREFIX`, `D_80027F30`). `0x80027F48..0x80028000` is the `data_post`
+chunk -- disassembled asm, so its symbols are defined and no longer appear
+below. Still referenced-and-unowned, 56 symbols, with the gap to the next
+referenced symbol as an upper bound on each span:
 
 ```
-0x80027F30 0x18   0x80027F48 0x18   0x80027F60 0x08   0x80027F68 0x14
-0x80027F7C 0x48   0x80027FC4 0x0C   0x80027FD0 0x04   0x80027FD4 0x24
-0x80027FF8 0x18   0x80028010 0x10   0x80028020 0x44   0x80028064 0x04
-0x80028068 0x04   0x8002806C 0x08   0x80028074 0x08   0x8002807C 0x08
-0x80028084 0x08   0x8002808C 0x08   0x80028094 0x08   0x8002809C 0x18
-0x800280B4 0x1E0  0x80028294 0x0C   0x800282A0 0x04   0x800282A4 0x0C
-0x800282B0 0x0C   0x800282BC 0x10   0x800282CC 0x0C   0x800282D8 0x10
-0x800282E8 0xC0   0x800283A8 0x10   0x800283B8 0x0C   0x800283C4 0x28
-0x800283EC 0x08   0x800283F4 0x08   0x800283FC 0x1C   0x80028418 0x18
-0x80028430 0x100  0x80028530 0x08   0x80028538 0x08   0x80028540 0x08
-0x80028548 0x08   0x80028550 0x04   0x80028554 0x04   0x80028558 0x04
-0x8002855C 0x04   0x80028560 0x04   0x80028564 0x04   0x80028568 0x04
-0x8002856C 0x04   0x80028570 0x258  0x800287C8 0x04   0x800287CC 0x04
-0x800287D0 0x08   0x800287D8 0x08   0x800287E0 0x04   0x800287E4 0x04
-0x800287E8 0x20   0x80028808 0x9C8  0x800291D0 0x448  0x80029618 0x1378
-0x8002A990 0xE50  0x8002B7E0 0x70   0x8002B850 0x118  0x8002B968 0x1A0
-0x8002BB08 0x4F8
+0x80028010 0x10     0x80028020 0x44     0x80028064 0x4      0x80028068 0x4
+0x8002806C 0x8      0x80028074 0x8      0x8002807C 0x8      0x80028084 0x8
+0x8002808C 0x8      0x80028094 0x8      0x8002809C 0x18     0x800280B4 0x1E0
+0x80028294 0xC      0x800282A0 0x4      0x800282A4 0xC      0x800282B0 0xC
+0x800282BC 0x10     0x800282CC 0xC      0x800282D8 0x10     0x800282E8 0xC0
+0x800283A8 0x10     0x800283B8 0xC      0x800283C4 0x28     0x800283EC 0x8
+0x800283F4 0x8      0x800283FC 0x1C     0x80028418 0x18     0x80028430 0x100
+0x80028530 0x8      0x80028538 0x8      0x80028540 0x8      0x80028548 0x8
+0x80028550 0x4      0x80028554 0x4      0x80028558 0x4      0x8002855C 0x4
+0x80028560 0x4      0x80028564 0x4      0x80028568 0x4      0x8002856C 0x4
+0x80028570 0x258    0x800287C8 0x4      0x800287CC 0x4      0x800287D0 0x8
+0x800287D8 0x8      0x800287E0 0x4      0x800287E4 0x4      0x800287E8 0x20
+0x80028808 0x9C8    0x800291D0 0x448    0x80029618 0x1378   0x8002A990 0xE50
+0x8002B7E0 0x70     0x8002B850 0x118    0x8002B968 0x1A0    0x8002BB08 0x4F8
 ```
 
 Regenerate that list after any landing:
