@@ -35,6 +35,7 @@
 
 #include "sys/types.h"
 #include "r3000.h"
+#include "kernel.h"
 #include "libcd.h"
 #include "libgte.h"
 #include "libgpu.h"

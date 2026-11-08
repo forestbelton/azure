@@ -1,4 +1,6 @@
 #include "common.h"
+#include "main.h"
+#include "strings.h"
 
 /* main.bin's overlay at 0x80020000: the memory card save/load subsystem.
    Built at cc1psx -G0, not the -G8 the resident executable uses; the Makefile
@@ -12,510 +14,6 @@
    recovers the map and docs/overlays.md records it. Carve this file along
    those boundaries before matching anything whose shape depends on which unit
    it is in. */
-
-/* 0x80069C28 is libcard's `_card_wait`, resident in the engine. splat names
-   it positionally here because main.bin has no symbol_addrs file yet. */
-void func_80069C28(s32 chan);
-
-s32 func_800213C4(s32 arg0);
-/* No arguments: func_80020A0C calls it with no $a0 set up at all, and its own
-   listing never reads $a0 (it works off D_80028550 and up). func_80020924's
-   call looks like it passes arg0 only because $a0 still holds the incoming
-   parameter there; both spellings compile identically in that caller, and
-   this one is what func_80020A0C requires. See the CALLEE ARITY caution in
-   docs/matching-levers.md. */
-void func_800214A4(void);
-s32 func_8002219C(s32 idx);
-/* card_mes.c's message entry point. The 20 wrappers at func_80022E74..
-   func_8002316C are one per message id 0..19, each passing a fixed id and
-   kind and either a caller-supplied parameter or 0. Decoded mechanically
-   from which argument register each wrapper sets; the register copies
-   (`addu $a2, $a1, $zero` where the kind equals the id, `addu $a3, $a2,
-   $zero` where both are 0) are gcc reusing an equal value, not source. */
-s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p);
-
-extern s32 D_800287C8;
-extern s32 D_800287CC;
-extern s32 D_800287E4;
-/* 128 bytes per entry; func_80021D38's `sll $a0, $a0, 7` is the stride and
-   the 2D array spelling is what produces the lui/addiu pair plus the shift,
-   where a scalar would fold differently. The element type is a guess that
-   only has to make offset 0 a word. */
-extern s32 D_80083E98[][32];
-extern s32 D_80083EA4[][32];
-extern u8 D_80078FD0[];
-void func_8004E5A0(s32 v, s32 n, u8 *out);
-void func_8004E69C(u8 *q);
-s8 *func_8004E298(u8 *a, u8 *b, s32 c);
-extern s32 D_80084120[];
-/* The overlay's own data, past its text end at 0x80027E20 and so in the
-   following `bin` segment; the linker resolves them from
-   splat/main.bin_undefined_syms_auto.txt. Declared as arrays because the
-   listings materialise them with the lui/addiu pair rather than folding a
-   %lo into the access. */
-extern u8 D_80027F60[];
-extern u8 D_80027F68[];
-
-extern u8 D_80027FC4[];
-extern u8 D_80027FF8[];
-extern u8 D_8002808C[];
-extern u8 D_80028094[];
-/* D_800814A0 is already declared `extern u32` in include/structs.h, which
-   common.h pulls in; declaring it again here is a conflicting-types error.
-
-   This unit needs BOTH spellings of it, which is what the `__asm__` alias is
-   for. func_80026FB4 updates it in place beside a u16 store and wants the
-   SCALAR form: there the target interleaves the two updates, which is what a
-   non-varying-address store permits. func_80023A00 does the same two updates
-   and the target does NOT interleave them -- 20 words with a load-delay nop
-   against 19 interleaved -- so there it needs the ARRAY form, where both
-   sides are in-struct, cse's `invalidate` drops the cached load and sched1
-   cannot hoist. Same mechanism and the same lever as `extern u32
-   D_800814B0[1]` in include/structs.h; see docs/matching-levers.md section 5.
-   Neither a cast-to-pointer index nor a pointer local reaches it: both still
-   give 19 words. The lever is PER SITE. */
-extern u32 D_800814A0_a[1] __asm__("D_800814A0");
-
-s32 func_800491F4(s32 a, u8 *fmt, s32 n);
-void func_800269B4(s32 *p);
-void func_80026B18(u8 *p, s32 *b, s32 *c);
-s32 func_8004CAA0(void);
-
-/* State handlers whose ADDRESS is stored into a field at -0x10 by the
-   countdown family (func_800252A4, func_8002546C, func_80026398,
-   func_8002765C). Only the address is taken, so the signature here does not
-   affect the generated code; it is written `(void)` rather than guessed. */
-/* The two GPU-primitive templates the card UI copies out of the engine's
-   data: D_8002E5D8 is 4 words and D_8002E5E8 is 3, both declared `extern
-   u32 []` in include/structs.h (which calls D_8002E5D8 "a 4-word template"),
-   so they are copied through a cast rather than retyped -- retyping them
-   would change every engine unit that already matches. The destination
-   layouts below are what the stores after each copy require: word-sized at
-   0x00/0x04, then s16 at 0x08/0x0A/0x0C and a byte at 0x0F. */
-typedef struct
-{
-    s32 unk_00;
-    s32 unk_04;
-    s16 unk_08;
-    s16 unk_0A;
-    s16 unk_0C;
-    u8 unk_0E;
-    u8 unk_0F;
-} UnkCardPrim;
-
-typedef struct
-{
-    s32 unk_00;
-    s32 unk_04;
-    s32 unk_08;
-} UnkCardPrim12;
-
-/* Four bytes, alignment 1: func_80026128 copies this out of D_80028064 with
-   lwl/lwr + swl/swr, which is what gcc emits for a struct it cannot assume is
-   word-aligned. */
-typedef struct
-{
-    u8 b0;
-    u8 b1;
-    u8 b2;
-    u8 b3;
-} UnkFour;
-
-/* Eight and 0x20 bytes, alignment 1, for the same reason as UnkFour:
-   func_80025FFC copies D_800200B8 onto its stack and a D_80027E78 row into
-   its argument with lwl/lwr + swl/swr. */
-typedef struct
-{
-    u8 b[8];
-} UnkEight;
-
-typedef struct
-{
-    u8 b[0x20];
-} UnkBlock20;
-
-/* The 0x80-byte save-slot row, declared as a STRUCT alias of D_80083E98 (the
-   unit already has it as `s32 [][32]`, which the other functions want).
-   func_80024390 needs the struct spelling: its first row access is the name
-   at +0xC, so gcc relocates against D_80083E98+0xC -- which splat names
-   D_80083EA4 -- keeps that address in a callee-saved register, and derives
-   the row base as `that - 0xC` in $fp for the other seven fields. With two
-   separate symbols each access materialises its own %hi. */
-typedef struct
-{
-    s32 unk_00;
-    s32 unk_04;
-    s16 unk_08;
-    s16 unk_0A;
-    u8 name[0x10];
-    u32 unk_1C;
-    s32 unk_20;
-    s32 unk_24;
-    s32 unk_28;
-    u32 unk_2C;
-    s32 unk_30;
-    s32 unk_34;
-    u8 pad_38[0x48];
-} UnkSaveRow;
-
-extern UnkSaveRow D_80083E98_s[] __asm__("D_80083E98");
-
-/* 24 bytes, alignment 1: func_80022774 copies a D_80027F48 template into its
-   third primitive with lwl/lwr + swl/swr. */
-typedef struct
-{
-    u8 b[24];
-} UnkBlock24;
-
-/* Two words, alignment 4: func_8002789C copies the pair func_800217D4
-   returns into p[6]/p[7] with gcc's aligned 8-byte block move (lw/lw/sw/sw);
-   as two field assignments it is one word longer and interleaved. */
-typedef struct
-{
-    s32 a;
-    s32 b;
-} UnkTwoWords;
-
-/* The u16 pair at the front of func_80025FFC's stack copy: the loads are
-   `lhu`, not `lh`, so the fields are unsigned. */
-typedef struct
-{
-    u16 x;
-    u16 y;
-    u16 w;
-    u16 h;
-} UnkURect;
-
-/* 0x80 bytes, alignment 1: func_80021DF4 copies a whole D_80083E98 row with
-   gcc's unknown-alignment block move -- the `(src | dst) & 3` test and both a
-   lwl/lwr and a lw loop. Through the s32[][32] type gcc would know both sides
-   are word-aligned and emit only the second. */
-typedef struct
-{
-    u8 b[0x80];
-} UnkRow;
-
-/* Five function pointers, 20 bytes: func_80021594 block-copies both
-   D_80020034 and D_80020048 onto its stack and dispatches through the copy.
-   It has to be a struct COPY from the extern, not a local array
-   INITIALISER: gcc emits a function's own constants into .rodata right after
-   that function, and func_80021594 sits BEFORE this unit's first
-   INCLUDE_RODATA line, so an initialiser lands at 0x80020000 and pushes
-   every other rodata block down. (func_800258C8's initialiser works only
-   because that function sits where its constant belongs.) */
-typedef struct
-{
-    s32 (*f[5])(void);
-} UnkFnTab5;
-
-typedef struct
-{
-    s32 unk_00;
-    UnkCardPrim *unk_04;
-    UnkCardPrim12 *unk_08;
-    s32 unk_0C;
-} UnkCardPair;
-
-/* 24-byte records: five string pointers then four bytes. The size comes
-   from func_80022C48's `b * 24` index and the layout from func_80022BE8,
-   which walks the five pointers and writes the bytes at 0x16 and 0x17. The
-   struct spelling is load-bearing in func_80022CD8: as a plain u8 array
-   indexed `[i * 24 + 0x15]` gcc folds the 0x15 into the symbol's %lo and the
-   listing's `lbu $v0, 0x15($v0)` comes out with displacement 0. */
-typedef struct
-{
-    u8 *strs[5];
-    u8 unk_14;
-    u8 unk_15;
-    u8 unk_16;
-    u8 unk_17;
-} UnkStrSet;
-
-/* The arrayed form of the same initialiser, at six different base offsets.
-   Each of func_80022B48, func_800237EC, func_80023EF4, func_80024C70,
-   func_80026DF0 and func_8002727C builds N of these in one loop, and the
-   layout is IDENTICAL in all six -- a 12-byte shared UnkCardPrim12 at the
-   base, 0x10 bytes of padding, then N back-pointers, N UnkCardPairs and N
-   4-word primitive templates -- only the base offset and N differ
-   (0x8B0/7, 0x184/18, 0x240/10, 0xB20/21, 0x44/4, 0xD4/4). It has to be
-   spelled as a struct rather than as separately computed pointers: the
-   target's loop keeps ONE base register and strength-reduces into
-   base-relative induction variables carrying the large displacements
-   (0x8CC, 0x958, 0x8EC, 0x8F0), which is what indexing through a struct
-   produces. Precomputing `base + 0x8CC` and friends into locals gives 38
-   words against 40 and every word differing. */
-#define UNK_CARD_GROUP(name, pad, n) \
-    typedef struct                   \
-    {                                \
-        u8 pad_000[pad];             \
-        u32 shared[3];               \
-        u8 pad_00C[0x10];            \
-        UnkCardPair *ptrs[n];        \
-        UnkCardPair ents[n];         \
-        u32 prims[n][4];             \
-    } name
-
-UNK_CARD_GROUP(UnkCardGrp8B0, 0x8B0, 7);
-UNK_CARD_GROUP(UnkCardGrp184, 0x184, 18);
-UNK_CARD_GROUP(UnkCardGrp240, 0x240, 10);
-UNK_CARD_GROUP(UnkCardGrpB20, 0xB20, 21);
-UNK_CARD_GROUP(UnkCardGrp044, 0x44, 4);
-UNK_CARD_GROUP(UnkCardGrp0D4, 0xD4, 4);
-
-void func_80023600(s32 *p);
-void func_80023730(UnkCardPair *p, u32 *a, u32 *b);
-void func_80024BB4(UnkCardPair *p, u32 *a, u32 *b);
-void func_800271C0(UnkCardPair *p, u32 *a, u32 *b);
-void func_800239B0(s32 **pp);
-void func_800240EC(s32 *p);
-void func_800251A4(s32 *p);
-void func_80024E44(s32 *p);
-void func_8002742C(s32 *p);
-void func_80025030(s32 *p);
-void func_80025DC8(s32 *p);
-void func_8004F52C(s32 a);
-u8 *func_8004DA74(u8 *out, u8 *s, s32 a);
-void func_8004CB2C(s32 *p);
-void func_80026920(s32 *p);
-void func_80027BF4(void);
-void func_80040AA0(s32 a);
-UnkNode *func_80044144(s16 a, s16 b, u32 c, u32 d);
-void func_800A68F4(void);
-void func_8005863C(void);
-void func_8006A084(void);
-extern u8 D_80020000[];
-extern u8 D_80020028[];
-s32 func_8006A004(s32 ev);
-s32 func_80069FF4(u32 cls, u32 spec, s32 mode, void *fn);
-s32 func_8006A034(s32 ev);
-void func_80069F18(u8 *fmt, u8 *file, s32 line);
-void func_80069DF8(s32 code) __attribute__((noreturn));
-void func_8006A094(void);
-void func_8006A248(u32 ev);
-s32 *func_80027AFC(s32 a, s32 b);
-u8 *func_80022A30(u8 *p, s32 *q);
-void func_80021538(void);
-void func_80025D34(s32 *p);
-void func_80023E14(s32 *p);
-void func_80025F0C(u8 *p, s32 n);
-void func_80025FFC(s32 *p, s32 v);
-void func_80026D78(s32 *p);
-void func_80022BE8(UnkStrSet *p);
-s32 func_80069BF8(s32 a);
-void func_80023A78(UnkCardPair *p, u32 *a, u32 *b, s32 n);
-void func_80026C94(s32 *p);
-void func_80026CF0(s32 *p);
-void func_80064F20(s32 a);
-void func_80064F00(s32 a, s32 b);
-s32 func_8006A024(s32 ev);
-s32 func_8002191C(void);
-void func_80027C90(s32 *p);
-s32 *func_80025C7C(s32 *p, s32 a);
-s32 *func_80026868(s32 *p, s32 a);
-s32 func_8004F418(s32 *p, s32 *q);
-void func_80020F18(void);
-void func_800585A0(void);
-s32 func_80021FF0(s32 a, u8 *b, s32 c);
-s32 func_80033B2C(s16 a);
-void func_800A6104(void);
-u8 *func_80022774(u8 *p, s32 *q);
-void func_80022934(s32 *p);
-void func_80022488(s32 *p);
-void func_80022524(s32 *p);
-void func_8004CBFC(u32 *p, u8 *q, u32 *r);
-void func_800439F8(void);
-void func_8006A0F4(u8 *p);
-extern const u8 D_80020084[];
-
-s32 func_8006A104(u8 *name, u8 *e);
-void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z);
-void func_8006A134(u8 *name);
-s32 func_80049E6C(s32 a);
-void func_80023C44(s32 *p);
-s32 func_8006A0A4(u8 *name, s32 mode);
-s32 *func_8003FE78(s32 a, u8 *b, s32 c);
-s32 *func_8003FC64(s32 a);
-s32 func_8004B4A8(s32 *p);
-s32 func_80021F18(s32 a, u8 *b);
-void func_800237EC(UnkCardGrp184 *c, s32 n);
-void func_80023258(s32 *p);
-s32 func_80069C38(s32 a);
-s32 func_80069C18(s32 a);
-s32 func_8002168C(void);
-void func_80026DF0(UnkCardGrp044 *c, s32 n);
-s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
-void func_80024C70(UnkCardGrpB20 *c, s32 n);
-void func_8003AD08(s32 n, u8 *buf);
-s32 func_800210F0(void);
-extern UnkFnTab5 D_80020034;
-extern UnkFnTab5 D_80020048;
-s32 func_80021298(void);
-extern u8 *D_80028294[];
-extern u8 *D_800282A0;
-/* func_80024D58 calls func_80024C48 with ONLY $a0 set, where the function
-   itself takes five arguments (func_80022C90 passes all five). The one-argument
-   call cannot be written through the real prototype, so it goes through an
-   `__asm__`-aliased declaration, the same device csrc/gprel_72A8.c uses for
-   func_80033AE8w. */
-s32 func_80024C48w(s32 *p) __asm__("func_80024C48");
-extern u8 D_8002A990[];
-u8 *func_800242D8(u8 *p, s32 w, s32 h);
-extern u8 D_8002B850[];
-extern u8 D_80079054[];
-extern u8 D_800790B4[];
-extern u8 D_80079114[];
-extern s32 D_8002809C[];
-extern u8 D_80028068[][2];
-extern u8 D_80027E78[][0x20];
-extern u8 D_800200B8[];
-s32 func_80049DE8(s32 a, s32 b, s32 c);
-s32 func_80049E1C(s32 a, s32 d, s32 m);
-void func_8002651C(s32 *p);
-void func_8006733C(UnkURect *r, u8 *src);
-void func_80067014(s32 n);
-extern s32 D_8002806C[];
-extern u8 *D_80028074[];
-extern u8 D_800287E8[];
-extern u8 D_800291D0[];
-extern u8 D_80029618[][0x3E4];
-extern u8 *D_800282A4[];
-extern u8 D_800791A4[];
-void func_8002727C(UnkCardGrp0D4 *c, s32 n);
-s16 func_80027DD0(void);
-extern u8 D_8002BB08[];
-extern u8 D_8002B968[];
-s32 *func_80027364(s32 *p);
-s32 *func_800238D4(s32 *p);
-s32 *func_80024D58(s32 *p, s32 a, s32 b);
-extern u8 D_80027FD0[];
-extern u8 D_8002B7E0[];
-s32 func_8006A0B4(s32 fd, s32 off, s32 whence);
-s32 func_8006A0C4(s32 fd, u8 *buf, s32 len);
-s32 func_8006A0E4(s32 fd);
-extern u8 D_800200A0[];
-extern u8 D_80027F48[];
-extern u8 D_800282D8[];
-extern u8 D_800282E8[];
-extern u8 *D_800283A8[];
-extern const u8 D_800200A4[];
-extern u8 *D_80027FD4[];
-u8 *func_8004E5E8(s32 v, u16 n, u8 *out);
-void func_80023B18(s32 *p);
-extern u8 D_80027F7C[];
-extern u8 D_800282B0[];
-extern u8 D_80077E84[];
-void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z);
-s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off);
-extern u8 D_80028064[];
-extern u8 *D_800283B8[];
-extern u8 D_800283C4[];
-extern u8 *D_800283EC[];
-extern u8 *D_800283F4[];
-extern u8 D_800283FC[];
-u8 *func_8006A114(u8 *e);
-void func_8005FE18(s32 a);
-extern u8 D_80027E68[];
-void func_80069E78(u8 *dst, u8 *src);
-void func_80069E38(u8 *dst, u8 *src);
-void func_80025788(s32 *p);
-extern u8 *D_80027F18[];
-extern u8 D_80027F20[];
-extern u8 *D_80027F30[];
-s32 func_80069C08(s32 a);
-void func_80024390(s32 *p);
-void func_80024818(s32 *p);
-void func_800249B4(s32 *p);
-void func_800250E8(s32 *p);
-void func_80025584(s32 *p);
-extern s16 D_80028010[];
-void func_80020A80(void);
-void func_80069EC8(void *p, s32 n);
-void func_8004E884(u8 *p, s32 a);
-void func_8004E264(u8 *p, s32 a);
-extern s32 D_80084118;
-extern s32 D_80028530;
-extern s32 D_80028538;
-extern s32 D_800287D0;
-extern s32 D_80028540;
-extern s32 D_80028548;
-extern s32 D_800287D8;
-extern s32 D_80028808;
-extern u8 *D_800282BC[];
-s32 *func_80026ED0(s32 *p, s32 a);
-void func_800252CC(s32 *p);
-void func_8002570C(s32 *p);
-void func_80025848(s32 *p);
-extern u8 D_80028418[];
-extern u8 D_80028430[];
-extern u8 D_8002807C[];
-extern u8 D_80028084[];
-extern s32 D_80083200;
-extern s32 D_80028550;
-extern s32 D_80028554;
-extern s32 D_80028558;
-extern s32 D_8002855C;
-extern s32 D_80028560;
-extern s32 D_80028564;
-extern s32 D_80028568;
-extern s32 D_8002856C;
-extern s32 D_80084128[];
-extern u8 D_80028020[];
-extern UnkStrSet D_800280B4[];
-extern s32 D_80028570[][10];
-extern s32 D_800287E0;
-void func_80024A50(s32 *p);
-/* In town's/dungeon's overlay region above the engine, reached as a plain
-   absolute call; the address comes from main.bin_undefined_funcs_auto.txt. */
-void func_800A68C0(void);
-extern u8 D_80077EF0[];
-extern u8 D_80077EFC[];
-void func_80020EA0(void);
-extern u8 D_800282CC[];
-s32 func_80021D54(s32 n);
-s32 func_80023FF0(s32 a, s32 n);
-void func_80025B9C(s32 *p);
-void func_80027684(s32 *p);
-void func_80020984(void);
-void func_80026410(s32 *p);
-void func_80049D80(s32 p, s16 *r);
-void func_8004E994(s32 a);
-extern u8 D_800786DC[];
-extern u8 D_800786E8[];
-s32 func_8002168C(void);
-void func_80026DF0(UnkCardGrp044 *c, s32 n);
-s32 func_8006A0D4(s32 fd, u8 *buf, s32 len);
-void func_80024C70(UnkCardGrpB20 *c, s32 n);
-void func_8003AD08(s32 n, u8 *buf);
-s32 func_800210F0(void);
-extern UnkFnTab5 D_80020034;
-extern UnkFnTab5 D_80020048;
-s32 func_80021298(void);
-extern u8 *D_80028294[];
-extern u8 *D_800282A0;
-/* func_80024D58 calls func_80024C48 with ONLY $a0 set, where the function
-   itself takes five arguments (func_80022C90 passes all five). The one-argument
-   call cannot be written through the real prototype, so it goes through an
-   `__asm__`-aliased declaration, the same device csrc/gprel_72A8.c uses for
-   func_80033AE8w. */
-s32 func_80024C48w(s32 *p) __asm__("func_80024C48");
-extern u8 D_8002A990[];
-u8 *func_800242D8(u8 *p, s32 w, s32 h);
-extern u8 D_8002B850[];
-extern u8 D_80079054[];
-extern u8 D_800790B4[];
-extern u8 D_80079114[];
-s32 func_800231E4(s32 flag);
-void func_80024ACC(s32 *p);
-void func_800270E0(s32 *p);
-
-void func_80025230(s32 *p);
-void func_800265B8(s32 *p);
-void func_80027584(s32 *p);
-void func_8002789C(s32 *p);
-void func_8002593C(s32 *p);
-void func_80025398(s32 *p);
-void func_800262BC(s32 *p);
-void func_80027584(s32 *p);
 
 /* c_server.c, somewhere in lines 1-180: the first function in the overlay and
    the first one landed. Its twin is func_804008A0.
@@ -535,8 +33,8 @@ void func_80020924(s32 arg0)
     s32 *p;
 
     func_800214A4();
-    func_80069C28(0);
-    func_80069C28(1);
+    _card_wait(0);
+    _card_wait(1);
     p = &D_800287CC;
     if (arg0)
     {
@@ -552,8 +50,8 @@ void func_80020924(s32 arg0)
 void func_80020984(void)
 {
     func_800214A4();
-    func_80069C28(0);
-    func_80069C28(1);
+    _card_wait(0);
+    _card_wait(1);
     func_800213C4(D_800287CC);
 }
 
@@ -562,8 +60,8 @@ void func_800209C4(void)
     s32 v;
 
     func_800214A4();
-    func_80069C28(0);
-    func_80069C28(1);
+    _card_wait(0);
+    _card_wait(1);
     v = 0x10 - D_800287CC;
     D_800287CC = v;
     func_800213C4(v);
@@ -577,131 +75,131 @@ void func_80020A0C(void)
     func_800214A4();
 }
 
-s32 func_80020A30(void)
+long HandleCardEOF(void)
 {
-    D_800287E4 = 1;
+    gCardState = CARD_STATE_EOF;
     return 0;
 }
 
-s32 func_80020A44(void)
+long HandleCardError(void)
 {
-    D_800287E4 = 2;
+    gCardState = CARD_STATE_ERROR;
     return 0;
 }
 
-s32 func_80020A58(void)
+long HandleCardTimeout(void)
 {
-    D_800287E4 = 3;
+    gCardState = CARD_STATE_TIMEOUT;
     return 0;
 }
 
-s32 func_80020A6C(void)
+long HandleCardNew(void)
 {
-    D_800287E4 = 4;
+    gCardState = CARD_STATE_NEW;
     return 0;
 }
 
 /* c_server.c's event setup, and the overlay's second largest function: eight
-   func_80069FF4 (OpenEvent) calls inside the func_8006A084 / func_8006A094
+   OpenEvent (OpenEvent) calls inside the EnterCriticalSection / ExitCriticalSection
    critical section, each asserting the handle is not -1, then eight
-   func_8006A034 (EnableEvent) calls each asserting a non-zero result. Source
+   EnableEvent (EnableEvent) calls each asserting a non-zero result. Source
    lines 185..200 and 212..226.
 
-   It falls out whole once func_80069DF8 is NORETURN (see func_80020F18): each
+   It falls out whole once exit is NORETURN (see func_80020F18): each
    of the sixteen %hi values then stays live in its own callee-saved register
    across the calls, which is why the function saves $s0..$s7 and $fp, and
    $s0 holds the -1 the first eight comparisons share. */
 void func_80020A80(void)
 {
-    func_8006A084();
-    D_80028550 = func_80069FF4(0xF4000001, 4, 0x2000, 0);
-    if (D_80028550 == -1)
+    EnterCriticalSection();
+    gSwCardEOFEvent = OpenEvent(SwCARD, EvSpIOE, EvMdNOINTR, NULL);
+    if (gSwCardEOFEvent == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 185);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 185);
+        exit(1);
     }
-    D_80028554 = func_80069FF4(0xF4000001, 0x8000, 0x2000, 0);
-    if (D_80028554 == -1)
+    gSwCardErrorEvent = OpenEvent(SwCARD, EvSpERROR, EvMdNOINTR, NULL);
+    if (gSwCardErrorEvent == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 187);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 187);
+        exit(1);
     }
-    D_80028558 = func_80069FF4(0xF4000001, 0x100, 0x2000, 0);
+    D_80028558 = OpenEvent(SwCARD, EvSpTIMOUT, EvMdNOINTR, NULL);
     if (D_80028558 == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 189);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 189);
+        exit(1);
     }
-    D_8002855C = func_80069FF4(0xF4000001, 0x2000, 0x2000, 0);
+    D_8002855C = OpenEvent(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
     if (D_8002855C == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 191);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 191);
+        exit(1);
     }
-    D_80028560 = func_80069FF4(0xF0000011, 4, 0x1000, (void *)func_80020A30);
+    D_80028560 = OpenEvent(HwCARD, EvSpIOE, EvMdINTR, HandleCardEOF);
     if (D_80028560 == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 194);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 194);
+        exit(1);
     }
-    D_80028564 = func_80069FF4(0xF0000011, 0x8000, 0x1000, (void *)func_80020A44);
+    D_80028564 = OpenEvent(HwCARD, EvSpERROR, EvMdINTR, HandleCardError);
     if (D_80028564 == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 196);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 196);
+        exit(1);
     }
-    D_80028568 = func_80069FF4(0xF0000011, 0x100, 0x1000, (void *)func_80020A58);
+    D_80028568 = OpenEvent(HwCARD, EvSpTIMOUT, EvMdINTR, HandleCardTimeout);
     if (D_80028568 == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 198);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 198);
+        exit(1);
     }
-    D_8002856C = func_80069FF4(0xF0000011, 0x2000, 0x1000, (void *)func_80020A6C);
+    D_8002856C = OpenEvent(HwCARD, EvSpNEW, EvMdINTR, HandleCardNew);
     if (D_8002856C == -1)
     {
-        func_80069F18(D_80020000, D_80020028, 200);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 200);
+        exit(1);
     }
-    func_8006A094();
-    if (func_8006A034(D_80028550) == 0)
+    ExitCriticalSection();
+    if (EnableEvent(gSwCardEOFEvent) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 212);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 212);
+        exit(1);
     }
-    if (func_8006A034(D_80028554) == 0)
+    if (EnableEvent(gSwCardErrorEvent) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 214);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 214);
+        exit(1);
     }
-    if (func_8006A034(D_80028558) == 0)
+    if (EnableEvent(D_80028558) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 216);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 216);
+        exit(1);
     }
-    if (func_8006A034(D_8002855C) == 0)
+    if (EnableEvent(D_8002855C) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 218);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 218);
+        exit(1);
     }
-    if (func_8006A034(D_80028560) == 0)
+    if (EnableEvent(D_80028560) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 220);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 220);
+        exit(1);
     }
-    if (func_8006A034(D_80028564) == 0)
+    if (EnableEvent(D_80028564) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 222);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 222);
+        exit(1);
     }
-    if (func_8006A034(D_80028568) == 0)
+    if (EnableEvent(D_80028568) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 224);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 224);
+        exit(1);
     }
-    if (func_8006A034(D_8002856C) == 0)
+    if (EnableEvent(D_8002856C) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 226);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 226);
+        exit(1);
     }
 }
 
@@ -712,7 +210,7 @@ void func_80020EA0(void)
         D_80084130[0] = 1;
         D_80084118 = 0;
         (&D_80084118)[1] = 0;
-        func_80069EC8(D_80083E98, 0x280);
+        bzero((unsigned char *)D_80083E98, 0x280);
     }
     func_80020A80();
     D_800287D0 = 0;
@@ -722,11 +220,11 @@ void func_80020EA0(void)
     D_800287C8 = 0;
 }
 
-/* c_server.c's teardown: eight asserts bracketed by func_8006A084 /
-   func_8006A094 (EnterCriticalSection / ExitCriticalSection), one per event
+/* c_server.c's teardown: eight asserts bracketed by EnterCriticalSection /
+   ExitCriticalSection (EnterCriticalSection / ExitCriticalSection), one per event
    handle, at source lines 263..277 in steps of two.
 
-   func_80069DF8 has to be declared NORETURN. Without it gcc assumes each
+   exit has to be declared NORETURN. Without it gcc assumes each
    assert body falls through into the next test, so after the two calls it
    re-materialises the next handle's %hi -- one extra word per assert, 121
    against 114. With it the `lui` that reorg puts in each `bnez`'s delay slot
@@ -734,48 +232,48 @@ void func_80020EA0(void)
    whole assert family reachable; see func_80020A80, which has 24 of them. */
 void func_80020F18(void)
 {
-    func_8006A084();
-    if (func_8006A004(D_80028550) == 0)
+    EnterCriticalSection();
+    if (CloseEvent(gSwCardEOFEvent) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 263);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 263);
+        exit(1);
     }
-    if (func_8006A004(D_80028554) == 0)
+    if (CloseEvent(gSwCardErrorEvent) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 265);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 265);
+        exit(1);
     }
-    if (func_8006A004(D_80028558) == 0)
+    if (CloseEvent(D_80028558) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 267);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 267);
+        exit(1);
     }
-    if (func_8006A004(D_8002855C) == 0)
+    if (CloseEvent(D_8002855C) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 269);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 269);
+        exit(1);
     }
-    if (func_8006A004(D_80028560) == 0)
+    if (CloseEvent(D_80028560) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 271);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 271);
+        exit(1);
     }
-    if (func_8006A004(D_80028564) == 0)
+    if (CloseEvent(D_80028564) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 273);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 273);
+        exit(1);
     }
-    if (func_8006A004(D_80028568) == 0)
+    if (CloseEvent(D_80028568) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 275);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 275);
+        exit(1);
     }
-    if (func_8006A004(D_8002856C) == 0)
+    if (CloseEvent(D_8002856C) == 0)
     {
-        func_80069F18(D_80020000, D_80020028, 277);
-        func_80069DF8(1);
+        printf(D_80020000, D_80020028, 277);
+        exit(1);
     }
-    func_8006A094();
+    ExitCriticalSection();
 }
 
 s32 func_800210E0(void)
@@ -826,10 +324,10 @@ one:
         r = 1;
         D_800287C8 = 0;
     }
-    else if ((func_80069C18(0) & 1) != 0 || (func_80069C18(1) & 1) != 0)
+    else if ((_card_status(0) & 1) != 0 || (_card_status(1) & 1) != 0)
     {
         func_800214A4();
-        while (func_80069C08(D_800287CC) == 0)
+        while (_card_load(D_800287CC) == 0)
         {
         }
         D_800287E0 = 0;
@@ -885,7 +383,7 @@ s32 func_8002121C(void)
     if (D_800287C8 == 2)
     {
         func_800214A4();
-        if (func_80069C08(D_800287CC) == 0)
+        if (_card_load(D_800287CC) == 0)
         {
             D_800287C8 = 0;
             r = 5;
@@ -946,11 +444,11 @@ s32 func_80021298(void)
     goto def;
 one:
     func_80021538();
-    if (func_80069C38(D_800287CC) == 0)
+    if (_card_clear(D_800287CC) == 0)
     {
         goto fail1;
     }
-    if ((func_80069C18(D_800287CC != 0) & 4) == 0)
+    if ((_card_status(D_800287CC != 0) & 4) == 0)
     {
         goto fail2;
     }
@@ -1034,7 +532,7 @@ s32 func_800213C4(s32 a)
     func_800214A4();
     do
     {
-    } while (func_80069BF8(a) == 0);
+    } while (_card_info(a) == 0);
     D_800287E0 = 0;
     D_800287C8 = 1;
     return 1;
@@ -1044,19 +542,19 @@ s32 func_80021410(void)
 {
     s32 r = 0;
 
-    if (func_8006A024(D_80028550) != 0)
+    if (TestEvent(gSwCardEOFEvent) != 0)
     {
         r = 1;
     }
-    else if (func_8006A024(D_80028554) != 0)
+    else if (TestEvent(gSwCardErrorEvent) != 0)
     {
         r = 2;
     }
-    else if (func_8006A024(D_80028558) != 0)
+    else if (TestEvent(D_80028558) != 0)
     {
         r = 3;
     }
-    else if (func_8006A024(D_8002855C) != 0)
+    else if (TestEvent(D_8002855C) != 0)
     {
         r = 4;
     }
@@ -1065,18 +563,18 @@ s32 func_80021410(void)
 
 void func_800214A4(void)
 {
-    func_8006A024(D_80028550);
-    func_8006A024(D_80028554);
-    func_8006A024(D_80028558);
-    func_8006A024(D_8002855C);
+    TestEvent(gSwCardEOFEvent);
+    TestEvent(gSwCardErrorEvent);
+    TestEvent(D_80028558);
+    TestEvent(D_8002855C);
 }
 
 s32 func_800214FC(void)
 {
-    s32 v = D_800287E4;
-    s32 r = 0;
+    CARD_STATE v = gCardState;
+    CARD_STATE r = 0;
 
-    if (v != 0)
+    if (v != CARD_STATE_OK)
     {
         r = v;
         func_80021538();
@@ -1086,11 +584,11 @@ s32 func_800214FC(void)
 
 void func_80021538(void)
 {
-    D_800287E4 = 0;
-    func_8006A024(D_80028560);
-    func_8006A024(D_80028564);
-    func_8006A024(D_80028568);
-    func_8006A024(D_8002856C);
+    gCardState = CARD_STATE_OK;
+    TestEvent(D_80028560);
+    TestEvent(D_80028564);
+    TestEvent(D_80028568);
+    TestEvent(D_8002856C);
 }
 
 s32 func_80021594(void)
@@ -1246,22 +744,22 @@ s32 func_8002191C(void)
 {
     u8 name[0x20];
     s32 n = 0;
-    u8 *e = (u8 *)D_80028570;
+    struct DIRENTRY *e = D_80028570;
     u8 **t = D_80027F18;
 
     if (D_800287CC != 0)
     {
         t++;
     }
-    func_80069E78(name, *t);
-    func_80069E38(name, (u8 *)D_80020084);
-    if (func_8006A104(name, e) != 0)
+    strcpy(name, *t);
+    strcat(name, (u8 *)D_80020084);
+    if (firstfile2(name, e) != 0)
     {
         do
         {
             n++;
-            e += 0x28;
-        } while (func_8006A114(e) == e);
+            e = (struct DIRENTRY *)((u8 *)e + 0x28);
+        } while (nextfile(e) == e);
     }
     return n;
 }
@@ -1290,7 +788,7 @@ const u8 D_80020084[28] = "*\0\0\0TMP\0"
 
 s32 func_800219B8(s32 n)
 {
-    s32(*p)[10] = D_80028570;
+    s32(*p)[10] = (s32(*)[10])D_80028570;
     s32 sum = 0;
     s32 i;
 
@@ -1348,18 +846,18 @@ s32 func_80021A84(s32 flag)
     u8 **t;
     s32 r;
 
-    func_80069C28(0);
-    func_80069C28(1);
+    _card_wait(0);
+    _card_wait(1);
     func_80021538();
     t = D_80027F18;
     if (flag != 0)
     {
         t++;
     }
-    func_8006A0F4(*t);
+    format(*t);
     while ((r = func_800214FC()) == 0)
     {
-        func_8005FE18(0);
+        VSync(0);
     }
     if (r != 1)
     {
@@ -1383,9 +881,9 @@ void func_80021B18(u8 *s, s32 idx)
     {
         t++;
     }
-    func_80069E78(s, *t);
-    func_80069E38(s, D_80027F20);
-    func_80069E38(s, D_80027F30[idx]);
+    strcpy(s, *t);
+    strcat(s, D_80027F20);
+    strcat(s, D_80027F30[idx]);
 }
 
 s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
@@ -1393,15 +891,15 @@ s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
     s32 r = 0;
     s32 fd;
 
-    fd = func_8006A0A4(name, 1);
+    fd = open(name, 1);
     if (fd != -1)
     {
         n = n << 7;
-        if (off == 0 || func_8006A0B4(fd, off << 7, 0) != -1)
+        if (off == 0 || lseek(fd, off << 7, 0) != -1)
         {
-            r = func_8006A0C4(fd, buf, n) == n;
+            r = read(fd, buf, n) == n;
         }
-        func_8006A0E4(fd);
+        close(fd);
     }
     /* DEVICE: the two nested degenerate loops weight the `return r`
        reference by 3 (flow.c:440 counts the LOOP_BEG/END notes,
@@ -1440,26 +938,26 @@ s32 func_80021C4C(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
 
     if (skip == 0)
     {
-        fd = func_8006A0A4(name, 0x30200);
+        fd = open(name, 0x30200);
         if (fd == -1)
         {
             return ok;
         }
-        func_8006A0E4(fd);
+        close(fd);
     }
-    fd = func_8006A0A4(name, 2);
+    fd = open(name, 2);
     if (fd == -1)
     {
         return ok;
     }
-    if (off == 0 || func_8006A0B4(fd, off << 7, 0) != -1)
+    if (off == 0 || lseek(fd, off << 7, 0) != -1)
     {
-        if (func_8006A0D4(fd, buf, n << 7) == (n << 7))
+        if (write(fd, buf, n << 7) == (n << 7))
         {
             ok = 1;
         }
     }
-    func_8006A0E4(fd);
+    close(fd);
     return ok;
 }
 
@@ -1565,10 +1063,9 @@ s32 func_80021EE0(s32 *gsw)
     return gsw[0x81] == sum;
 }
 
-s32 func_8006A124(u8 *a, u8 *b);
 void func_80021DF4(s32 idx, u8 *src);
 
-/* func_8006A124 is almost certainly libapi `rename`: it takes two of the
+/* rename is almost certainly libapi `rename`: it takes two of the
    0x20-byte name buffers func_80021B18 builds, and this function uses it to
    move the real save to the scratch name (slot 5), read it back, and move it
    home again. The two buffers must be declared nameA-then-nameB to land at
@@ -1587,7 +1084,7 @@ s32 func_80021F18(s32 idx, u8 *buf)
     row = tbl[idx];
     if (row[0] != 0)
     {
-        func_8006A124(nameA, nameB);
+        rename(nameA, nameB);
     }
     *(s32 *)(buf + 0x204) = 0;
     func_80021EB8((s32 *)buf);
@@ -1597,7 +1094,7 @@ s32 func_80021F18(s32 idx, u8 *buf)
         func_80021DF4(idx, buf);
         func_800220DC();
     }
-    func_8006A124(nameB, nameA);
+    rename(nameB, nameA);
     return r;
 }
 
@@ -1675,13 +1172,13 @@ s32 func_8002219C(s32 idx)
     s32 v;
 
     func_80021B18(name, idx);
-    func_80069C28(0);
-    func_80069C28(1);
+    _card_wait(0);
+    _card_wait(1);
     func_80021538();
-    func_8006A134(name);
+    erase(name);
     while ((v = func_800214FC()) == 0)
     {
-        func_8005FE18(0);
+        VSync(0);
     }
     if (idx < 5)
     {
@@ -2283,7 +1780,7 @@ s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p)
     {
         func_800231E4(r[3] != 2);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0x9C8);
+        bzero((unsigned char *)r, 0x9C8);
     }
     func_80022B48((UnkCardGrp8B0 *)r, 7);
     q[3] = (s32)(r + 0x22F);
@@ -2620,7 +2117,7 @@ s32 *func_800238D4(s32 *p)
     {
         func_80023A00(q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0x428);
+        bzero((unsigned char *)r, 0x428);
     }
     func_800237EC((UnkCardGrp184 *)r, 0x12);
     q[3] = (s32)(r + 0x64);
@@ -2874,7 +2371,7 @@ s32 func_80023FF0(s32 a, s32 b)
     {
         func_80024184(q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0x3C4);
+        bzero((unsigned char *)r, 0x3C4);
     }
     func_80023EF4((UnkCardGrp240 *)r, 0xA);
     q[3] = (s32)(r + 147);
@@ -3100,14 +2597,14 @@ void func_80024390(s32 *p)
 
     e = (UnkCardPair *)p[723];
     func_8003AD08(p[31] + 1, buf);
-    func_80069E38(buf, D_800282D8);
-    func_80069E38(buf, D_80083E98_s[p[31]].name);
+    strcat(buf, D_800282D8);
+    strcat(buf, D_80083E98_s[p[31]].name);
     func_8004DA74((u8 *)p + 0x84, buf, 1);
     e->unk_00 = (s32)((u8 *)p + 0x84);
     e->unk_04->unk_08 = 0xA8;
     e->unk_04->unk_0A = 0x110;
     e = (UnkCardPair *)p[724];
-    func_80069E78(buf, D_800282E8);
+    strcpy(buf, D_800282E8);
     func_8004DA74((u8 *)p + 0x204, buf, 1);
     e->unk_00 = (s32)((u8 *)p + 0x204);
     e->unk_04->unk_08 = 0xA0;
@@ -3115,10 +2612,10 @@ void func_80024390(s32 *p)
     if (D_80083E98_s[p[31]].unk_08 != 0)
     {
         e = (UnkCardPair *)p[725];
-        func_80069E78(buf, D_800283A8[2]);
+        strcpy(buf, D_800283A8[2]);
         func_8003AD08(D_80083E98_s[p[31]].unk_34, num);
-        func_80069E38(buf, num);
-        func_80069E38(buf, D_800283A8[3]);
+        strcat(buf, num);
+        strcat(buf, D_800283A8[3]);
         func_8004DA74((u8 *)p + 0x384, buf, 1);
         e->unk_00 = (s32)((u8 *)p + 0x384);
         e->unk_04->unk_08 = 0xB8;
@@ -3135,13 +2632,13 @@ void func_80024390(s32 *p)
     hr = sec / 3600;
     e = (UnkCardPair *)p[727];
     func_8004E5A0(hr >= 1000 ? 999 : hr, 3, buf);
-    func_80069E38(buf, (u8 *)D_800200A4);
+    strcat(buf, (u8 *)D_800200A4);
     mn = sec / 60;
     func_8004E5E8(mn - hr * 60, 2, num);
-    func_80069E38(buf, num);
-    func_80069E38(buf, (u8 *)D_800200A4);
+    strcat(buf, num);
+    strcat(buf, (u8 *)D_800200A4);
     func_8004E5E8(sec - mn * 60, 2, num);
-    func_80069E38(buf, num);
+    strcat(buf, num);
     func_8004E69C(buf);
     func_8004E298((u8 *)p + 0x684, buf, 1);
     e->unk_00 = (s32)((u8 *)p + 0x684);
@@ -3214,8 +2711,8 @@ void func_80024818(s32 *p)
     {
         func_8004DA74((u8 *)p + 0x84, D_800283F4[k], 1);
         func_8003AD08(n / 3, num);
-        func_80069E78(buf, num);
-        func_80069E38(buf, D_800283FC);
+        strcpy(buf, num);
+        strcat(buf, D_800283FC);
         func_8004DA74((u8 *)p + 0x204, buf, 1);
         cnt = 2;
     }
@@ -3364,7 +2861,7 @@ s32 *func_80024D58(s32 *p, s32 a, s32 b)
     {
         func_80024EEC(q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0xE30);
+        bzero((unsigned char *)r, 0xE30);
     }
     r[0x1F] = a;
     r[0x20] = b;
@@ -3817,9 +3314,9 @@ void func_80025848(s32 *p)
 
 void func_800258C8(s32 *p)
 {
-    void (*fns[4])(void) = {func_800252CC, func_8002570C, func_80025848, func_800252CC};
+    void (*fns[4])(s32 *) = {func_800252CC, func_8002570C, func_80025848, func_800252CC};
 
-    fns[p[0x11]]();
+    fns[p[0x11]](p);
 }
 
 void func_8002592C(s32 *p)
@@ -4125,16 +3622,16 @@ void func_80025F0C(u8 *p, s32 n)
 {
     u8 buf[0x10];
 
-    func_80069E78(p + 4, D_80028294[0]);
+    strcpy(p + 4, D_80028294[0]);
     func_8003AD08(n + 1, buf);
-    func_80069E38(p + 4, buf);
-    func_80069E38(p + 4, D_80028294[3]);
-    func_80069E38(p + 4, (u8 *)0x8001020C);
-    func_80069E38(p + 4, D_80028294[3]);
-    func_80069E38(p + 4, *(s16 *)0x80010208 != 0 ? D_80028294[1] : D_80028294[2]);
-    func_80069E38(p + 4, D_800282A0);
+    strcat(p + 4, buf);
+    strcat(p + 4, D_80028294[3]);
+    strcat(p + 4, (u8 *)0x8001020C);
+    strcat(p + 4, D_80028294[3]);
+    strcat(p + 4, *(s16 *)0x80010208 != 0 ? D_80028294[1] : D_80028294[2]);
+    strcat(p + 4, D_800282A0);
     func_8003AD08(*(s32 *)0x8001022C, buf);
-    func_80069E38(p + 4, buf);
+    strcat(p + 4, buf);
 }
 
 /* A three-pass VRAM upload. 0x80010080 is a constant address, not a symbol --
@@ -4146,18 +3643,18 @@ void func_80025F0C(u8 *p, s32 n)
    local advanced at the bottom of the loop (56 DIFF). */
 void func_80025FFC(s32 *p, s32 n)
 {
-    UnkURect r;
+    RECT r;
     s32 i;
 
-    *(UnkEight *)&r = *(UnkEight *)D_800200B8;
+    r = *(RECT *)D_800200B8;
     *(UnkBlock20 *)((u8 *)p + 0x60) = *(UnkBlock20 *)D_80027E78[n];
     r.y += n * 16;
     for (i = 0; i < 3; i++)
     {
-        func_8006733C(&r, (u8 *)0x80010080 + i * 0x80);
+        StoreImage(&r, (u_long *)((u8 *)0x80010080 + i * 0x80));
         r.x += 4;
     }
-    func_80067014(0);
+    DrawSync(0);
 }
 
 void func_80026128(u8 *p, s32 a, s32 mode)
@@ -4708,7 +4205,7 @@ s32 *func_80026ED0(s32 *p, s32 a)
     {
         func_80026FB4((u16 *)q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0xF0);
+        bzero((unsigned char *)r, 0xF0);
     }
     func_80026DF0((UnkCardGrp044 *)r, 4);
     q[3] = (s32)(r + 0x14);
@@ -4851,7 +4348,7 @@ s32 *func_80027364(s32 *p)
     {
         func_80023A00(q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0x180);
+        bzero((unsigned char *)r, 0x180);
     }
     func_8002727C((UnkCardGrp0D4 *)r, 4);
     q[3] = (s32)(r + 0x38);
@@ -5142,7 +4639,7 @@ s32 *func_80027AFC(s32 a, s32 b)
     {
         func_80027C90(q);
         ((u16 *)q)[15] &= 0x7FFF;
-        func_80069EC8(r, 0x44);
+        bzero((unsigned char *)r, 0x44);
     }
     D_80082E60.unk_0F |= 0x80;
     func_80027A68(r, a, b);
@@ -5152,9 +4649,9 @@ s32 *func_80027AFC(s32 a, s32 b)
 
 void func_80027BC0(void)
 {
-    func_8006A084();
-    func_8006A248(0xF2000002);
-    func_8006A094();
+    EnterCriticalSection();
+    StartRCnt(0xF2000002);
+    ExitCriticalSection();
 }
 
 void func_80027BF4(void)
@@ -5211,8 +4708,8 @@ void func_80027D7C(s32 *p)
 {
     func_80027C60();
     D_80083200 = 0x200;
-    func_80064F20(0x200);
-    func_80064F00(0xA0, 0x78);
+    SetGeomScreen(0x200);
+    SetGeomOffset(0xA0, 0x78);
     func_80027AFC((s32)p, 0);
 }
 
