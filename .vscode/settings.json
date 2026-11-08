@@ -1,4 +1,7 @@
 {
+    "C_Cpp.default.defines": [
+        "LANGUAGE_C"
+    ],
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/psyq/include",
         "${workspaceFolder}/include"
