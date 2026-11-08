@@ -35,7 +35,7 @@ void func_80020924(s32 arg0)
     func_800214A4();
     _card_wait(0);
     _card_wait(1);
-    p = &D_800287CC;
+    p = &gCardChannel;
     if (arg0)
     {
         *p = 0x10;
@@ -44,7 +44,7 @@ void func_80020924(s32 arg0)
     {
         *p = 0;
     }
-    func_800213C4(D_800287CC);
+    func_800213C4(gCardChannel);
 }
 
 void func_80020984(void)
@@ -52,7 +52,7 @@ void func_80020984(void)
     func_800214A4();
     _card_wait(0);
     _card_wait(1);
-    func_800213C4(D_800287CC);
+    func_800213C4(gCardChannel);
 }
 
 void func_800209C4(void)
@@ -62,8 +62,8 @@ void func_800209C4(void)
     func_800214A4();
     _card_wait(0);
     _card_wait(1);
-    v = 0x10 - D_800287CC;
-    D_800287CC = v;
+    v = 0x10 - gCardChannel;
+    gCardChannel = v;
     func_800213C4(v);
 }
 
@@ -315,7 +315,7 @@ high:
     goto out;
 one:
     t = &D_80084118;
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
         t++;
     }
@@ -327,7 +327,7 @@ one:
     else if ((_card_status(0) & 1) != 0 || (_card_status(1) & 1) != 0)
     {
         func_800214A4();
-        while (_card_load(D_800287CC) == 0)
+        while (_card_load(gCardChannel) == 0)
         {
         }
         D_800287E0 = 0;
@@ -336,7 +336,7 @@ one:
     goto out;
 three:
     u = &D_80084118;
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
         u++;
     }
@@ -383,7 +383,7 @@ s32 func_8002121C(void)
     if (D_800287C8 == 2)
     {
         func_800214A4();
-        if (_card_load(D_800287CC) == 0)
+        if (_card_load(gCardChannel) == 0)
         {
             D_800287C8 = 0;
             r = 5;
@@ -444,11 +444,11 @@ s32 func_80021298(void)
     goto def;
 one:
     func_80021538();
-    if (_card_clear(D_800287CC) == 0)
+    if (_card_clear(gCardChannel) == 0)
     {
         goto fail1;
     }
-    if ((_card_status(D_800287CC != 0) & 4) == 0)
+    if ((_card_status(gCardChannel != 0) & 4) == 0)
     {
         goto fail2;
     }
@@ -465,7 +465,7 @@ fail2:
     goto out;
 three:
     t = &D_80084118;
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
         t++;
     }
@@ -735,7 +735,7 @@ void func_80021904(void)
 
 s32 func_8002190C(void)
 {
-    return D_800287CC != 0;
+    return gCardChannel != 0;
 }
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_80020074);
@@ -745,15 +745,15 @@ s32 func_8002191C(void)
     u8 name[0x20];
     s32 n = 0;
     struct DIRENTRY *e = D_80028570;
-    u8 **t = D_80027F18;
+    char **mem_card_name = &MEM_CARD_NAMES[0];
 
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
-        t++;
+        mem_card_name++;
     }
-    strcpy(name, *t);
+    strcpy(name, *mem_card_name);
     strcat(name, (u8 *)D_80020084);
-    if (firstfile2(name, e) != 0)
+    if (firstfile2(name, e) != NULL)
     {
         do
         {
@@ -843,7 +843,7 @@ s32 func_80021A04(s32 n, u8 *s)
 
 s32 func_80021A84(s32 flag)
 {
-    u8 **t;
+    char **t;
     s32 r;
 
     _card_wait(0);
@@ -875,13 +875,13 @@ s32 func_80021A84(s32 flag)
 
 void func_80021B18(u8 *s, s32 idx)
 {
-    u8 **t = D_80027F18;
+    char **mem_card_name = &MEM_CARD_NAMES[0];
 
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
-        t++;
+        mem_card_name++;
     }
-    strcpy(s, *t);
+    strcpy(s, *mem_card_name);
     strcat(s, D_80027F20);
     strcat(s, D_80027F30[idx]);
 }
@@ -977,7 +977,7 @@ s32 func_80021D54(s32 idx)
 
     func_80021B18(name, idx);
     t = (s32 **)D_80084128;
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
         t++;
     }
@@ -1131,7 +1131,7 @@ s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
 
 void func_800220DC(void)
 {
-    s32 i = D_800287CC != 0;
+    s32 i = gCardChannel != 0;
     s32 n;
 
     n = func_8002191C();
@@ -1143,7 +1143,7 @@ s32 func_80022138(void)
 {
     s32 *p = D_80084120;
 
-    if (D_800287CC != 0)
+    if (gCardChannel != 0)
     {
         p++;
     }
@@ -4738,3 +4738,31 @@ void func_80027DF4(s32 *p, s32 v)
    Each per-function ovlverify check still passed; only `make` caught it. */
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80020000", D_800200B8);
+
+/* ------------------------------------------------------------------------- */
+/* The overlay's own .data, which starts at 0x80027E20 immediately after the
+   text end and is being taken over from the bottom up -- see
+   docs/owning-data.md. Everything below 0x80027F20 is still
+   asm/data/ovl_main_80020000_data_pre.data.s; this unit owns 0x80027F20 and
+   up, and the splat yaml's `.data` subsegment boundary has to move with every
+   object that moves across.
+
+   DEFINITION ORDER IS ADDRESS ORDER. cc1psx lays .data objects out in the
+   order they are written here, so a new object goes at its address position in
+   this block and nowhere else. */
+
+/* The two memory-card device names, as pointers into this unit's own rodata:
+   D_80020074 is "bu10:" and the "bu00:" that follows it at +8 shares the
+   listing, so the second entry is spelled as an offset into the first symbol.
+   Index 0 is "bu00:" and index 1 is "bu10:", which is the opposite of the
+   order the strings sit in. */
+char *D_80027F18[2] = {
+    D_80020074 + 8,
+    D_80020074,
+};
+
+/* The save-file prefix, pasted after a "bu10:"/"bu00:" device name by
+   func_80021F0C. Sixteen bytes, not thirteen: the four bytes after the NUL are
+   part of the object rather than inter-object padding, and `[]` would drop
+   them and pull every later .data object down by four. */
+char D_80027F20[16] = "BASLUS-00614";

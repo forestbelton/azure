@@ -184,7 +184,32 @@ segments:
       # $gp-relative (0 refs), and it could not be: the block's data at
       # 0x80027E20 is far outside $gp's +/-32K window around 0x80080994.
       - [0x25d924, c, ovl_main_80020000]
-  - [0x264e20, bin]
+      # The overlay's .data, which begins the instant the text ends. It is
+      # split in two because splat has NO per-symbol migration for `.data` --
+      # that exists for `.rodata` only (see csrc/ovl_main_80020000.c's
+      # INCLUDE_RODATA stubs). A dotted `.data` subsegment writes no assembly
+      # at all and the C unit must define every byte of it, so the range the C
+      # unit owns is carved off and the remainder stays an ordinary undotted
+      # `data` subsegment that splat keeps disassembling.
+      #
+      # `ovl_main_80020000_data_pre` is the NOT-YET-OWNED part, and its name
+      # must differ from `ovl_main_80020000` or splat would make it a sibling
+      # of the C unit and link the same object's .data twice.
+      #
+      # The owned window is ONE contiguous range -- splat keys siblings by
+      # section name, so a unit gets exactly one `.data` subsegment. It grows
+      # in either direction: lower its start to claim the object below (and
+      # `_data_pre` shrinks to match), or raise its end to claim the object
+      # above (and the following segment's start moves up with it). Both
+      # boundaries are hand-maintained and both have to track the C file.
+      #
+      # docs/owning-data.md is the procedure, with this change as its worked
+      # example.
+      - [0x264e20, data, ovl_main_80020000_data_pre]
+      - [0x264f18, .data, ovl_main_80020000]
+  # The data above the owned window. Still a blob; make it a second undotted
+  # `data` subsegment if you want its pointers symbolised before claiming it.
+  - [0x264f30, bin]
   - [0x265000, bin]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
   # left it as bin, reporting "only 58 internal jal targets and the best

@@ -19,7 +19,9 @@ s32 func_8002219C(s32 idx);
 s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p);
 
 extern s32 D_800287C8;
-extern s32 D_800287CC;
+
+#define gCardChannel D_800287CC
+extern s32 gCardChannel;
 
 typedef enum CARD_STATE
 {
@@ -386,9 +388,27 @@ extern u8 *D_800283F4[];
 extern u8 D_800283FC[];
 extern u8 D_80027E68[];
 void func_80025788(s32 *p);
-extern u8 *D_80027F18[];
-extern u8 D_80027F20[];
-extern u8 *D_80027F30[];
+
+/* DEFINED by this unit, in the .data block at the foot of
+   csrc/ovl_main_80020000.c. {"bu00:", "bu10:"} -- index 0 is the SECOND of the
+   two strings in the rodata listing. */
+#define MEM_CARD_NAMES D_80027F18
+extern char *MEM_CARD_NAMES[2];
+
+/* "bu10:", immediately followed in the same rodata listing by "bu00:" at +8.
+   Declared here so D_80027F18's initialiser can take its address. */
+#define MEM_CARD1 D_80020074
+extern char MEM_CARD1[8];
+extern char MEM_CARD0[8];
+
+/* DEFINED by this unit, in the .data block at the foot of
+   csrc/ovl_main_80020000.c. The declaration stays here because the first use
+   (func_80021F0C) is above the definition, which has to sit at its address
+   position. */
+extern char D_80027F20[16];
+
+extern char *D_80027F30[];
+
 void func_80024390(s32 *p);
 void func_80024818(s32 *p);
 void func_800249B4(s32 *p);
