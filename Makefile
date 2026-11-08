@@ -222,7 +222,7 @@ cdk-gcc: $(CDK_CC1)
 .PHONY: all containers clean splat check expected ctx ghidra-syms extract \
         cdk-gcc
 
-all: build/$(SLUS) build/$(TOWN)
+all: build/$(SLUS) build/$(TOWN) build/$(MAIN)
 
 # Every container, not just the two in `all`. main.bin and dungeon.bin are
 # 26 MB and 16 MB, so relinking them on every build is not worth it -- but
@@ -270,6 +270,7 @@ build/$(MAIN): $(OFILES)
 		--script=build/$(MAIN).ld \
 		--script=splat/$(MAIN)_undefined_funcs_auto.txt \
 		--script=splat/$(MAIN)_undefined_syms_auto.txt \
+		--script=splat/common_syms.txt \
 		--output=build/$(MAIN).elf
 	$(OBJCOPY) -O binary build/$(MAIN).elf build/$(MAIN)
 	@echo ""
