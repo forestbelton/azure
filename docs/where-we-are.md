@@ -146,11 +146,11 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and **96 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and **99 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** 88 came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap`, and 8 from the RESIDENT units
+  `tools/decomp/twinalign.py --symmap`, and 11 from the RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls
   them in the executable. For those, the renames were read off the block's
@@ -158,10 +158,15 @@ Three things about the overlays that change how they are worked, all in
   `jal` here -- which is firmer than the similarity match that found the
   counterpart, and `func_8004F2BC`'s five calls fixed five symbols at once.
 
-  Nine of the twin-only functions are **not decompilable and now
-  identified**: `addiu $t2, $zero, 0xB0; jr $t2; addiu $t1, $zero, <call>` is
-  a PSY-Q BIOS call stub, hand-written library assembly. They stay on
-  `INCLUDE_ASM`, as the `asm/psyq` listings do. Rebuilding the LIVE overlay's own
+  **The block's last 23 functions are not decompilation work at all** -- 289
+  words, 3.5% of it, above `func_804084DC`. They are PSY-Q library code, and
+  this project keeps PSY-Q library code as assembly everywhere, including for
+  the resident executable. Nine are BIOS call stubs (`addiu $t2, $zero, 0xB0;
+  jr $t2; addiu $t1, $zero, <call>`), and `func_804087C8` matches
+  `func_80069D78` at 0.90 masked -- whose own listing is
+  `asm/psyq/libcard/END.s`, so the resident copy of that same code is
+  assembly here too. They stay on `INCLUDE_ASM`, which makes the real
+  remaining work 239 functions rather than 262. Rebuilding the LIVE overlay's own
   source at `-G8` and aligning its 241 functions against this block gives the
   scale of what is already in the tree:
 

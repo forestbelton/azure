@@ -21,6 +21,23 @@
  * linked against a different engine build, where printf is at 0x8007C040,
  * which in the shipped executable is inside libgte's rcossin_tbl.
  *
+ * THE LAST 23 FUNCTIONS ARE NOT DECOMPILATION WORK. Everything above
+ * func_804084DC -- 23 functions, 289 words, 3.5% of the block -- is PSY-Q
+ * library code, and this project keeps PSY-Q library code as ASSEMBLY
+ * everywhere, including for the resident executable. Two kinds of evidence,
+ * and they agree:
+ *
+ *   * Nine of them are BIOS call stubs: `addiu $t2, $zero, 0xB0; jr $t2;
+ *     addiu $t1, $zero, <call>`, a jump to the BIOS entry point with the
+ *     call number in $t1. That is not C in any revision.
+ *   * func_804087C8 matches func_80069D78 at 0.90 masked, and
+ *     func_80069D78's own listing is `asm/psyq/libcard/END.s` -- the
+ *     resident copy of this same code is assembly in this tree too. The
+ *     `jalr $t2` BIOS calls are right there in both.
+ *
+ * So they stay on INCLUDE_ASM, as the asm/psyq listings do, and the block's
+ * real remaining work is the 239 functions below them.
+ *
  * HOW A FUNCTION GETS HERE. `tools/decomp/twinalign.py --todo` pairs each of
  * this block's functions with the live function it came from and sorts by how
  * much they differ; --symmap gives the live -> twin rename. A body is moved
