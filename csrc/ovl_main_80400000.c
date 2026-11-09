@@ -892,11 +892,109 @@ u8 *func_80404818(u8 *p)
     return p + 0xC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404888);
+/* func_8004F068, the third of the template builders, with its three globals
+ * as scalars for the same reason as func_804047B0's. */
+u8 *func_80404888(u8 *p)
+{
+    u32 a;
+    u32 b;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804048F8);
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_80408CDC;
+    a = D_80408CE4;
+    b = D_80408CE0;
+    p[1] |= 2;
+    p[0] |= 0x41;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404A3C);
+/* func_8004F0DC, with ONE MORE INDIRECTION. Where the live structure has the
+ * seven primitive pointers inline at p+0x220.., this build holds a POINTER
+ * there to a table of them: it loads p[0x220], then reads the entry at 0x0,
+ * 0x14, 0x18, 0x4, 0x8, 0xC, 0x10 off that -- the same seven fields, one
+ * level down. It also RELOADS p[0x220] for every entry, which is not a
+ * spelling choice: each block ends with a store through q, which may alias
+ * p[0x220], so the load cannot be cached. Writing the dereference out each
+ * time is what reproduces that; a local would not.
+ */
+void func_804048F8(u8 *p)
+{
+    u8 *q;
+
+    q = (*(u8 ***) (p + 0x220))[0];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 6;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x10;
+    *(u8 **) q = p + 8;
+    q = (*(u8 ***) (p + 0x220))[5];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x80;
+    q = (*(u8 ***) (p + 0x220))[6];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0x68;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0xF8;
+    q = (*(u8 ***) (p + 0x220))[1];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0xA0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x70;
+    *(u8 **) q = p + 0x170;
+    q = (*(u8 ***) (p + 0x220))[2];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0x70;
+    *(u8 **) q = p + 0x170;
+    q = (*(u8 ***) (p + 0x220))[3];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0xA0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x170;
+    q = (*(u8 ***) (p + 0x220))[4];
+    *(s16 *) (*(u8 **) (q + 4) + 8) = 0;
+    *(s16 *) (*(u8 **) (q + 4) + 0xA) = 0;
+    *(u8 **) q = p + 0x170;
+}
+
+/* func_8004F1E8, with its four primitive blocks ROTATED. The live body runs
+ * 0x80/0xFF, then 0x2C with the GetTPage and GetClut pair, then the 0x70/0xE0
+ * one, then 0x81 with p[0] = 0x80 inside it. This build runs the 0x81 block
+ * FIRST -- without the p[0] = 0x80 -- then the other three in order, and sets
+ * p[0] = 0x80 at the end. Reading it off the listing is unambiguous: the
+ * entry sets 0x81/0x20/0 before it has touched anything else, and the final
+ * `sb $s1, 0x0($s0)` comes after the 0x70/0xE0 stores. Its two calls are
+ * GetTPage and GetClut in this engine build, func_80078570 and
+ * func_80078640. */
+u8 *func_80404A3C(u8 *p)
+{
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p += 0xC;
+    p[1] = 0x80;
+    p[8] = 0;
+    p[9] = 0;
+    p[0xA] = 0xFF;
+    p[0xB] = 0xFF;
+    p += 0xC;
+    p[1] = 0x2C;
+    *(s16 *) (p + 4) = func_80078570(1, 0, 0x380, 0x100);
+    *(s16 *) (p + 6) = func_80078640(0, 0x1F5);
+    p[8] = 0;
+    p[9] = 0;
+    p[0xA] = 0xA0;
+    p[0xB] = 0x70;
+    p += 0xC;
+    p[8] = 0x70;
+    p[9] = 0xE0;
+    p[1] = 0x80;
+    p[0xA] = 8;
+    p[0xB] = 8;
+    p[0] = 0x80;
+    return p + 0xC;
+}
 
 /* func_8004F2BC. Its five calls are this block's func_804047B0, func_80404818,
  * func_80404888, func_80404A3C and func_804048F8, in that order. */

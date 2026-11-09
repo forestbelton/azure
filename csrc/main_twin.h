@@ -38,6 +38,8 @@ u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
+u_short func_80078570(int tp, int abr, int x, int y); /* GetTPage */
+u_short func_80078640(int x, int y);                 /* GetClut */
 void func_8007BEF0();                                /* exit, psyq/include/stdlib.h */
 int func_8007C040(char *fmt, ...);                   /* printf */
 long func_8007C998(unsigned long, long, long, long (*func)()); /* OpenEvent */
@@ -46,10 +48,13 @@ long func_8007C9C8(long);                            /* TestEvent */
 int func_8007CA38(void);                             /* EnterCriticalSection */
 void func_8007CA48(void);                            /* ExitCriticalSection */
 void func_80400A10(void);                            /* func_80020A80 */
+s32 func_804010F0(void);                             /* func_800210F0 */
+s32 func_804012B0(void);                             /* func_80021298 */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
 void func_804014E4(void);                            /* reset_sw_events */
 void func_80401578(void);                            /* reset_hw_events */
 s32 func_804016D0(void);                             /* func_8002168C */
+void func_804018FC(void);                            /* func_80021904 */
 s32 func_80401E2C(s32 n);                            /* func_80021D54 */
 s32 func_80402084(s32 a, u8 *b);                     /* func_80021F18 */
 s32 func_80402154(s32 a, u8 *b, s32 c);              /* func_80021FF0 */
@@ -61,9 +66,18 @@ u8 *func_80402CD4(u8 *p, s32 *q);                    /* func_80022A30 */
 void func_80402EA4(s32 *p, s32 a, s32 b, s32 c, s32 d); /* func_80022C48 */
 s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p);   /* func_80022D60 */
 void func_804030F4(s32 a);                           /* func_80022E9C */
+void func_8040311C(s32 a, s32 p);                    /* func_80022EC4 */
+void func_80403144(s32 a);                           /* func_80022EEC */
 void func_8040320C(s32 a);                           /* func_80022FB4 */
 void func_80403234(s32 a);                           /* func_80022FDC */
+void func_8040325C(s32 a);                           /* func_80023004 */
+void func_80403284(s32 a);                           /* func_8002302C */
+void func_804032AC(s32 a);                           /* func_80023054 */
 void func_804032D4(s32 a);                           /* func_8002307C */
+void func_804032FC(s32 a);                           /* func_800230A4 */
+void func_8040334C(s32 a);                           /* func_800230F4 */
+void func_80403374(s32 a);                           /* func_8002311C */
+void func_804033C4(s32 a);                           /* func_8002316C */
 s32 func_8040343C(s32 flag);                         /* func_800231E4 */
 void func_80403698(s32 *p);                          /* func_800233D0 */
 void func_804037F4(u8 *p);                           /* func_8002352C */
@@ -71,6 +85,8 @@ void func_804039F8(UnkCardPair *p, u32 *a, u32 *b);  /* func_80023730 */
 void func_80403D24(s32 *p);                          /* func_80023A00 */
 void func_80403D7C(s32 *p, s32 v);                   /* func_80023A50 */
 void func_80403DA0(UnkCardPair *p, u32 *a, u32 *b, s32 n); /* func_80023A78 */
+void func_80403E54(s32 *p);                          /* func_80023B18 */
+void func_804040C8(s32 *p);                          /* func_80023D64 */
 void func_80404178(s32 *p);                          /* func_80023E14 */
 s32 func_80404364(s32 a, s32 n);                     /* func_80023FF0 */
 void func_80404570(s32 *p);                          /* func_80024184 */
@@ -93,23 +109,23 @@ void func_804059A8(s32 *p);                          /* func_80024EEC */
 void func_80405A00(s32 *p, s32 a, s32 b);            /* func_80024F3C */
 void func_80405A3C(s32 *p);                          /* func_80024F7C */
 void func_80405AE8(s32 *p);                          /* func_80025030 */
+void func_80405B98(s32 *p);                          /* func_800250E8 */
 void func_80405C44(u8 *p);                           /* func_8002519C */
 void func_80405CB8(s32 *p);                          /* func_80025230 */
 void func_80405DE0(s32 *p);                          /* func_80025398 */
 void func_80406368(s32 *p);                          /* func_8002593C */
+void func_804065CC(s32 *p);                          /* func_80025BD4 */
 s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
-/* ONE argument at func_80407E08's call site, where the func_8040701C
- * beside it takes two and the live source passes two to both. A
- * one-argument call cannot be written through the real prototype, so it
- * goes through an __asm__ alias -- the same device as main.h's
- * func_80024C48w and csrc/gprel_72A8.c's func_80033AE8w. */
 void func_80406678w(s32 *p) __asm__("func_80406678");
+void func_80406720(s32 *p);                          /* func_80025D34 */
 void func_804067BC(s32 *p);                          /* func_80025DC8 */
 void func_804069FC(s32 *p);                          /* func_800261C0 */
 void func_80406AA8(s32 *p);                          /* func_800262BC */
 void func_80406BEC(s32 *p);                          /* func_80026410 */
 void func_80406DA0(s32 *p);                          /* func_800265B8 */
+void func_80406F70(s32 *p);                          /* func_800267C0 */
 s32 *func_8040701C(s32 *p, s32 a);                   /* func_80026868 */
+void func_804070C4(s32 *p);                          /* func_80026920 */
 void func_804072CC(u8 *p, s32 *b, s32 *c);           /* func_80026B18 */
 void func_804073B0(UnkCardPair *p, u32 *a, u32 *b);  /* func_80026C00 */
 void func_80407558(s32 *p);                          /* func_80026D78 */
@@ -119,9 +135,11 @@ void func_804078D8(u8 *p);                           /* func_80027054 */
 void func_80407A44(UnkCardPair *p, u32 *a, u32 *b);  /* func_800271C0 */
 void func_80407D38(s32 *p);                          /* func_80027458 */
 void func_80407D90(s32 *p);                          /* func_800274A8 */
+/* ONE argument at func_80407E08's call site, where the func_8040701C beside it takes two; same device as main.h's func_80024C48w. */
 void func_80407E64(s32 *p);                          /* func_80027584 */
 void func_80407F68(s32 *p);                          /* func_80027684 */
 void func_804081AC(s32 *p);                          /* func_8002789C */
+void func_804083A0(s32 *p);                          /* func_80027A9C */
 void func_804084DC(s32 *p);                          /* func_80027C90 */
 long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
@@ -159,6 +177,9 @@ extern u32 D_80408CCC;                             /* D_80071668 */
 extern u32 D_80408CD0;                               /* D_8007166C */
 extern u32 D_80408CD4;                             /* D_80071670 */
 extern u32 D_80408CD8;                             /* D_80071674 */
+extern u32 D_80408CDC;                               /* D_80071678 */
+extern u32 D_80408CE0;                               /* D_8007167C, read as a SCALAR here */
+extern u32 D_80408CE4;                               /* D_80071680, likewise */
 extern u8 D_80408CE8[];                              /* D_800717BC, include/structs.h */
 extern u8 D_80408CF0[];                              /* D_80027FD0 */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
