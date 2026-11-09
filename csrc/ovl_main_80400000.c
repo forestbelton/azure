@@ -806,7 +806,25 @@ void func_80404688(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804046C8);
+/* func_8004EEBC, and it references nothing outside its own argument. */
+void func_804046C8(u8 *p)
+{
+    u32 *q = *(u32 **) (p + 4);
+
+    if (q != 0)
+    {
+        if (q[0] != 0)
+        {
+            *(u32 *) (p + 0x274) = 0;
+            *(u32 *) (p + 0x284) = (u32) (p + 0xF8);
+        }
+        else
+        {
+            *(u32 *) (p + 0x274) = (u32) (p + 0x80);
+            *(u32 *) (p + 0x284) = 0;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404708);
 
@@ -820,19 +838,60 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804048F8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404A3C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404B10);
+/* func_8004F2BC. Its five calls are this block's func_804047B0, func_80404818,
+ * func_80404888, func_80404A3C and func_804048F8, in that order. */
+void func_80404B10(u8 *p)
+{
+    func_804047B0(p + 0x8);
+    func_80404818(p + 0x80);
+    func_80404888(p + 0xF8);
+    func_80404A3C(p + 0x170);
+    func_804048F8(p);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404B5C);
+/* func_80050B7C. */
+void func_80404B5C(s32 a)
+{
+    func_80047358(a, D_80408CE8, 0x7);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404B84);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404C3C);
+/* From the RESIDENT engine, not the live overlay: this debug build linked
+ * libcard's callers statically where retail calls them in the executable, so
+ * these bodies come from csrc/unk_1C540.c. Every rename below was read off
+ * this block's own listing positionally -- the Nth call in the resident body
+ * is the Nth jal here -- which is firmer than the similarity match that found
+ * the counterpart. func_8004F3D0. */
+void func_80404C3C(u32 *p, u32 v)
+{
+    *p = v;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404C44);
+/* func_8004F3D8. */
+void func_80404C44(u8 *p, u32 v)
+{
+    func_80404C3C((u32 *) p, v);
+    func_80404708(p + 0x210, (u32 *) (p + 0x1E8), (u32 *) (p + 0x1F8));
+    func_80404B10(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404C84);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404DBC);
+/* func_8004B500. D_800814A0 is D_8008DAB4 here, by a 24-vote symmap entry,
+ * and the local `g` is the live body's -- see main.h's note on the two
+ * spellings of that object. */
+void func_80404DBC(u8 *p)
+{
+    u32 g;
+
+    if (p != 0)
+    {
+        g = D_8008DAB4;
+        *(u16 *) (p + 0x1E) |= 0x8000;
+        D_8008DAB4 = g | 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404DEC);
 

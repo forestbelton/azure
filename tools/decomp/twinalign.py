@@ -183,7 +183,11 @@ def load_live(obj):
                    and not sym.startswith("."):
                     cur["syms"].append((len(cur["ins"]) - 1, kind, sym))
             continue
-        m = re.match(r"^\s+[0-9a-f]+:\s+(.*)$", line)
+        # `\s*`, not `\s+`: objdump indents instruction lines in an OBJECT
+        # but not in a LINKED ELF, and requiring the indent made this loader
+        # return zero functions for build/*.elf -- silently, since a function
+        # with no instructions is filtered out below.
+        m = re.match(r"^\s*[0-9a-f]+:\s+(.*)$", line)
         if m:
             t = m.group(1).strip()
             if t:

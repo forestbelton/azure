@@ -77,8 +77,16 @@ void func_80404570(s32 *p);                          /* func_80024184 */
 void func_804045C8(s32 *p, s32 flag);                /* func_800241D4 */
 void func_80404618(s32 *p, s32 flag);                /* func_80024224 */
 void func_80404668(s32 *p);                          /* func_80024274 */
+void func_80404708(u8 *p, u32 *a, u32 *b);           /* func_8004EEFC */
+u8 *func_804047B0(u8 *p);                            /* func_8004EF90 */
+u8 *func_80404818(u8 *p);                            /* func_8004EFF4 */
+u8 *func_80404888(u8 *p);                            /* func_8004F068 */
+void func_804048F8(u8 *p);                           /* func_8004F0DC */
+u8 *func_80404A3C(u8 *p);                            /* func_8004F1E8 */
+void func_80404B10(u8 *p);                           /* func_8004F2BC */
+void func_80404C3C(u32 *p, u32 v);                   /* func_8004F3D0 */
 s32 func_80404C84(s32 *p, s32 *q);                   /* func_8004F418 */
-void func_80404DBC(s32 a);                           /* func_8004F52C */
+void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
@@ -90,11 +98,12 @@ void func_80405CB8(s32 *p);                          /* func_80025230 */
 void func_80405DE0(s32 *p);                          /* func_80025398 */
 void func_80406368(s32 *p);                          /* func_8002593C */
 s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
-void func_80406678w(s32 *p) __asm__("func_80406678");   /* ONE argument at func_80407E08's call site, where the
-    * func_8040701C beside it takes two and the live source passes two to both.
-    * The one-argument call cannot be written through the real prototype, so it
-    * goes through an __asm__ alias -- the same device as main.h's
-    * func_80024C48w and csrc/gprel_72A8.c's func_80033AE8w. */
+/* ONE argument at func_80407E08's call site, where the func_8040701C
+ * beside it takes two and the live source passes two to both. A
+ * one-argument call cannot be written through the real prototype, so it
+ * goes through an __asm__ alias -- the same device as main.h's
+ * func_80024C48w and csrc/gprel_72A8.c's func_80033AE8w. */
+void func_80406678w(s32 *p) __asm__("func_80406678");
 void func_804067BC(s32 *p);                          /* func_80025DC8 */
 void func_804069FC(s32 *p);                          /* func_800261C0 */
 void func_80406AA8(s32 *p);                          /* func_800262BC */
@@ -135,6 +144,7 @@ extern u8 *D_80408C8C[];                             /* D_800282BC */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
+extern u8 D_80408CE8[];                              /* D_800717BC, include/structs.h */
 extern u8 D_80408CF0[];                              /* D_80027FD0 */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
 extern u8 D_80408D64[];                              /* D_8002808C */
