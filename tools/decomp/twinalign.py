@@ -171,7 +171,16 @@ def load_live(obj):
         if m:
             if cur["ins"]:
                 kind, sym = m.group(1), m.group(2).split("+")[0]
-                if kind in ("R_MIPS_26", "R_MIPS_HI16", "R_MIPS_LO16"):
+                # A reloc against a SECTION NAME (`.text`, `.rodata`) is how
+                # gas encodes a branch to a local label or a local constant.
+                # The twin's listing spells those `.L80401298`, which is
+                # filtered on that side -- so they have to be filtered here
+                # too, or the two reference lists differ in LENGTH and the
+                # pair is skipped. That alone lost _card_load, and with it
+                # 19 words of func_8040122C to a call into the resident
+                # engine instead of this block's own static copy.
+                if kind in ("R_MIPS_26", "R_MIPS_HI16", "R_MIPS_LO16") \
+                   and not sym.startswith("."):
                     cur["syms"].append((len(cur["ins"]) - 1, kind, sym))
             continue
         m = re.match(r"^\s+[0-9a-f]+:\s+(.*)$", line)
