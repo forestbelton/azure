@@ -147,6 +147,10 @@ long func_80408674(long chan);                       /* _card_load */
 
 /* --- variables, in address order --- */
 extern u32 D_8002D690;                               /* D_8002E5D8[0] in the shipped build */
+/* The ARRAY spelling of the 4-word template, for func_80404B84's loop, which
+ * keeps it in a base register; func_80404708 reads the same words as the four
+ * scalars above. Per-site, exactly as main.h's D_800814A0_a. */
+extern u32 D_8002D690_a[] __asm__("D_8002D690");
 extern u32 D_8002D694;                               /* D_8002E5D8[1] */
 extern u32 D_8002D698;                               /* D_8002E5D8[2] */
 extern u32 D_8002D69C;                               /* D_8002E5D8[3] */
