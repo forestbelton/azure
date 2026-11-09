@@ -55,6 +55,11 @@ TWIN = ROOT / "csrc/ovl_main_80400000.c"
 HDR = ROOT / "csrc/main_twin.h"
 CACHE = twinalign.BUILD / "symmap.json"
 STUB = 'INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", %s);'
+# every function the LIVE unit defines, so a name that survives renaming can be
+# reported instead of linking silently against the resident engine
+LIVE_NAMES = set(re.findall(r"^[\w \*]+?(\w+)\([^;)]*\)\s*\n\{",
+                            (ROOT / "csrc/ovl_main_80020000.c").read_text(),
+                            re.MULTILINE))
 
 
 def symmap(refresh=False):
@@ -76,11 +81,30 @@ def symmap(refresh=False):
     return m, ambig
 
 
-def pairing(twin_fn):
-    """The live function this one was compiled from, per twinalign."""
+def pairs():
     live = twinalign.load_live(twinalign.build_live_g8())
     twin = twinalign.load_twin()
-    for a, b, s in twinalign.align(live, twin):
+    return twinalign.align(live, twin)
+
+
+def pairing_map():
+    """{live function name: twin function name} from the ALIGNMENT.
+
+    A second source of renames, and a weaker one than a --symmap vote: the map
+    is derived from reference lists that have to agree in length, which skips
+    every assert-bearing pair, so a function only ever CALLED from such a pair
+    is missing from it. The alignment still pairs it. HandleCardError,
+    HandleCardTimeout and HandleCardNew are the case that found this: all
+    three are passed to OpenEvent in func_80400A10, whose reference lists
+    differ in length because of its sixteen asserts, so the map had only
+    HandleCardEOF and the other three silently stayed live names.
+    """
+    return {a["name"]: b["name"] for a, b, _ in pairs() if a and b}
+
+
+def pairing(twin_fn):
+    """The live function this one was compiled from, per twinalign."""
+    for a, b, s in pairs():
         if b is not None and b["name"] == twin_fn:
             if a is None:
                 sys.exit("%s has no live counterpart (twin-only); it is engine code "
@@ -124,12 +148,13 @@ def extract(fn):
 
 def do_move(twin_fn, live_fn, dry):
     m, ambig = symmap()
+    fnmap = pairing_map()
     body = extract(live_fn)
     # the live source names some globals through a macro (card_slot ->
     # D_800287CC); resolve those before renaming
     macros = dict(re.findall(r"^#define (\w+) (D_[0-9A-F]{8})$",
                              (ROOT / "csrc/main.h").read_text(), re.MULTILINE))
-    used, refused = set(), set()
+    used, refused, byalign = set(), set(), set()
 
     def sub(mo):
         tok = mo.group(0)
@@ -142,15 +167,26 @@ def do_move(twin_fn, live_fn, dry):
         if real in m:
             used.add((real, m[real]))
             return m[real]
+        if real in fnmap:
+            byalign.add(real)
+            used.add((real, fnmap[real]))
+            return fnmap[real]
         return tok
 
     new = re.sub(r"\b[A-Za-z_]\w*\b", sub, body)
     unmapped = sorted(set(re.findall(r"\b(?:func_[0-9A-F]{8}|D_[0-9A-F]{8})\b", new))
                       - {twin_fn} - {t for _, t in used})
+    # a live NAME that is neither mapped nor paired: the silent failure mode,
+    # since it compiles and links against the resident engine
+    unmapped += sorted(n for n in re.findall(r"\b[A-Za-z_]\w*\b", new)
+                       if n in LIVE_NAMES and n not in m and n not in fnmap)
 
     print("%s  <-  %s" % (twin_fn, live_fn))
     for a, b in sorted(used):
         print("    %-22s -> %s" % (a, b))
+    if byalign:
+        print("    from the ALIGNMENT, not a symmap vote: %s"
+              % ", ".join(sorted(byalign)))
     if refused:
         print("    REFUSED, the map's vote is a tie -- rename by hand: %s"
               % ", ".join(sorted(refused)))

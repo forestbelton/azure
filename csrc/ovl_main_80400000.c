@@ -58,6 +58,53 @@
  *
  *   * ONE CONSTANT IS LOWER BY ONE (func_80402DC8 passes 6 where the live
  *     source passes 7).
+ *
+ * WHERE THE MECHANICAL PHASE ENDS. Everything above was a move plus an
+ * immediate. The 33 functions of twinalign's `near` and `inserts-only`
+ * classes that carry no assert were moved the same way and measured, and
+ * only ONE of them (func_80407E08) landed; the rest are per-function
+ * matching work and are back on INCLUDE_ASM. The triage is worth more than
+ * the attempt, so here it is, with the differing-word count:
+ *
+ *   14 fn, 1 word   THE EQUAL-VALUE REGISTER REUSE DOES NOT HAPPEN HERE.
+ *   each            func_804030F4, func_8040311C, func_80403144,
+ *                   func_8040320C, func_80403234, func_8040325C,
+ *                   func_80403284, func_804032AC, func_804032D4,
+ *                   func_804032FC, func_8040334C, func_80403374,
+ *                   func_804033C4 -- the card_mes.c wrappers main.h
+ *                   documents -- plus func_804013F8. The live build spells
+ *                   an argument that equals one already in a register as a
+ *                   copy (`addu $a2, $a1, $zero` where the kind equals the
+ *                   id, `move $a3, $a2` where both are 0); this block
+ *                   re-materialises the constant (`addiu $a2, $zero, 0x2`).
+ *                   The SOURCE IS THE SAME -- func_80022EC4 is
+ *                   `func_80022D60(a, 2, 2, p)` and this block's
+ *                   func_8040311C sets $a1 and $a2 from two separate
+ *                   `addiu`s -- so cse chose differently. Tried and did not
+ *                   move it: a `void *` fourth parameter, an unprototyped
+ *                   callee, a `u8` parameter to force a mode difference.
+ *                   One lever here is worth 14 functions.
+ *
+ *   2 fn, 2 words   A DIFFERENT POINTER SPELLING OF THE SAME ADDRESS.
+ *                   func_80406720 and func_804070C4 hold `q = p + 8` and
+ *                   reach two fields as `q[6]`/`q[7]`; this block reaches
+ *                   the same bytes as `0x38($s2)`/`0x3C($s2)` with $s2
+ *                   holding p, i.e. p[14]/p[15]. Writing it that way is NOT
+ *                   the fix -- it takes func_80406720 from 2 differing to 8,
+ *                   because the allocation cascades.
+ *
+ *   1 fn, 2 words   func_804078D8: two words transposed, a `lui`/`addiu`
+ *                   scheduling order.
+ *
+ *   others          func_804037F4 (5), func_804012B0 (9), func_804065CC and
+ *                   func_80406F70 (11 each), func_804040C8 and
+ *                   func_80406BEC (12), func_804083A0 (15), func_80405B98
+ *                   and func_80407F68 (19), func_80405AE8 (20),
+ *                   func_80404DEC (28), func_804018FC and func_80403E54
+ *                   (42), func_804010F0 and func_80405DE0 (49).
+ *                   func_804018FC is the extreme case: 42 words against a
+ *                   live counterpart of 2, so that pairing is wrong or the
+ *                   live source lost the body entirely.
  */
 
 /* The twin of func_80020924, and the pair that measures the -G difference:
@@ -1180,7 +1227,21 @@ void func_80407DB8(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407E08);
+void func_80407E08(s32 *p)
+{
+    s32 v;
+
+    func_804084DC(p - 8);
+    v = p[0];
+    if (v == 0)
+    {
+        func_80406678w((s32 *)p[5]);
+    }
+    else
+    {
+        func_8040701C((s32 *)p[5], v);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407E64);
 
