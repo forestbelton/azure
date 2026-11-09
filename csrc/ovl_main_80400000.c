@@ -28,29 +28,36 @@
  * `tools/decomp/ovlverify.py --G 8` -- note the --G 8, which is the opposite
  * of every other overlay unit.
  *
- * FIFTEEN PARKS, and their measurements are the interesting part. All 86
- * functions whose masked bodies were already identical at -G8 were moved;
- * 71 came out at 0 differing words and these 15 did not. Every one of them
- * differs ONLY in immediates, in four families, which says the shapes are
- * right and the twin's DATA LAYOUT and a couple of its constants are not:
+ * WHAT THE FIRST 86 FUNCTIONS COST, AND WHAT THEY TAUGHT. Every function
+ * whose masked body was already identical to the live source at -G8 was moved.
+ * 71 landed at 0 differing words with nothing changed but their symbol names.
+ * The other 15 differed ONLY in immediates, and all 15 now land too, after
+ * adjustments that fall into four families -- none of which is a different
+ * SPELLING of the body, and all of which say something about this build:
  *
- *   delta  functions                                       what it looks like
- *   +0x18  func_804038C8 func_80403738 func_80403B84       one extra 24-byte
- *          func_80403CD4, with a +1 loop bound             UnkStrSet record
- *   -0x240 func_80402EBC func_804033EC func_80402BB8        a group struct's
- *   -0x84  func_80404314 func_804044D8 func_8040454C        pad differs; 0x240
- *   -0x34  func_8040553C func_80405900 func_804057B0        and 0x8B0 are
- *                                                           UNK_CARD_GROUP pads
- *   +8     func_804025F8                                    8 more bytes of
- *                                                           stack frame
- *   -1     func_80402DC8                                     one count lower
+ *   * THE WORD INDICES THROUGH ITS STRUCTURES DIFFER, by a constant per
+ *     structure: -0x91 words in func_80402BB8, -0x90 in func_80402EBC and
+ *     func_804033EC, -0x21 in func_80404314/func_804044D8/func_8040454C,
+ *     -0xD in func_8040553C/func_80405900/func_804057B0, +6 in
+ *     func_804038C8/func_80403738/func_80403B84/func_80403CD4. These bodies
+ *     index a plain `s32 *p` by word, not an UNK_CARD_GROUP struct, so the
+ *     fix is the index and the deltas are a direct read-out of how this
+ *     build's data is laid out against the live one's.
  *
- * The +0x18-with-a-+1-bound family is the one to read carefully: a table with
- * one MORE entry is not something an assert does. It is the first concrete
- * evidence for the open question in docs/where-we-are.md -- whether part of
- * this block is an EARLIER REVISION of the source rather than the same source
- * with asserts. Fixing these needs twin-specific struct instantiations (a
- * UNK_CARD_GROUP at the twin's pad), not a different spelling of the body.
+ *   * FOUR OF ITS TABLES HAVE ONE MORE ENTRY. func_804038C8, func_80403738,
+ *     func_80403B84 and func_80403CD4 each need a loop bound of 4 where the
+ *     live source has 3, and the +6-word index shift beside it is 24 bytes --
+ *     one UnkStrSet record. func_804038C8 also wants 0x22 where the live
+ *     source writes 0x1A. A TABLE WITH ONE MORE ENTRY IS NOT SOMETHING AN
+ *     ASSERT DOES: this is the first hard evidence for the open question in
+ *     docs/where-we-are.md, that part of this block is a DIFFERENT REVISION
+ *     of the source rather than the same source with asserts compiled in.
+ *
+ *   * ONE FUNCTION HAS A LOCAL THE LIVE SOURCE DOES NOT (func_804025F8, 8
+ *     bytes, never read). See the DEVICE comment on it.
+ *
+ *   * ONE CONSTANT IS LOWER BY ONE (func_80402DC8 passes 6 where the live
+ *     source passes 7).
  */
 
 /* The twin of func_80020924, and the pair that measures the -G difference:
@@ -310,7 +317,26 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402508);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804025B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804025F8);
+void func_804025F8(u8 *p, s32 idx, s32 n)
+{
+    s32 i;
+    /* DEVICE: eight bytes of unread locals, worth nothing in
+       instructions and everything in displacements. The live frame is 0x20 --
+       0x10 of outgoing-argument area plus the four saved registers, no locals
+       -- and this block's is 0x28, with the SAME four saves 8 bytes higher and
+       every instruction otherwise identical. So the debug source has a local
+       here that it never reads, and gcc 2.7.2 allocates an unused local
+       AGGREGATE rather than eliminating it. A scalar would be dropped. */
+    s32 unused[2];
+
+    func_80051DE4(p, 1);
+    p += idx * 12;
+    for (i = 0; i < n; i++)
+    {
+        func_800514A8(p, 0);
+        p += 12;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402670);
 
@@ -330,7 +356,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402974);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402A1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402BB8);
+void func_80402BB8(s32 *p)
+{
+    s32 **q = (s32 **)p[0x1A7];
+
+    ((u16 *)q[1])[4] = 0xA0;
+    ((u16 *)q[1])[5] = 0x78;
+    q[0] = p + 9;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402BE0);
 
@@ -342,13 +375,21 @@ void func_80402D90(s32 *p)
     func_80402BB8(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402DC8);
+s32 func_80402DC8(s32 a)
+{
+    return func_80047358(a, D_80408C84, 6);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402DF0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402EA4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402EBC);
+void func_80402EBC(s32 *p, s32 a, s32 b, s32 c, s32 d)
+{
+    func_80402EA4(p, a, b, c, d);
+    func_80402974((UnkCardPair *)(p + 0x19F), (u32 *)(p + 0x195), (u32 *)(p + 0x199));
+    func_80402D90(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402F04);
 
@@ -415,7 +456,17 @@ void func_8040339C(s32 a, s32 p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804033C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804033EC);
+void func_804033EC(s32 **pp)
+{
+    s32 i = 0;
+    s32 **p = pp;
+
+    do
+    {
+        func_80051FBC(*p[0x1A3]);
+        p++;
+    } while (++i < 4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040343C);
 
@@ -423,7 +474,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804034D8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403698);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403738);
+void func_80403738(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 4; i++)
+    {
+        ((UnkCardPair *)p[0x78 + i])->unk_04->unk_08 = 0x24;
+        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[0] = 0x68;
+        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[1] = 0x68;
+        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[2] = 0x60;
+        ((UnkCardPair *)p[0x70 + i])->unk_04->unk_08 = 9;
+        ((UnkCardPair *)p[0x74 + i])->unk_04->unk_08 = 0x42;
+        ((UnkCardPair *)p[0x7C + i])->unk_04->unk_08 = 0x8F;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804037F4);
 
@@ -439,7 +504,29 @@ s32 func_80403868(s32 p, s32 w, s32 h)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804038C8);
+void func_804038C8(s32 *p)
+{
+    s32 i;
+
+    p[32] = 1;
+    p[33] = 1;
+    func_804037F4((u8 *)p);
+    func_80403868((s32)(p + 1), 0x36, 0x10);
+    func_80403698(p);
+    ((UnkCardPair *)p[110])->unk_04->unk_0A = 0x22;
+    for (i = 0; i < 4; i++)
+    {
+        ((UnkCardPair *)p[124 + i])->unk_04->unk_08 = 0x8E;
+        ((UnkCardPair *)p[124 + i])->unk_04->unk_0A = (i * 16) + 0x82;
+        ((UnkCardPair *)p[112 + i])->unk_04->unk_08 = 9;
+        ((UnkCardPair *)p[112 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+        ((UnkCardPair *)p[116 + i])->unk_04->unk_08 = 0x42;
+        ((UnkCardPair *)p[116 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+        ((UnkCardPair *)p[120 + i])->unk_04->unk_08 = 0x24;
+        ((UnkCardPair *)p[120 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+    }
+    func_80403738(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804039F8);
 
@@ -455,11 +542,26 @@ void func_80403B7C(s32 *p, s32 v)
     p[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403B84);
+void func_80403B84(s32 *p, s32 v)
+{
+    func_80403B7C(p, v);
+    func_804039F8((UnkCardPair *)(p + 0x6A), (u32 *)(p + 0x60), (u32 *)(p + 0x64));
+    func_804038C8(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403BC4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403CD4);
+void func_80403CD4(s32 **pp)
+{
+    s32 i = 0;
+    s32 **p = pp;
+
+    do
+    {
+        func_80051FBC(*p[0x7C]);
+        p++;
+    } while (++i < 4);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403D24);
 
@@ -505,13 +607,39 @@ void func_80404308(s32 *p, s32 a, s32 b)
     p[1] = a;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404314);
+void func_80404314(s32 *p, s32 a, s32 b)
+{
+    func_80404308(p, a, b);
+    func_80403DA0((UnkCardPair *)(p + 0x72), (u32 *)(p + 0x68), (u32 *)(p + 0x6C), b);
+    func_80404178(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404364);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804044D8);
+void func_804044D8(s32 *p)
+{
+    s32 off = 0;
+    s32 i = 0;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040454C);
+    do
+    {
+        func_80051FBC(*(s32 *)p[off + 0x77]);
+        *(s32 *)p[off + 0x77] = 0;
+        off++;
+    } while (++i < 3);
+    *(s32 *)p[0x7A] = 0;
+}
+
+void func_8040454C(s32 **p)
+{
+    s32 i = 0;
+
+    do
+    {
+        *p[0x76] = 0;
+        p++;
+    } while (++i < 10);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404570);
 
@@ -570,7 +698,28 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804053A0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804054E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040553C);
+void func_8040553C(s32 *p)
+{
+    UnkCardPair *q;
+
+    func_80404DEC((u8 *)(p + 1), 0xF8, 0x48);
+    q = (UnkCardPair *)p[0x2C5];
+    q->unk_04->unk_08 = 0xA0;
+    q->unk_04->unk_0A = 0xB0;
+    q->unk_00 = (s32)(p + 1);
+    q = (UnkCardPair *)p[0x2C2];
+    q->unk_04->unk_08 = 0x60;
+    q->unk_04->unk_0A = 0x88;
+    q->unk_00 = (s32)D_800841DC;
+    q = (UnkCardPair *)p[0x2C3];
+    q->unk_04->unk_08 = 0xD0;
+    q->unk_04->unk_0A = 0x88;
+    q->unk_00 = (s32)D_8008423C;
+    q = (UnkCardPair *)p[0x2C4];
+    q->unk_04->unk_08 = 0x20;
+    q->unk_04->unk_0A = 0x88;
+    q->unk_00 = (s32)D_8008429C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405624);
 
@@ -586,11 +735,33 @@ void func_804057A8(s32 *p, s32 v)
     p[0] = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804057B0);
+void func_804057B0(s32 *p, s32 v)
+{
+    func_804057A8(p, v);
+    func_80405624((UnkCardPair *)(p + 0x2BE), (u32 *)(p + 0x2B4), (u32 *)(p + 0x2B8));
+    func_8040553C(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804057F0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405900);
+void func_80405900(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 3; i++)
+    {
+        func_80051FBC(*(s32 *)p[0x2C6 + i]);
+        *(s32 *)p[0x2C6 + i] = 0;
+    }
+    for (i = 0; i < 4; i++)
+    {
+        *(s32 *)p[0x2C9 + i] = 0;
+    }
+    for (i = 0; i < 10; i++)
+    {
+        *(s32 *)p[0x2CD + i] = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804059A8);
 
