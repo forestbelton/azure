@@ -75,6 +75,13 @@ endif
 
 CFLAGS_G0 := $(CFLAGS) -G0
 CFLAGS += -G8
+# The DEFAULT flags under a name, so the one overlay unit that wants them --
+# main.bin's debug twin at 0x80400000, which is the live overlay's source built
+# the other way -- can opt back in past the `ovl_%` -G0 pattern rule below.
+# This is NOT a reintroduction of the removed MASPSXFLAGS_G8 escape hatch (see
+# the note further down): nothing here changes what -G the hatch changed, it
+# just names the resident default so a pattern rule can be stepped around.
+CFLAGS_DEFAULT := $(CFLAGS)
 
 # -G8 is the compiler's default and the game uses small-data addressing: 245
 # genuine $gp-relative loads/stores in the game's own code, against
@@ -118,6 +125,8 @@ MASPSXFLAGS += --aspsx-version=$(ASPSX_VERSION) \
 
 MASPSXFLAGS_G0 := $(MASPSXFLAGS) -G0
 MASPSXFLAGS += -G8
+# As with CFLAGS_DEFAULT above: the default, named, for the 0x80400000 twin.
+MASPSXFLAGS_DEFAULT := $(MASPSXFLAGS)
 
 # THERE IS NO LONGER A PER-FILE -G ESCAPE HATCH, and that is the point. Two
 # variables used to live here, MASPSXFLAGS_G8 and MASPSXFLAGS_G2, which left
@@ -168,6 +177,19 @@ MASPSXFLAGS += -G8
 # overlay one; it now says so.
 build/csrc/ovl_%.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/ovl_%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
+# THE ONE OVERLAY UNIT THAT IS -G8: main.bin's debug twin at 0x80400000. It is
+# the same source as the live overlay built the other way, and -G is the whole
+# difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global
+# access comes out as the assembler-expanded `lui $at` + `%lo` pair, which is
+# what this block uses, against the hoisted-lui split the live block uses at
+# -G0. func_80020924/func_804008A0 is the pair that shows it: 24 words at -G0,
+# 26 at -G8, and the 26 match this block instruction for instruction.
+#
+# An exact target name beats the `ovl_%` pattern above in GNU make, which is
+# the only reason this works as two lines rather than a rewrite of the pattern.
+build/csrc/ovl_main_80400000.o: CFLAGS := $(CFLAGS_DEFAULT)
+build/csrc/ovl_main_80400000.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT)
 
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.

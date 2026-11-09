@@ -129,17 +129,50 @@ Three things about the overlays that change how they are worked, all in
   pointer) does not arise. `main.bin`'s overlay is a `c` subsegment as of
   2026-11-01 with per-unit `CFLAGS`/`MASPSXFLAGS` overrides in the Makefile,
   and is **complete: 241 of 241 functions, 7,487 of 7,487 words (100.0%)**,
-  with all four containers byte-identical. That completes the project --
-  **1,293 of 1,293 functions, 100.0% of its words**, and no `INCLUDE_ASM`
-  anywhere in `csrc/`. The nineteen landed in the second sweep were all read
-  out of `cc1psx -O2 -G0 -da` dumps by hand, with no permuter, and in all
-  nineteen the park's stated cause was wrong rather than its spelling.
+  with all four containers byte-identical. That completed every block the
+  project counted -- **1,293 of 1,293 functions, 100.0% of its words**. It is
+  no longer true that there is no `INCLUDE_ASM` anywhere in `csrc/`: the debug
+  twin below was opened as a `c` subsegment on 2026-11-09 and carries 261 of
+  them. The nineteen landed in the second sweep were all read out of
+  `cc1psx -O2 -G0 -da` dumps by hand, with no permuter, and in all nineteen
+  the park's stated cause was wrong rather than its spelling.
 * **`main.bin+0x269000` is the same source at `-G8`**, with more of its
   asserts compiled in, and its rodata names nine original translation units.
   Unit boundaries are where four previous dead ends turned out to be. One C
   source reproduces both blocks byte-for-byte, so every function in this
   overlay has TWO independent targets. It is dead code on retail
   (`0x80400000` is 8 MB dev-board RAM) but still has to be reproduced.
+
+  **It is now being reproduced, and the reuse is measured rather than
+  assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
+  alternate entries, built at `-G8` through an exact-target Makefile override
+  past the `ovl_%` `-G0` pattern rule -- with `func_804008A0` landed from C
+  (26 words, 0 differing) and the rest on `INCLUDE_ASM`. Rebuilding the LIVE
+  overlay's own source at `-G8` and aligning its 241 functions against this
+  block gives the scale of what is already in the tree:
+
+  | the twin's 8,272 words | fn | words | share |
+  |---|---|---|---|
+  | already identical, no source edits | 86 | 1,363 | 16.5% |
+  | differs <=10% (an assert inserted) | 33 | 982 | 11.9% |
+  | differs 10-40% | 67 | 3,159 | 38.2% |
+  | differs >40% | 45 | 2,068 | 25.0% |
+  | twin-only, no live counterpart | 32 | 700 | 8.5% |
+
+  231 of 263 pair 1:1 with a function the live source already defines, and the
+  32 that do not are engine code this build linked statically rather than
+  calling in the resident executable -- 14 of them match an already-decompiled
+  resident function exactly under masking (`func_804046C8` is `func_8004EEBC`,
+  `func_80404B10` is `func_8004F2BC`, and nine 4-word PSY-Q stubs), and most
+  of the rest sit at 0.7-0.85 against one, which is the assert pattern again.
+  So **no function here needs decompiling from scratch**; what is missing is
+  the asserts, which `tools/assertmap.py` reads out of this block, and the
+  per-function register allocation they shift.
+
+  **One thing is NOT yet established**: that the 45 functions at >40%
+  difference are the same source plus asserts. 37 assert sites do not
+  obviously explain 139 divergent functions, so some of this block may be an
+  EARLIER REVISION of the source. That only resolves once the asserts are in.
 * **town and dungeon have no such oracle.** None of town's 76 assert records
   is inside its big overlay, and dungeon has zero.
 

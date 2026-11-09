@@ -304,11 +304,71 @@ segments:
   # that grid -- a boundary there pads the container. 0x2719e0 takes one word
   # of the three zero words of padding into .text and is 16-byte aligned.
   # The block's data starts at 0x2719e8.
+  # DECOMPILING THE TWIN. The text subsegment is `c` as of 2026-11-09, and the
+  # unit is built at -G8 -- the opposite of the live overlay's -G0 override, and
+  # the thing that makes the shared source produce this block. The Makefile has
+  # an exact-target override for it, because the `build/csrc/ovl_%.o` pattern
+  # rule would otherwise hand it -G0 like every other overlay unit.
+  #
+  # The plan is ONE SOURCE for both blocks, not a second decompilation: the
+  # live overlay's own source rebuilt at -G8 already reproduces 86 of this
+  # block's 263 functions instruction-for-instruction, 231 of 263 pair 1:1
+  # with a function it already defines, and the 32 that do not are engine code
+  # this debug build linked statically (`memory.c` and the PSY-Q stubs) which
+  # is already decompiled in the resident units. What is missing is the
+  # asserts, which `tools/assertmap.py` reads straight out of this block.
+  #
+  # Two things make the twin's object DIFFERENT from the live one despite the
+  # shared source, and both are why its symbols have to be renamed rather than
+  # shared:
+  #
+  # 1. It was linked against a DIFFERENT ENGINE BUILD. It calls printf at
+  #    0x8007C040 and exit at 0x8007BEF0, which in the shipped executable land
+  #    inside libgte's `rcossin_tbl`. Its external addresses are unusable.
+  # 2. Its data is its own copy at 0x8040xxxx and NOT at a constant offset
+  #    from the live overlay's: `card_slot` is 0x800287CC live and 0x804094EC
+  #    here, a delta of 0x3E0D20, while the data regions' bases differ by
+  #    0x3E1320. Both blocks are in ONE container, so one symbol name cannot
+  #    resolve to two addresses.
+  #
+  # rodata keeps its own NAME (`..._rodata`) and stays UNDOTTED. Undotted is
+  # what disassembles it unconditionally; the dotted form would migrate it
+  # into the C unit, and migration only emits a symbol it can ATTRIBUTE to a
+  # function -- which is how the live overlay's message pool was written
+  # nowhere and left the container 0x864 bytes short (see the `hrodata` note
+  # 100 lines up). A DIFFERENT name is what keeps it undotted: an undotted
+  # subsegment sharing the `c` unit's name is a hard error. The function
+  # pointer table at +0x269058 and the nine filenames live here and are
+  # claimed later, the same way as the `data_pre`/`data_post` chunks above.
   - type: code
     start: 0x269000
     vram: 0x80400000
     subsegments:
-      - [0x269000, rodata, ovl_main_80400000]
-      - [0x2698a0, asm, ovl_main_80400000]
+      # THE SPLIT IS THE JUMP TABLE AND NOTHING ELSE, and both halves of that
+      # are forced. There is exactly one jumptable in this rodata,
+      # jtbl_8040007C (five words, at the offset splat's own "likely file
+      # split" suggestion names), and its entries are `.L` labels inside
+      # func_804016D0's text. A local label is only visible in the object that
+      # defines it, so the table MUST ride in the same object as the code:
+      # undotted, it links as five undefined references to `.L80401770` and
+      # friends. Dotted, splat migrates it into that function's nonmatchings
+      # listing, which is part of the C unit's object. Hence the dotted
+      # subsegment, and hence it covers 0x14 bytes.
+      #
+      # Everything else must NOT migrate. Migration only emits a symbol it can
+      # ATTRIBUTE to one function, and this block's rodata is mostly the
+      # opposite of that: ASSERT_FMT and the nine translation-unit filenames
+      # are referenced from dozens of functions each, so splat attributes them
+      # to nobody and writes them NOWHERE -- 13 of the 263 functions took
+      # their rodata along and the link then failed on undefined D_80400894 /
+      # D_8040086C, which are `cardsme.c` and `memory.c`. Undotted with their
+      # own names is what disassembles them unconditionally. Same lesson as
+      # the live overlay's message pool 170 lines up, reached from the other
+      # direction: there an undotted subsegment was needed because nothing
+      # referenced the pool, here because everything does.
+      - [0x269000, rodata, ovl_main_80400000_rodata_pre]
+      - [0x26907c, .rodata, ovl_main_80400000]
+      - [0x269090, rodata, ovl_main_80400000_rodata_post]
+      - [0x2698a0, c, ovl_main_80400000]
   - [0x2719e0, bin]
   - [0x275800]
