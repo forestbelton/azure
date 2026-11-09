@@ -826,11 +826,71 @@ void func_804046C8(u8 *p)
     }
 }
 
+/* PARK: 42 words, and the closest spelling reaches 38. The body is
+ * func_8004EEFC from csrc/unk_1C540.c, which copies the two GPU-primitive
+ * templates into the caller's two primitives.
+ *
+ * What is settled: this block reads the templates as SEVEN SEPARATE SCALARS,
+ * not through two array pointers. A pointer into an array keeps one base
+ * register and displaces off it (37 words); seven scalars materialise a
+ * `lui`/`%lo` pair each, which is what the listing shows, and that is worth
+ * one word. splat named these words individually for the same reason, and the
+ * shipped build's D_8002E5D8/D_8002E5E8 are this engine build's D_8002D690..
+ * and D_8002D6A0..
+ *
+ * What is not: the remaining four words are LOAD-DELAY NOPS. This block emits
+ * `lui`, `lw`, `nop`, `sw` per word; ours interleaves the next word's `lui`
+ * into the delay slot. Tried and did not reach it -- `volatile` on the seven
+ * sources (no change at 38, since it constrains the loads and not the stores)
+ * and `volatile` on the destinations through a cast (overshoots to 44). What
+ * is wanted is a spelling where the next load cannot be hoisted across the
+ * previous store. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404708);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804047B0);
+/* func_8004EF90. Its three globals are D_80408CC4, D_80408CCC and D_80408CC8,
+ * in the order the body reads them -- the listing's first-use order is the
+ * rename. */
+u8 *func_804047B0(u8 *p)
+{
+    u32 a;
+    u32 b;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404818);
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_80408CC4;
+    a = D_80408CCC;
+    b = D_80408CC8;
+    p[1] |= 2;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
+
+/* func_8004EFF4, the same shape one template along. */
+u8 *func_80404818(u8 *p)
+{
+    u32 a;
+    u32 b;
+
+    p[1] = 0xB0;
+    *(u32 *) (p + 8) = D_80408CD0;
+    a = D_80408CD8;
+    b = D_80408CD4;
+    p[1] |= 2;
+    p[0] |= 0x40;
+    *(u32 *) (p + 4) = a;
+    *(u32 *) (p + 0xC) = b;
+    p += 0x18;
+    p[1] = 0x81;
+    *(u16 *) (p + 4) = 0x20;
+    *(u16 *) (p + 6) = 0;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404888);
 

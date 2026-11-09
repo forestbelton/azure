@@ -146,11 +146,22 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and **86 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and **96 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
-  byte-identical. Every one of them came from the live overlay's own source
-  with its references renamed through `tools/decomp/twinalign.py --symmap`;
-  not one was decompiled from a listing. Rebuilding the LIVE overlay's own
+  byte-identical. **Not one was decompiled from a listing.** 88 came from the
+  live overlay's own source with their references renamed through
+  `tools/decomp/twinalign.py --symmap`, and 8 from the RESIDENT units
+  (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
+  this debug build linked libcard's callers statically where retail calls
+  them in the executable. For those, the renames were read off the block's
+  own listings POSITIONALLY -- the Nth call in the resident body is the Nth
+  `jal` here -- which is firmer than the similarity match that found the
+  counterpart, and `func_8004F2BC`'s five calls fixed five symbols at once.
+
+  Nine of the twin-only functions are **not decompilable and now
+  identified**: `addiu $t2, $zero, 0xB0; jr $t2; addiu $t1, $zero, <call>` is
+  a PSY-Q BIOS call stub, hand-written library assembly. They stay on
+  `INCLUDE_ASM`, as the `asm/psyq` listings do. Rebuilding the LIVE overlay's own
   source at `-G8` and aligning its 241 functions against this block gives the
   scale of what is already in the tree:
 

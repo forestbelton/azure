@@ -128,6 +128,15 @@ long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
 
 /* --- variables, in address order --- */
+extern u32 D_8002D690;                               /* D_8002E5D8[0] in the shipped build */
+extern u32 D_8002D694;                               /* D_8002E5D8[1] */
+extern u32 D_8002D698;                               /* D_8002E5D8[2] */
+extern u32 D_8002D69C;                               /* D_8002E5D8[3] */
+extern u32 D_8002D6A0;                               /* D_8002E5E8[0] */
+extern u32 D_8002D6A4;                               /* D_8002E5E8[1] */
+extern u32 D_8002D6A8;                               /* D_8002E5E8[2] */
+                             /* D_8002E5D8, the 4-word GPU template, in the OTHER engine build */
+                             /* D_8002E5E8, the 3-word one */
 extern u8 D_80084110[];                              /* D_80027F7C */
 extern u8 D_800841DC[];                              /* D_80079054 */
 extern u8 D_8008423C[];                              /* D_800790B4 */
@@ -144,6 +153,12 @@ extern u8 *D_80408C8C[];                             /* D_800282BC */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
+extern u32 D_80408CC4;                               /* D_80071660 */
+extern u32 D_80408CC8;                             /* D_80071664 */
+extern u32 D_80408CCC;                             /* D_80071668 */
+extern u32 D_80408CD0;                               /* D_8007166C */
+extern u32 D_80408CD4;                             /* D_80071670 */
+extern u32 D_80408CD8;                             /* D_80071674 */
 extern u8 D_80408CE8[];                              /* D_800717BC, include/structs.h */
 extern u8 D_80408CF0[];                              /* D_80027FD0 */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
