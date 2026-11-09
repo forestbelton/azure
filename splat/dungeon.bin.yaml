@@ -36,7 +36,7 @@ options:
   undefined_syms_auto_path: splat/dungeon.bin_undefined_syms_auto.txt
 segments:
   - [0x0, bin]
-  # The dungeon overlay: 353 functions at 0x80088760 -- the SAME address as
+  # The dungeon overlay: 863 functions at 0x80088760 -- the SAME address as
   # town.bin's overlay, the first byte after the resident engine's last
   # (0x8008875F). The two are therefore mutually exclusive at runtime, and an
   # address in this range means different code depending on which is
@@ -55,19 +55,37 @@ segments:
   # dungeon session (21 seeks), which is what reloading an overlay per floor
   # looks like.
   #
-  # There is only ONE code overlay in this container. The seeks at +0x2a3000,
-  # +0x4a3000 and so on -- 0xa3000 at 0x200000 strides, as if the container
-  # were chunked in 2 MB units -- are assets and low-RAM data, not more
-  # overlays: assuming the same 0x80088760 base at those offsets scores 0-45
-  # against this one's 353, and the reported spans run to megabytes. +0x2a3000
-  # holds pointers into 0x8001d4xx, so it belongs to the low-RAM region that
-  # main.bin's overlay occupies; +0x9f000 and +0x4a3000 are texture records.
+  # THIS IS NOT THE ONLY CODE OVERLAY IN THIS CONTAINER, and the claim that it
+  # was is withdrawn. It said: "the seeks at +0x2a3000, +0x4a3000 and so on are
+  # assets and low-RAM data, not more overlays: assuming the same 0x80088760
+  # base at those offsets scores 0-45 against this one's 353". The scores were
+  # right and the inference was wrong -- a bank that loads at 0x8001d4xx or
+  # 0x8016e800 scores nothing at the 0x80088760 base BECAUSE THE BASE IS
+  # WRONG, so a low score there is not evidence of absence. The prologue vote
+  # can only rank bases for a span you already suspect; used as a search it
+  # has no power, and that is how about two hundred further code objects came
+  # to be filed as assets.
   #
-  # rodata first, code from +0xa3e28 (gcc -G8 data-before-functions).
+  # `tools/decomp/codemap.py` searches instead of ranking, by scoring a delta
+  # on whether internal `jal` targets land two words after a `jr $ra` -- a
+  # function start, since cc1psx emits functions back to back. It takes this
+  # overlay at 456 of 456 internal targets (100%) against 4% for the
+  # runner-up, where the prologue vote managed 1484 against 374, and that
+  # margin is what makes a blind sweep over 26 MB possible. docs/dungeon-map.md
+  # has the resulting map; the short version is that +0x2a3000 is a real code
+  # overlay whose jump table into 0x8001d4xx is a jump table into ITSELF, and
+  # that file 0x9bd800..0x135e000 holds ~195 banked overlays of 0x6000 bytes
+  # each, stored as seven relinked copies -- one per RAM slot -- which
+  # func_800A0B94 in this very overlay loads with
+  # `dest = 0x80170800 - i * 0x6000`, `nsec = 0xC`.
   #
-  # KNOWN WRONG BY 58 WORDS, and not yet corrected because this overlay is
-  # still `asm` and a re-split of this 26 MB container is not free. The text
-  # really starts at +0xa3d40 (vram 0x800894A0). What sits in 0x800894A0..
+  # rodata first, code from +0xa3d40 (gcc -G8 data-before-functions).
+  #
+  # CORRECTED 2026-11-09, having been KNOWN WRONG BY 58 WORDS: the text starts
+  # at +0xa3d40 (vram 0x800894A0), not the +0xa3e28 this file declared, and the
+  # overlay is 863 functions / 85,616 words rather than 862. Re-split and
+  # `make containers` is byte-identical with the corrected boundary, and
+  # func_800894A0 now has a listing of its own. What sits in 0x800894A0..
   # 0x80089588 is one entire function -- `addiu $sp, $sp, -0x20`, $s0/$s1/$ra
   # saved, eight `jal`s (0x80040190, 0x800401FC, 0x8004027C, 0x8004D70C,
   # 0x800D13B8, 0x800CF8E4, 0x800897E4 and, last, 0x80089588 which is the
@@ -82,12 +100,10 @@ segments:
   # here does -- this one is reached from outside the block -- so no `func_`
   # symbol was ever created for it and it reads as rodata.
   #
-  # Fixing it is `[0xa3d40, rodata...]`/`[0xa3d40, asm, ovl_dungeon]` plus
-  # `splat split splat/dungeon.bin.yaml` and `make build/dungeon.bin` to
-  # confirm byte-identical; it takes the overlay to 863 functions / 85,616
-  # words. Do it when dungeon work starts, and re-run the same two checks
-  # then -- a `func_` label inside the rodata listing, and a decode of the
-  # last data block's tail -- because the second one is what caught this.
+  # Both ends were re-checked independently before the boundary moved: the word
+  # at +0xa3d40 is `27bdffe0`, the four words below it are the
+  # `01c801c0 / 0010001c` 2-word record pattern this note predicted, and the
+  # last `jr $ra` is at +0xf76f8 with its delay slot at +0xf76fc.
   # The three corrections eec0572 worked out on town.bin apply here unchanged:
   # `rodata` and not `.rodata` while this overlay is `asm` -- the dot routes
   # the subsegment to a sibling C object and extracts nothing, so every
@@ -105,6 +121,6 @@ segments:
     vram: 0x80088760
     subsegments:
       - [0xa3000, rodata, ovl_dungeon]
-      - [0xa3e28, asm, ovl_dungeon]
+      - [0xa3d40, asm, ovl_dungeon]
   - [0xf7700, bin]
   - [0x1a86800]
