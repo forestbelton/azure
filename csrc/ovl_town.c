@@ -1079,6 +1079,22 @@ typedef struct Unk8006ADBCRec
 #define TOWN_PT ((UnkTown2AE8Int *)D_80083780)
 #define TOWN_REC ((Unk8006ADBCRec *)D_8006ADBC)
 
+/* The SAME record at +0x18, halved.  func_800AC4C4 reads 0x18 with `lh` and
+   0x1A with `lhu` -- the two halves of Unk8006ADBCRec's `s32 unk_18` -- and
+   neither `*(s16 *)(D_8006ADBC + 0x18)` nor `*(s16 *)&TOWN_REC->unk_18` with
+   `*((u16 *)&TOWN_REC->unk_18 + 1)` beside it reaches the listing: both are
+   2 differing plus a relocated word whose addend moves.  So the halfword view
+   is a second type rather than a cast, and Unk8006ADBCRec's s32 stays as it
+   is because its own users compare the whole word to 0x37000C. */
+typedef struct Unk8006ADBCRec2
+{
+    u8 pad_00[0x18];
+    s16 unk_18;
+    u16 unk_1A;
+} Unk8006ADBCRec2;
+
+#define TOWN_REC2 ((Unk8006ADBCRec2 *)D_8006ADBC)
+
 /* A RESIDENT symbol (splat/town.bin_undefined_syms_auto.txt), declared
    nowhere in include/structs.h or csrc/. Only its +0x08 pointer has a
    witness, and that pointee's type is inferred from three s16 reads at
@@ -3296,6 +3312,123 @@ typedef struct UnkTownAD138SP
     u8 unk_20C;
     u8 unk_20D;
 } UnkTownAD138SP;
+
+/* THE SAME 0x1F800000 SCRATCHPAD AGAIN, as func_800AC4C4 lays it out.  The two
+   views are deliberately separate types and not one: func_800AC4C4 stores a
+   WORD at 0xE0/0xE8/0xF0/0xF8 and a HALFWORD at +4 of each (the packed
+   screen-XY and a vertex height), which SVECTOR's three s16 cannot spell, and
+   it owns 0x110, 0x12C, 0x14C, 0x164..0x17C where UnkTownAD138SP has padding
+   or a `u16 unk_170`.  Reconciling them means re-measuring func_800AD138, so
+   it is not done here. */
+typedef struct UnkTownACVtx
+{
+    s32 unk_00;
+    u16 unk_04;
+    u16 unk_06;
+} UnkTownACVtx;
+
+typedef struct UnkTownACNrm
+{
+    s32 unk_00;
+    s16 unk_04;
+    s16 unk_06;
+} UnkTownACNrm;
+
+typedef struct UnkTownACObj
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+    u32 unk_08;
+    u32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+} UnkTownACObj;
+
+typedef struct UnkTownACMap
+{
+    u16 *unk_00;
+    UnkTownACObj **unk_04;
+    UnkTownACVtx *unk_08;
+    UnkTownACNrm *unk_0C;
+    u8 pad_10[0x4];
+    s16 unk_14;
+    s16 unk_16;
+    s16 unk_18;
+    s16 unk_1A;
+} UnkTownACMap;
+
+typedef struct UnkTownACView
+{
+    u8 pad_00[0x84];
+    s32 unk_84;
+    s32 unk_88;
+} UnkTownACView;
+
+typedef struct UnkTownACVert
+{
+    u32 unk_00;
+    u16 unk_04;
+    u16 unk_06;
+} UnkTownACVert;
+
+typedef struct UnkTownACSP
+{
+    u32 unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    u8 pad_10[0x4];
+    s32 unk_14;
+    s32 unk_18;
+    Unk46C20B unk_1C[4];
+    u32 *unk_BC;
+    s32 unk_C0;
+    u8 pad_C4[0x4];
+    s32 unk_C8;
+    u8 pad_CC[0x8];
+    s32 unk_D4;
+    u8 pad_D8[0x4];
+    s32 unk_DC;
+    UnkTownACVert unk_E0;
+    UnkTownACVert unk_E8;
+    UnkTownACVert unk_F0;
+    UnkTownACVert unk_F8;
+    u8 pad_100[0x10];
+    u32 unk_110;
+    s32 unk_114;
+    s32 unk_118;
+    s32 unk_11C;
+    s32 unk_120;
+    s32 unk_124;
+    s32 unk_128;
+    s32 unk_12C;
+    u8 pad_130[0x4];
+    s32 unk_134;
+    s32 unk_138;
+    u8 pad_13C[0x8];
+    s32 unk_144;
+    u8 pad_148[0x4];
+    s32 unk_14C;
+    u8 pad_150[0x14];
+    u32 unk_164;
+    s32 unk_168;
+    s32 unk_16C;
+    s32 unk_170;
+    u16 unk_174;
+    u16 unk_176;
+    u16 unk_178;
+    u8 pad_17A[0x2];
+    s32 unk_17C;
+} UnkTownACSP;
+
+/* Resident libgte.  SetColorMatrix (0x80064D50) and SetLightMatrix
+   (0x80064D20) are named in splat/common_syms.txt and used by name elsewhere
+   in this unit; 0x80064624 is unnamed there but sits in libgte's
+   matrix/geometry block and takes two s32. */
+void func_80064624(s32, s32);
+void func_800AD138(u32);
 
 /* The four halfwords at 0x8008333C+0x14..0x1A, reached through a pointer to
    D_80083160 + 0x1DC rather than off the symbol: func_800AD138's listing
@@ -32619,7 +32752,443 @@ void func_800AC488(s32 a, s32 b, s32 u, s32 v)
     D_800D1548.unk_02 = b;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_town", func_800AC4C4);
+/* THE VERTEX BLOCK'S FOUR HOISTED LOCALS (vi0, vi1, vi2, h1) ARE THE WHOLE
+   DIFFICULTY OF THIS FUNCTION, and each one is a MEASURED scheduler lever, not
+   a style choice.  Written the obvious way -- eleven plain statements, every
+   index read inline -- the body is 797 of 797 words with 23 differing rows, all
+   of them in words 377..428, and no reordering of those eleven statements
+   reaches the listing (all 88 constrained orders were swept; the four that stay
+   at 797 words score 27, 30, 43 and 45 aligned rows).  The four locals are what
+   closes it, for three separate reasons:
+
+   1. `vi0` makes room for `sp->unk_16C = o->unk_14` INSIDE the first vertex's
+      address computation.  The listing has its `lw 0x14($a2)` at word 378 and
+      its `sw 0x16C($s1)` at 381, i.e. between the index load at 377 and the
+      vt load at 382.  Those three memory refs have unrelated base registers,
+      so memrefs_conflict_p (alias.c) makes each pair a dependence and NEITHER
+      scheduler may reorder them: the store has to be between them in PROGRAM
+      order, and no placement of `sp->unk_16C = o->unk_14` as a statement can
+      be, because the index load and the vt load belong to one statement.
+      Splitting the index out into a local opens exactly that slot.  Measured:
+      the store as a statement before the Z0 assignment is 798 words (its load
+      and store come out adjacent and grow a load-delay nop), after it 797/43.
+
+   2. `vi1` and `vi2` are the LIFT that puts each vertex's +4 halfword store
+      ahead of its +0 word store.  In sched1 the two stores meet on priority
+      (adjust_priority only bumps an insn whose SET_DEST is a REG, so a store
+      is never bumped), and the +4 store's chain runs two load latencies past
+      the preceding `sw 0x168` while the +0 store's runs one -- so the +4 store
+      is one deeper and loses, every spelling.  A load whose base register is
+      not $s1, sitting between the two stores, ties them: it conflicts with the
+      +0 store, which therefore inherits its priority, and rank_for_schedule's
+      INSN_LUID tie-break then takes the +4 store first because it is first in
+      source.  `vi1 = o->unk_02` and `vi2 = o->unk_04` are those loads -- and
+      they are the ones the listing has there (words 400 and 425).  Measured
+      with a V-slot sweep: vi1 anywhere but the Q0/P0 gap and vi2 anywhere but
+      the Q1/P1 gap is 795-796 words (28 placements swept, all of them worse).
+
+   3. `h1` fixes the LAST five words, 400..404, by one LUID.  With vi0/vi1/vi2
+      alone this is 797 words and 5 differing, the pri-7 sched2 group coming out
+      `or, lhu 0x2($a2), lhu 0x12C, sw 0xE0, lhu 0x14` against the listing's
+      `lhu 0x2($a2), or, sw 0xE0, lhu 0x14, lhu 0x12C`.  Both orders are legal;
+      SCHED_SORT picks within the group by descending INSN_LUID, and the 0x12C
+      load has to come after the 0x14 load for the listing's order.  In source
+      the 0x12C read is in the +4 statement and the 0x14 read in the +0 one
+      after it, so sched1 emits them in the other order.  Reading 0x14 into a
+      local BEFORE the +4 statement swaps the two LUIDs and nothing else: 797
+      words, 0 differing.  The same hoist placed AFTER the +4 statement is back
+      to 5 differing, which is the control.
+
+   EVERY OTHER read of `(u16)sp->unk_12C` and `(u16)sp->unk_14` in this region
+   is its own load in the listing and must stay its own expression: cse kills
+   the MEM at every intervening store through another base, so the loads are
+   not redundant and collapsing any further pair of them loses words.  `h1`
+   covers exactly one read, the one in the second vertex's +0 statement.
+
+   Spellings that are byte-identical here, so pick on taste: `(u16)sp->unk_12C`
+   as `*(u16 *)((u8 *)sp + 0x12C)` in any or all of the three, the 0x16A read as
+   `*(s16 *)((u8 *)sp + 0x16A)`, `(u16)sp->unk_14` as a cast off `sp`, vi0/vi1/
+   vi2 as s32/u32/int/u16 (s16 and short are 800 words), and the declaration
+   anywhere in the block.  Spellings that are NOT: one local reused for all
+   three indices (800), the two `|` operands swapped (798 in the first vertex,
+   797/24 in the second), the `+` operands inside the `<< 16` swapped (796).
+
+   The out-of-image words at 0x80013180 are the constant 0x80010000 plus
+   displacements, not the symbol: the symbol form is 798 words.  That is why
+   aligndiff still prints four rows for this function -- 0x3C028001/0x8C4B3180/
+   0x904C3184/0x90423185 are byte-identical to the listing and differ only in
+   how splat renders the relocation. */
+void func_800AC4C4(void)
+{
+    UnkTownACSP *sp = (UnkTownACSP *)0x1F800000;
+    Unk80083160 *g;
+    UnkTownACMap *m;
+    u16 *cell;
+    UnkTownACVtx *vt;
+    UnkTownACNrm *nm;
+    UnkTownACObj *o;
+    UnkTownACView *v;
+    u8 *q;
+    POLY_FT4 *p;
+    LINE_F4 *l;
+    SVECTOR *sv;
+    s32 i;
+    s32 t;
+    s32 vi0, vi1, vi2;
+    u16 h1;
+    s32 a, b, c, d;
+    u8 *z;
+    u32 w;
+    u16 x, y;
+
+    g = &D_80083160;
+    m = (UnkTownACMap *)((u8 *)g + 0x1DC);
+    cell = (u16 *)g->unk_1DC;
+    vt = m->unk_08;
+    nm = m->unk_0C;
+    SetColorMatrix((MATRIX *)((u8 *)g + 0x70));
+    v = (UnkTownACView *)((u8 *)g + 0x18);
+    func_80064624(v->unk_84, v->unk_88);
+    SetLightMatrix((MATRIX *)((u8 *)g + 0x50));
+    if (D_800D1554 != 0)
+    {
+        *(s16 *)((u8 *)g + 0x1A) = -0xB8;
+        *(s16 *)((u8 *)g + 0x1E) = 0x1DA;
+    }
+    else
+    {
+        *(s16 *)((u8 *)g + 0x1A) = -0x88;
+        *(s16 *)((u8 *)g + 0x1E) = 0x1AA;
+    }
+    sv = (SVECTOR *)((u8 *)g + 0x20);
+    func_80046884((RECT *)((u8 *)g + 0x18), sv, 0);
+    sp->unk_00 = g->unk_A8;
+    q = (u8 *)0x80010000;
+    z = g->unk_00;
+    a = m->unk_14;
+    b = m->unk_16;
+    c = m->unk_18;
+    d = m->unk_1A;
+    w = *(u32 *)(q + 0x3180);
+    x = q[0x3184];
+    y = q[0x3185];
+    sp->unk_BC = (u32 *)(z + 0xB0);
+    sp->unk_124 = a;
+    sp->unk_178 = y;
+    sp->unk_114 = 0x40 << sp->unk_124;
+    sp->unk_128 = b;
+    sp->unk_11C = c;
+    sp->unk_120 = d;
+    sp->unk_110 = w;
+    sp->unk_176 = x;
+    sp->unk_118 = 0x40 << sp->unk_128;
+    p = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
+    sp->unk_14C = 0xFFFF;
+    sp->unk_174 = 4;
+    sp->unk_164 = (u32)p + 0xCCCC;
+    sp->unk_0C =
+        (s16)func_80046C20((Unk46C20A *)sv, sp->unk_1C, &sp->unk_174);
+    while (sp->unk_174 != 0)
+    {
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C == 0 && sp->unk_1C[i].unk_18 <= sp->unk_0C)
+            {
+                sp->unk_1C[i].unk_1C = 1;
+            }
+        }
+        sp->unk_14 = 0x7FFF;
+        sp->unk_18 = -0x7FFF;
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C > 0)
+            {
+                sp->unk_08 = sp->unk_1C[i].unk_00;
+                if (sp->unk_08 < sp->unk_14)
+                {
+                    sp->unk_14 = sp->unk_08;
+                }
+                if (sp->unk_08 > sp->unk_18)
+                {
+                    sp->unk_18 = sp->unk_08;
+                }
+                sp->unk_1C[i].unk_10 += sp->unk_1C[i].unk_08;
+                while (sp->unk_1C[i].unk_10 >= 0)
+                {
+                    sp->unk_1C[i].unk_00 += sp->unk_1C[i].unk_14;
+                    sp->unk_1C[i].unk_20 -= 0x40;
+                    sp->unk_1C[i].unk_10 -= sp->unk_1C[i].unk_04;
+                    if (sp->unk_1C[i].unk_20 <= 0)
+                    {
+                        break;
+                    }
+                }
+                sp->unk_08 = sp->unk_1C[i].unk_00;
+                if (sp->unk_08 < sp->unk_14)
+                {
+                    sp->unk_14 = sp->unk_08;
+                }
+                if (sp->unk_08 > sp->unk_18)
+                {
+                    sp->unk_18 = sp->unk_08;
+                }
+            }
+        }
+        sp->unk_14 = (sp->unk_14 - 0x20) & -0x40;
+        sp->unk_18 = (sp->unk_18 + 0x20) & -0x40;
+        sp->unk_134 = sp->unk_14 / 64;
+        sp->unk_138 = sp->unk_0C / 64;
+        if (sp->unk_138 < 0)
+        {
+            sp->unk_138 = 0;
+        }
+        else if (sp->unk_138 >= sp->unk_120)
+        {
+            sp->unk_138 = sp->unk_120 << sp->unk_124;
+        }
+        else
+        {
+            sp->unk_138 = sp->unk_138 << sp->unk_124;
+        }
+        while (sp->unk_14 <= sp->unk_18)
+        {
+            if (sp->unk_134 < 0)
+            {
+                sp->unk_144 = sp->unk_138 + (sp->unk_134 & 3);
+            }
+            else if (sp->unk_134 >= sp->unk_11C)
+            {
+                sp->unk_144 =
+                    sp->unk_138 + sp->unk_11C + (sp->unk_134 & 3) - 3;
+            }
+            else
+            {
+                sp->unk_144 = sp->unk_138 + sp->unk_134;
+            }
+            sp->unk_C0 = cell[sp->unk_144] & 0x3FFF;
+            if (sp->unk_C0 != 0)
+            {
+                sp->unk_17C = cell[sp->unk_144] & 0xC000;
+                if (sp->unk_17C != 0)
+                {
+                    sp->unk_E0.unk_04 = sp->unk_E8.unk_04 =
+                        sp->unk_F0.unk_04 = sp->unk_F8.unk_04 = 0;
+                    sp->unk_E0.unk_00 =
+                        (u16)sp->unk_14 | (sp->unk_0C << 16);
+                    sp->unk_E8.unk_00 =
+                        (u16)(sp->unk_14 + 0x40) | (sp->unk_0C << 16);
+                    sp->unk_F0.unk_00 =
+                        (u16)sp->unk_14 | ((sp->unk_0C + 0x40) << 16);
+                    sp->unk_F8.unk_00 =
+                        (u16)(sp->unk_14 + 0x40) | ((sp->unk_0C + 0x40) << 16);
+                    gte_ldv3(&sp->unk_E0, &sp->unk_E8, &sp->unk_F0);
+                    *(u32 *)&p->r0 = 0x2C404040;
+                    gte_rtpt_b();
+                    gte_avsz3();
+                    gte_stotz(&sp->unk_C8);
+                    gte_stsxy3_ft4(p);
+                    gte_ldv0(&sp->unk_F8);
+                    *(u32 *)&p->u0 = *(u32 *)&D_800D1548;
+                    gte_rtps_b();
+                    gte_stsxy(&p->x3);
+                    *(u32 *)&p->u1 = *(u32 *)&D_800D1548.unk_04;
+                    *(u16 *)&p->u2 = *(u16 *)&D_800D1548.unk_08;
+                    *(u16 *)&p->u3 = *(u16 *)&D_800D1548.unk_0A;
+                    gte_stszotz(&sp->unk_D4);
+                    sp->unk_C8 =
+                        ((sp->unk_C8 + sp->unk_C8 * 2 + sp->unk_D4 + 3) >> 2) + 4;
+                    if ((u32)sp->unk_C8 >= 0x200)
+                    {
+                        sp->unk_C8 = 0x1FF;
+                    }
+                    setlen(p, 9);
+                    addPrim(&sp->unk_BC[sp->unk_C8], p);
+                    p++;
+                }
+                sp->unk_12C = 0;
+                o = m->unk_04[sp->unk_C0];
+                for (;;)
+                {
+                    if (o->unk_0C == 0)
+                    {
+                        goto objZero;
+                    }
+                    sp->unk_170 = o->unk_10;
+                    vi0 = o->unk_00;
+                    sp->unk_16C = o->unk_14;
+                    sp->unk_168 = vt[vi0].unk_00;
+                    sp->unk_E0.unk_04 =
+                        vt[o->unk_00].unk_04 - (u16)sp->unk_12C;
+                    vi1 = o->unk_02;
+                    sp->unk_E0.unk_00 =
+                        (u16)((u16)sp->unk_14 + (u16)sp->unk_168) |
+                        ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x16A))) << 16);
+                    sp->unk_168 = vt[vi1].unk_00;
+                    h1 = (u16)sp->unk_14;
+                    sp->unk_E8.unk_04 =
+                        vt[o->unk_02].unk_04 - (u16)sp->unk_12C;
+                    vi2 = o->unk_04;
+                    sp->unk_E8.unk_00 =
+                        (u16)(h1 + (u16)sp->unk_168) |
+                        ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x16A))) << 16);
+                    sp->unk_168 = vt[vi2].unk_00;
+                    sp->unk_F0.unk_00 =
+                        (u16)((u16)sp->unk_14 + (u16)sp->unk_168) |
+                        ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x16A))) << 16);
+                    sp->unk_F0.unk_04 =
+                        vt[o->unk_04].unk_04 - (u16)sp->unk_12C;
+                    gte_ldv3(&sp->unk_E0, &sp->unk_E8, &sp->unk_F0);
+                    gte_rtpt();
+                    gte_nclip();
+                    gte_stopz(&sp->unk_DC);
+                    if (sp->unk_DC < 0)
+                    {
+                        goto backFace;
+                    }
+                    sp->unk_F8.unk_04 =
+                        vt[o->unk_06].unk_04 - (u16)sp->unk_12C;
+                    gte_stsxy3_ft4(p);
+                    gte_avsz3();
+                    gte_stotz(&sp->unk_C8);
+                    t = (u16)sp->unk_170;
+                    if (sp->unk_14C != t)
+                    {
+                        sp->unk_14C = t;
+                        gte_ldrgb(&sp->unk_00);
+                        gte_ldv0(&nm[t]);
+                        gte_nccs();
+                        gte_strgb(&sp->unk_04);
+                    }
+                    sp->unk_168 = vt[o->unk_06].unk_00;
+                    sp->unk_F8.unk_00 =
+                        (u16)((u16)sp->unk_14 + (u16)sp->unk_168) |
+                        ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x16A))) << 16);
+                    gte_ldv0(&sp->unk_F8);
+                    *(u32 *)&p->u0 = o->unk_08;
+                    gte_rtps_b();
+                    *(u32 *)&p->u1 = o->unk_0C;
+                    *(u16 *)&p->u2 = *(u16 *)((u8 *)sp + 0x172);
+                    *(u16 *)&p->u3 = (u16)sp->unk_16C;
+                    gte_stsxy(&p->x3);
+                    gte_stszotz(&sp->unk_D4);
+                    sp->unk_C8 = (sp->unk_C8 + sp->unk_C8 * 2 + sp->unk_D4 + 3) >> 2;
+                    if ((u32)sp->unk_C8 >= 0x200)
+                    {
+                        sp->unk_C8 = 0x1FF;
+                    }
+                    if (sp->unk_C8 > 0x1C0 &&
+                        (s16)sp->unk_E0.unk_04 < 0)
+                    {
+                        if (nm[sp->unk_14C].unk_04 >= 0)
+                        {
+                            goto cellDone;
+                        }
+                        if ((nm[sp->unk_14C].unk_00 & 0xFFF0FFF) != 0)
+                        {
+                            goto cellDone;
+                        }
+                    }
+                    if ((u32)sp->unk_C8 >= 0x200)
+                    {
+                        goto cellDone;
+                    }
+                    setlen(p, 9);
+                    *(u32 *)&p->r0 = sp->unk_04;
+                    if ((*(u8 *)((u8 *)sp + 0x16F) & 1) != 0)
+                    {
+                        p->code |= 2;
+                    }
+                    else if ((sp->unk_17C & 0xC000) == 0xC000)
+                    {
+                        l = (LINE_F4 *)p;
+                        *(u32 *)&l->x1 = *(u32 *)&p->x1;
+                        *(u32 *)&l->x2 = *(u32 *)&p->x2;
+                        *(u32 *)&l->x3 = *(u32 *)&p->x3;
+                        *(u32 *)&p->r0 = sp->unk_110;
+                        setlen(p, 5);
+                        addPrim(&sp->unk_BC[sp->unk_C8], p);
+                        p++;
+                        setlen(p, 1);
+                        *(u32 *)&p->r0 =
+                            (*(u16 *)((u8 *)sp + 0x176) & 0x9FF) | 0xE1000000;
+                    }
+                    addPrim(&sp->unk_BC[sp->unk_C8], p);
+                    p++;
+                    if ((*(u8 *)((u8 *)sp + 0x16E) & 0xF) != 1)
+                    {
+                        o++;
+                        continue;
+                    }
+                    if ((s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                    {
+                        goto cellDone;
+                    }
+                    o += (*(u8 *)((u8 *)sp + 0x16E) >> 4) + 1;
+                    continue;
+                backFace:
+                    if (nm[(u16)sp->unk_170].unk_04 < 0)
+                    {
+                        if (*(u8 *)((u8 *)sp + 0x16E) != 1)
+                        {
+                            o++;
+                            continue;
+                        }
+                        if ((s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                        {
+                            goto cellDone;
+                        }
+                        o++;
+                        continue;
+                    }
+                    if ((*(u8 *)((u8 *)sp + 0x16E) & 0xF0) == 0 &&
+                        (s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                    {
+                        goto cellDone;
+                    }
+                    o += *(u8 *)((u8 *)sp + 0x16E) & 0xF;
+                    continue;
+                objZero:
+                    if (*(u8 *)((u8 *)o + 0x16) == 1 &&
+                        *(s8 *)((u8 *)o + 0x17) < 0)
+                    {
+                        goto cellDone;
+                    }
+                    o++;
+                }
+            cellDone:
+                if (sp->unk_164 < (u32)p)
+                {
+                    goto allDone;
+                }
+            }
+            sp->unk_134++;
+            sp->unk_14 += 0x40;
+        }
+        sp->unk_0C += 0x40;
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C > 0)
+            {
+                sp->unk_1C[i].unk_0C -= 0x40;
+                if (sp->unk_1C[i].unk_0C <= 0)
+                {
+                    sp->unk_1C[i].unk_1C = -1;
+                    sp->unk_174--;
+                }
+            }
+        }
+    }
+allDone:
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)p;
+    if (TOWN_REC2->unk_18 == 0xC)
+    {
+        t = TOWN_REC2->unk_1A;
+        if ((t < 0x25 || t > 0x29) && (s16)t != 0x34)
+        {
+            func_800AD138(sp->unk_164);
+        }
+    }
+}
 
 void func_800AD138(u32 limit)
 {

@@ -333,14 +333,19 @@ size, the `-G` value, the struct layout, the flags.
    now a CLUSTER: functions sharing a caller, a callee, a record layout or a
    near-identical shape.
 
-   **State at the end of 2026-11-04:** the three ovl_town units together are
-   **1,811 of 1,818 functions and 69,086 of 70,311 words**; `ovl_town` itself
-   is **1,197 of 1,203 functions and 97.8% of its words** with **6 stubs
-   left, all of them parks**; `ovl_town_800BF3F0` is **611 of 612 and 99.7%**,
-   its one stub also a park; `ovl_town_800BEBA4` is **100%**.
-   The project total is **99.0%**, 3,105 of 3,112 functions, and the 7
-   remaining stubs across the whole project are exactly the 7 parks --
-   **every non-park stub in the game has landed.**
+   **State on 2026-11-09: `town.bin` IS DONE, and with it the whole project.**
+   All three ovl_town units are 100%: `ovl_town` 1,203 of 1,203 functions and
+   53,192 of 53,192 words, `ovl_town_800BF3F0` 612 of 612, `ovl_town_800BEBA4`
+   100%. `progress.py` reports the project total as **3,103 of 3,103 functions
+   and 119,577 of 119,577 words, 100.0%**; `guard.py` reports **0 asm stubs**
+   and `docs/near-misses/` holds no parks. `make check` and `make containers`
+   are byte-identical on all four outputs. The last function to land was
+   `func_800AC4C4` (797 words, the town's map-cell POLY_FT4/LINE_F4 pass);
+   its mechanism is the last section of `docs/matching-levers.md`.
+
+   The paragraph this replaced recorded the state at the end of 2026-11-04 --
+   1,811 of 1,818 ovl_town functions, 7 stubs project-wide, all of them parks.
+   Those 7 were retired one at a time over the five days that followed.
 
    TEN parks have now been RETIRED by solving them rather than giving up, and
    the last four of those went in one session: func_800B8E08 (139 words, 5

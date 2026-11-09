@@ -113,4 +113,21 @@
                                             "swc2 $13, 16(%0)\n\t" \
                                             "swc2 $14, 24(%0)" ::"r"(r0) : "memory")
 
+/* The func_800AC4C4 group, added 2026-11-09 when that 797-word park landed:
+   the town's map-cell POLY_FT4/LINE_F4 pass, which calls func_800AD138 above
+   to finish the frame.  Two of the three are NO-nop forms of operations this
+   file already has with their nops (inline_c.h:863 names the convention):
+   func_800AC4C4's listing fills both latency slots with its own stores, so
+   `rtpt` at 0x4A280030 and `rtps` at 0x4A180001 come out bare.  `gte_nccs`
+   (0x4B08041B) keeps the two nops, because the listing has them.  Every COP2
+   word is read off func_800AC4C4's own listing, not inline_c.h.
+
+     rtpt   0x4A280030      rtps   0x4A180001      nccs   0x4B08041B */
+
+#define gte_rtpt_b() __asm__ volatile("c2 0x280030")
+
+#define gte_rtps_b() __asm__ volatile("c2 0x180001")
+
+#define gte_nccs() __asm__ volatile("nop\n\tnop\n\tc2 0x108041B")
+
 #endif
