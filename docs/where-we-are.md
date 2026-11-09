@@ -146,10 +146,13 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- with `func_804008A0` landed from C
-  (26 words, 0 differing) and the rest on `INCLUDE_ASM`. Rebuilding the LIVE
-  overlay's own source at `-G8` and aligning its 241 functions against this
-  block gives the scale of what is already in the tree:
+  past the `ovl_%` `-G0` pattern rule -- and **86 of its 262 functions are
+  landed from C at 0 differing words**, with all four containers
+  byte-identical. Every one of them came from the live overlay's own source
+  with its references renamed through `tools/decomp/twinalign.py --symmap`;
+  not one was decompiled from a listing. Rebuilding the LIVE overlay's own
+  source at `-G8` and aligning its 241 functions against this block gives the
+  scale of what is already in the tree:
 
   | the twin's 8,272 words | fn | words | share |
   |---|---|---|---|
@@ -169,10 +172,30 @@ Three things about the overlays that change how they are worked, all in
   the asserts, which `tools/assertmap.py` reads out of this block, and the
   per-function register allocation they shift.
 
-  **One thing is NOT yet established**: that the 45 functions at >40%
-  difference are the same source plus asserts. 37 assert sites do not
-  obviously explain 139 divergent functions, so some of this block may be an
-  EARLIER REVISION of the source. That only resolves once the asserts are in.
+  **It is a DIFFERENT REVISION in places, and that is now measured rather
+  than suspected.** The question used to be open: 37 assert sites do not
+  obviously explain 139 divergent functions. Landing the first 86 answered
+  part of it. Of those, 71 needed nothing but renamed symbols; the other 15
+  differed only in immediates, and two of the four families cannot be
+  asserts:
+
+  * **Four of its tables hold one more entry.** `func_804038C8`,
+    `func_80403738`, `func_80403B84` and `func_80403CD4` each want a loop
+    bound of 4 where the live source has 3, with a 24-byte (one `UnkStrSet`)
+    index shift beside it. `func_804038C8` also writes `0x22` where the live
+    source writes `0x1A`, and `func_80402DC8` passes 6 where it passes 7.
+  * **Its data is laid out differently**, by a constant word offset per
+    structure: `-0x91`, `-0x90`, `-0x21`, `-0xD` and `+6` across the nine
+    others. Those bodies index a plain `s32 *p` by word, so the deltas read
+    out the layout difference directly.
+  * `func_804025F8` carries eight bytes of locals the live source does not.
+
+  So the two sources are close but not the same revision, which is the
+  argument for keeping the twin's C separate (`csrc/ovl_main_80400000.c`,
+  `csrc/main_twin.h`) until the block is finished rather than merging onto
+  one source now. What is still untested is whether the 44 functions at
+  <60% similarity are this same kind of small divergence or something
+  larger; the asserts have not been put back in any of them yet.
 * **town and dungeon have no such oracle.** None of town's 76 assert records
   is inside its big overlay, and dungeon has zero.
 
