@@ -136,11 +136,108 @@ long func_804009FC(void)
     return 0;
 }
 
+/* PARK: 265 words, and the only one of the 86+2 moved so far that is not a
+ * mechanical move. The body is right -- the live counterpart func_80020A80
+ * renamed, with this block's 16 assert line numbers (180..221, -5 from the
+ * live source's) -- and comes out 256 words, nine short. The nine are branch
+ * delay slots, and the mechanism is NOT the one func_80400EF8 below needs:
+ * there the twin leaves the slot empty, here BOTH builds fill it, from
+ * opposite sides. At the first site this block has
+ *
+ *     bne   $v0, $s0, .L80400A6C
+ *      ori  $a1, $zero, 0x8000      <- stolen from the branch TARGET
+ *
+ * against our
+ *
+ *     bne   v0, s0, ...
+ *      lui  a0, %hi(ASSERT_FMT)     <- stolen from the FALL-THROUGH
+ *
+ * where that `ori` is the NEXT OpenEvent call's second argument, bit-identical
+ * in both (34058000) and merely placed differently. So reorg is choosing
+ * steal_delay_list_from_target where ours chooses the fall-through, and what
+ * decides it is the order sched1 put the next call's argument setup in --
+ * $a1's constant first in the target, $a0's `lui` first in ours. Seven of the
+ * sixteen sites already agree, so it is per-site and an unconditional barrier
+ * (which is what func_80400EF8 wants) overshoots by exactly those seven.
+ *
+ * Worth knowing before picking this up: docs/overlays.md records that the LIVE
+ * func_80020A80 keeps all sixteen %hi values live in callee-saved registers,
+ * which is why it saves $s0..$s7 and $fp. This one saves only $s0, so its
+ * register allocation is genuinely different, not just its scheduling. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400E34);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400EF8);
+/* Eight assert sites, and two things had to change beyond the symbol renames.
+ *
+ * DEVICE: the empty volatile asm at the top of each assert body, worth one
+ * word per site -- eight here, 114 -> 122. It emits nothing. What it does is
+ * stop reorg stealing the body's first instruction into the `bnez`'s delay
+ * slot: this block leaves that slot empty and the live build fills it, and an
+ * asm_operands insn is not something reorg will move. The underlying cause is
+ * NOT established -- both builds call an abort the compiler knows nothing
+ * about, and declaring func_8007BEF0 `noreturn` changes neither one -- so this
+ * reproduces an observed scheduling difference rather than explaining it. It
+ * is also not general: func_80400A10 above fills these slots from the other
+ * side at seven of its sixteen sites, where an unconditional barrier is wrong.
+ *
+ * The LINE NUMBERS are this block's, not the live source's: 253..267 against
+ * 263..277, an offset of -10 that is per function (func_80400A10's is -5), so
+ * they come from `tools/assertmap.py --sites`, which reads them out of the
+ * block. A line number the live source happens to share would be luck. */
+void func_80400EF8(void)
+{
+    func_8007CA38();
+    if (func_8007C9A8(D_80409270) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 253);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_80409274) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 255);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_80409278) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 257);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_8040927C) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 259);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_80409280) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 261);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_80409284) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 263);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_80409288) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 265);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9A8(D_8040928C) == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_80400004, D_8040002C, 267);
+        func_8007BEF0(1);
+    }
+    func_8007CA48();
+}
 
 s32 func_804010E0(void)
 {

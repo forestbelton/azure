@@ -38,7 +38,13 @@ void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
+void func_8007BEF0();                                /* exit, psyq/include/stdlib.h */
+int func_8007C040(char *fmt, ...);                   /* printf */
+long func_8007C998(unsigned long, long, long, long (*func)()); /* OpenEvent */
+long func_8007C9A8(long);                            /* CloseEvent */
 long func_8007C9C8(long);                            /* TestEvent */
+int func_8007CA38(void);                             /* EnterCriticalSection */
+void func_8007CA48(void);                            /* ExitCriticalSection */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
 void func_804014E4(void);                            /* reset_sw_events */
 void func_80401578(void);                            /* reset_hw_events */
@@ -89,6 +95,8 @@ long func_80408674(long chan);                       /* _card_load */
 extern u8 D_800841DC[];                              /* D_80079054 */
 extern u8 D_8008423C[];                              /* D_800790B4 */
 extern u8 D_8008429C[];                              /* D_80079114 */
+extern const char D_80400004[40];                    /* ASSERT_FMT */
+extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
 extern u8 D_80408C84[];                              /* D_80027F60 */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */

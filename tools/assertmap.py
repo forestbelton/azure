@@ -82,9 +82,13 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 CONTAINER = ROOT / "data/main/main.bin"
-TWIN = dict(asm=ROOT / "asm/ovl_main_80400000.s", start=0x269000, end=0x2719E0,
+TWIN = dict(asm=ROOT / "asm/ovl_main_80400000.s",
+            nonmatchings=ROOT / "asm/nonmatchings/ovl_main_80400000",
+            start=0x269000, end=0x2719E0,
             vram=0x80400000, rodata_end=0x804008A0)
-LIVE = dict(asm=ROOT / "asm/ovl_main_80020000.s", start=0x25D000, end=0x264E20,
+LIVE = dict(asm=ROOT / "asm/ovl_main_80020000.s",
+            nonmatchings=ROOT / "asm/nonmatchings/ovl_main_80020000",
+            start=0x25D000, end=0x264E20,
             vram=0x80020000, rodata_end=0x80020924)
 
 MARKER = b'Assertion failed: file "%s", line %d\n\x00'
@@ -133,10 +137,44 @@ def fmt_anchors(block, names):
     return out
 
 
+def listing_lines(block):
+    """The block's disassembly, from whichever form splat left it in.
+
+    A block split as `asm` is ONE listing; a block split as `c` -- which both
+    overlays now are, the live one since 2026-11-01 and the twin since
+    2026-11-09 -- has a per-function listing under asm/nonmatchings/<unit>/
+    instead, and the single file is GONE. This used to read only the single
+    file, so converting a block to `c` broke this tool with a
+    FileNotFoundError; the live block had already been converted and nobody
+    had run --live since.
+
+    A landed function has no listing at all any more, so the unit map this
+    tool builds covers what is still carried as assembly. That is the right
+    behaviour for its purpose -- it reads the ORIGINAL translation unit names
+    out of the block -- but it does mean the counts shrink as functions land.
+    """
+    if block["asm"].is_file():
+        return block["asm"].read_text().splitlines()
+    d = block["nonmatchings"]
+    if not d.is_dir():
+        raise SystemExit("neither %s nor %s exists -- run `make splat`"
+                         % (block["asm"], d))
+    lines = []
+    for path in sorted(d.glob("*.s")):
+        text = path.read_text()
+        # a listing with migrated rodata opens with a .section .rodata block;
+        # only the text half holds functions
+        if ".section .text" in text:
+            text = text[text.index(".section .text"):]
+        lines.extend(text.splitlines())
+    # the per-function files are emitted in name order, not address order
+    return lines
+
+
 def functions(block):
     """[(vram, name, words, [(op, operands)], {sym_vram})] in address order."""
     out, cur = [], None
-    for line in block["asm"].read_text().splitlines():
+    for line in listing_lines(block):
         m = GLABEL.match(line)
         if m:
             cur = [m.group(1), [], [], set()]
@@ -150,8 +188,8 @@ def functions(block):
                 mm = SYM.fullmatch(s)
                 if mm:
                     cur[3].add(int(mm.group(1), 16))
-    return [(w[0][0], n, [x[1] for x in w], ops, syms)
-            for n, w, ops, syms in out if w]
+    return sorted([(w[0][0], n, [x[1] for x in w], ops, syms)
+                   for n, w, ops, syms in out if w], key=lambda t: t[0])
 
 
 def assert_sites(funcs, names):
