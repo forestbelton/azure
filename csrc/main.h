@@ -185,12 +185,37 @@ typedef struct
    (0x8CC, 0x958, 0x8EC, 0x8F0), which is what indexing through a struct
    produces. Precomputing `base + 0x8CC` and friends into locals gives 38
    words against 40 and every word differing. */
+/* The 0x2C bytes this used to spell as two pads are the WINDOW'S OWN root
+   primitive, and the arithmetic says so in all six windows at once. Each
+   setup function passes its group three addresses -- pad+0xC, pad-0x1C and
+   pad-0xC -- to one of func_800226E0/func_80023730/func_80023A78/
+   func_80024BB4/func_80026C00/func_800271C0, which copies the same two
+   engine templates (D_8002E5D8, 4 words; D_8002E5E8, 3 words) that
+   `prims`/`shared` get and then hangs them off that first address:
+
+     func_80022C90  0x8B0 -> 0x8BC, 0x894, 0x8A4
+     func_80023894  0x184 -> 0x190, 0x168, 0x178
+     func_80023FA0  0x240 -> 0x24C, 0x224, 0x234
+     func_80024D18  0xB20 -> 0xB2C, 0xB04, 0xB14
+     func_80026E90  0x044 -> 0x050, 0x028, 0x038
+     func_80027324  0x0D4 -> 0x0E0, 0x0B8, 0x0C8
+
+   Six for six on pad+0xC, pad-0x1C and pad-0xC, so `pad_00C[0x10]` is an
+   UnkCardPair (16 bytes, exactly), and the last 0x1C of `pad_000` is that
+   pair's own 4-word primitive and 3-word UnkCardPrim12. Its `unk_0C` is
+   written too: each ctor stores the func_800491F4 handle for `ptrs` into
+   pad+0x18.
+
+   Naming them changes no offset and no size -- verified member by member and
+   for all six instantiations against the previous spelling. */
 #define UNK_CARD_GROUP(name, pad, n) \
     typedef struct                   \
     {                                \
-        u8 pad_000[pad];             \
+        u8 pad_000[(pad) - 0x1C];    \
+        u32 root_prim[4];            \
+        u32 root_shared[3];          \
         u32 shared[3];               \
-        u8 pad_00C[0x10];            \
+        UnkCardPair root;            \
         UnkCardPair *ptrs[n];        \
         UnkCardPair ents[n];         \
         u32 prims[n][4];             \
@@ -318,11 +343,11 @@ void func_80026D78(s32 *p);
 void func_80026DF0(UnkCardGrp044 *c, s32 n);
 s32 *func_80026ED0(s32 *p, s32 a);
 void func_80026FB4(u16 *p);
-void func_800270E0(s32 *p);
+void func_800270E0(UnkCardGrp0D4 *c);
 void func_800271C0(UnkCardPair *p, u32 *a, u32 *b);
 void func_8002727C(UnkCardGrp0D4 *c, s32 n);
 s32 *func_80027364(s32 *p);
-void func_8002742C(s32 *p);
+void func_8002742C(UnkCardGrp0D4 *c);
 void func_80027458(s32 *p);
 void func_80027584(s32 *p);
 void func_80027684(s32 *p);
