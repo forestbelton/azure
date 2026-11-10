@@ -3,6 +3,7 @@
 WIP decompilation of Azure Dreams
 
 - [azure](#azure)
+  - [Goals and Progress](#goals-and-progress)
   - [Setup](#setup)
     - [Submodules](#submodules)
     - [CD image](#cd-image)
@@ -14,6 +15,30 @@ WIP decompilation of Azure Dreams
     - [Python](#python)
   - [Build](#build)
   - [Decompiling](#decompiling)
+
+## Goals and Progress
+The end goal of the project is **not** to simply have a source tree that compiles
+byte-exact to the CD image. In some sense, that would be trivially satisfiable.
+
+The goal is to have a source tree that reflects what someone who developed this
+game would have had on their computer, sprinkled with some modern quality-of-life
+improvements. This is a somewhat subjective process, but should include:
+
+- Decompiled C source for every C function in the game
+  - **NOTE**: Some C functions include assembly directives (e.g. COP2 instructions), and some functions are not C
+- Descriptive names for all declarations (functions, types, data)
+- Assets (textures, songs, etc.) represented in a format that can be easily viewed/edited
+
+Ideally, the below progress table would be automated away. At the moment, it's
+not, so I've opted not to include hard numbers. Looking at the splat
+configurations should give a good indicator of how far along each file is.
+
+|File|Description|
+|----|-----------|
+|SLUS_006.14|Code/data separated, all game C decompiled, nothing named intelligently|
+|MAIN.BIN|Code/data separated, non-debug game C decompiled, some naming around memory card routines|
+|TOWN.BIN|Code/data separated, all game C decompiled|
+|DUNGEON.BIN|Just getting started|
 
 ## Setup
 
