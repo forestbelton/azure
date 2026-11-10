@@ -439,6 +439,11 @@ interval the unit's own first function must lie in.
 | `cardsme.c` | [205, 215] | 215 | [227, 230] | 238 | 2/3 |
 | `memory.c` | [231, 232] | [231, 232] | 232 | 371-387 | 1/2 |
 
+**SUPERSEDED for this overlay as of 2026-11-10 -- see "Carving the nine"
+below, which anchors all nine units directly off the twin's `__FILE__`
+strings and contradicts three of this table's results.** The method stays
+general; the numbers here do not.
+
 The nine stay in order and do not overlap, which the alignment did not
 enforce. Eight functions follow `memory.c` in the live block and 23 follow it
 in the twin; in the twin those are PSY-Q library stubs (16-byte bodies at
@@ -469,6 +474,139 @@ belong to `c_server.c` and `0x800200A8` to `cardinfo.c`, none disputed. Six of
 the block's ten rodata symbols is thin, but it is the mechanism a per-unit
 rodata split will use, and it needs more anchored functions rather than a
 different method.
+
+### Carving the nine, 2026-11-10
+
+The nine units are now nine files in `csrc/main/`, all four containers
+byte-identical. The per-unit text sizes sum to `0x74FC` and the rodata to
+`0x924`, which are the single object's figures exactly.
+
+**The bracket table above is superseded where the two disagree.** It was
+built by pairing twin bodies with difflib, and three of its results are
+wrong: `card_mes.c` does not start in `[59, 65]` (it starts at 46),
+`func_80023C44` and `func_80023D64` are `card_win.c`'s rather than
+`card_opt.c`'s, and `cardbk.c` is not an eight-function range. The table is
+kept because its METHOD is still the general one; the sections below are
+what to use for this overlay.
+
+#### The twin names all nine units directly, which beats pairing
+
+Every one of the nine `__FILE__` strings is in the twin's rodata, in link
+order: `0x8040002C` `c_server.c`, `0x80400570` `card_mes.c`, `0x804005C8`
+`card_opt.c`, `0x80400620` `card_win.c`, `0x80400654` `cardbk.c`,
+`0x80400760` `cardinfo.c`, `0x804007CC` `cardslot.c`, `0x80400800`
+`cardsme.c`, `0x80400894` `memory.c`. A twin function that REFERENCES one of
+them is in that unit -- no alignment, no scoring:
+
+| unit | twin function | live index |
+|---|---|---|
+| `c_server.c` | `func_80400A10` | 8 |
+| `card_mes.c` | `func_80402F84` | 65 |
+| `card_opt.c` | `func_80403BC4` | [94, 101] |
+| `card_win.c` | `func_80404364` | 114 |
+| `cardbk.c` | `func_80404C84` | [120, 122] |
+| `cardinfo.c` | `func_804057F0` | [128, 135] |
+| `cardslot.c` | `func_804076C8` and two more | 202 |
+| `cardsme.c` | `func_80407C10` | [210, 217] |
+| `memory.c` | `func_804083FC`, `func_804084DC` | [230, 235] |
+
+That is the first anchor `cardbk.c` has ever had. The live indices come from
+the twin-to-live DRIFT PROFILE: over the 95 pairs `csrc/main_twin.h` records,
+the drift is piecewise constant, so an unpaired twin function's live index is
+bracketed by the nearest pair on each side. The profile also shows where the
+twin has functions the retail build does not -- it jumps by FOURTEEN between
+live 120 and 122, which is `cardbk.c`.
+
+#### A duplicated helper means a separate file
+
+Three helpers exist in SIX copies each, one per window-owning unit, and the
+copies differ only in their constants:
+
+| helper | live indices |
+|---|---|
+| root-pair initialiser | 53, 94, 103, 128, 195, 210 |
+| `UNK_CARD_GROUP` init loop | 60, 96, 111, 130, 200, 212 |
+| `func_800491F4` ordering wrapper | 59, 95, 110, 129, 199, 211 |
+
+Two more families are BYTE-identical, which is stronger still: the centred-
+rect helper at 92, 105 and 208, and the flag-check stepper at 137 and 172.
+No translation unit defines the same function twice, so each family's members
+are in distinct units -- six ordered clusters, `{53,59,60}` `{92,94,95,96}`
+`{103,105,110,111}` `{128,129,130}` `{195,199,200}` `{208,210,211,212}`, one
+per unit, which forces a boundary between each adjacent pair.
+
+Matching the clusters against the twin anchors identifies them as
+`card_mes`, `card_opt`, `card_win`, `cardinfo`, `cardslot`, `cardsme`. So
+`cardbk.c` is the one unit of the seven with no window -- consistent with it
+having a single live function.
+
+The group struct is then a per-unit type, which makes every function that
+names one an anchor. That is what settles `func_80023C44`/`func_80023D64`:
+they reach the `0x240` group, the one `card_win.c`'s `func_80023FF0`
+constructs.
+
+#### The boundaries, and which are inferences
+
+| unit | indices | top boundary |
+|---|---|---|
+| `c_server.c` | 0..45 | INFERRED in (45, 53]: `card_mes.c` owns 53, and 46..52 are all message-window helpers while 43..45 are all card-file operations |
+| `card_mes.c` | 46..87 | DETERMINED: 87 reaches the `0x8B0` group, 88 the `0x184` |
+| `card_opt.c` | 88..102 | DETERMINED: 101 reaches the `0x184` group, 102 writes that window's head fields, 103 is `card_win.c`'s root-pair copy |
+| `card_win.c` | 103..121 | DETERMINED: 121 reaches the `0x240` group, 122 is `cardbk.c`'s |
+| `cardbk.c` | 122 | DETERMINED: its twin anchor maps to [120, 122]; `card_win.c` owns 120 and 121, `cardinfo.c` owns 123 |
+| `cardinfo.c` | 123..171 | INFERRED in (164, 172]: its data run holds the three objects 167, 168 and 171 use, and 172 is the flag-check stepper's second copy |
+| `cardslot.c` | 172..205 | DETERMINED: 205 wraps `cardslot.c`'s `func_80026B18`, 206 reaches the `0x0D4` group |
+| `cardsme.c` | 206..227 | INFERRED in (227, 230]: 227 uses `D_8002809C`, and 228..231 all work on `memory.c`'s `D_8002BB08` payload |
+| `memory.c` | 228..240 | end of block |
+
+Five determined, four inferred inside narrow windows. Any order-respecting
+cut builds byte-identical, so an inferred boundary is a claim about the
+original source, not about the output.
+
+#### Rodata is per unit; data is per unit but not carvable
+
+The rodata partitions exactly, in link order, and only four units have any:
+
+| unit | rodata |
+|---|---|
+| `c_server.c` | `0x80020000..0x800200A0` -- the assert pair, the two handler tables, `MEM_CARD0/1`, the six name strings |
+| `card_mes.c` | `0x800200A0`, four bytes |
+| `cardbk.c` | `0x800200A4`, the one-character string |
+| `cardinfo.c` | `0x800200A8..0x800200C0` -- `func_800258C8`'s own four-entry constant, which cc1psx emits right after that function, then `SAVE_ICON_VRAM_RECT` |
+| data file | `0x800200C0..0x80020924` -- the 59 message strings, emitted by the unit that uses them, which is wherever the tables live |
+
+The data region is also per unit, but in TWO groups rather than one:
+`0x80027E20..0x80028530` is each unit's tables in link order, and
+`0x80028530..0x8002BB6C` is each unit's zero-initialised state in the same
+order. Both runs check out object by object -- `cardbk.c`'s single function
+uses the single object in its slot (`D_80027FD0`), `c_server.c`'s counters,
+event descriptors, `card_dir` and `card_st` open the second run, and each
+window unit's node blob follows in order.
+
+What defeated the earlier reading was assuming a data object belongs to the
+unit that USES it. It does not: `c_server.c` defines both animation scripts
+and `SAVE_ICON_CLUTS`, which only later units read, and the message tables
+and every string belong to `memory.c`, which no longer references most of
+them.
+
+It is still not carvable. Reproducing two per-unit groups needs the second
+emitted after the first, and splat's script has one DATA group per segment
+with its BSS group ahead of TEXT. So every data object stays in
+`csrc/ovl_main_80020000.c`, which is now data only, and the units reach what
+they need as externs. The attribution is established; the build cannot
+express it.
+
+#### Three things the carve needs that are not the source split
+
+* `build/csrc/main/%.o` needs its own `-G0` pair. The `ovl_%` pattern does
+  not match it, and the Makefile comment about carving `ovl_town` is the same
+  trap one directory over.
+* it also needs `-Icsrc`, because `#include "main.h"` resolves against
+  `csrc/main/` first.
+* `build/main.bin` does not depend on `build/main.bin.ld`, so a yaml change
+  needs `splat split splat/main.bin.yaml` run by hand. `make` alone links
+  against the stale script and reports undefined symbols that are already
+  fixed.
 
 ### What not to use the twin for
 

@@ -269,6 +269,15 @@ void func_80021538(void);
 s32 func_8002168C(void);
 /* In csrc/main/c_server.c; func_8002789C reads the pair it returns. */
 s32 *func_800217D4(void);
+
+/* In csrc/main/cardsme.c. D_8002809C, the handler table that holds their
+   addresses, is in the data file, so these have to be visible there. */
+void func_80027528(s32 *p);
+void func_800276EC(s32 *p);
+void func_80027734(s32 *p);
+void func_80027778(s32 *p);
+/* Also in cardsme.c: memory.c's func_8002789C installs it as the stepper. */
+void func_800277BC(s32 *p);
 s32 count_card_files(void);
 s32 read_card_file(u8 *name, u8 *buf, s32 n, s32 off);
 s32 load_save_slot_info(s32 n);
