@@ -39,36 +39,35 @@ segments:
   - [0x3000, bin, unk.vab]
   - [0x3800, bin]
   - [0x20000, bin, kewne_loading_img]
-  - [0x20800, shiftjis, str/main/beldo]
-  - [0x2080c, shiftjis, str/main/rock]
-  - [0x20818, shiftjis, str/main/storm_wall]
-  - [0x20830, shiftjis, str/main/ice_wall]
-  - [0x20844, shiftjis, str/main/fire_wall]
-  - [0x20858, shiftjis, str/main/selfi]
-  - [0x20864, shiftjis, str/main/ghosh]
-  - [0x20870, shiftjis, str/main/guy]
-  - [0x20878, shiftjis, str/main/salaman]
-  - [0x20888, shiftjis, str/main/frog]
-  - [0x20894, shiftjis, str/main/rainbow]
-  - [0x208a4, shiftjis, str/main/maximum_egg]
-  - [0x208c4, shiftjis, str/main/maximum]
-  - [0x208d4, shiftjis, str/main/vermilion]
-  - [0x208e8, shiftjis, str/main/golem_egg]
-  - [0x20904, shiftjis, str/main/cinnabar]
-  - [0x20924, shiftjis, str/main/tyrant_egg]
-  # The rest of the name/colour/egg-description pool the `str/main/*` segments
-  # above start: 0x20940 opens on "TYRANT" and continues the same
-  # (NAME, colour, "A NAME egg.") triplets in full-width Shift-JIS, which is
-  # how the US release renders Latin text in the Japanese font. Still `bin`
-  # because splitting it into `shiftjis` segments needs the 4-aligned-boundary
-  # check in docs/data-map.md; the text proper ends at 0x21280.
-  - [0x20940, bin, str/main/pool_tail]
+  # The monster/spell/character string pool, 0x20800..0x21268: 134
+  # NUL-terminated full-width Shift-JIS strings, each padded to 4. One
+  # hand-owned file, asrc/monsters.s, placed by the `hrodata` subsegment type
+  # (splat/ext/hrodata.py) -- it was 17 one-string `shiftjis` segments plus a
+  # 2,368-byte `bin` tail, which cost 18 segment blocks in the linker script
+  # for 2.6 KB of text and left two thirds of the pool undecoded.
+  #
+  # `vram: 0x20800` is the rom offset, not a finding. This container's
+  # non-overlay resources have no known load address -- the CD-ROM log shows
+  # the game seeking main.bin+0x20800, but nothing in the tree says where the
+  # bytes land -- and `hrodata` refuses a segment without a vram. Identity is
+  # the one value that cannot be mistaken for a RAM address, and it costs
+  # nothing: splat's generated names for this range are thrown away, since the
+  # file names every string itself.
+  - {start: 0x20800, type: hrodata, name: monsters, vram: 0x20800}
   # Pointer and index tables, then 11 KB of unidentified fixed-size records,
   # then zero padding from 0x24440. The game reads this: the CD-ROM command
   # log seeks main.bin+0x20800 and +0x21800. 144 of its words are pointers
   # into 0x8002c094..0x8008b270, i.e. into the resident executable's own RAM,
   # so it is a relocated resource rather than a standalone file.
-  - [0x21280, bin, main_tables_21280]
+  #
+  # It starts at 0x21268 and not 0x21280: the string pool's last entry is
+  # "Ｕｌｔｉｍａｔｅ", whose NUL is at 0x21264, and the 20-byte records whose
+  # stride runs 0x2127C, 0x21290, 0x212A4, ... leave 0x21268..0x2127C as one
+  # more 20-byte unit ahead of them. Whether that unit is a record or a header
+  # is not settled -- its first word is 0x00240010 against the records'
+  # 0x000C0110/0x000C0010, and its second is not a pointer -- but it is table
+  # words either way, and not text.
+  - [0x21268, bin, main_tables_21268]
   # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
   # in any container, and it holds nothing. It is kept as a named `bin` for the
   # same reason as slus_006.14's `tail_unloaded`: so splat stops calling it

@@ -99,20 +99,35 @@ The 31,456 bytes ahead of the filler are real and the game does read them.
 
 | segment | range | bytes | what |
 |---|---|---|---|
-| `str/main/pool_tail` | 0x20940-0x21280 | 2,368 | the rest of the `str/main/*` pool |
-| `main_tables_21280` | 0x21280-0x28420 | 29,088 | tables, then zero pad from 0x24440 |
+| `monsters` | 0x20800-0x21268 | 2,664 | the string pool, **decoded 2026-11-09** |
+| `main_tables_21268` | 0x21268-0x28420 | 29,112 | tables, then zero pad from 0x24440 |
 
-`str/main/pool_tail` opens on `TYRANT` and continues the same
-`(NAME, colour, "A NAME egg." )` triplets in **full-width Shift-JIS** that the
-`str/main/*` segments above it already carry — 0x20924 is `str/main/tyrant_egg`
-and 0x20940 is the matching `TYRANT`. That is how the US release renders Latin
-text in the Japanese font: `0x8260`-`0x8279` are `A`-`Z`, `0x8281`-`0x829A` are
-`a`-`z`, `0x8140` is space, `0x8144` is a period. It is still `bin` because
-splitting it into `shiftjis` segments needs the 4-aligned-boundary check in
-`docs/data-map.md` ("How to split a text pool"); the text proper ends at
-0x21280. **This is the obvious next piece of work in this container.**
+**The string pool is done.** `asrc/monsters.s` is all 134 of its entries as
+readable `.shiftjisz` directives, one `hrodata` subsegment, replacing 17
+one-string `shiftjis` segments plus a 2,368-byte `str/main/pool_tail` — 18
+linker-script segment blocks for 2.6 KB of text, two thirds of it never
+decoded. From 0x208A4 the pool runs in groups of three: an egg description,
+the monster NAME in capitals, then a colour in lower case. Full width is how
+the US release renders Latin text in the Japanese font: `0x8260`-`0x8279` are
+`A`-`Z`, `0x8281`-`0x829A` are `a`-`z`, `0x8140` is space, `0x8144` a period.
 
-`main_tables_21280` is pointer and index tables (0x21280..0x21800), then 11 KB
+Two things the consolidation turned up:
+
+* **One of the 17 old segments was misnamed.** `[0x20904, shiftjis,
+  str/main/cinnabar]` spanned 32 bytes, which is TWO strings, and put
+  `STR_MAIN_CINNABAR` on the first of them. 0x20904 is `GOLEM`; `cinnabar` is
+  at 0x20910 and had no label at all. Both have their own now. The other
+  sixteen names are reproduced exactly.
+* **The pool ends at 0x21268, not 0x21280.** Its last entry is `Ultimate` at
+  0x21254, whose NUL is at 0x21264, and 0x21265..0x21268 is `C4 0D 0E` — the
+  original toolchain's buffer showing through where it padded the pool up to
+  the 4-aligned table, the fifth instance of that in the project and the first
+  outside a rodata/text boundary (`docs/owning-data.md` §4.8). The 24 bytes
+  from 0x21268 are table words, not text — the 20-byte records whose stride
+  runs 0x2127C, 0x21290, 0x212A4, … leave 0x21268..0x2127C as one more
+  20-byte unit ahead of them — so `main_tables` starts there now.
+
+`main_tables_21268` is pointer and index tables (0x21268..0x21800), then 11 KB
 of unidentified fixed-size records (0x21840..0x24340), then a pointer table
 (0x24340..0x24400), then zero padding from 0x24440. 144 of its words are
 pointers into 0x8002c094..0x8008b270 — into the resident executable's own RAM —
@@ -129,13 +144,13 @@ unnamed `bin` together.
 
 | type | bytes | % of container | what |
 |---|---|---|---|
-| `bin` (named) | 2,361,024 | 91.57% | identified resources |
+| `bin` (named) | 2,358,680 | 91.48% | identified resources |
 | `bin` (unnamed) | 132,640 | 5.14% | the two blobs below |
 | `c` | 63,036 | 2.44% | both overlays' text (29,948 + 33,088) |
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
 | `.rodata` + `rodata` | 4,548 | 0.18% | both overlays' rodata |
+| `hrodata` | 2,664 | 0.10% | `asrc/monsters.s`, the string pool |
 | `data` | 1,172 | 0.05% | `ovl_main_80020000_pad` |
-| `shiftjis` | 320 | 0.01% | `str/main/*` |
 
 Down from 2,250,432 bytes (87.3%) unknown before the first pass over this
 container, and from 149,024 (5.78%) before the overlay's data was claimed.

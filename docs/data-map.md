@@ -550,6 +550,14 @@ all zero), which is why that split was safe.
 | `str_pool_EFC` 0xEFC-0x2164 | 54 | a `0x8004D0xx` pointer table at 0x1DF9 (stride 0x10), a colour triple at 0x1DD8, and a byte ramp at 0x2151 |
 | `str_pool_800` 0x800-0xDC0 | 70 | 69 bytes of ASCII `printf` formats at 0x800 (`"MESSYS  %x \n"`, `"STEP    %x \n"`, `"XASTAT %x\n"`) and a 4-pointer table at 0xD98 |
 
+`main.bin`'s own pool, 0x20800-0x21268, went the whole way on 2026-11-09 and
+is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
+`hrodata` subsegment and no `data` chunks at all (`asrc/monsters.s`). It was
+easy for two reasons worth checking for first -- every string starts 4-aligned,
+so nothing had to be cut short, and none of them embeds a control byte. See
+`docs/main-bin-data.md`; the only wrinkle was three non-zero bytes of linker
+buffer in the last entry's padding.
+
 `0x002810` was done this way on 2026-10-30: 322 strings, 12,266 bytes, split
 at 0x57F8. What it cost, and what the next pool will cost too:
 
