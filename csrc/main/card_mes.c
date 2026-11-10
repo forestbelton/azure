@@ -740,3 +740,19 @@ s32 func_800231E4(s32 flag)
 }
 
 const u8 D_800200A0[4] = {0, 1, 2, 3};
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S .data, moved here from csrc/ovl_main_80020000.c on 2026-11-10.
+   The overlay's first data run, 0x80027E20..0x800280B4, partitions over the
+   nine units with zero order violations; docs/overlays.md, "Rodata is per
+   unit; so is data", has the argument. Definition order is address order, and
+   the block sits at the END of the file on purpose: every function above it
+   reaches these through main.h's declaration, and a definition earlier in the
+   file would complete the type at those sites and could move codegen.
+   --------------------------------------------------------------------------- */
+
+/* 0x80027F60 */
+/* func_800491F4 index list for func_80022B20: 7 entries, then 0x07
+   terminates it (the loop runs while the byte is < the count it is
+   passed). */
+u8 D_80027F60[0x8] = {0x05, 0x06, 0x00, 0x01, 0x02, 0x03, 0x04, 0x07};

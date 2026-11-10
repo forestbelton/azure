@@ -257,3 +257,19 @@ void func_80023A50(s32 *p, s32 v)
         q[35] = t;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S .data, moved here from csrc/ovl_main_80020000.c on 2026-11-10.
+   The overlay's first data run, 0x80027E20..0x800280B4, partitions over the
+   nine units with zero order violations; docs/overlays.md, "Rodata is per
+   unit; so is data", has the argument. Definition order is address order, and
+   the block sits at the END of the file on purpose: every function above it
+   reaches these through main.h's declaration, and a definition earlier in the
+   file would complete the type at those sites and could move codegen.
+   --------------------------------------------------------------------------- */
+
+/* 0x80027F68 */
+/* func_800491F4 index list for func_800237C4, 18 entries then the 0x12
+   terminator. */
+u8 D_80027F68[0x14] = {0x00, 0x01, 0x0A, 0x0B, 0x0C, 0x0D, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0E, 0x0F,
+                       0x10, 0x11, 0x12, 0x00};

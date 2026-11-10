@@ -1130,3 +1130,61 @@ void init_save_file_header(u8 *p, s32 a, s32 mode)
 }
 
 const RECT SAVE_ICON_VRAM_RECT = {0x380, 0x100, 4, 0x10};
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S .data, moved here from csrc/ovl_main_80020000.c on 2026-11-10.
+   The overlay's first data run, 0x80027E20..0x800280B4, partitions over the
+   nine units with zero order violations; docs/overlays.md, "Rodata is per
+   unit; so is data", has the argument. Definition order is address order, and
+   the block sits at the END of the file on purpose: every function above it
+   reaches these through main.h's declaration, and a definition earlier in the
+   file would complete the type at those sites and could move codegen.
+   --------------------------------------------------------------------------- */
+
+/* 0x80027FD4 */
+/* Nine cel-record pointers; func_80024390 reads [i] and [8]. */
+u8 *D_80027FD4[9] = {
+    D_800284A8,
+    D_800284B4,
+    D_800284C0,
+    D_800284CC,
+    D_800284D8,
+    D_800284E4,
+    D_800284F0,
+    D_800284FC,
+    D_80028520,
+};
+
+/* 0x80027FF8 */
+/* func_800491F4 index list for func_80024C48, 21 entries then the 0x15
+   terminator. splat
+   labels 0x80028000 because that is where the old `bin` segment began;
+   nothing references it, so the list is one object here. */
+u8 D_80027FF8[0x18] = {0x03, 0x00, 0x01, 0x02, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+                       0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x6F, 0x73};
+
+/* 0x80028010 */
+/* Eight sound ids, polled one per bit by func_80025E54. */
+s16 D_80028010[8] = {
+    0x146E,
+    0x1472,
+    0x1470,
+    0x147A,
+    0x1476,
+    0x1474,
+    0x1478,
+    0x1391,
+};
+
+/* 0x80028020 */
+/* A 68-entry byte table func_80025ECC sums through, indexed by the bytes
+   at 0x800133A4. */
+u8 D_80028020[0x44] = {0x00, 0x00, 0x01, 0x02, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00,
+                       0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                       0x00, 0x00, 0x00, 0x00};
+
+/* 0x80028064 */
+/* The UnkFour template init_save_file_header copies with lwl/lwr. */
+u8 SAVE_FILE_MAGIC[0x4] = {0x53, 0x43, 0x13, 0x03};

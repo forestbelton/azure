@@ -307,3 +307,33 @@ void func_800277BC(s32 *p)
         p[14] = 1;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S .data, moved here from csrc/ovl_main_80020000.c on 2026-11-10.
+   The overlay's first data run, 0x80027E20..0x800280B4, partitions over the
+   nine units with zero order violations; docs/overlays.md, "Rodata is per
+   unit; so is data", has the argument. Definition order is address order, and
+   the block sits at the END of the file on purpose: every function above it
+   reaches these through main.h's declaration, and a definition earlier in the
+   file would complete the type at those sites and could move codegen.
+   --------------------------------------------------------------------------- */
+
+/* 0x80028094 */
+/* func_800491F4 index list for func_80027254, 4 entries then the 0x04
+   terminator. */
+u8 D_80028094[0x8] = {0x02, 0x00, 0x01, 0x03, 0x04, 0x04, 0x6D, 0x70};
+
+/* 0x8002809C */
+/* The six input handlers, indexed by func_8002168C's return. Entry 0 is the
+   null word: func_800277BC only indexes this after testing `n != 0`, so the
+   slot exists to make the index direct rather than biased. The handlers land
+   in p[-4], which is an s32 slot because p is an s32 *, so the store casts --
+   the same `(s32)func_...` idiom the handlers themselves use. */
+void (*D_8002809C[6])(s32 *) = {
+    NULL,
+    func_80027528,
+    func_80027528,
+    func_800276EC,
+    func_80027734,
+    func_80027778,
+};

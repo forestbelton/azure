@@ -447,9 +447,10 @@ extern const RECT SAVE_ICON_VRAM_RECT;
    `conflicting types` error, which is one more gate for free -- it is what
    caught card_dir being 15 rows and not 10. */
 
-/* The 1-frame animation script, spelled as what it is now that this unit
-   defines it; func_8004CBFC's parameter is a `u8 *`, hence the casts at the
-   three call sites. */
+/* The two animation scripts, spelled as what they are. Both are c_server.c's
+   .data; func_8004CBFC's parameter is a `u8 *`, hence the casts at the three
+   call sites of the 1-frame one and in cardslot.c's D_80028074. */
+extern UnkAnimStep D_80027E20[9];
 extern UnkAnimStep D_80027E68[2];
 extern u8 SAVE_ICON_CLUTS[][0x20];
 extern const char *MEM_CARD_NAMES[2];

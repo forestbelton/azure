@@ -623,15 +623,16 @@ size, the `-G` value, the struct layout, the flags.
    `docs/overlays.md`'s "Carving the nine" has the evidence per boundary and
    says which four are inferences. The unit map table above it is marked
    SUPERSEDED for this overlay; three of its results were wrong.
-   **The data's per-unit ownership is now established too** -- the state run
-   object by object with zero order violations, confirmed independently by
-   its two residue words falling on the only two misaligned unit boundaries,
-   and the tables run except one cut between `cardsme.c` and `memory.c`. It
-   stays in one file anyway, for the two reasons under "Rodata is per unit;
-   so is data"; the linker script is NOT one of them, contrary to what that
-   doc said before 2026-11-10. Also there: the twin is the Japanese build and
-   its per-unit Shift-JIS text names `cardbk.c` as the saved-game summary
-   panel. What is left is the per-window head fields: `UNK_CARD_GROUP` is
+   **The data is carved too**, as of the same day: each unit's `.data` sits at
+   the end of its own file, and `csrc/ovl_main_80020000.c` is down from 966
+   lines to 168, holding only the state run -- the overlay's `.bss`, which
+   cannot be `.bss` and cannot go with the units, because a unit can only own
+   the FIRST of the image's two data runs. The per-unit partition is
+   determined except one inferred cut (the message pool and its tables, put
+   in `memory.c`, alternative `cardsme.c`), and it is confirmed independently
+   by the two residue words falling on the only two misaligned unit
+   boundaries. Also there: the twin is the Japanese build and its per-unit
+   Shift-JIS text names `cardbk.c` as the saved-game summary panel. What is left is the per-window head fields: `UNK_CARD_GROUP` is
    still one macro over six files, so naming them means six declarations that
    agree on the tail.
 

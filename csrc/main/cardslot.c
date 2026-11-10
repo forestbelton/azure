@@ -570,3 +570,45 @@ void func_80026FF8(s32 *p, s32 *b, s32 *c)
 {
     func_80026B18((u8 *)(p + 8), b, c);
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S .data, moved here from csrc/ovl_main_80020000.c on 2026-11-10.
+   The overlay's first data run, 0x80027E20..0x800280B4, partitions over the
+   nine units with zero order violations; docs/overlays.md, "Rodata is per
+   unit; so is data", has the argument. Definition order is address order, and
+   the block sits at the END of the file on purpose: every function above it
+   reaches these through main.h's declaration, and a definition earlier in the
+   file would complete the type at those sites and could move codegen.
+   --------------------------------------------------------------------------- */
+
+/* 0x80028068 */
+/* The two-slot pick table, indexed [p[9]][i] in func_800269B4. */
+u8 D_80028068[2][2] = {{0x01, 0x00},
+                       {0x00, 0x01}};
+
+/* 0x8002806C */
+/* The two colours those two slots select. */
+s32 D_8002806C[2] = {
+    0x00404040,
+    0x00808080,
+};
+
+/* 0x80028074 */
+/* The two animation scripts those two slots select. */
+u8 *D_80028074[2] = {
+    (u8 *)D_80027E68,
+    (u8 *)D_80027E20,
+};
+
+/* 0x8002807C */
+/* Read as `(s32 *)` by func_80026D78 -- a pair of zeros. */
+u8 D_8002807C[0x8] = {0};
+
+/* 0x80028084 */
+/* The matching pair of ones. */
+u8 D_80028084[0x8] = {0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+
+/* 0x8002808C */
+/* func_800491F4 index list for func_80026DC8, 4 entries then the 0x04
+   terminator; three more bytes follow it inside the object. */
+u8 D_8002808C[0x8] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x08, 0x00, 0x0C};

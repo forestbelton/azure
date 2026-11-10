@@ -133,23 +133,22 @@ segments:
       # THE NINE UNITS, carved out 2026-11-10 into csrc/main/. Text runs are
       # live-block function indices; docs/overlays.md's "Carving the nine" has
       # the evidence for each boundary and says which are inferences. Only
-      # four units own rodata, in link order -- card_opt/card_win/cardslot/
-      # cardsme/memory emit none -- and ovl_main_80020000.c is now DATA ONLY,
-      # holding every data object plus the 59 message strings.
+      # five units own rodata, in link order -- card_opt/card_win/cardslot/
+      # cardsme emit none, and memory.c owns the 59 message strings because
+      # the eight tables that reference them are its .data.
       #
-      # The data is NOT held back by the linker script: a `.data` subsegment
-      # per object placement builds byte-identical, since legacy generation
-      # emits one input-section line per subsegment in subsegment order. It is
-      # held back because the image wants two runs per unit (tables, then
-      # state) where one object gives one, and because the tables run's tail
-      # has one undetermined cut that `make containers` cannot referee -- any
-      # partition respecting address order links the same. See
-      # docs/overlays.md, "Rodata is per unit; so is data".
+      # THE DATA IS CARVED TOO, as each unit's own .data. What is left in
+      # ovl_main_80020000.c is only the state run, 0x80028530..0x8002BB6C,
+      # the overlay's .bss, which cannot be .bss and cannot go with the
+      # units: every explicit `.data` subsegment sits above all text, so the
+      # nine auto-emitted main/*.o(.data) lines always come FIRST in the DATA
+      # group, and a unit can therefore only own the FIRST of the image's two
+      # runs. See docs/overlays.md, "The data IS carved".
       - [0x25d000, .rodata, main/c_server]       # 0x80020000, 0xA0
       - [0x25d0a0, .rodata, main/card_mes]       # 0x800200A0, 4
       - [0x25d0a4, .rodata, main/cardbk]         # 0x800200A4, 4
       - [0x25d0a8, .rodata, main/cardinfo]       # 0x800200A8, 0x18
-      - [0x25d0c0, .rodata, ovl_main_80020000]   # the message strings
+      - [0x25d0c0, .rodata, main/memory]         # the 59 message strings
       - [0x25d924, c, main/c_server]             #   0..45
       - [0x25f25c, c, main/card_mes]             #  46..87
       - [0x260258, c, main/card_opt]             #  88..102
@@ -159,7 +158,22 @@ segments:
       - [0x2631c0, c, main/cardslot]             # 172..205
       - [0x264018, c, main/cardsme]              # 206..227
       - [0x26489c, c, main/memory]               # 228..240
-      - [0x264e20, .data, ovl_main_80020000]
+      # The first data run, per unit. These are redundant for the LINK -- a `c`
+      # subsegment already emits its object's `.data` line, and splat keeps
+      # the first occurrence -- but they are not redundant for COVERAGE: with
+      # the range unclaimed, splat reads it as unmapped and writes 41 of its
+      # symbols into main.bin_undefined_syms_auto.txt as absolute addresses,
+      # shadowing the real definitions. They also document the partition.
+      - [0x264e20, .data, main/c_server]          # 0x80027E20
+      - [0x264f60, .data, main/card_mes]          # 0x80027F60
+      - [0x264f68, .data, main/card_opt]          # 0x80027F68
+      - [0x264f7c, .data, main/card_win]          # 0x80027F7C
+      - [0x264fd0, .data, main/cardbk]            # 0x80027FD0
+      - [0x264fd4, .data, main/cardinfo]          # 0x80027FD4
+      - [0x265068, .data, main/cardslot]          # 0x80028068
+      - [0x265094, .data, main/cardsme]           # 0x80028094
+      - [0x2650b4, .data, main/memory]            # 0x800280B4, the inferred one
+      - [0x265530, .data, ovl_main_80020000]      # the state run only
       - [0x268b6c, data, ovl_main_80020000_pad]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
   # left it as bin, reporting "only 58 internal jal targets and the best

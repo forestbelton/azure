@@ -573,7 +573,7 @@ The rodata partitions exactly, in link order, and only four units have any:
 | `card_mes.c` | `0x800200A0`, four bytes (`00 01 02 03`) |
 | `cardbk.c` | `0x800200A4`, the one-character string (`" "`) |
 | `cardinfo.c` | `0x800200A8..0x800200C0` -- `func_800258C8`'s own four-entry switch table, whose entries are addresses inside cardinfo's OWN text, then `SAVE_ICON_VRAM_RECT` |
-| the message pool | `0x800200C0..0x80020924` -- the 59 strings, which belong to whichever unit holds the eight tables; see the open cut below |
+| `memory.c` | `0x800200C0..0x80020924` -- the 59 message strings, flushed out of the eight tables' initialisers; this is the INFERRED boundary, the alternative being `cardsme.c` |
 
 The switch table is the hard anchor here: a compiler-generated jump table
 goes in the object holding the switch, and its four entries all land in
@@ -643,15 +643,32 @@ worth keeping in mind because it is the whole reason this needs an argument:
 c_server's, used by units six and seven away.
 
 The tail is the eight message-pool tables plus the sixteen animation payloads
-above them. It is one or two units, and all of it is `cardsme.c`'s or
-`memory.c`'s: the middle zone ends at cardsme, and the pool is the segment's
-last rodata. `gCardMessages` and `D_800282A4` share `MSG_EMPTY`, of which the
-pool holds one copy, so those two and everything between them are one unit.
-That leaves the cut at `0x800280B4` or anywhere in
-`0x800282BC..0x80028530` -- fifteen candidate positions, and no evidence
-between them. Nothing in the tail is referenced by `memory.c` at all, and one
-object (`D_800282CC`) is referenced by `cardsme.c`, which leans toward
-cardsme owning at least the upper part; that is a lean, not a finding.
+above them. It is `cardsme.c`'s or `memory.c`'s: the middle zone ends at
+cardsme, and the pool is the segment's last rodata. `gCardMessages` and
+`D_800282A4` share `MSG_EMPTY`, of which the pool holds one copy, so those two
+and everything between them are ONE unit.
+
+**It is placed in `memory.c`, and that is an inference.** Parsimony picks it:
+the cut at `0x800280B4` is the only position that needs no second choice,
+since cardsme owning part of the tail leaves "how much" open. Three things
+were tried against it and gave nothing:
+
+* **code references into the pool.** Pairing every `lui`/`%lo` in the
+  overlay's 7487 words of text against the 59 string starts finds ZERO.
+  The pool is reached only through the tables' data relocations, so the
+  own-rodata signal that settled the text boundaries is silent here.
+* **function pointers in the tail.** The only ones in the whole tables run
+  are `D_8002809C`'s five, which point into cardsme's text -- and
+  `D_8002809C` is already determined cardsme's, below the tail.
+* **the twin.** It puts this text in five other units entirely; see below.
+
+The one counter-signal is that `D_800282CC` is read by `cardsme.c` while
+nothing in the tail is read by `memory.c` at all. It is weak: this overlay has
+two PROVEN cross-unit data uses already, both in c_server's block. And the
+twin's `cardsme.c` strings are debug-only ASCII (`ERROR`, `NOW CHECK`,
+`CARD1 %s`) that retail does not carry at all, so "cardsme already holds
+text" does not transfer either. If better evidence turns up, the block moves
+to `cardsme.c` mechanically and the build will not notice.
 
 **Correction, 2026-11-10.** An earlier pass over this section replaced the
 claim "both runs check out object by object" with the opposite, that the
@@ -661,39 +678,51 @@ jumps only in c_server's head block and inside the tail; across the 45
 objects in between it does not jump once. The original claim was right, and
 what it was missing was this argument rather than evidence.
 
-#### The build CAN express per-unit data; the gap is evidence, not tooling
+#### The data IS carved, and a unit can only own the FIRST data run
 
-An earlier version of this section said the build could not express two
-per-unit groups. That was wrong, and the correction matters because it moves
-the blocker from "impossible" to "unproven".
+Done 2026-11-10. `csrc/ovl_main_80020000.c` went from 966 lines to 168, and
+every unit now carries its own data:
 
-**Measured 2026-11-10.** Moving `D_8002BB08`, the overlay's last data object,
-into a new `csrc/main/memory_state.c` and adding one yaml line --
-`[0x268b08, .data, main/memory_state]` -- builds all four containers
-byte-identical. Legacy generation emits one input-section line per
-subsegment IN SUBSEGMENT ORDER, so the DATA group takes as many objects as
-the yaml lists, in the order it lists them. One DATA group does not mean one
-object.
+| where | what | lines |
+|---|---|---|
+| the nine `csrc/main/*.c` | each unit's `.data` block, appended at the END of its file | 24 objects |
+| `csrc/main/memory.c` | the 59 messages and the eight tables that point at them, `0x800280B4..0x80028530` -- the one INFERRED data boundary | 18 objects |
+| `csrc/ovl_main_80020000.c` | the state run `0x80028530..0x8002BB6C`, the overlay's `.bss` which cannot be `.bss` | 30 objects |
 
-Two real constraints remain, and neither is the one that was written here:
+**The rule that decides the split, and it is forced, not chosen.** Every
+explicit `.data` subsegment sits at a rom address above all of the segment's
+text, so the nine auto-emitted `main/*.o(.data)` lines always come FIRST in
+the DATA group, ahead of any data file's. The image has two runs per unit, so
+the units take the first run -- the tables -- and the second has to live in
+one object after them. The reverse is not available: there is no way to get a
+data file's `.data` ahead of the units'.
 
-1. **One object contributes one `.data` run.** Nine unit objects give nine
-   runs, not the eighteen that `[tables x9][state x9]` needs. Reproducing
-   both runs needs a second object per unit, a `*_state.c`, which builds but
-   is a source fiction: in the original those were one file's `.data` and
-   its `.bss`.
-2. **Real `.bss` is out, for the reason `docs/owning-data.md` SS6 gives
-   first.** Two non-zero words sit inside the zero run -- `0xF97F8BEF` at
-   `0x8002A98C` and `0x6F7C7327` at `0x8002B964` -- so it is three disjoint
-   windows, and a NOBITS section would write zeros over both. The other
-   reason that doc gives, a fixed `.rodata`/`.bss`/`.text`/`.data` group
-   order, is NOT a tool limit: `section_order` is a yaml option, settable
-   per segment, and splat's source says it is legacy generation that ignores
-   it. That is this repo's configuration, not a wall.
+**Why nothing further is carved.** Two reasons, neither of them the linker:
 
-So every data object stays in `csrc/ovl_main_80020000.c` for now, and the
-units reach what they need as externs -- but because the cut points are
-unproven, not because they are unbuildable.
+1. **One object contributes one `.data` run**, so both runs per unit needs two
+   objects per unit. That builds -- measured by moving `D_8002BB08` into a
+   `csrc/main/memory_state.c` with one yaml line, four containers
+   byte-identical -- but it invents a second translation unit per real one,
+   and the original had nine.
+2. **Real `.bss` is out**, which would otherwise let a unit hold both runs,
+   for the reason `docs/owning-data.md` SS6 gives first: the run holds the two
+   non-zero residue words, and a NOBITS section would write zeros over both.
+
+An earlier version of this section said the build could not express per-unit
+data at all, and blamed one DATA group per segment with `.bss` ahead of
+`.text`. Both halves were wrong. Legacy generation emits one input-section
+line per subsegment IN SUBSEGMENT ORDER, so the DATA group takes as many
+objects as the yaml lists, in the order it lists them; and the group order is
+`section_order`, a yaml option settable per segment, which splat's source
+notes it is *legacy* generation that ignores.
+
+**The carve is self-verifying in one place that matters.** Moving the message
+tables into `memory.c` moves the 59 string literals with them, because cc1psx
+emits a literal into the unit whose initialiser uses it. So the 0x864-byte
+pool at `0x800200C0..0x80020924` is now produced by gcc's deferred-constant
+flush over `memory.c`'s eight initialisers rather than transcribed, and it
+comes out byte-exact -- every string at its ROM address, with the empty string
+deduplicated across all 60 slots that hold it.
 
 #### The twin's UI text is per unit -- and retail reorganised it
 
