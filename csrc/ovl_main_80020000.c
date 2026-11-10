@@ -28,7 +28,7 @@
    it keeps its own re-materialised `lui $v0`, which is what the listing has.
    The local costs no instruction: combine folds the `%lo` back into the
    stores. */
-void func_80020924(s32 use_second_slot)
+void set_card_slot(s32 use_second_slot)
 {
     s32 *p;
 
@@ -47,7 +47,7 @@ void func_80020924(s32 use_second_slot)
     check_card_slot(card_slot);
 }
 
-void func_80020984(void)
+void recheck_card_slot(void)
 {
     reset_sw_events();
     _card_wait(0);
@@ -55,8 +55,8 @@ void func_80020984(void)
     check_card_slot(card_slot);
 }
 
-// Same as func_80020984, but swaps the active card slot
-void func_800209C4(void)
+// Same as recheck_card_slot, but swaps the active card slot
+void switch_card_slot(void)
 {
     long next_card_slot;
 
@@ -68,9 +68,9 @@ void func_800209C4(void)
     check_card_slot(next_card_slot);
 }
 
-void func_80020A0C(void)
+void reset_card_server(void)
 {
-    s32 *p = &D_800287C8;
+    s32 *p = &card_st;
 
     *p = 0;
     reset_sw_events();
@@ -106,11 +106,11 @@ long HandleCardNew(void)
    EnableEvent (EnableEvent) calls each asserting a non-zero result. Source
    lines 185..200 and 212..226.
 
-   It falls out whole once exit is NORETURN (see func_80020F18): each
+   It falls out whole once exit is NORETURN (see close_card_events): each
    of the sixteen %hi values then stays live in its own callee-saved register
    across the calls, which is why the function saves $s0..$s7 and $fp, and
    $s0 holds the -1 the first eight comparisons share. */
-void func_80020A80(void)
+void open_card_events(void)
 {
     EnterCriticalSection();
     gSwCardEOFEvent = OpenEvent(SwCARD, EvSpIOE, EvMdNOINTR, NULL);
@@ -204,7 +204,7 @@ void func_80020A80(void)
     }
 }
 
-void func_80020EA0(void)
+void start_card_server(void)
 {
     if (card_first_flg[0] == 0)
     {
@@ -213,12 +213,12 @@ void func_80020EA0(void)
         (&D_80084118)[1] = 0;
         bzero((unsigned char *)D_80083E98, 0x280);
     }
-    func_80020A80();
+    open_card_events();
     D_800287D0[0] = 0;
     D_800287D0[1] = 0;
     D_800287D8[0] = 0;
     D_800287D8[1] = 0;
-    D_800287C8 = 0;
+    card_st = 0;
 }
 
 /* c_server.c's teardown: eight asserts bracketed by EnterCriticalSection /
@@ -230,8 +230,8 @@ void func_80020EA0(void)
    re-materialises the next handle's %hi -- one extra word per assert, 121
    against 114. With it the `lui` that reorg puts in each `bnez`'s delay slot
    is the one the branch target's `lw` uses. This is the lever that makes the
-   whole assert family reachable; see func_80020A80, which has 24 of them. */
-void func_80020F18(void)
+   whole assert family reachable; see open_card_events, which has 24 of them. */
+void close_card_events(void)
 {
     EnterCriticalSection();
     if (CloseEvent(gSwCardEOFEvent) == 0)
@@ -277,14 +277,14 @@ void func_80020F18(void)
     ExitCriticalSection();
 }
 
-s32 func_800210E0(void)
+s32 get_card_st(void)
 {
-    return D_800287C8;
+    return card_st;
 }
 
-s32 func_800210F0(void)
+s32 on_sw_card_eof(void)
 {
-    s32 st = D_800287C8;
+    s32 st = card_st;
     s32 r = 0;
     s32 *t;
     s32 *u;
@@ -323,7 +323,7 @@ one:
     if (t[0] != 0)
     {
         r = 1;
-        D_800287C8 = 0;
+        card_st = 0;
     }
     else if ((_card_status(0) & 1) != 0 || (_card_status(1) & 1) != 0)
     {
@@ -331,8 +331,8 @@ one:
         while (_card_load(card_slot) == 0)
         {
         }
-        D_800287E0 = 0;
-        D_800287C8 = 3;
+        card_evflg = 0;
+        card_st = 3;
     }
     goto out;
 three:
@@ -343,14 +343,14 @@ three:
     }
     r = 2;
     u[0] = 1;
-    D_800287C8 = 0;
+    card_st = 0;
     /* DEVICE: an empty volatile asm, worth 1 word. It emits nothing; it exists
        only to put a non-SET insn at the end of this basic block. gcc 2.7.2 runs
        jump_optimize with cross_jump AFTER sched2 and BEFORE dbr_schedule
        (toplev.c:3117/3142/3167), and for an unconditional `j' find_cross_jump is
        called with minimum == 1 (jump.c:1978), so ONE matching insn before the
        jump is enough to merge. Without this asm the insn before `out:' is
-       `sw $zero,%lo(D_800287C8)($a1)', identical to the one that ends the st==1
+       `sw $zero,%lo(card_st)($a1)', identical to the one that ends the st==1
        block above, so the st==1 block's `j out' is retargeted onto this one; dbr
        then fills its delay slot with the preceding `addiu $s1,1' instead of the
        store and the function comes out 74 words (47 DIFF). The asm's pattern is
@@ -361,12 +361,12 @@ three:
        block's delay slot goes to a nop).
 
        Ruled out, all measured with tools/decomp/ovlverify.py: reordering the
-       st==1 tail to `D_800287C8 = 0; r = 1;' keeps 75 words but 2 DIFF (sched2
+       st==1 tail to `card_st = 0; r = 1;' keeps 75 words but 2 DIFF (sched2
        does not swap the two leaf stores back -- they tie on priority and the tie
        breaks to source order); swapping the st==3 tail (any of its six orders)
-       74w/47 or 75w/4; `*(volatile s32 *)&D_800287C8 = 0' on either store
+       74w/47 or 75w/4; `*(volatile s32 *)&card_st = 0' on either store
        74w/47 (rtx_renumbered_equal_p ignores MEM_VOLATILE_P); `*(u32 *)&',
-       `*(s32 *)&' and `*(&D_800287C8)' 74w/47; a trailing `goto out;' 74w/47
+       `*(s32 *)&' and `*(&card_st)' 74w/47; a trailing `goto out;' 74w/47
        (the early jump_optimize deletes a jump to the next label long before the
        cross-jump pass); a trailing `return r;' 76w/15; a trailing `while (0) {}'
        75w/24; a trailing `;' or an unused label 74w/47.
@@ -377,22 +377,22 @@ out:
     return r;
 }
 
-s32 func_8002121C(void)
+s32 on_hw_card_eof(void)
 {
     s32 r = 0;
 
-    if (D_800287C8 == 2)
+    if (card_st == 2)
     {
         reset_sw_events();
         if (_card_load(card_slot) == 0)
         {
-            D_800287C8 = 0;
+            card_st = 0;
             r = 5;
         }
         else
         {
-            D_800287E0 = 0;
-            D_800287C8 = D_800287C8 + 1;
+            card_evflg = 0;
+            card_st = card_st + 1;
         }
     }
     return r;
@@ -404,14 +404,14 @@ s32 func_8002121C(void)
    cse1's PATH".
 
    - The fail body has to appear TWICE, once per test. cse1 can only share the
-     one `lui %hi(D_800287C8)` with a block it reaches on a path from the
+     one `lui %hi(card_st)` with a block it reaches on a path from the
      function's first insn, and cse_end_of_basic_block (cse.c:8103) will only
      extend a path across a conditional jump whose target label has
      LABEL_NUSES == 1. A single shared fail block (`&&`, or either nesting)
      gives that label two uses, so the fail body gets a SECOND `lui`: 58 words
      / 23 DIFF. jump2's cross-jumping merges the two copies back into one.
    - `def:` must sit between the st==3 arm and `out:`. Without it the st==3
-     arm's trailing `D_800287C8 = 0` is the insn before `out:` and is the same
+     arm's trailing `card_st = 0` is the insn before `out:` and is the same
      word as the fail body's, so find_cross_jump (jump.c:1978, minimum 1)
      steals the fail copies' store instead and each copy loses a word to the
      merge: 58 words / 25 DIFF. With `def:` in between, the insn before `out:`
@@ -422,11 +422,11 @@ s32 func_8002121C(void)
    56w/44; fully nested `!=` 56w/44; `switch` 58w/23; a single-fail `goto`
    chain 58w/23; duplicated fail bodies inline (if/else-if/else) 58w/36;
    duplicated fail bodies out of line without `def:` 58w/25; duplicated with
-   `D_800287C8 = 0;` before `r = 5;` 57w/2; duplicated with the st==3 arm's
+   `card_st = 0;` before `r = 5;` 57w/2; duplicated with the st==3 arm's
    two stores swapped 57w/2. */
-s32 func_80021298(void)
+s32 on_card_new(void)
 {
-    s32 st = D_800287C8;
+    s32 st = card_st;
     s32 r = 0;
     s32 *t;
 
@@ -453,16 +453,16 @@ one:
     {
         goto fail2;
     }
-    D_800287E0 = st;
-    D_800287C8 = D_800287C8 + 1;
+    card_evflg = st;
+    card_st = card_st + 1;
     goto out;
 fail1:
     r = 5;
-    D_800287C8 = 0;
+    card_st = 0;
     goto out;
 fail2:
     r = 5;
-    D_800287C8 = 0;
+    card_st = 0;
     goto out;
 three:
     t = &D_80084118;
@@ -472,7 +472,7 @@ three:
     }
     r = 3;
     t[0] = 0;
-    D_800287C8 = 0;
+    card_st = 0;
     goto out;
 def:
     r = 5;
@@ -480,9 +480,9 @@ out:
     return r;
 }
 
-s32 func_8002137C(void)
+s32 on_card_timeout(void)
 {
-    s32 *p = &D_800287C8;
+    s32 *p = &card_st;
     s32 r = 0;
 
     if (*p != 0)
@@ -493,9 +493,9 @@ s32 func_8002137C(void)
     return r;
 }
 
-s32 func_800213A0(void)
+s32 on_card_error(void)
 {
-    s32 *p = &D_800287C8;
+    s32 *p = &card_st;
     s32 r = 0;
 
     if (*p != 0)
@@ -507,8 +507,8 @@ s32 func_800213A0(void)
 }
 
 /* Returns 1, and that return value is what the extra word is for. The unit's
-   own matched twin of this tail -- func_800210F0's st==1 block, same
-   `D_800287E0 = 0; D_800287C8 = <const>;' after the same call-and-spin -- comes
+   own matched twin of this tail -- on_sw_card_eof's st==1 block, same
+   `card_evflg = 0; card_st = <const>;' after the same call-and-spin -- comes
    out `lui' in the delay slot, `lui', `sw $zero', `addiu $v0, $zero, 3',
    `sw $v0'. Here the target instead materialises the 1 FIRST (into the delay
    slot) and copies it, `addu $v1, $v0, $zero', before the store. That is
@@ -516,13 +516,13 @@ s32 func_800213A0(void)
    `(set (reg:SI 2 v0) (const_int 1))', cse2 unifies it with the store's
    constant, so the one pseudo holding 1 lives in $v0 up to the `jr' and the
    store's source has to be a second register. Three regs are live at the peak
-   ($v0 = 1, $v1 = %hi(D_800287E0), $a0 = %hi(D_800287C8)), which is also why
+   ($v0 = 1, $v1 = %hi(card_evflg), $a0 = %hi(card_st)), which is also why
    the second `lui' lands in $a0 rather than reusing $v0.
 
    Declaring it `void' is what parked it: with no return value the constant is
    an ordinary statement-level quantity, the allocator puts it straight in the
    store's register and there is no copy -- 18 words, 10 DIFF, whatever the tail
-   is spelled like (`t = 1; ... D_800287C8 = t;' 18w/11; `while' for `do/while'
+   is spelled like (`t = 1; ... card_st = t;' 18w/11; `while' for `do/while'
    and the two stores swapped 18w/10-11). `s32 t = 1; ... return t;' is worse
    still at 21w/19: `t' then spans the calls and takes $s1.
 
@@ -534,12 +534,12 @@ s32 check_card_slot(s32 card_slot)
     do
     {
     } while (_card_info(card_slot) == 0);
-    D_800287E0 = 0;
-    D_800287C8 = 1;
+    card_evflg = 0;
+    card_st = 1;
     return 1;
 }
 
-s32 func_80021410(void)
+s32 test_sw_card_events(void)
 {
     s32 r = 0;
 
@@ -570,7 +570,7 @@ void reset_sw_events(void)
     TestEvent(gSwCardNewEvent);
 }
 
-CARD_STATE func_800214FC(void)
+CARD_STATE take_card_state(void)
 {
     CARD_STATE state = gCardState;
     CARD_STATE old_state = CARD_STATE_OK;
@@ -592,16 +592,16 @@ void reset_hw_events(void)
     TestEvent(gHwCardNewEvent);
 }
 
-s32 func_80021594(void)
+s32 poll_card_events(void)
 {
-    UnkFnTab5 a = D_80020034;
-    UnkFnTab5 b = D_80020048;
+    UnkFnTab5 a = gSwCardEventHandlers;
+    UnkFnTab5 b = gHwCardEventHandlers;
     s32 r = 0;
-    s32 st = D_800287E0;
+    s32 st = card_evflg;
 
     if (st == 0)
     {
-        r = func_80021410();
+        r = test_sw_card_events();
         if (r != 0)
         {
             r = a.f[r]();
@@ -609,7 +609,7 @@ s32 func_80021594(void)
     }
     else if (st == 1)
     {
-        r = func_800214FC();
+        r = take_card_state();
         if (r != 0)
         {
             r = b.f[r]();
@@ -621,20 +621,20 @@ s32 func_80021594(void)
 const char ASSERT_FMT[] = "Assertion failed: file \"%s\", line %d\n";
 const char FILENAME_C_SERVER[] = "c_server.c";
 
-const UnkFnTab5 D_80020034 = {{
+const UnkFnTab5 gSwCardEventHandlers = {{
     NULL,
-    func_800210F0,
-    func_800213A0,
-    func_8002137C,
-    func_80021298,
+    on_sw_card_eof,
+    on_card_error,
+    on_card_timeout,
+    on_card_new,
 }};
 
-const UnkFnTab5 D_80020048 = {{
+const UnkFnTab5 gHwCardEventHandlers = {{
     NULL,
-    func_8002121C,
-    func_800213A0,
-    func_8002137C,
-    func_80021298,
+    on_hw_card_eof,
+    on_card_error,
+    on_card_timeout,
+    on_card_new,
 }};
 
 /* The st==3 arm carries its own COPY of the D_80028530[i] >= 0xB check rather
@@ -651,7 +651,7 @@ const UnkFnTab5 D_80020048 = {{
    target's branch goes to the shared `addu $v0, $s0, $zero`. */
 s32 func_8002168C(void)
 {
-    s32 st = func_80021594();
+    s32 st = poll_card_events();
     s32 i = is_second_card_slot();
 
     if (st != 0)
@@ -690,7 +690,7 @@ s32 func_8002168C(void)
             }
             break;
         }
-        func_80020924(i);
+        set_card_slot(i);
     }
     return st;
 }
@@ -702,7 +702,7 @@ s32 func_8002168C(void)
    stores so jump.c cross-jumps them into the shared tail at $a0/$a1. */
 s32 *func_800217D4(void)
 {
-    s32 v = func_80021410();
+    s32 v = test_sw_card_events();
     s32 i;
 
     if (v != 0)
@@ -736,12 +736,12 @@ s32 *func_800217D4(void)
                 D_80028548[i] = 0;
             }
         }
-        func_800209C4();
+        switch_card_slot();
     }
     return D_800287D8;
 }
 
-void func_80021904(void)
+void print_card_status(void)
 {
 }
 
@@ -753,11 +753,11 @@ int is_second_card_slot(void)
 const char MEM_CARD1[8] = "bu10:";
 const char MEM_CARD0[8] = "bu00:";
 
-s32 func_8002191C(void)
+s32 count_card_files(void)
 {
     u8 name[0x20];
     s32 n = 0;
-    struct DIRENTRY *e = D_80028570;
+    struct DIRENTRY *e = card_dir;
     const char **mem_card_name = &MEM_CARD_NAMES[0];
 
     if (card_slot != 0)
@@ -777,7 +777,7 @@ s32 func_8002191C(void)
     return n;
 }
 
-/* splat MIGRATED this block into func_8002191C's nonmatching listing, so
+/* splat MIGRATED this block into count_card_files's nonmatching listing, so
    landing that function in C left the symbol with no definition and the link
    failed with "undefined reference to D_80020084". It cannot be replaced by a
    `"*"` literal in the function either: the label covers 28 bytes holding
@@ -800,9 +800,9 @@ const char D_80020094[4] = "02";
 const char D_80020098[4] = "01";
 const char D_8002009C[4] = "00";
 
-s32 func_800219B8(s32 n)
+s32 count_free_blocks(s32 n)
 {
-    s32(*p)[10] = (s32(*)[10])D_80028570;
+    s32(*p)[10] = (s32(*)[10])card_dir;
     s32 sum = 0;
     s32 i;
 
@@ -814,11 +814,11 @@ s32 func_800219B8(s32 n)
     return 0xF - sum;
 }
 
-s32 func_80021A04(s32 n, u8 *s)
+s32 card_file_exists(s32 n, u8 *s)
 {
     s32 i = 0;
     s32 ret = 0;
-    u8 *tbl = (u8 *)D_80028570;
+    u8 *tbl = (u8 *)card_dir;
     u8 *row;
 
     if (n > 0)
@@ -855,7 +855,7 @@ s32 func_80021A04(s32 n, u8 *s)
     return ret;
 }
 
-s32 func_80021A84(s32 card_slot)
+s32 format_card(s32 card_slot)
 {
     const char **mem_card;
     s32 r;
@@ -869,7 +869,7 @@ s32 func_80021A84(s32 card_slot)
         mem_card++;
     }
     format(*mem_card);
-    while ((r = func_800214FC()) == 0)
+    while ((r = take_card_state()) == 0)
     {
         VSync(0);
     }
@@ -905,7 +905,7 @@ void get_card_path(char *out, s32 file_id)
     strcat(out, MEM_CARD_FILENAMES[file_id]);
 }
 
-s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
+s32 read_card_file(u8 *name, u8 *buf, s32 n, s32 off)
 {
     s32 r = 0;
     s32 fd;
@@ -950,7 +950,7 @@ s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off)
     } while (0);
 }
 
-s32 func_80021C4C(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
+s32 write_card_file(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
 {
     s32 ok = 0;
     s32 fd;
@@ -980,12 +980,12 @@ s32 func_80021C4C(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
     return ok;
 }
 
-s32 func_80021D38(s32 i)
+s32 save_slot_used(s32 i)
 {
     return D_80083E98[i][0];
 }
 
-s32 func_80021D54(s32 idx)
+s32 load_save_slot_info(s32 idx)
 {
     u8 name[0x20];
     s32 r = 1;
@@ -995,24 +995,24 @@ s32 func_80021D54(s32 idx)
     s32 v;
 
     get_card_path(name, idx);
-    t = (s32 **)D_80084128;
+    t = (s32 **)card_file_count;
     if (card_slot != 0)
     {
         t++;
     }
-    v = func_80021A04((s32)*t, name + 5);
+    v = card_file_exists((s32)*t, name + 5);
     tbl = D_80083E98;
     e = tbl[idx];
     e[0] = v;
     if (v != 0)
     {
-        r = func_80021B98(name, (u8 *)e, 1, 4);
+        r = read_card_file(name, (u8 *)e, 1, 4);
         e[0] = 1;
     }
     return r;
 }
 
-void func_80021DF4(s32 idx, u8 *src)
+void store_save_slot_info(s32 idx, u8 *src)
 {
     s32 *row;
 
@@ -1035,7 +1035,7 @@ void func_80021DF4(s32 idx, u8 *src)
    function's twin. The accumulator keeps its invented name here: the twin
    prints it only in func_80401FEC (as `c`), and in this one it never reaches a
    printf, so there is no witness for it. */
-void func_80021EB8(s32 *gsw)
+void set_gsw_checksum(s32 *gsw)
 {
     s32 sum = 0;
     s32 *q = gsw + 0x82;
@@ -1051,7 +1051,7 @@ void func_80021EB8(s32 *gsw)
 
 /* The `while (1)` plus `break` is load-bearing, not style: with a `for` or
    `while` whose test is the loop's last insn, loop.c's check_dbra_loop
-   reverses this into the downcount form func_80021EB8 has (`li 0x177D` /
+   reverses this into the downcount form set_gsw_checksum has (`li 0x177D` /
    `addiu -1` / `bgez`), 13 words. Here the conditional branch is followed by
    the backward jump, so get_condition_for_loop finds no final conditional
    branch and check_dbra_loop bails before it can reverse -- jump2 then merges
@@ -1074,7 +1074,7 @@ void func_80021EB8(s32 *gsw)
    prints it as `printf("%s = %x\n", "c", ...)` right before it prints
    `(int)gsw->check_sum`, so the debug build names both halves of this
    comparison. */
-s32 func_80021EE0(s32 *gsw)
+s32 check_gsw_checksum(s32 *gsw)
 {
     s32 c = 0;
     s32 *q = gsw + 0x82;
@@ -1092,7 +1092,7 @@ s32 func_80021EE0(s32 *gsw)
     return gsw[GSW_CHECK_SUM] == c;
 }
 
-s32 func_80021F18(s32 idx, u8 *buf)
+s32 write_save_file(s32 idx, u8 *buf)
 {
     u8 nameA[0x20];
     u8 nameB[0x20];
@@ -1109,18 +1109,18 @@ s32 func_80021F18(s32 idx, u8 *buf)
         rename(nameA, nameB);
     }
     *(s32 *)(buf + 0x204) = 0;
-    func_80021EB8((s32 *)buf);
-    r = func_80021C4C(nameB, buf, 0xC0, 0, row[0]);
+    set_gsw_checksum((s32 *)buf);
+    r = write_card_file(nameB, buf, 0xC0, 0, row[0]);
     if (r != 0)
     {
-        func_80021DF4(idx, buf);
-        func_800220DC();
+        store_save_slot_info(idx, buf);
+        refresh_card_info();
     }
     rename(nameB, nameA);
     return r;
 }
 
-s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
+s32 read_save_file(s32 idx, u8 *buf, s32 flag)
 {
     u8 name[0x20];
     s32 saved;
@@ -1128,20 +1128,20 @@ s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
     s32(*tbl)[32];
 
     get_card_path(name, idx);
-    if (func_80021B98(name, buf, 0xC0, 0) != 0 && func_80021EE0((s32 *)buf) != 0)
+    if (read_card_file(name, buf, 0xC0, 0) != 0 && check_gsw_checksum((s32 *)buf) != 0)
     {
         if (flag != 0)
         {
             saved = *(s16 *)(buf + 0x208);
             *(s16 *)(buf + 0x208) = 0;
             *(s32 *)(buf + 0x204) = 0;
-            func_80021EB8((s32 *)buf);
+            set_gsw_checksum((s32 *)buf);
             tbl = D_80083E98;
             row = tbl[idx];
             *(s16 *)((u8 *)row + 8) = 0;
             row[1] = *(s32 *)(buf + 0x204);
-            func_80021C4C(name, (u8 *)row, 1, 4, row[0]);
-            func_80021C4C(name, buf, 1, 0, row[0]);
+            write_card_file(name, (u8 *)row, 1, 4, row[0]);
+            write_card_file(name, buf, 1, 0, row[0]);
             *(s16 *)(buf + 0x208) = saved;
         }
         else
@@ -1151,19 +1151,19 @@ s32 func_80021FF0(s32 idx, u8 *buf, s32 flag)
     }
 }
 
-void func_800220DC(void)
+void refresh_card_info(void)
 {
     s32 i = card_slot != 0;
     s32 n;
 
-    n = func_8002191C();
-    D_80084128[i] = n;
-    D_80084120[i] = func_800219B8(n);
+    n = count_card_files();
+    card_file_count[i] = n;
+    card_free_blocks[i] = count_free_blocks(n);
 }
 
-s32 func_80022138(void)
+s32 get_free_blocks(void)
 {
-    s32 *p = D_80084120;
+    s32 *p = card_free_blocks;
 
     if (card_slot != 0)
     {
@@ -1172,7 +1172,7 @@ s32 func_80022138(void)
     return *p;
 }
 
-s32 func_80022160(void)
+s32 count_used_save_slots(void)
 {
     s32 count = 0;
     s32 i = 0;
@@ -1187,7 +1187,7 @@ s32 func_80022160(void)
     return count;
 }
 
-s32 func_8002219C(s32 idx)
+s32 erase_save_file(s32 idx)
 {
     u8 name[0x20];
     s32(*tbl)[32];
@@ -1198,7 +1198,7 @@ s32 func_8002219C(s32 idx)
     _card_wait(1);
     reset_hw_events();
     erase(name);
-    while ((v = func_800214FC()) == 0)
+    while ((v = take_card_state()) == 0)
     {
         VSync(0);
     }
@@ -1206,14 +1206,14 @@ s32 func_8002219C(s32 idx)
     {
         tbl = D_80083E98;
         tbl[idx][0] = 0;
-        func_800220DC();
+        refresh_card_info();
     }
     return v == 1;
 }
 
-void func_8002223C(void)
+void erase_tmp_file(void)
 {
-    func_8002219C(5);
+    erase_save_file(5);
 }
 
 /* The space-skipping width measurer: for each of the a+1 segments it skips a
@@ -1325,7 +1325,7 @@ void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z)
 
 void func_80022488(s32 *p)
 {
-    UnkStrSet *t = D_800280B4;
+    UnkStrSet *t = gCardMessages;
     UnkStrSet *r = &t[p[2]];
     s32 n = r->unk_17 - 1;
     s32 x;
@@ -1408,7 +1408,7 @@ void func_80022524(s32 *p)
     }
     if (dir != 0)
     {
-        n = func_80049E1C(p[0], dir, D_800280B4[p[2]].unk_14);
+        n = func_80049E1C(p[0], dir, gCardMessages[p[2]].unk_14);
         if (n != p[0])
         {
             p[0] = n;
@@ -1451,7 +1451,7 @@ void func_800226E0(UnkCardPair *p, u32 *a, u32 *b)
    same four iterations, the same `p[-0x18] |= 0x80` and return, but THREE
    primitives per iteration (0xC, 0xC, 0x18 bytes), the last a D_80027F48
    template copied through a 24-byte alignment-1 struct and then patched with
-   four 0x90D0E0 words. Width and height come from D_800280B4[q[2]].unk_16 * 4
+   four 0x90D0E0 words. Width and height come from gCardMessages[q[2]].unk_16 * 4
    and .unk_17 * 17, stored to q[6]/q[7] with +8 and halved for the sprite
    bytes; `(w + 0xA) >> 1` is the one signed halving.
 
@@ -1482,7 +1482,7 @@ u8 *func_80022774(u8 *p, s32 *q)
        sched2's LUID tie-break (`rank_for_schedule`, sched.c:2425). The two
        cannot share it: every marker form measured is 3 at best (two markers),
        and 0 only with a THIRD marker holding the `lo_sum` back
-       (`"r"((u8 *)&D_800280B4[q[2]] - q[2] * 24)`, which cse folds to the
+       (`"r"((u8 *)&gCardMessages[q[2]] - q[2] * 24)`, which cse folds to the
        lo_sum pseudo), declined as a third device. The pin removes the pricing
        question entirely, leaves the load's launch to the `sll` so the giv gets
        the hole, and sched2 then orders the two `lbu` by priority on its own.
@@ -1501,8 +1501,8 @@ u8 *func_80022774(u8 *p, s32 *q)
 
     *(UnkFour *)buf = *(UnkFour *)D_800200A0;
     i = 0;
-    w = D_800280B4[q[2]].unk_16 * 4;
-    hh = D_800280B4[q[2]].unk_17;
+    w = gCardMessages[q[2]].unk_16 * 4;
+    hh = gCardMessages[q[2]].unk_17;
     h = (hh << 4) + hh;
     q[6] = w + 8;
     q[7] = h + 8;
@@ -1575,7 +1575,7 @@ void func_8002290C(s32 *p)
 }
 
 /* Five sprites in a row, 0x180 bytes of buffer apart, each label rendered by
-   func_8004DA74 into `(u8 *)p + 0x114 + i * 0x180`. D_800280B4 must be
+   func_8004DA74 into `(u8 *)p + 0x114 + i * 0x180`. gCardMessages must be
    indexed directly: hoisting it into a `UnkStrSet *t` local costs 5 DIFF
    even though gcc hoists the base address either way, and giving the row its
    own local inside the loop costs 21. */
@@ -1590,7 +1590,7 @@ void func_80022934(s32 *p)
         e->unk_04->unk_08 = 0x124 - (p[6] / 2);
         e->unk_04->unk_0A = (i * 17) - (p[7] / 2) + 0xFC;
         e->unk_00 = (s32)func_8004DA74((u8 *)p + 0x114 + i * 0x180,
-                                       D_800280B4[p[2]].strs[i], 1);
+                                       gCardMessages[p[2]].strs[i], 1);
     }
 }
 
@@ -1754,7 +1754,7 @@ void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
     p[2] = b;
     p[3] = c;
     p[8] = d;
-    func_80022BE8(&D_800280B4[b]);
+    func_80022BE8(&gCardMessages[b]);
 }
 
 void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
@@ -1768,7 +1768,7 @@ void func_80022CD8(s32 *p)
 {
     func_80022774((u8 *)(p + 9), p);
     func_80022934(p);
-    p[0] = D_800280B4[p[2]].unk_15;
+    p[0] = gCardMessages[p[2]].unk_15;
     func_80022488(p);
     if (p[3] == 2)
     {
@@ -1788,7 +1788,7 @@ void func_80022B48(UnkCardGrp8B0 *c, s32 n);
    through $v0, which as a void function is three words instead of four.
    func_80022B20 likewise had to become `s32` with a `return`, since its
    value lands in r[0x232]; its own ten words are unchanged. */
-s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p)
+s32 open_card_message(s32 a, s32 id, s32 kind, s32 p)
 {
     s32 *q = (s32 *)D_800287E8;
     s32 *r = q + 8;
@@ -1812,104 +1812,104 @@ s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p)
     return (s32)q;
 }
 
-void func_80022E74(s32 a, s32 p)
+void msg_format_confirm(s32 a, s32 p)
 {
-    func_80022D60(a, 0, 1, p);
+    open_card_message(a, 0, 1, p);
 }
 
-void func_80022E9C(s32 a)
+void msg_no_card(s32 a)
 {
-    func_80022D60(a, 1, 0, 0);
+    open_card_message(a, 1, 0, 0);
 }
 
-void func_80022EC4(s32 a, s32 p)
+void msg_please_wait(s32 a, s32 p)
 {
-    func_80022D60(a, 2, 2, p);
+    open_card_message(a, 2, 2, p);
 }
 
-void func_80022EEC(s32 a)
+void msg_overwrite_failed(s32 a)
 {
-    func_80022D60(a, 8, 0, 0);
+    open_card_message(a, 8, 0, 0);
 }
 
-void func_80022F14(s32 a, s32 p)
+void msg_formatting(s32 a, s32 p)
 {
-    func_80022D60(a, 4, 2, p);
+    open_card_message(a, 4, 2, p);
 }
 
-void func_80022F3C(s32 a, s32 p)
+void msg_overwrite_confirm(s32 a, s32 p)
 {
-    func_80022D60(a, 5, 1, p);
+    open_card_message(a, 5, 1, p);
 }
 
-void func_80022F64(s32 a, s32 p)
+void msg_saving(s32 a, s32 p)
 {
-    func_80022D60(a, 6, 2, p);
+    open_card_message(a, 6, 2, p);
 }
 
-void func_80022F8C(s32 a, s32 p)
+void msg_loading(s32 a, s32 p)
 {
-    func_80022D60(a, 14, 2, p);
+    open_card_message(a, 14, 2, p);
 }
 
-void func_80022FB4(s32 a)
+void msg_not_enough_blocks_overwrite(s32 a)
 {
-    func_80022D60(a, 9, 0, 0);
+    open_card_message(a, 9, 0, 0);
 }
 
-void func_80022FDC(s32 a)
+void msg_not_enough_blocks(s32 a)
 {
-    func_80022D60(a, 10, 0, 0);
+    open_card_message(a, 10, 0, 0);
 }
 
-void func_80023004(s32 a)
+void msg_load_failed(s32 a)
 {
-    func_80022D60(a, 11, 0, 0);
+    open_card_message(a, 11, 0, 0);
 }
 
-void func_8002302C(s32 a)
+void msg_format_failed(s32 a)
 {
-    func_80022D60(a, 12, 0, 0);
+    open_card_message(a, 12, 0, 0);
 }
 
-void func_80023054(s32 a)
+void msg_format_done(s32 a)
 {
-    func_80022D60(a, 13, 0, 0);
+    open_card_message(a, 13, 0, 0);
 }
 
-void func_8002307C(s32 a)
+void msg_card_damaged(s32 a)
 {
-    func_80022D60(a, 3, 0, 0);
+    open_card_message(a, 3, 0, 0);
 }
 
-void func_800230A4(s32 a)
+void msg_no_saved_game(s32 a)
 {
-    func_80022D60(a, 7, 0, 0);
+    open_card_message(a, 7, 0, 0);
 }
 
-void func_800230CC(s32 a, s32 p)
+void msg_copying(s32 a, s32 p)
 {
-    func_80022D60(a, 15, 2, p);
+    open_card_message(a, 15, 2, p);
 }
 
-void func_800230F4(s32 a)
+void msg_copy_failed(s32 a)
 {
-    func_80022D60(a, 16, 0, 0);
+    open_card_message(a, 16, 0, 0);
 }
 
-void func_8002311C(s32 a)
+void msg_cannot_overwrite(s32 a)
 {
-    func_80022D60(a, 17, 0, 0);
+    open_card_message(a, 17, 0, 0);
 }
 
-void func_80023144(s32 a, s32 p)
+void msg_delete_confirm(s32 a, s32 p)
 {
-    func_80022D60(a, 18, 1, p);
+    open_card_message(a, 18, 1, p);
 }
 
-void func_8002316C(s32 a)
+void msg_delete_failed(s32 a)
 {
-    func_80022D60(a, 19, 0, 0);
+    open_card_message(a, 19, 0, 0);
 }
 
 /* The local copy of the parameter is load-bearing, and so is declaring the
@@ -2217,7 +2217,7 @@ void func_80023B18(s32 *p)
     UnkCardPair *q = (UnkCardPair *)p[0x98];
     s32 k;
 
-    k = func_80022138() >= 3;
+    k = get_free_blocks() >= 3;
     q->unk_00 = (s32)func_8004DA74((u8 *)p + 8, D_800282A4[k], 1);
     q->unk_04->unk_08 = 0xF0;
     q->unk_04->unk_0A = 0x91;
@@ -2715,8 +2715,8 @@ void func_80024818(s32 *p)
     s32 cnt;
     s32 i;
 
-    n = func_80022138();
-    if (k != 0 && func_80022160() == 0)
+    n = get_free_blocks();
+    if (k != 0 && count_used_save_slots() == 0)
     {
         func_8004DA74((u8 *)p + 0x84, D_800283EC[0], 1);
         func_8004DA74((u8 *)p + 0x204, D_800283EC[1], 1);
@@ -3053,10 +3053,10 @@ void func_800251A4(s32 *p)
 
 void func_80025230(s32 *p)
 {
-    if (func_80021FF0(p[10], (u8 *)0x80010000, 1) == 0)
+    if (read_save_file(p[10], (u8 *)0x80010000, 1) == 0)
     {
         p[13] = (s32)func_8002593C;
-        func_80023004((s32)(p - 8));
+        msg_load_failed((s32)(p - 8));
         p[-4] = (s32)func_80024F7C;
     }
     else
@@ -3064,7 +3064,7 @@ void func_80025230(s32 *p)
         func_8002519C((u8 *)0x80010000);
         p[-4] = (s32)func_800251A4;
     }
-    func_80020984();
+    recheck_card_slot();
     p[16] = 0;
 }
 
@@ -3086,28 +3086,28 @@ void func_800252CC(s32 *p)
     if (D_80083E98[n][0] != 0)
     {
         p[15] = 1;
-        func_80022F8C((s32)(p - 8), (s32)(p + 16));
+        msg_loading((s32)(p - 8), (s32)(p + 16));
         p[16] = 1;
         p[-4] = (s32)func_800252A4;
     }
     else
     {
         p[13] = (s32)func_8002593C;
-        func_800230A4((s32)(p - 8));
+        msg_no_saved_game((s32)(p - 8));
         p[-4] = (s32)func_80024FAC;
     }
 }
 
 void func_80025358(s32 *p, s32 v)
 {
-    func_80025F0C((u8 *)p, v);
-    func_80025FFC(p, v);
+    set_save_title((u8 *)p, v);
+    set_save_icon(p, v);
 }
 
 /* func_80025358's first argument is the 0x80010000 base, not 'p - 8': the
    'lui $a0, 0x8001' in that jal's delay slot is the live argument. The
    'addiu $a0, $s2, -0x20' that reorg puts in BOTH beqz delay slots is the
-   fail block's own func_800230F4 argument, hoisted out of the block because
+   fail block's own msg_copy_failed argument, hoisted out of the block because
    every predecessor carries it. Spelling 'p - 8' here instead cost exactly
    one word (53w/1 DIFF) across twelve measured variants of the constant and
    of the 'p - 8' sites; nothing about the local or the goto structure was
@@ -3118,17 +3118,17 @@ void func_80025398(s32 *p)
     s32 i;
     s32 off;
 
-    if (func_80021FF0(p[11], b, 0) == 0)
+    if (read_save_file(p[11], b, 0) == 0)
     {
         goto fail;
     }
     func_80025358((s32 *)b, p[10]);
-    if (func_80021F18(p[10], b) == 0)
+    if (write_save_file(p[10], b) == 0)
     {
         goto fail;
     }
     func_8002519C(b);
-    func_800220DC();
+    refresh_card_info();
     off = 0;
     for (i = 0; i < 5; i++)
     {
@@ -3139,10 +3139,10 @@ void func_80025398(s32 *p)
     goto done;
 fail:
     p[13] = (s32)func_80024FFC;
-    func_800230F4((s32)(p - 8));
+    msg_copy_failed((s32)(p - 8));
     p[-4] = (s32)func_80024F7C;
 done:
-    func_80020984();
+    recheck_card_slot();
     p[16] = 0;
 }
 
@@ -3160,7 +3160,7 @@ void func_8002546C(s32 *p)
 void func_80025494(s32 *p)
 {
     p[15] = 1;
-    func_800230CC((s32)(p - 8), (s32)(p + 16));
+    msg_copying((s32)(p - 8), (s32)(p + 16));
     p[16] = 1;
     p[-4] = (s32)func_8002546C;
 }
@@ -3171,10 +3171,10 @@ void func_800254E4(s32 *p)
 
     if (tbl[p[10]][0] == 0)
     {
-        if (func_80022138() < 3)
+        if (get_free_blocks() < 3)
         {
             p[13] = (s32)func_80024FFC;
-            func_80022FDC((s32)(p - 8));
+            msg_not_enough_blocks((s32)(p - 8));
             p[-4] = (s32)func_80024FAC;
         }
         else
@@ -3185,7 +3185,7 @@ void func_800254E4(s32 *p)
     else
     {
         p[13] = (s32)func_80024FFC;
-        func_8002311C((s32)(p - 8));
+        msg_cannot_overwrite((s32)(p - 8));
         p[-4] = (s32)func_80024FAC;
     }
 }
@@ -3196,7 +3196,7 @@ void func_800254E4(s32 *p)
    0x40 test instead of leaving through a goto, the held-key step is -2 rather
    than -4, and func_80027AFC takes a literal 0 as its second argument. The
    unk_08 test has to be an enclosing `if`, not an early return: on the
-   zero path the target still runs the func_8002168C/func_80021904 tail. */
+   zero path the target still runs the func_8002168C/print_card_status tail. */
 void func_80025584(s32 *p)
 {
     s32 dir = 0;
@@ -3253,7 +3253,7 @@ void func_80025584(s32 *p)
         }
     }
     r = func_8002168C();
-    func_80021904();
+    print_card_status();
     if (r == 0)
     {
         return;
@@ -3279,7 +3279,7 @@ void func_8002570C(s32 *p)
     else
     {
         p[13] = (s32)func_8002593C;
-        func_800230A4((s32)(p - 8));
+        msg_no_saved_game((s32)(p - 8));
         p[-4] = (s32)func_80024FAC;
     }
 }
@@ -3295,7 +3295,7 @@ void func_80025788(s32 *p)
     }
     else
     {
-        if (func_8002219C(p[10]) != 0)
+        if (erase_save_file(p[10]) != 0)
         {
             p[-4] = (s32)func_8002593C;
             off = 0;
@@ -3308,10 +3308,10 @@ void func_80025788(s32 *p)
         else
         {
             p[13] = (s32)func_8002593C;
-            func_8002316C((s32)(p - 8));
+            msg_delete_failed((s32)(p - 8));
             p[-4] = (s32)func_80024F7C;
         }
-        func_80020984();
+        recheck_card_slot();
         p[16] = 0;
     }
 }
@@ -3323,13 +3323,13 @@ void func_80025848(s32 *p)
     if (D_80083E98[n][0] != 0)
     {
         p[13] = (s32)func_80025788;
-        func_80023144((s32)(p - 8), (s32)(p + 14));
+        msg_delete_confirm((s32)(p - 8), (s32)(p + 14));
         p[-4] = (s32)func_80024FAC;
     }
     else
     {
         p[13] = (s32)func_8002593C;
-        func_800230A4((s32)(p - 8));
+        msg_no_saved_game((s32)(p - 8));
         p[-4] = (s32)func_80024FAC;
     }
 }
@@ -3440,7 +3440,7 @@ void func_8002593C(s32 *p)
         }
     }
     r = func_8002168C();
-    func_80021904();
+    print_card_status();
     if (r != 0)
     {
         if (r != 1)
@@ -3468,7 +3468,7 @@ void func_80025B40(s32 *p, s32 v)
 void func_80025B60(s32 *p)
 {
     func_80025030(p);
-    func_80020984();
+    recheck_card_slot();
     p[-4] = (s32)func_8002593C;
 }
 
@@ -3484,7 +3484,7 @@ void func_80025BD4(s32 *p)
 
     if (n < MEM_CARD_FILE_ID_TMP)
     {
-        if (func_80021D54(n) != 0)
+        if (load_save_slot_info(n) != 0)
         {
             p[n + 1] = func_80023FF0((s32)(p - 8), n);
             p[9] = p[9] + 1;
@@ -3492,7 +3492,7 @@ void func_80025BD4(s32 *p)
         else
         {
             p[13] = (s32)func_80025B9C;
-            func_80023004((s32)(p - 8));
+            msg_load_failed((s32)(p - 8));
             p[-4] = (s32)func_80024F7C;
         }
     }
@@ -3508,8 +3508,8 @@ s32 *func_80025C7C(s32 *p, s32 a)
     s32 *r = q + 8;
 
     func_80025B40(r, (s32)p);
-    func_8002223C();
-    func_800220DC();
+    erase_tmp_file();
+    refresh_card_info();
     r[0x12] = 1;
     q[8] = func_8004F418(q, q + 0x1A);
     r[6] = (s32)func_800238D4(q);
@@ -3640,7 +3640,7 @@ s32 func_80025ECC(void)
    begins with the call, so its backward scan stops at the label and its slot
    is filled forwards with the next `addiu $s0, $s3, 0x4`. Writing the test as
    a statement leaves both insns in the join and costs the word (60w/4). */
-void func_80025F0C(u8 *p, s32 n)
+void set_save_title(u8 *p, s32 n)
 {
     u8 buf[0x10];
 
@@ -3663,13 +3663,13 @@ void func_80025F0C(u8 *p, s32 n)
    The `r.y` update must come AFTER the row copy (43 DIFF before it), and the
    source pointer must be `(u8 *)0x80010080 + i * 0x80` rather than a walking
    local advanced at the bottom of the loop (56 DIFF). */
-void func_80025FFC(s32 *p, s32 n)
+void set_save_icon(s32 *p, s32 n)
 {
     RECT r;
     s32 i;
 
-    r = D_800200B8;
-    *(UnkBlock20 *)((u8 *)p + 0x60) = *(UnkBlock20 *)D_80027E78[n];
+    r = SAVE_ICON_VRAM_RECT;
+    *(UnkBlock20 *)((u8 *)p + 0x60) = *(UnkBlock20 *)SAVE_ICON_CLUTS[n];
     r.y += n * 16;
     for (i = 0; i < 3; i++)
     {
@@ -3679,20 +3679,20 @@ void func_80025FFC(s32 *p, s32 n)
     DrawSync(0);
 }
 
-void func_80026128(u8 *p, s32 a, s32 mode)
+void init_save_file_header(u8 *p, s32 a, s32 mode)
 {
     u8 *b = (u8 *)0x80010000;
     s32 f;
 
-    *(UnkFour *)p = *(UnkFour *)D_80028064;
+    *(UnkFour *)p = *(UnkFour *)SAVE_FILE_MAGIC;
     f = (mode ^ 2) == 0;
     *(s32 *)(b + 0x224) = *(s32 *)(b + 0x2D5C);
     *(s16 *)(b + 0x208) = f;
     *(s16 *)(b + 0x20A) = f;
     *(s32 *)(b + 0x230) = func_80025E54();
     *(s32 *)(b + 0x228) = func_80025ECC();
-    func_80025F0C((u8 *)p, a);
-    func_80025FFC((s32 *)p, a);
+    set_save_title((u8 *)p, a);
+    set_save_icon((s32 *)p, a);
 }
 
 void func_800261C0(s32 *p)
@@ -3738,8 +3738,8 @@ void func_80026270(s32 **pp)
 
 /* The `p[-4] = ...` store is written out in all three arms, as in the twin
    func_80025230, and gcc's cross-jumping merges them into the tail: that is
-   where the target's `sw $v0, -0x10($s0)` in func_80020984's delay slot comes
-   from. Spelling the merge by hand -- one `s32 h` assigned in each arm and
+   where the target's `sw $v0, -0x10($s0)` in recheck_card_slot's delay slot
+   comes from. Spelling the merge by hand -- one `s32 h` assigned in each arm and
    stored once after the if -- lands 55 words with 3 DIFF, because then the
    `p[13]` store and the `p - 8` argument are the last two insns of the fail
    block and sched2, which is a REVERSE list scheduler whose only live
@@ -3754,11 +3754,11 @@ void func_80026270(s32 **pp)
    register wrong (55w/1). */
 void func_800262BC(s32 *p)
 {
-    func_80026128((u8 *)0x80010000, p[11], p[9]);
-    if (func_80021F18(p[11], (u8 *)0x80010000) == 0)
+    init_save_file_header((u8 *)0x80010000, p[11], p[9]);
+    if (write_save_file(p[11], (u8 *)0x80010000) == 0)
     {
         p[13] = (s32)func_800265B8;
-        func_80022EEC((s32)(p - 8));
+        msg_overwrite_failed((s32)(p - 8));
         p[-4] = (s32)func_800261C0;
     }
     else
@@ -3777,7 +3777,7 @@ void func_800262BC(s32 *p)
             p[-4] = (s32)func_800265B8;
         }
     }
-    func_80020984();
+    recheck_card_slot();
     p[16] = 0;
 }
 
@@ -3795,7 +3795,7 @@ void func_80026398(s32 *p)
 void func_800263C0(s32 *p)
 {
     p[15] = 1;
-    func_80022F64((s32)(p - 8), (s32)(p + 16));
+    msg_saving((s32)(p - 8), (s32)(p + 16));
     p[16] = 1;
     p[-4] = (s32)func_80026398;
 }
@@ -3815,21 +3815,21 @@ void func_80026410(s32 *p)
 void func_8002644C(s32 *p)
 {
     p[13] = (s32)func_80026410;
-    func_80022F3C((s32)(p - 8), (s32)(p + 14));
+    msg_overwrite_confirm((s32)(p - 8), (s32)(p + 14));
     p[-4] = (s32)func_800261F0;
 }
 
 void func_80026494(s32 *p)
 {
     p[13] = (s32)func_800265B8;
-    func_80022FB4((s32)(p - 8));
+    msg_not_enough_blocks_overwrite((s32)(p - 8));
     p[-4] = (s32)func_800261F0;
 }
 
 void func_800264D8(s32 *p)
 {
     p[13] = (s32)func_800265B8;
-    func_80022FDC((s32)(p - 8));
+    msg_not_enough_blocks((s32)(p - 8));
     p[-4] = (s32)func_800261F0;
 }
 
@@ -3839,11 +3839,11 @@ void func_8002651C(s32 *p)
     {
         p[-4] = (s32)func_8002644C;
     }
-    else if (func_80022138() >= 3)
+    else if (get_free_blocks() >= 3)
     {
         p[-4] = (s32)func_800263C0;
     }
-    else if (func_80022160() != 0)
+    else if (count_used_save_slots() != 0)
     {
         func_80026494(p);
     }
@@ -3865,7 +3865,7 @@ void func_8002651C(s32 *p)
    `beq` against a materialised 1.
 
    The 0x20 case leaves through a `goto` into the tail -- it does NOT fall
-   into the func_8002168C/func_80021904 pair the way every other path does.
+   into the func_8002168C/print_card_status pair the way every other path does.
 
    D_80083160 is the Unk80083160 struct from include/structs.h, read as
    .unk_08 and .unk_10; the same pair appears in func_800277BC. */
@@ -3925,7 +3925,7 @@ void func_800265B8(s32 *p)
         }
     }
     r = func_8002168C();
-    func_80021904();
+    print_card_status();
     if (r == 0)
     {
         return;
@@ -3952,7 +3952,7 @@ void func_80026728(s32 *p, s32 v)
 void func_80026748(s32 *p)
 {
     func_80025DC8(p);
-    func_80020984();
+    recheck_card_slot();
     p[-4] = (s32)func_800265B8;
 }
 
@@ -3968,7 +3968,7 @@ void func_800267C0(s32 *p)
 
     if (n < MEM_CARD_FILE_ID_TMP)
     {
-        if (func_80021D54(n) != 0)
+        if (load_save_slot_info(n) != 0)
         {
             p[n + 3] = func_80023FF0((s32)(p - 8), n);
             p[10] = p[10] + 1;
@@ -3976,7 +3976,7 @@ void func_800267C0(s32 *p)
         else
         {
             p[13] = (s32)func_80026784;
-            func_80023004((s32)(p - 8));
+            msg_load_failed((s32)(p - 8));
             p[-4] = (s32)func_800261C0;
         }
     }
@@ -3996,8 +3996,8 @@ s32 *func_80026868(s32 *p, s32 a)
         r = q + 8;
         r[9] = a;
         func_80026728(r, (s32)p);
-        func_8002223C();
-        func_800220DC();
+        erase_tmp_file();
+        refresh_card_info();
         q[8] = func_8004F418(q, 0);
         r[1] = (s32)func_80024D58(q, r[11], 3);
         r[2] = (s32)func_80027364(q);
@@ -4448,30 +4448,30 @@ void func_80027584(s32 *p)
 
     do
     {
-        r = func_80021A84(p[3]);
+        r = format_card(p[3]);
         if (r != 5)
         {
             break;
         }
     } while (i++ < 6);
     p[14] = 0;
-    func_80020984();
+    recheck_card_slot();
     if (r == 1)
     {
         p[11] = (s32)func_8002789C;
-        func_80023054((s32)(p - 8));
+        msg_format_done((s32)(p - 8));
         p[-4] = (s32)func_800274D8;
     }
     else if (r == 4)
     {
         p[11] = (s32)func_8002789C;
-        func_80022E9C((s32)(p - 8));
+        msg_no_card((s32)(p - 8));
         p[-4] = (s32)func_800274A8;
     }
     else
     {
         p[11] = (s32)func_8002789C;
-        func_8002302C((s32)(p - 8));
+        msg_format_failed((s32)(p - 8));
         p[-4] = (s32)func_800274D8;
     }
 }
@@ -4498,7 +4498,7 @@ void func_80027684(s32 *p)
     else
     {
         p[16] = 1;
-        func_80022F14((s32)(p - 8), (s32)(p + 14));
+        msg_formatting((s32)(p - 8), (s32)(p + 14));
         p[14] = 1;
         h = (s32)func_8002765C;
     }
@@ -4508,21 +4508,21 @@ void func_80027684(s32 *p)
 void func_800276EC(s32 *p)
 {
     p[11] = (s32)func_80027684;
-    func_80022E74((s32)(p - 8), (s32)(p + 15));
+    msg_format_confirm((s32)(p - 8), (s32)(p + 15));
     p[-4] = (s32)func_800274D8;
 }
 
 void func_80027734(s32 *p)
 {
     p[11] = (s32)func_8002789C;
-    func_80022E9C((s32)(p - 8));
+    msg_no_card((s32)(p - 8));
     p[-4] = (s32)func_800274A8;
 }
 
 void func_80027778(s32 *p)
 {
     p[11] = (s32)func_8002789C;
-    func_8002307C((s32)(p - 8));
+    msg_card_damaged((s32)(p - 8));
     p[-4] = (s32)func_800274D8;
 }
 
@@ -4533,13 +4533,13 @@ void func_800277BC(s32 *p)
 
     if (D_80083160.unk_08 != 0 && (D_80083160.unk_10 & 0x20) != 0)
     {
-        func_800209C4();
+        switch_card_slot();
         p[14] = 0;
         p[-4] = (s32)func_8002789C;
         return;
     }
     n = func_8002168C();
-    func_80021904();
+    print_card_status();
     if (n != 0)
     {
         p[14] = 0;
@@ -4549,9 +4549,9 @@ void func_800277BC(s32 *p)
         p[-4] = (s32)h;
         return;
     }
-    if (func_800210E0() == 3 && p[14] == 0)
+    if (get_card_st() == 3 && p[14] == 0)
     {
-        func_80022EC4((s32)(p - 8), (s32)(p + 14));
+        msg_please_wait((s32)(p - 8), (s32)(p + 14));
         p[14] = 1;
     }
 }
@@ -4593,7 +4593,7 @@ void func_8002789C(s32 *p)
         else if (D_80083160.unk_10 & 0x40)
         {
             func_80053DA8(0x503);
-            func_80020924(p[3]);
+            set_card_slot(p[3]);
             p[13] = 0;
             p[-4] = (s32)func_800277BC;
             return;
@@ -4628,7 +4628,7 @@ void func_8002789C(s32 *p)
     diff[1] = t[1] != p[7];
     *(UnkTwoWords *)&p[6] = *(UnkTwoWords *)t;
     func_80026FF8((s32 *)p[9], t, diff);
-    func_80021904();
+    print_card_status();
 }
 
 void func_80027A68(s32 *p, s32 a, s32 b)
@@ -4644,7 +4644,7 @@ void func_80027A9C(s32 *p)
 
     p[8] = func_8004F418(q, p + 3);
     p[9] = (s32)func_80026ED0(q, p[3]);
-    func_800209C4();
+    switch_card_slot();
     p[-4] = (s32)func_8002789C;
 }
 
@@ -4679,7 +4679,7 @@ void func_80027BC0(void)
 void func_80027BF4(void)
 {
     D_80080A84 = 2;
-    func_80020F18();
+    close_card_events();
     func_800585A0();
     if (D_80082E6A == 1)
     {
@@ -4696,7 +4696,7 @@ void func_80027C60(void)
 {
     func_8005863C();
     D_80080A84 = 1;
-    func_80020EA0();
+    start_card_server();
 }
 
 void func_80027C90(s32 *p)
@@ -4752,7 +4752,7 @@ void func_80027DF4(s32 *p, s32 v)
     }
 }
 
-const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};
+const RECT SAVE_ICON_VRAM_RECT = {0x380, 0x100, 4, 0x10};
 
 /* ------------------------------------------------------------------------- */
 /* The overlay's own .data. It starts at 0x80027E20, immediately after the text
@@ -5133,18 +5133,18 @@ UnkAnimStep D_80027E68[2] = {
 };
 
 /* 0x80027E78 */
-/* Five 16-entry 5551 CLUTs, one 0x20-byte row each; func_80025FFC copies
+/* Five 16-entry 5551 CLUTs, one 0x20-byte row each; set_save_icon copies
    the selected row into its primitive at +0x60 as an UnkBlock20. */
-u8 D_80027E78[5][0x20] = {{0x00, 0x00, 0x5A, 0x6F, 0xDF, 0x53, 0x3A, 0x26, 0x04, 0x6A, 0x04, 0x55, 0xE4, 0x3C, 0x85, 0x20,
-                           0xCC, 0x10, 0x3F, 0x1F, 0x9A, 0x11, 0x34, 0x15, 0x73, 0x5A, 0x93, 0x7F, 0x30, 0x15, 0x66, 0x0C},
-                          {0x00, 0x00, 0xFF, 0x7F, 0xFB, 0x5B, 0xD6, 0x47, 0x2D, 0x43, 0x49, 0x2E, 0x46, 0x19, 0x82, 0x0C,
-                           0x9F, 0x57, 0xBF, 0x46, 0x1D, 0x1D, 0xD7, 0x62, 0xA6, 0x1C, 0x4C, 0x31, 0x65, 0x14, 0x43, 0x0C},
-                          {0x00, 0x00, 0x9C, 0x73, 0xDD, 0x5A, 0x7A, 0x49, 0x1E, 0x27, 0x97, 0x15, 0xF3, 0x51, 0x67, 0x14,
-                           0xAF, 0x10, 0x73, 0x37, 0x89, 0x2E, 0x86, 0x25, 0xC4, 0x10, 0xDD, 0x4F, 0x94, 0x30, 0x68, 0x18},
-                          {0x00, 0x00, 0xFD, 0x6B, 0xFA, 0x52, 0x56, 0x7F, 0x6E, 0x72, 0x4F, 0x6D, 0xEA, 0x58, 0x84, 0x1C,
-                           0xDF, 0x76, 0x7C, 0x51, 0x90, 0x38, 0x69, 0x18, 0x8C, 0x24, 0x34, 0x3E, 0x6E, 0x29, 0xC7, 0x14},
-                          {0x00, 0x00, 0x6D, 0x20, 0x93, 0x3C, 0xD9, 0x58, 0x9A, 0x5D, 0x5B, 0x66, 0x2D, 0x09, 0xB4, 0x05,
-                           0x5B, 0x02, 0xDB, 0x0A, 0x7B, 0x17, 0x42, 0x08, 0x29, 0x25, 0x52, 0x4A, 0x9C, 0x6F, 0x1F, 0x00}};
+u8 SAVE_ICON_CLUTS[5][0x20] = {{0x00, 0x00, 0x5A, 0x6F, 0xDF, 0x53, 0x3A, 0x26, 0x04, 0x6A, 0x04, 0x55, 0xE4, 0x3C, 0x85, 0x20,
+                                0xCC, 0x10, 0x3F, 0x1F, 0x9A, 0x11, 0x34, 0x15, 0x73, 0x5A, 0x93, 0x7F, 0x30, 0x15, 0x66, 0x0C},
+                               {0x00, 0x00, 0xFF, 0x7F, 0xFB, 0x5B, 0xD6, 0x47, 0x2D, 0x43, 0x49, 0x2E, 0x46, 0x19, 0x82, 0x0C,
+                                0x9F, 0x57, 0xBF, 0x46, 0x1D, 0x1D, 0xD7, 0x62, 0xA6, 0x1C, 0x4C, 0x31, 0x65, 0x14, 0x43, 0x0C},
+                               {0x00, 0x00, 0x9C, 0x73, 0xDD, 0x5A, 0x7A, 0x49, 0x1E, 0x27, 0x97, 0x15, 0xF3, 0x51, 0x67, 0x14,
+                                0xAF, 0x10, 0x73, 0x37, 0x89, 0x2E, 0x86, 0x25, 0xC4, 0x10, 0xDD, 0x4F, 0x94, 0x30, 0x68, 0x18},
+                               {0x00, 0x00, 0xFD, 0x6B, 0xFA, 0x52, 0x56, 0x7F, 0x6E, 0x72, 0x4F, 0x6D, 0xEA, 0x58, 0x84, 0x1C,
+                                0xDF, 0x76, 0x7C, 0x51, 0x90, 0x38, 0x69, 0x18, 0x8C, 0x24, 0x34, 0x3E, 0x6E, 0x29, 0xC7, 0x14},
+                               {0x00, 0x00, 0x6D, 0x20, 0x93, 0x3C, 0xD9, 0x58, 0x9A, 0x5D, 0x5B, 0x66, 0x2D, 0x09, 0xB4, 0x05,
+                                0x5B, 0x02, 0xDB, 0x0A, 0x7B, 0x17, 0x42, 0x08, 0x29, 0x25, 0x52, 0x4A, 0x9C, 0x6F, 0x1F, 0x00}};
 
 /* 0x80027F18 */
 const char *MEM_CARD_NAMES[2] = {
@@ -5243,8 +5243,8 @@ u8 D_80028020[0x44] = {0x00, 0x00, 0x01, 0x02, 0x00, 0x01, 0x01, 0x01, 0x01, 0x0
                        0x00, 0x00, 0x00, 0x00};
 
 /* 0x80028064 */
-/* The UnkFour template func_80026128 copies with lwl/lwr. */
-u8 D_80028064[0x4] = {0x53, 0x43, 0x13, 0x03};
+/* The UnkFour template init_save_file_header copies with lwl/lwr. */
+u8 SAVE_FILE_MAGIC[0x4] = {0x53, 0x43, 0x13, 0x03};
 
 /* 0x80028068 */
 /* The two-slot pick table, indexed [p[9]][i] in func_800269B4. */
@@ -5301,7 +5301,7 @@ void (*D_8002809C[6])(s32 *) = {
 /* 0x800280B4 */
 /* The 20-message table: five Shift-JIS lines from the rodata pool plus
    four bytes each. 0x80020688 is the empty line. */
-UnkStrSet D_800280B4[20] = {
+UnkStrSet gCardMessages[20] = {
     /*  0 */ {{MSG_MEMORY_CARD_IS_NOT, MSG_FORMATTED_DO_YOU_WISH_TO, MSG_FORMAT_IT_NOW, MSG_YES_NO_3, MSG_EMPTY}, 2, 1, 0, 0},
     /*  1 */ {{MSG_NO_MEMORY_CARD_DETECTED, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
     /*  2 */ {{MSG_PLEASE_WAIT, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
@@ -5325,8 +5325,8 @@ UnkStrSet D_800280B4[20] = {
 };
 
 /* 0x80028294 */
-/* The four fragments func_80025F0C builds its save title from. splat names
-   the fourth separately, D_800282A0, because func_80025F0C reaches it with
+/* The four fragments set_save_title builds its save title from. splat names
+   the fourth separately, D_800282A0, because set_save_title reaches it with
    its own %hi/%lo pair -- but the function already indexes this table past
    its old three-entry bound to get at it, and %lo(D_80028294 + 12) IS
    %lo(D_800282A0), so the one array is both the honest spelling and
@@ -5340,7 +5340,7 @@ u8 *D_80028294[4] = {
 
 /* 0x800282A4 */
 /* The two headings func_80023B18 draws, indexed by
-   `func_80022138() >= 3`. */
+   `get_free_blocks() >= 3`. */
 u8 *D_800282A4[2] = {
     MSG_CANT_USE,
     MSG_EMPTY,
@@ -5594,20 +5594,20 @@ long gHwCardNewEvent = 0;
 
 /* 0x80028570 */
 /* firstfile2/nextfile walk this 15-row directory buffer 0x28 bytes at a
-   time (func_8002191C); func_800219B8 reads row word 6 and func_80021A04
-   compares the 0x15-byte name. */
-struct DIRENTRY D_80028570[15] = {{{0}}};
+   time (count_card_files); count_free_blocks reads row word 6 and
+   card_file_exists compares the 0x15-byte name. */
+struct DIRENTRY card_dir[15] = {{{0}}};
 
 /* 0x800287C8 */
 /* The card state machine's step. */
-s32 D_800287C8 = 0;
+s32 card_st = 0;
 
 /* 0x800287CC */
 s32 card_slot = 0;
 
 /* 0x800287D0 */
 /* The two per-slot outputs of those counters: func_8002168C writes
-   D_800287D0[i] and func_800217D4 writes D_800287D8[i], and func_80020EA0
+   D_800287D0[i] and func_800217D4 writes D_800287D8[i], and start_card_server
    clears all four. */
 s32 D_800287D0[2] = {0, 0};
 
@@ -5615,7 +5615,7 @@ s32 D_800287D0[2] = {0, 0};
 s32 D_800287D8[2] = {0, 0};
 
 /* 0x800287E0 */
-s32 D_800287E0 = 0;
+s32 card_evflg = 0;
 
 /* 0x800287E4 */
 CARD_STATE gCardState = CARD_STATE_OK;

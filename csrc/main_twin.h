@@ -47,37 +47,37 @@ long func_8007C9A8(long);                            /* CloseEvent */
 long func_8007C9C8(long);                            /* TestEvent */
 int func_8007CA38(void);                             /* EnterCriticalSection */
 void func_8007CA48(void);                            /* ExitCriticalSection */
-void func_80400A10(void);                            /* func_80020A80 */
-s32 func_804010F0(void);                             /* func_800210F0 */
-s32 func_804012B0(void);                             /* func_80021298 */
+void func_80400A10(void);                            /* open_card_events */
+s32 func_804010F0(void);                             /* on_sw_card_eof */
+s32 func_804012B0(void);                             /* on_card_new */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
 void func_804014E4(void);                            /* reset_sw_events */
 void func_80401578(void);                            /* reset_hw_events */
 s32 func_804016D0(void);                             /* func_8002168C */
-void func_804018FC(void);                            /* func_80021904 */
-s32 func_80401E2C(s32 n);                            /* func_80021D54 */
-s32 func_80402084(s32 a, u8 *b);                     /* func_80021F18 */
-s32 func_80402154(s32 a, u8 *b, s32 c);              /* func_80021FF0 */
-void func_80402214(void);                            /* func_800220DC */
-s32 func_80402268(void);                             /* func_80022138 */
-s32 func_804022C8(s32 idx);                          /* func_8002219C */
+void func_804018FC(void);                            /* print_card_status */
+s32 func_80401E2C(s32 n);                            /* load_save_slot_info */
+s32 func_80402084(s32 a, u8 *b);                     /* write_save_file */
+s32 func_80402154(s32 a, u8 *b, s32 c);              /* read_save_file */
+void func_80402214(void);                            /* refresh_card_info */
+s32 func_80402268(void);                             /* get_free_blocks */
+s32 func_804022C8(s32 idx);                          /* erase_save_file */
 void func_80402974(UnkCardPair *p, u32 *a, u32 *b);  /* func_800226E0 */
 u8 *func_80402CD4(u8 *p, s32 *q);                    /* func_80022A30 */
 void func_80402EA4(s32 *p, s32 a, s32 b, s32 c, s32 d); /* func_80022C48 */
-s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p);   /* func_80022D60 */
-void func_804030F4(s32 a);                           /* func_80022E9C */
-void func_8040311C(s32 a, s32 p);                    /* func_80022EC4 */
-void func_80403144(s32 a);                           /* func_80022EEC */
-void func_8040320C(s32 a);                           /* func_80022FB4 */
-void func_80403234(s32 a);                           /* func_80022FDC */
-void func_8040325C(s32 a);                           /* func_80023004 */
-void func_80403284(s32 a);                           /* func_8002302C */
-void func_804032AC(s32 a);                           /* func_80023054 */
-void func_804032D4(s32 a);                           /* func_8002307C */
-void func_804032FC(s32 a);                           /* func_800230A4 */
-void func_8040334C(s32 a);                           /* func_800230F4 */
-void func_80403374(s32 a);                           /* func_8002311C */
-void func_804033C4(s32 a);                           /* func_8002316C */
+s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p);   /* open_card_message */
+void func_804030F4(s32 a);                           /* msg_no_card */
+void func_8040311C(s32 a, s32 p);                    /* msg_please_wait */
+void func_80403144(s32 a);                           /* msg_overwrite_failed */
+void func_8040320C(s32 a);                           /* msg_not_enough_blocks_overwrite */
+void func_80403234(s32 a);                           /* msg_not_enough_blocks */
+void func_8040325C(s32 a);                           /* msg_load_failed */
+void func_80403284(s32 a);                           /* msg_format_failed */
+void func_804032AC(s32 a);                           /* msg_format_done */
+void func_804032D4(s32 a);                           /* msg_card_damaged */
+void func_804032FC(s32 a);                           /* msg_no_saved_game */
+void func_8040334C(s32 a);                           /* msg_copy_failed */
+void func_80403374(s32 a);                           /* msg_cannot_overwrite */
+void func_804033C4(s32 a);                           /* msg_delete_failed */
 s32 func_8040343C(s32 flag);                         /* func_800231E4 */
 void func_80403698(s32 *p);                          /* func_800233D0 */
 void func_804037F4(u8 *p);                           /* func_8002352C */
@@ -198,9 +198,9 @@ extern long D_80409280;                              /* gHwCardEOFEvent, D_80028
 extern long D_80409284;                              /* gHwCardErrorEvent, D_80028564 */
 extern long D_80409288;                              /* gHwCardTimeoutEvent, D_80028568 */
 extern long D_8040928C;                              /* gHwCardNewEvent, D_8002856C */
-extern s32 D_804094E8;                               /* D_800287C8 */
+extern s32 D_804094E8;                               /* card_st, D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
-extern s32 D_80409500;                               /* D_800287E0 */
+extern s32 D_80409500;                               /* card_evflg, D_800287E0 */
 extern CARD_STATE D_80409504;                        /* gCardState, D_800287E4 */
 
 #define dbg_card_slot D_804094EC

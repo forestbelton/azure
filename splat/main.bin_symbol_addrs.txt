@@ -15,13 +15,14 @@
 // D_800200B8 -- SPLITTING ONE RODATA OBJECT IN TWO.
 //
 // While the text was `asm`, spimdisasm found a single reference to
-// 0x800200B8, from func_80025FFC, and so emitted 0x800200B8..0x80020924 as ONE
+// 0x800200B8, from set_save_icon, and so emitted 0x800200B8..0x80020924 as ONE
 // 0x86C-byte `dlabel`. It is really two things:
 //
 //   * 0x800200B8, eight bytes, a GPU `RECT` {x=0x380, y=0x100, w=4, h=0x10}.
-//     func_80025FFC copies it onto its stack as `*(RECT *)D_800200B8` and
-//     walks it across three StoreImage calls, so the type is witnessed, not
-//     guessed. It is `const RECT D_800200B8` in the C unit now.
+//     set_save_icon copies it onto its stack as
+//     `*(RECT *)SAVE_ICON_VRAM_RECT` and walks it across three StoreImage
+//     calls, so the type is witnessed, not
+//     guessed. It is `const RECT SAVE_ICON_VRAM_RECT` in the C unit now.
 //   * 0x800200C0, the rest, the overlay's 59 Shift-JIS UI messages. These no
 //     longer have symbols OR an assembly file: they are the string literals
 //     of the eight `u8 *` tables in the C unit's .data, and cc1psx emits them

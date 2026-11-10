@@ -218,10 +218,10 @@ segment:
 
   | identifier | twin site | twin operand | live site | live spelling |
   |---|---|---|---|---|
-  | `card_first_flg` | func_80400E34 | `D_8013BB6C` | func_80020EA0 | `card_first_flg[0]`, a macro over `D_80084130` |
-  | `cnt` | func_80401B30, func_804022C8 | `$s1` / `$s0` local | func_80021A84, func_8002219C | *nothing* -- twin-only |
-  | `c` | func_80401FEC | `$s1` local | func_80021EE0 | `c` |
-  | `(int)gsw->check_sum` | func_80401F98, func_80401FEC | `0x204($a0)` | func_80021EB8, func_80021EE0 | `gsw[GSW_CHECK_SUM]` |
+  | `card_first_flg` | func_80400E34 | `D_8013BB6C` | start_card_server | `card_first_flg[0]`, a macro over `D_80084130` |
+  | `cnt` | func_80401B30, func_804022C8 | `$s1` / `$s0` local | format_card, erase_save_file | *nothing* -- twin-only |
+  | `c` | func_80401FEC | `$s1` local | check_gsw_checksum | `c` |
+  | `(int)gsw->check_sum` | func_80401F98, func_80401FEC | `0x204($a0)` | set_gsw_checksum, check_gsw_checksum | `gsw[GSW_CHECK_SUM]` |
 
   Three lessons in that table. **A named global need not be in either block:**
   `card_first_flg` is engine `.bss` in both links, so the name has to be a
@@ -392,8 +392,8 @@ those differ between the links -- and carries each unit label across.
 **184 of the live block's 241 functions pair.**
 
 The live block is not a plain `NDEBUG` build. It keeps **24 assert sites, all
-naming `c_server.c`, in two functions** (`func_80020A80` at lines 185-226 and
-`func_80020F18` at 263-277), while its other eight units have none. So the
+naming `c_server.c`, in two functions** (`open_card_events` at lines 185-226 and
+`close_card_events` at 263-277), while its other eight units have none. So the
 shipped build compiled `c_server.c` with asserts live and the rest without --
 a per-file difference worth knowing before writing any of those files. Those
 24 sites are a signal of the live block's own, and they **agree with the
@@ -449,8 +449,8 @@ because their unit is known outright rather than bracketed:
 
 | unit | anchored live functions |
 |---|---|
-| `c_server.c` | `func_80020A80`, `func_80020F18` (its own asserts), `func_80021594`, `func_8002191C`, `func_80021EB8`, `func_80021EE0` |
-| `card_mes.c` | `func_80022D60` |
+| `c_server.c` | `open_card_events`, `close_card_events` (its own asserts), `poll_card_events`, `count_card_files`, `set_gsw_checksum`, `check_gsw_checksum` |
+| `card_mes.c` | `open_card_message` |
 | `card_opt.c` | `func_800238D4`, `func_80023C44`, `func_80023D64` |
 | `card_win.c` | `func_80023FF0` |
 | `cardinfo.c` | `func_800258C8` |
@@ -498,7 +498,7 @@ What `-G` actually changes here has nothing to do with `$gp` in the end. At
 symbol reference, which the assembler expands into a `lui $at` / `%lo($at)`
 pair **per use**. At `-G0` cc1psx emits its own `%hi`/`%lo` split address into
 a general register, which can be hoisted and shared -- the hoisted-lui shape
-this overlay uses everywhere. On `func_80020924` that is the difference
+this overlay uses everywhere. On `set_card_slot` that is the difference
 between 26 words and 24.
 
 A consequence worth stating, because it retires one of this project's main
@@ -510,7 +510,7 @@ declared size is ever `<= G`, so **every** global access takes the split form
 whatever the declaration says. Spelling a global `extern T X[];` instead of as
 a scalar cannot change the addressing shape in an overlay. The levers that do
 still work are the ones about WHICH register the address lands in and WHERE
-the `high` is emitted -- which is what landed `func_80020924`.
+the `high` is emitted -- which is what landed `set_card_slot`.
 
 ### One source reproduces both builds
 
@@ -519,7 +519,7 @@ at `-G8`**, both with 0 differing words:
 
 | block | flags | words | shape |
 |---|---|---|---|
-| live `func_80020924` | `-O2 -G0` | 24 | `lui $v1` hoisted, shared by both stores |
+| live `set_card_slot` | `-O2 -G0` | 24 | `lui $v1` hoisted, shared by both stores |
 | twin `func_804008A0` | `-O2 -G8` | 26 | `lui $at` re-expanded at each of three uses |
 
 So the twin is not a different compiler and not only an asserts-on build: it
@@ -567,7 +567,7 @@ maspsx gets `-G0` as well, so that it makes no small-data decisions of its own
 on a unit that has none. Note this is a `CFLAGS` override, which the Makefile
 had no mechanism for before -- only `MASPSXFLAGS` was overridable per unit.
 
-### func_80020924
+### set_card_slot
 
 24 words, the first function in the overlay. Its C is in
 `csrc/ovl_main_80020000.c` with the reasoning in the comment; the lever is
@@ -585,7 +585,7 @@ into the stores.
 
 Worth knowing when a sweep starts: splat emits a `jr $ra; nop` function as
 real C rather than `INCLUDE_ASM`, so the trivial ones are free -- here
-`func_80021904` and `func_8002519C`.
+`print_card_status` and `func_8002519C`.
 
 ## Sweeping an overlay
 
@@ -631,19 +631,19 @@ Families. Grouping the stubs by masked instruction signature (`jal` targets
 and i-type immediates dropped) found 15 families among the 177 stubs, and
 three of them were most of a day's progress:
 
-* **20 one-line message wrappers** (`func_80022E74..func_8002316C`, 10 words
-  each, `0x28` apart) around `card_mes.c`'s `func_80022D60(a, id, kind, p)`,
-  one per message id 0..19. Decoded mechanically from which argument register
-  each wrapper writes; the register copies (`addu $a2, $a1, $zero` where kind
-  equals id, `addu $a3, $a2, $zero` where both are 0) are gcc reusing an
-  equal value, not source. All 20 landed from one generator.
+* **20 one-line message wrappers** (`msg_format_confirm..msg_delete_failed`,
+  10 words each, `0x28` apart) around `card_mes.c`'s `open_card_message(a, id,
+  kind, p)`, one per message id 0..19. Decoded mechanically from which
+  argument register each wrapper writes; the register copies (`addu $a2, $a1,
+  $zero` where kind equals id, `addu $a3, $a2, $zero` where both are 0) are
+  gcc reusing an equal value, not source. All 20 landed from one generator.
 * **5 three-pointer primitive initialisers** (37 words each).
 * **13 small accessor/setter/wrapper groups** of 2-20 words.
 
 ### Four levers this overlay needed
 
 1. **The pointer-local hoist** (`docs/matching-levers.md:3173`), per site.
-   `func_80020924` and `func_8002137C` both store to a global on one branch
+   `set_card_slot` and `on_card_timeout` both store to a global on one branch
    and read or store it on another; through the symbol each `%hi` is emitted
    beside its own store and the second branch materialises a second `lui`,
    one word long. Through a local assigned just before the branch the `%hi`
@@ -679,7 +679,7 @@ wants its increment in the CONDITION (`} while (++i < 10);` is 9 words,
 `i++;` in the body is 10 -- the body form hoists the increment above the load
 and pays a load-delay nop), and two initialisers in a row want the cheaper one
 first, since `s32 sum = 0;` ahead of `s32 *q = gsw + 0x82;` is the whole
-difference between 0 and 2 differing words in `func_80021EB8`.
+difference between 0 and 2 differing words in `set_gsw_checksum`.
 
 ## Levers overlay code keeps needing
 
@@ -695,23 +695,23 @@ symbol's `%lo` and lets it compute `i * stride` before materialising the base;
 assigning the table to a local first forces the base out as its own quantity,
 materialised first. Symptoms, all one or two words:
 
-* `D_800280B4[p[2]].unk_15` with the base inline gives `lbu $v0, 0($v0)` where
-  the target has `lbu $v0, 0x15($v0)` -- the 0x15 went into the relocation.
-  With `UnkStrSet *t = D_800280B4; r = &t[p[2]];` it matches
+* `gCardMessages[p[2]].unk_15` with the base inline gives `lbu $v0, 0($v0)`
+  where the target has `lbu $v0, 0x15($v0)` -- the 0x15 went into the
+  relocation. With `UnkStrSet *t = gCardMessages; r = &t[p[2]];` it matches
   (func_80022488, func_80022CD8).
 * `D_80083E98[idx]` inline emits the shift before the `lui`/`addiu`; through a
   local it emits the base first and fills the load-delay slot with the
-  `addiu` (func_80021D54, func_8002219C, func_800254E4).
+  `addiu` (load_save_slot_info, erase_save_file, func_800254E4).
 * The same thing one step further on: `row = tbl` as a separate copy makes the
   materialised address and the walking pointer two quantities, which is the
-  extra `addu` the target has (func_80021A04). See matching-levers.md's
+  extra `addu` the target has (card_file_exists). See matching-levers.md's
   `p += x` is one long quantity note.
 
 **2. A value used only after a call must not be computed before it.**
 (3 functions) Written above the call it is live across it, takes a
 callee-saved register, and costs that register's save and restore -- two
 words, sometimes three. func_800251A4's 1-or-3 flag (37 words against 35),
-func_80021A84's table pointer, func_80023E14's table base. The fix is always
+format_card's table pointer, func_80023E14's table base. The fix is always
 to move the assignment below the last call that precedes its first use.
 
 **3. Write the store into both arms of an if/else and let jump.c cross-jump
@@ -723,13 +723,13 @@ func_80025848.
 **4. Declaration order decides which callee-saved register each local gets,
 and the order the setup is emitted in.** (6 functions) The target's first
 instructions are the cheapest way to read this off: whichever local is
-initialised first in the listing is declared first. func_80021EB8 (`sum`
+initialised first in the listing is declared first. set_gsw_checksum (`sum`
 before the cursor, 2 DIFF), func_80023194 and func_800239B0 (counter before
-cursor, plus a local COPY of the parameter, 6 DIFF), func_8002191C,
-func_80025E54, func_80021A04.
+cursor, plus a local COPY of the parameter, 6 DIFF), count_card_files,
+func_80025E54, card_file_exists.
 
 **5. `x++` is not `x = 1` even when x is provably 0.** (1 function, but it
-unblocked three other things) func_80021A04's mismatch flag increments; with
+unblocked three other things) card_file_exists's mismatch flag increments; with
 the increment form gcc stops hoisting the flag's `= 0` out of the enclosing
 loop, which is what made the rest of that function's allocation fall into
 place.
@@ -741,7 +741,7 @@ integer `off` with `p[off + 0x98]` keeps the displacement where the target has
 it (func_800240EC, func_80025DC8).
 
 **7. A trailing correction in the listing can be the compiler's, not the
-source's.** func_8002191C increments its count before the loop, again in the
+source's.** count_card_files increments its count before the loop, again in the
 loop's delay slot, and decrements after -- which reads like a source `n--` and
 is loop rotation of `do { n++; ... } while (...)`. Writing the `n--` makes it
 40 words / 9 DIFF; leaving it out, 39 / 0.
@@ -799,13 +799,14 @@ void func_80069DF8(s32 code) __attribute__((noreturn));
 ```
 
 and the `lui` that reorg puts in each test's `bnez` delay slot is the one the
-branch target's load uses. func_80020F18 went from 121 words against 114 with
-nothing else differing, to exact; func_80020A80, the overlay's second largest
-function at 264 words, then came out zero-differing on the FIRST spelling --
-eight `OpenEvent` calls inside the `EnterCriticalSection` pair, each asserting
-the handle is not -1, then eight `EnableEvent` calls each asserting a non-zero
-result. All sixteen `%hi` values stay live in their own callee-saved register
-across the calls, which is why that function saves `$s0..$s7` and `$fp`.
+branch target's load uses. close_card_events went from 121 words against 114
+with nothing else differing, to exact; open_card_events, the overlay's second
+largest function at 264 words, then came out zero-differing on the FIRST
+spelling -- eight `OpenEvent` calls inside the `EnterCriticalSection` pair,
+each asserting the handle is not -1, then eight `EnableEvent` calls each
+asserting a non-zero result. All sixteen `%hi` values stay live in their own
+callee-saved register across the calls, which is why that function saves
+`$s0..$s7` and `$fp`.
 
 `town.bin` has 76 assert records against this overlay's 10, including 54 in
 `main.c`; the lever should pay there many times over.
@@ -826,13 +827,14 @@ other four took one or two each, because three levers transfer whole:
 
 Where they differ is instructive about how little of a family is actually
 shared: one's 0x20 case returns, another's falls through, a third jumps into
-the tail past the `func_8002168C`/`func_80021904` pair; the held-key steps are
+the tail past the `func_8002168C`/`print_card_status` pair; the held-key steps
+are
 -2 and -4; one has two flags rather than one.
 
 ### Nine more levers
 
 **9. An unused RETURN VALUE looks like a dead address or copy in `$v0`.**
-(3 functions) func_80023FF0, func_80022D60 and func_800217D4 all end with a
+(3 functions) func_80023FF0, open_card_message and func_800217D4 all end with a
 `lui`/`addiu` pair or an `addu $v0, $sN, $zero` that nothing reads -- in
 func_800217D4's case split across a `beqz`'s delay slot on one exit. Every
 caller ignores the value; as `void` the function is one or two words short.
@@ -916,17 +918,17 @@ block in C at the position it belongs to in the rodata stream, which for
 D_800200A4 is immediately after `INCLUDE_RODATA(D_800200A0)`.
 
 The mirror-image trap is gcc emitting a function's OWN constants there.
-func_80021594's two five-entry function-pointer tables verify clean as local
+poll_card_events's two five-entry function-pointer tables verify clean as local
 array initialisers -- 62 words, 0 differing -- and still break the build,
 because gcc puts a function's constants in `.rodata` right after that
-function and func_80021594 sits *before* this unit's first `INCLUDE_RODATA`
+function and poll_card_events sits *before* this unit's first `INCLUDE_RODATA`
 line, so they land at 0x80020000 and push every later block down. The
 initialiser lever is only available where the function's position in the file
 already puts its constants in the slot they belong to. The shape that works
 there keeps both `INCLUDE_RODATA` blocks and COPIES from the extern --
-`UnkFnTab5 a = D_80020034;` -- which is what the listing was showing all
-along: batched `lw`/`sw` pairs are gcc's block move, not an initialiser being
-materialised.
+`UnkFnTab5 a = gSwCardEventHandlers;` -- which is what the listing was showing
+all along: batched `lw`/`sw` pairs are gcc's block move, not an initialiser
+being materialised.
 
 ### The permuter is for ORDERINGS, and a good base is most of the work
 

@@ -13,7 +13,7 @@ The overlays are -G0, NOT the -G8 the resident executable is built with, and
 that is not a style choice: at -G8 cc1psx records `.extern SYM,4` and the
 access comes out as the assembler-expanded `lui $at` / `%lo` pair, while at -G0
 cc1psx emits its own `%hi`/`%lo` split address into a general register -- the
-hoisted-lui shape the live overlay uses. Measured on func_80020924: -G8 gives
+hoisted-lui shape the live overlay uses. Measured on set_card_slot: -G8 gives
 26 words with two `lui $at`, -G0 gives 25 with `lui $v1`, and the target is 24.
 (The debug twin at 0x80400000 uses the `lui $at` shape throughout, so IT looks
 like a -G8 build of the same source. Do not assume one -G fits both blocks.)
@@ -33,7 +33,7 @@ with a local array initialiser emits that initialiser into the unit's
 .rodata, and if the same bytes are also pulled in by an INCLUDE_RODATA line
 the unit gets them twice -- which happened with D_800200A8 and
 func_800258C8, put 0x10 extra bytes ahead of the text, and moved every
-function from func_800210F0 on by 0x10. Every per-function check here still
+function from on_sw_card_eof on by 0x10. Every per-function check here still
 reported 0 differing; only `make build/main.bin` caught it. So a clean run of
 this tool is a reason to build, not a substitute for building.
 

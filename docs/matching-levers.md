@@ -2314,7 +2314,7 @@ func_80025230 does it -- makes the store part of each arm, so the argument is
 no longer the arm's last insn, and the `p[13]` store takes the slot.
 `jump_optimize`'s second run then merges the three copies back into the tail
 and produces the register, the `j` to the shared block and the
-`sw $v0, -0x10($s0)` in func_80020984's delay slot that the listing shows.
+`sw $v0, -0x10($s0)` in recheck_card_slot's delay slot that the listing shows.
 55 words, 3 DIFF to MATCH.
 
 Measured on the hand-merged spelling, all 55 words: all six permutations of
@@ -2323,7 +2323,7 @@ with the `h` assignment before the call), the argument in a local at block and
 at function scope (both 3 DIFF), `(s32)p - 32` and `(s32)&p[-8]` as the
 argument (both 3 DIFF). One of them is worth keeping as a diagnostic: re-base
 the store on the argument local, `s32 *q = p - 8; q[21] = ...;
-func_80022EEC((s32)q);`. The store then depends on the argument, so the
+msg_overwrite_failed((s32)q);`. The store then depends on the argument, so the
 argument is ready first and the order comes out exactly right -- 55w/1 DIFF,
 the single wrong word being the store's base (`sw $v0, 0x54($a0)` for
 `sw $v0, 0x34($s0)`). A 1-DIFF whose only fault is a base register, reached by
@@ -12024,7 +12024,7 @@ branch TO.** Both guards here carry an identical `addiu $a0, $s2, -0x20`:
     19  2644FFE0  addiu $a0, $s2, -0x20
 
 and the block at `.L80025428` starts with `lui $v0, %hi(...)`, not with the
-`addiu`. That is the fail block's own `func_800230F4((s32)(p - 8))` argument,
+`addiu`. That is the fail block's own `msg_copy_failed((s32)(p - 8))` argument,
 hoisted into every predecessor's slot and deleted from the block -- which
 reorg can only do when *every* predecessor carries it. Read in reverse: an
 identical insn in two slots targeting one label is evidence about the
@@ -12038,7 +12038,7 @@ at 54 words / 50 DIFF. Changing the one argument to `b`: MATCH.
 
 ## CROSS-JUMPING RUNS AFTER sched2 AND BEFORE reorg, AND ONE MATCHING INSN IS ENOUGH -- SO AN EMPTY `__asm__` AT A BLOCK'S END IS A ONE-WORD LEVER
 
-Measured on `func_800210F0` (ovl_main_80020000, 75 words).
+Measured on `on_sw_card_eof` (ovl_main_80020000, 75 words).
 
 The pass order matters and is checkable in the tree at
 `scratch/gcc-src/cdk-gcc-b18/toplev.c`: `schedule_insns` (sched2) at 3117,
@@ -12049,17 +12049,17 @@ come after it. Two consequences:
 
 **You cannot out-schedule a cross-jump.** sched2 has already run, so there is
 no later pass to restore an order that the merge destroyed. In this function
-the `st == 3` body ends `u[0] = 1; D_800287C8 = 0;` and the `st == 1` body ends
-`r = 1; D_800287C8 = 0;`; the two trailing stores are the identical word
+the `st == 3` body ends `u[0] = 1; card_st = 0;` and the `st == 1` body ends
+`r = 1; card_st = 0;`; the two trailing stores are the identical word
 `ACA087C8`, and the st==1 body's `j out` is retargeted onto the st==3 body's
 copy. reorg then fills that jump's slot with the preceding `addiu $s1, 1`
 instead of the store, and the function is 74 words. Reordering the st==1 tail
-to `D_800287C8 = 0; r = 1;` does break the merge -- back to 75 words -- but
+to `card_st = 0; r = 1;` does break the merge -- back to 75 words -- but
 sched2 does not swap the pair back: two leaf stores tie on priority (neither
 has an in-block successor) and the tie breaks to source order, so the slot gets
 `addiu $s1, 1` again and the block comes out `sw; j; addiu` instead of
 `addiu; j; sw`. 75 words, 2 DIFF. That the scheduler *is* running is visible in
-the same block: `addiu $v0, 1` is hoisted above the `D_800287C8` store because
+the same block: `addiu $v0, 1` is hoisted above the `card_st` store because
 it has a successor (`sw $v0, 0($a0)`) and so a longer chain.
 
 **One matching insn is enough.** For an unconditional jump, `jump.c:2188`
@@ -12083,10 +12083,10 @@ Three things about that lever:
   words again. Put it at the end of the st==1 body instead and reorg loses the
   slot, because `stop_search_p` (`reorg.c:708`) stops the backward scan on
   `ASM_INPUT`: 76 words.
-- **`volatile` on the store does not do it.** `*(volatile s32 *)&D_800287C8 = 0`
+- **`volatile` on the store does not do it.** `*(volatile s32 *)&card_st = 0`
   on either store is 74 words / 47 DIFF: `rtx_renumbered_equal_p` compares the
   address and the mode, not `MEM_VOLATILE_P`, so the two patterns still match.
-  Nor do `*(u32 *)&`, `*(s32 *)&` or `*(&D_800287C8)` -- all 74/47.
+  Nor do `*(u32 *)&`, `*(s32 *)&` or `*(&card_st)` -- all 74/47.
 - **A trailing `goto` to the next label is not an insn by then.** Writing
   `goto out;` as the st==3 body's last statement would put a `JUMP_INSN` and a
   `BARRIER` before the label, and `find_cross_jump`'s `i2` loop skips only
@@ -12212,7 +12212,7 @@ is the backward jump and the conditional branch sits before it, so it returns
 reversing. jump2 then merges the branch pair back into the one `bnez`, so the
 emitted loop is identical to the `for`'s -- minus the reversal.
 
-Measured on func_80021EE0 (ovl_main_80020000), 14 words:
+Measured on check_gsw_checksum (ovl_main_80020000), 14 words:
 
 * `while (1)` + `i++;` + `if (i >= 0x177E) break;` -- MATCH.
 * `while (1)` + `if (++i >= 0x177E) break;` -- MATCH.
@@ -12233,7 +12233,7 @@ Measured on func_80021EE0 (ovl_main_80020000), 14 words:
 
 Read in reverse: a listing whose loop walks a pointer AND keeps an upcounting
 `slti` counter is telling you the exit test was not the loop's last insn in
-the source. Its sibling func_80021EB8, which differs only in storing the sum
+the source. Its sibling set_gsw_checksum, which differs only in storing the sum
 instead of comparing it, DOES have the reversed form and is spelled as the
 downcount.
 
@@ -12297,7 +12297,7 @@ once in the fall-through. So in
 the delay slot is naming the join block's first insn. A `lui` there instead of
 the `sll` is this lever and nothing to do with scheduling.
 
-Measured on func_80021DF4 (ovl_main_80020000), 7 of 49 words: the
+Measured on store_save_slot_info (ovl_main_80020000), 7 of 49 words: the
 one-expression store is 7 DIFF in all eleven spellings above, and
 
 ```c
@@ -12473,9 +12473,9 @@ in-block dependents is taken whenever nothing else is hazard-boosted.
 MEASURED on func_800213C4 (ovl_main_80020000, -G0), 2026-11-01: 18 words /
 10 DIFF to 19 / 0, one word and one word only.
 
-The tail was read as `D_800287E0 = 0; D_800287C8 = 1;` on a `void` function,
+The tail was read as `card_evflg = 0; card_st = 1;` on a `void` function,
 and the unit already contains a MATCHED twin of exactly that tail after
-exactly the same call-and-spin -- func_800210F0's `st == 1` block, `lui` in
+exactly the same call-and-spin -- on_sw_card_eof's `st == 1` block, `lui` in
 the loop branch's delay slot, `lui`, `sw $zero`, `addiu $v0, $zero, 3`,
 `sw $v0`. func_800213C4's target does something else: the constant is
 materialised FIRST, in the delay slot, both `lui`s come before either store,
@@ -12488,7 +12488,7 @@ store's own `(const_int 1)`, so the single pseudo holding 1 is tied to `$v0`
 and lives until the `jr`. The store's source therefore cannot be `$v0` and the
 copy is not an artifact of anything -- it is the only way to get the value into
 a second register. Three values are live at the peak (`$v0` = 1, `$v1` =
-`%hi(D_800287E0)`, `$a0` = `%hi(D_800287C8)`), which is also what pushes the
+`%hi(card_evflg)`, `$a0` = `%hi(card_st)`), which is also what pushes the
 second `lui` off `$v1`. And because the constant is now the first insn of the
 block after the loop rather than the fourth, `reorg` takes IT for the loop
 branch's delay slot instead of the first `lui`; the delay-slot fill is a
@@ -12498,7 +12498,7 @@ The whole of the park's measured table is explained by the missing return:
 
 | spelling | words | DIFF |
 |---|---|---|
-| `void`, `D_800287E0 = 0; D_800287C8 = 1;` | 18 | 10 |
+| `void`, `card_evflg = 0; card_st = 1;` | 18 | 10 |
 | `void`, `t = 1;` before the stores, store `t` | 18 | 11 |
 | `void`, `while` for `do/while`; the two stores swapped | 18 | 10-11 |
 | `s32`, `s32 t = 1;` at the top, store `t`, `return t;` | 21 | 19 |
@@ -12764,7 +12764,7 @@ the next best was 3.
 
 ## gcc'S DIVIDE-BY-POWER-OF-TWO COPY SURVIVES ONLY WHEN THE QUOTIENT IS WRITTEN BACK INTO THE DIVIDEND -- cse1's `make_regs_eqv` DECIDES IT, ON THE *LAST* `regno_last_uid` OF THE TWO PSEUDOS
 
-MEASURED on `func_800219B8` (ovl_main_80020000, -G0), 2026-11-01: 18 words /
+MEASURED on `count_free_blocks` (ovl_main_80020000, -G0), 2026-11-01: 18 words /
 18 DIFF to 19 / **0**, landed MATCH. Two separate words, one of which is this
 one.
 
@@ -12860,10 +12860,10 @@ The only way to get the base into a pseudo is to say so in C:
 
 | spelling | words | DIFF |
 |---|---|---|
-| `D_80028570[i][6]` | 18 | 18 |
-| `s32 (*p)[10] = D_80028570;` then `p[i][6]` | **19** | 10 |
-| `s32 *p = &D_80028570[0][0];` then `p[i * 10 + 6]` | **19** | 10 |
-| `s32 *p = D_80028570[0];` then `p[6]; p += 10;` | 18 | 19 |
+| `card_dir[i][6]` | 18 | 18 |
+| `s32 (*p)[10] = card_dir;` then `p[i][6]` | **19** | 10 |
+| `s32 *p = &card_dir[0][0];` then `p[i * 10 + 6]` | **19** | 10 |
+| `s32 *p = card_dir[0];` then `p[6]; p += 10;` | 18 | 19 |
 
 The last row is the useful negative: walking the pointer in the source makes
 `p` the biv itself, loop.c has no giv to initialise, and the base is
@@ -12941,10 +12941,10 @@ problem: it is sunk in the exact match too.
 
 ## A DUPLICATED FAIL BODY IS WHAT PUTS IT IN cse1's PATH -- cse CAN ONLY SHARE A `%hi` WITH A BLOCK IT REACHES, AND IT REACHES ONE ONLY ACROSS A **ONE-USE** LABEL
 
-Measured on `func_80021298` (ovl_main_80020000, 57 words, landed MATCH).
+Measured on `on_card_new` (ovl_main_80020000, 57 words, landed MATCH).
 
 The park was 58 words / 23 DIFF and the whole extra word was one
-`lui %hi(D_800287C8)`. The function reads `D_800287C8` at the top and writes
+`lui %hi(card_st)`. The function reads `card_st` at the top and writes
 it from three different arms; the target has **one** `lui`, in `$s3`, shared by
 all five references. The park's `st == 1` fail block re-materialised its own.
 
@@ -12987,7 +12987,7 @@ target's three words.
 first, and a trailing `goto` is how you stop that.** `jump.c:2188` tries
 `find_cross_jump (insn, JUMP_LABEL (insn), 1, ...)` *before* the `jump_chain`
 loop, and `minimum` is 1 there, so one identical insn is enough. Here the
-`st == 3` arm also ends `D_800287C8 = 0;` and sits immediately before `out:`,
+`st == 3` arm also ends `card_st = 0;` and sits immediately before `out:`,
 so each fail copy's trailing store was stolen into *its* block and each copy
 lost a word to the merge: 58 words / 25 DIFF, two blocks of `j out` with
 `r = 5` in the delay slot. Putting the `default` arm's `r = 5;` in a labelled
@@ -12995,7 +12995,7 @@ block **between** the `st == 3` arm and `out:`
 
     three:
         ...
-        D_800287C8 = 0;
+        card_st = 0;
         goto out;
     def:
         r = 5;
@@ -13022,7 +13022,7 @@ Measurement table, all `ovlverify.py` on this one function, target 57 words:
 | single-fail `goto` chain (the park) | 58 | 23 |
 | duplicated fail bodies, inline (`if`/`else if`/`else`) | 58 | 36 |
 | duplicated fail bodies out of line, no `def:` | 58 | 25 |
-| duplicated, `D_800287C8 = 0;` before `r = 5;` | 57 | 2 |
+| duplicated, `card_st = 0;` before `r = 5;` | 57 | 2 |
 | duplicated, `st == 3` arm's two stores swapped | 57 | 2 |
 | duplicated out of line + trailing `def:` block | **57** | **0** |
 
@@ -13046,7 +13046,7 @@ Two cautions this cost:
 
 ## `;; N regs to allocate:` IN `.greg` IS THE WHOLE ANSWER FOR CALLEE-SAVED REGISTERS -- AND `allocno_compare` IS global.c's, NOT local-alloc's
 
-Measured on `func_80021B98` (ovl_main_80020000, -G0, 45 words), 11 DIFF to
+Measured on `read_card_file` (ovl_main_80020000, -G0, 45 words), 11 DIFF to
 **0**, landed MATCH 2026-11-01.
 
 **Read this before any local-alloc reasoning about an `$s` register.** A value
@@ -13237,7 +13237,7 @@ allocator never saw.
 
 ## THE `lui` TEMP REGISTER TELLS SYMBOL FROM CONSTANT ADDRESS IN A *REGISTER* LOAD -- AND WRITING `p + 4` INLINE IS A LOCAL-ALLOC/GLOBAL-ALLOC LEVER
 
-Measured on `func_80025F0C` (ovl_main_80020000, -G0, 60 words), 30 DIFF to
+Measured on `set_save_title` (ovl_main_80020000, -G0, 60 words), 30 DIFF to
 **0**, landed MATCH 2026-11-01. Three findings; the park named none of them.
 
 ### 1. A word load from a constant address uses the DESTINATION as the `lui` temp

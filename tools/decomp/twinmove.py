@@ -34,7 +34,7 @@ the unit's header.
 
 Usage:
     python3 tools/decomp/twinmove.py func_804008A0              # move (live fn from the pairing)
-    python3 tools/decomp/twinmove.py func_804008A0 func_80020924
+    python3 tools/decomp/twinmove.py func_804008A0 set_card_slot
     python3 tools/decomp/twinmove.py func_804008A0 --dry        # print, do not write
     python3 tools/decomp/twinmove.py func_80402BB8 --patch 'p[0x238]=>p[0x1A7]'
     python3 tools/decomp/twinmove.py func_804038C8 --back       # back out to INCLUDE_ASM

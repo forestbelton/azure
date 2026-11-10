@@ -5,8 +5,8 @@
 
 /* `gsw->check_sum`, the word index of it in the `s32 *` the save-block
    checksum pair takes. The name is the 0x80400000 debug twin's: func_80401F98
-   and func_80401FEC -- func_80021EB8 and func_80021EE0 here -- print it as
-   `printf("%s = %x\n", "(int)gsw->check_sum", ...)` against the word at
+   and func_80401FEC -- set_gsw_checksum and check_gsw_checksum here -- print
+   it as `printf("%s = %x\n", "(int)gsw->check_sum", ...)` against the word at
    gsw+0x204, which is this index. The struct the twin's `->` implies is not
    written yet (and the `(int)` cast says the member is not plainly `int`), so
    until there is a type for it the member can only be named as its index into
@@ -48,9 +48,9 @@ typedef struct
     s32 unk_08;
 } UnkCardPrim12;
 
-/* Four bytes, alignment 1: func_80026128 copies this out of D_80028064 with
-   lwl/lwr + swl/swr, which is what gcc emits for a struct it cannot assume is
-   word-aligned. */
+/* Four bytes, alignment 1: init_save_file_header copies this out of
+   SAVE_FILE_MAGIC with lwl/lwr + swl/swr, which is what gcc emits for a
+   struct it cannot assume is word-aligned. */
 typedef struct
 {
     u8 b0;
@@ -117,7 +117,7 @@ typedef struct
     s32 b;
 } UnkTwoWords;
 
-/* The u16 pair at the front of func_80025FFC's stack copy: the loads are
+/* The u16 pair at the front of set_save_icon's stack copy: the loads are
    `lhu`, not `lh`, so the fields are unsigned. */
 typedef struct
 {
@@ -127,23 +127,23 @@ typedef struct
     u16 h;
 } UnkURect;
 
-/* 0x80 bytes, alignment 1: func_80021DF4 copies a whole D_80083E98 row with
-   gcc's unknown-alignment block move -- the `(src | dst) & 3` test and both a
-   lwl/lwr and a lw loop. Through the s32[][32] type gcc would know both sides
-   are word-aligned and emit only the second. */
+/* 0x80 bytes, alignment 1: store_save_slot_info copies a whole D_80083E98
+   row with gcc's unknown-alignment block move -- the `(src | dst) & 3` test
+   and both a lwl/lwr and a lw loop. Through the s32[][32] type gcc would
+   know both sides are word-aligned and emit only the second. */
 typedef struct
 {
     u8 b[0x80];
 } UnkRow;
 
-/* Five function pointers, 20 bytes: func_80021594 block-copies both
-   D_80020034 and D_80020048 onto its stack and dispatches through the copy.
-   It has to be a struct COPY from the extern, not a local array
-   INITIALISER: gcc emits a function's own constants into .rodata right after
-   that function, and func_80021594 sits BEFORE this unit's first
-   INCLUDE_RODATA line, so an initialiser lands at 0x80020000 and pushes
-   every other rodata block down. (func_800258C8's initialiser works only
-   because that function sits where its constant belongs.) */
+/* Five function pointers, 20 bytes: poll_card_events block-copies both
+   gSwCardEventHandlers and gHwCardEventHandlers onto its stack and dispatches
+   through the copy. It has to be a struct COPY from the extern, not a local
+   array INITIALISER: gcc emits a function's own constants into .rodata right
+   after that function, and poll_card_events sits BEFORE this unit's first
+   INCLUDE_RODATA line, so an initialiser lands at 0x80020000 and pushes every
+   other rodata block down. (func_800258C8's initialiser works only because
+   that function sits where its constant belongs.) */
 typedef struct
 {
     s32 (*f[5])(void);
@@ -208,33 +208,34 @@ UNK_CARD_GROUP(UnkCardGrp0D4, 0xD4, 4);
    countdown family (func_800252A4, func_8002546C, func_80026398,
    func_8002765C). Only the address is taken, so the signature here does not
    affect the generated code; it is written `(void)` rather than guessed. */
-void func_80020984(void);
-void func_80020A80(void);
-void func_80020EA0(void);
-void func_80020F18(void);
-s32 func_800210F0(void);
-s32 func_80021298(void);
+void recheck_card_slot(void);
+void open_card_events(void);
+void start_card_server(void);
+void close_card_events(void);
+s32 on_sw_card_eof(void);
+s32 on_card_new(void);
 s32 func_800213C4(s32 arg0);
 void reset_sw_events(void);
 
-/* No arguments: func_80020A0C calls it with no $a0 set up at all, and its own
-   listing never reads $a0 (it works off D_80028550 and up). func_80020924's
+/* No arguments: reset_card_server calls it with no $a0 set up at all, and
+   its own listing never reads $a0 (it works off D_80028550 and up).
+   set_card_slot's
    call looks like it passes arg0 only because $a0 still holds the incoming
    parameter there; both spellings compile identically in that caller, and
-   this one is what func_80020A0C requires. See the CALLEE ARITY caution in
+   this one is what reset_card_server requires. See the CALLEE ARITY caution in
    docs/matching-levers.md. */
 void func_800214A4(void);
 
 void reset_hw_events(void);
 void func_80021538(void);
 s32 func_8002168C(void);
-s32 func_8002191C(void);
-s32 func_80021B98(u8 *name, u8 *buf, s32 n, s32 off);
-s32 func_80021D54(s32 n);
-s32 func_80021F18(s32 a, u8 *b);
-s32 func_80021FF0(s32 a, u8 *b, s32 c);
-void func_800220DC(void);
-s32 func_8002219C(s32 idx);
+s32 count_card_files(void);
+s32 read_card_file(u8 *name, u8 *buf, s32 n, s32 off);
+s32 load_save_slot_info(s32 n);
+s32 write_save_file(s32 a, u8 *b);
+s32 read_save_file(s32 a, u8 *b, s32 c);
+void refresh_card_info(void);
+s32 erase_save_file(s32 idx);
 void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z);
 void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z);
 void func_80022488(s32 *p);
@@ -244,13 +245,13 @@ void func_80022934(s32 *p);
 u8 *func_80022A30(u8 *p, s32 *q);
 void func_80022BE8(UnkStrSet *p);
 
-/* card_mes.c's message entry point. The 20 wrappers at func_80022E74..
-   func_8002316C are one per message id 0..19, each passing a fixed id and
+/* card_mes.c's message entry point. The 20 wrappers at msg_format_confirm..
+   msg_delete_failed are one per message id 0..19, each passing a fixed id and
    kind and either a caller-supplied parameter or 0. Decoded mechanically
    from which argument register each wrapper sets; the register copies
    (`addu $a2, $a1, $zero` where the kind equals the id, `addu $a3, $a2,
    $zero` where both are 0) are gcc reusing an equal value, not source. */
-s32 func_80022D60(s32 a, s32 id, s32 kind, s32 p);
+s32 open_card_message(s32 a, s32 id, s32 kind, s32 p);
 
 s32 func_800231E4(s32 flag);
 void func_80023258(s32 *p);
@@ -301,8 +302,8 @@ void func_80025B9C(s32 *p);
 s32 *func_80025C7C(s32 *p, s32 a);
 void func_80025D34(s32 *p);
 void func_80025DC8(s32 *p);
-void func_80025F0C(u8 *p, s32 n);
-void func_80025FFC(s32 *p, s32 v);
+void set_save_title(u8 *p, s32 n);
+void set_save_icon(s32 *p, s32 v);
 void func_800262BC(s32 *p);
 void func_80026410(s32 *p);
 void func_8002651C(s32 *p);
@@ -369,14 +370,14 @@ void func_800A68F4(void);
 /* Variables */
 extern const char ASSERT_FMT[40];
 extern const char FILENAME_C_SERVER[];
-extern const UnkFnTab5 D_80020034;
-extern const UnkFnTab5 D_80020048;
+extern const UnkFnTab5 gSwCardEventHandlers;
+extern const UnkFnTab5 gHwCardEventHandlers;
 extern const char MEM_CARD1[8];
 extern const char MEM_CARD0[8];
 extern const char D_80020084[];
 extern const u8 D_800200A0[4];
 extern const u8 D_800200A4[];
-extern const RECT D_800200B8;
+extern const RECT SAVE_ICON_VRAM_RECT;
 
 /* The overlay's own data, 0x80027E20..0x8002BB6C, past its text end. These
    are NOT externs into a splat blob any more -- csrc/ovl_main_80020000.c
@@ -386,13 +387,13 @@ extern const RECT D_800200B8;
    the lui/addiu pair rather than folding a %lo into the access. A sized
    declaration against a differently sized definition is a hard
    `conflicting types` error, which is one more gate for free -- it is what
-   caught D_80028570 being 15 rows and not 10. */
+   caught card_dir being 15 rows and not 10. */
 
 /* The 1-frame animation script, spelled as what it is now that this unit
    defines it; func_8004CBFC's parameter is a `u8 *`, hence the casts at the
    three call sites. */
 extern UnkAnimStep D_80027E68[2];
-extern u8 D_80027E78[][0x20];
+extern u8 SAVE_ICON_CLUTS[][0x20];
 extern const char *MEM_CARD_NAMES[2];
 extern char MEM_CARD_PREFIX[16];
 extern const char *MEM_CARD_FILENAMES[6];
@@ -406,7 +407,7 @@ extern u8 *D_80027FD4[];
 extern u8 D_80027FF8[];
 extern s16 D_80028010[];
 extern u8 D_80028020[];
-extern u8 D_80028064[];
+extern u8 SAVE_FILE_MAGIC[];
 extern u8 D_80028068[][2];
 extern s32 D_8002806C[];
 extern u8 *D_80028074[];
@@ -415,7 +416,7 @@ extern u8 D_80028084[];
 extern u8 D_8002808C[];
 extern u8 D_80028094[];
 extern void (*D_8002809C[6])(s32 *);
-extern UnkStrSet D_800280B4[];
+extern UnkStrSet gCardMessages[];
 extern u8 *D_80028294[4];
 extern u8 *D_800282A4[];
 extern u8 D_800282B0[];
@@ -436,45 +437,35 @@ extern s32 D_80028538[2];
 extern s32 D_80028540[2];
 extern s32 D_80028548[2];
 
-#define gSwCardEOFEvent D_80028550
 extern long gSwCardEOFEvent;
 
-#define gSwCardErrorEvent D_80028554
 extern long gSwCardErrorEvent;
 
-#define gSwCardTimeoutEvent D_80028558
 extern long gSwCardTimeoutEvent;
 
-#define gSwCardNewEvent D_8002855C
 extern long gSwCardNewEvent;
 
-#define gHwCardEOFEvent D_80028560
 extern long gHwCardEOFEvent;
 
-#define gHwCardErrorEvent D_80028564
 extern long gHwCardErrorEvent;
 
-#define gHwCardTimeoutEvent D_80028568
 extern long gHwCardTimeoutEvent;
 
-#define gHwCardNewEvent D_8002856C
 extern long gHwCardNewEvent;
 
-/* 15 rows, not 10: the object runs 0x258 bytes to D_800287C8 and
-   func_8002191C/func_80021A04 walk it 0x28 bytes at a time, which is
+/* 15 rows, not 10: the object runs 0x258 bytes to card_st and
+   count_card_files/card_file_exists walk it 0x28 bytes at a time, which is
    sizeof(struct DIRENTRY) exactly. */
-extern struct DIRENTRY D_80028570[15];
+extern struct DIRENTRY card_dir[15];
 
-extern s32 D_800287C8;
+extern s32 card_st;
 
-#define card_slot D_800287CC
 extern s32 card_slot;
 
 extern s32 D_800287D0[2];
 extern s32 D_800287D8[2];
-extern s32 D_800287E0;
+extern s32 card_evflg;
 
-#define gCardState D_800287E4
 extern CARD_STATE gCardState;
 
 extern u8 D_800287E8[];
@@ -537,7 +528,7 @@ extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 
 extern s32 D_80083200;
 
-/* 128 bytes per entry; func_80021D38's `sll $a0, $a0, 7` is the stride and
+/* 128 bytes per entry; save_slot_used's `sll $a0, $a0, 7` is the stride and
    the 2D array spelling is what produces the lui/addiu pair plus the shift,
    where a scalar would fold differently. The element type is a guess that
    only has to make offset 0 a word. */
@@ -545,7 +536,11 @@ extern s32 D_80083E98[][32];
 extern UnkSaveRow D_80083E98_s[] __asm__("D_80083E98");
 extern s32 D_80083EA4[][32];
 extern s32 D_80084118;
-extern s32 D_80084120[];
-extern s32 D_80084128[];
+/* These two are the resident bss at 0x80084120/0x80084128, which this unit
+   does not own -- the names come from splat/main.bin_undefined_syms_auto.txt
+   and the linker script, so they are renamed through an `__asm__` alias
+   rather than at the definition, as with D_80083E98_s above. */
+extern s32 card_free_blocks[] __asm__("D_80084120");
+extern s32 card_file_count[] __asm__("D_80084128");
 
 #endif

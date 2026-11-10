@@ -367,9 +367,9 @@ subsegment -- `0x25d000..0x25d0c0`, so 192.
 > in an initialiser.
 
 splat sizes a rodata object from where the next *referenced* symbol starts, so
-one `dlabel` routinely covers several unrelated things. `D_800200B8` was the
-worst case in this overlay: a single 0x86C-byte object spanning
-`0x800200B8..0x80020924`, because `func_80025FFC` held its only reference. It
+one `dlabel` routinely covers several unrelated things. `SAVE_ICON_VRAM_RECT`
+was the worst case in this overlay: a single 0x86C-byte object spanning
+`0x800200B8..0x80020924`, because `set_save_icon` held its only reference. It
 is really an 8-byte GPU `RECT` followed by 0x864 bytes of Shift-JIS UI
 messages.
 
@@ -377,19 +377,19 @@ messages.
 `symbol_addrs_path` there from the start; the file need not have existed):
 
 ```
-D_800200B8 = 0x800200B8; // size:0x8
+SAVE_ICON_VRAM_RECT = 0x800200B8; // size:0x8
 D_800200C0 = 0x800200C0;
 ```
 
 The `size` is what makes spimdisasm end the first object. Then the RECT is an
 ordinary §4.5 landing -- and its type is *witnessed*, not guessed, because the
-use site reads `*(RECT *)D_800200B8` and walks it across three `StoreImage`
-calls, so the cast can go away:
+use site reads `*(RECT *)SAVE_ICON_VRAM_RECT` and walks it across three
+`StoreImage` calls, so the cast can go away:
 
 ```c
-const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};   /* in the C unit  */
+const RECT SAVE_ICON_VRAM_RECT = {0x380, 0x100, 4, 0x10};  /* in the C unit */
 ...
-    r = D_800200B8;                                 /* was *(RECT *)D_800200B8 */
+    r = SAVE_ICON_VRAM_RECT;                 /* was *(RECT *)SAVE_ICON_VRAM_RECT */
 ```
 
 **Now the trap, and it is silent.** Rodata migration only emits a symbol it
@@ -527,9 +527,9 @@ Three things it costs:
   All 59 messages stay literals. §4.8 is what the bytes turn out to be.
 * **Position is now implicit.** The pool lands where the tables are, so the
   tables have to come after every other `.rodata` contribution in the file.
-  They do, because the data block is at the foot and `const RECT D_800200B8`
-  is the last const above it. If you reorder that block, `.rodata` reorders
-  with it.
+They do, because the data block is at the foot and `const RECT
+SAVE_ICON_VRAM_RECT` is the last const above it. If you reorder that block,
+`.rodata` reorders with it.
 
 The gate is §5's, plus the `.rodata` size: `size -A` must say `.rodata 2340`
 against the subsegment span `0x25d924 - 0x25d000`, and `_25D000_TEXT_START`
@@ -694,7 +694,7 @@ All four must come out byte-identical.
   table that points into it needs the cast back -- `(char *)D_80020074 + 8` --
   or you get `initialization discards 'const' from pointer target type` at
   every entry. It still builds; the alternative is making the `char **` use
-  site in `func_80021A84` const-correct, which is more churn than the cast.
+  site in `format_card` const-correct, which is more churn than the cast.
 
   **Check the section, not just the bytes:**
 
@@ -862,7 +862,7 @@ in the C file; see the `.bss` bullet in §6.
 
 Worth knowing before touching it, because most of it is readable now:
 
-* **A message table.** `D_800280B4` is 20 x `UnkStrSet`: five Shift-JIS line
+* **A message table.** `gCardMessages` is 20 x `UnkStrSet`: five Shift-JIS line
   pointers plus four bytes. Its 121 pointer words, and those of the seven
   smaller tables, are **string literals** -- see §4.7. That is what retired
   `asrc/ovl_main_80020000_rodata_pool.s` and the `hrodata` subsegment, and it
@@ -880,7 +880,7 @@ Worth knowing before touching it, because most of it is readable now:
   and tables point at. Nothing
   in the overlay reads one -- each is stored by address into a primitive field
   and consumed outside -- so they stay `u8[]`.
-* **Five 16-entry CLUTs** at `D_80027E78`, `0x20` bytes each.
+* **Five 16-entry CLUTs** at `SAVE_ICON_CLUTS`, `0x20` bytes each.
 * **Six `func_800491F4` index lists**, each a byte list terminated by the
   first byte that is not less than the count the call passes.
 * **A function-pointer table**, `D_8002809C`, six entries, four of them this
@@ -894,7 +894,7 @@ Worth knowing before touching it, because most of it is readable now:
 Three objects were merged away because splat's symbol list oversplits them, each
 measured byte-identical on 2026-11-09:
 
-* `D_80028294[3]` + `D_800282A0` -> `D_80028294[4]`. `func_80025F0C` already
+* `D_80028294[3]` + `D_800282A0` -> `D_80028294[4]`. `set_save_title` already
   indexed past the three-entry bound to reach the fourth, and
   `%lo(D_80028294 + 12)` *is* `%lo(D_800282A0)`.
 * `D_80027FF8` + `D_80028000` -> one 0x18-byte list. `0x80028000` only had a

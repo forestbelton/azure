@@ -94,8 +94,8 @@
  *                   copy (`addu $a2, $a1, $zero` where the kind equals the
  *                   id, `move $a3, $a2` where both are 0); this block
  *                   re-materialises the constant (`addiu $a2, $zero, 0x2`).
- *                   The SOURCE IS THE SAME -- func_80022EC4 is
- *                   `func_80022D60(a, 2, 2, p)` and this block's
+ *                   The SOURCE IS THE SAME -- msg_please_wait is
+ *                   `open_card_message(a, 2, 2, p)` and this block's
  *                   func_8040311C sets $a1 and $a2 from two separate
  *                   `addiu`s -- so cse chose differently. Tried and did not
  *                   move it: a `void *` fourth parameter, an unprototyped
@@ -124,7 +124,7 @@
  *                   live source lost the body entirely.
  */
 
-/* The twin of func_80020924, and the pair that measures the -G difference:
+/* The twin of set_card_slot, and the pair that measures the -G difference:
  * 24 words at -G0 in the live block, 26 here at -G8, where a global access
  * comes out as the assembler-expanded `lui $at` + `%lo` pair instead of the
  * hoisted-lui split. Same body as the live one, including the pointer local,
@@ -201,7 +201,7 @@ long func_804009FC(void)
 }
 
 /* PARK: 265 words, and the only one of the 86+2 moved so far that is not a
- * mechanical move. The body is right -- the live counterpart func_80020A80
+ * mechanical move. The body is right -- the live counterpart open_card_events
  * renamed, with this block's 16 assert line numbers (180..221, -5 from the
  * live source's) -- and comes out 256 words, nine short. The nine are branch
  * delay slots, and the mechanism is NOT the one func_80400EF8 below needs:
@@ -225,7 +225,7 @@ long func_804009FC(void)
  * (which is what func_80400EF8 wants) overshoots by exactly those seven.
  *
  * Worth knowing before picking this up: docs/overlays.md records that the LIVE
- * func_80020A80 keeps all sixteen %hi values live in callee-saved registers,
+ * open_card_events keeps all sixteen %hi values live in callee-saved registers,
  * which is why it saves $s0..$s7 and $fp. This one saves only $s0, so its
  * register allocation is genuinely different, not just its scheduling. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
@@ -233,7 +233,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
 /* The `card_first_flg` site. This opens with
    `printf("%s = %d\n", "card_first_flg", D_8013BB6C)` and then tests and sets
    that same word, so D_8013BB6C is this link's `card_first_flg` and the live
-   func_80020EA0's D_80084130 is the retail link's -- which is why that one is
+   start_card_server's D_80084130 is the retail link's -- which is why that one is
    now spelled `card_first_flg[0]` (include/structs.h). Nothing else in either
    block names a global. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400E34);
@@ -441,7 +441,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401AA4);
 
 /* A `cnt` site: the $s1 the VSync poll loop increments is printed as
    `printf("%s = %d\n", "cnt", cnt)` once the loop ends, so name it `cnt` when
-   this lands. `cnt` is TWIN-ONLY -- the live func_80021A84 has no counter at
+   this lands. `cnt` is TWIN-ONLY -- the live format_card has no counter at
    all, because the print was its only use -- so there is nothing to rename in
    the live unit. Same story in func_804022C8. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401B30);
@@ -460,11 +460,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401ED4);
 
 /* Prints `(int)gsw->check_sum` after storing it, so the parameter is `gsw` and
    the word at +0x204 is its `check_sum` member -- GSW_CHECK_SUM in csrc/main.h,
-   now used by the live func_80021EB8/func_80021EE0. */
+   now used by the live set_gsw_checksum/check_gsw_checksum. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401F98);
 
 /* Prints both halves of the comparison: `c` (the xor accumulator) and then
-   `(int)gsw->check_sum`. The live func_80021EE0's accumulator is now `c`. */
+   `(int)gsw->check_sum`. The live check_gsw_checksum's accumulator is now `c`. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401FEC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402084);
@@ -477,7 +477,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402268);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402290);
 
-/* The other `cnt` site; see func_80401B30. The live func_8002219C has no
+/* The other `cnt` site; see func_80401B30. The live erase_save_file has no
    counter either. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804022C8);
 

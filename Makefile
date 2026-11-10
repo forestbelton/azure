@@ -153,7 +153,7 @@ MASPSXFLAGS_DEFAULT := $(MASPSXFLAGS)
 # dungeon's live at 0x80088760+, all far outside $gp's +/-32K window around
 # 0x80080994, so psylink would have rejected a GPREL16 there.
 #
-# What -G actually changes, measured on func_80020924 (24 words): at -G8
+# What -G actually changes, measured on set_card_slot (24 words): at -G8
 # cc1psx records `.extern SYM,4` and a global access comes out as the
 # assembler-expanded `lui $at` + `%lo` pair, giving 26 words; at -G0 cc1psx
 # emits its own `%hi`/`%lo` split address into a general register -- the
@@ -161,7 +161,7 @@ MASPSXFLAGS_DEFAULT := $(MASPSXFLAGS)
 # small-data decisions of its own on a unit that has no small data.
 #
 # Worth knowing: main.bin's DEBUG TWIN at 0x80400000 is the SAME SOURCE built
-# at -G8. One C source reproduces both blocks byte-for-byte (func_80020924 at
+# at -G8. One C source reproduces both blocks byte-for-byte (set_card_slot at
 # -G0 and its twin func_804008A0 at -G8, 0 differing words each), which gives
 # every function in this overlay two independent targets. See
 # docs/overlays.md.
@@ -183,7 +183,7 @@ build/csrc/ovl_%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 # difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global
 # access comes out as the assembler-expanded `lui $at` + `%lo` pair, which is
 # what this block uses, against the hoisted-lui split the live block uses at
-# -G0. func_80020924/func_804008A0 is the pair that shows it: 24 words at -G0,
+# -G0. set_card_slot/func_804008A0 is the pair that shows it: 24 words at -G0,
 # 26 at -G8, and the 26 match this block instruction for instruction.
 #
 # An exact target name beats the `ovl_%` pattern above in GNU make, which is
