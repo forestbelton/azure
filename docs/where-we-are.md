@@ -610,6 +610,14 @@ size, the `-G` value, the struct layout, the flags.
    disagreement (`s32 *` against `u32 *`).
 5. `tools/lib2ar.sh` references a path under `$HOME/scratch` and does
    `basename $1 .LIB` against a lowercase `.lib`.
+6. **The node payload thread**, legibility rather than matching:
+   `UnkNode` is a 0x20 header and now ends with `u8 payload[0]`, so
+   `(u8 *)n + 0x20` can be `n->payload` and `p[-4]` can be
+   `((UnkNode *)p - 1)->unk_10`. Eight sites landed in `faa8e5f`, all free;
+   142 are left, 108 of them in `ovl_town.c`, and the work is establishing
+   each base as a node rather than measuring. **`docs/node-payload.md`** has
+   the loop, the one query that counts the sites correctly, and the two
+   traps.
 
 ## Running agents on this
 
