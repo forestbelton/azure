@@ -130,8 +130,13 @@ segments:
     start: 0x25d000
     vram: 0x80020000
     subsegments:
-      - [0x25d000, .rodata, ovl_main_80020000]
-      - [0x25d924, c, ovl_main_80020000]
+      # c_server.c, the first of the nine units, carved out 2026-11-10: its
+      # text is indices 0..61 (set_card_slot..erase_tmp_file) and its rodata
+      # is 0x80020000..0x800200A0. It owns no data -- see the file's header.
+      - [0x25d000, .rodata, main/c_server]
+      - [0x25d0a0, .rodata, ovl_main_80020000]
+      - [0x25d924, c, main/c_server]
+      - [0x25f25c, c, ovl_main_80020000]
       - [0x264e20, .data, ovl_main_80020000]
       - [0x268b6c, data, ovl_main_80020000_pad]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass

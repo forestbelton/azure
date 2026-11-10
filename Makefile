@@ -178,6 +178,17 @@ MASPSXFLAGS_DEFAULT := $(MASPSXFLAGS)
 build/csrc/ovl_%.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/ovl_%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
+# csrc/main/ holds the 0x80020000 overlay's own translation units as they are
+# carved out of csrc/ovl_main_80020000.c, and they do NOT match the `ovl_%`
+# pattern above, so they need their own. This is the trap the comment above
+# describes, one directory over: without these two lines csrc/main/c_server.c
+# would silently build at the resident -G8 and the container would come out
+# the wrong length.
+# `-Icsrc` is for `#include "main.h"`: a quoted include resolves against the
+# INCLUDING file's directory first, which is csrc/main/ here, not csrc/.
+build/csrc/main/%.o: CFLAGS := $(CFLAGS_G0) -Icsrc
+build/csrc/main/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # THE ONE OVERLAY UNIT THAT IS -G8: main.bin's debug twin at 0x80400000. It is
 # the same source as the live overlay built the other way, and -G is the whole
 # difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global

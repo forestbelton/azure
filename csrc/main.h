@@ -267,6 +267,8 @@ void func_800214A4(void);
 void reset_hw_events(void);
 void func_80021538(void);
 s32 func_8002168C(void);
+/* In csrc/main/c_server.c; func_8002789C reads the pair it returns. */
+s32 *func_800217D4(void);
 s32 count_card_files(void);
 s32 read_card_file(u8 *name, u8 *buf, s32 n, s32 off);
 s32 load_save_slot_info(s32 n);
@@ -413,6 +415,15 @@ extern const UnkFnTab5 gHwCardEventHandlers;
 extern const char MEM_CARD1[8];
 extern const char MEM_CARD0[8];
 extern const char D_80020084[];
+/* The six save-file name strings. They live in csrc/main/c_server.c with the
+   rest of that unit's rodata, while MEM_CARD_FILENAMES, which points at them,
+   is one of the data objects still in csrc/ovl_main_80020000.c. */
+extern const char D_80020088[];
+extern const char D_8002008C[];
+extern const char D_80020090[];
+extern const char D_80020094[];
+extern const char D_80020098[];
+extern const char D_8002009C[];
 extern const u8 D_800200A0[4];
 extern const u8 D_800200A4[];
 extern const RECT SAVE_ICON_VRAM_RECT;
