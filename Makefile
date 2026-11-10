@@ -201,6 +201,10 @@ ASFLAGS_C += -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1
 SPLATFILES := $(shell find splat -type f -name '*.yaml')
 
 BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
+
+STRFILES := $(shell find asrc/str -type f -name '*.txt')
+STRSFILES := $(STRFILES:%.txt=%.s)
+
 # asm/nonmatchings/ holds per-function assembly that C files pull in via
 # INCLUDE_ASM. Those files have no macro.inc of their own, so they must not be
 # assembled standalone.
@@ -209,12 +213,11 @@ BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
 # csrc/ is C we maintain. splat's `hrodata` subsegment type (splat/ext/
 # hrodata.py) seeds a file there once and then never rewrites it, and `clean`
 # does not delete the tree the way it deletes asm/. Same glob, same
-# `build/%.o: %.s` rule below -- so `azure shiftjis` runs over these files too
-# and `.shiftjis "..."` is available in them. The directory does not exist in a
+# `build/%.o: %.s` rule below. The directory does not exist in a
 # fresh checkout until the first such subsegment is split, which is what the
 # pre-existing 2>/dev/null covers.
 SFILES := $(shell find asm asrc -type f -name '*.s' \
-            -not -path 'asm/nonmatchings/*' 2>/dev/null)
+            -not -path 'asm/nonmatchings/*' 2>/dev/null) $(STRSFILES)
 CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
           $(CFILES:%.c=build/%.o)
@@ -310,7 +313,7 @@ build/$(DUNGEON): $(OFILES)
 
 build/%.o: %.s
 	@mkdir -p $(shell dirname $@)
-	$(AZURE) shiftjis $< | $(AS) $(ASFLAGS) -o $@
+	$(AS) $(ASFLAGS) -o $@ $<
 
 # C goes compiler -S -> maspsx -> GNU as, so that aspsx's quirks are
 # reproduced while still using modern binutils for the actual assembly.
@@ -322,6 +325,9 @@ build/%.o: %.c
 build/%.o: %.bin
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) --relocatable --format=binary -o $@ $<
+
+asrc/str/%.s: asrc/str/%.txt
+	python tools/shiftjis_to_asm.py $< -o $@
 
 # Report where the build diverges from the original, and which subsegment
 # owns that offset. A whole-file checksum cannot tell you that.
@@ -352,7 +358,7 @@ clean:
 # asm/nonmatchings is cleared first: splat only adds files, so shrinking or
 # re-carving a `c` subsegment otherwise leaves per-function asm behind in the
 # old unit's directory, and the same function ends up owned by two units.
-splat: $(SPLATFILES)
+splat: $(SPLATFILES) $(STRSFILES)
 	rm -rf asm/nonmatchings
 	@for SPLATFILE in $(SPLATFILES); do \
 		echo "=== $$SPLATFILE === "; \

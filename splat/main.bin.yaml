@@ -41,7 +41,7 @@ segments:
   - [0x20000, bin, kewne_loading_img]
   - start: 0x20800
     type: hrodata
-    name: monsters
+    name: str/monsters
     # NB: `vram: 0x20800` is just the ROM offset, not its actual load address
     vram: 0x20800
   # Pointer and index tables, then 11 KB of unidentified fixed-size records,

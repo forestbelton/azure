@@ -31,19 +31,21 @@ Three things make the file ours, and all three have to hold:
    the dotted `.rodata` route, which extracts nothing and so knows the range
    only through whatever references reach into it.
 3. **`make` sees it.** `SFILES` in the Makefile globs `asrc` alongside `asm`,
-   and the existing `build/%.o: %.s` rule does the rest. That rule pipes the
-   file through `azure shiftjis` before the assembler, so `.shiftjis "Ｂｅｌｄｏ"`
-   works here exactly as it does in the files `splat/ext/shiftjis.py` writes,
-   and it assembles at `-G0` with `-Iinclude`, so `macro.inc` resolves and
-   nothing can wander into small data.
+   and the existing `build/%.o: %.s` rule does the rest, assembling at `-G0`
+   with `-Iinclude` so `macro.inc` resolves and nothing can wander into small
+   data.
 
-   One constraint on that filter, and it is the first thing anyone rewriting a
-   seeded `.word` blob trips over: `SHIFTJIS_DIRECTIVE_PATTERN` in
-   `src/azure/commands/shiftjis.py` anchors to the start and end of the line,
-   so a `.shiftjis` directive must sit ALONE on its line. Keep the seed's
-   `/* offset */` note on the line above, not in front of the directive, or
-   the filter passes the line through and GNU as reports
-   `unknown pseudo-op: .shiftjis`.
+   For a pool of text, do not keep the seeded `.word` blob and do not hand-write
+   the assembly either. Name the subsegment `str/<name>`, so this class writes
+   `asrc/str/<name>.s`, and put the strings in `asrc/str/<name>.txt`: the
+   `asrc/str/%.s: asrc/str/%.txt` rule regenerates the `.s` from it with
+   `tools/shiftjis_to_asm.py`, whose docstring has the entry forms. The `.s` is
+   gitignored, the `.txt` is the source of truth, and `make splat` depends on
+   the generated files so they exist before a split looks for them.
+
+   Note what that means for `check_provenance` below: it reads the GENERATED
+   file, so the `Covers rom` line has to be a comment in the `.txt`, which the
+   generator passes through.
 
 Default location is `asrc/`, a sibling of `csrc/`. splat's own `hasm`
 convention would be `src_path` (here `csrc/`), and `hasm_in_src_path` is how it

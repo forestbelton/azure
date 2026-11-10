@@ -49,7 +49,7 @@ segments:
   #   - merging 0x800, 0xE30 and 0xE7C into one segment of four subsegments
   #     (one `rodata` plus three `.rodata` naming three DIFFERENT C units)
   #     builds byte-identical;
-  #   - the name table's `.rodata` at 0x541D0 (asrc/names.s) sits between
+  #   - the name table's `.rodata` at 0x541D0 (asrc/str/names.txt) sits between
   #     `data` subsegments at 0x3E01C and 0x5426C, in the same segment, and
   #     holds a `.word` that used to be a `data` subsegment of its own.
   # What IS grouped is the non-primary sections of `asm`/`c` subsegments:
@@ -132,14 +132,14 @@ segments:
     align: 4
     subsegments:
       - [0x2164, .rodata, unk_24FCC]
-  # The staff-credits roll, as one hand-owned listing: asrc/credits.s, placed
+  # The staff-credits roll, as one hand-owned pool: asrc/str/credits.txt, placed
   # by the `hrodata` subsegment type. 53 strings, the whole of this segment,
   # replacing 53 one-per-string `shiftjis` subsegments that `azure findstr`
   # generated.
   #
   # Every one of the 53 starts 4-aligned and carries exactly `4 - (len % 4)`
   # trailing zeros -- the same 160 bytes of inter-string padding the previous
-  # comment counted, now emitted by `.shiftjisz` in the listing rather than
+  # comment counted, now emitted by the generator rather than
   # absorbed by 53 subsegments. Nothing needs a `bin` filler, which is just as
   # well: a `bin` is `.data` and would be emitted ahead of this segment's whole
   # `.rodata` group.
@@ -148,7 +148,7 @@ segments:
   # a way it did not for the item pool. `hrodata` scans its range, so splat
   # knows a symbol lives at each address game_data's credits table points to and
   # writes those words as symbol references; the symbol_addrs entries make them
-  # the names asrc/credits.s defines, so the table reads as
+  # the names asrc/str/credits.txt defines, so the table reads as
   # `.word STR_CREDITS_*` instead of resolving to invented D_ names that nothing
   # would define.
   - type: code
@@ -156,7 +156,7 @@ segments:
     vram: 0x8002E984
     align: 4
     subsegments:
-      - [0x2184, hrodata, credits]
+      - [0x2184, hrodata, str/credits]
   # The run at 0x8002EFDC, supplied by TWO objects: jtbl_8002EFDC is
   # func_80052144's, in unk_25944, and jtbl_8002EFF0 is func_80052CE0's, in
   # unk_264E0. Two contiguous `.rodata` subsegments in two adjacent segments,
@@ -175,7 +175,7 @@ segments:
     subsegments:
       - [0x27f0, .rodata, unk_264E0]
   # The item/spell description-and-name pool, ALL of it, as one hand-owned
-  # assembly listing: asrc/items.s, placed by the `hrodata` subsegment type
+  # text pool: asrc/str/items.txt, placed by the `hrodata` subsegment type
   # (splat/ext/hrodata.py), which seeds such a file once and then never
   # rewrites it.
   #
@@ -192,7 +192,7 @@ segments:
   # splitting string-by-string makes splat align every entry, and a string that
   # does not happen to start on the grid gets padded and shifts everything
   # after it. One subsegment is one literal `.rodata` run, so the question
-  # never arises -- and `.shiftjisz` in the listing emits each string's NUL plus
+  # never arises -- and the generator emits each string's NUL plus
   # its 1-4 bytes of padding, so the file carries no `.fill` and no counting.
   #
   # The comment this replaces said five of the tail's strings -- 0x57FA,
@@ -209,10 +209,10 @@ segments:
     vram: 0x8002F010
     align: 4
     subsegments:
-      - [0x2810, hrodata, items]
+      - [0x2810, hrodata, str/items]
       # The last 8 bytes of what used to be `str_item_tail` are not text and
       # have nothing to do with the pool, so they are their own subsegment
-      # rather than a byte block at the bottom of asrc/items.s: `s16
+      # rather than a byte block at the bottom of asrc/str/items.txt: `s16
       # {1, 2, 3, 0}`, which func_80054104 memcpys into a local `s16 t[4]` and
       # then reads the first three entries of. Two more C units declare it.
       # splat names it D_80032E0C on its own, from the references.
@@ -700,7 +700,7 @@ segments:
       # Back to the game: the $gp anchor region. _gp = 0x80080994 is file
       # 0x54194, the first word of this piece.
       - [0x54194, data, game_gp]
-      # The whole name table as one hand-owned listing: asrc/names.s, placed by
+      # The whole name table as one hand-owned pool: asrc/str/names.txt, placed by
       # the `hrodata` subsegment type. Nineteen names over 0x541D0-0x5426C,
       # replacing six one-per-string `shiftjis` subsegments and the `data` one
       # that held the pointer between them.
@@ -712,9 +712,9 @@ segments:
       # into a `.rodata` run, which the ld script emitted in declared order
       # (see the long note at the top of this file); in the listing it is simply
       # a `.word` in .rodata, and the bytes do not care which section they were
-      # declared from. csrc/unk_72A8.c names it D_80080A50 and asrc/names.s
+      # declared from. csrc/unk_72A8.c names it D_80080A50 and asrc/str/names.txt
       # defines it, so the symbol survives the move.
-      - [0x541d0, hrodata, names]
+      - [0x541d0, hrodata, str/names]
       # Small data above _gp: .sdata and .sbss, then zero fill. NOT the
       # game's alone, which is why this is `gp_data` and not `game_gp_data`
       # -- libapi/PATCH's 16-byte .sbss is in here, and PATCH both loads from

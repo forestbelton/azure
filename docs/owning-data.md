@@ -409,39 +409,48 @@ subsegment of its own, which is disassembled unconditionally. Here it earns
 ```
 
 `hrodata` (`splat/ext/hrodata.py`) seeds the file into `asrc/` **once** and
-never rewrites it, so it can be turned into something readable. `SFILES` globs
-`asrc/` alongside `asm/` and the `build/%.o: %.s` rule pipes every asm source
-through `azure shiftjis`, so `.shiftjisz "..."` expands there:
+never rewrites it, so it can be turned into something readable. Since
+2026-11-09 the readable form is not assembly at all: the pool lives in
+`asrc/str/<name>.txt`, one entry per line, and `tools/shiftjis_to_asm.py`
+generates the `.s` beside it through the `asrc/str/%.s: asrc/str/%.txt` rule.
+Name the subsegment `str/<name>` so `hrodata` writes into that tree, and the
+entry is just the text:
 
-```asm
-dlabel D_800200C0
-    .shiftjisz "Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ．"
+```
+D_800200C0=Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ．
 ```
 
-`.shiftjisz` emits the string, a NUL, then `.balign 4, 0` -- which is exactly
-the layout all 59 entries use, so the whole pool converts mechanically. Three
-things to know before doing the same elsewhere:
+The default form emits the string, a NUL, then zeros to the next 4-byte
+boundary -- exactly the layout all 59 entries use, so a pool converts
+mechanically. Four things to know before doing the same elsewhere:
 
-* **A nonmatchings listing could never do this.** Those are assembled as part
-  of the C object, through maspsx, which never sees the `azure shiftjis`
-  filter. `.shiftjis` only works in a file the `build/%.o: %.s` rule builds,
-  i.e. under `asm/` or `asrc/`.
-* **The filter is line-anchored.** `SHIFTJIS_DIRECTIVE_PATTERN` in
-  `src/azure/commands/shiftjis.py` matches start-of-line to end-of-line, so a
-  directive must sit ALONE on its line -- an offset comment in front of it
-  reaches GNU as unexpanded as `unknown pseudo-op: .shiftjis`.
+* **Two more entry forms carry the bytes that are not text.** `:nopad=` emits a
+  string and its NUL and stops; `:bytes=HH HH` emits literal bytes, under a
+  label or under none. Between them they cover a pointer word sitting inside a
+  pool (`asrc/str/names.txt`, `D_80080A50`) and padding that is not zeros
+  (`asrc/str/monsters.txt`, the last entry).
+* **The value is NOT stripped, and must not be.** U+3000 IDEOGRAPHIC SPACE is
+  this game's space character and Python's `str.strip()` counts it as
+  whitespace. One item description ends with one; stripping it shortened the
+  pool by 4 bytes and moved every later string, which is the sort of break that
+  looks like a generator bug anywhere except where it is.
+* **Keep the `Covers rom` line in the header.** Comment lines pass through to
+  the generated `.s`, which is where `hrodata` reads the provenance back from.
+  Drop the line and the only guard against the yaml moving off the file goes
+  quiet -- the file still assembles, just no longer to the size the linker
+  script is placing.
 * **Check the padding bytes, not just the strings.** All 59 entries pad with
-  zeros, which is what `.balign 4, 0` produces -- but the three bytes after the
-  LAST entry's padding, `0x80020921..0x80020924`, are `05 61 64`. Those belong
-  to the section, not to the string (§4.7's last sub-section), so the entry
-  needed `.shiftjis` plus an explicit `.byte 0x00, 0x05, 0x61, 0x64` here. A
-  decoder that only walks NUL terminators will not notice either fact.
+  zeros, which is what the default form produces -- but the three bytes after
+  the LAST entry's padding, `0x80020921..0x80020924`, are `05 61 64`. Those
+  belong to the section, not to the string (§4.7's last sub-section), so that
+  entry would need `:nopad=` plus a `:bytes=05 61 64` line. A decoder that only
+  walks NUL terminators will not notice either fact.
 
 The gate for an `hrodata` chunk is its object's section size against the
 subsegment span:
 
-    mips64-linux-gnu-size -A build/asrc/ovl_main_80020000_rodata_pool.o | grep '^\.rodata'
-    # 2148 == 0x25d924 - 0x25d0c0
+    mips64-linux-gnu-size -A build/asrc/str/<name>.o | grep '^\.rodata'
+    # e.g. 2664 == 0x21268 - 0x20800 for asrc/str/monsters.txt
 
 And because the file is frozen, **moving the subsegment in the yaml does not
 move the bytes in the file.** `hrodata` records the seeded rom range in the

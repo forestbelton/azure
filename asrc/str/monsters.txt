@@ -1,0 +1,180 @@
+# The monster/spell/character string pool from main.bin: 134 strings in
+# full-width Shift-JIS, each NUL-terminated and padded with zeros to the next
+# 4-byte boundary, which is the default entry form below.
+#
+# Covers rom 0x020800..0x021268.
+#
+# Full-width is how the US release renders Latin text in the Japanese font:
+# 0x8260-0x8279 are A-Z, 0x8281-0x829A are a-z, 0x8140 is space, 0x8144 a
+# period. One entry, U-BOAT, spells its dash with 0x817C, a full-width MINUS
+# SIGN (U+2212) rather than a hyphen; all 134 strings were checked to
+# round-trip through the encoder before this file was written.
+#
+# WHAT IT IS. From the AZURE_EGG entry on, the pool runs in groups of three: an
+# egg description, the monster NAME in capitals, then a colour in lower case.
+# The grouping is not rigid -- BLOCK and METAL share the one "sky blue" that
+# follows them, and so do UNICORN/UNIVERN, CLOWN/DEATH, NYUEL/BATTNEL,
+# ARACHNE/ASHRA, SNOWMAN/SABER, GRIFFON/GRINEUT, FLAME/IFRIT and DRAGON/KEWNE.
+# The eleven entries before AZURE_EGG are not in the pattern at all: four
+# character names (Beldo, Selfi, Ghosh, Guy), the three wall spells, Salaman,
+# FROG, and two colours.
+#
+# THE LAST ENTRY'S PADDING IS NOT ZEROS, which is why ULTIMATE is the one entry
+# written as a pair of lines. "Ultimate" ends with its NUL at 0x21264, and
+# 0x21265..0x21268 is C4 0D 0E -- the original toolchain's buffer showing
+# through where it padded the pool up to the 4-aligned table that follows. It
+# is the fifth instance of that in the project and the first found outside a
+# rodata/text boundary; docs/owning-data.md 4.8 has the other four. So the
+# string takes `:nopad=`, which stops the generator computing a zero pad, and
+# the three bytes follow as a `:bytes=` line under no label of their own.
+#
+# HOW IT WAS BUILT. One `hrodata` subsegment replaced 17 one-string `shiftjis`
+# segments covering 0x20800..0x20940 plus the 2,368-byte
+# `[0x20940, bin, str/main/pool_tail]` after them -- 18 segment blocks in the
+# linker script for 2.6 KB of text, two thirds of it never decoded. Sixteen of
+# the 17 old symbol names come out of the rule below unchanged. The seventeenth
+# was WRONG, and is corrected here: the old
+# `[0x20904, shiftjis, str/main/cinnabar]` spanned 32 bytes, which is TWO
+# strings, and put STR_MAIN_CINNABAR on the first of them. 0x20904 is GOLEM and
+# 0x20910 is cinnabar; each has its own label now.
+#
+# Names are "NFKC to ASCII, strip a leading `A `/`An ` and a trailing ` egg.`
+# down to `<NAME>_EGG`, non-alphanumerics to `_`, upper case". To regenerate
+# the bytes from the ROM rather than editing by hand, the walk is: split on the
+# first NUL, then expect the next entry at the next 4-aligned offset.
+
+STR_MAIN_BELDO=Ｂｅｌｄｏ
+STR_MAIN_ROCK=ｒｏｃｋ
+STR_MAIN_STORM_WALL=ｓｔｏｒｍ　ｗａｌｌ
+STR_MAIN_ICE_WALL=ｉｃｅ　ｗａｌｌ
+STR_MAIN_FIRE_WALL=ｆｉｒｅ　ｗａｌｌ
+STR_MAIN_SELFI=Ｓｅｌｆｉ
+STR_MAIN_GHOSH=Ｇｈｏｓｈ
+STR_MAIN_GUY=Ｇｕｙ
+STR_MAIN_SALAMAN=Ｓａｌａｍａｎ
+STR_MAIN_FROG=ＦＲＯＧ
+STR_MAIN_RAINBOW=ｒａｉｎｂｏｗ
+STR_MAIN_MAXIMUM_EGG=Ａ　ＭＡＸＩＭＵＭ　ｅｇｇ．
+STR_MAIN_MAXIMUM=ＭＡＸＩＭＵＭ
+STR_MAIN_VERMILION=ｖｅｒｍｉｌｉｏｎ
+STR_MAIN_GOLEM_EGG=Ａ　ＧＯＬＥＭ　ｅｇｇ．
+STR_MAIN_GOLEM=ＧＯＬＥＭ
+STR_MAIN_CINNABAR=ｃｉｎｎａｂａｒ
+STR_MAIN_TYRANT_EGG=Ａ　ＴＹＲＡＮＴ　ｅｇｇ．
+STR_MAIN_TYRANT=ＴＹＲＡＮＴ
+STR_MAIN_LAVENDER=ｌａｖｅｎｄｅｒ
+STR_MAIN_GLACIER_EGG=Ａ　ＧＬＡＣＩＥＲ　ｅｇｇ．
+STR_MAIN_GLACIER=ＧＬＡＣＩＥＲ
+STR_MAIN_PURPLISH=ｐｕｒｐｌｉｓｈ
+STR_MAIN_GARUDA_EGG=Ａ　ＧＡＲＵＤＡ　ｅｇｇ．
+STR_MAIN_GARUDA=ＧＡＲＵＤＡ
+STR_MAIN_BURGUNDY=ｂｕｒｇｕｎｄｙ
+STR_MAIN_KILLER_EGG=Ａ　ＫＩＬＬＥＲ　ｅｇｇ．
+STR_MAIN_KILLER=ＫＩＬＬＥＲ
+STR_MAIN_SCARLET=ｓｃａｒｌｅｔ
+STR_MAIN_MANDARA_EGG=Ａ　ＭＡＮＤＡＲＡ　ｅｇｇ．
+STR_MAIN_MANDARA=ＭＡＮＤＡＲＡ
+STR_MAIN_MAGENTA=ｍａｇｅｎｔａ
+STR_MAIN_ZU_EGG=Ａ　ＺＵ　ｅｇｇ．
+STR_MAIN_ZU=ＺＵ
+STR_MAIN_RUSSET=ｒｕｓｓｅｔ
+STR_MAIN_NAPLASS_EGG=Ａ　ＮＡＰＬＡＳＳ　ｅｇｇ．
+STR_MAIN_NAPLASS=ＮＡＰＬＡＳＳ
+STR_MAIN_ORANGE=ｏｒａｎｇｅ
+STR_MAIN_VIPER_EGG=Ａ　ＶＩＰＥＲ　ｅｇｇ．
+STR_MAIN_VIPER=ＶＩＰＥＲ
+STR_MAIN_YELLOW=ｙｅｌｌｏｗ
+STR_MAIN_STEALTH_EGG=Ａ　ＳＴＥＡＬＴＨ　ｅｇｇ．
+STR_MAIN_STEALTH=ＳＴＥＡＬＴＨ
+STR_MAIN_INDIGO=ｉｎｄｉｇｏ
+STR_MAIN_WEADOG_EGG=Ａ　ＷＥＡＤＯＧ　ｅｇｇ．
+STR_MAIN_WEADOG=ＷＥＡＤＯＧ
+STR_MAIN_PURPLE=ｐｕｒｐｌｅ
+STR_MAIN_KRAKEN_EGG=Ａ　ＫＲＡＫＥＮ　ｅｇｇ．
+STR_MAIN_KRAKEN=ＫＲＡＫＥＮ
+STR_MAIN_VIOLET=ｖｉｏｌｅｔ
+STR_MAIN_PICKET_EGG=Ａ　ＰＩＣＫＥＴ　ｅｇｇ．
+STR_MAIN_PICKET=ＰＩＣＫＥＴ
+STR_MAIN_SIENNA=ｓｉｅｎｎａ
+STR_MAIN_BARONG_EGG=Ａ　ＢＡＲＯＮＧ　ｅｇｇ．
+STR_MAIN_BARONG=ＢＡＲＯＮＧ
+STR_MAIN_UMBER=ｕｍｂｅｒ
+STR_MAIN_MANOEVA_EGG=Ａ　ＭＡＮＯＥＶＡ　ｅｇｇ．
+STR_MAIN_MANOEVA=ＭＡＮＯＥＶＡ
+STR_MAIN_BROWN=ｂｒｏｗｎ
+STR_MAIN_CYCLONE_EGG=Ａ　ＣＹＣＬＯＮＥ　ｅｇｇ．
+STR_MAIN_CYCLONE=ＣＹＣＬＯＮＥ
+STR_MAIN_OCHER=ｏｃｈｅｒ
+STR_MAIN_VOLCANO_EGG=Ａ　ＶＯＬＣＡＮＯ　ｅｇｇ．
+STR_MAIN_VOLCANO=ＶＯＬＣＡＮＯ
+STR_MAIN_GREEN=ｇｒｅｅｎ
+STR_MAIN_BLUME_EGG=Ａ　ＢＬＵＭＥ　ｅｇｇ．
+STR_MAIN_BLUME=ＢＬＵＭＥ
+STR_MAIN_KHAKI=ｋｈａｋｉ
+STR_MAIN_DREAMIN_EGG=Ａ　ＤＲＥＡＭＩＮ　ｅｇｇ．
+STR_MAIN_DREAMIN=ＤＲＥＡＭＩＮ
+STR_MAIN_BLACK=ｂｌａｃｋ
+STR_MAIN_BALOON_EGG=Ａ　ＢＡＬＯＯＮ　ｅｇｇ．
+STR_MAIN_BALOON=ＢＡＬＯＯＮ
+STR_MAIN_WHITE=ｗｈｉｔｅ
+STR_MAIN_U_BOAT_EGG=Ａｎ　Ｕ−ＢＯＡＴ　ｅｇｇ．
+STR_MAIN_U_BOAT=Ｕ−ＢＯＡＴ
+STR_MAIN_CYAN=ｃｙａｎ
+STR_MAIN_NOISE_EGG=Ａ　ＮＯＩＳＥ　ｅｇｇ．
+STR_MAIN_NOISE=ＮＯＩＳＥ
+STR_MAIN_AQUA_BLUE=ａｑｕａ　ｂｌｕｅ
+STR_MAIN_TROLL_EGG=Ａ　ＴＲＯＬＬ　ｅｇｇ．
+STR_MAIN_TROLL=ＴＲＯＬＬ
+STR_MAIN_DEEP_BLUE=ｄｅｅｐ　ｂｌｕｅ
+STR_MAIN_PULUNPA_EGG=Ａ　ＰＵＬＵＮＰＡ　ｅｇｇ．
+STR_MAIN_PULUNPA=ＰＵＬＵＮＰＡ
+STR_MAIN_SEA_BLUE=ｓｅａ　ｂｌｕｅ
+STR_MAIN_BLOCK_EGG=Ａ　ＢＬＯＣＫ　ｅｇｇ．
+STR_MAIN_BLOCK=ＢＬＯＣＫ
+STR_MAIN_METAL_EGG=Ａ　ＭＥＴＡＬ　ｅｇｇ．
+STR_MAIN_METAL=ＭＥＴＡＬ
+STR_MAIN_SKY_BLUE=ｓｋｙ　ｂｌｕｅ
+STR_MAIN_UNICORN_EGG=Ａｎ　ＵＮＩＣＯＲＮ　ｅｇｇ．
+STR_MAIN_UNICORN=ＵＮＩＣＯＲＮ
+STR_MAIN_UNIVERN_EGG=Ａｎ　ＵＮＩＶＥＲＮ　ｅｇｇ．
+STR_MAIN_UNIVERN=ＵＮＩＶＥＲＮ
+STR_MAIN_BLUE=ｂｌｕｅ
+STR_MAIN_CLOWN_EGG=Ａ　ＣＬＯＷＮ　ｅｇｇ．
+STR_MAIN_CLOWN=ＣＬＯＷＮ
+STR_MAIN_DEATH_EGG=Ａ　ＤＥＡＴＨ　ｅｇｇ．
+STR_MAIN_DEATH=ＤＥＡＴＨ
+STR_MAIN_PALE_PINK=ｐａｌｅ　ｐｉｎｋ
+STR_MAIN_NYUEL_EGG=Ａ　ＮＹＵＥＬ　ｅｇｇ．
+STR_MAIN_NYUEL=ＮＹＵＥＬ
+STR_MAIN_BATTNEL_EGG=Ａ　ＢＡＴＴＮＥＬ　ｅｇｇ．
+STR_MAIN_BATTNEL=ＢＡＴＴＮＥＬ
+STR_MAIN_PINK=ｐｉｎｋ
+STR_MAIN_ARACHNE_EGG=Ａｎ　ＡＲＡＣＨＮＥ　ｅｇｇ．
+STR_MAIN_ARACHNE=ＡＲＡＣＨＮＥ
+STR_MAIN_ASHRA_EGG=Ａｎ　ＡＳＨＲＡ　ｅｇｇ．
+STR_MAIN_ASHRA=ＡＳＨＲＡ
+STR_MAIN_DARK_GRAY=ｄａｒｋ　ｇｒａｙ
+STR_MAIN_SNOWMAN_EGG=Ａ　ＳＮＯＷＭＡＮ　ｅｇｇ．
+STR_MAIN_SNOWMAN=ＳＮＯＷＭＡＮ
+STR_MAIN_SABER_EGG=Ａ　ＳＡＢＥＲ　ｅｇｇ．
+STR_MAIN_SABER=ＳＡＢＥＲ
+STR_MAIN_GRAY=ｇｒａｙ
+STR_MAIN_GRIFFON_EGG=Ａ　ＧＲＩＦＦＯＮ　ｅｇｇ．
+STR_MAIN_GRIFFON=ＧＲＩＦＦＯＮ
+STR_MAIN_GRINEUT_EGG=Ａ　ＧＲＩＮＥＵＴ　ｅｇｇ．
+STR_MAIN_GRINEUT=ＧＲＩＮＥＵＴ
+STR_MAIN_WINE_RED=ｗｉｎｅ　ｒｅｄ
+STR_MAIN_FLAME_EGG=Ａ　ＦＬＡＭＥ　ｅｇｇ．
+STR_MAIN_FLAME=ＦＬＡＭＥ
+STR_MAIN_IFRIT_EGG=Ａ　ＩＦＲＩＴ　ｅｇｇ．
+STR_MAIN_IFRIT=ＩＦＲＩＴ
+STR_MAIN_RED=ｒｅｄ
+STR_MAIN_KID_EGG=Ａ　ＫＩＤ　ｅｇｇ．
+STR_MAIN_KID=ＫＩＤ
+STR_MAIN_DRAGON_EGG=Ａ　ＤＲＡＧＯＮ　ｅｇｇ．
+STR_MAIN_DRAGON=ＤＲＡＧＯＮ
+STR_MAIN_KEWNE_EGG=Ａ　ＫＥＷＮＥ　ｅｇｇ．
+STR_MAIN_KEWNE=ＫＥＷＮＥ
+STR_MAIN_THE_ULTIMATE_EGG=Ｔｈｅ　ｕｌｔｉｍａｔｅ　ｅｇｇ．
+STR_MAIN_ULTIMATE:nopad=Ｕｌｔｉｍａｔｅ
+:bytes=c4 0d 0e

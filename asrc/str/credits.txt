@@ -1,0 +1,65 @@
+# The staff-credits roll: all 53 strings, in roll order -- a role, then the
+# person who filled it.
+#
+# Covers rom 0x002184..0x0027DC (vram 0x8002E984..0x8002EFDC).
+#
+# Every one of these is reached by a pointer in game_data's credits table
+# (file 0x4528C onward), and `hrodata` scans its range, so splat binds those
+# pointers by symbol. The labels are declared in
+# splat/slus_006.14_symbol_addrs.txt so the table reads as `.word
+# STR_CREDITS_*`; renaming one here without updating that file is an
+# undefined reference at link time.
+
+STR_CREDITS_PRESENTED_BY=Ｐｒｅｓｅｎｔｅｄ　ｂｙ
+STR_CREDITS_KITAUE_KAZUMI=Ｋｉｔａｕｅ　Ｋａｚｕｍｉ
+STR_CREDITS_PRODUCED_BY=Ｐｒｏｄｕｃｅｄ　ｂｙ
+STR_CREDITS_YONEOKA_MASAKI=Ｙｏｎｅｏｋａ　Ｍａｓａｋｉ
+STR_CREDITS_SUPERVISED_BY=Ｓｕｐｅｒｖｉｓｅｄ　ｂｙ
+STR_CREDITS_HARADA_MASAAKI=Ｈａｒａｄａ　Ｍａｓａａｋｉ
+STR_CREDITS_SPECIAL_THANKS_TO=Ｓｐｅｃｉａｌ　ｔｈａｎｋｓ　ｔｏ
+STR_CREDITS_KASAI_HIDEKI=ＫＡＳＡＩ　ＨＩＤＥＫＩ
+STR_CREDITS_FLATLINE=ＦＬＡＴＬＩＮＥ
+STR_CREDITS_SOUND_EDITED_BY=Ｓｏｕｎｄ　ｅｄｉｔｅｄ　ｂｙ
+STR_CREDITS_KIYOHIKO_YAMANE=Ｋｉｙｏｈｉｋｏ　Ｙａｍａｎｅ
+STR_CREDITS_MUSIC_DRIVER_BY=Ｍｕｓｉｃ　ｄｒｉｖｅｒ　ｂｙ
+STR_CREDITS_NORITADA_MATSUKAWA=Ｎｏｒｉｔａｄａ　Ｍａｔｓｕｋａｗａ
+STR_CREDITS_SOUND_MANAGEMENT_BY=Ｓｏｕｎｄ　ｍａｎａｇｅｍｅｎｔ　ｂｙ
+STR_CREDITS_SOUND_PROGRAMMING_BY=Ｓｏｕｎｄ　ｐｒｏｇｒａｍｍｉｎｇ　ｂｙ
+STR_CREDITS_IMOHORE_IMAI=Ｉｍｏｈｏｒｅ　ＩＭＡＩ
+STR_CREDITS_MOVIE_SE_BY=Ｍｏｖｉｅ　ＳＥ　ｂｙ
+STR_CREDITS_HIROE_NOGUCHI=Ｈｉｒｏｅ　Ｎｏｇｕｃｈｉ
+STR_CREDITS_SOUND_EFFECTS_BY=Ｓｏｕｎｄ　ｅｆｆｅｃｔｓ　ｂｙ
+STR_CREDITS_HIROSHI_TAMAWARI=Ｈｉｒｏｓｈｉ　Ｔａｍａｗａｒｉ
+STR_CREDITS_MUSIC_BY=Ｍｕｓｉｃ　ｂｙ
+STR_CREDITS_TADANO_TSUGUO=ＴＡＤＡＮＯ　ＴＳＵＧＵＯ
+STR_CREDITS_IMAIZUMI_KENICHIRO=Ｉｍａｉｚｕｍｉ　Ｋｅｎｉｃｈｉｒｏ
+STR_CREDITS_NAKANO_KAZUAKI=Ｎａｋａｎｏ　Ｋａｚｕａｋｉ
+STR_CREDITS_MOVIE_BY=Ｍｏｖｉｅ　ｂｙ
+STR_CREDITS_TAJIMA_TERUTO=Ｔａｊｉｍａ　Ｔｅｒｕｔｏ
+STR_CREDITS_AOKI_YOKO=Ａｏｋｉ　Ｙｏｋｏ
+STR_CREDITS_ADDITIONAL_DESIGN_BY=Ａｄｄｉｔｉｏｎａｌ　ｄｅｓｉｇｎ　ｂｙ
+STR_CREDITS_MASAKO_YASHIMA=Ｍａｓａｋｏ　Ｙａｓｈｉｍａ
+STR_CREDITS_KANEGUCHI_KENJI=Ｋａｎｅｇｕｃｈｉ　Ｋｅｎｊｉ
+STR_CREDITS_SATOH_HIROKI=Ｓａｔｏｈ　Ｈｉｒｏｋｉ
+STR_CREDITS_IWAKURA_KOUSUKE=Ｉｗａｋｕｒａ　Ｋｏｕｓｕｋｅ
+STR_CREDITS_KOMA=ＫＯＭＡ
+STR_CREDITS_HAGIHARA_TORU=Ｈａｇｉｈａｒａ　Ｔｏｒｕ
+STR_CREDITS_SCENARIO_CODED_BY=Ｓｃｅｎａｒｉｏ　ｃｏｄｅｄ　ｂｙ
+STR_CREDITS_KATANA_1=ＫＡＴＡＮＡ−１
+STR_CREDITS_KIKUCHI_YUJI=Ｋｉｋｕｃｈｉ　Ｙｕｊｉ
+STR_CREDITS_ISHIKAWA_KAZUO=Ｉｓｈｉｋａｗａ　Ｋａｚｕｏ
+STR_CREDITS_OGISO_KAZUMASA=Ｏｇｉｓｏ　Ｋａｚｕｍａｓａ
+STR_CREDITS_HAKODATE_ZIRO=ＨＡＫＯＤＡＴＥ　ＺＩＲＯ
+STR_CREDITS_PROGRAMMING_BY=Ｐｒｏｇｒａｍｍｉｎｇ　ｂｙ
+STR_CREDITS_INABA_HARUHIKO=Ｉｎａｂａ　Ｈａｒｕｈｉｋｏ
+STR_CREDITS_ASSISTANT_DIRECTED_BY=Ａｓｓｉｓｔａｎｔ　ｄｉｒｅｃｔｅｄ　ｂｙ
+STR_CREDITS_BACKGROUND_DESIGN_BY=Ｂａｃｋｇｒｏｕｎｄ　ｄｅｓｉｇｎ　ｂｙ
+STR_CREDITS_HATTORI_K_SUKE=Ｈａｔｔｏｒｉ　Ｋ−ｓｕｋｅ
+STR_CREDITS_MONSTER_DESIGN_BY=Ｍｏｎｓｔｅｒ　ｄｅｓｉｇｎ　ｂｙ
+STR_CREDITS_CHARACTER_DESIGN_BY=Ｃｈａｒａｃｔｅｒ　ｄｅｓｉｇｎ　ｂｙ
+STR_CREDITS_YAMADA_KOJI=Ｙａｍａｄａ　Ｋｏｊｉ
+STR_CREDITS_SCENARIO_WRITTEN_BY=Ｓｃｅｎａｒｉｏ　ｗｒｉｔｔｅｎ　ｂｙ
+STR_CREDITS_HORIO_KENICHIRO=Ｈｏｒｉｏ　Ｋｅｎｉｃｈｉｒｏ
+STR_CREDITS_DIRECTED_BY=Ｄｉｒｅｃｔｅｄ　ｂｙ
+STR_CREDITS_CREDITS=Ｃｒｅｄｉｔｓ
+STR_CREDITS_AZURE_DREAMS=Ａｚｕｒｅ　Ｄｒｅａｍｓ

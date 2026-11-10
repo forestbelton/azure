@@ -385,7 +385,7 @@ the text, and `.data` at 0x4CCEC-0x54194, after it. `_69F4` lays out as
 0x69F4   rodata  psyq/libspu/SPU ... psyq/libgpu/SYS   (13 subsegments)
 0x7130   text    everything
 0x3E01C  data    psyq/libsn_data ... psyq/libapi_data, game_gp
-0x541D0  rodata  names        (the whole name table, asrc/names.s)
+0x541D0  rodata  names        (the whole name table, asrc/str/names.txt)
 0x5426C  data    gp_data, tail_unloaded
 ```
 
@@ -480,7 +480,7 @@ subdivision.
 | `str_item_tail` | 0x57F8-0x6614 | 3,612 | tail of the item pool; 90 strings held back, see below |
 | `smf_magic` | 0x68FC-0x690C | 16 | `MThd`/`MTrk` with zero lengths |
 | `game_gp` | 0x54194-0x541D0 | 60 | the `_gp` anchor; `_gp` = 0x80080994 is its first word |
-| `names` | 0x541D0-0x5426C | 156 | the name table, hand-owned as `asrc/names.s`: nineteen 8-byte Shift-JIS slots plus the 4-byte pointer at 0x54250 |
+| `names` | 0x541D0-0x5426C | 156 | the name table, hand-owned as `asrc/str/names.txt`: nineteen 8-byte Shift-JIS slots plus the 4-byte pointer at 0x54250 |
 | `gp_data` | 0x5426C-0x55000 | 3,476 | `.sdata`/`.sbss` above `_gp`, then zero fill |
 
 The first five are `rodata` subsegments, not `data`: they sit among the C
@@ -552,7 +552,7 @@ all zero), which is why that split was safe.
 
 `main.bin`'s own pool, 0x20800-0x21268, went the whole way on 2026-11-09 and
 is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
-`hrodata` subsegment and no `data` chunks at all (`asrc/monsters.s`). It was
+`hrodata` subsegment and no `data` chunks at all (`asrc/str/monsters.txt`). It was
 easy for two reasons worth checking for first -- every string starts 4-aligned,
 so nothing had to be cut short, and none of them embeds a control byte. See
 `docs/main-bin-data.md`; the only wrinkle was three non-zero bytes of linker

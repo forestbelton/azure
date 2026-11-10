@@ -8,7 +8,6 @@ from azure.commands import (
     lib,
     libmatch,
     libscan,
-    shiftjis,
     spec,
     symbols,
 )
@@ -22,7 +21,6 @@ ALL_PARSERS: dict[str, Parser] = {
     "lib": lib.setup_parser,
     "libmatch": libmatch.setup_parser,
     "libscan": libscan.setup_parser,
-    "shiftjis": shiftjis.setup_parser,
     "spec": spec.setup_parser,
     "symbols": symbols.setup_parser,
 }

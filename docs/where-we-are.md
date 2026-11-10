@@ -242,7 +242,7 @@ Percentages below are of the 346,112-byte **image**, not of the file:
 | C translation units | 167,596 | 48.4% |
 | `data` subsegments | 94,028 | 27.2% |
 | identified library/asm (`psyq/*`, `main`) | 57,408 | 16.6% |
-| Shift-JIS text, hand-owned (`asrc/items.s`, `asrc/credits.s`, `asrc/names.s`) | 14,040 | 4.1% |
+| Shift-JIS text, hand-owned (`asrc/str/*.txt`) | 14,040 | 4.1% |
 | `rodata` subsegments | 11,640 | 3.4% |
 | jump tables (`.rodata` of C units) | 1,400 | 0.4% |
 | **unknown** | **0** | **0.0%** |

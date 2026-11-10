@@ -1,0 +1,41 @@
+# The name table at 0x800809D0, all of it: nineteen names of full-width
+# Shift-JIS in 8-byte slots, with one 4-byte pointer wedged in at 0x54250.
+#
+# Covers rom 0x0541D0..0x05426C (vram 0x800809D0..0x80080A6C).
+#
+# Sixteen slots run 8-aligned from 0x541D0; the pointer shifts the last three
+# (max, zu, kid) to 4 mod 8, which is why this is not one uniform array.
+#
+# D_80080A50 IS NOT A NAME. It is a pointer to "Girl" at 0x8002D34C, entry 58
+# of the CHARACTER-name table in str_pool_800 (file 0x848..0xD98, ~103 entries
+# -- KimBr, Shiela, Beldo, then the monsters in lower case). A different family
+# of names from the nineteen here, so it points out to that table rather than
+# being a twentieth slot, and it would not fit inline anyway: "Girl" is four
+# full-width characters, eight bytes, and an 8-byte slot leaves nothing for the
+# terminator. It is written as `:bytes=` -- the little-endian word, no NUL and
+# no padding -- because it is not text.
+#
+# Nothing decompiled reaches the strings by name; the D_ labels came from
+# splat's seed and the STR_NAME_ ones are ours. The one entry code does name is
+# D_80080A50, read by func_80035DBC in csrc/unk_72A8.c.
+
+D_800809D0,STR_NAME_BOY=Ｂｏｙ
+D_800809D8,STR_NAME_MAN=Ｍａｎ
+D_800809E0,STR_NAME_CAT=Ｃａｔ
+D_800809E8,STR_NAME_DOG=Ｄｏｇ
+D_800809F0,STR_NAME_POP=Ｐｏｐ
+D_800809F8,STR_NAME_SEE=Ｓｅｅ
+D_80080A00,STR_NAME_BET=Ｂｅｔ
+D_80080A08,STR_NAME_DAR=Ｄａｒ
+D_80080A10,STR_NAME_KAY=Ｋａｙ
+D_80080A18,STR_NAME_MEE=Ｍｅｅ
+D_80080A20,STR_NAME_DAI=Ｄａｉ
+D_80080A28,STR_NAME_FON=Ｆｏｎ
+D_80080A30,STR_NAME_PEN=Ｐｅｎ
+D_80080A38,STR_NAME_MIA=Ｍｉａ
+D_80080A40,STR_NAME_FUR=Ｆｕｒ
+D_80080A48,STR_NAME_GUY=Ｇｕｙ
+D_80080A50:bytes=4c d3 02 80
+D_80080A54,STR_NAME_MAX=ｍａｘ
+D_80080A5C,STR_NAME_ZU=ｚｕ
+D_80080A64,STR_NAME_KID=ｋｉｄ

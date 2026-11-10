@@ -102,8 +102,8 @@ The 31,456 bytes ahead of the filler are real and the game does read them.
 | `monsters` | 0x20800-0x21268 | 2,664 | the string pool, **decoded 2026-11-09** |
 | `main_tables_21268` | 0x21268-0x28420 | 29,112 | tables, then zero pad from 0x24440 |
 
-**The string pool is done.** `asrc/monsters.s` is all 134 of its entries as
-readable `.shiftjisz` directives, one `hrodata` subsegment, replacing 17
+**The string pool is done.** `asrc/str/monsters.txt` is all 134 of its entries
+as one line of text each, one `hrodata` subsegment, replacing 17
 one-string `shiftjis` segments plus a 2,368-byte `str/main/pool_tail` — 18
 linker-script segment blocks for 2.6 KB of text, two thirds of it never
 decoded. From 0x208A4 the pool runs in groups of three: an egg description,
@@ -149,7 +149,7 @@ unnamed `bin` together.
 | `c` | 63,036 | 2.44% | both overlays' text (29,948 + 33,088) |
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
 | `.rodata` + `rodata` | 4,548 | 0.18% | both overlays' rodata |
-| `hrodata` | 2,664 | 0.10% | `asrc/monsters.s`, the string pool |
+| `hrodata` | 2,664 | 0.10% | `asrc/str/monsters.txt`, the string pool |
 | `data` | 1,172 | 0.05% | `ovl_main_80020000_pad` |
 
 Down from 2,250,432 bytes (87.3%) unknown before the first pass over this

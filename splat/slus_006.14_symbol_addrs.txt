@@ -392,13 +392,13 @@ ratan_tbl = 0x8007ff70; // type:u16 size:0x802
 _ctype_ = 0x800808ec; // type:u8 size:0x81
 
 // -------------------------------------------------------------------------
-// The staff-credits roll, asrc/credits.s.
+// The staff-credits roll, asrc/str/credits.txt.
 //
 // 53 Shift-JIS strings at 0x8002e984-0x8002efdc, every one of them reached by
 // a pointer in game_data's credits table. The subsegment is `hrodata`, so
 // splat SCANS the range and binds those pointers by symbol; without these
 // entries it invents D_8002e984 and the like, the table stays unreadable, and
-// the names asrc/credits.s actually defines go unreferenced. `defined:True`
+// the names asrc/str/credits.txt actually defines go unreferenced. `defined:True`
 // keeps them out of slus_006.14_undefined_syms_auto.txt, since that listing
 // is what defines them.
 // -------------------------------------------------------------------------
