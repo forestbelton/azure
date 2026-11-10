@@ -262,7 +262,7 @@ s32 read_save_file(s32 a, u8 *b, s32 c);
 void refresh_card_info(void);
 s32 erase_save_file(s32 idx);
 void func_8002225C(u8 *s, s32 a, s32 *x, s32 *y, s32 *z);
-void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z);
+void func_800223B4(UnkCardGrp8B0 *c, s32 x, s32 y, s32 n, s32 z);
 void func_80022488(s32 *p);
 void func_80022524(s32 *p);
 u8 *func_80022774(u8 *p, s32 *q);

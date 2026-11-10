@@ -1310,17 +1310,18 @@ u8 *func_80022300(s32 *a, u8 *p, s32 n);
    minus half the corresponding extent. `x * 4` has to be a local declared
    BEFORE the other two: the target computes it at word 3, ahead of the $s4
    save and the `p + 0xE4` address, and inline it is computed after both. */
-void func_800223B4(s32 *p, s32 x, s32 y, s32 n, s32 z)
+void func_800223B4(UnkCardGrp8B0 *c, s32 x, s32 y, s32 n, s32 z)
 {
     s32 sx = x * 4;
-    UnkCardPair *e = (UnkCardPair *)p[569];
+    UnkCardPair *e = c->ptrs[6];
+    s32 *p = (s32 *)c;
     u8 *q = (u8 *)&p[57];
 
     e->unk_04->unk_08 = sx - (p[6] / 2) + 0xA2;
     e->unk_04->unk_0A = (n * 17) - (p[7] / 2) + 0x7A;
     func_80022300(p, q, y);
     e->unk_00 = (s32)q;
-    func_8002233C((u8 *)((UnkCardPair *)p[563 + n])->unk_00, z, y);
+    func_8002233C((u8 *)c->ptrs[n]->unk_00, z, y);
 }
 
 void func_80022488(s32 *p)
@@ -1335,7 +1336,7 @@ void func_80022488(s32 *p)
     if (r->unk_14 != 0)
     {
         func_8002225C(r->strs[n], p[0], &x, &y, &z);
-        func_800223B4(p, x, y, n, z);
+        func_800223B4((UnkCardGrp8B0 *)p, x, y, n, z);
     }
 }
 
@@ -1565,13 +1566,13 @@ u8 *func_80022774(u8 *p, s32 *q)
     return p;
 }
 
-void func_8002290C(s32 *p)
+void func_8002290C(UnkCardGrp8B0 *c)
 {
-    s32 **q = (s32 **)p[0x238];
+    UnkCardPair *q = c->ptrs[5];
 
-    ((u16 *)q[1])[4] = 0xA0;
-    ((u16 *)q[1])[5] = 0x78;
-    q[0] = p + 9;
+    q->unk_04->unk_08 = 0xA0;
+    q->unk_04->unk_0A = 0x78;
+    q->unk_00 = (s32)((s32 *)c + 9);
 }
 
 /* Five sprites in a row, 0x180 bytes of buffer apart, each label rendered by
@@ -1585,7 +1586,7 @@ void func_80022934(s32 *p)
 
     for (i = 0; i < 5; i++)
     {
-        UnkCardPair *e = (UnkCardPair *)p[563 + i];
+        UnkCardPair *e = ((UnkCardGrp8B0 *)p)->ptrs[i];
 
         e->unk_04->unk_08 = 0x124 - (p[6] / 2);
         e->unk_04->unk_0A = (i * 17) - (p[7] / 2) + 0xFC;
@@ -1663,10 +1664,12 @@ u8 *func_80022A30(u8 *p, s32 *q)
     return p;
 }
 
-void func_80022AE8(s32 *p)
+void func_80022AE8(UnkCardGrp8B0 *c)
 {
+    s32 *p = (s32 *)c;
+
     func_80022A30((u8 *)(p + 9), p);
-    func_8002290C(p);
+    func_8002290C(c);
 }
 
 s32 func_80022B20(s32 a)
@@ -1757,11 +1760,11 @@ void func_80022C48(s32 *p, s32 a, s32 b, s32 c, s32 d)
     func_80022BE8(&gCardMessages[b]);
 }
 
-void func_80022C90(s32 *p, s32 a, s32 b, s32 c, s32 d)
+void func_80022C90(UnkCardGrp8B0 *g, s32 a, s32 b, s32 c, s32 d)
 {
-    func_80022C48(p, a, b, c, d);
-    func_800226E0((UnkCardPair *)(p + 0x22F), (u32 *)(p + 0x225), (u32 *)(p + 0x229));
-    func_80022AE8(p);
+    func_80022C48((s32 *)g, a, b, c, d);
+    func_800226E0(&g->root, g->root_prim, g->root_shared);
+    func_80022AE8(g);
 }
 
 void func_80022CD8(s32 *p)
@@ -1792,6 +1795,7 @@ s32 open_card_message(s32 a, s32 id, s32 kind, s32 p)
 {
     s32 *q = (s32 *)D_800287E8;
     s32 *r = q + 8;
+    UnkCardGrp8B0 *c;
 
     if (func_8004B4A8(q) == 0)
     {
@@ -1804,10 +1808,11 @@ s32 open_card_message(s32 a, s32 id, s32 kind, s32 p)
         ((u16 *)q)[15] &= 0x7FFF;
         bzero((unsigned char *)r, 0x9C8);
     }
-    func_80022B48((UnkCardGrp8B0 *)r, 7);
-    q[3] = (s32)(r + 0x22F);
-    r[0x232] = func_80022B20((s32)(r + 0x233));
-    func_80022C90(r, a, id, kind, p);
+    c = (UnkCardGrp8B0 *)r;
+    func_80022B48(c, 7);
+    q[3] = (s32)&c->root;
+    c->root.unk_0C = func_80022B20((s32)c->ptrs);
+    func_80022C90(c, a, id, kind, p);
     q[4] = (s32)func_80022CD8;
     return (s32)q;
 }
@@ -1916,15 +1921,13 @@ void msg_delete_failed(s32 a)
    counter first: the target saves $s1 (the counter) before $s0 (the cursor)
    and fills the load-delay slot with the cursor's own increment. Walking the
    parameter directly puts $s0 first and leaves a nop there -- 6 differing. */
-void func_80023194(s32 **pp)
+void func_80023194(UnkCardGrp8B0 *c)
 {
     s32 i = 0;
-    s32 **p = pp;
 
     do
     {
-        func_8004E994(*p[0x233]);
-        p++;
+        func_8004E994(c->ptrs[i]->unk_00);
     } while (++i < 5);
 }
 
@@ -1936,7 +1939,7 @@ s32 func_800231E4(s32 flag)
     {
         ((u16 *)p[5])[15] |= 0x2000;
     }
-    func_80023194((s32 **)p);
+    func_80023194((UnkCardGrp8B0 *)p);
     ((u16 *)p)[-1] |= 0x8000;
     D_800814A0_a[0] |= 0x8000;
     return D_80028808;
