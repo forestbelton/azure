@@ -6,22 +6,45 @@
    it was built from are in csrc/main/; this file is what could not be split
    with them.
 
-   WHY THE DATA IS NOT CARVED. The overlay's data region is two per-unit
-   concatenations, not one: 0x80027E20..0x80028530 is each unit's tables in
-   link order, and 0x80028530..0x8002BB6C is each unit's zero-initialised
-   state in the same order -- c_server.c's counters, event descriptors,
-   card_dir and card_st, then one node blob per window unit. Reproducing that
-   with nine objects needs the second group emitted after the first, and
-   splat's linker script has one DATA group per segment, with its BSS group
-   ahead of TEXT. So every data object stays in one object here, where the
-   source order already reproduces both runs, and the units reach what they
-   need as externs. The attribution itself IS established -- see
-   docs/overlays.md under "Carving the nine" -- it just is not buildable.
+   WHY THE DATA IS NOT CARVED -- AND IT IS NOT THE BUILD. The data region is
+   two per-unit concatenations: 0x80027E20..0x80028530 is each unit's tables
+   in link order and 0x80028530..0x8002BB6C is each unit's zero-initialised
+   state in the same order, which is the ordinary data-then-bss shape. The
+   partition is now known for all but one cut -- docs/overlays.md, "Rodata is
+   per unit; so is data", has the per-unit blocks and the argument. In short:
+   link order forces a unit's objects to be contiguous and in unit order, so
+   if ownership tracked usage the referencing units would read down the
+   address list non-decreasing, and they do, for 27 of 27 objects in the
+   state run and for the 45 of the tables run that lie below 0x800280B4.
+
+   SO WHY IS IT STILL ONE FILE. Two reasons, neither of them the linker:
+
+   1. One object contributes one .data run, and the image needs two per unit
+      (tables, then state). Splitting each unit into a `*_state.c` builds --
+      measured 2026-11-10 -- but it is a source fiction: in the original
+      those were one file's .data and its .bss. Real .bss is barred outright
+      by the residue words, per docs/owning-data.md.
+   2. The tables run's tail, 0x800280B4..0x80028530, has one undetermined
+      cut between cardsme.c and memory.c, and `make containers` cannot
+      referee it: any partition respecting address order links identically.
+      Unlike a text boundary, a wrong data cut moves no bytes.
+
+   A DATA OBJECT BELONGS TO THE UNIT THAT DEFINES IT, NOT THE ONE THAT USES
+   IT. Two objects here prove it rather than merely allow it: D_80027E68 is
+   the second object in the tables run and only cardslot.c reads it, and
+   SAVE_ICON_CLUTS is third and only cardinfo.c reads it. Both are
+   c_server.c's, pinned there because MEM_CARD_NAMES and MEM_CARD_FILENAMES
+   just above them point at literals in c_server's own rodata and no unit
+   precedes unit 1.
+
+   An earlier version of this comment blamed the linker script alone, and the
+   version after it over-corrected and called the whole partition unproven.
+   Both are wrong; the two numbered reasons above are what is left.
 
    The 59 Shift-JIS message strings below are this file's rodata, at
    0x800200C0..0x80020924. cc1psx emits a string literal into the unit that
-   uses it, and the tables that reference them are all here, which is why
-   this file is the last .rodata contributor in the segment. */
+   uses it, so they belong wherever their tables do; all that pins is a unit
+   AFTER cardinfo.c, since the pool is the segment's last rodata. */
 
 /* ------------------------------------------------------------------------- */
 /* The overlay's own .data. It starts at 0x80027E20, immediately after the text

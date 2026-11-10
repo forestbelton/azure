@@ -789,10 +789,23 @@ All four must come out byte-identical.
      the zeros are not one run but three, and a NOBITS section would write
      zeros over both. A unit gets one subsegment per linker section, so three
      disjoint windows cannot be expressed anyway.
-  2. **splat's legacy generation emits the four section groups in a fixed
-     order per segment**, `.rodata` / `.bss` / `.text` / `.data`. There is no
-     way to interleave a `.bss` window *after* the `.data` the overlay's
-     addresses demand.
+  2. ~~**splat's legacy generation emits the four section groups in a fixed
+     order per segment**, `.rodata` / `.bss` / `.text` / `.data`.~~
+     **WITHDRAWN 2026-11-10.** The order is not fixed by the tool:
+     `section_order` is a yaml option, settable per segment, and splat's own
+     source notes that it is *legacy* generation which ignores it. So this is
+     this repo's configuration, not a wall. Reason 1 is the one that stands,
+     and it is enough on its own -- three disjoint windows cannot be one
+     NOBITS section however the groups are ordered.
+
+  While withdrawing that: the sibling claim that per-unit `.data` cannot be
+  expressed at all is also wrong. A `.data` subsegment per object placement
+  builds byte-identical -- measured by moving `D_8002BB08` into its own
+  `csrc/main/memory_state.c` -- because legacy generation emits one
+  input-section line per subsegment *in subsegment order*. What blocks the
+  data carve is that the per-unit cut points are unproven and the container
+  check cannot referee them; see `docs/overlays.md`, "The build CAN express
+  per-unit data".
 
   So an overlay's zero tail is initialised data in C whether the original
   source said so or not, and the file says why where it does it.

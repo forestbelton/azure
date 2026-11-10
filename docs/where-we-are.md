@@ -620,12 +620,20 @@ size, the `-G` value, the struct layout, the flags.
    traps.
 7. **The 0x80020000 overlay is carved**, 2026-11-10: its nine translation
    units are `csrc/main/*.c` and `csrc/ovl_main_80020000.c` is data only.
-   `docs/overlays.md`'s "Carving the nine" has the evidence per boundary,
-   says which four are inferences, and records why the data could not go
-   with the units. The unit map table above it is marked SUPERSEDED for this
-   overlay; three of its results were wrong. What is left there is the
-   per-window head fields: `UNK_CARD_GROUP` is still one macro over six
-   files, so naming them means six declarations that agree on the tail.
+   `docs/overlays.md`'s "Carving the nine" has the evidence per boundary and
+   says which four are inferences. The unit map table above it is marked
+   SUPERSEDED for this overlay; three of its results were wrong.
+   **The data's per-unit ownership is now established too** -- the state run
+   object by object with zero order violations, confirmed independently by
+   its two residue words falling on the only two misaligned unit boundaries,
+   and the tables run except one cut between `cardsme.c` and `memory.c`. It
+   stays in one file anyway, for the two reasons under "Rodata is per unit;
+   so is data"; the linker script is NOT one of them, contrary to what that
+   doc said before 2026-11-10. Also there: the twin is the Japanese build and
+   its per-unit Shift-JIS text names `cardbk.c` as the saved-game summary
+   panel. What is left is the per-window head fields: `UNK_CARD_GROUP` is
+   still one macro over six files, so naming them means six declarations that
+   agree on the tail.
 
 ## Running agents on this
 

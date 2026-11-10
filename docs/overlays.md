@@ -563,38 +563,179 @@ Five determined, four inferred inside narrow windows. Any order-respecting
 cut builds byte-identical, so an inferred boundary is a claim about the
 original source, not about the output.
 
-#### Rodata is per unit; data is per unit but not carvable
+#### Rodata is per unit; so is data, and it is nearly all determined
 
 The rodata partitions exactly, in link order, and only four units have any:
 
 | unit | rodata |
 |---|---|
 | `c_server.c` | `0x80020000..0x800200A0` -- the assert pair, the two handler tables, `MEM_CARD0/1`, the six name strings |
-| `card_mes.c` | `0x800200A0`, four bytes |
-| `cardbk.c` | `0x800200A4`, the one-character string |
-| `cardinfo.c` | `0x800200A8..0x800200C0` -- `func_800258C8`'s own four-entry constant, which cc1psx emits right after that function, then `SAVE_ICON_VRAM_RECT` |
-| data file | `0x800200C0..0x80020924` -- the 59 message strings, emitted by the unit that uses them, which is wherever the tables live |
+| `card_mes.c` | `0x800200A0`, four bytes (`00 01 02 03`) |
+| `cardbk.c` | `0x800200A4`, the one-character string (`" "`) |
+| `cardinfo.c` | `0x800200A8..0x800200C0` -- `func_800258C8`'s own four-entry switch table, whose entries are addresses inside cardinfo's OWN text, then `SAVE_ICON_VRAM_RECT` |
+| the message pool | `0x800200C0..0x80020924` -- the 59 strings, which belong to whichever unit holds the eight tables; see the open cut below |
 
-The data region is also per unit, but in TWO groups rather than one:
-`0x80027E20..0x80028530` is each unit's tables in link order, and
-`0x80028530..0x8002BB6C` is each unit's zero-initialised state in the same
-order. Both runs check out object by object -- `cardbk.c`'s single function
-uses the single object in its slot (`D_80027FD0`), `c_server.c`'s counters,
-event descriptors, `card_dir` and `card_st` open the second run, and each
-window unit's node blob follows in order.
+The switch table is the hard anchor here: a compiler-generated jump table
+goes in the object holding the switch, and its four entries all land in
+`0x80024390..0x800261C0`, cardinfo's text. So the pool is owned by a unit at
+or after `cardinfo.c`, and no earlier.
 
-What defeated the earlier reading was assuming a data object belongs to the
-unit that USES it. It does not: `c_server.c` defines both animation scripts
-and `SAVE_ICON_CLUTS`, which only later units read, and the message tables
-and every string belong to `memory.c`, which no longer references most of
-them.
+**The data region is per unit in two groups** -- `0x80027E20..0x80028530`
+tables, `0x80028530..0x8002BB6C` zero state -- which is just the ordinary
+data-then-bss shape, so the partition exists whatever we know of it. What we
+know is most of it.
 
-It is still not carvable. Reproducing two per-unit groups needs the second
-emitted after the first, and splat's script has one DATA group per segment
-with its BSS group ahead of TEXT. So every data object stays in
-`csrc/ovl_main_80020000.c`, which is now data only, and the units reach what
-they need as externs. The attribution is established; the build cannot
-express it.
+**The method, and its one trap.** A data object belongs to the unit that
+DEFINES it, not the one that uses it, so the referencing unit is a hint and
+not a proof. What turns the hint into evidence is that link order forces a
+unit's objects to be CONTIGUOUS and in unit order: if ownership tracked
+usage, the referencing units read down the address list would come out
+non-decreasing, and if it did not, they would be scrambled. They come out
+non-decreasing almost everywhere, and the places they do not are exactly the
+places with an independent anchor.
+
+**The state run is fully determined. 27 objects with a single referencing
+unit, zero order violations:**
+
+| unit | state block | objects |
+|---|---|---|
+| `c_server.c` | `0x80028530..0x800287E8` | 19, incl. the 8 event vars, `card_dir`, `card_st`, `card_slot`, `card_evflg`, `gCardState` |
+| `card_mes.c` | `0x800287E8..0x800291D0` | 3 |
+| `card_opt.c` | `0x800291D0..0x80029618` | 1 |
+| `card_win.c` | `0x80029618..0x8002A990` | 2 |
+| `cardbk.c` | -- | none |
+| `cardinfo.c` | `0x8002A990..0x8002B850` | 2 |
+| `cardslot.c` | `0x8002B850..0x8002B968` | 2 |
+| `cardsme.c` | `0x8002B968..0x8002BB08` | 1 |
+| `memory.c` | `0x8002BB08..0x8002BB6C` | 1 |
+
+A non-decreasing run of 27 over nine units is about 1 in 1e19 by chance, so
+this is not an alignment that happened to work. `cardbk.c` owning nothing is
+the expected answer, not a hole: it is the one unit with no window, and it
+has a single live function.
+
+**And the partition predicts the two residue words, which is independent
+confirmation.** `docs/owning-data.md` SS6 records `0xF97F8BEF` at
+`0x8002A98C` and `0x6F7C7327` at `0x8002B964` as high-entropy words sitting
+inside the zero region, read by nothing, each just past the end of a buffer
+whose true length is witnessed by its `func_8003FE78` word count. Under the
+table above they are the gaps between unit blocks: every unit's state block
+begins on an 8-byte boundary, exactly two interior block ends are not
+8-aligned -- card_win's at `0x8002A98C` and cardslot's at `0x8002B964` -- and
+both carry a residue word, while all five 8-aligned interior boundaries carry
+none. Two for two with no exceptions. So the residue is inter-unit `.bss`
+alignment padding, written out of the linker's buffer rather than zero-filled.
+(memory's end is misaligned too and has no residue, correctly: nothing
+follows it but the 0x494-byte pad to the sector boundary.)
+
+**The tables run is determined except one cut.** It falls in three zones:
+
+| zone | span | status |
+|---|---|---|
+| head | `0x80027E20..0x80027F60` | `c_server.c`, DETERMINED -- `MEM_CARD_NAMES` and `MEM_CARD_FILENAMES` point at literals inside c_server's own rodata block, a literal is emitted into the unit that uses it, and no unit precedes unit 1; the rest follows by contiguity |
+| middle | `0x80027F60..0x800280B4` | DETERMINED -- 18 objects, zero violations: card_mes 1, card_opt 1, card_win 2, cardbk 1, cardinfo 5, cardslot 6, cardsme 2 |
+| tail | `0x800280B4..0x80028530` | ONE OPEN CUT between `cardsme.c` and `memory.c` |
+
+The head is also where the defines-is-not-uses trap shows itself, and it is
+worth keeping in mind because it is the whole reason this needs an argument:
+`D_80027E68` is the second object in the run and only `cardslot.c` reads it,
+`SAVE_ICON_CLUTS` is third and only `cardinfo.c` reads it. Both are
+c_server's, used by units six and seven away.
+
+The tail is the eight message-pool tables plus the sixteen animation payloads
+above them. It is one or two units, and all of it is `cardsme.c`'s or
+`memory.c`'s: the middle zone ends at cardsme, and the pool is the segment's
+last rodata. `gCardMessages` and `D_800282A4` share `MSG_EMPTY`, of which the
+pool holds one copy, so those two and everything between them are one unit.
+That leaves the cut at `0x800280B4` or anywhere in
+`0x800282BC..0x80028530` -- fifteen candidate positions, and no evidence
+between them. Nothing in the tail is referenced by `memory.c` at all, and one
+object (`D_800282CC`) is referenced by `cardsme.c`, which leans toward
+cardsme owning at least the upper part; that is a lean, not a finding.
+
+**Correction, 2026-11-10.** An earlier pass over this section replaced the
+claim "both runs check out object by object" with the opposite, that the
+referencing map "jumps around link order freely" and seven of the eight cuts
+would be invention. That was an over-correction and it was wrong. The map
+jumps only in c_server's head block and inside the tail; across the 45
+objects in between it does not jump once. The original claim was right, and
+what it was missing was this argument rather than evidence.
+
+#### The build CAN express per-unit data; the gap is evidence, not tooling
+
+An earlier version of this section said the build could not express two
+per-unit groups. That was wrong, and the correction matters because it moves
+the blocker from "impossible" to "unproven".
+
+**Measured 2026-11-10.** Moving `D_8002BB08`, the overlay's last data object,
+into a new `csrc/main/memory_state.c` and adding one yaml line --
+`[0x268b08, .data, main/memory_state]` -- builds all four containers
+byte-identical. Legacy generation emits one input-section line per
+subsegment IN SUBSEGMENT ORDER, so the DATA group takes as many objects as
+the yaml lists, in the order it lists them. One DATA group does not mean one
+object.
+
+Two real constraints remain, and neither is the one that was written here:
+
+1. **One object contributes one `.data` run.** Nine unit objects give nine
+   runs, not the eighteen that `[tables x9][state x9]` needs. Reproducing
+   both runs needs a second object per unit, a `*_state.c`, which builds but
+   is a source fiction: in the original those were one file's `.data` and
+   its `.bss`.
+2. **Real `.bss` is out, for the reason `docs/owning-data.md` SS6 gives
+   first.** Two non-zero words sit inside the zero run -- `0xF97F8BEF` at
+   `0x8002A98C` and `0x6F7C7327` at `0x8002B964` -- so it is three disjoint
+   windows, and a NOBITS section would write zeros over both. The other
+   reason that doc gives, a fixed `.rodata`/`.bss`/`.text`/`.data` group
+   order, is NOT a tool limit: `section_order` is a yaml option, settable
+   per segment, and splat's source says it is legacy generation that ignores
+   it. That is this repo's configuration, not a wall.
+
+So every data object stays in `csrc/ovl_main_80020000.c` for now, and the
+units reach what they need as externs -- but because the cut points are
+unproven, not because they are unbuildable.
+
+#### The twin's UI text is per unit -- and retail reorganised it
+
+Dumped 2026-11-10, and it settles what the twin can and cannot do for data.
+Carving the twin's rodata at the nine `__FILE__` anchors (each unit's block
+opens with its own copy of the assert format string, so a block starts 0x28
+bytes before its filename) shows the twin is the JAPANESE build, with its UI
+text distributed across five units:
+
+| twin unit | its Shift-JIS strings | the retail table they become |
+|---|---|---|
+| `c_server.c` | 29 messages, `0x80400148..0x80400545` -- データの消去に失敗しました。, 空きブロックが足りません。, メモリーカードが壊れています。 ... | `gCardMessages` |
+| `card_mes.c` | リプレイ / 消す / コピー / ロード | `D_800282BC` = REPLAY/DELETE/COPY/LOAD |
+| `card_opt.c` | 使用できません。/ 回 / 冒険中 | `D_800282A4` = `MSG_CANT_USE` |
+| `cardbk.c` | 名前 / 貯金 / 冒険 / 回 / 時間 / 建物 / 不思議な塔 / 魔物の塔 / Ｆから冒険再開 / メモリーカードに他のゲームのデータがあります。 / あと ... つデータがセーブできます。 | `D_800283A8`, `D_800283B8`, `D_800283EC`, `D_800283F4` |
+| `cardinfo.c` | アザーライフ・アザードリームス　ＮＯ． | `D_80028294` = `MSG_AZURE_DREAMS`/`D`/`T`/`COLON` |
+
+Two useful things and one dead end come out of it.
+
+**`cardbk.c` is the saved-game summary panel.** 名前 (name), 貯金 (savings),
+冒険 ... 回 (adventures, count), 時間 (time), 建物 (buildings), plus the two
+tower names and "resume the adventure from F". That is the per-slot summary
+box, and it is the first statement of what this unit is FOR rather than where
+it sits. It also explains the retail shape: fourteen of its functions are
+compiled out and one survives, because the summary panel is drawn from data
+the retail build fills in elsewhere.
+
+**It also gives the Japanese original of most of the English messages**, which
+is better provenance for the `MSG_*` macro names in
+`csrc/ovl_main_80020000.c` than the English text alone -- 消す is "delete"
+flatly, so `MSG_DELETE` is right, and 冒険中 ("adventuring") is not a UI
+label at all.
+
+**The dead end: the twin cannot settle retail's data ownership.** In the twin
+these tables live in units 1, 2, 3, 5 and 6. In retail they cannot: the pool
+is one contiguous block after cardinfo's rodata, and the retail rodata of
+units 1, 2, 3 and 5 is fully accounted for by other things (the assert pair
+and handler tables, four bytes, nothing, one space). So the retail source
+CENTRALISED the UI text into a single unit, and the twin predates that
+change. Unlike the text boundaries -- where the twin's filenames were
+decisive -- here it is evidence that the two builds differ, which is why the
+tail cut above stays open.
 
 #### Three things the carve needs that are not the source split
 

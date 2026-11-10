@@ -135,8 +135,16 @@ segments:
       # the evidence for each boundary and says which are inferences. Only
       # four units own rodata, in link order -- card_opt/card_win/cardslot/
       # cardsme/memory emit none -- and ovl_main_80020000.c is now DATA ONLY,
-      # holding every data object plus the 59 message strings, because the
-      # data region is two per-unit groups and a linker script has one.
+      # holding every data object plus the 59 message strings.
+      #
+      # The data is NOT held back by the linker script: a `.data` subsegment
+      # per object placement builds byte-identical, since legacy generation
+      # emits one input-section line per subsegment in subsegment order. It is
+      # held back because the image wants two runs per unit (tables, then
+      # state) where one object gives one, and because the tables run's tail
+      # has one undetermined cut that `make containers` cannot referee -- any
+      # partition respecting address order links the same. See
+      # docs/overlays.md, "Rodata is per unit; so is data".
       - [0x25d000, .rodata, main/c_server]       # 0x80020000, 0xA0
       - [0x25d0a0, .rodata, main/card_mes]       # 0x800200A0, 4
       - [0x25d0a4, .rodata, main/cardbk]         # 0x800200A4, 4
