@@ -61,56 +61,16 @@ following SHA256:
 ```
 
 ### PSY-Q
-
-The game was built using PSY-Q 4.1's `cc1psx` although its runtime libraries
-are from PSY-Q 4.0.
-
-**The build does not run those binaries.** The compiler is built from source
-instead -- see [The compiler](#the-compiler) below -- so what `psyq/` is needed
-for is its **headers** (`include/`, which the build compiles against) and its
-**libraries** (`lib/`, which the `azure libmatch` and `azure libscan` analysis
-tools read). The `.exe`s are not used by anything; they are kept as the
-provenance reference the native compiler was verified against, and
-`tools/validate-psyq.py` records their hashes.
+The PSY-Q dependencies are the **headers** and **libraries** from version 4.0.
 
 Ensure you have a `psyq/` directory in the project root with the following
 contents:
 
 ```
 include/
-aspsx-2.67.exe
-aspsx.exe
-cc1plpsx.exe
-cc1psx.exe
-ccpsx.exe
-cpppsx.exe
+  <all psy-q headers>
 lib/
-    2mbyte.obj
-    8mbyte.obj
-    autopad.obj
-    libapi.lib
-    libc2.lib
-    libcard.lib
-    libcd.lib
-    libc.lib
-    libcomb.lib
-    libds.lib
-    libetc.lib
-    libgpu.lib
-    libgs.lib
-    libgte.lib
-    libgun.lib
-    libmath.lib
-    libmcrd.lib
-    libpress.lib
-    libsio.lib
-    libsnd.lib
-    libsn.lib
-    libspu.lib
-    libtap.lib
-    noheap.obj
-    none3.obj
-    poweron.obj
+  <all psy-q libraries>
 ```
 
 The project includes a script to ensure that this directory has the correct contents:

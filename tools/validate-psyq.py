@@ -6,12 +6,6 @@ import sys
 PSYQ_PREFIX = "psyq"
 
 RAW_MANIFEST = f"""
-aspsx.exe        7f928fa89e143facd75737822b08bb63fb41a06415ba943393db727aa398efc8
-aspsx-2.67.exe   44103a7e64432095d0795e434232aa8deabeade393063f56e00ce0d329382df7
-cc1plpsx.exe     855bf8e3194980e1cd5eb9d6ce763ffca5dcbc3af899ecfa9d4786dd024cb164
-cc1psx.exe       17b0d9dc6a80b2aaec90f912bb442321ec8bc5cecaf7071f5bd187e1d6525d49
-ccpsx.exe        7ea2ea5e16f8847f6ccdce229f74d4cd6188d7aefdd7a035200d27b524962aa5
-cpppsx.exe       2eef12fc06c6f02844e2679d3fb42dab88886b84a1a7ca1fb01cc713c466c78d
 lib/2mbyte.obj   b4ed8b2e76bc841f7a81132906d846877aefa8f6233fb738600c8b1ebd032a46
 lib/8mbyte.obj   0c0ccb91c6d059a88b5ec5ac8f34c65a717c636a911247c31faa0df4ae2e599e
 lib/autopad.obj  fab3b9d89065f18f5c6a76955958dc77b5c99b50d098bfb75c692b7bcec53bf0
