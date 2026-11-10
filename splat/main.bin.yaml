@@ -39,21 +39,11 @@ segments:
   - [0x3000, bin, unk.vab]
   - [0x3800, bin]
   - [0x20000, bin, kewne_loading_img]
-  # The monster/spell/character string pool, 0x20800..0x21268: 134
-  # NUL-terminated full-width Shift-JIS strings, each padded to 4. One
-  # hand-owned file, asrc/monsters.s, placed by the `hrodata` subsegment type
-  # (splat/ext/hrodata.py) -- it was 17 one-string `shiftjis` segments plus a
-  # 2,368-byte `bin` tail, which cost 18 segment blocks in the linker script
-  # for 2.6 KB of text and left two thirds of the pool undecoded.
-  #
-  # `vram: 0x20800` is the rom offset, not a finding. This container's
-  # non-overlay resources have no known load address -- the CD-ROM log shows
-  # the game seeking main.bin+0x20800, but nothing in the tree says where the
-  # bytes land -- and `hrodata` refuses a segment without a vram. Identity is
-  # the one value that cannot be mistaken for a RAM address, and it costs
-  # nothing: splat's generated names for this range are thrown away, since the
-  # file names every string itself.
-  - {start: 0x20800, type: hrodata, name: monsters, vram: 0x20800}
+  - start: 0x20800
+    type: hrodata
+    name: monsters
+    # NB: `vram: 0x20800` is just the ROM offset, not its actual load address
+    vram: 0x20800
   # Pointer and index tables, then 11 KB of unidentified fixed-size records,
   # then zero padding from 0x24440. The game reads this: the CD-ROM command
   # log seeks main.bin+0x20800 and +0x21800. 144 of its words are pointers
