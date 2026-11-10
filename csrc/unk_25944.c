@@ -747,9 +747,9 @@ void func_800525D4(void)
 
     if (n != NULL)
     {
-        s = (u8 *)(n + 1);
+        s = n->payload;
         n->unk_10 = (u32)func_80052144;
-        *(u16 *)(n + 1) = 0;
+        *(u16 *)n->payload = 0;
         *(u16 *)(s + 2) = 0;
         *(u16 *)(s + 4) = 0;
         *(u16 *)(s + 6) = 0;

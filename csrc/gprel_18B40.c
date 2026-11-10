@@ -111,7 +111,7 @@ s32 func_80045340(u8 *p, UnkVec *v, UnkSlot *s)
             D_80081510 = 0;
             return 0;
         }
-        p = (u8 *)n + 0x20;
+        p = n->payload;
         v = n->unk_08;
         s = (UnkSlot *)n->unk_0C;
     }

@@ -631,7 +631,7 @@ s32 func_80033D54(u8 *pl, UnkVec *v, UnkSlot *s)
         {
             break;
         }
-        pl = (u8 *)n + 0x20;
+        pl = n->payload;
         v = n->unk_08;
         s = (UnkSlot *)n->unk_0C;
     }

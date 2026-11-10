@@ -663,8 +663,7 @@ void func_80040190(void)
 
             if ((s32)fn < 0 && !(p->unk_1E & 0x400))
             {
-                ((void (*)(void *, UnkVec *, u32))fn)((u8 *)p + 0x20,
-                                                      p->unk_08, p->unk_0C);
+                ((void (*)(void *, UnkVec *, u32))fn)(p->payload, p->unk_08, p->unk_0C);
             }
             p = next;
         } while (p != NULL);
@@ -742,7 +741,7 @@ void func_800402F4(void)
         {
             continue;
         }
-        f((u8 *)n + 0x20, n->unk_08, (UnkSlot *)n->unk_0C);
+        f(n->payload, n->unk_08, (UnkSlot *)n->unk_0C);
         if (func_80045310(*(u32 *)(D_80083160.unk_00 + 0x8D0)) != 0)
         {
             return;
