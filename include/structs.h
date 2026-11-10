@@ -1629,6 +1629,22 @@ typedef struct UnkNode
     struct UnkNode *unk_18;
     u16 unk_1C; /* indexes D_800833E0 in func_80044AAC */
     u16 unk_1E; /* flags */
+    /* The node is a HEADER: every user allocates 0x20 + a payload of its own
+       and reaches it off the node. func_8003FE78's size argument is the whole
+       object in words and varies per caller (0x19..0x394 in the card overlay
+       alone), each `bzero` after a reuse clears exactly that size minus 0x20,
+       and csrc/gprel_72A8.c converts the other way with `(UnkNode *)(p -
+       0x20)`. Spelling that as a member puts the 0x20 in the type instead of
+       at every site: `(T *)n->payload`.
+
+       It is `[0]`, gcc's zero-length-array extension, and not the C99
+       flexible array member `[]`, which cc1psx rejects outright ("field
+       `payload' has incomplete type"). Neither form contributes to `sizeof`,
+       so the header stays 0x20 and `n + 1` still advances by it. Measured:
+       `n->payload`, `(u8 *)n + 0x20` and `(s32 *)(n + 1)` all compile to the
+       same `addu $2,$4,32`, and `p[-4] = v` and `((UnkNode *)p - 1)->unk_10 =
+       v` both to the same `sw $5,-16($4)`. */
+    u8 payload[0];
 } UnkNode;
 
 extern UnkNode D_80082D38;
