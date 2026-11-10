@@ -414,7 +414,7 @@ extern u8 D_8002807C[];
 extern u8 D_80028084[];
 extern u8 D_8002808C[];
 extern u8 D_80028094[];
-extern s32 D_8002809C[];
+extern void (*D_8002809C[6])(s32 *);
 extern UnkStrSet D_800280B4[];
 extern u8 *D_80028294[4];
 extern u8 *D_800282A4[];
