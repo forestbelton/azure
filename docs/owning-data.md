@@ -17,6 +17,16 @@ the data objects `D_80027F18` and `D_80027F20` and the rodata object
 `D_80020074`. All four containers stayed byte-identical. Re-measure rather than
 trust.
 
+> **The 0x80020000 overlay is DONE as of 2026-11-09.** It owns its whole data
+> region, `0x80027E20..0x8002BB6C`, as one `.data` subsegment and 90 objects --
+> see §7, which is now the end state rather than a queue. The incremental
+> procedure in §4 is kept because it is what the *other* three overlays will
+> need, and because §6 is where the traps live; read §7 first if what you want
+> is this overlay's shape. The one thing §4 cannot tell you, because it only
+> came up at the end, is **why the all-zero tail could not be `.bss`** -- that
+> is the last bullet of §6, and it is the most surprising thing in this
+> document.
+
 This is mostly about **data**, which is the hard case. Code is
 `docs/landing-a-function.md`. **Rodata** needs none of the yaml work, because
 splat already migrates it per symbol into the `INCLUDE_RODATA` stubs at the
@@ -430,18 +440,22 @@ the only guard, so read it.
 Run, in order:
 
     make build/main.bin                     # the container
-    mips64-linux-gnu-size -A build/csrc/ovl_main_80020000.o | grep '^\.data'
-    mips64-linux-gnu-nm build/main.bin.elf | grep ' D_80027F48$'
+    mips64-linux-gnu-size -A build/csrc/ovl_main_80020000.o | grep -E '^\.(data|bss)'
+    mips64-linux-gnu-nm build/main.bin.elf | grep ' D_8002BB6C$'
 
 **The gate is the C object's `.data` size against the `.data` subsegment's
-span.** With the window at `0x264f18..0x264f48` the span is 0x30, so `size -A`
-must say 48 -- and the first symbol of the `data_post` chunk (`D_80027F48`)
-must land on the boundary, `0x80027F48`. Those two together pin both ends.
+span**, and **`.bss` must read 0**. With the window at its final
+`0x264e20..0x268b6c` the span is 0x3D4C, so `size -A` must say `.data 15692`
+and `.bss 0` -- and the first symbol of the chunk above the window
+(`D_8002BB6C`, in `ovl_main_80020000_pad`) must land on the boundary,
+`0x8002BB6C`. Those pin both ends and catch the `.comm` mistake in §6.
 
 Do **not** use `_25D000_DATA_END` for this. It was the gate while the tail was
-a top-level `bin`, but once `data_post` is inside the segment the DATA group
-runs to the segment end and `_25D000_DATA_END` reads `0x80028000` no matter
-what your object does.
+a top-level `bin`, but with a `data` chunk inside the segment the DATA group
+runs to the segment end and `_25D000_DATA_END` reads `0x8002C000` no matter
+what your object does. `_25D000_TEXT_START` is still worth a look -- it must
+be `0x80020924` -- because that is what moves if a zero object slips into
+`.bss`.
 
 **`make` alone will not catch a short object.** Measured: declaring
 `D_80027F20[12]` -- four bytes short -- still built `main.bin` **byte-identical**,
@@ -577,37 +591,163 @@ All four must come out byte-identical.
   so if a function that reads it stops matching, that is the first thing to
   look at.
 
+* **AN ALL-ZERO OBJECT STILL NEEDS AN EXPLICIT `= {0}`, AND `.bss` IS NOT
+  AVAILABLE AT ALL.** This is the one that decided the shape of the finished
+  overlay. 13.8 KB of its 15,692-byte data region is zero -- work buffers the
+  original source surely declared without an initialiser -- and the obvious
+  spelling is the obvious one:
+
+      u8 D_80028808[0x9C4];            /* WRONG */
+      u8 D_80028808[0x9C4] = {0};      /* right */
+
+  cc1psx emits `.comm` for the first (measured: gcc 2.7.2 has no
+  zero-initialised-data-in-bss optimisation, so an explicit initialiser does
+  reach `.data`, however many zeros it holds), and a `.comm` lands in the C
+  object's `.bss`. **splat's generated `.bss` input-section line for a C unit
+  sits between the segment's `.rodata` and its `.text`**:
+
+      _25D000_RODATA_START = .;
+      ...
+      _25D000_BSS_START = .;
+      build/csrc/ovl_main_80020000.o(.bss);     <<< here
+      _25D000_TEXT_START = .;
+
+  so the mistake does not shorten the data at the top of the segment -- it
+  inserts the buffer at `0x800200C0` and **moves every function in the
+  overlay down**, with `make` blaming a rodata function-pointer table exactly
+  as the missing-`const` trap above does. `size -A`'s `.bss` line is the cheap
+  check and §5 now runs it.
+
+  And **no**, the tail cannot be turned into a real `.bss` subsegment to make
+  the zeros honest. Two independent reasons:
+
+  1. **Two four-byte runs of non-zero residue sit inside the zero region**, at
+     `0x8002A98C` and `0x8002B964` (`0xF97F8BEF` and `0x6F7C7327`, high-entropy
+     and read by nothing). Each is the word immediately after a buffer whose
+     true length is witnessed by the word count handed to `func_8003FE78`, so
+     the zeros are not one run but three, and a NOBITS section would write
+     zeros over both. A unit gets one subsegment per linker section, so three
+     disjoint windows cannot be expressed anyway.
+  2. **splat's legacy generation emits the four section groups in a fixed
+     order per segment**, `.rodata` / `.bss` / `.text` / `.data`. There is no
+     way to interleave a `.bss` window *after* the `.data` the overlay's
+     addresses demand.
+
+  So an overlay's zero tail is initialised data in C whether the original
+  source said so or not, and the file says why where it does it.
+
 ---
 
-## 7. What is left
+## 7. The end state
 
-`0x80027E20` (text end) through `0x8002C000` is one file-backed data region --
-mostly non-zero up to `0x8002852F`, then large mostly-zero arrays with isolated
-live words at `0x8002A98C` and `0x8002B964`, so none of it is safely `bss`.
-Owned by the C unit so far: `0x80027F18..0x80027F48` (`MEM_CARD_NAMES`,
-`MEM_CARD_PREFIX`, `D_80027F30`). `0x80027F48..0x80028000` is the `data_post`
-chunk -- disassembled asm, so its symbols are defined and no longer appear
-below. Still referenced-and-unowned, 56 symbols, with the gap to the next
-referenced symbol as an upper bound on each span:
+**Done 2026-11-09.** `csrc/ovl_main_80020000.c` defines every byte of
+`0x80027E20..0x8002BB6C`, 90 objects, as one `.data` subsegment:
 
-```
-0x80028010 0x10     0x80028020 0x44     0x80028064 0x4      0x80028068 0x4
-0x8002806C 0x8      0x80028074 0x8      0x8002807C 0x8      0x80028084 0x8
-0x8002808C 0x8      0x80028094 0x8      0x8002809C 0x18     0x800280B4 0x1E0
-0x80028294 0xC      0x800282A0 0x4      0x800282A4 0xC      0x800282B0 0xC
-0x800282BC 0x10     0x800282CC 0xC      0x800282D8 0x10     0x800282E8 0xC0
-0x800283A8 0x10     0x800283B8 0xC      0x800283C4 0x28     0x800283EC 0x8
-0x800283F4 0x8      0x800283FC 0x1C     0x80028418 0x18     0x80028430 0x100
-0x80028530 0x8      0x80028538 0x8      0x80028540 0x8      0x80028548 0x8
-0x80028550 0x4      0x80028554 0x4      0x80028558 0x4      0x8002855C 0x4
-0x80028560 0x4      0x80028564 0x4      0x80028568 0x4      0x8002856C 0x4
-0x80028570 0x258    0x800287C8 0x4      0x800287CC 0x4      0x800287D0 0x8
-0x800287D8 0x8      0x800287E0 0x4      0x800287E4 0x4      0x800287E8 0x20
-0x80028808 0x9C8    0x800291D0 0x448    0x80029618 0x1378   0x8002A990 0xE50
-0x8002B7E0 0x70     0x8002B850 0x118    0x8002B968 0x1A0    0x8002BB08 0x4F8
+```yaml
+      - [0x25d000, .rodata, ovl_main_80020000]
+      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
+      - [0x25d924, c, ovl_main_80020000]
+      - [0x264e20, .data, ovl_main_80020000]
+      - [0x268b6c, data, ovl_main_80020000_pad]
 ```
 
-Regenerate that list after any landing:
+Nothing of this overlay is `extern`-into-a-blob any more, and
+`splat/main.bin_undefined_syms_auto.txt` lists none of its addresses. The
+container's `unknown` figure went from 149,024 bytes (5.78%) to 132,640
+(5.14%); what is left of it is `[0x3800, bin]` (the VAB waveform area, 116,736)
+and `[0x2719e0, bin]` (the debug twin's data, 15,904), neither of which is this
+overlay's.
+
+### Where the data ends, and why `0x8002C000` was the wrong answer
+
+The old version of this section called `0x80027E20..0x8002C000` "one
+file-backed data region", because that is where the segment ends and the bytes
+up there are in the container. They are **pad**, and the witness is a word
+count. Every trailing buffer in this overlay is handed to `func_8003FE78`,
+whose third argument is a length in words (`p = (u8 *)n + count * 4`), and
+every one of those counts lands exactly on the next referenced symbol:
+
+| buffer | words | so it ends at | next symbol |
+|---|---|---|---|
+| `0x800287E8` | 0x27A | `0x800291D0` | `0x800291D0` |
+| `0x800291D0` | 0x112 | `0x80029618` | `0x80029618` |
+| `0x80029618` | 0xF9 x 5 rows | `0x8002A98C` | (residue, then `0x8002A990`) |
+| `0x8002A990` | 0x394 | `0x8002B7E0` | `0x8002B7E0` |
+| `0x8002B7E0` | 0x1C | `0x8002B850` | `0x8002B850` |
+| `0x8002B850` | 0x45 | `0x8002B964` | (residue, then `0x8002B968`) |
+| `0x8002B968` | 0x68 | `0x8002BB08` | `0x8002BB08` |
+| `0x8002BB08` | 0x19 | **`0x8002BB6C`** | nothing |
+
+Six exact hits make the seventh trustworthy: the last object ends at
+`0x8002BB6C`, the 0x494 bytes above it are zero, nothing references them, and
+`0x269000` is where the container's next sector-aligned resource begins. So
+they are the mastering pad, and they stay in `ovl_main_80020000_pad`.
+
+That chunk is **not** optional bookkeeping, and the failure is not the one the
+first bullet of §6 describes. The next segment's LMA is `__romPos`, not its own
+`start:`, so without the pad chunk this segment ends at `0x268b6c`, `__romPos`
+aligns to `0x268b70`, and the debug twin and everything after it lands early.
+Measured 2026-11-09 by deleting the line:
+
+    built 0x275370 bytes, size differs by -0x490
+    FAIL  0x83a5 of 0x275370 bytes differ (1.31%); first at 0x268b70
+
+Same rule, opposite sign to the 2026-11-08 incident: there the window's end was
+8 bytes *past* the grid and the container came out long.
+
+The same word counts are what split two buffers into "buffer + residue word"
+in the C file; see the `.bss` bullet in §6.
+
+### What the region turned out to be
+
+Worth knowing before touching it, because most of it is readable now:
+
+* **A message table.** `D_800280B4` is 20 x `UnkStrSet`: five Shift-JIS line
+  pointers into `asrc/ovl_main_80020000_rodata_pool.s` plus four bytes. Those
+  121 pointer words were the reason the pool got per-message labels; claiming
+  the table is what finally made them load-bearing, and all 59 are referenced.
+* **Seven more pointer tables** of pool strings, and seven more Shift-JIS strings
+  that live in `.data` rather than the pool because they are written through --
+  `D_800282E8` is a 0xC0-byte save-row template with runs of spaces where the
+  numbers go.
+* **Two animation scripts**, `D_80027E20` and `D_80027E68`, now spelled as
+  `UnkAnimStep[]`. The record is witnessed by the two resident functions that
+  walk one (`func_8004CBFC`, `func_8004CB2C`): `{u16 delay, s16 op, void *arg}`,
+  `op == 2` meaning `arg` is this step's cel record and `op` 0 or 1 meaning
+  `arg` is the next script, which is how a script loops.
+* **Twenty-nine 12-byte cel records**, in seventeen objects, those scripts
+  and tables point at. Nothing
+  in the overlay reads one -- each is stored by address into a primitive field
+  and consumed outside -- so they stay `u8[]`.
+* **Five 16-entry CLUTs** at `D_80027E78`, `0x20` bytes each.
+* **Six `func_800491F4` index lists**, each a byte list terminated by the
+  first byte that is not less than the count the call passes.
+* **A function-pointer table**, `D_8002809C`, six entries, four of them this
+  unit's own `func_80027528`/`func_800276EC`/`func_80027734`/`func_80027778`.
+* **A 15-row `struct DIRENTRY` buffer** at `0x80028570`. `csrc/main.h` had it
+  as `[10]`; the object is 0x258 bytes and the walk stride is `0x28`, which is
+  `sizeof(struct DIRENTRY)`, so it is 15.
+* **The eight card event descriptors**, four per-slot counter pairs, and the
+  `UnkNode` work buffers in the table above.
+
+Three objects were merged away because splat's symbol list oversplits them, each
+measured byte-identical on 2026-11-09:
+
+* `D_80028294[3]` + `D_800282A0` -> `D_80028294[4]`. `func_80025F0C` already
+  indexed past the three-entry bound to reach the fourth, and
+  `%lo(D_80028294 + 12)` *is* `%lo(D_800282A0)`.
+* `D_80027FF8` + `D_80028000` -> one 0x18-byte list. `0x80028000` only had a
+  label because that is where the old `bin` segment began.
+* The six two-word counters (`D_80028530`, `D_80028538`, `D_80028540`,
+  `D_80028548`, `D_800287D0`, `D_800287D8`) are `s32[2]` indexed `[i]`, not a
+  scalar reached as `(&D_80028530)[i]`. Both spellings build byte-identical,
+  and the array one does not need an invented symbol for the second word.
+
+Objects that still need one, because a name inside a larger buffer is the only
+part the code reaches: `D_80028808` (the `+0x20` word of the `0x800287E8`
+buffer, which is therefore three C objects), and the two residue words.
+
+### Regenerating the unowned list, for the other overlays
 
 ```sh
 python3 - <<'EOF'
@@ -624,10 +764,5 @@ for i, (a, n) in enumerate(syms):
 EOF
 ```
 
-Claim them from the two edges of the owned window inward, one or a few at a
-time, running §5 after each. Note that the unowned prefix
-(`0x80027E20..0x80027F18`) opens on an eleven-entry table of
-`{u32, void *}` pairs, two of whose pointers point back into the table itself
-(`0x80027E20` and `0x80027E68`) -- `D_80027E68` is a referenced symbol in the
-middle of it, so claiming that run means splitting it into two C arrays so the
-second one starts at `0x80027E68`.
+For this overlay that now prints nothing, which is the point. Change the range
+and the yaml filename for `town.bin` or `dungeon.bin`.

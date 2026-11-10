@@ -129,7 +129,12 @@ Three things about the overlays that change how they are worked, all in
   pointer) does not arise. `main.bin`'s overlay is a `c` subsegment as of
   2026-11-01 with per-unit `CFLAGS`/`MASPSXFLAGS` overrides in the Makefile,
   and is **complete: 241 of 241 functions, 7,487 of 7,487 words (100.0%)**,
-  with all four containers byte-identical. That completed every block the
+  with all four containers byte-identical. **Its DATA is complete too, as of
+  2026-11-09**: `0x80027E20..0x8002BB6C`, 15,692 bytes, 90 objects, all defined
+  in `csrc/ovl_main_80020000.c` rather than `extern`-ed into a splat blob, so
+  nothing of this overlay is in `splat/main.bin_undefined_syms_auto.txt` any
+  more. It is the only block of which that is true; `docs/owning-data.md` is
+  the procedure and its §7 the end state. That completed every block the
   project counted -- **1,293 of 1,293 functions, 100.0% of its words**. It is
   no longer true that there is no `INCLUDE_ASM` anywhere in `csrc/`: the debug
   twin below was opened as a `c` subsegment on 2026-11-09 and carries 261 of

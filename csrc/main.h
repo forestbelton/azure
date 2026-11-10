@@ -64,6 +64,19 @@ typedef struct
     u8 b[0x20];
 } UnkBlock20;
 
+/* One step of an animation script, 8 bytes, witnessed by the two resident
+   functions that walk one: func_8004CBFC seeds a primitive from the first
+   step (`p[0] = *(u16 *)q / D_80080A84`, `r[0] = *(u32 *)(q + 4)`) and
+   func_8004CB2C advances it, switching on the halfword at +2 -- 2 means
+   `arg` is this step's cel record and the walk moves on 8 bytes, 0 and 1
+   mean `arg` is the next script to run, which is how a script loops. */
+typedef struct
+{
+    u16 delay;
+    s16 op;
+    void *arg;
+} UnkAnimStep;
+
 /* The 0x80-byte save-slot row, declared as a STRUCT alias of D_80083E98 (the
    unit already has it as `s32 [][32]`, which the other functions want).
    func_80024390 needs the struct spelling: its first row access is the name
@@ -365,12 +378,20 @@ extern const u8 D_800200A0[4];
 extern const u8 D_800200A4[];
 extern const RECT D_800200B8;
 
-/* The overlay's own data, past its text end at 0x80027E20 and so in the
-   following `bin` segment; the linker resolves them from
-   splat/main.bin_undefined_syms_auto.txt. Declared as arrays because the
-   listings materialise them with the lui/addiu pair rather than folding a
-   %lo into the access. */
-extern u8 D_80027E68[];
+/* The overlay's own data, 0x80027E20..0x8002BB6C, past its text end. These
+   are NOT externs into a splat blob any more -- csrc/ovl_main_80020000.c
+   defines every one of them, at the foot of the file in address order, and
+   they are declared here because almost every use site is above the
+   definition. Declared as arrays because the listings materialise them with
+   the lui/addiu pair rather than folding a %lo into the access. A sized
+   declaration against a differently sized definition is a hard
+   `conflicting types` error, which is one more gate for free -- it is what
+   caught D_80028570 being 15 rows and not 10. */
+
+/* The 1-frame animation script, spelled as what it is now that this unit
+   defines it; func_8004CBFC's parameter is a `u8 *`, hence the casts at the
+   three call sites. */
+extern UnkAnimStep D_80027E68[2];
 extern u8 D_80027E78[][0x20];
 extern const char *MEM_CARD_NAMES[2];
 extern char MEM_CARD_PREFIX[16];
@@ -395,8 +416,7 @@ extern u8 D_8002808C[];
 extern u8 D_80028094[];
 extern s32 D_8002809C[];
 extern UnkStrSet D_800280B4[];
-extern u8 *D_80028294[];
-extern u8 *D_800282A0;
+extern u8 *D_80028294[4];
 extern u8 *D_800282A4[];
 extern u8 D_800282B0[];
 extern u8 *D_800282BC[];
@@ -411,10 +431,10 @@ extern u8 *D_800283F4[];
 extern u8 D_800283FC[];
 extern u8 D_80028418[];
 extern u8 D_80028430[];
-extern s32 D_80028530;
-extern s32 D_80028538;
-extern s32 D_80028540;
-extern s32 D_80028548;
+extern s32 D_80028530[2];
+extern s32 D_80028538[2];
+extern s32 D_80028540[2];
+extern s32 D_80028548[2];
 
 #define gSwCardEOFEvent D_80028550
 extern long gSwCardEOFEvent;
@@ -433,16 +453,18 @@ extern s32 D_80028564;
 extern s32 D_80028568;
 extern s32 D_8002856C;
 
-extern struct DIRENTRY D_80028570[10];
-// extern s32 D_80028570[][10];
+/* 15 rows, not 10: the object runs 0x258 bytes to D_800287C8 and
+   func_8002191C/func_80021A04 walk it 0x28 bytes at a time, which is
+   sizeof(struct DIRENTRY) exactly. */
+extern struct DIRENTRY D_80028570[15];
 
 extern s32 D_800287C8;
 
 #define card_slot D_800287CC
 extern s32 card_slot;
 
-extern s32 D_800287D0;
-extern s32 D_800287D8;
+extern s32 D_800287D0[2];
+extern s32 D_800287D8[2];
 extern s32 D_800287E0;
 
 #define gCardState D_800287E4
@@ -457,6 +479,93 @@ extern u8 D_8002B7E0[];
 extern u8 D_8002B850[];
 extern u8 D_8002B968[];
 extern u8 D_8002BB08[];
+
+/* The 59 Shift-JIS UI messages in asrc/ovl_main_80020000_rodata_pool.s, which
+   the D_800280B4 message table and the nine smaller pointer tables below it
+   index. Not `const`: the tables that hold these addresses are `u8 *`, and a
+   const-qualified declaration makes every entry an
+   "initialization discards `const'" warning. */
+extern u8 D_800200C0[];
+extern u8 D_800200F0[];
+extern u8 D_80020114[];
+extern u8 D_8002012C[];
+extern u8 D_80020158[];
+extern u8 D_80020188[];
+extern u8 D_800201C0[];
+extern u8 D_800201EC[];
+extern u8 D_80020204[];
+extern u8 D_8002021C[];
+extern u8 D_8002024C[];
+extern u8 D_80020270[];
+extern u8 D_8002029C[];
+extern u8 D_800202AC[];
+extern u8 D_800202E4[];
+extern u8 D_80020324[];
+extern u8 D_80020364[];
+extern u8 D_800203A4[];
+extern u8 D_800203E0[];
+extern u8 D_80020420[];
+extern u8 D_8002045C[];
+extern u8 D_8002049C[];
+extern u8 D_800204C4[];
+extern u8 D_800204F4[];
+extern u8 D_80020508[];
+extern u8 D_80020528[];
+extern u8 D_80020554[];
+extern u8 D_80020574[];
+extern u8 D_80020590[];
+extern u8 D_800205AC[];
+extern u8 D_800205C8[];
+extern u8 D_80020608[];
+extern u8 D_80020638[];
+extern u8 D_80020654[];
+extern u8 D_80020688[];
+extern u8 D_8002068C[];
+extern u8 D_800206B8[];
+extern u8 D_800206D8[];
+extern u8 D_8002070C[];
+extern u8 D_80020734[];
+extern u8 D_80020738[];
+extern u8 D_8002073C[];
+extern u8 D_80020740[];
+extern u8 D_8002075C[];
+extern u8 D_80020770[];
+extern u8 D_80020780[];
+extern u8 D_80020790[];
+extern u8 D_8002079C[];
+extern u8 D_800207A8[];
+extern u8 D_800207AC[];
+extern u8 D_800207D4[];
+extern u8 D_800207F4[];
+extern u8 D_80020810[];
+extern u8 D_8002083C[];
+extern u8 D_80020870[];
+extern u8 D_800208A4[];
+extern u8 D_800208B8[];
+extern u8 D_800208EC[];
+extern u8 D_80020908[];
+
+/* The 12-byte cel records at the top of the overlay's data, declared here
+   because the tables that point at them (D_80027E20, D_80027E68 and
+   D_80027FD4) are defined 0x5D0 bytes lower and so come first in the C
+   file. */
+extern u8 D_80028448[];
+extern u8 D_80028454[];
+extern u8 D_80028460[];
+extern u8 D_8002846C[];
+extern u8 D_80028478[];
+extern u8 D_80028484[];
+extern u8 D_80028490[];
+extern u8 D_8002849C[];
+extern u8 D_800284A8[];
+extern u8 D_800284B4[];
+extern u8 D_800284C0[];
+extern u8 D_800284CC[];
+extern u8 D_800284D8[];
+extern u8 D_800284E4[];
+extern u8 D_800284F0[];
+extern u8 D_800284FC[];
+extern u8 D_80028520[];
 extern u8 D_80077E84[];
 extern u8 D_80077EF0[];
 extern u8 D_80077EFC[];

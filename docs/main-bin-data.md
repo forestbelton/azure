@@ -79,7 +79,7 @@ regions, one explanation.
   `/STRT/DUMMYM.STR` are 99.6% zeros — 16 bytes of 0x0c then zero fill, one
   sector repeated 166 times. This is nothing like them.
 - **Not a file-wide pre-fill.** Every *other* gap in `main.bin` is zeros
-  (0x24440..0x28420, 0x265000, 0x2719e0 are 90-99.9% zero). Only this one run
+  (0x24440..0x28420, 0x268b6c, 0x2719e0 are 90-99.9% zero). Only this one run
   was filled this way, so it was filled deliberately and separately.
 
 ### The one structural fact
@@ -121,26 +121,41 @@ both +0x20800 and +0x21800, so it is read in at least two pieces.
 
 ## What splat sees now
 
-| type | bytes | % of container |
-|---|---|---|
-| `bin` (named) | 2,360,544 | 91.55% |
-| `asm` (the 0x80400000 debug twin) | 33,600 | 1.30% |
-| `c` (the 0x80020000 overlay) | 29,788 | 1.16% |
-| `shiftjis` (`str/main/*`) | 320 | 0.01% |
-| **unknown** | **149,504** | **5.80%** |
+Re-measured 2026-11-09, after the 0x80020000 overlay took over the whole of
+its own data (`docs/owning-data.md` §7). These are subsegment spans summed
+straight out of `splat/main.bin.yaml`, which is why they add up to the
+container exactly; splat's own summary rounds to KB and lumps the named and
+unnamed `bin` together.
 
-Down from 2,250,432 bytes (87.3%) unknown before this pass. Read splat's
-`unknown` line and not its "in defined segments" total — `docs/data-map.md`
-explains why that headline number is unreliable.
+| type | bytes | % of container | what |
+|---|---|---|---|
+| `bin` (named) | 2,361,024 | 91.57% | identified resources |
+| `bin` (unnamed) | 132,640 | 5.14% | the two blobs below |
+| `c` | 63,036 | 2.44% | both overlays' text (29,948 + 33,088) |
+| `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
+| `rodata` + `hrodata` + `.rodata` | 4,548 | 0.18% | both overlays' rodata |
+| `data` | 1,172 | 0.05% | `ovl_main_80020000_pad` |
+| `shiftjis` | 320 | 0.01% | `str/main/*` |
 
-## The 149 KB still unknown, and what it is
+Down from 2,250,432 bytes (87.3%) unknown before the first pass over this
+container, and from 149,024 (5.78%) before the overlay's data was claimed.
+Read splat's `unknown` line and not its "in defined segments" total —
+`docs/data-map.md` explains why that headline number is unreliable.
+
+## The 130 KB still unknown, and what it is
 
 | blob | bytes | what it is |
 |---|---|---|
 | `[0x3800, bin]` | 116,736 | **the VAB waveform area** — identified, see below |
-| `[0x265000, bin]` | 16,384 | 93.3% zeros; overlay data + padding |
 | `[0x2719e0, bin]` | 15,904 | 90.1% zeros; debug-twin data + padding |
-| `[0x264e20, bin]` | 480 | tail of the 0x80020000 overlay's data |
+
+Two rows gone since 2026-11-01. `[0x265000, bin]`, 16,384 bytes, is not
+"overlay data + padding" awaiting a decision any more: 0x265000..0x268b6c is
+the upper half of the 0x80020000 overlay's `.data` and is defined in
+`csrc/ovl_main_80020000.c`, and 0x268b6c..0x269000 is the 1,172-byte pad to the
+sector boundary, now its own named `data` subsegment. The 480-byte
+`[0x264e20, bin]` went the same way. The remaining `[0x2719e0, bin]` is the
+debug twin's data and is the same job on the other block.
 
 **`[0x3800, bin]` is the sound bank's samples and should simply be named.** The
 VAB header at 0x3000 is `pBAV`, version 7, 3 programs, 39 tones, 28 VAGs, with
@@ -152,6 +167,6 @@ measures as ADPCM rather than merely being assumed to be: **99.3% of its 7,088
 filler. Sample data actually runs to 0x1FAF0 — 2,016 bytes past the VAB's
 declared `total_size` — and then zero-pads to the 0x20000 sector boundary.
 
-So of the 149 KB, 114 KB is a known quantity awaiting a name and the other
-35 KB is overlay data and zero padding. **There is no unexplained bulk data
-left in `main.bin`.**
+So of the 130 KB, 114 KB is a known quantity awaiting a name and the other
+16 KB is the debug twin's data and zero padding. **There is no unexplained bulk
+data left in `main.bin`.**

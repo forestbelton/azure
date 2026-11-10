@@ -245,8 +245,11 @@ The subsystem is the memory card: `bu00:`/`bu10:`, `TMP`, `ERROR` /
 `CARD STATUS0 %x`, `illegal data`. Its external calls go to 65 distinct
 engine targets, many already named -- `printf`, `exit`, `strcat`, `rand`,
 `TestEvent`, `_card_wait` (libcard is resident at `0x3d3f8..0x3d578` with
-module names). Its 69 private data symbols live at
-`0x80027E20..0x8002D000`, a region no engine C file references.
+module names). Its private data lives at `0x80027E20..0x8002BB6C`, a region no
+engine C file references -- and as of 2026-11-09 `csrc/ovl_main_80020000.c`
+defines all 15,692 bytes of it as 90 objects; `docs/owning-data.md` §7 is the
+inventory. (The 0x494 bytes from there to `0x8002C000` are the pad to the next
+sector; the `0x8002D000` this used to say was a guess at the far end.)
 
 ### The assert-record census across all four containers
 
@@ -487,7 +490,7 @@ Two reasons to believe it before measuring anything. There are **0
 `$gp`-relative references across ~200K instructions** of split overlay code.
 And there could not have been any: `$gp` is `0x80080994` and GPREL16 reaches
 +/-32K from it, i.e. `0x80078994..0x80088994`, while this overlay keeps its
-data at `0x80027E20..0x8002D000` and town's and dungeon's live at
+data at `0x80027E20..0x8002BB6C` and town's and dungeon's live at
 `0x80088760` and above. psylink would have rejected a GPREL16 in any of them.
 
 What `-G` actually changes here has nothing to do with `$gp` in the end. At

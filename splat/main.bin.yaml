@@ -214,50 +214,46 @@ segments:
       # $gp-relative (0 refs), and it could not be: the block's data at
       # 0x80027E20 is far outside $gp's +/-32K window around 0x80080994.
       - [0x25d924, c, ovl_main_80020000]
-      # The overlay's .data, which begins the instant the text ends. It is
-      # split in two because splat has NO per-symbol migration for `.data` --
-      # that exists for `.rodata` only (see csrc/ovl_main_80020000.c's
-      # INCLUDE_RODATA stubs). A dotted `.data` subsegment writes no assembly
-      # at all and the C unit must define every byte of it, so the range the C
-      # unit owns is carved off and the remainder stays an ordinary undotted
-      # `data` subsegment that splat keeps disassembling.
+      # The overlay's .data, 0x264e20..0x268b6c (vram 0x80027E20..0x8002BB6C),
+      # which begins the instant the text ends and is OWNED IN FULL by the C
+      # unit as of 2026-11-09. A dotted `.data` subsegment writes no assembly
+      # and no stub -- splat has per-symbol migration for `.rodata` only, see
+      # docs/owning-data.md -- so csrc/ovl_main_80020000.c defines every byte
+      # of this range, and an object dropped from its data block is dropped
+      # from the container.
       #
-      # `ovl_main_80020000_data_pre` is the NOT-YET-OWNED part, and its name
-      # must differ from `ovl_main_80020000` or splat would make it a sibling
-      # of the C unit and link the same object's .data twice.
+      # This used to be three subsegments, `_data_pre` / `.data` / `_data_post`,
+      # with the owned window growing from the middle outwards, plus a
+      # top-level `[0x265000, bin]` above them. The window has now swallowed
+      # all three and the bin: 90 objects, the last of them D_8002BB08.
+      - [0x264e20, .data, ovl_main_80020000]
+      # 0x268b6c..0x269000, 0x494 bytes, ALL ZERO: the pad from the overlay's
+      # last data object to the sector boundary the next segment starts on.
       #
-      # The owned window is ONE contiguous range -- splat keys siblings by
-      # section name, so a unit gets exactly one `.data` subsegment. It grows
-      # in either direction: lower its start to claim the object below (and
-      # `_data_pre` shrinks to match), or raise its end to claim the object
-      # above (and the following segment's start moves up with it). Both
-      # boundaries are hand-maintained and both have to track the C file.
+      # It is pad rather than data, and the witness is a word count. Each of
+      # the overlay's trailing buffers is handed to func_8003FE78 with its
+      # size in WORDS, and every one of those counts lands exactly on the next
+      # referenced symbol -- 0x27A words from 0x800287E8, 0x112 from
+      # 0x800291D0, 0x394 from 0x8002A990, 0x1C from 0x8002B7E0, 0x68 from
+      # 0x8002B968. The last one, 0x19 words from 0x8002BB08, ends at
+      # 0x8002BB6C, and above it nothing is referenced, nothing is non-zero,
+      # and 0x269000 is where main.bin's next sector-aligned resource begins.
       #
-      # docs/owning-data.md is the procedure, with this change as its worked
-      # example.
-      - [0x264e20, data, ovl_main_80020000_data_pre]
-      - [0x264f18, .data, ovl_main_80020000]
-      # The data above the owned window, as a second undotted `data`
-      # subsegment rather than a top-level `bin`.
+      # IT HAS TO BE A SUBSEGMENT OF THIS SEGMENT. Not a top-level `bin`, not
+      # nothing at all: the next segment's LMA is `__romPos`, not its own
+      # `start:`, and `__romPos` is whatever this segment ends at after
+      # `ALIGN(__romPos, 16)`. Drop this line and the segment ends at
+      # 0x268b6c, 0x269000 becomes 0x268b70, and the debug twin plus
+      # everything after it lands early -- measured 2026-11-09:
       #
-      # THIS IS WHY, and it cost a 0x10-long container on 2026-11-08. splat
-      # emits `__romPos = ALIGN(__romPos, 16)` after a code segment, so the
-      # segment's END must sit on a 16-byte boundary -- the same rule the text
-      # end obeys, 150 lines up, applied to the far end of the same segment.
-      # While the tail was a top-level `bin`, the segment ended wherever the
-      # `.data` window ended, so moving the window to 0x264f48 to claim
-      # D_80027F30 (0x18 bytes, ending 8 short of the grid) slipped
-      # `_25D000_ROM_END` to 0x264f50 and then slipped the 0x80400000 segment's
-      # end by another 8 at the second ALIGN, for 0x275810 bytes against
-      # 0x275800. Every boundary INSIDE the overlay was correct; the overshoot
-      # was entirely in the two aligns.
+      #   built 0x275370 bytes, size differs by -0x490
+      #   FAIL 0x83a5 of 0x275370 bytes differ (1.31%); first at 0x268b70
       #
-      # Ending the segment at 0x265000 fixes it permanently: the boundary you
-      # now move to claim an object is purely internal to the segment, between
-      # this chunk and the `.data` window above it, so segment alignment never
-      # enters into it again.
-      - [0x264f60, data, ovl_main_80020000_data_post]
-  - [0x265000, bin]
+      # This is the same `__romPos` rule the text end obeys 150 lines up, and
+      # the same one that cost a 0x10-LONG container on 2026-11-08 when the
+      # window's end was 8 past the grid. With the pad inside, the segment
+      # ends at 0x269000 and the only boundary anyone moves again is internal.
+      - [0x268b6c, data, ovl_main_80020000_pad]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
   # left it as bin, reporting "only 58 internal jal targets and the best
   # delta scored 6 against a floor of 5, which is noise" -- that measurement
