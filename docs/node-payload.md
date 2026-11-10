@@ -107,11 +107,24 @@ as `u32` until that is used". The card overlay is that use: 57 sites store a
 function's address into it. Typing it as a function pointer would touch every
 unit that assigns it, so it is its own change with its own container check.
 
-## Not this thread
+## The sibling thread, which is further along
 
-The six `UNK_CARD_GROUP` payload structs in `csrc/main.h` are the same gap
-seen from inside a payload, and naming their pads buys nothing on its own --
-every access goes through `(T *)(p + K)` arithmetic at the call site, so only
-converting the call sites helps a reader, and that is the half that can move
-code. It is also downstream of carving `ovl_main_80020000.c` back into its
-nine original units, which that file's header comment asks for first.
+The six `UNK_CARD_GROUP` payload structs are the same gap seen from inside a
+payload rather than from the node. That half IS done as of 2026-11-10: all
+six windows reach their group through the struct, `(UnkCardPair *)p[...]` is
+gone from the unit, and `pad_00C` turned out to be each window's root
+`UnkCardPair` with its own primitive and `UnkCardPrim12` in the 0x1C bytes
+ahead of it. Two measurements came out of it and are recorded in the macro's
+comment: a head-heavy function moves if it takes the group pointer
+(func_80022934 and func_80023258 both do, one of them at an unchanged word
+count), and a per-function word count is only a first filter -- the container
+is the test.
+
+What is still not named is each window's HEAD, the fields below `pad_000`.
+Those are per unit, and until 2026-11-10 the macro was shared by one
+translation unit, so there was nowhere to put them. The overlay is carved now
+(`docs/overlays.md`, "Carving the nine"), so the blocker is narrower: six
+files each want their own struct, and `UNK_CARD_GROUP` is one macro whose
+tail -- `shared`, `root`, `ptrs`, `ents`, `prims` -- all six must keep
+agreeing on. Replacing it with six hand-written declarations is the step, and
+it is a layout change, so it gets the container check per file.

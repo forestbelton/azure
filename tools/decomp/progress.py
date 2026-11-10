@@ -31,7 +31,14 @@ STUB_RE = re.compile(r'INCLUDE_ASM\("[^"]+",\s*(\w+)\)')
 # The parameter list must be matched lazily -- see the note in guard.py, whose
 # regex this is. Greedy matching swallows a run of bodyless definitions whole
 # and reports all but the first as missing.
-DEF_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', re.M)
+# A LANDED FUNCTION IS LANDED WHETHER OR NOT IT IS STILL CALLED `func_<addr>`.
+# This matched `func_[0-9A-Fa-f]+` only until 2026-11-10, so every renamed
+# definition was invisible: csrc/main/c_server.c counted 2 of its 46 functions
+# and the project total was short by the number of names the sweeps had
+# recovered. A declaration still cannot match, because the pattern requires
+# `)` followed by `{` rather than `;`, and a statement keyword cannot, because
+# the name has to sit at column 0.
+DEF_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*\{', re.M)
 # AN OLD-STYLE (K&R) DEFINITION PUTS ITS PARAMETER DECLARATIONS BETWEEN `)`
 # AND `{`, so DEF_RE's `\)\s*\{` cannot see it and the function is counted as
 # a stub. Found 2026-11-03: func_8009C7A8 is landed K&R on purpose -- a
@@ -76,9 +83,17 @@ ALIAS_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*'
 
 
 def units():
-    """unit -> (C function names, INCLUDE_ASM names), in csrc order."""
+    """unit -> (C function names, INCLUDE_ASM names), in csrc order.
+
+    csrc/ is one directory deep as well as flat: the 0x80020000 overlay's nine
+    translation units live in csrc/main/ since 2026-11-10, and a unit there is
+    keyed 'main/c_server' so `sizes()` finds build/csrc/main/c_server.o. Only
+    the flat glob was scanned before, and carving the overlay dropped 171
+    functions out of the total without failing anything.
+    """
     out = {}
-    for f in sorted(glob.glob(PROJ + '/csrc/*.c')):
+    for f in sorted(glob.glob(PROJ + '/csrc/*.c') +
+                    glob.glob(PROJ + '/csrc/*/*.c')):
         t = open(f).read()
         stubs = STUB_RE.findall(t)
         found = DEF_RE.findall(t) + knr_defs(t)
@@ -89,7 +104,8 @@ def units():
             if re.search(r'^[A-Za-z_][\w \*]*?\b' + name + r'\s*\([^;]*?\)\s*\{',
                          t, re.M) and label not in done:
                 done.append(label)
-        out[os.path.basename(f)[:-2]] = (done, stubs)
+        key = os.path.relpath(f, PROJ + '/csrc')[:-2]
+        out[key] = (done, stubs)
     return out
 
 

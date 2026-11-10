@@ -618,6 +618,14 @@ size, the `-G` value, the struct layout, the flags.
    each base as a node rather than measuring. **`docs/node-payload.md`** has
    the loop, the one query that counts the sites correctly, and the two
    traps.
+7. **The 0x80020000 overlay is carved**, 2026-11-10: its nine translation
+   units are `csrc/main/*.c` and `csrc/ovl_main_80020000.c` is data only.
+   `docs/overlays.md`'s "Carving the nine" has the evidence per boundary,
+   says which four are inferences, and records why the data could not go
+   with the units. The unit map table above it is marked SUPERSEDED for this
+   overlay; three of its results were wrong. What is left there is the
+   per-window head fields: `UNK_CARD_GROUP` is still one macro over six
+   files, so naming them means six declarations that agree on the tail.
 
 ## Running agents on this
 
