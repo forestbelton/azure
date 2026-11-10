@@ -125,38 +125,38 @@ void func_80020A80(void)
         printf(ASSERT_FMT, FILENAME_C_SERVER, 187);
         exit(1);
     }
-    D_80028558 = OpenEvent(SwCARD, EvSpTIMOUT, EvMdNOINTR, NULL);
-    if (D_80028558 == -1)
+    gSwCardTimeoutEvent = OpenEvent(SwCARD, EvSpTIMOUT, EvMdNOINTR, NULL);
+    if (gSwCardTimeoutEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 189);
         exit(1);
     }
-    D_8002855C = OpenEvent(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
-    if (D_8002855C == -1)
+    gSwCardNewEvent = OpenEvent(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
+    if (gSwCardNewEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 191);
         exit(1);
     }
-    D_80028560 = OpenEvent(HwCARD, EvSpIOE, EvMdINTR, HandleCardEOF);
-    if (D_80028560 == -1)
+    gHwCardEOFEvent = OpenEvent(HwCARD, EvSpIOE, EvMdINTR, HandleCardEOF);
+    if (gHwCardEOFEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 194);
         exit(1);
     }
-    D_80028564 = OpenEvent(HwCARD, EvSpERROR, EvMdINTR, HandleCardError);
-    if (D_80028564 == -1)
+    gHwCardErrorEvent = OpenEvent(HwCARD, EvSpERROR, EvMdINTR, HandleCardError);
+    if (gHwCardErrorEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 196);
         exit(1);
     }
-    D_80028568 = OpenEvent(HwCARD, EvSpTIMOUT, EvMdINTR, HandleCardTimeout);
-    if (D_80028568 == -1)
+    gHwCardTimeoutEvent = OpenEvent(HwCARD, EvSpTIMOUT, EvMdINTR, HandleCardTimeout);
+    if (gHwCardTimeoutEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 198);
         exit(1);
     }
-    D_8002856C = OpenEvent(HwCARD, EvSpNEW, EvMdINTR, HandleCardNew);
-    if (D_8002856C == -1)
+    gHwCardNewEvent = OpenEvent(HwCARD, EvSpNEW, EvMdINTR, HandleCardNew);
+    if (gHwCardNewEvent == -1)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 200);
         exit(1);
@@ -172,32 +172,32 @@ void func_80020A80(void)
         printf(ASSERT_FMT, FILENAME_C_SERVER, 214);
         exit(1);
     }
-    if (EnableEvent(D_80028558) == 0)
+    if (EnableEvent(gSwCardTimeoutEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 216);
         exit(1);
     }
-    if (EnableEvent(D_8002855C) == 0)
+    if (EnableEvent(gSwCardNewEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 218);
         exit(1);
     }
-    if (EnableEvent(D_80028560) == 0)
+    if (EnableEvent(gHwCardEOFEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 220);
         exit(1);
     }
-    if (EnableEvent(D_80028564) == 0)
+    if (EnableEvent(gHwCardErrorEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 222);
         exit(1);
     }
-    if (EnableEvent(D_80028568) == 0)
+    if (EnableEvent(gHwCardTimeoutEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 224);
         exit(1);
     }
-    if (EnableEvent(D_8002856C) == 0)
+    if (EnableEvent(gHwCardNewEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 226);
         exit(1);
@@ -244,32 +244,32 @@ void func_80020F18(void)
         printf(ASSERT_FMT, FILENAME_C_SERVER, 265);
         exit(1);
     }
-    if (CloseEvent(D_80028558) == 0)
+    if (CloseEvent(gSwCardTimeoutEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 267);
         exit(1);
     }
-    if (CloseEvent(D_8002855C) == 0)
+    if (CloseEvent(gSwCardNewEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 269);
         exit(1);
     }
-    if (CloseEvent(D_80028560) == 0)
+    if (CloseEvent(gHwCardEOFEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 271);
         exit(1);
     }
-    if (CloseEvent(D_80028564) == 0)
+    if (CloseEvent(gHwCardErrorEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 273);
         exit(1);
     }
-    if (CloseEvent(D_80028568) == 0)
+    if (CloseEvent(gHwCardTimeoutEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 275);
         exit(1);
     }
-    if (CloseEvent(D_8002856C) == 0)
+    if (CloseEvent(gHwCardNewEvent) == 0)
     {
         printf(ASSERT_FMT, FILENAME_C_SERVER, 277);
         exit(1);
@@ -551,11 +551,11 @@ s32 func_80021410(void)
     {
         r = 2;
     }
-    else if (TestEvent(D_80028558) != 0)
+    else if (TestEvent(gSwCardTimeoutEvent) != 0)
     {
         r = 3;
     }
-    else if (TestEvent(D_8002855C) != 0)
+    else if (TestEvent(gSwCardNewEvent) != 0)
     {
         r = 4;
     }
@@ -566,8 +566,8 @@ void reset_sw_events(void)
 {
     TestEvent(gSwCardEOFEvent);
     TestEvent(gSwCardErrorEvent);
-    TestEvent(D_80028558);
-    TestEvent(D_8002855C);
+    TestEvent(gSwCardTimeoutEvent);
+    TestEvent(gSwCardNewEvent);
 }
 
 CARD_STATE func_800214FC(void)
@@ -586,10 +586,10 @@ CARD_STATE func_800214FC(void)
 void reset_hw_events(void)
 {
     gCardState = CARD_STATE_OK;
-    TestEvent(D_80028560);
-    TestEvent(D_80028564);
-    TestEvent(D_80028568);
-    TestEvent(D_8002856C);
+    TestEvent(gHwCardEOFEvent);
+    TestEvent(gHwCardErrorEvent);
+    TestEvent(gHwCardTimeoutEvent);
+    TestEvent(gHwCardNewEvent);
 }
 
 s32 func_80021594(void)
@@ -5575,22 +5575,22 @@ long gSwCardEOFEvent = 0;
 long gSwCardErrorEvent = 0;
 
 /* 0x80028558 */
-long D_80028558 = 0;
+long gSwCardTimeoutEvent = 0;
 
 /* 0x8002855C */
-long D_8002855C = 0;
+long gSwCardNewEvent = 0;
 
 /* 0x80028560 */
-s32 D_80028560 = 0;
+long gHwCardEOFEvent = 0;
 
 /* 0x80028564 */
-s32 D_80028564 = 0;
+long gHwCardErrorEvent = 0;
 
 /* 0x80028568 */
-s32 D_80028568 = 0;
+long gHwCardTimeoutEvent = 0;
 
 /* 0x8002856C */
-s32 D_8002856C = 0;
+long gHwCardNewEvent = 0;
 
 /* 0x80028570 */
 /* firstfile2/nextfile walk this 15-row directory buffer 0x28 bytes at a

@@ -448,10 +448,17 @@ extern long gSwCardTimeoutEvent;
 #define gSwCardNewEvent D_8002855C
 extern long gSwCardNewEvent;
 
-extern s32 D_80028560;
-extern s32 D_80028564;
-extern s32 D_80028568;
-extern s32 D_8002856C;
+#define gHwCardEOFEvent D_80028560
+extern long gHwCardEOFEvent;
+
+#define gHwCardErrorEvent D_80028564
+extern long gHwCardErrorEvent;
+
+#define gHwCardTimeoutEvent D_80028568
+extern long gHwCardTimeoutEvent;
+
+#define gHwCardNewEvent D_8002856C
+extern long gHwCardNewEvent;
 
 /* 15 rows, not 10: the object runs 0x258 bytes to D_800287C8 and
    func_8002191C/func_80021A04 walk it 0x28 bytes at a time, which is

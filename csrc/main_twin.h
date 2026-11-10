@@ -194,10 +194,10 @@ extern long D_80409270;                              /* gSwCardEOFEvent, D_80028
 extern long D_80409274;                              /* gSwCardErrorEvent, D_80028554 */
 extern long D_80409278;                              /* gSwCardTimeoutEvent, D_80028558 */
 extern long D_8040927C;                              /* gSwCardNewEvent, D_8002855C */
-extern s32 D_80409280;                               /* D_80028560 */
-extern s32 D_80409284;                               /* D_80028564 */
-extern s32 D_80409288;                               /* D_80028568 */
-extern s32 D_8040928C;                               /* D_8002856C */
+extern long D_80409280;                              /* gHwCardEOFEvent, D_80028560 */
+extern long D_80409284;                              /* gHwCardErrorEvent, D_80028564 */
+extern long D_80409288;                              /* gHwCardTimeoutEvent, D_80028568 */
+extern long D_8040928C;                              /* gHwCardNewEvent, D_8002856C */
 extern s32 D_804094E8;                               /* D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
 extern s32 D_80409500;                               /* D_800287E0 */
