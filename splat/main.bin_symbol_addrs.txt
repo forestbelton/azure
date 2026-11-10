@@ -1,31 +1,36 @@
 // Hand-maintained symbol declarations for main.bin. The yaml has pointed
-// `symbol_addrs_path` here from the start; nothing needed it until 2026-11-08.
+// `symbol_addrs_path` here from the start.
 //
-// D_800200B8 -- SPLITTING ONE ROdata OBJECT IN TWO.
+// NOTHING IN HERE IS LOAD-BEARING ANY MORE, measured 2026-11-09 by emptying
+// the file: splat re-splits and all four containers still come out
+// byte-identical. It is kept for the record, because the one entry below was
+// load-bearing for a day and the reason is worth keeping.
 //
-// spimdisasm found a single reference, from func_80025FFC, and so emitted
-// 0x800200B8..0x80020924 as ONE 0x86C-byte `dlabel`. It is really two things:
+// Why it stopped mattering: the 0x80020000 overlay's text is a `c` subsegment,
+// so splat disassembles no functions in that segment, so rodata migration has
+// nothing to attribute a symbol to and emits nothing at all. Symbol names and
+// sizes only steer output that is no longer produced. csrc/ovl_main_80020000.c
+// defines all 2340 bytes of that .rodata itself.
+//
+// D_800200B8 -- SPLITTING ONE RODATA OBJECT IN TWO.
+//
+// While the text was `asm`, spimdisasm found a single reference to
+// 0x800200B8, from func_80025FFC, and so emitted 0x800200B8..0x80020924 as ONE
+// 0x86C-byte `dlabel`. It is really two things:
 //
 //   * 0x800200B8, eight bytes, a GPU `RECT` {x=0x380, y=0x100, w=4, h=0x10}.
 //     func_80025FFC copies it onto its stack as `*(RECT *)D_800200B8` and
 //     walks it across three StoreImage calls, so the type is witnessed, not
-//     guessed.
-//   * 0x800200C0, the rest, the overlay's Shift-JIS UI message pool -- the
-//     same full-width encoding as the `str/main/*` segments in the yaml. It
-//     opens on 82 65 82 81 82 89 82 8C 82 85 82 84, i.e. "Failed to delete
-//     data." in full-width Latin.
+//     guessed. It is `const RECT D_800200B8` in the C unit now.
+//   * 0x800200C0, the rest, the overlay's 59 Shift-JIS UI messages. These no
+//     longer have symbols OR an assembly file: they are the string literals
+//     of the eight `u8 *` tables in the C unit's .data, and cc1psx emits them
+//     at these addresses by itself. docs/owning-data.md §4.7 has the rule and
+//     the measurement.
 //
-// Giving the first a `size` is what makes spimdisasm end the object there;
-// declaring the second gives the pool a name of its own so the RECT can be
-// defined in C while the pool stays in assembly.
-//
-// The split alone is not enough. Nothing REFERENCES the pool, and rodata
-// migration only emits what it can attribute to a function, so after this
-// split splat wrote the pool nowhere at all. It needs the undotted `rodata`
-// subsegment in splat/main.bin.yaml as well; that comment has the detail.
+// Giving the first a `size` is what made spimdisasm end the object there, and
+// the split alone was not enough -- nothing referenced the pool, and migration
+// only emits what it can attribute to a function, so the split created the
+// symbol and wrote the data nowhere. That trap is docs/owning-data.md §4.6; it
+// is how the `hrodata` subsegment came to exist, and §4.7 is how it went away.
 D_800200B8 = 0x800200B8; // size:0x8
-// No `size` on the pool: it is 59 separate strings, and
-// asrc/ovl_main_80020000_rodata_pool.s is the authority on their boundaries.
-// The `size:0x8` above is the one that matters -- it is what ends D_800200B8's
-// object and so creates the pool as a symbol of its own in the first place.
-D_800200C0 = 0x800200C0;

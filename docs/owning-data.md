@@ -17,15 +17,19 @@ the data objects `D_80027F18` and `D_80027F20` and the rodata object
 `D_80020074`. All four containers stayed byte-identical. Re-measure rather than
 trust.
 
-> **The 0x80020000 overlay is DONE as of 2026-11-09.** It owns its whole data
-> region, `0x80027E20..0x8002BB6C`, as one `.data` subsegment and 90 objects --
-> see §7, which is now the end state rather than a queue. The incremental
-> procedure in §4 is kept because it is what the *other* three overlays will
-> need, and because §6 is where the traps live; read §7 first if what you want
-> is this overlay's shape. The one thing §4 cannot tell you, because it only
-> came up at the end, is **why the all-zero tail could not be `.bss`** -- that
-> is the last bullet of §6, and it is the most surprising thing in this
-> document.
+> **The 0x80020000 overlay is DONE as of 2026-11-09.** Data *and* rodata: it
+> owns `0x80027E20..0x8002BB6C` as one `.data` subsegment and 90 objects, and
+> all 2,340 bytes of `0x80020000..0x80020924` as its `.rodata` -- see §7, which
+> is now the end state rather than a queue. The incremental procedure in §4 is
+> kept because it is what the *other* three overlays will need, and because §6
+> is where the traps live; read §7 first if what you want is this overlay's
+> shape.
+>
+> Two things §4 could not tell you, because both only came up at the end:
+> **why the all-zero tail could not be `.bss`** (the last bullet of §6, and the
+> most surprising thing in this document), and **why a string pool should never
+> be owned object-by-object** (§4.7, which retired the whole of §4.6's
+> `hrodata` chunk for this overlay).
 
 This is mostly about **data**, which is the hard case. Code is
 `docs/landing-a-function.md`. **Rodata** needs none of the yaml work, because
@@ -352,6 +356,14 @@ subsegment -- `0x25d000..0x25d0c0`, so 192.
 
 ### 4.6 Splitting one rodata object, and the symbol splat then DELETES
 
+> **SUPERSEDED FOR THIS OVERLAY, 2026-11-09, by §4.7.** The `hrodata` chunk
+> this section builds is gone: the 59 messages are string literals in the C
+> unit and cc1psx emits the pool itself. What is still live here is the
+> *technique* -- `slus_006.14.yaml` uses `hrodata` too, the symbol_addrs split
+> is how you end an over-long `dlabel`, and the silent-deletion trap is real.
+> Read §4.7 first; come back here if the strings in your case are not literals
+> in an initialiser.
+
 splat sizes a rodata object from where the next *referenced* symbol starts, so
 one `dlabel` routinely covers several unrelated things. `D_800200B8` was the
 worst case in this overlay: a single 0x86C-byte object spanning
@@ -432,6 +444,74 @@ And because the file is frozen, **moving the subsegment in the yaml does not
 move the bytes in the file.** `hrodata` records the seeded rom range in the
 file's header and warns on a later split when the two disagree; that warning is
 the only guard, so read it.
+
+### 4.7 When the rodata is a STRING POOL, let cc1psx emit it
+
+**Measured 2026-11-09. This is the better answer whenever the rodata is
+string literals, and it is worth checking for before doing any of §4.6.**
+
+The 0x864 bytes at `0x800200C0..0x80020924` were never a separate object to
+own. They are the string literals of the eight `u8 *` tables in this unit's
+`.data`, and cc1psx puts them at exactly those addresses by itself.
+
+The rule in gcc 2.7.2 is: a file-scope initialiser's string constants are
+**deferred**, then flushed right after that initialiser's data, in **reverse
+order of first appearance**, with **duplicates merged** -- globally, so a
+string first used by one table and reused by a later one is emitted once, at
+the first table's position. Confirmed directly:
+
+```c
+u8 *a[2] = {"AAA", ""};
+u8 *b[2] = {"", "AAA"};
+```
+
+```asm
+a:  .word $LC0 ; .word $LC1
+    .rdata
+$LC1: .ascii "\000"        <<< reversed
+$LC0: .ascii "AAA\000"
+b:  .word $LC1 ; .word $LC0 <<< merged, nothing re-emitted
+```
+
+**Simulate it against the ROM before writing anything.** Walk the tables in
+address order; for each, take its pool-pointer words, keep first appearances,
+reverse that list; concatenate. For this overlay that predicts **all 59
+addresses in the ROM's order** -- including that the empty string lands 35th
+of 39 in the message table's block, because it is 5th to appear there, and that
+it is emitted once for the sixty-odd entries that use it. 59 of 59 is not a
+coincidence; it says the pool is these initialisers and nothing else.
+
+Then the whole job is: write the literals into the tables, extend the
+`.rodata` subsegment over the pool, delete the `hrodata` subsegment and its
+`asrc/` file. No `INCLUDE_RODATA`, no named symbols, no `extern` block --
+csrc/main.h lost 59 declarations and the tables stopped needing the
+non-`const` hack that §6 describes, because a string literal is already
+`.rdata` without the keyword.
+
+Three things it costs:
+
+* **The Japanese cannot stay in the source.** cc1psx has no Shift-JIS input
+  encoding and `azure shiftjis` only runs on `asm/`/`asrc/` sources, never on
+  what cc1psx emits, so the bytes are `\x` escapes. Put the decoded text in a
+  comment on the line above and generate the two together. In this unit each
+  message is a `#define MSG_... ((u8 *)"\x..")` with that comment, which is
+  what makes the 20-entry message table read as the game's dialogue script.
+* **A literal cannot carry non-zero padding.** `.ascii` always ends in exactly
+  one NUL, and the linker's `FILL(0x00000000)` does the rest. The last message
+  here pads with `05 61 64`, so it stays a sized `const u8 [0x1C]` object,
+  placed just after the table whose deferred constants are the pool's last
+  entries -- which is what keeps it last in `.rodata`. One object out of 59.
+* **Position is now implicit.** The pool lands where the tables are, so the
+  tables have to come after every other `.rodata` contribution in the file.
+  They do, because the data block is at the foot and `const RECT D_800200B8`
+  is the last const above it. If you reorder that block, `.rodata` reorders
+  with it.
+
+The gate is §5's, plus the `.rodata` size: `size -A` must say `.rodata 2340`
+against the subsegment span `0x25d924 - 0x25d000`, and `_25D000_TEXT_START`
+must still be `0x80020924`.
+
+---
 
 ---
 
@@ -645,7 +725,6 @@ All four must come out byte-identical.
 
 ```yaml
       - [0x25d000, .rodata, ovl_main_80020000]
-      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
       - [0x25d924, c, ovl_main_80020000]
       - [0x264e20, .data, ovl_main_80020000]
       - [0x268b6c, data, ovl_main_80020000_pad]
@@ -703,9 +782,10 @@ in the C file; see the `.bss` bullet in §6.
 Worth knowing before touching it, because most of it is readable now:
 
 * **A message table.** `D_800280B4` is 20 x `UnkStrSet`: five Shift-JIS line
-  pointers into `asrc/ovl_main_80020000_rodata_pool.s` plus four bytes. Those
-  121 pointer words were the reason the pool got per-message labels; claiming
-  the table is what finally made them load-bearing, and all 59 are referenced.
+  pointers plus four bytes. Its 121 pointer words, and those of the seven
+  smaller tables, are **string literals** -- see §4.7. That is what retired
+  `asrc/ovl_main_80020000_rodata_pool.s` and the `hrodata` subsegment, and it
+  is why the table now reads as the game's dialogue script.
 * **Seven more pointer tables** of pool strings, and seven more Shift-JIS strings
   that live in `.data` rather than the pool because they are written through --
   `D_800282E8` is a 0xC0-byte save-row template with runs of spaces where the

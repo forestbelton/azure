@@ -133,7 +133,7 @@ unnamed `bin` together.
 | `bin` (unnamed) | 132,640 | 5.14% | the two blobs below |
 | `c` | 63,036 | 2.44% | both overlays' text (29,948 + 33,088) |
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
-| `rodata` + `hrodata` + `.rodata` | 4,548 | 0.18% | both overlays' rodata |
+| `.rodata` + `rodata` | 4,548 | 0.18% | both overlays' rodata |
 | `data` | 1,172 | 0.05% | `ovl_main_80020000_pad` |
 | `shiftjis` | 320 | 0.01% | `str/main/*` |
 

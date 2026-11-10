@@ -164,55 +164,33 @@ segments:
     start: 0x25d000
     vram: 0x80020000
     subsegments:
-      # `.rodata` WITH the dot, now that there is a sibling C unit. The
-      # dotted form is what splat requires for rodata migration -- an
-      # undotted `rodata` beside a `c` subsegment is a hard error ("not
+      # `.rodata` WITH the dot, and covering the WHOLE of it, 0x25d000..
+      # 0x25d924. The dotted form is what splat requires for rodata migration
+      # -- an undotted `rodata` beside a `c` subsegment is a hard error ("not
       # prefixed with a dot, which is required for the rodata migration
       # feature"). The warning in town.bin.yaml and dungeon.bin.yaml is the
       # same rule seen from the other side: there, with no C unit to migrate
       # INTO, the dot routes the subsegment to a sibling object that does not
       # exist and extracts nothing. The dot is right exactly when a `c`
       # sibling exists.
+      #
+      # And because the sibling is `c` and not `asm`, splat disassembles no
+      # functions here, so there is nothing for rodata migration to attribute
+      # a symbol TO and it emits nothing at all -- the same deal as the
+      # `.data` subsegment below. csrc/ovl_main_80020000.c defines all 2340
+      # bytes, and `size -A` on its object must say `.rodata 2340`.
+      #
+      # 0x25d0c0..0x25d924 was its own `hrodata` subsegment until 2026-11-09,
+      # a hand-written asrc/ file holding the 59 Shift-JIS UI messages as
+      # readable `.shiftjisz "..."` text, because nothing REFERENCED the pool
+      # and migration silently wrote it nowhere. That is gone: the messages
+      # are the string literals of the eight pointer tables in the C unit's
+      # .data, and cc1psx emits them here by itself. gcc 2.7.2 defers a
+      # file-scope initialiser's string constants and flushes them after that
+      # initialiser, reversed and deduplicated, and simulating that over the
+      # eight tables predicts all 59 pool addresses in the ROM's order. See
+      # the message block at the foot of csrc/ovl_main_80020000.c.
       - [0x25d000, .rodata, ovl_main_80020000]
-      # The Shift-JIS UI message pool, 0x864 bytes, carved out of the migrated
-      # rodata as an UNDOTTED `rodata` subsegment with its own name -- the
-      # exact mirror of the `data_pre`/`data_post` chunks below.
-      #
-      # It has to be carved, not left to migration: rodata migration only
-      # emits a symbol it can ATTRIBUTE to a function, and nothing references
-      # the pool. Splitting D_800200B8's 0x86C-byte object into the 8-byte
-      # RECT plus this (see splat/main.bin_symbol_addrs.txt) left the pool
-      # unreferenced, and splat then wrote it NOWHERE -- no listing, no
-      # warning, a container 0x864 bytes short. An undotted subsegment is
-      # disassembled unconditionally, which is the fix.
-      #
-      # `hrodata` and not `rodata`: splat/ext/hrodata.py seeds the file into
-      # asrc/ once and then never rewrites it, which is what lets the pool be
-      # kept as readable `.shiftjisz "..."` text instead of `.word` blobs.
-      # SFILES globs asrc/ alongside asm/ and the `build/%.o: %.s` rule pipes
-      # every asm source through `azure shiftjis`, so the directive expands.
-      # A nonmatchings listing could never do this: those are assembled as
-      # part of the C object, through maspsx, which never sees that filter.
-      #
-      # 59 NUL-terminated Shift-JIS strings, each padded to 4 -- exactly the
-      # `.shiftjisz` layout -- except the LAST, whose three padding bytes are
-      # 05 61 64 rather than zeros, so it is spelled out by hand. One entry,
-      # 0x80020688, is the empty string, and it is referenced three times.
-      #
-      # The 0x1E0-byte table at 0x800280B4 is what indexes into this pool: 121
-      # words in the `bin` at 0x265000 point in here. They are raw bytes with
-      # no relocations today, which is why the per-message labels below are
-      # not yet load-bearing -- claiming that table is what will need them.
-      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
-      # `c`, not `asm`: this overlay is being decompiled. The unit is built at
-      # cc1psx -G0, NOT the -G8 the resident executable uses, and the Makefile
-      # has the per-unit override. -G is not cosmetic here: at -G8 cc1psx
-      # records `.extern SYM,4` and a global access comes out as the
-      # assembler-expanded `lui $at` / `%lo` pair, while at -G0 it emits its
-      # own `%hi`/`%lo` split address into a general register, which is the
-      # hoisted-lui shape this block uses. Nothing in the overlay is
-      # $gp-relative (0 refs), and it could not be: the block's data at
-      # 0x80027E20 is far outside $gp's +/-32K window around 0x80080994.
       - [0x25d924, c, ovl_main_80020000]
       # The overlay's .data, 0x264e20..0x268b6c (vram 0x80027E20..0x8002BB6C),
       # which begins the instant the text ends and is OWNED IN FULL by the C

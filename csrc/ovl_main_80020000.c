@@ -4772,6 +4772,339 @@ const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};
    and its .text -- so a forgotten `= {0}` does not shorten the data, it moves
    every function in the overlay. See docs/owning-data.md. */
 
+/* ------------------------------------------------------------------------- */
+/* The overlay's 59 Shift-JIS UI messages.
+
+   THEY ARE STRING LITERALS, NOT NAMED OBJECTS, and that is a measurement
+   rather than a preference. They occupy 0x800200C0..0x80020924, the top of
+   this unit's .rodata, and cc1psx puts them there by itself: gcc 2.7.2 defers
+   the string constants of a file-scope initialiser and flushes them after that
+   initialiser's data, in REVERSE order of first appearance, merging
+   duplicates. Simulating exactly that over the eight tables below -- in
+   address order, reversing each table's own first-appearance list -- predicts
+   all 59 addresses in the ROM's order, including where the empty string lands
+   (35th of that table's 39, because it is 5th to appear) and that it is emitted
+   once for all 60 slots that hold it. So the pool was never a separate thing to own: it is
+   what these tables' initialisers compile to, which is also why asrc/ no
+   longer has a hand-written copy of it.
+
+   The text is in the comments because it cannot be in the source. cc1psx has
+   no Shift-JIS input encoding, and `azure shiftjis` -- which is what let the
+   old asrc file carry `.shiftjisz "Ｆａｉｌｅｄ..."` -- only runs on asm/ and
+   asrc/ sources, never on the assembly cc1psx emits. The escapes and the
+   comment are generated from the ROM together; keep them together.
+
+   The `(u8 *)` in each macro is there so the eight tables, all of which are
+   `u8 *`, take a `char *` literal without 121 warnings. */
+
+/* 0x800200C0 "Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ．" */
+#define MSG_FAILED_TO_DELETE_DATA ((u8 *)"\x82\x65\x82\x81\x82\x89\x82\x8C\x82\x85\x82\x84" \
+                                         "\x81\x40\x82\x94\x82\x8F\x81\x40\x82\x84\x82\x85" \
+                                         "\x82\x8C\x82\x85\x82\x94\x82\x85\x81\x40\x82\x84" \
+                                         "\x82\x81\x82\x94\x82\x81\x81\x44")
+
+/* 0x800200F0 "        ＹＥＳ                ＮＯ" */
+#define MSG_YES_NO ((u8 *)"\x20\x20\x20\x20\x20\x20\x20\x20\x82\x78\x82\x64" \
+                          "\x82\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20" \
+                          "\x20\x20\x20\x20\x20\x20\x82\x6D\x82\x6E")
+
+/* 0x80020114 "ｔｈｉｓ　ｄａｔａ？" */
+#define MSG_THIS_DATA ((u8 *)"\x82\x94\x82\x88\x82\x89\x82\x93\x81\x40\x82\x84" \
+                             "\x82\x81\x82\x94\x82\x81\x81\x48")
+
+/* 0x8002012C "Ｄｏ　ｙｏｕ　ｗｉｓｈ　ｔｏ　ｄｅｌｅｔｅ" */
+#define MSG_DO_YOU_WISH_TO_DELETE ((u8 *)"\x82\x63\x82\x8F\x81\x40\x82\x99\x82\x8F\x82\x95" \
+                                         "\x81\x40\x82\x97\x82\x89\x82\x93\x82\x88\x81\x40" \
+                                         "\x82\x94\x82\x8F\x81\x40\x82\x84\x82\x85\x82\x8C" \
+                                         "\x82\x85\x82\x94\x82\x85")
+
+/* 0x80020158 "Ｄｅｌｅｔｅ　ｄａｔａ　ａｎｄ　ｒｅｔｒｙ．" */
+#define MSG_DELETE_DATA_AND_RETRY ((u8 *)"\x82\x63\x82\x85\x82\x8C\x82\x85\x82\x94\x82\x85" \
+                                         "\x81\x40\x82\x84\x82\x81\x82\x94\x82\x81\x81\x40" \
+                                         "\x82\x81\x82\x8E\x82\x84\x81\x40\x82\x92\x82\x85" \
+                                         "\x82\x94\x82\x92\x82\x99\x81\x44")
+
+/* 0x80020188 "Ｃａｎｎｏｔ　ｏｖｅｒｗｒｉｔｅ　ｔｈｉｓ　ｄａｔａ．" */
+#define MSG_CANNOT_OVERWRITE_THIS_DATA ((u8 *)"\x82\x62\x82\x81\x82\x8E\x82\x8E\x82\x8F\x82\x94" \
+                                              "\x81\x40\x82\x8F\x82\x96\x82\x85\x82\x92\x82\x97" \
+                                              "\x82\x92\x82\x89\x82\x94\x82\x85\x81\x40\x82\x94" \
+                                              "\x82\x88\x82\x89\x82\x93\x81\x40\x82\x84\x82\x81" \
+                                              "\x82\x94\x82\x81\x81\x44")
+
+/* 0x800201C0 "Ｆａｉｌｅｄ　ｔｏ　ｃｏｐｙ　ｄａｔａ．" */
+#define MSG_FAILED_TO_COPY_DATA ((u8 *)"\x82\x65\x82\x81\x82\x89\x82\x8C\x82\x85\x82\x84" \
+                                       "\x81\x40\x82\x94\x82\x8F\x81\x40\x82\x83\x82\x8F" \
+                                       "\x82\x90\x82\x99\x81\x40\x82\x84\x82\x81\x82\x94" \
+                                       "\x82\x81\x81\x44")
+
+/* 0x800201EC "Ｃｏｐｙｉｎｇ．．．" */
+#define MSG_COPYING ((u8 *)"\x82\x62\x82\x8F\x82\x90\x82\x99\x82\x89\x82\x8E" \
+                           "\x82\x87\x81\x44\x81\x44\x81\x44")
+
+/* 0x80020204 "Ｌｏａｄｉｎｇ．．．" */
+#define MSG_LOADING ((u8 *)"\x82\x6B\x82\x8F\x82\x81\x82\x84\x82\x89\x82\x8E" \
+                           "\x82\x87\x81\x44\x81\x44\x81\x44")
+
+/* 0x8002021C "Ｆｏｒｍａｔｔｅｄ　ｓｕｃｃｅｓｓｆｕｌｌｙ．" */
+#define MSG_FORMATTED_SUCCESSFULLY ((u8 *)"\x82\x65\x82\x8F\x82\x92\x82\x8D\x82\x81\x82\x94" \
+                                          "\x82\x94\x82\x85\x82\x84\x81\x40\x82\x93\x82\x95" \
+                                          "\x82\x83\x82\x83\x82\x85\x82\x93\x82\x93\x82\x86" \
+                                          "\x82\x95\x82\x8C\x82\x8C\x82\x99\x81\x44")
+
+/* 0x8002024C "Ｆａｉｌｅｄ　ｔｏ　ｆｏｒｍａｔ" */
+#define MSG_FAILED_TO_FORMAT ((u8 *)"\x82\x65\x82\x81\x82\x89\x82\x8C\x82\x85\x82\x84" \
+                                    "\x81\x40\x82\x94\x82\x8F\x81\x40\x82\x86\x82\x8F" \
+                                    "\x82\x92\x82\x8D\x82\x81\x82\x94")
+
+/* 0x80020270 "Ｆａｉｌｅｄ　ｔｏ　ｌｏａｄ　ｄａｔａ．" */
+#define MSG_FAILED_TO_LOAD_DATA ((u8 *)"\x82\x65\x82\x81\x82\x89\x82\x8C\x82\x85\x82\x84" \
+                                       "\x81\x40\x82\x94\x82\x8F\x81\x40\x82\x8C\x82\x8F" \
+                                       "\x82\x81\x82\x84\x81\x40\x82\x84\x82\x81\x82\x94" \
+                                       "\x82\x81\x81\x44")
+
+/* 0x8002029C "ｓｃｒｅｅｎ．" */
+#define MSG_SCREEN ((u8 *)"\x82\x93\x82\x83\x82\x92\x82\x85\x82\x85\x82\x8E" \
+                          "\x81\x44")
+
+/* 0x800202AC "ａｔ　ｔｈｅ　Ｍｅｍｏｒｙ　Ｃａｒｄ　ｍａｎａｇｅｒ" */
+#define MSG_AT_THE_MEMORY_CARD_MANAGER ((u8 *)"\x82\x81\x82\x94\x81\x40\x82\x94\x82\x88\x82\x85" \
+                                              "\x81\x40\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92" \
+                                              "\x82\x99\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84" \
+                                              "\x81\x40\x82\x8D\x82\x81\x82\x8E\x82\x81\x82\x87" \
+                                              "\x82\x85\x82\x92")
+
+/* 0x800202E4 "Ｃａｒｄ　ｏｒ　ｄｅｌｅｔｅ　ｕｎｎｅｃｅｓｓａｒｙ　ｄａｔａ" */
+#define MSG_CARD_OR_DELETE_UNNECESSARY_DATA ((u8 *)"\x82\x62\x82\x81\x82\x92\x82\x84\x81\x40\x82\x8F" \
+                                                   "\x82\x92\x81\x40\x82\x84\x82\x85\x82\x8C\x82\x85" \
+                                                   "\x82\x94\x82\x85\x81\x40\x82\x95\x82\x8E\x82\x8E" \
+                                                   "\x82\x85\x82\x83\x82\x85\x82\x93\x82\x93\x82\x81" \
+                                                   "\x82\x92\x82\x99\x81\x40\x82\x84\x82\x81\x82\x94" \
+                                                   "\x82\x81")
+
+/* 0x80020324 "Ｍｅｍｏｒｙ　Ｃａｒｄ．　Ｕｓｅ　ａｎｏｔｈｅｒ　Ｍｅｍｏｒｙ" */
+#define MSG_MEMORY_CARD_USE_ANOTHER_MEMORY ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                                                  "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x44" \
+                                                  "\x81\x40\x82\x74\x82\x93\x82\x85\x81\x40\x82\x81" \
+                                                  "\x82\x8E\x82\x8F\x82\x94\x82\x88\x82\x85\x82\x92" \
+                                                  "\x81\x40\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92" \
+                                                  "\x82\x99")
+
+/* 0x80020364 "ｔｈｅ　Ｍｅｍｏｒｙ　Ｃａｒｄ　ｍａｎａｇｅｒ　ｓｃｒｅｅｎ．" */
+#define MSG_THE_MEMORY_CARD_MANAGER_SCREEN ((u8 *)"\x82\x94\x82\x88\x82\x85\x81\x40\x82\x6C\x82\x85" \
+                                                  "\x82\x8D\x82\x8F\x82\x92\x82\x99\x81\x40\x82\x62" \
+                                                  "\x82\x81\x82\x92\x82\x84\x81\x40\x82\x8D\x82\x81" \
+                                                  "\x82\x8E\x82\x81\x82\x87\x82\x85\x82\x92\x81\x40" \
+                                                  "\x82\x93\x82\x83\x82\x92\x82\x85\x82\x85\x82\x8E" \
+                                                  "\x81\x44")
+
+/* 0x800203A4 "ｏｒ　ｄｅｌｅｔｅ　ｕｎｎｅｃｅｓｓａｒｙ　ｄａｔａ　ａｔ" */
+#define MSG_OR_DELETE_UNNECESSARY_DATA_AT ((u8 *)"\x82\x8F\x82\x92\x81\x40\x82\x84\x82\x85\x82\x8C" \
+                                                 "\x82\x85\x82\x94\x82\x85\x81\x40\x82\x95\x82\x8E" \
+                                                 "\x82\x8E\x82\x85\x82\x83\x82\x85\x82\x93\x82\x93" \
+                                                 "\x82\x81\x82\x92\x82\x99\x81\x40\x82\x84\x82\x81" \
+                                                 "\x82\x94\x82\x81\x81\x40\x82\x81\x82\x94")
+
+/* 0x800203E0 "ｄａｔａ　ｏｒ　ｕｓｅ　ａｎｏｔｈｅｒ　Ｍｅｍｏｒｙ　Ｃａｒｄ" */
+#define MSG_DATA_OR_USE_ANOTHER_MEMORY_CARD ((u8 *)"\x82\x84\x82\x81\x82\x94\x82\x81\x81\x40\x82\x8F" \
+                                                   "\x82\x92\x81\x40\x82\x95\x82\x93\x82\x85\x81\x40" \
+                                                   "\x82\x81\x82\x8E\x82\x8F\x82\x94\x82\x88\x82\x85" \
+                                                   "\x82\x92\x81\x40\x82\x6C\x82\x85\x82\x8D\x82\x8F" \
+                                                   "\x82\x92\x82\x99\x81\x40\x82\x62\x82\x81\x82\x92" \
+                                                   "\x82\x84")
+
+/* 0x80020420 "Ｍｅｍｏｒｙ　Ｃａｒｄ．　Ｏｖｅｒｗｒｉｔｅ　ｓａｖｅｄ" */
+#define MSG_MEMORY_CARD_OVERWRITE_SAVED ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                                               "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x44" \
+                                               "\x81\x40\x82\x6E\x82\x96\x82\x85\x82\x92\x82\x97" \
+                                               "\x82\x92\x82\x89\x82\x94\x82\x85\x81\x40\x82\x93" \
+                                               "\x82\x81\x82\x96\x82\x85\x82\x84")
+
+/* 0x8002045C "Ｎｏｔ　ｅｎｏｕｇｈ　ｆｒｅｅ　ｂｌｏｃｋｓ　ｏｎ　ｔｈｉｓ" */
+#define MSG_NOT_ENOUGH_FREE_BLOCKS_ON_THIS ((u8 *)"\x82\x6D\x82\x8F\x82\x94\x81\x40\x82\x85\x82\x8E" \
+                                                  "\x82\x8F\x82\x95\x82\x87\x82\x88\x81\x40\x82\x86" \
+                                                  "\x82\x92\x82\x85\x82\x85\x81\x40\x82\x82\x82\x8C" \
+                                                  "\x82\x8F\x82\x83\x82\x8B\x82\x93\x81\x40\x82\x8F" \
+                                                  "\x82\x8E\x81\x40\x82\x94\x82\x88\x82\x89\x82\x93")
+
+/* 0x8002049C "Ｆａｉｌｅｄ　ｔｏ　ｏｖｅｒｗｒｉｔｅ" */
+#define MSG_FAILED_TO_OVERWRITE ((u8 *)"\x82\x65\x82\x81\x82\x89\x82\x8C\x82\x85\x82\x84" \
+                                       "\x81\x40\x82\x94\x82\x8F\x81\x40\x82\x8F\x82\x96" \
+                                       "\x82\x85\x82\x92\x82\x97\x82\x92\x82\x89\x82\x94" \
+                                       "\x82\x85")
+
+/* 0x800204C4 "Ｎｏ　ｓａｖｅｄ　ｇａｍｅ　ｄｅｔｅｃｔｅｄ．" */
+#define MSG_NO_SAVED_GAME_DETECTED ((u8 *)"\x82\x6D\x82\x8F\x81\x40\x82\x93\x82\x81\x82\x96" \
+                                          "\x82\x85\x82\x84\x81\x40\x82\x87\x82\x81\x82\x8D" \
+                                          "\x82\x85\x81\x40\x82\x84\x82\x85\x82\x94\x82\x85" \
+                                          "\x82\x83\x82\x94\x82\x85\x82\x84\x81\x44")
+
+/* 0x800204F4 "Ｓａｖｉｎｇ．．．" */
+#define MSG_SAVING ((u8 *)"\x82\x72\x82\x81\x82\x96\x82\x89\x82\x8E\x82\x87" \
+                          "\x81\x44\x81\x44\x81\x44")
+
+/* 0x80020508 "        ＹＥＳ            ＮＯ" */
+#define MSG_YES_NO_2 ((u8 *)"\x20\x20\x20\x20\x20\x20\x20\x20\x82\x78\x82\x64" \
+                            "\x82\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20" \
+                            "\x20\x20\x82\x6D\x82\x6E")
+
+/* 0x80020528 "ｏｖｅｒｗｒｉｔｅ　ｔｈｉｓ　ｄａｔａ？" */
+#define MSG_OVERWRITE_THIS_DATA ((u8 *)"\x82\x8F\x82\x96\x82\x85\x82\x92\x82\x97\x82\x92" \
+                                       "\x82\x89\x82\x94\x82\x85\x81\x40\x82\x94\x82\x88" \
+                                       "\x82\x89\x82\x93\x81\x40\x82\x84\x82\x81\x82\x94" \
+                                       "\x82\x81\x81\x48")
+
+/* 0x80020554 "Ｄｏ　ｙｏｕ　ｗｉｓｈ　ｔｏ" */
+#define MSG_DO_YOU_WISH_TO ((u8 *)"\x82\x63\x82\x8F\x81\x40\x82\x99\x82\x8F\x82\x95" \
+                                  "\x81\x40\x82\x97\x82\x89\x82\x93\x82\x88\x81\x40" \
+                                  "\x82\x94\x82\x8F")
+
+/* 0x80020574 "Ｍｅｍｏｒｙ　Ｃａｒｄ．" */
+#define MSG_MEMORY_CARD ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                               "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x44")
+
+/* 0x80020590 "Ｄｏ　ｎｏｔ　ｒｅｍｏｖｅ" */
+#define MSG_DO_NOT_REMOVE ((u8 *)"\x82\x63\x82\x8F\x81\x40\x82\x8E\x82\x8F\x82\x94" \
+                                 "\x81\x40\x82\x92\x82\x85\x82\x8D\x82\x8F\x82\x96" \
+                                 "\x82\x85")
+
+/* 0x800205AC "Ｆｏｒｍａｔｔｉｎｇ．．．" */
+#define MSG_FORMATTING ((u8 *)"\x82\x65\x82\x8F\x82\x92\x82\x8D\x82\x81\x82\x94" \
+                              "\x82\x94\x82\x89\x82\x8E\x82\x87\x81\x44\x81\x44" \
+                              "\x81\x44")
+
+/* 0x800205C8 "Ｐｌｅａｓｅ　ｕｓｅ　ａｎｏｔｈｅｒ　Ｍｅｍｏｒｙ　Ｃａｒｄ．" */
+#define MSG_PLEASE_USE_ANOTHER_MEMORY_CARD ((u8 *)"\x82\x6F\x82\x8C\x82\x85\x82\x81\x82\x93\x82\x85" \
+                                                  "\x81\x40\x82\x95\x82\x93\x82\x85\x81\x40\x82\x81" \
+                                                  "\x82\x8E\x82\x8F\x82\x94\x82\x88\x82\x85\x82\x92" \
+                                                  "\x81\x40\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92" \
+                                                  "\x82\x99\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84" \
+                                                  "\x81\x44")
+
+/* 0x80020608 "Ｍｅｍｏｒｙ　Ｃａｒｄ　ｉｓ　ｄａｍａｇｅｄ．" */
+#define MSG_MEMORY_CARD_IS_DAMAGED ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                                          "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x40" \
+                                          "\x82\x89\x82\x93\x81\x40\x82\x84\x82\x81\x82\x8D" \
+                                          "\x82\x81\x82\x87\x82\x85\x82\x84\x81\x44")
+
+/* 0x80020638 "Ｐｌｅａｓｅ　ｗａｉｔ．" */
+#define MSG_PLEASE_WAIT ((u8 *)"\x82\x6F\x82\x8C\x82\x85\x82\x81\x82\x93\x82\x85" \
+                               "\x81\x40\x82\x97\x82\x81\x82\x89\x82\x94\x81\x44")
+
+/* 0x80020654 "Ｎｏ　Ｍｅｍｏｒｙ　Ｃａｒｄ　ｄｅｔｅｃｔｅｄ．" */
+#define MSG_NO_MEMORY_CARD_DETECTED ((u8 *)"\x82\x6D\x82\x8F\x81\x40\x82\x6C\x82\x85\x82\x8D" \
+                                           "\x82\x8F\x82\x92\x82\x99\x81\x40\x82\x62\x82\x81" \
+                                           "\x82\x92\x82\x84\x81\x40\x82\x84\x82\x85\x82\x94" \
+                                           "\x82\x85\x82\x83\x82\x94\x82\x85\x82\x84\x81\x44")
+
+/* 0x80020688 "" */
+#define MSG_EMPTY ((u8 *)"")
+
+/* 0x8002068C "          ＹＥＳ                    ＮＯ" */
+#define MSG_YES_NO_3 ((u8 *)"\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x82\x78" \
+                            "\x82\x64\x82\x72\x20\x20\x20\x20\x20\x20\x20\x20" \
+                            "\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20" \
+                            "\x82\x6D\x82\x6E")
+
+/* 0x800206B8 "ｆｏｒｍａｔ　ｉｔ　ｎｏｗ？" */
+#define MSG_FORMAT_IT_NOW ((u8 *)"\x82\x86\x82\x8F\x82\x92\x82\x8D\x82\x81\x82\x94" \
+                                 "\x81\x40\x82\x89\x82\x94\x81\x40\x82\x8E\x82\x8F" \
+                                 "\x82\x97\x81\x48")
+
+/* 0x800206D8 "ｆｏｒｍａｔｔｅｄ．　Ｄｏ　ｙｏｕ　ｗｉｓｈ　ｔｏ" */
+#define MSG_FORMATTED_DO_YOU_WISH_TO ((u8 *)"\x82\x86\x82\x8F\x82\x92\x82\x8D\x82\x81\x82\x94" \
+                                            "\x82\x94\x82\x85\x82\x84\x81\x44\x81\x40\x82\x63" \
+                                            "\x82\x8F\x81\x40\x82\x99\x82\x8F\x82\x95\x81\x40" \
+                                            "\x82\x97\x82\x89\x82\x93\x82\x88\x81\x40\x82\x94" \
+                                            "\x82\x8F")
+
+/* 0x8002070C "Ｍｅｍｏｒｙ　Ｃａｒｄ　ｉｓ　ｎｏｔ" */
+#define MSG_MEMORY_CARD_IS_NOT ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                                      "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x40" \
+                                      "\x82\x89\x82\x93\x81\x40\x82\x8E\x82\x8F\x82\x94")
+
+/* 0x80020734 "：" */
+#define MSG_COLON ((u8 *)"\x81\x46")
+
+/* 0x80020738 "Ｔ" */
+#define MSG_T ((u8 *)"\x82\x73")
+
+/* 0x8002073C "Ｄ" */
+#define MSG_D ((u8 *)"\x82\x63")
+
+/* 0x80020740 "Ａｚｕｒｅ　Ｄｒｅａｍｓ　" */
+#define MSG_AZURE_DREAMS ((u8 *)"\x82\x60\x82\x9A\x82\x95\x82\x92\x82\x85\x81\x40" \
+                                "\x82\x63\x82\x92\x82\x85\x82\x81\x82\x8D\x82\x93" \
+                                "\x81\x40")
+
+/* 0x8002075C "Ｃａｎ’ｔ　ｕｓｅ" */
+#define MSG_CANT_USE ((u8 *)"\x82\x62\x82\x81\x82\x8E\x81\x66\x82\x94\x81\x40" \
+                            "\x82\x95\x82\x93\x82\x85")
+
+/* 0x80020770 "Ｒｅｐｌａｙ" */
+#define MSG_REPLAY ((u8 *)"\x82\x71\x82\x85\x82\x90\x82\x8C\x82\x81\x82\x99")
+
+/* 0x80020780 "Ｄｅｌｅｔｅ" */
+#define MSG_DELETE ((u8 *)"\x82\x63\x82\x85\x82\x8C\x82\x85\x82\x94\x82\x85")
+
+/* 0x80020790 "Ｃｏｐｙ" */
+#define MSG_COPY ((u8 *)"\x82\x62\x82\x8F\x82\x90\x82\x99")
+
+/* 0x8002079C "Ｌｏａｄ" */
+#define MSG_LOAD ((u8 *)"\x82\x6B\x82\x8F\x82\x81\x82\x84")
+
+/* 0x800207A8 "Ｆ" */
+#define MSG_F ((u8 *)"\x82\x65")
+
+/* 0x800207AC "Ｃｏｎｔｉｎｕｅ ｑｕｅｓｔ ｆｒｏｍ　" */
+#define MSG_CONTINUE_QUEST_FROM ((u8 *)"\x82\x62\x82\x8F\x82\x8E\x82\x94\x82\x89\x82\x8E" \
+                                       "\x82\x95\x82\x85\x20\x82\x91\x82\x95\x82\x85\x82" \
+                                       "\x93\x82\x94\x20\x82\x86\x82\x92\x82\x8F\x82\x8D" \
+                                       "\x81\x40")
+
+/* 0x800207D4 "Ｆ ＭＡＧＩＣＡＬ ＴＯＷＥＲ" */
+#define MSG_F_MAGICAL_TOWER ((u8 *)"\x82\x65\x20\x82\x6C\x82\x60\x82\x66\x82\x68\x82" \
+                                   "\x62\x82\x60\x82\x6B\x20\x82\x73\x82\x6E\x82\x76" \
+                                   "\x82\x64\x82\x71")
+
+/* 0x800207F4 "Ｍｏｎｓｔｅｒ　Ｔｏｗｅｒ" */
+#define MSG_MONSTER_TOWER ((u8 *)"\x82\x6C\x82\x8F\x82\x8E\x82\x93\x82\x94\x82\x85" \
+                                 "\x82\x92\x81\x40\x82\x73\x82\x8F\x82\x97\x82\x85" \
+                                 "\x82\x92")
+
+/* 0x80020810 "Ｍｅｍｏｒｙ　Ｃａｒｄ　ｉｓ　ｆｕｌｌ．　" */
+#define MSG_MEMORY_CARD_IS_FULL ((u8 *)"\x82\x6C\x82\x85\x82\x8D\x82\x8F\x82\x92\x82\x99" \
+                                       "\x81\x40\x82\x62\x82\x81\x82\x92\x82\x84\x81\x40" \
+                                       "\x82\x89\x82\x93\x81\x40\x82\x86\x82\x95\x82\x8C" \
+                                       "\x82\x8C\x81\x44\x81\x40")
+
+/* 0x8002083C "Ｃａｎｎｏｔ　ｃｏｐｙ　ｄａｔａ　ｂｅｃａｕｓｅ" */
+#define MSG_CANNOT_COPY_DATA_BECAUSE ((u8 *)"\x82\x62\x82\x81\x82\x8E\x82\x8E\x82\x8F\x82\x94" \
+                                            "\x81\x40\x82\x83\x82\x8F\x82\x90\x82\x99\x81\x40" \
+                                            "\x82\x84\x82\x81\x82\x94\x82\x81\x81\x40\x82\x82" \
+                                            "\x82\x85\x82\x83\x82\x81\x82\x95\x82\x93\x82\x85")
+
+/* 0x80020870 "Ｃａｎｎｏｔ　ｓａｖｅ　ｄａｔａ　ｂｅｃａｕｓｅ" */
+#define MSG_CANNOT_SAVE_DATA_BECAUSE ((u8 *)"\x82\x62\x82\x81\x82\x8E\x82\x8E\x82\x8F\x82\x94" \
+                                            "\x81\x40\x82\x93\x82\x81\x82\x96\x82\x85\x81\x40" \
+                                            "\x82\x84\x82\x81\x82\x94\x82\x81\x81\x40\x82\x82" \
+                                            "\x82\x85\x82\x83\x82\x81\x82\x95\x82\x93\x82\x85")
+
+/* 0x800208A4 "ｄｅｔｅｃｔｅｄ．" */
+#define MSG_DETECTED ((u8 *)"\x82\x84\x82\x85\x82\x94\x82\x85\x82\x83\x82\x94" \
+                            "\x82\x85\x82\x84\x81\x44")
+
+/* 0x800208B8 "Ｎｏ　Ａｚｕｒｅ　Ｄｒｅａｍｓ　ｇａｍｅ　ｄａｔａ" */
+#define MSG_NO_AZURE_DREAMS_GAME_DATA ((u8 *)"\x82\x6D\x82\x8F\x81\x40\x82\x60\x82\x9A\x82\x95" \
+                                             "\x82\x92\x82\x85\x81\x40\x82\x63\x82\x92\x82\x85" \
+                                             "\x82\x81\x82\x8D\x82\x93\x81\x40\x82\x87\x82\x81" \
+                                             "\x82\x8D\x82\x85\x81\x40\x82\x84\x82\x81\x82\x94" \
+                                             "\x82\x81")
+
+/* 0x800208EC "Ｙｏｕ　ｃａｎ　ｃｏｐｙ" */
+#define MSG_YOU_CAN_COPY ((u8 *)"\x82\x78\x82\x8F\x82\x95\x81\x40\x82\x83\x82\x81" \
+                                "\x82\x8E\x81\x40\x82\x83\x82\x8F\x82\x90\x82\x99")
+
+/* ------------------------------------------------------------------------- */
 /* 0x80027E20 */
 /* The 8-frame animation script reached through D_80028074[1]; the last
    step is the op-1 jump back to the top. Nothing names it directly. */
@@ -4962,26 +5295,26 @@ s32 D_8002809C[6] = {
 /* The 20-message table: five Shift-JIS lines from the rodata pool plus
    four bytes each. 0x80020688 is the empty line. */
 UnkStrSet D_800280B4[20] = {
-    /*  0 */ {{D_8002070C, D_800206D8, D_800206B8, D_8002068C, D_80020688}, 2, 1, 0, 0},
-    /*  1 */ {{D_80020654, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  2 */ {{D_80020638, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  3 */ {{D_80020608, D_800205C8, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  4 */ {{D_800205AC, D_80020590, D_80020574, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  5 */ {{D_80020554, D_80020528, D_80020508, D_80020688, D_80020688}, 2, 0, 0, 0},
-    /*  6 */ {{D_800204F4, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  7 */ {{D_800204C4, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  8 */ {{D_8002049C, D_80020574, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /*  9 */ {{D_8002045C, D_80020420, D_800203E0, D_800203A4, D_80020364}, 0, 0, 0, 0},
-    /* 10 */ {{D_8002045C, D_80020324, D_800202E4, D_800202AC, D_8002029C}, 0, 0, 0, 0},
-    /* 11 */ {{D_80020270, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 12 */ {{D_8002024C, D_80020574, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 13 */ {{D_8002021C, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 14 */ {{D_80020204, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 15 */ {{D_800201EC, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 16 */ {{D_800201C0, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 17 */ {{D_80020188, D_80020158, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
-    /* 18 */ {{D_8002012C, D_80020114, D_800200F0, D_80020688, D_80020688}, 2, 0, 0, 0},
-    /* 19 */ {{D_800200C0, D_80020688, D_80020688, D_80020688, D_80020688}, 0, 0, 0, 0},
+    /*  0 */ {{MSG_MEMORY_CARD_IS_NOT, MSG_FORMATTED_DO_YOU_WISH_TO, MSG_FORMAT_IT_NOW, MSG_YES_NO_3, MSG_EMPTY}, 2, 1, 0, 0},
+    /*  1 */ {{MSG_NO_MEMORY_CARD_DETECTED, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  2 */ {{MSG_PLEASE_WAIT, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  3 */ {{MSG_MEMORY_CARD_IS_DAMAGED, MSG_PLEASE_USE_ANOTHER_MEMORY_CARD, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  4 */ {{MSG_FORMATTING, MSG_DO_NOT_REMOVE, MSG_MEMORY_CARD, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  5 */ {{MSG_DO_YOU_WISH_TO, MSG_OVERWRITE_THIS_DATA, MSG_YES_NO_2, MSG_EMPTY, MSG_EMPTY}, 2, 0, 0, 0},
+    /*  6 */ {{MSG_SAVING, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  7 */ {{MSG_NO_SAVED_GAME_DETECTED, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  8 */ {{MSG_FAILED_TO_OVERWRITE, MSG_MEMORY_CARD, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /*  9 */ {{MSG_NOT_ENOUGH_FREE_BLOCKS_ON_THIS, MSG_MEMORY_CARD_OVERWRITE_SAVED, MSG_DATA_OR_USE_ANOTHER_MEMORY_CARD, MSG_OR_DELETE_UNNECESSARY_DATA_AT, MSG_THE_MEMORY_CARD_MANAGER_SCREEN}, 0, 0, 0, 0},
+    /* 10 */ {{MSG_NOT_ENOUGH_FREE_BLOCKS_ON_THIS, MSG_MEMORY_CARD_USE_ANOTHER_MEMORY, MSG_CARD_OR_DELETE_UNNECESSARY_DATA, MSG_AT_THE_MEMORY_CARD_MANAGER, MSG_SCREEN}, 0, 0, 0, 0},
+    /* 11 */ {{MSG_FAILED_TO_LOAD_DATA, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 12 */ {{MSG_FAILED_TO_FORMAT, MSG_MEMORY_CARD, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 13 */ {{MSG_FORMATTED_SUCCESSFULLY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 14 */ {{MSG_LOADING, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 15 */ {{MSG_COPYING, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 16 */ {{MSG_FAILED_TO_COPY_DATA, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 17 */ {{MSG_CANNOT_OVERWRITE_THIS_DATA, MSG_DELETE_DATA_AND_RETRY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
+    /* 18 */ {{MSG_DO_YOU_WISH_TO_DELETE, MSG_THIS_DATA, MSG_YES_NO, MSG_EMPTY, MSG_EMPTY}, 2, 0, 0, 0},
+    /* 19 */ {{MSG_FAILED_TO_DELETE_DATA, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY, MSG_EMPTY}, 0, 0, 0, 0},
 };
 
 /* 0x80028294 */
@@ -4992,18 +5325,18 @@ UnkStrSet D_800280B4[20] = {
    %lo(D_800282A0), so the one array is both the honest spelling and
    byte-identical. Measured 2026-11-09. */
 u8 *D_80028294[4] = {
-    D_80020740,
-    D_8002073C,
-    D_80020738,
-    D_80020734,
+    MSG_AZURE_DREAMS,
+    MSG_D,
+    MSG_T,
+    MSG_COLON,
 };
 
 /* 0x800282A4 */
 /* The two headings func_80023B18 draws, indexed by
    `func_80022138() >= 3`. */
 u8 *D_800282A4[2] = {
-    D_8002075C,
-    D_80020688,
+    MSG_CANT_USE,
+    MSG_EMPTY,
 };
 
 /* 0x800282AC */
@@ -5021,10 +5354,10 @@ u8 D_800282B0[0xC] =
 /* 0x800282BC */
 /* The four menu entries func_8002352C draws. */
 u8 *D_800282BC[4] = {
-    D_8002079C,
-    D_80020790,
-    D_80020780,
-    D_80020770,
+    MSG_LOAD,
+    MSG_COPY,
+    MSG_DELETE,
+    MSG_REPLAY,
 };
 
 /* 0x800282CC */
@@ -5062,18 +5395,18 @@ u8 D_800282E8[0xC0] =
 /* 0x800283A8 */
 /* Four more fragments for the same buffer. */
 u8 *D_800283A8[4] = {
-    D_800207F4,
-    D_800207D4,
-    D_800207AC,
-    D_800207A8,
+    MSG_MONSTER_TOWER,
+    MSG_F_MAGICAL_TOWER,
+    MSG_CONTINUE_QUEST_FROM,
+    MSG_F,
 };
 
 /* 0x800283B8 */
 /* The three error lines func_80024390 and func_80024818 pick between. */
 u8 *D_800283B8[3] = {
-    D_80020870,
-    D_8002083C,
-    D_80020810,
+    MSG_CANNOT_SAVE_DATA_BECAUSE,
+    MSG_CANNOT_COPY_DATA_BECAUSE,
+    MSG_MEMORY_CARD_IS_FULL,
 };
 
 /* 0x800283C4 */
@@ -5087,16 +5420,28 @@ u8 D_800283C4[0x28] =
 /* 0x800283EC */
 /* The two-line default pair, for func_80024818 and func_800249B4. */
 u8 *D_800283EC[2] = {
-    D_800208B8,
-    D_800208A4,
+    MSG_NO_AZURE_DREAMS_GAME_DATA,
+    MSG_DETECTED,
 };
 
 /* 0x800283F4 */
 /* The indexed alternative. */
 u8 *D_800283F4[2] = {
-    D_80020908,
-    D_800208EC,
+    (u8 *)MSG_YOU_CAN_SAVE,
+    MSG_YOU_CAN_COPY,
 };
+
+/* 0x80020908 -- .rodata, not .data, so it is out of address order among its
+   neighbours here. "Ｙｏｕ　ｃａｎ　ｓａｖｅ", the last object in .rodata, and the
+   only one of the 59 messages that is not a string literal: the three bytes
+   after its NUL are 05 61 64, not the zero padding the other 58 have, and a
+   literal always ends in exactly one NUL. So it is a sized object written out
+   to 0x1C, placed right after the table whose deferred constants are the
+   pool's last two entries, which is what keeps it last. */
+const u8 MSG_YOU_CAN_SAVE[0x1C] =
+    "\x82\x78\x82\x8F\x82\x95\x81\x40\x82\x83\x82\x81"
+    "\x82\x8E\x81\x40\x82\x93\x82\x81\x82\x96\x82\x85"
+    "\x00\x05\x61\x64";
 
 /* 0x800283FC */
 /* Appended after it.
