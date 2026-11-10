@@ -2212,21 +2212,21 @@ void func_80023A78(UnkCardPair *p, u32 *a, u32 *b, s32 n)
     p->unk_04->unk_0F = 4;
 }
 
-void func_80023B18(s32 *p)
+void func_80023B18(UnkCardGrp240 *c)
 {
-    UnkCardPair *q = (UnkCardPair *)p[0x98];
+    UnkCardPair *q = c->ptrs[1];
     s32 k;
 
     k = get_free_blocks() >= 3;
-    q->unk_00 = (s32)func_8004DA74((u8 *)p + 8, D_800282A4[k], 1);
+    q->unk_00 = (s32)func_8004DA74((u8 *)c + 8, D_800282A4[k], 1);
     q->unk_04->unk_08 = 0xF0;
     q->unk_04->unk_0A = 0x91;
-    q = (UnkCardPair *)p[0x9C];
+    q = c->ptrs[5];
     q->unk_04->unk_08 = 0x70;
     q->unk_04->unk_0A = 0x10;
     q->unk_00 = (s32)D_800791A4;
-    q = (UnkCardPair *)p[0x9E];
-    q->unk_00 = (s32)((u8 *)p + 0x134);
+    q = c->ptrs[7];
+    q->unk_00 = (s32)((u8 *)c + 0x134);
     q->unk_04->unk_08 = 0xAE;
     q->unk_04->unk_0A = 0x18;
 }
@@ -2246,11 +2246,11 @@ s32 func_80023BE4(s32 p, s32 w, s32 h)
 /* Four UnkCardPair slots set up in a row, each `e->unk_00` plus the x and y
    in its UnkCardPrim. Two things are load-bearing:
 
-   `e = (UnkCardPair *)p[155]` must be assigned BEFORE the func_8004E5A0 /
-   func_8004E69C pair, not after: the target loads $s3 at word 39, ahead of
-   both calls, and with the load after them the function is 71 words instead
-   of 72 (gcc fills the p[0] load-delay slot with the `li $a1, 4` that the
-   target has already issued back at word 27).
+   `e = c->ptrs[4]` (word 155, when this read `p[155]`) must be assigned
+   BEFORE the func_8004E5A0 / func_8004E69C pair, not after: the target loads
+   $s3 at word 39, ahead of both calls, and with the load after them the
+   function is 71 words instead of 72 (gcc fills the p[0] load-delay slot with
+   the `li $a1, 4` that the target has already issued back at word 27).
 
    The second table access has to be spelled as a BYTE offset. The target
    advances the D_80083EA4 base register in place at word 37
@@ -2260,70 +2260,72 @@ s32 func_80023BE4(s32 p, s32 w, s32 h)
    DIFF). A named `s32 (*tbl)[32]` local with `tbl += p[0]` gets the in-place
    update but hoists the `lui`/`addiu` into the prologue, which is worse
    (23). */
-void func_80023C44(s32 *p)
+void func_80023C44(UnkCardGrp240 *c)
 {
     u8 buf[8];
     UnkCardPair *e;
+    s32 *p = (s32 *)c;
 
-    e = (UnkCardPair *)p[156];
+    e = c->ptrs[5];
     e->unk_04->unk_08 = 0x70;
     e->unk_04->unk_0A = 0x10;
     e->unk_00 = (s32)D_80078FD0;
 
-    e = (UnkCardPair *)p[152];
+    e = c->ptrs[1];
     e->unk_00 = (s32)func_8004DA74((u8 *)(p + 2), (u8 *)D_80083EA4[p[0]], 1);
     e->unk_04->unk_08 = 0xF0;
     e->unk_04->unk_0A = 0x91;
 
-    e = (UnkCardPair *)p[155];
+    e = c->ptrs[4];
     func_8004E5A0(*(s32 *)((u8 *)D_80083EA4[p[0]] + 0x20), 4, buf);
     func_8004E69C(buf);
     e->unk_00 = (s32)func_8004E298((u8 *)(p + 0x41), buf, 1);
     e->unk_04->unk_08 = 0x147;
     e->unk_04->unk_0A = 0x91;
 
-    e = (UnkCardPair *)p[158];
+    e = c->ptrs[7];
     e->unk_00 = (s32)(p + 77);
     e->unk_04->unk_08 = 0xAE;
     e->unk_04->unk_0A = 0x18;
 }
 
-void func_80023D64(s32 *p)
+void func_80023D64(UnkCardGrp240 *c)
 {
     UnkCardPair *q;
 
-    q = (UnkCardPair *)p[0x9D];
+    q = c->ptrs[6];
     q->unk_04->unk_08 = 0xFA;
     q->unk_04->unk_0A = 0x10;
     q->unk_00 = (s32)D_80027F7C;
-    q = (UnkCardPair *)p[0x9A];
-    q->unk_00 = (s32)func_8004DA74((u8 *)p + 0xA4, D_800282B0, 1);
+    q = c->ptrs[3];
+    q->unk_00 = (s32)func_8004DA74((u8 *)c + 0xA4, D_800282B0, 1);
     q->unk_04->unk_08 = 0x178;
     q->unk_04->unk_0A = 0x90;
-    q = (UnkCardPair *)p[0x9F];
-    q->unk_00 = (s32)((u8 *)p + 0x1AC);
+    q = c->ptrs[8];
+    q->unk_00 = (s32)((u8 *)c + 0x1AC);
     q->unk_04->unk_08 = 0x10C;
     q->unk_04->unk_0A = 0x18;
 }
 
-void func_80023E14(s32 *p)
+void func_80023E14(UnkCardGrp240 *c)
 {
     s32(*tbl)[32];
+    s32 *p = (s32 *)c;
 
     func_80023BE4((s32)(p + 0x4D), 0x80, 0x18);
     func_80023BE4((s32)(p + 0x6B), 0x2A, 0x14);
     tbl = D_80083E98;
     if (tbl[p[0]][0] != 0)
     {
-        func_80023C44(p);
+        func_80023C44(c);
         if (((s16 *)tbl[p[0]])[4] != 0)
         {
-            func_80023D64(p);
+            func_80023D64(c);
         }
     }
     else
     {
-        func_80023B18(p);
+        func_80023B18(c);
     }
 }
 
@@ -2364,11 +2366,11 @@ void func_80023F94(s32 *p, s32 a, s32 b)
     p[1] = a;
 }
 
-void func_80023FA0(s32 *p, s32 a, s32 b)
+void func_80023FA0(UnkCardGrp240 *c, s32 a, s32 b)
 {
-    func_80023F94(p, a, b);
-    func_80023A78((UnkCardPair *)(p + 0x93), (u32 *)(p + 0x89), (u32 *)(p + 0x8D), b);
-    func_80023E14(p);
+    func_80023F94((s32 *)c, a, b);
+    func_80023A78(&c->root, c->root_prim, c->root_shared, b);
+    func_80023E14(c);
 }
 
 void func_80023EF4(UnkCardGrp240 *c, s32 n);
@@ -2383,6 +2385,7 @@ s32 func_80023FF0(s32 a, s32 b)
 {
     s32 *q = (s32 *)D_80029618[b];
     s32 *r = q + 8;
+    UnkCardGrp240 *c;
 
     if (func_8004B4A8(q) == 0)
     {
@@ -2395,36 +2398,36 @@ s32 func_80023FF0(s32 a, s32 b)
         ((u16 *)q)[15] &= 0x7FFF;
         bzero((unsigned char *)r, 0x3C4);
     }
-    func_80023EF4((UnkCardGrp240 *)r, 0xA);
-    q[3] = (s32)(r + 147);
-    r[150] = func_80023ECC((s32)(r + 151));
-    func_80023FA0(r, a, b);
+    c = (UnkCardGrp240 *)r;
+    func_80023EF4(c, 0xA);
+    q[3] = (s32)&c->root;
+    c->root.unk_0C = func_80023ECC((s32)c->ptrs);
+    func_80023FA0(c, a, b);
     q[4] = (s32)func_80023EC4;
     return (s32)q;
 }
 
-void func_800240EC(s32 *p)
+void func_800240EC(UnkCardGrp240 *c)
 {
     s32 off = 0;
     s32 i = 0;
 
     do
     {
-        func_8004E994(*(s32 *)p[off + 0x98]);
-        *(s32 *)p[off + 0x98] = 0;
+        func_8004E994(c->ptrs[off + 1]->unk_00);
+        c->ptrs[off + 1]->unk_00 = 0;
         off++;
     } while (++i < 3);
-    *(s32 *)p[0x9B] = 0;
+    c->ptrs[4]->unk_00 = 0;
 }
 
-void func_80024160(s32 **p)
+void func_80024160(UnkCardGrp240 *c)
 {
     s32 i = 0;
 
     do
     {
-        *p[0x97] = 0;
-        p++;
+        c->ptrs[i]->unk_00 = 0;
     } while (++i < 10);
 }
 
@@ -2435,7 +2438,7 @@ void func_80024184(s32 *p)
     if (p != 0)
     {
         q = p + 8;
-        func_800240EC(q);
+        func_800240EC((UnkCardGrp240 *)q);
         ((u16 *)q)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
     }
@@ -2443,59 +2446,59 @@ void func_80024184(s32 *p)
 
 void func_800241D4(s32 *p, s32 flag)
 {
-    s32 *q;
-    s32 *r;
+    UnkCardGrp240 *c;
+    UnkCardPair *r;
 
     if (p != 0)
     {
-        q = p + 8;
-        r = (s32 *)q[0xA0];
-        q[0x89] = 0x808080;
+        c = (UnkCardGrp240 *)(p + 8);
+        r = c->ptrs[9];
+        c->root_prim[0] = 0x808080;
         if (flag != 0)
         {
-            r[0] = (s32)D_800786E8;
+            r->unk_00 = (s32)D_800786E8;
         }
         else
         {
-            r[0] = 0;
+            r->unk_00 = 0;
         }
-        ((u16 *)r[1])[4] = 0x60;
-        ((u16 *)r[1])[5] = 0x18;
+        r->unk_04->unk_08 = 0x60;
+        r->unk_04->unk_0A = 0x18;
     }
 }
 
 void func_80024224(s32 *p, s32 flag)
 {
-    s32 *q;
-    s32 *r;
+    UnkCardGrp240 *c;
+    UnkCardPair *r;
 
     if (p != 0)
     {
-        q = p + 8;
-        r = (s32 *)q[0xA0];
-        q[0x89] = 0x808080;
+        c = (UnkCardGrp240 *)(p + 8);
+        r = c->ptrs[9];
+        c->root_prim[0] = 0x808080;
         if (flag != 0)
         {
-            r[0] = (s32)D_800786DC;
+            r->unk_00 = (s32)D_800786DC;
         }
         else
         {
-            r[0] = 0;
+            r->unk_00 = 0;
         }
-        ((u16 *)r[1])[4] = 0x66;
-        ((u16 *)r[1])[5] = 0x18;
+        r->unk_04->unk_08 = 0x66;
+        r->unk_04->unk_0A = 0x18;
     }
 }
 
 void func_80024274(s32 *p)
 {
-    s32 *q;
+    UnkCardGrp240 *c;
 
     if (p != 0)
     {
-        q = p + 8;
-        q[0x89] = 0x606868;
-        *(s32 *)q[0xA0] = 0;
+        c = (UnkCardGrp240 *)(p + 8);
+        c->root_prim[0] = 0x606868;
+        c->ptrs[9]->unk_00 = 0;
     }
 }
 
@@ -2506,9 +2509,9 @@ void func_80024298(s32 *p)
     if (p != 0)
     {
         q = p + 8;
-        func_800240EC(q);
-        func_80024160((s32 **)q);
-        func_80023E14(q);
+        func_800240EC((UnkCardGrp240 *)q);
+        func_80024160((UnkCardGrp240 *)q);
+        func_80023E14((UnkCardGrp240 *)q);
     }
 }
 
@@ -4067,8 +4070,8 @@ void func_800269B4(s32 *p)
         {
             func_8004CBFC((u32 *)((u8 *)p + (k * 12 + 4)), D_80028074[i], e);
         }
-        ((UnkCardPair *)p[24 + i])->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
-        ((UnkCardPair *)p[26 + i])->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
+        ((UnkCardGrp044 *)p)->ptrs[i]->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
+        ((UnkCardGrp044 *)p)->ptrs[2 + i]->unk_04->unk_00 = D_8002806C[D_80028068[p[9]][i]];
     }
 }
 
@@ -4097,7 +4100,7 @@ void func_80026B18(u8 *p, s32 *b, s32 *c)
     {
         if (c[i] != 0)
         {
-            UnkCardPair *q = (UnkCardPair *)((s32 *)p)[0x1A + i];
+            UnkCardPair *q = ((UnkCardGrp044 *)p)->ptrs[2 + i];
 
             any = 1;
             if (b[i] != 0)
@@ -4138,15 +4141,15 @@ void func_80026C00(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-void func_80026C94(s32 *p)
+void func_80026C94(UnkCardGrp044 *c)
 {
     UnkCardPair *q;
 
-    q = (UnkCardPair *)p[0x18];
+    q = c->ptrs[0];
     q->unk_04->unk_08 = 0x40;
     q->unk_04->unk_0A = 0x20;
     q->unk_00 = (s32)D_80028418;
-    q = (UnkCardPair *)p[0x19];
+    q = c->ptrs[1];
     q->unk_04->unk_08 = 0xC0;
     q->unk_04->unk_0A = 0x20;
     q->unk_00 = (s32)D_80028430;
@@ -4158,26 +4161,26 @@ void func_80026C94(s32 *p)
    leaves it there for the call. With two arguments the pointer goes to a
    different register and $s0/$s1 come out swapped for the whole function.
    Same discovery as func_800269B4, from the other side. */
-void func_80026CF0(s32 *p)
+void func_80026CF0(UnkCardGrp044 *c)
 {
     UnkCardPair *q;
 
-    q = (UnkCardPair *)p[0x1A];
+    q = c->ptrs[2];
     q->unk_04->unk_08 = 0x40;
     q->unk_04->unk_0A = 0x20;
-    func_8004CBFC((u32 *)(p + 1), (u8 *)D_80027E68, (u32 *)q);
-    q = (UnkCardPair *)p[0x1B];
+    func_8004CBFC((u32 *)((s32 *)c + 1), (u8 *)D_80027E68, (u32 *)q);
+    q = c->ptrs[3];
     q->unk_04->unk_08 = 0xC0;
     q->unk_04->unk_0A = 0x20;
-    func_8004CBFC((u32 *)(p + 4), (u8 *)D_80027E68, (u32 *)q);
+    func_8004CBFC((u32 *)((s32 *)c + 4), (u8 *)D_80027E68, (u32 *)q);
 }
 
-void func_80026D78(s32 *p)
+void func_80026D78(UnkCardGrp044 *c)
 {
-    func_80026C94(p);
-    func_80026CF0(p);
-    func_80026B18((u8 *)p, (s32 *)D_8002807C, (s32 *)D_80028084);
-    func_800269B4(p);
+    func_80026C94(c);
+    func_80026CF0(c);
+    func_80026B18((u8 *)c, (s32 *)D_8002807C, (s32 *)D_80028084);
+    func_800269B4((s32 *)c);
 }
 
 s32 func_80026DC8(s32 a)
@@ -4206,17 +4209,18 @@ void func_80026DF0(UnkCardGrp044 *c, s32 n)
     c->shared[2] = D_8002E5E8[2];
 }
 
-void func_80026E90(s32 *p, s32 v)
+void func_80026E90(UnkCardGrp044 *c, s32 v)
 {
-    p[0] = v;
-    func_80026C00((UnkCardPair *)(p + 0x14), (u32 *)(p + 0xA), (u32 *)(p + 0xE));
-    func_80026D78(p);
+    *(s32 *)c = v;
+    func_80026C00(&c->root, c->root_prim, c->root_shared);
+    func_80026D78(c);
 }
 
 s32 *func_80026ED0(s32 *p, s32 a)
 {
     s32 *q = (s32 *)D_8002B850;
     s32 *r = q + 8;
+    UnkCardGrp044 *c;
 
     if (func_8004B4A8(q) == 0)
     {
@@ -4229,11 +4233,12 @@ s32 *func_80026ED0(s32 *p, s32 a)
         ((u16 *)q)[15] &= 0x7FFF;
         bzero((unsigned char *)r, 0xF0);
     }
-    func_80026DF0((UnkCardGrp044 *)r, 4);
-    q[3] = (s32)(r + 0x14);
-    r[0x17] = func_80026DC8((s32)(r + 0x18));
+    c = (UnkCardGrp044 *)r;
+    func_80026DF0(c, 4);
+    q[3] = (s32)&c->root;
+    c->root.unk_0C = func_80026DC8((s32)c->ptrs);
     r[9] = a;
-    func_80026E90(r, (s32)p);
+    func_80026E90(c, (s32)p);
     q[4] = (s32)func_80026AE4;
     return q;
 }
