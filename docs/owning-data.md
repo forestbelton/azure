@@ -25,11 +25,13 @@ trust.
 > is where the traps live; read §7 first if what you want is this overlay's
 > shape.
 >
-> Two things §4 could not tell you, because both only came up at the end:
-> **why the all-zero tail could not be `.bss`** (the last bullet of §6, and the
-> most surprising thing in this document), and **why a string pool should never
-> be owned object-by-object** (§4.7, which retired the whole of §4.6's
-> `hrodata` chunk for this overlay).
+> Three things §4 could not tell you, because all three only came up at the
+> end: **why the all-zero tail could not be `.bss`** (the last bullet of §6,
+> and the most surprising thing in this document), **why a string pool should
+> never be owned object-by-object** (§4.7, which retired the whole of §4.6's
+> `hrodata` chunk for this overlay), and **that a section boundary off the
+> 4-byte grid carries three bytes of the original linker's buffer** (§4.8 --
+> four of them in this project, and not one belongs to the object before it).
 
 This is mostly about **data**, which is the hard case. Code is
 `docs/landing-a-function.md`. **Rodata** needs none of the yaml work, because
@@ -428,11 +430,12 @@ things to know before doing the same elsewhere:
   `src/azure/commands/shiftjis.py` matches start-of-line to end-of-line, so a
   directive must sit ALONE on its line -- an offset comment in front of it
   reaches GNU as unexpanded as `unknown pseudo-op: .shiftjis`.
-* **Check the padding bytes, not just the strings.** 58 of the 59 entries pad
-  with zeros, which is what `.balign 4, 0` produces. The last one pads with
-  `05 61 64`, so it needs `.shiftjis` plus an explicit
-  `.byte 0x00, 0x05, 0x61, 0x64`. A decoder that only walks NUL terminators
-  will not notice; verify the pad bytes are zero before trusting `.shiftjisz`.
+* **Check the padding bytes, not just the strings.** All 59 entries pad with
+  zeros, which is what `.balign 4, 0` produces -- but the three bytes after the
+  LAST entry's padding, `0x80020921..0x80020924`, are `05 61 64`. Those belong
+  to the section, not to the string (§4.7's last sub-section), so the entry
+  needed `.shiftjis` plus an explicit `.byte 0x00, 0x05, 0x61, 0x64` here. A
+  decoder that only walks NUL terminators will not notice either fact.
 
 The gate for an `hrodata` chunk is its object's section size against the
 subsegment span:
@@ -496,11 +499,23 @@ Three things it costs:
   comment on the line above and generate the two together. In this unit each
   message is a `#define MSG_... ((u8 *)"\x..")` with that comment, which is
   what makes the 20-entry message table read as the game's dialogue script.
-* **A literal cannot carry non-zero padding.** `.ascii` always ends in exactly
-  one NUL, and the linker's `FILL(0x00000000)` does the rest. The last message
-  here pads with `05 61 64`, so it stays a sized `const u8 [0x1C]` object,
-  placed just after the table whose deferred constants are the pool's last
-  entries -- which is what keeps it last in `.rodata`. One object out of 59.
+* **The section's last three bytes are not an object, and cannot be one.**
+  `.rodata` here ends at `0x80020921` -- the last message's NUL -- and the text
+  starts at `0x80020924`. The three bytes in between are `05 61 64`, not zeros,
+  so the linker's `FILL(0x00000000)` does not produce them and a string literal
+  cannot either, since `.ascii` ends in exactly one NUL. Nor can a named
+  3-byte array: cc1psx emits `.align 2` before every file-scope object, and
+  `__attribute__((aligned(1)))` does not change that (both measured), so the
+  array would be pushed onto `0x80020924` and the first function. A deferred
+  string constant, by contrast, gets no TRAILING align -- which is the only
+  reason `0x80020921` is reachable from C at all. So they are spelled as what
+  they are, raw section content:
+
+      __asm__(".rdata\n"
+              "\t.byte 0x05, 0x61, 0x64\n"
+              "\t.data");
+
+  All 59 messages stay literals. §4.8 is what the bytes turn out to be.
 * **Position is now implicit.** The pool lands where the tables are, so the
   tables have to come after every other `.rodata` contribution in the file.
   They do, because the data block is at the foot and `const RECT D_800200B8`
@@ -510,6 +525,63 @@ Three things it costs:
 The gate is §5's, plus the `.rodata` size: `size -A` must say `.rodata 2340`
 against the subsegment span `0x25d924 - 0x25d000`, and `_25D000_TEXT_START`
 must still be `0x80020924`.
+
+---
+
+### 4.8 The junk bytes at a section boundary that does not land on 4
+
+ASPSX/psylink pads a section up to the next section's alignment with
+**whatever was in its buffer**, not with zeros. Every boundary in this project
+that does not already land on 4 shows it:
+
+| container | offset | bytes | as text |
+|---|---|---|---|
+| `town.bin` | `0x00C19D` | `2e 73 65` | `".se"` |
+| `town.bin` | `0x00D521` | `35 2f 30` | `"5/0"` |
+| `main.bin` | `0x25D921` | `05 61 64` | `"\5ad"` |
+| `main.bin` | `0x26989D` | `20 42 30` | `" B0"` |
+
+Four boundaries over two containers, found by scanning every `rodata` /
+`.rodata` / `hrodata` subsegment's last word for a NUL followed by non-zero
+bytes:
+
+```sh
+python3 - <<'EOF'
+import yaml
+for name, b, y in [('main.bin', 'data/main/main.bin', 'splat/main.bin.yaml'),
+                   ('town.bin', 'data/town/town.bin', 'splat/town.bin.yaml')]:
+    ROM, Y = open(b, 'rb').read(), yaml.safe_load(open(y))
+    flat = []
+    def walk(e):
+        if isinstance(e, list): flat.append((e[0], e[1] if len(e) > 1 else 'bin'))
+        elif isinstance(e, dict):
+            for sg in e.get('subsegments') or []: walk(sg)
+            if not e.get('subsegments'): flat.append((e['start'], e.get('type')))
+    for e in Y['segments']: walk(e)
+    flat.sort()
+    for (o, t), (o2, _) in zip(flat, flat[1:]):
+        if t not in ('rodata', '.rodata', 'hrodata'): continue
+        w = ROM[o2 - 4:o2]
+        if 0 in w[:-1]:
+            k = max(i for i, c in enumerate(w) if c == 0)
+            if k < 3 and any(w[k + 1:]):
+                print(name, hex(o2 - 3 + k), w.hex(' '), bytes(w[k + 1:]))
+EOF
+```
+
+Three things that follow:
+
+* **It is a printable-ASCII fragment every time, and never the same fragment
+  twice.** `05 61 64` occurs nowhere else in `main.bin`; `5/0` occurs once
+  more, in the random filler. So they are off-cuts of *something* textual in
+  the toolchain's own memory -- a filename, a date, a version string -- but
+  **what** is not known, and nothing here identifies it.
+* **It is not the preceding object's padding.** Read it as such and the
+  object's declared size is wrong by three bytes, which matters the moment
+  anything else is placed relative to it. Spell it as section content.
+* **Expect it when you take over an overlay's last rodata object.** The
+  `main.bin` twin's boundary, after its last assert string `"memory.c"`, is the
+  same shape and still ahead of us.
 
 ---
 

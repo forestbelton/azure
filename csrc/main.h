@@ -480,11 +480,6 @@ extern u8 D_8002B850[];
 extern u8 D_8002B968[];
 extern u8 D_8002BB08[];
 
-/* The one Shift-JIS message that is a named object rather than a string
-   literal in the table that uses it -- see the message block at the foot of
-   csrc/ovl_main_80020000.c for why the other 58 are not declared anywhere. */
-extern const u8 MSG_YOU_CAN_SAVE[0x1C];
-
 /* The 12-byte cel records at the top of the overlay's data, declared here
    because the tables that point at them (D_80027E20, D_80027E68 and
    D_80027FD4) are defined 0x5D0 bytes lower and so come first in the C

@@ -5104,6 +5104,10 @@ const RECT D_800200B8 = {0x380, 0x100, 4, 0x10};
 #define MSG_YOU_CAN_COPY ((u8 *)"\x82\x78\x82\x8F\x82\x95\x81\x40\x82\x83\x82\x81" \
                                 "\x82\x8E\x81\x40\x82\x83\x82\x8F\x82\x90\x82\x99")
 
+/* 0x80020908 "Ｙｏｕ　ｃａｎ　ｓａｖｅ" */
+#define MSG_YOU_CAN_SAVE ((u8 *)"\x82\x78\x82\x8F\x82\x95\x81\x40\x82\x83\x82\x81" \
+                                "\x82\x8E\x81\x40\x82\x93\x82\x81\x82\x96\x82\x85")
+
 /* ------------------------------------------------------------------------- */
 /* 0x80027E20 */
 /* The 8-frame animation script reached through D_80028074[1]; the last
@@ -5427,21 +5431,46 @@ u8 *D_800283EC[2] = {
 /* 0x800283F4 */
 /* The indexed alternative. */
 u8 *D_800283F4[2] = {
-    (u8 *)MSG_YOU_CAN_SAVE,
+    MSG_YOU_CAN_SAVE,
     MSG_YOU_CAN_COPY,
 };
 
-/* 0x80020908 -- .rodata, not .data, so it is out of address order among its
-   neighbours here. "Ｙｏｕ　ｃａｎ　ｓａｖｅ", the last object in .rodata, and the
-   only one of the 59 messages that is not a string literal: the three bytes
-   after its NUL are 05 61 64, not the zero padding the other 58 have, and a
-   literal always ends in exactly one NUL. So it is a sized object written out
-   to 0x1C, placed right after the table whose deferred constants are the
-   pool's last two entries, which is what keeps it last. */
-const u8 MSG_YOU_CAN_SAVE[0x1C] =
-    "\x82\x78\x82\x8F\x82\x95\x81\x40\x82\x83\x82\x81"
-    "\x82\x8E\x81\x40\x82\x93\x82\x81\x82\x96\x82\x85"
-    "\x00\x05\x61\x64";
+/* 0x80020921..0x80020924 -- THREE BYTES THAT BELONG TO NO OBJECT, which is why
+   they are spelled as raw section content rather than as C.
+
+   The message above ends with its NUL at 0x80020920 and the overlay's text
+   starts at 0x80020924, so three bytes sit in between -- and they are
+   05 61 64, not zeros. They are not the message's padding and not an object of
+   their own: the original toolchain filled the gap it needed in order to
+   4-align the text with whatever was in its buffer. Every other section
+   boundary in the project that does not land on 4 looks the same:
+
+       town.bin  0x00C19D   2e 73 65   ".se"
+       town.bin  0x00D521   35 2f 30   "5/0"
+       main.bin  0x25D921   05 61 64   "\5ad"   <- this one
+       main.bin  0x26989D   20 42 30   " B0"    (the debug twin, after its
+                                                 last string, "memory.c")
+
+   Four boundaries over two containers, a printable-ASCII fragment every time
+   and never the same fragment twice; 05 61 64 occurs nowhere else in
+   main.bin. What the fragments are off-cuts OF is not known.
+
+   It could not be a C object in any case. cc1psx emits `.align 2` before every
+   file-scope object -- measured, and `__attribute__((aligned(1)))` does not
+   change it -- so a named 3-byte array would be pushed to 0x80020924, on top
+   of the first function. A deferred string constant gets no TRAILING align,
+   which is what leaves 0x80020921 reachable from here at all.
+
+   The closing `.data` is belt and braces. It is not needed HERE -- cc1psx has
+   just flushed those constants into .rdata itself, so it emits `.data` of its
+   own accord for the next object, and dropping the line still builds
+   byte-identical (measured). But cc1psx only emits a section directive when
+   the section changes by ITS reckoning, and this block is invisible to that,
+   so an `__asm__` like this placed anywhere else in the data block would send
+   the object after it into .rdata. Leave the restore in. */
+__asm__(".rdata\n"
+        "\t.byte 0x05, 0x61, 0x64\n"
+        "\t.data");
 
 /* 0x800283FC */
 /* Appended after it.

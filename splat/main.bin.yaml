@@ -180,6 +180,14 @@ segments:
       # `.data` subsegment below. csrc/ovl_main_80020000.c defines all 2340
       # bytes, and `size -A` on its object must say `.rodata 2340`.
       #
+      # The last three bytes of the span, 0x25d921..0x25d924, belong to no
+      # object at all: the last message's NUL is at 0x25d920 and they are
+      # 05 61 64, the original linker's buffer showing through where it padded
+      # .rodata up to the 4-aligned text. Three other section boundaries in
+      # the project look the same; docs/owning-data.md §4.8. The C unit emits
+      # them with a file-scope `__asm__`, since cc1psx aligns every named
+      # object to 4 and would push a 3-byte array onto func_80020924.
+      #
       # 0x25d0c0..0x25d924 was its own `hrodata` subsegment until 2026-11-09,
       # a hand-written asrc/ file holding the 59 Shift-JIS UI messages as
       # readable `.shiftjisz "..."` text, because nothing REFERENCED the pool
