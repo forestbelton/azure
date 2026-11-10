@@ -49,8 +49,9 @@ segments:
   #   - merging 0x800, 0xE30 and 0xE7C into one segment of four subsegments
   #     (one `rodata` plus three `.rodata` naming three DIFFERENT C units)
   #     builds byte-identical;
-  #   - the str/name `shiftjis` run at 0x541D0 already sits between `data`
-  #     subsegments at 0x3E01C and 0x5426C, in the same segment.
+  #   - the name table's `.rodata` at 0x541D0 (asrc/names.s) sits between
+  #     `data` subsegments at 0x3E01C and 0x5426C, in the same segment, and
+  #     holds a `.word` that used to be a `data` subsegment of its own.
   # What IS grouped is the non-primary sections of `asm`/`c` subsegments:
   # their .data/.rodata/.bss are emitted in blocks after the text group. That
   # is the real constraint, and it is why a unit owning two SEPARATED .rodata
@@ -387,9 +388,6 @@ segments:
       # The D_80081518..E / D_80081520..6 atlas-cursor cluster, likewise.
       - [0x1ab38, c, gprel_1AB38]
       - [0x1ada4, c, unk_1ADA4]
-      # - [0x2d854, shiftjis, str/name/kimbr]
-      # - [0x2d860, shiftjis, str/name/girl2]
-      # - [0x2d86c, shiftjis, str/name/girl1]
       - [0x1af14, asm, psyq/libsnd/SSGNC]
       - [0x1af38, c, unk_1AF38]
       - [0x1c520, asm, psyq/libsnd/UT_RON]
@@ -702,24 +700,21 @@ segments:
       # Back to the game: the $gp anchor region. _gp = 0x80080994 is file
       # 0x54194, the first word of this piece.
       - [0x54194, data, game_gp]
-      - [0x541d0, hrodata, names]
-      # NINETEEN names, now all split. Sixteen 8-byte slots run 0x541D0-0x54250
-      # (the last two were inside the old 0x54240 blob), then a 4-byte pointer
-      # to 0x8002D34C, then three more names: max, zu, kid.
+      # The whole name table as one hand-owned listing: asrc/names.s, placed by
+      # the `hrodata` subsegment type. Nineteen names over 0x541D0-0x5426C,
+      # replacing six one-per-string `shiftjis` subsegments and the `data` one
+      # that held the pointer between them.
       #
-      # Those three used to be held back, on the grounds that "a segment groups
-      # its entries by section, so a `shiftjis` (.rodata) subsegment cannot be
-      # placed after a `bin` (.data) one" and that splitting them would need an
-      # extra segment. Both halves of that were wrong -- see the long note at
-      # the top of this file -- and they split in place with no new segment:
-      # `data` for the pointer, `shiftjis` for the three names, `data` again
-      # for the rest. Byte-identical.
-      - [0x54240, shiftjis, str/name/fur]
-      - [0x54248, shiftjis, str/name/guy]
-      - [0x54250, data, gp_name_ptr]
-      - [0x54254, shiftjis, str/name/max]
-      - [0x5425c, shiftjis, str/name/zu]
-      - [0x54264, shiftjis, str/name/kid]
+      # That pointer is why this looked like it needed splitting. It is four
+      # bytes at 0x54250 holding 0x8002D34C -- "Girl", an entry in the separate
+      # character-name table inside str_pool_800 -- and it sits between name
+      # sixteen and name seventeen. As a `data` subsegment it was `.data` wedged
+      # into a `.rodata` run, which the ld script emitted in declared order
+      # (see the long note at the top of this file); in the listing it is simply
+      # a `.word` in .rodata, and the bytes do not care which section they were
+      # declared from. csrc/unk_72A8.c names it D_80080A50 and asrc/names.s
+      # defines it, so the symbol survives the move.
+      - [0x541d0, hrodata, names]
       # Small data above _gp: .sdata and .sbss, then zero fill. NOT the
       # game's alone, which is why this is `gp_data` and not `game_gp_data`
       # -- libapi/PATCH's 16-byte .sbss is in here, and PATCH both loads from

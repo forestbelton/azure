@@ -330,14 +330,17 @@ three details of splat that are easy to get wrong:
    nothing is extracted. Written as plain `rodata` it instead disassembles the
    bytes into `asm/data/<unit>.rodata.s`, which the Makefile's `SFILES` glob
    would then assemble and link *as well* as the C object.
-2. **Each placement needs its own splat segment.** Under
-   `ld_legacy_generation: True` a segment's entries are grouped by section, so
-   one segment can hold only one `.rodata` run, after all of its `.data`. The
-   opening blob therefore has to be cut into a segment per run. This is not
-   optional cosmetics: the segment's `.rodata` group is also where the
-   `str/name/*` Shift-JIS subsegments live (they are `.rodata` too, at
-   0x541D0), so adding a `.rodata` subsegment to the existing single segment
-   drags *those* to 0x8002D5C0 and destroys the image.
+2. **Each placement needs its own splat segment** -- but not for the reason
+   this item used to give. It claimed `ld_legacy_generation: True` groups a
+   segment's entries by section, so that one segment can hold only one
+   `.rodata` run and adding a second would drag the name table at 0x541D0 to
+   0x8002D5C0. That is FALSE, and the header of `slus_006.14.yaml` has the
+   three byte-identical checks that disprove it: explicitly declared
+   subsegments are emitted in declared *offset* order whatever their section.
+   What IS grouped is the non-primary sections of `asm`/`c` subsegments, and
+   that is the real constraint here: an object has one `.rodata`, so a dotted
+   `.rodata` subsegment can pull it to one offset only, and a unit owning two
+   SEPARATED `.rodata` runs has to be cut into two units.
 3. **Set `align: 4` on each new segment.** The default segment align is 16, and
    `_end_segment` emits `__romPos = ALIGN(__romPos, 16)` after it. A segment
    ending at 0x8002D67C or 0x8002D6FC would be rounded up to a 16-byte boundary
