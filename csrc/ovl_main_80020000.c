@@ -1951,7 +1951,7 @@ void func_80023258(s32 *p)
     s32 d = ((p[34] - w) * (p[33] << 4)) / p[32] + 0xA;
     s32 i;
 
-    ((UnkCardPair *)p[105])->unk_04->unk_0A = (w << 4) + d;
+    ((UnkCardGrp184 *)p)->ptrs[1]->unk_04->unk_0A = (w << 4) + d;
     for (i = 0; i < 3; i++)
     {
         s32 v = ((u8 *)p)[0x7C + i];
@@ -1973,13 +1973,13 @@ void func_80023258(s32 *p)
         }
         *q = n;
         u = ((u8 *)p)[0x7C + i];
-        ((UnkCardPair *)p[114 + i])->unk_04->unk_08 = u + 0x24;
-        ((UnkCardPair *)p[118 + i])->unk_04->unk_08 = u + 0x8F;
-        ((UnkCardPair *)p[106 + i])->unk_04->unk_08 = u + 9;
-        ((UnkCardPair *)p[110 + i])->unk_04->unk_08 = u + 0x42;
-        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
-        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
-        ((u8 *)((UnkCardPair *)p[114 + i])->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
+        ((UnkCardGrp184 *)p)->ptrs[10 + i]->unk_04->unk_08 = u + 0x24;
+        ((UnkCardGrp184 *)p)->ptrs[14 + i]->unk_04->unk_08 = u + 0x8F;
+        ((UnkCardGrp184 *)p)->ptrs[2 + i]->unk_04->unk_08 = u + 9;
+        ((UnkCardGrp184 *)p)->ptrs[6 + i]->unk_04->unk_08 = u + 0x42;
+        ((u8 *)((UnkCardGrp184 *)p)->ptrs[10 + i]->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkCardGrp184 *)p)->ptrs[10 + i]->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkCardGrp184 *)p)->ptrs[10 + i]->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
     }
     if (p[33] < p[32])
     {
@@ -1987,34 +1987,35 @@ void func_80023258(s32 *p)
     }
 }
 
-void func_800233D0(s32 *p)
+void func_800233D0(UnkCardGrp184 *c)
 {
+    s32 *p = (s32 *)c;
     s32 i;
 
-    *(s32 *)p[0x68] = func_80049E6C(3);
-    *(s32 *)p[0x69] = (s32)D_80077E84;
+    c->ptrs[0]->unk_00 = func_80049E6C(3);
+    c->ptrs[1]->unk_00 = (s32)D_80077E84;
     for (i = 0; i < 3; i++)
     {
-        *(s32 *)p[0x6A + i] = (s32)D_80077EF0;
-        *(s32 *)p[0x6E + i] = (s32)D_80077EFC;
-        *(s32 *)p[0x72 + i] = (s32)(p + 1);
-        *(s32 *)p[0x76 + i] = (s32)((u8 *)p + 0x90 + i * 0x48);
+        c->ptrs[2 + i]->unk_00 = (s32)D_80077EF0;
+        c->ptrs[6 + i]->unk_00 = (s32)D_80077EFC;
+        c->ptrs[10 + i]->unk_00 = (s32)(p + 1);
+        c->ptrs[14 + i]->unk_00 = (s32)((u8 *)p + 0x90 + i * 0x48);
     }
 }
 
-void func_80023470(s32 *p)
+void func_80023470(UnkCardGrp184 *c)
 {
     s32 i;
 
     for (i = 0; i < 3; i++)
     {
-        ((UnkCardPair *)p[0x72 + i])->unk_04->unk_08 = 0x24;
-        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[0] = 0x68;
-        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[1] = 0x68;
-        ((u8 *)((UnkCardPair *)p[0x72 + i])->unk_04)[2] = 0x60;
-        ((UnkCardPair *)p[0x6A + i])->unk_04->unk_08 = 9;
-        ((UnkCardPair *)p[0x6E + i])->unk_04->unk_08 = 0x42;
-        ((UnkCardPair *)p[0x76 + i])->unk_04->unk_08 = 0x8F;
+        c->ptrs[10 + i]->unk_04->unk_08 = 0x24;
+        ((u8 *)c->ptrs[10 + i]->unk_04)[0] = 0x68;
+        ((u8 *)c->ptrs[10 + i]->unk_04)[1] = 0x68;
+        ((u8 *)c->ptrs[10 + i]->unk_04)[2] = 0x60;
+        c->ptrs[2 + i]->unk_04->unk_08 = 9;
+        c->ptrs[6 + i]->unk_04->unk_08 = 0x42;
+        c->ptrs[14 + i]->unk_04->unk_08 = 0x8F;
     }
 }
 
@@ -2045,28 +2046,29 @@ s32 func_800235A0(s32 p, s32 w, s32 h)
    because the first store may alias it, so spelling each store as its own
    full expression is what produces the doubled `lw` pairs. A `do`/`while`
    here is 78 words against 76. */
-void func_80023600(s32 *p)
+void func_80023600(UnkCardGrp184 *c)
 {
+    s32 *p = (s32 *)c;
     s32 i;
 
     p[32] = 1;
     p[33] = 1;
     func_8002352C((u8 *)p);
     func_800235A0((s32)(p + 1), 0x36, 0x10);
-    func_800233D0(p);
-    ((UnkCardPair *)p[104])->unk_04->unk_0A = 0x1A;
+    func_800233D0(c);
+    c->ptrs[0]->unk_04->unk_0A = 0x1A;
     for (i = 0; i < 3; i++)
     {
-        ((UnkCardPair *)p[118 + i])->unk_04->unk_08 = 0x8E;
-        ((UnkCardPair *)p[118 + i])->unk_04->unk_0A = (i * 16) + 0x82;
-        ((UnkCardPair *)p[106 + i])->unk_04->unk_08 = 9;
-        ((UnkCardPair *)p[106 + i])->unk_04->unk_0A = (i * 16) + 0xA;
-        ((UnkCardPair *)p[110 + i])->unk_04->unk_08 = 0x42;
-        ((UnkCardPair *)p[110 + i])->unk_04->unk_0A = (i * 16) + 0xA;
-        ((UnkCardPair *)p[114 + i])->unk_04->unk_08 = 0x24;
-        ((UnkCardPair *)p[114 + i])->unk_04->unk_0A = (i * 16) + 0xA;
+        c->ptrs[14 + i]->unk_04->unk_08 = 0x8E;
+        c->ptrs[14 + i]->unk_04->unk_0A = (i * 16) + 0x82;
+        c->ptrs[2 + i]->unk_04->unk_08 = 9;
+        c->ptrs[2 + i]->unk_04->unk_0A = (i * 16) + 0xA;
+        c->ptrs[6 + i]->unk_04->unk_08 = 0x42;
+        c->ptrs[6 + i]->unk_04->unk_0A = (i * 16) + 0xA;
+        c->ptrs[10 + i]->unk_04->unk_08 = 0x24;
+        c->ptrs[10 + i]->unk_04->unk_0A = (i * 16) + 0xA;
     }
-    func_80023470(p);
+    func_80023470(c);
 }
 
 void func_80023730(UnkCardPair *p, u32 *a, u32 *b)
@@ -2121,17 +2123,18 @@ void func_8002388C(s32 *p, s32 v)
     p[0] = v;
 }
 
-void func_80023894(s32 *p, s32 v)
+void func_80023894(UnkCardGrp184 *c, s32 v)
 {
-    func_8002388C(p, v);
-    func_80023730((UnkCardPair *)(p + 0x64), (u32 *)(p + 0x5A), (u32 *)(p + 0x5E));
-    func_80023600(p);
+    func_8002388C((s32 *)c, v);
+    func_80023730(&c->root, c->root_prim, c->root_shared);
+    func_80023600(c);
 }
 
 s32 *func_800238D4(s32 *p)
 {
     s32 *q = (s32 *)D_800291D0;
     s32 *r = q + 8;
+    UnkCardGrp184 *c;
 
     if (func_8004B4A8(q) == 0)
     {
@@ -2144,24 +2147,23 @@ s32 *func_800238D4(s32 *p)
         ((u16 *)q)[15] &= 0x7FFF;
         bzero((unsigned char *)r, 0x428);
     }
-    func_800237EC((UnkCardGrp184 *)r, 0x12);
-    q[3] = (s32)(r + 0x64);
-    r[0x67] = func_800237C4((s32)(r + 0x68));
-    func_80023894(r, (s32)p);
+    c = (UnkCardGrp184 *)r;
+    func_800237EC(c, 0x12);
+    q[3] = (s32)&c->root;
+    c->root.unk_0C = func_800237C4((s32)c->ptrs);
+    func_80023894(c, (s32)p);
     q[4] = (s32)func_80023258;
     func_80023258(r);
     return q;
 }
 
-void func_800239B0(s32 **pp)
+void func_800239B0(UnkCardGrp184 *c)
 {
     s32 i = 0;
-    s32 **p = pp;
 
     do
     {
-        func_8004E994(*p[0x76]);
-        p++;
+        func_8004E994(c->ptrs[14 + i]->unk_00);
     } while (++i < 3);
 }
 
@@ -2172,7 +2174,7 @@ void func_80023A00(s32 *p)
     if (p != 0)
     {
         q = p + 8;
-        func_800239B0((s32 **)q);
+        func_800239B0((UnkCardGrp184 *)q);
         ((u16 *)q)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
     }

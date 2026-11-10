@@ -207,7 +207,20 @@ typedef struct
    pad+0x18.
 
    Naming them changes no offset and no size -- verified member by member and
-   for all six instantiations against the previous spelling. */
+   for all six instantiations against the previous spelling.
+
+   WHICH FUNCTIONS TAKE THE GROUP. One whose body is mostly group access
+   takes `name *`; one whose body is mostly HEAD access -- the window's own
+   fields, below pad_000, which this shared macro cannot name -- keeps its
+   payload pointer and spells the group access `((name *)p)->ptrs[k]`. That
+   is measured, not taste: func_80022934 and func_80023258 both move with a
+   group parameter even though the head reads still go through an `s32 *p`
+   local. func_80022934 came out 65 words against 62 with the head
+   arithmetic based on the group pointer, and 62 words with 0x1e bytes
+   differing -- every register permuted -- based on the local. func_80023258
+   kept its word count exactly and still permuted 0x10 bytes. The lever is
+   how many references the head local has against the group one, so
+   func_800223B4 and func_80023600 hold both and are fine. */
 #define UNK_CARD_GROUP(name, pad, n) \
     typedef struct                   \
     {                                \
@@ -280,11 +293,11 @@ s32 open_card_message(s32 a, s32 id, s32 kind, s32 p);
 
 s32 func_800231E4(s32 flag);
 void func_80023258(s32 *p);
-void func_80023600(s32 *p);
+void func_80023600(UnkCardGrp184 *c);
 void func_80023730(UnkCardPair *p, u32 *a, u32 *b);
 void func_800237EC(UnkCardGrp184 *c, s32 n);
 s32 *func_800238D4(s32 *p);
-void func_800239B0(s32 **pp);
+void func_800239B0(UnkCardGrp184 *c);
 void func_80023A00(s32 *p);
 void func_80023A78(UnkCardPair *p, u32 *a, u32 *b, s32 n);
 void func_80023B18(UnkCardGrp240 *c);
