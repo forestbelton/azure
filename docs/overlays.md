@@ -207,8 +207,35 @@ segment:
 * **Source line numbers.** Every assert site passes `__LINE__` as an
   immediate, which brackets function order and rough line structure within
   each unit.
-* **Real identifiers**, from the assert expressions: `card_first_flg`,
-  `(int)gsw->check_sum`.
+* **Real identifiers.** Not from the `Assertion failed` records themselves,
+  which carry only file and line, but from the debug prints beside them:
+  `printf("%s = %d\n", #x, x)` and its `%x` sibling, which put the stringised
+  expression in rodata next to the format. Those two formats are
+  `D_80400038` / `D_80400114`, and a full scan of the block's rodata
+  (`0x80400000..0x804008A0`, every NUL-terminated string, not just the long
+  ones) finds **exactly four** such operands. All four are now carried into
+  the live block where a live counterpart exists:
+
+  | identifier | twin site | twin operand | live site | live spelling |
+  |---|---|---|---|---|
+  | `card_first_flg` | func_80400E34 | `D_8013BB6C` | func_80020EA0 | `card_first_flg[0]`, a macro over `D_80084130` |
+  | `cnt` | func_80401B30, func_804022C8 | `$s1` / `$s0` local | func_80021A84, func_8002219C | *nothing* -- twin-only |
+  | `c` | func_80401FEC | `$s1` local | func_80021EE0 | `c` |
+  | `(int)gsw->check_sum` | func_80401F98, func_80401FEC | `0x204($a0)` | func_80021EB8, func_80021EE0 | `gsw[GSW_CHECK_SUM]` |
+
+  Three lessons in that table. **A named global need not be in either block:**
+  `card_first_flg` is engine `.bss` in both links, so the name has to be a
+  `#define` over the splat symbol (include/structs.h) until that region is
+  split, and the incomplete-array declaration the live addressing needs is why
+  it reads `card_first_flg[0]`. **A named local can be twin-only:** `cnt`
+  exists only to be printed, so the live build has no counter in either
+  function and there is nothing to rename -- the recovered name belongs to the
+  twin's own future decompilation, and is recorded at those two INCLUDE_ASM
+  sites. **A `->` names a member without giving a type:** the `(int)` cast
+  says `check_sum` is not plainly `int`, and the live source takes an
+  `s32 *gsw`, so the member can only be named as its word index (csrc/main.h).
+  `gsw` itself was already adopted as the parameter name from this same
+  string.
 
 splat also suggests a rodata file split at `+0x26907C` from jump-table
 alignment, which is an independent witness for a unit boundary there.

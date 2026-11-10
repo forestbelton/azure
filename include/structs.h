@@ -1512,7 +1512,18 @@ extern u8 D_8007382A[];
 extern u8 D_80082B4B[];
 extern u32 D_800737A8[];
 extern u32 D_800869C0[];
+/* `card_first_flg`: the name comes from the 0x80400000 debug twin, whose
+   func_80400E34 opens with `printf("%s = %d\n", "card_first_flg", ...)` over
+   the very word it then tests and sets -- D_8013BB6C in that link, this one in
+   the retail link (func_80020EA0 is the same function). See docs/overlays.md.
+
+   The word is engine .bss (0x800815C0..0x80088760), which no split
+   translation unit owns, so the name can only be a macro over the splat
+   symbol until that region is moved in. The incomplete array is the
+   addressing shape func_80020EA0 and func_8004EB30 need, so the name is
+   written `card_first_flg[0]` at every use. */
 extern u32 D_80084130[];
+#define card_first_flg D_80084130
 extern u16 D_80084778[];
 extern s16 D_80084808[];
 extern u32 D_80086D4C[];

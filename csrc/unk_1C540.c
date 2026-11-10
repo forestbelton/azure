@@ -4374,7 +4374,7 @@ u8 *func_8004EAC4(u8 *dst, u8 *src, s32 i) {
 }
 
 void func_8004EB30(void) {
-    D_80084130[0] = 0;
+    card_first_flg[0] = 0;
 }
 
 void func_8004EB3C(u8 *p) {

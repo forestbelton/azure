@@ -206,9 +206,9 @@ void func_80020A80(void)
 
 void func_80020EA0(void)
 {
-    if (D_80084130[0] == 0)
+    if (card_first_flg[0] == 0)
     {
-        D_80084130[0] = 1;
+        card_first_flg[0] = 1;
         D_80084118 = 0;
         (&D_80084118)[1] = 0;
         bzero((unsigned char *)D_80083E98, 0x280);
@@ -1030,6 +1030,11 @@ void func_80021DF4(s32 idx, u8 *src)
     row[0] = 1;
 }
 
+/* `gsw` and GSW_CHECK_SUM are the twin's own identifiers, from
+   `printf("%s = %x\n", "(int)gsw->check_sum", ...)` in func_80401F98, this
+   function's twin. The accumulator keeps its invented name here: the twin
+   prints it only in func_80401FEC (as `c`), and in this one it never reaches a
+   printf, so there is no witness for it. */
 void func_80021EB8(s32 *gsw)
 {
     s32 sum = 0;
@@ -1041,7 +1046,7 @@ void func_80021EB8(s32 *gsw)
         sum ^= *q++;
         n--;
     } while (n >= 0);
-    gsw[0x81] = sum;
+    gsw[GSW_CHECK_SUM] = sum;
 }
 
 /* The `while (1)` plus `break` is load-bearing, not style: with a `for` or
@@ -1057,29 +1062,34 @@ void func_80021EB8(s32 *gsw)
    DIFF, all register names.
    Ruled out, measured: `q[i]` in twelve spellings (declaration orders, `i = 0`
    as a declaration initialiser, `while`, `do`/`while`, `gsw[0x82 + i]`,
-   `(gsw + 0x82)[i]`, `(... ^ sum) == 0`, u32) -- all 14 words / 6 DIFF;
-   `for (i = 0; i < 0x177E; i++) sum ^= *q++;` -- 13 words / 11 DIFF
+   `(gsw + 0x82)[i]`, `(... ^ c) == 0`, u32) -- all 14 words / 6 DIFF;
+   `for (i = 0; i < 0x177E; i++) c ^= *q++;` -- 13 words / 11 DIFF
    (reversed); `do { } while (++i < 0x177E)` with `*q++` -- 13 / 11;
    `for (;;)` in place of `while (1)` -- 14 / 3 (the first iteration is
    peeled); `if (++i == 0x177E) break;` -- 14 / 6 (`bne` against a
    register-held 0x177E instead of `slti`/`bnez`). `if (++i >= 0x177E) break;`
-   and a `goto` loop also match. */
+   and a `goto` loop also match.
+
+   `c` is the accumulator's real name, not a guess: the twin's func_80401FEC
+   prints it as `printf("%s = %x\n", "c", ...)` right before it prints
+   `(int)gsw->check_sum`, so the debug build names both halves of this
+   comparison. */
 s32 func_80021EE0(s32 *gsw)
 {
-    s32 sum = 0;
+    s32 c = 0;
     s32 *q = gsw + 0x82;
     s32 i = 0;
 
     while (1)
     {
-        sum ^= *q++;
+        c ^= *q++;
         i++;
         if (i >= 0x177E)
         {
             break;
         }
     }
-    return gsw[0x81] == sum;
+    return gsw[GSW_CHECK_SUM] == c;
 }
 
 s32 func_80021F18(s32 idx, u8 *buf)

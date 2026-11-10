@@ -3,6 +3,16 @@
 
 #define MEM_CARD_FILE_ID_TMP 5
 
+/* `gsw->check_sum`, the word index of it in the `s32 *` the save-block
+   checksum pair takes. The name is the 0x80400000 debug twin's: func_80401F98
+   and func_80401FEC -- func_80021EB8 and func_80021EE0 here -- print it as
+   `printf("%s = %x\n", "(int)gsw->check_sum", ...)` against the word at
+   gsw+0x204, which is this index. The struct the twin's `->` implies is not
+   written yet (and the `(int)` cast says the member is not plainly `int`), so
+   until there is a type for it the member can only be named as its index into
+   the pointer the live source already calls `gsw`. */
+#define GSW_CHECK_SUM 0x81
+
 /* Types */
 typedef enum CARD_STATE
 {

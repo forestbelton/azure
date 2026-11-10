@@ -230,6 +230,12 @@ long func_804009FC(void)
  * register allocation is genuinely different, not just its scheduling. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
 
+/* The `card_first_flg` site. This opens with
+   `printf("%s = %d\n", "card_first_flg", D_8013BB6C)` and then tests and sets
+   that same word, so D_8013BB6C is this link's `card_first_flg` and the live
+   func_80020EA0's D_80084130 is the retail link's -- which is why that one is
+   now spelled `card_first_flg[0]` (include/structs.h). Nothing else in either
+   block names a global. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400E34);
 
 /* Eight assert sites, and two things had to change beyond the symbol renames.
@@ -433,6 +439,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401A50);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401AA4);
 
+/* A `cnt` site: the $s1 the VSync poll loop increments is printed as
+   `printf("%s = %d\n", "cnt", cnt)` once the loop ends, so name it `cnt` when
+   this lands. `cnt` is TWIN-ONLY -- the live func_80021A84 has no counter at
+   all, because the print was its only use -- so there is nothing to rename in
+   the live unit. Same story in func_804022C8. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401B30);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401BF4);
@@ -447,8 +458,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E2C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401ED4);
 
+/* Prints `(int)gsw->check_sum` after storing it, so the parameter is `gsw` and
+   the word at +0x204 is its `check_sum` member -- GSW_CHECK_SUM in csrc/main.h,
+   now used by the live func_80021EB8/func_80021EE0. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401F98);
 
+/* Prints both halves of the comparison: `c` (the xor accumulator) and then
+   `(int)gsw->check_sum`. The live func_80021EE0's accumulator is now `c`. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401FEC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402084);
@@ -461,6 +477,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402268);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402290);
 
+/* The other `cnt` site; see func_80401B30. The live func_8002219C has no
+   counter either. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804022C8);
 
 void func_804023C4(void)
