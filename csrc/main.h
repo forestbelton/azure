@@ -311,7 +311,7 @@ void func_80024390(s32 *p);
 void func_80024818(s32 *p);
 void func_800249B4(s32 *p);
 void func_80024A50(s32 *p);
-void func_80024ACC(s32 *p);
+void func_80024ACC(UnkCardGrpB20 *c);
 void func_80024BB4(UnkCardPair *p, u32 *a, u32 *b);
 
 /* func_80024D58 calls func_80024C48 with ONLY $a0 set, where the function
@@ -323,7 +323,7 @@ s32 func_80024C48w(s32 *p) __asm__("func_80024C48");
 
 void func_80024C70(UnkCardGrpB20 *c, s32 n);
 s32 *func_80024D58(s32 *p, s32 a, s32 b);
-void func_80024E44(s32 *p);
+void func_80024E44(UnkCardGrpB20 *c);
 void func_80024EEC(s32 *p);
 void func_80025030(s32 *p);
 void func_800250E8(s32 *p);
