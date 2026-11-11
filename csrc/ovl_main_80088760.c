@@ -24,7 +24,24 @@
    form. */
 extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 
+/* The overlay's own data run at 0x8008B074..0x8008B380, which splat emits as
+   asm/data/ovl_main_80088760_data.data.s. */
+extern s32 D_8008B2F0[];
+
+/* 0x80053858 IS A FUNCTION -- slus+0x27058 sits two words after a `jr $ra`
+   and opens on `addiu $sp, $sp, -0x48` -- but this overlay only ever takes
+   its address, never `jal`s it, so splat classifies the reference as data and
+   main.bin_undefined_syms_auto.txt defines it as `D_80053858`. The __asm__
+   label keeps the C honest about what it is while linking against the name
+   splat actually emits; it is the same device csrc/main.h uses for
+   D_800814A0_a. Declaring it `type:func` in main.bin_symbol_addrs.txt instead
+   does not work: the address is outside this container, so splat either
+   errors ("unable to determine a segment") or, with `absolute:True`, stops
+   emitting the assignment and the link loses the symbol. */
+extern void func_80053858(void) __asm__("D_80053858");
+
 s32 func_8004EE30(s32 *);
+s32 *func_8003FC64(s32);
 
 void func_80088BD0(s32 *);
 
@@ -54,7 +71,31 @@ void func_80088930(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008896C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80088B48);
+void func_80088B48(s32 *p)
+{
+    s16 *q;
+
+    q = (s16 *)p[1];
+    if (q[16] == 4)
+    {
+        ((u16 *)p)[11] &= 0xFFFD;
+    }
+    if (((s16 *)p)[0] == 0)
+    {
+        /* `q[18] * 16`, NOT `q[18] << 4`. The product is expanded too late for
+           combine's force_to_mode to carry the `sh`'s 0xFFFF mask back to the
+           load, so the sign-extending `lh` survives; written as a shift the
+           mask reaches the load and it becomes `lhu`. One word.
+           `s32 t = q[18];` first, or any s32 temp anywhere in the chain, does
+           the same thing for the same reason. */
+        ((s16 *)p)[7] = q[18] * 16 + 0xA0;
+        if (((u16 *)q)[19] & 1)
+        {
+            ((u16 *)p)[-1] |= 0x8000;
+            D_800814A0_a[0] |= 0x8000;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80088BD0);
 
@@ -99,9 +140,33 @@ void func_8008AA40(s16 **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AA84);
+void func_8008AA84(s32 *p)
+{
+    u16 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AAE4);
+    q = (u16 *)p[1];
+    ((s16 *)p)[8] = (s16)q[7 + p[6]] >> 2;
+    if (((s16 *)q)[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
+
+void func_8008AAE4(s32 *p)
+{
+    s32 *t;
+    s16 *q;
+
+    t = D_8008B2F0;
+    q = (s16 *)p[1];
+    ((s16 *)p)[8] = t[p[6]] >> 2;
+    if (q[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AB44);
 
@@ -120,7 +185,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008ACB4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AD58);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AE60);
+void func_8008AE60(s32 *p, Blk30 *src)
+{
+    s32 *w;
+
+    w = func_8003FC64(1);
+    if (w != 0)
+    {
+        *(Blk30 *)(w + 8) = *src;
+        w[4] = (s32)p;
+        func_8004491C((UnkNode *)w, (u32)func_80053858);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AEEC);
 

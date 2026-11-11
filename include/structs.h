@@ -1389,6 +1389,15 @@ typedef struct Blk20
 {
     u32 w[8];
 } Blk20;
+
+/* And at 0x30 bytes, which is back over the threshold for a LOOP: the
+   0x80088760 overlay's func_8008AE60 copies twelve words into a node it has
+   just allocated, and gcc emits emit_block_move's four-word body with a `bne`
+   back edge rather than twelve unrolled pairs. */
+typedef struct Blk30
+{
+    u32 w[0xC];
+} Blk30;
 /* Not guarded against PERMUTER: decomp-permuter's forked pycparser parses an
    __asm__ label on a declaration (perm_pycparser/c_parser.py asm_label_opt)
    and re-emits it, so the permuter sees the symbol. m2c's does not. */
