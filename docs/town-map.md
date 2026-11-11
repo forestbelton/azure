@@ -361,10 +361,11 @@ name.
 
 ## Next
 
-* **Carve the overlay's data.** Started: 23 objects, 1,416 bytes of 179,448.
-  `docs/owning-data.md` §8 is the town section -- why it goes to `ovl_town.c`
-  as a contiguous prefix, why this overlay has no unit oracle, and the traps.
-  4,657 `dlabel`s to go.
+* **Carve the overlay's data.** Started: 22 objects, 1,416 bytes of 180,288,
+  and set up as parks -- `tools/decomp/datawork.py` is the queue and the brief
+  generator, `tools/decomp/dataverify.py` is the gate. `docs/owning-data.md`
+  §8 is the method: why it goes to `ovl_town.c` as a contiguous prefix, why
+  this overlay has no unit oracle, and the traps. 4,657 `dlabel`s to go.
 * **Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does not
   see at all.
 * **Check `main.bin+0x21800` and `dungeon.bin`'s data tail**, both from the

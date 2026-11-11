@@ -945,10 +945,21 @@ and the yaml filename for `town.bin` or `dungeon.bin`.
 
 ## 8. The town overlay: 0x800CF720..0x800FB418
 
-Started 2026-11-10. **23 objects, 1,416 bytes of 179,448 (0.8%).** The rest is
+Started 2026-11-10. **22 objects, 1,416 bytes of 180,288 (0.8%).** The rest is
 `asm/data/ovl_town_data.data.s`, 4,657 `dlabel`s. All four containers are
 byte-identical at every step; `make check`, `progress.py` (3214/3378) and
 `guard.py` (164/164) are unchanged.
+
+Run the queue rather than reading numbers out of this section:
+
+    python3 tools/decomp/datawork.py                      # where it is
+    python3 tools/decomp/datawork.py --count 16           # the next park
+    python3 tools/decomp/datawork.py --count 16 --brief dq2_
+    python3 tools/decomp/dataverify.py scratch/dq2_defs.c # the gate
+
+(Commit 672f748's message says 23 objects. It is 22 -- `dataverify.py`'s
+object count is the one to trust, and it found the slip the first time it ran
+on the landed tranche.)
 
 This section is the part that differs from §4, and all of it was measured on
 the way in.
@@ -1053,18 +1064,44 @@ in `ovl_town.c` is the shape that does.
   check it against `objdump -h build/csrc/ovl_town.o`'s `.data` size, which
   must equal the window exactly.
 
-### The queue
+### The queue, as parks
 
-`python3 tools/scan-container.py town.bin --anchors` is not the tool for this
-one; the inventory is the listing itself:
+`tools/decomp/datawork.py` is `worklist.py`'s job for this work and
+`tools/decomp/dataverify.py` is `ovlverify.py`'s. Both read the current state
+off the yaml, the listing and the unit every time they run, so neither can go
+stale while a park is open.
 
-```sh
-grep -c '^dlabel' asm/data/ovl_town_data.data.s        # 4657 to go
-```
+**There is nothing to rank, which is the one way this differs from the
+function sweep.** A C unit's `.data` is the region's contiguous prefix, so the
+only choice is how many objects the next park takes. `--count` sets that, and
+the tool prints where the runs of same-shaped objects end, which is where a
+park should stop -- a park that ends in the middle of a run makes the next
+one read the same shape twice.
 
-The next boundary is 0x800CFCA8, where three all-zero struct objects
-(`UnkTownPlane`, `UnkTownCFCC4`, and the undeclared 28 bytes at 0x800CFCCC)
-and the self-referential `UnkTownCFCB4 D_800CFCB4` begin. All-zero structs
-need no field layout -- `= { 0 }` is enough -- so the struct types only become
-work where the bytes are not zero, which first happens at `D_800CFD18`
-(`UnkTownVec16[16]`).
+**`dataverify.py` is a real gate and it is the reason this can be delegated.**
+It compiles the candidate at `-G0`, takes the object's `.data` and compares it
+against the container with relocated words masked -- no link, so no `make`,
+so an agent can run it without touching shared state. It checks three things:
+the bytes, the LAYOUT (each object's offset inside `.data` against its vram
+delta, which is what catches a wrong array length AT the object instead of as
+a mystery at the end), and the window size the yaml's next boundary must be.
+It has a self-test -- the landed tranche verifies clean, 0 problems -- and a
+negative test: a deliberately wrong length shows as `+0x4` layout drift on
+every object after it, and FAILs.
+
+What it cannot see is what `ovlverify.py` cannot see: a relocation against the
+wrong symbol that resolves to the right word. So the brief makes the agent
+read every relocation against its own listing and hand the list back, and
+`make containers` is still the gate, run by whoever merges.
+
+The park contract is the function sweep's: the agent writes to `scratch/`
+under a unique prefix, hands back a re-runnable anchor-based merge script, the
+object table with each type's provenance, the relocation list, and ONE yaml
+number. It does not touch `csrc/`, `splat/` or `docs/`, does not run `make`,
+and does not commit.
+
+The first park is **D_800CFCA8..**, where the struct-typed objects start. All
+of the next five are all-zero, so `= { 0 }` covers them and no field layout is
+needed; the struct layouts only become work at `D_800CFD18`
+(`UnkTownVec16[16]`). `D_800CFCF3` is the first padding case rule 7 describes
+-- one declared byte with a 12-byte gap after it.
