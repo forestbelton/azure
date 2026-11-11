@@ -93,7 +93,7 @@ independent either.
 
 ## Where the overlays load
 
-Four code overlays are placed. None of the containers is loaded as a
+Five code overlays are placed. None of the containers is loaded as a
 unit -- they are 2.5/16.1/26.5 MB against 2 MB of RAM, and the disc is
 addressed by absolute LBA, so a container is just a region of it.
 
@@ -101,10 +101,13 @@ addressed by absolute LBA, so a container is just a region of it.
 |---|---|---|---|---|---|
 | `town.bin` | `+0xb000` | `0x80088760` | `+0xd630..+0x51fc0` | 536 | 1815 |
 | `dungeon.bin` | `+0xa3000` | `0x80088760` | `+0xa3e28..+0xf7700` | 353 | 862 |
+| `main.bin` | `+0x21800` | `0x80088760` | `+0x21968..+0x24110` | 29/29 | 26 |
 | `main.bin` | `+0x25d000` | `0x80020000` | `+0x25d924..+0x264e20` | 130 | 241 |
 | `main.bin` | `+0x269000` | `0x80400000` | `+0x2698a0..+0x2719e0` | 142 | 263 |
 
-("Vote" is the jal-against-prologue agreement score that placed the overlay;
+("Vote" is the jal-against-prologue agreement score that placed the overlay,
+except for `main.bin+0x21800`, which is small enough that the score shown is
+the stricter function-start test `tools/decomp/codemap.py` uses -- 29 of 29.
 "Functions" is what splat emitted. The code spans end on the 16-byte boundary
 splat's `__romPos` alignment requires -- see each yaml's comment and the rule
 below.)
@@ -118,6 +121,10 @@ one is longer than the code above: 278 sectors for town (`+0xb000..+0x95AC4`),
 (100%). So town's and dungeon's overlays carry data past their text, and there
 is a fifth placed overlay. `docs/town-map.md` has the table, the evidence and
 the follow-ups.
+
+**2026-11-11: that fifth overlay is now split and in the build.** It is the
+GAME OPTION screen, and the row for it is in the table above. See "The
+`0x80088760` overlay in `main.bin`" below.
 
 `0x80088760` is the first byte after the resident engine's last
 (`0x8008875F`), which is the layout this document predicted. town and dungeon
@@ -166,6 +173,105 @@ occupies, and `+0x9f000` / `+0x4a3000` are texture records.
 
 `0x801768AC`, the isolated address near the top of RAM, is in none of the
 spans. `0x800D5460` is, in dungeon's.
+
+## The `0x80088760` overlay in `main.bin`: the GAME OPTION screen
+
+Mapped 2026-11-11, split, and byte-identical in the build. This is the third
+descriptor in the engine's load table and the one the 2026-11-10 note above
+left as a follow-up. It is the only overlay that loads into the shared
+`0x80088760` slot from `main.bin`, which is why nothing about `main.bin`'s own
+layout hinted at it: both of the container's *other* code blocks load
+somewhere else entirely.
+
+**What loads it.** The third descriptor at vram `0x80080C48` is
+`0x07088760 / 0x0000075C` in the `{nsec << 23 | dest, LBA}` form: 14 sectors
+to `0x80088760` from LBA 1884. `spec.yaml` extracts `main.bin` from sector
+1817, so the read starts at `(1884 - 1817) * 0x800 = 0x21800` and runs
+`14 * 0x800 = 0x7000` bytes into `0x80088760..0x8008F760`. The PCSX-Redux
+CD-ROM command log already showed a seek to `main.bin+0x21800`; this
+descriptor is where that seek comes from, and it supplies the length the log
+could not. Unlike the `0x80400000` twin below, **this one is live on retail
+hardware.**
+
+**What it is.** Its rodata is the options menu's own string pool:
+`GAME OPTION`, `  TO FAMILIAR`, `ATTACK`, `ON`, `OFF`, ` MAGIC EFFECT`,
+` SOUND EFFECT`, ` BGM`, `VOLUME`, `MAX`, `MIN`, `  WALL COLOR`, `DUNGEON`,
+then `B`/`G`/`R` and fourteen more one-character strings for the per-glyph
+renderer. The pointer table at `+0x24350..+0x24408`, in the block's data run,
+indexes exactly those strings at `0x800887F4..0x800888A8`.
+
+**Why the base is `0x80088760`.** `codemap.py --pin` reports 5/5 (100%), but
+five internal targets is a thin sample, so three further tests by hand:
+
+1. **29 of 29 `jal` targets land exactly two words after an `0x03E00008`.**
+   Five are internal -- `0x80088BD0`, `0x80089C24`, `0x8008A98C`,
+   `0x8008ABD4`, `0x8008AE60` -- and each is also an `addiu $sp, $sp, -N`
+   prologue. The other **24 are resident, and all 24 sit two words after a
+   `jr $ra` in `data/slus_006.14` itself.** That second half is the strong
+   test and it is one this project had no occasion to run before: it says the
+   object was linked against *the shipped engine*. The `0x80400000` twin is
+   exactly the opposite case -- it calls `printf` at an address that lands
+   inside libgte's `rcossin_tbl` in the retail executable -- so the two blocks
+   in this container now bracket the test from both ends.
+2. **The data run's self-pointers.** `+0x242D4..+0x2434C` resolve to
+   `0x8008B188..0x8008B270`, inside the run's own `0x8008B070..0x8008B380`.
+   `0x8008B270` is the upper bound `docs/main-bin-data.md` used to attribute
+   to the tables below the overlay; it was this table all along.
+3. **The addresses the code builds.** `lui 0x8008` / `lui 0x8009` pairs give
+   41 distinct addresses inside the stored image, 28 above the read end (so
+   `.bss`, zeroed by the loader rather than stored), and **zero** in the
+   `0x8008F380..0x8008F760` gap the sector rounding drags in.
+
+**The boundaries, and the sector count as an independent check.**
+
+```
+0x21800..0x21968   rodata, 360 bytes                0x80088760..0x800888C8
+0x21968..0x24110   text, 10,152 bytes, 26 functions 0x800888C8..0x8008B070
+0x24110..0x24420   data, 784 bytes                  0x8008B070..0x8008B380
+0x24420..0x28420   16,384 stored zero bytes         0x8008B380..0x8008F380
+```
+
+The file is therefore `0x21800..0x28420`, 27,680 bytes, and
+`ceil((0x28420 - 0x21800) / 0x800)` is **exactly 14** -- the descriptor's own
+sector count, arrived at from the image without using it. The read rounds up
+past the file end, so its last 992 bytes are the head of `main.bin`'s dead
+filler run, landing in RAM above anything the overlay touches. That is the
+same shape as town's 278-sector read and its `ovl_town_read_tail`.
+
+Two boundary details worth having written down:
+
+* **The text starts on an empty function.** `0x21968` is `jr $ra; nop` and
+  nothing else -- a `void f(void) {}` -- which is what puts the rodata/text
+  seam there rather than at the next prologue at `0x21970`. The rodata's last
+  object is the five-word jumptable at `0x21954`, which is also the offset
+  splat's own "likely file split" suggestion names; the suggestion is
+  advisory here and declining it is correct.
+* **The 16 KB of stored zeros is real and must be reproduced.** Nothing
+  references it with a `lui`/`addiu` pair, but it is inside the overlay's own
+  file and the sector count proves the loader pulls it in. `splat` keeps it
+  as its own `bin` rather than 4,096 lines of `.word 0x00000000`. Note that
+  the resident side *does* reference into it -- `D_8008CA34` and `D_8008DAB4`
+  were already in `main.bin_undefined_syms_auto.txt` before this block was
+  mapped -- which is consistent with the slot being scratch RAM for whichever
+  overlay is resident.
+
+**The identity problem, and why it costs nothing here.** This block,
+`town.bin+0xb000` and `dungeon.bin+0xa3000` all load at `0x80088760`, so an
+address in `0x80088760..` means different code depending on which is
+resident. That does not collide in the build: each container's link takes its
+inputs from its own `build/*.ld` and never sees another container's objects
+(the link rules pass no object files on the command line), which is why
+`D_80088760` can be defined by `ovl_town`, `ovl_dungeon` and this unit at
+once. None of the 26 function addresses collides with a `town` or `dungeon`
+overlay function address either, but that is luck, not a constraint.
+
+**It is `asm`, not `c`.** Same shape as `ovl_dungeon`: undotted `rodata` plus
+`asm`, sharing one name, with a separate `ovl_main_80088760_data` for the data
+run. The two jumptables in the rodata (`jtbl_80088770`, `jtbl_800888B4`)
+reference `.L` labels in the text, which links across the two objects because
+splat's `jlabel` macro emits them `.global`. That is the whole reason an
+undotted rodata subsegment works here where the `0x80400000` twin needed a
+dotted one -- that block's rodata rides with a `c` unit.
 
 ## The fourth overlay: `main.bin+0x269000` at `0x80400000`
 
@@ -293,12 +399,13 @@ four prologues and three `jr $ra`:
 
 | container | unplaced code | runs | largest |
 |---|---|---|---|
-| `main.bin` | ~0 | 1 (noise) | 12 KB / 14 prologues at `+0x21000` -- **this call was wrong**: it is the 14-sector overlay at `0x80088760`, see above |
+| `main.bin` | 0 | 1 (**not** noise) | 12 KB / 14 prologues at `+0x21000` -- **this call was wrong twice over**: that run is the 14-sector overlay at `0x80088760`, now split, and the prologue count was low only because the scan started below its text. See above. |
 | `town.bin` | 0.64 MB | 59 | 69 KB / 291 prologues at `+0x649000` |
 | `dungeon.bin` | 6.13 MB | 401 | 364 KB / 715 prologues at `+0xe2d000`, then 360 KB / 598 at `+0xcdd000` |
 
-So **`main.bin` is structurally complete** with this block placed: both of
-its code blocks are split and nothing else in the container is code.
+So **`main.bin` is structurally complete**: all three of its code blocks --
+`+0x21800` at `0x80088760`, `+0x25d000` at `0x80020000` and `+0x269000` at
+`0x80400000` -- are split, and nothing else in the container is code.
 
 Town's remaining 59 runs are separately linked low-RAM overlays, and the
 second vote is much weaker on them than on the big four: `+0x2ab000` scores
@@ -327,11 +434,22 @@ In rough order:
    dispatcher `func_8003E4FC`. The 49 descriptors at `0x80081020..0x800811a8`
    are the *audio* table (KCET sequences and VAB banks, verified by the magic
    bytes at each source offset), and `D_8006E6F4` is a 2-entry table of
-   descriptor pairs selecting the town or dungeon sound bank. No descriptor in
-   the ROM targets a code overlay, so those are built at runtime.
+   descriptor pairs selecting the town or dungeon sound bank.
+
+   This used to end "no descriptor in the ROM targets a code overlay, so
+   those are built at runtime." **That was wrong, and it was wrong about the
+   49-entry table only.** A separate four-entry table of the same shape sits
+   at `0x80080C38`, and three of its four entries ARE code overlays:
+   `town.bin+0xb000`, `dungeon.bin+0xa3000` and `main.bin+0x21800`, all to
+   `0x80088760`. See `docs/town-map.md` §1 for the table and the
+   `0x80088760` section above for what the third one turned out to be.
 2. **Recovering an entry's load address.** Prologue/jal fingerprinting, not a
-   table: that is what placed all four code overlays above. Either read it from
-   the container's own table if one is ever found, or take a code entry's
+   table: that is what placed four of the five code overlays above. (The
+   fifth, `main.bin+0x21800`, was found the other way round -- from the
+   engine's own load table at `0x80080C38`, which turned out to exist after
+   all and is described in `docs/town-map.md` §1. It gives a destination and a
+   length for four reads, and three of the five overlays are among them.)
+   Either read it from the container's own table, or take a code entry's
    internal `jal` targets and find the base that makes them land on its own
    function starts.
 3. **A splat spec per overlay**, with its own vram base. The "keep two

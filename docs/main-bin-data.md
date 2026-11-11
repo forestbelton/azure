@@ -1,6 +1,6 @@
 # The data in main.bin
 
-Companion to `docs/overlays.md`, which covers this container's two code blocks.
+Companion to `docs/overlays.md`, which covers this container's three code blocks.
 Numbers here were measured on 2026-11-01 against `data/main/main.bin`
 (sha1 69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d); re-measure rather than trust
 them. Scripts to reproduce every figure are described inline.
@@ -100,7 +100,9 @@ The 31,456 bytes ahead of the filler are real and the game does read them.
 | segment | range | bytes | what |
 |---|---|---|---|
 | `monsters` | 0x20800-0x21268 | 2,664 | the string pool, **decoded 2026-11-09** |
-| `main_tables_21268` | 0x21268-0x28420 | 29,112 | tables, then zero pad from 0x24440 |
+| `main_tables_21268` | 0x21268-0x21800 | 1,432 | the pool's index tables |
+| `ovl_main_80088760` | 0x21800-0x24420 | 10,784 | **a code overlay, split 2026-11-11** |
+| `ovl_main_80088760_zero` | 0x24420-0x28420 | 16,384 | that overlay's stored zeros |
 
 **The string pool is done.** `asrc/str/monsters.txt` is all 134 of its entries
 as one line of text each, one `hrodata` subsegment, replacing 17
@@ -127,30 +129,53 @@ Two things the consolidation turned up:
   runs 0x2127C, 0x21290, 0x212A4, … leave 0x21268..0x2127C as one more
   20-byte unit ahead of them — so `main_tables` starts there now.
 
-`main_tables_21268` is pointer and index tables (0x21268..0x21800), then 11 KB
-of unidentified fixed-size records (0x21840..0x24340), then a pointer table
-(0x24340..0x24400), then zero padding from 0x24440. 144 of its words are
-pointers into 0x8002c094..0x8008b270 — into the resident executable's own RAM —
-so it is a relocated resource rather than a standalone file. The game seeks
-both +0x20800 and +0x21800, so it is read in at least two pieces.
+**`main_tables_21268` ends at 0x21800, not 0x28420 — corrected 2026-11-11.**
+It used to be described as "pointer and index tables (0x21268..0x21800), then
+11 KB of unidentified fixed-size records (0x21840..0x24340), then a pointer
+table (0x24340..0x24400), then zero padding from 0x24440", with "144 words
+pointing into 0x8002c094..0x8008b270". Everything in that sentence from
+0x21800 up belonged to **a code overlay** that was sitting unrecognised inside
+the segment: the "fixed-size records" were its rodata, text and data, and
+0x8008b270 was the upper bound of its data run's self-pointer table. It is the
+GAME OPTION screen, it loads at 0x80088760, and `docs/overlays.md` has the
+section on it.
+
+What is actually left under this name is 1,432 bytes, 0x21268..0x21800: one
+leading 20-byte unit, then 71 twenty-byte records at 0x2127C..0x21768, then
+zero padding to 0x21800. Each record holds up to three pointers, and **135 of
+the segment's 358 words are pointers, every one of them into
+0x8002C000..0x8002CA54** — the resident executable's own low RAM, where the
+monster string pool is relocated to. None points into 0x80088760.., which is
+what makes 0x21800 a boundary rather than a guess: the overlay below begins
+where the pointers stop. So this is a relocated resource, not a standalone
+file.
+
+The game's two seeks, +0x20800 and +0x21800, are now accounted for
+separately: the first reads the string pool and these tables, the second is
+the overlay's own 14-sector descriptor.
 
 ## What splat sees now
 
-Re-measured 2026-11-09, after the 0x80020000 overlay took over the whole of
-its own data (`docs/owning-data.md` §7). These are subsegment spans summed
-straight out of `splat/main.bin.yaml`, which is why they add up to the
-container exactly; splat's own summary rounds to KB and lumps the named and
-unnamed `bin` together.
+Re-measured 2026-11-11, after the 0x80088760 overlay was split out of
+`main_tables_21268`. These are subsegment spans summed straight out of
+`splat/main.bin.yaml`, which is why they add up to the container exactly;
+splat's own summary rounds to KB and lumps the named and unnamed `bin`
+together.
 
 | type | bytes | % of container | what |
 |---|---|---|---|
-| `bin` (named) | 2,358,680 | 91.48% | identified resources |
+| `bin` (named) | 2,347,384 | 91.04% | identified resources |
 | `bin` (unnamed) | 132,640 | 5.14% | the two blobs below |
-| `c` | 63,036 | 2.44% | both overlays' text (29,948 + 33,088) |
+| `c` | 63,036 | 2.44% | the two decompiled overlays' text (29,948 + 33,088) |
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
-| `.rodata` + `rodata` | 4,548 | 0.18% | both overlays' rodata |
+| `asm` | 10,152 | 0.39% | the 0x80088760 overlay's text, 26 functions |
+| `.rodata` + `rodata` | 4,908 | 0.19% | all three overlays' rodata |
 | `hrodata` | 2,664 | 0.10% | `asrc/str/monsters.txt`, the string pool |
-| `data` | 1,172 | 0.05% | `ovl_main_80020000_pad` |
+| `data` | 1,956 | 0.08% | `ovl_main_80020000_pad` + the 0x80088760 data run |
+
+The named-`bin` figure fell by 11,296 bytes rather than by the overlay's full
+27,680: `main_tables_21268` gave up 0x21800..0x28420, but 16,384 of that came
+straight back as `ovl_main_80088760_zero`, which is `bin` too.
 
 Down from 2,250,432 bytes (87.3%) unknown before the first pass over this
 container, and from 149,024 (5.78%) before the overlay's data was claimed.

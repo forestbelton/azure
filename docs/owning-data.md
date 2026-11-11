@@ -172,10 +172,16 @@ interchangeable -- `0x80027F18` is only an overlay address because
 
 | segment | `start:` | `vram:` | `rom = vram - delta` |
 |---|---|---|---|
+| `main.bin` option overlay | `0x21800` | `0x80088760` | `vram - 0x80066F60` |
 | `main.bin` low overlay | `0x25d000` | `0x80020000` | `vram - 0x7FDC3000` |
 | `main.bin` debug twin | `0x269000` | `0x80400000` | `vram - 0x80197000` |
 | `town.bin` overlay | `0xb000` | `0x80088760` | `vram - 0x8007D760` |
 | `dungeon.bin` overlay | `0xa3000` | `0x80088760` | `vram - 0x7FFE5760` |
+
+Note the first three rows: `main.bin` alone has **three** different maps, so
+"the `main.bin` delta" is not a thing. `0x80088760` in particular is three
+different places depending on the container and, within `main.bin`, is only an
+overlay address at all because of the option overlay's own map.
 
 A one-liner, so you are not doing hex by hand:
 

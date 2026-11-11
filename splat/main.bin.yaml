@@ -44,11 +44,21 @@ segments:
     name: str/monsters
     # NB: `vram: 0x20800` is just the ROM offset, not its actual load address
     vram: 0x20800
-  # Pointer and index tables, then 11 KB of unidentified fixed-size records,
-  # then zero padding from 0x24440. The game reads this: the CD-ROM command
-  # log seeks main.bin+0x20800 and +0x21800. 144 of its words are pointers
-  # into 0x8002c094..0x8008b270, i.e. into the resident executable's own RAM,
-  # so it is a relocated resource rather than a standalone file.
+  # Pointer and index tables for the string pool above: 71 twenty-byte records
+  # at 0x2127C..0x21768 after one leading unit, then zero padding to 0x21800.
+  # 135 of its 358 words are pointers, and every one of them lands in
+  # 0x8002C000..0x8002CA54 -- the resident executable's own low RAM -- so this
+  # is a relocated resource rather than a standalone file. NONE of them points
+  # into 0x80088760.., which is what makes 0x21800 a real boundary and not a
+  # guess: the overlay below starts where the pointers stop.
+  #
+  # Re-measured 2026-11-11. This segment used to run to 0x28420 and was
+  # described as "11 KB of unidentified fixed-size records, then zero padding
+  # from 0x24440", with "144 words pointing into 0x8002c094..0x8008b270". All
+  # three of those belonged to the OVERLAY below, not to these tables: the
+  # 0x8008b270 upper bound was its data-run self-pointer table, and the "fixed
+  # size records" were its rodata, text and data. The pointer count over the
+  # tables alone is 135, all resident.
   #
   # It starts at 0x21268 and not 0x21280: the string pool's last entry is
   # "Ｕｌｔｉｍａｔｅ", whose NUL is at 0x21264, and the 20-byte records whose
@@ -58,6 +68,84 @@ segments:
   # 0x000C0110/0x000C0010, and its second is not a pointer -- but it is table
   # words either way, and not text.
   - [0x21268, bin, main_tables_21268]
+  # THE THIRD PLACED OVERLAY, mapped 2026-11-11, and the only one of the five
+  # that loads into the shared 0x80088760 slot from main.bin. docs/overlays.md
+  # has the method; this is what it is and how the boundaries were pinned.
+  #
+  # WHAT LOADS IT. The engine's overlay load table at vram 0x80080C38 holds
+  # four 8-byte CD queue descriptors in the {nsec << 23 | dest, LBA} form
+  # tools/scan-img.py documents. The third is 0x07088760 / 0x0000075C:
+  # nsec 14, dest 0x80088760, LBA 1884. spec.yaml extracts main.bin from
+  # sector 1817, so (1884 - 1817) * 0x800 = 0x21800 exactly, and the read is
+  # 14 * 0x800 = 0x7000 bytes into 0x80088760..0x8008F760. The PCSX-Redux
+  # CD-ROM command log docs/overlays.md cites already showed a seek to
+  # main.bin+0x21800; this descriptor is where that seek comes from and it
+  # states the length the log could not. Unlike the 0x80400000 twin below,
+  # this one is LIVE on retail hardware.
+  #
+  # WHAT IT IS: the GAME OPTION screen. Its rodata is the menu's own string
+  # pool -- "GAME OPTION", "  TO FAMILIAR", "ATTACK", "ON", "OFF",
+  # " MAGIC EFFECT", " SOUND EFFECT", " BGM", "VOLUME", "MAX", "MIN",
+  # "  WALL COLOR", "DUNGEON", then B/G/R and fourteen more single characters
+  # for the per-glyph renderer -- and the pointer table at 0x24350..0x24408 in
+  # its data run indexes exactly those strings, at 0x800887F4..0x800888A8.
+  #
+  # THE BASE IS 0x80088760, by the function-start test of
+  # tools/decomp/codemap.py and then three times over by hand:
+  #
+  # 1. 29 of 29 jal targets land exactly two words after an 0x03E00008.
+  #    Five are internal (0x80088BD0, 0x80089C24, 0x8008A98C, 0x8008ABD4,
+  #    0x8008AE60) and each is also an `addiu $sp, $sp, -N` prologue; the
+  #    other 24 are resident, and all 24 sit two words after a `jr $ra` in
+  #    data/slus_006.14 itself. That last half is the strong one -- it says
+  #    this object was linked against the SHIPPED engine, which is precisely
+  #    what the 0x80400000 twin below is not.
+  # 2. The data run's self-pointers (0x242D4..0x2434C) resolve to
+  #    0x8008B188..0x8008B270, inside the run's own 0x8008B070..0x8008B380.
+  # 3. The code builds its globals as `lui 0x8008`/`lui 0x8009`: 41 distinct
+  #    addresses inside the stored image, 28 above the read end in .bss, and
+  #    ZERO in the 0x8008F380..0x8008F760 gap the sector rounding drags in.
+  #
+  # THE BOUNDARIES.
+  #   0x21800..0x21968   rodata, 360 bytes. 0x80088760..0x800888C8. Ends on
+  #                      the five-word jumptable at 0x21954, whose entries are
+  #                      `.L` labels in the text -- splat's `jlabel` macro
+  #                      emits those global, which is why an undotted rodata
+  #                      subsegment links here the way it does for ovl_dungeon.
+  #   0x21968..0x24110   text, 10,152 bytes, 26 functions. 0x800888C8..
+  #                      0x8008B070. The first function is an empty
+  #                      `jr $ra; nop` at 0x21968, which is what puts the
+  #                      text/rodata seam there and not at the next prologue.
+  #                      Last `jr $ra` 0x24108, delay slot 0x2410C.
+  #   0x24110..0x24420   data, 784 bytes. 0x8008B070..0x8008B380.
+  #   0x24420..0x28420   16,384 stored zero bytes, 0x8008B380..0x8008F380.
+  #                      Nothing references them with a lui/addiu pair, but
+  #                      they are inside the overlay's own file and the sector
+  #                      count proves the loader pulls them in, so they are
+  #                      kept as their own `bin` rather than 4,096 lines of
+  #                      `.word 0x00000000`.
+  #
+  # The file is therefore 0x21800..0x28420, 27,680 bytes, and
+  # ceil((0x28420 - 0x21800) / 0x800) is EXACTLY 14 -- the descriptor's
+  # sector count, derived independently of it. The read rounds up past the
+  # file end, so its last 992 bytes are the head of the dead filler run
+  # below, landing in RAM above anything the overlay touches. Same shape as
+  # town.bin's 278-sector read (splat/town.bin.yaml, `ovl_town_read_tail`).
+  #
+  # Mutually exclusive with town.bin's and dungeon.bin's overlays, which load
+  # at the same address -- so 0x80088760.. means different code depending on
+  # which is resident. That costs nothing here: each container's link takes
+  # its inputs from its own build/*.ld and never sees another container's
+  # objects, which is why `D_80088760` can be defined by ovl_town, ovl_dungeon
+  # and this unit at once.
+  - type: code
+    start: 0x21800
+    vram: 0x80088760
+    subsegments:
+      - [0x21800, rodata, ovl_main_80088760]
+      - [0x21968, asm, ovl_main_80088760]
+      - [0x24110, data, ovl_main_80088760_data]
+  - [0x24420, bin, ovl_main_80088760_zero]
   # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
   # in any container, and it holds nothing. It is kept as a named `bin` for the
   # same reason as slus_006.14's `tail_unloaded`: so splat stops calling it

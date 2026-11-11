@@ -125,6 +125,12 @@ checking:
   `codemap.py --pin` gives it **5/5 (100%)** at that base. `docs/overlays.md`
   dismissed it ("12 KB / 14 prologues at +0x21000 -- density too low to be
   code"); the descriptor table says the game loads it, and the pin agrees.
+  **Confirmed and split 2026-11-11.** It is the GAME OPTION screen: 360 bytes
+  of rodata, 10,152 of text in 26 functions, 784 of data and 16,384 stored
+  zeros, 0x21800..0x28420, which is exactly the descriptor's 14 sectors when
+  rounded up. 29 of its 29 `jal` targets land two words after a `jr $ra`, and
+  24 of those are in `slus_006.14` itself, so it was linked against the
+  shipped engine. `docs/overlays.md` has the section.
 * **The dungeon overlay's read is 187 sectors**, file 0xa3000..0x100800, so it
   too carries about 0x9100 bytes of data past the 0xf7700 text end
   `splat/dungeon.bin.yaml` stops at.
@@ -368,8 +374,9 @@ name.
   this overlay has no unit oracle, and the traps. 4,657 `dlabel`s to go.
 * **Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does not
   see at all.
-* **Check `main.bin+0x21800` and `dungeon.bin`'s data tail**, both from the
-  descriptor table above.
+* **Check `dungeon.bin`'s data tail**, from the descriptor table above.
+  `main.bin+0x21800`, the other half of this item, is **done**: it is a code
+  overlay, split 2026-11-11, and `docs/overlays.md` has it.
 * **The 3,587 names.** 72 are attached (`docs/town-identifiers.md`); the rest
   index tables in the tier-2 overlays, so decompiling those is what unlocks
   them. The `FNO_` group -- 113 values at 100..212, a dispatch table indexed

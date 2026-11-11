@@ -99,10 +99,11 @@ So the overlays hold several MB of code against the executable's 216 KB.
 
 **That paragraph used to say `dungeon.bin` had no splat spec, `town.bin` was
 one 16 MB `bin` blob and nothing was started. All three are stale.** As of
-2026-11-01 four code overlays are split, in the build, and byte-identical:
+2026-11-11 five code overlays are split, in the build, and byte-identical:
 
 | overlay | vram | functions | words | median fn | max fn |
 |---|---|---|---|---|---|
+| `main.bin+0x21800` | `0x80088760` | 26 | 2,538 | -- | -- |
 | `main.bin+0x25d000` | `0x80020000` | 241 | 7,487 | 20 | 290 |
 | `main.bin+0x269000` | `0x80400000` | 263 | 8,271 | -- | -- |
 | `town.bin+0xb000` | `0x80088760` | 1,815 | 70,244 | 24 | 797 |
@@ -112,9 +113,10 @@ For scale against the 41,767 words of this executable: town's overlay is
 1.7x it, dungeon's 2.0x, and main's live overlay 18% of it.
 
 Unplaced code remaining, by 4 KB chunk with >=4 prologues and >=3 `jr $ra`:
-`main.bin` effectively none (one 12 KB run at `+0x21000` with 14 prologues in
-3,072 words, too sparse to be code), `town.bin` 0.64 MB in 59 runs,
-`dungeon.bin` 6.13 MB in 401 runs -- the dungeon figure inflated by long
+`main.bin` **none** -- the one 12 KB run at `+0x21000` that this used to call
+"too sparse to be code" was the `0x80088760` overlay, split 2026-11-11, so the
+container is structurally complete -- `town.bin` 0.64 MB in 59 runs,
+`dungeon.bin` 6.13 MB in 401 runs, the dungeon figure inflated by long
 stretches of near-identical repeated blocks.
 
 Three things about the overlays that change how they are worked, all in
