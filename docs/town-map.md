@@ -361,10 +361,10 @@ name.
 
 ## Next
 
-* **Carve the overlay's data into the three units.** It is one
-  `asm/data/ovl_town_data.data.s` of 70,475 lines; `docs/owning-data.md`
-  describes the job for the resident engine and commit 9628271 did it for
-  main.bin's card overlay. 757 defined symbols are the starting inventory.
+* **Carve the overlay's data.** Started: 23 objects, 1,416 bytes of 179,448.
+  `docs/owning-data.md` §8 is the town section -- why it goes to `ovl_town.c`
+  as a contiguous prefix, why this overlay has no unit oracle, and the traps.
+  4,657 `dlabel`s to go.
 * **Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does not
   see at all.
 * **Check `main.bin+0x21800` and `dungeon.bin`'s data tail**, both from the

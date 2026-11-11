@@ -940,3 +940,131 @@ EOF
 
 For this overlay that now prints nothing, which is the point. Change the range
 and the yaml filename for `town.bin` or `dungeon.bin`.
+
+---
+
+## 8. The town overlay: 0x800CF720..0x800FB418
+
+Started 2026-11-10. **23 objects, 1,416 bytes of 179,448 (0.8%).** The rest is
+`asm/data/ovl_town_data.data.s`, 4,657 `dlabel`s. All four containers are
+byte-identical at every step; `make check`, `progress.py` (3214/3378) and
+`guard.py` (164/164) are unchanged.
+
+This section is the part that differs from §4, and all of it was measured on
+the way in.
+
+### The town overlay has no unit oracle
+
+§4 assumes you know which unit owns the bytes. Here you do not, and it is not
+a gap that effort closes:
+
+* **No assert records.** `docs/overlays.md` is explicit -- none of town.bin's
+  85 assert records is inside this overlay; they are all in the tier-2 low-RAM
+  objects. So there is no debug twin naming the original units, which is what
+  gave main.bin's carve its nine.
+* **No `$gp`.** The overlay is built at `-G0`, so `tools/tuscan.py`'s
+  membership signal does not exist (`docs/addressing-and-translation-units.md`).
+* **And the reference signal is NOISE.** Which of the three carved units
+  mentions a data symbol does not decide anything, because *use is not
+  definition*: 132 symbols are used only by `ovl_town.c` and 55 only by
+  `ovl_town_800BF3F0.c`, and they interleave --- **83 of the first group sit
+  above the first of the second, and 54 of the second sit below the last of
+  the first.** No contiguous three-way assignment fits, so there is nothing to
+  infer from. Do not spend an afternoon re-deriving this; the counts are the
+  answer.
+
+What is left is **link order**, which is a fact and not an inference: the
+region's first bytes are emitted by the segment's first object. So the owned
+window is a **contiguous prefix** and it belongs to `csrc/ovl_town.c`.
+
+### Why a prefix, and the lever if that ever stops being enough
+
+`ld_legacy_generation: True` makes a segment emit **one group per section
+type**, and inside the DATA group splat lists every C object before every asm
+data object. Checked against the card overlay's own script rather than
+assumed:
+
+```
+_25D000_DATA_START = .;
+build/csrc/main/c_server.o(.data);     ... the nine units ...
+build/csrc/main/memory.o(.data);
+build/csrc/ovl_main_80020000.o(.data);
+build/asm/data/ovl_main_80020000_pad.data.o(.data);
+```
+
+So a C unit's bytes cannot sit after an asm chunk's, and §4.2's `data_pre`
+window -- unowned bytes *below* the owned ones -- is not available here. The
+town shape is therefore two subsegments, not three:
+
+```yaml
+      - [0x51fc0, .data, ovl_town]        # owned, grows upward
+      - [0x52548, data, ovl_town_data]    # not yet owned
+```
+
+The segment still ends at the top-level `[0x7e000, bin, ovl_town_read_tail]`,
+so the 16-byte-grid problem §4.2 warns about cannot arise from moving this
+boundary -- it is internal.
+
+**If a non-prefix window is ever needed**, the lever is more segments, not a
+different group order: `splat/slus_006.14.yaml` splits one run across adjacent
+`type: code` segments for exactly this reason ("one segment can hold only one
+`.rodata` group under ld_legacy_generation"), and the same trick gives a
+second DATA group. A given C object's `.data` can still only be placed once.
+
+### One object per `dlabel`, and no merging
+
+The nine 84-byte records at 0x800CF880 look like one 0x2F4-byte array. They are
+not, and collapsing them would break the link twice over: `D_800CFB74` points
+at each one separately, and **164 functions in this overlay are still asm
+stubs** that reference these symbols by name. An `extern`-less `dlabel` is not
+a free element -- it is a symbol something needs.
+
+### Use the type the unit already declared
+
+153 of the first 226 `dlabel`s already have a typed `extern` from the function
+sweeps, and that type is the definition's type -- not a judgement call, and
+writing a different one is a `conflicting types` error, which is the gate §4.4
+describes working for you. Where the sweeps never needed a declaration, the
+listing's element width is all you have, and `s32[21]` for an undeclared
+84-byte record claims nothing more than that.
+
+Watch for a symbol with **two different declarations in two units**:
+`D_800D0B14` is `UnkTown2AE8 *` in one and `s32` in another. One definition
+cannot satisfy both; the existing `D_800CF874_b[] __asm__("D_800CF874")` alias
+in `ovl_town.c` is the shape that does.
+
+### Two measured facts worth having
+
+* **An explicitly zero initializer lands in `.data`, not `.bss`.**
+  `u8 D_800CF828[16] = {0, ...}` is 16 bytes of `.data` under cc1psx 2.7.2 --
+  verified by the window accounting, since the object is entirely zero and the
+  owned window would otherwise be 16 bytes short. The `.bss` placement of zero
+  initializers is a later-gcc optimisation and this compiler does not do it.
+  So a zero-filled object in the region can be owned like any other, and
+  `Unk80082660 D_800CF720[33] = { { 0, -1, 0, 0 } };` -- one entry written,
+  32 implied -- replaces 66 lines of `.word 0x00000000`.
+* **A wrong window end shows up as a RODATA difference.** Set the `.data` end
+  from anything other than the last object's real end and the build fails with
+  `size differs by +0x60` and `first at 0x00bf24`, which is in the overlay's
+  **rodata** and looks like a rodata bug. It is not: the C object's `.data` is
+  larger than the window the yaml reserved, the DATA group spills, and every
+  section after it shifts. The first difference is always upstream of the
+  cause. Compute the end as `0x51fc0 + (last_object_end - 0x800CF720)` and
+  check it against `objdump -h build/csrc/ovl_town.o`'s `.data` size, which
+  must equal the window exactly.
+
+### The queue
+
+`python3 tools/scan-container.py town.bin --anchors` is not the tool for this
+one; the inventory is the listing itself:
+
+```sh
+grep -c '^dlabel' asm/data/ovl_town_data.data.s        # 4657 to go
+```
+
+The next boundary is 0x800CFCA8, where three all-zero struct objects
+(`UnkTownPlane`, `UnkTownCFCC4`, and the undeclared 28 bytes at 0x800CFCCC)
+and the self-referential `UnkTownCFCB4 D_800CFCB4` begin. All-zero structs
+need no field layout -- `= { 0 }` is enough -- so the struct types only become
+work where the bytes are not zero, which first happens at `D_800CFD18`
+(`UnkTownVec16[16]`).

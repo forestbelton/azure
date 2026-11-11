@@ -182,7 +182,24 @@ segments:
       # csrc/ovl_town_data.c. Carving these 179,448 bytes into the three units
       # the way docs/owning-data.md describes for main.bin's card overlay is
       # the next step and is NOT done here.
-      - [0x51fc0, data, ovl_town_data]
+      # TRANCHE 1 is owned by csrc/ovl_town.c -- 0x51fc0..0x52548, the 23
+      # objects at 0x800CF720..0x800CFC24. The window is a PREFIX and has to
+      # be: under `ld_legacy_generation` a segment emits one DATA group, and
+      # in it every C object comes before every asm data object (confirmed
+      # against build/main.bin.ld's card overlay, which lists its nine units,
+      # then ovl_main_80020000.o, then the pad). So the bytes a C unit owns are
+      # the FIRST bytes of the region, and the window grows upward from here.
+      #
+      # It goes to ovl_town rather than to one of the other two units because
+      # ovl_town is first in link order, which is the only claim the evidence
+      # supports: this overlay has no assert records to name its original
+      # units (docs/overlays.md) and the reference signal is noise -- 83
+      # symbols used only by ovl_town sit ABOVE the first symbol used only by
+      # ovl_town_800BF3F0, and 54 of the latter sit below the last of the
+      # former, so no contiguous three-way assignment fits. See
+      # docs/owning-data.md, "The town overlay has no unit oracle".
+      - [0x51fc0, .data, ovl_town]
+      - [0x52548, data, ovl_town_data]
   # The remainder of the 278-sector read: zero, apart from three single-island
   # strays at 0x82800 (3 bytes), 0x83000 (30 bytes, Shift-JIS fragments and
   # the pointer 0x80031B58) and 0x93000 (1 byte), and then the first 1,340

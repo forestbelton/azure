@@ -48906,3 +48906,208 @@ s32 func_800BEAD0(void)
     }
     return 0;
 }
+
+/* ---------------------------------------------------------------------------
+   THE OVERLAY'S OWN DATA, tranche 1: 0x800CF720..0x800CFC24.
+
+   The 278-sector read the overlay load table asks for carries 0x2BCF8 bytes
+   of data above the text (splat/town.bin.yaml and docs/town-map.md have the
+   evidence). This is the first 1,188 bytes of it, moved out of
+   asm/data/ovl_town_data.data.s and into the unit that emits the first
+   `.data` of the segment. docs/owning-data.md is the procedure;
+   docs/owning-data.md's town section is why it goes to THIS unit and why it
+   has to be a contiguous prefix.
+
+   Every type here is the one the unit's own `extern` already declared, so no
+   use site above sees a different type than it did before. The objects whose
+   declarations the sweeps never needed -- the nine 84-byte records and their
+   pointer table -- are spelled `s32[21]` and `u8 *[11]`, which is what the
+   listing's element width says and nothing more.
+
+   ONE OBJECT PER `dlabel`, AND NO MERGING. The nine records look like one
+   0x2F4-byte array and they are not: D_800CFB74 points at each one
+   separately, and 164 functions in this overlay are still asm stubs that
+   reference these symbols by name, so collapsing two dlabels into one array
+   drops a symbol the link needs.
+   --------------------------------------------------------------------------- */
+
+extern u8 D_80088760[];
+
+Unk80082660 D_800CF720[33] = {
+    { 0x00, -1, 0x0000, 0x00000000 },  /* [0] */
+};
+
+u8 D_800CF828[16] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+Unk41284 *D_800CF838[9] = {
+    NULL,
+    &D_80080EA8,
+    (Unk41284 *)0x80080EE0,
+    (Unk41284 *)0x80080EC0,
+    (Unk41284 *)0x80080ED0,
+    (Unk41284 *)0x80080ED8,
+    (Unk41284 *)0x80080EA0,
+    (Unk41284 *)0x80080EB0,
+    (Unk41284 *)0x80080EB8,
+};
+
+Unk41284 *D_800CF85C[6] = {
+    (Unk41284 *)0x80080EE0,
+    (Unk41284 *)0x80080EC0,
+    (Unk41284 *)0x80080ED0,
+    (Unk41284 *)0x80080EB8,
+    (Unk41284 *)0x80080EB0,
+    NULL,
+};
+
+s32 D_800CF874[3] = {
+    0x00000001, 0x0000003A, 0x0000003B,
+};
+
+s32 D_800CF880[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x04000000, 0x00000000, 0xFFECFFEC,
+    0x00280028, 0x012C0361, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFECFFEC, 0x00280028,
+    0x012C0361, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CF8D4[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00000014,
+    0x00000000, 0x08000000, 0x00000000, 0xFFEC0000,
+    0x00280028, 0x012C036B, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFEC0000, 0x00280028,
+    0x012C036B, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CF928[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00000028,
+    0x00000000, 0x08000000, 0x00000000, 0xFFEC0000,
+    0x00280028, 0x012C0375, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFEC0000, 0x00280028,
+    0x012C0375, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CF97C[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0xFFEC0000,
+    0x00000000, 0x0000F800, 0x00000000, 0xFFD8FFEC,
+    0x00280028, 0x01040361, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFD8FFEC, 0x00280028,
+    0x01040361, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CF9D0[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0xFFEC0014,
+    0x00000000, 0x0000F800, 0x00000000, 0xFFD8FFEC,
+    0x00280028, 0x0104036B, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFD8FFEC, 0x00280028,
+    0x0104036B, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CFA24[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0xFFEC0014,
+    0x00000000, 0x0000F800, 0x00000000, 0xFFD8FFEC,
+    0x00280028, 0x01040375, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0xFFD8FFEC, 0x00280028,
+    0x01040375, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CFA78[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00140000,
+    0x00000000, 0x00000800, 0x00000000, 0x0000FFEC,
+    0x00280028, 0x01540361, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0x0000FFEC, 0x00280028,
+    0x01540361, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CFACC[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00140014,
+    0x00000000, 0x00000800, 0x00000000, 0x0000FFEC,
+    0x00280028, 0x0154036B, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0x0000FFEC, 0x00280028,
+    0x0154036B, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+s32 D_800CFB20[21] = {
+    0x00000002, 0x00000000, 0x00000000, 0x00140014,
+    0x00000000, 0x00000800, 0x00000000, 0x0000FFEC,
+    0x00280028, 0x01540375, 0x00280028, 0x00000080,
+    0x01EE0000, 0x00000000, 0x0000FFEC, 0x00280028,
+    0x01540375, 0x00280028, 0x00000020, 0x01F10000,
+    0x00000000,
+};
+
+u8 *D_800CFB74[11] = {
+    (u8 *)D_800CF880,
+    (u8 *)D_800CF8D4,
+    (u8 *)D_800CF928,
+    (u8 *)D_800CF97C,
+    (u8 *)D_800CF9D0,
+    (u8 *)D_800CFA24,
+    (u8 *)D_800CFA78,
+    (u8 *)D_800CFACC,
+    (u8 *)D_800CFB20,
+    NULL,
+    NULL,
+};
+
+s32 D_800CFBA0[33] = {
+    0x80088C00, 0x80088B80, 0x80088B2C, 0x80088B20,
+    0x80088B08, 0x80088B08, 0x80088B08, 0x80088B08,
+    0x80088AF8, 0x80088AE8, 0x80088AC4, 0x80088A8C,
+    0x80088A3C, 0x800889FC, 0x800889EC, 0x8008899C,
+    0x80088930, 0x800888D8, 0x80088890, 0x80088874,
+    0x8008885C, 0x80088838, 0x80088818, 0x800887F8,
+    0x800887D8, 0x800887C0, 0x800887B8, 0x800887A8,
+    0x80088B08, 0x80088794, 0x80088770, 0x80088B08,
+    (s32)D_80088760,
+};
+
+u8 D_800CFC24[8] = {
+    0x08, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+};
+
+s8 D_800CFC2C[12] = {
+    0, 0, 1, 0, 1, 2, 0, 1,
+    2, 0, 0, 0,
+};
+
+u8 D_800CFC38[12] = {
+    0x00, 0x04, 0x08, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C,
+    0x0C, 0x0C, 0x0C, 0x00,
+};
+
+/* Two parallel step tables over the same eleven slots: D_800CFC38/D_800CFC44
+   and D_800CFC70/D_800CFC7C, each a byte offset beside a handler. The handler
+   columns repeat in the same 1-2-3-3-2 shape, which is why both are eleven
+   entries and not eight. Declared `s32` by the use sites, so the casts are
+   the declaration's, not a choice. */
+s32 D_800CFC44[11] = {
+    (s32)func_8008BA44, (s32)func_8008BACC, (s32)func_8008BACC,
+    (s32)func_8008BB50, (s32)func_8008BB50, (s32)func_8008BB50,
+    (s32)func_8008BBD4, (s32)func_8008BBD4, (s32)func_8008BBD4,
+    (s32)func_8008BACC, (s32)func_8008BACC,
+};
+
+u8 D_800CFC70[12] = {
+    0x0C, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+};
+
+s32 D_800CFC7C[11] = {
+    (s32)func_8008BF5C, (s32)func_8008BFB0, (s32)func_8008BFB0,
+    (s32)func_8008C004, (s32)func_8008C004, (s32)func_8008C004,
+    (s32)func_8008C058, (s32)func_8008C058, (s32)func_8008C058,
+    (s32)func_8008BFB0, (s32)func_8008BFB0,
+};
