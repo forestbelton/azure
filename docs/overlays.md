@@ -336,6 +336,41 @@ C unit is what retires the pool as a separate object. Then one dotted
 `.rodata` covers `0x21800..0x21968` with splat writing not a byte of it, which
 is exactly how `splat/main.bin.yaml` already describes the 0x80020000 segment.
 
+**MEASURED 2026-11-11, and it is stronger than "the pool is the problem":
+THE C UNIT'S OWN RODATA IS EMITTED AS ONE CONTIGUOUS BLOCK AHEAD OF EVERY
+`INCLUDE_RODATA`.** So whatever the C unit emits must be an exact PREFIX of
+the overlay's rodata, in order. That is not a theory -- both halves were
+built:
+
+* `func_80088BD0` LANDS. Its `u8 *tbl[3]` initialiser is the FIRST rodata
+  object at 0x80088760, so dropping its `INCLUDE_RODATA` and letting gcc emit
+  it keeps the prefix intact and all four containers still match.
+* `func_8008A288` CANNOT, even at 0 differing. Its switch table belongs LAST,
+  at 0x800888B4. Landing it makes gcc emit that table with the unit's other
+  compiler-generated rodata -- i.e. first -- and the container comes out 89%
+  different, with the first bad word at the very start of the rodata,
+  +0x21800.
+
+So the rodata is all-or-nothing from the first C-owned object onward. Landing
+`func_800890EC`, `func_80089608` or `func_8008A288` requires ALL SIX objects
+between them to become C-owned, in this order:
+
+```
+0x80088760  u8 *tbl[3]       func_80088BD0   local initialiser   -- DONE
+0x80088770  jtbl_80088770    func_800890EC   switch table        -- needs the function landed
+0x80088790  u8 *[10]         func_80089608   local initialiser   -- needs the function landed
+0x800887B8  s16[10]          func_80089608   local initialiser   -- needs the function landed
+0x800887CC  u32[10]          func_80089608   local initialiser   -- needs the function landed
+0x800887F4  the string pool  nobody          -- needs the .data pointer table owned in C
+0x800888AC  D_800888AC       read as an EXTERN by func_80089C24   -- needs to become a C-defined const RECT
+0x800888B4  jtbl_800888B4    func_8008A288   switch table        -- needs the function landed
+```
+
+Two of those are not just "land the function". The string pool has no owner in
+the text at all, and `D_800888AC` is *read* by `func_80089C24` rather than
+emitted by it, so it has to be promoted from an extern to a definition in the
+unit. Both are the `docs/owning-data.md` §4.7 job described above.
+
 Positive evidence that the layout will land: `func_80089608` matches at 259 of
 259 words with its three initialisers in place, and `verify.py` reports the
 only residue as two relocated words whose addend differs --
