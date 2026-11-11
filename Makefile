@@ -273,8 +273,8 @@ containers: build/$(SLUS) build/$(TOWN) build/$(MAIN) build/$(DUNGEON)
 
 # TODO: Probably want to use .d files generated from `splat` here
 # splat generates the linker script into build/, so it is a real prerequisite
-# of the link: `rm -rf build` otherwise leaves the project unlinkable until
-# `make splat` is run again.
+# of every link below -- all four of them. `rm -rf build` otherwise leaves the
+# project unlinkable until `make splat` is run again.
 build/%.ld: splat/%.yaml
 	splat split $<
 
@@ -294,7 +294,7 @@ build/$(SLUS): $(OFILES) build/$(SLUS).ld
 # function of its own and so has no defining `glabel` anywhere now that those
 # 113 words are landed as one C function -- see the file's own header and
 # splat/town.bin_symbol_addrs.txt.
-build/$(TOWN): $(OFILES) splat/$(TOWN)_extra_syms.txt
+build/$(TOWN): $(OFILES) build/$(TOWN).ld splat/$(TOWN)_extra_syms.txt
 	$(LD) $(LDFLAGS) \
 		--script=build/$(TOWN).ld \
 		--script=splat/$(TOWN)_undefined_funcs_auto.txt \
@@ -306,7 +306,7 @@ build/$(TOWN): $(OFILES) splat/$(TOWN)_extra_syms.txt
 	@echo ""
 	@$(CHECK) build/$(TOWN) data/town/$(TOWN) --yaml splat/$(SLUS).yaml
 
-build/$(MAIN): $(OFILES)
+build/$(MAIN): $(OFILES) build/$(MAIN).ld
 	$(LD) $(LDFLAGS) \
 		--script=build/$(MAIN).ld \
 		--script=splat/$(MAIN)_undefined_funcs_auto.txt \
@@ -317,7 +317,7 @@ build/$(MAIN): $(OFILES)
 	@echo ""
 	@$(CHECK) build/$(MAIN) data/main/$(MAIN) --yaml splat/$(SLUS).yaml
 
-build/$(DUNGEON): $(OFILES)
+build/$(DUNGEON): $(OFILES) build/$(DUNGEON).ld
 	$(LD) $(LDFLAGS) \
 		--script=build/$(DUNGEON).ld \
 		--script=splat/$(DUNGEON)_undefined_funcs_auto.txt \
