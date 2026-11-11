@@ -112,12 +112,16 @@ segments:
   #                      `.L` labels in the text -- splat's `jlabel` macro
   #                      emits those global, which is why an undotted rodata
   #                      subsegment links here the way it does for ovl_dungeon.
-  #   0x21968..0x24110   text, 10,152 bytes, 26 functions. 0x800888C8..
-  #                      0x8008B070. The first function is an empty
+  #   0x21968..0x24114   text, 10,156 bytes, 26 functions. 0x800888C8..
+  #                      0x8008B074. The first function is an empty
   #                      `jr $ra; nop` at 0x21968, which is what puts the
   #                      text/rodata seam there and not at the next prologue.
-  #                      Last `jr $ra` 0x24108, delay slot 0x2410C.
-  #   0x24110..0x24420   data, 784 bytes. 0x8008B070..0x8008B380.
+  #                      The last `jr $ra` is at 0x2410C and its delay-slot
+  #                      nop at 0x24110, so the END IS 0x24114. 0x24110 is a
+  #                      zero word either way, which is why a boundary at
+  #                      0x24110 still builds byte-identical -- it just cuts
+  #                      the last function one word short.
+  #   0x24114..0x24420   data, 780 bytes. 0x8008B074..0x8008B380.
   #   0x24420..0x28420   16,384 stored zero bytes, 0x8008B380..0x8008F380.
   #                      Nothing references them with a lui/addiu pair, but
   #                      they are inside the overlay's own file and the sector
@@ -144,7 +148,7 @@ segments:
     subsegments:
       - [0x21800, .rodata, ovl_main_80088760]
       - [0x21968, c, ovl_main_80088760]
-      - [0x24110, data, ovl_main_80088760_data]
+      - [0x24114, data, ovl_main_80088760_data]
   - [0x24420, bin, ovl_main_80088760_zero]
   # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
   # in any container, and it holds nothing. It is kept as a named `bin` for the

@@ -58,13 +58,27 @@ OVERLAYS = [
     # fingerprinting reported: four frameless leaf functions build no stack
     # frame and so cast no vote. See splat/town.bin.yaml.
     ("ovl_town", 0x8008AC84, 0x800CF720),
-    ("ovl_dungeon", 0x80089588, 0x800DCE60),
+    # 0x800894A0, not the 0x80089588 this table carried until 2026-11-11:
+    # dungeon's `asm` subsegment starts at file 0xa3d40, which is vram
+    # 0x800894A0, and that is also its first glabel. The stale low bound made
+    # overlay_for reject its first few functions outright, and once main.bin's
+    # overlapping 0x80088760 overlay was added it would have mis-assigned
+    # them instead -- silently, to another container.
+    ("ovl_dungeon", 0x800894A0, 0x800DCE60),
+    # main.bin's option-screen overlay, LAST on purpose: it loads at the same
+    # 0x80088760 as town's and dungeon's, so its range overlaps both of theirs
+    # and an address alone cannot say which unit a function belongs to. The
+    # tie-break below prefers whichever candidate actually has a per-function
+    # listing, and falls back to the FIRST match -- so keeping this entry last
+    # leaves every pre-existing lookup resolving exactly as it did.
+    ("ovl_main_80088760", 0x800888C8, 0x8008B070),
 ]
 # Which container each overlay lives in. Both ovl_main_* overlays are in
 # main.bin, so this cannot be derived from the name by splitting on "_".
 CONTAINER = {
     "ovl_main_80020000": "main.bin",
     "ovl_main_80400000": "main.bin",
+    "ovl_main_80088760": "main.bin",
     "ovl_town": "town.bin",
     "ovl_dungeon": "dungeon.bin",
 }
@@ -72,11 +86,25 @@ ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
 
 
 def overlay_for(func):
+    """Which split overlay holds `func`.
+
+    THREE overlays load at 0x80088760 -- town's, dungeon's and main.bin's
+    option screen -- so their address ranges overlap and the address is not
+    enough. What distinguishes them is the per-function listing, which splat
+    writes under the owning unit's own directory. When exactly one candidate
+    has one, that is the answer; otherwise fall back to the first range that
+    matches, which is what this did before the third overlay existed.
+    """
     a = int(func.split("_")[1], 16)
-    for name, lo, hi in OVERLAYS:
-        if lo <= a < hi:
-            return name
-    raise SystemExit(f"{func} is in none of the split overlays")
+    cands = [name for name, lo, hi in OVERLAYS if lo <= a < hi]
+    if not cands:
+        raise SystemExit(f"{func} is in none of the split overlays")
+    if len(cands) > 1:
+        have = [n for n in cands if os.path.exists(
+            os.path.join(PROJ, "asm", "nonmatchings", n, func + ".s"))]
+        if len(have) == 1:
+            return have[0]
+    return cands[0]
 
 
 def listing(func):

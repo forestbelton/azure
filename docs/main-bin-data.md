@@ -168,10 +168,10 @@ together.
 | `bin` (unnamed) | 132,640 | 5.14% | the two blobs below |
 | `c` | 63,036 | 2.44% | the two decompiled overlays' text (29,948 + 33,088) |
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
-| `asm` | 10,152 | 0.39% | the 0x80088760 overlay's text, 26 functions |
+| `c` (new unit) | 10,156 | 0.39% | the 0x80088760 overlay's text, 26 functions |
 | `.rodata` + `rodata` | 4,908 | 0.19% | all three overlays' rodata |
 | `hrodata` | 2,664 | 0.10% | `asrc/str/monsters.txt`, the string pool |
-| `data` | 1,956 | 0.08% | `ovl_main_80020000_pad` + the 0x80088760 data run |
+| `data` | 1,952 | 0.08% | `ovl_main_80020000_pad` + the 0x80088760 data run |
 
 The named-`bin` figure fell by 11,296 bytes rather than by the overlay's full
 27,680: `main_tables_21268` gave up 0x21800..0x28420, but 16,384 of that came

@@ -103,7 +103,7 @@ one 16 MB `bin` blob and nothing was started. All three are stale.** As of
 
 | overlay | vram | functions | words | median fn | max fn |
 |---|---|---|---|---|---|
-| `main.bin+0x21800` | `0x80088760` | 26 | 2,538 | -- | -- |
+| `main.bin+0x21800` | `0x80088760` | 26 | 2,539 | -- | -- |
 | `main.bin+0x25d000` | `0x80020000` | 241 | 7,487 | 20 | 290 |
 | `main.bin+0x269000` | `0x80400000` | 263 | 8,271 | -- | -- |
 | `town.bin+0xb000` | `0x80088760` | 1,815 | 70,244 | 24 | 797 |
