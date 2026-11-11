@@ -305,10 +305,43 @@ splat can attribute it to no function and writes it nowhere. And it cannot be
 given its own undotted subsegment, because that would need dotted `.rodata`
 on both sides of it for the two jumptables, which is the second failure above.
 
-The way out is ORDER, not a new subsegment: land `func_800890EC` and
-`func_8008A288` first. Once both jumptable owners are C, gcc emits the
-jumptables itself and no migration is needed, so the rodata can be carved
-freely around the string pool.
+**REFINED 2026-11-11, and the earlier advice here was not enough.** It said to
+land the two jumptable owners first and then carve freely. Landing them is
+necessary but it does not unblock anything, because the obstruction is not the
+jumptables -- it is that **every byte of this rodata except the string pool
+turns out to be C-owned**, and the string pool sits in the middle of it:
+
+```
+0x21800  D_80088760     func_80088BD0's  u8 *tbl[3] initialiser
+0x21810  jtbl_80088770  func_800890EC's  switch table
+0x21830  D_80088790     func_80089608's  u8 *[10] initialiser
+0x21858  D_800887B8     func_80089608's  s16[10]  initialiser (2-byte aligned)
+0x2186C  D_800887CC     func_80089608's  u32[10]  initialiser
+0x21894  the string pool          <-- the ONLY thing no function owns
+0x2194C  D_800888AC     func_80089C24's  initialiser
+0x21954  jtbl_800888B4  func_8008A288's  switch table
+```
+
+A unit gets exactly one dotted `.rodata` sibling, so an undotted subsegment
+for the pool would need dotted rodata on BOTH sides of it. No carve exists.
+
+The actual fix is the one `docs/owning-data.md` §4.7 already records for the
+card overlay: **own the `.data` pointer table in C and cc1psx emits the
+strings itself, at these addresses.** There, the 0x80020000 overlay's 59
+Shift-JIS messages are the string literals of that unit's own `u8 *` tables
+and needed no symbol, no subsegment and no `INCLUDE_RODATA`. The same shape is
+here -- the table at `+0x24350` in this overlay's `data` subsegment is what
+points at the pool, as raw `.word` literals -- so bringing that table into the
+C unit is what retires the pool as a separate object. Then one dotted
+`.rodata` covers `0x21800..0x21968` with splat writing not a byte of it, which
+is exactly how `splat/main.bin.yaml` already describes the 0x80020000 segment.
+
+Positive evidence that the layout will land: `func_80089608` matches at 259 of
+259 words with its three initialisers in place, and `verify.py` reports the
+only residue as two relocated words whose addend differs --
+`addiu $a2, $v0, %lo(D_800887B8)` and `%lo(D_800887CC)`. Those are gcc's own
+labels for tables 2 and 3, and they fall at exactly the original addresses, so
+cc1psx reproduces this rodata's layout label for label.
 
 ## The fourth overlay: `main.bin+0x269000` at `0x80400000`
 

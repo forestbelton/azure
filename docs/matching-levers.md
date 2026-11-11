@@ -15066,6 +15066,20 @@ the function and is easy to misread as a scheduling problem.
 > `UnkTown89960 w = D_80089960;` is **392 differing** against 0 for the same
 > thing as a statement.
 
+**CONFIRMED IN THE OTHER DIRECTION 2026-11-11, and the reason is block
+membership, not init order as such.** `func_80089608` (ovl_main_80088760, 259
+words, 0 differing) opens with three LOCAL ARRAY initialisers, two of which
+cc1psx expands as a four-register copy LOOP rather than straight-line moves.
+`s16 *r = (s16 *)p[0];` declared AHEAD of those three arrays is 0 differing;
+the same thing as a statement after them is **260 words / 245 differing**. The
+copy loop is its own basic block, so the two positions are not a scheduling
+choice at all: as an initialiser the `lw` is in the ENTRY block, above the
+loop's `.L` label, and as a statement it is in the post-copy block, where no
+pass can move it back. **When a scalar's load has to appear above a block
+copy's loop label, an initialiser is the only spelling that puts it there** --
+and `do { } while (0)` cannot help, because the boundary needed is on the
+other side.
+
 **NEGATIVE RESULT, AND IT BOUNDS THIS LEVER: with no initialisers, order buys
 nothing.** On `func_800BE4D4` (ovl_town, 363 words, landed 2026-11-03) six
 different declaration orders of THIRTEEN function-scope locals, none of them
