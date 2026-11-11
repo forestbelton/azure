@@ -221,7 +221,76 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_800888AC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A288);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A794);
+/* func_8008896C's shadow pass: the same two tiles per widget, but drawn three
+   times at offsets k = 2, 1, 0 in 0x505050, semi-transparent instead of
+   shade-textured, and out of texture page bank 3 instead of 0. Everything
+   that function's comment says about the two primitive locals, the init
+   order and the halfword grouping applies here unchanged -- written that way
+   it matched first try.
+
+   func_80066640 is SetSemiTrans and func_80066668 (used by func_8008896C) is
+   SetShadeTex, both named in splat/common_syms.txt, and libgpu.h declares
+   both as real functions rather than macros, which is why they are `jal`s.
+   The extra loop level costs `w` its saved register: with k, i and j all
+   live, gcc spills the second parameter to its argument home and reloads it
+   per iteration, which is the `lw $t0, 0x44($sp)` in the body. */
+s32 func_8008A794(u8 *p, u16 *w)
+{
+    Unk80083160 *g;
+    SPRT *s;
+    DR_MODE *dm;
+    s32 i;
+    s32 j;
+    s32 k;
+    s32 y;
+    s32 tx;
+    u8 *next;
+
+    g = &D_80083160;
+    while (1)
+    {
+        for (k = 2; k >= 0; k--)
+        {
+            for (i = 0; i < 2; i++)
+            {
+                j = 1;
+                y = i << 8;
+                tx = 0x280;
+                do
+                {
+                    s32 v;
+
+                    s = (SPRT *)*(u8 **)(g->unk_00 + 0x8D0);
+                    *(u8 **)(g->unk_00 + 0x8D0) = (u8 *)s + 0x14;
+                    *(u32 *)&s->r0 = 0x505050;
+                    SetSprt(s);
+                    SetSemiTrans(s, 1);
+                    s->x0 = (j << 8) + k;
+                    v = (y - w[3]) + k;
+                    s->w = 0x100;
+                    s->h = 0x100;
+                    *(s16 *)&s->u0 = 0;
+                    s->y0 = v;
+                    s->clut = GetClut(0, 0x1F0);
+                    addPrim(g->unk_00 + 0x82C, s);
+                    dm = (DR_MODE *)*(u8 **)(g->unk_00 + 0x8D0);
+                    *(u8 **)(g->unk_00 + 0x8D0) = (u8 *)dm + 0xC;
+                    func_80067F20((u32 *)dm, 0, 0, GetTPage(1, 3, tx, y), 0);
+                    addPrim(g->unk_00 + 0x82C, dm);
+                    tx -= 0x80;
+                } while (--j >= 0);
+            }
+        }
+        next = *(u8 **)(p - 8);
+        if (next == 0)
+        {
+            break;
+        }
+        p = next + 0x20;
+        w = *(u16 **)(next + 8);
+    }
+    return 0;
+}
 
 s32 *func_8008A98C(s32 *a, s32 *b, s32 c, s32 d)
 {
