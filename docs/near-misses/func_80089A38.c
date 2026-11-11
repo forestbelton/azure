@@ -19,6 +19,31 @@
  *   80089BD0 built slti v0,a0 target slti v0,v0
  */
 
+/* DECOMP-PERMUTER IS NOT USABLE ON THIS PARK AS IMPORTED -- measured
+   2026-11-11, so nobody spends the run again.
+ *
+ * `permimport.py func_80089A38` then `permrun.py --minutes 1 --jobs 2`
+ * reports `base=1160` and improves to `best=795`, but that scale has nothing
+ * to do with this park: the park itself is 13 DIFF. Taking the search's best
+ * output (output-795-1) and measuring it with ovlverify gives 122 words and
+ * 119 DIFF against the park's 123 and 13, and a 0x28 frame against the
+ * target's 0x20 -- the mutation adds an `unsigned int new_var` that costs a
+ * saved register. So permimport's generated base.c does NOT reproduce this
+ * park's compilation, and every score in the run is relative to that wrong
+ * base. This is the failure docs/landing-a-function.md's note on overlay
+ * parks and inline declarations describes.
+ *
+ * Fix the base before trusting another run: compare
+ * nonmatchings/func_80089A38/base.c and compile.sh against what
+ * ovlverify.py does for this unit (cc1psx -G0, gas -G0, -Iinclude
+ * -Ipsyq/include), and check the inline `extern u32 D_800814A0_a[1]
+ * __asm__("D_800814A0");` survived preprocessing.
+ *
+ * Also note: permrun.py writes its result ONLY at the end, so a backgrounded
+ * run that is killed first leaves an empty log and no permlog.tsv row. Two
+ * attempts were lost that way before it was run in the foreground.
+ */
+
 #include "common.h"
 extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 void func_800478B8(s32);

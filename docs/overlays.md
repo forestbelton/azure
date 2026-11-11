@@ -265,13 +265,50 @@ inputs from its own `build/*.ld` and never sees another container's objects
 once. None of the 26 function addresses collides with a `town` or `dungeon`
 overlay function address either, but that is luck, not a constraint.
 
-**It is `asm`, not `c`.** Same shape as `ovl_dungeon`: undotted `rodata` plus
-`asm`, sharing one name, with a separate `ovl_main_80088760_data` for the data
-run. The two jumptables in the rodata (`jtbl_80088770`, `jtbl_800888B4`)
-reference `.L` labels in the text, which links across the two objects because
-splat's `jlabel` macro emits them `.global`. That is the whole reason an
-undotted rodata subsegment works here where the `0x80400000` twin needed a
-dotted one -- that block's rodata rides with a `c` unit.
+### The rodata contract for this unit
+
+It started as `asm` and is `c` as of 2026-11-11. The arrangement that works is
+**one dotted `.rodata` over the whole range** plus a separate
+`ovl_main_80088760_data` for the data run, and the three arrangements that do
+not are worth knowing, because each failed differently:
+
+* **Undotted `rodata` with a `c` text subsegment does not link.** The two
+  jumptables hold `.L` labels in the text. A whole-subsegment `asm` listing
+  emits those through splat's `jlabel` macro, which is `.global`, so an
+  undotted rodata object can reach them -- that is why the `asm` shape worked.
+  A per-function nonmatchings listing emits a plain local `.L80089594:`
+  instead, and the rodata object gets 13 undefined references.
+* **Two dotted `.rodata` subsegments, one per jumptable, silently drops one.**
+  splat keys a `c` section's siblings by section name, so a unit has exactly
+  one `.rodata` sibling; the earlier of the two is discarded and
+  `jtbl_80088770` ends up defined nowhere.
+* **One dotted subsegment over everything is right**, and the attribution is
+  what makes it safe: each of the seven rodata symbols is referenced by
+  exactly one function, and the mapping is non-decreasing in both rodata
+  address and function index. splat migrates the two jumptables into their
+  functions' own listings and the other five ride as `INCLUDE_RODATA`. Note
+  that the C unit has to be DELETED and regenerated to get those
+  `INCLUDE_RODATA` lines -- splat writes the file only when it creates it.
+
+**This is what blocks `func_80089608`, and the block is structural.** That
+function's three stack tables are LOCAL ARRAY INITIALISERS -- ten pointers,
+ten `s16`, ten `u32`, which cc1psx emits to rodata and block-copies to the
+stack, the `s16` one through `lwl`/`lwr` because it is only 2-byte aligned.
+Landing it therefore makes the C unit own `0x80088790..0x800887F4`, and the
+`INCLUDE_RODATA` for `D_800887CC` currently covers those bytes too, so the
+unit would emit them twice. Splitting the symbol works -- `size:0x28` plus an
+explicit `D_800887F4 = 0x800887F4;` in `main.bin_symbol_addrs.txt` ends the
+object at the right place, and `size` alone does not -- but it leaves the
+0xB8-byte string pool with no owner: nothing in the TEXT references it (the
+pointer table in the overlay's `.data` does, as raw `.word` literals), so
+splat can attribute it to no function and writes it nowhere. And it cannot be
+given its own undotted subsegment, because that would need dotted `.rodata`
+on both sides of it for the two jumptables, which is the second failure above.
+
+The way out is ORDER, not a new subsegment: land `func_800890EC` and
+`func_8008A288` first. Once both jumptable owners are C, gcc emits the
+jumptables itself and no migration is needed, so the rodata can be carved
+freely around the string pool.
 
 ## The fourth overlay: `main.bin+0x269000` at `0x80400000`
 
