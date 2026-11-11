@@ -71,7 +71,13 @@ OVERLAYS = [
     # tie-break below prefers whichever candidate actually has a per-function
     # listing, and falls back to the FIRST match -- so keeping this entry last
     # leaves every pre-existing lookup resolving exactly as it did.
-    ("ovl_main_80088760", 0x800888C8, 0x8008B070),
+    # main.bin's option-screen overlay, CARVED into three units on 2026-11-11
+    # so that each one's rodata starts where its jump table needs it (see
+    # docs/matching-levers.md on `.align 3`). All three are last for the same
+    # reason the single entry was: they overlap town's and dungeon's ranges.
+    ("ovl_main_80088760", 0x800888C8, 0x80089608),
+    ("ovl_main_80089608", 0x80089608, 0x8008A288),
+    ("ovl_main_8008A288", 0x8008A288, 0x8008B074),
 ]
 # Which container each overlay lives in. Both ovl_main_* overlays are in
 # main.bin, so this cannot be derived from the name by splitting on "_".
@@ -79,26 +85,46 @@ CONTAINER = {
     "ovl_main_80020000": "main.bin",
     "ovl_main_80400000": "main.bin",
     "ovl_main_80088760": "main.bin",
+    "ovl_main_80089608": "main.bin",
+    "ovl_main_8008A288": "main.bin",
     "ovl_town": "town.bin",
     "ovl_dungeon": "dungeon.bin",
 }
 ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
 
 
+# The unit named by the source file this was invoked on, when that file is
+# csrc/<overlay>.c. Set in main(); see overlay_for.
+SRC_UNIT = None
+
+
 def overlay_for(func):
     """Which split overlay holds `func`.
 
     THREE overlays load at 0x80088760 -- town's, dungeon's and main.bin's
-    option screen -- so their address ranges overlap and the address is not
-    enough. What distinguishes them is the per-function listing, which splat
-    writes under the owning unit's own directory. When exactly one candidate
-    has one, that is the answer; otherwise fall back to the first range that
-    matches, which is what this did before the third overlay existed.
+    option screen -- so their address ranges OVERLAP and the address alone is
+    never enough. Three signals, in descending order of trust:
+
+    1. **The source file you passed.** `csrc/ovl_main_80089608.c` says the
+       unit outright, and that is authoritative in a way an address cannot be.
+       This matters most for a LANDED function: splat writes per-function
+       listings only for stubs, so once a function lands its listing is gone
+       at the next `make splat` and signal 2 has nothing to go on. Before this
+       existed, re-measuring a landed function in a carved unit went looking
+       in dungeon.bin.elf.
+    2. **The per-function listing**, which splat writes under the owning
+       unit's own directory. Decisive while the function is still a stub.
+    3. **The first range that matches**, which is what this did when only one
+       overlay loaded at 0x80088760.
     """
     a = int(func.split("_")[1], 16)
     cands = [name for name, lo, hi in OVERLAYS if lo <= a < hi]
     if not cands:
         raise SystemExit(f"{func} is in none of the split overlays")
+    # Only trust the hint when the address agrees with it, so that a genuinely
+    # wrong OVERLAYS range still surfaces instead of being papered over.
+    if SRC_UNIT in cands:
+        return SRC_UNIT
     if len(cands) > 1:
         have = [n for n in cands if os.path.exists(
             os.path.join(PROJ, "asm", "nonmatchings", n, func + ".s"))]
@@ -319,6 +345,10 @@ def main():
             print(f"{i:4d} {w:08X}  {t}")
         return
 
+    stem = os.path.splitext(os.path.basename(args.src or ""))[0]
+    if stem in CONTAINER:
+        global SRC_UNIT
+        SRC_UNIT = stem
     if not args.src or not args.funcs:
         ap.error("need a candidate .c and at least one function name")
 

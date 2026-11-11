@@ -66,7 +66,6 @@ void func_800478B8(s32);
    func_8008A288 emit a real `addu $a0, ...` that the target does not have. */
 void func_80088BD0(void);
 
-extern RECT D_800888AC;
 extern s32 D_8008B2B0;
 extern s32 D_8008B2B4[];
 extern s32 D_8008B2BC[];
@@ -164,6 +163,18 @@ void func_80089A38(s32 *, s32 *, s32);
 void func_80089608(s32 *);
 extern void func_80044BB0(void) __asm__("D_80044BB0");
 extern void func_80053A88(void) __asm__("D_80053A88");
+
+/* The 256x1 VRAM strip func_80089C24 copies onto its stack. It used to be
+   splat's own `ovl_main_80088760_rect` subsegment; owning it here retires that
+   subsegment and its generated listing.
+
+   IT HAS TO LIVE IN THIS UNIT, AND FIRST. sizeof(RECT) is 8, so placing it at
+   this unit's rodata offset 0 leaves jtbl_800888B4 at offset 8 -- already
+   8-aligned, so the `.align 3` cc1psx emits before a jump table pads nothing.
+   That is the same reason this unit was carved out at all; see
+   docs/matching-levers.md, "cc1psx EMITS `.align 3` FOR JUMP TABLES". The
+   unit's rodata consequently starts at 0x2194c, not 0x21954. */
+const RECT D_800888AC = {0, 0x1F0, 0x100, 1};
 
 void func_8008A288(s32 *p)
 {

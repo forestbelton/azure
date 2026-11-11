@@ -66,7 +66,7 @@ void func_800478B8(s32);
    func_8008A288 emit a real `addu $a0, ...` that the target does not have. */
 void func_80088BD0(void);
 
-extern RECT D_800888AC;
+extern const RECT D_800888AC;
 extern s32 D_8008B2B0;
 extern s32 D_8008B2B4[];
 extern s32 D_8008B2BC[];
