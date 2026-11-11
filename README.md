@@ -61,7 +61,7 @@ following SHA256:
 ```
 
 ### PSY-Q
-The PSY-Q dependencies are the **headers** and **libraries** from version 4.0.
+The only PSY-Q dependencies are the **headers** from version 4.0.
 
 Ensure you have a `psyq/` directory in the project root with the following
 contents:
@@ -69,8 +69,6 @@ contents:
 ```
 include/
   <all psy-q headers>
-lib/
-  <all psy-q libraries>
 ```
 
 The project includes a script to ensure that this directory has the correct contents:
@@ -91,7 +89,7 @@ $ make cdk-gcc
 ```
 
 That runs the submodule's `gcc-2.7.2-cdk` Dockerfile and installs `cc1`, `cpp`
-and `gcc` into `scratch/cdk-gcc/`. It needs **docker** and takes about 20
+and `gcc` into `scratch/cdk-gcc/`. It needs **Docker** and takes about 20
 seconds. `make` builds it on demand, so this step is optional.
 
 The result is the same compiler the game was built with, not a substitute: its

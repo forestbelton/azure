@@ -314,6 +314,16 @@ The 817 functions carved as `unk_72A8` (294, 0x80033aa8-0x8003c9f8) and
 modules: they call `AddPrim`, `GetTPage`, `ClearImage`, `RotTransPers4`,
 `RotMatrix`, `CompMatrix`, `PushMatrix`/`PopMatrix`.
 
+**The overlays were scanned too, 2026-11-10, and `main.bin`'s twin block
+statically links its own copy of libcard** -- twelve modules at
+0x271644-0x271848, currently twelve `INCLUDE_ASM` stubs in
+`csrc/ovl_main_80400000.c`. That also settles the file's own open note that
+"func_804087C8 matches func_80069D78 at 0.90 masked": both are
+`libcard/END`. `town.bin`, `dungeon.bin` and the live 0x80020000 overlay are
+clean. Full table, evidence and the remaining steps are in
+`docs/twin-block-libcard.md`, which exists so that `psyq/lib` -- an analysis
+input, never a link input -- is no longer needed to finish the twin block.
+
 ## Before writing a function
 
 Read `docs/matching-levers.md` -- the lever index for this compiler. Add to it

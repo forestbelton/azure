@@ -1,6 +1,5 @@
 #include "common.h"
 #include "main.h"
-#include "strings.h"
 
 /* THE 0x80020000 OVERLAY'S .bss, WHICH CANNOT BE .bss. Nothing else is here.
    The nine translation units the overlay was built from are in csrc/main/,

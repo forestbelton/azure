@@ -59,9 +59,14 @@ CHECK = python tools/check.py
 # toolchain at ubuntu:focal.
 #
 # The wine path is gone entirely: there is no tools/ccpsx and no prefix pool.
-# psyq/ is still needed for its headers and its libraries, and the .exes are
-# kept as the provenance reference the native build was verified against --
-# tools/validate-psyq.py records their hashes. See docs/compiler-version.md.
+# psyq/ is still needed for its HEADERS, which -Ipsyq/include below feeds to
+# every unit. Its libraries are NOT needed: they were never a link input (the
+# retail library code is already in the containers, carved as asm) and were
+# only ever an analysis input for `azure libmatch`/`libscan`, whose results are
+# committed -- see docs/twin-block-libcard.md. The .exes are kept as the
+# provenance reference the native build was verified against, at the three
+# hashes above. tools/validate-psyq.py checks the headers and nothing else.
+# See docs/compiler-version.md.
 CC             = tools/cdkgcc
 ASPSX_VERSION  = 2.56
 
