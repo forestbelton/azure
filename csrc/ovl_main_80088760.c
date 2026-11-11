@@ -269,7 +269,63 @@ void func_8008ACB4(s32 *p, s16 *out)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AD58);
+void func_8008AD58(s32 *p)
+{
+    u16 t[2];
+    s16 *q;
+    s32 on;
+
+    q = (s16 *)p[3];
+    t[0] = 2;
+    t[1] = 1;
+    /* `on = 0` first, and the else arm as an `if` that only ever STORES 1.
+       Written symmetrically (`on = p[9] == 0;` in the else) the else arm
+       becomes `sltiu` and the then arm's `addu $a0, $zero, $zero` has no
+       reason to exist -- reorg puts that zeroing in the `beqz`'s delay slot
+       precisely because both paths can run it. 2 words. */
+    on = 0;
+    if (((u16 *)q)[11] & t[p[8]])
+    {
+        on = p[9] != 0;
+    }
+    else if (p[9] == 0)
+    {
+        on = 1;
+    }
+    /* Each arm declares its OWN `v`. One shared function-scope local is the
+       same 66 words with every opcode, immediate and displacement right and
+       4 REGISTERS wrong: the else arm's constant and its loaded p[4] swap
+       $v0/$a0. A block-scope variable is allocated before a function-scope
+       one in gcc 2.7.2, which is what puts them back -- see
+       docs/compiler-version.md's note on the two tie-breaks. */
+    if (on)
+    {
+        s32 v;
+
+        v = p[4] + 0x101010;
+        p[4] = v;
+        if (v > 0x808080)
+        {
+            p[4] = 0x808080;
+        }
+    }
+    else
+    {
+        s32 v;
+
+        v = p[4] - 0x101010;
+        p[4] = v;
+        if (v <= 0x30302F)
+        {
+            p[4] = 0x303030;
+        }
+    }
+    if (q[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 void func_8008AE60(s32 *p, Blk30 *src)
 {
@@ -284,7 +340,65 @@ void func_8008AE60(s32 *p, Blk30 *src)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AEEC);
+void func_8008AEEC(s32 *p)
+{
+    s16 *h;
+    s16 *q;
+
+    h = (s16 *)p;
+    q = (s16 *)p[3];
+    h[1]--;
+    switch (h[0])
+    {
+    case 0:
+        if (h[1] <= 0)
+        {
+            p[4] = 0xC0C0C0;
+            ((u16 *)p)[14] |= 1;
+            h[0]++;
+        }
+        break;
+    case 1:
+        {
+            s32 v;
+
+            v = p[4] - 0x101010;
+            p[4] = v;
+            if (v == 0)
+            {
+                h[1] = 0x3C;
+                h[0]++;
+            }
+        }
+        break;
+    case 2:
+        if (h[1] <= 0)
+        {
+            h[0]++;
+        }
+        break;
+    case 3:
+        {
+            s32 v;
+
+            v = p[4] + 0x101010;
+            p[4] = v;
+            if (v == 0xC0C0C0)
+            {
+                p[4] = 0x808080;
+                h[1] = 0x5A;
+                h[0] = 0;
+                ((u16 *)p)[14] &= 0xFFFE;
+            }
+        }
+        break;
+    }
+    if (q[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 void func_8008B030(s16 **p)
 {
