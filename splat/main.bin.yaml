@@ -154,9 +154,20 @@ segments:
       # `.align 3` a no-op at section offset 0. Exactly the town overlay's
       # fix; see docs/matching-levers.md, "cc1psx EMITS `.align 3` FOR JUMP
       # TABLES", and docs/where-we-are.md on ovl_town becoming three units.
+      # Carved again for func_80089608, whose three stack tables are local
+      # array initialisers: its own unit owns 0x21830..0x21894 and emits them.
+      # The STRING POOL at 0x21894 and D_800888AC at 0x2194C belong to no
+      # function -- nothing in any text references the pool, only raw `.word`
+      # literals in this overlay's .data, and func_80089C24 READS D_800888AC
+      # as an extern. They get an UNDOTTED subsegment of their own, which is
+      # possible only because the carve gives each unit its own single dotted
+      # `.rodata` sibling; one unit cannot have two.
       - [0x21800, .rodata, ovl_main_80088760]
+      - [0x21830, .rodata, ovl_main_80089608]
+      - [0x21894, rodata, ovl_main_80088760_str]
       - [0x21954, .rodata, ovl_main_8008A288]
       - [0x21968, c, ovl_main_80088760]
+      - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
       - [0x24114, data, ovl_main_80088760_data]
   - [0x24420, bin, ovl_main_80088760_zero]

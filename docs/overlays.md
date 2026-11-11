@@ -336,47 +336,44 @@ C unit is what retires the pool as a separate object. Then one dotted
 `.rodata` covers `0x21800..0x21968` with splat writing not a byte of it, which
 is exactly how `splat/main.bin.yaml` already describes the 0x80020000 segment.
 
-**THE ORDERING IS FINE. THE BLOCKER IS ALIGNMENT -- measured 2026-11-11, and
-it replaces an earlier wrong note here that blamed emission order.** gcc emits
-each function's rodata right beside that function, so a landed function's
-constants land in the correct position; `func_80088BD0`'s `u8 *tbl[3]` proves
-it, landing byte-identical at 0x80088760 with its `INCLUDE_RODATA` dropped.
+**RESOLVED 2026-11-11 BY CARVING, which is what this document should have
+said from the start.** Two things were blocking integration and both have a
+precedent in this repo that I missed:
 
-What actually stops `func_8008A288`, at 0 differing on its own text, is that
-**cc1psx emits `.align 3` before a jump table and `jtbl_800888B4` has to sit
-at 0x800888B4, which is 4-aligned and NOT 8-aligned.** `.align 3` can only
-produce a multiple of 8, so no arrangement of the preceding rodata can put the
-table where the image wants it. Measured directly: the unit's `.rodata` goes
-from 0x168 to 0x16C bytes with the function landed, exactly the four bytes of
-padding, and that four-byte growth moves `__romPos` and every later segment --
-which is the 89%-different container, first bad word at +0x21800.
+1. **Jump-table alignment.** cc1psx emits `.align 3` before every jump table,
+   and `jtbl_800888B4` has to sit at 0x800888B4, which is 4 mod 8 -- so inside
+   one big unit it gained four bytes of pad the reference does not have, the
+   unit's `.rodata` went 0x168 -> 0x16C, and that moved `__romPos` and every
+   later segment (an 89%-different container, first bad word at +0x21800).
+   `docs/matching-levers.md`'s "cc1psx EMITS `.align 3` FOR JUMP TABLES" has
+   the mechanism and a one-command screen; `docs/where-we-are.md` records
+   ovl_town being split into THREE units for exactly this. THE FIX IS A UNIT
+   WHOSE RODATA STARTS AT THE TABLE: `.align 3` at section offset 0 emits
+   nothing. splat had been suggesting the exact split point, `[0x21954,
+   .rodata]`, since the first split of this overlay.
 
-The original build therefore had no `.align 3` there. `jtbl_80088770`, the
-other table in this unit, IS 8-aligned (0x80088770), so it is unaffected and
-`func_800890EC` can land. The untried route for `func_8008A288` is a computed
-goto (`goto *p` with a `static void *tbl[] = { &&L0, ... }`), which puts the
-table under source control as an ordinary const array with no jump-table
-alignment -- it would need to reproduce the same `jr $v0` dispatch.
+2. **One dotted `.rodata` sibling per unit** is a per-UNIT limit, so carving
+   also buys more of them -- which is what lets the string pool have an
+   UNDOTTED subsegment of its own between two C-owned ranges. The pool needed
+   one more thing: a declared symbol. Nothing in any text references it (the
+   pointer table in this overlay's `.data` uses raw `.word` literals), so
+   spimdisasm had no reference to infer one from and the undotted object came
+   out holding only D_800888AC. `D_800887F4 = 0x800887F4;` in
+   main.bin_symbol_addrs.txt is what makes the 0xB8 bytes disassemble, as
+   `.asciz` strings.
 
-Separately, the rodata IS still all-or-nothing in the ownership sense. Landing
-`func_800890EC`, `func_80089608` or `func_8008A288` requires ALL SIX objects
-between them to become C-owned, in this order:
+So this overlay is now FOUR objects rather than one:
 
 ```
-0x80088760  u8 *tbl[3]       func_80088BD0   local initialiser   -- DONE
-0x80088770  jtbl_80088770    func_800890EC   switch table        -- needs the function landed
-0x80088790  u8 *[10]         func_80089608   local initialiser   -- needs the function landed
-0x800887B8  s16[10]          func_80089608   local initialiser   -- needs the function landed
-0x800887CC  u32[10]          func_80089608   local initialiser   -- needs the function landed
-0x800887F4  the string pool  nobody          -- needs the .data pointer table owned in C
-0x800888AC  D_800888AC       read as an EXTERN by func_80089C24   -- needs to become a C-defined const RECT
-0x800888B4  jtbl_800888B4    func_8008A288   switch table        -- needs the function landed
+ovl_main_80088760      rodata 0x21800..0x21830   text 0x21968..0x226a8
+ovl_main_80089608      rodata 0x21830..0x21894   text 0x226a8..0x23328
+ovl_main_80088760_str  rodata 0x21894..0x21954   (undotted; the pool + D_800888AC)
+ovl_main_8008A288      rodata 0x21954..0x21968   text 0x23328..0x24114
 ```
 
-Two of those are not just "land the function". The string pool has no owner in
-the text at all, and `D_800888AC` is *read* by `func_80089C24` rather than
-emitted by it, so it has to be promoted from an extern to a definition in the
-unit. Both are the `docs/owning-data.md` §4.7 job described above.
+and `func_80089608` and `func_8008A288` are both landed. The remaining
+`func_800890EC` owns `jtbl_80088770` at 0x80088770, which IS 8-aligned, so it
+is unaffected by (1).
 
 Positive evidence that the layout will land: `func_80089608` matches at 259 of
 259 words with its three initialisers in place, and `verify.py` reports the

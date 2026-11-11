@@ -35,3 +35,11 @@
 // symbol and wrote the data nowhere. That trap is docs/owning-data.md §4.6; it
 // is how the `hrodata` subsegment came to exist, and §4.7 is how it went away.
 D_800200B8 = 0x800200B8; // size:0x8
+
+// D_800887F4 -- THE MENU STRING POOL, which needs a symbol to exist at all.
+// Nothing in any text references it: the pointer table in this overlay's
+// .data points at it as raw `.word` literals, so spimdisasm has no reference
+// to infer a symbol from and the undotted `ovl_main_80088760_str` subsegment
+// came out holding only D_800888AC. Declaring the start is what makes the
+// 0xB8 bytes of Shift-JIS/ASCII menu text disassemble into that object.
+D_800887F4 = 0x800887F4; // rodata
