@@ -142,8 +142,8 @@ segments:
     start: 0x21800
     vram: 0x80088760
     subsegments:
-      - [0x21800, rodata, ovl_main_80088760]
-      - [0x21968, asm, ovl_main_80088760]
+      - [0x21800, .rodata, ovl_main_80088760]
+      - [0x21968, c, ovl_main_80088760]
       - [0x24110, data, ovl_main_80088760_data]
   - [0x24420, bin, ovl_main_80088760_zero]
   # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
