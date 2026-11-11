@@ -81,7 +81,89 @@ void func_80088930(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008896C);
+/* Draws the two 256x256 background tiles of the options screen, for every
+   sibling in the widget chain. Each tile is an SPRT plus a draw-mode
+   primitive that selects its texture page, both taken from the +0x8D0 bump
+   allocator and linked into the OT at +0x82C.
+
+   SetSprt/SetShadeTex/GetClut/GetTPage are the real libgpu FUNCTIONS -- they
+   are `jal`s here and splat/common_syms.txt names all four. func_80067F20 is
+   libgpu's SetDrawMode on five witnesses: five arguments matching its
+   signature, (dfe=0, dtd=0, tpage, tw=NULL) usage, a 0xC-byte allocation
+   which is sizeof(DR_MODE), and SetDrawArea/SetDrawOffset named at 0x80067E2C
+   and 0x80067EB0 immediately before it. It is called by the project's own
+   name because common_syms.txt does not name it and nine call sites in three
+   other units already use func_80067F20; naming it there is a separate,
+   project-wide change.
+
+   TWO SEPARATE, PROPERLY TYPED LOCALS, not one reused `u8 *`. That is worth
+   14 words of register noise and nothing else: with one pointer serving both
+   primitives its live range spans both `addPrim`s, so gcc cannot mask it
+   destructively and the `(u_long)p & 0xFFFFFF` inside each `setaddr(ot, p)`
+   needs a fresh register, which pushes the OT base out into $a2/$a0. With `s`
+   and `dm` each dying at its own addPrim the target's `and $s0, $s0, $s1` is
+   available and every register falls into place. Spelling the cast `(u32)q`
+   does not help -- it is the live range, not the type of the expression.
+
+   Two orderings matter as well, 3 words each: `j = 1` is written BEFORE `y`
+   and `tx` at the loop head, and the halfword stores go in the listing's
+   order grouped by value (x0, then w/h together, then u0v0, then y0) rather
+   than in field order -- the same grouping rule as func_80053604 in
+   csrc/unk_264E0.c. `v = y - w[3]` is its own block-scope local, so it gets a
+   register of its own and its load can be hoisted above the 0x100 pair. */
+s32 func_8008896C(u8 *p, u16 *w)
+{
+    Unk80083160 *g;
+    SPRT *s;
+    DR_MODE *dm;
+    s32 i;
+    s32 j;
+    s32 y;
+    s32 tx;
+    u8 *next;
+
+    g = &D_80083160;
+    while (1)
+    {
+        for (i = 0; i < 2; i++)
+        {
+            j = 1;
+            y = i << 8;
+            tx = 0x280;
+            do
+            {
+                s32 v;
+
+                s = (SPRT *)*(u8 **)(g->unk_00 + 0x8D0);
+                *(u8 **)(g->unk_00 + 0x8D0) = (u8 *)s + 0x14;
+                *(u32 *)&s->r0 = 0x808080;
+                SetSprt(s);
+                SetShadeTex(s, 1);
+                s->x0 = j << 8;
+                v = y - w[3];
+                s->w = 0x100;
+                s->h = 0x100;
+                *(s16 *)&s->u0 = 0;
+                s->y0 = v;
+                s->clut = GetClut(0, 0x1F0);
+                addPrim(g->unk_00 + 0x82C, s);
+                dm = (DR_MODE *)*(u8 **)(g->unk_00 + 0x8D0);
+                *(u8 **)(g->unk_00 + 0x8D0) = (u8 *)dm + 0xC;
+                func_80067F20((u32 *)dm, 0, 0, GetTPage(1, 0, tx, y), 0);
+                addPrim(g->unk_00 + 0x82C, dm);
+                tx -= 0x80;
+            } while (--j >= 0);
+        }
+        next = *(u8 **)(p - 8);
+        if (next == 0)
+        {
+            break;
+        }
+        p = next + 0x20;
+        w = *(u16 **)(next + 8);
+    }
+    return 0;
+}
 
 void func_80088B48(s32 *p)
 {
