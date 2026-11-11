@@ -59,6 +59,24 @@
  * off by even a register. A further run from this same base is not worth the
  * CPU -- it has already searched 217,802 spellings of it.
  *
+ * ALSO EXHAUSTED, 2026-11-11, all on the case-3 residue:
+ *   * tools/decomp/unname.py -- 0 improvements.
+ *   * tools/decomp/search.py -- 35 variants over 17 transform families, none
+ *     better than the base. Its own verdict: what is left is allocation or
+ *     ordering, not shape.
+ *   * splitting the read-modify-writes into single-set temps, which is the
+ *     lever docs/matching-levers.md:1969 predicts for a surviving load-delay
+ *     nop (sched1 gives a single-set pseudo maximum priority, so the use lands
+ *     next to its load and FINAL is forced to emit the nop): `u = q[1] + q[4];
+ *     q[1] = u;` gives 13 unchanged, splitting both adds gives 18, and
+ *     splitting with `d` first gives 121 words / 37.
+ *
+ * So six independent methods now agree the residue is scheduling, and none
+ * of them reaches it. The two words are the unfilled load-delay nop after
+ * `lw q[1]` and the unfilled `bgez` delay slot; the target's `lw q[1]` is
+ * followed by an insn that mentions $v0, which is what forces its nop, and
+ * this candidate's is not.
+ *
  * Operational note: permrun.py writes its result ONLY at the end, so a
  * backgrounded run that is killed first leaves an empty log and no
  * permlog.tsv row. Two attempts were lost that way.
