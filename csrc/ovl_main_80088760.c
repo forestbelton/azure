@@ -64,6 +64,93 @@ void func_800478B8(s32);
    func_8008A288 emit a real `addu $a0, ...` that the target does not have. */
 void func_80088BD0(void);
 
+extern RECT D_800888AC;
+extern s32 D_8008B2B0;
+extern s32 D_8008B2B4[];
+extern s32 D_8008B2BC[];
+extern s32 D_8008B2C4[];
+extern s32 D_8008B2D4[];
+extern s32 D_8008B2DC[];
+extern s32 D_8008B2E4[];
+extern s32 D_8008B2FC[];
+extern u8 D_80078AF0[];
+extern u8 D_80013180[];
+extern u8 D_80013181[];
+extern u8 D_80013182[];
+extern u8 D_80013184[];
+extern u8 D_80013186[];
+extern u8 D_800786E8[];
+
+s32 func_8008A794(u8 *, u16 *);
+void func_8008A288(s32 *);
+s32 *func_8008A98C(s32 *, s32 *, s32, s32);
+void func_8008AA40(s16 **);
+void func_8008AA84(s32 *);
+void func_8008AAE4(s32 *);
+void func_8008AB44(s32 *);
+void func_8008ABD4(s32 *, Blk28 *);
+void func_8008AC70(s16 **);
+void func_8008ACB4(s32 *, s16 *);
+void func_8008AD58(s32 *);
+void func_8008AE60(s32 *, Blk30 *);
+void func_8008AEEC(s32 *);
+void func_8008B030(s16 **);
+
+/* THE COLOUR BYTES WANT THE ARRAY SPELLING. The target keeps each
+   `lui %hi(X)` glued to its own `lbu %lo(X)`, in source order, with the
+   load-delay nop after the one feeding the `>> 5`. As five `extern u8 X;`
+   scalars -- or as five `*(u8 *)0x8001318N` constants -- gcc hoists all four
+   loads into four separate registers, fills that delay slot and comes out one
+   word SHORT. An array reference sets MEM_IN_STRUCT_P, which is what keeps
+   the loads dependent on the stores between them. 409 words / 56 DIFF against
+   408 / 359 for either of the other two; the single biggest step here.
+   They sit outside the loaded image, so docs' usual constant-address rule
+   would have applied -- it does not. */
+
+/* The 0x30-byte widget descriptor func_8008AE60 copies into the node it
+   allocates: +0x00/+0x02 are the state machine's state and timer,
+   +0x0C the parent node, +0x10 the 24-bit colour, +0x14/+0x16 the
+   position. */
+typedef struct BlkA
+{
+    s16 unk_00;
+    s16 unk_02;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+    s16 unk_14;
+    u16 unk_16;
+    s16 unk_18;
+    s16 unk_1A;
+    s16 unk_1C;
+    s16 unk_1E;
+    s32 unk_20;
+    s32 unk_24;
+    s32 unk_28;
+    s32 unk_2C;
+} BlkA;
+
+/* The 0x28-byte one func_8008ABD4 copies: +0x04 the parent node, +0x08 the
+   colour, +0x18 the row index its handlers read as p[6]. */
+typedef struct BlkB
+{
+    s16 unk_00;
+    s16 unk_02;
+    s32 unk_04;
+    s32 unk_08;
+    s16 unk_0C;
+    s16 unk_0E;
+    s16 unk_10;
+    s16 unk_12;
+    s16 unk_14;
+    s16 unk_16;
+    s32 unk_18;
+    s32 unk_1C;
+    s32 unk_20;
+    s32 unk_24;
+} BlkB;
+
 void func_800888C8(void) {
 }
 
@@ -426,7 +513,276 @@ void func_80089A38(s32 *p, s32 *q, s32 arg2)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80089C24);
+void func_80089C24(void)
+{
+    /* 0x18 bytes, not 8: only pos[0] and pos[1] are ever read (func_8008A98C
+       takes a[0] and a[1], a 16.16 x/y pair), but the frame has b at sp+0x28
+       and the only way to get the 0x10-byte gap above this block is for the
+       block itself to be 0x18 wide. Every later displacement depends on it. */
+    s32 pos[6];
+    BlkB b;
+    BlkA a;
+    u16 buf[0x100];
+    RECT r;
+    s32 *w;
+    s32 *node;
+    s32 i;
+    s32 *vol;
+    s32 t0;
+    s32 t1;
+    s32 t2;
+
+    node = NULL;
+    r = D_800888AC;
+    /* DEVICE: an empty `do { } while (0)`, worth 1 word and the whole
+       function's alignment. Without it cse carries the block move's
+       destination address forward and keeps `&r` alive in $s0 across the
+       volume block, so the two StoreImage/LoadImage calls share one hoisted
+       address plus a `move` instead of each recomputing `addiu $a0, $sp,
+       0x280` -- 410 words, 388 differing. The label this emits is the cse
+       extended-basic-block boundary that stops the equivalence. It emits no
+       code and does not warn under -Wall. Legal spellings ruled out, all of
+       them 410/388, are listed in the header. */
+    do
+    {
+    } while (0);
+    /* Before `D_80080A84 = 1`, which is 2 words: it decides whether the
+       0x100 or the `lui %hi(D_80080A84)` is issued first. */
+    t0 = 0x100;
+    D_80080A84 = 1;
+    /* The pointer-local hoist, worth 20 words. Assigned HERE, between the
+       flag store and the first volume read: that is where the target
+       materialises `lui %hi(D_8008B2F0)` and its `lo_sum`, so [0] reaches the
+       array as a %lo displacement off the high register while [1] and [2] use
+       the materialised base. Written as `D_8008B2F0[k] = tk` at each store
+       the same five instructions come out in the wrong blocks (22 DIFF);
+       assigned one statement earlier, 9 DIFF. */
+    vol = D_8008B2F0;
+
+    if (*(s32 *)&D_80080A98 != 0x7FFF)
+    {
+        t0 = *(s32 *)&D_80080A98 >> 7;
+    }
+    vol[0] = t0;
+    t1 = 0x100;
+    if (*(s32 *)&D_80080A9C != 0x7FFF)
+    {
+        t1 = *(s32 *)&D_80080A9C >> 7;
+    }
+    vol[1] = t1;
+    t2 = 0x100;
+    if (*(s32 *)&D_80080A94 != 0x7FFF)
+    {
+        t2 = *(s32 *)&D_80080A94 >> 7;
+    }
+    vol[2] = t2;
+
+    func_80053DA8(0x200);
+    func_8006733C(&r, buf);
+    func_80067014(0);
+    i = 0xFF;
+    do
+    {
+        /* The STP bit over a 0x200-byte CLUT read back by func_8006733C
+           (StoreImage) and written by func_800672D8 (LoadImage). THE s32
+           TEMP IS LOAD-BEARING: `buf[i] |= ~0x7FFF` lets combine carry the
+           `sh`'s 0xFFFF mask back onto the constant, which makes it fit
+           `ori`'s immediate and costs the hoisted `addiu $a0, $zero,
+           -0x8000` -- one word short. Through an s32 the ior stays SImode,
+           0xFFFF8000 needs a register, and loop hoists it. */
+        s32 v;
+
+        v = buf[i] | ~0x7FFF;
+        buf[i] = v;
+    } while (--i >= 0);
+    func_800672D8(&r, buf);
+
+    w = func_8003FC64(0x11);
+    if (w != NULL)
+    {
+        s16 *c;
+
+        w[4] = (s32)func_8008A288;
+        func_8004491C((UnkNode *)w, (u32)func_8008A794);
+        node = w + 8;
+        ((s16 *)w[2])[3] = 0xF0;
+        ((s16 *)node)[2] = 0x20;
+        ((s16 *)node)[10] = D_80013184[0] >> 5;
+        ((s16 *)node)[7] = D_80013180[0];
+        ((s16 *)node)[8] = D_80013181[0];
+        ((s16 *)node)[9] = D_80013182[0];
+        c = (s16 *)node;
+        i = 2;
+        do
+        {
+            if (c[7 + i] >= 0xFF)
+            {
+                c[7 + i] = 0x100;
+            }
+        } while (--i >= 0);
+        /* Tested `== 0` so the `|= 2` arm is the FALLTHROUGH, as in the
+           target; written the other way round the two arms swap places in
+           memory and the `bnez` becomes a `beqz`. */
+        if ((D_80013186[0] & 1) == 0)
+        {
+            ((u16 *)node)[11] |= 2;
+        }
+        else
+        {
+            ((u16 *)node)[11] &= 0xFFFD;
+        }
+    }
+    func_80053428((Unk80083120 *)node);
+
+    pos[0] = 0x400000;
+    pos[1] = 0xA00000;
+    func_8008A98C(pos, (s32 *)func_8008AC70, (s32)D_80078AF0, (s32)node);
+    ((s16 *)pos)[1] = 0x94;
+    ((s16 *)pos)[3] = 0x44;
+    func_8008A98C(pos, (s32 *)func_8008ACB4, (s32)D_800786E8, (s32)node);
+
+    /* This group is written in REVERSE field order, worth 4 words: the
+       scheduler emits it in source order either way, and the target's order
+       is 0x6C, 0x6A, 0x60, 0x5C, 0x50. The two fields the loop does not
+       touch (0x66, 0x68) still come first. */
+    a.unk_16 = 0xD0;
+    a.unk_18 = 1;
+    a.unk_1C = 0;
+    a.unk_1A = 0x7C80;
+    a.unk_10 = 0x808080;
+    a.unk_0C = (s32)node;
+    a.unk_00 = 0;
+    i = 26;
+    do
+    {
+        /* unk_14 BEFORE unk_02, worth 6 words: the order the two ramps are
+           written in decides which of $s1/$s3 each strength-reduced
+           induction variable gets, and the order of their two `sh`s. */
+        a.unk_14 = i * 8 + 0x30;
+        a.unk_04 = D_8008B2FC[i];
+        a.unk_02 = i * 2 + 0x1E;
+        func_8008AE60((s32 *)func_8008AEEC, (Blk30 *)&a);
+    } while (--i >= 0);
+
+    a.unk_14 = 0x74;
+    a.unk_16 = 0xC;
+    a.unk_04 = D_8008B2B0;
+    func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+
+    a.unk_14 = 0x20;
+    for (i = 0; i < 2; i++)
+    {
+        a.unk_16 = i * 0xC + 0x20;
+        a.unk_04 = D_8008B2B4[i];
+        func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+    }
+
+    /* An in-place update, not a fresh constant: the target reads the field
+       back with `lhu`, which is why unk_16 is u16. */
+    a.unk_16 -= 6;
+    for (i = 0; i < 2; i++)
+    {
+        a.unk_20 = 0;
+        a.unk_24 = i;
+        a.unk_14 = i * 0x40 + 0xBE;
+        a.unk_04 = D_8008B2BC[i];
+        func_8008AE60((s32 *)func_8008AD58, (Blk30 *)&a);
+    }
+
+    a.unk_14 = 0x20;
+    i = 3;
+    do
+    {
+        a.unk_16 = i * 0xC + 0x40;
+        a.unk_04 = D_8008B2C4[i];
+        func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+    } while (--i >= 0);
+
+    i = 1;
+    do
+    {
+        a.unk_14 = i * 0x40 + 0xBE;
+        a.unk_04 = D_8008B2D4[i];
+        func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+    } while (--i >= 0);
+
+    a.unk_14 = 0x20;
+    for (i = 0; i < 2; i++)
+    {
+        a.unk_16 = i * 0xC + 0x78;
+        a.unk_04 = D_8008B2DC[i];
+        func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+    }
+
+    a.unk_14 = 0xB2;
+    i = 2;
+    do
+    {
+        a.unk_16 = i * 0xC + 0x7E;
+        a.unk_04 = D_8008B2E4[i];
+        func_8008AE60((s32 *)func_8008B030, (Blk30 *)&a);
+    } while (--i >= 0);
+
+    /* The nine stores of this first Blk28 go in the TARGET'S order, which is
+       neither field order nor its reverse (46 and 45 DIFF against 37): the
+       0x1C that three of them share is materialised once and its last two
+       uses sit at the end, after the two stores that need no constant.
+       Same rule as func_8008896C's halfword grouping in this unit. */
+    b.unk_0C = 0x1C;
+    b.unk_10 = 0x100;
+    b.unk_14 = 2;
+    b.unk_16 = 1;
+    b.unk_08 = 0x202020;
+    b.unk_00 = 0;
+    b.unk_04 = (s32)node;
+    b.unk_12 = 0x1C;
+    b.unk_0E = 0x1C;
+    func_8008ABD4((s32 *)func_8008AA40, (Blk28 *)&b);
+
+    /* unk_12 before unk_0E on these two: unk_0E's `sh` is the one the target
+       puts in the `jal`'s delay slot, so it is written last. */
+    b.unk_12 = 0x34;
+    b.unk_0E = 0x3C;
+    func_8008ABD4((s32 *)func_8008AA40, (Blk28 *)&b);
+
+    b.unk_12 = 0x2E;
+    b.unk_0E = 0x74;
+    func_8008ABD4((s32 *)func_8008AA40, (Blk28 *)&b);
+
+    b.unk_0C = 0x20;
+    b.unk_0E = 0xA6;
+    b.unk_10 = 0x40;
+    b.unk_12 = 0x18;
+    func_8008ABD4((s32 *)func_8008AB44, (Blk28 *)&b);
+
+    b.unk_0C = 0xCA;
+    b.unk_10 = 0x40;
+    b.unk_12 = 8;
+    b.unk_16 = 0;
+    /* The loop COUNTER is the block's own +0x18 field -- which is what the
+       handlers read as p[6] -- so each iteration reloads and restores it.
+       That is the `lw`/`sw 0x40($sp)` pair around every call, not a spill. */
+    b.unk_18 = 2;
+    do
+    {
+        b.unk_08 = 0xFF << (b.unk_18 * 8);
+        b.unk_0E = b.unk_18 * 12 + 0x7E;
+        func_8008ABD4((s32 *)func_8008AA84, (Blk28 *)&b);
+    } while (--b.unk_18 >= 0);
+
+    /* unk_12 before unk_08, worth 4 words: it decides that the `8` is
+       materialised into its own register before the 0xFFFFFF store. */
+    b.unk_12 = 8;
+    b.unk_08 = 0xFFFFFF;
+    b.unk_14 = 0;
+    b.unk_16 = 0;
+    b.unk_18 = 2;
+    do
+    {
+        b.unk_0E = (b.unk_18 + 1) * 12 + 0x40;
+        func_8008ABD4((s32 *)func_8008AAE4, (Blk28 *)&b);
+    } while (--b.unk_18 >= 0);
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_80088790);
 
@@ -435,6 +791,7 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_800887B8);
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_800887CC);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_800888AC);
+
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A288);
 
