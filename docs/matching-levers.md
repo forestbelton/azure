@@ -20205,3 +20205,94 @@ it. `potential_hazard` (`sched.c:1349`) is a function of the insn's TYPE and of
 the LUID is. When a group's order is wrong and the hazard term is what decides
 it, stop looking for a spelling and go change which insn is in the ready list
 at that cycle.
+
+### A CONSTANT ADDRESS WITH A ZERO LOW HALF IS A ONE-WORD BASE, and the only way to share one base across several symbols
+
+`docs/addressing-and-translation-units.md` already says an out-of-image global
+can be a constant cast to a pointer. This is the sharp case for it: **when several addresses in
+the same 64K page are written in one block, a constant base is a word shorter
+than any symbol spelling, and no symbol spelling can reach the shape at all.**
+
+`func_800890EC` (ovl_main_80088760, `-G0`) stores to D_80012094, D_80012D6E and
+D_80012098 in one arm. The listing is
+
+    lui   $v0, %hi(D_80012094)        <- lui ALONE
+    addiu $v1, $zero, 0x5
+    sh    $v1, %lo(D_80012094)($v0)
+    addiu $v1, $zero, 0x2
+    sb    $zero, %lo(D_80012D6E)($v0)
+    jal   func_80040AA0
+     sh   $v1, %lo(D_80012098)($v0)
+
+Four words for the base and three stores. Measured, whole-function, 2026-11-11:
+
+| spelling | base cost |
+|---|---|
+| `u8 *b = (u8 *)0x80010000;` then `+ 0x2094` / `[0x2D6E]` / `+ 0x2098` | **1 word** |
+| one struct or `extern T X[]` at D_80012094, fields at +0/+4/+0xCDA | 2 (`lui` + `addiu`) |
+| the same at a base symbol 0x80010000 | 2 |
+| three separate `extern`s | 3 (three `lui`s) |
+| `*(s16 *)0x80012094 = 5;` (bare constants) | 2 each, 6 total |
+
+Why each, from the compiler:
+
+* The constant wins because `mips_move_1word` materialises a `CONST_INT` whose
+  low half is zero with the `lui` alone, and 0x2094/0x2D6E/0x2098 then ride in
+  the stores as ordinary displacements. **splat prints those displacements as
+  `%lo(SYM)`, so the listing does not show that the words carry no relocation**
+  -- check with `ovlverify --raw`, where all four words are byte-identical.
+* One object cannot do it: for the fields at a nonzero offset the address is
+  `(const (plus sym N))`, `mips_check_split` accepts it
+  (`config/mips/mips.c`, the function of that name, the CONST/PLUS arm), and in
+  ISOLATION each ref does come out as its own `lui %hi(sym+N)` + `%lo(sym+N)`.
+  With several refs `cse` folds `(lo_sum (high X) X)` back to `X`
+  (`cse.c`, the `'o'` case in `fold_rtx`, "(lo_sum (high X) X) is simply X"),
+  the common base is then CSEd into one register, and the `(lo_sum)` comes
+  back as a real `addiu`. That `addiu` is the extra word, and gcc emits it
+  even when `%lo(base)` is 0, because it cannot know that it is.
+* Three symbols cannot do it either, and correctly so: gcc will not share a
+  `%hi` across distinct `SYMBOL_REF`s, since it cannot know they land in the
+  same 64K page.
+* A bare constant address is worse, not better: `(const_int 0x80012094)` is a
+  legitimate address on its own (`GO_IF_LEGITIMATE_ADDRESS` in
+  `config/mips/mips.h` accepts any `CONSTANT_ADDRESS_P` that
+  `mips_check_split` rejects), so it never splits and comes out as the
+  assembler's `lui $at` macro, one pair per store.
+
+So the tell is a `lui` with **no** `addiu` after it feeding two or more
+displacements: that is a constant base, and the local is what holds it.
+
+### A PSEUDO THAT DIES TWICE IN A BLOCK ESCAPES LOCAL-ALLOC -- use it to lose a register race
+
+`local-alloc.c` gives a quantity only to a pseudo that is local to one block
+and dies once there; `combine_regs` says so in its own words -- *"If UREG is a
+pseudo-register that hasn't already been assigned a quantity number, it means
+that it is not local to this block or dies more than once."* A pseudo with two
+live ranges therefore never enters `block_alloc`'s race at all, and whatever it
+was going to beat on priority wins instead.
+
+That race is `QTY_CMP_PRI` (`local-alloc.c`, the macro of that name):
+`floor_log2(n_refs) * n_refs * size / (death - birth)`, scaled by 10000, where
+birth and death are `2 * insn_number` with notes not counted. A constant set
+immediately before its single use scores 10000 and **beats a base pointer**,
+whose four references spread over ten slots score 8000 -- so the constant takes
+the low register and the base is pushed up one.
+
+Measured on `func_800890EC`'s GAME OPTION arm, which stores 5 and then 2
+through one constant base. With two separate constants the base lands in `$v1`
+and both values in `$v0`, against the listing's `$v0` base and `$v1` values:
+**6 differing words of pure register names**. Writing both values through ONE
+`s16 v` makes that pseudo die twice, drops it out of `.lreg` entirely -- it is
+missing from the `;; Register N in M` list, which is how to confirm this -- and
+the base takes `$v0`: **4 differing**. Every other spelling of the same values
+(one variable for the first only, for the second only, two variables, any
+type) is back to 6.
+
+**The cost, and why that park stops at 4:** reusing one variable adds the
+anti-dependence `store of v` -> `v = 2`, which lengthens the first set's path
+to the end of the block by one edge. `rank_for_schedule` breaks an
+INSN_PRIORITY tie on INSN_LUID, higher first, and with two constants the
+later-written argument setup `$a0 = 6` ties with `$v1 = 5` and wins that tie
+-- which is the listing's order. One edge of extra priority on `$v1 = 5` takes
+the slot away from it. So the register pair wants one value pseudo and the
+schedule wants two, and no source form was found that gives both.
