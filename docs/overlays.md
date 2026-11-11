@@ -336,22 +336,29 @@ C unit is what retires the pool as a separate object. Then one dotted
 `.rodata` covers `0x21800..0x21968` with splat writing not a byte of it, which
 is exactly how `splat/main.bin.yaml` already describes the 0x80020000 segment.
 
-**MEASURED 2026-11-11, and it is stronger than "the pool is the problem":
-THE C UNIT'S OWN RODATA IS EMITTED AS ONE CONTIGUOUS BLOCK AHEAD OF EVERY
-`INCLUDE_RODATA`.** So whatever the C unit emits must be an exact PREFIX of
-the overlay's rodata, in order. That is not a theory -- both halves were
-built:
+**THE ORDERING IS FINE. THE BLOCKER IS ALIGNMENT -- measured 2026-11-11, and
+it replaces an earlier wrong note here that blamed emission order.** gcc emits
+each function's rodata right beside that function, so a landed function's
+constants land in the correct position; `func_80088BD0`'s `u8 *tbl[3]` proves
+it, landing byte-identical at 0x80088760 with its `INCLUDE_RODATA` dropped.
 
-* `func_80088BD0` LANDS. Its `u8 *tbl[3]` initialiser is the FIRST rodata
-  object at 0x80088760, so dropping its `INCLUDE_RODATA` and letting gcc emit
-  it keeps the prefix intact and all four containers still match.
-* `func_8008A288` CANNOT, even at 0 differing. Its switch table belongs LAST,
-  at 0x800888B4. Landing it makes gcc emit that table with the unit's other
-  compiler-generated rodata -- i.e. first -- and the container comes out 89%
-  different, with the first bad word at the very start of the rodata,
-  +0x21800.
+What actually stops `func_8008A288`, at 0 differing on its own text, is that
+**cc1psx emits `.align 3` before a jump table and `jtbl_800888B4` has to sit
+at 0x800888B4, which is 4-aligned and NOT 8-aligned.** `.align 3` can only
+produce a multiple of 8, so no arrangement of the preceding rodata can put the
+table where the image wants it. Measured directly: the unit's `.rodata` goes
+from 0x168 to 0x16C bytes with the function landed, exactly the four bytes of
+padding, and that four-byte growth moves `__romPos` and every later segment --
+which is the 89%-different container, first bad word at +0x21800.
 
-So the rodata is all-or-nothing from the first C-owned object onward. Landing
+The original build therefore had no `.align 3` there. `jtbl_80088770`, the
+other table in this unit, IS 8-aligned (0x80088770), so it is unaffected and
+`func_800890EC` can land. The untried route for `func_8008A288` is a computed
+goto (`goto *p` with a `static void *tbl[] = { &&L0, ... }`), which puts the
+table under source control as an ordinary const array with no jump-table
+alignment -- it would need to reproduce the same `jr $v0` dispatch.
+
+Separately, the rodata IS still all-or-nothing in the ownership sense. Landing
 `func_800890EC`, `func_80089608` or `func_8008A288` requires ALL SIX objects
 between them to become C-owned, in this order:
 
