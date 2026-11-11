@@ -19,31 +19,50 @@
  *   80089BD0 built slti v0,a0 target slti v0,v0
  */
 
-/* DECOMP-PERMUTER IS NOT USABLE ON THIS PARK AS IMPORTED -- measured
-   2026-11-11, so nobody spends the run again.
+/* DECOMP-PERMUTER: RUN, MEASURED, AND NOT A WAY IN -- 2026-11-11.
  *
- * `permimport.py func_80089A38` then `permrun.py --minutes 1 --jobs 2`
- * reports `base=1160` and improves to `best=795`, but that scale has nothing
- * to do with this park: the park itself is 13 DIFF. Taking the search's best
- * output (output-795-1) and measuring it with ovlverify gives 122 words and
- * 119 DIFF against the park's 123 and 13, and a 0x28 frame against the
- * target's 0x20 -- the mutation adds an `unsigned int new_var` that costs a
- * saved register. So permimport's generated base.c does NOT reproduce this
- * park's compilation, and every score in the run is relative to that wrong
- * base. This is the failure docs/landing-a-function.md's note on overlay
- * parks and inline declarations describes.
+ * 40 minutes, 217,802 candidates, 6 jobs: base=1160 -> best=160.
  *
- * Fix the base before trusting another run: compare
- * nonmatchings/func_80089A38/base.c and compile.sh against what
- * ovlverify.py does for this unit (cc1psx -G0, gas -G0, -Iinclude
- * -Ipsyq/include), and check the inline `extern u32 D_800814A0_a[1]
- * __asm__("D_800814A0");` survived preprocessing.
+ * THE RUN IS SOUND. An earlier note here claimed permimport's base.c did not
+ * reproduce this park's compilation. That was WRONG and is retracted:
+ * `ovlverify.py nonmatchings/func_80089A38/base.c func_80089A38` gives 123
+ * words / 13 DIFF, identical to this park, and target.s / target.o are the
+ * splat listing exactly (0x1EC = 123 words). compile.sh carries the right
+ * -G0, and -DPERMUTER only drops an `.include "include/labels.inc"` -- same
+ * 108 instructions either way.
  *
- * Also note: permrun.py writes its result ONLY at the end, so a backgrounded
- * run that is killed first leaves an empty log and no permlog.tsv row. Two
- * attempts were lost that way before it was run in the foreground.
+ * HOW THE WRONG CONCLUSION HAPPENED, because the trap is reusable: the
+ * search's best candidates measure 122 words / 103 DIFF through ovlverify,
+ * which reads as far worse than this park's 13. It is not. They are ONE WORD
+ * SHORT, and ovlverify counts POSITIONALLY, so a single missing word shifts
+ * everything after it. advise.py aligns the streams and reports only three
+ * findings for the same candidate -- one EXTRA nop at 80089A94 and the
+ * MISSING `bgez`/delay pair at 80089BC4 -- with no register differences at
+ * all. verify.py's own docstring says to reach for advise.py exactly here.
+ * Never compare positional DIFF across a length change.
+ *
+ * WHY IT STILL CANNOT BE LANDED. The best candidates are semantically wrong,
+ * not merely odd. The mutation empties the guard and negates unconditionally:
+ *
+ *     v = ((s16 *)q)[1];
+ *     if (v < 0) { ; }
+ *     q[3] = d + (d >> 3);
+ *     if ((-v) >= 0x169) { ((s16 *)p)[4] = 0xFF; }
+ *
+ * That is `-v >= 0x169`, not `abs(v) >= 0x169`; for positive v the two
+ * disagree. It scores better only because the dead `if` lets jump.c delete
+ * the `bgez` and its delay slot. So this is a device that changes behaviour,
+ * which the project does not allow, and there is no legal spelling of it.
+ *
+ * What it is still worth: it independently confirms that the whole residue
+ * is in case 3's abs-then-compare, and that nothing else in the function is
+ * off by even a register. A further run from this same base is not worth the
+ * CPU -- it has already searched 217,802 spellings of it.
+ *
+ * Operational note: permrun.py writes its result ONLY at the end, so a
+ * backgrounded run that is killed first leaves an empty log and no
+ * permlog.tsv row. Two attempts were lost that way.
  */
-
 #include "common.h"
 extern u32 D_800814A0_a[1] __asm__("D_800814A0");
 void func_800478B8(s32);
