@@ -1,6 +1,7 @@
 /* The remainder of ovl_town after the ovl_town_800BEBA4 carve-out. Named for its
  * start offset. */
 #include "common.h"
+#include "town.h"
 
 /* town.bin's overlay at 0x80088760, loaded when the player is in the town.
    Built at cc1psx -G0, not the -G8 the resident executable uses; the Makefile
@@ -2271,14 +2272,14 @@ extern u8 D_80111F68[];
 extern u8 D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
-/* Two 0x20-byte-row tables func_800C4AEC selects between on bit 23 of the
+/* Two 0x20-byte-row tables psn_dm_pos_org selects between on bit 23 of the
    renderable's +0x08 flag word, indexed by bits 24..29 of the same word, and
    read as four u16s at +0x00/+0x02/+0x04/+0x06.  Same row stride as
    D_800D2644 above (and D_800D2650 is D_800D2644 + 0xC), so the `[][0x10]`
    shape is what makes the index come out as one `sll ... 5`. */
 extern u16 D_800D2650[][0x10];
 extern u16 D_800D2FC0[][0x10];
-/* A u16 lookup func_800C4A88 indexes with a 0..3 direction and stores into
+/* A u16 lookup psn_dm_ang_org indexes with a 0..3 direction and stores into
    the actor's resting facing at +0x6E, so these are the four quarter turns. */
 extern u16 D_800D5070[];
 /* The two WORD SCALARS func_800C52D0 multiplies its parent-relative
@@ -2627,7 +2628,7 @@ void func_800C8B5C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
    `t->unk_44->unk_14` or `a->unk_80->unk_14`, `lui`/`lw` rather than
    `lui`/`addiu` -- in the other five.  Eight landed on the first compile from
    the landed relatives; three needed a statement order found by brute force
-   (func_800947CC 10 -> 0, func_80099468 10 -> 0, func_80099680 2 -> 0, all at
+   (func_800947CC 10 -> 0, plt_dm_nicpan 10 -> 0, plt_dm_bath 2 -> 0, all at
    the right word count throughout, so never structural), and two needed the
    pinned-register DEVICE annotated at their sites.
 
@@ -7441,7 +7442,7 @@ s32 func_800C2B88(s32 x, s32 y, UnkTown2AE8 *c)
                               dy <= -0x7FFF0000 ? -0x7FFF0000 : dy);
 }
 
-/* The facing func_800C40D0 below and the landed func_800C4864 (:6605) both
+/* The facing func_800C40D0 below and the landed psn_dm_plway (:6605) both
    store into the actor's +0x72: if this actor is the one the collision record
    is currently driving, take the quarter turn its +0x18 index names out of
    D_800D5078; otherwise aim at the mover D_80083780.
@@ -7456,7 +7457,7 @@ s32 func_800C2B88(s32 x, s32 y, UnkTown2AE8 *c)
    `addu $a2, $a1, $zero` that nothing nearby reads: $a1 is overwritten by
    %lo(D_800CFCB4) two words later, so `b` is parked in $a2 for a call fifteen
    words away whose own argument setup is therefore absent.  Dropping it is 37
-   words / 37 differing.  The landed func_800C48DC (:6616) passes three too.
+   words / 37 differing.  The landed psn_dm_tgtway (:6616) passes three too.
 
    The two gate tests are order-pinned: `== D_80082660[...].unk_04 + 0x20`
    first is 39 words / 30 differing.  TOWN_PT is the file's macro and keeps the
@@ -8397,13 +8398,13 @@ void func_800C3988(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     {
         e = &D_80082660[a->unk_60];
         t = e->unk_00;
-        if (t >= 2 && t < 0x16)
+        if (t >= 2 && t < DFLT_END_PSN_DM)
         {
             ((void (*)(UnkTownActor *, UnkTown2AE8 *, UnkTownRend *))D_800D5084[t])(a, b, c);
         }
-        else if (t >= 0x16)
+        else if (t >= DFLT_END_PSN_DM)
         {
-            ((void (**)(UnkTownActor *, UnkTown2AE8 *, UnkTownRend *))a->unk_5C)[t - 0x16](a, b, c);
+            ((void (**)(UnkTownActor *, UnkTown2AE8 *, UnkTownRend *))a->unk_5C)[t - DFLT_END_PSN_DM](a, b, c);
         }
         else if (t < 0)
         {
@@ -8568,7 +8569,7 @@ void func_800C3EAC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 
    The bind is the 29-member func_800C2E84 wrapper form documented in the declaration block above func_800C2E84's prototype, here off +0x80's tenth slot -- `a->unk_80->unk_20`,
    the only use of +0x20 on UnkTownArg80 so far; its neighbours +0x1C and +0x24
-   already have landed users in func_800C4644 and func_800C50CC.  The install is written
+   already have landed users in psn_dm_jmp and func_800C50CC.  The install is written
    AFTER the call, which is what the listing says: the `lui`/`addiu` pair for
    %hi/%lo(func_800C3EAC) is at words 23-24, after the `jal`, not in its delay
    slot (the delay slot carries `addu $a1, $s2`, the forwarded third
@@ -8662,7 +8663,7 @@ void func_800C3FFC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 /* The third member of the func_800C4134/func_800C41D4 install set below, and
    the only one that also aims the actor: clear the +0x15 byte, install
    func_800C3960 at +0x50, seed +0x72 from func_800C2BE8 and advance through
-   func_800C4174.  Same +0x72 assignment the landed func_800C4864 (:6605) makes.
+   func_800C4174.  Same +0x72 assignment the landed psn_dm_plway (:6605) makes.
 
    THE +0x15 CLEAR MUST COME FIRST.  Putting it after the +0x50 install is 2
    differing: its `sb` is the insn sched2 puts in the `jal func_800C2BE8` delay
@@ -8732,9 +8733,9 @@ void func_800C4174(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
    `void func_800C41D4();` (:1456) and its five landed call sites disagree --
    func_800C3BB8 (:6207) passes none, four others pass three -- but the
    zero-argument site is ABOVE this definition and binds to that declaration,
-   while func_800C4A88 and func_800C4AEC are BELOW it and pass three.  A
+   while psn_dm_ang_org and psn_dm_pos_org are BELOW it and pass three.  A
    one-parameter definition is a hard `too many arguments to function` in
-   func_800C4A88, measured.
+   psn_dm_ang_org, measured.
 
    10 words -- its header reads `nonmatching func_800C41D4, 0x28`, and
    0x28/4 = 10.  No jump table, no rodata of its own.  No call at all.
@@ -8747,7 +8748,7 @@ void func_800C41D4(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     D_80082660[a->unk_60].unk_01 = 0;
 }
 
-void func_800C41FC(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_homepos(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8758,7 +8759,7 @@ void func_800C41FC(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x20;
 }
 
-void func_800C4260(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_talk(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8769,7 +8770,7 @@ void func_800C4260(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x15;
 }
 
-void func_800C42C4(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_talk2(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8780,7 +8781,7 @@ void func_800C42C4(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x15;
 }
 
-void func_800C4328(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_northway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8791,7 +8792,7 @@ void func_800C4328(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = 0x800;
 }
 
-void func_800C438C(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_southway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8802,7 +8803,7 @@ void func_800C438C(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = 0;
 }
 
-void func_800C43EC(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_westway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8813,7 +8814,7 @@ void func_800C43EC(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = 0xC00;
 }
 
-void func_800C4450(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_eastway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8824,7 +8825,7 @@ void func_800C4450(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = 0x400;
 }
 
-void func_800C44B4(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_northwk(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8835,7 +8836,7 @@ void func_800C44B4(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x20;
 }
 
-void func_800C4518(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_southwk(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8846,7 +8847,7 @@ void func_800C4518(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x20;
 }
 
-void func_800C457C(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_westwk(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8857,7 +8858,7 @@ void func_800C457C(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x20;
 }
 
-void func_800C45E0(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_eastwk(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8868,7 +8869,7 @@ void func_800C45E0(UnkTownActor *a, s32 b, s32 c)
     a->unk_6C = 0x20;
 }
 
-void func_800C4644(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_jmp(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8906,13 +8907,13 @@ void func_800C46A8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     }
 }
 
-void func_800C4804(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_gotgt(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     func_800C2E84(a, (s32)c, a->unk_80->unk_24);
     func_800C46A8(a, b, c);
 }
 
-void func_800C4864(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_plway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8923,7 +8924,7 @@ void func_800C4864(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = func_800C2BE8(a, b);
 }
 
-void func_800C48DC(UnkTownActor *a, s32 b, s32 c)
+void psn_dm_tgtway(UnkTownActor *a, s32 b, s32 c)
 {
     Unk80082660 *t;
 
@@ -8934,7 +8935,7 @@ void func_800C48DC(UnkTownActor *a, s32 b, s32 c)
     a->unk_72 = func_800C2B88(a->unk_88, a->unk_8A, b);
 }
 
-void func_800C4958(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_disp_off(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80082660 *p;
 
@@ -8944,7 +8945,7 @@ void func_800C4958(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     func_800C4174(a, b, c);
 }
 
-void func_800C49C0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_disp_on(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80082660 *p;
 
@@ -8954,7 +8955,7 @@ void func_800C49C0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     func_800C4174(a, b, c);
 }
 
-/* func_800C4958's slot-handler twin, four hundred bytes above it: the same
+/* psn_dm_disp_off's slot-handler twin, four hundred bytes above it: the same
    `t = D_80082660; t[a->unk_60].unk_00 = 0;` slot reset and the same
    func_800C4174 advance, with a THREE-CALL teardown behind it --
    func_8008F134, the resident func_80033D08 unlink, then func_800C30A4, each
@@ -8964,7 +8965,7 @@ void func_800C49C0(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
    The advance call comes FIRST, before the teardown: the slot reset's
    `sb $zero, 0x0($v0)` sits in func_800C4174's delay slot.  22 words, 0
    differing on the first compile. */
-void func_800C4A30(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_del(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80082660 *p;
 
@@ -8996,14 +8997,14 @@ void func_800C4A30(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
    25 of 25 words and 7 differing: every differing word is a $v0/$v1 rename
    plus the `sb`/`lbu` pair emitted in the other order.  Splitting it into
    `t = D_80082660; e = &t[a->unk_60];` -- the same two-step the landed
-   func_800C41FC family writes -- is 0 differing.  Also measured, all 25 words
+   psn_dm_homepos family writes -- is 0 differing.  Also measured, all 25 words
    and 7 differing: the two head statements in either order,
    `*(u8 *)&e->unk_02`, `*(u8 *)e = 0` for the slot reset, `e = D_80082660 +
    a->unk_60`, and `e` declared last.  `u8 n` instead of `s32 n` is 13.
    Inlining both slot refs as `D_80082660[a->unk_60]` is 28 and 29 words.
 
    25 words, 0 differing. */
-void func_800C4A88(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_ang_org(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     Unk80082660 *t;
     Unk80082660 *e;
@@ -9069,7 +9070,7 @@ void func_800C4A88(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
    +0x84/+0x86 writes are plain `sh` and use the named s16 fields.
 
    61 words, 0 differing. */
-void func_800C4AEC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
+void psn_dm_pos_org(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
     UnkTownRend *r;
     u16 *p;
@@ -10765,7 +10766,7 @@ void func_800C7070(void *arg0)
     func_800C3050(arg0, 0x3, D_800D5D48, D_800D5D4C, D_800D5D18, D_800D5D20);
 }
 
-/* The ACTOR twin of func_8009A3A4 above, and func_800C41FC's body with a
+/* The ACTOR twin of plt_dm_plway above, and psn_dm_homepos's body with a
    facing store instead of a countdown and a hand-on instead of a handler
    install.  Its first call is func_800C4174's own first statement spelled
    identically -- `func_800C2E84(a, (s32)c, a->unk_80->unk_04)` -- with no
@@ -10777,7 +10778,7 @@ void func_800C7070(void *arg0)
    ahead of the slot clear is 8 differing and after the hand-on 5, both at 32
    words.  `D_80082660[a->unk_60]` written inline instead of through the
    pointer local measures identically (0 differing); the local is
-   func_800C41FC's style, not a requirement.  Passing `b` where the listing
+   psn_dm_homepos's style, not a requirement.  Passing `b` where the listing
    passes `c` to func_800C2E84 is 31 words with 29 differing.
 
    32 words -- its header reads `nonmatching func_800C70B8, 0x80`, and
@@ -11789,7 +11790,7 @@ void func_800C885C(UnkTownActor *a, UnkVec *b, UnkTownRend *c)
     func_800C3FFC(a, b, c);
 }
 
-/* A gate-and-advance: run func_800C4804 with all three parameters forwarded
+/* A gate-and-advance: run psn_dm_gotgt with all three parameters forwarded
    (the `jal`'s delay slot is the $s0 copy, not an argument setup) and move
    the actor to the +0x54 state func_800C885C, which landed in the group
    immediately before this one and whose prototyped definition now sits a few
@@ -11800,7 +11801,7 @@ void func_800C885C(UnkTownActor *a, UnkVec *b, UnkTownRend *c)
 
    Its address sits in D_800D630C + 0x1C, the +0x5C handler table
    func_800C895C above binds, beside func_800C8688, func_800C86CC and
-   func_800C8808; func_800C4804's own three-parameter definition pins the
+   func_800C8808; psn_dm_gotgt's own three-parameter definition pins the
    arity.
 
    13 words -- its header reads `nonmatching func_800C88AC, 0x34`, and
@@ -11808,10 +11809,10 @@ void func_800C885C(UnkTownActor *a, UnkVec *b, UnkTownRend *c)
    relocdump 3, TWO of them the address-take %hi/%lo on the FUNCTION symbol
    func_800C885C -- masked by ovlverify with no `jal` to decode, verified by
    name and zero addend against this listing -- plus one plain
-   `jal func_800C4804` and no intra-function `j`. */
+   `jal psn_dm_gotgt` and no intra-function `j`. */
 void func_800C88AC(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
 {
-    func_800C4804(a, b, c);
+    psn_dm_gotgt(a, b, c);
     a->unk_54 = func_800C885C;
 }
 
@@ -15441,7 +15442,7 @@ void func_800CECC8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
    actor's +0x90 countdown from its own D_80082660 slot: the LOW BYTE of that
    slot's +0x02 halfword, sign-extended, which is the `lbu` plus sll/sra 24
    pair and the reason the read is spelled `(s8)(*(u8 *)...)` rather than
-   `e->unk_02` -- Unk80082660's +0x02 is s16.  Same reading func_800C4A88
+   `e->unk_02` -- Unk80082660's +0x02 is s16.  Same reading psn_dm_ang_org
    records for the same field.
 
    THE BASE MUST BE ITS OWN LOCAL, shared by the index-5 reset and the
@@ -15450,7 +15451,7 @@ void func_800CECC8(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
    rename plus the handler install scheduled two insns early -- and reaching
    the byte as `*(u8 *)((u8 *)D_80082660 + a->unk_60 * 8 + 0x2)` is the same
    32 and 9.  `t = D_80082660;` with a second local for the slot pointer, the
-   two-step the func_800C41FC family writes, is also 0 differing.
+   two-step the psn_dm_homepos family writes, is also 0 differing.
 
    Also measured, 32 words and 11 differing: the +0x90 seed written AFTER the
    +0x54 install instead of before it.

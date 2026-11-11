@@ -1,6 +1,7 @@
 /* Carved out of ovl_town; see docs/addressing-and-translation-units.md.
  * Replace this header with the evidence for the split. */
 #include "common.h"
+#include "town.h"
 
 /* town.bin's overlay at 0x80088760, loaded when the player is in the town.
    Built at cc1psx -G0, not the -G8 the resident executable uses; the Makefile
@@ -2184,14 +2185,14 @@ extern u8 D_80111F68[];
 extern u8 D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
-/* Two 0x20-byte-row tables func_800C4AEC selects between on bit 23 of the
+/* Two 0x20-byte-row tables psn_dm_pos_org selects between on bit 23 of the
    renderable's +0x08 flag word, indexed by bits 24..29 of the same word, and
    read as four u16s at +0x00/+0x02/+0x04/+0x06.  Same row stride as
    D_800D2644 above (and D_800D2650 is D_800D2644 + 0xC), so the `[][0x10]`
    shape is what makes the index come out as one `sll ... 5`. */
 extern u16 D_800D2650[][0x10];
 extern u16 D_800D2FC0[][0x10];
-/* A u16 lookup func_800C4A88 indexes with a 0..3 direction and stores into
+/* A u16 lookup psn_dm_ang_org indexes with a 0..3 direction and stores into
    the actor's resting facing at +0x6E, so these are the four quarter turns. */
 extern u16 D_800D5070[];
 /* (0x400 - a) >> 10 & 3: a facing in PSX angle units turned into a 0..3
@@ -2454,7 +2455,7 @@ void func_800C8B5C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
    `t->unk_44->unk_14` or `a->unk_80->unk_14`, `lui`/`lw` rather than
    `lui`/`addiu` -- in the other five.  Eight landed on the first compile from
    the landed relatives; three needed a statement order found by brute force
-   (func_800947CC 10 -> 0, func_80099468 10 -> 0, func_80099680 2 -> 0, all at
+   (func_800947CC 10 -> 0, plt_dm_nicpan 10 -> 0, plt_dm_bath 2 -> 0, all at
    the right word count throughout, so never structural), and two needed the
    pinned-register DEVICE annotated at their sites.
 

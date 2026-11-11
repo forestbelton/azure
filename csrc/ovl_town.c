@@ -1,4 +1,5 @@
 #include "common.h"
+#include "town.h"
 
 /* town.bin's overlay at 0x80088760, loaded when the player is in the town.
    Built at cc1psx -G0, not the -G8 the resident executable uses; the Makefile
@@ -2256,14 +2257,14 @@ extern u_long D_80111F68[];
 extern u_long D_80111F88[];
 extern s16 D_80162004[];
 extern s16 D_800D2644[][0x10];
-/* Two 0x20-byte-row tables func_800C4AEC selects between on bit 23 of the
+/* Two 0x20-byte-row tables psn_dm_pos_org selects between on bit 23 of the
    renderable's +0x08 flag word, indexed by bits 24..29 of the same word, and
    read as four u16s at +0x00/+0x02/+0x04/+0x06.  Same row stride as
    D_800D2644 above (and D_800D2650 is D_800D2644 + 0xC), so the `[][0x10]`
    shape is what makes the index come out as one `sll ... 5`. */
 extern u16 D_800D2650[][0x10];
 extern u16 D_800D2FC0[][0x10];
-/* A u16 lookup func_800C4A88 indexes with a 0..3 direction and stores into
+/* A u16 lookup psn_dm_ang_org indexes with a 0..3 direction and stores into
    the actor's resting facing at +0x6E, so these are the four quarter turns. */
 extern u16 D_800D5070[];
 /* (0x400 - a) >> 10 & 3: a facing in PSX angle units turned into a 0..3
@@ -2584,7 +2585,7 @@ void func_800C8B5C(UnkTownActor *a, UnkTown2AE8 *b, s32 c);
    `t->unk_44->unk_14` or `a->unk_80->unk_14`, `lui`/`lw` rather than
    `lui`/`addiu` -- in the other five.  Eight landed on the first compile from
    the landed relatives; three needed a statement order found by brute force
-   (func_800947CC 10 -> 0, func_80099468 10 -> 0, func_80099680 2 -> 0, all at
+   (func_800947CC 10 -> 0, plt_dm_nicpan 10 -> 0, plt_dm_bath 2 -> 0, all at
    the right word count throughout, so never structural), and two needed the
    pinned-register DEVICE annotated at their sites.
 
@@ -8470,7 +8471,7 @@ void func_80090210(void)
 }
 
 /* func_80093CEC (:10088) with its first argument nailed to D_800D0178, which is
-   the same bind descriptor func_800989C8 and func_80098A30 pass.  The node
+   the same bind descriptor plt_dm_sleep and plt_dm_kicked_bfr pass.  The node
    pointer folds onto the task base -- `lw $a2, -0x14($a1)`, i.e. -0x20 + 0xC
    -- exactly as func_80093CEC's comment records, so the `o` local and an
    inline cast both reach it.
@@ -12110,7 +12111,7 @@ void func_80094944(s32 a, s32 b)
    next step repeats the subscript.
 
    *** OLD-STYLE DEFINITION, FORCED. ***  Of its 104 landed call sites, 57 sit
-   BELOW this definition: 41 pass TWO arguments (func_80098B9C at :13822 is the
+   BELOW this definition: 41 pass TWO arguments (plt_dm_standup at :13822 is the
    nearest) and 16 pass THREE (func_8009B014 at :15258 among them).  So an ANSI
    two-parameter definition cannot read what the three-argument sites pass and
    an ANSI three-parameter one is a hard "too few arguments" at all 41
@@ -15202,7 +15203,7 @@ void func_80098160(void)
     func_80098988();
 }
 
-/* The step func_80098CF0 installs at t->unk_04: run the +0x0A countdown and,
+/* The step plt_dm_yoda_mv installs at t->unk_04: run the +0x0A countdown and,
    when it goes NEGATIVE, hand back to func_80098D60; otherwise advance the
    mover's +0x02 integer coordinate by 4.
 
@@ -15420,7 +15421,7 @@ void func_800984AC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
    `<= 0` is 49 / 31; a dead third parameter is a tie at 49 / 0.
 
    TWO parameters: $a2 is never referenced in the listing, the same
-   sub-form func_80098834 and func_80098F10 are in.  Nothing calls this
+   sub-form func_80098834 and plt_dm_yuka_hosei are in.  Nothing calls this
    function -- func_80098608 only installs it at t->unk_04, through the
    unprototyped `void (*unk_04)()` slot -- so no call site constrains arity.
 
@@ -15460,7 +15461,7 @@ void func_80098544(UnkTownTask *t, UnkTown2AE8 *b)
    re-arming the countdown AFTER the handler install is 5 differing.
 
    TWO parameters: $a2 is never referenced.  Its only referrer is
-   func_800993F4, which installs it at t->unk_04 and does not call it.
+   plt_dm_jmpup_pos_set, which installs it at t->unk_04 and does not call it.
 
    34 words -- its header reads `nonmatching func_80098608, 0x88`, and
    0x88/4 = 34.  No jump table, no rodata of its own.  Measured 0 differing.
@@ -15482,7 +15483,7 @@ void func_80098608(UnkTownTask *t, UnkTown2AE8 *b)
 }
 
 /* func_80098544's twin over the task's OTHER target pair, +0x30/+0x32 -- the
-   one func_80098834 and func_80099468 seed from the mover -- and with a
+   one func_80098834 and plt_dm_nicpan seed from the mover -- and with a
    handoff to func_80098928 instead of an install.
 
    THE TWO ARMS READ +0x30/+0x32 WITH DIFFERENT SIGNEDNESS, and the listing
@@ -15544,7 +15545,7 @@ void func_80098690(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
    install, re-arm, call is 52 / 7.
 
    TWO parameters: $a2 is never referenced.  Its only referrer is
-   func_80099468, which installs it at t->unk_04; the existing
+   plt_dm_nicpan, which installs it at t->unk_04; the existing
    `void func_80098764();` declaration at the top of the unit stays K&R and
    agrees with any arity.
 
@@ -15626,13 +15627,13 @@ void func_800988C8(UnkTownTask *t, UnkTown2AE8 *b, void *c)
 
 /* Four more members of the func_80094984 bind family, in the THREE-argument
    sub-form whose nearest landed relatives are func_80098D60 and func_80098DC0
-   -- the two functions immediately after func_80098CF0's stub -- and NOT the
-   two-argument func_80098B9C shape: here `func_80099754(b)` comes FIRST and
+   -- the two functions immediately after plt_dm_yoda_mv's stub -- and NOT the
+   two-argument plt_dm_standup shape: here `func_80099754(b)` comes FIRST and
    the bind is `func_80094984(desc, t, c)` with the third parameter passed on.
    func_80099790's call `func_80098928(a, b, c)` is the arity witness and the
    inline declaration above already carried the types.  In all four the
    listing's word order IS the source statement order, one statement to one
-   contiguous run of words, with no reordering -- which is why func_80098CF0
+   contiguous run of words, with no reordering -- which is why plt_dm_yoda_mv
    clears the D_80082660 byte BEFORE installing its handler while the other
    three install the handler first.  24 / 26 / 26 / 28 words, 0 differing. */
 void func_80098928(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
@@ -15649,7 +15650,7 @@ void func_80098928(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
    difference between the two.
 
    `D_80082660[1].unk_01 = 0;` is the established idiom (func_80098928 and
-   func_800989C8 end the same way): the `+ 9` folds into the R_MIPS_LO16
+   plt_dm_sleep end the same way): the `+ 9` folds into the R_MIPS_LO16
    addend, so the candidate relocates against D_80082660 where splat's listing
    prints `%lo(D_80082669)`, and seqcheck reports that one symbol mismatch.
    Hand-decoded: %hi is 0x8008 either way (0x2660 carries nothing) and
@@ -15660,7 +15661,7 @@ void func_80098928(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
    OLD-STYLE (K&R), BUT UNLIKE func_80097DE8 THAT IS A CHOICE, NOT FORCED.
    Three landed callers pass nothing (func_80098078, func_80098140,
    func_80098160) and five pass three arguments (func_80097D54, func_800983BC,
-   func_800988C8, func_8009A58C, func_8009A5C0) -- but every zero-argument
+   func_800988C8, plt_dm_ang_org, plt_dm_pos_org) -- but every zero-argument
    caller PRECEDES this definition and type-checks against the unit's
    `void func_80098988();` declaration, so an ANSI three-parameter definition
    also compiles and also measures 16 / 0.  K&R is kept so the definition
@@ -15685,7 +15686,7 @@ s32 c;
     D_80082660[1].unk_01 = 0;
 }
 
-void func_800989C8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+void plt_dm_sleep(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80099754(b);
     func_80094984(D_800D0178, t, c);
@@ -15694,7 +15695,7 @@ void func_800989C8(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     D_80082660[1].unk_01 = 0;
 }
 
-void func_80098A30(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+void plt_dm_kicked_bfr(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80099754(b);
     func_80094984(D_800D0178, t, c);
@@ -15706,10 +15707,10 @@ void func_80098A30(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 /* Clear the engine record's +0x08 byte, then enter func_80098ABC.  The store
    is in the `jal`'s delay slot, which pins it BEFORE the call: a store written
    after a call can never be pulled into that call's delay slot
-   (reorg.c:3180).  Its sibling func_80098C9C has the same two statements the
+   (reorg.c:3180).  Its sibling plt_dm_biku has the same two statements the
    other way round and the listing shows it -- there the `lui`/`sb` sit after
    the `jal` with a `nop` in the slot.  Measured: this function in that order is
-   9 words / 6 differing, and func_80098C9C in this one is also 9 / 6.
+   9 words / 6 differing, and plt_dm_biku in this one is also 9 / 6.
 
    `D_80082660[1].unk_00 = 0;` is the established idiom: the `+ 8` folds into
    the R_MIPS_LO16 addend, so the candidate relocates against D_80082660 where
@@ -15725,13 +15726,13 @@ void func_80098A30(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 
    9 words -- its header reads `nonmatching func_80098A98, 0x24`, and
    0x24/4 = 9.  0 differing. */
-void func_80098A98(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_kicked(UnkTownTask *t, UnkTown2AE8 *b)
 {
     D_80082660[1].unk_00 = 0;
     func_80098ABC(t, b);
 }
 
-/* The func_80094984 bind in its TWO-argument sub-form (func_80098E70's shape,
+/* The func_80094984 bind in its TWO-argument sub-form (plt_dm_yoda_poka's shape,
    :13897, same D_800D0170 descriptor), followed by the handler install, the
    mover reset and three per-frame deltas.
 
@@ -15748,7 +15749,7 @@ void func_80098A98(UnkTownTask *t, UnkTown2AE8 *b)
    and t->unk_10 ahead of the deltas is 15 -- all at 29 words.
 
    $a2 is never read, so the third parameter has no witness and is left off;
-   the two landed call sites (func_80097EC0 and the sibling func_80098A98) both
+   the two landed call sites (func_80097EC0 and the sibling plt_dm_kicked) both
    pass nothing and type-check against the unit's `void func_80098ABC();`
    declaration.  Adding `s32 c` and passing it on as
    `func_80094984(D_800D0170, t, c)` is a measured tie at 29 / 0, since $a2
@@ -15805,7 +15806,7 @@ void func_80098B70(void *p, UnkTown2AE8 *q, void *r)
     func_80099754(q);
 }
 
-void func_80098B9C(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_standup(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0180, t);
     t->unk_04 = func_800980B4;
@@ -15826,7 +15827,7 @@ void func_80098B9C(UnkTownTask *t, UnkTown2AE8 *b)
 
    15 words -- its header reads `nonmatching func_80098C04, 0x3C`, and
    0x3C/4 = 15.  0 differing. */
-void func_80098C04(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_biku_bfr(UnkTownTask *t, UnkTown2AE8 *b)
 {
     t->unk_04 = func_80098104;
     D_80082660[1].unk_00 = 0;
@@ -15834,12 +15835,12 @@ void func_80098C04(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-/* func_80098E70 (:13897) minus the D_80082660 clear, with 0x10 for 0x15 and a
+/* plt_dm_yoda_poka (:13897) minus the D_80082660 clear, with 0x10 for 0x15 and a
    func_80099754 reset on the end.  The handler install is reorg's steal into
    `jal func_80099754`'s delay slot; the `sh` of 0x10 is the second steal, from
    one insn further back.
 
-   OLD-STYLE (K&R), AND HERE IT IS FORCED.  func_80098C9C is defined BELOW this
+   OLD-STYLE (K&R), AND HERE IT IS FORCED.  plt_dm_biku is defined BELOW this
    function and calls `func_80098C40()` with no arguments, which against a
    prototyped two-parameter definition is a hard "too few arguments" -- the
    error-shaped case in docs/town-sweep.md.  The other landed caller,
@@ -15847,8 +15848,8 @@ void func_80098C04(UnkTownTask *t, UnkTown2AE8 *b)
    against the unit's `void func_80098C40();` declaration.  K&R keeps the
    definition in agreement with that declaration, which is func_80098988's
    recorded decision for the same situation.  Measured all three ways: the ANSI
-   definition with func_80098C9C's call left at zero arguments does not compile;
-   the ANSI definition with func_80098C9C widened to `func_80098C40(t, b)` is
+   definition with plt_dm_biku's call left at zero arguments does not compile;
+   the ANSI definition with plt_dm_biku widened to `func_80098C40(t, b)` is
    23 / 0 and 9 / 0, as is the K&R definition with that widened call site -- so
    the bytes never decide it and the declaration agreement does.
 
@@ -15867,38 +15868,38 @@ UnkTown2AE8 *b;
     func_80099754(b);
 }
 
-/* func_80098A98's mirror image: the SAME two statements in the OPPOSITE order,
+/* plt_dm_kicked's mirror image: the SAME two statements in the OPPOSITE order,
    and the listing is the witness.  Here `jal func_80098C40` carries a `nop`
-   and the `lui`/`sb` pair follows it, where func_80098A98 has the `sb` in the
+   and the `lui`/`sb` pair follows it, where plt_dm_kicked has the `sb` in the
    call's delay slot -- a store written after a call can never be pulled into
    it (reorg.c:3180), so the order is pinned in both.  Writing this one in
-   func_80098A98's order is 9 words / 6 differing.
+   plt_dm_kicked's order is 9 words / 6 differing.
 
-   Zero-argument for the same reason as func_80098A98, and additionally because
+   Zero-argument for the same reason as plt_dm_kicked, and additionally because
    func_80098C40 is K&R-defined above: its two arguments ride the live incoming
    $a0/$a1.
 
    9 words -- its header reads `nonmatching func_80098C9C, 0x24`, and
    0x24/4 = 9.  0 differing. */
-void func_80098C9C(void)
+void plt_dm_biku(void)
 {
     func_80098C40();
     D_80082660[1].unk_00 = 0;
 }
 
-void func_80098CC0(UnkTownTask *t)
+void plt_dm_mamtalk(UnkTownTask *t)
 {
     t->unk_04 = func_80098140;
     t->unk_10 = 0x800;
 }
 
-void func_80098CD8(UnkTownTask *t)
+void plt_dm_mamtalkend(UnkTownTask *t)
 {
     t->unk_04 = func_80098160;
     t->unk_10 = 0x400;
 }
 
-void func_80098CF0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
+void plt_dm_yoda_mv(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
 {
     func_80099754(b);
     func_80094984(D_800D0090, t, c);
@@ -15924,7 +15925,7 @@ void func_80098DC0(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
     t->unk_10 = 0x400;
 }
 
-void func_80098E20(UnkTownTask *t)
+void plt_dm_yoda_stdwn(UnkTownTask *t)
 {
     func_80094984(D_800D00A0, t);
     D_80082660[1].unk_00 = 0;
@@ -15932,7 +15933,7 @@ void func_80098E20(UnkTownTask *t)
     t->unk_0A = 0x8;
 }
 
-void func_80098E70(UnkTownTask *t)
+void plt_dm_yoda_poka(UnkTownTask *t)
 {
     func_80094984(D_800D0170, t);
     D_80082660[1].unk_00 = 0;
@@ -15940,7 +15941,7 @@ void func_80098E70(UnkTownTask *t)
     t->unk_0A = 0x15;
 }
 
-void func_80098EC0(UnkTownTask *t)
+void plt_dm_yoda_stdup(UnkTownTask *t)
 {
     func_80094984(D_800D0180, t);
     D_80082660[1].unk_00 = 0;
@@ -15950,18 +15951,18 @@ void func_80098EC0(UnkTownTask *t)
 
 /* The install half of a pair with func_800982EC below: two parameters, not
    three -- $a2 is never touched in the listing, which is the two-argument
-   sub-form of this bind family (func_80098F48, func_80099294, ...).  The
+   sub-form of this bind family (plt_dm_mogura_pos_set, plt_dm_swim_bfr, ...).  The
    %hi/%lo pair is on the FUNCTION func_800982EC, so it is masked by
    ovlverify and has no jal to decode; relocdump.py names it.  14 words --
    its header reads `nonmatching func_80098F10, 0x38`, and 0x38/4 = 14.
    0 differing. */
-void func_80098F10(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_yuka_hosei(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80099754(b);
     t->unk_04 = func_800982EC;
 }
 
-void func_80098F48(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_mogura_pos_set(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -15973,7 +15974,7 @@ void func_80098F48(UnkTownTask *t, UnkTown2AE8 *b)
     t->unk_04 = func_8009AA2C;
 }
 
-void func_80098FBC(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_eat(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01A0, t);
     D_80082660[1].unk_00 = 0;
@@ -15982,7 +15983,7 @@ void func_80098FBC(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_80099020(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_damage0(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E8, t);
     D_80082660[1].unk_00 = 0;
@@ -15991,7 +15992,7 @@ void func_80099020(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_80099084(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_damage1(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01F0, t);
     D_80082660[1].unk_00 = 0;
@@ -16000,7 +16001,7 @@ void func_80099084(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_800990E8(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_dead(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01A8, t);
     D_80082660[1].unk_00 = 0;
@@ -16009,7 +16010,7 @@ void func_800990E8(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_8009914C(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_carryup(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -16021,7 +16022,7 @@ void func_8009914C(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_800991C0(UnkTownTask *t, s32 b)
+void plt_dm_carrywaytgt(UnkTownTask *t, s32 b)
 {
     Unk80082660 *p;
 
@@ -16041,7 +16042,7 @@ void func_800991C0(UnkTownTask *t, s32 b)
     }
 }
 
-/* func_8009A344's body with a rodata descriptor in place of
+/* plt_dm_gotgt's body with a rodata descriptor in place of
    `a->unk_44->unk_24`.  THE BIND TAKES THREE ARGUMENTS here too, and the
    witness is the register exchange rather than an argument setup: $a2 still
    holds `c` at the call so jump2 deletes the copy, but the copy is there when
@@ -16049,13 +16050,13 @@ void func_800991C0(UnkTownTask *t, s32 b)
    with $s1 and $s2 swapped -- 23 words, 6 differing, all of them the three
    entry copies and the two outgoing ones.  23 words -- its header reads
    `nonmatching func_80099238, 0x5C`, and 0x5C/4 = 23.  0 differing. */
-void func_80099238(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_carrywalktgt(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(D_800D0130, a, c);
     func_8009A1E8(a, b, c);
 }
 
-void func_80099294(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_swim_bfr(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0150, t);
     D_80082660[1].unk_00 = 0;
@@ -16080,10 +16081,10 @@ void func_80099294(UnkTownTask *t, UnkTown2AE8 *b)
    writing `D_80082660[1]` (19); with the bare array and the local, 11; only
    the base local PLUS the facing local reaches 0.  The chain's RTL has to
    come first so sched2 ranks it ahead of the %hi/%lo of func_800983BC -- the
-   same LUID ordering func_800991C0's device buys, but here a statement order
+   same LUID ordering plt_dm_carrywaytgt's device buys, but here a statement order
    is enough.  38 words -- its header reads `nonmatching func_800992F8,
    0x98`, and 0x98/4 = 38.  0 differing. */
-void func_800992F8(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_swim(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
     s32 n;
@@ -16099,7 +16100,7 @@ void func_800992F8(UnkTownTask *t, UnkTown2AE8 *b)
     func_80053DA8(0x519);
 }
 
-void func_80099390(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_swim_aftr(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D0150, t);
     D_80082660[1].unk_00 = 0;
@@ -16108,7 +16109,7 @@ void func_80099390(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_800993F4(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_jmpup_pos_set(UnkTownTask *t, UnkTown2AE8 *b)
 {
     Unk80082660 *p;
 
@@ -16120,7 +16121,7 @@ void func_800993F4(UnkTownTask *t, UnkTown2AE8 *b)
     t->unk_04 = func_80098608;
 }
 
-void func_80099468(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_nicpan(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01B8, t);
     D_80082660[1].unk_00 = 0;
@@ -16151,12 +16152,12 @@ void func_80099468(UnkTownTask *t, UnkTown2AE8 *b)
 
    func_800A8184 is defined BELOW this (:21108) so its call rides an implicit
    declaration, the arrangement this unit uses 18 times; its own comment block
-   already records that its ASM caller func_800994DC passes `lh 0x36($s0)` and
+   already records that its ASM caller plt_dm_now_getitem passes `lh 0x36($s0)` and
    `lh 0x38($s0)`.
 
    24 words -- its header reads `nonmatching func_800994DC, 0x60`, and
    0x60/4 = 24.  Measured 0 differing, first compile. */
-void func_800994DC(UnkTownTask *t)
+void plt_dm_now_getitem(UnkTownTask *t)
 {
     func_80094984(D_800D01C0, t);
     D_80082660[1].unk_00 = 0;
@@ -16165,7 +16166,7 @@ void func_800994DC(UnkTownTask *t)
     func_800A8184(t->unk_36, t->unk_38);
 }
 
-void func_8009953C(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_kao_up(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01C8, t);
     D_80082660[1].unk_00 = 0;
@@ -16175,7 +16176,7 @@ void func_8009953C(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_800995A8(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_kao_down(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01D0, t);
     D_80082660[1].unk_00 = 0;
@@ -16185,7 +16186,7 @@ void func_800995A8(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_80099614(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_udauda(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01D8, t);
     D_80082660[1].unk_00 = 0;
@@ -16195,7 +16196,7 @@ void func_80099614(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_80099680(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_bath(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E0, t);
     D_80082660[1].unk_00 = 0;
@@ -16205,7 +16206,7 @@ void func_80099680(UnkTownTask *t, UnkTown2AE8 *b)
     func_80099754(b);
 }
 
-void func_800996E8(UnkTownTask *t, UnkTown2AE8 *b)
+void plt_dm_bath_turn(UnkTownTask *t, UnkTown2AE8 *b)
 {
     func_80094984(D_800D01E0, t);
     D_80082660[1].unk_00 = 0;
@@ -16332,7 +16333,7 @@ void func_80099A38(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-/* func_8009A128 installs this at the task's +0x04 with `t->unk_0A = 0x20`:
+/* plt_dm_jmp installs this at the task's +0x04 with `t->unk_0A = 0x20`:
    the family's plain countdown step, firing func_8009A18C below when the
    counter goes negative.  `--a->unk_0A < 0` is the unit's established in-place
    narrow test (`lhu`, `addiu -1`, `sh`, `sll 16`, `bgez`) -- `<= 0` is 1
@@ -16424,7 +16425,7 @@ void func_80099C18(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     *(s16 *)((u8 *)b + 0xA) = func_800C2AE8(b);
 }
 
-void func_80099CE0(UnkTownTask *t)
+void plt_dm_homepos(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16435,7 +16436,7 @@ void func_80099CE0(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-void func_80099D44(UnkTownTask *t)
+void plt_dm_talk(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16446,7 +16447,7 @@ void func_80099D44(UnkTownTask *t)
     t->unk_0A = 0x15;
 }
 
-void func_80099DA8(UnkTownTask *t)
+void plt_dm_talk2(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16457,7 +16458,7 @@ void func_80099DA8(UnkTownTask *t)
     t->unk_0A = 0x15;
 }
 
-void func_80099E0C(UnkTownTask *t)
+void plt_dm_northway(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16468,7 +16469,7 @@ void func_80099E0C(UnkTownTask *t)
     t->unk_10 = 0x800;
 }
 
-void func_80099E70(UnkTownTask *t)
+void plt_dm_southway(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16479,7 +16480,7 @@ void func_80099E70(UnkTownTask *t)
     t->unk_10 = 0;
 }
 
-void func_80099ED0(UnkTownTask *t)
+void plt_dm_westway(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16490,7 +16491,7 @@ void func_80099ED0(UnkTownTask *t)
     t->unk_10 = 0xC00;
 }
 
-void func_80099F34(UnkTownTask *t)
+void plt_dm_eastway(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16501,7 +16502,7 @@ void func_80099F34(UnkTownTask *t)
     t->unk_10 = 0x400;
 }
 
-void func_80099F98(UnkTownTask *t)
+void plt_dm_northwk(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16512,7 +16513,7 @@ void func_80099F98(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-void func_80099FFC(UnkTownTask *t)
+void plt_dm_southwk(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16523,7 +16524,7 @@ void func_80099FFC(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-void func_8009A060(UnkTownTask *t)
+void plt_dm_westwk(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16534,7 +16535,7 @@ void func_8009A060(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-void func_8009A0C4(UnkTownTask *t)
+void plt_dm_eastwk(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16545,7 +16546,7 @@ void func_8009A0C4(UnkTownTask *t)
     t->unk_0A = 0x20;
 }
 
-void func_8009A128(UnkTownTask *t)
+void plt_dm_jmp(UnkTownTask *t)
 {
     Unk80082660 *p;
 
@@ -16574,7 +16575,7 @@ void func_8009A18C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 }
 
 /* func_80099B00's continuation (`func_8009A1A4(a, b, c)` at :12455): the
-   func_8009A060 / func_8009A0C4 / func_8009A128 bind-and-install shape again,
+   plt_dm_westwk / plt_dm_eastwk / plt_dm_jmp bind-and-install shape again,
    reaching the SEVENTH descriptor slot -- `t->unk_44->unk_20` -- and handing
    over to func_80099B70, landed above at :12475.
 
@@ -16624,13 +16625,13 @@ void func_8009A1E8(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     }
 }
 
-void func_8009A344(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_gotgt(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     func_80094984(a->unk_44->unk_24, a, c);
     func_8009A1E8(a, b, c);
 }
 
-/* func_8009A494's shape with func_8009A41C's descriptor bind in front of it:
+/* plt_dm_disp_off's shape with plt_dm_tgtway's descriptor bind in front of it:
    both of those are landed and both sit within twenty lines of here.  The
    `lw 0x40` of the index reads through $a0 rather than $s0 because the three
    outgoing copies for func_80098928 are already emitted when the record
@@ -16638,7 +16639,7 @@ void func_8009A344(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 
    THE BIND TAKES THREE ARGUMENTS, and the witness is a missing insn plus a
    register exchange, not an argument setup -- the two-argument spelling
-   func_8009A41C uses is 29 words against 30 with 27 differing, all
+   plt_dm_tgtway uses is 29 words against 30 with 27 differing, all
    positional.  The third argument costs NO instruction: `$a2` still holds the
    incoming `c` at that call, so jump2 deletes the argument copy
    (scratch/gcc-src/cdk-gcc-b18/jump.c:484-493, `find_equiv_reg` at
@@ -16661,7 +16662,7 @@ void func_8009A344(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 
    30 words -- its header reads `nonmatching func_8009A3A4, 0x78`, and
    0x78/4 = 30.  Measured 0 differing. */
-void func_8009A3A4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_plway(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     Unk80082660 *p;
 
@@ -16671,12 +16672,12 @@ void func_8009A3A4(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_80098928(a, b, c);
 }
 
-void func_8009A41C(UnkTownTask *t, s32 b)
+void plt_dm_tgtway(UnkTownTask *t, s32 b)
 {
     Unk80082660 *p;
 
     func_80094984(t->unk_44->unk_14, t);
-    /* DEVICE: as in func_800991C0 above. */
+    /* DEVICE: as in plt_dm_carrywaytgt above. */
     {
         register s32 zz __asm__("$6") = b;
 
@@ -16688,7 +16689,7 @@ void func_8009A41C(UnkTownTask *t, s32 b)
     }
 }
 
-void func_8009A494(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_disp_off(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     Unk80082660 *p;
 
@@ -16698,7 +16699,7 @@ void func_8009A494(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_80098928(a, b, c);
 }
 
-void func_8009A4FC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_disp_on(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     Unk80082660 *p;
 
@@ -16708,7 +16709,7 @@ void func_8009A4FC(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
     func_80098928(a, b, c);
 }
 
-void func_8009A56C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
+void plt_dm_del(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
 {
     func_80098928(a, b, c);
 }
@@ -16718,13 +16719,13 @@ void func_8009A56C(UnkTownTask *a, UnkTown2AE8 *b, s32 c)
    delay slot, so it precedes the call in source. Two members differ only in
    which field holds the index -- +0x40 against +0x60 -- which is why
    families.py reports two varying words rather than one. */
-void func_8009A58C(u8 *s, UnkTown2AE8 *b, void *c)
+void plt_dm_ang_org(u8 *s, UnkTown2AE8 *b, void *c)
 {
     D_80082660[*(s32 *)(s + 0x40)].unk_00 = 0;
     func_80098988(s, b, c);
 }
 
-void func_8009A5C0(u8 *s, UnkTown2AE8 *b, void *c)
+void plt_dm_pos_org(u8 *s, UnkTown2AE8 *b, void *c)
 {
     D_80082660[*(s32 *)(s + 0x40)].unk_00 = 0;
     func_80098988(s, b, c);
@@ -16961,7 +16962,7 @@ void func_8009A99C(s32 a)
    snapped onto the target and the next stage installed.  D_800D0608 is a
    UnkTown2AE8 used as that target: this function takes its +0x08 word,
    func_8009AAB8 takes +0x00 and +0x04, and nothing here touches +0x0C..+0x14
-   of it.  func_80098F48 installs this function at +0x04 after setting
+   of it.  plt_dm_mogura_pos_set installs this function at +0x04 after setting
    `t->unk_0A = 0xA`, which is the same 0xA this function reloads.
 
    The halving is signed `/ 2`, not `>> 1`: the `srl 31`/`addu`/`sra 1`
@@ -16969,7 +16970,7 @@ void func_8009A99C(s32 a)
    func_8009AAB8, 34 differing).
 
    THE THIRD PARAMETER HAS NO WITNESS.  Nothing calls this function -- its
-   address is only taken, in func_80098F48 -- and the body never reads $a2, so a
+   address is only taken, in plt_dm_mogura_pos_set -- and the body never reads $a2, so a
    two-parameter definition also measures 35 words, 0 differing.  It is
    written with three to match the handler convention and its own
    continuation func_8009AB74, which really does forward one.
@@ -27662,7 +27663,7 @@ void func_800A6684(UnkTownActor *a, UnkVec *q, UnkTownRend *r)
    frame.  func_800AAAA0 (:28665) is the line-level template for the
    `func_800C2E84(actor, (s32)renderer, descriptor)` bind -- the second
    argument is the RENDERER (`addu $a1, $s3`, the fourth parameter), the same
-   `(s32)` cast func_800C4174 and func_800C4804 use.
+   `(s32)` cast func_800C4174 and psn_dm_gotgt use.
 
    THE +0x50 INSTALL MUST BE WRITTEN BEFORE THE func_800C2E84 CALL AND AFTER
    THE THREE ZERO STORES.  It ends up in the call's delay slot, and reorg can
@@ -29102,7 +29103,7 @@ void func_800A8070(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    and the ELSE arm re-loads both bytes with `lbu` because it is a branch target
    and starts a fresh extended basic block.
 
-   Its ASM caller func_800994DC passes two arguments, `lh 0x36($s0)` and
+   Its ASM caller plt_dm_now_getitem passes two arguments, `lh 0x36($s0)` and
    `lh 0x38($s0)` -- UnkTownTask's target pair -- so `s32`/`s32` here needs no
    truncation at the call site and the width is not witnessed in either
    direction. */
@@ -31255,7 +31256,7 @@ void func_800AAA58(UnkTownTask *t, UnkTown2AE8 *b, s32 c)
    family instead of func_8008F01C, no func_8003DB94 head, and a
    func_800C2E84 actor bind plus a handler install on the tail.  The
    func_800C2E84 call passes the RENDERER as its `s32 b` -- `addu $a1, $s2`,
-   not $s1 -- the same `(s32)` cast func_800C4174 and func_800C4804 use.
+   not $s1 -- the same `(s32)` cast func_800C4174 and psn_dm_gotgt use.
    Passing the MOVER there instead is 32 words with 9 differing.
 
    `*(u32 *)((u8 *)p - 0x10) = (u32)func_800AAB20` is the UnkNode +0x10
