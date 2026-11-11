@@ -54,6 +54,7 @@ extern u16 D_8008B36C[];
 
 s32 func_8004EE30(s32 *);
 s32 *func_8003FC64(s32);
+void func_800478B8(s32);
 
 /* NO ARGUMENT. func_8008A288 calls this with $a0 holding whatever
    func_80053604 left in it and no setup of its own, which only works if the
@@ -319,7 +320,111 @@ void func_80089A14(s32 *p)
     D_800814A0_a[0] |= 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80089A38);
+/* The widget physics state machine: five states on the s16 at +0x08, driving
+   a 16.16 position at +0x00/+0x04 from a velocity at +0x0C/+0x10. Note that
+   the word at +0x00 and the halfword at +0x02 OVERLAP -- +0x02 is the integer
+   part of that fixed-point position, which is what case 3 reads.
+
+   CASE 3's GUARD IS A CONDITIONAL EXPRESSION, NOT AN `if`, and that is the
+   whole function. `v < 0 ? -v : v` folds to an ABS_EXPR and the MIPS backend
+   emits abssi2, which is ONE insn whose own template prints
+   `bgez / <nop> / subu` (config/mips/mips.md:1766, template at :1781, the
+   nop being the `%#`). Written as `if (v < 0) { v = -v; }` the branch stays a
+   real branch and the function sits at 13 DIFF: reorg then has a slot to fill
+   and fills it, and the q[3] store never sinks into the `bnez`. Six
+   scheduling-based attacks failed on this because there was never a delay
+   slot to control -- the nop belongs to the instruction.
+   `__builtin_abs(...)` also measures 0; `v = v < 0 ? -v : v;` as its own
+   statement before the q[3] store does NOT -- it has to be inside the
+   comparison.
+
+   Case 1 is a cross-jumped if/else, not a delta: the STORE goes in each arm
+   so jump.c merges the common `addu`/`sw` tail and leaves one `lui` per arm.
+   Case 2 is an init and an override rather than an if/else. */
+void func_80089A38(s32 *p, s32 *q, s32 arg2)
+{
+    s16 *r;
+
+    r = (s16 *)p[0];
+    func_800478B8(arg2);
+    if (((u16 *)r)[19] & 1)
+    {
+        ((s16 *)p)[4] = 0xFF;
+    }
+    switch (((s16 *)p)[4])
+    {
+    case 0:
+        break;
+    case 1:
+        {
+            s32 d;
+
+            q[0] += q[3];
+            q[1] += q[4];
+            d = q[3];
+            if (((s16 *)p)[6] != 0)
+            {
+                q[3] = d - 0x10000;
+            }
+            else
+            {
+                q[3] = d + 0x10000;
+            }
+            q[4] += 0x8000;
+            if (q[3] == 0)
+            {
+                ((s16 *)p)[4]++;
+            }
+        }
+        break;
+    case 2:
+        {
+            s32 v;
+
+            v = 0xE8;
+            if (((s16 *)p)[6] != 0)
+            {
+                v = 0x58;
+            }
+            ((s16 *)q)[1] = v;
+            ((s16 *)q)[3] = r[18] * 16 + 0xA8;
+            if (r[16] == 0x20)
+            {
+                s32 t;
+
+                t = -0x20000;
+                if (((s16 *)p)[6] != 0)
+                {
+                    t = 0x20000;
+                }
+                q[3] = t;
+                q[4] = -0x40000;
+                ((s16 *)p)[4]++;
+            }
+        }
+        break;
+    case 3:
+        {
+            s32 d;
+            s32 v;
+
+            q[0] += q[3];
+            q[1] += q[4];
+            d = q[3];
+            q[3] = d + (d >> 3);
+            v = ((s16 *)q)[1];
+            if ((v < 0 ? -v : v) >= 0x169)
+            {
+                ((s16 *)p)[4] = 0xFF;
+            }
+        }
+        break;
+    case 0xFF:
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80089C24);
 
