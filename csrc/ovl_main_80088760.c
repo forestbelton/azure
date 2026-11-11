@@ -151,6 +151,18 @@ typedef struct BlkB
     s32 unk_24;
 } BlkB;
 
+extern u8 D_8008B074[];
+extern u8 D_8008B230[];
+extern u8 D_8008B270[];
+s32 func_8008896C(u8 *, u16 *);
+void func_800890EC(s32 *, s32 *);
+void func_80088EDC(s32 *, s32 *, u16 *);
+void func_80088B48(s32 *);
+void func_80089A38(s32 *, s32 *, s32);
+void func_80089608(s32 *);
+extern void func_80044BB0(void) __asm__("D_80044BB0");
+extern void func_80053A88(void) __asm__("D_80053A88");
+
 void func_800888C8(void) {
 }
 
@@ -285,7 +297,115 @@ void func_80088B48(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80088BD0);
+void func_80088BD0(void)
+{
+    u8 *root = 0;
+    u8 *tbl[3] = { &D_8008B074[0xFC], &D_8008B074[0xF0], &D_8008B074[0x108] };
+    s32 *n;
+    u8 *w;
+    u8 *c;
+    UnkSlot *sl;
+    s32 i;
+    s32 a;
+    s32 b;
+
+    D_80080A84 = 1;
+    n = func_8003FC64(0x11);
+    if (n != 0)
+    {
+        root = (u8 *)n + 0x20;
+        n[4] = (s32)func_800890EC;
+        func_8004491C((UnkNode *)n, (u32)func_8008896C);
+        *(s16 *)(root + 0x22) = 0x708;
+        *(s16 *)(n[2] + 6) = 0xF0;
+        *(s16 *)(root + 0x1A) = 0;
+        *(s16 *)(root + 0x1C) = 0x40;
+    }
+    i = 2;
+    a = 0x3C;
+    b = 0xC8;
+    do
+    {
+        n = func_8003FC64(0x111);
+        ((u8 **)(root + 4))[i] = (u8 *)n;
+        if (n != 0)
+        {
+            w = (u8 *)n + 0x20;
+            sl = (UnkSlot *)n[3];
+            n[4] = (s32)func_80088EDC;
+            func_8004491C((UnkNode *)n, (u32)func_80044BB0);
+            *(s16 *)(n[2] + 2) = -0x40;
+            *(s16 *)(n[2] + 6) = b;
+            *(s32 *)(n[2] + 0xC) = 0x150000;
+            *(s16 *)((u8 *)sl + 0x1E) = 0x1000;
+            *(s16 *)((u8 *)sl + 0x1C) = 0x1000;
+            sl->unk_08 = (u32)tbl[i];
+            sl->unk_04 = 0;
+            sl->unk_05 = 0;
+            *(s32 *)((u8 *)sl + 0xC) = 0x808080;
+            n[8] = (s32)root;
+            *(s16 *)(w + 0xC) = i;
+            *(s16 *)(w + 0xA) = a;
+        }
+        a -= 0x1E;
+        b -= 0x10;
+    } while (--i >= 0);
+    n = func_8003FC64(1);
+    if (n != 0)
+    {
+        n[4] = (s32)func_80088B48;
+        func_8004491C((UnkNode *)n, (u32)func_80053A88);
+        c = (u8 *)n + 0x20;
+        *(s16 *)(c + 0xC) = 0x60;
+        *(s16 *)(c + 0xE) = -0x100;
+        *(s16 *)(c + 0x10) = 0x80;
+        *(s16 *)(c + 0x12) = 0x10;
+        *(s16 *)(c + 0x14) = 0;
+        *(s16 *)(c + 0x16) = 3;
+        *(s32 *)(c + 8) = 0x606060;
+        *(s16 *)((u8 *)n + 0x20) = 0;
+        *(s32 *)(c + 4) = (s32)root;
+    }
+    i = 1;
+    do
+    {
+        n = func_8003FC64(0x111);
+        ((u8 **)(root + 0x10))[i] = (u8 *)n;
+        if (n != 0)
+        {
+            w = (u8 *)n + 0x20;
+            sl = (UnkSlot *)n[3];
+            n[4] = (s32)func_80089A38;
+            func_8004491C((UnkNode *)n, (u32)func_80044BB0);
+            *(s16 *)(n[2] + 6) = 0xE9;
+            if (i != 0)
+            {
+                *(s16 *)(n[2] + 2) = -0x15;
+                *(s32 *)(n[2] + 0xC) = 0x160000;
+                func_8003DB94((UnkSlot *)sl, (UnkElem *)D_8008B270, 0);
+            }
+            else
+            {
+                *(s16 *)(n[2] + 2) = 0x155;
+                *(s32 *)(n[2] + 0xC) = 0xFFEA0000;
+                func_8003DB94((UnkSlot *)sl, (UnkElem *)D_8008B230, 0);
+            }
+            *(s32 *)(n[2] + 0x10) = 0xFFF80000;
+            *(s16 *)((u8 *)sl + 0x1E) = 0x1000;
+            *(s16 *)((u8 *)sl + 0x1C) = 0x1000;
+            *(s32 *)((u8 *)sl + 0xC) = 0x808080;
+            *(s32 *)(w + 0) = (s32)root;
+            *(s16 *)(w + 0xC) = i;
+        }
+    } while (--i >= 0);
+    n = func_8003FC64(1);
+    if (n != 0)
+    {
+        n[4] = (s32)func_80089608;
+        n[8] = (s32)root;
+        *(s16 *)((u8 *)n + 0x2E) = 0xE00;
+    }
+}
 
 /* The widget's own state machine, six live states on the s16 at +0x08 plus an
    empty one. State 1 counts down and walks the 16.16 value at +0x0C toward
@@ -395,7 +515,6 @@ void func_80088EDC(s32 *p, s32 *q, u16 *s)
     }
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_80088760);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_800890EC);
 
