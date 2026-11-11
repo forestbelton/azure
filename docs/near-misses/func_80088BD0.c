@@ -41,7 +41,7 @@ extern void func_80044BB0(void) __asm__("D_80044BB0");
 extern void func_80053A88(void) __asm__("D_80053A88");
 s32 *func_8003FC64(s32);
 
-void func_80088BD0(s32 *arg0)
+void func_80088BD0(void)
 {
     u8 *tbl[3] = { &D_8008B074[0xFC], &D_8008B074[0xF0], &D_8008B074[0x108] };
     u8 *root;

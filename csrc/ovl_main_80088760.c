@@ -55,7 +55,13 @@ extern u16 D_8008B36C[];
 s32 func_8004EE30(s32 *);
 s32 *func_8003FC64(s32);
 
-void func_80088BD0(s32 *);
+/* NO ARGUMENT. func_8008A288 calls this with $a0 holding whatever
+   func_80053604 left in it and no setup of its own, which only works if the
+   callee takes nothing. func_800888D0 appears to pass its own parameter, but
+   that is a coincidence of allocation: p is still live in $a0 there, so the
+   argument move is a no-op gcc deletes. Declaring a parameter here would make
+   func_8008A288 emit a real `addu $a0, ...` that the target does not have. */
+void func_80088BD0(void);
 
 void func_800888C8(void) {
 }
@@ -64,7 +70,7 @@ void func_800888D0(s32 *p)
 {
     if (((u16 *)p)[-1] & 0x2000)
     {
-        func_80088BD0(p);
+        func_80088BD0();
         ((u16 *)p)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
     }
