@@ -1,0 +1,44 @@
+# The GAME OPTION screen's string pool, from main.bin's 0x80088760 overlay:
+# 28 plain-ASCII entries, each NUL-terminated and padded with zeros to the next
+# 4-byte boundary, which is the default entry form.
+#
+# Covers rom 0x021894..0x02194C.
+#
+# NOTHING IN ANY TEXT REFERENCES THIS POOL. The pointer table at +0x24350 in
+# the overlay's own .data points at it, and splat emits that table as raw
+# `.word` literals, so spimdisasm has no reference to infer a symbol from --
+# which is why `D_800887F4 = 0x800887F4;` has to be declared by hand in
+# splat/main.bin_symbol_addrs.txt for these bytes to disassemble at all.
+#
+# The first thirteen entries are the menu labels, in screen order. The fifteen
+# single characters after them are the per-glyph renderer's alphabet: B/G/R are
+# the colour channels of the wall-colour picker, and the rest spell out the
+# labels it draws one character at a time.
+D_800887F4=GAME OPTION
+=  TO FAMILIAR
+=ATTACK
+=ON
+=OFF
+= MAGIC EFFECT
+= SOUND EFFECT
+= BGM
+=VOLUME
+=MAX
+=MIN
+=  WALL COLOR
+=DUNGEON
+=B
+=G
+=R
+=I
+=M
+=D
+=N
+=O
+=T
+=U
+=X
+= 
+=S
+=E
+=P

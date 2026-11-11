@@ -164,7 +164,13 @@ segments:
       # `.rodata` sibling; one unit cannot have two.
       - [0x21800, .rodata, ovl_main_80088760]
       - [0x21830, .rodata, ovl_main_80089608]
-      - [0x21894, rodata, ovl_main_80088760_str]
+      # The menu string pool is HAND-OWNED TEXT, not a rodata blob:
+      # asrc/str/options.txt is the source of truth and the Makefile's
+      # `asrc/str/%.s: asrc/str/%.txt` rule regenerates the listing from it.
+      # Same arrangement as str/monsters. D_800888AC is NOT part of it -- it is
+      # the RECT func_80089C24 reads -- so it keeps its own rodata subsegment.
+      - [0x21894, hrodata, str/options]
+      - [0x2194c, rodata, ovl_main_80088760_rect]
       - [0x21954, .rodata, ovl_main_8008A288]
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]
