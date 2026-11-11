@@ -329,12 +329,42 @@ Three of those seven are plainly a code object's rodata, which the sweep misses
 because its window is 0x6000 and sector-granular; `codemap.py --pin` is how to
 put a real boundary on any of them.
 
+## What the yaml says now
+
+`splat/town.bin.yaml` was two unnamed `bin` blobs either side of the code.
+It now declares all six bands, and `splat split` reports
+**`unknown: 0 B (0.00%)`** -- an unnamed `bin` is what `statistics_type` maps
+to `"unk"` (`docs/data-map.md`), so naming them is what empties that line.
+
+The structural change is that the code segment absorbed the overlay's data as
+a `data` subsegment, 0x51fc0..0x7e000. It ends at 0x7e000 rather than the last
+non-zero byte at 0x7dcb8 because splat emits
+`__romPos = ALIGN(__romPos, 16)` after a code segment and a boundary at
+0x7dcb8 would pad the container eight bytes long -- the same trap the text end
+hit. 0x7e000..0x96000, the rest of the 278-sector read, is `ovl_town_read_tail`.
+
+**757 of the overlay's data symbols stopped being absolute addresses.** They
+are now real definitions in `asm/data/ovl_town_data.data.s` and
+`town.bin_undefined_syms_auto.txt` lost every one of them. What is left above
+0x800CF720 divides exactly as the boundary predicts: **13 inside the data
+segment, every one of them unaligned** -- byte-level interior references of
+the `D_800D185D` kind, which splat can mint a symbol for but not a `dlabel`
+-- and **102 at or above 0x800FB760**, which is the overlay's `.bss` and is
+not in the file at all.
+
+One thing to know before touching this again: with the data split, spimdisasm
+emits the two person-state dispatch tables as `.word <handler>`, so the 72
+names from `docs/town-identifiers.md` had to go into
+`town.bin_symbol_addrs.txt` as well as into the C. Renaming a function that a
+`data` subsegment points at now breaks the link until splat is told the new
+name.
+
 ## Next
 
-* **Name the overlay's data in `splat/town.bin.yaml`.** The 0x51fc0..0x95ac4
-  run is `ovl_town`'s own data and is currently unnamed `bin`. Splitting it is
-  the same job `docs/owning-data.md` describes for the resident engine, with
-  791 referenced symbols already waiting for it.
+* **Carve the overlay's data into the three units.** It is one
+  `asm/data/ovl_town_data.data.s` of 70,475 lines; `docs/owning-data.md`
+  describes the job for the resident engine and commit 9628271 did it for
+  main.bin's card overlay. 757 defined symbols are the starting inventory.
 * **Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does not
   see at all.
 * **Check `main.bin+0x21800` and `dungeon.bin`'s data tail**, both from the

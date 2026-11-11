@@ -43,7 +43,23 @@ segments:
   # - [0x0, bin]
   # - [0x6f681e, az_string, STR_ANGEL_GREETING]
   # - [0x6f69fe, bin]
-  - [0x0, bin]
+  #
+  # THE 22-SECTOR PREAMBLE. These 0xb000 bytes are byte-identical to
+  # main.bin's first 0xb000 and dungeon.bin's diverge from them at exactly
+  # 0x7800, which is where docs/dungeon-map.md puts that container's unplaced
+  # head code -- so all three containers are built on one preamble and dungeon
+  # overwrites part of it. Nothing loads it: no descriptor in slus_006.14 or
+  # in either mapped overlay targets either address.
+  #
+  # The sequence is a complete KCET/TSDB/KDT container, 13 tracks, 0x2938
+  # bytes, and 0x2938..0x3000 is its pad. The bank is NOT complete: its header
+  # is internally consistent (header size plus the summed VAG size table
+  # equals its own `fsize` to the byte, as it does for all 17 banks here) but
+  # declares 0x1C310 bytes where only 0x8000 are present -- the overlay starts
+  # at 0xb000 and the waveform is cut mid-sample. The bytes up to 0xb000 are
+  # SPU ADPCM. See docs/town-map.md.
+  - [0x0, bin, snd_preamble_seq]
+  - [0x3000, bin, snd_preamble_vab]
   # The town overlay: 1815 functions at 0x80088760, which is the first byte
   # after the resident engine's last (0x8008875F) -- the layout
   # docs/overlays.md predicted but could not place. dungeon.bin's overlay
@@ -132,9 +148,78 @@ segments:
       - [0xd524, c, ovl_town]
       - [0x41444, c, ovl_town_800BEBA4]
       - [0x41c90, c, ovl_town_800BF3F0]
-  # The rest of the container: assets, and the overlay's own data beyond its
-  # code. splat suggests rodata file splits at 0xc14c and 0xc1a0 (jump tables
-  # that are not file-aligned), which is the next step whenever this overlay's
-  # rodata is carved into translation units.
-  - [0x51fc0, bin]
+      # THE OVERLAY'S OWN DATA, which this file used to file as unnamed `bin`
+      # along with 16 MB of assets. The engine's overlay load table at vram
+      # 0x80080C38 holds `{nsec << 23 | dest, LBA}` descriptors and asks for
+      # **278 sectors** from LBA 3099, which is 0xb000..0x96000 -- not the 142
+      # sectors of rodata and text above. 278 is
+      # ceil((0x95AC4 - 0xb000) / 0x800), and 0x95AC4 is independently where
+      # the mastered filler run starts, so the two agree on a file length of
+      # 0x8AAC4 and the read rounds it up to a sector.
+      #
+      # Three measurements say 0x51fc0..0x7dcb8 is this overlay's data rather
+      # than an asset that happens to sit here:
+      #
+      # 1. The overlay's C already references 791 symbols at or above
+      #    0x800CF720 and the LOWEST of them is exactly 0x800CF720 -- the
+      #    first byte after the text. They run up to 0x800FE5D8, which is past
+      #    the end of the read and therefore .bss.
+      # 2. 1,265 words in the region fall inside the overlay's own text range
+      #    and 934 of them (74%) land exactly two words after a `jr $ra`, by
+      #    the function-start test tools/decomp/codemap.py is built on. The
+      #    same test over 0x96000..0x120000 of the filler finds 7 candidates
+      #    and 0 hits.
+      # 3. 8,399 words in the region point back into the region.
+      #
+      # It ends at 0x7e000 and not 0x7dcb8 because splat emits
+      # `__romPos = ALIGN(__romPos, 16)` after a code segment: a boundary at
+      # 0x7dcb8 inserts eight bytes of pad and the container comes out eight
+      # bytes long, which is the same trap the text-end note above records.
+      # 0x7dcb8..0x7e000 is zero either way.
+      #
+      # This is `data` and not `.data`: the dot routes a subsegment to a
+      # SIBLING C OBJECT (see the `.rodata` note above) and there is no
+      # csrc/ovl_town_data.c. Carving these 179,448 bytes into the three units
+      # the way docs/owning-data.md describes for main.bin's card overlay is
+      # the next step and is NOT done here.
+      - [0x51fc0, data, ovl_town_data]
+  # The remainder of the 278-sector read: zero, apart from three single-island
+  # strays at 0x82800 (3 bytes), 0x83000 (30 bytes, Shift-JIS fragments and
+  # the pointer 0x80031B58) and 0x93000 (1 byte), and then the first 1,340
+  # bytes of the filler run below, which begins at 0x95AC4 -- inside the read
+  # but above everything the overlay references, so it lands in RAM that
+  # __main zeroes.
+  - [0x7e000, bin, ovl_town_read_tail]
+  # 1,529,148 bytes of mastered filler, with the fingerprint
+  # docs/main-bin-data.md closed that container's dead region with: entropy
+  # 7.9999, zero fraction 0.00397, chi-square 251.8, and both zlib and xz
+  # EXPAND it. It ends exactly where the first image blob begins. Nothing
+  # reads it; do not spend time on it.
+  - [0x96000, bin, filler]
+  # Everything the game shows or plays: 80 image blobs, 33 KCET sequences, 16
+  # VAB banks, 43 runs of tier-2 code, 272 sectors of Shift-JIS script (the
+  # English one in full-width characters and the Japanese one still beside
+  # it), and the two symbol tables that name 3,587 of the original source's
+  # identifiers.
+  #
+  # NOT enumerated here, on purpose. Every blob, bank and sequence in it has a
+  # byte-exact extent, but they interleave with code runs whose ends are only
+  # sector-granular, so a per-asset segment list would be ~250 entries of
+  # which some are guesses, and one arithmetic slip in it breaks the link.
+  # `python3 tools/scan-container.py town.bin --anchors` is the inventory and
+  # is regenerated from the image; docs/town-map.md reads it.
+  - [0x20b000, bin, assets]
+  # 2,773 sectors, 1,956 of them (71%) entirely zero, and not one image blob,
+  # sound bank or sequence in the whole 5.4 MB. It opens with a PSY-Q debugger
+  # CONFIGURATION FILE in ASCII -- `#version / 4.112`, `#readram0`,
+  # `#writeram0` over 8 MB of RAM, `#video`, `#default tabs`, `#window` -- and
+  # continues as a 0x6000 period of mostly-zero blocks whose small non-zero
+  # islands carry the game's default character names and pointers into the
+  # tier-2 overlays' RAM band. 0x6000 is one banked overlay slot
+  # (docs/dungeon-map.md). Dev-machine residue in reserved space.
+  - [0x9fb000, bin, dev_tail]
+  # 72 more image blobs. The last 111 sectors are a dense run of small ones
+  # carrying only type-3/type-4 records -- compressed or copied RAM payloads
+  # rather than textures.
+  - [0xf65800, bin, asset_blob_tail]
   - [0x101b800]

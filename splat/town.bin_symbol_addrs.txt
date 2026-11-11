@@ -32,3 +32,87 @@
 // with no `jr`.
 func_800A64C0 = 0x800A64C0; // type:func size:0x1C4
 func_800A652C = 0x800A652C; // ignore:True size:0x4
+
+// THE PERSON STATE HANDLERS, named from the symbol tables the development
+// build left in this container -- see docs/town-identifiers.md and
+// include/town.h. These have to be here and not only in the C: with the
+// overlay data split as `data`, spimdisasm emits the two dispatch tables as
+// `.word <handler>` and the link fails on `func_<addr>` names that no longer
+// exist. The comment on each line is the table slot that names it.
+//
+// D_800D5084 is the 22-entry shared table (slots 0 and 1 are dead -- the
+// dispatcher bounds are `t >= 2 && t < DFLT_END_PSN_DM`), and D_800D0508 is
+// the player's 54-entry table: the same shared states at 2..21, then
+// SSTP_PLT_DM_* at 22..53.
+plt_dm_sleep = 0x800989C8; // type:func  D_800D0508[22]  SSTP_PLT_DM_SLEEP
+plt_dm_kicked_bfr = 0x80098A30; // type:func  D_800D0508[23]  SSTP_PLT_DM_KICKED_BFR
+plt_dm_kicked = 0x80098A98; // type:func  D_800D0508[39]  SSTP_PLT_DM_KICKED
+plt_dm_standup = 0x80098B9C; // type:func  D_800D0508[24]  SSTP_PLT_DM_STANDUP
+plt_dm_biku_bfr = 0x80098C04; // type:func  D_800D0508[25]  SSTP_PLT_DM_BIKU_BFR
+plt_dm_biku = 0x80098C9C; // type:func  D_800D0508[44]  SSTP_PLT_DM_BIKU
+plt_dm_mamtalk = 0x80098CC0; // type:func  D_800D0508[26]  SSTP_PLT_DM_MAMTALK
+plt_dm_mamtalkend = 0x80098CD8; // type:func  D_800D0508[27]  SSTP_PLT_DM_MAMTALKEND
+plt_dm_yoda_mv = 0x80098CF0; // type:func  D_800D0508[28]  SSTP_PLT_DM_YODA_MV
+plt_dm_yoda_stdwn = 0x80098E20; // type:func  D_800D0508[29]  SSTP_PLT_DM_YODA_STDWN
+plt_dm_yoda_poka = 0x80098E70; // type:func  D_800D0508[30]  SSTP_PLT_DM_YODA_POKA
+plt_dm_yoda_stdup = 0x80098EC0; // type:func  D_800D0508[31]  SSTP_PLT_DM_YODA_STDUP
+plt_dm_yuka_hosei = 0x80098F10; // type:func  D_800D0508[32]  SSTP_PLT_DM_YUKA_HOSEI
+plt_dm_mogura_pos_set = 0x80098F48; // type:func  D_800D0508[33]  SSTP_PLT_DM_MOGURA_POS_SET
+plt_dm_eat = 0x80098FBC; // type:func  D_800D0508[34]  SSTP_PLT_DM_EAT
+plt_dm_damage0 = 0x80099020; // type:func  D_800D0508[52]  SSTP_PLT_DM_DAMAGE0
+plt_dm_damage1 = 0x80099084; // type:func  D_800D0508[53]  SSTP_PLT_DM_DAMAGE1
+plt_dm_dead = 0x800990E8; // type:func  D_800D0508[35]  SSTP_PLT_DM_DEAD
+plt_dm_carryup = 0x8009914C; // type:func  D_800D0508[36]  SSTP_PLT_DM_CARRYUP
+plt_dm_carrywaytgt = 0x800991C0; // type:func  D_800D0508[37]  SSTP_PLT_DM_CARRYWAYTGT
+plt_dm_carrywalktgt = 0x80099238; // type:func  D_800D0508[38]  SSTP_PLT_DM_CARRYWALKTGT
+plt_dm_swim_bfr = 0x80099294; // type:func  D_800D0508[40]  SSTP_PLT_DM_SWIM_BFR
+plt_dm_swim = 0x800992F8; // type:func  D_800D0508[41]  SSTP_PLT_DM_SWIM
+plt_dm_swim_aftr = 0x80099390; // type:func  D_800D0508[42]  SSTP_PLT_DM_SWIM_AFTR
+plt_dm_jmpup_pos_set = 0x800993F4; // type:func  D_800D0508[43]  SSTP_PLT_DM_JMPUP_POS_SET
+plt_dm_nicpan = 0x80099468; // type:func  D_800D0508[45]  SSTP_PLT_DM_NICPAN
+plt_dm_now_getitem = 0x800994DC; // type:func  D_800D0508[46]  SSTP_PLT_DM_NOW_GETITEM
+plt_dm_kao_up = 0x8009953C; // type:func  D_800D0508[47]  SSTP_PLT_DM_KAO_UP
+plt_dm_kao_down = 0x800995A8; // type:func  D_800D0508[48]  SSTP_PLT_DM_KAO_DOWN
+plt_dm_udauda = 0x80099614; // type:func  D_800D0508[49]  SSTP_PLT_DM_UDAUDA
+plt_dm_bath = 0x80099680; // type:func  D_800D0508[50]  SSTP_PLT_DM_BATH
+plt_dm_bath_turn = 0x800996E8; // type:func  D_800D0508[51]  SSTP_PLT_DM_BATH_TURN
+plt_dm_homepos = 0x80099CE0; // type:func  D_800D0508[2]  PSN_DM_HOMEPOS
+plt_dm_talk = 0x80099D44; // type:func  D_800D0508[3]  PSN_DM_TALK
+plt_dm_talk2 = 0x80099DA8; // type:func  D_800D0508[4]  PSN_DM_TALK2
+plt_dm_northway = 0x80099E0C; // type:func  D_800D0508[5]  PSN_DM_NORTHWAY
+plt_dm_southway = 0x80099E70; // type:func  D_800D0508[6]  PSN_DM_SOUTHWAY
+plt_dm_westway = 0x80099ED0; // type:func  D_800D0508[7]  PSN_DM_WESTWAY
+plt_dm_eastway = 0x80099F34; // type:func  D_800D0508[8]  PSN_DM_EASTWAY
+plt_dm_northwk = 0x80099F98; // type:func  D_800D0508[9]  PSN_DM_NORTHWK
+plt_dm_southwk = 0x80099FFC; // type:func  D_800D0508[10]  PSN_DM_SOUTHWK
+plt_dm_westwk = 0x8009A060; // type:func  D_800D0508[11]  PSN_DM_WESTWK
+plt_dm_eastwk = 0x8009A0C4; // type:func  D_800D0508[12]  PSN_DM_EASTWK
+plt_dm_jmp = 0x8009A128; // type:func  D_800D0508[13]  PSN_DM_JMP
+plt_dm_gotgt = 0x8009A344; // type:func  D_800D0508[14]  PSN_DM_GOTGT
+plt_dm_plway = 0x8009A3A4; // type:func  D_800D0508[15]  PSN_DM_PLWAY
+plt_dm_tgtway = 0x8009A41C; // type:func  D_800D0508[16]  PSN_DM_TGTWAY
+plt_dm_disp_off = 0x8009A494; // type:func  D_800D0508[17]  PSN_DM_DISP_OFF
+plt_dm_disp_on = 0x8009A4FC; // type:func  D_800D0508[18]  PSN_DM_DISP_ON
+plt_dm_del = 0x8009A56C; // type:func  D_800D0508[19]  PSN_DM_DEL
+plt_dm_ang_org = 0x8009A58C; // type:func  D_800D0508[20]  PSN_DM_ANG_ORG
+plt_dm_pos_org = 0x8009A5C0; // type:func  D_800D0508[21]  PSN_DM_POS_ORG
+psn_dm_homepos = 0x800C41FC; // type:func  D_800D5084[2]  PSN_DM_HOMEPOS
+psn_dm_talk = 0x800C4260; // type:func  D_800D5084[3]  PSN_DM_TALK
+psn_dm_talk2 = 0x800C42C4; // type:func  D_800D5084[4]  PSN_DM_TALK2
+psn_dm_northway = 0x800C4328; // type:func  D_800D5084[5]  PSN_DM_NORTHWAY
+psn_dm_southway = 0x800C438C; // type:func  D_800D5084[6]  PSN_DM_SOUTHWAY
+psn_dm_westway = 0x800C43EC; // type:func  D_800D5084[7]  PSN_DM_WESTWAY
+psn_dm_eastway = 0x800C4450; // type:func  D_800D5084[8]  PSN_DM_EASTWAY
+psn_dm_northwk = 0x800C44B4; // type:func  D_800D5084[9]  PSN_DM_NORTHWK
+psn_dm_southwk = 0x800C4518; // type:func  D_800D5084[10]  PSN_DM_SOUTHWK
+psn_dm_westwk = 0x800C457C; // type:func  D_800D5084[11]  PSN_DM_WESTWK
+psn_dm_eastwk = 0x800C45E0; // type:func  D_800D5084[12]  PSN_DM_EASTWK
+psn_dm_jmp = 0x800C4644; // type:func  D_800D5084[13]  PSN_DM_JMP
+psn_dm_gotgt = 0x800C4804; // type:func  D_800D5084[14]  PSN_DM_GOTGT
+psn_dm_plway = 0x800C4864; // type:func  D_800D5084[15]  PSN_DM_PLWAY
+psn_dm_tgtway = 0x800C48DC; // type:func  D_800D5084[16]  PSN_DM_TGTWAY
+psn_dm_disp_off = 0x800C4958; // type:func  D_800D5084[17]  PSN_DM_DISP_OFF
+psn_dm_disp_on = 0x800C49C0; // type:func  D_800D5084[18]  PSN_DM_DISP_ON
+psn_dm_del = 0x800C4A30; // type:func  D_800D5084[19]  PSN_DM_DEL
+psn_dm_ang_org = 0x800C4A88; // type:func  D_800D5084[20]  PSN_DM_ANG_ORG
+psn_dm_pos_org = 0x800C4AEC; // type:func  D_800D5084[21]  PSN_DM_POS_ORG
