@@ -202,9 +202,13 @@ _card_wait = 0x80069c28; // type:func
 _card_clear = 0x80069c38; // type:func
 _card_write = 0x80069c70; // type:func
 _new_card = 0x80069c80; // type:func
+InitCARD = 0x80069c90; // type:func
+StartCARD = 0x80069ce8; // type:func
+StopCARD = 0x80069d20; // type:func
 InitCARD2 = 0x80069d48; // type:func
 StartCARD2 = 0x80069d58; // type:func
 StopCARD2 = 0x80069d68; // type:func
+_ExitCard = 0x80069d78; // type:func
 
 // libc
 exit = 0x80069df8; // type:func

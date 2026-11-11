@@ -2,8 +2,15 @@
 
 `main.bin`'s second code run, the 0x80400000 twin block, contains its **own
 copy of PSY-Q's libcard** -- twelve library modules at the tail of its text,
-currently sitting in `csrc/ovl_main_80400000.c` as twelve `INCLUDE_ASM`
-stubs named `func_8040xxxx`, indistinguishable from game code.
+sitting in `csrc/ovl_main_80400000.c` as twelve `INCLUDE_ASM` stubs named
+`func_8040xxxx`.
+
+**What was already known:** that the block's last 23 functions are PSY-Q
+library code and not decompilation work, which is why the unit header and
+`docs/where-we-are.md` both put the real remaining work at 239 rather than
+262, and why `func_804087C8`'s resident twin `_ExitCard` (0x80069D78) was
+already tied to `asm/psyq/libcard/END.s`. **What is new here** is WHICH modules the
+other eleven are, and their real PSY-Q export names.
 
 Found 2026-11-10 by pointing `azure libscan` at the overlay containers rather
 than only at `slus_006.14`. This is the ONLY such find: `slus_006.14` was
@@ -52,24 +59,38 @@ The run is 0x271644-0x271848. Text ends at 0x2719dc, so 0x271848-0x2719dc
 - **Two of the matches are large.** `CARD` is 14 words with 12 invariant,
   `END` is 32 words with 21 invariant. Those are not coincidences; contrast
   the 4-word stubs, which are only credible *because* of the neighbours.
-- **It answers a question the project had already asked.**
-  `csrc/ovl_main_80400000.c:33` records that "func_804087C8 matches
-  func_80069D78 at 0.90 masked" and leaves it open. `func_80069D78` is
-  `slus_006.14` offset 0x3d578, which is exactly where `libcard/END` sits in
-  the executable. **Both are libcard/END** -- two copies of the same library
-  module, linked into two different binaries. The 0.90 rather than 1.00 is
-  the relocation difference.
+- **It extends an identification the project had already made.**
+  `csrc/ovl_main_80400000.c:33` records that `func_804087C8` matches
+  `_ExitCard` (0x80069D78) at 0.90 masked and that its listing is
+  `asm/psyq/libcard/END.s` -- so that one module was already placed, and the
+  0.90 rather than 1.00 is the relocation difference. The scan confirms it
+  independently from the library bytes and places the ELEVEN NEIGHBOURS the
+  note stopped at, which is what turns "the tail is library code" into a
+  module-by-module account.
 - **The landed C calls two of them.** `func_80408654(0)` / `func_80408654(1)`
   at `ovl_main_80400000.c:137,138,154,155,164,165` is `_card_wait(0/1)`, and
   `func_80408674(D_804094EC)` at :326 is `_card_load(...)`. Those calls now
   read as the libcard API they are.
 
-The two unmatched functions in the 0x8c gap at 0x2716dc are most likely
-libcard modules from the build this project has no copy of -- `A79`
-(`_card_read`), `A88` (`_card_chan`), `INIT` (`StartCARD`/`InitCARD`/
-`StopCARD`), `PATCH` or `FORMAT` are the unplaced candidates in
-`psyq/lib/libcard.lib` -- or game code. `libscan` names neither at any
-`--min-invariant` down to 2.
+The two unmatched functions in the 0x8c gap at 0x2716dc are **very likely
+the twin's own `libcard/INIT`**, from the build this project has no copy of.
+`libscan` names neither at any `--min-invariant` down to 2, so this is
+inference from shape, not a content match -- but it is a tight fit:
+
+- `func_80408730` is 0x38 bytes, which is `StartCARD`'s size in the resident
+  `INIT` **exactly**; `func_804086DC` is 0x54 against `InitCARD`'s 0x58, one
+  word shorter.
+- The gap occupies the same slot in the module order. In `slus_006.14`,
+  `INIT` sits between `A80` and `A74`; here the gap sits between `A80` and
+  `A74` too, with only `SSINIT` between it and `A74`.
+- `0x54 + 0x38 = 0x8c`, the whole gap, with no third function where the
+  resident `INIT`'s `StopCARD` would be -- consistent with a build that
+  drops it, and with `func_8003D56C` calling only `InitCARD` and
+  `StartCARD`.
+
+If that is right the two names are `InitCARD` and `StartCARD`. Confirming it
+needs a libcard build that is not the one in this project's manifest, so
+treat the names as unestablished until something other than size agrees.
 
 ## What is left to do
 
@@ -84,16 +105,47 @@ Nothing that needs `psyq/lib`. Whenever twin block work resumes:
 3. Decide `SSINIT_C` vs `SSINIT_H`. The two modules are byte-identical over
    these 12 words, so the libraries cannot settle it; the caller can.
 
-Do not try to decompile these as game functions. That is the cost this file
-exists to prevent -- twelve of the twin block's 262 functions are not the
-game's code, and 99 were landed before anyone knew which.
+Do not try to decompile these as game functions. The block's tail was
+already excluded from the work as library code, so nothing was mis-landed;
+what this file adds is that the exclusion can now be stated per module and
+per name instead of as "the last 23".
 
-## Related gap in the main executable
+## The resident executable's libcard run is now fully named
 
-`libcard/END`'s export `_ExitCard` is **not** in
-`splat/slus_006.14_symbol_addrs.txt` either, though the other ten libcard
-names here all are. `func_80069D78` is that module; it can be renamed
-independently of any twin block work.
+Closed 2026-11-10. `libcard/END`'s export `_ExitCard` was missing from
+`splat/slus_006.14_symbol_addrs.txt`, and so were all three of
+`libcard/INIT`'s. Four names added:
+
+| vram | name | module |
+|---|---|---|
+| 0x80069c90 | `InitCARD`  | libcard/INIT +0x000 |
+| 0x80069ce8 | `StartCARD` | libcard/INIT +0x058 |
+| 0x80069d20 | `StopCARD`  | libcard/INIT +0x090 |
+| 0x80069d78 | `_ExitCard` | libcard/END  +0x000 |
+
+`INIT` needed the module's own export offsets, because it exports three
+symbols and `azure lib --list` prints them in record order, not address
+order -- it reads `StartCARD InitCARD StopCARD`, which would have mis-named
+two of the three if taken at face value. `PsyQObject.text_exports()` gives
+each export's offset within `.text`, so the mapping is read rather than
+guessed; `libcard/A92` -> `_card_status` and `libcard/END` -> `_ExitCard`,
+both already known, were used as controls. The run is contiguous and the
+arithmetic closes: `A80` ends at 0x80069c90 where `InitCARD` begins, and
+`INIT`'s 0xb8 bytes end at 0x80069d48, which is `InitCARD2`.
+
+Renaming these two is what revealed that `kernel.h` declares the whole
+low-level card API -- `void InitCARD(long val)`, `long StartCARD(void)`,
+`long StopCARD(void)`, `_bu_init`, `_card_*` -- so `include/structs.h`'s
+hand-added `func_80069C90`/`func_80069CE8` declarations were redundant and
+are gone. It also explained `func_8003D56C`'s "unused" parameter: it is
+`InitCARD`'s `val`, forwarded, and forwarding a parameter already in `$a0`
+emits no code. `func_8003D56C` now reads `InitCARD(arg0)` and all four
+containers stay byte-identical.
+
+Note for anyone grepping `psyq/include`: those headers are CRLF with
+extended-ASCII, so plain `grep` calls them binary and silently reports
+nothing. `grep -a` is required, and a missing `-a` is why these were thought
+undeclared at first.
 
 ## The other three are clean
 

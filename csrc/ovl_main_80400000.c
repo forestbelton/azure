@@ -30,10 +30,11 @@
  *   * Nine of them are BIOS call stubs: `addiu $t2, $zero, 0xB0; jr $t2;
  *     addiu $t1, $zero, <call>`, a jump to the BIOS entry point with the
  *     call number in $t1. That is not C in any revision.
- *   * func_804087C8 matches func_80069D78 at 0.90 masked, and
- *     func_80069D78's own listing is `asm/psyq/libcard/END.s` -- the
- *     resident copy of this same code is assembly in this tree too. The
- *     `jalr $t2` BIOS calls are right there in both.
+ *   * func_804087C8 matches `_ExitCard` (0x80069D78) at 0.90 masked, and
+ *     `_ExitCard`'s own listing is `asm/psyq/libcard/END.s` -- the resident
+ *     copy of this same code is assembly in this tree too. The `jalr $t2`
+ *     BIOS calls are right there in both. The eleven neighbours below it are
+ *     named per module in `docs/twin-block-libcard.md`.
  *
  * So they stay on INCLUDE_ASM, as the asm/psyq listings do, and the block's
  * real remaining work is the 239 functions below them.

@@ -225,12 +225,14 @@ void func_8003D468(void)
     *(u16 *)(base + 0x2098) = f;
 }
 
-/* arg0 is unused; it exists because func_8003D5A4's call site passes 1 and an
-   unused register parameter generates no code. */
+/* arg0 is InitCARD's `val`, forwarded. func_8003D5A4's call site passes 1, and
+   forwarding a parameter that is already in $a0 emits no code -- which is why
+   this read as an unused parameter until kernel.h's `void InitCARD(long)`
+   named the callee. */
 void func_8003D56C(s32 arg0)
 {
-    func_80069C90();
-    func_80069CE8();
+    InitCARD(arg0);
+    StartCARD();
     _bu_init();
     ChangeClearPAD(0);
 }

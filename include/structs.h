@@ -2064,12 +2064,10 @@ char *strcpy(char *, const char *);
 
 /* Hand-added. Outside the extracted code; splat's undefined_funcs_auto and
    undefined_syms_auto resolve these for the linker. */
-void func_80069C90(void);
 void func_80048B28(void);
 void func_800894A0(void);
 void func_80065034(u8 *, u8 *, u8 *);
 void func_80040418(void);
-void func_80069CE8(void);
 extern u32 *D_8006CDC8[];
 /* Declared as an array of unestablished length: func_8003D7DC derives
    addresses inside it with `addiu`, which only happens when the base is a
