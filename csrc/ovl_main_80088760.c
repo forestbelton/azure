@@ -39,6 +39,18 @@ extern s32 D_8008B2F0[];
    errors ("unable to determine a segment") or, with `absolute:True`, stops
    emitting the assignment and the link loses the symbol. */
 extern void func_80053858(void) __asm__("D_80053858");
+extern void func_80053A88(void) __asm__("D_80053A88");
+extern void func_80044BB0(void) __asm__("D_80044BB0");
+
+/* Two adjacent u16s and a u16 table, all in the overlay's own data run.
+   D_8008B36A has no definition in asm/data/ovl_main_80088760_data.data.s:
+   it is 2-aligned, so spimdisasm cannot label it, and
+   main.bin_undefined_syms_auto.txt supplies it as an absolute instead. That
+   is the project's standing arrangement for a 2-aligned symbol -- see
+   D_80082E6A and friends in the resident units. */
+extern u16 D_8008B368;
+extern u16 D_8008B36A;
+extern u16 D_8008B36C[];
 
 s32 func_8004EE30(s32 *);
 s32 *func_8003FC64(s32);
@@ -129,7 +141,27 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A288);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A794);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008A98C);
+s32 *func_8008A98C(s32 *a, s32 *b, s32 c, s32 d)
+{
+    s32 *w;
+    s32 *t;
+
+    w = func_8003FC64(0x136);
+    if (w != 0)
+    {
+        w[4] = (s32)b;
+        ((s32 *)w[2])[0] = a[0];
+        ((s32 *)w[2])[1] = a[1];
+        func_8004491C((UnkNode *)w, (u32)func_80044BB0);
+        t = (s32 *)w[3];
+        ((s16 *)t)[15] = 0x1000;
+        ((s16 *)t)[14] = 0x1000;
+        t[2] = c;
+        t[3] = 0x808080;
+        w[8] = (s32)d;
+    }
+    return w;
+}
 
 void func_8008AA40(s16 **p)
 {
@@ -168,9 +200,44 @@ void func_8008AAE4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AB44);
+void func_8008AB44(s32 *p)
+{
+    s16 *q;
+    s32 i;
+    s32 v;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008ABD4);
+    q = (s16 *)p[1];
+    p[2] = 0;
+    i = 2;
+    do
+    {
+        v = q[7 + i];
+        if (v >= 0x100)
+        {
+            v = 0xFF;
+        }
+        p[2] += v << (i * 8);
+    } while (--i >= 0);
+    ((u16 *)p)[10] = ((u16 *)q)[10];
+    if (q[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
+
+void func_8008ABD4(s32 *p, Blk28 *src)
+{
+    s32 *w;
+
+    w = func_8003FC64(1);
+    if (w != 0)
+    {
+        *(Blk28 *)(w + 8) = *src;
+        w[4] = (s32)p;
+        func_8004491C((UnkNode *)w, (u32)func_80053A88);
+    }
+}
 
 void func_8008AC70(s16 **p)
 {
@@ -181,7 +248,26 @@ void func_8008AC70(s16 **p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008ACB4);
+void func_8008ACB4(s32 *p, s16 *out)
+{
+    s16 *q;
+
+    q = (s16 *)p[0];
+    if (q[6] == 0 && (((u16 *)q)[11] & 2))
+    {
+        out[1] = D_8008B36A;
+    }
+    else
+    {
+        out[1] = D_8008B368;
+    }
+    out[3] = D_8008B36C[q[6]];
+    if (q[11] & 0x8000)
+    {
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_8008AD58);
 

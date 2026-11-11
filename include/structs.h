@@ -1390,6 +1390,15 @@ typedef struct Blk20
     u32 w[8];
 } Blk20;
 
+/* 0x28 bytes, which gcc splits: a `bne` loop for the first 0x20 and then an
+   UNROLLED two-word remainder. The 0x80088760 overlay's func_8008ABD4 is
+   func_8008AE60 with this size instead of Blk30, and the extra
+   lw/lw/sw/sw tail after the loop is the whole difference. */
+typedef struct Blk28
+{
+    u32 w[0xA];
+} Blk28;
+
 /* And at 0x30 bytes, which is back over the threshold for a LOOP: the
    0x80088760 overlay's func_8008AE60 copies twelve words into a node it has
    just allocated, and gcc emits emit_block_move's four-word body with a `bne`
