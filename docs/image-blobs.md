@@ -149,6 +149,14 @@ it picks the lurid end of a palette set on the town atlases at lba `0x167e`.
 77 of the 684 textures sit in blobs with no palette record at all, so they
 cannot be rendered without supplying one from elsewhere.
 
+### Sweeping one container instead of the disc
+
+`tools/scan-container.py` runs this tool's sweep over a container's own
+sectors (no az.bin needed) as one pass of a whole-container accounting that
+also finds the sound banks, the sequences and the script. On `town.bin` it
+reports 152 blobs / 436 textures / 886 palette records and says what the other
+77% of the container is: `docs/town-map.md`.
+
 ### The record format is not the only asset path
 
 `func_8003F8F8` walks a different table (`Unk3F8F8`: a pointer plus a `RECT`

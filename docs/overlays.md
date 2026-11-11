@@ -109,6 +109,16 @@ addressed by absolute LBA, so a container is just a region of it.
 splat's `__romPos` alignment requires -- see each yaml's comment and the rule
 below.)
 
+**2026-11-10: the table is the CODE, not the overlay.** The engine's overlay
+load table at vram `0x80080C38` gives each of these reads a length, and every
+one is longer than the code above: 278 sectors for town (`+0xb000..+0x95AC4`),
+187 for dungeon (`+0xa3000..+0x100800`), and a *third* descriptor at
+`0x80088760` that this document dismissed -- 14 sectors at
+`main.bin+0x21800`, which `codemap.py --pin` places at that base at 5/5
+(100%). So town's and dungeon's overlays carry data past their text, and there
+is a fifth placed overlay. `docs/town-map.md` has the table, the evidence and
+the follow-ups.
+
 `0x80088760` is the first byte after the resident engine's last
 (`0x8008875F`), which is the layout this document predicted. town and dungeon
 share it, so they are mutually exclusive and an address there means different
@@ -258,7 +268,7 @@ Same marker, scanned over every container:
 | container | records | translation units named |
 |---|---|---|
 | `main.bin` | 10 | `c_server.c` (x2), `card_mes.c`, `card_opt.c`, `card_win.c`, `cardbk.c`, `cardinfo.c`, `cardslot.c`, `cardsme.c`, `memory.c` |
-| `town.bin` | 76 | `main.c` (54), `lshop.c` (10), `tobjs.c` (8), `player.c` (4) |
+| `town.bin` | 76 -- **85**, see below | `main.c` (54), `lshop.c` (10), `tobjs.c` (8), `player.c` (4) |
 | `dungeon.bin` | 0 | -- |
 | `slus_006.14` | 0 | -- |
 
@@ -267,6 +277,10 @@ overlay** -- they are all at `+0x2ab000` and beyond, in a second tier of
 small low-RAM overlays, so the big town overlay has no oracle either. And
 **dungeon was built with asserts out entirely**, so there is nothing of this
 kind to recover there.
+
+Re-counting town's with a pattern anchored on the NUL terminator gives **85**
+records and two more units -- `sn_main.c` (7) and `flgtst.c` (2) -- both in the
+`0x806F0000` dev-only band (`docs/town-map.md` §4).
 
 Town's tier 2 also leaks identifiers: `((u_long)p - (u_long)ost_w)/
 sizeof(OSETDT)`, `((u_long)pp - (u_long)osel_w)/ sizeof(OSETDT*)`,
@@ -279,7 +293,7 @@ four prologues and three `jr $ra`:
 
 | container | unplaced code | runs | largest |
 |---|---|---|---|
-| `main.bin` | ~0 | 1 (noise) | 12 KB / 14 prologues at `+0x21000` -- density too low to be code |
+| `main.bin` | ~0 | 1 (noise) | 12 KB / 14 prologues at `+0x21000` -- **this call was wrong**: it is the 14-sector overlay at `0x80088760`, see above |
 | `town.bin` | 0.64 MB | 59 | 69 KB / 291 prologues at `+0x649000` |
 | `dungeon.bin` | 6.13 MB | 401 | 364 KB / 715 prologues at `+0xe2d000`, then 360 KB / 598 at `+0xcdd000` |
 
