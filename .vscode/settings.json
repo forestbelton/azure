@@ -4,6 +4,7 @@
     ],
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/psyq/include",
-        "${workspaceFolder}/include"
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/csrc"
     ]
 }
