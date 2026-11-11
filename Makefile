@@ -371,11 +371,30 @@ expected: check
 clean:
 	rm -rf asm assets build
 
-# asm/nonmatchings is cleared first: splat only adds files, so shrinking or
-# re-carving a `c` subsegment otherwise leaves per-function asm behind in the
-# old unit's directory, and the same function ends up owned by two units.
+# THE WHOLE asm/ TREE is cleared first, not just asm/nonmatchings. splat only
+# ADDS files, so every subsegment that is renamed, retyped or deleted leaves
+# its old output behind -- and an orphan in asm/ is worse than one in
+# asm/nonmatchings, because SFILES globs asm/ (excluding nonmatchings) and the
+# orphan is assembled into an object with a full set of duplicate symbol
+# definitions. It is only unlinked for as long as no linker script happens to
+# name it.
+#
+# This was not hypothetical. Converting main.bin's 0x80088760 overlay from
+# `asm` to `c` on 2026-11-11 orphaned asm/ovl_main_80088760.s, 2,870 lines
+# defining all 26 of that overlay's functions; it survived every `make splat`
+# that day and was still being assembled hours later.
+#
+# Clearing asm/ entirely is safe: git tracks nothing in it, `clean` already
+# deletes it outright, and splat regenerates all of it. Hand-owned assembly
+# lives in asrc/, which is why `hrodata` redirects there -- see
+# splat/ext/hrodata.py and the asrc/str/%.s rule below.
+# build/asm goes with it, because it mirrors asm/ one-to-one and an orphaned
+# OBJECT carries the same duplicate definitions as the source it came from.
+# Note this is `build/asm`, never `build`: splat writes the linker scripts
+# into build/, so removing the whole directory leaves the project unlinkable
+# until the next `make splat` -- see the build/%.ld rule.
 splat: $(SPLATFILES) $(STRSFILES)
-	rm -rf asm/nonmatchings
+	rm -rf asm build/asm
 	@for SPLATFILE in $(SPLATFILES); do \
 		echo "=== $$SPLATFILE === "; \
 		splat split $$SPLATFILE; \
