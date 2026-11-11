@@ -151,6 +151,10 @@ typedef struct BlkB
     s32 unk_24;
 } BlkB;
 
+extern u8 D_80080A78;
+void func_8003D468(void);
+void func_80040AA0(s32);
+void func_80089C24(void);
 extern u8 D_8008B074[];
 extern u8 D_8008B230[];
 extern u8 D_8008B270[];
@@ -516,4 +520,267 @@ void func_80088EDC(s32 *p, s32 *q, u16 *s)
 }
 
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_800890EC);
+
+void func_800890EC(s32 *p, s32 *q)
+{
+    Unk80083160 *g;
+    s16 va;
+    s32 t;
+    s32 i;
+
+    t = ((u16 *)p)[17] - 1;
+    g = &D_80083160;
+    ((s16 *)p)[17] = t;
+    switch (((s16 *)p)[16])
+    {
+    case 0:
+        if (g->unk_10 != 0)
+        {
+            ((s16 *)p)[16] = 0x10;
+        }
+        else if ((s16)func_80053428((Unk80083120 *)((u8 *)p + 0x18)) != 0)
+        {
+            ((s16 *)p)[16] = 1;
+            ((u16 *)p)[19] &= 0xFFFE;
+        }
+        break;
+    case 1:
+        if (g->unk_08 != 0)
+        {
+            ((s16 *)p)[16] = 0x10;
+        }
+        else
+        {
+            q[1] += 0xFFFEC000;
+            if (((s16 *)q)[3] < 0)
+            {
+                q[1] = 0;
+                ((s16 *)p)[17] = 0x69;
+                ((s16 *)p)[16] = 2;
+            }
+        }
+        break;
+    case 2:
+        if (g->unk_08 != 0)
+        {
+            ((s16 *)p)[16] = 0x13;
+        }
+        else if ((s16)t <= 0)
+        {
+            i = 2;
+            do
+            {
+                ((s16 *)((void **)p)[i + 1])[20] = 1;
+            } while (--i >= 0);
+            i = 1;
+            do
+            {
+                ((s16 *)((void **)p)[i + 4])[20] = 1;
+            } while (--i >= 0);
+            ((s16 *)p)[17] = 0x5F;
+            ((s16 *)p)[16] = 3;
+        }
+        break;
+    case 3:
+        if (g->unk_08 != 0)
+        {
+            ((s16 *)p)[16] = 0x13;
+        }
+        /* `va` is the same variable that carries the 5 in case 0x20's
+           h18 == 1 arm. This use is what keeps it out of local-alloc there;
+           see the header. combine folds it back into the `lh`. */
+        va = ((s16 *)p)[17];
+        if (va <= 0)
+        {
+            ((s16 *)p)[17] = 0x708;
+            ((s16 *)p)[16] = 4;
+        }
+        break;
+    case 4:
+        if (g->unk_08 != 0)
+        {
+            ((s16 *)p)[17] = 0x708;
+        }
+        if (g->unk_10 & 0x1000)
+        {
+            ((s16 *)p)[18] = (((s16 *)p)[18] + 2) % 3;
+        }
+        else if (g->unk_10 & 0x4000)
+        {
+            ((s16 *)p)[18] = (((s16 *)p)[18] + 1) % 3;
+        }
+        if (g->unk_10 & 0x840)
+        {
+            s32 snd;
+
+            snd = 0x51A;
+            if (((s16 *)p)[18] == 2)
+            {
+                snd = 0x522;
+            }
+            func_80053DA8(snd);
+            ((s16 *)p)[17] = 0x60;
+            ((s16 *)p)[16] = 0x20;
+        }
+        else if (((s16 *)p)[17] <= 0)
+        {
+            ((s16 *)p)[16] = 0xFE;
+        }
+        break;
+    case 0x10:
+        ((s16 *)p)[13] = 0;
+        ((s16 *)p)[14] = 8;
+        ((s16 *)p)[16] = 0x11;
+        /* fallthrough */
+    case 0x11:
+        if ((s16)func_80053604((Unk80083120 *)((u8 *)p + 0x18)) != 0)
+        {
+            q[1] = 0;
+            ((s16 *)p)[13] = 0;
+            ((s16 *)p)[16] = 0x12;
+        }
+        break;
+    case 0x12:
+        if ((s16)func_80053428((Unk80083120 *)((u8 *)p + 0x18)) != 0)
+        {
+            ((s16 *)p)[13] = 0;
+            ((s16 *)p)[16] = 0x13;
+        }
+        break;
+    case 0x13:
+        i = 2;
+        do
+        {
+            ((s16 *)((void **)p)[i + 1])[20] = 0x10;
+        } while (--i >= 0);
+        i = 1;
+        do
+        {
+            ((s16 *)((void **)p)[i + 4])[20] = 2;
+        } while (--i >= 0);
+        ((s16 *)p)[17] = 0x708;
+        ((s16 *)p)[16] = 4;
+        break;
+    case 0x20:
+        if ((s16)t <= 0)
+        {
+            D_80080A84 = 2;
+            ((u16 *)p)[19] |= 1;
+            switch (((s16 *)p)[18])
+            {
+            case 0:
+                {
+                    s32 *n;
+
+                    n = func_8003FC64(0x100);
+                    if (n != 0)
+                    {
+                        n[4] = (s32)func_80088930;
+                        ((s16 *)p)[16] = 0xFD;
+                    }
+                    else
+                    {
+                        ((s16 *)p)[16] = 0xFF;
+                    }
+                }
+                break;
+            case 1:
+                {
+                    /* TWO levers here, both measured 2026-11-11.
+                       (1) `b` is a CONSTANT 0x80010000 in a local, not a
+                       symbol. D_80012094/D_80012098/D_80012D6E share one
+                       `lui $v0, 0x8001` with 0x2094/0x2D6E/0x2098 as plain
+                       displacements; splat prints those as %lo(SYM) but the
+                       words carry no relocation (confirmed with
+                       `ovlverify --raw`: all three store words and the lui
+                       are byte-identical). A constant with a zero low half
+                       costs ONE word, because mips_move_1word emits only the
+                       lui; every symbol spelling costs two, since gcc emits
+                       the `(lo_sum)` `addiu` as well -- it cannot know %lo is
+                       0. Measured at the whole-function level: one struct or
+                       array at D_80012094 = 327 words / 6-7 DIFF (the extra
+                       addiu plus a knock-on); a struct at 0x80010000 = same;
+                       three separate externs = three `lui`s; hardcoded
+                       `*(s16 *)0x80012094 = 5` = 328 / 86, because a bare
+                       CONST_INT address is legitimate (mips.h
+                       GO_IF_LEGITIMATE_ADDRESS) and comes out as the
+                       assembler's `lui $at` macro.
+                       (2) the 5 goes through the function-scope `va`, which
+                       case 3 also uses; the 2 is a plain constant. Both value
+                       pseudos must be set once for the schedule, and `va`
+                       must not be a local-alloc quantity for the registers.
+                       See the header for the mechanism. */
+                    u8 *b;
+
+                    b = (u8 *)0x80010000;
+                    func_8003D468();
+                    va = 5;
+                    *(s16 *)(b + 0x2094) = va;
+                    b[0x2D6E] = 0;
+                    *(s16 *)(b + 0x2098) = 2;
+                    func_80040AA0(6);
+                    ((s16 *)p)[16] = 0xFF;
+                }
+                break;
+            case 2:
+                ((s16 *)p)[16] = 0xFD;
+                func_80089C24();
+                break;
+            default:
+                ((s16 *)p)[16] = 0xFF;
+                break;
+            }
+        }
+        break;
+    case 0xFD:
+        /* Loop note as a block boundary (docs/matching-levers.md:994): the
+           note pins this store at the top of the block, so sched1 has nothing
+           left to put in the `lw %lo(D_800814A0)` load-delay slot and the nop
+           survives (docs/matching-levers.md:1969 -- the slot survives iff the
+           insn sched1 placed next mentions the loaded register). Without it
+           gcc sinks `addiu $v1, $zero, 0x2` into the slot and the function is
+           a word short. Worth 1 word and ~67 DIFF: 326 words / 73 bare,
+           327 / 6 with the note. All six statement orders of this arm were
+           measured bare (72-73 DIFF, no word recovered); the note wrapped
+           round the OTHER two statements instead is 327 / 6 as well, round
+           only the D_800814A0 store 327 / 13. */
+        do
+        {
+            D_80080A84 = 2;
+        } while (0);
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+        break;
+    case 0xFE:
+        D_80080A84 = 2;
+        switch (D_80080A78 & 7)
+        {
+        case 0:
+        case 4:
+            func_80040AA0(0x1E);
+            break;
+        case 2:
+        case 6:
+            func_80040AA0(0x20);
+            break;
+        case 1:
+            func_80040AA0(0x12);
+            break;
+        case 3:
+            func_80040AA0(0x13);
+            break;
+        case 5:
+            func_80040AA0(0x14);
+            break;
+        case 7:
+            func_80040AA0(0x15);
+            break;
+        }
+        ((s16 *)p)[16] = 0xFF;
+        D_80080A78 = (D_80080A78 + 1) & 7;
+        ((u16 *)p)[19] |= 1;
+        break;
+    case 0xFF:
+        break;
+    }
+}
