@@ -193,7 +193,113 @@ void func_80088B48(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80088BD0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80088760", func_80088EDC);
+/* The widget's own state machine, six live states on the s16 at +0x08 plus an
+   empty one. State 1 counts down and walks the 16.16 value at +0x0C toward
+   zero; 2 eases the halfword at +0x02 of the second argument toward 0xA0; 0x10
+   latches it and branches on two fields of the object at p[0]; 0x20 sets or
+   clears bit 0x80 of the third argument's +0x14; 0x21 ramps +0x00 by +0x0C
+   while +0x00 stays under 0x1FFFFFF; 0xFF marks the widget dirty.
+
+   `case 0: break;` IS LOAD-BEARING, and it is the whole function. Without it
+   gcc builds a different case-node tree -- two plain equality tests for the
+   {1, 2} subtree instead of the target's equality-then-range-test pair -- and
+   the result is 130 words against 132 with 116 of them differing, because
+   every branch offset downstream shifts. With it: 0 differing, first try.
+   An empty case is not a no-op to this compiler; it is a node in
+   balance_case_nodes' tree and it changes how every sibling is tested.
+   func_80089A38 has the same empty case 0 for the same reason.
+
+   Two smaller shapes, both forced by the listing: state 0x10 stores the
+   VALUE it compared (`c = r[16]; if (c == 0x20) ... p->h4 = c;`) rather than
+   the literal 0x20, which is why the target has `sh $a2` and not a fresh
+   `addiu`; and state 2 reads the +0x02 halfword twice, signed for the
+   subtraction and unsigned for the addend, which is one `s16` field used two
+   ways rather than two fields. */
+void func_80088EDC(s32 *p, s32 *q, u16 *s)
+{
+    s16 *r;
+
+    r = (s16 *)p[0];
+    if (((u16 *)r)[19] & 1)
+    {
+        ((s16 *)p)[4] = 0xFF;
+    }
+    switch (((s16 *)p)[4])
+    {
+    case 0:
+        break;
+    case 1:
+        if (--((s16 *)p)[5] <= 0)
+        {
+            s32 d;
+
+            q[0] += q[3];
+            d = q[3] - 0x10000;
+            q[3] = d;
+            if (d == 0)
+            {
+                ((s16 *)p)[5] = 4;
+                ((s16 *)p)[4] = 2;
+            }
+        }
+        break;
+    case 2:
+        ((s16 *)q)[1] += (0xA0 - ((s16 *)q)[1]) >> 1;
+        if (--((s16 *)p)[5] <= 0)
+        {
+            ((s16 *)p)[4] = 0x10;
+        }
+        break;
+    case 0x10:
+        {
+            s32 c;
+
+            ((s16 *)q)[1] = 0xA0;
+            c = r[16];
+            if (c == 0x20)
+            {
+                if (r[18] == ((s16 *)p)[6])
+                {
+                    ((s16 *)p)[4] = c;
+                }
+                else
+                {
+                    q[3] = -0x80000;
+                    ((s16 *)p)[4] = 0x21;
+                }
+            }
+        }
+        break;
+    case 0x20:
+        if ((((u16 *)r)[17] >> 3) & 1)
+        {
+            s[10] |= 0x80;
+        }
+        else
+        {
+            s[10] &= 0xFF7F;
+        }
+        break;
+    case 0x21:
+        {
+            s32 x;
+
+            x = q[0];
+            if (x <= 0x1FFFFFF)
+            {
+                q[0] = x + q[3];
+                q[3] += 0x20000;
+            }
+        }
+        break;
+    default:
+        break;
+    case 0xFF:
+        ((u16 *)p)[-1] |= 0x8000;
+        D_800814A0_a[0] |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_main_80088760", D_80088760);
 
