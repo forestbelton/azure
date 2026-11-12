@@ -422,7 +422,27 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
    start_card_server's D_80084130 is the retail link's -- which is why that one is
    now spelled `card_first_flg[0]` (include/structs.h). Nothing else in either
    block names a global. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400E34);
+void func_80400E34(void)
+{
+    func_8007C040(D_80400038, D_80400044, D_8013BB6C);
+    if (D_8013BB6C == 0)
+    {
+        D_8013BB6C = 1;
+        func_804086DC(1);
+        func_80408730();
+        func_8007C958();
+        func_8007CB08(0);
+        D_8009E390 = 0;
+        D_8009E394 = 0;
+        func_8007BFE0((u8 *)D_8009DDD8, 0x280);
+    }
+    func_80400A10();
+    D_804094F0[0] = 0;
+    D_804094F0[1] = 0;
+    D_804094F8[0] = 0;
+    D_804094F8[1] = 0;
+    D_804094E8 = 0;
+}
 
 /* Eight assert sites, and two things had to change beyond the symbol renames.
  *
@@ -641,9 +661,90 @@ s32 func_804015D8(void)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804016D0);
+/* Live func_8002168C. Three revision differences: case 3's threshold is 4
+ * here and 0xB there, none of the three cases zeroes D_80409250/D_80409258
+ * after setting the state, and cases 4/5 have no counterpart to the live
+ * `(&D_80084118)[i] = 0;`. */
+s32 func_804016D0(void)
+{
+    s32 st = func_804015D8();
+    s32 i = func_804019A4();
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804017EC);
+    if (st != 0)
+    {
+        if (D_80409258[i] == st)
+        {
+            D_80409250[i]++;
+        }
+        else
+        {
+            D_80409250[i] = 0;
+        }
+        D_80409258[i] = st;
+        switch (st)
+        {
+        case 1:
+        case 2:
+            D_804094F0[i] = st;
+            break;
+        case 3:
+            if (D_80409250[i] >= 4)
+            {
+                D_804094F0[i] = st;
+            }
+            break;
+        case 4:
+        case 5:
+            if (D_80409250[i] >= 0xB)
+            {
+                D_804094F0[i] = st;
+            }
+            break;
+        }
+        func_804008A0(i);
+    }
+    return st;
+}
+
+/* Live func_800217D4, with the same two revision differences as
+ * func_804016D0 above: neither arm zeroes D_80409260/D_80409268 after
+ * setting the state, and there is no counterpart to the live
+ * `(&D_80084118)[i] = 0;`. */
+s32 *func_804017EC(void)
+{
+    s32 v = func_80401444();
+    s32 i;
+
+    if (v != 0)
+    {
+        i = func_804019A4();
+        if (D_80409268[i] == v)
+        {
+            D_80409260[i]++;
+        }
+        else
+        {
+            D_80409260[i] = 0;
+        }
+        D_80409268[i] = v;
+        if (v == 1 || v == 4)
+        {
+            if (D_80409260[i] >= 4)
+            {
+                D_804094F8[i] = 1;
+            }
+        }
+        else
+        {
+            if (D_80409260[i] >= 4)
+            {
+                D_804094F8[i] = 0;
+            }
+        }
+        func_80400948();
+    }
+    return D_804094F8;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804018FC);
 
@@ -759,7 +860,42 @@ s32 func_80401AA4(s32 n, u8 *s)
    this lands. `cnt` is TWIN-ONLY -- the live format_card has no counter at
    all, because the print was its only use -- so there is nothing to rename in
    the live unit. Same story in func_804022C8. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401B30);
+/* Live format_card, with a VSync COUNTER the live one does not keep and a
+ * printf of it after the wait loop. */
+s32 func_80401B30(s32 card_slot)
+{
+    const char **mem_card;
+    s32 n = 0;
+    CARD_STATE r;
+
+    func_80408654(0);
+    func_80408654(1);
+    func_80401578();
+    mem_card = D_80408AA0;
+    if (card_slot != 0)
+    {
+        mem_card++;
+    }
+    func_8007CAA8(*mem_card);
+    while ((r = func_8040153C()) == 0)
+    {
+        n++;
+        func_800702F0(0);
+    }
+    func_8007C040(D_80400038, D_804000F8, n);
+    if (r != 1)
+    {
+        if (r == 3)
+        {
+            r = 4;
+        }
+        else
+        {
+            r = 5;
+        }
+    }
+    return r;
+}
 
 void func_80401BF4(char *out, s32 file_id)
 {
@@ -774,7 +910,33 @@ void func_80401BF4(char *out, s32 file_id)
     func_8007BF50(out, D_80408AB8[file_id]);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401C70);
+/* Live read_card_file, and NOT its two devices. The shifted length is its
+ * own local here -- assigning back into `n` as the live source does swaps
+ * $s1 and $s2 between `n` and `off` -- and the result is a branch, not the
+ * live `r = read(...) == n;`, which comes out branchless and a word short.
+ * The live source's two nested degenerate loops around `return r` are wrong
+ * here: they cost 17 differing. */
+s32 func_80401C70(u8 *name, u8 *buf, s32 n, s32 off)
+{
+    s32 r = 0;
+    s32 fd;
+
+    fd = func_8007CA58(name, 1);
+    if (fd != -1)
+    {
+        s32 len = n << 7;
+
+        if (off == 0 || func_8007CA68(fd, off << 7, 0) != -1)
+        {
+            if (func_8007CA78(fd, buf, len) == len)
+            {
+                r = 1;
+            }
+        }
+        func_8007CA98(fd);
+    }
+    return r;
+}
 
 /* Live write_card_file. SINGLE EXIT, not the live source's two early
  * `return ok;` -- with those, gcc proves `ok` is still 0 at each and
@@ -936,7 +1098,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804024A4);
    Source in docs/near-misses/func_80402508.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402508);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804025B8);
+/* Live func_80022300, with three constants changed: n * 12 where it has
+ * n << 3, 0x15 where it has 0x13, and 0x800000 where it has 0xA04010. */
+u8 *func_804025B8(s32 *a, u8 *p, s32 n)
+{
+    p[1] = 0x28;
+    p[0xA] = (n * 12) + 4;
+    p[0xB] = 0x15;
+    *(s32 *)(p + 4) = 0x800000;
+    p[0] |= 0x80;
+    return p + 0xC;
+}
 
 void func_804025F8(u8 *p, s32 idx, s32 n)
 {
@@ -958,9 +1130,41 @@ void func_804025F8(u8 *p, s32 idx, s32 n)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402670);
+/* Live func_800223B4, in raw word indices because every offset moved: ptrs
+ * at c[0x1A3] against the live group's 563, the pair at c[0x1A8] (ptrs[5],
+ * not ptrs[6]), the scratch at c[0x4B] against p[57], and x * 6 where the
+ * live one has x * 4. `sx` still has to be the FIRST local: the target
+ * computes it at word 3, ahead of the $s4 save. */
+void func_80402670(s32 *c, s32 x, s32 y, s32 n, s32 z)
+{
+    s32 sx = x * 6;
+    UnkCardPair *e = (UnkCardPair *)c[0x1A8];
+    u8 *q = (u8 *)&c[0x4B];
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040274C);
+    e->unk_04->unk_08 = sx - (c[6] / 2) + 0xA2;
+    e->unk_04->unk_0A = (n * 17) - (c[7] / 2) + 0x7A;
+    func_804025B8(c, q, y);
+    e->unk_00 = (s32)q;
+    func_804025F8((u8 *)((UnkCardPair *)c[n + 0x1A3])->unk_00, z, y);
+}
+
+/* Live func_80022488. The strings are a SEPARATE table here, D_80408B2C,
+ * four per record (the index is `sll 4`), where the live build has them in
+ * the same 24-byte UnkStrSet as the four bytes. */
+void func_8040274C(s32 *p)
+{
+    s32 i = p[2];
+    s32 n = D_80408ADC[i].unk_01 - 1;
+    s32 x;
+    s32 y;
+    s32 z;
+
+    if (D_80408ADC[i].unk_02 != 0)
+    {
+        func_80402508(D_80408B2C[i][n], p[0], &x, &y, &z);
+        func_80402670(p, x, y, n, z);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804027F8);
 
@@ -1004,7 +1208,23 @@ void func_80402BB8(s32 *p)
     q[0] = p + 9;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402BE0);
+/* Live func_80022934. FOUR entries here, not five; the buffer stride is
+ * 0x108 from a base of 0x234 where the live one is 0x180 from 0x114; the
+ * strings come from the separate D_80408B2C table. */
+void func_80402BE0(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 4; i++)
+    {
+        UnkCardPair *e = (UnkCardPair *)p[i + 0x1A3];
+
+        e->unk_04->unk_08 = 0x124 - (p[6] / 2);
+        e->unk_04->unk_0A = (i * 17) - (p[7] / 2) + 0xFC;
+        e->unk_00 = (s32)func_80051B50((u8 *)p + 0x234 + i * 0x108,
+                                       D_80408B2C[p[2]][i], 1);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402CD4);
 
@@ -2001,9 +2221,10 @@ void func_80405624(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-void func_804056CC(s32 a)
+/* RETURNS: func_804057F0 stores $v0 straight after the call. */
+s32 func_804056CC(s32 a)
 {
-    func_80047358(a, D_80408D28, 0x15);
+    return func_80047358(a, D_80408D28, 0x15);
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804056F4);
@@ -2020,7 +2241,43 @@ void func_804057B0(s32 *p, s32 v)
     func_8040553C(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804057F0);
+/* Live func_80024D58. TWO arguments here, not three -- there is no r[0x20]
+ * store -- and the allocation failure is an ASSERT this build carries and the
+ * live one does not (D_80400738/D_80400760 are this translation unit's own
+ * copies of the format and the filename, not c_server.c's D_80400004 pair).
+ * The group is spelled in raw word indices, as func_804057B0 and
+ * func_80405900 beside it are: root at r[0x2BE], its unk_0C at r[0x2C1],
+ * ptrs at r[0x2C2]. */
+s32 *func_804057F0(s32 *p, s32 a)
+{
+    s32 *q = (s32 *)D_8040B4F8;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_8040B4F8, 0x387);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_80400738, D_80400760, 0x1A0);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_804059A8(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0xDFC);
+    }
+    r[0x1F] = a;
+    func_804056F4((UnkCardGrpB20 *)r, 0x15);
+    q[3] = (s32)(r + 0x2BE);
+    r[0x2C1] = func_804056CC((s32)(r + 0x2C2));
+    func_804057B0(r, (s32)p);
+    q[4] = 0;
+    return q;
+}
 
 void func_80405900(s32 *p)
 {
@@ -2346,7 +2603,38 @@ void func_80406150(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804061C4);
+/* Live func_80025788, with func_80404688 in the loop where it has
+ * func_80404C84, func_80405A64 as the else arm's handler where it has
+ * func_80405A3C, and no `func_80400908(); p[16] = 0;` tail. */
+void func_804061C4(s32 *p)
+{
+    s32 i;
+    s32 off;
+
+    if (p[14] != 0)
+    {
+        p[-4] = (s32)func_80406368;
+    }
+    else
+    {
+        if (func_804022C8(p[10]) != 0)
+        {
+            p[-4] = (s32)func_80406368;
+            off = 0;
+            for (i = 0; i < 5; i++)
+            {
+                func_80404688((s32 *)p[off + 1]);
+                off++;
+            }
+        }
+        else
+        {
+            p[13] = (s32)func_80406368;
+            func_804033C4((s32)(p - 8));
+            p[-4] = (s32)func_80405A64;
+        }
+    }
+}
 
 /* Live func_80025848, MOVED OVER UNCHANGED except for the four symbols. The
  * other half of the folded-indexed-load pair with func_80404DEC: under 4.1's
@@ -2531,7 +2819,35 @@ void func_80406A74(void)
     func_8003D548(3);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406AA8);
+/* Live func_800262BC, with func_80403144 where it has func_804030F4, two of
+ * its calls absent, func_80404688 taking one argument, and the 0x80010000
+ * read a WORD here where the live one reads ((s16 *)0x80010000)[0x104]. The
+ * handler goes through a LOCAL: three stores would cost three %hi pairs. */
+void func_80406AA8(s32 *p)
+{
+    func_80406844((u8 *)0x80010000, p[11], p[9]);
+    if (func_80402084(p[11], (u8 *)0x80010000) == 0)
+    {
+        p[13] = (s32)func_80406DA0;
+        func_80403144((s32)(p - 8));
+        p[-4] = (s32)func_804069FC;
+    }
+    else
+    {
+        func_80405A00((s32 *)p[1], p[11]);
+        func_80404688((s32 *)p[p[11] + 3]);
+        if (D_80010208 != 0)
+        {
+            p[-4] = (s32)func_80406A74;
+        }
+        else
+        {
+            p[-4] = (s32)func_80406DA0;
+        }
+    }
+    func_80400908();
+    p[16] = 0;
+}
 
 void func_80406B74(s32 *p)
 {
@@ -2773,7 +3089,39 @@ void func_80407688(s32 *p, s32 v)
     func_80407558(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804076C8);
+/* Live func_80026ED0. ONE argument, not two -- the live `r[9] = a;` has no
+ * counterpart -- and, as in func_804057F0, the allocation failure is an
+ * assert this build carries and the live one does not.  Raw word indices for
+ * the UnkCardGrp044: root at r[0x14], its unk_0C at r[0x17], ptrs at r[0x18]. */
+s32 *func_804076C8(s32 *p)
+{
+    s32 *q = (s32 *)D_8040C318;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_8040C318, 0x42);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_804007A4, D_804007CC, 0x136);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_804077D4(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0xE4);
+    }
+    func_804075D0((UnkCardGrp044 *)r, 4);
+    q[3] = (s32)(r + 0x14);
+    r[0x17] = func_804075A8(r[0x18]);
+    func_80407688(r, (s32)p);
+    q[4] = (s32)func_80407298;
+    return q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804077D4);
 
@@ -3020,7 +3368,7 @@ void func_804083A0(s32 *p)
     s32 *q = p - 8;
 
     p[8] = func_80404C84(q, p + 3);
-    p[9] = (s32)func_804076C8w(q);
+    p[9] = (s32)func_804076C8(q);
     func_80400948();
     p[-4] = (s32)func_804081AC;
 }

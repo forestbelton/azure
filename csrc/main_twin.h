@@ -39,9 +39,12 @@ void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
+void func_800702F0(s32 mode);                        /* VSync */
 void func_8004DDBC(u32 *p, u8 *q, u32 *r);           /* func_8004CBFC */
 s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
 s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
+s32 func_80047FD8(s32 *p);                           /* func_8004B4A8 */
+void func_80040560(s32 *p, u32 f);                   /* func_8004491C */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
 /* THIS BLOCK LINKED ITS OWN COPY OF THE C LIBRARY AND THE BIOS DIRECTORY
@@ -51,11 +54,14 @@ void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
    csrc/ovl_main_80400000.c. Spell them by address here. */
 long func_8007CA58(char *name, long flags);          /* open */
 long func_8007CA68(long fd, long off, long whence);  /* lseek */
+long func_8007CA78(long fd, void *buf, long n);      /* read */
 long func_8007CA88(long fd, void *buf, long n);      /* write */
 long func_8007CA98(long fd);                         /* close */
 char *func_8007BF50(char *d, char *s);               /* strcat */
 char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
+long func_8007C958(void);                            /* a libcard init call */
+long func_8007CAA8(const char *name);                /* format */
 long func_8007CB08(long);                            /* ChangeClearPAD */
 struct DIRENTRY *func_8007CAB8(u8 *name, struct DIRENTRY *e);  /* firstfile2 */
 struct DIRENTRY *func_8007CAC8(struct DIRENTRY *e);  /* nextfile */
@@ -77,6 +83,10 @@ void func_80400E34(void);                            /* start_card_server */
 s32 func_804010F0(void);                             /* on_sw_card_eof */
 s32 func_804012B0(void);                             /* on_card_new */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
+s32 func_80401444(void);                             /* test_sw_card_events */
+CARD_STATE func_8040153C(void);                      /* take_card_state */
+s32 func_804015D8(void);                             /* poll_card_events */
+int func_804019A4(void);                             /* is_second_card_slot */
 void func_804014E4(void);                            /* reset_sw_events */
 void func_80401578(void);                            /* reset_hw_events */
 s32 func_804016D0(void);                             /* func_8002168C */
@@ -85,6 +95,10 @@ s32 func_804019B4(void);                             /* count_card_files */
 s32 func_80401B30(s32 card_slot);                     /* format_card */
 s32 func_80401C70(u8 *name, u8 *buf, s32 n, s32 off); /* read_card_file */
 s32 func_80401E2C(s32 n);                            /* load_save_slot_info */
+u8 *func_804025B8(s32 *a, u8 *p, s32 n);             /* func_80022300 */
+void func_804025F8(u8 *p, s32 idx, s32 n);           /* func_8002233C */
+void func_80402508(u8 *s, s32 a, s32 *x, s32 *y, s32 *z); /* func_8002225C */
+void func_80402670(s32 *c, s32 x, s32 y, s32 n, s32 z);   /* func_800223B4 */
 void func_8040274C(s32 *p);                          /* func_80022488 */
 void func_804027F8(s32 *p);                          /* func_800226A8 */
 u8 *func_80402A1C(u8 *p, s32 *q);                    /* func_80022774 */
@@ -146,6 +160,8 @@ void func_804053A0(s32 *p);                          /* func_80024818 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_804054E8(s32 *p);                          /* func_80024A50 */
+s32 func_804056CC(s32 a);                            /* func_80024C48 */
+void func_804056F4(UnkCardGrpB20 *c, s32 n);         /* func_80024C70 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
 s32 *func_804057F0(s32 *p, s32 a);                  /* func_80024D58 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
@@ -170,6 +186,7 @@ s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
 void func_80406678w(s32 *p) __asm__("func_80406678");
 void func_80406720(s32 *p);                          /* func_80025D34 */
 void func_804067BC(s32 *p);                          /* func_80025DC8 */
+void func_80406844(u8 *p, s32 a, s32 mode);          /* init_save_file_header */
 void func_804069FC(s32 *p);                          /* func_800261C0 */
 void func_80406AA8(s32 *p);                          /* func_800262BC */
 void func_80406BEC(s32 *p);                          /* func_80026410 */
@@ -183,10 +200,13 @@ void func_804073B0(UnkCardPair *p, u32 *a, u32 *b);  /* func_80026C00 */
 void func_80407458(s32 *p);                          /* func_80026C94 */
 void func_804074C4(s32 *p);                          /* func_80026CF0 */
 void func_80407558(UnkCardGrp044 *c);             /* func_80026D78 */
-s32 *func_804076C8(s32 *p, s32 a);                   /* func_80026ED0 */
-/* ONE argument at func_804083A0's call site, where the live func_80027A9C passes
- * p[3] as a second; same device as main.h's func_80024C48w. */
-s32 *func_804076C8w(s32 *p) __asm__("func_804076C8");
+void func_804075D0(UnkCardGrp044 *c, s32 n);         /* func_80026DF0 */
+s32 func_804075A8(s32 a);                            /* func_80026DC8 */
+void func_80407688(s32 *p, s32 v);                   /* func_80026E90 */
+/* ONE argument, where the live func_80026ED0 takes two: there is no r[9]
+ * store in the body and no second load at func_804083A0's call site. */
+s32 *func_804076C8(s32 *p);                          /* func_80026ED0 */
+void func_804077D4(s32 *p);                          /* func_80026FB4 */
 void func_8040789C(UnkCardGrp0D4 *c);             /* func_80027018 */
 void func_804078D8(u8 *p);                           /* func_80027054 */
 void func_80407A44(UnkCardPair *p, u32 *a, u32 *b);  /* func_800271C0 */
@@ -204,9 +224,11 @@ long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
 /* libcard's own BIOS stubs, four words each and not expressible in C. */
+void func_80408730(void);                            /* func_80027D7C */
 long func_80408798(long pad_enable);                 /* B0:0x4A, init_card */
 long func_804088A0(void);                            /* B0:0x4B, start_card */
 long func_80408958(void);                            /* B0:0x55 */
+short func_8040861C(void);                           /* the callback func_804057F0 hands func_80040560 */
 long func_804086BC(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
                                                         votes func_80027AFC, which takes two */
 void func_804086CC(void);                            /* func_80027C60 */
@@ -252,8 +274,14 @@ extern s32 D_80136140[];                             /* card_file_count, D_80084
                                                         ENGINE BUILD is different here: this one is
                                                         nowhere near the resident 0x80084128 */
 
+extern s32 D_8013BB6C;                               /* THIS link's card_first_flg; the live
+                                                        start_card_server's is D_80084130 */
+extern s32 D_8009E394;                               /* the word after D_8009E390 */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 extern const char D_80400004[40];                    /* ASSERT_FMT */
+extern char D_80400038[];                            /* "%s = %d\n" */
+extern char D_80400044[];                            /* "card_first_flg" */
+extern char D_804000F8[];                            /* the format_card counter's name */
 extern const UnkFnTab5 D_80400054;                   /* gSwCardEventHandlers */
 extern const UnkFnTab5 D_80400068;                   /* gHwCardEventHandlers */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
@@ -279,6 +307,7 @@ typedef struct
     u8 unk_03;
 } UnkTwinMsg;
 extern UnkTwinMsg D_80408ADC[];                      /* live gCardMessages' trailing four bytes */
+extern u8 *D_80408B2C[][4];                          /* and its strings, FOUR per record, not five */
 
 extern const char *D_80408AA0[];                     /* MEM_CARD_NAMES */
 extern char D_80408AA8[16];                          /* MEM_CARD_PREFIX */
@@ -304,6 +333,12 @@ extern u8 *D_80408C8C[4];                            /* D_800282BC */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
+extern u8 D_8040B4F8[];                              /* D_8002A990 */
+extern u8 D_8040C318[];                              /* D_8002B850 */
+extern const char D_804007A4[40];                    /* another unit's ASSERT_FMT copy */
+extern const char D_804007CC[];                      /* its filename */
+extern const char D_80400738[40];                    /* this unit's own ASSERT_FMT copy */
+extern const char D_80400760[];                      /* its filename */
 extern u32 D_80408CC4;                               /* D_80071660 */
 extern u32 D_80408CC8;                             /* D_80071664 */
 extern u32 D_80408CCC;                             /* D_80071668 */
@@ -334,6 +369,12 @@ extern long D_80409280;                              /* gHwCardEOFEvent, D_80028
 extern long D_80409284;                              /* gHwCardErrorEvent, D_80028564 */
 extern long D_80409288;                              /* gHwCardTimeoutEvent, D_80028568 */
 extern long D_8040928C;                              /* gHwCardNewEvent, D_8002856C */
+extern s32 D_80409260[2];                            /* D_80028540 */
+extern s32 D_80409268[2];                            /* D_80028548 */
+extern s32 D_804094F8[2];                            /* D_800287D8 */
+extern s32 D_80409250[2];                            /* D_80028530 */
+extern s32 D_80409258[2];                            /* D_80028538 */
+extern s32 D_804094F0[2];                            /* D_800287D0 */
 extern s32 D_804094E8;                               /* card_st, D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
 extern s32 D_80409500;                               /* card_evflg, D_800287E0 */
