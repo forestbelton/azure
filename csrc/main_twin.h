@@ -444,6 +444,7 @@ extern u8 *D_80408B2C[][4];                          /* and its strings, FOUR pe
 extern const char *D_80408AA0[];                     /* MEM_CARD_NAMES */
 extern char D_80408AA8[16];                          /* MEM_CARD_PREFIX */
 extern const char *D_80408AB8[6];                    /* MEM_CARD_FILENAMES */
+extern const UnkBlock24 D_80408C6C;                   /* D_80027F48 */
 extern u8 D_80408C84[8];                              /* D_80027F60 */
 /* FOUR SIZED-ALIAS DEVICES USED TO LIVE HERE and are gone as of 2026-11-11.
    Three were `extern u8 func_XXXXXXXX_a[8] __asm__("func_XXXXXXXX")`, giving

@@ -1497,7 +1497,77 @@ void func_80402974(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402A1C);
+u8 *func_80402A1C(u8 *p, s32 *q)
+{
+    u8 buf[4];
+    u32 w;
+    u32 h;
+    u32 hh;
+    u32 bh;
+    s32 g;
+    s32 i;
+
+    *(UnkFour *)buf = *(UnkFour *)D_80400544;
+    i = 0;
+    w = D_80408ADC[q[2]].unk_00 * 12;
+    hh = D_80408ADC[q[2]].unk_01;
+    h = hh * 17;
+    q[6] = w + 8;
+    q[7] = h + 8;
+    for (; i < 4; i++)
+    {
+        p[0xA] = (w + 8) >> 1;
+        p[0xB] = (h + 8) >> 1;
+        p[1] = 0x48;
+        *(s32 *)(p + 4) = 0x101010;
+        p[0] = buf[i];
+        p += 0xC;
+        p[0xA] = (s32)(w + 0xA) >> 1;
+        bh = h + 0xA;
+        p[0xB] = bh >> 1;
+        p[1] = 0x48;
+        *(s32 *)(p + 4) = 0x101010;
+        p[0] = buf[i];
+        p += 0xC;
+        *(UnkBlock24 *)p = D_80408C6C;
+        g = 0x30BFC0;
+        /* DEVICE: one marker, worth 68 words (68 -> 0). `"0"(g)` is a second
+           set of g inside the loop, and `"r"(p)` is a VARYING input, so the
+           asm's set is not invariant and `consec_sets_invariant_p` (loop.c)
+           refuses the pair: the lui/ori stays in the loop, where the target
+           has it. This is the twin of the same device in func_80402A1C's live
+           counterpart func_80022774, with one difference that matters -- there
+           the varying input is `i`, here it is `p`. `i` cannot do the job in
+           this build: it has no non-giv use, so loop.c's strength reduction
+           eliminates it and rewrites `i < 4` as the buf pointer against
+           `buf + 4` (`slt $t1, $t8`), which is what the target does. Naming
+           `i` in the marker is the one spelling that keeps it alive, and that
+           costs the elimination -- 104 words, 74 differing.
+           `"r"(bh)` is the live device's (b)/(c) jobs and does both here too:
+           it is the last use of `h + 0xA`, so force_movables does not link the
+           `srl` to the `addiu` and the shift stays in the loop while the addiu
+           hoists; and it is bh's third reference, which fixes its register.
+           Legal spellings ruled out: no marker 68; `"0"(g), "r"(bh)` 67 (bh is
+           loop-invariant, so the asm is invariant and both insns hoist);
+           `"0"(g), "r"(p)` 24, with or without `volatile`, and the same 24 with
+           the shift written inline as `p[0xB] = (h + 0xA) >> 1;`.
+           Operand order does not matter. `h = hh * 17;` is free here -- the
+           live source needs `(hh << 4) + hh` only because expand_mult's copy
+           would lose its hard-register pin, and this build has no pin.
+           Warns under -Wall? No -- g is initialised. */
+        __asm__("" : "=r"(g) : "0"(g), "r"(p), "r"(bh));
+        *(s32 *)(p + 4) = g;
+        *(s32 *)(p + 0xC) = g;
+        *(s32 *)(p + 0x10) = g;
+        *(s32 *)(p + 0x14) = g;
+        p[0xA] = (w + 8) >> 1;
+        p[0xB] = (h + 8) >> 1;
+        p[0] = buf[i];
+        p += 0x18;
+    }
+    p[-0x18] |= 0x80;
+    return p;
+}
 
 void func_80402BB8(s32 *p)
 {
