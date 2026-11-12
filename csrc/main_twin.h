@@ -486,6 +486,18 @@ extern const char D_80400800[];                      /* its filename */
 extern const char D_804005F8[40];                    /* another unit's ASSERT_FMT copy */
 extern const char D_80400620[];                      /* its filename */
 extern u8 D_8040B4F8[];                              /* D_8002A990 */
+/* func_804062F4's dispatch table. The source has it as a LOCAL array with an
+   initialiser; written that way gcc emits the sixteen bytes into this unit's
+   .rodata a second time, the object's rodata grows 0x14 -> 0x24, and main.bin
+   comes out 0x10 long -- the unit has one dotted `.rodata` subsegment and
+   this template lives 0x6DC further on, inside a hand-owned blob. Copying the
+   blob's own object produces the same four lw/sw pairs and emits nothing. */
+typedef struct
+{
+    void (*f[4])(s32 *);
+} UnkTwinDispatch4;
+extern const UnkTwinDispatch4 D_8040076C;
+
 extern char D_80400660[];                            /* " <name> " */
 extern u32 D_80400668[];                             /* the 41-byte card-info header */
 extern char D_804006AC[];                            /* live D_800283A8[3] */

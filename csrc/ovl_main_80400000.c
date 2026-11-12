@@ -3450,30 +3450,25 @@ void func_80406274(s32 *p)
     }
 }
 
-/* func_804062F4 IS BLOCKED BY THE RODATA SPLIT, NOT BY MATCHING. Live
- * func_800258C8, and its body moves over cleanly -- but it is
- * `void (*fns[4])(s32 *) = {...}`, so gcc emits a 16-byte template into the
- * unit's .rodata and block-copies it to the stack. The target does exactly
- * that, from D_8040076C at 0x26976C.
+/* Live func_800258C8. The source is `void (*fns[4])(s32 *) = {...}` -- written
+ * that way gcc emits the template into this unit's .rodata a SECOND time and
+ * the container comes out 0x10 long, because the unit has one dotted
+ * `.rodata` subsegment and this template is 0x6DC further on, inside a
+ * hand-owned blob. Copying the blob's own object instead produces the same
+ * four lw/sw pairs and emits nothing; the declaration in main_twin.h carries
+ * the rest of the note.
  *
- * This unit's dotted `.rodata` subsegment is 0x26907C..0x269090, twenty bytes
- * that are an already-landed function's SWITCH TABLE, and a unit can have
- * only one. 0x26976C is 0x6DC further on, inside the hand-owned
- * `ovl_main_80400000_rodata_post` blob, so landing this function emits the
- * template a SECOND time: the object's .rodata goes 20 -> 36 bytes, every
- * rodata byte and the whole text after it shift 0x10, and main.bin comes out
- * 0x10 long. Measured -- and note that ovlverify reported 0 differing for
- * this function throughout, exactly as its own header warns. Only the link
- * catches it.
- *
- * WHAT IT ACTUALLY PROVES: the twin block is several translation units, like
- * the live side's nine, and our single `c` subsegment is an approximation
- * that works only while the asm rodata blobs fill the gaps. Two ways out, in
- * order of honesty: carve this function (and whatever else shares its unit)
- * into its own translation unit with its own `.rodata` at 0x26976C; or leave
- * it here. The live counterpart is cardinfo.c, so the carve has a name to
- * aim at. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804062F4);
+ * It also remains true that the twin block is several translation units like
+ * the live side's nine, and that our single `c` subsegment is an
+ * approximation that works while the asm rodata blobs fill the gaps. This
+ * function was the one piece of evidence for that and it no longer forces
+ * the carve. */
+void func_804062F4(s32 *p)
+{
+    UnkTwinDispatch4 tbl = D_8040076C;
+
+    tbl.f[p[0x11]](p);
+}
 
 void func_80406358(s32 *p)
 {
