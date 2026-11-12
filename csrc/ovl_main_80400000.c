@@ -229,29 +229,20 @@
  *                   deleted, and FOUR devices came out of this unit and
  *                   csrc/main_twin.h altogether.
  *
- *   2 fn, 2 words   A DIFFERENT POINTER SPELLING OF THE SAME ADDRESS.
- *                   func_80406720 and func_804070C4 hold `q = p + 8` and
- *                   reach two fields as `q[6]`/`q[7]`; this block reaches
- *                   the same bytes as `0x38($s2)`/`0x3C($s2)` with $s2
- *                   holding p, i.e. p[14]/p[15].
- *
- *                   REFINED 2026-11-11, and the earlier note that writing it
- *                   that way "is NOT the fix" was half right. p[14]/p[15]
- *                   DOES fix both loads; what is left at 8 differing is one
- *                   REGISTER SWAP and nothing else -- the candidate gives
- *                   $s0 to the counter and $s1 to the pointer, the target
- *                   the reverse, and the four prologue/epilogue saves follow.
- *                   The cause is the priority race: `q[0]` folds to `p[8]`,
- *                   so with q[6]/q[7] gone `q` has NO reference outside the
- *                   loop and loses to `i`. Swept without moving it off 8:
- *                   declaring i first, i inside the if, q inside the if (36),
- *                   a for-loop, `i = 0` at declaration (37), i++ as its own
- *                   statement, a down-counter (26), `register`, `*q` for
- *                   q[0], the final `|=` written off q to buy a reference
- *                   (38), moving only one of the two reads (9 each). The
- *                   live spelling and a `u8 *q` with byte offsets both sit
- *                   at 2. So it is a register race needing a lever that is
- *                   not in this file yet, and the residue is exactly one.
+ *   LANDED 2026-11-12  func_80406720 and func_804070C4, which were a
+ *                   register race plus a delay slot and stood at 2 words
+ *                   differing for three sessions. BOTH halves had a lever.
+ *                   The race (the candidate gives $s0 to the counter and
+ *                   $s1 to the pointer, the target the reverse, and the four
+ *                   prologue/epilogue saves follow) is a priority race: cse
+ *                   folds every `q[n]` outside the loop to p-relative, so
+ *                   `q` has NO reference outside the loop and loses to `i`.
+ *                   A degenerate `do { } while (0)` over the body buys it
+ *                   one -- flow.c:440 weights a reference by loop_depth.
+ *                   The delay slot is reorg scanning BACKWARD out of a
+ *                   CALL_INSN; an empty `asm` between `q++` and the call
+ *                   stops it (stop_search_p) and the forward scan takes
+ *                   `i++`. Both are in docs/matching-levers.md.
  *
  *   LANDED 2026-11-11, all three by the SAME lever -- a declared size of 8
  *   or less takes the -G8 small-data path, which costs the address ONE
@@ -323,9 +314,8 @@
  *                   What is known to still be real: func_804018FC is 42
  *                   words against a live counterpart of 2, so that pairing
  *                   is wrong or the live source lost the body entirely.
- *                   func_80406720/func_804070C4's register race (above) and
- *                   func_804012B0's block layout were characterised under
- *                   4.1 and have not been re-opened -- func_804012B0's last
+ *                   func_804012B0's block layout was characterised under
+ *                   4.1 and has not been re-opened -- its last
  *                   arm falls through to the shared return in the live build
  *                   and jumps to it here, and that build reuses a register
  *                   already holding %lo(D_8009E390) where the live one
@@ -3742,11 +3732,47 @@ s32 *func_80406678(s32 *p, s32 a)
     return q;
 }
 
-/* NEAR MISS, 39 of 39 words, 2 differing: `q++` lands in the call's delay
- * slot where the target puts `i++` there and the increment before the call.
- * Source in docs/near-misses/func_80406720.c; func_804070C4 below is the
- * same function with three different callees and the same 2. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406720);
+/* TWO devices, and func_804070C4 below is the same function with three
+ * different callees and the same two.
+ *
+ * The degenerate `do { } while (0)` sets the register assignment. cse rewrites
+ * all three of `q[0]`, `q[6]` and `q[7]` as p-relative, so `q` loses the
+ * references that would outrank `i`; flow.c:440 weights a reference by
+ * loop_depth, and one more level over the body is enough to put them back in
+ * the target's order (p in $s2, q in $s0, i in $s1).
+ *
+ * The empty asm sets the call's delay slot. reorg fills a CALL_INSN's slot
+ * from BEHIND as well as from in front, so with `q++` written before the call
+ * it takes `q++` either way; `stop_search_p` ends the backward scan at an
+ * asm, and the forward scan then takes `i++`, which is the target's
+ * `addiu $s0,$s0,4` / `jal` / `addiu $s1,$s1,1`. The hoisted `v` is what lets
+ * `q++` precede the call at all. */
+void func_80406720(s32 *p)
+{
+    s32 *q = p + 8;
+    s32 i;
+
+    if (p != 0)
+    {
+        func_80404DBC((u8 *)q[0]);
+        func_80403D24((s32 *)q[6]);
+        func_804059A8((s32 *)q[7]);
+        i = 0;
+        do
+        {
+            do
+            {
+                s32 *v = (s32 *)q[1];
+
+                q++;
+                __asm__("");
+                func_80404570(v);
+            } while (0);
+        } while (++i < 5);
+        ((u16 *)p)[15] |= 0x8000;
+        D_8008DAB4 |= 0x8000;
+    }
+}
 
 void func_804067BC(s32 *p)
 {
@@ -3768,12 +3794,26 @@ void func_804067BC(s32 *p)
     func_80405A00((s32 *)p[1], p[11]);
 }
 
-/* NEAR MISS, 112 words of 110: the second block copy's 7-byte tail. The
- * target does `lwl/lwr` + `lh` + `lb`, which is block_move_sequence with
- * align 2, and no C type can ask for that -- a struct of 0x27 bytes has
- * align 1, and raising its alignment rounds the size to 0x28 and the tail to
- * two more `lwl/lwr` pairs. Source in docs/near-misses/func_80406844.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406844);
+/* The second block copy's seven-byte tail is `lwl/lwr` + `lh` + `lb`, which
+ * is expand_block_move with align 2 and a size of 0x27. No C TYPE can ask for
+ * that pair -- a 0x27-byte struct has align 1, and raising its alignment
+ * rounds the size to 0x28 -- but the alignment memcpy is handed does not come
+ * from a type: get_pointer_alignment (expr.c) reads it off the pointer
+ * EXPRESSION, and a cast is undone on the way (the NOP_EXPR arm re-reads the
+ * inner pointer's target type), so only a pointer VARIABLE of u16 type keeps
+ * it. Hence q, which every use goes through: route one of them through p and
+ * the two pseudos cost a `move`. */
+void func_80406844(u8 *p, s32 a, s32 mode)
+{
+    u8 buf[0x10];
+    u16 *q = (u16 *)p;
+
+    *(UnkTwinBlk200 *)q = D_80408EC8;
+    memcpy(q + 2, D_8040077C, 0x27);
+    func_8003830C(a + 1, buf);
+    func_8007BF50((u8 *)q + 4, buf);
+    D_80010208.unk_00 = mode == 2;
+}
 
 void func_804069FC(s32 *p)
 {
@@ -4065,7 +4105,33 @@ s32 *func_8040701C(s32 *p, s32 a)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804070C4);
+/* The same two devices as func_80406720 above. */
+void func_804070C4(s32 *p)
+{
+    s32 *q = p + 8;
+    s32 i;
+
+    if (p != 0)
+    {
+        func_80404DBC((u8 *)q[0]);
+        func_804059A8((s32 *)q[1]);
+        func_80407D38((s32 *)q[2]);
+        i = 0;
+        do
+        {
+            do
+            {
+                s32 *v = (s32 *)q[3];
+
+                q++;
+                __asm__("");
+                func_80404570(v);
+            } while (0);
+        } while (++i < 5);
+        ((u16 *)p)[15] |= 0x8000;
+        D_8008DAB4 |= 0x8000;
+    }
+}
 
 /* Live func_800269B4, with the group's ptrs reached through p[0x18] -- the
  * same extra indirection as func_804072CC and func_80407458. */

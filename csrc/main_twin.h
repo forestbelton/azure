@@ -52,18 +52,14 @@ typedef struct
     u32 unk_00;
 } UnkTwinWord;
 
-/* The two templates func_80406844 block-copies into the save header. Both
- * have alignment 1, which is what makes gcc emit the runtime alignment test
- * and the lwl/lwr pair beside the aligned loop. */
+/* The 0x200-byte template func_80406844 block-copies into the save header.
+ * It has alignment 1, which is what makes gcc emit the runtime alignment
+ * test and the lwl/lwr pair beside the aligned loop. The 0x27-byte template
+ * beside it is a u16 array instead: see D_8040077C. */
 typedef struct
 {
     u8 unk_00[0x200];
 } UnkTwinBlk200;
-
-typedef struct
-{
-    u8 unk_00[0x27];
-} UnkTwinBlk27;
 
 
 /* --- functions, in address order --- */
@@ -397,7 +393,7 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
-extern const UnkTwinBlk27 D_8040077C;                /* the header's 0x27-byte template */
+extern const u16 D_8040077C[];                       /* the header's 0x27-byte template, copied at align 2 */
 extern u8 D_804006C4[];                              /* two whole-screen messages */
 extern u8 D_804006EC[];
 extern const s32 D_80400714;                         /* the free-block line's prefix: a word

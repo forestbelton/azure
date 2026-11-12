@@ -153,7 +153,7 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **238 of its 263 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **241 of its 263 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** Most came from the
   live overlay's own source with their references renamed through
@@ -202,18 +202,25 @@ Three things about the overlays that change how they are worked, all in
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
   one pass** -- 21 with nothing changed but their symbol names. Successive
-  passes took the rest: stubs went **157 -> 25**.
+  passes took the rest: stubs went **157 -> 22**.
 
-  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 25 is accounted for:
-  **15** are hand-written assembly that can never be C (nine BIOS call stubs,
-  the libapi BIOS-patch routines, a `jr` into a data label, two delay loops),
-  and the other **10** are covered by the 9 parks in `docs/near-misses/`,
-  each with its body established and a measured reason (`func_804070C4`
-  shares `func_80406720`'s). There is no function left to pick up cold; the
-  work from here is cracking parks, and three of them fell on 2026-11-12 --
+  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 22 remaining stubs is
+  accounted for: **15** are hand-written assembly that can never be C (nine
+  BIOS call stubs, the libapi BIOS-patch routines, a `jr` into a data label,
+  two delay loops), and the other **7** are covered by the 7 parks in
+  `docs/near-misses/`. There is no function left to pick up cold; the work
+  from here is cracking parks, and SIX of them fell on 2026-11-12 --
   func_80402CD4 to a loop-invariance marker, func_8040861C by blocking
-  reorg's epilogue scan, and func_80401E2C by pinning a sunk load ahead of
-  an `la`.
+  reorg's epilogue scan, func_80401E2C by pinning a sunk load ahead of an
+  `la`, func_80406844 by reading `memcpy`'s alignment off a pointer VARIABLE
+  rather than a type, and func_80406720 with func_804070C4 by stopping
+  reorg's BACKWARD scan out of a call's delay slot with an empty `asm`.
+
+  The last three are worth naming as a pattern: all three parks had been
+  written off as "the stand-in compiler is FSF 2.7.2 and not SN's 4.0 build",
+  and all three were levers in the tree the whole time. A park that blames the
+  compiler is a hypothesis, not a finding, unless it names the pass and the
+  guard -- func_80404EA0's CONST_DOUBLE magic does; those three did not.
 
   `func_804062F4` used to be listed here as blocked for a structural reason --
   it needs a 16-byte rodata template at 0x26976C and this unit's single dotted
