@@ -219,11 +219,50 @@ Three things about the overlays that change how they are worked, all in
   words for three sessions -- with an asm-only block between the last arm and
   the shared `out:`.
 
-  The last three are worth naming as a pattern: all three parks had been
-  written off as "the stand-in compiler is FSF 2.7.2 and not SN's 4.0 build",
-  and all three were levers in the tree the whole time. A park that blames the
-  compiler is a hypothesis, not a finding, unless it names the pass and the
-  guard -- func_80404EA0's CONST_DOUBLE magic does; those three did not.
+  The compiler-blaming parks are worth naming as a pattern: three of the six
+  had been written off as "the stand-in compiler is FSF 2.7.2 and not SN's 4.0
+  build", and all three were levers in the tree the whole time. A park that
+  blames the compiler is a hypothesis, not a finding, unless it names the pass
+  and the guard.
+
+  **THE FIVE PARKS THAT ARE LEFT, as of 2026-11-12, all re-measured the same
+  day.** Three of them were rebuilt on better candidates; the count is not the
+  only thing to read.
+
+  - `func_804053A0` -- 82 of 82 words, 10 differing (was 84/46 that morning
+    and 81/68 before it). The LENGTH now matches and the whole tail loop is
+    byte-exact. Six of the ten are one scheduling decision before the first
+    jal, three are the `mfhi` reload-register gap it shares with
+    func_80404EA0, one is a commuted `addu`.
+  - `func_804022C8` -- 63 of 63 words, 7 differing, rebuilt from a 4-differing
+    candidate that had the two pointer increments in the wrong order and could
+    never have anything else. Every one of the seven is a register NAME, with
+    a control that makes the block byte-exact.
+  - `func_804034D8` -- 112 of 112, 6 differing, ONE register pair. The park's
+    local-alloc-priority reading was tested against `qty_compare_1`'s own
+    formula and does not hold: twenty-two spellings that move the reference
+    count or the live range all measure the same.
+  - `func_80402508` -- 44 of 44, 16 differing, and the two findings turned out
+    to be ONE: the target holds the space character in three registers because
+    loop.c gives each loop its own preheader copy, and cse1 merges ours into
+    one pseudo before the loop pass sees them.
+  - `func_80404EA0` -- 322 of 320, 154 differing, and its last two words are
+    now a FALSIFIABLE claim rather than an assertion. See below.
+
+  **THE ONE BIG LEVER LEFT IS A TOOLCHAIN QUESTION, and it is the user's
+  call.** func_80404EA0's unsigned-division magic gap is not a compiler
+  VERSION difference, it is a compiler BUILD-HOST difference. machmode.h picks
+  `HOST_WIDE_INT = long` only when `long` is wider than `int`; our cc1 is a
+  32-bit i386 binary where both are 32, so `immed_double_const`
+  (varasm.c:1859) reads a top-bit-set division magic as negative and hands
+  back a CONST_DOUBLE that `large_int` rejects, and mips.md:3208's
+  `lui`/`ori` split never fires. With a 64-bit HOST_WIDE_INT the same source
+  returns a CONST_INT. The test is concrete -- build `vendor/old-gcc`'s
+  `2.7.2-psx` with a 64-bit HOST_WIDE_INT and re-measure -- but it is a
+  change to the compiler that has to be re-measured against all 243 landed
+  functions in the unit, so it is written down and not taken. The same
+  question is worth asking of every other "it is the compiler" verdict in
+  `docs/near-misses/`.
 
   `func_804062F4` used to be listed here as blocked for a structural reason --
   it needs a 16-byte rodata template at 0x26976C and this unit's single dotted
