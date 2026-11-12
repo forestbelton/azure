@@ -146,6 +146,46 @@ def cc1_g_for_unit(unit):
     return _g_lookup(_CC1_G_BY_UNIT[0], _CC1_G_BY_UNIT[1], unit, 8)
 
 
+_CC_BY_UNIT = None
+
+
+def _makefile_cc_map():
+    """{unit: driver} from the Makefile's per-object `CC := tools/...` rules.
+
+    THE PROJECT BUILDS WITH TWO COMPILERS as of 2026-11-11. Everything is
+    tools/cdkgcc (PSY-Q 4.1's cc1psx, cygnus-2.7.2-970404 SN32.3.7.0004)
+    except main.bin's 0x80400000 debug twin, which is tools/psx272gcc (FSF
+    gcc 2.7.2, standing in for 4.0's `2.7.2.SN32.3.7 Build 0001`). Measuring
+    that unit with the wrong one is silent in exactly the way a wrong -G is:
+    the function does not match and nothing says why. So read the Makefile,
+    the same way cc1_g_for_unit does, instead of hardcoding a unit name here.
+    """
+    exact, pats = {}, []
+    try:
+        mk = open(os.path.join(PROJ, 'Makefile')).read()
+    except OSError:
+        return exact, pats
+    mk = mk.replace('\\\n', ' ')
+    for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
+                         r'\s*:\s*CC\s*:?=\s*(\S+)', mk, re.M):
+        for o in m.group(1).split():
+            stem = o[len('build/csrc/'):-2]
+            if '%' in stem:
+                pats.append((stem, m.group(2)))
+            else:
+                exact[stem] = m.group(2)
+    pats.sort(key=lambda kv: -len(kv[0]))
+    return exact, pats
+
+
+def cc1_for_unit(unit):
+    """The compiler driver this unit is built with, from the Makefile."""
+    global _CC_BY_UNIT
+    if _CC_BY_UNIT is None:
+        _CC_BY_UNIT = _makefile_cc_map()
+    return _g_lookup(_CC_BY_UNIT[0], _CC_BY_UNIT[1], unit, 'tools/cdkgcc')
+
+
 _GP_DEFS_BY_UNIT = {}
 
 # A file-scope tentative definition of a small global: `u32 D_80080ADC;`,
@@ -218,8 +258,12 @@ class CompileError(Exception):
     pass
 
 
-def compile_asm(src, cflags=()):
-    """Compile the candidate to assembly with tools/cdkgcc; return the text.
+def compile_asm(src, cflags=(), unit=None):
+    """Compile the candidate to assembly; return the text.
+
+    UNIT picks the compiler, because the project now builds with two -- see
+    cc1_for_unit. Passing None means tools/cdkgcc, which is right for every
+    unit but main.bin's 0x80400000 twin.
 
     This used to carry two workarounds for driving cc1psx under wine, both of
     which the native compiler makes unnecessary. Wine's filesystem is
@@ -234,7 +278,8 @@ def compile_asm(src, cflags=()):
     os.makedirs(SP, exist_ok=True)
     base = os.path.splitext(os.path.basename(src))[0]
     s = os.path.join(SP, base + '.s')
-    r = subprocess.run([os.path.join(PROJ, 'tools/cdkgcc')] + CFLAGS + list(cflags)
+    cc = cc1_for_unit(unit) if unit else 'tools/cdkgcc'
+    r = subprocess.run([os.path.join(PROJ, cc)] + CFLAGS + list(cflags)
                        + ['-S', '-o', s, src], cwd=PROJ,
                        capture_output=True, text=True)
     if r.returncode:
@@ -286,9 +331,11 @@ def object_words(o):
     return words, relocs
 
 
-def build(src, gasG=0, cflags=()):
-    """compile + assemble + disassemble a candidate."""
-    asm = compile_asm(src, cflags)
+def build(src, gasG=0, cflags=(), unit=None):
+    """compile + assemble + disassemble a candidate.
+
+    Pass UNIT so the right compiler is used; see compile_asm."""
+    asm = compile_asm(src, cflags, unit)
     name = os.path.splitext(os.path.basename(src))[0]
     return object_words(assemble(asm, name, gasG))
 

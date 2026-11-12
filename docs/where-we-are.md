@@ -153,12 +153,13 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **106 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **109 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** 88 came from the
   live overlay's own source with their references renamed through
   `tools/decomp/twinalign.py --symmap`, 7 on 2026-11-11 from the `-G8`
-  declared-size and increment-order levers, and 11 from the RESIDENT units
+  declared-size and increment-order levers, 3 more that same day from the
+  SECOND COMPILER below, and 11 from the RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls
   them in the executable. For those, the renames were read off the block's
@@ -179,14 +180,40 @@ Three things about the overlays that change how they are worked, all in
   source at `-G8` and aligning its 241 functions against this block gives the
   scale of what is already in the tree:
 
-  Two cautions for anyone resuming this block, both paid for on 2026-11-11.
-  `twinalign` read only `csrc/ovl_main_80020000.c`, so once the nine-unit
-  carve moved every live body into `csrc/main/*.c` it paired NOTHING -- every
-  row came back `twin-only` at 0.00. And its pairing is arbitrary among
-  identical-masked functions, so anchor on the already-landed ones rather
-  than trusting a `--todo` row. The 14-function `reload_cse_regs` cluster is
-  closed as unreachable without a patched compiler;
-  `csrc/ovl_main_80400000.c`'s header carries all of it.
+  **THIS UNIT BUILDS WITH A DIFFERENT COMPILER as of 2026-11-11, and that is
+  the single biggest thing to know before resuming it.** The block is a PSY-Q
+  **4.0** build where the rest of the project is 4.1; two passes separate them
+  (`reload_cse_regs` and split addresses) and both are Cygnus/SN additions over
+  FSF gcc 2.7.2. SN never released 4.0's source, but 4.0's `cc1psx` reports
+  `2.7.2.SN32.3.7 Build 0001` -- SN's build of FSF 2.7.2 -- so FSF 2.7.2
+  stands in, built natively from the same `vendor/old-gcc` submodule
+  (`make psx272-gcc`) and driven by `tools/psx272gcc`. No wine. 105 of the
+  previously landed 106 functions were byte-identical under it untouched, the
+  106th matched once a frame-padding device was deleted, and FOUR fabricated
+  devices came out of the source. `docs/compiler-version.md`'s twin section
+  has the provenance, the feature table and the measurements.
+
+  **Re-measuring this block means re-measuring with THAT compiler.** `asmlib`
+  resolves it from the Makefile, so `ovlverify`/`verify`/`advise`/`permimport`/
+  `twinalign` all do it by themselves; a hand-rolled `tools/cdkgcc` command
+  does not. And `rm -rf build/twinalign` after any compiler change -- that
+  cache keys on the source mtime only.
+
+  **What it unblocked.** `twinalign.py --todo` now reports **33 of the 156
+  remaining stubs as mask-identical** to their live counterparts, against **1**
+  before, plus 24 more as `near`. The 15-function `reload_cse_regs` cluster is
+  no longer blocked (`func_80405AE8` landed from its park with its body
+  unchanged) and neither is the folded indexed load (`func_80404DEC` and
+  `func_80406274` landed by moving the live body over and renaming symbols).
+  Every differing-word count recorded in `csrc/ovl_main_80400000.c`'s "others"
+  triage predates the switch and is stale.
+
+  Two more cautions, both paid for on 2026-11-11. `twinalign` read only
+  `csrc/ovl_main_80020000.c`, so once the nine-unit carve moved every live
+  body into `csrc/main/*.c` it paired NOTHING -- every row came back
+  `twin-only` at 0.00. And its pairing is arbitrary among identical-masked
+  functions, so anchor on the already-landed ones rather than trusting a
+  `--todo` row.
 
   | the twin's 8,272 words | fn | words | share |
   |---|---|---|---|

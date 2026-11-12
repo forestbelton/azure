@@ -6,6 +6,16 @@
  * build, and dead on retail (0x80400000 is 8 MB dev-board RAM). It is in the
  * container, so it still has to be reproduced. See docs/overlays.md.
  *
+ * THIS UNIT IS THE ONE THE PROJECT BUILDS WITH A DIFFERENT COMPILER. The
+ * Makefile points it at tools/psx272gcc -- native FSF gcc 2.7.2 for
+ * mips-sony-psx -- because this block is a PSY-Q 4.0 build and everything
+ * else is 4.1. Two passes separate them, reload_cse_regs and split
+ * addresses, and both are Cygnus/SN additions over FSF 2.7.2. The triage
+ * below has the evidence; tools/psx272gcc's header has the provenance.
+ * EVERY MEASUREMENT OF THIS UNIT MUST USE THAT COMPILER -- asmlib resolves
+ * it from the Makefile, so ovlverify/verify/advise/permimport/twinalign all
+ * do it automatically; a hand-rolled `tools/cdkgcc` command does not.
+ *
  * THE PLAN IS NOT A SECOND DECOMPILATION. The live overlay's own source
  * rebuilt at -G8 already reproduces 86 of this block's 263 functions
  * instruction-for-instruction, 231 of 263 pair 1:1 with a function it
@@ -116,28 +126,30 @@
  *                   docs/matching-levers.md has the full heading and the
  *                   swept-and-failed spellings; do not retry them.
  *
- *                   LANDING THESE NEEDS A SECOND COMPILER, and as of
- *                   2026-11-11 we know WHICH: PSY-Q 4.0's cc1psx, not
- *                   cdk-gcc-b18 with reload_cse_regs switched off. THIS
- *                   BLOCK IS A 4.0 BUILD. Two unrelated passes that 4.1 has
- *                   are both missing from it -- reload_cse_regs, above, and
- *                   split addresses, which is the discriminator
- *                   docs/compiler-version.md already used to prove the GAME
- *                   code is 4.1. That document's new last section has the
- *                   evidence; the short version is that `mips_split_addresses`
- *                   gates the folded `lui $at` / `addu` / `%lo($at)` indexed
- *                   load this block uses everywhere, it is set
- *                   unconditionally from TARGET_GAS in override_options, and
- *                   -mno-gas does NOT change the generated code (measured),
- *                   so no per-unit CFLAGS override can buy it.
+ *                   RESOLVED 2026-11-11 BY A SECOND COMPILER, and it needed
+ *                   no wine. THIS BLOCK IS A 4.0 BUILD: two unrelated passes
+ *                   4.1 has are missing from it -- reload_cse_regs, above,
+ *                   and split addresses, which is the very discriminator
+ *                   docs/compiler-version.md uses to prove the GAME code is
+ *                   4.1. SN never released 4.0's source (decompals/old-gcc
+ *                   has one CDK tarball, b18, and that IS 4.1 -- its
+ *                   version.c is `cygnus-2.7.2-970404 SN32.3.7.0004`, the
+ *                   string 4.1's cc1psx.exe reports). But 4.0's reports
+ *                   `2.7.2.SN32.3.7 Build 0001`, so 4.0 is SN's build of FSF
+ *                   gcc 2.7.2 where 4.1 is SN's build of a Cygnus snapshot
+ *                   -- and reload_cse, split_addresses, -mfix4300 and
+ *                   -ffunction-sections are all in b18 and all absent from
+ *                   FSF 2.7.2 AND from 4.0's binary. So FSF 2.7.2 stands in,
+ *                   this unit builds with tools/psx272gcc, and both classes
+ *                   closed at once.
  *
- *                   That is better news than the old plan: one compiler
- *                   closes the reload_cse_regs cluster AND the folded
- *                   addresses together, where disabling that one pass would
- *                   have left every folded address still wrong. The 4.0 disc
- *                   is on this machine. It is still NOT started -- it means
- *                   wine for this unit, which is what the native cdk-gcc
- *                   build exists to avoid.
+ *                   IT IS A STAND-IN, NOT THE COMPILER. Where it and the
+ *                   real Build 0001 differ the bytes will say so. What is
+ *                   measured: 105 of the 106 functions landed under 4.1 are
+ *                   byte-identical under it untouched, the 106th
+ *                   (func_804025F8) matches once its frame-padding device is
+ *                   deleted, and FOUR devices came out of this unit and
+ *                   csrc/main_twin.h altogether.
  *
  *   2 fn, 2 words   A DIFFERENT POINTER SPELLING OF THE SAME ADDRESS.
  *                   func_80406720 and func_804070C4 hold `q = p + 8` and
@@ -177,9 +189,10 @@
  *                     D_80408CF0, D_80408D64); all now carry their real
  *                     size, with the container byte-identical either way.
  *     func_804037F4   needed the lever on a table whose real size is 16, so
- *                     it uses the D_80408C8C_a[1] alias the way D_8008DAB4_a
- *                     is used. Plus two revision differences: stride 0x3C
- *                     for 0x48, bound 4 for 3.
+ *                     under 4.1 it used a D_80408C8C_a[1] alias. That alias
+ *                     is gone -- tools/psx272gcc needs no help here. Its two
+ *                     revision differences stand: stride 0x3C for 0x48,
+ *                     bound 4 for 3.
  *     func_804040C8   needed no declaration change once D_804005F0 was
  *                     sized -- only the -0x21 word indices and four revision
  *                     constants.
@@ -194,71 +207,55 @@
  *   func_80405A00 takes TWO arguments here where the live func_80024F3C
  *   takes three, and its listing never reads $a2.
  *
- *   func_80405AE8 is THE SAME TWO LEVERS AND THEN ONE reload_cse_regs WORD.
- *   Both applied, it goes 20 -> 1 differing, and the one is `flag = 1` in the
- *   arm whose own test already put 1 in $v0. It is parked as
- *   docs/near-misses/func_80405AE8.c and lands unchanged the day a cc1psx
- *   without that pass exists -- so the blocked cluster is 15 functions, not
- *   14. Measure it with `ovlverify.py --G 8`.
+ *   func_80405AE8 was THE SAME TWO LEVERS AND THEN ONE reload_cse_regs
+ *   WORD, which made the cluster 15 rather than 14. It was parked at exactly
+ *   one differing word with a note saying it would land unchanged the day a
+ *   cc1psx without that pass existed. LANDED 2026-11-11 on tools/psx272gcc,
+ *   body unchanged, park deleted.
  *
- *   LANDED 2026-11-11 ON A THIRD LEVER, the sized DATA ALIAS of a FUNCTION
- *   symbol. A function has no size to declare, but `extern u8 F_a[8]
- *   __asm__("F");` gives it one, which puts the address on the -G8 small-data
- *   path and makes it ONE insn -- so reorg has no `lui` to steal into the
- *   preceding branch's delay slot, where this build keeps a nop.
- *   func_80406BEC (12 -> 0), func_804065CC and func_80406F70 (11 -> 0 each).
- *   An INCOMPLETE alias does not work, which is what says the size is doing
- *   it. It is per site: func_804065CC reaches its symbol twice and only the
- *   second needs the alias. All three also carry a revision difference --
- *   one handler where the live source has two.
+ *   LANDED 2026-11-11 ON A THIRD LEVER, THEN UN-LEVERED THE SAME DAY.
+ *   func_80406BEC (12 -> 0), func_804065CC and func_80406F70 (11 -> 0 each)
+ *   were landed with a sized DATA ALIAS of a FUNCTION symbol -- `extern u8
+ *   F_a[8] __asm__("F");` gives a function a declared size, which puts its
+ *   address on the -G8 small-data path and makes it ONE insn, so reorg has
+ *   no `lui` to steal into the preceding branch's delay slot where this
+ *   build keeps a nop. All three were EMULATING a compiler without split
+ *   addresses, one site at a time. This unit now has one, so the plain
+ *   spellings match and the three aliases are deleted. The revision
+ *   difference they also carry is real and stays: one handler where the live
+ *   source has two.
  *
- *   These aliases EMULATE the no-split-addresses build one site at a time.
- *   Revisit them if 4.0 is ever wired up.
+ *   The lever itself is still true and still documented in
+ *   docs/matching-levers.md -- it is the right tool for a 4.1-built unit.
  *
- *   func_80406274 is the same two levers and then the folded indexed load:
- *   pointer-to-array for its table plus the function alias takes it 32 -> 5,
- *   and the 5 are entirely that load. Same wall as func_80404DEC.
+ *   func_80406274 and func_80404DEC were THE FOLDED INDEXED LOAD, and both
+ *   LANDED 2026-11-11 by moving the live body over with its symbols renamed
+ *   and nothing else. Between them they had 33 swept spellings recorded
+ *   against them. See their own comments.
  *
- *   others          func_804012B0 (9), func_804083A0 (15), func_80407F68
- *                   (19), func_80404DEC (28), func_804018FC and
- *                   func_80403E54 (42), func_804010F0 and func_80405DE0
- *                   (49). func_804018FC is the extreme case: 42 words
- *                   against a live counterpart of 2, so that pairing is
- *                   wrong or the live source lost the body entirely.
+ *   others          THE WHOLE LIST IS STALE as of the compiler switch and
+ *                   must be re-measured, not read. Every count in it was
+ *                   taken under 4.1's cc1. `twinalign.py --todo` on
+ *                   tools/psx272gcc now reports 33 of the 156 remaining
+ *                   stubs as MASK-IDENTICAL to their live counterparts
+ *                   (against 1 before) and 24 more as `near`, so the
+ *                   remaining work is mostly moving live bodies over with
+ *                   the symbol map rather than finding levers.
  *
- *                   func_80404DEC was looked at and is NOT that family -- it
- *                   is a drawing-primitive setup loop. Its 27 is ONE EXTRA
- *                   WORD plus the positional shift behind it: the candidate
- *                   materialises the table's base inside the loop
- *                   (`lui`/`addiu`/`addu`/`lbu`, 4 words) where this build
- *                   folds the symbol into the load and uses $at as the
- *                   scratch:
+ *                   What is known to still be real: func_804018FC is 42
+ *                   words against a live counterpart of 2, so that pairing
+ *                   is wrong or the live source lost the body entirely.
+ *                   func_80406720/func_804070C4's register race (above) and
+ *                   func_804012B0's block layout were characterised under
+ *                   4.1 and have not been re-opened -- func_804012B0's last
+ *                   arm falls through to the shared return in the live build
+ *                   and jumps to it here, and that build reuses a register
+ *                   already holding %lo(D_8009E390) where the live one
+ *                   re-materialises the pair.
  *
- *                     lui  $at, %hi(D_80408CF0)
- *                     addu $at, $at, $a3
- *                     lbu  $v0, %lo(D_80408CF0)($at)
- *
- *                   $at means the ASSEMBLER expanded it, so cc1psx emitted
- *                   that load as one insn against the symbol. Nothing here
- *                   reproduces it: docs/matching-levers.md's "A %lo in the
- *                   displacement with a REGISTER index means a constant
- *                   base" says cse never folds a %lo into a MEM once the
- *                   address carries a register index, and the constant-base
- *                   spelling it prescribes does not help either. Measured,
- *                   all 46 words against the target's 45: D_80408CF0[i++]
- *                   with the declaration at [4], [], [9], [12] and [0x10];
- *                   ((u8 *)0x80410000)[i++ - 0x7310], which is the
- *                   zero-low-half constant base; *(u8 *)(0x80408CF0 + i++);
- *                   and splitting the post-increment out. The lever is
- *                   probably how cc1psx emits an INDEXED load against a
- *                   sized extern at -G8, which is not written down yet.
- *
- *                   func_804012B0 was looked at and is NOT a one-lever job:
- *                   its last arm falls through to the shared return in the
- *                   live build and jumps to it here, and this build reuses a
- *                   register already holding %lo(D_8009E390) where the live
- *                   one re-materialises the pair. Block layout plus cse,
- *                   not a spelling.
+ *                   RE-MEASURE BEFORE BELIEVING ANY OF IT. `rm -rf
+ *                   build/twinalign` first: that cache keys on the source
+ *                   mtime only and does not notice the compiler changing.
  */
 
 /* The twin of set_card_slot, and the pair that measures the -G difference:
@@ -636,15 +633,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804025B8);
 void func_804025F8(u8 *p, s32 idx, s32 n)
 {
     s32 i;
-    /* DEVICE: eight bytes of unread locals, worth nothing in
-       instructions and everything in displacements. The live frame is 0x20 --
-       0x10 of outgoing-argument area plus the four saved registers, no locals
-       -- and this block's is 0x28, with the SAME four saves 8 bytes higher and
-       every instruction otherwise identical. So the debug source has a local
-       here that it never reads, and gcc 2.7.2 allocates an unused local
-       AGGREGATE rather than eliminating it. A scalar would be dropped. */
-    s32 unused[2];
 
+    /* The frame is 0x28 here against the live build's 0x20, with the same
+       four saves 8 bytes higher and every instruction otherwise identical.
+       That used to need a DEVICE -- `s32 unused[2]`, eight bytes of locals
+       the function never reads -- on the theory that the debug source had an
+       unused local. It did not: FSF 2.7.2 simply reserves those 8 bytes and
+       the Cygnus snapshot does not, so the device came out when this unit
+       moved to tools/psx272gcc. See the header. */
     func_80051DE4(p, 1);
     p += idx * 12;
     for (i = 0; i < n; i++)
@@ -810,14 +806,16 @@ void func_80403738(s32 *p)
  * The stride is 0x3C where the live source steps 0x48, and the bound is 4
  * where it is 3 -- both measured off the listing, and both of the families
  * the header describes: a structure 12 bytes smaller, and a table walked to
- * one more entry. D_80408C8C_a is the <=8 spelling; see csrc/main_twin.h. */
+ * one more entry. It also needed a sized `D_80408C8C_a[1]` alias under 4.1's
+ * compiler, to make the table's address one insn; tools/psx272gcc makes it
+ * one insn anyway, so the plain `D_80408C8C` is back. */
 void func_804037F4(u8 *p)
 {
     s32 i;
 
     for (i = 0; i < 4; i++)
     {
-        func_80051B50(p + 0x90 + i * 0x3C, D_80408C8C_a[i], 1);
+        func_80051B50(p + 0x90 + i * 0x3C, D_80408C8C[i], 1);
     }
 }
 
@@ -1302,7 +1300,44 @@ void func_80404DBC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404DEC);
+/* Live func_800242D8, MOVED OVER UNCHANGED except for the symbol
+ * (D_80027FD0 -> D_80408CF0). It was the headline blocked function -- 28
+ * differing, and the triage above records five spellings of the indexed load
+ * swept against it, because under 4.1's compiler the load could not be made
+ * to fold: GO_IF_LEGITIMATE_ADDRESS rejects a constant address plus a
+ * register whenever mips_split_addresses is on, and override_options turns it
+ * on unconditionally. tools/psx272gcc has no such pass, so
+ * `D_80408CF0[i++]` emits the one insn the assembler expands into
+ * `lui $at` / `addu $at,$at,$a3` / `lbu %lo(...)($at)`, and the live body
+ * matches with nothing added. Every lever in the live source's own long
+ * comment -- the empty third for-clause, `i++` before `p += 0x18` -- still
+ * does its work; see csrc/main/cardbk.c. */
+u8 *func_80404DEC(u8 *p, s32 w, s32 h)
+{
+    s32 i;
+
+    p[1] = 0x81;
+    *(s16 *)(p + 4) = 0x20;
+    *(s16 *)(p + 6) = 0;
+    p += 0xC;
+    for (i = 0; i < 4;)
+    {
+        p[1] = 0x38;
+        *(s32 *)(p + 4) = 0x9CBCBC;
+        *(s32 *)(p + 0xC) = 0x9CBCBC;
+        *(s32 *)(p + 0x10) = 0x9CBCBC;
+        *(s32 *)(p + 0x14) = 0x8C9C9C;
+        p[0xA] = w / 2;
+        p[0xB] = h / 2;
+        p[0] = D_80408CF0[i++];
+        p += 0x18;
+    }
+    p[1] = 0x81;
+    *(s16 *)(p + 4) = 0x20;
+    *(s16 *)(p + 6) = 1;
+    p[0] = 0x80;
+    return p + 0xC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
@@ -1397,7 +1432,70 @@ void func_80405AB4(s32 *p)
     p[-4] = (s32)func_80406368;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405AE8);
+/* main.bin's 0x80400000 twin, live counterpart func_80025030.
+ *
+ * THE FUNCTION THE SECOND COMPILER WAS WORTH. Under the 4.1 cc1 it sat at
+ * exactly one differing word for a week, parked, with its own note saying it
+ * would land unchanged the day a cc1psx without reload_cse_regs existed. It
+ * did, and it did -- not one character of the body changed.
+ *
+ * Two levers took it from 20 differing to 1, and both are already landed on
+ * its sibling func_80405B98:
+ *
+ *   1. func_80405A00 TAKES TWO ARGUMENTS in this build where the live
+ *      func_80024F3C takes three. Its listing reads $a0 and $a1 and never
+ *      $a2.
+ *   2. THE INCREMENT ORDER IS THE DELAY SLOTS. `i++` before `off++`, with a
+ *      plain `while (i < 5)`, puts the counter increment in the two `j`
+ *      delay slots and pushes the pointer increment into the `bnez`'s. The
+ *      live spelling -- `off++;` then `while (++i < 5)` -- is 19 differing.
+ *
+ * What is left is word 10:
+ *
+ *     candidate  move  $s3, $v0          target  addiu $s3, $zero, 0x1
+ *
+ * `flag = 1` in the arm whose test already put 1 in $v0. 4.1's
+ * reload_cse_simplify_set rewrites the constant to a copy of that register;
+ * FSF 2.7.2 has no such pass, so it materialises, which is what the target
+ * does. It could never have been spelled around -- the TARGET also carries
+ * `addiu $v0, $zero, 0x1` for the comparison, so the register genuinely
+ * holds 1 there and 4.1's substitution is unconditional.
+ *
+ * MEASURE IT WITH `ovlverify.py --G 8`, never the default -G0.
+ */
+void func_80405AE8(s32 *p)
+{
+    s32 flag;
+    s32 off;
+    s32 i;
+
+    if (p[0x12] == 1)
+    {
+        flag = 1;
+    }
+    else
+    {
+        func_80403D7C((s32 *)p[6], p[0x11]);
+        flag = 0;
+    }
+    off = 0;
+    i = 0;
+    do
+    {
+        if (i == p[10])
+        {
+            func_804045C8((s32 *)p[off + 1], flag);
+        }
+        else
+        {
+            func_80404668((s32 *)p[off + 1]);
+        }
+        i++;
+        off++;
+    } while (i < 5);
+    func_80405A00((s32 *)p[7], p[10]);
+}
+
 
 /* Live func_800250E8, with two differences and neither of them an index: the
  * p[10]/p[11]/p[7] reads are at the same offsets as the live ones.
@@ -1489,7 +1587,30 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406150);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804061C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406274);
+/* Live func_80025848, MOVED OVER UNCHANGED except for the four symbols. The
+ * other half of the folded-indexed-load pair with func_80404DEC: under 4.1's
+ * compiler two levers took it 32 -> 5 and the five were entirely
+ * `D_8009DDD8[n][0]`, which came out as a split address plus an `addu` plus a
+ * `lw 0(...)` where the target has the assembler's three-word expansion of
+ * one insn. tools/psx272gcc folds it, and the live body matches with no
+ * device. */
+void func_80406274(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_8009DDD8[n][0] != 0)
+    {
+        p[13] = (s32)func_804061C4;
+        func_8040339C((s32)(p - 8), (s32)(p + 14));
+        p[-4] = (s32)func_80405A64;
+    }
+    else
+    {
+        p[13] = (s32)func_80406368;
+        func_804032FC((s32)(p - 8));
+        p[-4] = (s32)func_80405A64;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804062F4);
 
@@ -1525,12 +1646,11 @@ void func_80406590(s32 *p)
  * and func_80025B60 for the trailing p[-4]. Its listing names the same
  * symbol twice, so this is not a symmap miscount.
  *
- * THE DELAY SLOT is the last p[-4] only. Plain `(s32)func_80406590` lets
- * reorg steal that address's `lui` into the preceding `bne`'s slot, where
- * this build keeps a nop: 11 differing. The sized data alias makes the
- * address one insn and there is nothing to steal: 0. The FIRST site does not
- * need it -- its pair is adjacent either way, because nothing there can
- * reach a delay slot -- which is why only one site carries the alias. */
+ * THE DELAY SLOT is the last p[-4] only, and it was what the second compiler
+ * fixed. Under 4.1's, `(s32)func_80406590` let reorg steal that address's
+ * `lui` into the preceding `bne`'s slot where this build keeps a nop (11
+ * differing), and a sized data alias at that one site bought it back. Under
+ * tools/psx272gcc the address is one insn and the plain spelling is 0. */
 void func_804065CC(s32 *p)
 {
     s32 n = p[9];
@@ -1551,7 +1671,7 @@ void func_804065CC(s32 *p)
     }
     if (n == 5)
     {
-        p[-4] = (s32)func_80406590_a;
+        p[-4] = (s32)func_80406590;
     }
 }
 
@@ -1600,17 +1720,16 @@ void func_80406B9C(s32 *p)
 
 /* Live func_80026410, same body and the same p[14]. The ONE difference is a
  * delay slot: the live build steals the function address's `lui` into the
- * `beqz`'s slot, this build leaves a nop there. That is the -G8 declared-size
- * lever again, reached through a DATA alias of the function symbol --
- * func_80406DA0_a gets an `.extern ...,8` record, so the address is one insn
- * and there is nothing for reorg to take. Plain `(s32)func_80406DA0` is 12
- * differing, the alias is 0, and an INCOMPLETE data alias is 12 again, which
- * is what says the size and not the data-ness is doing the work. */
+ * `beqz`'s slot, this build leaves a nop there. Under 4.1's compiler that
+ * needed a sized DATA alias of the function symbol to make the address one
+ * insn, so reorg had nothing to take -- 12 differing plain, 0 with the alias.
+ * Under tools/psx272gcc the address is one insn to begin with and the plain
+ * spelling matches, so the alias is gone. */
 void func_80406BEC(s32 *p)
 {
     if (p[14] != 0)
     {
-        p[-4] = (s32)func_80406DA0_a;
+        p[-4] = (s32)func_80406DA0;
     }
     else
     {
@@ -1664,8 +1783,9 @@ void func_80406F34(s32 *p)
  * one slot over (p[10] and p[n+3] where that one has p[9] and p[n+1]), the
  * same revision collapse -- func_80406F34 at both the p[13] and the trailing
  * p[-4] site, where the live source has func_80026784 and func_80026748 --
- * and the same delay slot needing the sized alias at the last site only.
- * 11 differing plain, 0 with the alias. */
+ * and the same delay slot, which was 11 differing under 4.1's compiler and
+ * needed a sized alias at the last site; it is 0 plain under
+ * tools/psx272gcc. */
 void func_80406F70(s32 *p)
 {
     s32 n = p[10];
@@ -1686,7 +1806,7 @@ void func_80406F70(s32 *p)
     }
     if (n == 5)
     {
-        p[-4] = (s32)func_80406F34_a;
+        p[-4] = (s32)func_80406F34;
     }
 }
 

@@ -114,7 +114,19 @@ TWIN_SRC = ROOT / "csrc/ovl_main_80400000.c"
 TWIN_ASM = ROOT / "asm/nonmatchings/ovl_main_80400000"
 BUILD = ROOT / "build/twinalign"
 
-CC = ROOT / "tools/cdkgcc"
+# THE TWIN'S COMPILER, not the project default. The live source is compiled
+# here to MODEL THE TWIN BUILD -- that is the whole point of the -G8 -- so it
+# has to use the compiler the twin unit is built with (FSF 2.7.2 for
+# mips-sony-psx, standing in for PSY-Q 4.0) and not the 4.1 cc1 the live block
+# itself uses. Compiling with 4.1 adds reload_cse_regs copies and split
+# addresses the twin does not have, which shows up as spurious differences in
+# every pairing. Read it from the Makefile so this cannot drift again.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    "asmlib", str(ROOT / "tools/decomp/asmlib.py"))
+_asmlib = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_asmlib)
+CC = ROOT / _asmlib.cc1_for_unit("ovl_main_80400000")
 MASPSX = ROOT / "vendor/maspsx/maspsx.py"
 AS = "mips64-linux-gnu-as"
 OBJDUMP = "mips64-linux-gnu-objdump"
@@ -173,7 +185,21 @@ def norm(ins):
 
 
 def build_live_g8():
-    """Compile each live unit at -G8; return the objects in function order."""
+    """Compile each live unit at -G8; return the objects in function order.
+
+    CC is the TWIN's compiler, so the modelled side is built the way the twin
+    is -- but FSF 2.7.2 does not accept a `+` in an asm output constraint, and
+    csrc/main/card_mes.c carries one as a matching device. A unit the twin's
+    compiler refuses falls back to the project default with a warning, which
+    is worse modelling for that unit and still a usable pairing, rather than
+    no pairing at all.
+
+    THE CACHE IS mtime AGAINST THE SOURCE ONLY, so it does not notice the
+    COMPILER changing. `rm -rf build/twinalign` after a compiler switch, or
+    every score here is the old compiler's. That cost a wrong reading of
+    func_80404DEC on 2026-11-11, which looked like vanilla 2.7.2 emitting a
+    split address when the object was simply stale.
+    """
     BUILD.mkdir(parents=True, exist_ok=True)
     objs = []
     for src in live_srcs():
@@ -182,9 +208,19 @@ def build_live_g8():
         objs.append(o)
         if o.exists() and o.stat().st_mtime > src.stat().st_mtime:
             continue
-        subprocess.run([str(CC), "-O2", "-Iinclude", "-Ipsyq/include", "-Icsrc", "-G8", "-S",
-                        "-o", str(s), str(src)], cwd=ROOT, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cflags = ["-O2", "-Iinclude", "-Ipsyq/include", "-Icsrc", "-G8", "-S",
+                  "-o", str(s), str(src)]
+        r = subprocess.run([str(CC)] + cflags, cwd=ROOT,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if r.returncode:
+            sys.stderr.write(
+                "twinalign: %s does not compile under %s (%s); falling back "
+                "to tools/cdkgcc for it\n"
+                % (src.name, CC.name,
+                   r.stderr.decode().strip().split("\n")[-1][:70]))
+            subprocess.run([str(ROOT / "tools/cdkgcc")] + cflags, cwd=ROOT,
+                           check=True, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
         with open(s) as fh:
             subprocess.run(["python3", str(MASPSX), "--aspsx-version=2.56",
                             "--force-stdin", "--run-assembler", "--gnu-as-path=" + AS,

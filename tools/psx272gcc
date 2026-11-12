@@ -1,0 +1,50 @@
+#!/bin/sh
+# Drive the native FSF gcc 2.7.2 build that stands in for PSY-Q 4.0's cc1psx.
+#
+# WHY A SECOND COMPILER. main.bin's 0x80400000 debug twin was NOT built with
+# the 4.1 compiler the rest of the project uses. Two passes the game's code
+# demonstrably has are absent from that block, and both are Cygnus/SN
+# additions over FSF 2.7.2:
+#
+#   * mips_split_addresses -- the twin folds a symbol into an indexed load and
+#     lets the ASSEMBLER expand it (`lui $at` / `addu $at,$at,$index` /
+#     `lw %lo(SYM)($at)`); a split-address compiler cannot emit that shape.
+#   * reload_cse_regs -- the twin materialises a constant where the game's
+#     code copies a hard register that already holds it, 14 times with no
+#     counter-example.
+#
+# PSY-Q 4.0's cc1psx.exe reports `2.7.2.SN32.3.7 Build 0001` against 4.1's
+# `cygnus-2.7.2-970404 SN32.3.7.0004`, so 4.0 is SN's build of FSF 2.7.2 and
+# 4.1 is SN's build of a Cygnus snapshot. SN never released Build 0001's
+# source -- decompals/old-gcc carries exactly one CDK tarball, b18, and that
+# IS 4.1 -- so there is nothing to build that reproduces 4.0 exactly.
+#
+# What there is, is the base it was built from. `grep -r` over the two trees:
+# reload_cse, split_addresses, -mfix4300 and -ffunction-sections are all in
+# cdk-gcc-b18 and all absent from FSF 2.7.2; 4.0's binary has none of them
+# either (its whole -m/-f option table is 64 entries, a strict subset of
+# 4.1's 77). So vanilla 2.7.2 sits on 4.0's side of every difference that can
+# be measured from outside the binary, and the twin's own bytes agree -- see
+# the Makefile's note and docs/compiler-version.md for the measurements.
+#
+# It is a STAND-IN, not the compiler. Where it and the real Build 0001 differ
+# the bytes will say so, and the honest record of that is this file plus the
+# verified function count.
+#
+# Everything else -- the CRLF-stripped psyq/include copy, the -B for an
+# uninstalled build -- is tools/cdkgcc's, so this just points it at the other
+# build directory. Interface is identical: `make CC=tools/psx272gcc`.
+set -eu
+
+PROJ=$(cd "$(dirname "$0")/.." && pwd)
+DIR=${PSX272_DIR:-$PROJ/scratch/psx272-gcc}
+
+if [ ! -x "$DIR/gcc" ]; then
+    echo "tools/psx272gcc: no gcc under $DIR" >&2
+    echo "  run 'make psx272-gcc' (needs docker and the vendor/old-gcc" >&2
+    echo "  submodule; 'git submodule update --init vendor/old-gcc')" >&2
+    exit 1
+fi
+
+export CDK_DIR="$DIR"
+exec "$PROJ/tools/cdkgcc" "$@"

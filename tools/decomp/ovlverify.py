@@ -352,7 +352,12 @@ def main():
     if not args.src or not args.funcs:
         ap.error("need a candidate .c and at least one function name")
 
-    words, relocs = asmlib.build(args.src, gasG=0, cflags=(f"-G{args.G}",))
+    # The COMPILER comes from the unit too, not just the -G: main.bin's
+    # 0x80400000 twin is built by tools/psx272gcc and everything else by
+    # tools/cdkgcc. Same silent-failure shape as a wrong -G -- see
+    # asmlib.cc1_for_unit.
+    words, relocs = asmlib.build(args.src, gasG=0, cflags=(f"-G{args.G}",),
+                                 unit=overlay_for(args.funcs[0]))
     # Recover each function's extent from the object's symbol table: objdump
     # gives one flat .text, so the candidate has to be cut at the symbols.
     o = os.path.join(asmlib.SP,

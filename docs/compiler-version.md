@@ -518,26 +518,88 @@ Two unrelated passes, both present in 4.1 and both absent from the twin, is
 much more economical as "an earlier compiler" than as two coincidences -- and
 4.0 is exactly the build this document already shows lacks the first of them.
 
-### What follows for the work
+### Resolved the same day, with FSF gcc 2.7.2 and no wine
 
-* The residual differences are ONE problem. A 4.0 `cc1psx` would be expected
-  to close the 15 `reload_cse_regs` functions AND the folded-address ones
-  together, which is a much better return than the earlier plan in that
-  header (patching cdk-gcc to disable `reload_cse_regs` alone, which would
-  have left every folded address still wrong).
-* `psyq/` carries headers only, so the 4.0 `cc1psx.exe` is not in the tree --
-  but it is NOT far away. The 4.0 disc this document was written against is
-  still on this machine, `~/Downloads/Programmer Tool - Runtime Library
-  Version 4.0 (Japan)_DTL-S2320_redump.zip`, beside the 4.1 one, and the 4.1
-  `cc1psx.exe` is unpacked at `~/scratch/azure/psyq/cc1psx.exe`. So wiring 4.0
-  up for ONE unit is extracting a binary and a `CC` override for that target,
-  not a compiler build. It does mean wine for that unit, which is what the
-  native cdk-gcc build exists to avoid, so it is a real trade and not a
-  free win. `vendor/old-gcc` also has Dockerfiles for 2.7.2 through 2.7.2.3
-  and a `gcc-2.7.2-psx` target, none of them built, but those are vanilla
-  trees and would be missing SN's patches as well as its passes.
-* The declared-size aliases that landed `func_80406BEC`, `func_804065CC`,
-  `func_80406F70`, `func_804078D8` and `func_804037F4` EMULATE a
-  no-split-addresses build one site at a time. The bytes match, which is what
-  the project requires, but they are not what the original source said -- so
-  if a 4.0 compiler is ever wired up, revisit them.
+**The 4.0 compiler cannot be built from source, and it did not need to be.**
+
+`decompals/old-gcc` carries exactly ONE SN/CDK source drop -- `b18.tar.gz`,
+in release 0.14 -- and that one IS 4.1: `cdk-gcc-b18/version.c` reads
+`cygnus-2.7.2-970404 SN32.3.7.0004`, the string 4.1's `cc1psx.exe` reports,
+character for character. Releases 0.13 through 0.17 contain no other SN
+tarball. SN never published the source of the 4.0 build, so `vendor/old-gcc`
+has nothing that reproduces it.
+
+What it does have is the tree 4.0 was built FROM:
+
+| | `version_string` |
+|---|---|
+| `psyq/4.0/compiler/cc1psx.exe` | `2.7.2.SN32.3.7 Build 0001` |
+| `psyq/4.1/compiler/cc1psx.exe` | `cygnus-2.7.2-970404 SN32.3.7.0004` |
+| `cdk-gcc-b18/version.c` | `cygnus-2.7.2-970404 SN32.3.7.0004` |
+| `gcc-2.7.2.3/version.c` | `2.7.2.3` |
+
+4.0 is SN's build of **FSF gcc 2.7.2**; 4.1 is SN's build of a **Cygnus dated
+snapshot**. And every feature b18 has that FSF 2.7.2 lacks is also absent from
+4.0's binary:
+
+| feature | FSF 2.7.2.3 source | b18 source | 4.0's `cc1psx.exe` |
+|---|---|---|---|
+| `reload_cse` | absent | 2 files | -- |
+| `split_addresses` | absent | 4 sites | no `lui %hi` template at all |
+| `-mfix4300` | absent | present | **absent** |
+| `-ffunction-sections` | absent | present | **absent** |
+
+4.0's whole `-m`/`-f` option table is 64 entries against 4.1's 77, and it is a
+**strict subset** -- nothing in 4.0 that 4.1 does not have. So FSF 2.7.2 sits
+on 4.0's side of every difference measurable from outside the binary.
+
+`make -C vendor/old-gcc VERSION=2.7.2-psx` builds it for `mips-sony-psx`, and
+`tools/psx272gcc` drives it. The Makefile points `build/csrc/ovl_main_80400000.o`
+at it and nothing else.
+
+**This correction is worth recording**: the bullet that used to be here said
+`vendor/old-gcc`'s vanilla trees "would be missing SN's patches as well as its
+passes". That was a guess, and it was wrong in the direction that mattered --
+the SN patches that bear on code generation for this block are precisely the
+ones we needed gone.
+
+### What the switch measured
+
+* **105 of the 106** functions landed under 4.1 are byte-identical under FSF
+  2.7.2 **untouched**.
+* **The 106th, `func_804025F8`, matches BETTER.** It had carried a device --
+  `s32 unused[2]`, eight bytes of locals the function never reads -- to pad
+  its frame from 0x20 to the target's 0x28, with a comment theorising that the
+  debug source had an unused local. It did not: FSF 2.7.2 reserves those 8
+  bytes by itself and the Cygnus snapshot does not. Device deleted.
+* **The three function-address aliases and the `D_80408C8C_a` table alias all
+  became unnecessary**, and the plain spellings match. The prediction written
+  here was that they would *break*; they did not, they simply stopped being
+  needed, which is the better outcome. All four are deleted. The lever itself
+  stays in `docs/matching-levers.md` -- it is the right tool for a 4.1 unit.
+* **`func_80405AE8` landed unchanged**, which is what its park had predicted
+  in writing: "this lands, unchanged, the day a cc1psx without
+  reload_cse_regs exists."
+* **`func_80404DEC` and `func_80406274` landed** by moving the live body over
+  with its symbols renamed and nothing else. They were the folded-indexed-load
+  pair, with 33 swept spellings recorded against them between them. Under FSF
+  2.7.2 `D_80408CF0[i++]` emits the one insn the assembler expands into
+  `lui $at` / `addu $at,$at,$a3` / `lbu %lo(...)($at)`.
+* All four containers stay **byte-identical**.
+* `twinalign.py --todo`, re-run with the twin's own compiler, reports **33 of
+  the 156 remaining stubs as mask-identical** to their live counterparts,
+  against **1** before, and 24 more as `near`.
+
+### It is a stand-in, not the compiler
+
+FSF 2.7.2 is not `2.7.2.SN32.3.7 Build 0001`, and SN certainly changed things
+in it beyond the psx target. Where the two differ the bytes will say so, and
+the honest record of the difference is the verified function count plus this
+section. Two known limits already:
+
+* FSF 2.7.2 **rejects a `+` in an asm output constraint**, which
+  `csrc/main/card_mes.c:349` uses as a matching device. That unit is 4.1's and
+  stays 4.1's; `twinalign` falls back to `tools/cdkgcc` for it, with a warning,
+  when modelling.
+* `-G8` is still load-bearing for the twin, independently of the compiler: at
+  `-G0` under FSF 2.7.2 four of the landed functions stop matching.

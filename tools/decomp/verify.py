@@ -82,7 +82,7 @@ if miss:
         print('           %s' % line)
     print()
 try:
-    words, relocs = asmlib.build(src, gasG, cflags=('-G%d' % cc1G,))
+    words, relocs = asmlib.build(src, gasG, cflags=('-G%d' % cc1G,), unit=unit)
 except CompileError as e:
     print(e)
     sys.exit(2)

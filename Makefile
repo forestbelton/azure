@@ -207,6 +207,27 @@ build/csrc/main/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 build/csrc/ovl_main_80400000.o: CFLAGS := $(CFLAGS_DEFAULT)
 build/csrc/ovl_main_80400000.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT)
 
+# AND IT IS ALSO THE ONE UNIT BUILT BY A DIFFERENT COMPILER. The -G8 above is
+# real -- at -G0 this block loses four of its matched functions -- but it was
+# never the whole story about the `lui $at` shape. That shape needs a compiler
+# WITHOUT split addresses, and 4.1's has them unconditionally
+# (`override_options` sets mips_split_addresses from TARGET_GAS && optimize,
+# and -mno-gas leaves codegen byte-identical).
+#
+# PSY-Q 4.0's cc1psx is `2.7.2.SN32.3.7 Build 0001`; 4.1's is
+# `cygnus-2.7.2-970404 SN32.3.7.0004`, which is cdk-gcc-b18's version.c
+# exactly. So 4.0 is SN's build of FSF 2.7.2 and 4.1 is SN's build of a
+# Cygnus snapshot, and every pass that separates the two blocks --
+# split addresses and reload_cse_regs -- is a Cygnus/SN addition that FSF
+# 2.7.2 does not have. SN never released Build 0001's source, so FSF 2.7.2
+# is the closest buildable thing and tools/psx272gcc drives it.
+#
+# MEASURED 2026-11-11 before switching: 105 of the 106 functions landed under
+# the 4.1 compiler stay byte-identical under 2.7.2, the 106th matches once a
+# frame-padding DEVICE is deleted, and four such devices come out of the
+# source altogether (see csrc/ovl_main_80400000.c's header).
+build/csrc/ovl_main_80400000.o: CC := tools/psx272gcc
+
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
 # This is independent of the -G8 used for C above.
@@ -260,8 +281,23 @@ $(CDK_CC1):
 
 cdk-gcc: $(CDK_CC1)
 
+# The SECOND compiler, FSF gcc 2.7.2 for mips-sony-psx, which stands in for
+# PSY-Q 4.0's cc1psx for the 0x80400000 twin only -- see the CC override
+# above and tools/psx272gcc's header. Same submodule, same Dockerfile
+# machinery, a different VERSION.
+PSX272_DIR := scratch/psx272-gcc
+PSX272_CC1 := $(PSX272_DIR)/cc1
+build/csrc/ovl_main_80400000.o: $(PSX272_CC1)
+
+$(PSX272_CC1):
+	$(MAKE) -C vendor/old-gcc VERSION=2.7.2-psx
+	@mkdir -p $(PSX272_DIR)
+	cp vendor/old-gcc/build-gcc-2.7.2-psx/* $(PSX272_DIR)/
+
+psx272-gcc: $(PSX272_CC1)
+
 .PHONY: all containers clean splat check expected ctx ghidra-syms extract \
-        cdk-gcc
+        cdk-gcc psx272-gcc
 
 all: build/$(SLUS) build/$(TOWN) build/$(MAIN)
 

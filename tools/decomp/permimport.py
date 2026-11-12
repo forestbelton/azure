@@ -55,10 +55,10 @@ def unit_for(func):
     return None
 
 
-def preprocess(park, out):
+def preprocess(park, out, cc="tools/cdkgcc"):
     """cpppsx the park source so pycparser sees no project macros."""
     r = subprocess.run(
-        [os.path.join(PROJ, "tools/cdkgcc"), "-E", "-G8",
+        [os.path.join(PROJ, cc), "-E", "-G8",
          "-Iinclude", "-Ipsyq/include", "-DPERMUTER", park],
         cwd=PROJ, capture_output=True, text=True)
     if r.returncode or not r.stdout.strip():
@@ -99,7 +99,7 @@ PROJ="{proj}"
 cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
-tools/cdkgcc -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
+{cc} -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
 python3 vendor/maspsx/maspsx.py \\
     --aspsx-version=2.56 --force-stdin --run-assembler \\
     --gnu-as-path="${{AS:-{as_}}}" --use-comm-section {gflags} \\
@@ -162,7 +162,10 @@ def main():
     d = os.path.join(PROJ, "nonmatchings", func)
     os.makedirs(d, exist_ok=True)
 
-    err = preprocess(park, os.path.join(d, "base.c"))
+    # Two compilers in the tree as of 2026-11-11; the unit picks one.
+    cc = asmlib.cc1_for_unit(unit)
+
+    err = preprocess(park, os.path.join(d, "base.c"), cc)
     if err:
         print("permimport: " + err)
         return 1
@@ -185,7 +188,7 @@ def main():
         gflags = "--dont-force-G0 -G%d" % gasG
     sh = os.path.join(d, "compile.sh")
     io.open(sh, "w", encoding="utf-8").write(COMPILE_SH.format(
-        unit=unit, proj=PROJ, as_=AS, gflags=gflags, cc1g=cc1G))
+        unit=unit, proj=PROJ, as_=AS, gflags=gflags, cc1g=cc1G, cc=cc))
     os.chmod(sh, 0o755)
     io.open(os.path.join(d, "settings.toml"), "w", encoding="utf-8").write(
         SETTINGS.format(func=func))

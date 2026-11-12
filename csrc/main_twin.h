@@ -114,6 +114,8 @@ void func_80405B98(s32 *p);                          /* func_800250E8 */
 void func_80405C44(u8 *p);                           /* func_8002519C */
 void func_80405CB8(s32 *p);                          /* func_80025230 */
 void func_80405DE0(s32 *p);                          /* func_80025398 */
+void func_804061C4(s32 *p);                          /* func_80025788 */
+void func_80406274(s32 *p);                          /* func_80025848 */
 void func_80406368(s32 *p);                          /* func_8002593C */
 void func_804065CC(s32 *p);                          /* func_80025BD4 */
 s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
@@ -167,32 +169,29 @@ extern u8 D_8008429C[];                              /* D_80079114 */
 extern u8 D_8008432C[];                              /* D_800791A4 */
 extern u32 D_8008DAB4;                               /* D_800814A0, declared in include/structs.h, not main.h */
 extern u32 D_8008DAB4_a[1] __asm__("D_8008DAB4");    /* the array spelling of the same object; see main.h's note on D_800814A0_a -- the lever is PER SITE */
+extern s32 D_8009DDD8[][32];                         /* D_80083E98, the 0x80-byte save-slot row */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 extern const char D_80400004[40];                    /* ASSERT_FMT */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
 extern u8 D_804005F0[8];                              /* D_800282B0 */
 extern u8 D_80408C84[8];                              /* D_80027F60 */
-/* THE <=8 SPELLING WORKS ON A FUNCTION ADDRESS TOO, and it is the only way to
-   stop reorg stealing the `lui` into a branch delay slot. Declared as sized
-   DATA, the symbol gets an `.extern SYM,8` record, takes the -G8 small-data
-   path and materialises as ONE insn, so there is no separate `lui` to steal
-   and the branch keeps its nop. func_80406BEC needs this; see its comment. */
-extern u8 func_80406DA0_a[8] __asm__("func_80406DA0");
+/* FOUR SIZED-ALIAS DEVICES USED TO LIVE HERE and are gone as of 2026-11-11.
+   Three were `extern u8 func_XXXXXXXX_a[8] __asm__("func_XXXXXXXX")`, giving
+   a FUNCTION a declared size so its address took the -G8 small-data path and
+   came out as one insn -- the only way, under 4.1's compiler, to stop reorg
+   stealing the `lui` into a branch delay slot where this block keeps a nop.
+   The fourth was `D_80408C8C_a[1]`, the same trick on a table whose real size
+   is 16. All four were EMULATING a compiler without split addresses, one site
+   at a time. This unit now has one (tools/psx272gcc), so the plain spellings
+   match and the lies are deleted. */
 extern void func_80406590(s32 *p);                   /* func_80025B9C AND func_80025B60:
                                                         this build uses ONE handler where the
                                                         live source has two. func_804065CC. */
-extern u8 func_80406590_a[8] __asm__("func_80406590");
 extern void func_80406F34(s32 *p);                   /* func_80026784 AND func_80026748: the
                                                         same one-handler-for-two as above,
                                                         on func_80406F70. */
-extern u8 func_80406F34_a[8] __asm__("func_80406F34");
 
 extern u8 *D_80408C8C[4];                            /* D_800282BC */
-extern u8 *D_80408C8C_a[1] __asm__("D_80408C8C");    /* the <=8 spelling of the same table: at -G8 a declared
-                                                        size of 8 or less takes the small-data path, and the
-                                                        address then costs ONE register instead of two. The
-                                                        lever is PER SITE, as for D_8008DAB4_a; func_804037F4
-                                                        needs it, and the real size is the [4] above. */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
