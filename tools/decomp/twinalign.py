@@ -40,6 +40,16 @@ FOUR CAUTIONS, three of them paid for.
   * There is no constant offset between the two blocks' data. `card_slot` is
     D_800287CC live and D_804094EC here (delta 0x3E0D20) while the data bases
     differ by 0x3E1320. Use the map, not arithmetic.
+  * THE PAIRING IS ARBITRARY AMONG IDENTICAL-MASKED FUNCTIONS, and this block
+    has a run of twenty near-identical `open_card_message` wrappers. The DP is
+    order-preserving but every `(a, K, 0, 0)` wrapper masks to the same word
+    sequence, so it satisfies the ordering with the wrong assignment: it paired
+    func_8040311C with msg_loading, which is already landed as func_804031E4.
+    ANCHOR ON THE LANDED FUNCTIONS. Twin wrappers 0,4,5,6,15,18 are landed with
+    the live constants 0/1, 4/2, 5/1, 6/2, 15/2, 18/1, which pins the run 1:1
+    positionally; the verified map is in csrc/ovl_main_80400000.c's header.
+    Do not move a body on a --todo row alone when its neighbours mask alike.
+
   * `make splat` regenerates the nonmatchings this tool reads, and make has no
     dependency from a C unit's .o on them. Run `rm -f build/csrc/<unit>.o`
     after a re-split or you will compare against a stale object.
@@ -68,7 +78,38 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 
-LIVE_SRC = ROOT / "csrc/ovl_main_80020000.c"
+# THE LIVE SIDE IS NINE UNITS, NOT ONE, and the order is the block's function
+# order, which the alignment DP depends on. This used to be the single file
+# `csrc/ovl_main_80020000.c`; the 2026-11-10 carve moved every one of the live
+# overlay's 241 function bodies into csrc/main/*.c and left that file holding
+# only data, so this tool silently paired NOTHING -- every twin function came
+# out `twin-only` with a 0.00 score, including the 14-function cluster the
+# park's own notes call its best lever. Derived from the yaml rather than
+# listed here so the next carve cannot break it the same way.
+LIVE_YAML = ROOT / "splat/main.bin.yaml"
+LIVE_VRAM = 0x80020000
+
+
+def live_srcs():
+    """The live overlay's C units, in the block's own rom (= function) order."""
+    import yaml
+
+    with open(LIVE_YAML, encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh)
+    for seg in cfg["segments"]:
+        if isinstance(seg, dict) and seg.get("vram") == LIVE_VRAM:
+            subs = [x for x in seg.get("subsegments", [])
+                    if isinstance(x, list) and len(x) > 2 and x[1] == "c"]
+            out = [ROOT / "csrc" / (x[2] + ".c") for x in sorted(subs)]
+            missing = [p for p in out if not p.exists()]
+            if missing:
+                sys.exit("twinalign: missing live unit(s): %s"
+                         % ", ".join(str(m) for m in missing))
+            if not out:
+                sys.exit("twinalign: no `c` subsegments at vram 0x%08X" % LIVE_VRAM)
+            return out
+    sys.exit("twinalign: no code segment at vram 0x%08X in %s"
+             % (LIVE_VRAM, LIVE_YAML))
 TWIN_SRC = ROOT / "csrc/ovl_main_80400000.c"
 TWIN_ASM = ROOT / "asm/nonmatchings/ovl_main_80400000"
 BUILD = ROOT / "build/twinalign"
@@ -132,29 +173,41 @@ def norm(ins):
 
 
 def build_live_g8():
-    """Compile the live unit at -G8 and return the object's path."""
+    """Compile each live unit at -G8; return the objects in function order."""
     BUILD.mkdir(parents=True, exist_ok=True)
-    s = BUILD / "live_g8.s"
-    o = BUILD / "live_g8.o"
-    if o.exists() and o.stat().st_mtime > LIVE_SRC.stat().st_mtime:
-        return o
-    subprocess.run([str(CC), "-O2", "-Iinclude", "-Ipsyq/include", "-G8", "-S",
-                    "-o", str(s), str(LIVE_SRC)], cwd=ROOT, check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    with open(s) as fh:
-        subprocess.run(["python3", str(MASPSX), "--aspsx-version=2.56",
-                        "--force-stdin", "--run-assembler", "--gnu-as-path=" + AS,
-                        "--use-comm-section", "-G8", "-EL", "-32", "-Iinclude",
-                        "-march=r3000", "-mtune=r3000", "-no-pad-sections", "-O1",
-                        "-o", str(o)], cwd=ROOT, check=True, stdin=fh,
+    objs = []
+    for src in live_srcs():
+        s = BUILD / (src.stem + "_g8.s")
+        o = BUILD / (src.stem + "_g8.o")
+        objs.append(o)
+        if o.exists() and o.stat().st_mtime > src.stat().st_mtime:
+            continue
+        subprocess.run([str(CC), "-O2", "-Iinclude", "-Ipsyq/include", "-Icsrc", "-G8", "-S",
+                        "-o", str(s), str(src)], cwd=ROOT, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return o
+        with open(s) as fh:
+            subprocess.run(["python3", str(MASPSX), "--aspsx-version=2.56",
+                            "--force-stdin", "--run-assembler", "--gnu-as-path=" + AS,
+                            "--use-comm-section", "-G8", "-EL", "-32", "-Iinclude",
+                            "-march=r3000", "-mtune=r3000", "-no-pad-sections", "-O1",
+                            "-o", str(o)], cwd=ROOT, check=True, stdin=fh,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return objs
 
 
-def load_live(obj):
-    """Functions of the -G8 object, with the symbol each instruction relocates."""
-    out = subprocess.run([OBJDUMP, "-dr", "--no-show-raw-insn", str(obj)],
-                         cwd=ROOT, capture_output=True, text=True).stdout
+def load_live(objs):
+    """Functions of the -G8 objects, with the symbol each instruction relocates.
+
+    Takes the list build_live_g8() returns and concatenates them in that order,
+    which is the live block's own function order -- the alignment is an
+    order-preserving DP, so getting this wrong is worse than useless.
+    """
+    if not isinstance(objs, (list, tuple)):
+        objs = [objs]
+    out = "\n".join(
+        subprocess.run([OBJDUMP, "-dr", "--no-show-raw-insn", str(o)],
+                       cwd=ROOT, capture_output=True, text=True).stdout
+        for o in objs)
     funcs, cur = [], None
     for line in out.split("\n"):
         m = re.match(r"^[0-9a-f]+ <(\w+)>:", line)

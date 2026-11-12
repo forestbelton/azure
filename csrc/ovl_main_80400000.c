@@ -84,24 +84,44 @@
  * matching work and are back on INCLUDE_ASM. The triage is worth more than
  * the attempt, so here it is, with the differing-word count:
  *
- *   14 fn, 1 word   THE EQUAL-VALUE REGISTER REUSE DOES NOT HAPPEN HERE.
- *   each            func_804030F4, func_8040311C, func_80403144,
+ *   14 fn, 1 word   NOT A SPELLING -- THIS BLOCK'S COMPILER LACKS
+ *   each            reload_cse_regs. RESOLVED 2026-11-11; the park below was
+ *                   left open as "one lever here is worth 14 functions" and
+ *                   the answer is that there is no source lever at all.
+ *
+ *                   func_804030F4, func_8040311C, func_80403144,
  *                   func_8040320C, func_80403234, func_8040325C,
  *                   func_80403284, func_804032AC, func_804032D4,
  *                   func_804032FC, func_8040334C, func_80403374,
  *                   func_804033C4 -- the card_mes.c wrappers main.h
- *                   documents -- plus func_804013F8. The live build spells
- *                   an argument that equals one already in a register as a
- *                   copy (`addu $a2, $a1, $zero` where the kind equals the
- *                   id, `move $a3, $a2` where both are 0); this block
- *                   re-materialises the constant (`addiu $a2, $zero, 0x2`).
- *                   The SOURCE IS THE SAME -- msg_please_wait is
- *                   `open_card_message(a, 2, 2, p)` and this block's
- *                   func_8040311C sets $a1 and $a2 from two separate
- *                   `addiu`s -- so cse chose differently. Tried and did not
- *                   move it: a `void *` fourth parameter, an unprototyped
- *                   callee, a `u8` parameter to force a mode difference.
- *                   One lever here is worth 14 functions.
+ *                   documents -- plus func_804013F8. The live build copies a
+ *                   hard register that already holds the value; this block
+ *                   materialises it again:
+ *
+ *                     live  addu $a3,$a2,$zero   twin  addu  $a3,$zero,$zero
+ *                     live  addu $a2,$a1,$zero   twin  addiu $a2,$zero,0x2
+ *                     live  addu $v1,$v0,$zero   twin  addiu $v1,$zero,imm
+ *
+ *                   14 for 14, one word each, same position each time, and
+ *                   NO function differs the other way round. The pass is
+ *                   reload_cse_simplify_set (reload1.c:8142) -- not cse: the
+ *                   operand is (const_int 0) in every dump through .lreg and
+ *                   (reg a2) in .greg. It has no cost test, takes the
+ *                   lowest-numbered hard register holding the value, is
+ *                   gated only on `optimize > 0`, and IS ABSENT FROM VANILLA
+ *                   gcc-2.7.2.3 -- an SN addition that cdk-gcc-b18 has. So
+ *                   this block was built by a cc1psx WITHOUT it, which is
+ *                   also why the footprint is so narrow: the pass only bites
+ *                   where a hard register already holds a wanted constant.
+ *                   docs/matching-levers.md has the full heading and the
+ *                   swept-and-failed spellings; do not retry them.
+ *
+ *                   LANDING THESE NEEDS A SECOND COMPILER, cdk-gcc-b18 with
+ *                   reload_cse_regs disabled (a one-line change at
+ *                   reload1.c:2140), selected for this unit only. Everything
+ *                   already landed here is independent of the pass, so it
+ *                   should be surgical -- but it is a build-architecture
+ *                   decision and is NOT started.
  *
  *   2 fn, 2 words   A DIFFERENT POINTER SPELLING OF THE SAME ADDRESS.
  *                   func_80406720 and func_804070C4 hold `q = p + 8` and
