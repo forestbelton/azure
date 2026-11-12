@@ -155,9 +155,9 @@
  *     write and it is two calls deep (set_save_title + set_save_icon), where
  *     this build has one store, `sw $zero, %lo(0x80010208)`. An earlier
  *     revision of the function, not an assert difference.
- *   * func_804012B0 (8 differing) is PARKED, with its two listing-settled
- *     renames and the one reordering that was measured and rejected.
- *     func_804010F0 is the same state machine at 49 and is not parked.
+ *   * func_804012B0 and func_804010F0, the two state machines, LANDED
+ *     2026-11-12. Their two listing-settled renames are below; the devices
+ *     that closed them are on func_804010F0 itself.
  *   * D_80084118 -> D_8009E390 for BOTH of those, but a different twin
  *     function genuinely uses the resident D_80084118. Check the listing per
  *     function; the name is not enough.
@@ -315,11 +315,10 @@
  *                   words against a live counterpart of 2, so that pairing
  *                   is wrong or the live source lost the body entirely.
  *                   func_804012B0's block layout was characterised under
- *                   4.1 and has not been re-opened -- its last
- *                   arm falls through to the shared return in the live build
- *                   and jumps to it here, and that build reuses a register
- *                   already holding %lo(D_8009E390) where the live one
- *                   re-materialises the pair.
+ *                   4.1 and the characterisation was RIGHT: its last arm
+ *                   falls through to the shared return in the live build and
+ *                   jumps to it here. It landed 2026-11-12 by making that
+ *                   jump real -- see the note on the function.
  *
  *                   RE-MEASURE BEFORE BELIEVING ANY OF IT. `rm -rf
  *                   build/twinalign` first: that cache keys on the source
@@ -611,11 +610,103 @@ s32 func_804010E0(void)
     return D_804094E8;
 }
 
-/* NEAR MISS, 79 of 79 words, 2 differing: one delay slot that reorg fills
- * with a duplicate of `out:`'s `addu $v0,$s0,$zero` where the target leaves a
- * nop, and the one word that follows it. Source in
- * docs/near-misses/func_804010F0.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804010F0);
+/* BOTH of these state machines turn on the SAME two devices, and the second
+ * is the one that took them off 2 differing after three sessions.
+ *
+ * ONE: `r = 5;` ahead of the `if (st == 3)`. The target has it in the beq's
+ * delay slot, and reorg can only put it there from BEFORE the branch --
+ * `fill_simple_delay_slots`'s forward "insns from beyond" block takes nothing
+ * for a conditional jump (the resource test it guards is `target == 0`,
+ * reorg.c:3055) and its target-steal needs `JUMP_LABEL (trial) == target`
+ * (reorg.c:3104), which the following `j` is not.
+ *
+ * TWO: an asm-only `def:` block BETWEEN the three arm and `out:`, which the
+ * chain's fall-through jumps to instead of `out:`. It settles the other two
+ * jumps at once. Without it the three arm sits directly above `out:`, its
+ * `goto out` is deleted as a jump to the next insn, and the arm falls through
+ * -- so `out:`'s `addu $v0,$s1,$zero` is never duplicated and the function is
+ * two words short. With it the arm really does end in a `j`, and reorg takes
+ * `out:`'s insn into its slot and retargets past it, which is the target's
+ * `j .L80401390` / `addu $v0,$s1,$zero` beside a separate one-insn `out:`.
+ * The default's own `j` then lands on the `def:` label -- same address, since
+ * the asm emits nothing -- where the insn at the label is an asm and so is
+ * not eligible for the slot, leaving the nop the target has. It also breaks
+ * the cross-jump that used to merge the three arm's `D_804094E8 = 0` tail
+ * onto an identical one, so the separate barrier that was doing that job is
+ * not needed.
+ *
+ * `D_8009E390_a` is the third device, in csrc/main_twin.h: read through the
+ * INCOMPLETE array alias the symbol has no size record, costs two insns, and
+ * the `t++` arms come out as the target's bare `addiu $v1,$v1,4` instead of a
+ * folded `D_8009E390+4`. */
+s32 func_804010F0(void)
+{
+    s32 st = D_804094E8;
+    s32 r = 0;
+    s32 *t;
+    s32 *u;
+
+    if (st == 0)
+    {
+        goto out;
+    }
+    if (st == 2)
+    {
+        goto out;
+    }
+    if ((u32)st >= 3)
+    {
+        goto high;
+    }
+    if (st == 1)
+    {
+        goto one;
+    }
+    r = 5;
+    goto out;
+high:
+    r = 5;
+    if (st == 3)
+    {
+        goto three;
+    }
+    goto def;
+one:
+    t = D_8009E390_a;
+    if (D_804094EC != 0)
+    {
+        t++;
+    }
+    if (t[0] != 0)
+    {
+        r = 1;
+        D_804094E8 = 0;
+    }
+    else if ((func_80408644(0) & 1) != 0 || (func_80408644(1) & 1) != 0)
+    {
+        func_804014E4();
+        while (func_80408674(D_804094EC) == 0)
+        {
+        }
+        D_80409500 = 0;
+        D_804094E8 = 3;
+    }
+    goto out;
+three:
+    r = 2;
+    u = D_8009E390_a;
+    if (D_804094EC != 0)
+    {
+        u++;
+    }
+    u[0] = 1;
+    D_804094E8 = 0;
+    goto out;
+def:
+    __asm__("");
+out:
+    return r;
+}
 
 s32 func_8040122C(void)
 {
@@ -638,12 +729,59 @@ s32 func_8040122C(void)
     return r;
 }
 
-/* NEAR MISS, 62 of 62 words, 2 differing -- one delay slot. Was 8 before the
- * two levers below; what is left is that the target puts the default arm's
- * `addiu $s1,$zero,5` in the `beq $s0,$v0,.L8040135C` delay slot and leaves
- * the following `j`'s slot empty, and gcc does it the other way round.
- * Source in docs/near-misses/func_804012B0.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804012B0);
+/* The same two devices as func_804010F0 above. */
+s32 func_804012B0(void)
+{
+    s32 st = D_804094E8;
+    s32 r = 0;
+    s32 *t;
+
+    if (st == 0)
+    {
+        goto out;
+    }
+    if (st == 1)
+    {
+        goto one;
+    }
+    r = 5;
+    if (st == 3)
+    {
+        goto three;
+    }
+    goto def;
+one:
+    func_80401578();
+    if (func_80408684(D_804094EC) == 0)
+    {
+        goto fail;
+    }
+    if ((func_80408644(D_804094EC != 0) & 4) == 0)
+    {
+        goto fail;
+    }
+    D_80409500 = st;
+    D_804094E8 = D_804094E8 + 1;
+    goto out;
+fail:
+    D_804094E8 = 0;
+    r = 5;
+    goto out;
+three:
+    r = 3;
+    t = D_8009E390_a;
+    if (D_804094EC != 0)
+    {
+        t++;
+    }
+    t[0] = 0;
+    D_804094E8 = 0;
+    goto out;
+def:
+    __asm__("");
+out:
+    return r;
+}
 
 s32 func_804013A8(void)
 {

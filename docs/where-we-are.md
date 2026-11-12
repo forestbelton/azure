@@ -153,7 +153,7 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **241 of its 263 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **243 of its 263 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** Most came from the
   live overlay's own source with their references renamed through
@@ -202,19 +202,22 @@ Three things about the overlays that change how they are worked, all in
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
   one pass** -- 21 with nothing changed but their symbol names. Successive
-  passes took the rest: stubs went **157 -> 22**.
+  passes took the rest: stubs went **157 -> 20**.
 
-  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 22 remaining stubs is
+  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 20 remaining stubs is
   accounted for: **15** are hand-written assembly that can never be C (nine
   BIOS call stubs, the libapi BIOS-patch routines, a `jr` into a data label,
-  two delay loops), and the other **7** are covered by the 7 parks in
+  two delay loops), and the other **5** are covered by the 5 parks in
   `docs/near-misses/`. There is no function left to pick up cold; the work
-  from here is cracking parks, and SIX of them fell on 2026-11-12 --
+  from here is cracking parks, and EIGHT of them fell on 2026-11-12 --
   func_80402CD4 to a loop-invariance marker, func_8040861C by blocking
   reorg's epilogue scan, func_80401E2C by pinning a sunk load ahead of an
   `la`, func_80406844 by reading `memcpy`'s alignment off a pointer VARIABLE
-  rather than a type, and func_80406720 with func_804070C4 by stopping
-  reorg's BACKWARD scan out of a call's delay slot with an empty `asm`.
+  rather than a type, func_80406720 with func_804070C4 by stopping reorg's
+  BACKWARD scan out of a call's delay slot with an empty `asm`, and
+  func_804010F0 with func_804012B0 -- the two state machines, parked at 2
+  words for three sessions -- with an asm-only block between the last arm and
+  the shared `out:`.
 
   The last three are worth naming as a pattern: all three parks had been
   written off as "the stand-in compiler is FSF 2.7.2 and not SN's 4.0 build",
