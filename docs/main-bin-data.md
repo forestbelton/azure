@@ -182,31 +182,84 @@ container, and from 149,024 (5.78%) before the overlay's data was claimed.
 Read splat's `unknown` line and not its "in defined segments" total —
 `docs/data-map.md` explains why that headline number is unreliable.
 
-## The 130 KB still unknown, and what it is
+## The 15 KB still unknown, and what it is
 
 | blob | bytes | what it is |
 |---|---|---|
-| `[0x3800, bin]` | 116,736 | **the VAB waveform area** — identified, see below |
-| `[0x2719e0, bin]` | 15,904 | 90.1% zeros; debug-twin data + padding |
+| `[0x2719e0, bin]` | 15,904 | the 0x80400000 twin's data + padding |
 
-Two rows gone since 2026-11-01. `[0x265000, bin]`, 16,384 bytes, is not
+Three rows gone since 2026-11-01. `[0x265000, bin]`, 16,384 bytes, is not
 "overlay data + padding" awaiting a decision any more: 0x265000..0x268b6c is
 the upper half of the 0x80020000 overlay's `.data` and is defined in
 `csrc/ovl_main_80020000.c`, and 0x268b6c..0x269000 is the 1,172-byte pad to the
-sector boundary, now its own named `data` subsegment. The 480-byte
-`[0x264e20, bin]` went the same way. The remaining `[0x2719e0, bin]` is the
-debug twin's data and is the same job on the other block.
+sector boundary, now a `pad` subsegment. The 480-byte `[0x264e20, bin]` went
+the same way, and `[0x3800, bin]` — 116,736 bytes, the largest of the three —
+was the sound bank, re-cut 2026-11-11 and named.
 
-**`[0x3800, bin]` is the sound bank's samples and should simply be named.** The
-VAB header at 0x3000 is `pBAV`, version 7, 3 programs, 39 tones, 28 VAGs, with
-`total_size` 0x1C310 — so the VAB spans 0x3000..0x1F310 and the splat segment
-at 0x3000 (2,048 bytes) is only its header sector, exactly as
-`tools/parse-vab.py` describes. The blob after it is the waveform area, and it
-measures as ADPCM rather than merely being assumed to be: **99.3% of its 7,088
-16-byte blocks are valid SPU-ADPCM** on the same test that scores 0.254 on the
-filler. Sample data actually runs to 0x1FAF0 — 2,016 bytes past the VAB's
-declared `total_size` — and then zero-pads to the 0x20000 sector boundary.
+### The sound bank is a .VH/.VB pair, not a .VAB
 
-So of the 130 KB, 114 KB is a known quantity awaiting a name and the other
-16 KB is the debug twin's data and zero padding. **There is no unexplained bulk
-data left in `main.bin`.**
+**Corrected 2026-11-11.** This was previously recorded as "the VAB waveform
+area ... awaiting a name", with sample data running "2,016 bytes past the VAB's
+declared `total_size`" and that overrun left unexplained. The overrun was the
+clue: these bytes are not one `.VAB` file.
+
+A `.VAB` holds its waveform data — `VabHdr`, the attribute tables and the
+samples contiguous, with `fsize` covering the lot. The split form, `.VH`
+(header) plus `.VB` (body), keeps them as separate objects; it is what
+`SsVabOpenHead` and `SsVabTransBody` take, and it is why the game reads this
+file at **two** offsets, +0x3000 and +0x4800.
+
+Four measurements against the header at 0x3000 (`pBAV`, ver 7, ps=3, ts=39,
+vs=28, `fsize` 0x1C310):
+
+1. **The VH is exactly 0x1020 bytes** — `VabHdr` 32 + `ProgAtr[128]` 2,048 +
+   `VagAtr[3][16]` 1,536 + `u16 offsets[256]` 512 — so it ends at 0x4020, and
+   its last nonzero byte is 0x3E58: offset entry 28 of 28, matching `vs`.
+2. **The waveform data does not follow at 0x4020.** 0x4020..0x4800 is 2,016
+   zero bytes; the body begins on the sector boundary the game reads from.
+3. **The 28 live offset entries sum to 0x1B2F0**, which is `fsize - 0x1020`
+   and exactly 0x4800..0x1FAF0. The header's own table sizes the body, and
+   sizes it as a standalone object.
+4. **A single .VAB would end at 0x3000 + `fsize` = 0x1F310.** Content runs to
+   0x1FAEF, 0x7E0 past it — the same 2,016 bytes the gap absorbed.
+
+The old cut was wrong on both ends: `unk.vab` spanned 0x3000..0x3800, which
+splits the VH mid-`ProgAtr` table (0x3800 is 32 bytes short of its end at
+0x3820), and the remainder of the bank was the unnamed blob. The shape now:
+
+| segment | range | bytes | what |
+|---|---|---|---|
+| `snd_bank.vh` | 0x3000-0x4020 | 4,128 | the VH: header + program/tone/offset tables |
+| `pad` | 0x4020-0x4800 | 2,016 | zero, aligning the body to its read sector |
+| `snd_bank.vb` | 0x4800-0x1FAF0 | 111,344 | the VB: 100% valid SPU-ADPCM |
+| `pad` | 0x1FAF0-0x20000 | 1,296 | zero, to the next resource |
+
+The ADPCM measurement is stronger than the old one looked, because the old one
+was measured over a range that included the VH. Restricted to the body it is
+**6,959 of 6,959 blocks valid, 100.00%**, and only 28 of them are all-zero, so
+it is not carried by silence. The last block that fails anywhere in the region
+is 0x3E50, inside the VH's own offset table. Controls on the same test:
+
+| region | blocks | pass |
+|---|---|---|
+| the VB | 6,959 | **100.00%** |
+| dead filler (random) | 129,342 | 0.80% |
+| `title_bg_img` (TIM) | 11,551 | 20.26% |
+| `song1.kdt` (sequence) | 660 | 2.58% |
+
+0.80% is exactly what the test predicts for random input --
+`(13/16)·(5/16)·(8/256)` = 0.7935% -- so the filler row validates the test
+rather than merely contrasting with it. Shift nibbles span 0..12 with a
+plausible decay (902 blocks at 0, 18 at 12), filters are 0..4, and the only
+flag values present are 0, 1, 4 and 7.
+
+`tools/parse-vab.py` parses the VH; note its `waveform_size` field is really
+`fsize`, the whole-bank size.
+
+`town.bin` carries this same bank — byte-identical from 0x3000 to its
+truncation at 0xb000, same `fsize` — as one dead `snd_preamble_vab` blob.
+`dungeon.bin` diverges from the shared preamble at 0x7800 and does not reach
+it. Neither is loaded, so neither was re-cut.
+
+So the one remaining unknown blob is 15,904 bytes of the 0x80400000 twin's
+data and its padding. **There is no unexplained bulk data left in `main.bin`.**

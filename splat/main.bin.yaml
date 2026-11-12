@@ -36,21 +36,87 @@ options:
   undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
 segments:
   - [0x0, bin, song1.kdt]
-  - [0x3000, bin, unk.vab]
-  - [0x3800, bin]
+  # THE SOUND BANK, AS A .VH/.VB PAIR AND NOT A .VAB. Re-cut 2026-11-11.
+  # A `.VAB` is one file: VabHdr, the attribute tables and the waveform data
+  # contiguous, with `fsize` covering the whole thing. These bytes are the
+  # SPLIT form instead -- `.VH` (header) and `.VB` (body) as separate objects,
+  # which is what SsVabOpenHead + SsVabTransBody take, and it is why the game
+  # reads this file at TWO offsets, +0x3000 and +0x4800.
+  #
+  # Four measurements say split rather than single, all against the header at
+  # 0x3000 (`pBAV`, ver 7, ps=3, ts=39, vs=28, fsize=0x1C310):
+  #   1. The VH is exactly 0x1020 bytes -- VabHdr 32 + ProgAtr[128] 2048 +
+  #      VagAtr[3][16] 1536 + u16 offsets[256] 512 -- so it ends at 0x4020,
+  #      and its last nonzero byte is 0x3E58, offset entry 28 of 28 (vs=28).
+  #   2. The waveform data does NOT follow at 0x4020. 0x4020..0x4800 is 2,016
+  #      zero bytes and the body starts on the sector boundary the game reads.
+  #   3. The 28 live offset entries SUM TO 0x1B2F0 == fsize - 0x1020, which is
+  #      exactly 0x4800..0x1FAF0. The header's own table sizes the body, and
+  #      it sizes it as a standalone object.
+  #   4. A single .VAB would therefore have to end at 0x3000 + fsize =
+  #      0x1F310. Content runs to 0x1FAEF -- 0x7E0 past it, the same 2,016 the
+  #      gap absorbed. docs/main-bin-data.md recorded that overrun as
+  #      unexplained; this is the explanation.
+  #
+  # The old cut was wrong on both ends: `unk.vab` was 0x3000..0x3800, which
+  # splits the VH mid-ProgAtr table (0x3800 is 32 bytes short of its end at
+  # 0x3820), and the rest of the bank was the unnamed blob below.
+  #
+  # town.bin carries this same bank, byte-identical to its truncation at
+  # 0xb000, as one dead `snd_preamble_vab` blob -- see that file's comment.
+  - [0x3000, bin, snd_bank.vh]
+  - [0x4020, pad]
+  - [0x4800, bin, snd_bank.vb]
+  - [0x1faf0, pad]
   - [0x20000, bin, kewne_loading_img]
   - start: 0x20800
     type: hrodata
     name: str/monsters
-    # NB: `vram: 0x20800` is just the ROM offset, not its actual load address
-    vram: 0x20800
-  # Pointer and index tables for the string pool above: 71 twenty-byte records
-  # at 0x2127C..0x21768 after one leading unit, then zero padding to 0x21800.
-  # 135 of its 358 words are pointers, and every one of them lands in
+    vram: 0x8002C000
+  # Pointer and index tables for the string pool above: a 64-ELEMENT ARRAY of
+  # 20-byte records, 0x21268..0x21768, then zero padding to 0x21800. 135 of
+  # its 358 words are pointers, and every one of them lands in
   # 0x8002C000..0x8002CA54 -- the resident executable's own low RAM -- so this
   # is a relocated resource rather than a standalone file. NONE of them points
   # into 0x80088760.., which is what makes 0x21800 a real boundary and not a
   # guess: the overlay below starts where the pointers stop.
+  #
+  # ITS LOAD ADDRESS IS 0x8002CA68, pinned three independent ways and measured
+  # 2026-11-11. (1) The pool loads at 0x8002C000, so the tables that follow it
+  # in the +0x20800 read land at 0x8002C000 + 0xA68. (2) slus_006.14 holds the
+  # word 0x8002CA68 at 0x80073588 -- the `+0xC` field of record 18 of the
+  # 20-byte descriptor array at D_80073414. (3) The highest table pointer,
+  # 0x8002CA54, is rom 0x21254, which is the pool's last entry; the lowest is
+  # 0x8002C000, its first. The pool's own vram is therefore 0x8002C000 and not
+  # the rom-offset placeholder it carried until now -- which also puts it
+  # exactly where the 0x80020000 overlay's 0xC000 bytes end.
+  #
+  # THE RECORD LAYOUT IS ALREADY PINNED BY LANDED CODE. func_8004A574 in
+  # csrc/unk_1C540.c walks both levels of it:
+  #     e = (u8 *) D_80073414 + p[1] * 20;          // the resident descriptors
+  #     r = (u8 *) *(u32 *) (e + 0xC) + p[0] * 20;  // == this array
+  #     v = *(u16 *) (r + (w ? 0x12 : 0x10)) * D_800713CC[e[3]];
+  # So `+0xC` of the outer record is this array's base, `p[0]` indexes it by
+  # 20, and `+0x10`/`+0x12` are two u16 fields scaled by a per-descriptor
+  # factor. Record 0 is index 0, not a header: the pointer is 0x8002CA68 =
+  # rom 0x21268. It is the odd one out (byte 2 is 0x24 against every other
+  # record's 0x0C, and its +4 is 0xA001020C, not a pool pointer).
+  #
+  # Records 1..63: byte 0 is always 0x10, byte 1 is 0x00/0x01/0x80, byte 2 is
+  # 0x0C, byte 3 is 0x00; +4, +8 and +0xC are up to three pool pointers; +0x10
+  # is 100 in every record and +0x12 varies (50000, 3200, 600, 100, ...).
+  # The 135 pointers cover 134 distinct strings -- every string start in the
+  # pool exactly once, with the first pointed at twice -- and the pool's
+  # remaining "start", rom 0x21265, is the `C4 0D 0E` toolchain residue that
+  # asrc/str/monsters.txt carries as `:bytes=c4 0d 0e`. The array is closed.
+  #
+  # TO OWN IT IN C: a unit at vram 0x8002CA68 holding a 64-element array of a
+  # 20-byte struct, with the pointer fields written as the pool's own labels
+  # (STR_MAIN_*, already global out of the hrodata listing) so the link
+  # resolves them to 0x8002C.. addresses. The pool vram above is what makes
+  # that resolve; it was corrected for this and main.bin stayed
+  # byte-identical. What is NOT yet established is what the fields MEAN --
+  # D_80073414 and D_800713CC are both still asm in slus_006.14.
   #
   # Re-measured 2026-11-11. This segment used to run to 0x28420 and was
   # described as "11 KB of unidentified fixed-size records, then zero padding
@@ -61,12 +127,11 @@ segments:
   # tables alone is 135, all resident.
   #
   # It starts at 0x21268 and not 0x21280: the string pool's last entry is
-  # "Ｕｌｔｉｍａｔｅ", whose NUL is at 0x21264, and the 20-byte records whose
-  # stride runs 0x2127C, 0x21290, 0x212A4, ... leave 0x21268..0x2127C as one
-  # more 20-byte unit ahead of them. Whether that unit is a record or a header
-  # is not settled -- its first word is 0x00240010 against the records'
-  # 0x000C0110/0x000C0010, and its second is not a pointer -- but it is table
-  # words either way, and not text.
+  # "Ｕｌｔｉｍａｔｅ", whose NUL is at 0x21264. 0x21268..0x21768 is 1,280
+  # bytes = 64 records exactly, and func_8004A574 indexes from 0x8002CA68, so
+  # the unit at 0x21268 is RECORD 0 and not a header -- an earlier reading of
+  # "71 records at 0x2127C after one leading unit" was wrong twice over: 71
+  # records would overrun 0x21800, and the stride starts one unit lower.
   - [0x21268, bin, main_tables_21268]
   # THE THIRD PLACED OVERLAY, mapped 2026-11-11, and the only one of the five
   # that loads into the shared 0x80088760 slot from main.bin. docs/overlays.md
@@ -126,8 +191,8 @@ segments:
   #                      Nothing references them with a lui/addiu pair, but
   #                      they are inside the overlay's own file and the sector
   #                      count proves the loader pulls them in, so they are
-  #                      kept as their own `bin` rather than 4,096 lines of
-  #                      `.word 0x00000000`.
+  #                      declared, as a `pad`. See the subsegment below for
+  #                      why that type and not a `bin`.
   #
   # The file is therefore 0x21800..0x28420, 27,680 bytes, and
   # ceil((0x28420 - 0x21800) / 0x800) is EXACTLY 14 -- the descriptor's
@@ -177,7 +242,33 @@ segments:
       - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
       - [0x24114, data, ovl_main_80088760_data]
-  - [0x24420, bin, ovl_main_80088760_zero]
+  # SIXTEEN KB OF ZEROS, OWNED BY ONE LINE. `pad` emits no asset, no listing
+  # and no object: its whole contribution to build/main.bin.ld is `. += 0x4000;`
+  # inside an output section of its own, which is enough to advance splat's
+  # running `__romPos` so every later segment keeps its LMA. ld marks that
+  # section NOBITS -- a dot advance gives it a size but no contents -- so the
+  # zeros are not in build/main.bin.elf at all; `objcopy -O binary` puts them
+  # in the container by zero-filling the gap up to .unread_filler's LMA.
+  #
+  # THAT NOBITS IS SPECIFIC TO A STANDALONE `pad` SEGMENT, which is what this
+  # one is: a section holding nothing but a dot advance gets a size and no
+  # contents. A `pad` SUBSEGMENT behaves differently -- its advance lands at
+  # the tail of the containing segment's section, which has real contents, so
+  # ld keeps that section PROGBITS and writes the fill itself. 0x268b6c is
+  # that form; `._25D000` comes out PROGBITS at 0xC000 with the zeros in it.
+  #
+  # TWO CONSEQUENCES, BOTH ONLY FOR THE STANDALONE FORM. It may never be a
+  # container's LAST segment: with no following section there is nothing for
+  # objcopy to pad up to, and the file comes out short with no error from ld,
+  # objcopy or splat -- measured on a reduced case, 8 bytes instead of 72,
+  # where the same pad inside a section with contents gave the full 72. And
+  # anything reading bytes out of a container ELF rather than the binary
+  # (tools/decomp/ovlverify.py, devmeasure.py) sees a hole here; harmless for
+  # a zero run, not for data.
+  #
+  # Only use either form for a run that is ENTIRELY zero. Both of this
+  # container's are, measured; tools/decomp/zerosweep.py is how to re-check.
+  - [0x24420, pad]
   # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
   # in any container, and it holds nothing. It is kept as a named `bin` for the
   # same reason as slus_006.14's `tail_unloaded`: so splat stops calling it
@@ -244,8 +335,8 @@ segments:
   # The 0x80020000 overlay. docs/overlays.md is how the block was placed and
   # what it is; docs/owning-data.md is the shape below -- both dotted
   # subsegments are defined in full by csrc/ovl_main_80020000.c, splat writes
-  # not a byte of either, and `_pad` is what keeps this segment's end on the
-  # 16-byte grid `__romPos` needs.
+  # not a byte of either, and the trailing `pad` is what keeps this segment's
+  # end on the 16-byte grid `__romPos` needs.
   - type: code
     start: 0x25d000
     vram: 0x80020000
@@ -294,7 +385,7 @@ segments:
       - [0x265094, .data, main/cardsme]           # 0x80028094
       - [0x2650b4, .data, main/memory]            # 0x800280B4, the inferred one
       - [0x265530, .data, ovl_main_80020000]      # the state run only
-      - [0x268b6c, data, ovl_main_80020000_pad]
+      - [0x268b6c, pad]
   # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
   # left it as bin, reporting "only 58 internal jal targets and the best
   # delta scored 6 against a floor of 5, which is noise" -- that measurement
@@ -407,5 +498,28 @@ segments:
       - [0x26907c, .rodata, ovl_main_80400000]
       - [0x269090, rodata, ovl_main_80400000_rodata_post]
       - [0x2698a0, c, ovl_main_80400000]
-  - [0x2719e0, bin]
+      # THE TWIN'S DATA, declared 2026-11-11. It was `[0x2719e0, bin]`, the
+      # last unknown blob in the container, and it is this block's own data
+      # run: the text ends at 0x2719e0 == vram 0x804089E0, and reconstructing
+      # lui+addiu/ori and lui+load/store pairs across 0x2698a0..0x2719e0
+      # yields 87 DISTINCT ADDRESSES landing in 0x80408A30..0x8040C628. The
+      # last nonzero byte in the run is 0x275627 == vram 0x8040C627, so the
+      # content ends exactly where the references end -- the top reference,
+      # 0x8040C628, is one past it.
+      #
+      # 90% of it is zero because most of it is uninitialised storage that
+      # the original link stored rather than reserved; there is no .bss here.
+      #
+      # Undotted `data` on purpose: this is a GENERATED listing, not C. The
+      # block's functions are only partly landed, so nothing can attribute
+      # these objects to a translation unit yet. When they are owned, this
+      # becomes `.data` beside csrc/ovl_main_80400000.c the way 0x265000 did
+      # for the 0x80020000 overlay -- see docs/owning-data.md.
+      - [0x2719e0, data, ovl_main_80400000_data]
+      # 0x275628..0x275800 is zero: 472 bytes padding the container to its
+      # sector-aligned end. A SUBSEGMENT and not a top-level `pad`, because a
+      # standalone pad as a container's last segment is silently truncated --
+      # see the note at 0x24420. Inside this segment's populated section the
+      # dot advance keeps it PROGBITS and ld writes the fill.
+      - [0x275628, pad]
   - [0x275800]
