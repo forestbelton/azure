@@ -50,16 +50,44 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import twinalign  # noqa: E402
 
 ROOT = twinalign.ROOT
-LIVE = ROOT / "csrc/ovl_main_80020000.c"
+# THE LIVE SIDE IS NINE FILES, NOT ONE. This was `csrc/ovl_main_80020000.c`
+# alone, which the 2026-11-10 carve emptied of every function body -- the same
+# staleness that made twinalign pair nothing. The list comes from
+# twinalign.live_srcs(), which derives it from the yaml, so a future carve
+# cannot break it either.
+LIVE_SRCS = list(twinalign.live_srcs())
 TWIN = ROOT / "csrc/ovl_main_80400000.c"
 HDR = ROOT / "csrc/main_twin.h"
 CACHE = twinalign.BUILD / "symmap.json"
 STUB = 'INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", %s);'
-# every function the LIVE unit defines, so a name that survives renaming can be
+# every function the LIVE units define, so a name that survives renaming can be
 # reported instead of linking silently against the resident engine
-LIVE_NAMES = set(re.findall(r"^[\w \*]+?(\w+)\([^;)]*\)\s*\n\{",
-                            (ROOT / "csrc/ovl_main_80020000.c").read_text(),
-                            re.MULTILINE))
+LIVE_NAMES = set()
+for _src in LIVE_SRCS:
+    LIVE_NAMES |= set(re.findall(r"^[\w \*]+?(\w+)\([^;)]*\)\s*\n\{",
+                                 _src.read_text(), re.MULTILINE))
+
+
+def live_aliases():
+    """{name used in live source: the symbol it really resolves to}.
+
+    TWO SPELLINGS, and missing the second one cost six functions on
+    2026-11-11. A live global can be named through a `#define NAME D_XXXXXXXX`
+    OR through an `__asm__` alias -- `extern s32 card_file_count[]
+    __asm__("D_80084128");`. Both have to be resolved to the real symbol
+    BEFORE the live -> twin rename, or the name survives, main.h's own
+    declaration resolves it at compile time, and the function links against
+    the RESIDENT engine. It compiles, it links, and ovlverify reports 0
+    differing, because the relocation is masked. Only the container link says
+    anything.
+    """
+    out = {}
+    for f in ("csrc/main.h", "include/structs.h"):
+        txt = (ROOT / f).read_text()
+        out.update(re.findall(r"^#define (\w+) (D_[0-9A-F]{8})$", txt, re.MULTILINE))
+        out.update((n, t) for n, t in re.findall(
+            r"\b(\w+)\s*(?:\[[^\]]*\])?\s*__asm__\(\"((?:D_|func_)[0-9A-F]{8})\"\)", txt))
+    return out
 
 
 def symmap(refresh=False):
@@ -137,24 +165,44 @@ def span(src, fn):
 
 
 def extract(fn):
-    src = LIVE.read_text()
-    m = re.search(r"^[\w \*]+?\b" + fn + r"\([^;)]*\)\s*\n\{", src, re.MULTILINE)
-    if not m:
-        sys.exit("no definition of %s in %s" % (fn, LIVE.name))
-    s, e = span(src, fn)
-    # the live body's own comment is about the LIVE function; leave it behind
-    return src[m.start():e]
+    """The live definition of FN, from whichever of the nine live units has it."""
+    for path in LIVE_SRCS:
+        src = path.read_text()
+        m = re.search(r"^[\w \*]+?\b" + fn + r"\([^;)]*\)\s*\n\{",
+                      src, re.MULTILINE)
+        if not m:
+            continue
+        s, e = span(src, fn)
+        # the live body's own comment is about the LIVE function; leave it behind
+        return src[m.start():e], path
+    sys.exit("no definition of %s in any of %s"
+             % (fn, ", ".join(p.name for p in LIVE_SRCS)))
 
 
 def do_move(twin_fn, live_fn, dry):
     m, ambig = symmap()
     fnmap = pairing_map()
-    body = extract(live_fn)
-    # the live source names some globals through a macro (card_slot ->
-    # D_800287CC); resolve those before renaming
-    macros = dict(re.findall(r"^#define (\w+) (D_[0-9A-F]{8})$",
-                             (ROOT / "csrc/main.h").read_text(), re.MULTILINE))
+    body, live_path = extract(live_fn)
+    macros = live_aliases()
     used, refused, byalign = set(), set(), set()
+
+    hdr = HDR.read_text()
+
+    def keep_suffix(tok, real, twin):
+        """Carry an alias SUFFIX across the rename when the twin has one too.
+
+        The live source reaches one object under two names on purpose -- the
+        per-site declared-size lever -- so `D_800814A0_a` must become
+        `D_8008DAB4_a` and not the bare `D_8008DAB4`, which is declared as a
+        scalar and would not even compile. Only used when main_twin.h actually
+        declares the suffixed spelling; otherwise the bare name goes in and
+        the compiler says so, which is the right kind of failure.
+        """
+        if tok != real and tok.startswith(real):
+            cand = twin + tok[len(real):]
+            if re.search(r"\b" + cand + r"\b", hdr):
+                return cand
+        return twin
 
     def sub(mo):
         tok = mo.group(0)
@@ -165,12 +213,14 @@ def do_move(twin_fn, live_fn, dry):
             refused.add(real)
             return tok
         if real in m:
-            used.add((real, m[real]))
-            return m[real]
+            t = keep_suffix(tok, real, m[real])
+            used.add((real, t))
+            return t
         if real in fnmap:
             byalign.add(real)
-            used.add((real, fnmap[real]))
-            return fnmap[real]
+            t = keep_suffix(tok, real, fnmap[real])
+            used.add((real, t))
+            return t
         return tok
 
     new = re.sub(r"\b[A-Za-z_]\w*\b", sub, body)
@@ -180,8 +230,15 @@ def do_move(twin_fn, live_fn, dry):
     # since it compiles and links against the resident engine
     unmapped += sorted(n for n in re.findall(r"\b[A-Za-z_]\w*\b", new)
                        if n in LIVE_NAMES and n not in m and n not in fnmap)
+    # AND AN ALIAS THAT SURVIVED RENAMING, which is the same silent failure one
+    # level down: `card_file_count` is not a func_/D_ name so it is not caught
+    # above, and main.h's __asm__ alias quietly resolves it to the RESIDENT
+    # D_80084128. Six functions linked that way on 2026-11-11 and every one of
+    # them measured 0 differing; only the container caught it.
+    unmapped += sorted(n for n in set(re.findall(r"\b[A-Za-z_]\w*\b", new))
+                       if n in macros)
 
-    print("%s  <-  %s" % (twin_fn, live_fn))
+    print("%s  <-  %s  (%s)" % (twin_fn, live_fn, live_path.name))
     for a, b in sorted(used):
         print("    %-22s -> %s" % (a, b))
     if byalign:

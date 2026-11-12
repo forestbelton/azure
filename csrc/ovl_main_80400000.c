@@ -81,18 +81,64 @@
  *     docs/where-we-are.md, that part of this block is a DIFFERENT REVISION
  *     of the source rather than the same source with asserts compiled in.
  *
- *   * ONE FUNCTION HAS A LOCAL THE LIVE SOURCE DOES NOT (func_804025F8, 8
- *     bytes, never read). See the DEVICE comment on it.
+ *   * ONE FUNCTION LOOKED LIKE IT HAD A LOCAL THE LIVE SOURCE DOES NOT
+ *     (func_804025F8, 8 bytes, never read). IT DOES NOT, and the device is
+ *     gone: the 8 bytes were the COMPILER, and FSF 2.7.2 reserves them by
+ *     itself. Kept in this list because a frame 8 bytes too small still
+ *     looks like a missing local, and now there is a second thing to check
+ *     first.
  *
  *   * ONE CONSTANT IS LOWER BY ONE (func_80402DC8 passes 6 where the live
  *     source passes 7).
  *
- * WHERE THE MECHANICAL PHASE ENDS. Everything above was a move plus an
- * immediate. The 33 functions of twinalign's `near` and `inserts-only`
- * classes that carry no assert were moved the same way and measured, and
- * only ONE of them (func_80407E08) landed; the rest are per-function
- * matching work and are back on INCLUDE_ASM. The triage is worth more than
- * the attempt, so here it is, with the differing-word count:
+ * AND THEN THE SECOND COMPILER RESTARTED IT, 2026-11-11. With
+ * tools/psx272gcc in place, `twinalign --todo` went from 1 mask-identical
+ * pair to 33, and 32 of those 33 landed in one pass: 21 with nothing but
+ * their symbol names changed, 11 after an adjustment. The adjustments were
+ * all old families plus TWO NEW ONES:
+ *
+ *   * A WHOLE STRUCTURE 0x84 BYTES EARLIER. func_80404668, func_804045C8,
+ *     func_80404618 and func_80403E54 reach UnkCardGrp240's fields at
+ *     0x1C0/0x21C/0x1DC/0x1EC/0x1F4 where the live struct has
+ *     0x244/0x2A0/0x260/0x270/0x278 -- a flat -0x84 on every field. Written
+ *     as raw word indices off `s32 *p`, as func_804040C8 already was. This
+ *     is the first-bullet family at a larger scale, and the cleanest
+ *     evidence yet that the two builds' structures genuinely differ.
+ *
+ *   * FOUR REVISION DIFFERENCES IN ONE FUNCTION. func_80403698 needs the
+ *     ptrs array 0x18 later, a loop bound of 4 for 3, func_80056F14 called
+ *     with 4 for 3, and a 0x3C stride for 0x48. Nothing in it is a spelling.
+ *
+ *   * AND THE MIRROR OF func_804065CC's ONE-HANDLER-FOR-TWO:
+ *     func_80405F24 has TWO handlers where the live source has one
+ *     (func_80406368 and func_80405AB4 for the single live func_80024FFC),
+ *     which is why twinmove refuses that symbol -- a real tie, not a weak
+ *     vote.
+ *
+ * THE ONE TRAP IN THAT BATCH IS WORTH MORE THAN THE BATCH. Six of the 32
+ * linked against the RESIDENT engine and every one of them measured 0
+ * differing. The live source names three objects through `__asm__` ALIASES
+ * rather than their symbols -- `card_file_count`, `card_free_blocks`,
+ * `D_800814A0_a` -- twinmove only resolved `#define` aliases, so the names
+ * survived the rename, csrc/main.h's own declarations resolved them at
+ * compile time, and the relocations pointed at the resident executable
+ * (D_80084128 where this build wants D_80136140, a different engine build
+ * entirely). ovlverify masks relocation targets, so it saw nothing. ONLY THE
+ * CONTAINER LINK CAUGHT IT, 33 bytes in 2.5 MB. twinmove now resolves
+ * `__asm__` aliases too, carries an alias SUFFIX across the rename when the
+ * twin declares one, and reports any alias name that survives. The general
+ * rule stands: a clean ovlverify sweep is a reason to build, never a
+ * substitute for building.
+ *
+ * WHERE THE MECHANICAL PHASE ENDED THE FIRST TIME. Everything above the
+ * second-compiler batch was a move plus an immediate. The 33 functions of
+ * twinalign's `near` and `inserts-only` classes that carried no assert were
+ * moved the same way and measured, and only ONE of them (func_80407E08)
+ * landed; the rest went back on INCLUDE_ASM. EVERY DIFFERING-WORD COUNT IN
+ * THE TRIAGE BELOW WAS TAKEN UNDER THE 4.1 COMPILER AND IS STALE. It is kept
+ * because the reasoning is still worth reading, and because two of its
+ * verdicts -- the reload_cse_regs cluster and the folded indexed load --
+ * are what identified the compiler in the first place.
  *
  *   14 fn, 1 word   NOT A SPELLING -- THIS BLOCK'S COMPILER LACKS
  *   each            reload_cse_regs. RESOLVED 2026-11-11; the park below was
@@ -499,7 +545,16 @@ s32 func_804013D0(void)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804013F8);
+s32 func_804013F8(s32 D_804094EC)
+{
+    func_804014E4();
+    do
+    {
+    } while (func_80408664(D_804094EC) == 0);
+    D_80409500 = 0;
+    D_804094E8 = 1;
+    return 1;
+}
 
 s32 func_80401444(void)
 {
@@ -554,7 +609,31 @@ void func_80401578(void)
     func_8007C9C8(D_8040928C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804015D8);
+s32 func_804015D8(void)
+{
+    UnkFnTab5 a = D_80400054;
+    UnkFnTab5 b = D_80400068;
+    s32 r = 0;
+    s32 st = D_80409500;
+
+    if (st == 0)
+    {
+        r = func_80401444();
+        if (r != 0)
+        {
+            r = a.f[r]();
+        }
+    }
+    else if (st == 1)
+    {
+        r = func_8040153C();
+        if (r != 0)
+        {
+            r = b.f[r]();
+        }
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804016D0);
 
@@ -569,7 +648,19 @@ int func_804019A4(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804019B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401A50);
+s32 func_80401A50(s32 n)
+{
+    s32(*p)[10] = (s32(*)[10])D_80409290;
+    s32 sum = 0;
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        sum += p[i][6];
+    }
+    sum = sum / 0x2000;
+    return 0xF - sum;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401AA4);
 
@@ -586,7 +677,10 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401C70);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401D28);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E14);
+s32 func_80401E14(s32 i)
+{
+    return D_8009DDD8[i][0];
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E2C);
 
@@ -605,9 +699,26 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402084);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402154);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402214);
+void func_80402214(void)
+{
+    s32 i = D_804094EC != 0;
+    s32 n;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402268);
+    n = func_804019B4();
+    D_80136140[i] = n;
+    D_8009EB58[i] = func_80401A50(n);
+}
+
+s32 func_80402268(void)
+{
+    s32 *p = D_8009EB58;
+
+    if (D_804094EC != 0)
+    {
+        p++;
+    }
+    return *p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402290);
 
@@ -714,7 +825,14 @@ void func_804030CC(s32 a, s32 p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804030F4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040311C);
+/* Live msg_please_wait, NOT msg_loading -- twinalign paired it with
+ * msg_loading, which is the arbitrary-pairing trap this block's wrapper run
+ * is famous for, and func_804031E4 already holds message 14. Message 2 with
+ * kind 2 is msg_please_wait, and it is the only live wrapper with that pair. */
+void func_8040311C(s32 a, s32 p)
+{
+    func_80402F84(a, 2, 2, p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403144);
 
@@ -784,7 +902,28 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040343C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804034D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403698);
+/* Live func_800233D0, with FOUR revision differences and nothing else -- the
+ * families in this file's header, all four at once. UnkCardGrp184's `ptrs`
+ * array is 0x18 LATER here (ptrs[0] at 0x1B8 against the live 0x1A0), so the
+ * indices are written raw off p; the loop runs to 4 where the live source
+ * runs to 3, which makes the four groups of four tile exactly where the live
+ * ones leave gaps; func_80056F14 is called with 4 rather than 3; and the
+ * embedded stride is 0x3C against 0x48, the same 12-bytes-smaller record that
+ * func_804037F4 sees. */
+void func_80403698(s32 *p)
+{
+    s32 i;
+
+    ((UnkCardPair *)p[0x6E])->unk_00 = func_80056F14(4);
+    ((UnkCardPair *)p[0x6F])->unk_00 = (s32)D_80082FF4;
+    for (i = 0; i < 4; i++)
+    {
+        ((UnkCardPair *)p[0x70 + i])->unk_00 = (s32)D_80083060;
+        ((UnkCardPair *)p[0x74 + i])->unk_00 = (s32)D_8008306C;
+        ((UnkCardPair *)p[0x78 + i])->unk_00 = (s32)(p + 1);
+        ((UnkCardPair *)p[0x7C + i])->unk_00 = (s32)((u8 *)p + 0x90 + i * 0x3C);
+    }
+}
 
 void func_80403738(s32 *p)
 {
@@ -855,7 +994,26 @@ void func_804038C8(s32 *p)
     func_80403738(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804039F8);
+void func_804039F8(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -152;
+    p->unk_04->unk_0A = -98;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 s32 func_80403AA0(s32 a)
 {
@@ -890,13 +1048,80 @@ void func_80403CD4(s32 **pp)
     } while (++i < 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403D24);
+void func_80403D24(s32 *p)
+{
+    s32 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403D7C);
+    if (p != 0)
+    {
+        q = p + 8;
+        func_80403CD4((UnkCardGrp184 *)q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_8008DAB4_a[0] |= 0x8000;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403DA0);
+void func_80403D7C(s32 *p, s32 v)
+{
+    s32 *q;
+    s32 t;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403E54);
+    if (p != 0)
+    {
+        q = p + 8;
+        t = q[34];
+        q[33] = 0;
+        q[32] = 3;
+        q[34] = v;
+        q[35] = t;
+    }
+}
+
+void func_80403DA0(UnkCardPair *p, u32 *a, u32 *b, s32 n)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -0xA0;
+    p->unk_04->unk_0A = n * 24 - 0x78;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
+
+/* Live func_80023B18. Four differences, all ONE revision constant: this
+ * build's UnkCardGrp240 is 0x84 bytes smaller, so `ptrs[1]`, `ptrs[5]` and
+ * `ptrs[7]` sit at 0x1DC, 0x1EC and 0x1F4 where the live struct has 0x260,
+ * 0x270 and 0x278, and the embedded buffer the last pair points at is at
+ * +0xB0 rather than +0x134. Raw word indices off p, as func_804040C8 and
+ * func_80404668 use. */
+void func_80403E54(s32 *p)
+{
+    UnkCardPair *q = (UnkCardPair *)p[0x77];
+    s32 k;
+
+    k = func_80402268() >= 3;
+    q->unk_00 = (s32)func_80051B50((u8 *)p + 8, D_80408CB0[k], 1);
+    q->unk_04->unk_08 = 0xF0;
+    q->unk_04->unk_0A = 0x91;
+    q = (UnkCardPair *)p[0x7B];
+    q->unk_04->unk_08 = 0x70;
+    q->unk_04->unk_0A = 0x10;
+    q->unk_00 = (s32)D_8008432C;
+    q = (UnkCardPair *)p[0x7D];
+    q->unk_00 = (s32)((u8 *)p + 0xB0);
+    q->unk_04->unk_08 = 0xAE;
+    q->unk_04->unk_0A = 0x18;
+}
 
 s32 func_80403F1C(s32 p, s32 w, s32 h)
 {
@@ -991,13 +1216,78 @@ void func_8040454C(s32 **p)
     } while (++i < 10);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404570);
+void func_80404570(s32 *p)
+{
+    s32 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804045C8);
+    if (p != 0)
+    {
+        q = p + 8;
+        func_804044D8((UnkCardGrp240 *)q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_8008DAB4_a[0] |= 0x8000;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404618);
+/* Live func_800241D4, with func_80404668's 0x84 struct shift. */
+void func_804045C8(s32 *p, s32 flag)
+{
+    UnkCardPair *r;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404668);
+    if (p != 0)
+    {
+        r = (UnkCardPair *)p[0x87];
+        p[0x70] = 0x808080;
+        if (flag != 0)
+        {
+            r->unk_00 = (s32)D_80083840;
+        }
+        else
+        {
+            r->unk_00 = 0;
+        }
+        r->unk_04->unk_08 = 0x60;
+        r->unk_04->unk_0A = 0x18;
+    }
+}
+
+/* Live func_80024224, func_804045C8's twin one message over, with the same
+ * 0x84 struct shift. */
+void func_80404618(s32 *p, s32 flag)
+{
+    UnkCardPair *r;
+
+    if (p != 0)
+    {
+        r = (UnkCardPair *)p[0x87];
+        p[0x70] = 0x808080;
+        if (flag != 0)
+        {
+            r->unk_00 = (s32)D_80083834;
+        }
+        else
+        {
+            r->unk_00 = 0;
+        }
+        r->unk_04->unk_08 = 0x66;
+        r->unk_04->unk_0A = 0x18;
+    }
+}
+
+/* Live func_80024274. REVISION: this build's UnkCardGrp240 is 0x84 BYTES
+ * SMALLER, so `c->root_prim[0]` and `c->ptrs[9]` are at 0x1C0 and 0x21C off
+ * `p` where the live struct puts them at 0x244 and 0x2A0. Written as raw word
+ * indices off p, as func_804040C8 is, rather than inventing a second struct
+ * for a build that only this unit sees. The same 0x84 appears in
+ * func_804045C8 and func_80404618. */
+void func_80404668(s32 *p)
+{
+    if (p != 0)
+    {
+        p[0x70] = 0x606868;
+        ((UnkCardPair *)p[0x87])->unk_00 = 0;
+    }
+}
 
 void func_80404688(s32 *p)
 {
@@ -1368,7 +1658,26 @@ void func_8040553C(s32 *p)
     q->unk_00 = (s32)D_8008429C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405624);
+void func_80405624(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -160;
+    p->unk_04->unk_0A = -120;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 void func_804056CC(s32 a)
 {
@@ -1410,11 +1719,32 @@ void func_80405900(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804059A8);
+void func_804059A8(s32 *p)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        func_80405900((UnkCardGrpB20 *)q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_8008DAB4_a[0] |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405A00);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405A3C);
+void func_80405A3C(s32 *p)
+{
+    u16 *w = (u16 *)(p - 8);
+    u16 f = w[15];
+
+    if ((f & 0x2000) != 0)
+    {
+        w[15] = f & ~0x2000;
+        p[-4] = p[13];
+    }
+}
 
 void func_80405A64(s32 *p)
 {
@@ -1556,7 +1886,24 @@ void func_80405D2C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405D54);
+void func_80405D54(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_8009DDD8[n][0] != 0)
+    {
+        p[15] = 1;
+        func_804031E4((s32)(p - 8), (s32)(p + 16));
+        p[16] = 1;
+        p[-4] = (s32)func_80405D2C;
+    }
+    else
+    {
+        p[13] = (s32)func_80406368;
+        func_804032FC((s32)(p - 8));
+        p[-4] = (s32)func_80405A64;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405DE0);
 
@@ -1579,7 +1926,37 @@ void func_80405ED4(s32 *p)
     p[-4] = (s32)func_80405EAC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405F24);
+/* Live func_800254E4. REVISION, and the MIRROR of the one func_804065CC
+ * carries: here the twin has TWO handlers where the live source has one.
+ * func_80024FFC is assigned at both `p[13]` sites live; this build assigns
+ * func_80406368 in the not-enough-blocks arm and func_80405AB4 in the
+ * cannot-overwrite arm. That is why twinmove refuses the symbol -- the map's
+ * vote is a genuine tie, one live symbol against two twin ones, and the
+ * listing is the only thing that can break it. */
+void func_80405F24(s32 *p)
+{
+    s32(*tbl)[32] = D_8009DDD8;
+
+    if (tbl[p[10]][0] == 0)
+    {
+        if (func_80402268() < 3)
+        {
+            p[13] = (s32)func_80406368;
+            func_80403234((s32)(p - 8));
+            p[-4] = (s32)func_80405A64;
+        }
+        else
+        {
+            func_80405ED4(p);
+        }
+    }
+    else
+    {
+        p[13] = (s32)func_80405AB4;
+        func_80403374((s32)(p - 8));
+        p[-4] = (s32)func_80405A64;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405FC4);
 
@@ -1612,6 +1989,29 @@ void func_80406274(s32 *p)
     }
 }
 
+/* func_804062F4 IS BLOCKED BY THE RODATA SPLIT, NOT BY MATCHING. Live
+ * func_800258C8, and its body moves over cleanly -- but it is
+ * `void (*fns[4])(s32 *) = {...}`, so gcc emits a 16-byte template into the
+ * unit's .rodata and block-copies it to the stack. The target does exactly
+ * that, from D_8040076C at 0x26976C.
+ *
+ * This unit's dotted `.rodata` subsegment is 0x26907C..0x269090, twenty bytes
+ * that are an already-landed function's SWITCH TABLE, and a unit can have
+ * only one. 0x26976C is 0x6DC further on, inside the hand-owned
+ * `ovl_main_80400000_rodata_post` blob, so landing this function emits the
+ * template a SECOND time: the object's .rodata goes 20 -> 36 bytes, every
+ * rodata byte and the whole text after it shift 0x10, and main.bin comes out
+ * 0x10 long. Measured -- and note that ovlverify reported 0 differing for
+ * this function throughout, exactly as its own header warns. Only the link
+ * catches it.
+ *
+ * WHAT IT ACTUALLY PROVES: the twin block is several translation units, like
+ * the live side's nine, and our single `c` subsegment is an approximation
+ * that works only while the asm rodata blobs fill the gaps. Two ways out, in
+ * order of honesty: carve this function (and whatever else shares its unit)
+ * into its own translation unit with its own `.rodata` at 0x26976C; or leave
+ * it here. The live counterpart is cardinfo.c, so the carve has a name to
+ * aim at. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804062F4);
 
 void func_80406358(s32 *p)
@@ -1683,7 +2083,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804067BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406844);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804069FC);
+void func_804069FC(s32 *p)
+{
+    u16 *w = (u16 *)(p - 8);
+    u16 f = w[15];
+
+    if ((f & 0x2000) != 0)
+    {
+        w[15] = f & ~0x2000;
+        p[-4] = p[13];
+    }
+}
 
 void func_80406A24(s32 *p)
 {
@@ -1758,7 +2168,25 @@ void func_80406CB8(s32 *p)
     p[-4] = (s32)func_80406A24;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406CFC);
+void func_80406CFC(s32 *p)
+{
+    if (D_8009DDD8[p[11]][0] != 0)
+    {
+        p[-4] = (s32)func_80406C2C;
+    }
+    else if (func_80402268() >= 3)
+    {
+        p[-4] = (s32)func_80406B9C;
+    }
+    else if (func_80402290() != 0)
+    {
+        func_80406C74(p);
+    }
+    else
+    {
+        func_80406CB8(p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406DA0);
 
@@ -1824,13 +2252,38 @@ void func_80407298(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804072CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804073B0);
+void func_804073B0(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -160;
+    p->unk_04->unk_0A = -120;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407458);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804074C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407558);
+void func_80407558(UnkCardGrp044 *c)
+{
+    func_80407458(c);
+    func_804074C4(c);
+    func_804072CC((u8 *)c, (s32 *)D_80408D54, (s32 *)D_80408D5C);
+    func_80407160((s32 *)c);
+}
 
 s32 func_804075A8(s32 a)
 {
@@ -1857,7 +2310,13 @@ void func_8040787C(s32 *p, s32 *b, s32 *c)
     func_804072CC((u8 *)(p + 8), b, c);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040789C);
+void func_8040789C(UnkCardGrp0D4 *c)
+{
+    c->ptrs[0]->unk_00 = (s32)D_80083060;
+    c->ptrs[1]->unk_00 = (s32)D_8008306C;
+    c->ptrs[2]->unk_00 = (s32)((s32 *)c + 1);
+    c->ptrs[3]->unk_00 = (s32)((s32 *)c + 0x1F);
+}
 
 void func_804078D8(u8 *p)
 {
@@ -1891,7 +2350,26 @@ void func_80407964(s32 *p)
     ((UnkCardPair *)p[0x3E])->unk_04->unk_0A = 0xA;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407A44);
+void func_80407A44(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -152;
+    p->unk_04->unk_0A = -98;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 s32 func_80407AEC(s32 a)
 {
@@ -1919,9 +2397,30 @@ void func_80407D0C(s32 *p)
     func_80051FBC(*(s32 *)p[0x3F]);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407D38);
+void func_80407D38(s32 *p)
+{
+    s32 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407D90);
+    if (p != 0)
+    {
+        q = p + 8;
+        func_80407D0C((UnkCardGrp0D4 *)q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_8008DAB4_a[0] |= 0x8000;
+    }
+}
+
+void func_80407D90(s32 *p)
+{
+    u16 *w = (u16 *)(p - 8);
+    u16 f = w[15];
+
+    if ((f & 0x2000) != 0)
+    {
+        w[15] = f & ~0x2000;
+        p[-4] = p[11];
+    }
+}
 
 void func_80407DB8(s32 *p)
 {
@@ -1949,7 +2448,40 @@ void func_80407E08(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407E64);
+void func_80407E64(s32 *p)
+{
+    s32 i = 0;
+    s32 r;
+
+    do
+    {
+        r = func_80401B30(p[3]);
+        if (r != 5)
+        {
+            break;
+        }
+    } while (i++ < 6);
+    p[14] = 0;
+    func_80400908();
+    if (r == 1)
+    {
+        p[11] = (s32)func_804081AC;
+        func_804032AC((s32)(p - 8));
+        p[-4] = (s32)func_80407DB8;
+    }
+    else if (r == 4)
+    {
+        p[11] = (s32)func_804081AC;
+        func_804030F4((s32)(p - 8));
+        p[-4] = (s32)func_80407D90;
+    }
+    else
+    {
+        p[11] = (s32)func_804081AC;
+        func_80403284((s32)(p - 8));
+        p[-4] = (s32)func_80407DB8;
+    }
+}
 
 void func_80407F40(s32 *p)
 {
@@ -1962,7 +2494,23 @@ void func_80407F40(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407F68);
+void func_80407F68(s32 *p)
+{
+    s32 h;
+
+    if (p[15] != 0)
+    {
+        h = (s32)func_804081AC;
+    }
+    else
+    {
+        p[16] = 1;
+        func_8040316C((s32)(p - 8), (s32)(p + 14));
+        p[14] = 1;
+        h = (s32)func_80407F40;
+    }
+    p[-4] = h;
+}
 
 void func_80407FD4(s32 *p)
 {

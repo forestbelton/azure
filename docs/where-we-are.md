@@ -153,13 +153,14 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **109 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **141 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
-  byte-identical. **Not one was decompiled from a listing.** 88 came from the
+  byte-identical. **Not one was decompiled from a listing.** 120 came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap`, 7 on 2026-11-11 from the `-G8`
-  declared-size and increment-order levers, 3 more that same day from the
-  SECOND COMPILER below, and 11 from the RESIDENT units
+  `tools/decomp/twinalign.py --symmap` -- 32 of them in one pass once the
+  SECOND COMPILER below was in place -- 7 from the `-G8` declared-size and
+  increment-order levers, 3 from the compiler switch itself, and 11 from the
+  RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls
   them in the executable. For those, the renames were read off the block's
@@ -199,14 +200,34 @@ Three things about the overlays that change how they are worked, all in
   does not. And `rm -rf build/twinalign` after any compiler change -- that
   cache keys on the source mtime only.
 
-  **What it unblocked.** `twinalign.py --todo` now reports **33 of the 156
-  remaining stubs as mask-identical** to their live counterparts, against **1**
-  before, plus 24 more as `near`. The 15-function `reload_cse_regs` cluster is
-  no longer blocked (`func_80405AE8` landed from its park with its body
-  unchanged) and neither is the folded indexed load (`func_80404DEC` and
-  `func_80406274` landed by moving the live body over and renaming symbols).
-  Every differing-word count recorded in `csrc/ovl_main_80400000.c`'s "others"
-  triage predates the switch and is stale.
+  **What it unblocked, and what has since been taken.** `twinalign.py --todo`
+  went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
+  one pass** -- 21 with nothing changed but their symbol names. The
+  15-function `reload_cse_regs` cluster is gone (`func_80405AE8` landed from
+  its park with its body unchanged) and so is the folded indexed load
+  (`func_80404DEC`, `func_80406274`). Stubs went 157 -> 122. What remains is
+  24 `near`, 39 `drift`, 38 `far` and 16 `twin-only`, plus ONE mask-identical
+  function that is blocked for a structural reason rather than a matching one:
+  `func_804062F4` needs a 16-byte rodata template at 0x26976C, and this unit's
+  single dotted `.rodata` subsegment is already spoken for, so landing it emits
+  the template twice and main.bin comes out 0x10 long. **That is the next
+  structural question for this block: it is several translation units, like the
+  live side's nine, and our one `c` subsegment only works while the asm rodata
+  blobs fill the gaps.** Every differing-word count in
+  `csrc/ovl_main_80400000.c`'s "others" triage predates the switch and is
+  stale.
+
+  **One trap from that batch is worth more than the batch.** Six of the 32
+  linked against the RESIDENT engine and every one measured 0 differing: the
+  live source names some objects through `__asm__` aliases
+  (`card_file_count`, `card_free_blocks`, `D_800814A0_a`), `twinmove` resolved
+  only `#define` aliases, so the names survived the rename and `csrc/main.h`
+  resolved them to resident addresses. `ovlverify` masks relocation targets and
+  saw nothing; the container link caught it as 33 bytes in 2.5 MB. twinmove
+  now resolves `__asm__` aliases, carries an alias suffix across the rename,
+  and reports any that survive -- but the standing rule is the lesson: **a
+  clean per-function sweep is a reason to build, never a substitute for
+  building.**
 
   Two more cautions, both paid for on 2026-11-11. `twinalign` read only
   `csrc/ovl_main_80020000.c`, so once the nine-unit carve moved every live
