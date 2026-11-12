@@ -46,6 +46,17 @@
  *
  * The outer `*z = n + *z;` is right and was established earlier: reading it
  * back is what the target does.
+ *
+ * Re-probed 2026-11-12, all worse or the same: `while (*s != ' ')` with the
+ * zero break inside (42 words, 19); a guard plus `for (;;)` with a break at
+ * each end (44, 16); the same with the character in a local, with and
+ * without the guard (44, 16). The marker that unlocked func_80402CD4 does
+ * not apply here -- it has to make something opaque, and both candidates
+ * cost real words: `__asm__("" : "=r"(s) : "0"(s))` inside the guard, to
+ * force the preheader reload the target has, is 46 words (25); a second
+ * 0x20 pseudo held apart by a marker is 45 (36); both together 48 (28).
+ * The duplicated zero test is gcc's jump threading and no source shape
+ * measured so far moves it.
  */
 
 #include "common.h"

@@ -33,7 +33,11 @@
  * before `q++` with the asm between (11), the asm ahead of both (12), the
  * asm after both (24, the merge comes back), the D_8009DDD8 store moved
  * between the conditionals (65 words), and the second pointer assigned after
- * that store (65).
+ * that store (65). Re-probed 2026-11-12: the reference-count
+ * marker that fixed func_80402CD4's register pair does nothing here --
+ * naming `w` once or twice in the volatile asm leaves it at 4, naming `q`
+ * makes it 8, both 8, `q` twice 11, and an in-place `"=r"(w)`/`"0"(w)` 4.
+ * The $a1 the read pointer gets is not a reference-count decision.
  */
 
 #include "common.h"
