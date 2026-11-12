@@ -52,6 +52,7 @@ typedef struct
     u32 unk_00;
 } UnkTwinWord;
 
+
 /* --- functions, in address order --- */
 void func_8003D548(s32 a);                           /* func_80040AA0 */
 s32 func_80047358(s32 a, u8 *fmt, s32 n);            /* func_800491F4 */
@@ -62,6 +63,7 @@ u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
 void func_800702F0(s32 mode);                        /* VSync */
+void func_8003830C(s32 n, u8 *out);                  /* func_8003AD08 */
 void func_80063FF8(s32 id);                          /* func_80053DA8 */
 s32 func_80058FF0(s32 a, s32 b, s32 c);              /* func_80049DE8 */
 s32 func_80056450(s32 a, s32 b, s32 c);              /* func_80047C44 */
@@ -373,6 +375,12 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern u8 D_804006C4[];                              /* two whole-screen messages */
+extern u8 D_804006EC[];
+extern const s32 D_80400714;                         /* the free-block line's prefix: a word
+                                                        and a signed byte, not a struct */
+extern const s8 D_80400718;
+extern u8 D_8040071C[];                              /* and its suffix */
 extern char D_80400848[];                            /* func_804080A4's state printf */
 extern char D_80400134[];                            /* check_gsw_checksum's two printfs */
 extern char D_80400138[];                            /* read_save_file's checksum complaint */

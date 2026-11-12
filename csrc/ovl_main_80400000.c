@@ -2566,50 +2566,35 @@ s32 func_80404B5C(s32 a)
     return func_80047358(a, D_80408CE8, 0x7);
 }
 
-/* PARK: 46 words against 46, and FIVE differing -- all of them register
- * names, with every displacement and every opcode already right. The
- * spelling that gets here is recorded because it took four tries:
- *
- *   void func_80404B84(u8 *p, s32 n)
- *   {
- *       s32 i;
- *       s32 unused[2];          <- the 8-byte frame this block has
- *
- *       for (i = 0; i < n; i++)
- *       {
- *           (*(u32 **) (p + 0x220))[i] = (u32) (p + 0x224 + i * 0x10);
- *           *(u32 *) (p + 0x294 + i * 0x10) = D_8002D690_a[0];
- *           ... [1] [2] [3] at 0x298 0x29C 0x2A0 ...
- *           *(u32 *) (p + 0x228 + i * 0x10) = (u32) (p + 0x294 + i * 0x10);
- *           *(u32 *) (p + 0x22C + i * 0x10) = (u32) (p + 0x204);
- *       }
- *       *(u32 *) (p + 0x204) = D_8002D6A0;   <- scalars, not an array
- *       *(u32 *) (p + 0x208) = D_8002D6A4;
- *       *(u32 *) (p + 0x20C) = D_8002D6A8;
- *   }
- *
- * WHAT IS SETTLED, and it is the useful part:
- *
- *   * It CONFIRMS func_804048F8's structural finding from a second function.
- *     The live body writes seven primitive pointers inline at p+0x220+i*4;
- *     this one loads p[0x220] and indexes off THAT, and every field above it
- *     is 0x18 lower (0x23C -> 0x224, 0x2AC -> 0x294, 0x240 -> 0x228,
- *     0x244 -> 0x22C). 0x18 is exactly what a seven-entry inline table
- *     (0x1C) costs when it becomes one pointer (0x4).
- *   * The two templates want DIFFERENT spellings in the same function: the
- *     4-word one through a base register (the D_8002D690_a alias) and the
- *     3-word one as three scalars. That is the listing's four %hi values.
- *   * The resident body's `u32 v` local must NOT be carried over, and that
- *     is the opposite of csrc/unk_1C540.c's comment on it, which exists
- *     because the live build needs it. Here it costs 3 words: with it 43 and
- *     25 differing, without it 42, and 42 + the 4-word frame is 46.
- *
- * WHAT IS NOT: ours materialises the template address as `lui $t3` then
- * `addiu $t2, $t3, %lo` -- two registers -- where this block does it in
- * place, `lui $t2` then `addiu $t2, $t2, %lo`. Tried and did not move it:
- * reading [0] through the `s` local (47 words), a sized `[4]` declaration.
- */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404B84);
+/* It was parked here at 5 differing for a long time. What landed it was the
+ * same thing that landed the other six builders: NO `u32 v` local for the
+ * first template word, and the three trailing words read through the
+ * one-member-struct spelling so that the store and the load conflict. The
+ * park's structural findings stand: this block loads the ptrs POINTER from
+ * c[0x88] where the live body has a seven-entry inline table, and every
+ * field above it is 0x18 lower, which is exactly what a seven-entry table
+ * costs when it becomes one pointer. */
+/* The seventh of the template-builder family, and the second (after
+ * func_804075D0) whose ptrs is a POINTER at c[0x88] rather than an inline
+ * array. shared at c[0x81], ents at c[0x89], prims at c[0xA5]. */
+void func_80404B84(s32 *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        ((UnkCardPair **)c[0x88])[i] = (UnkCardPair *)&c[0x89 + i * 4];
+        c[0xA5 + i * 4] = D_8002D690_a[0];
+        c[0xA6 + i * 4] = D_8002D690_a[1];
+        c[0xA7 + i * 4] = D_8002D690_a[2];
+        c[0xA8 + i * 4] = D_8002D690_a[3];
+        c[0x8A + i * 4] = (s32)&c[0xA5 + i * 4];
+        c[0x8B + i * 4] = (s32)&c[0x81];
+    }
+    c[0x81] = D_8002D6A0.unk_00;
+    c[0x82] = D_8002D6A4.unk_00;
+    c[0x83] = D_8002D6A8.unk_00;
+}
 
 /* From the RESIDENT engine, not the live overlay: this debug build linked
  * libcard's callers statically where retail calls them in the executable, so
@@ -2654,7 +2639,7 @@ s32 *func_80404C84(s32 *a, s32 *b)
     }
     D_804F281B = 8;
     D_805030EF = 8;
-    func_80404B84((u8 *)r, 7);
+    func_80404B84(r, 7);
     q[3] = (s32)(r + 0x84);
     r[0x87] = func_80404B5C(r[0x88]);
     r[1] = (s32)b;
@@ -2720,6 +2705,10 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
+/* NEAR MISS, 81 words of 82: the target materialises &buf once into $s0 and
+ * then moves it three times, and gcc rematerialises `addiu $a0,$sp,0x10` at
+ * each of the three uses -- one word cheaper, and every register after it
+ * renamed. Source in docs/near-misses/func_804053A0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804053A0);
 
 /* The live func_80024A50 has a second test on p[0x20] and a third callee in
