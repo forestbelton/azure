@@ -118,6 +118,7 @@ void func_80400E34(void);                            /* start_card_server */
 s32 func_804010F0(void);                             /* on_sw_card_eof */
 s32 func_804012B0(void);                             /* on_card_new */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
+s32 func_804010E0(void);                             /* take_sw_card_state */
 s32 func_80401444(void);                             /* test_sw_card_events */
 CARD_STATE func_8040153C(void);                      /* take_card_state */
 s32 func_804015D8(void);                             /* poll_card_events */
@@ -196,7 +197,10 @@ void func_804048F8(u8 *p);                           /* func_8004F0DC */
 u8 *func_80404A3C(u8 *p);                            /* func_8004F1E8 */
 void func_80404B10(u8 *p);                           /* func_8004F2BC */
 void func_80404C3C(u32 *p, u32 v);                   /* func_8004F3D0 */
-s32 func_80404C84(s32 *p, s32 *q);                   /* func_8004F418 */
+s32 func_80404B5C(s32 a);                            /* twin-only; RETURNS */
+void func_80404C44(u8 *p, u32 v);                    /* twin-only */
+void func_804046C8(u8 *p);                           /* twin-only */
+s32 *func_80404C84(s32 *p, s32 *q);                  /* func_8004F418 */
 void func_80404EA0(s32 *p);                          /* func_80024390 */
 void func_804053A0(s32 *p);                          /* func_80024818 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
@@ -234,6 +238,7 @@ void func_80406150(s32 *p);                          /* func_800253E8-family, pa
 void func_804061C4(s32 *p);                          /* func_80025788 */
 void func_80406274(s32 *p);                          /* func_80025848 */
 void func_804062F4(s32 *p);                          /* func_800258C8 */
+void func_80406358(s32 *p);                          /* func_8002592C */
 void func_80406368(s32 *p);                          /* func_8002593C */
 void func_804065CC(s32 *p);                          /* func_80025BD4 */
 s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
@@ -368,6 +373,7 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern char D_80400848[];                            /* func_804080A4's state printf */
 extern char D_80400134[];                            /* check_gsw_checksum's two printfs */
 extern char D_80400138[];                            /* read_save_file's checksum complaint */
 extern const char D_8040086C[40];                    /* memory.c's ASSERT_FMT copy */
@@ -431,6 +437,11 @@ extern u8 D_80408CB8[];                              /* D_80027FC4 */
 extern u8 D_80409508[];                              /* D_800287E8 */
 extern u8 D_80409C90[];                              /* D_800291D0 */
 extern u8 D_8040A0F0[][0x360];                       /* five 0x360-byte groups */
+extern u8 D_8040B1D0[];                              /* the save-slot group */
+extern const char D_8040062C[40];                    /* another unit's ASSERT_FMT copy */
+extern const char D_80400654[];                      /* its filename */
+extern u8 D_804F281B;                                /* two bytes this block pokes to 8 */
+extern u8 D_805030EF;
 extern u8 D_8040C420[];                              /* D_8002B968 */
 extern const char D_804005A0[40];                    /* card_opt.c's ASSERT_FMT copy */
 extern const char D_804005C8[];                      /* its filename */
@@ -443,6 +454,7 @@ extern const u8 D_80400544[4];                       /* D_800200A0 */
 extern const char D_80400548[40];                    /* card_mes.c's ASSERT_FMT copy */
 extern const char D_80400570[];                      /* its filename */
 extern u8 D_8040C318[];                              /* D_8002B850 */
+extern u8 D_8040C5C0[];                              /* the message-pair group */
 extern const char D_804007A4[40];                    /* another unit's ASSERT_FMT copy */
 extern const char D_804007CC[];                      /* its filename */
 extern const char D_80400738[40];                    /* this unit's own ASSERT_FMT copy */
@@ -459,6 +471,9 @@ extern u32 D_80408CE4;                               /* D_80071680, likewise */
 extern u8 D_80408CE8[8];                              /* D_800717BC, include/structs.h */
 extern u8 D_80408CF0[4];                              /* D_80027FD0 */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
+extern u8 D_80408D40[][2];                           /* D_80028068 */
+extern s32 D_80408D44[];                             /* D_8002806C */
+extern u8 *D_80408D4C[];                             /* D_80028074 */
 extern u8 D_80408D54[];                              /* D_8002807C */
 extern u8 D_80408D5C[];                              /* D_80028084 */
 extern u8 D_80408D64[8];                              /* D_8002808C */
@@ -485,6 +500,8 @@ extern s32 D_80409258[2];                            /* D_80028538 */
 extern s32 D_804094F0[2];                            /* D_800287D0 */
 extern s32 D_804094E8;                               /* card_st, D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
+extern char *D_804090C8[];                           /* state names, printed by func_804080A4 */
+extern s32 D_804090E0[];                             /* and the handler it picks by state */
 extern u8 D_80409528[];                              /* the message group this block keeps */
 extern u16 *D_8040953C;                              /* a POINTER, read then flagged */
 extern s32 D_80409500;                               /* card_evflg, D_800287E0 */

@@ -2560,9 +2560,10 @@ void func_80404B10(u8 *p)
 }
 
 /* func_80050B7C. */
-void func_80404B5C(s32 a)
+/* RETURNS: func_80404C84 stores $v0 straight after the call. */
+s32 func_80404B5C(s32 a)
 {
-    func_80047358(a, D_80408CE8, 0x7);
+    return func_80047358(a, D_80408CE8, 0x7);
 }
 
 /* PARK: 46 words against 46, and FIVE differing -- all of them register
@@ -2629,7 +2630,39 @@ void func_80404C44(u8 *p, u32 v)
     func_80404B10(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404C84);
+s32 *func_80404C84(s32 *a, s32 *b)
+{
+    s32 *q = (s32 *)D_8040B1D0;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_8040B1D0, 0xC9);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_8040062C, D_80400654, 0x17A);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_80404DBC((u8 *)q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x304);
+    }
+    D_804F281B = 8;
+    D_805030EF = 8;
+    func_80404B84((u8 *)r, 7);
+    q[3] = (s32)(r + 0x84);
+    r[0x87] = func_80404B5C(r[0x88]);
+    r[1] = (s32)b;
+    func_80404C44((u8 *)r, (u32)a);
+    q[4] = (s32)func_804046C8;
+    func_804046C8((u8 *)r);
+    return q;
+}
 
 /* func_8004B500. D_800814A0 is D_8008DAB4 here, by a 24-vote symmap entry,
  * and the local `g` is the live body's -- see main.h's note on the two
@@ -3350,7 +3383,109 @@ void func_80406358(s32 *p)
     p[19] = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406368);
+/* Live func_8002593C. The 0x40 and 0x20 arms are the other way round, the
+ * counter loses 4 rather than 2, and the second func_80058FF0 call takes 4
+ * where the live one takes 3. */
+void func_80406368(s32 *p)
+{
+    s32 dir = 0;
+    s32 upd = 0;
+    s32 r;
+
+    if (D_801379A8.unk_00 != 0)
+    {
+        if (D_801379B0.unk_00 & 0x40)
+        {
+            func_80063FF8(0x515);
+            func_80406720(p - 8);
+            func_804083FC(p[8], 0);
+            return;
+        }
+        if (D_801379B0.unk_00 & 0x20)
+        {
+            func_80063FF8(0x514);
+            if (p[18] == 0)
+            {
+                func_80406358(p);
+                upd = 1;
+            }
+            else
+            {
+                func_804062F4(p);
+            }
+        }
+        else if (D_801379A8.unk_00 & 0x5000)
+        {
+            if (D_801379B0.unk_00 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_801379B0.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379B0.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 4;
+                if (D_801379A8.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379A8.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        else if (D_801379A8.unk_00 & 0xA000)
+        {
+            if (D_801379A8.unk_00 & 0x2000)
+            {
+                p[18] = 1;
+            }
+            else
+            {
+                p[18] = 0;
+            }
+            upd = 1;
+        }
+        if (dir != 0)
+        {
+            func_80063FF8(0x502);
+            if (p[18] == 1)
+            {
+                p[10] = func_80058FF0(p[10], dir, 5);
+            }
+            else
+            {
+                p[17] = func_80058FF0(p[17], dir, 4);
+            }
+            func_80405AE8(p);
+        }
+    }
+    r = func_804016D0();
+    func_804018FC();
+    if (r != 0)
+    {
+        if (r != 1)
+        {
+            func_80406720(p - 8);
+            func_804083FC(p[8], 0);
+        }
+    }
+    if (upd != 0)
+    {
+        func_80405AE8(p);
+    }
+}
 
 void func_80406568(s32 *p, s32 v)
 {
@@ -3742,7 +3877,27 @@ s32 *func_8040701C(s32 *p, s32 a)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804070C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407160);
+/* Live func_800269B4, with the group's ptrs reached through p[0x18] -- the
+ * same extra indirection as func_804072CC and func_80407458. */
+void func_80407160(s32 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        s32 k = D_80408D40[p[9]][i];
+        u32 *e = ((u32 **)p[0x18])[k + 2];
+
+        if (e[0] != 0)
+        {
+            func_8004DDBC((u32 *)((u8 *)p + (k * 12 + 4)), D_80408D4C[i], e);
+        }
+        ((UnkCardPair **)p[0x18])[i]->unk_04->unk_00 =
+            D_80408D44[D_80408D40[p[9]][i]];
+        ((UnkCardPair **)p[0x18])[i + 2]->unk_04->unk_00 =
+            D_80408D44[D_80408D40[p[9]][i]];
+    }
+}
 
 void func_80407298(s32 *p)
 {
@@ -4223,7 +4378,35 @@ void func_80408060(s32 *p)
     p[-4] = (s32)func_80407DB8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804080A4);
+void func_804080A4(s32 *p)
+{
+    s32 st;
+
+    if (D_801379A8.unk_00 != 0 && (D_801379B0.unk_00 & 0x40) != 0)
+    {
+        func_80400948();
+        p[14] = 0;
+        p[-4] = (s32)func_804081AC;
+    }
+    else
+    {
+        st = func_804016D0();
+        func_8003FA78(D_80400848, p[3], D_804090C8[st]);
+        func_804018FC();
+        if (st != 0)
+        {
+            p[14] = 0;
+            p[12] = st;
+            p[-4] = D_804090E0[st];
+            p[13] = st;
+        }
+        else if (func_804010E0() == 3 && p[14] == 0)
+        {
+            func_8040311C((s32)(p - 8), (s32)(p + 14));
+            p[14] = 1;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804081AC);
 
@@ -4245,7 +4428,34 @@ void func_804083A0(s32 *p)
     p[-4] = (s32)func_804081AC;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804083FC);
+/* A group allocator with NO func_80040560 call and the two arms the other
+ * way round: the allocation path's assert never returns, so gcc jumps past
+ * the else arm instead of over the then arm. */
+s32 *func_804083FC(s32 a, s32 b)
+{
+    s32 *q = (s32 *)D_8040C5C0;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_8040C5C0, 0x19);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_8040086C, D_80400894, 0x173);
+            func_8007BEF0(1);
+        }
+    }
+    else
+    {
+        func_804084DC(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x44);
+    }
+    func_80408394(r, a, b);
+    q[4] = (s32)func_804083A0;
+    return q;
+}
 
 void func_804084DC(s32 *p)
 {
