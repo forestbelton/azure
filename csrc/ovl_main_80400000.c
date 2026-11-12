@@ -4712,20 +4712,45 @@ void func_804085DC(s32 *p)
     func_804083FC((s32)p, 0);
 }
 
-/* NEAR MISS, 9 words of 10, 5 differing: `short func_8040861C(void) { return
- * func_8004DBDC(); }` is right in the body and wrong in the EPILOGUE. gcc 2.7.2
- * hand-schedules the epilogue whenever one body insn is left to interleave --
- *     .set noreorder / lw $31,16($sp) / sra $2,$2,16 / j $31 / addu $sp,$sp,24
- * -- four words, where the target has the plain reorder-mode epilogue with the
- * sra ahead of it and an empty slot:
- *     sra $2,$2,16 / lw $31 / addiu $sp / jr $31 / nop
- * Five words. That is the shape gcc emits only when it has NOTHING to
- * interleave: every landed function in this unit whose last body insn is a
- * jal's delay slot has it. Tried and rejected: `short`/`s32` return, a short
+/* The body is just `return func_8004DBDC();` with a `short` return type. The
+ * marker is a DEVICE, worth one word and five differing (5 -> 0).
+ *
+ * mips.h's `mips_epilogue_delay_slots` gives the epilogue ONE delay slot when
+ * the only saved register is $ra, and reorg's backward scan at the end of
+ * `fill_simple_delay_slots` then walks back from the last insn looking for
+ * something to put in it. Here it finds the `sra` and the epilogue comes out
+ * interleaved and noreorder --
+ *     lw $31,16($sp) / sra $2,$2,16 / j $31 / addu $sp,$sp,24
+ * -- four words where the target has the plain reorder-mode five:
+ *     sra $2,$2,16 / lw $ra / addiu $sp / jr $ra / nop
+ *
+ * `stop_search_p` (reorg.c) ends that scan at an `asm`, so a marker AFTER the
+ * truncation blocks it. The cast is the whole device: without it gcc sinks the
+ * sign-extension past the asm to the return and the scan reaches it anyway --
+ * `short v = g(); __asm__ volatile(""); return v;` is still 9 words. `"r"((s32)v)`
+ * forces the sll/sra before the marker, and then there is nothing behind it.
+ *
+ * THIS IS A COMPILER-VERSION DIFFERENCE AND THE PROOF IS IN THE TREE.
+ * csrc/main/memory.c's `s16 func_80027DD0(void) { return func_8004CAA0(); }`
+ * is the same two lines in the live block, it is landed byte-identical under
+ * the 4.1 compiler, and its epilogue IS interleaved -- 9 words, exactly what
+ * gcc gives here. 4.1 fills that slot, this block's 4.0 build does not, and
+ * FSF 2.7.2 and the Cygnus b18 tree carry an identical
+ * `mips_epilogue_delay_slots`, so the clause is not where they differ.
+ * Across the twin's 49 framed functions that save only $ra, not one fills the
+ * jr slot; across the live overlay's 48, two do, and both of those are
+ * compiled C. Measured 2026-11-12.
+ *
+ * Tried and rejected, all still 9 words: `short`/`s32` return, a short
  * callee, a short local, an explicit (short) cast, and an empty volatile asm
- * before the return, between the call and the return, and at the top -- the
- * interleave survives all six. Source in docs/near-misses/func_8040861C.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040861C);
+ * before the return, between the call and the return, and at the top. */
+short func_8040861C(void)
+{
+    short v = func_8004DBDC();
+
+    __asm__("" :: "r"((s32)v));
+    return v;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408644);
 
