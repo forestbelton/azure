@@ -106,7 +106,8 @@ void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
-void func_80405A00(s32 *p, s32 a, s32 b);            /* func_80024F3C */
+void func_80405A00(s32 *p, s32 a);                    /* func_80024F3C, which takes THREE -- this
+                                                        build reads only $a0/$a1, see its listing */
 void func_80405A3C(s32 *p);                          /* func_80024F7C */
 void func_80405AE8(s32 *p);                          /* func_80025030 */
 void func_80405B98(s32 *p);                          /* func_800250E8 */

@@ -168,14 +168,57 @@
  *                     sized -- only the -0x21 word indices and four revision
  *                     constants.
  *
+ *   AND ONE ON A SECOND LEVER, THE INCREMENT ORDER. func_80405B98 walks a
+ *   5-element loop with a moving pointer `off` and a counter `i`. Written the
+ *   live way -- `off++;` then `while (++i < 5)` -- the POINTER increment
+ *   fills the two `j` delay slots and the `bnez` takes a nop: 18 differing.
+ *   Incrementing the COUNTER first, with a plain `while (i < 5)`, puts `i++`
+ *   in those slots and pushes `off++` into the `bnez`'s, which is this
+ *   build's shape: 0 differing. Its other difference is an arity one --
+ *   func_80405A00 takes TWO arguments here where the live func_80024F3C
+ *   takes three, and its listing never reads $a2.
+ *
+ *   func_80405AE8 is THE SAME TWO LEVERS AND THEN ONE reload_cse_regs WORD.
+ *   Both applied, it goes 20 -> 1 differing, and the one is `flag = 1` in the
+ *   arm whose own test already put 1 in $v0. It is parked as
+ *   docs/near-misses/func_80405AE8.c and lands unchanged the day a cc1psx
+ *   without that pass exists -- so the blocked cluster is 15 functions, not
+ *   14. Measure it with `ovlverify.py --G 8`.
+ *
  *   others          func_804012B0 (9), func_804065CC and func_80406F70 (11
  *                   each), func_80406BEC (12), func_804083A0 (15),
- *                   func_80405B98 and func_80407F68 (19), func_80405AE8
- *                   (20), func_80404DEC (28), func_804018FC and
- *                   func_80403E54 (42), func_804010F0 and func_80405DE0
+ *                   func_80407F68 (19), func_80404DEC (28), func_804018FC
+ *                   and func_80403E54 (42), func_804010F0 and func_80405DE0
  *                   (49). func_804018FC is the extreme case: 42 words
  *                   against a live counterpart of 2, so that pairing is
  *                   wrong or the live source lost the body entirely.
+ *
+ *                   func_80404DEC was looked at and is NOT that family -- it
+ *                   is a drawing-primitive setup loop. Its 27 is ONE EXTRA
+ *                   WORD plus the positional shift behind it: the candidate
+ *                   materialises the table's base inside the loop
+ *                   (`lui`/`addiu`/`addu`/`lbu`, 4 words) where this build
+ *                   folds the symbol into the load and uses $at as the
+ *                   scratch:
+ *
+ *                     lui  $at, %hi(D_80408CF0)
+ *                     addu $at, $at, $a3
+ *                     lbu  $v0, %lo(D_80408CF0)($at)
+ *
+ *                   $at means the ASSEMBLER expanded it, so cc1psx emitted
+ *                   that load as one insn against the symbol. Nothing here
+ *                   reproduces it: docs/matching-levers.md's "A %lo in the
+ *                   displacement with a REGISTER index means a constant
+ *                   base" says cse never folds a %lo into a MEM once the
+ *                   address carries a register index, and the constant-base
+ *                   spelling it prescribes does not help either. Measured,
+ *                   all 46 words against the target's 45: D_80408CF0[i++]
+ *                   with the declaration at [4], [], [9], [12] and [0x10];
+ *                   ((u8 *)0x80410000)[i++ - 0x7310], which is the
+ *                   zero-low-half constant base; *(u8 *)(0x80408CF0 + i++);
+ *                   and splitting the post-increment out. The lever is
+ *                   probably how cc1psx emits an INDEXED load against a
+ *                   sized extern at -G8, which is not written down yet.
  *
  *                   func_804012B0 was looked at and is NOT a one-lever job:
  *                   its last arm falls through to the shared return in the
@@ -1323,7 +1366,41 @@ void func_80405AB4(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405AE8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405B98);
+/* Live func_800250E8, with two differences and neither of them an index: the
+ * p[10]/p[11]/p[7] reads are at the same offsets as the live ones.
+ *
+ * 1. func_80405A00 TAKES TWO ARGUMENTS HERE where the live func_80024F3C
+ *    takes three -- its listing reads $a0 and $a1 and never $a2, which is
+ *    also the 2-word length difference between the two bodies.
+ * 2. THE INCREMENT ORDER IS THE DELAY SLOTS. Written the live way --
+ *    `off++;` then `while (++i < 5)` -- the pointer increment fills the two
+ *    `j` delay slots and the `bnez` gets a nop: 18 differing. Incrementing
+ *    the counter FIRST puts `i++` in those slots and pushes `off++` into the
+ *    `bnez`'s, which is what this build does. 0 differing. */
+void func_80405B98(s32 *p)
+{
+    s32 off = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (i == p[11])
+        {
+            func_80404618((s32 *)p[off + 1], 1);
+        }
+        else if (i == p[10])
+        {
+            func_804045C8((s32 *)p[off + 1], 1);
+        }
+        else
+        {
+            func_80404668((s32 *)p[off + 1]);
+        }
+        i++;
+        off++;
+    } while (i < 5);
+    func_80405A00((s32 *)p[7], p[10]);
+}
 
 /* splat seeded this as an empty `(void)` function, which is a correct
  * spelling of its two words (`jr $ra`, `nop`) but not the source's: the

@@ -1,9 +1,17 @@
 # Near-miss sources for the functions that have not landed
 
-**Empty as of 2026-11-01: every function in the resident executable has
-landed.** The procedure below is kept because it is the one that finished the
-project, and because the overlays will need it again. `probe-cse-forwarding.c`
-is not a park -- it is a standing compiler probe.
+Every function in the resident executable landed on 2026-11-01, and the three
+parks for the 0x80088760 overlay were deleted on 2026-11-11 when those
+functions landed too -- they had been left behind, and `parkstats.py --check`
+had been failing on all three because a landed function has no nonmatchings
+listing to measure against. **A landed function must not keep a park.**
+
+One park is live: `func_80405AE8.c`, in main.bin's 0x80400000 twin. It sits at
+one differing word and that word is the `reload_cse_regs` one, so it is not
+waiting on a spelling -- it is waiting on a compiler. Read its header before
+touching it.
+
+`probe-cse-forwarding.c` is not a park -- it is a standing compiler probe.
 
 One file per function that is written but not matching: the source that got
 closest, plus a generated stats header. They are **not** compiled into the
@@ -30,6 +38,12 @@ matches.
 An agent given one function to land should be pointed at
 `docs/landing-a-function.md`, which is the whole procedure and is written to be
 read instead of this file.
+
+**The twin unit is -G8 and every other overlay is -G0.** Until 2026-11-11
+`asmlib.cc1_g_for_unit` returned -G0 for every unit in the tree, so these
+tools measured the twin -- the only place any work remains -- at the wrong -G.
+It reads the Makefile correctly now, but if a measurement here ever disagrees
+with `ovlverify.py --G 8`, suspect that function first.
 
 ## Working on one
 

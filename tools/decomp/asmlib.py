@@ -23,7 +23,13 @@ PROJ = os.environ.get(
 # cc1psx needs BOTH include roots: include/common.h pulls in sys/types.h,
 # libcd.h, libgte.h and libgpu.h, which live only under psyq/include. This is
 # the Makefile's CFLAGS, minus -S/-o.
-CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include']
+#
+# -Icsrc is here for the PARK files. A unit under csrc/ reaches its sibling
+# headers -- csrc/main.h, csrc/main_twin.h -- through the quoted-include rule,
+# which searches the INCLUDING file's own directory first, so the Makefile
+# needs -Icsrc only for csrc/main/. A park in docs/near-misses/ has no such
+# sibling, and without this a twin park cannot include main_twin.h at all.
+CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include', '-Icsrc']
 
 
 # A unit left at a nonzero gas -G sends an UNDEFINED symbol whose
@@ -42,7 +48,7 @@ CFLAGS = ['-O2', '-G8', '-Iinclude', '-Ipsyq/include']
 _G_BY_UNIT = None
 
 
-def _makefile_g_map(var):
+def _makefile_g_map(var, default_g):
     """{unit: -G} from the Makefile's per-object `VAR := $(VAR_G<n>)` rules.
 
     Handles PATTERN rules as well as explicit targets, and that is not
@@ -53,6 +59,30 @@ def _makefile_g_map(var):
     Two parks silently re-measured 10 words longer before it was caught.
     Explicit targets win over patterns; the longest pattern prefix wins among
     patterns.
+
+    TWO MORE WAYS IT WENT WRONG, both fixed 2026-11-11, and between them they
+    made this function return -G0 for EVERY unit in the project:
+
+      * The stem was `os.path.basename(target)`, so `build/csrc/main/%.o`
+        reduced to the pattern `%` -- which matches every unit there is. Every
+        resident unit was therefore reported as the -G0 those nine carved
+        card units use. The stem is now the path under `build/csrc/`, so that
+        rule contributes `main/%` and matches only what it should.
+      * The value had to be exactly `$(VAR_G<n>)`. main.bin's 0x80400000 twin
+        is the one overlay built at the RESIDENT default and its override
+        reads `$(CFLAGS_DEFAULT)`, so it did not match at all and the unit
+        fell through to the `ovl_%` pattern -- reported as -G0 when it is the
+        only -G8 overlay in the tree. `_DEFAULT` is now recognised, and what
+        it means is DEFAULT_G, which differs per variable: 8 for CFLAGS,
+        because that is the -G cc1psx gets, but 0 for MASPSXFLAGS, because
+        `gasG` is not a -G value -- it is "this unit wants
+        --dont-force-G0", and no unit does. assemble()'s own docstring says
+        so, and ovlverify, which is the tool that has the twin right, passes
+        gasG=0 with the -G only in cflags.
+
+    That second one mattered: as of 2026-11-11 every remaining asm stub in
+    the project is in that twin unit, so advise.py, parkstats.py and
+    verify.py were all measuring the only work left at the wrong -G.
     """
     exact, pats = {}, []
     try:
@@ -62,14 +92,18 @@ def _makefile_g_map(var):
     # join the backslash continuations so one rule is one line
     mk = mk.replace('\\\n', ' ')
     for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
-                         r'\s*:\s*' + var + r'\s*:?=\s*\$\(' + var + r'_G(\d+)\)',
+                         r'\s*:\s*' + var + r'\s*:?=\s*\$\(' + var
+                         + r'_(?:G(\d+)|(DEFAULT))\)',
                          mk, re.M):
+        g = default_g if m.group(3) else int(m.group(2))
         for o in m.group(1).split():
-            stem = os.path.basename(o)[:-2]
+            # the path UNDER build/csrc/, not the basename: `main/%` has to
+            # stay `main/%` or its pattern matches every unit in the tree
+            stem = o[len('build/csrc/'):-2]
             if '%' in stem:
-                pats.append((stem, int(m.group(2))))
+                pats.append((stem, g))
             else:
-                exact[stem] = int(m.group(2))
+                exact[stem] = g
     pats.sort(key=lambda kv: -len(kv[0]))
     return exact, pats
 
@@ -88,7 +122,7 @@ def gas_g_for_unit(unit):
     """The gas -G this unit is built with, from the Makefile's own rules."""
     global _G_BY_UNIT
     if _G_BY_UNIT is None:
-        _G_BY_UNIT = _makefile_g_map('MASPSXFLAGS')
+        _G_BY_UNIT = _makefile_g_map('MASPSXFLAGS', 0)
     return _g_lookup(_G_BY_UNIT[0], _G_BY_UNIT[1], unit, 0)
 
 
@@ -108,7 +142,7 @@ def cc1_g_for_unit(unit):
     """
     global _CC1_G_BY_UNIT
     if _CC1_G_BY_UNIT is None:
-        _CC1_G_BY_UNIT = _makefile_g_map('CFLAGS')
+        _CC1_G_BY_UNIT = _makefile_g_map('CFLAGS', 8)
     return _g_lookup(_CC1_G_BY_UNIT[0], _CC1_G_BY_UNIT[1], unit, 8)
 
 
