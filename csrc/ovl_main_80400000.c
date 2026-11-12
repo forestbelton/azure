@@ -1166,7 +1166,70 @@ void func_8040274C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804027F8);
+/* The third of the input-word handlers, after func_80405FC4 and
+ * func_80406DA0. Its masks are 0xA000/0x8000/0x2000 where theirs are
+ * 0x5000/0x1000/0x4000, its 0x40 arm does nothing at all, its counter is
+ * p[4] with a threshold of 3 and NO decrement in the over-threshold arm,
+ * and the step comes out of the message table. */
+void func_804027F8(s32 *p)
+{
+    s32 dir = 0;
+
+    if (D_801379A8.unk_00 != 0)
+    {
+        if ((D_801379B0.unk_00 & 0x40) == 0)
+        {
+            if (D_801379B0.unk_00 & 0x20)
+            {
+                func_80063FF8(0x514);
+                if (p[8] != 0)
+                {
+                    *(s32 *)p[8] = func_8040343C(1);
+                }
+                else
+                {
+                    func_8040343C(1);
+                }
+            }
+            else if (D_801379A8.unk_00 & 0xA000)
+            {
+                if (D_801379B0.unk_00 & 0xA000)
+                {
+                    p[4] = 0;
+                    if (D_801379B0.unk_00 & 0x8000)
+                    {
+                        dir = -1;
+                    }
+                    else if (D_801379B0.unk_00 & 0x2000)
+                    {
+                        dir = 1;
+                    }
+                }
+                else if (p[4] >= 3)
+                {
+                    if (D_801379A8.unk_00 & 0x8000)
+                    {
+                        dir = -1;
+                    }
+                    else if (D_801379A8.unk_00 & 0x2000)
+                    {
+                        dir = 1;
+                    }
+                }
+                else
+                {
+                    p[4]++;
+                }
+            }
+        }
+        if (dir != 0)
+        {
+            func_80063FF8(0x502);
+            p[0] = func_80056450(p[0], dir, D_80408ADC[p[2]].unk_02);
+            func_8040274C(p);
+        }
+    }
+}
 
 void func_8040293C(s32 *p)
 {
@@ -1270,7 +1333,39 @@ void func_80402F04(s32 *p)
     p[-4] = (s32)f;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402F84);
+/* Live open_card_message, the third of the group-allocating family after
+ * func_804057F0 and func_804076C8 -- same assert this build carries and the
+ * live one does not. func_80402DF0 takes 6 here, not 7; raw word indices for
+ * the group: root at r[0x19F], its unk_0C at r[0x1A2], ptrs at r[0x1A3]. */
+s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p)
+{
+    s32 *q = (s32 *)D_80409508;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_80409508, 0x1E1);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_80400548, D_80400570, 0x299);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_8040343C(r[3] != 2);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x764);
+    }
+    func_80402DF0(r, 6);
+    q[3] = (s32)(r + 0x19F);
+    r[0x1A2] = func_80402DC8((s32)(r + 0x1A3));
+    func_80402EBC(r, a, id, kind, p);
+    q[4] = (s32)func_80402F04;
+    return (s32)q;
+}
 
 void func_804030CC(s32 a, s32 p)
 {
@@ -1412,6 +1507,13 @@ void func_804033EC(s32 **pp)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040343C);
 
+/* NEAR MISS, 112 of 112 words, 6 differing -- ONE register pair swapped.
+ * The body is established (live func_80023258, with the ptrs array 0x18
+ * further along and FOUR slots in the loop, not three), and this function is
+ * what found --expand-div: see the Makefile. What is left is that the target
+ * puts the division's quotient in $v1 and the ptrs pointer in $v0, and gcc
+ * does it the other way round, which is a local-alloc tie.
+ * Source in docs/near-misses/func_804034D8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804034D8);
 
 /* Live func_800233D0, with FOUR revision differences and nothing else -- the
@@ -1717,6 +1819,14 @@ void func_80404314(s32 *p, s32 a, s32 b)
     func_80404178(p);
 }
 
+/* NEAR MISS, 93 of 93 words. The body is right -- one of five 0x360-byte
+ * groups picked by index, with THREE asserts the live build has no
+ * counterpart for (the index is bounds-checked at both ends) and raw word
+ * indices off r: root at r[0x72], its unk_0C at r[0x75], ptrs at r[0x76].
+ * What is wrong is register allocation: plainly written, `n` outranks `r` in
+ * global.c's allocno order and the two take $s1 and $s2 the other way round,
+ * 16 differing with every other word already correct. Source in
+ * docs/near-misses/func_80404364.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404364);
 
 void func_804044D8(s32 *p)
@@ -2581,7 +2691,78 @@ void func_80405F24(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405FC4);
+/* Live func_80025584. D_801379A8/D_801379B0 are this link's two input words,
+ * read as plain globals where the live source has D_80083160.unk_08/unk_10;
+ * the 0x40 and 0x20 arms are the other way round; and the tail calls
+ * func_804083FC with a literal 0 where the live one passes p[9]. */
+void func_80405FC4(s32 *p)
+{
+    s32 dir = 0;
+    s32 r;
+
+    if (D_801379A8.unk_00 != 0)
+    {
+        if (D_801379B0.unk_00 & 0x40)
+        {
+            func_80063FF8(0x515);
+            p[-4] = (s32)func_80405AB4;
+        }
+        if (D_801379B0.unk_00 & 0x20)
+        {
+            func_80063FF8(0x514);
+            func_80405F24(p);
+        }
+        else if (D_801379A8.unk_00 & 0x5000)
+        {
+            if (D_801379B0.unk_00 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_801379B0.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379B0.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 2;
+                if (D_801379A8.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379A8.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        if (dir != 0)
+        {
+            func_80063FF8(0x502);
+            p[10] = func_80058FF0(p[10], dir, 5);
+            func_80405B98(p);
+        }
+    }
+    r = func_804016D0();
+    func_804018FC();
+    if (r == 0)
+    {
+        return;
+    }
+    if (r == 1)
+    {
+        return;
+    }
+    func_80406720(p - 8);
+    func_804083FC(p[8], 0);
+}
 
 /* Live func_8002570C. REVISION: the live true-arm calls func_80024F3C's
  * sibling between the two stores; this build has no call there at all, just
@@ -2928,7 +3109,86 @@ void func_80406CFC(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406DA0);
+/* Live func_800265B8, the sibling of func_80405FC4 above: the 0x40 arm goes
+ * straight to the close tail, p[12] loses 4 here rather than 2, and the
+ * state word is p[11].
+ *
+ * DEVICE: that first arm REPEATS the close tail instead of a `goto` to it,
+ * and gcc's cross-jumping merges the two into the one `j`. The four extra
+ * references to `p` are what the device is for -- with a `goto`, `dir`
+ * outranks `p` in global.c's allocno order and the two take $s0 and $s1 the
+ * other way round, 22 differing with every other word already right. The
+ * live func_800265B8 uses the goto, and at -G0 either spelling matches. */
+void func_80406DA0(s32 *p)
+{
+    s32 dir = 0;
+    s32 r;
+
+    if (D_801379A8.unk_00 != 0)
+    {
+        if (D_801379B0.unk_00 & 0x40)
+        {
+            func_80063FF8(0x515);
+            func_804070C4(p - 8);
+            func_804083FC(p[8], p[9]);
+            return;
+        }
+        if (D_801379B0.unk_00 & 0x20)
+        {
+            func_80063FF8(0x514);
+            func_80406CFC(p);
+        }
+        else if (D_801379A8.unk_00 & 0x5000)
+        {
+            if (D_801379B0.unk_00 & 0x5000)
+            {
+                p[12] = 0;
+                if (D_801379B0.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379B0.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else if (p[12] >= 0xD)
+            {
+                p[12] -= 4;
+                if (D_801379A8.unk_00 & 0x1000)
+                {
+                    dir = -1;
+                }
+                else if (D_801379A8.unk_00 & 0x4000)
+                {
+                    dir = 1;
+                }
+            }
+            else
+            {
+                p[12]++;
+            }
+        }
+        if (dir != 0)
+        {
+            func_80063FF8(0x502);
+            p[11] = func_80058FF0(p[11], dir, 5);
+            func_804067BC(p);
+        }
+    }
+    r = func_804016D0();
+    func_804018FC();
+    if (r == 0)
+    {
+        return;
+    }
+    if (r == 1)
+    {
+        return;
+    }
+    func_804070C4(p - 8);
+    func_804083FC(p[8], p[9]);
+}
 
 void func_80406F0C(s32 *p, s32 v)
 {
@@ -3009,7 +3269,37 @@ void func_80407298(s32 *p)
     func_8004DCCC(p + 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804072CC);
+/* Live func_80026B18, with ONE MORE INDIRECTION: the pair comes through
+ * p[0x18] here, where the live one reads the group's own ptrs array. Same
+ * difference as func_80407458 and func_804074C4. */
+void func_804072CC(u8 *p, s32 *b, s32 *c)
+{
+    s32 any = 0;
+    s32 i;
+
+    for (i = 0; i < 2; i++)
+    {
+        if (c[i] != 0)
+        {
+            UnkCardPair *q = ((UnkCardPair **)((s32 *)p)[0x18])[2 + i];
+
+            any = 1;
+            if (b[i] != 0)
+            {
+                func_8004DDBC((u32 *)(p + (i * 0xC + 4)), (u8 *)D_80408A30, (u32 *)q);
+            }
+            else
+            {
+                q->unk_00 = 0;
+                *(s32 *)(p + i * 0xC + 8) = 0;
+            }
+        }
+    }
+    if (any != 0)
+    {
+        func_80407160((s32 *)p);
+    }
+}
 
 void func_804073B0(UnkCardPair *p, u32 *a, u32 *b)
 {

@@ -228,6 +228,17 @@ build/csrc/ovl_main_80400000.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT)
 # source altogether (see csrc/ovl_main_80400000.c's header).
 build/csrc/ovl_main_80400000.o: CC := tools/psx272gcc
 
+# AND IT IS THE ONE UNIT WHOSE ASSEMBLER EXPANDS DIVISION. The whole binary
+# holds exactly four `div` instructions: two in the live block at 0x80023280
+# and 0x800232D4, bare `div`/`mflo`, and two in func_804034D8 at 0x80403500
+# and 0x80403578, each followed by the full aspsx check sequence --
+# `bnez`/`break 0x7` for the zero divisor and `bne`/`lui 0x8000`/`bne`/
+# `break 0x6` for 0x80000000 / -1. maspsx models that as --expand-div, and
+# it is off by default because the rest of the game wants it off. The two
+# blocks were therefore assembled by different aspsx settings, which is the
+# same story as the compiler above: this one came out of the 4.0 SDK.
+build/csrc/ovl_main_80400000.o: MASPSXFLAGS += --expand-div
+
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
 # This is independent of the -G8 used for C above.

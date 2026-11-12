@@ -108,6 +108,45 @@ def _makefile_g_map(var, default_g):
     return exact, pats
 
 
+_MASPSX_EXTRA = None
+
+
+def _makefile_flag_map(var):
+    """{unit: [extra flags]} from the Makefile's per-object `VAR += ...` rules.
+
+    Same shape as _makefile_g_map, for the appended-flag form. As of
+    2026-11-12 the only such rule is ovl_main_80400000's --expand-div: that
+    block's two divisions carry the full aspsx check sequence and the live
+    block's two do not, so getting this wrong costs 18 words on one function
+    and says nothing about why.
+    """
+    exact, pats = {}, []
+    try:
+        mk = open(os.path.join(PROJ, 'Makefile')).read()
+    except OSError:
+        return exact, pats
+    mk = mk.replace('\\\n', ' ')
+    for m in re.finditer(r'^(build/csrc/\S+\.o(?:\s+build/csrc/\S+\.o)*)'
+                         r'\s*:\s*' + var + r'\s*\+=\s*(.+)$', mk, re.M):
+        flags = m.group(2).split('#')[0].split()
+        for o in m.group(1).split():
+            stem = o[len('build/csrc/'):-2]
+            if '%' in stem:
+                pats.append((stem, flags))
+            else:
+                exact.setdefault(stem, []).extend(flags)
+    pats.sort(key=lambda kv: -len(kv[0]))
+    return exact, pats
+
+
+def maspsx_extra_for_unit(unit):
+    """The extra maspsx flags this unit is assembled with."""
+    global _MASPSX_EXTRA
+    if _MASPSX_EXTRA is None:
+        _MASPSX_EXTRA = _makefile_flag_map('MASPSXFLAGS')
+    return _g_lookup(_MASPSX_EXTRA[0], _MASPSX_EXTRA[1], unit, [])
+
+
 def _g_lookup(exact, pats, unit, default):
     if unit in exact:
         return exact[unit]
@@ -289,7 +328,7 @@ def compile_asm(src, cflags=(), unit=None):
     return open(s).read()
 
 
-def assemble(asm, name, gasG=0):
+def assemble(asm, name, gasG=0, unit=None):
     """maspsx + gas the assembly; return the object path.
 
     gasG models a unit left at a nonzero gas -G -- gas then emits GPREL16 for
@@ -302,6 +341,8 @@ def assemble(asm, name, gasG=0):
            '--use-comm-section', '-G%d' % (gasG or 8)]
     if gasG:
         cmd.append('--dont-force-G0')
+    if unit:
+        cmd += maspsx_extra_for_unit(unit)
     cmd += ['-EL', '-32', '-Iinclude', '-march=r3000', '-mtune=r3000',
             '-no-pad-sections', '-O1', '-o', o]
     r = subprocess.run(cmd, input=asm, text=True, cwd=PROJ, capture_output=True)
@@ -337,7 +378,7 @@ def build(src, gasG=0, cflags=(), unit=None):
     Pass UNIT so the right compiler is used; see compile_asm."""
     asm = compile_asm(src, cflags, unit)
     name = os.path.splitext(os.path.basename(src))[0]
-    return object_words(assemble(asm, name, gasG))
+    return object_words(assemble(asm, name, gasG, unit))
 
 
 def _listing_rows(unit, func):
