@@ -1329,7 +1329,9 @@ void func_804024A4(s32 *p)
     }
 }
 
-/* NEAR MISS: two extra loads of *s in the inner scan loop, and they are the target's not ours
+/* NEAR MISS, 44 of 44 words, 16 differing: gcc duplicates the inner scan's
+   zero test at the bottom of the loop and then undoes the pointer increment,
+   where the target keeps one test at each end.
    Source in docs/near-misses/func_80402508.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402508);
 
