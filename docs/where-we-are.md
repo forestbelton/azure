@@ -249,20 +249,36 @@ Three things about the overlays that change how they are worked, all in
   - `func_80404EA0` -- 322 of 320, 154 differing, and its last two words are
     now a FALSIFIABLE claim rather than an assertion. See below.
 
-  **THE ONE BIG LEVER LEFT IS A TOOLCHAIN QUESTION, and it is the user's
-  call.** func_80404EA0's unsigned-division magic gap is not a compiler
-  VERSION difference, it is a compiler BUILD-HOST difference. machmode.h picks
-  `HOST_WIDE_INT = long` only when `long` is wider than `int`; our cc1 is a
-  32-bit i386 binary where both are 32, so `immed_double_const`
-  (varasm.c:1859) reads a top-bit-set division magic as negative and hands
-  back a CONST_DOUBLE that `large_int` rejects, and mips.md:3208's
-  `lui`/`ori` split never fires. With a 64-bit HOST_WIDE_INT the same source
-  returns a CONST_INT. The test is concrete -- build `vendor/old-gcc`'s
-  `2.7.2-psx` with a 64-bit HOST_WIDE_INT and re-measure -- but it is a
-  change to the compiler that has to be re-measured against all 243 landed
-  functions in the unit, so it is written down and not taken. The same
-  question is worth asking of every other "it is the compiler" verdict in
-  `docs/near-misses/`.
+  **A CORRECTION, SAME DAY, AND THE METHOD LESSON IS THE POINT.** During this
+  pass func_80404EA0's last two words were written up as a compiler
+  BUILD-HOST difference -- machmode.h takes `HOST_WIDE_INT = long` only when
+  `long` is wider than `int`, so a 32-bit-hosted cc1 turns a top-bit-set
+  division magic into a CONST_DOUBLE that `large_int` rejects and the
+  mips.md:3208 split never fires. The mechanism is real; the conclusion was
+  not. forest asked why we would build the compiler with a 64-bit
+  HOST_WIDE_INT when 64-bit hosts barely existed when this game was compiled,
+  which is the right question: cc1psx was a 32-bit Win32 binary and the host
+  that claim implies never existed for this toolchain.
+
+  The counter-example was already in the tree. `csrc/main/cardinfo.c`'s
+  `func_80024390` is landed C, byte-identical, and is this very function's
+  live counterpart; `build/csrc/main/cardinfo.s` splits the SAME 0x91A2B3C5
+  magic into `li $2,-1851654144` plus a separate `ori $2,$2,0xb3c5`. Compile
+  that file with tools/psx272gcc instead and it splits identically, so FSF
+  2.7.2 does it too. What the original measurement really showed is that a
+  STANDALONE `g / 3600` does not split under either compiler -- a statement
+  about context, not about the magic. func_80404EA0's two words go back to
+  being a source question.
+
+  **The lesson, which is worth more than the park:** the reasoning was "this
+  mechanism would produce the observed bytes, therefore this is what
+  happened", and it never asked whether the thing it implied was possible. A
+  mechanism that explains the bytes is a hypothesis. It becomes a finding
+  only when the thing it implies is checked against something independent --
+  and here that check was one grep of a file the project had already built.
+  The same test should be run on every other "it is the compiler" verdict in
+  `docs/near-misses/`: find the live counterpart and look at what our own
+  build already does with it.
 
   `func_804062F4` used to be listed here as blocked for a structural reason --
   it needs a 16-byte rodata template at 0x26976C and this unit's single dotted

@@ -512,7 +512,7 @@ then read only the section you need.
 - reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:20715`
 - AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:20741`
 - A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:20783`
-- THE UNSIGNED-DIVISION MAGIC GAP IS THE COMPILER'S BUILD HOST, NOT ITS VERSION  `:20817`
+- RETRACTED: "AN UNSIGNED-DIVISION MAGIC WITH THE TOP BIT SET NEVER SPLITS"  `:20817`
 
 <!-- END INDEX -->
 
@@ -20814,47 +20814,43 @@ Measured on the same body: the conditional bound as a `for`, as a `while`
 with an explicit `i++`, with `i += 1`, and with a marker on `i` are all 84 and
 46. Only moving the condition itself into the two arms changes anything.
 
-## THE UNSIGNED-DIVISION MAGIC GAP IS THE COMPILER'S BUILD HOST, NOT ITS VERSION
+## RETRACTED: "AN UNSIGNED-DIVISION MAGIC WITH THE TOP BIT SET NEVER SPLITS"
 
-An unsigned division by a constant whose MAGIC has the top bit set never gets
-the `lui`/`ori` split under tools/psx272gcc or tools/cdkgcc, so the scheduler
-has one insn where the target has two and cannot fill a load delay. This is
-what costs func_80404EA0 its last two words, and it has been written down as
-"the stand-in compiler is not SN's 4.0 build" since it was found. It is
-narrower than that, and it is falsifiable.
+This section asserted, on 2026-11-12, that a top-bit-set division magic can
+never get the `lui`/`ori` split because `expand_mult_highpart` hands it to
+`immed_double_const` as a CONST_DOUBLE, and then that the 4.0 compiler must
+have been built on a host with a 64-bit HOST_WIDE_INT. BOTH CLAIMS ARE WRONG
+and the section is kept as the correction.
 
-`expand_mult_highpart` (expmed.c:2536) builds the multiplier as
+THE FACT THAT KILLS THEM is already in the tree. `csrc/main/cardinfo.c` is
+landed C, byte-identical in main.bin, and its `func_80024390` -- the live
+counterpart of the twin's func_80404EA0 -- divides by 60 and then by 3600.
+Its generated assembly, `build/csrc/main/cardinfo.s`, holds
 
-    wide_op1 = immed_double_const (cnst1, 0, wider_mode)   /* DImode */
+    li    $2,-2004318071          # 0x88888889   <- NOT split
+    multu $3,$2
+    li    $2,-1851654144          # 0x91a20000   <- SPLIT: the lui half
+    mfhi  $11
+    ori   $2,$2,0xb3c5            <- and the ori half, scheduled apart
 
-and `immed_double_const` (varasm.c:1859) returns a CONST_INT only for
-`(i1 == 0 && i0 >= 0) || (i1 == ~0 && i0 < 0)`. With `width` = 64 and
-HOST_BITS_PER_WIDE_INT = 32, none of the clearing arms above that test run,
-so a magic with the top bit set arrives as a NEGATIVE `i0` with `i1 == 0` and
-falls through to the CONST_DOUBLE. mips.c's `large_int` (mips.c:416) opens
-with `if (GET_CODE (op) != CONST_INT) return FALSE`, so the define_split at
-mips.md:3208 never fires.
+so 0x91A2B3C5 DOES reach `large_int` as a CONST_INT and the mips.md split DOES
+fire. Compiling the same file with tools/psx272gcc instead of tools/cdkgcc
+produces the same two insns at the same place, so this is not a 4.0-vs-4.1
+difference either: FSF 2.7.2 splits it too.
 
-HOST_BITS_PER_WIDE_INT is chosen in machmode.h:49-57:
+WHAT THE ORIGINAL MEASUREMENT ACTUALLY SHOWED is that a STANDALONE
+`sink(g / 3600)` does not split under either compiler while `g / 216000`
+does. That is true, and it is a statement about the context, not about the
+magic -- the same magic splits in cardinfo.c under both compilers. Whatever
+decides it, the two compilers agree, so func_80404EA0's two words are not a
+demonstrated compiler gap and should be re-probed as a SOURCE question.
 
-    #if HOST_BITS_PER_LONG > HOST_BITS_PER_INT
-    #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_LONG
-    #define HOST_WIDE_INT long
-    #else
-    #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_INT
-    #define HOST_WIDE_INT int
-    #endif
+THE METHOD ERROR IS WORTH MORE THAN THE FINDING. The reasoning was: this
+mechanism would produce the observed output, therefore this mechanism is what
+happened. It never asked whether the conclusion was possible -- cc1psx was a
+32-bit Win32 binary, where `long` and `int` are both 32 and HOST_WIDE_INT is
+32-bit, so the host it implied did not exist for this toolchain. A mechanism
+that explains the bytes is a hypothesis; it is a finding only once the thing
+it implies is checked against something independent. In this case the
+independent check was one `grep` of a file the project had already built.
 
-Our cc1 is a 32-bit i386 binary, where `long` and `int` are both 32, so it
-takes the second arm. On a host where `long` is wider, `width ==
-HOST_BITS_PER_WIDE_INT` holds, `i1` is cleared, 0x91A2B3C5 is POSITIVE in 64
-bits, and the same source returns `GEN_INT (i0)` -- a CONST_INT, which
-`large_int` accepts.
-
-So the gap is a BUILD-CONFIGURATION difference in the compiler, not a version
-difference, and the test is concrete: build vendor/old-gcc's 2.7.2-psx with a
-64-bit HOST_WIDE_INT and re-measure. It is a toolchain change that has to be
-re-measured against every landed function in the twin unit, so it is not a
-lever to reach for casually -- but it is the only thing left standing between
-func_80404EA0 and a match, and the same question is worth asking of any other
-"it is the compiler" verdict in docs/near-misses/.

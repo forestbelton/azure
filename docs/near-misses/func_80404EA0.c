@@ -30,66 +30,50 @@
  * ten-iteration loop are right. What is left is TWO NOPS and the register
  * names that follow from them, and both come from the compiler, not here.
  *
- * FINDING 1, worth two words. An unsigned division by a constant whose MAGIC
- * has the top bit set never gets the `lui`/`ori` split, so the scheduler has
- * one insn where the target has two and cannot fill a load delay.
- *   expmed.c `expand_mult_highpart` builds the multiplier as
- *   `wide_op1 = immed_double_const (cnst1, 0, DImode)`, and on a 32-bit
- *   HOST_WIDE_INT host `immed_double_const` returns a CONST_INT only for
- *   `i1 == 0 && i0 >= 0`. 0x91A2B3C5 (the magic for 3600) and 0x88888889
- *   (for 60) are NEGATIVE as a HOST_WIDE_INT, so both come out CONST_DOUBLE.
- *   mips.c's `large_int` (mips.c:416) begins `if (GET_CODE (op) != CONST_INT)
- *   return FALSE`, so the define_split at mips.md:3208 that turns a large
- *   constant into `lui` + `ior` never fires: gcc emits one `li`, maspsx
- *   expands it to an ADJACENT lui/ori, and the `lw $v0,0x7C($s3)` ahead of it
- *   keeps its nop. The target has the `lui` IN that delay slot and the `ori`
- *   four insns later -- two independent insns, which only a split gives.
- *   This block's THIRD division is the control: 216000 needs a pre-shift, its
- *   magic 0x026D60DD is positive, it splits, and those words match exactly.
- *   Measured on a standalone file: /9, /100, /1000 and /216000 split; /3, /60
- *   and /3600 do not -- under tools/psx272gcc AND under tools/cdkgcc.
- *   scratch/psx272-gcc/cc1 is a 32-bit i386 binary, and so was the real
- *   cc1psx, so this is not our build being unusual.
+ * FINDING 1 WAS WRONG AND IS RETRACTED, 2026-11-12. It said: an unsigned
+ * division by a constant whose MAGIC has the top bit set never gets the
+ * `lui`/`ori` split, because `expand_mult_highpart` (expmed.c:2536) builds
+ * the multiplier with `immed_double_const (cnst1, 0, DImode)` and a 32-bit
+ * HOST_WIDE_INT makes that a CONST_DOUBLE, which `large_int` (mips.c:416)
+ * rejects, so the define_split at mips.md:3208 cannot fire. A later note on
+ * top of it concluded that cc1psx must therefore have been built on a host
+ * with a 64-bit HOST_WIDE_INT. BOTH ARE WRONG.
  *
- *   THE WAY THE 4.0 COMPILER REACHED A CONST_INT IS NOW NAMED, 2026-11-12,
- *   and it is the BUILD HOST, not the compiler version. machmode.h:49-57
- *   picks the widest host integer:
+ * THE COUNTER-EXAMPLE IS IN THE TREE, and it is this function's own live
+ * counterpart. `csrc/main/cardinfo.c`'s func_80024390 is landed C,
+ * byte-identical in main.bin, and divides by 60 and then by 3600.
+ * build/csrc/main/cardinfo.s holds
  *
- *       #if HOST_BITS_PER_LONG > HOST_BITS_PER_INT
- *       #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_LONG
- *       #define HOST_WIDE_INT long
- *       #else
- *       #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_INT
- *       #define HOST_WIDE_INT int
- *       #endif
+ *     li    $2,-2004318071      # 0x88888889   <- NOT split
+ *     multu $3,$2
+ *     li    $2,-1851654144      # 0x91a20000   <- SPLIT, the lui half
+ *     mfhi  $11
+ *     ori   $2,$2,0xb3c5        <- the ori half, scheduled apart
  *
- *   On the i386 host ours is built for, `long` and `int` are both 32, so
- *   HOST_BITS_PER_WIDE_INT is 32. Walk `immed_double_const` (varasm.c:1859)
- *   with width = GET_MODE_BITSIZE (DImode) = 64 and that:
- *     - `width < HOST_BITS_PER_WIDE_INT` is false, `width ==` is false and
- *       `width > 2 * HOST_BITS_PER_WIDE_INT` is false, so nothing clears or
- *       sign-extends;
- *     - `if (width <= HOST_BITS_PER_WIDE_INT) i1 = (i0 < 0) ? ~0 : 0;` does
- *       not run either;
- *     - so the CONST_INT test `(i1 == 0 && i0 >= 0) || (i1 == ~0 && i0 < 0)`
- *       sees i1 == 0 and i0 < 0 -- 0x91A2B3C5 as a 32-bit HOST_WIDE_INT is
- *       negative -- and falls through to the CONST_DOUBLE.
- *   With a 64-bit HOST_WIDE_INT the SAME SOURCE takes the `width ==
- *   HOST_BITS_PER_WIDE_INT` arm, then `width <= HOST_BITS_PER_WIDE_INT` sets
- *   i1 = 0 because 0x91A2B3C5 is POSITIVE in 64 bits, and the test returns
- *   `GEN_INT (i0)` -- a CONST_INT, which `large_int` accepts and the
- *   mips.md:3208 split then fires on. A positive magic like 216000's
- *   0x026D60DD is i0 >= 0 either way, which is exactly the control this park
- *   already records.
+ * so 0x91A2B3C5 reaches `large_int` as a CONST_INT and the split fires.
+ * Compile that same file with tools/psx272gcc instead of tools/cdkgcc and
+ * the two insns come out in the same place, so FSF 2.7.2 splits it too and
+ * this is not a 4.0-vs-4.1 difference. The two compilers also agree on a
+ * standalone `sink(g / 3600)`, which neither splits. So whatever decides it
+ * is CONTEXT, and both compilers decide it the same way.
  *
- *   So cc1psx was built on a host where `long` is wider than `int`, and
- *   tools/psx272gcc is not. That is a BUILD-CONFIGURATION difference, not a
- *   version one, and it is the first thing about this compiler that is
- *   falsifiable rather than asserted: build vendor/old-gcc's 2.7.2-psx with
- *   HOST_BITS_PER_WIDE_INT 64 and these two words either appear or they do
- *   not. It is not done here because it is a TOOLCHAIN change that has to be
- *   re-measured against all 243 landed functions in this unit, which is the
- *   user's call, not a park's.
+ * WHAT THAT MEANS FOR THIS PARK: the two missing words are NOT a demonstrated
+ * compiler gap and have to be re-probed as a SOURCE question. What is known
+ * about the target's shape is unchanged and was re-read from the listing on
+ * 2026-11-12 -- it materialises the magic ONCE in $v1 and uses it for BOTH
+ * `multu`s, which is what gives the two halves room to be scheduled apart:
+ *
+ *     lui   $v1,(0x91A2B3C5 >> 16)      <- in the lw's delay slot
+ *     ...   sll / lui $at / addu $at / lw $v0
+ *     ori   $v1,$v1,(0x91A2B3C5 & 0xFFFF)
+ *     multu $v0,$v1 / mfhi $a0 / srl $a0,$a0,11        <- x / 3600
+ *     multu $a0,$v1 / mfhi $v1 / srl $v1,$v1,11        <- (x / 3600) / 3600
+ *     sll/subu/sll/addu/sll  -> $v1 * 3600
+ *     subu  $a0,$a0,$v0                                <- % 3600
+ *
+ * which confirms the park's `x / 3600 % 3600` reading of the middle field.
+ * The open question is why our build leaves the magic as one `li` here when
+ * the same compiler splits it in cardinfo.c.
  *
  * FINDING 2, the register names. `umulsi3_highpart`'s output is constrained
  * `"=h"` (mips.md:1038), so reload must copy HI into a GPR, and

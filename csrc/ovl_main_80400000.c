@@ -3035,16 +3035,16 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
     return p + 0xC;
 }
 
-/* NEAR MISS, 322 words of 320. Two words: an unsigned division's magic
- * constant is a CONST_DOUBLE when its top bit is set, so mips.md's
- * large-constant split never fires and the `lui` cannot fill the load delay.
- * NAMED 2026-11-12, and it is the compiler's BUILD HOST rather than its
- * version: machmode.h picks HOST_WIDE_INT = `long` only when `long` is wider
- * than `int`, and on the i386 host tools/psx272gcc is built for they are
- * both 32, so `immed_double_const` (varasm.c:1859) reads a top-bit-set magic
- * as negative and returns a CONST_DOUBLE. With a 64-bit HOST_WIDE_INT the
- * same source returns a CONST_INT and the split fires. Testable: rebuild
- * vendor/old-gcc's 2.7.2-psx that way and re-measure the unit.
+/* NEAR MISS, 322 words of 320. Two words: gcc leaves an unsigned division's
+ * magic as one `li`, which maspsx expands to an adjacent lui/ori, where the
+ * target has the `lui` in the preceding load's delay slot and the `ori` four
+ * insns later -- the mips.md:3208 large-constant split. This was written up
+ * as "a top-bit-set magic is a CONST_DOUBLE and can never split", and on
+ * 2026-11-12 as a HOST_WIDE_INT width difference on top of that. BOTH ARE
+ * RETRACTED: this function's own live counterpart, csrc/main/cardinfo.c's
+ * func_80024390, splits the SAME magic, under tools/cdkgcc and under
+ * tools/psx272gcc alike. So it is context, both compilers agree on it, and
+ * the two words are a SOURCE question rather than a compiler gap.
  * Source in docs/near-misses/func_80404EA0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
