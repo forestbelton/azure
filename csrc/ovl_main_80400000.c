@@ -1596,11 +1596,70 @@ void func_80402BE0(s32 *p)
     }
 }
 
-/* NEAR MISS, 46 words of 47, 24 differing from ONE: the target keeps 0xC in
- * a register and computes `srl $v0,$a3,1` inside the loop for the second
- * height, and gcc hoists that shift into the preheader where it folds to 6.
- * Source in docs/near-misses/func_80402CD4.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402CD4);
+/* Live func_80022A30, whose seven-statement preheader device carries over --
+ * see that function's note in csrc/main/card_mes.c for why the `h1 = w1` copy
+ * survives. Two differences here: the shared word is 0x101010 where the live
+ * one has 0x104058, and the SECOND height is not a copy but a shift the
+ * target recomputes every iteration. The marker in the loop is what keeps it
+ * there. */
+u8 *func_80402CD4(u8 *p, s32 *q)
+{
+    u8 buf[4];
+    u8 w1;
+    u8 h1;
+    u8 c;
+    s32 d;
+    u8 w2;
+    u32 e;
+    s32 i;
+
+    *(UnkFour *)buf = *(UnkFour *)D_80400544;
+    i = 0;
+    w1 = 5;
+    h1 = w1;
+    c = 0x48;
+    d = 0x101010;
+    w2 = 6;
+    e = 0xC;
+    for (; i < 4; i++)
+    {
+        p[0xA] = w1;
+        p[0xB] = h1;
+        p[1] = c;
+        *(s32 *)(p + 4) = d;
+        p[0] = buf[i];
+        p += 0xC;
+        p[0xA] = w2;
+        /* DEVICE: one marker, worth 24 words (24 -> 0) and the last word of
+           length. `"0"(e)` is a SECOND set of e inside the loop and `"r"(p)`
+           is a varying input, so the asm is not invariant, e is not invariant,
+           and loop.c leaves `e >> 1` in the loop -- where the target computes
+           `srl $v0,$a3,1` every iteration. Written without the marker the
+           shift is a movable, loop.c hoists it into the preheader, e is a
+           known 0xC in that block and the shift FOLDS to `li 6`: one word
+           short and every register after it renamed. Keeping the constant out
+           of the loop is the point, so this is the mirror of func_80402A1C's
+           marker, which keeps one in.
+           `"r"(d)` TWICE is the second job. One set and one use leave e with
+           three references against d's two, so e takes $a1 and d takes $a3;
+           the target has them the other way round. Two more references for d
+           restore the order. Three also match.
+           Legal spellings ruled out: no marker 46 words, 24 differing;
+           `"0"(e)` alone 48/29; `"r"(e)` alone 48/36; `volatile` with the
+           same operands 47/2; dropping `"r"(p)` 48/25 (the asm goes back to
+           being invariant); dropping one `"r"(d)`, or replacing it with
+           `"r"(c)`, 47/6; and declaring d after e, or e before d, 47/6.
+           Warns under -Wall? No. */
+        __asm__("" : "=r"(e) : "0"(e), "r"(p), "r"(d), "r"(d));
+        p[0xB] = e >> 1;
+        p[1] = c;
+        *(s32 *)(p + 4) = d;
+        p[0] = buf[i];
+        p += 0xC;
+    }
+    p[-0x18] |= 0x80;
+    return p;
+}
 
 void func_80402D90(s32 *p)
 {
