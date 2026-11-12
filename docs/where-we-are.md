@@ -153,13 +153,12 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **168 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **233 of its 263 functions are
   landed from C at 0 differing words**, with all four containers
-  byte-identical. **Not one was decompiled from a listing.** 134 came from the
+  byte-identical. **Not one was decompiled from a listing.** Most came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap` -- 46 of them in two passes once the
-  SECOND COMPILER below was in place -- 7 from the `-G8` declared-size and
-  increment-order levers, 3 from the compiler switch itself, and 11 from the
+  `tools/decomp/twinalign.py --symmap`, the rest from the `-G8` declared-size
+  and increment-order levers, from the compiler switch below, and from the
   RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls
@@ -202,24 +201,53 @@ Three things about the overlays that change how they are worked, all in
 
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
-  one pass** -- 21 with nothing changed but their symbol names. A second pass
-  over the 24 `near` rows took 14 more, so stubs went **157 -> 108**. The
-  15-function `reload_cse_regs` cluster is gone -- `func_80405AE8` landed from
-  its park with its body unchanged, and the twelve message wrappers it also
-  covered needed no thought at all -- and so is the folded indexed load
-  (`func_80404DEC`, `func_80406274`). What remains is
-  4 `near`, 31 `drift`, 38 `far` and 16 `twin-only`, plus ONE mask-identical
-  function that is blocked for a structural reason rather than a matching one:
+  one pass** -- 21 with nothing changed but their symbol names. Successive
+  passes took the rest: stubs went **157 -> 30**, and of those 30 roughly ten
+  are hand-written assembly that can never be C (BIOS call stubs, a `jr` into
+  a data label, two delay loops). What remains in `--todo` is 2 `near`,
+  4 `drift`, 12 `far` and 11 `twin-only`, plus ONE mask-identical function
+  that is blocked for a structural reason rather than a matching one:
   `func_804062F4` needs a 16-byte rodata template at 0x26976C, and this unit's
   single dotted `.rodata` subsegment is already spoken for, so landing it emits
   the template twice and main.bin comes out 0x10 long. **That is the next
   structural question for this block: it is several translation units, like the
   live side's nine, and our one `c` subsegment only works while the asm rodata
-  blobs fill the gaps.** Every differing-word count in
-  `csrc/ovl_main_80400000.c`'s "others" triage predates the switch and is
-  stale.
+  blobs fill the gaps.**
 
-  **One trap from that batch is worth more than the batch.** Six of the 32
+  **TWO BUILD-LEVEL FACTS, both found on 2026-11-12 and both now in the
+  Makefile.** The block's assembler EXPANDS DIVISION where the rest of the
+  game's does not: main.bin holds exactly four `div` instructions, the live
+  block's two are a bare `div`/`mflo`, and `func_804034D8`'s two carry the
+  full aspsx check sequence. maspsx models that as `--expand-div`, which the
+  Makefile now passes for this unit alone, and `asmlib.maspsx_extra_for_unit`
+  reads that rule the way `cc1_for_unit` already reads the `CC` one. And
+  `func_8007BEF0` -- this block's `exit` -- is **NORETURN**; that one attribute
+  landed three functions, one of them the 265-word `open_card_events`, whose
+  seven "unfilled" delay slots were reorg declining to steal from an assert arm
+  it thought could fall through.
+
+  **A FIXED-ADDRESS SCALAR DOES NOT CONFLICT WITH A VARYING-ADDRESS STRUCT,
+  and this block keeps running into it from both sides.** cse's
+  `note_mem_written` marks a store through a pointer `nonscalar` and
+  `invalidate_memory` then spares fixed-address entries whose `in_struct` is
+  clear; `sched.c`'s `true_dependence` excuses the same pair outright. So a
+  global that must RELOAD after a store through a pointer, or a store that must
+  not float past a load through one, has to be spelled as a STRUCT member.
+  `csrc/main_twin.h` has a one-member `UnkTwinWord` for exactly that, used by
+  D_801379A8/D_801379B0 (the two input words), D_80010208, and the three
+  trailing template words D_8002D6A0/A4/A8.
+
+  Every differing-word count in `csrc/ovl_main_80400000.c`'s "others" triage
+  predates the compiler switch and is stale.
+
+  **Eleven functions are parked in `docs/near-misses/`**, all of them with the
+  body established and 1-6 words or one register pair left. Two of them --
+  `func_80406720`/`func_804070C4` and `func_80406844` -- are the clearest
+  evidence that `tools/psx272gcc` is NOT the 4.0 compiler: the first pair's
+  live counterpart matches from the same source under 4.1, and the second
+  needs a block move with an alignment no C type can ask for.
+
+  **One trap from that batch, and it has fired twice since.** Six of the 32
   linked against the RESIDENT engine and every one measured 0 differing: the
   live source names some objects through `__asm__` aliases
   (`card_file_count`, `card_free_blocks`, `D_800814A0_a`), `twinmove` resolved
