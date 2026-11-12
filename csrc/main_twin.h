@@ -169,9 +169,14 @@ extern u32 D_8008DAB4_a[1] __asm__("D_8008DAB4");    /* the array spelling of th
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 extern const char D_80400004[40];                    /* ASSERT_FMT */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
-extern u8 D_804005F0[];                              /* D_800282B0 */
-extern u8 D_80408C84[];                              /* D_80027F60 */
-extern u8 *D_80408C8C[];                             /* D_800282BC */
+extern u8 D_804005F0[8];                              /* D_800282B0 */
+extern u8 D_80408C84[8];                              /* D_80027F60 */
+extern u8 *D_80408C8C[4];                            /* D_800282BC */
+extern u8 *D_80408C8C_a[1] __asm__("D_80408C8C");    /* the <=8 spelling of the same table: at -G8 a declared
+                                                        size of 8 or less takes the small-data path, and the
+                                                        address then costs ONE register instead of two. The
+                                                        lever is PER SITE, as for D_8008DAB4_a; func_804037F4
+                                                        needs it, and the real size is the [4] above. */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
@@ -184,11 +189,11 @@ extern u32 D_80408CD8;                             /* D_80071674 */
 extern u32 D_80408CDC;                               /* D_80071678 */
 extern u32 D_80408CE0;                               /* D_8007167C, read as a SCALAR here */
 extern u32 D_80408CE4;                               /* D_80071680, likewise */
-extern u8 D_80408CE8[];                              /* D_800717BC, include/structs.h */
-extern u8 D_80408CF0[];                              /* D_80027FD0 */
+extern u8 D_80408CE8[8];                              /* D_800717BC, include/structs.h */
+extern u8 D_80408CF0[4];                              /* D_80027FD0 */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
-extern u8 D_80408D64[];                              /* D_8002808C */
-extern u8 D_80408D6C[];                              /* D_800282CC */
+extern u8 D_80408D64[8];                              /* D_8002808C */
+extern u8 D_80408D6C[8];                             /* D_800282CC */
 extern u8 D_80408D74[];                              /* D_80028094 */
 extern long D_80409270;                              /* gSwCardEOFEvent, D_80028550 */
 extern long D_80409274;                              /* gSwCardErrorEvent, D_80028554 */

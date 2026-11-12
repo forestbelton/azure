@@ -127,22 +127,62 @@
  *                   func_80406720 and func_804070C4 hold `q = p + 8` and
  *                   reach two fields as `q[6]`/`q[7]`; this block reaches
  *                   the same bytes as `0x38($s2)`/`0x3C($s2)` with $s2
- *                   holding p, i.e. p[14]/p[15]. Writing it that way is NOT
- *                   the fix -- it takes func_80406720 from 2 differing to 8,
- *                   because the allocation cascades.
+ *                   holding p, i.e. p[14]/p[15].
  *
- *   1 fn, 2 words   func_804078D8: two words transposed, a `lui`/`addiu`
- *                   scheduling order.
+ *                   REFINED 2026-11-11, and the earlier note that writing it
+ *                   that way "is NOT the fix" was half right. p[14]/p[15]
+ *                   DOES fix both loads; what is left at 8 differing is one
+ *                   REGISTER SWAP and nothing else -- the candidate gives
+ *                   $s0 to the counter and $s1 to the pointer, the target
+ *                   the reverse, and the four prologue/epilogue saves follow.
+ *                   The cause is the priority race: `q[0]` folds to `p[8]`,
+ *                   so with q[6]/q[7] gone `q` has NO reference outside the
+ *                   loop and loses to `i`. Swept without moving it off 8:
+ *                   declaring i first, i inside the if, q inside the if (36),
+ *                   a for-loop, `i = 0` at declaration (37), i++ as its own
+ *                   statement, a down-counter (26), `register`, `*q` for
+ *                   q[0], the final `|=` written off q to buy a reference
+ *                   (38), moving only one of the two reads (9 each). The
+ *                   live spelling and a `u8 *q` with byte offsets both sit
+ *                   at 2. So it is a register race needing a lever that is
+ *                   not in this file yet, and the residue is exactly one.
  *
- *   others          func_804037F4 (5), func_804012B0 (9), func_804065CC and
- *                   func_80406F70 (11 each), func_804040C8 and
- *                   func_80406BEC (12), func_804083A0 (15), func_80405B98
- *                   and func_80407F68 (19), func_80405AE8 (20),
- *                   func_80404DEC (28), func_804018FC and func_80403E54
- *                   (42), func_804010F0 and func_80405DE0 (49).
- *                   func_804018FC is the extreme case: 42 words against a
- *                   live counterpart of 2, so that pairing is wrong or the
- *                   live source lost the body entirely.
+ *   LANDED 2026-11-11, all three by the SAME lever -- a declared size of 8
+ *   or less takes the -G8 small-data path, which costs the address ONE
+ *   register and leaves the %hi/%lo pair ADJACENT so nothing schedules
+ *   between them. See docs/matching-levers.md, "A global's DECLARED SIZE
+ *   also decides how many registers its address costs".
+ *
+ *     func_804078D8   was "two words transposed, a lui/addiu scheduling
+ *                     order". D_80408D6C's real size is 8 and it was
+ *                     declared `[]`; declaring `[8]` is both correct and the
+ *                     fix. Four more twin objects had the same wrong
+ *                     declaration (D_804005F0, D_80408C84, D_80408CE8,
+ *                     D_80408CF0, D_80408D64); all now carry their real
+ *                     size, with the container byte-identical either way.
+ *     func_804037F4   needed the lever on a table whose real size is 16, so
+ *                     it uses the D_80408C8C_a[1] alias the way D_8008DAB4_a
+ *                     is used. Plus two revision differences: stride 0x3C
+ *                     for 0x48, bound 4 for 3.
+ *     func_804040C8   needed no declaration change once D_804005F0 was
+ *                     sized -- only the -0x21 word indices and four revision
+ *                     constants.
+ *
+ *   others          func_804012B0 (9), func_804065CC and func_80406F70 (11
+ *                   each), func_80406BEC (12), func_804083A0 (15),
+ *                   func_80405B98 and func_80407F68 (19), func_80405AE8
+ *                   (20), func_80404DEC (28), func_804018FC and
+ *                   func_80403E54 (42), func_804010F0 and func_80405DE0
+ *                   (49). func_804018FC is the extreme case: 42 words
+ *                   against a live counterpart of 2, so that pairing is
+ *                   wrong or the live source lost the body entirely.
+ *
+ *                   func_804012B0 was looked at and is NOT a one-lever job:
+ *                   its last arm falls through to the shared return in the
+ *                   live build and jumps to it here, and this build reuses a
+ *                   register already holding %lo(D_8009E390) where the live
+ *                   one re-materialises the pair. Block layout plus cse,
+ *                   not a spelling.
  */
 
 /* The twin of set_card_slot, and the pair that measures the -G difference:
@@ -690,7 +730,20 @@ void func_80403738(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804037F4);
+/* Live func_8002352C, with TWO revision differences and one addressing lever.
+ * The stride is 0x3C where the live source steps 0x48, and the bound is 4
+ * where it is 3 -- both measured off the listing, and both of the families
+ * the header describes: a structure 12 bytes smaller, and a table walked to
+ * one more entry. D_80408C8C_a is the <=8 spelling; see csrc/main_twin.h. */
+void func_804037F4(u8 *p)
+{
+    s32 i;
+
+    for (i = 0; i < 4; i++)
+    {
+        func_80051B50(p + 0x90 + i * 0x3C, D_80408C8C_a[i], 1);
+    }
+}
 
 s32 func_80403868(s32 p, s32 w, s32 h)
 {
@@ -785,7 +838,30 @@ s32 func_80403F1C(s32 p, s32 w, s32 h)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403F7C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804040C8);
+/* Live func_80023D64. Its UnkCardGrp240 `c->ptrs[N]` reads are spelled as raw
+ * word indices here because this build's ptrs array sits 0x21 WORDS lower --
+ * ptrs[6] is p[0x7C] against the live 0x9D -- which is the same -0x21 delta
+ * func_80404314 and func_804044D8 carry. Four of the constants are revision
+ * differences too: 0x100 for 0xFA, 0x181 for 0x178, 0x91 for 0x90, 0x112 for
+ * 0x10C; 0x10 and 0x18 are shared. The byte offsets differ independently --
+ * 0x5C for 0xA4, 0x128 for 0x1AC. */
+void func_804040C8(s32 *p)
+{
+    UnkCardPair *q;
+
+    q = (UnkCardPair *)p[0x7C];
+    q->unk_04->unk_08 = 0x100;
+    q->unk_04->unk_0A = 0x10;
+    q->unk_00 = (s32)D_80084110;
+    q = (UnkCardPair *)p[0x79];
+    q->unk_00 = (s32)func_80051B50((u8 *)p + 0x5C, D_804005F0, 1);
+    q->unk_04->unk_08 = 0x181;
+    q->unk_04->unk_0A = 0x91;
+    q = (UnkCardPair *)p[0x7E];
+    q->unk_00 = (s32)((u8 *)p + 0x128);
+    q->unk_04->unk_08 = 0x112;
+    q->unk_04->unk_0A = 0x18;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404178);
 
@@ -1472,7 +1548,10 @@ void func_8040787C(s32 *p, s32 *b, s32 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040789C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804078D8);
+void func_804078D8(u8 *p)
+{
+    func_80051B50(p + 0x7C, D_80408D6C, 1);
+}
 
 s32 func_80407904(s32 p, s32 w, s32 h)
 {

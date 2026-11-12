@@ -153,11 +153,12 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and **99 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **102 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** 88 came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap`, and 11 from the RESIDENT units
+  `tools/decomp/twinalign.py --symmap`, 3 on 2026-11-11 from the `-G8`
+  declared-size lever, and 11 from the RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls
   them in the executable. For those, the renames were read off the block's
@@ -177,6 +178,15 @@ Three things about the overlays that change how they are worked, all in
   remaining work 239 functions rather than 262. Rebuilding the LIVE overlay's own
   source at `-G8` and aligning its 241 functions against this block gives the
   scale of what is already in the tree:
+
+  Two cautions for anyone resuming this block, both paid for on 2026-11-11.
+  `twinalign` read only `csrc/ovl_main_80020000.c`, so once the nine-unit
+  carve moved every live body into `csrc/main/*.c` it paired NOTHING -- every
+  row came back `twin-only` at 0.00. And its pairing is arbitrary among
+  identical-masked functions, so anchor on the already-landed ones rather
+  than trusting a `--todo` row. The 14-function `reload_cse_regs` cluster is
+  closed as unreachable without a patched compiler;
+  `csrc/ovl_main_80400000.c`'s header carries all of it.
 
   | the twin's 8,272 words | fn | words | share |
   |---|---|---|---|
