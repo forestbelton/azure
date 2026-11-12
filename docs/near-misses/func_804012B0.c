@@ -48,6 +48,31 @@
  * second copy of the tail disappears), with and without a `def:` label, and
  * with the default arm inlined or returning directly.
  *
+ * Re-probed 2026-11-12 with reorg's own rules in hand, and the shape of the
+ * problem is now EXACT. `fill_simple_delay_slots` skips its "insns from
+ * beyond" block for an unconditional jump (reorg.c:2986: the guard requires
+ * `! simplejump_p`), and for the `beq` it does run but refuses the steal
+ * because the following `j`'s label is not the beq's own target
+ * (reorg.c:3104, `JUMP_LABEL (trial) == target`). So the target's
+ * `addiu $s1,$zero,5` in the beq's slot CANNOT have come from the def block
+ * behind the `j`: in the target's RTL it was already BEFORE the beq, which is
+ * `r = 5;` written ahead of the `if (st == 3)`.
+ *
+ * That spelling costs four words to CROSS-JUMPING, not to delay slots: the
+ * fail arm's `D_804094E8 = 0; goto out;` and the three arm's are an identical
+ * three-insn tail and gcc merges them. An empty volatile asm after the THREE
+ * arm's store breaks the merge and the measurement goes 58/26 -> 60/11, with
+ * the beq slot, the fail arm and the whole three arm then correct. What is
+ * left in that variant is two words at the very end: the target keeps
+ * `j .L80401390 / addu $v0,$s1,$zero` plus a separate one-insn
+ * `.L8040138C: addu $v0,$s1,$zero`, where gcc lays the three arm last and
+ * falls straight into `out:`. Swapping the arms, or putting the asm after
+ * the fail arm instead, is 61 and 27.
+ *
+ * So there are two routes, 62 words with 2 differing and 60 with 11, and
+ * neither is a spelling of the other's problem. The 62-word one is kept here
+ * because it is the one word-for-word candidate.
+ *
  * Its sibling func_804010F0 (live on_sw_card_eof) is the same state machine
  * and is not parked.
  */
