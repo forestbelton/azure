@@ -69,6 +69,8 @@ void func_8004DDBC(u32 *p, u8 *q, u32 *r);           /* func_8004CBFC */
 s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
 s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80047FD8(s32 *p);                           /* func_8004B4A8 */
+void func_80047938(s32 *p);                          /* func_8004AE08 */
+int func_8003FA78(char *fmt, ...);                   /* the debug printf */
 void func_80040560(s32 *p, u32 f);                   /* func_8004491C */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
@@ -129,6 +131,7 @@ void func_80402508(u8 *s, s32 a, s32 *x, s32 *y, s32 *z); /* func_8002225C */
 void func_80402670(s32 *c, s32 x, s32 y, s32 n, s32 z);   /* func_800223B4 */
 void func_8040274C(s32 *p);                          /* func_80022488 */
 void func_804027F8(s32 *p);                          /* func_800226A8 */
+void func_804024A4(s32 *p);                          /* twin-only */
 u8 *func_80402A1C(u8 *p, s32 *q);                    /* func_80022774 */
 void func_80402BE0(s32 *p);                          /* func_80022934 */
 s32 func_80402084(s32 a, u8 *b);                     /* write_save_file */
@@ -192,8 +195,13 @@ void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80404224(s32 *p);                          /* func_80023EC0 */
 void func_80404254(UnkTwinGrp1BC *c, s32 n);         /* func_80023EF4 */
+s32 func_80403AA0(s32 a);                            /* func_800237C4 */
 void func_80403AC8(UnkTwinGrp19C *c, s32 n);         /* func_800237EC */
+void func_80403B84(s32 *p, s32 v);                   /* func_80023894 */
+void func_804034D8(s32 *p);                          /* func_80023258 */
+s32 func_80407AEC(s32 a);                            /* func_80027254 */
 void func_80407B14(UnkTwinGrp0D4 *c, s32 n);         /* func_8002727C */
+void func_80407BD0(s32 *p, s32 v);                   /* func_80027324 */
 void func_804054E8(s32 *p);                          /* func_80024A50 */
 s32 func_804056CC(s32 a);                            /* func_80024C48 */
 void func_804056F4(UnkTwinGrpAEC *c, s32 n);         /* func_80024C70 */
@@ -258,10 +266,14 @@ void func_804081AC(s32 *p);                          /* func_8002789C */
 void func_804083A0(s32 *p);                          /* func_80027A9C */
 s32 *func_804083FC(s32 a, s32 b);                    /* func_80027AFC */
 void func_804084DC(s32 *p);                          /* func_80027C90 */
+long func_80408644(long chan);                       /* B0:0x5C, _card_status */
 long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
 /* libcard's own BIOS stubs, four words each and not expressible in C. */
+void func_804087A8(void);                            /* twin-only, 4 words */
+void func_804087B8(void);                            /* twin-only, 4 words */
+void func_804087C8(void);                            /* twin-only */
 void func_80408730(void);                            /* func_80027D7C */
 long func_80408798(long pad_enable);                 /* B0:0x4A, init_card */
 long func_804088A0(void);                            /* B0:0x4B, start_card */
@@ -336,8 +348,17 @@ extern UnkTwinWord D_801379B0;                       /* D_80083160.unk_10 */
 extern s32 D_8013BB6C;                               /* THIS link's card_first_flg; the live
                                                         start_card_server's is D_80084130 */
 extern s32 D_8009E394;                               /* the word after D_8009E390 */
+extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 extern const char D_80400004[40];                    /* ASSERT_FMT */
+extern char D_80400090[];                            /* "card_slot = %d\n" and friends */
+extern char D_8040009C[];
+extern char D_804000A4[];
+extern char D_804000B0[];
+extern char D_804000BC[];
+extern char D_804000D0[];
+extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern char D_80400120[];
 extern char D_80400038[];                            /* "%s = %d\n" */
 extern char D_80400044[];                            /* "card_first_flg" */
 extern char D_804000F8[];                            /* the format_card counter's name */
@@ -393,7 +414,13 @@ extern u8 D_80408C9C[];                              /* D_80027F68 */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
 extern u8 D_80409508[];                              /* D_800287E8 */
+extern u8 D_80409C90[];                              /* D_800291D0 */
 extern u8 D_8040A0F0[][0x360];                       /* five 0x360-byte groups */
+extern u8 D_8040C420[];                              /* D_8002B968 */
+extern const char D_804005A0[40];                    /* card_opt.c's ASSERT_FMT copy */
+extern const char D_804005C8[];                      /* its filename */
+extern const char D_804007D8[40];                    /* cardsme.c's ASSERT_FMT copy */
+extern const char D_80400800[];                      /* its filename */
 extern const char D_804005F8[40];                    /* another unit's ASSERT_FMT copy */
 extern const char D_80400620[];                      /* its filename */
 extern u8 D_8040B4F8[];                              /* D_8002A990 */

@@ -621,6 +621,10 @@ s32 func_804010E0(void)
     return D_804094E8;
 }
 
+/* NEAR MISS, 79 of 79 words, 2 differing: one delay slot that reorg fills
+ * with a duplicate of `out:`'s `addu $v0,$s0,$zero` where the target leaves a
+ * nop, and the one word that follows it. Source in
+ * docs/near-misses/func_804010F0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804010F0);
 
 s32 func_8040122C(void)
@@ -644,6 +648,11 @@ s32 func_8040122C(void)
     return r;
 }
 
+/* NEAR MISS, 62 of 62 words, 2 differing -- one delay slot. Was 8 before the
+ * two levers below; what is left is that the target puts the default arm's
+ * `addiu $s1,$zero,5` in the `beq $s0,$v0,.L8040135C` delay slot and leaves
+ * the following `j`'s slot empty, and gcc does it the other way round.
+ * Source in docs/near-misses/func_804012B0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804012B0);
 
 s32 func_804013A8(void)
@@ -847,7 +856,18 @@ s32 *func_804017EC(void)
     return D_804094F8;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804018FC);
+/* print_card_status, which is EMPTY in the live block and prints six lines
+ * here. That is the clearest single piece of evidence that this block is a
+ * debug build of the same source. */
+void func_804018FC(void)
+{
+    func_8003FA78(D_80400090, D_804094EC);
+    func_8003FA78(D_8040009C, D_804094E8);
+    func_8003FA78(D_804000A4, D_80409500);
+    func_8003FA78(D_804000B0, D_80409504);
+    func_8003FA78(D_804000BC, func_80408644(0));
+    func_8003FA78(D_804000D0, func_80408644(1));
+}
 
 int func_804019A4(void)
 {
@@ -1123,7 +1143,21 @@ void func_80401ED4(s32 idx, u8 *src)
 /* Prints `(int)gsw->check_sum` after storing it, so the parameter is `gsw` and
    the word at +0x204 is its `check_sum` member -- GSW_CHECK_SUM in csrc/main.h,
    now used by the live set_gsw_checksum/check_gsw_checksum. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401F98);
+/* Live set_gsw_checksum, with FOUR more words in the run and a printf after. */
+void func_80401F98(s32 *gsw)
+{
+    s32 sum = 0;
+    s32 *q = gsw + 0x82;
+    s32 n = 0x1781;
+
+    do
+    {
+        sum ^= *q++;
+        n--;
+    } while (n >= 0);
+    gsw[0x81] = sum;
+    func_8007C040(D_80400114, D_80400120);
+}
 
 /* Prints both halves of the comparison: `c` (the xor accumulator) and then
    `(int)gsw->check_sum`. The live check_gsw_checksum's accumulator is now `c`. */
@@ -1189,7 +1223,22 @@ void func_804023C4(void)
     func_804022C8(5);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804023E4);
+/* The flag has to be read into a local and `p` decremented IN PLACE: the
+ * target reuses $s0 for both and puts the `addiu $s0,$s0,-0x20` in the
+ * beqz's delay slot. A separate `q = p - 8` costs the extra register and
+ * leaves the slot empty. */
+void func_804023E4(s32 *p)
+{
+    s32 v;
+
+    func_80047938(p);
+    v = ((u16 *)p)[-1];
+    p -= 8;
+    if (v & 0x2000)
+    {
+        func_804024A4(p);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402428);
 
@@ -1427,7 +1476,13 @@ void func_80402DF0(UnkTwinGrp670 *c, s32 n)
     c->shared[2] = D_8002D6A8.unk_00;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402EA4);
+void func_80402EA4(s32 *p, s32 a, s32 b, s32 c, s32 d)
+{
+    p[5] = a;
+    p[2] = b;
+    p[3] = c;
+    p[8] = d;
+}
 
 void func_80402EBC(s32 *p, s32 a, s32 b, s32 c, s32 d)
 {
@@ -1793,7 +1848,38 @@ void func_80403B84(s32 *p, s32 v)
     func_804038C8(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403BC4);
+/* Live func_800238D4, the same allocator over the UnkTwinGrp19C: root at
+ * r[0x6A], unk_0C at r[0x6D], ptrs at r[0x6E]. */
+s32 *func_80403BC4(s32 *p)
+{
+    s32 *q = (s32 *)D_80409C90;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_80409C90, 0x118);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_804005A0, D_804005C8, 0x151);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_80403D24(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x440);
+    }
+    func_80403AC8((UnkTwinGrp19C *)r, 0x12);
+    q[3] = (s32)(r + 0x6A);
+    r[0x6D] = func_80403AA0((s32)(r + 0x6E));
+    func_80403B84(r, (s32)p);
+    q[4] = (s32)func_804034D8;
+    func_804034D8(r);
+    return q;
+}
 
 void func_80403CD4(s32 **pp)
 {
@@ -3715,7 +3801,19 @@ void func_804077D4(s32 *p)
     D_8008DAB4 |= 0x8000;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407830);
+void func_80407830(s32 *p, s32 a)
+{
+    s32 *q = p + 8;
+
+    if (p == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_804007A4, D_804007CC, 0x153);
+        func_8007BEF0(1);
+    }
+    p[0x11] = a;
+    func_80407160(q);
+}
 
 void func_8040787C(s32 *p, s32 *b, s32 *c)
 {
@@ -3824,7 +3922,38 @@ void func_80407BD0(s32 *p, s32 v)
     func_80407964(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407C10);
+/* Live func_80027364, a group allocator of the same family as
+ * func_804057F0 and the rest, with the assert this build carries. The
+ * UnkTwinGrp0D4's root is at r[0x38], its unk_0C at r[0x3B], ptrs at
+ * r[0x3C]. */
+s32 *func_80407C10(s32 *p)
+{
+    s32 *q = (s32 *)D_8040C420;
+    s32 *r = q + 8;
+
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, D_8040C420, 0x68);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_804007D8, D_80400800, 0xEE);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_80403D24(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x180);
+    }
+    func_80407B14((UnkTwinGrp0D4 *)r, 4);
+    q[3] = (s32)(r + 0x38);
+    r[0x3B] = func_80407AEC((s32)(r + 0x3C));
+    func_80407BD0(r, (s32)p);
+    return q;
+}
 
 void func_80407D0C(s32 *p)
 {
@@ -3996,9 +4125,19 @@ void func_8040855C(s32 *p)
     func_804083FC((s32)p, 1);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040859C);
+void func_8040859C(s32 *p)
+{
+    D_8008CA34 = 1;
+    func_80400E34();
+    func_804083FC((s32)p, 2);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804085DC);
+void func_804085DC(s32 *p)
+{
+    D_8008CA34 = 1;
+    func_80400E34();
+    func_804083FC((s32)p, 0);
+}
 
 /* NEAR MISS, 9 words of 10, 5 differing: `short func_8040861C(void) { return
  * func_8004DBDC(); }` is right in the body and wrong in the EPILOGUE. gcc 2.7.2
@@ -4026,10 +4165,10 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408674);
 /* Live func_80027D0C. TWO REVISION DIFFERENCES: func_804086BC takes THREE
  * arguments here and the second is 0x3F, not 1. It is a BIOS 0xB0:0x4E stub,
  * so the listing is the only authority on its arity. */
-void func_80408684(s32 *p)
+long func_80408684(long chan)
 {
     func_804086CC();
-    func_804086BC((s32)p, 0x3F, 0);
+    return func_804086BC(chan, 0x3F, 0);
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086BC);
@@ -4049,9 +4188,20 @@ void func_804086DC(long pad_enable)
     func_8007CA48();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408730);
+void func_80408730(void)
+{
+    func_8007CA38();
+    func_804087A8();
+    func_8007CB08(0);
+    func_8007CA48();
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408768);
+void func_80408768(void)
+{
+    func_804087B8();
+    func_80408958();
+    func_804087C8();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408798);
 
