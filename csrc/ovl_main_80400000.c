@@ -1438,8 +1438,13 @@ s32 func_80402290(void)
 
 /* The other `cnt` site; see func_80401B30. The live erase_save_file has no
    counter either. */
-/* NEAR MISS, 63 of 63 words, 4 differing -- two registers swapped in the
- * free-block fixup. Source in docs/near-misses/func_804022C8.c. */
+/* NEAR MISS, 63 of 63 words, 7 differing -- and the park was REBUILT on a
+ * worse-counting, better-shaped candidate on 2026-11-12. Every one of the 7
+ * is a register NAME: `q` gets $a0 and the flag $a1 where the target has $v0
+ * and $a0, because the INDEX pseudo of `D_8009DDD8[idx][0] = 0` holds $v0
+ * and gcc emits the `q = w` copy with the declarations, ahead of it. Write
+ * that store with a constant index and the whole fixup is byte-exact.
+ * Source in docs/near-misses/func_804022C8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804022C8);
 
 void func_804023C4(void)
