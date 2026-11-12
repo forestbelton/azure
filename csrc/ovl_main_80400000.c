@@ -412,9 +412,110 @@ long func_804009FC(void)
     return 0;
 }
 
-/* NEAR MISS: seven unfilled branch delay slots; the target steals each next call's $a1 constant into the preceding bne's slot
-   Source in docs/near-misses/func_80400A10.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
+/* open_card_events, sixteen assert sites. Two things beyond the renames.
+ *
+ * NORETURN on func_8007BEF0 is what finally landed this. The seven delay
+ * slots that used to come out empty are the ones where the target steals the
+ * NEXT call's $a1 event constant into the preceding `bnez`: reorg will only
+ * do that if the assert arm cannot fall through, and without the attribute
+ * gcc treats it as an ordinary pair of calls that return.
+ *
+ * The LINE NUMBERS are this block's, not the live source's -- an offset of
+ * -5 from the live open_card_events, per function -- and they come from
+ * `tools/assertmap.py --sites`, which reads them out of the block. */
+void func_80400A10(void)
+{
+    func_8007CA38();
+    D_80409270 = func_8007C998(SwCARD, EvSpIOE, EvMdNOINTR, NULL);
+    if (D_80409270 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 180);
+        func_8007BEF0(1);
+    }
+    D_80409274 = func_8007C998(SwCARD, EvSpERROR, EvMdNOINTR, NULL);
+    if (D_80409274 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 182);
+        func_8007BEF0(1);
+    }
+    D_80409278 = func_8007C998(SwCARD, EvSpTIMOUT, EvMdNOINTR, NULL);
+    if (D_80409278 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 184);
+        func_8007BEF0(1);
+    }
+    D_8040927C = func_8007C998(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
+    if (D_8040927C == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 186);
+        func_8007BEF0(1);
+    }
+    D_80409280 = func_8007C998(HwCARD, EvSpIOE, EvMdINTR, func_804009C0);
+    if (D_80409280 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 189);
+        func_8007BEF0(1);
+    }
+    D_80409284 = func_8007C998(HwCARD, EvSpERROR, EvMdINTR, func_804009D4);
+    if (D_80409284 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 191);
+        func_8007BEF0(1);
+    }
+    D_80409288 = func_8007C998(HwCARD, EvSpTIMOUT, EvMdINTR, func_804009E8);
+    if (D_80409288 == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 193);
+        func_8007BEF0(1);
+    }
+    D_8040928C = func_8007C998(HwCARD, EvSpNEW, EvMdINTR, func_804009FC);
+    if (D_8040928C == -1)
+    {
+        func_8007C040(D_80400004, D_8040002C, 195);
+        func_8007BEF0(1);
+    }
+    func_8007CA48();
+    if (func_8007C9D8(D_80409270) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 207);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_80409274) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 209);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_80409278) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 211);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_8040927C) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 213);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_80409280) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 215);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_80409284) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 217);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_80409288) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 219);
+        func_8007BEF0(1);
+    }
+    if (func_8007C9D8(D_8040928C) == 0)
+    {
+        func_8007C040(D_80400004, D_8040002C, 221);
+        func_8007BEF0(1);
+    }
+}
 
 /* The `card_first_flg` site. This opens with
    `printf("%s = %d\n", "card_first_flg", D_8013BB6C)` and then tests and sets
@@ -1302,7 +1403,29 @@ s32 func_80402DC8(s32 a)
     return func_80047358(a, D_80408C84, 6);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402DF0);
+/* Live func_80022B48, the UnkTwinGrp670 instance of the five-way template builder. The
+ * group is 0x670 bytes of padding where the live one is a different size, and the
+ * two templates are this block's own D_8002D690/D_8002D6A0 pair -- the first
+ * through a BASE POINTER (one lui, four offsets) and the trailing three as
+ * separate absolutes. */
+void func_80402DF0(UnkTwinGrp670 *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = D_8002D690_a[0];
+        c->prims[i][1] = D_8002D690_a[1];
+        c->prims[i][2] = D_8002D690_a[2];
+        c->prims[i][3] = D_8002D690_a[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002D6A0.unk_00;
+    c->shared[1] = D_8002D6A4.unk_00;
+    c->shared[2] = D_8002D6A8.unk_00;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402EA4);
 
@@ -1359,7 +1482,7 @@ s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p)
         ((u16 *)q)[15] &= 0x7FFF;
         func_8007BFE0((u8 *)r, 0x764);
     }
-    func_80402DF0(r, 6);
+    func_80402DF0((UnkTwinGrp670 *)r, 6);
     q[3] = (s32)(r + 0x19F);
     r[0x1A2] = func_80402DC8((s32)(r + 0x1A3));
     func_80402EBC(r, a, id, kind, p);
@@ -1634,7 +1757,29 @@ s32 func_80403AA0(s32 a)
     return func_80047358(a, D_80408C9C, 0x12);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403AC8);
+/* Live func_800237EC, the UnkTwinGrp19C instance of the five-way template builder. The
+ * group is 0x19C bytes of padding where the live one is a different size, and the
+ * two templates are this block's own D_8002D690/D_8002D6A0 pair -- the first
+ * through a BASE POINTER (one lui, four offsets) and the trailing three as
+ * separate absolutes. */
+void func_80403AC8(UnkTwinGrp19C *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = D_8002D690_a[0];
+        c->prims[i][1] = D_8002D690_a[1];
+        c->prims[i][2] = D_8002D690_a[2];
+        c->prims[i][3] = D_8002D690_a[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002D6A0.unk_00;
+    c->shared[1] = D_8002D6A4.unk_00;
+    c->shared[2] = D_8002D6A8.unk_00;
+}
 
 void func_80403B7C(s32 *p, s32 v)
 {
@@ -1804,7 +1949,29 @@ s32 func_8040422C(s32 a)
     return func_80047358(a, D_80408CB8, 0xA);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404254);
+/* Live func_80023EF4, the UnkTwinGrp1BC instance of the five-way template builder. The
+ * group is 0x1BC bytes of padding where the live one is a different size, and the
+ * two templates are this block's own D_8002D690/D_8002D6A0 pair -- the first
+ * through a BASE POINTER (one lui, four offsets) and the trailing three as
+ * separate absolutes. */
+void func_80404254(UnkTwinGrp1BC *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = D_8002D690_a[0];
+        c->prims[i][1] = D_8002D690_a[1];
+        c->prims[i][2] = D_8002D690_a[2];
+        c->prims[i][3] = D_8002D690_a[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002D6A0.unk_00;
+    c->shared[1] = D_8002D6A4.unk_00;
+    c->shared[2] = D_8002D6A8.unk_00;
+}
 
 void func_80404308(s32 *p, s32 a, s32 b)
 {
@@ -1819,15 +1986,57 @@ void func_80404314(s32 *p, s32 a, s32 b)
     func_80404178(p);
 }
 
-/* NEAR MISS, 93 of 93 words. The body is right -- one of five 0x360-byte
- * groups picked by index, with THREE asserts the live build has no
- * counterpart for (the index is bounds-checked at both ends) and raw word
- * indices off r: root at r[0x72], its unk_0C at r[0x75], ptrs at r[0x76].
- * What is wrong is register allocation: plainly written, `n` outranks `r` in
- * global.c's allocno order and the two take $s1 and $s2 the other way round,
- * 16 differing with every other word already correct. Source in
- * docs/near-misses/func_80404364.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404364);
+/* One of five 0x360-byte groups, picked by index, with THREE asserts the
+ * live func_80023FF0 has no counterpart for: the index is bounds-checked at
+ * both ends before the group is touched. Raw word indices off r: root at
+ * r[0x72], its unk_0C at r[0x75], ptrs at r[0x76].
+ *
+ * It needed func_8007BEF0 declared NORETURN. Without it `n` outranks `r` in
+ * global.c's allocno order and the two take $s1 and $s2 the other way round
+ * -- 16 differing with every other word already right -- because the three
+ * assert arms look like ordinary calls that come back, which lengthens every
+ * live range that spans them. */
+s32 *func_80404364(s32 a, s32 n)
+{
+    s32 *q = (s32 *)D_8040A0F0[n];
+    s32 *r = q + 8;
+
+    if (n >= 5)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_804005F8, D_80400620, 0x12B);
+        func_8007BEF0(1);
+    }
+    if (n < 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_804005F8, D_80400620, 0x12C);
+        func_8007BEF0(1);
+    }
+    if (func_80047FD8(q) == 0)
+    {
+        q = func_8003C714(0, (u8 *)q, 0xD8);
+        if (q == 0)
+        {
+            __asm__ volatile("");
+            func_8007C040(D_804005F8, D_80400620, 0x12F);
+            func_8007BEF0(1);
+        }
+        func_80040560(q, (u32)func_8040861C);
+    }
+    else
+    {
+        func_80404570(q);
+        ((u16 *)q)[15] &= 0x7FFF;
+        func_8007BFE0((u8 *)r, 0x340);
+    }
+    func_80404254(r, 0xA);
+    q[3] = (s32)(r + 0x72);
+    r[0x75] = func_8040422C((s32)(r + 0x76));
+    func_80404314(r, a, n);
+    q[4] = (s32)func_80404224;
+    return q;
+}
 
 void func_804044D8(s32 *p)
 {
@@ -2337,7 +2546,29 @@ s32 func_804056CC(s32 a)
     return func_80047358(a, D_80408D28, 0x15);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804056F4);
+/* Live func_80024C70, the UnkTwinGrpAEC instance of the five-way template builder. The
+ * group is 0xAEC bytes of padding where the live one is a different size, and the
+ * two templates are this block's own D_8002D690/D_8002D6A0 pair -- the first
+ * through a BASE POINTER (one lui, four offsets) and the trailing three as
+ * separate absolutes. */
+void func_804056F4(UnkTwinGrpAEC *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = D_8002D690_a[0];
+        c->prims[i][1] = D_8002D690_a[1];
+        c->prims[i][2] = D_8002D690_a[2];
+        c->prims[i][3] = D_8002D690_a[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002D6A0.unk_00;
+    c->shared[1] = D_8002D6A4.unk_00;
+    c->shared[2] = D_8002D6A8.unk_00;
+}
 
 void func_804057A8(s32 *p, s32 v)
 {
@@ -2381,7 +2612,7 @@ s32 *func_804057F0(s32 *p, s32 a)
         func_8007BFE0((u8 *)r, 0xDFC);
     }
     r[0x1F] = a;
-    func_804056F4((UnkCardGrpB20 *)r, 0x15);
+    func_804056F4((UnkTwinGrpAEC *)r, 0x15);
     q[3] = (s32)(r + 0x2BE);
     r[0x2C1] = func_804056CC((s32)(r + 0x2C2));
     func_804057B0(r, (s32)p);
@@ -2588,7 +2819,7 @@ void func_80405C4C(s32 *p)
         v = 3;
     }
     D_80011F48 = v;
-    func_8003D548(D_80010208 != 0 ? 5 : 4);
+    func_8003D548(D_80010208.unk_00 != 0 ? 5 : 4);
 }
 
 void func_80405CB8(s32 *p)
@@ -2638,7 +2869,44 @@ void func_80405D54(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405DE0);
+/* Live func_80025398. Four differences: func_80402154 takes two arguments
+ * here, the live func_80025358 call is a plain `D_80010208.unk_00 = 0;`, the loop
+ * calls func_80404688 rather than func_80404C84, and the fail arm's two
+ * handlers are func_80406368 and func_80405A3C where the live one has
+ * func_80024FFC twice over. */
+void func_80405DE0(s32 *p)
+{
+    u8 *b = (u8 *)0x80010000;
+    s32 i;
+    s32 off;
+
+    if (func_80402154(p[11], b) == 0)
+    {
+        goto fail;
+    }
+    D_80010208.unk_00 = 0;
+    if (func_80402084(p[10], b) == 0)
+    {
+        goto fail;
+    }
+    func_80405C44(b);
+    func_80402214();
+    off = 0;
+    for (i = 0; i < 5; i++)
+    {
+        func_80404688((s32 *)p[off + 1]);
+        off++;
+    }
+    func_80405AB4(p);
+    goto done;
+fail:
+    p[13] = (s32)func_80406368;
+    func_8040334C((s32)(p - 8));
+    p[-4] = (s32)func_80405A3C;
+done:
+    func_80400908();
+    p[16] = 0;
+}
 
 void func_80405EAC(s32 *p)
 {
@@ -3017,7 +3285,7 @@ void func_80406AA8(s32 *p)
     {
         func_80405A00((s32 *)p[1], p[11]);
         func_80404688((s32 *)p[p[11] + 3]);
-        if (D_80010208 != 0)
+        if (D_80010208.unk_00 != 0)
         {
             p[-4] = (s32)func_80406A74;
         }
@@ -3370,7 +3638,28 @@ s32 func_804075A8(s32 a)
     return func_80047358(a, D_80408D64, 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804075D0);
+/* The sixth of the family, and the one whose ptrs is a POINTER at c[0x18]
+ * rather than an inline array -- same revision difference as func_804072CC,
+ * func_80407458 and func_804074C4. Raw word indices: shared at c[0x11],
+ * ents at c[0x19], prims at c[0x29]. */
+void func_804075D0(s32 *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        ((UnkCardPair **)c[0x18])[i] = (UnkCardPair *)&c[0x19 + i * 4];
+        c[0x29 + i * 4] = D_8002D690_a[0];
+        c[0x2A + i * 4] = D_8002D690_a[1];
+        c[0x2B + i * 4] = D_8002D690_a[2];
+        c[0x2C + i * 4] = D_8002D690_a[3];
+        c[0x1A + i * 4] = (s32)&c[0x29 + i * 4];
+        c[0x1B + i * 4] = (s32)&c[0x11];
+    }
+    c[0x11] = D_8002D6A0.unk_00;
+    c[0x12] = D_8002D6A4.unk_00;
+    c[0x13] = D_8002D6A8.unk_00;
+}
 
 void func_80407688(s32 *p, s32 v)
 {
@@ -3405,7 +3694,7 @@ s32 *func_804076C8(s32 *p)
         ((u16 *)q)[15] &= 0x7FFF;
         func_8007BFE0((u8 *)r, 0xE4);
     }
-    func_804075D0((UnkCardGrp044 *)r, 4);
+    func_804075D0(r, 4);
     q[3] = (s32)(r + 0x14);
     r[0x17] = func_804075A8(r[0x18]);
     func_80407688(r, (s32)p);
@@ -3413,7 +3702,18 @@ s32 *func_804076C8(s32 *p)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804077D4);
+/* Live func_80026FB4 plus an assert on the pointer. */
+void func_804077D4(s32 *p)
+{
+    if (p == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_804007A4, D_804007CC, 0x14B);
+        func_8007BEF0(1);
+    }
+    ((u16 *)p)[15] |= 0x8000;
+    D_8008DAB4 |= 0x8000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407830);
 
@@ -3488,7 +3788,29 @@ s32 func_80407AEC(s32 a)
     return func_80047358(a, D_80408D74, 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407B14);
+/* Live func_8002727C, the UnkTwinGrp0D4 instance of the five-way template builder. The
+ * group is 0xD4 bytes of padding where the live one is a different size, and the
+ * two templates are this block's own D_8002D690/D_8002D6A0 pair -- the first
+ * through a BASE POINTER (one lui, four offsets) and the trailing three as
+ * separate absolutes. */
+void func_80407B14(UnkTwinGrp0D4 *c, s32 n)
+{
+    s32 i;
+
+    for (i = 0; i < n; i++)
+    {
+        c->ptrs[i] = &c->ents[i];
+        c->prims[i][0] = D_8002D690_a[0];
+        c->prims[i][1] = D_8002D690_a[1];
+        c->prims[i][2] = D_8002D690_a[2];
+        c->prims[i][3] = D_8002D690_a[3];
+        c->ents[i].unk_04 = (UnkCardPrim *)c->prims[i];
+        c->ents[i].unk_08 = (UnkCardPrim12 *)c->shared;
+    }
+    c->shared[0] = D_8002D6A0.unk_00;
+    c->shared[1] = D_8002D6A4.unk_00;
+    c->shared[2] = D_8002D6A8.unk_00;
+}
 
 void func_80407BC8(s32 *p, s32 v)
 {

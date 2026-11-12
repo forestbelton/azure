@@ -30,6 +30,28 @@
 
 #include "main.h"
 
+/* The group types this block builds, in main.h's UNK_CARD_GROUP shape. Every
+ * one of them is a different size from the live block's: the padding before
+ * the four-word root primitive is what moved, and with it every offset after
+ * it. They are derived from the five builders' own listings -- shared at
+ * `pad`, ptrs at pad+0x1C, ents after the ptrs array, prims after the ents --
+ * not from a symmap vote. */
+UNK_CARD_GROUP(UnkTwinGrp0D4, 0xD4, 4);    /* func_80407B14; the live UnkCardGrp0D4's size */
+UNK_CARD_GROUP(UnkTwinGrp19C, 0x19C, 18);  /* func_80403AC8; live UnkCardGrp184 */
+UNK_CARD_GROUP(UnkTwinGrp1BC, 0x1BC, 10);  /* func_80404254; live UnkCardGrp240 */
+UNK_CARD_GROUP(UnkTwinGrp670, 0x670, 6);   /* func_80402DF0; live UnkCardGrp8B0 */
+UNK_CARD_GROUP(UnkTwinGrpAEC, 0xAEC, 21);  /* func_804056F4; live UnkCardGrpB20 */
+
+/* A single word that has to read as a STRUCT rather than a scalar. Used for
+ * the pairs whose reads must CONFLICT with a store through a pointer: cse's
+ * invalidate_memory and sched.c's true_dependence both excuse a
+ * fixed-address NON-struct MEM against a varying-address struct one, so a
+ * plain `extern u32` survives stores the target reloads after. */
+typedef struct
+{
+    u32 unk_00;
+} UnkTwinWord;
+
 /* --- functions, in address order --- */
 void func_8003D548(s32 a);                           /* func_80040AA0 */
 s32 func_80047358(s32 a, u8 *fmt, s32 n);            /* func_800491F4 */
@@ -70,7 +92,10 @@ struct DIRENTRY *func_8007CAB8(u8 *name, struct DIRENTRY *e);  /* firstfile2 */
 struct DIRENTRY *func_8007CAC8(struct DIRENTRY *e);  /* nextfile */
 u_short func_80078570(int tp, int abr, int x, int y); /* GetTPage */
 u_short func_80078640(int x, int y);                 /* GetClut */
-void func_8007BEF0();                                /* exit, psyq/include/stdlib.h */
+/* exit, psyq/include/stdlib.h. NORETURN is load-bearing: func_804077D4 keeps
+ * its argument in $a0 across the assert call, which only works if gcc knows
+ * the assert arm never returns. */
+void func_8007BEF0() __attribute__((noreturn));
 int func_8007C040(char *fmt, ...);                   /* printf */
 long func_8007C998(unsigned long, long, long, long (*func)()); /* OpenEvent */
 long func_8007C9A8(long);                            /* CloseEvent */
@@ -118,7 +143,7 @@ s32 func_804022C8(s32 idx);                          /* erase_save_file */
 void func_80402974(UnkCardPair *p, u32 *a, u32 *b);  /* func_800226E0 */
 u8 *func_80402CD4(u8 *p, s32 *q);                    /* func_80022A30 */
 void func_80402EA4(s32 *p, s32 a, s32 b, s32 c, s32 d); /* func_80022C48 */
-void func_80402DF0(s32 *c, s32 n);                   /* func_80022B48 */
+void func_80402DF0(UnkTwinGrp670 *c, s32 n);         /* func_80022B48 */
 s32 func_80402DC8(s32 a);                            /* func_80022B20 */
 void func_80402EBC(s32 *c, s32 a, s32 id, s32 kind, s32 p); /* func_80022C90 */
 s32 func_80402F84(s32 a, s32 id, s32 kind, s32 p);   /* open_card_message */
@@ -166,10 +191,12 @@ void func_804053A0(s32 *p);                          /* func_80024818 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80404224(s32 *p);                          /* func_80023EC0 */
-void func_80404254(s32 *c, s32 n);                   /* func_80023EF4 */
+void func_80404254(UnkTwinGrp1BC *c, s32 n);         /* func_80023EF4 */
+void func_80403AC8(UnkTwinGrp19C *c, s32 n);         /* func_800237EC */
+void func_80407B14(UnkTwinGrp0D4 *c, s32 n);         /* func_8002727C */
 void func_804054E8(s32 *p);                          /* func_80024A50 */
 s32 func_804056CC(s32 a);                            /* func_80024C48 */
-void func_804056F4(UnkCardGrpB20 *c, s32 n);         /* func_80024C70 */
+void func_804056F4(UnkTwinGrpAEC *c, s32 n);         /* func_80024C70 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
 s32 *func_804057F0(s32 *p, s32 a);                  /* func_80024D58 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
@@ -211,7 +238,7 @@ void func_804073B0(UnkCardPair *p, u32 *a, u32 *b);  /* func_80026C00 */
 void func_80407458(s32 *p);                          /* func_80026C94 */
 void func_804074C4(s32 *p);                          /* func_80026CF0 */
 void func_80407558(UnkCardGrp044 *c);             /* func_80026D78 */
-void func_804075D0(UnkCardGrp044 *c, s32 n);         /* func_80026DF0 */
+void func_804075D0(s32 *c, s32 n);                   /* func_80026DF0 */
 s32 func_804075A8(s32 a);                            /* func_80026DC8 */
 void func_80407688(s32 *p, s32 v);                   /* func_80026E90 */
 /* ONE argument, where the live func_80026ED0 takes two: there is no r[9]
@@ -253,14 +280,19 @@ extern u32 D_8002D690_a[] __asm__("D_8002D690");
 extern u32 D_8002D694;                               /* D_8002E5D8[1] */
 extern u32 D_8002D698;                               /* D_8002E5D8[2] */
 extern u32 D_8002D69C;                               /* D_8002E5D8[3] */
-extern u32 D_8002D6A0;                               /* D_8002E5E8[0] */
+/* The 3-word template's words, each in its OWN one-member struct: the five
+ * builders store them into `c->shared[i]` through a pointer and the target
+ * does lw / nop / sw three times, so the store and the load have to
+ * conflict. As plain `extern u32` gcc batches the three loads ahead of the
+ * three stores and the function comes out three words short. */
+extern UnkTwinWord D_8002D6A0;                       /* D_8002E5E8[0] */
 /* and the ARRAY spelling of the 3-word template, for the five functions that
  * copy both templates into a caller-supplied buffer -- the live source reads
  * them as `u32 *s = D_8002E5E8;` and so must this, or the seven absolute
  * loads come out hoisted into four registers instead of reusing $v0. */
 extern u32 D_8002D6A0_a[] __asm__("D_8002D6A0");
-extern u32 D_8002D6A4;                               /* D_8002E5E8[1] */
-extern u32 D_8002D6A8;                               /* D_8002E5E8[2] */
+extern UnkTwinWord D_8002D6A4;                       /* D_8002E5E8[1] */
+extern UnkTwinWord D_8002D6A8;                       /* D_8002E5E8[2] */
                              /* D_8002E5D8, the 4-word GPU template, in the OTHER engine build */
                              /* D_8002E5E8, the 3-word one */
 extern u8 D_80084110[];                              /* D_80027F7C */
@@ -268,7 +300,9 @@ extern u8 D_800841DC[];                              /* D_80079054 */
 extern u8 D_8008423C[];                              /* D_800790B4 */
 extern u8 D_8008429C[];                              /* D_80079114 */
 extern u8 D_8008432C[];                              /* D_800791A4 */
-extern s32 D_80010208;                               /* live b[0x104], read as a WORD here */
+extern UnkTwinWord D_80010208;                       /* live b[0x104], a WORD here, and a STRUCT
+                                                        so that func_80405DE0's store to it does not
+                                                        float past a load through a pointer */
 extern u16 D_80011F48;                               /* live b[0x1B8A], a different address in this link */
 extern u8 D_8008CA34;                                /* a BYTE, written by six functions in this
                                                         block and by nothing in the live one */
@@ -297,10 +331,6 @@ extern s32 D_80136140[];                             /* card_file_count, D_80084
  *   one struct, or as `extern u32 x[]` read at [0], gcc keeps each base in a
  *   callee-saved register instead of re-materialising the %hi at every read.
  * The live source reaches the same pair as D_80083160.unk_08 and .unk_10. */
-typedef struct
-{
-    u32 unk_00;
-} UnkTwinWord;
 extern UnkTwinWord D_801379A8;                       /* D_80083160.unk_08 */
 extern UnkTwinWord D_801379B0;                       /* D_80083160.unk_10 */
 extern s32 D_8013BB6C;                               /* THIS link's card_first_flg; the live
