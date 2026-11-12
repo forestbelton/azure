@@ -88,7 +88,10 @@ char *func_8007BF50(char *d, char *s);               /* strcat */
 char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
 long func_8007C958(void);                            /* a libcard init call */
+long func_8007BF18(const char *s);                   /* puts */
 long func_8007CAA8(const char *name);                /* format */
+long func_8007CAD8(const char *a, const char *b);    /* rename */
+long func_8007CAE8(const char *name);                /* erase */
 long func_8007CB08(long);                            /* ChangeClearPAD */
 struct DIRENTRY *func_8007CAB8(u8 *name, struct DIRENTRY *e);  /* firstfile2 */
 struct DIRENTRY *func_8007CAC8(struct DIRENTRY *e);  /* nextfile */
@@ -124,6 +127,9 @@ void func_804018FC(void);                            /* print_card_status */
 s32 func_804019B4(void);                             /* count_card_files */
 s32 func_80401B30(s32 card_slot);                     /* format_card */
 s32 func_80401C70(u8 *name, u8 *buf, s32 n, s32 off); /* read_card_file */
+s32 func_80401D28(u8 *name, u8 *buf, s32 n, s32 off, s32 skip); /* write_card_file */
+void func_80401ED4(s32 idx, u8 *src);                /* store_save_slot_info */
+s32 func_80401FEC(s32 *gsw);                         /* check_gsw_checksum */
 s32 func_80401E2C(s32 n);                            /* load_save_slot_info */
 u8 *func_804025B8(s32 *a, u8 *p, s32 n);             /* func_80022300 */
 void func_804025F8(u8 *p, s32 idx, s32 n);           /* func_8002233C */
@@ -195,6 +201,7 @@ void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80404224(s32 *p);                          /* func_80023EC0 */
 void func_80404254(UnkTwinGrp1BC *c, s32 n);         /* func_80023EF4 */
+void func_804033EC(s32 **pp);                        /* twin-only */
 s32 func_80403AA0(s32 a);                            /* func_800237C4 */
 void func_80403AC8(UnkTwinGrp19C *c, s32 n);         /* func_800237EC */
 void func_80403B84(s32 *p, s32 v);                   /* func_80023894 */
@@ -327,6 +334,7 @@ extern u8 D_80083834[];                              /* D_800786DC */
 extern u8 D_80083840[];                              /* D_800786E8 */
 extern s32 D_8009DDD8[][32];                         /* D_80083E98, the 0x80-byte save-slot row */
 extern s32 D_8009EB58[];                             /* card_free_blocks, D_80084120 */
+extern s32 D_8009EB58_a[] __asm__("D_8009EB58");     /* a second spelling: see func_804022C8 */
 extern s32 D_80136140[];                             /* card_file_count, D_80084128 -- and note the
                                                         ENGINE BUILD is different here: this one is
                                                         nowhere near the resident 0x80084128 */
@@ -358,6 +366,7 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern char D_80400138[];                            /* read_save_file's checksum complaint */
 extern char D_80400120[];
 extern char D_80400038[];                            /* "%s = %d\n" */
 extern char D_80400044[];                            /* "card_first_flg" */
@@ -469,6 +478,8 @@ extern s32 D_80409258[2];                            /* D_80028538 */
 extern s32 D_804094F0[2];                            /* D_800287D0 */
 extern s32 D_804094E8;                               /* card_st, D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
+extern u8 D_80409528[];                              /* the message group this block keeps */
+extern u16 *D_8040953C;                              /* a POINTER, read then flagged */
 extern s32 D_80409500;                               /* card_evflg, D_800287E0 */
 extern CARD_STATE D_80409504;                        /* gCardState, D_800287E4 */
 

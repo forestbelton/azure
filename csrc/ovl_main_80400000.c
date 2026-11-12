@@ -1163,9 +1163,54 @@ void func_80401F98(s32 *gsw)
    `(int)gsw->check_sum`. The live check_gsw_checksum's accumulator is now `c`. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401FEC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402084);
+/* Live write_save_file, without its `*(s32 *)(buf + 0x204) = 0;` and without
+ * the refresh_card_info call. */
+s32 func_80402084(s32 idx, u8 *buf)
+{
+    char nameA[0x20];
+    char nameB[0x20];
+    s32 r;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402154);
+    func_80401BF4(nameA, idx);
+    func_80401BF4(nameB, 5);
+    if (D_8009DDD8[idx][0] != 0)
+    {
+        func_8007CAD8(nameA, nameB);
+    }
+    func_80401F98((s32 *)buf);
+    r = func_80401D28((u8 *)nameB, buf, 0xC0, 0, D_8009DDD8[idx][0]);
+    if (r != 0)
+    {
+        func_80401ED4(idx, buf);
+    }
+    func_8007CAD8(nameB, nameA);
+    return r;
+}
+
+/* Live read_save_file. TWO arguments here, no `flag` arm at all, and a
+ * RETURN: the live one returns nothing. The checksum failure prints. */
+s32 func_80402154(s32 idx, u8 *buf)
+{
+    char name[0x20];
+    s32 r;
+
+    func_80401BF4(name, idx);
+    r = func_80401C70((u8 *)name, buf, 0xC0, 0);
+    if (r != 0)
+    {
+        r = func_80401FEC((s32 *)buf);
+        if (r != 0)
+        {
+            r = func_80401D28((u8 *)name, (u8 *)D_8009DDD8[idx], 1, 4,
+                              D_8009DDD8[idx][0]);
+        }
+        else
+        {
+            func_8007BF18(D_80400138);
+        }
+    }
+    return r;
+}
 
 void func_80402214(void)
 {
@@ -1216,6 +1261,8 @@ s32 func_80402290(void)
 
 /* The other `cnt` site; see func_80401B30. The live erase_save_file has no
    counter either. */
+/* NEAR MISS, 63 of 63 words, 4 differing -- two registers swapped in the
+ * free-block fixup. Source in docs/near-misses/func_804022C8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804022C8);
 
 void func_804023C4(void)
@@ -1683,7 +1730,22 @@ void func_804033EC(s32 **pp)
     } while (++i < 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040343C);
+s32 func_8040343C(s32 flag)
+{
+    s32 **q = (s32 **)D_80409528;
+
+    if (func_80047FD8((s32 *)(q - 8)) != 0)
+    {
+        if (flag != 0)
+        {
+            D_8040953C[15] |= 0x2000;
+        }
+        func_804033EC(q);
+        ((u16 *)q)[-1] |= 0x8000;
+        D_8008DAB4 |= 0x8000;
+    }
+    return (s32)q[0];
+}
 
 /* NEAR MISS, 112 of 112 words, 6 differing -- ONE register pair swapped.
  * The body is established (live func_80023258, with the ptrs array 0x18
@@ -3299,6 +3361,10 @@ s32 *func_80406678(s32 *p, s32 a)
     return q;
 }
 
+/* NEAR MISS, 39 of 39 words, 2 differing: `q++` lands in the call's delay
+ * slot where the target puts `i++` there and the increment before the call.
+ * Source in docs/near-misses/func_80406720.c; func_804070C4 below is the
+ * same function with three different callees and the same 2. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406720);
 
 void func_804067BC(s32 *p)
