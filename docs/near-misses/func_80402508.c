@@ -56,7 +56,10 @@
  * force the preheader reload the target has, is 46 words (25); a second
  * 0x20 pseudo held apart by a marker is 45 (36); both together 48 (28).
  * The duplicated zero test is gcc's jump threading and no source shape
- * measured so far moves it.
+ * measured so far moves it. A `"memory"` clobber inside the guard, which
+ * is the direct way to ask for the target's preheader `lbu` reload, costs
+ * two words instead: it invalidates `*x` and `total` as well (46 words, 25
+ * differing, volatile or not, with either loop shape).
  */
 
 #include "common.h"
