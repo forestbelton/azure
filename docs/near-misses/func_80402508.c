@@ -60,6 +60,30 @@
  * is the direct way to ask for the target's preheader `lbu` reload, costs
  * two words instead: it invalidates `*x` and `total` as well (46 words, 25
  * differing, volatile or not, with either loop shape).
+ *
+ * WORTH KNOWING, read off the target on 2026-11-12: it holds the space
+ * character 0x20 in THREE separate registers -- $t4 for the two outer tests,
+ * $v1 for the first inner loop (reused for `n` straight afterwards, in the
+ * `beq`'s delay slot) and $t1 for the second. That is loop.c's
+ * `move_movables` giving each loop its own preheader copy of an invariant
+ * constant, which it can only do if the three are separate pseudos when the
+ * loop pass runs. Ours are ONE pseudo, because cse1 merges three identical
+ * CONST_INTs before loop ever sees them, so there is nothing to hoist and
+ * nothing to rename -- which is the same cause as the missing preheader
+ * `lbu`, not a second defect. Everything left in this function is one
+ * question: how the target's build reached the loop pass with those
+ * redundancies intact.
+ *
+ * Tried 2026-11-12, all WORSE, on the theory that a store between the guard
+ * and the loop would stop cse1 folding the second `lbu` (gcc 2.7.2 cannot
+ * disambiguate `*x` from `*s`): `*x = total` duplicated into both arms of
+ * the guard (49 and 48 words), `n = 0` duplicated the same way with the
+ * store left above (47), and a `*y = 0` store added inside the guard (47).
+ * Also tried, all 44 words and 16 differing: `while (*s != 0)` with the
+ * space break at the bottom, the character read into a local before the
+ * guard, the loop walked through a copied pointer `u8 *t`, and an
+ * `__asm__("" : : "r"(s))` in the preheader. A `volatile` guard load is 46
+ * words; an explicit `goto` loop is 43.
  */
 
 #include "common.h"
