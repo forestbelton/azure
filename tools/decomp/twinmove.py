@@ -237,6 +237,20 @@ def do_move(twin_fn, live_fn, dry):
     # them measured 0 differing; only the container caught it.
     unmapped += sorted(n for n in set(re.findall(r"\b[A-Za-z_]\w*\b", new))
                        if n in macros)
+    # AND EVERY NAMED CALLEE THAT SURVIVED, which is the widest form of the
+    # same failure. This block linked its OWN copy of the C library and the
+    # BIOS directory calls at addresses that are not the resident ones, so a
+    # surviving `strcpy` or `firstfile2` compiles, links against the resident
+    # engine and measures 0 differing -- func_804019B4 did exactly that on
+    # 2026-11-11 and only `make build/main.bin` caught it, as 8 bytes.
+    # LIVE_NAMES cannot see these: they are not defined in the live units.
+    kw = {"if", "while", "for", "switch", "return", "sizeof", "do", "else"}
+    named = sorted({c for c in re.findall(r"\b([A-Za-z_]\w*)\s*\(", new)
+                    if not re.match(r"^(?:func|D)_[0-9A-F]{8}$", c)
+                    and c not in kw and c != twin_fn})
+    if named:
+        print("    NAMED CALLEES, resolve each against the LISTING before you "
+              "trust a measurement: %s" % ", ".join(named))
 
     print("%s  <-  %s  (%s)" % (twin_fn, live_fn, live_path.name))
     for a, b in sorted(used):

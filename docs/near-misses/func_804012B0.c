@@ -29,6 +29,12 @@
  *   * `r = 3` is in that `beqz`'s DELAY SLOT in the target and after the arm
  *     here.
  *
+ * REJECTED: the declared-size lever that landed func_804019B4 -- an incomplete
+ * array alias of D_8009E390, so the object is not -G8 small data. Still 8
+ * differing, unchanged. So the two functions look alike and are not the same
+ * defect: there the fold was the whole problem, here the delay slot is tangled
+ * with it.
+ *
  * REJECTED: moving `r = 3;` above `t = &D_8009E390;`. It does fill the slot,
  * and it goes 8 -> 17 differing at a word LONGER, because the function's
  * other `beqz` then loses its own filler and the epilogue shifts. The two

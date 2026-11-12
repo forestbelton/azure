@@ -412,6 +412,8 @@ long func_804009FC(void)
     return 0;
 }
 
+/* NEAR MISS: seven unfilled branch delay slots; the target steals each next call's $a1 constant into the preceding bne's slot
+   Source in docs/near-misses/func_80400A10.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
 
 /* The `card_first_flg` site. This opens with
@@ -521,8 +523,6 @@ s32 func_8040122C(void)
     return r;
 }
 
-/* NEAR MISS: block layout plus a cse reuse of the D_8009E390 base; 8 words
-   Source in docs/near-misses/func_804012B0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804012B0);
 
 s32 func_804013A8(void)
@@ -652,7 +652,42 @@ int func_804019A4(void)
     return D_804094EC != 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804019B4);
+/* NEAR MISS: one insertion: the conditional +4 is re-materialised as SYM+4 instead of added to the live register
+   Source in docs/near-misses/func_804019B4.c. */
+/* Live count_card_files. TWO RENAMES THE SYMMAP DID NOT HAVE --
+ * MEM_CARD_NAMES -> D_80408AA0 and D_80020084 -> D_804000F4 -- AND THEN
+ * ONE DECLARED SIZE. See csrc/main_twin.h on D_80408AA0: at [2] the array
+ * is 8 bytes, takes the -G8 small-data path, and the conditional `+4` gets
+ * folded into a fresh SYM+4 address where the target adds 4 to the live
+ * register -- one inserted word and 28 positional differences behind it.
+ * An incomplete declaration, or any size over 8, matches exactly.
+ *
+ * REJECTED on the way: a byte-cast increment, `+ 1`, and dropping the
+ * `&...[0]` (all 40 words); and an index local, which gets the length
+ * right but goes BRANCHLESS where the target branches. */
+s32 func_804019B4(void)
+{
+    u8 name[0x20];
+    s32 n = 0;
+    struct DIRENTRY *e = D_80409290;
+    const char **mem_card_name = &D_80408AA0[0];
+
+    if (D_804094EC != 0)
+    {
+        mem_card_name++;
+    }
+    func_8007BF80(name, *mem_card_name);
+    func_8007BF50(name, (u8 *)D_804000F4);
+    if (func_8007CAB8(name, e) != NULL)
+    {
+        do
+        {
+            n++;
+            e = (struct DIRENTRY *)((u8 *)e + 0x28);
+        } while (func_8007CAC8(e) == e);
+    }
+    return n;
+}
 
 s32 func_80401A50(s32 n)
 {
@@ -668,7 +703,56 @@ s32 func_80401A50(s32 n)
     return 0xF - sum;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401AA4);
+s32 func_80401AA4(s32 n, u8 *s)
+{
+    s32 i = 0;
+    s32 ret = 0;
+    u8 *tbl = (u8 *)D_80409290;
+    u8 *row;
+    /* DEVICE: 8 bytes of unread local. The target builds a 0x8 frame where
+       this body is frameless, and every other word matches once it shifts --
+       no extra calls, no extra registers saved, just the prologue, the
+       epilogue adjust and the displacement. AND THIS ONE IS NOT THE COMPILER:
+       func_804025F8 looked identical and turned out to be FSF 2.7.2 reserving
+       8 bytes that the Cygnus snapshot does not, but BOTH sides here are FSF
+       2.7.2, so the twin's source really does have a local this one lost. A
+       scalar is eliminated; it has to be an aggregate, and 8 bytes of one.
+       `s32 unused[1]` is 32 words, `u8 buf[8]` also matches. */
+    s32 unused[2];
+
+    if (n > 0)
+    {
+        row = tbl;
+        do
+        {
+            s32 bad = 0;
+            s32 j = 0;
+
+            do
+            {
+                u8 c = s[j];
+
+                if (c == 0)
+                {
+                    break;
+                }
+                if (c != row[j])
+                {
+                    bad++;
+                    break;
+                }
+                j++;
+            } while (j < 0x15);
+            if (bad == 0)
+            {
+                ret = 1;
+                break;
+            }
+            row += 0x28;
+        } while (++i < n);
+    }
+    return ret;
+}
 
 /* A `cnt` site: the $s1 the VSync poll loop increments is printed as
    `printf("%s = %d\n", "cnt", cnt)` once the loop ends, so name it `cnt` when
@@ -677,7 +761,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401AA4);
    the live unit. Same story in func_804022C8. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401B30);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401BF4);
+void func_80401BF4(char *out, s32 file_id)
+{
+    const char **mem_card_name = &D_80408AA0[0];
+
+    if (D_804094EC != 0)
+    {
+        mem_card_name++;
+    }
+    func_8007BF80(out, *mem_card_name);
+    func_8007BF50(out, D_80408AA8);
+    func_8007BF50(out, D_80408AB8[file_id]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401C70);
 
@@ -1956,7 +2051,22 @@ void func_80405C44(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405C4C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405CB8);
+void func_80405CB8(s32 *p)
+{
+    if (func_80402154(p[10], (u8 *)0x80010000) == 0)
+    {
+        p[13] = (s32)func_80406368;
+        func_8040325C((s32)(p - 8));
+        p[-4] = (s32)func_80405A3C;
+    }
+    else
+    {
+        func_80405C44((u8 *)0x80010000);
+        p[-4] = (s32)func_80405C4C;
+    }
+    func_80400908();
+    p[16] = 0;
+}
 
 void func_80405D2C(s32 *p)
 {
@@ -2158,7 +2268,22 @@ void func_804065CC(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406678);
+s32 *func_80406678(s32 *p, s32 a)
+{
+    s32 *q = func_8003C714(0, D_8040C628, 0x1C);
+    s32 *r = q + 8;
+
+    func_80406570(r, (s32)p);
+    func_804023C4();
+    func_80402214();
+    r[0x12] = 1;
+    q[8] = func_80404C84(q, q + 0x1A);
+    r[6] = (s32)func_80403BC4(q);
+    r[7] = (s32)func_804057F0(q, r[10]);
+    r[9] = 0;
+    q[4] = (s32)func_804065CC;
+    return q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406720);
 
@@ -2339,7 +2464,26 @@ void func_80406F70(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040701C);
+s32 *func_8040701C(s32 *p, s32 a)
+{
+    s32 *q = func_8003C480(0);
+    s32 *r;
+
+    if (q != 0)
+    {
+        r = q + 8;
+        r[9] = a;
+        func_80406F14(r, (s32)p);
+        func_804023C4();
+        func_80402214();
+        q[8] = func_80404C84(q, 0);
+        r[1] = (s32)func_804057F0(q, r[11]);
+        r[2] = (s32)func_80407C10(q);
+        r[10] = 0;
+        q[4] = (s32)func_80406F70;
+    }
+    return q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804070C4);
 

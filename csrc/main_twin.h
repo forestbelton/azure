@@ -41,7 +41,16 @@ s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
 s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
+/* THIS BLOCK LINKED ITS OWN COPY OF THE C LIBRARY AND THE BIOS DIRECTORY
+   CALLS, at addresses that are not the resident ones. The live source names
+   them (strcpy, firstfile2, ...) and those names resolve to the RESIDENT
+   engine, which links silently and is wrong -- see the alias note in
+   csrc/ovl_main_80400000.c. Spell them by address here. */
+char *func_8007BF50(char *d, char *s);               /* strcat */
+char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
+struct DIRENTRY *func_8007CAB8(u8 *name, struct DIRENTRY *e);  /* firstfile2 */
+struct DIRENTRY *func_8007CAC8(struct DIRENTRY *e);  /* nextfile */
 u_short func_80078570(int tp, int abr, int x, int y); /* GetTPage */
 u_short func_80078640(int x, int y);                 /* GetClut */
 void func_8007BEF0();                                /* exit, psyq/include/stdlib.h */
@@ -51,6 +60,10 @@ long func_8007C9A8(long);                            /* CloseEvent */
 long func_8007C9C8(long);                            /* TestEvent */
 int func_8007CA38(void);                             /* EnterCriticalSection */
 void func_8007CA48(void);                            /* ExitCriticalSection */
+long func_804009C0(void);                            /* HandleCardEOF */
+long func_804009D4(void);                            /* HandleCardError */
+long func_804009E8(void);                            /* HandleCardTimeout */
+long func_804009FC(void);                            /* HandleCardNew */
 void func_80400A10(void);                            /* open_card_events */
 s32 func_804010F0(void);                             /* on_sw_card_eof */
 s32 func_804012B0(void);                             /* on_card_new */
@@ -63,7 +76,10 @@ s32 func_804019B4(void);                             /* count_card_files */
 s32 func_80401B30(s32 card_slot);                     /* format_card */
 s32 func_80401E2C(s32 n);                            /* load_save_slot_info */
 s32 func_80402084(s32 a, u8 *b);                     /* write_save_file */
-s32 func_80402154(s32 a, u8 *b, s32 c);              /* read_save_file */
+s32 func_80402154(s32 a, u8 *b);                     /* read_save_file, which takes
+                                                        THREE here in the live build --
+                                                        this listing reads $a0 and $a1
+                                                        and never $a2 */
 void func_80402214(void);                            /* refresh_card_info */
 s32 func_80402268(void);                             /* get_free_blocks */
 s32 func_80402290(void);                             /* count_used_save_slots */
@@ -113,7 +129,7 @@ s32 func_80404C84(s32 *p, s32 *q);                   /* func_8004F418 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
-s32 *func_804057F0(s32 *p, s32 a, s32 b);            /* func_80024D58 */
+s32 *func_804057F0(s32 *p, s32 a);                  /* func_80024D58 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
 void func_80405A00(s32 *p, s32 a);                    /* func_80024F3C, which takes THREE -- this
                                                         build reads only $a0/$a1, see its listing */
@@ -208,7 +224,19 @@ extern const char D_80400004[40];                    /* ASSERT_FMT */
 extern const UnkFnTab5 D_80400054;                   /* gSwCardEventHandlers */
 extern const UnkFnTab5 D_80400068;                   /* gHwCardEventHandlers */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
+extern const char D_804000F4[];                      /* D_80020084, the filename suffix */
 extern u8 D_804005F0[8];                              /* D_800282B0 */
+/* MEM_CARD_NAMES, DECLARED INCOMPLETE ON PURPOSE. The object really is 8
+   bytes -- D_80408AA8 below is the next one -- but 8 bytes is the -G8
+   small-data path, which makes the address ONE insn, after which cse folds
+   func_804019B4's conditional `+4` into a fresh SYM+4 instead of adding to
+   the live register. The target adds, so the original declaration cannot
+   have carried the size. The live block is -G0, where the declared size
+   changes nothing, which is why csrc/main.h can say `[2]` and why this -G8
+   build is the only place the difference shows. */
+extern const char *D_80408AA0[];                     /* MEM_CARD_NAMES */
+extern char D_80408AA8[16];                          /* MEM_CARD_PREFIX */
+extern const char *D_80408AB8[6];                    /* MEM_CARD_FILENAMES */
 extern u8 D_80408C84[8];                              /* D_80027F60 */
 /* FOUR SIZED-ALIAS DEVICES USED TO LIVE HERE and are gone as of 2026-11-11.
    Three were `extern u8 func_XXXXXXXX_a[8] __asm__("func_XXXXXXXX")`, giving
