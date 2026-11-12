@@ -776,7 +776,42 @@ void func_80401BF4(char *out, s32 file_id)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401C70);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401D28);
+/* Live write_card_file. SINGLE EXIT, not the live source's two early
+ * `return ok;` -- with those, gcc proves `ok` is still 0 at each and
+ * materialises the constant, where the target reads it back out of $s3. A
+ * `goto out` to one `return ok;` makes both exits share the tail and it
+ * matches exactly. (Writing `return 0;` at both sites is the same 3
+ * differing, because the fold is what the source cannot reach.) */
+s32 func_80401D28(u8 *name, u8 *buf, s32 n, s32 off, s32 skip)
+{
+    s32 ok = 0;
+    s32 fd;
+
+    if (skip == 0)
+    {
+        fd = func_8007CA58(name, 0x30200);
+        if (fd == -1)
+        {
+            goto out;
+        }
+        func_8007CA98(fd);
+    }
+    fd = func_8007CA58(name, 2);
+    if (fd == -1)
+    {
+        goto out;
+    }
+    if (off == 0 || func_8007CA68(fd, off << 7, 0) != -1)
+    {
+        if (func_8007CA88(fd, buf, n << 7) == (n << 7))
+        {
+            ok = 1;
+        }
+    }
+    func_8007CA98(fd);
+out:
+    return ok;
+}
 
 s32 func_80401E14(s32 i)
 {
@@ -840,7 +875,31 @@ s32 func_80402268(void)
     return *p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402290);
+/* Live count_used_save_slots. TWO SPELLING CHOICES, both forced by the
+ * listing. The loop variable is a BYTE OFFSET stepping 0x80 against a limit
+ * of 0x280, not an index with a `sll 7` -- the load is the folded
+ * `lui $at` / `addu $at,$at,$v1` / `lw %lo(SYM)($at)`. And the value is read
+ * into a local with the increment BEFORE the test, which is what frees the
+ * `beqz`'s delay slot for that increment; with the increment after the `if`,
+ * reorg finds `count++` in the fall-through first, cannot use it, and leaves
+ * a nop. Worth one word. */
+s32 func_80402290(void)
+{
+    s32 count = 0;
+    s32 off = 0;
+
+    do
+    {
+        s32 v = *(s32 *)((u8 *)D_8009DDD8 + off);
+
+        off += 0x80;
+        if (v != 0)
+        {
+            count++;
+        }
+    } while (off < 0x280);
+    return count;
+}
 
 /* The other `cnt` site; see func_80401B30. The live erase_save_file has no
    counter either. */
@@ -857,6 +916,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402428);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804024A4);
 
+/* NEAR MISS: two extra loads of *s in the inner scan loop, and they are the target's not ours
+   Source in docs/near-misses/func_80402508.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402508);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804025B8);
@@ -1340,7 +1401,23 @@ void func_804040C8(s32 *p)
     q->unk_04->unk_0A = 0x18;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404178);
+void func_80404178(s32 *p)
+{
+    func_80403F1C((s32)(p + 0x2C), 0x80, 0x18);
+    func_80403F1C((s32)(p + 0x4A), 0x2C, 0x14);
+    if (D_8009DDD8[p[0]][0] != 0)
+    {
+        func_80403F7C(p);
+        if (D_8009DDD8[p[0]][2] != 0)
+        {
+            func_804040C8(p);
+        }
+    }
+    else
+    {
+        func_80403E54(p);
+    }
+}
 
 void func_80404224(s32 *p)
 {
@@ -2153,7 +2230,25 @@ void func_80405F24(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405FC4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406150);
+/* Live func_8002570C. REVISION: the live true-arm calls func_80024F3C's
+ * sibling between the two stores; this build has no call there at all, just
+ * `p[11] = n` and the handler. */
+void func_80406150(s32 *p)
+{
+    s32 n = p[10];
+
+    if (D_8009DDD8[n][0] != 0)
+    {
+        p[11] = n;
+        p[-4] = (s32)func_80405FC4;
+    }
+    else
+    {
+        p[13] = (s32)func_80406368;
+        func_804032FC((s32)(p - 8));
+        p[-4] = (s32)func_80405A64;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804061C4);
 
@@ -2518,9 +2613,40 @@ void func_804073B0(UnkCardPair *p, u32 *a, u32 *b)
     p->unk_04->unk_0F = 4;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80407458);
+/* Live func_80026C94. REVISION: one more INDIRECTION. The live struct has
+ * `ptrs` inline at +0x60; here +0x60 holds a POINTER to the pair array, so
+ * each access is `lw 0x60($a0)` then `lw N($v0)`. And it is re-read for the
+ * second pair rather than held in a local, because the `sw` through the
+ * first pair invalidates cse's entry for it. */
+void func_80407458(s32 *p)
+{
+    UnkCardPair *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804074C4);
+    q = ((UnkCardPair **)p[0x18])[0];
+    q->unk_04->unk_08 = 0x40;
+    q->unk_04->unk_0A = 0x20;
+    q->unk_00 = (s32)D_80409110;
+    q = ((UnkCardPair **)p[0x18])[1];
+    q->unk_04->unk_08 = 0xC0;
+    q->unk_04->unk_0A = 0x20;
+    q->unk_00 = (s32)D_80409128;
+}
+
+/* Live func_80026CF0, func_80407458's sibling and the same extra
+ * indirection through +0x60. */
+void func_804074C4(s32 *p)
+{
+    UnkCardPair *q;
+
+    q = ((UnkCardPair **)p[0x18])[2];
+    q->unk_04->unk_08 = 0x40;
+    q->unk_04->unk_0A = 0x20;
+    func_8004DDBC((u32 *)(p + 1), (u8 *)D_80408A30, (u32 *)q);
+    q = ((UnkCardPair **)p[0x18])[3];
+    q->unk_04->unk_08 = 0xC0;
+    q->unk_04->unk_0A = 0x20;
+    func_8004DDBC((u32 *)(p + 4), (u8 *)D_80408A30, (u32 *)q);
+}
 
 void func_80407558(UnkCardGrp044 *c)
 {
@@ -2806,7 +2932,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408664);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408674);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408684);
+/* Live func_80027D0C. TWO REVISION DIFFERENCES: func_804086BC takes THREE
+ * arguments here and the second is 0x3F, not 1. It is a BIOS 0xB0:0x4E stub,
+ * so the listing is the only authority on its arity. */
+void func_80408684(s32 *p)
+{
+    func_804086CC();
+    func_804086BC((s32)p, 0x3F, 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086BC);
 

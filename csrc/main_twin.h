@@ -37,6 +37,7 @@ void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
+void func_8004DDBC(u32 *p, u8 *q, u32 *r);           /* func_8004CBFC */
 s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
 s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
@@ -46,6 +47,10 @@ void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
    them (strcpy, firstfile2, ...) and those names resolve to the RESIDENT
    engine, which links silently and is wrong -- see the alias note in
    csrc/ovl_main_80400000.c. Spell them by address here. */
+long func_8007CA58(char *name, long flags);          /* open */
+long func_8007CA68(long fd, long off, long whence);  /* lseek */
+long func_8007CA88(long fd, void *buf, long n);      /* write */
+long func_8007CA98(long fd);                         /* close */
 char *func_8007BF50(char *d, char *s);               /* strcat */
 char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
@@ -110,6 +115,7 @@ void func_80403D24(s32 *p);                          /* func_80023A00 */
 void func_80403D7C(s32 *p, s32 v);                   /* func_80023A50 */
 void func_80403DA0(UnkCardPair *p, u32 *a, u32 *b, s32 n); /* func_80023A78 */
 void func_80403E54(s32 *p);                        /* func_80023B18 */
+void func_80403F7C(s32 *p);                          /* func_80023C44 */
 void func_804040C8(s32 *p);                          /* func_80023D64 */
 void func_80404178(s32 *p);                          /* func_80023E14 */
 s32 func_80404364(s32 a, s32 n);                     /* func_80023FF0 */
@@ -141,6 +147,7 @@ void func_80405C4C(s32 *p);                          /* func_800251A4 */
 void func_80405CB8(s32 *p);                          /* func_80025230 */
 void func_80405D54(s32 *p);                          /* func_800252CC */
 void func_80405DE0(s32 *p);                          /* func_80025398 */
+void func_80405FC4(s32 *p);                          /* func_80025584 */
 void func_80406150(s32 *p);                          /* func_800253E8-family, paired by alignment */
 void func_804061C4(s32 *p);                          /* func_80025788 */
 void func_80406274(s32 *p);                          /* func_80025848 */
@@ -161,8 +168,8 @@ void func_804070C4(s32 *p);                          /* func_80026920 */
 void func_80407160(s32 *p);                          /* func_800269B4 */
 void func_804072CC(u8 *p, s32 *b, s32 *c);           /* func_80026B18 */
 void func_804073B0(UnkCardPair *p, u32 *a, u32 *b);  /* func_80026C00 */
-void func_80407458(UnkCardGrp044 *c);                /* func_80026C94 */
-void func_804074C4(UnkCardGrp044 *c);                /* func_80026CF0 */
+void func_80407458(s32 *p);                          /* func_80026C94 */
+void func_804074C4(s32 *p);                          /* func_80026CF0 */
 void func_80407558(UnkCardGrp044 *c);             /* func_80026D78 */
 s32 *func_804076C8(s32 *p, s32 a);                   /* func_80026ED0 */
 void func_8040789C(UnkCardGrp0D4 *c);             /* func_80027018 */
@@ -180,7 +187,9 @@ void func_804084DC(s32 *p);                          /* func_80027C90 */
 long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
-s32 *func_804086BC(s32 a, s32 b);                    /* func_80027AFC */
+long func_804086BC(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
+                                                        votes func_80027AFC, which takes two */
+void func_804086CC(void);                            /* func_80027C60 */
 
 /* --- variables, in address order --- */
 extern u32 D_8002D690;                               /* D_8002E5D8[0] in the shipped build */
@@ -275,6 +284,9 @@ extern u8 D_80408D5C[];                              /* D_80028084 */
 extern u8 D_80408D64[8];                              /* D_8002808C */
 extern u8 D_80408D6C[8];                             /* D_800282CC */
 extern u8 D_80408D74[];                              /* D_80028094 */
+extern UnkAnimStep D_80408A30[2];                    /* D_80027E68 */
+extern u8 D_80409110[];                              /* D_80028418 */
+extern u8 D_80409128[];                              /* D_80028430 */
 extern struct DIRENTRY D_80409290[15];               /* card_dir */
 extern u8 D_8040C628[];                              /* D_8002B7E0 */
 extern long D_80409270;                              /* gSwCardEOFEvent, D_80028550 */
