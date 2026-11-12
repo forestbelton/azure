@@ -49,8 +49,47 @@
  *   Measured on a standalone file: /9, /100, /1000 and /216000 split; /3, /60
  *   and /3600 do not -- under tools/psx272gcc AND under tools/cdkgcc.
  *   scratch/psx272-gcc/cc1 is a 32-bit i386 binary, and so was the real
- *   cc1psx, so this is not our build being unusual; the 4.0 compiler reached
- *   a CONST_INT some other way.
+ *   cc1psx, so this is not our build being unusual.
+ *
+ *   THE WAY THE 4.0 COMPILER REACHED A CONST_INT IS NOW NAMED, 2026-11-12,
+ *   and it is the BUILD HOST, not the compiler version. machmode.h:49-57
+ *   picks the widest host integer:
+ *
+ *       #if HOST_BITS_PER_LONG > HOST_BITS_PER_INT
+ *       #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_LONG
+ *       #define HOST_WIDE_INT long
+ *       #else
+ *       #define HOST_BITS_PER_WIDE_INT HOST_BITS_PER_INT
+ *       #define HOST_WIDE_INT int
+ *       #endif
+ *
+ *   On the i386 host ours is built for, `long` and `int` are both 32, so
+ *   HOST_BITS_PER_WIDE_INT is 32. Walk `immed_double_const` (varasm.c:1859)
+ *   with width = GET_MODE_BITSIZE (DImode) = 64 and that:
+ *     - `width < HOST_BITS_PER_WIDE_INT` is false, `width ==` is false and
+ *       `width > 2 * HOST_BITS_PER_WIDE_INT` is false, so nothing clears or
+ *       sign-extends;
+ *     - `if (width <= HOST_BITS_PER_WIDE_INT) i1 = (i0 < 0) ? ~0 : 0;` does
+ *       not run either;
+ *     - so the CONST_INT test `(i1 == 0 && i0 >= 0) || (i1 == ~0 && i0 < 0)`
+ *       sees i1 == 0 and i0 < 0 -- 0x91A2B3C5 as a 32-bit HOST_WIDE_INT is
+ *       negative -- and falls through to the CONST_DOUBLE.
+ *   With a 64-bit HOST_WIDE_INT the SAME SOURCE takes the `width ==
+ *   HOST_BITS_PER_WIDE_INT` arm, then `width <= HOST_BITS_PER_WIDE_INT` sets
+ *   i1 = 0 because 0x91A2B3C5 is POSITIVE in 64 bits, and the test returns
+ *   `GEN_INT (i0)` -- a CONST_INT, which `large_int` accepts and the
+ *   mips.md:3208 split then fires on. A positive magic like 216000's
+ *   0x026D60DD is i0 >= 0 either way, which is exactly the control this park
+ *   already records.
+ *
+ *   So cc1psx was built on a host where `long` is wider than `int`, and
+ *   tools/psx272gcc is not. That is a BUILD-CONFIGURATION difference, not a
+ *   version one, and it is the first thing about this compiler that is
+ *   falsifiable rather than asserted: build vendor/old-gcc's 2.7.2-psx with
+ *   HOST_BITS_PER_WIDE_INT 64 and these two words either appear or they do
+ *   not. It is not done here because it is a TOOLCHAIN change that has to be
+ *   re-measured against all 243 landed functions in this unit, which is the
+ *   user's call, not a park's.
  *
  * FINDING 2, the register names. `umulsi3_highpart`'s output is constrained
  * `"=h"` (mips.md:1038), so reload must copy HI into a GPR, and
