@@ -52,6 +52,19 @@ typedef struct
     u32 unk_00;
 } UnkTwinWord;
 
+/* The two templates func_80406844 block-copies into the save header. Both
+ * have alignment 1, which is what makes gcc emit the runtime alignment test
+ * and the lwl/lwr pair beside the aligned loop. */
+typedef struct
+{
+    u8 unk_00[0x200];
+} UnkTwinBlk200;
+
+typedef struct
+{
+    u8 unk_00[0x27];
+} UnkTwinBlk27;
+
 
 /* --- functions, in address order --- */
 void func_8003D548(s32 a);                           /* func_80040AA0 */
@@ -60,11 +73,15 @@ s32 func_8004DBDC(void);                             /* no live counterpart name
 void func_8004DCCC(s32 *p);                          /* func_8004CB2C */
 void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
+s8 *func_80051520(u8 *a, u8 *b, s32 c);              /* func_8004E298 */
+void func_80051804(s32 v, s32 n, u8 *out);           /* func_8004E5A0 */
+void func_80051900(u8 *q);                           /* func_8004E69C */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
 void func_800702F0(s32 mode);                        /* VSync */
 void func_8003830C(s32 n, u8 *out);                  /* func_8003AD08 */
 void func_80063FF8(s32 id);                          /* func_80053DA8 */
+void func_8003FD58(s32 a, s32 b, s32 c, s32 d);      /* twin-only */
 s32 func_80058FF0(s32 a, s32 b, s32 c);              /* func_80049DE8 */
 s32 func_80056450(s32 a, s32 b, s32 c);              /* func_80047C44 */
 void func_8004DDBC(u32 *p, u8 *q, u32 *r);           /* func_8004CBFC */
@@ -269,6 +286,7 @@ void func_80407688(s32 *p, s32 v);                   /* func_80026E90 */
  * store in the body and no second load at func_804083A0's call site. */
 s32 *func_804076C8(s32 *p);                          /* func_80026ED0 */
 void func_804077D4(s32 *p);                          /* func_80026FB4 */
+void func_8040787C(s32 *p, s32 *b, s32 *c);          /* func_80026FF8 */
 void func_8040789C(UnkCardGrp0D4 *c);             /* func_80027018 */
 void func_804078D8(u8 *p);                           /* func_80027054 */
 void func_80407A44(UnkCardPair *p, u32 *a, u32 *b);  /* func_800271C0 */
@@ -324,6 +342,7 @@ extern UnkTwinWord D_8002D6A8;                       /* D_8002E5E8[2] */
                              /* D_8002E5D8, the 4-word GPU template, in the OTHER engine build */
                              /* D_8002E5E8, the 3-word one */
 extern u8 D_80084110[];                              /* D_80027F7C */
+extern u8 D_80084158[];                              /* D_80078FD0 */
 extern u8 D_800841DC[];                              /* D_80079054 */
 extern u8 D_8008423C[];                              /* D_800790B4 */
 extern u8 D_8008429C[];                              /* D_80079114 */
@@ -375,13 +394,17 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern const UnkTwinBlk27 D_8040077C;                /* the header's 0x27-byte template */
 extern u8 D_804006C4[];                              /* two whole-screen messages */
 extern u8 D_804006EC[];
 extern const s32 D_80400714;                         /* the free-block line's prefix: a word
                                                         and a signed byte, not a struct */
 extern const s8 D_80400718;
 extern u8 D_8040071C[];                              /* and its suffix */
+extern u8 D_804005EC[];                              /* a fixed line func_80403F7C draws */
 extern char D_80400848[];                            /* func_804080A4's state printf */
+extern char D_80400854[];                            /* and func_804081AC's two */
+extern char D_80400860[];
 extern char D_80400134[];                            /* check_gsw_checksum's two printfs */
 extern char D_80400138[];                            /* read_save_file's checksum complaint */
 extern const char D_8040086C[40];                    /* memory.c's ASSERT_FMT copy */
@@ -440,6 +463,7 @@ extern void func_80406F34(s32 *p);                   /* func_80026784 AND func_8
 
 extern u8 *D_80408C8C[4];                            /* D_800282BC */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
+extern const UnkTwinBlk200 D_80408EC8;               /* the header's 0x200-byte template */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
 extern u8 D_80409508[];                              /* D_800287E8 */
@@ -509,6 +533,7 @@ extern s32 D_804094F0[2];                            /* D_800287D0 */
 extern s32 D_804094E8;                               /* card_st, D_800287C8 */
 extern s32 D_804094EC;                               /* card_slot, D_800287CC */
 extern char *D_804090C8[];                           /* state names, printed by func_804080A4 */
+extern char *D_804090F8[];                           /* and the ones func_804081AC prints */
 extern s32 D_804090E0[];                             /* and the handler it picks by state */
 extern u8 D_80409528[];                              /* the message group this block keeps */
 extern u16 *D_8040953C;                              /* a POINTER, read then flagged */

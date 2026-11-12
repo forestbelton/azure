@@ -2084,7 +2084,42 @@ s32 func_80403F1C(s32 p, s32 w, s32 h)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403F7C);
+/* Live func_80023C44, with FIVE groups rather than four and the save-slot
+ * row reached directly -- `&D_8009DDD8[p[0]][3]` where the live one loads a
+ * pointer out of D_80083EA4. */
+void func_80403F7C(s32 *p)
+{
+    u8 buf[8];
+    UnkCardPair *e;
+
+    e = (UnkCardPair *)p[0x7B];
+    e->unk_04->unk_08 = 0x70;
+    e->unk_04->unk_0A = 0x10;
+    e->unk_00 = (s32)D_80084158;
+
+    e = (UnkCardPair *)p[0x77];
+    e->unk_00 = (s32)func_80051B50((u8 *)(p + 2),
+                                   (u8 *)&D_8009DDD8[p[0]][3], 1);
+    e->unk_04->unk_08 = 0xF0;
+    e->unk_04->unk_0A = 0x91;
+
+    e = (UnkCardPair *)p[0x78];
+    e->unk_00 = (s32)func_80051B50((u8 *)p + 0x50, D_804005EC, 1);
+    e->unk_04->unk_08 = 0x160;
+    e->unk_04->unk_0A = 0x91;
+
+    e = (UnkCardPair *)p[0x7A];
+    func_80051804(D_8009DDD8[p[0]][0xB], 4, buf);
+    func_80051900(buf);
+    e->unk_00 = (s32)func_80051520((u8 *)p + 0x80, buf, 1);
+    e->unk_04->unk_08 = 0x13F;
+    e->unk_04->unk_0A = 0x91;
+
+    e = (UnkCardPair *)p[0x7D];
+    e->unk_00 = (s32)((u8 *)p + 0xB0);
+    e->unk_04->unk_08 = 0xAE;
+    e->unk_04->unk_0A = 0x18;
+}
 
 /* Live func_80023D64. Its UnkCardGrp240 `c->ptrs[N]` reads are spelled as raw
  * word indices here because this build's ptrs array sits 0x21 WORDS lower --
@@ -3572,6 +3607,11 @@ void func_804067BC(s32 *p)
     func_80405A00((s32 *)p[1], p[11]);
 }
 
+/* NEAR MISS, 112 words of 110: the second block copy's 7-byte tail. The
+ * target does `lwl/lwr` + `lh` + `lb`, which is block_move_sequence with
+ * align 2, and no C type can ask for that -- a struct of 0x27 bytes has
+ * align 1, and raising its alignment rounds the size to 0x28 and the tail to
+ * two more `lwl/lwr` pairs. Source in docs/near-misses/func_80406844.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406844);
 
 void func_804069FC(s32 *p)
@@ -4397,7 +4437,70 @@ void func_804080A4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804081AC);
+/* Live func_8002789C, with four more calls in the 0x40 arm and two printfs
+ * after. The 8-byte copy of t into p[6]/p[7] has to be a STRUCT assignment
+ * here for the same reason as there -- see that function's note. */
+void func_804081AC(s32 *p)
+{
+    s32 flag = 0;
+    s32 *t;
+    s32 diff[2];
+
+    if (D_801379A8.unk_00 != 0)
+    {
+        if (D_801379B0.unk_00 & 0x40)
+        {
+            func_80063FF8(0x515);
+            func_804084DC(p - 8);
+            D_8008CA34 = 2;
+            func_80400EF8();
+            func_8003FD58(0, 0xF, 0, 0);
+            ((u16 *)p[5])[15] |= 0x2000;
+        }
+        else if (D_801379B0.unk_00 & 0x20)
+        {
+            func_80063FF8(0x514);
+            func_804008A0(p[3]);
+            p[13] = 0;
+            p[-4] = (s32)func_804080A4;
+            return;
+        }
+        else if (D_801379A8.unk_00 & 0xA000)
+        {
+            if (D_801379A8.unk_00 & 0x8000)
+            {
+                s32 v = p[3];
+
+                p[3] = 0;
+                if (v != 0)
+                {
+                    flag = 1;
+                }
+            }
+            else
+            {
+                if (p[3] == 0)
+                {
+                    flag = 1;
+                }
+                p[3] = 1;
+            }
+        }
+        if (flag != 0)
+        {
+            func_80063FF8(0x502);
+            func_80407830((s32 *)p[9], p[3]);
+        }
+    }
+    t = func_804017EC();
+    diff[0] = t[0] != p[6];
+    diff[1] = t[1] != p[7];
+    *(UnkTwoWords *)&p[6] = *(UnkTwoWords *)t;
+    func_8040787C((s32 *)p[9], t, diff);
+    func_8003FA78(D_80400854, D_804090F8[t[0]]);
+    func_8003FA78(D_80400860, D_804090F8[t[1]]);
+    func_804018FC();
+}
 
 void func_80408394(s32 *p, s32 a, s32 b)
 {
