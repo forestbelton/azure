@@ -818,6 +818,22 @@ s32 func_80401E14(s32 i)
     return D_8009DDD8[i][0];
 }
 
+/* Live load_save_slot_info, with the row pointer NOT kept in a local: every
+ * one of the three D_8009DDD8 references re-materialises the base, which is
+ * what the two assembler-expanded stores and the re-loaded $a1 say. */
+/* NEAR MISS, 43 words of 42: ONE nop, and it is gcc's emission order, not the
+ * body. The block before the branch holds three insns -- `la $4,D_80136140`,
+ * `lw $2,D_804094EC` and `sll $16,$16,7` -- and gcc schedules the `la` first,
+ * so the load's delay has nothing in it and gcc emits its own `#nop`:
+ *     la $4,D_80136140 / lw $2,D_804094EC / #nop / beq $2,$0,L / sll $16,$16,7
+ * The target is the same four insns with the first two swapped, where the la's
+ * two words cover the load delay and no nop is needed. Reordering the source
+ * does not reach it: a `slot = D_804094EC;` statement ahead of the `t =`, an
+ * if/else that assigns t on both arms, and `off` before, between and after
+ * every other statement in the block all emit the la first. Hoisting the
+ * multiply above func_80401BF4 DOES get the order right (42 words, 7
+ * differing) but then idx never reaches $s0 and the whole prologue shifts.
+ * Source in docs/near-misses/func_80401E2C.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E2C);
 
 void func_80401ED4(s32 idx, u8 *src)
@@ -956,7 +972,26 @@ void func_8040293C(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402974);
+void func_80402974(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -160;
+    p->unk_04->unk_0A = -72;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402A1C);
 
@@ -995,7 +1030,25 @@ void func_80402EBC(s32 *p, s32 a, s32 b, s32 c, s32 d)
     func_80402D90(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402F04);
+/* The two handlers are the other way round from the live func_80022CD8, and
+ * the pointer goes through a LOCAL: the target materialises func_804027F8
+ * before the test and overwrites it, where two stores would cost a second
+ * %hi pair. Same in-place device as func_804008A0's. */
+void func_80402F04(s32 *p)
+{
+    void (*f)(s32 *);
+
+    func_80402A1C((u8 *)(p + 9), p);
+    func_80402BE0(p);
+    p[0] = D_80408ADC[p[2]].unk_03;
+    func_8040274C(p);
+    f = func_804027F8;
+    if (p[3] == 2)
+    {
+        f = func_8040293C;
+    }
+    p[-4] = (s32)f;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402F84);
 
@@ -1888,7 +1941,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804053A0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804054E8);
+/* The live func_80024A50 has a second test on p[0x20] and a third callee in
+ * the else; this build has neither. */
+void func_804054E8(s32 *p)
+{
+    s32 n = p[0x1F];
+
+    if (D_8009DDD8[n][0] != 0)
+    {
+        func_80404EA0(p);
+    }
+    else
+    {
+        func_804053A0(p);
+    }
+}
 
 void func_8040553C(s32 *p)
 {
@@ -1987,7 +2054,18 @@ void func_804059A8(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405A00);
+void func_80405A00(s32 *p, s32 a)
+{
+    s32 *q;
+
+    if (p != 0)
+    {
+        q = p + 8;
+        q[0x1F] = a;
+        func_80405900((UnkCardGrpB20 *)q);
+        func_804054E8(q);
+    }
+}
 
 void func_80405A3C(s32 *p)
 {
@@ -2126,7 +2204,25 @@ void func_80405C44(u8 *p)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80405C4C);
+/* Live func_800251A4. Three differences: D_8008CA34 and func_80400EF8 stand in
+ * for its func_80027BF4, the D_80082E60 flag update and two of its calls are
+ * absent, and the two absolute addresses are this link's -- 0x80011F48 for the
+ * halfword store and 0x80010208 for the word read, where the live pair is
+ * 0x80013714 and 0x80010208 and the read is a HALFWORD. */
+void func_80405C4C(s32 *p)
+{
+    s32 v;
+
+    D_8008CA34 = 2;
+    func_80400EF8();
+    v = 1;
+    if (p[0x11] == 0)
+    {
+        v = 3;
+    }
+    D_80011F48 = v;
+    func_8003D548(D_80010208 != 0 ? 5 : 4);
+}
 
 void func_80405CB8(s32 *p)
 {
@@ -2426,7 +2522,14 @@ void func_80406A24(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406A74);
+/* No live counterpart: D_8008CA34 is written by six functions in this block
+ * and by nothing in the live one. It is a BYTE -- the store is `sb`. */
+void func_80406A74(void)
+{
+    D_8008CA34 = 2;
+    func_80400EF8();
+    func_8003D548(3);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406AA8);
 
@@ -2910,18 +3013,46 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804081AC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408394);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804083A0);
+/* Live func_80027A9C. func_804076C8 takes ONE argument at this site -- the
+ * live call passes p[3] second and there is no load of it here. */
+void func_804083A0(s32 *p)
+{
+    s32 *q = p - 8;
+
+    p[8] = func_80404C84(q, p + 3);
+    p[9] = (s32)func_804076C8w(q);
+    func_80400948();
+    p[-4] = (s32)func_804081AC;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804083FC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804084DC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040855C);
+void func_8040855C(s32 *p)
+{
+    D_8008CA34 = 1;
+    func_80400E34();
+    func_804083FC((s32)p, 1);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040859C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804085DC);
 
+/* NEAR MISS, 9 words of 10, 5 differing: `short func_8040861C(void) { return
+ * func_8004DBDC(); }` is right in the body and wrong in the EPILOGUE. gcc 2.7.2
+ * hand-schedules the epilogue whenever one body insn is left to interleave --
+ *     .set noreorder / lw $31,16($sp) / sra $2,$2,16 / j $31 / addu $sp,$sp,24
+ * -- four words, where the target has the plain reorder-mode epilogue with the
+ * sra ahead of it and an empty slot:
+ *     sra $2,$2,16 / lw $31 / addiu $sp / jr $31 / nop
+ * Five words. That is the shape gcc emits only when it has NOTHING to
+ * interleave: every landed function in this unit whose last body insn is a
+ * jal's delay slot has it. Tried and rejected: `short`/`s32` return, a short
+ * callee, a short local, an explicit (short) cast, and an empty volatile asm
+ * before the return, between the call and the return, and at the top -- the
+ * interleave survives all six. Source in docs/near-misses/func_8040861C.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040861C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408644);
@@ -2945,7 +3076,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086CC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086DC);
+/* libcard's InitCARD, not game code: ChangeClearPAD, then init_card /
+ * start_card / B0:0x55 inside a critical section. The live func_80027D40 the
+ * alignment pairs it with is something else entirely. */
+void func_804086DC(long pad_enable)
+{
+    func_8007CB08(0);
+    func_8007CA38();
+    func_80408798(pad_enable);
+    func_804088A0();
+    func_80408958();
+    func_8007CA48();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408730);
 

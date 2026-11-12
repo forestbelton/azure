@@ -31,7 +31,9 @@
 #include "main.h"
 
 /* --- functions, in address order --- */
+void func_8003D548(s32 a);                           /* func_80040AA0 */
 s32 func_80047358(s32 a, u8 *fmt, s32 n);            /* func_800491F4 */
+s32 func_8004DBDC(void);                             /* no live counterpart named */
 void func_8004DCCC(s32 *p);                          /* func_8004CB2C */
 void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
@@ -54,6 +56,7 @@ long func_8007CA98(long fd);                         /* close */
 char *func_8007BF50(char *d, char *s);               /* strcat */
 char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
+long func_8007CB08(long);                            /* ChangeClearPAD */
 struct DIRENTRY *func_8007CAB8(u8 *name, struct DIRENTRY *e);  /* firstfile2 */
 struct DIRENTRY *func_8007CAC8(struct DIRENTRY *e);  /* nextfile */
 u_short func_80078570(int tp, int abr, int x, int y); /* GetTPage */
@@ -70,6 +73,7 @@ long func_804009D4(void);                            /* HandleCardError */
 long func_804009E8(void);                            /* HandleCardTimeout */
 long func_804009FC(void);                            /* HandleCardNew */
 void func_80400A10(void);                            /* open_card_events */
+void func_80400E34(void);                            /* start_card_server */
 s32 func_804010F0(void);                             /* on_sw_card_eof */
 s32 func_804012B0(void);                             /* on_card_new */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
@@ -79,7 +83,12 @@ s32 func_804016D0(void);                             /* func_8002168C */
 void func_804018FC(void);                            /* print_card_status */
 s32 func_804019B4(void);                             /* count_card_files */
 s32 func_80401B30(s32 card_slot);                     /* format_card */
+s32 func_80401C70(u8 *name, u8 *buf, s32 n, s32 off); /* read_card_file */
 s32 func_80401E2C(s32 n);                            /* load_save_slot_info */
+void func_8040274C(s32 *p);                          /* func_80022488 */
+void func_804027F8(s32 *p);                          /* func_800226A8 */
+u8 *func_80402A1C(u8 *p, s32 *q);                    /* func_80022774 */
+void func_80402BE0(s32 *p);                          /* func_80022934 */
 s32 func_80402084(s32 a, u8 *b);                     /* write_save_file */
 s32 func_80402154(s32 a, u8 *b);                     /* read_save_file, which takes
                                                         THREE here in the live build --
@@ -132,8 +141,11 @@ u8 *func_80404A3C(u8 *p);                            /* func_8004F1E8 */
 void func_80404B10(u8 *p);                           /* func_8004F2BC */
 void func_80404C3C(u32 *p, u32 v);                   /* func_8004F3D0 */
 s32 func_80404C84(s32 *p, s32 *q);                   /* func_8004F418 */
+void func_80404EA0(s32 *p);                          /* func_80024390 */
+void func_804053A0(s32 *p);                          /* func_80024818 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
+void func_804054E8(s32 *p);                          /* func_80024A50 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
 s32 *func_804057F0(s32 *p, s32 a);                  /* func_80024D58 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
@@ -172,6 +184,9 @@ void func_80407458(s32 *p);                          /* func_80026C94 */
 void func_804074C4(s32 *p);                          /* func_80026CF0 */
 void func_80407558(UnkCardGrp044 *c);             /* func_80026D78 */
 s32 *func_804076C8(s32 *p, s32 a);                   /* func_80026ED0 */
+/* ONE argument at func_804083A0's call site, where the live func_80027A9C passes
+ * p[3] as a second; same device as main.h's func_80024C48w. */
+s32 *func_804076C8w(s32 *p) __asm__("func_804076C8");
 void func_8040789C(UnkCardGrp0D4 *c);             /* func_80027018 */
 void func_804078D8(u8 *p);                           /* func_80027054 */
 void func_80407A44(UnkCardPair *p, u32 *a, u32 *b);  /* func_800271C0 */
@@ -183,10 +198,15 @@ void func_80407E64(s32 *p);                          /* func_80027584 */
 void func_80407F68(s32 *p);                          /* func_80027684 */
 void func_804081AC(s32 *p);                          /* func_8002789C */
 void func_804083A0(s32 *p);                          /* func_80027A9C */
+s32 *func_804083FC(s32 a, s32 b);                    /* func_80027AFC */
 void func_804084DC(s32 *p);                          /* func_80027C90 */
 long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
+/* libcard's own BIOS stubs, four words each and not expressible in C. */
+long func_80408798(long pad_enable);                 /* B0:0x4A, init_card */
+long func_804088A0(void);                            /* B0:0x4B, start_card */
+long func_80408958(void);                            /* B0:0x55 */
 long func_804086BC(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
                                                         votes func_80027AFC, which takes two */
 void func_804086CC(void);                            /* func_80027C60 */
@@ -215,6 +235,10 @@ extern u8 D_800841DC[];                              /* D_80079054 */
 extern u8 D_8008423C[];                              /* D_800790B4 */
 extern u8 D_8008429C[];                              /* D_80079114 */
 extern u8 D_8008432C[];                              /* D_800791A4 */
+extern s32 D_80010208;                               /* live b[0x104], read as a WORD here */
+extern u16 D_80011F48;                               /* live b[0x1B8A], a different address in this link */
+extern u8 D_8008CA34;                                /* a BYTE, written by six functions in this
+                                                        block and by nothing in the live one */
 extern u32 D_8008DAB4;                               /* D_800814A0, declared in include/structs.h, not main.h */
 extern u32 D_8008DAB4_a[1] __asm__("D_8008DAB4");    /* the array spelling of the same object; see main.h's note on D_800814A0_a -- the lever is PER SITE */
 extern u8 D_80082FF4[];                              /* D_80077E84 */
@@ -243,6 +267,19 @@ extern u8 D_804005F0[8];                              /* D_800282B0 */
    have carried the size. The live block is -G0, where the declared size
    changes nothing, which is why csrc/main.h can say `[2]` and why this -G8
    build is the only place the difference shows. */
+/* The debug build's message record is FOUR BYTES where the live UnkStrSet is
+ * 24: every site indexes it `sll 2`, and the five string pointers the live
+ * struct carries are not in it. Which of the live unk_14..unk_17 each byte
+ * is has NOT been established, so they are numbered by position. */
+typedef struct
+{
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+    u8 unk_03;
+} UnkTwinMsg;
+extern UnkTwinMsg D_80408ADC[];                      /* live gCardMessages' trailing four bytes */
+
 extern const char *D_80408AA0[];                     /* MEM_CARD_NAMES */
 extern char D_80408AA8[16];                          /* MEM_CARD_PREFIX */
 extern const char *D_80408AB8[6];                    /* MEM_CARD_FILENAMES */
