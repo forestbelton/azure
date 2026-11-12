@@ -67,9 +67,11 @@ s32 func_80058FF0(s32 a, s32 b, s32 c);              /* func_80049DE8 */
 s32 func_80056450(s32 a, s32 b, s32 c);              /* func_80047C44 */
 void func_8004DDBC(u32 *p, u8 *q, u32 *r);           /* func_8004CBFC */
 s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
+s32 *func_8003C480(s32 a);                           /* the twin's allocator */
 s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80047FD8(s32 *p);                           /* func_8004B4A8 */
 void func_80047938(s32 *p);                          /* func_8004AE08 */
+s32 func_800484A4(s32 a, s32 *b);                    /* func_8004B9F0 */
 int func_8003FA78(char *fmt, ...);                   /* the debug printf */
 void func_80040560(s32 *p, u32 f);                   /* func_8004491C */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
@@ -186,7 +188,7 @@ void func_80404570(s32 *p);                          /* func_80024184 */
 void func_804045C8(s32 *p, s32 flag);                /* func_800241D4 */
 void func_80404618(s32 *p, s32 flag);                /* func_80024224 */
 void func_80404668(s32 *p);                          /* func_80024274 */
-void func_80404708(u8 *p, u32 *a, u32 *b);           /* func_8004EEFC */
+void func_80404708(UnkCardPair *p, u32 *a, u32 *b);  /* func_800237C4 family */
 u8 *func_804047B0(u8 *p);                            /* func_8004EF90 */
 u8 *func_80404818(u8 *p);                            /* func_8004EFF4 */
 u8 *func_80404888(u8 *p);                            /* func_8004F068 */
@@ -366,7 +368,10 @@ extern char D_804000B0[];
 extern char D_804000BC[];
 extern char D_804000D0[];
 extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern char D_80400134[];                            /* check_gsw_checksum's two printfs */
 extern char D_80400138[];                            /* read_save_file's checksum complaint */
+extern const char D_8040086C[40];                    /* memory.c's ASSERT_FMT copy */
+extern const char D_80400894[];                      /* its filename */
 extern char D_80400120[];
 extern char D_80400038[];                            /* "%s = %d\n" */
 extern char D_80400044[];                            /* "card_first_flg" */
@@ -395,6 +400,7 @@ typedef struct
     u8 unk_02;
     u8 unk_03;
 } UnkTwinMsg;
+extern void (*D_80408AD0[])(s32 *);                  /* the message constructors */
 extern UnkTwinMsg D_80408ADC[];                      /* live gCardMessages' trailing four bytes */
 extern u8 *D_80408B2C[][4];                          /* and its strings, FOUR per record, not five */
 
@@ -433,6 +439,7 @@ extern const char D_80400800[];                      /* its filename */
 extern const char D_804005F8[40];                    /* another unit's ASSERT_FMT copy */
 extern const char D_80400620[];                      /* its filename */
 extern u8 D_8040B4F8[];                              /* D_8002A990 */
+extern const u8 D_80400544[4];                       /* D_800200A0 */
 extern const char D_80400548[40];                    /* card_mes.c's ASSERT_FMT copy */
 extern const char D_80400570[];                      /* its filename */
 extern u8 D_8040C318[];                              /* D_8002B850 */

@@ -1161,7 +1161,23 @@ void func_80401F98(s32 *gsw)
 
 /* Prints both halves of the comparison: `c` (the xor accumulator) and then
    `(int)gsw->check_sum`. The live check_gsw_checksum's accumulator is now `c`. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401FEC);
+/* Live check_gsw_checksum, with the run four words longer and both the
+ * computed and the stored sum printed before the comparison. */
+s32 func_80401FEC(s32 *gsw)
+{
+    s32 sum = 0;
+    s32 *q = gsw + 0x82;
+    s32 i = 0;
+
+    for (i = 0; i < 0x1782; i++)
+    {
+        sum ^= *q;
+        q++;
+    }
+    func_8007C040(D_80400114, D_80400134, sum);
+    func_8007C040(D_80400114, D_80400120, gsw[0x81]);
+    return gsw[0x81] == sum;
+}
 
 /* Live write_save_file, without its `*(s32 *)(buf + 0x204) = 0;` and without
  * the refresh_card_info call. */
@@ -1287,9 +1303,31 @@ void func_804023E4(s32 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402428);
+/* The FIRST argument is never read -- the allocator is called with a literal
+ * zero -- and the constructor comes out of D_80408AD0 by index. */
+s32 *func_80402428(s32 unused, s32 a, s32 n)
+{
+    s32 *p = func_8003C480(0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804024A4);
+    if (p != 0)
+    {
+        p[8] = a;
+        p[9] = n;
+        D_80408AD0[n](p);
+        p[4] = (s32)func_804023E4;
+    }
+    return p;
+}
+
+void func_804024A4(s32 *p)
+{
+    if (p != 0)
+    {
+        *(s32 *)p[8] = func_800484A4(p[9] + 6, (s32 *)p[8]);
+        ((u16 *)p)[15] |= 0x8000;
+        D_8008DAB4 |= 0x8000;
+    }
+}
 
 /* NEAR MISS: two extra loads of *s in the inner scan loop, and they are the target's not ours
    Source in docs/near-misses/func_80402508.c. */
@@ -1486,6 +1524,10 @@ void func_80402BE0(s32 *p)
     }
 }
 
+/* NEAR MISS, 46 words of 47, 24 differing from ONE: the target keeps 0xC in
+ * a register and computes `srl $v0,$a3,1` inside the loop for the second
+ * height, and gcc hoists that shift into the preheader where it folds to 6.
+ * Source in docs/near-misses/func_80402CD4.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402CD4);
 
 void func_80402D90(s32 *p)
@@ -2336,7 +2378,26 @@ void func_804046C8(u8 *p)
  * and `volatile` on the destinations through a cast (overshoots to 44). What
  * is wanted is a spelling where the next load cannot be hoisted across the
  * previous store. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404708);
+void func_80404708(UnkCardPair *p, u32 *a, u32 *b)
+{
+    u32 *s1 = D_8002D690_a;
+    u32 *s2 = D_8002D6A0_a;
+
+    a[0] = s1[0];
+    a[1] = s1[1];
+    a[2] = s1[2];
+    a[3] = s1[3];
+    b[0] = s2[0];
+    b[1] = s2[1];
+    b[2] = s2[2];
+    p->unk_04 = (UnkCardPrim *)a;
+    p->unk_08 = (UnkCardPrim12 *)b;
+    p->unk_00 = 0;
+    p->unk_04->unk_08 = -160;
+    p->unk_04->unk_0A = -120;
+    p->unk_04->unk_0C = 0x200;
+    p->unk_04->unk_0F = 4;
+}
 
 /* func_8004EF90. Its three globals are D_80408CC4, D_80408CCC and D_80408CC8,
  * in the order the body reads them -- the listing's first-use order is the
@@ -4166,7 +4227,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804080A4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804081AC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408394);
+void func_80408394(s32 *p, s32 a, s32 b)
+{
+    p[5] = a;
+    p[0] = b;
+}
 
 /* Live func_80027A9C. func_804076C8 takes ONE argument at this site -- the
  * live call passes p[3] second and there is no load of it here. */
@@ -4182,7 +4247,19 @@ void func_804083A0(s32 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804083FC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804084DC);
+void func_804084DC(s32 *p)
+{
+    if (p == 0)
+    {
+        __asm__ volatile("");
+        func_8007C040(D_8040086C, D_80400894, 0x183);
+        func_8007BEF0(1);
+    }
+    func_80404DBC((u8 *)p[0x10]);
+    func_804077D4((s32 *)p[0x11]);
+    ((u16 *)p)[15] |= 0x8000;
+    D_8008DAB4 |= 0x8000;
+}
 
 void func_8040855C(s32 *p)
 {
