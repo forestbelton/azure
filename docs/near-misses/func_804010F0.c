@@ -40,7 +40,20 @@
  * return to `addiu $v0,$zero,2`. An `"=r"(r)`/`"0"(r)` pair is worse (77w,
  * 12 DIFF: the cross-jump comes back).
  *
- * Its sibling func_804012B0 (live on_card_new) is parked beside it at 2.
+ * Re-probed 2026-11-12. Making `r` opaque at the three arm's return is the
+ * obvious way to stop the fold -- it is what would put `addu $v0,$s0,$zero`
+ * in that `j`'s slot -- and every form of it measures 77 words and 12
+ * differing, because an opaque `r` makes the arm's `return r` identical to
+ * `out:`'s and the cross-jump comes straight back: volatile `"=r"(r)`/`"0"(r)`
+ * alone, with `"r"(r)` added, and either order of the two markers. The
+ * target's three arm has no `addu` of its own at all -- reorg stole `out:`'s
+ * and retargeted past it -- so the arm ended in a plain `goto out`, and that
+ * spelling is the one that falls through instead. The two requirements are
+ * in direct opposition under this compiler.
+ *
+ * Its sibling func_804012B0 (live on_card_new) is parked beside it at 2, and
+ * its note now carries the reorg.c line numbers for why neither `j` can take
+ * an insn from behind the other.
  */
 
 #include "common.h"

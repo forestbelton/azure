@@ -1104,20 +1104,53 @@ s32 func_80401E14(s32 i)
 /* Live load_save_slot_info, with the row pointer NOT kept in a local: every
  * one of the three D_8009DDD8 references re-materialises the base, which is
  * what the two assembler-expanded stores and the re-loaded $a1 say. */
-/* NEAR MISS, 43 words of 42: ONE nop, and it is gcc's emission order, not the
- * body. The block before the branch holds three insns -- `la $4,D_80136140`,
- * `lw $2,D_804094EC` and `sll $16,$16,7` -- and gcc schedules the `la` first,
- * so the load's delay has nothing in it and gcc emits its own `#nop`:
- *     la $4,D_80136140 / lw $2,D_804094EC / #nop / beq $2,$0,L / sll $16,$16,7
- * The target is the same four insns with the first two swapped, where the la's
- * two words cover the load delay and no nop is needed. Reordering the source
- * does not reach it: a `slot = D_804094EC;` statement ahead of the `t =`, an
- * if/else that assigns t on both arms, and `off` before, between and after
- * every other statement in the block all emit the la first. Hoisting the
- * multiply above func_80401BF4 DOES get the order right (42 words, 7
- * differing) but then idx never reaches $s0 and the whole prologue shifts.
- * Source in docs/near-misses/func_80401E2C.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E2C);
+/* Live load_save_slot_info. The row is addressed by a BYTE OFFSET, not a
+ * pointer local: the target's two stores are `sw $v0, D_8009DDD8($s0)` with
+ * $s0 holding idx << 7, and a `s32 *e = D_8009DDD8[idx];` local costs the add
+ * and comes out at 40 words. */
+s32 func_80401E2C(s32 idx)
+{
+    char name[0x20];
+    s32 r = 1;
+    s32 **t;
+    s32 off;
+    s32 v;
+    s32 slot;
+
+    func_80401BF4(name, idx);
+    off = idx * 0x80;
+    slot = D_804094EC;
+    /* DEVICE: one marker, worth a word (43 -> 42, 34 differing -> 0). The
+       block before the branch is three insns -- `la $4,D_80136140`,
+       `lw $2,D_804094EC` and `sll $16,$16,7`. Written plainly gcc sinks the
+       load to its comparison, so the `la` is first in LUID order, sched2 ties
+       on priority and keeps that order, the load's delay has nothing in it
+       and gcc emits its own `#nop`. The target is the same four insns with
+       the first two swapped, the la's two assembler-expanded words covering
+       the delay. Reading the flag into a local does not move it on its own --
+       gcc sinks it again -- so the marker is what pins the load ahead of the
+       `la`, and then the scheduler fills the delay by itself.
+       Legal spellings ruled out: no marker 43 words, 34 differing; the marker
+       AFTER the `t =` 43/34 (too late to change the order); `volatile` 43/34
+       (it is a scheduling barrier, so the la cannot move into the delay
+       either); `"=r"(slot)`/`"0"(slot)` also matches, and so does moving the
+       `off` multiply after the marker.
+       Warns under -Wall? No. */
+    __asm__("" : : "r"(slot));
+    t = (s32 **)D_80136140;
+    if (slot != 0)
+    {
+        t++;
+    }
+    v = func_80401AA4((s32)*t, (u8 *)(name + 5));
+    *(s32 *)((u8 *)D_8009DDD8 + off) = v;
+    if (v != 0)
+    {
+        r = func_80401C70((u8 *)name, (u8 *)D_8009DDD8 + off, 1, 4);
+        *(s32 *)((u8 *)D_8009DDD8 + off) = 1;
+    }
+    return r;
+}
 
 void func_80401ED4(s32 idx, u8 *src)
 {
