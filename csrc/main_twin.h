@@ -172,6 +172,21 @@ extern const char D_80400004[40];                    /* ASSERT_FMT */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
 extern u8 D_804005F0[8];                              /* D_800282B0 */
 extern u8 D_80408C84[8];                              /* D_80027F60 */
+/* THE <=8 SPELLING WORKS ON A FUNCTION ADDRESS TOO, and it is the only way to
+   stop reorg stealing the `lui` into a branch delay slot. Declared as sized
+   DATA, the symbol gets an `.extern SYM,8` record, takes the -G8 small-data
+   path and materialises as ONE insn, so there is no separate `lui` to steal
+   and the branch keeps its nop. func_80406BEC needs this; see its comment. */
+extern u8 func_80406DA0_a[8] __asm__("func_80406DA0");
+extern void func_80406590(s32 *p);                   /* func_80025B9C AND func_80025B60:
+                                                        this build uses ONE handler where the
+                                                        live source has two. func_804065CC. */
+extern u8 func_80406590_a[8] __asm__("func_80406590");
+extern void func_80406F34(s32 *p);                   /* func_80026784 AND func_80026748: the
+                                                        same one-handler-for-two as above,
+                                                        on func_80406F70. */
+extern u8 func_80406F34_a[8] __asm__("func_80406F34");
+
 extern u8 *D_80408C8C[4];                            /* D_800282BC */
 extern u8 *D_80408C8C_a[1] __asm__("D_80408C8C");    /* the <=8 spelling of the same table: at -G8 a declared
                                                         size of 8 or less takes the small-data path, and the

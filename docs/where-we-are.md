@@ -153,11 +153,11 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **103 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **106 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** 88 came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap`, 4 on 2026-11-11 from the `-G8`
+  `tools/decomp/twinalign.py --symmap`, 7 on 2026-11-11 from the `-G8`
   declared-size and increment-order levers, and 11 from the RESIDENT units
   (`csrc/unk_1C540.c`), which is where the `twin-only` functions come from:
   this debug build linked libcard's callers statically where retail calls

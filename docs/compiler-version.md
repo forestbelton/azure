@@ -473,3 +473,71 @@ Copy `COMPILER/CC1PSX.EXE`, `CPPPSX.EXE` and `CC1PLPSX.EXE` over
 
 The 4.1 disc image lives in `~/Downloads/Programmer Tool - Runtime Library
 Version 4.1 (Japan)_DTL-S2330_redump/`.
+
+## main.bin's 0x80400000 twin is 4.0, not 4.1
+
+**Established 2026-11-11.** Everything above is about the GAME code, which is
+4.1. The debug twin in `main.bin` is a different build, and two independent
+measurements both say it is the older compiler. That matters because it is the
+only unit in the tree with work left in it, and because it means the twin's
+residual differences have ONE cause rather than several.
+
+**1. It has no split addresses.** The discriminator this document already uses
+-- 4.0 "cannot emit the hoisted-lui global access shape" -- shows up in the
+twin as the reverse of the game code. An indexed load of a non-small-data
+symbol comes out folded, with `$at` as the scratch:
+
+    target      lui  $at, %hi(SYM)        candidate   lui   $v0, %hi(SYM)
+                addu $at, $at, $index                 addiu $v0, $v0, %lo(SYM)
+                lw   $v0, %lo(SYM)($at)               sll   $v1, $v1, 7
+                                                      addu  $v1, $v1, $v0
+                                                      lw    $v0, 0($v1)
+
+`$at` is the giveaway: gcc never allocates `$1`, so the ASSEMBLER expanded a
+single `lw $rD, SYM($index)`. `GO_IF_LEGITIMATE_ADDRESS` (`config/mips/mips.h`,
+the `PLUS` case) accepts a constant address plus a register -- its comment says
+so in as many words, "the assembler can use $r1 to load just the high 16 bits,
+add in the register, and fold the low 16 bits into the memory reference,
+whereas the compiler generates a 4 instruction sequence" -- but **only when
+`! mips_split_addresses`**. And `mips_split_addresses` is set unconditionally
+in `override_options` (`config/mips/mips.c:3678`) from
+`TARGET_GAS && optimize && ! flag_pic && Pmode == SImode`.
+
+**It is NOT reachable as a flag.** `-mno-gas` should clear `TARGET_GAS` and
+with it `mips_split_addresses`, but measured on this compiler the generated
+code is byte-identical either way -- only the `options enabled` comment moves.
+So a per-unit `CFLAGS` override cannot buy this the way the `-G8` one does.
+
+**2. It has no `reload_cse_regs`.** The 15-function cluster in
+`csrc/ovl_main_80400000.c`'s header: where the game code copies a hard register
+that already holds a needed constant, the twin materialises the constant again.
+`reload_cse_regs` is an SN addition absent from vanilla gcc-2.7.2.3, has no
+cost test and no flag, and `docs/matching-levers.md` has the full reading.
+
+Two unrelated passes, both present in 4.1 and both absent from the twin, is
+much more economical as "an earlier compiler" than as two coincidences -- and
+4.0 is exactly the build this document already shows lacks the first of them.
+
+### What follows for the work
+
+* The residual differences are ONE problem. A 4.0 `cc1psx` would be expected
+  to close the 15 `reload_cse_regs` functions AND the folded-address ones
+  together, which is a much better return than the earlier plan in that
+  header (patching cdk-gcc to disable `reload_cse_regs` alone, which would
+  have left every folded address still wrong).
+* `psyq/` carries headers only, so the 4.0 `cc1psx.exe` is not in the tree --
+  but it is NOT far away. The 4.0 disc this document was written against is
+  still on this machine, `~/Downloads/Programmer Tool - Runtime Library
+  Version 4.0 (Japan)_DTL-S2320_redump.zip`, beside the 4.1 one, and the 4.1
+  `cc1psx.exe` is unpacked at `~/scratch/azure/psyq/cc1psx.exe`. So wiring 4.0
+  up for ONE unit is extracting a binary and a `CC` override for that target,
+  not a compiler build. It does mean wine for that unit, which is what the
+  native cdk-gcc build exists to avoid, so it is a real trade and not a
+  free win. `vendor/old-gcc` also has Dockerfiles for 2.7.2 through 2.7.2.3
+  and a `gcc-2.7.2-psx` target, none of them built, but those are vanilla
+  trees and would be missing SN's patches as well as its passes.
+* The declared-size aliases that landed `func_80406BEC`, `func_804065CC`,
+  `func_80406F70`, `func_804078D8` and `func_804037F4` EMULATE a
+  no-split-addresses build one site at a time. The bytes match, which is what
+  the project requires, but they are not what the original source said -- so
+  if a 4.0 compiler is ever wired up, revisit them.

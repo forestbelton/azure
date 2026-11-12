@@ -116,12 +116,28 @@
  *                   docs/matching-levers.md has the full heading and the
  *                   swept-and-failed spellings; do not retry them.
  *
- *                   LANDING THESE NEEDS A SECOND COMPILER, cdk-gcc-b18 with
- *                   reload_cse_regs disabled (a one-line change at
- *                   reload1.c:2140), selected for this unit only. Everything
- *                   already landed here is independent of the pass, so it
- *                   should be surgical -- but it is a build-architecture
- *                   decision and is NOT started.
+ *                   LANDING THESE NEEDS A SECOND COMPILER, and as of
+ *                   2026-11-11 we know WHICH: PSY-Q 4.0's cc1psx, not
+ *                   cdk-gcc-b18 with reload_cse_regs switched off. THIS
+ *                   BLOCK IS A 4.0 BUILD. Two unrelated passes that 4.1 has
+ *                   are both missing from it -- reload_cse_regs, above, and
+ *                   split addresses, which is the discriminator
+ *                   docs/compiler-version.md already used to prove the GAME
+ *                   code is 4.1. That document's new last section has the
+ *                   evidence; the short version is that `mips_split_addresses`
+ *                   gates the folded `lui $at` / `addu` / `%lo($at)` indexed
+ *                   load this block uses everywhere, it is set
+ *                   unconditionally from TARGET_GAS in override_options, and
+ *                   -mno-gas does NOT change the generated code (measured),
+ *                   so no per-unit CFLAGS override can buy it.
+ *
+ *                   That is better news than the old plan: one compiler
+ *                   closes the reload_cse_regs cluster AND the folded
+ *                   addresses together, where disabling that one pass would
+ *                   have left every folded address still wrong. The 4.0 disc
+ *                   is on this machine. It is still NOT started -- it means
+ *                   wine for this unit, which is what the native cdk-gcc
+ *                   build exists to avoid.
  *
  *   2 fn, 2 words   A DIFFERENT POINTER SPELLING OF THE SAME ADDRESS.
  *                   func_80406720 and func_804070C4 hold `q = p + 8` and
@@ -185,10 +201,27 @@
  *   without that pass exists -- so the blocked cluster is 15 functions, not
  *   14. Measure it with `ovlverify.py --G 8`.
  *
- *   others          func_804012B0 (9), func_804065CC and func_80406F70 (11
- *                   each), func_80406BEC (12), func_804083A0 (15),
- *                   func_80407F68 (19), func_80404DEC (28), func_804018FC
- *                   and func_80403E54 (42), func_804010F0 and func_80405DE0
+ *   LANDED 2026-11-11 ON A THIRD LEVER, the sized DATA ALIAS of a FUNCTION
+ *   symbol. A function has no size to declare, but `extern u8 F_a[8]
+ *   __asm__("F");` gives it one, which puts the address on the -G8 small-data
+ *   path and makes it ONE insn -- so reorg has no `lui` to steal into the
+ *   preceding branch's delay slot, where this build keeps a nop.
+ *   func_80406BEC (12 -> 0), func_804065CC and func_80406F70 (11 -> 0 each).
+ *   An INCOMPLETE alias does not work, which is what says the size is doing
+ *   it. It is per site: func_804065CC reaches its symbol twice and only the
+ *   second needs the alias. All three also carry a revision difference --
+ *   one handler where the live source has two.
+ *
+ *   These aliases EMULATE the no-split-addresses build one site at a time.
+ *   Revisit them if 4.0 is ever wired up.
+ *
+ *   func_80406274 is the same two levers and then the folded indexed load:
+ *   pointer-to-array for its table plus the function alias takes it 32 -> 5,
+ *   and the 5 are entirely that load. Same wall as func_80404DEC.
+ *
+ *   others          func_804012B0 (9), func_804083A0 (15), func_80407F68
+ *                   (19), func_80404DEC (28), func_804018FC and
+ *                   func_80403E54 (42), func_804010F0 and func_80405DE0
  *                   (49). func_804018FC is the extreme case: 42 words
  *                   against a live counterpart of 2, so that pairing is
  *                   wrong or the live source lost the body entirely.
@@ -1485,7 +1518,42 @@ void func_80406590(s32 *p)
     p[-4] = (s32)func_80406368;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804065CC);
+/* Live func_80025BD4, with one revision difference and one delay slot.
+ *
+ * THE REVISION DIFFERENCE: this build assigns func_80406590 at BOTH sites
+ * where the live source has two separate handlers, func_80025B9C for p[13]
+ * and func_80025B60 for the trailing p[-4]. Its listing names the same
+ * symbol twice, so this is not a symmap miscount.
+ *
+ * THE DELAY SLOT is the last p[-4] only. Plain `(s32)func_80406590` lets
+ * reorg steal that address's `lui` into the preceding `bne`'s slot, where
+ * this build keeps a nop: 11 differing. The sized data alias makes the
+ * address one insn and there is nothing to steal: 0. The FIRST site does not
+ * need it -- its pair is adjacent either way, because nothing there can
+ * reach a delay slot -- which is why only one site carries the alias. */
+void func_804065CC(s32 *p)
+{
+    s32 n = p[9];
+
+    if (n < 5)
+    {
+        if (func_80401E2C(n) != 0)
+        {
+            p[n + 1] = func_80404364((s32)(p - 8), n);
+            p[9] = p[9] + 1;
+        }
+        else
+        {
+            p[13] = (s32)func_80406590;
+            func_8040325C((s32)(p - 8));
+            p[-4] = (s32)func_80405A3C;
+        }
+    }
+    if (n == 5)
+    {
+        p[-4] = (s32)func_80406590_a;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406678);
 
@@ -1530,7 +1598,25 @@ void func_80406B9C(s32 *p)
     p[-4] = (s32)func_80406B74;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406BEC);
+/* Live func_80026410, same body and the same p[14]. The ONE difference is a
+ * delay slot: the live build steals the function address's `lui` into the
+ * `beqz`'s slot, this build leaves a nop there. That is the -G8 declared-size
+ * lever again, reached through a DATA alias of the function symbol --
+ * func_80406DA0_a gets an `.extern ...,8` record, so the address is one insn
+ * and there is nothing for reorg to take. Plain `(s32)func_80406DA0` is 12
+ * differing, the alias is 0, and an INCOMPLETE data alias is 12 again, which
+ * is what says the size and not the data-ness is doing the work. */
+void func_80406BEC(s32 *p)
+{
+    if (p[14] != 0)
+    {
+        p[-4] = (s32)func_80406DA0_a;
+    }
+    else
+    {
+        func_80406B9C(p);
+    }
+}
 
 void func_80406C2C(s32 *p)
 {
@@ -1574,7 +1660,35 @@ void func_80406F34(s32 *p)
     p[-4] = (s32)func_80406DA0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406F70);
+/* Live func_800267C0, and func_804065CC's twin in every sense: the same body
+ * one slot over (p[10] and p[n+3] where that one has p[9] and p[n+1]), the
+ * same revision collapse -- func_80406F34 at both the p[13] and the trailing
+ * p[-4] site, where the live source has func_80026784 and func_80026748 --
+ * and the same delay slot needing the sized alias at the last site only.
+ * 11 differing plain, 0 with the alias. */
+void func_80406F70(s32 *p)
+{
+    s32 n = p[10];
+
+    if (n < 5)
+    {
+        if (func_80401E2C(n) != 0)
+        {
+            p[n + 3] = func_80404364((s32)(p - 8), n);
+            p[10] = p[10] + 1;
+        }
+        else
+        {
+            p[13] = (s32)func_80406F34;
+            func_8040325C((s32)(p - 8));
+            p[-4] = (s32)func_804069FC;
+        }
+    }
+    if (n == 5)
+    {
+        p[-4] = (s32)func_80406F34_a;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040701C);
 
