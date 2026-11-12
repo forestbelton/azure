@@ -75,7 +75,9 @@ void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 s8 *func_80051520(u8 *a, u8 *b, s32 c);              /* func_8004E298 */
 void func_80051804(s32 v, s32 n, u8 *out);           /* func_8004E5A0 */
-void func_80051900(u8 *q);                           /* func_8004E69C */
+void func_80051900(u8 *q);
+void func_80051898(s32 v, u8 *out);                  /* func_8004E634 */
+void func_8005184C(s32 v, s32 n, u8 *out);           /* func_8004E5E8 */                           /* func_8004E69C */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
 void func_800702F0(s32 mode);                        /* VSync */
@@ -361,6 +363,7 @@ extern u8 D_8008306C[];                              /* D_80077EFC */
 extern u8 D_80083834[];                              /* D_800786DC */
 extern u8 D_80083840[];                              /* D_800786E8 */
 extern s32 D_8009DDD8[][32];                         /* D_80083E98, the 0x80-byte save-slot row */
+extern u32 D_8009DDD8_u[][32] __asm__("D_8009DDD8"); /* the same rows read UNSIGNED */
 extern s32 D_8009EB58[];                             /* card_free_blocks, D_80084120 */
 extern s32 D_8009EB58_a[] __asm__("D_8009EB58");     /* a second spelling: see func_804022C8 */
 extern s32 D_80136140[];                             /* card_file_count, D_80084128 -- and note the
@@ -483,6 +486,11 @@ extern const char D_80400800[];                      /* its filename */
 extern const char D_804005F8[40];                    /* another unit's ASSERT_FMT copy */
 extern const char D_80400620[];                      /* its filename */
 extern u8 D_8040B4F8[];                              /* D_8002A990 */
+extern char D_80400660[];                            /* " <name> " */
+extern u32 D_80400668[];                             /* the 41-byte card-info header */
+extern char D_804006AC[];                            /* live D_800283A8[3] */
+extern char D_804006BC[];                            /* the time separator, live D_800200A4 */
+extern u16 D_804006C0[];                             /* "10" */
 extern const u8 D_80400544[4];                       /* D_800200A0 */
 extern const char D_80400548[40];                    /* card_mes.c's ASSERT_FMT copy */
 extern const char D_80400570[];                      /* its filename */
@@ -503,6 +511,8 @@ extern u32 D_80408CE0;                               /* D_8007167C, read as a SC
 extern u32 D_80408CE4;                               /* D_80071680, likewise */
 extern u8 D_80408CE8[8];                              /* D_800717BC, include/structs.h */
 extern u8 D_80408CF0[4];                              /* D_80027FD0 */
+extern u8 *D_80408CF4;                               /* live D_800283A8[2] */
+extern u8 *D_80408CFC[11];                           /* live D_80027FD4, ELEVEN not nine */
 extern u8 D_80408D28[];                              /* D_80027FF8 */
 extern u8 D_80408D40[][2];                           /* D_80028068 */
 extern s32 D_80408D44[];                             /* D_8002806C */

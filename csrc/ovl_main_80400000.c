@@ -2810,6 +2810,8 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
     return p + 0xC;
 }
 
+/* NEAR MISS: two words: an unsigned division's magic constant is a CONST_DOUBLE when its top bit is set, so mips.md's large-constant split never fires and the lui cannot fill the load delay
+   Source in docs/near-misses/func_80404EA0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
 /* NEAR MISS, 81 words of 82: the target materialises &buf once into $s0 and
