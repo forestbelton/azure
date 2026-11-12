@@ -49,11 +49,27 @@ def main():
         raise SystemExit("park.py: no definition of %s in %s" %
                          (func, os.path.relpath(UNIT, PROJ)))
     body = m.group(0)
-    # carry the declarations the park needs for permimport's cpppsx pass
+    # THE HEADER COMMENT MUST COME FIRST, before the includes: parkstats.py
+    # splits a park at the FIRST `*/` and treats everything after it as the
+    # body, so an `#include` above the comment is dropped from the measurement
+    # and the park reads as "does not build". This wrote the includes first
+    # until 2026-11-11 and every park it made needed hand-reordering.
+    #
+    # The first line must also be exactly `func_XXXXXXXX (unit)` -- parkstats
+    # finds the function and unit with that pattern, and will happily match a
+    # `func_... (something)` further down the prose instead.
+    #
+    # The 0x80400000 twin's parks also need main_twin.h, and ONLY they do:
+    # it declares the same objects as csrc/main.h at this block's own
+    # addresses, so including it in a resident park would be wrong.
+    inc = '#include "common.h"\n'
+    if unit == "ovl_main_80400000":
+        inc += '#include "main_twin.h"\n'
     io.open(os.path.join(PARKS, func + ".c"), "w", encoding="utf-8").write(
-        '#include "common.h"\n\n/* %s\n\n   Parked by tools/decomp/park.py; the'
-        ' live comment is in csrc/%s.c, which also carries the\n'
-        '   declarations this needs. */\n\n%s' % (reason, unit, body))
+        '/* %s (%s)\n *\n * MEASURED. %s\n *\n'
+        ' * Parked by tools/decomp/park.py; the live comment is in csrc/%s.c,\n'
+        ' * which also carries the declarations this needs. */\n\n'
+        '%s\n%s' % (func, unit, reason, unit, inc, body))
     note = "/* NEAR MISS: %s\n   Source in docs/near-misses/%s.c. */\n" % (reason, func)
     io.open(UNIT, "w", encoding="utf-8").write(
         src[:m.start()] + note + STUB % func + src[m.end():])

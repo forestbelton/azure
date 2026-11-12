@@ -153,11 +153,11 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **141 of its 262 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-11) **155 of its 262 functions are
   landed from C at 0 differing words**, with all four containers
-  byte-identical. **Not one was decompiled from a listing.** 120 came from the
+  byte-identical. **Not one was decompiled from a listing.** 134 came from the
   live overlay's own source with their references renamed through
-  `tools/decomp/twinalign.py --symmap` -- 32 of them in one pass once the
+  `tools/decomp/twinalign.py --symmap` -- 46 of them in two passes once the
   SECOND COMPILER below was in place -- 7 from the `-G8` declared-size and
   increment-order levers, 3 from the compiler switch itself, and 11 from the
   RESIDENT units
@@ -202,11 +202,13 @@ Three things about the overlays that change how they are worked, all in
 
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
-  one pass** -- 21 with nothing changed but their symbol names. The
-  15-function `reload_cse_regs` cluster is gone (`func_80405AE8` landed from
-  its park with its body unchanged) and so is the folded indexed load
-  (`func_80404DEC`, `func_80406274`). Stubs went 157 -> 122. What remains is
-  24 `near`, 39 `drift`, 38 `far` and 16 `twin-only`, plus ONE mask-identical
+  one pass** -- 21 with nothing changed but their symbol names. A second pass
+  over the 24 `near` rows took 14 more, so stubs went **157 -> 108**. The
+  15-function `reload_cse_regs` cluster is gone -- `func_80405AE8` landed from
+  its park with its body unchanged, and the twelve message wrappers it also
+  covered needed no thought at all -- and so is the folded indexed load
+  (`func_80404DEC`, `func_80406274`). What remains is
+  11 `near`, 38 `drift`, 38 `far` and 16 `twin-only`, plus ONE mask-identical
   function that is blocked for a structural reason rather than a matching one:
   `func_804062F4` needs a 16-byte rodata template at 0x26976C, and this unit's
   single dotted `.rodata` subsegment is already spoken for, so landing it emits

@@ -37,8 +37,11 @@ void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
 u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
 void func_80051DE4(u8 *p, s32 a);                    /* func_8004E884 */
 void func_80051FBC(s32 a);                           /* func_8004E994 */
+s32 *func_8003C480(s32 a);                           /* func_8003FC64 */
+s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
+long func_8007C9D8(long event);                      /* EnableEvent */
 u_short func_80078570(int tp, int abr, int x, int y); /* GetTPage */
 u_short func_80078640(int x, int y);                 /* GetClut */
 void func_8007BEF0();                                /* exit, psyq/include/stdlib.h */
@@ -86,6 +89,7 @@ s32 func_8040343C(s32 flag);                         /* func_800231E4 */
 void func_80403698(s32 *p);                        /* func_800233D0 */
 void func_804037F4(u8 *p);                           /* func_8002352C */
 void func_804039F8(UnkCardPair *p, u32 *a, u32 *b);  /* func_80023730 */
+s32 *func_80403BC4(s32 *p);                          /* func_800238D4 */
 void func_80403D24(s32 *p);                          /* func_80023A00 */
 void func_80403D7C(s32 *p, s32 v);                   /* func_80023A50 */
 void func_80403DA0(UnkCardPair *p, u32 *a, u32 *b, s32 n); /* func_80023A78 */
@@ -109,6 +113,7 @@ s32 func_80404C84(s32 *p, s32 *q);                   /* func_8004F418 */
 void func_80404DBC(u8 *p);                           /* func_8004F52C */
 u8 *func_80404DEC(u8 *p, s32 w, s32 h);              /* func_800242D8 */
 void func_80405624(UnkCardPair *p, u32 *a, u32 *b);  /* func_80024BB4 */
+s32 *func_804057F0(s32 *p, s32 a, s32 b);            /* func_80024D58 */
 void func_804059A8(s32 *p);                          /* func_80024EEC */
 void func_80405A00(s32 *p, s32 a);                    /* func_80024F3C, which takes THREE -- this
                                                         build reads only $a0/$a1, see its listing */
@@ -116,12 +121,14 @@ void func_80405A3C(s32 *p);                          /* func_80024F7C */
 void func_80405AE8(s32 *p);                          /* func_80025030 */
 void func_80405B98(s32 *p);                          /* func_800250E8 */
 void func_80405C44(u8 *p);                           /* func_8002519C */
+void func_80405C4C(s32 *p);                          /* func_800251A4 */
 void func_80405CB8(s32 *p);                          /* func_80025230 */
 void func_80405D54(s32 *p);                          /* func_800252CC */
 void func_80405DE0(s32 *p);                          /* func_80025398 */
 void func_80406150(s32 *p);                          /* func_800253E8-family, paired by alignment */
 void func_804061C4(s32 *p);                          /* func_80025788 */
 void func_80406274(s32 *p);                          /* func_80025848 */
+void func_804062F4(s32 *p);                          /* func_800258C8 */
 void func_80406368(s32 *p);                          /* func_8002593C */
 void func_804065CC(s32 *p);                          /* func_80025BD4 */
 s32 *func_80406678(s32 *p, s32 a);                   /* func_80025C7C */
@@ -145,6 +152,7 @@ s32 *func_804076C8(s32 *p, s32 a);                   /* func_80026ED0 */
 void func_8040789C(UnkCardGrp0D4 *c);             /* func_80027018 */
 void func_804078D8(u8 *p);                           /* func_80027054 */
 void func_80407A44(UnkCardPair *p, u32 *a, u32 *b);  /* func_800271C0 */
+s32 *func_80407C10(s32 *p);                          /* func_80027364 */
 void func_80407D38(s32 *p);                          /* func_80027458 */
 void func_80407D90(s32 *p);                          /* func_800274A8 */
 /* ONE argument at func_80407E08's call site, where the func_8040701C beside it takes two; same device as main.h's func_80024C48w. */
@@ -156,6 +164,7 @@ void func_804084DC(s32 *p);                          /* func_80027C90 */
 long func_80408654(long drv);                        /* _card_wait */
 long func_80408664(long chan);                       /* _card_info */
 long func_80408674(long chan);                       /* _card_load */
+s32 *func_804086BC(s32 a, s32 b);                    /* func_80027AFC */
 
 /* --- variables, in address order --- */
 extern u32 D_8002D690;                               /* D_8002E5D8[0] in the shipped build */
@@ -239,6 +248,7 @@ extern u8 D_80408D64[8];                              /* D_8002808C */
 extern u8 D_80408D6C[8];                             /* D_800282CC */
 extern u8 D_80408D74[];                              /* D_80028094 */
 extern struct DIRENTRY D_80409290[15];               /* card_dir */
+extern u8 D_8040C628[];                              /* D_8002B7E0 */
 extern long D_80409270;                              /* gSwCardEOFEvent, D_80028550 */
 extern long D_80409274;                              /* gSwCardErrorEvent, D_80028554 */
 extern long D_80409278;                              /* gSwCardTimeoutEvent, D_80028558 */

@@ -130,6 +130,38 @@
  * rule stands: a clean ovlverify sweep is a reason to build, never a
  * substitute for building.
  *
+ * THE SECOND PASS, same day: the 24 `near` rows. 14 more landed, 141 -> 155.
+ *
+ *   * TWELVE WERE THE reload_cse_regs WRAPPERS and needed no thought at all
+ *     once the compiler was right -- see their own comment. Their IDs, not
+ *     twinalign, are what pairs them: every wrapper masks to the same ten
+ *     words, so the DP had the whole run shifted by one.
+ *   * func_804067BC moved over untouched.
+ *   * func_80401ED4 NEEDED THE LIVE SOURCE'S OWN DEVICE REVERSED, which is
+ *     the most interesting thing in this batch -- see its comment. Without
+ *     split addresses a MEM address FOLDS, so the spelling that costs four
+ *     words under 4.1 costs three here, and the pointer-local goes on the
+ *     OTHER access.
+ *
+ * THE OTHER TEN ARE REAL MATCHING WORK and are back on INCLUDE_ASM, but their
+ * SYMBOL MAPS are not: those are in csrc/main_twin.h now, and they are the
+ * expensive part to re-derive. Three of them are findings rather than renames:
+ *
+ *   * func_80405DE0 (49 differing). func_80024FFC maps to TWO twin functions,
+ *     func_80405AB4 after the loop and func_80406368 in the fail arm.
+ *     func_80024298's symmap vote is func_80404C84 and is WRONG (a 0.26
+ *     pairing); the listing says func_80404688. AND func_80025358 IS NOT
+ *     CALLED AT ALL -- the live source calls it between the read and the
+ *     write and it is two calls deep (set_save_title + set_save_icon), where
+ *     this build has one store, `sw $zero, %lo(0x80010208)`. An earlier
+ *     revision of the function, not an assert difference.
+ *   * func_804012B0 (8 differing) is PARKED, with its two listing-settled
+ *     renames and the one reordering that was measured and rejected.
+ *     func_804010F0 is the same state machine at 49 and is not parked.
+ *   * D_80084118 -> D_8009E390 for BOTH of those, but a different twin
+ *     function genuinely uses the resident D_80084118. Check the listing per
+ *     function; the name is not enough.
+ *
  * WHERE THE MECHANICAL PHASE ENDED THE FIRST TIME. Everything above the
  * second-compiler batch was a move plus an immediate. The 33 functions of
  * twinalign's `near` and `inserts-only` classes that carried no assert were
@@ -380,34 +412,6 @@ long func_804009FC(void)
     return 0;
 }
 
-/* PARK: 265 words, and the only one of the 86+2 moved so far that is not a
- * mechanical move. The body is right -- the live counterpart open_card_events
- * renamed, with this block's 16 assert line numbers (180..221, -5 from the
- * live source's) -- and comes out 256 words, nine short. The nine are branch
- * delay slots, and the mechanism is NOT the one func_80400EF8 below needs:
- * there the twin leaves the slot empty, here BOTH builds fill it, from
- * opposite sides. At the first site this block has
- *
- *     bne   $v0, $s0, .L80400A6C
- *      ori  $a1, $zero, 0x8000      <- stolen from the branch TARGET
- *
- * against our
- *
- *     bne   v0, s0, ...
- *      lui  a0, %hi(ASSERT_FMT)     <- stolen from the FALL-THROUGH
- *
- * where that `ori` is the NEXT OpenEvent call's second argument, bit-identical
- * in both (34058000) and merely placed differently. So reorg is choosing
- * steal_delay_list_from_target where ours chooses the fall-through, and what
- * decides it is the order sched1 put the next call's argument setup in --
- * $a1's constant first in the target, $a0's `lui` first in ours. Seven of the
- * sixteen sites already agree, so it is per-site and an unconditional barrier
- * (which is what func_80400EF8 wants) overshoots by exactly those seven.
- *
- * Worth knowing before picking this up: docs/overlays.md records that the LIVE
- * open_card_events keeps all sixteen %hi values live in callee-saved registers,
- * which is why it saves $s0..$s7 and $fp. This one saves only $s0, so its
- * register allocation is genuinely different, not just its scheduling. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80400A10);
 
 /* The `card_first_flg` site. This opens with
@@ -517,6 +521,8 @@ s32 func_8040122C(void)
     return r;
 }
 
+/* NEAR MISS: block layout plus a cse reuse of the D_8009E390 base; 8 words
+   Source in docs/near-misses/func_804012B0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804012B0);
 
 s32 func_804013A8(void)
@@ -684,7 +690,26 @@ s32 func_80401E14(s32 i)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401E2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80401ED4);
+void func_80401ED4(s32 idx, u8 *src)
+{
+    s32 *row;
+
+    /* THE LIVE SOURCE'S DEVICE IS THE OTHER WAY ROUND HERE, and the reason
+       is the compiler. Live store_save_slot_info computes the row pointer
+       for the SECOND access in its own statement, because as a MEM address
+       4.1's memory_address forces the symbol into a register before the
+       index shift (lui/addiu/sll) and only a pointer assignment gets the
+       target's sll/lui/addiu order. Without split addresses there is a third
+       option that build did not have: a MEM address FOLDS, and the second
+       access comes out as `lui $at` / `addu $at,$at,$v1` /
+       `sw %lo(SYM)($at)` -- three words, not four. So here it is the FIRST
+       access that needs the pointer local and the second that must be
+       written as the plain 2-D index. Swapping the two spellings takes it
+       from 4 differing to 0. */
+    row = D_8009DDD8[idx];
+    *(UnkRow *)row = *(UnkRow *)(src + 0x200);
+    D_8009DDD8[idx][0] = 1;
+}
 
 /* Prints `(int)gsw->check_sum` after storing it, so the parameter is `gsw` and
    the word at +0x204 is its `check_sum` member -- GSW_CHECK_SUM in csrc/main.h,
@@ -823,7 +848,21 @@ void func_804030CC(s32 a, s32 p)
     func_80402F84(a, 0, 1, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804030F4);
+/* THE ELEVEN ZERO-KIND MESSAGE WRAPPERS, and the twelfth below them, were
+ * the reload_cse_regs cluster: one word each, `addu $a3, $a2, $zero` in the
+ * live build against `addu $a3, $zero, $zero` here, because 4.1's
+ * reload_cse_simplify_set rewrites the second zero argument into a copy of
+ * the first. tools/psx272gcc has no such pass and they land untouched.
+ *
+ * THE MESSAGE ID IS THE ONLY THING THAT PAIRS THEM, and twinalign cannot:
+ * every wrapper masks to the same ten words, so its order-preserving DP had
+ * the whole run shifted by one. Each id below is read off that function's
+ * own listing and agrees with csrc/main_twin.h's map. */
+/* Live msg_no_card. */
+void func_804030F4(s32 a)
+{
+    func_80402F84(a, 1, 0, 0);
+}
 
 /* Live msg_please_wait, NOT msg_loading -- twinalign paired it with
  * msg_loading, which is the arbitrary-pairing trap this block's wrapper run
@@ -834,7 +873,11 @@ void func_8040311C(s32 a, s32 p)
     func_80402F84(a, 2, 2, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403144);
+/* Live msg_overwrite_failed. */
+void func_80403144(s32 a)
+{
+    func_80402F84(a, 8, 0, 0);
+}
 
 void func_8040316C(s32 a, s32 p)
 {
@@ -856,35 +899,75 @@ void func_804031E4(s32 a, s32 p)
     func_80402F84(a, 14, 2, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040320C);
+/* Live msg_not_enough_blocks_overwrite. */
+void func_8040320C(s32 a)
+{
+    func_80402F84(a, 9, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403234);
+/* Live msg_not_enough_blocks. */
+void func_80403234(s32 a)
+{
+    func_80402F84(a, 10, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040325C);
+/* Live msg_load_failed. */
+void func_8040325C(s32 a)
+{
+    func_80402F84(a, 11, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403284);
+/* Live msg_format_failed. */
+void func_80403284(s32 a)
+{
+    func_80402F84(a, 12, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804032AC);
+/* Live msg_format_done. */
+void func_804032AC(s32 a)
+{
+    func_80402F84(a, 13, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804032D4);
+/* Live msg_card_damaged. */
+void func_804032D4(s32 a)
+{
+    func_80402F84(a, 3, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804032FC);
+/* Live msg_no_saved_game. */
+void func_804032FC(s32 a)
+{
+    func_80402F84(a, 7, 0, 0);
+}
 
 void func_80403324(s32 a, s32 p)
 {
     func_80402F84(a, 15, 2, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_8040334C);
+/* Live msg_copy_failed. */
+void func_8040334C(s32 a)
+{
+    func_80402F84(a, 16, 0, 0);
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80403374);
+/* Live msg_cannot_overwrite. */
+void func_80403374(s32 a)
+{
+    func_80402F84(a, 17, 0, 0);
+}
 
 void func_8040339C(s32 a, s32 p)
 {
     func_80402F84(a, 18, 1, p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804033C4);
+/* Live msg_delete_failed. */
+void func_804033C4(s32 a)
+{
+    func_80402F84(a, 19, 0, 0);
+}
 
 void func_804033EC(s32 **pp)
 {
@@ -2079,7 +2162,25 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406678);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406720);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804067BC);
+void func_804067BC(s32 *p)
+{
+    s32 off = 0;
+    s32 i = 0;
+
+    do
+    {
+        if (i == p[11])
+        {
+            func_804045C8((s32 *)p[off + 3], 1);
+        }
+        else
+        {
+            func_80404668((s32 *)p[off + 3]);
+        }
+        off++;
+    } while (++i < 5);
+    func_80405A00((s32 *)p[1], p[11]);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80406844);
 
