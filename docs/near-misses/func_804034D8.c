@@ -39,6 +39,33 @@
  * into the store; `(w << 4)` and `d` swapped in the final add; `w * 16`.
  * Worse: `p[33] * 16` and swapping the multiply's operands (10 each); a
  * degenerate loop around the store (113 words); `volatile s32 d` (116).
+ *
+ * RE-PROBED 2026-11-12 with the allocator's own formula in hand, and the
+ * reading above -- that it is a local-alloc priority tie -- is NOT supported.
+ * local-alloc.c's `qty_compare_1` ranks a quantity by
+ *
+ *     floor_log2 (qty_n_refs) * qty_n_refs * qty_size
+ *       / (qty_death - qty_birth)
+ *
+ * so the two levers are its REFERENCE COUNT and its LIVE RANGE, and both are
+ * reachable from C -- naming a value in an `__asm__` adds a reference, and
+ * naming it after its last use lengthens the range. Twenty-two spellings that
+ * move one or the other measure 112 words and 6 differing, UNCHANGED, every
+ * one of them, with the whole prologue byte-identical to the target:
+ *   - the prim hoisted into `UnkCardPrim *r` with `"r"(r)` named once, twice
+ *     and three times, in-place `"=r"(r)`/`"0"(r)`, a volatile pair, and an
+ *     `"r"(d)` input on the same marker;
+ *   - `d` named once, twice and three times AFTER the store (which lengthens
+ *     its range as well as adding references), and once before it;
+ *   - `(w << 4) + d` computed into a temporary, and written `d + (w << 4)`;
+ *   - `p[32]` hoisted into a local, the product hoisted into a local, both
+ *     hoisted, the divisor's local declared first, and the divisor passed
+ *     through an in-place marker before the division.
+ * `divmodsi4` (mips.md:1285) puts the quotient in an ordinary `"=d"` pseudo
+ * under `optimize`, so this is NOT the `"=h"` reload-register gap that
+ * func_80404EA0 and func_804053A0 share. It is a plain allocation decision
+ * that no source spelling reaches, because cse and combine canonicalise all
+ * of these to the same RTL -- which is also why the measurement never moves.
  */
 
 #include "common.h"
