@@ -396,9 +396,17 @@ extern char D_80400114[];                            /* set_gsw_checksum's print
 extern const u16 D_8040077C[];                       /* the header's 0x27-byte template, copied at align 2 */
 extern u8 D_804006C4[];                              /* two whole-screen messages */
 extern u8 D_804006EC[];
-extern const s32 D_80400714;                         /* the free-block line's prefix: a word
-                                                        and a signed byte, not a struct */
-extern const s8 D_80400718;
+/* The free-block line's prefix: ONE five-byte object, 82 A0 82 C6 00 -- two
+   Shift-JIS characters and a terminator -- at alignment 4. It was declared
+   here as a word plus a separate signed byte, with a comment insisting it was
+   "not a struct", and func_804053A0's park spent six words on a scheduling
+   story that followed from that shape. A constant-size memcpy from it is ONE
+   movstrsi insn and the six words went away. The alignment is load-bearing:
+   declared as u8[] (align 1) the same memcpy measures 84 words against 82.
+   D_80400718 is the tail of THIS object, not a symbol of its own; splat still
+   emits a label there, so a landed func_804053A0 will relocate against
+   D_80400714+4 and verify.py will mark that word `?`. */
+extern const s32 D_80400714[];
 extern u8 D_8040071C[];                              /* and its suffix */
 extern u8 D_804005EC[];                              /* a fixed line func_80403F7C draws */
 extern char D_80400848[];                            /* func_804080A4's state printf */
