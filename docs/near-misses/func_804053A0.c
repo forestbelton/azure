@@ -87,26 +87,30 @@
  *     the target uses the one the following `subu` writes, which is the
  *     argument register itself. ONE gap in the stand-in compiler, not two.
  *
- * THE TENTH WORD FELL ON 2026-11-12, and it is a general lever. The loop's
- * element load was `addu $v1,$v1,$s2` against the target's `addu $v1,$s2,$v1`
- * -- the base written SECOND. Written as ONE expression, `p[0x2C6 + i]` folds
- * to `(p + 0xB18) + i*4`, combine then sinks the 0xB18 into the `lw`'s
- * displacement, and what is left is an `addu` whose op0 is the INDEX. CUT THE
- * SUM WITH A LOCAL and the base stays op0:
+ * THE TENTH WORD FELL ON 2026-11-12, and the fix is the GROUP TYPE. The
+ * loop's element load was `addu $v1,$v1,$s2` against the target's
+ * `addu $v1,$s2,$v1` -- the base written SECOND. As a FLAT index,
+ * `p[0x2C6 + i]` is a three-term sum: fold reassociates it to
+ * `(p + 0xB18) + i*4`, combine sinks the 0xB18 into the `lw`'s displacement,
+ * and the `addu` that survives has the INDEX as op0. Written through the
+ * group struct the base is named once and the sum is only ever two terms:
  *
- *     s32 *q = p + i;
- *     e = (UnkCardPair *)q[0x2C6];
+ *     UnkCardPair *e = ((UnkTwinGrpAEC *)p)->ptrs[4 + i];
  *
- * Measured: that is 9, and so are `u8 *q = (u8 *)p + i * 4;` with
- * `*(UnkCardPair **)(q + 0xB18)`, `s32 off = i * 4;` with
- * `*(UnkCardPair **)((u8 *)p + off + 0xB18)`, and
+ * which is what the LIVE counterpart writes -- func_80024818's loop is
+ * `((UnkCardGrpB20 *)p)->ptrs[4 + i]`, byte-identical -- and what
+ * func_80404EA0 uses two functions up. ptrs sits at 0xB08 in UnkTwinGrpAEC,
+ * so 0xB18 is ptrs[4]; ptrs[5..9] were measured first and came back 10
+ * because the right `addu` was paid for with a wrong displacement.
+ *
+ * Any statement boundary does it. Also 9: `s32 *q = p + i;` with `q[0x2C6]`,
+ * `u8 *q = (u8 *)p + i * 4;` with `*(UnkCardPair **)(q + 0xB18)`,
+ * `s32 off = i * 4;` with `*(UnkCardPair **)((u8 *)p + off + 0xB18)`, and
  * `UnkCardPair **q = (UnkCardPair **)(p + i);` with `q[0x2C6]`. Still 10, all
- * of them single expressions: `(&p[0x2C6])[i]`, `p[i + 0x2C6]`,
- * `*(p + 0x2C6 + i)`, `*(UnkCardPair **)((u8 *)p + 0xB18 + i * 4)`,
- * `*(UnkCardPair **)((u8 *)p + i * 4 + 0xB18)`,
- * `((UnkCardPair **)((u8 *)p + i * 4))[0x2C6]` and `(p + i)[0x2C6]` without
- * the local. The struct spelling `((UnkTwinGrpAEC *)p)->ptrs[k + i]` is 10 for
- * every k, and `ptrs + i` with a constant index is 11.
+ * of them SINGLE flat expressions: `(&p[0x2C6])[i]`, `p[i + 0x2C6]`,
+ * `*(p + 0x2C6 + i)`, `*(UnkCardPair **)((u8 *)p + 0xB18 + i * 4)`, the same
+ * with the terms swapped, `((UnkCardPair **)((u8 *)p + i * 4))[0x2C6]` and
+ * `(p + i)[0x2C6]` without the local. `ptrs + i` with a constant index is 11.
  *
  * Tried 2026-11-12 against the six scheduling words, all 9 and none of them
  * moving `addiu $s1,$sp,0x50` later: `u8 *m = num` declared first, declared
@@ -155,8 +159,7 @@ void func_804053A0(s32 *p)
     i = 0;
     while (n < 3 ? i < 2 : i < 1)
     {
-        s32 *q = p + i;
-        UnkCardPair *e = (UnkCardPair *)q[0x2C6];
+        UnkCardPair *e = ((UnkTwinGrpAEC *)p)->ptrs[4 + i];
 
         e->unk_00 = (s32)((u8 *)p + 0x80 + 0x108 * i);
         e->unk_04->unk_08 = 0xA9;

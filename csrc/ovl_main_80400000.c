@@ -3059,9 +3059,10 @@ INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
  * left is NINE words: six of scheduling before the first jal (gcc hoists
  * `addiu $s1,$sp,0x50` above the two seed stores) and the three-word `mfhi`
  * register gap it shares with func_80404EA0. The tenth, a commuted `addu`,
- * fell the same day by CUTTING THE POINTER SUM WITH A LOCAL -- `s32 *q = p +
- * i;` then `q[0x2C6]`, because the one-expression form folds to
- * `(p + 0xB18) + i*4` and leaves the index as op0.
+ * fell the same day by NAMING THE BASE: `((UnkTwinGrpAEC *)p)->ptrs[4 + i]`,
+ * which is what the live func_80024818 writes. A flat `p[0x2C6 + i]` is a
+ * three-term sum that folds to `(p + 0xB18) + i*4` and leaves the index as
+ * op0.
  * Source in docs/near-misses/func_804053A0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804053A0);
 

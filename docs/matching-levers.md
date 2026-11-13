@@ -513,7 +513,7 @@ then read only the section you need.
 - AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:20742`
 - A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:20784`
 - AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:20818`
-- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- CUT IT WITH A LOCAL  `:20882`
+- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE  `:20882`
 
 <!-- END INDEX -->
 
@@ -20879,7 +20879,7 @@ UNSIGNED division leaves 0x88888889 as a single `li`, exactly as the rule
 says. Comparing a live counterpart only works if the thing the hypothesis
 turns on -- here, signedness -- is read off BOTH sides before comparing.
 
-## A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- CUT IT WITH A LOCAL
+## A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE
 
 `addu` is not commutative as far as the bytes go: `addu $v1,$s2,$v1` and
 `addu $v1,$v1,$s2` are different words. The operand order comes straight off
@@ -20891,20 +20891,21 @@ to `(p + 0xB18) + i * 4`, combine then sinks the 0xB18 into the load's own
 displacement, and what is left is an `addu` whose op0 is the INDEX and whose
 op1 is the base -- `addu $v1,$v1,$s2`, then `lw $v1,0xB18($v1)`.
 
-CUT THE SUM WITH A LOCAL and the base stays op0:
+NAME THE BASE so the sum is only ever two terms, and it stays op0. The
+idiomatic way is the group struct the record already has:
 
-    s32 *q = p + i;
-    e = (UnkCardPair *)q[0x2C6];        ->  addu $v1,$s2,$v1 / lw $v1,0xB18($v1)
+    e = ((UnkTwinGrpAEC *)p)->ptrs[4 + i];   ->  addu $v1,$s2,$v1
+                                                 lw   $v1,0xB18($v1)
 
-The local forces `PLUS(p, i*4)` to be expanded on its own, before the constant
-term exists, so there is nothing for fold to reassociate. Measured on
-func_804053A0, where it took the park from 10 differing to 9. These also work:
-`u8 *q = (u8 *)p + i * 4;` with `*(UnkCardPair **)(q + 0xB18)`,
-`s32 off = i * 4;` with `*(UnkCardPair **)((u8 *)p + off + 0xB18)`, and
-`UnkCardPair **q = (UnkCardPair **)(p + i);` with `q[0x2C6]`.
+Any statement boundary does the same job -- `s32 *q = p + i;` then
+`q[0x2C6]`, `u8 *q = (u8 *)p + i * 4;` then `*(UnkCardPair **)(q + 0xB18)`,
+or `s32 off = i * 4;` then `*(UnkCardPair **)((u8 *)p + off + 0xB18)` -- but
+the struct is the one to reach for, because it is what the LIVE counterpart
+writes: func_80024818's loop is `((UnkCardGrpB20 *)p)->ptrs[4 + i]` and it is
+byte-identical.
 
-WHAT DOES NOT WORK is any SINGLE expression, however it is parenthesised or
-cast: `(&p[0x2C6])[i]`, `p[i + 0x2C6]`, `*(p + 0x2C6 + i)`,
+WHAT DOES NOT WORK is any SINGLE flat expression, however it is parenthesised
+or cast: `(&p[0x2C6])[i]`, `p[i + 0x2C6]`, `*(p + 0x2C6 + i)`,
 `*(UnkCardPair **)((u8 *)p + 0xB18 + i * 4)`, the same with the terms swapped,
 `((UnkCardPair **)((u8 *)p + i * 4))[0x2C6]` and `(p + i)[0x2C6]` all keep the
 index first. The statement boundary is the lever, not the spelling.
@@ -20913,3 +20914,9 @@ A TWO-term sum has no such problem -- `(u8 *)p + 0x80 + 0x108 * i` in the same
 loop comes out `addu $v0,$s2,$v0` with the base first in both builds, because
 the constant folds into the `addiu` that precedes it and the `addu` only ever
 had two operands.
+
+AND CHECK THE OFFSET BEFORE READING THE COUNT. Measured on func_804053A0,
+where this took the park from 10 differing to 9 -- but `ptrs[5 + i]` through
+`ptrs[9 + i]` all measured 10, which reads like "the struct form does not
+help" and is not: each of them bought the right `addu` and paid for it with a
+wrong displacement. ptrs sits at 0xB08 in UnkTwinGrpAEC, so 0xB18 is ptrs[4].
