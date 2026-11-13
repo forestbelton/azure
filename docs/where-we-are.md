@@ -135,8 +135,16 @@ Three things about the overlays that change how they are worked, all in
   2026-11-09**: `0x80027E20..0x8002BB6C`, 15,692 bytes, 90 objects, all defined
   in `csrc/ovl_main_80020000.c` rather than `extern`-ed into a splat blob, so
   nothing of this overlay is in `splat/main.bin_undefined_syms_auto.txt` any
-  more. It is the only block of which that is true; `docs/owning-data.md` is
-  the procedure and its §7 the end state. That completed every block the
+  more. `docs/owning-data.md` is the procedure and its §7 the end state.
+  **It stopped being the only such block on 2026-11-13**, when the 0x80400000
+  twin's data AND both halves of its rodata were owned too -- `0x80400000..
+  0x804008A0` and `0x804089E0..0x8040C628`, 2,208 + 15,432 bytes, and not one
+  undotted subsegment left in that segment. That took THREE units rather than
+  one, for two reasons specific to a -G8 block, both in owning-data §9: at -G8
+  all file-scope data is emitted before all text, so rodata that belongs after
+  a jump table cannot share the table's unit; and a jump table is aligned to
+  `BIGGEST_ALIGNMENT`, so it has to sit at offset 0 of its own input section to
+  land on a 4-aligned address. That completed every block the
   project counted -- **1,293 of 1,293 functions, 100.0% of its words**. It is
   no longer true that there is no `INCLUDE_ASM` anywhere in `csrc/`: the debug
   twin below was opened as a `c` subsegment on 2026-11-09 and carries 261 of
