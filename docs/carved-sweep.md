@@ -29,6 +29,27 @@ register, a wrong constant, or "only registers differ" -- which is the one case
 where rewriting the C is known not to help. Validated against six functions in
 this table whose answers were already known.
 
+**On an "only registers differ" verdict, run `--sched` before `--greg`**
+(added 2026-11-12). sched1 runs before BOTH allocators, so a register
+difference is often not an allocation decision at all: it is a scheduling one
+the allocator merely priced. `--sched` prints every slot where a load or a
+store took a position from a non-memory insn of the same priority --
+`schedule_select` (sched.c:2615) breaks a priority tie on function-unit
+hazard, and a store always outranks a register move, so no ordering of the
+source statements ever reaches the `INSN_LUID` tie-break. On func_804022C8's
+parked candidate that is one row,
+
+    block   T     winner      insn   priority  beat
+    4       T-2   store       99     1         reg copy 89
+
+and it is the whole reason seven words differed by register name through
+eleven spellings. What moves such a row is a memory DEPENDENCE rather than an
+order; see docs/matching-levers.md, "A STORE ALWAYS BEATS A REGISTER COPY FOR
+THE LAST SLOT OF A BLOCK". Both `--sched` and `--greg` now compile with the
+UNIT's own `-G` AND the unit's own COMPILER -- `dump.sh` hardcoded
+tools/cdkgcc until the same day, so every dump it had ever collected for a
+0x80400000 twin function was from the wrong compilation.
+
 `tools/decomp/magic.py 0x80010003 [post_shift]` tells you which DIVISOR a
 constant-division magic came from, by running gcc 2.7.2's own
 choose_multiplier over every divisor. Do not estimate it from the arithmetic:
