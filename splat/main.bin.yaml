@@ -34,349 +34,88 @@ options:
 
   undefined_funcs_auto_path: splat/main.bin_undefined_funcs_auto.txt
   undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
+
+# How this container is laid out, and why each boundary is where it is, is in
+# docs/main-bin-data.md and docs/overlays.md. The comments kept here are the
+# ones that constrain THIS FILE: delete one and the container still builds,
+# wrong. Everything else was moved out or dropped on 2026-11-13; git has it.
 segments:
   - [0x0, bin, song1.kdt]
-  # THE SOUND BANK, AS A .VH/.VB PAIR AND NOT A .VAB. Re-cut 2026-11-11.
-  # A `.VAB` is one file: VabHdr, the attribute tables and the waveform data
-  # contiguous, with `fsize` covering the whole thing. These bytes are the
-  # SPLIT form instead -- `.VH` (header) and `.VB` (body) as separate objects,
-  # which is what SsVabOpenHead + SsVabTransBody take, and it is why the game
-  # reads this file at TWO offsets, +0x3000 and +0x4800.
-  #
-  # Four measurements say split rather than single, all against the header at
-  # 0x3000 (`pBAV`, ver 7, ps=3, ts=39, vs=28, fsize=0x1C310):
-  #   1. The VH is exactly 0x1020 bytes -- VabHdr 32 + ProgAtr[128] 2048 +
-  #      VagAtr[3][16] 1536 + u16 offsets[256] 512 -- so it ends at 0x4020,
-  #      and its last nonzero byte is 0x3E58, offset entry 28 of 28 (vs=28).
-  #   2. The waveform data does NOT follow at 0x4020. 0x4020..0x4800 is 2,016
-  #      zero bytes and the body starts on the sector boundary the game reads.
-  #   3. The 28 live offset entries SUM TO 0x1B2F0 == fsize - 0x1020, which is
-  #      exactly 0x4800..0x1FAF0. The header's own table sizes the body, and
-  #      it sizes it as a standalone object.
-  #   4. A single .VAB would therefore have to end at 0x3000 + fsize =
-  #      0x1F310. Content runs to 0x1FAEF -- 0x7E0 past it, the same 2,016 the
-  #      gap absorbed. docs/main-bin-data.md recorded that overrun as
-  #      unexplained; this is the explanation.
-  #
-  # The old cut was wrong on both ends: `unk.vab` was 0x3000..0x3800, which
-  # splits the VH mid-ProgAtr table (0x3800 is 32 bytes short of its end at
-  # 0x3820), and the rest of the bank was the unnamed blob below.
-  #
-  # town.bin carries this same bank, byte-identical to its truncation at
-  # 0xb000, as one dead `snd_preamble_vab` blob -- see that file's comment.
+  # The sound bank is a split .VH/.VB pair, not one .VAB, which is why the
+  # game reads it at two offsets and why the VH ends at 0x4020 rather than
+  # running into the body.
   - [0x3000, bin, snd_bank.vh]
   - [0x4020, pad]
   - [0x4800, bin, snd_bank.vb]
   - [0x1faf0, pad]
   - [0x20000, bin, kewne_loading_img]
+  # vram 0x8002C000 is load-bearing: the tables below reference this pool by
+  # label, so the link only resolves if the pool sits where it is loaded.
   - start: 0x20800
     type: hrodata
     name: str/monsters
     vram: 0x8002C000
-  # Pointer and index tables for the string pool above: a 64-ELEMENT ARRAY of
-  # 20-byte records, 0x21268..0x21768, then zero padding to 0x21800. 135 of
-  # its 358 words are pointers, and every one of them lands in
-  # 0x8002C000..0x8002CA54 -- the resident executable's own low RAM -- so this
-  # is a relocated resource rather than a standalone file. NONE of them points
-  # into 0x80088760.., which is what makes 0x21800 a real boundary and not a
-  # guess: the overlay below starts where the pointers stop.
-  #
-  # ITS LOAD ADDRESS IS 0x8002CA68, pinned three independent ways and measured
-  # 2026-11-11. (1) The pool loads at 0x8002C000, so the tables that follow it
-  # in the +0x20800 read land at 0x8002C000 + 0xA68. (2) slus_006.14 holds the
-  # word 0x8002CA68 at 0x80073588 -- the `+0xC` field of record 18 of the
-  # 20-byte descriptor array at D_80073414. (3) The highest table pointer,
-  # 0x8002CA54, is rom 0x21254, which is the pool's last entry; the lowest is
-  # 0x8002C000, its first. The pool's own vram is therefore 0x8002C000 and not
-  # the rom-offset placeholder it carried until now -- which also puts it
-  # exactly where the 0x80020000 overlay's 0xC000 bytes end.
-  #
-  # THE RECORD LAYOUT IS ALREADY PINNED BY LANDED CODE. func_8004A574 in
-  # csrc/unk_1C540.c walks both levels of it:
-  #     e = (u8 *) D_80073414 + p[1] * 20;          // the resident descriptors
-  #     r = (u8 *) *(u32 *) (e + 0xC) + p[0] * 20;  // == this array
-  #     v = *(u16 *) (r + (w ? 0x12 : 0x10)) * D_800713CC[e[3]];
-  # So `+0xC` of the outer record is this array's base, `p[0]` indexes it by
-  # 20, and `+0x10`/`+0x12` are two u16 fields scaled by a per-descriptor
-  # factor. Record 0 is index 0, not a header: the pointer is 0x8002CA68 =
-  # rom 0x21268. It is the odd one out (byte 2 is 0x24 against every other
-  # record's 0x0C, and its +4 is 0xA001020C, not a pool pointer).
-  #
-  # Records 1..63: byte 0 is always 0x10, byte 1 is 0x00/0x01/0x80, byte 2 is
-  # 0x0C, byte 3 is 0x00; +4, +8 and +0xC are up to three pool pointers; +0x10
-  # is 100 in every record and +0x12 varies (50000, 3200, 600, 100, ...).
-  # The 135 pointers cover 134 distinct strings -- every string start in the
-  # pool exactly once, with the first pointed at twice -- and the pool's
-  # remaining "start", rom 0x21265, is the `C4 0D 0E` toolchain residue that
-  # asrc/str/monsters.txt carries as `:bytes=c4 0d 0e`. The array is closed.
-  #
-  # TO OWN IT IN C: a unit at vram 0x8002CA68 holding a 64-element array of a
-  # 20-byte struct, with the pointer fields written as the pool's own labels
-  # (STR_MAIN_*, already global out of the hrodata listing) so the link
-  # resolves them to 0x8002C.. addresses. The pool vram above is what makes
-  # that resolve; it was corrected for this and main.bin stayed
-  # byte-identical. What is NOT yet established is what the fields MEAN --
-  # D_80073414 and D_800713CC are both still asm in slus_006.14.
-  #
-  # Re-measured 2026-11-11. This segment used to run to 0x28420 and was
-  # described as "11 KB of unidentified fixed-size records, then zero padding
-  # from 0x24440", with "144 words pointing into 0x8002c094..0x8008b270". All
-  # three of those belonged to the OVERLAY below, not to these tables: the
-  # 0x8008b270 upper bound was its data-run self-pointer table, and the "fixed
-  # size records" were its rodata, text and data. The pointer count over the
-  # tables alone is 135, all resident.
-  #
-  # It starts at 0x21268 and not 0x21280: the string pool's last entry is
-  # "Ｕｌｔｉｍａｔｅ", whose NUL is at 0x21264. 0x21268..0x21768 is 1,280
-  # bytes = 64 records exactly, and func_8004A574 indexes from 0x8002CA68, so
-  # the unit at 0x21268 is RECORD 0 and not a header -- an earlier reading of
-  # "71 records at 0x2127C after one leading unit" was wrong twice over: 71
-  # records would overrun 0x21800, and the stride starts one unit lower.
-  # OWNED IN C 2026-11-13, which is what the paragraph above asked for. The
-  # array is `const UnkMainTbl14 D_8002CA68[64]` in csrc/main_tables_21268.c,
-  # with every pointer written as the pool's own STR_MAIN_* label so the link
-  # resolves them against the hrodata segment above; that is why the pool's
-  # vram had to be right first. Two things the `bin` segment was hiding and
-  # the C file now states: unk_10 is NOT 100 in every record (record 23 is
-  # 150, record 0 is 0), and records 60..63 hold no pointers at all.
-  # `align: 4` is load-bearing. A `code` segment defaults to align 16, and
-  # splat then emits `__romPos = ALIGN(__romPos, 16)` after it
-  # (segtypes/linker_entry.py:640). The table ends at 0x21768, which is 8 mod
-  # 16, so the default silently pushed the pad and everything after it 8 bytes
-  # down the file and main.bin came out long. A `data` parent is NOT the fix:
-  # splat then ignores the dotted `.rodata` subsegment, emits its own
-  # asm/data/21268.data.s and links that instead of the C object.
+  # `align: 4` is load-bearing. A code segment defaults to align 16 and splat
+  # then emits `__romPos = ALIGN(__romPos, 16)` after it
+  # (segtypes/linker_entry.py:640). This segment ends at 0x21768, which is
+  # 8 mod 16, so the default pushes the pad and every later segment 8 bytes
+  # down the file -- and nothing reports it. A `data` parent is not an
+  # alternative: splat then ignores the dotted subsegment and links its own
+  # generated listing instead of the C object.
   - type: code
     start: 0x21268
     vram: 0x8002CA68
     align: 4
     subsegments:
       - [0x21268, .rodata, main_tables_21268]
-  # 0x21768..0x21800 is zero padding, verified all-zero. The overlay below
-  # starts at 0x21800 because that is where the tables' pointers stop.
   - [0x21768, pad]
-  # THE THIRD PLACED OVERLAY, mapped 2026-11-11, and the only one of the five
-  # that loads into the shared 0x80088760 slot from main.bin. docs/overlays.md
-  # has the method; this is what it is and how the boundaries were pinned.
-  #
-  # WHAT LOADS IT. The engine's overlay load table at vram 0x80080C38 holds
-  # four 8-byte CD queue descriptors in the {nsec << 23 | dest, LBA} form
-  # tools/scan-img.py documents. The third is 0x07088760 / 0x0000075C:
-  # nsec 14, dest 0x80088760, LBA 1884. spec.yaml extracts main.bin from
-  # sector 1817, so (1884 - 1817) * 0x800 = 0x21800 exactly, and the read is
-  # 14 * 0x800 = 0x7000 bytes into 0x80088760..0x8008F760. The PCSX-Redux
-  # CD-ROM command log docs/overlays.md cites already showed a seek to
-  # main.bin+0x21800; this descriptor is where that seek comes from and it
-  # states the length the log could not. Unlike the 0x80400000 twin below,
-  # this one is LIVE on retail hardware.
-  #
-  # WHAT IT IS: the GAME OPTION screen. Its rodata is the menu's own string
-  # pool -- "GAME OPTION", "  TO FAMILIAR", "ATTACK", "ON", "OFF",
-  # " MAGIC EFFECT", " SOUND EFFECT", " BGM", "VOLUME", "MAX", "MIN",
-  # "  WALL COLOR", "DUNGEON", then B/G/R and fourteen more single characters
-  # for the per-glyph renderer -- and the pointer table at 0x24350..0x24408 in
-  # its data run indexes exactly those strings, at 0x800887F4..0x800888A8.
-  #
-  # THE BASE IS 0x80088760, by the function-start test of
-  # tools/decomp/codemap.py and then three times over by hand:
-  #
-  # 1. 29 of 29 jal targets land exactly two words after an 0x03E00008.
-  #    Five are internal (0x80088BD0, 0x80089C24, 0x8008A98C, 0x8008ABD4,
-  #    0x8008AE60) and each is also an `addiu $sp, $sp, -N` prologue; the
-  #    other 24 are resident, and all 24 sit two words after a `jr $ra` in
-  #    data/slus_006.14 itself. That last half is the strong one -- it says
-  #    this object was linked against the SHIPPED engine, which is precisely
-  #    what the 0x80400000 twin below is not.
-  # 2. The data run's self-pointers (0x242D4..0x2434C) resolve to
-  #    0x8008B188..0x8008B270, inside the run's own 0x8008B070..0x8008B380.
-  # 3. The code builds its globals as `lui 0x8008`/`lui 0x8009`: 41 distinct
-  #    addresses inside the stored image, 28 above the read end in .bss, and
-  #    ZERO in the 0x8008F380..0x8008F760 gap the sector rounding drags in.
-  #
-  # THE BOUNDARIES.
-  #   0x21800..0x21968   rodata, 360 bytes. 0x80088760..0x800888C8. Ends on
-  #                      the five-word jumptable at 0x21954, whose entries are
-  #                      `.L` labels in the text -- splat's `jlabel` macro
-  #                      emits those global, which is why an undotted rodata
-  #                      subsegment links here the way it does for ovl_dungeon.
-  #   0x21968..0x24114   text, 10,156 bytes, 26 functions. 0x800888C8..
-  #                      0x8008B074. The first function is an empty
-  #                      `jr $ra; nop` at 0x21968, which is what puts the
-  #                      text/rodata seam there and not at the next prologue.
-  #                      The last `jr $ra` is at 0x2410C and its delay-slot
-  #                      nop at 0x24110, so the END IS 0x24114. 0x24110 is a
-  #                      zero word either way, which is why a boundary at
-  #                      0x24110 still builds byte-identical -- it just cuts
-  #                      the last function one word short.
-  #   0x24114..0x24420   data, 780 bytes. 0x8008B074..0x8008B380.
-  #   0x24420..0x28420   16,384 stored zero bytes, 0x8008B380..0x8008F380.
-  #                      Nothing references them with a lui/addiu pair, but
-  #                      they are inside the overlay's own file and the sector
-  #                      count proves the loader pulls them in, so they are
-  #                      declared, as a `pad`. See the subsegment below for
-  #                      why that type and not a `bin`.
-  #
-  # The file is therefore 0x21800..0x28420, 27,680 bytes, and
-  # ceil((0x28420 - 0x21800) / 0x800) is EXACTLY 14 -- the descriptor's
-  # sector count, derived independently of it. The read rounds up past the
-  # file end, so its last 992 bytes are the head of the dead filler run
-  # below, landing in RAM above anything the overlay touches. Same shape as
-  # town.bin's 278-sector read (splat/town.bin.yaml, `ovl_town_read_tail`).
-  #
-  # Mutually exclusive with town.bin's and dungeon.bin's overlays, which load
-  # at the same address -- so 0x80088760.. means different code depending on
-  # which is resident. That costs nothing here: each container's link takes
-  # its inputs from its own build/*.ld and never sees another container's
-  # objects, which is why `D_80088760` can be defined by ovl_town, ovl_dungeon
-  # and this unit at once.
+  # The GAME OPTION overlay, loaded to 0x80088760 by the CD queue descriptor
+  # at vram 0x80080C38. Mutually exclusive with town.bin's and dungeon.bin's
+  # overlays at the same address; each container links only its own objects,
+  # so all three may define D_80088760.
   - type: code
     start: 0x21800
     vram: 0x80088760
     subsegments:
-      # CARVED 2026-11-11 at splat's own suggested rodata split, 0x21954.
-      # jtbl_800888B4 sits at 0x800888B4, which is 4 mod 8, and cc1psx emits
-      # `.align 3` before every jump table -- so compiled inside one unit it
-      # gains four bytes of pad the reference does not have and the container
-      # comes out long. A unit whose rodata STARTS at the table makes that
-      # `.align 3` a no-op at section offset 0. Exactly the town overlay's
-      # fix; see docs/matching-levers.md, "cc1psx EMITS `.align 3` FOR JUMP
-      # TABLES", and docs/where-we-are.md on ovl_town becoming three units.
-      # Carved again for func_80089608, whose three stack tables are local
-      # array initialisers: its own unit owns 0x21830..0x21894 and emits them.
-      # The STRING POOL at 0x21894 and D_800888AC at 0x2194C belong to no
-      # function -- nothing in any text references the pool, only raw `.word`
-      # literals in this overlay's .data, and func_80089C24 READS D_800888AC
-      # as an extern. They get an UNDOTTED subsegment of their own, which is
-      # possible only because the carve gives each unit its own single dotted
-      # `.rodata` sibling; one unit cannot have two.
+      # Carved at 0x21954 so each unit's rodata STARTS on its jump table.
+      # cc1psx emits `.align 3` before every jump table, and jtbl_800888B4 is
+      # 4 mod 8, so a unit holding it mid-rodata gains four bytes the
+      # reference does not have and the container comes out long. Merging
+      # these units back together reintroduces that.
       - [0x21800, .rodata, ovl_main_80088760]
       - [0x21830, .rodata, ovl_main_80089608]
-      # The menu string pool is HAND-OWNED TEXT, not a rodata blob:
-      # asrc/str/options.txt is the source of truth and the Makefile's
-      # `asrc/str/%.s: asrc/str/%.txt` rule regenerates the listing from it.
-      # Same arrangement as str/monsters. D_800888AC, the RECT func_80089C24
-      # reads, is NOT part of it: it is a `const RECT` in ovl_main_8008A288,
-      # whose 8 bytes also put that unit's jump table back on an 8-byte
-      # boundary.
+      # Hand-owned text, regenerated from asrc/str/options.txt by the
+      # Makefile's `asrc/str/%.s: asrc/str/%.txt` rule -- not a rodata blob.
       - [0x21894, hrodata, str/options]
       - [0x2194c, .rodata, ovl_main_8008A288]
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
       - [0x24114, data, ovl_main_80088760_data]
-  # SIXTEEN KB OF ZEROS, OWNED BY ONE LINE. `pad` emits no asset, no listing
-  # and no object: its whole contribution to build/main.bin.ld is `. += 0x4000;`
-  # inside an output section of its own, which is enough to advance splat's
-  # running `__romPos` so every later segment keeps its LMA. ld marks that
-  # section NOBITS -- a dot advance gives it a size but no contents -- so the
-  # zeros are not in build/main.bin.elf at all; `objcopy -O binary` puts them
-  # in the container by zero-filling the gap up to .unread_filler's LMA.
-  #
-  # THAT NOBITS IS SPECIFIC TO A STANDALONE `pad` SEGMENT, which is what this
-  # one is: a section holding nothing but a dot advance gets a size and no
-  # contents. A `pad` SUBSEGMENT behaves differently -- its advance lands at
-  # the tail of the containing segment's section, which has real contents, so
-  # ld keeps that section PROGBITS and writes the fill itself. 0x268b6c is
-  # that form; `._25D000` comes out PROGBITS at 0xC000 with the zeros in it.
-  #
-  # TWO CONSEQUENCES, BOTH ONLY FOR THE STANDALONE FORM. It may never be a
-  # container's LAST segment: with no following section there is nothing for
-  # objcopy to pad up to, and the file comes out short with no error from ld,
-  # objcopy or splat -- measured on a reduced case, 8 bytes instead of 72,
-  # where the same pad inside a section with contents gave the full 72. And
-  # anything reading bytes out of a container ELF rather than the binary
-  # (tools/decomp/ovlverify.py, devmeasure.py) sees a hole here; harmless for
-  # a zero run, not for data.
-  #
-  # Only use either form for a run that is ENTIRELY zero. Both of this
-  # container's are, measured; tools/decomp/zerosweep.py is how to re-check.
+  # A standalone `pad` emits only `. += N;` in its own output section, which
+  # ld marks NOBITS; objcopy zero-fills the gap. Two consequences: it may
+  # NEVER be a container's last segment (the file comes out short, silently --
+  # the 0x275628 pad below is a subsegment for this reason), and anything
+  # reading bytes from the ELF rather than the binary sees a hole here. Only
+  # use it for a run that is entirely zero; tools/decomp/zerosweep.py checks.
   - [0x24420, pad]
-  # DEAD FILLER, 2,069,472 bytes (0x1F93E0) -- the single largest unmapped run
-  # in any container, and it holds nothing. It is kept as a named `bin` for the
-  # same reason as slus_006.14's `tail_unloaded`: so splat stops calling it
-  # unknown and nobody spends another pass on it.
-  #
-  # The game never reads it. A PCSX-Redux CD-ROM command log covering boot,
-  # title, town and dungeon (78 distinct seeks) hits main.bin at exactly 11
-  # offsets -- +0x0, +0x3000, +0x4800, +0x20000, +0x20800, +0x21800, then
-  # straight to +0x221800, +0x226800, +0x257000, +0x258800, +0x25d000. The one
-  # gap in that list is this run, to the sector. There is also no resource
-  # table to reach it with: neither slus_006.14 nor main.bin contains the
-  # sector numbers (67, 1091, 1101, 1198, 1201, 1210) or the byte offsets
-  # (0x221800, 0x226800, 0x257000, 0x258800, 0x25d000) of the known resources
-  # as a u16 or u32 table anywhere.
-  #
-  # It is nevertheless real, deliberately mastered content, not a dump
-  # artifact: all 1011 of its CD sectors (LBA 1897..2907) carry a VALID EDC
-  # over bytes 16..2071, checked against the Mode 2 Form 1 layout and
-  # validated on known-good sectors first.
-  #
-  # What it is NOT, each tested rather than assumed:
-  #   - not compressed game data -- it is incompressible. zlib -9 returns
-  #     100.03% of input and xz 100.02%; both expand it.
-  #   - not any PRNG fill. Berlekamp-Massey over its bits gives linear
-  #     complexity exactly n/2+1 (1001 at 2000 bits, 10001 at 20000), the
-  #     random signature, so no LFSR generated it; and solving
-  #     x[n+1] = a*x[n] + c mod 2^32 from three consecutive words predicts
-  #     2 of 4095 at every alignment and endianness tried, so no word LCG did.
-  #   - not SPU-ADPCM and not XA-ADPCM. The 16-byte-block test scores 0.2543 /
-  #     0.0324 against a random baseline of 0.254 / 0.031 at every phase, and
-  #     0 of 16167 128-byte groups show the XA sound-group header redundancy.
-  #   - not images -- no TIM header occurs in it at any 4-aligned offset.
-  #   - not a copy of anything else on the disc. Six 24-byte needles taken
-  #     across it each occur exactly ONCE in all 298 MB of az.bin: here.
-  #   - not the disc's own padding convention. /STR/DUMMY_.STR and
-  #     /STRT/DUMMYM.STR are 99.6% zeros (16 bytes of 0x0c, then zero fill,
-  #     one sector repeated 166 times); this is nothing like them.
-  #   - not a file-wide pre-fill either. Every OTHER gap in main.bin is zeros
-  #     (0x24440..0x28420, 0x265000, 0x2719e0 all 90-99.9% zero), so only this
-  #     one run was filled this way.
-  #
-  # What it measures as: 2,069,472 bytes at H = 7.9999 bits/byte, chi-square
-  # 218.5 on 255 df, zero fraction 0.00392 = 1/256, longest zero run in the
-  # whole 2 MB just 2 bytes, and 0 anomalous windows out of 16167 scanned at
-  # 128-byte resolution. That is indistinguishable from uniform random, and it
-  # is the SAME fingerprint as slus_006.14's `tail_unloaded` (176,128 bytes,
-  # H = 7.9989, chi-square 268.7, zero fraction 0.00374), which docs/data-map.md
-  # reached the same dead end on. Two regions, one explanation.
-  #
-  # The one structural fact worth recording: it ends at 0x221800, and
-  # 0x221800 - 0x21800 = exactly 0x200000. Read with the segment above, the
-  # resource the game loads at +0x21800 sits at the head of a round 2 MiB
-  # reservation whose unwritten remainder is this run. That makes it a
-  # reserved hole keeping the images at +0x221800 and beyond on fixed sector
-  # offsets -- which is why it must still be reproduced byte for byte by
-  # `make containers` even though nothing reads it.
-  #
-  # Do not spend time on it.
+  # 2 MB of mastered random filler. Nothing reads it, nothing indexes it, and
+  # it is not compressed, generated, audio, image or a copy of anything else
+  # on the disc -- all tested; docs/main-bin-data.md has the measurements. It
+  # ends at 0x221800, exactly 0x200000 past the overlay above, so it is a
+  # reserved hole keeping the images below on fixed sector offsets. It must
+  # still be reproduced byte for byte. Do not spend time on it.
   - [0x28420, bin, unread_filler]
   - [0x221800, bin, unk_img_1]
   - [0x226800, bin, title_bg_img]
   - [0x257000, bin, title_menu_img]
   - [0x258800, bin, unk_img_2]
-  # The 0x80020000 overlay. docs/overlays.md is how the block was placed and
-  # what it is; docs/owning-data.md is the shape below -- both dotted
-  # subsegments are defined in full by csrc/ovl_main_80020000.c, splat writes
-  # not a byte of either, and the trailing `pad` is what keeps this segment's
-  # end on the 16-byte grid `__romPos` needs.
+  # The 0x80020000 card overlay, owned in full by csrc/main/*.c plus
+  # csrc/ovl_main_80020000.c; splat writes not a byte of either.
   - type: code
     start: 0x25d000
     vram: 0x80020000
     subsegments:
-      # THE NINE UNITS, carved out 2026-11-10 into csrc/main/. Text runs are
-      # live-block function indices; docs/overlays.md's "Carving the nine" has
-      # the evidence for each boundary and says which are inferences. Only
-      # five units own rodata, in link order -- card_opt/card_win/cardslot/
-      # cardsme emit none, and memory.c owns the 59 message strings because
-      # the eight tables that reference them are its .data.
-      #
-      # THE DATA IS CARVED TOO, as each unit's own .data. What is left in
-      # ovl_main_80020000.c is only the state run, 0x80028530..0x8002BB6C,
-      # the overlay's .bss, which cannot be .bss and cannot go with the
-      # units: every explicit `.data` subsegment sits above all text, so the
-      # nine auto-emitted main/*.o(.data) lines always come FIRST in the DATA
-      # group, and a unit can therefore only own the FIRST of the image's two
-      # runs. See docs/overlays.md, "The data IS carved".
       - [0x25d000, .rodata, main/c_server]       # 0x80020000, 0xA0
       - [0x25d0a0, .rodata, main/card_mes]       # 0x800200A0, 4
       - [0x25d0a4, .rodata, main/cardbk]         # 0x800200A4, 4
@@ -391,12 +130,11 @@ segments:
       - [0x2631c0, c, main/cardslot]             # 172..205
       - [0x264018, c, main/cardsme]              # 206..227
       - [0x26489c, c, main/memory]               # 228..240
-      # The first data run, per unit. These are redundant for the LINK -- a `c`
-      # subsegment already emits its object's `.data` line, and splat keeps
-      # the first occurrence -- but they are not redundant for COVERAGE: with
-      # the range unclaimed, splat reads it as unmapped and writes 41 of its
-      # symbols into main.bin_undefined_syms_auto.txt as absolute addresses,
-      # shadowing the real definitions. They also document the partition.
+      # Redundant for the LINK -- a `c` subsegment already emits its object's
+      # .data line -- but NOT for coverage: unclaimed, splat reads the range
+      # as unmapped and writes 41 of its symbols into
+      # main.bin_undefined_syms_auto.txt as absolute addresses, shadowing the
+      # real definitions. Do not delete them as duplicates.
       - [0x264e20, .data, main/c_server]          # 0x80027E20
       - [0x264f60, .data, main/card_mes]          # 0x80027F60
       - [0x264f68, .data, main/card_opt]          # 0x80027F68
@@ -408,140 +146,39 @@ segments:
       - [0x2650b4, .data, main/memory]            # 0x800280B4, the inferred one
       - [0x265530, .data, ovl_main_80020000]      # the state run only
       - [0x268b6c, pad]
-  # The second code run, RESOLVED 2026-11-01 to 0x80400000. An earlier pass
-  # left it as bin, reporting "only 58 internal jal targets and the best
-  # delta scored 6 against a floor of 5, which is noise" -- that measurement
-  # was wrong, not the method. Voting this block's own `jal` targets against
-  # its own `addiu sp,sp,-N` prologues over the full +0x269000..+0x272000
-  # span gives 654 jal sites to 265 distinct targets, 191 prologues, and
-  # **142 hits at this delta against a next-best of 33** -- the same
-  # second-vote test that placed the other three overlays.
+  # The 0x80400000 debug twin of the overlay above: dead on retail (it needs
+  # an 8 MB DTL-H2000), but in the container, so it must still be reproduced.
+  # Built at -G8, which the Makefile sets with an exact-target override --
+  # the `build/csrc/ovl_%.o` pattern rule would otherwise hand it -G0.
+  # Its symbols cannot be shared with the live overlay: different engine
+  # build, and its data is not at a constant offset from the live one's.
   #
-  # Four independent confirmations, so the vote is not carrying this alone:
-  #
-  # 1. The function-pointer table at +0x269058 holds 0x804010F0, 0x804013D0,
-  #    0x804013A8, 0x804012B0, and the last two ARE prologues at the
-  #    predicted file offsets (0x26A2B0, 0x26A22C: `addiu $sp, $sp, -0x20`
-  #    and `-0x18`).
-  # 2. The code builds its addresses as `lui $at, 0x8041`, e.g.
-  #    `lui $at, 0x8041; sw $v0, -0x6B14($at)` -> 0x804094EC, which lands in
-  #    this block's own data.
-  # 3. Text ends at 0x2719dc and the `.data` immediately after it is
-  #    pointers 0x80409140 / 0x8040914C / 0x80409158 / 0x80409164.
-  # 4. 0x80400000 is upper RAM on an 8 MB DTL-H2000 development board, which
-  #    is why nothing loads it on retail and why the CD-ROM command log shows
-  #    no seek here. It is DEAD CODE on the shipped disc -- but it is in the
-  #    container, so `make containers` still has to reproduce it.
-  #
-  # What it is: a DEBUG BUILD OF THE SAME SOURCE as the 0x80020000 overlay
-  # above, with asserts compiled in. 50.4% of the live overlay's 7487 words
-  # are covered by shared masked instruction runs with this block, the
-  # longest 121 words, and the function pointers correspond one-to-one with a
-  # small shift from the assert calls (0x800210F0 -> 0x804010F0,
-  # 0x80021298 -> 0x804012B0). That makes this block an oracle for the live
-  # overlay rather than just more work: its rodata carries nine translation
-  # unit names from the original source -- c_server.c, card_mes.c,
-  # card_opt.c, card_win.c, cardbk.c, cardinfo.c, cardslot.c, cardsme.c and
-  # memory.c -- against the live overlay's one, plus a `__LINE__` immediate
-  # at every assert site and the assert EXPRESSIONS, which leak real
-  # identifiers (`card_first_flg`, `(int)gsw->check_sum`).
-  #
-  # Boundaries. rodata is 0x269000..0x2698a0: the last string is "memory.c"
-  # at 0x269894 and 0x2698a0 is the first prologue. Text END IS 0x2719e0,
-  # NOT 0x2719dc: the last `jr $ra` is at 0x2719d4 and its delay slot at
-  # 0x2719d8, so the code proper stops at 0x2719dc, but splat emits
-  # `__romPos = ALIGN(__romPos, 16)` after a code segment and 0x2719dc is off
-  # that grid -- a boundary there pads the container. 0x2719e0 takes one word
-  # of the three zero words of padding into .text and is 16-byte aligned.
-  # The block's data starts at 0x2719e8.
-  # DECOMPILING THE TWIN. The text subsegment is `c` as of 2026-11-09, and the
-  # unit is built at -G8 -- the opposite of the live overlay's -G0 override, and
-  # the thing that makes the shared source produce this block. The Makefile has
-  # an exact-target override for it, because the `build/csrc/ovl_%.o` pattern
-  # rule would otherwise hand it -G0 like every other overlay unit.
-  #
-  # The plan is ONE SOURCE for both blocks, not a second decompilation: the
-  # live overlay's own source rebuilt at -G8 already reproduces 86 of this
-  # block's 263 functions instruction-for-instruction, 231 of 263 pair 1:1
-  # with a function it already defines, and the 32 that do not are engine code
-  # this debug build linked statically (`memory.c` and the PSY-Q stubs) which
-  # is already decompiled in the resident units. What is missing is the
-  # asserts, which `tools/assertmap.py` reads straight out of this block.
-  #
-  # Two things make the twin's object DIFFERENT from the live one despite the
-  # shared source, and both are why its symbols have to be renamed rather than
-  # shared:
-  #
-  # 1. It was linked against a DIFFERENT ENGINE BUILD. It calls printf at
-  #    0x8007C040 and exit at 0x8007BEF0, which in the shipped executable land
-  #    inside libgte's `rcossin_tbl`. Its external addresses are unusable.
-  # 2. Its data is its own copy at 0x8040xxxx and NOT at a constant offset
-  #    from the live overlay's: `card_slot` is 0x800287CC live and 0x804094EC
-  #    here, a delta of 0x3E0D20, while the data regions' bases differ by
-  #    0x3E1320. Both blocks are in ONE container, so one symbol name cannot
-  #    resolve to two addresses.
-  #
-  # rodata keeps its own NAME (`..._rodata`) and stays UNDOTTED. Undotted is
-  # what disassembles it unconditionally; the dotted form would migrate it
-  # into the C unit, and migration only emits a symbol it can ATTRIBUTE to a
-  # function -- which is how the live overlay's message pool was written
-  # nowhere and left the container 0x864 bytes short (see the `hrodata` note
-  # 100 lines up). A DIFFERENT name is what keeps it undotted: an undotted
-  # subsegment sharing the `c` unit's name is a hard error. The function
-  # pointer table at +0x269058 and the nine filenames live here and are
-  # claimed later, the same way as the `data_pre`/`data_post` chunks above.
+  # Text END IS 0x2719e0, not 0x2719dc where the code stops: splat emits
+  # ALIGN(__romPos, 16) after a code segment and 0x2719dc is off that grid,
+  # so a boundary there pads the container.
   - type: code
     start: 0x269000
     vram: 0x80400000
     subsegments:
-      # THE SPLIT IS THE JUMP TABLE AND NOTHING ELSE, and both halves of that
-      # are forced. There is exactly one jumptable in this rodata,
-      # jtbl_8040007C (five words, at the offset splat's own "likely file
-      # split" suggestion names), and its entries are `.L` labels inside
-      # func_804016D0's text. A local label is only visible in the object that
-      # defines it, so the table MUST ride in the same object as the code:
-      # undotted, it links as five undefined references to `.L80401770` and
-      # friends. Dotted, splat migrates it into that function's nonmatchings
-      # listing, which is part of the C unit's object. Hence the dotted
-      # subsegment, and hence it covers 0x14 bytes.
-      #
-      # Everything else must NOT migrate. Migration only emits a symbol it can
-      # ATTRIBUTE to one function, and this block's rodata is mostly the
-      # opposite of that: ASSERT_FMT and the nine translation-unit filenames
-      # are referenced from dozens of functions each, so splat attributes them
-      # to nobody and writes them NOWHERE -- 13 of the 263 functions took
-      # their rodata along and the link then failed on undefined D_80400894 /
-      # D_8040086C, which are `cardsme.c` and `memory.c`. Undotted with their
-      # own names is what disassembles them unconditionally. Same lesson as
-      # the live overlay's message pool 170 lines up, reached from the other
-      # direction: there an undotted subsegment was needed because nothing
-      # referenced the pool, here because everything does.
+      # DOTTED vs UNDOTTED here is forced, in both directions. jtbl_8040007C's
+      # entries are `.L` labels inside func_804016D0, and a local label is
+      # only visible in its own object, so that table must ride with the code:
+      # dotted, 0x14 bytes. Everything else must NOT migrate -- migration only
+      # emits a symbol it can attribute to ONE function, and ASSERT_FMT and
+      # the nine translation-unit filenames are referenced from dozens each,
+      # so splat attributes them to nobody and writes them nowhere, and the
+      # link fails on undefined D_80400894 / D_8040086C. Undotted needs a
+      # DIFFERENT name: an undotted subsegment sharing the `c` unit's name is
+      # a hard error.
       - [0x269000, rodata, ovl_main_80400000_rodata_pre]
       - [0x26907c, .rodata, ovl_main_80400000]
       - [0x269090, rodata, ovl_main_80400000_rodata_post]
       - [0x2698a0, c, ovl_main_80400000]
-      # THE TWIN'S DATA, declared 2026-11-11. It was `[0x2719e0, bin]`, the
-      # last unknown blob in the container, and it is this block's own data
-      # run: the text ends at 0x2719e0 == vram 0x804089E0, and reconstructing
-      # lui+addiu/ori and lui+load/store pairs across 0x2698a0..0x2719e0
-      # yields 87 DISTINCT ADDRESSES landing in 0x80408A30..0x8040C628. The
-      # last nonzero byte in the run is 0x275627 == vram 0x8040C627, so the
-      # content ends exactly where the references end -- the top reference,
-      # 0x8040C628, is one past it.
-      #
-      # 90% of it is zero because most of it is uninitialised storage that
-      # the original link stored rather than reserved; there is no .bss here.
-      #
-      # Undotted `data` on purpose: this is a GENERATED listing, not C. The
+      # Undotted `data` because this is a generated listing, not C: the
       # block's functions are only partly landed, so nothing can attribute
-      # these objects to a translation unit yet. When they are owned, this
-      # becomes `.data` beside csrc/ovl_main_80400000.c the way 0x265000 did
-      # for the 0x80020000 overlay -- see docs/owning-data.md.
+      # these objects to a translation unit yet. It becomes `.data` beside
+      # csrc/ovl_main_80400000.c when they are -- see docs/owning-data.md.
       - [0x2719e0, data, ovl_main_80400000_data]
-      # 0x275628..0x275800 is zero: 472 bytes padding the container to its
-      # sector-aligned end. A SUBSEGMENT and not a top-level `pad`, because a
-      # standalone pad as a container's last segment is silently truncated --
-      # see the note at 0x24420. Inside this segment's populated section the
-      # dot advance keeps it PROGBITS and ld writes the fill.
+      # A subsegment, not a top-level `pad`: see the note at 0x24420.
       - [0x275628, pad]
   - [0x275800]
