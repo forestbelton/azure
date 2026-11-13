@@ -7,10 +7,10 @@
  * VERDICT: LENGTH
  * LENGTH  built 322, target 320 (+2)
  *   OPCODE 8040512C built nop target lui v1
- *     also at: 804051A4 80405318 8040532C
+ *     also at: 804051A4
  *   EXTRA 80405140 built has lui v1 and the target has nothing there
  *     also at: 804051B8
- *   ALLOCATION 80404EA0 23 register-only difference(s) as well
+ *   ALLOCATION 80404EA0 22 register-only difference(s) as well
  *   80405108 built mfhi t3 target mfhi a0
  *   80405110 built srl a0,t3 target srl a0,a0
  *   80405148 built mfhi t3 target mfhi a0
@@ -293,6 +293,143 @@
  * them, and the other two as a single `li`. Same function, same compilation,
  * same division shape; the only variable is bit 31 of a constant the source
  * never names. That is the whole of it, and no C can reach it.
+ *
+ * ================= 2026-11-13, THIRD PASS ==================================
+ *
+ * ONE SOURCE CHANGE ADOPTED, AND POSITIONAL DIFF CANNOT SEE IT. The flag test
+ * is now `if (m & f)` where it was `if (f & m)`. Both are 322 words / 154
+ * DIFF -- which is why the second pass listed the swap under "orderings
+ * tried, all 322/154" and moved on -- but advise.py's ALIGNED findings are
+ * not the same:
+ *
+ *   f & m    322 words, 154 DIFF    4 OPCODE + 2 EXTRA + 23 ALLOCATION
+ *   m & f    322 words, 154 DIFF    2 OPCODE + 2 EXTRA + 22 ALLOCATION
+ *
+ * The two OPCODE findings that go away are at target words 286 and 291
+ * (0x80405318, 0x8040532C) and have nothing to do with the divisions: they
+ * are a schedule swap in the flag loop. The target fills the load-delay slot
+ * of `lw $v0,0x7C($s3)` with the `lw $s2,0xB34($a1)` that loads `e`, and puts
+ * the `sllv` that builds `m` in the slot of the flag load; `f & m` does it
+ * the other way round. The STATEMENT order in the loop body is not a lever --
+ * all six permutations of {f-load, e-load, m} measure identically, in both
+ * AND orders -- the AND's operand order is the whole of it. The loop body now
+ * matches the target instruction for instruction.
+ *
+ * WHAT IS LEFT IS EXACTLY TWO THINGS AND NOTHING ELSE. Rebuilding the
+ * alignment by hand (delete our two welded `lui`s, which is what the two
+ * EXTRA findings are) and diffing word against word, the only non-relocation
+ * differences anywhere in the 320 words are
+ *
+ *   aligned 163, 193        our `nop` where the target has `lui $v1`
+ *   aligned 154,156         the /216000 mfhi pair
+ *   aligned 170..185        the /3600 mfhi chain
+ *   aligned 200..212        the /60 mfhi chain
+ *
+ * i.e. FINDING 1 and FINDING 2 and no third defect. Every call, constant,
+ * displacement, branch, frame slot and schedule decision elsewhere is already
+ * the target's.
+ *
+ * SWEEPS ON THE NEW BASE, both empty: tools/decomp/search.py 30 variants, best
+ * still 322/154 (its one word-closing candidate, the `for` rewritten as a
+ * backward goto, is 319 words / 187 DIFF and is not the target's shape);
+ * tools/decomp/unname.py 0 improvements.
+ *
+ * FINDING 1 RE-VERIFIED FROM THE COMPILER SOURCE, not re-asserted.
+ * expmed.c:2554 computes `op1 = GEN_INT (cnst1)` and then at 2560 a SECOND
+ * operand `wide_op1 = immed_double_const (cnst1, unsignedp ? 0 : ..., 
+ * wider_mode)`, and it is wide_op1 -- not op1 -- that is handed to
+ * `expand_binop (mode, umul_highpart_optab, op0, wide_op1, ...)` at 2591.
+ * wider_mode is DImode, so immed_double_const does not clamp, and with
+ * unsignedp the high half is 0 while a magic with bit 31 set makes the low
+ * half negative: neither collapse arm holds and a CONST_DOUBLE survives.
+ * mips.c:416 `large_int` returns FALSE for anything that is not a CONST_INT
+ * and the define_split at mips.md:3208 is predicated on it, so the magic
+ * stays one `li` macro. Toy control, tools/psx272gcc -O2 -G8:
+ * `x/3600u` and `x/60u` give one `li`, `x/216000u` gives `li`+`ori`.
+ * tools/cdkgcc emits the identical three.
+ *
+ * AND THE DIVISOR FIXES THE MAGIC COMPLETELY, which closes the last door on
+ * the source side. In expmed.c's unsigned TRUNC_DIV branch the initial right
+ * shift is taken only when `mh != 0`, i.e. only when the 32-bit magic does
+ * not suffice: that is why 216000 (= 2^6 * 3375) gets `srl $v0,$v0,6` and a
+ * bit-31-clear magic while 3600 (= 2^4 * 225) does not. There is no spelling
+ * of `/ 3600u` that asks for a different multiplier.
+ *
+ * FINDING 2 NOW HAS ITS MECHANISM, from the dumps instead of from the
+ * 115-instruction census. A seven-line toy reproduces the exact sequence --
+ *
+ *     void g(u32 x, u32 *t)
+ *     { u32 a = x / 3600u; u32 b = a / 3600u; f3(a - b * 3600, 2, t); }
+ *
+ * compiles to li/multu/mfhi $7/srl $3,$7,11/multu $3,$2/.../mfhi $7/
+ * srl $2,$7,11/sll/subu/sll/addu/sll/subu $4,$3,$4, the same shape and the
+ * same untying as here, under BOTH tools/psx272gcc and tools/cdkgcc. Its
+ * dumps say why:
+ *
+ *   .lreg   Register 75 used 2 times across 2 insns in block 0;
+ *           pref HI_REG, else GR_REGS.          (and Register 78, the second)
+ *           Neither appears in local-alloc's "Register N in M" list.
+ *   .greg   (insn 13 ... (set (reg:SI 64 hi) (truncate:SI (lshiftrt:DI
+ *             (mult:DI ...) (const_int 32)))) 42 {umulsi3_highpart}
+ *           (insn 49 13 14 (set (reg:SI 7 a3) (reg:SI 64 hi)) -1 (nil))
+ *           (insn 52 18 19 (set (reg:SI 7 a3) (reg:SI 64 hi)) -1 (nil))
+ *
+ * The highpart pseudo prefers HI_REG because `umulsi3_highpart` constrains
+ * its output "=h" (mips.md:1038), global-alloc gives it the hi register, and
+ * the copy out to a GPR is a RELOAD insn -- INSN_CODE -1, created after
+ * allocation, and handed the same spill register both times. A reload
+ * register is chosen from the spill set, never from the consumer's operands,
+ * so it structurally cannot be the register the following `srl` writes. That
+ * is the whole of FINDING 2, it applies to every constant division this
+ * compiler expands, and no C reaches it.
+ *
+ * THE THREE ROUTES, AND WHY EACH GETS EXACTLY TWO OF THE THREE PROPERTIES
+ * (split magic / target schedule / tied mfhi). All measured 2026-11-13 on
+ * this base with `m & f`, tools/decomp/ovlverify.py <src> func_80404EA0 --G 8
+ * and tools/decomp/advise.py --terse:
+ *
+ *   compiler division (this park)       322 words 154 DIFF
+ *       2 OPCODE + 2 EXTRA + 22 ALLOCATION
+ *       schedule yes, split NO, tying NO
+ *   asm `multu`+`mfhi`, magic in a plain local
+ *                                       320 words  44 DIFF
+ *       2 OPCODE + 9 MISSING + 2 EXTRA + 26 ALLOCATION
+ *       split yes, tying yes, schedule NO
+ *       (the variant with `"=h"(hi)` on the asm and the compiler's own mfhi
+ *        measures the same 320/44 with the same findings)
+ *   u64 widening multiply, magic in a plain local:
+ *       (u32)(((unsigned long long)x * (unsigned long long)k) >> 43)
+ *                                       326 words 155 DIFF
+ *       2 OPCODE + 6 EXTRA + 22 ALLOCATION
+ *       split yes, schedule yes, tying NO, and +6 dead words
+ *
+ * The u64 route is the interesting one and it is NOT closed for the reason
+ * the second pass gave: it keeps a real `multu`, the magic splits, and there
+ * are no MISSING findings at all -- the target's schedule is intact. What it
+ * costs is two dead words per multiply, `mflo` and a zeroing move, because
+ * the DImode product lives in the hi/lo pair and the DImode shift writes a
+ * zero high word, and flow deletes neither: both are subreg writes of a live
+ * DImode pseudo. Four multiplies, six surviving dead words.
+ *
+ * WHY NO ROUTE GETS ALL THREE, stated as the implication chain:
+ *   - a split magic needs a CONST_INT, which only a C-level constant gives;
+ *   - a C-level constant can reach a `multu` only through an asm or through
+ *     `umulsidi3`;
+ *   - an asm has INSN_CODE < 0, so sched.c:1375 prices it at 1 and the `imul`
+ *     hole the target fills with `li $a1,2` / `addiu $s0,$sp,0x60` /
+ *     `move $a2,$s0` stops existing (that is the 9 MISSING);
+ *   - `umulsidi3` brings the two dead words;
+ *   - and the compiler's own division, the only generator of a bare
+ *     `umulsi3_highpart`, always brings the CONST_DOUBLE.
+ * Every route also leaves FINDING 2 untouched except the asm one, which ties
+ * the mfhi only because the asm's output is an ordinary pseudo.
+ *
+ * SO THE PARK IS THE BEST SOURCE AND IT IS NOT A MATCH. 322/154 with two
+ * shape findings and 22 register findings, all four of them one of the two
+ * stand-in gaps. A byte-exact func_80404EA0 needs a compiler that splits an
+ * unsigned division magic with bit 31 set and that allocates the highpart
+ * result to a GPR instead of reloading it out of hi -- i.e. it needs PSY-Q
+ * 4.0's real cc1psx, not FSF 2.7.2.
  */
 
 #include "common.h"
@@ -375,7 +512,7 @@ void func_80404EA0(s32 *p)
 
         e = ((UnkTwinGrpAEC *)p)->ptrs[11 + i];
         m = 1 << i;
-        if (f & m)
+        if (m & f)
         {
             s = D_80408CFC[i];
         }

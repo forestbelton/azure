@@ -107,28 +107,70 @@
  *     three-term sum that fold reassociates, and the `addu` comes out with
  *     the operands swapped: 1 word.
  *
- * WHAT IS LEFT IS THREE WORDS, in TWO independent allocator decisions:
+ * WHAT IS LEFT IS THREE WORDS, and 2026-11-13 closed the mechanism:
  *
  *     built   sra $a0,$s3,31 / mfhi $a3 / subu $a0,$a3,$a0
  *     target  sra $v0,$s3,31 / mfhi $a0 / subu $a0,$a0,$v0
  *
- * The sra's pseudo is block-local and dies in the insn
- * `(set (reg:SI 4 a0) (minus (reg HI) (reg sra)))`. local-alloc's operand
- * loop calls `combine_regs` on every operand of an insn whose operand 0 is an
- * output (local-alloc.c:1240-1300); for a pseudo operand against a HARD
- * destination it records that hard register in `qty_phys_sugg` and returns
- * failure (local-alloc.c:1797-1820), and the suggested quantities are
- * allocated in a phase that runs BEFORE the refs-weighted one. So $a0 is
- * suggested to the sra's quantity and it takes it. To keep it off $a0 the
- * only two routes are (a) something live in $a0 across the quantity's whole
- * lifetime -- impossible, the quantity's birth and death are adjacent insns
- * and $a0 is born at the second one -- or (b) a rival suggestion, which needs
- * the value to be on a hard-register copy path, and the sra's result is not.
- * Then reload must copy HI into a GPR (`smulsi3_highpart` is "=h") and
- * `order_regs_for_reload` hands it the lowest register no pseudo wants, which
- * is $a3 here because $a0 is taken by the sra.
+ * THE TARGET'S `mfhi $a0` CANNOT BE A RELOAD REGISTER AT ALL, so the two
+ * halves are not independent after all: the target must have the highpart
+ * pseudo ALLOCATED to $a0, with the `mfhi` as that pseudo's OUTPUT reload.
+ * order_regs_for_reload (reload1.c:3651-3660) adds `large + 1` to the use
+ * count of every hard register that appears EXPLICITLY in the rtl, and -- under
+ * `#ifndef SMALL_REGISTER_CLASSES`, which mips.h does not define -- also
+ * sets it in `bad_spill_regs`. $a0 is explicitly used by every call in this
+ * function, so it is both last in `potential_reload_regs` and barred. Our
+ * own .greg says the same from the other side: for insn 69,
+ * `Need 1 reg of class GR_REGS (for insn 69). / Spilling reg 7.` -- $a3 is
+ * simply the lowest-numbered register that NO pseudo wants.
  *
- * MEASURED CONTROLS for that, 2026-11-13, all with tools/psx272gcc -O2 -G8:
+ * SO THE WHOLE RESIDUE IS ONE BIT: prefclass of the smulsi3_highpart pseudo.
+ * Our .lreg prints it: `Register 85 ... pref HI_REG, else GR_REGS`, and .greg
+ * then puts `85 in 64` (HI). With GR_REGS instead, local-alloc's combine_regs
+ * would hand it $a0 off `(set (reg:SI 4 a0) (minus (reg 85) (reg 87)))` --
+ * which is exactly how reg 87, the sra, gets $a0 today -- and reg 87 would
+ * fall to $v0. That is the target, word for word.
+ *
+ * AND THAT BIT IS A TIE, DECIDED BY A TABLE, NOT BY ANYTHING IN THE SOURCE.
+ * regclass.c:1286 scores each class as the sum over the pseudo's references of
+ * may_move_cost[class][constraint class]. The highpart pseudo has EXACTLY
+ * two references for any spelling of a constant division: its `"=h"` set
+ * (smulsi3_highpart, mips.md:986) and its one `"d"` use, the sign-correction
+ * subtract. REGISTER_MOVE_COST (mips.h:2914) is SYMMETRIC across that
+ * boundary -- GR_REGS->HI_REG and HI_REG->GR_REGS are both 6 -- so
+ *     cost[HI_REG] = 0 + 6 = 6     cost[GR_REGS] = 6 + 0 = 6
+ * exactly. regclass.c:948 breaks the tie with `best = reg_class_subunion[best]
+ * [class]`, and reg_class_subunion[HI_REG][GR_REGS] is HI_REG, not GR_REGS:
+ * the table (regclass.c:230-258) keeps the LAST class index contained in
+ * the union that is not a subset of the current pick, so GR_REGS (1) is
+ * taken and then HI_REG (3) replaces it. A tie therefore always resolves
+ * to HI_REG.
+ *
+ * ONE EXTRA GR-CONSTRAINED REFERENCE IS ALL IT WOULD TAKE, and that is
+ * measured, not inferred: in the DImode spelling below the product pseudo
+ * reads `pref MD_REGS, else GR_REGS` in .lreg, and adding a single
+ * `__asm__("" :: "r"(x))` on it flips it to `GR_REGS or none`. The highpart
+ * pseudo has no C-level name, so there is nothing to hang that reference on;
+ * and both of its two references sit at the same loop depth, so the
+ * loop_cost weighting cannot break the tie either. The last escape would be
+ * a consumer whose operand is READ-WRITE -- regclass doubles such an
+ * operand's cost (`scale = 1 + (op_types[i] == OP_READ_WRITE)`), which would
+ * make cost[GR_REGS] 6 against cost[HI_REG] 12 -- and mips.md has no such
+ * operand in GR_REGS: its only five `"+"` operands are the madd-style
+ * accumulates at mips.md:1083-1139, all of them `+l`, `+x` or `+a`. There is
+ * no C spelling of a constant division under tools/psx272gcc that puts the
+ * highpart in a GPR.
+ *
+ * THE CITATIONS ARE INTO scratch/gcc-src/gcc-2.7.2.3; tools/psx272gcc builds
+ * FSF 2.7.2 (its banner says `GNU C 2.7.2 [AL 1.1, MM 40] Sony Playstation`),
+ * so find the code by content, not by line. The same four pieces are in
+ * scratch/gcc-src/cdk-gcc-b18 as well -- regclass.c:967, :1365, :264 and
+ * reload1.c:3864 -- which is why BOTH stand-ins produce the scratch form.
+ * Nothing here is inferred from the tree alone: `pref HI_REG, else GR_REGS`,
+ * `85 in 64` and `Spilling reg 7.` are all printed by tools/psx272gcc itself
+ * (tools/decomp/dump.sh docs/near-misses/func_804053A0.c -G8 tools/psx272gcc).
+ *
+ * MEASURED CONTROLS, 2026-11-13, all with tools/psx272gcc -O2 -G8:
  *   void f1(s32 n, u8 *q) { g(n / 3, q); }
  *     -> sra $4,$4,31 / mfhi $3 / subu $4,$3,$4   (ours)
  *   void f5(u32 n, u8 *q) { g(n / 96, q); }
@@ -139,30 +181,53 @@
  *        any case measured here, even where the destination was free.
  *   void fb(s32 n, u8 *q) { gg(7, n / 3, q); }
  *     -> sra $2 / mfhi $7 / subu $5,$7,$2 -- with the sra off the
- *        destination register, reload STILL takes the lowest unused register
- *        and not the destination. So the two residual words are not one
- *        decision chained to the other.
+ *        destination register, reload STILL takes the lowest unused register.
+ *   h(n / 3, m / 5) -- two highparts in one call: sched1 SERIALISES them
+ *     (mult / mfhi $3 / ... / mult / mfhi $7), so HI never becomes
+ *     unavailable and neither pseudo is pushed into a GPR. There is no way
+ *     to make HI busy across the live range from C.
  *   All 12 `mfhi`s in build/main.bin split cleanly: the six in LANDED code
  *   (0x80024584..0x80024904, 0x80089344, 0x8008A36C) put HI in a scratch,
  *   the six in TWIN target bytes (0x80405108, 0x80405148, 0x80405164,
  *   0x804051C0, 0x804051D8, 0x80405420) put it in the consumer's own
- *   destination. There is no landed twin `mfhi` anywhere, so there is no
- *   control that this build can produce the target's form at all.
+ *   destination. The project-wide count is in docs/matching-levers.md:
+ *   115 `mfhi` across 3384 landed functions, 0 in the target's form.
  *   The LIVE counterpart proves it from the other side: func_80024818 is
  *   landed byte-identical and its `n / 3` is
  *   `sra $4,$17,31 / mfhi $11 / subu $4,$11,$4` -- OUR shape, from the same
  *   source, under the 4.1 compiler.
+ *
+ * THE DIVISION SPELLED BY HAND IS BYTE-EQUAL, NOT BETTER. Writing the magic
+ * multiply out so the highpart has a C name does not help, because combine
+ * folds the extraction straight back into the subtract and the pseudo that
+ * is left is the DImode product, not an SImode highpart:
+ *   union { s64 d; struct { s32 h, l; } w; } u;
+ *   u.d = (s64)n * (s64)0x55555556; ... u.w.h - (n >> 31)
+ *                                          82 words,  3 differing (identical
+ *                                          instruction stream to `n / 3`)
+ * Anything that stops the fold is an asm insn, and every asm insn here is a
+ * scheduling barrier that costs more than it buys:
+ *   ... hi = u.w.h; __asm__("" ::"r"(hi)); f(hi - (n >> 31), num)
+ *                                          82 words,  9 differing
+ *   ... __asm__("" : "=r"(h2) : "r"(hi)); f(h2 - (n >> 31), num)
+ *                                          82 words, 14 differing
+ *   ... __asm__("" : "=r"(hi) : "0"(hi));  82 words, 13 differing
+ * (the last two also push the `mult` from word 22 down to word 29 and turn
+ * the `mfhi` into an `mflo`.)
  *
  * Tried against those three words, all 3 differing: `n / 3` hoisted into a
  * local declared first, declared second, assigned after the memcpy, and used
  * twice; `(n * 1) / 3`; `n / 3L`; `q = n; q / 3`; `&num[0]`; `(u8 *)num`;
  * `u8 *m = num` declared first and assigned first; `b = buf` before the
  * memcpy, `b` dropped entirely; and search.py's whole transform set (16
- * variants, no improvement). Worse: `__asm__("" : "=r"(q) : "0"(q))` on the
- * quotient (83 words, 52 -- the move is not deleted); `__asm__ volatile(""
- * ::: "$4")` before the call (82 words, 20 -- it splits the block instead);
- * `register s32 z asm("$4")` as the dividend (83, 62); `volatile s32 q`
- * (84, 61); `(n + n - n) / 3` (83, 61).
+ * variants, no improvement). unname.py: 0 improvements, 2026-11-13. Worse:
+ * `__asm__("" : "=r"(q) : "0"(q))` on the quotient (83 words, 52 -- the move
+ * is not deleted); `__asm__ volatile("" ::: "$4")` before the call (82 words,
+ * 20 -- it splits the block instead); `register s32 z asm("$4")` as the
+ * dividend (83, 62); `volatile s32 q` (84, 61); `(n + n - n) / 3` (83, 61).
+ *
+ * PERMUTER: 278296 candidates on 2026-11-13 at base=30, found=none; a second
+ * run from the same base the same day is recorded in nonmatchings/permlog.tsv.
  */
 
 #include "common.h"
