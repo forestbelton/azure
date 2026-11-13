@@ -1136,8 +1136,8 @@ needed; the struct layouts only become work at `D_800CFD18`
 Measured 2026-11-13, against `main.bin` with all four containers byte-identical
 before and after. The twin's chunks are
 
-      - [0x269000, rodata, ovl_main_80400000_rodata_pre]    0x7C,   7 objects
-                                                            BLOCKED, see §9.3
+      - [0x269000, .rodata, ovl_main_80400000_rodata_pre]   0x7C,   7 objects
+                                                            ** DONE 2026-11-13 **
       - [0x26907c, .rodata, ovl_main_80400000]              0x14,   jtbl, OWNED
       - [0x269090, .rodata, ovl_main_80400000_rodata]       0x810, 98 objects
                                                             ** DONE 2026-11-13 **
@@ -1307,9 +1307,26 @@ where the next group's alignment begins: `01 C0 D0` at `0x8040B4F5`, `89` at
 `0x8040C317`, and `3C 78 DA 42` at `0x8040C624`, which is the last word of the
 whole region. Read the bytes; do not assume a long zero run is uniform.
 
-### 9.3 THE BLOCKER: A COMPILER-EMITTED JUMP TABLE GETS `.align 3`, AND THIS ONE IS AT 0x7C
+### 9.3 A COMPILER-EMITTED JUMP TABLE GETS `.align 3`, AND THIS ONE IS AT 0x7C
 
-**`rodata_pre` cannot be owned without changing the stand-in compiler.** It
+> **RESOLVED 2026-11-13, AND NOT THE WAY THIS SECTION SAYS.** Everything below
+> is correct about the mechanism and wrong about the conclusion: owning
+> `rodata_pre` does not need a different compiler, it needs the jump table to
+> be at offset 0 of *its own input section*, which a separate unit gives for
+> free. `csrc/ovl_main_80400000_rodata_pre.c` holds the seven objects, the
+> function unit's `.rodata` is the 0x14-byte table alone, and the segment
+> carries three `.rodata` windows in a row. All four containers are
+> byte-identical and the twin has no undotted subsegment left.
+>
+> **The pattern worth taking from this:** a per-unit alignment request is only
+> a constraint on the offset *within that unit's section*. If something has to
+> sit at an address the alignment cannot reach, give it a section of its own
+> rather than trying to move the alignment. The same move answers §9.1's
+> ordering problem, which is why all three of this overlay's chunks are owned
+> by three units and not one.
+
+**The original claim, kept because the mechanism is real: `rodata_pre` cannot
+be owned in the same unit as the jump table.** It
 sits *below* `jtbl_8040007C`, so owning it puts 0x7C bytes ahead of the jump
 table inside one input section -- and gcc aligns a jump table to
 `BIGGEST_ALIGNMENT`:
@@ -1334,16 +1351,23 @@ free. The 4-aligned `jtbl_*` symbols elsewhere (`jtbl_8003323C` and friends)
 are in PSY-Q *assembly* listings, not compiler output, so they are not
 evidence either way.
 
-There is no source lever and no flag. The options, none of them taken here:
+There is no source lever and no flag that moves the alignment itself. The
+options as they were first written up:
 
-1. **Patch the stand-in** so a jump table aligns to 4. It would affect only
-   this unit, since `tools/psx272gcc` is used by nothing else, and it should
-   be a no-op on everything that currently builds -- no unit in the tree has a
-   compiler-emitted jump table at a non-zero `.rodata` offset. It is still a
-   change to the compiler and wants its own measurement.
+1. **Patch the stand-in** so a jump table aligns to 4. Rejected by forest --
+   and it would have been the wrong answer anyway, since option 4 costs
+   nothing and changes no tool.
 2. **Rewrite the `.align 3` before a jump table in this unit's generated `.s`.**
-   Same effect, no compiler change, but a pipeline special case.
+   Same effect, no compiler change, but a pipeline special case. Also
+   unnecessary.
 3. **Leave `rodata_pre` alone.** It is 0x7C bytes and 7 objects.
+4. **Give the jump table its own input section** -- i.e. put the objects in
+   another unit, so the table is at offset 0 of the function unit's `.rodata`
+   and an 8-byte alignment request costs nothing. **This is what was done.**
+   Note it does NOT require the eventual nine-unit split to be settled: even
+   with `c_server.c` carved out as its own unit, its rodata and its jump table
+   would be in one section again and the padding would come back. The jump
+   table wants a section boundary, not a translation-unit boundary.
 
 ### 9.4 `rodata_post` IS DONE, AND IT TOOK A SECOND TRANSLATION UNIT
 

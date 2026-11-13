@@ -132,7 +132,11 @@ long func_804009E8(void);                            /* HandleCardTimeout */
 long func_804009FC(void);                            /* HandleCardNew */
 void func_80400A10(void);                            /* open_card_events */
 void func_80400E34(void);                            /* start_card_server */
+void func_8040855C(s32 *p);                          /* D_80400000's value */
 s32 func_804010F0(void);                             /* on_sw_card_eof */
+s32 func_8040122C(void);                             /* on_hw_card_eof */
+s32 func_804013A8(void);                             /* on_card_timeout */
+s32 func_804013D0(void);                             /* on_card_error */
 s32 func_804012B0(void);                             /* on_card_new */
 s32 func_804013F8(s32 card_slot);                    /* check_card_slot */
 s32 func_804010E0(void);                             /* take_sw_card_state */
@@ -385,9 +389,13 @@ extern s32 D_8013BB6C;                               /* THIS link's card_first_f
 extern s32 D_8009E394;                               /* the word after D_8009E390 */
 extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
-/* THE TWIN'S RODATA. D_80400000..D_80400078 is still splat's; everything from
-   D_80400090 up is defined by csrc/ovl_main_80400000_rodata.c, which is why
-   these are all `const` -- a non-const definition goes under `.data`, at the
+/* THE TWIN'S RODATA, ALL OF IT OWNED IN C as of 2026-11-13, by TWO units and
+   not one: D_80400000..D_8040007C by csrc/ovl_main_80400000_rodata_pre.c and
+   D_80400090 up by csrc/ovl_main_80400000_rodata.c, with jtbl_8040007C
+   between them emitted by the function unit itself. Each of those files opens
+   with the measurement that forced it -- a jump table's `.align 3` for the
+   first, -G8's data-before-text emission order for the second. That is why
+   these are all `const`: a non-const definition goes under `.data`, at the
    other end of the segment.
 
    THE UNSIZED ONES ARE UNSIZED ON PURPOSE, and adding a size is a measurement,
@@ -436,8 +444,8 @@ extern const char D_80400138[];                      /* read_save_file's checksu
 extern const char D_8040086C[40];                    /* memory.c's ASSERT_FMT copy */
 extern const char D_80400894[];                      /* its filename */
 extern const char D_80400120[];
-extern char D_80400038[];                            /* "%s = %d\n" */
-extern char D_80400044[];                            /* "card_first_flg" */
+extern const char D_80400038[12];                    /* "%s = %d\n" */
+extern const char D_80400044[16];                    /* "card_first_flg" */
 extern const char D_804000F8[];                      /* the format_card counter's name */
 extern const UnkFnTab5 D_80400054;                   /* gSwCardEventHandlers */
 extern const UnkFnTab5 D_80400068;                   /* gHwCardEventHandlers */

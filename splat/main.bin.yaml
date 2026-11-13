@@ -135,7 +135,7 @@ segments:
       # 0x269000 still cannot be owned, for the unrelated reason in SS9.3: gcc
       # gives a jump table `.align 3`, which is free at offset 0 of a unit's
       # section and costs four bytes of gas padding behind rodata_pre's 0x7C.
-      - [0x269000, rodata, ovl_main_80400000_rodata_pre]
+      - [0x269000, .rodata, ovl_main_80400000_rodata_pre]
       - [0x26907c, .rodata, ovl_main_80400000]
       - [0x269090, .rodata, ovl_main_80400000_rodata]
       - [0x2698a0, c, ovl_main_80400000]
