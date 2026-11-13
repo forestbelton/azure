@@ -330,6 +330,72 @@
  * comes out as the assembler-expanded `lui $at` + `%lo` pair instead of the
  * hoisted-lui split. Same body as the live one, including the pointer local,
  * which is the in-place flag update device. */
+/* ---------------------------------------------------------------------------
+ * THE UNIT'S FIRST RODATA, 0x80400000..0x8040007C -- 0x7C bytes, 7 objects,
+ * followed immediately by jtbl_8040007C, which func_804016D0's switch emits.
+ *
+ * c_server.c's rodata: the assert pair, the debug-print pair, and the two card
+ * event handler tables.  These lived in a file of their own until the jump
+ * table's `.align 3` was dealt with -- gcc 8-aligns every jump table
+ * (final.c:1518), the table is at offset 0x7C here, 4 mod 8, and gas paid for
+ * it with four bytes of pad until tools/decomp/jtbl_align.py started
+ * rewriting that one directive for this unit.  See the Makefile and
+ * docs/owning-data.md SS9.3; the live 0x80020000 overlay is the reason the
+ * rewrite is scoped to this unit and not applied to the 4.1 ones.
+ *
+ * ORDER MATTERS AND IS FILE ORDER: these seven are the only file-scope
+ * `.rodata` objects the unit defines, and at -G8 all file-scope data precedes
+ * everything the text stream emits, so the table lands behind them.  Anything
+ * added here lands between 0x80400000 and the table.
+ *
+ * Nothing references D_80400000 -- not this unit, not csrc/ovl_main_80400000_
+ * rodata.c, not any remaining asm stub -- so it must be non-static or gcc
+ * discards it.  It is one word holding a function address and the live overlay
+ * has no counterpart for it: that overlay's rodata starts at ASSERT_FMT.  What
+ * registers it, if anything does, is not known.  It needs the explicit
+ * `section(".rodata")` because it is four bytes and this unit is the one built
+ * at -G8, which would otherwise put it in `.sdata` and drop it -- measured, as
+ * main.bin four bytes short with the image starting at ASSERT_FMT.
+ * ------------------------------------------------------------------------- */
+/* 0x80400000 */
+void (*const D_80400000)(s32 *) __attribute__((section(".rodata"))) =
+    func_8040855C;
+
+/* 0x80400004 -- ASSERT_FMT.  c_server.c's own copy; each of the nine original
+   translation units has one, and the other eight are in
+   csrc/ovl_main_80400000_rodata.c. */
+const char D_80400004[40] = "Assertion failed: file \"%s\", line %d\n";
+
+/* 0x8040002C -- FILENAME_C_SERVER. */
+const char D_8040002C[12] = "c_server.c";
+
+/* 0x80400038 -- the debug-print format, used from three sites. */
+const char D_80400038[12] = "%s = %d\n";
+
+/* 0x80400044 -- the variable name the line above prints, which is how we know
+   the original called this flag `card_first_flg`. */
+const char D_80400044[16] = "card_first_flg";
+
+/* 0x80400054 -- gSwCardEventHandlers, and 0x80400068 gHwCardEventHandlers.
+   The live csrc/main/c_server.c spells these the same way; only the first
+   handler differs between the two tables. */
+const UnkFnTab5 D_80400054 = {{
+    NULL,
+    func_804010F0,
+    func_804013D0,
+    func_804013A8,
+    func_804012B0,
+}};
+
+/* 0x80400068 */
+const UnkFnTab5 D_80400068 = {{
+    NULL,
+    func_8040122C,
+    func_804013D0,
+    func_804013A8,
+    func_804012B0,
+}};
+
 void func_804008A0(s32 use_second_slot)
 {
     s32 *p;

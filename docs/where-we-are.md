@@ -139,12 +139,19 @@ Three things about the overlays that change how they are worked, all in
   **It stopped being the only such block on 2026-11-13**, when the 0x80400000
   twin's data AND both halves of its rodata were owned too -- `0x80400000..
   0x804008A0` and `0x804089E0..0x8040C628`, 2,208 + 15,432 bytes, and not one
-  undotted subsegment left in that segment. That took THREE units rather than
-  one, for two reasons specific to a -G8 block, both in owning-data §9: at -G8
-  all file-scope data is emitted before all text, so rodata that belongs after
-  a jump table cannot share the table's unit; and a jump table is aligned to
-  `BIGGEST_ALIGNMENT`, so it has to sit at offset 0 of its own input section to
-  land on a 4-aligned address. That completed every block the
+  undotted subsegment left in that segment. That takes TWO units rather than
+  one, for a reason specific to a -G8 block (owning-data §9.1): at -G8 all
+  file-scope data is emitted before all text, so rodata that belongs *after* a
+  jump table cannot share the table's unit. It took three for a day, because a
+  jump table also gets `BIGGEST_ALIGNMENT` and so wanted offset 0 of its own
+  input section -- until the image was asked what the ORIGINAL toolchain did.
+  `jtbl_8040007C` is at a 4-aligned address behind `c_server.c`'s own rodata,
+  which no 8-aligning toolchain can produce, so this 4.0-SDK block's did not:
+  `tools/decomp/jtbl_align.py` rewrites that one directive for that one unit
+  and the third unit is gone. The 4.1 units keep the pad, measured in the live
+  overlay's own object, and so do `ovl_town`'s two splits. owning-data §9.3 has
+  the whole trail, including why the mechanism was right twice and the
+  conclusion drawn from it wrong twice. That completed every block the
   project counted -- **1,293 of 1,293 functions, 100.0% of its words**. It is
   no longer true that there is no `INCLUDE_ASM` anywhere in `csrc/`: the debug
   twin below was opened as a `c` subsegment on 2026-11-09 and carries 261 of

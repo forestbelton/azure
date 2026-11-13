@@ -239,6 +239,19 @@ build/csrc/ovl_main_80400000.o: CC := tools/psx272gcc
 # same story as the compiler above: this one came out of the 4.0 SDK.
 build/csrc/ovl_main_80400000.o: MASPSXFLAGS += --expand-div
 
+# AND IT IS THE ONE UNIT WHOSE JUMP TABLE IS NOT 8-ALIGNED. gcc gives every
+# jump table `.align 3` (final.c:1518, BIGGEST_ALIGNMENT 64), and for the 4.1
+# units that is correct -- csrc/main/c_server.c's table is at rodata offset
+# 0x60 behind four bytes of pad at 0x5C, and that pad is in the shipped image.
+# This block's table is at 0x8040007C, 4 mod 8, behind 0x7C of c_server.c's
+# own rodata, which an 8-aligning toolchain cannot produce. Same story as the
+# compiler and --expand-div above: the 4.0 SDK did it differently. The filter
+# rewrites that ONE directive and leaves every other `.align` alone; without
+# it, 0x269000 needs a third C unit purely to put the table at offset 0 of a
+# section. See tools/decomp/jtbl_align.py and docs/owning-data.md SS9.3.
+ASFILTER ?= true
+build/csrc/ovl_main_80400000.o: ASFILTER := python3 tools/decomp/jtbl_align.py
+
 # Assembling splat's output: keep -G0 here. splat emits %gp_rel relocations
 # explicitly, so the assembler must not make its own small-data decisions.
 # This is independent of the -G8 used for C above.
@@ -383,6 +396,7 @@ build/%.o: %.s
 build/%.o: %.c
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(CFLAGS) -S -o $(@:.o=.s) $<
+	$(ASFILTER) $(@:.o=.s)
 	$(MASPSX) $(MASPSXFLAGS) $(ASFLAGS_C) -o $@ < $(@:.o=.s)
 
 build/%.o: %.bin

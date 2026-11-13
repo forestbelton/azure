@@ -112,31 +112,41 @@ segments:
       # DOTTED vs UNDOTTED here is forced, in both directions. jtbl_8040007C's
       # entries are `.L` labels inside func_804016D0, and a local label is
       # only visible in its own object, so that table must ride with the code:
-      # dotted. Everything in `rodata_pre` must NOT migrate -- migration only
+      # dotted. The 0x7C in front of it must NOT migrate -- migration only
       # emits a symbol it can attribute to ONE function, and c_server.c's
       # ASSERT_FMT copy is referenced from dozens, so splat attributes it to
       # nobody and writes it nowhere, and the link fails on undefined
       # D_80400004. Undotted needs a DIFFERENT name: an undotted subsegment
       # sharing the `c` unit's name is a hard error.
       #
-      # TWO DOTTED `.rodata` WINDOWS, AND THEY MUST BE TWO UNITS. The 0x810
-      # bytes at 0x269090 are csrc/ovl_main_80400000_rodata.c -- 98 objects,
-      # where splat's old `rodata_post` listing had 47 labels -- and they
-      # cannot be part of the unit above them, in any file order: at -G8
+      # 0x269000 IS ONE WINDOW, NOT TWO, and that took a build change. gcc
+      # gives every jump table `.align 3` (final.c:1518, BIGGEST_ALIGNMENT
+      # 64), so jtbl_8040007C at offset 0x7C of the unit's own `.rodata` --
+      # 4 mod 8 -- used to cost four bytes of gas pad, measured as `.rodata`
+      # 148 against the window's 144 and `size differs by +0x4`. The block
+      # then needed a THIRD unit whose section started at the table. It does
+      # not any more: tools/decomp/jtbl_align.py rewrites that one directive
+      # to `.align 2` for this unit only, because this is the 4.0-SDK block
+      # and a toolchain that 8-aligned jump tables could not have put one at
+      # 0x8040007C in the first place. The 4.1 units keep their pad -- see the
+      # filter's header for the live-overlay measurement that proves it.
+      #
+      # TWO DOTTED `.rodata` WINDOWS REMAIN, AND THEY MUST BE TWO UNITS. The
+      # 0x810 bytes at 0x269090 are csrc/ovl_main_80400000_rodata.c -- 98
+      # objects, where splat's old `rodata_post` listing had 47 labels -- and
+      # they cannot be part of the unit above them, in any file order: at -G8
       # cc1psx writes the TEXT to a temp file and appends it after all
       # file-scope data (mips.c:4181, for the assembler's small-data pass), so
-      # jtbl_8040007C -- which func_804016D0's switch emits -- always lands
-      # AFTER every object the unit defines. Measured: the right total, 2084,
-      # and main.bin differing from 0x26907c, the table's own address. A unit
-      # gets one subsegment per section, so one unit cannot hold two windows
-      # either. See csrc/ovl_main_80400000_rodata.c's header and
-      # docs/owning-data.md SS6.
-      #
-      # 0x269000 still cannot be owned, for the unrelated reason in SS9.3: gcc
-      # gives a jump table `.align 3`, which is free at offset 0 of a unit's
-      # section and costs four bytes of gas padding behind rodata_pre's 0x7C.
-      - [0x269000, .rodata, ovl_main_80400000_rodata_pre]
-      - [0x26907c, .rodata, ovl_main_80400000]
+      # jtbl_8040007C always lands AFTER every object the unit defines.
+      # Measured: the right total, 2084, and main.bin differing from
+      # 0x26907c, the table's own address. A unit gets one subsegment per
+      # section, so one unit cannot hold two windows either. This split is
+      # the one the eventual nine-translation-unit shape dissolves on its own:
+      # that 0x810 is the OTHER EIGHT units' rodata, eight more ASSERT_FMT
+      # copies among it, and 0x269090 is simply where c_server.c ends.
+      # See csrc/ovl_main_80400000_rodata.c's header and
+      # docs/owning-data.md SS6 and SS9.3.
+      - [0x269000, .rodata, ovl_main_80400000]
       - [0x269090, .rodata, ovl_main_80400000_rodata]
       - [0x2698a0, c, ovl_main_80400000]
       # Dotted `.data`, so splat emits NOTHING here and csrc/ovl_main_80400000.c

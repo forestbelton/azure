@@ -33,12 +33,12 @@
  * are two units, which is what docs/owning-data.md SS6 says to do with
  * disjoint ranges, and the yaml orders the two input sections.
  *
- * (SS9.3's `.align 3` is a separate, still-standing blocker, and it is why
- * rodata_pre below the table is still splat's. The table gets
- * BIGGEST_ALIGNMENT, eight bytes, and sits at a 4-aligned address; here it is
- * at offset 0 of its own unit's section, where that costs nothing. 0x810 is
- * also 8-aligned, which is why the wrong-order measurement above still
- * totalled 2084 rather than 2088.)
+ * (SS9.3's `.align 3` was a second, independent reason for a THIRD unit below
+ * the table, and it is gone: the table is at a 4-aligned address because this
+ * block's toolchain did not 8-align jump tables, so
+ * tools/decomp/jtbl_align.py rewrites that one directive and the function
+ * unit holds both the 0x7C and the table. 0x810 is itself 8-aligned, which is
+ * why the wrong-order measurement above still totalled 2084 and not 2088.)
  *
  * THIS UNIT IS -G0 AND BUILT BY tools/cdkgcc, not by the twin's own compiler:
  * it matches the Makefile's `build/csrc/ovl_%.o` pattern rule and takes no
@@ -71,7 +71,8 @@
  * original was nine translation units -- c_server.c, card_mes.c, card_opt.c,
  * card_win.c, cardbk.c, cardinfo.c, cardslot.c, cardsme.c, memory.c -- each
  * carrying its own copy of the format string followed by its own filename.
- * c_server.c's pair is in rodata_pre; the other eight are below, and they are
+ * c_server.c's pair is in the function unit, above jtbl_8040007C; the other
+ * eight are below, and they are
  * what marks the unit boundaries in this region. gcc merges identical string
  * literals globally, so a literal would be emitted once: the only way to get
  * eight copies out of one C file is eight NAMED objects. docs/overlays.md
@@ -121,8 +122,8 @@ extern void func_80405D54(s32 *p);
 extern void func_80406150(s32 *p);
 extern void func_80406274(s32 *p);
 
-/* --- c_server.c's assert pair is in rodata_pre, below the jump table, so
-   everything from here to D_80400548 follows it. --- */
+/* --- c_server.c's assert pair is in the function unit, ABOVE jtbl_8040007C,
+   so everything from here to D_80400548 follows the table. --- */
 /* 0x80400090  print_card_status: func_804018FC prints six lines the live block does not */
 const char D_80400090[12] = "CHAN %x\n";
 

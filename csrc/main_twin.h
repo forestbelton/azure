@@ -390,11 +390,12 @@ extern s32 D_8009E394;                               /* the word after D_8009E39
 extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 /* THE TWIN'S RODATA, ALL OF IT OWNED IN C as of 2026-11-13, by TWO units and
-   not one: D_80400000..D_8040007C by csrc/ovl_main_80400000_rodata_pre.c and
-   D_80400090 up by csrc/ovl_main_80400000_rodata.c, with jtbl_8040007C
-   between them emitted by the function unit itself. Each of those files opens
-   with the measurement that forced it -- a jump table's `.align 3` for the
-   first, -G8's data-before-text emission order for the second. That is why
+   not one: D_80400000..D_8040007C by csrc/ovl_main_80400000.c itself, which
+   also emits jtbl_8040007C right behind them, and D_80400090 up by
+   csrc/ovl_main_80400000_rodata.c. The one measurement that forces the split
+   is -G8's data-before-text emission order, in that second file's header; the
+   jump table's `.align 3` wanted a third unit for a day and is now handled in
+   the build instead, by tools/decomp/jtbl_align.py. That is why
    these are all `const`: a non-const definition goes under `.data`, at the
    other end of the segment.
 

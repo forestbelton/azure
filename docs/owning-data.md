@@ -1136,9 +1136,9 @@ needed; the struct layouts only become work at `D_800CFD18`
 Measured 2026-11-13, against `main.bin` with all four containers byte-identical
 before and after. The twin's chunks are
 
-      - [0x269000, .rodata, ovl_main_80400000_rodata_pre]   0x7C,   7 objects
+      - [0x269000, .rodata, ovl_main_80400000]              0x90,   7 objects
+                                                            plus jtbl_8040007C
                                                             ** DONE 2026-11-13 **
-      - [0x26907c, .rodata, ovl_main_80400000]              0x14,   jtbl, OWNED
       - [0x269090, .rodata, ovl_main_80400000_rodata]       0x810, 98 objects
                                                             ** DONE 2026-11-13 **
       - [0x2719e0, .data,   ovl_main_80400000]              0x3C48, 98 objects
@@ -1309,21 +1309,38 @@ whole region. Read the bytes; do not assume a long zero run is uniform.
 
 ### 9.3 A COMPILER-EMITTED JUMP TABLE GETS `.align 3`, AND THIS ONE IS AT 0x7C
 
-> **RESOLVED 2026-11-13, AND NOT THE WAY THIS SECTION SAYS.** Everything below
-> is correct about the mechanism and wrong about the conclusion: owning
-> `rodata_pre` does not need a different compiler, it needs the jump table to
-> be at offset 0 of *its own input section*, which a separate unit gives for
-> free. `csrc/ovl_main_80400000_rodata_pre.c` holds the seven objects, the
-> function unit's `.rodata` is the 0x14-byte table alone, and the segment
-> carries three `.rodata` windows in a row. All four containers are
-> byte-identical and the twin has no undotted subsegment left.
+> **RESOLVED TWICE ON 2026-11-13, AND THE SECOND TIME IS THE REAL ONE.**
+> Everything below is correct about the mechanism and wrong about what has to
+> change. The first fix gave the table a section of its own --
+> `csrc/ovl_main_80400000_rodata_pre.c` held the seven objects, the function
+> unit's `.rodata` was the 0x14-byte table alone, three `.rodata` windows in a
+> row -- because a per-unit alignment request only constrains the offset
+> *within that unit's section*, so a table at offset 0 pays nothing. That
+> works and all four containers were byte-identical.
 >
-> **The pattern worth taking from this:** a per-unit alignment request is only
-> a constraint on the offset *within that unit's section*. If something has to
-> sit at an address the alignment cannot reach, give it a section of its own
-> rather than trying to move the alignment. The same move answers §9.1's
-> ordering problem, which is why all three of this overlay's chunks are owned
-> by three units and not one.
+> It was still a workaround, and **the image says so.** `jtbl_8040007C` is at
+> `0x8040007C`, 4 mod 8, with 0x7C of `c_server.c`'s OWN rodata in front of it
+> -- `ASSERT_FMT` and `"c_server.c"`, which no other translation unit can own.
+> A toolchain that 8-aligned jump tables could not have put a table there at
+> all. So this block's did not, and the `.align 3` our build emits is simply
+> wrong for it: this is the one unit out of the 4.0 SDK, the same reason it
+> needs a different compiler and `--expand-div`.
+> `tools/decomp/jtbl_align.py` rewrites that one directive to `.align 2` for
+> this unit, `rodata_pre.c` is deleted, and 0x269000 is one window again.
+>
+> **The fix is scoped, and that is not caution, it is measured.** The 4.1
+> units genuinely do 8-align: in `csrc/main/c_server.o` the handler tables end
+> at rodata offset 0x5C and the table starts at 0x60, and those four pad bytes
+> are in the shipped image. Dropping the directive globally breaks three
+> containers. The same is true of `ovl_town`'s two splits -- those stay.
+>
+> **The lesson, and it is the same one twice.** The mechanism below was right
+> both times; what was wrong both times was the step from "this is what our
+> toolchain does" to "so this is what the source/segment layout has to be".
+> The question that settled it -- *what does the original image say the
+> original toolchain did?* -- was available from the start and took one
+> `objdump -s -j .rodata`. Ask it before restructuring anything to accommodate
+> a directive.
 
 **The original claim, kept because the mechanism is real: `rodata_pre` cannot
 be owned in the same unit as the jump table.** It
@@ -1385,8 +1402,7 @@ in that order, whatever the file says (§9.1), and the twin's section runs
 `func_804016D0`. One unit cannot produce that order, and one unit cannot have
 two windows. So it is two units and the yaml orders the two input sections:
 
-      - [0x269000, rodata, ovl_main_80400000_rodata_pre]   splat's, §9.3
-      - [0x26907c, .rodata, ovl_main_80400000]             the jump table, 0x14
+      - [0x269000, .rodata, ovl_main_80400000]             7 objects + jtbl, 0x90
       - [0x269090, .rodata, ovl_main_80400000_rodata]      98 objects, 0x810
       - [0x2698a0, c, ovl_main_80400000]
 
@@ -1403,12 +1419,13 @@ windows, `.data` 15432 against `0x3C48`, `.sdata`, `.sbss` and `.bss` all
 absent or zero in both objects, four containers byte-identical. The data chunk
 is independent of both rodata chunks, so owning it first was uneventful.
 
-**The same device would unblock `rodata_pre`**, and it is the fourth option
-§9.3 does not list: a third unit whose `.rodata` is `0x269000..0x26907c` puts
-`jtbl_8040007C` at offset 0 of the *function* unit's section, where `.align 3`
-is free, and the seven objects at offset 0 of their own. Not done, not
-measured, and out of scope where it came up; §9.3's compiler story is still
-the honest account of why it cannot be done inside one unit.
+**`rodata_pre` was a third unit for one day and is now gone** -- the fix for
+its `.align 3` turned out to belong in the build, not in the segment layout.
+See §9.3. What survives here is the ordering constraint, which is a different
+thing and is the reason there are still two windows: the 0x810 cannot join the
+unit above it at -G8 in any file order. That one dissolves on its own when the
+block becomes nine translation units, because the 0x810 is the other eight
+units' rodata and 0x269090 is just where `c_server.c` ends.
 
 Two things learned there that belong with §4 rather than here. **The
 relocation inventory of a region is worth taking before you start**: this one
