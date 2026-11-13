@@ -176,12 +176,29 @@
  *     long-latency `div` early no matter where the source puts it. No source
  *     reordering reaches this.
  *
- * AND A WARNING ABOUT THE PERMUTER ON THIS FUNCTION. A 40-minute run from the
- * 2-DIFF base produced two candidates its own scorer called better (1770 and
- * 1790). Through the real gate they are 113 words/8 differing and 113/12,
- * against this park's 112/2. The permuter's score is not this project's gate
- * and on this function it is actively misleading -- `ovlverify.py` every
- * candidate before believing a score.
+ * THE PERMUTER HAS NOW SEARCHED THIS PROPERLY, and found nothing. The first
+ * 40-minute run from the 2-DIFF base reported base=1810 and returned two
+ * candidates its scorer called better, 1770 and 1790, which through the real
+ * gate are 113 words/8 differing and 113/12 against this park's 112/2. That
+ * was not the permuter being unreliable: permimport.py's generated
+ * compile.sh did not pass this unit's --expand-div, so the CANDIDATE lacked
+ * the aspsx division-check sequences (bnez/break 0x7, bne/lui 0x8000/bne/
+ * break 0x6) that the TARGET has, twice -- 18 phantom words of difference,
+ * and the search spent an hour optimising them. Fixed 2026-11-13; the flag
+ * now comes from asmlib.maspsx_extra_for_unit.
+ *
+ * Re-run with the import correct: base=10, 240,198 candidates in 40 minutes
+ * at 100/s, best=10, found=none. THAT is a real negative, and it is the only
+ * one this function has ever had -- every earlier permuter result on it was
+ * scored against the wrong target. It says no local permutation of this
+ * source reaches the last two words, which is consistent with both routes
+ * closed by hand above.
+ *
+ * The general rule stands anyway: ovlverify.py every candidate before
+ * believing a score, and check base= against what the park measures. A base
+ * score wildly out of line with the park's DIFF is the symptom that found
+ * this bug -- func_804053A0 scored base=30 for 3 differing while this one
+ * scored 1810 for 2.
  */
 
 #include "common.h"
