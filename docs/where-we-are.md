@@ -233,7 +233,34 @@ Three things about the overlays that change how they are worked, all in
   and THREE are left. Three of the five were rebuilt on better candidates;
   the count is not the only thing to read.
 
-  - `func_804053A0` -- 82 of 82 words, 9 differing (was 84/46 that morning and
+  **SUPERSEDED 2026-11-13 -- READ THIS BEFORE THE THREE ENTRIES BELOW.** One
+  pass of three agents, each given one function, the procedure doc and NO
+  context from the session that wrote these verdicts, moved two of the three:
+
+      func_804034D8   6 differing -> 2
+      func_804053A0   9 differing -> 3
+      func_80404EA0   unchanged at 322/320, and now properly closed
+
+  **Both of the verdicts that moved were mine, and both were wrong in a way
+  worth naming.** func_804034D8 was closed because the live twin
+  func_80023258 is byte-identical and allocates the way our candidate does --
+  which established that our output is REASONABLE for our compiler, and was
+  read as establishing that the target was UNREACHABLE. Those are different
+  claims and only the first was tested; one cross-block reference that
+  refuses a `combine_regs` tie moved four words. func_804053A0 was closed on
+  the compiler's own `-dS` trace, every word of which is true, and which was
+  explaining a residue of a WRONG SHAPE: the seed is one five-byte object,
+  `main_twin.h` declared it as a word plus a byte with a comment insisting it
+  was "not a struct", and a `memcpy` that becomes one `movstrsi` insn took all
+  six words. A trace explains the code you gave the compiler; it cannot tell
+  you the code was the wrong shape, and the more exactly it explains the
+  residue the more convincing the wrong shape becomes.
+
+  The entries below are kept as the record of what was believed and why. The
+  live numbers are in the park headers, which `parkstats.py` generates.
+
+  - `func_804053A0` -- NOW 82 of 82, 3 differing (2026-11-13). Written up
+    below at 9 differing (was 84/46 that morning and
     81/68 before it). The LENGTH matches and the whole tail loop is
     byte-exact. Six of the nine are one scheduling decision before the first
     jal and three are the `mfhi` register gap it shares with func_80404EA0.
@@ -271,7 +298,8 @@ Three things about the overlays that change how they are worked, all in
     flag read into a local ABOVE the store: that makes the store's address
     opaque, so the load becomes an anti-dependence the store cannot pass, and
     the flag stays out of the branch's shadow. Levers 489 and 490.
-  - `func_804034D8` -- 112 of 112, 6 differing, ONE register pair, and the
+  - `func_804034D8` -- NOW 112 of 112, 2 differing (2026-11-13). Written up
+    below at 6 differing, ONE register pair, and the
     counterpart check says it is the compiler. The park's
     local-alloc-priority reading was tested against `qty_compare_1`'s own
     formula and does not hold: twenty-two spellings that move the reference
