@@ -238,6 +238,17 @@ Three things about the overlays that change how they are worked, all in
     the base puts it back first -- `((UnkTwinGrpAEC *)p)->ptrs[4 + i]`, which
     is exactly what the live counterpart func_80024818 writes. That is a
     general lever and it is written up in docs/matching-levers.md.
+
+    **And the counterpart check now says the other nine are NOT a source
+    question.** func_80024818 is landed and byte-identical, and its `n / 3`
+    comes out `addu $16,$sp,80 / move $5,$16 / sra $4,$17,31 / mfhi $11 /
+    subu $4,$11,$4` -- &num early, the sign correction in the argument
+    register, the quotient in a scratch. That is OUR shape exactly, and it is
+    what the retail binary holds; the twin's 4.0 build does the opposite.
+    Backing it up: across the whole landed project there are 115 `mfhi`
+    instructions and in NONE of them is the `mfhi` destination also the
+    destination of the insn that consumes it, where the twin does that in all
+    six it has left. Lever 487.
   - `func_804022C8` -- 63 of 63 words, 7 differing, rebuilt from a 4-differing
     candidate that had the two pointer increments in the wrong order and could
     never have anything else. Every one of the seven is a register NAME, with

@@ -85,7 +85,18 @@
  *     (mips.md:1038), so reload must copy HI into a GPR and
  *     `order_regs_for_reload` hands it the first register no pseudo wants;
  *     the target uses the one the following `subu` writes, which is the
- *     argument register itself. ONE gap in the stand-in compiler, not two.
+ *     argument register itself. ONE gap in the stand-in compiler, not two --
+ *     and it has a project-wide control as of 2026-11-12: across the whole
+ *     landed project there are 115 `mfhi` instructions and NONE of them
+ *     writes the register its consumer writes. The LIVE counterpart proves
+ *     the same thing from the other side. func_80024818 is landed,
+ *     byte-identical, and its `n / 3` comes out
+ *     `addu $16,$sp,80 / move $5,$16 / sra $4,$17,31 / mfhi $11 /
+ *     subu $4,$11,$4` -- &num early, the sign correction in the argument
+ *     register, the quotient in a scratch. That is OUR shape, exactly, and
+ *     it is what the retail binary holds. So both of this park's residues
+ *     reproduce the 4.1 compiler's behaviour and the twin's 4.0 build does
+ *     something else; neither is a source question.
  *
  * THE TENTH WORD FELL ON 2026-11-12, and the fix is the GROUP TYPE. The
  * loop's element load was `addu $v1,$v1,$s2` against the target's

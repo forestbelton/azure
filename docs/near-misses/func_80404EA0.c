@@ -101,14 +101,23 @@
  * costs the three-word sign correction (`addu`/`sra`/`subu`) and changes the
  * answer. Do not re-probe the two nops from C.
  *
- * FINDING 2, the register names. `umulsi3_highpart`'s output is constrained
- * `"=h"` (mips.md:1038), so reload must copy HI into a GPR, and
- * `order_regs_for_reload` hands it the first register no pseudo wants --
- * $t3 here, four times. The target uses the register the FOLLOWING `srl`
- * writes, so the shift is in place: `mfhi $a0` / `srl $a0,$a0,5`. Every
- * register difference in this function is downstream of that choice.
- * func_804053A0's park carries the same line (`built mfhi t0 target mfhi a0`),
- * so it is ONE gap in the stand-in compiler, not two.
+ * FINDING 2, the register names, AND IT NOW HAS A PROJECT-WIDE CONTROL.
+ * `umulsi3_highpart`'s output is constrained `"=h"` (mips.md:1038), so the
+ * value has to be copied into a GPR with `mfhi`, and ours lands in $t3 four
+ * times while the target uses the register the FOLLOWING insn writes, in
+ * place: `mfhi $a0` / `srl $a0,$a0,11`.
+ *
+ * MEASURED 2026-11-12 over the whole landed project -- 3384 functions, all
+ * four containers byte-identical -- there are 115 `mfhi` instructions and in
+ * NOT ONE of them is the `mfhi` destination also the destination of the insn
+ * that consumes it. It is always a scratch: $8 thirty-two times, $11 twenty-
+ * three, $7 twenty-one, $6 seventeen, then $9, $5 and three stragglers. The
+ * twin's target does the opposite in all six `mfhi` it has left. So this is a
+ * compiler difference with a negative control behind it, not an assertion.
+ * The caveat is that those six are all inside this park and func_804053A0's,
+ * so the twin side is not an independent sample; the weight is on our 115.
+ * Every register difference in this function is downstream of that choice,
+ * and func_804053A0's park carries the same line, so it is ONE gap, not two.
  *
  * WHAT IS SETTLED, so a later attempt does not re-derive it:
  *   - D_80400668 is a 41-character string the source copies with an INLINED
