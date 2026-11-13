@@ -63,20 +63,50 @@
  *
  * WHAT IS LEFT is NINE words, all of them before the first jal.
  *
- *   * SIX are one scheduling decision. The target emits the two seed stores
- *     first and only then materialises `&num`:
+ *   * SIX are one scheduling decision, and as of 2026-11-12 the decision is
+ *     READ OFF THE SCHEDULER'S OWN TRACE rather than guessed at. The target
+ *     emits the two seed stores first and only then materialises `&num`:
  *         lui/lw D_80400714 / lui/lb D_80400718 / sw 0x10($sp) / sb 0x14($sp)
  *         addiu $s1,$sp,0x50 / addu $a1,$s1,$zero
- *     gcc hoists `addiu $s1,$sp,0x50` and its copy to the top of the block
- *     and sinks the two stores past them. The `b = buf` device does not
- *     transfer: `&buf` is pinned by being used only AFTER a call, and `&num`
- *     is the call's own argument, so there is no barrier to pin it against.
- *     Tried, all 10: `u8 *m = num;` as a declaration and as an assignment
- *     after the stores, `n / 3` hoisted into a local, and `"r"(m)` or an
- *     in-place `"=r"(m)`/`"0"(m)` marker on it. Tried, worse: a plain
- *     `__asm__("")` before the assignment (83 words, 63 differing -- it
- *     splits the block and costs a word), a marker naming `c` there (12),
- *     and the two seed stores written in the other order (12).
+ *     gcc puts `addiu $s1,$sp,0x50` and its copy at the top of the block and
+ *     the two stores after them. `tools/psx272gcc -dS` names the slot:
+ *
+ *         ;; ready list at T-15: 62 (2) 59 (2) 75 (1), now 62 59 75
+ *         ;; ready list at T-16: 59 (2) 75 (1), now 59 75
+ *         ;; ready list at T-17: 75 (1) 54 (7f000001)
+ *
+ *     59 and 62 are the two stores, 75 is `$a1 = reg89` and 71 (not yet
+ *     ready) is `reg89 = $fp + 80`, the `&num`. gcc 2.7.2 schedules a block
+ *     BACKWARD, filling the last slot first, so the insn picked at T-15 ends
+ *     up LATEST. The stores carry priority 2 -- `priority()` is
+ *     `priority(prev) + insn_cost - 1` and each store's predecessor is a
+ *     LOAD, which costs 2 -- while the whole `&num` chain is cost-1 insns
+ *     and so is priority 1. A higher priority group is examined first, so
+ *     the stores take T-15 and T-16, `$a1 = reg89` takes T-17, and `&num`
+ *     only becomes ready after it and lands at T-20, three slots EARLIER in
+ *     the block.
+ *
+ *     SO THIS IS NOT THE func_804022C8 TIE. There the copy and the store
+ *     were both priority 1 and `schedule_select`'s function-unit hazard rule
+ *     broke the tie, which a memory dependence could undo. Here the stores
+ *     outrank `&num` outright, and the only thing that would lift the `&num`
+ *     chain to priority 2 is a cost>1 predecessor -- a LOAD feeding a frame
+ *     address, which no spelling of `&num` has. Measured 2026-11-12: the
+ *     func_804022C8 device, an empty asm with `"m"` inputs on both stored
+ *     lvalues, is 9 unchanged as a bare barrier after the stores and 16 when
+ *     it also launders the pointer (`"=r"(m) : "0"(m), "m"(...)`) -- blocking
+ *     the stores only lets the LOADS take the late slots and pushes `&num`
+ *     further up.
+ *
+ *     The `b = buf` device does not transfer either: `&buf` is pinned by
+ *     being used only AFTER a call, and `&num` is the call's own argument,
+ *     so there is no barrier to pin it against. Tried, all 10: `u8 *m = num;`
+ *     as a declaration and as an assignment after the stores, `n / 3`
+ *     hoisted into a local, and `"r"(m)` or an in-place `"=r"(m)`/`"0"(m)`
+ *     marker on it. Tried, worse: a plain `__asm__("")` before the
+ *     assignment (83 words, 63 differing -- it splits the block and costs a
+ *     word), a marker naming `c` there (12), and the two seed stores written
+ *     in the other order (12).
  *
  *   * THREE are the `mfhi` reload-register gap this park shares with
  *     func_80404EA0: `mfhi $a3` / `sra $a0,$s3,31` / `subu $a0,$a3,$a0`
