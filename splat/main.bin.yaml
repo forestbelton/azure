@@ -19,7 +19,6 @@ options:
 
   subalign: 4
 
-
   find_file_boundaries: False
   gp_value: 0x80080994
 
@@ -34,34 +33,17 @@ options:
 
   undefined_funcs_auto_path: splat/main.bin_undefined_funcs_auto.txt
   undefined_syms_auto_path: splat/main.bin_undefined_syms_auto.txt
-
-# How this container is laid out, and why each boundary is where it is, is in
-# docs/main-bin-data.md and docs/overlays.md. The comments kept here are the
-# ones that constrain THIS FILE: delete one and the container still builds,
-# wrong. Everything else was moved out or dropped on 2026-11-13; git has it.
 segments:
   - [0x0, bin, song1.kdt]
-  # The sound bank is a split .VH/.VB pair, not one .VAB, which is why the
-  # game reads it at two offsets and why the VH ends at 0x4020 rather than
-  # running into the body.
   - [0x3000, bin, snd_bank.vh]
   - [0x4020, pad]
   - [0x4800, bin, snd_bank.vb]
   - [0x1faf0, pad]
   - [0x20000, bin, kewne_loading_img]
-  # vram 0x8002C000 is load-bearing: the tables below reference this pool by
-  # label, so the link only resolves if the pool sits where it is loaded.
-  - start: 0x20800
-    type: hrodata
-    name: str/monsters
+  - type: hrodata
+    start: 0x20800
     vram: 0x8002C000
-  # `align: 4` is load-bearing. A code segment defaults to align 16 and splat
-  # then emits `__romPos = ALIGN(__romPos, 16)` after it
-  # (segtypes/linker_entry.py:640). This segment ends at 0x21768, which is
-  # 8 mod 16, so the default pushes the pad and every later segment 8 bytes
-  # down the file -- and nothing reports it. A `data` parent is not an
-  # alternative: splat then ignores the dotted subsegment and links its own
-  # generated listing instead of the C object.
+    name: str/monsters
   - type: code
     start: 0x21268
     vram: 0x8002CA68
@@ -70,92 +52,59 @@ segments:
       - [0x21268, .rodata, main_tables_21268]
   - [0x21768, pad]
   # The GAME OPTION overlay, loaded to 0x80088760 by the CD queue descriptor
-  # at vram 0x80080C38. Mutually exclusive with town.bin's and dungeon.bin's
-  # overlays at the same address; each container links only its own objects,
-  # so all three may define D_80088760.
+  # at vram 0x80080C38.
   - type: code
     start: 0x21800
     vram: 0x80088760
     subsegments:
-      # Carved at 0x21954 so each unit's rodata STARTS on its jump table.
-      # cc1psx emits `.align 3` before every jump table, and jtbl_800888B4 is
-      # 4 mod 8, so a unit holding it mid-rodata gains four bytes the
-      # reference does not have and the container comes out long. Merging
-      # these units back together reintroduces that.
       - [0x21800, .rodata, ovl_main_80088760]
       - [0x21830, .rodata, ovl_main_80089608]
-      # Hand-owned text, regenerated from asrc/str/options.txt by the
-      # Makefile's `asrc/str/%.s: asrc/str/%.txt` rule -- not a rodata blob.
       - [0x21894, hrodata, str/options]
       - [0x2194c, .rodata, ovl_main_8008A288]
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
       - [0x24114, data, ovl_main_80088760_data]
-  # A standalone `pad` emits only `. += N;` in its own output section, which
-  # ld marks NOBITS; objcopy zero-fills the gap. Two consequences: it may
-  # NEVER be a container's last segment (the file comes out short, silently --
-  # the 0x275628 pad below is a subsegment for this reason), and anything
-  # reading bytes from the ELF rather than the binary sees a hole here. Only
-  # use it for a run that is entirely zero; tools/decomp/zerosweep.py checks.
   - [0x24420, pad]
-  # 2 MB of mastered random filler. Nothing reads it, nothing indexes it, and
-  # it is not compressed, generated, audio, image or a copy of anything else
-  # on the disc -- all tested; docs/main-bin-data.md has the measurements. It
-  # ends at 0x221800, exactly 0x200000 past the overlay above, so it is a
-  # reserved hole keeping the images below on fixed sector offsets. It must
-  # still be reproduced byte for byte. Do not spend time on it.
+  # NB: 2 MB of mastered random filler. (?)
   - [0x28420, bin, unread_filler]
   - [0x221800, bin, unk_img_1]
   - [0x226800, bin, title_bg_img]
   - [0x257000, bin, title_menu_img]
   - [0x258800, bin, unk_img_2]
   # The 0x80020000 card overlay, owned in full by csrc/main/*.c plus
-  # csrc/ovl_main_80020000.c; splat writes not a byte of either.
+  # csrc/ovl_main_80020000.c
   - type: code
     start: 0x25d000
     vram: 0x80020000
     subsegments:
-      - [0x25d000, .rodata, main/c_server]       # 0x80020000, 0xA0
-      - [0x25d0a0, .rodata, main/card_mes]       # 0x800200A0, 4
-      - [0x25d0a4, .rodata, main/cardbk]         # 0x800200A4, 4
-      - [0x25d0a8, .rodata, main/cardinfo]       # 0x800200A8, 0x18
-      - [0x25d0c0, .rodata, main/memory]         # the 59 message strings
-      - [0x25d924, c, main/c_server]             #   0..45
-      - [0x25f25c, c, main/card_mes]             #  46..87
-      - [0x260258, c, main/card_opt]             #  88..102
-      - [0x260a78, c, main/card_win]             # 103..121
-      - [0x2612d8, c, main/cardbk]               # 122
-      - [0x261390, c, main/cardinfo]             # 123..171
-      - [0x2631c0, c, main/cardslot]             # 172..205
-      - [0x264018, c, main/cardsme]              # 206..227
-      - [0x26489c, c, main/memory]               # 228..240
-      # Redundant for the LINK -- a `c` subsegment already emits its object's
-      # .data line -- but NOT for coverage: unclaimed, splat reads the range
-      # as unmapped and writes 41 of its symbols into
-      # main.bin_undefined_syms_auto.txt as absolute addresses, shadowing the
-      # real definitions. Do not delete them as duplicates.
-      - [0x264e20, .data, main/c_server]          # 0x80027E20
-      - [0x264f60, .data, main/card_mes]          # 0x80027F60
-      - [0x264f68, .data, main/card_opt]          # 0x80027F68
-      - [0x264f7c, .data, main/card_win]          # 0x80027F7C
-      - [0x264fd0, .data, main/cardbk]            # 0x80027FD0
-      - [0x264fd4, .data, main/cardinfo]          # 0x80027FD4
-      - [0x265068, .data, main/cardslot]          # 0x80028068
-      - [0x265094, .data, main/cardsme]           # 0x80028094
-      - [0x2650b4, .data, main/memory]            # 0x800280B4, the inferred one
-      - [0x265530, .data, ovl_main_80020000]      # the state run only
+      - [0x25d000, .rodata, main/c_server]
+      - [0x25d0a0, .rodata, main/card_mes]
+      - [0x25d0a4, .rodata, main/cardbk]
+      - [0x25d0a8, .rodata, main/cardinfo]
+      - [0x25d0c0, .rodata, main/memory]
+      - [0x25d924, c, main/c_server]
+      - [0x25f25c, c, main/card_mes]
+      - [0x260258, c, main/card_opt]
+      - [0x260a78, c, main/card_win]
+      - [0x2612d8, c, main/cardbk]
+      - [0x261390, c, main/cardinfo]
+      - [0x2631c0, c, main/cardslot]
+      - [0x264018, c, main/cardsme]
+      - [0x26489c, c, main/memory]
+      - [0x264e20, .data, main/c_server]
+      - [0x264f60, .data, main/card_mes]
+      - [0x264f68, .data, main/card_opt]
+      - [0x264f7c, .data, main/card_win]
+      - [0x264fd0, .data, main/cardbk]
+      - [0x264fd4, .data, main/cardinfo]
+      - [0x265068, .data, main/cardslot]
+      - [0x265094, .data, main/cardsme]
+      - [0x2650b4, .data, main/memory]
+      - [0x265530, .data, ovl_main_80020000]
       - [0x268b6c, pad]
-  # The 0x80400000 debug twin of the overlay above: dead on retail (it needs
-  # an 8 MB DTL-H2000), but in the container, so it must still be reproduced.
-  # Built at -G8, which the Makefile sets with an exact-target override --
-  # the `build/csrc/ovl_%.o` pattern rule would otherwise hand it -G0.
-  # Its symbols cannot be shared with the live overlay: different engine
-  # build, and its data is not at a constant offset from the live one's.
-  #
-  # Text END IS 0x2719e0, not 0x2719dc where the code stops: splat emits
-  # ALIGN(__romPos, 16) after a code segment and 0x2719dc is off that grid,
-  # so a boundary there pads the container.
+  # The 0x80400000 debug twin of the overlay above. Requires -G8 in the build
+  # and a different version of the compiler.
   - type: code
     start: 0x269000
     vram: 0x80400000
@@ -179,6 +128,5 @@ segments:
       # these objects to a translation unit yet. It becomes `.data` beside
       # csrc/ovl_main_80400000.c when they are -- see docs/owning-data.md.
       - [0x2719e0, data, ovl_main_80400000_data]
-      # A subsegment, not a top-level `pad`: see the note at 0x24420.
       - [0x275628, pad]
   - [0x275800]
