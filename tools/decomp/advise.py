@@ -48,6 +48,17 @@ target and says which ones DO.
 
     python3 tools/decomp/advise.py scratch/zz_foo.c unk_1C540 func_8004F780
     python3 tools/decomp/advise.py scratch/zz_foo.c unk_1C540 func_8004F780 --greg
+    python3 tools/decomp/advise.py scratch/zz_foo.c unk_1C540 func_8004F780 --sched
+
+`--sched` is the one to reach for on an ALLOCATION verdict BEFORE --greg, and
+the reason is the pass order: sched1 runs before both allocators, so a
+register difference is often not an allocation decision at all but a
+scheduling one the allocator merely priced. It prints every slot where a load
+or a store took a position from a non-memory insn of the same priority --
+schedule_select's function-unit hazard rule, which no ordering of the source
+reaches. Both it and --greg compile with the UNIT's own -G and the unit's own
+compiler; the 0x80400000 twin is -G8 and tools/psx272gcc and everything else
+is -G0 and tools/cdkgcc, and a dump from the wrong one reads as an answer.
 
 `--terse` prints the verdict and the finding headlines without the hint
 paragraphs: the measurements alone, for a caller that does not need the prose
@@ -166,7 +177,15 @@ SHIFT_HINT = """the word counts differ by {d}. DO NOT read the positional
 
 ALLOC_HINT = """every opcode, immediate, displacement and branch offset
     matches and only register numbers differ, in {n} place(s). No rewrite of
-    the logic reaches this; it is matching-levers section 3. In rough order of
+    the logic reaches this; it is matching-levers section 3. RUN --sched
+    FIRST: sched1 runs before both allocators, so what looks like an
+    allocation decision is often a scheduling one -- a load or a store takes
+    the last slot of a block from a register copy of the same priority
+    (schedule_select's function-unit hazard, sched.c:2615), the copy is
+    pushed up, and its destination is then live across whatever the memory
+    insn needed. No ordering of the source reaches that tie-break; a memory
+    DEPENDENCE does, and an empty asm with an `"m"` input is how to give it
+    one (func_804022C8: 7 words -> MATCH). In rough order of
     how often it has paid here:
       - Assign back to a parameter or an existing local instead of introducing
         a fresh one, when the target reuses that register. gcc then ties the
@@ -625,9 +644,167 @@ def main():
 
     if '--greg' in flags:
         print()
-        greg_report(src)
+        greg_report(src, cc1G, asmlib.cc1_for_unit(unit))
+
+    if '--sched' in flags:
+        print()
+        sched_report(src, cc1G, asmlib.cc1_for_unit(unit))
     return 0
 
+
+
+
+# ------------------------------------------------------------------ --sched
+#
+# WHY A SCHEDULER REPORT AT ALL, when --greg already prints the allocator's
+# numbers. Because sched1 RUNS FIRST (dump.sh's header has the pass order),
+# and inside one basic block the order it emits is the order local-alloc then
+# prices. A register-only difference whose allocator numbers look identical on
+# both sides is usually not an allocation decision at all: it is a SCHEDULING
+# decision that moved one value's birth across another's live range, and the
+# allocator only recorded the conflict that followed.
+#
+# func_804022C8 is the worked example. Seven words differed by register name,
+# twenty-two spellings measured the same seven, and the cause was two lines of
+# this trace:
+#
+#     ;; ready list at T-2: 97 (1) 100 (1), now 100 97
+#     ;; insn 97 has a greater potential hazard, now 97 100
+#
+# The sort put the register copy first, correctly, by INSN_LUID -- and then
+# schedule_select (sched.c:2615) regrouped the list by priority and, inside
+# the top group, moved the insn with the largest FUNCTION-UNIT HAZARD to the
+# front. A store has one; a register move has none. So a store always takes
+# the slot, no ordering of the source statements ever reaches the tie-break,
+# and only a DEPENDENCE moves it. Every "greater potential hazard" line below
+# is one of those, and each one is a place where the source cannot steer.
+
+_SCHED_KIND = [
+    # ORDER MATTERS: `store` has to be tested before `load`, because a store's
+    # body contains a `(mem` too, and a load's `(mem` is often wrapped --
+    # `(set (reg) (sign_extend (mem ...)))` is still an `lb`, and testing for
+    # `(set (reg) (mem` alone reported it as `sign_extend`.
+    (r'\(set \(mem', 'store'),
+    (r'\(set \(pc\)', 'branch'),
+    (r'\(call ', 'call'),
+    (r'asm_operands', 'asm'),
+    (r'\(mem', 'load'),
+    (r'\(set \(reg[^)]*\)\s*\(reg', 'reg copy'),
+    (r'\(set \(reg[^)]*\)\s*\(symbol_ref', 'address'),
+    (r'\(set \(reg[^)]*\)\s*\(const_int', 'constant'),
+]
+
+
+def _sched_insns(text):
+    """{insn number: one-word kind} read out of the dump's own RTL."""
+    out = {}
+    for m in re.finditer(r'\((insn|jump_insn|call_insn) (\d+) .*?(?=\n\n)',
+                         text, re.S):
+        body = re.sub(r'\s+', ' ', m.group(0))
+        kind = None
+        for pat, name in _SCHED_KIND:
+            if re.search(pat, body):
+                kind = name
+                break
+        if kind is None:
+            mm = re.search(r'\(set \([^)]*\) \((\w+)', body)
+            kind = mm.group(1) if mm else m.group(1)
+        out[int(m.group(2))] = kind
+    return out
+
+
+def _sched_slots(blk):
+    """[(T, chosen, {insn: priority}, swapped)] for one block's trace.
+
+    The trace is not one line per slot. A ready list can be printed without
+    its `, now ...` tail, then a `blocking insn` or `launching` line, then the
+    tail -- and a `greater potential hazard` line prints a SECOND `now` whose
+    head is the insn actually taken. So parse by state, not by line, and take
+    the LAST `now` seen for a slot as the decision.
+    """
+    slots, cur, cands, swapped = [], None, {}, False
+    for l in blk.split('\n'):
+        if not l.startswith(';;'):
+            continue
+        m = re.match(r';; ready list at T-(\d+):(.*)$', l)
+        if m:
+            if cur is not None and cands:
+                slots.append((cur, chosen, cands, swapped))
+            cur, swapped, chosen = m.group(1), False, None
+            cands = {int(a): b for a, b in
+                     re.findall(r'(\d+) \(([0-9a-f]+)\)', m.group(2))}
+            l = m.group(2)
+        if cur is None:
+            continue
+        if 'greater potential hazard' in l:
+            swapped = True
+        nm = re.search(r', now((?: \d+)+)', l)
+        if nm:
+            chosen = int(nm.group(1).split()[0])
+    if cur is not None and cands:
+        slots.append((cur, chosen, cands, swapped))
+    return slots
+
+
+def sched_report(src, cc1G=0, cc='tools/cdkgcc'):
+    d = collect_dumps(src, cc1G, cc)
+    if d is None:
+        print('  --sched: no dumps collected')
+        return
+    try:
+        text = open(os.path.join(d, 'sched')).read()
+    except OSError:
+        print('  --sched: no sched dump (is this unit compiled with -O2?)')
+        return
+
+    kinds = _sched_insns(text)
+    mem = ('store', 'load')
+    print('  SCHEDULER (sched1, from the compiler\'s own .sched trace)')
+    print('  slots a MEMORY insn took from a non-memory insn of equal priority')
+    blocks = re.split(r'^;;\s+-- basic block number ', text, flags=re.M)[1:]
+    rows = 0
+    for blk in blocks:
+        num = blk.split()[0]
+        out = []
+        for t, chosen, cands, swapped in _sched_slots(blk):
+            if chosen is None or kinds.get(chosen) not in mem:
+                continue
+            pri = cands.get(chosen)
+            lost = [n for n, p in cands.items()
+                    if n != chosen and p == pri and kinds.get(n) not in mem]
+            if lost:
+                out.append((t, chosen, pri, lost, swapped))
+        if not out:
+            continue
+        if not rows:
+            print('  %-7s %-5s %-11s %-6s %-9s %s'
+                  % ('block', 'T', 'winner', 'insn', 'priority', 'beat'))
+        for t, chosen, pri, lost, swapped in out:
+            rows += 1
+            print('  %-7s %-5s %-11s %-6d %-9s %s%s'
+                  % (num, 'T-' + t, kinds.get(chosen, '?'), chosen, pri,
+                     ', '.join('%s %d' % (kinds.get(x, '?'), x) for x in lost[:4]),
+                     '   <-- hazard swap' if swapped else ''))
+    if not rows:
+        print('    none: every slot in this function went to an insn the sort')
+        print('    chose on priority or INSN_LUID, so the ordinary ordering')
+        print('    levers do steer it.')
+        return
+    print(wrap("""READ THESE AS PLACES THE SOURCE CANNOT STEER. sched1 fills a
+    block BACKWARD, so T-2 is the LAST slot before the branch and a larger T
+    is earlier in the block; the winner took the later position and the insns
+    it beat were pushed UP. Among insns of equal priority schedule_select
+    (sched.c:2615) picks the largest FUNCTION-UNIT HAZARD, which a load or a
+    store has and a register move, an add or an address does not -- so the
+    memory insn wins whatever INSN_LUID says, and reordering the source never
+    reaches the tie-break. A row marked `hazard swap` is one where the sort
+    had actually put the other insn first and schedule_select took it back;
+    an unmarked row agreed with the sort, which looks like an ordinary
+    ordering decision and is not one. A definition pushed UP is live across
+    everything between, which is the conflict --greg then prices. What moves
+    it is a DEPENDENCE, not an order: see docs/matching-levers.md, "A STORE
+    ALWAYS BEATS A REGISTER COPY FOR THE LAST SLOT OF A BLOCK".""",
+                indent='    '))
 
 
 # ---------------------------------------------------------- margins
@@ -774,11 +951,27 @@ def regname(n):
     return SPECIAL.get(n, '#%d' % n)
 
 
-def greg_report(src):
+def collect_dumps(src, cc1G, cc):
+    """Run dump.sh for this source and return the dump directory, or None.
+
+    The -G AND THE COMPILER both have to come from the unit. dump.sh defaults
+    to -G0 and tools/cdkgcc, which is right for the overlays and wrong for
+    the 0x80400000 twin (-G8, tools/psx272gcc) -- and a dump from the wrong
+    compilation is worse than no dump, because it reads as an answer.
+    """
     base = os.path.splitext(os.path.basename(src))[0]
     d = os.path.join(asmlib.SP, 'dumps', base)
     r = subprocess.run(['bash', os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                             'dump.sh'), src],
+                                             'dump.sh'), src, str(cc1G), cc],
+                       capture_output=True, text=True, cwd=asmlib.PROJ)
+    return d if os.path.isdir(d) else None
+
+
+def greg_report(src, cc1G=0, cc='tools/cdkgcc'):
+    base = os.path.splitext(os.path.basename(src))[0]
+    d = os.path.join(asmlib.SP, 'dumps', base)
+    r = subprocess.run(['bash', os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                             'dump.sh'), src, str(cc1G), cc],
                        capture_output=True, text=True, cwd=asmlib.PROJ)
     if not os.path.isdir(d):
         print('  --greg: no dumps collected (%s)' % (r.stderr.strip()[:200] or d))

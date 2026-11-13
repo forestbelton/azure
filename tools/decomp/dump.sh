@@ -91,7 +91,19 @@ SP="$AZURE_SCRATCH"
 # used is printed so it cannot be silently wrong again.
 G="${2:--G0}"
 case "$G" in -G*) ;; *) G="-G$G" ;; esac
-echo "dump.sh: compiling with $G (overlays are -G0; pass a 2nd arg to override)" >&2
+
+# CC: THE PROJECT BUILDS WITH TWO COMPILERS, and this script hardcoded one.
+# Everything is tools/cdkgcc except main.bin's 0x80400000 debug twin, which
+# the Makefile builds with tools/psx272gcc (see asmlib.cc1_for_unit). Dumps
+# collected here for a twin function were therefore from a DIFFERENT
+# COMPILATION than the one being matched -- the SAME trap this file already
+# records for -G, sitting one line below the comment that records it. Found
+# 2026-11-12, while reading the scheduler's trace for func_804022C8. Default
+# stays tools/cdkgcc; pass a third argument to override, and the driver used
+# is printed so it cannot be silently wrong again.
+CC="${3:-tools/cdkgcc}"
+echo "dump.sh: compiling with $G and $CC (overlays are -G0, and the 0x80400000" >&2
+echo "         twin is tools/psx272gcc -G8; pass a 2nd/3rd arg to override)" >&2
 
 b=$(basename "$1" .c)
 case "$1" in
@@ -102,8 +114,11 @@ esac
 rm -rf "$SP/dumps/$b"
 mkdir -p "$SP/dumps/$b"
 cd "$SP/dumps/$b"
-"$AZURE_ROOT"/tools/cdkgcc -O2 "$G" -I"$AZURE_ROOT/include" -I"$AZURE_ROOT/psyq/include" \
-    -da -S -o out.s "$in_abs" 2>&1
+# -Icsrc was missing until 2026-11-12, so any source including a header that
+# lives in csrc/ -- main_twin.h, every park in the 0x80400000 block -- failed
+# to compile here and the only symptom was "no dumps collected".
+"$AZURE_ROOT"/"$CC" -O2 "$G" -I"$AZURE_ROOT/include" -I"$AZURE_ROOT/psyq/include" \
+    -I"$AZURE_ROOT/csrc" -da -S -o out.s "$in_abs" 2>&1
 
 # Strip the input's name so callers see bare pass names (out.s stays out.s).
 for f in "$b".c.*; do
