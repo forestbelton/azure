@@ -2187,22 +2187,93 @@ s32 func_8040343C(s32 flag)
     return (s32)q[0];
 }
 
-/* NEAR MISS, 112 of 112 words, 6 differing -- ONE register pair swapped.
- * The body is established (live func_80023258, with the ptrs array 0x18
- * further along and FOUR slots in the loop, not three), and this function is
- * what found --expand-div: see the Makefile. What is left is that the target
- * puts the division's quotient in $v1 and the ptrs pointer in $v0, and gcc
- * does it the other way round.
+/* Live func_80023258, with the ptrs array 0x18 further along and FOUR slots
+ * in the loop, not three. This function is what found --expand-div: see the
+ * Makefile.
  *
- * NOT A SOURCE QUESTION, settled 2026-11-12 against the counterpart.
- * func_80023258 is landed and byte-identical and is the same source down to
- * the statement; its prologue comes out `div $2,$3,$2 / lw $3,420($9)` --
- * quotient in $2, pointer in $3, OUR way round, in the shipped retail binary.
- * So the 4.1 compiler breaks this tie the way we do and the twin's 4.0 build
- * breaks it the other way, which is the same shape as the `mfhi` gap in
- * func_80404EA0 and func_804053A0.
- * Source in docs/near-misses/func_804034D8.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804034D8);
+ * THE MARKER TAKES $v0 AWAY FROM THE TIED QUOTIENT, and it is worth SIX
+ * words -- delete it, keep the `c` hoist, and this is 112 words with 6
+ * differing. local-alloc ties the quotient to `e + 0xA` (an arithmetic
+ * source is a REG, so `combine_regs` fires) and then prices that pair,
+ * `ptrs[1]` and `->unk_04` at EXACTLY 5000 each under `qty_compare_1`:
+ * 4 refs over 16, 2 over 4, 2 over 4, all of them floor_log2(n)*n/span = 1/2.
+ * A three-way exact tie falls through to the quantity NUMBER, which is birth
+ * order, and the quotient is born at the `div` five insns ahead of the
+ * `lw 0x1BC` -- so it takes $v0 and the pointers fall to $v1.
+ *
+ * The divisor is a FOURTH quantity that already outranks all three: hoisted
+ * into `c` it is 3 refs over a span of 2, priced 15000, allocated first into
+ * $v0 and released at the `div`. Naming it once more AFTER the division
+ * stretches it over the quotient's range but not over the pointers', so the
+ * tied pair is pushed to $v1 -- `mflo $v1` / `addiu $v1,$v1,0xA`, tied, which
+ * is what the target has -- and both pointers get $v0 back.
+ *
+ * The earlier reading of this function was backwards and is worth recording
+ * so it is not re-derived: it tried to UNTIE the quotient with a reference
+ * from a later block, which did buy the pointers their $v0 but made the
+ * quotient a global allocno stranded in $t3 (6 -> 2, never 0). The target's
+ * `addiu $v1,$v1,0xA` reads and writes one register, so the target is TIED;
+ * the tie had to be kept and merely lose the contest. */
+void func_804034D8(s32 *p)
+{
+    s32 w = p[35];
+    s32 c = p[32];
+    s32 e = ((p[34] - w) * (p[33] << 4)) / c;
+    s32 d = e + 0xA;
+    s32 i;
+
+    /* DEVICE: one extra reference to the divisor, after the division. It
+       emits no instruction -- the template is empty and the operand is
+       already in a register -- so it costs zero words. What it buys is the
+       lifetime of `c`: local-alloc.c prices the divisor's quantity at 15000
+       and hands it $v0 first, and this reference keeps that quantity alive
+       past the `div`, across the range of the tied {quotient, quotient+0xA}
+       quantity, which therefore cannot have $v0 and takes $v1 -- the target's
+       `mflo $v1` / `addiu $v1,$v1,0xA`. `c` is dead again before `ptrs[1]` is
+       loaded, so the pointer pair gets $v0 back. Worth SIX words: without it
+       the function is correct C, still 112 words, and 6 differ. `c` itself
+       exists only so the divisor has a name to reference; `p[32]` written
+       inline here would emit a second load. The matching constraint pins the
+       marker to `w` without a copy; `w` is used after it, so nothing is dead
+       and there is no uninitialised read, hence no -Wall warning (the default
+       CFLAGS has no -Wall in any case). Spellings ruled out, and the legal
+       asm-free attempts at the same effect, are measured in the header. */
+    __asm__("" : "=r"(w) : "0"(w), "r"(c));
+    ((UnkTwinGrp19C *)p)->ptrs[1]->unk_04->unk_0A = (w << 4) + d;
+    for (i = 0; i < 4; i++)
+    {
+        s32 v = ((u8 *)p)[0x7C + i];
+        s32 u;
+        s32 n;
+        u8 *q = (u8 *)p + i + 0x7C;
+
+        if (i == p[34])
+        {
+            n = v + (8 - v) / (p[32] - p[33] + 1);
+        }
+        else
+        {
+            n = v;
+            if (n != 0)
+            {
+                n -= 1;
+            }
+        }
+        *q = n;
+        u = ((u8 *)p)[0x7C + i];
+        ((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04->unk_08 = u + 0x24;
+        ((UnkTwinGrp19C *)p)->ptrs[14 + i]->unk_04->unk_08 = u + 0x8F;
+        ((UnkTwinGrp19C *)p)->ptrs[2 + i]->unk_04->unk_08 = u + 9;
+        ((UnkTwinGrp19C *)p)->ptrs[6 + i]->unk_04->unk_08 = u + 0x42;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
+    }
+    if (p[33] < p[32])
+    {
+        p[33]++;
+    }
+}
 
 /* Live func_800233D0, with FOUR revision differences and nothing else -- the
  * families in this file's header, all four at once. UnkCardGrp184's `ptrs`
