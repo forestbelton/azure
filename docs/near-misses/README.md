@@ -6,10 +6,12 @@ functions landed too -- they had been left behind, and `parkstats.py --check`
 had been failing on all three because a landed function has no nonmatchings
 listing to measure against. **A landed function must not keep a park.**
 
-One park is live: `func_80405AE8.c`, in main.bin's 0x80400000 twin. It sits at
-one differing word and that word is the `reload_cse_regs` one, so it is not
-waiting on a spelling -- it is waiting on a compiler. Read its header before
-touching it.
+Three parks are live, all three in main.bin's 0x80400000 twin:
+`func_804034D8.c`, `func_804053A0.c` and `func_80404EA0.c`. `func_80405AE8.c`
+was named here as the one live park until it landed on 2026-11-11; the
+sentence outlived the park, which is the failure mode this file warns about
+two paragraphs up. Read a park's generated header before touching it, and
+`docs/landing-a-function.md` before touching any of them.
 
 `probe-cse-forwarding.c` is not a park -- it is a standing compiler probe.
 
