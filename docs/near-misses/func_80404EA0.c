@@ -30,38 +30,59 @@
  * ten-iteration loop are right. What is left is TWO NOPS and the register
  * names that follow from them, and both come from the compiler, not here.
  *
- * FINDING 1 WAS WRONG AND IS RETRACTED, 2026-11-12. It said: an unsigned
- * division by a constant whose MAGIC has the top bit set never gets the
- * `lui`/`ori` split, because `expand_mult_highpart` (expmed.c:2536) builds
- * the multiplier with `immed_double_const (cnst1, 0, DImode)` and a 32-bit
- * HOST_WIDE_INT makes that a CONST_DOUBLE, which `large_int` (mips.c:416)
- * rejects, so the define_split at mips.md:3208 cannot fire. A later note on
- * top of it concluded that cc1psx must therefore have been built on a host
- * with a 64-bit HOST_WIDE_INT. BOTH ARE WRONG.
+ * FINDING 1, RE-ESTABLISHED 2026-11-12 after a WRONG retraction. An UNSIGNED
+ * division by a constant whose magic has BIT 31 SET never gets the `lui`/`ori`
+ * split. `expand_mult_highpart` (expmed.c:2536) builds the multiplier it hands
+ * the highpart optab as
  *
- * THE COUNTER-EXAMPLE IS IN THE TREE, and it is this function's own live
- * counterpart. `csrc/main/cardinfo.c`'s func_80024390 is landed C,
- * byte-identical in main.bin, and divides by 60 and then by 3600.
- * build/csrc/main/cardinfo.s holds
+ *     immed_double_const (cnst1, unsignedp ? 0 : -(cnst1 >> 31), DImode)
  *
- *     li    $2,-2004318071      # 0x88888889   <- NOT split
- *     multu $3,$2
- *     li    $2,-1851654144      # 0x91a20000   <- SPLIT, the lui half
- *     mfhi  $11
- *     ori   $2,$2,0xb3c5        <- the ori half, scheduled apart
+ * and `immed_double_const` (varasm.c:1859) collapses a pair to a CONST_INT
+ * only when `(i1 == 0 && i0 >= 0) || (i1 == ~0 && i0 < 0)`. DImode is 64 bits
+ * and HOST_BITS_PER_WIDE_INT is 32, so the `width <= HOST_BITS_PER_WIDE_INT`
+ * clamp above it does not fire and i1 stays exactly as passed. For an UNSIGNED
+ * division i1 is 0 while a magic with bit 31 set makes i0 NEGATIVE, so neither
+ * arm holds and the result is a CONST_DOUBLE. `large_int` (mips.c:416) takes
+ * CONST_INT only, so the define_split at mips.md:3208 cannot fire and the
+ * constant stays one `li` MACRO -- two adjacent words nothing can separate.
  *
- * so 0x91A2B3C5 reaches `large_int` as a CONST_INT and the split fires.
- * Compile that same file with tools/psx272gcc instead of tools/cdkgcc and
- * the two insns come out in the same place, so FSF 2.7.2 splits it too and
- * this is not a 4.0-vs-4.1 difference. The two compilers also agree on a
- * standalone `sink(g / 3600)`, which neither splits. So whatever decides it
- * is CONTEXT, and both compilers decide it the same way.
+ * THE CONTROL IS SIGNEDNESS, which moves the flag without moving the magic.
+ * A signed division passes i1 = ~0 with i0 < 0, the second arm holds, and the
+ * SAME 0x91A2B3C5 splits. Measured 2026-11-12, and tools/cdkgcc and
+ * tools/psx272gcc emit the identical three:
  *
- * WHAT THAT MEANS FOR THIS PARK: the two missing words are NOT a demonstrated
- * compiler gap and have to be re-probed as a SOURCE question. What is known
- * about the target's shape is unchanged and was re-read from the listing on
- * 2026-11-12 -- it materialises the magic ONCE in $v1 and uses it for BOTH
- * `multu`s, which is what gives the two halves room to be scheduled apart:
+ *     sink(x / 3600u)    li  $2,-1851608123   # 0x91a2b3c5     <- ONE li
+ *     sink(x / 3600)     li  $2,-1851654144   # 0x91a20000
+ *                        ori $2,$2,0xb3c5                      <- SPLIT
+ *     sink(x / 216000u)  li  $2,0x026d0000 / ori $2,$2,0x60dd  <- SPLIT,
+ *                                            because bit 31 of ITS magic is 0
+ *
+ * AND THAT IS EXACTLY WHERE THE +2 WORDS COME FROM. Split, the `lui` half is a
+ * free-standing insn and sched1 hoists it into a load-delay slot; unsplit, the
+ * macro is ONE insn and the slot takes a `nop` instead. Ours and the target
+ * agree word for word on the FIRST division -- 216000, bit 31 clear, `lui
+ * $v1,0x26d` in the `lw`'s slot and `ori` five words later -- and differ by
+ * exactly one `nop` at each of the other two, which are 3600 and 60.
+ *
+ * WHAT STAYS RETRACTED is the step that followed it: that the target's
+ * compiler must therefore have been built with a 64-bit HOST_WIDE_INT. Such a
+ * host WOULD produce the target's bytes, but cc1psx was a 32-bit DOS/Win32
+ * binary, and SN's base snapshot differing from FSF 2.7.2.3 right here is just
+ * as good an explanation. The gap is real and its mechanism is identified; why
+ * the REAL compiler does not have it is not known, and no measurement here can
+ * settle it.
+ *
+ * THE "COUNTER-EXAMPLE" THAT DROVE THE RETRACTION WAS A MISREAD, and that is
+ * the lesson worth more than the finding. csrc/main/cardinfo.c's func_80024390
+ * does split 0x91A2B3C5 -- because THAT division is SIGNED. The file's own
+ * header says so: "`/ 60` unsigned for seconds, then `/ 3600` and `/ 60`
+ * signed". Its one UNSIGNED division, by 60, leaves 0x88888889 as a single
+ * `li`, exactly like this function's two. A live counterpart is the right
+ * check; reading its signedness is part of making the check.
+ *
+ * THE TARGET'S SHAPE, re-read from the listing on 2026-11-12: it materialises
+ * the magic ONCE in $v1 and uses it for BOTH `multu`s, which is what gives the
+ * two halves room to be scheduled apart:
  *
  *     lui   $v1,(0x91A2B3C5 >> 16)      <- in the lw's delay slot
  *     ...   sll / lui $at / addu $at / lw $v0
@@ -72,8 +93,13 @@
  *     subu  $a0,$a0,$v0                                <- % 3600
  *
  * which confirms the park's `x / 3600 % 3600` reading of the middle field.
- * The open question is why our build leaves the magic as one `li` here when
- * the same compiler splits it in cardinfo.c.
+ * Ours is the same sequence with `lui $v1` and `ori $v1` welded together one
+ * word later, and a `nop` left in the slot the `lui` should have filled.
+ *
+ * SO THIS PARK IS CLOSED AS A STAND-IN GAP, not as a source question. No
+ * spelling of an unsigned division reaches the split, and making it signed
+ * costs the three-word sign correction (`addu`/`sra`/`subu`) and changes the
+ * answer. Do not re-probe the two nops from C.
  *
  * FINDING 2, the register names. `umulsi3_highpart`'s output is constrained
  * `"=h"` (mips.md:1038), so reload must copy HI into a GPR, and

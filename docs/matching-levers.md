@@ -512,7 +512,7 @@ then read only the section you need.
 - reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:20715`
 - AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:20741`
 - A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:20783`
-- RETRACTED: "AN UNSIGNED-DIVISION MAGIC WITH THE TOP BIT SET NEVER SPLITS"  `:20817`
+- AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:20817`
 
 <!-- END INDEX -->
 
@@ -20814,43 +20814,66 @@ Measured on the same body: the conditional bound as a `for`, as a `while`
 with an explicit `i++`, with `i += 1`, and with a marker on `i` are all 84 and
 46. Only moving the condition itself into the two arms changes anything.
 
-## RETRACTED: "AN UNSIGNED-DIVISION MAGIC WITH THE TOP BIT SET NEVER SPLITS"
+## AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET
 
-This section asserted, on 2026-11-12, that a top-bit-set division magic can
-never get the `lui`/`ori` split because `expand_mult_highpart` hands it to
-`immed_double_const` as a CONST_DOUBLE, and then that the 4.0 compiler must
-have been built on a host with a 64-bit HOST_WIDE_INT. BOTH CLAIMS ARE WRONG
-and the section is kept as the correction.
+Division by a constant becomes a magic multiply, and the magic is a 32-bit
+constant the MIPS back end would normally materialise as `lui` + `ori` -- two
+SEPARATE insns, which sched1 can then schedule apart to fill a load-delay
+slot. For an UNSIGNED division whose magic has BIT 31 SET it does not: the
+constant stays a single `li` MACRO, two welded words, and the slot that the
+`lui` half would have filled takes a `nop` instead. That nop is the cost: one
+word per such division.
 
-THE FACT THAT KILLS THEM is already in the tree. `csrc/main/cardinfo.c` is
-landed C, byte-identical in main.bin, and its `func_80024390` -- the live
-counterpart of the twin's func_80404EA0 -- divides by 60 and then by 3600.
-Its generated assembly, `build/csrc/main/cardinfo.s`, holds
+THE MECHANISM, read out of the tree. `expand_mult_highpart` (expmed.c:2536)
+hands the highpart optab
 
-    li    $2,-2004318071          # 0x88888889   <- NOT split
-    multu $3,$2
-    li    $2,-1851654144          # 0x91a20000   <- SPLIT: the lui half
-    mfhi  $11
-    ori   $2,$2,0xb3c5            <- and the ori half, scheduled apart
+    immed_double_const (cnst1, unsignedp ? 0 : -(cnst1 >> 31), DImode)
 
-so 0x91A2B3C5 DOES reach `large_int` as a CONST_INT and the mips.md split DOES
-fire. Compiling the same file with tools/psx272gcc instead of tools/cdkgcc
-produces the same two insns at the same place, so this is not a 4.0-vs-4.1
-difference either: FSF 2.7.2 splits it too.
+and `immed_double_const` (varasm.c:1859) collapses that pair to a CONST_INT
+only when `(i1 == 0 && i0 >= 0) || (i1 == ~0 && i0 < 0)`. DImode is 64 bits
+and HOST_BITS_PER_WIDE_INT is 32, so the `width <= HOST_BITS_PER_WIDE_INT`
+clamp above the test does not fire and i1 stays as passed. Unsigned passes
+i1 = 0, and a magic with bit 31 set makes i0 NEGATIVE, so neither arm holds
+and the result is a CONST_DOUBLE. `large_int` (mips.c:416) takes CONST_INT
+only, so the define_split at mips.md:3208 never fires.
 
-WHAT THE ORIGINAL MEASUREMENT ACTUALLY SHOWED is that a STANDALONE
-`sink(g / 3600)` does not split under either compiler while `g / 216000`
-does. That is true, and it is a statement about the context, not about the
-magic -- the same magic splits in cardinfo.c under both compilers. Whatever
-decides it, the two compilers agree, so func_80404EA0's two words are not a
-demonstrated compiler gap and should be re-probed as a SOURCE question.
+THE CONTROL IS SIGNEDNESS, because it moves the flag without moving the
+magic. Signed passes i1 = ~0 with i0 < 0, the second arm holds, and the same
+magic splits. tools/cdkgcc and tools/psx272gcc emit the identical three:
 
-THE METHOD ERROR IS WORTH MORE THAN THE FINDING. The reasoning was: this
-mechanism would produce the observed output, therefore this mechanism is what
-happened. It never asked whether the conclusion was possible -- cc1psx was a
-32-bit Win32 binary, where `long` and `int` are both 32 and HOST_WIDE_INT is
-32-bit, so the host it implied did not exist for this toolchain. A mechanism
-that explains the bytes is a hypothesis; it is a finding only once the thing
-it implies is checked against something independent. In this case the
-independent check was one `grep` of a file the project had already built.
+    sink(x / 3600u)    li  $2,-1851608123  # 0x91a2b3c5      <- ONE li
+    sink(x / 3600)     li  $2,-1851654144  # 0x91a20000
+                       ori $2,$2,0xb3c5                      <- SPLIT
+    sink(x / 216000u)  li  $2,0x026d0000 / ori $2,$2,0x60dd  <- SPLIT, bit
+                                                          31 of ITS magic is 0
 
+So the rule is about the SIGNEDNESS of the division and bit 31 of the magic,
+and nothing else. It is not about the divisor, the context, or the number of
+uses.
+
+WHERE IT BITES: func_80404EA0's park. Its three time fields divide an unsigned
+row by 216000, 3600 and 60. The first magic has bit 31 clear and our build
+matches the target word for word there; the other two are 0x91A2B3C5 and
+0x88888889 and each costs one nop -- which is the whole of that park's
+"built 322, target 320". The real compiler splits them, so this is a gap in
+the stand-in, and NO source spelling reaches it: making the division signed
+buys the split at the price of a three-word sign correction.
+
+WHAT IS NOT SUPPORTED, and was retracted on 2026-11-12 and stays retracted:
+the next step, which concluded that the real cc1psx must have been built on a
+host with a 64-bit HOST_WIDE_INT. That host WOULD produce the target's bytes,
+but cc1psx was a 32-bit DOS/Win32 binary where `long` and `int` are both 32,
+and SN's base snapshot differing from FSF 2.7.2.3 right here explains it just
+as well. A mechanism that explains the bytes is a hypothesis; it becomes a
+finding only once what it IMPLIES is checked against something independent.
+
+AND THE FAILED CHECK IS ITS OWN LEVER. The independent check run that day was
+the right one -- find the live counterpart and see what our own build already
+does with it -- and it returned the WRONG answer, which retracted a correct
+finding for several hours. `csrc/main/cardinfo.c`'s func_80024390 does split
+0x91A2B3C5, and its `build/csrc/main/cardinfo.s` shows the `lui` and `ori`
+scheduled apart. But that division is SIGNED; the file's own header says
+"`/ 60` unsigned for seconds, then `/ 3600` and `/ 60` signed", and its one
+UNSIGNED division leaves 0x88888889 as a single `li`, exactly as the rule
+says. Comparing a live counterpart only works if the thing the hypothesis
+turns on -- here, signedness -- is read off BOTH sides before comparing.

@@ -246,39 +246,42 @@ Three things about the overlays that change how they are worked, all in
     to be ONE: the target holds the space character in three registers because
     loop.c gives each loop its own preheader copy, and cse1 merges ours into
     one pseudo before the loop pass sees them.
-  - `func_80404EA0` -- 322 of 320, 154 differing, and its last two words are
-    now a FALSIFIABLE claim rather than an assertion. See below.
+  - `func_80404EA0` -- 322 of 320, 154 differing, and CLOSED as a stand-in
+    compiler gap. See below.
 
-  **A CORRECTION, SAME DAY, AND THE METHOD LESSON IS THE POINT.** During this
-  pass func_80404EA0's last two words were written up as a compiler
-  BUILD-HOST difference -- machmode.h takes `HOST_WIDE_INT = long` only when
-  `long` is wider than `int`, so a 32-bit-hosted cc1 turns a top-bit-set
-  division magic into a CONST_DOUBLE that `large_int` rejects and the
-  mips.md:3208 split never fires. The mechanism is real; the conclusion was
-  not. forest asked why we would build the compiler with a 64-bit
-  HOST_WIDE_INT when 64-bit hosts barely existed when this game was compiled,
-  which is the right question: cc1psx was a 32-bit Win32 binary and the host
-  that claim implies never existed for this toolchain.
+  **A CORRECTION AND A COUNTER-CORRECTION, SAME DAY, AND THE METHOD LESSON IS
+  THE POINT.** func_80404EA0's last two words were written up as the
+  mips.md:3208 large-constant split failing to fire on an unsigned division
+  whose magic has bit 31 set -- `expand_mult_highpart` passes i1 = 0,
+  `immed_double_const` makes a CONST_DOUBLE when i0 is negative, and
+  `large_int` takes CONST_INT only. On top of that, it concluded the real
+  cc1psx must have been built with a 64-bit HOST_WIDE_INT. forest asked why we
+  would build the compiler with a 64-bit HOST_WIDE_INT when 64-bit hosts
+  barely existed when this game was compiled -- the right question, and that
+  conclusion is retracted and stays retracted. cc1psx was a 32-bit DOS/Win32
+  binary; SN's base snapshot differing from FSF 2.7.2.3 right there explains
+  the target's bytes just as well, and nothing here can tell them apart.
 
-  The counter-example was already in the tree. `csrc/main/cardinfo.c`'s
-  `func_80024390` is landed C, byte-identical, and is this very function's
-  live counterpart; `build/csrc/main/cardinfo.s` splits the SAME 0x91A2B3C5
-  magic into `li $2,-1851654144` plus a separate `ori $2,$2,0xb3c5`. Compile
-  that file with tools/psx272gcc instead and it splits identically, so FSF
-  2.7.2 does it too. What the original measurement really showed is that a
-  STANDALONE `g / 3600` does not split under either compiler -- a statement
-  about context, not about the magic. func_80404EA0's two words go back to
-  being a source question.
+  **The retraction then over-reached, and that is the part worth recording.**
+  The check that drove it was the right check -- find the live counterpart and
+  see what our own build already does with it -- and it returned the wrong
+  answer. `csrc/main/cardinfo.c`'s `func_80024390` does split the same
+  0x91A2B3C5 magic. But its splitting divisions are the SIGNED ones: the
+  file's own header says "`/ 60` unsigned for seconds, then `/ 3600` and
+  `/ 60` signed", and its ONE unsigned division leaves 0x88888889 as a single
+  `li`, exactly as the mechanism predicts. Signedness is also the clean
+  control, measured on both compilers: `x / 3600u` is one `li`, `x / 3600` is
+  `lui` + `ori`, same magic. So the MECHANISM was right all along and is
+  re-established; only the build-host inference was ever wrong.
 
-  **The lesson, which is worth more than the park:** the reasoning was "this
-  mechanism would produce the observed bytes, therefore this is what
-  happened", and it never asked whether the thing it implied was possible. A
-  mechanism that explains the bytes is a hypothesis. It becomes a finding
-  only when the thing it implies is checked against something independent --
-  and here that check was one grep of a file the project had already built.
-  The same test should be run on every other "it is the compiler" verdict in
-  `docs/near-misses/`: find the live counterpart and look at what our own
-  build already does with it.
+  **Two lessons, not one.** A mechanism that explains the bytes is a
+  hypothesis -- it becomes a finding only when what it IMPLIES is checked
+  against something independent. And a live-counterpart check only works if
+  the thing the hypothesis turns on is read off BOTH sides first; here that
+  was one word, "unsigned", in a comment the file already carried. Retracting
+  a correct finding costs as much as keeping a wrong one. The counterpart
+  check is still worth running on every other "it is the compiler" verdict in
+  `docs/near-misses/` -- carefully.
 
   `func_804062F4` used to be listed here as blocked for a structural reason --
   it needs a 16-byte rodata template at 0x26976C and this unit's single dotted

@@ -3035,16 +3035,19 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
     return p + 0xC;
 }
 
-/* NEAR MISS, 322 words of 320. Two words: gcc leaves an unsigned division's
- * magic as one `li`, which maspsx expands to an adjacent lui/ori, where the
- * target has the `lui` in the preceding load's delay slot and the `ori` four
- * insns later -- the mips.md:3208 large-constant split. This was written up
- * as "a top-bit-set magic is a CONST_DOUBLE and can never split", and on
- * 2026-11-12 as a HOST_WIDE_INT width difference on top of that. BOTH ARE
- * RETRACTED: this function's own live counterpart, csrc/main/cardinfo.c's
- * func_80024390, splits the SAME magic, under tools/cdkgcc and under
- * tools/psx272gcc alike. So it is context, both compilers agree on it, and
- * the two words are a SOURCE question rather than a compiler gap.
+/* NEAR MISS, 322 words of 320, and CLOSED as a stand-in gap. Two words, one
+ * per division: for an UNSIGNED division whose magic has bit 31 set, gcc
+ * leaves the magic as one `li` macro -- two welded words -- where the target
+ * has the mips.md:3208 split, with the `lui` half in the preceding load's
+ * delay slot and the `ori` four insns later. The nop in that unfilled slot is
+ * the whole difference. `expand_mult_highpart` passes i1 = 0 for an unsigned
+ * division, `immed_double_const` makes a CONST_DOUBLE of it when i0 is
+ * negative, and `large_int` takes CONST_INT only. THE CONTROL IS SIGNEDNESS:
+ * the same 0x91A2B3C5 splits when the division is signed, in both compilers.
+ * This park's own live counterpart, csrc/main/cardinfo.c's func_80024390,
+ * reads like a counter-example and is not one -- its splitting divisions are
+ * the SIGNED ones, and its one unsigned division leaves 0x88888889 whole, as
+ * the rule says. No source spelling reaches it.
  * Source in docs/near-misses/func_80404EA0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
