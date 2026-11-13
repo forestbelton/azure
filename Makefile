@@ -274,7 +274,7 @@ OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
 # conveniently, so rebuild every C object when any header changes. Without
 # this, editing include/common.h leaves stale objects behind and the build
 # silently keeps using them.
-HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc)
+HEADERS := $(wildcard include/*.h) $(wildcard include/*.inc) $(wildcard csrc/*.h)
 $(CFILES:%.c=build/%.o): $(HEADERS)
 
 # The compiler itself, built on demand from the vendor/old-gcc submodule. It

@@ -112,16 +112,32 @@ segments:
       # DOTTED vs UNDOTTED here is forced, in both directions. jtbl_8040007C's
       # entries are `.L` labels inside func_804016D0, and a local label is
       # only visible in its own object, so that table must ride with the code:
-      # dotted, 0x14 bytes. Everything else must NOT migrate -- migration only
-      # emits a symbol it can attribute to ONE function, and ASSERT_FMT and
-      # the nine translation-unit filenames are referenced from dozens each,
-      # so splat attributes them to nobody and writes them nowhere, and the
-      # link fails on undefined D_80400894 / D_8040086C. Undotted needs a
-      # DIFFERENT name: an undotted subsegment sharing the `c` unit's name is
-      # a hard error.
+      # dotted. Everything in `rodata_pre` must NOT migrate -- migration only
+      # emits a symbol it can attribute to ONE function, and c_server.c's
+      # ASSERT_FMT copy is referenced from dozens, so splat attributes it to
+      # nobody and writes it nowhere, and the link fails on undefined
+      # D_80400004. Undotted needs a DIFFERENT name: an undotted subsegment
+      # sharing the `c` unit's name is a hard error.
+      #
+      # TWO DOTTED `.rodata` WINDOWS, AND THEY MUST BE TWO UNITS. The 0x810
+      # bytes at 0x269090 are csrc/ovl_main_80400000_rodata.c -- 98 objects,
+      # where splat's old `rodata_post` listing had 47 labels -- and they
+      # cannot be part of the unit above them, in any file order: at -G8
+      # cc1psx writes the TEXT to a temp file and appends it after all
+      # file-scope data (mips.c:4181, for the assembler's small-data pass), so
+      # jtbl_8040007C -- which func_804016D0's switch emits -- always lands
+      # AFTER every object the unit defines. Measured: the right total, 2084,
+      # and main.bin differing from 0x26907c, the table's own address. A unit
+      # gets one subsegment per section, so one unit cannot hold two windows
+      # either. See csrc/ovl_main_80400000_rodata.c's header and
+      # docs/owning-data.md SS6.
+      #
+      # 0x269000 still cannot be owned, for the unrelated reason in SS9.3: gcc
+      # gives a jump table `.align 3`, which is free at offset 0 of a unit's
+      # section and costs four bytes of gas padding behind rodata_pre's 0x7C.
       - [0x269000, rodata, ovl_main_80400000_rodata_pre]
       - [0x26907c, .rodata, ovl_main_80400000]
-      - [0x269090, rodata, ovl_main_80400000_rodata_post]
+      - [0x269090, .rodata, ovl_main_80400000_rodata]
       - [0x2698a0, c, ovl_main_80400000]
       # Dotted `.data`, so splat emits NOTHING here and csrc/ovl_main_80400000.c
       # defines all 0x3C48 bytes itself -- 98 objects, 89.8% of them zero. The

@@ -543,11 +543,13 @@ must still be `0x80020924`.
 
 ---
 
-### 4.8 The junk bytes at a section boundary that does not land on 4
+### 4.8 The junk bytes at a boundary that does not land on 4
 
-ASPSX/psylink pads a section up to the next section's alignment with
-**whatever was in its buffer**, not with zeros. Every boundary in this project
-that does not already land on 4 shows it:
+ASPSX/psylink pads up to the next alignment with **whatever was in its
+buffer**, not with zeros. The scan below finds the ones at a SECTION end;
+read the last bullet first, because the same thing happens at ordinary object
+boundaries inside a section and that is the common case. Every section
+boundary in this project that does not already land on 4 shows it:
 
 | container | offset | bytes | as text |
 |---|---|---|---|
@@ -591,12 +593,27 @@ Three things that follow:
   more, in the random filler. So they are off-cuts of *something* textual in
   the toolchain's own memory -- a filename, a date, a version string -- but
   **what** is not known, and nothing here identifies it.
-* **It is not the preceding object's padding.** Read it as such and the
-  object's declared size is wrong by three bytes, which matters the moment
-  anything else is placed relative to it. Spell it as section content.
-* **Expect it when you take over an overlay's last rodata object.** The
-  `main.bin` twin's boundary, after its last assert string `"memory.c"`, is the
-  same shape and still ahead of us.
+* ~~**It is not the preceding object's padding.**~~ **CORRECTED 2026-11-13: it
+  usually IS, and the scan above only finds the ones at a section end.** The
+  same off-cut appears at ORDINARY OBJECT boundaries inside a section, wherever
+  a string is shorter than the span up to the next 4-aligned object. The twin's
+  rodata chunk has seven of them in 0x810 bytes: `02` after `"illegal data"`
+  (`0x269146`), `AE` after `"card_win.c"` (`0x26962B`), `A2` after
+  `"cardbk.c"` (`0x26965F`), `0C` after the card-info header template
+  (`0x2697A3`), `3C` after `"cardslot.c"` (`0x2697D7`), `03` after
+  `"cardsme.c"` (`0x26980A`) and `20 42 30` after `"memory.c"` (`0x26989D`) --
+  the last being this table's own `main.bin` entry, which is not special after
+  all. So **read the bytes up to the next object's address, not up to the
+  string's NUL**, and put them in that object's initialiser:
+
+      const char D_80400620[12] = "card_win.c\0\xAE";
+
+  A 12-byte literal in a `char[12]` is legal C -- the NUL is dropped -- and it
+  keeps the object's declared size right, which §6's last trap is about. The
+  section-content spelling below is only needed when the span is NOT 4-aligned,
+  which is why `0x80020921`'s three bytes need it and the twin's do not.
+* **Expect it when you take over any rodata object whose string is short.**
+  Not just the last one in a section.
 
 ---
 
@@ -1114,17 +1131,17 @@ needed; the struct layouts only become work at `D_800CFD18`
 
 ---
 
-## 9. The twin overlay: 0x80400000, and the two things that are different at -G8
+## 9. The twin overlay: 0x80400000, and the three things that are different at -G8
 
 Measured 2026-11-13, against `main.bin` with all four containers byte-identical
-before and after. **Nothing here landed**; this section is the feasibility
-work, so that the next attempt starts from the constraints rather than
-rediscovering them. The twin's three unowned chunks are
+before and after. The twin's chunks are
 
       - [0x269000, rodata, ovl_main_80400000_rodata_pre]    0x7C,   7 objects
+                                                            BLOCKED, see §9.3
       - [0x26907c, .rodata, ovl_main_80400000]              0x14,   jtbl, OWNED
-      - [0x269090, rodata, ovl_main_80400000_rodata_post]   0x810, 47 objects
-      - [0x2719e0, data,   ovl_main_80400000_data]          0x3C48, 107 labels
+      - [0x269090, .rodata, ovl_main_80400000_rodata]       0x810, 98 objects
+                                                            ** DONE 2026-11-13 **
+      - [0x2719e0, .data,   ovl_main_80400000]              0x3C48, 98 objects
                                                             ** DONE 2026-11-13 **
 
 and the shape of the job is §4's, with the live overlay's `csrc/main/*.c` as a
@@ -1132,18 +1149,49 @@ worked example for almost every object: `csrc/main_twin.h` already annotates
 each `D_` symbol with its live counterpart's name, so the types are witnessed
 rather than guessed.
 
-### 9.1 The emission model, confirmed on the live overlay
+### 9.1 THE EMISSION MODEL IS NOT FILE ORDER AT -G8, AND THAT DECIDES THE FILE LAYOUT
 
-`.rodata` order is **file order**, with file-scope const objects emitted where
-they are defined and a function's string pool emitted where the function is.
-Confirmed against the finished 0x80020000 overlay: `ASSERT_FMT` is defined at
-`csrc/main/c_server.c:640` and lands at `0x80020000`, the start of the
-section, because nothing earlier in that file contributes rodata; then
+> **CORRECTED 2026-11-13.** This section used to say `.rodata` order is file
+> order. That is true of the -G0 units and false of this one, and the
+> difference is what forced the rodata chunk into a second translation unit.
+
+At -G0, `.rodata` order **is** file order, with file-scope const objects
+emitted where they are defined and a function's own constants emitted where the
+function is. Confirmed against the finished 0x80020000 overlay: `ASSERT_FMT` is
+defined at `csrc/main/c_server.c:640` and lands at `0x80020000`, the start of
+the section, because nothing earlier in that file contributes rodata; then
 `FILENAME_C_SERVER` (:641), `gSwCardEventHandlers` (:643),
 `gHwCardEventHandlers` (:651) follow in order, and the 24-byte gap at
 `0x8002005C..0x80020074` before `MEM_CARD1` (:772) is the anonymous `$LC`
-pool of the functions in between. So a named object's position is yours to
-choose and a literal's is not.
+pool of the functions in between. `build/csrc/main/c_server.s` shows it
+directly: `.rdata` and `.text` alternate down the file.
+
+**At -G8 ALL FILE-SCOPE DATA IS EMITTED BEFORE ALL TEXT.** `mips_asm_file_start`
+diverts the text to a temp file when `TARGET_GP_OPT` is on -- the comment in
+`mips.c:4174` says why, "so that we can put all externs before all symbol
+references ... for the assembler's global pointer optimizations to work" --
+and `mips_asm_file_end` (`mips.c:4237`) appends it after everything the data
+stream wrote. `function_prologue`/`function_epilogue` are what switch
+`asm_out_file` between the two streams (`mips.c:5327`), so a *function's* own
+constants, including a jump table, are in the text stream and land last.
+Measured with `tools/psx272gcc -O2 -S` on
+
+    const char A[12] = "hello";
+    int f(int x) { switch (x) { /* five arms -> a jump table */ } }
+    const char B[12] = "world";
+
+    -G8:  A, B, .text, jump table      <- NOT file order
+    -G0:  A, jump table, B             <- file order
+
+So at -G8 a named object's position **within the data group** is yours to
+choose, but no source ordering can put it after a compiler-emitted constant of
+the same unit. That is the whole reason `csrc/ovl_main_80400000_rodata.c`
+exists: the twin's `.rodata` is `[jtbl_8040007C][0x810 of objects]`, the table
+is func_804016D0's, and a unit gets one subsegment per section, so the two runs
+have to be two units with the yaml ordering their input sections. Defining the
+objects in the function unit instead measured the right total, `.rodata` 2084,
+and `main.bin` `0x79a of 0x275800 bytes differ, first at 0x26907c` -- the
+table's own address.
 
 ### 9.2 AT -G8 EVERY CONST OBJECT OF 8 BYTES OR LESS GOES TO `.sdata`, AND THE ORIGINAL'S DID NOT
 
@@ -1179,8 +1227,14 @@ an explicit `.section` is taken literally. Two consequences:
 
 * **Every rodata object of 8 bytes or less has to be a NAMED object with that
   attribute**, so the short format strings cannot be written as literals.
-  12 of rodata_post's 47 objects and 45 of the data chunk's 98 objects are in
-  this class.
+  45 of the data chunk's 98 objects are in this class, and so are 27 of the
+  rodata chunk's 98 -- **but the rodata chunk is a unit of its own and so is
+  -G0**, where `mips_section_threshold` is zero and the question does not
+  arise, so `csrc/ovl_main_80400000_rodata.c` carries no attribute at all. The
+  27 are listed in its header, for whoever moves one of them back into the
+  -G8 unit. (The file is -G0 because it matches the Makefile's
+  `build/csrc/ovl_%.o` pattern rule and takes no target-specific override; for
+  data that is a difference without a consequence, and the containers say so.)
 * **Do NOT put the attribute on a `const` object.** Measured 2026-11-13: for a
   non-`const` object gcc emits `.section .data,"aw",@progbits`, and for a
   `const` one it emits `.section .data,"a",@progbits` -- the same name with
@@ -1213,6 +1267,25 @@ bytes, not a symbol invented to take an address: `D_80408A40[3][0x20]` (three
 16-entry 5551 CLUTs after `D_80408A30`'s `UnkAnimStep[2]`; the live
 `SAVE_ICON_CLUTS` has five rows, this has three), `D_80408CF8`, and
 `D_80409540[0x750]`.
+
+**THE RODATA CHUNK RUNS THE OTHER WAY ALMOST THROUGHOUT: 47 LABELS, 98
+OBJECTS.** splat sizes a rodata object from the next *referenced* symbol, and
+nothing in this segment refers to any of these interiors symbolically, so one
+label routinely covers a filename plus everything after it -- `D_80400138` is
+one 1036-byte label holding 32 separate strings. **The pointer tables in the
+twin's own `.data` are the oracle**, and they are already written out as plain
+address words because the rodata was unowned when they landed: `D_80408AA0`
+names the two 8-byte card prefixes inside `D_804000D0`'s label, `D_80408AB8`
+the six filename suffixes inside `D_804000F8`'s, `D_80408B2C[20][4]` all 31
+message strings inside `D_80400138`'s, `D_80408C8C` four menu rows inside
+`D_80400570`'s, `D_80408CB0` two inside `D_804005C8`'s,
+`D_80408CF4`/`D_80408CF8` two inside `D_80400668`'s, and `D_804090C8` the six
+slot-state names inside `D_80400800`'s. Those addresses can now become names;
+doing it is a follow-up on the data block, not part of the rodata landing.
+
+Only two of the 47 run the data chunk's way, off the 4-byte grid and absorbed
+into the object above: `D_804006C2` into `D_804006C0` and `D_80400718` into
+`D_80400714` (§9.5).
 
 ### 9.2c A MOSTLY-ZERO OBJECT WITH A NON-ZERO TAIL IS A DESIGNATED INITIALISER
 
@@ -1272,30 +1345,46 @@ There is no source lever and no flag. The options, none of them taken here:
    Same effect, no compiler change, but a pipeline special case.
 3. **Leave `rodata_pre` alone.** It is 0x7C bytes and 7 objects.
 
-### 9.4 OWN `rodata_post` FIRST, AND THE ORDER IS WHY
+### 9.4 `rodata_post` IS DONE, AND IT TOOK A SECOND TRANSLATION UNIT
 
-`rodata_post` is **not** blocked, and the reason is worth stating because it
-inverts the obvious order of work. A unit gets one `.rodata` subsegment, so
-the owned window has to be contiguous -- but it does not have to start at the
-segment start. Taking
+> **CORRECTED 2026-11-13, in the landing.** This section used to say the
+> window could grow FORWARD from the jump table with every object defined
+> *below* `func_804016D0` in the same C file. The second half of that is not a
+> thing you can do: §9.1 is why. The first half is right -- the window does
+> grow forward from `0x26907c` -- but the objects live in a file of their own.
 
-      - [0x269000, rodata, ovl_main_80400000_rodata_pre]
-      - [0x26907c, .rodata, ovl_main_80400000]     <- grows FORWARD to 0x2698a0
+A unit gets one `.rodata` subsegment, so an owned window has to be contiguous,
+and it does not have to start at the segment start. But at -G8 a unit's
+`.rodata` is `[all its file-scope objects][all its functions' own constants]`
+in that order, whatever the file says (§9.1), and the twin's section runs
+`[jtbl_8040007C][0x810 of objects]` with the table belonging to
+`func_804016D0`. One unit cannot produce that order, and one unit cannot have
+two windows. So it is two units and the yaml orders the two input sections:
 
-leaves the jump table at **offset 0** of the owned window, where its `.align 3`
-costs nothing, and puts all 47 owned objects after it. In the C file that
-means every one of them is defined *below* `func_804016D0`; their uses can be
-anywhere, because `csrc/main_twin.h` already declares them.
+      - [0x269000, rodata, ovl_main_80400000_rodata_pre]   splat's, §9.3
+      - [0x26907c, .rodata, ovl_main_80400000]             the jump table, 0x14
+      - [0x269090, .rodata, ovl_main_80400000_rodata]      98 objects, 0x810
+      - [0x2698a0, c, ovl_main_80400000]
 
-So the queue is: `rodata_post`, and `rodata_pre` only if 9.3 is ever resolved.
+`csrc/ovl_main_80400000_rodata.c` is data only and needs no Makefile change --
+`CFILES` is a `find` over `csrc` -- and splat's legacy generation emits one
+input-section line per subsegment in subsegment order, which is the same
+property §7 measured for per-unit `.data`. The live overlay's yaml already has
+the shape: five `.rodata` subsegments for five units of one segment, and
+`[0x265530, .data, ovl_main_80020000]` is a unit with no text at all.
 
-**The data chunk is DONE as of 2026-11-13** -- 98 objects, 45 of them carrying
-the section attribute, `.data` 15432 against the window's 0x3C48, `.sdata`,
-`.sbss` and `.bss` all absent or zero, four containers byte-identical. The
-ordering advice above turned out not to matter for it: the data chunk is
-independent of both rodata chunks, so owning it while `rodata_pre` and
-`rodata_post` are still unowned was uneventful. The ordering argument still
-stands for the two rodata chunks, which share a window with the jump table.
+**Both rodata chunks and the data chunk are DONE as of 2026-11-13** --
+`.rodata` 20 for the function unit and 2064 for the data unit against the two
+windows, `.data` 15432 against `0x3C48`, `.sdata`, `.sbss` and `.bss` all
+absent or zero in both objects, four containers byte-identical. The data chunk
+is independent of both rodata chunks, so owning it first was uneventful.
+
+**The same device would unblock `rodata_pre`**, and it is the fourth option
+§9.3 does not list: a third unit whose `.rodata` is `0x269000..0x26907c` puts
+`jtbl_8040007C` at offset 0 of the *function* unit's section, where `.align 3`
+is free, and the seven objects at offset 0 of their own. Not done, not
+measured, and out of scope where it came up; §9.3's compiler story is still
+the honest account of why it cannot be done inside one unit.
 
 Two things learned there that belong with §4 rather than here. **The
 relocation inventory of a region is worth taking before you start**: this one
@@ -1309,18 +1398,35 @@ correctly and nothing references them, so it is harmless -- but §4.3's "should
 have LOST exactly the symbols now inside the window" does not hold for labels
 spimdisasm could not place on a word boundary.
 
-### 9.5 Two smaller facts for whoever picks this up
+### 9.5 Two smaller facts, both settled in the landing
 
-* **One object in rodata_post starts off the 4-byte grid**, `D_804006C2`, and
-  it is not an object at all -- it is the second half of the 3-byte
-  `D_804006C0` that the landed func_80404EA0 copies with
-  `memcpy(buf, D_804006C0, 3)`, which compiles to `lh` + `lb` and makes splat
-  name the `lb`'s target. `D_80400718` is the same thing inside
-  func_804053A0's park, which calls removing the label "a landing-time chore".
-  Owning the object is that chore: the label has to come out of
-  `splat/main.bin_symbol_addrs.txt`'s output too, or the still-unowned chunk
-  keeps referencing a name nothing defines (§6).
-* **The twin's section boundary junk is already known**: `0x26989D` holds
-  `20 42 30` (`" B0"`) after the last assert string `"memory.c"`, per §4.8.
-  It is section content, not padding on the last object, and is spelled with
-  an `__asm__(".rdata\n\t.byte ...\n\t.data")` as in §4.7.
+* **`D_804006C2` AND `D_80400718` ARE NOT OBJECTS, AND ONE OF THEM NEEDED A
+  `size`.** Each starts off the 4-byte grid and is the tail of the object
+  above: `D_804006C2` is the second half of the 3-byte `D_804006C0` that the
+  landed func_80404EA0 copies with `memcpy(buf, D_804006C0, 3)` -- `lh` + `lb`,
+  so splat named the `lb`'s target -- and `D_80400718` is the same thing in
+  the five-byte block move of func_804053A0's park. Owning the chunk removes
+  the `dlabel`s that defined them, and that is a **link failure** for any
+  reference that survives: the parked func_804053A0's nonmatching listing
+  still relocated against `D_80400718` and `ld` said `undefined reference`
+  twice. The fix is §4.6's, `D_80400714 = 0x80400714; // size:0x8` in
+  `splat/main.bin_symbol_addrs.txt`, which makes spimdisasm spell the byte
+  load `%lo(D_80400714 + 0x4)` instead of inventing a name. `D_804006C2`
+  needed nothing, because func_80404EA0 is compiled C and has no listing.
+  Both names survive as harmless absolute assignments in
+  `splat/main.bin_undefined_syms_auto.txt`, exactly as the data chunk's nine
+  off-grid names do.
+
+  **It does not clear `verify.py`'s `?` on that park, and that is a tooling
+  bug, not a symbol-table one.** The mark moved from the `lb` to the `lui`:
+  gas keeps a HI16/LO16 pair's addend on the LO16 only, so the built
+  `lui` carries 0 where `asmlib.listing_addend` reads `+0x4` out of
+  `%hi(D_80400714 + 0x4)`. Any `SYM + offset` spelling will do this. The
+  remedy belongs in `asmlib.py`.
+
+* **THE "SECTION BOUNDARY" JUNK IS AN OBJECT-BOUNDARY PHENOMENON**, and §4.8
+  now says so. `0x26989D`'s `20 42 30` (`" B0"`) after `"memory.c"` is the
+  last of SEVEN in this one chunk, not a one-off at the section end, and none
+  of them needs §4.7's `__asm__` escape hatch: each span is 4-aligned, so the
+  bytes go in the initialiser of the object above and the object keeps its
+  real size.

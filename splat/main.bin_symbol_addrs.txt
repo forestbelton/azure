@@ -43,3 +43,24 @@ D_800200B8 = 0x800200B8; // size:0x8
 // came out holding only D_800888AC. Declaring the start is what makes the
 // 0xB8 bytes of Shift-JIS/ASCII menu text disassemble into that object.
 D_800887F4 = 0x800887F4; // rodata
+
+// D_80400714 -- ENDING A LABEL THAT SPLAT CUT INSIDE AN OBJECT, and this one
+// IS load-bearing: without it the link fails.
+//
+// The twin's rodata is owned by csrc/ovl_main_80400000.c as of 2026-11-13, and
+// 0x80400714 is ONE eight-byte object there -- 82 A0 82 C6 00, two Shift-JIS
+// characters and a terminator, then padding. func_804053A0 copies five bytes
+// of it with a block move, which comes out `lw D_80400714` + `lb` at +4, so
+// spimdisasm named the byte load's target and emitted a second label,
+// D_80400718. That label used to be defined by the generated rodata_post
+// listing; with the chunk owned, nothing defines it and the still-parked
+// func_804053A0's nonmatching listing fails to link against it.
+//
+// A `size` is what tells spimdisasm the second address is inside the first, so
+// it spells the relocation `%lo(D_80400714 + 4)` instead of inventing a name.
+// docs/owning-data.md §4.6 is the technique and §9.5 called this the
+// landing-time chore; this is it. The same shape at 0x804006C2, inside
+// D_804006C0, needs no entry: func_80404EA0 is compiled C, so there is no
+// listing to relocate, and the only trace left is a harmless absolute
+// assignment in main.bin_undefined_syms_auto.txt.
+D_80400714 = 0x80400714; // size:0x8

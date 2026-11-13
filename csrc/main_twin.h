@@ -68,7 +68,7 @@ s32 func_80047358(s32 a, u8 *fmt, s32 n);            /* func_800491F4 */
 s32 func_8004DBDC(void);                             /* no live counterpart named */
 void func_8004DCCC(s32 *p);                          /* func_8004CB2C */
 void func_800514A8(u8 *p, s32 a);                    /* func_8004E264 */
-u8 *func_80051B50(u8 *out, u8 *s, s32 a);            /* func_8004DA74 */
+u8 *func_80051B50(u8 *out, const u8 *s, s32 a);      /* func_8004DA74 */
 s8 *func_80051520(u8 *a, u8 *b, s32 c);              /* func_8004E298 */
 void func_80051804(s32 v, s32 n, u8 *out);           /* func_8004E5A0 */
 void func_80051900(u8 *q);
@@ -89,7 +89,7 @@ s32 *func_8003C714(s32 a, u8 *b, s32 c);             /* func_8003FE78 */
 s32 func_80047FD8(s32 *p);                           /* func_8004B4A8 */
 void func_80047938(s32 *p);                          /* func_8004AE08 */
 s32 func_800484A4(s32 a, s32 *b);                    /* func_8004B9F0 */
-int func_8003FA78(char *fmt, ...);                   /* the debug printf */
+int func_8003FA78(const char *fmt, ...);             /* the debug printf */
 void func_80040560(s32 *p, u32 f);                   /* func_8004491C */
 s32 func_80056F14(s32 a);                            /* func_80049E6C */
 void func_80058368(s32 p, s16 *r);                   /* func_80049D80 */
@@ -103,7 +103,7 @@ long func_8007CA68(long fd, long off, long whence);  /* lseek */
 long func_8007CA78(long fd, void *buf, long n);      /* read */
 long func_8007CA88(long fd, void *buf, long n);      /* write */
 long func_8007CA98(long fd);                         /* close */
-char *func_8007BF50(char *d, char *s);               /* strcat */
+char *func_8007BF50(char *d, const char *s);         /* strcat */
 char *func_8007BF80(char *d, const char *s);         /* strcpy */
 long func_8007C9D8(long event);                      /* EnableEvent */
 long func_8007C958(void);                            /* a libcard init call */
@@ -120,7 +120,7 @@ u_short func_80078640(int x, int y);                 /* GetClut */
  * its argument in $a0 across the assert call, which only works if gcc knows
  * the assert arm never returns. */
 void func_8007BEF0() __attribute__((noreturn));
-int func_8007C040(char *fmt, ...);                   /* printf */
+int func_8007C040(const char *fmt, ...);             /* printf */
 long func_8007C998(unsigned long, long, long, long (*func)()); /* OpenEvent */
 long func_8007C9A8(long);                            /* CloseEvent */
 long func_8007C9C8(long);                            /* TestEvent */
@@ -385,17 +385,33 @@ extern s32 D_8013BB6C;                               /* THIS link's card_first_f
 extern s32 D_8009E394;                               /* the word after D_8009E390 */
 extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
+/* THE TWIN'S RODATA. D_80400000..D_80400078 is still splat's; everything from
+   D_80400090 up is defined by csrc/ovl_main_80400000_rodata.c, which is why
+   these are all `const` -- a non-const definition goes under `.data`, at the
+   other end of the segment.
+
+   THE UNSIZED ONES ARE UNSIZED ON PURPOSE, and adding a size is a measurement,
+   not a tidy-up. Several of these objects are eight bytes or fewer, and at
+   this unit's -G8 a COMPLETE declaration of such a symbol takes the small-data
+   path: ENCODE_SECTION_INFO flags it on size alone (mips.h:2554), its address
+   becomes a single-insn constant in the RTL, and cse can then fold an offset
+   into a fresh SYM+n instead of adding to a live register. Taking the address
+   once survives that -- D_804005F0[8] and D_80400544[4] are declared complete
+   and their use sites match, because maspsx expands the one `la` back into
+   lui/addiu -- but the MEM_CARD_NAMES note further down is a measured case
+   where it did not. The definitions in the rodata unit carry the real size and
+   are compiled at -G0, where none of this applies. */
 extern const char D_80400004[40];                    /* ASSERT_FMT */
-extern char D_80400090[];                            /* "card_slot = %d\n" and friends */
-extern char D_8040009C[];
-extern char D_804000A4[];
-extern char D_804000B0[];
-extern char D_804000BC[];
-extern char D_804000D0[];
-extern char D_80400114[];                            /* set_gsw_checksum's printf */
+extern const char D_80400090[];                      /* "card_slot = %d\n" and friends */
+extern const char D_8040009C[];
+extern const char D_804000A4[];
+extern const char D_804000B0[];
+extern const char D_804000BC[];
+extern const char D_804000D0[];
+extern const char D_80400114[];                      /* set_gsw_checksum's printf */
 extern const u16 D_8040077C[];                       /* the header's 0x27-byte template, copied at align 2 */
-extern u8 D_804006C4[];                              /* two whole-screen messages */
-extern u8 D_804006EC[];
+extern const u8 D_804006C4[];                        /* two whole-screen messages */
+extern const u8 D_804006EC[];
 /* The free-block line's prefix: ONE five-byte object, 82 A0 82 C6 00 -- two
    Shift-JIS characters and a terminator -- at alignment 4. It was declared
    here as a word plus a separate signed byte, with a comment insisting it was
@@ -403,28 +419,31 @@ extern u8 D_804006EC[];
    story that followed from that shape. A constant-size memcpy from it is ONE
    movstrsi insn and the six words went away. The alignment is load-bearing:
    declared as u8[] (align 1) the same memcpy measures 84 words against 82.
-   D_80400718 is the tail of THIS object, not a symbol of its own; splat still
-   emits a label there, so a landed func_804053A0 will relocate against
-   D_80400714+4 and verify.py will mark that word `?`. */
+   D_80400718 is the tail of THIS object, not a symbol of its own. splat no
+   longer emits a label there: the chunk is owned by
+   csrc/ovl_main_80400000_rodata.c and splat/main.bin_symbol_addrs.txt gives
+   this symbol size 8, so the park's listing relocates against
+   D_80400714 + 0x4. verify.py still marks that pair's `lui` `?`, which is its
+   own bug -- gas keeps a HI16/LO16 addend on the LO16 only. */
 extern const s32 D_80400714[];
-extern u8 D_8040071C[];                              /* and its suffix */
-extern u8 D_804005EC[];                              /* a fixed line func_80403F7C draws */
-extern char D_80400848[];                            /* func_804080A4's state printf */
-extern char D_80400854[];                            /* and func_804081AC's two */
-extern char D_80400860[];
-extern char D_80400134[];                            /* check_gsw_checksum's two printfs */
-extern char D_80400138[];                            /* read_save_file's checksum complaint */
+extern const u8 D_8040071C[];                        /* and its suffix */
+extern const u8 D_804005EC[];                        /* a fixed line func_80403F7C draws */
+extern const char D_80400848[];                      /* func_804080A4's state printf */
+extern const char D_80400854[];                      /* and func_804081AC's two */
+extern const char D_80400860[];
+extern const char D_80400134[];                      /* check_gsw_checksum's two printfs */
+extern const char D_80400138[];                      /* read_save_file's checksum complaint */
 extern const char D_8040086C[40];                    /* memory.c's ASSERT_FMT copy */
 extern const char D_80400894[];                      /* its filename */
-extern char D_80400120[];
+extern const char D_80400120[];
 extern char D_80400038[];                            /* "%s = %d\n" */
 extern char D_80400044[];                            /* "card_first_flg" */
-extern char D_804000F8[];                            /* the format_card counter's name */
+extern const char D_804000F8[];                      /* the format_card counter's name */
 extern const UnkFnTab5 D_80400054;                   /* gSwCardEventHandlers */
 extern const UnkFnTab5 D_80400068;                   /* gHwCardEventHandlers */
 extern const char D_8040002C[];                      /* FILENAME_C_SERVER, "c_server.c" */
 extern const char D_804000F4[];                      /* D_80020084, the filename suffix */
-extern u8 D_804005F0[8];                              /* D_800282B0 */
+extern const u8 D_804005F0[8];                       /* D_800282B0 */
 /* MEM_CARD_NAMES, DECLARED INCOMPLETE ON PURPOSE. The object really is 8
    bytes -- D_80408AA8 below is the next one -- but 8 bytes is the -G8
    small-data path, which makes the address ONE insn, after which cse folds
@@ -506,11 +525,11 @@ typedef struct
 } UnkTwinDispatch4;
 extern const UnkTwinDispatch4 D_8040076C;
 
-extern char D_80400660[];                            /* " <name> " */
-extern u32 D_80400668[];                             /* the 41-byte card-info header */
-extern char D_804006AC[];                            /* live D_800283A8[3] */
-extern char D_804006BC[];                            /* the time separator, live D_800200A4 */
-extern u16 D_804006C0[];                             /* "10" */
+extern const char D_80400660[];                      /* " <name> " */
+extern const u32 D_80400668[];                       /* the 41-byte card-info header */
+extern const char D_804006AC[];                      /* live D_800283A8[3] */
+extern const char D_804006BC[];                      /* the time separator, live D_800200A4 */
+extern const u16 D_804006C0[];                       /* "10" */
 extern const u8 D_80400544[4];                       /* D_800200A0 */
 extern const char D_80400548[40];                    /* card_mes.c's ASSERT_FMT copy */
 extern const char D_80400570[];                      /* its filename */
