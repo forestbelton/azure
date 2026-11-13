@@ -109,7 +109,7 @@ S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
 {cc} -O2 -G{cc1g} -Iinclude -Ipsyq/include -Icsrc -DPERMUTER -S "$INPUT" -o "$S"
 python3 vendor/maspsx/maspsx.py \\
-    --aspsx-version=2.56 --force-stdin --run-assembler \\
+    --aspsx-version=2.56 --force-stdin --run-assembler {mflags}\\
     --gnu-as-path="${{AS:-{as_}}}" --use-comm-section {gflags} \\
     -EL -32 -march=r3000 -mtune=r3000 -no-pad-sections -O1 \\
     -o "$OUTPUT" < "$S"
@@ -194,9 +194,23 @@ def main():
         gflags = "-G8"
     else:
         gflags = "--dont-force-G0 -G%d" % gasG
+    # THE UNIT'S OWN maspsx FLAGS. Without these the candidate is assembled
+    # differently from the target.o beside it: ovl_main_80400000 is built with
+    # --expand-div, so its two divisions carry the full aspsx check sequence
+    # (bnez/break 0x7, bne/lui 0x8000/bne/break 0x6) in the TARGET and not in
+    # the candidate. Found 2026-11-13 after a 40-minute run on func_804034D8
+    # reported base=1810 for a source that ovlverify.py measures at 2
+    # differing, and returned three "improvements" that verify at 8 and 12.
+    # asmlib's own helper already warned this costs 18 words on one function
+    # and says nothing about why; the permuter does not even say that much,
+    # it just optimises the wrong objective for an hour.
+    mflags = " ".join(asmlib.maspsx_extra_for_unit(unit))
+    if mflags:
+        mflags += " "
     sh = os.path.join(d, "compile.sh")
     io.open(sh, "w", encoding="utf-8").write(COMPILE_SH.format(
-        unit=unit, proj=PROJ, as_=AS, gflags=gflags, cc1g=cc1G, cc=cc))
+        unit=unit, proj=PROJ, as_=AS, gflags=gflags, cc1g=cc1G, cc=cc,
+        mflags=mflags))
     os.chmod(sh, 0o755)
     io.open(os.path.join(d, "settings.toml"), "w", encoding="utf-8").write(
         SETTINGS.format(func=func))
