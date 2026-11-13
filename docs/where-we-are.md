@@ -229,11 +229,14 @@ Three things about the overlays that change how they are worked, all in
   day.** Three of them were rebuilt on better candidates; the count is not the
   only thing to read.
 
-  - `func_804053A0` -- 82 of 82 words, 10 differing (was 84/46 that morning
-    and 81/68 before it). The LENGTH now matches and the whole tail loop is
-    byte-exact. Six of the ten are one scheduling decision before the first
-    jal, three are the `mfhi` reload-register gap it shares with
-    func_80404EA0, one is a commuted `addu`.
+  - `func_804053A0` -- 82 of 82 words, 9 differing (was 84/46 that morning and
+    81/68 before it). The LENGTH matches and the whole tail loop is
+    byte-exact. Six of the nine are one scheduling decision before the first
+    jal and three are the `mfhi` register gap it shares with func_80404EA0.
+    The tenth was a commuted `addu` and it fell: a three-term pointer sum
+    reassociates and leaves the INDEX as op0, so cutting it with a local
+    (`s32 *q = p + i;` then `q[0x2C6]`) puts the base back first. That is a
+    general lever and it is written up in docs/matching-levers.md.
   - `func_804022C8` -- 63 of 63 words, 7 differing, rebuilt from a 4-differing
     candidate that had the two pointer increments in the wrong order and could
     never have anything else. Every one of the seven is a register NAME, with

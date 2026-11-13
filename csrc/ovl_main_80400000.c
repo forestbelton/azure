@@ -3051,14 +3051,17 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
  * Source in docs/near-misses/func_80404EA0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
 
-/* NEAR MISS, 82 of 82 words, 10 differing -- the LENGTH now matches. Rebuilt
+/* NEAR MISS, 82 of 82 words, 9 differing -- the LENGTH matches. Rebuilt
  * twice on 2026-11-12: 81/68, then 84/46, then this. The last device was the
  * loop bound: written `while (n < 3 ? i < 2 : i < 1)` rather than as a `for`
  * over the conditional bound `(n < 3 ? 2 : 1)`, there is ONE induction
  * variable instead of two and the whole loop comes out byte-exact. What is
- * left is six words of scheduling before the first jal (gcc hoists
- * `addiu $s1,$sp,0x50` above the two seed stores), the three-word `mfhi`
- * reload-register gap it shares with func_80404EA0, and one commuted `addu`.
+ * left is NINE words: six of scheduling before the first jal (gcc hoists
+ * `addiu $s1,$sp,0x50` above the two seed stores) and the three-word `mfhi`
+ * register gap it shares with func_80404EA0. The tenth, a commuted `addu`,
+ * fell the same day by CUTTING THE POINTER SUM WITH A LOCAL -- `s32 *q = p +
+ * i;` then `q[0x2C6]`, because the one-expression form folds to
+ * `(p + 0xB18) + i*4` and leaves the index as op0.
  * Source in docs/near-misses/func_804053A0.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804053A0);
 
