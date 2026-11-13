@@ -142,8 +142,157 @@
  *   - loop-body orderings tried, all 322/154: `e` before `f`, `m` before `f`,
  *     both expressions inline, and `m & f` instead of `f & m`.
  *
+ * ================= 2026-11-12, SECOND PASS: FINDING 1 IS NOT THE FLOOR ======
+ *
+ * "Do not re-probe the two nops from C" above is now WRONG as stated. There
+ * is no SOURCE spelling that splits the magic -- that part holds -- but a
+ * DEVICE does, and it reaches the target's 320 words. Measured with
+ * tools/decomp/ovlverify.py <src> func_80404EA0 --G 8:
+ *
+ *   this park, unchanged                               322 words, 154 DIFF
+ *   device on the /3600 field only                     321 words, 148 DIFF
+ *   device on /3600 and /60                            320 words,  47 DIFF
+ *   same, with __volatile__ on the multu asm           320 words,  48 DIFF
+ *
+ * THE DEVICE, in full, replacing the two `% 3600` / `% 60` statements:
+ *
+ *   static __inline__ u32 umulhi(u32 a, u32 b)
+ *   {
+ *       u32 r;
+ *       __asm__("multu %1,%2\n\tmfhi %0" : "=d"(r) : "d"(a), "d"(b));
+ *       return r;
+ *   }
+ *   ...
+ *   {
+ *       u32 k = 0x91A2B3C5u;                    (and 0x88888889u, >> 5)
+ *       u32 a = umulhi(D_8009DDD8_u[p[31]][7], k) >> 11;
+ *       u32 b = umulhi(a, k) >> 11;
+ *       func_8005184C(a - b * 3600, 2, tim);
+ *   }
+ *
+ * WHY IT RECOVERS THE WORDS. `u32 k = <magic>` is a PLAIN LOCAL, so expand
+ * emits a real `(set (reg) (const_int))` insn and sched1 splits it at
+ * sched.c:4823 (`try_split`, guarded by `reload_completed == 0`, so sched1
+ * only -- sched2 never splits). Two independent insns, and the scheduler
+ * puts one in each load-delay slot, which is exactly what FINDING 1 says the
+ * target has. The magic must NOT be the inline function's own argument: a
+ * literal passed to an inline parameter is folded into the ASM_OPERANDS at
+ * EXPAND -- it is already inside the asm in the .rtl dump, before cse --
+ * so reload materialises it after sched1 and it stays one `li`. Verified on
+ * the toy: `umulhi(x, 0x91A2B3C5u)` gives `li $7,-1851608123`, while
+ * `u32 k = 0x91A2B3C5u; umulhi(x, k)` gives `li $5,0x91a20000` + `ori`.
+ * The device also makes FINDING 2 moot where it is used: `mfhi %0` inside
+ * the asm writes the same register the `srl` writes, in place, as the
+ * target does.
+ *
+ * WHY IT IS NOT ADOPTED, and what it costs. sched.c's `insn_cost` returns 1
+ * for any insn with `INSN_CODE (insn) < 0`, which is every asm, and it also
+ * forces `LINK_COST_FREE` when the CONSUMER is an asm. So an asm `multu` has
+ * no `imul` latency, the hole the real `umulsi3_highpart` opens after it
+ * disappears, and the three argument-setup insns the target parks in that
+ * hole (`li $a1,2` / `addiu $s0,$sp,0x60` / `move $a2,$s0`, target words
+ * 174-176) float to the top of the block instead. THIS PARK'S SCHEDULE IS
+ * THE TARGET'S and the device's is not: aligned findings from advise.py,
+ *
+ *   this park      4 OPCODE + 2 EXTRA                + 23 ALLOCATION
+ *   device         4 OPCODE + 9 MISSING + 2 EXTRA    + 27 ALLOCATION
+ *
+ * so 320/47 is the worse source even though both numbers are smaller. The
+ * device is recorded, not kept.
+ *
+ * DEVICE VARIANTS MEASURED, all 320 words / 47 DIFF -- the schedule, not the
+ * asm's shape, is what is stuck: `multu`+`mfhi` fused; `multu`+`mfhi`+`srl`
+ * fused; `__asm__("multu %1,%2" : "=h"(hi) ...)` with a real `mfhi` (loses
+ * the tying again, `mfhi $t3`); `multu` with "=h" plus a fused `mfhi`+`srl`
+ * reading "h"; the magic built as `lui` asm + C `| 0xb3c5`; `k` declared at
+ * function scope; `k` assigned after the array load. tools/decomp/search.py
+ * over the 320/47 source: 72 variants compiled, none improved.
+ *
+ * THE ONE LEAD LEFT, and it is a real one. `(u32)(((u64)t * (u64)k) >> 43)`
+ * gives a REAL `multu` -- mips.md's `umulsidi3`, output constrained "=x" --
+ * so the `imul` latency is back AND the schedule is the target's (the toy
+ * puts `move $6,$5` / `li $5,2` in the hole after the second `multu`, as the
+ * target does), AND `k` as a plain local still splits into `lui`/`ori`. It
+ * costs TWO DEAD WORDS per multiply: `mflo $10` and `move $9,$0`, the low
+ * half of the DImode product and the high half of the shifted result. flow
+ * does not delete them because both are SUBREG writes of a live DImode
+ * pseudo. Anyone who finds a spelling that drops those two gets the real
+ * `multu`, the split magic and the schedule at once. `>> 32` then `>> 11`
+ * costs THREE (it adds `srl $8,$11,0`); `>> 43` is the cheaper spelling.
+ *
+ * WHAT IS STILL OUT OF REACH FROM C, with the evidence:
+ *   - the split itself. varasm.c:1914 makes a CONST_INT only when the mode
+ *     fits HOST_BITS_PER_WIDE_INT; expmed.c:2554 asks for DImode and
+ *     `GET_MODE_BITSIZE (wider_mode) <= HOST_BITS_PER_INT` is false on any
+ *     host, so the clamp never fires. scratch/psx272-gcc/cc1 is a 32-bit
+ *     i386 ELF, and gcc 2.7.2's machmode.h:48 picks `long` only when
+ *     HOST_BITS_PER_LONG > HOST_BITS_PER_INT, so a 64-bit host build of the
+ *     SAME source would split -- but the real cc1psx.exe was 32-bit too, so
+ *     the host is not the explanation and the difference is in SN's tree.
+ *   - FINDING 2 with a real `mfhi`: unchanged, `mfhi $t3` every time.
+ *
+ * Both compilers agree on all of it: tools/cdkgcc and tools/psx272gcc emit
+ * the identical `li $2,-1851608123` for `x/3600u` and the identical
+ * `li $2,0x026d0000` + `ori` for `x/216000u`.
+ *
+ * A NEW MEASURED MECHANISM FOR docs/matching-levers.md, which this pass was
+ * not allowed to edit: the section at its "AN UNSIGNED DIVISION'S MAGIC
+ * CONSTANT IS A CONST_DOUBLE" heading ends "there is no source lever for
+ * it". That is right about SOURCE and wrong about reach: an asm `multu` with
+ * the magic in a plain local recovers both words and the in-place `mfhi`,
+ * and the price is sched.c:insn_cost returning 1 for every asm.
+ *
  * Parked by tools/decomp/park.py; the live comment is in csrc/ovl_main_80400000.c,
  * which also carries the declarations this needs. 
+ *
+ * ================= 2026-11-12, VERIFIED, AND THE CONTROL ====================
+ *
+ * Every number above reproduces: park 322/154, the device 320/47, the aligned
+ * findings 4 OPCODE + 2 EXTRA + 23 ALLOCATION for the park against
+ * 4 OPCODE + 9 MISSING + 2 EXTRA + 27 ALLOCATION for the device. Not adopting
+ * it is right: the park's schedule is the target's and the device's is not.
+ *
+ * TWO CORRECTIONS to the section above, both measured.
+ *
+ *   * The hoist is not load-bearing. `u32 t = D_8009DDD8_u[p[31]][7];` can be
+ *     dropped and the load left inline at both sites -- 320 words, 47
+ *     differing, identical. What costs the 9 MISSING is the `a - b * 3600`
+ *     restructure, which is forced: the TARGET materialises the magic once in
+ *     $v1 and runs BOTH multiplies off it (`multu $v0,$v1` then
+ *     `multu $a0,$v1`), so a device that changes only the outer division
+ *     breaks that sharing and the compiler-generated `%` grows a second,
+ *     unsplit `li` of the same constant. Keeping the C `%` measures 324/161.
+ *
+ *   * The u64 route is closed, and not for the reason guessed. mips.md:1037
+ *     DOES define `umulsi3_highpart`, so `(u32)((u64)t * (u64)k >> 32)` looks
+ *     like it should match it and keep a REAL multu -- which would give the
+ *     split magic AND the target's schedule at once. combine does not match
+ *     it: the product lands in the `x` (hi/lo) pair via `umulsidi3_internal`
+ *     and the DImode subreg shift is not folded, so the result is
+ *     `multu`/`mfhi`/`mflo` plus a dead `move $9,$0`. Measured: `>> 43` 324
+ *     (one site) and 326 (both), `>> 32` then `>> 11` 328.
+ *
+ * THE CONTROL, which is why this is a compiler gap and not a spelling that
+ * nobody has found. The magic reaches RTL as a CONST_DOUBLE, straight from
+ * this function's own `.rtl` dump:
+ *
+ *     (const_double (const_int 0) -1851608123 0)
+ *
+ * `large_int` (mips.c:416) tests for CONST_INT, so the define_split at
+ * mips.md:3208 cannot fire and the constant stays ONE `li` macro -- two words
+ * the assembler expands, but one insn, so sched1 has nothing to put in the
+ * two load-delay slots and they stay `nop`. The control is inside this same
+ * function: it does three unsigned divisions, and they disagree.
+ *
+ *     /216000  magic 0x026D60DD  bit31 0  (const_int 40722653)   SPLITS
+ *     /3600    magic 0x91A2B3C5  bit31 1  (const_double ...)     does not
+ *     /60      magic 0x88888889  bit31 1  (const_double ...)     does not
+ *
+ * In the emitted asm the /216000 magic comes out as `li $3,0x026d0000` and
+ * `ori $3,$3,0x60dd` as two separate insns with other work scheduled between
+ * them, and the other two as a single `li`. Same function, same compilation,
+ * same division shape; the only variable is bit 31 of a constant the source
+ * never names. That is the whole of it, and no C can reach it.
  */
 
 #include "common.h"

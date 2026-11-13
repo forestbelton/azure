@@ -506,18 +506,18 @@ then read only the section you need.
 - THE TWIN BLOCK'S ASSEMBLER EXPANDS DIVISION AND THE REST OF THE GAME'S DOES NOT  `:20554`
 - AN `__asm__` MARKER THAT READS A VARYING VALUE AND WRITES THE ONE YOU CARE ABOUT DECIDES WHICH SIDE OF THE LOOP AN INVARIANT LANDS ON -- IN BOTH DIRECTIONS  `:20569`
 - AN UNSIGNED DIVISION'S MAGIC CONSTANT IS A CONST_DOUBLE WHEN ITS TOP BIT IS SET, SO THE `lui`/`ori` SPLIT NEVER FIRES AND THE `lui` CANNOT FILL A LOAD DELAY  `:20608`
-- IN A UNIT WHOSE RODATA IS A HAND-OWNED BLOB, A LOCAL ARRAY INITIALISER EMITS THE TEMPLATE A SECOND TIME -- COPY THE BLOB'S OWN OBJECT INSTEAD  `:20634`
-- A SIGNED BYTE ASSIGNED STRAIGHT THROUGH LOADS WITH `lbu`; THROUGH AN `s32` LOCAL IT LOADS WITH `lb` -- AND THE PAIR REORDERS TO load/load/store/store  `:20658`
-- `memcpy`'s ALIGNMENT COMES OFF THE POINTER EXPRESSION, NOT THE TYPE -- AND A CAST IS UNDONE, SO ONLY A POINTER VARIABLE CARRIES IT  `:20680`
-- reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:20720`
-- AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:20746`
-- A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:20788`
-- AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:20822`
-- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE  `:20886`
-- THE TWIN'S COMPILER REUSES HI'S REGISTER FOR THE RESULT; OURS NEVER DOES, 0 OF 115  `:20928`
-- WALK A STRING THROUGH A COPY OF THE POINTER TO KEEP THE ROTATED LOOP'S PREHEADER RELOAD  `:20965`
-- A STORE ALWAYS BEATS A REGISTER COPY FOR THE LAST SLOT OF A BLOCK -- ONLY A DEPENDENCE MOVES IT  `:21003`
-- MAKE THE STORE'S ADDRESS OPAQUE TO KEEP A LOAD ABOVE IT  `:21070`
+- IN A UNIT WHOSE RODATA IS A HAND-OWNED BLOB, A LOCAL ARRAY INITIALISER EMITS THE TEMPLATE A SECOND TIME -- COPY THE BLOB'S OWN OBJECT INSTEAD  `:20672`
+- A SIGNED BYTE ASSIGNED STRAIGHT THROUGH LOADS WITH `lbu`; THROUGH AN `s32` LOCAL IT LOADS WITH `lb` -- AND THE PAIR REORDERS TO load/load/store/store  `:20696`
+- `memcpy`'s ALIGNMENT COMES OFF THE POINTER EXPRESSION, NOT THE TYPE -- AND A CAST IS UNDONE, SO ONLY A POINTER VARIABLE CARRIES IT  `:20718`
+- reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:20758`
+- AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:20784`
+- A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:20826`
+- AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:20860`
+- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE  `:20924`
+- THE TWIN'S COMPILER REUSES HI'S REGISTER FOR THE RESULT; OURS NEVER DOES, 0 OF 115  `:20966`
+- WALK A STRING THROUGH A COPY OF THE POINTER TO KEEP THE ROTATED LOOP'S PREHEADER RELOAD  `:21003`
+- A STORE ALWAYS BEATS A REGISTER COPY FOR THE LAST SLOT OF A BLOCK -- ONLY A DEPENDENCE MOVES IT  `:21041`
+- MAKE THE STORE'S ADDRESS OPAQUE TO KEEP A LOAD ABOVE IT  `:21108`
 
 <!-- END INDEX -->
 
@@ -20623,7 +20623,45 @@ independent insns, and one of them goes in the delay slot.
 Measured under tools/psx272gcc AND tools/cdkgcc; both behave the same, and
 `scratch/psx272-gcc/cc1` is a 32-bit i386 binary, as the real cc1psx was.
 func_80404EA0's target nevertheless HAS the split, twice, so this is a gap in
-the stand-in and there is no source lever for it. See that park.
+the stand-in. See that park.
+
+**THE CONTROL IS INSIDE ONE FUNCTION**, which is why this is worth citing as a
+gap rather than a guess. func_80404EA0 does three unsigned divisions, and its
+own `.rtl` dump disagrees with itself about them:
+
+    /216000  magic 0x026D60DD  bit31 0  (const_int 40722653)   SPLITS
+    /3600    magic 0x91A2B3C5  bit31 1  (const_double ...)     does not
+    /60      magic 0x88888889  bit31 1  (const_double ...)     does not
+
+One compilation, one function, one division shape; the only variable is bit 31
+of a constant the source never names.
+
+**"NO SOURCE LEVER" IS NOT "NO LEVER", corrected 2026-11-12.** There is no
+source SPELLING -- that stands -- but a device reaches the bytes. `u32 k =
+<magic>` as a PLAIN LOCAL makes expand emit a real `(set (reg) (const_int))`,
+and sched1 splits THAT at `try_split` (sched.c:4823, guarded by
+`reload_completed == 0`, so sched1 only and sched2 never), giving two
+independent insns the scheduler puts one per load-delay slot. Feed it to an
+asm `multu`/`mfhi` and func_80404EA0 goes from 322 words to the target's 320.
+The magic must not be the inline helper's own ARGUMENT: a literal passed to an
+inline parameter is folded into the `ASM_OPERANDS` at expand, before cse, so
+reload materialises it after sched1 and it stays one `li`.
+
+**And it is still not adopted, which is the part to carry away.** `insn_cost`
+(sched.c) returns 1 for any insn with `INSN_CODE < 0` -- every asm -- and
+forces `LINK_COST_FREE` when the CONSUMER is an asm. So an asm `multu` has no
+`imul` latency, the hole a real `umulsi3_highpart` opens after it vanishes,
+and the insns the target parks in that hole float away. The aligned findings
+go from 4 OPCODE + 2 EXTRA + 23 ALLOCATION to 4 OPCODE + 9 MISSING + 2 EXTRA
++ 27 ALLOCATION while the positional DIFF FALLS from 154 to 47. **An asm that
+stands in for an arithmetic insn buys the bytes and pays in schedule, and the
+positional DIFF will tell you the opposite.** Align before believing it.
+
+`umulsi3_highpart` is defined (mips.md:1037), so `(u32)((u64)t * (u64)k >> 32)`
+looks like it should keep a real multu and get both. combine does not match it
+-- the product lands in the `x` (hi/lo) pair via `umulsidi3_internal` and the
+DImode subreg shift is not folded -- so that route costs two dead words per
+multiply instead.
 
 Its companion in the same park: `umulsi3_highpart`'s output is constrained
 `"=h"` (mips.md:1038), so reload must copy HI into a GPR and
