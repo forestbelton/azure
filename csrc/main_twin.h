@@ -451,7 +451,11 @@ extern u8 *D_80408B2C[][4];                          /* and its strings, FOUR pe
 extern const char *D_80408AA0[];                     /* MEM_CARD_NAMES */
 extern char D_80408AA8[16];                          /* MEM_CARD_PREFIX */
 extern const char *D_80408AB8[6];                    /* MEM_CARD_FILENAMES */
-extern const UnkBlock24 D_80408C6C;                   /* D_80027F48 */
+/* D_80027F48's twin. NOT const: it is in the twin's .data, and at this
+   unit's -G8 a const object of any size goes to .rdata, which is at the
+   other end of the segment. csrc/main.h declares the live D_80027F48 the
+   same way. */
+extern UnkBlock24 D_80408C6C;                        /* D_80027F48 */
 extern u8 D_80408C84[8];                              /* D_80027F60 */
 /* FOUR SIZED-ALIAS DEVICES USED TO LIVE HERE and are gone as of 2026-11-11.
    Three were `extern u8 func_XXXXXXXX_a[8] __asm__("func_XXXXXXXX")`, giving
@@ -471,7 +475,7 @@ extern void func_80406F34(s32 *p);                   /* func_80026784 AND func_8
 
 extern u8 *D_80408C8C[4];                            /* D_800282BC */
 extern u8 D_80408C9C[];                              /* D_80027F68 */
-extern const UnkTwinBlk200 D_80408EC8;               /* the header's 0x200-byte template */
+extern UnkTwinBlk200 D_80408EC8;                     /* the header's 0x200-byte template; .data, so not const */
 extern u8 *D_80408CB0[];                             /* D_800282A4 */
 extern u8 D_80408CB8[];                              /* D_80027FC4 */
 extern u8 D_80409508[];                              /* D_800287E8 */

@@ -1125,6 +1125,7 @@ rediscovering them. The twin's three unowned chunks are
       - [0x26907c, .rodata, ovl_main_80400000]              0x14,   jtbl, OWNED
       - [0x269090, rodata, ovl_main_80400000_rodata_post]   0x810, 47 objects
       - [0x2719e0, data,   ovl_main_80400000_data]          0x3C48, 107 labels
+                                                            ** DONE 2026-11-13 **
 
 and the shape of the job is §4's, with the live overlay's `csrc/main/*.c` as a
 worked example for almost every object: `csrc/main_twin.h` already annotates
@@ -1178,10 +1179,60 @@ an explicit `.section` is taken literally. Two consequences:
 
 * **Every rodata object of 8 bytes or less has to be a NAMED object with that
   attribute**, so the short format strings cannot be written as literals.
-  12 of rodata_post's 47 objects and 49 of the data chunk's 107 labels are in
+  12 of rodata_post's 47 objects and 45 of the data chunk's 98 objects are in
   this class.
+* **Do NOT put the attribute on a `const` object.** Measured 2026-11-13: for a
+  non-`const` object gcc emits `.section .data,"aw",@progbits`, and for a
+  `const` one it emits `.section .data,"a",@progbits` -- the same name with
+  different flags, in a file that also uses plain `.data`. A `const` object
+  that belongs in `.data` should lose the `const` instead; two declarations in
+  `csrc/main_twin.h` needed exactly that. (Beware when testing this: a second
+  attributed object in the same file inherits the section the first one
+  opened and emits no directive of its own, which can make the difference look
+  like it is not there.)
 * An object nothing references must also be non-`static`, or gcc discards it.
   `D_80400000` is referenced by nothing in C or in any remaining asm stub.
+
+### 9.2b NINE OF THE DATA CHUNK'S 107 LABELS CANNOT BE OBJECTS AT ALL
+
+The same alignment mechanism as §9.3, seen from the data side, and it is the
+one thing in this region that cost real analysis. gcc emits `.align 2` before
+**every** file-scope object (mips.h's `DATA_ALIGNMENT` raises an array's
+alignment to a word), so a label that does not start on the 4-byte grid cannot
+be declared -- the declaration would push it up onto the next word and move
+everything after it. Nine of the 107 are in this class, each a byte or
+halfword read inside something larger, and each has to be absorbed into the
+4-aligned object above it: `D_80408ADD`, `D_80408ADE`, `D_80408ADF`,
+`D_80409526`, `D_80409CAE`, `D_8040B1EE`, `D_8040B516`, `D_8040C336`,
+`D_8040C43E`, `D_8040C5DE`. Nothing references any of those names. So the
+region is **98 objects**, and "label" and "object" are not the same count.
+
+Three labels run the other way, covering more than one object, and need an
+extra NAME each to cover the remaining bytes -- a definition that covers
+bytes, not a symbol invented to take an address: `D_80408A40[3][0x20]` (three
+16-entry 5551 CLUTs after `D_80408A30`'s `UnkAnimStep[2]`; the live
+`SAVE_ICON_CLUTS` has five rows, this has three), `D_80408CF8`, and
+`D_80409540[0x750]`.
+
+### 9.2c A MOSTLY-ZERO OBJECT WITH A NON-ZERO TAIL IS A DESIGNATED INITIALISER
+
+FSF 2.7.2 accepts them -- they are a GNU extension long predating C99 -- and
+it is the only reasonable spelling here:
+
+    u8 D_8040B1D0[0x328] = {
+        [0x325] = 0x01,
+        0xC0,
+        0xD0,
+    };
+
+emits `.space 0x325` and then the three bytes. The alternative, a separate
+3-byte array, does not work: `.align 2` pushes it onto the next word (§9.2b).
+
+**§6's warning about non-zero residue inside a zero run paid off three times**
+in this region, each one word or less and each at the tail of a group buffer
+where the next group's alignment begins: `01 C0 D0` at `0x8040B4F5`, `89` at
+`0x8040C317`, and `3C 78 DA 42` at `0x8040C624`, which is the last word of the
+whole region. Read the bytes; do not assume a long zero run is uniform.
 
 ### 9.3 THE BLOCKER: A COMPILER-EMITTED JUMP TABLE GETS `.align 3`, AND THIS ONE IS AT 0x7C
 
@@ -1236,8 +1287,27 @@ costs nothing, and puts all 47 owned objects after it. In the C file that
 means every one of them is defined *below* `func_804016D0`; their uses can be
 anywhere, because `csrc/main_twin.h` already declares them.
 
-So the queue is: `rodata_post`, then the data chunk, and `rodata_pre` only if
-9.3 is ever resolved.
+So the queue is: `rodata_post`, and `rodata_pre` only if 9.3 is ever resolved.
+
+**The data chunk is DONE as of 2026-11-13** -- 98 objects, 45 of them carrying
+the section attribute, `.data` 15432 against the window's 0x3C48, `.sdata`,
+`.sbss` and `.bss` all absent or zero, four containers byte-identical. The
+ordering advice above turned out not to matter for it: the data chunk is
+independent of both rodata chunks, so owning it while `rodata_pre` and
+`rodata_post` are still unowned was uneventful. The ordering argument still
+stands for the two rodata chunks, which share a window with the jump table.
+
+Two things learned there that belong with §4 rather than here. **The
+relocation inventory of a region is worth taking before you start**: this one
+is 29 words in FIVE places (`D_804089E8` 9, `D_80408A30` 2, `D_80408CFC` 11,
+`D_80408D4C` 2, `D_804090E0` 5 -- the last being function pointers), and a
+survey that found only three of the five would have been discovered the hard
+way. And **`splat/main.bin_undefined_syms_auto.txt` did not change**, contrary
+to §4.3: the nine off-grid names and `D_8040C628` are absolute-assigned there
+both before and after, even while the `dlabel`s defined them. They resolve
+correctly and nothing references them, so it is harmless -- but §4.3's "should
+have LOST exactly the symbols now inside the window" does not hold for labels
+spimdisasm could not place on a word boundary.
 
 ### 9.5 Two smaller facts for whoever picks this up
 

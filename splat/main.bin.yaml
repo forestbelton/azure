@@ -123,10 +123,10 @@ segments:
       - [0x26907c, .rodata, ovl_main_80400000]
       - [0x269090, rodata, ovl_main_80400000_rodata_post]
       - [0x2698a0, c, ovl_main_80400000]
-      # Undotted `data` because this is a generated listing, not C: the
-      # block's functions are only partly landed, so nothing can attribute
-      # these objects to a translation unit yet. It becomes `.data` beside
-      # csrc/ovl_main_80400000.c when they are -- see docs/owning-data.md.
-      - [0x2719e0, data, ovl_main_80400000_data]
+      # Dotted `.data`, so splat emits NOTHING here and csrc/ovl_main_80400000.c
+      # defines all 0x3C48 bytes itself -- 98 objects, 89.8% of them zero. The
+      # window ends where `pad` begins, so no boundary moves when it grows; see
+      # docs/owning-data.md, and SS9 for the two -G8 rules this block needs.
+      - [0x2719e0, .data, ovl_main_80400000]
       - [0x275628, pad]
   - [0x275800]
