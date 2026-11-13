@@ -1495,11 +1495,56 @@ void func_804024A4(s32 *p)
     }
 }
 
-/* NEAR MISS, 44 of 44 words, 16 differing: gcc duplicates the inner scan's
-   zero test at the bottom of the loop and then undoes the pointer increment,
-   where the target keeps one test at each end.
-   Source in docs/near-misses/func_80402508.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80402508);
+/* The space-skipping width measurer; live func_8002225C, which csrc/main/card_mes.c
+   carries verbatim apart from the glyph walk.
+
+   TWO devices, and the second was only found by reading the live one. The
+   space skip is a plain `while`, not a guarded `do`/`while`: that is what
+   makes loop.c hoist a SECOND copy of the 0x20 it compares against, and the
+   target holds that constant in three separate registers ($t4 for the outer
+   tests, $v1 for the skip loop, $t1 for the glyph walk). Written as a guard
+   plus `do`/`while` cse1 merges all three into one pseudo before loop ever
+   runs, and every register in the function shifts.
+
+   Then the glyph walk goes through a COPY of the pointer. Walking `s` itself
+   is 42 words of the target's 44: cse1 propagates the `lbu` across the
+   rotated loop's guard, so the preheader reload the target has never appears.
+   Through `t` it survives, because the copy gives the loop its own pseudo and
+   there is no earlier load of `*t` to propagate. The live function walks `s`
+   directly, which is why this did not come out of the counterpart. */
+void func_80402508(u8 *s, s32 a, s32 *x, s32 *y, s32 *z)
+{
+    u8 *t;
+    s32 total = 0;
+    s32 n = 0;
+    s32 i = 0;
+
+    *z = 0;
+    if (a < 0)
+    {
+        return;
+    }
+    do
+    {
+        *z = n + *z;
+        while (*s == ' ')
+        {
+            s++;
+            total++;
+        }
+        *x = total;
+        n = 0;
+        t = s;
+        while (*t != ' ' && *t != 0)
+        {
+            t += 2;
+            n++;
+        }
+        s = t;
+        total += n * 2;
+        *y = n;
+    } while (++i <= a);
+}
 
 /* Live func_80022300, with three constants changed: n * 12 where it has
  * n << 3, 0x15 where it has 0x13, and 0x800000 where it has 0xA04010. */
