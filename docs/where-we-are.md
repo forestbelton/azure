@@ -153,7 +153,7 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **244 of its 263 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **245 of its 263 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** Most came from the
   live overlay's own source with their references renamed through
@@ -202,14 +202,14 @@ Three things about the overlays that change how they are worked, all in
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
   one pass** -- 21 with nothing changed but their symbol names. Successive
-  passes took the rest: stubs went **157 -> 19**.
+  passes took the rest: stubs went **157 -> 18**.
 
-  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 19 remaining stubs is
+  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 18 remaining stubs is
   accounted for: **15** are hand-written assembly that can never be C (nine
   BIOS call stubs, the libapi BIOS-patch routines, a `jr` into a data label,
-  two delay loops), and the other **4** are covered by the 4 parks in
+  two delay loops), and the other **3** are covered by the 3 parks in
   `docs/near-misses/`. There is no function left to pick up cold; the work
-  from here is cracking parks, and NINE of them fell on 2026-11-12 --
+  from here is cracking parks, and TEN of them fell on 2026-11-12 --
   func_80402CD4 to a loop-invariance marker, func_8040861C by blocking
   reorg's epilogue scan, func_80401E2C by pinning a sunk load ahead of an
   `la`, func_80406844 by reading `memcpy`'s alignment off a pointer VARIABLE
@@ -217,8 +217,10 @@ Three things about the overlays that change how they are worked, all in
   BACKWARD scan out of a call's delay slot with an empty `asm`, and
   func_804010F0 with func_804012B0 -- the two state machines, parked at 2
   words for three sessions -- with an asm-only block between the last arm and
-  the shared `out:`, and func_80402508 by taking its live counterpart's loop
-  spelling and then walking the string through a COPY of the pointer.
+  the shared `out:`, func_80402508 by taking its live counterpart's loop
+  spelling and then walking the string through a COPY of the pointer, and
+  func_804022C8 by giving a register copy a memory dependence on the store
+  above it so the scheduler stops hoisting it over the index pseudo.
 
   The compiler-blaming parks are worth naming as a pattern: three of the six
   had been written off as "the stand-in compiler is FSF 2.7.2 and not SN's 4.0
@@ -227,9 +229,9 @@ Three things about the overlays that change how they are worked, all in
   and the guard.
 
   **THE PARKS, as of 2026-11-12, all re-measured the same day.** Of the five
-  that stood that morning, func_80402508 has since LANDED and four are left.
-  Three of the five were rebuilt on better candidates; the count is not the
-  only thing to read.
+  that stood that morning, func_80402508 and func_804022C8 have since LANDED
+  and THREE are left. Three of the five were rebuilt on better candidates;
+  the count is not the only thing to read.
 
   - `func_804053A0` -- 82 of 82 words, 9 differing (was 84/46 that morning and
     81/68 before it). The LENGTH matches and the whole tail loop is
@@ -251,10 +253,24 @@ Three things about the overlays that change how they are worked, all in
     instructions and in NONE of them is the `mfhi` destination also the
     destination of the insn that consumes it, where the twin does that in all
     six it has left. Lever 487.
-  - `func_804022C8` -- 63 of 63 words, 7 differing, rebuilt from a 4-differing
-    candidate that had the two pointer increments in the wrong order and could
-    never have anything else. Every one of the seven is a register NAME, with
-    a control that makes the block byte-exact.
+  - `func_804022C8` -- **LANDED 2026-11-12**, 63 of 63, zero differing. The
+    park had the cause isolated and the verdict wrong: all seven words were
+    register names, caused by the `q = w` copy being scheduled ahead of the
+    `D_8009DDD8[idx][0] = 0` store so that it was live across the store's
+    index pseudo. The park concluded no source spelling could move it, and
+    the `-dS` dump says WHY: the copy and the store are both priority 1 and
+    both ready for the last slot of the block, and `schedule_select`
+    (sched.c:2615) breaks that tie on FUNCTION-UNIT HAZARD, where a store
+    always outranks a register move -- `;; insn 97 has a greater potential
+    hazard`. Reordering the source never reaches the LUID tie-break, which is
+    why eleven spellings all measured 7. What moves it is a DEPENDENCE:
+    an empty `__asm__("" : "=r"(w) : "0"(w), "m"(D_8009DDD8[idx][0]))`
+    between the store and the copy, which emits nothing (output and input are
+    the same variable) and makes the store unready for that slot. The
+    companion half is the live counterpart's own `s32 (*tbl)[32]` plus the
+    flag read into a local ABOVE the store: that makes the store's address
+    opaque, so the load becomes an anti-dependence the store cannot pass, and
+    the flag stays out of the branch's shadow. Levers 489 and 490.
   - `func_804034D8` -- 112 of 112, 6 differing, ONE register pair, and the
     counterpart check says it is the compiler. The park's
     local-alloc-priority reading was tested against `qty_compare_1`'s own

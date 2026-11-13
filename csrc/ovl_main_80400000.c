@@ -1438,14 +1438,70 @@ s32 func_80402290(void)
 
 /* The other `cnt` site; see func_80401B30. The live erase_save_file has no
    counter either. */
-/* NEAR MISS, 63 of 63 words, 7 differing -- and the park was REBUILT on a
- * worse-counting, better-shaped candidate on 2026-11-12. Every one of the 7
- * is a register NAME: `q` gets $a0 and the flag $a1 where the target has $v0
- * and $a0, because the INDEX pseudo of `D_8009DDD8[idx][0] = 0` holds $v0
- * and gcc emits the `q = w` copy with the declarations, ahead of it. Write
- * that store with a constant index and the whole fixup is byte-exact.
- * Source in docs/near-misses/func_804022C8.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804022C8);
+/* Live erase_save_file, plus a VSync counter and its printf, plus a
+ * free-block fixup the live one has no counterpart for. THE FIXUP IS ONE
+ * SCHEDULING DECISION and three devices that reach it.
+ *
+ *   * The asm between the store and `q = w` is what lands the function. It
+ *     gives the COPY a memory dependence on the store. Without it sched1
+ *     puts the copy SECOND in the block, ahead of `addu $at,$at,$v0`, where
+ *     it is live across the index pseudo of `D_8009DDD8[idx][0] = 0`;
+ *     global.c records the conflict and `q` cannot have $v0, so `q` takes
+ *     $a0, the flag takes $a1, and seven words differ by register name.
+ *     NO ORDER OF THE SOURCE CAN DO THIS. The copy and the store are both
+ *     priority 1 and both ready at the last slot of the block, and
+ *     gcc 2.7.2's schedule_select breaks that tie on function-unit hazard
+ *     (sched.c:2655), where a store always outranks a register move. Only a
+ *     dependence moves it. See docs/matching-levers.md.
+ *   * `tbl`, the live erase_save_file's own `s32 (*tbl)[32]`, makes the
+ *     store's address opaque to the dependence analyser, so the `slot` load
+ *     ABOVE it becomes an anti-dependence the store cannot be scheduled
+ *     past. That is what keeps the flag read ahead of the store; with the
+ *     flag read inline in the `if` the dependence runs the other way and
+ *     the load lands in the branch's shadow for a nop.
+ *   * The empty asm between the two conditionals keeps them apart: written
+ *     as two plain `if`s gcc proves the second redundant and merges them. */
+s32 func_804022C8(s32 idx)
+{
+    char name[0x20];
+    s32 n = 0;
+    s32 v;
+
+    func_80401BF4(name, idx);
+    func_80408654(0);
+    func_80408654(1);
+    func_80401578();
+    func_8007CAE8(name);
+    while ((v = func_8040153C()) == 0)
+    {
+        n++;
+        func_800702F0(0);
+    }
+    func_8007C040(D_80400038, D_804000F8, n);
+    if (idx < 5)
+    {
+        s32(*tbl)[32];
+        s32 *w = D_8009EB58;
+        s32 *q;
+        s32 slot = D_804094EC;
+
+        tbl = D_8009DDD8;
+        tbl[idx][0] = 0;
+        __asm__("" : "=r"(w) : "0"(w), "m"(D_8009DDD8[idx][0]));
+        q = w;
+        if (slot != 0)
+        {
+            w++;
+        }
+        __asm__("" : : "r"(w));
+        if (slot != 0)
+        {
+            q++;
+        }
+        *w = *q + 3;
+    }
+    return v == 1;
+}
 
 void func_804023C4(void)
 {
