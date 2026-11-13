@@ -107,7 +107,7 @@ PROJ="{proj}"
 cd "$PROJ"
 S="$(mktemp --suffix=.s)"
 trap 'rm -f "$S"' EXIT
-{cc} -O2 -G{cc1g} -Iinclude -Ipsyq/include -DPERMUTER -S "$INPUT" -o "$S"
+{cc} -O2 -G{cc1g} -Iinclude -Ipsyq/include -Icsrc -DPERMUTER -S "$INPUT" -o "$S"
 python3 vendor/maspsx/maspsx.py \\
     --aspsx-version=2.56 --force-stdin --run-assembler \\
     --gnu-as-path="${{AS:-{as_}}}" --use-comm-section {gflags} \\

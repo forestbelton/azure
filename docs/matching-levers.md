@@ -21165,9 +21165,15 @@ right word.
 **AND THE PRICE, which is why it did not finish the function.** The same
 reference makes the quotient a GLOBAL allocno whose range crosses the loop.
 local-alloc runs before global-alloc, so the loop's own short quantities have
-already taken `$v0`/`$v1` and the quotient lands in `$t3`. The target's
-quotient is `$v1`, so in the target it is local to the block AND untied -- and
-nothing found so far gets both at once.
+already taken `$v0`/`$v1` and the quotient lands in `$t3`.
+
+**READ THE TARGET BEFORE REACHING FOR THIS A SECOND TIME.** func_804034D8's
+target is `mflo $v1` / `addiu $v1,$v1,0xA` -- one register in and out, so the
+target is TIED, exactly like the untouched candidate and the mirror image of
+it. Untying is what wins the four words, and it is NOT what the last two want:
+those want the tie KEPT and the tied pair to lose the register contest. This
+lever moves an allocation by refusing a tie; it cannot move one that the
+target also ties. Check which of the two you are looking at first.
 
 **A MEASURED NEGATIVE THAT CONTRADICTS THE FORMULA, so do not compute a margin
 from it and believe the margin.** Adding a zero-word insn strictly between the

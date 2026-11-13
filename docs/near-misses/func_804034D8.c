@@ -128,6 +128,60 @@
  * way we do, but that is not evidence about what the SOURCE can reach in the
  * 4.0 build: four of the six moved on a spelling. Treat the counterpart
  * argument as an observation about 4.1, not as a floor for this function.
+ *
+ * ================= 2026-11-13, VERIFIED, AND WHAT THE LAST TWO NEED =========
+ *
+ * The 6 -> 2 result reproduces: this file measures 2 differing, and the same
+ * body with the one `__asm__("" ::"r"(e));` line deleted measures 6. The
+ * device is worth exactly four words.
+ *
+ * BUT THE REMAINING TWO ARE NOT MORE OF THE SAME DEVICE, and the direction
+ * matters. Put the two allocations side by side:
+ *
+ *     target        mflo $v1 ... addiu $v1,$v1,0xA ... sh $a0,0xA($v0)
+ *     6-DIFF base   mflo $v0 ... addiu $v0,$v0,0xA ... sh $a0,0xA($v1)
+ *     this park     mflo $t3 ... addiu $v1,$t3,0xA ... sh $a0,0xA($v0)
+ *
+ * The TARGET IS TIED -- its `addiu` reads and writes one register, exactly as
+ * the 6-DIFF base does. The two are mirror images of one allocation decision.
+ * This park is the only one of the three that is UNTIED, which is what buys
+ * the pointer `$v0` and the four words, and also what strands the quotient in
+ * `$t3`. So the last two words do NOT want more untying: they want the tie
+ * KEPT and the tied pair to LOSE the register contest. Anything that unties
+ * further is going the wrong way.
+ *
+ * THE CONTEST, read off `qty_compare_1` (local-alloc.c) rather than guessed:
+ * `pri = floor_log2(n_refs) * n_refs * size / (death - birth) * 10000`, and
+ * on an exact tie `return *q1 - *q2` -- the LOWER quantity number, which is
+ * birth order. The tied pair is 4 refs over 16 and the pointer 2 over 4; both
+ * are 1/2, so both are 5000 and birth order decides. The quotient is born at
+ * the `div`. So the whole remaining difference is: get the pointer's quantity
+ * born first, or break the 5000 tie on the numerator.
+ *
+ * TWO ROUTES MEASURED AND CLOSED, 2026-11-13:
+ *
+ *   * MORE REFERENCES TO THE POINTER cost a word before they can help.
+ *     In-place `__asm__("" : "=r"(r) : "0"(r))` on a hoisted `ptrs[1]`, named
+ *     once, twice and three times, and the same on a hoisted `->unk_04`, all
+ *     measure 113 WORDS. Block 0 has no slack: the marker cannot fill the
+ *     load-delay slot the `sll` fills, so a nop appears. (And the arithmetic
+ *     would not have helped anyway: 3 refs over a span of 6 is 1/2 again,
+ *     another exact 5000, so the tie-break just runs a second time.)
+ *
+ *   * HOISTING THE POINTER LOAD ABOVE THE DIVISION does not change birth
+ *     order. `UnkCardPair *r = ...ptrs[1];` before the division, the same
+ *     with `->unk_04` hoisted instead, and the inner pointer hoisted alone:
+ *     112 words, 6 differing, ALL THREE, identical to the base. Birth order
+ *     is the SCHEDULED order, and sched1 runs before local-alloc and puts the
+ *     long-latency `div` early no matter where the source puts it. No source
+ *     reordering reaches this.
+ *
+ * AND A WARNING ABOUT THE PERMUTER ON THIS FUNCTION. A 40-minute run from the
+ * 2-DIFF base produced two candidates its own scorer called better (1770 and
+ * 1790). Through the real gate they are 113 words/8 differing and 113/12,
+ * against this park's 112/2. The permuter's score is not this project's gate
+ * and on this function it is actively misleading -- `ovlverify.py` every
+ * candidate before believing a score.
  */
 
 #include "common.h"
