@@ -1111,3 +1111,146 @@ of the next five are all-zero, so `= { 0 }` covers them and no field layout is
 needed; the struct layouts only become work at `D_800CFD18`
 (`UnkTownVec16[16]`). `D_800CFCF3` is the first padding case rule 7 describes
 -- one declared byte with a 12-byte gap after it.
+
+---
+
+## 9. The twin overlay: 0x80400000, and the two things that are different at -G8
+
+Measured 2026-11-13, against `main.bin` with all four containers byte-identical
+before and after. **Nothing here landed**; this section is the feasibility
+work, so that the next attempt starts from the constraints rather than
+rediscovering them. The twin's three unowned chunks are
+
+      - [0x269000, rodata, ovl_main_80400000_rodata_pre]    0x7C,   7 objects
+      - [0x26907c, .rodata, ovl_main_80400000]              0x14,   jtbl, OWNED
+      - [0x269090, rodata, ovl_main_80400000_rodata_post]   0x810, 47 objects
+      - [0x2719e0, data,   ovl_main_80400000_data]          0x3C48, 107 labels
+
+and the shape of the job is §4's, with the live overlay's `csrc/main/*.c` as a
+worked example for almost every object: `csrc/main_twin.h` already annotates
+each `D_` symbol with its live counterpart's name, so the types are witnessed
+rather than guessed.
+
+### 9.1 The emission model, confirmed on the live overlay
+
+`.rodata` order is **file order**, with file-scope const objects emitted where
+they are defined and a function's string pool emitted where the function is.
+Confirmed against the finished 0x80020000 overlay: `ASSERT_FMT` is defined at
+`csrc/main/c_server.c:640` and lands at `0x80020000`, the start of the
+section, because nothing earlier in that file contributes rodata; then
+`FILENAME_C_SERVER` (:641), `gSwCardEventHandlers` (:643),
+`gHwCardEventHandlers` (:651) follow in order, and the 24-byte gap at
+`0x8002005C..0x80020074` before `MEM_CARD1` (:772) is the anonymous `$LC`
+pool of the functions in between. So a named object's position is yours to
+choose and a literal's is not.
+
+### 9.2 AT -G8 EVERY CONST OBJECT OF 8 BYTES OR LESS GOES TO `.sdata`, AND THE ORIGINAL'S DID NOT
+
+This is the first constraint and it has no counterpart in the 0x80020000
+work, because that overlay is -G0. Measured with `tools/psx272gcc -O2 -G8`:
+
+    void (*const PTR4)(s32 *) = callee;        -> .sdata
+    const char EIGHT[8] = "bu10:";             -> .sdata
+    const char *const SMALL = "10";            -> .sdata  (BOTH the pointer
+                                                  and the literal)
+    const char ASSERT_FMT[40] = "...";         -> .rdata
+    const char VNAME[16] = "card_first_flg";   -> .rdata
+
+It applies to anonymous string literals too, so a short format string written
+at a call site lands in `.sdata` as readily as a named array. The original
+compiler did not do this: there is **not one $gp-relative reference in this
+block** (`docs/overlays.md`), and the 3-byte `D_804006C0` is reached with
+`lui %hi` / `lh` by the landed func_80404EA0. So SN's 4.0 kept readonly data
+out of the small-data section and FSF 2.7.2 does not.
+
+The way through is an explicit section attribute, and it must name
+**`.rodata`**, not `.rdata`:
+
+    void (*const D_80400000)(s32 *) __attribute__((section(".rodata")))
+        = func_8040855C;
+
+`section(".rdata")` emits `.section .rdata,"a",@progbits`, which gas keeps as
+a section genuinely called `.rdata` that the linker script never collects --
+measured: `size -A` showed `.rdata 4` beside `.rodata 140`, and the container
+came out 4 bytes short with the first difference at the section start. cc1psx's
+own bare `.rdata` directive is the ECOFF alias and does land in `.rodata`;
+an explicit `.section` is taken literally. Two consequences:
+
+* **Every rodata object of 8 bytes or less has to be a NAMED object with that
+  attribute**, so the short format strings cannot be written as literals.
+  12 of rodata_post's 47 objects and 49 of the data chunk's 107 labels are in
+  this class.
+* An object nothing references must also be non-`static`, or gcc discards it.
+  `D_80400000` is referenced by nothing in C or in any remaining asm stub.
+
+### 9.3 THE BLOCKER: A COMPILER-EMITTED JUMP TABLE GETS `.align 3`, AND THIS ONE IS AT 0x7C
+
+**`rodata_pre` cannot be owned without changing the stand-in compiler.** It
+sits *below* `jtbl_8040007C`, so owning it puts 0x7C bytes ahead of the jump
+table inside one input section -- and gcc aligns a jump table to
+`BIGGEST_ALIGNMENT`:
+
+    final.c:1516   readonly_data_section ();
+    final.c:1518   ASM_OUTPUT_ALIGN (file, exact_log2 (BIGGEST_ALIGNMENT
+                                                       / BITS_PER_UNIT));
+
+guarded only by `#ifdef READONLY_DATA_SECTION`, which mips.h defines
+(`:3690`), and `BIGGEST_ALIGNMENT` is 64 (`mips.h:1080`). 64/8 = 8, so
+`.align 3`. The ROM puts the table at `0x8040007C`, which is 4-aligned and
+**not** 8-aligned, so the original compiler used `.align 2` here.
+
+Measured: with the seven objects owned, `.rodata` came out 148 against the
+window's 144, the four extra bytes being gas's padding from 0x7C to 0x80, and
+`make containers` reported `size differs by +0x4` with the first difference at
+`0x269000`. `objdump -s -j .rodata` shows the gap directly.
+
+This has never bitten before because **every other compiler-emitted jump table
+in the project is at offset 0 of its unit's `.rodata`**, where `.align 3` is
+free. The 4-aligned `jtbl_*` symbols elsewhere (`jtbl_8003323C` and friends)
+are in PSY-Q *assembly* listings, not compiler output, so they are not
+evidence either way.
+
+There is no source lever and no flag. The options, none of them taken here:
+
+1. **Patch the stand-in** so a jump table aligns to 4. It would affect only
+   this unit, since `tools/psx272gcc` is used by nothing else, and it should
+   be a no-op on everything that currently builds -- no unit in the tree has a
+   compiler-emitted jump table at a non-zero `.rodata` offset. It is still a
+   change to the compiler and wants its own measurement.
+2. **Rewrite the `.align 3` before a jump table in this unit's generated `.s`.**
+   Same effect, no compiler change, but a pipeline special case.
+3. **Leave `rodata_pre` alone.** It is 0x7C bytes and 7 objects.
+
+### 9.4 OWN `rodata_post` FIRST, AND THE ORDER IS WHY
+
+`rodata_post` is **not** blocked, and the reason is worth stating because it
+inverts the obvious order of work. A unit gets one `.rodata` subsegment, so
+the owned window has to be contiguous -- but it does not have to start at the
+segment start. Taking
+
+      - [0x269000, rodata, ovl_main_80400000_rodata_pre]
+      - [0x26907c, .rodata, ovl_main_80400000]     <- grows FORWARD to 0x2698a0
+
+leaves the jump table at **offset 0** of the owned window, where its `.align 3`
+costs nothing, and puts all 47 owned objects after it. In the C file that
+means every one of them is defined *below* `func_804016D0`; their uses can be
+anywhere, because `csrc/main_twin.h` already declares them.
+
+So the queue is: `rodata_post`, then the data chunk, and `rodata_pre` only if
+9.3 is ever resolved.
+
+### 9.5 Two smaller facts for whoever picks this up
+
+* **One object in rodata_post starts off the 4-byte grid**, `D_804006C2`, and
+  it is not an object at all -- it is the second half of the 3-byte
+  `D_804006C0` that the landed func_80404EA0 copies with
+  `memcpy(buf, D_804006C0, 3)`, which compiles to `lh` + `lb` and makes splat
+  name the `lb`'s target. `D_80400718` is the same thing inside
+  func_804053A0's park, which calls removing the label "a landing-time chore".
+  Owning the object is that chore: the label has to come out of
+  `splat/main.bin_symbol_addrs.txt`'s output too, or the still-unowned chunk
+  keeps referencing a name nothing defines (§6).
+* **The twin's section boundary junk is already known**: `0x26989D` holds
+  `20 42 30` (`" B0"`) after the last assert string `"memory.c"`, per §4.8.
+  It is section content, not padding on the last object, and is spelled with
+  an `__asm__(".rdata\n\t.byte ...\n\t.data")` as in §4.7.
