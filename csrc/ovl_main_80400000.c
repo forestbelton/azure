@@ -2136,7 +2136,15 @@ s32 func_8040343C(s32 flag)
  * further along and FOUR slots in the loop, not three), and this function is
  * what found --expand-div: see the Makefile. What is left is that the target
  * puts the division's quotient in $v1 and the ptrs pointer in $v0, and gcc
- * does it the other way round, which is a local-alloc tie.
+ * does it the other way round.
+ *
+ * NOT A SOURCE QUESTION, settled 2026-11-12 against the counterpart.
+ * func_80023258 is landed and byte-identical and is the same source down to
+ * the statement; its prologue comes out `div $2,$3,$2 / lw $3,420($9)` --
+ * quotient in $2, pointer in $3, OUR way round, in the shipped retail binary.
+ * So the 4.1 compiler breaks this tie the way we do and the twin's 4.0 build
+ * breaks it the other way, which is the same shape as the `mfhi` gap in
+ * func_80404EA0 and func_804053A0.
  * Source in docs/near-misses/func_804034D8.c. */
 INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804034D8);
 

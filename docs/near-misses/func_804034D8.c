@@ -66,6 +66,36 @@
  * func_80404EA0 and func_804053A0 share. It is a plain allocation decision
  * that no source spelling reaches, because cse and combine canonicalise all
  * of these to the same RTL -- which is also why the measurement never moves.
+ *
+ * AND THE LIVE COUNTERPART SETTLES IT, 2026-11-12. func_80023258
+ * (csrc/main/card_opt.c) is this function's live twin, landed and
+ * byte-identical, and it is the SAME source down to the statement. Its
+ * prologue allocates exactly the way ours does and the opposite way to the
+ * twin's target:
+ *
+ *     live, byte-identical    div $2,$3,$2 / lw $3,420($9) / lw $3,4($3)
+ *                             addu $2,$2,10 / addu $4,$4,$2 / sh $4,10($3)
+ *     ours (the twin)         mflo $v0     / lw $v1,0x1BC  / lw $v1,4($v1)
+ *                             addiu $v0,10 / addu $a0,$a0,$v0 / sh $a0,0xA($v1)
+ *     the twin's target       mflo $v1     / lw $v0,0x1BC  / lw $v0,4($v0)
+ *                             addiu $v1,10 / addu $a0,$a0,$v1 / sh $a0,0xA($v0)
+ *
+ * The quotient takes $2 and the pointer $3 in the shipped retail binary, so
+ * our candidate is not making a mistake -- the 4.1 compiler decides this tie
+ * the same way we do, and the twin's 4.0 build decides it the other way. That
+ * is the same shape as the `mfhi` gap, with an independent sample behind it
+ * this time. Six words, and they are the compiler's.
+ *
+ * SPELLING adopted 2026-11-12 from that counterpart: the group struct, not
+ * flat word indices. `((UnkTwinGrp19C *)p)->ptrs[1]` and `->ptrs[10 + i]` and
+ * so on, which is what func_80023258 writes with UnkCardGrp184. ptrs sits at
+ * 0x1B8 in UnkTwinGrp19C, so p[0x6F] is ptrs[1], p[0x70 + i] is ptrs[2 + i],
+ * p[0x74 + i] is ptrs[6 + i], p[0x78 + i] is ptrs[10 + i] and p[0x7C + i] is
+ * ptrs[14 + i]. It measures the SAME 112 and 6 -- the base-naming lever does
+ * not apply here, because every one of these sums was already two terms --
+ * but it is the truer source and the one a later attempt should start from.
+ * Cutting the sum the other way, `s32 *r = p + i;` with `r[0x78]` and the
+ * rest, is 111 words and 28 differing.
  */
 
 #include "common.h"
@@ -78,7 +108,7 @@ void func_804034D8(s32 *p)
     s32 d = ((p[34] - w) * (p[33] << 4)) / p[32] + 0xA;
     s32 i;
 
-    ((UnkCardPair *)p[0x6F])->unk_04->unk_0A = (w << 4) + d;
+    ((UnkTwinGrp19C *)p)->ptrs[1]->unk_04->unk_0A = (w << 4) + d;
     for (i = 0; i < 4; i++)
     {
         s32 v = ((u8 *)p)[0x7C + i];
@@ -100,13 +130,13 @@ void func_804034D8(s32 *p)
         }
         *q = n;
         u = ((u8 *)p)[0x7C + i];
-        ((UnkCardPair *)p[0x78 + i])->unk_04->unk_08 = u + 0x24;
-        ((UnkCardPair *)p[0x7C + i])->unk_04->unk_08 = u + 0x8F;
-        ((UnkCardPair *)p[0x70 + i])->unk_04->unk_08 = u + 9;
-        ((UnkCardPair *)p[0x74 + i])->unk_04->unk_08 = u + 0x42;
-        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
-        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
-        ((u8 *)((UnkCardPair *)p[0x78 + i])->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
+        ((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04->unk_08 = u + 0x24;
+        ((UnkTwinGrp19C *)p)->ptrs[14 + i]->unk_04->unk_08 = u + 0x8F;
+        ((UnkTwinGrp19C *)p)->ptrs[2 + i]->unk_04->unk_08 = u + 9;
+        ((UnkTwinGrp19C *)p)->ptrs[6 + i]->unk_04->unk_08 = u + 0x42;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[0] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[1] = ((u8 *)p)[0x7C + i] * 3 + 0x68;
+        ((u8 *)((UnkTwinGrp19C *)p)->ptrs[10 + i]->unk_04)[2] = ((u8 *)p)[0x7C + i] * 4 + 0x60;
     }
     if (p[33] < p[32])
     {

@@ -255,10 +255,19 @@ Three things about the overlays that change how they are worked, all in
     candidate that had the two pointer increments in the wrong order and could
     never have anything else. Every one of the seven is a register NAME, with
     a control that makes the block byte-exact.
-  - `func_804034D8` -- 112 of 112, 6 differing, ONE register pair. The park's
+  - `func_804034D8` -- 112 of 112, 6 differing, ONE register pair, and the
+    counterpart check says it is the compiler. The park's
     local-alloc-priority reading was tested against `qty_compare_1`'s own
     formula and does not hold: twenty-two spellings that move the reference
-    count or the live range all measure the same.
+    count or the live range all measure the same. Then the live twin
+    `func_80023258` (csrc/main/card_opt.c) -- landed, byte-identical, the
+    same source down to the statement -- came out `div $2,$3,$2 /
+    lw $3,420($9)`: quotient in $2, pointer in $3, OUR way round, in the
+    shipped retail binary. The 4.1 compiler breaks this tie the way we do and
+    the twin's 4.0 build breaks it the other way. The park now carries the
+    counterpart's own spelling, the group struct `((UnkTwinGrp19C *)p)->ptrs`
+    rather than flat word indices; it measures the same 6 and is the truer
+    source to start from.
   - `func_80402508` -- **LANDED 2026-11-12**, 44 of 44, zero differing. The
     park's single remaining cause was right and the counterpart check closed
     it. Its live twin `func_8002225C` (csrc/main/card_mes.c, byte-identical)
