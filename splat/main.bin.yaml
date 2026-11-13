@@ -132,7 +132,29 @@ segments:
   # the unit at 0x21268 is RECORD 0 and not a header -- an earlier reading of
   # "71 records at 0x2127C after one leading unit" was wrong twice over: 71
   # records would overrun 0x21800, and the stride starts one unit lower.
-  - [0x21268, bin, main_tables_21268]
+  # OWNED IN C 2026-11-13, which is what the paragraph above asked for. The
+  # array is `const UnkMainTbl14 D_8002CA68[64]` in csrc/main_tables_21268.c,
+  # with every pointer written as the pool's own STR_MAIN_* label so the link
+  # resolves them against the hrodata segment above; that is why the pool's
+  # vram had to be right first. Two things the `bin` segment was hiding and
+  # the C file now states: unk_10 is NOT 100 in every record (record 23 is
+  # 150, record 0 is 0), and records 60..63 hold no pointers at all.
+  # `align: 4` is load-bearing. A `code` segment defaults to align 16, and
+  # splat then emits `__romPos = ALIGN(__romPos, 16)` after it
+  # (segtypes/linker_entry.py:640). The table ends at 0x21768, which is 8 mod
+  # 16, so the default silently pushed the pad and everything after it 8 bytes
+  # down the file and main.bin came out long. A `data` parent is NOT the fix:
+  # splat then ignores the dotted `.rodata` subsegment, emits its own
+  # asm/data/21268.data.s and links that instead of the C object.
+  - type: code
+    start: 0x21268
+    vram: 0x8002CA68
+    align: 4
+    subsegments:
+      - [0x21268, .rodata, main_tables_21268]
+  # 0x21768..0x21800 is zero padding, verified all-zero. The overlay below
+  # starts at 0x21800 because that is where the tables' pointers stop.
+  - [0x21768, pad]
   # THE THIRD PLACED OVERLAY, mapped 2026-11-11, and the only one of the five
   # that loads into the shared 0x80088760 slot from main.bin. docs/overlays.md
   # has the method; this is what it is and how the boundaries were pinned.
