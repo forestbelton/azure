@@ -91,6 +91,23 @@ def new_session_and_die_with_parent():
 
     Without the second half, killing permrun.py orphans the search instead of
     stopping it: os.setsid() puts it out of reach of the shell's own group.
+
+    THE TRAP THIS CREATES, and it has already cost one agent a 50-minute run:
+    the summary row is written ONCE, at the end (see the bottom of main()).
+    So if permrun.py itself dies -- which it does on SIGHUP when the shell
+    that backgrounded it with a bare `&` exits -- the search dies with it via
+    PDEATHSIG and NO row is appended and NOTHING is printed. That is
+    indistinguishable from a clean search that found nothing, and on
+    2026-11-13 it was reported as "exit 0, empty log, no permlog row" and
+    nearly filed as a bug in the import path. LAUNCH IT WITH `nohup` (or
+    setsid, or a harness that keeps the process alive across the call):
+
+        nohup python3 tools/decomp/permrun.py FUNC --minutes 40 --jobs 6 \
+            > run.log 2>&1 &
+
+    An empty log DURING a run is normal -- the child's output is piped and
+    only the summary is printed -- so judge a run by the permlog.tsv row,
+    never by the log being empty.
     """
     os.setsid()
     try:

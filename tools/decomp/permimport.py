@@ -57,9 +57,17 @@ def unit_for(func):
 
 def preprocess(park, out, cc="tools/cdkgcc"):
     """cpppsx the park source so pycparser sees no project macros."""
+    # -Icsrc was missing until 2026-11-13, so no park that includes a header
+    # living in csrc/ -- main_twin.h, every park in the 0x80400000 twin, which
+    # is the only block with work left -- could be imported at all. An agent
+    # working func_804034D8 had to rewrite the park's includes as
+    # ../../csrc/... to get a permuter run at all. The include list is taken
+    # from asmlib.CFLAGS now rather than spelled again here, because this is
+    # the THIRD tool in this directory found carrying its own drifted copy
+    # (tools/decomp/dump.sh had both this and a hardcoded compiler).
+    incs = [f for f in asmlib.CFLAGS if f.startswith("-I")]
     r = subprocess.run(
-        [os.path.join(PROJ, cc), "-E", "-G8",
-         "-Iinclude", "-Ipsyq/include", "-DPERMUTER", park],
+        [os.path.join(PROJ, cc), "-E", "-G8"] + incs + ["-DPERMUTER", park],
         cwd=PROJ, capture_output=True, text=True)
     if r.returncode or not r.stdout.strip():
         return "preprocess failed: %s" % (r.stderr.strip().split("\n")[0][:120])
