@@ -112,9 +112,14 @@
  *     built   sra $a0,$s3,31 / mfhi $a3 / subu $a0,$a3,$a0
  *     target  sra $v0,$s3,31 / mfhi $a0 / subu $a0,$a0,$v0
  *
- * THE TARGET'S `mfhi $a0` CANNOT BE A RELOAD REGISTER AT ALL, so the two
+ * THE TARGET'S `mfhi $a0` CANNOT BE A GPR SPILL REGISTER, so the two
  * halves are not independent after all: the target must have the highpart
  * pseudo ALLOCATED to $a0, with the `mfhi` as that pseudo's OUTPUT reload.
+ * (CORRECTED 2026-11-13, second pass: it IS a reload, just not a GR_REGS one.
+ * Both routes found below print `;; Need 1 reg of class HI_REG ... Spilling
+ * reg 64.` in .greg -- HI is the spill register and the `mfhi $a0` is the
+ * OUTPUT reload that moves the "=h" result into the pseudo's GPR. The
+ * paragraph below is right that $a0 can never be a GR_REGS spill reg.)
  * order_regs_for_reload (reload1.c:3651-3660) adds `large + 1` to the use
  * count of every hard register that appears EXPLICITLY in the rtl, and -- under
  * `#ifndef SMALL_REGISTER_CLASSES`, which mips.h does not define -- also
@@ -152,14 +157,20 @@
  * `__asm__("" :: "r"(x))` on it flips it to `GR_REGS or none`. The highpart
  * pseudo has no C-level name, so there is nothing to hang that reference on;
  * and both of its two references sit at the same loop depth, so the
- * loop_cost weighting cannot break the tie either. The last escape would be
+ * loop_cost weighting cannot break the tie either.
+ *   ^^ THAT LAST CLAUSE IS FALSE AND IS THE WHOLE CONTENT OF THE 2026-11-13
+ *      SECOND PASS. The two references do NOT have to sit at the same loop
+ *      depth: see TWO WAYS TO PUT THE HIGHPART IN A GPR below. Both were
+ *      measured, both produce `mfhi $a0 / subu $a0,$a0,$v0`, and the function
+ *      still does not land -- for a different reason, stated there.
+ * The last escape would be
  * a consumer whose operand is READ-WRITE -- regclass doubles such an
  * operand's cost (`scale = 1 + (op_types[i] == OP_READ_WRITE)`), which would
  * make cost[GR_REGS] 6 against cost[HI_REG] 12 -- and mips.md has no such
  * operand in GR_REGS: its only five `"+"` operands are the madd-style
  * accumulates at mips.md:1083-1139, all of them `+l`, `+x` or `+a`. There is
  * no C spelling of a constant division under tools/psx272gcc that puts the
- * highpart in a GPR.
+ * highpart in a GPR.      <-- DISPROVEN 2026-11-13; there are two. See below.
  *
  * THE CITATIONS ARE INTO scratch/gcc-src/gcc-2.7.2.3; tools/psx272gcc builds
  * FSF 2.7.2 (its banner says `GNU C 2.7.2 [AL 1.1, MM 40] Sony Playstation`),
@@ -227,7 +238,126 @@
  * dividend (83, 62); `volatile s32 q` (84, 61); `(n + n - n) / 3` (83, 61).
  *
  * PERMUTER: 278296 candidates on 2026-11-13 at base=30, found=none; a second
- * run from the same base the same day is recorded in nonmatchings/permlog.tsv.
+ * run from the same base the same day, 421925 candidates at base=30,
+ * best=30, found=none. Both rows are in nonmatchings/permlog.tsv. 700k
+ * candidates from this base is enough: the residue is an allocator decision
+ * the permuter's transforms cannot reach.
+ *
+ * ==========================================================================
+ * TWO WAYS TO PUT THE HIGHPART IN A GPR -- 2026-11-13, second pass.
+ * ==========================================================================
+ *
+ * BOTH REACH `sra $v0,$s3,31 / mfhi $a0 / subu $a0,$a0,$v0` BYTE FOR BYTE,
+ * i.e. all three residue words. Neither lands, because each one drags the
+ * MULTIPLIER CONSTANT out of $v0 with it. The blocking mechanism is new and
+ * is stated at the end; it is NOT the regclass tie, which is beatable.
+ *
+ * ROUTE 1 -- loop_cost, no device at all. regclass.c weights each reference
+ * by `loop_cost = 1 << (2 * MIN (loop_depth, 5))`, and loop_depth is driven
+ * by the NOTE_INSN_LOOP_BEG/END notes in the insn stream. Put a loop note
+ * BETWEEN the `smulsi3_highpart` insn and its one `"d"` use and the tie
+ * stops being a tie: cost[HI_REG] = 0 + 6*4 = 24 against
+ * cost[GR_REGS] = 6 + 0 = 6, so prefclass comes out GR_REGS.
+ * A `do { } while (0)` does it, because the loop notes survive to regclass
+ * even though jump deletes the branch and NOT ONE WORD is emitted for it:
+ *
+ *     s32 d;
+ *     d = n / 3;                                 -- mult, depth 0
+ *     do { func_8003830C(d, num); } while (0);   -- subu, depth 1
+ *
+ * combine merges the subtract into the argument copy and therefore MOVES it
+ * to the copy's position, which is inside the loop -- that is what splits the
+ * two references across the note. Measured in a 4-function probe:
+ *     g(n / 3, q)                         .lreg `pref HI_REG, else GR_REGS`
+ *     s32 d = n / 3; g(d, q)              .lreg `pref HI_REG, else GR_REGS`
+ *     s32 d = n/3; q[0]=1; g(d, q)        .lreg `pref HI_REG, else GR_REGS`
+ *     s32 d = n/3; do { g(d,q); } while(0)
+ *                                         .lreg `GR_REGS or none`, .greg
+ *                                         `Spilling reg 64.`, emits `mfhi $2`
+ * In the park body the same change gives 82 words, 19 differing, with the
+ * three residue words EXACT (q1).
+ *
+ * ROUTE 2 -- a local register variable, which bypasses prefclass entirely:
+ *
+ *     register s32 hi asm("$4");
+ *     hi = n / 3 + (n >> 31);              -- == the highpart; the `+ sgn`
+ *                                          cancels the division's own sign
+ *                                          correction in combine
+ *     func_8003830C(hi - (n >> 31), num);
+ *
+ * combine folds the cancelled subtract away and recog accepts
+ * `(set (reg:SI 4 a0) (truncate (lshiftrt (mult:DI ...) 32)))` -- recog
+ * checks predicates, not constraints -- so the "=h" constraint is left to
+ * reload, which spills HI and emits the output reload `mfhi $a0`. 82 words,
+ * 10 differing, three residue words EXACT (w1).
+ *
+ * WHY NEITHER LANDS: local-alloc TIES THE MULTIPLIER CONSTANT TO THE
+ * HIGHPART, so the two can never sit in different GPRs.
+ * block_alloc's tying loop (local-alloc.c, the `for (i = 1; i <
+ * insn_n_operands...)` over the highpart insn) calls combine_regs on each
+ * input that dies there. Operand 1 is `n`, which is global, so combine_regs
+ * returns at its first guard (`reg_qty[ureg] < 0`). Operand 2 is the
+ * 0x55555556 pseudo, and the pseudo-pseudo path then needs only
+ * `reg_meets_class_p (HP, qty_min_class[qty(const)])` -- GR_REGS against
+ * GR_REGS, always true -- so the constant JOINS THE HIGHPART'S QUANTITY and
+ * gets whatever register that quantity gets. Measured, from .greg
+ * dispositions, every case agreeing:
+ *     prefclass HI_REG  (`85 in 64`)  constant $v0, highpart HI   -- no tie
+ *     route 1, q1       (`85 in 4`)   constant $a0, highpart $a0  -- tied
+ *     route 1, q2/hp    (`in 2`)      constant $v0, highpart $v0  -- tied
+ *     route 1, probe ic (`75 in 2`)   constant $v0, highpart $v0  -- tied
+ * and route 2 reaches the same place by the other door: with the hard reg
+ * $a0 written into the insn there is no pseudo-pseudo tie, but combine_regs'
+ * hard-reg branch hands the constant `qty_phys_sugg = {$a0}` instead, and
+ * the suggested pass takes it, because the constant DIES at the highpart
+ * insn and $a0 is only born there -- find_free_reg's
+ * `for (ins = born_index; ins < dead_index; ins++)` is half-open, so the two
+ * ranges never overlap and $a0 always looks free.
+ *
+ * SO BOTH ROUTES TRADE ONE THREE-WORD RESIDUE FOR ANOTHER. Whatever register
+ * the highpart quantity takes, the 0x55555556 pseudo takes it too, so the
+ * three words `lui/ori/mult` go wrong exactly when the three words
+ * `sra/mfhi/subu` come right -- and the constant's three drag a fourth with
+ * them, because `lui $v0,0x5555` is only stealable into the `beqz` delay slot
+ * while it writes $v0. That is why 3 is still the floor and why neither route
+ * is worth keeping as the park body.
+ *
+ * THE TARGET HAS THE HIGHPART IN $a0 AND THE CONSTANT IN $v0. Under this
+ * local-alloc that combination is unreachable: a GR_REGS highpart always
+ * drags the constant into its own register, and an HI_REG highpart cannot be
+ * in $a0 at all. Denying $a0 to the constant needs $a0 live strictly inside
+ * [constant birth, constant death), which needs a use of the constant after
+ * the mult, and the constant has no C-level name either.
+ *
+ * SOURCES MEASURED THIS PASS, all 82 words (verify.py, ovl_main_80400000):
+ *   park body as it stands                                         3
+ *   DImode union, u.w.a (offset 0 is the HIGH half here)            3
+ *   DImode union, u.w.b                                             3
+ *   s32 sgn, hp; sgn = n>>31; hp = n/3 + sgn; call(hp - sgn)        3
+ *   register s32 hi asm("$4"); hi = n/3 + (n>>31)   [ROUTE 2]      10
+ *     + `s32 t` two-step (combine merges it back)                  10
+ *     + quotient hoisted into a pseudo                             10
+ *     + pinned `register s32 m asm("$2") = 0x55555556` (dead, cse
+ *       does not pick it up as the multiplier)                     10
+ *     + memcpy moved after the division                            19
+ *     + `do { } while (0)` as well                                 19
+ *   do { } while (0) round the call, quotient hoisted  [ROUTE 1]   19
+ *     + `b = buf` before the loop                                  20
+ *     + whole tail inside the loop                                 20
+ *   do { } while (0), highpart hoisted as `hp = n/3 + (n>>31)`     16
+ *     + the sign hoisted into `s32 sgn` too                        16
+ *     + memcpy inside the loop                                     15
+ *   register s32 sgn asm("$2") for the sign only                    5
+ *     (gets `sra $v0` and `subu $a0,$a3,$v0`, but the hard-reg dest
+ *      gives the sra an output dependence on the memcpy's `lw $v0`
+ *      and sched1 lifts it three slots)
+ *   register s32 hi asm("$4") on a DImode extraction (always
+ *     `mflo`: the simple-move route reads subreg word 0 as the LOW
+ *     half, while combine's fold of the same subreg into
+ *     smulsi3_highpart reads it as the HIGH half -- the two
+ *     disagree, and only the folded form ever emits `mfhi`)        11
+ *   __asm__("" : "=r"(hi) : "0"(t)) as the HI-to-$a0 move          12
+ *   plain `s32 hi` instead of the pinned one (route 2 collapses)     3
  */
 
 #include "common.h"

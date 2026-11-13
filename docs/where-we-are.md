@@ -153,7 +153,7 @@ Three things about the overlays that change how they are worked, all in
   **It is now being reproduced, and the reuse is measured rather than
   assumed.** As of 2026-11-09 it is a `c` subsegment -- 262 functions plus 3
   alternate entries, built at `-G8` through an exact-target Makefile override
-  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-12) **245 of its 263 functions are
+  past the `ovl_%` `-G0` pattern rule -- and (as of 2026-11-13) **247 of its 263 functions are
   landed from C at 0 differing words**, with all four containers
   byte-identical. **Not one was decompiled from a listing.** Most came from the
   live overlay's own source with their references renamed through
@@ -202,13 +202,13 @@ Three things about the overlays that change how they are worked, all in
   **What it unblocked, and what has since been taken.** `twinalign.py --todo`
   went from **1** mask-identical pair to **33**, and **32 of those 33 landed in
   one pass** -- 21 with nothing changed but their symbol names. Successive
-  passes took the rest: stubs went **157 -> 18**.
+  passes took the rest: stubs went **157 -> 16**.
 
-  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 18 remaining stubs is
+  **THE UNTRIED LIST IS NOW EMPTY.** Every one of the 16 remaining stubs is
   accounted for: **15** are hand-written assembly that can never be C (nine
   BIOS call stubs, the libapi BIOS-patch routines, a `jr` into a data label,
-  two delay loops), and the other **3** are covered by the 3 parks in
-  `docs/near-misses/`. There is no function left to pick up cold; the work
+  two delay loops), and the other **1** is covered by the single remaining
+  park in `docs/near-misses/`. There is no function left to pick up cold; the work
   from here is cracking parks, and TEN of them fell on 2026-11-12 --
   func_80402CD4 to a loop-invariance marker, func_8040861C by blocking
   reorg's epilogue scan, func_80401E2C by pinning a sunk load ahead of an
@@ -228,18 +228,42 @@ Three things about the overlays that change how they are worked, all in
   blames the compiler is a hypothesis, not a finding, unless it names the pass
   and the guard.
 
-  **THE PARKS, as of 2026-11-12, all re-measured the same day.** Of the five
-  that stood that morning, func_80402508 and func_804022C8 have since LANDED
-  and THREE are left. Three of the five were rebuilt on better candidates;
-  the count is not the only thing to read.
+  **THE PARKS: ONE IS LEFT, AND IT IS func_804053A0.** Everything from here
+  to the end of this block is the record of how the other four fell; read the
+  two paragraphs below and then only func_804053A0's entry.
 
-  **SUPERSEDED 2026-11-13 -- READ THIS BEFORE THE THREE ENTRIES BELOW.** One
-  pass of three agents, each given one function, the procedure doc and NO
-  context from the session that wrote these verdicts, moved two of the three:
+  **SUPERSEDED 2026-11-13 -- READ THIS BEFORE THE ENTRIES BELOW.** Two passes
+  of agents, each given one function, the procedure doc and NO context from the
+  session that wrote these verdicts, took the parks from five to one. The first
+  pass moved two of three:
 
       func_804034D8   6 differing -> 2
       func_804053A0   9 differing -> 3
       func_80404EA0   unchanged at 322/320, and now properly closed
+
+  and then func_804034D8 and func_80404EA0 both LANDED, each of them on a park
+  whose verdict said the stand-in compiler made it impossible:
+
+      func_804034D8   LANDED -- stretch a rival quantity's live range so the
+                      tied quotient loses the contest for $v0
+      func_80404EA0   LANDED -- 322/154 -> 320/0.  Both of its findings were
+                      TRUE and both were BYPASSED: a u64 widening multiply
+                      with the magic in a plain local never lets the compiler
+                      expand the division, so there is no CONST_DOUBLE magic
+                      and no multiplier pseudo to tie the `mfhi` against.
+                      `(u32)` on the product emits `mfhi` -- the C computes
+                      the wrong half and the assembly fetches the right one,
+                      which makes it the project's first device whose C
+                      meaning differs from its bytes.
+      func_804053A0   still parked at 3, and now with a FLOOR rather than a
+                      verdict: see its entry.
+
+  **THE SCORE ON COMPILER VERDICTS IS NOW 4 FOR 4 AGAINST.** Every park closed
+  in this block on the grounds that PSY-Q 4.0 did something FSF 2.7.2 cannot
+  has since landed or had its central claim disproven by measurement. The
+  mechanism in those write-ups was right nearly every time; what was wrong,
+  every time, was the step from "this is what our compiler does with THIS
+  source" to "no source reaches the target". Write the first and stop.
 
   **Both of the verdicts that moved were mine, and both were wrong in a way
   worth naming.** func_804034D8 was closed because the live twin
@@ -259,8 +283,26 @@ Three things about the overlays that change how they are worked, all in
   The entries below are kept as the record of what was believed and why. The
   live numbers are in the park headers, which `parkstats.py` generates.
 
-  - `func_804053A0` -- NOW 82 of 82, 3 differing (2026-11-13). Written up
-    below at 9 differing (was 84/46 that morning and
+  - `func_804053A0` -- **THE ONE REMAINING PARK.** 82 of 82, 3 differing, and
+    as of 2026-11-13 the 3 is a MEASURED FLOOR rather than a verdict. Two
+    spellings DO produce the target's `sra $v0,$s3,31 / mfhi $a0 /
+    subu $a0,$a0,$v0` exactly -- a `do { } while (0)` around the quotient's
+    use, which is a free `loop_cost` multiplier that flips the highpart
+    pseudo's prefclass off HI_REG, and a `register s32 hi asm("$4")`, which
+    turns the `"=h"` constraint into an output reload. Both then lose
+    `lui/ori/mult`, because once the highpart's prefclass is GPR-compatible
+    `local-alloc`'s `combine_regs` pulls the multiplier constant into its
+    quantity and the two share a register; the target needs them in `$a0` and
+    `$v0`. Breaking that tie needs a reference to the constant after the
+    multiply and the constant has no C-level name. Both park claims that said
+    this was unreachable -- "no C spelling puts the highpart in a GPR" and
+    "`mfhi $a0` cannot be a reload register at all" -- are DISPROVEN; the
+    blocker is a different pass than the one named. 33 spellings and a
+    421925-candidate permuter run are in the park header. **The corollary is
+    worth more than the park:** the twin's whole remaining `mfhi` family needs
+    the highpart in a GPR AND its co-operands elsewhere, which this
+    `local-alloc` cannot do, so it is ONE compiler difference and not one per
+    function. Written up below at 9 differing (was 84/46 that morning and
     81/68 before it). The LENGTH matches and the whole tail loop is
     byte-exact. Six of the nine are one scheduling decision before the first
     jal and three are the `mfhi` register gap it shares with func_80404EA0.
@@ -323,8 +365,14 @@ Three things about the overlays that change how they are worked, all in
     because the loop then has its own pseudo and cse1 has no earlier load of
     `*t` to propagate from. 44 of 44, zero differing. The live one walks `s`
     directly, so the two differ by exactly this one load.
-  - `func_80404EA0` -- 322 of 320, 154 differing, and CLOSED as a stand-in
-    compiler gap. See below.
+  - `func_80404EA0` -- **LANDED 2026-11-13**, 320 of 320, zero differing, on
+    the u64-widening-multiply device described above. The analysis below is
+    kept because every mechanism in it is correct and still worth reading --
+    the CONST_DOUBLE magic, the reload-register `mfhi`, the three routes that
+    each get two of the three properties. What it got wrong was only the
+    conclusion that a compiler was needed. The levers are in
+    docs/matching-levers.md under "A u64 WIDENING MULTIPLY REACHES A REAL
+    `multu` WITH A C-LEVEL MAGIC".
 
   **A CORRECTION AND A COUNTER-CORRECTION, SAME DAY, AND THE METHOD LESSON IS
   THE POINT.** func_80404EA0's last two words were written up as the

@@ -3215,21 +3215,215 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
     return p + 0xC;
 }
 
-/* NEAR MISS, 322 words of 320, and CLOSED as a stand-in gap. Two words, one
- * per division: for an UNSIGNED division whose magic has bit 31 set, gcc
- * leaves the magic as one `li` macro -- two welded words -- where the target
- * has the mips.md:3208 split, with the `lui` half in the preceding load's
- * delay slot and the `ori` four insns later. The nop in that unfilled slot is
- * the whole difference. `expand_mult_highpart` passes i1 = 0 for an unsigned
- * division, `immed_double_const` makes a CONST_DOUBLE of it when i0 is
- * negative, and `large_int` takes CONST_INT only. THE CONTROL IS SIGNEDNESS:
- * the same 0x91A2B3C5 splits when the division is signed, in both compilers.
- * This park's own live counterpart, csrc/main/cardinfo.c's func_80024390,
- * reads like a counter-example and is not one -- its splitting divisions are
- * the SIGNED ones, and its one unsigned division leaves 0x88888889 whole, as
- * the rule says. No source spelling reaches it.
- * Source in docs/near-misses/func_80404EA0.c. */
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80404EA0);
+/* Live func_80024818's sibling, cut down.  LANDED 2026-11-13 at 320 of 320
+ * words with a three-part DEVICE on each of the three constant divisions;
+ * without it this function is 322 words and 154 differing.  The two findings
+ * that stood for three sessions were both real -- an unsigned division's
+ * magic with bit 31 set is a CONST_DOUBLE and never splits, and the copy out
+ * of `hi` is a reload insn that can never be the consumer's register -- and
+ * both are BYPASSED rather than fixed, by never letting the compiler expand
+ * the division at all.  docs/matching-levers.md carries the three levers;
+ * the device comments below carry the mechanism and the measurements.
+ */
+void func_80404EA0(s32 *p)
+{
+    u8 buf[0x40] __attribute__((aligned(4)));
+    u8 num[0x10];
+    u8 tim[8];
+    UnkCardPair *e;
+    s32 i;
+    s32 m;
+    u8 *s;
+
+    e = ((UnkTwinGrpAEC *)p)->ptrs[4];
+    func_8003830C(p[31] + 1, buf);
+    func_8007BF50((char *)buf, D_80400660);
+    func_8007BF50((char *)buf, (char *)&D_8009DDD8[p[31]][3]);
+    func_80051B50((u8 *)p + 0x80, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x80);
+    e->unk_04->unk_08 = 0xA9;
+    e->unk_04->unk_0A = 0x110;
+    e = ((UnkTwinGrpAEC *)p)->ptrs[5];
+    memcpy(buf, D_80400668, 0x2A);
+    func_80051B50((u8 *)p + 0x188, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x188);
+    e->unk_04->unk_08 = 0xBC;
+    e->unk_04->unk_0A = 0x110;
+    if (D_8009DDD8[p[31]][2] != 0)
+    {
+        e = ((UnkTwinGrpAEC *)p)->ptrs[6];
+        func_8007BF80((char *)buf, (char *)D_80408CF4);
+        func_8003830C(D_8009DDD8[p[31]][13], num);
+        func_8007BF50((char *)buf, (char *)num);
+        func_8007BF50((char *)buf, D_804006AC);
+        func_80051B50((u8 *)p + 0x290, buf, 1);
+        e->unk_00 = (s32)((u8 *)p + 0x290);
+        e->unk_04->unk_08 = 0xBC;
+        e->unk_04->unk_0A = 0x140;
+    }
+    e = ((UnkTwinGrpAEC *)p)->ptrs[7];
+    func_80051804(D_8009DDD8[p[31]][9], 0xA, buf);
+    func_80051900(buf);
+    func_80051520((u8 *)p + 0x398, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x398);
+    e->unk_04->unk_08 = 0x140;
+    e->unk_04->unk_0A = 0x110;
+    e = ((UnkTwinGrpAEC *)p)->ptrs[8];
+    func_80051898(D_8009DDD8[p[31]][7], buf);
+    {
+        /* DEVICE: the three constructs below are one device, applied to each
+         * of this function's three constant divisions.  They buy the last
+         * 2 words and all 22 register names: 322/154 without them, 320/0
+         * with.  See the park header's 2026-11-13 FOURTH PASS section for the
+         * mechanism and for the spellings ruled out.
+         *
+         *   1. `(u32)<u64 product>` asks for the LOW 32 bits in C and comes
+         *      out as ONE `mfhi` -- the HIGH 32 bits.  The lowpart subreg
+         *      reaches output_move_single (mips.c:937) with SUBREG_WORD 0;
+         *      that function builds the mnemonic from the NAME of
+         *      REGNO+subreg_word (mips.c:953, `ret = "mf%1\t%0"`), and word 0
+         *      of a DImode in MD_REGS is regno 64, whose REGISTER_NAMES entry
+         *      (mips.h:3151) is "hi".  This target is WORDS_BIG_ENDIAN
+         *      (mips.h:981), where the lowpart of a two-word value is word 1,
+         *      so the C and the emitted instruction disagree: THIS STATEMENT
+         *      COMPUTES THE WRONG VALUE AND EMITS THE RIGHT ONE.  That is how
+         *      a C-level magic constant reaches a real `multu` and splits
+         *      into lui/ori, which the compiler's own division cannot do (its
+         *      magic is a CONST_DOUBLE -- FINDING 1).  Writing the C-correct
+         *      half instead, `(u32)(q >> 32)`, goes through
+         *      output_move_double and costs TWO DEAD WORDS per multiply --
+         *      `mflo` and a zeroing `move`, each one half of a single insn's
+         *      two-word template (the DImode copy at mips.c:1352 and
+         *      lshrdi3_internal2 at mips.md:4208), so no pass can delete
+         *      either: 326 words, 155 differing.
+         *   2. the `"memory"` barrier stops combine folding the truncation
+         *      back into umulsidi3_internal, which simplifies to mulsi3 and
+         *      gives `mult`/`mflo` (320 words, 13 differing).  A plain
+         *      asm volatile("") does not block it.
+         *   3. `__asm__("" ::"r"(h))` stops combine folding the same move
+         *      FORWARD into the `srl`; folded, the subreg reaches reload and
+         *      comes back as `mfhi $t3 / srl $a0,$t3,11` out of the
+         *      function's one spill register (320 words, 22 differing).
+         *
+         * Both asms are zero-length (#APP/#NO_APP), so they cost no words.
+         * Neither warns under -Wall; nothing here reads an uninitialised
+         * local.  Without the device this function is 322 words.
+         */
+        u32 k0 = 0x026D60DDu;
+        unsigned long long q0 = (unsigned long long)(D_8009DDD8_u[p[31]][7] >> 6) * (unsigned long long)k0;
+        u32 h0;
+
+        __asm__ __volatile__("" ::: "memory");
+        h0 = (u32)q0;
+        __asm__("" ::"r"(h0));
+        h0 >>= 5;
+        func_80051804(h0, 3, buf);
+    }
+    func_8007BF50((char *)buf, D_804006BC);
+    {
+        u32 k = 0x91A2B3C5u;
+        unsigned long long q = (unsigned long long)D_8009DDD8_u[p[31]][7] * (unsigned long long)k;
+        unsigned long long r;
+        /* DEVICE: pinning `a` to $a0.  local-alloc's combine_regs
+         * (local-alloc.c:1808) records $a0 in qty_phys_sugg for BOTH dying
+         * inputs of `subu $a0,$a0,$v0` and returns 0, so the operand loop
+         * does not break and `a` and the `b * 3600` temp chain both want it;
+         * qty_sugg_compare_1 then orders that group by qty_compare_1, where
+         * the chain (one tied quantity, 10 refs / 6 insns = 25000) beats `a`
+         * (6 refs / 17 insns = 3529) and takes $a0, pushing `a` to $a3.
+         * Taking `a` out of the quantity pool leaves the chain $v0 and `b`
+         * $v1, which is the target.  Measured equivalent without the pin:
+         * 24 extra zero-word references to `a`, as three
+         * __asm__("" ::"r"(a), ... x8) insns, raise it to 4*30/40 = 30000 and
+         * also reach 320/0; 18 refs gives 320/9 and 16 gives 320/9.
+         */
+        register u32 a __asm__("$4");
+        u32 b;
+
+        __asm__ __volatile__("" ::: "memory");
+        a = (u32)q;
+        __asm__("" ::"r"(a));
+        a >>= 11;
+        r = (unsigned long long)a * (unsigned long long)k;
+        __asm__ __volatile__("" ::: "memory");
+        b = (u32)r;
+        __asm__("" ::"r"(b));
+        b >>= 11;
+        func_8005184C(a - b * 3600, 2, tim);
+    }
+    func_8007BF50((char *)buf, (char *)tim);
+    func_8007BF50((char *)buf, D_804006BC);
+    {
+        u32 k = 0x88888889u;
+        unsigned long long q = (unsigned long long)D_8009DDD8_u[p[31]][7] * (unsigned long long)k;
+        unsigned long long r;
+        /* DEVICE: pinning `a` to $a0.  local-alloc's combine_regs
+         * (local-alloc.c:1808) records $a0 in qty_phys_sugg for BOTH dying
+         * inputs of `subu $a0,$a0,$v0` and returns 0, so the operand loop
+         * does not break and `a` and the `b * 3600` temp chain both want it;
+         * qty_sugg_compare_1 then orders that group by qty_compare_1, where
+         * the chain (one tied quantity, 10 refs / 6 insns = 25000) beats `a`
+         * (6 refs / 17 insns = 3529) and takes $a0, pushing `a` to $a3.
+         * Taking `a` out of the quantity pool leaves the chain $v0 and `b`
+         * $v1, which is the target.  Measured equivalent without the pin:
+         * 24 extra zero-word references to `a`, as three
+         * __asm__("" ::"r"(a), ... x8) insns, raise it to 4*30/40 = 30000 and
+         * also reach 320/0; 18 refs gives 320/9 and 16 gives 320/9.
+         */
+        register u32 a __asm__("$4");
+        u32 b;
+
+        __asm__ __volatile__("" ::: "memory");
+        a = (u32)q;
+        __asm__("" ::"r"(a));
+        a >>= 5;
+        r = (unsigned long long)a * (unsigned long long)k;
+        __asm__ __volatile__("" ::: "memory");
+        b = (u32)r;
+        __asm__("" ::"r"(b));
+        b >>= 5;
+        func_8005184C(a - b * 60, 2, tim);
+    }
+    func_8007BF50((char *)buf, (char *)tim);
+    func_80051900(buf);
+    func_80051520((u8 *)p + 0x4A0, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x4A0);
+    e->unk_04->unk_08 = 0x147;
+    e->unk_04->unk_0A = 0x120;
+    e = ((UnkTwinGrpAEC *)p)->ptrs[9];
+    func_80051804(D_8009DDD8[p[31]][11], 4, buf);
+    func_80051900(buf);
+    func_80051520((u8 *)p + 0x5A8, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x5A8);
+    e->unk_04->unk_08 = 0xF2;
+    e->unk_04->unk_0A = 0x120;
+    e = ((UnkTwinGrpAEC *)p)->ptrs[10];
+    memcpy(buf, D_804006C0, 3);
+    func_80051900(buf);
+    func_80051520((u8 *)p + 0x6B0, buf, 1);
+    e->unk_00 = (s32)((u8 *)p + 0x6B0);
+    e->unk_04->unk_08 = 0x180;
+    e->unk_04->unk_0A = 0x130;
+    for (i = 0; i < 10; i++)
+    {
+        s32 f = D_8009DDD8[p[31]][12];
+
+        e = ((UnkTwinGrpAEC *)p)->ptrs[11 + i];
+        m = 1 << i;
+        if (m & f)
+        {
+            s = D_80408CFC[i];
+        }
+        else
+        {
+            s = D_80408CFC[10];
+        }
+        e->unk_00 = (s32)s;
+        e->unk_04->unk_08 = 0x38 + 0x10 * i;
+        e->unk_04->unk_0A = 0xB0;
+    }
+}
+
 
 /* NEAR MISS, 82 of 82 words, 9 differing -- the LENGTH matches. Rebuilt
  * twice on 2026-11-12: 81/68, then 84/46, then this. The last device was the
