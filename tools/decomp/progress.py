@@ -85,15 +85,19 @@ ALIAS_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*'
 def units():
     """unit -> (C function names, INCLUDE_ASM names), in csrc order.
 
-    csrc/ is one directory deep as well as flat: the 0x80020000 overlay's nine
-    translation units live in csrc/main/ since 2026-11-10, and a unit there is
-    keyed 'main/c_server' so `sizes()` finds build/csrc/main/c_server.o. Only
-    the flat glob was scanned before, and carving the overlay dropped 171
-    functions out of the total without failing anything.
+    csrc/ nests to ANY depth, and a unit is keyed by its path under csrc/
+    without the suffix -- 'main/c_server', 'main/debug/cardinfo' -- so
+    `sizes()` finds build/csrc/<key>.o.
+
+    THIS GLOB HAS SILENTLY UNDER-REPORTED TWICE. It was flat, and carving the
+    0x80020000 overlay into csrc/main/ on 2026-11-10 dropped 171 functions out
+    of the total without failing anything; it was then two levels, and moving
+    the twin's units to csrc/main/debug/ on 2026-11-13 dropped 240 and the
+    one park. Both times the headline percentage went UP. It recurses now, so
+    there is no third time. guard.py had the identical bug, same day.
     """
     out = {}
-    for f in sorted(glob.glob(PROJ + '/csrc/*.c') +
-                    glob.glob(PROJ + '/csrc/*/*.c')):
+    for f in sorted(glob.glob(PROJ + '/csrc/**/*.c', recursive=True)):
         t = open(f).read()
         stubs = STUB_RE.findall(t)
         found = DEF_RE.findall(t) + knr_defs(t)
