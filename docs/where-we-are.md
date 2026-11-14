@@ -140,7 +140,7 @@ Three things about the overlays that change how they are worked, all in
   twin's data AND both halves of its rodata were owned too -- `0x80400000..
   0x804008A0` and `0x804089E0..0x8040C628`, 2,208 + 15,432 bytes, and not one
   undotted subsegment left in that segment. **And on 2026-11-13 the block was
-  CARVED INTO ITS NINE TRANSLATION UNITS** -- ten files in `csrc/main_twin/`,
+  CARVED INTO ITS NINE TRANSLATION UNITS** -- ten files in `csrc/main/debug/`,
   because `c_server.c` splits at `func_804016D0`, plus a tail holding the
   statically linked PSY-Q library objects and, for now, the whole `.data`
   window. The nine `__FILE__` strings partition the rodata with no inference;

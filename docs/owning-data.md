@@ -1185,7 +1185,7 @@ Measured with `tools/psx272gcc -O2 -S` on
 
 So at -G8 a named object's position **within the data group** is yours to
 choose, but no source ordering can put it after a compiler-emitted constant of
-the same unit. That is the whole reason `csrc/main_twin/`'s units
+the same unit. That is the whole reason `csrc/main/debug/`'s units
 exists: the twin's `.rodata` is `[jtbl_8040007C][0x810 of objects]`, the table
 is func_804016D0's, and a unit gets one subsegment per section, so the two runs
 have to be two units with the yaml ordering their input sections. Defining the
@@ -1230,7 +1230,7 @@ an explicit `.section` is taken literally. Two consequences:
   45 of the data chunk's 98 objects are in this class, and so are 27 of the
   rodata chunk's 98 -- **but the rodata chunk is a unit of its own and so is
   -G0**, where `mips_section_threshold` is zero and the question does not
-  arise, so `csrc/main_twin/`'s units carries no attribute at all. The
+  arise, so `csrc/main/debug/`'s units carries no attribute at all. The
   27 are listed in its header, for whoever moves one of them back into the
   -G8 unit. (The file is -G0 because it matches the Makefile's
   `build/csrc/ovl_%.o` pattern rule and takes no target-specific override; for
@@ -1402,8 +1402,8 @@ in that order, whatever the file says (§9.1), and the twin's section runs
 `func_804016D0`. One unit cannot produce that order, and one unit cannot have
 two windows. So it is two units and the yaml orders the two input sections:
 
-      - [0x269000, .rodata, main_twin/c_server_a]          7 objects + jtbl, 0x90
-      - [0x269090, .rodata, main_twin/c_server_b]          0x4B8
+      - [0x269000, .rodata, main/debug/c_server_a]          7 objects + jtbl, 0x90
+      - [0x269090, .rodata, main/debug/c_server_b]          0x4B8
       ...                                                  one window per unit
 
 **Superseded by the carve on 2026-11-13**: the second window is no longer a

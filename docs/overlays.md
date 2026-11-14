@@ -1021,7 +1021,7 @@ tail cut above stays open.
 
 ### Carving the twin, 2026-11-13
 
-The twin is now **ten files in `csrc/main_twin/`** plus a tail, all four
+The twin is now **ten files in `csrc/main/debug/`** plus a tail, all four
 containers byte-identical. Per-unit `.text` sums to `0x8140` and `.rodata` to
 `0x8A0`, which are the single unit's figures exactly.
 
@@ -1070,7 +1070,7 @@ original had ten units.
 
 #### What the carve needs that the source split does not
 
-- **Makefile rules.** `build/csrc/main_twin/%.o` needs every override the
+- **Makefile rules.** `build/csrc/main/debug/%.o` needs every override the
   parent unit had: `CFLAGS_DEFAULT` (-G8), `tools/psx272gcc`, `--expand-div`,
   and `tools/decomp/jtbl_align.py`. It matches neither `ovl_%` nor `main/%`,
   both of which are -G0. This is the trap the `ovl_%` comment describes.
@@ -1083,7 +1083,7 @@ original had ten units.
   declared at the head of the unit that needs them, not added to
   `main_twin.h`, because they are not part of the block's interface.
 - **`INCLUDE_ASM` paths** move with the function, to
-  `asm/nonmatchings/main_twin/<unit>`.
+  `asm/nonmatchings/main/debug/<unit>`.
 
 #### Two things the carve turned up
 

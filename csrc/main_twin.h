@@ -390,7 +390,7 @@ extern s32 D_8009E394;                               /* the word after D_8009E39
 extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
 /* THE TWIN'S RODATA, ALL OF IT OWNED IN C as of 2026-11-13, and since the
-   carve it is owned by the TEN units in csrc/main_twin/ -- one per original
+   carve it is owned by the TEN units in csrc/main/debug/ -- one per original
    translation unit, except c_server.c which is two because jtbl_8040007C sits
    in the MIDDLE of its rodata and -G8 always emits a jump table last in its
    unit. Each unit's slice starts at its own ASSERT_FMT copy, which is how the
@@ -431,7 +431,7 @@ extern const u8 D_804006EC[];
    declared as u8[] (align 1) the same memcpy measures 84 words against 82.
    D_80400718 is the tail of THIS object, not a symbol of its own. splat no
    longer emits a label there: the chunk is owned by
-   csrc/main_twin/cardbk.c and splat/main.bin_symbol_addrs.txt gives
+   csrc/main/debug/cardbk.c and splat/main.bin_symbol_addrs.txt gives
    this symbol size 8, so the park's listing relocates against
    D_80400714 + 0x4. verify.py still marks that pair's `lui` `?`, which is its
    own bug -- gas keeps a HI16/LO16 addend on the LO16 only. */

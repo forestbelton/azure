@@ -21,7 +21,7 @@ extern void func_8040801C(s32 *p);
 extern void func_80408060(s32 *p);
 
 /* CARVED 2026-11-13: this file is now the TAIL of the block, not the block.
- * The nine original translation units are in csrc/main_twin/, ten files
+ * The nine original translation units are in csrc/main/debug/, ten files
  * because c_server.c is split at func_804016D0 (see that directory and
  * docs/overlays.md, "Carving the twin"). What is left here is everything from
  * 0x8040855C -- the statically linked PSY-Q library objects, still asm stubs,
@@ -29,7 +29,7 @@ extern void func_80408060(s32 *p);
  * window, whose per-unit partition is known but not yet applied.
  *
  * The notes below are about the BLOCK and still apply to all ten units; the
- * Makefile gives csrc/main_twin/%.o every override this file has.
+ * Makefile gives csrc/main/debug/%.o every override this file has.
  *
  * main.bin's DEBUG TWIN of the 0x80020000 card overlay: the same source built
  * at -G8 with its asserts compiled in, linked against a different engine

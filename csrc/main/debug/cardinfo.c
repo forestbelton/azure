@@ -20,7 +20,7 @@ extern void func_80404688(s32 *p);
    Carved out of csrc/ovl_main_80400000.c on 2026-11-13. The unit
    boundaries and which of them are INFERRED are in
    docs/overlays.md, "Carving the twin".  Build flags come from the
-   build/csrc/main_twin/%.o rules in the Makefile, NOT from the
+   build/csrc/main/debug/%.o rules in the Makefile, NOT from the
    ovl_% pattern -- this block is -G8 and uses its own compiler. */
 
 
@@ -264,7 +264,7 @@ void func_80404EA0(s32 *p)
  * three-term sum that folds to `(p + 0xB18) + i*4` and leaves the index as
  * op0.
  * Source in docs/near-misses/func_804053A0.c. */
-INCLUDE_ASM("asm/nonmatchings/main_twin/cardinfo", func_804053A0);
+INCLUDE_ASM("asm/nonmatchings/main/debug/cardinfo", func_804053A0);
 
 /* The live func_80024A50 has a second test on p[0x20] and a third callee in
  * the else; this build has neither. */

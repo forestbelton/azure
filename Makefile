@@ -239,19 +239,26 @@ build/csrc/ovl_main_80400000.o: CC := tools/psx272gcc
 # same story as the compiler above: this one came out of the 4.0 SDK.
 build/csrc/ovl_main_80400000.o: MASPSXFLAGS += --expand-div
 
-# csrc/main_twin/ holds that same block's own translation units, carved out of
-# csrc/ovl_main_80400000.c on 2026-11-13. They need EVERY override the parent
-# unit has -- the -G8 default flags, the 4.0-era compiler, --expand-div and the
-# jump-table alignment filter -- and they match neither `ovl_%` (which is -G0)
-# nor `main/%` (the live overlay, also -G0). Without these lines they would
-# build at the resident flags and the container would come out the wrong
-# length, which is the trap the ovl_% comment above describes.
+# csrc/main/debug/ holds the DEBUG TWIN's own translation units, carved out of
+# csrc/ovl_main_80400000.c on 2026-11-13 -- the same nine units as csrc/main/
+# beside it, built the other way. They need EVERY override the parent unit
+# has: the -G8 default flags, the 4.0-era compiler, --expand-div and the
+# jump-table alignment filter.
+#
+# THESE FOUR LINES MUST WIN AGAINST `build/csrc/main/%.o` ABOVE, which is -G0
+# and which `build/csrc/main/debug/cardbk.o` ALSO matches, with the longer
+# stem `debug/cardbk`. GNU make breaks that tie by stem length, so the more
+# specific pattern here takes precedence. That is a tie being broken, not an
+# exclusive match: MEASURED on the rename, with these lines still saying
+# `main_twin`, cardbk.c compiled as `tools/cdkgcc ... -G0`, the wrong compiler
+# at the wrong -G, and the only symptom was a wrong-length container. If these
+# move, or the directory is renamed again, read the compile line back.
 # `-Icsrc` is for `#include "main_twin.h"`: a quoted include resolves against
-# the INCLUDING file's directory first, which is csrc/main_twin/ here.
-build/csrc/main_twin/%.o: CFLAGS := $(CFLAGS_DEFAULT) -Icsrc
-build/csrc/main_twin/%.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT) --expand-div
-build/csrc/main_twin/%.o: CC := tools/psx272gcc
-build/csrc/main_twin/%.o: ASFILTER := python3 tools/decomp/jtbl_align.py
+# the INCLUDING file's directory first, which is csrc/main/debug/ here.
+build/csrc/main/debug/%.o: CFLAGS := $(CFLAGS_DEFAULT) -Icsrc
+build/csrc/main/debug/%.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT) --expand-div
+build/csrc/main/debug/%.o: CC := tools/psx272gcc
+build/csrc/main/debug/%.o: ASFILTER := python3 tools/decomp/jtbl_align.py
 
 # AND IT IS THE ONE UNIT WHOSE JUMP TABLE IS NOT 8-ALIGNED. gcc gives every
 # jump table `.align 3` (final.c:1518, BIGGEST_ALIGNMENT 64), and for the 4.1

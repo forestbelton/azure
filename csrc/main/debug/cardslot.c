@@ -19,7 +19,7 @@ extern void func_80404688(s32 *p);
    Carved out of csrc/ovl_main_80400000.c on 2026-11-13. The unit
    boundaries and which of them are INFERRED are in
    docs/overlays.md, "Carving the twin".  Build flags come from the
-   build/csrc/main_twin/%.o rules in the Makefile, NOT from the
+   build/csrc/main/debug/%.o rules in the Makefile, NOT from the
    ovl_% pattern -- this block is -G8 and uses its own compiler. */
 
 
