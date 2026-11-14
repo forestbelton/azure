@@ -265,20 +265,138 @@ void func_80404EA0(s32 *p)
 }
 
 
-/* NEAR MISS, 82 of 82 words, 9 differing -- the LENGTH matches. Rebuilt
- * twice on 2026-11-12: 81/68, then 84/46, then this. The last device was the
- * loop bound: written `while (n < 3 ? i < 2 : i < 1)` rather than as a `for`
- * over the conditional bound `(n < 3 ? 2 : 1)`, there is ONE induction
- * variable instead of two and the whole loop comes out byte-exact. What is
- * left is NINE words: six of scheduling before the first jal (gcc hoists
- * `addiu $s1,$sp,0x50` above the two seed stores) and the three-word `mfhi`
- * register gap it shares with func_80404EA0. The tenth, a commuted `addu`,
- * fell the same day by NAMING THE BASE: `((UnkTwinGrpAEC *)p)->ptrs[4 + i]`,
- * which is what the live func_80024818 writes. A flat `p[0x2C6 + i]` is a
- * three-term sum that folds to `(p + 0xB18) + i*4` and leaves the index as
- * op0.
- * Source in docs/near-misses/func_804053A0.c. */
-INCLUDE_ASM("asm/nonmatchings/main/debug/cardinfo", func_804053A0);
+/* Live func_80024818, cut down: no `k`, no count_used_save_slots arm, and
+ * `strcpy(buf, num); strcat(buf, D_800283FC)` replaced by a five-byte seed
+ * block-moved into buf followed by two strcats.  LANDED 2026-11-13 at 82 of
+ * 82 words, the last function in the project, with a three-part DEVICE on
+ * the `n / 3`; without it this is 82 words and 3 differing
+ * (`sra $a0 / mfhi $a3 / subu $a0,$a3,$a0` against the target's
+ * `sra $v0 / mfhi $a0 / subu $a0,$a0,$v0`), where it stood for three passes.
+ * The device comment below carries the mechanism and the measurements.  The
+ * park's `u8 *b; b = buf;` after the first call is gone: with the division
+ * device in place `buf` used directly is 82/0 as well.
+ *
+ * The seed is ONE `movstrsi`: `memcpy` of a constant 5 bytes from a
+ * 4-aligned symbol (main_twin.h declares D_80400714 as `const s32 []` for
+ * exactly this) expands through mips.c's block_move into a single insn, so
+ * it schedules as one atom and its byte step is `lb`.  Two explicit stores
+ * are 9 differing; a 1-aligned source is 84 words.
+ */
+void func_804053A0(s32 *p)
+{
+    u8 buf[0x40];
+    u8 num[0x10];
+    s32 n;
+    s32 i;
+
+    n = func_80402268();
+    if (n < 3)
+    {
+        func_80051B50((u8 *)p + 0x80, D_804006C4, 1);
+        func_80051B50((u8 *)p + 0x188, D_804006EC, 1);
+    }
+    else
+    {
+        /* DEVICE: `k`, the zero-length asm that reads it, and `hi` pinned to
+         * $a0 are ONE device.  Together they compute exactly `n / 3` --
+         * `hi` is the magic multiply's high word, `hi - (n >> 31)` is gcc's
+         * own expansion of the quotient, and the asm template is empty -- and
+         * they buy the function's last three words: 82/3 without, 82/0 with.
+         * The target has the multiply's highpart ALLOCATED to $a0 and the
+         * 0x55555556 multiplier in $v0; plain `n / 3` leaves the highpart in
+         * HI (regclass ties HI_REG against GR_REGS at 6 each and
+         * reg_class_subunion resolves the tie to HI_REG), so its `mfhi` is a
+         * reload into the lowest unused register, $a3.
+         *
+         *   1. `register s32 hi __asm__("$4")` with `hi = n / 3 + (n >> 31)`.
+         *      combine cancels the `+` against the division's own sign
+         *      correction, leaving smulsi3_highpart with the hard register
+         *      as its destination; recog checks predicates, not the "=h"
+         *      constraint, so reload spills HI (`Spilling reg 64.` in .greg)
+         *      and the `mfhi $a0` is that insn's output reload.  Alone this
+         *      is 82/10: local-alloc's combine_regs hands the multiplier
+         *      pseudo `qty_phys_sugg = {$a0}` off the same insn, and since
+         *      the multiplier dies where $a0 is born, find_free_reg's
+         *      half-open `[born_index, dead_index)` scan never sees $a0 live
+         *      and the constant follows the highpart into $a0.
+         *   2. `s32 k = 0x55555556` NAMES THE DIVISION'S OWN MULTIPLIER.
+         *      expand_divmod loads the magic into a fresh pseudo; cse1 finds
+         *      `k` already holding the same constant, rewrites the
+         *      smulsi3_highpart to read `k` (canon_reg substitutes the
+         *      equivalence class's first register, and a block-local
+         *      newcomer does not displace `k` there) and deletes the second
+         *      load.  .cse shows one `(set (reg/v k) (const_int 1431655766))`
+         *      and `(sign_extend:DI (reg/v k))` in the multiply.  It must be
+         *      a plain local set BEFORE the division: `register s32 k
+         *      __asm__("$2")` is not adopted (make_regs_eqv puts a pseudo
+         *      ahead of a non-fixed hard register as the class's first
+         *      member) and materialises the constant twice, 84 words and 63
+         *      differing;
+         *      assigned after the division, 84/64.  On its own it changes
+         *      nothing -- with part 1 and no part 3 the bytes are those of
+         *      part 1 alone, 82/10.
+         *   3. `__asm__("" ::"r"(k))` straight after the division is a use of
+         *      the multiplier AFTER the multiply, which is the one thing the
+         *      suggestion in part 1 cannot survive: `k` now dies at the asm,
+         *      one insn past the `mult`, so $a0 is live inside its range,
+         *      find_free_reg strikes $a0 from the suggested set, and `k`
+         *      falls to the lowest free register, $v0.  The asm is not
+         *      volatile and has no output, so it is not a scheduling barrier
+         *      (`__volatile__`: 82/12), and it emits only #APP/#NO_APP.
+         *
+         * ORDER IS PART OF IT.  The memcpy must follow the asm and precede
+         * the call: before the division, or with the asm after it, `k` is
+         * live across the block move and takes $v0 from the move's scratch
+         * registers (82/6 both ways); after the call, 82/12.
+         *
+         * WARNS UNDER -Wall, spuriously: "`hi' might be used uninitialized".
+         * flow's regno_uninitialized only asks whether the register is live
+         * at the top of block 0, and $4 is -- it carries the incoming `p`.
+         * `hi` is assigned by the statement before its only read.  The
+         * default CFLAGS has no -Wall; do not "fix" it with an initialiser.
+         *
+         * Ruled out, all measured against main/debug/cardinfo: parts 2+3
+         * without the pin, 82/3; the pin on `hi = n / 3` with no
+         * cancellation, 82/3 (the hard register is then the subtract's
+         * destination and the highpart is a pseudo again); the
+         * `do { } while (0)` loop_cost route to a GPR highpart with parts
+         * 2+3, 82/13.  func_80404EA0's device above -- mulsidi3, a "memory"
+         * barrier and `(s32)<product>` -- also reaches 82/0 here with `hi`
+         * pinned, but it reads the C LOW half and relies on the compiler
+         * naming HI for it; this one needs no wrong value, so it was
+         * preferred.  `const s32 k` and a named `s32 sgn = n >> 31` are both
+         * 82/0 as well.  Scores are verify.py's, taken while this was a park.
+         */
+        s32 k = 0x55555556;
+        register s32 hi __asm__("$4");
+
+        hi = n / 3 + (n >> 31);
+        __asm__("" ::"r"(k));
+        memcpy(buf, D_80400714, 5);
+        func_8003830C(hi - (n >> 31), num);
+        func_8007BF50(buf, num);
+        func_8007BF50(buf, D_8040071C);
+        func_80051B50((u8 *)p + 0x80, buf, 1);
+    }
+    i = 0;
+    /* DEVICE: the bound is the TEST, written as two comparisons.  The target
+     * recomputes `slti $v0,$s3,3` inside the loop, so there is no count
+     * local (the live source's `cnt`, set in both arms, is 73 words); and
+     * `for (i = 0; i < (n < 3 ? 2 : 1); i++)` carries `i` and `i + 1` in two
+     * pseudos: 84 words and 37 differing. */
+    while (n < 3 ? i < 2 : i < 1)
+    {
+        /* Through the group struct, as the live func_80024818 writes it: a
+         * flat `p[0x2C6 + i]` is a three-term sum and commutes the `addu`,
+         * 82/1. */
+        UnkCardPair *e = ((UnkTwinGrpAEC *)p)->ptrs[4 + i];
+
+        e->unk_00 = (s32)((u8 *)p + 0x80 + 0x108 * i);
+        e->unk_04->unk_08 = 0xA9;
+        e->unk_04->unk_0A = 0x110 + 0x10 * i;
+        i++;
+    }
+}
 
 /* The live func_80024A50 has a second test on p[0x20] and a third callee in
  * the else; this build has neither. */

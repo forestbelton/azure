@@ -6,12 +6,17 @@ functions landed too -- they had been left behind, and `parkstats.py --check`
 had been failing on all three because a landed function has no nonmatchings
 listing to measure against. **A landed function must not keep a park.**
 
-Three parks are live, all three in main.bin's 0x80400000 twin:
-`func_804034D8.c`, `func_804053A0.c` and `func_80404EA0.c`. `func_80405AE8.c`
-was named here as the one live park until it landed on 2026-11-11; the
+**NO PARKS ARE LIVE. 2026-11-13.** `func_804053A0.c` was the last one and it
+landed; `func_804034D8` and `func_80404EA0` landed before it the same day.
+Every function in all four containers is now compiled from C. This directory
+holds no park files at all, so `parkstats.py` has nothing to measure and
+`--check` passes vacuously -- that is the expected state, not a broken tool.
+
+The counts above are the ones this file has got wrong before: `func_80405AE8.c`
+was named here as the one live park until it landed on 2026-11-11, and the
 sentence outlived the park, which is the failure mode this file warns about
-two paragraphs up. Read a park's generated header before touching it, and
-`docs/landing-a-function.md` before touching any of them.
+two paragraphs up. If a park is ever added back, name it here and read its
+generated header before touching it, plus `docs/landing-a-function.md`.
 
 `probe-cse-forwarding.c` is not a park -- it is a standing compiler probe.
 

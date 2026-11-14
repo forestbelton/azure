@@ -62,7 +62,8 @@ const u8 D_804006EC[40] __attribute__((section(".rodata"))) =
 
 /* 0x80400714 "あと" -- 82 A0 82 C6 00 and three bytes of pad, ONE object, the
    free-block line's prefix. s32 because func_804053A0's five-byte block move
-   needs it 4-aligned; see csrc/main_twin.h and the park. D_80400718 is this
+   needs it 4-aligned; see csrc/main_twin.h and the device comment on
+   func_804053A0 in cardinfo.c. D_80400718 is this
    object's tail, not a symbol. */
 const s32 D_80400714[2] __attribute__((section(".rodata"))) = {(s32)0xC682A082, 0};
 

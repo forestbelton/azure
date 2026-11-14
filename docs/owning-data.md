@@ -1451,11 +1451,15 @@ spimdisasm could not place on a word boundary.
   above: `D_804006C2` is the second half of the 3-byte `D_804006C0` that the
   landed func_80404EA0 copies with `memcpy(buf, D_804006C0, 3)` -- `lh` + `lb`,
   so splat named the `lb`'s target -- and `D_80400718` is the same thing in
-  the five-byte block move of func_804053A0's park. Owning the chunk removes
+  the five-byte block move of func_804053A0. Owning the chunk removes
   the `dlabel`s that defined them, and that is a **link failure** for any
-  reference that survives: the parked func_804053A0's nonmatching listing
-  still relocated against `D_80400718` and `ld` said `undefined reference`
-  twice. The fix is §4.6's, `D_80400714 = 0x80400714; // size:0x8` in
+  reference that survives: while func_804053A0 was parked its nonmatching
+  listing still relocated against `D_80400718` and `ld` said `undefined
+  reference` twice. (func_804053A0 LANDED 2026-11-13, so no listing is
+  compiled from it any more and the `size` below is no longer load-bearing
+  for the link. It is kept because `make splat` still regenerates the
+  listing and the size is what keeps spimdisasm from inventing the name
+  again.) The fix is §4.6's, `D_80400714 = 0x80400714; // size:0x8` in
   `splat/main.bin_symbol_addrs.txt`, which makes spimdisasm spell the byte
   load `%lo(D_80400714 + 0x4)` instead of inventing a name. `D_804006C2`
   needed nothing, because func_80404EA0 is compiled C and has no listing.

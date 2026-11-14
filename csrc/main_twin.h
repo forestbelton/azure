@@ -441,16 +441,17 @@ extern const u8 D_804006EC[];
 /* The free-block line's prefix: ONE five-byte object, 82 A0 82 C6 00 -- two
    Shift-JIS characters and a terminator -- at alignment 4. It was declared
    here as a word plus a separate signed byte, with a comment insisting it was
-   "not a struct", and func_804053A0's park spent six words on a scheduling
-   story that followed from that shape. A constant-size memcpy from it is ONE
+   "not a struct", and func_804053A0 spent six words, and a park's worth of
+   scheduling story, on what followed from that shape. A constant-size memcpy from it is ONE
    movstrsi insn and the six words went away. The alignment is load-bearing:
    declared as u8[] (align 1) the same memcpy measures 84 words against 82.
    D_80400718 is the tail of THIS object, not a symbol of its own. splat no
    longer emits a label there: the chunk is owned by
    csrc/main/debug/cardbk.c and splat/main.bin_symbol_addrs.txt gives
-   this symbol size 8, so the park's listing relocates against
-   D_80400714 + 0x4. verify.py still marks that pair's `lui` `?`, which is its
-   own bug -- gas keeps a HI16/LO16 addend on the LO16 only. */
+   this symbol size 8, so a regenerated listing relocates against
+   D_80400714 + 0x4. (func_804053A0 landed 2026-11-13; while it was parked
+   verify.py marked that pair's `lui` `?`, which is verify.py's own bug --
+   gas keeps a HI16/LO16 addend on the LO16 only.) */
 extern const s32 D_80400714[];
 extern const u8 D_8040071C[];                        /* and its suffix */
 extern const u8 D_804005EC[];                        /* a fixed line func_80403F7C draws */

@@ -47,14 +47,20 @@ D_800887F4 = 0x800887F4; // rodata
 // D_80400714 -- ENDING A LABEL THAT SPLAT CUT INSIDE AN OBJECT, and this one
 // IS load-bearing: without it the link fails.
 //
-// The twin's rodata is owned by csrc/ovl_main_80400000.c as of 2026-11-13, and
-// 0x80400714 is ONE eight-byte object there -- 82 A0 82 C6 00, two Shift-JIS
-// characters and a terminator, then padding. func_804053A0 copies five bytes
-// of it with a block move, which comes out `lw D_80400714` + `lb` at +4, so
-// spimdisasm named the byte load's target and emitted a second label,
-// D_80400718. That label used to be defined by the generated rodata_post
-// listing; with the chunk owned, nothing defines it and the still-parked
-// func_804053A0's nonmatching listing fails to link against it.
+// The twin's rodata is owned per translation unit as of 2026-11-13 -- this
+// chunk by csrc/main/debug/cardbk.c -- and 0x80400714 is ONE eight-byte object
+// there: 82 A0 82 C6 00, two Shift-JIS characters and a terminator, then
+// padding. func_804053A0 copies five bytes of it with a block move, which
+// comes out `lw D_80400714` + `lb` at +4, so spimdisasm named the byte load's
+// target and emitted a second label, D_80400718. That label used to be defined
+// by the generated rodata_post listing; with the chunk owned, nothing defines
+// it, and while func_804053A0 was parked its nonmatching listing failed to
+// link against it.
+//
+// func_804053A0 LANDED 2026-11-13, so no listing is compiled from it any more
+// and this entry is no longer load-bearing for the link. KEEP IT: `make splat`
+// still regenerates that listing, and the size is what stops spimdisasm
+// inventing the name a second time.
 //
 // A `size` is what tells spimdisasm the second address is inside the first, so
 // it spells the relocation `%lo(D_80400714 + 4)` instead of inventing a name.

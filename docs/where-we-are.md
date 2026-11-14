@@ -253,9 +253,10 @@ Three things about the overlays that change how they are worked, all in
   blames the compiler is a hypothesis, not a finding, unless it names the pass
   and the guard.
 
-  **THE PARKS: ONE IS LEFT, AND IT IS func_804053A0.** Everything from here
-  to the end of this block is the record of how the other four fell; read the
-  two paragraphs below and then only func_804053A0's entry.
+  **THE PARKS: NONE ARE LEFT. func_804053A0 LANDED 2026-11-13** and it was the
+  last one, in the project as well as in this block. Everything from here to
+  the end of this block is the record of how the six fell; it is history now,
+  not a work list.
 
   **SUPERSEDED 2026-11-13 -- READ THIS BEFORE THE ENTRIES BELOW.** Two passes
   of agents, each given one function, the procedure doc and NO context from the
@@ -283,9 +284,10 @@ Three things about the overlays that change how they are worked, all in
       func_804053A0   still parked at 3, and now with a FLOOR rather than a
                       verdict: see its entry.
 
-  **THE SCORE ON COMPILER VERDICTS IS NOW 4 FOR 4 AGAINST.** Every park closed
+  **THE SCORE ON COMPILER VERDICTS IS NOW 5 FOR 5 AGAINST.** Every park closed
   in this block on the grounds that PSY-Q 4.0 did something FSF 2.7.2 cannot
-  has since landed or had its central claim disproven by measurement. The
+  has since landed. Not "had its central claim weakened" -- landed, byte for
+  byte, every one. The
   mechanism in those write-ups was right nearly every time; what was wrong,
   every time, was the step from "this is what our compiler does with THIS
   source" to "no source reaches the target". Write the first and stop.
@@ -308,45 +310,75 @@ Three things about the overlays that change how they are worked, all in
   The entries below are kept as the record of what was believed and why. The
   live numbers are in the park headers, which `parkstats.py` generates.
 
-  - `func_804053A0` -- **THE ONE REMAINING PARK.** 82 of 82, 3 differing, and
-    as of 2026-11-13 the 3 is a MEASURED FLOOR rather than a verdict. Two
-    spellings DO produce the target's `sra $v0,$s3,31 / mfhi $a0 /
-    subu $a0,$a0,$v0` exactly -- a `do { } while (0)` around the quotient's
-    use, which is a free `loop_cost` multiplier that flips the highpart
-    pseudo's prefclass off HI_REG, and a `register s32 hi asm("$4")`, which
-    turns the `"=h"` constraint into an output reload. Both then lose
-    `lui/ori/mult`, because once the highpart's prefclass is GPR-compatible
-    `local-alloc`'s `combine_regs` pulls the multiplier constant into its
-    quantity and the two share a register; the target needs them in `$a0` and
-    `$v0`. Breaking that tie needs a reference to the constant after the
-    multiply and the constant has no C-level name. Both park claims that said
-    this was unreachable -- "no C spelling puts the highpart in a GPR" and
-    "`mfhi $a0` cannot be a reload register at all" -- are DISPROVEN; the
-    blocker is a different pass than the one named. 33 spellings and a
-    421925-candidate permuter run are in the park header. **The corollary is
-    worth more than the park:** the twin's whole remaining `mfhi` family needs
-    the highpart in a GPR AND its co-operands elsewhere, which this
-    `local-alloc` cannot do, so it is ONE compiler difference and not one per
-    function. Written up below at 9 differing (was 84/46 that morning and
-    81/68 before it). The LENGTH matches and the whole tail loop is
-    byte-exact. Six of the nine are one scheduling decision before the first
-    jal and three are the `mfhi` register gap it shares with func_80404EA0.
-    The tenth was a commuted `addu` and it fell: a flat `p[0x2C6 + i]` is a
-    three-term sum that reassociates and leaves the INDEX as op0, so naming
-    the base puts it back first -- `((UnkTwinGrpAEC *)p)->ptrs[4 + i]`, which
-    is exactly what the live counterpart func_80024818 writes. That is a
-    general lever and it is written up in docs/matching-levers.md.
+  - `func_804053A0` -- **LANDED 2026-11-13**, 82 of 82, zero differing. The
+    LAST function in the project. It stood at 3 differing through three
+    passes, all three words the `n / 3` sign correction: our
+    `sra $a0,$s3,31 / mfhi $a3 / subu $a0,$a3,$a0` against the target's
+    `sra $v0,$s3,31 / mfhi $a0 / subu $a0,$a0,$v0`.
 
-    **And the counterpart check now says the other nine are NOT a source
-    question.** func_80024818 is landed and byte-identical, and its `n / 3`
-    comes out `addu $16,$sp,80 / move $5,$16 / sra $4,$17,31 / mfhi $11 /
-    subu $4,$11,$4` -- &num early, the sign correction in the argument
-    register, the quotient in a scratch. That is OUR shape exactly, and it is
-    what the retail binary holds; the twin's 4.0 build does the opposite.
-    Backing it up: across the whole landed project there are 115 `mfhi`
-    instructions and in NONE of them is the `mfhi` destination also the
-    destination of the insn that consumes it, where the twin does that in all
-    six it has left. Lever 487.
+    **What landed it is a three-part device, and the third part is the one
+    nobody had tried.** `register s32 hi asm("$4")` with
+    `hi = n / 3 + (n >> 31)` puts the highpart in $a0 -- combine cancels the
+    `+` against the division's own sign correction, recog checks predicates
+    and not the `"=h"` constraint, and reload spills HI and emits the
+    `mfhi $a0` as that insn's output reload. On its own that is 10 differing,
+    because `local-alloc`'s `combine_regs` hands the multiplier pseudo
+    `qty_phys_sugg = {$a0}` off the same insn and `find_free_reg`'s half-open
+    `[born_index, dead_index)` scan never sees $a0 live against a constant
+    that dies where $a0 is born. So: `s32 k = 0x55555556;` before the
+    division, which **cse1 adopts as the division's own multiplier** --
+    `canon_reg` substitutes the equivalence class's first register and a
+    block-local newcomer does not displace `k` -- and then
+    `__asm__("" ::"r"(k));` immediately after, a use of the multiplier one
+    insn past the `mult`, which makes $a0 live inside `k`'s range so
+    `find_free_reg` strikes it and `k` falls to $v0. Empty template,
+    non-volatile, no output, so it is not a scheduling barrier and emits
+    nothing. The C computes exactly `n / 3`.
+
+    **Three claims in the old entry were wrong and are worth keeping as a
+    pattern.** "The constant has no C-level name" -- false, and naming it is
+    free. "No C spelling puts the highpart in a GPR" and "`mfhi $a0` cannot be
+    a reload register at all" -- both disproven on the second pass. And the
+    corollary this entry advertised as worth more than the park, that the
+    twin's `mfhi` family "needs the highpart in a GPR AND its co-operands
+    elsewhere, which this `local-alloc` cannot do, so it is ONE compiler
+    difference and not one per function" -- **that is the biggest of the
+    four.** This `local-alloc` can do it. It took one extra reference to the
+    constant, placed after the multiply, to break the tie that the whole
+    corollary rested on. A claim about what an allocator cannot do, inferred
+    from the spellings that happened to be tried, outranked the measurements
+    it was built from for three passes.
+
+    The park also carried a false SEMANTIC claim, which matters more than a
+    false mechanical one: the third pass recorded a `union { long long d;
+    s32 w[2]; }` form as "semantically correct, 3 differing" and the pinned
+    variant of it as "1 differing, wrong code". The direction of the fold was
+    backwards -- `u.w[0]` is never folded into `smulsi3_highpart` at all; the
+    dumps show `mulsidi3_internal` with a surviving `(subreg:SI (reg:DI) 0)`.
+    Check what a candidate computes before recording what it scores.
+
+    What stayed from the earlier passes, all still load-bearing: the
+    five-byte seed as ONE `movstrsi` (`memcpy` of a constant 5 bytes from a
+    4-aligned symbol, worth six words over two explicit stores), the loop
+    bound written as two comparisons rather than a conditional bound, and the
+    element load through the group struct so the `addu` keeps the base as op0
+    -- which is what the live counterpart func_80024818 writes. The park's
+    `u8 *b; b = buf;` device is GONE: with the division device in place,
+    `buf` used directly is 82/0 too. Lever 487 and the new division lever are
+    in docs/matching-levers.md; the ruled-out spellings and their scores are
+    at the site in `csrc/main/debug/cardinfo.c`.
+
+    **The counterpart check was right about the compiler and wrong about the
+    conclusion.** func_80024818 is landed, byte-identical, and its `n / 3`
+    comes out in OUR shape -- the quotient in a scratch -- under 4.1; across
+    the landed project there are 115 `mfhi` instructions and in none of them
+    is the `mfhi` destination also the destination of the insn that consumes
+    it, where the twin does it in all six. Every word of that is true. It
+    established that our output is what the compiler does by default, and it
+    was read as establishing that the target was out of reach. Those are
+    different claims and only the first was ever tested -- the same error this
+    block already names twice above, made a third time.
+
   - `func_804022C8` -- **LANDED 2026-11-12**, 63 of 63, zero differing. The
     park had the cause isolated and the verdict wrong: all seven words were
     register names, caused by the `q = w` copy being scheduled ahead of the
