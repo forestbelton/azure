@@ -64,11 +64,6 @@ segments:
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
-      # Dotted: csrc/ovl_main_80088760_data.c defines all 0x30C bytes. It is a
-      # data-only unit because every object here is reached from more than one
-      # of the overlay's three code units, so there is no evidence for a
-      # per-unit partition the way the card overlay has one; that file's
-      # header has the argument.
       - [0x24114, .data, ovl_main_80088760_data]
   - [0x24420, pad]
   # NB: 2 MB of mastered random filler. (?)
@@ -114,35 +109,6 @@ segments:
     start: 0x269000
     vram: 0x80400000
     subsegments:
-      # CARVED INTO ITS NINE TRANSLATION UNITS, 2026-11-13. The block's own
-      # rodata names them: each original unit carries its own ASSERT_FMT copy
-      # followed by its own __FILE__ string, and all nine are here in link
-      # order -- c_server.c at 0x8040002C, then card_mes.c, card_opt.c,
-      # card_win.c, cardbk.c, cardinfo.c, cardslot.c, cardsme.c, memory.c.
-      # Each unit's rodata therefore STARTS at its assert pair, which is what
-      # fixes the ten `.rodata` windows below; the text boundaries come from
-      # the twin-to-live pair map in csrc/main_twin.h. Six of the eight text
-      # boundaries are DETERMINED by a pair on each side; three gaps are
-      # inferred. See docs/overlays.md, "Carving the twin", for which.
-      #
-      # TEN UNITS FOR NINE TRANSLATION UNITS: c_server.c is split in two, at
-      # func_804016D0. Its rodata runs [7 objects][jtbl_8040007C][0x4B8 more]
-      # with the table in the MIDDLE, and at -G8 cc1psx appends the text
-      # stream after all file-scope data (mips.c:4181), so a table always
-      # lands LAST in its unit and one unit cannot produce that order. This is
-      # docs/owning-data.md SS9.1, and it is the same constraint that used to
-      # need a separate rodata unit. Splitting at the function that emits the
-      # table is the same move ovl_town makes at func_800BEBA4.
-      #
-      # The tail unit keeps the name ovl_main_80400000 and is NOT one of the
-      # nine: from 0x8040855C it is the statically linked PSY-Q library
-      # objects (docs/twin-block-libcard.md), still asm stubs. It also still
-      # holds the whole 0x3C48 `.data` window -- that region's per-unit
-      # partition is known but not yet applied, see docs/overlays.md.
-      #
-      # Build flags for csrc/main/debug/ are their own Makefile rules: -G8, the
-      # 4.0-era compiler, --expand-div and the jump-table alignment filter.
-      # They match neither `ovl_%` nor `main/%`, both of which are -G0.
       - [0x269000, .rodata, main/debug/c_server_a]
       - [0x269090, .rodata, main/debug/c_server_b]
       - [0x269548, .rodata, main/debug/card_mes]
@@ -164,22 +130,8 @@ segments:
       - [0x27089c, c, main/debug/cardsme]
       - [0x2711ac, c, main/debug/memory]
       - [0x27155c, c, ovl_main_80400000]
-      # THE TWIN'S OWN STATICALLY LINKED PSY-Q libcard, 0x271644..0x271848.
-      # Marked per module, the same way slus_006.14.yaml marks the resident
-      # executable's copy, instead of being swallowed by the `c` subsegment
-      # above as fifteen anonymous `func_8040xxxx` INCLUDE_ASM stubs. Four of
-      # these were landed C; they are library code, not the game's, so they
-      # are asm here like their resident counterparts. Names are in
-      # main.bin_symbol_addrs.txt with a `twin_` prefix, because
-      # common_syms.txt already binds the unprefixed ones to 0x80069xxx.
-      #
-      # THE SUBSEGMENT PATHS ALSO HAVE TO DIFFER FROM slus_006.14.yaml's, and
-      # that is not cosmetic: a subsegment's name IS its output path, so
-      # naming these `psyq/libcard/INIT` made `make splat` write the twin's
-      # copy over the resident one in asm/psyq/libcard/INIT.s -- last yaml
-      # split wins, and nothing warns. They live under main/debug/ to match
-      # the C units, so the container is readable from the path.
-      # Evidence per module: docs/twin-block-libcard.md.
+      # NB: The debug overlay has its own subset of PSY-Q statically linked
+      # here.
       - [0x271644, asm, main/debug/psyq/libcard/A92]    # _card_status
       - [0x271654, asm, main/debug/psyq/libcard/A93]    # _card_wait
       - [0x271664, asm, main/debug/psyq/libcard/C171]   # _card_info
@@ -187,12 +139,6 @@ segments:
       - [0x271684, asm, main/debug/psyq/libcard/CARD]   # _card_clear
       - [0x2716bc, asm, main/debug/psyq/libcard/A78]    # _card_write
       - [0x2716cc, asm, main/debug/psyq/libcard/A80]    # _new_card
-      # INIT holds THREE functions, not two: InitCARD 0x54, StartCARD 0x38,
-      # StopCARD 0x30. StopCARD was read as libsnd/SSINIT until 2026-11-13 --
-      # a false positive, since a three-call wrapper has almost no invariant
-      # bytes once relocations are masked. The resident StopCARD is
-      # `StopCARD2(); _ExitCard();` and this one is the same with the BIOS
-      # unpatch at 0x80408958 between them. There is no libsnd module here.
       - [0x2716dc, asm, main/debug/psyq/libcard/INIT]   # InitCARD, StartCARD, StopCARD
       - [0x271798, asm, main/debug/psyq/libcard/A74]    # InitCARD2
       - [0x2717a8, asm, main/debug/psyq/libcard/A75]    # StartCARD2
