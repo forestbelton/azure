@@ -302,16 +302,16 @@ void func_804081AC(s32 *p);                          /* func_8002789C */
 void func_804083A0(s32 *p);                          /* func_80027A9C */
 s32 *func_804083FC(s32 a, s32 b);                    /* func_80027AFC */
 void func_804084DC(s32 *p);                          /* func_80027C90 */
-long func_80408644(long chan);                       /* B0:0x5C, _card_status */
-long func_80408654(long drv);                        /* _card_wait */
-long func_80408664(long chan);                       /* _card_info */
-long func_80408674(long chan);                       /* _card_load */
+long twin__card_status(long chan);                       /* B0:0x5C, _card_status */
+long twin__card_wait(long drv);                        /* _card_wait */
+long twin__card_info(long chan);                       /* _card_info */
+long twin__card_load(long chan);                       /* _card_load */
 /* libcard's own BIOS stubs, four words each and not expressible in C. */
-void func_804087A8(void);                            /* twin-only, 4 words */
-void func_804087B8(void);                            /* twin-only, 4 words */
-void func_804087C8(void);                            /* twin-only */
-void func_80408730(void);                            /* libcard/INIT's StartCARD:
-                                                        wraps func_804087A8
+void twin_StartCARD2(void);                            /* twin-only, 4 words */
+void twin_StopCARD2(void);                            /* twin-only, 4 words */
+void twin__ExitCard(void);                            /* twin-only */
+void twin_StartCARD(void);                            /* libcard/INIT's StartCARD:
+                                                        wraps twin_StartCARD2
                                                         (StartCARD2) in the
                                                         func_8007CA38/CA48
                                                         critical-section pair.
@@ -320,13 +320,13 @@ void func_80408730(void);                            /* libcard/INIT's StartCARD
                                                         WRONG -- the live one
                                                         is 0x54 of game code
                                                         calling SetGeomScreen. */
-long func_80408798(long pad_enable);                 /* B0:0x4A, init_card */
+long twin_InitCARD2(long pad_enable);                 /* B0:0x4A, init_card */
 long func_804088A0(void);                            /* B0:0x4B, start_card */
 long func_80408958(void);                            /* B0:0x55 */
 short func_8040861C(void);                           /* the callback func_804057F0 hands func_80040560 */
-long func_804086BC(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
+long twin__card_write(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
                                                         votes func_80027AFC, which takes two */
-void func_804086CC(void);                            /* B0:0x50, _new_card. The
+void twin__new_card(void);                            /* B0:0x50, _new_card. The
                                                         symmap votes
                                                         func_80027C60; that is
                                                         WRONG -- this is three

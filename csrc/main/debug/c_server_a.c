@@ -15,8 +15,8 @@ extern u8 D_80409194[0xC];
 /* Defined in sibling units of this block; main_twin.h does not
    declare them because they were file-local to the single unit
    these were carved out of. */
-extern long func_80408684(long chan);
-extern void func_804086DC(long pad_enable);
+extern long twin__card_clear(long chan);
+extern void twin_InitCARD(long pad_enable);
 
 /* THE 0x80400000 DEBUG TWIN -- c_server.c, part 1 of 2: the objects below jtbl_8040007C and
    every function up to and including func_804016D0, whose switch emits it.
@@ -101,8 +101,8 @@ void func_804008A0(s32 use_second_slot)
     s32 *p;
 
     func_804014E4();
-    func_80408654(0);
-    func_80408654(1);
+    twin__card_wait(0);
+    twin__card_wait(1);
     p = &dbg_card_slot;
     if (use_second_slot)
     {
@@ -118,8 +118,8 @@ void func_804008A0(s32 use_second_slot)
 void func_80400908(void)
 {
     func_804014E4();
-    func_80408654(0);
-    func_80408654(1);
+    twin__card_wait(0);
+    twin__card_wait(1);
     func_804013F8(D_804094EC);
 }
 
@@ -128,8 +128,8 @@ void func_80400948(void)
     long next_card_slot;
 
     func_804014E4();
-    func_80408654(0);
-    func_80408654(1);
+    twin__card_wait(0);
+    twin__card_wait(1);
     next_card_slot = 0x10 - D_804094EC;
     D_804094EC = next_card_slot;
     func_804013F8(next_card_slot);
@@ -284,8 +284,8 @@ void func_80400E34(void)
     if (D_8013BB6C == 0)
     {
         D_8013BB6C = 1;
-        func_804086DC(1);
-        func_80408730();
+        twin_InitCARD(1);
+        twin_StartCARD();
         func_8007C958();
         func_8007CB08(0);
         D_8009E390 = 0;
@@ -448,10 +448,10 @@ one:
         r = 1;
         D_804094E8 = 0;
     }
-    else if ((func_80408644(0) & 1) != 0 || (func_80408644(1) & 1) != 0)
+    else if ((twin__card_status(0) & 1) != 0 || (twin__card_status(1) & 1) != 0)
     {
         func_804014E4();
-        while (func_80408674(D_804094EC) == 0)
+        while (twin__card_load(D_804094EC) == 0)
         {
         }
         D_80409500 = 0;
@@ -481,7 +481,7 @@ s32 func_8040122C(void)
     if (D_804094E8 == 2)
     {
         func_804014E4();
-        if (func_80408674(D_804094EC) == 0)
+        if (twin__card_load(D_804094EC) == 0)
         {
             D_804094E8 = 0;
             r = 5;
@@ -518,11 +518,11 @@ s32 func_804012B0(void)
     goto def;
 one:
     func_80401578();
-    if (func_80408684(D_804094EC) == 0)
+    if (twin__card_clear(D_804094EC) == 0)
     {
         goto fail;
     }
-    if ((func_80408644(D_804094EC != 0) & 4) == 0)
+    if ((twin__card_status(D_804094EC != 0) & 4) == 0)
     {
         goto fail;
     }
@@ -580,7 +580,7 @@ s32 func_804013F8(s32 D_804094EC)
     func_804014E4();
     do
     {
-    } while (func_80408664(D_804094EC) == 0);
+    } while (twin__card_info(D_804094EC) == 0);
     D_80409500 = 0;
     D_804094E8 = 1;
     return 1;

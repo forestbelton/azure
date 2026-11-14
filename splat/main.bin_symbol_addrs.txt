@@ -64,3 +64,23 @@ D_800887F4 = 0x800887F4; // rodata
 // listing to relocate, and the only trace left is a harmless absolute
 // assignment in main.bin_undefined_syms_auto.txt.
 D_80400714 = 0x80400714; // size:0x8
+
+// THE DEBUG TWIN'S OWN STATICALLY LINKED libcard, 0x80408644..0x80408848.
+// The resident executable has its own copy and splat/common_syms.txt already
+// defines THOSE names at 0x80069xxx, which main.bin's link reads, so these
+// carry a `twin_` prefix in front of the exact PSY-Q export name. The module
+// each one belongs to is in splat/main.bin.yaml and docs/twin-block-libcard.md.
+twin__card_status = 0x80408644; // type:func
+twin__card_wait = 0x80408654; // type:func
+twin__card_info = 0x80408664; // type:func
+twin__card_load = 0x80408674; // type:func
+twin__card_clear = 0x80408684; // type:func
+twin__card_write = 0x804086BC; // type:func
+twin__new_card = 0x804086CC; // type:func
+twin_InitCARD = 0x804086DC; // type:func
+twin_StartCARD = 0x80408730; // type:func
+twin_StopCARD = 0x80408768; // type:func
+twin_InitCARD2 = 0x80408798; // type:func
+twin_StartCARD2 = 0x804087A8; // type:func
+twin_StopCARD2 = 0x804087B8; // type:func
+twin__ExitCard = 0x804087C8; // type:func

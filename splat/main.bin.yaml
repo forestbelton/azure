@@ -164,6 +164,45 @@ segments:
       - [0x27089c, c, main/debug/cardsme]
       - [0x2711ac, c, main/debug/memory]
       - [0x27155c, c, ovl_main_80400000]
+      # THE TWIN'S OWN STATICALLY LINKED PSY-Q libcard, 0x271644..0x271848.
+      # Marked per module, the same way slus_006.14.yaml marks the resident
+      # executable's copy, instead of being swallowed by the `c` subsegment
+      # above as fifteen anonymous `func_8040xxxx` INCLUDE_ASM stubs. Four of
+      # these were landed C; they are library code, not the game's, so they
+      # are asm here like their resident counterparts. Names are in
+      # main.bin_symbol_addrs.txt with a `twin_` prefix, because
+      # common_syms.txt already binds the unprefixed ones to 0x80069xxx.
+      #
+      # THE SUBSEGMENT PATHS ALSO HAVE TO DIFFER FROM slus_006.14.yaml's, and
+      # that is not cosmetic: a subsegment's name IS its output path, so
+      # naming these `psyq/libcard/INIT` made `make splat` write the twin's
+      # copy over the resident one in asm/psyq/libcard/INIT.s -- last yaml
+      # split wins, and nothing warns. They live under main/debug/ to match
+      # the C units, so the container is readable from the path.
+      # Evidence per module: docs/twin-block-libcard.md.
+      - [0x271644, asm, main/debug/psyq/libcard/A92]    # _card_status
+      - [0x271654, asm, main/debug/psyq/libcard/A93]    # _card_wait
+      - [0x271664, asm, main/debug/psyq/libcard/C171]   # _card_info
+      - [0x271674, asm, main/debug/psyq/libcard/C172]   # _card_load
+      - [0x271684, asm, main/debug/psyq/libcard/CARD]   # _card_clear
+      - [0x2716bc, asm, main/debug/psyq/libcard/A78]    # _card_write
+      - [0x2716cc, asm, main/debug/psyq/libcard/A80]    # _new_card
+      # INIT holds THREE functions, not two: InitCARD 0x54, StartCARD 0x38,
+      # StopCARD 0x30. StopCARD was read as libsnd/SSINIT until 2026-11-13 --
+      # a false positive, since a three-call wrapper has almost no invariant
+      # bytes once relocations are masked. The resident StopCARD is
+      # `StopCARD2(); _ExitCard();` and this one is the same with the BIOS
+      # unpatch at 0x80408958 between them. There is no libsnd module here.
+      - [0x2716dc, asm, main/debug/psyq/libcard/INIT]   # InitCARD, StartCARD, StopCARD
+      - [0x271798, asm, main/debug/psyq/libcard/A74]    # InitCARD2
+      - [0x2717a8, asm, main/debug/psyq/libcard/A75]    # StartCARD2
+      - [0x2717b8, asm, main/debug/psyq/libcard/A76]    # StopCARD2
+      - [0x2717c8, asm, main/debug/psyq/libcard/END]    # _ExitCard
+      # Five functions with no module identified and no resident counterpart:
+      # a `jr` into a data label, the two BIOS-table patchers INIT calls
+      # (GetC0Table at B0:0x56 and GetB0Table at B0:0x57, each stashing $ra at
+      # D_8040923C), and two delay loops. None is expressible in C.
+      - [0x271848, asm, main/debug/psyq/unk_271848]
       - [0x2719e0, .data, ovl_main_80400000]
       - [0x275628, pad]
   - [0x275800]

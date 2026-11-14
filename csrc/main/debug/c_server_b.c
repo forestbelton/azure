@@ -319,8 +319,8 @@ void func_804018FC(void)
     func_8003FA78(D_8040009C, D_804094E8);
     func_8003FA78(D_804000A4, D_80409500);
     func_8003FA78(D_804000B0, D_80409504);
-    func_8003FA78(D_804000BC, func_80408644(0));
-    func_8003FA78(D_804000D0, func_80408644(1));
+    func_8003FA78(D_804000BC, twin__card_status(0));
+    func_8003FA78(D_804000D0, twin__card_status(1));
 }
 
 int func_804019A4(void)
@@ -443,8 +443,8 @@ s32 func_80401B30(s32 card_slot)
     s32 n = 0;
     CARD_STATE r;
 
-    func_80408654(0);
-    func_80408654(1);
+    twin__card_wait(0);
+    twin__card_wait(1);
     func_80401578();
     mem_card = D_80408AA0;
     if (card_slot != 0)
@@ -794,8 +794,8 @@ s32 func_804022C8(s32 idx)
     s32 v;
 
     func_80401BF4(name, idx);
-    func_80408654(0);
-    func_80408654(1);
+    twin__card_wait(0);
+    twin__card_wait(1);
     func_80401578();
     func_8007CAE8(name);
     while ((v = func_8040153C()) == 0)

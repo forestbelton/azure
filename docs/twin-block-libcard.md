@@ -123,18 +123,39 @@ libcard into `csrc/main/memory.c`, which is false: live `func_80027C60` is
 `libscan` had already matched `func_804086CC` correctly as `A80 _new_card`.
 The header now says which comments in this block are votes.
 
-## What is left to do
+## What is left to do -- ALL THREE CLOSED 2026-11-13
 
-Nothing that needs `psyq/lib`. Whenever twin block work resumes:
+1. **Done.** 0x271644-0x271848 is thirteen `main/debug/psyq/libcard/*` asm
+   subsegments in `splat/main.bin.yaml`, one per module, plus
+   `main/debug/psyq/unk_271848` for the five functions past `END`. The tail
+   `c` subsegment now stops at 0x271644.
+2. **Done.** Fourteen names are in `splat/main.bin_symbol_addrs.txt` and the
+   fifteen `INCLUDE_ASM` lines are gone from `csrc/ovl_main_80400000.c`,
+   which is down to four functions. The names carry a **`twin_` prefix** in
+   front of the exact PSY-Q export, because `splat/common_syms.txt` already
+   binds the unprefixed ones to the resident copy at 0x80069xxx and main.bin's
+   link reads that file.
+3. **Dissolved rather than decided: there is no libsnd module here.**
+   0x271768 is `libcard/INIT`'s **StopCARD**, its third function. The
+   resident `StopCARD` is `StopCARD2(); _ExitCard();` and this one is the
+   same with the BIOS unpatch at 0x80408958 between them, which is why it is
+   0x30 against the resident's 0x28. The module then runs 0x2716dc-0x271798
+   as InitCARD 0x54 + StartCARD 0x38 + StopCARD 0x30, and INIT's "missing
+   third function" -- which this file previously read as a build that drops
+   `StopCARD` -- was never missing.
 
-1. Re-mark 0x271644-0x271848 as `psyq/libcard/*` + `psyq/libsnd/*` asm
-   subsegments in `splat/main.bin.yaml`, instead of letting the single
-   `[0x2698a0, c, ovl_main_80400000]` subsegment swallow them.
-2. Name them in `splat/main.bin_symbol_addrs.txt`, which currently holds **no
-   entry at all** in 0x804086xx-0x804088xx, and drop the matching
-   `INCLUDE_ASM` lines from `csrc/ovl_main_80400000.c`.
-3. Decide `SSINIT_C` vs `SSINIT_H`. The two modules are byte-identical over
-   these 12 words, so the libraries cannot settle it; the caller can.
+   **Why `libscan` said `SSINIT_C or SSINIT_H`:** it is a three-call wrapper,
+   and once relocations are masked such a function is prologue, epilogue and
+   nops. There are almost no invariant bytes to match on, so a 12-word hit
+   there is weak evidence however exact it looks. Treat a short call-wrapper
+   match as a hint and check what it CALLS.
+
+**One trap, found by walking into it.** A subsegment's name is its output
+path, so naming these `psyq/libcard/INIT` made `make splat` write the twin's
+copy straight over the resident one in `asm/psyq/libcard/INIT.s` -- last yaml
+split wins, nothing warns, and the next build assembles the wrong container's
+code. A second copy of a PSY-Q module needs a path of its own; these live
+under `main/debug/` to match the C units.
 
 Do not try to decompile these as game functions. The block's tail was
 already excluded from the work as library code, so nothing was mis-landed;

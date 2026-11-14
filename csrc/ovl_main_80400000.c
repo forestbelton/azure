@@ -70,7 +70,7 @@ extern void func_80408060(s32 *p);
  *   * Nine of them are BIOS call stubs: `addiu $t2, $zero, 0xB0; jr $t2;
  *     addiu $t1, $zero, <call>`, a jump to the BIOS entry point with the
  *     call number in $t1. That is not C in any revision.
- *   * func_804087C8 matches `_ExitCard` (0x80069D78) at 0.90 masked, and
+ *   * twin__ExitCard matches `_ExitCard` (0x80069D78) at 0.90 masked, and
  *     `_ExitCard`'s own listing is `asm/psyq/libcard/END.s` -- the resident
  *     copy of this same code is assembly in this tree too. The `jalr $t2`
  *     BIOS calls are right there in both. The eleven neighbours below it are
@@ -422,73 +422,6 @@ short func_8040861C(void)
     return v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408644);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408654);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408664);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408674);
-
-/* Live func_80027D0C. TWO REVISION DIFFERENCES: func_804086BC takes THREE
- * arguments here and the second is 0x3F, not 1. It is a BIOS 0xB0:0x4E stub,
- * so the listing is the only authority on its arity. */
-long func_80408684(long chan)
-{
-    func_804086CC();
-    return func_804086BC(chan, 0x3F, 0);
-}
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086BC);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804086CC);
-
-/* libcard's InitCARD, not game code: ChangeClearPAD, then init_card /
- * start_card / B0:0x55 inside a critical section. The live func_80027D40 the
- * alignment pairs it with is something else entirely. */
-void func_804086DC(long pad_enable)
-{
-    func_8007CB08(0);
-    func_8007CA38();
-    func_80408798(pad_enable);
-    func_804088A0();
-    func_80408958();
-    func_8007CA48();
-}
-
-void func_80408730(void)
-{
-    func_8007CA38();
-    func_804087A8();
-    func_8007CB08(0);
-    func_8007CA48();
-}
-
-void func_80408768(void)
-{
-    func_804087B8();
-    func_80408958();
-    func_804087C8();
-}
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408798);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804087A8);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804087B8);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804087C8);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408848);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804088A0);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408928);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_80408958);
-
-INCLUDE_ASM("asm/nonmatchings/ovl_main_80400000", func_804089C4);
-
 /* ---------------------------------------------------------------------------
    THE TWIN'S DATA, 0x804089E0..0x8040C628.
 
@@ -558,7 +491,7 @@ extern u8 D_80409218[];
 /* ------------------------------------------------------------------------- */
 
 /* 0x8040922C */
-/* func_804087C8 (a PSY-Q libcard routine, still an asm stub) stashes
+/* twin__ExitCard (a PSY-Q libcard routine, still an asm stub) stashes
    its return address in the first word. */
 u8 D_8040922C[0x10] = {0};
 
