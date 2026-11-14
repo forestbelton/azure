@@ -1019,6 +1019,96 @@ tail cut above stays open.
   against the stale script and reports undefined symbols that are already
   fixed.
 
+### Carving the twin, 2026-11-13
+
+The twin is now **ten files in `csrc/main_twin/`** plus a tail, all four
+containers byte-identical. Per-unit `.text` sums to `0x8140` and `.rodata` to
+`0x8A0`, which are the single unit's figures exactly.
+
+Three independent things fix the boundaries, and they agree:
+
+1. **The nine `__FILE__` strings.** Each original unit carries its own
+   `ASSERT_FMT` copy followed by its own filename, and all nine are in the
+   twin's rodata in link order. So **each unit's rodata slice STARTS at its
+   assert pair** -- that partitions the 0x8A0 window with no inference at all,
+   and `csrc/ovl_main_80400000_rodata.c`'s group comments had already marked
+   the runs. The windows are self-checking: a wrong cut makes a unit's
+   `.rodata` the wrong size and the container the wrong length.
+2. **The twin-to-live pair map** in `csrc/main_twin.h`. A twin function whose
+   counterpart is recorded inherits that counterpart's unit, read off the live
+   block's own yaml ranges. 149 of the 263 are tagged that way, and the nine
+   runs come out contiguous and in strict address order with no violations.
+3. **The live block's own boundaries**, already carved in `csrc/main/`.
+
+| unit | text from | boundary above it |
+|---|---|---|
+| `c_server.c` a | `0x804008A0` | -- |
+| `c_server.c` b | `0x804017EC` | NOT a source boundary: see below |
+| `card_mes.c` | `0x80402508` | INFERRED in `(0x804022C8, 0x80402508]`: four functions, none naming a `__FILE__` string or touching either unit's rodata; one of them is live `erase_tmp_file`'s twin |
+| `card_opt.c` | `0x804034D8` | DETERMINED: paired on both sides |
+| `card_win.c` | `0x80403DA0` | DETERMINED |
+| `cardbk.c` | `0x804046C8` | INFERRED, but tightly: `func_80404C84` names `cardbk.c`, and the drift profile jumps by FOURTEEN here, which is exactly the count if cardbk starts at `0x804046C8` -- 15 twin functions for its 1 live one |
+| `cardinfo.c` | `0x80404EA0` | DETERMINED |
+| `cardslot.c` | `0x804069FC` | DETERMINED |
+| `cardsme.c` | `0x8040789C` | DETERMINED |
+| `memory.c` | `0x804081AC` | INFERRED in `(0x80407F68, 0x804081AC]`: `func_804080A4` reaches cardsme's rodata slice, so cardsme keeps it |
+| tail (library) | `0x8040855C` | the PSY-Q objects, see below |
+
+Six determined, three inferred inside narrow windows, same as the live block.
+Any order-respecting cut builds byte-identical, so an inferred boundary is a
+claim about the original source and not about the output.
+
+#### `c_server.c` is TWO units, and that is the toolchain, not the source
+
+Its rodata is `[7 objects][jtbl_8040007C][0x4B8 more]` with the table in the
+MIDDLE. At -G8 cc1psx appends the text stream after all file-scope data
+(`mips.c:4181`), so a compiler-emitted jump table always lands LAST in its
+unit, and one unit cannot produce that order -- `docs/owning-data.md` §9.1.
+Splitting at `func_804016D0`, the function whose switch emits the table, is
+the same move `ovl_town` makes at `func_800BEBA4`. It is NOT a claim that the
+original had ten units.
+
+#### What the carve needs that the source split does not
+
+- **Makefile rules.** `build/csrc/main_twin/%.o` needs every override the
+  parent unit had: `CFLAGS_DEFAULT` (-G8), `tools/psx272gcc`, `--expand-div`,
+  and `tools/decomp/jtbl_align.py`. It matches neither `ovl_%` nor `main/%`,
+  both of which are -G0. This is the trap the `ovl_%` comment describes.
+- **An explicit `section(".rodata")` on every rodata object.** The old
+  rodata unit was -G0, where this never arises. At -G8 a const object of 8
+  bytes or less goes to `.sdata`, which no subsegment collects, and the link
+  fails with *defined in discarded section `.sdata`*. 104 objects needed it.
+- **Cross-unit declarations.** Nothing in the block is `static`, but 42
+  functions were only visible because everything shared a file. They are
+  declared at the head of the unit that needs them, not added to
+  `main_twin.h`, because they are not part of the block's interface.
+- **`INCLUDE_ASM` paths** move with the function, to
+  `asm/nonmatchings/main_twin/<unit>`.
+
+#### Two things the carve turned up
+
+- **`guard.py` only globbed one directory level**, `csrc/*.c` and
+  `asm/nonmatchings/*/*.s`, so it had never seen `csrc/main/` either. Fixed to
+  recurse. `parkstats.py` and `nmcheck.py` matched a unit name as `(\w+)`,
+  which a unit with a slash in it fails -- latent since `main/c_server`.
+- **The tail is not `memory.c`.** `main_twin.h` pairs `func_804086CC` and
+  `func_80408730` with live `func_80027C60` and `func_80027D7C`, which sit
+  inside `csrc/main/memory.c` -- but `docs/twin-block-libcard.md` identifies
+  the first as `libcard/A80 _new_card`. Both can be true only if the LIVE
+  overlay also links libcard at its tail and the live carve swept it into
+  `memory.c`. That is a question about `csrc/main/memory.c`, not the twin, and
+  it is open.
+
+#### Still to do
+
+The `.data` window, `0x804089E0..0x8040C628`, is still owned whole by the tail
+unit. Its per-unit partition is known -- two runs, tables then state, each in
+unit order, which is the shape §"The data IS carved" describes for the live
+block, and the state run is a clean non-decreasing sweep across all nine with
+zero order violations. Applying it moves no bytes, so byte-identity cannot
+check it; it is a claim about the original and wants the same care the live
+block's partition got.
+
 ### What not to use the twin for
 
 * **Its external `jal` targets are not retail engine addresses.** It calls

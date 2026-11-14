@@ -239,6 +239,20 @@ build/csrc/ovl_main_80400000.o: CC := tools/psx272gcc
 # same story as the compiler above: this one came out of the 4.0 SDK.
 build/csrc/ovl_main_80400000.o: MASPSXFLAGS += --expand-div
 
+# csrc/main_twin/ holds that same block's own translation units, carved out of
+# csrc/ovl_main_80400000.c on 2026-11-13. They need EVERY override the parent
+# unit has -- the -G8 default flags, the 4.0-era compiler, --expand-div and the
+# jump-table alignment filter -- and they match neither `ovl_%` (which is -G0)
+# nor `main/%` (the live overlay, also -G0). Without these lines they would
+# build at the resident flags and the container would come out the wrong
+# length, which is the trap the ovl_% comment above describes.
+# `-Icsrc` is for `#include "main_twin.h"`: a quoted include resolves against
+# the INCLUDING file's directory first, which is csrc/main_twin/ here.
+build/csrc/main_twin/%.o: CFLAGS := $(CFLAGS_DEFAULT) -Icsrc
+build/csrc/main_twin/%.o: MASPSXFLAGS := $(MASPSXFLAGS_DEFAULT) --expand-div
+build/csrc/main_twin/%.o: CC := tools/psx272gcc
+build/csrc/main_twin/%.o: ASFILTER := python3 tools/decomp/jtbl_align.py
+
 # AND IT IS THE ONE UNIT WHOSE JUMP TABLE IS NOT 8-ALIGNED. gcc gives every
 # jump table `.align 3` (final.c:1518, BIGGEST_ALIGNMENT 64), and for the 4.1
 # units that is correct -- csrc/main/c_server.c's table is at rodata offset

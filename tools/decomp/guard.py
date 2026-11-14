@@ -7,12 +7,12 @@ os.makedirs(SP, exist_ok=True)
 PROJ = os.environ.get('AZURE_ROOT',
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 known = set()
-for f in glob.glob(PROJ + '/asm/nonmatchings/*/*.s'):
+for f in glob.glob(PROJ + '/asm/nonmatchings/**/*.s', recursive=True):
     m = re.search(r'nonmatching (\w+),', open(f).read())
     if m:
         known.add(m.group(1))
 have = set()
-for f in glob.glob(PROJ + '/csrc/*.c'):
+for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True):
     t = open(f).read()
     have |= set(re.findall(r'INCLUDE_ASM\("[^"]+", (\w+)\)', t))
     # The parameter-list class MUST be lazy. Greedy `[^;]*` crosses newlines,
@@ -49,7 +49,7 @@ missing = sorted(known - have)
 # prose inside csrc comments, which silently inflated this project's headline
 # stub count.
 stubs = sum(len(re.findall(r'INCLUDE_ASM\("[^"]+",\s*\w+\)', open(f).read()))
-            for f in glob.glob(PROJ + '/csrc/*.c'))
+            for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True))
 print('%d known, %d accounted for, %d still asm stubs' % (len(known), len(have & known), stubs))
 
 # docs/carved-sweep.md's rows are the measurement record for every function
@@ -57,7 +57,7 @@ print('%d known, %d accounted for, %d still asm stubs' % (len(known), len(have &
 # worse than no row: it sends the next session hunting for words that are
 # already paid. Three such rows were found by hand on 2026-10-27, so check it.
 stub_names = set()
-for f in glob.glob(PROJ + '/csrc/*.c'):
+for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True):
     stub_names |= set(re.findall(r'INCLUDE_ASM\("[^"]+",\s*(\w+)\)',
                                  open(f).read()))
 try:

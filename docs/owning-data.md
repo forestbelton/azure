@@ -1136,11 +1136,11 @@ needed; the struct layouts only become work at `D_800CFD18`
 Measured 2026-11-13, against `main.bin` with all four containers byte-identical
 before and after. The twin's chunks are
 
-      - [0x269000, .rodata, ovl_main_80400000]              0x90,   7 objects
+      - [0x269000, .rodata, <one window per unit>]          0x8A0, 105 objects
                                                             plus jtbl_8040007C
-                                                            ** DONE 2026-11-13 **
-      - [0x269090, .rodata, ovl_main_80400000_rodata]       0x810, 98 objects
-                                                            ** DONE 2026-11-13 **
+                                                            ** DONE 2026-11-13,
+                                                            and carved into ten
+                                                            units the same day **
       - [0x2719e0, .data,   ovl_main_80400000]              0x3C48, 98 objects
                                                             ** DONE 2026-11-13 **
 
@@ -1185,7 +1185,7 @@ Measured with `tools/psx272gcc -O2 -S` on
 
 So at -G8 a named object's position **within the data group** is yours to
 choose, but no source ordering can put it after a compiler-emitted constant of
-the same unit. That is the whole reason `csrc/ovl_main_80400000_rodata.c`
+the same unit. That is the whole reason `csrc/main_twin/`'s units
 exists: the twin's `.rodata` is `[jtbl_8040007C][0x810 of objects]`, the table
 is func_804016D0's, and a unit gets one subsegment per section, so the two runs
 have to be two units with the yaml ordering their input sections. Defining the
@@ -1230,7 +1230,7 @@ an explicit `.section` is taken literally. Two consequences:
   45 of the data chunk's 98 objects are in this class, and so are 27 of the
   rodata chunk's 98 -- **but the rodata chunk is a unit of its own and so is
   -G0**, where `mips_section_threshold` is zero and the question does not
-  arise, so `csrc/ovl_main_80400000_rodata.c` carries no attribute at all. The
+  arise, so `csrc/main_twin/`'s units carries no attribute at all. The
   27 are listed in its header, for whoever moves one of them back into the
   -G8 unit. (The file is -G0 because it matches the Makefile's
   `build/csrc/ovl_%.o` pattern rule and takes no target-specific override; for
@@ -1402,12 +1402,17 @@ in that order, whatever the file says (§9.1), and the twin's section runs
 `func_804016D0`. One unit cannot produce that order, and one unit cannot have
 two windows. So it is two units and the yaml orders the two input sections:
 
-      - [0x269000, .rodata, ovl_main_80400000]             7 objects + jtbl, 0x90
-      - [0x269090, .rodata, ovl_main_80400000_rodata]      98 objects, 0x810
-      - [0x2698a0, c, ovl_main_80400000]
+      - [0x269000, .rodata, main_twin/c_server_a]          7 objects + jtbl, 0x90
+      - [0x269090, .rodata, main_twin/c_server_b]          0x4B8
+      ...                                                  one window per unit
 
-`csrc/ovl_main_80400000_rodata.c` is data only and needs no Makefile change --
-`CFILES` is a `find` over `csrc` -- and splat's legacy generation emits one
+**Superseded by the carve on 2026-11-13**: the second window is no longer a
+data-only unit but `c_server.c`'s own second half, and the rest of the 0x810
+is the other eight units' rodata. The CONSTRAINT is unchanged and is why
+`c_server.c` is two units rather than one. A data-only unit needs no Makefile
+change -- `CFILES` is a `find` over `csrc` -- but a unit with CODE does, which
+is the trap the Makefile's `ovl_%` comment describes; splat's legacy
+generation emits one
 input-section line per subsegment in subsegment order, which is the same
 property §7 measured for per-unit `.data`. The live overlay's yaml already has
 the shape: five `.rodata` subsegments for five units of one segment, and

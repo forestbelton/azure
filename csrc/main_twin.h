@@ -389,13 +389,14 @@ extern s32 D_8013BB6C;                               /* THIS link's card_first_f
 extern s32 D_8009E394;                               /* the word after D_8009E390 */
 extern s32 D_8009E390_a[] __asm__("D_8009E390");    /* incomplete on purpose: see below */
 extern s32 D_8009E390;                               /* D_80084118; read off this block's own listing, not a symmap vote -- its pair is assert-bearing */
-/* THE TWIN'S RODATA, ALL OF IT OWNED IN C as of 2026-11-13, by TWO units and
-   not one: D_80400000..D_8040007C by csrc/ovl_main_80400000.c itself, which
-   also emits jtbl_8040007C right behind them, and D_80400090 up by
-   csrc/ovl_main_80400000_rodata.c. The one measurement that forces the split
-   is -G8's data-before-text emission order, in that second file's header; the
-   jump table's `.align 3` wanted a third unit for a day and is now handled in
-   the build instead, by tools/decomp/jtbl_align.py. That is why
+/* THE TWIN'S RODATA, ALL OF IT OWNED IN C as of 2026-11-13, and since the
+   carve it is owned by the TEN units in csrc/main_twin/ -- one per original
+   translation unit, except c_server.c which is two because jtbl_8040007C sits
+   in the MIDDLE of its rodata and -G8 always emits a jump table last in its
+   unit. Each unit's slice starts at its own ASSERT_FMT copy, which is how the
+   boundaries were found; docs/overlays.md, "Carving the twin", has the table.
+   The jump table's `.align 3` wanted a unit of its own for a day and is now
+   handled in the build instead, by tools/decomp/jtbl_align.py. That is why
    these are all `const`: a non-const definition goes under `.data`, at the
    other end of the segment.
 
@@ -430,7 +431,7 @@ extern const u8 D_804006EC[];
    declared as u8[] (align 1) the same memcpy measures 84 words against 82.
    D_80400718 is the tail of THIS object, not a symbol of its own. splat no
    longer emits a label there: the chunk is owned by
-   csrc/ovl_main_80400000_rodata.c and splat/main.bin_symbol_addrs.txt gives
+   csrc/main_twin/cardbk.c and splat/main.bin_symbol_addrs.txt gives
    this symbol size 8, so the park's listing relocates against
    D_80400714 + 0x4. verify.py still marks that pair's `lui` `?`, which is its
    own bug -- gas keeps a HI16/LO16 addend on the LO16 only. */

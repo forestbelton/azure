@@ -41,7 +41,7 @@ PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
 
 # "func_80042900 (unk_14934) -- 1 instruction off, 34 words against 33."
 # "func_80045CC4 (unk_14934) -- 436 of 437 words, 47 DIFF."
-HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\((\w+)\)")
+HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\(([\w/]+)\)")
 
 
 def unit_gas_flags():

@@ -25,7 +25,7 @@ PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
 sys.path.insert(0, HERE)
 import asmlib  # noqa: E402
 
-HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\((\w+)\)")
+HEAD = re.compile(r"(func_[0-9A-Fa-f]{8})\s*\(([\w/]+)\)")
 MULTI = re.compile(r"nmcheck:\s*multi")
 BUILT = re.compile(r"built (\d+) words, target (\d+) words")
 RESULT = re.compile(r"RESULT: (?:(\d+) DIFF|MATCH)")

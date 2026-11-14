@@ -139,10 +139,18 @@ Three things about the overlays that change how they are worked, all in
   **It stopped being the only such block on 2026-11-13**, when the 0x80400000
   twin's data AND both halves of its rodata were owned too -- `0x80400000..
   0x804008A0` and `0x804089E0..0x8040C628`, 2,208 + 15,432 bytes, and not one
-  undotted subsegment left in that segment. That takes TWO units rather than
-  one, for a reason specific to a -G8 block (owning-data §9.1): at -G8 all
-  file-scope data is emitted before all text, so rodata that belongs *after* a
-  jump table cannot share the table's unit. It took three for a day, because a
+  undotted subsegment left in that segment. **And on 2026-11-13 the block was
+  CARVED INTO ITS NINE TRANSLATION UNITS** -- ten files in `csrc/main_twin/`,
+  because `c_server.c` splits at `func_804016D0`, plus a tail holding the
+  statically linked PSY-Q library objects and, for now, the whole `.data`
+  window. The nine `__FILE__` strings partition the rodata with no inference;
+  six of the eight text boundaries are determined by the twin-to-live pair map
+  and three are inferred inside narrow windows. docs/overlays.md, "Carving the
+  twin", has the table and what the carve needed that the source split did
+  not. The reason `c_server.c` is two units is specific to a -G8 block
+  (owning-data §9.1): at -G8 all file-scope data is emitted before all text,
+  so rodata that belongs *after* a jump table cannot share the table's unit.
+  The rodata needed three units for a day, because a
   jump table also gets `BIGGEST_ALIGNMENT` and so wanted offset 0 of its own
   input section -- until the image was asked what the ORIGINAL toolchain did.
   `jtbl_8040007C` is at a 4-aligned address behind `c_server.c`'s own rodata,

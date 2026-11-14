@@ -109,50 +109,56 @@ segments:
     start: 0x269000
     vram: 0x80400000
     subsegments:
-      # DOTTED vs UNDOTTED here is forced, in both directions. jtbl_8040007C's
-      # entries are `.L` labels inside func_804016D0, and a local label is
-      # only visible in its own object, so that table must ride with the code:
-      # dotted. The 0x7C in front of it must NOT migrate -- migration only
-      # emits a symbol it can attribute to ONE function, and c_server.c's
-      # ASSERT_FMT copy is referenced from dozens, so splat attributes it to
-      # nobody and writes it nowhere, and the link fails on undefined
-      # D_80400004. Undotted needs a DIFFERENT name: an undotted subsegment
-      # sharing the `c` unit's name is a hard error.
+      # CARVED INTO ITS NINE TRANSLATION UNITS, 2026-11-13. The block's own
+      # rodata names them: each original unit carries its own ASSERT_FMT copy
+      # followed by its own __FILE__ string, and all nine are here in link
+      # order -- c_server.c at 0x8040002C, then card_mes.c, card_opt.c,
+      # card_win.c, cardbk.c, cardinfo.c, cardslot.c, cardsme.c, memory.c.
+      # Each unit's rodata therefore STARTS at its assert pair, which is what
+      # fixes the ten `.rodata` windows below; the text boundaries come from
+      # the twin-to-live pair map in csrc/main_twin.h. Six of the eight text
+      # boundaries are DETERMINED by a pair on each side; three gaps are
+      # inferred. See docs/overlays.md, "Carving the twin", for which.
       #
-      # 0x269000 IS ONE WINDOW, NOT TWO, and that took a build change. gcc
-      # gives every jump table `.align 3` (final.c:1518, BIGGEST_ALIGNMENT
-      # 64), so jtbl_8040007C at offset 0x7C of the unit's own `.rodata` --
-      # 4 mod 8 -- used to cost four bytes of gas pad, measured as `.rodata`
-      # 148 against the window's 144 and `size differs by +0x4`. The block
-      # then needed a THIRD unit whose section started at the table. It does
-      # not any more: tools/decomp/jtbl_align.py rewrites that one directive
-      # to `.align 2` for this unit only, because this is the 4.0-SDK block
-      # and a toolchain that 8-aligned jump tables could not have put one at
-      # 0x8040007C in the first place. The 4.1 units keep their pad -- see the
-      # filter's header for the live-overlay measurement that proves it.
+      # TEN UNITS FOR NINE TRANSLATION UNITS: c_server.c is split in two, at
+      # func_804016D0. Its rodata runs [7 objects][jtbl_8040007C][0x4B8 more]
+      # with the table in the MIDDLE, and at -G8 cc1psx appends the text
+      # stream after all file-scope data (mips.c:4181), so a table always
+      # lands LAST in its unit and one unit cannot produce that order. This is
+      # docs/owning-data.md SS9.1, and it is the same constraint that used to
+      # need a separate rodata unit. Splitting at the function that emits the
+      # table is the same move ovl_town makes at func_800BEBA4.
       #
-      # TWO DOTTED `.rodata` WINDOWS REMAIN, AND THEY MUST BE TWO UNITS. The
-      # 0x810 bytes at 0x269090 are csrc/ovl_main_80400000_rodata.c -- 98
-      # objects, where splat's old `rodata_post` listing had 47 labels -- and
-      # they cannot be part of the unit above them, in any file order: at -G8
-      # cc1psx writes the TEXT to a temp file and appends it after all
-      # file-scope data (mips.c:4181, for the assembler's small-data pass), so
-      # jtbl_8040007C always lands AFTER every object the unit defines.
-      # Measured: the right total, 2084, and main.bin differing from
-      # 0x26907c, the table's own address. A unit gets one subsegment per
-      # section, so one unit cannot hold two windows either. This split is
-      # the one the eventual nine-translation-unit shape dissolves on its own:
-      # that 0x810 is the OTHER EIGHT units' rodata, eight more ASSERT_FMT
-      # copies among it, and 0x269090 is simply where c_server.c ends.
-      # See csrc/ovl_main_80400000_rodata.c's header and
-      # docs/owning-data.md SS6 and SS9.3.
-      - [0x269000, .rodata, ovl_main_80400000]
-      - [0x269090, .rodata, ovl_main_80400000_rodata]
-      - [0x2698a0, c, ovl_main_80400000]
-      # Dotted `.data`, so splat emits NOTHING here and csrc/ovl_main_80400000.c
-      # defines all 0x3C48 bytes itself -- 98 objects, 89.8% of them zero. The
-      # window ends where `pad` begins, so no boundary moves when it grows; see
-      # docs/owning-data.md, and SS9 for the two -G8 rules this block needs.
+      # The tail unit keeps the name ovl_main_80400000 and is NOT one of the
+      # nine: from 0x8040855C it is the statically linked PSY-Q library
+      # objects (docs/twin-block-libcard.md), still asm stubs. It also still
+      # holds the whole 0x3C48 `.data` window -- that region's per-unit
+      # partition is known but not yet applied, see docs/overlays.md.
+      #
+      # Build flags for csrc/main_twin/ are their own Makefile rules: -G8, the
+      # 4.0-era compiler, --expand-div and the jump-table alignment filter.
+      # They match neither `ovl_%` nor `main/%`, both of which are -G0.
+      - [0x269000, .rodata, main_twin/c_server_a]
+      - [0x269090, .rodata, main_twin/c_server_b]
+      - [0x269548, .rodata, main_twin/card_mes]
+      - [0x2695a0, .rodata, main_twin/card_opt]
+      - [0x2695f8, .rodata, main_twin/card_win]
+      - [0x26962c, .rodata, main_twin/cardbk]
+      - [0x269738, .rodata, main_twin/cardinfo]
+      - [0x2697a4, .rodata, main_twin/cardslot]
+      - [0x2697d8, .rodata, main_twin/cardsme]
+      - [0x26986c, .rodata, main_twin/memory]
+      - [0x2698a0, c, main_twin/c_server_a]
+      - [0x26a7ec, c, main_twin/c_server_b]
+      - [0x26b508, c, main_twin/card_mes]
+      - [0x26c4d8, c, main_twin/card_opt]
+      - [0x26cda0, c, main_twin/card_win]
+      - [0x26d6c8, c, main_twin/cardbk]
+      - [0x26dea0, c, main_twin/cardinfo]
+      - [0x26f9fc, c, main_twin/cardslot]
+      - [0x27089c, c, main_twin/cardsme]
+      - [0x2711ac, c, main_twin/memory]
+      - [0x27155c, c, ovl_main_80400000]
       - [0x2719e0, .data, ovl_main_80400000]
       - [0x275628, pad]
   - [0x275800]
