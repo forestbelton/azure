@@ -1091,13 +1091,19 @@ original had ten units.
   `asm/nonmatchings/*/*.s`, so it had never seen `csrc/main/` either. Fixed to
   recurse. `parkstats.py` and `nmcheck.py` matched a unit name as `(\w+)`,
   which a unit with a slash in it fails -- latent since `main/c_server`.
-- **The tail is not `memory.c`.** `main_twin.h` pairs `func_804086CC` and
-  `func_80408730` with live `func_80027C60` and `func_80027D7C`, which sit
-  inside `csrc/main/memory.c` -- but `docs/twin-block-libcard.md` identifies
-  the first as `libcard/A80 _new_card`. Both can be true only if the LIVE
-  overlay also links libcard at its tail and the live carve swept it into
-  `memory.c`. That is a question about `csrc/main/memory.c`, not the twin, and
-  it is open.
+- **A conflict that turned out to be my own parse error, RESOLVED.** The
+  pair map appeared to put `func_804086CC` and `func_80408730` in
+  `memory.c`, which would have meant the live carve swept libcard into
+  `csrc/main/memory.c`. It did not. Those two `/* func_8002XXXX */` comments
+  in `main_twin.h` are SYMMAP VOTES, not verified pairings -- the line beside
+  them already disputed a third -- and both are wrong: `func_804086CC` is a
+  three-instruction BIOS stub (`B0:0x50`, `_new_card`, which `libscan` had
+  matched correctly) and live `func_80027C60` is ordinary game code. With the
+  two votes dropped, `memory.c`'s run ends at `0x804084DC`, which is exactly
+  where the memory/tail boundary was already drawn, so the carve is
+  unaffected and that boundary is better supported than it was. The same
+  check CONFIRMED `func_804086DC` and `func_80408730` as libcard's `InitCARD`
+  and `StartCARD` on content -- see `docs/twin-block-libcard.md`.
 
 #### Still to do
 

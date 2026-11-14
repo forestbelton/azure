@@ -88,9 +88,40 @@ inference from shape, not a content match -- but it is a tight fit:
   drops it, and with `func_8003D56C` calling only `InitCARD` and
   `StartCARD`.
 
-If that is right the two names are `InitCARD` and `StartCARD`. Confirming it
-needs a libcard build that is not the one in this project's manifest, so
-treat the names as unestablished until something other than size agrees.
+**CONFIRMED ON CONTENT, 2026-11-13, and the names are `InitCARD` and
+`StartCARD`.** Both are landed C now, and what they CALL settles it without
+needing the libcard build this project lacks:
+
+    func_804086DC(long pad_enable)      func_80408730(void)
+    {                                   {
+        ChangeClearPAD(0);                  EnterCriticalSection();
+        EnterCriticalSection();             func_804087A8();   /* StartCARD2 */
+        func_80408798(pad_enable);          ChangeClearPAD(0);
+        func_804088A0();                    ExitCriticalSection();
+        func_80408958();                }
+        ExitCriticalSection();
+    }
+
+`func_80408798` is `B0:0x4A init_card`, `func_804088A0` is `B0:0x4B
+start_card` and `func_804087A8` is `A75 StartCARD2` -- each a three-
+instruction BIOS stub in this same table. A critical section wrapped around
+`init_card`/`start_card` IS `InitCARD`; one wrapped around `StartCARD2` IS
+`StartCARD`. That is a content match in the only sense available, and it
+agrees with the size and slot-order arguments above rather than resting on
+them.
+
+**A WARNING THAT COST A WRONG CONCLUSION.** `csrc/main_twin.h` carries
+`/* func_8002XXXX */` comments in this region, and in the REST of that header
+such a comment is a verified twin-to-live counterpart. Here it is a SYMMAP
+VOTE, and two of them are wrong: `func_804086CC` is voted `func_80027C60` and
+`func_80408730` is voted `func_80027D7C`. Neither holds -- `func_804086CC` is
+three instructions (`addiu $t2,0xB0 / jr $t2 / addiu $t1,0x50`), a BIOS stub,
+against 0x30 of game code; `func_80408730` is 0x38 against 0x54. Reading
+those votes as pairings produced the claim that the LIVE overlay links
+libcard into `csrc/main/memory.c`, which is false: live `func_80027C60` is
+`func_8005863C(); D_80080A84 = 1; start_card_server();`, plain game code.
+`libscan` had already matched `func_804086CC` correctly as `A80 _new_card`.
+The header now says which comments in this block are votes.
 
 ## What is left to do
 

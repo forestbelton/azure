@@ -310,14 +310,30 @@ long func_80408674(long chan);                       /* _card_load */
 void func_804087A8(void);                            /* twin-only, 4 words */
 void func_804087B8(void);                            /* twin-only, 4 words */
 void func_804087C8(void);                            /* twin-only */
-void func_80408730(void);                            /* func_80027D7C */
+void func_80408730(void);                            /* libcard/INIT's StartCARD:
+                                                        wraps func_804087A8
+                                                        (StartCARD2) in the
+                                                        func_8007CA38/CA48
+                                                        critical-section pair.
+                                                        The symmap votes
+                                                        func_80027D7C; that is
+                                                        WRONG -- the live one
+                                                        is 0x54 of game code
+                                                        calling SetGeomScreen. */
 long func_80408798(long pad_enable);                 /* B0:0x4A, init_card */
 long func_804088A0(void);                            /* B0:0x4B, start_card */
 long func_80408958(void);                            /* B0:0x55 */
 short func_8040861C(void);                           /* the callback func_804057F0 hands func_80040560 */
 long func_804086BC(s32 a, s32 b, s32 c);             /* a BIOS 0xB0:0x4E stub; the symmap
                                                         votes func_80027AFC, which takes two */
-void func_804086CC(void);                            /* func_80027C60 */
+void func_804086CC(void);                            /* B0:0x50, _new_card. The
+                                                        symmap votes
+                                                        func_80027C60; that is
+                                                        WRONG -- this is three
+                                                        instructions, a BIOS
+                                                        call stub, and the live
+                                                        one is 0x30 of game
+                                                        code. */
 
 /* --- variables, in address order --- */
 extern u32 D_8002D690;                               /* D_8002E5D8[0] in the shipped build */
