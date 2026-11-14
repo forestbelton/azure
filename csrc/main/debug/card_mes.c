@@ -655,3 +655,83 @@ s32 func_8040343C(s32 flag)
     }
     return (s32)q[0];
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x80408ADC..0x80408C8C.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x80408ADC */
+/* The 20 message records, four bytes each. splat cuts a label at the
+   first three bytes (D_80408ADD..D_80408ADF) because the unit reads them
+   with lb; nothing references those names. */
+UnkTwinMsg D_80408ADC[20] = {
+    {0x15, 0x03, 0x02, 0x01},
+    {0x0E, 0x01, 0x00, 0x00},
+    {0x0C, 0x01, 0x00, 0x00},
+    {0x14, 0x02, 0x00, 0x00},
+    {0x12, 0x02, 0x00, 0x00},
+    {0x0D, 0x02, 0x02, 0x00},
+    {0x0E, 0x02, 0x00, 0x00},
+    {0x0D, 0x01, 0x00, 0x00},
+    {0x10, 0x02, 0x00, 0x00},
+    {0x15, 0x04, 0x00, 0x00},
+    {0x13, 0x04, 0x00, 0x00},
+    {0x10, 0x01, 0x00, 0x00},
+    {0x0E, 0x01, 0x00, 0x00},
+    {0x0E, 0x01, 0x00, 0x00},
+    {0x0E, 0x02, 0x00, 0x00},
+    {0x0C, 0x02, 0x00, 0x00},
+    {0x0B, 0x01, 0x00, 0x00},
+    {0x14, 0x02, 0x00, 0x00},
+    {0x12, 0x02, 0x02, 0x01},
+    {0x0E, 0x01, 0x00, 0x00},
+};
+
+/* 0x80408B2C */
+/* The 20 records' strings, four per record. They live in this block's
+   rodata pool, which is not owned yet, so they are addresses. */
+u8 *D_80408B2C[20][4] = {
+    {(u8 *)0x80400518, (u8 *)0x804004F4, (u8 *)0x804004D4, (u8 *)0x804004D0},
+    {(u8 *)0x804004B0, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400494, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400474, (u8 *)0x80400448, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400420, (u8 *)0x80400494, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400404, (u8 *)0x804003E8, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x804003C8, (u8 *)0x80400494, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x804003AC, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400388, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x8040035C, (u8 *)0x80400330, (u8 *)0x80400308, (u8 *)0x804002F4},
+    {(u8 *)0x804002D8, (u8 *)0x804002B4, (u8 *)0x80400308, (u8 *)0x804002F4},
+    {(u8 *)0x80400290, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400270, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400250, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400230, (u8 *)0x80400494, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400218, (u8 *)0x80400494, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400200, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x804001E4, (u8 *)0x804001B8, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400190, (u8 *)0x80400168, (u8 *)0x804004D0, (u8 *)0x804004D0},
+    {(u8 *)0x80400148, (u8 *)0x804004D0, (u8 *)0x804004D0, (u8 *)0x804004D0},
+};
+
+/* 0x80408C6C */
+/* The 24-byte primitive template, D_80027F48's twin. */
+UnkBlock24 D_80408C6C = {{0x00, 0x38, 0x00, 0x00, 0xBC, 0xBC, 0x9C, 0x00, 0x00, 0x00, 0xA0, 0x70,
+                          0xBC, 0xBC, 0x9C, 0x00, 0xBC, 0xBC, 0x9C, 0x00, 0xBC, 0xBC, 0x9C, 0x00}};
+
+/* 0x80408C84 */
+/* D_80027F60's twin. */
+u8 D_80408C84[0x8] __attribute__((section(".data"))) = {
+    0x04, 0x05, 0x00, 0x01, 0x02, 0x03, 0x06, 0x35};
+

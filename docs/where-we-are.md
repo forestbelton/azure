@@ -142,8 +142,10 @@ Three things about the overlays that change how they are worked, all in
   undotted subsegment left in that segment. **And on 2026-11-13 the block was
   CARVED INTO ITS NINE TRANSLATION UNITS** -- ten files in `csrc/main/debug/`,
   because `c_server.c` splits at `func_804016D0`, plus a tail holding the
-  statically linked PSY-Q library objects and, for now, the whole `.data`
-  window. The nine `__FILE__` strings partition the rodata with no inference;
+  statically linked PSY-Q library objects, libcard's own data and the state
+  run. **The `.data` window is carved per unit too**, the same forced split
+  the live block has: the units take the tables run and one object behind
+  them takes the state run, because one object contributes one `.data` run. The nine `__FILE__` strings partition the rodata with no inference;
   six of the eight text boundaries are determined by the twin-to-live pair map
   and three are inferred inside narrow windows. docs/overlays.md, "Carving the
   twin", has the table and what the carve needed that the source split did

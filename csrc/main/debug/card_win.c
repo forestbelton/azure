@@ -368,3 +368,32 @@ void func_80404688(s32 *p)
         func_80404178(q);
     }
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x80408CB0..0x80408CC4.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x80408CB0 */
+/* D_800282A4's twin. */
+u8 *D_80408CB0[2] __attribute__((section(".data"))) = {
+    (u8 *)0x804005D8,
+    (u8 *)0x804005D4,
+};
+
+/* 0x80408CB8 */
+/* D_80027FC4's twin, another index list. */
+u8 D_80408CB8[0xC] = {
+    0x07, 0x08, 0x05, 0x06, 0x01, 0x02, 0x03, 0x04, 0x09, 0x0A, 0xE1, 0x06};
+

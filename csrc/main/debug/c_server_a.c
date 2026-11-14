@@ -1,6 +1,17 @@
 #include "common.h"
 #include "main_twin.h"
 
+/* Data objects this unit's own initialisers point at but another
+   unit defines; main_twin.h does not declare them. */
+extern u8 D_80409140[0xC];
+extern u8 D_8040914C[0xC];
+extern u8 D_80409158[0xC];
+extern u8 D_80409164[0xC];
+extern u8 D_80409170[0xC];
+extern u8 D_8040917C[0xC];
+extern u8 D_80409188[0xC];
+extern u8 D_80409194[0xC];
+
 /* Defined in sibling units of this block; main_twin.h does not
    declare them because they were file-local to the single unit
    these were carved out of. */
@@ -698,3 +709,91 @@ s32 func_804016D0(void)
     }
     return st;
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x804089E0..0x80408ADC.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x804089E0 */
+/* Eight zero bytes below the first animation script; nothing reads them. */
+u8 D_804089E0[0x8] __attribute__((section(".data"))) = {0};
+
+/* 0x804089E8 */
+/* The 8-frame animation script, D_80027E20's twin: eight op-2 steps and
+   the op-1 jump back to the top. Reached through D_80408D4C[1]. */
+UnkAnimStep D_804089E8[9] = {
+    {0x6, 2, D_80409140},
+    {0x4, 2, D_8040914C},
+    {0x2, 2, D_80409158},
+    {0x4, 2, D_80409164},
+    {0x6, 2, D_80409170},
+    {0x4, 2, D_8040917C},
+    {0x2, 2, D_80409188},
+    {0x4, 2, D_80409194},
+    {0x0, 1, D_804089E8},
+};
+
+/* 0x80408A30 */
+/* The 1-frame script, D_80027E68's twin. */
+UnkAnimStep D_80408A30[2] = {
+    {0x2, 2, D_80409140},
+    {0x0, 0, D_80408A30},
+};
+
+/* 0x80408A40 */
+/* Three 16-entry 5551 CLUTs, one 0x20-byte row each -- the live block's
+   SAVE_ICON_CLUTS has five. Only the first row is written; nothing in
+   this unit names the object, so it rides D_80408A30's splat label. */
+u8 D_80408A40[3][0x20] = {
+    {0x00, 0x00, 0xFF, 0x7F, 0xBE, 0x77, 0x5C, 0x6B, 0xFA, 0x5E, 0xB9, 0x56,
+     0x74, 0x4E, 0x30, 0x46, 0x0C, 0x42, 0xCA, 0x35, 0x88, 0x29, 0x46, 0x1D,
+     0x25, 0x15, 0xC3, 0x0C, 0x62, 0x08, 0x21, 0x04},
+    {0},
+    {0},
+};
+
+/* 0x80408AA0 */
+/* MEM_CARD_NAMES: "bu00:" and "bu10:" in this block's rodata, which is
+   not owned yet, so the two words are spelled as the addresses they are. */
+const char *D_80408AA0[2] __attribute__((section(".data"))) = {
+    (const char *)0x804000EC,
+    (const char *)0x804000E4,
+};
+
+/* 0x80408AA8 */
+/* MEM_CARD_PREFIX. */
+char D_80408AA8[16] = "BISLPS-00001";
+
+/* 0x80408AB8 */
+/* MEM_CARD_FILENAMES. */
+const char *D_80408AB8[6] = {
+    (const char *)0x80400110,
+    (const char *)0x8040010C,
+    (const char *)0x80400108,
+    (const char *)0x80400104,
+    (const char *)0x80400100,
+    (const char *)0x804000FC,
+};
+
+/* 0x80408AD0 */
+/* The message constructors, in the engine build this block was linked
+   against -- 0x80060A1C and friends are not addresses in the shipped
+   executable, so there is no symbol to name. */
+void (*D_80408AD0[3])(s32 *) = {
+    (void (*)(s32 *))0x80060A1C,
+    (void (*)(s32 *))0x80060A3C,
+    (void (*)(s32 *))0x80060A5C,
+};
+

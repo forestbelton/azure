@@ -1,6 +1,20 @@
 #include "common.h"
 #include "main_twin.h"
 
+/* Data objects this unit's own initialisers point at but another
+   unit defines; main_twin.h does not declare them. */
+extern u8 D_804091A0[0xC];
+extern u8 D_804091AC[0xC];
+extern u8 D_804091B8[0xC];
+extern u8 D_804091C4[0xC];
+extern u8 D_804091D0[0xC];
+extern u8 D_804091DC[0xC];
+extern u8 D_804091E8[0xC];
+extern u8 D_804091F4[0xC];
+extern u8 D_80409200[0xC];
+extern u8 D_8040920C[0xC];
+extern u8 D_80409218[0x14];
+
 /* Defined in sibling units of this block; main_twin.h does not
    declare them because they were file-local to the single unit
    these were carved out of. */
@@ -1178,3 +1192,51 @@ void func_80406844(u8 *p, s32 a, s32 mode)
     func_8007BF50((u8 *)q + 4, buf);
     D_80010208.unk_00 = mode == 2;
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x80408CF4..0x80408D40.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x80408CF4 */
+/* Live D_800283A8[2] and [3]: two separate pointer words into the
+   rodata string pool. Only the first has a name the unit uses. */
+u8 *D_80408CF4 __attribute__((section(".data"))) = (u8 *)0x804006A0;
+
+/* 0x80408CF8 */
+u8 *D_80408CF8 __attribute__((section(".data"))) = (u8 *)0x80400694;
+
+/* 0x80408CFC */
+/* Live D_80027FD4: eleven cel records, [10] being the "clear" one
+   func_80404EA0 indexes as D_80408CFC[i]. */
+u8 *D_80408CFC[11] = {
+    D_804091A0,
+    D_804091AC,
+    D_804091B8,
+    D_804091C4,
+    D_804091D0,
+    D_804091DC,
+    D_804091E8,
+    D_804091F4,
+    D_80409200,
+    D_8040920C,
+    D_80409218,
+};
+
+/* 0x80408D28 */
+/* D_80027FF8's twin. */
+u8 D_80408D28[0x18] = {
+    0x03, 0x00, 0x01, 0x02, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+    0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x51, 0x9D};
+

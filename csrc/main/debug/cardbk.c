@@ -436,3 +436,61 @@ u8 *func_80404DEC(u8 *p, s32 w, s32 h)
     p[0] = 0x80;
     return p + 0xC;
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x80408CC4..0x80408CF4.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x80408CC4 */
+/* Nine words the unit reads one at a time, D_80071660..D_80071680 in the
+   engine build this block was linked against. Each one is its own object
+   because each is read as a scalar, which at -G8 is also why each needs the
+   section attribute. */
+u32 D_80408CC4 __attribute__((section(".data"))) = 0xB8B8AC00;
+
+/* 0x80408CC8 */
+u32 D_80408CC8 __attribute__((section(".data"))) = 0x00000000;
+
+/* 0x80408CCC */
+u32 D_80408CCC __attribute__((section(".data"))) = 0x0070D0D8;
+
+/* 0x80408CD0 */
+u32 D_80408CD0 __attribute__((section(".data"))) = 0xD8D80000;
+
+/* 0x80408CD4 */
+u32 D_80408CD4 __attribute__((section(".data"))) = 0x00000000;
+
+/* 0x80408CD8 */
+u32 D_80408CD8 __attribute__((section(".data"))) = 0x0080B0B8;
+
+/* 0x80408CDC */
+u32 D_80408CDC __attribute__((section(".data"))) = 0xD8D80000;
+
+/* 0x80408CE0 */
+u32 D_80408CE0 __attribute__((section(".data"))) = 0x00000000;
+
+/* 0x80408CE4 */
+u32 D_80408CE4 __attribute__((section(".data"))) = 0x0080B0B8;
+
+/* 0x80408CE8 */
+/* D_800717BC's twin. */
+u8 D_80408CE8[0x8] __attribute__((section(".data"))) = {
+    0x05, 0x06, 0x01, 0x02, 0x03, 0x04, 0x07, 0x30};
+
+/* 0x80408CF0 */
+/* D_80027FD0's twin. */
+u8 D_80408CF0[0x4] __attribute__((section(".data"))) = {
+    0x00, 0x01, 0x02, 0x03};
+

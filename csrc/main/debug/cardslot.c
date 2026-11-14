@@ -1,6 +1,10 @@
 #include "common.h"
 #include "main_twin.h"
 
+/* Data objects this unit's own initialisers point at but another
+   unit defines; main_twin.h does not declare them. */
+extern UnkAnimStep D_804089E8[9];
+
 /* Defined in sibling units of this block; main_twin.h does not
    declare them because they were file-local to the single unit
    these were carved out of. */
@@ -573,3 +577,52 @@ void func_8040787C(s32 *p, s32 *b, s32 *c)
 {
     func_804072CC((u8 *)(p + 8), b, c);
 }
+
+/* ---------------------------------------------------------------------------
+   THIS UNIT'S `.data`, 0x80408D40..0x80408D6C.
+
+   The twin's data is two runs: the TABLES, 0x804089E0..0x8040922C, which the
+   nine units own, and the STATE run behind it, which one object has to hold
+   because one object contributes one `.data` run. That is the same shape and
+   the same forced split as the live 0x80020000 overlay -- docs/overlays.md,
+   "The data IS carved, and a unit can only own the FIRST data run".
+
+   Ownership is by DEFINITION, not by use: link order makes a unit's objects
+   contiguous and in unit order, so the referencing units read down the
+   address list come out non-decreasing, and where they do not, the object is
+   merely USED by the later unit. Applying this partition moves no bytes, so
+   byte-identity cannot check it -- it is a claim about the original source.
+   ------------------------------------------------------------------------- */
+
+/* 0x80408D40 */
+/* D_80028068's twin. */
+u8 D_80408D40[2][2] __attribute__((section(".data"))) = {
+    {0x01, 0x00},
+    {0x00, 0x01},
+};
+
+/* 0x80408D44 */
+/* D_8002806C's twin. */
+s32 D_80408D44[2] __attribute__((section(".data"))) = {0x00404040, 0x00808080};
+
+/* 0x80408D4C */
+/* D_80028074's twin: the two animation scripts above. */
+u8 *D_80408D4C[2] __attribute__((section(".data"))) = {
+    (u8 *)D_80408A30,
+    (u8 *)D_804089E8,
+};
+
+/* 0x80408D54 */
+/* D_8002807C's twin. */
+u8 D_80408D54[0x8] __attribute__((section(".data"))) = {0};
+
+/* 0x80408D5C */
+/* D_80028084's twin. */
+u8 D_80408D5C[0x8] __attribute__((section(".data"))) = {
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+
+/* 0x80408D64 */
+/* D_8002808C's twin. */
+u8 D_80408D64[0x8] __attribute__((section(".data"))) = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x83};
+

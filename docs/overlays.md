@@ -1105,15 +1105,53 @@ original had ten units.
   check CONFIRMED `func_804086DC` and `func_80408730` as libcard's `InitCARD`
   and `StartCARD` on content -- see `docs/twin-block-libcard.md`.
 
-#### Still to do
+#### The data is carved too, the same way and with the same forced split
 
-The `.data` window, `0x804089E0..0x8040C628`, is still owned whole by the tail
-unit. Its per-unit partition is known -- two runs, tables then state, each in
-unit order, which is the shape §"The data IS carved" describes for the live
-block, and the state run is a clean non-decreasing sweep across all nine with
-zero order violations. Applying it moves no bytes, so byte-identity cannot
-check it; it is a claim about the original and wants the same care the live
-block's partition got.
+Done the same day. The window is two runs, exactly as the live block's is:
+
+| run | range | who |
+|---|---|---|
+| tables | `0x804089E0..0x8040922C` | the nine units, by definition order |
+| libcard's own | `0x8040922C..0x80409250` | the tail unit |
+| state | `0x80409250..0x8040C628` | the tail unit |
+
+The last two are contiguous, so the tail's single `.data` run covers both --
+which is lucky rather than clever, and it is what lets the whole thing work
+with no yaml change at all: splat's legacy generation already emits one
+`<unit>.o(.data)` line per `c` subsegment, in subsegment order, ahead of the
+explicit `[0x2719e0, .data, ovl_main_80400000]`. Per-unit `.data` sums to
+0x3C48 against the window.
+
+**The split between the units and the tail is FORCED, not chosen**, for the
+reason §"The data IS carved" gives for the live block: one object contributes
+one `.data` run, the image has two runs per unit, so the units take the first
+and the second has to live in one object behind them. Real `.bss` is out for
+the same reason it is out there.
+
+**What decides each boundary.** The state run is fully determined: 27 objects
+whose referencing unit, read down the address list, is a clean non-decreasing
+sweep across all nine with zero violations. The tables run has three objects
+referenced by a LATER unit than the run they sit in -- `0x80408A30`,
+`0x80408EC8`, `0x80409110`/`0x80409128` -- which is the hint-versus-owner
+distinction, not a problem: a data object belongs to the unit that DEFINES
+it. Two boundaries lean on the live block's own partition rather than on the
+twin:
+
+- `0x804089E8` is `D_80027E20`'s twin and `0x80408A30` is `D_80027E68`'s, and
+  both of those are `c_server.c`'s in `csrc/main/`. So c_server owns the head
+  of the run even though the first object a unit NAMES there is cardslot's.
+- The eighteen 12-byte cel records at `0x80409140` are pointed at by
+  c_server's animation scripts, which would put them at the head too. They
+  are not: their live counterparts, `D_80028448` and the rest, are defined in
+  `csrc/main/memory.c`. So they are `memory.c`'s here as well, and the tail
+  of the tables run is memory's -- the same slot the live `memory.c` takes
+  with its message tables.
+
+**Byte-identity cannot check any of this.** Any address-order cut builds the
+same image, so the partition is a claim about the original source. What
+supports it is the non-decreasing property, the three anchors above, and the
+agreement with a partition that was established independently on the live
+block.
 
 ### What not to use the twin for
 
