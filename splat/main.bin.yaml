@@ -64,7 +64,12 @@ segments:
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]
       - [0x23328, c, ovl_main_8008A288]
-      - [0x24114, data, ovl_main_80088760_data]
+      # Dotted: csrc/ovl_main_80088760_data.c defines all 0x30C bytes. It is a
+      # data-only unit because every object here is reached from more than one
+      # of the overlay's three code units, so there is no evidence for a
+      # per-unit partition the way the card overlay has one; that file's
+      # header has the argument.
+      - [0x24114, .data, ovl_main_80088760_data]
   - [0x24420, pad]
   # NB: 2 MB of mastered random filler. (?)
   - [0x28420, bin, unread_filler]
