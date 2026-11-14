@@ -244,6 +244,79 @@
  * the permuter's transforms cannot reach.
  *
  * ==========================================================================
+ * THIRD PASS, 2026-11-13. THE PARK STILL DOES NOT LAND, AND TWO OF THE
+ * CLAIMS BELOW THAT SAY WHY ARE NOW DISPROVEN. Read these before the
+ * second-pass section, which they correct.
+ * ==========================================================================
+ *
+ * 1. "THE CONSTANT HAS NO C-LEVEL NAME EITHER" IS FALSE, and it costs
+ *    nothing to give it one:
+ *
+ *        s32 m = 0x55555556;
+ *        union { long long d; s32 w[2]; } u;
+ *        u.d = (long long)n * m;
+ *        func_8003830C(u.w[0] - (n >> 31), num);     82 words, 3 differing
+ *
+ *    -- the SAME instruction stream as `n / 3`, with the multiplier now a
+ *    named local. The second-pass conclusion rested on the constant being
+ *    unnameable, which is what made "a use of the constant after the mult"
+ *    sound impossible.
+ *
+ * 2. "THE HIGHPART IN $a0 AND THE CONSTANT IN $v0 ... IS UNREACHABLE" IS
+ *    FALSE. Pin both and that is exactly what comes out:
+ *
+ *        register s32 m  asm("$2") = 0x55555556;
+ *        register s32 hi asm("$4");
+ *        union { long long d; s32 w[2]; } u;
+ *        u.d = (long long)n * m;
+ *        hi = u.w[0];
+ *        func_8003830C(hi - (n >> 31), num);         82 words, 1 differing
+ *
+ *        built   lui $v0 / ori $v0 / mult $s3,$v0 / sra $v0,$s3,31 /
+ *                mflo $a0 / subu $a0,$a0,$v0
+ *        target  ... identical except  mfhi $a0
+ *
+ *    All three second-pass residue words are right, the constant stays in
+ *    $v0, and local-alloc does NOT drag it after the highpart. So the
+ *    allocation is not the blocker and the ALLOC verdict no longer describes
+ *    this function.
+ *
+ * WHAT ACTUALLY BLOCKS IT NOW, and it is one bit: `mflo` against `mfhi`.
+ * A hard-register destination SUPPRESSES combine's fold of the subreg into
+ * `smulsi3_highpart`. Without the fold gcc takes `u.w[0]` at its literal
+ * little-endian meaning -- the LOW half -- and, since nothing then reads the
+ * high half, narrows the whole thing to `mult` + `mflo`. So the 1-differing
+ * form is also WRONG CODE: it computes `(n * 0x55555556) - (n >> 31)`.
+ * The fold is what delivers `mfhi` AND the correct value, and the two routes
+ * to it are mutually exclusive with what we need:
+ *   * fold + hard-reg destination  -> only via gcc's OWN division
+ *     (`hi = n / 3 + (n >> 31)`, the second pass's route 2), whose constant
+ *     has no name, so it follows the highpart into $a0: 10 differing.
+ *   * fold + named constant        -> only without a hard-reg destination
+ *     (item 1 above), so the highpart stays in HI: 3 differing.
+ *
+ * MEASURED THIS PASS, all 82 words, verify.py against main/debug/cardinfo:
+ *   union + named m, no pins                                        3
+ *   union + m pinned $v0                                            3
+ *   union + m pinned, quotient pinned $a0                           3
+ *   union + m pinned, hi pinned $a0, hi = u.w[0]                    1  (wrong code)
+ *   the same with `u.w[1]` / `u.w.l`            3  (still `mflo`, pin lost)
+ *   the same with the route-2 cancellation written round u.w[0]     1  (wrong code)
+ *   `(s32)(((long long)n * m) >> 32)` instead of the union         54
+ *   union + `__asm__("" ::"r"(m))` to outlive the mult              9
+ *   route 2 + an unused pinned `m`                                 10
+ *     (confirms the second pass: cse does not adopt it as the multiplier)
+ *   route 1 (`do { } while (0)`) over the union form, m named      63
+ *     and with m pinned                                            60
+ *
+ * SO THE FLOOR IS STILL 3 for a source that computes the right value, but it
+ * is a DIFFERENT floor: not "the allocator cannot be steered" -- it can, and
+ * item 2 steers it exactly onto the target -- but "the one fold that emits
+ * `mfhi` will not take a hard register, and the one spelling that does is
+ * the division whose constant cannot be named". Anything that closes this
+ * has to break that pairing.
+ *
+ * ==========================================================================
  * TWO WAYS TO PUT THE HIGHPART IN A GPR -- 2026-11-13, second pass.
  * ==========================================================================
  *
