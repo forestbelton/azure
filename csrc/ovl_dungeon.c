@@ -1122,6 +1122,34 @@ extern u8 D_800E02CC[];
 /* func_8008C7B4's two eight-way facing tables. */
 extern u8 D_800DD0B8[];
 extern u8 D_800DCFD8[];
+/* The 0x34-byte Gouraud-textured primitive func_800D3738 and func_800C6B40
+   emit -- libgpu's POLY_GT4, with the three u/v pairs that are read back a
+   byte at a time written through Unk453E0UV the way the resident
+   func_800453E0's Unk453E0P does. */
+typedef struct UnkDungeonGT4
+{
+    u32 unk_00;
+    u32 unk_04;
+    u16 unk_08;
+    u16 unk_0A;
+    u16 unk_0C;
+    u16 unk_0E;
+    u32 unk_10;
+    u16 unk_14;
+    u16 unk_16;
+    Unk453E0UV unk_18;
+    u16 unk_1A;
+    u32 unk_1C;
+    u16 unk_20;
+    u16 unk_22;
+    Unk453E0UV unk_24;
+    u16 unk_26;
+    u32 unk_28;
+    u16 unk_2C;
+    u16 unk_2E;
+    Unk453E0UV unk_30;
+    u16 unk_32;
+} UnkDungeonGT4;
 extern u8 D_800DCFB0[];
 /* func_80090C10's own callees and rodata.  func_8004B568 takes NO argument at
    its one call site here ($a0 is never set before the `jal`), so it is
@@ -35355,7 +35383,247 @@ s32 func_800D36D0(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3738);
+/* Emits one POLY_GT4 per 0xC-byte element for one slot: the resident
+   func_800453E0 (csrc/gprel_18B40.c) over a 0x34-byte Gouraud primitive
+   instead of its 0x28-byte flat one, with the quad's TOP edge widened by
+   half.  Unk453E0SP, Unk44D24E and Unk453E0T are that function's own types
+   and carry over unchanged.
+
+   TWO SPELLING FACTS, and each was worth the whole match.
+
+   (1) THE ELEMENT'S x AND y BYTES GO THROUGH AN `s16` LOCAL AND THE
+   WIDENING IS `a = a + a / 2;` WITH NO CAST.  With `s32 a` and
+   `a + (s16)a / 2` all six `(s8)e->unk_02`/`unk_03` reads come out as a
+   single `lb` instead of the target's `lbu` + `sll 24` + `sra 24`, and the
+   function is 514 words / 102 aligned differences.  The HImode local is
+   what forces the pair: the sign extension is of a QImode value already in
+   a register, because the `a + a / 2` store is HImode and combine rewrites
+   the extension as shifts rather than deleting it.  `volatile` on the byte
+   read (docs/matching-levers.md) produces the same triple and is the WRONG
+   cure here -- loop.c reverts the DEST_ADDR giv substitution on a volatile
+   MEM (`validate_change` cannot re-recognise an insn holding one), so the
+   six reads come off the biv at `2($s2)` instead of the e+4 giv at
+   `-0x2($s2)`, the three callee-saved registers permute, and it is 527
+   words but 91 aligned differences.
+
+   (2) THE SECOND COLOUR WORD IS STORED THROUGH A `u8 *` CAST.  Written
+   `q->unk_28 = *(u32 *)s->unk_0C;` the store is an in-struct MEM, its
+   pseudo outlives the `(sp->unk_24 & 0xC) == 0xC` gate, it lands in $a0
+   instead of $v1, and reorg then steals it into the `bne`'s delay slot
+   where the target has `lui $a0, 0xFF` -- 527 words, 8 aligned differences.
+   The cast kills the last eight.  Also measured on that tail, all at
+   527 words: `1C, 28, setlen, setcode` 8; `1C, 28, setcode, setlen` 11;
+   `setlen, setcode, 1C, 28` 19; `28, 1C, setlen, setcode` 9; the zero
+   stores swapped 10; a `u32` local for the second store, `0xC == (x & 0xC)`
+   and `*(u32 *)&p->unk_24` all compiled to the identical program.
+
+   527 words, 0 differing. */
+void func_800D3738(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3)
+{
+    Unk80083160 *g = &D_80083160;
+    Unk453E0SP *p = (Unk453E0SP *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    UnkDungeonGT4 *q;
+    Unk44D24E *e;
+    s32 w;
+    s32 h;
+
+    p->unk_EC = 0;
+    p->unk_8C = 0;
+    p->unk_84 = 0;
+    p->unk_7C = 0;
+    p->unk_74 = 0;
+    p->unk_20 = base + 0xB0;
+    p->unk_00 = ((u16 *)v)[1];
+    p->unk_02 = ((u16 *)v)[3];
+    p->unk_04 = ((u16 *)v)[5];
+    q = *(UnkDungeonGT4 **)(base + 0x8D0);
+    p->unk_C0 = RotTransPers((void *)0x1F800000, (void *)0x1F8000B8, (void *)0x1F800090,
+                             (void *)0x1F800094);
+    s->unk_14 |= 0x8000;
+    w = p->unk_C0 - 0xA;
+    D_8006CD30.unk_1C = p->unk_C0 * 4;
+    p->unk_C0 = w - arg3;
+    if ((u32)p->unk_C0 < 0x1D6)
+    {
+        PushMatrix();
+        p->unk_B8 = p->unk_B8 - 0xA0;
+        p->unk_BA = p->unk_BA - 0x78;
+        p->unk_30.w = g->unk_C4;
+        p->unk_34.w = g->unk_C6;
+        p->unk_38.w = g->unk_C8;
+        p->unk_100 = s->unk_16;
+        p->unk_104 = g->unk_B8 + (s->unk_1A - p->unk_34.h);
+        h = s->unk_18 - 0x100;
+        p->unk_102 = h + ((p->unk_38.h + 0x100) & 0x1FF);
+        p->unk_108 = p->unk_E4 = s->unk_20;
+        p->unk_10A = p->unk_E8 = s->unk_22;
+        RotMatrix((void *)0x1F800100, (void *)0x1F8000D0);
+        p->unk_30.w = s->unk_1C;
+        p->unk_34.w = s->unk_1E;
+        p->unk_38.w = 0x1000;
+        ScaleMatrix((void *)0x1F8000D0, (void *)0x1F800030);
+        CompMatrix(&D_8006CD30, (void *)0x1F8000D0, (void *)0x1F800050);
+        SetTransMatrix((void *)0x1F800050);
+        SetRotMatrix((void *)0x1F800050);
+        e = (Unk44D24E *)s->unk_08;
+        p->unk_24 = s->unk_14;
+        for (;;)
+        {
+            if ((e->unk_00 & 0x20) == 0)
+            {
+                s32 x;
+                s32 y;
+                s16 a;
+
+                x = e->unk_08;
+                p->unk_08.w = x;
+                y = e->unk_0A;
+                p->unk_10.w = y;
+                if (x + y >= 0x100 || s->unk_1A != 0)
+                {
+                    p->unk_10.w = y - 1;
+                }
+                x = e->unk_09;
+                p->unk_0C.w = x;
+                y = e->unk_0B;
+                p->unk_14.w = y;
+                if (x + y >= 0x100 || s->unk_1A != 0)
+                {
+                    p->unk_14.w = y - 1;
+                }
+                if ((e->unk_00 ^ p->unk_24) & 1)
+                {
+                    a = -(s8)e->unk_02 - p->unk_108;
+                    a = a + a / 2;
+                    p->unk_70 = a;
+                    a = a - (p->unk_10.h + p->unk_10.w / 2);
+                    p->unk_78 = a;
+                    a = -(s8)e->unk_02 - p->unk_108;
+                    p->unk_80 = a;
+                    a = a - p->unk_10.h;
+                    p->unk_88 = a;
+                }
+                else
+                {
+                    a = (s8)e->unk_02 - p->unk_108;
+                    a = a + a / 2;
+                    p->unk_70 = a;
+                    a = a + (p->unk_10.h + p->unk_10.w / 2);
+                    p->unk_78 = a;
+                    a = (s8)e->unk_02 - p->unk_108;
+                    p->unk_80 = a;
+                    a = a + p->unk_10.h;
+                    p->unk_88 = a;
+                }
+                if ((e->unk_00 ^ p->unk_24) & 2)
+                {
+                    a = -(s8)e->unk_03 - p->unk_10A;
+                    p->unk_7A = a;
+                    p->unk_72 = a;
+                    a = a - p->unk_14.h;
+                    p->unk_8A = a;
+                    p->unk_82 = a;
+                }
+                else
+                {
+                    a = (s8)e->unk_03 - p->unk_10A;
+                    p->unk_7A = a;
+                    p->unk_72 = a;
+                    a = a + p->unk_14.h;
+                    p->unk_8A = a;
+                    p->unk_82 = a;
+                }
+                RotTransPers4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &p->unk_F0,
+                              &p->unk_F4, &p->unk_F8, &p->unk_FC, &p->unk_90, &p->unk_94);
+                q->unk_08 = p->unk_F0 + p->unk_B8;
+                q->unk_0A = p->unk_F2 + p->unk_BA;
+                q->unk_14 = p->unk_F4 + p->unk_B8;
+                q->unk_16 = p->unk_F6 + p->unk_BA;
+                q->unk_20 = p->unk_F8 + p->unk_B8;
+                q->unk_22 = p->unk_FA + p->unk_BA;
+                q->unk_2C = p->unk_FC + p->unk_B8;
+                q->unk_2E = p->unk_FE + p->unk_BA;
+                if ((((u16)(q->unk_08 + 0x20) < 0x181 && (u16)(q->unk_0A + 0x20) < 0x121) |
+                     ((u16)(q->unk_14 + 0x20) < 0x181 && (u16)(q->unk_16 + 0x20) < 0x121) |
+                     ((u16)(q->unk_20 + 0x20) < 0x181 && (u16)(q->unk_22 + 0x20) < 0x121) |
+                     ((u16)(q->unk_2C + 0x20) < 0x181 && (u16)(q->unk_2E + 0x20) < 0x121)) != 0)
+                {
+                    u8 t;
+
+                    s->unk_14 &= 0x7FFF;
+                    p->unk_10.w = p->unk_10.w + p->unk_08.w;
+                    p->unk_14.w = (p->unk_14.w + p->unk_0C.w) << 8;
+                    p->unk_0C.w = p->unk_0C.w << 8;
+                    if (p->unk_24 & 0x100)
+                    {
+                        q->unk_0E = s->unk_12;
+                    }
+                    else
+                    {
+                        q->unk_0E = s->unk_12 + e->unk_06;
+                    }
+                    q->unk_0C = p->unk_0C.h + p->unk_08.h;
+                    q->unk_18.h = p->unk_0C.h + p->unk_10.h;
+                    if (s->unk_10 != 0)
+                    {
+                        q->unk_1A = s->unk_10 + (e->unk_04 & 0xFF9F);
+                    }
+                    else
+                    {
+                        q->unk_1A = e->unk_04;
+                    }
+                    q->unk_24.h = p->unk_14.h | p->unk_08.h;
+                    q->unk_30.h = p->unk_14.h | p->unk_10.h;
+                    if ((s16)p->unk_50 >= 0x1800)
+                    {
+                        t = q->unk_30.b[0];
+                        q->unk_30.b[0] = t + 0xFF;
+                        q->unk_18.b[0] = t;
+                    }
+                    if ((s16)p->unk_58 >= 0x1800)
+                    {
+                        t = q->unk_30.b[1];
+                        q->unk_30.b[1] = t + 0xFF;
+                        q->unk_24.b[1] = t;
+                    }
+                    if ((s16)q->unk_08 > (s16)q->unk_2C)
+                    {
+                        t = q->unk_30.b[0];
+                        q->unk_30.b[0] = t + 0xFF;
+                        q->unk_18.b[0] = t;
+                    }
+                    if ((s16)q->unk_0A > (s16)q->unk_2E)
+                    {
+                        t = q->unk_30.b[1];
+                        q->unk_30.b[1] = t + 0xFF;
+                        q->unk_24.b[1] = t;
+                    }
+                    q->unk_04 = 0;
+                    q->unk_10 = 0;
+                    q->unk_1C = *(u32 *)s->unk_0C;
+                    *(u32 *)((u8 *)q + 0x28) = *(u32 *)s->unk_0C;
+                    setlen(q, 12);
+                    setcode(q, 0x3C);
+                    if ((*(s32 *)&p->unk_24 & 0xC) == 0xC)
+                    {
+                        setcode(q, 0x3E);
+                    }
+                    ((Unk453E0T *)q)->addr = ((Unk453E0T *)(p->unk_20 + p->unk_C0 * 4))->addr;
+                    ((Unk453E0T *)(p->unk_20 + p->unk_C0 * 4))->addr = (u32)q;
+                    q++;
+                }
+            }
+            if ((s8)e->unk_00 < 0)
+            {
+                break;
+            }
+            e++;
+        }
+        PopMatrix();
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* func_800D1C70 with the D_800DEEC0 template, a 0x1000 scale,
    func_800D4158 / func_800D4494 as the hooks, two more renderer fields set
