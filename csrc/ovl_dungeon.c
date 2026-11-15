@@ -1193,14 +1193,6 @@ typedef struct UnkDungeonSPC
     UnkDungeonSPXY unk_F0[4];
     SVECTOR unk_100;
 } UnkDungeonSPC;
-/* func_800AFFB4's projection and emit pair.  THE `func_` SPELLINGS ARE
-   MANDATORY: RotNclip4 and SetPolyGT4 are declared by psyq/include and resolve
-   through splat/common_syms.txt, which build/dungeon.bin does NOT link --
-   the Makefile passes that script for town.bin and main.bin only.  The psyq
-   names compile and measure 0 differing, then fail the link.  Kept
-   unprototyped and on ONE line each: a wrapped declaration breaks the
-   whole-unit sweep's awk definition scan, and every argument is a pointer, so
-   a prototype buys no codegen. */
 /* func_800C7930's two halfword tables, indexed by the renderable's facing. */
 extern u16 D_800DCEAC[];
 extern u16 D_800DCEBC[];
@@ -6481,7 +6473,7 @@ void func_80096A54(u8 *a, UnkVec *v, u8 *b, u8 *c)
 
 /* Installer: state 0x34, handler slot cleared, bit 0 of the +0xA2 halfword
    dropped. 8 words, 0 differing. */
-void func_80096AC0(u8 *p)
+void func_80096AC0(u8 *p, void *b, u8 *c, u8 *d)
 {
     p[0x9A] = 0x34;
     p[0x9B] = 0;
@@ -18138,13 +18130,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AFBFC);
    causes drags the whole `d` block with it. `s32` is 355 / 184, `u8` 355 /
    182, `volatile u16` 354 / 200.
 
-   THE CALLEES MUST BE SPELLED `func_`. RotNclip4, SetPolyGT4 and AddPrim are
+   THE CALLEES ARE SPELLED `RotNclip4` / `SetPolyGT4` / `AddPrim`.  They are
    declared by psyq/include and resolve through splat/common_syms.txt, which
-   build/dungeon.bin does NOT link against -- the Makefile passes
-   --script=splat/common_syms.txt for town.bin and main.bin only. The psyq
-   names compile, measure 356/356 at 0 differing, and then fail the link;
-   only RotNclip4, SetPolyGT4 and AddPrim are in
-   splat/dungeon.bin_undefined_funcs_auto.txt. */
+   build/dungeon.bin did NOT link until 2026-11-15 -- the Makefile passed that
+   script for town.bin and main.bin only, so the library names compiled,
+   measured 356/356 at 0 differing, and then failed the link.  The dungeon
+   rule passes it now and all four containers stay byte-identical. */
 POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag)
 {
     s32 i;
