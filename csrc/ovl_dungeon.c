@@ -2970,7 +2970,52 @@ void func_80093D8C(u8 *a, u8 *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80093E74);
+/* Retire the party slot the view's +0x8A names: copy the live record into
+   the D_800E3E48 shadow, point D_800E3DF0 at the copy, clear the slot's
+   0x4000 flag and the +0xD0 pointer, mark the owner and announce 0x704.
+
+   THE SLOT INDEX IS `s16`, AND IT IS THE WHOLE FUNCTION. As `u8 k` the
+   widened value lives in ONE pseudo and the target's `addu $s0, $s3, $zero`
+   -- a copy of the widened index, kept so that one register feeds the three
+   early uses and the other the late re-read after the inline struct
+   assignment ends cse's region -- is never emitted: 109 words of 110.
+   An `s16` is an HImode pseudo whose int uses each want a conversion, which
+   is where the copy comes from. `u16` is 1 differing (the extension comes
+   out `andi` rather than `sll`/`sra`), `s8` is 109 words again, and any
+   plain `s32` index is 106 -- an int index lets reload_cse reuse the earlier
+   `&D_800E3DF0[i]` across the block move and costs four more words.
+
+   Three placements of an `__asm__("" : "=r"(j) : "0"(j))` copy device were
+   measured first and all stayed at 109: gcc coalesces the copy away.
+   decomp-permuter found the type in 434 candidates. 110 words, 0 differing. */
+void func_80093E74(u8 *p, void *b, void *c, u8 *d)
+{
+    u8 *q;
+    u8 *r;
+    u8 *e;
+    u8 *w;
+    s16 k;
+    s32 i;
+
+    q = *(u8 **)(p + *(s16 *)(d + 0x8A) * 4 + 0xD0);
+    q[3] &= 0xDF;
+    k = q[3] & 0x1F;
+    i = k;
+    r = (u8 *)D_800E3DF0[i];
+    if ((s16)func_80042900((s8 *)r, 0xA) != 0)
+    {
+        r[0x13] = r[0xA8];
+    }
+    D_800E3DF0[i] = (s32)&D_800E3E48[i];
+    D_800E3E48[i] = *(Unk800E3E48 *)r;
+    *(u32 *)((u8 *)D_800E3DF0[k] + 0x14) &= ~0x4000;
+    *(s32 *)(p + *(s16 *)(d + 0x8A) * 4 + 0xD0) = 0;
+    *(u32 *)(*(u8 **)(d + 0x60) + 0x1C) |= 0x400000;
+    e = *(u8 **)(d + 0x60);
+    w = *(u8 **)(e - 0x14);
+    func_8009A3D0(w[0x24], w[0x25], (*(u32 *)(e + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+    func_800A56E0(0x704);
+}
 
 /* The dungeon's "can the party step here" probe, called from two stubs with
    SIX arguments: the leader record, an unread second, the tile record whose
