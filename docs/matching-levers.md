@@ -817,9 +817,9 @@ then read only the section you need.
 - `s16` FOR A BOOLEAN SWITCH RESULT KEEPS THE JOIN COPIES  `:27239`
 - A LOOP BOUND AS A LOCAL AND AS AN IN-CONDITION READ ARE BOTH RIGHT, PER LOOP  `:27247`
 - A CONSTANT ADDRESS AND ITS DECLARED SYMBOL CAN BE BYTE-IDENTICAL AND STILL DECIDE A REGISTER PAIR  `:27261`
-- AN `s16` DESTINATION IS WHAT STOPS combine FOLDING `lbu`/`sll 24`/`sra 24` INTO ONE `lb`  `:27289`
-- WHICH OPERAND OF A `<` IS WRITTEN FIRST DECIDES THE REGISTER PAIR AND THE LOAD ORDER  `:27300`
-- clang-format READS `(s16)*(u16 *)x` AS A MULTIPLY  `:27307`
+- AN `s16` DESTINATION IS WHAT STOPS combine FOLDING `lbu`/`sll 24`/`sra 24` INTO ONE `lb`  `:27309`
+- WHICH OPERAND OF A `<` IS WRITTEN FIRST DECIDES THE REGISTER PAIR AND THE LOAD ORDER  `:27320`
+- clang-format READS `(s16)*(u16 *)x` AS A MULTIPLY  `:27327`
 
 <!-- END INDEX -->
 
@@ -27276,15 +27276,35 @@ a register, which lengthens a nearby parameter's live range across an
 ```
 
 `D_80013714` as the DECLARED SYMBOL is right here, where the unit's other
-sixteen sites use the raw address. An `__asm__("" ::"r"(d))` reference buys
-the identical flip -- it is what `func_8008C13C`'s own `/* DEVICE */` does,
-for the same allocno, in the same family -- so **the symbol spelling makes the
-device unnecessary**.
-
-**The practical rule: when the residue is two swapped callee-saved registers
+sixteen sites use the raw address. **The practical rule: when the residue is two swapped callee-saved registers
 and the function reads an out-of-image global, measure the symbol spelling
 before reaching for a free-reference device.** `ovlverify` cannot distinguish
-them; only `aligndiff` can.
+them; only `aligndiff` can, and the spelling is free where a device is not.
+
+**BUT THE TWO ARE NOT THE SAME LEVER, AND ONLY MEASUREMENT TELLS YOU WHICH YOU
+NEED.** Both 2x2 grids, run on two functions that are line-for-line relatives
+in one family:
+
+| | `func_8008B9FC` | `func_8008C13C` |
+| --- | --- | --- |
+| symbol, no device | **0** | 25 |
+| constant, no device | 51 | 25 |
+| constant + `__asm__("" ::"r"(d))` | **0** | **0** |
+| symbol + device | -- | 25 |
+
+On the first they are interchangeable and the free spelling is the one to
+take. On the second **the device is REQUIRED and the symbol spelling is
+ACTIVELY HARMFUL** -- it destroys the device's effect, 0 to 25, with or
+without the device present.
+
+The mechanisms only look alike. The symbol buys a REGISTER for the `high`,
+which lengthens a neighbouring parameter's live range; `func_8008C13C`'s
+device buys `c` three INSNS of live range (232 -> 229 -> 231) against a
+different competitor entirely. They move the same decision in one function and
+different decisions in the other.
+
+The operand is not free either: on `func_8008B9FC`, `__asm__("" ::"r"(d))`
+reaches 0 while `"r"(p)` and `"r"(c)` are both 51.
 
 ## AN `s16` DESTINATION IS WHAT STOPS combine FOLDING `lbu`/`sll 24`/`sra 24` INTO ONE `lb`
 
