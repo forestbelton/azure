@@ -307,6 +307,8 @@ void func_800A63B8(u8 *, u8 *, s16);
 s32 func_800AD6FC(u8 *, s32, s32);
 void func_800A5F38(u8 *, u8 *);
 void func_800C4AFC(u8 *, s32, u8 *);
+extern s32 D_800DCF78;
+void func_800C4944();
 void *func_800990FC(void);
 void *func_80099194(u8 *, u8 *);
 /* RETURNS the advanced cursor: it writes the terminating NUL and hands back
@@ -7876,7 +7878,59 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800ABDBC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AC010);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AC480);
+/* Glide the mover towards the tile record's centre over the +0x96 countdown,
+   then -- on the frame it reaches zero -- stop it dead, re-place it on the
+   tile, and hand the leash at +0x88 back to the view. 82 words, 0 differing.
+
+   THE 0x20 IN THE FIRST NUMERATOR IS A VARIABLE, and that is the whole
+   function. Both halves want `(byte << 6) - (halfword - 0x20)`, which fold
+   reassociates into `(byte << 6) - halfword + 0x20` unless the subtrahend is
+   its own statement -- and with the statement the two equal-depth chains of
+   the FIRST numerator schedule the other way round: `lh 0x2($a0)` before
+   `lbu 0x24($s0)`, four words differing, with every other word in the
+   function exact. rank_for_schedule has nothing left to separate them but
+   INSN_LUID, and no source order reaches it: thirty-three spellings were
+   measured, including the byte hoisted into a local of either type, two
+   numerator locals, either store as a cast, `* 0x10000` for `<< 16`, and an
+   empty `__asm__ volatile("")` between the chains (84 words) or before them
+   (no change). Holding the 0x20 in a local instead blocks the reassociation
+   without a statement boundary, and the chains come out in the target's
+   order. The second numerator keeps the ordinary spelling; it was never
+   wrong. decomp-permuter found this in two minutes after the hand sweep had
+   run out. */
+s32 func_800AC480(u8 *p, UnkVec *v, u8 *r, u8 *b)
+{
+    s16 n;
+    s16 d;
+    s32 w;
+    u8 *g;
+
+    n = *(s16 *)(p + 0x96);
+    if (n != 0)
+    {
+        w = 0x20;
+        v->unk_0C = (((r[0x24] << 6) - (*(s16 *)((u8 *)v + 0x2) - w)) << 16) / n;
+        w = *(s16 *)((u8 *)v + 0x6) - 0x20;
+        v->unk_10 = (((r[0x25] << 6) - w) << 16) / *(s16 *)(p + 0x96);
+    }
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return 0;
+    }
+    v->unk_14 = 0;
+    v->unk_10 = 0;
+    v->unk_0C = 0;
+    func_800A2B04(v, r[0x24], r[0x25]);
+    d = func_800BCB04((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20, *(u16 *)(b + 0x88) - 0x20);
+    if (d < 0x200)
+    {
+        *(s16 *)(p + 0x92) += *(u16 *)(b + 0x88) - d;
+        *(s16 *)(b + 0x88) = d;
+    }
+    g = (u8 *)&D_80083460;
+    *(s16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AC5C8);
 
@@ -12354,7 +12408,68 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4640);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4944);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4AFC);
+/* Spawn the 0x202 tint node the kill handlers close on: stash the colour in
+   D_800DCF78, run func_800B835C over the pair {0x1000340, 0x200020}, copy the
+   dying mover's three coordinates into both the new node's mover and its own
+   +0x40 record, and bump the engine's +0x0A counter. 65 words, 0 differing.
+
+   THE FIRST ARGUMENT IS `(u8 *)&D_800DCF78 - 0x10`, and that spelling is what
+   produces the target's THREE-instruction address: one `lui %hi`, one
+   `addiu %lo` and a separate `addiu -0x10`, with the colour's own store
+   reusing the same `%hi` register. A symbol of its own at 0x800DCF68 would
+   fold into two.
+
+   ONE TEMPORARY PER COORDINATE, NOT ONE REUSED. With a single `u16 t` for all
+   three the three live quantities rotate -- the copy takes $a1 where the
+   target has $v0, the record pointer $v1 where the target has $a1 and the
+   mover $v0 where the target has $v1 -- 18 differing with every opcode right.
+   Three locals is 0. The screen that proved it was the mode: `u8 t` alone
+   reproduces the target's allocation exactly and leaves only the three `lbu`
+   against `lhu`, 5 differing, which says the residue was never about the
+   stores.
+
+   AND THE COLOUR'S STORE COMES FIRST, above both stack-array stores: written
+   last it swaps with the `sw 0x14($sp)` that fills the call's delay slot
+   (2 differing), and written between them it also swaps the two constants'
+   registers (7). */
+void func_800C4AFC(u8 *m, s32 col, u8 *act)
+{
+    UnkNode *n;
+    u8 *q;
+    UnkVec *v;
+    s32 arr[2];
+    u16 t1;
+    u16 t2;
+    u16 t3;
+    u8 *g;
+
+    n = func_8003FD64(0x202, D_80083498);
+    if (n != NULL)
+    {
+        D_800DCF78 = col;
+        arr[0] = 0x1000340;
+        arr[1] = 0x200020;
+        func_800B835C((u8 *)&D_800DCF78 - 0x10, arr, 1, 0);
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x2) = 0x40;
+        v = n->unk_08;
+        *(u32 *)((u8 *)n + 0x10) = (u32)func_800C4944;
+        t1 = *(u16 *)(m + 0x2);
+        *(s16 *)((u8 *)v + 0x2) = t1;
+        *(s16 *)(q + 0x20) = t1;
+        t2 = *(u16 *)(m + 0x6);
+        *(s16 *)((u8 *)v + 0x6) = t2;
+        *(s16 *)(q + 0x22) = t2;
+        t3 = *(u16 *)(m + 0xA);
+        *(s16 *)((u8 *)v + 0xA) = t3;
+        *(s16 *)(q + 0x24) = t3;
+        *(u8 **)(q + 0x1C) = m;
+        *(u8 **)(q + 0x28) = act;
+        func_800A56E0(0x702);
+        g = (u8 *)&D_80083460;
+        *(s16 *)(g + 0xA) += 1;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4C00);
 

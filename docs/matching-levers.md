@@ -22810,3 +22810,74 @@ is 66 words. Written as two complete store arms the `>> 2`, the add and the
 store are duplicated into both and `find_cross_jump` does not merge them back
 -- 70 words. The rule of thumb: put only the DIFFERING expression in the
 ternary, never the statement around it.
+
+## HOLD A CONSTANT IN A LOCAL TO BLOCK fold's REASSOCIATION WITHOUT A STATEMENT BOUNDARY
+
+`func_800AC480`, ovl_dungeon, 2026-11-14. Four words, after thirty-three
+spellings and a permuter run.
+
+`A - (B - K)` is reassociated by `fold` into `A - B + K`, and the usual cure
+is to compute `B - K` in its own statement. But the statement boundary also
+sets the two chains' INSN_LUIDs, and when both are the same depth
+`rank_for_schedule` (sched.c) has nothing left to separate them: it falls
+through priority and dependence class to LUID, and the chains come out in
+source order. If the target wants the other order, NOTHING in the source
+reaches it -- not the operand hoisted into a local of any type, not two
+numerator locals, not a cast store, not `* 0x10000` for `<< 16`, and not an
+empty `__asm__ volatile("")` between the chains (which costs two words) or
+before them (which changes nothing).
+
+The cure is to keep the expression in ONE statement and make `K` a variable:
+
+    w = 0x20;
+    v->unk_0C = (((r[0x24] << 6) - (*(s16 *)((u8 *)v + 0x2) - w)) << 16) / n;
+
+`fold` will not reassociate across a non-constant, so the `addiu -0x20`
+survives, and because there is no statement boundary the sub-expressions keep
+the evaluation order the source wrote them in.
+
+**The general shape:** when a statement boundary is the only thing standing
+between two equal-depth chains and the schedule you want, replace the
+boundary with a variable.
+
+## ONE TEMPORARY PER READ-BACK, AND THE MODE IS THE SCREEN
+
+`func_800C4AFC`, ovl_dungeon, 2026-11-14. 18 differing with every opcode
+already right, and the same lever `func_800DC724` needed.
+
+Three coordinates each read once and stored twice, through a single reused
+`u16 t`, merge into ONE quantity whose `QTY_CMP_PRI`
+(`floor_log2(refs)*refs*size / (death - birth)`, local-alloc.c:1693) then
+loses to the two pointers: the copy takes `$a1` where the target has `$v0`,
+the record pointer `$v1` where the target has `$a1`, and the mover `$v0`
+where the target has `$v1`. Three separate locals is 0 differing.
+
+**And there is a cheap screen for it.** Declaring the single temporary `u8`
+instead of `u16` reproduces the target's allocation exactly and leaves only
+the three `lbu` against `lhu` -- 5 differing. When a narrowing of a temporary
+fixes the registers and breaks only the load widths, the residue was never
+about the stores: it is the quantity's lifetime, and the fix is to split it.
+
+## A GLOBAL'S STORE GOES ABOVE THE STACK-ARRAY STORES THAT FEED THE SAME CALL
+
+`func_800C4AFC`, ovl_dungeon, 2026-11-14. Two words.
+
+A call taking a global's address and a stack array: write the global's own
+store FIRST. Written after both array elements it swaps with the `sw` that
+fills the call's delay slot (2 differing); written between them it also
+swaps the two constants' registers (7).
+
+## `(u8 *)&SYM - K` IS THREE INSTRUCTIONS AND A SEPARATE SYMBOL IS TWO
+
+`func_800C4AFC`, ovl_dungeon, 2026-11-14.
+
+    lui   $v0, %hi(D_800DCF78)
+    addiu $a0, $v0, %lo(D_800DCF78)
+    addiu $a0, $a0, -0x10
+    sw    $s2, %lo(D_800DCF78)($v0)
+
+is `func_800B835C((u8 *)&D_800DCF78 - 0x10, ...)` beside `D_800DCF78 = col;`
+-- one `%hi` serving both, with the displacement as its own `addiu`. A symbol
+declared at the lower address would fold into `lui`/`addiu` and share nothing.
+So a lone `addiu reg, reg, -K` after a `%lo` is a sign that the source names
+the HIGHER symbol and subtracts.
