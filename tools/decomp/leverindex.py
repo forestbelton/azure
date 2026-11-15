@@ -8,8 +8,13 @@ need, instead of paying for the whole document on every turn.
 Rewrites the block between the INDEX markers in place. Run it after adding or
 renaming a heading; `--check` exits 1 if the index is stale.
 
-    python3 tools/decomp/leverindex.py
-    python3 tools/decomp/leverindex.py --check
+    python3 tools/decomp/leverindex.py              # regenerate the index
+    python3 tools/decomp/leverindex.py --check      # exit 1 if stale
+    python3 tools/decomp/leverindex.py --grep DELAY # headings matching a word
+
+UNKNOWN ARGUMENTS ARE AN ERROR, deliberately. This script used to accept any
+argument and fall through to REWRITING the document, so a reader who typed
+`--grep` got a silent edit to docs/matching-levers.md instead of a search.
 """
 import io
 import os
@@ -67,14 +72,48 @@ def rebuild_once(text):
     return new
 
 
+def grep(text, words):
+    """Print the headings matching every word, case-insensitively."""
+    hits = 0
+    for line in text.split("\n"):
+        if not line.startswith("## "):
+            continue
+        head = line[3:].rstrip()
+        low = head.lower()
+        if all(w.lower() in low for w in words):
+            print(head)
+            hits += 1
+    if not hits:
+        print("no heading matches %s" % " ".join(words))
+    return 0
+
+
 def main():
+    args = sys.argv[1:]
     text = io.open(DOC, encoding="utf-8").read()
+
+    if args and args[0] == "--grep":
+        if len(args) < 2:
+            sys.stderr.write("usage: leverindex.py --grep WORD [WORD...]\n")
+            return 2
+        return grep(text, args[1:])
+
+    unknown = [a for a in args if a != "--check"]
+    if unknown:
+        sys.stderr.write(
+            "leverindex.py: unknown argument %s\n"
+            "  (no argument) regenerate the index\n"
+            "  --check       exit 1 if the index is stale\n"
+            "  --grep WORD   print headings matching WORD\n"
+            "Refusing to rewrite %s.\n" % (unknown[0], DOC))
+        return 2
+
     final = rebuild(text)
     levers = len(build(final.split("\n")))
     if final == text:
         print("index current (%d levers)" % levers)
         return 0
-    if "--check" in sys.argv:
+    if "--check" in args:
         print("index is STALE (%d levers); run leverindex.py" % levers)
         return 1
     io.open(DOC, "w", encoding="utf-8").write(final)
