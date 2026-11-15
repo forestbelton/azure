@@ -12,8 +12,10 @@ containers. What changed on 2026-11-01, and the evidence for it, is below.
 **Unknown is not the same as owned, and OWNED is what is left.** A `data` or
 `rodata` subsegment is accounted for but still lives in `asm/data/*.s` as
 `dlabel`s rather than as C. As of 2026-11-14 the game's own unowned bytes are
-**61,580 in four subsegments**, down from 70,308, and 968 of those four
-cannot be owned in C at all: the three string pools went
+**992 in three subsegments**, down from 70,308 at the start of that day, and
+968 of the 992 cannot be owned in C at all. What is left is `gp_sbss` (968
+bytes of `.sbss` and the 0x800-rounded tail of `t_size`, which a C definition
+emits as NOBITS) and `tbl_660C` plus `smf_magic`, 24 bytes between them: the three string pools went
 to C that day (`csrc/str/speakers.c`, `csrc/str/spells.c`,
 `csrc/str/commands.c`, 6,160 bytes and 237 objects), then `game_gp` as
 `csrc/game_gp.c` (60 bytes, 10 objects, the project's first `.sdata`
@@ -595,10 +597,9 @@ the other three are `data`.
 |---|---|---|---|---|
 | `tbl_660C` | 0x660C-0x6614 | 8 | 1 | a `u16` array `{1,2,3}`, `D_80032E0C`, behind the item pool |
 | `smf_magic` | 0x68FC-0x690C | 16 | 1 | `MThd`/`MTrk` with zero lengths |
-| `game_data` | 0x3E040-0x4CCEC | 60,588 | 666 | see the section above |
 | `gp_sbss` | 0x54C38-0x55000 | 968 | 67 | `.sbss` and the 0x800-rounded tail of `t_size`, all zero; NOT ownable in C at any `-G` |
 
-And the seven that are DONE:
+And the eight that are DONE:
 
 | subsegment | file range | bytes | objects | C unit |
 |---|---|---|---|---|
@@ -609,6 +610,7 @@ And the seven that are DONE:
 | `names` | 0x541D0-0x5426C | 156 | 20 | `csrc/str/names.c` |
 | `game_gp` | 0x54194-0x541D0 | 60 | 10 | `csrc/game_gp.c` |
 | `gp_data` (`.sdata` part) | 0x5426C-0x54C38 | 2,508 | 287 | `csrc/gp_data.c` |
+| `game_data` | 0x3E040-0x4CCEC | 60,588 | 666 | `csrc/game_data.c` |
 
 `gp_data` is **not** the game's alone, which is why it is no longer called
 `game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there, and it is the
@@ -910,15 +912,26 @@ is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
 `.rodata` subsegment and no `data` chunks at all (`csrc/str/monsters.c`). See
 `docs/main-bin-data.md`.
 
-## What is left, in order
+## What is left
 
-1. **`game_data`, 60,588 bytes, 666 objects** -- blocked on carving the text
-   into original translation units first; see the section above for the
-   measurement and the one tool it needs.
-2. **Nothing, in the gp region.** `game_gp` and `gp_data`'s `.sdata` part
-   both landed on 2026-11-14. `gp_sbss`, the 968 bytes above 0x54C38, is not
-   work: a C definition cannot emit it at any `-G`.
-3. **`tbl_660C` and `smf_magic`, 24 bytes** -- not blocked on anything, just
-   not worth a translation unit each. Folding `smf_magic` into
-   `csrc/unk_2879C.c` would need the compiler to emit the array after that
-   unit's jump tables.
+**Nothing that can be owned, as of 2026-11-14.** Every string pool, the gp
+region and `game_data` all landed that day; the three subsegments still typed
+`data`/`rodata` for the game are 992 bytes and none of them is work:
+
+* **`gp_sbss`, 968 bytes.** `.sbss` and the 0x800-rounded tail of `t_size`,
+  all zero. A C definition cannot emit it at any `-G`: with no initialiser it
+  is NOBITS and contributes nothing, and with one it is `.data` and would
+  have to sit below.
+* **`tbl_660C` and `smf_magic`, 24 bytes between them.** Not blocked on
+  anything, just not worth a translation unit each. Folding `smf_magic` into
+  `csrc/unk_2879C.c` would need the compiler to emit the array after that
+  unit's jump tables, which is not worth 16 bytes to find out.
+
+**The work that is left is not ownership, it is ATTRIBUTION.** Three files --
+`csrc/game_gp.c`, `csrc/gp_data.c`, `csrc/game_data.c`, 63,156 bytes and 965
+objects between them -- hold data that belonged to the game's ~43 original
+translation units, in one unit each because the carve that would place it
+does not exist. Each says so in its own header. The thing that would dissolve
+all three is a carve of the TEXT into those units, and the measurement that
+says it is not currently possible is above: 29 proven cores covering 8.5% of
+the block. A new signal, not a new tool, is what that needs.

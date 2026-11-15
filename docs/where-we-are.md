@@ -610,17 +610,20 @@ Percentages below are of the 346,112-byte **image**, not of the file:
 
 | what | bytes | % of image |
 |------|-------|-------------|
-| C translation units | 167,596 | 48.4% |
-| `data` subsegments | 94,024 | 27.2% |
+| C translation units (text) | 167,596 | 48.4% |
 | identified library/asm (`psyq/*`, `main`) | 57,408 | 16.6% |
-| `.rodata` of C units (pools and jump tables) | 25,208 | 7.3% |
-| `rodata` subsegments | 1,876 | 0.5% |
+| `.data`/`.sdata` owned by a C unit | 63,156 | 18.2% |
+| `.rodata` owned by a C unit (pools and jump tables) | 25,208 | 7.3% |
+| `data` subsegments, all PSY-Q's but 968 bytes | 30,868 | 8.9% |
+| `rodata` subsegments, all PSY-Q's but 24 bytes | 1,876 | 0.5% |
 | **unknown** | **0** | **0.0%** |
 
-(Re-measured 2026-11-14. The `shiftjis` row is gone -- that subsegment type
-is not used in this container any more -- and `rodata` fell from 11,640 to
-1,876 because the last three string pools became C units that day. 1,852 of
-what is left is the PSY-Q libraries' own `.rdata`, which stays assembly.)
+(Re-measured 2026-11-14, at the end of the day that owned the lot. The
+`shiftjis` row is gone -- that subsegment type is not used in this container
+any more. Of the 32,744 bytes still disassembled, **31,752 are PSY-Q library
+data and rodata**, which stay assembly by the same policy that keeps the
+library code assembly; the game's own share is 992 bytes and 968 of those
+cannot be C.)
 
 (splat's own report line reads 79.58%, not 100%. It drops every `data`,
 `rodata` and `.bss` subsegment -- those segtypes inherit `statistics` from
@@ -660,33 +663,47 @@ The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 `__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
 It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
 
-What remains is not unknown, just **not owned in C**: 61,580 bytes of the
-game's own in four subsegments, down from 70,308 on 2026-11-14 -- the last
-three string pools landed as `csrc/str/speakers.c` (1,472 bytes, 107
-objects), `csrc/str/spells.c` (3,836, 103) and `csrc/str/commands.c` (852,
-36), then `game_gp` as `csrc/game_gp.c` (60, 10) and `gp_data`'s `.sdata`
-run as `csrc/gp_data.c` (2,508, 287). No `rodata` subsegment of the game's is
-left, and 968 of the 61,580 cannot be owned in C at all. **`game_data`, at
-60,588 bytes, is now the whole of the remaining work.** The five, and the order to
+**THE EXECUTABLE'S DATA IS OWNED AS OF 2026-11-14.** 992 bytes of the game's
+own are still typed `data`/`rodata`, down from 70,308 that morning, and 968
+of the 992 cannot be owned in C at all -- `gp_sbss` is `.sbss` and the
+0x800-rounded tail of `t_size`, which a definition emits as NOBITS. The other
+24 are `tbl_660C` and `smf_magic`, not worth a unit each. Six units did it:
+`csrc/str/speakers.c` (1,472 bytes, 107 objects), `csrc/str/spells.c` (3,836,
+103), `csrc/str/commands.c` (852, 36), `csrc/game_gp.c` (60, 10),
+`csrc/gp_data.c` (2,508, 287) and `csrc/game_data.c` (60,588, 666). No
+`rodata` subsegment of the game's is left.
+
+**What is left is ATTRIBUTION, not ownership.** The last three of those files
+hold data that belonged to the game's ~43 original translation units, in one
+unit each, because the carve that would place it does not exist -- see the
+measurement two bullets down. Each file's header says so, and all three
+dissolve into the real units when a carve appears. The five, and the order to
 work them, are in **`docs/data-map.md`, "What is left, in order"**; the two
 things worth carrying out of it are:
 
-- **`game_data`, 60,588 bytes and 666 objects, is the last of it, and the
-  TEXT CARVE THAT WOULD SETTLE ITS OWNERSHIP IS NOT AVAILABLE.** The reference
-  signal is good -- 116 of the 127 single-referenced objects fit a monotone
-  link-order assignment, against a null whose maximum over 2,000 shuffles is
-  76 -- but eight of the eleven exceptions are `unk_72A8`, which is 305
-  functions and an ADDRESSING-MODE carve rather than one translation unit, so
-  giving it one contiguous `.data` window would be a false claim. The oracle
-  that would fix that is `$gp` membership, and `tools/tuscan.py` can now read
-  it out of `build/csrc/*.o` (`--source objects`, sound because the container
-  is byte-identical). **It is too sparse to carve with**: `--cores` reports 67
-  of 1053 functions making a `$gp`-relative access at all, 29 proven cores
-  covering 8.5% of the block, and boundary windows up to 170 functions wide.
-  So `game_data` goes the way the gp region went -- a unit with no code, with
-  the attribution stated as undetermined -- which is also forced, because
-  defining a small object of it inside a `-G8` unit would ask gas for a
-  GPREL16 that cannot reach `_gp`.
+- **`game_data` LANDED 2026-11-14 as `csrc/game_data.c`**, 666 objects in 668
+  C objects, 60,588 bytes, and THE TEXT CARVE THAT WOULD SETTLE ITS OWNERSHIP
+  IS NOT AVAILABLE. The reference signal is good -- 116 of the 127
+  single-referenced objects fit a monotone link-order assignment, against a
+  null whose maximum over 2,000 shuffles is 76 -- but eight of the eleven
+  exceptions are `unk_72A8`, which is 305 functions and an ADDRESSING-MODE
+  carve rather than one translation unit, so giving it one contiguous `.data`
+  window would be a false claim. The oracle that would fix that is `$gp`
+  membership, and `tools/tuscan.py` can now read it out of `build/csrc/*.o`
+  (`--source objects`, sound because the container is byte-identical). **It
+  is too sparse to carve with**: `--cores` reports 67 of 1053 functions making
+  a `$gp`-relative access at all, 29 proven cores covering 8.5% of the block,
+  and boundary windows up to 170 functions wide. So it went the way the gp
+  region went -- a unit with no code, attribution stated as undetermined --
+  which is also forced, because defining a small object of it inside a `-G8`
+  unit would ask gas for a GPREL16 that cannot reach: the region starts
+  0x16154 below `_gp`.
+- **Its 1,072 relocations were checked exhaustively rather than sampled.**
+  142 objects carry a symbol operand, naming 852 distinct symbols. The
+  (address, symbol) pairs `dataverify.py` reports and the ones in the listing
+  are the same set, with nothing in one and not the other. That check is the
+  only one those words get: a relocated word is masked in the byte
+  comparison, which is the bargain `ovlverify.py` makes for text.
 - **`game_gp` LANDED 2026-11-14 as `csrc/game_gp.c`**, 60 bytes, and it
   turned the `game_data` argument above into a proof. Two relocations sixteen
   bytes apart inside `build/csrc/unk_72A8.o` -- `R_MIPS_HI16 D_800809A8` and
