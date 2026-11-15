@@ -277,6 +277,18 @@ extern u8 D_800E104E[];
 extern u8 D_800E107C[];
 extern u8 D_800E10C0[];
 extern u8 D_800E10F2[];
+/* The second kill skeleton's callees and strings. func_8008D344 is in this
+   unit and is reached with four arguments, exactly like func_8008D330. */
+void func_8008D344(u8 *, void *, void *, void *);
+s32 func_80098864(u8 *, s32);
+void func_800A6480(u8 *, u8 *);
+void func_8009D8A4(void);
+extern u32 D_800E296C;
+extern u8 D_800E11FD[];
+extern u8 D_800E1224[];
+extern u8 D_800E1258[];
+extern u8 D_800E1279[];
+extern u8 D_800E12A9[];
 void func_800A56E0(s32);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
@@ -1950,15 +1962,197 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BEDEC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF074);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF210);
+/* func_800BF34C with D_800E11FD and bit 0x800000, plus func_8009D8A4 and
+   sound 0x80F on the out-of-range arm. 79 words, 0 differing. */
+s32 func_800BF210(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF34C);
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800997FC(D_800E11FD);
+        func_8009D8A4();
+        D_800E296C |= 0x800000;
+        func_800A56E0(0x80F);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF478);
+/* THE SECOND KILL SKELETON, in five copies. It is not the func_800BD72C one:
+   four parameters rather than three, a 0xD short-circuit at the top that
+   hands the node straight to func_80098864, func_800A6480 in place of
+   func_800A63B8, func_8008D344 in place of func_8008D330, the D_800DDE84
+   field taken as the LOW two bits rather than bits 6-7, the node passed to
+   func_800AD6FC as its third argument instead of zero, and an out-of-range
+   arm that reports a string and raises a bit in D_800E296C. Only that
+   string and that bit differ between the five -- D_800E1224/0x100,
+   D_800E1258/0x800, D_800E1279/0x400, D_800E12A9/0x200 -- except
+   func_800BF210, which also rings func_8009D8A4 and sound 0x80F.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF5A4);
+   The 0xD arm RETURNS func_80098864's value: the branch leaves $v0 alone
+   and jumps to the epilogue, where the other arms set it explicitly.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF6D0);
+   75 words, 0 differing. */
+s32 func_800BF34C(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800997FC(D_800E1224);
+        D_800E296C |= 0x100;
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
+
+/* func_800BF34C with D_800E1258 and bit 0x800. 75 words, 0 differing. */
+s32 func_800BF478(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800997FC(D_800E1258);
+        D_800E296C |= 0x800;
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
+
+/* func_800BF34C with D_800E1279 and bit 0x400. 75 words, 0 differing. */
+s32 func_800BF5A4(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800997FC(D_800E1279);
+        D_800E296C |= 0x400;
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
+
+/* func_800BF34C with D_800E12A9 and bit 0x200. 75 words, 0 differing. */
+s32 func_800BF6D0(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800997FC(D_800E12A9);
+        D_800E296C |= 0x200;
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF7FC);
 
