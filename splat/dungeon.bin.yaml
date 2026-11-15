@@ -28,6 +28,7 @@ options:
   # Namespaced like main.bin's: without this both this config and
   # town.bin's would write their offset-0 bin into the default assets/.
   asset_path: assets/dungeon
+  src_path: csrc
 
   symbol_addrs_path: splat/dungeon.bin_symbol_addrs.txt
   reloc_addrs_path: splat/dungeon.bin_reloc_addrs.txt
@@ -104,23 +105,35 @@ segments:
   # at +0xa3d40 is `27bdffe0`, the four words below it are the
   # `01c801c0 / 0010001c` 2-word record pattern this note predicted, and the
   # last `jr $ra` is at +0xf76f8 with its delay slot at +0xf76fc.
-  # The three corrections eec0572 worked out on town.bin apply here unchanged:
-  # `rodata` and not `.rodata` while this overlay is `asm` -- the dot routes
-  # the subsegment to a sibling C object and extracts nothing, so every
-  # reference into the overlay's own rodata comes out undefined, and the rule
-  # INVERTS the moment a csrc/ovl_dungeon.c exists, because splat then refuses
-  # the undotted form outright (docs/overlays.md, "The rodata dot"); a FOLLOWING segment, or the code subsegment
-  # runs to the end of the container; and a text end on a 16-byte boundary,
-  # because splat emits `__romPos = ALIGN(__romPos, 16)` after a code segment
-  # and a boundary off that grid pads the container.
+  # `.rodata` WITH the dot, because csrc/ovl_dungeon.c exists: splat refuses
+  # the undotted form for a segment that has a sibling C unit, and without a
+  # sibling the dot extracts nothing and every reference into the overlay's
+  # own rodata comes out undefined. The two halves of that rule are why this
+  # line changed in the same commit that created the C file
+  # (docs/overlays.md, "The rodata dot").
+  #
+  # The other two corrections eec0572 worked out on town.bin still apply: a
+  # FOLLOWING segment, or the code subsegment runs to the end of the
+  # container; and a text end on a 16-byte boundary, because splat emits
+  # `__romPos = ALIGN(__romPos, 16)` after a code segment and a boundary off
+  # that grid pads the container.
   #
   # The text ends at 0xf7700: the last `jr $ra` is at 0xf76f8 and its delay
   # slot follows. The 0xf8000 the old bin split used is 0x900 bytes past it.
+  #
+  # SEVEN of this block's 28 jump tables sit at 4 mod 8 (jtbl_80088D7C,
+  # 800892CC, 800892E4, 8008938C, 800893E4, 80089454, 80089474). While their
+  # functions are INCLUDE_ASM that costs nothing -- splat migrates each table
+  # into its function's listing and emits it verbatim -- but cc1psx writes
+  # `.align 3` before a table it compiles, so the first of those seven to be
+  # landed needs a unit whose rodata STARTS at a 4-mod-8 address, where the
+  # directive is a no-op. That is the same forced carve town.bin took; see
+  # splat/town.bin.yaml and docs/overlays.md.
   - type: code
     start: 0xa3000
     vram: 0x80088760
     subsegments:
-      - [0xa3000, rodata, ovl_dungeon]
-      - [0xa3d40, asm, ovl_dungeon]
+      - [0xa3000, .rodata, ovl_dungeon]
+      - [0xa3d40, c, ovl_dungeon]
   - [0xf7700, bin]
   - [0x1a86800]

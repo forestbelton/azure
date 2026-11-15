@@ -2039,7 +2039,14 @@ void func_80046884(RECT *, SVECTOR *, s32);
 void func_8003BFE4(void);
 void func_8004D70C(void);
 void func_800AC3EC(void);
-void func_800A48F0(s8 *, s8, s8);
+/* RETURNS a value, and the witness is in dungeon.bin's overlay rather than
+   here. 0x800A48F0 is an OVERLAY address: the resident engine calls it from
+   func_80042560 (csrc/unk_154BC.c) and reaches whichever overlay is loaded,
+   and the one in csrc/ovl_dungeon.c is a real function with three callers
+   that all test its result as a halfword -- `sll $v0, 16` then `bgez`. The
+   engine's own call discards it, which is why this said `void`; the three
+   dungeon call sites cannot be written at all unless it does not. */
+s16 func_800A48F0(s8 *, s8, s8);
 void func_800AC4C4(void);
 void func_8003F9E0(UnkEntry *);
 s32 func_800429E4(u8 *);

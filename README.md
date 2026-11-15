@@ -32,7 +32,7 @@ Ideally, the below progress table would be automated away. At the moment, it's n
 |SLUS_006.14|        ✅|        ✅|         ❌|     ❌|
 |MAIN.BIN   |        ✅|        🚧|         ✅|     🚧|
 |TOWN.BIN   |        ✅|        ✅|         ❌|     ❌|
-|DUNGEON.BIN|        🚧|        ❌|         ❌|     ❌|
+|DUNGEON.BIN|        🚧|        🚧|         ❌|     ❌|
 
 ## Setup
 

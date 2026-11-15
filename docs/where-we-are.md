@@ -107,10 +107,23 @@ one 16 MB `bin` blob and nothing was started. All three are stale.** As of
 | `main.bin+0x25d000` | `0x80020000` | 241 | 7,487 | 20 | 290 |
 | `main.bin+0x269000` | `0x80400000` | 263 | 8,271 | -- | -- |
 | `town.bin+0xb000` | `0x80088760` | 1,815 | 70,244 | 24 | 797 |
-| `dungeon.bin+0xa3000` | `0x80088760` | 862 | 85,558 | 64 | 1,817 |
+| `dungeon.bin+0xa3000` | `0x80088760` | 863 | 85,616 | 64 | 1,817 |
 
 For scale against the 41,767 words of this executable: town's overlay is
 1.7x it, dungeon's 2.0x, and main's live overlay 18% of it.
+
+**And on 2026-11-14 the dungeon overlay became a `c` subsegment**, which is
+what opens it: `csrc/ovl_dungeon.c`, 863 functions, 85,616 words -- the
+largest single block in the project, 1.6x `ovl_town` and 2.0x this
+executable. Everything about working it is in **`docs/dungeon-sweep.md`**;
+`docs/town-sweep.md` is still the operating procedure. The one fact to carry
+out of it: **it is not town's overlay with different data.**
+`tools/decomp/xsibs.py` -- new, and the first thing to run on any newly
+opened block -- compares a unit's stubs against every function landed in ANY
+container by opcode stream, reading the landed side out of the reference
+images through each container's ELF, and reports **20 of 863 with a near
+sibling at 0.88, 582 words, 0.7% of the block.** So it is 85,000 words of
+reading rather than a renaming job.
 
 Unplaced code remaining, by 4 KB chunk with >=4 prologues and >=3 `jr $ra`:
 `main.bin` **none** -- the one 12 KB run at `+0x21000` that this used to call
@@ -758,8 +771,10 @@ size, the `-G` value, the struct layout, the flags.
    the verbatim subagent brief with a measured list of what in it is
    load-bearing, the traps, the parks, and what is established about its
    types. Start there rather than here when continuing it. `main.bin`'s overlay
-   is complete; `dungeon.bin`'s is still an `asm` subsegment and its yaml
-   records a boundary error to fix before converting it.
+   is complete, and `town.bin`'s is too. `dungeon.bin`'s was converted from
+   `asm` to `c` on 2026-11-14 and is the front that is open now, at 67 of 863
+   functions; **`docs/dungeon-sweep.md`** is its entry point, and the yaml's
+   boundary error was fixed on 2026-11-09 before the conversion.
 
    **Two things about the ranking, as of 2026-11-02.** Run
    `tools/decomp/nearsibs.py <unit> --groups` BEFORE `worklist.py`: it finds
