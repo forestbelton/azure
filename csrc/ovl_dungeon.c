@@ -1006,6 +1006,7 @@ extern u8 D_800E1AC2[];
 extern u8 D_800E1AD0[];
 s32 func_800422A8(u8 *, void *, s32, s32);
 void func_800BABA8();
+extern u8 D_800E03B0[];
 extern u8 D_800E03D4[];
 void func_800CC744();
 UnkNode *func_800CC5F0(s16, s16, s16, s16, s16, s16);
@@ -9749,7 +9750,59 @@ s32 func_800B627C(s16 kind, u8 *b, s16 idx, u8 flag)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B63A8);
+/* A particle's per-frame step: accelerate the three deltas from the record's
+   own three constants (the third scaled by the frame counter), advance the
+   position by them, then bleed the renderable's three colour bytes by the
+   record's three rates, clamping each at 0x80 when it wraps. 101 words,
+   0 differing on the first compile.
+
+   The clamp is `if (c[N] > 0x80) c[N] = 0x80;` on a `u8` field, which is the
+   `andi 0xFF` / `sltiu 0x81` / `bnez` triple -- the mask is on the register
+   cse forwarded from the `sb`, not a reload. */
+void func_800B63A8(u8 *p, UnkVec *v, u8 *c)
+{
+    s16 t;
+
+    v->unk_0C += *(s32 *)p;
+    v->unk_10 += *(s32 *)(p + 0x4);
+    v->unk_14 += *(s32 *)(p + 0x8) * *(s16 *)(p + 0x10);
+    *(s16 *)(p + 0x10) = *(u16 *)(p + 0x10) + 1;
+    v->unk_00 += v->unk_0C;
+    v->unk_04 += v->unk_10;
+    v->unk_08 += v->unk_14;
+    func_800478B8(c);
+    if (c[0xC] != 0)
+    {
+        c[0xC] -= p[0x14];
+        if (c[0xC] > 0x80)
+        {
+            c[0xC] = 0x80;
+        }
+    }
+    if (c[0xD] != 0)
+    {
+        c[0xD] -= p[0x16];
+        if (c[0xD] > 0x80)
+        {
+            c[0xD] = 0x80;
+        }
+    }
+    if (c[0xE] != 0)
+    {
+        c[0xE] -= p[0x18];
+        if (c[0xE] > 0x80)
+        {
+            c[0xE] = 0x80;
+        }
+    }
+    t = *(u16 *)(p + 0xE) - 1;
+    *(s16 *)(p + 0xE) = t;
+    if (t <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 void func_800B653C(u8 *t, u16 ang)
 {
@@ -14968,7 +15021,51 @@ void func_800CAED0(u8 *p, UnkVec *v)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CAFDC);
+/* Spawn TWO 0x212 sparks off the parent node, each jittered +/-0x20 from
+   the parent's mover on all three axes, given a velocity from one angle
+   through func_80064584/func_800644B8 and a lifetime of 0x80..0xFF frames.
+   The loop is `for (i = 2; i > 0; i--)`, which is the `addiu $s3, -1` /
+   `bgtz` pair at the bottom with no entry test. 101 words, 0 differing on
+   the first compile. */
+void func_800CAFDC(UnkNode *a, s16 b, s32 col)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s32 i;
+    s16 t;
+
+    for (i = 2; i > 0; i--)
+    {
+        n = func_8003FD64(0x212, a);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_800CAED0;
+            func_8004491C(n, (u32)D_80045340);
+            m = n->unk_08;
+            *(s16 *)((u8 *)m + 0x2) =
+                *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0x3F) - 0x20;
+            *(s16 *)((u8 *)m + 0x6) =
+                *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0x3F) - 0x20;
+            *(s16 *)((u8 *)m + 0xA) =
+                *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x3F) - 0x20;
+            t = func_80069EF8();
+            *(s32 *)((u8 *)m + 0xC) = func_80064584(t) << 5;
+            *(s32 *)((u8 *)m + 0x10) = func_800644B8(t) << 5;
+            *(s16 *)((u8 *)m + 0x16) = -(func_80069EF8() & 7) - 8;
+            r = (u8 *)n->unk_0C;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            *(u8 **)(r + 0x8) = D_800E03B0;
+            *(s32 *)(r + 0xC) = col;
+            *(s16 *)(r + 0x6) = 8;
+            q = (u8 *)n + 0x20;
+            *(s16 *)(q + 0xB0) = b;
+            *(s16 *)(q + 0x96) = (func_80069EF8() & 0xFF) | 0x80;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CB170);
 
