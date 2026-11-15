@@ -121,7 +121,8 @@ s32 func_800AD9B4();
    a real declaration above it. */
 void func_800B2A60();
 void func_800D8C64();
-void func_800D4494();
+void func_800D4494(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AA258(void);
 
 /* The six flag probes and their three callers. func_800A6D30's result is
    masked to 16 bits at every use, so it is declared u16 rather than cast at
@@ -208,6 +209,7 @@ typedef void (*UnkDungeonStep)(u8 *, UnkVec *, u8 *, u8 *);
 extern UnkDungeonStep D_800E21C0[];
 extern UnkDungeonStep D_800E2228[];
 extern UnkDungeonStep D_800E2284[];
+extern UnkDungeonStep D_800E22E0[];
 /* The engine's global flag halfword at D_80083460 + 2. csrc/unk_154BC.c
    reaches the same object as `*(u16 *)((u8 *)&D_80083460 + 2)`; here it is a
    `%lo` displacement off its own `lui`, which is what a declared u16 gives. */
@@ -246,7 +248,6 @@ void func_8009A21C(s32, s32, s32);
 u8 func_8009FB34(s32, s32);
 extern u8 D_800E2178[];
 extern u8 D_800E221C[];
-extern u8 D_800E22E0[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800894A0);
 
@@ -3402,9 +3403,168 @@ u8 *func_800D3F74(s16 kind, s16 x, s16 y, s16 ang)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4158);
+/* func_800D1E34 with D_800E22E0 and a 38-word tail of its own: a +0x9E
+   counter stepped modulo 96, and a brightness ramp over its first 25 steps
+   written into the renderer's three colour bytes.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4494);
+   The modulo is cc1psx's signed-by-constant sequence and comes out of a
+   plain `% 96` -- `mult` by 0x2AAAAAAB, `sra 4`, minus the sign, then
+   `q*3 << 5` subtracted back off. `t` is s16: the `sll 16`/`sra 16` ahead
+   of the `mult` is the dividend being narrowed, and the second pair after
+   the `sh` is the same value re-extended for `t < 0x19`. The argument is
+   `t * 85`, which synth_mult splits into `t*5` and `(t*5) << 4` added --
+   two shifts and two adds, not a `mult`.
+   207 words, 0 differing. */
+void func_800D4158(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *a;
+    s32 r;
+    s16 t;
+
+    a = p;
+    if (D_80083462 & 0x2000)
+    {
+        a[0x71] &= 0x7F;
+        return;
+    }
+    if (*(UnkDungeonStep *)(a + 0x8C) != NULL)
+    {
+        (*(UnkDungeonStep *)(a + 0x8C))(a, b, c, a);
+    }
+    D_800E22E0[a[0x9A]](a, b, c, a);
+    if (!(*(u16 *)(c + 0x14) & 0x8000))
+    {
+        if (!(*(u16 *)(c + 0x14) & 0x40))
+        {
+            func_800478B8(c);
+        }
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if (*(u16 *)(p + 0x98) & 0x8)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if (*(u16 *)(p + 0x98) & 0x4)
+    {
+        goto drop;
+    }
+    r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                      (s16)(*(u16 *)(a + 0x88) - 0x20));
+    if ((s16)r >= 0x200)
+    {
+        goto drop;
+    }
+    if (*(s16 *)(p + 0x92) + *(s16 *)(a + 0x88) < (s16)r)
+    {
+        /* A BARE VOLATILE READ, and the listing leaves no other reading: this
+           arm is four words -- `lhu $v0, 0x98($s1)`, `j`, its empty delay
+           slot, and the `beqz` that branches over it -- and the load's
+           destination is dead at the jump. An ordinary read here is deleted
+           by flow (`insn_dead_p` keeps only a set whose source has side
+           effects), an empty arm collapses the if/else into one branch, and
+           both come out three words short. */
+        *(volatile u16 *)(p + 0x98);
+    }
+    else
+    {
+        if ((s16)r >= *(s16 *)(a + 0x88))
+        {
+            *(s32 *)(p + 0x90) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x92) = r - *(u16 *)(a + 0x88);
+        }
+        b->unk_14 = 0;
+        *(u32 *)(a + 0x1C) |= 0x8000000;
+        p[0x9D] = 0;
+    }
+    if (*(u32 *)(a + 0x1C) & 0x40000000)
+    {
+        *(u32 *)(a + 0x1C) &= ~0x40000000;
+        r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                          (s16)(*(u16 *)(a + 0x88) - 0x20));
+        *(s16 *)(p + 0x92) += *(u16 *)(a + 0x88) - r;
+        *(u16 *)(a + 0x88) = r;
+    }
+    goto tail;
+drop:
+    *(u32 *)(a + 0x1C) &= ~0x8000000;
+tail:
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(a + 0x88) + *(u16 *)(p + 0x92);
+    t = (s16)(*(u16 *)(p + 0x9E) + 1) % 96;
+    *(s16 *)(p + 0x9E) = t;
+    if (t < 0x19)
+    {
+        s32 w = ((func_800644B8(t * 85) >> 4) * 96 >> 8) + 0x80;
+
+        c[0xE] = w;
+        c[0xD] = w;
+        c[0xC] = w;
+    }
+    else
+    {
+        c[0xE] = 0x80;
+        c[0xD] = 0x80;
+        c[0xC] = 0x80;
+    }
+    *(u16 *)(c + 0x14) |= 0x40;
+    *(u32 *)(a + 0x1C) |= 0x200;
+}
+
+/* func_800D20D8 with a guard ahead of it: while the engine's 0x2000 flag is
+   down, a record carrying the 0x100 bit is handed to func_800AA258 and the
+   frame ends there, and otherwise the actor's state byte is forced to 0xE.
+   The 0xE is materialised once and used for both the compare and the store,
+   which is the `addiu $v1, $zero, 0xE` in the `beqz` delay slot.
+   79 words, 0 differing. */
+void func_800D4494(u8 *a, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+
+    if (!(D_80083462 & 0x2000))
+    {
+        if (*(u32 *)(d + 0x1C) & 0x100)
+        {
+            func_800AA258();
+            return;
+        }
+        if (a[0x9A] != 0xE)
+        {
+            a[0x9A] = 0xE;
+        }
+    }
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        *(s32 *)(d + 0x60) = 0;
+        n = (s8)d[0x6D];
+        func_800A9A0C(d);
+        if (n != 0)
+        {
+            if (*(s8 *)(d + 0x6D) == 0)
+            {
+                d[0x28]--;
+            }
+        }
+        if (d[0x28] == 0)
+        {
+            D_80083470 = d - 0x20;
+            func_800AAA54((UnkDungeonActor *)a, b, c, 0);
+            return;
+        }
+    }
+    if (*(s16 *)(d + 0x64) != 0)
+    {
+        func_800AA6B4(a, b, c, 0);
+    }
+}
 
 /* Four two-gate installers: the same park as the ten above behind a second
    test, whose result is read as a halfword. The second parameter is unused --
