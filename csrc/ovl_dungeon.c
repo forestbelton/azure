@@ -1890,7 +1890,81 @@ void func_8008FA14(u8 *p, void *b, void *c, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008FA7C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008FD50);
+/* The state-0x22 glide: ease the mover onto the tile at c[0x24]/c[0x25] over
+   the engine's shared countdown at D_80083460 + 4, re-skin from D_800DD0E0
+   unless the view's +0xA2 says not to, and on the last frame stop the mover,
+   place it and hand over to func_80094F74 (which may park func_8008EAC8).
+
+   THE RESET IS WRITTEN AS A DUPLICATED `if` ARM, and that is a DEVICE. The
+   whole residue was four words: the target fills the first division's
+   `mflo` delay with the SECOND division's `lw 0x4($s0)`, and every spelling
+   reachable from the source leaves a `nop` there -- struct or cast on both
+   the loads and the stores, the subtrahend hoisted into a local, the
+   numerator as its own statement, all four at 114/4. The duplicated arm
+   puts a CODE_LABEL where the block has to split, and the load is then free
+   to rise. jump2 cross-jumps the arms back together and deletes the test,
+   so the emitted code carries no trace of it.
+
+   This is the THIRD independent sighting of this device in this unit --
+   func_8009704C (a cse-region boundary against an unwanted common
+   subexpression) and func_800C0230 (a reorg boundary against a stolen
+   delay slot) are the other two, and all three were found by
+   decomp-permuter after hand sweeps ran out. Here it took 211 candidates.
+   114 words, 0 differing. */
+void func_8008FD50(u8 *p, UnkVec *v, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *g2;
+    u8 *t;
+    s32 k;
+
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x80) != 0)
+    {
+        if (c != NULL)
+        {
+            *(s16 *)(g + 0x4) = 0;
+        }
+        else
+        {
+            *(s16 *)(g + 0x4) = 0;
+        }
+    }
+    if (*(s16 *)(g + 0x4) != 0)
+    {
+        v->unk_0C = ((((c[0x24] << 6) + 0x20) << 16) - v->unk_00) / *(s16 *)(g + 0x4);
+        v->unk_10 = ((((c[0x25] << 6) + 0x20) << 16) - v->unk_04) / *(s16 *)(g + 0x4);
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x100) != 0 && *(s16 *)(g + 0x4) == 6)
+    {
+        func_8008D94C(p, v, c, d);
+        return;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+    {
+        if (*(u8 **)(c + 0x2C) != D_800DD0E0)
+        {
+            t = D_800DD0E0;
+            *(u8 **)(c + 0x2C) = t;
+            k = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+            func_80048A44(c, t[k], 0, 1);
+        }
+    }
+    g2 = (u8 *)&D_80083460;
+    *(s16 *)(g2 + 0x4) = *(u16 *)(g2 + 0x4) - 1;
+    if (*(s16 *)(g2 + 0x4) <= 0)
+    {
+        *(s16 *)(g2 + 0x4) = 0;
+        v->unk_14 = 0;
+        v->unk_10 = 0;
+        v->unk_0C = 0;
+        func_800A2B04(v, c[0x24], c[0x25]);
+        if ((s16)func_80094F74(p, v, c, d) > 0)
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_8008EAC8;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008FF18);
 
