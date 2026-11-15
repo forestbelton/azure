@@ -642,6 +642,11 @@ extern s16 D_800DD264[];
 extern s16 D_800120A2;
 extern u8 D_800DCFB8[];
 extern u8 D_800DD018[];
+/* func_80092018's other two eight-way facing tables. */
+extern u8 D_800DD020[];
+extern u8 D_800DD028[];
+/* Defined below; func_80092018 calls it above its definition. */
+void func_800B653C(u8 *, s16);
 /* The 12-byte, alignment-1 object func_800A34BC copies out of the
    D_8007359C record into the actor's +0x34: an s16[4] or any 2-aligned type
    would move it with aligned `lw`, and the target's copy is the `lwl`/`lwr`
@@ -4007,7 +4012,159 @@ void func_80091C64(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80092018);
+/* State machine on the actor's +0x9B for the lift/platform ride: state 0
+   either re-skins the slot from D_800DD028 (once) or, with the renderable's
+   0xE000 bits clear, asks func_8009074C for a destination and hands the
+   actor back to func_8008ACDC when it is a new facing and func_80094EA4
+   agrees; state 16 sets the mover's two integer velocities from the engine's
+   sine/cosine tables and runs the +0x96 countdown down into the engine's
+   +0x124 record; state 17 re-skins from D_800DD020 and falls through into
+   state 18, which glides the mover onto the tile over D_80083460+4, pulses
+   func_800B653C every fourth frame and lands in state 0x13; state 19 runs the
+   same glide off +0x96 and closes on func_800A2B04/func_80099F70/func_80099F04
+   and D_80083460+2's 0x812 bits. jtbl_800889C0 is 0 mod 8, so cc1psx's
+   `.align 3` is a no-op. 310 words, 0 differing.
+
+   THE TWO GLIDE EXPRESSIONS TAKE DIFFERENT BIAS SPELLINGS, and a 20-point
+   grid over the two measured every combination:
+
+   - STATE 18's TABLE TERM AND ITS +0x20 MUST BE ONE LOCAL ASSIGNED INSIDE
+     THE EXPRESSION, `(x = D_8006CCD8[k] * 16 + 0x20)`. Written flat as
+     `A + T * 16 + 0x20 - B`, fold's associate moves the 0x20 onto the
+     loaded position (`addiu $v1, -0x20` where the target has
+     `addiu $v1, 0x20` on the shifted table entry) -- 148 differing.
+     Assigning B to the local instead is 14.
+   - STATE 19 HAS NO LOCAL: `A + 0x20 - B` is the func_80092E90 rule, and
+     fold reassociates it into the target's `A - (B - 0x20)` with the
+     subtrahend as a scratch register. The func_800AB1C0 spelling
+     `A - (x = B - 0x20)` keeps the bias right but gives the local its own
+     callee-saved register, which costs a word and 105 differing here,
+     because the divisor `*(s16 *)(p + 0x96)` is already live in $a0 from
+     the gate above it.
+
+   D_80083460+4 IS `((s16 *)g)[2]`, AN ARRAY REF -- func_80092E90's rule.
+   Through `*(s16 *)(g + 4)` the read is a plain MEM, the `b->unk_0C` store
+   does not invalidate it, the second divisor is not reloaded and the
+   function is a word short.
+
+   STATE 16's TWO VELOCITIES USE `* 8`, NOT `<< 3`. A shift between the
+   sign-extended table load and the narrowing `sh` lets combine turn the
+   `lh` into `lhu`; the multiply does not. Two words. */
+void func_80092018(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    s32 r;
+    s32 x;
+    s32 y;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            if (*(u8 **)(c + 0x2C) != D_800DD028)
+            {
+                *(u8 **)(c + 0x2C) = D_800DD028;
+                func_80048A44(c, D_800DD028[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            }
+            else
+            {
+                *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+            }
+            break;
+        }
+        r = func_8009074C(*(s16 *)(p + 0x9E), (u16 *)(p + 0xA2), (u16 *)(d + 0x2A));
+        if ((s16)r == 0xFFF)
+        {
+            break;
+        }
+        if (((*(u16 *)(d + 0x2A) >> 9) & 7) == (((s16)r >> 9) & 7))
+        {
+            break;
+        }
+        if ((s16)func_80094EA4() == 0)
+        {
+            break;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+        break;
+    case 16:
+        *(s16 *)((u8 *)b + 0xE) = D_8006CCD8[(*(u16 *)(d + 0x2A) >> 9) & 7] * 8;
+        *(s16 *)((u8 *)b + 0x12) = D_8006CCE8[(*(u16 *)(d + 0x2A) >> 9) & 7] * 8;
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_800DD018;
+        func_80048A44(c, D_800DD018[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(u32 *)(*(u8 **)(p + 0x124) + 0x1C) |= 0x100;
+        *(u16 *)(*(u8 **)(p + 0x124) + 0x6A) = *(u16 *)(d + 0x2A);
+        *(u8 **)(*(u8 **)(p + 0x124) + 0x60) = d;
+        p[0x9B]++;
+        break;
+    case 17:
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_800DD020;
+            func_80048A44(c, D_800DD020[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            p[0x9B]++;
+        }
+        /* fallthrough */
+    case 18:
+        g = (u8 *)&D_80083460;
+        if (((s16 *)g)[2] != 0)
+        {
+            b->unk_0C = (((c[0x24] << 6) + (x = D_8006CCD8[(*(u16 *)(d + 0x2A) >> 9) & 7] * 16 + 0x20) - *(s16 *)((u8 *)b + 0x2)) << 16) / ((s16 *)g)[2];
+            b->unk_10 = (((c[0x25] << 6) + (y = D_8006CCE8[(*(u16 *)(d + 0x2A) >> 9) & 7] * 16 + 0x20) - *(s16 *)((u8 *)b + 0x6)) << 16) / ((s16 *)g)[2];
+        }
+        if ((((u16 *)g)[2] & 3) == 0)
+        {
+            func_800B653C((u8 *)b, *(s16 *)(d + 0x2A));
+        }
+        if (--((s16 *)g)[2] > 0)
+        {
+            break;
+        }
+        ((s16 *)g)[2] = 0;
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(u8 **)(c + 0x2C) = D_800DD028;
+        func_80048A44(c, D_800DD028[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(s16 *)(p + 0x96) = 2;
+        p[0x9B] = 0x13;
+        break;
+    case 19:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            b->unk_0C = (((c[0x24] << 6) + 0x20 - *(s16 *)((u8 *)b + 0x2)) << 16) / *(s16 *)(p + 0x96);
+            b->unk_10 = (((c[0x25] << 6) + 0x20 - *(s16 *)((u8 *)b + 0x6)) << 16) / *(s16 *)(p + 0x96);
+        }
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            if (--*(s16 *)(p + 0x96) == 0)
+            {
+                b->unk_10 = 0;
+                b->unk_0C = 0;
+            }
+        }
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0 ||
+            ((*(u16 *)(c + 0x14) & 0x6000) != 0 && *(s16 *)(p + 0x96) == 0))
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            func_80099F70(*(u8 **)(d + 0x5C));
+            func_80099F04(*(u8 **)(d + 0x5C));
+            h = (u8 *)&D_80083460;
+            *(u16 *)(h + 0x2) |= 0x812;
+            *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+        }
+        break;
+    }
+}
 
 /* Pick the actor's next +0x8C handler from the fourth argument's 0x100000
    flag, with the third argument's 0xE000 bits as the gate on the other side.
