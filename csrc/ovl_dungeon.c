@@ -29104,7 +29104,7 @@ void func_800CDE0C(void)
    re-sign-extended for the second loop out of $t1/$t2, which is what the
    second `sll`/`sra` pair is. func_800CDF40 is this source with `=` for
    `+=`. 64 words, 0 differing. */
-void func_800CDE40(s16 x, s16 y, u16 v)
+void func_800CDE40(s16 x, s16 y, s16 v)
 {
     s32 i;
 
@@ -29126,7 +29126,7 @@ void func_800CDE40(s16 x, s16 y, u16 v)
 
 /* func_800CDE40 with the counter SET rather than added to.
    58 words, 0 differing. */
-void func_800CDF40(s16 x, s16 y, u16 v)
+void func_800CDF40(s16 x, s16 y, s16 v)
 {
     s32 i;
 
@@ -29146,7 +29146,179 @@ void func_800CDF40(s16 x, s16 y, u16 v)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CE028);
+/* The five-by-five tile-height ripple the dungeon runs while a floor
+   rises or sinks: three phases off +0x6A, each walking the same 5x5 grid
+   of the 6-byte cell table D_8008333C[0] and feeding every slot standing
+   on the tile through func_800CDE40 / func_800CDF40.
+
+   THE THIRD ARGUMENT OF func_800CDE40 AND func_800CDF40 IS `s16`, NOT
+   `u16`, AND THIS FUNCTION IS THE FIRST WITNESS.  MIPS's PROMOTE_MODE
+   keeps the signedness, so a `u16` parameter makes the call site
+   `andi $a2, 0xFFFF` where the target has `sll`/`sra 16`: one word per
+   call site, four sites, 301 words against 304.  Both callees stay at
+   64/64 and 58/58 words, 0 differing, with the narrower type -- their own
+   bodies never read the sign.
+
+   EVERY TEMPORARY IS PER-LOOP, AND THAT IS THE WHOLE RESIDUE, 40 TO 0.
+   sched.c's `birthing_insn_p` only lifts an insn to LAUNCH_PRIORITY when
+   its destination pseudo has `reg_n_sets == 1`, so a local written in two
+   of the four nests is never deferred and sched1 drops its load at the top
+   of the block instead of at the end of the load group.  `c1`..`c4`,
+   `wa`/`wc`, `ta`/`tc`, `d1`/`d3`, `e1`/`e3` and `qa`..`qd` are the same
+   four expressions written four times for that reason; one shared set of
+   names is 304 words and 40 differing, and the first spellings with one
+   `c`, one `w`, one `t` and one `q` were 47.
+
+   THE TILE BASE IS AN `s32`, NOT A `u8 *`.  C's `pointer_int_sum` puts the
+   pointer operand FIRST whichever way the source is written, so a `u8 *`
+   base gives `addu $v1, $s5, $v1` at all four sites where the target has
+   `addu $v1, $v1, $s5`; that is the last 4 differing and no ordering of
+   `base + index * 6` / `index * 6 + base` reaches it.
+
+   Three more spellings, each measured: the cursor must be a real biv
+   (`qa++`) or loop.c folds the 0x36 into the load displacement and the
+   preheader gets `move $s2, $s4` instead of `addiu $s2, $s4, 0x36`;
+   `for (j = 0, qa = ...)` rather than a statement before the loop, so the
+   giv's init follows `j = 0`; and the +0x6A counter must be READ before
+   D_800E296C's store (`n = *(u16 *)(p + 0x6A);` ... `= n + 1;`), because
+   sched1 cannot lift that load over the global's `sw` and the plain
+   statement order costs the `nop` after it -- 305 words against 304.
+   304 words, 0 differing. */
+void func_800CE028(u8 *p)
+{
+    s16 *wa;
+    s16 *wc;
+    s32 ta;
+    s32 tc;
+    u8 *c1;
+    u8 *c2;
+    u8 *c3;
+    u8 *c4;
+    u8 *ga;
+    u8 *gb;
+    u8 *gc;
+    u8 *r;
+    s32 i;
+    s32 j;
+    s32 d1;
+    s32 e1;
+    s32 d3;
+    s32 e3;
+    s32 n;
+    s16 *qa;
+    s16 *qb;
+    s16 *qc;
+    s16 *qd;
+
+    if (*(s16 *)(p + 0x6A) == 0)
+    {
+        wa = (s16 *)D_8008333C;
+        ta = D_8008333C[0];
+        for (i = 0, r = p; i < 5; i++)
+        {
+            for (j = 0, qa = (s16 *)(r + 0x36); j < 5; j++)
+            {
+                c1 = (u8 *)((((i + *(s16 *)(p + 0x2)) << wa[10]) + *(s16 *)p + j) * 6 + ta);
+                e1 = *qa;
+                d1 = (e1 - *(s16 *)(c1 + 0x2)) / *(s16 *)(p + 0x68);
+                *(u16 *)(c1 + 0x2) += d1;
+                func_800CDE40(*(u16 *)p + j, *(u16 *)(p + 0x2) + i, -d1);
+                qa++;
+            }
+            r += 0xA;
+        }
+        func_800CDE0C();
+        if ((*(u16 *)(p + 0x68) & 7) == 0)
+        {
+            func_800A56E0(0x818);
+        }
+        if (--*(s16 *)(p + 0x68) <= 0)
+        {
+            for (i = 0, r = p; i < 5; i++)
+            {
+                for (j = 0, qb = (s16 *)(r + 0x36); j < 5; j++)
+                {
+                    c2 = (u8 *)((((i + *(s16 *)(p + 0x2)) << wa[10]) + *(s16 *)p + j) * 6 + ta);
+                    *(u16 *)(c2 + 0x2) = *(u16 *)qb;
+                    func_800CDF40(*(u16 *)p + j, *(u16 *)(p + 0x2) + i, -*(u16 *)qb);
+                    qb++;
+                }
+                r += 0xA;
+            }
+            func_8009D6F4();
+            ga = (u8 *)&D_80083460;
+            *(u16 *)(ga + 0xA) -= 1;
+            n = *(u16 *)(p + 0x6A);
+            D_800E296C &= 0xFFF7FFFF;
+            *(s16 *)(p + 0x6A) = n + 1;
+        }
+    }
+    else if (*(s16 *)(p + 0x6A) == 1)
+    {
+        gb = (u8 *)&D_80083460;
+        if (*(u16 *)(gb + 0x2) & 0x10)
+        {
+            if (--*(s16 *)(p + 0x6C) <= 0)
+            {
+                *(u16 *)(gb + 0xA) += 1;
+                *(s16 *)(p + 0x68) = 0x20;
+                func_800419EC(0x20, 8);
+                *(s16 *)(p + 0x6A) += 1;
+                D_800E296C |= 0x80000;
+            }
+        }
+    }
+    else
+    {
+        wc = (s16 *)D_8008333C;
+        tc = D_8008333C[0];
+        for (i = 0, r = p; i < 5; i++)
+        {
+            for (j = 0, qc = (s16 *)(r + 0x4); j < 5; j++)
+            {
+                c3 = (u8 *)((((i + *(s16 *)(p + 0x2)) << wc[10]) + *(s16 *)p + j) * 6 + tc);
+                e3 = *qc;
+                d3 = (e3 - *(s16 *)(c3 + 0x2)) / *(s16 *)(p + 0x68);
+                *(u16 *)(c3 + 0x2) += d3;
+                func_800CDE40(*(u16 *)p + j, *(u16 *)(p + 0x2) + i, -d3);
+                qc++;
+            }
+            r += 0xA;
+        }
+        if ((*(u16 *)(p + 0x68) & 7) == 0)
+        {
+            func_800A56E0(0x818);
+        }
+        if (--*(s16 *)(p + 0x68) <= 0)
+        {
+            for (i = 0, r = p; i < 5; i++)
+            {
+                for (j = 0, qd = (s16 *)(r + 0x4); j < 5; j++)
+                {
+                    c4 = (u8 *)((((i + *(s16 *)(p + 0x2)) << wc[10]) + *(s16 *)p + j) * 6 + tc);
+                    *(u16 *)(c4 + 0x2) = *(u16 *)qd;
+                    func_800CDF40(*(u16 *)p + j, *(u16 *)(p + 0x2) + i, -*(u16 *)qd);
+                    qd++;
+                }
+                r += 0xA;
+            }
+            func_8009D6F4();
+            gc = (u8 *)&D_80083460;
+            *(u16 *)(gc + 0xA) -= 1;
+            if (*(s16 *)(p + 0x6E) == 0)
+            {
+                D_800E296C &= 0x7FF7FFFF;
+            }
+            else
+            {
+                D_800E296C &= 0xBFF7FFFF;
+            }
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        func_800CDE0C();
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CE4E8);
 
