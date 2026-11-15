@@ -246,6 +246,43 @@ Both pairs are landed. The general lesson for the rest of this block: when
 the residue is "which register did this parameter get", read the parameter's
 own declaration off the load and the call, not the allocator.
 
+## PARALLELISING THIS BLOCK: one copy of the unit per agent
+
+The whole overlay is ONE file, `csrc/ovl_dungeon.c`, so agents cannot each
+edit it. They do not need to. `tools/decomp/ovlverify.py` takes the source
+path as its first argument, so an agent can work entirely on its own copy:
+
+    cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-<name>.c
+    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-<name>.c func_X func_Y
+
+That measures against the reference image exactly as it does in the real
+unit, with no build and no shared state. Each agent hands back the C it
+landed and the measured word counts; the dispatcher merges, runs
+`ovlverify` again on the real file, `clang-format`, `make build/dungeon.bin`
+and commits. **Verify every landing yourself after merging** -- an agent's
+copy can drift from the unit while it works, and two agents can both add the
+same declaration.
+
+**Tell every agent not to run `make`.** It regenerates `asm/nonmatchings/`
+and deletes the listing of every function that is already landed; ovlverify
+then takes that function's extent from the next ELF symbol, measures past
+its end, and reports plausible-looking numbers. An agent that builds will
+quietly poison its own measurements and everyone else's.
+
+**Batch by mechanism, and name the mechanism in the brief.**
+`docs/matching-levers.md` at `:9195` has the measured costs: a function whose
+mechanism is already named costs 130-230K tokens and lands, an open-ended one
+costs about 315K and comes back short. Ten functions sharing one recipe came
+back all-MATCH in a single 152K run. The batches that suit this block are the
+near-sibling sets (one reading, N substitutions), the parked near-misses (the
+analysis is already written, hand them the file), and runs of small functions
+sorted by size.
+
+**Build only this container while others are working.**
+`make build/dungeon.bin` links and checks dungeon.bin alone; `make
+containers` does all four and will report a town.bin mismatch that belongs to
+whoever is editing town, not to you.
+
 ## What has NOT been done
 
 * **The overlay's DATA is not owned.** The splat segment stops at the end of
