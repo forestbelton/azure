@@ -195,6 +195,32 @@ void func_800D20D8();
 void func_800D28E4();
 void func_800D3140();
 
+/* The per-frame step driver the cluster's entities share. The +0x8C slot and
+   the D_800E2xxx tables both hold this shape -- the four-argument step the
+   installers above park -- and the first and last arguments are the same
+   record reached through two differently-typed pointers, which is why
+   func_800D21CC takes it twice. */
+typedef void (*UnkDungeonStep)(u8 *, UnkVec *, u8 *, u8 *);
+extern UnkDungeonStep D_800E21C0[];
+extern UnkDungeonStep D_800E2228[];
+extern UnkDungeonStep D_800E2284[];
+/* The engine's global flag halfword at D_80083460 + 2. csrc/unk_154BC.c
+   reaches the same object as `*(u16 *)((u8 *)&D_80083460 + 2)`; here it is a
+   `%lo` displacement off its own `lui`, which is what a declared u16 gives. */
+extern u16 D_80083462;
+/* Two arguments at its definition in csrc/unk_1AF38.c, one at every call in
+   this unit -- csrc/unk_25944.c already declares it short the same way. */
+void func_800478B8(u8 *);
+/* Returns the distance between two points as seen from a facing; the third
+   argument is sign-extended at every call site and the result is used both
+   raw and as a halfword, so the return is s32 and the casts are explicit. */
+s32 func_800BCB04(s32, s32, s16);
+/* The handler trio's callees. func_800A9A0C is declared `void func_800A9A0C(u8 *)`
+   in csrc/unk_154BC.c and its result is never read here either. */
+void func_800A9A0C(u8 *);
+void func_800AA6B4(u8 *, UnkVec *, u8 *, s32);
+extern u8 *D_80083470;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800894A0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80089588);
@@ -2423,9 +2449,175 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1A80);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1C70);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1E34);
+/* THE CLUSTER'S PER-FRAME STEP DRIVER, and the entry point the four machines
+   above are reached through. Three copies: func_800D2E9C is this source with
+   D_800E2284 for D_800E21C0 and nothing else changed, and func_800D2664 is
+   it again with D_800E2228 and WITHOUT the func_800478B8 guard -- 160 words
+   against 169.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D20D8);
+   A frame for one entity: bail out with the record's +0x71 top bit cleared
+   while the engine's global 0x2000 flag is up; run the entity's own +0x8C
+   hook if it has one and then its state handler out of the table, both with
+   the same four arguments the installed machines take; integrate the mover
+   (+0x00 += +0x0C, +0x04 += +0x10) and its +0x14 accumulator; then decide
+   whether the entity is still inside its leash, which is what the two
+   func_800BCB04 calls measure -- the first from the mover's own position,
+   the second from the tile centre once the +0x40000000 request bit is set.
+   Out of range, or with +0x98 bit 2 up, the +0x8000000 bit is dropped.
+
+   THE RECORD IS REACHED THROUGH TWO POINTERS and this is not a cosmetic
+   choice: `addu $s0, $s1, $zero` makes a second pseudo for the same address,
+   and the fields are split between them -- +0x1C, +0x71, +0x88, +0x8C and
+   +0x9A on the copy, +0x90, +0x92, +0x98 and +0x9D on the parameter. Both
+   survive to allocation and both take a callee-saved register. The copy is
+   also what the handler calls pass as their FIRST and FOURTH arguments, which
+   is why func_800D21CC above takes the same record twice.
+
+   The two tests before func_800478B8 are NESTED `if`s, not `&&`. Written with
+   `&&`, fold merges `(x & 0x8000) == 0 && (x & 0x40) == 0` into a single
+   `andi $v0, $v0, 0x8040` and the function comes out two words short; the
+   target keeps one `lhu` and two `andi`/`bnez` pairs, which is what two
+   statements give.
+
+   169 words, 0 differing. */
+void func_800D1E34(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *a;
+    s32 r;
+
+    a = p;
+    if (D_80083462 & 0x2000)
+    {
+        a[0x71] &= 0x7F;
+        return;
+    }
+    if (*(UnkDungeonStep *)(a + 0x8C) != NULL)
+    {
+        (*(UnkDungeonStep *)(a + 0x8C))(a, b, c, a);
+    }
+    D_800E21C0[a[0x9A]](a, b, c, a);
+    if (!(*(u16 *)(c + 0x14) & 0x8000))
+    {
+        if (!(*(u16 *)(c + 0x14) & 0x40))
+        {
+            func_800478B8(c);
+        }
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if (*(u16 *)(p + 0x98) & 0x8)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if (*(u16 *)(p + 0x98) & 0x4)
+    {
+        goto drop;
+    }
+    r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                      (s16)(*(u16 *)(a + 0x88) - 0x20));
+    if ((s16)r >= 0x200)
+    {
+        goto drop;
+    }
+    if (*(s16 *)(p + 0x92) + *(s16 *)(a + 0x88) < (s16)r)
+    {
+        /* A BARE VOLATILE READ, and the listing leaves no other reading: this
+           arm is four words -- `lhu $v0, 0x98($s1)`, `j`, its empty delay
+           slot, and the `beqz` that branches over it -- and the load's
+           destination is dead at the jump. An ordinary read here is deleted
+           by flow (`insn_dead_p` keeps only a set whose source has side
+           effects), an empty arm collapses the if/else into one branch, and
+           both come out three words short. */
+        *(volatile u16 *)(p + 0x98);
+    }
+    else
+    {
+        if ((s16)r >= *(s16 *)(a + 0x88))
+        {
+            *(s32 *)(p + 0x90) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x92) = r - *(u16 *)(a + 0x88);
+        }
+        b->unk_14 = 0;
+        *(u32 *)(a + 0x1C) |= 0x8000000;
+        p[0x9D] = 0;
+    }
+    if (*(u32 *)(a + 0x1C) & 0x40000000)
+    {
+        *(u32 *)(a + 0x1C) &= ~0x40000000;
+        r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                          (s16)(*(u16 *)(a + 0x88) - 0x20));
+        *(s16 *)(p + 0x92) += *(u16 *)(a + 0x88) - r;
+        *(u16 *)(a + 0x88) = r;
+    }
+    goto tail;
+drop:
+    *(u32 *)(a + 0x1C) &= ~0x8000000;
+tail:
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(a + 0x88) + *(u16 *)(p + 0x92);
+    *(u16 *)(c + 0x14) |= 0x40;
+    *(u32 *)(a + 0x1C) |= 0x200;
+}
+
+/* THREE BYTE-IDENTICAL COPIES -- func_800D28E4 and func_800D3140 differ from
+   this one in nothing but their label -- and the handler the four machines
+   above park in the actor's +0x8C slot once their glide finishes.
+
+   It runs the record's +0x6D countdown down: while it is positive, clear
+   +0x60, let func_800A9A0C act on the record, and if the counter started
+   non-zero and has since been zeroed, decrement the +0x28 population byte.
+   When that reaches zero the record is published at D_80083470 (biased by
+   -0x20 to the node, the same bias the walk family uses) and handed to
+   func_800AAA54; otherwise, if +0x64 is non-zero, to func_800AA6B4.
+
+   THE STORE COMES FIRST AND THE COUNTER IS READ SECOND, and the order is
+   worth four words. Written the other way round -- the counter read, then
+   the store -- cse still holds the `lb $v0, 0x6D($s1)` the guard above
+   loaded, combine folds the `lbu`/`sll 24`/`sra 24` triple back into that
+   one `lb`, and the function comes out 57 words. With the store between
+   them the load is reissued as the target has it. `s16 n = (s8)d[0x6D]` is
+   both casts: the `(s8)` is the `sll 24`/`sra 24` pair and the `s16`
+   declaration is the `sll 16` before the `beqz`, which is how an HImode
+   compare against zero is spelled. Five statement orders measured; only
+   this one reaches 0, and the nearest two sit at 4 differing.
+
+   61 words each, 0 differing. */
+void func_800D20D8(u8 *a, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        *(s32 *)(d + 0x60) = 0;
+        n = (s8)d[0x6D];
+        func_800A9A0C(d);
+        if (n != 0)
+        {
+            if (*(s8 *)(d + 0x6D) == 0)
+            {
+                d[0x28]--;
+            }
+        }
+        if (d[0x28] == 0)
+        {
+            D_80083470 = d - 0x20;
+            func_800AAA54((UnkDungeonActor *)a, b, c, 0);
+            return;
+        }
+    }
+    if (*(s16 *)(d + 0x64) != 0)
+    {
+        func_800AA6B4(a, b, c, 0);
+    }
+}
 
 /* FOUR IDENTICAL COPIES, one per entity, differing in exactly one symbol:
    the handler parked in the actor's +0x8C slot at the end -- func_800D20D8,
@@ -2586,9 +2778,120 @@ void func_800D2464(void *a, void *b, u8 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D24A8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2664);
+/* func_800D1E34 with D_800E2228 and no func_800478B8 guard -- the entity
+   this one drives is never handed to it. Same source otherwise, and the
+   nine words it loses are why the two parameters land in the other order:
+   fewer references to the slot record moves it past the mover in
+   `allocno_compare`. 160 words, 0 differing. */
+void func_800D2664(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *a;
+    s32 r;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D28E4);
+    a = p;
+    if (D_80083462 & 0x2000)
+    {
+        a[0x71] &= 0x7F;
+        return;
+    }
+    if (*(UnkDungeonStep *)(a + 0x8C) != NULL)
+    {
+        (*(UnkDungeonStep *)(a + 0x8C))(a, b, c, a);
+    }
+    D_800E2228[a[0x9A]](a, b, c, a);
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if (*(u16 *)(p + 0x98) & 0x8)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if (*(u16 *)(p + 0x98) & 0x4)
+    {
+        goto drop;
+    }
+    r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                      (s16)(*(u16 *)(a + 0x88) - 0x20));
+    if ((s16)r >= 0x200)
+    {
+        goto drop;
+    }
+    if (*(s16 *)(p + 0x92) + *(s16 *)(a + 0x88) < (s16)r)
+    {
+        /* A BARE VOLATILE READ, and the listing leaves no other reading: this
+           arm is four words -- `lhu $v0, 0x98($s1)`, `j`, its empty delay
+           slot, and the `beqz` that branches over it -- and the load's
+           destination is dead at the jump. An ordinary read here is deleted
+           by flow (`insn_dead_p` keeps only a set whose source has side
+           effects), an empty arm collapses the if/else into one branch, and
+           both come out three words short. */
+        *(volatile u16 *)(p + 0x98);
+    }
+    else
+    {
+        if ((s16)r >= *(s16 *)(a + 0x88))
+        {
+            *(s32 *)(p + 0x90) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x92) = r - *(u16 *)(a + 0x88);
+        }
+        b->unk_14 = 0;
+        *(u32 *)(a + 0x1C) |= 0x8000000;
+        p[0x9D] = 0;
+    }
+    if (*(u32 *)(a + 0x1C) & 0x40000000)
+    {
+        *(u32 *)(a + 0x1C) &= ~0x40000000;
+        r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                          (s16)(*(u16 *)(a + 0x88) - 0x20));
+        *(s16 *)(p + 0x92) += *(u16 *)(a + 0x88) - r;
+        *(u16 *)(a + 0x88) = r;
+    }
+    goto tail;
+drop:
+    *(u32 *)(a + 0x1C) &= ~0x8000000;
+tail:
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(a + 0x88) + *(u16 *)(p + 0x92);
+    *(u16 *)(c + 0x14) |= 0x40;
+    *(u32 *)(a + 0x1C) |= 0x200;
+}
+
+/* func_800D20D8 again, byte for byte. */
+void func_800D28E4(u8 *a, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        *(s32 *)(d + 0x60) = 0;
+        n = (s8)d[0x6D];
+        func_800A9A0C(d);
+        if (n != 0)
+        {
+            if (*(s8 *)(d + 0x6D) == 0)
+            {
+                d[0x28]--;
+            }
+        }
+        if (d[0x28] == 0)
+        {
+            D_80083470 = d - 0x20;
+            func_800AAA54((UnkDungeonActor *)a, b, c, 0);
+            return;
+        }
+    }
+    if (*(s16 *)(d + 0x64) != 0)
+    {
+        func_800AA6B4(a, b, c, 0);
+    }
+}
 
 /* Four identical copies of one four-state walk-and-stop machine, differing
    only in the handler they park at the end. See func_800D21CC. */
@@ -2687,9 +2990,124 @@ void func_800D2C70(void *a, void *b, u8 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2CB4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2E9C);
+/* func_800D1E34 with D_800E2284 for D_800E21C0; see it for the whole
+   mechanism. 169 words, 0 differing. */
+void func_800D2E9C(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *a;
+    s32 r;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3140);
+    a = p;
+    if (D_80083462 & 0x2000)
+    {
+        a[0x71] &= 0x7F;
+        return;
+    }
+    if (*(UnkDungeonStep *)(a + 0x8C) != NULL)
+    {
+        (*(UnkDungeonStep *)(a + 0x8C))(a, b, c, a);
+    }
+    D_800E2284[a[0x9A]](a, b, c, a);
+    if (!(*(u16 *)(c + 0x14) & 0x8000))
+    {
+        if (!(*(u16 *)(c + 0x14) & 0x40))
+        {
+            func_800478B8(c);
+        }
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if (*(u16 *)(p + 0x98) & 0x8)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if (*(u16 *)(p + 0x98) & 0x4)
+    {
+        goto drop;
+    }
+    r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                      (s16)(*(u16 *)(a + 0x88) - 0x20));
+    if ((s16)r >= 0x200)
+    {
+        goto drop;
+    }
+    if (*(s16 *)(p + 0x92) + *(s16 *)(a + 0x88) < (s16)r)
+    {
+        /* A BARE VOLATILE READ, and the listing leaves no other reading: this
+           arm is four words -- `lhu $v0, 0x98($s1)`, `j`, its empty delay
+           slot, and the `beqz` that branches over it -- and the load's
+           destination is dead at the jump. An ordinary read here is deleted
+           by flow (`insn_dead_p` keeps only a set whose source has side
+           effects), an empty arm collapses the if/else into one branch, and
+           both come out three words short. */
+        *(volatile u16 *)(p + 0x98);
+    }
+    else
+    {
+        if ((s16)r >= *(s16 *)(a + 0x88))
+        {
+            *(s32 *)(p + 0x90) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x92) = r - *(u16 *)(a + 0x88);
+        }
+        b->unk_14 = 0;
+        *(u32 *)(a + 0x1C) |= 0x8000000;
+        p[0x9D] = 0;
+    }
+    if (*(u32 *)(a + 0x1C) & 0x40000000)
+    {
+        *(u32 *)(a + 0x1C) &= ~0x40000000;
+        r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                          (s16)(*(u16 *)(a + 0x88) - 0x20));
+        *(s16 *)(p + 0x92) += *(u16 *)(a + 0x88) - r;
+        *(u16 *)(a + 0x88) = r;
+    }
+    goto tail;
+drop:
+    *(u32 *)(a + 0x1C) &= ~0x8000000;
+tail:
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(a + 0x88) + *(u16 *)(p + 0x92);
+    *(u16 *)(c + 0x14) |= 0x40;
+    *(u32 *)(a + 0x1C) |= 0x200;
+}
+
+/* func_800D20D8 again, byte for byte. */
+void func_800D3140(u8 *a, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        *(s32 *)(d + 0x60) = 0;
+        n = (s8)d[0x6D];
+        func_800A9A0C(d);
+        if (n != 0)
+        {
+            if (*(s8 *)(d + 0x6D) == 0)
+            {
+                d[0x28]--;
+            }
+        }
+        if (d[0x28] == 0)
+        {
+            D_80083470 = d - 0x20;
+            func_800AAA54((UnkDungeonActor *)a, b, c, 0);
+            return;
+        }
+    }
+    if (*(s16 *)(d + 0x64) != 0)
+    {
+        func_800AA6B4(a, b, c, 0);
+    }
+}
 
 /* Four identical copies of one four-state walk-and-stop machine, differing
    only in the handler they park at the end. See func_800D21CC. */
