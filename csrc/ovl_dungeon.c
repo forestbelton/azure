@@ -268,6 +268,15 @@ extern u8 D_800E0E9B[];
 extern u8 D_800E0EE1[];
 extern u8 D_800E0F07[];
 void func_800997FC(u8 *);
+s32 func_800A2424(u8 *, s32);
+extern u8 D_800E173A[];
+extern u8 D_800E1827[];
+s32 func_800C8A3C(u8 *, s16, s16);
+void func_800D5460(u8 *, s32, s32);
+extern u8 D_800E104E[];
+extern u8 D_800E107C[];
+extern u8 D_800E10C0[];
+extern u8 D_800E10F2[];
 void func_800A56E0(s32);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
@@ -1852,11 +1861,88 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE360);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE4E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE5A8);
+/* A kill handler with an OUT-OF-RANGE arm: where the other six fall through
+   the pointer gate into shared code, these two branch to func_800997FC with
+   a string of their own, and the `lui $a0, %hi(...)` for it sits in the
+   gate's delay slot. The in-range arm applies an effect through
+   func_800A48F0, announces it, and tints the node through func_800D5460.
+   82 words, 0 differing. */
+s32 func_800BE5A8(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        if ((s16)func_800A48F0((s8 *)p, 0x20, 0x10) != 0)
+        {
+            if (*(u32 *)(p + 0x14) & 0x4000)
+            {
+                func_80099844(p, D_800E104E);
+            }
+        }
+        func_800D5460(p - 0x20, 0xE0E0E0, 0x702);
+    }
+    else
+    {
+        func_800997FC(D_800E107C);
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE6F0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE9E4);
+/* func_800BE5A8 with a RANDOM effect value -- `func_800A6D30() & 0x1F` with
+   bit 5 forced on -- whose result is not tested, a different tint and a
+   different pair of strings. 83 words, 0 differing. */
+s32 func_800BE9E4(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        func_800A48F0((s8 *)p, 0xF, (func_800A6D30() & 0x1F) | 0x20);
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            func_80099844(p, D_800E10C0);
+        }
+        func_800D5460(p - 0x20, 0x804040, 0x612);
+    }
+    else
+    {
+        func_800997FC(D_800E10F2);
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BEB30);
 
@@ -1966,9 +2052,67 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2F2C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C30D4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3238);
+/* The same skeleton again, with a charge roll through func_800C8900 and
+   sound 0x612 on a hit. 65 words, 0 differing. */
+s32 func_800C3238(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C333C);
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if (func_800C8900(p, 0x400, 0x8) != 0)
+    {
+        func_800A56E0(0x612);
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
+
+/* func_800C3238 with a func_800A2424 gate and a message instead of a
+   sound. 65 words, 0 differing. */
+s32 func_800C333C(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if (func_800A2424(p, 1) == 0)
+    {
+        func_80099844(p, D_800E173A);
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3440);
 
@@ -2050,7 +2194,42 @@ s32 func_800C37C8(u8 *p, u8 *q, s16 k)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3900);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3AE0);
+/* The same skeleton with an effect applied through func_800A48F0 -- the
+   engine entry whose return type include/structs.h had as void until this
+   block was opened; the `sll $v0, 16` before the `beqz` is the halfword
+   test that corrected it. 74 words, 0 differing. */
+s32 func_800C3AE0(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if ((s16)func_800A48F0((s8 *)p, 0x7, -0xA) != 0)
+    {
+        func_800A56E0(0x615);
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            func_80099844(p, D_800E1827);
+        }
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3C08);
 
@@ -2058,7 +2237,36 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3D3C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4030);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4220);
+/* func_800C3238 with func_800C8A3C and sound 0x520.
+   65 words, 0 differing. */
+s32 func_800C4220(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if (func_800C8A3C(p, 0x400, 0x8) != 0)
+    {
+        func_800A56E0(0x520);
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4324);
 
