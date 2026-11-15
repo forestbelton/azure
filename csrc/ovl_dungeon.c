@@ -105,7 +105,7 @@ typedef struct UnkDungeonSprite
 s32 func_800AB378();
 s32 func_800ABDBC();
 s32 func_800AC010();
-s32 func_800AC480();
+s32 func_800AC480(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_800AC5C8();
 s32 func_800ACE34();
 /* Called for effect by func_800B318C and as a predicate by func_800DA660. */
@@ -8826,9 +8826,12 @@ void func_800B31AC(UnkDungeonActor *p)
     }
 }
 
-void func_800B31E4(UnkDungeonActor *p)
+/* FOUR PARAMETERS, forwarded. func_800AC480 reads all four argument
+   registers; this caller only passes them through, so the wrong arity was
+   invisible until that function was read. 14 words, 0 differing either way. */
+void func_800B31E4(UnkDungeonActor *p, UnkVec *b, u8 *c, u8 *d)
 {
-    if (func_800AC480() != 0)
+    if (func_800AC480((u8 *)p, b, c, d) != 0)
     {
         p->unk_8C = func_800B2A60;
     }
@@ -16819,9 +16822,12 @@ void func_800DA6C4(UnkDungeonActor *p, void *b, void *c, void *d)
     }
 }
 
-void func_800DA728(UnkDungeonActor *p)
+/* FOUR PARAMETERS, forwarded. func_800AC480 reads all four argument
+   registers; this caller only passes them through, so the wrong arity was
+   invisible until that function was read. 14 words, 0 differing either way. */
+void func_800DA728(UnkDungeonActor *p, UnkVec *b, u8 *c, u8 *d)
 {
-    if (func_800AC480() != 0)
+    if (func_800AC480((u8 *)p, b, c, d) != 0)
     {
         p->unk_8C = func_800D8C64;
     }
