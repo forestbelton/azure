@@ -841,6 +841,9 @@ extern u8 D_800DEA68[];
 extern u8 D_800E188B[];
 extern u8 D_800E1729[];
 extern u8 D_800E101C[];
+extern u8 D_800E1580[];
+extern u8 D_800E15A2[];
+extern u8 *D_80082EB4;
 s32 func_80069EF8(void);
 extern u8 *D_80082EB0;
 s32 func_80098C80(u8 *);
@@ -9864,7 +9867,67 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C1F28);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2130);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C22EC);
+/* The kill skeleton's out-of-range arm reaches the record D_80082EB4 names,
+   and `p` ITSELF is reused for it -- the target keeps everything in $s0.
+   THE FLAG IS SET LAST IN THE ARM: written first its `li $s2, 1` lands
+   before the mask's `ori` and the function is 3 differing; one statement
+   later, 2; last, 0. 111 words, 0 differing. */
+s32 func_800C22EC(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+    u8 *e;
+    s32 f;
+    s32 i;
+
+    f = 0;
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        e = D_80082EB4;
+        if (e[1] == 0x13)
+        {
+            i = e[3] & 0x1F;
+            if (i < 0x14)
+            {
+                p = (u8 *)D_800E3DF0[i];
+                if ((s16)func_80042900((s8 *)p, 0xE) != 0)
+                {
+                    p[0x28] = (p[0x29] >> 1) + 1;
+                    *(s32 *)(p + 0x1C) &= ~0x4000000;
+                    func_80041E70(p);
+                    func_80099844(p, D_800E1580);
+                    f = 1;
+                }
+            }
+        }
+        if (f == 0)
+        {
+            func_800997FC(D_800E15A2);
+        }
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C24A8);
 
