@@ -507,3 +507,14 @@ STR_NAME_KID = 0x80080a64; // size:0x8 defined:True
 // for the linker.
 // -------------------------------------------------------------------------
 STR_ITEM_MAKES_IT_POSSIBLE_TO_RETURN_TO_A_TOW = 0x8002f010; // size:0x4c defined:True
+
+// -------------------------------------------------------------------------
+// The familiar-command and menu-verb pool, csrc/str/commands.c.
+//
+// Two entries for 36 objects, the same reason as the item pool above: only
+// the first string is reached by a pointer splat emits symbolically, and
+// D_8002E950 is the index table func_80050A58 reads. The other 34 strings are
+// bare literals in game_data's pointer table at rom 0x044EC0.
+// -------------------------------------------------------------------------
+STR_CMD_CAN_T_COMMAND_FAMILIAR = 0x8002e610; // size:0x30 defined:True
+D_8002E950 = 0x8002e950; // size:0x14 defined:True

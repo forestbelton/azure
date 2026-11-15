@@ -121,7 +121,7 @@ segments:
     vram: 0x8002E610
     align: 4
     subsegments:
-      - [0x1e10, rodata, str_pool_1E10]
+      - [0x1e10, .rodata, str/commands]
   # jtbl_8002E964, func_800517CC's 8-entry table: the only `.rodata` of
   # unk_24FCC, the sixth piece. 32 bytes, no pad -- the table's own `.align 3`
   # is relative to the object's section origin, which is offset 0 here.
