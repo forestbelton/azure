@@ -787,12 +787,12 @@ then read only the section you need.
 - AN `asm` OUTPUT BUYS THE BASIC BLOCK WITHOUT BUYING LIVE RANGE; AN `asm` INPUT BUYS BOTH  `:26626`
 - AN `asm` THAT *WRITES* A VARIABLE KILLS cse's SUBREG EQUIVALENCE  `:26649`
 - A LINKER-SCRIPT SYMBOL RELOCATES WORDS THE ORIGINAL LEFT AS CONSTANTS  `:26668`
-- `build/dungeon.bin` DOES NOT LINK `common_syms.txt`, SO A PSYQ NAME MEASURES 0 AND THEN FAILS THE LINK  `:26692`
-- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:26714`
-- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:26737`
-- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:26749`
-- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:26773`
-- A PROVED-UNREACHABLE RESIDUE: THE `|= 0x80000000` GATE'S `$v0`/`$v1` SWAP  `:26788`
+- FIXED: `build/dungeon.bin` NOW LINKS `common_syms.txt` -- BUT CHECK THE RULE BEFORE TRUSTING A PSYQ NAME  `:26692`
+- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:26725`
+- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:26748`
+- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:26760`
+- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:26784`
+- A PROVED-UNREACHABLE RESIDUE: THE `|= 0x80000000` GATE'S `$v0`/`$v1` SWAP  `:26799`
 
 <!-- END INDEX -->
 
@@ -26689,7 +26689,7 @@ resolves to identical bytes.
 added to the linker script is not a finding** -- check that `arith=OK`, that
 `masked_words` is the smaller number, and that the container builds.
 
-## `build/dungeon.bin` DOES NOT LINK `common_syms.txt`, SO A PSYQ NAME MEASURES 0 AND THEN FAILS THE LINK
+## FIXED: `build/dungeon.bin` NOW LINKS `common_syms.txt` -- BUT CHECK THE RULE BEFORE TRUSTING A PSYQ NAME
 
 ovl_dungeon, 2026-11-15, `func_800AFFB4`. **This is a build-breaker that
 `ovlverify` structurally cannot see**, and it differs PER CONTAINER:
@@ -26706,10 +26706,21 @@ declared by `psyq/include` and resolve through `common_syms.txt`. In
 then fail the link. Only the `func_` spellings are in
 `splat/dungeon.bin_undefined_funcs_auto.txt`.
 
-`docs/town-sweep.md`'s "A REAL LIBRARY NAME, WHICH IS WORSE, BECAUSE NOTHING
-WARNS" says to grep the overlay's two `*_auto.txt` files, which is the right
-check; **this is why the answer differs between containers.** `make
-build/<container>.bin` is the only gate that catches it.
+**This was fixed on 2026-11-15**: the dungeon rule now passes
+`--script=splat/common_syms.txt` like town's and main's, all four containers
+rebuild byte-identical with the change, and a probe that calls `RotNclip4`
+links cleanly against the new script set where it previously reported
+`undefined reference`. The omission was incidental -- dungeon.bin work had not
+started when the rule was written.
+
+**The entry stays because the failure MODE is the lesson, not the one rule.**
+`SLUS` still links without `common_syms`, the four rules still differ in which
+scripts they pass, and nothing in the compile or in `ovlverify` can see any of
+it: a psyq name compiles clean, measures 0 differing, and fails only at the
+link. `docs/town-sweep.md`'s "A REAL LIBRARY NAME, WHICH IS WORSE, BECAUSE
+NOTHING WARNS" says to grep the overlay's two `*_auto.txt` files -- still the
+right check before using a library name in a unit you have not built before.
+`make build/<container>.bin` is the only gate that catches it.
 
 ## GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES
 

@@ -434,6 +434,7 @@ build/$(DUNGEON): $(OFILES) build/$(DUNGEON).ld splat/$(DUNGEON)_extra_syms.txt
 		--script=splat/$(DUNGEON)_undefined_funcs_auto.txt \
 		--script=splat/$(DUNGEON)_undefined_syms_auto.txt \
 		--script=splat/$(DUNGEON)_extra_syms.txt \
+		--script=splat/common_syms.txt \
 		--output=build/$(DUNGEON).elf
 	$(OBJCOPY) -O binary build/$(DUNGEON).elf build/$(DUNGEON)
 	@echo ""
