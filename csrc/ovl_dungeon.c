@@ -364,6 +364,7 @@ s32 func_800C135C();
    slot. Only its ADDRESS is taken, which is why nothing had falsified it. */
 s32 func_800C152C();
 extern u8 D_800DEAE0[];
+extern u8 D_800DEC00[];
 extern u8 D_800DF514[];
 extern u8 D_800E1482[];
 extern u8 D_800E14A6[];
@@ -10657,7 +10658,60 @@ void func_800B66C8(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B6814);
+/* Burst 8..15 0x212 sparks evenly around the circle from one random start
+   angle: each gets func_800B63A8 as its step, a position offset by
+   (cos, sin) >> 11, a velocity of (cos, sin) << 6 with a -0x30000 climb,
+   and a drag record at +0x20 holding the negated velocity >> 6. The count
+   is `(rand & 0xF) | 8`, which is why the loop's entry guard is `beqz` and
+   not `blez` -- nonzero_bits proves it is in [8, 15]. 114 words,
+   0 differing on the first compile. */
+void func_800B6814(u8 *p)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s32 cnt;
+    s32 step;
+    s32 ang;
+    s32 i;
+
+    cnt = (func_80069EF8() & 0xF) | 8;
+    step = 0x1000 / cnt;
+    ang = func_80069EF8();
+    for (i = 0; i < cnt; i++, ang += step)
+    {
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            m = n->unk_08;
+            r = (u8 *)n->unk_0C;
+            *(u32 *)((u8 *)n + 0x10) = (u32)func_800B63A8;
+            func_8004491C(n, (u32)D_80045340);
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0x2) + (func_80064584(ang) >> 11);
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0x6) + (func_800644B8(ang) >> 11);
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0xA);
+            *(s32 *)((u8 *)m + 0xC) = func_80064584(ang) << 6;
+            *(s32 *)((u8 *)m + 0x10) = func_800644B8(ang) << 6;
+            *(s32 *)((u8 *)m + 0x14) = 0xFFFD0000;
+            q = (u8 *)n + 0x20;
+            *(s32 *)(q + 0x0) = -*(s32 *)((u8 *)m + 0xC) >> 6;
+            *(s32 *)(q + 0x4) = -*(s32 *)((u8 *)m + 0x10) >> 6;
+            *(s32 *)(q + 0x8) = 0x2000;
+            func_8003DB94(r, D_800DEC00, 0);
+            *(s32 *)(r + 0xC) = 0x808080;
+            *(s16 *)(r + 0x1E) = 0x400;
+            *(s16 *)(r + 0x1C) = 0x400;
+            *(s16 *)(r + 0x10) = 0x60;
+            *(s16 *)(r + 0x12) = 0x7E80;
+            *(u16 *)(r + 0x14) |= 0x10C;
+            *(s16 *)(q + 0xE) = (func_80069EF8() & 3) | 0x10;
+            *(s16 *)(q + 0x16) = 0x10;
+            *(s16 *)(q + 0x14) = 0x10;
+            *(s16 *)(q + 0x18) = 8;
+        }
+    }
+}
 
 /* The +0x64 halfword is read ONCE into an s32 local and tested twice (`bltz`
    then `blez`), and the `&= 0xF7FF` is written out in both arms --
