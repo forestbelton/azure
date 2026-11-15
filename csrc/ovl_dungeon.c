@@ -128,6 +128,10 @@ void func_800D4494();
    three sites; func_800A48F0 is declared in include/structs.h, and the note
    there says why its return type was corrected from void. */
 u16 func_800A6D30();
+/* The two probe callers that are reached from above their own definitions;
+   without these the call sites take an implicit `int f()` and cc1psx warns. */
+s32 func_800C8844(u8 *, s16, s16);
+s32 func_800C8980(u8 *, s16, s16);
 void func_80099844(u8 *, u8 *);
 void func_800DC1B8(void *);
 extern u8 D_800E19C2[];
@@ -220,6 +224,29 @@ s32 func_800BCB04(s32, s32, s16);
 void func_800A9A0C(u8 *);
 void func_800AA6B4(u8 *, UnkVec *, u8 *, s32);
 extern u8 *D_80083470;
+
+/* The cluster's spawners and what they reach. D_80083498 is declared
+   UnkTownCam in include/structs.h; only its address is wanted here. */
+UnkNode *func_8003FD64(s32, void *);
+/* csrc/ovl_town.c declares the same two as `UnkTownCam D_80083498` and
+   `u8 D_80045340[]`; only their addresses are wanted here, and the array
+   spelling gives the same split lui/addiu the listing has. */
+extern u8 D_80083498[];
+extern u8 D_80045340[];
+/* The step drivers and handlers the spawners park; the spawners sit ahead of
+   them in address order, so each needs a prototype here. */
+void func_800D1E34(u8 *, UnkVec *, u8 *);
+void func_800D2664(u8 *, UnkVec *, u8 *);
+void func_800D2E9C(u8 *, UnkVec *, u8 *);
+void func_800D4158(u8 *, UnkVec *, u8 *);
+extern u8 D_800DEEC0[];
+void func_8003DB94(void *, void *, s32);
+void func_80099FDC(UnkNode *);
+void func_8009A21C(s32, s32, s32);
+u8 func_8009FB34(s32, s32);
+extern u8 D_800E2178[];
+extern u8 D_800E221C[];
+extern u8 D_800E22E0[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800894A0);
 
@@ -2447,7 +2474,77 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1824);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1A80);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1C70);
+/* THE CLUSTER'S SPAWNER, and the third shape in the set: func_800D24A8 and
+   func_800D3F74 below are this source with the template, the scale and the
+   two hooks substituted. Allocate a 0x112 node out of D_80083498, tag it
+   0x34, take the engine's D_80045340 list, seed the mover's facing and the
+   renderer's colour, scale and tile, park func_800D1E34 as the node's step
+   and func_800D20D8 in the record's +0x8C slot, then measure the leash with
+   func_800BCB04 and light the record up. Returns the node's payload, or
+   NULL when the allocation fails -- one exit, with `p` preset to NULL, which
+   is what the early `addu $s2, $zero, $zero` is.
+
+   ALL FOUR PARAMETERS ARE s16 AND THAT IS WORTH ELEVEN WORDS. Only `kind`
+   is witnessed directly -- `sll $v0, $s0, 16` / `sra` / `bne $v0, 1` is a
+   narrow parameter re-extended, which an `s32` would not need. The other
+   three are invisible in their own instructions: `sb $s6, 0x24($s0)` and
+   `sh $s4, 0xA($s1)` truncate whatever they are given. They show up in the
+   PROLOGUE instead. As `s32`, the tile pair's two allocnos come out at
+   2 refs / 72 and 74 insns, the x pseudo wins `allocno_compare` by 3%, the
+   two take each other's callee-saved registers, and the whole save-and-copy
+   sequence reschedules around them: 13 differing words, none of them in the
+   body. As `s16` they land the right way round and the function is 0. A
+   parameter whose only use is a narrowing store still has a declared type,
+   and the prologue is where you read it.
+
+   113 words, 0 differing. */
+u8 *func_800D1C70(s16 kind, s16 x, s16 y, s16 ang)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        p[0x13] = 0x34;
+        if (kind == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = ang;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        *((u8 *)r + 0x24) = x;
+        *((u8 *)r + 0x25) = y;
+        r->unk_1E = 0x1800;
+        r->unk_1C = 0x1800;
+        func_8003DB94(r, D_800E2178, 0);
+        n->unk_10 = (u32)func_800D1E34;
+        *(u32 *)(p + 0x8C) = (u32)func_800D20D8;
+        *((u8 *)r + 0x26) = func_8009FB34(*((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        func_800A2B04(m, *((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        *(s16 *)(p + 0x88) =
+            func_800BCB04(*(u16 *)((u8 *)m + 0x2), *(u16 *)((u8 *)m + 0x6), *(s16 *)((u8 *)m + 0xA));
+        *(u32 *)((u8 *)r + 0xC) = 0x2C808080;
+        r->unk_14 |= 0x8000;
+        func_80099FDC(n);
+        func_8009A21C(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                      (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        p[0x9A] = 0xE;
+        *(s8 *)(p + 0x9C) = -1;
+        *(u32 *)(p + 0x1C) |= 0x40000200;
+    }
+    return p;
+}
 
 /* THE CLUSTER'S PER-FRAME STEP DRIVER, and the entry point the four machines
    above are reached through. Three copies: func_800D2E9C is this source with
@@ -2776,7 +2873,56 @@ void func_800D2464(void *a, void *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D24A8);
+/* func_800D1C70 with D_800E221C stored straight into the renderer's +0x08
+   instead of handed to func_8003DB94, a 0x1400 scale, and func_800D2664 /
+   func_800D28E4 as the two hooks. 111 words, 0 differing. */
+u8 *func_800D24A8(s16 kind, s16 x, s16 y, s16 ang)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        p[0x13] = 0x34;
+        if (kind == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = ang;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_08 = (u32)D_800E221C;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        *((u8 *)r + 0x24) = x;
+        *((u8 *)r + 0x25) = y;
+        r->unk_1E = 0x1400;
+        r->unk_1C = 0x1400;
+        n->unk_10 = (u32)func_800D2664;
+        *(u32 *)(p + 0x8C) = (u32)func_800D28E4;
+        *((u8 *)r + 0x26) = func_8009FB34(*((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        func_800A2B04(m, *((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        *(s16 *)(p + 0x88) =
+            func_800BCB04(*(u16 *)((u8 *)m + 0x2), *(u16 *)((u8 *)m + 0x6), *(s16 *)((u8 *)m + 0xA));
+        *(u32 *)((u8 *)r + 0xC) = 0x2C808080;
+        r->unk_14 |= 0x8000;
+        func_80099FDC(n);
+        func_8009A21C(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                      (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        p[0x9A] = 0xE;
+        *(s8 *)(p + 0x9C) = -1;
+        *(u32 *)(p + 0x1C) |= 0x40000200;
+    }
+    return p;
+}
 
 /* func_800D1E34 with D_800E2228 and no func_800478B8 guard -- the entity
    this one drives is never handed to it. Same source otherwise, and the
@@ -3198,7 +3344,63 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D36D0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3738);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3F74);
+/* func_800D1C70 with the D_800DEEC0 template, a 0x1000 scale,
+   func_800D4158 / func_800D4494 as the hooks, two more renderer fields set
+   (+0x12 and the 0x100 flag), and a tail the other two do not have: the
+   leash measurement is kept in a local so the record's +0x92 can be seeded
+   with `ang - v` after +0x88 takes `v` itself. 121 words, 0 differing. */
+u8 *func_800D3F74(s16 kind, s16 x, s16 y, s16 ang)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+    s32 v;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        p[0x13] = 0x34;
+        if (kind == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = ang;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        *((u8 *)r + 0x24) = x;
+        *((u8 *)r + 0x25) = y;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        r->unk_12 = 0x7E40;
+        r->unk_14 |= 0x100;
+        func_8003DB94(r, D_800DEEC0, 0);
+        n->unk_10 = (u32)func_800D4158;
+        *(u32 *)(p + 0x8C) = (u32)func_800D4494;
+        *((u8 *)r + 0x26) = func_8009FB34(*((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        func_800A2B04(m, *((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        v = func_800BCB04(*(u16 *)((u8 *)m + 0x2), *(u16 *)((u8 *)m + 0x6), *(s16 *)((u8 *)m + 0xA));
+        *(s16 *)(p + 0x88) = v;
+        *(s32 *)(p + 0x90) = 0;
+        *(s16 *)(p + 0x92) = ang - v;
+        *(u32 *)((u8 *)r + 0xC) = 0x2C808080;
+        r->unk_14 |= 0x8000;
+        func_80099FDC(n);
+        func_8009A21C(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                      (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        p[0x9A] = 0xE;
+        *(s8 *)(p + 0x9C) = -1;
+        *(u32 *)(p + 0x1C) |= 0x40000200;
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4158);
 
