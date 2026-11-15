@@ -280,6 +280,21 @@ path as its first argument, so an agent can work entirely on its own copy:
     cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-<name>/ovl_dungeon.c
     python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-<name>/ovl_dungeon.c func_X
 
+**AND EACH AGENT NEEDS ITS OWN `AZURE_SCRATCH`.** `asmlib.compile_asm`
+derives its intermediate `.s`/`.o` path from the source file's BASENAME inside
+`$AZURE_SCRATCH` (default `/tmp/azure-decomp`). Since the basename has to be
+`ovl_dungeon.c` -- see the next paragraph -- every agent otherwise writes the
+same `ovl_dungeon.s`, and two concurrent compiles corrupt each other. Two
+agents in the 2026-11-14 wave hit it independently:
+
+    export AZURE_SCRATCH=/tmp/claude-1000/agent-<name>/sp
+
+The failures are loud and misleading: `unrecognized opcode 'macro'`, `junk at
+end of line`, `symbol already defined` on a run of functions the agent never
+touched. They read as a source defect and are not one. A compile that merely
+finishes first could in principle hand back another agent's object silently,
+so this is a correctness fix, not just an annoyance.
+
 **THE COPY'S BASENAME MATTERS, and this recipe used to get it wrong.**
 `ovlverify.py` picks the container ELF from the SOURCE FILE'S BASENAME
 (`stem in CONTAINER`). A copy called `agent-c4.c` falls back to
