@@ -614,14 +614,11 @@ s16 func_8009FB34(u16, u16);
    masks with `andi $a3, $v0, 0xFFFF`. */
 /* The nine GTE/matrix-stack routines func_800DBA90 drives. splat names them
    PushMatrix, PopMatrix, SetRotMatrix, SetTransMatrix, RotTrans, RotMatrix,
-   RotMatrixX, RotMatrixY and RotMatrixZ, but only the `func_` spellings are
-   in splat/dungeon.bin_undefined_funcs_auto.txt, so those are what link. */
+   RotMatrixX, RotMatrixY and RotMatrixZ.  Both spellings link since
+   build/dungeon.bin started passing --script=splat/common_syms.txt on
+   2026-11-15; the library names are the readable ones and are what this unit
+   now uses. */
 
-/* func_800C55F4's three remaining GTE/GPU helpers. NormalClip has
-   NormalClip's shape -- three packed screen-XY words in, a signed area out,
-   tested with `blez` -- and SetPolyG3 is the one-argument primitive
-   initialiser that sits beside SetPolyG4's. Only the `func_` spellings
-   are in splat/dungeon.bin_undefined_funcs_auto.txt, so those are what link. */
 /* Prototype copied from its definition in csrc/unk_1C540.c:2936. The `s16`
    second parameter is load-bearing HERE: the CALLER is what carries the
    `sll`/`sra 16` pair the target has at each of func_800C55F4's three call
@@ -1145,11 +1142,6 @@ u32 func_8004383C(u8 *, s16);
    func_800B0654 at index 0 and func_800B06C0 at index 1. */
 typedef void (*UnkDungeonProj)(UnkVec *, UnkSlot *, void *);
 extern UnkDungeonProj D_800DEFF0[];
-/* RotTransPers4: four scratchpad SVECTORs in, four packed screen pairs plus
-   the depth and the flag out.  Only the `func_` spelling is in
-   splat/dungeon.bin_undefined_funcs_auto.txt, so that is what links, and it
-   is kept on ONE line because a wrapped declaration is swept as a definition
-   and hard-exits ovlverify. */
 /* Swaps the two packed screen pairs it is handed. */
 void func_8003E12C(s32 *, s32 *);
 /* func_800B06F0's two primitive emitters and the colour-row hand-off. */
@@ -1631,6 +1623,32 @@ typedef struct UnkDungeonSP5
     u8 pad_100[0x18];
     u32 unk_118;
 } UnkDungeonSP5;
+
+/* The 0x1F800000 scratchpad as func_800D6170 lays it out: the OT base at
+   +0x24, ScaleMatrix's vector at +0x34, the composed matrix at +0x54, the
+   node's own matrix at +0x74 (whose `t` is the mover's position at
+   +0x88..+0x90), RotMatrix's input at +0xA4, RotAverage4's four input vectors
+   at +0xB0, its p/flag out-parameters at +0xD0/+0xD4 and the OT index at
+   +0x100. */
+typedef struct UnkDungeonSP6
+{
+    u8 pad_00[0x24];
+    u8 *unk_24;
+    s16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDungeonSP6;
 
 /* The 0xC-byte texture record the scratchpad's +0x118 points at, town's
    UnkTownA41D8T field for field.  Indexed [flag * 4 + (i & 1) * 2 + half]. */
@@ -35217,7 +35235,138 @@ void func_800D6068(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D6170);
+/* The ladder/rope strip: compose the slot's rotation with the camera's own
+   matrix in the 0x1F800000 scratchpad, then walk the strip's far end back
+   towards its near end 0x10 units at a time, RotAverage4-ing a POLY_F4 per
+   rung into the +0x8D0 cursor, and close with the one short segment that is
+   left over.  func_800BA414 above is the same emit block with a different
+   quad; the four on-screen tests are `|`, not `||`, for the reason its note
+   gives, and the two OT links are `addPrim` -- P_TAG bitfield stores, which
+   a hand-written `|` cannot produce.
+
+   THREE SPELLINGS ARE LOAD-BEARING, and together they are the whole landing
+   (399 words / 32 aligned differences before them, 400 / 0 after).
+
+   THE SCALE VECTOR IS ONE CHAINED ASSIGNMENT.  `sp->unk_34.vx = sp->unk_34.vy
+   = sp->unk_34.vz = 0x2000;` emits +0x3C, +0x38, +0x34, which is the target's
+   order; three separate statements emit +0x34, +0x38, +0x3C and the stores
+   do not realign.  Same rule as func_800BA384's note.
+
+   `q[4]` IS DECLARED BEFORE THE MATRIX.  The target's frame puts the four
+   halfwords at $sp+0x28 and ReadRotMatrix's MATRIX at $sp+0x30; declaring
+   the MATRIX first puts it at +0x28 and `q` at +0x48, and every one of the
+   eleven `q` accesses then reads the wrong displacement.
+
+   `&m` GOES THROUGH A POINTER LOCAL, and that is the 400th word.  Written
+   `ReadRotMatrix(&m); CompMatrix(&m, ...)` the address is two separate
+   `addiu $a0,$sp,0x30`, which is one word SHORT; `MATRIX *mp = &m;` makes it
+   one pseudo live across the call, so it takes $s0 and the two call sites
+   become `addu $a0,$s0,$zero`.  400 words, 0 differing. */
+void func_800D6170(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
+{
+    UnkDungeonSP6 *sp = (UnkDungeonSP6 *)0x1F800000;
+    Unk80083160 *g;
+    s16 q[4];
+    MATRIX m;
+    MATRIX *mp;
+    u8 *t;
+    s32 i;
+
+    g = &D_80083160;
+    sp->unk_24 = g->unk_00 + 0xB0;
+    sp->unk_74.t[0] = *(s16 *)((u8 *)v + 0x2);
+    sp->unk_74.t[1] = *(s16 *)((u8 *)v + 0x6);
+    sp->unk_74.t[2] = *(s16 *)((u8 *)v + 0xA);
+    s->unk_14 |= 0x8000;
+    PushMatrix();
+    sp->unk_34.vx = sp->unk_34.vy = sp->unk_34.vz = 0x2000;
+    sp->unk_A4.vx = s->unk_16;
+    sp->unk_A4.vz = s->unk_1A;
+    sp->unk_A4.vy = s->unk_18;
+    RotMatrix(&sp->unk_A4, &sp->unk_74);
+    mp = &m;
+    ReadRotMatrix(mp);
+    CompMatrix(mp, &sp->unk_74, &sp->unk_54);
+    ScaleMatrix(&sp->unk_54, &sp->unk_34);
+    SetTransMatrix(&sp->unk_54);
+    SetRotMatrix(&sp->unk_54);
+    sp->unk_28 = s->unk_14;
+    for (i = 0; i < 4; i++)
+    {
+        q[i] = *(u16 *)(p + 0x54 + i * 2);
+    }
+    while (abs(q[0] - q[2]) >= 0x11)
+    {
+        sp->unk_B0[0].vx = *(u16 *)(p + 0x44);
+        sp->unk_B0[1].vx = *(u16 *)(p + 0x46);
+        sp->unk_B0[2].vx = *(u16 *)(p + 0x48);
+        sp->unk_B0[3].vx = *(u16 *)(p + 0x4A);
+        sp->unk_B0[0].vy = *(u16 *)(p + 0x4C);
+        sp->unk_B0[1].vy = *(u16 *)(p + 0x4E);
+        sp->unk_B0[2].vy = *(u16 *)(p + 0x50);
+        sp->unk_B0[3].vy = *(u16 *)(p + 0x52);
+        sp->unk_B0[0].vz = q[2] - 0x10;
+        sp->unk_B0[1].vz = q[3] - 0x10;
+        sp->unk_B0[2].vz = q[2];
+        sp->unk_B0[3].vz = q[3];
+        q[2] -= 0x10;
+        q[3] -= 0x10;
+        t = *(u8 **)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)t + 0x18;
+        sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
+                                  (s32 *)(t + 0x8), (s32 *)(t + 0xC), (s32 *)(t + 0x10),
+                                  (s32 *)(t + 0x14), &sp->unk_D0, &sp->unk_D4) -
+                      d - 6;
+        if ((u32)sp->unk_100 < 0x1E0)
+        {
+            if (((u16)(*(u16 *)(t + 0x8) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0xA) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0xC) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0xE) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0x12) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0x14) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0x16) + 0x20) < 0x121))
+            {
+                s->unk_14 &= 0x7FFF;
+                *(s32 *)(t + 0x4) = *(s32 *)((u8 *)s + 0xC);
+                SetPolyF4(t);
+                addPrim(sp->unk_24 + sp->unk_100 * 4, t);
+            }
+        }
+    }
+    if (q[0] != q[2])
+    {
+        sp->unk_B0[0].vx = *(u16 *)(p + 0x44);
+        sp->unk_B0[1].vx = *(u16 *)(p + 0x46);
+        sp->unk_B0[2].vx = *(u16 *)(p + 0x48);
+        sp->unk_B0[3].vx = *(u16 *)(p + 0x4A);
+        sp->unk_B0[0].vy = *(u16 *)(p + 0x4C);
+        sp->unk_B0[1].vy = *(u16 *)(p + 0x4E);
+        sp->unk_B0[2].vy = *(u16 *)(p + 0x50);
+        sp->unk_B0[3].vy = *(u16 *)(p + 0x52);
+        sp->unk_B0[0].vz = q[0];
+        sp->unk_B0[1].vz = q[1];
+        sp->unk_B0[2].vz = q[2];
+        sp->unk_B0[3].vz = q[3];
+        t = *(u8 **)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)t + 0x18;
+        sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
+                                  (s32 *)(t + 0x8), (s32 *)(t + 0xC), (s32 *)(t + 0x10),
+                                  (s32 *)(t + 0x14), &sp->unk_D0, &sp->unk_D4) -
+                      d - 6;
+        if ((u32)sp->unk_100 < 0x1E0)
+        {
+            if (((u16)(*(u16 *)(t + 0x8) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0xA) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0xC) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0xE) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0x12) + 0x20) < 0x121) |
+                ((u16)(*(u16 *)(t + 0x14) + 0x20) < 0x181 && (u16)(*(u16 *)(t + 0x16) + 0x20) < 0x121))
+            {
+                s->unk_14 &= 0x7FFF;
+                *(s32 *)(t + 0x4) = *(s32 *)((u8 *)s + 0xC);
+                SetPolyF4(t);
+                addPrim(sp->unk_24 + sp->unk_100 * 4, t);
+            }
+        }
+    }
+    PopMatrix();
+}
 
 s32 func_800D67B0(u8 *p, UnkVec *v, UnkSlot *s)
 {
