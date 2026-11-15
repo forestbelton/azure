@@ -483,6 +483,61 @@ both queued:
   block; `reorg` here steals that `lui` into the slot instead. Every word
   from the following `lw` to the end is identical.
 
+## 2026-11-15, LATER: 791 OF 863, AND WHAT THE PERMUTER IS AND IS NOT FOR
+
+`progress.py`: **791 of 863 landed, 72 stubs, 73.4%**, from 565 earlier the
+same day. The whole-unit `ovlverify.py` sweep is clean, `clang-format` has no
+complaints, and `build/dungeon.bin` is byte-identical.
+
+**THE PERMUTER DOES NOT CRACK A SMALL PURE-ALLOCATION RESIDUE. IT IS FOR
+MISSING OR MISPLACED INSTRUCTIONS.** This is now measured on both sides and it
+is the single most expensive thing to get wrong, because a 30-minute search
+that cannot win looks exactly like one that has not won yet.
+
+* `func_800C0404`, base 60, **best 60 after 132,425 iterations.** The residue
+  was entirely register numbers at identical word counts.
+* `func_8009A8C0`, base 825 -> **best 525**, and the real value was not the
+  525: splitting that answer into its independent edits and measuring each one
+  took the function to **27**. A permuter answer is a bag of ideas, not a
+  patch -- take it apart.
+* `func_800B06F0` closed **outright at 0** from a length-shifted base.
+* `func_800C9AAC`: nothing.
+
+So the triage rule before queueing a residue: if `aligndiff` says the word
+counts match and every difference is a register number, the permuter will not
+help and `.greg`/allocation work is the only route. If the candidate is short
+or long by a word or two inside one block and the structure is proved
+elsewhere, queue it.
+
+**THE PARK-CLOSING ROUNDS DECAYED CLEANLY, AND THAT IS WHEN TO STOP.** Five
+successive agents whose whole job was to close existing parks returned 4 of 5,
+3 of 5, 2 of 5, 1 of 5, 0 of 5. The decay is the signal: the parks that close
+under a fresh reading close in the first two rounds, and after that the same
+budget is worth more on cold functions. A sixth round was justified only
+because `xsibs --ratio 0.60` had produced genuinely new templates, which is a
+different kind of lead from "read it again".
+
+**A PROVED-UNREACHABLE RESIDUE EXISTS IN THIS BLOCK, AND IT IS FOUR WORDS.**
+The `|= 0x80000000` gate's `$v0`/`$v1` swap has now been seen in three
+functions -- `func_8009C93C`, `func_800AAF00`, `func_800D92C0` -- with every
+spelling swept in each. **Subtract those four words before judging whether a
+function containing that gate can close**, or you will read a landing-shaped
+residue as a failing one.
+
+Open parks at the time of writing, both with saved candidates:
+
+* `func_8008ACDC`, **739 of 741 words, 19 aligned differences.** The whole
+  residue is two words at `0x8008AFB0` in the facing compare: a missing
+  `andi $v0, $v0, 0xFF` and a missing `addu $v0, $a0, $zero`. Twenty spellings
+  of that one expression were measured (the best, `u8 i; want = i << 9`, is
+  the saved body); `s32 i` costs 229, `i = n[1]; i &= 7;` costs 243. Queued
+  for the permuter -- one word off in one 40-word block is the shape that
+  wins.
+* `func_800CF8E4`, **932 of 932 words, 8 differing**, a register swap of two
+  hoisted constants. Word counts match and every difference is a register
+  number, so by the rule above this is NOT permuter food; it needs `.greg`
+  work.
+
 ## What has NOT been done
 
 * **The overlay's DATA is not owned.** The splat segment stops at the end of
