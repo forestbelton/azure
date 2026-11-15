@@ -229,6 +229,25 @@ are the ONLY ones left in it, each with a measured residue:
   `NOTE_INSN_LOOP_BEG` is followed by a simple jump in the first,
   after-regscan `jump_optimize`.
 
+**THE KILL-HANDLER FAMILY IS THE BIGGEST NAMED SEAM LEFT: 21 members, 3,295
+words** (2026-11-14, after the parallel wave). `func_800BD72C` is the bare
+skeleton and nineteen copies are landed; every remaining member opens with the
+same four blocks and differs only in its tail. Find them with
+
+    grep -l 'func_8008D330\|func_8008D344' asm/nonmatchings/ovl_dungeon/*.s
+
+and cross-reference against the `INCLUDE_ASM` list. Four of them landed on the
+FIRST COMPILE from the template alone (func_800C4324, func_800C30D4, and
+func_800BE360 after one arm flip), so this is transcription, not
+investigation -- batch it with the skeleton named in the brief.
+
+**AND RUN `xsibs.py` AGAIN BEFORE ANYTHING ELSE.** It found `func_800B653C` at
+0.969 against town's landed `func_800ABC00`; that one was a 99-word function
+landed on the first compile by reading town's C and changing four constants.
+A cross-container sibling at >= 0.95 is close to free, and the tool's output
+goes stale as the unit fills, so re-run it rather than trusting the numbers in
+this file.
+
 What the tools say is left, and where to go next:
 
 * `nearsibs.py --groups` is down to 16 sets and 2,807 words. The largest left

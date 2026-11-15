@@ -836,6 +836,12 @@ void func_800C1718();
 extern u8 D_800DF3C0[];
 /* func_8008DB0C's direction table and the engine pointer its tail tests. */
 extern u8 D_800DD130[];
+void func_800B63A8();
+extern u8 D_800DEA68[];
+extern u8 D_800E188B[];
+extern u8 D_800E1729[];
+extern u8 D_800E101C[];
+s32 func_80069EF8(void);
 extern u8 *D_80082EB0;
 s32 func_80098C80(u8 *);
 void func_800C9F34();
@@ -7493,7 +7499,44 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B627C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B63A8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B653C);
+void func_800B653C(u8 *t, u16 ang)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *v;
+    s32 i;
+
+    i = (ang >> 9) & 7;
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        r = (u8 *)n->unk_0C;
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_800B63A8;
+        func_8004491C(n, (u32)D_80045340);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(t + 0x2) - D_8006CCD8[i] * 16;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(t + 0x6) - D_8006CCE8[i] * 16;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(t + 0xA);
+        m->unk_0C = -(*(s32 *)(t + 0xC) * ((func_80069EF8() & 1) + 2));
+        m->unk_10 = -(*(s32 *)(t + 0x10) * ((func_80069EF8() & 1) + 2));
+        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        func_8003DB94(r, D_800DEA68, 0);
+        r[0xE] = 0x80;
+        r[0xD] = 0x80;
+        r[0xC] = 0x80;
+        *(s16 *)(r + 0x1E) = 0x1000;
+        *(s16 *)(r + 0x1C) = 0x1000;
+        *(s16 *)(r + 0x10) = 0x60;
+        *(u16 *)(r + 0x14) |= 0xC;
+        *(s16 *)(v + 0x18) = 0x10;
+        *(s16 *)(v + 0x16) = 0x10;
+        *(s16 *)(v + 0x14) = 0x10;
+        *(s16 *)(v + 0xE) = (func_80069EF8() & 3) | 4;
+        *(s32 *)(v + 0x8) = 0x800;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B66C8);
 
@@ -8721,7 +8764,47 @@ s32 func_800BE120(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE360);
+s32 func_800BE360(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+    s32 f;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if ((*(s16 *)(D_80073414[q[1]].unk_0C + q[0] * 0x14) & 0x8000) == 0)
+        {
+            f = D_800DDE84[p[0x13]] & 3;
+        }
+        else
+        {
+            f = (D_800DDE84[p[0x13]] >> 4) & 3;
+        }
+        if (func_800AD6FC(p, f, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        func_80098B38(q);
+    }
+    else
+    {
+        func_800997FC(D_800E101C);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* The kill skeleton's short member: no D_800E3D7C arm, func_800A6480 for the
    report and the 0x2-bit field of D_800DDE84's entry. THE THIRD PARAMETER IS
@@ -9921,7 +10004,41 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2CDC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2F2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C30D4);
+s32 func_800C30D4(u8 *p, u8 *q, s16 k)
+{
+    u8 *e;
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    e = *(u8 **)(p - 0x14);
+    func_800C5BBC((e[0x24] << 6) | 0x20, (e[0x25] << 6) | 0x20, *(s16 *)(p + 0x88), 0x802080, 0x20,
+                  1);
+    if ((s16)func_800A48F0((s8 *)p, 0x5, 0x8) != 0)
+    {
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            func_80099844(p, D_800E1729);
+        }
+    }
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* The same skeleton again, with a charge roll through func_800C8900 and
    sound 0x612 on a hit. 65 words, 0 differing. */
@@ -10230,7 +10347,45 @@ s32 func_800C4220(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C4324);
+s32 func_800C4324(u8 *p, u8 *q, s16 k)
+{
+    void *m;
+    void *h;
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    func_800C4AFC(*(u8 **)(p - 0x18), 0xC02020, p);
+    if (*(u32 *)(p + 0x14) & 0x4000)
+    {
+        h = func_800990FC();
+        m = h;
+        if (!(*(u32 *)(p + 0x1C) & 0x10))
+        {
+            h = func_80099194(D_800E188B, h);
+        }
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    func_80042B68((s8 *)p, 0x3);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* The heal: 7 plus two random bits, clamped to 0xFF and then to the gap
    between +0x28 and +0x29, parked in +0x64 and read back out of the field
