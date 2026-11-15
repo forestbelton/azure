@@ -352,6 +352,62 @@ sorted by size.
 containers` does all four and will report a town.bin mismatch that belongs to
 whoever is editing town, not to you.
 
+## 2026-11-15: THE SEAMS ARE SPENT, AND THE PERMUTER IS THE REMAINING EDGE
+
+`progress.py` as of 2026-11-15: **565 of 863 landed, 298 stubs, 29.5%, no
+parks in the unit**. The whole-unit `ovlverify.py` sweep is clean over all
+563 names, `clang-format` still has no complaints, and
+`build/dungeon.bin` is byte-identical.
+
+**Every structural seam in this block is now closed, and the tools say so
+rather than a guess.** On the 298 stubs that remain:
+
+* `families.py ovl_dungeon` -- **0 families with >= 2 members.**
+* `nearsibs.py ovl_dungeon --ratio 0.85` -- **3 pairs, 651 words**, the
+  largest `func_800B8FC8`/`func_800B835C` at 0.891.
+* `xsibs.py` was exhausted the day the block opened: 19 functions, 550
+  words, nearly all landed.
+
+The kill-handler family, the 0x800D1C70 cluster and the reused-temporary
+idiom are all done. What is left is 298 singletons, and the size profile has
+moved with them: the smallest remaining stub is 53 words, the median is
+around 140, and 204 of the 298 are over 120 words. **Batch sizes have to
+come down with it** -- eight functions per agent at 85-95 words, fewer above
+that.
+
+**THE PERMUTER IS WORTH MORE THAN ANOTHER HAND SWEEP, AND THE NUMBERS ARE
+NOT CLOSE.** `func_800AC480` sat at 82 of 82 words with four differing after
+thirty-three measured spellings across two sessions -- an equal-depth
+sched1 tie that no source order reaches. `permimport.py --source <the agent's
+own unit copy>` followed by `permrun.py --minutes 45 --jobs 6` found
+`base=120 -> best=0` in **two minutes**, and the winning idea (hold the
+constant in a local so `fold` cannot reassociate, instead of splitting the
+statement) generalises -- it is in `docs/matching-levers.md` now.
+
+The workflow that follows from that:
+
+1. Agents land what they can and **save every residue's best candidate** to
+   its own file. A residue with no saved candidate cannot be permuted, so
+   the brief now asks for `/tmp/.../func_XXXXXXXX_best.c` explicitly.
+2. Agents do NOT run the permuter. `permrun.py`'s jobs are a machine-wide
+   budget of 20 and only one search runs at a time; with five agents going,
+   that budget belongs to the dispatcher.
+3. The dispatcher queues the residues and runs them one at a time between
+   merges. `permimport.py --source` takes the agent's whole unit copy, so
+   there is nothing to extract by hand.
+
+Two parks are open at the time of writing, both with saved candidates and
+both queued:
+
+* `func_800A31D0`, 52 of 53 words, 23 differing. The missing word is the
+  `nop` after `lhu 0xA($a3)`: the target does not interleave the two counter
+  read-modify-writes and every hand spelling does.
+* `func_800C0230`, 117 of 117, 26 differing, and the whole residue is one
+  delay slot -- the target fills the cached-RAM gate's `bnez` from the
+  fall-through and leaves `lui %hi(D_80012090)` at the head of the next
+  block; `reorg` here steals that `lui` into the slot instead. Every word
+  from the following `lw` to the end is identical.
+
 ## What has NOT been done
 
 * **The overlay's DATA is not owned.** The splat segment stops at the end of
