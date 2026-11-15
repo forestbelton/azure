@@ -1118,6 +1118,12 @@ extern u8 D_800E02CC[];
 extern u8 D_800DD0B8[];
 extern u8 D_800DCFD8[];
 extern u8 D_800DCFB0[];
+/* func_8008B9FC's eight-way facing table, one more of the same class. */
+extern u8 D_800DCFC0[];
+/* The byte func_8008B9FC switches on at 0xF0/0xF8/0xE8/0xE0 and tests for
+   8 or 0; an independent scalar rather than a field of D_800E3540, which
+   this unit declares as a `void *`. */
+extern u8 D_800E3544;
 /* One more eight-entry direction table of the same class, func_8008F6EC's.
    An independent symbol rather than D_800DD030 + 0xA0. */
 extern u8 D_800DD0D0[];
@@ -1257,6 +1263,7 @@ extern s16 D_800E2468[][2];
 extern u8 D_800E2178[];
 extern u8 D_800E221C[];
 extern u8 D_800DD7E0[];
+extern u8 D_800DD7DC;
 void func_8009E038();
 void func_8009E798();
 extern u8 D_800E1937[];
@@ -1649,6 +1656,36 @@ typedef struct UnkDungeonSP6
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDungeonSP6;
+/* The 0x1F800000 scratchpad as func_800D71A8 lays it out: the four UV scalars
+   at +0x08..+0x17, the OT base at +0x20 and the pair's mirror flags at +0x24,
+   the quad's four SVECTORs at +0x70, RotTransPers4's two out-parameters at
+   +0x90/+0x94, the screen offset at +0xB8, the OT index at +0xC0, the four
+   projected screen points at +0xF0 and the sprite's half-extents at +0x108. */
+typedef struct UnkDungeonSP7
+{
+    u8 pad_00[0x8];
+    u32 unk_08;
+    u32 unk_0C;
+    u32 unk_10;
+    u32 unk_14;
+    u8 pad_18[0x8];
+    u32 unk_20;
+    u16 unk_24;
+    u8 pad_26[0x4A];
+    SVECTOR unk_70[4];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x2C];
+    DVECTOR unk_F0[4];
+    u8 pad_100[0x8];
+    u16 unk_108;
+    u16 unk_10A;
+} UnkDungeonSP7;
 
 /* The 0xC-byte texture record the scratchpad's +0x118 points at, town's
    UnkTownA41D8T field for field.  Indexed [flag * 4 + (i & 1) * 2 + half]. */
@@ -1853,7 +1890,220 @@ void func_8008B870(u8 *a, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008B9FC);
+/* The entry handler of the same dispatcher func_8008C13C (:1858) serves, and
+   that function is its line-for-line template: the same func_8009ABA0 probe,
+   the same D_8006CCD8/D_8006CCE8 eight-way step, the same f/h/q
+   materialisations of D_80083460 and the same r>0 / r<0 / r==0 fork, with a
+   longer D_800E3544 tail. 464 words, 0 differing.
+
+   D_80013714 IS THE DECLARED SYMBOL HERE, not the raw address the unit's
+   other sixteen sites use. Both spellings are 0 differing -- the linked
+   bytes are identical -- but the raw address emits no relocation and costs
+   57 aligned differences: the symbol's `high` needs a register, which
+   lengthens `d`'s live range past `p`'s and flips the one allocno_compare
+   that swaps $s3 and $s4 over the whole function. The numbers out of .lreg
+   are p 21 refs / 504 insns against d 26 refs / 625 insns, i.e. priorities
+   0.16667 against 0.16640. An `__asm__("" ::"r"(d))` reference buys the same
+   flip, which is what func_8008C13C's own DEVICE does; the symbol makes it
+   unnecessary here.
+
+   THE `*(s16 *)(q + 0x4)` HALVING IS DUPLICATED INTO THE 0xF0, 0xF8 AND 0xE8
+   ARMS. Cross-jumping merges all three back onto the last one, which is what
+   .L8008C048 is. Written once as a shared tail after the chain, the 0xF0
+   arm's whole swap block is cross-jumped away too and the function comes out
+   449 words, fifteen short.
+
+   THE INDEX MUST BE INLINE IN THE func_80048A44 ARGUMENT at the three
+   unconditional table stores, and each of those stores needs its OWN pointer
+   local: one local shared between two stores splits that symbol's `%hi` and
+   `%lo` across two registers, and a named index local puts the table base in
+   $v1 where the target has it in $a1 (27 aligned differences). The two
+   subtracting arms need their own index locals k2/k3 for the same reason --
+   the function-scope `k` is 465 words with a nop in the 0xE8 arm, and
+   writing that index inline as well is 467.
+
+   Relocations: the two `*(s16 *)((u8 *)&D_80083460 + 0x4) = 8` stores
+   relocate against D_80083460 with +4 in the displacement where splat names
+   D_80083464, exactly as func_8008E264, func_8008FF18 and func_800971A8
+   already do. seqcheck's four mismatches are all that pair; raw == relocdump
+   at 104 == 104. */
+void func_8008B9FC(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *f;
+    u8 *h;
+    u8 *q;
+    u8 *t;
+    u8 *t2;
+    u8 *t3;
+    u8 *u;
+    u8 *u2;
+    u8 *cur;
+    s32 r;
+    s32 k;
+    s32 k2;
+    s32 k3;
+    s32 v;
+    s32 w;
+
+    g = (u8 *)&D_80083160;
+    r = func_8009ABA0(*(s16 *)(d + 0x2A), b, c, *(s16 *)(d + 0x88), 0x20);
+    if ((s16)r > 0)
+    {
+        p[0x9B] = 0;
+        func_8009A3D0(c[0x24], c[0x25], 0x300);
+        k = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        c[0x24] += *(u8 *)&D_8006CCD8[k];
+        c[0x25] += *(u8 *)&D_8006CCE8[k];
+        func_8009A21C(c[0x24], c[0x25], 0x300);
+        f = (u8 *)&D_80083460;
+        *(u16 *)(f + 0x2) |= 0x8;
+        *(s32 *)(p + 0x8C) = 0;
+        if ((s16)r != 4)
+        {
+            if ((D_80013714 & 2) != 0 ||
+                ((*(s32 *)(g + 0x8) & 0x20) != 0 && (*(u16 *)(p + 0xA2) & 0x100) == 0 && func_800A5C70() != 0))
+            {
+                *(u16 *)(f + 0x2) |= 0x80;
+                cur = *(u8 **)(c + 0x2C);
+                t = D_800DCFC0;
+                if (cur != t)
+                {
+                    *(u8 **)(c + 0x2C) = t;
+                    v = ((*(s16 *)(g + 0xC8) + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                    func_80048A44(c, t[v], 0, 1);
+                }
+            }
+        }
+        h = (u8 *)&D_80083460;
+        if ((*(u16 *)(h + 0x2) & 0x80) != 0 || (s16)r == 1)
+        {
+            func_80099F70(*(u8 **)(d + 0x5C));
+            func_80099F04(*(u8 **)(d + 0x5C));
+            if ((*(u16 *)(h + 0x2) & 0x80) == 0 && (D_800E3544 == 8 || D_800E3544 == 0))
+            {
+                cur = *(u8 **)(c + 0x2C);
+                t = D_800DCFB8;
+                if (cur != t)
+                {
+                    *(u8 **)(c + 0x2C) = t;
+                    v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                    func_80048A44(c, t[v], 0, 1);
+                }
+            }
+            p[0x9A] = 0xF;
+            *(s16 *)((u8 *)&D_80083460 + 0x4) = 8;
+        }
+        else
+        {
+            *(u16 *)(p + 0x98) |= 0xC;
+            if ((s16)r < 4)
+            {
+                *(u16 *)(p + 0xA2) |= 1;
+            }
+            else if ((s16)r == 2 || (s16)r == 4)
+            {
+                p[0x9B] = 8;
+            }
+            func_80094ED4(p, b, c, d);
+            *(s16 *)((u8 *)&D_80083460 + 0x4) = 8;
+            if (*(u8 **)(c + 0x2C) == D_800DCFB8)
+            {
+                *(u16 *)(c + 0x14) |= 0x6000;
+                func_8008E264(p, b, c, d);
+            }
+            else
+            {
+                u = D_800DD030;
+                *(u8 **)(c + 0x2C) = u;
+                func_80048A44(c, u[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            }
+            p[0x9A] = 0x10;
+            *(s32 *)(d + 0x1C) |= 0x40000000;
+            func_8009F644(d, 8, 0, 0);
+            return;
+        }
+        func_8009F644(d, 8, 0, 0);
+    }
+    else if ((s16)r < 0)
+    {
+        if ((D_80013714 & 1) != 0 || (s16)(++*(u16 *)(p + 0x96)) >= 0x15)
+        {
+            func_8008CD4C(p, b, c, d, (s16)r);
+            if (p[0x9B] >= 0x10)
+            {
+                *(s32 *)(d + 0x1C) |= 0x40000000;
+            }
+        }
+        return;
+    }
+    else
+    {
+        u2 = D_800DCFB0;
+        *(u8 **)(c + 0x2C) = u2;
+        w = ((*(s16 *)(g + 0xC8) + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+        func_80048A44(c, u2[w], 0, 1);
+        *(s32 *)(p + 0x8C) = (s32)func_8008ACDC;
+        return;
+    }
+    *(s32 *)(d + 0x1C) |= 0x40000000;
+    q = (u8 *)&D_80083460;
+    *(u16 *)(q + 0x2) |= 0x812;
+    func_800A67F4();
+    func_80094ED4(p, b, c, d);
+    if ((D_80013714 & 8) != 0)
+    {
+        if (D_800E3544 == 0xF0)
+        {
+            cur = *(u8 **)(c + 0x2C);
+            t = D_800DCFC0;
+            if (cur != t)
+            {
+                *(u8 **)(c + 0x2C) = t;
+                v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                func_80048A44(c, t[v], 0, 1);
+            }
+            *(s16 *)(q + 0x4) = (s16)(*(u16 *)(q + 0x4)) >> 1;
+        }
+        else if (D_800E3544 == 0xF8)
+        {
+            *(u16 *)(p + 0xA2) |= 0x100;
+            *(u16 *)(q + 0xA) += 1;
+            cur = *(u8 **)(c + 0x2C);
+            t = D_800DCFC0;
+            if (cur != t)
+            {
+                *(u8 **)(c + 0x2C) = t;
+                v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                func_80048A44(c, t[v], 0, 1);
+            }
+            *(s16 *)(q + 0x4) = (s16)(*(u16 *)(q + 0x4)) >> 1;
+        }
+        else if (D_800E3544 == 0xE8)
+        {
+            t2 = D_800DCFE8;
+            *(u8 **)(c + 0x2C) = t2;
+            func_80048A44(c, t2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 1, 1);
+            func_8009A3D0(c[0x24], c[0x25], 0x300);
+            k2 = (*(u16 *)(d + 0x2A) >> 9) & 7;
+            c[0x24] -= D_8006CCD8[k2] * 2;
+            c[0x25] -= D_8006CCE8[k2] * 2;
+            func_8009A21C(c[0x24], c[0x25], 0x300);
+            *(s16 *)(q + 0x4) = (s16)(*(u16 *)(q + 0x4)) >> 1;
+        }
+        else if (D_800E3544 == 0xE0)
+        {
+            t3 = D_800DD0D0;
+            *(u8 **)(c + 0x2C) = t3;
+            func_80048A44(c, t3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 1, 1);
+            func_8009A3D0(c[0x24], c[0x25], 0x300);
+            k3 = (*(u16 *)(d + 0x2A) >> 9) & 7;
+            c[0x24] -= *(u8 *)&D_8006CCD8[k3];
+            c[0x25] -= *(u8 *)&D_8006CCE8[k3];
+            func_8009A21C(c[0x24], c[0x25], 0x300);
+        }
+    }
+}
 
 void func_8008C13C(u8 *p, void *b, u8 *c, u8 *d)
 {
@@ -15731,7 +15981,212 @@ void func_800A86DC(s32 i)
     *(s32 *)(b + i * 4 + 0x29C) = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A871C);
+/* func_800A8E74's node steps here: the OTHER 0x110-node +0x10 handler (see
+   func_8008D470, which is this one's sibling), a two-state machine on the
+   view's +0xA0. State 0 either walks the carrier's own tile one step along
+   the stored facing (+0x1C bit 0x200000) or projects
+   the carrier, seeds the mover from the view's +0x8C record and arms the
+   +0xA2 flag; state 1 eases the mover onto c[0x24]/c[0x25] over the +0xA4
+   countdown and, when it expires, either lands on a target func_8009B25C
+   finds or steps one more tile. Every path that does not return falls into
+   the three 16.16 integrations at the end. 470 words, 0 differing;
+   seqcheck seq=OK with raw == relocdump == 71 and no relocation on a
+   function symbol.
+
+   THE DIRECTION INDEX `i` IS `s16`, AND THAT IS THE WHOLE LAST WORD. As
+   `s32` the `andi $v1, $v0, 0x7` and the variable are one pseudo and the
+   `addu $s4, $v1, $zero` at 0x800A8878 never exists: 470 words, 96
+   differing. An `s16` local gets an HImode pseudo here, so the assignment
+   is a mode-changing copy that jump2's find_equiv_reg cannot delete, while
+   the value 0..7 needs no re-extension at either `sll i, 1`. `u16` and `u8`
+   are 469 / 80. func_8008D470's own comment records the same mechanism on
+   its `s16` latch, so this is the second measurement of it in this unit.
+   One `s16 i` serves all three index sites; three separate `s32` locals are
+   also 0 but a single `s32` one is 470 / 98.
+
+   TWO OF THE NINE `b + 0xA` ACCESSES MUST BE THE INDEX FORM `*((s16 *)b + 5)`
+   -- the `+ 8` store in the 0x80000 arm and the third argument of the SECOND
+   func_800BCB04 in the big arm. Only the index form leaves a top-level
+   PLUS_EXPR, which is what sets MEM_IN_STRUCT_P, so sched1 lifts
+   `lw %lo(D_800814A8)` and `lh 0xA($s3)` over the store beside them and the
+   load-delay slot stops being a `nop`: the flat `*(s16 *)((u8 *)b + 0xA)` is
+   471 / 9 and 471 / 5 respectively. The other seven are ties, so they keep
+   the unit's usual spelling.
+
+   func_8009B164 IS CALLED THROUGH A PROTOTYPED CAST. Its landed definition
+   takes `u16`, which makes the argument `lhu`; the target has `lh`, i.e. the
+   original translation unit had no prototype in scope and the argument
+   promoted to `int`. The cast emits the same `jal` and the same relocation.
+   Calling it directly is 470 / 1.
+
+   Also measured, each against the landed body: `h` as `s16` with the `(s16)`
+   casts dropped 470 / 2 (the compares read the call's return register
+   instead of h's own); one `(u8 *)&D_80083460` local instead of two 470 / 4;
+   `x` and `y` merged, or hoisted out of the subtraction, 470 / 3 each
+   (func_800AB1C0's idiom); `e` inlined twice instead of held in a local
+   472 / 9, because the `sb` to c[0x24] wipes cse's memory table; dropping
+   `q = p` and using one pointer 464 / 88. */
+void func_800A871C(u8 *p, UnkVec *b, u8 *c)
+{
+    s16 out[4];
+    u8 *q;
+    u8 *d;
+    u8 *e;
+    u8 *g;
+    u8 *g2;
+    s16 i;
+    s32 h;
+    s32 x;
+    s32 y;
+
+    q = p;
+    if (*(u8 **)(q + 0x9C) == D_80081484 && (*(u8 **)(q + 0x9C))[1] == 0)
+    {
+        *(u8 **)(q + 0x9C) = (u8 *)&D_800E3540;
+    }
+    switch (*(s16 *)(p + 0xA0))
+    {
+    case 0:
+        if ((*(s32 *)(q + 0x1C) & 0x200000) != 0)
+        {
+            *(s16 *)(q + 0x2A) = *(u16 *)(*(u8 **)(q + 0x60) + 0x2A);
+            if (func_8003DE58(*(u32 *)(*(u8 **)(*(u8 **)*(u8 **)*(u8 **)(*(u8 **)(p + 0x90) + 0x28) +
+                                                (*(u8 **)(*(u8 **)(p + 0x90) + 0x2C))[2] * 4) +
+                                       4),
+                              *(u8 **)(p + 0x90), out, 0) == 0)
+            {
+                out[2] = -0x30;
+            }
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)(*(u8 **)(p + 0x8C) + 0xA) + (u16)out[2];
+            c[0x24] = (*(u8 **)(p + 0x90))[0x24];
+            c[0x25] = (*(u8 **)(p + 0x90))[0x25];
+            func_800A2B04(b, c[0x24], c[0x25]);
+            *(s16 *)(p + 0xA0) = *(u16 *)(p + 0xA0) + 1;
+            *(s16 *)(q + 0x6A) = *(u16 *)(*(u8 **)(q + 0x60) + 0x2A);
+            i = (*(u16 *)(q + 0x6A) >> 9) & 7;
+            if (*(s16 *)(q + 0x8A) != 0)
+            {
+                h = func_800BCB04((((c[0x24] + D_8006CCD8[i] * *(s16 *)(q + 0x8A)) << 6) + 0x20) & 0xFFE0,
+                                  (((c[0x25] + D_8006CCE8[i] * *(s16 *)(q + 0x8A)) << 6) + 0x20) & 0xFFE0,
+                                  *(s16 *)((u8 *)b + 0xA));
+                if ((s16)h < 0x200)
+                {
+                    b->unk_14 = (((s16)h - *(s16 *)((u8 *)b + 0xA)) << 15) / *(s16 *)(q + 0x8A);
+                }
+                else
+                {
+                    b->unk_14 = ((*(s16 *)(*(u8 **)(q + 0x60) + 0x88) - *(s16 *)((u8 *)b + 0xA)) << 15) /
+                                *(s16 *)(q + 0x8A);
+                }
+            }
+            c[0x24] += *(u8 *)&D_8006CCD8[i];
+            c[0x25] += *(u8 *)&D_8006CCE8[i];
+            *(s16 *)(p + 0xA4) = 2;
+            return;
+        }
+        if (func_8003DE58(*(u8 **)(*(u8 **)(p + 0x90) + 0x8), *(u8 **)(p + 0x90), out, 0) != 0 &&
+            (*(s32 *)(q + 0x1C) & 0x80000) != 0)
+        {
+            *(s16 *)(p + 0xA2) = 1;
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)(*(u8 **)(p + 0x8C) + 0x2) + (u16)out[0];
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)(*(u8 **)(p + 0x8C) + 0x6) + (u16)out[1];
+            *((s16 *)b + 5) = *(u16 *)(*(u8 **)(p + 0x8C) + 0xA) + (u16)out[2] + 8;
+            *(s16 *)(q + 0x88) = *(u16 *)((u8 *)D_800814A8 + 0x88);
+        }
+        else if (*(s16 *)(p + 0xA2) == 0)
+        {
+            return;
+        }
+        else if ((*(s32 *)(q + 0x1C) & 0x80000) == 0)
+        {
+            e = *(u8 **)(*(u8 **)(q + 0x60) - 0x14);
+            *(s16 *)(q + 0x6A) = *(u16 *)(*(u8 **)(q + 0x60) + 0x2A);
+            i = (*(u16 *)(q + 0x6A) >> 9) & 7;
+            c[0x24] = e[0x24] + *(u8 *)&D_8006CCD8[i];
+            c[0x25] = e[0x25] + *(u8 *)&D_8006CCE8[i];
+            func_800A2B04(b, c[0x24], c[0x25]);
+            h = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(s16 *)((u8 *)b + 0xA));
+            if ((s16)h > 0x200)
+            {
+                h = *(u16 *)((u8 *)b + 0xA);
+            }
+            func_800A7A7C(c[0x24], c[0x25], h, *(s32 *)(c + 0x8), *(u8 **)(p + 0x9C));
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            *(s16 *)((u8 *)b + 0xA) =
+                func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *((s16 *)b + 5));
+            func_800B66C8((u8 *)b);
+            func_8009A028(q);
+            return;
+        }
+        if (*(s32 *)(D_800E3D7C + 0x124) != 0)
+        {
+            break;
+        }
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        func_8009A028(q);
+        return;
+    case 1:
+        if (*(s16 *)(p + 0xA4) != 0)
+        {
+            b->unk_0C = (((c[0x24] << 6) - (x = *(s16 *)((u8 *)b + 0x2) - 0x20)) << 16) / *(s16 *)(p + 0xA4);
+            b->unk_10 = (((c[0x25] << 6) - (y = *(s16 *)((u8 *)b + 0x6) - 0x20)) << 16) / *(s16 *)(p + 0xA4);
+        }
+        *(s16 *)(p + 0xA4) = *(u16 *)(p + 0xA4) - 1;
+        if (*(s16 *)(p + 0xA4) > 0)
+        {
+            break;
+        }
+        d = func_8009B25C(q, c[0x24], c[0x25], *(s16 *)(q + 0x88));
+        if (d != NULL)
+        {
+            if (d[0x13] == 0x1F && (*(s32 *)(d + 0x1C) & 0x228) == 0 && D_800DD7DC != 0)
+            {
+                *(s32 *)(d + 0x14) |= 0x800000;
+                *(s32 *)(d + 0x48) = **(s32 **)(p + 0x9C);
+            }
+            else if (func_80098920(d, *(u8 **)(p + 0x9C), 0xD, (s32)q) == 0)
+            {
+                goto cont;
+            }
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            func_8009A028(q);
+            g = (u8 *)&D_80083460;
+            *(s16 *)(g + 0xA) = *(u16 *)(g + 0xA) - 1;
+            return;
+        }
+    cont:
+        if ((s16)((s32 (*)(s32, UnkVec *, u8 *))func_8009B164)(*(s16 *)(q + 0x6A), b, c) != 0)
+        {
+            if (--*(s16 *)(q + 0x8A) > 0)
+            {
+                func_800A2B04(b, c[0x24], c[0x25]);
+                i = (*(u16 *)(q + 0x6A) >> 9) & 7;
+                c[0x24] += *(u8 *)&D_8006CCD8[i];
+                c[0x25] += *(u8 *)&D_8006CCE8[i];
+                *(s16 *)(p + 0xA4) = 2;
+                break;
+            }
+        }
+        h = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(s16 *)((u8 *)b + 0xA));
+        if ((s16)h > 0x200)
+        {
+            h = *(u16 *)((u8 *)b + 0xA);
+        }
+        func_800A7A7C(c[0x24], c[0x25], h, *(s32 *)(c + 0x8), *(u8 **)(p + 0x9C));
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        func_8009A028(q);
+        g2 = (u8 *)&D_80083460;
+        *(s16 *)(g2 + 0xA) = *(u16 *)(g2 + 0xA) - 1;
+        break;
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+}
 
 /* Spawn the 0x110 node func_800A871C steps, seeding the mover's three 16.16
    integer halves and the view's +0x88 either from the D_800E36C8 spot record
@@ -35673,7 +36128,225 @@ void func_800D707C(u8 *p, UnkVec *v)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D71A8);
+/* Emit one POLY_FT4 per sprite cell of the renderable the actor's +0xA4 slot
+   array holds for the caller's +0x6 id: build the quad's four corners in the
+   scratchpad from the cell's 0xC-byte descriptor, project them with
+   RotTransPers4, bias by the view's +0xB8 screen offset, and -- when any
+   corner lands inside the 384x288 guard band -- fill the primitive's UVs,
+   patch the group's code byte and addPrim it at the scratchpad's +0xC0 depth.
+   Returns the advanced cursor. 454 words, 0 differing; seqcheck `seq=OK`,
+   `arith=OK`, raw 8 == relocdump 8, with ten constant-address scratchpad
+   words the raw comparison verifies.
+
+   `RotTransPers4` IS SPELLED BY ITS LIBRARY NAME. splat calls it
+   func_800654B0 (dungeon.bin_undefined_funcs_auto.txt:134) but
+   splat/common_syms.txt:115 carries `RotTransPers4 = 0x800654b0` and
+   build/dungeon.bin links that script since 2026-11-15, so the psyq
+   declaration in psyq/include/libgte.h:363 is the one to use and no local
+   declaration may be added.
+
+   FOUR SPELLINGS ARE LOAD-BEARING, each measured by ablation from the landed
+   body with tools/decomp/aligndiff.py.
+   (1) THE TWO LOOPS SHARE ONE COUNTER. Separate `i` and `j` are two
+   allocnos, so global-alloc hands them two hard registers and the whole
+   function rotates: still 454 words but 28 aligned differences, with `e` in
+   $s7 rather than $fp, the counter in $fp rather than $s6 and the primitive
+   cursor in $s6 rather than $s7. One variable reused across the two disjoint
+   loops is one allocno and one register.
+   (2) `x` AND `y` MUST BE `s16`. The corner value's HImode destination is
+   what stops combine folding `lbu`/`sll 24`/`sra 24` into a single `lb`: as
+   `s32` the function is 450 words -- four short, two per axis -- and 42
+   differing. The second corner is then `x - sp->unk_10` written out in each
+   arm, which keeps the `lhu` on the word field and lets cross-jumping merge
+   only the two `sh` at +0x88/+0x78.
+   (3) THE TWO FLIP TESTS READ THE HIGH CORNER FIRST. `q->x0 > q->x3` and
+   `q->y0 > q->y3`, not `q->x3 < q->x0` / `q->y3 < q->y0`: the `slt` is the
+   same either way, but the operand evaluated first is the one that gets
+   $v0/$v1 and the earlier load slot. The inverted forms are 6 and 2
+   differing.
+   (4) THE CODE BYTE IS A LOCAL AND ITS PATCH IS AN `if`/`else`. `t[0x1]`
+   re-read at each use is 459 words / 18 differing, because the `sb` into
+   r[0xF] is a QImode store and wipes cse's whole memory table; and
+   `w = v | 2; if ((f & 4) == 0) { w = v & 0xFD; }` -- the shape reorg's
+   delay-slot fill makes look right -- is 8 differing, a three-register
+   rotation. The plain two-arm `if`/`else` is the one that lands.
+
+   AND THE Y AXIS IS NOT THE X AXIS' MIRROR. Its `else` arm is
+   `(s8)t[0x3] - sp->unk_10A` where the x axis' is `(s8)t[0x2] +
+   sp->unk_108`; writing the symmetric `+` is 1 differing. */
+POLY_FT4 *func_800D71A8(u8 *p, s32 a, u8 *b, u8 *c, POLY_FT4 *q)
+{
+    UnkDungeonSP7 *sp = (UnkDungeonSP7 *)0x1F800000;
+    u8 *e;
+    u8 *r;
+    u8 *t;
+    s32 i;
+    s32 k;
+    s32 v;
+    s32 w;
+    s16 x;
+    s16 y;
+
+    e = NULL;
+    for (i = 0; i < *(s16 *)(p + 0x9E); i++)
+    {
+        if (*(u8 **)(p + 0xA4 + i * 4) != NULL)
+        {
+            e = *(u8 **)(p + 0xA4 + i * 4) + 0x20;
+            if (*(u16 *)(c + 0x6) == *(u16 *)(e + 0x6))
+            {
+                break;
+            }
+        }
+    }
+    for (i = 0; i < *(s16 *)(e + 0x2); i++)
+    {
+        r = &e[i * 0x30 + 0x8];
+        t = *(u8 **)(r + 0x8);
+        while (1)
+        {
+            if ((t[0x0] & 0x20) == 0)
+            {
+                sp->unk_08 = t[0x8];
+                sp->unk_0C = t[0x9];
+                sp->unk_10 = t[0xA];
+                sp->unk_14 = t[0xB];
+                if (((t[0x0] ^ sp->unk_24) & 1) != 0)
+                {
+                    x = -(s8)t[0x2] - sp->unk_108;
+                    sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+                    sp->unk_70[1].vx = sp->unk_70[3].vx = x - sp->unk_10;
+                }
+                else
+                {
+                    x = (s8)t[0x2] + sp->unk_108;
+                    sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+                    sp->unk_70[1].vx = sp->unk_70[3].vx = x + sp->unk_10;
+                }
+                if (((c[0x0] ^ *(u16 *)(b + 0x14)) & 1) != 0)
+                {
+                    sp->unk_70[0].vx = sp->unk_70[2].vx = sp->unk_70[2].vx - (s8)c[0x2];
+                    sp->unk_70[1].vx = sp->unk_70[3].vx = sp->unk_70[3].vx - (s8)c[0x2];
+                }
+                else
+                {
+                    sp->unk_70[0].vx = sp->unk_70[2].vx = sp->unk_70[2].vx + (s8)c[0x2];
+                    sp->unk_70[1].vx = sp->unk_70[3].vx = sp->unk_70[3].vx + (s8)c[0x2];
+                }
+                if (((t[0x0] ^ sp->unk_24) & 2) != 0)
+                {
+                    y = -(s8)t[0x3] - sp->unk_10A;
+                    sp->unk_70[0].vy = sp->unk_70[1].vy = y;
+                    sp->unk_70[2].vy = sp->unk_70[3].vy = y - sp->unk_14;
+                }
+                else
+                {
+                    y = (s8)t[0x3] - sp->unk_10A;
+                    sp->unk_70[0].vy = sp->unk_70[1].vy = y;
+                    sp->unk_70[2].vy = sp->unk_70[3].vy = y + sp->unk_14;
+                }
+                if (((c[0x0] ^ *(u16 *)(b + 0x14)) & 2) != 0)
+                {
+                    sp->unk_70[0].vy = sp->unk_70[1].vy = sp->unk_70[1].vy - (s8)c[0x3];
+                    sp->unk_70[2].vy = sp->unk_70[3].vy = sp->unk_70[3].vy - (s8)c[0x3];
+                }
+                else
+                {
+                    sp->unk_70[0].vy = sp->unk_70[1].vy = sp->unk_70[1].vy + (s8)c[0x3];
+                    sp->unk_70[2].vy = sp->unk_70[3].vy = sp->unk_70[3].vy + (s8)c[0x3];
+                }
+                RotTransPers4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                              (s32 *)&sp->unk_F0[0], (s32 *)&sp->unk_F0[1], (s32 *)&sp->unk_F0[2],
+                              (s32 *)&sp->unk_F0[3], &sp->unk_90, &sp->unk_94);
+                q->x0 = sp->unk_F0[0].vx + sp->unk_B8;
+                q->y0 = sp->unk_F0[0].vy + sp->unk_BA;
+                q->x1 = sp->unk_F0[1].vx + sp->unk_B8;
+                q->y1 = sp->unk_F0[1].vy + sp->unk_BA;
+                q->x2 = sp->unk_F0[2].vx + sp->unk_B8;
+                q->y2 = sp->unk_F0[2].vy + sp->unk_BA;
+                q->x3 = sp->unk_F0[3].vx + sp->unk_B8;
+                q->y3 = sp->unk_F0[3].vy + sp->unk_BA;
+                if (((u16)(q->x0 + 0x20) < 0x181 && (u16)(q->y0 + 0x20) < 0x121) |
+                    ((u16)(q->x1 + 0x20) < 0x181 && (u16)(q->y1 + 0x20) < 0x121) |
+                    ((u16)(q->x2 + 0x20) < 0x181 && (u16)(q->y2 + 0x20) < 0x121) |
+                    ((u16)(q->x3 + 0x20) < 0x181 && (u16)(q->y3 + 0x20) < 0x121))
+                {
+                    setlen(q, 9);
+                    sp->unk_10 = sp->unk_10 + sp->unk_08;
+                    if ((sp->unk_10 & 0x100) != 0)
+                    {
+                        sp->unk_10 = sp->unk_10 - 1;
+                    }
+                    sp->unk_14 = sp->unk_14 + sp->unk_0C;
+                    if ((sp->unk_14 & 0x100) != 0)
+                    {
+                        sp->unk_14 = sp->unk_14 - 1;
+                    }
+                    sp->unk_14 = sp->unk_14 * 0x100;
+                    sp->unk_0C = sp->unk_0C * 0x100;
+                    *(u32 *)&q->u0 = (sp->unk_0C + sp->unk_08) +
+                                     ((*(u16 *)(b + 0x12) + *(u16 *)(t + 0x6)) << 16);
+                    *(u16 *)&q->u1 = sp->unk_0C + sp->unk_10;
+                    k = *(u16 *)(b + 0x10);
+                    if (k != 0)
+                    {
+                        q->tpage = k + (*(u16 *)(t + 0x4) & 0xFF9F);
+                    }
+                    else
+                    {
+                        q->tpage = *(u16 *)(t + 0x4);
+                    }
+                    *(u16 *)&q->u2 = sp->unk_14 + sp->unk_08;
+                    *(u16 *)&q->u3 = sp->unk_14 + sp->unk_10;
+                    if (q->x0 > q->x3)
+                    {
+                        q->u1--;
+                        q->u3--;
+                    }
+                    if (q->y0 > q->y3)
+                    {
+                        q->v2--;
+                        q->v3--;
+                    }
+                    v = t[0x1];
+                    r[0xF] = v;
+                    if ((*(u16 *)(r + 0x14) & 0x8) != 0)
+                    {
+                        if ((*(u16 *)(r + 0x14) & 0x4) != 0)
+                        {
+                            w = v | 2;
+                        }
+                        else
+                        {
+                            w = v & 0xFD;
+                        }
+                        r[0xF] = w;
+                    }
+                    if ((*(u16 *)(r + 0x14) & 0x10) != 0)
+                    {
+                        r[0xF] = r[0xF] | 1;
+                    }
+                    else
+                    {
+                        r[0xF] = r[0xF] & 0xFE;
+                    }
+                    *(u32 *)&q->r0 = *(u32 *)(r + 0xC);
+                    if ((*(u16 *)(e + 0x4) & 0x8000) == 0)
+                    {
+                        addPrim((u32 *)sp->unk_20 + sp->unk_C0, q);
+                    }
+                    q++;
+                }
+            }
+            if (*(s8 *)t < 0)
+            {
+                break;
+            }
+            t += 0xC;
+        }
+    }
+    return q;
+}
 
 /* `&p[i * 0x30 + 0x8]` AND NOT A WALKED OFFSET. With `off = 8;` before the
    loop and `off += 0x30` in the body, the `addiu $s1, $zero, 0x8` is emitted
