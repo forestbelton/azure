@@ -1419,6 +1419,14 @@ extern Unk8006B200 D_8006B200s[] __asm__("D_8006B200");
 #endif
 extern u8 D_80119000[];
 extern u8 D_80126000[];
+/* The two engine primitive templates at the tail of str_pool_EFC, defined in
+   csrc/str/spells.c. They are .rdata in the ROM and the DEFINITION there is
+   `const`, but these declarations are deliberately NOT: six units copy them
+   out through `u32 *` locals, and const-qualifying those locals changes
+   gcc 2.7.2's codegen -- measured 2026-11-14, 8 bytes in csrc/unk_1C540.c and
+   breakage in main.bin and town.bin as well. spells.c therefore includes
+   types.h rather than common.h, so the definition and these declarations are
+   never in one translation unit. */
 extern u32 D_8002E5D8[]; /* a 4-word template */
 extern u32 D_8002E5E8[];
 extern u32 D_800710E4[];

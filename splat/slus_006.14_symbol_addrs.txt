@@ -528,4 +528,22 @@ D_8002E950 = 0x8002e950; // size:0x14 defined:True
 // entry game_data's pointer table can name; the other 99 are bare literals.
 // -------------------------------------------------------------------------
 D_8002D000 = 0x8002d000; // size:0x10 defined:True
+D_8002D010 = 0x8002d010; // size:0x10 defined:True
+D_8002D020 = 0x8002d020; // size:0x10 defined:True
+D_8002D030 = 0x8002d030; // size:0xc defined:True
+D_8002D03C = 0x8002d03c; // size:0xc defined:True
+D_8002D594 = 0x8002d594; // size:0x20 defined:True
+D_8002D5B4 = 0x8002d5b4; // size:0xc defined:True
 STR_SPEAKER_3MEN = 0x8002d048; // size:0xc defined:True
+
+// -------------------------------------------------------------------------
+// The spell description-and-name pool, csrc/str/spells.c.
+//
+// One entry, the head of the pool, the same reason as the item pool: the
+// other 100 strings are bare literals in game_data's pointer table.
+// D_8002E5D8 and D_8002E5E8, at the pool's tail, keep their splat names and
+// are defined in the same unit.
+// -------------------------------------------------------------------------
+STR_SPELL_ATTACK_ENEMY_BY_TORNADO = 0x8002d6fc; // size:0x34 defined:True
+D_8002E5D8 = 0x8002e5d8; // size:0x10 defined:True
+D_8002E5E8 = 0x8002e5e8; // size:0x10 defined:True

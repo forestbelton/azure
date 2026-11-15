@@ -102,7 +102,7 @@ segments:
     vram: 0x8002D6FC
     align: 4
     subsegments:
-      - [0xefc, rodata, str_pool_EFC]
+      - [0xefc, .rodata, str/spells]
   # jtbl_8002E5F8, func_8004CECC's 6-entry table and, since that function
   # matched on 2026-11-01, the only `.rodata` of the FIRST piece of the carved
   # unit unk_1C540 -- the piece now ends at func_800517CC, which with
