@@ -663,11 +663,14 @@ The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 `__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
 It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
 
-**THE EXECUTABLE'S DATA IS OWNED AS OF 2026-11-14.** 992 bytes of the game's
-own are still typed `data`/`rodata`, down from 70,308 that morning, and 968
-of the 992 cannot be owned in C at all -- `gp_sbss` is `.sbss` and the
-0x800-rounded tail of `t_size`, which a definition emits as NOBITS. The other
-24 are `tbl_660C` and `smf_magic`, not worth a unit each. Six units did it:
+**THE EXECUTABLE'S DATA IS OWNED AS OF 2026-11-14.** 416 bytes of the game's
+own are still typed `data`/`rodata`, down from 70,308 that morning, and 392
+of the 416 cannot be owned in C at all -- `gp_sbss` is `.sbss`, which a
+definition emits as NOBITS. The other 24 are `tbl_660C` and `smf_magic`, not
+worth a unit each. The 576 bytes above `__bss` (vram 0x800815C0, where
+libsn/SNMAIN's descriptor pins it) are a `pad` subsegment: the linker never
+emitted them and they are in the file only because `t_size` rounds up to a
+2 KB sector. Six units did it:
 `csrc/str/speakers.c` (1,472 bytes, 107 objects), `csrc/str/spells.c` (3,836,
 103), `csrc/str/commands.c` (852, 36), `csrc/game_gp.c` (60, 10),
 `csrc/gp_data.c` (2,508, 287) and `csrc/game_data.c` (60,588, 666). No

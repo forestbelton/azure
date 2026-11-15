@@ -765,6 +765,23 @@ segments:
       # contributes no file bytes, and one WITH an initialiser would be .data
       # and would have to sit below. It stays disassembled.
       - [0x54c38, data, gp_sbss]
+      # AND THE LAST 0x240 BYTES ARE NOT .sbss, THEY ARE MASTERING SLACK.
+      # 0x54DC0 is vram 0x800815C0, which is where libsn/SNMAIN's module
+      # descriptor pins __bss -- the one place in the file that states the
+      # boundary. Below it the linker EMITTED zeros, which is why they are
+      # `data`; above it it emitted nothing, and these 576 bytes are in the
+      # file only because t_size (0x54800) is rounded up to a 2 KB sector.
+      #
+      # That matters for the two symbols it used to define. Every other .bss
+      # symbol in this executable -- 185 of them, 0x80081800..0x80088760 --
+      # is a linker-script assignment in slus_006.14_undefined_syms_auto.txt,
+      # and D_800815C0 and D_800816C0 were the only two getting a definition
+      # out of a listing, purely because they fall below the rounding.
+      # D_800816C0 makes the point: include/structs.h has it as 0x14 entries
+      # of 0x64 bytes, so the object runs to 0x80081E90 and only its first
+      # 320 bytes were ever in the file. `pad` puts both where the other 185
+      # are.
+      - [0x54dc0, pad]
       # NOT PART OF THE EXECUTABLE. The PS-X EXE header gives t_addr
       # 0x8002D000 and t_size 0x54800, so the loaded image is file
       # 0x800-0x55000 / vram 0x8002D000-0x80081800 and the PSX loader never

@@ -12,10 +12,10 @@ containers. What changed on 2026-11-01, and the evidence for it, is below.
 **Unknown is not the same as owned, and OWNED is what is left.** A `data` or
 `rodata` subsegment is accounted for but still lives in `asm/data/*.s` as
 `dlabel`s rather than as C. As of 2026-11-14 the game's own unowned bytes are
-**992 in three subsegments**, down from 70,308 at the start of that day, and
-968 of the 992 cannot be owned in C at all. What is left is `gp_sbss` (968
-bytes of `.sbss` and the 0x800-rounded tail of `t_size`, which a C definition
-emits as NOBITS) and `tbl_660C` plus `smf_magic`, 24 bytes between them: the three string pools went
+**416 in three subsegments**, down from 70,308 at the start of that day, and
+392 of the 416 cannot be owned in C at all. What is left is `gp_sbss` (392
+bytes of `.sbss`, which a C definition emits as NOBITS) and `tbl_660C` plus
+`smf_magic`, 24 bytes between them: the three string pools went
 to C that day (`csrc/str/speakers.c`, `csrc/str/spells.c`,
 `csrc/str/commands.c`, 6,160 bytes and 237 objects), then `game_gp` as
 `csrc/game_gp.c` (60 bytes, 10 objects, the project's first `.sdata`
@@ -597,7 +597,8 @@ the other three are `data`.
 |---|---|---|---|---|
 | `tbl_660C` | 0x660C-0x6614 | 8 | 1 | a `u16` array `{1,2,3}`, `D_80032E0C`, behind the item pool |
 | `smf_magic` | 0x68FC-0x690C | 16 | 1 | `MThd`/`MTrk` with zero lengths |
-| `gp_sbss` | 0x54C38-0x55000 | 968 | 67 | `.sbss` and the 0x800-rounded tail of `t_size`, all zero; NOT ownable in C at any `-G` |
+| `gp_sbss` | 0x54C38-0x54DC0 | 392 | 63 | `.sbss`, all zero; NOT ownable in C at any `-G` |
+| (`pad`) | 0x54DC0-0x55000 | 576 | -- | above `__bss`; in the file only because `t_size` rounds to 2 KB |
 
 And the eight that are DONE:
 
@@ -739,6 +740,21 @@ above it are now the `gp_sbss` subsegment.
 last non-zero byte in the old blob is at rom 0x54C35; `dataverify.py`'s NEXT
 YAML BOUNDARY for the definitions is 0x54C38 -- one number from the image,
 one from the compiled object's section size.
+
+**And the TOP of what is left is a third boundary, stated by the binary.**
+0x54DC0 is vram 0x800815C0, where libsn/SNMAIN's module descriptor pins
+`__bss`. Below it the linker emitted zeros into the image, which is why
+0x54C38..0x54DC0 is `data`; above it the linker emitted nothing and the 576
+bytes are in the file only because `t_size` (0x54800) rounds up to a 2 KB
+sector, so they are a `pad` subsegment. That is not cosmetic: it decides
+where two symbols live. Every other `.bss` symbol in this executable -- 185
+of them, 0x80081800..0x80088760 -- is a linker-script assignment in
+`slus_006.14_undefined_syms_auto.txt`, and `D_800815C0` and `D_800816C0`
+were the only two getting a definition out of a listing, purely because they
+fall below the rounding. `D_800816C0` makes the case on its own:
+`include/structs.h` has it as 0x14 entries of 0x64 bytes, so the object runs
+to 0x80081E90 and only its first 320 bytes were ever in the file. As `pad`,
+both join the other 185.
 
 **`tools/decomp/dataverify.py` needed one `WINDOWS` entry and nothing else.**
 `("gp_data", 0x5426C, 0x80080A6C, "data/slus_006.14")`, and the tool written
@@ -918,10 +934,12 @@ is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
 region and `game_data` all landed that day; the three subsegments still typed
 `data`/`rodata` for the game are 992 bytes and none of them is work:
 
-* **`gp_sbss`, 968 bytes.** `.sbss` and the 0x800-rounded tail of `t_size`,
-  all zero. A C definition cannot emit it at any `-G`: with no initialiser it
-  is NOBITS and contributes nothing, and with one it is `.data` and would
-  have to sit below.
+* **`gp_sbss`, 392 bytes.** `.sbss`, all zero, 63 objects of which 56 are
+  referenced from C. A C definition cannot emit it at any `-G`: with no
+  initialiser it is NOBITS and contributes nothing, and with one it is
+  `.data` and would have to sit below. **Not `pad`** -- it is live
+  zero-initialised small data, and naming it padding would move 56 real
+  symbols into the file for symbols the map cannot place.
 * **`tbl_660C` and `smf_magic`, 24 bytes between them.** Not blocked on
   anything, just not worth a translation unit each. Folding `smf_magic` into
   `csrc/unk_2879C.c` would need the compiler to emit the array after that
