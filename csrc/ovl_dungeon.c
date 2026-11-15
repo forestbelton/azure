@@ -175,7 +175,7 @@ extern UnkDungeonRect D_80089498;
 UnkNode *func_8003FC64(s32);
 /* Parked at the node's +0x10 by the pair below; an address-take needs a
    declaration. */
-void func_800A7CC4();
+s32 func_800A7CC4(u8 *, UnkVec *, UnkSlot *);
 void func_800B51C8();
 
 /* Engine and overlay globals this unit reaches. D_800E3D7C is the resident
@@ -265,7 +265,7 @@ void func_800C9088(u8 *, UnkVec *, UnkSlot *, s16);
 void func_800D07C8(u8 *, UnkVec *, UnkSlot *, s16);
 void func_800D6170(u8 *, UnkVec *, UnkSlot *, s16);
 /* The five-argument one. func_800CEEFC stores a fifth zero at 0x10($sp). */
-void func_800CEFB8(u8 *, UnkVec *, UnkSlot *, s16, s32);
+void func_800CEFB8(u8 *, UnkVec *, UnkSlot *, s16, s16);
 
 /* The 0x800D1C70..0x800D4634 state machines. D_8006CCD8/E8 are the engine's
    eight-entry sine and cosine tables, indexed by the facing field's top
@@ -1848,6 +1848,135 @@ void func_80047DF0(void);
 void func_80043914(u8 *);
 void func_800424E0(u8 *, s16, u8 *);
 void func_80042560(s8 *);
+
+/* The 0x1F800000 scratchpad as func_800CEFB8 lays it out: the resident
+   func_8003DBD0's Unk453E0SP with one more halfword witnessed at +0x10E --
+   the ratan2 bearing between the renderable's two projected points, read
+   back when the caller's fifth argument is zero. */
+typedef struct UnkDungeonSP8
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x2];
+    Unk3DBD0W unk_08;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u16 unk_24;
+    u8 pad_26[0xA];
+    Unk3DBD0W unk_30;
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    u8 pad_3C[0x14];
+    u16 unk_50;
+    u8 pad_52[0x6];
+    u16 unk_58;
+    u8 pad_5A[0x16];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0x2];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x8];
+    s32 unk_CC;
+    u8 pad_D0[0x14];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    u16 unk_F8;
+    u16 unk_FA;
+    u16 unk_FC;
+    u16 unk_FE;
+    s16 unk_100;
+    s16 unk_102;
+    s16 unk_104;
+    u8 pad_106[0x2];
+    u16 unk_108;
+    u16 unk_10A;
+    u8 pad_10C[0x2];
+    u16 unk_10E;
+    u8 pad_110[0x2C];
+} UnkDungeonSP8;
+/* The 0x28-byte flat-textured primitive func_800CEFB8 emits -- libgpu's
+   POLY_FT4, with the three u/v pairs that are read back a byte at a time
+   written through Unk453E0UV the way UnkDungeonGT4 above does. */
+typedef struct UnkDungeonFT4
+{
+    u32 unk_00;
+    u32 unk_04;
+    u16 unk_08;
+    u16 unk_0A;
+    u16 unk_0C;
+    u16 unk_0E;
+    u16 unk_10;
+    u16 unk_12;
+    Unk453E0UV unk_14;
+    u16 unk_16;
+    u16 unk_18;
+    u16 unk_1A;
+    Unk453E0UV unk_1C;
+    u16 unk_1E;
+    u16 unk_20;
+    u16 unk_22;
+    Unk453E0UV unk_24;
+    u16 unk_26;
+} UnkDungeonFT4;
+/* A 4-byte slot of the primitive below that is written as a WORD and read
+   back as a halfword or a byte -- the u/v + CLUT and u/v + TPAGE pairs, which
+   func_800A7CC4 fills with one `sw` each and then decrements a byte at a
+   time. UnkDungeonGT4's Unk453E0UV is the 2-byte version of the same idea. */
+typedef union UnkDungeonPUV
+{
+    u32 w;
+    u16 h;
+    u8 b[2];
+} UnkDungeonPUV;
+/* The same 0x28-byte POLY_FT4 as UnkDungeonFT4 above with its three u/v
+   slots under their WORD face: func_800A7CC4 writes each u/v pair and the
+   CLUT or TPAGE beside it in ONE `sw` (the CLUT arrives as `<< 16`), where
+   func_800CEFB8 writes the two halves separately. */
+typedef struct UnkDungeonFT4W
+{
+    u32 unk_00;
+    u32 unk_04;
+    u16 unk_08;
+    u16 unk_0A;
+    UnkDungeonPUV unk_0C;
+    u16 unk_10;
+    u16 unk_12;
+    UnkDungeonPUV unk_14;
+    u16 unk_18;
+    u16 unk_1A;
+    UnkDungeonPUV unk_1C;
+    u16 unk_20;
+    u16 unk_22;
+    UnkDungeonPUV unk_24;
+} UnkDungeonFT4W;
 
 /* The overlay's per-frame entry point; `void func_800894A0(void)` is declared
    in include/structs.h because the resident engine calls it. D_80083160 is a
@@ -16799,7 +16928,260 @@ void func_800A7C64(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A7CC4);
+/* The 0x40 ground-item slots: for each live D_800E3548 slot, project
+   D_800E36C8's tile into the scratchpad, then emit TWO POLY_FT4s per element
+   of its 0xC-byte list -- the sprite itself and, under a second matrix that
+   has been flattened by ScaleMatrix and offset by six, a semi-transparent
+   shadow whose colour word is the sprite's plus 0x7FC00000.  func_800D3738's
+   renderer with the slot table's outer loop around it; the u/v + CLUT and
+   u/v + TPAGE halves arrive as ONE `sw` each here, which is what
+   UnkDungeonFT4W above exists for.
+
+   SIX SPELLING FACTS, each measured on this function.
+
+   (1) `s32 i = 0;` IS THE FIRST DECLARATION.  Left as `for (i = 0; ...)`
+   after the four pointer initialisers, the counter's zeroing and its own
+   `sw $s6` come out seventh and eighth instead of first and second: 4 aligned
+   differences and nothing else wrong.
+
+   (2) THE BYTE-OFFSET LOCAL IS TWO VARIABLES, ONE PER GROUP.  One `s16 a`
+   across both the +0x02 and the +0x03 group keeps its quantity live over the
+   whole stretch, so local-alloc never ties the sum to it, hands it $t0, and
+   EVERY compiler temporary in the function shifts from $t0 to $t1 -- 87
+   aligned differences, all of them register numbers.  Two locals die at their
+   own sums, both get $v0, and the shift goes away.
+
+   (3) `u16 cam[3]`, NOT `s16`.  Only the `(cam[2] + 0x100)` read shows it:
+   `lhu` against `lh`, 1 word.  The array has to be an array (three `sh` into
+   consecutive stack halfwords at 0x28); three scalars would be registers.
+
+   (4) `Unk80083160 *g = &D_80083160;`.  All nine callee-saved registers are
+   taken ($s0..$s7 and $fp), so `g` gets none and reload rematerialises its
+   `lui`/`addiu` at each use -- which is exactly the target's three
+   re-materialisations and its closing `lw 0x0($t0)`.  Reaching the struct by
+   name instead gives the symbolic `lw %lo(D_80083160)($v0)` at the tail, one
+   word short of the target's three.
+
+   (5) EACH ADDEND OF `p->unk_102` IS IN ITS OWN LOCAL.  Inline, the
+   `s->unk_18 - 0x100` half is computed in HImode as `ori $v1,0xFF00` plus
+   `addu` rather than one `addiu`: one word long and 15 more aligned
+   differences.
+
+   (6) THE TILE'S +0x02 IS SEEDED FROM THE SCRATCHPAD, NOT FROM +0x04 AGAIN.
+   `D_800E36C8_u[i].unk_02 = sp->unk_04;` lets cse forward the halfword it has
+   just stored; `= D_800E36C8_u[i].unk_04;` reloads it, because the scratchpad
+   store between the two invalidates cse's memory.  1 word.  The same
+   mechanism is load-bearing in the shadow's scale: `sc.vz` is assigned twice
+   with the second reading the first back, and the store between the two
+   `(s16)sp->unk_04` reads is why they are not commoned -- which is where the
+   target's dead `-4` store and its subtract-itself pair come from.
+
+   593 words, 0 differing. */
+s32 func_800A7CC4(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s32 i = 0;
+    Unk80083160 *g = &D_80083160;
+    MATRIX *m = (MATRIX *)0x1F8000D0;
+    MATRIX *mm = (MATRIX *)0x1F800050;
+    Unk453E0SP *sp = (Unk453E0SP *)0x1F800000;
+    UnkDungeonFT4W *q;
+    Unk44D24E *e;
+    u16 cam[3];
+    VECTOR sc;
+    s32 k;
+    s32 n;
+
+    q = *(UnkDungeonFT4W **)(g->unk_00 + 0x8D0);
+    sp->unk_20 = g->unk_00 + 0xB0;
+    sp->unk_E4 = 0;
+    sp->unk_E8 = 0;
+    sp->unk_EC = 0;
+    sp->unk_8C = 0;
+    sp->unk_84 = 0;
+    sp->unk_7C = 0;
+    sp->unk_74 = 0;
+    cam[0] = g->unk_C4;
+    cam[1] = g->unk_C6;
+    cam[2] = g->unk_C8;
+    for (; i < 0x40; i++)
+    {
+        if (D_800E3548_s[i].unk_01 != 0)
+        {
+            sp->unk_00 = (D_800E36C8_u[i].unk_00 << 6) + 0x20;
+            sp->unk_02 = (D_800E36C8_u[i].unk_01 << 6) + 0x20;
+            sp->unk_04 = D_800E36C8_u[i].unk_04;
+            D_800E36C8_u[i].unk_02 = sp->unk_04;
+            e = (Unk44D24E *)D_800E36C8_u[i].unk_08;
+            sp->unk_C0 = RotTransPers((void *)sp, &sp->unk_B8, &sp->unk_90, &sp->unk_94);
+            D_8006CD30.unk_1C = sp->unk_C0 * 4;
+            sp->unk_C0 = sp->unk_C0 - 2;
+            if ((u32)sp->unk_C0 < 0x1E0)
+            {
+                PushMatrix();
+                sp->unk_B8 = sp->unk_B8 - 0xA0;
+                sp->unk_BA = sp->unk_BA - 0x78;
+                sp->unk_100 = s->unk_16;
+                sp->unk_104 = g->unk_B8 + (s->unk_1A - cam[1]);
+                k = (cam[2] + 0x100) & 0x1FF;
+                n = s->unk_18 - 0x100;
+                sp->unk_102 = k + n;
+                RotMatrix(&sp->unk_100, m);
+                CompMatrix(&D_8006CD30, m, mm);
+                SetTransMatrix(mm);
+                SetRotMatrix(mm);
+                for (;;)
+                {
+                    if ((e->unk_00 & 0x20) == 0)
+                    {
+                        s32 x;
+                        s32 y;
+                        s16 a;
+                        s16 b;
+                        u8 t;
+
+                        x = e->unk_08;
+                        sp->unk_08.w = x;
+                        y = e->unk_0A;
+                        sp->unk_10.w = y;
+                        if (x + y >= 0x100)
+                        {
+                            sp->unk_10.w = y - 1;
+                        }
+                        x = e->unk_09;
+                        sp->unk_0C.w = x;
+                        y = e->unk_0B;
+                        sp->unk_14.w = y;
+                        if (x + y >= 0x100)
+                        {
+                            sp->unk_14.w = y - 1;
+                        }
+                        a = (s8)e->unk_02;
+                        sp->unk_80 = a;
+                        sp->unk_70 = a;
+                        a = a + sp->unk_10.h;
+                        sp->unk_88 = a;
+                        sp->unk_78 = a;
+                        b = (s8)e->unk_03;
+                        sp->unk_7A = b;
+                        sp->unk_72 = b;
+                        b = b + sp->unk_14.h;
+                        sp->unk_8A = b;
+                        sp->unk_82 = b;
+                        RotTransPers4(&sp->unk_70, &sp->unk_78, &sp->unk_80, &sp->unk_88,
+                                      &sp->unk_F0, &sp->unk_F4, &sp->unk_F8, &sp->unk_FC,
+                                      &sp->unk_90, &sp->unk_94);
+                        q->unk_08 = sp->unk_F0 + sp->unk_B8;
+                        q->unk_0A = sp->unk_F2 + sp->unk_BA;
+                        q->unk_10 = sp->unk_F4 + sp->unk_B8;
+                        q->unk_12 = sp->unk_F6 + sp->unk_BA;
+                        q->unk_18 = sp->unk_F8 + sp->unk_B8;
+                        q->unk_1A = sp->unk_FA + sp->unk_BA;
+                        q->unk_20 = sp->unk_FC + sp->unk_B8;
+                        q->unk_22 = sp->unk_FE + sp->unk_BA;
+                        if ((((u16)(q->unk_08 + 0x20) < 0x181 && (u16)(q->unk_0A + 0x20) < 0x121) |
+                             ((u16)(q->unk_10 + 0x20) < 0x181 && (u16)(q->unk_12 + 0x20) < 0x121) |
+                             ((u16)(q->unk_18 + 0x20) < 0x181 && (u16)(q->unk_1A + 0x20) < 0x121) |
+                             ((u16)(q->unk_20 + 0x20) < 0x181 && (u16)(q->unk_22 + 0x20) < 0x121)) !=
+                            0)
+                        {
+                            sp->unk_10.w = sp->unk_10.w + sp->unk_08.w;
+                            sp->unk_14.w = (sp->unk_14.w + sp->unk_0C.w) << 8;
+                            sp->unk_0C.w = sp->unk_0C.w << 8;
+                            q->unk_0C.w = sp->unk_0C.w + sp->unk_08.w + (e->unk_06 << 16);
+                            q->unk_14.w = sp->unk_0C.w + sp->unk_10.w + ((s16)e->unk_04 << 16);
+                            q->unk_1C.h = sp->unk_14.h + sp->unk_08.h;
+                            q->unk_24.h = sp->unk_14.h + sp->unk_10.h;
+                            if ((s16)sp->unk_50 >= 0x1800)
+                            {
+                                t = q->unk_24.b[0];
+                                q->unk_24.b[0] = t + 0xFF;
+                                q->unk_14.b[0] = t;
+                            }
+                            if ((s16)sp->unk_58 >= 0x1800)
+                            {
+                                t = q->unk_24.b[1];
+                                q->unk_24.b[1] = t + 0xFF;
+                                q->unk_1C.b[1] = t;
+                            }
+                            if ((s16)q->unk_08 > (s16)q->unk_20)
+                            {
+                                q->unk_14.b[0] = q->unk_14.b[0] - 1;
+                                q->unk_24.b[0] = q->unk_24.b[0] - 1;
+                            }
+                            if ((s16)q->unk_0A > (s16)q->unk_22)
+                            {
+                                q->unk_1C.b[1] = q->unk_1C.b[1] - 1;
+                                q->unk_24.b[1] = q->unk_24.b[1] - 1;
+                            }
+                            q->unk_04 = *(u32 *)s->unk_0C;
+                            SetPolyFT4(q);
+                            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
+                            q++;
+                            PushMatrix();
+                            sc.vz = (s16)sp->unk_04 - 4;
+                            sc.vz = (sc.vz - (s16)sp->unk_04) * 32 + 0x1000;
+                            if (sc.vz < 0)
+                            {
+                                sc.vz = 0;
+                            }
+                            sc.vx = sc.vz;
+                            sc.vy = sc.vz / 2;
+                            sp->unk_102 = 0;
+                            sp->unk_100 = -cam[0];
+                            sp->unk_104 = g->unk_B8 - cam[1];
+                            RotMatrix(&sp->unk_100, m);
+                            CompMatrix(&D_8006CD30, m, mm);
+                            ScaleMatrix(mm, &sc);
+                            SetTransMatrix(mm);
+                            SetRotMatrix(mm);
+                            sp->unk_70 = sp->unk_70 + 6;
+                            sp->unk_78 = sp->unk_78 + 6;
+                            RotTransPers4(&sp->unk_70, &sp->unk_78, &sp->unk_80, &sp->unk_88,
+                                          &sp->unk_F0, &sp->unk_F4, &sp->unk_F8, &sp->unk_FC,
+                                          &sp->unk_90, &sp->unk_94);
+                            q->unk_08 = sp->unk_F0 + sp->unk_B8;
+                            q->unk_0A = sp->unk_F2 + sp->unk_BA;
+                            q->unk_10 = sp->unk_F4 + sp->unk_B8;
+                            q->unk_12 = sp->unk_F6 + sp->unk_BA;
+                            q->unk_18 = sp->unk_F8 + sp->unk_B8;
+                            q->unk_1A = sp->unk_FA + sp->unk_BA;
+                            q->unk_20 = sp->unk_FC + sp->unk_B8;
+                            q->unk_22 = sp->unk_FE + sp->unk_BA;
+                            q->unk_0C.w = sp->unk_0C.w + sp->unk_08.w + 0x7FC00000;
+                            q->unk_14.w = sp->unk_0C.w + sp->unk_10.w + ((s16)e->unk_04 << 16);
+                            q->unk_1C.h = sp->unk_14.h + sp->unk_08.h;
+                            q->unk_24.h = sp->unk_14.h + sp->unk_10.h;
+                            if ((s16)q->unk_08 > (s16)q->unk_20)
+                            {
+                                q->unk_14.b[0] = q->unk_14.b[0] - 1;
+                                q->unk_24.b[0] = q->unk_24.b[0] - 1;
+                            }
+                            if ((s16)q->unk_0A > (s16)q->unk_22)
+                            {
+                                q->unk_1C.b[1] = q->unk_1C.b[1] - 1;
+                                q->unk_24.b[1] = q->unk_24.b[1] - 1;
+                            }
+                            q->unk_04 = *(u32 *)s->unk_0C;
+                            SetPolyFT4(q);
+                            setSemiTrans(q, 1);
+                            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
+                            q++;
+                            PopMatrix();
+                        }
+                    }
+                    if ((s8)e->unk_00 < 0)
+                    {
+                        break;
+                    }
+                    e++;
+                }
+                PopMatrix();
+            }
+        }
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+    return 0;
+}
 
 /* The three halfword stores into the mover are the 16.16 integer halves at
    +0x2/+0x6/+0xA, which is why c, d and e are s16; no caller witnesses the
@@ -34003,7 +34385,301 @@ s32 func_800CEF54(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CEFB8);
+/* Emits one POLY_FT4 per 0xC-byte element for one slot, the same renderer as
+   func_800D3738 over libgpu's 0x28-byte FLAT primitive instead of its
+   0x34-byte Gouraud one, and with two RotTransPers calls instead of one: the
+   renderable's +0x02/+0x06/+0x0A and +0x0E/+0x12/+0x16 points are both
+   projected, the OT index is their mean and func_80065F90 (ratan2) of their
+   screen delta is parked at the scratchpad's +0x10E as the sprite's bearing.
+   The fifth argument picks the quad's shear: nonzero shears the top edge,
+   zero adds that bearing into the view rotation.
+
+   Unk453E0SP has no +0x10E and UnkDungeonGT4 is 0x34 bytes, hence the two new
+   types above.
+
+   SEVEN SPELLING FACTS, each measured on this function.
+
+   (1) THE FIFTH PARAMETER IS `s16`, NOT THE `s32` THE FORWARD DECLARATION
+   CARRIED.  It is tested twice as `sll 16` / `bnez`, and the two tests are in
+   DIFFERENT registers because gcc copies the parameter's pseudo ($s4, which
+   the element cursor then reuses) into $fp -- no source device is needed for
+   that, `move $fp,$20` falls out of the plain parameter.  Both callers
+   (func_800CEEFC, func_800CEF54) pass a literal and re-measure at 0 differing.
+
+   (2) EACH ARM OF THE TWO BYTE-OFFSET IF/ELSES DUPLICATES ITS TAIL.  With
+   `p->unk_88`/`p->unk_78` written once after the if/else, `jump.c`
+   cross-jumps all FOUR stores into the join, the offset local needs a second
+   register for the sum and the function is 588 words / 62 aligned
+   differences; duplicated, the shared tail is the two stores the target has
+   at .L800CF31C and the sum lands back in the offset's own register.
+
+   (3) `e->unk_01` GOES THROUGH A LOCAL.  The `s->unk_0C[3]` store between the
+   first read and the two patched ones invalidates cse's memory, so each arm
+   reloads the byte: 4 words.
+
+   (4) `g->unk_B8` NEEDS AN EXPLICIT `(s16)`.  Unk80083160 declares it `u16`
+   -- correctly, func_800A7CC4 below reads the same field with `lhu` -- but
+   here the target reads it with `lh`.  1 word.
+
+   (5) THE SUBTRACTION IN `p->unk_104` READS `g->unk_C6`, NOT `p->unk_34.h`.
+   Through the scratchpad field the halfword is reloaded and the two camera
+   components swap registers; through `g->unk_C6` cse forwards the `lh` it
+   just stored from.  2 words.  (func_800D3738 wants the other spelling at the
+   same site; it has no conditional after it.)
+
+   (6) THE FOUR SCRATCHPAD DECREMENTS ARE IN SOURCE ORDER B8, F0, BA, F2.
+   All 24 permutations were measured at 587 words: B8/F0/BA/F2 is 5 aligned
+   differences, the next best 9, the "natural" B8/BA/F0/F2 13 and the worst 21.
+
+   (7) EACH ADDEND OF `p->unk_102` IS IN ITS OWN LOCAL, AND THE SECOND ONE
+   REUSES THE LOCAL THAT HELD THE SECOND PROJECTION'S RETURN.  Written inline
+   `fold` moves the `- 0x100` onto the masked value (`addiu ...,-0x100` after
+   the `andi`) and that is the last differing word; a fresh local for the
+   second addend is 4, `h` for both is 1, and `z` is 0.  The same split is why
+   `p->unk_10.w - 1 + p->unk_08.w` is two statements: inline, fold rewrites it
+   as `p->unk_10.w + (p->unk_08.w - 1)` and the two `lw` come out swapped.
+
+   587 words, 0 differing. */
+void func_800CEFB8(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3, s16 arg4)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDungeonSP8 *p = (UnkDungeonSP8 *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    UnkDungeonFT4 *q;
+    Unk44D24E *e;
+    s32 y;
+    s32 h;
+    s32 z;
+    s32 u;
+
+    p->unk_EC = 0;
+    p->unk_8C = 0;
+    p->unk_84 = 0;
+    p->unk_7C = 0;
+    p->unk_74 = 0;
+    p->unk_20 = base + 0xB0;
+    q = *(UnkDungeonFT4 **)(base + 0x8D0);
+    s->unk_14 |= 0x8000;
+    p->unk_00 = ((u16 *)v)[1];
+    p->unk_02 = ((u16 *)v)[3];
+    p->unk_04 = ((u16 *)v)[5];
+    p->unk_C0 = RotTransPers((void *)0x1F800000, (void *)0x1F8000B8, (void *)0x1F800090,
+                             (void *)0x1F800094);
+    p->unk_00 = ((u16 *)v)[7];
+    p->unk_02 = ((u16 *)v)[9];
+    p->unk_04 = ((u16 *)v)[11];
+    z = RotTransPers((void *)0x1F800000, (void *)0x1F8000F0, (void *)0x1F800090,
+                     (void *)0x1F800094);
+    p->unk_C0 = (p->unk_C0 + z) >> 1;
+    p->unk_10E = func_80065F90((s16)p->unk_F2 - (s16)p->unk_BA, (s16)p->unk_F0 - (s16)p->unk_B8);
+    D_8006CD30.unk_1C = p->unk_C0 * 4;
+    p->unk_C0 = p->unk_C0 - arg3;
+    if ((u32)p->unk_C0 < 0x1E0)
+    {
+        PushMatrix();
+        p->unk_B8 = p->unk_B8 - 0xA0;
+        p->unk_F0 = p->unk_F0 - 0xA0;
+        p->unk_BA = p->unk_BA - 0x78;
+        p->unk_F2 = p->unk_F2 - 0x78;
+        p->unk_30.w = g->unk_C4;
+        p->unk_34.w = g->unk_C6;
+        p->unk_38.w = g->unk_C8;
+        p->unk_100 = s->unk_16;
+        y = (s->unk_1A - g->unk_C6) + (s16)g->unk_B8;
+        if (arg4 == 0)
+        {
+            y += (s16)p->unk_10E;
+        }
+        p->unk_104 = y;
+        h = (p->unk_38.h + 0x100) & 0x1FF;
+        z = s->unk_18 - 0x100;
+        p->unk_102 = h + z;
+        p->unk_108 = p->unk_E4 = s->unk_20;
+        p->unk_10A = p->unk_E8 = s->unk_22;
+        RotMatrix((void *)0x1F800100, (void *)0x1F8000D0);
+        p->unk_30.w = s->unk_1C;
+        p->unk_34.w = s->unk_1E;
+        p->unk_38.w = 0x1000;
+        ScaleMatrix((void *)0x1F8000D0, (void *)0x1F800030);
+        CompMatrix(&D_8006CD30, (void *)0x1F8000D0, (void *)0x1F800050);
+        SetTransMatrix((void *)0x1F800050);
+        SetRotMatrix((void *)0x1F800050);
+        e = (Unk44D24E *)s->unk_08;
+        p->unk_24 = s->unk_14;
+        for (;;)
+        {
+            if ((e->unk_00 & 0x20) == 0)
+            {
+                s16 a;
+                u8 t;
+                u8 c;
+
+                p->unk_08.w = e->unk_08;
+                p->unk_0C.w = e->unk_09;
+                p->unk_10.w = e->unk_0A;
+                p->unk_14.w = e->unk_0B;
+                if ((e->unk_00 ^ p->unk_24) & 1)
+                {
+                    a = -(s8)e->unk_02 - p->unk_108;
+                    p->unk_80 = a;
+                    p->unk_70 = a;
+                    a = a - p->unk_10.h;
+                    p->unk_88 = a;
+                    p->unk_78 = a;
+                }
+                else
+                {
+                    a = (s8)e->unk_02 - p->unk_108;
+                    p->unk_80 = a;
+                    p->unk_70 = a;
+                    a = a + p->unk_10.h;
+                    p->unk_88 = a;
+                    p->unk_78 = a;
+                }
+                if ((e->unk_00 ^ p->unk_24) & 2)
+                {
+                    a = -(s8)e->unk_03 - p->unk_10A;
+                    p->unk_7A = a;
+                    p->unk_72 = a;
+                    a = a - p->unk_14.h;
+                    p->unk_8A = a;
+                    p->unk_82 = a;
+                }
+                else
+                {
+                    a = (s8)e->unk_03 - p->unk_10A;
+                    p->unk_7A = a;
+                    p->unk_72 = a;
+                    a = a + p->unk_14.h;
+                    p->unk_8A = a;
+                    p->unk_82 = a;
+                }
+                RotTransPers4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &q->unk_08,
+                              &q->unk_10, &q->unk_18, &q->unk_20, &p->unk_90, &p->unk_94);
+                if (arg4 != 0)
+                {
+                    if ((s16)p->unk_BA < (s16)p->unk_F2)
+                    {
+                        q->unk_08 += p->unk_B8;
+                        q->unk_10 += p->unk_B8;
+                        q->unk_0A += p->unk_BA;
+                        q->unk_12 += p->unk_BA;
+                        q->unk_18 += p->unk_F0;
+                        q->unk_20 += p->unk_F0;
+                        q->unk_1A += p->unk_F2;
+                        q->unk_22 += p->unk_F2;
+                    }
+                    else
+                    {
+                        q->unk_18 += p->unk_B8;
+                        q->unk_20 += p->unk_B8;
+                        q->unk_1A += p->unk_BA;
+                        q->unk_22 += p->unk_BA;
+                        q->unk_08 += p->unk_F0;
+                        q->unk_10 += p->unk_F0;
+                        q->unk_0A += p->unk_F2;
+                        q->unk_12 += p->unk_F2;
+                    }
+                }
+                else
+                {
+                    q->unk_18 += p->unk_B8;
+                    q->unk_1A += p->unk_BA;
+                    q->unk_10 += p->unk_F0;
+                    q->unk_12 += p->unk_F2;
+                    q->unk_08 += p->unk_B8;
+                    q->unk_0A += p->unk_BA;
+                    q->unk_20 += p->unk_F0;
+                    q->unk_22 += p->unk_F2;
+                }
+                if ((((u16)(q->unk_08 + 0x20) < 0x181 && (u16)(q->unk_0A + 0x20) < 0x121) |
+                     ((u16)(q->unk_10 + 0x20) < 0x181 && (u16)(q->unk_12 + 0x20) < 0x121) |
+                     ((u16)(q->unk_18 + 0x20) < 0x181 && (u16)(q->unk_1A + 0x20) < 0x121) |
+                     ((u16)(q->unk_20 + 0x20) < 0x181 && (u16)(q->unk_22 + 0x20) < 0x121)) != 0)
+                {
+                    setlen(q, 9);
+                    s->unk_14 &= 0x7FFF;
+                    u = p->unk_10.w - 1;
+                    p->unk_10.w = u + p->unk_08.w;
+                    if (p->unk_10.w & 0x100)
+                    {
+                        p->unk_10.w = p->unk_10.w - 1;
+                    }
+                    u = p->unk_14.w - 1;
+                    p->unk_14.w = u + p->unk_0C.w;
+                    if (p->unk_14.w & 0x100)
+                    {
+                        p->unk_14.w = p->unk_14.w - 1;
+                    }
+                    p->unk_14.w = p->unk_14.w << 8;
+                    p->unk_0C.w = p->unk_0C.w << 8;
+                    if (s->unk_12 != 0)
+                    {
+                        if (p->unk_24 & 0x100)
+                        {
+                            q->unk_0E = s->unk_12;
+                        }
+                        else
+                        {
+                            q->unk_0E = s->unk_12 + e->unk_06;
+                        }
+                    }
+                    else
+                    {
+                        q->unk_0E = e->unk_06;
+                    }
+                    q->unk_0C = p->unk_0C.h + p->unk_08.h;
+                    q->unk_14.h = p->unk_0C.h + p->unk_10.h;
+                    if (s->unk_10 != 0)
+                    {
+                        q->unk_16 = s->unk_10 + (e->unk_04 & 0xFF9F);
+                    }
+                    else
+                    {
+                        q->unk_16 = e->unk_04;
+                    }
+                    q->unk_1C.h = p->unk_14.h | p->unk_08.h;
+                    q->unk_24.h = p->unk_14.h | p->unk_10.h;
+                    if ((s16)q->unk_08 > (s16)q->unk_20)
+                    {
+                        t = q->unk_24.b[0];
+                        q->unk_24.b[0] = t + 0xFF;
+                        q->unk_14.b[0] = t;
+                    }
+                    if ((s16)q->unk_0A > (s16)q->unk_22)
+                    {
+                        t = q->unk_24.b[1];
+                        q->unk_24.b[1] = t + 0xFF;
+                        q->unk_1C.b[1] = t;
+                    }
+                    c = e->unk_01;
+                    s->unk_0C[3] = c;
+                    if (p->unk_24 & 8)
+                    {
+                        if (p->unk_24 & 4)
+                        {
+                            s->unk_0C[3] = c | 2;
+                        }
+                        else
+                        {
+                            s->unk_0C[3] = c & 0xFD;
+                        }
+                    }
+                    q->unk_04 = *(u32 *)s->unk_0C;
+                    AddPrim(p->unk_20 + p->unk_C0 * 4, q);
+                    q++;
+                }
+            }
+            if ((s8)e->unk_00 < 0)
+            {
+                break;
+            }
+            e++;
+        }
+        PopMatrix();
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CF8E4);
 
