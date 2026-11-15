@@ -1340,6 +1340,15 @@ void func_80098614(u8 *, u8 *);
 extern u8 D_800DCF58;
 extern u8 D_8014A000[];
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
+/* func_80094270's eight message strings. */
+extern u8 D_800E0633[];
+extern u8 D_800E0726[];
+extern u8 D_800E0739[];
+extern u8 D_800E0747[];
+extern u8 D_800E0766[];
+extern u8 D_800E0769[];
+extern u8 D_800E077C[];
+extern u8 D_800E078A[];
 /* func_800D5594's renderable tables. */
 extern u8 D_800E23F8[];
 extern u8 D_800E2400[];
@@ -2325,7 +2334,7 @@ void func_8008D9F0(u8 *p, void *b, u8 *c, u8 *d)
    and report. FIVE PARAMETERS, the second never read; the fifth is `u16` --
    the entry load is `lhu $s1, 0x30($sp)`, and a narrow stack parameter is
    what keeps that load at all. 55 words, 0 differing. */
-void func_8008DB0C(UnkDungeonActor *p, void *b, u8 *c, s16 d, u16 e)
+void func_8008DB0C(UnkDungeonActor *p, void *b, u8 *c, s16 d, s16 e)
 {
     u8 *t;
 
@@ -4199,7 +4208,110 @@ s32 func_80094208(s16 k)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094270);
+/* The "you cannot do that" reporter: hand func_8009402C the intended move and,
+   on any refusal, build the matching message out of D_800E3DF0's name table
+   and send it.  182 words, 0 differing, with one device.
+
+   THE FIFTH PARAMETER OF func_8008DB0C HAD TO BE WIDENED from `u16 e` to
+   `s16 e`.  With `u16` this function's call site emits `lhu 0x1A($sp)` where
+   the target has `lh`.  Both of func_8008DB0C's callers agree with `s16`:
+   func_80091430's listing loads the same argument with `lh $v0, 0x1A($sp)`.
+   func_8008DB0C itself still measures 55 of 55 words, 0 differing.
+
+   SETTLED, with numbers: the index must reuse `r`, func_8009402C's own s32
+   result, so sched1's `birthing_insn_p` does not defer it past the second
+   call -- a separate `s32 i` is 5 differing and `s16 r` is 7; the record slot
+   is addressed inline twice, a `q` local costs 1; `*(p + k + 0xFA)` not
+   `p[k + 0xFA]`, 1 word; and the two `return 0` paths share one
+   `move $v0, $zero`, so the first branch falls into an `else` and the
+   function ends with a single `return 0;` -- two separate `return 0;` is 181
+   words. */
+s32 func_80094270(u8 *p, void *b, u8 *c, u8 *d, s16 k)
+{
+    s16 x;
+    s16 y;
+    s32 r;
+    u8 *h;
+    u8 *m;
+    s32 t;
+
+    *(s16 *)(p + 0x8A) = k;
+    if (func_80094208(0) != 0)
+    {
+        return 1;
+    }
+    if (*(p + k + 0xFA) == 2)
+    {
+        func_800997FC(D_800E0633);
+        return 1;
+    }
+    if (*(u8 **)(p + *(s16 *)(p + 0x8A) * 4 + 0xD0) == d)
+    {
+        if ((*(u32 *)(*(u8 **)(p + *(s16 *)(p + 0x8A) * 4 + 0xAC) + 0x1C) & 0x20000) == 0)
+        {
+            m = func_800990FC();
+            h = func_80099194(D_800E0726, m);
+            h = func_80099194(*(s16 *)(p + 0x8A) != 0 ? D_800E05F0 : D_800E05E1, h);
+            h = func_80099194(D_800E0739, h - 3);
+            func_80099290(h);
+            func_800A5720(m);
+            func_800A56E0(0x506);
+            return 1;
+        }
+        func_80094E34();
+        D_80082EB0 = NULL;
+        func_8008DB0C((UnkDungeonActor *)p, b, c, 0, 0);
+        *(s32 *)(p + 0x60) = 0;
+    }
+    else
+    {
+        r = func_8009402C(p, (s32)b, c, &x, &y, d);
+        if (r != 0)
+        {
+            m = func_800990FC();
+            if (r == 1)
+            {
+                t = d[3] & 0x1F;
+                /* DEVICE: this reference stops combine folding the 0x1F mask and
+                   the (u8) truncation into one `andi`.  A CALL between the two
+                   statements is the only legal barrier (combine.c:937) and it puts
+                   the zero-extension on the wrong side; the reference pins both
+                   before the call, which is where the target has them.  Without it
+                   the function is 182 words, 4 differing: mine loads into $s0 and
+                   masks in place, the target loads into $v0, masks there, and
+                   takes `andi $s0, $v0, 0xFF` as the jal's delay slot.  Both
+                   statements moved before the call without the device fold to one
+                   `andi` and the function is 181 words / 84.  It emits nothing. */
+                __asm__("" ::"r"(t));
+                r = (u8)t;
+                h = func_80099194(D_800E0747, m);
+                h = func_8009929C(0xA, h);
+                h = func_80099734((u8 *)D_800E3DF0[r], h);
+                h = func_80099194(D_800E0766, h);
+            }
+            else if (r == 2)
+            {
+                h = func_80099194(D_800E0769, m);
+                h = func_80099194(k != 0 ? D_800E05F0 : D_800E05E1, h);
+                h = func_80099194(D_800E077C, h - 3);
+            }
+            else
+            {
+                h = func_80099734((u8 *)D_800E3DF0[d[3] & 0x1F], m);
+                h = func_80099194(D_800E078A, h);
+            }
+            func_80099290(h);
+            func_800A5720(m);
+            func_800A56E0(0x506);
+            return 1;
+        }
+        *(s32 *)(p + 0xC8) = 0;
+        D_80082EB0 = d;
+        func_8008DB0C((UnkDungeonActor *)p, b, c, x, y);
+        func_80094E34();
+    }
+    return 0;
+}
 
 /* The same +0xAC slot table and the same pointer-local hoist func_8009456C
    documents. 9 words, 0 differing. */
