@@ -660,12 +660,14 @@ The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 `__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
 It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
 
-What remains is not unknown, just **not owned in C**: 64,088 bytes of the
+What remains is not unknown, just **not owned in C**: 61,580 bytes of the
 game's own in four subsegments, down from 70,308 on 2026-11-14 -- the last
 three string pools landed as `csrc/str/speakers.c` (1,472 bytes, 107
 objects), `csrc/str/spells.c` (3,836, 103) and `csrc/str/commands.c` (852,
-36), and `game_gp` as `csrc/game_gp.c` (60, 10). No `rodata` subsegment of
-the game's is left. The five, and the order to
+36), then `game_gp` as `csrc/game_gp.c` (60, 10) and `gp_data`'s `.sdata`
+run as `csrc/gp_data.c` (2,508, 287). No `rodata` subsegment of the game's is
+left, and 968 of the 61,580 cannot be owned in C at all. **`game_data`, at
+60,588 bytes, is now the whole of the remaining work.** The five, and the order to
 work them, are in **`docs/data-map.md`, "What is left, in order"**; the two
 things worth carrying out of it are:
 
@@ -695,12 +697,22 @@ things worth carrying out of it are:
   unchanged. It is also the first `.sdata` subsegment in the project;
   `auto_link_sections` gained `".sdata"` and was verified byte-identical
   before anything used it.
-- **`gp_data` is 2,508 ownable bytes of 3,476.** The same free oracle applies
-  -- `objdump -r build/csrc/*.o | grep GPREL16` -- and it settles the units
-  for many of the 350 objects, in two interleaved monotone runs that are
-  `.sdata` and `.sbss`. What is left out is the 968 bytes above vram
-  0x80081435: `.sbss` and zero fill, which a C definition emits as NOBITS and
-  so would leave the container short. They stay a `data` subsegment.
+- **`gp_data`'s `.sdata` run LANDED the same day as `csrc/gp_data.c`**, 287
+  objects and 2,508 bytes, the same data-only shape and for the same reason.
+  The boundary was derived twice and the two agree: the last non-zero byte of
+  the old blob is at rom 0x54C35 and `dataverify.py`'s section size puts the
+  next yaml boundary at 0x54C38. `tools/decomp/dataverify.py`, written for
+  the town overlay, needed one `WINDOWS` entry to work on the executable.
+  The 968 bytes above it are `.sbss` and the 0x800-rounded tail of `t_size`
+  and are NOT ownable in C at any `-G` -- a tentative definition is NOBITS --
+  so they stay the `gp_sbss` subsegment.
+- **NO ARRAY MAY START AT AN ADDRESS THAT IS NOT 4-ALIGNED**, which came out
+  of that landing and is general. gcc 2.7.2's `DATA_ALIGNMENT` raises every
+  `ARRAY_TYPE`, `RECORD_TYPE` and `UNION_TYPE` to `BITS_PER_WORD`, and
+  `__attribute__((aligned(1)))` does not lower it -- measured, the attribute
+  is ignored and `.align 2` is emitted anyway. Scalars keep their natural
+  alignment, so such an object is written as one scalar per element. The
+  drift from getting it wrong appears at the object AFTER the bad one.
 
 The five formerly-unidentified code gaps -- 0x31CC4, 0x32934, 0x33234,
 0x34BD0 and 0x362B4, 5,556 bytes in all -- are now `asm` subsegments, which is

@@ -12,11 +12,14 @@ containers. What changed on 2026-11-01, and the evidence for it, is below.
 **Unknown is not the same as owned, and OWNED is what is left.** A `data` or
 `rodata` subsegment is accounted for but still lives in `asm/data/*.s` as
 `dlabel`s rather than as C. As of 2026-11-14 the game's own unowned bytes are
-**64,088 in four subsegments**, down from 70,308: the three string pools went
+**61,580 in four subsegments**, down from 70,308, and 968 of those four
+cannot be owned in C at all: the three string pools went
 to C that day (`csrc/str/speakers.c`, `csrc/str/spells.c`,
-`csrc/str/commands.c`, 6,160 bytes and 237 objects) and `game_gp` followed as
+`csrc/str/commands.c`, 6,160 bytes and 237 objects), then `game_gp` as
 `csrc/game_gp.c` (60 bytes, 10 objects, the project's first `.sdata`
-subsegment), and no `rodata` subsegment of the game's is left. See "What is left, in order" below for the
+subsegment) and `gp_data`'s `.sdata` run as `csrc/gp_data.c` (2,508 bytes,
+287 objects). No `rodata` subsegment of the game's is left, and the only
+`data` ones are `game_data` and a 968-byte run of zeros. See "What is left, in order" below for the
 rest and for the two things that block it.
 
 ## The file is not the program
@@ -563,9 +566,9 @@ the other three are `data`.
 | `tbl_660C` | 0x660C-0x6614 | 8 | 1 | a `u16` array `{1,2,3}`, `D_80032E0C`, behind the item pool |
 | `smf_magic` | 0x68FC-0x690C | 16 | 1 | `MThd`/`MTrk` with zero lengths |
 | `game_data` | 0x3E040-0x4CCEC | 60,588 | 666 | see the section above |
-| `gp_data` | 0x5426C-0x55000 | 3,476 | 350 | `.sdata`/`.sbss` above `_gp`, then zero fill |
+| `gp_sbss` | 0x54C38-0x55000 | 968 | 67 | `.sbss` and the 0x800-rounded tail of `t_size`, all zero; NOT ownable in C at any `-G` |
 
-And the five that are DONE:
+And the seven that are DONE:
 
 | subsegment | file range | bytes | objects | C unit |
 |---|---|---|---|---|
@@ -575,6 +578,7 @@ And the five that are DONE:
 | the item pool | 0x2810-0x660C | 15,868 | 405 | `csrc/str/items.c` |
 | `names` | 0x541D0-0x5426C | 156 | 20 | `csrc/str/names.c` |
 | `game_gp` | 0x54194-0x541D0 | 60 | 10 | `csrc/game_gp.c` |
+| `gp_data` (`.sdata` part) | 0x5426C-0x54C38 | 2,508 | 287 | `csrc/gp_data.c` |
 
 `gp_data` is **not** the game's alone, which is why it is no longer called
 `game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there, and it is the
@@ -637,7 +641,7 @@ has `return D_8008099C = a;`. That is what rules out the tempting reading --
 that `game_gp` plus `csrc/str/names.c`'s 156 read-only bytes immediately above
 it form one contiguous `.rdata` run ending where `gp_data` begins.
 
-### `gp_data`: the oracle is free here too, and the blocker is `.sbss`
+### `gp_data` is DONE too, and the alignment rule it turned up is general
 
 All measured 2026-11-14.
 
@@ -693,15 +697,58 @@ C and the container comes out 392 bytes short. The 968 bytes above 0x54C38
 should stay a `data` subsegment of zeros, and their symbols stay in
 `slus_006.14_undefined_syms_auto.txt` where they are now.
 
-**The splat option is no longer a blocker.** `auto_link_sections` now lists
-`".sdata"` -- added for `game_gp` above, verified byte-identical before
-anything used it, and the explicit `.sdata` subsegment there places the
-section at its declared offset. What is left for `gp_data` is the 2,508 bytes
-themselves and the ownership question, which is the one `game_gp` just
-settled the shape of: `unk_1C540` holds sixteen of the `$gp`-named objects
-here and is a 268-function addressing-mode carve, so the same proof applies. Expect the
-same shape of answer -- a data-only unit that perturbs no reference -- until
-the text carve lands.
+**Landed 2026-11-14 as `csrc/gp_data.c`**, 287 objects, 2,508 bytes, the same
+data-only shape as `game_gp` and for the same reason -- `unk_1C540` holds
+sixteen of the `$gp`-named objects here and is a 268-function
+addressing-mode carve, so that file's proof applies unchanged. The 968 bytes
+above it are now the `gp_sbss` subsegment.
+
+**The boundary was derived twice, independently, and the two agree.** The
+last non-zero byte in the old blob is at rom 0x54C35; `dataverify.py`'s NEXT
+YAML BOUNDARY for the definitions is 0x54C38 -- one number from the image,
+one from the compiled object's section size.
+
+**`tools/decomp/dataverify.py` needed one `WINDOWS` entry and nothing else.**
+`("gp_data", 0x5426C, 0x80080A6C, "data/slus_006.14")`, and the tool written
+for the town overlay works on the executable unchanged: 287 objects, layout
+ok, bytes OK, three relocations listed for reading against the listing.
+`D_80080A90` holds `.word D_8014A000`; `D_80080B34` and `D_80080B40` both
+hold `.word D_80080B3C`, which is a scalar here and so needs its address
+taken -- `(u32)&D_80080B3C`, not a cast of its value, which is §8 rule 6.
+
+**NO ARRAY MAY START AT AN ADDRESS THAT IS NOT 4-ALIGNED, and this is
+general.** gcc 2.7.2's `DATA_ALIGNMENT` (mips.h) raises every `ARRAY_TYPE`,
+`RECORD_TYPE` and `UNION_TYPE` to `BITS_PER_WORD`.
+`__attribute__((aligned(1)))` does **not** lower it again -- measured, the
+attribute is simply ignored and `.align 2` is emitted anyway. Scalars keep
+their natural alignment, so a multi-element object at a non-4-aligned address
+has to be written as one scalar per element, with invented `D_` names for the
+ones after the first; three objects here needed it (`D_80080A8A`,
+`D_80080AD2`, `D_80080B0A`). The failure mode is the one `dataverify.py`'s
+`layout` column exists for: the drift appears at the object AFTER the one
+with the wrong type.
+
+**`-G0`, and this is the one top-level `csrc` unit that is.** The run
+interleaves objects of 8 bytes and fewer with 24 larger ones, and at the
+`-G8` the original used those two groups go to `.sdata` and `.data` -- two
+sections, which one subsegment cannot place. `csrc/game_gp.c` is not in the
+Makefile rule: all of its objects are small, so it stays `-G8` and `.sdata`
+like the original. The cost here is that the section name is not the
+original's; the bytes and their order are.
+
+**The types are the listing's element widths, not the tree's declarations,
+and that is a decision.** §8 rule 2 says to use the declared type because a
+mismatch is a `conflicting types` error and that error is the gate. Here the
+definitions are in a unit of their own, so no such gate exists, and adopting
+the declarations was measured rather than skipped: of the 96 objects the tree
+declares, 32 are scalars whose size equals the span and 19 are arrays that
+divide it, but **22 are struct types** (`Unk41284`, `CVECTOR`) needing a
+field-by-field layout, **21 are scalars SMALLER than their span** and would
+each need a value object plus a pad object, and **2 already have conflicting
+declarations**. That is 45 hand-written layouts, each a chance to be
+byte-identical and wrong, for definitions that move into their real units
+when the text carve lands. So all 96 declarations are recorded in comments
+above the objects they describe, and a later pass has them in place.
 
 `smf_magic`'s owner is no longer unknown: `csrc/unk_2879C.c` calls
 `func_80058800(D_800330FC, ..., 4)`, a 4-byte compare, so these are two magic
@@ -838,10 +885,9 @@ is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
 1. **`game_data`, 60,588 bytes, 666 objects** -- blocked on carving the text
    into original translation units first; see the section above for the
    measurement and the one tool it needs.
-2. **`gp_data`, 2,508 ownable bytes of 3,476** -- `game_gp` is done. The
-   `$gp` oracle names the units for many of the objects and costs one
-   `objdump -r`; what is left is the 968 bytes of `.sbss` and zero fill that
-   no C definition can emit, which stay a `data` subsegment. See above.
+2. **Nothing, in the gp region.** `game_gp` and `gp_data`'s `.sdata` part
+   both landed on 2026-11-14. `gp_sbss`, the 968 bytes above 0x54C38, is not
+   work: a C definition cannot emit it at any `-G`.
 3. **`tbl_660C` and `smf_magic`, 24 bytes** -- not blocked on anything, just
    not worth a translation unit each. Folding `smf_magic` into
    `csrc/unk_2879C.c` would need the compiler to emit the array after that
