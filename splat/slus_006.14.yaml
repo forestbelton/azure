@@ -687,7 +687,15 @@ segments:
       # its own directory. Still one blob -- its internal boundaries are real
       # but not yet pinned to the byte, so they live in docs/data-map.md
       # rather than being guessed at here.
-      - [0x3e040, data, game_data]
+      # The game's own .data, owned by csrc/game_data.c: 666 dlabels in 668 C
+      # objects, 60,588 bytes, everything between libsn's module descriptor
+      # and libspu's data. `.data` and -G0 through a Makefile override, for
+      # the same reason as gp_data below plus one more: this region starts
+      # 0x16154 BELOW _gp, so a GPREL16 could not reach it even if -G8 asked
+      # for one. The per-unit attribution is undetermined -- see the file's
+      # header and docs/data-map.md -- so it is one unit with no code rather
+      # than a guess spread over the 38 `c` subsegments above.
+      - [0x3e040, .data, game_data]
       - [0x4ccec, data, psyq/libspu_data]
       - [0x4d4b8, data, psyq/libetc_data]
       - [0x4e618, data, psyq/libcd_data]

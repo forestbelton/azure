@@ -220,6 +220,12 @@ build/csrc/str/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 build/csrc/gp_data.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/gp_data.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
+# csrc/game_data.c is -G0 for the same reason and one more: the region it
+# holds starts 0x16154 below _gp, so a GPREL16 could not reach it even if -G8
+# asked for one. It holds no code either.
+build/csrc/game_data.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/game_data.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # THE ONE OVERLAY UNIT THAT IS -G8: main.bin's debug twin at 0x80400000. It is
 # the same source as the live overlay built the other way, and -G is the whole
 # difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global

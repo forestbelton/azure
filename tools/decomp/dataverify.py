@@ -61,6 +61,10 @@ WINDOWS = {
     # fewer with 24 larger ones, and at the -G8 the original used those two
     # groups land in different sections. See docs/data-map.md.
     "gp_data": (0x5426C, 0x80080A6C, "data/slus_006.14"),
+    # slus_006.14's game `.data`, between libsn's module descriptor and
+    # libspu's data. -G0 for the same reason as gp_data, and because a
+    # GPREL16 could not reach it anyway: it starts 0x16154 below `_gp`.
+    "game_data": (0x3E040, 0x8006A840, "data/slus_006.14"),
 }
 
 
