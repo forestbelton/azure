@@ -374,6 +374,22 @@ extern u8 D_800E11D7[];
 extern u8 D_80081485[];
 extern s16 D_800E3CCE;
 extern u8 D_800DCF4F;
+void func_80045C34();
+extern u8 D_800E092B[];
+extern s16 D_80083466;
+extern u8 *D_800E5910;
+
+/* D_8006DE24 is `Unk8006DE24 D_8006DE24[]` in include/structs.h, whose
+   0x14-byte record names only +0x10; +0x13 is inside its trailing pad, so
+   func_800A3820 reaches the same array under a second face rather than
+   widening a shared declaration. The 0x13 has to arrive as a FIELD -- as
+   `(u8 *)&D_8006DE24[i] + 0x13` it folds into the symbol's `%lo` and the
+   load loses its displacement. */
+typedef struct UnkDungeonName
+{
+    u8 pad_00[0x13];
+    u8 unk_13;
+} UnkDungeonName;
 /* The two eight-direction probes. func_8009B25C is in this unit and sits
    above these, but a stub gives no prototype. */
 u8 *func_8009B25C(u8 *, u16, u16, s16);
@@ -486,7 +502,23 @@ void func_8008D330(UnkDungeonActor *p, void *b, void *c, void *d)
     p->unk_8C = NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008D344);
+/* func_8008D330 one state over, with a fourth-argument gate. THE SECOND
+   STATE IS AN INCREMENT OF THE FIELD, not the constant 0x2D: spelled
+   `p[0x9A] = 0x2D;` the second store is `li $v0, 45` where the target reuses
+   the 0x2C still in $v0 with `addiu $v0, $v0, 1`. `p[0x9A]++` costs no load
+   -- cse knows the byte from the store four lines up. `u8 *` rather than
+   UnkDungeonActor is the call sites': every one of them passes a `u8 *`.
+   9 words, 0 differing. */
+void func_8008D344(u8 *p, void *b, void *c, void *d)
+{
+    p[0x9A] = 0x2C;
+    p[0x9B] = 0;
+    *(s32 *)(p + 0x8C) = 0;
+    if (d == NULL)
+    {
+        p[0x9A]++;
+    }
+}
 
 /* The five-argument installer: state 0x2E, the handler slot cleared, and the
    last two arguments parked at +0xCC and +0x10E. Like func_8008D330 it is
@@ -565,7 +597,21 @@ void func_80091920(UnkDungeonActor *p)
     p->unk_8C = NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80091934);
+/* State 0x2B; the fourth argument picks the sub-state byte.
+   9 words, 0 differing. */
+void func_80091934(UnkDungeonActor *p, void *b, void *c, void *d)
+{
+    p->unk_9A = 0x2B;
+    if (d == NULL)
+    {
+        p->unk_9B = 0x10;
+    }
+    else
+    {
+        p->unk_9B = 0;
+    }
+    p->unk_8C = NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80091958);
 
@@ -613,7 +659,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094208);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094270);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094548);
+/* The same +0xAC slot table and the same pointer-local hoist func_8009456C
+   documents. 9 words, 0 differing. */
+void func_80094548(s16 k, s32 v)
+{
+    u8 *base = D_800E3D7C;
+
+    *(s16 *)(*(u8 **)(base + k * 4 + 0xAC) + 0x2A) = v << 9;
+}
 
 /* Write a byte into +0x45 of the record in the engine's +0xAC slot table.
 
@@ -633,7 +686,13 @@ void func_8009456C(s16 k, u8 v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009458C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800945C4);
+/* The same table at +0x46, with bit 15 forced on. 9 words, 0 differing. */
+void func_800945C4(s16 k, s32 v)
+{
+    u8 *base = D_800E3D7C;
+
+    *(s16 *)(*(u8 **)(base + k * 4 + 0xAC) + 0x46) = v | 0x8000;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800945E8);
 
@@ -665,7 +724,24 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80095854);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80095A10);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80095DD0);
+/* State 0x15, a global counter bump and the fourth argument parked at
+   D_80083460 + 0xC.
+
+   THE COUNTER BUMP COMES FIRST. With the `sw` written ahead of it the load
+   delay after the `lhu` can only be a nop; with the bump first, reorg drops
+   the `sw` into that slot, which is the target's order.
+   11 words, 0 differing. */
+void func_80095DD0(u8 *p, void *b, void *c, void *d)
+{
+    u8 *g;
+
+    p[0x9A] = 0x15;
+    p[0x9B] = 0;
+    *(s32 *)(p + 0x8C) = 0;
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0x14) += 1;
+    *(void **)(g + 0xC) = d;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80095DFC);
 
@@ -711,7 +787,16 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80097A68);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80097AF8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80097C50);
+/* State 0x3A, the step counter cleared, and bit 5 dropped from the fourth
+   argument's +0x1C flags. 10 words, 0 differing. */
+void func_80097C50(UnkDungeonActor *p, void *b, void *c, u8 *d)
+{
+    p->unk_9A = 0x3A;
+    p->unk_9B = 0;
+    p->unk_8C = NULL;
+    p->unk_96 = 0;
+    *(s32 *)(d + 0x1C) &= ~0x20;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80097C78);
 
@@ -856,7 +941,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800998C0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80099978);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800999B0);
+/* Append the 0x12 0x10 control pair, terminate, hand back the cursor.
+   9 words, 0 differing. */
+u8 *func_800999B0(u8 *p)
+{
+    *p++ = 0x12;
+    *p++ = 0x10;
+    *p++ = 0;
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800999D4);
 
@@ -1246,7 +1339,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0B94);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0DD8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0E44);
+/* Park a random nibble in the engine's D_80083466.
+
+   THE CALL IS ITS OWN STATEMENT AND THE MASK IS NOT. Spelled
+   `D_80083466 = func_800A6D30() & 0xF;` the assignment expands its LHS
+   address FIRST, so the `%hi` lands in the jal's delay slot in a
+   callee-saved register and the function is two words longer; with the
+   mask folded into the call's own statement the `lui` comes out after the
+   `andi`. 10 words, 0 differing. */
+void func_800A0E44(void)
+{
+    s32 v;
+
+    v = func_800A6D30();
+    D_80083466 = v & 0xF;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0E6C);
 
@@ -1323,7 +1430,15 @@ void func_800A2AE4(void)
     *(u16 *)(g + 0xA) -= 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2B04);
+/* Tile (x, z) to the halfword world coordinates at +0x2 and +0x6. The
+   `(s16)` casts are what give the `sll 16`/`sra 10` pairs, and neither
+   field is an UnkVec member, so both go in as offsets.
+   9 words, 0 differing. */
+void func_800A2B04(UnkVec *p, s32 x, s32 z)
+{
+    *(s16 *)((u8 *)p + 0x2) = ((s16)x) * 64 + 0x20;
+    *(s16 *)((u8 *)p + 0x6) = ((s16)z) * 64 + 0x20;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2B28);
 
@@ -1355,7 +1470,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A32A4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A34BC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A3518);
+/* A capacity predicate: true once +0x29 over half of +0x11 plus two has
+   caught up with +0x28.
+
+   THE DIVISOR IS ITS OWN STATEMENT -- the target loads +0x11 before +0x29,
+   which is the divisor's expression first; inline, the dividend goes first.
+   And `>> 1`, not `/ 2`: the value comes out of an `lbu`, so combine knows
+   the sign bit is clear and the shift stays the `srl` the target has, where
+   a signed divide by two costs three words. 11 words, 0 differing. */
+s32 func_800A3518(u8 *p)
+{
+    s32 d;
+
+    d = (p[0x11] >> 1) + 2;
+    return p[0x29] / d >= p[0x28];
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A3544);
 
@@ -1367,7 +1496,16 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A365C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A36B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A3820);
+/* Read +0x13 out of the D_8006DE24 record; see UnkDungeonName above. The
+   index is a separate statement, or fold hands the symbol to expand first
+   and the `lui` comes out ahead of the multiply. 11 words, 0 differing. */
+u8 func_800A3820(s16 i)
+{
+    s32 off;
+
+    off = (s16)i * 0x14;
+    return ((UnkDungeonName *)(off + (u8 *)D_8006DE24))->unk_13;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A384C);
 
@@ -1466,7 +1604,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A63B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A6480);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A6508);
+/* 9 words, 0 differing. */
+void func_800A6508(void)
+{
+    func_800997FC(D_800E092B);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A652C);
 
@@ -1672,7 +1814,18 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AA888);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AA924);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AAA28);
+/* func_80095DD0 on the SECOND argument and without the parked pointer.
+   11 words, 0 differing. */
+void func_800AAA28(void *a, u8 *p, void *c, void *d)
+{
+    u8 *g;
+
+    p[0x9A] = 0x15;
+    p[0x9B] = 0;
+    *(s32 *)(p + 0x8C) = 0;
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0x14) += 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AAA54);
 
@@ -1718,7 +1871,27 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD058);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD4D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD568);
+/* Clamp the +0x64 cursor so cursor + step never passes the limit at +0x29.
+
+   THE THREE LOADS ARE LOCALS. As one condition the two bytes are re-read
+   inside the arm -- the `slt` kills the register holding +0x29 before cse
+   can reuse it -- and the function comes out 16 words against 11.
+   11 words, 0 differing. */
+s16 func_800AD568(u8 *p)
+{
+    s32 v;
+    s32 a;
+    s32 b;
+
+    v = *(s16 *)(p + 0x64);
+    a = p[0x28];
+    b = p[0x29];
+    if (v + a > b)
+    {
+        *(s16 *)(p + 0x64) = b - a;
+    }
+    return *(s16 *)(p + 0x64);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD594);
 
@@ -2002,7 +2175,12 @@ void func_800B6008(s16 x, s16 y)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B60B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B6204);
+/* 9 words, 0 differing. */
+s32 func_800B6204(s8 *p)
+{
+    func_800A48F0(p, 7, 0x10);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B6228);
 
@@ -2090,7 +2268,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BB2E4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BB55C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BBA20);
+/* 8 words, 0 differing. */
+s32 func_800BBA20(void)
+{
+    func_80045C34();
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BBA40);
 
@@ -5969,7 +6152,20 @@ void func_800DBEE8(void)
     func_800673A0(r.v, 0x1C2, 0x19C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DBF38);
+/* Drop bit 0 of a flag word in the object D_800E5910 points at.
+
+   THE BASE LOCAL IS LOAD-BEARING AND SO IS ITS SECOND USE. As one
+   expression the two constants fold and the access becomes `lw 0x74`; split
+   across a local, combine would still propagate the `addiu` into the memory
+   address -- except that the local feeds BOTH the load and the store, and
+   combine does not substitute a def with two uses. 9 words, 0 differing. */
+void func_800DBF38(void)
+{
+    u8 *p;
+
+    p = D_800E5910 + 0x20;
+    *(s32 *)(p + 0x54) &= ~1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DBF5C);
 
@@ -5993,7 +6189,25 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DC1F8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DC5B4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DC628);
+/* One half-extent into four fields of the record at +0x8 and its negation
+   into a fifth.
+
+   THE NODE IS RE-READ FOR THE LAST STORE. Dereferenced inline at all five
+   the unit gets five `lw`s -- a halfword store through an unrelated pointer
+   kills the equivalence every time -- and cached in one local it gets one;
+   the target has exactly two. 10 words, 0 differing. */
+void func_800DC628(u8 *p, s16 v)
+{
+    u8 *q;
+
+    q = *(u8 **)(p + 0x8);
+    *(s16 *)(q + 0x58) = v;
+    *(s16 *)(q + 0x34) = v;
+    *(s16 *)(q + 0x28) = v;
+    *(s16 *)(q + 0xE) = v;
+    q = *(u8 **)(p + 0x8);
+    *(s16 *)(q + 0x1A) = -v;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DC650);
 
