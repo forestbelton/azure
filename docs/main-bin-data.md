@@ -104,8 +104,8 @@ The 31,456 bytes ahead of the filler are real and the game does read them.
 | `ovl_main_80088760` | 0x21800-0x24420 | 10,784 | **a code overlay, split 2026-11-11** |
 | `ovl_main_80088760_zero` | 0x24420-0x28420 | 16,384 | that overlay's stored zeros |
 
-**The string pool is done.** `asrc/str/monsters.txt` is all 134 of its entries
-as one line of text each, one `hrodata` subsegment, replacing 17
+**The string pool is done.** `csrc/str/monsters.c` is all 134 of its entries
+as one `const char[]` each, one `.rodata` subsegment, replacing 17
 one-string `shiftjis` segments plus a 2,368-byte `str/main/pool_tail` — 18
 linker-script segment blocks for 2.6 KB of text, two thirds of it never
 decoded. From 0x208A4 the pool runs in groups of three: an egg description,
@@ -170,7 +170,7 @@ together.
 | `.data` | 15,692 | 0.61% | the 0x80020000 overlay's data, all of it |
 | `c` (new unit) | 10,156 | 0.39% | the 0x80088760 overlay's text, 26 functions |
 | `.rodata` + `rodata` | 4,908 | 0.19% | all three overlays' rodata |
-| `hrodata` | 2,664 | 0.10% | `asrc/str/monsters.txt`, the string pool |
+| `.rodata` (pool) | 2,664 | 0.10% | `csrc/str/monsters.c`, the string pool |
 | `data` | 1,952 | 0.08% | `ovl_main_80020000_pad` + the 0x80088760 data run |
 
 The named-`bin` figure fell by 11,296 bytes rather than by the overlay's full

@@ -6,7 +6,6 @@ options:
   base_path: ..
   platform: psx
   compiler: GCC
-  extensions_path: splat/ext
 
   create_asm_dependencies: False
 
@@ -40,10 +39,15 @@ segments:
   - [0x4800, bin, snd_bank.vb]
   - [0x1faf0, pad]
   - [0x20000, bin, kewne_loading_img]
-  - type: hrodata
+  # The monster/spell/character string pool, as one unit: csrc/str/monsters.c.
+  # A `code` segment holding nothing but a `.rodata` subsegment, the same shape
+  # as 0x21268 below, because the pool has no text of its own to anchor it.
+  - type: code
     start: 0x20800
     vram: 0x8002C000
-    name: str/monsters
+    align: 4
+    subsegments:
+      - [0x20800, .rodata, str/monsters]
   - type: code
     start: 0x21268
     vram: 0x8002CA68
@@ -59,7 +63,7 @@ segments:
     subsegments:
       - [0x21800, .rodata, ovl_main_80088760]
       - [0x21830, .rodata, ovl_main_80089608]
-      - [0x21894, hrodata, str/options]
+      - [0x21894, .rodata, str/options]
       - [0x2194c, .rodata, ovl_main_8008A288]
       - [0x21968, c, ovl_main_80088760]
       - [0x226a8, c, ovl_main_80089608]

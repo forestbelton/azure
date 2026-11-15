@@ -20,7 +20,7 @@
  * the ones the POOL LABELS give away by sight: unk_04 is a monster's name in
  * capitals, unk_08 the matching egg description, unk_0C a colour in lower
  * case, and the groups of two and three match the pool's own grouping that
- * asrc/str/monsters.txt describes. That is an observation about 63 records,
+ * csrc/str/monsters.c describes. That is an observation about 63 records,
  * not a decoding of the format, so it lives in this comment.
  *
  * WHAT THE 64 RECORDS ACTUALLY HOLD, counted rather than asserted:

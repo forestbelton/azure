@@ -194,6 +194,19 @@ build/csrc/ovl_%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 build/csrc/main/%.o: CFLAGS := $(CFLAGS_G0) -Icsrc
 build/csrc/main/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
+# csrc/str/ holds the string pools: data-only units, no code, one per pool, each
+# placed by a `.rodata` subsegment. THEY ARE -G0 FOR A REASON THAT HAS NOTHING TO
+# DO WITH ADDRESSING. At the resident default of -G8 cc1psx puts any object of 8
+# bytes or fewer in .sdata, and these pools are full of them -- every name in
+# csrc/str/names.c is six bytes of full-width Shift-JIS plus a terminator, and
+# options.c has fifteen single characters. Half of each pool would land in
+# .sdata and the `.rodata` the linker script asks for would come out short. At
+# -G0 every object goes to .rdata and the pool is one contiguous run, which is
+# what it is in the ROM. Nothing else about -G can reach these units: they hold
+# no code, so there is no access for a $gp-relative shape to apply to.
+build/csrc/str/%.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/str/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # THE ONE OVERLAY UNIT THAT IS -G8: main.bin's debug twin at 0x80400000. It is
 # the same source as the live overlay built the other way, and -G is the whole
 # difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global
@@ -284,22 +297,20 @@ SPLATFILES := $(shell find splat -type f -name '*.yaml')
 
 BINFILES := $(shell find assets -type f -name '*.bin' 2>/dev/null)
 
-STRFILES := $(shell find asrc/str -type f -name '*.txt')
-STRSFILES := $(STRFILES:%.txt=%.s)
-
 # asm/nonmatchings/ holds per-function assembly that C files pull in via
 # INCLUDE_ASM. Those files have no macro.inc of their own, so they must not be
 # assembled standalone.
 #
-# asrc/ is the hand-owned half of the same picture: assembly WE maintain, as
-# csrc/ is C we maintain. splat's `hrodata` subsegment type (splat/ext/
-# hrodata.py) seeds a file there once and then never rewrites it, and `clean`
-# does not delete the tree the way it deletes asm/. Same glob, same
-# `build/%.o: %.s` rule below. The directory does not exist in a
-# fresh checkout until the first such subsegment is split, which is what the
-# pre-existing 2>/dev/null covers.
-SFILES := $(shell find asm asrc -type f -name '*.s' \
-            -not -path 'asm/nonmatchings/*' 2>/dev/null) $(STRSFILES)
+# EVERY OTHER .s IS SPLAT'S, regenerated on every split and deleted by `clean`.
+# There is no hand-owned assembly tree any more: `asrc/` and the `hrodata`
+# subsegment type that seeded it went away on 2026-11-14 with the string pools,
+# which are C in csrc/str/ now. Hand-owned DATA goes in a C unit placed by a
+# dotted `.rodata` subsegment -- docs/owning-data.md SS4.6.
+#
+# asm/ does not exist in a fresh checkout until the first split, which is what
+# the 2>/dev/null covers.
+SFILES := $(shell find asm -type f -name '*.s' \
+            -not -path 'asm/nonmatchings/*' 2>/dev/null)
 CFILES := $(shell find csrc -type f -name '*.c' 2>/dev/null)
 OFILES := $(BINFILES:%.bin=build/%.o) $(SFILES:%.s=build/%.o) \
           $(CFILES:%.c=build/%.o)
@@ -424,9 +435,6 @@ build/%.o: %.bin
 	@mkdir -p $(shell dirname $@)
 	$(LD) $(LDFLAGS) --relocatable --format=binary -o $@ $<
 
-asrc/str/%.s: asrc/str/%.txt
-	python tools/shiftjis_to_asm.py $< -o $@
-
 # Report where the build diverges from the original, and which subsegment
 # owns that offset. A whole-file checksum cannot tell you that.
 check: build/$(SLUS)
@@ -467,15 +475,14 @@ clean:
 # that day and was still being assembled hours later.
 #
 # Clearing asm/ entirely is safe: git tracks nothing in it, `clean` already
-# deletes it outright, and splat regenerates all of it. Hand-owned assembly
-# lives in asrc/, which is why `hrodata` redirects there -- see
-# splat/ext/hrodata.py and the asrc/str/%.s rule below.
+# deletes it outright, splat regenerates all of it, and nothing hand-owned
+# lives there -- see the SFILES comment above.
 # build/asm goes with it, because it mirrors asm/ one-to-one and an orphaned
 # OBJECT carries the same duplicate definitions as the source it came from.
 # Note this is `build/asm`, never `build`: splat writes the linker scripts
 # into build/, so removing the whole directory leaves the project unlinkable
 # until the next `make splat` -- see the build/%.ld rule.
-splat: $(SPLATFILES) $(STRSFILES)
+splat: $(SPLATFILES)
 	rm -rf asm build/asm
 	@for SPLATFILE in $(SPLATFILES); do \
 		echo "=== $$SPLATFILE === "; \

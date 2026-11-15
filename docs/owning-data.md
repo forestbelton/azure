@@ -367,8 +367,10 @@ subsegment -- `0x25d000..0x25d0c0`, so 192.
 > **SUPERSEDED FOR THIS OVERLAY, 2026-11-09, by §4.7.** The `hrodata` chunk
 > this section builds is gone: the 59 messages are string literals in the C
 > unit and cc1psx emits the pool itself. What is still live here is the
-> *technique* -- `slus_006.14.yaml` uses `hrodata` too, the symbol_addrs split
-> is how you end an over-long `dlabel`, and the silent-deletion trap is real.
+> *technique* -- the symbol_addrs split is how you end an over-long `dlabel`,
+> and the silent-deletion trap is real. The `hrodata` subsegment type itself
+> was deleted on 2026-11-14, when the last four pools using it became C.
+> This section now describes the C route throughout.
 > Read §4.7 first; come back here if the strings in your case are not literals
 > in an initialiser.
 
@@ -405,63 +407,60 @@ warning, and a container 0x864 bytes short. The split created the symbol and
 deleted the data in the same step.
 
 The fix is the same shape as `data_pre`/`data_post`: carve the orphan out as a
-subsegment of its own, which is disassembled unconditionally. Here it earns
-`hrodata` rather than plain `rodata`, because the content is text:
+subsegment of its own, which is disassembled unconditionally. Give it to a C
+unit of its own through a dotted `.rodata`, and write the content as C:
 
 ```yaml
       - [0x25d000, .rodata, ovl_main_80020000]
-      - [0x25d0c0, hrodata, ovl_main_80020000_rodata_pool]
+      - [0x25d0c0, .rodata, str/ovl_main_80020000_pool]
       - [0x25d924, c, ovl_main_80020000]
 ```
 
-`hrodata` (`splat/ext/hrodata.py`) seeds the file into `asrc/` **once** and
-never rewrites it, so it can be turned into something readable. Since
-2026-11-09 the readable form is not assembly at all: the pool lives in
-`asrc/str/<name>.txt`, one entry per line, and `tools/shiftjis_to_asm.py`
-generates the `.s` beside it through the `asrc/str/%.s: asrc/str/%.txt` rule.
-Name the subsegment `str/<name>` so `hrodata` writes into that tree, and the
-entry is just the text:
+A string pool is `const char[]` definitions, one per entry, in a unit that
+holds nothing else:
 
-```
-D_800200C0=Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ．
+```c
+/* Ｆａｉｌｅｄ　ｔｏ　ｄｅｌｅｔｅ　ｄａｔａ． */
+const char D_800200C0[] = "\x82\x65\x82\x81...";
 ```
 
-The default form emits the string, a NUL, then zeros to the next 4-byte
-boundary -- exactly the layout all 59 entries use, so a pool converts
-mechanically. Four things to know before doing the same elsewhere:
+cc1psx emits file-scope objects in source order and gives each one `.align 2`,
+so the default shape -- string, NUL, zeros to the next 4-byte boundary -- falls
+out of `const char x[] = "..."` with nothing to compute. Five things to know
+before converting a pool:
 
-* **Two more entry forms carry the bytes that are not text.** `:nopad=` emits a
-  string and its NUL and stops; `:bytes=HH HH` emits literal bytes, under a
-  label or under none. Between them they cover a pointer word sitting inside a
-  pool (`asrc/str/names.txt`, `D_80080A50`) and padding that is not zeros
-  (`asrc/str/monsters.txt`, the last entry).
-* **The value is NOT stripped, and must not be.** U+3000 IDEOGRAPHIC SPACE is
-  this game's space character and Python's `str.strip()` counts it as
-  whitespace. One item description ends with one; stripping it shortened the
-  pool by 4 bytes and moved every later string, which is the sort of break that
-  looks like a generator bug anywhere except where it is.
-* **Keep the `Covers rom` line in the header.** Comment lines pass through to
-  the generated `.s`, which is where `hrodata` reads the provenance back from.
-  Drop the line and the only guard against the yaml moving off the file goes
-  quiet -- the file still assembles, just no longer to the size the linker
-  script is placing.
-* **Check the padding bytes, not just the strings.** All 59 entries pad with
-  zeros, which is what the default form produces -- but the three bytes after
-  the LAST entry's padding, `0x80020921..0x80020924`, are `05 61 64`. Those
-  belong to the section, not to the string (§4.7's last sub-section), so that
-  entry would need `:nopad=` plus a `:bytes=05 61 64` line. A decoder that only
-  walks NUL terminators will not notice either fact.
+* **The unit must be -G0.** At -G8 any object of 8 bytes or fewer goes to
+  `.sdata`, and short entries are everywhere in these pools. See the
+  `build/csrc/str/%.o` rules in the Makefile.
+* **Spell every non-ASCII byte as `\xNN`, never as a bare character after an
+  escape.** `"\x82" "d"` written without the break is the single hex escape
+  `\x82d`, which is out of range for a char. Pure-ASCII pools stay plain text.
+* **The bytes that are not text need an explicit array size.** A pointer word
+  inside a pool is a `const u32` (`csrc/str/names.c`, `D_80080A50`, which is
+  why `include/structs.h` declares it `const` -- a non-const definition goes to
+  `.data` and the pool comes out short). Padding that is not zeros goes in the
+  entry it follows, as `const char x[N] = "...\x00\xC4\x0D\x0E"` with N
+  equal to the initializer length so C adds no second terminator
+  (`csrc/str/monsters.c`, the last entry). So does the pool's own trailing
+  padding, since nothing follows the last entry to align against.
+* **The U+3000 IDEOGRAPHIC SPACE is load-bearing and invisible.** It is this
+  game's space character. One item description ends with one; losing it
+  shortens the pool by 4 bytes and moves every later string.
+* **A C file can only put ONE symbol at an address.** Where splat's scan had
+  invented a `D_` name beside the readable one, the readable name now has to be
+  declared in the container's `symbol_addrs` -- a dotted `.rodata` is not
+  scanned, so nothing else tells splat the symbol is there. Get it wrong and
+  the build is still byte-identical; the pointer table just reads as bare
+  addresses.
 
-The gate for an `hrodata` chunk is its object's section size against the
-subsegment span:
+The gate is the object's section size against the subsegment span:
 
-    mips64-linux-gnu-size -A build/asrc/str/<name>.o | grep '^\.rodata'
-    # e.g. 2664 == 0x21268 - 0x20800 for asrc/str/monsters.txt
+    mips64-linux-gnu-size -A build/csrc/str/<name>.o | grep '^\.rodata'
+    # e.g. 2664 == 0x21268 - 0x20800 for csrc/str/monsters.c
 
-And because the file is frozen, **moving the subsegment in the yaml does not
-move the bytes in the file.** `hrodata` records the seeded rom range in the
-file's header and warns on a later split when the two disagree; that warning is
-the only guard, so read it.
+Nothing freezes the file and nothing checks its provenance: move the
+subsegment in the yaml without moving the definitions and `make check` reports
+it as an offset. That is the whole guard, so read it.
 
 ### 4.7 When the rodata is a STRING POOL, let cc1psx emit it
 
@@ -509,8 +508,7 @@ non-`const` hack that §6 describes, because a string literal is already
 Three things it costs:
 
 * **The Japanese cannot stay in the source.** cc1psx has no Shift-JIS input
-  encoding and `azure shiftjis` only runs on `asm/`/`asrc/` sources, never on
-  what cc1psx emits, so the bytes are `\x` escapes. Put the decoded text in a
+  encoding, so the bytes are `\x` escapes. Put the decoded text in a
   comment on the line above and generate the two together. In this unit each
   message is a `#define MSG_... ((u8 *)"\x..")` with that comment, which is
   what makes the 20-entry message table read as the game's dialogue script.
@@ -559,7 +557,7 @@ boundary in this project that does not already land on 4 shows it:
 | `main.bin` | `0x26989D` | `20 42 30` | `" B0"` |
 
 Four boundaries over two containers, found by scanning every `rodata` /
-`.rodata` / `hrodata` subsegment's last word for a NUL followed by non-zero
+`.rodata` subsegment's last word for a NUL followed by non-zero
 bytes:
 
 ```sh
@@ -577,7 +575,7 @@ for name, b, y in [('main.bin', 'data/main/main.bin', 'splat/main.bin.yaml'),
     for e in Y['segments']: walk(e)
     flat.sort()
     for (o, t), (o2, _) in zip(flat, flat[1:]):
-        if t not in ('rodata', '.rodata', 'hrodata'): continue
+        if t not in ('rodata', '.rodata'): continue
         w = ROM[o2 - 4:o2]
         if 0 in w[:-1]:
             k = max(i for i, c in enumerate(w) if c == 0)

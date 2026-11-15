@@ -249,14 +249,13 @@ void func_80027DF4(s32 *p, s32 v)
    all 59 addresses in the ROM's order, including where the empty string lands
    (35th of that table's 39, because it is 5th to appear) and that it is emitted
    once for all 60 slots that hold it. So the pool was never a separate thing to own: it is
-   what these tables' initialisers compile to, which is also why asrc/ no
-   longer has a hand-written copy of it.
+   what these tables' initialisers compile to, which is why the hand-written
+   copy it used to have was deleted.
 
-   The text is in the comments because it cannot be in the source. cc1psx has
-   no Shift-JIS input encoding, and `azure shiftjis` -- which is what let the
-   old asrc file carry `.shiftjisz "Ｆａｉｌｅｄ..."` -- only runs on asm/ and
-   asrc/ sources, never on the assembly cc1psx emits. The escapes and the
-   comment are generated from the ROM together; keep them together.
+   The text is in the comments because it cannot be in the source: cc1psx has
+   no Shift-JIS input encoding, so the bytes are escapes. The escapes and the
+   comment are generated from the ROM together; keep them together. This is
+   the same shape every pool in csrc/str/ uses.
 
    The `(u8 *)` in each macro is there so the eight tables, all of which are
    `u8 *`, take a `char *` literal without 121 warnings. */

@@ -396,15 +396,16 @@ ratan_tbl = 0x8007ff70; // type:u16 size:0x802
 _ctype_ = 0x800808ec; // type:u8 size:0x81
 
 // -------------------------------------------------------------------------
-// The staff-credits roll, asrc/str/credits.txt.
+// The staff-credits roll, csrc/str/credits.c.
 //
 // 53 Shift-JIS strings at 0x8002e984-0x8002efdc, every one of them reached by
-// a pointer in game_data's credits table. The subsegment is `hrodata`, so
-// splat SCANS the range and binds those pointers by symbol; without these
-// entries it invents D_8002e984 and the like, the table stays unreadable, and
-// the names asrc/str/credits.txt actually defines go unreferenced. `defined:True`
-// keeps them out of slus_006.14_undefined_syms_auto.txt, since that listing
-// is what defines them.
+// a pointer in game_data's credits table. These entries are now the ONLY way
+// splat knows a symbol lives at each of those addresses: a dotted `.rodata`
+// subsegment extracts nothing and scans nothing, so without them splat emits
+// the table as bare `.word 0x8002e984` literals -- the same bytes, an
+// unreadable table, and the names csrc/str/credits.c defines go unreferenced.
+// `defined:True` keeps them out of slus_006.14_undefined_syms_auto.txt, since
+// the C file is what defines them.
 // -------------------------------------------------------------------------
 STR_CREDITS_PRESENTED_BY = 0x8002e984; // size:0x1c defined:True
 STR_CREDITS_KITAUE_KAZUMI = 0x8002e9a0; // size:0x1c defined:True
@@ -459,3 +460,50 @@ STR_CREDITS_HORIO_KENICHIRO = 0x8002ef78; // size:0x20 defined:True
 STR_CREDITS_DIRECTED_BY = 0x8002ef98; // size:0x18 defined:True
 STR_CREDITS_CREDITS = 0x8002efb0; // size:0x10 defined:True
 STR_CREDITS_AZURE_DREAMS = 0x8002efc0; // size:0x1c defined:True
+
+// -------------------------------------------------------------------------
+// The character-name table, csrc/str/names.c.
+//
+// Nineteen names at 0x800809d0-0x80080a6c, each reached by a pointer in
+// game_data. Same story as the credits block above, and the same reason these
+// entries exist at all: while the pool was a hand-owned `hrodata` subsegment
+// splat scanned the range, invented D_800809d0 and friends, and the pool's
+// listing defined BOTH that name and the readable one so the reference
+// resolved either way. A C file can only put one symbol at an address, so the
+// D_ aliases are gone and these entries are what make game_data's table read
+// as `.word STR_NAME_BOY`.
+//
+// NOT IN THIS LIST: D_80080a50, the pointer to "Girl" wedged in at 0x80080a50.
+// It is declared in include/structs.h and read by csrc/unk_72A8.c, so it was
+// never one of splat's invented names and needs no entry here.
+// -------------------------------------------------------------------------
+STR_NAME_BOY = 0x800809d0; // size:0x8 defined:True
+STR_NAME_MAN = 0x800809d8; // size:0x8 defined:True
+STR_NAME_CAT = 0x800809e0; // size:0x8 defined:True
+STR_NAME_DOG = 0x800809e8; // size:0x8 defined:True
+STR_NAME_POP = 0x800809f0; // size:0x8 defined:True
+STR_NAME_SEE = 0x800809f8; // size:0x8 defined:True
+STR_NAME_BET = 0x80080a00; // size:0x8 defined:True
+STR_NAME_DAR = 0x80080a08; // size:0x8 defined:True
+STR_NAME_KAY = 0x80080a10; // size:0x8 defined:True
+STR_NAME_MEE = 0x80080a18; // size:0x8 defined:True
+STR_NAME_DAI = 0x80080a20; // size:0x8 defined:True
+STR_NAME_FON = 0x80080a28; // size:0x8 defined:True
+STR_NAME_PEN = 0x80080a30; // size:0x8 defined:True
+STR_NAME_MIA = 0x80080a38; // size:0x8 defined:True
+STR_NAME_FUR = 0x80080a40; // size:0x8 defined:True
+STR_NAME_GUY = 0x80080a48; // size:0x8 defined:True
+STR_NAME_MAX = 0x80080a54; // size:0x8 defined:True
+STR_NAME_ZU = 0x80080a5c; // size:0x8 defined:True
+STR_NAME_KID = 0x80080a64; // size:0x8 defined:True
+
+// -------------------------------------------------------------------------
+// The item/spell pool, csrc/str/items.c.
+//
+// ONE entry for 405 strings, because exactly one of them is reached by a
+// pointer that splat emits: the first, at the head of the pool. The other 404
+// are reached through tables that splat already writes as bare literals, so
+// they need no symbol here -- csrc/str/items.c names them for the reader, not
+// for the linker.
+// -------------------------------------------------------------------------
+STR_ITEM_MAKES_IT_POSSIBLE_TO_RETURN_TO_A_TOW = 0x8002f010; // size:0x4c defined:True

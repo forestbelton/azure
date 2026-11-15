@@ -30,10 +30,10 @@
  * symbols rather than raw addresses is what makes that readable; splat had
  * already resolved the relocations, so no information is invented here.
  *
- * D_8008B2B0 holds the address of the `str/options` Shift-JIS pool, which is
- * `hrodata` and lives in asrc/, so it is spelled as a cast of that symbol. */
+ * D_8008B2B0 holds the address of the `str/options` menu-string pool, which
+ * csrc/str/options.c owns, so it is spelled as a cast of that symbol. */
 
-extern u8 D_800887F4[]; /* asrc/str/options.s, the pool at 0x800887F4 */
+extern u8 D_800887F4[]; /* csrc/str/options.c, the pool at 0x800887F4 */
 
 /* 0x8008B074 */
 u8 D_8008B074[0x114] = {

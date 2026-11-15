@@ -6,7 +6,6 @@ options:
   base_path: ..
   platform: psx
   compiler: GCC
-  extensions_path: splat/ext
 
   create_asm_dependencies: False
 

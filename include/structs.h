@@ -1292,7 +1292,11 @@ extern Unk80073414 D_80073414[];
 extern u32 D_8006A944;
 extern u32 D_8006A948;
 extern u32 D_8006AC5C[];
-extern u32 D_80080A50;
+/* CONST BECAUSE OF WHERE IT IS DEFINED, not because anything here needs it:
+   csrc/str/names.c owns this word, and that unit's whole output has to land in
+   .rodata for the linker script to place the name pool. A non-const definition
+   goes to .data and the pool comes out short. */
+extern const u32 D_80080A50;
 extern u32 D_80013628;
 
 /* $gp-relative in the carved units; see the `.sdata` size records at the top
