@@ -354,6 +354,8 @@ u8 *func_8009B25C(u8 *, u16, u16, s16);
 s16 func_8009A540(s32, s32, s32, s16);
 s16 func_800A2CB8(u8 *, u8 *);
 extern u16 D_8008347E;
+s16 func_8009A350(s16, s16, s32, u16 *);
+s16 func_800A41F0(u8 *);
 /* The three 60-word effect handlers below. */
 s32 func_800C8ABC(u8 *, s16, s16);
 void func_800A6508(void);
@@ -823,9 +825,106 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009AF18);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B164);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B25C);
+/* Walk the record's own ring looking for a neighbour standing on the given
+   tile within 0x40 of the given facing, with func_8009A350's terrain mask
+   as the gate. func_8009B390 below is this source reading the ring head
+   from D_800E3D7C instead and without the empty-ring test.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B390);
+   THE PARAMETER IS THE WALKER. Writing the walk through a separate local
+   and keeping `p` as the head costs a word and moves four registers: the
+   target copies `p` into the head variable in the `bnez` delay slot of the
+   mask test and then advances `p` itself, which is what reusing the
+   parameter gives. 77 words, 0 differing. */
+u8 *func_8009B25C(u8 *p, u16 x, u16 y, s16 ang)
+{
+    u8 *h;
+    u8 *e;
+    u16 m;
+    s16 a;
+    s32 d;
+
+    if (func_8009A350(x - 1, y, 0, &m) == 0)
+    {
+        return NULL;
+    }
+    if (!(m & 0x3300))
+    {
+        return NULL;
+    }
+    h = p;
+    p = *(u8 **)(p + 0x5C) + 0x20;
+    if (p != h)
+    {
+        a = ang;
+        do
+        {
+            e = *(u8 **)(p - 0x14);
+            if (e[0x24] == x && e[0x25] == y)
+            {
+                d = *(s16 *)(p + 0x88) - a;
+                if (d < 0)
+                {
+                    d = -d;
+                }
+                if (d < 0x40)
+                {
+                    if (func_800A41F0(p) != 0)
+                    {
+                        return p;
+                    }
+                }
+            }
+            p = *(u8 **)(p + 0x5C) + 0x20;
+        } while (p != h);
+    }
+    return NULL;
+}
+
+/* func_8009B25C over the engine's own ring: three parameters instead of
+   four, the head out of D_800E3D7C, and no empty-ring test because that
+   ring always has the player in it. 72 words, 0 differing. */
+u8 *func_8009B390(u16 x, u16 y, s16 ang)
+{
+    u8 *p;
+    u8 *h;
+    u8 *e;
+    u16 m;
+    s16 a;
+    s32 d;
+
+    if (func_8009A350(x - 1, y, 0, &m) == 0)
+    {
+        return NULL;
+    }
+    if (!(m & 0x3300))
+    {
+        return NULL;
+    }
+    p = D_800E3D7C;
+    h = p;
+    a = ang;
+    do
+    {
+        e = *(u8 **)(p - 0x14);
+        if (e[0x24] == x && e[0x25] == y)
+        {
+            d = *(s16 *)(p + 0x88) - a;
+            if (d < 0)
+            {
+                d = -d;
+            }
+            if (d < 0x40)
+            {
+                if (func_800A41F0(p) != 0)
+                {
+                    return p;
+                }
+            }
+        }
+        p = *(u8 **)(p + 0x5C) + 0x20;
+    } while (p != h);
+    return NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B4B0);
 
