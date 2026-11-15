@@ -611,12 +611,16 @@ Percentages below are of the 346,112-byte **image**, not of the file:
 | what | bytes | % of image |
 |------|-------|-------------|
 | C translation units | 167,596 | 48.4% |
-| `data` subsegments | 94,028 | 27.2% |
+| `data` subsegments | 94,024 | 27.2% |
 | identified library/asm (`psyq/*`, `main`) | 57,408 | 16.6% |
-| Shift-JIS text, owned as C (`csrc/str/*.c`) | 14,040 | 4.1% |
-| `rodata` subsegments | 11,640 | 3.4% |
-| jump tables (`.rodata` of C units) | 1,400 | 0.4% |
+| `.rodata` of C units (pools and jump tables) | 25,208 | 7.3% |
+| `rodata` subsegments | 1,876 | 0.5% |
 | **unknown** | **0** | **0.0%** |
+
+(Re-measured 2026-11-14. The `shiftjis` row is gone -- that subsegment type
+is not used in this container any more -- and `rodata` fell from 11,640 to
+1,876 because the last three string pools became C units that day. 1,852 of
+what is left is the PSY-Q libraries' own `.rdata`, which stays assembly.)
 
 (splat's own report line reads 79.58%, not 100%. It drops every `data`,
 `rodata` and `.bss` subsegment -- those segtypes inherit `statistics` from
@@ -656,12 +660,31 @@ The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 `__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
 It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
 
-What remains is not unknown, just coarse: **59 KB in one `game_data`
-subsegment** (pointer tables, three packed Shift-JIS dialogue pools, and a
-long run of fixed-size records with its own directory) and **~10 KB of
-Shift-JIS text still typed `data` rather than `shiftjis`**, so splat accounts
-for it but it does not read as text. Text is split with the union-plus-zero
-coverage test in `docs/data-map.md`, not from one detector's output.
+What remains is not unknown, just **not owned in C**: 64,148 bytes of the
+game's own in five subsegments, down from 70,308 on 2026-11-14 when the last
+three string pools landed as `csrc/str/speakers.c` (1,472 bytes, 107
+objects), `csrc/str/spells.c` (3,836, 103) and `csrc/str/commands.c` (852,
+36). No `rodata` subsegment of the game's is left. The five, and the order to
+work them, are in **`docs/data-map.md`, "What is left, in order"**; the two
+things worth carrying out of it are:
+
+- **`game_data`, 60,588 bytes and 666 objects, is blocked on carving the TEXT
+  into original translation units first.** The reference signal here is good,
+  unlike `ovl_town_data`'s -- 116 of the 127 single-referenced objects fit a
+  monotone link-order assignment, against a null whose maximum over 2,000
+  shuffles is 76 -- and eight of the eleven exceptions are `unk_72A8`, which
+  is 305 functions and an ADDRESSING-MODE carve rather than one translation
+  unit. Giving it one contiguous `.data` window would be a false claim about
+  the original source. The oracle for the text carve is `$gp` membership
+  (`docs/addressing-and-translation-units.md`), and `tools/tuscan.py` needs a
+  new input to use it: it reads `asm/nonmatchings/*/*.s`, which this
+  executable no longer has, so the modes have to come out of a disassembly of
+  `build/slus_006.14.elf` instead.
+- **`gp_data` and `game_gp` are blocked on a splat option.** The generated
+  linker script collects only `(.data)` and `(.rodata)`; these two are the
+  `.sdata`/`.sbss` run, so `auto_link_sections` has to gain `".sdata"` first.
+  Nothing is being dropped today -- checked object by object -- so that change
+  is additive.
 
 The five formerly-unidentified code gaps -- 0x31CC4, 0x32934, 0x33234,
 0x34BD0 and 0x362B4, 5,556 bytes in all -- are now `asm` subsegments, which is

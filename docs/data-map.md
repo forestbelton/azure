@@ -1,13 +1,22 @@
 # The data in slus_006.14
 
 Companion to `docs/where-we-are.md`, which covers the code. Numbers here were
-re-measured on 2026-11-01 against `data/slus_006.14`
+re-measured on 2026-11-14 against `data/slus_006.14`
 (sha1 e6bfbb95ff6676899e077481221d73ddd4d3bf52); re-measure rather than trust
 them.
 
 **`splat split` now reports 0 bytes unknown.** Every byte of the file belongs
 to a named subsegment, and `make containers` stays byte-identical on all four
 containers. What changed on 2026-11-01, and the evidence for it, is below.
+
+**Unknown is not the same as owned, and OWNED is what is left.** A `data` or
+`rodata` subsegment is accounted for but still lives in `asm/data/*.s` as
+`dlabel`s rather than as C. As of 2026-11-14 the game's own unowned bytes are
+**64,148 in five subsegments**, down from 70,308: the three string pools went
+to C that day (`csrc/str/speakers.c`, `csrc/str/spells.c`,
+`csrc/str/commands.c`, 6,160 bytes and 237 objects), and no `rodata`
+subsegment of the game's is left. See "What is left, in order" below for the
+rest and for the two things that block it.
 
 ## The file is not the program
 
@@ -103,17 +112,23 @@ group the splat ld script emits ahead of the text; see "two data groups" below.
 
 ## What splat sees now
 
-| type | bytes | % of file | % of image |
-|---|---|---|---|
-| `c` | 167,596 | 31.97% | 48.42% |
-| `data` | 94,028 | 17.93% | 27.17% |
-| `asm` | 57,408 | 10.95% | 16.59% |
-| `shiftjis` | 14,040 | 2.68% | 4.06% |
-| `rodata` | 11,640 | 2.22% | 3.36% |
-| `.rodata` (jump tables in C units) | 1,400 | 0.27% | 0.40% |
-| `bin` (`tail_unloaded`, outside the image) | 176,128 | 33.59% | -- |
-| `header` (outside the image) | 2,048 | 0.39% | -- |
-| **unknown** | **0** | **0.00%** | **0.00%** |
+| type | bytes | % of file |
+|---|---|---|
+| `bin` (`tail_unloaded`, outside the image) | 176,128 | 33.59% |
+| `c` | 167,596 | 31.97% |
+| `data` | 94,024 | 17.93% |
+| `asm` | 57,408 | 10.95% |
+| `.rodata` (owned by a sibling C object) | 25,208 | 4.81% |
+| `header` (outside the image) | 2,048 | 0.39% |
+| `rodata` (still disassembled) | 1,876 | 0.36% |
+| **unknown** | **0** | **0.00%** |
+
+The `shiftjis` row is gone: that subsegment type is no longer used anywhere in
+this container. Every string pool is C now, which is also why `.rodata` went
+from 1,400 bytes to 25,208 and `rodata` from 11,640 to 1,876. Of the 1,876
+that are left, 1,852 are the thirteen PSY-Q library `.rdata` runs at
+0x69F4-0x7130, which stay assembly by the same policy that keeps the library
+code assembly; the other 24 are `tbl_660C` and `smf_magic`.
 
 ### Why splat's own total says 79.58%
 
@@ -424,14 +439,79 @@ now nineteen and complete.
 
 ### What is left inside `game_data`
 
-59 KB, still one subsegment. Its internal structure is real but **not pinned
-to the byte**, so it is recorded here rather than guessed at in the yaml:
-pointer/descriptor tables near the start, three packed Shift-JIS dialogue
-pools (roughly 0x3EA1C-0x40041C, 0x4101C-0x4161C and 0x4261C-0x4481C at
-512-byte resolution), and from ~0x47000 a long run of uniform fixed-size
+59 KB, still one subsegment, **666 objects**. Its internal structure is real
+but **not pinned to the byte**, so it is recorded here rather than guessed at
+in the yaml: pointer/descriptor tables near the start, three packed Shift-JIS
+dialogue pools (roughly 0x3EA1C-0x40041C, 0x4101C-0x4161C and 0x4261C-0x4481C
+at 512-byte resolution), and from ~0x47000 a long run of uniform fixed-size
 records with an 8-byte-entry directory around 0x4CC48 pointing into
 0x80077xxx-0x80079xxx. The run ends at 0x4CCEC, which is exactly where
 libspu's data begins -- the one boundary in here that *is* byte-exact.
+
+#### The ownership signal here is GOOD, which is the opposite of the town overlay
+
+Measured 2026-11-14. `docs/owning-data.md` §8 records that `ovl_town_data` has
+no unit oracle at all -- no asserts, no `$gp`, and a reference signal that is
+noise, with "no contiguous three-way assignment" fitting. **This container is
+not in that position**, and the difference decides how its carve is worked.
+
+The constraint to satisfy is that one object file contributes one `.data` run,
+and the linker lays those runs out in link order -- so an assignment of
+objects to units must be NON-DECREASING in link order when read in address
+order. Take the 127 objects of `game_data` that exactly one C unit mentions,
+in address order, and ask for the longest non-decreasing run of link indices:
+
+| | objects | longest non-decreasing run |
+|---|---|---|
+| observed | 127 | **116** |
+| same multiset, shuffled (2,000 trials) | 127 | mean 68.2, p95 71, max 76 |
+
+116 against a null whose maximum over two thousand shuffles is 76. The
+reference signal in this container carries the layout, and `use is not
+ownership` -- true as a statement about any single object -- does not make the
+aggregate useless here the way it does in town.
+
+#### What the eleven exceptions are, and why they are the actual blocker
+
+Eight of the eleven objects that fall outside that run are `unk_72A8`, at
+0x8007216C, 0x800721C0, 0x8007386C, 0x80073AAC, 0x80073B54, 0x80073DC4,
+0x800776FC and 0x80077784 -- all near the TOP of the region, while
+`unk_72A8`'s other 54 single-referenced objects are at the bottom,
+0x8006A847..0x8006B230. The remaining three are `D_8006ADC0` (`unk_264E0`),
+`D_80071FF0` (`unk_24FCC`) and `D_800777AC` (`unk_108F0`).
+
+That is not a flaw in the signal. **`unk_72A8` is not a translation unit.** It
+is 305 functions and 8,464 words, and so is `unk_1C540` at 268 functions --
+the two of them are a third of the game's code. Both are carves by ADDRESSING
+MODE (`docs/addressing-and-translation-units.md`), not by original file, and a
+unit that is really a dozen original units has its data scattered through the
+region accordingly. Giving a 305-function object file one contiguous `.data`
+window would be a statement about the original source that is almost certainly
+false, and would have to be undone later.
+
+So the order of work is:
+
+1. **Carve the text into original translation units first.** The oracle exists
+   and is this container's alone: the `$gp` membership rule
+   (`docs/addressing-and-translation-units.md`, "What follows") says a
+   function that reaches a global `$gp`-relatively was compiled in the unit
+   that defined it. `tools/tuscan.py` is that tool, but it reads
+   `asm/nonmatchings/*/*.s`, and this executable has no nonmatchings left --
+   every function is landed. The mode is still in the bytes, because the build
+   is byte-identical, so the replacement input is a disassembly of
+   `build/slus_006.14.elf`: an `lw $x, N($gp)` is the `$gp`-relative shape and
+   a `lui`/`%lo` pair is not. **That is the one piece of new tooling this
+   needs.**
+2. **Then grow per-unit `.data` prefixes** the way `docs/owning-data.md` §4.2
+   describes, lowest address first, with the single-reference assignment above
+   as the proposal and `make check`'s offset report as the gate.
+
+#### Do not start at the bottom expecting `gprel_72A8`
+
+`gprel_72A8` is first in link order but has no single-referenced object
+anywhere in `game_data`; the first 35 belong to `unk_72A8`. The region's first
+byte, 0x3E040 / 0x8006A840, is therefore `unk_72A8`'s, which means the first
+tranche is one of the two units that should be carved before it is written.
 
 ## The five unidentified code blocks
 
@@ -472,22 +552,60 @@ subdivision.
 
 ## The smaller pieces
 
-| subsegment | file range | bytes | what |
-|---|---|---|---|
-| `str_pool_800` | 0x800-0xDC0 | 1,472 | 72% Shift-JIS: debug format strings, then a character-name table from 0x848 |
-| `str_pool_EFC` | 0xEFC-0x1DF8 | 3,836 | 90% Shift-JIS, plus a `0x8004D0xx` pointer table at 0x1DF9 (stride 0x10) |
-| `str_pool_1E10` | 0x1E10-0x2164 | 852 | same pool, after the jump-table segments |
-| `str_item_tail` | 0x57F8-0x6614 | 3,612 | tail of the item pool; 90 strings held back, see below |
-| `smf_magic` | 0x68FC-0x690C | 16 | `MThd`/`MTrk` with zero lengths |
-| `game_gp` | 0x54194-0x541D0 | 60 | the `_gp` anchor; `_gp` = 0x80080994 is its first word |
-| `names` | 0x541D0-0x5426C | 156 | the name table, owned as `csrc/str/names.c`: nineteen 8-byte Shift-JIS slots plus the 4-byte pointer at 0x54250 |
-| `gp_data` | 0x5426C-0x55000 | 3,476 | `.sdata`/`.sbss` above `_gp`, then zero fill |
+**All four `str_*` rows are gone as of 2026-11-14**; they are C units now,
+and the table below is what is left. `tbl_660C` and `smf_magic` are `rodata`
+subsegments because they sit among the C units' jump-table `.rodata` runs;
+the other three are `data`.
 
-The first five are `rodata` subsegments, not `data`: they sit among the C
-units' jump-table `.rodata` runs and the `str/item/*` pool, which is
-`.rodata` too. `gp_data` is **not** the game's alone, which is why it is no
-longer called `game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there,
-and it is the source of the permanent 0x54D98 diagnostic above.
+| subsegment | file range | bytes | objects | what |
+|---|---|---|---|---|
+| `tbl_660C` | 0x660C-0x6614 | 8 | 1 | a `u16` array `{1,2,3}`, `D_80032E0C`, behind the item pool |
+| `smf_magic` | 0x68FC-0x690C | 16 | 1 | `MThd`/`MTrk` with zero lengths |
+| `game_data` | 0x3E040-0x4CCEC | 60,588 | 666 | see the section above |
+| `game_gp` | 0x54194-0x541D0 | 60 | 9 | the `_gp` anchor; `_gp` = 0x80080994 is its first word |
+| `gp_data` | 0x5426C-0x55000 | 3,476 | 350 | `.sdata`/`.sbss` above `_gp`, then zero fill |
+
+And the five that are DONE:
+
+| subsegment | file range | bytes | objects | C unit |
+|---|---|---|---|---|
+| `str_pool_800` | 0x800-0xDC0 | 1,472 | 107 | `csrc/str/speakers.c` |
+| `str_pool_EFC` | 0xEFC-0x1DF8 | 3,836 | 103 | `csrc/str/spells.c` |
+| `str_pool_1E10` | 0x1E10-0x2164 | 852 | 36 | `csrc/str/commands.c` |
+| the item pool | 0x2810-0x660C | 15,868 | 405 | `csrc/str/items.c` |
+| `names` | 0x541D0-0x5426C | 156 | 20 | `csrc/str/names.c` |
+
+`gp_data` is **not** the game's alone, which is why it is no longer called
+`game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there, and it is the
+source of the permanent 0x54D98 diagnostic above.
+
+### `game_gp` and `gp_data` need a splat OPTION before they need any C
+
+Measured 2026-11-14, and worth knowing before anyone starts on them. The
+generated `build/slus_006.14.ld` collects exactly two input sections per
+object, `(.data)` and `(.rodata)`. There is no `(.sdata)` and no `(.sbss)`
+line anywhere in it, because `auto_link_sections` defaults to
+`[".data", ".rodata", ".bss"]` and this container does not override it. These
+two subsegments are the `.sdata`/`.sbss` run, so a C unit defining their
+objects at `-G8` would emit them to `.sdata` and the linker would drop them
+on the floor -- short container, no diagnostic.
+
+Two facts make this a chore rather than a wall:
+
+* splat has an `sdata` segment type (`segtypes/common/sdata.py`) and
+  `auto_link_sections` is a real yaml option, so adding `".sdata"` turns the
+  collection on.
+* **Nothing is being dropped today.** Checked object by object: not one
+  `build/csrc/*.o` has a non-empty `.sdata` or `.sbss`, so turning the
+  collection on is purely additive and cannot move a byte that is currently
+  placed.
+
+The second half of the problem is the one to think about first. The `$gp`
+oracle says these objects were defined in the units that reach them
+`$gp`-relatively, and those are the `gprel_*` units, which are `-G8` -- which
+is exactly the setting that sends an object of 8 bytes or fewer to `.sdata`.
+So owning them is not the same shape as owning a pool: a `-G0` unit would put
+them in `.data` and link today, but it would also be the wrong unit.
 
 `smf_magic`'s owner is no longer unknown: `csrc/unk_2879C.c` calls
 `func_80058800(D_800330FC, ..., 4)`, a 4-byte compare, so these are two magic
@@ -500,31 +618,15 @@ subsegment.
 The pool at **0x2810-0x57F8 is done**: 322 `shiftjis` subsegments under
 `str/item/`, 12,266 bytes.
 
-## How to split a text pool (and when you cannot)
+## How to split a text pool: SOLVED, and the pools are all done
 
-The four `str_*` subsegments above are `data`, not `shiftjis`. That is enough
-for splat to account for them, and spimdisasm finds the ASCII strings, but the
-Shift-JIS comes out as `.short`/`.word` rather than readable text. Turning
-them into `shiftjis` subsegments is still worth doing; the rules have not
-changed.
+**Superseded 2026-11-14.** This section used to describe converting the
+`str_*` blobs to `shiftjis` subsegments. That route is gone: the `shiftjis`
+subsegment type is no longer used in this container at all, and every pool is
+a C unit whose strings cc1psx emits itself, which is `docs/owning-data.md`
+§4.7's route. What is below is what the conversions actually cost.
 
-Only one rule actually constrains this, and it is **not** the section-order
-rule this section used to state (see "the ordering rule, corrected" above --
-`.data` and `.rodata` subsegments interleave freely, and non-text bytes in the
-middle or at the end of a pool do **not** need a segment of their own):
-
-- **`subalign: 4` is the real constraint.** Every subsegment boundary must be
-  a multiple of 4, because `subalign` pads each input section to 4 and a
-  boundary that is not 4-aligned shifts everything after it. A string that
-  starts 2-aligned therefore cannot begin a subsegment.
-- A `shiftjis` subsegment runs to the next subsegment's offset and zero-fills
-  the remainder, so trailing NUL padding needs no entry of its own -- it is
-  absorbed as each string's `.fill`.
-- Mixed content is fine: `data` for the non-text bytes, `shiftjis` for the
-  strings, in offset order, in one segment. The `max`/`zu`/`kid` split at
-  0x54250 is exactly that shape and is byte-identical.
-
-### The coverage test
+### The coverage test, which is what makes the split safe
 
 Whether a pool is splittable is decidable, and the test does not depend on any
 one string detector's recall:
@@ -533,57 +635,116 @@ one string detector's recall:
 > covered. **Every uncovered byte must be zero.** If one is not, it is either a
 > string you missed or real data, and it is printed for you to look at.
 
-This matters because the detectors disagree. `azure findstr` targets
-full-width Latin and skips kanji runs; a kana/kanji-aware byte-pair scanner
-finds 1,398 bytes *fewer* overall because it breaks runs at the script's
-control bytes (0x0A newline, and the 0x11/0x08 pair) and can drift out of
-phase. Neither is a ceiling, and Ghidra's string model does better than
-either -- so use the union plus the zero test, not a single tool's output.
-Applied to the credits block the test came back clean (160 uncovered bytes,
-all zero), which is why that split was safe.
+**For all three 2026-11-14 pools there was a second, stronger test available,
+and it is the one to reach for first.** Every string in each pool is pointed
+at from a table inside `game_data`, so the object boundaries can be read out
+of the image rather than inferred from a detector:
 
-### What the test says about the remaining pools
+| pool | NUL-walked starts | pointer targets from `game_data` | agree | uncovered non-zero |
+|---|---|---|---|---|
+| `str_pool_800` names, 0x848-0xD94 | 100 | 100 | yes | 0 |
+| `str_pool_EFC`, 0xEFC-0x1DD8 | 101 | 101 | yes | 0 |
+| `str_pool_1E10`, 0x1E10-0x2150 | 35 | 35 | yes | 0 |
 
-| blob | uncovered non-zero bytes | blocker |
-|---|---|---|
-| `str_item_tail` 0x57F8-0x6614 | 11 | 8 bytes of Japanese at 0x5194 that both detectors missed, and a `u16` array `{1,2,3}` in the last 8 bytes (0x660C, already named `D_80032E0C`) |
-| `str_pool_EFC` 0xEFC-0x2164 | 54 | a `0x8004D0xx` pointer table at 0x1DF9 (stride 0x10), a colour triple at 0x1DD8, and a byte ramp at 0x2151 |
-| `str_pool_800` 0x800-0xDC0 | 70 | 69 bytes of ASCII `printf` formats at 0x800 (`"MESSYS  %x \n"`, `"STEP    %x \n"`, `"XASTAT %x\n"`) and a 4-pointer table at 0xD98 |
+Two independent derivations landing on the same set is what makes this safe,
+and it mattered: **exactly one target per pool is a relocated symbol and the
+rest are bare `.word` literals**, so a wrong boundary would have changed
+nothing the linker could complain about. It would have been silent.
 
-`main.bin`'s own pool, 0x20800-0x21268, went the whole way on 2026-11-09 and
-is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
-`.rodata` subsegment and no `data` chunks at all (`csrc/str/monsters.c`). It was
-easy for two reasons worth checking for first -- every string starts 4-aligned,
-so nothing had to be cut short, and none of them embeds a control byte. See
-`docs/main-bin-data.md`; the only wrinkle was three non-zero bytes of linker
-buffer in the last entry's padding.
+The old "what the test says" table is retired with the pools. One of its three
+rows was wrong on its own terms: it listed `str_pool_EFC` as blocked partly by
+"a `0x8004D0xx` pointer table at 0x1DF9 (stride 0x10)". There is no such
+table. 0x1DF8 is `jtbl_8002E5F8`, func_8004CECC's six-entry jump table, in the
+NEXT subsegment, read one byte early.
 
-`0x002810` was done this way on 2026-10-30: 322 strings, 12,266 bytes, split
-at 0x57F8. What it cost, and what the next pool will cost too:
+### Rules that carried over
+
+- **`subalign: 4` is the real constraint on any subsegment boundary**, and it
+  is not the section-order rule this section used to state (see "the ordering
+  rule, corrected" above). Every boundary must be a multiple of 4.
+- **The unit must be `-G0`**, or objects of 8 bytes or fewer go to `.sdata`
+  and the linker script does not collect it. The `build/csrc/str/%.o` rules in
+  the Makefile do this.
+- **Spell every non-ASCII byte as `\xNN`**, never as a bare character after an
+  escape.
+- **The U+3000 IDEOGRAPHIC SPACE is load-bearing and invisible.**
+- **A C file can only put ONE symbol at an address.** Where splat had invented
+  a `D_` name beside the readable one, the readable name goes in
+  `splat/slus_006.14_symbol_addrs.txt` with `defined:True` -- that is also what
+  takes the symbol OUT of `slus_006.14_undefined_syms_auto.txt`, which is the
+  measure of the thing. All three pools' symbols are out of it now.
+
+### Two rules learned on 2026-11-14
+
+**TRAILING PADDING GOES BOTH WAYS, and which applies depends on what follows
+the last object.** `docs/owning-data.md` §4.6 says the last entry carries the
+pool's own padding in an explicit array size, because nothing follows it to
+align against. That is half the rule.
+
+* `csrc/str/spells.c` is the §4.6 case. Its last object, `D_8002E5E8`, is the
+  three words the code reads, and the pool's fourth word is padding. 3,832 is
+  already 4-aligned, so SUBALIGN(4) supplies nothing, and the unit has to
+  declare `[4]`.
+* `csrc/str/speakers.c` is the opposite. Its last object is a 10-byte
+  byte-aligned struct, and a 2-byte pad object after it made the unit 1,474
+  rather than 1,472 -- cc1psx's `.align 2` ahead of that object had ALREADY
+  supplied the two bytes, and the object then added two more. Dropping it
+  leaves `.rodata` at 1,470 and SUBALIGN(4) in the generated linker script
+  supplies the rest.
+
+So: if the last object ends 4-aligned, declare the pad; if it does not, do
+not. The gate is the same either way --
+`mips64-linux-gnu-size -A build/csrc/str/<name>.o` against the subsegment
+span.
+
+**`const` CANNOT ALWAYS BE PROPAGATED TO THE CONSUMERS, AND THIS IS MEASURED.**
+A pool object must be defined `const` or cc1psx emits it under `.data`. When
+the object has a `D_` name other units reach, the obvious follow-through is to
+make the shared declaration `const` too, as `csrc/str/names.c`'s `D_80080A50`
+did. For `D_8002E5D8` and `D_8002E5E8` that **changes gcc 2.7.2's codegen**:
+six units copy them out through `u32 *` locals, and const-qualifying those
+locals so the header could take the const left `csrc/unk_1C540.c` 8 bytes
+short -- shifting every jump table behind it -- and broke main.bin at
+0x25D0A8 and town.bin at 0x031828.
+
+The fix is to keep the const inside the defining unit: `csrc/str/spells.c`
+includes `include/types.h` rather than `include/common.h`, so the `const`
+definition and `include/structs.h`'s `extern u32 D_8002E5D8[];` are never in
+one translation unit. `csrc/str/speakers.c` did NOT need this -- its five
+named objects are only read through explicit casts and struct assignments, so
+`include/structs.h` takes the `const` there and all four containers stay
+byte-identical. **Try the header first; fall back to types.h when the gate
+says no.**
+
+### What it cost before
+
+`0x002810` was done on 2026-10-30: 322 strings, 12,266 bytes, split at
+0x57F8, and the tail folded into `csrc/str/items.c` later.
 
 - **The pool had to be cut short.** Five strings start 2-aligned -- the
   composed-name nouns at 0x57FA, 0x586E, 0x596A, 0x5A62 and 0x60C6 -- and
-  `subalign: 4` pads every input section to 4, so a subsegment boundary that
-  is not a multiple of 4 shifts everything after it. 0x57F8-0x6614 keeps the
-  remaining 90 strings as one `rodata` subsegment. **Check `offset % 4 == 0`
-  on every boundary before splitting** -- that, and not section ordering, is
-  what makes those five strings expensive. The same rule governed every boundary in the 0x3E01C
-  rewrite above, and is why `psyq/libsn_data` ends at 0x3E040 rather than at
-  0x3E03E, where `unk_72A8.c`'s biased array base points.
-- **The `.shiftjis` directive could not hold the script's control bytes.** The
-  descriptions embed 0x0A line breaks (and the dialogue pools in `game_data`
-  also use 0x11 and 0x08), which decode to C0 controls and ended the
-  directive's line mid-string. `splat/ext/shiftjis.py` now escapes any
-  character below 0x20, plus `"` and `\`, and `azure shiftjis` reverses
-  exactly those escapes. This was the blocker for *every* remaining pool, so
-  it is now cleared for all of them.
+  `subalign: 4` pads every input section to 4. **Check `offset % 4 == 0` on
+  every boundary before splitting.** The same rule governed every boundary in
+  the 0x3E01C rewrite above, and is why `psyq/libsn_data` ends at 0x3E040
+  rather than at 0x3E03E, where `unk_72A8.c`'s biased array base points.
 - **46 of the 412 strings came from the fallback scan, not `findstr`.** They
   are the Japanese **unidentified-item** names, never translated for the US
   release and still in the binary, built as colour-plus-noun pairs
-  (`紺色の草`, `金色の種`, `薄い巻き物`, `四角いメガネ`). They appear as
-  `str/item/jp_*`, named by offset because the slug would be empty.
+  (`紺色の草`, `金色の種`, `薄い巻き物`, `四角いメガネ`).
 
-Next: `str_pool_EFC` (3,836 bytes + 852 after the jump tables, 54 uncovered
-non-zero bytes) and `str_pool_800` (1,472, 70), then the 90 strings left in
-`str_item_tail`. The dialogue pools inside `game_data` are harder -- their
-entries are not aligned at all.
+`main.bin`'s own pool, 0x20800-0x21268, went the whole way on 2026-11-09 and
+is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
+`.rodata` subsegment and no `data` chunks at all (`csrc/str/monsters.c`). See
+`docs/main-bin-data.md`.
+
+## What is left, in order
+
+1. **`game_data`, 60,588 bytes, 666 objects** -- blocked on carving the text
+   into original translation units first; see the section above for the
+   measurement and the one tool it needs.
+2. **`gp_data` and `game_gp`, 3,536 bytes, 359 objects** -- blocked on
+   `auto_link_sections` and on the `-G8`/`.sdata` question; see above.
+3. **`tbl_660C` and `smf_magic`, 24 bytes** -- not blocked on anything, just
+   not worth a translation unit each. Folding `smf_magic` into
+   `csrc/unk_2879C.c` would need the compiler to emit the array after that
+   unit's jump tables.
