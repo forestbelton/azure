@@ -169,6 +169,47 @@ void func_800B51C8();
 extern u8 *D_800E3D7C;
 extern u8 D_800E3548[];
 extern u8 D_800E3648[];
+/* The two parallel tables the four sweeps below walk, beside D_800E3548's
+   and D_800E3648's 4-byte flag slots. They are STRUCT ARRAYS rather than
+   byte pointers: walked as `u8 *` the two field reads become one giv biased
+   by the later offset and the base is lost (`addiu $s0, $v0, 7`, reads at
+   -1 and 0), where the target keeps the base and uses +6/+7 displacements. */
+typedef struct UnkDungeonSpotA
+{
+    u8 unk_00;
+    u8 unk_01;
+    u8 pad_02[0x2];
+    u16 unk_04;
+    u8 pad_06[0x6];
+} UnkDungeonSpotA;
+
+typedef struct UnkDungeonSpotB
+{
+    u8 pad_00[0x6];
+    u8 unk_06;
+    u8 unk_07;
+    u8 pad_08[0xA];
+    u16 unk_12;
+    u8 pad_14[0x4];
+} UnkDungeonSpotB;
+
+typedef struct UnkDungeonSlot
+{
+    u8 pad_00[0x1];
+    u8 unk_01;
+    u8 pad_02[0x2];
+} UnkDungeonSlot;
+
+/* The same two flag tables as D_800E3548/D_800E3648 above, under their
+   struct face: the sweeps below index BOTH tables off the loop counter, and
+   a hand-walked pointer for one of them is not a giv, which reverses the
+   order loop.c emits the two initialisations in. */
+extern UnkDungeonSlot D_800E3548_s[] __asm__("D_800E3548");
+extern UnkDungeonSlot D_800E3648_s[] __asm__("D_800E3648");
+/* The same slots as whole words, for func_800A7030's clear. */
+extern UnkDungeonSpotA D_800E36C8[];
+extern UnkDungeonSpotB D_800E39C8[];
+void func_800B5F80(s32);
 extern s32 D_800DCF60;
 extern s32 D_8008335C;
 
@@ -294,6 +335,17 @@ extern u8 D_800E1224[];
 extern u8 D_800E1258[];
 extern u8 D_800E1279[];
 extern u8 D_800E12A9[];
+/* The two kill handlers whose out-of-range arm spawns through func_800BBA40
+   (seven arguments, three of them on the stack) instead of reporting. */
+s32 func_800BBA40(s32, s32, s16, void *, s32, s32, void *);
+void func_800C135C();
+void func_800C152C();
+extern u8 D_800DEAE0[];
+extern u8 D_800DF514[];
+extern u8 D_800E1482[];
+extern u8 D_800E14A6[];
+extern u8 D_800E1843[];
+extern u8 D_800E206A[];
 /* The three 60-word effect handlers below. */
 s32 func_800C8ABC(u8 *, s16, s16);
 void func_800A6508(void);
@@ -314,6 +366,11 @@ extern u8 D_80082E6B;
 extern u8 D_800DCF4E;
 extern u8 D_800DF3CC[];
 extern u8 D_800DF3D4[];
+/* The two digit strips below. func_8004E57C is `void func_8004E57C(s32, u16,
+   s32)` where it is defined; D_800808ED is the engine's per-character
+   attribute table. */
+void func_8004E57C(s32, u16, s32);
+extern u8 D_800808ED[];
 void func_800A56E0(s32);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
@@ -1173,7 +1230,42 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A6E10);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A6E8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A7030);
+/* Clear any of the 0x40 live slots standing on the given tile and report it.
+   D_800E3548's +0x01 is the slot's live flag and D_800E36C8 holds the tile.
+
+   BOTH TABLES ARE INDEXED OFF THE COUNTER, not walked as pointers, and the
+   tile bytes are held in LOCALS. Three measurements behind that: a `u8 *`
+   walk over the wide table collapses its two field reads into one giv
+   biased by the later offset and loses the base (`addiu $s0, $v0, 7`, reads
+   at -1 and 0) where the target keeps the base and uses +6/+7; a
+   hand-initialised pointer for the narrow table is a biv rather than a giv,
+   which reverses the order loop.c emits the two initialisations in; and
+   passing `D_800E36C8[i].unk_00` to the call a second time costs two
+   reloads, because the word store to the slot between them invalidates
+   cse's memory. 45 words, 0 differing. */
+void func_800A7030(s16 x, s16 y)
+{
+    s32 i;
+    u8 cx;
+    u8 cy;
+
+    for (i = 0; i < 0x40; i++)
+    {
+        if (D_800E3548_s[i].unk_01 != 0)
+        {
+            cx = D_800E36C8[i].unk_00;
+            if (cx == x)
+            {
+                cy = D_800E36C8[i].unk_01;
+                if (cy == y)
+                {
+                    *(s32 *)&D_800E3548_s[i] = 0;
+                    func_8009A3D0(cx, cy, 0x800);
+                }
+            }
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A70E4);
 
@@ -1580,7 +1672,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B5ED0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B5F80);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B6008);
+/* func_800A7030 over the OTHER pair of tables -- 0x20 entries at stride 0x18,
+   tile at +0x06/+0x07 -- handing the index to func_800B5F80 rather than
+   clearing the slot itself. 44 words, 0 differing. */
+void func_800B6008(s16 x, s16 y)
+{
+    s32 i;
+
+    for (i = 0; i < 0x20; i++)
+    {
+        if (D_800E3648_s[i].unk_01 != 0 && D_800E39C8[i].unk_06 == x && D_800E39C8[i].unk_07 == y)
+        {
+            func_800B5F80(i);
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B60B8);
 
@@ -2228,7 +2334,43 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BFD80);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BFF00);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C003C);
+/* func_800C3C08 on the +0x02 counter, with the effect applied
+   unconditionally through func_800A48F0 and a different tint.
+   81 words, 0 differing. */
+s32 func_800C003C(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if (p[0x2] < 0xFF)
+    {
+        p[0x2]++;
+    }
+    func_800A48F0((s8 *)p, 0x7, 0x8);
+    if (*(u32 *)(p + 0x14) & 0x4000)
+    {
+        func_80099844(p, D_800E206A);
+    }
+    func_800D4FC8((UnkNode *)(p - 0x20), 0xF02020, 0x616);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C0180);
 
@@ -2246,11 +2388,87 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C0E88);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C135C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C13C8);
+/* WIP C13C8 */
+s32 func_800C13C8(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+    u8 *e;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, NULL);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) -= 1;
+    }
+    else
+    {
+        e = *(u8 **)(p - 0x14);
+        if (func_800BBA40(e[0x24], e[0x25], *(s16 *)(p + 0x88), D_800DEAE0, 0x5000, 0x202080, func_800C135C) == 0)
+        {
+            return 0;
+        }
+        func_800997FC(D_800E1482);
+    }
+    func_80098B38(q);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C152C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C15B4);
+/* WIP C15B4 */
+s32 func_800C15B4(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *g;
+    u8 *e;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, NULL);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) -= 1;
+    }
+    else
+    {
+        e = *(u8 **)(p - 0x14);
+        if (func_800BBA40(e[0x24], e[0x25], *(s16 *)(p + 0x88), D_800DF514, 0x2800, 0x802020, func_800C152C) == 0)
+        {
+            return 0;
+        }
+        func_800997FC(D_800E14A6);
+    }
+    func_80098B38(q);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C1718);
 
@@ -2489,7 +2707,41 @@ s32 func_800C3AE0(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3C08);
+/* The first kill skeleton with a +0x03 counter bumped and the node handed
+   to func_800D4FC8 for its burst. 77 words, 0 differing. */
+s32 func_800C3C08(u8 *p, u8 *q, s16 k)
+{
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    if (p[0x3] < 0xFF)
+    {
+        p[0x3]++;
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            func_80099844(p, D_800E1843);
+        }
+    }
+    func_800D4FC8((UnkNode *)(p - 0x20), 0x202020, 0x616);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3D3C);
 
@@ -3187,9 +3439,52 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CDD0C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CDE0C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CDE40);
+/* Both tables in one pass: add to the counter of every live slot standing on
+   the given tile. A leaf -- no frame, no $ra -- so the two parameters are
+   re-sign-extended for the second loop out of $t1/$t2, which is what the
+   second `sll`/`sra` pair is. func_800CDF40 is this source with `=` for
+   `+=`. 64 words, 0 differing. */
+void func_800CDE40(s16 x, s16 y, u16 v)
+{
+    s32 i;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CDF40);
+    for (i = 0; i < 0x40; i++)
+    {
+        if (D_800E3548_s[i].unk_01 != 0 && D_800E36C8[i].unk_00 == x && D_800E36C8[i].unk_01 == y)
+        {
+            D_800E36C8[i].unk_04 += v;
+        }
+    }
+    for (i = 0; i < 0x20; i++)
+    {
+        if (D_800E3648_s[i].unk_01 != 0 && D_800E39C8[i].unk_06 == x && D_800E39C8[i].unk_07 == y)
+        {
+            D_800E39C8[i].unk_12 += v;
+        }
+    }
+}
+
+/* func_800CDE40 with the counter SET rather than added to.
+   58 words, 0 differing. */
+void func_800CDF40(s16 x, s16 y, u16 v)
+{
+    s32 i;
+
+    for (i = 0; i < 0x40; i++)
+    {
+        if (D_800E3548_s[i].unk_01 != 0 && D_800E36C8[i].unk_00 == x && D_800E36C8[i].unk_01 == y)
+        {
+            D_800E36C8[i].unk_04 = v;
+        }
+    }
+    for (i = 0; i < 0x20; i++)
+    {
+        if (D_800E3648_s[i].unk_01 != 0 && D_800E39C8[i].unk_06 == x && D_800E39C8[i].unk_07 == y)
+        {
+            D_800E39C8[i].unk_12 = v;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CE028);
 
