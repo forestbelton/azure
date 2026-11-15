@@ -348,6 +348,27 @@ extern u8 D_800E1843[];
 extern u8 D_800E206A[];
 extern u8 D_800E1350[];
 extern u8 D_800E2056[];
+/* The two kill handlers that build a sentence. D_80089364 and D_80089368 are
+   in this overlay's own rodata, two of the three the unit still carries as
+   INCLUDE_RODATA. */
+void func_8008D368(void *, void *, void *, void *, s32);
+void *func_8009955C(u8 *, void *);
+void *func_80099978(void *);
+void *func_80099368(u8 *, void *);
+void func_800998C0(void *, void *);
+extern u8 D_800DD148[];
+extern u8 D_80089364[];
+extern u8 D_80089368[];
+extern u8 D_800E110B[];
+extern u8 D_800E112A[];
+extern u8 D_800E1156[];
+extern u8 D_800E116E[];
+extern u8 D_800DD158[];
+extern u8 D_8008936C[];
+extern u8 D_80089370[];
+extern u8 D_800E118C[];
+extern u8 D_800E11AB[];
+extern u8 D_800E11D7[];
 /* The two eight-direction probes. func_8009B25C is in this unit and sits
    above these, but a stub gives no prototype. */
 u8 *func_8009B25C(u8 *, u16, u16, s16);
@@ -2287,9 +2308,190 @@ s32 func_800BE9E4(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BEB30);
+/* THE KILL HANDLER THAT BUILDS A SENTENCE. The second skeleton's gate, then
+   an out-of-range arm that reports what happened in words: take a message
+   buffer from func_800990FC and run it through the overlay's
+   func_80099194 / func_80099368 / func_8009955C / func_80099978 /
+   func_800998C0 chain, each returning the handle the next takes, and hand
+   the result to func_80099290. D_80089364 and D_80089368 are two of the
+   three fragments this overlay keeps in its own rodata.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BEDEC);
+   Two spellings cost words here:
+
+   - `h` IS REUSED for func_80099368's result; a second variable for it puts
+     that result in the temporary's register instead and moves four words.
+     The OLD handle still has to reach func_800998C0, so it goes into its own
+     variable first: `e2 = h; h = func_80099368(e, h); func_800998C0(t, e2);`
+   - `t` HOLDS THE BIASED POINTER, `h - 2`, not `h`. Written as `t = h` with
+     the `- 2` at the call site the subtraction moves to the call and the
+     function is 1 word differing.
+
+   The arms are in the target's physical order, which is the reverse of the
+   natural reading twice over: the `e == NULL` report is the LAST arm and the
+   `e[3] & 0x40` short form is the SECOND, so both are written as the `else`.
+   175 words, 0 differing. */
+s32 func_800BEB30(u8 *p, u8 *q, s16 k, s32 r)
+{
+    void *m;
+    void *h;
+    void *t;
+    void *e2;
+    u8 *e;
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(D_800E3D7C + 0x110) = q;
+        func_8008D344(D_800E3D7C, D_80083780, D_80082E80, D_800E3D7C);
+        q[3] &= 0xDF;
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        e = *(u8 **)(D_800E3D7C + 0x4C);
+        if (e != NULL)
+        {
+            if (!(q[3] & 0x20))
+            {
+                *(s32 *)(D_800E3D7C + 0x114) = 0x202080;
+                func_8008D368(D_800E3D7C, D_80083780, D_80082E80, D_800DD148, 0x2);
+                q[3] |= 0x20;
+                return 0;
+            }
+            m = func_800990FC();
+            h = m;
+            if (e[1] == 0xF || (e[1] == 0x10 && e[0] == 2))
+            {
+                if (!(e[3] & 0x40))
+                {
+                    h = func_8009955C(e, m);
+                    if (*(s8 *)(e + 2) < 0x63)
+                    {
+                        e[2]++;
+                    }
+                    h = func_80099978(func_80099194(D_800E110B, h));
+                    t = (u8 *)h - 2;
+                    h = func_80099194(D_80089364, h);
+                    e2 = h;
+                    h = func_80099368(e, h);
+                    func_800998C0(t, e2);
+                    h = func_80099194(D_80089368, h);
+                }
+                else
+                {
+                    h = func_80099194(D_800E112A, func_80099368(e, m));
+                }
+            }
+            else
+            {
+                h = func_80099194(D_800E1156, func_80099368(e, h));
+            }
+            func_80099290(h);
+            func_800A5720(m);
+        }
+        else
+        {
+            func_800997FC(D_800E116E);
+        }
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
+
+/* func_800BEB30's shorter sibling: the record comes from +0x50 rather than
+   +0x4C, there is no +0x01/+0x00 dispatch at all, and func_800990FC is
+   called INSIDE each arm rather than once above them -- which is also why
+   the final func_80099194 result goes straight into func_80099290 here
+   instead of through a variable. 162 words, 0 differing. */
+s32 func_800BEDEC(u8 *p, u8 *q, s16 k, s32 r)
+{
+    void *m;
+    void *h;
+    void *t;
+    void *e2;
+    u8 *e;
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(D_800E3D7C + 0x110) = q;
+        func_8008D344(D_800E3D7C, D_80083780, D_80082E80, D_800E3D7C);
+        q[3] &= 0xDF;
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        e = *(u8 **)(D_800E3D7C + 0x50);
+        if (e != NULL)
+        {
+            if (!(q[3] & 0x20))
+            {
+                *(s32 *)(D_800E3D7C + 0x114) = 0x802020;
+                func_8008D368(D_800E3D7C, D_80083780, D_80082E80, D_800DD158, 0);
+                q[3] |= 0x20;
+                return 0;
+            }
+            if (!(e[3] & 0x40))
+            {
+                m = func_800990FC();
+                h = func_8009955C(e, m);
+                if (*(s8 *)(e + 2) < 0x63)
+                {
+                    e[2]++;
+                }
+                h = func_80099978(func_80099194(D_800E118C, h));
+                t = (u8 *)h - 2;
+                h = func_80099194(D_8008936C, h);
+                e2 = h;
+                h = func_80099368(e, h);
+                func_800998C0(t, e2);
+                func_80099290(func_80099194(D_80089370, h));
+            }
+            else
+            {
+                m = func_800990FC();
+                func_80099290(func_80099194(D_800E11AB, func_80099368(e, m)));
+            }
+            func_800A5720(m);
+        }
+        else
+        {
+            func_800997FC(D_800E11D7);
+        }
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BF074);
 
