@@ -1166,6 +1166,59 @@ void func_80069F28(u8 *, u8 *, s32);
 extern void *D_800DD274[];
 u32 func_8004383C(u8 *, s16);
 void func_80067E2C(u8 *, void *);
+/* func_800B06F0's two projection callbacks, picked by the view's +0x8:
+   func_800B0654 at index 0 and func_800B06C0 at index 1. */
+typedef void (*UnkDungeonProj)(UnkVec *, UnkSlot *, void *);
+extern UnkDungeonProj D_800DEFF0[];
+/* RotTransPers4: four scratchpad SVECTORs in, four packed screen pairs plus
+   the depth and the flag out.  Only the `func_` spelling is in
+   splat/dungeon.bin_undefined_funcs_auto.txt, so that is what links, and it
+   is kept on ONE line because a wrapped declaration is swept as a definition
+   and hard-exits ovlverify. */
+s32 func_800654B0(); /* 4 SVECTOR *, 4 s32 * sxy, s32 *p, s32 *flag */
+/* Swaps the two packed screen pairs it is handed. */
+void func_8003E12C(s32 *, s32 *);
+/* func_800B06F0's two primitive emitters and the colour-row hand-off. */
+void func_8004C010(u8 *, u32 *);
+u8 *func_8004CD28(u8 *, u8 *, u8 **, u8 *);
+u8 *func_800B0BE0(u8 *, u8 *, u8 **, u8 *);
+/* A packed screen-XY word in the scratchpad, read back as two halfwords --
+   the same word/halfword union Unk3DBD0W is for func_8003DBD0. */
+typedef union UnkDungeonSPXY
+{
+    s32 w;
+    u16 h[2];
+} UnkDungeonSPXY;
+/* The 0x1F800000 scratchpad as func_800B06F0 lays it out: the OT base at
+   +0x20, ScaleMatrix's vector at +0x30, the quad's four corners at +0x70,
+   RotTransPers4's two out-parameters at +0x90/+0x94, the projection's screen
+   offset at +0xB8, the OT index (then row pointer) at +0xC0, the matrix's
+   translation at +0xE4, the four projected corners at +0xF0 and RotMatrix's
+   input at +0x100. */
+typedef struct UnkDungeonSPC
+{
+    u8 pad_00[0x20];
+    u32 unk_20;
+    u8 pad_24[0xC];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    u8 pad_3C[0x34];
+    SVECTOR unk_70[4];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x20];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    UnkDungeonSPXY unk_F0[4];
+    SVECTOR unk_100;
+} UnkDungeonSPC;
 /* func_800AFFB4's projection and emit pair.  THE `func_` SPELLINGS ARE
    MANDATORY: RotNclip4 and SetPolyGT4 are declared by psyq/include and resolve
    through splat/common_syms.txt, which build/dungeon.bin does NOT link --
@@ -1207,7 +1260,10 @@ extern u8 D_800DF650[];
 extern u8 D_80089074[];
 extern u8 D_800E1AE6[];
 extern u8 D_800E1BDA[];
-void func_800B06F0();
+/* Not void: the body ends in `addu $v0, $zero, $zero`, the same node-walk
+   `return 0` csrc/unk_19434.c's func_80046398 carries.  Its only three uses
+   are address-takes, so nothing else moves. */
+s32 func_800B06F0();
 extern u8 D_800E1A88[];
 extern u8 D_800E1A9D[];
 extern u8 D_800E1AC2[];
@@ -18302,7 +18358,181 @@ void func_800B06C0(u8 *v, u8 *q, u8 *p)
     *(s32 *)(p + 0xC0) = *(s16 *)(v + 0xA) + *(s8 *)(q + 0x4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B06F0);
+s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    MATRIX *m = (MATRIX *)0x1F8000D0;
+    Unk80083160 *g = &D_80083160;
+    UnkDungeonSPC *sp = (UnkDungeonSPC *)0x1F800000;
+    UnkNode *n;
+    u8 ***e;
+    u32 *col;
+    POLY_FT4 *q;
+    volatile u8 *r;
+    s32 ta;
+    s32 tb;
+    s32 tc;
+    s32 td;
+    s32 u;
+
+    sp->unk_EC = *(s32 *)((u8 *)g + 0xA0);
+    q = *(POLY_FT4 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_20 = (u32)(D_80083160.unk_00 + 0xB0);
+    for (;;)
+    {
+        D_800DEFF0[*(u16 *)(p + 0x8) & 1](v, s, sp);
+        e = *(u8 ***)p;
+        col = *(u32 **)(p + 0x4);
+        if ((u32)sp->unk_C0 < 0x1E0)
+        {
+            sp->unk_C0 = sp->unk_C0 * 4 + sp->unk_20;
+            sp->unk_B8 -= 0xA0;
+            sp->unk_BA -= 0x78;
+            func_800649A0();
+            sp->unk_100.vx = s->unk_16;
+            sp->unk_100.vy = s->unk_18;
+            sp->unk_100.vz = s->unk_1A;
+            sp->unk_E4 = s->unk_20;
+            sp->unk_E8 = s->unk_22;
+            sp->unk_30 = s->unk_1C;
+            sp->unk_34 = s->unk_1E;
+            sp->unk_38 = 0x1000;
+            func_80065820(&sp->unk_100, m);
+            func_80064BC0(m, (VECTOR *)&sp->unk_30);
+            func_80064D80(m);
+            func_80064CF0(m);
+            r = (volatile u8 *)*e;
+            if (r != NULL)
+            {
+                do
+                {
+                again:
+                {
+                    sp->unk_70[3].vz = 0;
+                    sp->unk_70[2].vz = 0;
+                    sp->unk_70[1].vz = 0;
+                    sp->unk_70[0].vz = 0;
+                    r = (volatile u8 *)((u32)r | 0x80000000);
+                    if ((r[0x0] ^ s->unk_14) & 1)
+                    {
+                        ta = -(s8)r[0x2] - s->unk_20;
+                        sp->unk_70[2].vx = ta;
+                        sp->unk_70[0].vx = ta;
+                        ta = ta - (*(u8 *)(r + 0xA));
+                        sp->unk_70[3].vx = ta;
+                        sp->unk_70[1].vx = ta;
+                    }
+                    else
+                    {
+                        tb = (s8)r[0x2] - s->unk_20;
+                        sp->unk_70[2].vx = tb;
+                        sp->unk_70[0].vx = tb;
+                        tb += (*(u8 *)(r + 0xA));
+                        sp->unk_70[3].vx = tb;
+                        sp->unk_70[1].vx = tb;
+                    }
+                    if ((r[0x0] ^ s->unk_14) & 2)
+                    {
+                        tc = -(s8)r[0x3] - s->unk_22;
+                        sp->unk_70[1].vy = tc;
+                        sp->unk_70[0].vy = tc;
+                        tc = tc - (*(u8 *)(r + 0xB));
+                        sp->unk_70[3].vy = tc;
+                        sp->unk_70[2].vy = tc;
+                    }
+                    else
+                    {
+                        td = (s8)r[0x3] - s->unk_22;
+                        sp->unk_70[1].vy = td;
+                        sp->unk_70[0].vy = td;
+                        td += (*(u8 *)(r + 0xB));
+                        sp->unk_70[3].vy = td;
+                        sp->unk_70[2].vy = td;
+                    }
+                    func_800654B0(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                                  &sp->unk_F0[0].w, &sp->unk_F0[1].w, &sp->unk_F0[2].w,
+                                  &sp->unk_F0[3].w, &sp->unk_90, &sp->unk_94);
+                    if (*(s8 *)r >= 0 && (*(u8 *)r & 8))
+                    {
+                        u = *(u8 *)r & 4;
+                        if (func_80065480(sp->unk_F0[0].w, sp->unk_F0[1].w, sp->unk_F0[2].w) <= 0)
+                        {
+                            if (u == 0)
+                            {
+                                goto skip;
+                            }
+                        }
+                        else if (u != 0)
+                        {
+                            goto skip;
+                        }
+                    }
+                    goto draw;
+                skip:
+                    if (r[0x1] != 0x2C)
+                    {
+                        goto nextelem;
+                    }
+                    goto bump;
+                draw:
+                    if (*(u8 *)r & 4)
+                    {
+                        func_8003E12C(&sp->unk_F0[0].w, &sp->unk_F0[1].w);
+                        func_8003E12C(&sp->unk_F0[2].w, &sp->unk_F0[3].w);
+                    }
+                    q->x0 = sp->unk_F0[0].h[0] + sp->unk_B8;
+                    q->y0 = sp->unk_F0[0].h[1] + sp->unk_BA;
+                    q->x1 = sp->unk_F0[1].h[0] + sp->unk_B8;
+                    q->y1 = sp->unk_F0[1].h[1] + sp->unk_BA;
+                    q->x2 = sp->unk_F0[2].h[0] + sp->unk_B8;
+                    q->y2 = sp->unk_F0[2].h[1] + sp->unk_BA;
+                    q->x3 = sp->unk_F0[3].h[0] + sp->unk_B8;
+                    q->y3 = sp->unk_F0[3].h[1] + sp->unk_BA;
+                    if ((r[0x1] & 0xFC) == 0x2C)
+                    {
+                        q = (POLY_FT4 *)func_800B0BE0((u8 *)sp->unk_C0, (u8 *)s, (u8 **)&r, (u8 *)q);
+                        func_8004C010((u8 *)q - 0x24, col);
+                        if (r != NULL)
+                        {
+                            goto again;
+                        }
+                    bump:
+                        col++;
+                    }
+                    else
+                    {
+                        if (sp != NULL || s->unk_14 != 0)
+                        {
+                            q = (POLY_FT4 *)func_8004CD28((u8 *)sp->unk_C0, (u8 *)s, (u8 **)&r, (u8 *)q);
+                        }
+                        else
+                        {
+                            q = (POLY_FT4 *)func_8004CD28((u8 *)sp->unk_C0, (u8 *)s, (u8 **)&r, (u8 *)q);
+                        }
+                        if (r != NULL)
+                        {
+                            goto again;
+                        }
+                    }
+                }
+                nextelem:
+                    e++;
+                    r = (volatile u8 *)*e;
+                } while (*(u8 *volatile *)&r != NULL);
+            }
+            func_80064A40();
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+    return 0;
+}
 
 /* Build one POLY_FT4 (0x28 bytes) for the 0xC-byte sprite descriptor at *c
    and hand it to func_8006658C, then step the cursor or clear it when the
