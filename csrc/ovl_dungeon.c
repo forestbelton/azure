@@ -376,6 +376,9 @@ extern s16 D_800E3CCE;
 extern u8 D_800DCF4F;
 void func_80045C34();
 extern u8 D_800E092B[];
+extern u8 D_800E0A1B[];
+extern u8 D_80089000[];
+void *func_80099734(u8 *, void *);
 extern s16 D_80083466;
 extern u8 *D_800E5910;
 
@@ -1629,7 +1632,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A634C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A63B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A6480);
+/* The smallest of the nineteen: the reused-temporary idiom and nothing
+   else. See func_800BD45C for why `h` is the name that is written again.
+   34 words, 0 differing. */
+void func_800A6480(u8 *p, u8 *q)
+{
+    void *m;
+    void *h;
+
+    h = func_800990FC();
+    m = h;
+    h = func_80099368(q, h);
+    h = func_80099194(D_800E0A1B, h);
+    h = func_80099734(p, h);
+    h = func_80099194(D_80089000, h);
+    func_80099290(func_800999B0(h));
+    func_800A5720(m);
+}
 
 /* 9 words, 0 differing. */
 void func_800A6508(void)
@@ -2412,9 +2431,78 @@ void func_800BCFBC(void)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BCFC4);
+/* THE TWO WORDS FOUR BYTES APART ARE NOT A SPLIT ADDRESS. $s0 holds the
+   CONSTANT 0x80010000, which mips_move_1word materialises with `lui` alone
+   because its low half is zero, and 0x2090/0x208C ride in the two loads as
+   ordinary displacements -- splat renders those as `%lo(SYM)`, which is what
+   made this look like a `%hi` kept in a register. See
+   docs/matching-levers.md, "A CONSTANT ADDRESS WITH A ZERO LOW HALF IS A
+   ONE-WORD BASE".
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD074);
+   So the question this was parked on -- can this cc1psx emit
+   `(lo_sum (high X) X+k)`? -- is answered: it does in `.rtl`, and it never
+   survives. cse folds `(lo_sum (high X) X)` back to `X` and then prefers
+   reg+displacement over a constant address on `mips_address_cost`, which is
+   the `addiu $s0, $v0, %lo` word that every symbol spelling produced.
+
+   `b` is ASSIGNED INSIDE the first arm. As an initialiser on the
+   declaration it is 44 words and 7 differing. 44 words, 0 differing. */
+void func_800BCFC4(void)
+{
+    u8 *b;
+
+    if (D_80082E6B == 0x11)
+    {
+        b = (u8 *)0x80010000;
+        if (*(s32 *)(b + 0x2090) == 0)
+        {
+            if (D_8008146C == 0x28)
+            {
+                if (func_80033BC0(0xA2) == 0)
+                {
+                    if (*(s32 *)(b + 0x208C) == 0)
+                    {
+                        *(s32 *)(b + 0x208C) = 1;
+                        func_80040AA0(0x21);
+                        D_800DCF4E = 0;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    func_8003E4FC(0x6, D_800DF3CC, 0);
+    func_8003F320();
+}
+
+/* func_800BCFC4 with D_800DF3D4. 44 words, 0 differing. */
+void func_800BD074(void)
+{
+    u8 *b;
+
+    if (D_80082E6B == 0x11)
+    {
+        b = (u8 *)0x80010000;
+        if (*(s32 *)(b + 0x2090) == 0)
+        {
+            if (D_8008146C == 0x28)
+            {
+                if (func_80033BC0(0xA2) == 0)
+                {
+                    if (*(s32 *)(b + 0x208C) == 0)
+                    {
+                        *(s32 *)(b + 0x208C) = 1;
+                        func_80040AA0(0x21);
+                        D_800DCF4E = 0;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    func_8003E4FC(0x6, D_800DF3D4, 0);
+    func_8003F320();
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD124);
 
@@ -2424,9 +2512,113 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD184);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD1C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD45C);
+/* The kill skeleton plus a spoken report, and the one that was parked for a
+   day over two words.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BD5C4);
+   THE CALL VALUE GOES INTO THE NAME THAT IS WRITTEN AGAIN, and the
+   long-lived handle is a copy taken off it:
+
+       h = func_800990FC();
+       m = h;
+       h = func_80099194(MSG, h);
+       ...
+       func_800A5720(m);
+
+   `make_regs_eqv` (cse.c:836-890) puts the two in one quantity with `h`
+   canonical -- which is what the target wants, because the argument insn
+   then keeps `h`, the SHORT pseudo, and local-alloc can give it $a1, making
+   the argument move a no-op. The only damage cse does is rewriting `m`'s
+   later use back to `h`, and reassigning `h` immediately after the copy
+   calls `delete_reg_equiv` on it, so `m` becomes the class head and
+   `func_800A5720(m)` is left alone. A third variable for func_80099194's
+   result, or the copy written the other way round (`m = f(); h = m;`), is
+   90 words and 2 differing -- which is what twelve spellings in the park
+   file measured.
+
+   This is a 19-INSTANCE IDIOM in this overlay. `addu $aN, $vM, $zero` …
+   `jal` … `addu $sK, $aN, $zero` matches nineteen functions here and
+   nowhere else in the project. 90 words, 0 differing. */
+s32 func_800BD45C(u8 *p, u8 *q, s16 k)
+{
+    void *m;
+    void *h;
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    func_800C4AFC(*(u8 **)(p - 0x18), 0x802080, p);
+    if (*(u32 *)(p + 0x14) & 0x4000)
+    {
+        if (!(*(u32 *)(p + 0x1C) & 0x40))
+        {
+            h = func_800990FC();
+            m = h;
+            h = func_80099194(D_800E0E69, h);
+            func_80099290(h);
+            func_800A5720(m);
+        }
+    }
+    func_80042B68((s8 *)p, 0x5);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
+
+/* func_800BD45C with a different tint, mask, string and sound.
+   90 words, 0 differing. */
+s32 func_800BD5C4(u8 *p, u8 *q, s16 k)
+{
+    void *m;
+    void *h;
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 6) & 3, 0) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    func_800C4AFC(*(u8 **)(p - 0x18), 0xC02020, p);
+    if (*(u32 *)(p + 0x14) & 0x4000)
+    {
+        if (!(*(u32 *)(p + 0x1C) & 0x400))
+        {
+            h = func_800990FC();
+            m = h;
+            h = func_80099194(D_800E0E82, h);
+            func_80099290(h);
+            func_800A5720(m);
+        }
+    }
+    func_80042B68((s8 *)p, 0x2);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* THE KILL HANDLERS: one skeleton, five landed copies and two parked. Every
    member opens the same way -- if the record IS the engine's current one
