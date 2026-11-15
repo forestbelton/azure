@@ -1327,6 +1327,11 @@ extern u8 D_800E0874[];
 extern u8 D_800E089C[];
 extern u8 D_800E08AB[];
 extern u8 D_800E08BA[];
+/* func_80098CF8's three failure messages and the name of the key it wants. */
+extern u8 D_800E08CC[];
+extern u8 D_800E08E5[];
+extern u8 D_800E08F1[];
+extern u8 D_800E0919[];
 extern u8 D_800DD2EC[];
 /* func_80095538 calls this one ABOVE its definition; without the forward
    declaration the call rides an implicit one and the definition then
@@ -5272,7 +5277,110 @@ s32 func_80098CEC(u8 *p)
     return p[0x3] & 0x20;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80098CF8);
+/* The key-use step: refuse the door outright when the held key is not
+   D_80081484's and that slot is armed, print the mismatch pair and bail;
+   otherwise, for a consumable key, announce it, spend it through
+   func_80098614 or func_800982A8, then spawn the unlock node, aim its mover
+   at the renderable's tile, record the key in the actor's +0xBC and in
+   D_80081484, re-skin the renderable at the camera-relative facing and arm
+   state 0x1B. 174 words, 0 differing -- a decomp-permuter win on top of a
+   16-differing hand floor.
+
+   THE WHOLE RESIDUE WAS ONE LOAD'S POSITION. `*(u32 *)d` must be read into a
+   local BETWEEN the `+0xBC` store and the `+0x9C` store; at that point the
+   target's copy of d's word has an extra consumer, so sched1 lifts it 18
+   insns earlier into the load-delay slot after `lhu $v0, 0x88($s4)`, and the
+   `addu $a0, $s5, $zero` that fills word 114 appears. Written inline at the
+   D_80081484 store the copy has only the store and the `jal` to feed, stays
+   next to the call, and word 114 is a `nop` instead -- 16 differing, with
+   knock-on register renames through words 118-134 and the two constant
+   argument setups at 143/151 swapped. A `w` local assigned anywhere ELSE is
+   byte-identical to the inline form; it is the position, not the local.
+
+   MEASURED AND REJECTED BY HAND FIRST, all 174 or 175 words: all 120 orders
+   of the five r-stores (floor 16, reached by every order putting 0x98
+   first); the table store moved before the r-block, after 0xAC and before
+   0x90 (173 words, 50-52); `((u8 **)r)[0x24] = c`, `c` as `void *`, an index
+   local, a `do { } while (0)` before the r-stores and `__asm__("" ::"r"(c))`
+   before the 0x90 store, all byte-identical; `((u8 **)c)[0xB] = D_800DD0B8`
+   22; x/y locals for the two byte reads 173/71; the dead-`if` reference
+   device 91; p[0x9A]/p[0x9B] above the D_80081484 store 21; the +0x88,
+   +0x2A and +0x1C reads moved off q onto p, 60/59/59. */
+UnkNode *func_80098CF8(u8 *p, void *b, u8 *c, u8 *d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *q;
+    u8 *g;
+    u8 *r;
+    void *h;
+    void *s;
+    u32 w;
+
+    q = p;
+    g = D_80081484;
+    if (d != g && g[1] != 0)
+    {
+        h = func_800990FC();
+        func_80099290(func_80099194(D_800E08E5,
+                                    func_80099368(g, func_80099194(D_800E08CC,
+                                                                   func_80099368(d, func_8009929C(8, h))))));
+        func_800A5720(h);
+        return NULL;
+    }
+    if ((d[3] & 0x20) != 0)
+    {
+        h = func_800990FC();
+        s = func_8009929C(8, h);
+        if ((d[3] & 0x40) != 0)
+        {
+            func_800A56E0(0x70A);
+            func_80099290(func_80099194(D_800E08F1, func_80099368(d, s)));
+            func_800A5720(h);
+            return NULL;
+        }
+        func_80099290(func_80099194(D_800E0919, func_80099368(d, s)));
+        func_800A5720(h);
+        if (d[1] == 0x11)
+        {
+            func_80098614(q, d);
+        }
+        else
+        {
+            func_800982A8(q, d);
+        }
+    }
+    n = func_800A8608(p - 0x20, d, 0, 0, 0);
+    if (n == NULL)
+    {
+        return NULL;
+    }
+    n->unk_10 = (u32)func_8008D470;
+    m = n->unk_08;
+    *(s16 *)((u8 *)m + 0x2) = (c[0x24] << 6) + 0x20;
+    *(s16 *)((u8 *)m + 0x6) = (c[0x25] << 6) + 0x20;
+    *(s16 *)((u8 *)m + 0xA) = *(u16 *)(q + 0x88) - 0x30;
+    r = (u8 *)n + 0x20;
+    *(u32 *)(r + 0x98) = *(u32 *)d;
+    *(s16 *)(r + 0xAC) = 1;
+    *(u8 **)(r + 0x90) = c;
+    *(void **)(r + 0x8C) = b;
+    *(s16 *)(r + 0xA8) = 6;
+    *(u8 **)(p + 0xBC) = d;
+    w = *(u32 *)d;
+    *(u8 **)(r + 0x9C) = D_80081484;
+    *(u32 *)(p + 0x8C) = 0;
+    *(u32 *)(p + 0x124) = 0;
+    *(u32 *)D_80081484 = w;
+    p[0x9A] = 0x1B;
+    p[0x9B] = 0;
+    *(u8 **)(c + 0x2C) = D_800DD0B8;
+    func_80048A44(c, D_800DD0B8[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+    func_800A56E0(0x511);
+    *(u32 *)(q + 0x1C) |= 0x100000;
+    func_80098B38(d);
+    return n;
+}
 
 /* THE 0x80010000 BASE AGAIN: splat renders these as %hi/%lo(D_8001xxxx) but
    a --raw run shows no relocations. `return ret` inside the loop is 19
