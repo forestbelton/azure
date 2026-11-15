@@ -414,6 +414,35 @@ rather than a guess.** On the 298 stubs that remain:
 * `xsibs.py` was exhausted the day the block opened: 19 functions, 550
   words, nearly all landed.
 
+**THAT xsibs CLAIM WAS WRONG, AND IT STAYED WRONG FOR A DAY.** It rested on
+the 0.85/0.88 runs only. At `--ratio 0.60` the same tool, on the same block,
+reports **18 functions and 5,972 words** -- and the leads are real, not noise:
+`func_800CF8E4` (932 words) is `csrc/ovl_town.c`'s `func_800AC4C4` rebuilt
+around a 6-byte map cell instead of a bare `u16`, and reading it that way took
+a cold function to **932 of 932 words, 8 differing** on the first serious
+compile. The 0.602 score badly undersells it: the object loop, the four edge
+loops, the vertex block, the LINE_F4 block and the backface tail are all
+town's shape, and town's own scheduler levers transfer verbatim.
+
+Five parks still carry untried templates from that run:
+
+| words | park | template |
+| --- | --- | --- |
+| 932 | `func_800CF8E4` | `town.bin:func_800AC4C4` 0.602 |
+| 528 | `func_800C6B40` | `slus:func_800453E0` 0.628 |
+| 390 | `func_800D07C8` | `slus:func_80045CC4` **0.832** |
+| 352 | `func_800B9144` | `slus:func_8003D0F0` 0.645 |
+| 211 | `func_800D0DE0` | `town.bin:func_800ABEEC` 0.716 |
+
+`func_800D07C8` at 0.832 is the sharpest: it was reconstructed BY HAND with no
+template and parked at 388 of 390 words with 378 differing.
+
+**Read the ratio as a floor on structural similarity, not as a confidence
+score.** A 0.60 sweep over this block costs about ten minutes of CPU and is
+the cheapest lead generator left. Note also that the tool scans the asm
+listings, so most rows in a 0.60 run name functions that are already landed --
+filter against `csrc` before reading the list as work.
+
 The kill-handler family, the 0x800D1C70 cluster and the reused-temporary
 idiom are all done. What is left is 298 singletons, and the size profile has
 moved with them: the smallest remaining stub is 53 words, the median is
