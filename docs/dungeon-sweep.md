@@ -176,38 +176,53 @@ in which local holds what are the two that matter.
 
 ## The state of the sweep
 
-Take the numbers from `progress.py`. As of 2026-11-14 the block is open, 71 of
-863 functions are landed at 0 differing, all four containers are
-byte-identical, `guard.py` accounts for every stub, the whole-unit
-`ovlverify.py` sweep reports 71 of 71 clean, and `clang-format` has **no**
+Take the numbers from `progress.py`. As of 2026-11-14 the block is open, **96
+of 863 functions are landed at 0 differing** and one pair is parked, all four
+containers are byte-identical, `guard.py` accounts for every stub, the
+whole-unit `ovlverify.py` sweep is clean, and `clang-format` has **no**
 complaints about `csrc/ovl_dungeon.c` -- keep that at zero, it is a better
 baseline than `ovl_town.c`'s 31 and it costs nothing to hold.
 
-What the tools say is left, and where to start:
+**What the first day of sweeping actually bought, and why.** 4,317 words came
+out of three readings and their substitutions:
 
-* `nearsibs.py --groups` reports 22 sets totalling 5,496 words, and the whole
-  `0x800D1C70..0x800D4634` region is one cluster -- FOUR sets and THIRTEEN
-  functions, 1,690 words, which looks like one translation unit with several
-  near-identical entities. **The first of its four sets is landed**: the four
-  166-word walk-and-stop machines at
-  `func_800D21CC`/`800D29D8`/`800D3234`/`800D4634` are one source with the
-  parked handler substituted, 664 words for one function's work. Read the
-  comment above `func_800D21CC` before taking the next set -- it records the
-  allocation-priority device and the three-statement subtraction that the
-  rest of the cluster will almost certainly need too, since every member
-  takes the same four parameters and runs the same `+0x9B` state machine.
-  What is left in the cluster: the 169-word pair `func_800D1E34`/`800D2E9C`
-  with `func_800D2664` at 0.973, the 61-word trio
-  `func_800D20D8`/`800D28E4`/`800D3140` (the handlers these four install),
-  and `func_800D1C70`/`800D24A8`/`800D3F74` at 0.95.
-* The second richest is `0x800BD45C..0x800C37C8`: seven members of 73..90
-  words, 565 words, spanning two address runs, with a six-member 434-word set
-  interleaved with it.
-* `families.py` reports 35 functions / 3,231 words in exact-shape families.
-  The installer families described above came out of it; what is left is
-  mostly pairs.
-* 761 functions have no twin at all, 81,140 words. That is the bulk, and
-  `docs/town-sweep.md`'s cluster economics is the answer to it.
+* the `0x800D1C70..0x800D4634` cluster, fifteen of sixteen functions and
+  2,375 words. Three entity families, each with a spawner, a per-frame step
+  driver and a +0x8C handler, plus a shared four-state glide machine in four
+  copies and a walk, a fade-out and a fourth spawner. Read `func_800D21CC`,
+  `func_800D1E34`, `func_800D20D8` and `func_800D1C70` and the other eleven
+  are substitutions.
+* the kill handlers, eleven of thirteen and 819 words, spread over
+  `0x800BD45C..0x800C4220`. One skeleton -- the D_800E3D7C identity test, the
+  cached-RAM pointer gate, the D_800DDE84 lookup, and a close on
+  func_80098B38 and the engine's +0x0A counter -- with a different middle per
+  entity. Read `func_800BD72C` and the rest are middles.
+* the 67 landed with the carve itself.
+
+**The one park.** `func_800BD45C` and `func_800BD5C4` are the kill skeleton
+plus the message chain and sit at 90 of 90 words, 2 differing: one copy
+reversed around func_800990FC's handle. `docs/near-misses/func_800BD45C.c`
+has twelve measured spellings and the cse reason they all fail. Landing it
+lands both, 180 words.
+
+What the tools say is left, and where to go next:
+
+* `nearsibs.py --groups` is down to 16 sets and 2,807 words. The largest left
+  are the five-member `func_800BF210`..`func_800BF6D0` run (379 words), the
+  `func_800BEB30`/`func_800BEDEC` pair (337) and `func_800D5AC0`/`func_800D68F4`
+  (240). The five-member run is the best value.
+* `families.py` reports 22 functions / 1,760 words in exact-shape families.
+* `func_800D3738` is 527 words and is the one function the 0x800D1C70 cluster
+  is still missing -- a singleton, and the largest in the region.
+* The rest have no twin: that is the bulk, and `docs/town-sweep.md`'s cluster
+  economics is the answer to it.
+
+**Two things this block has already taught that generalise**, both now in
+`docs/matching-levers.md`: a four-word `if` arm whose only content is a load
+is a bare `volatile` read, and when the residue is two callee-saved registers
+swapped, read `.lreg`'s ref/length lines and solve for the reference count
+rather than sweeping spellings -- eleven natural rewrites on `func_800D21CC`
+left both numbers unchanged to the reference.
 
 ## What has NOT been done
 

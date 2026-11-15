@@ -125,6 +125,12 @@ images through each container's ELF, and reports **20 of 863 with a near
 sibling at 0.88, 582 words, 0.7% of the block.** So it is 85,000 words of
 reading rather than a renaming job.
 
+The first day of sweeping it took the unit to **96 of 863 landed, one pair
+parked, 4,317 of 85,616 words (5.0%)** -- and all but 67 of those came out of
+three readings plus substitutions, because this block is built out of entity
+families that differ only in their constants. See `docs/dungeon-sweep.md`
+for which readings those were and which sets are left.
+
 Unplaced code remaining, by 4 KB chunk with >=4 prologues and >=3 `jr $ra`:
 `main.bin` **none** -- the one 12 KB run at `+0x21000` that this used to call
 "too sparse to be code" was the `0x80088760` overlay, split 2026-11-11, so the
