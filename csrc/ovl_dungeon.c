@@ -242,6 +242,16 @@ void func_800D2664(u8 *, UnkVec *, u8 *);
 void func_800D2E9C(u8 *, UnkVec *, u8 *);
 void func_800D4158(u8 *, UnkVec *, u8 *);
 extern u8 D_800DEEC0[];
+extern u8 D_800DEF08[];
+extern u32 D_800814A0;
+extern s16 D_8008346A;
+void func_800A56E0(s32);
+void func_800A32A4(u8 *);
+void func_8009A028(u8 *);
+void func_8009A3D0(s32, s32, s32);
+s32 func_80042900(s8 *, s8);
+s32 func_800D36D0(u8 *, UnkVec *, UnkSlot *);
+void func_800D3738(u8 *, UnkVec *, UnkSlot *, s16);
 void func_8003DB94(void *, void *, s32);
 void func_80099FDC(UnkNode *);
 void func_8009A21C(s32, s32, s32);
@@ -3135,7 +3145,62 @@ void func_800D2C70(void *a, void *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2CB4);
+/* The cluster's FOURTH spawner, and the one that shows the list tag is a
+   FUNCTION: func_8004491C takes func_800D36D0 where the other three pass
+   D_80045340, so this entity's nodes are walked by the guarded walk below
+   rather than by the engine's own list. Otherwise func_800D1C70 with the
+   D_800DEF08 template, no colour bytes, a different scale pair, three more
+   renderer flags, func_800D2E9C / func_800D3140 as hooks, a plain 0x808080
+   colour word and a zeroed +0x9E. 122 words, 0 differing. */
+u8 *func_800D2CB4(s16 kind, s16 x, s16 y, s16 ang)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        p[0x13] = 0x34;
+        if (kind == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        func_8004491C(n, (u32)func_800D36D0);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = ang;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x24) = x;
+        *((u8 *)r + 0x25) = y;
+        func_8003DB94(r, D_800DEF08, 0);
+        r->unk_12 = 0x7E02;
+        r->unk_1C = 0x1800;
+        r->unk_1E = 0x2000;
+        r->unk_14 |= 0xC;
+        r->unk_10 |= 0x20;
+        r->unk_14 |= 0x100;
+        n->unk_10 = (u32)func_800D2E9C;
+        *(u32 *)(p + 0x8C) = (u32)func_800D3140;
+        *((u8 *)r + 0x26) = func_8009FB34(*((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        func_800A2B04(m, *((u8 *)r + 0x24), *((u8 *)r + 0x25));
+        *(s16 *)(p + 0x88) =
+            func_800BCB04(*(u16 *)((u8 *)m + 0x2), *(u16 *)((u8 *)m + 0x6), *(s16 *)((u8 *)m + 0xA));
+        *(u32 *)((u8 *)r + 0xC) = 0x808080;
+        r->unk_14 |= 0x8000;
+        func_80099FDC(n);
+        func_8009A21C(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                      (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        p[0x9A] = 0xE;
+        *(s8 *)(p + 0x9C) = -1;
+        *(s16 *)(p + 0x9E) = 0;
+        *(u32 *)(p + 0x1C) |= 0x40000200;
+    }
+    return p;
+}
 
 /* func_800D1E34 with D_800E2284 for D_800E21C0; see it for the whole
    mechanism. 169 words, 0 differing. */
@@ -3339,9 +3404,89 @@ void func_800D3234(UnkDungeonActor *a, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D34CC);
+/* A two-state fade-out: state 0 raises the record's 0x10000000 bit, asks
+   func_800A56E0 for sound 0x805 and arms a sixteen-step ramp, and state 1
+   walks the renderer's three colour bytes towards 0x20 and its two scales
+   towards zero, a step's worth of the remaining distance each frame. On
+   the last step -- or at once if the renderer's 0x8000 flag is up -- it
+   releases the engine's +0x10 slot, retires the record and rings
+   func_800A56C0.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D36D0);
+   The 0x20 the three colour terms are measured against is materialised
+   ONCE, in the dispatch's `beq` delay slot, and again at the end of state
+   0 -- one constant reaching the fallthrough and the direct entry. State 0
+   falls through into state 1, as in func_800D21CC. 129 words, 0
+   differing. */
+void func_800D34CC(UnkDungeonActor *a, UnkVec *b, UnkSlot *r, u8 *d)
+{
+    u8 *g;
+
+    switch (a->unk_9B)
+    {
+    case 0:
+        if (D_8008346A != 0)
+        {
+            return;
+        }
+        *(u32 *)(d + 0x1C) |= 0x10000000;
+        func_800A56E0(0x805);
+        *(u32 *)((u8 *)r + 0xC) = 0x808080;
+        a->unk_96 = 0x10;
+        a->unk_9B++;
+        /* fallthrough */
+    case 1:
+        *((u8 *)r + 0xC) += (0x20 - *((u8 *)r + 0xC)) / a->unk_96;
+        *((u8 *)r + 0xD) += (0x20 - *((u8 *)r + 0xD)) / a->unk_96;
+        *((u8 *)r + 0xE) += (0x20 - *((u8 *)r + 0xE)) / a->unk_96;
+        r->unk_1C -= r->unk_1C / a->unk_96;
+        r->unk_1E -= r->unk_1E / a->unk_96;
+        if (--a->unk_96 > 0 && !(r->unk_14 & 0x8000))
+        {
+            return;
+        }
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        func_800A32A4(d);
+        if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+        {
+            func_8009A3D0(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                          (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(d);
+        *(u16 *)(d - 2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        func_800A56C0();
+        return;
+    }
+}
+
+/* The node walk func_800D2CB4 hands to func_8004491C as its list tag: the
+   same four-member walk as func_800BC054 above, with the visitor skipped
+   for any node whose renderer carries the 0x80 flag. 26 words, 0
+   differing. */
+s32 func_800D36D0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    UnkNode *n;
+
+    for (;;)
+    {
+        if (!(s->unk_14 & 0x80))
+        {
+            func_800D3738(p, v, s, s->unk_06);
+        }
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3738);
 
