@@ -7492,7 +7492,47 @@ UnkNode *func_800A7700(s32 x, s32 y, s32 ang, s32 *q)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A77AC);
+/* Ease the mover onto the tile at +0xAA/+0xAC over the +0xA0 countdown, and
+   on the last frame claim a D_800E3548 slot for it: the four-byte word at
+   +0x98 goes into the slot, the two tile bytes, the +0xAE height twice and
+   the renderer's +0x08 go into the matching D_800E36C8 record, and the view
+   is re-aimed. 104 words, 0 differing.
+
+   THE +0x02 AND +0x04 STORES SHARE ONE READ -- written as two statements
+   each reading `*(u16 *)(p + 0xAE)` the second `lhu` and its load-delay nop
+   survive, 106 words. A chained assignment or one `u16` local is 104.
+   The third numerator has no `<< 6` and no `+ 0x20`: it is a raw height,
+   where the first two are tile coordinates. */
+void func_800A77AC(u8 *p, UnkVec *v, u8 *c)
+{
+    s16 i;
+    s16 t;
+    u8 *g;
+
+    v->unk_00 += ((((*(s16 *)(p + 0xAA) << 6) + 0x20) << 16) - v->unk_00) / *(s16 *)(p + 0xA0);
+    v->unk_04 += ((((*(s16 *)(p + 0xAC) << 6) + 0x20) << 16) - v->unk_04) / *(s16 *)(p + 0xA0);
+    v->unk_08 += ((*(s16 *)(p + 0xAE) << 16) - v->unk_08) / *(s16 *)(p + 0xA0);
+    t = *(u16 *)(p + 0xA0) - 1;
+    *(s16 *)(p + 0xA0) = t;
+    if (t <= 0)
+    {
+        i = func_800A71F4();
+        if (i >= 0)
+        {
+            *(s32 *)&D_800E3548_t[i] = *(s32 *)(p + 0x98);
+            D_800E36C8_u[i].unk_00 = p[0xAA];
+            D_800E36C8_u[i].unk_01 = p[0xAC];
+            D_800E36C8_u[i].unk_04 = D_800E36C8_u[i].unk_02 = *(u16 *)(p + 0xAE);
+            D_800E36C8_u[i].unk_08 = *(s32 *)(c + 0x8);
+            func_8009A21C(*(s16 *)(p + 0xAA), *(s16 *)(p + 0xAC), 0x800);
+            func_800A4300(D_80082E80, D_800E3D7C);
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) -= 1;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spawn the 0x212-style node through func_800A8608.
 
