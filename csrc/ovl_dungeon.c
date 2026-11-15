@@ -9332,7 +9332,254 @@ s32 func_8009B7E4(u8 *a, u8 *b)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B88C);
+/* "Find a free cell at or next to (x, y)" for the dungeon. Stage one walks the
+   actor ring -- `a`'s ring, or D_800E3D7C's when `a` is NULL, which is what the
+   `first` flag is for: it lets the D_800E3D7C walk run the FULL ring even though
+   the first step lands back on the head -- and marks a 25-byte claim table in the
+   scratchpad at 0x1F800000: slot 0 is the tile itself, 1..8 the eight
+   D_8006CCD8/E8 neighbours, 9..24 the sixteen D_800DCE6C/8C ones. An actor within
+   Chebyshev distance 2 claims the slot func_80065F90's angle picks. Stages two
+   and three then hand back the first UNclaimed cell that func_800A0548 says is on
+   the map, func_8009A350 says exists without the 0x8000/0x400 flags (0x400 is
+   waived when the ring head's +0x1C has 0x40000), and func_800BCB04 puts below
+   0x200. 360 words, 0 differing.
+
+   THE SHAPE WAS RIGHT AT 372 WORDS / 228 ALIGNED; EVERY ONE OF THE SEVEN
+   LOAD-BEARING SPELLINGS BELOW IS AN ALLOCATION OR AN RTL-OPERAND-ORDER FACT.
+
+   (1) `xx = x; yy = y;` -- THE TWO s32 PARAMETERS MUST BE COPIED INTO LOCALS.
+   A never-reassigned parameter gets about DOUBLE the REG_LIVE_LENGTH of an
+   identical mid-function pseudo (x: 16 refs / 552 against xx: 16 refs / 276), so
+   global.c's floor_log2(refs)*refs/live_length ranks the raw parameters BELOW
+   `h` and the (s16)x preheader copies, and both parameters spill: 372 words,
+   228 aligned. The copies cost nothing -- they coalesce into the
+   `addu $s5,$a1,$zero` the prologue has anyway. Dropping either one is 370
+   words and 132 (yy) or 169 (xx) aligned.
+
+   (2) `ax = dx >= 0 ? dx : -dx;` INTO A SECOND VARIABLE. abssi2 emits its
+   three-word `bgez/move/subu` form only when REGNO(dst) != REGNO(src); the
+   in-place `if (dx < 0) { dx = -dx; }` is the two-word form and the `move` the
+   target puts in the `bgez` delay slot never appears. The func_800A0134 abs just
+   below IS the in-place one-variable form -- that is why it has a `nop` delay
+   slot. (`dx < 0 ? -dx : dx` does not fold to ABS_EXPR at all.)
+
+   (3) `s16 first`, `s16 j`, `s16 j2`, `s16 gx2/gy2/gx3/gy3`. Each narrow copy
+   survives cse because the modes differ, and each is a real word: `first` is the
+   `addu $v0,$s0,$zero` ahead of the loop test, j/j2 the `addu $s0,$s1,$zero` and
+   `addu $v1,$s1,$zero` at the loop heads. Narrowing gx2/gy2 and gx3/gy3 took
+   359 words / 154 aligned to 360 / 73 -- as s32 they outrank `yy` and it spills.
+
+   (4) ONE `k1` FOR ALL THREE INDEX ROLES: the ring walk's claim slot, loop one's
+   direction and loop two's. Separate `k`/`k1`/`k2` are three allocnos whose
+   priorities land between the table pointers and `p`, and the whole callee-saved
+   file comes out permuted: 73 aligned. Merging k1/k2 is 55; folding the ring
+   walk's slot variable in too is 17.
+
+   (5) `u8 *sp = (u8 *)0x1F800000;` A POINTER LOCAL, NOT A CONSTANT ADDRESS.
+   Reload rematerialises its REG_EQUIV constant as a bare `lui` at each of the
+   four sites, which is what the target has; reaching 0x1F800001 as a constant
+   goes through LEGITIMIZE_ADDRESS instead, which builds `PLUS(index, int_reg)`
+   and puts the `lui` in the result register: 17 aligned against 12.
+
+   (6) `(D_8006CCD8[j] & 0xFFFF)`, NOT `(u16)D_8006CCD8[j]`. Nine `addu`s come
+   out with their operands transposed with the cast and right with the mask --
+   combine's "put complex operands first" swaps `PLUS(reg, zero_extend(mem))`
+   and the split puts the swap back into the insn stream. 12 aligned to 3.
+
+   (7) THE LAST TWO WORDS ARE OPERAND ORDER INSIDE THE SCRATCHPAD ADDRESS.
+   `*(sp + j + 1)` associates as `PLUS(PLUS(sp, j), 1)` and gives
+   `addu $v0,$t1,$s0`; `sp[1 + j]` gives the transpose. The claim store is
+   `*(u8 *)(k1 | (s32)sp) = 1;` -- an explicit `|` with the INDEX FIRST is the
+   only spelling that reaches the target's `or $v1,$s1,$t1`; `sp[k1]`,
+   `*(sp + k1)` and `(s32)sp | k1` are all the `addu` with the operands the
+   other way round. 3 aligned to 0. */
+s16 func_8009B88C(u8 *a, s32 x, s32 y, s16 *d, s16 *e)
+{
+    u8 *p;
+    u8 *h;
+    u8 *q;
+    u8 *sp;
+    u16 m;
+    s32 xx;
+    s32 yy;
+    s16 first;
+    s32 dx;
+    s32 dy;
+    s32 ax;
+    s32 ay;
+    s32 n;
+    s32 gx;
+    s32 gy;
+    s32 sx;
+    s32 sy;
+    s16 cnt;
+    s32 k1;
+    s16 j;
+    s16 gx2;
+    s16 gy2;
+    s32 bx;
+    s32 by;
+    s16 j2;
+    s16 gx3;
+    s16 gy3;
+    s32 cx;
+    s32 cy;
+
+    sp = (u8 *)0x1F800000;
+    xx = x;
+    yy = y;
+    p = a;
+    if (p != NULL)
+    {
+        h = p;
+        first = 0;
+    }
+    else
+    {
+        h = D_800E3D7C;
+        p = *(u8 **)(h + 0x58) + 0x20;
+        first = 1;
+    }
+    func_8003DB4C((int *)sp, 7);
+    while ((p = *(u8 **)(p + 0x5C) + 0x20) != h || first)
+    {
+        first = 0;
+        q = *(u8 **)(p - 0x14);
+        dx = (s16)xx - q[0x24];
+        ax = dx >= 0 ? dx : -dx;
+        dy = (s16)yy - q[0x25];
+        ay = dy >= 0 ? dy : -dy;
+        if (ax < ay)
+        {
+            ax = ay;
+        }
+        if (ax < 3)
+        {
+            if (ax == 0)
+            {
+                k1 = 0;
+            }
+            else if (ax == 1)
+            {
+                k1 = (((func_80065F90(q[0x25] - (s16)yy, q[0x24] - (s16)xx) + 0x100) >> 9) & 7) + 1;
+            }
+            else
+            {
+                k1 = (((func_80065F90(q[0x25] - (s16)yy, q[0x24] - (s16)xx) + 0x80) >> 8) & 0xF) + 9;
+            }
+            n = (s16)func_800A0134(h, p);
+            if (n < 0)
+            {
+                n = -n;
+            }
+            if (n < 0x40)
+            {
+                *(u8 *)(k1 | (s32)sp) = 1;
+            }
+        }
+    }
+    if (sp[0] == 0)
+    {
+        gx = (s16)xx;
+        gy = (s16)yy;
+        if (func_800A0548(gx, gy) == 0)
+        {
+            if ((s16)func_8009A350(xx - 1, gy, 0, &m) != 0)
+            {
+                if ((m & 0x8000) == 0)
+                {
+                    if ((m & 0x400) == 0 || (*(u32 *)(p + 0x1C) & 0x40000) != 0)
+                    {
+                        sx = gx << 6;
+                        sx = (sx + 0x20) & 0xFFE0;
+                        sy = gy << 6;
+                        sy = (sy + 0x20) & 0xFFE0;
+                        if ((s16)func_800BCB04(sx, sy, *(u16 *)(h + 0x88) - 0x20) < 0x200)
+                        {
+                            *d = xx;
+                            *e = yy;
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    cnt = 0;
+    gx2 = (s16)xx;
+    gy2 = (s16)yy;
+    k1 = D_8008347E & 7;
+    while (cnt < 8)
+    {
+        j = k1;
+        if (*(sp + j + 1) == 0)
+        {
+            if (func_800A0548((s16)(xx + (D_8006CCD8[j] & 0xFFFF)),
+                              (s16)(yy + (D_8006CCE8[j] & 0xFFFF))) == 0)
+            {
+                if ((s16)func_8009A350(gx2, gy2, j, &m) != 0)
+                {
+                    if ((m & 0x8000) == 0)
+                    {
+                        if ((m & 0x400) == 0 || (*(u32 *)(p + 0x1C) & 0x40000) != 0)
+                        {
+                            bx = (gx2 + D_8006CCD8[j]) << 6;
+                            bx = (bx + 0x20) & 0xFFE0;
+                            by = (gy2 + D_8006CCE8[j]) << 6;
+                            by = (by + 0x20) & 0xFFE0;
+                            if ((s16)func_800BCB04(bx, by, *(u16 *)(h + 0x88) - 0x20) < 0x200)
+                            {
+                                *d = xx + (D_8006CCD8[j] & 0xFFFF);
+                                *e = yy + (D_8006CCE8[j] & 0xFFFF);
+                                return 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        cnt++;
+        k1 = (k1 + 1) & 7;
+    }
+    cnt = 0;
+    gx3 = (s16)xx;
+    gy3 = (s16)yy;
+    k1 = D_8008347E & 0xF;
+    while (cnt < 0x10)
+    {
+        j2 = k1;
+        if (*(sp + j2 + 9) == 0)
+        {
+            if (func_800A0548((s16)(xx + (D_800DCE6C[j2] & 0xFFFF)),
+                              (s16)(yy + (D_800DCE8C[j2] & 0xFFFF))) == 0)
+            {
+                if ((s16)func_8009A350(xx + (D_800DCE6C[j2] & 0xFFFF) - 1,
+                                       yy + (D_800DCE8C[j2] & 0xFFFF), 0, &m) != 0)
+                {
+                    if ((m & 0x8000) == 0)
+                    {
+                        if ((m & 0x400) == 0 || (*(u32 *)(p + 0x1C) & 0x40000) != 0)
+                        {
+                            cx = (gx3 + D_800DCE6C[j2]) << 6;
+                            cx = (cx + 0x20) & 0xFFE0;
+                            cy = (gy3 + D_800DCE8C[j2]) << 6;
+                            cy = (cy + 0x20) & 0xFFE0;
+                            if ((s16)func_800BCB04(cx, cy, *(u16 *)(h + 0x88) - 0x20) < 0x200)
+                            {
+                                *d = xx + (D_800DCE6C[j2] & 0xFFFF);
+                                *e = yy + (D_800DCE8C[j2] & 0xFFFF);
+                                return 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        cnt++;
+        k1 = (k1 + 1) & 0xF;
+    }
+    return 0;
+}
 
 /* A node's +0x10 step for the damage number: append a 0x10-byte primitive to
    D_80083160.unk_00's +0x8D0 cursor, tint it by the remaining frames, hang it
@@ -21924,7 +22171,201 @@ UnkNode *func_800B9964(u8 *p)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B9A78);
+/* The kind-0x212 party-follow step func_800BA074 installs at +0x10, so the
+   three parameters are func_80040190's cast and share func_800B96C4's shape.
+   While the +0x0E glide lasts it eases the record's +0x14/+0x18/+0x08 onto the
+   leader's mover (reached as `**p` minus 0x18, func_800B96C4's spelling) and
+   drops the height by the leader's D_800DDC40 footprint; when the glide ends it
+   snaps them and latches the facing. Then it re-targets onto the engine's +0xAC
+   or +0xB0 actor when D_80083160's +0x10 asks, retires the node on the 0x20 bit,
+   announces on the 0x40 bit, and finally writes the mover from the camera
+   bearing at D_80083160's +0xC8.
+
+   383 words, 0 differing.
+
+   TWO SPELLINGS ARE LOAD-BEARING, both measured.
+
+   (1) THE TWO `= 8` STORES AT +0x0E ARE `*((s16 *)p + 7)`, THE POINTER-ADD
+   FORM. Only the pointer-add form is MEM_IN_STRUCT_P (func_800B96C4's rule).
+   A varying-address STRUCT store is what sched.c's true_dependence excuses
+   against the fixed-address non-struct `lw %lo(D_800E3D7C)` beside it, so the
+   global's load hoists over the `sh` and the literal 8 keeps its own register
+   one insn longer -- the target's `addiu $v1,$zero,8` / `lw` / `sh $v1`.
+   Spelled `*(s16 *)(p + 0xE) = 8` the two conflict, the `sh` goes first and
+   the load has to re-materialise after it: 383 words, 8 aligned differences,
+   at both sites.
+
+   (2) THE TWO `&D_80083460` BASES ARE SEPARATE LOCALS, one per arm. Shared,
+   the local is referenced in two regions, so it is a GLOBAL allocno and
+   local-alloc can no longer tie the `high` pseudo to the `lo_sum` that
+   consumes it: both materialisations come out two-register, `lui $v0` /
+   `addiu $v1,$v0,%lo`, where the target has the one-register `lui $v1` /
+   `addiu $v1,$v1,%lo`. Worth 4 aligned differences.
+
+   What was right on the first compile and should not be disturbed: the
+   leader actor is RE-SPELLED INLINE at every one of its nine sites, never
+   bound to a local -- each intervening store kills the cse and the target
+   reloads `*(u8 **)(*(u8 **)p)` every time; the countdown is an `s16 k`
+   assigned from `*(u16 *)(p + 0xE) - 1`, which folds `k <= 0` into
+   `sll 16`/`bgtz` with no `sra` (func_800B8CF0's rule); and D_80083160 is
+   reached through `Unk80083160 *g`, the pointer local that keeps
+   `addiu $s3, $v0, %lo(D_80083160)` in a callee-saved register across all
+   four reads (func_8009BE2C's rule). */
+void func_800B9A78(u8 *p, UnkVec *b, u8 *c)
+{
+    Unk80083160 *g;
+    u8 *s;
+    u8 *q;
+    u8 *q2;
+    s32 n;
+    s32 i;
+    s16 k;
+
+    g = &D_80083160;
+    s = *(u8 **)(*(u8 **)(*(u8 **)p) - 0x18);
+    if (*(s16 *)(p + 0xE) != 0)
+    {
+        *(s32 *)(p + 0x14) += (*(s32 *)(s + 0x0) - *(s32 *)(p + 0x14)) / *(s16 *)(p + 0xE);
+        *(s32 *)(p + 0x18) += (*(s32 *)(s + 0x4) - *(s32 *)(p + 0x18)) / *(s16 *)(p + 0xE);
+        if (*(s16 *)(p + 0x12) != 2)
+        {
+            *(s32 *)(p + 0x8) += (*(s32 *)(s + 0x8) - (D_800DDC40[(*(u8 **)(*(u8 **)p))[0x13]] << 16) -
+                                  *(s32 *)(p + 0x8)) /
+                                     *(s16 *)(p + 0xE) -
+                                 ((func_800644B8(*(s16 *)(p + 0xE) << 8) * *(s16 *)(p + 0xE)) << 6);
+            if ((*(s32 *)(*(u8 **)(*(u8 **)p) + 0x1C) & 0x80000) != 0)
+            {
+                *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) - 0x80;
+            }
+        }
+        else
+        {
+            *(s32 *)(p + 0x8) += ((*(s16 *)(*(u8 **)(*(u8 **)p) + 0x88) << 16) - *(s32 *)(p + 0x8)) / *(s16 *)(p + 0xE);
+        }
+    }
+    k = *(u16 *)(p + 0xE) - 1;
+    *(s16 *)(p + 0xE) = k;
+    if (k <= 0)
+    {
+        *(s32 *)(p + 0x14) = *(s32 *)(s + 0x0);
+        *(s32 *)(p + 0x18) = *(s32 *)(s + 0x4);
+        if (*(s16 *)(p + 0x12) != 2)
+        {
+            n = *(s16 *)(*(u8 **)(*(u8 **)p) + 0x88) - D_800DDC40[(*(u8 **)(*(u8 **)p))[0x13]];
+            if ((*(s32 *)(*(u8 **)(*(u8 **)p) + 0x1C) & 0x40000) != 0)
+            {
+                n -= 0x40;
+            }
+            *(s16 *)(p + 0xA) = n;
+            if ((*(s32 *)(*(u8 **)(*(u8 **)p) + 0x1C) & 0x80000) != 0)
+            {
+                *(s16 *)(p + 0xA) = n - 0x80;
+            }
+        }
+        else
+        {
+            *(s16 *)(p + 0xA) = *(u16 *)(*(u8 **)(*(u8 **)p) + 0x88);
+        }
+        *(s16 *)(p + 0xE) = 0;
+    }
+    if (*(s16 *)(p + 0xC) == 0)
+    {
+        if (*(s16 *)(p + 0xE) == 0)
+        {
+            if ((g->unk_10 & 2) != 0 && func_800BA33C(*(u8 **)(D_800E3D7C + 0xAC)) != 0 &&
+                *(u8 **)(D_800814A8 + 0xAC) != *(u8 **)(*(u8 **)p))
+            {
+                *((s16 *)p + 7) = 8;
+                *(u32 *)p = (u32)(D_800E3D7C + 0xAC);
+                if (*(s16 *)(p + 0x12) == 2)
+                {
+                    *(s32 *)(c + 0xC) = 0x101080;
+                }
+            }
+            if ((g->unk_10 & 1) != 0 && func_800BA33C(*(u8 **)(D_800E3D7C + 0xB0)) != 0 &&
+                *(u8 **)(D_800814A8 + 0xB0) != *(u8 **)(*(u8 **)p))
+            {
+                *((s16 *)p + 7) = 8;
+                *(u32 *)p = (u32)(D_800E3D7C + 0xB0);
+                if (*(s16 *)(p + 0x12) == 2)
+                {
+                    *(s32 *)(c + 0xC) = 0x801010;
+                }
+            }
+        }
+        if ((g->unk_10 & 0x20) != 0)
+        {
+            if (*(s16 *)(p + 0x12) == 0)
+            {
+                q = (u8 *)&D_80083460;
+                *(s16 *)(q + 0xA) = *(u16 *)(q + 0xA) - 1;
+            }
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            return;
+        }
+        if ((g->unk_10 & 0x40) != 0)
+        {
+            *(s16 *)(p + 0xC) = 1;
+            if (*(s16 *)(p + 0x12) == 0)
+            {
+                if ((*(u8 **)(*(u8 **)p))[0x13] == 0)
+                {
+                    func_8009F644(D_800E3D7C, 0x48, (s16)func_80098C80(*(u8 **)(p + 0x2C)), 0);
+                }
+                else
+                {
+                    func_8009F644(D_800E3D7C, 0x50, *(u8 **)(*(u8 **)p) == *(u8 **)(D_800E3D7C + 0xB0),
+                                  (s16)func_80098C80(*(u8 **)(p + 0x2C)));
+                }
+            }
+        }
+    }
+    else
+    {
+        if (*(s16 *)(p + 0x12) == 0)
+        {
+            func_800C77D0(*(u8 **)(*(u8 **)p) - 0x20, *(u8 **)(*(u8 **)(*(u8 **)p) - 0x18), 8, D_800DCE66);
+            if ((s16)func_80098920(*(u8 **)(*(u8 **)p), *(u8 **)(p + 0x2C), 0x15, 0) < 0)
+            {
+                return;
+            }
+            q2 = (u8 *)&D_80083460;
+            *(s16 *)(q2 + 0xA) = *(u16 *)(q2 + 0xA) - 1;
+        }
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    k = *(u16 *)(p + 0x10) + 1;
+    *(s16 *)(p + 0x10) = k;
+    if (*(s16 *)(p + 0x12) == 2)
+    {
+        *(s16 *)(c + 0x1A) = *(u16 *)(c + 0x1A) + 0x40;
+    }
+    else
+    {
+        *(s32 *)(p + 0x4) += func_800644B8(k << 7) << 5;
+    }
+    if (*(s16 *)(p + 0x12) == 0)
+    {
+        i = *(u16 *)(p + 0x24) & 0x1F;
+        *(s16 *)(p + 0x24) = i;
+        if (i < 0x10)
+        {
+            *(s16 *)(c + 0x18) = *(u16 *)(c + 0x18) + 0x80;
+        }
+        *(s16 *)(c + 0x18) = ((*(u16 *)(c + 0x18) + 0x400) & 0x7FF) - 0x400;
+        *(s16 *)(p + 0x24) = *(u16 *)(p + 0x24) + 1;
+    }
+    if (*(s32 *)c != 0)
+    {
+        func_800478B8(c);
+    }
+    *(s16 *)((u8 *)b + 0x2) = *(u16 *)(p + 0x16) + ((func_80064584(g->unk_C8) * *(s16 *)(p + 0x1C)) >> 11);
+    *(s16 *)((u8 *)b + 0x6) = *(u16 *)(p + 0x1A) + ((func_800644B8(g->unk_C8) * *(s16 *)(p + 0x1C)) >> 11);
+    b->unk_08 = *(s32 *)(p + 0x4) + *(s32 *)(p + 0x8) + (*(s16 *)(p + 0x20) << 15);
+}
 
 extern u8 D_80083780[];
 extern u8 D_800DF368[];
