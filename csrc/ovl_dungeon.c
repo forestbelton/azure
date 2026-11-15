@@ -5497,7 +5497,179 @@ s16 func_80094ED4(u8 *a, void *b, u8 *c, u8 *d)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094F74);
+extern u8 D_800E0A76[];
+extern u8 D_800E0A83[];
+extern u8 D_800E0A90[];
+extern u8 D_800E0AA1[];
+extern u8 D_800E0ABC[];
+extern u8 D_800E0AD8[];
+extern u8 D_800E0B07[];
+extern u8 D_800E0AFA[];
+extern u8 D_80088A80[];
+extern u8 D_80088A84[];
+extern u16 D_80012094;
+extern s16 D_80012096;
+
+s32 func_80094F74(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *m;
+    u8 *h;
+    u8 *q;
+    u8 *w;
+    u8 *w2;
+    u8 *bb;
+    s16 *zz;
+    s32 r;
+    s32 a;
+    s32 n;
+    s32 v;
+
+    g = (u8 *)&D_80083160;
+    r = func_800A70E4(c[0x24], c[0x25], *(s16 *)(d + 0x88));
+    if ((s16)r < 0)
+    {
+        if (*(s16 *)(p + 0x100) < 0)
+        {
+            return 1;
+        }
+        func_80095DD0(p, b, c, d);
+        return 0;
+    }
+    m = func_800990FC();
+    h = func_8009929C(8, m);
+    if (D_80081485[0] != 0)
+    {
+        func_80099290(func_80099194(
+            D_80088A80, func_80099368((u8 *)&D_800E3548_s[(s16)r], func_80099194(D_800E0A76, h))));
+        func_800A5720(m);
+        return 1;
+    }
+    a = func_80098FB0();
+    n = func_80098FF8();
+    if ((D_80013714 & 1) == 0)
+    {
+        if ((*(s32 *)(g + 0x8) & 0x20) != 0)
+        {
+            func_8009F644(d, 0x40, 0, 0);
+            func_80099290(func_80099194(
+                D_80088A80, func_80099368((u8 *)&D_800E3548_s[(s16)r], func_80099194(D_800E0A83, h))));
+            func_800A5720(m);
+            return 1;
+        }
+    }
+    else
+    {
+        q = func_8009F868();
+        if (q != NULL)
+        {
+            if ((q[1] & 0xF8) == 0x40)
+            {
+                return 1;
+            }
+            func_8009F988();
+        }
+    }
+    if (D_800E3548_s[(s16)r].unk_01 == 0xE ||
+        (D_800E3548_s[(s16)r].unk_01 == 0xC && D_800E3548_s[(s16)r].unk_00 == 4) ||
+        (D_800E3548_s[(s16)r].unk_01 == 0x12 && D_800E3548_s[(s16)r].unk_00 == 1))
+    {
+        h = func_80099368((u8 *)&D_800E3548_s[(s16)r], h);
+        if (D_800E3548_s[(s16)r].unk_01 == 0xE)
+        {
+            h = func_80099194(D_80088A84, h);
+        }
+        else
+        {
+            h = func_80099194(D_800E0A90, h);
+        }
+        *(u16 *)(p + 0xA2) |= 0x80;
+        if (D_800E3548_s[(s16)r].unk_01 == 0xC)
+        {
+            h = func_80099194(D_800E0ABC,
+                              func_8009929C(0xA, func_80099194(D_800E0AA1, func_8009929C(0xA, h))));
+            p[0xFB] = 1;
+            zz = &D_80012096;
+            if (D_80012094 != 3)
+            {
+                *zz = 3;
+            }
+            else
+            {
+                *zz = 5;
+                /* DEVICE: worth 5 words (0x80095248..0x80095260). %hi of
+                   D_80012096 must be allocated before the constant 3, and
+                   allocno_compare gives it 1*3/16 against the constant's
+                   1*3/6 (both live lengths already doubled by
+                   update_equiv_regs). This asm emits nothing but adds two
+                   references to the symbol's high -- 2*5/18 = 5555 against
+                   5000 -- without adding an instruction, because
+                   update_equiv_regs deletes the lo_sum it keeps alive.
+                   No legal spelling reaches it: three references is all two
+                   stores can produce. Measured, all 7 differing unless noted:
+                   `D_80012096 = 3/5` with no pointer local (317 words, 142);
+                   constant addresses for both (318, 141); a page-base local
+                   (316, 11); `__asm__("" ::"r"(zz))` (317, 147 -- the "r"
+                   forces the whole address into a register); the arms swapped
+                   (9); `zz` assigned earlier (7); `zz[0] =` (7). The same asm
+                   anywhere but the end of the else arm perturbs the delay-slot
+                   fill and costs words or order (11 to 144 differing). */
+                __asm__("" : "=m"(D_80012096) : "m"(D_80012096));
+            }
+            *(s16 *)0x8001209A = 0;
+        }
+        else if (D_800E3548_s[(s16)r].unk_01 == 0xE)
+        {
+            /* DEVICE: worth 2 words (the `addu`/`lbu` pair at 0x800951E8).
+               The slot address is a block-local pseudo here, so local-alloc's
+               combine_regs ties it to the `sra` that feeds it and it inherits
+               $v0; the target keeps them apart in $a0. This reference in a
+               second basic block makes reg_basic_block -1, which is exactly
+               the `reg_qty[sreg] == -1` leg of combine_regs that refuses the
+               tie, and the address then conflicts with the 0xC/0xE constant
+               in $v0 and the kind byte in $v1 and lands in $a0. No legal
+               spelling reaches it: the target's 0xE arm touches nothing in
+               the slot, so nothing in C can reference the address there.
+               Measured alternatives, all 7 differing: the kind byte in a u8
+               local compared twice; `((u16 *)p)[0x51] |= 0x80`;
+               `*(u16 *)(p+0xA2) = *(u16 *)(p+0xA2) | 0x80`; 11 differing for
+               `((UnkDungeonSlot *)&D_800E3548_s[(s16)r])->unk_01`. */
+            __asm__("" ::"m"(D_800E3548_s[(s16)r].unk_01));
+            v = func_800438E4();
+            *(s32 *)(p + 0xFC) += v;
+            func_800B4C7C(0x97, d, (s16)v, 1);
+        }
+        w = (u8 *)0x80010298;
+        *(s32 *)w = *(s32 *)&D_800E3548_s[(s16)r];
+        D_800E3548_s[(s16)r].unk_00 = 0;
+        D_800E3548_s[(s16)r].unk_01 = 0;
+        func_8009A3D0(D_800E36C8[(s16)r].unk_00, D_800E36C8[(s16)r].unk_01, 0x800);
+        *(u8 **)(p + 0xBC) = w;
+    }
+    else if ((s16)a < 0 || (s16)n < 0)
+    {
+        h = func_80099194(D_80088A80,
+                          func_80099368((u8 *)&D_800E3548_s[(s16)r],
+                                        func_80099194(D_800E0AFA,
+                                                      func_8009929C(0xA, func_80099194(D_800E0AD8, h)))));
+    }
+    else
+    {
+        h = func_80099194(D_800E0B07, func_80099368((u8 *)&D_800E3548_s[(s16)r], h));
+        w2 = (u8 *)0x80010248 + (s16)a * 4;
+        *(s32 *)w2 = *(s32 *)&D_800E3548_s[(s16)r];
+        bb = (u8 *)0x80010000;
+        *(u8 **)(bb + (s16)n * 4 + 0x29C) = w2;
+        *(u16 *)(p + 0xA2) |= 0x80;
+        D_800E3548_s[(s16)r].unk_00 = 0;
+        D_800E3548_s[(s16)r].unk_01 = 0;
+        func_8009A3D0(D_800E36C8[(s16)r].unk_00, D_800E36C8[(s16)r].unk_01, 0x800);
+        *(u8 **)(p + 0xBC) = w2;
+    }
+    func_80099290(h);
+    func_800A5720(m);
+    return 1;
+}
 
 /* Probe the tile the second argument's (0x24, 0x25) and the fourth's facing
    pick, park the index at +0x100 and report whether the caller may go on.
@@ -21252,7 +21424,125 @@ UnkNode *func_800B9964(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B9A78);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BA074);
+extern u8 D_80083780[];
+extern u8 D_800DF368[];
+
+void func_800B9A78();
+s32 func_800BA074(u8 *a)
+{
+    UnkNode *t[3];
+    UnkVec *m;
+    u8 *r;
+    u8 *v;
+    s32 i;
+    /* The constant 2 has to reach a register BEFORE `g2`'s address does, and
+       the only way to put it there is a local initialised in the loop's own
+       init clause. loop.c's move_movables emits the movables with
+       emit_insn_before(.., loop_start), so they land in the preheader in the
+       order scan_loop found them, which is body order: with `2` first
+       materialised at the `i == last` test, `g2 = D_80083780` is movable #1
+       and the constant #2, and global.c's allocno_compare then reads
+       2*7/234 = 598 for the address against 2*7/232 = 603 for the constant,
+       so the constant takes $s7 and the address $fp -- the target's two
+       registers, swapped, and nothing else differs. Setting `last` here
+       instead leaves it before the preheader entirely, which makes the
+       address 232 and the constant 242 and reverses the pair. It has to be
+       AFTER `i = 0` (hence the comma, not a statement before the loop):
+       whichever of the two is emitted first fills the delay slot of
+       `bnez $v0`, and the target's delay slot holds `i = 0`.
+       `g2` cannot simply be moved down past the `i == last` test instead --
+       scan_loop refuses to hoist it there. Past the `if (t[i] != NULL)` jump
+       maybe_never is 1, `g2` is a user variable so condition (2) is out, and
+       its three uses straddle two basic blocks so condition (1) is too; the
+       measured result is 176 of 178 words, 173 differing. Spelling the
+       address inline instead makes it a non-uservar that hoists from
+       anywhere, but then the %lo folds into each load and the lo_sum
+       disappears: 175 words. */
+    s32 last;
+    u8 *g;
+    u8 *g2;
+
+    if (func_8003FA44(3) == 0)
+    {
+        return 0;
+    }
+    for (i = 0, last = 2; i < 3; i++)
+    {
+        g2 = D_80083780;
+        t[i] = func_8003FC64(0x12);
+        if (t[i] != NULL)
+        {
+            t[i]->unk_10 = (u32)func_800B9A78;
+            if (i == last)
+            {
+                func_8004491C(t[2], (u32)func_80045C34);
+            }
+            else
+            {
+                func_8004491C(t[i], (u32)D_80045340);
+            }
+            m = t[i]->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)(g2 + 0x2);
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)(g2 + 0x6);
+            r = (u8 *)t[i]->unk_0C;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            *(s32 *)(r + 0xC) = 0x2C808080;
+            *(s16 *)(r + 0x6) = 4;
+            if (i == 0)
+            {
+                func_800C77D0(t[0], (u8 *)m, 8, D_800DCE66);
+                *(u32 *)(r + 0x8) = func_8004A658(a[1], a[0]);
+            }
+            else if (i == 1)
+            {
+                *(u32 *)(r + 0x8) = (u32)D_800DF368;
+            }
+            else
+            {
+                func_8003DB94(r, D_80079444, 0);
+                *(u16 *)(r + 0x14) |= 0xC;
+            }
+            v = (u8 *)t[i] + 0x20;
+            *(s16 *)(v + 0xA) = *(u16 *)(g2 + 0xA) - D_800DDC40[0];
+            *(u32 *)v = (u32)&D_800814A8;
+            *(s16 *)(v + 0x12) = i;
+            *(s16 *)(v + 0x16) = *(u16 *)((u8 *)m + 0x2);
+            *(s16 *)(v + 0x1A) = *(u16 *)((u8 *)m + 0x6);
+            if (i != 0)
+            {
+                *(u32 *)(v + 0x28) = (u32)t[0];
+            }
+            else
+            {
+                *(u32 *)(v + 0x2C) = (u32)a;
+            }
+            if (func_800BA33C(*(u8 **)(D_800E3D7C + 0xAC)) != 0)
+            {
+                *(s16 *)(v + 0xE) = 8;
+                *(u32 *)v = (u32)(D_800E3D7C + 0xAC);
+                if (*(s16 *)(v + 0x12) == last)
+                {
+                    *(s32 *)(r + 0xC) = 0x101080;
+                }
+            }
+            else if (func_800BA33C(*(u8 **)(D_800E3D7C + 0xB0)) != 0)
+            {
+                *(s16 *)(v + 0xE) = 8;
+                *(u32 *)v = (u32)(D_800E3D7C + 0xB0);
+                if (*(s16 *)(v + 0x12) == last)
+                {
+                    *(s32 *)(r + 0xC) = 0x801010;
+                }
+            }
+        }
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) += 1;
+    func_800B1768(0, 0x27, 0x40, 0x209, 0, 0);
+    func_800B1B10(a, 0x4C, 0x50, 0x200, 0, 2);
+    return (s32)t[0];
+}
 
 /* THE `!= 0` MUST BE SPLIT OFF THE AND. `return (x & 0x20000) != 0;` folds
    to srl 17 / andi 1 (3 differing); cc1psx expands statement by statement,
@@ -35718,7 +36008,115 @@ s32 func_800DA93C(u8 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DAB50);
+void func_800DAB50(u8 *p)
+{
+    u8 rec[0x30];
+    s32 i;
+    s32 off;
+    s32 x;
+    s32 y;
+    s32 d;
+
+    *(s16 *)(rec + 0x28) = 0;
+    *(s16 *)(rec + 0x20) = 0;
+    if (*(s16 *)(p + 8) != 0)
+    {
+        *(s16 *)(rec + 0x22) = 0x30;
+        *(s16 *)(rec + 0x2A) = *(u16 *)(p + 2) + 0x30;
+    }
+    else
+    {
+        *(s16 *)(rec + 0x22) = (*(u16 *)(p + 2) << 1) + 0x40;
+        *(s16 *)(rec + 0x2A) = 0x30;
+    }
+    i = 0;
+    *(s16 *)(rec + 0x24) = func_800644B8((*(s16 *)(p + 2) - 0x20) << 6) >> 6;
+    *(u8 **)rec = rec + 0x20;
+    *(s16 *)(rec + 0x2C) = 0;
+    *(s16 *)(rec + 0x18) = 2;
+    *(s16 *)(rec + 0xC) = *(u16 *)(p + 0xA);
+    off = 0x28;
+    *(s32 *)(rec + 8) = 0;
+    *(s32 *)(rec + 0x14) = 0;
+    *(s32 *)(rec + 0x10) = 0;
+    *(s16 *)(rec + 0x1A) = 0;
+    for (; i < 2; i++)
+    {
+        *(u8 **)(rec + 4) = p + off;
+        func_800DBA90(rec);
+        *(u16 *)(rec + 0xC) += 0x200;
+        off += 0x10;
+    }
+    for (i = 3; i >= 0; i--)
+    {
+        *(u16 *)(p + i * 8 + 0x28) += *(u16 *)(p + 0x20);
+        *(u16 *)(p + i * 8 + 0x2A) += *(u16 *)(p + 0x22);
+        *(u16 *)(p + i * 8 + 0x2C) += *(u16 *)(p + 0x24);
+    }
+    switch (*(s16 *)p)
+    {
+    case 0:
+        *(s32 *)(p + 0x10) = 0;
+        *(s16 *)(p + 4) = func_80066460(0, 1, 0x2C0, 0x100);
+        *(s32 *)(p + 0xC) = 0x242424;
+        *(u16 *)p += 1;
+    case 1:
+        *(s32 *)(p + 0x10) += *(s32 *)(p + 0xC);
+        if (p[0x13] != 0)
+        {
+            *(s16 *)(p + 4) = func_80066460(0, 3, 0x2C0, 0x100);
+            *(s32 *)(p + 0x10) = 0xFFFFFF;
+            *(s32 *)(p + 0xC) = 0x101010;
+            *(u16 *)p += 1;
+        }
+        break;
+    case 2:
+        *(s32 *)(p + 0x10) -= *(s32 *)(p + 0xC);
+        if (p[0x10] == 0x7F)
+        {
+            *(s16 *)(p + 4) = func_80066460(0, 3, 0x2C0, 0x100);
+            *(s32 *)(p + 0x10) = 0xA0A0A0;
+            *(s32 *)(p + 0xC) = 0x101010;
+            *(u16 *)p += 1;
+        }
+        break;
+    case 3:
+        *(s32 *)(p + 0x10) -= *(s32 *)(p + 0xC);
+        if (*(s32 *)(p + 0xC) > 0x80808)
+        {
+            *(s32 *)(p + 0xC) = *(s32 *)(p + 0xC) - 0x10101;
+        }
+        if (*(s32 *)(p + 0x10) < 0)
+        {
+            *(s32 *)(p + 0x10) = 0;
+            *(u16 *)(p - 2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    x = *(u16 *)(p + 2);
+    i = ((s16)x << 2) + ((s16)x >> 1);
+    /* ONE load of p+0xA, before the test, into an `s32` local of its own.
+       Loading it inside each arm gives the right word count but two
+       `lh 0xA($s2)` where the target has one, and lets sched1 lift the
+       `lh 0x8($s2)` into the load-delay slot of `lhu 0x2($s2)`: 11 differing.
+       With the load hoisted, the three-deep sll/sra/sra/addu chain is the
+       only thing ready and both the load-delay slot and the `bnez` delay
+       slot stay empty, which is the target's pair of nops. The local must
+       not be `x` (reusing it splits the `lhu`/`sll` pair across $v1 and $v0,
+       2 differing) and must not be `s16` (191 words). */
+    d = *(s16 *)(p + 0xA);
+    if (*(s16 *)(p + 8) == 0)
+    {
+        y = d - i;
+    }
+    else
+    {
+        y = d + i;
+    }
+    *(s16 *)(p + 0xA) = y;
+    *(s16 *)(p + 2) = *(u16 *)(p + 2) - 1;
+}
 
 /* Spawn the 0x312 effect at the mover's position. THE NODE POINTER IS BUMPED
    IN PLACE -- `n += 0x20` -- rather than taken into a second local: the
