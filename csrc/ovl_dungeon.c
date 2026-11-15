@@ -113,7 +113,12 @@ s32 func_800AC82C();
 /* Called for effect only; both forwarders discard the 0 it returns. */
 s32 func_800AB538();
 void func_800AB778();
-void func_800AD058();
+/* Widened to `s32`: every exit sets $v0, which is a `return 0`/`return 1`
+   and not a `void` tail. Its one landed caller, func_800D9F7C, discards the
+   result and is unchanged at 8 words, 0 differing -- the same correction
+   func_800AB538 one line up records. The definition stays K&R for the same
+   reason: func_800D9F7C sits BELOW it and passes no arguments. */
+s32 func_800AD058();
 /* The second gate of the four-argument installers, whose result is tested as
    a HALFWORD -- `sll $v0, 16` then `blez`, with no `sra`. Two arguments. */
 s32 func_800AD9B4();
@@ -583,6 +588,18 @@ void func_80065DF0(s32, MATRIX *);              /* RotMatrixZ */
 
 /* SetPolyG4. */
 void func_80066708(void *);
+/* func_800C55F4's three remaining GTE/GPU helpers. func_80065480 has
+   NormalClip's shape -- three packed screen-XY words in, a signed area out,
+   tested with `blez` -- and func_800666B8 is the one-argument primitive
+   initialiser that sits beside func_80066708's. Only the `func_` spellings
+   are in splat/dungeon.bin_undefined_funcs_auto.txt, so those are what link. */
+s32 func_80065480(s32, s32, s32);
+void func_800666B8(void *);
+/* Prototype copied from its definition in csrc/unk_1C540.c:2936. The `s16`
+   second parameter is load-bearing HERE: the CALLER is what carries the
+   `sll`/`sra 16` pair the target has at each of func_800C55F4's three call
+   sites. */
+u8 *func_8004CECC(u32, s16, s32, u8 *);
 
 /* The dungeon's 0x1F800000 scratchpad as the two tag callbacks below see it:
    the projection input vector at +0x04, the primitive cursor at +0x1C, the
@@ -1453,19 +1470,27 @@ typedef struct UnkDungeonSP3
 {
     u8 pad_00[0x20];
     u8 *unk_20;
-    u8 pad_24[0x2C];
+    u8 pad_24[0x4];
+    SVECTOR unk_28;
+    VECTOR unk_30;
+    u8 pad_40[0x10];
     MATRIX unk_50;
     SVECTOR unk_70[4];
     s32 unk_90;
     s32 unk_94;
     u8 pad_98[0x28];
     s32 unk_C0;
-    u8 pad_C4[0xC];
+    s32 unk_C4;
+    s32 unk_C8;
+    s32 unk_CC;
     MATRIX unk_D0;
-    u8 pad_F0[0x10];
+    s32 unk_F0;
+    u8 pad_F4[0xC];
     s32 unk_100;
     s16 unk_104;
-    u8 pad_106[0x16];
+    u8 pad_106[0xE];
+    s32 unk_114;
+    u8 pad_118[0x4];
     MATRIX unk_11C;
 } UnkDungeonSP3;
 void func_80064840(MATRIX *, MATRIX *, MATRIX *); /* CompMatrix */
@@ -1530,6 +1555,9 @@ extern u8 D_800E1BAA[];
    case-1/2 handshake byte -- a declared SCALAR, since the `%lo` sits inside
    the `lbu`. */
 extern u8 D_800DD138[];
+/* func_800B3D10's speed divisor, a declared SCALAR -- the `%lo` sits inside
+   the `lbu`, the same reading D_800E3E40 below carries. */
+extern u8 D_800E3D68;
 extern u8 D_800E3E40;
 /* Resident helpers func_80095A10 needs; prototypes copied from their
    definitions in csrc/unk_1AF38.c and csrc/unk_154BC.c. */
@@ -16545,7 +16573,156 @@ void func_800ACF88(u8 *p)
     func_800A5720(m);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD058);
+/* The four-state fade-and-retire machine the actor's +0x9B drives, and the
+   widest member of the func_800D1A80 / func_800D34CC / func_800AB538 family:
+   state 0 arms it unless D_8008346A says a transition is already running,
+   state 1 sets the renderable's +0x10/+0x12/+0x14, raises the record's
+   0x10000000, rings 0x806 for kinds 5 and 0x1E and 0x805 otherwise and arms
+   the sixteen-step ramp, state 2 walks the three colour bytes towards 0x20
+   and -- on the last step or when the renderable raises 0x8000 -- releases
+   the engine's +0x10 slot and retires the record down one of two tails, and
+   state 3 glides the mover towards D_80083780, shrinks the renderable's two
+   scales and retires it the same way. 286 words, 0 differing.
+
+   THREE SPELLINGS ARE LOAD-BEARING, each measured on this function:
+
+   (1) THE RETIRE TAIL IS WRITTEN OUT IN BOTH ARMS, not reached by `break`
+   from a shared one, and that is 52 of the 67 differing words. Cross-jumping
+   runs in jump2, AFTER global-alloc, so the duplicated tail is still two
+   copies when `allocno_compare` prices the four parameters -- it is what puts
+   `d`'s allocno ahead of `p`'s, and the two swap $s1 and $s2 without it.
+   With ONE copy in the source the function is still 286 words (the arm
+   simply branches to it), which is why the error reads as pure register
+   noise.
+
+   (2) THE TWO D_80083460 POINTERS ARE TWO LOCALS, one per case -- the g/g2
+   split func_800AB538 records for D_80083780. Shared, the pointer lives in
+   two basic blocks, global-alloc owns it, and both blocks come out with the
+   pointer and the value in each other's registers: 9 differing.
+
+   (3) THE FIRST D_80083780 READ GOES THROUGH THE SYMBOL AND THE POINTER
+   LOCAL IS ASSIGNED AFTER IT. cse unifies the two `lui`s either way, so the
+   bytes are the same instructions; but with `h = D_80083780;` ahead of the
+   first group the `addiu $s0, $s0, %lo` starts above it and sched2 leaves it
+   one slot BELOW the second `jal` instead of one slot above -- 6 differing
+   words, every one of them a shift.
+
+   The three `/ *(s16 *)(p + 0x96)` divisions are written out, not cached in
+   a local: the target reloads +0x96 for each one.
+
+   K&R AND `s32`, both forced: the landed func_800D9F7C below calls this with
+   NO arguments, so a prototyped four-parameter definition is "too few
+   arguments"; and every exit sets $v0, which is a `return 0`/`return 1` and
+   not a `void` tail. func_800D9F7C still measures 8 words, 0 differing. */
+s32 func_800AD058(p, b, c, d)
+u8 *p;
+u8 *b;
+u8 *c;
+u8 *d;
+{
+    u8 *g;
+    u8 *g2;
+    u8 *h;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if (D_8008346A != 0)
+        {
+            return 0;
+        }
+        p[0x9B] = 1;
+        /* fall through */
+    case 1:
+        *(s16 *)(c + 0x10) = 0x20;
+        *(s16 *)(c + 0x12) -= 0x80;
+        *(u16 *)(c + 0x14) |= 0xC;
+        *(u32 *)(d + 0x1C) |= 0x10000000;
+        func_800A56E0((d[0x13] == 5 || d[0x13] == 0x1E) ? 0x806 : 0x805);
+        *(u32 *)(c + 0xC) = 0x808080;
+        *(s16 *)(p + 0x96) = 0x10;
+        p[0x9B]++;
+        /* fall through */
+    case 2:
+        c[0xC] += (0x20 - c[0xC]) / *(s16 *)(p + 0x96);
+        c[0xD] += (0x20 - c[0xD]) / *(s16 *)(p + 0x96);
+        c[0xE] += (0x20 - c[0xE]) / *(s16 *)(p + 0x96);
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        if (*(s16 *)(p + 0x96) > 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            return 0;
+        }
+        if ((*(s32 *)(d + 0x14) & 0x20000000) == 0)
+        {
+            g = (u8 *)&D_80083460;
+            if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+            {
+                *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+            }
+        }
+        if ((*(s32 *)(d + 0x14) & 0x4000) == 0)
+        {
+            func_800A2FE0(d);
+            func_800A32A4(d);
+            if (d[0x49] != 0 && (d[0x4B] & 0x20) == 0)
+            {
+                func_800B8228(*(s16 *)(b + 0x2), *(s16 *)(b + 0x6), *(s16 *)(d + 0x88), d + 0x48);
+            }
+            if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+            {
+                func_8009A3D0(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            }
+            func_8009A028(d);
+            *(u16 *)(d - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            return 1;
+        }
+        if ((*(s32 *)(d + 0x14) & 0x20000000) == 0)
+        {
+            func_800ACF88(d);
+        }
+        func_800A2FE0(d);
+        func_800A32A4(d);
+        if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+        {
+            func_8009A3D0(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(d);
+        *(u16 *)(d - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        func_800A56E0(0x609);
+        return 1;
+    case 3:
+        *(s32 *)(b + 0x0) +=
+            ((*(s32 *)D_80083780 + ((*(s16 *)(p + 0x96) * func_80064584(c[0x27] << 7)) << 5)) - *(s32 *)(b + 0x0)) >> 2;
+        h = D_80083780;
+        *(s32 *)(b + 0x4) +=
+            ((*(s32 *)(h + 0x4) + ((*(s16 *)(p + 0x96) * func_800644B8(c[0x27] << 7)) << 5)) - *(s32 *)(b + 0x4)) >> 2;
+        *(s16 *)(d + 0x88) +=
+            ((*(s16 *)(h + 0xA) - (func_800644B8(*(s16 *)(p + 0x96) << 3) >> 6)) - *(s16 *)(d + 0x88)) >> 4;
+        *(s16 *)(c + 0x1C) -= *(u16 *)(c + 0x1C) / *(s16 *)(p + 0x96);
+        *(s16 *)(c + 0x1E) -= *(u16 *)(c + 0x1E) / *(s16 *)(p + 0x96);
+        c[0x27]++;
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            return 0;
+        }
+        g2 = (u8 *)&D_80083460;
+        *(u16 *)(g2 + 0xA) -= 1;
+        func_800A2FE0(d);
+        func_800A32A4(d);
+        if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+        {
+            func_8009A3D0(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(d);
+        *(u16 *)(d - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return 1;
+    }
+    return 0;
+}
 
 /* 38 words, 0 differing. */
 void func_800AD4D0(u8 *p)
@@ -18546,7 +18723,213 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089118);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B348C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B3D10);
+/* The weapon-element speed table: look the slot's kind up with
+   func_800A9400 and, per element, raise one of the renderable's three
+   +0x14 bits and scale its +0x20 speed by D_800E3D68 / (D_800E3D68 + 1).
+   Kinds 1..3 scale unconditionally, kinds 7..9 scale by 2x when the
+   wielder's +0x4C record is kind 0x10 and matches the element, by 1.5x
+   when it is 0x10 and does not, and otherwise work off the wielder's own
+   func_800981F8 reading; kinds 13..45 only set the bit. 289 words,
+   0 differing, and the 49-entry jtbl_80089200 comes out entry for entry.
+
+   IT OWNS A JUMP TABLE, AND THAT TABLE IS AT 0 MOD 8, so the `.align 3`
+   cc1psx writes before it is a no-op -- `jtbl_80089200` is NOT one of the
+   seven 4-mod-8 tables docs/dungeon-sweep.md lists, and this is the second
+   landed table in the unit after func_80095538's.
+
+   THE TABLE'S LENGTH IS THE ONLY WITNESS FOR THE TOP CASE LABEL. gcc sizes
+   a switch table max-min+1, the table is 49 entries and the dispatch's
+   `addiu $v0, -0x1` / `sltiu 0x31` puts min at 1, so a case 49 exists even
+   though its body is empty; 46..48 are written with it because they share
+   the triple rhythm of 13..45. Stopping at `case 45:` is a 45-entry table
+   and four words short.
+
+   FOUR SPELLINGS ARE LOAD-BEARING, each measured on this function:
+
+   (1) IN KINDS 1..3 THE `+=` COMES FIRST AND THE `|=` SECOND. The other way
+   round the mult/div chain loses sched1's first slot to the `|=`'s
+   load/or/store, the `sw +0x14` no longer sits next to the `addu`/`sh +0x20`
+   pair, and cross-jumping then merges only the `sh` instead of all four
+   words: 286 words against 289, 250 differing.
+
+   (2) IN KINDS 7..9 THE `|=` COMES FIRST. The two orders are not the same
+   question: here the store is followed by a `lw +0x4C` and two byte tests,
+   not by a divide.
+
+   (3) THE func_800981F8 PATH NEEDS AN EXPLICIT `u` FOR THE OLD +0x20 AND
+   AN EXPLICIT STORE. Written `*(s16 *)(c + 0x20) += ...` the `+=`'s own
+   `lhu` is commoned with the `lh` the subtraction already did and the
+   target's second load disappears -- the two live in different arms of the
+   same statement, so nothing later re-separates them. Read into `u` right
+   after the call, it lands in the `lh`'s load-delay slot exactly as the
+   target has it. Worth 3 words.
+
+   (4) EACH ARM OF THE 1.5x/1x CHOICE CARRIES ITS OWN DIVISION. With the
+   `/ (D_800E3D68 + 1)` factored out of the ternary, gcc materialises
+   D_800E3D68 and the `+ 1` ABOVE the arms and the target's second
+   `lbu %lo(D_800E3D68)` and its in-arm `mult` both vanish: 284 words
+   against 289. With the division inside both arms, cross-jumping puts the
+   shared `mflo`/`addiu 1`/`div` tail back at .L800B40EC by itself.
+
+   `D_800E3D68 / 2` is a bare `srl` and not the signed bias sequence because
+   c-typeck's shorten path does a `u8 / small-constant` division in the
+   UNSIGNED type; `D_800E3D68 + 1` is a plain int add, which is why the
+   divide beside it is a signed `div`.
+
+   The second parameter is never read here; the only caller, func_800B348C,
+   sets $a0/$a1/$a2, so the arity is three. */
+void func_800B3D10(s16 a, s32 b, u8 *c)
+{
+    s32 t;
+    s32 u;
+
+    switch (func_800A9400(a))
+    {
+    case 1:
+        *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68) / (D_800E3D68 + 1);
+        *(s32 *)(c + 0x14) |= 1;
+        break;
+    case 2:
+        *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68) / (D_800E3D68 + 1);
+        *(s32 *)(c + 0x14) |= 2;
+        break;
+    case 3:
+        *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68) / (D_800E3D68 + 1);
+        *(s32 *)(c + 0x14) |= 4;
+        break;
+    case 7:
+        *(s32 *)(c + 0x14) |= 1;
+        if ((*(u8 **)(c + 0x4C))[1] == 0x10)
+        {
+            if ((*(u8 **)(c + 0x4C))[0] == 6)
+            {
+                *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68 * 2) / (D_800E3D68 + 1);
+            }
+            else
+            {
+                *(s16 *)(c + 0x20) +=
+                    (*(s16 *)(c + 0x20) * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1);
+            }
+        }
+        else
+        {
+            t = *(s16 *)(c + 0x20) - func_800981F8(c) * 2;
+            u = *(u16 *)(c + 0x20);
+            if (t < 0)
+            {
+                t = 0;
+            }
+            *(s16 *)(c + 0x20) = u + ((*(u8 **)(c + 0x4C))[0] == 5
+                                          ? (t * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1)
+                                          : (t * D_800E3D68) / (D_800E3D68 + 1));
+        }
+        break;
+    case 8:
+        *(s32 *)(c + 0x14) |= 2;
+        if ((*(u8 **)(c + 0x4C))[1] == 0x10)
+        {
+            if ((*(u8 **)(c + 0x4C))[0] == 7)
+            {
+                *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68 * 2) / (D_800E3D68 + 1);
+            }
+            else
+            {
+                *(s16 *)(c + 0x20) +=
+                    (*(s16 *)(c + 0x20) * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1);
+            }
+        }
+        else
+        {
+            t = *(s16 *)(c + 0x20) - func_800981F8(c) * 2;
+            u = *(u16 *)(c + 0x20);
+            if (t < 0)
+            {
+                t = 0;
+            }
+            *(s16 *)(c + 0x20) = u + ((*(u8 **)(c + 0x4C))[0] == 6
+                                          ? (t * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1)
+                                          : (t * D_800E3D68) / (D_800E3D68 + 1));
+        }
+        break;
+    case 9:
+        *(s32 *)(c + 0x14) |= 4;
+        if ((*(u8 **)(c + 0x4C))[1] == 0x10)
+        {
+            if ((*(u8 **)(c + 0x4C))[0] == 8)
+            {
+                *(s16 *)(c + 0x20) += (*(s16 *)(c + 0x20) * D_800E3D68 * 2) / (D_800E3D68 + 1);
+            }
+            else
+            {
+                *(s16 *)(c + 0x20) +=
+                    (*(s16 *)(c + 0x20) * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1);
+            }
+        }
+        else
+        {
+            t = *(s16 *)(c + 0x20) - func_800981F8(c) * 2;
+            u = *(u16 *)(c + 0x20);
+            if (t < 0)
+            {
+                t = 0;
+            }
+            *(s16 *)(c + 0x20) = u + ((*(u8 **)(c + 0x4C))[0] == 7
+                                          ? (t * (D_800E3D68 + D_800E3D68 / 2)) / (D_800E3D68 + 1)
+                                          : (t * D_800E3D68) / (D_800E3D68 + 1));
+        }
+        break;
+    case 13:
+    case 40:
+    case 43:
+        *(s32 *)(c + 0x14) |= 1;
+        break;
+    case 14:
+    case 41:
+    case 44:
+        *(s32 *)(c + 0x14) |= 2;
+        break;
+    case 16:
+    case 19:
+        *(s32 *)(c + 0x14) |= 1;
+        break;
+    case 17:
+    case 20:
+        *(s32 *)(c + 0x14) |= 2;
+        break;
+    case 22:
+        *(s32 *)(c + 0x14) |= 1;
+        break;
+    case 23:
+        *(s32 *)(c + 0x14) |= 2;
+        break;
+    case 31:
+    case 34:
+    case 37:
+        *(s32 *)(c + 0x14) |= 1;
+        break;
+    case 32:
+    case 35:
+    case 38:
+        *(s32 *)(c + 0x14) |= 2;
+        break;
+    case 15:
+    case 18:
+    case 21:
+    case 24:
+    case 33:
+    case 36:
+    case 39:
+    case 42:
+    case 45:
+        *(s32 *)(c + 0x14) |= 4;
+        break;
+    case 46:
+    case 47:
+    case 48:
+    case 49:
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B4194);
 
@@ -25148,7 +25531,174 @@ s32 func_800C55A0(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C55F4);
+/* The slot's shadow/overlay triangle fan: push the matrix stack, project the
+   mover's position through the view to get the depth reference at +0xCC,
+   compose the slot's +0x16 rotation and +0x1C scale into the scratchpad
+   matrix at +0x50 and load it, then walk the element list at
+   `s->unk_08`'s +0x8 -- one 0xC-byte record per triangle, three byte indices
+   into the 8-byte vertex table at +0x0 and a sign-bit terminator at +0xB --
+   projecting each triangle into a POLY_G3 taken from D_80083160.unk_00's
+   +0x8D0 cursor, depth-fading each corner's colour through func_8004CECC and
+   chaining the primitive plus a following 0xC-byte command into the OT.
+   284 words, 0 differing.
+
+   FOUR SPELLINGS ARE LOAD-BEARING, each measured on this function:
+
+   (1) THE VERTEX TABLE BASE IS AN INTEGER, NOT A POINTER. `u8 *tbl` puts the
+   base in the `addu`'s FIRST operand at all six table reads, because
+   c-typeck.c's `pointer_int_sum` builds `ptr + idx` whatever order the source
+   writes, and the target has the index first. Writing the sum as
+   `(c[0] << 3) + tbl` does not move it; declaring `tbl` as `u32` does, and
+   that is 6 of the 36 differing words.
+
+   (2) THE `0x100 - p[0x32]` PARTIAL IS ITS OWN LOCAL PER CALL SITE -- u0, u1,
+   u2 -- and that is worth 30 differing. Shared in one local it lives in three
+   basic blocks, so global-alloc owns it; `set_preference` (global.c:1545)
+   takes XEXP(src,0) of each `subu`, which is the 0x100 constant local-alloc
+   has already put in $a0 at one site and $a1 at another, so the partial
+   carries preferences {4,5}; `expand_preferences` (global.c:782) then merges
+   them into the clamped value it dies into, and `find_reg`'s preference pass
+   overrides the $v1 it had picked with $a0. One local per site keeps all
+   three out of global-alloc, the clamped value is left with no hard-register
+   preference, and find_reg's plain scan gives it the target's $v1.
+
+   (3) AND THE PARTIAL CANNOT BE A PARENTHESISED SUBEXPRESSION.
+   `t = (0x100 - p[0x32]) - ((sp->unk_CC - sp->unk_C0) << 5);` is 285 words /
+   125 differing -- fold reassociates it anyway -- against 284 / 30 for the
+   same thing as two statements. The unparenthesised three-term form is
+   285 / 131 and puts the shifted term first.
+
+   (4) THE TWO SCRATCHPAD ADDRESS SPELLINGS ARE BOTH HERE, and the
+   `ori`/`addiu` distinction is what picks them. `&sp->unk_50`, `&sp->unk_30`,
+   `&sp->unk_D0`, `&sp->unk_90` and `&sp->unk_94` are plain members and come
+   out as `addu $aN, $s3, $zero` + `ori $aN, $aN, 0xNN` -- a 32-bit constant
+   whose `lui` cse replaced with a copy of the held base -- while
+   `&sp->unk_70[i]` is a SUBSCRIPT and comes out as one `addiu $a0, $s3, 0xNN`
+   off the same register. Mixing them is not a slip; it is what the target
+   has, and docs/matching-levers.md's "`ori` WHERE THE TARGET HAS `addiu`" is
+   the diagnostic.
+
+   func_8004CECC's `s16` second parameter is also load-bearing: the
+   `sll`/`sra 16` pair at each of the three call sites is the CALLER's, and
+   without the prototype there is no such pair.
+
+   The primitive cursor and the `&prim->code` cursor at +7 are two source
+   pointers, each bumped by 0x1C and then 0xC: the three NormalClip arguments
+   are read off the code cursor at +1/+9/+0x11 and the three RotTransPers
+   out-parameters off the primitive at +8/+0x10/+0x18, so neither base can
+   serve both. The element cursor is ONE pointer: `c + 0xB` is loop.c's giv
+   and combine_givs folds c[1] and c[2] onto it as -0xA and -0x9. */
+void func_800C55F4(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
+{
+    MATRIX m;
+    UnkDungeonSP3 *sp;
+    u8 *g;
+    u8 *e;
+    u8 *c;
+    u32 tbl;
+    u8 *prim;
+    u8 *code;
+    s32 u0;
+    s32 u1;
+    s32 u2;
+    s32 t;
+
+    sp = (UnkDungeonSP3 *)0x1F800000;
+    g = (u8 *)&D_80083160;
+    e = (u8 *)s->unk_08;
+    c = *(u8 **)(e + 0x8);
+    tbl = *(u32 *)e;
+    func_800649A0();
+    sp->unk_30.vx = s->unk_1C;
+    sp->unk_30.vy = s->unk_1E;
+    sp->unk_30.vz = s->unk_20;
+    sp->unk_28.vx = sp->unk_50.t[0] = *(s16 *)((u8 *)v + 0x2);
+    sp->unk_28.vy = sp->unk_50.t[1] = *(s16 *)((u8 *)v + 0x6);
+    sp->unk_28.vz = sp->unk_50.t[2] = *(s16 *)((u8 *)v + 0xA);
+    sp->unk_CC = func_80065420(&sp->unk_28, &sp->unk_F0, &sp->unk_90, &sp->unk_94) - d;
+    func_80064AE0(&m);
+    func_80065820((SVECTOR *)&s->unk_16, &sp->unk_50);
+    func_80064BC0(&sp->unk_50, &sp->unk_30);
+    func_80064840(&m, &sp->unk_50, &sp->unk_D0);
+    func_80064D80(&sp->unk_D0);
+    func_80064CF0(&sp->unk_D0);
+    sp->unk_20 = *(u8 **)&D_80083160 + 0xB0;
+    prim = *(u8 **)(*(u8 **)&D_80083160 + 0x8D0);
+    code = prim + 0x7;
+    s->unk_14 |= 0x8000;
+    for (;;)
+    {
+        *(s32 *)&sp->unk_70[0] = *(s32 *)((c[0] << 3) + tbl);
+        *(s32 *)&sp->unk_70[1] = *(s32 *)((c[1] << 3) + tbl);
+        *(s32 *)&sp->unk_70[2] = *(s32 *)((c[2] << 3) + tbl);
+        sp->unk_70[0].vz = *(u16 *)((c[0] << 3) + tbl + 0x4);
+        sp->unk_70[1].vz = *(u16 *)((c[1] << 3) + tbl + 0x4);
+        sp->unk_70[2].vz = *(u16 *)((c[2] << 3) + tbl + 0x4);
+        sp->unk_C0 = func_80065420(&sp->unk_70[0], (s32 *)(prim + 0x8), &sp->unk_90, &sp->unk_94);
+        sp->unk_C4 = func_80065420(&sp->unk_70[1], (s32 *)(prim + 0x10), &sp->unk_90, &sp->unk_94);
+        sp->unk_C8 = func_80065420(&sp->unk_70[2], (s32 *)(prim + 0x18), &sp->unk_90, &sp->unk_94);
+        sp->unk_114 = func_80065480(*(s32 *)(code + 0x1), *(s32 *)(code + 0x9), *(s32 *)(code + 0x11));
+        if (sp->unk_114 > 0)
+        {
+            sp->unk_C0 -= d;
+            sp->unk_C4 -= d;
+            sp->unk_C8 -= d;
+            if ((u32)sp->unk_C0 < 0x1E0)
+            {
+                u0 = 0x100 - *(s16 *)(p + 0x32);
+                t = u0 - ((sp->unk_CC - sp->unk_C0) << 5);
+                if (t < 0x20)
+                {
+                    t = 0x20;
+                }
+                else if (t >= 0x100)
+                {
+                    t = 0xFF;
+                }
+                func_8004CECC(*(s16 *)(p + 0x30), t, 0xFF, prim + 0x4);
+                u1 = 0x100 - *(s16 *)(p + 0x32);
+                t = u1 - ((sp->unk_CC - sp->unk_C4) << 5);
+                if (t < 0x20)
+                {
+                    t = 0x20;
+                }
+                else if (t >= 0x100)
+                {
+                    t = 0xFF;
+                }
+                func_8004CECC(*(s16 *)(p + 0x30), t, 0xFF, prim + 0xC);
+                u2 = 0x100 - *(s16 *)(p + 0x32);
+                t = u2 - ((sp->unk_CC - sp->unk_C8) << 5);
+                if (t < 0x20)
+                {
+                    t = 0x20;
+                }
+                else if (t >= 0x100)
+                {
+                    t = 0xFF;
+                }
+                func_8004CECC(*(s16 *)(p + 0x30), t, 0xFF, prim + 0x14);
+                func_800666B8(prim);
+                *code |= 0x2;
+                func_8006658C(sp->unk_20 + sp->unk_C0 * 4, prim);
+                prim += 0x1C;
+                code += 0x1C;
+                s->unk_14 &= 0x7FFF;
+                func_80067F20((u32 *)prim, 0, 0, 0, 0);
+                func_8006658C(sp->unk_20 + sp->unk_C0 * 4, prim);
+                prim += 0xC;
+                code += 0xC;
+            }
+        }
+        if (*(s8 *)(c + 0xB) < 0)
+        {
+            break;
+        }
+        c += 0xC;
+    }
+    func_80064A40();
+    *(u32 *)(*(u8 **)g + 0x8D0) = (u32)prim;
+}
 
 /* Per-frame step: advance the mover by its own three deltas, damp the first
    two by a 1/8th subtract, fade the renderable's three colour bytes towards 0
