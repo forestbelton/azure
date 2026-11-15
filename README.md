@@ -30,7 +30,7 @@ Ideally, the below progress table would be automated away. At the moment, it's n
 |File       |Code found|Decompiled|Fully split|Labeled|
 |-----------|----------|----------|-----------|-------|
 |SLUS_006.14|        ✅|        ✅|         ❌|     ❌|
-|MAIN.BIN   |        ✅|        🚧|         ✅|     🚧|
+|MAIN.BIN   |        ✅|        ✅|         ✅|     🚧|
 |TOWN.BIN   |        ✅|        ✅|         ❌|     ❌|
 |DUNGEON.BIN|        🚧|        🚧|         ❌|     ❌|
 
