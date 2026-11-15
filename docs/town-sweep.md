@@ -2021,3 +2021,22 @@ open question that should be settled from a `cc1psx -O2 -G0 -da` dump of
 loop.c's decisions before any more CPU goes into it. Its three settled notes
 have already been reused verbatim by an agent on a different function, so the
 park has paid for itself whether or not it lands.
+
+## A WRAPPED DECLARATION IS A SWEEP-BREAKER, NOT JUST A SPARE NAME
+
+2026-11-15, ovl_dungeon. Worth knowing before the next whole-unit sweep.
+
+The sweep recipe collects function names with an `awk` that treats a line
+carrying a name and no trailing `;` as a DEFINITION. A long prototype that
+clang-format wraps --
+
+    s32 func_80065590(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, s32 *,
+                      s32 *, s32 *, s32 *, s32 *, s32 *);
+
+-- has a first line with no `;`, so the name is collected, and `ovlverify`
+then HARD-EXITS with `func_80065590 is in none of the split overlays`. The
+sweep reports zero functions, which is the "sweep that verified nothing"
+shape: it looks like a pass unless you check the count.
+
+So: keep a new declaration on one line (shorten its comment if need be), and
+always read the sweep's NAME COUNT, not just its failure count.
