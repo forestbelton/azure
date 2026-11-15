@@ -34,6 +34,22 @@ def trel(t):
         return False          # splat pseudo-symbol for a computed scratchpad address
     return bool(RELOC.search(t))
 T = [key(w, trel(t)) for (w,t) in tgt]
+# The target's own first address, read out of its listing.  This used to be a
+# hardcoded 0x800AC4C4, so every run printed addresses for the wrong function.
+TBASE = 0
+_lst = ovlverify.listing(func)
+if _lst:
+    _seen = False
+    for _ln in open(_lst):
+        if _ln.startswith("glabel "):
+            _seen = _ln.split()[1].strip() == func
+            continue
+        if _seen:
+            _m = re.search(r'/\* [0-9A-F]+ ([0-9A-F]{8})', _ln)
+            if _m:
+                TBASE = int(_m.group(1), 16)
+                break
+
 sm = difflib.SequenceMatcher(None, G, T, autojunk=False)
 out=[]
 def wordeq(gi,tj):
@@ -56,7 +72,17 @@ for tag,i1,i2,j1,j2 in sm.get_opcodes():
         for k in range(max(i2-i1,j2-j1)):
             gi = i1+k if i1+k<i2 else None
             tj = j1+k if j1+k<j2 else None
-            out.append(('X', gi, tj))
+            # A raw constant address in the candidate has NO relocation, so
+            # key() keeps its immediate, while the listing's %hi(D_...) side
+            # drops it -- the keys differ and difflib calls it a 'replace'
+            # even though the two WORDS are identical.  That false class cost
+            # an agent most of a budget on 2026-11-15 (six of its twenty-five
+            # reported differences were matching code), so check the bytes
+            # before reporting a replace.
+            tag2 = 'X'
+            if gi is not None and tj is not None and wordeq(gi, tj):
+                tag2 = '='
+            out.append((tag2, gi, tj))
     elif tag=='delete':
         for gi in range(i1,i2): out.append(('+', gi, None))
     elif tag=='insert':
@@ -69,5 +95,5 @@ for i,(tag,gi,tj) in enumerate(out):
     if tag=='=' and not show: continue
     gt = re.sub(r'\s+',' ',got[gi][2].strip()) if gi is not None else ''
     tt = re.sub(r'\s+',' ',tgt[tj][1].strip()) if tj is not None else ''
-    ta = ('%08X'%(0x800AC4C4 + 4*tj)) if tj is not None else '        '
+    ta = ('%08X'%(TBASE + 4*tj)) if (tj is not None and TBASE) else '        '
     print("%s %4s %4s %s  %-40s %s" % (tag, gi if gi is not None else '', tj if tj is not None else '', ta, gt, tt))
