@@ -17119,7 +17119,57 @@ s32 func_800CC2A8(u8 *p)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CC370);
+/* Step the 0x817 marker one tile along its stored direction, re-arming
+   whatever it lands on: a func_8009B390 hit takes func_8009CE1C, the
+   D_800E3648 slot under it is either handed to func_800CCC20 or cleared
+   outright, and the D_800E3548 slot is cleared. 96 words, 0 differing.
+
+   THE RESIDUE WAS THE CALL'S SECOND ARGUMENT. Written `func_800CCC20(0)`
+   -- which compiles, because the unit's declaration for it was still the
+   empty-paren form -- the function is 96 words with exactly three
+   differing: the func_800B500C result lives in $v1 instead of the target's
+   $a1, and because it then dies at the `sll` local-alloc ties the scaled
+   index to it. The target keeps it in $a1 across the shift because it IS
+   the call's second argument. Nothing in the spelling of the index reaches
+   that: `s32 s` with and without a cast, three declaration orders, a u8
+   local for the byte and a struct-array alias for the subscript are all
+   byte-identical, and inverting the if/else is 95 words / 42. */
+void func_800CC370(u8 *p)
+{
+    u8 *r;
+    s16 s;
+    s16 t;
+
+    *(s16 *)(p + 0x0) += D_8006CCD8[p[0x6]];
+    *(s16 *)(p + 0x2) += D_8006CCE8[p[0x6]];
+    r = func_8009B390(*(u16 *)(p + 0x0), *(u16 *)(p + 0x2), *(s16 *)(p + 0x4));
+    if (r != NULL)
+    {
+        func_8009CE1C(r, 6, D_800E3D7C[0x11], 9, (s16)(p[0x6] << 9), 0, 3);
+    }
+    s = func_800B500C(*(s16 *)(p + 0x0), *(s16 *)(p + 0x2), *(s16 *)(p + 0x4));
+    if (s >= 0)
+    {
+        if (D_800E3648[s * 4] == 7)
+        {
+            func_800CCC20(NULL, s);
+        }
+        else
+        {
+            *(s32 *)&D_800E3648[s * 4] = 0;
+        }
+    }
+    t = func_800A70E4(*(s16 *)(p + 0x0), *(s16 *)(p + 0x2), *(s16 *)(p + 0x4));
+    if (t >= 0)
+    {
+        *(s32 *)&D_800E3548[t * 4] = 0;
+    }
+    if (--p[0x7] == 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A node's +0x10 per-frame step. The arity is the +0x10 convention
    func_80040190 casts to, since the only reference to this function anywhere
