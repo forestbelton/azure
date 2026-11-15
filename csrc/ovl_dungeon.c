@@ -872,6 +872,9 @@ void func_80042518(s8 *, s32);
 extern u8 D_800DD030[];
 extern u8 D_800DD050[];
 extern u8 D_800DD058[];
+/* func_80091C64's other eight-way facing table, beside D_800DD030/D_800DD050
+   above. */
+extern u8 D_800DD038[];
 /* func_800909A0's two skin tables and the +0x9A step table it dispatches
    through; the table has UnkDungeonStep's four-argument shape. */
 extern u8 D_800DD008[];
@@ -1309,6 +1312,9 @@ void func_800CCDA0();
 extern u8 D_800DFD0C[];
 extern u8 D_800DFD30[];
 extern u8 D_800DDC40[];
+/* func_800B0F50's sprite-chain template table and the engine's glyph page. */
+extern u8 *D_800DEFF8[];
+extern u8 D_80077FEC[];
 void func_800CD910(u8 *);
 extern u8 D_800DF820[];
 /* func_800AB538's pan limit, a halfword of its own: the listing reads it
@@ -3853,7 +3859,92 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80088934);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80088970);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80091C64);
+/* Five states of the camera's pull-back-and-return: 0 runs the +0x96 timer
+   down to 9 and re-skins the renderable off D_800DD038, 1 drives the mover
+   out along the engine record's facing until the timer expires and re-skins
+   off D_800DD058, 2 waits on D_8008346C and re-arms the timer at 8, 3 glides
+   the mover back onto the renderable's (+0x24, +0x25) tile, and 4 restores
+   the saved facing from +0x11A and hands the actor to func_8008EAC8 or
+   func_8008ACDC on the record's 0x100000 bit. jtbl_800889A8 is 0 mod 8, so
+   cc1psx's `.align 3` is a no-op. 237 words, 0 differing.
+
+   THE TWO SKIN TABLES ARE NAMED TWICE AT EACH SITE, NOT BOUND TO A LOCAL --
+   func_8008E264's rule, and the cost here is the same shape it records:
+   with `t = D_800DD038; *(u8 **)(c + 0x2C) = t; func_80048A44(c, t[...])`
+   the symbol's `high` takes $v0 and only its `lo_sum` takes $a1, and the
+   `addu $a0, $s2, $zero` the target puts in the gate's delay slot is pushed
+   two insns later. 237 words, 12 differing -- exactly three in each of the
+   four re-skin blocks. Writing the symbol out at both sites is 0. */
+void func_80091C64(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if (--*(s16 *)(p + 0x96) < 9)
+        {
+            *(u8 **)(c + 0x2C) = D_800DD038;
+            func_80048A44(c, D_800DD038[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            *(u16 *)(p + 0x98) |= 0xC;
+            p[0x9B]++;
+            func_800A56E0(0x701);
+        }
+        break;
+    case 1:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            b->unk_00 += func_80064584(*(s16 *)(d + 0x2A) + 0x400) << 6;
+            b->unk_04 += func_800644B8(*(s16 *)(d + 0x2A) + 0x400) << 6;
+            *(s16 *)(p + 0x92) = -func_800644B8(*(s16 *)(p + 0x96) << 8) >> 8;
+        }
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_800DD058;
+        func_80048A44(c, D_800DD058[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(s16 *)(p + 0x92) = 0;
+        p[0x9B]++;
+        break;
+    case 2:
+        if (D_8008346C != 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_800DD038;
+        func_80048A44(c, D_800DD038[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(s16 *)(p + 0x96) = 8;
+        p[0x9B]++;
+        break;
+    case 3:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            b->unk_00 += (((c[0x24] << 6) + 0x20 - *(s16 *)((u8 *)b + 0x2)) << 16) / *(s16 *)(p + 0x96);
+            b->unk_04 += (((c[0x25] << 6) + 0x20 - *(s16 *)((u8 *)b + 0x6)) << 16) / *(s16 *)(p + 0x96);
+            *(s16 *)(p + 0x92) = -func_800644B8(*(s16 *)(p + 0x96) << 8) >> 8;
+        }
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            break;
+        }
+        func_800A2B04(b, c[0x24], c[0x25]);
+        *(s16 *)(p + 0x92) = 0;
+        p[0x9B]++;
+        *(u8 **)(c + 0x2C) = D_800DD058;
+        func_80048A44(c, D_800DD058[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        break;
+    case 4:
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) -= 1;
+        *(s16 *)(d + 0x2A) = *(s16 *)(p + 0x11A);
+        *(u32 *)(p + 0x8C) = (*(u32 *)(d + 0x1C) & 0x100000) ? (u32)func_8008EAC8 : (u32)func_8008ACDC;
+        *(s32 *)(d + 0x14) &= ~0x20000;
+        *(u16 *)(p + 0x98) &= 0xFFF3;
+        *(u16 *)(p + 0xA2) |= 0x10;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80092018);
 
@@ -16229,7 +16320,133 @@ void func_800B0D34(u8 *p, UnkVec *b, u8 *c)
     *(s16 *)((u8 *)b + 0xA) = *(u16 *)(q + 0xA) - (D_800DDC40[t[0x13]] + 0x50);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B0F50);
+/* The dungeon HUD panel's 0x12-kind node: two number plates from the actor's
+   +0x28 and +0x25, a name string picked out of D_800DEFF8, and two bare
+   elements parked in the +0x70 slot array. 233 words, 0 differing.
+
+   THE LENGTH CALL IS DUPLICATED INTO BOTH ARMS. Written once after the join
+   over a shared `name` local it is 235 words / 226 differing: `i = 4` then
+   lives inside the arms, sched1 lifts its `li` above the D_800DEFF8 base's
+   last use, `i` loses $s0 to that base and `c` takes an EIGHTH callee-saved
+   register -- the two extra words are its save and restore. Duplicated, the
+   arms end at the call, cross-jumping merges the tail, and $s0 carries the
+   base and then `i` exactly as the target does.
+
+   `c = (u8 *)n + 0x64;` BOUND BEFORE THE `if` is the 233rd word. Spelled
+   `*(u32 *)((u8 *)n + 0x64) = 0x808080;` at its use the address folds into
+   the store and the function is 232 words; the target computes it ahead of
+   the branch and reorg takes it into the delay slot.
+
+   `r[1] |= 2;` GOES AFTER ALL FOUR `q` COLOUR COPIES. Its lbu/ori/sb chain
+   outranks the +0x10 copy and is hoisted past it wherever it sits earlier:
+   before +0x4 is 236 / 67, before +0xC 234 / 64, before +0x10 233 / 11,
+   between +0x10 and +0x14 233 / 8.
+
+   Three narrower spellings, each measured: `*(s8 *)(r + 0x2) = -2` (through
+   the `u8 *` the -2 is narrowed to `li 254`), `*(u16 *)` for the 0xFC00 at
+   the sprite's +0x18 (`ori`, where `s16` gives `li -1024`), and the paired
+   byte and `buf` stores written high offset first. */
+UnkNode *func_800B0F50(u8 *p)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkDungeonSprite *s;
+    u8 *q;
+    u8 *r;
+    u8 *t;
+    u8 *c;
+    s32 w;
+    s32 i;
+    u8 buf[0x10];
+
+    n = func_8003FD64(0x12, D_80083498);
+    if (n != NULL)
+    {
+        s = (UnkDungeonSprite *)n->unk_0C;
+        m = n->unk_08;
+        s->unk_1C = 0x1000;
+        s->unk_1E = 0x1000;
+        *(u32 *)((u8 *)s + 0xC) = 0x808080;
+        *(u16 *)((u8 *)s + 0x18) = 0xFC00;
+        t = *(u8 **)(p - 0x18);
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(t + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(t + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(t + 0xA) - (D_800DDC40[p[0x13]] + 0x50);
+        n->unk_10 = (u32)func_800B0D34;
+        func_8004491C(n, (u32)func_800B06F0);
+        q = (u8 *)n + 0x20;
+        *(u32 *)(q + 0x14) = (u32)p;
+        *(u32 *)((u8 *)n + 0x20) = (u32)((u8 *)n + 0x70);
+        *(u32 *)(q + 0x4) = (u32)((u8 *)n + 0x58);
+        *(u32 *)((u8 *)n + 0x70) = (u32)D_80077FEC;
+        *(u32 *)((u8 *)n + 0x58) = 0x808080;
+        r = (u8 *)func_800B12F4();
+        *(u32 *)(q + 0x28) = (u32)r;
+        if (r != NULL)
+        {
+            buf[2] = 9;
+            buf[0] = 9;
+            buf[3] = 0x38;
+            buf[1] = 0x38;
+            func_8004E5A0(p[0x28], 3, &buf[4]);
+            *(u32 *)((u8 *)n + 0x74) = (u32)func_8004E298(r, buf, 0);
+            func_800B1320(r, 8, (s16)(-*(s8 *)(r + 0x3)));
+            func_800B135C(r, 8);
+            r += 0x24;
+            *(u32 *)((u8 *)n + 0x5C) = 0x808080;
+            func_8004E5A0(p[0x25], 3, &buf[4]);
+            *(u32 *)((u8 *)n + 0x78) = (u32)func_8004E298(r, buf, 0);
+            func_800B1320(r, 8, (s16)(-*(s8 *)(r + 0x3) + 8));
+            func_800B135C(r, 8);
+            r += 0x24;
+            *(u32 *)((u8 *)n + 0x60) = 0x808080;
+            c = (u8 *)n + 0x64;
+            if ((*(u16 *)(p + 0x46) & 0x8000) != 0)
+            {
+                *(u32 *)((u8 *)n + 0x7C) =
+                    (u32)func_8004DA74(r, D_800DEFF8[*(u16 *)(p + 0x46) & 0x3FFF] + 1, 0);
+                i = 4;
+                w = func_80069E98(D_800DEFF8[*(u16 *)(p + 0x46) & 0x3FFF] + 1) * 4;
+            }
+            else
+            {
+                *(u32 *)((u8 *)n + 0x7C) = (u32)func_8004DA74(r, D_800DEFF8[4] + 1, 0);
+                i = 4;
+                w = func_80069E98(D_800DEFF8[4] + 1) * 4;
+            }
+            func_800B1320(r, (s16)(((0x20 - w) >> 1) + 0x80), (s16)(-*(s8 *)(r + 0x3) + 0x11));
+            func_800B135C(r, 8);
+            r += 0x30;
+            *(u32 *)c = 0x808080;
+            *(u32 *)(q + i * 4 + 0x50) = (u32)r;
+            r[0x1] = 0x38;
+            *(s8 *)(r + 0x2) = -2;
+            *(s8 *)(r + 0x3) = -2;
+            r[0x9] = 0;
+            r[0x8] = 0;
+            r[0xB] = 0x24;
+            r[0xA] = 0x24;
+            r[0x0] = 0xC0;
+            *(u32 *)(q + 0x18) = 0x202020;
+            *(u32 *)(q + 0x1C) = 0x402020;
+            *(u32 *)(q + 0x20) = 0x204020;
+            *(u32 *)(q + 0x24) = 0x202040;
+            *(u32 *)(r + 0x4) = *(u32 *)(q + 0x18);
+            *(u32 *)(r + 0xC) = *(u32 *)(q + 0x1C);
+            *(u32 *)(r + 0x10) = *(u32 *)(q + 0x20);
+            *(u32 *)(r + 0x14) = *(u32 *)(q + 0x24);
+            r[0x1] |= 2;
+            i++;
+            r += 0x18;
+            *(u32 *)(q + i * 4 + 0x50) = (u32)r;
+            r[0x1] = 0x81;
+            *(s16 *)(r + 0x4) = 0x40;
+            *(s16 *)(r + 0x6) = 0;
+            r[0x0] = 0xC0;
+        }
+    }
+    return n;
+}
 
 /* 11 words, 0 differing. */
 u8 *func_800B12F4(void)
