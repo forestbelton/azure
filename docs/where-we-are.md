@@ -671,18 +671,22 @@ left, and 968 of the 61,580 cannot be owned in C at all. **`game_data`, at
 work them, are in **`docs/data-map.md`, "What is left, in order"**; the two
 things worth carrying out of it are:
 
-- **`game_data`, 60,588 bytes and 666 objects, is blocked on carving the TEXT
-  into original translation units first.** The reference signal here is good,
-  unlike `ovl_town_data`'s -- 116 of the 127 single-referenced objects fit a
-  monotone link-order assignment, against a null whose maximum over 2,000
-  shuffles is 76 -- and eight of the eleven exceptions are `unk_72A8`, which
-  is 305 functions and an ADDRESSING-MODE carve rather than one translation
-  unit. Giving it one contiguous `.data` window would be a false claim about
-  the original source. The oracle for the text carve is `$gp` membership
-  (`docs/addressing-and-translation-units.md`), and `tools/tuscan.py` needs a
-  new input to use it: it reads `asm/nonmatchings/*/*.s`, which this
-  executable no longer has, so the modes have to come out of a disassembly of
-  `build/slus_006.14.elf` instead.
+- **`game_data`, 60,588 bytes and 666 objects, is the last of it, and the
+  TEXT CARVE THAT WOULD SETTLE ITS OWNERSHIP IS NOT AVAILABLE.** The reference
+  signal is good -- 116 of the 127 single-referenced objects fit a monotone
+  link-order assignment, against a null whose maximum over 2,000 shuffles is
+  76 -- but eight of the eleven exceptions are `unk_72A8`, which is 305
+  functions and an ADDRESSING-MODE carve rather than one translation unit, so
+  giving it one contiguous `.data` window would be a false claim. The oracle
+  that would fix that is `$gp` membership, and `tools/tuscan.py` can now read
+  it out of `build/csrc/*.o` (`--source objects`, sound because the container
+  is byte-identical). **It is too sparse to carve with**: `--cores` reports 67
+  of 1053 functions making a `$gp`-relative access at all, 29 proven cores
+  covering 8.5% of the block, and boundary windows up to 170 functions wide.
+  So `game_data` goes the way the gp region went -- a unit with no code, with
+  the attribution stated as undetermined -- which is also forced, because
+  defining a small object of it inside a `-G8` unit would ask gas for a
+  GPREL16 that cannot reach `_gp`.
 - **`game_gp` LANDED 2026-11-14 as `csrc/game_gp.c`**, 60 bytes, and it
   turned the `game_data` argument above into a proof. Two relocations sixteen
   bytes apart inside `build/csrc/unk_72A8.o` -- `R_MIPS_HI16 D_800809A8` and

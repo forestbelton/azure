@@ -493,22 +493,52 @@ region accordingly. Giving a 305-function object file one contiguous `.data`
 window would be a statement about the original source that is almost certainly
 false, and would have to be undone later.
 
-So the order of work is:
+#### THE TEXT CARVE IS NOT AVAILABLE, and that is measured
 
-1. **Carve the text into original translation units first.** The oracle exists
-   and is this container's alone: the `$gp` membership rule
-   (`docs/addressing-and-translation-units.md`, "What follows") says a
-   function that reaches a global `$gp`-relatively was compiled in the unit
-   that defined it. `tools/tuscan.py` is that tool, but it reads
-   `asm/nonmatchings/*/*.s`, and this executable has no nonmatchings left --
-   every function is landed. The mode is still in the bytes, because the build
-   is byte-identical, so the replacement input is a disassembly of
-   `build/slus_006.14.elf`: an `lw $x, N($gp)` is the `$gp`-relative shape and
-   a `lui`/`%lo` pair is not. **That is the one piece of new tooling this
-   needs.**
-2. **Then grow per-unit `.data` prefixes** the way `docs/owning-data.md` §4.2
-   describes, lowest address first, with the single-reference assignment above
-   as the proposal and `make check`'s offset report as the gate.
+An earlier version of this section said the order of work was to carve the
+text into its original translation units first, using the `$gp` membership
+rule, and that `tools/tuscan.py` needed one new input to do it. The input was
+built -- `tuscan.py --source objects` reads the modes out of `build/csrc/*.o`,
+which is sound because the container is byte-identical -- and the answer came
+back too thin to carve with:
+
+    $ python3 tools/tuscan.py --source objects --cores
+    67 of 1053 function(s) make a $gp-relative access at all, naming 68
+    symbol(s) -> 29 PROVEN core(s)
+    89 of 1053 function(s) are inside a proven core (8.5%)
+    widest gap BETWEEN two cores: 170 function(s)
+
+**Only 67 of 1053 functions make a `$gp`-relative access at all.** The rule is
+sound and the tool now runs, but most functions never touch small data, so
+most of them carry no evidence of membership in anything. 29 proven cores
+against roughly 43 units, 8.5% of the block covered, and boundary windows up
+to 170 functions wide.
+
+Read `--cores` and not the default report. The default grouping uses negative
+evidence too -- a function addressing a symbol absolutely is not in the unit
+that defines it -- and on this container that yields 43 runs and then reports
+10 symbols reached `$gp`-relatively from TWO of them, which is a
+contradiction. It is not a bug: the original source could declare a symbol
+`extern` above its own definition and get the absolute form inside the
+defining unit, which `docs/addressing-and-translation-units.md` already proves
+happens here. `--cores` uses positive evidence only and reports the gaps as
+gaps.
+
+#### So `game_data` is not blocked -- it is a data-only unit, like the gp region
+
+With no carve available, the choice is the one `csrc/game_gp.c` and
+`csrc/gp_data.c` already made twice: put the definitions in a unit that holds
+no code, where they cannot perturb a relocation, and say plainly that the
+per-unit attribution is undetermined rather than encoding a guess in the yaml.
+A data-only unit is also FORCED here for a second reason, the same one that
+forced `-G0` on `csrc/gp_data.c`: defining a small `game_data` object inside
+one of the `-G8` units would make its size known, and a `.extern` of 8 bytes
+or fewer at `-G8` asks gas for a GPREL16 -- which cannot reach, since
+`game_data` starts 0x16154 below `_gp` and GPREL16 spans +/-32K.
+
+The 116-of-127 reference signal above is still worth having; it is just not
+load-bearing for the landing. It is the thing to check a later per-unit carve
+against, once there is one.
 
 #### Do not start at the bottom expecting `gprel_72A8`
 
