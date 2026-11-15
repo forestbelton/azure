@@ -16805,7 +16805,88 @@ void func_800C7D54(s16 k)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C7DEC);
+/* The "can this hit land" gate: refuse while the attacker's +0x4C record
+   carries a 0x8000-flagged entry, while the combined +0x28/+0x64 total is
+   not positive, and while the defender's quartered +0x64 does not exceed
+   the negated total; then halve the margin for kinds 1 and 2, refuse kind
+   10, and commit. 95 words, 0 differing.
+
+   THE HALVING IS OF `w`, NOT OF `v`, and that one character was the whole
+   residue. Written `w = (v - 1) / 2;` the function is 95 words with 13
+   differing, which reads exactly like an allocation rotation -- two locals
+   in each other's registers and the delay slot that follows them -- and
+   twenty-odd spellings of the locals, the declaration order, the widths and
+   the tests do not move it. The cause is that `v` is DEAD after the
+   comparison in the target: `sll`/`sra $v1, $a0` overwrites v's register
+   with the sign-extended w, and the later `addiu $v0, $v1, -0x1` reads that,
+   not the total. A value the target lets die has its register reused, and
+   that is indistinguishable from a bad allocation until you check which
+   variable the arithmetic actually reads.
+
+   decomp-permuter reached 0 here too, in 76k candidates, but its answer was
+   `if (-v >= (v = w))` -- an unsequenced read and write of one object in one
+   expression, i.e. undefined behaviour that happens to emit the right code
+   because it models v dying. The honest spelling is better and is what is
+   landed. */
+s32 func_800C7DEC(u8 *a, u8 *b)
+{
+    u8 *c;
+    u8 *d;
+    s32 e;
+    s32 v;
+    s16 w;
+
+    if (*(s32 *)(b + 0x54) & 0x8000)
+    {
+        c = *(u8 **)(a + 0x4C);
+        if (c != NULL)
+        {
+            if ((*(s16 *)(D_80073414[c[1]].unk_0C + c[0] * 0x14) & 0x8000) == 0)
+            {
+                return 0;
+            }
+        }
+        v = (s16)(a[0x28] + *(u16 *)(a + 0x64));
+        if (v <= 0)
+        {
+            return 0;
+        }
+        w = (s16) * (u16 *)(b + 0x64) >> 2;
+        if (w == 0)
+        {
+            w = -1;
+        }
+        if (-v >= w)
+        {
+            return 0;
+        }
+        d = *(u8 **)(a + 0x50);
+        if (d != NULL)
+        {
+            e = d[0];
+            if (e == 1 || e == 2)
+            {
+                w = (w - 1) / 2;
+            }
+            else if (e == 10)
+            {
+                return 0;
+            }
+        }
+        *(s16 *)(a + 0x64) = w;
+        D_80083470 = a - 0x20;
+        *(s32 *)(a + 0x60) = 0;
+        func_800A5A18(*(UnkVec **)(a - 0x18), a);
+        func_800A56E0(0x60F);
+        *(s32 *)(a + 0x1C) |= 0x20000000;
+        if (a[0x13] == 0)
+        {
+            D_800E3E41 = 2;
+        }
+        return 1;
+    }
+    return 0;
+}
 
 /* True while anything is still blocking. THE LAST TEST HAS TO SHARE THE
    FUNCTION'S EXIT with the loop's, as an `else if` rather than a third
