@@ -434,6 +434,33 @@ void func_8003DB94(void *, void *, s32);
 void func_80099FDC(UnkNode *);
 void func_8009A21C(s32, s32, s32);
 s16 func_8009FB34(u16, u16);
+/* Neither is in include/structs.h; both spellings are
+   csrc/ovl_town_800BF3F0.c's. func_80066460 returns u16 -- the call site
+   masks with `andi $a3, $v0, 0xFFFF`. */
+s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag); /* RotTransPers */
+u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y);            /* GetTPage */
+
+/* The dungeon's 0x1F800000 scratchpad as the two tag callbacks below see it:
+   the projection input vector at +0x04, the primitive cursor at +0x1C, the
+   OT base at +0x24, RotTransPers' two out-parameters at +0xD0/+0xD4 and the
+   resulting OT index at +0x100. Only those are named. */
+typedef struct UnkDungeonSP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDungeonSP;
+
 extern u8 D_800E2178[];
 extern u8 D_800E221C[];
 
@@ -5798,7 +5825,84 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D586C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D58D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D5AC0);
+/* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
+   projected through the 0x1F800000 scratchpad. func_800D68F4 is this
+   function again, byte for byte. The family is ovl_town's func_800BB218 --
+   this walk with a 0x180-iteration inner loop and a constant colour -- and
+   csrc/ovl_town_800BF3F0.c's func_800BFFF4 is the LINE_G2 version, which
+   carries the long note on the shape.
+
+   THE OT LINKS ARE `addPrim`, i.e. bitfield stores through P_TAG's
+   `addr:24`; a hand-written `|` cannot produce the
+   `lw`/`and 0xFF000000`/`and 0xFFFFFF`/`or`/`sw` quintets, and
+   csrc/unk_19434.c:92-99 says why. The two masks are loop-hoisted into
+   $s2/$s4.
+
+   THE THREE DEAD `lbu`s AT +0x4/+0x5/+0x6 ARE `setRGB0(t, t->r0, t->g0,
+   t->b0)` -- an echo of the colour word just copied in. cse deletes the
+   three STORES as redundant, because it knows the word that was written,
+   and the three loads survive tightly packed where the target has them.
+   They are NOT bare `volatile` reads: that spelling does keep the loads,
+   but gcc 2.7.2's `read_dependence` pairs volatile only with volatile
+   (scratch/gcc-src/cdk-gcc-b18/sched.c:822), so they take priority 0, drift
+   to wherever the ready list puts them, and let the first addPrim's
+   `lw 0x0($s0)` hoist to the top of the block -- 120 words and 36
+   differing, the right length and the wrong function. Omitting them is 117.
+
+   `setTile1` plus `setSemiTrans(t, 1)` is ONE `sb 0x6A`: cse folds the
+   `getcode` back to the 0x68 just stored and drops the dead first store.
+   `setlen(t, 2)` plus `setcode(t, 0x6A)` is identical.
+
+   Three orderings are load-bearing. The colour word is copied BEFORE the tag
+   setup (6 differing the other way: with `setlen` first, $v0 carries both
+   the constant and the loaded word and the `lw 0x8($s3)` cannot issue
+   first). `sp->unk_1C` is written BEFORE `sp->unk_24` -- 20 differing
+   swapped, and the whole $s3/$s4 split between `p` and the 0xFF000000 mask
+   turns over -- even though the target STORES them in the other order. And
+   `p = (u8 *)n + 0x20;` comes before `v = n->unk_08;`: 4 differing swapped.
+
+   120 words, 0 differing. */
+s32 func_800D5AC0(u8 *p, UnkVec *v)
+{
+    UnkDungeonSP *sp = (UnkDungeonSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkNode *n;
+    TILE_1 *t;
+    DR_MODE *dm;
+
+    sp->unk_1C = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_24 = D_80083160.unk_00 + 0xB0;
+    while (1)
+    {
+        sp->unk_04 = *(u16 *)((u8 *)v + 0x2);
+        sp->unk_06 = *(u16 *)((u8 *)v + 0x6);
+        sp->unk_08 = *(u16 *)((u8 *)v + 0xA);
+        t = (TILE_1 *)sp->unk_1C;
+        sp->unk_1C = (u8 *)(t + 1);
+        sp->unk_100 = func_80065420((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
+        if ((u32)sp->unk_100 < 0x1E0)
+        {
+            *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
+            setTile1(t);
+            setSemiTrans(t, 1);
+            setRGB0(t, t->r0, t->g0, t->b0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, t);
+            dm = (DR_MODE *)sp->unk_1C;
+            sp->unk_1C = (u8 *)(dm + 1);
+            func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0, 0), 0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, dm);
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_1C;
+    return 0;
+}
 
 /* One frame of a fading burst, and a leaf: integrate the mover, halve each
    of its three velocities, scale the three colour bytes by the remaining
@@ -5854,7 +5958,48 @@ s32 func_800D67B0(u8 *p, UnkVec *v, UnkSlot *s)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D6804);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D68F4);
+/* func_800D5AC0 again, byte for byte. 120 words, 0 differing. */
+s32 func_800D68F4(u8 *p, UnkVec *v)
+{
+    UnkDungeonSP *sp = (UnkDungeonSP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkNode *n;
+    TILE_1 *t;
+    DR_MODE *dm;
+
+    sp->unk_1C = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_24 = D_80083160.unk_00 + 0xB0;
+    while (1)
+    {
+        sp->unk_04 = *(u16 *)((u8 *)v + 0x2);
+        sp->unk_06 = *(u16 *)((u8 *)v + 0x6);
+        sp->unk_08 = *(u16 *)((u8 *)v + 0xA);
+        t = (TILE_1 *)sp->unk_1C;
+        sp->unk_1C = (u8 *)(t + 1);
+        sp->unk_100 = func_80065420((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
+        if ((u32)sp->unk_100 < 0x1E0)
+        {
+            *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
+            setTile1(t);
+            setSemiTrans(t, 1);
+            setRGB0(t, t->r0, t->g0, t->b0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, t);
+            dm = (DR_MODE *)sp->unk_1C;
+            sp->unk_1C = (u8 *)(dm + 1);
+            func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0, 0), 0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, dm);
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_1C;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D6AD4);
 
