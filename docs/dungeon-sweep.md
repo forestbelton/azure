@@ -246,13 +246,34 @@ are the ONLY ones left in it, each with a measured residue:
   which only happens when `g` is assigned in a DIFFERENT basic block --
   and assigning it inside the arm folds the address and commons the second
   read away (159 words, three short).
-* `func_800B7774`, 244/251, **147 differing**. Seven words short, all in one
-  `while` loop whose exit test the target DUPLICATES above the loop. A plain
-  `while`, a `for(;;)` with a `break` and an explicit if-wrapped `do/while`
-  are byte-identical, so the loop's spelling is not the lever;
-  `jump.c:599`'s `duplicate_loop_exit_test` is, and it only runs when
-  `NOTE_INSN_LOOP_BEG` is followed by a simple jump in the first,
-  after-regscan `jump_optimize`.
+* ~~`func_800B7774`, 244/251, **147 differing**. Seven words short, all in one
+  `while` loop whose exit test the target DUPLICATES above the loop ...
+  `jump.c:599`'s `duplicate_loop_exit_test` is the lever.~~
+  **THIS DIAGNOSIS WAS WRONG, and it was a dispatcher lead, not an agent's
+  reading of the listing.** `func_800B7774` LANDED at 251 words, 0 differing
+  on 2026-11-15, and neither the loop nor cross-jumping was involved at any
+  point. The guard is produced correctly by any plain `while` here, because
+  the loop's `*(u32 *)(q + 0x18)` operand is cse-forwarded from the `sw` that
+  precedes the guard -- so the guard's `sltu` reads the stored register while
+  the bottom test reloads, the two tails differ BY CONSTRUCTION, and
+  `find_cross_jump` can never fire. `docs/matching-levers.md`'s cross-jumping
+  mechanism is sound; it simply does not apply to this function.
+
+  The seven words were six independent one- and two-word misses scattered
+  across the function, and the three that generalised are now catalogue
+  entries: the number of source locals holding one global's address deciding
+  whether its `%hi` and `%lo` share a register (51 differing and one word);
+  where a global is READ deciding a delay-slot fill independently of the
+  dependent store (5 differing); and an extra `addu` copy surviving into the
+  output being an `optimize_reg_copy_1` residue that only a loop NOTE between
+  the copy and the source's death can block.
+
+  **The lesson for the dispatcher is the one worth keeping:** a seven-word
+  deficit concentrated near a loop invited a single-mechanism explanation, and
+  a named gcc function with a plausible precondition made it feel verified.
+  It was never measured. A lead handed down with a `jump.c` line number reads
+  as established and costs an agent its whole budget chasing it -- so say
+  "unverified guess" when it is one.
 
 **THE KILL-HANDLER FAMILY IS THE BIGGEST NAMED SEAM LEFT: 21 members, 3,295
 words** (2026-11-14, after the parallel wave). `func_800BD72C` is the bare
