@@ -18,6 +18,21 @@ options:
 
   subalign: 4
 
+  # `.sdata` is NOT in splat's default auto_link_sections
+  # ([".data", ".rodata", ".bss"]), and this container needs it: `game_gp` and
+  # the lower two thirds of `gp_data` are the `-G8` small-data run, so a C unit
+  # defining an object of 8 bytes or fewer emits it to `.sdata` and a linker
+  # script without an `o(.sdata)` line drops it on the floor -- short
+  # container, no diagnostic.
+  #
+  # Purely additive when it was added on 2026-11-14: not one build/csrc/*.o had
+  # a non-empty `.sdata` or `.sbss` at that point, so turning the collection on
+  # could not move a byte that was already placed. It is NOT in `section_order`
+  # on purpose -- that list only controls where `_X_SECTION_START`/`_END`
+  # brackets are dropped, and `.sdata` entries are better emitted inline in
+  # declared-offset order with no brackets of their own.
+  auto_link_sections: [".data", ".rodata", ".bss", ".sdata"]
+
   find_file_boundaries: False
   gp_value: 0x80080994
 
@@ -694,7 +709,7 @@ segments:
       - [0x54170, data, psyq/libapi_data]
       # Back to the game: the $gp anchor region. _gp = 0x80080994 is file
       # 0x54194, the first word of this piece.
-      - [0x54194, data, game_gp]
+      - [0x54194, .sdata, game_gp]
       # The whole name table as one unit: csrc/str/names.c. Nineteen names over
       # 0x541D0-0x5426C, replacing six one-per-string `shiftjis` subsegments and
       # the `data` one that held the pointer between them.

@@ -660,11 +660,12 @@ The binary also states its own layout. libsn/SNMAIN's 36-byte `.data` at
 `__textlen` is exactly `__data`, and `__data` + `__datalen` is exactly `_gp`.
 It pins `.bss` at 0x800815C0-0x80088760, which nothing else in the file does.
 
-What remains is not unknown, just **not owned in C**: 64,148 bytes of the
-game's own in five subsegments, down from 70,308 on 2026-11-14 when the last
+What remains is not unknown, just **not owned in C**: 64,088 bytes of the
+game's own in four subsegments, down from 70,308 on 2026-11-14 -- the last
 three string pools landed as `csrc/str/speakers.c` (1,472 bytes, 107
 objects), `csrc/str/spells.c` (3,836, 103) and `csrc/str/commands.c` (852,
-36). No `rodata` subsegment of the game's is left. The five, and the order to
+36), and `game_gp` as `csrc/game_gp.c` (60, 10). No `rodata` subsegment of
+the game's is left. The five, and the order to
 work them, are in **`docs/data-map.md`, "What is left, in order"**; the two
 things worth carrying out of it are:
 
@@ -680,18 +681,26 @@ things worth carrying out of it are:
   new input to use it: it reads `asm/nonmatchings/*/*.s`, which this
   executable no longer has, so the modes have to come out of a disassembly of
   `build/slus_006.14.elf` instead.
-- **`gp_data` and `game_gp` have a FREE oracle and a different blocker.**
-  Our build reproduces the original's addressing modes byte for byte, so
-  `mips64-linux-gnu-objdump -r build/csrc/*.o | grep GPREL16` names the unit
-  that defined each `$gp`-reached object with no new tooling at all; it
-  settles 68 of the 359, in two interleaved monotone runs that are `.sdata`
-  and `.sbss`. What blocks it is that only 2,568 of the 3,536 bytes are
-  ownable: the last non-zero byte is at vram 0x80081435 and the 968 above it
-  are `.sbss` and zero fill, which a C definition emits as NOBITS and so
-  would leave the container short. The `.sdata` part also needs
-  `auto_link_sections` to gain `".sdata"`, since the generated linker script
-  collects only `(.data)` and `(.rodata)` -- additive, because nothing is
-  being dropped today.
+- **`game_gp` LANDED 2026-11-14 as `csrc/game_gp.c`**, 60 bytes, and it
+  turned the `game_data` argument above into a proof. Two relocations sixteen
+  bytes apart inside `build/csrc/unk_72A8.o` -- `R_MIPS_HI16 D_800809A8` and
+  `R_MIPS_GPREL16 D_800809B8` -- say that the function reaching the second
+  was compiled in the unit that DEFINED it and the function reaching the
+  first was not. Both are inside our `unk_72A8`, so `unk_72A8` is at least
+  two original translation units over a 60-byte run, and no assignment of
+  that run to our 38 units can be right. So the bytes went to a unit with no
+  code, which is the only shape that cannot perturb a reference: defining
+  them in `unk_72A8.c` or `gprel_72A8.c` would flip their absolute
+  neighbours to GPREL16. Every relocation in both consumers was checked
+  unchanged. It is also the first `.sdata` subsegment in the project;
+  `auto_link_sections` gained `".sdata"` and was verified byte-identical
+  before anything used it.
+- **`gp_data` is 2,508 ownable bytes of 3,476.** The same free oracle applies
+  -- `objdump -r build/csrc/*.o | grep GPREL16` -- and it settles the units
+  for many of the 350 objects, in two interleaved monotone runs that are
+  `.sdata` and `.sbss`. What is left out is the 968 bytes above vram
+  0x80081435: `.sbss` and zero fill, which a C definition emits as NOBITS and
+  so would leave the container short. They stay a `data` subsegment.
 
 The five formerly-unidentified code gaps -- 0x31CC4, 0x32934, 0x33234,
 0x34BD0 and 0x362B4, 5,556 bytes in all -- are now `asm` subsegments, which is
