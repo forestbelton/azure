@@ -1,0 +1,22 @@
+/* Hand-maintained extra linker symbols for dungeon.bin, passed to ld alongside
+   splat's two generated `*_auto.txt` scripts (see the Makefile's dungeon
+   rule).  Nothing here is generated; splat never writes this file, so an
+   entry added here survives `make splat`.
+
+   D_800DF37A is a 2-byte datum that splat did not name.  Its neighbours
+   D_800DF374, D_800DF378 and D_800DF37C are all in
+   dungeon.bin_undefined_syms_auto.txt; 0x800DF37A fell through because
+   nothing in the already-split code referenced it directly.
+
+   The witness is func_800BA810, which reaches 0x800DF37A THREE times, each
+   through its own `lui %hi` / `%lo` pair.  cse shares one `%hi` across a
+   symbol and a constant offset, so every spelling that reaches the address as
+   D_800DF378 + 2 -- a two-u16 struct, a `u16 x[]` array, and
+   `*(u16 *)((u8 *)&D_800DF378 + 2)` were all measured -- collapses the three
+   pairs into one and cannot get below 12 differing.  Only an independent
+   symbol reproduces three independent pairs.  The raw constant address
+   `*(u16 *)0x800DF37A` fixes the loads but turns the store into the
+   assembler's absolute macro (`lui $at`).  See docs/matching-levers.md,
+   "A SYMBOL PLUS A CONSTANT OFFSET IS ONE %hi TO cse; TWO SYMBOLS ARE TWO". */
+
+D_800DF37A = 0x800DF37A;

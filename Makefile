@@ -428,11 +428,12 @@ build/$(MAIN): $(OFILES) build/$(MAIN).ld
 	@echo ""
 	@$(CHECK) build/$(MAIN) data/main/$(MAIN) --yaml splat/$(SLUS).yaml
 
-build/$(DUNGEON): $(OFILES) build/$(DUNGEON).ld
+build/$(DUNGEON): $(OFILES) build/$(DUNGEON).ld splat/$(DUNGEON)_extra_syms.txt
 	$(LD) $(LDFLAGS) \
 		--script=build/$(DUNGEON).ld \
 		--script=splat/$(DUNGEON)_undefined_funcs_auto.txt \
 		--script=splat/$(DUNGEON)_undefined_syms_auto.txt \
+		--script=splat/$(DUNGEON)_extra_syms.txt \
 		--output=build/$(DUNGEON).elf
 	$(OBJCOPY) -O binary build/$(DUNGEON).elf build/$(DUNGEON)
 	@echo ""
