@@ -176,6 +176,18 @@ void func_800B51C8();
    engine's, and its `u8 *` spelling is copied from csrc/unk_154BC.c, which
    walks the same +0xAC field at the same stride. */
 extern u8 *D_800E3D7C;
+/* func_800BA810's cached-route state and the name record it indexes. */
+extern u8 *D_800DF374;
+extern u16 D_800DF378;
+extern u16 D_800DF37A;
+extern u8 D_800DF380[];
+typedef struct UnkDungeonName1
+{
+    u8 pad_00[0x12];
+    u8 unk_12;
+    u8 pad_13[0x1];
+} UnkDungeonName1;
+extern UnkDungeonName1 D_8006DE24_n[] __asm__("D_8006DE24");
 extern u8 D_800E3548[];
 extern u8 D_800E3648[];
 /* func_80095DFC's three message strings. */
@@ -8867,8 +8879,102 @@ s32 func_8009A66C(u32 f, u8 *c, u8 *d, s16 y)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009A8C0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009ABA0);
+s32 func_8009ABA0(u16 a, UnkVec *b, u8 *c, s16 d, s16 e)
+{
+    s32 k;
+    u16 x;
+    u16 y;
+    s16 z;
+    u16 m;
+    u8 *q;
+    u32 f;
 
+    k = (a >> 9) & 7;
+    x = *(u16 *)((u8 *)b + 0x2);
+    y = *(u16 *)((u8 *)b + 0x6);
+    z = d - e;
+    if ((s16)func_8009A540(k, x >> 6, y >> 6, z) == 0)
+    {
+        return -2;
+    }
+    x += D_8006CCD8[k] * 64;
+    y += D_8006CCE8[k] * 64;
+    if ((s16)func_8009A350(c[0x24], c[0x25], k, &m) == 0)
+    {
+        return 0;
+    }
+    if ((m & 0x8000) != 0)
+    {
+        return -2;
+    }
+    if ((m & 0x400) != 0)
+    {
+        return 0;
+    }
+    if ((m & 0x3300) != 0)
+    {
+        z = func_800BCB04(x, y, z);
+        /* DEVICE: 4 differing (words 65, 66, 69, 71), worth 0 words -- the
+           asm emits nothing.  `z` is `s16`, so the assignment above is
+           `(set (reg:HI z) (subreg:HI (reg:SI result)))` and cse records the
+           equivalence; the 4th argument's promotion back to int is then
+           expanded as `sll`/`sra` off the SImode RESULT pseudo rather than
+           off `z`, the result stays live past the copy, and the
+           `%hi(D_800814A8)` is pushed out of $v0 into $v1.  The target
+           extends out of `z`'s own register ($s2).  An asm that writes `z`
+           kills the equivalence without emitting an instruction.  The ~30
+           legal spellings in the park header -- every cast on the argument,
+           a `w = z` copy, a second `z2` local, block scopes, the duplicated
+           `if` arm in four placements -- are all 134/4, because cse re-forms
+           the equivalence from the copy each time.  The permuter's own answer
+           was to narrow func_800BCB04's return type to `short`, which breaks
+           seven landed functions. */
+        __asm__("" : "+r"(z));
+        q = func_8009B25C((u8 *)D_800814A8, x >> 6, y >> 6, z);
+        if (q != NULL)
+        {
+            f = *(u32 *)(q + 0x1C);
+            if ((f & 0x2000) != 0)
+            {
+                if ((f & 0x628) == 0)
+                {
+                    if ((*(u32 *)(q + 0x14) & 0x40000000) == 0)
+                    {
+                        if (*(s16 *)(q + 0x6C) +
+                                ((*(s16 *)(q + 0x6E) * *(s16 *)&D_80083460) >> 8) >=
+                            0x100)
+                        {
+                            goto ok;
+                        }
+                    }
+                }
+            }
+            return -1;
+        }
+    ok:
+    }
+    else
+    {
+        z = func_800BCB04(x, y, z);
+    }
+    if ((s16)z < 0x200)
+    {
+        if ((s16)z == d)
+        {
+            return 1;
+        }
+        if (d < (s16)z)
+        {
+            if ((s16)z - d >= 0x41)
+            {
+                return 4;
+            }
+            return 2;
+        }
+        return 3;
+    }
+    return -2;
+}
 /* Probe the cell one step along `k` from (c, d): the blocked test, then the
    map cell's own flags, then a second probe at the stepped coordinate.
 
@@ -21716,8 +21822,139 @@ UnkNode *func_800BA764(u16 x, u16 y, s16 ang, s32 w)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BA810);
+void func_800BA810(u8 *p, u16 kind)
+{
+    u8 *q;
+    u8 *v;
+    s32 i;
+    s32 cz;
+    s32 cx;
+    s32 h;
+    s32 t;
+    s16 t2;
+    s32 d;
+    s32 idx;
+    s32 j;
+    u16 fa;
+    u8 *w;
 
+    if (p == NULL)
+    {
+        /* DEVICE: 3 differing (rows 44/46/47, the preamble's `lw` and the two
+           `lhu`s off it).  `v` has to be a GLOBAL allocno to come out in $v1:
+           with it block-local, local-alloc's qty_compare ties it with both
+           `lhu` temps at the same priority and the tie goes to the lowest
+           quantity number, which is `v`, so it takes $v0 and the two temps
+           shift one register each.  Sharing `v` with the +0x60 tail below is
+           what made it global, but then the tail's pointer is $v1 where the
+           target has $v0 (that is the separate `w`).  A plain
+           `__asm__("" ::"r"(v))` in an arm of the chain does make it global
+           and is 3 DIFFERING, but it is a USE, so `v` is then live across the
+           whole compare chain and lands in $a0.  An asm OUTPUT in this
+           already-taken early-return arm adds the second block without
+           extending the live range at all; it must be __volatile__, since a
+           non-volatile asm whose only output is dead is deleted by flow and
+           the reference goes with it (5 differing). */
+        __asm__ __volatile__("" : "=r"(v));
+        D_800DF374 = NULL;
+        func_800403BC((s32)func_800BA6B8);
+        return;
+    }
+    if (D_800DF374 == p && D_800DF37A == *(s16 *)(p + 0x2A) &&
+        D_800DF378 == kind)
+    {
+        return;
+    }
+    fa = *(u16 *)(p + 0x2A);
+    D_800DF374 = p;
+    D_800DF378 = kind;
+    D_800DF37A = fa;
+    func_800403BC((s32)func_800BA6B8);
+    t = kind & 0x3FFF;
+    t2 = t;
+    v = *(u8 **)(p - 0x18);
+    h = *(s16 *)(p + 0x88);
+    cx = *(u16 *)(v + 0x2) >> 6;
+    cz = *(u16 *)(v + 0x6) >> 6;
+    d = (*(u16 *)(p + 0x2A) >> 9) & 7;
+    if (t2 == 8)
+    {
+        i = 1;
+        if (p[0x13] == 0x16)
+        {
+            if (p[0x48] == 0xF)
+            {
+                i = 0xA;
+            }
+        }
+        while (i > 0)
+        {
+            cx += D_8006CCD8[d];
+            cz += D_8006CCE8[d];
+            h = (s16)func_800BCB04(((cx << 6) + 0x20) & 0xFFE0,
+                                   ((cz << 6) + 0x20) & 0xFFE0, (s16)(h - 0x20));
+            if (h >= 0x201)
+            {
+                return;
+            }
+            func_800BA764(cx, cz, h, 0xFF);
+            i--;
+        }
+    }
+    else if (t2 == 0xB)
+    {
+        i = 1;
+        while (i > 0)
+        {
+            cx += D_8006CCD8[d];
+            cz += D_8006CCE8[d];
+            h = (s16)func_800BCB04(((cx << 6) + 0x20) & 0xFFE0,
+                                   ((cz << 6) + 0x20) & 0xFFE0, (s16)(h - 0x20));
+            if (h >= 0x201)
+            {
+                return;
+            }
+            func_800BA764(cx, cz, h, 0xFF00);
+            i--;
+        }
+    }
+    else if (t2 == 0xC)
+    {
+        func_800BA764(cx, cz, h, 0xFFFF);
+    }
+    else if ((u32)(t - 1) < 3)
+    {
+        j = (t2 - 1) * 3;
+        idx = *(p + j + 0x8);
+        if (D_8006DE24_n[idx].unk_12 == 1)
+        {
+            i = D_800DF380[idx] & 0x1F;
+            while (i > 0)
+            {
+                cx += D_8006CCD8[d];
+                cz += D_8006CCE8[d];
+                h = (s16)func_800BCB04(((cx << 6) + 0x20) & 0xFFE0,
+                                       ((cz << 6) + 0x20) & 0xFFE0, (s16)(h - 0x20));
+                if (h >= 0x201)
+                {
+                    return;
+                }
+                func_800BA764(cx, cz, h, 0xFF);
+                i--;
+            }
+        }
+        else if (D_8006DE24_n[idx].unk_12 == 2)
+        {
+            q = *(u8 **)(p + 0x60);
+            if (q != NULL)
+            {
+                w = *(u8 **)(q - 0x18);
+                func_800BA764(*(u16 *)(w + 0x2) >> 6, *(u16 *)(w + 0x6) >> 6,
+                              *(s16 *)(q + 0x88), 0xFF);
+            }
+        }
+    }
+}
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BABA8);
 
 /* State 0 seeds the 0x40-byte noise table at +0x12 and falls into state 1
