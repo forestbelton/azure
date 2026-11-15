@@ -133,6 +133,7 @@ u16 func_800A6D30();
    without these the call sites take an implicit `int f()` and cc1psx warns. */
 s32 func_800C8844(u8 *, s16, s16);
 s32 func_800C8980(u8 *, s16, s16);
+s32 func_800C8900(u8 *, s16, s16);
 void func_80099844(u8 *, u8 *);
 void func_800DC1B8(void *);
 extern u8 D_800E19C2[];
@@ -298,6 +299,17 @@ extern u8 D_800E1BF3[];
 extern u8 D_800E1C03[];
 extern u8 D_800E1C14[];
 extern void *D_800DCF14;
+/* The two engine-state gates below. func_80033BC0 is declared `void` in
+   csrc/gprel_72A8.c and RETURNS a value anyway; csrc/ovl_town_800BF3F0.c
+   records the same thing and says not to take that prototype, so this is
+   the old-style form, which gives the value without the wrong type. */
+s32 func_80033BC0();
+void func_80040AA0(s32);
+void func_8003F320(void);
+extern u8 D_80082E6B;
+extern u8 D_800DCF4E;
+extern u8 D_800DF3CC[];
+extern u8 D_800DF3D4[];
 void func_800A56E0(s32);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
@@ -308,7 +320,7 @@ void func_800D3738(u8 *, UnkVec *, UnkSlot *, s16);
 void func_8003DB94(void *, void *, s32);
 void func_80099FDC(UnkNode *);
 void func_8009A21C(s32, s32, s32);
-u8 func_8009FB34(s32, s32);
+s16 func_8009FB34(u16, u16);
 extern u8 D_800E2178[];
 extern u8 D_800E221C[];
 
@@ -844,9 +856,48 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FD7C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FE94);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FFD4);
+/* Walk the eight neighbouring tiles and report the first that passes:
+   D_8006CCD8 and D_8006CCE8 are the engine's sine and cosine tables, read
+   here as u16 and added to the record's tile, and the index is handed back
+   through the caller's halfword as `i << 9` -- the same facing encoding
+   csrc/ovl_town.c decodes with `(ang >> 9) & 7`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0084);
+   func_8009FB34 RETURNS s16 AND TAKES u16: the `andi $a0, $a0, 0xFFFF`
+   before the call is a u16 parameter truncating, and the `sll $v0, 16`
+   after it is a halfword result being tested signed. The spawners above
+   store its result with `sb` and so witness neither.
+   44 words, 0 differing. */
+s32 func_8009FFD4(u8 *p, s16 *out)
+{
+    s32 i;
+
+    for (i = 0; i < 8; i++)
+    {
+        if (func_8009FB34(p[0x24] + ((u16 *)D_8006CCD8)[i], p[0x25] + ((u16 *)D_8006CCE8)[i]) < 0)
+        {
+            *out = i << 9;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* func_8009FFD4 with the test inverted -- `bltz` for `bgez`, the first
+   neighbour that FAILS. 44 words, 0 differing. */
+s32 func_800A0084(u8 *p, s16 *out)
+{
+    s32 i;
+
+    for (i = 0; i < 8; i++)
+    {
+        if (func_8009FB34(p[0x24] + ((u16 *)D_8006CCD8)[i], p[0x25] + ((u16 *)D_8006CCE8)[i]) >= 0)
+        {
+            *out = i << 9;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0134);
 
