@@ -17,12 +17,32 @@ constrain the grouping:
 The second is what makes this worth doing rather than guessing: it is a strong
 check the first has to satisfy, and where the two disagree the output says so
 instead of smoothing it over.
+
+TWO SOURCES, because a fully landed block has no nonmatchings left. `--source
+nonmatchings` reads `asm/nonmatchings/*/*.s`; `--source objects` reads the
+relocations out of `build/csrc/*.o`, which is sound only because the container
+builds BYTE-IDENTICAL -- every GPREL16 there is a `$gp`-relative instruction in
+the reference. `auto` prefers the listings and falls back to the objects.
+
+AND TWO REPORTS, because the default one overstates what is known.
+`--cores` uses POSITIVE evidence only -- the interval spanned by the functions
+that reach one symbol `$gp`-relatively is provably one unit -- and reports the
+gaps as gaps. On slus_006.14, measured 2026-11-14:
+
+    67 of 1053 functions make a $gp-relative access at all
+    29 proven cores covering 89 functions, 8.5%
+    the widest gap between two cores is 170 functions
+
+So this signal does NOT determine a carve of that executable; it pins 29
+cores and leaves 964 functions in windows a boundary could be anywhere in.
+Read `--cores` before believing the default report's run list.
 """
 
 import argparse
 import collections
 import pathlib
 import re
+import subprocess
 from typing import TypedDict
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -33,8 +53,13 @@ ABS = re.compile(r"%(?:hi|lo)\(([\w.]+)\)")
 ScanTuple = tuple[int, str, str, set[str], set[str]]
 
 
-def scan() -> list[ScanTuple]:
-    """[(addr, name, unit, gp_syms, abs_syms)] in address order."""
+def scan_nonmatchings() -> list[ScanTuple]:
+    """[(addr, name, unit, gp_syms, abs_syms)] from asm/nonmatchings/.
+
+    The original source, and the only one for a block that still has asm
+    stubs. It reads nothing for a block that is fully landed, which is what
+    `scan_objects` is for.
+    """
     out: list[ScanTuple] = []
     for f in sorted((ROOT / "asm/nonmatchings").glob("*/*.s")):
         m = re.fullmatch(r"func_([0-9A-Fa-f]{8})", f.stem)
@@ -50,6 +75,77 @@ def scan() -> list[ScanTuple]:
         out.append((int(m.group(1), 16), f.stem, f.parent.name, gp, ab - gp))
     out.sort()
     return out
+
+
+def units_of(container: str) -> list[str]:
+    """The container's `c` subsegment names, in link order."""
+    y = (ROOT / "splat" / (container + ".yaml")).read_text()
+    return [m.group(1)
+            for m in re.finditer(r"^\s*- \[0x[0-9a-f]+, c, (\S+)\]", y, re.M)]
+
+
+def scan_objects(container: str) -> list[ScanTuple]:
+    """The same tuples, read out of the COMPILED OBJECTS instead.
+
+    Once a block is fully landed there are no nonmatchings left, and the
+    addressing mode has to come from somewhere else. It comes from our own
+    objects, and that is sound for exactly one reason: the container builds
+    BYTE-IDENTICAL, so every GPREL16 relocation in `build/csrc/*.o` is a
+    `$gp`-relative instruction in the reference and every HI16/LO16 is an
+    absolute one. Check `make check` before trusting a run of this.
+
+    Relocations are attributed to the enclosing function by offset, which
+    needs the object's own `.text` symbol table rather than the listing.
+    """
+    out: list[ScanTuple] = []
+    for unit in units_of(container):
+        o = ROOT / "build/csrc" / (unit + ".o")
+        if not o.exists():
+            continue
+        funcs = []
+        for ln in subprocess.run(
+                ["mips64-linux-gnu-nm", "--defined-only", str(o)],
+                capture_output=True, text=True).stdout.splitlines():
+            p = ln.split()
+            if len(p) == 3 and p[1] in "tT" and re.fullmatch(
+                    r"func_[0-9A-Fa-f]{8}", p[2]):
+                funcs.append((int(p[0], 16), p[2]))
+        funcs.sort()
+        if not funcs:
+            continue
+        per: dict[str, tuple[set[str], set[str]]] = {
+            n: (set(), set()) for _, n in funcs}
+        for ln in subprocess.run(
+                ["mips64-linux-gnu-objdump", "-r", "-j", ".text", str(o)],
+                capture_output=True, text=True).stdout.splitlines():
+            m = re.match(r"([0-9a-f]+)\s+R_MIPS_(\w+)\s+(\S+)", ln)
+            if not m:
+                continue
+            off, kind, sym = int(m.group(1), 16), m.group(2), m.group(3)
+            if kind not in ("GPREL16", "HI16", "LO16"):
+                continue
+            owner = None
+            for a, n in funcs:
+                if a > off:
+                    break
+                owner = n
+            if owner is None:
+                continue
+            per[owner][0 if kind == "GPREL16" else 1].add(sym)
+        for _, n in funcs:
+            gp, ab = per[n]
+            out.append((int(n[5:], 16), n, unit, gp, ab - gp))
+    out.sort()
+    return out
+
+
+def scan(source: str = "auto", container: str = "slus_006.14") -> list[ScanTuple]:
+    if source == "nonmatchings":
+        return scan_nonmatchings()
+    if source == "objects":
+        return scan_objects(container)
+    out = scan_nonmatchings()
+    return out if out else scan_objects(container)
 
 
 Run = TypedDict(
@@ -101,6 +197,67 @@ def group(funcs: list[ScanTuple]) -> list[Run]:
     return runs
 
 
+def cores(funcs: list[ScanTuple]) -> list[tuple[int, int, set[str]]]:
+    """The runs POSITIVE evidence alone proves, as (lo, hi, symbols).
+
+    `group()` uses negative evidence too -- a function addressing a symbol
+    absolutely is not in the unit that defines it -- and that is where it can
+    be wrong, because the original source could declare a symbol `extern`
+    ABOVE its own definition and get the absolute form inside the defining
+    unit. docs/addressing-and-translation-units.md, "Proved: one unit CAN mix
+    both modes". Run `group()` and this against each other: where they
+    disagree, this one is the floor.
+
+    Positive evidence alone says: every function that reaches symbol `s`
+    `$gp`-relatively is in the unit that defines `s`, and the linker lays a
+    unit out contiguously, so the whole ADDRESS INTERVAL spanned by those
+    functions is one unit. Merging the overlapping intervals gives runs that
+    are proven, and gaps that are not evidence of anything.
+    """
+    span: dict[str, list[int]] = collections.defaultdict(list)
+    for addr, _name, _unit, gp, _ab in funcs:
+        for s in gp:
+            span[s].append(addr)
+    out: list[tuple[int, int, set[str]]] = []
+    for lo, hi, s in sorted((min(v), max(v), s) for s, v in span.items()):
+        if out and lo <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], hi), out[-1][2] | {s})
+        else:
+            out.append((lo, hi, {s}))
+    return out
+
+
+def report_cores(funcs: list[ScanTuple]) -> None:
+    import bisect
+
+    addrs = [f[0] for f in funcs]
+    unit = {f[0]: f[2] for f in funcs}
+    cs = cores(funcs)
+    covered = 0
+    nsyms = len({s for f in funcs for s in f[3]})
+    nwit = sum(1 for f in funcs if f[3])
+    print("%d of %d function(s) make a $gp-relative access at all, naming %d"
+          " symbol(s) -> %d PROVEN core(s)\n" % (nwit, len(funcs), nsyms, len(cs)))
+    print("%-24s %-5s %-20s %s" % ("core", "fns", "current unit(s)", "unproven gap after"))
+    for i, (lo, hi, _ss) in enumerate(cs):
+        j0, j1 = bisect.bisect_left(addrs, lo), bisect.bisect_right(addrs, hi)
+        covered += j1 - j0
+        us = sorted({unit[a] for a in addrs[j0:j1]})
+        nxt = cs[i + 1][0] if i + 1 < len(cs) else None
+        gap = (bisect.bisect_left(addrs, nxt) if nxt else len(addrs)) - j1
+        print("%#010x..%#010x %-5d %-20s %d function(s)" % (
+            lo, hi, j1 - j0, ",".join(us)[:20], gap))
+    print("\n%d of %d function(s) are inside a proven core (%.1f%%); the other"
+          " %d are in gaps, and a unit boundary can be anywhere in one."
+          % (covered, len(funcs), 100.0 * covered / len(funcs), len(funcs) - covered))
+    gaps = [bisect.bisect_left(addrs, cs[i + 1][0])
+            - bisect.bisect_right(addrs, cs[i][1]) for i in range(len(cs) - 1)]
+    if gaps:
+        print("widest gap BETWEEN two cores: %d function(s); after the last"
+              " core: %d" % (max(gaps),
+                             len(addrs) - bisect.bisect_right(addrs, cs[-1][1])))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("-n", "--limit", type=int, default=30)
@@ -110,11 +267,35 @@ def main():
         default=1,
         help="only show runs with at least this many functions",
     )
+    ap.add_argument(
+        "--source",
+        choices=("auto", "nonmatchings", "objects"),
+        default="auto",
+        help="where the addressing modes come from; `auto` prefers"
+             " asm/nonmatchings and falls back to the compiled objects,"
+             " which is what a fully landed block needs",
+    )
+    ap.add_argument(
+        "--container",
+        default="slus_006.14",
+        help="which splat yaml names the `c` units to read, for --source objects",
+    )
+    ap.add_argument(
+        "--cores",
+        action="store_true",
+        help="report only what POSITIVE evidence proves, and how much of the"
+             " block it leaves unproven",
+    )
     args = ap.parse_args()
 
-    funcs = scan()
+    funcs = scan(args.source, args.container)
     if not funcs:
-        raise SystemExit("no per-function asm; run `make splat`")
+        raise SystemExit(
+            "no per-function evidence: asm/nonmatchings is empty (run"
+            " `make splat`) and build/csrc has no objects (run `make`)")
+    if args.cores:
+        report_cores(funcs)
+        return 0
     runs = group(funcs)
 
     print(

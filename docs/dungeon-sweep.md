@@ -266,8 +266,19 @@ The whole overlay is ONE file, `csrc/ovl_dungeon.c`, so agents cannot each
 edit it. They do not need to. `tools/decomp/ovlverify.py` takes the source
 path as its first argument, so an agent can work entirely on its own copy:
 
-    cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-<name>.c
-    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-<name>.c func_X func_Y
+    mkdir -p /tmp/claude-1000/agent-<name>
+    cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-<name>/ovl_dungeon.c
+    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-<name>/ovl_dungeon.c func_X
+
+**THE COPY'S BASENAME MATTERS, and this recipe used to get it wrong.**
+`ovlverify.py` picks the container ELF from the SOURCE FILE'S BASENAME
+(`stem in CONTAINER`). A copy called `agent-c4.c` falls back to
+`build/town.bin.elf`. For a single named function that still has its listing
+nothing goes wrong, which is why this went unnoticed for two waves; in a
+whole-unit sweep it produces dozens of `NO TARGET` lines and at least one
+plausible-looking false failure (`func_800C838C` measured 25 against 31 words
+that way, and 31/31/0 when named properly). Keep the copy named
+`ovl_dungeon.c` in a directory of its own.
 
 That measures against the reference image exactly as it does in the real
 unit, with no build and no shared state. Each agent hands back the C it
