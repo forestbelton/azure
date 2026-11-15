@@ -176,8 +176,8 @@ in which local holds what are the two that matter.
 
 ## The state of the sweep
 
-Take the numbers from `progress.py`. As of 2026-11-14 the block is open, **122
-of 863 functions are landed at 0 differing** and three are parked, all four
+Take the numbers from `progress.py`. As of 2026-11-14 the block is open, **126
+of 863 functions are landed at 0 differing** and two are parked, all four
 containers are byte-identical, `guard.py` accounts for every stub, the
 whole-unit `ovlverify.py` sweep is clean, and `clang-format` has **no**
 complaints about `csrc/ovl_dungeon.c` -- keep that at zero, it is a better
@@ -224,39 +224,27 @@ swapped, read `.lreg`'s ref/length lines and solve for the reference count
 rather than sweeping spellings -- eleven natural rewrites on `func_800D21CC`
 left both numbers unchanged to the reference.
 
-## THE OPEN QUESTION IN THIS BLOCK: a parameter the target keeps in memory
+## SETTLED: where a parameter lives
 
-Two functions have been lost to the same thing, and it will come back.
+This section used to be the block's open question -- two functions had been
+lost to a parameter the target keeps in its incoming home slot. It is
+answered, it cost 312 words to leave unanswered, and the full write-up is in
+`docs/matching-levers.md` under "WHERE A PARAMETER LIVES". In short:
 
-`func_800D5460` (parked, 77/3) and `func_800DBC20`/`func_800DBD5C`
-(abandoned at 79 words and 68 differing, no park) both have a parameter that
-the TARGET holds in its incoming home slot -- stored once, reloaded once --
-where every natural spelling gives it a callee-saved register instead and
-pays the save/restore pair. In `func_800D5460` it is the second argument, in
-`func_800DBC20` the sixth.
+* A REGISTER parameter is in a pseudo unless the SOURCE made it addressable.
+  `assign_parms` (function.c:3775) gives it the home-slot MEM only for
+  `TREE_ADDRESSABLE`, `volatile`, or a BLKmode type -- there is no cost path,
+  so the allocator never chooses memory for one. `func_800D5460`'s second
+  argument is addressable, and `(void)&colour;` says so at no cost in code.
+* A STACK parameter (the fifth and up) prefers memory, because
+  `regclass.c:786` DISCOUNTS `mem_cost` for a pseudo whose init loads from
+  its own slot. `func_800DBC20`'s sixth argument is a promoted `s16` -- `lw`
+  then `sll 16`/`sra 16` -- and declaring it `s32` with an explicit cast is
+  a word short.
 
-**What it is not**, both checked against the compiler's own source:
-
-* not caller-saves. `global.c:1086` retries with call-clobbered registers
-  only when `best_reg < 0`, and both functions leave `$s2` upward free, so
-  the first attempt cannot have failed. Weighting the uses with a degenerate
-  loop to clear `CALLER_SAVE_PROFITABLE`'s `4 * calls < refs` (regs.h:171)
-  costs a word rather than saving one.
-* not `update_equiv_regs`' replacement path for a REGISTER parameter: that
-  needs `rtx_equal_p (note, SET_SRC)`, and the init insn's source is the hard
-  register, not the home MEM. For a STACK parameter the test does hold, which
-  is why `func_800DBC20`'s sixth argument gets rematerialised at its use
-  instead -- the opposite error, and equally wrong.
-
-`volatile` on the parameter imitates the first case and reaches 3 differing;
-`docs/near-misses/func_800D5460.c` says in as many words that this is a
-device of unknown provenance rather than a finding.
-
-**Settle this before taking another function with five or more parameters,
-or one whose argument is live across its first call.** It is one question
-about how this cc1psx lays out parameters, and it is worth more than the two
-functions it has cost: `docs/addressing-and-translation-units.md` and
-`local-alloc.c`'s `update_equiv_regs` are where to start.
+Both pairs are landed. The general lesson for the rest of this block: when
+the residue is "which register did this parameter get", read the parameter's
+own declaration off the load and the call, not the allocator.
 
 ## What has NOT been done
 

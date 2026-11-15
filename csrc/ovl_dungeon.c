@@ -5164,13 +5164,118 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4CB0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4DE8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4FC8);
+/* The effect spawner the kill handlers call: allocate a 0x12 node, park a
+   step in it, seed its mover from the caller's, tint it and ring a sound.
+   func_800D5460 below is this source with func_800D5294 as the step and a
+   0x32 life. See its `&colour` note. 77 words, 0 differing. */
+void func_800D4FC8(UnkNode *src, s32 colour, u16 snd)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *g;
+
+    /* `&colour` IS LOAD-BEARING and costs no code. The target keeps this
+       parameter in its incoming home slot at 0x24($sp) -- stored once in the
+       jal's delay slot, reloaded once -- and assign_parms (function.c:3775)
+       gives a register parameter a MEM for its DECL_RTL at -O2 in exactly
+       three cases: TREE_ADDRESSABLE, TREE_SIDE_EFFECTS, or a BLKmode type.
+       A struct is ruled out by the call sites, which pass integer constants
+       with `lui`/`ori`, so the original took its address. Without this the
+       parameter takes a third callee-saved register and pays the
+       save/restore pair: 78 words. `volatile` reaches 77 with 3 differing --
+       the prologue permuted -- and the address-take reaches 0. */
+    (void)&colour;
+    n = func_8003FC64(0x12);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        *(UnkNode **)(p + 0x24) = src;
+        n->unk_10 = (u32)func_800D4DE8;
+        *(s16 *)(p + 0x1E) = 0x1E;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)src->unk_08 + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)src->unk_08 + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)src->unk_08 + 0xA);
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        *(s32 *)(p + 0xC) = *(s32 *)((u8 *)r + 0xC) = colour;
+        r->unk_12 = 0x7DCE;
+        r->unk_14 |= 0x100;
+        func_8003DB94(r, D_800DECF8, 0);
+        if (snd != 0)
+        {
+            func_800A56E0(snd);
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) += 1;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D50FC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D5294);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D5460);
+/* func_800D4FC8 with func_800D5294 and a 0x32 life. 77 words, 0 differing. */
+void func_800D5460(UnkNode *src, s32 colour, u16 snd)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *g;
+
+    /* `&colour` IS LOAD-BEARING and costs no code. The target keeps this
+       parameter in its incoming home slot at 0x24($sp) -- stored once in the
+       jal's delay slot, reloaded once -- and assign_parms (function.c:3775)
+       gives a register parameter a MEM for its DECL_RTL at -O2 in exactly
+       three cases: TREE_ADDRESSABLE, TREE_SIDE_EFFECTS, or a BLKmode type.
+       A struct is ruled out by the call sites, which pass integer constants
+       with `lui`/`ori`, so the original took its address. Without this the
+       parameter takes a third callee-saved register and pays the
+       save/restore pair: 78 words. `volatile` reaches 77 with 3 differing --
+       the prologue permuted -- and the address-take reaches 0. */
+    (void)&colour;
+    n = func_8003FC64(0x12);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        *(UnkNode **)(p + 0x24) = src;
+        n->unk_10 = (u32)func_800D5294;
+        *(s16 *)(p + 0x1E) = 0x32;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)src->unk_08 + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)src->unk_08 + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)src->unk_08 + 0xA);
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        *(s32 *)(p + 0xC) = *(s32 *)((u8 *)r + 0xC) = colour;
+        r->unk_12 = 0x7DCE;
+        r->unk_14 |= 0x100;
+        func_8003DB94(r, D_800DECF8, 0);
+        if (snd != 0)
+        {
+            func_800A56E0(snd);
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) += 1;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D5594);
 
@@ -5434,9 +5539,86 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DB660);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DBA90);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DBC20);
+/* Draw one digit strip: format two numbers into stack buffers through
+   func_8004E57C, then walk the first string and blit each character with
+   func_800673A0, the glyph's x chosen from the engine's per-character
+   attribute table and stepping left by 4 each time.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DBD5C);
+   SIX PARAMETERS, AND THE LAST TWO ARE BOTH s16. The sixth arrives on the
+   stack and is read with `lw` and then `sll 16`/`sra 16` -- a PROMOTED s16
+   stack parameter, where a plain s32 gets rematerialised at its use and
+   costs the function a word. The fifth is also s16 and the witness is the
+   `sll`/`sra` where it is passed on; as u16 it is an `andi $a2, $s5,
+   0xFFFF` instead, which is the same length and one differing word.
+
+   THE WALKER IS WHAT IS PASSED TO THE FIRST func_8004E57C, not the array.
+   Passing `t` and walking a separate `s` makes two pseudos and an
+   `addu $s0, $s2, $zero` between them. 79 words, 0 differing. */
+void func_800DBC20(s32 a, s32 b, u16 c, s16 x, s16 y, s16 n)
+{
+    UnkDungeonRect r;
+    u8 t[0x10];
+    u8 u[0x10];
+    u8 *s;
+
+    s = t;
+    func_8004E57C(a, c, (s32)s);
+    func_8004E57C(b, c, (s32)u);
+    if (t[0] != 0)
+    {
+        do
+        {
+            if (n != 0)
+            {
+                r.v[0] = (D_800808ED[*s] & 4) ? (*s * 4 + 0x100) : 0x1C0;
+            }
+            else
+            {
+                r.v[0] = (D_800808ED[*s] & 4) ? (*s * 4 + 0x100) : 0x1E8;
+            }
+            r.v[1] = 0x1C0;
+            r.v[2] = 0x4;
+            r.v[3] = 0x8;
+            func_800673A0(r.v, x, y);
+            s++;
+            x -= 4;
+        } while (*s != 0);
+    }
+}
+
+/* func_800DBC20 with the other glyph row: 0x1EC for the fallback, 0x1B0
+   for the row and a height of 0x10. 79 words, 0 differing. */
+void func_800DBD5C(s32 a, s32 b, u16 c, s16 x, s16 y, s16 n)
+{
+    UnkDungeonRect r;
+    u8 t[0x10];
+    u8 u[0x10];
+    u8 *s;
+
+    s = t;
+    func_8004E57C(a, c, (s32)s);
+    func_8004E57C(b, c, (s32)u);
+    if (t[0] != 0)
+    {
+        do
+        {
+            if (n != 0)
+            {
+                r.v[0] = (D_800808ED[*s] & 4) ? (*s * 4 + 0x100) : 0x1C0;
+            }
+            else
+            {
+                r.v[0] = (D_800808ED[*s] & 4) ? (*s * 4 + 0x100) : 0x1EC;
+            }
+            r.v[1] = 0x1B0;
+            r.v[2] = 0x4;
+            r.v[3] = 0x10;
+            func_800673A0(r.v, x, y);
+            s++;
+            x -= 4;
+        } while (*s != 0);
+    }
+}
 
 /* Hand one of the overlay's two stored rectangles to the engine. The copy
    to a local is in the source, not an artefact: func_800673A0 takes a
