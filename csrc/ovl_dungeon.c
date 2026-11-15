@@ -273,7 +273,11 @@ s32 func_800A2424(u8 *, s32);
 extern u8 D_800E173A[];
 extern u8 D_800E1827[];
 s32 func_800C8A3C(u8 *, s16, s16);
-void func_800D5460(u8 *, s32, s32);
+void func_800D4FC8(UnkNode *, s32, u16);
+void func_800D5460(UnkNode *, s32, u16);
+void func_800D4DE8();
+void func_800D5294();
+extern u8 D_800DECF8[];
 extern u8 D_800E104E[];
 extern u8 D_800E107C[];
 extern u8 D_800E10C0[];
@@ -1964,7 +1968,7 @@ s32 func_800BE5A8(u8 *p, u8 *q, s16 k)
                 func_80099844(p, D_800E104E);
             }
         }
-        func_800D5460(p - 0x20, 0xE0E0E0, 0x702);
+        func_800D5460((UnkNode *)(p - 0x20), 0xE0E0E0, 0x702);
     }
     else
     {
@@ -2004,7 +2008,7 @@ s32 func_800BE9E4(u8 *p, u8 *q, s16 k)
         {
             func_80099844(p, D_800E10C0);
         }
-        func_800D5460(p - 0x20, 0x804040, 0x612);
+        func_800D5460((UnkNode *)(p - 0x20), 0x804040, 0x612);
     }
     else
     {
