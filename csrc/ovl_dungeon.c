@@ -18396,7 +18396,64 @@ void func_800DAE44(u8 *p, s16 v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DAEF4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DB164);
+/* The spawned marker's +0x10 step: a three-case state machine on +0x4C,
+   driven by the +0x48 countdown the function spends on entry. Case 0 jitters
+   the renderable's two scales, case 1 bleeds the colour word and the mover's
+   +0x14 until the view's height passes +0x10, case 2 kills the node. The
+   tail adds the remaining delta once the state has left 0.
+
+   EACH RANDOM DELTA IS ITS OWN STATEMENT. Written inline,
+   `field - ((func_80069EF8() & 0xFF) + 0x300)`, fold reassociates it into
+   `(field - 0x300) - draw` and the constant is folded into the field's own
+   `addiu` -- 6 differing, three words per arm in the wrong order. With the
+   delta computed first the target's `andi` / `lhu` / `addiu 0x300` / `subu`
+   comes out directly. (Holding the 0x300 in a local works too, and so does
+   an s16 delta; all four spellings measured 0.)
+
+   BOTH `*(s16 *)(p + 0x48) <= 0` TESTS ARE THE SAME SOURCE. In case 2 no
+   call intervenes, so cse forwards the stored value and the test is a bare
+   `sll 16` on the register; in case 0 the two func_80069EF8 calls kill the
+   equivalence and the field is reloaded with `lh`. 94 words, 0 differing. */
+void func_800DB164(u8 *p, UnkVec *v, UnkSlot *r)
+{
+    s32 d;
+
+    *(s16 *)(p + 0x48) = *(u16 *)(p + 0x48) - 1;
+    switch (*(s16 *)(p + 0x4C))
+    {
+    case 0:
+        d = (func_80069EF8() & 0xFF) + 0x300;
+        *(s16 *)((u8 *)r + 0x1C) = *(u16 *)((u8 *)r + 0x1C) - d;
+        d = (func_80069EF8() & 0xFF) + 0x200;
+        *(s16 *)((u8 *)r + 0x1E) = *(u16 *)((u8 *)r + 0x1E) + d;
+        if (*(s16 *)(p + 0x48) <= 0)
+        {
+            *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        }
+        break;
+    case 1:
+        *(s32 *)((u8 *)r + 0xC) += 0xFFF3F3F4;
+        v->unk_14 -= (func_80069EF8() & 0xFF) << 10;
+        if (*(s16 *)((u8 *)v + 0xA) < *(s16 *)(p + 0x10))
+        {
+            *(s16 *)(p + 0x48) = 4;
+            *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        }
+        break;
+    case 2:
+        if (*(s16 *)(p + 0x48) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    if (*(s16 *)(p + 0x4C) != 0)
+    {
+        v->unk_08 += v->unk_14;
+        func_800478B8((u8 *)r);
+    }
+}
 
 /* Two passes of four 0x312 nodes each, the outer counter stepping by 3 so
    that it is 3 then 0, which is what the `sltu $zero, $s1` stored at +0x24 of
