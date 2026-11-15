@@ -176,20 +176,30 @@ in which local holds what are the two that matter.
 
 ## The state of the sweep
 
-Take the numbers from `progress.py`. As of 2026-11-14 the block is open, 67 of
+Take the numbers from `progress.py`. As of 2026-11-14 the block is open, 71 of
 863 functions are landed at 0 differing, all four containers are
 byte-identical, `guard.py` accounts for every stub, the whole-unit
-`ovlverify.py` sweep reports 67 of 67 clean, and `clang-format` has **no**
+`ovlverify.py` sweep reports 71 of 71 clean, and `clang-format` has **no**
 complaints about `csrc/ovl_dungeon.c` -- keep that at zero, it is a better
 baseline than `ovl_town.c`'s 31 and it costs nothing to hold.
 
 What the tools say is left, and where to start:
 
-* `nearsibs.py --groups` reports 22 sets totalling 5,496 words. The richest is
-  four 166-word functions at `func_800D21CC`/`800D29D8`/`800D3234`/`800D4634`,
-  and the whole `0x800D1C70..0x800D4634` region is one cluster -- FOUR sets and
-  THIRTEEN functions, 1,690 words, which looks like one translation unit with
-  several near-identical entities. Start there.
+* `nearsibs.py --groups` reports 22 sets totalling 5,496 words, and the whole
+  `0x800D1C70..0x800D4634` region is one cluster -- FOUR sets and THIRTEEN
+  functions, 1,690 words, which looks like one translation unit with several
+  near-identical entities. **The first of its four sets is landed**: the four
+  166-word walk-and-stop machines at
+  `func_800D21CC`/`800D29D8`/`800D3234`/`800D4634` are one source with the
+  parked handler substituted, 664 words for one function's work. Read the
+  comment above `func_800D21CC` before taking the next set -- it records the
+  allocation-priority device and the three-statement subtraction that the
+  rest of the cluster will almost certainly need too, since every member
+  takes the same four parameters and runs the same `+0x9B` state machine.
+  What is left in the cluster: the 169-word pair `func_800D1E34`/`800D2E9C`
+  with `func_800D2664` at 0.973, the 61-word trio
+  `func_800D20D8`/`800D28E4`/`800D3140` (the handlers these four install),
+  and `func_800D1C70`/`800D24A8`/`800D3F74` at 0.95.
 * The second richest is `0x800BD45C..0x800C37C8`: seven members of 73..90
   words, 565 words, spanning two address runs, with a six-member 434-word set
   interleaved with it.

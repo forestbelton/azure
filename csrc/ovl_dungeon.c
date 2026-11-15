@@ -59,11 +59,18 @@ typedef struct UnkDungeonActor
 {
     u8 pad_00[0x8C];
     void (*unk_8C)();
-    u8 pad_90[0xA];
+    u8 pad_90[0x6];
+    /* The step counter the 0x800D1C70..0x800D4634 state machines run down:
+       written as a halfword, decremented in place and compared signed
+       (`lhu` / `addiu -1` / `sh` / `sll 16` / `bgtz`), which is what an s16
+       field gives. */
+    s16 unk_96;
+    u8 pad_98[0x2];
     /* func_8008D330 and func_80091920 park a state byte here and clear the
        one after it in the same breath as clearing the handler slot, which is
        the witness that +0x8C and +0x9A are fields of one record. */
     u8 unk_9A;
+    /* The state index the +0x8C handlers switch on. */
     u8 unk_9B;
 } UnkDungeonActor;
 
@@ -173,6 +180,20 @@ void func_800D07C8(u8 *, UnkVec *, UnkSlot *, s16);
 void func_800D6170(u8 *, UnkVec *, UnkSlot *, s16);
 /* The five-argument one. func_800CEEFC stores a fifth zero at 0x10($sp). */
 void func_800CEFB8(u8 *, UnkVec *, UnkSlot *, s16, s32);
+
+/* The 0x800D1C70..0x800D4634 state machines. D_8006CCD8/E8 are the engine's
+   eight-entry sine and cosine tables, indexed by the facing field's top
+   three bits exactly as csrc/ovl_town.c indexes them. */
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+void func_800AD4D0(u8 *);
+void func_800AAA54(UnkDungeonActor *, UnkVec *, u8 *, s32);
+void func_800A2B04(UnkVec *, s32, s32);
+/* The handler each of the four copies parks; an address-take needs a
+   declaration. func_800D4494 is declared with the installers above. */
+void func_800D20D8();
+void func_800D28E4();
+void func_800D3140();
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800894A0);
 
@@ -2406,7 +2427,147 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D1E34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D20D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D21CC);
+/* FOUR IDENTICAL COPIES, one per entity, differing in exactly one symbol:
+   the handler parked in the actor's +0x8C slot at the end -- func_800D20D8,
+   func_800D28E4, func_800D3140 and func_800D4494 respectively. Every other
+   word of all four listings is the same.
+
+   The machine is a step hook, switched on the actor's +0x9B state. State 0
+   seeds the mover's two velocity words from the engine's sine/cosine tables
+   at the entity's facing (+0x6A, top three bits -- the same index expression
+   csrc/ovl_town.c uses) and either arms an eight-step glide or, when the
+   record's +0x14 bit 15 is set, jumps straight to state 2 with a zero count.
+   State 1 bleeds a quarter off each velocity per step. State 2 steers the
+   mover towards the record's +0x24/+0x25 tile centre, dividing the remaining
+   distance by the steps left, and on the last step snaps it there, clears
+   the engine's +0x10 slot tag if it points at this node, and hands the
+   actor to its next handler.
+
+   Three spellings to note:
+
+   - `case 0` FALLS THROUGH into `case 1`, and its `d[0x28] == 0` arm reaches
+     case 1's tail with a `goto`. Both are in the listing: the fallthrough is
+     the absent `j` after `sh $v0, 0x96($s0)`, and the `goto` is
+     `beqz $v0, .L800D2334` branching from case 0 into the middle of case 1.
+   - `d` is the node PAYLOAD pointer, not the node: the engine's slot holds
+     `d - 0x20`, which is the same +0x20 bias the walk family uses.
+   - D_80083460 is reached through a `u8 *` local, which is what gives the
+     split `lui`/`addiu` and a `lw`/`sw` pair off one register rather than a
+     `%lo` displacement; csrc/unk_154BC.c spells the same object the same way.
+
+   TWO THINGS COST THE WHOLE SESSION'S MEASUREMENT, and both are now levers in
+   docs/matching-levers.md.
+
+   The `do { } while (0)` around the last store is NOT decoration. `a` and `b`
+   are both live across calls, so both are global-alloc allocnos, and
+   `allocno_compare`'s priority put them 2% apart the wrong way:
+   `a` = 19 refs / 226 insns = 0.3363 against `b` = 16 / 186 = 0.3441, so `b`
+   sorted first and took $s0. That is 36 of the 40 differing words -- every
+   `$s0`/`$s1` in the function swapped -- at the exact word count. The
+   degenerate loop weights the reference inside it by two, `a` reaches 20
+   refs and 0.3540, and the swap goes away. Solve for the count before
+   spelling anything: `floor_log2(R) * R / 226 > 0.3441` first holds at
+   R = 20, so exactly ONE extra weighted reference is wanted and two would be
+   no better. Eleven structural rewrites -- nested tails, split decrements,
+   `u8 *` parameters in place of the typed ones, local aliases, reordered
+   stores -- all left both numbers at 19/226 and 16/186 exactly, which is
+   what sent this to the compiler's own dumps.
+
+   The first division is in THREE statements and the second in two, and the
+   asymmetry is measured, not an accident. Written as one expression,
+   `X - (b02 - 0x20)`, fold's `associate` (fold-const.c:4183, reached through
+   `split_tree` on the second operand) moves the constant to the other side
+   and emits `addiu $v0, $v0, 32` where the target has `addiu $v1, $v1,
+   -0x20`: one word. Written with the difference in its own local, fold is
+   defeated but sched1 then emits the b-side load first and the pair at
+   0x800D23A4 comes out swapped: two words. Only `goal -= now;` as its own
+   statement gets both -- it keeps the constant on the b-term AND puts the
+   `subu` in a statement of its own, which is what orders the two loads.
+   Giving the second division the same three-statement shape costs a word
+   (167 and 54 differing), and ten other spellings of the first were measured
+   in between.
+
+   166 words each, 0 differing. */
+void func_800D21CC(UnkDungeonActor *a, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 goal;
+    s32 now;
+
+    switch (a->unk_9B)
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        a->unk_9B++;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                a->unk_96 = 0;
+                a->unk_9B = 2;
+                return;
+            }
+            a->unk_96 = 8;
+        }
+        else
+        {
+            goto stop;
+        }
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(a, b, c, 0);
+        }
+        else
+        {
+            a->unk_96 = 8;
+            a->unk_9B++;
+        }
+        return;
+    case 2:
+        if (a->unk_96 != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 15) / a->unk_96;
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 15) / a->unk_96;
+        }
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        a->unk_8C = func_800D20D8;
+        do
+        {
+            a->unk_9A = 0xE;
+        } while (0);
+        return;
+    }
+}
 
 /* One gate, two arms, twice over: the same source compiled at two
    addresses -- the only word that differs between the pair is the `j` to its
@@ -2429,7 +2590,88 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2664);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D28E4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D29D8);
+/* Four identical copies of one four-state walk-and-stop machine, differing
+   only in the handler they park at the end. See func_800D21CC. */
+void func_800D29D8(UnkDungeonActor *a, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 goal;
+    s32 now;
+
+    switch (a->unk_9B)
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        a->unk_9B++;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                a->unk_96 = 0;
+                a->unk_9B = 2;
+                return;
+            }
+            a->unk_96 = 8;
+        }
+        else
+        {
+            goto stop;
+        }
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(a, b, c, 0);
+        }
+        else
+        {
+            a->unk_96 = 8;
+            a->unk_9B++;
+        }
+        return;
+    case 2:
+        if (a->unk_96 != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 15) / a->unk_96;
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 15) / a->unk_96;
+        }
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        a->unk_8C = func_800D28E4;
+        do
+        {
+            a->unk_9A = 0xE;
+        } while (0);
+        return;
+    }
+}
 
 void func_800D2C70(void *a, void *b, u8 *c)
 {
@@ -2449,7 +2691,88 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D2E9C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3140);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D3234);
+/* Four identical copies of one four-state walk-and-stop machine, differing
+   only in the handler they park at the end. See func_800D21CC. */
+void func_800D3234(UnkDungeonActor *a, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 goal;
+    s32 now;
+
+    switch (a->unk_9B)
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        a->unk_9B++;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                a->unk_96 = 0;
+                a->unk_9B = 2;
+                return;
+            }
+            a->unk_96 = 8;
+        }
+        else
+        {
+            goto stop;
+        }
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(a, b, c, 0);
+        }
+        else
+        {
+            a->unk_96 = 8;
+            a->unk_9B++;
+        }
+        return;
+    case 2:
+        if (a->unk_96 != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 15) / a->unk_96;
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 15) / a->unk_96;
+        }
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        a->unk_8C = func_800D3140;
+        do
+        {
+            a->unk_9A = 0xE;
+        } while (0);
+        return;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D34CC);
 
@@ -2478,7 +2801,88 @@ void func_800D45D0(UnkDungeonActor *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D4634);
+/* Four identical copies of one four-state walk-and-stop machine, differing
+   only in the handler they park at the end. See func_800D21CC. */
+void func_800D4634(UnkDungeonActor *a, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 goal;
+    s32 now;
+
+    switch (a->unk_9B)
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        a->unk_9B++;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                a->unk_96 = 0;
+                a->unk_9B = 2;
+                return;
+            }
+            a->unk_96 = 8;
+        }
+        else
+        {
+            goto stop;
+        }
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(a, b, c, 0);
+        }
+        else
+        {
+            a->unk_96 = 8;
+            a->unk_9B++;
+        }
+        return;
+    case 2:
+        if (a->unk_96 != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 15) / a->unk_96;
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 15) / a->unk_96;
+        }
+        if (--a->unk_96 > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        a->unk_8C = func_800D4494;
+        do
+        {
+            a->unk_9A = 0xE;
+        } while (0);
+        return;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D48CC);
 
