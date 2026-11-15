@@ -681,9 +681,9 @@ then read only the section you need.
 - A SYMBOL NAMED TWICE AND A SYMBOL BOUND TO A LOCAL ARE BOTH RIGHT, PER SITE  `:24654`
 - STORES IN ALL THREE ARMS AGAINST ONE STORE AFTER THE JOIN -- THE DISCRIMINATOR  `:24675`
 - A PARAMETER'S CALLEE-SAVED REGISTER IS DECIDED BY WHERE ITS LAST USE SITS  `:24689`
-- A DUPLICATED `if` ARM CANNOT BREAK A cse REG-EQUIVALENCE  `:24750`
-- IN THE ENTRY BLOCK, WHICH SIDE OF A LOAD YOU WRITE A STORE ON IS THE WHOLE SCHEDULE  `:24766`
-- SMALLER SPELLINGS MEASURED IN BATCH j2  `:24827`
+- A DUPLICATED `if` ARM CANNOT BREAK A cse REG-EQUIVALENCE  `:24773`
+- IN THE ENTRY BLOCK, WHICH SIDE OF A LOAD YOU WRITE A STORE ON IS THE WHOLE SCHEDULE  `:24789`
+- SMALLER SPELLINGS MEASURED IN BATCH j2  `:24850`
 
 <!-- END INDEX -->
 
@@ -24692,18 +24692,41 @@ ovl_dungeon, 2026-11-15, `func_800B835C`. Read it out of `global.c`'s
 `allocno_compare` rather than guessing:
 
 ```c
-  pri = (floor_log2 (allocno_n_refs[v]) * allocno_n_refs[v]
-         / allocno_live_length[v]) * 10000 * allocno_size[v];
+  register int pri1
+    = (((double) (floor_log2 (allocno_n_refs[v1]) * allocno_n_refs[v1])
+	/ allocno_live_length[v1])
+       * 10000 * allocno_size[v1]);
   ...
   if (pri2 - pri1) return pri2 - pri1;
   return v1 - v2;            /* ties: ascending allocno number */
 ```
 
+**Copy that cast.** The division is done in `double`, not integer. Written as
+integer arithmetic almost every allocno would come out at `pri == 0`
+(`8 / 64 == 0`) and the whole ordering would collapse onto the
+ascending-pseudo-number tie-break, i.e. onto declaration order -- which is a
+different and WRONG model, and one that is easy to talk yourself into. With
+the double, ties are rare and the priority genuinely orders the list.
+
 `global_alloc` qsorts the allocnos by this and then hands out hard registers
 in that order, so for a group of allocnos with the SAME reference count the
 ordering is **shortest live range first** -- and a parameter that is defined
 in the prologue and used once has a live range that runs from entry to its
-single use, so **the order is simply the order of the last uses**.
+single use, so for those, **the order is the order of the last uses**.
+
+**SCOPE: that last sentence holds where the reference counts are equal and the
+live ranges are close**, which is the once-used-parameter case this was
+measured on. It is not the general rule, and the first place you will want to
+reach for it is a residue where it does not hold. `func_800CA1E0`'s rotation
+is between two LOCALS whose priorities are not close -- `k` at 4 refs over ~64
+insns scores about 1250, `wz` at 2 refs over ~23 insns about 870 -- so `k`
+sorts first by a wide margin and there is no last use to move that closes it.
+Eleven orderings were measured there (six declaration positions for `k`, three
+for `wz`, both assignment orders, a phantom zero, one and two `__asm__`
+references): every one is 148 differing or worse. When the two allocnos differ
+in reference count, go and look for the missing INSTRUCTION instead -- in that
+function the rotation turned out to be downstream of a `andi`/`addu` pseudo
+split the candidate was not emitting at all.
 
 Two consequences worth having:
 
