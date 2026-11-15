@@ -299,7 +299,9 @@ void func_800A5F38(u8 *, u8 *);
 void func_800C4AFC(u8 *, s32, u8 *);
 void *func_800990FC(void);
 void *func_80099194(u8 *, void *);
-void func_80099290(void *);
+/* RETURNS the advanced cursor: it writes the terminating NUL and hands back
+   p + 1, which is why the string chain can be nested. */
+u8 *func_80099290(u8 *);
 void func_800A5720(void *);
 void func_80042B68(s8 *, s8);
 void func_80098B38(u8 *);
@@ -351,7 +353,7 @@ extern u8 D_800E2056[];
 /* The two kill handlers that build a sentence. D_80089364 and D_80089368 are
    in this overlay's own rodata, two of the three the unit still carries as
    INCLUDE_RODATA. */
-void func_8008D368(void *, void *, void *, void *, s32);
+void func_8008D368(u8 *, void *, void *, void *, s32);
 void *func_8009955C(u8 *, void *);
 void *func_80099978(void *);
 void *func_80099368(u8 *, void *);
@@ -369,6 +371,9 @@ extern u8 D_80089370[];
 extern u8 D_800E118C[];
 extern u8 D_800E11AB[];
 extern u8 D_800E11D7[];
+extern u8 D_80081485[];
+extern s16 D_800E3CCE;
+extern u8 D_800DCF4F;
 /* The two eight-direction probes. func_8009B25C is in this unit and sits
    above these, but a stub gives no prototype. */
 u8 *func_8009B25C(u8 *, u16, u16, s16);
@@ -483,7 +488,17 @@ void func_8008D330(UnkDungeonActor *p, void *b, void *c, void *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008D344);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008D368);
+/* The five-argument installer: state 0x2E, the handler slot cleared, and the
+   last two arguments parked at +0xCC and +0x10E. Like func_8008D330 it is
+   reached with more arguments than its body reads. 8 words, 0 differing. */
+void func_8008D368(u8 *p, void *b, void *c, void *d, s32 e)
+{
+    p[0x9A] = 0x2E;
+    p[0x9B] = 0;
+    *(void **)(p + 0x8C) = NULL;
+    *(void **)(p + 0xCC) = d;
+    *(s16 *)(p + 0x10E) = e;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008D388);
 
@@ -600,7 +615,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094270);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094548);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009456C);
+/* Write a byte into +0x45 of the record in the engine's +0xAC slot table.
+
+   THE POINTER LOCAL IS LOAD-BEARING. Spelled inline --
+   `(*(u8 **)(k * 4 + D_800E3D7C + 0xAC))[0x45] = v;` -- the `sll` for the
+   index lands ahead of the `lui` and the function is 2 differing; only
+   taking the global into a local first hoists its `high` above the
+   sign-extension. That is docs/matching-levers.md's pointer-local hoist
+   (:3628) applied to a LOAD of a pointer global, which the section records
+   only for a store. 8 words, 0 differing. */
+void func_8009456C(s16 k, u8 v)
+{
+    u8 *base = D_800E3D7C;
+
+    (*(u8 **)(base + k * 4 + 0xAC))[0x45] = v;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009458C);
 
@@ -650,7 +679,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800969B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80096A54);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80096AC0);
+/* Installer: state 0x34, handler slot cleared, bit 0 of the +0xA2 halfword
+   dropped. 8 words, 0 differing. */
+void func_80096AC0(u8 *p)
+{
+    p[0x9A] = 0x34;
+    p[0x9B] = 0;
+    *(void **)(p + 0x8C) = NULL;
+    *(u16 *)(p + 0xA2) &= ~1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80096AE0);
 
@@ -744,7 +781,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80098C48);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80098C80);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80098CEC);
+/* 3 words, 0 differing. */
+s32 func_80098CEC(u8 *p)
+{
+    return p[0x3] & 0x20;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80098CF8);
 
@@ -770,9 +811,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80099194);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80099254);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80099290);
+/* The string builder's terminator: write the NUL and hand back the advanced
+   cursor. 3 words, 0 differing. */
+u8 *func_80099290(u8 *p)
+{
+    *p = 0;
+    return p + 1;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009929C);
+/* Append one byte. 3 words, 0 differing. */
+u8 *func_8009929C(s32 c, u8 *p)
+{
+    *p = c;
+    return p + 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800992A8);
 
@@ -792,7 +844,13 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800997FC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80099844);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800998A4);
+/* Append the two-byte 0x81 0x21 control pair. 7 words, 0 differing. */
+u8 *func_800998A4(u8 *p)
+{
+    *p++ = 0x81;
+    *p++ = 0x21;
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800998C0);
 
@@ -1025,9 +1083,25 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009F988);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009F9E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FAAC);
+/* TWO out-of-image accesses, so a BASE LOCAL. One access written as a plain
+   constant address stays absolute and the assembler expands it with
+   `lui $at`; two want the constant-base idiom, which gives one bare `lui`
+   in an allocatable register and two displacements. `$at` in a listing is
+   the tell for the first shape. 6 words, 0 differing. */
+void func_8009FAAC(void)
+{
+    u8 *base = (u8 *)0x80010000;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FAC4);
+    *(u16 *)(base + 0x3718) = 0;
+    *(u16 *)(base + 0x371A) += 1;
+}
+
+/* ONE out-of-image access, so a plain constant address -- the assembler's
+   `lui $at` expansion; see func_8009FAAC. 6 words, 0 differing. */
+void func_8009FAC4(void)
+{
+    *(void **)0x8001371C = (void *)0x80013720;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009FADC);
 
@@ -1088,7 +1162,11 @@ s32 func_800A0084(u8 *p, s16 *out)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0134);
+/* 7 words, 0 differing. */
+s16 func_800A0134(u8 *a, u8 *b)
+{
+    return *(u16 *)(a + 0x88) - *(u16 *)(b + 0x88);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0150);
 
@@ -1235,7 +1313,15 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A1D4C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2424);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2AE4);
+/* 8 words, 0 differing. */
+void func_800A2AE4(void)
+{
+    u8 *g;
+
+    D_800DCF4F = 0;
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2B04);
 
@@ -1249,7 +1335,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2C34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2C78);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2CAC);
+/* 3 words, 0 differing. */
+s32 func_800A2CAC(u8 *p)
+{
+    return p[0x25] < 0x40;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2CB8);
 
@@ -1323,7 +1413,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A504C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A5690);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A56C0);
+/* Saturating countdown. 8 words, 0 differing. */
+void func_800A56C0(void)
+{
+    if (D_800E3CCE != 0)
+    {
+        D_800E3CCE -= 1;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A56E0);
 
@@ -1339,7 +1436,11 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A5AF0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A5C70);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A5D44);
+/* 6 words, 0 differing. */
+void func_800A5D44(void)
+{
+    *(s32 *)0x8001362C = D_8008347E;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A5D5C);
 
@@ -1671,7 +1772,24 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B1320);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B135C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B13AC);
+/* Walk a 0xC-stride table terminated by a negative first byte, writing `v`
+   into each entry's +0x06.
+
+   THE BACKWARD `goto` IS LOAD-BEARING. A `for (;;)` with a `break` is 9
+   words and 8 differing -- loop.c rotates it and emits a preheader jump --
+   and tail recursion is 14, because this compiler does not eliminate it
+   here. 8 words, 0 differing. */
+void func_800B13AC(s8 *p, s16 v)
+{
+top:
+    *(s16 *)(p + 0x6) = v;
+    if (*p < 0)
+    {
+        return;
+    }
+    p += 0xC;
+    goto top;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B13CC);
 
@@ -1681,11 +1799,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B1434);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B1484);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B14B4);
+/* 6 words, 0 differing. */
+s32 func_800B14B4(void)
+{
+    return *(s32 *)(D_800E3D7C + 0x104) == 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B14CC);
+/* 4 words, 0 differing. */
+s32 func_800B14CC(void)
+{
+    return D_80081485[0] == 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B14DC);
+/* 8 words, 0 differing. */
+s32 func_800B14DC(void)
+{
+    return D_800E3D7C[0x9A] != 0x29;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B14FC);
 
