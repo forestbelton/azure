@@ -72,6 +72,11 @@ typedef struct UnkDungeonActor
     u8 unk_9A;
     /* The state index the +0x8C handlers switch on. */
     u8 unk_9B;
+    u8 pad_9C[0x2C];
+    /* func_80090C10's case 2 clears this through the struct face, and that is
+       load-bearing: through `*(s32 *)(p + 0xC8)` the D_800E296C
+       read-modify-write beside it schedules two words differently. */
+    void *unk_C8;
 } UnkDungeonActor;
 
 /* The 4-halfword rectangle MoveImage takes. The engine function has no
@@ -1118,6 +1123,30 @@ extern u8 D_800E02CC[];
 extern u8 D_800DD0B8[];
 extern u8 D_800DCFD8[];
 extern u8 D_800DCFB0[];
+/* func_80090C10's own callees and rodata.  func_8004B568 takes NO argument at
+   its one call site here ($a0 is never set before the `jal`), so it is
+   declared K&R; other units declare it `void func_8004B568(u8 *)`. */
+void func_8004B568();
+void func_8002534C(u8 *, void *, u8 *, u8 *);
+extern s8 D_800DCF4D;
+extern u8 D_8001EF2C[];
+extern u8 D_800DDCBC[][8];
+extern u8 D_800E0462[];
+extern u8 D_800E0472[];
+extern u8 D_800E0542[];
+extern u8 D_800E0571[];
+extern u8 D_800E069D[];
+extern u8 D_800E06BD[];
+extern u8 D_800E06C0[];
+extern u8 D_800E06E0[];
+/* func_8009C12C's seven message strings. */
+extern u8 D_800E0D7B[];
+extern u8 D_800E0D92[];
+extern u8 D_800E0D9E[];
+extern u8 D_800E0DB8[];
+extern u8 D_800E0DD0[];
+extern u8 D_800E0DDD[];
+extern u8 D_800E0DEA[];
 /* func_8008B9FC's eight-way facing table, one more of the same class. */
 extern u8 D_800DCFC0[];
 /* The byte func_8008B9FC switches on at 0xF0/0xF8/0xE8/0xE0 and tests for
@@ -4312,7 +4341,277 @@ void func_800909A0(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80090C10);
+/* The 0x9B state machine's dispatcher: an outer `switch (p[0x9B])` whose
+   cases 0 and 1 fall through into 2, and inside case 2 a second switch over
+   D_80082EB8 (dense 1..21; 11, 13 and 15 are absent from the source, so their
+   jtbl_800888B0 slots point at the default). The arms are written in the
+   order the listing lays them out -- 1, 2, 21, 3/4/20, 5, 8/9, 10, 14, 12,
+   16, 6/7, 17/18, 19 -- because cc1psx emits switch bodies in SOURCE order.
+
+   EVERY ARM THAT HOLDS A VALUE NEEDS ITS OWN FUNCTION-SCOPE LOCAL. Disjoint
+   arms sharing one local are one global allocno with one hard register, and
+   here that is most of the residue: letting case 1's dispatch result share
+   `r` with case 3/4/20's cost 521 words and 29 aligned differences (case 1
+   gained a pointless `move s1,v0`); letting case 12's two record loads share
+   case 0's `e` cost 6 and 7 more. Split, they land in $a0/$v1 as the target
+   has them.
+
+   The other three that were measured one at a time, each from this body:
+   * `t = (u8 *)&D_80082EB0;` then `*(u16 *)(t + 8)` in case 6/7. Spelled
+     `((u16 *)&D_80082EB0)[4]` the address folds to the constant
+     `D_80082EB0 + 8` and gcc biases one register by 8 and reads the triple's
+     first word back at -8: 5 aligned differences. A pointer local forces
+     &D_80082EB0 itself into a register, which is what `addiu $v0, $v1,
+     %lo(D_80082EB0)` / `lhu 0x8($v0)` / `lw %lo(D_80082EB0)($v1)` is.
+   * `((UnkDungeonActor *)p)->unk_C8 = NULL;` -- the ONE store in case 2 that
+     is spelled through the struct. sched.c's true_dependence drops the
+     conflict only when the varying-address side has MEM_IN_STRUCT_P and the
+     symbol side does not, so through `*(s32 *)(p + 0xC8)` the D_800E296C load
+     cannot be lifted over it: 2 aligned differences. (Putting the bit on
+     D_800E296C instead, via an `__asm__` array alias, changes nothing -- it
+     is the wrong side of the test.)
+   * `extern u8 D_800DDCBC[][8]` with `D_800DDCBC[g[0x13]][7]`: as a flat
+     array `[g[0x13] * 8 + 7]` folds the +7 into the %lo and the `lbu` loses
+     its 0x7 displacement, 1 aligned difference.
+
+   Case 8/9's two message arms are written out in full and cc1psx cross-jumps
+   their shared tail to .L800911E4 by itself; the test is spelled `== 0` so
+   the D_800E069D arm is emitted first, which is the layout the target has
+   (`!= 0` with the arms the other way round costs 14). Case 3/4/20 really
+   does test the sign of the same value twice, `bgtz` then `bgez`.
+   520 words, 0 differing. */
+void func_80090C10(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *e;
+    u8 *g;
+    u8 *m;
+    u8 *t;
+    u8 *h;
+    u8 *h0;
+    u8 f;
+    s32 r;
+    s32 q;
+    s32 i;
+    s32 k;
+    s32 v;
+    s32 x;
+    s16 sx;
+    s16 sy;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        D_800DCF4D = -1;
+        func_8004B568();
+        if (D_800E4938 != D_8004F5F4)
+        {
+            if ((s16)func_80042900((s8 *)d, 0xA) != 0)
+            {
+                *(void **)(c + 0x2C) = D_800DD274;
+                func_8003DB94(c,
+                              *(void **)((u8 *)D_800DD274 +
+                                         (((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 7) & 0x1C)),
+                              0);
+            }
+            else
+            {
+                e = ((*(s32 *)(d + 0x1C) & 0x100000) != 0) ? D_800DD0B8 : D_800DCFB0;
+                *(u8 **)(c + 0x2C) = e;
+                func_80048A44(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            }
+        }
+        p[0x9B]++;
+        /* fallthrough */
+    case 1:
+        q = ((s32 (*)(u32, u32))D_800E4938_a[0])(D_800E4938_a[1], D_800E4938_a[2]);
+        *(s32 *)(p + 0xC8) = q;
+        if (q == 0)
+        {
+            return;
+        }
+        *(s16 *)(p + 0x96) = 0;
+        D_80082EB0 = NULL;
+        ((u32 *)&D_80082EB0)[1] = 0;
+        ((u32 *)&D_80082EB0)[2] = 0;
+        p[0x9B]++;
+        /* fallthrough */
+    case 2:
+        if ((*(u16 *)(*(u8 **)(p + 0xC8) + 0x1E) & 0x8000) != 0)
+        {
+            func_800BA810(NULL, 0);
+            ((UnkDungeonActor *)p)->unk_C8 = NULL;
+            D_800E296C &= ~0x2000;
+        }
+        if (*(s32 *)(p + 0xC8) != 0)
+        {
+            return;
+        }
+        switch (D_80082EB8)
+        {
+        case 1:
+            func_8009F644(d, 0x48, (s16)func_80098C80(D_80082EB0), 0);
+            if (D_80082EB0[1] == 0x11)
+            {
+                func_80098614(d, D_80082EB0);
+            }
+            else
+            {
+                func_800982A8(d, D_80082EB0);
+            }
+            break;
+        case 2:
+            if (D_80082EB0[1] == 0x11)
+            {
+                func_8009F644(d, 0x48, (s16)func_80098C80(*(u8 **)(d + 0x50)), 0);
+                func_80098614(d, NULL);
+            }
+            else
+            {
+                func_8009F644(d, 0x48, (s16)func_80098C80(*(u8 **)(d + 0x4C)), 0);
+                func_800982A8(d, NULL);
+            }
+            break;
+        case 21:
+            if ((D_80082EB0[3] & 0x20) != 0)
+            {
+                func_800997FC(D_800E0542);
+                break;
+            }
+            if (func_800BA33C(*(u8 **)(p + 0xAC)) != 0 || func_800BA33C(*(u8 **)(p + 0xB0)) != 0)
+            {
+                func_80091920((UnkDungeonActor *)p, b, c, d);
+                return;
+            }
+            func_800997FC(D_800E0571);
+            break;
+        case 3:
+        case 4:
+        case 20:
+            r = func_80098920(d, D_80082EB0, 3, 0);
+            if (r >= 0)
+            {
+                x = (s16)func_80098C80(D_80082EB0);
+                func_8009F644(d, 0x48, x, (s16)func_80098C80(((u8 **)&D_80082EB0)[1]));
+                if (r > 0)
+                {
+                    break;
+                }
+                if (r >= 0)
+                {
+                    return;
+                }
+            }
+            if (D_80082EB0[1] == 0x15)
+            {
+                p[0x9B] = 3;
+            }
+            return;
+        case 5:
+            func_8009F644(d, 0x58, 0, (s16)func_80098C80(D_80082EB0));
+            func_80098CF8(p, b, c, D_80082EB0);
+            break;
+        case 8:
+        case 9:
+            func_8009F644(d, 0x98, 0, (s16)func_80098C80(D_80082EB0));
+            if ((D_80082EB0[3] & 0x20) != 0)
+            {
+                func_800956B8(p, b, c, D_80082EB0);
+                break;
+            }
+            i = (*(u16 *)(d + 0x2A) >> 8) & 0xE;
+            if (func_8009B88C(NULL, (s16)(c[0x24] + *(u16 *)((u8 *)D_8006CCD8 + i)),
+                              (s16)(c[0x25] + *(u16 *)((u8 *)D_8006CCE8 + i)), &sx, &sy) == 0)
+            {
+                h0 = func_800990FC();
+                h = func_80099194(D_800E069D, h0);
+                h = func_80099734((u8 *)D_800E3DF0[D_80082EB0[3] & 0x1F], h);
+                h = func_80099194(D_800E06BD, h);
+            }
+            else
+            {
+                if (func_80095854((UnkDungeonActor *)p, b, c, D_80082EB0) != 0)
+                {
+                    return;
+                }
+                h0 = func_800990FC();
+                h = func_80099194(D_800E06C0, h0);
+                h = func_80099734((u8 *)D_800E3DF0[D_80082EB0[3] & 0x1F], h);
+                h = func_80099194(D_800E06E0, h);
+            }
+            func_80099290(h);
+            func_800A5720(h0);
+            break;
+        case 10:
+            func_8002534C(p, b, c, d);
+            *(s32 *)(p + 0xC8) = 0;
+            return;
+        case 14:
+            func_8008D330((UnkDungeonActor *)p, b, c, d);
+            *(s32 *)(p + 0xC8) = 0;
+            break;
+        case 12:
+            m = ((u8 **)(p + 0xAC))[(s32)D_80082EB0];
+            if ((*(s32 *)(m + 0x1C) & 0x80000) == 0)
+            {
+                *(s32 *)(m + 0x60) = 0;
+            }
+            if (D_800E4938 == D_8001EF2C)
+            {
+                break;
+            }
+            g = ((u8 **)(p + 0xAC))[(s32)D_80082EB0];
+            k = *(u16 *)(g + 0x46) & 0x3FFF;
+            if (k >= 5 && k <= 7)
+            {
+                break;
+            }
+            if (k >= 9 && k <= 10)
+            {
+                f = D_800DDCBC[g[0x13]][7];
+                if ((f & ((k == 9) ? 1 : 2)) != 0)
+                {
+                    break;
+                }
+            }
+            if (func_8008D024(p, b, c, (s16)(s32)D_80082EB0, 1) != 0)
+            {
+                return;
+            }
+            break;
+        case 16:
+            *(u8 **)(p + 0xBC) = D_80082EB0;
+            if (func_8008D388(p, b, c, d) != 0)
+            {
+                return;
+            }
+            break;
+        case 6:
+        case 7:
+            t = (u8 *)&D_80082EB0;
+            v = *(u16 *)(t + 8) - 6;
+            *(s16 *)(d + 0x8A) = v;
+            if (func_80094270(p, b, c, D_80082EB0, (s16)v) == 0)
+            {
+                return;
+            }
+            break;
+        case 17:
+        case 18:
+            func_80097F84(D_80082EB0, D_800E0462, D_800E0472, 1);
+            break;
+        case 19:
+            func_8008D9F0(p, b, c, d);
+            return;
+        }
+        D_80082EB8 = 0;
+        if (*(s32 *)(p + 0xC8) == 0)
+        {
+            *(u16 *)(p + 0xA2) |= 0x40;
+            func_80096088((UnkDungeonActor *)p, d);
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80091430);
 
@@ -9972,7 +10271,324 @@ void func_8009BFF8(u8 *p, u8 *q)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009C12C);
+/* Hand the actor over to the record it is standing on: refuse with a message
+   when there is nothing there, build the travel halfword +0x22 and the flag
+   drift the same way func_8009CE1C does, lay the result in +0x64, relink the
+   two +0x60 slots, publish the node in D_80083470 and fire the 0x601 cue plus
+   the func_80099C58 flash. 516 words, 0 differing.
+
+   THE WHOLE FUNCTION IS AN ALLOCATION RACE BETWEEN `h` AND `o`, and nothing
+   else in it was ever more than three words. Target order of the five
+   callee-saved allocnos is h $s0, o $s1, n $s2, fl $s3, p $s4; the obvious
+   spelling gives o $s0, n $s1, fl $s2, p $s3, h $s4 -- 189 aligned
+   differences at 515 words, every one of them a register number.
+   `allocno_compare`'s `floor_log2(refs) * refs / live_length` from `.lreg`:
+   o is 46/385 = 0.597 and h must beat it. `live_length` cannot be moved here
+   (h is live across the whole middle on the path that reaches the `r == 0`
+   block), so only the REFERENCE COUNT is available, and the floor_log2 step
+   at 32 means h needs exactly 32. THREE FREE REFERENCES BUY THEM, and all
+   three are byte-identical to the nested form they replace:
+
+   * the refusal path's chain on `h`/`h0` instead of its own local (+6);
+   * `h = func_80099734(p, h0); h = func_80099194(D_800E0D92, h);
+      h = func_8009929C(0xA, h);` instead of one nested call (+4);
+   * the same un-nesting of the D_800E0DB8 pair (+2).
+
+   20 refs -> 32 refs rotates all five registers at once. Measured with
+   16 x `__asm__("" ::"r"(h))` first, which reaches the same 0; the three
+   un-nestings are the device-free spelling of it.
+
+   THE `i < 0` REFUSAL MUST NEST, NOT RETURN EARLY. `if (i >= 0) { ... }`
+   with one `return NULL` at the end of the block is 0; `if (i < 0) return
+   NULL;` lets jump.c fold the two `j .L8009C908` / `move $v0,$zero` tails
+   together, reorg then cannot steal the move into the `bltz`'s delay slot,
+   and it is 3 aligned differences at the same word count.
+
+   `*((s32 *)o + 7) &= 0xDFFFFFFF;` -- the POINTER-ADD form, not
+   `*(s32 *)(o + 0x1C)`. The cast form is not MEM_IN_STRUCT_P, so sched
+   cannot hoist D_800E3D7C's `lw` over the store and the load-delay nop
+   stands: 518 words, 19 differing.
+
+   The 0x20 in the func_80099C58 arguments sits on the `* 0x40` operand
+   (`... * 0x40 + 0x20 + D_8006CCD8[j] * 0x20`), the OPPOSITE side from
+   func_8009CE1C's call, because `fold`'s additive-constant swap moves it
+   across; on the table term it is 6 differing at the same word count. The
+   second table index is inlined as `(i1 + 4) & 7` -- as its own local the
+   two `sll`/`addu` index pairs come out in the other order, 8 differing.
+
+   func_8003AD08's argument is an if/else over two whole calls, not a
+   ternary: the ternary is two words short (no `j`, and the `h` copy is not
+   duplicated into both arms). Same for the D_800E0DD0/D_800E0DDD pick,
+   which as a ternary builds the `high` in $v0 instead of $a0, 4 differing.
+
+   `(s8)p[0x13] >= 0` and `*(s16 *)(o + 0x64) >= 0` are the `bltz`-to-skip
+   tests; `ang` is read as `(u16)ang >> 9` (`lhu` + `srl`). func_800B4C7C,
+   func_800B5ED0, func_800C82B8, func_800C7DEC, func_800A2D68 and
+   func_8009CD58 are all still on their implicit declarations here -- a
+   prototype for func_800B5ED0 would zero-extend its third argument where
+   the target sign-extends it. */
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k)
+{
+    u8 *o;
+    void *h0;
+    u8 *h;
+    s16 n;
+    s16 r;
+    s16 d;
+    s32 w;
+    s32 e;
+    s32 fl;
+    s32 j;
+    s32 a;
+    s32 v;
+    s32 t;
+    s32 kk;
+    s32 i;
+    s32 i1;
+
+    p[0x73] = 0;
+    p[0x72] = 0;
+    o = *(u8 **)(p + 0x60);
+    n = 0;
+    r = 0;
+    if (o == NULL)
+    {
+        if (p != D_800E3D7C)
+        {
+            return NULL;
+        }
+        i = (s16)func_800B5ED0(q[0x24], q[0x25], ang, *(s16 *)(p + 0x88));
+        if (i >= 0)
+        {
+            h0 = func_800990FC();
+            h = func_8009929C(8, h0);
+            h = func_8009955C(&D_800E3648[i * 4], h);
+            h = func_80099194(D_800E0D7B, h);
+            func_80099290(h);
+            func_800A5720(h0);
+            func_800A56E0(0x700);
+            func_800A2D68(p, 8);
+            func_800B4C7C(0x82, p, 8, 1);
+        }
+        return NULL;
+    }
+    h0 = func_800990FC();
+    h = h0;
+    if ((s8)p[0x13] >= 0)
+    {
+        if ((*(u16 *)(q + 0x14) & *(u16 *)(*(u8 **)(o - 0x14) + 0x14) & 0x8000) == 0 || (p[0x13] == 0x23 && *(s16 *)(p + 0xA6) != 0 && (*(u16 *)(*(u8 **)(o - 0x14) + 0x14) & 0x8000) == 0))
+        {
+            h = func_80099734(p, h0);
+            h = func_80099194(D_800E0D92, h);
+            h = func_8009929C(0xA, h);
+        }
+        else
+        {
+            a = *(s32 *)(p + 0x14) & 0x4000;
+            if (a == 0)
+            {
+                r = -1;
+            }
+            if (a != 0 || (*(s32 *)(o + 0x14) & 0x4000) != 0)
+            {
+                h = func_80099194(D_800E0D9E, func_80099734(a != 0 ? p : o, h));
+                r = 1;
+            }
+        }
+    }
+    *(s32 *)(o + 0x14) |= 0x1000000;
+    if ((*(s32 *)(p + 0x14) & 0x4000000) != 0)
+    {
+        func_800B4C7C(3, o, -1, 0);
+        if ((s8)p[0x13] >= 0)
+        {
+            w = r;
+            if (w == 0)
+            {
+                h = func_80099734(o, h);
+                h = func_80099194(D_800E0DB8, h);
+            }
+            if (w < 0)
+            {
+                return NULL;
+            }
+            func_80099290(h);
+            func_800A5720(h0);
+        }
+        return NULL;
+    }
+    if (*(u32 *)(p + 0x4C) != 0 && *(u16 *)*(u32 *)(p + 0x4C) == 0xF0D)
+    {
+        *(s16 *)(o + 0x22) = o[0x27];
+    }
+    else
+    {
+        *(s16 *)(o + 0x22) = o[0x27] + func_80098250(o);
+    }
+    if ((s16)func_80042900((s8 *)o, 0xA) != 0)
+    {
+        *(s16 *)(o + 0x22) >>= 1;
+    }
+    if (*(s16 *)(o + 0x22) == 0)
+    {
+        (*(s16 *)(o + 0x22))++;
+    }
+    e = func_8009CD58(p, 7, 1);
+    fl = func_8009CD58(o, 7, 0);
+    if ((e & 1) != 0)
+    {
+        if ((s16)func_80042900((s8 *)o, 0x13) != 0)
+        {
+            *(s16 *)(p + 0x20) >>= 2;
+        }
+        else
+        {
+            if ((fl & 4) != 0)
+            {
+                n++;
+            }
+            if ((fl & 2) != 0)
+            {
+                n -= 2;
+            }
+        }
+    }
+    if ((e & 2) != 0)
+    {
+        if ((s16)func_80042900((s8 *)o, 0x14) != 0)
+        {
+            *(s16 *)(p + 0x20) >>= 2;
+        }
+        else
+        {
+            if ((fl & 1) != 0)
+            {
+                n++;
+            }
+            if ((fl & 4) != 0)
+            {
+                n -= 2;
+            }
+        }
+    }
+    if ((e & 4) != 0)
+    {
+        if ((s16)func_80042900((s8 *)o, 0x12) != 0)
+        {
+            *(s16 *)(p + 0x20) >>= 2;
+        }
+        else
+        {
+            if ((fl & 2) != 0)
+            {
+                n++;
+            }
+            if ((fl & 1) != 0)
+            {
+                n -= 2;
+            }
+        }
+    }
+    d = *(u16 *)(p + 0x88) - *(u16 *)(o + 0x88);
+    if (d >= 0x20)
+    {
+        n--;
+    }
+    else if (d < -0x1F)
+    {
+        n++;
+    }
+    *(s16 *)(p + 0x20) += (*(s16 *)(p + 0x20) * n) >> 3;
+    v = func_800C82B8(p);
+    if (v != 0)
+    {
+        *(s16 *)(p + 0x20) += (*(s16 *)(p + 0x20) >> 3) * v;
+    }
+    if ((*(s32 *)(p + 0x1C) & 0x1000000) != 0)
+    {
+        t = (*(s16 *)(o + 0x22) - *(s16 *)(p + 0x20)) / 2;
+        *(s16 *)(o + 0x64) = t + (s16)t / 2;
+    }
+    else
+    {
+        *(s16 *)(o + 0x64) = (*(s16 *)(o + 0x22) - *(s16 *)(p + 0x20)) / 2;
+    }
+    if (*(s16 *)(o + 0x64) >= 0)
+    {
+        *(s16 *)(o + 0x64) = -1;
+    }
+    j = func_80042900((s8 *)o, 0x1D);
+    if (r == 0)
+    {
+        h = func_80099734(o, h);
+        if ((*(s32 *)(p + 0x14) & 0x2000) != 0)
+        {
+            h = func_80099194(D_800E0DD0, h);
+        }
+        else
+        {
+            h = func_80099194(D_800E0DDD, h);
+        }
+        if ((s16)j != 0)
+        {
+            h = func_8003AD08(0, h);
+        }
+        else
+        {
+            h = func_8003AD08(-*(s16 *)(o + 0x64), h);
+        }
+        h = func_80099194(D_800E0DEA, h);
+    }
+    if (r >= 0)
+    {
+        func_80099290(h);
+        func_800A5720(h0);
+    }
+    if (k == 1)
+    {
+        func_800C7DEC(p, o);
+    }
+    *((s32 *)o + 7) &= 0xDFFFFFFF;
+    if (o == D_800E3D7C)
+    {
+        func_8009BFF8(o, p);
+    }
+    if ((s16)j != 0)
+    {
+        kk = 0;
+    }
+    else
+    {
+        kk = (s16) - *(u16 *)(o + 0x64);
+    }
+    func_800B4C7C(3, o, kk, 0);
+    if (o == D_800E3D7C)
+    {
+        func_80094E34();
+    }
+    *(u8 **)(o + 0x60) = p;
+    *(u8 **)(p + 0x60) = o;
+    D_80083470 = o - 0x20;
+    if ((*(s32 *)(p + 0x1C) & 0x1000000) != 0)
+    {
+        func_800A56E0(0x700);
+        func_8009BF7C(*(u16 *)(p + 0x14) & 0x2000, 4);
+    }
+    func_800A56E0(0x601);
+    if ((*(u16 *)(q + 0x14) & 0x8000) == 0)
+    {
+        func_800419EC(8, 0x10);
+    }
+    if (p == D_800E3D7C && p[0xA8] != 0)
+    {
+        return o;
+    }
+    i1 = ((u16)ang >> 9) & 7;
+    func_80099C58((s16)((q[0x24] + D_8006CCD8[i1] * k) * 0x40 + 0x20 + D_8006CCD8[(i1 + 4) & 7] * 0x20),
+                  (s16)((q[0x25] + D_8006CCE8[i1] * k) * 0x40 + 0x20 + D_8006CCE8[(i1 + 4) & 7] * 0x20),
+                  (s16)(*(u16 *)(*(u8 **)(p + 0x60) + 0x88) - 0x30), e, *(s16 *)(p + 0x2A));
+    return o;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009C93C);
 
@@ -10733,7 +11349,232 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80088CAC);
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80088CB0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009E038);
+/* The kind-0x12 node's per-frame handler: func_8009ED30 installs it at the
+   node's +0x10, so `p` is `(u8 *)n + 0x20`, `v` is `n->unk_08` and `q` is
+   `n->unk_0C`. A five-state machine on the halfword at +0x1A -- 0 fades in,
+   1 holds, 0x10 eases toward the target pose, 0x20 decays the renderable's
+   scale, 0x30 rearms -- with +0x1C the remaining frame count that every
+   `x += (target - x) / n` step divides by.
+
+   THE WHOLE RESIDUE WAS gcc's MEM_IN_STRUCT_P ALIAS TEST, and eight of this
+   function's halfword accesses on `p` have to be spelled `((s16 *)p)[i]` for
+   it. `*(s16 *)(p + N)` is an INDIRECT_REF and gets MEM_IN_STRUCT_P = 0, so
+   it conflicts with the plain scalar `D_800E296C` and neither can be
+   scheduled across the other; an ARRAY_REF sets the bit and the conflict is
+   dropped. Measured by reverting exactly one group out of the landed body and
+   re-running aligndiff.py (the landed body reads 9 there, all of them the
+   masked constant-address `lui`s below; `--raw` is clean):
+
+     +0x1A in the `>= 2` test          473 words, 18  -- ONE WORD: without it
+       the D_800E296C `sw` cannot reach the branch delay slot, because the
+       `lh` of +0x1A is forced after it and takes the same register, and a
+       load-delay `nop` appears where the target has the `and`.
+     the two +0x2C clears              472 words, 13
+     the +0x4 / +0x6 clears            472 words, 13
+     the +0x1C clear in case 0         472 words, 12
+     the three stores in the two
+       `D_800E296C &= mask` arms       470 words, 31  -- TWO WORDS SHORT
+
+   That last one is the interesting half. With those stores left as
+   `*(s16 *)`, both arms end with the `lw`/`ori` adjacent to the `and`, so
+   jump2 cross-jumps FIVE instructions into .L8009E728 where the target shares
+   only three. Forcing the shape instead with two `u32` locals
+   (`m = D_800E296C;` before the stores, `D_800E296C = m & mask;` after)
+   restores the two words but loses the register assignment: 473 words, 44.
+   The alias spelling gets both. Plain `*(s16 *)` everywhere and no locals is
+   471 words, 52.
+
+   0x80013630..0x80013637 ARE ONE CONSTANT-ADDRESS BASE IN A LOCAL whose low
+   half is zero -- `b = (u8 *)0x80010000;` assigned just before its first use,
+   with the offsets in the displacement -- the device func_8009ED30's block
+   already records. 0x8001363C stays an INLINE constant address, which is
+   where its `lui $at` comes from. `--raw` confirms neither emits a
+   relocation.
+
+   q's +0x1C..+0x22 counters are read `*(u16 *)` and p's and v's `*(s16 *)`.
+   The eases divide `(target - x)` by the frame count, so the sign of the load
+   is load-bearing and the target shows which is which: q's fields take ONE
+   `lhu` for both the subtraction and the `+=`, p's and v's take an `lh` for
+   the subtraction and a separate `lhu` for the `+=`.
+   472 words, 0 differing. */
+void func_8009E038(u8 *p, u8 *v, u8 *q)
+{
+    u8 *g;
+    u8 *e;
+    u8 *b;
+    u32 f;
+
+    g = (u8 *)&D_80083160;
+    if ((D_800E296C & 0x2000) != 0)
+    {
+        if (*(s16 *)(p + 0x1A) < 0x20)
+        {
+            *(s16 *)(p + 0x1A) = 0x20;
+        }
+    }
+    f = D_800E296C;
+    if ((f & 0x800000) != 0)
+    {
+        D_800E296C = f & ~0x2000;
+        if (((s16 *)p)[0xD] >= 2)
+        {
+            *(s16 *)(p + 0x1A) = 0;
+            *(s16 *)(p + 0x1C) = 8;
+        }
+        ((s16 *)p)[0x16] = 0;
+        D_800E296C &= 0xFEFFFFFF;
+    }
+    else if (*(u16 *)(p + 0x1A) >= 0x20 && *(u16 *)(p + 0x1A) < 0x30 && (f & 0x2000) == 0)
+    {
+        *(s16 *)(p + 0x1A) = 0x30;
+    }
+    if (*(s16 *)(p + 0x1A) != 0 || (*(s32 *)(D_800E3D7C + 0x1C) & 0x10) != 0)
+    {
+        ((s16 *)p)[0x16] = 0;
+        D_800E296C &= 0xFEFFFFFF;
+    }
+    switch (*(s16 *)(p + 0x1A))
+    {
+    case 0:
+        f = D_800E296C;
+        if ((f & 0x800000) == 0)
+        {
+            *(s16 *)(p + 0x2C) = *(u16 *)(p + 0x2C) + 1;
+            if (*(s16 *)(p + 0x2C) == 0x1F)
+            {
+                D_800E296C = f | 0x1000000;
+                func_800A634C(0);
+            }
+            else if (*(s16 *)(p + 0x2C) >= 0x20)
+            {
+                *(s16 *)(p + 0x2C) = 0x20;
+            }
+        }
+        if (*(s16 *)(p + 0x1C) > 0)
+        {
+            q[0xC] = q[0xD] = q[0xE] = q[0xE] + (0x80 - q[0xE]) / *(s16 *)(p + 0x1C);
+            *(u16 *)(q + 0x1C) = *(u16 *)(q + 0x1E) =
+                *(u16 *)(q + 0x1E) + (0x3000 - *(u16 *)(q + 0x1E)) / *(s16 *)(p + 0x1C);
+            *(u16 *)(q + 0x20) += (0x20 - *(u16 *)(q + 0x20)) / *(s16 *)(p + 0x1C);
+            *(u16 *)(q + 0x22) += (0x20 - *(u16 *)(q + 0x22)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(v + 0x2) += (0xA0 - *(s16 *)(v + 0x2)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(v + 0x6) += (0x78 - *(s16 *)(v + 0x6)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x4) += (0 - *(s16 *)(p + 0x4)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x6) += (0 - *(s16 *)(p + 0x6)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x8) += (0x140 - *(s16 *)(p + 0x8)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0xA) += (0xE0 - *(s16 *)(p + 0xA)) / *(s16 *)(p + 0x1C);
+        }
+        if (--*(s16 *)(p + 0x1C) > 0)
+        {
+            break;
+        }
+        *(s16 *)(v + 0x2) = 0xA0;
+        *(s16 *)(v + 0x6) = 0x78;
+        *(u16 *)(q + 0x1E) = 0x3000;
+        *(u16 *)(q + 0x1C) = 0x3000;
+        *(u16 *)(q + 0x20) = 0x20;
+        *(u16 *)(q + 0x22) = 0x20;
+        *(u32 *)(q + 0xC) = 0x808080;
+        *(s16 *)(p + 0x8) = 0x140;
+        *(s16 *)(p + 0xA) = 0xE0;
+        ((s16 *)p)[0x2] = 0;
+        ((s16 *)p)[0x3] = 0;
+        ((s16 *)p)[0xE] = 0;
+        if ((D_800E296C & 0x800000) != 0)
+        {
+            *(s16 *)(p + 0x1C) = 0x1E;
+            *(s16 *)(p + 0x1A) = *(u16 *)(p + 0x1A) + 1;
+            break;
+        }
+        if ((*(s32 *)(g + 0x8) & 0x100) != 0)
+        {
+            break;
+        }
+        *(s16 *)(p + 0x1C) = 4;
+        *(s16 *)(p + 0x1A) = 0x10;
+        break;
+    case 1:
+        if (--*(s16 *)(p + 0x1C) > 0)
+        {
+            break;
+        }
+        ((s16 *)p)[0xE] = 8;
+        ((s16 *)p)[0xD] = 0x10;
+        D_800E296C &= 0xFF7FFFFF;
+        break;
+    case 0x10:
+        if (*(s16 *)(p + 0x1C) != 0)
+        {
+            *(u16 *)(q + 0x1C) = *(u16 *)(q + 0x1E) =
+                *(u16 *)(q + 0x1E) + (*(s16 *)(p + 0x1E) - *(u16 *)(q + 0x1E)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(v + 0x2) += (*(s16 *)(p + 0x14) - *(s16 *)(v + 0x2)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(v + 0x6) += (*(s16 *)(p + 0x16) - *(s16 *)(v + 0x6)) / *(s16 *)(p + 0x1C);
+            e = D_80082E80;
+            *(u16 *)(q + 0x20) += (e[0x24] - *(u16 *)(q + 0x20)) / *(s16 *)(p + 0x1C);
+            *(u16 *)(q + 0x22) += (e[0x25] - *(u16 *)(q + 0x22)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x4) += (*(s16 *)(p + 0xC) - *(s16 *)(p + 0x4)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x6) += (*(s16 *)(p + 0xE) - *(s16 *)(p + 0x6)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0x8) += (*(s16 *)(p + 0x10) - *(s16 *)(p + 0x8)) / *(s16 *)(p + 0x1C);
+            *(s16 *)(p + 0xA) += (*(s16 *)(p + 0x12) - *(s16 *)(p + 0xA)) / *(s16 *)(p + 0x1C);
+            if (--*(s16 *)(p + 0x1C) <= 0)
+            {
+                *(s16 *)(v + 0x2) = *(s16 *)(p + 0x14);
+                *(s16 *)(v + 0x6) = *(s16 *)(p + 0x16);
+                *(u16 *)(q + 0x1C) = *(u16 *)(q + 0x1E) = *(s16 *)(p + 0x1E);
+                *(u16 *)(q + 0x20) = e[0x24];
+                *(u16 *)(q + 0x22) = e[0x25];
+                b = (u8 *)0x80010000;
+                *(s16 *)(b + 0x3630) = *(s16 *)(p + 0x4) = *(u16 *)(p + 0xC);
+                *(s16 *)(b + 0x3632) = *(s16 *)(p + 0x6) = *(u16 *)(p + 0xE);
+                *(s16 *)(b + 0x3634) = *(s16 *)(p + 0x8) = *(u16 *)(p + 0x10);
+                *(s16 *)(b + 0x3636) = *(s16 *)(p + 0xA) = *(u16 *)(p + 0x12);
+            }
+        }
+        else
+        {
+            *(u16 *)(q + 0x20) = D_80082E80[0x24];
+            *(u16 *)(q + 0x22) = D_80082E80[0x25];
+        }
+        if ((*(s32 *)(g + 0x8) & 0x10) != 0 && (*(s32 *)(g + 0x10) & 0x8) != 0)
+        {
+            if (*(s16 *)(p + 0x1E) < 0x5000)
+            {
+                *(s16 *)(p + 0x1E) = *(u16 *)(p + 0x1E) + 0x1000;
+                *(s32 *)0x8001363C = *(s16 *)(p + 0x1E);
+            }
+            else
+            {
+                *(s16 *)(p + 0x1E) = 0;
+                *(s32 *)0x8001363C = 0;
+            }
+            *(s16 *)(p + 0x1C) = 4;
+        }
+        if ((*(s32 *)(g + 0x8) & 0x100) != 0)
+        {
+            if ((s16)func_800A2C34(NULL) == 0)
+            {
+                func_800A67F4();
+                ((s16 *)p)[0x16] = 0;
+                ((s16 *)p)[0xD] = 0;
+                ((s16 *)p)[0xE] = 1;
+                D_800E296C &= 0xFEFFFFFF;
+            }
+        }
+        break;
+    case 0x20:
+        *(u16 *)(q + 0x1E) -= *(u16 *)(q + 0x1E) >> 2;
+        if (*(u16 *)(q + 0x1E) < 0x100)
+        {
+            *(u16 *)(q + 0x1E) = 0;
+        }
+        break;
+    case 0x30:
+        *(s16 *)(p + 0x1A) = 0x10;
+        *(s16 *)(p + 0x1C) = 4;
+        break;
+    }
+    func_8009DF0C(p);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009E798);
 
