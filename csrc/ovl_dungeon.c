@@ -289,6 +289,15 @@ extern u8 D_800E1224[];
 extern u8 D_800E1258[];
 extern u8 D_800E1279[];
 extern u8 D_800E12A9[];
+/* The three 60-word effect handlers below. */
+s32 func_800C8ABC(u8 *, s16, s16);
+void func_800A6508(void);
+void func_800C5BBC(s32, s32, s16, s32, s32, s32);
+extern u8 D_800E3D40;
+extern u8 D_800E1BF3[];
+extern u8 D_800E1C03[];
+extern u8 D_800E1C14[];
+extern void *D_800DCF14;
 void func_800A56E0(s32);
 void func_800A32A4(u8 *);
 void func_8009A028(u8 *);
@@ -2997,11 +3006,113 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CCDA0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CD004);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CD1A4);
+/* THREE 60-WORD EFFECT HANDLERS, one source. Roll a chance through one of the
+   probe callers -- the chance itself doubles from 0x40 to 0x400 while the
+   engine's D_800E3D40 flag is up -- and on a miss poke func_800A6508 and
+   leave. On a hit, announce it, show the overlay's own message when the
+   record's +0x13 is clear, and unless the renderer already carries 0x8000,
+   fire func_800C5BBC at the tile centre with a tint.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CD294);
+   func_800A6508 TAKES NO ARGUMENTS, and the witness is a `nop`. The target
+   leaves its `jal` delay slot empty while `$a0` already holds the record --
+   put there by the `addu $a0, $s0, $zero` in the BRANCH delay slot above,
+   which is the OTHER path's func_80099844 argument that reorg hoisted
+   because it is harmless here. Given a `u8 *` parameter the call emits its
+   own copy, that copy fills the delay slot, and the function is one word
+   over at the same length. An empty `jal` slot next to a live argument
+   register is a nullary callee.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CD384);
+   60 words each, 0 differing. */
+s32 func_800CD1A4(u8 *p)
+{
+    u8 *r;
+
+    if (func_800C8ABC(p, D_800E3D40 != 0 ? 0x400 : 0x40, 0x10) == 0)
+    {
+        if (p[0x13] == 0)
+        {
+            func_800A6508();
+        }
+        return 1;
+    }
+    func_80099844(p, D_800E1BF3);
+    if (p[0x13] == 0)
+    {
+        func_800DC1B8(D_800DCF0C);
+    }
+    r = *(u8 **)(p - 0x14);
+    if (*(u16 *)(r + 0x14) & 0x8000)
+    {
+        return 1;
+    }
+    func_800C5BBC((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20, *(s16 *)(p + 0x88), 0x808080, 0x20,
+                  0);
+    func_800A56E0(0x520);
+
+    return 1;
+}
+
+/* func_800CD1A4 with func_800C8C1C, D_800E1C03/D_800DCF14, a white tint, a
+   0x40 fifth argument and sound 0x612. 60 words, 0 differing. */
+s32 func_800CD294(u8 *p)
+{
+    u8 *r;
+
+    if (func_800C8C1C(p, D_800E3D40 != 0 ? 0x400 : 0x40, 0x10) == 0)
+    {
+        if (p[0x13] == 0)
+        {
+            func_800A6508();
+        }
+        return 1;
+    }
+    func_80099844(p, D_800E1C03);
+    if (p[0x13] == 0)
+    {
+        func_800DC1B8(D_800DCF14);
+    }
+    r = *(u8 **)(p - 0x14);
+    if (*(u16 *)(r + 0x14) & 0x8000)
+    {
+        return 1;
+    }
+    func_800C5BBC((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20, *(s16 *)(p + 0x88), 0xFFFFFF, 0x40,
+                  0);
+    func_800A56E0(0x612);
+
+    return 1;
+}
+
+/* func_800CD1A4 with func_800C8844, the miss gate on the record's +0x14
+   0x4000 flag instead of its +0x13 byte, a 1 in the sixth argument and no
+   sound. 60 words, 0 differing. */
+s32 func_800CD384(u8 *p)
+{
+    u8 *r;
+
+    if (func_800C8844(p, D_800E3D40 != 0 ? 0x400 : 0x40, 0x8) == 0)
+    {
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            func_800A6508();
+        }
+        return 1;
+    }
+    func_80099844(p, D_800E1C14);
+    if (p[0x13] == 0)
+    {
+        func_800DC1B8(D_800DCF1C);
+    }
+    r = *(u8 **)(p - 0x14);
+    if (*(u16 *)(r + 0x14) & 0x8000)
+    {
+        return 1;
+    }
+    func_800C5BBC((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20, *(s16 *)(p + 0x88), 0x802080, 0x20,
+                  1);
+
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CD474);
 
