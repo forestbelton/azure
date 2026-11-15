@@ -205,6 +205,20 @@ reversed around func_800990FC's handle. `docs/near-misses/func_800BD45C.c`
 has twelve measured spellings and the cse reason they all fail. Landing it
 lands both, 180 words.
 
+**THE NEXT SEAM IS NAMED AND HAS SIXTEEN MEMBERS.** The reused-temporary
+idiom that closed func_800BD45C -- a message handle used once as an
+argument and once after a later call -- matches NINETEEN functions in this
+overlay and nowhere else in the project. Three are landed
+(func_800BD45C, func_800BD5C4, func_800A6480); the other sixteen are
+func_8008F428, func_8009255C, func_80099844, func_8009BFF8, func_800A7A7C,
+func_800B7774, func_800BD86C, func_800BDEB8, func_800BE120, func_800BF7FC,
+func_800C0B60 (twice), func_800C261C, func_800C4030, func_800C4490 and
+func_800C857C. Find them with
+`addu $aN,$vM,$zero` … `jal` … `addu $sK,$aN,$zero`. The mechanism is in
+docs/matching-levers.md under "A REUSED TEMPORARY IS HOW THE ARGUMENT KEEPS
+THE SHORT PSEUDO", so these are a batch for one agent rather than sixteen
+investigations.
+
 What the tools say is left, and where to go next:
 
 * `nearsibs.py --groups` is down to 16 sets and 2,807 words. The largest left
