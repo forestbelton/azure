@@ -191,7 +191,8 @@ typedef struct UnkDungeonSpotB
     u8 pad_00[0x6];
     u8 unk_06;
     u8 unk_07;
-    u8 pad_08[0x4];
+    /* func_800C2F2C clears this whole word through the subscript. */
+    s32 unk_08;
     UnkNode *unk_0C;
     u8 pad_10[0x2];
     /* s16, not u16: func_800B500C reads it with `lh` into a subtraction.
@@ -1026,6 +1027,35 @@ void func_800B96C4();
 extern s16 D_800E2468[][2];
 extern u8 D_800E2178[];
 extern u8 D_800E221C[];
+/* The g1 batch of kill handlers. func_800C7380 and func_800B60B8 are in this
+   unit and sit below their caller; func_800C8CD8 is defined below too. */
+u8 *func_800C7380(s32, s32, s16, s32, s32);
+s32 func_800B60B8(s32, s32, s16, s32, u8 *);
+s32 func_800C8CD8(u8 *, s16, s16);
+void func_800C1F28(u8 *, s16);
+void func_8009D6F4(void);
+/* `void func_800403BC(s32)` where it is defined, in csrc/unk_12DEC.c. */
+void func_800403BC(s32);
+/* Parked through func_800403BC by func_800C3D3C; an address-take needs a
+   declaration above it. */
+void func_800CE028();
+extern u8 D_80089378[];
+extern u8 D_8008937C[];
+extern u8 D_800893D8[];
+extern u8 D_800E0F2D[];
+extern u8 D_800E0F44[];
+extern u8 D_800E0F65[];
+extern u8 D_800E0F85[];
+extern u8 D_800E13DA[];
+extern u8 D_800E13E9[];
+extern u8 D_800E1532[];
+extern u8 D_800E1549[];
+extern u8 D_800E16E3[];
+extern u8 D_800E1713[];
+extern u8 D_800E1756[];
+extern u8 D_800E176F[];
+extern u8 D_800E1788[];
+extern u8 D_800E1863[];
 
 /* The overlay's per-frame entry point; `void func_800894A0(void)` is declared
    in include/structs.h because the resident engine calls it. D_80083160 is a
@@ -10448,7 +10478,92 @@ s32 func_800BDB74(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BDC98);
+/* The first kill skeleton with a THREE-WAY flag and the D_800DDE84 field
+   taken as bits 8-9 (`srl 8` / `andi 3`), the only member that reads that
+   half; the func_800AD6FC gate is tested as a HALFWORD here (`sll 16` with
+   no `sra`), which is the (s16) cast func_800C4490 also needs.
+
+   `s16 f` CARRIES -1, 0 AND 1, and the three message arms are spelled
+   `if (f < 0) ... else if (f != 0) ... else ...`. Written as the reading
+   order `else if (f == 0) {0F65} else {0F44}` the second test comes out
+   `bnez` where the target has `beqz` -- 1 differing at the right length,
+   and invisible everywhere else because both strings are relocations.
+   136 words, 0 differing. */
+s32 func_800BDC98(u8 *p, u8 *q, s16 k)
+{
+    void *m;
+    void *h;
+    s16 f;
+    u8 *g;
+
+    f = 0;
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+        if (p[0x25] == p[0x66])
+        {
+            f = 1;
+        }
+        if ((s16)func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 8) & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+        if (f != 0)
+        {
+            if (p[0x4] < 0xFF)
+            {
+                p[0x4]++;
+                func_80041E70(p);
+            }
+        }
+        if (*(u32 *)(p + 0x14) & 0x4000)
+        {
+            if (f == 0)
+            {
+                if (p[0x25] != p[0x66])
+                {
+                    f = -1;
+                }
+            }
+            h = func_800990FC();
+            m = h;
+            if (f < 0)
+            {
+                h = func_80099734(p, h);
+                h = func_80099194(D_800E0F2D, h);
+            }
+            else if (f != 0)
+            {
+                h = func_80099734(p, h);
+                h = func_80099194(D_800E0F44, h);
+            }
+            else
+            {
+                h = func_80099734(p, h);
+                h = func_80099194(D_800E0F65, h);
+            }
+            func_80099290(h);
+            func_800A5720(m);
+        }
+        func_800D5460((UnkNode *)(p - 0x20), 0x20A0A0, 0x702);
+        func_80098B38(q);
+    }
+    else
+    {
+        func_800997FC(D_800E0F85);
+        func_800A56E0(0x506);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* THE KILL HANDLER WITH A FLAG, and four spellings had to be right at once.
 
@@ -11471,7 +11586,98 @@ void *func_800C07AC(void *p)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C08A4);
+/* The second kill skeleton with a 0x16 ENTITY ARM that runs the same
+   func_80099978 / func_800998C0 sentence the out-of-range arm does, and a
+   0xD short-circuit that is itself conditional:
+   `if (k == 0xD) { if (p[0x13] != 0x16 || (func_800A6D30() & 1)) return
+   func_80098864(q, r); }`.
+
+   The chain is func_800BEB30's, including its two measured facts -- `h` is
+   REUSED for func_80099368's result with the old handle parked in its own
+   variable first, and the biased pointer holds `h - 2` rather than taking
+   the `- 2` at the call site. A second variable for func_80099368's result
+   (`b = func_80099368(q, h); func_800998C0(a, h);`) is 177 words.
+
+   THE TWO CHAINS SHARE `m` AND `h` BUT NOT THE BIASED POINTER AND THE PARKED
+   HANDLE. With `a`/`b` shared as well neither `b` coalesces, the function
+   takes a fifth callee-saved register and comes out 179 words; with all four
+   split per arm it is the right length but `m` and `h` swap $s1 and $s2,
+   24 differing. Only this split reaches 0 -- the other half of
+   func_800C0B60's "two pairs of handle variables" lesson.
+   175 words, 0 differing. */
+s32 func_800C08A4(u8 *p, u8 *q, s16 k, s32 r)
+{
+    void *m;
+    void *h;
+    void *a;
+    void *b;
+    void *a2;
+    void *b2;
+    u8 *n;
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        if (p[0x13] != 0x16 || (func_800A6D30() & 1))
+        {
+            return func_80098864(q, r);
+        }
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        if (p[0x13] == 0x16)
+        {
+            n = *(u8 **)(p - 0x18);
+            p[0x4B] &= ~0x20;
+            func_800A7A7C(*(u16 *)(n + 0x2) >> 6, *(u16 *)(n + 0x6) >> 6, *(s16 *)(n + 0xA),
+                          func_8004A658(p[0x49], p[0x48]), p + 0x48);
+            p[0x48] = q[0];
+            p[0x4B] |= 0x20;
+            m = func_800990FC();
+            h = func_80099978(func_80099194(D_800E13DA, func_80099734(p, m)));
+            a = (u8 *)h - 2;
+            h = func_80099194(D_80089378, h);
+            b = h;
+            h = func_80099368(q, h);
+            func_800998C0(a, b);
+            h = func_80099194(D_8008937C, h);
+            func_80099290(h);
+            func_800A5720(m);
+        }
+        else
+        {
+            func_800A6480(p, q);
+            if (func_800AD6FC(p, (D_800DDE84[p[0x13]] >> 4) & 3, 0) == 0)
+            {
+                func_800A5F38(p, q);
+                return 1;
+            }
+        }
+        func_80098B38(q);
+    }
+    else
+    {
+        m = func_800990FC();
+        h = func_80099978(func_80099194(D_800E13E9, func_80099734(p, m)));
+        a2 = (u8 *)h - 2;
+        h = func_80099194(D_80089378, h);
+        b2 = h;
+        h = func_80099368(q, h);
+        func_800998C0(a2, b2);
+        h = func_80099194(D_8008937C, h);
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 /* The elemental-brand handler. TWO PAIRS OF HANDLE VARIABLES, not one. The
    in-range chain and the out-of-range chain share `m`/`h` at 2 differing:
@@ -11743,7 +11949,72 @@ UnkNode *func_800C1A44(s16 x, s16 y, s16 ang)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C1B1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C1CE0);
+/* The second kill skeleton whose out-of-range arm takes the message handle
+   FIRST and only then decides what to say: with either +0xAC or +0xB0 of
+   D_800E3D7C occupied it runs func_800C1F28 over both slots behind
+   func_8003FA44's gate, otherwise it reports D_800E1549. The slot walk is
+   func_800C0180's inline `i * 4 + D_800E3D7C + 0xAC` spelling, upward from 0.
+   121 words, 0 differing. */
+s32 func_800C1CE0(u8 *p, u8 *q, s16 k, s32 r)
+{
+    void *m;
+    void *h;
+    u8 *e;
+    s32 i;
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        h = func_800990FC();
+        m = h;
+        if (*(u8 **)(D_800E3D7C + 0xAC) != NULL || *(u8 **)(D_800E3D7C + 0xB0) != NULL)
+        {
+            if (func_8003FA44(4) == 0)
+            {
+                return 0;
+            }
+            for (i = 0; i < 2; i++)
+            {
+                e = *(u8 **)(i * 4 + D_800E3D7C + 0xAC);
+                if (e != NULL)
+                {
+                    func_800C1F28(e, (s16)i);
+                }
+            }
+            h = func_80099194(D_800E1532, h);
+            func_800A56E0(0x501);
+        }
+        else
+        {
+            h = func_80099194(D_800E1549, h);
+        }
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
 /* 25 words, 0 differing. */
 void func_800C1EC4(u8 *p)
@@ -11962,7 +12233,63 @@ u8 *func_800C2C7C(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2CDC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C2F2C);
+/* The kill skeleton WITHOUT the cached-RAM gate: past the D_800E3D7C
+   identity test it spawns through func_800C7380 and returns 0 if that
+   fails, then dresses the spawn, clears the spot record's +0x08 word and
+   speaks only when k == 0xD -- the handle is taken unconditionally, ahead
+   of that test.
+
+   THE SPOT INDEX IS NOT A LOCAL: `D_800E39C8[*(s16 *)(c + 0x20)].unk_08 = 0`
+   with the subscript written at the site. Read into an `s32 i` first the
+   `lui`/`addiu` for D_800E39C8 lands AFTER the `sh`/`sll`/`sra` instead of
+   before it -- 5 differing at the right length. `c` is the spawn's record
+   at `n + 0x20`, which is where the `addiu $v1, $s0, 0x20` comes from.
+   106 words, 0 differing. */
+s32 func_800C2F2C(u8 *p, u8 *q, s16 k)
+{
+    void *m;
+    void *h;
+    u8 *e;
+    u8 *n;
+    u8 *c;
+    u8 *g;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    e = *(u8 **)(p - 0x14);
+    n = func_800C7380(e[0x24], e[0x25], *(s16 *)(p + 0x88), -1, q[0]);
+    if (n == NULL)
+    {
+        return 0;
+    }
+    func_800A56E0(0x60D);
+    c = n + 0x20;
+    *(s16 *)(c + 0x20) = func_800B60B8(e[0x24], e[0x25], *(s16 *)(p + 0x88), 5, n);
+    D_800E39C8[*(s16 *)(c + 0x20)].unk_08 = 0;
+    h = func_800990FC();
+    m = h;
+    if (k == 0xD)
+    {
+        h = func_80099368(q, h);
+        h = func_80099194(D_800E1713, h);
+        h = func_80099734(p, h);
+        h = func_80099194(D_800893D8, h);
+        h = func_800999B0(h);
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    func_800997FC(D_800E16E3);
+    func_800C8CD8(p, 0x100, 0x10);
+    func_8009A21C(e[0x24], e[0x25], 0x10);
+    func_80098B38(q);
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    return 1;
+}
 
 s32 func_800C30D4(u8 *p, u8 *q, s16 k)
 {
@@ -12062,7 +12389,82 @@ s32 func_800C333C(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3440);
+/* The second kill skeleton with an out-of-range arm that sweeps the two
+   engine slots at D_800E3D7C's +0x4C and +0x50, clearing each one's 0x40
+   bit and announcing it, and falls back to D_800E1788 when neither fired.
+   The flag is SET LAST IN EACH ARM, as in func_800C22EC. 148 words,
+   0 differing. */
+s32 func_800C3440(u8 *p, u8 *q, s16 k, s32 r)
+{
+    void *m;
+    void *h;
+    u8 *e;
+    s32 f;
+    u8 *g;
+
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else
+    {
+        func_800C4D78((u8 *)0xC0C0C0, 0);
+        func_800A56E0(0x702);
+        func_80042B68((s8 *)p, 0x8);
+        f = 0;
+        e = *(u8 **)(D_800E3D7C + 0x4C);
+        if (e[1] != 0 && (e[3] & 0x40))
+        {
+            e[3] &= ~0x40;
+            h = func_800990FC();
+            m = h;
+            h = func_80099368(e, h);
+            h = func_80099194(D_800E1756, h);
+            func_80099290(h);
+            func_800A5720(m);
+            f = 1;
+        }
+        e = *(u8 **)(D_800E3D7C + 0x50);
+        if (e[1] != 0 && (e[3] & 0x40))
+        {
+            e[3] &= ~0x40;
+            h = func_800990FC();
+            m = h;
+            h = func_80099368(e, h);
+            h = func_80099194(D_800E176F, h);
+            func_80099290(h);
+            func_800A5720(m);
+            f = 1;
+        }
+        if (f == 0)
+        {
+            h = func_800990FC();
+            m = h;
+            h = func_80099194(D_800E1788, h);
+            func_80099290(h);
+            func_800A5720(m);
+        }
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
 /* The same skeleton with NO func_800C4AFC tint at all: this one spends a
    +0x26 charge instead, with sound 0x615, and only when at least two are
@@ -12215,7 +12617,123 @@ s32 func_800C3C08(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C3D3C);
+/* The floor-wide reveal: behind D_800E296C's 0x20000000 it raises
+   0x40000000 on every record of the engine's +0x5C ring, clears the two spot
+   tables' live halfwords and walks the 0x3E x 0x3E cell grid, flooring every
+   cell whose first halfword is 0xB or more and clearing its +0x02.
+
+   THE D_80083160 BASE IS A LOCAL OF ITS OWN. Written `w = (u8 *)&D_80083160
+   + 0x1DC` in one go gcc folds the displacement into the symbol
+   (`%hi(D_80083160+476)`) and the pair that materialises the base disappears
+   -- 188 words of 189. Assigning `v = (u8 *)&D_80083160;` first and taking
+   both `v + 0x1DC` and `*(s32 *)(v + 0x1DC)` off it keeps the
+   `lui`/`addiu`/`addiu` the target has.
+
+   THE SWEEP COUNTER IS NOT THE NESTED LOOPS' COUNTER: with one `i` for all
+   three loops the pseudo gets one register and the two table sweeps come out
+   with the counter and the narrow table's giv in each other's registers,
+   13 differing. The ring walk also loads into the CURSOR and copies to the
+   sentinel (`n = D_800E3D7C; b = n;`), not the other way round -- reversed
+   it is 2 differing.
+
+   THE INNER COUNTER IS BUMPED BETWEEN THE INDEX AND THE ADDRESS. The target
+   puts `addiu $a0, $a0, 1` immediately after `addu $v0, $a0, $v0` and before
+   the multiply by 6; a plain `for (l = 1; l < 0x3F; l++)` emits it after the
+   store and the last five words shift. Splitting the third subscript into
+   `x = l + (j << shift); l++;` is the only spelling measured that places it
+   there. 189 words, 0 differing. */
+s32 func_800C3D3C(u8 *p, u8 *q, s16 k, s32 r)
+{
+    u8 *v;
+    u8 *w;
+    s32 t;
+    u8 *b;
+    u8 *n;
+    u8 *c;
+    s32 i;
+    s32 j;
+    s32 l;
+    s32 x;
+    u8 *g;
+
+    v = (u8 *)&D_80083160;
+    w = v + 0x1DC;
+    t = *(s32 *)(v + 0x1DC);
+    if (k == 0xD)
+    {
+        return func_80098864(q, r);
+    }
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D344(p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A6480(p, q);
+        if (func_800AD6FC(p, D_800DDE84[p[0x13]] & 3, (s32)q) == 0)
+        {
+            func_800A5F38(p, q);
+            return 1;
+        }
+    }
+    else if (D_800E296C & 0x20000000)
+    {
+        func_8009BF7C(1, 8);
+        func_800A56E0(0x80F);
+        n = D_800E3D7C;
+        b = n;
+        do
+        {
+            *(u32 *)(n + 0x1C) |= 0x40000000;
+            *(s16 *)(n + 0x88) = 0;
+            n = *(u8 **)(n + 0x5C) + 0x20;
+        } while (n != b);
+        for (i = 0; i < 0x40; i++)
+        {
+            if (D_800E3548_s[i].unk_01 != 0)
+            {
+                D_800E36C8[i].unk_04 = 0;
+            }
+        }
+        for (i = 0; i < 0x20; i++)
+        {
+            if (D_800E3648_s[i].unk_01 != 0)
+            {
+                D_800E39C8[i].unk_12 = 0;
+            }
+        }
+        for (j = 1; j < 0x3F; j++)
+        {
+            for (l = 1; l < 0x3F;)
+            {
+                c = (u8 *)((l + (j << *(s16 *)(w + 0x14))) * 6 + t);
+                if (*(u16 *)c >= 0xB)
+                {
+                    *(s16 *)c = 0x68;
+                    c = (u8 *)((l + (j << *(s16 *)(w + 0x14))) * 6 + t);
+                    *(u16 *)(c + 0x4) &= 0x7B32;
+                }
+                x = l + (j << *(s16 *)(w + 0x14));
+                l++;
+                c = (u8 *)(x * 6 + t);
+                *(s16 *)(c + 0x2) = 0;
+            }
+        }
+        func_8009D6F4();
+        D_800E296C &= 0x3FF7FFFF;
+        func_800403BC((s32)func_800CE028);
+    }
+    else
+    {
+        func_800997FC(D_800E1863);
+    }
+    g = (u8 *)&D_80083460;
+    *(u16 *)(g + 0xA) -= 1;
+    func_80098B38(q);
+    return 1;
+}
 
 /* The second kill skeleton with the chain in the IN-RANGE arm and a 64-slot
    sweep out of range. The sweep indexes both tables off the counter through

@@ -22881,3 +22881,102 @@ is `func_800B835C((u8 *)&D_800DCF78 - 0x10, ...)` beside `D_800DCF78 = col;`
 declared at the lower address would fold into `lui`/`addiu` and share nothing.
 So a lone `addiu reg, reg, -K` after a `%lo` is a sign that the source names
 the HIGHER symbol and subtracts.
+
+## `&SYMBOL + K` FOLDS INTO THE RELOCATION; A BASE LOCAL DOES NOT
+
+`func_800C3D3C`, ovl_dungeon, 2026-11-14. One word.
+
+    w = (u8 *)&D_80083160 + 0x1DC;
+
+is one `lui %hi(D_80083160+476)` / `addiu %lo(D_80083160+476)` pair: the
+displacement is folded into the relocation and the instruction that would
+have added it is gone -- 188 words of 189. Writing the base into its own
+local first,
+
+    v = (u8 *)&D_80083160;
+    w = v + 0x1DC;
+    t = *(s32 *)(v + 0x1DC);
+
+keeps `lui`/`addiu` for the symbol and a separate `addiu $s2, $v0, 0x1DC`,
+and the LOAD is then written off the base rather than off `w`, which is what
+gives `lw $s1, 0x1DC($v0)`. A lone `addiu reg, reg, K` after a `%lo` means
+the source names the symbol and adds; no `addiu` at all means it folded.
+
+## ONE LOOP COUNTER VARIABLE IS ONE HARD REGISTER FOR THE WHOLE FUNCTION
+
+`func_800C3D3C`, ovl_dungeon, 2026-11-14. 13 differing at the right length.
+
+Two table sweeps and a nested pair, all written with one `i`, make one
+pseudo: the sweeps' counter and the narrow table's giv come out in each
+other's registers. Giving the sweeps their own counter and the nest its own
+`j`/`l` fixes it with no other change. **When the residue is "two loop
+temporaries swapped", check whether the C reuses one counter across loops the
+target keeps apart.**
+
+## TO PLACE A LOOP'S INCREMENT INSIDE AN ADDRESS COMPUTATION, SPLIT THE SUBSCRIPT
+
+`func_800C3D3C`, ovl_dungeon, 2026-11-14. Five words shifted.
+
+The target bumps the inner counter between the index `addu` and the multiply.
+A plain `for (l = 1; l < 0x3F; l++)` emits the increment after the body's
+store. The only spelling measured that places it where the target has it is
+an empty for-increment with the subscript split:
+
+    for (l = 1; l < 0x3F;)
+    {
+        ...
+        x = l + (j << shift);
+        l++;
+        c = (u8 *)(x * 6 + t);
+    }
+
+`l++` embedded in the subscript and a `do`/`while` both leave it where the
+plain `for` put it.
+
+## WITH TWO COPIES OF ONE CALL CHAIN, SHARE THE LONG-LIVED VARIABLES AND SPLIT THE SHORT ONES
+
+`func_800C08A4`, ovl_dungeon, 2026-11-14. The other half of
+`func_800C0B60`'s "two pairs of handle variables" note, with the numbers.
+
+Two arms each running the same four-variable message chain:
+
+* all four shared between the arms -- the parked handle never coalesces, a
+  FIFTH callee-saved register appears, **179 words of 175**;
+* all four split per arm -- right length, but the two long-lived handles
+  trade `$s1` and `$s2`, **24 differing**;
+* the two long-lived handles shared, the biased pointer and the parked
+  handle split -- **0 differing**.
+
+Sharing the long-lived pair is what keeps the allocator's order; splitting
+the short-lived pair is what keeps each arm's coalescing.
+
+## A THREE-VALUED FLAG'S MIDDLE TEST IS SPELLED BY THE BRANCH, NOT BY THE READING ORDER
+
+`func_800BDC98`, ovl_dungeon, 2026-11-14. One differing word.
+
+A flag carrying -1, 0 and 1 wants `if (f < 0) ... else if (f != 0) ... else`,
+which is `bgez` then `beqz`. The natural reading order,
+`else if (f == 0) ... else ...`, gives `bnez` for the second test. Nothing
+else moves, and when both arms' only difference is a string relocation the
+verifier masks, the whole residue is that one branch -- easy to misread as
+noise.
+
+## A SUBSCRIPT READ INTO A LOCAL MOVES THE SYMBOL'S `lui`/`addiu` AFTER THE PRECEDING STORE
+
+`func_800C2F2C`, ovl_dungeon, 2026-11-14. Five differing at the right length.
+
+    i = *(s16 *)(c + 0x20);
+    D_800E39C8[i].unk_08 = 0;
+
+puts the table's `lui`/`addiu` AFTER the `sh`/`sll`/`sra` that produced `i`.
+Written at the site, `D_800E39C8[*(s16 *)(c + 0x20)].unk_08 = 0;`, the
+address materialises first. Same family as "a two-step index written as two
+statements loses the table base's register", read from the other side.
+
+## A do/while OVER A RING LOADS INTO THE CURSOR, NOT THE SENTINEL
+
+`func_800C3D3C`, ovl_dungeon, 2026-11-14. Two differing.
+
+`n = D_800E3D7C; b = n;` -- the global's `lw` lands in the cursor and the
+copy goes to the sentinel. Reversed (`b = D_800E3D7C; n = b;`) the `lw`
+destination and the copy direction both swap.
