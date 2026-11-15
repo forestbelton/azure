@@ -205,19 +205,29 @@ reversed around func_800990FC's handle. `docs/near-misses/func_800BD45C.c`
 has twelve measured spellings and the cse reason they all fail. Landing it
 lands both, 180 words.
 
-**THE NEXT SEAM IS NAMED AND HAS SIXTEEN MEMBERS.** The reused-temporary
-idiom that closed func_800BD45C -- a message handle used once as an
-argument and once after a later call -- matches NINETEEN functions in this
-overlay and nowhere else in the project. Three are landed
-(func_800BD45C, func_800BD5C4, func_800A6480); the other sixteen are
-func_8008F428, func_8009255C, func_80099844, func_8009BFF8, func_800A7A7C,
-func_800B7774, func_800BD86C, func_800BDEB8, func_800BE120, func_800BF7FC,
-func_800C0B60 (twice), func_800C261C, func_800C4030, func_800C4490 and
-func_800C857C. Find them with
-`addu $aN,$vM,$zero` … `jal` … `addu $sK,$aN,$zero`. The mechanism is in
-docs/matching-levers.md under "A REUSED TEMPORARY IS HOW THE ARGUMENT KEEPS
-THE SHORT PSEUDO", so these are a batch for one agent rather than sixteen
-investigations.
+**THE REUSED-TEMPORARY SEAM IS TWELVE-SIXTEENTHS CLOSED** (2026-11-14,
+commit "Close the reused-temporary seam"). The idiom -- a message handle used
+once as an argument and once after a later call -- matched nineteen functions
+in this overlay and nowhere else. Fifteen are now landed; three resisted and
+are the ONLY ones left in it, each with a measured residue:
+
+* `func_8008F428`, 177/177 words, **15 differing**. Thirteen are the two masks
+  in the `p[0x9B] == 1` arm -- the target materialises both before touching
+  D_80081484, every spelling tried materialises each at its use. Five
+  statement orders and a `u32` local per constant move nothing.
+* `func_8009255C`, 162/162, **38 differing**, all of them the shift caused by
+  where `(u8 *)&D_80083160`'s `lui`/`addiu` land. The bind: the field at
+  `g + 0xC8` is read TWICE in case 0 and the target does not common them,
+  which only happens when `g` is assigned in a DIFFERENT basic block --
+  and assigning it inside the arm folds the address and commons the second
+  read away (159 words, three short).
+* `func_800B7774`, 244/251, **147 differing**. Seven words short, all in one
+  `while` loop whose exit test the target DUPLICATES above the loop. A plain
+  `while`, a `for(;;)` with a `break` and an explicit if-wrapped `do/while`
+  are byte-identical, so the loop's spelling is not the lever;
+  `jump.c:599`'s `duplicate_loop_exit_test` is, and it only runs when
+  `NOTE_INSN_LOOP_BEG` is followed by a simple jump in the first,
+  after-regscan `jump_optimize`.
 
 What the tools say is left, and where to go next:
 
