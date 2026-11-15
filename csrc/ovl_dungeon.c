@@ -1164,6 +1164,16 @@ void func_80069F28(u8 *, u8 *, s32);
 extern void *D_800DD274[];
 u32 func_8004383C(u8 *, s16);
 void func_80067E2C(u8 *, void *);
+/* func_800AFFB4's projection and emit pair.  THE `func_` SPELLINGS ARE
+   MANDATORY: RotNclip4 and SetPolyGT4 are declared by psyq/include and resolve
+   through splat/common_syms.txt, which build/dungeon.bin does NOT link --
+   the Makefile passes that script for town.bin and main.bin only.  The psyq
+   names compile and measure 0 differing, then fail the link.  Kept
+   unprototyped and on ONE line each: a wrapped declaration breaks the
+   whole-unit sweep's awk definition scan, and every argument is a pointer, so
+   a prototype buys no codegen. */
+s32 func_80065610();             /* RotNclip4: 4 SVECTOR *, 4 s32 * sxy, p, flag, otz */
+void func_8006671C(POLY_GT4 *p); /* SetPolyGT4 */
 /* func_800C7930's two halfword tables, indexed by the renderable's facing. */
 extern u16 D_800DCEAC[];
 extern u16 D_800DCEBC[];
@@ -1573,6 +1583,45 @@ typedef struct UnkDungeonSP4
     u8 pad_C4[0x50];
     volatile s32 unk_114;
 } UnkDungeonSP4;
+
+/* The 0x1F800000 scratchpad as func_800AFFB4 lays it out -- town's
+   UnkTownA3B80SP field for field: the four UV scalars at +0x08..+0x17,
+   RotAverageNclip4's p/flag/otz out-parameters at +0x90/+0x94/+0xC0, the
+   quad's four SVECTORs at +0x70, the four projected screen points at +0xF0,
+   the OT base at +0x20 and the texture table base at +0x118. */
+typedef struct UnkDungeonSP5
+{
+    u8 pad_00[0x8];
+    u32 unk_08;
+    u32 unk_0C;
+    u32 unk_10;
+    u32 unk_14;
+    u8 pad_18[0x8];
+    u32 unk_20;
+    u8 pad_24[0x4C];
+    SVECTOR unk_70[4];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+    u8 pad_C4[0x2C];
+    DVECTOR unk_F0[4];
+    u8 pad_100[0x18];
+    u32 unk_118;
+} UnkDungeonSP5;
+
+/* The 0xC-byte texture record the scratchpad's +0x118 points at, town's
+   UnkTownA41D8T field for field.  Indexed [flag * 4 + (i & 1) * 2 + half]. */
+typedef struct UnkDungeonAFFB4T
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    u16 unk_06;
+    u8 unk_08;
+    u8 unk_09;
+    u8 unk_0A;
+    u8 unk_0B;
+} UnkDungeonAFFB4T;
 /* A 0x20-byte face record, the gouraud-textured cousin of the resident
    Unk463ECF (0x18 bytes): four vertex indices, two packed UV/CLUT words, FOUR
    colour-table indices instead of one, the +0x1A/+0x1C UV pair and the
@@ -18021,7 +18070,160 @@ void func_800AFAD8(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AFBFC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AFFB4);
+/* The vertical strip of gouraud-textured quads one ring segment is drawn as:
+   fourteen RotAverageNclip4 passes up one 0xE00-per-step column of the
+   scratchpad quad, each visible pass emitting TWO POLY_GT4s split across the
+   mid-edge, and returning the advanced primitive cursor (or NULL when nothing
+   was emitted). func_800AFBFC is the only caller and passes 0 or 1 as the
+   fifth argument.
+
+   THIS IS csrc/ovl_town.c's func_800A41D8 WITH POLY_GT4 FOR POLY_FT4. Every
+   load-bearing spelling that function's comment records transfers verbatim --
+   the bitwise `|` of four `&&` pairs with the `(u16)` casts, the `>> 1`
+   midpoints, the chained colour assignment running b/g/r with p[0] before
+   p[1], the two divides by twelve, `sp->unk_0C` first in the +0x14 sum, the
+   `u0`/`u1` word pair with `u2`/`u3` as halves and the four decrements after,
+   and `s16 flag` arriving in a stack slot. The differences are that this one
+   has no `p->code |= c->unk_0F & 2;`, no DR_MODE pass and so no second
+   AddPrim loop, and that the two colour values come out of a depth the
+   scratchpad carries instead of the caller's +0x16 field. 356 words,
+   0 differing; seqcheck `seq=OK`, `arith=OK`, 4 relocated words.
+
+   THE SECOND COLOUR VALUE IS THE SAME VARIABLE, `d = d - 0x10;`, NOT A
+   SECOND LOCAL. With a separate `s16 w = d - 0x10;` the function is still
+   356 words but 8 differing, and every one of the eight is a register
+   number: a three-way rotation in which the SImode temp holding
+   `0xE0 - (...)`, its sign-extension and `d` itself take $v1/$a1/$a2 where
+   the target takes $a1/$a2/$v1. The cause is global.c's `allocno_compare`,
+   read out of the .greg/.lreg dumps rather than swept for: with a separate
+   `w`, `d` is pseudo 91 with 4 refs across 9 insns, priority
+   floor_log2(4)*4/9*10000 = 8888, and it sorts SEVENTEENTH in
+   `allocno_order` -- behind the temp (8 refs / 7 insns, 34285), which
+   therefore takes $v1 first. Reusing `d` deletes the third pseudo and the
+   order comes out right. Declaration order of the locals is NOT the lever
+   here: d/w/v, v/w/d and `w = d; w -= 0x10;` all measure the same 8.
+
+   `lo` IS `s16`, NOT `u16`. As `u16` the function is 355 words / 181
+   differing: the one missing word is `addu $v0, $t0, $zero`, the copy that
+   stands between the spilled flag's `lhu` and its `beqz`, and the shift it
+   causes drags the whole `d` block with it. `s32` is 355 / 184, `u8` 355 /
+   182, `volatile u16` 354 / 200.
+
+   THE CALLEES MUST BE SPELLED `func_`. RotNclip4, SetPolyGT4 and AddPrim are
+   declared by psyq/include and resolve through splat/common_syms.txt, which
+   build/dungeon.bin does NOT link against -- the Makefile passes
+   --script=splat/common_syms.txt for town.bin and main.bin only. The psyq
+   names compile, measure 356/356 at 0 differing, and then fail the link;
+   only func_80065610, func_8006671C and func_8006658C are in
+   splat/dungeon.bin_undefined_funcs_auto.txt. */
+POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag)
+{
+    s32 i;
+    s32 j;
+    s32 n;
+    u16 z;
+    s16 lo;
+    s16 d;
+    s16 v;
+    UnkDungeonAFFB4T *t;
+
+    n = 0;
+    lo = *(s16 *)(a + 0x8) >= 0xE00;
+    z = *(u16 *)(a + 0x8);
+    sp->unk_70[0].vz = sp->unk_70[1].vz = z - 0x6200;
+    sp->unk_70[2].vz = sp->unk_70[3].vz = z - 0x5400;
+    for (i = 0; i < 0xE; i++)
+    {
+        sp->unk_70[0].vz += 0xE00;
+        sp->unk_70[1].vz += 0xE00;
+        sp->unk_70[2].vz += 0xE00;
+        sp->unk_70[3].vz += 0xE00;
+        if (func_80065610(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                          (s32 *)&sp->unk_F0[0], (s32 *)&sp->unk_F0[1], (s32 *)&sp->unk_F0[2],
+                          (s32 *)&sp->unk_F0[3], (s32 *)&sp->unk_90, (s32 *)&sp->unk_C0,
+                          (s32 *)&sp->unk_94) > 0)
+        {
+            if (((u16)(sp->unk_F0[0].vx + 0x20) < 0x181 &&
+                 (u16)(sp->unk_F0[0].vy + 0x20) < 0x121) |
+                ((u16)(sp->unk_F0[1].vx + 0x20) < 0x181 &&
+                 (u16)(sp->unk_F0[1].vy + 0x20) < 0x121) |
+                ((u16)(sp->unk_F0[2].vx + 0x20) < 0x181 &&
+                 (u16)(sp->unk_F0[2].vy + 0x20) < 0x121) |
+                ((u16)(sp->unk_F0[3].vx + 0x20) < 0x181 &&
+                 (u16)(sp->unk_F0[3].vy + 0x20) < 0x121))
+            {
+                *(u32 *)&p[0].x0 = *(u32 *)&sp->unk_F0[0];
+                *(u32 *)&p[0].x2 = *(u32 *)&sp->unk_F0[2];
+                *(u32 *)&p[1].x1 = *(u32 *)&sp->unk_F0[1];
+                *(u32 *)&p[1].x3 = *(u32 *)&sp->unk_F0[3];
+                p[0].x1 = p[1].x0 = (sp->unk_F0[0].vx + sp->unk_F0[1].vx) >> 1;
+                p[0].x3 = p[1].x2 = (sp->unk_F0[2].vx + sp->unk_F0[3].vx) >> 1;
+                p[0].y1 = p[1].y0 = (sp->unk_F0[0].vy + sp->unk_F0[1].vy) >> 1;
+                p[0].y3 = p[1].y2 = (sp->unk_F0[2].vy + sp->unk_F0[3].vy) >> 1;
+                sp->unk_90 = sp->unk_70[0].vz % 0xE00;
+                sp->unk_90 = sp->unk_90 / 0x100;
+                if (lo)
+                {
+                    sp->unk_90 += 0x10;
+                }
+                d = 0xE0 - ((u16)sp->unk_90 + i * 16);
+                v = 0x80;
+                if (d <= 0x80)
+                {
+                    v = d;
+                    if (d < 0)
+                    {
+                        v = 0;
+                    }
+                }
+                p[1].r0 = p[1].r1 = p[0].r1 = p[0].r0 = p[1].g0 = p[1].g1 = p[0].g1 = p[0].g0 =
+                    p[1].b0 = p[1].b1 = p[0].b1 = p[0].b0 = v;
+                d = d - 0x10;
+                if (d > 0x80)
+                {
+                    d = 0x80;
+                }
+                else if (d < 0)
+                {
+                    d = 0;
+                }
+                p[1].r2 = p[1].r3 = p[0].r3 = p[0].r2 = p[1].g2 = p[1].g3 = p[0].g3 = p[0].g2 =
+                    p[1].b2 = p[1].b3 = p[0].b3 = p[0].b2 = d;
+                t = &((UnkDungeonAFFB4T *)sp->unk_118)[(i & 1) * 2 + flag * 4];
+                for (j = 0; j < 2; j++)
+                {
+                    func_8006671C(p);
+                    sp->unk_08 = t->unk_08;
+                    sp->unk_0C = t->unk_09;
+                    sp->unk_10 = t->unk_0A;
+                    sp->unk_14 = t->unk_0B;
+                    sp->unk_10 = sp->unk_10 + sp->unk_08;
+                    sp->unk_14 = (sp->unk_0C + sp->unk_14) * 0x100;
+                    sp->unk_0C = sp->unk_0C * 0x100;
+                    *(u32 *)&p->u0 = (sp->unk_0C + sp->unk_08) | (t->unk_06 << 16);
+                    *(u32 *)&p->u1 = (sp->unk_0C + sp->unk_10) | (t->unk_04 << 16);
+                    *(u16 *)&p->u2 = sp->unk_14 + sp->unk_08;
+                    *(u16 *)&p->u3 = sp->unk_14 + sp->unk_10;
+                    p->u1--;
+                    p->u3--;
+                    p->v2--;
+                    p->v3--;
+                    func_8006658C((u32 *)sp->unk_20 + (t - (UnkDungeonAFFB4T *)sp->unk_118) /
+                                                          sizeof(UnkDungeonAFFB4T),
+                                  p);
+                    p++;
+                    t++;
+                }
+                n++;
+            }
+        }
+    }
+    if (n == 0)
+    {
+        return NULL;
+    }
+    return p;
+}
 
 /* Open the kind-0x12 panel for corner `k`. THE RENDERABLE POINTER IS RE-READ
    PER GROUP, and the source says so by assigning the local three times: the
