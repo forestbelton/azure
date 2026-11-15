@@ -54,6 +54,13 @@ import asmlib
 WINDOWS = {
     "ovl_town": (0x51FC0, 0x800CF720, "data/town/town.bin"),
     "ovl_dungeon": (0xF7700, 0x800DCE60, "data/dungeon/dungeon.bin"),
+    # slus_006.14's small-data run above `_gp`. Only 0x80080A6C..0x80081438 is
+    # ownable: above that is `.sbss` and the over-rounded tail of `t_size`,
+    # which a C definition emits as NOBITS and so cannot supply. -G0 is forced
+    # here rather than chosen -- the run interleaves objects of 8 bytes and
+    # fewer with 24 larger ones, and at the -G8 the original used those two
+    # groups land in different sections. See docs/data-map.md.
+    "gp_data": (0x5426C, 0x80080A6C, "data/slus_006.14"),
 }
 
 

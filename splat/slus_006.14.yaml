@@ -744,7 +744,19 @@ segments:
       # subsegment would be wrong. It cannot be suppressed without
       # `suggestion_rodata_section_start: False`, which would also silence
       # the check over game_data, so it is left to print.
-      - [0x5426c, data, gp_data]
+      # The ownable part of the small-data run, owned by csrc/gp_data.c:
+      # 287 objects, 2,508 bytes. `.data` and not `.sdata` because the run
+      # interleaves objects of 8 bytes and fewer with 24 larger ones, and at
+      # the -G8 the original used those two groups land in different
+      # sections; that unit is -G0 through an exact-target Makefile override.
+      - [0x5426c, .data, gp_data]
+      # 0x54C38..0x55000, 968 bytes, all zero: `.sbss` (0x80081438..0x800815C0,
+      # which the 0x54D98 diagnostic above also places) and then the 576 bytes
+      # between __bss and the end of t_size, which is 0x800-rounded. NOT
+      # ownable in C at any -G: a definition with no initialiser is NOBITS and
+      # contributes no file bytes, and one WITH an initialiser would be .data
+      # and would have to sit below. It stays disassembled.
+      - [0x54c38, data, gp_sbss]
       # NOT PART OF THE EXECUTABLE. The PS-X EXE header gives t_addr
       # 0x8002D000 and t_size 0x54800, so the loaded image is file
       # 0x800-0x55000 / vram 0x8002D000-0x80081800 and the PSX loader never

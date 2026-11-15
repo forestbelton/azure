@@ -207,6 +207,19 @@ build/csrc/main/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 build/csrc/str/%.o: CFLAGS := $(CFLAGS_G0)
 build/csrc/str/%.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
 
+# csrc/gp_data.c is -G0 for a different reason, and it is the one top-level
+# unit that is. It holds slus_006.14's small-data run above _gp -- 287 objects
+# in one subsegment -- and that run interleaves objects of 8 bytes and fewer
+# with 24 larger ones. At the -G8 the original used, those two groups go to
+# .sdata and .data: two sections, which one `.data` subsegment cannot place.
+# At -G0 every object goes to .data and the run is contiguous, which is what
+# it is in the ROM. The unit holds no code, so -G reaches nothing else in it.
+# csrc/game_gp.c, the 60 bytes at _gp itself, is NOT in this rule: every one
+# of its objects is 8 bytes or fewer, so it stays -G8 and `.sdata` like the
+# original. See the header of each file.
+build/csrc/gp_data.o: CFLAGS := $(CFLAGS_G0)
+build/csrc/gp_data.o: MASPSXFLAGS := $(MASPSXFLAGS_G0)
+
 # THE ONE OVERLAY UNIT THAT IS -G8: main.bin's debug twin at 0x80400000. It is
 # the same source as the live overlay built the other way, and -G is the whole
 # difference in shape -- at -G8 cc1psx records `.extern SYM,4` and a global
