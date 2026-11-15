@@ -518,3 +518,14 @@ STR_ITEM_MAKES_IT_POSSIBLE_TO_RETURN_TO_A_TOW = 0x8002f010; // size:0x4c defined
 // -------------------------------------------------------------------------
 STR_CMD_CAN_T_COMMAND_FAMILIAR = 0x8002e610; // size:0x30 defined:True
 D_8002E950 = 0x8002e950; // size:0x14 defined:True
+
+// -------------------------------------------------------------------------
+// The speaker/short-name pool, csrc/str/speakers.c.
+//
+// D_8002D000 is the image's load address as well as the first debug format
+// string, and asm/psyq/libsn/SNMAIN.s takes %hi/%lo of it, so it has to stay
+// a symbol. STR_SPEAKER_3MEN is the head of the 100-name table, the one
+// entry game_data's pointer table can name; the other 99 are bare literals.
+// -------------------------------------------------------------------------
+D_8002D000 = 0x8002d000; // size:0x10 defined:True
+STR_SPEAKER_3MEN = 0x8002d048; // size:0xc defined:True

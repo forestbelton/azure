@@ -1467,12 +1467,14 @@ extern Unk80082660 D_80082660[];
 extern u32 D_800C3174[];
 extern u32 D_800C321C[];
 extern u32 D_800C3960[];
-/* Out of image: a 9-byte table func_80038C40 copies to its stack with
-   lwl/lwr, so byte-aligned. */
-extern u8 D_8002D000[];
-extern u8 D_8002D010[];
-extern u8 D_8002D020[];
-extern s8 D_8002D03C[];
+/* The head of str_pool_800, csrc/str/speakers.c: three debug printf formats
+   and, after a fourth, a 9-byte table func_80038C40 copies to its stack with
+   lwl/lwr, so byte-aligned. `const` because the pool is .rdata -- without it
+   cc1psx emits the definitions under .data and the pool comes out short. */
+extern const u8 D_8002D000[];
+extern const u8 D_8002D010[];
+extern const u8 D_8002D020[];
+extern const s8 D_8002D03C[];
 extern u32 D_8006ADC0[];
 extern u8 D_800812C8[];
 extern u8 D_800812D0[];
@@ -1810,7 +1812,7 @@ extern u16 D_800838D8[0x40];
 extern Unk80083968 D_80083968[];
 
 /* The multi-field objects above, by their base label. */
-extern Unk8002D5B4 D_8002D5B4;
+extern const Unk8002D5B4 D_8002D5B4;  /* in str_pool_800; see above */
 extern Unk8006CE34 D_8006CE34;
 extern Unk8006CE80 D_8006CE80[];
 extern Unk8006E61C D_8006E61C[];

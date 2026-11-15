@@ -71,7 +71,7 @@ segments:
     align: 4
     subsegments:
       # NB: 0x800 was added to all the offsets here to account for start addr
-      - [0x800, rodata, str_pool_800]
+      - [0x800, .rodata, str/speakers]
       # jtbl_8002D5C0, func_8003E758's 28-entry table: the first of the three
       # contiguous runs, 112 bytes.
       - [0xdc0, .rodata, unk_11F0C]

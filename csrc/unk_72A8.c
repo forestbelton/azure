@@ -2581,7 +2581,7 @@ void func_80038000(u8 v) {
 }
 
 extern u8 D_800809C4[];
-extern u8 D_8002D030[];
+extern const u8 D_8002D030[];
 
 s32 func_80053EF0(s32);
 void func_800387D0(u8 *);
@@ -5942,7 +5942,7 @@ u32 *func_8003C8E4(s32 k) {
     }
 }
 
-extern Blk20 D_8002D594b __asm__("D_8002D594");
+extern const Blk20 D_8002D594b __asm__("D_8002D594");
 extern u32 D_8006B200w[] __asm__("D_8006B200");
 
 /* Copies the eight-word D_8002D594 template into a DEAD local -- gcc 2.7.2's
