@@ -579,33 +579,82 @@ And the five that are DONE:
 `game_gp_data` -- libapi/PATCH's 16-byte `.sbss` is in there, and it is the
 source of the permanent 0x54D98 diagnostic above.
 
-### `game_gp` and `gp_data` need a splat OPTION before they need any C
+### `game_gp` and `gp_data`: the oracle is free here, and the blocker is `.sbss`
 
-Measured 2026-11-14, and worth knowing before anyone starts on them. The
-generated `build/slus_006.14.ld` collects exactly two input sections per
-object, `(.data)` and `(.rodata)`. There is no `(.sdata)` and no `(.sbss)`
-line anywhere in it, because `auto_link_sections` defaults to
-`[".data", ".rodata", ".bss"]` and this container does not override it. These
-two subsegments are the `.sdata`/`.sbss` run, so a C unit defining their
-objects at `-G8` would emit them to `.sdata` and the linker would drop them
-on the floor -- short container, no diagnostic.
+All measured 2026-11-14.
 
-Two facts make this a chore rather than a wall:
+**The ownership oracle costs one command.** The `$gp` membership rule says a
+unit that reaches a global `$gp`-relatively is the unit that defined it
+(`docs/addressing-and-translation-units.md`), and for these two subsegments
+it does not need `tools/tuscan.py` or any disassembly -- our build reproduces
+the original's addressing modes byte for byte, so the relocations in our own
+objects are the answer:
 
-* splat has an `sdata` segment type (`segtypes/common/sdata.py`) and
-  `auto_link_sections` is a real yaml option, so adding `".sdata"` turns the
-  collection on.
-* **Nothing is being dropped today.** Checked object by object: not one
-  `build/csrc/*.o` has a non-empty `.sdata` or `.sbss`, so turning the
-  collection on is purely additive and cannot move a byte that is currently
-  placed.
+    for o in build/csrc/*.o; do
+      mips64-linux-gnu-objdump -r $o | grep GPREL16
+    done
 
-The second half of the problem is the one to think about first. The `$gp`
-oracle says these objects were defined in the units that reach them
-`$gp`-relatively, and those are the `gprel_*` units, which are `-G8` -- which
-is exactly the setting that sends an object of 8 bytes or fewer to `.sdata`.
-So owning them is not the same shape as owning a pool: a `-G0` unit would put
-them in `.data` and link today, but it would also be the wrong unit.
+**68 of the 359 objects are named that way, and they form TWO interleaved
+monotone runs, not one.** Read in address order the link indices look like
+noise -- the longest non-decreasing run is 41 of 68 -- until you notice every
+unit owns objects in two separated bands:
+
+| unit | link idx | low band | high band |
+|---|---|---|---|
+| `gprel_72A8` | 0 | 0x8008099C | -- |
+| `gprel_10308` | 3 | 0x80080AA4..0x80080AB0 | -- |
+| `unk_108F0` | 4 | 0x80080ABC..0x80080ABE | -- |
+| `gprel_11B4C` | 9 | 0x80080AD0 | 0x800814D0 |
+| `unk_11F0C` | 12 | 0x80080AD2 | 0x800814D4 |
+| `unk_12A70` | 14 | -- | 0x800814B0..0x800814B4 |
+| `gprel_17B7C` | 24 | 0x80080AF3 | 0x80081508 |
+| `unk_19434` | 27 | 0x80080B08..0x80080B0A | -- |
+| `gprel_1AB38` | 28 | -- | 0x80081518..0x80081526 |
+| `unk_1AF38` | 30 | 0x80080B10 | 0x80081530 |
+| `unk_1C540` | 31 | 0x80080B1B | 0x80081558 |
+
+Each band is monotone in link order on its own. They are `.sdata` and
+`.sbss`, which are two output sections, and one object file contributes one
+run to each -- so this region is two partitions to find, not one.
+
+**Where the boundary is, measured rather than assumed.** The last non-zero
+byte in `gp_data` is at file 0x54C35, vram 0x80081435, and everything from
+there to the end of the image is zero. That confirms the split this doc
+already recorded from the library scan:
+
+| | file | vram | bytes | non-zero |
+|---|---|---|---|---|
+| `.sdata` part of `gp_data` | 0x5426C-0x54C38 | 0x80080A6C-0x80081438 | 2,508 | 1,333 |
+| `.sbss` part | 0x54C38-0x54DC0 | 0x80081438-0x800815C0 | 392 | 0 |
+| zero fill to the image end | 0x54DC0-0x55000 | 0x800815C0-0x80081800 | 576 | 0 |
+
+**So the ownable part is 2,508 bytes, not 3,476, and `.sbss` is why.** A C
+definition of an `.sbss` object is a tentative definition: it goes to
+`.comm`/`.sbss`, which is NOBITS and contributes no file bytes. Own those in
+C and the container comes out 392 bytes short. The 968 bytes above 0x54C38
+should stay a `data` subsegment of zeros, and their symbols stay in
+`slus_006.14_undefined_syms_auto.txt` where they are now.
+
+**The `.sdata` part still needs a splat option first.** The generated
+`build/slus_006.14.ld` collects exactly two input sections per object,
+`(.data)` and `(.rodata)`; there is no `(.sdata)` line anywhere in it,
+because `auto_link_sections` defaults to `[".data", ".rodata", ".bss"]` and
+this container does not override it. A `-G8` unit defining a small object
+emits it to `.sdata` and the linker drops it on the floor -- short container,
+no diagnostic. Two things make that a chore rather than a wall: splat has an
+`sdata` segment type (`segtypes/common/sdata.py`) and `auto_link_sections` is
+a real yaml option; and **nothing is being dropped today** -- checked object
+by object, not one `build/csrc/*.o` has a non-empty `.sdata` or `.sbss` -- so
+turning the collection on is purely additive and cannot move a placed byte.
+
+`game_gp`, the 60 bytes at `_gp` itself, is a smaller puzzle of the same
+kind and is the place to start: nine objects, one of which (`D_8008099C`)
+the oracle already assigns to `gprel_72A8`, and one of which (`D_800809C4`,
+`"XXX\n"`) is a string literal, so the run may be `.rdata` rather than
+`.sdata` -- `csrc/str/names.c`'s own `.rodata` sits immediately above it at
+0x800809D0, which would make the two one contiguous read-only run and would
+explain the ordering without any `.sdata` at all. Settle that before touching
+`auto_link_sections`.
 
 `smf_magic`'s owner is no longer unknown: `csrc/unk_2879C.c` calls
 `func_80058800(D_800330FC, ..., 4)`, a 4-byte compare, so these are two magic
@@ -742,8 +791,11 @@ is the cleanest example of the shape: 134 strings, 2,664 bytes, **one**
 1. **`game_data`, 60,588 bytes, 666 objects** -- blocked on carving the text
    into original translation units first; see the section above for the
    measurement and the one tool it needs.
-2. **`gp_data` and `game_gp`, 3,536 bytes, 359 objects** -- blocked on
-   `auto_link_sections` and on the `-G8`/`.sdata` question; see above.
+2. **`gp_data` and `game_gp`, 2,568 ownable bytes of 3,536** -- the `$gp`
+   oracle already names 68 of the 359 objects' units and costs one
+   `objdump -r`; the blockers are `auto_link_sections` and the 968 bytes of
+   `.sbss` and zero fill that no C definition can emit. Start with
+   `game_gp`'s nine objects. See above.
 3. **`tbl_660C` and `smf_magic`, 24 bytes** -- not blocked on anything, just
    not worth a translation unit each. Folding `smf_magic` into
    `csrc/unk_2879C.c` would need the compiler to emit the array after that

@@ -680,11 +680,18 @@ things worth carrying out of it are:
   new input to use it: it reads `asm/nonmatchings/*/*.s`, which this
   executable no longer has, so the modes have to come out of a disassembly of
   `build/slus_006.14.elf` instead.
-- **`gp_data` and `game_gp` are blocked on a splat option.** The generated
-  linker script collects only `(.data)` and `(.rodata)`; these two are the
-  `.sdata`/`.sbss` run, so `auto_link_sections` has to gain `".sdata"` first.
-  Nothing is being dropped today -- checked object by object -- so that change
-  is additive.
+- **`gp_data` and `game_gp` have a FREE oracle and a different blocker.**
+  Our build reproduces the original's addressing modes byte for byte, so
+  `mips64-linux-gnu-objdump -r build/csrc/*.o | grep GPREL16` names the unit
+  that defined each `$gp`-reached object with no new tooling at all; it
+  settles 68 of the 359, in two interleaved monotone runs that are `.sdata`
+  and `.sbss`. What blocks it is that only 2,568 of the 3,536 bytes are
+  ownable: the last non-zero byte is at vram 0x80081435 and the 968 above it
+  are `.sbss` and zero fill, which a C definition emits as NOBITS and so
+  would leave the container short. The `.sdata` part also needs
+  `auto_link_sections` to gain `".sdata"`, since the generated linker script
+  collects only `(.data)` and `(.rodata)` -- additive, because nothing is
+  being dropped today.
 
 The five formerly-unidentified code gaps -- 0x31CC4, 0x32934, 0x33234,
 0x34BD0 and 0x362B4, 5,556 bytes in all -- are now `asm` subsegments, which is
