@@ -22649,3 +22649,164 @@ right count, but it spends `lui`+`ori` and still loses the `nop`);
 `MEM_VOLATILE_P` on one MEM does nothing here) and on both (54 / 20). Typing
 `p` as a struct pointer fixes the second half and needs a struct this unit
 cannot witness -- and even then the `nop` does not come back.
+
+## combine WILL NOT FOLD A `reg + const` BASE INTO A DISPLACEMENT ACROSS A CALL, AND THAT IS HOW A POINTER LOCAL SURVIVES
+
+`func_800B9964`, ovl_dungeon, 2026-11-14. One word, and the fix is where the
+assignment sits, not how it is spelled.
+
+cse rewrites a bare `*q` into `0x20($s2)` but leaves `*(q + 0xE)` as
+`0xE(q)`. That leaves `q` with a single remaining use, which combine then
+folds into `0x2E($s2)`, deleting the `addiu` -- **68 words against the
+target's 69**. Every addressing spelling of `q` folds identically: inline,
+two uses, a `u8 *` alias, `&n->unk_20`.
+
+The one thing that stops it is a CALL between the assignment and the use,
+because combine will not combine across a call (combine.c:8834). So
+
+    q = (u8 *)n + 0x20;
+    func_8003DB94(r, D_80079444, 0);   /* the barrier */
+    ...
+    *(s16 *)(q + 0xE) = 4;
+
+keeps the `addiu` the target has. This is the complement of the
+"all accesses at a nonzero offset want a pointer local" entry: the pointer
+local only survives if something protects it.
+
+## A `COMPONENT_REF` STORE IS SINKABLE AND A CAST STORE IS NOT
+
+`func_800B9964`, ovl_dungeon, 2026-11-14. The store side of the
+MEM_IN_STRUCT_P rule, and worth 10 differing with every opcode already right.
+
+`n->unk_10 = (u32)func_800B96C4;` carries MEM_IN_STRUCT_P, so sched1 proves
+it independent of the following `n->unk_08` / `n->unk_0C` loads and sinks it
+four insns -- which then lets two address materialisations (`%hi` of the
+function and `%hi(D_80083780)`) interleave. Written
+`*(u32 *)((u8 *)n + 0x10) = ...` the store stays put and all 69 words match.
+
+Read together with the load-side entry: a struct-typed access is the MOBILE
+one in both directions. When the target shows a store pinned where the source
+puts it, cast it.
+
+## `x * 64` AND `x << 6` DECIDE `lh` AGAINST `lhu` UNDER A TRAILING MASK
+
+`func_800D5F80`, ovl_dungeon, 2026-11-14. Four loads, no word change, so only
+a register-level read catches it.
+
+`force_to_mode` narrows a mask through an `ASHIFT` and reaches the
+`sign_extend` of the load underneath, rewriting it to `zero_extend`; it does
+not narrow through a `MULT`. So in
+
+    u0 = *(s16 *)(p + 0x2) + t[0] * 64;
+    x  = u0 & 0xFFFF;
+
+the `* 64` keeps the table read as `lh`, and `<< 6` turns it into `lhu`.
+
+## AN EXPLICIT `& 0xFFFF` INTO AN `s32` IS NOT THE SAME ALLOCATION AS A `u16` LOCAL
+
+`func_800D5F80`, ovl_dungeon, 2026-11-14. 17 differing, same 58 words either
+way.
+
+A `u16` local creates an HImode pseudo, and that extra quantity loses the
+register race against the table row pointer (2 refs / 6 insns against 3 / 6):
+the row pointer wins `$v1` and the sum is pushed out to `$a0`. Masking into
+an `s32` removes the HImode quantity entirely, the row pointer falls back to
+`$a1` -- the incoming parameter register -- and the sums take `$v1`, which is
+the target. Writing the sums straight into `u16` locals is the same 17.
+
+**And it interacts with statement granularity.** Hoisting the table base into
+its own statement ahead of the index is worth 4 words here -- but only once
+the allocation is already right. Tried against the `u16` spelling the same
+change reads as a dead end (29 differing). Two levers that must be applied
+together are invisible one at a time.
+
+## A NARROW LOCAL FOR A `sltu` RESULT BUYS THE TARGET'S REDUNDANT `addu`
+
+`func_800CC058`, ovl_dungeon, 2026-11-14. Two words.
+
+As `s32` the `sltiu` writes the variable's register directly and the later
+test reads it there: 75 words against 77. Declared `s8` or `s16`, the store
+is a truncation and the read a widening -- and because `sltiu` is provably 0
+or 1, combine reduces that widening to a plain `addu $v0, $s1, $zero`, which
+reorg then duplicates into the `j`'s delay slot. `u8` and `u16` are 2
+differing; the unsigned widening does not reduce the same way.
+
+So a bare `addu reg, reg, $zero` sitting next to a `sltiu` is not noise. It
+is the signature of a narrow local.
+
+## `abs(d) > K` CANNOT PRODUCE `slt reg, reg`; THE THRESHOLD MUST BE A LOCAL, AND ITS WIDTH MATTERS
+
+`func_800A3F28`, ovl_dungeon, 2026-11-14.
+
+`fold` canonicalises `x > 1` into `x >= 2` and the expansion is
+`slti $v0, $v0, 2`. A target that spends `slt $v0, $s2, $v0` with the
+constant living in a callee-saved register is comparing against a VARIABLE,
+and nothing else produces it -- twelve spellings (`> 1`, `!(> 1)`, `<= 1`,
+`||` + `else`, `goto`, `(u32)` casts) all gave the `slti`.
+
+Then the local's width decides whether it fits: `s32 lim` takes a seventh
+callee-saved register and the function is 75 words; `s16 lim` lands at 73.
+
+## AN `==` COMPARISON'S OPERAND ORDER CAN ROTATE EVERY CALLEE-SAVED REGISTER
+
+`func_800A3F28`, ovl_dungeon, 2026-11-14. 24 differing with the whole
+structure already exact, and no word change.
+
+`r == *(s8 *)(e + 0x26)` lands. `*(s8 *)(e + 0x26) == r` rotates `$s1..$s5`
+by one, because the HImode extension of `r` is born in the other order and
+every allocno's `live_length` shifts with it. When a candidate is structurally
+perfect and the whole register file is off by one slot, read the comparisons
+before re-reading the control flow.
+
+## A CALL RESULT'S DECLARED TYPE DECIDES WHERE ITS `sll`/`sra` LANDS
+
+`func_800A3F28`, ovl_dungeon, 2026-11-14. 5 differing, no word change.
+
+`s16 r = func_8009FB34(...)` defers the sign-extension to the first INT use
+-- inside the `if`, where reorg can take the `sll` into the `beq`'s delay
+slot. `s32 r` puts the extension at the assignment, ahead of the following
+`lw`. Same instructions, different place.
+
+## A LOAD THAT IS LIVE ACROSS A CALL MUST BE WRITTEN BEFORE IT
+
+`func_800A40AC`, ovl_dungeon, 2026-11-14. 11 differing.
+
+gcc will not move a load across a call, so a value the target has already in
+a callee-saved register at the call must be read in the source before the
+call too: `q9 = q[9];` then `t = func_800A35D8(...);`, never the other way.
+The general screen: a `lbu`/`lw` into an `$s` register immediately before a
+`jal`, whose value is only used after it.
+
+## A TWO-STEP INDEX WRITTEN `(p + i)[K]` AND `p[i + K]` DIFFER BY THE `addu`'s OPERAND ORDER
+
+`func_800BAF04`, ovl_dungeon, 2026-11-14. Exactly one word.
+
+`(p + i)[0x12]` emits the base add first and the constant displacement in the
+load; `p[i + 0x12]` emits the index add first. Both are one `addu` plus one
+displacement, so the count never moves -- only which register is the `addu`'s
+first operand.
+
+## A `u16` TABLE READ INTO A `u16` LOCAL STOPS combine FOLDING `lhu` + `sll`/`sra` INTO `lh`
+
+`func_800DC724`, ovl_dungeon, 2026-11-14.
+
+Read inline into a signed subtraction, combine folds the `lhu` and the
+`sll 16`/`sra 16` into a single `lh`. Hoisting the two table halfwords into
+`u16` locals first keeps them as `lhu`, which is what the target has.
+
+**And one local per read-back, never one reused.** With a single `s32 v`
+serving both halves the two disjoint live ranges become ONE quantity whose
+`floor_log2(refs)*refs/live_length` priority then beats the record pointer's:
+`q` lands in `$a1` and the read-back in `$a0`, exactly swapped -- 9 differing.
+
+## A STEP WRITTEN AS A TERNARY WITH A SHARED TAIL CROSS-JUMPS; TWO COMPLETE ARMS DO NOT
+
+`func_800DC724`, ovl_dungeon, 2026-11-14. Four words.
+
+    k = (d > 0) ? (d + 3) : (d - 3);
+    *(s16 *)(q + 0x8) = cx + (k >> 2);
+
+is 66 words. Written as two complete store arms the `>> 2`, the add and the
+store are duplicated into both and `find_cross_jump` does not merge them back
+-- 70 words. The rule of thumb: put only the DIFFERING expression in the
+ternary, never the statement around it.
