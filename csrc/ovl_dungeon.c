@@ -126,6 +126,8 @@ s32 func_800AD9B4();
    a real declaration above it. */
 void func_800B2A60();
 void func_800D8C64();
+/* Defined below; func_800D8590 installs its address at the node's +0x10. */
+void func_800D8728();
 void func_800D4494(u8 *, UnkVec *, u8 *, u8 *);
 /* FOUR parameters: it reads $a0, $a2 and $a3. Its one call site, in the
    landed func_800D4494, is a pure FORWARD of that function's own arguments,
@@ -35267,7 +35269,92 @@ void func_800D7FB8(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D81D4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D8590);
+/* Park the actor into its 0x2E "knocked out" state: stash the +0x10 handler
+   and the current state byte in the shadow record at +0x20, install
+   func_800D8728/func_800D8C64, re-skin from D_800E262C by the facing, and
+   clear two bits of the renderable's +0x14 flags.
+
+   THE ADDRESS ARITHMETIC IS THE WHOLE RESIDUE. `e += p[0xA8];` -- the sum
+   written back INTO the pointer local -- is what gives the `lw` $v0 and the
+   `lbu` $v1. Spelled `e[p[0xA8] + 0xF9] = 1;` the add is a separate pseudo,
+   local-alloc ties it to the BYTE (combine.c's simplify_rtx canonicalisation
+   puts the folded `(subreg:SI (reg:QI))` first in any commutative pair, so
+   the byte is always operand 0 and always wins the tie), the byte takes $v0
+   and the two loads come out exchanged: 2 differing, and no spelling of the
+   subscript moves it -- `*(e + b + 0xF9)`, `*(e + 0xF9 + b)`, `e[0xF9 + b]`,
+   `(e + 0xF9)[b]`, `*(&e[0xF9] + b)`, `*(u8 *)((s32)e + b + 0xF9)` and a
+   separate `s32 b` local all measure 102/2.
+
+   With the `+=` form the second read of p[0xA8] must be PLAIN. An earlier
+   candidate needed `*(volatile u8 *)` to stop cse commoning it with the
+   `if (p[0xA8] != 0)` guard; that is only true while the add is a third
+   pseudo. Here cse's substitution is what feeds the `+=`, and `volatile`
+   costs the last word (102/1), as does a trailing `do { } while (0)`.
+
+   `*(s16 *)(c + 0x12) = 0;` must still sit BETWEEN the two +0x14 masks --
+   written before both, flow deletes the first `sh` and the function is 99
+   words -- and `e = D_800E3D7C;` must be a pointer local, which is what puts
+   the `lw` ahead of the byte load.
+
+   func_800D8728 needs a declaration above this function; it is address-taken
+   here and defined below. */
+u8 *func_800D8590(u8 *p)
+{
+    u8 *g;
+    u8 *n;
+    u8 *c;
+    u8 *a;
+    u8 *t;
+    u8 *e;
+
+    g = (u8 *)&D_80083460;
+    n = p - 0x20;
+    if (*(s32 *)(g + 0x10) == (s32)n)
+    {
+        *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+    }
+    c = *(u8 **)(n + 0xC);
+    if (p[0x13] == 0)
+    {
+        func_80094E34();
+    }
+    else
+    {
+        if (p[0x13] == 0x2B)
+        {
+            func_80042B68((s8 *)p, 0x1A);
+        }
+        if (p[0x13] == 0x15)
+        {
+            if (p[0xA7] != 0)
+            {
+                if (p[0xA8] != 0)
+                {
+                    e = D_800E3D7C;
+                    e += p[0xA8];
+                    e[0xF9] = 1;
+                }
+            }
+        }
+        func_80069EC8(n + 0xAC, 0x24);
+        a = n + 0x20;
+        *(u32 *)(a + 0xAC) = *(u32 *)(n + 0x10);
+        *(s32 *)(n + 0x10) = (s32)func_800D8728 & 0x7FFFFFFF;
+        *(s16 *)(a + 0xA8) = p[0x13];
+        p[0x13] = 0x2E;
+        a[0x9A] = 0xFF;
+        *(s8 *)(a + 0x9C) = -1;
+        *(void **)(a + 0x8C) = func_800D8C64;
+        t = D_800E262C;
+        *(u8 **)(c + 0x2C) = t;
+        func_8003DB94(c, *(void **)(t + (((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 7) & 0x1C)), 0);
+        *(s16 *)(a + 0xA0) = 0x14;
+    }
+    *(u16 *)(c + 0x14) |= 0x8000;
+    *(s16 *)(c + 0x12) = 0;
+    *(u16 *)(c + 0x14) &= 0xFFF3;
+    return p;
+}
 
 /* The dungeon actor's SECOND per-frame driver, func_800B274C (:18193) one
    state machine over: past the engine's 0x2000 gate it runs func_800A9E70,
