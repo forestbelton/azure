@@ -37,12 +37,47 @@ Exit 1 if any check fails.
 """
 
 import glob
+import io
 import os
 import re
 import subprocess
 import sys
 
 PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def _psyq_aliases():
+    """Map every PSY-Q library name to the `func_` spelling at the same address.
+
+    splat names a resident routine `func_80065610`; `splat/common_syms.txt`
+    names the same address `RotNclip4`.  A unit whose container links
+    common_syms.txt can call it by either name, and the two produce IDENTICAL
+    bytes -- only the relocation's symbol name differs.  Without this map a
+    unit that uses the readable spelling reports `seq=FAIL` on every such call
+    and the check stops being a gate.
+    """
+    out = {}
+    path = os.path.join(PROJ, "splat", "common_syms.txt")
+    try:
+        text = io.open(path, encoding="utf-8", errors="replace").read()
+    except IOError:
+        return out
+    for line in text.split("\n"):
+        m = re.match(r"^(\w+)\s*=\s*0x([0-9a-fA-F]+);", line.strip())
+        if m and not m.group(1).startswith(("func_", "D_")):
+            out[m.group(1)] = "func_%08X" % int(m.group(2), 16)
+    return out
+
+
+PSYQ_ALIAS = _psyq_aliases()
+
+
+def canon(entry):
+    """Rewrite a sequence entry's symbol to its `func_` spelling, if aliased."""
+    parts = entry.split(" ")
+    if len(parts) == 2 and parts[1] in PSYQ_ALIAS:
+        return "%s %s" % (parts[0], PSYQ_ALIAS[parts[1]])
+    return entry
 
 
 def target_seq(func):
@@ -119,6 +154,12 @@ def main():
         rawn = int(m.group(1)) if m else -1
         t = target_seq(f)
         c, total = cand_seq(unit, f)
+        # splat names a resident routine func_80065610 and common_syms.txt
+        # names the same address RotNclip4.  A unit whose container links
+        # common_syms.txt may use either spelling and the bytes are identical,
+        # so compare both sequences in the `func_` spelling.
+        t = [canon(e) for e in t]
+        c = [canon(e) for e in c]
         fn = len([x for x in t if re.match(r'(HI16|LO16) func_', x)])
         ok_arith = (rawn == total)
         ok_seq = (t == c)

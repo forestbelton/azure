@@ -74,7 +74,7 @@ typedef struct UnkDungeonActor
     u8 unk_9B;
 } UnkDungeonActor;
 
-/* The 4-halfword rectangle func_800673A0 takes. The engine function has no
+/* The 4-halfword rectangle MoveImage takes. The engine function has no
    declaration in include/structs.h; the `s16 *` signature is the one
    csrc/ovl_town_800BEBA4.c read off its own listing. Alignment 2 is the
    whole shape of the copy -- an `s16[4]` cannot be moved with aligned `lw`,
@@ -162,7 +162,6 @@ extern void *D_800DCF1C;
 s32 func_800AB464();
 s32 func_800AC7EC();
 /* The engine's rectangle setter; see UnkDungeonRect. */
-void func_800673A0(s16 *r, s32 x, s32 y);
 extern UnkDungeonRect D_80089490;
 extern UnkDungeonRect D_80089498;
 /* The engine's node allocator and its install call. func_8004491C is
@@ -611,35 +610,18 @@ void func_80099FDC(UnkNode *);
 void func_8009A21C(s32, s32, s32);
 s16 func_8009FB34(u16, u16);
 /* Neither is in include/structs.h; both spellings are
-   csrc/ovl_town_800BF3F0.c's. func_80066460 returns u16 -- the call site
+   csrc/ovl_town_800BF3F0.c's. GetTPage returns u16 -- the call site
    masks with `andi $a3, $v0, 0xFFFF`. */
-s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag); /* RotTransPers */
-u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y);            /* GetTPage */
 /* The nine GTE/matrix-stack routines func_800DBA90 drives. splat names them
    PushMatrix, PopMatrix, SetRotMatrix, SetTransMatrix, RotTrans, RotMatrix,
    RotMatrixX, RotMatrixY and RotMatrixZ, but only the `func_` spellings are
    in splat/dungeon.bin_undefined_funcs_auto.txt, so those are what link. */
-void func_800649A0(void);                       /* PushMatrix */
-void func_80064A40(void);                       /* PopMatrix */
-void func_80064CF0(MATRIX *);                   /* SetRotMatrix */
-void func_80064D80(MATRIX *);                   /* SetTransMatrix */
-void func_80065450(SVECTOR *, VECTOR *, s32 *); /* RotTrans */
-void func_80065820(SVECTOR *, MATRIX *);        /* RotMatrix */
-MATRIX *func_80064BC0(MATRIX *, VECTOR *);      /* ScaleMatrix */
-void func_80064B90(MATRIX *, VECTOR *);         /* TransMatrix */
-void func_80065AB0(s32, MATRIX *);              /* RotMatrixX */
-void func_80065C50(s32, MATRIX *);              /* RotMatrixY */
-void func_80065DF0(s32, MATRIX *);              /* RotMatrixZ */
 
-/* SetPolyG4. */
-void func_80066708(void *);
-/* func_800C55F4's three remaining GTE/GPU helpers. func_80065480 has
+/* func_800C55F4's three remaining GTE/GPU helpers. NormalClip has
    NormalClip's shape -- three packed screen-XY words in, a signed area out,
-   tested with `blez` -- and func_800666B8 is the one-argument primitive
-   initialiser that sits beside func_80066708's. Only the `func_` spellings
+   tested with `blez` -- and SetPolyG3 is the one-argument primitive
+   initialiser that sits beside SetPolyG4's. Only the `func_` spellings
    are in splat/dungeon.bin_undefined_funcs_auto.txt, so those are what link. */
-s32 func_80065480(s32, s32, s32);
-void func_800666B8(void *);
 /* Prototype copied from its definition in csrc/unk_1C540.c:2936. The `s16`
    second parameter is load-bearing HERE: the CALLER is what carries the
    `sll`/`sra 16` pair the target has at each of func_800C55F4's three call
@@ -869,8 +851,6 @@ extern u8 *D_800DD724;
 extern u8 *D_800DD720;
 extern u8 D_800DD824[];
 u8 *func_8004AC3C(u8 *, s32 *);
-s32 func_80069E98(u8 *);
-void func_80069ED8(u8 *, u8 *, s32);
 void func_800C2824();
 /* THREE s16 PARAMETERS: declared s32 the three prologue parameter copies
    come out in parameter order where the target emits the third's pair
@@ -1028,7 +1008,6 @@ extern u8 D_800E101C[];
 extern u8 D_800E1580[];
 extern u8 D_800E15A2[];
 extern u8 *D_80082EB4;
-s32 func_80069EF8(void);
 extern u8 *D_80082EB0;
 s32 func_80098C80(u8 *);
 void func_800C9F34();
@@ -1063,8 +1042,6 @@ void func_80048190(s16);
 extern u8 D_800DCFE0[];
 extern u8 D_800DCFE8[];
 extern u8 D_800E3E41;
-void func_800666E0(u8 *);
-void func_80066640(u8 *, s32);
 void func_800DAEF4();
 extern u8 D_800DF358[];
 extern u8 D_800E045F[];
@@ -1114,7 +1091,6 @@ void func_8004D70C(void);
 void func_80044B48(void);
 s32 func_80042A80(u8 *);
 s32 func_80045310(u32);
-s32 func_8006649C(s32, s32);
 UnkNode *func_800A8608(void *, void *, s16, s16, s16);
 UnkNode *func_800BC26C(void *, s16, s32, s32);
 /* The 8-byte, alignment-1 object func_800DA840 copies into each spawned
@@ -1165,7 +1141,6 @@ void func_80069F28(u8 *, u8 *, s32);
    installers index. */
 extern void *D_800DD274[];
 u32 func_8004383C(u8 *, s16);
-void func_80067E2C(u8 *, void *);
 /* func_800B06F0's two projection callbacks, picked by the view's +0x8:
    func_800B0654 at index 0 and func_800B06C0 at index 1. */
 typedef void (*UnkDungeonProj)(UnkVec *, UnkSlot *, void *);
@@ -1175,7 +1150,6 @@ extern UnkDungeonProj D_800DEFF0[];
    splat/dungeon.bin_undefined_funcs_auto.txt, so that is what links, and it
    is kept on ONE line because a wrapped declaration is swept as a definition
    and hard-exits ovlverify. */
-s32 func_800654B0(); /* 4 SVECTOR *, 4 s32 * sxy, s32 *p, s32 *flag */
 /* Swaps the two packed screen pairs it is handed. */
 void func_8003E12C(s32 *, s32 *);
 /* func_800B06F0's two primitive emitters and the colour-row hand-off. */
@@ -1227,8 +1201,6 @@ typedef struct UnkDungeonSPC
    unprototyped and on ONE line each: a wrapped declaration breaks the
    whole-unit sweep's awk definition scan, and every argument is a pointer, so
    a prototype buys no codegen. */
-s32 func_80065610();             /* RotNclip4: 4 SVECTOR *, 4 s32 * sxy, p, flag, otz */
-void func_8006671C(POLY_GT4 *p); /* SetPolyGT4 */
 /* func_800C7930's two halfword tables, indexed by the renderable's facing. */
 extern u16 D_800DCEAC[];
 extern u16 D_800DCEBC[];
@@ -1702,12 +1674,9 @@ typedef struct UnkDungeonFace
     u8 unk_1E;
     s8 unk_1F;
 } UnkDungeonFace;
-void func_80064840(MATRIX *, MATRIX *, MATRIX *); /* CompMatrix */
-void func_80064AE0(MATRIX *);                     /* ReadRotMatrix */
 /* RotAverage4. Kept on ONE line: a wrapped declaration's first line carries
    no `;`, so the whole-unit sweep's awk recipe takes it for a definition and
    ovlverify then hard-exits on it. */
-s32 func_80065590(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, s32 *, s32 *, s32 *, s32 *, s32 *, s32 *);
 /* func_800A48F0 (above) calls this one; without the forward declaration the
    call rides an implicit one and the definition then contradicts it. */
 void func_800A4B88(s8 *, s16);
@@ -3272,7 +3241,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008EAC8);
    * `D_800E3DA8` must be declared `extern s16 D_800E3DA8[]` and written as
      `D_800E3DA8[0]` / `D_800E3DA8[1]`. As a scalar with
      `*(s16 *)((u8 *)&D_800E3DA8 + 2)` for the second the lo_sum lands
-     AFTER the second func_80069EF8 call instead of in its delay slot: 2
+     AFTER the second rand call instead of in its delay slot: 2
      differing. A `u8 *` base local and `(&D_800E3DA8)[1]` are both 2 as
      well; only the array declaration reaches 0.
    * The message handle is `h = func_800990FC(); m = h;` -- func_800956B8's
@@ -3320,8 +3289,8 @@ void func_8008F428(u8 *p, void *b, u8 *c, u8 *d)
         }
         if (p[0x9B] == 1)
         {
-            D_800E3DA8[0] = (func_80069EF8() & 0xF) - 8;
-            D_800E3DA8[1] = (func_80069EF8() & 0xF) - 8;
+            D_800E3DA8[0] = (rand() & 0xF) - 8;
+            D_800E3DA8[1] = (rand() & 0xF) - 8;
             if ((*(s16 *)(p + 0x96) -= 1) > 0)
             {
                 return;
@@ -8158,11 +8127,13 @@ u8 *func_800992A8(s32 n, u8 *d)
 
 /* Append a string to `dst` and hand back the new cursor.
 
-   THEY ARE SPELLED `func_80069E98` / `func_80069ED8`, NOT `strlen` /
-   `memcpy`. Both names link and both measure the same bytes, but the `func_`
-   spellings are the ones in splat/dungeon.bin_undefined_funcs_auto.txt, which
-   is what the listing's relocations name and what keeps seqcheck's ordered
-   symbol comparison clean. 32 words, 0 differing. */
+   THEY ARE SPELLED `strlen` / `memcpy`, NOT `func_80069E98` /
+   `func_80069ED8`. Both names link, now that build/dungeon.bin passes
+   --script=splat/common_syms.txt like town's and main's rules, and both
+   measure the same bytes; the library spellings are the readable ones.
+   seqcheck canonicalises a PSY-Q name to its `func_` spelling before
+   comparing, so the ordered symbol check stays clean either way.
+   32 words, 0 differing. */
 u8 *func_800992E8(u8 *p, u8 *dst)
 {
     u8 *src;
@@ -8177,8 +8148,8 @@ u8 *func_800992E8(u8 *p, u8 *dst)
     {
         src = (u8 *)func_8004AC3C(p, &n);
     }
-    len = func_80069E98(src);
-    func_80069ED8(dst, src, len);
+    len = strlen(src);
+    memcpy(dst, src, len);
     return dst + len;
 }
 
@@ -8467,8 +8438,8 @@ s32 func_80099A1C(u8 *p, UnkVec *m, u8 *r)
         *(s16 *)(sp + 0x0) = *(u16 *)((u8 *)m + 0x2);
         *(s16 *)(sp + 0x2) = *(u16 *)((u8 *)m + 0x6);
         *(s16 *)(sp + 0x4) = *(u16 *)((u8 *)m + 0xA);
-        *(s32 *)(sp + 0xC0) = func_80065420((SVECTOR *)sp, (s32 *)(sp + 0xB8),
-                                            (s32 *)(sp + 0x90), (s32 *)(sp + 0x94)) -
+        *(s32 *)(sp + 0xC0) = RotTransPers((SVECTOR *)sp, (s32 *)(sp + 0xB8),
+                                           (s32 *)(sp + 0x90), (s32 *)(sp + 0x94)) -
                               *(s16 *)(r + 0x6);
         *(s16 *)(sp + 0xB8) = *(u16 *)(sp + 0xB8) - ((s16)(*(u16 *)p) >> 1);
         *(s16 *)(sp + 0xB8) =
@@ -9414,14 +9385,14 @@ void func_8009BE2C(u8 *p, UnkVec *m, u8 *c)
     {
         *(s32 *)(q + 0x4) = (s16)v;
     }
-    func_800667A8(q);
+    SetTile(q);
     q[0x7] |= 2;
-    func_8006658C(g->unk_00 + 0xB0, q);
+    AddPrim(g->unk_00 + 0xB0, q);
     q = *(u8 **)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
     q[0x3] = 1;
     *(u32 *)(q + 0x4) = 0xE1000020;
-    func_8006658C(g->unk_00 + 0xB0, q);
+    AddPrim(g->unk_00 + 0xB0, q);
     if (--*(s8 *)(c + 0x5) == 0)
     {
         *(u16 *)(p - 0x2) |= 0x8000;
@@ -9968,7 +9939,7 @@ void func_8009D3B0(void)
             }
         }
     }
-    func_800672D8(r.v, D_800E50A8);
+    LoadImage(r.v, D_800E50A8);
 }
 
 /* Rebuild the packed 4-bit minimap at D_800E50A8 from the height map and hand
@@ -10058,7 +10029,7 @@ void func_8009D6F4(void)
             }
         }
     }
-    func_800672D8(r.v, q);
+    LoadImage(r.v, q);
 }
 
 /* Repack the floor's tile types into the two-nibble-per-cell map at
@@ -10068,7 +10039,7 @@ void func_8009D6F4(void)
    (1) THE MAP BASE IS ITS OWN LOCAL, COPIED INTO THE CURSOR. The target
    materialises D_800E50A8 once (words 12-13) and copies it into the cursor
    (`addu $a3, $a1, $zero`), keeping $a1 live across both loops for the
-   func_800672D8 argument. Writing `p = D_800E50A8;` and passing
+   LoadImage argument. Writing `p = D_800E50A8;` and passing
    `D_800E50A8` again at the call rematerialises it after the loops --
    cse restarts at the join -- which is 118 words.
    (2) `m = &g[0x1DC]` OFF A BASE LOCAL, NOT `(u8 *)&D_80083160 + 0x1DC`.
@@ -10166,12 +10137,12 @@ void func_8009D8A4(void)
             }
         }
     }
-    func_800672D8(r.v, q);
+    LoadImage(r.v, q);
     func_8009BF7C(1, 0x20);
 }
 
 /* Append a 0xC-byte primitive to the list at D_80083160's +0x8D0 and hand it
-   to func_8006658C.
+   to AddPrim.
 
    THE SECOND PARAMETER IS `s32` WITH TWO `(u16)` CASTS, not a `u16`. A u16
    parameter arrives already zero-extended, so the callee emits no `andi` and
@@ -10198,7 +10169,7 @@ void func_8009DA70(s32 x, s32 y, s32 *src, s32 tag)
     }
     *(s16 *)(q + 0xA) = t;
     *(s32 *)(q + 0x4) = *src;
-    func_8006658C(tag, q);
+    AddPrim(tag, q);
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009DAD8);
@@ -10227,8 +10198,8 @@ void func_8009DF0C(u8 *p)
     q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
     r = D_80083160.unk_00 + 0x8B0;
     *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
-    func_80067E2C(q, D_80083160.unk_00);
-    func_8006658C(r, q);
+    SetDrawArea(q, D_80083160.unk_00);
+    AddPrim(r, q);
     func_8009DAD8(r, p);
     u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
     *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
@@ -10242,11 +10213,11 @@ void func_8009DF0C(u8 *p)
     }
     *(s16 *)(u + 0xA) = t;
     *(u32 *)(u + 0xC) = w[1];
-    func_8006658C(r, u);
+    AddPrim(r, u);
     q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
     *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
-    func_80067E2C(q, w);
-    func_8006658C(r, q);
+    SetDrawArea(q, w);
+    AddPrim(r, q);
 }
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80088CA8);
@@ -10572,7 +10543,7 @@ void func_8009F21C(u8 *a, UnkVec *b, u8 *c)
    when the fifth argument is non-zero), install func_8009F21C, build a
    scale-0x1800 rotation from the engine's +0xB0 bearing in the 0x1F800000
    scratchpad, push it, project (x, y) biased by half a map cell through
-   func_80065420 and park the screen pair in the node's mover. The last
+   RotTransPers and park the screen pair in the node's mover. The last
    argument doubles as "quiet": when it is zero the engine's 0x40000 request
    bit goes up instead.
 
@@ -10636,17 +10607,17 @@ s32 e;
         *(s32 *)(sp + 0x30) = 0x1800;
         *(s32 *)(sp + 0x38) = 0;
         *(s16 *)(sp + 0x9C) = *(u16 *)(q + 0xB0);
-        func_80065820((SVECTOR *)(sp + 0x98), (MATRIX *)(sp + 0xD0));
-        func_80064BC0((MATRIX *)(sp + 0xD0), (VECTOR *)(sp + 0x30));
+        RotMatrix((SVECTOR *)(sp + 0x98), (MATRIX *)(sp + 0xD0));
+        ScaleMatrix((MATRIX *)(sp + 0xD0), (VECTOR *)(sp + 0x30));
         *(s32 *)(sp + 0xE4) = 0;
         *(s32 *)(sp + 0xE8) = 0;
         *(s32 *)(sp + 0xEC) = 0;
-        func_80064CF0((MATRIX *)(sp + 0xD0));
-        func_80064D80((MATRIX *)(sp + 0xD0));
+        SetRotMatrix((MATRIX *)(sp + 0xD0));
+        SetTransMatrix((MATRIX *)(sp + 0xD0));
         *(s16 *)(sp + 0x74) = 0;
         *(s16 *)(sp + 0x70) = x - (1 << *(s16 *)(g + 0x14)) / 2;
         *(s16 *)(sp + 0x72) = y - (1 << *(s16 *)(g + 0x16)) / 2;
-        func_80065420((SVECTOR *)(sp + 0x70), (s32 *)(sp + 0xF0), (s32 *)(sp + 0x90), (s32 *)(sp + 0x94));
+        RotTransPers((SVECTOR *)(sp + 0x70), (s32 *)(sp + 0xF0), (s32 *)(sp + 0x90), (s32 *)(sp + 0x94));
         *(s16 *)((u8 *)v + 0x2) = *(u16 *)(sp + 0xF0);
         *(s16 *)((u8 *)v + 0x6) = *(u16 *)(sp + 0xF2);
         r = (u8 *)n->unk_0C;
@@ -14229,8 +14200,8 @@ s32 func_800A5FC0(u8 *p)
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x18);
     func_80067F20((u32 *)q, 0, 0, *(s32 *)(p + 0x4), 0);
     *(s32 *)(r + 0x4) = *(s32 *)(p + 0x0);
-    func_800666E0(r);
-    func_80066640(r, 1);
+    SetPolyF4(r);
+    SetSemiTrans(r, 1);
     *(s32 *)(r + 0x10) = 0xE00000;
     *(s32 *)(r + 0x8) = 0;
     *(s16 *)(r + 0xE) = 0;
@@ -14249,8 +14220,8 @@ s32 func_800A5FC0(u8 *p)
     w = *(u16 *)(p + 0xA);
     *(s16 *)(r + 0x14) = w;
     *(s16 *)(r + 0xC) = w;
-    func_8006658C(g->unk_00 + (*(s16 *)(p + 0xC) * 4 + 0x70), r);
-    func_8006658C(g->unk_00 + (*(s16 *)(p + 0xC) * 4 + 0x70), q);
+    AddPrim(g->unk_00 + (*(s16 *)(p + 0xC) * 4 + 0x70), r);
+    AddPrim(g->unk_00 + (*(s16 *)(p + 0xC) * 4 + 0x70), q);
     return 0;
 }
 
@@ -14345,14 +14316,14 @@ s32 func_800A624C(u8 *p)
     func_80067F20((u32 *)q, 0, 0, 0x40, 0);
     c = *(s16 *)(p + 0xA);
     *(s32 *)(r + 0x4) = c | (c << 8) | (c << 16);
-    func_800666E0(r);
-    func_80066640(r, 1);
+    SetPolyF4(r);
+    SetSemiTrans(r, 1);
     *(s32 *)(r + 0x8) = 0;
     *(s32 *)(r + 0xC) = 0x140;
     *(s32 *)(r + 0x10) = 0xE00000;
     *(s32 *)(r + 0x14) = 0xE00140;
-    func_8006658C(D_80083160.unk_00 + (*(s16 *)(p + 0xC) * 4 + 0xB0), r);
-    func_8006658C(D_80083160.unk_00 + (*(s16 *)(p + 0xC) * 4 + 0xB0), q);
+    AddPrim(D_80083160.unk_00 + (*(s16 *)(p + 0xC) * 4 + 0xB0), r);
+    AddPrim(D_80083160.unk_00 + (*(s16 *)(p + 0xC) * 4 + 0xB0), q);
     return 0;
 }
 
@@ -18172,7 +18143,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AFBFC);
    build/dungeon.bin does NOT link against -- the Makefile passes
    --script=splat/common_syms.txt for town.bin and main.bin only. The psyq
    names compile, measure 356/356 at 0 differing, and then fail the link;
-   only func_80065610, func_8006671C and func_8006658C are in
+   only RotNclip4, SetPolyGT4 and AddPrim are in
    splat/dungeon.bin_undefined_funcs_auto.txt. */
 POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag)
 {
@@ -18196,10 +18167,10 @@ POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag
         sp->unk_70[1].vz += 0xE00;
         sp->unk_70[2].vz += 0xE00;
         sp->unk_70[3].vz += 0xE00;
-        if (func_80065610(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
-                          (s32 *)&sp->unk_F0[0], (s32 *)&sp->unk_F0[1], (s32 *)&sp->unk_F0[2],
-                          (s32 *)&sp->unk_F0[3], (s32 *)&sp->unk_90, (s32 *)&sp->unk_C0,
-                          (s32 *)&sp->unk_94) > 0)
+        if (RotNclip4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                      (s32 *)&sp->unk_F0[0], (s32 *)&sp->unk_F0[1], (s32 *)&sp->unk_F0[2],
+                      (s32 *)&sp->unk_F0[3], (s32 *)&sp->unk_90, (s32 *)&sp->unk_C0,
+                      (s32 *)&sp->unk_94) > 0)
         {
             if (((u16)(sp->unk_F0[0].vx + 0x20) < 0x181 &&
                  (u16)(sp->unk_F0[0].vy + 0x20) < 0x121) |
@@ -18250,7 +18221,7 @@ POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag
                 t = &((UnkDungeonAFFB4T *)sp->unk_118)[(i & 1) * 2 + flag * 4];
                 for (j = 0; j < 2; j++)
                 {
-                    func_8006671C(p);
+                    SetPolyGT4(p);
                     sp->unk_08 = t->unk_08;
                     sp->unk_0C = t->unk_09;
                     sp->unk_10 = t->unk_0A;
@@ -18266,9 +18237,9 @@ POLY_GT4 *func_800AFFB4(u8 *a, void *c, UnkDungeonSP5 *sp, POLY_GT4 *p, s16 flag
                     p->u3--;
                     p->v2--;
                     p->v3--;
-                    func_8006658C((u32 *)sp->unk_20 + (t - (UnkDungeonAFFB4T *)sp->unk_118) /
-                                                          sizeof(UnkDungeonAFFB4T),
-                                  p);
+                    AddPrim((u32 *)sp->unk_20 + (t - (UnkDungeonAFFB4T *)sp->unk_118) /
+                                                    sizeof(UnkDungeonAFFB4T),
+                            p);
                     p++;
                     t++;
                 }
@@ -18345,8 +18316,8 @@ void func_800B0654(u8 *a, u8 *b, u8 *c)
     *(s16 *)(c + 0x28) = *(u16 *)(a + 0x2);
     *(s16 *)(c + 0x2A) = *(u16 *)(a + 0x6);
     *(s16 *)(c + 0x2C) = *(u16 *)(a + 0xA);
-    *(s32 *)(c + 0xC0) = func_80065420((SVECTOR *)(c + 0x28), (s32 *)(c + 0xB8), (s32 *)(c + 0x90),
-                                       (s32 *)(c + 0x94)) +
+    *(s32 *)(c + 0xC0) = RotTransPers((SVECTOR *)(c + 0x28), (s32 *)(c + 0xB8), (s32 *)(c + 0x90),
+                                      (s32 *)(c + 0x94)) +
                          *(s8 *)(b + 0x4);
 }
 
@@ -18387,7 +18358,7 @@ s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
             sp->unk_C0 = sp->unk_C0 * 4 + sp->unk_20;
             sp->unk_B8 -= 0xA0;
             sp->unk_BA -= 0x78;
-            func_800649A0();
+            PushMatrix();
             sp->unk_100.vx = s->unk_16;
             sp->unk_100.vy = s->unk_18;
             sp->unk_100.vz = s->unk_1A;
@@ -18396,10 +18367,10 @@ s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
             sp->unk_30 = s->unk_1C;
             sp->unk_34 = s->unk_1E;
             sp->unk_38 = 0x1000;
-            func_80065820(&sp->unk_100, m);
-            func_80064BC0(m, (VECTOR *)&sp->unk_30);
-            func_80064D80(m);
-            func_80064CF0(m);
+            RotMatrix(&sp->unk_100, m);
+            ScaleMatrix(m, (VECTOR *)&sp->unk_30);
+            SetTransMatrix(m);
+            SetRotMatrix(m);
             r = (volatile u8 *)*e;
             if (r != NULL)
             {
@@ -18448,13 +18419,13 @@ s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
                         sp->unk_70[3].vy = td;
                         sp->unk_70[2].vy = td;
                     }
-                    func_800654B0(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                    RotTransPers4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
                                   &sp->unk_F0[0].w, &sp->unk_F0[1].w, &sp->unk_F0[2].w,
                                   &sp->unk_F0[3].w, &sp->unk_90, &sp->unk_94);
                     if (*(s8 *)r >= 0 && (*(u8 *)r & 8))
                     {
                         u = *(u8 *)r & 4;
-                        if (func_80065480(sp->unk_F0[0].w, sp->unk_F0[1].w, sp->unk_F0[2].w) <= 0)
+                        if (NormalClip(sp->unk_F0[0].w, sp->unk_F0[1].w, sp->unk_F0[2].w) <= 0)
                         {
                             if (u == 0)
                             {
@@ -18519,7 +18490,7 @@ s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
                     r = (volatile u8 *)*e;
                 } while (*(u8 *volatile *)&r != NULL);
             }
-            func_80064A40();
+            PopMatrix();
         }
         n = *(UnkNode **)(p - 0x8);
         if (n == NULL)
@@ -18535,7 +18506,7 @@ s32 func_800B06F0(u8 *p, UnkVec *v, UnkSlot *s)
 }
 
 /* Build one POLY_FT4 (0x28 bytes) for the 0xC-byte sprite descriptor at *c
-   and hand it to func_8006658C, then step the cursor or clear it when the
+   and hand it to AddPrim, then step the cursor or clear it when the
    descriptor's first byte is negative.
 
    THE CURSOR IS ADVANCED BEFORE THE TAIL `if`, not in the `return`:
@@ -18551,7 +18522,7 @@ u8 *func_800B0BE0(u8 *a, u8 *b, u8 **c, u8 *q)
     s32 t;
 
     *(u32 *)(q + 0x4) = *(u32 *)(b + 0xC);
-    func_800666F4(q);
+    SetPolyFT4(q);
     *(s16 *)(q + 0xE) = *(u16 *)(*c + 0x6);
     t = *(u16 *)(b + 0x10);
     if (t != 0)
@@ -18566,7 +18537,7 @@ u8 *func_800B0BE0(u8 *a, u8 *b, u8 **c, u8 *q)
     q[0x14] = q[0x24] = (*c)[0x8] + (*c)[0xA] - 1;
     q[0xD] = q[0x15] = (*c)[0x9];
     q[0x1D] = q[0x25] = (*c)[0x9] + (*c)[0xB] - 1;
-    func_8006658C(a, q);
+    AddPrim(a, q);
     q += 0x28;
     if (*(s8 *)*c < 0)
     {
@@ -18764,13 +18735,13 @@ UnkNode *func_800B0F50(u8 *p)
                 *(u32 *)((u8 *)n + 0x7C) =
                     (u32)func_8004DA74(r, D_800DEFF8[*(u16 *)(p + 0x46) & 0x3FFF] + 1, 0);
                 i = 4;
-                w = func_80069E98(D_800DEFF8[*(u16 *)(p + 0x46) & 0x3FFF] + 1) * 4;
+                w = strlen(D_800DEFF8[*(u16 *)(p + 0x46) & 0x3FFF] + 1) * 4;
             }
             else
             {
                 *(u32 *)((u8 *)n + 0x7C) = (u32)func_8004DA74(r, D_800DEFF8[4] + 1, 0);
                 i = 4;
-                w = func_80069E98(D_800DEFF8[4] + 1) * 4;
+                w = strlen(D_800DEFF8[4] + 1) * 4;
             }
             func_800B1320(r, (s16)(((0x20 - w) >> 1) + 0x80), (s16)(-*(s8 *)(r + 0x3) + 0x11));
             func_800B135C(r, 8);
@@ -19130,13 +19101,13 @@ void func_800B1B10(u8 *p, s16 x, s16 y, s16 d, s16 e, s16 f)
         *(u8 *)func_80099368(p, h) = 0;
         s = (u8 *)func_8004DA74(t, h, 0);
         *(s32 *)((u8 *)n + 0x74) = (s32)s & 0x7FFFFFFF;
-        len = func_80069E98(h) * 4;
+        len = strlen(h) * 4;
         func_800B1320(t, e != 0 ? (s16)(0x89 - len) : 0x8A, (s16)(-*(s8 *)(t + 0x3) - 0xE));
         func_800B135C(t, e != 0 ? 4 : 8);
         func_800B13CC(t, 0x20);
         func_800B1400(t, 2);
         *col++ = 0x808080;
-        func_80069E98(h);
+        strlen(h);
         t = func_800B12F4();
         *(u8 **)(q + 0x2C) = t;
         *(s32 *)(q + k * 4 + 0x50) = (s32)t & 0x7FFFFFFF;
@@ -20531,7 +20502,7 @@ UnkNode *func_800B4C7C(u16 a, u8 *p, s16 v, s16 k)
                 break;
             case 0x80:
                 func_8004E634(v, s);
-                s = s + func_80069E98(s);
+                s = s + strlen(s);
                 *s = 0x45;
                 s++;
                 *s = 0x58;
@@ -20920,9 +20891,9 @@ void func_800B653C(u8 *t, s16 ang)
         *(s16 *)((u8 *)m + 0x2) = *(u16 *)(t + 0x2) - D_8006CCD8[i] * 16;
         *(s16 *)((u8 *)m + 0x6) = *(u16 *)(t + 0x6) - D_8006CCE8[i] * 16;
         *(s16 *)((u8 *)m + 0xA) = *(u16 *)(t + 0xA);
-        m->unk_0C = -(*(s32 *)(t + 0xC) * ((func_80069EF8() & 1) + 2));
-        m->unk_10 = -(*(s32 *)(t + 0x10) * ((func_80069EF8() & 1) + 2));
-        m->unk_14 = (~func_80069EF8() & 1) << 15;
+        m->unk_0C = -(*(s32 *)(t + 0xC) * ((rand() & 1) + 2));
+        m->unk_10 = -(*(s32 *)(t + 0x10) * ((rand() & 1) + 2));
+        m->unk_14 = (~rand() & 1) << 15;
         func_8003DB94(r, D_800DEA68, 0);
         r[0xE] = 0x80;
         r[0xD] = 0x80;
@@ -20934,7 +20905,7 @@ void func_800B653C(u8 *t, s16 ang)
         *(s16 *)(v + 0x18) = 0x10;
         *(s16 *)(v + 0x16) = 0x10;
         *(s16 *)(v + 0x14) = 0x10;
-        *(s16 *)(v + 0xE) = (func_80069EF8() & 3) | 4;
+        *(s16 *)(v + 0xE) = (rand() & 3) | 4;
         *(s32 *)(v + 0x8) = 0x800;
     }
 }
@@ -20968,15 +20939,15 @@ void func_800B66C8(u8 *p)
     }
     else
     {
-        n = (func_80069EF8() & 7) | 4;
+        n = (rand() & 7) | 4;
         step = 0x1000 / n;
-        ang = func_80069EF8();
+        ang = rand();
         *(s16 *)(t + 0xA) = *(u16 *)(p + 0xA);
         *(s16 *)(t + 0x16) = -4;
         for (i = 0; i < n; i++)
         {
-            *(s16 *)(t + 0x2) = *(u16 *)(p + 0x2) + (func_80069EF8() & 0x1F) - 0x10;
-            *(s16 *)(t + 0x6) = *(u16 *)(p + 0x6) + (func_80069EF8() & 0x1F) - 0x10;
+            *(s16 *)(t + 0x2) = *(u16 *)(p + 0x2) + (rand() & 0x1F) - 0x10;
+            *(s16 *)(t + 0x6) = *(u16 *)(p + 0x6) + (rand() & 0x1F) - 0x10;
             *(s32 *)(t + 0xC) = func_80064584(ang) << 5;
             *(s32 *)(t + 0x10) = func_800644B8(ang) << 5;
             func_800B653C(t, ang);
@@ -21003,9 +20974,9 @@ void func_800B6814(u8 *p)
     s32 ang;
     s32 i;
 
-    cnt = (func_80069EF8() & 0xF) | 8;
+    cnt = (rand() & 0xF) | 8;
     step = 0x1000 / cnt;
-    ang = func_80069EF8();
+    ang = rand();
     for (i = 0; i < cnt; i++, ang += step)
     {
         n = func_8003FC64(0x212);
@@ -21032,7 +21003,7 @@ void func_800B6814(u8 *p)
             *(s16 *)(r + 0x10) = 0x60;
             *(s16 *)(r + 0x12) = 0x7E80;
             *(u16 *)(r + 0x14) |= 0x10C;
-            *(s16 *)(q + 0xE) = (func_80069EF8() & 3) | 0x10;
+            *(s16 *)(q + 0xE) = (rand() & 3) | 0x10;
             *(s16 *)(q + 0x16) = 0x10;
             *(s16 *)(q + 0x14) = 0x10;
             *(s16 *)(q + 0x18) = 8;
@@ -21365,22 +21336,22 @@ void func_800B7D74(s32 x, s32 y, s32 z, s32 sel)
         switch (sel)
         {
         case 0:
-            *(s16 *)((u8 *)m + 0xE) = (func_80069EF8() & 0x1F) - 0x10;
-            *(s16 *)((u8 *)m + 0x12) = (func_80069EF8() & 0x1F) - 0x10;
-            *(s16 *)((u8 *)m + 0x16) = -8 - (func_80069EF8() & 0x1F);
+            *(s16 *)((u8 *)m + 0xE) = (rand() & 0x1F) - 0x10;
+            *(s16 *)((u8 *)m + 0x12) = (rand() & 0x1F) - 0x10;
+            *(s16 *)((u8 *)m + 0x16) = -8 - (rand() & 0x1F);
             *(u32 *)(q + 0x8) = (u32)D_8006E5D4;
             func_8003DB94(r, D_8006E5D4, 0);
             break;
         case 1:
             *(u32 *)(r + 0x8) = (u32)D_8006E24C;
-            *(s16 *)((u8 *)m + 0x16) = -0x10 - (func_80069EF8() & 0xF);
+            *(s16 *)((u8 *)m + 0x16) = -0x10 - (rand() & 0xF);
             *(s32 *)((u8 *)m + 0xC) = func_80064584(*(s16 *)(g + 0xB0) - 0x300) << 7;
             *(s32 *)((u8 *)m + 0x10) = func_800644B8(*(s16 *)(g + 0xB0) - 0x300) << 7;
             *(s16 *)(q + 0x12) = 1;
             break;
         case 2:
             *(u32 *)(r + 0x8) = (u32)D_8006E258;
-            *(s16 *)((u8 *)m + 0x16) = -8 - (func_80069EF8() & 0xF);
+            *(s16 *)((u8 *)m + 0x16) = -8 - (rand() & 0xF);
             *(s32 *)((u8 *)m + 0xC) = func_80064584(*(s16 *)(g + 0xB0) + 0x500) << 7;
             *(s32 *)((u8 *)m + 0x10) = func_800644B8(*(s16 *)(g + 0xB0) + 0x500) << 7;
             *(s16 *)(q + 0x12) = 1;
@@ -21390,14 +21361,14 @@ void func_800B7D74(s32 x, s32 y, s32 z, s32 sel)
             func_8003DB94(r, D_8006E51C, 0);
             *(s32 *)((u8 *)m + 0xC) = func_80064584(*(s16 *)(g + 0xB0)) << 7;
             *(s32 *)((u8 *)m + 0x10) = func_800644B8(*(s16 *)(g + 0xB0)) << 7;
-            *(s16 *)((u8 *)m + 0x16) = -0xC - (func_80069EF8() & 0xF);
+            *(s16 *)((u8 *)m + 0x16) = -0xC - (rand() & 0xF);
             break;
         case 4:
             *(u32 *)(q + 0x8) = (u32)D_8006E57C;
             func_8003DB94(r, D_8006E57C, 0);
             *(s32 *)((u8 *)m + 0xC) = -func_80064584(*(s16 *)(g + 0xB0)) << 7;
             *(s32 *)((u8 *)m + 0x10) = -func_800644B8(*(s16 *)(g + 0xB0)) << 7;
-            *(s16 *)((u8 *)m + 0x16) = -0xC - (func_80069EF8() & 0xF);
+            *(s16 *)((u8 *)m + 0x16) = -0xC - (rand() & 0xF);
             break;
         }
         r[0xE] = 0x80;
@@ -21405,9 +21376,9 @@ void func_800B7D74(s32 x, s32 y, s32 z, s32 sel)
         r[0xC] = 0x80;
         *(s16 *)(r + 0x1E) = 0x1000;
         *(s16 *)(r + 0x1C) = 0x1000;
-        *(s16 *)(q + 0x14) = (func_80069EF8() & 0x1FF) - 0x100;
-        *(s16 *)(q + 0x16) = (func_80069EF8() & 0x1FF) - 0x100;
-        *(s16 *)(q + 0x10) = (func_80069EF8() & 0x1F) + 0x20;
+        *(s16 *)(q + 0x14) = (rand() & 0x1FF) - 0x100;
+        *(s16 *)(q + 0x16) = (rand() & 0x1FF) - 0x100;
+        *(s16 *)(q + 0x10) = (rand() & 0x1F) + 0x20;
     }
 }
 
@@ -22169,17 +22140,17 @@ void func_800BA414(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
     sp->unk_D0.t[1] = *(s16 *)((u8 *)v + 0x6);
     sp->unk_D0.t[2] = *(s16 *)((u8 *)v + 0xA);
     q = *(u8 **)(g->unk_00 + 0x8D0);
-    func_800649A0();
+    PushMatrix();
     sp->unk_100 = 0;
     sp->unk_104 = 0;
-    func_80065820((SVECTOR *)&sp->unk_100, &sp->unk_D0);
-    func_80064AE0(&sp->unk_11C);
-    func_80064840(&sp->unk_11C, &sp->unk_D0, &sp->unk_50);
-    func_80064D80(&sp->unk_50);
-    func_80064CF0(&sp->unk_50);
-    sp->unk_C0 = func_80065590(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
-                               (s32 *)(q + 0x8), (s32 *)(q + 0xC), (s32 *)(q + 0x10), (s32 *)(q + 0x14),
-                               &sp->unk_90, &sp->unk_94) -
+    RotMatrix((SVECTOR *)&sp->unk_100, &sp->unk_D0);
+    ReadRotMatrix(&sp->unk_11C);
+    CompMatrix(&sp->unk_11C, &sp->unk_D0, &sp->unk_50);
+    SetTransMatrix(&sp->unk_50);
+    SetRotMatrix(&sp->unk_50);
+    sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                             (s32 *)(q + 0x8), (s32 *)(q + 0xC), (s32 *)(q + 0x10), (s32 *)(q + 0x14),
+                             &sp->unk_90, &sp->unk_94) -
                  d - 8;
     if ((u32)sp->unk_C0 < 0x1E0)
     {
@@ -22189,17 +22160,17 @@ void func_800BA414(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
             ((u16)(*(u16 *)(q + 0x14) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x16) + 0x20) < 0x121))
         {
             *(s32 *)(q + 0x4) = *(s32 *)((u8 *)s + 0xC);
-            func_800666E0(q);
+            SetPolyF4(q);
             r = q + 0x18;
             q[0x7] |= 2;
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
             q += 0x24;
             func_80067F20((u32 *)r, 0, 0, 0x20, 0);
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, r);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, r);
         }
     }
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
-    func_80064A40();
+    PopMatrix();
 }
 
 /* A node +0x10 handler, the same shape as func_800A6B70 next door.
@@ -22405,7 +22376,7 @@ void func_800BAF04(u8 *p)
     case 0:
         for (i = 0; i < 0x40; i++)
         {
-            (p + i)[0x12] = func_80069EF8() & 0x1F;
+            (p + i)[0x12] = rand() & 0x1F;
         }
         *(s16 *)(p + 0xE) = 0;
         p[0x10] = 0;
@@ -22806,15 +22777,15 @@ void func_800BBDEC(u8 *p, UnkVec *v, UnkSlot *r, s16 d)
     sp->unk_D0.t[1] = *(s16 *)((u8 *)v + 0x6);
     sp->unk_D0.t[2] = *(s16 *)((u8 *)v + 0xA);
     q = *(u8 **)(*(u8 **)&D_80083160 + 0x8D0);
-    func_800649A0();
+    PushMatrix();
     ((s16 *)sp)[0x80] = r->unk_16;
     ((s16 *)sp)[0x82] = r->unk_1A;
     ((s16 *)sp)[0x81] = r->unk_18;
-    func_80065820((SVECTOR *)&sp->unk_100, &sp->unk_D0);
-    func_80064AE0(&sp->unk_11C);
-    func_80064840(&sp->unk_11C, &sp->unk_D0, &sp->unk_50);
-    func_80064D80(&sp->unk_50);
-    func_80064CF0(&sp->unk_50);
+    RotMatrix((SVECTOR *)&sp->unk_100, &sp->unk_D0);
+    ReadRotMatrix(&sp->unk_11C);
+    CompMatrix(&sp->unk_11C, &sp->unk_D0, &sp->unk_50);
+    SetTransMatrix(&sp->unk_50);
+    SetRotMatrix(&sp->unk_50);
     sp->unk_70[0].vz = sp->unk_70[1].vz = 0;
     h = -*(u16 *)(p + 0x50);
     sp->unk_70[1].vx = sp->unk_70[3].vx = 0x10;
@@ -22822,9 +22793,9 @@ void func_800BBDEC(u8 *p, UnkVec *v, UnkSlot *r, s16 d)
     sp->unk_70[0].vy = sp->unk_70[1].vy = 0;
     sp->unk_70[2].vy = sp->unk_70[3].vy = 0;
     sp->unk_70[2].vz = sp->unk_70[3].vz = h;
-    sp->unk_C0 = func_80065590(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
-                               (s32 *)(q + 0x8), (s32 *)(q + 0x10), (s32 *)(q + 0x18),
-                               (s32 *)(q + 0x20), &sp->unk_90, &sp->unk_94);
+    sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                             (s32 *)(q + 0x8), (s32 *)(q + 0x10), (s32 *)(q + 0x18),
+                             (s32 *)(q + 0x20), &sp->unk_90, &sp->unk_94);
     if ((u32)sp->unk_C0 < 0x1E0)
     {
         t = *(u32 *)((u8 *)r + 0xC);
@@ -22834,21 +22805,21 @@ void func_800BBDEC(u8 *p, UnkVec *v, UnkSlot *r, s16 d)
         q[0xC] = q[0x4] >> 2;
         q[0xD] = q[0x5] >> 2;
         q[0xE] = q[0x6] >> 2;
-        func_80066708(q);
+        SetPolyG4(q);
         if ((r->unk_14 & 4) != 0)
         {
             q[0x7] |= 2;
         }
-        func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+        AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
         q += 0x24;
         if ((r->unk_14 & 4) != 0)
         {
             func_80067F20((u32 *)q, 0, 0, 0x20, 0);
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
             q += 0xC;
         }
     }
-    func_80064A40();
+    PopMatrix();
     *(u32 *)(*(u8 **)g + 0x8D0) = (u32)q;
 }
 
@@ -22918,7 +22889,7 @@ UnkNode *func_800BC0A8(s16 x, s16 y, s16 ang, s16 d, s16 e, s16 f, u32 g, s16 h)
 
 /* Wrap the record's +0x02 counter into 0..0x1F by its +0x0C span and blit the
    two 0x10 x 0x20 cells. The rectangle is the 4-halfword UnkDungeonRect
-   func_800673A0 takes; its first halfword reuses the 0x270 already in $a1
+   MoveImage takes; its first halfword reuses the 0x270 already in $a1
    for the call. 29 words, 0 differing. */
 void func_800BC1B4(u8 *p)
 {
@@ -22929,8 +22900,8 @@ void func_800BC1B4(u8 *p)
     r.v[1] = *(u16 *)(p + 0x2) + 0x140;
     r.v[2] = 0x10;
     r.v[3] = 0x20;
-    func_800673A0(r.v, 0x270, 0x100);
-    func_800673A0(r.v, 0x270, 0x120);
+    MoveImage(r.v, 0x270, 0x100);
+    MoveImage(r.v, 0x270, 0x120);
 }
 
 /* 17 words, 0 differing. */
@@ -27032,7 +27003,7 @@ void func_800C4640(u8 *p, UnkVec *v, UnkSlot *r)
         v->unk_14 += 0x1800;
         if (*(s16 *)(p + 0x18) != 0)
         {
-            k = func_80069EF8();
+            k = rand();
             t = 0xF0;
             if ((k & 3) != 0)
             {
@@ -27052,7 +27023,7 @@ void func_800C4640(u8 *p, UnkVec *v, UnkSlot *r)
         if (*(s16 *)(p + 0x18) != 0)
         {
             r->unk_0C[0] = r->unk_0C[1] = r->unk_0C[2] =
-                (func_80069EF8() & 3) != 0 ? 0x10 : (u32)(*(s16 *)(p + 0x2) * 15) >> 1;
+                (rand() & 3) != 0 ? 0x10 : (u32)(*(s16 *)(p + 0x2) * 15) >> 1;
         }
         *(s16 *)(p + 0x2) = *(u16 *)(p + 0x2) - 1;
         if (*(s16 *)(p + 0x2) <= 0)
@@ -27104,9 +27075,9 @@ void func_800C4944(u8 *p)
     s32 i;
     s32 t[3];
 
-    t[0] = func_80069EF8();
-    t[1] = func_80069EF8();
-    t[2] = func_80069EF8();
+    t[0] = rand();
+    t[1] = rand();
+    t[2] = rand();
     for (i = 1; i >= 0; i--)
     {
         n = func_8003FC64(0x202);
@@ -27374,7 +27345,7 @@ UnkNode *func_800C542C(u8 *p, s16 a, s16 b, s16 d)
         *(u8 **)(q + 0x24) = p;
         *(s16 *)(r + 0x20) = 0x2000;
         *(s16 *)(q + 0x32) = 0x400;
-        *(s16 *)(q + 0x2C) = func_80069EF8();
+        *(s16 *)(q + 0x2C) = rand();
         if (d == 1)
         {
             *(s16 *)(q + 0x2A) = 0;
@@ -27490,20 +27461,20 @@ void func_800C55F4(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
     e = (u8 *)s->unk_08;
     c = *(u8 **)(e + 0x8);
     tbl = *(u32 *)e;
-    func_800649A0();
+    PushMatrix();
     sp->unk_30.vx = s->unk_1C;
     sp->unk_30.vy = s->unk_1E;
     sp->unk_30.vz = s->unk_20;
     sp->unk_28.vx = sp->unk_50.t[0] = *(s16 *)((u8 *)v + 0x2);
     sp->unk_28.vy = sp->unk_50.t[1] = *(s16 *)((u8 *)v + 0x6);
     sp->unk_28.vz = sp->unk_50.t[2] = *(s16 *)((u8 *)v + 0xA);
-    sp->unk_CC = func_80065420(&sp->unk_28, &sp->unk_F0, &sp->unk_90, &sp->unk_94) - d;
-    func_80064AE0(&m);
-    func_80065820((SVECTOR *)&s->unk_16, &sp->unk_50);
-    func_80064BC0(&sp->unk_50, &sp->unk_30);
-    func_80064840(&m, &sp->unk_50, &sp->unk_D0);
-    func_80064D80(&sp->unk_D0);
-    func_80064CF0(&sp->unk_D0);
+    sp->unk_CC = RotTransPers(&sp->unk_28, &sp->unk_F0, &sp->unk_90, &sp->unk_94) - d;
+    ReadRotMatrix(&m);
+    RotMatrix((SVECTOR *)&s->unk_16, &sp->unk_50);
+    ScaleMatrix(&sp->unk_50, &sp->unk_30);
+    CompMatrix(&m, &sp->unk_50, &sp->unk_D0);
+    SetTransMatrix(&sp->unk_D0);
+    SetRotMatrix(&sp->unk_D0);
     sp->unk_20 = *(u8 **)&D_80083160 + 0xB0;
     prim = *(u8 **)(*(u8 **)&D_80083160 + 0x8D0);
     code = prim + 0x7;
@@ -27516,10 +27487,10 @@ void func_800C55F4(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
         sp->unk_70[0].vz = *(u16 *)((c[0] << 3) + tbl + 0x4);
         sp->unk_70[1].vz = *(u16 *)((c[1] << 3) + tbl + 0x4);
         sp->unk_70[2].vz = *(u16 *)((c[2] << 3) + tbl + 0x4);
-        sp->unk_C0 = func_80065420(&sp->unk_70[0], (s32 *)(prim + 0x8), &sp->unk_90, &sp->unk_94);
-        sp->unk_C4 = func_80065420(&sp->unk_70[1], (s32 *)(prim + 0x10), &sp->unk_90, &sp->unk_94);
-        sp->unk_C8 = func_80065420(&sp->unk_70[2], (s32 *)(prim + 0x18), &sp->unk_90, &sp->unk_94);
-        sp->unk_114 = func_80065480(*(s32 *)(code + 0x1), *(s32 *)(code + 0x9), *(s32 *)(code + 0x11));
+        sp->unk_C0 = RotTransPers(&sp->unk_70[0], (s32 *)(prim + 0x8), &sp->unk_90, &sp->unk_94);
+        sp->unk_C4 = RotTransPers(&sp->unk_70[1], (s32 *)(prim + 0x10), &sp->unk_90, &sp->unk_94);
+        sp->unk_C8 = RotTransPers(&sp->unk_70[2], (s32 *)(prim + 0x18), &sp->unk_90, &sp->unk_94);
+        sp->unk_114 = NormalClip(*(s32 *)(code + 0x1), *(s32 *)(code + 0x9), *(s32 *)(code + 0x11));
         if (sp->unk_114 > 0)
         {
             sp->unk_C0 -= d;
@@ -27560,14 +27531,14 @@ void func_800C55F4(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
                     t = 0xFF;
                 }
                 func_8004CECC(*(s16 *)(p + 0x30), t, 0xFF, prim + 0x14);
-                func_800666B8(prim);
+                SetPolyG3(prim);
                 *code |= 0x2;
-                func_8006658C(sp->unk_20 + sp->unk_C0 * 4, prim);
+                AddPrim(sp->unk_20 + sp->unk_C0 * 4, prim);
                 prim += 0x1C;
                 code += 0x1C;
                 s->unk_14 &= 0x7FFF;
                 func_80067F20((u32 *)prim, 0, 0, 0, 0);
-                func_8006658C(sp->unk_20 + sp->unk_C0 * 4, prim);
+                AddPrim(sp->unk_20 + sp->unk_C0 * 4, prim);
                 prim += 0xC;
                 code += 0xC;
             }
@@ -27578,7 +27549,7 @@ void func_800C55F4(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
         }
         c += 0xC;
     }
-    func_80064A40();
+    PopMatrix();
     *(u32 *)(*(u8 **)g + 0x8D0) = (u32)prim;
 }
 
@@ -29079,20 +29050,20 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
     UnkDungeonFace *f;
     POLY_GT4 *q;
 
-    func_800649A0();
+    PushMatrix();
     sp->unk_30 = s->unk_1C;
     sp->unk_34 = s->unk_1E;
     sp->unk_38 = s->unk_20;
     sp->unk_40 = ((s16 *)v)[1];
     sp->unk_44 = ((s16 *)v)[3];
     sp->unk_48 = ((s16 *)v)[5];
-    func_80064AE0((MATRIX *)m);
+    ReadRotMatrix((MATRIX *)m);
     sp->unk_50.m[0][0] = sp->unk_50.m[1][1] = sp->unk_50.m[2][2] = 0x1000;
     sp->unk_50.m[0][1] = sp->unk_50.m[0][2] = sp->unk_50.m[1][0] = sp->unk_50.m[1][2] =
         sp->unk_50.m[2][0] = sp->unk_50.m[2][1] = 0;
-    func_80065AB0(s->unk_16, (MATRIX *)0x1F800050);
-    func_80065DF0(s->unk_1A, (MATRIX *)0x1F800050);
-    func_80065C50(s->unk_18, (MATRIX *)0x1F800050);
+    RotMatrixX(s->unk_16, (MATRIX *)0x1F800050);
+    RotMatrixZ(s->unk_1A, (MATRIX *)0x1F800050);
+    RotMatrixY(s->unk_18, (MATRIX *)0x1F800050);
     if (s->unk_14 & 1)
     {
         sp->unk_30 = -sp->unk_30;
@@ -29101,12 +29072,12 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
     {
         sp->unk_34 = -sp->unk_34;
     }
-    func_80064BC0((MATRIX *)0x1F800050, (VECTOR *)0x1F800030);
-    func_80064B90((MATRIX *)0x1F800050, (VECTOR *)0x1F800040);
-    func_80064840((MATRIX *)0x1F800050, (MATRIX *)p, (MATRIX *)0x1F8000D0);
-    func_80064840((MATRIX *)m, (MATRIX *)0x1F8000D0, (MATRIX *)0x1F800050);
-    func_80064D80((MATRIX *)0x1F800050);
-    func_80064CF0((MATRIX *)0x1F800050);
+    ScaleMatrix((MATRIX *)0x1F800050, (VECTOR *)0x1F800030);
+    TransMatrix((MATRIX *)0x1F800050, (VECTOR *)0x1F800040);
+    CompMatrix((MATRIX *)0x1F800050, (MATRIX *)p, (MATRIX *)0x1F8000D0);
+    CompMatrix((MATRIX *)m, (MATRIX *)0x1F8000D0, (MATRIX *)0x1F800050);
+    SetTransMatrix((MATRIX *)0x1F800050);
+    SetRotMatrix((MATRIX *)0x1F800050);
     sp->unk_20 = (u32)(D_80083160.unk_00 + 0xB0);
     q = (POLY_GT4 *)*(u32 *)(D_80083160.unk_00 + 0x8D0);
     s->unk_14 |= 0x8000;
@@ -29126,8 +29097,8 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
         sp->unk_70[1].vz = tbl[f->unk_02].vz;
         sp->unk_70[2].vz = tbl[f->unk_04].vz;
         sp->unk_70[3].vz = tbl[f->unk_06].vz;
-        sp->unk_C0 = func_80065590(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
-                                   &q->x0, &q->x1, &q->x2, &q->x3, &sp->unk_90, &sp->unk_94);
+        sp->unk_C0 = RotAverage4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                                 &q->x0, &q->x1, &q->x2, &q->x3, &sp->unk_90, &sp->unk_94);
         switch (s->unk_14 & 3)
         {
         case 0:
@@ -29151,7 +29122,7 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
             sxy2 = *(s32 *)&q->x1;
             break;
         }
-        sp->unk_114 = func_80065480(sxy0, sxy1, sxy2);
+        sp->unk_114 = NormalClip(sxy0, sxy1, sxy2);
         if (sp->unk_114 > 0)
         {
             sp->unk_C0 = sp->unk_C0 - depth;
@@ -29173,7 +29144,7 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
                 }
                 *(u16 *)&q->u2 = f->unk_1A;
                 *(u16 *)&q->u3 = f->unk_1C;
-                func_8006671C(q);
+                SetPolyGT4(q);
                 if (s->unk_14 & 8)
                 {
                     if (s->unk_14 & 4)
@@ -29181,7 +29152,7 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
                         q->code |= 2;
                     }
                 }
-                func_8006658C((void *)(sp->unk_20 + sp->unk_C0 * 4), q);
+                AddPrim((void *)(sp->unk_20 + sp->unk_C0 * 4), q);
                 q++;
                 s->unk_14 &= 0x7FFF;
             }
@@ -29192,7 +29163,7 @@ void func_800C9088(u8 *p, UnkVec *v, UnkSlot *s, s16 depth)
         }
         f++;
     }
-    func_80064A40();
+    PopMatrix();
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
 }
 
@@ -29210,7 +29181,7 @@ s32 func_800C95C0(u8 *p, UnkVec *v, UnkSlot *s)
         sp->unk_02 = *(u16 *)((u8 *)v + 0x6);
         sp->unk_04 = *(u16 *)((u8 *)v + 0xA);
         sp->unk_C0 =
-            func_80065420((SVECTOR *)&sp->unk_00, &sp->unk_B8, &sp->unk_90, &sp->unk_94) -
+            RotTransPers((SVECTOR *)&sp->unk_00, &sp->unk_B8, &sp->unk_90, &sp->unk_94) -
             s->unk_06;
         func_800C96E8(p, sp);
         n = *(UnkNode **)(p - 0x8);
@@ -29321,8 +29292,8 @@ void func_800C96E8(u8 *p, void *sp)
             r.y = t;
             r.w = *(u16 *)(p + 0x0);
             r.h = *(u16 *)(p + 0x2);
-            func_80066890(q, &r, bx + *(s16 *)(p + 0x4), r.y + *(s16 *)(p + 0x6));
-            func_8006658C(D_80083160.unk_00 + (*(s32 *)((u8 *)sp + 0xC0) * 4 + 0xB0), q);
+            SetDrawMove(q, &r, bx + *(s16 *)(p + 0x4), r.y + *(s16 *)(p + 0x6));
+            AddPrim(D_80083160.unk_00 + (*(s32 *)((u8 *)sp + 0xC0) * 4 + 0xB0), q);
             q += 0x18;
         }
     }
@@ -29943,15 +29914,15 @@ void func_800CAFDC(UnkNode *a, s16 b, s32 col)
             func_8004491C(n, (u32)D_80045340);
             m = n->unk_08;
             *(s16 *)((u8 *)m + 0x2) =
-                *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0x3F) - 0x20;
+                *(u16 *)((u8 *)a->unk_08 + 0x2) + (rand() & 0x3F) - 0x20;
             *(s16 *)((u8 *)m + 0x6) =
-                *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0x3F) - 0x20;
+                *(u16 *)((u8 *)a->unk_08 + 0x6) + (rand() & 0x3F) - 0x20;
             *(s16 *)((u8 *)m + 0xA) =
-                *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x3F) - 0x20;
-            t = func_80069EF8();
+                *(u16 *)((u8 *)a->unk_08 + 0xA) + (rand() & 0x3F) - 0x20;
+            t = rand();
             *(s32 *)((u8 *)m + 0xC) = func_80064584(t) << 5;
             *(s32 *)((u8 *)m + 0x10) = func_800644B8(t) << 5;
-            *(s16 *)((u8 *)m + 0x16) = -(func_80069EF8() & 7) - 8;
+            *(s16 *)((u8 *)m + 0x16) = -(rand() & 7) - 8;
             r = (u8 *)n->unk_0C;
             *(s16 *)(r + 0x1E) = 0x1000;
             *(s16 *)(r + 0x1C) = 0x1000;
@@ -29960,7 +29931,7 @@ void func_800CAFDC(UnkNode *a, s16 b, s32 col)
             *(s16 *)(r + 0x6) = 8;
             q = (u8 *)n + 0x20;
             *(s16 *)(q + 0xB0) = b;
-            *(s16 *)(q + 0x96) = (func_80069EF8() & 0xFF) | 0x80;
+            *(s16 *)(q + 0x96) = (rand() & 0xFF) | 0x80;
         }
     }
 }
@@ -31184,7 +31155,7 @@ s32 func_800CD004(u8 *p)
             *(s16 *)(r + 0x1E) = 0x1000;
             *(s16 *)(r + 0x1C) = 0x1000;
             *(u32 *)(r + 0xC) = 0x808080;
-            *(u8 **)(r + 0x8) = (func_80069EF8() & 3) ? D_800DFD0C : D_800DFD30;
+            *(u8 **)(r + 0x8) = (rand() & 3) ? D_800DFD0C : D_800DFD30;
             *(s16 *)(r + 0x10) = 0x20;
             v = (u8 *)n + 0x20;
             *(s16 *)(v + 0xA) = *(u16 *)(p + 0x88) - D_800DDC40[p[0x13]];
@@ -32546,7 +32517,7 @@ void func_800D1824(u8 *p)
                     *(u16 *)(q + 0x1C) = *(u16 *)(f + 0x12);
                     *(u16 *)(q + 0x24) = *(u16 *)(f + 0x14);
                     q[3] = 9;
-                    func_8006658C((u8 *)(sp->unk_20 + sp->unk_C0 * 4), q);
+                    AddPrim((u8 *)(sp->unk_20 + sp->unk_C0 * 4), q);
                     q += 0x28;
                 }
             }
@@ -34186,9 +34157,9 @@ void func_800D4DE8(u8 *p, UnkVec *b, u8 *c)
                 *(s16 *)(v + 0x20) = 0xA;
                 n->unk_10 = (u32)func_800D4CB0;
                 m = n->unk_08;
-                *(s32 *)((u8 *)m + 0xC) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
-                *(s32 *)((u8 *)m + 0x10) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
-                *(s32 *)((u8 *)m + 0x14) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
+                *(s32 *)((u8 *)m + 0xC) = ((rand() & 0x7FFF) - 0x4000) << 7;
+                *(s32 *)((u8 *)m + 0x10) = ((rand() & 0x7FFF) - 0x4000) << 7;
+                *(s32 *)((u8 *)m + 0x14) = ((rand() & 0x7FFF) - 0x4000) << 7;
                 *(s16 *)((u8 *)m + 0xA) -= D_800DDC40[(*(u8 **)p)[0x13]] >> 1;
             }
         }
@@ -34267,10 +34238,10 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D50FC);
    115 words, 0 differing.
 
    THE JITTER'S CONSTANT MUST BE PARENTHESISED ONTO THE RANDOM OPERAND.
-   `*(u16 *)(m + 2) + (func_80069EF8() & 0x3F) - 0x1F` is 115 words at 4
+   `*(u16 *)(m + 2) + (rand() & 0x3F) - 0x1F` is 115 words at 4
    differing: the `addu` comes out before the `addiu -0x1F` because fold
    moves the additive constant onto the memory operand. Written
-   `+ ((func_80069EF8() & 0x3F) - 0x1F)` the swap goes the other way and the
+   `+ ((rand() & 0x3F) - 0x1F)` the swap goes the other way and the
    order is the target's -- docs/matching-levers.md :19632, "write the
    constant on the operand the listing does NOT have it on".
    `(x - 0x1F) + rand` and `x - 0x1F + rand` are 118 words / 115 differing,
@@ -34311,10 +34282,10 @@ void func_800D5294(u8 *p, UnkVec *b, u8 *c)
                 *(s16 *)(r + 0x20) = 0x20;
                 n->unk_10 = (u32)func_800D50FC;
                 m = n->unk_08;
-                *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) + ((func_80069EF8() & 0x3F) - 0x1F);
-                *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) + ((func_80069EF8() & 0x3F) - 0x1F);
-                *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)m + 0xA) - (func_80069EF8() & 0x1F);
-                *(s32 *)((u8 *)m + 0x14) = -((u16)func_80069EF8() + 0x10000) << 1;
+                *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) + ((rand() & 0x3F) - 0x1F);
+                *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) + ((rand() & 0x3F) - 0x1F);
+                *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)m + 0xA) - (rand() & 0x1F);
+                *(s32 *)((u8 *)m + 0x14) = -((u16)rand() + 0x10000) << 1;
             }
         }
     }
@@ -34617,7 +34588,7 @@ s32 func_800D5AC0(u8 *p, UnkVec *v)
         sp->unk_08 = *(u16 *)((u8 *)v + 0xA);
         t = (TILE_1 *)sp->unk_1C;
         sp->unk_1C = (u8 *)(t + 1);
-        sp->unk_100 = func_80065420((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
+        sp->unk_100 = RotTransPers((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
         if ((u32)sp->unk_100 < 0x1E0)
         {
             *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
@@ -34627,7 +34598,7 @@ s32 func_800D5AC0(u8 *p, UnkVec *v)
             addPrim(sp->unk_24 + sp->unk_100 * 4, t);
             dm = (DR_MODE *)sp->unk_1C;
             sp->unk_1C = (u8 *)(dm + 1);
-            func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0, 0), 0);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
             addPrim(sp->unk_24 + sp->unk_100 * 4, dm);
         }
         n = *(UnkNode **)(p - 0x8);
@@ -34705,9 +34676,9 @@ void func_800D5DCC(UnkNode *a, s16 b, u8 *c)
         *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)((u8 *)n->unk_08 + 0x2) + (t[0] * 16);
         *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)((u8 *)n->unk_08 + 0x6) + (t[1] * 16);
         *(s16 *)((u8 *)n->unk_0C + 0x6) = 6;
-        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 6;
-        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 6;
-        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 5;
+        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((rand() & 0x7FFF) - 0x4000) << 6;
+        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((rand() & 0x7FFF) - 0x4000) << 6;
+        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((rand() & 0x7FFF) - 0x4000) << 5;
         *(s32 *)((u8 *)n->unk_08 + 0xC) += t[0] * 0x160000;
         *(s32 *)((u8 *)n->unk_08 + 0x10) += t[1] * 0x160000;
         p = (u8 *)n + 0x20;
@@ -34871,7 +34842,7 @@ s32 func_800D68F4(u8 *p, UnkVec *v)
         sp->unk_08 = *(u16 *)((u8 *)v + 0xA);
         t = (TILE_1 *)sp->unk_1C;
         sp->unk_1C = (u8 *)(t + 1);
-        sp->unk_100 = func_80065420((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
+        sp->unk_100 = RotTransPers((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
         if ((u32)sp->unk_100 < 0x1E0)
         {
             *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
@@ -34881,7 +34852,7 @@ s32 func_800D68F4(u8 *p, UnkVec *v)
             addPrim(sp->unk_24 + sp->unk_100 * 4, t);
             dm = (DR_MODE *)sp->unk_1C;
             sp->unk_1C = (u8 *)(dm + 1);
-            func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0, 0), 0);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
             addPrim(sp->unk_24 + sp->unk_100 * 4, dm);
         }
         n = *(UnkNode **)(p - 0x8);
@@ -35356,8 +35327,8 @@ void func_800D7D30(u8 *p, UnkVec *b, u8 *c)
             *(u16 *)(p + 0xC) + ((func_800644B8(*(s16 *)(p + 0x18)) * *(s16 *)(p + 0x1E)) >> 12);
         *(s16 *)((u8 *)b + 0x6) =
             *(u16 *)(p + 0xE) + ((func_80064584(*(s16 *)(p + 0x18)) * *(s16 *)(p + 0x1E)) >> 12);
-        b->unk_14 += ((func_80069EF8() & 0xFF) << 9) - 0x20000;
-        *(s16 *)(p + 0x18) = *(u16 *)(p + 0x18) + 0x80 + (func_80069EF8() & 0x3F);
+        b->unk_14 += ((rand() & 0xFF) << 9) - 0x20000;
+        *(s16 *)(p + 0x18) = *(u16 *)(p + 0x18) + 0x80 + (rand() & 0x3F);
         *(s32 *)(p + 0x28) += *(s32 *)(p + 0x34);
         if (*(s32 *)(p + 0x1C) <= 0)
         {
@@ -35566,7 +35537,7 @@ u8 *func_800D8590(u8 *p)
                 }
             }
         }
-        func_80069EC8(n + 0xAC, 0x24);
+        bzero(n + 0xAC, 0x24);
         a = n + 0x20;
         *(u32 *)(a + 0xAC) = *(u32 *)(n + 0x10);
         *(s32 *)(n + 0x10) = (s32)func_800D8728 & 0x7FFFFFFF;
@@ -35748,7 +35719,7 @@ void func_800D8728(u8 *p, UnkVec *b, u8 *c)
         if (*(s16 *)(p + 0xA0) < -7)
         {
             *(u16 *)(p + 0x98) &= 0xFFFE;
-            *(s16 *)(p + 0xA0) = (func_80069EF8() & 0x3F) | 0x40;
+            *(s16 *)(p + 0xA0) = (rand() & 0x3F) | 0x40;
         }
     }
     else
@@ -36687,7 +36658,7 @@ void func_800DA840(UnkDungeonName8 *src, s16 a)
                 }
                 *(s16 *)(q + 0xA) = t;
                 *(UnkDungeonName8 *)(q + 0x20) = *src;
-                *(s16 *)(q + 0x6) = func_8006649C(a << 4, 0x1F8);
+                *(s16 *)(q + 0x6) = GetClut(a << 4, 0x1F8);
                 n->unk_10 = (u32)func_800DAB50;
                 func_8004491C(n, (u32)func_800DA93C);
             }
@@ -36711,7 +36682,7 @@ void func_800DA840(UnkDungeonName8 *src, s16 a)
    133 words.
 
    AND THE u GROUP MUST BE STORED BEFORE THE v IS COMPUTED. `w` is
-   address-taken -- it is the out-parameter func_80065420 gets twice -- so the
+   address-taken -- it is the out-parameter RotTransPers gets twice -- so the
    target RELOADS it with `lw 0x10($sp)` for the `/ 4`, which only happens
    because the four `sb`s in between wipe cse's memory table. With both the
    `% 4` and the `/ 4` computed before any store (a single `setUV4`), cse keeps
@@ -36732,17 +36703,17 @@ s32 func_800DA93C(u8 *p)
     {
         t = (POLY_FT4 *)*(u32 *)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(t + 1);
-        z = func_80065420((SVECTOR *)(p + 0x28), (s32 *)&t->x0, &w, &w);
-        z += func_80065420((SVECTOR *)(p + 0x30), (s32 *)&t->x1, &w, &w);
-        z += func_80065420((SVECTOR *)(p + 0x38), (s32 *)&t->x2, &w, &w);
-        z += func_80065420((SVECTOR *)(p + 0x40), (s32 *)&t->x3, &w, &w);
+        z = RotTransPers((SVECTOR *)(p + 0x28), (s32 *)&t->x0, &w, &w);
+        z += RotTransPers((SVECTOR *)(p + 0x30), (s32 *)&t->x1, &w, &w);
+        z += RotTransPers((SVECTOR *)(p + 0x38), (s32 *)&t->x2, &w, &w);
+        z += RotTransPers((SVECTOR *)(p + 0x40), (s32 *)&t->x3, &w, &w);
         z = (z >> 2) - 8;
         if ((u32)z < 0x1E0)
         {
             w = 0xFF - *(s16 *)(p + 0x2);
             *(u32 *)&t->r0 = *(u32 *)(p + 0x10);
-            func_800666F4(t);
-            func_80066640((u8 *)t, 1);
+            SetPolyFT4(t);
+            SetSemiTrans((u8 *)t, 1);
             t->tpage = *(u16 *)(p + 0x4);
             t->clut = *(u16 *)(p + 0x6);
             w = (s16)(*(s16 *)(p + 0x2) % 8);
@@ -36813,14 +36784,14 @@ void func_800DAB50(u8 *p)
     {
     case 0:
         *(s32 *)(p + 0x10) = 0;
-        *(s16 *)(p + 4) = func_80066460(0, 1, 0x2C0, 0x100);
+        *(s16 *)(p + 4) = GetTPage(0, 1, 0x2C0, 0x100);
         *(s32 *)(p + 0xC) = 0x242424;
         *(u16 *)p += 1;
     case 1:
         *(s32 *)(p + 0x10) += *(s32 *)(p + 0xC);
         if (p[0x13] != 0)
         {
-            *(s16 *)(p + 4) = func_80066460(0, 3, 0x2C0, 0x100);
+            *(s16 *)(p + 4) = GetTPage(0, 3, 0x2C0, 0x100);
             *(s32 *)(p + 0x10) = 0xFFFFFF;
             *(s32 *)(p + 0xC) = 0x101010;
             *(u16 *)p += 1;
@@ -36830,7 +36801,7 @@ void func_800DAB50(u8 *p)
         *(s32 *)(p + 0x10) -= *(s32 *)(p + 0xC);
         if (p[0x10] == 0x7F)
         {
-            *(s16 *)(p + 4) = func_80066460(0, 3, 0x2C0, 0x100);
+            *(s16 *)(p + 4) = GetTPage(0, 3, 0x2C0, 0x100);
             *(s32 *)(p + 0x10) = 0xA0A0A0;
             *(s32 *)(p + 0xC) = 0x101010;
             *(u16 *)p += 1;
@@ -36935,16 +36906,16 @@ void func_800DAEF4(u8 *p, UnkVec *v, u8 *c)
             r = (u8 *)n->unk_0C;
             w = (u8 *)n + 0x20;
             *(s16 *)((u8 *)n->unk_08 + 0x2) =
-                *(u16 *)((u8 *)v + 0x2) + ((func_80069EF8() % 64 + func_80069EF8() % 64 - 0x40) / 2);
+                *(u16 *)((u8 *)v + 0x2) + ((rand() % 64 + rand() % 64 - 0x40) / 2);
             *(s16 *)((u8 *)n->unk_08 + 0x6) =
-                *(u16 *)((u8 *)v + 0x6) + ((func_80069EF8() % 64 + func_80069EF8() % 64 - 0x40) / 2);
+                *(u16 *)((u8 *)v + 0x6) + ((rand() % 64 + rand() % 64 - 0x40) / 2);
             *(s16 *)((u8 *)n->unk_08 + 0xA) = *(u16 *)(p + 0x10);
             *(s16 *)(w + 0x10) = *(u16 *)((u8 *)v + 0xA);
-            n->unk_08->unk_14 = (v->unk_08 - (*(s16 *)(p + 0x10) << 16)) / ((func_80069EF8() & 3) + 4);
+            n->unk_08->unk_14 = (v->unk_08 - (*(s16 *)(p + 0x10) << 16)) / ((rand() & 3) + 4);
             *(s16 *)(r + 0x1C) = 0x1000;
             *(s16 *)(r + 0x1E) = 0x200;
             *(u16 *)(r + 0x14) |= 0xC;
-            if (func_80069EF8() & 1)
+            if (rand() & 1)
             {
                 *(u16 *)(r + 0x14) |= 0x1;
             }
@@ -36974,7 +36945,7 @@ void func_800DAEF4(u8 *p, UnkVec *v, u8 *c)
    tail adds the remaining delta once the state has left 0.
 
    EACH RANDOM DELTA IS ITS OWN STATEMENT. Written inline,
-   `field - ((func_80069EF8() & 0xFF) + 0x300)`, fold reassociates it into
+   `field - ((rand() & 0xFF) + 0x300)`, fold reassociates it into
    `(field - 0x300) - draw` and the constant is folded into the field's own
    `addiu` -- 6 differing, three words per arm in the wrong order. With the
    delta computed first the target's `andi` / `lhu` / `addiu 0x300` / `subu`
@@ -36983,7 +36954,7 @@ void func_800DAEF4(u8 *p, UnkVec *v, u8 *c)
 
    BOTH `*(s16 *)(p + 0x48) <= 0` TESTS ARE THE SAME SOURCE. In case 2 no
    call intervenes, so cse forwards the stored value and the test is a bare
-   `sll 16` on the register; in case 0 the two func_80069EF8 calls kill the
+   `sll 16` on the register; in case 0 the two rand calls kill the
    equivalence and the field is reloaded with `lh`. 94 words, 0 differing. */
 void func_800DB164(u8 *p, UnkVec *v, UnkSlot *r)
 {
@@ -36993,9 +36964,9 @@ void func_800DB164(u8 *p, UnkVec *v, UnkSlot *r)
     switch (*(s16 *)(p + 0x4C))
     {
     case 0:
-        d = (func_80069EF8() & 0xFF) + 0x300;
+        d = (rand() & 0xFF) + 0x300;
         *(s16 *)((u8 *)r + 0x1C) = *(u16 *)((u8 *)r + 0x1C) - d;
-        d = (func_80069EF8() & 0xFF) + 0x200;
+        d = (rand() & 0xFF) + 0x200;
         *(s16 *)((u8 *)r + 0x1E) = *(u16 *)((u8 *)r + 0x1E) + d;
         if (*(s16 *)(p + 0x48) <= 0)
         {
@@ -37004,7 +36975,7 @@ void func_800DB164(u8 *p, UnkVec *v, UnkSlot *r)
         break;
     case 1:
         *(s32 *)((u8 *)r + 0xC) += 0xFFF3F3F4;
-        v->unk_14 -= (func_80069EF8() & 0xFF) << 10;
+        v->unk_14 -= (rand() & 0xFF) << 10;
         if (*(s16 *)((u8 *)v + 0xA) < *(s16 *)(p + 0x10))
         {
             *(s16 *)(p + 0x48) = 4;
@@ -37085,7 +37056,7 @@ void func_800DB2DC(u8 *a, u8 *b, u8 *c, s16 d)
    calls func_800478B8 and retires the node when the +0x6 countdown reaches
    zero.
 
-   The jitter is `func_80069EF8() % 11 - 5`: the magic 0x2E8BA2E9 with
+   The jitter is `rand() % 11 - 5`: the magic 0x2E8BA2E9 with
    `mfhi`/`sra 1` and a `sra 31` sign correction is tools/decomp/magic.py's
    divisor 11, and the `lw 0x0($s2)` before each of the three reads is the
    source record re-dereferenced -- the call between them invalidates it.
@@ -37096,9 +37067,9 @@ void func_800DB2DC(u8 *a, u8 *b, u8 *c, s16 d)
    5 differing. 126 words, 0 differing. */
 void func_800DB420(u8 *p, UnkVec *m, u8 *c)
 {
-    *(s16 *)((u8 *)m + 0x2) = *(u16 *)(*(u8 **)p + 0x2) + func_80069EF8() % 11 - 5;
-    *(s16 *)((u8 *)m + 0x6) = *(u16 *)(*(u8 **)p + 0x6) + func_80069EF8() % 11 - 5;
-    *(s16 *)((u8 *)m + 0xA) = *(u16 *)(*(u8 **)p + 0xA) + func_80069EF8() % 11 - 5;
+    *(s16 *)((u8 *)m + 0x2) = *(u16 *)(*(u8 **)p + 0x2) + rand() % 11 - 5;
+    *(s16 *)((u8 *)m + 0x6) = *(u16 *)(*(u8 **)p + 0x6) + rand() % 11 - 5;
+    *(s16 *)((u8 *)m + 0xA) = *(u16 *)(*(u8 **)p + 0xA) + rand() % 11 - 5;
     switch (*(s16 *)(p + 0x4))
     {
     case 0:
@@ -37144,7 +37115,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DB660);
    *(p + 4). 100 words, 0 differing.
 
    THE IDENTITY FILL'S INNER COUNTER IS `flag` ITSELF -- the same local whose
-   address is handed to func_80065450 later. That address-take makes it
+   address is handed to RotTrans later. That address-take makes it
    TREE_ADDRESSABLE, so it lives in its stack slot and the inner loop reloads
    it, recomputing `j * 2 + row` every iteration. With a separate `s32 j` the
    counter stays in a register, loop.c reduces the subscript to a pointer walk
@@ -37161,14 +37132,14 @@ void func_800DBA90(u8 *p)
     s32 flag;
     s32 i;
 
-    func_800649A0();
+    PushMatrix();
     m.t[0] = *(s16 *)(p + 0x10);
     m.t[1] = *(s16 *)(p + 0x12);
     m.t[2] = *(s16 *)(p + 0x14);
-    func_80064D80(&m);
+    SetTransMatrix(&m);
     if (*(u16 *)(p + 0x1A) == 0)
     {
-        func_80065820((SVECTOR *)(p + 0x8), &m);
+        RotMatrix((SVECTOR *)(p + 0x8), &m);
     }
     else if (*(u16 *)(p + 0x1A) != 0x8000)
     {
@@ -37181,25 +37152,25 @@ void func_800DBA90(u8 *p)
         }
         if (*(u16 *)(p + 0x1A) == 1)
         {
-            func_80065AB0(*(s16 *)(p + 0x8), &m);
-            func_80065C50(*(s16 *)(p + 0xA), &m);
-            func_80065DF0(*(s16 *)(p + 0xC), &m);
+            RotMatrixX(*(s16 *)(p + 0x8), &m);
+            RotMatrixY(*(s16 *)(p + 0xA), &m);
+            RotMatrixZ(*(s16 *)(p + 0xC), &m);
         }
     }
-    func_80064CF0(&m);
+    SetRotMatrix(&m);
     for (i = 0; i < *(s16 *)(p + 0x18); i++)
     {
-        func_80065450((SVECTOR *)(*(u8 **)p + i * 8), &v, &flag);
+        RotTrans((SVECTOR *)(*(u8 **)p + i * 8), &v, &flag);
         *(s16 *)(*(u8 **)(p + 0x4) + i * 8) = v.vx;
         *(s16 *)(*(u8 **)(p + 0x4) + i * 8 + 0x2) = v.vy;
         *(s16 *)(*(u8 **)(p + 0x4) + i * 8 + 0x4) = v.vz;
     }
-    func_80064A40();
+    PopMatrix();
 }
 
 /* Draw one digit strip: format two numbers into stack buffers through
    func_8004E57C, then walk the first string and blit each character with
-   func_800673A0, the glyph's x chosen from the engine's per-character
+   MoveImage, the glyph's x chosen from the engine's per-character
    attribute table and stepping left by 4 each time.
 
    SIX PARAMETERS, AND THE LAST TWO ARE BOTH s16. The sixth arrives on the
@@ -37237,7 +37208,7 @@ void func_800DBC20(s32 a, s32 b, u16 c, s16 x, s16 y, s16 n)
             r.v[1] = 0x1C0;
             r.v[2] = 0x4;
             r.v[3] = 0x8;
-            func_800673A0(r.v, x, y);
+            MoveImage(r.v, x, y);
             s++;
             x -= 4;
         } while (*s != 0);
@@ -37271,7 +37242,7 @@ void func_800DBD5C(s32 a, s32 b, u16 c, s16 x, s16 y, s16 n)
             r.v[1] = 0x1B0;
             r.v[2] = 0x4;
             r.v[3] = 0x10;
-            func_800673A0(r.v, x, y);
+            MoveImage(r.v, x, y);
             s++;
             x -= 4;
         } while (*s != 0);
@@ -37279,20 +37250,20 @@ void func_800DBD5C(s32 a, s32 b, u16 c, s16 x, s16 y, s16 n)
 }
 
 /* Hand one of the overlay's two stored rectangles to the engine. The copy
-   to a local is in the source, not an artefact: func_800673A0 takes a
+   to a local is in the source, not an artefact: MoveImage takes a
    writable `s16 *`. */
 void func_800DBE98(void)
 {
     UnkDungeonRect r = D_80089490;
 
-    func_800673A0(r.v, 0x1C2, 0x19C);
+    MoveImage(r.v, 0x1C2, 0x19C);
 }
 
 void func_800DBEE8(void)
 {
     UnkDungeonRect r = D_80089498;
 
-    func_800673A0(r.v, 0x1C2, 0x19C);
+    MoveImage(r.v, 0x1C2, 0x19C);
 }
 
 /* Drop bit 0 of a flag word in the object D_800E5910 points at.
@@ -37459,7 +37430,7 @@ void func_800DC1B8(void *arg0)
    (3) `g = *(u8 **)(p + 0x40);` MUST BE ITS OWN STATEMENT, and it is the
    third callee-saved register.  Written inline as the store's destination
    -- `*(s16 *)(*(u8 **)(p + 0x40) + 0x88) = ...` -- the `lw` lands AFTER
-   func_80069E98 and needs no saved register, so the function saves two
+   strlen and needs no saved register, so the function saves two
    callee-saved registers instead of three and comes out 237 words.  Bound
    to a local before the call it lives across it, takes a third $s register
    and the function is 239.
@@ -37516,7 +37487,7 @@ void func_800DC1F8(u8 *p, u8 *q)
                 func_800DBEE8();
                 g = *(u8 **)(p + 0x40);
                 *(s16 *)(g + 0x88) =
-                    (3 - ((u32)func_80069E98(*(u8 **)(p + 0x2C)) >> 1)) * 6 + 0xA4;
+                    (3 - ((u32)strlen(*(u8 **)(p + 0x2C)) >> 1)) * 6 + 0xA4;
                 *(s32 *)(*(u8 **)(p + 0x3C) + 0x80) = func_8004DC14(*(u8 **)(p + 0x2C), 6);
                 if (*(s32 *)(*(u8 **)(p + 0x3C) + 0x80) == 0)
                 {

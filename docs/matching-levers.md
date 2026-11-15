@@ -788,11 +788,11 @@ then read only the section you need.
 - AN `asm` THAT *WRITES* A VARIABLE KILLS cse's SUBREG EQUIVALENCE  `:26649`
 - A LINKER-SCRIPT SYMBOL RELOCATES WORDS THE ORIGINAL LEFT AS CONSTANTS  `:26668`
 - FIXED: `build/dungeon.bin` NOW LINKS `common_syms.txt` -- BUT CHECK THE RULE BEFORE TRUSTING A PSYQ NAME  `:26692`
-- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:26725`
-- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:26748`
-- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:26760`
-- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:26784`
-- A PROVED-UNREACHABLE RESIDUE: THE `|= 0x80000000` GATE'S `$v0`/`$v1` SWAP  `:26799`
+- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:26739`
+- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:26762`
+- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:26774`
+- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:26798`
+- A PROVED-UNREACHABLE RESIDUE: THE `|= 0x80000000` GATE'S `$v0`/`$v1` SWAP  `:26813`
 
 <!-- END INDEX -->
 
@@ -26712,6 +26712,20 @@ rebuild byte-identical with the change, and a probe that calls `RotNclip4`
 links cleanly against the new script set where it previously reported
 `undefined reference`. The omission was incidental -- dungeon.bin work had not
 started when the rule was written.
+
+`ovl_dungeon.c` now uses the LIBRARY SPELLINGS throughout -- 36 names over 254
+call sites, `rand()` alone 69 times -- matching `ovl_town.c`, which has always
+done so. The unit's local declarations of those functions were deleted; the
+`psyq/include` prototypes that `common.h` already pulls in are the real ones.
+All 776 functions still measure 0 differing and the container is
+byte-identical.
+
+**`seqcheck` was taught the aliasing in the same change**, because without it
+every such call reported `seq=FAIL` with `jal func_80065610` against
+`jal RotNclip4` -- the same address under two names -- and the check would
+have stopped being a gate across 36 functions. It now canonicalises a PSY-Q
+name to its `func_` spelling before comparing. The `jtbl_*`-against-`.rodata`
+class still reports, as it should.
 
 **The entry stays because the failure MODE is the lesson, not the one rule.**
 `SLUS` still links without `common_syms`, the four rules still differ in which
