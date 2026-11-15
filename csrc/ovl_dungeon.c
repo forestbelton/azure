@@ -591,6 +591,16 @@ void func_800A6194();
 s32 func_800A624C();
 void func_80096384();
 void func_800D7FB8();
+/* The spark step func_800D7FB8 parks at each node's +0x10. It owns a 4-mod-8
+   jump table, so it stays INCLUDE_ASM until the unit is carved; only its
+   address is taken here. */
+void func_800D81D4();
+extern u32 D_80081488;
+extern u8 D_8006CCF8[];
+extern s16 D_800DD264[];
+extern s16 D_800120A2;
+extern u8 D_800DCFB8[];
+extern u8 D_800DD018[];
 /* The 12-byte, alignment-1 object func_800A34BC copies out of the
    D_8007359C record into the actor's +0x34: an s16[4] or any 2-aligned type
    would move it with aligned `lw`, and the target's copy is the `lwl`/`lwr`
@@ -1700,7 +1710,74 @@ void func_8008CCB0(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008CD4C);
+/* State 0x18: unless the fifth argument is -2, look at the tile one step
+   ahead in the actor's facing, and if something is standing there and
+   func_8009ADB8 agrees, park it in +0x124, step the view onto that tile and
+   hand over to func_80094ED4. Either way the slot's +0x2C table is re-sent
+   to func_80048A44. 136 words, 0 differing.
+
+   FIVE PARAMETERS; the fifth arrives on the stack at 0x50($sp) and is a
+   PROMOTED s16 (`lw` then `sll 16`/`sra 16`). As `s32` with a `(s16)` cast at
+   the test it is 134 words.
+
+   THE FIRST STORE MUST BE AN ARRAY REFERENCE, NOT A CAST. `((u8 **)c)[0xB]`
+   sets MEM_IN_STRUCT_P (expr.c's INDIRECT_REF arm takes a top-level
+   PLUS_EXPR; a cast puts a NOP_EXPR on top and loses it), so the store is
+   provably clear of the incoming argument slot and the fifth parameter's
+   `lw` moves down to its use, where it is scheduled after the store.
+   Written `*(u8 **)(c + 0x2C)` the load stays in the prologue, sched2 ranks
+   it above the D_800DD018 `lui`, and it is 9 differing. The sibling
+   `*(s32 *)(p + 0x8C) = 0;` is inert either way (measured both).
+
+   `dx` AND `x` ARE INTERLEAVED WITH `dy` AND `y`. With both bases computed
+   first, x's live range starts five insns later, its global-alloc priority
+   beats the parameter `c`'s and the two swap $s2 and $s3 -- 36 differing. */
+void func_8008CD4C(u8 *p, UnkVec *b, u8 *c, u8 *d, s16 e)
+{
+    u8 *q;
+    u8 *g;
+    s16 *dx;
+    s16 *dy;
+    s32 k;
+    s32 x;
+    s32 y;
+
+    ((u8 **)c)[0xB] = D_800DD018;
+    p[0x9A] = 0x18;
+    p[0x9B] = 0;
+    *(s32 *)(p + 0x8C) = 0;
+    if (e != -2)
+    {
+        k = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        dx = &D_8006CCD8[k];
+        x = c[0x24] + (u16)*dx;
+        dy = &D_8006CCE8[k];
+        y = c[0x25] + (u16)*dy;
+        q = func_8009B25C(d, x, y, *(s16 *)(d + 0x88));
+        if (q != NULL)
+        {
+            if ((s16)func_8009ADB8(d, q, (s16)x, (s16)y, *(s16 *)(d + 0x88)) != 0)
+            {
+                *(u8 **)(p + 0x124) = q;
+                func_8009A3D0(c[0x24], c[0x25], 0x300);
+                c[0x24] += *(u8 *)dx;
+                c[0x25] += *(u8 *)dy;
+                func_8009A21C(c[0x24], c[0x25], 0x300);
+                *(u32 *)(d + 0x1C) |= 0x40000000;
+                g = (u8 *)&D_80083460;
+                *(s16 *)(g + 0x4) = 0x20;
+                *(u16 *)(g + 0x2) |= 0x8;
+                p[0x9B] = 0x10;
+                *(u8 **)(c + 0x2C) = D_800DCFB8;
+                *(s16 *)(p + 0x96) = 4;
+                func_8009F644(d, 8, 0, 0);
+                func_800A56E0(0x50B);
+                func_80094ED4(p, b, c, d);
+            }
+        }
+    }
+    func_80048A44(c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+}
 
 /* THE RECORD HAS TO ARRIVE AS `UnkDungeonActor *`: through a `u8 *` cast the
    +0x8C store may alias D_800E296C, so sched1 cannot lift that global's `lw`
@@ -8757,7 +8834,85 @@ INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089000);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A4B88);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A4E2C);
+/* Pick a random free tile: 256 tries at a random D_800E2970 room, then a
+   full 1..0x3E scan, then a range check on whatever the caller already had.
+   Returns the room index on the random hit and 0 otherwise. 136 words,
+   0 differing.
+
+   BOTH HITS ARE `goto`s TO BLOCKS WRITTEN AFTER THE `return 0`. The two
+   bodies are `*x = cx; *y = cy; return <n>;` and cross-jumping merges their
+   tails at .L800A5000, which lets reorg steal `addu $v0, $s3, $zero` into
+   the first loop's own `beqz` delay slot. Written as inline bodies inside
+   the loops the merge still happens but the branch cannot be inverted over
+   the `v0 = room` insn, and it is 135 words / 102 differing.
+
+   THE TWO DRAWS COME FIRST AND THE TWO BASES ARE ADDED AFTER:
+   `cx = rand % e->unk_04; cy = rand % e->unk_06; cx += e->unk_00;
+   cy += e->unk_02;`. Folded into one expression each, the `+ unk_00` fills
+   the second `jal`'s delay slot where the target has a `nop` -- 135 words,
+   one short. Two extra `rx`/`ry` locals instead are 134 words, because the
+   `%`'s HImode result then costs an `andi 0xFFFF` at the assignment.
+   `(u32)func_800A6D30() % ...` is what makes those two divides `divu`; the
+   room's `% *(s16 *)(g + 0x6)` is signed and stays `div`.
+
+   `i = 0x100;` IS ITS OWN STATEMENT AHEAD OF `g = (u8 *)D_80081468;`. As the
+   `for`'s init the preheader emits D_80081468's `lui`/`addiu` first and it
+   is 5 differing; `for (i = 0x100, g = ...; ...)` measures identically to
+   this spelling. */
+s32 func_800A4E2C(u8 *x, u8 *y)
+{
+    u8 *g;
+    s16 room;
+    s16 cx;
+    s16 cy;
+    s32 i;
+    u16 w;
+
+    i = 0x100;
+    g = (u8 *)D_80081468;
+    for (; i > 0; i--)
+    {
+        room = func_800A6D30() % *(s16 *)(g + 0x6);
+        if (D_800E2970_s[room].unk_0A != 0)
+        {
+            cx = (u32)func_800A6D30() % D_800E2970_s[room].unk_04;
+            cy = (u32)func_800A6D30() % D_800E2970_s[room].unk_06;
+            cx += D_800E2970_s[room].unk_00;
+            cy += D_800E2970_s[room].unk_02;
+            if ((s16)func_8009A350(cx - 1, cy, 0, &w) != 0 && (w & 0xF720) == 0)
+            {
+                goto found;
+            }
+        }
+    }
+    for (cy = 1; cy < 0x3F; cy++)
+    {
+        for (cx = 1; cx < 0x3F; cx++)
+        {
+            if ((s16)func_8009A350(cx - 1, cy, 0, &w) != 0 && (w & 0xF720) == 0)
+            {
+                goto found_scan;
+            }
+        }
+    }
+    if ((u32)(*x - 1) >= 0x3E || (u32)(*y - 1) >= 0x3E)
+    {
+        goto bad;
+    }
+    return 0;
+found_scan:
+    *x = cx;
+    *y = cy;
+    return 0;
+found:
+    *x = cx;
+    *y = cy;
+    return room;
+bad:
+    *x = 1;
+    *y = 1;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A504C);
 
@@ -10826,7 +10981,78 @@ void func_800A9C10(void)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A9C18);
+/* The arrival tail for a kind-(d & 3) == 2 entity: pick the cast or
+   D_80081488 for the renderable's +0x28, place the mover, measure the leash
+   into +0x88, dress the slot, face it off D_80083160's +0xC8 stamp, light
+   the node and hang the 0x110 marker, then set or clear the slot's bit 0
+   from D_8006CCF8. 136 words, 0 differing on the first compile.
+
+   func_800B22F0 (csrc/ovl_dungeon.c:12451) is the line-for-line template for
+   everything from the func_8009FB34 call to func_800BC26C; only the head,
+   the D_80083160 facing lookup and the D_8006CCF8 tail are new.
+
+   THE HEAD'S `(d & ~3)` IS A SEPARATE s16 LOCAL: the `sll 16`/`bnez` pair is
+   the HImode comparison, where the `(d & 3) == 2` test next to it needs no
+   extension because `andi 3` has already proved the range. */
+void func_800A9C18(UnkNode *n, UnkVec *m, UnkSlot *r, s16 d)
+{
+    u8 *p;
+    u8 *g;
+    s16 id;
+
+    p = (u8 *)n + 0x20;
+    id = d & ~3;
+    if ((d & 3) == 2)
+    {
+        if (id == 0)
+        {
+            r->unk_28 = func_80047D44(p[0x13]);
+        }
+        else
+        {
+            r->unk_28 = D_80081488;
+        }
+        D_800DCF4D = -1;
+    }
+    else
+    {
+        if (p[0x13] != 0x38)
+        {
+            func_80048088(p[0x13]);
+        }
+        func_8004827C(n, p[0x13]);
+    }
+    *((u8 *)r + 0x26) = func_8009FB34(*((u8 *)r + 0x24), *((u8 *)r + 0x25));
+    func_800A2B04(m, *((u8 *)r + 0x24), *((u8 *)r + 0x25));
+    *(s16 *)(p + 0x88) = func_800BCB04(*(u16 *)((u8 *)m + 0x2), *(u16 *)((u8 *)m + 0x6),
+                                       *(u16 *)((u8 *)m + 0xA) - 0x20);
+    r->unk_1E = 0x1000;
+    r->unk_1C = 0x1000;
+    *(u32 *)((u8 *)r + 0xC) = 0x2C808080;
+    r->unk_14 |= 0x8000;
+    g = (u8 *)&D_80083160;
+    func_80047784((u8 *)r,
+                  (*(u8 **)((u8 *)r + 0x2C))[((*(s16 *)(g + 0xC8) + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7],
+                  0);
+    func_80099FDC(n);
+    if ((*(u32 *)(p + 0x14) & 0x4000) == 0)
+    {
+        func_800A34BC(p);
+    }
+    func_8009A21C(*((u8 *)r + 0x24), *((u8 *)r + 0x25),
+                  (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+    p[0x71] = 0;
+    *(u32 *)(p + 0x1C) |= 0x40000000;
+    func_800BC26C(n, 0, (s32)((u8 *)r + 0x2C), (s32)(p + 0x2A));
+    if (D_8006CCF8[((*(s16 *)(g + 0xC8) + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7] != 0)
+    {
+        r->unk_14 |= 1;
+    }
+    else
+    {
+        r->unk_14 &= 0xFFFE;
+    }
+}
 
 /* A COMMON RETURN VARIABLE, not two returns. With `return 1;` as its own
    statement reorg lifts the `li 1` into the `beqz` delay slot and the
@@ -11513,7 +11739,80 @@ s32 func_800AC480(u8 *p, UnkVec *v, u8 *r, u8 *b)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AC5C8);
+/* The three-state landing glide: state 0 stamps the facing into +0x6A, state
+   1 pans +0x2A, bleeds the mover's +0x14 and on the last frame either tears
+   the actor down or re-measures its leash, state 2 pans and closes with
+   func_8009A21C and the +0x6A restore. 137 words, 0 differing.
+
+   MUST STAY K&R: the landed func_800B321C and func_800DA760 both call this
+   with NO arguments, and an ANSI four-parameter definition makes those calls
+   "too few arguments to function" -- the same resolution func_800AB464 and
+   func_800AC7EC next door already carry.
+
+   THE TWO D_80083460 BASES ARE TWO SEPARATE LOCALS. One shared `u8 *g` is a
+   single global-alloc quantity, so both sites get the same hard register and
+   the `high` keeps its own -- 137 words, 6 differing, every differing word a
+   `lui`/`addiu` register. Two locals are local-alloc quantities, the `high`
+   is combined into each one's own register ($v1 and $v0) and it is 0.
+   The spelling of the local is inert: `s16 *`, `u16 *` and `*(s16 *)(g+0xA)`
+   all give the identical program. */
+s32 func_800AC5C8(a, b, c, p)
+u8 *a;
+UnkVec *b;
+u8 *c;
+u8 *p;
+{
+    u8 *g;
+    u8 *h;
+
+    switch (a[0x9B])
+    {
+    case 0:
+        *(s16 *)(p + 0x6A) = *(u16 *)(p + 0x2A) & 0xFFF;
+        a[0x9B] += 1;
+    case 1:
+        *(s16 *)(p + 0x2A) += 0x200;
+        b->unk_14 += 0xFFFF0000;
+        if ((*(s16 *)(a + 0x96) -= 1) > 0)
+        {
+            return 0;
+        }
+        b->unk_14 = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        *(s16 *)(a + 0x96) = 0x10;
+        if ((*(s32 *)(p + 0x14) & 0x4000) == 0)
+        {
+            g = (u8 *)&D_80083460;
+            *(u16 *)(g + 0xA) -= 1;
+            func_800A32A4(p);
+            func_8009A028(p);
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        else
+        {
+            *(s16 *)(p + 0x88) = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, -0x400);
+            *(u16 *)(a + 0x98) &= 0xFFF7;
+            *(u32 *)(p + 0x1C) &= 0xFFFEFFFF;
+            *(s16 *)(a + 0x96) = 0x10;
+            a[0x9B] += 1;
+        }
+        break;
+    case 2:
+        *(s16 *)(p + 0x2A) += 0x200;
+        if ((*(s16 *)(a + 0x96) -= 1) > 0)
+        {
+            return 0;
+        }
+        *(s32 *)(a + 0x90) = 0;
+        func_8009A21C(c[0x24], c[0x25], (*(s32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        *(s16 *)(p + 0x2A) = *(u16 *)(p + 0x6A);
+        return 1;
+    }
+    return 0;
+}
 
 /* MUST STAY K&R: the landed func_800DA808 below calls this with NO
    arguments, and an ANSI four-parameter definition makes that call "too few
@@ -12231,7 +12530,104 @@ u8 *func_800B0BE0(u8 *a, u8 *b, u8 **c, u8 *q)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B0D34);
+/* The mirror/tail step on a node's +0x10: pick the reflected direction from
+   the +0x12 phase, stamp two 3-byte colour cells when the actor's gauges say
+   so, then run the two-state fade on the slot's +0x18 -- state 1 tears the
+   node and its four children down below -0x3FF -- and finally track the
+   actor's position into the mover with D_800DDC40's per-kind height.
+   135 words, 0 differing.
+
+   `m` MUST BE DECLARED `s16`. The direction is `m = k;` and then, inside the
+   phase test, `m = -k & 0x1F;` and `m = 0x10;` -- three copies into one
+   variable. As `s32` cse's `make_regs_eqv` merges m with k (m's last mention
+   is later, so m becomes the canonical register), both copies vanish and the
+   function is 133 words / 126 differing; an `if`/`else` instead is 135/100
+   but lays the `else` arm out after a `j`. As `s16` the copy is
+   `(set (reg:HI m) (subreg:HI k))`, `make_regs_eqv` never runs, and both
+   `addu $a3` copies survive -- and `m << 3` still costs no extension because
+   gcc knows the value is 0..0x1F.
+
+   CASE 1'S EARLY ARM IS THE *NORMAL* ONE. With the teardown written first as
+   `if (c18 < -0x3FF) { ...; return; }` it is laid out inline and the branch
+   sense inverts -- 135 words, 7 differing.
+
+   THE FOUR-SLOT SWEEP IS AN INDEX, NOT A CURSOR. `*(u8 **)(p + 0x28 + i * 4)`
+   lets loop.c make the giv, whose initialiser does not sit ahead of the
+   D_800814A0 hoist in the preheader; a `r = p; ... r += 4;` cursor is a
+   source statement that does, and it is 2 differing. */
+void func_800B0D34(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *a;
+    u8 *t;
+    u8 *q;
+    s32 k;
+    s16 m;
+    s32 i;
+
+    a = *(u8 **)(p + 0x4);
+    t = *(u8 **)(p + 0x14);
+    k = *(u16 *)(p + 0x12) & 0x1F;
+    m = k;
+    if ((*(u16 *)(p + 0x12) & 0x10) != 0)
+    {
+        m = -k & 0x1F;
+        if (m == 0)
+        {
+            m = 0x10;
+        }
+    }
+    a += 4;
+    if (t[0x29] / (t[0x11] / 2 + 2) >= t[0x28])
+    {
+        a[0] = -0x80 - (m << 3);
+        a[2] = 0x10;
+        a[1] = 0x10;
+    }
+    a += 4;
+    if (t[0x25] < 0xA)
+    {
+        a[0] = -0x80 - (m << 3);
+        a[2] = 0x10;
+        a[1] = 0x10;
+    }
+    *(s16 *)(p + 0x12) += 1;
+    switch (*(s16 *)(p + 0x10))
+    {
+    case 0:
+        if (*(u16 *)(c + 0x18) != 0)
+        {
+            *(s16 *)(c + 0x18) += 0x80;
+        }
+        if (*(u8 **)(D_800E3D7C + 0x104) != *(u8 **)(p + 0x14))
+        {
+            *(s16 *)(p + 0x10) += 1;
+        }
+        break;
+    case 1:
+        if (*(s16 *)(c + 0x18) >= -0x3FF)
+        {
+            *(s16 *)(c + 0x18) = *(u16 *)(c + 0x18) - 0x100;
+            break;
+        }
+        func_8004E994(*(u8 **)(p + 0x5C));
+        for (i = 0; i < 4; i++)
+        {
+            if (*(u8 **)(p + 0x28 + i * 4) != NULL)
+            {
+                *(u16 *)(*(u8 **)(p + 0x28 + i * 4) - 0x2) |= 0x8000;
+                D_800814A0 |= 0x8000;
+            }
+        }
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    c[0x4] = 0;
+    q = *(u8 **)(t - 0x18);
+    *(s16 *)((u8 *)b + 0x2) = *(u16 *)(q + 0x2);
+    *(s16 *)((u8 *)b + 0x6) = *(u16 *)(q + 0x6);
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(q + 0xA) - (D_800DDC40[t[0x13]] + 0x50);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B0F50);
 
@@ -18844,7 +19240,69 @@ void func_800C7A3C(u8 *a, u8 *b, s16 c, s16 d, s16 e, s32 f)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C7B38);
+/* The camera pull-back: state 0 eases D_80083178's +0xAC/+0xB0/+0xA4/+0xA6
+   (and +0xA8 over half the countdown) towards the record's own targets and,
+   when the countdown expires, snaps them and advances; state 1 runs
+   func_800C77D0 once and drops D_80083460's +0xA counter. 135 words,
+   0 differing.
+
+   D_800DD264 NEEDS ITS OWN POINTER LOCAL AT EACH OF ITS TWO SITES. Written
+   `D_800DD264[D_800120A2]` the index's `%hi` is what reorg steals into the
+   `blez`/`bgtz` delay slots and the base's `lui` lands next to the `addiu`
+   -- 135 words, 6 differing, all six a `lui`/`addiu` register. With a local
+   per site the base's `high` is hoisted into the slot instead and it is 0;
+   ONE local shared by both sites is 134 words / 121 differing.
+
+   D_800120A2 IS KEPT AS THE DECLARED SYMBOL. `*(s16 *)0x800120A2` also
+   measures 0 differing under ovlverify, but it emits one relocation fewer
+   than the listing carries; the symbol spelling closes seqcheck at
+   raw == relocdump == 22 with seq=OK. */
+void func_800C7B38(u8 *p)
+{
+    u8 *g;
+    u8 *h;
+    s16 d;
+    s16 *t;
+    s16 *u;
+
+    g = (u8 *)&D_80083178;
+    switch (*(s32 *)(p + 0x18))
+    {
+    case 0:
+        if (*(s16 *)(p + 0x24) > 0)
+        {
+            *(s32 *)(p + 0x10) -= *(s32 *)(p + 0x10) >> 2;
+            *(s16 *)(g + 0x98) = *(u16 *)(p + 0x26) + *(u16 *)(p + 0x10);
+            t = D_800DD264;
+            *(s16 *)(g + 0xAC) += (t[D_800120A2] - *(s16 *)(g + 0xAC)) / *(s16 *)(p + 0x24);
+            *(s16 *)(g + 0xB0) += (-*(s16 *)(g + 0xB0)) / *(s16 *)(p + 0x24);
+            *(s16 *)(g + 0xA4) +=
+                (*(s16 *)(*(u8 **)(p + 0xC) + 0x2) - *(s16 *)(g + 0xA4)) / *(s16 *)(p + 0x24);
+            *(s16 *)(g + 0xA6) +=
+                (*(s16 *)(*(u8 **)(p + 0xC) + 0x6) - *(s16 *)(g + 0xA6)) / *(s16 *)(p + 0x24);
+            d = *(s16 *)(p + 0x24) / 2;
+            if (d != 0)
+            {
+                *(s16 *)(g + 0xA8) += (*(s16 *)(*(u8 **)(p + 0xC) + 0xA) - *(s16 *)(g + 0xA8)) / d;
+            }
+            if (--*(s16 *)(p + 0x24) > 0)
+            {
+                break;
+            }
+        }
+        *(s16 *)(g + 0xB0) = 0;
+        u = D_800DD264;
+        *(s16 *)(g + 0xAC) = u[D_800120A2];
+        *(s16 *)(g + 0x98) = *(u16 *)(p + 0x26);
+        *(s32 *)(p + 0x18) += 1;
+        break;
+    case 1:
+        func_800C77D0(D_800E3D7C - 0x20, D_80083780, 8, D_800DCE66);
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        break;
+    }
+}
 
 /* Run one cue list: func_800BD184 on the byte D_800DF64C[k] names, then every
    entry of D_800DF640[k] until its function pointer is NULL. The second
@@ -24524,7 +24982,85 @@ void func_800D7F38(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D7FB8);
+/* The 0x312 spark storm: state 0 throws 151 nodes at func_800D81D4 with the
+   seeded (x, y, z) from the installer and alternating +0x4A facings, then
+   falls through into state 1's countdown; state 0xFF bleeds D_80083460's
+   +0xA counter and raises the two 0x8000 flags. 135 words, 0 differing.
+
+   CASE 0 FALLS THROUGH INTO CASE 1: the loop's `bgez` drops straight into
+   .L800D8130. With a `break` the `j`/`nop` pair is two extra words.
+
+   `q = (u8 *)n + 0x20` MUST BE ASSIGNED BEFORE THE func_8004491C CALL, even
+   though its only use is the +0x4A store at the bottom. Assigned at the use
+   it is a block-local quantity in $v1 and the function loses the sixth
+   callee-saved register -- 133 words against 135 with 135 differing.
+
+   The slot fill is func_8003DB94's body inlined with idx 0, and its NINE
+   STORES ARE IN A FIXED ORDER: 0x1E, 0x1C, 0x10, 0x00, 0x14, 0x08, 0x04,
+   0x05, 0x0C. Measured: 0x00,04,05,08,0C,1E,1C,10,14 is 135/14;
+   1E,1C,10,0,14,4,5,C,8 is 136/86; 1E,1C,10,0,4,5,C,8,14 is 135/21.
+   `r = (u8 *)n->unk_0C` also has to be read BEFORE the three n->unk_08
+   stores -- after the first one it is 135/20, because the `lw 0xC($s0)` then
+   misses the first load-delay hole. */
+void func_800D7FB8(u8 *p)
+{
+    UnkNode *n;
+    u8 *q;
+    u8 *r;
+    u8 *g;
+    s32 i;
+
+    switch (*(s16 *)p)
+    {
+    case 0:
+        *(s16 *)(p + 0x2) = 0x3C;
+        *(s16 *)p += 1;
+        func_800A56E0(0x600);
+        for (i = 0x96; i >= 0; i--)
+        {
+            n = func_8003FD64(0x312, D_80083498);
+            if (n != NULL)
+            {
+                q = (u8 *)n + 0x20;
+                n->unk_10 = (u32)func_800D81D4;
+                func_8004491C(n, (u32)D_80045340);
+                r = (u8 *)n->unk_0C;
+                *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)(p + 0x4);
+                *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)(p + 0x6);
+                *(s16 *)((u8 *)n->unk_08 + 0xA) = *(u16 *)(p + 0x8);
+                *(s16 *)(r + 0x1E) = 0x400;
+                *(s16 *)(r + 0x1C) = 0x400;
+                *(s16 *)(r + 0x10) = 0x20;
+                *(u8 **)(r + 0x0) = D_800DEC00;
+                *(u16 *)(r + 0x14) |= 0xC;
+                *(s32 *)(r + 0x8) = *(s32 *)(D_800DEC00 + 0x4);
+                r[0x4] = 0;
+                r[0x5] = 0;
+                *(s32 *)(r + 0xC) = 0;
+                *(UnkDungeonName8 *)((u8 *)n + 0x2C) = *(UnkDungeonName8 *)(p + 0x4);
+                *(s16 *)(q + 0x4A) = (i & 1) ? 1 : -1;
+                *(s16 *)((u8 *)n->unk_08 + 0xA) = *(u16 *)(p + 0x8);
+            }
+        }
+        /* FALLS THROUGH: the loop's exit branch drops straight into case 1 */
+    case 1:
+        if (--*(s16 *)(p + 0x2) <= 0)
+        {
+            *(s16 *)(p + 0x2) = 8;
+            *(s16 *)p = 0xFF;
+        }
+        break;
+    case 0xFF:
+        if (--*(s16 *)(p + 0x2) <= 0)
+        {
+            g = (u8 *)&D_80083460;
+            *(u16 *)(g + 0xA) -= 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800D81D4);
 
