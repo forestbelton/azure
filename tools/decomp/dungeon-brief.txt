@@ -163,6 +163,18 @@ halves what the listing costs you to read:
   declared before adding it.
 * Keep types honest. If a struct field's offset and width are all you know,
   a cast through `u8 *` is fine; do not invent a struct you cannot witness.
+* **A NEW TYPEDEF NAME MUST NOT COLLIDE WITH ONE ANOTHER AGENT IS INVENTING
+  RIGHT NOW.** You cannot see the other batches' names, and nothing fails
+  until the second one lands. Before naming a scratchpad or primitive
+  struct, check BOTH places:
+
+      grep -o 'UnkDungeon[A-Za-z0-9_]*' csrc/ovl_dungeon.c | sort -u
+      grep -ho 'UnkDungeon[A-Za-z0-9_]*' docs/dungeon-parks/*.c | sort -u
+
+  On 2026-11-16 two agents independently defined `UnkDungeonSP9` for two
+  DIFFERENT layouts of the 0x1F800000 scratchpad -- both correct for their
+  own function -- and only the merge caught it. Prefer a name that says
+  which function it belongs to if you are unsure.
 * Put a short comment above each landed function giving its word count,
   `0 differing`, and -- when you had to fight for it -- the ONE spelling fact
   that made it land and what the wrong spellings cost. Those comments are the
