@@ -2,6 +2,30 @@ import sys, os, re, subprocess, difflib
 sys.path.insert(0, '/home/case/projects/azure/tools/decomp')
 import asmlib, ovlverify
 src, func = sys.argv[1], sys.argv[2]
+
+# SAME GUARD AS ovlverify.py's, AND FOR THE SAME REASON. If FUNC is still an
+# INCLUDE_ASM in SRC, the stub's own assembly defines the symbol in the object
+# and this tool compares the target against ITSELF -- "0 aligned differences",
+# which is the exact shape of a landing with no warning attached.
+#
+# ovlverify.py grew this guard on 2026-11-04 after it reported a false landing
+# for nine consecutive spellings. aligndiff did not, and on 2026-11-16 an agent
+# running a parallel batch reused a measurement directory whose copy had been
+# re-spliced for a DIFFERENT function; this printed
+# "109 built / 109 target, 0 aligned differences" for a function that was back
+# to being a stub. Re-splice before every measurement -- and now the tool says
+# so rather than leaving it to discipline.
+if '--allow-stub' not in sys.argv:
+    try:
+        _src_txt = open(src, encoding="utf-8", errors="replace").read()
+    except OSError:
+        _src_txt = ""
+    if re.search(r'INCLUDE_ASM\("[^"]*",\s*%s\s*\)' % re.escape(func), _src_txt):
+        print("%s: STILL AN INCLUDE_ASM STUB in %s -- refusing to measure the "
+              "stub against itself (it would report 0 aligned differences). "
+              "Re-splice the body first, or pass --allow-stub." % (func, src))
+        sys.exit(1)
+
 words, relocs = asmlib.build(src, gasG=0, cflags=('-G0',))
 o = os.path.join(asmlib.SP, os.path.splitext(os.path.basename(src))[0] + ".o")
 syms = {}
