@@ -327,6 +327,7 @@ s32 func_800BCB04(s32, s32, s16);
    into the local, and the local is callee-saved because it crosses the
    loop's calls.  That is the three words in func_800CA444. */
 s16 func_800BCB04h(s32, s32, s16) __asm__("func_800BCB04");
+s32 func_8009B164s(s16, UnkVec *, u8 *) __asm__("func_8009B164");
 /* The handler trio's callees. func_800A9A0C is declared `void func_800A9A0C(u8 *)`
    in csrc/unk_154BC.c and its result is never read here either. */
 void func_800A9A0C(u8 *);
@@ -20343,7 +20344,154 @@ u8 *d;
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AC010);
+/* func_800AC010 -- 284 words, 0 differing.  State 4's per-frame step for the
+   four-argument installer family.
+
+   THE LAST FOUR WORDS WERE A sched1 PRIORITY BOOST, AND THE CURE IS FOUR
+   SINGLE-SET LOCALS.  The residue was one transposition of two independent
+   two-insn chains at 0x800AC04C -- target `lbu`/`lh`/`sll`/`addiu`, candidate
+   `lh`/`lbu`/`addiu`/`sll` -- and it survived sixteen spellings of the
+   subtraction.  Cause, read out of `tools/decomp/sched.py --sched1`:
+   `adjust_priority` (sched.c:2551) hands LAUNCH_PRIORITY (0x7f000001) to any
+   insn that becomes ready while `birthing_insn_p` holds, i.e. that SETs a
+   live pseudo with `reg_n_sets == 1`.  With ONE `s32 x` shared by the two
+   subtractions, `x` has two sets, the `addiu` is not birthing and not
+   boosted, the `sll` into its compiler temp IS, and the boosted insn wins the
+   cycle in which both become ready -- which in a backward scheduler means it
+   is EMITTED LAST, putting the `lh` chain first.  Give every operand of both
+   divisions its own write-once local (`u1`/`x1`, `u2`/`x2`) and both chain
+   tails are birthing, the tie falls through to INSN_LUID, and the chain
+   written SECOND is emitted first, which is the target's order.
+   The subtrahend still MUST go through a local: written inline, `fold`'s
+   associate path rewrites `A - (B - 0x20)` into `(A + 0x20) - B` and the
+   `addiu` comes out `+32` on the shifted byte.  `s32 x; s32 y; s32 u;` with
+   `u` shared is 285 words / 12 -- a shared local goes to global_alloc
+   (local-alloc.c:472 wants `reg_n_deaths == 1`) and costs the extra word.
+
+   THE THREE DEVICES THAT GOT IT TO 284 WORDS BEFORE THAT, each measured:
+   1. `goto fail;` IN THE SECOND func_8009B88C ARM.  Both arms end in the same
+      `func_800A2B04` / `func_800AA5E4` / `return 0` tail.  Written out twice,
+      jump.c's forward scan always deletes the FIRST copy, so the shared tail
+      lands at the END of the function where the target has it at 0x800AC1C0.
+      Both arms `== 0`: 282 / 38.  Arm 1 `== 0`, arm 2 `!= 0`: 282 / 33.
+      Label in arm 1 and `goto fail` in arm 2: 282 / 12.
+   2. A TRAILING `out: return 0;`.  The `*(s16 *)(a + 0x96) = 2` arm's
+      `return 0` must cross-jump onto a one-insn `v0 = 0` block that falls
+      into the epilogue; that is what makes the final `return 1` need its own
+      `j .L800AC458`.  Worth the last two words: 282 -> 284.
+   3. `s32 func_8009B164s(s16, UnkVec *, u8 *) __asm__("func_8009B164");`
+      The landed definition takes `u16` (its own `(a >> 9) & 7` needs the
+      logical shift), and through it the argument load is `lhu` where the
+      target has `lh`.
+
+   MUST STAY K&R: `s32 func_800AC010();` at the top of the unit and two landed
+   call sites pass NO arguments, so an ANSI four-parameter definition makes
+   both "too few arguments" -- the same constraint func_800AC82C records. */
+
+s32 func_800AC010(a, b, c, p)
+u8 *a;
+UnkVec *b;
+u8 *c;
+u8 *p;
+{
+    u8 *d;
+    u8 *g;
+    u8 *h;
+    s32 u1;
+    s32 x1;
+    s32 u2;
+    s32 x2;
+    s16 o0;
+    s16 o1;
+    s16 t;
+
+    if (*(s16 *)(a + 0x96) != 0)
+    {
+        u1 = c[0x24] << 6;
+        x1 = *(s16 *)((u8 *)b + 0x2) - 0x20;
+        b->unk_0C = ((u1 - x1) << 16) / *(s16 *)(a + 0x96);
+        u2 = c[0x25] << 6;
+        x2 = *(s16 *)((u8 *)b + 0x6) - 0x20;
+        b->unk_10 = ((u2 - x2) << 16) / *(s16 *)(a + 0x96);
+    }
+    *(s16 *)(a + 0x96) = *(u16 *)(a + 0x96) - 1;
+    if (*(s16 *)(a + 0x96) > 0)
+    {
+        return 0;
+    }
+    d = (u8 *)func_8009C93C(p, c, *(s16 *)(p + 0x6A), 0, 0);
+    if (d != NULL)
+    {
+        func_8009CE1C(p, 4, 1, 8, (s16)(*(u16 *)(p + 0x6A) + 0x800), 0, 1);
+        func_8009CE1C(d, 8, 1, 8, *(s16 *)(p + 0x6A), 0, 1);
+        *(u16 *)(a + 0x98) &= 0xFFF7;
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(s32 *)(p + 0x1C) |= 0x40000000;
+        a[0x9C] = c[0x26];
+        c[0x26] = func_8009FB34(c[0x24], c[0x25]);
+        func_800A19E4((s32)c, p, 3, 6, a + 0x9C);
+        if (func_8009B88C(p, c[0x24], c[0x25], &o0, &o1) == 0)
+        {
+        fail:
+            func_800A2B04(b, c[0x24], c[0x25]);
+            func_800AA5E4(a, b, c, p);
+            return 0;
+        }
+        c[0x24] = o0;
+        c[0x25] = o1;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        func_8009A21C(c[0x24], c[0x25], (*(s32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        *(s32 *)(p + 0x1C) &= 0xFFDFFFFF;
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) -= 1;
+        *(s16 *)(a + 0x96) = 0;
+        p[0x71] = 0;
+        return 1;
+    }
+    if ((s16)func_8009B164s(*(s16 *)(p + 0x6A), b, c) != 0)
+    {
+        *(s16 *)(p + 0x8A) = *(u16 *)(p + 0x8A) - 1;
+        if (*(s16 *)(p + 0x8A) > 0)
+        {
+            c[0x24] += *(u8 *)&D_8006CCD8[(*(u16 *)(p + 0x6A) >> 9) & 7];
+            c[0x25] += *(u8 *)&D_8006CCE8[(*(u16 *)(p + 0x6A) >> 9) & 7];
+            *(s16 *)(a + 0x96) = 2;
+            goto out;
+        }
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    *(u16 *)(a + 0x98) &= 0xFFF7;
+    a[0x9C] = c[0x26];
+    c[0x26] = func_8009FB34(c[0x24], c[0x25]);
+    func_800A19E4((s32)c, p, 3, 6, a + 0x9C);
+    t = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                      (s16)(*(u16 *)((u8 *)b + 0xA) - 0x20));
+    if ((s16)t < 0x200)
+    {
+        *(s16 *)(a + 0x92) = 0;
+        *(s16 *)(p + 0x88) = t;
+    }
+    h = (u8 *)&D_80083460;
+    *(u16 *)(h + 0xA) -= 1;
+    *(s16 *)(a + 0x96) = 0;
+    *(s32 *)(p + 0x1C) = (*(s32 *)(p + 0x1C) | 0x40000000) & 0xFFDFFFFF;
+    if (func_8009B88C(p, c[0x24], c[0x25], &o0, &o1) == 0)
+    {
+        goto fail;
+    }
+    c[0x24] = o0;
+    c[0x25] = o1;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_8009A21C(c[0x24], c[0x25], (*(s32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+    p[0x71] = 0;
+    return 1;
+out:
+    return 0;
+}
 
 /* Glide the mover towards the tile record's centre over the +0x96 countdown,
    then -- on the frame it reaches zero -- stop it dead, re-place it on the
