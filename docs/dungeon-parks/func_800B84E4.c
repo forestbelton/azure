@@ -11,11 +11,23 @@
    UnkDungeonSPXY):
 
        typedef union UnkDungeonSPUV { s32 w; u8 b; } UnkDungeonSPUV;
-       typedef struct UnkDungeonSP9 {...} UnkDungeonSP9;    /* scratchpad */
-       typedef struct UnkDungeonGT4W {...} UnkDungeonGT4W;  /* POLY_GT4 */
-       void func_8006671C(void *);
+       typedef struct UnkDungeonSPF {...} UnkDungeonSPF;    /* scratchpad
+   NAME COLLISION RESOLVED 2026-11-16: this typedef was called UnkDungeonSP9
+   until func_800BC4D4 landed with a DIFFERENT struct under that same name
+   (its +0x00/+0x02/+0x04 origin triple against this one's 8 bytes of
+   padding).  Both describe the 0x1F800000 scratchpad as their own function
+   lays it out, so both are right and only the name was wrong.  This one is
+   now UnkDungeonSPF; UnkDungeonSP9 belongs to func_800BC4D4 and is in
+   csrc/ovl_dungeon.c.  Check the SP-name list in csrc before inventing
+   another: SP, SP2..SP9, SPA, SPC, SPD, SPW, SPXY are taken.
+ */
+typedef struct UnkDungeonGT4W
+{
+    ...
+} UnkDungeonGT4W; /* POLY_GT4 */
+void func_8006671C(void *);
 
-   The signature is the one docs/dungeon-parks/func_800B835C.c pins:
+The signature is the one docs / dungeon - parks / func_800B835C.c pins :
    `void func_800B84E4(s16 *, u8 *, u8 *, s32);'.  The first argument is read
    as `*(u16 *)a' / `*((u16 *)a + 1)' / `*(s32 *)a' -- all three loads in the
    listing are `lhu'/`lw', never `lh', so the reads are UNSIGNED even though
@@ -67,10 +79,12 @@
      twice (once for the unconditional store, once inside the `if (dd)'
      arm), the second read is re-emitted as its own `lhu' and the function
      is one word long.
-   * `i = 0;' AS THE SECOND STATEMENT INSIDE THE `if', not the first and not
-     the last.  16 -> 11.  All six orderings of {dd, i, ang} were measured:
-     dd,i,ang = 10 aligned / 11 masked; dd,ang,i = 10 aligned / 12 masked;
-     ang,dd,i = 11; i,dd,ang = 16; i,ang,dd = 17; ang,i,dd = 17.  `i = 0'
+   * `i = 0;
+     ' AS THE SECOND STATEMENT INSIDE THE `if', not the first and not the last.16->11. All six orderings of{dd, i, ang} were measured : dd, i, ang = 10 aligned / 11 masked;
+     dd, ang, i = 10 aligned / 12 masked;
+     ang, dd, i = 11;
+     i, dd, ang = 16;
+     i, ang, dd = 17; ang,i,dd = 17.  `i = 0'
      placed BEFORE the `if' is 16 and two words short.  The lever is that
      `ang = 0' written after `i = 0' is copy-propagated to `ang = i'
      (`addu $s1, $s5, $zero'), which is what the target has.
@@ -93,8 +107,9 @@
    * the loop-top copy via a temp local (`tp = sp->unk_78.w; sp->unk_70.w =
      tp;'): 14.
    * the loop-top copy moved after the first UV pair: 212 words / 11.
-   * the loop-top copy as a 4-byte STRUCT assignment, both `struct {u16
-     h[2];}' and `struct {u16 a, b;}': 214 words / 12 -- gcc expands both as
+   * the loop-top copy as a 4-byte STRUCT assignment, both `struct {
+    u16
+        h[2];}' and `struct {u16 a, b;}': 214 words / 12 -- gcc expands both as
      two halfword moves, not one word move.
    * a SECOND pointer local `u8 *b = (u8 *)0x1F800070;' for the 0x70/0x78
      region, to break the alias disambiguation: 209 words / 98.
@@ -150,7 +165,7 @@ typedef union UnkDungeonSPUV
 /* The 0x1F800000 scratchpad as func_800B84E4 lays it out: the four UV
    scalars at +0x08..+0x17 and two packed screen pairs at +0x70 and +0x78,
    each the XY half of an 8-byte slot whose Z halfword is zeroed. */
-typedef struct UnkDungeonSP9
+typedef struct UnkDungeonSPF
 {
     u8 pad_00[0x8];
     UnkDungeonSPUV unk_08;
@@ -163,7 +178,7 @@ typedef struct UnkDungeonSP9
     u8 pad_76[0x2];
     UnkDungeonSPXY unk_78;
     s16 unk_7C;
-} UnkDungeonSP9;
+} UnkDungeonSPF;
 /* The same 0x34-byte POLY_GT4 as UnkDungeonGT4 above with its four screen
    pairs under their WORD face and ALL FOUR u/v pairs byte-addressed:
    func_800B84E4 copies each screen pair in with one `sw' and reads its own
@@ -194,7 +209,7 @@ void func_8006671C(void *);
 void func_800B84E4(s16 *a, u8 *p, u8 *ot, s32 d)
 {
     Unk80083160 *g = &D_80083160;
-    UnkDungeonSP9 *sp = (UnkDungeonSP9 *)0x1F800000;
+    UnkDungeonSPF *sp = (UnkDungeonSPF *)0x1F800000;
     UnkDungeonGT4W *q;
     s32 i;
     s32 ang;

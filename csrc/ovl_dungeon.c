@@ -1370,6 +1370,74 @@ typedef struct UnkDungeonSPD
     u16 unk_108;
     u16 unk_10A;
 } UnkDungeonSPD;
+
+/* The 0x1F800000 scratchpad as func_800BC4D4 lays it out: the mover's two
+   origin halfwords at +0x00/+0x02 and the caller's depth at +0x04, the four
+   per-element UV scalars at +0x08..+0x17, the OT base at +0x20 and a copy of
+   the slot's +0x14 flag word at +0x24, ScaleMatrix's vector at +0x30, the
+   quad's four corners at +0x70, RotTransPers4's two out-parameters at
+   +0x90/+0x94, the projection's screen offset at +0xB8, the OT index at
+   +0xC0, the matrix translation at +0xE4 and the four projected corners at
+   +0xF0.  Its +0x04 is u16 BECAUSE the function reads it back as `(s16)`:
+   the `lhu`/`sll 16`/`sra 16` triple is only reachable from a u16 field with
+   an explicit cast -- an s16 field folds to one `lh`. */
+typedef struct UnkDungeonSP9
+{
+    s16 unk_00;
+    s16 unk_02;
+    u16 unk_04;
+    u8 pad_06[0x2];
+    UnkDungeonSPW unk_08;
+    UnkDungeonSPW unk_0C;
+    UnkDungeonSPW unk_10;
+    UnkDungeonSPW unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u16 unk_24;
+    u8 pad_26[0xA];
+    UnkDungeonSPW unk_30;
+    UnkDungeonSPW unk_34;
+    UnkDungeonSPW unk_38;
+    u8 pad_3C[0x34];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0x2];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x20];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    u16 unk_F8;
+    u16 unk_FA;
+    u16 unk_FC;
+    u16 unk_FE;
+} UnkDungeonSP9;
+/* func_800BC3E4 calls this one; without the forward declaration the call
+   rides an implicit one and the definition then contradicts it. */
+void func_800BC4D4(UnkVec *, UnkSlot *, s16, s32);
 /* func_800C7930's two halfword tables, indexed by the renderable's facing. */
 extern u16 D_800DCEAC[];
 extern u16 D_800DCEBC[];
@@ -26766,7 +26834,158 @@ s32 func_800BC3E4(u8 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BC4D4);
+void func_800BC4D4(UnkVec *v, UnkSlot *s, s16 arg2, s32 arg3)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDungeonSP9 *p = (UnkDungeonSP9 *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    u8 *q;
+    u8 *e;
+    s32 w;
+    s32 h;
+
+    q = *(u8 **)(base + 0x8D0);
+    p->unk_20 = base + 0xB0;
+    p->unk_EC = 0;
+    p->unk_E8 = 0;
+    p->unk_E4 = 0;
+    p->unk_8C = 0;
+    p->unk_84 = 0;
+    p->unk_7C = 0;
+    p->unk_74 = 0;
+    e = (u8 *)s->unk_08;
+    p->unk_24 = s->unk_14;
+    p->unk_00 = ((u16 *)v)[1];
+    p->unk_02 = ((u16 *)v)[3];
+    p->unk_04 = arg2;
+    p->unk_C0 = RotTransPers((void *)0x1F800000, (void *)0x1F8000B8, (void *)0x1F800090,
+                             (void *)0x1F800094);
+    w = p->unk_C0 - 0x7;
+    D_8006CD30.unk_1C = p->unk_C0 * 4;
+    p->unk_C0 = w - arg3;
+    if ((u32)p->unk_C0 < 0x1E0)
+    {
+        PushMatrix();
+        p->unk_B8 = p->unk_B8 - 0xA0;
+        p->unk_BA = p->unk_BA - 0x78;
+        h = (((s16 *)v)[5] - (s16)p->unk_04) * 0x20 + 0x1000;
+        p->unk_38.w = h;
+        if (h < 0)
+        {
+            p->unk_38.w = 0;
+        }
+        p->unk_30.w = p->unk_38.w;
+        p->unk_34.w = p->unk_38.w / 2;
+        RotMatrix((void *)0x1F800100, (void *)0x1F8000D0);
+        CompMatrix(&D_8006CD30, (void *)0x1F8000D0, (void *)0x1F800050);
+        ScaleMatrix((void *)0x1F800050, (void *)0x1F800030);
+        p->unk_30.w = s->unk_1C;
+        p->unk_34.w = s->unk_1E;
+        p->unk_38.w = 0x1000;
+        ScaleMatrix((void *)0x1F800050, (void *)0x1F800030);
+        SetTransMatrix((void *)0x1F800050);
+        SetRotMatrix((void *)0x1F800050);
+        do
+        {
+            if ((e[0x0] & 0x20) == 0)
+            {
+                s16 a1;
+                s16 a2;
+                s16 b1;
+                s16 b2;
+
+                p->unk_08.w = e[0x8];
+                p->unk_0C.w = e[0x9];
+                p->unk_10.w = e[0xA];
+                p->unk_14.w = e[0xB];
+                func_80067EF4(q, 0, 0);
+                AddPrim(p->unk_20 + p->unk_C0 * 4, q);
+                q += 0xC;
+                if ((e[0x0] ^ p->unk_24) & 1)
+                {
+                    a1 = -(s8)e[0x2];
+                    p->unk_80 = a1;
+                    p->unk_70 = a1;
+                    a1 = a1 - p->unk_10.h;
+                    p->unk_88 = a1;
+                    p->unk_78 = a1;
+                }
+                else
+                {
+                    a2 = (s8)e[0x2];
+                    p->unk_80 = a2;
+                    p->unk_70 = a2;
+                    a2 = a2 + p->unk_10.h;
+                    p->unk_88 = a2;
+                    p->unk_78 = a2;
+                }
+                if ((e[0x0] ^ p->unk_24) & 2)
+                {
+                    b1 = -(s8)e[0x3];
+                    p->unk_7A = b1;
+                    p->unk_72 = b1;
+                    b1 = b1 - p->unk_14.h;
+                    p->unk_8A = b1;
+                    p->unk_82 = b1;
+                }
+                else
+                {
+                    b2 = (s8)e[0x3];
+                    p->unk_7A = b2;
+                    p->unk_72 = b2;
+                    b2 = b2 + p->unk_14.h;
+                    p->unk_8A = b2;
+                    p->unk_82 = b2;
+                }
+                p->unk_70 = p->unk_70 + 6;
+                p->unk_78 = p->unk_78 + 6;
+                RotTransPers4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &p->unk_F0,
+                              &p->unk_F4, &p->unk_F8, &p->unk_FC, &p->unk_90, &p->unk_94);
+                *(s16 *)(q + 0x8) = p->unk_F0 + p->unk_B8;
+                *(s16 *)(q + 0xA) = p->unk_F2 + p->unk_BA;
+                *(s16 *)(q + 0x10) = p->unk_F4 + p->unk_B8;
+                *(s16 *)(q + 0x12) = p->unk_F6 + p->unk_BA;
+                *(s16 *)(q + 0x18) = p->unk_F8 + p->unk_B8;
+                *(s16 *)(q + 0x1A) = p->unk_FA + p->unk_BA;
+                *(s16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                *(s16 *)(q + 0x22) = p->unk_FE + p->unk_BA;
+                q[0x3] = 9;
+                p->unk_10.w = p->unk_10.w + p->unk_08.w;
+                p->unk_14.w = (p->unk_0C.w + p->unk_14.w) << 8;
+                p->unk_0C.w = p->unk_0C.w << 8;
+                *(u32 *)(q + 0xC) = p->unk_0C.w + p->unk_08.w +
+                                    ((*(u16 *)(e + 0x4) & 0x80) ? 0x7F800000 : 0x7FC00000);
+                *(u32 *)(q + 0x14) = p->unk_0C.w + p->unk_10.w + (*(s16 *)(e + 0x4) << 16);
+                *(s16 *)(q + 0x1C) = p->unk_14.h + p->unk_08.h;
+                *(s16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
+                if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+                {
+                    q[0x14]--;
+                    q[0x24]--;
+                }
+                if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+                {
+                    q[0x1D]--;
+                    q[0x25]--;
+                }
+                *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
+                q[0x7] = 0x2E;
+                AddPrim(p->unk_20 + p->unk_C0 * 4, q);
+                q += 0x28;
+                func_80067EF4(q, 1, 0);
+                AddPrim(p->unk_20 + p->unk_C0 * 4, q);
+                q += 0xC;
+            }
+            if (*(s8 *)e < 0)
+            {
+                break;
+            }
+            e += 0xC;
+        } while (1);
+        PopMatrix();
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* Look a tile up in the 6-byte map rows at D_80083160 + 0x1DC and return the
    negated height at +0x2, or 0x400 where the row's first halfword is 0.
