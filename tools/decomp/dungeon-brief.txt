@@ -159,7 +159,12 @@ halves what the listing costs you to read:
   most valuable thing you produce after the code. Measured numbers only; never
   write a mechanism you did not verify.
 * If a prototype you need differs from one already in the file, say so loudly
-  in your report: it may change code that is already landed. A call site that
+  in your report: it may change code that is already landed. This happens
+  often and the changes are usually right -- on 2026-11-16 `func_800BBA40`
+  had three parameters too wide, `func_800C5BBC` was declared `void` and
+  returns a value, and `func_800BABA8` needed a return type -- so report the
+  change AND the list of landed callers you re-measured with it, because that
+  list is what lets me make it. A call site that
   disagrees with a landed definition's arity is fixed with the unit's alias
   spelling, which leaves the definition alone:
   `s32 func_80096100_4(u8 *, UnkVec *, u8 *, u8 *) __asm__("func_80096100");`
@@ -192,6 +197,20 @@ minutes. A residue with no saved candidate cannot be permuted.
 **DO NOT RUN THE PERMUTER YOURSELF.** `permrun.py`'s jobs are a machine-wide
 budget of 20 and only one search may run at a time; with several agents
 working, that budget is mine to spend. Report the residue and the file.
+
+**WHEN YOU MESSAGE ME ABOUT A LANDING, SEND FOUR THINGS IN THAT ONE
+MESSAGE:** the body, its comment block, any new typedefs or extern/function
+declarations it needs, and any prototype you had to change. Each of those has
+cost a round trip or worse on a real run:
+
+* a body whose two new typedefs were not reported did not compile on my side,
+  and I had to dig them out of the agent's own working copy;
+* a body sent without its comment block went into `csrc/` bare, and the
+  write-up -- the most valuable thing you produce after the code -- had to be
+  restored afterwards from the final report;
+* a body I lifted verbatim carried the agent's own
+  `/* ===AGENT func_X BEGIN=== */` splice markers into `csrc/` and I committed
+  them. **Strip your markers before you send a body.**
 
 **AND IF YOU LAND SOMETHING, SAY SO AS SOON AS IT LANDS.** Do not hold four
 finished bodies until the end of the run. A one-line interim message naming
