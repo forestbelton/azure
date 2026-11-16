@@ -62,7 +62,25 @@
    (candidate k=$s4 h=$s5 wz=$s6 against target k=$s5 h=$s6 wz=$s4).
    The target also carries an extra `addu $s5, $a0, $zero` copy at word 6
    that the candidate coalesces away.  Nothing tried reproduces the hoist.
-   PERMUTER FOOD: this is a placement, not a pure allocation tie. */
+   PERMUTER FOOD: this is a placement, not a pure allocation tie.
+
+   ALSO MEASURED AND REJECTED, all aimed at that one placement:
+   * `s16 k2 = k;` (and u16/s8/u8/s32) used as func_8009A540's first argument,
+     to give the copy a source position of its own: identical bytes to the
+     base for s16/s8/s32, 43 with a different allocation for u16/u8.  cse
+     propagates the copy away in every case.
+   * `register s32 k2 __asm__("$4");` for that same local DOES put the
+     `addu $a0, $sN, $zero` at word 21 where the target has it at 22 -- but
+     the `(s16 *)D_8008333C` base then lands in $t0 rather than $a2, `d` is
+     still live in $a2, and the function is still 184/43.  So $a0 being busy
+     is NOT what pushes the base into $a2, and the one-cause story above is
+     incomplete.
+   * `do { } while (0);` after `k = (f >> 9) & 7;` (the loop-NOTE lever that
+     blocks optimize_reg_copy_1) is 184/56; wrapping the copy in one is 56 too.
+   * `u8 *volatile d` as the third parameter -- which is the other
+     `assign_parms` condition for the home slot, and which also blocks cse's
+     forwarding -- is 185 words / 46, and 186/46 with `(void)&d;` as well.
+     Every read of `d` becomes a load, which is one more than the target. */
 s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
 {
     s16 *sh;
