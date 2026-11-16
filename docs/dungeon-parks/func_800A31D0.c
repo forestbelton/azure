@@ -1,4 +1,4 @@
-/* PARK: func_800A31D0, 52 of 53 words, 21 aligned differences.
+/* PARK: func_800A31D0, 52 of 53 words, 17 aligned differences.
    ovl_dungeon.  Measured 2026-11-16.  Walks the engine's node list and, for
    every kind-0x1E node whose +0xA4 owner is this record, bumps two counters
    and sets a request bit.
