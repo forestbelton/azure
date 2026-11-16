@@ -354,6 +354,9 @@ extern s16 D_8008346A;
 /* The kill handlers' callees and tables. D_80082E80 is csrc/ovl_town.c's
    UnkTownScene; only its address is wanted. */
 extern u8 D_80082E80[];
+/* The +0x9A state table func_800C9AAC dispatches through, same element type
+   as D_800E22E0's. */
+extern UnkDungeonStep D_800E0354[];
 extern u16 D_800DDE84[];
 extern u8 D_800E0E69[];
 extern u8 D_800E0E82[];
@@ -33394,7 +33397,182 @@ u8 *func_800C9850(s16 x, s16 z, s16 y)
     return q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C9AAC);
+/* The UnkNode +0x10 per-frame handler for an actor: run the +0x8C step, then
+   the +0x9A state function out of D_800E0354, advance the mover by the
+   +0x0C/+0x10 velocity, pick the eight-way facing cell off D_80083228 plus
+   the record's +0x2A, re-dress through func_8003DB94 when it changed, and
+   settle the +0x92 pitch toward func_800BCB04's range.
+
+   FIVE SPELLINGS CARRY IT, each measured against the 290-word target:
+
+   (1) `d = p;` -- THE RECORD IS REACHED THROUGH TWO POINTER LOCALS. +0x1C,
+       +0x2A and +0x88 go through `d`, everything else through `p`; the
+       target copies $a0 into both $s1 and $s2 in the prologue. With one
+       pointer it is 287 words, 278 differing.
+   (2) `i = k;` -- THE FACING CELL IS TWO LOCALS, an `s16` that is stored back
+       into +0x94 and an `s32` that indexes the two tables. The target keeps
+       them in $s4 and $s0 and copies between them. One local is 287 / 277.
+   (3) `lim = -0x20;` -- THE PITCH FLOOR GOES IN A LOCAL. Written
+       `*(s16 *)(p + 0x92) > -0x20`, mips.c's `gen_int_relational` takes the
+       GT entry's `const_add` and folds the bound into one `slti $v0, $a0,
+       -31`; the target materialises -0x20 into a register and uses the
+       reverse-operand `slt $v0, $v0, $a0`, which is what a non-constant
+       second operand gives. One word: 289 / 105. `>= -0x1F`, `-0x20 <
+       p[0x92]`, `!(... <= -0x20)` and swapping the arms are all 289 as well.
+   (4) `w` -- the +0x9E counter is read ONCE, into a `u16` local: the store of
+       `w + 1` sits in the call's delay slot and the multiply sign-extends the
+       same load. Read twice around the call it is 289 / 131.
+   (5) The two +0x8C calls are written through the MEMORY EXPRESSION, not a
+       shared `UnkDungeonStep h` local. One local for both gives the handler
+       $v1 where the second call wants $v0 -- 290 words, 3 differing, and
+       nothing else in the function moves.
+
+   290 words, 0 differing. */
+void func_800C9AAC(u8 *p, UnkVec *v, u8 *c)
+{
+    u8 *d;
+    s32 i;
+    s16 k;
+    s16 e;
+    s16 g;
+    u16 w;
+    s32 lim;
+
+    d = p;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        if (*(UnkDungeonStep *)(p + 0x8C) == func_800C9F34)
+        {
+            (*(UnkDungeonStep *)(p + 0x8C))(p, v, c, p);
+        }
+        else
+        {
+            p[0x71] &= 0x7F;
+        }
+        return;
+    }
+    if (func_800A9E70((UnkDungeonActor *)p, v, c, p) != 0)
+    {
+        return;
+    }
+    if (*(UnkDungeonStep *)(p + 0x8C) != NULL)
+    {
+        (*(UnkDungeonStep *)(p + 0x8C))(p, v, c, p);
+    }
+    D_800E0354[p[0x9A]](p, v, c, p);
+    if (*(s16 *)(p + 0xB8) == 0)
+    {
+        c[0xC] += 4;
+        c[0xD] += 4;
+        c[0xE] += 4;
+        if (c[0xC] >= 0x40)
+        {
+            *(s16 *)(p + 0xB8) = 1;
+        }
+    }
+    v->unk_00 += v->unk_0C;
+    v->unk_04 += v->unk_10;
+    *(s32 *)(p + 0x90) += v->unk_14;
+    if ((*(u16 *)(c + 0x14) & 0x8000) == 0)
+    {
+        k = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+        i = k;
+        if (*(s16 *)(p + 0x94) != i)
+        {
+            func_8003DB94(c, ((void **)*(u8 **)(p + 0xA4))[i], *(s8 *)(c + 0x4));
+            *(s16 *)(p + 0x94) = k;
+        }
+        if (D_8006CCF8[i] != 0)
+        {
+            *(u16 *)(c + 0x14) |= 1;
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) &= 0xFFFE;
+        }
+        func_800A020C(*(s32 *)(d + 0x1C), c + 0xC);
+        if ((*(s32 *)(d + 0x1C) & 0x20) == 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                func_800478B8(c);
+            }
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) |= 0x7000;
+            *(s32 *)(d + 0x1C) &= 0xFFFBFFFF;
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x40000) != 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                w = *(u16 *)(p + 0x9E);
+                *(s16 *)(p + 0x9E) = w + 1;
+                *(s32 *)(p + 0xA0) += func_800644B8((s16)w * 170) << 5;
+            }
+            if ((*(u16 *)(p + 0x98) & 8) == 0)
+            {
+                func_800BCB04(*(u16 *)((u8 *)v + 0x2), *(u16 *)((u8 *)v + 0x6),
+                              (s16)(*(u16 *)(d + 0x88) - 0x20));
+                lim = -0x20;
+                if (*(s16 *)(p + 0x92) > lim)
+                {
+                    *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) - 8;
+                }
+                else if (*(s16 *)(p + 0x92) < -0x28)
+                {
+                    *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) + 8;
+                }
+            }
+        }
+        else
+        {
+            *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA0);
+            *(s16 *)(p + 0x9E) = 0;
+            *(s32 *)(p + 0xA0) = 0;
+            if ((*(u16 *)(p + 0x98) & 8) == 0)
+            {
+                e = func_800BCB04(*(u16 *)((u8 *)v + 0x2), *(u16 *)((u8 *)v + 0x6),
+                                  (s16)(*(u16 *)(d + 0x88) - 0x20)) -
+                    *(u16 *)(d + 0x88);
+                if (*(s16 *)(p + 0x92) < e)
+                {
+                    *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) + 8;
+                    if (e < *(s16 *)(p + 0x92))
+                    {
+                        *(s16 *)(p + 0x92) = e;
+                    }
+                }
+                else
+                {
+                    *(s16 *)(p + 0x92) = e;
+                }
+            }
+        }
+    }
+    else if ((*(u16 *)(c + 0x14) & 0x800) != 0)
+    {
+        *(u16 *)(c + 0x14) &= 0x8FFF;
+    }
+    else
+    {
+        *(u16 *)(c + 0x14) |= 0x7000;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x40000000) != 0)
+    {
+        *(s32 *)(d + 0x1C) &= 0xBFFFFFFF;
+        g = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20,
+                          (s16)(*(u16 *)(d + 0x88) - 0x20));
+        if (g < 0x200)
+        {
+            *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) + (*(u16 *)(d + 0x88) - g);
+            *(s16 *)(d + 0x88) = g;
+        }
+    }
+    *(s16 *)((u8 *)v + 0xA) = (*(u16 *)(d + 0x88) + *(u16 *)(p + 0x92)) - *(u16 *)(p + 0xA2);
+    *(u16 *)(c + 0x14) |= 0x40;
+}
 
 /* The +0x8C handler func_800CAAC8 installs: run the waypoint step while the
    engine's +0x1000 bit is up, give up to func_800CAA94 when +0x2000 is down

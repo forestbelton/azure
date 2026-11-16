@@ -106,7 +106,37 @@
    pseudo, so `memrefs_conflict_p' proves them distinct, and the
    MEM_IN_STRUCT_P exemption in `true_dependence' (sched.c) only fires when
    one side is a FIXED address, which clears the dependence rather than
-   creating one.  What is left is sched1's own priority order. */
+   creating one.  What is left is sched1's own priority order.
+
+   ------------------------------------- measured and rejected by batch j48
+
+   All 211 words / 10 aligned unless noted.  j48 reproduced the 10-row base
+   and attacked residue (a) -- the `ot' parameter copy, which the target
+   schedules into the load-delay slot of `lbu $v0, 0xB($s3)' (word 37) and
+   this candidate leaves as the last insn before the guard branch, where
+   reorg takes it for the delay slot instead of `i = 0'.
+
+   * `dd = d & 0xFFFF;' for `dd = (u16)d;':                 10, identical.
+   * the guard as `if (*(u16 *)(p + 0xE))':                 10, identical.
+   * `g' assigned as a STATEMENT before the `q' read:       10.
+     the same after the `q' read:                           10.
+     the same just before the tail store:                   210 words / 17 --
+     the local must be live across the loop for reload to rematerialise it.
+   * the four `sp->unk_08..unk_14' scratchpad stores moved ABOVE the two
+     `sp->unk_78' stores:                                   211 / 26.
+   * the two `sp->unk_74 = 0; sp->unk_7C = 0;' zero stores moved BELOW the
+     `sp->unk_78' stores:                                   209 / 18.
+
+   WHY NONE OF IT REACHES IT.  The `ot' copy is `(set (reg 30) (reg 6))',
+   emitted by `assign_parms' at the very top, and its only use is inside the
+   loop.  It therefore has NO dependent in the entry block, so sched.c's
+   `priority' gives it the floor value 1 and `rank_for_schedule' puts it last
+   among everything ready.  The target gets it at word 37 because a load-use
+   stall opened there and the scheduler had nothing better; reproducing that
+   needs the stall, not a source order -- the copy's own LUID is already the
+   smallest in the block, so the tie-break that fixed func_800CE4E8's outer
+   loop head has nothing to work with here.  `.sched' work, not the
+   permuter. */
 
 /* ---- the new declarations this body needs, verbatim ---- */
 /* A scratchpad word written whole and read back as its low BYTE and as the
