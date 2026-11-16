@@ -556,13 +556,24 @@ Between one working day and the next, a routine cleanup wiped everything under
 Nothing in the repo was lost. **Everything lost was lost because the brief
 told agents to keep their working files in `/tmp`.**
 
-**So the rule is now: a candidate goes in `docs/near-misses/func_XXXXXXXX.c`,
+**So the rule is now: a candidate goes in `docs/dungeon-parks/func_XXXXXXXX.c`,
 in the repo, the moment it is the best one -- not at the end of the run.** One
 file per function, so concurrent agents never collide on a path. The agents do
 not stage or commit it; the dispatcher does. The earlier instruction in this
 sweep's brief -- "Do not park anything in docs/near-misses/; just report it" --
 was wrong and is withdrawn. It was meant to keep a churning parallel sweep out
 of the repo's park tooling, and the cost of that tidiness was four functions.
+
+The new directory is `docs/dungeon-parks/`, not `docs/near-misses/`, because
+the two hold different things. A near-miss file is a self-contained park
+source that `parkstats.py` and `nmcheck.py` compile on their own; a dungeon
+park is a function BODY that needs the ~1500 lines of declarations at the top
+of `csrc/ovl_dungeon.c`, so putting one in `docs/near-misses/` makes
+`parkstats.py --check` fail on a file it cannot read. `docs/dungeon-parks/`
+has its own README and its headers are hand-written on purpose: the part worth
+keeping is the list of spellings already measured and rejected, with their
+scores, which is the thing that stops the next reader paying for the same
+sweep twice.
 
 **And the brief template itself now lives in the repo**, at
 `tools/decomp/dungeon-brief.txt`, for the same reason: the previous copy was in

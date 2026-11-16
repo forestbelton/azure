@@ -175,7 +175,7 @@ than a stalled agent.
 
 **AND WRITE YOUR BEST CANDIDATE INTO THE REPO, THE MOMENT IT IS YOUR BEST:**
 
-    docs/near-misses/func_XXXXXXXX.c
+    docs/dungeon-parks/func_XXXXXXXX.c
 
 the body alone, with the residue written at the top as a comment: the word
 counts, the aligned difference count, which instructions differ, and every
