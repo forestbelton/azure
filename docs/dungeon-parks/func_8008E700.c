@@ -59,7 +59,7 @@
        with the index INLINE: best 17 (AEBDC, BDECA), worst 38, median ~25.
      with the index hoisted to `v` and B split into P/Q:
        PQAXDYVC 6, PAQXDYVC 6, PQADXYVC 6, PQXADYVC 6, PAXQDYVC 6,
-       APQXDYVC 8, PQAXDVYC 8, PQAVXDYC 12, LPQXMDYVC 13 (A split), 
+       APQXDYVC 8, PQAXDVYC 8, PQAVXDYC 12, LPQXMDYVC 13 (A split),
        PQAXYDVC 16, PQVAXDYC 27, VPQAXDYC 43.
      splitting `s = *(void**)D_80081484` from the NULL store: no change.
      a `void **q` local for the D_80081484 base: no change (same md5).
@@ -94,7 +94,20 @@
    Measured with
      python3 tools/decomp/aligndiff.py <unit copy> func_8008E700
      python3 tools/decomp/ovlverify.py <unit copy> func_8008E700
-   -> 208 of 208 words, 7 differing masked, 6 aligned. */
+   -> 208 of 208 words, 7 differing masked, 6 aligned.
+   PERMUTED 2026-11-16, 25 minutes, 6 jobs: NO IMPROVEMENT.  It reported
+   280 -> 145 on its own metric, and re-measured with aligndiff its best
+   output is **208 words and 6 aligned rows -- identical to this body**, with
+   the same six rows in the same place.  Its one idea was a pointer copy
+   (`g2 = c;` with the `+0x2C` store written through `g2`), which is legal C
+   and changes nothing measurable.
+
+   That is the third time this sweep has seen the permuter's own score move
+   without the aligned count moving with it; see docs/matching-levers.md,
+   "THE PERMUTER'S SCORE IS NOT THE ALIGNED DIFFERENCE COUNT".  **Do not
+   queue this one again.**  The residue is the sched1 priority tie described
+   above, and the two orders that would fix it break the other side.
+ */
 
 void func_8008E700(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
