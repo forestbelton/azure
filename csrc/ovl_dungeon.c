@@ -1626,6 +1626,7 @@ void func_80099F70(u8 *);
 extern s16 D_800E3DA8[];
 extern u8 D_800E0523[];
 extern u8 D_800E0683[];
+extern u8 D_800DD150[];
 /* Defined below; func_8008F428 calls it above its definition. */
 s32 func_800A6DA4(u32, u32);
 /* The 0x80010248 record array's 4-byte entry.  func_800945E8 copies one whole
@@ -5381,7 +5382,75 @@ void func_800927E4(UnkDungeonActor *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80092BB8);
+void func_80092BB8(UnkDungeonActor *p, void *b, u8 *c, u8 *d)
+{
+    Unk80083160 *q;
+    u8 *t;
+    u16 out[4];
+
+    switch (p->unk_9B)
+    {
+    case 0:
+        q = &D_80083160;
+        if ((((q->unk_C8 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) == 2)
+        {
+            t = *(u8 **)((u8 *)p + 0xCC);
+            *(u8 **)(c + 0x2C) = t;
+            func_80048A44(c, t[((q->unk_C8 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                          *(s16 *)((u8 *)p + 0x10E), 1);
+            p->unk_9B++;
+        }
+        else
+        {
+            *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + 0x200;
+        }
+        break;
+    case 1:
+        if ((D_80013714 & 8) != 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+            {
+                if (*(u8 **)(c + 0x2C) == D_800DD148)
+                {
+                    p->unk_9B = 0x10;
+                }
+                else
+                {
+                    *(u32 *)((u8 *)p + 0x8C) = (u32)func_8008ACDC;
+                }
+            }
+        }
+        else if (func_8003DE58(*(u8 **)(c + 0x8), c, out, 0) != 0 ||
+                 (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            func_800D7A14(*(u8 **)((u8 *)p + 0x114));
+            p->unk_9B++;
+        }
+        break;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0 || D_8008346A < 2)
+        {
+            if (*(void **)((u8 *)p + 0x110) != NULL)
+            {
+                func_80091934(p, b, c, d);
+            }
+            else
+            {
+                *(u8 **)(c + 0x2C) = D_800DD150;
+                func_80048A44(c, D_800DD150[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                              2, 1);
+                *(u32 *)((u8 *)p + 0x8C) = (u32)func_8008ACDC;
+            }
+        }
+        break;
+    case 0x10:
+        if ((p->unk_96 -= 1) <= 0)
+        {
+            func_8008D368((u8 *)p, b, c, D_800DD150, 0);
+        }
+        break;
+    }
+}
 
 /* Two states: 0 arms a 0x10-frame timer and advances, 1 runs it down and
    hands the actor to func_8008ACDC when it expires.

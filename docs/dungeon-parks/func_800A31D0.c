@@ -42,7 +42,25 @@
    specific block and everything else matches, is exactly the shape the
    permuter closes -- see docs/dungeon-sweep.md's triage rule.  QUEUE IT.
 
+   PERMUTED 2026-11-16, 20 minutes, 6 jobs.  It did NOT close the function,
+   but unlike the func_8009A540 run its ideas were legal C and one of them
+   paid.  Its best output confirms the diagnosis above -- it interposes
+   `n[0x6D] = 0;` BETWEEN the two increments, which is a store that may alias
+   and does stop the D_800DCE68 load hoisting -- but it lands on 54 words,
+   one OVER, rather than 53.
+
+   I then swept all 24 orderings of the four stores inside the `if`, with and
+   without the `d` local, 48 compiles.  **Not one of them reaches 53 words.**
+   Every ordering is either 52 (the nop missing) or 54 (an extra word); the
+   schedule flips between those two states and the target's 53 sits between
+   them.  Best at 52 is 17 differing, best at 54 is 15.  So the store ordering
+   is not the lever, and the one word is still the alias fact described above.
+
    -------------------------------------------------------------- what paid
+
+   52/21 -> 52/17: writing `c - 0x20` INLINE in the comparison instead of
+   through a `d` local.  Worth 4 differences at the same length, and it is
+   the permuter's one transferable idea from that run.
 
    51/28 -> 52/21: `g = (u8 *)&D_80083460;` assigned INSIDE the loop body,
    immediately before its use, rather than before the loop.  Worth 1 word.
@@ -58,11 +76,10 @@ void func_800A31D0(u8 *c)
 
     if (c[0x13] == 0x1E && (*(s32 *)(c + 0x14) & 0x4000) != 0 && *(s16 *)(c + 0xAA) != 0)
     {
-        d = c - 0x20;
         n = *(u8 **)(D_800E3D7C + 0x5C) + 0x20;
         while (n != D_800E3D7C)
         {
-            if (n[0x13] == 0x1E && *(u8 **)(n + 0xA4) == d)
+            if (n[0x13] == 0x1E && *(u8 **)(n + 0xA4) == c - 0x20)
             {
                 g = (u8 *)&D_80083460;
                 *(u16 *)(g + 0xA) += 1;
