@@ -42,39 +42,40 @@
      on the measurement: `stmt.c:5052-5071` takes `minval`/`maxval` from the
      case list and sizes the vector from their difference, and
      `stmt.c:5304-5307` is a loop headed `/* Fill in the gaps with the
-     default.  */`.  So only the LOWEST and HIGHEST case labels matter to the
-     table's extent; everything between is free.
-   * THE SIX SHARED TAILS ARE NOT A GOTO LADDER, and they are not written
-     out per arm either.  `.L800AF89C` is simply THE CODE AFTER THE SWITCH;
-     every arm reaches it with a plain `break`, and the three entry points
-     .L800AF89C / .L800AF8A0 / .L800AF8A4 are the delay-slot scheduler
-     stealing one or two instructions from the head of that block
-     (`addu $a0,$s7,$zero`, then `addu $a1,$s5,$zero`) and bumping the
-     branch target by one word each time.  Written this way the whole tail
-     structure falls out with NO gotos anywhere in the function -- the
-     finished body below contains none.
-   * THE FACING PREAMBLE HAS NO SEPARATE INDEX VARIABLE.  It is
-     `sp1E = (*(u16 *)(c + 0x2A) >> 9) & 7;` and then `D_8006CCD8[sp1E]`
-     directly.  j34's `s32 u` intermediate puts the index in a second
-     register and defers the `sh $v1,0x1E($sp)` past the `sll`, costing a
-     word of shuffling in each of the NINE copies.  (The nine copies
-     themselves are real -- that part of the decode is correct.)
-   * `ret` IS `u32` AND IS RETURNED AS `ret << 16 >> 16`.  Every other
-     spelling loses the target's `sll $v0,$fp,16` / `srl $v0,$v0,16` pair and
-     compiles to a bare `move v0,s8`: measured `u16 ret; return ret;`,
-     `s32 ret; return (u16)ret;`, `s32 ret; return ret & 0xFFFF;` and
-     `s16 ret; return (u16)ret;` all give the move (150 rows), and
-     `return (u16)(ret << 16) >> 16;` gives 175.  The shift pair is 147.
-   * THREE LANDED CALLEES NEED AN ALIAS WITH A DIFFERENT RETURN TYPE:
-       - func_800A35A4 is landed returning `u8`.  The target compares its
-         result with func_8009FD40's as `sll`/`sll`/`slt`, which is C's
-         shorten_compare narrowing a comparison of two SHORT-typed rvalues.
-         Through the `u8` return the cast leaves an `andi $v0,$v0,0xFF` and
-         the compare degrades to `sra`/`slt`: +5 words over the three copies.
-         The casts must come OFF and the callee must be `s16`.
-       - func_8009FD40 is landed returning `s16`.  Cases 0x2C and 0x2A need
-         its result UNEXTENDED (`addu $s0,$v0,$zero`) so that
-         `(u16)(r - 2) < 7` keeps its `andi $v0,$v0,0xFFFF`; through the s16
+     default.  */`.So only the LOWEST and HIGHEST case labels matter to the
+    table's extent; everything between is free.
+        *THE SIX SHARED TAILS ARE NOT A GOTO LADDER,
+    and they are not written
+        out per arm either.  `.L800AF89C` is simply THE CODE AFTER THE SWITCH;
+    every arm reaches it with a plain `break`, and the three entry points
+                                                           .L800AF89C /
+                                                           .L800AF8A0 /.L800AF8A4 are the delay -
+                                                   slot scheduler
+                                                       stealing one or two instructions from the head of that
+                                                       block(`addu $a0, $s7, $zero`, then `addu $a1, $s5, $zero`) and bumping the
+                                                   branch target by one word each time.Written this way the whole tail
+                                                   structure falls out with NO gotos anywhere in the function-- the
+                                                   finished body below contains none.
+                                                       *THE FACING PREAMBLE HAS NO SEPARATE INDEX VARIABLE.It is
+     `sp1E = (*(u16 *)(c + 0x2A) >> 9) & 7;` and then `D_8006CCD8[sp1E]` directly.j34 's `s32 u` intermediate puts the index in a second register and defers the `sh $v1, 0x1E($sp)` past the `sll`, costing a word of shuffling in each of the NINE copies.(The nine copies themselves are real-- that part of the decode is correct.) * `ret` IS `u32` AND IS RETURNED AS `ret << 16 >> 16`.Every other spelling loses the target' s `sll $v0, $fp, 16` / `srl $v0, $v0, 16` pair and compiles to a bare `move v0, s8`:
+measured `u16 ret;
+return ret;
+`,
+     `s32 ret;
+return (u16)ret;
+`, `s32 ret;
+return ret & 0xFFFF;
+` and
+     `s16 ret;
+return (u16)ret;
+` all give the move(150 rows), and
+     `return (u16)(ret << 16) >> 16;
+` gives 175. The shift pair is 147. * THREE LANDED CALLEES NEED AN ALIAS WITH A DIFFERENT RETURN TYPE : -func_800A35A4 is landed returning `u8`.The target compares its
+                                                                                                            result with func_8009FD40 's as `sll`/`sll`/`slt`, which is C' s
+                                                                                                                shorten_compare narrowing a comparison of two SHORT -
+    typed rvalues.Through the `u8` return the cast leaves an `andi $v0,
+    $v0, 0xFF` and the compare degrades to `sra`/`slt`: +5 words over the three copies.The casts must come OFF and the callee must be `s16`.- func_8009FD40 is landed returning `s16`.Cases 0x2C and 0x2A need its result UNEXTENDED(`addu $s0, $v0, $zero`) so that
+         `(u16)(r - 2) < 7` keeps its `andi $v0, $v0, 0xFFFF`; through the s16
          return gcc sign-extends on assignment and then drops the andi.
        - func_800A40AC is landed returning `s16` and costs a `sra` in case
          2's throw path for the same reason.
@@ -100,11 +101,14 @@
    * func_800A0E6C IS CALLED WITHOUT A PROTOTYPE, exactly as the unit's later
      call site does.  Adding one would change that landed call.
    * The dead `*(u16 *)(c + 0x24) > 0x10000` test is real and is written out
-     as j34 says; with `s32 t` it gives the target's `lui`/`slt` exactly.
+     as j34 says;
+with `s32 t` it gives the target's `lui`/`slt` exactly.
 
-   RESIDUE, by region (+9 words net)
+    RESIDUE,
+    by region(+9 words net)
 
-   1. case 0x1D's tail does not cross-jump into case 0x26's at .L800AEEFC:
+            1. case 0x1D's tail does not cross
+        - jump into case 0x26's at.L800AEEFC:
       +8 words, 9 rows.  The nine instructions are TEXTUALLY IDENTICAL in
       both arms in my build -- same opcodes, same registers, same branch
       targets -- and gcc still emits both copies.  I read jump.c's
@@ -117,25 +121,25 @@
       that first attempt I could not establish.  Giving either arm its own
       `g` does not change it (0x1D: 130 -> 137, 0x26: no change).
    2. case 0x18's last `c[0x46] = 0x800B; return 2;` does not cross-jump into
-      .L800AF8F0: +3 words.  gcc holds the 0x800B in $v1 there; the target
-      holds it in $v0, which is what lets it merge.
-   3. .L800AE010's `func_800A0818(...); c[0x2A]=; c[0x46]=0x800B; return 2;`
-      cross-jumps in MY build (into case 0x18's identical tail) and does NOT
-      in the target: -5 words.  (2) and (3) are one question with opposite
-      signs: in the target .L800AE010 holds 0x800B in $v1 and case 0x18 holds
-      it in $v0, so neither merges with the other and case 0x18 merges with
-      .L800AF8F0 instead.  Both of mine hold it in $v1.
-   4. The claim block reloads D_800814A8 with two load-delay nops where the
-      target interleaves the `lw` with the `lhu $v0,0x1C($sp)` chain:
+      .L800AF8F0:
+      + 3 words.gcc holds the 0x800B in $v1 there;
+      the target
+          holds it in $v0,
+          which is what lets it merge.3. .L800AE010's `func_800A0818(...); c[0x2A]=; c[0x46]=0x800B; return 2;` cross - jumps in MY build(into case 0x18's identical tail) and does NOT
+                                                                                                                        in the target : -5 words.(2)and(3) are one question with opposite
+                                                                                                                                        signs : in the target.L800AE010 holds 0x800B in $v1 and case 0x18 holds
+                                                                                                                                                it in $v0,
+          so neither merges with the other and case 0x18 merges with
+                  .L800AF8F0 instead.Both of mine hold it in $v1.4. The claim block reloads D_800814A8 with two load
+              - delay nops where the
+              target interleaves the `lw` with the `lhu $v0,
+          0x1C($sp)` chain:
       +2 words, 3 rows.  I tried the array-reference spelling the unit's
       func_80097F84 comment records (`((u8 **)(D_800814A8 + 0xAC))[j]`, which
       IS MEM_IN_STRUCT_P where `*(u8 **)(D_800814A8 + j*4 + 0xAC)` is not):
       byte-for-byte no change here, so that lever does not reach this store.
-   5. case 0x24's Chebyshev test: ~15 rows, net -2 words.  The dx/dy/mx shape
-      below reproduces the target's instruction sequence but gcc puts `mx` in
-      $a2 where the target has $s0, and sp18/sp1A in $v1/$a0 where the target
-      has $a0/$a1.  Six orderings measured, all 130 or worse.
-   6. case 0x2A: ~20 rows, a clean permutation of the callee-saved registers
+   5. case 0x24's Chebyshev test:
+      ~15 rows, net - 2 words.The dx / dy / mx shape below reproduces the target's instruction sequence but gcc puts `mx` in $a2 where the target has $s0, and sp18 / sp1A in $v1 / $a0 where the target has $a0 / $a1.Six orderings measured, all 130 or worse.6. case 0x2A: ~20 rows, a clean permutation of the callee-saved registers
       ($s0<->$s3 for r/ang, $s1<->$s2 for &D_80082E80).  Instruction-for-
       instruction correct otherwise.
    7. case 0x22: 3 rows, `lui $s1` where the target has `lui $s0` and the
