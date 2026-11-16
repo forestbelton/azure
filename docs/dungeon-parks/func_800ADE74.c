@@ -41,7 +41,7 @@
      with the gaps left out.  Checked against the compiler rather than taken
      on the measurement: `stmt.c:5052-5071` takes `minval`/`maxval` from the
      case list and sizes the vector from their difference, and
-     `stmt.c:5304-5307` is a loop headed `/* Fill in the gaps with the
+     `stmt.c:5304-5307` is a loop headed `(* Fill in the gaps with the
      default.  */`.So only the LOWEST and HIGHEST case labels matter to the
     table's extent; everything between is free.
         *THE SIX SHARED TAILS ARE NOT A GOTO LADDER,
@@ -209,7 +209,7 @@ with `s32 t` it gives the target's `lui`/`slt` exactly.
    THE THREE ALIAS DECLARATIONS BELOW ARE REQUIRED and are not yet in
    csrc/ovl_dungeon.c's declaration block.  Everything else this body needs
    is already declared or defined above line 20092 of the unit.
-*/
+*)
 
 s16 func_800A35A4h(u8 *, s32) __asm__("func_800A35A4");
 s32 func_8009FD40w(u8 *, u8 *) __asm__("func_8009FD40");

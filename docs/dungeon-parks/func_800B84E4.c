@@ -11,7 +11,7 @@
    UnkDungeonSPXY):
 
        typedef union UnkDungeonSPUV { s32 w; u8 b; } UnkDungeonSPUV;
-       typedef struct UnkDungeonSPF {...} UnkDungeonSPF;    /* scratchpad
+       typedef struct UnkDungeonSPF {...} UnkDungeonSPF;    (* scratchpad
    NAME COLLISION RESOLVED 2026-11-16: this typedef was called UnkDungeonSP9
    until func_800BC4D4 landed with a DIFFERENT struct under that same name
    (its +0x00/+0x02/+0x04 origin triple against this one's 8 bytes of
@@ -151,7 +151,7 @@ The signature is the one docs / dungeon - parks / func_800B835C.c pins :
    needs the stall, not a source order -- the copy's own LUID is already the
    smallest in the block, so the tie-break that fixed func_800CE4E8's outer
    loop head has nothing to work with here.  `.sched' work, not the
-   permuter. */
+   permuter. *)
 
 /* ---- the new declarations this body needs, verbatim ---- */
 /* A scratchpad word written whole and read back as its low BYTE and as the

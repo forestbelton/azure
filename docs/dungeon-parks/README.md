@@ -35,6 +35,21 @@ anything over ~200 words; `ovlverify` compares word N against word N, so one
 transposed pair misses twice. A function is landed only at `0 differing` with
 the word counts equal.
 
+## Run `parkcheck.py` after editing a header
+
+    python3 tools/decomp/parkcheck.py        # exit 1 if any park is malformed
+
+Nothing compiles these files, so nothing catches a malformed one. The failure
+is always the same: an **inner `/*` inside the header**, which in C ends the
+outer comment at the first following `*/` and turns the rest of the header
+into code. It goes unnoticed because every merge script extracts from the
+DEFINITION LINE onward and never reads the header -- so the body measures
+perfectly while the file as a whole is not valid C.
+
+On 2026-11-16 three of thirty-five were malformed at once, two of them from
+my own notes quoting `/* ... */` from compiler source. Write inner comment
+markers as `(* ... *)` or drop them.
+
 ## The header is hand-written, and it is the point
 
 Unlike `docs/near-misses/`, nothing generates these headers. Each one should
