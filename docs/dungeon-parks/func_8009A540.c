@@ -66,8 +66,16 @@
      hoist at the END of the preheader, the middle position is itself the
      evidence that the real source has a user variable there.  29 -> 23.
 
-   Word-exact with the whole residue in two words in one place: permuter food
-   by the triage rule in docs/dungeon-sweep.md. */
+   PERMUTED 2026-11-16, 20 minutes, 6 jobs: NOTHING USABLE.  Its best output
+   scores 320 against the base's 725 on the permuter's own metric and is
+   WORSE by the project's: `aligndiff` measures it at 73 words against the
+   target's 75, two words SHORT, with the D_800DCEBC reference folded to a
+   constant `lui 0x800E` / `lhu -12608`.  The single idea in it is
+   `k * (k = 2)` -- an unsequenced modification and use of `k` in one
+   expression, which is undefined behaviour and would not be in the original
+   source.  Every other output in the run is the permuter's own `new_var`
+   randomisation with no structural idea in it.  **Do not re-run this one**;
+   it needs the `.greg` work described above, not another search. */
 
 s16 func_8009A540(s32 a, s32 x, s32 y, s16 z)
 {
