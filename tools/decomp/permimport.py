@@ -170,6 +170,26 @@ def main():
     d = os.path.join(PROJ, "nonmatchings", func)
     os.makedirs(d, exist_ok=True)
 
+    # ALWAYS run the source through permsafe first.  decomp-permuter parses
+    # base.c with pycparser, which cannot parse an `__asm__` operand holding a
+    # binary operator -- `gte_stsxy(q + 0x20)` expands to `:: "r"( q + 0x20 )`
+    # and the parse dies on the `+`.  ONE such call anywhere in the unit breaks
+    # the import of EVERY function in it, and the only symptom is `base=?` in
+    # the permrun log with zero iterations, which looks like a dead permuter
+    # rather than a parse error.  This used to be a separate step you had to
+    # remember; it cost two wasted runs on 2026-11-16 before anyone ran
+    # permuter.py by hand and saw the message.  The hoist is codegen-neutral
+    # (it only touches OTHER functions in the copy) and never touches csrc.
+    safe = os.path.join(d, "source.c")
+    r = subprocess.run([sys.executable, os.path.join(HERE, "permsafe.py"),
+                        park, safe], capture_output=True, text=True)
+    if r.returncode != 0:
+        print("permimport: permsafe failed:\n%s" % (r.stdout + r.stderr))
+        return 1
+    if r.stdout.strip():
+        print(r.stdout.strip())
+    park = safe
+
     # Two compilers in the tree as of 2026-11-11; the unit picks one.
     cc = asmlib.cc1_for_unit(unit)
 
