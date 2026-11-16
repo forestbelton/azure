@@ -5382,6 +5382,28 @@ void func_800927E4(UnkDungeonActor *p, void *b, u8 *c, u8 *d)
     }
 }
 
+/* State 0x2B: case 0 re-skins the renderable off the actor's own +0xCC table
+   once the camera-relative facing reaches 2 (and spins the mover's facing by
+   0x200 until it does), case 1 waits for the projection or the 0x8000 flag
+   and hands the +0x114 record to func_800D7A14 -- unless D_80013714's bit 3
+   is up, where it either re-arms at sub-state 0x10 or parks func_8008ACDC --
+   case 2 closes on func_80091934 or on the D_800DD150 skin, and case 0x10
+   runs the +0x96 timer down into func_8008D368. 145 words, 0 differing on
+   the first compile.
+
+   ITS TEMPLATE IS THE FUNCTION ABOVE IT, func_800927E4, and three of that
+   one's measured spellings transferred verbatim: `q = &D_80083160;` with the
+   heading read as the COMPONENT_REF `q->unk_C8` (a `u8 *` base and
+   `*(s16 *)(g + 0xC8)` is a fixed-address scalar that cse does not kill on
+   the `*(u8 **)(c + 0x2C)` store between the gate and the index, so one load
+   would serve both); the handler store written `*(u32 *)((u8 *)p + 0x8C)` and
+   not `p->unk_8C`; and the facing index written out in full at both sites
+   rather than bound to a local.
+
+
+   The +0xCC skin table IS bound to a local here, unlike func_800927E4's
+   named symbols -- it is a pointer LOAD, and the target loads it once for
+   the `*(u8 **)(c + 0x2C)` store and the index both. */
 void func_80092BB8(UnkDungeonActor *p, void *b, u8 *c, u8 *d)
 {
     Unk80083160 *q;
@@ -9978,6 +10000,34 @@ s32 func_8009ADB8(u8 *a, u8 *b, s32 c, s32 d, s16 e)
     return 0;
 }
 
+/* Walk up to `n` tiles along the direction in `ang` and report how many were
+   clear: the count is returned one SHORT when func_800A0548, func_8009A350 or
+   func_800BCB04 stops the walk, and in full when a stepped-on tile holds a
+   0x1F occupant (which is then flagged 0x800000 and announced through
+   D_800DD7DC). 147 words, 0 differing.
+
+   TWO SPELLINGS ARE LOAD-BEARING.
+
+   (1) `dir` IS A COPY MADE INSIDE THE LOOP of a value computed outside it:
+   `d0 = (ang >> 9) & 7;` before the loop and `dir = d0;` as the loop body's
+   first statement. loop.c hoists that invariant copy into the preheader, and
+   it is the target's `addu $fp, $a2, $zero` -- the `andi` stays in the entry
+   block in a call-clobbered register and only the copy gets $fp. With one
+   `dir` assigned before the loop the function is 146 words, one short, with 3
+   aligned differences; computing `dir` inside the loop and dropping `d0`
+   entirely is 144/142; `d0` and `dir` both assigned before the loop is
+   146/123, as is an `s32 ang` with `((u32)ang >> 9)`.
+
+   (2) THE func_8009A350 TEST IS AN if/else WITH `return k - 1` IN THE ELSE
+   ARM, not an early `if (... == 0) return k - 1;`. The else arm is emitted
+   after the then arm, which is where the target's own 2-word `j`/`sll` block
+   sits -- just before the loop tail. As an early return it is laid out inline
+   and the function is 148 words with 55 aligned differences. The
+   func_800A0548 test above it IS a plain early return and stays one.
+
+   `u16 dir` instead of `s32 dir` is 147 words, 20 differing; hoisting
+   `&D_8006CCD8[dir]` into a `u16 *t` by hand before the loop is 148/144 --
+   the hoist is loop.c's to make, not the source's. */
 s16 func_8009AF18(u16 ang, UnkVec *b, u8 *c, s16 n)
 {
     s16 k;
@@ -10215,6 +10265,52 @@ u8 *func_8009B4B0(u8 *p, u16 x, u16 y)
     return NULL;
 }
 
+/* Step one tile along the actor's own facing and decide what is standing
+   there: func_8009A540 vetoes the step, func_8009B25C hands back whatever
+   occupies the tile, and when nothing does, func_800A70E4 picks a free slot
+   and func_800A8E74 spawns the node for it. Returns the occupant, (u8 *)1
+   when the spawn failed, or NULL. 142 words, 0 differing.
+
+   FOUR SPELLINGS WERE LOAD-BEARING, in the order they paid.
+
+   (1) ONE TRAILING `return NULL`, with everything nested inside the
+   func_8009A540 gate. Both NULL exits then branch to the one `addu $v0,
+   $zero, $zero` block the compiler puts after all the code. Written as two
+   early returns -- `if (func_8009A540(...) == 0) return NULL;` and later
+   `if (n < 0) return NULL;` -- gcc keeps the shared stub in the MIDDLE of the
+   function, the second test inverts to `bgez`, and it is 142 words with 34
+   aligned differences. Same for the single `return r`: with two early
+   `return r`s gcc builds a `j`/`move` stub and the two tests branch to it,
+   where the target branches straight to the epilogue with `addu $v0, $s0,
+   $zero` in each delay slot (51 aligned differences).
+
+   (2) `hp = &D_800814A8;` -- A POINTER LOCAL TO THE SYMBOL, read as `*hp` at
+   both sites. That is what gives ONE `lui $s6, %hi(D_800814A8)` in a
+   callee-saved register with the `%lo` folded into each `lw`'s displacement.
+   Named directly as `(u8 *)D_800814A8` each site materialises its own
+   `lui`/`lw` pair, $s6 is never saved, and the function is 141 words -- one
+   short -- with 24 aligned differences. An array alias
+   `extern u32 D_800814A8_a[] __asm__("D_800814A8");` read as `[0]`,
+   `*(u32 *)&D_800814A8` and `(&D_800814A8)[0]` all measure identically to the
+   plain scalar, 141/116; only the pointer local moves it.
+
+   (3) `h2 = (u8 *)*hp;` READ BEFORE `*(u8 **)(q + 0x80) = p;`. The load has
+   to precede the store or reorg cannot put the store in the `bne`'s delay
+   slot: with the store first it fills the slot from the join block instead
+   and the function is 143 words. Paired with (4) it is the difference
+   between 14 and 1 aligned differences.
+
+   (4) `w = *(u32 *)s;` bound to a local ahead of the two stores, with the
+   stores left in target order. Without the local the `lw 0($s1)` cannot be
+   scheduled into the `lui`'s shadow and a load-delay `nop` appears; swapping
+   the two stores instead removes the nop but puts the word store first (11
+   aligned differences).
+
+   (5) `s32 v` with the test written `(s16)v < 0`. As `s16 v` with `v < 0` the
+   `sll` reads the call result where the target reads the truncating copy --
+   one register row, 142/1. `s8 v`, an `s32` temporary feeding `v`, and an
+   `if (v >= 0) {} else` all score the same 1; `(s16)` applied at the
+   assignment instead is 142/3. */
 u8 *func_8009B5AC(u8 *p, s16 x, s16 y)
 {
     u8 *r;
