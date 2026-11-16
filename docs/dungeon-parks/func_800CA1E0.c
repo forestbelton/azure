@@ -56,7 +56,42 @@
        (`f = (f >> 9) & 7;` and `f` everywhere) is 45 rows.
 
    Two words of allocator noise inside one 153-word function whose every
-   other word aligns -- good permuter food. */
+   other word aligns -- good permuter food.    ---------------------------------------------- 2026-11-16, permuted and improved
+
+   PERMUTED, 25 minutes, 6 jobs: 660 -> 315 on its own metric, which
+   re-measures with aligndiff as **152 words of 153 and 5 aligned rows**,
+   from this park's 151 / 17.  Its two ideas were legal C this time
+   (`D_8006CCD8[new_var2 = k]` and `return -(new_var = 1)`), and BOTH have
+   legitimate equivalents that reproduce them exactly.  The body below is the
+   legitimate form.
+
+   (1) `s32 kk = k;` with **every** use of the index moved to `kk`.
+       151/17 -> 152/5.  Moving only the first three uses and leaving the
+       later `D_800DCEAC[k]` on the original is 151/17 -- no effect at all.
+       See the catalogue entry "A SOURCE-LEVEL COPY CANNOT REPRODUCE AN
+       ALLOCATOR COPY", which this refines: the copy pays when the original
+       is left with no uses, and does nothing when it keeps some.
+
+   (2) `s32 one = 1;` assigned at the top and the second bounds test written
+       `return -one;`.  152/5 -> **153/6 -- the exact target word count.**
+       Assigned later instead it is 151/22 or 152/5, so the position is the
+       lever, not the local.
+
+   WHAT IS LEFT, 6 rows: the target computes `(f >> 9) & 7` into `$a0` and
+   copies it to `$s5`, then copies it BACK into `$a0` at word 22; this body
+   computes straight into `$s5` and copies once.  And the target's
+   `addiu $a1, $zero, 0x1` sits at word 30 where this has a `nop`, with the
+   `li 1` at 22 instead -- the two instructions are in swapped slots.
+
+   A THIRD index local for the copy-back does not buy it: assigned after
+   `kk`, before the call, after the first bounds test, or also used for the
+   later table reads, all four measure identically to not having it.  The
+   copy is coalesced every time, which is the same entry's rule working
+   correctly -- `kk` is still live, but the copy's own source is dead.
+
+   Word-exact with every remaining difference a register name or a two-insn
+   swap: `.greg`/`.sched` work by the triage rule, not another search. */
+
 s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
 {
     u16 w;
@@ -67,6 +102,8 @@ s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
     s32 wx;
     s32 wz;
     s32 k;
+    s32 kk;
+    s32 one;
     s32 h;
     s32 t;
     s16 n;
@@ -74,22 +111,24 @@ s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
 
     k = (f >> 9) & 7;
     m = (u8 *)D_8008333C;
-    ax = c[0x24] + (u16)D_8006CCD8[k];
+    kk = k;
+    one = 1;
+    ax = c[0x24] + (u16)D_8006CCD8[kk];
     if (ax == 0 || (1 << *(s16 *)(m + 0x14)) - 1 < ax)
     {
         return -1;
     }
-    az = c[0x25] + (u16)D_8006CCE8[k];
+    az = c[0x25] + (u16)D_8006CCE8[kk];
     if (az == 0 || (1 << *(s16 *)(m + 0x16)) - 1 < az)
     {
-        return -1;
+        return -one;
     }
     h = *(u16 *)(d + 0x88);
     px = c[0x24] << 6;
     pz = c[0x25] << 6;
     wx = px + 0x20;
     wz = pz + 0x20;
-    if (func_8009A540(k, px >> 6, pz >> 6, h - y) == 0)
+    if (func_8009A540(kk, px >> 6, pz >> 6, h - y) == 0)
     {
         return 0;
     }
@@ -102,7 +141,7 @@ s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
     }
     if ((s8)c[0x26] < 0)
     {
-        n = func_8009FB34(c[0x24] + (u16)D_8006CCD8[k], c[0x25] + (u16)D_8006CCE8[k]);
+        n = func_8009FB34(c[0x24] + (u16)D_8006CCD8[kk], c[0x25] + (u16)D_8006CCE8[kk]);
         if (n >= 0 && (D_800E2970_s[n].unk_0C & 2) != 0 && (*(s32 *)(d + 0x1C) & 0x2000) == 0)
         {
             return 0;

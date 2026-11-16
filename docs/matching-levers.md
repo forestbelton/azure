@@ -877,15 +877,15 @@ then read only the section you need.
 - `MEM_IN_STRUCT_P` CUTS BOTH WAYS, AND WHICH WAY DEPENDS ON THE SIDE OF `true_dependence` IT LANDS ON  `:28578`
 - DRAW THE CALL RESULT INTO THE SHORT-LIVED LOCAL, NOT THE LONG-LIVED ONE  `:28606`
 - A SOURCE-LEVEL COPY CANNOT REPRODUCE AN ALLOCATOR COPY  `:28627`
-- PUT THE STORE INSIDE BOTH ARMS TO KEEP A TWO-ARM `if`  `:28645`
-- gcc TRUSTS A NARROW RETURN FOR A COMPARISON AND NOT FOR AN ASSIGNMENT -- TWO WORDS, IN OPPOSITE DIRECTIONS  `:28663`
-- WRITE A LOOP ADDRESS'S CONSTANT ON THE **INDEX** SIDE, OR loop.c FOLDS IT INTO A GIV AND COSTS A REGISTER  `:28679`
-- `cond ? a == K1 : a == K2` IS NOT TWO `if`s WITH THE BODY DUPLICATED, AND IT IS FIVE WORDS  `:28700`
-- `return -1` FIRST, NOT LAST, WHEN FOUR EARLIER TESTS ALSO RETURN IT  `:28717`
-- THE PERMUTER CAN CONFIRM A MECHANISM EVEN WHEN ITS SPELLING IS UNUSABLE  `:28731`
-- READ `move_movables`' THRESHOLD OUT OF `-dL` INSTEAD OF GUESSING IT -- AND ARRAY INDEXING IS HOW YOU PUSH `insn_count` PAST IT  `:28762`
-- THE SAME `threshold` vs `insn_count` DECIDES WHERE AN ELIMINATED BIV'S BOUND IS COMPUTED  `:28790`
-- A STORE WRITTEN INTO BOTH ARMS BUYS A REAL RELOAD AFTER THE JOIN, AND THAT RELOAD BLOCKS A CROSS-JUMP  `:28811`
+- PUT THE STORE INSIDE BOTH ARMS TO KEEP A TWO-ARM `if`  `:28663`
+- gcc TRUSTS A NARROW RETURN FOR A COMPARISON AND NOT FOR AN ASSIGNMENT -- TWO WORDS, IN OPPOSITE DIRECTIONS  `:28681`
+- WRITE A LOOP ADDRESS'S CONSTANT ON THE **INDEX** SIDE, OR loop.c FOLDS IT INTO A GIV AND COSTS A REGISTER  `:28697`
+- `cond ? a == K1 : a == K2` IS NOT TWO `if`s WITH THE BODY DUPLICATED, AND IT IS FIVE WORDS  `:28718`
+- `return -1` FIRST, NOT LAST, WHEN FOUR EARLIER TESTS ALSO RETURN IT  `:28735`
+- THE PERMUTER CAN CONFIRM A MECHANISM EVEN WHEN ITS SPELLING IS UNUSABLE  `:28749`
+- READ `move_movables`' THRESHOLD OUT OF `-dL` INSTEAD OF GUESSING IT -- AND ARRAY INDEXING IS HOW YOU PUSH `insn_count` PAST IT  `:28780`
+- THE SAME `threshold` vs `insn_count` DECIDES WHERE AN ELIMINATED BIV'S BOUND IS COMPUTED  `:28808`
+- A STORE WRITTEN INTO BOTH ARMS BUYS A REAL RELOAD AFTER THE JOIN, AND THAT RELOAD BLOCKS A CROSS-JUMP  `:28829`
 
 <!-- END INDEX -->
 
@@ -28641,6 +28641,24 @@ live range -- a copy whose source stays live afterwards, or one placed so the
 two ranges overlap (see "TWO PARAMETERS THAT TIE IN PRIORITY" and the
 `func_800B23F8` park). A copy of a value that is dead afterwards is free to
 delete and gcc deletes it.
+
+**REFINED 2026-11-16 on `func_800CA1E0`, with a controlled pair.** The rule
+above is about a copy made ALONGSIDE continued use of the original. A copy
+that is really a RENAME -- `kk = k;` with **every** remaining use moved to
+`kk`, so `k` is left with none -- is a different thing and it does pay:
+151 words / 17 aligned rows against **152 / 5**. Moving only some of the uses
+and leaving the rest on `k` measures 151/17, i.e. exactly nothing.
+
+So the discriminator is **whether the original keeps any uses**:
+
+* original keeps uses -> the copy is redundant, `canon_reg` folds it, no effect;
+* original left with none -> you have given the value a second definition
+  point, and that can be worth a word.
+
+Both halves were measured on the same function minutes apart, which is why
+they are filed together. And the original rule still holds for a THIRD copy
+on top: four placements of a `k3 = kk;` on that same function all coalesced
+away, because the copy's own source was dead even though `kk` was not.
 
 ## PUT THE STORE INSIDE BOTH ARMS TO KEEP A TWO-ARM `if`
 

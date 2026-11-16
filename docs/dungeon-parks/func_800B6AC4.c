@@ -1,5 +1,120 @@
-/* PARK: func_800B6AC4 (812 words).  Best: built 804 words, 65 aligned
-   differences.  Not landed. */
+/* PARK -- func_800B6AC4, the 12-case +0x9B state machine over jtbl_80089310.
+   NOT LANDED.  Best measured: built 811 words, target 812 words,
+   46 aligned differences (tools/decomp/aligndiff.py).  ovlverify's positional
+   count reads 598/643 only because the candidate is one word short at
+   aligned index 203 and everything after it shifts.
+
+   The register allocation, the switch dispatch, the epilogue, the shared
+   `p[0x9B]++` tail (.L800B7718/.L800B771C), the shared redraw tail
+   (.L800B770C), and cases 0, 1, 3, 4, 5, 6, 8 and 11 are now EXACT.
+   What is left, in aligned-index order:
+
+   (1) 2 words, case 2's `k` flag.  The target materialises k in $v1 and
+       tests a COPY in $v0: `addu $v0, $v1, $zero` twice, once in the
+       delay slot of `beqz $v0, .L800B6DFC` and once at the .L800B6DF8
+       cross-jump join.  Every spelling tried tests $v1 directly and loses
+       both copies.  Measured and rejected: `if (k == 1)` (808/64),
+       `if (k != 0)` (807/61 -- identical to `if (k)`), an explicit
+       `else { k = 0; }` in the g+8 arm (805/64), and declaring k first
+       (no change).
+
+   (2) 1 row, case 7: the target emits `lui $a1, %hi(D_800DCF4F)` BEFORE
+       `addiu $a0, $a0, %lo(D_80083460)`; the candidate emits it after.
+       Zero words, pure order.
+
+   (3) 5 rows, case 9: the target leaves a load-delay `nop` between
+       `lw $v1, 0xC0($s2)` and `lbu $v1, 0x0($v1)` and only materialises
+       %hi/%lo(D_800E3DF0) after the three `sb`s.  The candidate fills that
+       stall with the D_800E3DF0 `lui`, which costs $v0 and forces an extra
+       `move $a1, $v0` for the func_80099090 result.  Net zero words.
+       Measured and rejected: `*(u8 *)(p + 0xC0)` in place of the
+       `((u8 **)p)[0x30]` array form (no change), hoisting `base9` above the
+       func_80099090 call (no change), dropping the `base9` local and writing
+       `(u8 *)0x80010000` inline (808/62).
+
+   (4) ~6 rows, case 10: the target's `sw $v1, %lo(D_800814A0)($t0)` is the
+       LAST insn before .L800B770C, with `sw $a1, 0x2C($a0)` and
+       `lh $a3, 0x2A($s3)` scheduled between the load and the store.  The
+       candidate puts the store four insns earlier and the table store one
+       insn earlier.
+
+   WHAT THE STATEMENT ORDER IN CASE 10 IS WORTH -- this is the single most
+   expensive thing measured on this function, because it decides whether
+   case 8's redraw cross-jumps into case 10's (the target shares only
+   .L800B770C; a candidate whose case-10 tail ends in the same `addu`
+   merges ten more words and comes out short).  With the four statements
+   labelled B = the D_8001029C/D_800E3DF0 clear, C = the `-0x2 |= 0x8000`
+   store, D = the `((u8 **)c)[0xB]` table store, and the D_800814A0
+   read-modify-write split as Y = `y = D_800814A0 | 0x8000;` and
+   S = `D_800814A0 = y;`, all 24 orders of {B,C,D} x Y-position were
+   measured.  B,Y,D,C,S is 811/46; B,Y,D,S,C is 811/46 as well;
+   B,C,Y,D,S is 814/65; B,D,C,Y,S is 814/65; Y,B,C,D,S is 805/58;
+   the unsplit `D_800814A0 |= 0x8000;` in its best position is 807/61 and
+   in its worst 816/68.
+
+   LEVERS THAT WERE WORTH A LOT AND ARE ALREADY IN THE BODY:
+
+   * EVERY D_80083460 BASE AND EVERY SCRATCH POINTER NEEDS ITS OWN LOCAL.
+     One `h` shared by cases 2, 3 and 7 crosses a call in case 3, so global
+     alloc gives the single pseudo a CALLEE-SAVED register everywhere and
+     case 2's `lui/addiu D_80083460` comes out in $s0 where the target has
+     $v1.  Splitting h/h2/h3/h4 (and r/e2/e7/e9/e10/n5/base9/base10) took
+     the function from 280 aligned differences to 96 IN ONE STEP and, with
+     it, fixed the whole parameter register map: before the split the
+     allocation order was b, g, c, p, d and after it g, c, p, d, b, which
+     is the target's.  Nothing else moved that map.
+
+   * THE SIX FACING TABLES ARE NAMED TWICE, NOT BOUND TO A `u8 *t`.
+     func_8008E264's rule transfers verbatim: with the local, the
+     `addu $a0, $s1, $zero` the target emits BEFORE the table store is
+     pushed past it at all six sites.  325 aligned differences with the
+     local, 280 without.
+
+   * CASE 2's FIRST D_80013714 READ MUST BE THE CONSTANT ADDRESS
+     `*(u16 *)0x80013714`; the other four must be structs.h's SYMBOL.
+     As the symbol, the `lui` is two insns and reorg steals it into the
+     delay slot of the preceding `bnez $v0, .L800B7750`, where the target
+     has a `nop` -- func_8008E0C4 records exactly this.  As the symbol in
+     case 7 the `%hi` is CSE'd into $s3 and serves three reads, which the
+     assembler macro cannot do, so that site must NOT be the constant.
+
+   * CASE 1's THREE STORES ARE 0xC0, D_80081484, 0x8C -- in that order,
+     with the +0x8C one a COMPONENT_REF (`((UnkDungeonActor *)p)->unk_8C`).
+     The component ref is what lets sched sink the D_80081484 store past it
+     (true_dependence's in-struct/varying exception); written
+     `*(u32 *)(p + 0x8C)`, or with the 0x8C store ahead of the D_80081484
+     one, the `lui %hi(func_800B69DC)` is stolen into the delay slot of the
+     `bnez $v0, .L800B6C80` above and the block comes out in the wrong
+     order.  Worth 10 aligned differences (75 -> 65).
+
+   * CASE 4's +0x8C STORE IS ALSO A COMPONENT_REF, for func_800969B8's
+     reason: through `*(u32 *)(p + 0x8C)` the store may alias D_800E296C
+     and sched1 cannot lift that global's `lw` above it.
+
+   * EVERY p+0xC0 ACCESS IS `((u8 **)p)[0x30]`, NOT A CAST.  The array form
+     sets MEM_IN_STRUCT_P, which is what lets case 7's `lw $a0, 0xC0($s2)`
+     move above the `sb` to D_800E2968.
+
+   * CASE 9's e9[0] SOURCE BYTE IS READ INTO A TEMP BEFORE THE e9[3]/e9[2]
+     STORES.  The target's `lw`/`nop`/`lbu` pair sits between `sb $v1, 0x1`
+     and `sb $v0, 0x3`, and a byte store is QImode, which true_dependence
+     never disambiguates -- so no spelling moves the load across it.  Only
+     writing it out in that order puts it there.  Worth 10 (85 -> 75).
+
+   * CASE 2's FIRST TEST IS WRITTEN `== 0` SO THE D_80083460 ARM IS THE
+     FALL-THROUGH; written the other way round the branch is inverted.
+
+   * D_80083228 IS D_80083160 + 0xC8, AND BOTH SPELLINGS APPEAR.  Case 0
+     reads it as `q->unk_C8` off its own `Unk80083160 *q` (func_800927E4's
+     measured shape, which this arm is a line-for-line copy of); every other
+     arm reads the absolute `D_80083228`.
+
+   * D_8001029C IS REACHED AS func_80098FF8 DOES IT: a `u8 *` local holding
+     0x80010000 with 0x29C inside the index.
+
+   Target 812 words = 0xCB0 bytes.  jtbl_80089310 is at rodata 0x89310,
+   0 mod 8, so this function is safe to land (func_80095538 is the
+   precedent). */
 void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     Unk80083160 *q;
@@ -10,7 +125,6 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     u8 *h4;
     u8 *n;
     u8 *m;
-    u8 *e;
     u8 *r;
     u8 *e2;
     u8 *e7;
@@ -23,6 +137,7 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     void *s;
     s32 k;
     s32 x;
+    u32 y;
     s32 v;
     s16 out[4];
 
@@ -317,9 +432,10 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
             base10 = (u8 *)0x80010000;
             e10 = *(u8 **)(base10 + *(s16 *)(d + 0x8A) * 4 + 0x29C);
             *(u32 *)((u8 *)D_800E3DF0[e10[3] & 0x1F] + 0x14) &= ~0x4000;
-            *(u16 *)(*(u8 **)(d + 0x60) - 0x2) |= 0x8000;
+            y = D_800814A0 | 0x8000;
             ((u8 **)c)[0xB] = D_800DD140;
-            D_800814A0 |= 0x8000;
+            *(u16 *)(*(u8 **)(d + 0x60) - 0x2) |= 0x8000;
+            D_800814A0 = y;
             func_80048A44(c, D_800DD140[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
             p[0x9B]++;
         }
