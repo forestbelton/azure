@@ -486,7 +486,8 @@ both queued:
 ## 2026-11-15, LATER: 791 OF 863, AND WHAT THE PERMUTER IS AND IS NOT FOR
 
 `progress.py`: **791 of 863 landed, 72 stubs, 73.4%**, from 565 earlier the
-same day. The whole-unit `ovlverify.py` sweep is clean, `clang-format` has no
+same day. (As of 2026-11-16 it is **795 of 863, 68 stubs, 75.2%** -- see the
+/tmp entry below for the four that got it there and the detour they took.) The whole-unit `ovlverify.py` sweep is clean, `clang-format` has no
 complaints, and `build/dungeon.bin` is byte-identical.
 
 **THE PERMUTER DOES NOT CRACK A SMALL PURE-ALLOCATION RESIDUE. IT IS FOR
@@ -548,6 +549,17 @@ Between one working day and the next, a routine cleanup wiped everything under
   `func_800C6B40`, `func_800B9144` and `func_800D0DE0`, the four 0.60-ratio
   xsibs leads -- and its run was cut off by a rate limit before it wrote its
   report. The bodies and the measurements went with the directory.
+
+  **These four were recovered**, and how is worth knowing: an agent's
+  conversation is held by the session, not by its working directory, so
+  `SendMessage` to its agent id resumed it and it re-emitted all four bodies
+  from its own transcript. Each was re-spliced and re-verified from scratch
+  rather than trusted, and all four landed. That route is only open while the
+  session still holds the agent -- `ListAgents` showing nothing means it is
+  gone -- and it does not recover everything: the same trick on a second agent
+  got its levers back but not the 478-line decode it had written to a file,
+  because the file's text had been produced by a series of patches rather than
+  emitted whole.
 * Five agents' unit copies, every saved `func_XXXXXXXX_best.c`, and the
   agents' own transcripts, which were the other way back to those bodies.
 * A permuter run in progress, and the dispatcher's own park candidate for
