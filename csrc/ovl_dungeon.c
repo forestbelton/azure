@@ -8099,7 +8099,165 @@ void func_80096AE0(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80096C24);
+/* The entry probe of the dispatcher func_8008B9FC and func_8008C13C serve,
+   and both are line-for-line templates for it: the same func_8009ABA0 probe
+   on +0x2A/+0x88 with 0x20 on the stack, the same D_8006CCD8/D_8006CCE8
+   eight-way step, the same f/h/q materialisations of D_80083460 and the same
+   `r > 0` / `r <= 0` fork, with a D_800DD274 or D_800DD294 re-skin in each
+   arm instead of func_8008B9FC's D_800E3544 tail. 266 words, 0 differing.
+
+   THE FIRST FLAG RMW IS THE ARRAY-REF SPELLING, `*((u16 *)f + 1) |= 0x8`,
+   AND IT IS WORTH THREE WORDS. Written `*(u16 *)(f + 0x2) |= 0x8` the
+   address expression's top node is a cast, so expand_expr leaves
+   MEM_IN_STRUCT_P clear; `f` holds a SYMBOL address so cse_rtx_addr_varies_p
+   is 0, and `in_struct` is then the only clause left in invalidate_memory by
+   which `*(s32 *)(p + 0x8C) = 0` could kill the cached load. It does not, so
+   the D_80013714 arm reuses the pre-or value as one `ori $v0, $v1, 0x88` and
+   the function comes out 263 words of 266 with 32 aligned differences. The
+   array-ref form is in-struct, the store kills it, the reload appears, and
+   the arm is the target's four words. docs/matching-levers.md, "WITH A
+   CONSTANT-ADDRESS BASE, MEM_IN_STRUCT_P IS THE ONLY WAY A STORE CAN KILL A
+   LOAD IN cse". The two `|= 0x80` arms are left as casts; only the cached
+   side of the pair decides this.
+
+   `h` IS ITS OWN LOCAL AND MUST STAY BELOW THE `(s16)r != 4` BLOCK. Assigned
+   beside `f`, cse turns it into a copy of `f`, the second
+   `lui`/`addiu` of D_80083460 at .L80096E08 disappears and it is 264 words
+   with 38 aligned differences.
+
+   Each D_800DD274 arm has its own pointer local, the rule func_800974DC
+   records, and each facing index is ONE expression inline in the subscript so
+   fold collapses the `* 4` into `sra 7` / `andi 0x1C`.
+
+   The two `*(s16 *)(...+ 0x4) = 8` stores are spelled against D_80083460
+   where splat's listing names D_80083464, exactly as func_8008B9FC,
+   func_8008E264 and func_800971A8 already do, so D_80083464 needs no
+   declaration. */
+void func_80096C24(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *f;
+    u8 *h;
+    u8 *q;
+    void **t;
+    void **t2;
+    void **t3;
+    u8 *t4;
+    void **t5;
+    void **cur;
+    s32 r;
+    s32 k;
+
+    /* DEVICE: worth 25 aligned differences and no words. Without it `p` and
+       the D_80083460 base `h` come out with each other's callee-saved
+       registers -- p in $s4 and h in $s3 where the target has p in $s3 and h
+       in $s4 -- and every one of the 25 differences is that one swap, at 266
+       of 266 words. `h` is 4 references over a ~40-insn range (pri 2*4/40)
+       against p's 15 over the whole function (3*15/250); one more reference
+       to p crosses the floor_log2 step at 16 and puts it in front in
+       allocno_compare. This is the same device func_8008C13C carries on its
+       own fourth parameter for the same $s3/$s4 rotation.
+       Measured and rejected as legal spellings, all 266 words / 25 aligned
+       differences: `*(u16 *)0x80013714` for the declared symbol; `cur`
+       dropped so the +0x2C load is tested inline; a `pa = p` copy feeding
+       `p[0x9B] = 8`, and another feeding `*(u16 *)(p + 0x98) |= 0xC`; an
+       `h2 = h` copy so `h` carries 3 references instead of 4; `UnkVec *b`
+       for `void *b`; and `*(s16 *)((u8 *)&D_80083460 + 0x4) = 8` for the
+       `h + 0x4` store, which cse folds straight back onto `h`. Inlining the
+       `k` facing index at both D_8006CCD8/E8 reads is 269 words / 45.
+       It does not warn under -Wall. */
+    g = (u8 *)&D_80083160;
+    __asm__("" ::"r"(p));
+    func_800A67F4();
+    r = func_8009ABA0(*(s16 *)(d + 0x2A), b, c, *(s16 *)(d + 0x88), 0x20);
+    if ((s16)r > 0)
+    {
+        p[0x9B] = 0;
+        func_8009A3D0(c[0x24], c[0x25], 0x300);
+        k = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        c[0x24] += *(u8 *)&D_8006CCD8[k];
+        c[0x25] += *(u8 *)&D_8006CCE8[k];
+        func_8009A21C(c[0x24], c[0x25], 0x300);
+        f = (u8 *)&D_80083460;
+        *((u16 *)f + 1) |= 0x8;
+        *(s32 *)(p + 0x8C) = 0;
+        if ((s16)r != 4)
+        {
+            if ((D_80013714 & 2) != 0)
+            {
+                *(u16 *)(f + 0x2) |= 0x80;
+                cur = *(void ***)(c + 0x2C);
+                t = D_800DD274;
+                if (cur != t)
+                {
+                    *(void ***)(c + 0x2C) = t;
+                    func_8003DB94(c, t[((*(s16 *)(g + 0xC8) + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+                }
+            }
+            else if ((*(s32 *)(g + 0x8) & 0x20) != 0 && func_800A5C70() != 0)
+            {
+                t2 = D_800DD274;
+                *(u16 *)(f + 0x2) |= 0x80;
+                *(void ***)(c + 0x2C) = t2;
+                func_8003DB94(c, t2[((*(s16 *)(g + 0xC8) + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            }
+            else
+            {
+                r = 5;
+                p[0x9B] = 0xA;
+            }
+        }
+        h = (u8 *)&D_80083460;
+        if ((*(u16 *)(h + 0x2) & 0x80) != 0 || (s16)r == 1)
+        {
+            func_80099F70(*(u8 **)(d + 0x5C));
+            func_80099F04(*(u8 **)(d + 0x5C));
+            if ((*(u16 *)(h + 0x2) & 0x80) == 0)
+            {
+                t3 = D_800DD274;
+                *(void ***)(c + 0x2C) = t3;
+                func_8003DB94(c, t3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            }
+            p[0x9A] = 0x35;
+            *(s16 *)(h + 0x4) = 8;
+        }
+        else
+        {
+            *(u16 *)(p + 0x98) |= 0xC;
+            t4 = D_800DD294;
+            *(u8 **)(c + 0x2C) = t4;
+            func_8003DB94(c, *(void **)(t4 + (((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) * 4), 0);
+            if ((s16)r < 4)
+            {
+                *(u16 *)(p + 0xA2) |= 1;
+            }
+            else if ((s16)r == 2 || (s16)r == 4)
+            {
+                p[0x9B] = 8;
+            }
+            func_80094ED4(p, b, c, d);
+            *(s16 *)((u8 *)&D_80083460 + 0x4) = 8;
+            p[0x9A] = 0x36;
+            *(s16 *)(p + 0x96) = 2;
+            *(s32 *)(d + 0x1C) |= 0x40000000;
+            func_8009F644(d, 8, 0, 0);
+            return;
+        }
+        func_8009F644(d, 8, 0, 0);
+    }
+    else
+    {
+        t5 = D_800DD274;
+        *(void ***)(c + 0x2C) = t5;
+        func_8003DB94(c, t5[((*(s16 *)(g + 0xC8) + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s32 *)(p + 0x8C) = (s32)func_80096384;
+        return;
+    }
+    func_80094ED4(p, b, c, d);
+    *(s32 *)(d + 0x1C) |= 0x40000000;
+    q = (u8 *)&D_80083460;
+    *(u16 *)(q + 0x2) |= 0x812;
+}
 
 /* Slide the mover onto the record's tile over the engine's shared countdown
    at D_80083460 + 4, then close on func_80095DD0 or park func_80096384.
@@ -42410,7 +42568,139 @@ void func_800DB618(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800DB660);
+/* One semi-transparent textured quad per step of a straight segment, for
+   every node of the tag chain. The segment runs from the record's
+   +0x08/+0x0A/+0x0C to its +0x10/+0x12/+0x14 in `*(s16 *)(p + 0x36)` steps;
+   each step builds func_800DBA90's 0x20-byte matrix record, rotates the
+   +0x26-scaled unit vector through it, widens the result by the +0x2E/+0x30
+   half-extents into the four corners, projects them with RotTransPers4 and
+   hangs the POLY_FT4 on the OT at the returned depth less 8. The colour at
+   +0x18 steps down by 0x080808 per quad until it reaches 0x080807, and the
+   two facing angles at +0x28/+0x22 advance by +0x2A/+0x24. 268 words,
+   0 differing.
+
+   THE THREE INTERPOLATED AXES ARE `d * i / n`, NOT ACCUMULATORS, AND THAT IS
+   THREE WORDS. loop.c strength-reduces each product into a giv whose `= 0`
+   lands in the loop PREHEADER -- after the `bltz` guard -- and whose `+= d`
+   lands at the loop bottom, in the reverse order the three were created.
+   Hand-written accumulators zeroed in the `for` init are 262 words of 268
+   with 49 aligned differences: the init is then in the GUARD's own basic
+   block, where sched1 spends the three `addu`s on load-delay slots that the
+   target leaves as `nop`s, and the three givs' registers rotate. The copy
+   chain `addu $s6, $zero, $zero` / `addu $s5, $s6` / `addu $s4, $s5` is what
+   a giv init looks like after cse unifies three zeros.
+
+   THE LOOP BOUND IS READ OFF `q`, NOT `p`. Both are the same pointer -- `q`
+   is a plain copy and the two live in different callee-saved registers all
+   the way through -- but cse substitutes `p` into the duplicated top test,
+   which is why the guard is `lh $v1, 0x36($s2)` and the bottom test is
+   `lh $v0, 0x36($s1)`. Spelling the bound on `p` is 1 differing, exactly
+   that word.
+
+   `ang += *(s16 *)(q + 0x2A)` GOES BEFORE THE PRIMITIVE FETCH. After it,
+   the `lh`/`addu` pair falls into the RotTransPers4 call's delay slot and
+   the `sw $v0, 0x24($sp)` that belongs there moves out: 268 words,
+   21 aligned differences.
+
+   D_80083160 IS A POINTER LOCAL AND REMATERIALISES. All nine callee-saved
+   registers are taken ($s0..$s7 and $fp), so `g` gets none and reload emits
+   its `lui`/`addiu` at each of the three uses, which is the shape
+   func_800A7CC4's note records for the same symbol. The 0xFFFFFF addPrim
+   mask is loop-hoisted into a pseudo and spilled to 0xA8($sp); the
+   0xFF000000 half is rematerialised with a bare `lui`.
+
+   The primitive cursor advances by 0x34, not sizeof(POLY_FT4): the stride is
+   written as a byte count on the u32, the way this unit's other +0x8D0 users
+   do it. `SVECTOR vec` and `u16 vec[3]` are byte-identical here, because
+   every read of it feeds an `sh` and combine picks `lhu` either way. */
+s32 func_800DB660(u8 *p)
+{
+    SVECTOR v[4];
+    SVECTOR v2[4];
+    SVECTOR vec;
+    u8 rec[0x20];
+    s32 w;
+    Unk80083160 *g = &D_80083160;
+    POLY_FT4 *t;
+    UnkNode *n;
+    u8 *q;
+    s32 i;
+    s32 dx;
+    s32 dy;
+    s32 dz;
+    s32 ang;
+    s32 zz;
+    s32 col;
+    s32 z;
+
+    while (1)
+    {
+        v[0].vx = v[1].vx = -*(s16 *)(p + 0x2E) >> 1;
+        v[0].vz = v[2].vz = -*(s16 *)(p + 0x30) >> 1;
+        v[2].vx = v[3].vx = v[0].vx + *(u16 *)(p + 0x2E);
+        v[1].vz = v[3].vz = v[0].vz + *(u16 *)(p + 0x30);
+        v[0].vy = v[1].vy = v[2].vy = v[3].vy = 0;
+        i = 0;
+        zz = *(s16 *)(p + 0x22);
+        q = p;
+        ang = *(s16 *)(p + 0x28);
+        col = *(s32 *)(p + 0x18);
+        dx = *(s16 *)(p + 0x10) - *(s16 *)(p + 0x8);
+        dy = *(s16 *)(p + 0x12) - *(s16 *)(p + 0xA);
+        dz = *(s16 *)(p + 0x14) - *(s16 *)(p + 0xC);
+        for (; i <= *(s16 *)(q + 0x36); i++)
+        {
+            vec.vx = (func_800644B8(ang) * *(s16 *)(q + 0x26)) >> 12;
+            vec.vy = vec.vz = 0;
+            *(u8 **)rec = (u8 *)&vec;
+            *(u8 **)(rec + 0x4) = (u8 *)&vec;
+            *(s16 *)(rec + 0xC) = *(u16 *)(q + 0x2C);
+            *(s16 *)(rec + 0x10) = *(u16 *)(q + 0x8) + dx * i / *(s16 *)(q + 0x36);
+            *(s16 *)(rec + 0x12) = *(u16 *)(q + 0xA) + dy * i / *(s16 *)(q + 0x36);
+            *(s16 *)(rec + 0x14) = *(u16 *)(q + 0xC) + dz * i / *(s16 *)(q + 0x36) +
+                                   ((func_800644B8(zz) * *(s16 *)(q + 0x20)) >> 12);
+            *(s16 *)(rec + 0x18) = 1;
+            *(s16 *)(rec + 0x1A) = 0;
+            func_800DBA90(rec);
+            v2[0].vx = v2[1].vx = vec.vx - ((s16)(*(u16 *)(q + 0x2E)) >> 1);
+            v2[2].vx = v2[3].vx = v2[0].vx + *(u16 *)(q + 0x2E);
+            v2[0].vz = v2[2].vz = vec.vz - ((s16)(*(u16 *)(q + 0x30)) >> 1);
+            v2[1].vz = v2[3].vz = v2[0].vz + *(u16 *)(q + 0x30);
+            v2[0].vy = v2[1].vy = v2[2].vy = v2[3].vy = vec.vy;
+            zz += *(s16 *)(q + 0x24);
+            ang += *(s16 *)(q + 0x2A);
+            t = *(POLY_FT4 **)(g->unk_00 + 0x8D0);
+            *(u32 *)(g->unk_00 + 0x8D0) = (u32)t + 0x34;
+            z = RotTransPers4(&v2[0], &v2[1], &v2[2], &v2[3], (s32 *)&t->x0, (s32 *)&t->x1,
+                              (s32 *)&t->x2, (s32 *)&t->x3, &w, &w) -
+                8;
+            if ((u32)z < 0x1E0)
+            {
+                *(u32 *)&t->r0 = col;
+                SetPolyFT4(t);
+                SetSemiTrans((u8 *)t, 1);
+                t->tpage = *(u16 *)(q + 0x32);
+                t->clut = *(u16 *)(q + 0x34);
+                t->u0 = t->u1 = q[0x0];
+                t->u2 = t->u3 = q[0x0] + q[0x4];
+                t->v0 = t->v2 = q[0x2];
+                t->v1 = t->v3 = q[0x2] + q[0x6];
+                addPrim((u32 *)(g->unk_00 + 0xB0) + z, t);
+            }
+            if (col > 0x80807)
+            {
+                col += 0xFFF7F7F8;
+            }
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+    }
+    return 0;
+}
 
 /* Stack the caller's record through the GTE: push, set the translation from
    +0x10/+0x12/+0x14, build the rotation according to the +0x1A mode, then
