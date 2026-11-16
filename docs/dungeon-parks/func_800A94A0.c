@@ -52,7 +52,24 @@
      `lw 0($v1)`; via the `u8 *nm` pointer local it stays a displacement.
    * func_80069EF8's result assigned to `r`, to `h`, to `src`, to a dedicated
      unused `s32`, as a bare call, with and without a cast: all six are the
-     same bytes (identical md5), so the dead copy is not reachable from C. */
+     same bytes (identical md5), so the dead copy is not reachable from C.
+   * `cc = c;` moved: after the func_800A982C call 226/74, immediately before
+     the `if ((s16)c == 0)` 226/74, at the very top 226/77, and two positions
+     inside the head give the base's bytes exactly.  None of them is 227 AND
+     below 76.
+   * the residue is the ALLOC class by docs/landing-a-function.md's test
+     (word counts equal, every difference a register number apart from the one
+     word at index 70), so per docs/dungeon-sweep.md it is `.greg` work and
+     NOT permuter food.  The allocation ORDER is what differs:
+       target     c=$s0 n=$s1 q0=$s2 q=$s3 a=$s4 s=$s5 e=$s6 cc=$s7
+       candidate  q=$s0 c=$s1 n=$s2 a=$s3 (s16)c=$s4 s=$s5 cc=$s6 e=$s7
+     and the one structural consequence is that the target's `(s16)c` reuses
+     c's own register because c dies at the sign-extend, where the candidate's
+     cse rewrites the sign-extend's operand to the `cc` copy and `(s16)c`
+     therefore needs a register of its own.
+   * ALL 210 single-move permutations of the 15 local declarations were swept
+     and NONE beats 227 words / 76 aligned, so declaration order is not the
+     tie-break that decides this rotation. */
 s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
 {
     UnkNode *n;

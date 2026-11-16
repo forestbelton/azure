@@ -102,8 +102,18 @@ The landed bodies in `csrc/ovl_dungeon.c` each carry a comment giving the one
 spelling fact that made them land, and for a function in the same family those
 comments are line-for-line templates. Two things to run before anything else:
 
+    python3 tools/decomp/leverindex.py --grep func_XXXXXXXX     <-- FIRST
     grep -n 'THE D_80083160 BASE IS A LOCAL OF ITS OWN' csrc/ovl_dungeon.c
     python3 tools/decomp/leverindex.py --grep <the opcode or idiom you see>
+
+**GREP THE INDEX FOR YOUR FUNCTION'S OWN NAME BEFORE ANYTHING ELSE.** Many
+catalogue entries are written against the specific function that produced
+them, so an entry about yours may already exist and name the exact lever. On
+batch j43 an agent spent about fifteen compiles rediscovering
+"A SECOND SET IS WHAT KEEPS A SIGN EXTENSION ALIVE" -- an entry written
+against the very function it was working on, worth 6 words -- before thinking
+to grep for the name. That is the cheapest search in this whole procedure and
+it is one command.
 
 On batch j31 the typedef grep below returned **nothing usable** for either
 function -- both take `u8 *`/`UnkVec *`, which is most of this block -- while
