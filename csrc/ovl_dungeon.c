@@ -1252,6 +1252,20 @@ typedef struct UnkDungeonSPC
     SVECTOR unk_100;
 } UnkDungeonSPC;
 
+/* A named view of D_80083460 for func_8008DBE8: its +0x02 flag halfword,
+   the +0x04 heading it divides twice, and the +0x0A counter.  The struct
+   face is what sets MEM_IN_STRUCT_P, which lets the `*(s32 *)(b + 0xC)'
+   store invalidate cse's entry for +0x04 so the second divide reloads it
+   -- worth 4 differing against reading the bytes through a `u8 *'. */
+typedef struct UnkDungeonGlobal
+{
+    u8 pad_00[0x2];
+    u16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x4];
+    u16 unk_0A;
+} UnkDungeonGlobal;
+
 /* The 0x1F800000 scratchpad as func_800BABA8 lays it out: the mover's three
    position halfwords at +0x00/+0x02/+0x04, the OT base at +0x20, the pair of
    RotTransPers input vectors at +0x70 and the OT index at +0xC0.  Its two
@@ -3397,7 +3411,61 @@ void func_8008DB0C(UnkDungeonActor *p, void *b, u8 *c, s16 d, s16 e)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008DBE8);
+void func_8008DBE8(u8 *p, void *b, u8 *c, u8 *d)
+{
+    UnkDungeonGlobal *g;
+    UnkDungeonGlobal *g2;
+    u8 *t;
+    s32 r;
+    s32 v;
+
+    g = (UnkDungeonGlobal *)&D_80083460;
+    if (g->unk_02 & 0x80)
+    {
+        g->unk_04 = 0;
+    }
+    if (g->unk_04 != 0)
+    {
+        *(s32 *)((u8 *)b + 0xC) = ((((c[0x24] << 6) + 0x20) << 16) - *(s32 *)b) / g->unk_04;
+        *(s32 *)((u8 *)b + 0x10) =
+            ((((c[0x25] << 6) + 0x20) << 16) - *(s32 *)((u8 *)b + 0x4)) / g->unk_04;
+    }
+    if (*(u16 *)(p + 0xA2) & 0x100)
+    {
+        r = g->unk_04;
+        if ((*(u16 *)0x80013714 & 8) ? r == 3 : r == 6)
+        {
+            func_8008D94C(p, b, c, d);
+            return;
+        }
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+    {
+        if (*(u8 **)(c + 0x2C) != D_800DD050)
+        {
+            t = D_800DD050;
+            *(u16 *)(p + 0xA2) |= 1;
+            *(u8 **)(c + 0x2C) = t;
+            v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+            func_80048A44(c, t[v], 0, 1);
+        }
+    }
+    g2 = (UnkDungeonGlobal *)&D_80083460;
+    g2->unk_04 = (u16)g2->unk_04 - 1;
+    if (g2->unk_04 <= 0)
+    {
+        g2->unk_04 = 0;
+        *(s32 *)((u8 *)b + 0x14) = 0;
+        *(s32 *)((u8 *)b + 0x10) = 0;
+        *(s32 *)((u8 *)b + 0xC) = 0;
+        func_800A2B04((UnkVec *)b, c[0x24], c[0x25]);
+        *(u16 *)(c + 0x14) |= 0x4000;
+        if ((s16)func_80094F74(p, b, c, d) > 0)
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+        }
+    }
+}
 
 /* State handler reached with (actor, mover, renderable, record). The first
    visit primes the mover's +0x0C/+0x10 from func_80064584/func_800644B8 of
