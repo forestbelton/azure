@@ -10089,7 +10089,74 @@ u8 *func_8009B4B0(u8 *p, u16 x, u16 y)
     return NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009B5AC);
+u8 *func_8009B5AC(u8 *p, s16 x, s16 y)
+{
+    u8 *r;
+    u8 *q;
+    s32 d;
+    s32 v;
+    s32 n;
+    UnkDungeonSlot4 *s;
+    u8 *h2;
+    u32 w;
+    u32 *hp;
+
+    hp = &D_800814A8;
+    d = (*(u16 *)(p + 0x2A) >> 9) & 7;
+    if (func_8009A540(d, (s16)(x - ((u16 *)D_8006CCD8)[d]), (s16)(y - ((u16 *)D_8006CCE8)[d]),
+                      *(u16 *)(p + 0x88) - 0x20) != 0)
+    {
+        r = func_8009B25C(p, x, y, *(s16 *)(p + 0x88));
+        if (r != NULL)
+        {
+            if ((*(s32 *)(r + 0x14) & 0x80000) != 0)
+            {
+                if (p == (u8 *)*hp)
+                {
+                    D_80081484[0] = r[0x13];
+                    D_80081484[1] = 0x13;
+                    v = 0x14;
+                    if ((*(s32 *)(r + 0x14) & 0x4000) != 0)
+                    {
+                        v = func_800A4298(r);
+                        if ((s16)v < 0)
+                        {
+                            v = 0x14;
+                        }
+                    }
+                    D_80081484[3] = v;
+                    D_80081484[2] = 0;
+                }
+            }
+            return r;
+        }
+        n = (s16)func_800A70E4(x, y, *(s16 *)(p + 0x88));
+        if (n >= 0)
+        {
+            s = &D_800E3548_t[n];
+            q = (u8 *)func_800A8E74(p, *(u8 **)(p - 0x18), *(s32 *)(p - 0x14), p, (u8 *)s, n);
+            if (q == NULL)
+            {
+                return (u8 *)1;
+            }
+            h2 = (u8 *)*hp;
+            *(u8 **)(q + 0x80) = p;
+            if (p == h2)
+            {
+                w = *(u32 *)s;
+                *(u8 **)(q + 0xBC) = D_80081484;
+                *(u32 *)D_80081484 = w;
+            }
+            s->unk_01 = 0;
+            s->unk_00 = 0;
+            func_8009A3D0(x, y, 0x800);
+            *(s32 *)(q + 0x34) |= 0x80000;
+            *(s32 *)(q + 0x3C) |= 0x2000;
+            return q + 0x20;
+        }
+    }
+    return NULL;
+}
 
 /* THE TWO FAILURE TESTS ARE ONE `&&`, NOT TWO EARLY RETURNS. Written as
    separate `return 0;` guards the second one becomes a skip-over with its
