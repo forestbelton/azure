@@ -43,6 +43,25 @@ instructions differ, the mechanism if it is known, and **every spelling that
 was measured and rejected, with its score**. That rejected-spelling list is
 what stops the next reader paying for the same sweep twice.
 
+## If a candidate goes missing, try `nonmatchings/` first
+
+`permimport.py` leaves a full copy of whatever it imported at
+`nonmatchings/<func>/base.c`, plus a `source.c` with the permsafe hoists
+applied. That directory is **gitignored but not temporary** -- it survives
+anything short of a clean, including the `/tmp` wipe that started this
+directory.
+
+On 2026-11-16 `func_800C0404`'s body existed nowhere else: the agent that
+wrote it was gone, `/tmp` had been cleared, and the only copy was the
+permuter base from the previous day. It was recovered from there, re-measured
+from scratch and is now in this directory. Check `nonmatchings/` before
+concluding a candidate is lost.
+
+(Each permuter output directory, `nonmatchings/<func>/output-NNN-M/source.c`,
+is a full copy too -- but those are *mutated* sources and may contain
+undefined behaviour or nonsense conditions the search invented. Read before
+reusing; see `docs/matching-levers.md` on re-measuring permuter answers.)
+
 ## Do not leave a park for a landed function
 
 When a function lands, delete its file here in the same change. A park for a
