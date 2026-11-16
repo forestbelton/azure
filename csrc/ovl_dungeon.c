@@ -394,6 +394,9 @@ extern u8 D_800E104E[];
 extern u8 D_800E107C[];
 extern u8 D_800E10C0[];
 extern u8 D_800E10F2[];
+extern u8 D_800E1095[];
+extern u8 D_800E10B3[];
+extern u8 D_80089360[];
 /* The second kill skeleton's callees and strings. func_8008D344 is in this
    unit and is reached with four arguments, exactly like func_8008D330. */
 void func_8008D344(u8 *, void *, void *, void *);
@@ -27125,7 +27128,98 @@ s32 func_800BE5A8(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BE6F0);
+/* BEGIN func_800BE6F0 */
+s32 func_800BE6F0(u8 *p, u8 *q, s16 k)
+{
+    u8 s[4];
+    u8 *b;
+    u8 *w;
+    u8 *e;
+    u8 *g;
+    u8 *g2;
+    void *h;
+    void *m;
+    s32 r;
+
+    if (p == D_800E3D7C)
+    {
+        *(u8 **)(p + 0x110) = q;
+        func_8008D330((UnkDungeonActor *)p, D_80083780, D_80082E80, p);
+        return 0;
+    }
+    if ((u32)p <= 0x9FFFFFFF)
+    {
+        func_800A63B8(p, q, k);
+    }
+    if (*(u32 *)(p + 0x14) & 0x4000)
+    {
+        h = func_800990FC();
+        m = h;
+        if ((u32)(p[0x13] - 3) < 0x2B)
+        {
+            h = func_80099734(p, h);
+            h = func_80099194(D_800E1095, h);
+        }
+        else
+        {
+            h = func_80099734(p, h);
+            h = func_80099194(D_800E10B3, h);
+            h = func_80099368(q, h);
+            h = func_80099194(D_80089360, h);
+        }
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    if ((u32)(p[0x13] - 3) < 0x2B)
+    {
+        s[0] = p[0x13];
+        if (p[0x13] == 3 || p[0x13] == 5 || p[0x13] == 7 || p[0x13] == 9 || p[0x13] == 0xB ||
+            p[0x13] == 0xD || p[0x13] == 0xF || p[0x13] == 0x11 || p[0x13] == 0x13)
+        {
+            s[0]++;
+        }
+        s[1] = 0x12;
+        s[2] = (func_800A6D30() & 0xF) + 0xA;
+        s[3] = 0;
+        func_800A90E8(s);
+        b = *(u8 **)(p - 0x18);
+        func_800B8228(*(s16 *)(b + 0x2), *(s16 *)(b + 0x6), *(s16 *)(b + 0xA), s);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(p - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        e = func_800A32A4(p);
+        if (e != NULL)
+        {
+            r = func_800A6620(e, 0);
+            if (r < 0x40)
+            {
+                u8 *z = (u8 *)0x80010000;
+
+                *(u8 *)(z + r * 0x54 + 0xA93) = 0;
+                ((s32 *)0x80010980)[r] = 0;
+            }
+        }
+        if ((s16)func_80042900((s8 *)p, 0x1B) == 0)
+        {
+            w = *(u8 **)(p - 0x14);
+            func_8009A3D0(w[0x24], w[0x25], (*(u32 *)(p + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(p);
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        func_800A5F38(p, q);
+        return 1;
+    }
+    func_80098B38(q);
+    g2 = (u8 *)&D_80083460;
+    *(u16 *)(g2 + 0xA) -= 1;
+    return 1;
+}
 
 /* func_800BE5A8 with a RANDOM effect value -- `func_800A6D30() & 0x1F` with
    bit 5 forced on -- whose result is not tested, a different tint and a
