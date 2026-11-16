@@ -404,6 +404,8 @@ s32 func_80098864(u8 *, s32);
 void func_800A6480(u8 *, u8 *);
 void func_8009D8A4(void);
 extern u32 D_800E296C;
+extern u32 D_800DCF80[];
+extern u32 D_800DCFA4[];
 extern u8 D_800E11FD[];
 extern u8 D_800E1224[];
 extern u8 D_800E1258[];
@@ -2137,7 +2139,133 @@ void func_800894A0(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80089588);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800897E4);
+/* BEGIN func_800897E4 */
+void func_800897E4(void)
+{
+    u32 *a;
+    u32 *a2;
+    u32 *b;
+    u32 *tbl;
+    u8 *s;
+    void (*h)(u8 *, s32, s32);
+    s32 save;
+    s32 i;
+
+    if ((D_800E296C & 0x2000000) != 0)
+    {
+        tbl = D_800DCFA4;
+        for (i = 0; i < 0x20; i++)
+        {
+            h = (void (*)(u8 *, s32, s32))D_80083360[i];
+            if (h != NULL)
+            {
+                s = (u8 *)D_800833E0[i];
+                if (s != NULL)
+                {
+                    if ((*(u16 *)(s + 0x1E) & 0x800) == 0)
+                    {
+                        a = D_800DCF80;
+                        b = tbl;
+                        for (;;)
+                        {
+                            if (*b == (u32)h)
+                            {
+                                h(s + 0x20, *(s32 *)(s + 0x8), *(s32 *)(s + 0xC));
+                                break;
+                            }
+                            if (*a == 0)
+                            {
+                                break;
+                            }
+                            a++;
+                            b++;
+                        }
+                    }
+                }
+                else
+                {
+                    D_80083360[i] = 0;
+                }
+            }
+        }
+    }
+    else if ((*(s32 *)(D_800814A8 + 0x1C) & 0x10) != 0)
+    {
+        for (i = 0; i < 0x20; i++)
+        {
+            a2 = D_800DCF80;
+            h = (void (*)(u8 *, s32, s32))D_80083360[i];
+            if (h != NULL)
+            {
+                s = (u8 *)D_800833E0[i];
+                if (s != NULL)
+                {
+                    if ((*(u16 *)(s + 0x1E) & 0x800) == 0)
+                    {
+                        b = a2 + 1;
+                        if (D_800DCF80[0] == (u32)h)
+                        {
+                            s = D_80083498;
+                            if (*(s32 *)(s + 0x14) != 0)
+                            {
+                                save = *(s32 *)(s + 0x18);
+                                *(s32 *)(s + 0x18) = 0;
+                                h(s + 0x20, *(s32 *)(s + 0x8), *(s32 *)(s + 0xC));
+                                *(s32 *)(s + 0x18) = save;
+                            }
+                        }
+                        else
+                        {
+                            for (;;)
+                            {
+                                if (*b == (u32)h)
+                                {
+                                    h(s + 0x20, *(s32 *)(s + 0x8), *(s32 *)(s + 0xC));
+                                    break;
+                                }
+                                if (*b == 0)
+                                {
+                                    break;
+                                }
+                                b++;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    D_80083360[i] = 0;
+                }
+            }
+        }
+    }
+    else
+    {
+        for (i = 0; i < 0x20; i++)
+        {
+            h = (void (*)(u8 *, s32, s32))D_80083360[i];
+            if (h != NULL)
+            {
+                s = (u8 *)D_800833E0[i];
+                if (s != NULL)
+                {
+                    if ((*(u16 *)(s + 0x1E) & 0x800) == 0)
+                    {
+                        h(s + 0x20, *(s32 *)(s + 0x8), *(s32 *)(s + 0xC));
+                        if (func_80045310(*(u32 *)(D_80083160.unk_00 + 0x8D0)) != 0)
+                        {
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    D_80083360[i] = 0;
+                }
+            }
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80089AA0);
 
