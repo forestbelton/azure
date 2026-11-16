@@ -80,7 +80,19 @@
    * `u8 *volatile d` as the third parameter -- which is the other
      `assign_parms` condition for the home slot, and which also blocks cse's
      forwarding -- is 185 words / 46, and 186/46 with `(void)&d;` as well.
-     Every read of `d` becomes a load, which is one more than the target. */
+     Every read of `d` becomes a load, which is one more than the target.
+   PERMUTED 2026-11-16, 30 minutes, 6 jobs: REJECTED.  It reported
+   2125 -> 1205 on its own metric and its best output measures 186 words
+   against the target's 184 with 88 aligned rows -- worse than this body's
+   184 / 43 -- AND it is semantically wrong: it deletes a `return -1' from
+   the `ax == 0' arm (six returns in the output against seven here) and
+   duplicates another.  Nothing in the tool's output flags that.
+
+   Do not re-run it from this body without a different idea; and see
+   docs/matching-levers.md, "THE FOUR OUTCOMES, AFTER SIX RUNS ON THIS
+   BLOCK", for why the diff has to be read line by line rather than trusted
+   because the score moved.
+ */
 s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
 {
     s16 *sh;
