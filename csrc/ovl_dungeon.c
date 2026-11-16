@@ -577,7 +577,7 @@ s16 func_800A41F0(u8 *);
 /* The three 60-word effect handlers below. */
 s32 func_800C8ABC(u8 *, s16, s16);
 void func_800A6508(void);
-void func_800C5BBC(s32, s32, s16, s32, s32, s32);
+s32 func_800C5BBC(s16, s16, s16, s32, u16, s16);
 extern u8 D_800E3D40;
 extern u8 D_800E1BF3[];
 extern u8 D_800E1C03[];
@@ -30253,7 +30253,60 @@ void func_800C5A64(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C5BBC);
+s32 func_800C5BBC(s16 x, s16 y, s16 ang, s32 col, u16 e, s16 snd)
+{
+    UnkNode *n;
+    UnkNode *first;
+    UnkVec *m;
+    u8 *r;
+    u8 *p;
+    u8 *g;
+    s32 i;
+    s32 k;
+
+    first = NULL;
+    if (snd != 0)
+    {
+        func_800A56E0(0x608);
+    }
+    i = 0;
+    k = (func_80069EF8() & 0xF) | 0x10;
+    for (; k >= 0; k--)
+    {
+        n = func_8003FC64(i != 0 ? 0x212 : 0x12);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_800C5A64;
+            func_8004491C(n, (u32)D_80045340);
+            m = n->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = x;
+            *(s16 *)((u8 *)m + 0x6) = y;
+            *(s16 *)((u8 *)m + 0xA) = ang;
+            *(s32 *)((u8 *)m + 0xC) += ((func_80069EF8() & 0x1F) - 0x10) << 14;
+            *(s32 *)((u8 *)m + 0x10) += ((func_80069EF8() & 0x1F) - 0x10) << 14;
+            *(s32 *)((u8 *)m + 0x14) = -((func_80069EF8() & 0xF) + 0x18) << 13;
+            r = (u8 *)n->unk_0C;
+            func_8003DB94(r, D_800DEA68, 0);
+            *(u32 *)(r + 0xC) = col;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            *(s16 *)(r + 0x10) = e;
+            *(s16 *)(r + 0x12) = 3;
+            *(u16 *)(r + 0x14) |= 0xC;
+            p = (u8 *)n + 0x20;
+            *(s16 *)(p + 0x10) = (func_80069EF8() & 0xF) | 0x10;
+            *(s16 *)(p + 0xC) = i;
+            if (i == 0)
+            {
+                first = n;
+                g = (u8 *)&D_80083460;
+                *(u16 *)(g + 0xA) += 1;
+            }
+        }
+        i++;
+    }
+    return (s32)first;
+}
 
 /* The +0x10 countdown is the usual `lhu` / `addiu -1` / `sh` / `sll 16`+
    `bgtz` pair of statements through one s16 local; the colour fade is one s32
