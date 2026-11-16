@@ -1,65 +1,98 @@
 /* PARK func_800A504C -- agent j51, 2026-11-16.
 
-   RESIDUE: target 401 words, candidate 401 words, 64 differing (masked);
-   aligndiff 64. The STRUCTURE is exact: every instruction, every schedule
-   slot and every stack displacement agrees. ~58 of the 64 are ONE register
-   rotation -- the target has `p` in $s3 and the `n == 1` gate pseudo in $s2,
-   this body has them the other way round. The rest:
+   RESIDUE: target 401 words, candidate 401 words, 13 differing (masked);
+   aligndiff 13. The structure is exact: every instruction, every schedule
+   slot and every stack displacement agrees, and the callee-saved file is now
+   the target's except for ONE pair. What is left:
 
-   * 1 word at 0x800A52D4 / 0x800A54C4: `lui %hi(D_800814A8)` is one slot
-     later here than in the target (it sits after the `sll $v0, 16` instead
-     of before it), in both case-2 blocks.
-   * 1 word at 0x800A544C: the shared `D_800DCF5E++` tail fills its own
-     load delay with `addu $v0, $zero, $zero` where the target leaves a
-     `nop` and reaches the shared `return 0` block instead.
-   * 2 words at 0x800A54AC/0x800A54B4: same cause -- the `q == NULL` early
-     exit threads its own `v0 = 0` into the delay slot.
+   * 6 rows, 0x800A5184..0x800A51A4: the call result and its copy are in the
+     wrong registers. The target has `addu $s0, $v0, $zero` / `beqz $s0` /
+     `addu $s2, $s0, $zero`, i.e. the call result in the 71-reference pseudo
+     and the COPY in the ~10-reference one; this body has them the other way
+     round, which is what the `d = <call>; q = d;` spelling buys (see below).
+     The three target uses that follow -- 0x800A5194 `addu $a3, $s2, $zero`
+     (the block move's destination), 0x800A51A0/0x800A51A4
+     `lw $t1/$t2, 0x5C/0x58($s2)` -- are all on the SHORT pseudo, which is
+     only reachable if cse2 leaves the copy canonical there.
+   * 4 rows, 0x800A5448..0x800A5458: the shared `D_800DCF5E++` tail fills its
+     own load delay with `addu $v0, $zero, $zero` (and so uses $v1 for the
+     increment) where the target leaves a `nop`, uses $v0, and reaches the
+     shared `return 0` block at .L800A5668 instead of the epilogue.
+   * 3 rows, 0x800A54A8..0x800A54B4: same cause. The else-branch case 2's
+     `q == NULL` exit takes `addu $v0, $zero, $zero` into its branch delay
+     slot and retargets to .L800A566C; the target leaves that exit pointing
+     at .L800A5668 and fills the slot with `addu $a0, $s3, $zero` from the
+     fall-through instead.
 
-   THE REGISTER ROTATION, DIAGNOSED FROM .greg/.lreg (tools/decomp/dump.sh):
-     allocnos  83 q (71 refs/190 insns, pri 2.242) -> $s0
-               84 w (19/138, 0.551)               -> $s1
-               81 p (38/612, 0.3105)              -> $s2   <-- target: $s3
-               85 d (7/63,   0.222)               -> $s3
-               82 g (11/199, 0.166)               -> $s4
-               98 the gate 1 (5/137, 0.073)       -> $s3 (shares with d)
-   global.c's allocno_compare is floor_log2(refs)*refs/live_length, and the
-   target needs an allocno with priority in (0.3105, 0.551) that conflicts
-   with `p` to take $s2 ahead of it. `d` is the only candidate -- 8 refs over
-   63 insns would be 0.381 -- but every spelling measured leaves it at 7,
-   because cse2 canonicalises `d` back to `q` for every use BEFORE the block
-   move (make_regs_eqv keeps `q` as qty_first_reg: q's last use is later),
-   so only the six field stores after the loop survive as references to `d`.
-   In the TARGET those pre-loop uses are NOT canonicalised: 0x800A5194
-   `addu $a3, $s2, $zero` and 0x800A51A0/0x800A51A4 `lw $t1/$t2, 0x5C/0x58($s2)`
-   all read `d`, not `q`. Finding the spelling that keeps `d` canonical there
-   is the whole remaining landing.
+   WHY THE REGISTER PAIR IS STUCK, from .greg/.lreg (tools/decomp/dump.sh).
+   global.c's allocno_compare is floor_log2(refs)*refs/live_length and
+   find_reg gives the first-sorted call-crossing allocno the lowest free
+   callee-saved register. In the FIRST draft the allocnos were
 
-   SPELLINGS MEASURED AND REJECTED (all at 401 words unless stated):
-     baseline (first draft, u8* casts throughout)          409 / 299
-     + `q -= 0x20` instead of a separate `e` local         404 / 132
+     83 q   71 refs/190 insns  2.242 -> $s0      84 w  19/138  0.551 -> $s1
+     81 p   38/612            0.3105 -> $s2      85 d   7/63   0.222 -> $s3
+     82 g   11/199            0.166  -> $s4      98 the `== 1` gate 5/137 -> $s3
+
+   and the target wants `p` in $s3, so something that CONFLICTS with `p` has
+   to score between 0.551 and 0.3105. `d` at 7 references scores 0.222 and at
+   8 it would score 0.381 -- the floor_log2 cliff. Every attempt to give the
+   `d = q` spelling an eighth reference failed, because cse2 canonicalises
+   `d` back to `q` for every use BEFORE the block-move loop (make_regs_eqv
+   keeps `q` as qty_first_reg: q's REGNO_LAST_UID is later), so only the six
+   field stores after the loop -- a fresh cse block -- survive as references
+   to `d`. What DID work is inverting the copy, `d = <call>; if (d == NULL);
+   q = d;`: that gives `d` the definition and the null test as well, nine
+   references, 0.386, and `p` moves to $s3. The cost is the six rows above,
+   because now the call result is in the short pseudo.
+
+   The landing is the spelling in which the COPY keeps ten references. In
+   cse's terms that needs REGNO_LAST_UID(copy) > REGNO_LAST_UID(call result)
+   at the `copy = result` insn, and `q` is reused by the other switch cases,
+   so its last uid is always later. Three ways round it were measured and all
+   lost ground (see the table).
+
+   SPELLINGS MEASURED (401 words unless stated):
+     first draft, u8* casts throughout                      409 / 299
+     + `q -= 0x20` instead of a separate `e` local          404 / 132
        (a separate local for q-0x20 is hoisted early by
-        sched and buys a SIXTH callee-saved register)
-     + `id = q[0x13]` local for the two 0x80010000 stores  (-2 words)
-     + `m = *(u16 *)(p + 0x2A)` local                      (-1 word)
-     + tail order `((u16*)w)[0xA] &= 0xFFFE;` BEFORE
-       `D_80080A90 = D_8014A000;`, and `D_800DCF5C = 1`
-       AFTER `((u16*)g)[5] -= 1`                            401 / 70
-     + reuse the `g` local as the 0x8C-field source
-       instead of a separate `s`                            401 / 64  <-- this body
-     `s16 n` gate local + `D_800DCF5C = n`                  402 / 397
-     `p = arg` parameter-copy device                        401 / 91
-     `d = q; s = p;` order swapped                          401 / 64 (identical)
-     4-parameter signature; `((u32 *)p)[5]` for the 0x4000
-       test; `((s16 *)g)[5]` for the gate; `s32 a` first
-       parameter; `s32 k`; splitting `q`/`w` into two
-       locals each                                          401 / 64 (all identical)
-     `d`-based pre-loop reads/block move (3 combinations)   401 / 64 (cse undoes them)
-     `g = p; d = q;` moved down to the field copies         399 / 336 (copies die)
+        sched1 and buys a SIXTH callee-saved register)
+     + `id = q[0x13]` local for the two 0x80010000 stores   (-2 words: the
+       first store kills cse's copy of the second read)
+     + `m = *(u16 *)(p + 0x2A)` local                       (-1 word)
+     + tail order `((u16 *)w)[0xA] &= 0xFFFE;` BEFORE
+       `D_80080A90 = D_8014A000;`, `D_800DCF5C = 1` AFTER
+       `((u16 *)g)[5] -= 1`, final `return 0` as `break`     401 / 70
+     + reuse the `g` local as the 0x8C-field source rather
+       than a separate `s`                                   401 / 64
+     + `d = <call>; if (d == NULL) ...; q = d;`              401 / 17
+     + `ab = D_800814A8;` pointer-local hoist at both
+       +0xAC/+0xD0 sites                                     401 / 13  <-- this body
+     `s16 n` gate local plus `D_800DCF5C = n`                402 / 397
+     `p = arg` parameter-copy device                         401 / 91
+     `g = p; d = q;` moved down beside the field copies      399 / 336
+       (same block as the uses, so cse kills both copies)
+     `d = q - 0x20` as the tail, to make d's last uid the
+       latest (with and without d-based pre-loop reads)      401 / 27
+     reverting the inverted copy but keeping `ab`            401 / 60
+     `k * 4 + D_800814A8 + 0xAC` operand order               401 / 17 (no change)
+     `d = q; if (d == NULL)` (test on the copy)              401 / 64
+     `d = q; s = p;` order swapped; 4-parameter signature;
+     `((u32 *)p)[5]` for the 0x4000 test; `((s16 *)g)[5]`
+     for the gate; `s32 a` first parameter; `s32 k`;
+     splitting `q`/`w`/`g` into separate locals; three
+     combinations of `d`-based pre-loop reads and block
+     move                                                    all byte-identical
+                                                             to their base
 
    NEW DECLARATIONS THIS BODY NEEDS:
      extern u8 D_800DCF5C;
      extern s16 D_800DCF5E;
      extern u8 D_8008149C[];
+
+   NOTE: `g` holds `&D_80083460` for the top gate and for the else-branch
+   case 2 tail, and is REUSED as the 0x8C-field source pointer inside the
+   first branch's case 2 (disjoint paths). That reuse is worth 6 differing
+   against a separate `s` local.
 */
 
 s32 func_800A504C(u8 *a, u8 *p)
@@ -78,6 +111,7 @@ s32 func_800A504C(u8 *a, u8 *p)
     s32 x;
     s32 y;
     s32 f;
+    u32 ab;
 
     g = (u8 *)&D_80083460;
     if (*(s16 *)(g + 0xA) != 1)
@@ -123,14 +157,14 @@ s32 func_800A504C(u8 *a, u8 *p)
                 return 0;
             }
             w = *(u8 **)(p - 0x14);
-            q = ((u8 * (*)(s32, s32, s32, s32))func_800A0B94(p[0x13], q, 1))(
+            d = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(
                 6, w[0x24], w[0x25], (s16)(*(u16 *)(p + 0x88) - 0x20));
-            if (q == NULL)
+            if (d == NULL)
             {
                 return 0;
             }
             g = p;
-            d = q;
+            q = d;
             x = *(s32 *)(q + 0x5C);
             y = *(s32 *)(q + 0x58);
             *(Unk42710 *)q = *(Unk42710 *)p;
@@ -156,7 +190,8 @@ s32 func_800A504C(u8 *a, u8 *p)
             d[0x9A] = g[0x9A];
             d[0x9B] = g[0x9B];
             k = (s16)func_800A1BD0(p);
-            *(s32 *)(D_800814A8 + k * 4 + 0xAC) = (s32)q;
+            ab = D_800814A8;
+            *(s32 *)(ab + k * 4 + 0xAC) = (s32)q;
             func_8009A3D0(w[0x24], w[0x25], 0x300);
             func_8009A028(q);
             q -= 0x20;
@@ -203,7 +238,7 @@ s32 func_800A504C(u8 *a, u8 *p)
             return 0;
         }
         w = *(u8 **)(p - 0x14);
-        q = ((u8 * (*)(s32, s32, s32, s32))func_800A0B94(p[0x13], q, 1))(
+        q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(
             1, w[0x24], w[0x25], (s16)(*(u16 *)(p + 0x88) - 0x20));
         if (q == NULL)
         {
@@ -211,8 +246,9 @@ s32 func_800A504C(u8 *a, u8 *p)
         }
         *(u32 *)(q + 0x14) |= 0x4000;
         k = (s16)func_800A1BD0(p);
-        e = *(u8 **)(D_800814A8 + k * 4 + 0xD0);
-        *(s32 *)(D_800814A8 + k * 4 + 0xAC) = (s32)q;
+        ab = D_800814A8;
+        e = *(u8 **)(ab + k * 4 + 0xD0);
+        *(s32 *)(ab + k * 4 + 0xAC) = (s32)q;
         i = e[3] & 0x1F;
         e[0] = p[0x13];
         D_800E3DF0[i] = (s32)q;

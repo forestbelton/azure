@@ -117,7 +117,7 @@ s32 func_800ACE34(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_800AC82C();
 /* Called for effect only; both forwarders discard the 0 it returns. */
 s32 func_800AB538();
-void func_800AB778();
+s32 func_800AB778();
 /* Widened to `s32`: every exit sets $v0, which is a `return 0`/`return 1`
    and not a `void` tail. Its one landed caller, func_800D9F7C, discards the
    result and is unchanged at 8 words, 0 differing -- the same correction
@@ -355,6 +355,9 @@ extern s16 D_8008346A;
 /* The kill handlers' callees and tables. D_80082E80 is csrc/ovl_town.c's
    UnkTownScene; only its address is wanted. */
 extern u8 D_80082E80[];
+extern u8 D_800E0C34[];
+extern u8 D_800E0C58[];
+extern u8 D_800E0C67[];
 /* The +0x9A state table func_800C9AAC dispatches through, same element type
    as D_800E22E0's. */
 extern UnkDungeonStep D_800E0354[];
@@ -14806,7 +14809,7 @@ s32 func_800A2C34(u8 *q)
 /* Two accesses off D_80083460, so a base pointer. The result accumulating
    in $v1 and moving to $v0 at the `jr` is the `||`. 13 words, 0 differing. */
 /* ONE PARAMETER, unread: func_800CB170 sets $a0 in the `jal`'s delay slot
-   and the still-stubbed func_800AB778 does too. 13 words, 0 differing
+   and the now-landed func_800AB778 does too. 13 words, 0 differing
    either way. */
 s32 func_800A2C78(u8 *p)
 {
@@ -20243,7 +20246,255 @@ u8 *d;
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AB778);
+/* The engine's four-state teardown for a retiring actor, switched on the
+   actor's +0x9B: state 0 bumps D_80083460's +0x0A census and advances to 3
+   (clearing the resident's +0x110 slot when the record's +0x43 is 0xFD and
+   otherwise refusing if func_800A2C78 says the floor is busy); state 3
+   either hands a sub-0x40 record to func_800C542C and jumps straight to
+   0x10, or arms the +0x96 fade and falls into state 4; state 4 runs the
+   five-way fade down -- three colour bytes and two scales, each divided by
+   what is left of the counter -- and on the last frame announces the record,
+   releases its D_800E3DF0 slot and its D_800E3E48 shadow and tears it down;
+   state 0x10 re-raises the 0x4000 flag, announces D_800E0C34 and runs the
+   same teardown without the census arithmetic. 401 words, 0 differing.
+
+   ONE `u8 *` LOCAL PER `&D_80083460` MATERIALISATION -- g, g2, g3, g4, four
+   sites in three cases. With ONE local reassigned the `%hi` lands in a
+   different register from its `%lo` at three of the four sites and the +0x0A
+   read-modify-writes lose their scheduling: 402 words, 127 differing, where
+   four locals plus the in-place `f` mask below is 401 / 8. This is
+   docs/matching-levers.md's "THE NUMBER OF SOURCE LOCALS HOLDING ONE
+   GLOBAL'S ADDRESS DECIDES WHETHER ITS %hi AND %lo SHARE A REGISTER", and
+   it is the single biggest lever in the function.
+
+   TWO `Unk800E3E48 *` LOCALS, ONE PER SITE, AND THEY ARE WHAT KEEPS +0x13 A
+   DISPLACEMENT. Written `((u8 *)&D_800E3E48[j])[0x13] = 0` the address is
+   `plus(plus(mult, symbol), 19)` and plus_constant folds the 19 into the
+   symbol, giving `%lo(D_800E3E48)+0x13` and `sb $zero, 0x0($v0)` where the
+   target has `addiu %lo(D_800E3E48)` and `sb $zero, 0x13($v0)` -- 2
+   differing. A pointer LOCAL makes the base a register, so the 19 has
+   nowhere to fold: `sh = D_800E3E48; *((u8 *)&sh[j] + 0x13) = 0;`. One local
+   SHARED between the two sites is 403 words / 176 differing; two locals are
+   401 / 4. `*(u8 *)((s32)&D_800E3E48[j] + 0x13)` folds the same way as the
+   array form and buys nothing.
+
+   THE SLOT INDEX IS TWO NARROW LOCALS: `s16 i` for D_800E3DF0 and `s16 j`
+   for D_800E3E48, per docs/matching-levers.md's "THE SCRATCHPAD INDEX TYPE
+   CAN BE WORTH 45 DIFFERING WORDS BY ITSELF", which was measured on this
+   very function: `s32`/`u32` is 403 words / 53 differing, one narrow index
+   is 401 / 18, two are 401 / 8.
+
+   `k = f & 0x4000;` IS A SEPARATE LOCAL *BEFORE* THE CALL, AND THAT IS THE
+   `jal func_80099844` DELAY SLOT. Written `if ((f & 0x4000) == 0)` after the
+   call the mask gets its own pseudo in $v0 and dbr fills the slot with
+   `addiu $a1, $a1, %lo(D_800E0C34)` instead -- 4 differing. `f &= 0x4000;`
+   in place before the call ties the result to $s0 but sched1 then hoists the
+   `andi` ahead of both argument setups -- 6 differing. Only a separate local
+   leaves the `andi` adjacent to the `jal`, which is where dbr takes it from.
+   401 / 2 -> this is worth 2 words.
+
+   STATE 0'S PROBE EXIT IS A `break`, AND THE `!= 0xFD` ARM ORDER GOES WITH
+   IT. As `return 0` the exit compiles to an inline `move $v0,0` + `j`, which
+   is two insns, so jump.c's conditional-jump-around-an-unconditional-jump
+   rule cannot fire and the branch comes out `beqz` into the join with a
+   `nop` in the following `j`'s delay slot -- 2 differing. As `break` the
+   exit is a bare `j` to the switch's shared `return 0`, jump.c inverts it to
+   `bnez` and reorg steals the zero into its delay slot and redirects to the
+   epilogue, which is the target. But `break` ALONE also lets gcc reorder the
+   two arms of the +0x43 test and merge both `j`s: 399 words, 349 differing.
+   Writing the test `if (d[0x43] != 0xFD) { probe } else { clear }` puts the
+   arms back in the target's order. Either change alone is no better than the
+   base; together they are the last 2 words.
+
+   `k` carries three disjoint values -- the `f` mask, the +0x43 record index
+   and func_800A1BD0's slot index -- and that is what the register assignment
+   wants. 0x80010A80 is a CONSTANT ADDRESS (`lui`/`ori`, not `lui`/`addiu`);
+   `ovlverify --raw` has both words byte-identical to the target, and the
+   other 90 raw differences are all `jal`/`j`/`%hi`/`%lo` relocation fields. */
+s32 func_800AB778(p, b, c, d)
+u8 *p;
+void *b;
+u8 *c;
+u8 *d;
+{
+    u8 *g;
+    u8 *g2;
+    u8 *g3;
+    u8 *g4;
+    u8 *e;
+    u8 *base;
+    Unk800E3E48 *sh;
+    Unk800E3E48 *sh2;
+    void *h;
+    void *m;
+    s32 f;
+    s16 k;
+    s16 n;
+    s16 i;
+    s16 j;
+
+    f = *(s32 *)(d + 0x14);
+    if ((f & 0x20000000) != 0)
+    {
+        *(s32 *)(d + 0x14) = f | 0x400000;
+        func_800ACB98(p, b, c, d);
+        return 0;
+    }
+    switch (p[0x9B])
+    {
+    case 0:
+        if (d[0x43] != 0xFD)
+        {
+            if ((s16)func_800A2C78(d) != 0)
+            {
+                break;
+            }
+        }
+        else
+        {
+            *(s32 *)(D_800E3D7C + 0x110) = 0;
+        }
+        g = (u8 *)&D_80083460;
+        *(u16 *)(g + 0xA) += 1;
+        p[0x9B] = 3;
+        break;
+    case 3:
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_80094E34();
+        }
+        if (d[0x43] < 0x40)
+        {
+            func_800C542C(d, D_800DCED4[func_800429E4(d)], d == *(u8 **)(D_800E3D7C + 0xAC), 2);
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] = 0x10;
+            break;
+        }
+        if (*(u16 *)(c + 0x12) == 0)
+        {
+            *(u16 *)(c + 0x12) = 0xFF80;
+        }
+        *(s16 *)(c + 0x10) = 0x20;
+        *(u16 *)(c + 0x14) |= 0xC;
+        *(s16 *)(p + 0x96) = 0x10;
+        *(s32 *)(d + 0x1C) |= 0x10000000;
+        p[0x9B]++;
+        break;
+    case 4:
+        c[0xC] -= c[0xC] / *(s16 *)(p + 0x96);
+        c[0xD] -= c[0xD] / *(s16 *)(p + 0x96);
+        c[0xE] -= c[0xE] / *(s16 *)(p + 0x96);
+        *(u16 *)(c + 0x1C) += (0x400 - *(u16 *)(c + 0x1C)) / *(s16 *)(p + 0x96);
+        *(u16 *)(c + 0x1E) += (0x400 - *(u16 *)(c + 0x1E)) / *(s16 *)(p + 0x96);
+        n = *(u16 *)(p + 0x96) - 1;
+        *(s16 *)(p + 0x96) = n;
+        if (n > 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            return 0;
+        }
+        h = func_800990FC();
+        m = func_8009929C(8, h);
+        if (d[0x43] == 0xFF)
+        {
+            m = func_80099194(D_800E0C58, func_80099734(d, m));
+            func_80099290(m);
+            func_800A5720(h);
+        }
+        else if (d[0x43] == 0xFE)
+        {
+            m = func_80099194(D_800E0C67, func_80099734(d, m));
+            func_80099290(m);
+            func_800A5720(h);
+        }
+        else
+        {
+            D_800DCE68 -= 1;
+            g2 = (u8 *)&D_80083460;
+            *(u16 *)(g2 + 0xA) -= 1;
+        }
+        func_800A31D0(d);
+        k = (s16)func_800A1BD0(d);
+        if (k >= 0)
+        {
+            base = D_800E3D7C;
+            *(s32 *)(k * 4 + base + 0xAC) = 0;
+            *(s32 *)(k * 4 + base + 0xD0) = 0;
+        }
+        if (*(s32 *)(D_800E3D7C + 0x110) != 0)
+        {
+            func_800A18E8(d[0x13], 3);
+            e = *(u8 **)(D_800E3D7C + 0x110);
+            i = e[3] & 0x1F;
+            j = i;
+            ((u8 *)D_800E3DF0[i])[0x13] = 0;
+            sh = D_800E3E48;
+            *((u8 *)&sh[j] + 0x13) = 0;
+            D_800E3DF0[i] = 0;
+            func_80098B38(*(u8 **)(D_800E3D7C + 0x110));
+        }
+        else
+        {
+            func_800A18E8(d[0x13], 2);
+        }
+        if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+        {
+            func_8009A3D0(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(d);
+        *(u16 *)(d - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        g3 = (u8 *)&D_80083460;
+        *(u16 *)(g3 + 0xA) -= 1;
+        if (*(s32 *)(g3 + 0xC) == (s32)d)
+        {
+            *(s32 *)(g3 + 0xC) = 0;
+        }
+        break;
+    case 0x10:
+        *(s32 *)(d + 0x14) = f | 0x4000;
+        k = f & 0x4000;
+        func_80099844(d, D_800E0C34);
+        if (k == 0)
+        {
+            *(s32 *)(d + 0x14) &= ~0x4000;
+        }
+        func_800A31D0(d);
+        k = d[0x43];
+        d[0x44] = 0;
+        if ((s16)func_80042900((s8 *)d, 0xA) != 0)
+        {
+            d[0x13] = d[0xA8];
+        }
+        func_800422DC((u8 *)(k * 0x54 + 0x80010A80), (s32)d);
+        func_800A18E8(d[0x13], 3);
+        k = (s16)func_800A1BD0(d);
+        if (k >= 0)
+        {
+            base = D_800E3D7C;
+            *(s32 *)(k * 4 + base + 0xAC) = 0;
+            *(s32 *)(k * 4 + base + 0xD0) = 0;
+        }
+        e = *(u8 **)(D_800E3D7C + 0x110);
+        i = e[3] & 0x1F;
+        j = i;
+        ((u8 *)D_800E3DF0[i])[0x13] = 0;
+        sh2 = D_800E3E48;
+        *((u8 *)&sh2[j] + 0x13) = 0;
+        D_800E3DF0[i] = 0;
+        func_80098B38(*(u8 **)(D_800E3D7C + 0x110));
+        if ((s16)func_80042900((s8 *)d, 0x1B) == 0)
+        {
+            func_8009A3D0(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        }
+        func_8009A028(d);
+        *(u16 *)(d - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        g4 = (u8 *)&D_80083460;
+        *(u16 *)(g4 + 0xA) -= 1;
+        break;
+    }
+    return 0;
+}
 
 /* The three-state climb/descend glide: case 0 seeds the 0x10-frame countdown
    and either re-places the mover and jumps to state 2 or parks the per-frame
