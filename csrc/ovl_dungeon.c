@@ -3539,6 +3539,38 @@ void func_8008DB0C(UnkDungeonActor *p, void *b, u8 *c, s16 d, s16 e)
     }
 }
 
+/* State 0x23's per-frame step: re-aim the mover at the record's tile over the
+   D_80083460 +0x04 countdown, hand off to func_8008D94C when the countdown
+   hits the frame the 0x80013714 flag selects, re-skin from D_800DD050, then
+   run the countdown down and close on func_800A2B04 / func_80094F74.
+
+   0x80013714 IS THE RAW CONSTANT ADDRESS, not the declared D_80013714 --
+   the same choice func_8008B870 records. A constant address is a two-word
+   assembler MACRO inside ONE rtl insn, so reorg cannot steal its `lui' into
+   the preceding `beqz $v0''s delay slot and that slot stays the target's
+   `nop'; the declared symbol is a `high' + `lo_sum' pair whose `lui' reorg
+   does steal, and the function comes out 127 words.
+
+   D_80083460 IS A STRUCT HERE, worth 4 differing. The second divide must
+   RELOAD the +0x04 halfword; through a `u8 *' cast it does not, because the
+   `*(s32 *)(b + 0xC)' store is a PLUS address (only `nonscalar') and the
+   halfword's own address folds to a constant, so cse's entry survives and the
+   divisor stays in the register the guard left it in. Reading it as a
+   COMPONENT_REF sets MEM_IN_STRUCT_P and the target's `lh $v1, 0x4($a1)'
+   comes back -- which also frees $a0 for the `lw $a0, 0x4($s0)' the target
+   puts in the `mflo' delay slot. `*(volatile s16 *)' forces the same reload
+   but costs an `lhu' plus its own `sll 16'/`sra 16': 130 words.
+
+   THE 3-OR-6 TEST IS A TERNARY. Written as two `if's with the call and
+   `return' duplicated per arm, cross-jumping merges the COMPARES as well as
+   the call -- the constant becomes a conditional `li 3'/`li 6' and a single
+   `bne', 123 words. The ternary is what produces the target's asymmetric
+   `beq -> call' / `bne -> continue' pair with the call block out of line.
+
+   `r' is `s32': an `s16' local gets an HImode pseudo and pays `lhu' plus
+   `sll 16'/`sra 16' at the comparison, 130 words. And `t = D_800DD050;' sits
+   INSIDE the arm -- hoisted above the test its `lui'/`addiu' pair precedes
+   the `lw $v1, 0x2C($s1)' and that is 2 differing. 128 words, 0 differing. */
 void func_8008DBE8(u8 *p, void *b, u8 *c, u8 *d)
 {
     UnkDungeonGlobal *g;
@@ -25852,6 +25884,22 @@ s32 func_800BBA20(void)
     return 0;
 }
 
+/* The 0x12 marker spawner for the three kill handlers' out-of-range arm:
+   func_800BB2E4 over {0x1000340, 0x1000080}, then func_800C1A44's spawner
+   with func_800BB55C as the node's +0x10 and a five-slot angle fan.
+
+   THE FAN IS AN INDEXED GIV, `r = q + i * 2;' AS THE BODY'S FIRST STATEMENT --
+   func_800BB55C records the same rule. Walking the pointer instead
+   (`q += 2' at the bottom) makes `i' dead in the body, loop.c REVERSES the
+   loop into a countdown and the preheader loses the `addu $v1, $v0, $zero'
+   copy the giv's init gives: 102 words against 104, 48 differing.
+
+   THE FIFTH PARAMETER IS `s16', AND THAT IS THE WHOLE REGISTER ROTATION.
+   As `s32' it is 104 words and 13 differing -- every difference a callee-saved
+   register, with the four register parameters one slot too low and the stack
+   parameter in $s6 where the target has $s3. The narrow declaration's extra
+   truncation reference is what lifts it past them. `u16' measures the same;
+   `u32' is 13 differing again. 104 words, 0 differing. */
 s32 func_800BBA40(s16 x, s16 y, s16 ang, void *d, s16 e, s32 g, void *h)
 {
     s32 v[2];
@@ -30900,6 +30948,29 @@ void func_800C5A64(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
+/* The eight-or-more particle spawner: a random 0x11..0x20 nodes on
+   func_800C5A64, the first of them 0x12 and the rest 0x212, each with a
+   random position jitter and a `-((rand & 0xF) + 0x18) << 13' lift. Returns
+   the FIRST node, so it is not void.
+
+   `g = (u8 *)&D_80083460;' BELONGS AT ITS USE, inside the `i == 0' arm.
+   Hoisted above the loop its `lui'/`addiu' pair is emitted whole before the
+   `bltz' guard and the target's split -- `lui' in the guard's delay slot,
+   `addiu' in the preheader -- is gone: 113 words, 2 differing.
+
+   THE COLOUR STORE IS THE FIRST OF THE SIX RENDERABLE STORES. Written in
+   offset order (0x1E, 0x1C, 0x10, 0x12, 0xC, 0x14) the `lw' that reloads the
+   fourth parameter from its home slot is scheduled seven words late:
+   113 words, 4 differing. Four other orders measure 4, 6 and 8.
+
+   THE FIRST PARAMETER IS `s16' AND HAS NO REG_EQUIV. A narrow REGISTER
+   parameter is promoted, so assign_parms does not hang the REG_EQUIV note on
+   its entry copy, and reload spills it to a fresh 16-bit slot -- which is the
+   target's `sh $a0, 0x10($sp)' / `lhu $t0, 0x10($sp)' pair rather than a word
+   spill to its own 0x40($sp) home. With a separate `s16 w = x;' local gcc
+   spills `y' instead and the three register parameters rotate: 113 words,
+   21 differing. The ternary is `i != 0 ? 0x212 : 0x12', not the other way
+   round -- inverted it is 17 differing. 113 words, 0 differing. */
 s32 func_800C5BBC(s16 x, s16 y, s16 ang, s32 col, u16 e, s16 snd)
 {
     UnkNode *n;

@@ -1,68 +1,102 @@
 /* func_8009A3D0 (ovl_dungeon) -- PARK, best so far.
 
    target 92 words, candidate 91 words, 77 differing (masked).
-   aligndiff: see below.  The residue is ONE missing word plus a rotation of
-   the five callee-saved registers.
+   The residue is ONE missing word plus a rotation of the five callee-saved
+   registers.  Everything structural is settled and measured below.
 
    WHAT THE FUNCTION IS.  (x, y, flags) over the 6-byte map cells at
    `*(s32 *)(&D_80083160 + 0x1DC)`, row shift at +0x1F0.  `flags & 0x8832`
-   non-zero clears `flags` out of the cell's +0x04 halfword (and when
-   `flags & 0x800` only if func_800A6E10(x, y) < 2); otherwise it clears them
+   non-zero CLEARS flags out of the cell's +0x04 halfword -- and when
+   `flags & 0x800` only if func_800A6E10(x, y) < 2.  Otherwise it clears them
    AND ors back the saturated `(cell & flags) - (flags & 0x1100)`.
 
-   THE ONE MEASURED MECHANISM, worth 13 words: the row shift must be read
-   through a STRUCT MEMBER, not `*(s16 *)(w + 0x14)` off a `u8 *`.
+   ================================================================
+   LEVER 1, worth 13 words: THE ROW SHIFT MUST BE A STRUCT MEMBER
+   ================================================================
    `cse.c`'s invalidate_memory drops an entry only on
-   `all || (nonscalar && in_struct) || cse_rtx_addr_varies_p (exp)`, and the
-   halfword store `*(u16 *)(c + 0x4) = ...` is a PLUS address, so it sets only
-   `nonscalar`.  With the cast spelling the shift's MEM has in_struct clear
-   and a constant-foldable base, so it survives the store, cse keeps the whole
-   index in a register and the second cell access vanishes:
+   `all || (nonscalar && p->in_struct) || cse_rtx_addr_varies_p (p->exp)`.
+   The halfword store `*(u16 *)(c + 0x4) = ...` has a PLUS address, so
+   note_mem_written sets only `nonscalar`; and the shift's own address folds
+   to a constant, so `cse_rtx_addr_varies_p` is 0.  Read through a `u8 *` its
+   in_struct is clear, the entry SURVIVES the store, cse keeps the whole cell
+   index in a register and the SECOND cell access disappears entirely:
      *(s16 *)(w + 0x14), u8 *w ............ 78 words, 88 differing
      ((UnkDungeonMapHdr *)w)->unk_14 ...... 88 words, 86 differing
-   (`*(volatile s16 *)(w + 0x14)` also reaches 88 -- same mechanism, confirms
-   it is the reload and not the struct type.)
+   `*(volatile s16 *)(w + 0x14)` also reaches 88, which is what proves the
+   mechanism is the reload and not the struct type.
+   (The same lever landed func_8008DBE8 -- see docs/dungeon-parks for its
+   write-up, where it is worth 4 differing on a divide.)
 
-   OTHER SPELLINGS MEASURED, all on top of the struct read:
-     one-armed `if ((s16)n < 0) n = 0;` ........... 90 words (no $a2 copy)
-     `if ((s16)n < 0) m = 0; else m = n;` ......... 91 words, 77 differing  <-- best
+   ===========================================================
+   LEVER 2, worth 2 words: THE CALL RESULT NEEDS AN s32 + CAST
+   ===========================================================
+   func_800A6E10 is landed as `s16`, so `if (func_800A6E10(a, b) >= 2)` emits
+   NO sign extension at all -- gcc trusts the SImode-promoted return.
+   `s32 r = func_800A6E10(a, b); if ((s16)r >= 2)` is what puts the target's
+   `sll 16`/`sra 16` back in front of the `slti`.
+
+   =====================================================
+   LEVER 3, worth 1 word: THE CLAMP IS A TWO-ARM if/else
+   =====================================================
+   `if ((s16)n < 0) m = 0; else m = n;` gives the target's
+   `addu $a2, $a0, $zero` copy; the one-armed `if ((s16)n < 0) n = 0;` does
+   not and is 90 words.
+
+   OTHER SPELLINGS MEASURED AND REJECTED (all on top of lever 1):
      `n = ((s16)n < 0) ? 0 : n;` .................. 79 words (pre-struct base)
-     duplicating `*(u16 *)(c+4) &= ~f;` per arm ... 98 words, 90 differing
-     `g = f;` local ahead of the first branch ..... 91 words, 82 differing
-     second cell access through a second pointer .. no change
-     f declared u16/u32/s16 ....................... conflicting types (the
-       unit already declares `void func_8009A3D0(s32, s32, s32);` at :609)
+     duplicating `*(u16 *)(c + 0x4) &= ~f;` per arm  98 words, 90 differing
+       -- cross-jumping does NOT merge the two tails here, because the two
+       arms' registers already differ
+     a second pointer local for the second access .. no change
+     f declared u16/u32/s16 ....................... conflicting types; the
+       unit declares `void func_8009A3D0(s32, s32, s32);` and the three
+       parameters' widths are therefore fixed
+     x/y declared s16 instead of (s16) casts ...... identical allocation
 
-   THE RETURN-VALUE EXTENSION IS WORTH 2 WORDS.  func_800A6E10 is landed as
-   `s16`, so `if (func_800A6E10(a, b) >= 2)` emits no sll/sra at all (gcc
-   trusts the SImode-promoted return).  `s32 r = func_800A6E10(a, b);
-   if ((s16)r >= 2)` is what puts the target's `sll 16`/`sra 16` back.
-
-   WHAT IS LEFT, and it is an ALLOCATION residue, not a shape one:
+   ==========================================================
+   THE RESIDUE IS AN ALLOCATION ONE, AND IT IS QUANTIFIED
+   ==========================================================
      target: $s0=flags  $s1=(s16)y  $s2=(s16)x  $s3=cellbase  $s4=&hdr
      here:   $s0=(s16)y $s1=(s16)x  $s2=cellbase $s3=flags    $s4=&hdr
-   i.e. `flags` is LAST of the five instead of FIRST.  `.greg` says
-   `;; 11 regs to allocate: 86 135 80 91 81 90 85 132 131 82 84` with 82 =
-   flags at rank 10 of 11.  flags is a parameter pseudo, so
+   i.e. `flags` is LAST of the five instead of FIRST, and the other four keep
+   their relative order.  `flags` is a parameter pseudo, so
    update_equiv_regs doubles its live_length (local-alloc.c:1094) and
-   global.c's allocno_compare divides by it: 2*7/L_f against 1*3/L_b for the
-   two short extension pseudos.  Copying it into a local before the first
-   branch (`g = f;`) halves the live length and moves it from rank 10 to rank
-   8 -- $s2 instead of $s3 -- but not past the two extension pseudos.  An
-   EIGHTH reference on flags would cross the floor_log2 step (2*7 -> 3*8) and
-   is the thing to look for; no legal spelling found that adds an insn
-   mentioning it which survives flow.
+   global.c's allocno_compare divides by it.  `.greg`'s own priority line,
+   with pseudo 82 = flags, measured by adding N zero-instruction
+   `__asm__("" ::"r"(f))` references purely as a DIAGNOSTIC:
 
-   The one missing word is a consequence of the rotation: with these registers
-   the then-arm's `sh $v0, 0x4($a1)` and the else arm's final store are the
-   SAME insn, so jump2 cross-jumps them (`j` + `and` in the delay slot, 2
-   words, against the target's `and` / `j` / `sh`, 3).  With the target's
-   registers the two stores differ and the merge cannot fire.
+     | extra refs on flags | priority rank | flags gets | differing |
+     |---|---|---|---|
+     | 0 (the saved body)  | 10 of 11 | $s3 | 77 |
+     | 1                   |  7 of 11 | $s2 | 75 |
+     | 3                   |  -       | $s1 | 74 |
+     | 6                   |  -       | $s0 | 69 |
+     | `q = f;` local only |  8 of 12 | $s2 | 82 |
+     | `q = f;` + 3        |  -       | $s0 | 71 |
+
+   So SIX extra references are needed to take $s0, which is far more than any
+   legal spelling can supply, and -- the part worth knowing -- EVEN WITH THE
+   TARGET'S EXACT CALLEE-SAVED ASSIGNMENT the function is still 91 words and
+   32 ALIGNED differences, because the caller-saved temporaries in the two
+   arms are then allocated the other way round.  So the callee-saved rotation
+   is NOT the whole residue and chasing it alone cannot close this function.
+
+   The one missing word: with these registers the then-arm's
+   `sh <reg>, 0x4(<reg>)` and the else arm's final store are the SAME insn,
+   so jump2 cross-jumps them (`j` + `and` in the delay slot, 2 words, against
+   the target's `and` / `j` / `sh`, 3).  The target's two stores use opposite
+   register pairs (`sh $v1, 0x4($v0)` against `sh $v0, 0x4($v1)`) and the
+   merge cannot fire.
 
    Also still wrong: the `beqz $v0, .L8009A454` delay slot holds a COPY of the
    branch target's first `sll` (reorg did not own the taken thread) where the
-   target MOVES the fall-through's first `sll` into it -- one extra word here,
-   which is why the count is 91 and not 90.
+   target MOVES the fall-through's first `sll` into it.
+
+   PERMUTER TRIAGE: the word counts differ by one and the residue is a
+   register permutation plus one cross-jump, which docs/dungeon-sweep.md
+   calls NOT permuter food.  But the one-word deficit is inside a single
+   4-insn block whose structure is proved, which is the shape the rule says
+   DOES win, so it is worth one short search.
 
    NEEDS the typedef below in the declaration block. */
 
