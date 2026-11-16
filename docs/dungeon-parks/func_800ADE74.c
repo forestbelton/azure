@@ -117,9 +117,25 @@ with `s32 t` it gives the target's `lui`/`slt` exactly.
       matches the single `ori $v0,$zero,0x8009` that sits before that label
       in t6, succeeds at minimum 1, and the `for (target = jump_chain[...])`
       loop that would have found case 0x26's nine-instruction tail is guarded
-      by `newjpos == 0` and never runs.  Why the original build gets past
-      that first attempt I could not establish.  Giving either arm its own
-      `g` does not change it (0x1D: 130 -> 137, 0x26: no change).
+      by `newjpos == 0` and never runs.  Giving either arm its own `g` does
+      not change it (0x1D: 130 -> 137, 0x26: no change).
+
+      ANSWERED 2026-11-16 by the dispatcher, and the answer says to stop
+      looking at the two arms.  The first attempt compares the insns before
+      the jump with the insns before **its own target label** -- E2 in
+      `find_cross_jump (e1, e2, ...)` is the LABEL, not the sibling jump
+      (`jump.c:2564`'s own comment).  So the original build gets past it
+      because in the original the last instruction before `.L800AFA10`
+      DIFFERS from case 0x1D's last instruction, the minimum-1 match fails,
+      `newjpos` stays 0 and the `jump_chain` loop runs and finds case 0x26's
+      nine-instruction tail.
+
+      **The lever is in whatever falls into `.L800AFA10`, not in either
+      arm.**  Change which constant that block leaves in a register, or
+      reorder its last statements, so that its final instruction stops
+      matching the arm's.  See docs/matching-levers.md, "A SHORT CROSS-JUMP
+      MATCH FOUND FIRST BLOCKS A LONGER ONE".  Nothing in cases 0x1D or 0x26
+      can reach this, which is why ~60 variants on them did not.
    2. case 0x18's last `c[0x46] = 0x800B; return 2;` does not cross-jump into
       .L800AF8F0:
       + 3 words.gcc holds the 0x800B in $v1 there;
