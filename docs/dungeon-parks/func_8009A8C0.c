@@ -33,7 +33,36 @@
      of the target's bare `lh`.  The ternary IN the argument is what gives
      `lh $a3, 0x88($t0)`.
    * tail written `if ((s16)t < 0x201) return 1; return -1;`: 182 words,
-     48 aligned.  Inverted (`>= 0x201 -> return -1` first) it is 184/43. */
+     48 aligned.  Inverted (`>= 0x201 -> return -1` first) it is 184/43.
+
+   A BROAD PLATEAU AT 43: every one of the following compiles to the SAME
+   bytes (md5 of the emitted word column identical to the base), so none of
+   them is the variable that matters --
+     the position of `h = *(u16 *)(d + 0x88);` (before px / after pz /
+     after wz); `h` as u16 instead of s32; `h` read as `((u16 *)d)[0x44]`;
+     the position of `(void)&d;` (top / before the h read / at the end);
+     `u8 **pd = &d;` instead of `(void)&d;`; `w` declared last;
+     `u32 k`; `(f >> 9) & 7` written inline at the two call sites;
+     `s32 kk = (f >> 9) & 7; k = kk;`; `u16 f` for the first parameter.
+   Also measured: `k = f >> 9; k &= 7;` is 60 aligned, `k = (f & 0xE00) >> 9`
+   is 45, `sh` declared at its first use is 45, `((s16 *)D_8008333C)[10]`
+   inline is 45.  All 24 permutations of the `wx/wz/k/h` declaration order
+   were measured: every order with `wx` before `wz` is 43, every order with
+   `wz` before `wx` is 182 words / 81 aligned.
+
+   WHAT THE RESIDUE REDUCES TO, and it is ONE cause.  The target evaluates
+   func_8009A540's first argument (`addu $a0, $s5, $zero`) in the FIRST basic
+   block, at word 22, twenty-odd words and four conditional branches before
+   the `jal`; the candidate emits it at word 53, in the call's own block.
+   That makes $a0 busy for the whole head of the target, so the constant 1
+   lands in $a1 and the `(s16 *)D_8008333C` base in $a2 -- which clobbers the
+   incoming $a2 and forces the target to RELOAD `d` from 0x50($sp) at the
+   `0x88` read, where the candidate still has it in $a2 and cse forwards it.
+   Every remaining R row downstream is that one register rotation
+   (candidate k=$s4 h=$s5 wz=$s6 against target k=$s5 h=$s6 wz=$s4).
+   The target also carries an extra `addu $s5, $a0, $zero` copy at word 6
+   that the candidate coalesces away.  Nothing tried reproduces the hoist.
+   PERMUTER FOOD: this is a placement, not a pure allocation tie. */
 s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
 {
     s16 *sh;

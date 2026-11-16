@@ -2139,7 +2139,47 @@ void func_800894A0(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80089588);
 
-/* BEGIN func_800897E4 */
+/* 175 words, 0 differing.  Three alternative loops over the same pair of
+   arrays: D_80083360[i] is a handler pointer and D_800833E0[i] the object it
+   runs on; the two flag tests pick which handlers are allowed to run and what
+   happens after each call.  Four spellings were worth 157 of the 175 words:
+
+   1. EACH LOOP INDEXES THE ARRAYS; IT DOES NOT WALK POINTERS.  loop.c turns
+      `D_80083360[i]` into the pointer bivs the listing shows, and in the
+      first two loops it then ELIMINATES `i`, rewriting the exit test as
+      `addiu $v0, $s3, 0x80` / `slt $v0, $s0, $v0` -- a SIGNED compare, which
+      a pointer compare (`sltu`) can never give.  maybe_eliminate_biv puts
+      that `addiu` inside the loop rather than the preheader exactly when
+      `threshold < insn_count`, and the pre-strength-reduction insns are also
+      what keep `insn_count` above move_movables' threshold, so the
+      `lui %hi(D_800DCF80)` and `lui %hi(D_80083160)` stay inside their loops.
+      Hand-written pointer walks measured 174 words / 34 aligned rows: the
+      bodies were right and every one of those rows was a hoisted `lui` or
+      the register numbering that followed from it.
+
+   2. `D_80083360[i] = 0` IS THE `else` OF `if (s != NULL)`, NOT THE `if` OF
+      `if (s == NULL)`.  Writing it the other way puts the store inline and
+      costs a `j` over it -- and, because the store then no longer sits
+      between the call and the shared `addiu $s0, $s0, 0x4`, the call path
+      reaches that increment by fall-through instead of by `j .L800898B8`,
+      which is where ten of the words went.  reorg steals the increment into
+      the jump's delay slot, and that -- not a failure to cross-jump -- is why
+      the target seems to emit the increment twice per loop.  165 words.
+
+   3. `cam` AND `s` ARE ONE VARIABLE.  Loop 2 overwrites the object pointer
+      with `&D_80083498` on the match path, so the single pseudo is live
+      across a call and takes a callee-saved register ($s1) in all three
+      loops.  A separate `cam` local leaves `s` in $a0 everywhere: 16 rows.
+
+   4. LOOP 2'S `a2` AND LOOP 1'S `a` MUST BE DIFFERENT LOCALS, and `a2` must
+      be set at the top of loop 2's body.  loop.c then hoists it as $s5
+      (%hi) / $s6 (the address), cse2 folds the `D_800DCF80[0]` load's own
+      `lui` onto $s5, and $s5 is the SEVENTH callee-saved register the target
+      saves -- the last two words.  Sharing one local costs 18 rows; setting
+      it beside its use costs the hoist and 2 words.
+
+   No prototype for this function: csrc/ovl_dungeon.c:2075 calls it seven
+   lines above, on an implicit `int` declaration, and that is load-bearing. */
 void func_800897E4(void)
 {
     u32 *a;
@@ -27372,7 +27412,33 @@ s32 func_800BE5A8(u8 *p, u8 *q, s16 k)
     return 1;
 }
 
-/* BEGIN func_800BE6F0 */
+/* The kill skeleton plus the chest/item teardown. Three spelling facts, each
+   measured here:
+
+   - THREE SEPARATE POINTER LOCALS, not one reused `b'. `*(u8 **)(p - 0x18)',
+     `*(u8 **)(p - 0x14)' and the 0x80010000 constant base are three different
+     values; sharing one local is 19 differing -- it ties all three to one
+     pseudo ($a3), and it also lets cse common the 0x80010000 high into the
+     `ori' for 0x80010980, costing a `move' and the target's second `lui'.
+     Three locals is 2 differing.
+   - D_80083460 IS TAKEN TWICE, SO IT IS TWO LOCALS (`g', `g2'). One local
+     reassigned puts the `%hi' in a different register from the `%lo' at the
+     tail site -- `lui $v0' / `addiu $a0, $v0' against the target's
+     `lui $a0' / `addiu $a0, $a0'. 2 differing -> 0. This is
+     docs/matching-levers.md's "THE NUMBER OF SOURCE LOCALS HOLDING ONE
+     GLOBAL'S ADDRESS DECIDES WHETHER ITS %hi AND %lo SHARE A REGISTER".
+   - THE TWO 0x80010000 TABLES KEEP THE TWO SPELLINGS csrc/ovl_town.c's
+     func_8009EF88 records: a pointer LOCAL whose low half is zero for the
+     0x54-stride byte (one `lui', the whole offset in the displacement), and
+     the WHOLE constant for the word table, because `((s32 *)0x80010980)[r]'
+     makes the address plus(ashift, CONST_INT) and force_operand materialises
+     it entire. Here they are in ONE block rather than town's two arms, and
+     they still do not common once the base local is block-scoped.
+
+   The `p[0x13]' range gate is written twice on purpose -- the message arm and
+   the teardown arm each test it -- and the target reads p[0x13] a third time
+   for the odd-state chain because the `s[0] = p[0x13]' store into an
+   address-taken local kills the cse. 189 words, 0 differing. */
 s32 func_800BE6F0(u8 *p, u8 *q, s16 k)
 {
     u8 s[4];
