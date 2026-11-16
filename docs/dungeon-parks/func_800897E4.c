@@ -1,4 +1,4 @@
-/* PARK: func_800897E4, 163 of 175 words, 125 aligned differences.
+/* PARK: func_800897E4, 165 of 175 words, 103 aligned differences.
    ovl_dungeon.  2026-11-16.  **This is a first compile of a complete reading,
    not a worked candidate** -- the decode below is the expensive part and is
    worth trusting; the loop SHAPES are not yet right and that is what the 12
@@ -50,19 +50,39 @@
 
    -------------------------------------------------- WHAT IS WRONG, AND WHY
 
-   The biggest single cause of the 12-word deficit: in the first two loops the
+   FIXED ALREADY, and it is in the body below: in the first two loops the
    target recomputes the bound INSIDE the loop --
 
        addiu $v0, $s3, 0x80
        slt   $v0, $s0, $v0
 
-   -- keeping `&D_80083360` in `$s3` across the whole loop, while this body
-   lets loop.c hoist `D_80083360 + 0x20` into the preheader. Finding the shape
-   that denies that hoist is the next job; see the two entries in
-   docs/matching-levers.md on `scan_loop`'s admission arms, and note that the
-   bound sits in the exit test AFTER the body's conditional branches, so
-   `maybe_never` should already be true -- the question is why it is hoisted
-   here anyway.
+   -- keeping `&D_80083360` in `$s3` across the whole loop, while the literal
+   `D_80083360 + 0x20` in the exit test lets loop.c hoist it into the
+   preheader.  **A `base` local that the bound expression references is what
+   denies the hoist**: `base = D_80083360; f = base;` with
+   `while (f < base + 0x20)`.  Applied to the first loop it measures
+   164/106 against 163/125, and to both 165/103.  Measured and worse: a `for`
+   loop with the literal bound in its condition, 166/128; `!=` instead of
+   `<`, 162/125.
+
+   WHAT IS LEFT, 10 words across the three loops, and it is the same thing
+   three times.  The target emits the handler call's tail TWICE per loop --
+
+       lw   $a1, 0x8($s1)
+       lw   $a2, 0xC($s1)
+       jalr $a3
+       addiu $a0, $s1, 0x20
+       j    .L800898BC
+       addiu $s0, $s0, 0x4        <- its own copy of the increment
+
+   -- so the call path jumps PAST the shared `addiu $s0, $s0, 0x4` at
+   `.L800898B8` and does its own in the delay slot, while the refusal paths
+   fall through that one.  A plain `break` out of the search loop merges the
+   two and emits the increment once, which is this body.  Finding the source
+   shape that keeps them separate is the remaining job; `docs/matching-
+   levers.md`'s "A DUPLICATED FAIL BODY IS WHAT PUTS IT IN cse1's PATH" is
+   the nearest relative, but note that here the target does NOT cross-jump
+   the copies, so whatever the source does has to defeat that merge too.
 
    The prologue also saves two fewer callee-saved registers than the target,
    which follows from the same thing.
@@ -73,6 +93,7 @@
 void func_800897E4(void)
 {
     u32 *f;
+    u32 *base;
     u32 *o;
     u32 *a;
     u32 *b;
@@ -85,7 +106,8 @@ void func_800897E4(void)
     if ((D_800E296C & 0x2000000) != 0)
     {
         b = D_800DCFA4;
-        f = D_80083360;
+        base = D_80083360;
+        f = base;
         o = D_800833E0;
         do
         {
@@ -119,11 +141,12 @@ void func_800897E4(void)
             }
             f++;
             o++;
-        } while (f < D_80083360 + 0x20);
+        } while (f < base + 0x20);
     }
     else if ((*(s32 *)(D_800814A8 + 0x1C) & 0x10) != 0)
     {
-        f = D_80083360;
+        base = D_80083360;
+        f = base;
         o = D_800833E0;
         do
         {
@@ -169,7 +192,7 @@ void func_800897E4(void)
             }
             f++;
             o++;
-        } while (f < D_80083360 + 0x20);
+        } while (f < base + 0x20);
     }
     else
     {
