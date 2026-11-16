@@ -2100,6 +2100,24 @@ typedef struct UnkDungeonFT4W
     UnkDungeonPUV unk_24;
 } UnkDungeonFT4W;
 
+/* Rodata this unit owns; func_80091430 hands one of the three to
+   func_8004DD2C. */
+extern u8 D_80088904[];
+extern u8 D_80088934[];
+extern u8 D_80088970[];
+extern u8 D_80012D6D;
+extern u8 D_80023C58[];
+extern u8 D_800E2004[];
+/* Resident helpers func_80091430 needs; prototypes copied from their
+   definitions in csrc/unk_1C540.c. */
+void func_8004DCE0(u32);
+void func_8004DCEC(void);
+void func_8004DD2C(u8 *);
+void func_8004E130(void);
+/* Defined below; the s16 return is what the `sll'/`beqz' on the result in
+   func_80091430 tests. */
+s16 func_8009402C(u8 *, s32, u8 *, s16 *, s16 *, u8 *);
+
 /* The overlay's per-frame entry point; `void func_800894A0(void)` is declared
    in include/structs.h because the resident engine calls it. D_80083160 is a
    POINTER LOCAL assigned before the first call -- that is where the
@@ -5144,7 +5162,268 @@ void func_80090C10(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80091430);
+/* The engine-dialogue state machine on +0x9B: state 0 opens the window
+   (func_800B9964 off +0x104, the mode beep, and one of three rodata scripts),
+   state 1 runs it -- re-aims the record's +0x2A facing through func_8009074C,
+   then either closes on D_80083160+0x10's 0x80/0x10/0x20/0x40 bits, re-targets
+   from the engine's +0xAC/+0xB0 slot pair on D_80083160+8, or (when +0x120 is
+   set) tears the window down and parks func_8008EAC8 / func_8008ACDC -- and
+   state 2 is the bare teardown. 316 words, 0 differing, with one device.
+
+   THE SIXTH ARGUMENT'S READ OF D_80082EB0 IS A `volatile` CAST, AND THAT IS A
+   DEVICE worth the function's last word. The target clears the global and
+   RELOADS it one insn later into the outgoing argument slot; cse1 records the
+   MEM dest with the stored constant's class (cse.c:7402) and forwards it, so
+   every ordinary spelling is 315 words / 9 aligned differences with
+   `sw $zero, 0x14($sp)` where the target has `lw` + `sw $v1`. A volatile READ
+   is refused a hash lookup, so it is never substituted, while the address is
+   still an ordinary pseudo and the `lui %hi(D_80082EB0)` stays shared between
+   the store and the load -- which is why this and not a cse-region boundary:
+   the target materialises that `high` ONCE.
+   docs/matching-levers.md:26412 records that `extern u8 *volatile D_80082EB0;`
+   also buys the word (314 of 316) but takes the landed func_8008DB0C to
+   56 words / 24 differing; the cast is the same lever confined to one read, and
+   func_8008DB0C, func_8009402C, func_80090C10 and func_80094270 all re-measure
+   at 0 differing beside it.
+   MEASURED AND REJECTED: moving `D_80082EB0 = NULL;` ABOVE the +0x8A store so
+   that store invalidates the entry does not work and costs 4 more -- 315 words
+   / 13 differing, with the `lui`/`sw` pair six words early. The reason is in
+   `note_mem_written` (cse.c:7606): a varying-address store whose address is a
+   PLUS and whose mode is not QImode sets only `nonscalar`, and
+   `invalidate_memory` drops an in-memory entry only when it is `in_struct` or
+   its address varies -- D_80082EB0's is neither.
+
+   THE THREE SCRIPTS ARE THREE SEPARATE CALLS to func_8004DD2C, not one call on
+   a selected pointer. Through a local assigned in three arms each symbol's
+   `high` lands in $v0 and only its `lo_sum` in $a0; three calls let
+   cross-jumping merge at the `jal` and leave `lui $a0` / `addiu $a0` in every
+   arm, which is the target. One call: 315 words, 11 differing.
+   (docs/matching-levers.md:26384, read for an argument rather than a ternary.)
+
+   THE +0x104 CLEAR IN THE 0x80 ARM IS AN ARRAY REF, `((void **)p)[0x41]`.
+   `a[i]` on a pointer is an INDIRECT_REF of a PLUS_EXPR, which expand_expr
+   marks MEM_IN_STRUCT_P; `*(s32 *)(p + 0x104)` is an INDIRECT_REF of the CAST,
+   which is not marked. Only with the bit set does true_dependence let the
+   `lw %lo(D_800E296C)` rise over the store, and the store land between the
+   `addiu $v1, $zero, -0x2001` and the `and` -- 316 words, 2 differing without
+   it. It is func_80090C10's `((UnkDungeonActor *)p)->unk_C8` rule reached
+   without extending the struct; the other three arms need no such spelling
+   because nothing is scheduled across them.
+
+   func_800B9964's result NEEDS ITS OWN LOCAL, separate from the +0xAC/+0xB0
+   slot read in the retarget tail: one shared local is one allocno, it takes
+   $a0, and state 0 gains an `addu $a0, $v0, $zero` -- 317 words, 8 differing.
+
+   The record pointer is re-spelled `*(u8 **)(p + 0x104)` at every site rather
+   than taken into a local: cse hands the three uses before func_80094208 one
+   `lw $t0` and re-reads it after each call, which is what the target does and
+   what a local in a callee-saved register would not. */
+void func_80091430(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *q;
+    u8 *n;
+    u8 **s;
+    s16 r;
+    s16 x;
+    s16 y;
+    s16 k;
+
+    g = (u8 *)&D_80083160;
+    switch (p[0x9B])
+    {
+    case 0:
+        n = (u8 *)func_800B9964(p + 0x104);
+        *(u8 **)(p + 0xC8) = n;
+        if (n == NULL)
+        {
+            return;
+        }
+        func_8004DCE0(2);
+        func_8004DCEC();
+        if (*(s16 *)(p + 0x120) == 0)
+        {
+            if (D_80012D6D == 0)
+            {
+                func_8004DD2C(D_80088904);
+            }
+            else
+            {
+                func_8004DD2C(D_80088934);
+            }
+        }
+        else
+        {
+            func_8004DD2C(D_80088970);
+        }
+        p[0x9B]++;
+        /* fallthrough */
+    case 1:
+        r = func_8009074C(*(s16 *)(p + 0x9E), (u16 *)(p + 0xA2),
+                          (u16 *)(*(u8 **)(p + 0x104) + 0x2A));
+        if (r != 0xFFF)
+        {
+            *(s16 *)(*(u8 **)(p + 0x104) + 0x2A) = r;
+            func_8009F644(d, 0x70, *(u8 **)(p + 0x104) == *(u8 **)(p + 0xB0), (r >> 9) & 7);
+        }
+        if (*(s16 *)(p + 0x120) == 0)
+        {
+            if (*(u8 **)(p + 0x104) != NULL)
+            {
+                if ((*(s32 *)(g + 0x10) & 0x80) != 0)
+                {
+                    if (func_80094208(0) != 0)
+                    {
+                        return;
+                    }
+                    if ((*(s32 *)(d + 0x1C) & 0x100000) != 0)
+                    {
+                        return;
+                    }
+                    *(s16 *)(d + 0x8A) = *(u8 **)(p + 0x104) != *(u8 **)(p + 0xAC);
+                    D_80082EB0 = NULL;
+                    /* DEVICE: the `volatile` cast on this one read stops cse1
+                       forwarding the zero just stored; worth the function's
+                       last word (315 of 316 without it) and it emits nothing.
+                       The head comment has the mechanism and the rejected
+                       spellings. */
+                    if (func_8009402C(p, (s32)b, c, &x, &y, *(u8 *volatile *)&D_80082EB0) != 0)
+                    {
+                        func_800997FC(D_800E2004);
+                    }
+                    else
+                    {
+                        func_8004E130();
+                    }
+                    *(s32 *)(p + 0xC8) = 0;
+                    func_8008DB0C((UnkDungeonActor *)p, b, c, x, y);
+                    ((void **)p)[0x41] = NULL;
+                    D_800E296C &= ~0x2000;
+                    return;
+                }
+                else if ((*(s32 *)(g + 0x10) & 0x10) != 0)
+                {
+                    func_800C77D0(*(u8 **)(p + 0x104) - 0x20,
+                                  *(u8 **)(*(u8 **)(p + 0x104) - 0x18), 8, D_800DCE66);
+                    k = *(u8 **)(p + 0x104) != *(u8 **)(p + 0xAC);
+                    *(s16 *)(d + 0x8A) = k;
+                    D_800E4940 = k;
+                    func_8008CF6C((UnkDungeonActor *)p, b, c, D_8001EF2C);
+                    D_80082EB0 = NULL;
+                    *(s32 *)(p + 0xC8) = 0;
+                    *(s32 *)(p + 0x104) = 0;
+                    func_8004E130();
+                    return;
+                }
+                else if ((*(s32 *)(g + 0x10) & 0x20) != 0)
+                {
+                    k = *(u8 **)(p + 0x104) != *(u8 **)(p + 0xAC);
+                    *(s16 *)(d + 0x8A) = k;
+                    D_800E4940 = k;
+                    func_8008CF6C((UnkDungeonActor *)p, b, c, D_80023C58);
+                    D_80082EB0 = NULL;
+                    *(s32 *)(p + 0xC8) = 0;
+                    *(s32 *)(p + 0x104) = 0;
+                    func_8004E130();
+                    return;
+                }
+                else if ((*(s32 *)(g + 0x10) & 0x40) != 0)
+                {
+                    func_800C77D0(*(u8 **)(p + 0x104) - 0x20,
+                                  *(u8 **)(*(u8 **)(p + 0x104) - 0x18), 8, D_800DCE66);
+                    k = *(u8 **)(p + 0x104) != *(u8 **)(p + 0xAC);
+                    *(s16 *)(d + 0x8A) = k;
+                    D_800E4940 = k;
+                    func_8008CF6C((UnkDungeonActor *)p, b, c, D_8004F5F4);
+                    D_80082EB0 = NULL;
+                    *(s32 *)(p + 0xC8) = 0;
+                    *(s32 *)(p + 0x104) = 0;
+                    func_8004E130();
+                    return;
+                }
+            }
+            if (*(u8 **)(p + 0x104) == *(u8 **)(p + 0xAC))
+            {
+                if ((*(s32 *)(g + 0x8) & 0x2) != 0)
+                {
+                    return;
+                }
+            }
+            else if (*(u8 **)(p + 0x104) == *(u8 **)(p + 0xB0))
+            {
+                if ((*(s32 *)(g + 0x8) & 0x1) != 0)
+                {
+                    return;
+                }
+            }
+            if ((*(s32 *)(g + 0x8) & 0x3) != 0)
+            {
+                if ((*(s32 *)(g + 0x8) & 0x2) != 0)
+                {
+                    s = (u8 **)(p + 0xAC);
+                }
+                else
+                {
+                    s = (u8 **)(p + 0xB0);
+                }
+                q = *s;
+                if (q == NULL)
+                {
+                    return;
+                }
+                if (*(u8 **)(p + 0x104) == q)
+                {
+                    return;
+                }
+                if ((*(s32 *)(q + 0x1C) & 0x20000) == 0)
+                {
+                    return;
+                }
+                if ((*(s32 *)(q + 0x1C) & 0x80000) != 0)
+                {
+                    return;
+                }
+                *(u8 **)(p + 0x104) = q;
+                func_800B0F50(q);
+            }
+            else
+            {
+                *(s32 *)(p + 0x104) = 0;
+                p[0x9B]++;
+            }
+        }
+        else
+        {
+            func_800BA810(*(u8 **)(p + 0x104), *(u16 *)(*(u8 **)(p + 0x104) + 0x46));
+            if ((*(s32 *)(g + 0x10) & 0x60) != 0)
+            {
+                if ((*(s32 *)(g + 0x10) & 0x20) != 0)
+                {
+                    func_800A56E0(0x515);
+                    *(u16 *)(*(u8 **)(p + 0x104) + 0x46) &= 0x7FFF;
+                }
+                else
+                {
+                    func_800A56E0(0x503);
+                }
+                *(s32 *)(p + 0x104) = 0;
+                func_8004E130();
+                D_800E296C &= ~0x2000;
+                *(void **)(p + 0x8C) =
+                    ((*(s32 *)(d + 0x1C) & 0x100000) != 0) ? func_8008EAC8 : func_8008ACDC;
+                func_800BA810(NULL, 0);
+            }
+        }
+        break;
+    case 2:
+        *(s32 *)(p + 0xC8) = 0;
+        func_8004E130();
+        D_800E296C &= ~0x2000;
+        *(void **)(p + 0x8C) =
+            ((*(s32 *)(d + 0x1C) & 0x100000) != 0) ? func_8008EAC8 : func_8008ACDC;
+        break;
+    }
+}
 
 void func_80091920(UnkDungeonActor *p)
 {
