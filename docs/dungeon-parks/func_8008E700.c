@@ -18,6 +18,75 @@
    a three-insn chain to a store, broken by RTL order.  ORDERING residue ->
    permuter.
 
+   ------------------------------------- THE SCHEDULER, MEASURED (agent j54)
+
+   2026-11-16.  `-da` dumps of a standalone file (unit declaration block +
+   this body, tools/cdkgcc) reproduce the residue exactly, so the loop below
+   is one 0.5s compile.  Read with `tools/decomp/sched.py <file>
+   func_8008E700` and `--sched1`.  Name the insns by their sched numbers:
+
+       474 li   $v1, 0xFFEF0000      A   (the mask, lui half)
+       475 ori  $v1, $v1, 0xFFFF     B   (the mask, ori half)
+       358 addu $a0, $s2, $zero      D
+       298 lui  $v0, %hi(D_80081484) C
+       309 lw   $v0, 0x1C($s0)       H
+       301 lw   $t0, %lo(..)($v0)    E
+       362 addiu $a2, $zero, 5       F
+       306 sw   $zero, %lo(..)($v0)  G
+
+   This body emits A C B D E F G H; the target emits A B D C H E F G.  So C
+   is two slots too early and H is three slots too late, and the register
+   follows: with H after G the `%hi` pseudo can take $v0, which is what the
+   target's $a1 says it must not.
+
+   TWO MECHANISMS, both measured, and together they say the SOURCE ORDER is
+   what decides this, not a spelling:
+
+   1. LAUNCH_PRIORITY.  `adjust_priority` (sched.c:2551) gives 0x7f000001 to
+      an insn that becomes ready while `birthing_insn_p` (sched.c:2512) holds
+      -- it SETs a live pseudo with `reg_n_sets == 1` -- and `schedule_select`
+      only chooses inside the highest-priority group.  The mask pseudo has
+      TWO sets (lui then ori) so A and B are never boosted; C is a write-once
+      temp and always is, which is why it wins T-33 and lands at slot 2.
+      Killing a boost is a real lever (it landed func_800AC010 this session)
+      but every way of killing C's here is worse: reusing `t` for `t2` is 31
+      aligned, reusing `r` for `v` is 14, reusing `g` for `g2` is 25.
+   2. THE +0x1C LOAD CANNOT CROSS THE D_80081484 PAIR UNLESS IT CROSSES IT IN
+      THE SOURCE.  `*(u32 *)(d + 0x1C)` is `(mem (plus (reg s0) 28))` and the
+      D_80081484 accesses are `(mem (lo_sum (reg) (symbol_ref ...)))`.  At
+      sched1 alias.c's `canon_rtx` resolves neither base to a constant (`d` is
+      a parameter), so a dependence IS assumed in both passes and whichever
+      the source writes first stays first.  That is why no permutation of
+      P/Q/A that leaves A after Q ever moves H: PQAXDYVC, PAQXDYVC, PQADXYVC,
+      PQXADYVC, PAXQDYVC, PQLMXDYVC, PQLXMDYVC, LPMQXDYVC and PLMQXDYVC are
+      all 6 and all byte-identical to this body.
+
+   `A` FIRST IS A DIFFERENT BASIN AND IT HAS THE REGISTERS RIGHT.  Moving the
+   whole `*(u32 *)(d + 0x1C) &= ~0x100000;` ahead of `s = *(void **)
+   D_80081484;` is **208 of 208 words and 8 aligned differences, but the two
+   registers this body gets wrong are both CORRECT there**: `%hi(D_80081484)`
+   is $a1 as in the target and the mask is $v1, and words 149..207 match.
+   Its residue is pure ordering -- the `and`/`lui %hi(D_80083460)`/`addiu`/
+   `sw 0x1C` group sits at 140..143 where the target has it at 144..147, and
+   the D_80081484 group is correspondingly late.  AXPQDYVC, APXQDYVC,
+   ADPQXYVC and APQDXYVC are all 8 and byte-identical; APQXDVYC is 10,
+   APQXDYCV 16, APQXYDVC 21, AVPQXDYC 13, AYPQXDVC 210 words / 23.
+   Splitting A into `m = *(u32 *)(d + 0x1C);` ... `*(u32 *)(d + 0x1C) = m &
+   ~0x100000;` is what the TARGET's shape looks like -- load early, `and` and
+   store after `t2 = D_800DCFD0` -- and it gets words 147..207 byte-exact,
+   but the extra pseudo costs the register pair back ($a1 and $v1 swap) and
+   it is 13: LPQXMDYVC 13, LPQMXDYVC 13, LPQXDYVMC 13, LPQXMVDYC 14,
+   LPQXMDVYC 15, PLQXMDYVC 15, LPQXMYDVC 17, LPQXDMYVC 18, LPQDXMYVC 18,
+   LPQXMDYCV 20, PLQXDYMVC 23, LPQXDYMCV 27, LPQYXMDVC 210 words / 28.
+   `((u32 *)d)[7] &= ~0x100000` re-measured against THIS body (not the
+   16-aligned one the note below was written against): 22.
+
+   SO THE OPEN QUESTION IS NARROW: a spelling that puts the +0x1C READ before
+   the D_80081484 pair and the `and`/store after it, WITHOUT introducing a
+   fourth pseudo in the block.  Nothing in the C does that -- the read has to
+   land somewhere, and `r` and `v` are the only reusable s32 locals, both of
+   which push the pseudo to global_alloc.
+
    WHAT GOT IT TO 6, and these are the levers worth keeping:
 
    * `*(u16 *)0x80013714`, NOT the declared `D_80013714` (include/structs.h
@@ -200,3 +269,102 @@ void func_8008E700(u8 *p, UnkVec *b, u8 *c, u8 *d)
         break;
     }
 }
+
+#if 0
+/* ALTERNATIVE (agent j54, 2026-11-16): `A' FIRST -- 208 of 208 words, 8
+   aligned differences, but BOTH REGISTERS CORRECT ($a1 for %hi(D_80081484),
+   $v1 for the mask) where the body above has them swapped, and words
+   149..207 byte-exact.  A pure ORDERING residue in a different basin from
+   the 6-aligned body, and the permuter has never seen it. */
+void func_8008E700(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *g2;
+    u8 *t;
+    u8 *t2;
+    void *s;
+    s16 n;
+    s32 r;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            b->unk_14 = -0x160000;
+            if ((*(u32 *)(d + 0x1C) & 0x100000) != 0)
+            {
+                *(u8 **)(c + 0x2C) = D_800DD0C8;
+            }
+            else
+            {
+                *(u8 **)(c + 0x2C) = D_800DD048;
+            }
+            func_80048A44(
+                c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            p[0x9B]++;
+        }
+        break;
+    case 1:
+        n = ++*(u16 *)(p + 0x96);
+        if ((*(u16 *)(p + 0xA2) & 0x10) != 0 && n >= 4)
+        {
+            b->unk_14 = 0;
+            if ((*(u32 *)(d + 0x1C) & 0x100000) != 0)
+            {
+                *(u32 *)(p + 0x8C) = (u32)func_8008EAC8;
+            }
+            else
+            {
+                t = D_800DD060;
+                *(u8 **)(c + 0x2C) = t;
+                func_80048A44(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            }
+            p[0x9B]++;
+        }
+        else if ((*(u32 *)(d + 0x1C) & 0x300000) == 0x100000 && (*(u16 *)0x80013714 & 1) == 0)
+        {
+            r = func_8009AF18(*(s16 *)(d + 0x2A), b, c, 8);
+            if ((s16)r != 0)
+            {
+                ((u32 *)*(u8 **)(p + 0x124))[7] |= 0x200000;
+                ((u32 *)d)[7] |= 0x200000;
+                *(s16 *)(*(u8 **)(p + 0x124) + 0x8A) = r;
+                (*(u8 **)(p + 0x124))[0x84] = 0x78;
+                (*(u8 **)(p + 0x124))[0x85] = 2;
+                func_8009F644(d, 0x30, *(s16 *)(p + 0x96), 0);
+                *(u32 *)(d + 0x1C) &= ~0x100000;
+                s = *(void **)D_80081484;
+                *(void **)D_80081484 = NULL;
+                t2 = D_800DCFD0;
+                g = (u8 *)&D_80083460;
+                *(u16 *)(g + 0xA) += 1;
+                *(u8 **)(c + 0x2C) = t2;
+                v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                D_800E3540 = s;
+                func_80048A44(c, t2[v], 5, 1);
+                func_800A56E0(0x512);
+            }
+        }
+        break;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            g2 = (u8 *)&D_80083460;
+            if (*(s16 *)(g2 + 0xA) == 0)
+            {
+                if ((*(u32 *)(d + 0x1C) & 0x200000) != 0)
+                {
+                    *(u32 *)(d + 0x1C) &= 0xFFDFFFFF;
+                    *(u16 *)(g2 + 0x2) |= 0x412;
+                    func_80099F70(*(void **)(d + 0x5C));
+                    func_80099F04(*(void **)(d + 0x5C));
+                }
+                *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+            }
+        }
+        break;
+    }
+}
+#endif
