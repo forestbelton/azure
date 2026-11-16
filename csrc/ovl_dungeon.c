@@ -408,7 +408,7 @@ extern u8 D_800E1279[];
 extern u8 D_800E12A9[];
 /* The two kill handlers whose out-of-range arm spawns through func_800BBA40
    (seven arguments, three of them on the stack) instead of reporting. */
-s32 func_800BBA40(s32, s32, s16, void *, s32, s32, void *);
+s32 func_800BBA40(s16, s16, s16, void *, s16, s32, void *);
 /* Not void: it answers 1 or 0. Only its ADDRESS is taken -- it is
    func_800C13C8's seventh argument to func_800BBA40 -- which is why nothing
    had falsified it. */
@@ -25103,7 +25103,53 @@ s32 func_800BBA20(void)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BBA40);
+s32 func_800BBA40(s16 x, s16 y, s16 ang, void *d, s16 e, s32 g, void *h)
+{
+    s32 v[2];
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s16 a;
+    s32 i;
+
+    v[0] = 0x1000340;
+    v[1] = 0x1000080;
+    func_800BB2E4(NULL, NULL, v, 1, NULL);
+    n = func_8003FD64(0x12, D_80083498);
+    if (n != NULL)
+    {
+        func_800A56E0(0x704);
+        n->unk_10 = (u32)func_800BB55C;
+        func_8004491C(n, (u32)func_800BBA20);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = x * 64 + 0x20;
+        *(s16 *)((u8 *)m + 0x6) = y * 64 + 0x20;
+        *(s16 *)((u8 *)m + 0xA) = ang;
+        r = (u8 *)n->unk_0C;
+        *(u8 **)(r + 0x8) = D_800DF3C0;
+        *(s16 *)(r + 0x1E) = 0x1000;
+        *(s16 *)(r + 0x1C) = 0x1000;
+        *(u32 *)(r + 0xC) = 0x808080;
+        *(s16 *)(r + 0x6) = 8;
+        func_8003DB94((u8 *)n + 0x2C, d, 0);
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x2A) = e;
+        *(s16 *)(q + 0x28) = e;
+        *(u32 *)(q + 0x18) = 0x808080;
+        *(u32 *)(q + 0x5C) = g;
+        *(u32 *)(q + 0x60) = (u32)h;
+        a = -0x400;
+        for (i = 0; i < 5; i++)
+        {
+            r = q + i * 2;
+            *(s16 *)(r + 0x3C) = a;
+            a += 0x999;
+        }
+        func_800C77D0(D_80083498, D_80083780, 8, 0x300);
+    }
+    return (s32)n;
+}
 
 /* func_800BC0A8's node handler, installed at UnkNode +0x10 and therefore
    reached through func_80040190's three-argument cast: the view at node
