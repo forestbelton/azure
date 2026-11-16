@@ -131,7 +131,32 @@ with `s32 t` it gives the target's `lui`/`slt` exactly.
       nine-instruction tail.
 
       **The lever is in whatever falls into `.L800AFA10`, not in either
-      arm.**  Change which constant that block leaves in a register, or
+      arm.**
+
+      CONFIRMED BY THE PERMUTER, 2026-11-16, 35 minutes, 6 jobs.  It found
+      the +8 words and it found them exactly where the analysis above says
+      they are: its one change is to DUPLICATE t6's `*(u16 *)(c + 0x46) =
+      0x8009; return 5;` body into two arms of a test, which changes the last
+      instruction before `.L800AFA10` and unblocks the longer merge.
+      Re-measured with aligndiff rather than taken from its own score
+      (6080 -> 5220): **1818 words against 1817 and 229 aligned rows**, from
+      this body's 1826 / 256.  So the direction and the magnitude are proved.
+
+      **Its spelling is not usable.**  The test it duplicated under is
+      `if (D_80082E80)` -- an `extern u8 []`, so the condition is the array's
+      address and is always true.  That cannot be the original source; it is
+      the permuter finding the shape by the only route its mutation set
+      offers.  The remaining job is a legitimate source form that makes gcc
+      emit that block twice, or that otherwise changes the instruction
+      before the label.
+
+      One legitimate partial, measured here: inverting the function's FINAL
+      test -- `if (*(s8 *)(b + 0x26) >= 0) return 2; return ret << 16 >> 16;`
+      rather than the other way round -- is **1823 words**, three better than
+      this body, though the aligned count rises to 271 because a shorter
+      build shifts more branch displacements.  Writing the second 0x8009
+      store through a temp is 1829 / 273.  Neither reaches the permuter's
+      1818, and whether they stack with it is untested.  Change which constant that block leaves in a register, or
       reorder its last statements, so that its final instruction stops
       matching the arm's.  See docs/matching-levers.md, "A SHORT CROSS-JUMP
       MATCH FOUND FIRST BLOCKS A LONGER ONE".  Nothing in cases 0x1D or 0x26
