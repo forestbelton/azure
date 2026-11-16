@@ -106,14 +106,21 @@ comments are line-for-line templates. Two things to run before anything else:
     grep -n 'THE D_80083160 BASE IS A LOCAL OF ITS OWN' csrc/ovl_dungeon.c
     python3 tools/decomp/leverindex.py --grep <the opcode or idiom you see>
 
-**GREP THE INDEX FOR YOUR FUNCTION'S OWN NAME BEFORE ANYTHING ELSE.** Many
-catalogue entries are written against the specific function that produced
-them, so an entry about yours may already exist and name the exact lever. On
-batch j43 an agent spent about fifteen compiles rediscovering
-"A SECOND SET IS WHAT KEEPS A SIGN EXTENSION ALIVE" -- an entry written
-against the very function it was working on, worth 6 words -- before thinking
-to grep for the name. That is the cheapest search in this whole procedure and
-it is one command.
+**GREP FOR YOUR FUNCTION'S OWN NAME BEFORE ANYTHING ELSE.** Many catalogue
+entries are written against the specific function that produced them, so an
+entry about yours may already exist and name the exact lever. Entries are
+TITLED BY MECHANISM, so the function name is almost always in the body --
+`--grep` searches both now, but if you want certainty use the file directly
+as well:
+
+    grep -n 'func_XXXXXXXX' docs/matching-levers.md
+
+On batch j43 an agent spent about fifteen compiles rediscovering "A SECOND
+SET IS WHAT KEEPS A SIGN EXTENSION ALIVE", an entry written against the very
+function it was working on and worth 6 words. On batch j50 another found
+three such entries only by grepping the file, because `--grep` matched
+headings only at the time; one of them was worth most of that function's
+landing on the first compile. That is the cheapest search in this procedure.
 
 On batch j31 the typedef grep below returned **nothing usable** for either
 function -- both take `u8 *`/`UnkVec *`, which is most of this block -- while

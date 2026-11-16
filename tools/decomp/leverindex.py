@@ -10,7 +10,7 @@ renaming a heading; `--check` exits 1 if the index is stale.
 
     python3 tools/decomp/leverindex.py              # regenerate the index
     python3 tools/decomp/leverindex.py --check      # exit 1 if stale
-    python3 tools/decomp/leverindex.py --grep DELAY # headings matching a word
+    python3 tools/decomp/leverindex.py --grep DELAY # headings AND bodies
 
 UNKNOWN ARGUMENTS ARE AN ERROR, deliberately. This script used to accept any
 argument and fall through to REWRITING the document, so a reader who typed
@@ -73,18 +73,48 @@ def rebuild_once(text):
 
 
 def grep(text, words):
-    """Print the headings matching every word, case-insensitively."""
-    hits = 0
-    for line in text.split("\n"):
-        if not line.startswith("## "):
+    """Print the headings matching every word, then the ENTRIES whose BODY does.
+
+    It used to search headings only, and that silently hid the most valuable
+    case. On 2026-11-16 an agent grepped this index for its own function name,
+    got nothing, and only found three entries written against that very
+    function -- one worth most of a landing on the first compile -- by running
+    a plain `grep` over the file. Entries are titled by MECHANISM, so the
+    function that produced one is almost always in its body and almost never
+    in its heading.
+    """
+    lines = text.split("\n")
+    # (heading, start, end) for every entry
+    entries, cur = [], None
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            if cur is not None:
+                entries.append((cur[0], cur[1], i))
+            cur = (line[3:].rstrip(), i)
+    if cur is not None:
+        entries.append((cur[0], cur[1], len(lines)))
+
+    low = [w.lower() for w in words]
+    in_head, in_body = [], []
+    for head, a, b in entries:
+        if all(w in head.lower() for w in low):
+            in_head.append((head, a))
             continue
-        head = line[3:].rstrip()
-        low = head.lower()
-        if all(w.lower() in low for w in words):
-            print(head)
-            hits += 1
-    if not hits:
-        print("no heading matches %s" % " ".join(words))
+        body = "\n".join(lines[a:b]).lower()
+        if all(w in body for w in low):
+            in_body.append((head, a))
+
+    for head, a in in_head:
+        print("%s   (:%d)" % (head, a + 1))
+    if in_body:
+        if in_head:
+            print()
+        print("-- and %d entr%s mentioning it in the BODY:"
+              % (len(in_body), "y" if len(in_body) == 1 else "ies"))
+        for head, a in in_body:
+            print("   %s   (:%d)" % (head, a + 1))
+    if not in_head and not in_body:
+        print("no entry matches %s" % " ".join(words))
     return 0
 
 
