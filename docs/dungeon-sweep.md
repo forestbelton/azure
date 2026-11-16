@@ -538,6 +538,43 @@ Open parks at the time of writing, both with saved candidates:
   number, so by the rule above this is NOT permuter food; it needs `.greg`
   work.
 
+## 2026-11-16: /tmp IS NOT DURABLE, AND IT COST FOUR LANDED FUNCTIONS
+
+Between one working day and the next, a routine cleanup wiped everything under
+`/tmp/claude-1000`. That took, in one go:
+
+* **Four closed functions that had never been reported.** The park-closing
+  agent's last status line was "All four closed" -- `func_800D07C8`,
+  `func_800C6B40`, `func_800B9144` and `func_800D0DE0`, the four 0.60-ratio
+  xsibs leads -- and its run was cut off by a rate limit before it wrote its
+  report. The bodies and the measurements went with the directory.
+* Five agents' unit copies, every saved `func_XXXXXXXX_best.c`, and the
+  agents' own transcripts, which were the other way back to those bodies.
+* A permuter run in progress, and the dispatcher's own park candidate for
+  `func_8009A540` at 75 of 75 words with 23 aligned differences.
+
+Nothing in the repo was lost. **Everything lost was lost because the brief
+told agents to keep their working files in `/tmp`.**
+
+**So the rule is now: a candidate goes in `docs/near-misses/func_XXXXXXXX.c`,
+in the repo, the moment it is the best one -- not at the end of the run.** One
+file per function, so concurrent agents never collide on a path. The agents do
+not stage or commit it; the dispatcher does. The earlier instruction in this
+sweep's brief -- "Do not park anything in docs/near-misses/; just report it" --
+was wrong and is withdrawn. It was meant to keep a churning parallel sweep out
+of the repo's park tooling, and the cost of that tidiness was four functions.
+
+**And the brief template itself now lives in the repo**, at
+`tools/decomp/dungeon-brief.txt`, for the same reason: the previous copy was in
+the session scratchpad and went with everything else.
+
+**The second lesson is about reporting cadence.** An agent that finishes four
+functions and reports none has banked nothing. The brief now asks for a
+one-line interim message the moment a function reaches `0 differing`, naming
+the function and the measurement. It costs the agent almost nothing and it is
+the only thing that survives a run that is cut off -- by a cleanup, a rate
+limit, or anything else.
+
 ## What has NOT been done
 
 * **The overlay's DATA is not owned.** The splat segment stops at the end of
