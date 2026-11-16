@@ -25215,7 +25215,36 @@ void func_800BA810(u8 *p, u16 kind)
         }
     }
 }
-/* ===J39 func_800BABA8 BEGIN=== */
+/* The 32-element fan of semi-transparent Gouraud quads a kind-0x202-style node
+   carries at +0x10. Each element's +0x12 phase byte advances by 4 a frame and
+   wraps (or sticks at 0x30 while p[0x10] is set); the pair of RotTransPers
+   input vectors sits on a circle of radius func_80064584/func_800644B8 of
+   `(i + (*(s16 *)(p + 0xE) << 6)) << 7'; the three colour channels are gated by
+   the slot's +0x14 flag word; and each visible element emits one 0x24-byte
+   POLY_G4 plus the 0xC-byte primitive func_80067F20 fills behind it.
+
+   THREE SPELLINGS, AND THE FIRST IS THE WHOLE RESIDUE.
+   (1) `s16 i = 0;' DECLARED AND INITIALISED IMMEDIATELY AFTER `g', with the
+   loop written `for (; i < 0x20; i++)'. 12 differing -> 0. The target sets `i'
+   at word 8, ahead of all three constant pointer locals, and that one position
+   decides which of `sp' and `fb' owns the shared `lui 0x1F80' -- the target has
+   `lui $s2' then `addu $s6, $s2'; with `i = 0' left in the `for' it is
+   `lui $s6' then `move $s2, $s6'. `i' initialised in the `for', or declared
+   `s16 i = 0;' after `q', are both 12, and all six declaration orders of
+   {sp, fa, fb} are 12 or 16 -- the lever is `i', not the pointers.
+   (2) `*(p + i + 0x12)' and NOT `p[i + 0x12]': 13 -> 12. The subscript form
+   folds to `addu $v1, $v0, $s4' (index first) where the target has
+   `addu $v1, $s4, $v0', the same operand order its own `addu $s0, $s4, $s0'
+   uses later for the identical address.
+   (3) The two RotTransPers out-parameters at +0x90/+0x94 are CONSTANT
+   ADDRESSES IN POINTER LOCALS, not members of UnkDungeonSPA: that is what
+   gives one `lui'/`ori' in the prologue and a one-word `addu $a2, $s7, $zero'
+   at each call, where `&sp->unk_90' is a two-word `addiu' per call. Same
+   device func_800B9144 uses for its `flag'.
+   The +0x12 phase byte has both faces in the listing and they are not
+   interchangeable: `u8' for the increment (`lbu'/`addiu'/`sb', with cse
+   forwarding the stored value) and `(s8)' at every test and use.
+   215 words, 0 differing. */
 s32 func_800BABA8(u8 *p, UnkVec *b, u8 *c)
 {
     Unk80083160 *g = &D_80083160;
@@ -25308,7 +25337,6 @@ s32 func_800BABA8(u8 *p, UnkVec *b, u8 *c)
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
     return 0;
 }
-/* ===J39 func_800BABA8 END=== */
 
 /* State 0 seeds the 0x40-byte noise table at +0x12 and falls into state 1
    WITHOUT breaking. THE INDEX MUST BE WRITTEN `(p + i)[0x12]`: as
