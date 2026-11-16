@@ -89,7 +89,7 @@ void func_800897E4(void)
         o = D_800833E0;
         do
         {
-            h = (void (*)(u8 *, s32, s32)) * f;
+            h = (void (*)(u8 *, s32, s32))*f;
             if (h != NULL)
             {
                 s = *(u8 **)o;
@@ -127,7 +127,7 @@ void func_800897E4(void)
         o = D_800833E0;
         do
         {
-            h = (void (*)(u8 *, s32, s32)) * f;
+            h = (void (*)(u8 *, s32, s32))*f;
             if (h != NULL)
             {
                 s = *(u8 **)o;
@@ -178,7 +178,7 @@ void func_800897E4(void)
         o = D_800833E0;
         do
         {
-            h = (void (*)(u8 *, s32, s32)) * f;
+            h = (void (*)(u8 *, s32, s32))*f;
             if (h != NULL)
             {
                 s = *(u8 **)o;
