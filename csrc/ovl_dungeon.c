@@ -1665,6 +1665,8 @@ void func_80099F70(u8 *);
 extern s16 D_800E3DA8[];
 extern u8 D_800E0523[];
 extern u8 D_800E0683[];
+extern u8 D_800DD100[];
+extern u8 D_800E06EB[];
 extern u8 D_800DD150[];
 /* Defined below; func_8008F428 calls it above its definition. */
 s32 func_800A6DA4(u32, u32);
@@ -5282,7 +5284,106 @@ void func_800924F0(UnkDungeonActor *a, UnkVec *m, u8 *r, u8 *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009255C);
+/* State 0x2D: case 0 turns the mover 0x200 at a time until the
+   camera-relative facing reaches 2 and then re-skins the renderable off
+   D_800DD100, case 1 waits for func_8004CAE8 to claim the node's +0x8
+   object, spawns the func_8008D470 node over the actor's cell and prints
+   the two-part line, case 2 hands the actor to func_80091934 or parks
+   func_8008ACDC.
+
+   ITS TEMPLATE IS func_800927E4 two functions above, and its three measured
+   spellings transfer verbatim: `q = &D_80083160;` with the heading read as
+   the COMPONENT_REF `q->unk_C8` (so the `*(u8 **)(c + 0x2C)` store between
+   the gate and the index kills cse's entry and BOTH `lh 0xC8($a1)` survive);
+   the handler store written `*(u32 *)((u8 *)p + 0x8C)` and not `p->unk_8C`;
+   and the facing index written out in full at both sites rather than bound
+   to a local.
+
+   THE MESSAGE HANDLE IS DRAWN INTO `s` AND COPIED TO `h`, NOT THE OTHER WAY
+   ROUND. `h = func_800990FC(); s = func_8009929C(8, h);` gives
+   `addu $s0, $v0, $zero` / `addu $a1, $s0, $zero` -- the long-lived copy
+   first -- which is 2 differing at the same 162 words; drawing into `s`
+   lets it die at the call, so it coalesces with the argument register and
+   the target's `addu $a1, $v0, $zero` / `addu $s0, $a1, $zero` pair comes
+   out. A separate `void *t` temporary, swapping the `h`/`s` declarations
+   and `s = func_8009929C(8, h = func_800990FC());` all score 2.
+   162 words, 0 differing. */
+void func_8009255C(UnkDungeonActor *p, void *b, u8 *c, u8 *d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *a;
+    Unk80083160 *q;
+    void *h;
+    void *s;
+
+    switch (p->unk_9B)
+    {
+    case 0:
+        q = &D_80083160;
+        if ((((q->unk_C8 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) == 2)
+        {
+            *(u8 **)(c + 0x2C) = D_800DD100;
+            func_80048A44(c, D_800DD100[((q->unk_C8 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            p->unk_9B++;
+        }
+        else
+        {
+            *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + 0x200;
+        }
+        break;
+    case 1:
+        if (func_8004CAE8(*(u8 **)(c + 0x8), 0) == NULL)
+        {
+            break;
+        }
+        if (*(u8 **)((u8 *)p + 0x110) == D_80081484)
+        {
+            *(u32 *)((u8 *)p + 0x124) = 0;
+            *(u32 *)((u8 *)p + 0x1C) = *(u32 *)((u8 *)p + 0x1C) & 0xFFEFFFFF;
+        }
+        n = (UnkNode *)func_800A8608((u8 *)p - 0x20, *(void **)((u8 *)p + 0x110), 0, 0, 0);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_8008D470;
+            m = n->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = (c[0x24] << 6) + 0x20;
+            *(s16 *)((u8 *)m + 0x6) = (c[0x25] << 6) + 0x20;
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)(d + 0x88) - 0x30;
+            a = (u8 *)n + 0x20;
+            *(s16 *)(a + 0xA8) = 0x1E;
+            *(s16 *)(a + 0xAA) = 2;
+            *(u8 **)(a + 0x90) = c;
+            *(void **)(a + 0x8C) = b;
+            *(u8 **)(a + 0x9C) = (u8 *)p + 0x108;
+            s = func_800990FC();
+            h = s;
+            s = func_8009929C(8, h);
+            s = func_80099734(d, s);
+            s = func_80099194(D_800E06E0 + 3, s);
+            s = func_80099368(*(u8 **)((u8 *)p + 0x110), s);
+            s = func_80099194(D_800E06EB, s);
+            s = func_8009965C(*(u8 **)((u8 *)p + 0x110), s);
+            func_80099290(s);
+            func_800A5720(h);
+            func_800A56E0(0x509);
+        }
+        p->unk_9B++;
+        break;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        if (*(void **)((u8 *)p + 0x110) != NULL)
+        {
+            func_80091934(p, b, c, d);
+            break;
+        }
+        *(u32 *)((u8 *)p + 0x8C) = (u32)func_8008ACDC;
+        break;
+    }
+}
 
 /* State 0x2C: case 0 re-skins the renderable at the camera-relative facing
    (on the 0x2C sub-state off D_80083228, otherwise off the camera record's
