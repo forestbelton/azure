@@ -9978,7 +9978,64 @@ s32 func_8009ADB8(u8 *a, u8 *b, s32 c, s32 d, s16 e)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009AF18);
+s16 func_8009AF18(u16 ang, UnkVec *b, u8 *c, s16 n)
+{
+    s16 k;
+    s32 dir;
+    s32 d0;
+    s32 x;
+    s32 y;
+    s32 xx;
+    s32 yy;
+    s32 wx;
+    s32 wz;
+    u16 w;
+    u8 *r;
+
+    D_800DD7DC = 0;
+    d0 = (ang >> 9) & 7;
+    x = c[0x24];
+    y = c[0x25];
+    wx = (x << 6) | 0x20;
+    wz = (y << 6) | 0x20;
+    for (k = 1; k <= n; k++)
+    {
+        dir = d0;
+        xx = (s16)x;
+        yy = (s16)y;
+        if (func_800A0548(xx, yy) != 0)
+        {
+            return k - 1;
+        }
+        if (func_8009A350(xx, yy, dir, &w) != 0)
+        {
+            x += ((u16 *)D_8006CCD8)[dir];
+            y += ((u16 *)D_8006CCE8)[dir];
+            if ((w & 0x3300) != 0)
+            {
+                r = func_8009B25C(D_800E3D7C, x, y, *(s16 *)(D_800E3D7C + 0x88));
+                if (r != NULL && r[0x13] == 0x1F && (*(s32 *)(r + 0x1C) & 0x228) == 0 &&
+                    *(s8 *)(*(u8 **)(D_800E3D7C + 0x124) + 0x13) < 0)
+                {
+                    D_800DD7DC = 1;
+                    *(s32 *)(r + 0x14) |= 0x800000;
+                }
+                return k;
+            }
+            wx += ((u16 *)D_800DCEAC)[dir];
+            wz += ((u16 *)D_800DCEBC)[dir];
+            if (func_800BCB04h((u16)wx, (u16)wz, *(s16 *)((u8 *)b + 0xA)) >= 0x200)
+            {
+                return k - 1;
+            }
+        }
+        else
+        {
+            return k - 1;
+        }
+    }
+    return k;
+}
 
 /* A reachability probe. THREE SPELLINGS, ALL MEASURED. (1) The two sums must
    be s32 LOCALS of their own, assigned before either shift: inline in the
