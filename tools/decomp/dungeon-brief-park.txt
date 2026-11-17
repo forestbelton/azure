@@ -241,11 +241,20 @@ cost a round trip or worse on a real run:
   `/* ===AGENT func_X BEGIN=== */` splice markers into `csrc/` and I committed
   them. **Strip your markers before you send a body.**
 
-**AND IF YOU LAND SOMETHING, SAY SO AS SOON AS IT LANDS.** Do not hold four
-finished bodies until the end of the run. A one-line interim message naming
-the function and its `0 differing` costs you almost nothing and is the only
-thing that survives if your run is cut off -- on 2026-11-16 an agent finished
-four and reported none, and all four were lost.
+**AND IF YOU LAND SOMETHING, WRITE IT TO THE REPO AS SOON AS IT LANDS.**
+
+You have NO channel for an interim message to me -- `SendMessage` reaches
+agents you spawn, not your caller -- so do not plan around sending one. An
+earlier version of this brief asked for one anyway, which was impossible to
+comply with.
+
+What survives instead is the repo. The moment a body measures `0 differing`,
+or a park moves, rewrite the park file with the current body and the current
+numbers, before you go on to the next idea. On 2026-11-16 an agent finished
+four functions, reported none, and lost all four to a /tmp cleanup; on the
+same day another took a park 10 rows to 0 and had rewritten the park file at
+the 4-row intermediate first, so nothing was ever only in /tmp. Be the
+second one.
 
 ## What to report back
 
