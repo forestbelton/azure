@@ -183,8 +183,18 @@ def body_of(path, func):
 # The cost is that a prototype with a function-pointer PARAMETER is no longer
 # recognised as one. That is the safe direction: it is then inserted verbatim
 # instead of adopted.
+#   * a line containing `__asm__` is never a prototype to ADOPT. It is a
+#     symbol alias -- `extern u16 D_800DD25A __asm__("D_800DD258 + 2");` or
+#     `s32 f_i(u16, u16) __asm__("f");` -- and the unit never has one to
+#     replace, so it must be INSERTED. Without this exclusion the lazy prefix
+#     ate `u16 D_800DD25A ` and `(\w+)` captured **`__asm__`** as the
+#     function name; adopt() then went looking for "the unit's prototype for
+#     __asm__", matched an unrelated aliased declaration and replaced it,
+#     and the compile failed with an undeclared identifier 7000 lines away in
+#     a different function. Found 2026-11-16 by the agent it happened to.
 PROTO = re.compile(
-    r"^(?!typedef\b)[A-Za-z_][\w \*]*?\**(\w+)\s*\([^;{()]*\)\s*;\s*$")
+    r"^(?!typedef\b)(?![^;]*__asm__)[A-Za-z_][\w \*]*?\**(\w+)"
+    r"\s*\([^;{()]*\)\s*;\s*$")
 
 
 def reproto(text):
