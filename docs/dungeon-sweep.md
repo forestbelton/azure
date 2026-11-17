@@ -642,3 +642,46 @@ combinations measured, all at 31 or worse.
 
 Both parks record the exact arithmetic, so a permuter run can be aimed rather
 than hoped. Neither should be re-dispatched as ordinary park-closing work.
+
+
+## 2026-11-16: THE PARK RANKING WAS WRONG, AND IT WAS WRONG TOWARDS THE TOP
+
+`parkresidue.py` exists because a ranking scraped from park headers put an
+agent on a function it said was at 6 rows and that measured at 33. The
+measuring version was better, but it was still reading the frontier wrong:
+**8 of 36 parks did not compile**, and a park that does not compile prints
+`SKIP`, which reads like "broken" rather than "nearly finished".
+
+Two of those eight were the closest unclosed functions in the unit.
+
+| function | words | rows | why it was invisible |
+|---|---|---|---|
+| `func_800C0404` | 234/234 | **2** | spliced its `#if 0` alternative, so `unbalanced #endif` |
+| `func_800B84E4` | 211/211 | **5** | its typedefs went at line 358, above the unit structs they build on |
+| `func_8009E798` | 358/358 | 71 | its 35-field struct existed only in a hand-back |
+| `func_800B6AC4` | 811/812 | 46 | seven externs and a function-pointer typedef, same |
+| `func_8009A3D0` | 91/92 | 45 | multi-line typedef below the header comment, dropped |
+| `func_800AFBFC` | 227/238 | 149 | needs a prototype change; got `conflicting types` |
+| `func_800B51C8` | 830/834 | 262 | same |
+| `func_8008FA7C` | 182/181 | 24 | (already measuring) |
+
+All 36 measure now. The five defects behind it are in commit `7f38af3`; the
+one worth carrying into other units is this:
+
+**A park body is not self-contained, and the declarations it needs are the
+part that goes missing.** Three separate parks had lost a typedef that lived
+only in an agent's transcript. The repo is the only durable place, and a
+`DECLARATIONS` block in the park header is the only form a tool can read
+back. That convention now has to survive contact: a one-line struct typedef,
+a function-pointer typedef, a multi-line construct below the comment, and a
+prototype CHANGE rather than a prototype addition are all things a park
+legitimately needs, and all four used to be dropped silently.
+
+**And the second-order lesson, which cost two parks that had been fine:** the
+first version of the prototype-adoption code matched
+`extern void (*D_800DD830[])(void);` with the captured function name equal to
+`void`, went looking for "the unit's prototype for void", found
+`typedef void (*UnkDungeonStep)(...)` and replaced it. `func_80096384` and
+`func_8008EAC8` then failed to compile 30000 lines away from anything either
+of them touches. A tool that rewrites the unit has to be as suspicious of its
+own pattern matches as the measurements it produces are of the compiler.
