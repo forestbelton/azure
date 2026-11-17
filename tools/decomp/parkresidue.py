@@ -201,6 +201,33 @@ def reproto(text):
         l + "\n" for l in seen.values())
 
 
+def sig_key(decl):
+    """A prototype's meaning, with parameter names and spacing removed.
+
+    `void f(u8 *p, s32 c);` and `void f(u8 *, s32);` are the same declaration.
+    Comparing the text instead would call every park a prototype change.
+    """
+    decl = decl.strip().rstrip(";")
+    head, _, args = decl.partition("(")
+    args = args.rsplit(")", 1)[0]
+    out = []
+    for a in args.split(","):
+        a = a.strip()
+        if a in ("", "void"):
+            out.append(a)
+            continue
+        # Drop the parameter NAME, which is the last token when there is more
+        # than one. Stripping "a trailing identifier" unconditionally eats the
+        # type itself in `s32` -- `s32` IS an identifier -- so the count of
+        # remaining tokens is what makes this safe.
+        toks = re.sub(r"\*", " * ", a).split()
+        if len(toks) > 1 and re.match(r"^[A-Za-z_]\w*(\[\s*\])?$", toks[-1]):
+            arr = "[]" if toks[-1].endswith("]") else ""
+            toks = toks[:-1] + ([arr] if arr else [])
+        out.append("".join(toks))
+    return (re.sub(r"\s+", "", head), tuple(out))
+
+
 def adopt(unit, decls):
     """REPLACE the unit's own prototype for any name the park re-declares.
 
@@ -226,8 +253,17 @@ def adopt(unit, decls):
         name = m.group(1)
         here = re.compile(r"^[A-Za-z_][\w \*]*?\**%s\s*\([^;{]*\)\s*;[^\n]*$"
                           % re.escape(name), re.M)
-        if here.search(unit):
-            unit = here.sub(line.strip().replace("\\", "\\\\"), unit, count=1)
+        hit = here.search(unit)
+        if hit:
+            # Only rewrite when the signature really DIFFERS. A park's body
+            # carries parameter NAMES and the unit's declaration usually does
+            # not, so a naive replace rewrites a line that means exactly the
+            # same thing -- which then shows up as gratuitous churn in the
+            # diff an agent hands back, and invites merging a cosmetic change
+            # along with a real one.
+            if sig_key(hit.group(0)) != sig_key(line):
+                unit = here.sub(line.strip().replace("\\", "\\\\"), unit,
+                                count=1)
         else:
             out.append(line)
     return unit, "".join(l + "\n" for l in out)

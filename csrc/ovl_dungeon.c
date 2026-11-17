@@ -561,6 +561,7 @@ extern s16 D_80080B04;
 extern u8 D_800E0DF5[];
 extern u8 D_80081484[];
 void func_8004B1A4(s32);
+void func_800B84E4(s16 *, u8 *, u8 *, s32);
 void func_800B835C(u8 *, s32 *, s32, s32);
 s32 func_800CE4E8(s32, s32, s32, u8 *, s32);
 void func_800D1824();
@@ -26321,7 +26322,58 @@ UnkNode *func_800B8228(u32 x, u32 y, u32 z, u8 *d)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B835C);
+void func_800B835C(u8 *p, s32 *b, s32 c, s32 d)
+{
+    Unk80083160 *g;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    s16 w[2];
+    s32 cc;
+    s32 dd;
+    s16 lean;
+    s32 t;
+    s32 t2;
+
+    cc = c;
+    dd = d;
+    g = &D_80083160;
+    lean = D_80083160.unk_00 != D_801C9E40;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    r = D_80083160.unk_00 + 0x8B0;
+    *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
+    SetDrawArea(q, D_80083160.unk_00);
+    AddPrim(r, q);
+    w[0] = *(u16 *)b + ((s16) * ((u16 *)b + 2) >> 1);
+    t = *((s16 *)b + 1) + ((s16) * ((u16 *)b + 3) >> 1);
+    if (lean)
+    {
+        t -= 0xE0;
+    }
+    w[1] = t;
+    func_800B84E4(w, p, r, (u16)dd);
+    if ((u16)cc != 0)
+    {
+        u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
+        *(u32 *)(u + 0x4) = 0x60000000;
+        u[0x3] = 3;
+        *(u16 *)(u + 0x8) = *(u16 *)b;
+        t2 = *((s16 *)b + 1);
+        if (lean)
+        {
+            t2 -= 0xE0;
+        }
+        *(s16 *)(u + 0xA) = t2;
+        *(u32 *)(u + 0xC) = b[1];
+        AddPrim(r, u);
+    }
+    __asm__("" ::"r"(cc), "r"(dd));
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    SetDrawArea(q, b);
+    AddPrim(r, q);
+}
 
 /* 211 words, 0 differing.  The fan/arc emitter: one POLY_GT4 per step of a
    `*(u16 *)(p + 0xE)'-step sweep, each quad spanning the previous step's
