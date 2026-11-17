@@ -98,7 +98,22 @@
    extern u8 D_800DCF5C;
    extern s16 D_800DCF5E;
    END DECLARATIONS
-*/
+
+   PERMUTED 2026-11-16, 40 minutes, 6 jobs: 480 -> 270 on its own metric,
+   re-measured with aligndiff **401 of 401 words and 10 aligned rows**, from
+   13.  Its idea is a DUPLICATED TAIL RETURN -- the permuter wrote
+   `if (p) { return 0; } else { return 0; }` and I measured the `else` away:
+   `if (p) { return 0; } return 0;` is identical at 10.  Every return value
+   in the function is still 0, 18 of them against 17 before, so this is not
+   one of the semantic mutations that search has produced elsewhere today.
+   A `do { } while (0)` in the same position is 13 (no change) and a bare
+   `__asm__("")` is 400 words / 24, one SHORT.  The body below is the
+   permuted one with the cleaner spelling.
+
+   WHAT IS STILL LEFT is the 6-row call-result/copy swap this header already
+   diagnoses, plus one of the two delay-slot rows.  The cliff arithmetic in
+   this header stands.
+ */
 
 s32 func_800A504C(u8 *a, u8 *p)
 {
@@ -117,9 +132,8 @@ s32 func_800A504C(u8 *a, u8 *p)
     s32 y;
     s32 f;
     u32 ab;
-
-    g = (u8 *)&D_80083460;
-    if (*(s16 *)(g + 0xA) != 1)
+    g = (u8 *)(&D_80083460);
+    if ((*((s16 *)(g + 0xA))) != 1)
     {
         return 0;
     }
@@ -127,7 +141,7 @@ s32 func_800A504C(u8 *a, u8 *p)
     {
         return 0;
     }
-    if ((*(u32 *)(p + 0x14) & 0x4000) != 0)
+    if (((*((u32 *)(p + 0x14))) & 0x4000) != 0)
     {
         switch (D_800DCF5E)
         {
@@ -137,16 +151,17 @@ s32 func_800A504C(u8 *a, u8 *p)
                 return 0;
             }
             q = func_800A1618(p[0x13], 2);
-            if (q == NULL)
+            if (q == 0)
             {
                 return 0;
             }
             D_80081488 = (u32)func_80047DB8(p[0x13]);
             func_800A0B94(p[0x13], q, 0);
             D_800E3E40 = 0;
-            func_8003E4FC(0xFF, D_8003E140, (s32)&D_800E3E40);
+            func_8003E4FC(0xFF, D_8003E140, (s32)(&D_800E3E40));
             D_800DCF5E++;
             return 0;
+
         case 1:
             if (D_800E3E40 == 0)
             {
@@ -155,65 +170,66 @@ s32 func_800A504C(u8 *a, u8 *p)
             func_80047E30();
             D_800DCF5E++;
             return 0;
+
         case 2:
             q = func_800A1618(p[0x13], 2);
-            if (q == NULL)
+            if (q == 0)
             {
                 return 0;
             }
-            w = *(u8 **)(p - 0x14);
-            d = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(
-                6, w[0x24], w[0x25], (s16)(*(u16 *)(p + 0x88) - 0x20));
-            if (d == NULL)
+            w = *((u8 **)(p - 0x14));
+            d = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(6, w[0x24], w[0x25], (s16)((*((u16 *)(p + 0x88))) - 0x20));
+            if (d == 0)
             {
                 return 0;
             }
             g = p;
             q = d;
-            x = *(s32 *)(q + 0x5C);
-            y = *(s32 *)(q + 0x58);
-            *(Unk42710 *)q = *(Unk42710 *)p;
-            *(s32 *)(q + 0x4C) = 0;
-            *(s32 *)(q + 0x50) = 0;
-            *(s32 *)(q + 0x5C) = x;
-            *(s32 *)(q + 0x58) = y;
+            x = *((s32 *)(q + 0x5C));
+            y = *((s32 *)(q + 0x58));
+            *((Unk42710 *)q) = *((Unk42710 *)p);
+            *((s32 *)(q + 0x4C)) = 0;
+            *((s32 *)(q + 0x50)) = 0;
+            *((s32 *)(q + 0x5C)) = x;
+            *((s32 *)(q + 0x58)) = y;
             func_80042640((Unk42710 *)q, q[0x13]);
-            w = *(u8 **)(q - 0x14);
-            *(s16 *)(w + 0x1E) = 0x1000;
-            *(s16 *)(w + 0x1C) = 0x1000;
-            *(u32 *)(q + 0x14) &= ~7;
-            *(u32 *)(q + 0x1C) &= ~7;
-            *(u32 *)(q + 0x14) |= *(u32 *)(p + 0x14) & 7;
-            *(u32 *)(q + 0x1C) |= *(u32 *)(p + 0x1C) & 7;
-            func_800424E0(q, q[0x13], NULL);
+            w = *((u8 **)(q - 0x14));
+            *((s16 *)(w + 0x1E)) = 0x1000;
+            *((s16 *)(w + 0x1C)) = 0x1000;
+            *((u32 *)(q + 0x14)) &= ~7;
+            *((u32 *)(q + 0x1C)) &= ~7;
+            *((u32 *)(q + 0x14)) |= (*((u32 *)(p + 0x14))) & 7;
+            *((u32 *)(q + 0x1C)) |= (*((u32 *)(p + 0x1C))) & 7;
+            func_800424E0(q, q[0x13], 0);
             func_80042710((Unk42710 *)q, (Unk42710 *)p);
-            *(u32 *)(q + 0x14) &= ~0x4000;
-            *(u32 *)(d + 0x8C) = *(u32 *)(g + 0x8C);
-            *(u32 *)(d + 0x90) = *(u32 *)(g + 0x90);
-            *(u16 *)(d + 0x94) = *(u16 *)(g + 0x94);
-            *(u16 *)(d + 0x98) = *(u16 *)(g + 0x98);
+            *((u32 *)(q + 0x14)) &= ~0x4000;
+            *((u32 *)(d + 0x8C)) = *((u32 *)(g + 0x8C));
+            *((u32 *)(d + 0x90)) = *((u32 *)(g + 0x90));
+            *((u16 *)(d + 0x94)) = *((u16 *)(g + 0x94));
+            *((u16 *)(d + 0x98)) = *((u16 *)(g + 0x98));
             d[0x9A] = g[0x9A];
             d[0x9B] = g[0x9B];
             k = (s16)func_800A1BD0(p);
             ab = D_800814A8;
-            *(s32 *)(ab + k * 4 + 0xAC) = (s32)q;
+            *((s32 *)((ab + (k * 4)) + 0xAC)) = (s32)q;
             func_8009A3D0(w[0x24], w[0x25], 0x300);
             func_8009A028(q);
             q -= 0x20;
             func_80044A50((UnkNode *)q);
-            *(u32 *)(q + 0x10) |= 0x80000000;
-            *(u16 *)(p - 0x2) |= 0x8000;
+            *((u32 *)(q + 0x10)) |= 0x80000000;
+            *((u16 *)(p - 0x2)) |= 0x8000;
             D_800DCF5E = 0;
             D_800814A0 |= 0x8000;
             return 0;
         }
+
         return 0;
     }
     switch (D_800DCF5E)
     {
     case 0:
         q = func_800A1618(p[0x13] - 1, 3);
-        if (q != NULL)
+        if (q != 0)
         {
             p[0x13]--;
             func_8003E188(p[0x13], 0);
@@ -221,10 +237,11 @@ s32 func_800A504C(u8 *a, u8 *p)
             D_80081488 = func_80048118(p[0x13], D_8008149C);
             func_800A0B94(p[0x13], q, 0);
             D_800E3E40 = 0;
-            func_8003E4FC(0xFF, D_8003E140, (s32)&D_800E3E40);
+            func_8003E4FC(0xFF, D_8003E140, (s32)(&D_800E3E40));
         }
         D_800DCF5E++;
         return 0;
+
     case 1:
         if (D_800E3E40 == 0)
         {
@@ -236,60 +253,64 @@ s32 func_800A504C(u8 *a, u8 *p)
         }
         D_800DCF5E++;
         return 0;
+
     case 2:
         q = func_800A1618(p[0x13], 3);
-        if (q == NULL)
+        if (q == 0)
         {
             return 0;
         }
-        w = *(u8 **)(p - 0x14);
-        q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(
-            1, w[0x24], w[0x25], (s16)(*(u16 *)(p + 0x88) - 0x20));
-        if (q == NULL)
+        w = *((u8 **)(p - 0x14));
+        q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(1, w[0x24], w[0x25], (s16)((*((u16 *)(p + 0x88))) - 0x20));
+        if (q == 0)
         {
             return 0;
         }
-        *(u32 *)(q + 0x14) |= 0x4000;
+        *((u32 *)(q + 0x14)) |= 0x4000;
         k = (s16)func_800A1BD0(p);
         ab = D_800814A8;
-        e = *(u8 **)(ab + k * 4 + 0xD0);
-        *(s32 *)(ab + k * 4 + 0xAC) = (s32)q;
+        e = *((u8 **)((ab + (k * 4)) + 0xD0));
+        *((s32 *)((ab + (k * 4)) + 0xAC)) = (s32)q;
         i = e[3] & 0x1F;
         e[0] = p[0x13];
         D_800E3DF0[i] = (s32)q;
-        w = *(u8 **)(q - 0x14);
-        *(s16 *)(w + 0x1E) = 0x1000;
-        *(s16 *)(w + 0x1C) = 0x1000;
+        w = *((u8 **)(q - 0x14));
+        *((s16 *)(w + 0x1E)) = 0x1000;
+        *((s16 *)(w + 0x1C)) = 0x1000;
         func_80042640((Unk42710 *)q, q[0x13]);
-        *(u32 *)(q + 0x14) &= ~7;
-        *(u32 *)(q + 0x1C) &= ~7;
-        *(u32 *)(q + 0x14) |= *(u32 *)(p + 0x14) & 7;
-        *(u32 *)(q + 0x1C) |= *(u32 *)(p + 0x1C) & 7;
-        func_800424E0(q, q[0x13], NULL);
+        *((u32 *)(q + 0x14)) &= ~7;
+        *((u32 *)(q + 0x1C)) &= ~7;
+        *((u32 *)(q + 0x14)) |= (*((u32 *)(p + 0x14))) & 7;
+        *((u32 *)(q + 0x1C)) |= (*((u32 *)(p + 0x1C))) & 7;
+        func_800424E0(q, q[0x13], 0);
         func_80042710((Unk42710 *)q, (Unk42710 *)p);
         if (q[0x43] < 0x40)
         {
             z = (u8 *)0x80010000;
             r = q[0x43];
             id = q[0x13];
-            *(u8 *)(z + r * 0x54 + 0xA93) = id;
-            *(u8 *)(z + r * 4 + 0x980) = id;
+            *((u8 *)((z + (r * 0x54)) + 0xA93)) = id;
+            *((u8 *)((z + (r * 4)) + 0x980)) = id;
         }
         func_800A152C(q[0x13], 3);
         func_80042560((s8 *)q);
-        m = *(u16 *)(p + 0x2A);
-        *(u16 *)(q + 0x2A) = m;
-        func_80047738(w, (*(u8 **)(w + 0x2C))[((D_80083228 + (s16)m + 0x100) >> 9) & 7],
-                      *(s8 *)(w + 0x4));
+        m = *((u16 *)(p + 0x2A));
+        *((u16 *)(q + 0x2A)) = m;
+        func_80047738(w, (*((u8 **)(w + 0x2C)))[(((D_80083228 + ((s16)m)) + 0x100) >> 9) & 7], *((s8 *)(w + 0x4)));
         ((u16 *)w)[0xA] &= 0xFFFE;
         D_80080A90 = D_8014A000;
         ((u16 *)g)[5] -= 1;
         D_800DCF5C = 1;
-        *(u16 *)(p - 0x2) |= 0x8000;
+        *((u16 *)(p - 0x2)) |= 0x8000;
         f = D_800814A0;
-        *(s32 *)(p + 0x90) = 0;
+        *((s32 *)(p + 0x90)) = 0;
         D_800814A0 = f | 0x8000;
         break;
+    }
+
+    if (p)
+    {
+        return 0;
     }
     return 0;
 }
