@@ -111,3 +111,22 @@ When a function lands, delete its file here in the same change. A park for a
 landed function has no listing to measure against and is pure confusion --
 `docs/near-misses/README.md` records that failure mode from the resident
 executable's sweep.
+
+## WRITE THE `DECLARATIONS` MARKERS. THE FALLBACK CAN BREAK A SPLICE, NOT JUST MISS ONE.
+
+`parkresidue.py` prefers an explicit block:
+
+    DECLARATIONS
+    extern u8 D_800DCFD0[];
+    s16 func_X_s(s16, UnkVec *, u8 *, s16) __asm__("func_X");
+    END DECLARATIONS
+
+Without one it falls back to scraping declaration-SHAPED lines out of the
+header comment, and on 2026-11-16 that fallback scraped a line of prose into
+the unit and produced `unterminated character constant` **at a line number
+inside the unit** -- a failure that looks nothing like a park problem.
+
+The fallback is now stricter (a prototype's first token must look like a C
+type, which rejects `It needs func_X(a, b);`) and a compile failure on that
+path says so explicitly. **But it is still a heuristic over prose.** Write
+the markers.

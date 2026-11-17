@@ -52,6 +52,19 @@ DECL_LINE = re.compile(
     r"|\w+[\w \*]*\s+\**\w+\s*\([^;{]*\)\s*(__asm__\s*\([^)]*\))?\s*;)\s*$")
 
 
+# A leading token that could really be a C return type. The FALLBACK path --
+# scraping declaration-shaped lines out of prose when a park has no explicit
+# DECLARATIONS block -- needs this, because the two-or-three-token rule alone
+# accepts an English phrase in front of a function CALL: "It needs
+# func_8009AF18(a, b, c, d);" parses as a prototype named `needs' returning
+# `It'. One such line was spliced into the unit on 2026-11-16 and the compile
+# failed with `unterminated character constant` at a line number inside the
+# unit -- a failure that looks nothing like a park problem.
+TYPEWORD = re.compile(
+    r"^(void|char|int|short|long|float|double|signed|unsigned|const|static|"
+    r"[us](8|16|32|64)|Unk\w*|[A-Z]\w*_t|struct|union|enum)\b")
+
+
 def decls_of(path):
     """Extract the declarations a park's body needs from its header.
 
@@ -77,6 +90,7 @@ def decls_of(path):
     header = s[:end] if end > 0 else s
     m = DECL_RE.search(header)
     region = m.group(1) if m else header
+    explicit = m is not None
     out = []
     for line in region.split("\n"):
         line = line.strip()
@@ -93,6 +107,9 @@ def decls_of(path):
             # word "spilled".
             lead = line.split("(")[0].split()
             if not 2 <= len(lead) <= 3:
+                continue
+            # In the fallback path the first token must look like a type.
+            if not explicit and not TYPEWORD.match(line):
                 continue
         out.append(line)
     return "".join(l + "\n" for l in out)
@@ -336,6 +353,9 @@ def measure(func):
         lines = (r.stderr or r.stdout).strip().split("\n")
         lines = [l for l in lines if "error" in l.lower() or "undeclared" in l.lower()]
         err = (lines[-1][:90] if lines else "did not compile")
+    if decls and not DECL_RE.search(
+            open(park, encoding="utf-8").read().split("*/")[0]):
+        err += "  [no DECLARATIONS block -- declarations were SCRAPED from prose]"
     return func, None, err
 
 

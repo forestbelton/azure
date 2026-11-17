@@ -1,84 +1,173 @@
-/* PARK: func_8008FA7C, 182 words against a target of 181, 46 differing
-   (masked), 24 aligned differences.  ovl_dungeon, 2026-11-16, agent j41.
-   The reading is complete and every arm but state 1 is byte-exact; the
-   residue is one word and the scheduling of state 1's tail.
+/* PARK: func_8008FA7C, 180 words against a target of 181, 31 aligned
+   differences.  ovl_dungeon, 2026-11-16, agent j80 (after j41).
 
-   TWO NEW DECLARATIONS, plus one alias:
+   j80's result in one line: THE BODY BELOW PRODUCES THE TARGET'S EXACT
+   INSTRUCTION STREAM, with a single two-insn pair in the wrong place and
+   one load-delay nop missing because of it.  There is no longer a wrong
+   instruction, a wrong operand or a wrong register anywhere else in the
+   function.  Candidate words 0..56 and 91..179 are byte-identical; the
+   whole residue lives in words 57..90.
 
-       extern u8 D_800DCFD0[];
-       extern u8 D_800DD060[];
+   WHAT CHANGED FROM j41's PARK (182 words / 24 rows):
+   only the spelling of state 1's angle load, from
+       *(s16 *)(d + 0x2A)        (inside the call argument)
+   to
+       ((s16 *)d)[0x15]
+   That one array ref is worth EIGHT instructions' worth of ordering and
+   the register of `s`.  Mechanism, which is the main thing this run
+   established:
 
-   and a prototype for func_8009AF18, which is DEFINED LOWER IN THE FILE with
-   a `u16` first parameter.  The call here passes a signed angle and the
-   target's load is `lh $a0, 0x2A($s1)`; the real prototype makes it `lhu`.
-   So the call needs the unit's alias spelling:
+     `sched.c`'s `anti_dependence`/`true_dependence` (:860, :880) have an
+     escape clause BEFORE `memrefs_conflict_p` ever decides:
 
-       s16 func_8009AF18_s(s16, UnkVec *, u8 *, s16) __asm__("func_8009AF18");
+        a MEM_IN_STRUCT reference at a VARYING, non-QImode, non-AND address
+        never conflicts with a non-MEM_IN_STRUCT reference at a FIXED address
 
-   ------------------------------------------------------ WHAT IT IS
+     `D_800E3540 = s;` is a MEM at a SYMBOL_REF -- fixed, not in a struct.
+     `*(s16 *)(d + 0x2A)` is a plain INDIRECT_REF -- varying, NOT in a
+     struct -- so the clause does NOT apply and the two CONFLICT.  The
+     store is the last statement before the call, so source order pins it
+     BEFORE the angle load, and the target has it AFTER
+     (`lh $a3, 0x2A($s1)` at 88, `sw $t0, %lo(D_800E3540)` at 90).
+     `((s16 *)d)[0x15]` is an ARRAY_REF, so MEM_IN_STRUCT_P is set, the
+     clause applies, the edge disappears and sched1 is free to float the
+     load above the store -- which it does, exactly as the target does.
+     This is the same mechanism as j41's lever 3 (`((u32 *)d)[7] &=` must
+     be an array ref), read in the other direction.
 
-   The same +0x9B state machine as the landed func_8008E504 (:3816), four
-   states, each ending in `*(u8 **)(c + 0x2C) = <table>` plus
-   `func_80048A44(c, table[dir], n, 1)` and `p[0x9B]++`, where
-   `dir = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7`.  State 0
-   parks 0xFFEA0000 in the vector's +0x14; state 1 runs the +0x96 countdown,
-   probes with func_8009AF18 and, on a nonzero answer, raises the parked
-   +0x124 record's 0x200000, writes the answer to its +0x8A, sets its
-   +0x84/+0x85 to 0x78/2, drops d's 0x100000, moves D_80081484 into
-   D_800E3540 and bumps D_80083460+0xA; state 2 gates on +0xA2's 0x10 and
-   d's 0x100000; state 3 gates on D_80083460+0xA, sets its +0x2 0x412, tears
-   down d's +0x5C and installs func_8008EAC8 or func_8008ACDC.
+   That one change fixes, all at once:
+     * `s` moves from $a2 to $t0           (`lw $t0, %lo(D_80081484)`)
+     * the angle moves into $a3            (`lh $a3, 0x2A($s1)`)
+     * `lui/sw %hi/%lo(D_800E3540)` land after the angle load
+     * `addiu $a3, $zero, 0x1` returns to the SHARED tail, so
+       `.L8008FD1C` is `jal` + `addiu $a3,1` and not `jal` + `nop`
+   i.e. it removes j41's extra word -- and then re-introduces a different
+   one-word error, below.
 
-   ------------------------------------------- THE THREE LEVERS THAT MATTERED
+   ------------------------------------------- WHAT IS LEFT: TWO INSNS
 
-   1. **STATE 3 MUST STORE THE TABLE IN BOTH ARMS, NOT ASSIGN A LOCAL AND
-      STORE ONCE.**  This is the whole shape of the function.  Writing
-      `t = A; ... t = B; ... *(u8 **)(c + 0x2C) = t; f(c, t[dir], ...)` gives
-      ONE store and no reload, and then cross-jumping folds state 0's and
-      state 2's entire thirteen-instruction index blocks into state 3's:
-      157-167 words of 181.  Writing the store inside each arm makes
-      cross-jumping merge the two stores (that is what `.L8008FCE8` is) and
-      leaves the later `(*(u8 **)(c + 0x2C))[dir]` as a REAL reload --
-      `lw $v1, 0x2C($a0)` -- because cse cannot forward a value that two
-      predecessors store differently.  That reload is the one instruction
-      that makes state 3's last insn `lbu $a1, 0x0($v1)` instead of
-      `lbu $a1, 0x0($v0)`, and per docs/matching-levers.md's "A SHORT
-      CROSS-JUMP MATCH FOUND FIRST BLOCKS A LONGER ONE" that mismatch caps
-      find_cross_jump's first call at the `jal`, so the loop that would
-      compare state 0 against state 2 never runs.  165 -> 182 words,
-      59 -> 30 rows.
+   Candidate 62..90 against target 62..91, instruction for instruction:
 
-   2. **EACH STATE NEEDS ITS OWN TABLE POINTER LOCAL** (t0/t1/t2 here).  One
-      shared local is one global-alloc quantity in one hard register, and two
-      arms whose index lands in the same register cross-jump: 148 words.
+       cand                      target
+       62 lui  v0,%hi(83460)     62 lw   v0,0x124(s0)
+       63 addiu a3,v0,%lo        63 addu a0,s2,zero
+       64 lw   v1,0x124(s0)      64 sh   a2,0x8A(v0)
+       65 li   v0,0x78           65 li   v0,0x78
+       66 sh   a2,0x8A(v1)       66 lw   v1,0x124(s0)
+       67 lw   v1,0x124(s0)      67 nop
+       68 addu a0,s2,zero        68 sb   v0,0x84(v1)
+       ... identical from here except  73 lui  v1,%hi(83460)
+       ...                             77 addiu v1,v1,%lo
+       (everything else in 69..90 matches 69..91 exactly)
 
-   3. **`((u32 *)d)[7] &= ~0x100000` MUST BE AN ARRAY REF**, the rule
-      func_8008E504's own comment records.  `*(u32 *)(d + 0x1C) &=` is
-      184 words / 57 rows.  `((u32 *)q)[7] |= 0x200000` is free either way.
+   So `&D_80083460`'s `lui`/`addiu` sit at the TOP of state 1's block in
+   $a3; the target has them at words 73/77 in $v1.  Because they sit at the
+   top they are not needed as delay-slot filler, `addu $a0,$s2,$zero`
+   becomes the filler for word 67 instead, and the target's nop there is
+   the missing 181st word.
 
-   -------------------------------------------------- WHAT IS LEFT: ONE WORD
+   THE CAUSAL CHAIN, measured, not guessed (dumps in `sched.py --sched1`,
+   `.lreg`, `.greg`):
 
-   All 24 rows are in state 1, and they are one scheduling decision.  The
-   target fills the load-delay slot after `lh $a3, 0x2A($s1)` with
-   `lui $v1, %hi(D_800E3540)`, which leaves `addiu $a3, $zero, 0x1` as the
-   last insn before the shared `jal func_80048A44` -- so cross-jumping takes
-   BOTH into the shared tail at `.L8008FD1C` and reorg puts the `addiu` in
-   the jal's delay slot.  We schedule `li $a3, 1` into that load-delay slot
-   instead, the shared tail is the `jal` alone, and its delay slot is a `nop`:
-   that nop is the extra word.  `D_800E3540 = s;` is already the last
-   statement before the call; the scheduler still issues its `lui` ahead of
-   the D_80083228 load.
+     1. `g` is a pseudo with TWO sets (state 1 and state 3), so
+        `birthing_insn_p` (sched.c, `reg_n_sets == 1`) never bumps its
+        `lo_sum` insn and it keeps priority 1 -- the minimum.
+     2. In sched1's backward scan the priority-1 group at T-24 is
+        { `a0 = c`, g's `lo_sum`, the 0xFFEFFFFF `ori` }.  `schedule_select`
+        breaks a priority tie on `potential_hazard` and then on ready-list
+        order, which `rank_for_schedule` sorts by DESCENDING `INSN_LUID`.
+        `a0 = c` is the call's argument setup, so its LUID is larger than
+        the `lo_sum`'s -- it wins, and the `lo_sum` is pushed all the way
+        down to T-35, i.e. to the top of the block.
+        With j41's body the group at T-25 was only { `lo_sum`, `ori` } --
+        `a0 = c` had already drained at T-20 -- so the `lo_sum` won there
+        and landed at the right place.  The ONE cycle of difference is
+        traced below.
+     3. Scheduled at the top of the block, `g` is now live across the three
+        `lw $v1, 0x124($s0)` reloads, which local-alloc has put in $v1.
+        `.greg` prints `84 conflicts: 80 82 83 84 90 2 3 4 5 6 8 29` --
+        the conflict with hard reg 3 is exactly those reloads -- so
+        `find_free_reg` takes the first free register, $a3 (7).  In the
+        target `g` is born at word 77, AFTER the last reload dies at 71,
+        so it does not conflict with 3 and gets $v1.
+     4. sched2 then can't help: with `g` in $a3 the `lui` has no
+        predecessor at all in the block, priority 1, so it goes to the
+        block head.  With `g` in $v1 the `lui` carries an anti-dependence
+        on `sb $v0, 0x85($v1)` and cannot precede it.
 
-   MEASURED AND REJECTED (all on top of the body below):
-     * a named index local `v` in state 1:            180 words / 31 rows
-     * `D_800E3540 = s;` before the +0x2C store:      182 / 31
-     * `D_800E3540 = s;` before `t1 = D_800DCFD0;`:   182 / 31
-     * table store before the +0xA bump:              182 / 29
-     * a separate `g1` local for state 1:             182 / 35
-     * `&D_80083460` written inline in state 1:       181 / 44
-     * `*(u32 *)(d + 0x1C) &=` instead of the array:  184 / 57
-     * state 3 with its own `t3` local and one store: 157 / 65
-     * state 3 storing through `((u8 **)c)[0xB]`:     165 / 59 */
+   WHY THE ONE CYCLE (this is the thing to attack):
+   in j41's body the E3540 store depends on nothing after it except the
+   call, but the ANGLE LOAD depends on the store, so sched1's chain is
+   `sw 0x2C(c)` -> `sw D_800E3540` -> `lh 0x2A` and the store is not ready
+   until T-11.  T-9 therefore has nothing of priority > 1 ready and
+   `a2 = 5` drains there; `a0 = c` drains at T-20.  Remove the edge (any
+   spelling that puts the load first) and the store becomes ready at T-4
+   with priority 8, wins T-9, blocks the following `lh` for one cycle on
+   the memory unit, and `sw 0x2C(c)` lands at T-14 instead of T-15 -- every
+   later insn shifts one cycle and `a0 = c` is still ready at T-24.
+   The fix wanted is ONE more occupied cycle in sched1's T-4..T-20 window,
+   or anything that drains `a0 = c` before the g `lo_sum` becomes ready at
+   T-21.
+
+   MEASURED AND REJECTED BY j80 (all on top of this body unless noted; the
+   number is built words / aligned rows, target 181):
+
+   -- ways of getting the angle load above the E3540 store --
+     * `a = *(s16 *)(d + 0x2A);` hoisted to a local, index uses `a`:
+                                                      180 / 33
+     * `a = D_80083228 + *(s16 *)(d + 0x2A);`          180 / 31 (same
+       instruction stream as this body, same g residue)
+     * `a = (... + 0x100) >> 9;`                       180 / 31
+     * `a = D_80083228 + ... + 0x100;`                 180 / 31
+     * `a` declared `s16` instead of `s32`:            182 / 41
+     * `a` assigned TWICE (also feeding func_8009AF18) 180 / 36
+     * hoisting the whole `t1[...]` byte into a local: 182 / 41
+     * `*(u8 *)(t1 + i)` instead of `t1[i]`:           184 / 26..28
+   -- `&D_80083460` spellings --
+     * separate local for state 1 (`g1`) + array ref:  182 / 32
+       (g1's pair DOES land at 69/76, close to the target's 73/77, but it
+        is then a LOCAL quantity, takes $a1, pushes the 0xFFEFFFFF mask to
+        $a3 and `r` to $a1, and the mask's `lui`/`ori` become adjacent so
+        the two `lw`s at 58/60 get nops: that is the 182.)
+     * separate local, four declaration orders:        182 / 32..35
+       (declaration order does not move anything)
+     * `g = (u8 *)&D_80083460 + 0xA; *(s16 *)g += 1;`  181 / 29
+       RIGHT LENGTH, but it is the same shape as "inline" below: `r` in
+       $a1, the mask in $a3, nops at 59/61, words 73..85 reordered.  ~12
+       genuinely different instructions, so WORSE than this body even
+       though the count matches.
+     * `&D_80083460` inline in state 1 (no local):     181 / 31  (same
+       shape as the row above)
+     * `((s16 *)g)[5] += 1;`                           180 / 31
+     * `*(u16 *)(g + 0xA) += 1;`                       180 / 31
+     * `*(s16 *)(g+0xA) = *(s16 *)(g+0xA) + 1;`        180 / 31
+   -- dependence-structure probes, all 180 / 31..35, none moved the g pair --
+     * `*(u32 *)(q + 0x1C) |= 0x200000;` (non-array)   180 / 31
+     * `((void **)D_80081484)[0]` for both accesses    180 / 31
+     * D_80081484 pair before `((u32 *)d)[7] &=`       180 / 32
+     * `*(void **)&D_800E3540 = s;`                    180 / 31
+     * `((u8 **)c)[0xB] = t1;`                         180 / 35
+     * `D_800E3540 = s;` before the +0x2C store        182 / 31
+     * `((u32 *)d)[7] &= 0xFFEFFFFF;`                  180 / 31
+     * `t1 = D_800DCFD0;` moved to five earlier points, each  180 / 31
+       (sched1 normalises all five to the same schedule)
+
+   STILL TRUE FROM j41's PARK, DO NOT DISTURB:
+     * state 3 must store the table in BOTH arms, not assign a local and
+       store once (157..167 words if you don't);
+     * each state needs its OWN table-pointer local (t0/t1/t2);
+     * `((u32 *)d)[7] &= ~0x100000` must be the array ref
+       (`*(u32 *)(d + 0x1C) &=` is 184 / 57);
+     * `s16 func_8009AF18_s(s16, UnkVec *, u8 *, s16) __asm__("func_8009AF18");`
+       is required -- the real prototype's `u16` first parameter gives
+       `lhu` where the target has `lh`.
+
+DECLARATIONS
+extern u8 D_800DCFD0[];
+extern u8 D_800DD060[];
+s16 func_8009AF18_s(s16, UnkVec *, u8 *, s16) __asm__("func_8009AF18");
+END DECLARATIONS
+*/
 
 void func_8008FA7C(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
@@ -120,7 +209,7 @@ void func_8008FA7C(u8 *p, UnkVec *b, u8 *c, u8 *d)
             t1 = D_800DCFD0;
             *(u8 **)(c + 0x2C) = t1;
             D_800E3540 = s;
-            func_80048A44(c, t1[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 5, 1);
+            func_80048A44(c, t1[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 5, 1);
         }
         p[0x9B]++;
         break;
