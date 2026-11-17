@@ -615,3 +615,30 @@ limit, or anything else.
   occupant and an unplaced head region, none of them split. That is where most
   of this container's 6.1 MB of unplaced code is, and pinning the bank starts
   across `0x9bd800..0x135e000` is the one piece of that map still to do.
+
+
+## 2026-11-16: A SECOND BLOCKED CLASS, AND IT IS NOT THE JUMP TABLES
+
+Two functions are now believed **unclosable for a reason in the compiler**,
+separately from the seven 4-mod-8 jump-table functions.
+
+**`func_800AAF00` -- 176/176 words, 4 aligned rows, and all four are the
+`|= 0x80000000` gate** this project already catalogued as proved-unreachable.
+An agent took it from 21 rows to 4 and then measured four more spellings of
+the gate itself: hoisting the `|` out of the inner `if` is 175/11, a
+matched-operand `asm` on the loaded value 177/11, the `|` through a local
+176/5, and the two tests merged with `&&` 176/4 and byte-identical. The
+catalogue's "treat as permanent" stands. **This function cannot close**, and
+it should not be handed to another agent as a near-miss.
+
+**`func_800AD6FC` -- 174/174, 31 rows**, one `$s2`/`$s4` swap between two
+pseudos with a third already correct *between* them, so the two neighbours of
+a fixed middle must exchange. From `-da`: one needs only +3.1% (11 references,
+or a live length of 112 instead of 116) but the other needs **-21%** -- 7
+references, or a live length of 113 instead of 89. It has **nine real uses in
+the target's own assembly**, so 7 references is unreachable, and its last use
+is word 128 of 174, so 113 is unreachable. Eleven device and structure
+combinations measured, all at 31 or worse.
+
+Both parks record the exact arithmetic, so a permuter run can be aimed rather
+than hoped. Neither should be re-dispatched as ordinary park-closing work.
