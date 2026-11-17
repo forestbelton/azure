@@ -12163,7 +12163,61 @@ s16 func_8009A350(s16 x, s16 y, s32 d, u16 *out)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009A3D0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009A540);
+s16 func_8009A540(s32 a, s32 x, s32 y, s16 z)
+{
+    u16 w;
+    s16 zz;
+    s32 ax;
+    s32 az;
+    s32 b;
+    s32 xx;
+    s32 yy;
+    s32 wx;
+    s32 wz;
+    s32 i;
+    s32 k;
+    u16 *t;
+    u16 *u;
+
+    b = a;
+    __asm__("" : "=r"(b) : "0"(b));
+    zz = z;
+    if ((a & 1) != 0)
+    {
+        i = -1;
+        xx = (s16)x;
+        wx = (xx << 6) + 0x20;
+        t = D_800DCEAC;
+        yy = (s16)y;
+        wz = (yy << 6) + 0x20;
+        for (; i < 2; i += 2)
+        {
+            if (func_8009A350(xx, yy, (b + i) & 7, &w) != 0)
+            {
+                k = ((u16)b + i) & 7;
+                ax = t[k] + wx;
+                u = D_800DCEBC;
+                az = u[k] + wz;
+                if (func_800BCB04h((u16)ax, (u16)az, zz) >= 0x201)
+                {
+                    break;
+                }
+                u = t;
+            }
+        }
+        {
+            register s32 h __asm__("$3");
+
+            h = (i < 2);
+            if (h != 0)
+            {
+                return 0;
+            }
+        }
+    }
+    b = a;
+    return 1;
+}
 
 /* Probe the tile one step along the facing in `f`: ask func_8009A540 whether
    the step is legal at all, func_8009A350 what the tile's flag word is, and
