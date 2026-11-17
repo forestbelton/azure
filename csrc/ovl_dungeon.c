@@ -370,7 +370,17 @@ typedef struct UnkDungeon82EB0
 extern UnkDungeon82EB0 D_80082EB0_m __asm__("D_80082EB0");
 u8 *func_80048118(s16, u8 *);
 void func_80047FF4(s16, u32);
-s32 func_800A31D0(u8 *);
+/* func_800A31D0's view of a list record: the +0x1C request word, the +0x6D
+   byte and the +0x6E halfword it clears. */
+typedef struct UnkDungeonA31D0
+{
+    u8 pad_00[0x1C];
+    s32 unk_1C;
+    u8 pad_20[0x4D];
+    u8 unk_6D;
+    s16 unk_6E;
+} UnkDungeonA31D0;
+void func_800A31D0(u8 *);
 extern u8 D_800E0C58[];
 extern u8 D_800E0C67[];
 /* The +0x9A state table func_800C9AAC dispatches through, same element type
@@ -15321,7 +15331,70 @@ void func_800A2FE0(u8 *p)
     func_800A5720(m);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A31D0);
+/* Walks the engine's node list and, for every kind-0x1E node whose +0xA4
+   owner is this record, bumps two counters and sets a request bit.
+   53 words, 0 differing.
+
+   TWO SPELLINGS ARE LOAD-BEARING, and they fix OPPOSITE halves of one
+   scheduling problem -- the 52-word plateau two earlier attempts and a
+   permuter run all sat on.
+
+   (1) `__asm__("")' BETWEEN THE TWO COUNTER INCREMENTS -- the missing word.
+   A traditional asm (ASM_INPUT, no operands) makes sched.c flush every
+   pending read/write list and depend on all of memory (sched.c:1943-1970),
+   so the D_800DCE68 load cannot be hoisted into the load-delay slot of
+   `lhu $v0, 0xA($a3)' and the target's bare `nop' survives.  Nothing else
+   reaches it: `*(u16 *)(g + 0xA) += 1' and `D_800DCE68 += 1' are both
+   non-struct refs whose addresses canon_rtx resolves to distinct symbols
+   (a once-set `g = (u8 *)&D_80083460' carries a REG_EQUIV), so
+   memrefs_conflict_p proves them disjoint and true_dependence's
+   MEM_IN_STRUCT_P clauses -- which only ever CLEAR a dependence -- never
+   get the chance to fire.  It emits no instruction.  Without it, with
+   everything else below: 52 words, 9 aligned.
+
+   (2) THE THREE RECORD STORES AS STRUCT MEMBERS, not `*(s16 *)(n + 0x6E)'
+   casts -- the second half.  COMPONENT_REF sets MEM_IN_STRUCT_P, and with
+   the varying `n' base that is exactly true_dependence's exemption against
+   the fixed, non-struct `sh %lo(D_800DCE68)', so `lw $v1, 0x1C($a1)' moves
+   up into that store's own delay slot as the target has it.  As casts the
+   load is pinned below the store and the two counter `lhu's interleave
+   instead: 52 words, 17 aligned.
+
+   The two together are what land it; the barrier ALONE (casts kept) is
+   54 words / 16 aligned, because the record load then cannot fill the
+   second slot either and a second `nop' appears.
+
+   Also load-bearing, from the park and re-confirmed here: `c - 0x20'
+   written INLINE in the comparison rather than through a local (a `d'
+   local is 4 differences worse at the same length), and
+   `g = (u8 *)&D_80083460' assigned INSIDE the loop body immediately before
+   its use -- before the loop or before the `if' it is 51 words, because
+   the `lui' leaves the branch delay slot the target fills it from.  loop.c
+   hoists the pair to the preheader by itself. */
+void func_800A31D0(u8 *c)
+{
+    u8 *g;
+    u8 *n;
+
+    if (c[0x13] == 0x1E && (*(s32 *)(c + 0x14) & 0x4000) != 0 && *(s16 *)(c + 0xAA) != 0)
+    {
+        n = *(u8 **)(D_800E3D7C + 0x5C) + 0x20;
+        while (n != D_800E3D7C)
+        {
+            if (n[0x13] == 0x1E && *(u8 **)(n + 0xA4) == c - 0x20)
+            {
+                g = (u8 *)&D_80083460;
+                *(u16 *)(g + 0xA) += 1;
+                __asm__("");
+                D_800DCE68 += 1;
+                ((UnkDungeonA31D0 *)n)->unk_6E = 0;
+                ((UnkDungeonA31D0 *)n)->unk_6D = 0;
+                ((UnkDungeonA31D0 *)n)->unk_1C |= 0x400000;
+            }
+            n = *(u8 **)(n + 0x5C) + 0x20;
+        }
+    }
+}
 
 /* Retire the record `p` from the party: drop its 0x1A/0x1C/0x1D attributes,
    hand it to func_800A31D0, and if it still owns one of the four +0xAC slots,
