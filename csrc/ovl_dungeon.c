@@ -381,6 +381,8 @@ typedef struct UnkDungeonA31D0
     s16 unk_6E;
 } UnkDungeonA31D0;
 void func_800A31D0(u8 *);
+void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);
+void func_80067E2C(void *, void *);
 extern u8 D_800E0C58[];
 extern u8 D_800E0C67[];
 /* The +0x9A state table func_800C9AAC dispatches through, same element type
@@ -27003,7 +27005,133 @@ void func_800BB14C(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800BB2E4);
+/* 158 words, 0 differing. The three-way overlay dispatcher: with a fifth
+   argument it brackets func_800B8FC8's output in a mask primitive; without
+   one, and only when the fourth argument's low halfword is zero, it emits a
+   single 0x10-byte primitive from the two words at *a and *b; and whenever
+   that halfword is NOT zero it falls through to the 0x60000000 tint
+   rectangle, a second mask primitive and func_80067E2C's draw-area
+   primitive.
+
+   THE ONE SPELLING FACT: `s16 dd = d;' AT THE TOP, WITH THE TAIL TEST
+   READING `dd' AND THE else-ARM TEST READING `d'. The target tests the
+   fourth argument twice: `sll $v0, $a3, 16' in the else arm, out of the
+   INCOMING ARGUMENT REGISTER, and `sll $v0, $s6, 16' at the tail, out of a
+   callee-saved copy. That is two pseudos, and with one `s32' variable it is
+   one: `d' then has three references across 178 insns, global.c's
+   allocno_compare scores it 3*10000/178 = 168 against `lean''s
+   2*10000/93 = 215, `lean' sorts first and takes $s6, and the function comes
+   out 158 words / 7 differing -- every row the $s6/$s7 swap plus the else
+   arm reading the copy.
+
+   A PLAIN `s32 dd = d;' DOES NOT SPLIT THEM (158/7, byte-identical to the
+   one-variable body): cse.c's make_regs_eqv makes whichever pseudo has the
+   LATER last use the canonical one, so a copy read late swallows the
+   parameter's early use and a copy read early is swallowed by it. An `s16'
+   copy is a different mode, so insert_regs finds no same-mode REG in the
+   equivalence class, `dd' gets a quantity of its own and both pseudos
+   survive. `d' then crosses no call on the entry->else-arm path, local-alloc
+   leaves it in $a3, and `dd' is 2 refs / live length shorter than `lean''s,
+   so it scores above `lean' and takes $s6. `u16 dd' and `s16 dd' with the
+   tail test written `(s16)dd == 0' are identical; `s32 dd = (s16)d;' puts
+   the copy in $s5 and moves two other allocnos.
+
+   THIS IS NOT THE "FOURTH REFERENCE" TWO EARLIER ATTEMPTS WENT LOOKING FOR.
+   One of them concluded the window was unreachable by sweeping the reference
+   count at a fixed live length; the correction to that was that a reference
+   placed at the END lengthens the range too and does reach it. Both were
+   reasoning about ONE pseudo. The target has two, and no reference count on
+   a single variable produces that.
+
+   Also measured: the scissor-off block written once after the join instead
+   of in both arms is 153 words (cross-jumping leaves each arm its own
+   D_80083160 reload); `s32 lean' is 158/11 (the target copies the boolean
+   to $v0 in each arm, which an s32 tested straight out of $s6 does not);
+   `lean' computed before `r' is 158/11 and before `g' 158/15; the two arms
+   exchanged is 69 differing. The first argument's halfword arithmetic is a
+   SIGNED divide `((s16) * ((u16 *)c + 2) / 2)', not the `>> 1' the sibling
+   func_800B835C uses at the same slot. */
+void func_800BB2E4(void *a, void *b, s32 *c, s32 d, void *e)
+{
+    Unk80083160 *g;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    s16 w[2];
+    s16 lean;
+    s32 t;
+    s16 dd;
+
+    dd = d;
+    g = &D_80083160;
+    r = D_80083160.unk_00 + 0x8B0;
+    lean = D_80083160.unk_00 != D_801C9E40;
+    if (e != NULL)
+    {
+        q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
+        func_80067EF4(q, 0, 0);
+        func_8006658C(r, q);
+        w[0] = *(u16 *)c + ((s16) * ((u16 *)c + 2) / 2);
+        w[1] = *((u16 *)c + 1) + *((u16 *)c + 3);
+        func_800B8FC8((u8 *)e, c, (s32 *)w, 0, 0);
+        q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
+        func_80067EF4(q, 1, 0);
+        func_8006658C(r, q);
+    }
+    else
+    {
+        if ((s16)d != 0)
+        {
+            goto rect;
+        }
+        u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
+        *(u32 *)(u + 0x8) = *(u32 *)a;
+        *(u32 *)(u + 0xC) = *(u32 *)b;
+        if (lean)
+        {
+            *(u16 *)(u + 0xA) -= 0xE0;
+            *(u16 *)(u + 0xE) -= 0xE0;
+        }
+        u[0x3] = 3;
+        *(u32 *)(u + 0x4) = 0;
+        u[0x7] = 0x40;
+        func_8006658C(r, u);
+        q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
+        func_80067EF4(q, 0, 0);
+        func_8006658C(r, q);
+    }
+    if (dd == 0)
+    {
+        return;
+    }
+rect:
+    u = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(u + 0x10);
+    *(u32 *)(u + 0x4) = 0x60000000;
+    u[0x3] = 3;
+    *(u16 *)(u + 0x8) = *(u16 *)c;
+    t = *((s16 *)c + 1);
+    if (lean)
+    {
+        t -= 0xE0;
+    }
+    *(s16 *)(u + 0xA) = t;
+    *(u16 *)(u + 0xC) = *((u16 *)c + 2);
+    *(u16 *)(u + 0xE) = *((u16 *)c + 3);
+    func_8006658C(r, u);
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    func_80067EF4(q, 0, 1);
+    func_8006658C(r, q);
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    func_80067E2C(q, c);
+    func_8006658C(r, q);
+}
 
 /* The dungeon's five-spoke ring effect: prime the VRAM pair, lay the five
    spokes' endpoints with func_80064584/func_800644B8 and func_800A07D0, then
