@@ -1,34 +1,46 @@
-/* PARKED 2026-11-16, j58.  target 600 words, candidate 600 words,
-   20 aligned differences (ovlverify masked: 20) -- EVERY INSTRUCTION
-   POSITIONALLY IDENTICAL, and all twenty rows are register names only.
+/* PARKED 2026-11-16, j58; j71 took it from 20 aligned rows to 2 on
+   2026-11-16.  target 600 words, candidate 600 words, **2 aligned
+   differences** (ovlverify masked: 2).  Every instruction is positionally
+   identical; both rows are register names only.
 
-   This is a fresh decompilation; no earlier park of this function survived
-   the 2026-11-16 cleanup.  Previous measured baseline on record (lever
-   catalogue :27899) was 602 words / 63 differences, so this is 2 words and
-   43 rows better and the word count is now exact.
+   WHAT IS LEFT (and only this):
+     202  sll v0,a0,0x10    vs   sll $v1, $a0, 16
+     203  sra a1,v0,0x10    vs   sra $a1, $v1, 16
 
-   THE RESIDUE IS TWO REGISTER PAIRS AND NOTHING ELSE.
+   The SImode temp that holds `want << 16` on the way to the sign extension
+   gets $v0 where the target has $v1.  This is now LITERALLY the same
+   two-row residue as docs/dungeon-parks/func_80096384.c, instruction for
+   instruction, and that park's own two rows are the same temp; whatever
+   closes one should close the other.  From the dumps: that temp is a LOCAL
+   quantity with 2 refs and a 2-insn range, so `QTY_CMP_PRI`
+   (local-alloc.c:1693) gives it the top priority in its block and
+   `find_free_reg` hands it the first register free over [birth, death];
+   it has no copy- or arithmetic-suggestion to steer it, and nothing holds
+   $v0 across those two insns in either build, so the difference is in
+   `regs_live_at` over that window and not in anything the surrounding
+   statements say.  Eighteen spellings of the `want` block were measured
+   against it without moving it (list below).  PERMUTER FOOD.
 
-   (A) FIFTEEN ROWS, words 184..219: the angle block's two quantities are
-   EXCHANGED.  `want` -- the s16 holding `(m[1] & 7) << 9` -- lands in $a1
-   where the target has $a0, and the raw `*(u16 *)(d + 0x2A)` read lands in
-   $a0 where the target has $a1.  Every instruction is the same instruction
-   in the same slot: the three `andi`s on each, the join `addu` the ternary
-   produces, the `sll 16`/`sra 16`, the `and` against -0x1000 and the final
-   `slt`.
-   THIS IS THE SAME RESIDUE, IN THE SAME CODE, AS docs/dungeon-parks/
-   func_80096384.c -- read that header first.  Its diagnosis (global_alloc's
-   `allocno_compare`, `(floor_log2(refs)*refs - live_length)/live_length`,
-   `want` scoring -0.500 against the read's -0.111 because `floor_log2(7)`
-   is 2) applies here unchanged, and its long "measured and rejected" list
-   is a list of things NOT to retry here.
+   The old fifteen-row $a0/$a1 exchange and the five-row case 0x50 block
+   are both GONE -- see j71's two levers below.
 
-   (B) FIVE ROWS, words 321..329, switch case 0x50: the target keeps
-   `m[0] & 0x60` and the `i * 4 + p` address in $v0 and only the shifted
-   index `i` in $s0; this candidate coalesces all three into $s0.  Same
-   instructions, same order.
+   HOW IT GOT HERE: 80 -> 67 -> 58 -> 29 -> 23 -> 20 (j58), -> 7 -> 2 (j71).
 
-   HOW IT GOT HERE: 80 -> 67 -> 58 -> 29 -> 23 -> 20, on five levers.
+   *** J71'S FIRST LEVER, worth 13 rows (20 -> 7), ONE COMPILE: ***
+   MOVE THE `*(s16 *)(d + 0x2A)` SIGN-EXTENSION IF/ELSE **OUT** OF THE
+   `do { } while (0)`, leaving only the `want` ternary, the `cur` read and
+   the `delta` subtraction inside it.  j58's header said the wrapper should
+   cover "exactly the block func_80096384.c wraps" -- true when it was
+   written, but j69 subsequently changed what that park wraps, and this
+   function wanted the same change.  The mechanism is j69's: `flow` adds
+   `loop_depth` per reference, so the zero-trip loop's LOOP notes were
+   DOUBLE-COUNTING the two references to the raw `*(s16 *)(d + 0x2A)` read
+   that sat inside it.  Pulling the if/else out drops that pseudo's weight
+   and flips the $a0/$a1 pair that was 15 of the 20 rows.
+
+   THE `do { } while (0)` IS STILL LOAD-BEARING: it is what keeps the three
+   references to `want` weighted at depth 2.  Do not delete it, and do not
+   put the halfword if/else back inside it.
 
    (1) THE SWITCH ARMS ARE IN SOURCE ORDER 0x8, 0x10, 0x28, 0x30, 0x48,
    0x50, 0x68, **0x88**, 0x70, 0x78, 0x80, 0x90, 0x98, 0xA0, 0xD8 -- NOT in
@@ -54,16 +66,13 @@
    index local is needed, and the seven index spellings that entry lists
    were all measured against the WRONG ARM ORDER.
 
-   (3) `s16 i` FOR CASE 0x50's INDEX, worth **6 rows** (29 -> 23).  As `s32`
-   the whole address chain coalesces one register further.  `u8`, `u16` and
-   a `(s32)` cast on the subscript are all identical to `s16`; `s8` and
-   `s32` are both 26.
+   (3) `s16` FOR CASE 0x50's HOISTED BYTE.  j58 measured this as the
+   INDEX's type and it was worth 6 rows (29 -> 23) there; in j71's shape the
+   same narrow local holds `m[0]` instead, and it is still load-bearing --
+   `s32 j` in its place is 9 rows and turns the `srl` into an `sra`.
 
-   (4) THE PERMUTER'S `do { ... } while (0)` FROM func_80096384's PARK
-   TRANSFERS, worth **3 rows** (23 -> 20).  It wraps the two sign-extension
-   arms, the `want` ternary, the `cur` read and the `delta` subtraction --
-   exactly the block func_80096384.c wraps -- and it is the catalogued
-   zero-trip device "A ZERO-TRIP `do { } while (0)` AROUND AN `if`".
+   (4) THE ZERO-TRIP `do { ... } while (0)`, now around the `want` ternary,
+   the `cur` read and the `delta` subtraction ONLY -- see j71's lever above.
 
    (5) `(((u32)w >> 1) ^ 1) & 1` for func_8008D024's fourth argument: the
    target has `srl $a3, $a3, 1`, and `w` as a plain `s32` gives `sra`.
@@ -82,8 +91,11 @@
    * One pointer local per skin site (`t` in the tail, `t2` at the
      D_800DCFB0 site).
 
-   MEASURED AND REJECTED (all at 600 words / 20 unless the row says
-   otherwise; the number is aligned differences):
+   MEASURED AND REJECTED BY j58, against the 20-row body (all at 600 words
+   / 20 unless the row says otherwise; the number is aligned differences).
+   THE CASE-0x50 ROWS BELOW ARE SUPERSEDED: they were all measured with a
+   local index, which j71's second lever replaced -- keep them only as
+   evidence that no address spelling fixes a local index.
      case 0x50, share one index local with case 0x88      603 / 45
      case 0x50, hoist the slot pointer before the call    607 / 69
      case 0x50, `n = i * 4;` then `p + 0xAC + n`          599 / 42
@@ -107,12 +119,110 @@
      `cur` read after the `delta` subtraction             20
      `want`'s sign extension as if/else, not the ternary  601 / 21
      the 0x88 arm left in value order (after 0x80)        600 / 58
+   The `want` rows above were all measured with the halfword if/else still
+   INSIDE the `do { } while (0)`, so their scores are not comparable to the
+   7-row body.
 
-   NOTE THE TWO 599/596-WORD ROWS: `s32 want` and the two-statement `want`
-   are each SHORTER than the target, so they are not simply worse -- they
-   remove an instruction the target has.  `want = m[1] & 7; want <<= 9;` at
-   599 words / 19 rows is the closest thing to a lead left in this function
-   and is where I would start a permuter run.
+   *** J71'S SECOND LEVER, worth 5 more rows (7 -> 2): CASE 0x50's INDEX
+   LIVES IN `m` ITSELF, AND THE BYTE IS HOISTED INTO THE `s16` LOCAL. ***
+       case 0x50:
+           i = m[0x0];
+           m = (u8 *)((i & 0x60) >> 5);
+           if (func_80098920(*(u8 **)(p + 0xAC + (s32)m * 4),
+                             func_8009FADC(i & 0x1F), 0x15, 0) < 0)
+   WHY, measured from the RTL dumps (tools/decomp/dump.sh, -G0):
+   the five rows were ONE local-alloc quantity.  `combine_regs`
+   (local-alloc.c:1791) ties the destination of an insn to a dying source,
+   so `t = m[0] & 0x60` -> `i = t >> 5` -> `i * 4` -> `+ p` all became one
+   quantity; that quantity crosses the `jal func_8009FADC`, so it must be
+   call-saved and every member came out `$s0`.  The target has the index in
+   `$s0` and the three temps in `$v0`, i.e. the index is a SEPARATE,
+   GLOBALLY allocated allocno.  `local_alloc` only hands a pseudo a local
+   quantity when `reg_basic_block[i] >= 0 && reg_n_deaths[i] == 1`
+   (local-alloc.c:472), so the index has to appear in TWO basic blocks --
+   and then `combine_regs` refuses both ties (`reg_qty[sreg] >= -1`,
+   local-alloc.c:1911) and the temps fall back to `$v0`.
+   Confirmed directly: ANY function-scope variable already used elsewhere,
+   substituted for `i` here, removes all five rows.  What is left is then
+   whatever that variable's OTHER site loses, and `m` is the one that loses
+   nothing, because in the target `$s0` holds `q`, then `m`, then this
+   index, on three disjoint paths -- one hard register, three values.
+   Scores for the other holders, all measured against the 7-row body
+   (aligned differences; case 0x50 itself is correct in every one of them):
+       `m` + byte hoisted into `s16 i`        **2**  <- the body below
+       `m` + byte hoisted into `u16`-cast i     2    (identical output)
+       `n`                                      5    (3 rows at n's own site)
+       `n` for the index, `q` as a copy         5    (same; `n` does the work)
+       `m` + byte hoisted into `w`              5    (byte lands in $a3)
+       `cur`                                    6    (4 rows at cur's site)
+       `w` / `delta`                            7    (5 rows at their sites)
+       `w2`                                     8
+       `m` + byte hoisted into `j`              9
+       pointer `q` directly                 599 / 8  (q's D_80083460 init
+                                                      rematerialises; one
+                                                      word short)
+       `k`                                     22
+       `r` / `e`                        602 / 28, 602 / 27
+       `j`                                 603 / 29
+       `want`                                 178
+   The byte MUST be hoisted into a narrow local (`s16`): `m` is reassigned
+   before the `& 0x1F` argument is read, so `m[0]` cannot be read twice, and
+   a wide/global holder (`w`, `j`) puts the loaded byte in the wrong
+   register.  `(i & 0x60) >> 5` with `s16 i` also keeps `srl`; with `s32 j`
+   it comes out `sra`.
+
+   ALSO MEASURED AND REJECTED BY J71, against the 7-row body (600 words /
+   7 unless stated):
+     all 16 positions for the `s16 i` declaration          7 (no effect)
+     hoisting func_8009FADC's result into `n`              7
+     `i = 0;` dead store after / inside the `if`           7  (a dead store
+                                                            is deleted
+                                                            BEFORE
+                                                            `mark_set_1`
+                                                            records
+                                                            reg_basic_block,
+                                                            flow.c:1541, so
+                                                            it cannot make a
+                                                            pseudo global)
+     inverted `if` with an early return                    7
+     `register` + block-scope index                        7
+     the index written inline, no local             599 / 26
+     `p + (i * 4 + 0xAC)`                                  7
+     `(m[0] & 0x60) / 32`                                  7
+     `((u8 **)(p + 0xAC))[i]`                              7
+     `do { } while (0)` around the arm / the index         7
+     cur after delta, INSIDE the do-while                  7
+     cur read before the do-while                         13
+     cur read after the do-while                          11
+     delta outside the do-while                           15
+     only the ternary inside the do-while                 15
+     no do-while at all                                   23
+     a second, nested do-while                            15
+     `want = m[1] & 7; want <<= 9;`                 599 / 19
+     `want = (m[1] << 9) & 0xE00`                   599 / 20
+     `(s16)((m[1] & 7) << 9)`                              7
+     compare operands swapped                              8
+     three other spellings of the `want` ternary           7
+     abs via a ternary / `delta >= 0x801` / `-0x1000`      7
+     `(cur & 0xFFF) | (want & ~0xFFF)` store order        11
+     `delta <= 0` for the abs                              8
+     final compare as `want <` / `<=` with arms swapped    7
+     final compare through `*(u16 *)(d + 0x2A) -= 0x200`   7
+
+   MEASURED AND REJECTED BY J71 AGAINST THE 2-ROW BODY (all 600 words / 2,
+   i.e. no effect on the surviving pair, unless stated):
+     `(s32)want` / `(s32)(s16)want` in the `delta` subtraction      2
+     `(s32)` cast on the `*(s16 *)(d + 0x2A)` load                  2
+     `delta = -(want - *(s16 *)(d + 0x2A));`                        2
+     `delta = *(s16 *)(d + 0x2A); delta -= want;`                  20
+     `cur` as u16 / s16 / u32                                       2
+     `delta` as s16                                           603 / 40
+     `want` as s32 / u16 / s8                   596 / 14, 596 / 15, 592 / 28
+   The pair is insensitive to every spelling of the statements around it.
+   Both of its insns are emitted as one unit by the sign-extension expander,
+   so no source reordering can put a basic-block boundary between them, and
+   that is what it would take to make the temp a GLOBAL allocno (which is
+   what pseudo 181 is here, and it gets $v1).
 
    DECLARATIONS THIS BODY NEEDS (new; nothing else in the unit declares
    them):
@@ -247,16 +357,16 @@ void func_8008EAC8(u8 *p, UnkVec *b, u8 *c, u8 *d)
         *(s16 *)(d + 0x2A) &= 0xFFF;
         if (*(s16 *)(d + 0x2A) != want)
         {
+            if ((*(u16 *)(d + 0x2A) & 0x800) != 0)
+            {
+                *(s16 *)(d + 0x2A) |= 0xF800;
+            }
+            else
+            {
+                *(s16 *)(d + 0x2A) &= 0x7FF;
+            }
             do
             {
-                if ((*(u16 *)(d + 0x2A) & 0x800) != 0)
-                {
-                    *(s16 *)(d + 0x2A) |= 0xF800;
-                }
-                else
-                {
-                    *(s16 *)(d + 0x2A) &= 0x7FF;
-                }
                 want = (want & 0x800) ? (want | 0xF800) : (want & 0x7FF);
                 cur = *(u16 *)(d + 0x2A);
                 delta = *(s16 *)(d + 0x2A) - want;
@@ -307,8 +417,9 @@ void func_8008EAC8(u8 *p, UnkVec *b, u8 *c, u8 *d)
             }
             return;
         case 0x50:
-            i = (m[0x0] & 0x60) >> 5;
-            if (func_80098920(*(u8 **)(p + 0xAC + i * 4), func_8009FADC(m[0x0] & 0x1F), 0x15, 0) < 0)
+            i = m[0x0];
+            m = (u8 *)((i & 0x60) >> 5);
+            if (func_80098920(*(u8 **)(p + 0xAC + (s32)m * 4), func_8009FADC(i & 0x1F), 0x15, 0) < 0)
             {
                 func_8009F988();
             }
