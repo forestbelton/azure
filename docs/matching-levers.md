@@ -1004,13 +1004,13 @@ then read only the section you need.
 - A USER COPY OF A PARAMETER IS THE ONLY WAY TO GIVE ITS HARD-REG COPY A LATER LUID  `:31906`
 - THERE IS NO FREE WAY TO RAISE `reg_n_sets` EXCEPT THE MATCHED-OPERAND `asm`  `:31922`
 - A REDUNDANT RECOMPUTATION IS A COPY THAT SURVIVES, WHERE A SOURCE-LEVEL COPY IS NOT  `:31945`
-- jump2 DELETES A REDUNDANT HARD-REGISTER COPY, SO TWO COPIES OF ONE VALUE CANNOT BOTH EXIST  `:31976`
-- READ THE `.set noreorder` BLOCKS IN THE OUTPUT BEFORE THEORISING ABOUT A DELAY SLOT  `:32014`
-- A TRAILING INPUT-ONLY FENCE *LOWERS* AN ALLOCNO'S PRIORITY  `:32032`
-- READ THE ASSEMBLER MACRO, NOT THE MNEMONIC  `:32049`
-- "SCORES EQUAL" IS NOT "STREAMS EQUAL" -- RE-MEASURE BEFORE TRUSTING A `byte-identical` NOTE  `:32063`
-- WHAT SETS `MEM_IN_STRUCT_P` IS THE `INDIRECT_REF`'s OPERAND BEING A `PLUS_EXPR`  `:32081`
-- A READ-MODIFY-WRITE AND A GLOBAL STORE CANNOT BOTH BE ORDERED FROM ONE STATEMENT  `:32114`
+- jump2 DELETES A REDUNDANT HARD-REGISTER COPY, SO TWO COPIES OF ONE VALUE CANNOT BOTH EXIST  `:31992`
+- READ THE `.set noreorder` BLOCKS IN THE OUTPUT BEFORE THEORISING ABOUT A DELAY SLOT  `:32030`
+- A TRAILING INPUT-ONLY FENCE *LOWERS* AN ALLOCNO'S PRIORITY  `:32048`
+- READ THE ASSEMBLER MACRO, NOT THE MNEMONIC  `:32065`
+- "SCORES EQUAL" IS NOT "STREAMS EQUAL" -- RE-MEASURE BEFORE TRUSTING A `byte-identical` NOTE  `:32079`
+- WHAT SETS `MEM_IN_STRUCT_P` IS THE `INDIRECT_REF`'s OPERAND BEING A `PLUS_EXPR`  `:32097`
+- A READ-MODIFY-WRITE AND A GLOBAL STORE CANNOT BOTH BE ORDERED FROM ONE STATEMENT  `:32130`
 
 <!-- END INDEX -->
 
@@ -31972,6 +31972,22 @@ folds to a plain move (combine proves `significant_bits(X) == 7`) **only if X
 already has two or more uses**. With one use, combine substitutes X's own
 `andi` into the widening and the chain collapses -- which explains a whole
 family of byte-identical results.
+
+The second use can be a **zero-word** one: `__asm__("" ::"r"(X));` (no
+outputs, implicitly volatile, survives flow, emits nothing) is enough. The
+matched-operand form `"=r"(X) : "0"(X)` also blocks the absorption **but
+poisons the fold**, which is the next fact.
+
+**AND THE MIRROR IMAGE, which is two-edged: a pinned hard register, or any
+value whose last set is an `asm`, kills `significant_bits`.** combine cannot
+prove the range of such a value, so the same `& 7` survives as a **real
+`andi`** instead of folding to a move. On `func_800CA1E0` that cost the last
+opcode -- and it is also what bought a missing word, because an `andi` is not
+a reg-reg `SET` and `jump2`'s redundant-copy deletion never looks at it.
+
+So the device has two settings. Read the value through a plain pseudo and you
+get a **copy**; read it through a pinned or asm-written one and you get an
+**`andi`**. Pick according to which word the target has.
 
 ## jump2 DELETES A REDUNDANT HARD-REGISTER COPY, SO TWO COPIES OF ONE VALUE CANNOT BOTH EXIST
 
