@@ -685,3 +685,49 @@ first version of the prototype-adoption code matched
 `func_8008EAC8` then failed to compile 30000 lines away from anything either
 of them touches. A tool that rewrites the unit has to be as suspicious of its
 own pattern matches as the measurements it produces are of the compiler.
+
+
+## 2026-11-16: A THIRD BLOCKED FUNCTION, AND THIS ONE HAS A PROOF
+
+**`func_800B23F8` -- 81/81 words, 11 differing** (`ovlverify`; `aligndiff`
+reports 13 rows because an LCS charges a permutation a deletion *and* an
+insertion). Every instruction is present, in the right register; the residue
+is one permutation of eleven words of the entry block.
+
+Unlike the two functions above, this one is argued from the compiler's own
+source rather than from exhausted measurement, and every citation was checked
+in `scratch/gcc-src/cdk-gcc-b18` rather than taken on an agent's word:
+
+* **sched2 did not choose that order.** `rank_for_schedule` (`sched.c:2429`)
+  opens `rtx tmp = *y; rtx tmp2 = *x;` -- swapped -- so its final LUID
+  comparison is descending; `schedule_select` (`:2663`) promotes only the
+  largest `potential_hazard` (`:1349`), nonzero only for a unit with
+  `max_blockage > 1`, and `mips.md` defines exactly two function units,
+  `"memory"` and `"imuldiv"`. A ready load or store beats every ALU insn and
+  nothing else ties. The block's output *is* its insn chain.
+
+* **So the target demands a chain C cannot produce.** Two inequalities must
+  reverse: the copies of parameters 2, 3 and 4 must follow the call's own
+  argument setup, and parameter 3's copy must follow parameter 4's. But
+  `emit_insns (conversion_insns)` sits at `function.c:4093` **inside**
+  `assign_parms`, so every parameter insn precedes every body insn
+  unconditionally -- and the call ends the block, so there is no source
+  position in between.
+
+* **No later pass moves one.** `update_equiv_regs` (`local-alloc.c:1199`) is
+  the only pass that relocates an init to its use, and it needs a `REG_EQUIV`,
+  minted only for a CONSTANT or MEM source (`:1085-1092`) -- never for a copy
+  out of a hard register.
+
+* **And the one lever that exists is already spent.** `PROMOTE_PROTOTYPES` is
+  defined (`config/mips/mips.h:1325`), so three of the four parameters are
+  already conversion parameters. The fourth cannot be narrowed: it is the
+  long-lived host of the `c = (s32)p;` merge that bought most of 21 -> 13.
+
+**Do not spend the permuter on it.** The permuter rewrites C, and no C
+reaches this order.
+
+That makes **three** functions blocked for compiler reasons -- `func_800AAF00`,
+`func_800AD6FC`, `func_800B23F8` -- beside the seven 4-mod-8 jump-table
+functions. Ten of the unit's remaining stubs are now accounted for as
+unreachable without carving the unit.

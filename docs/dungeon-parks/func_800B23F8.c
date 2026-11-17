@@ -40,6 +40,87 @@
    `s32 c` body below).  Measured and worse: `s32 b` 17; `s32 b, s32 d` 17;
    `p = NULL;` moved after the func_8003FD64 call 33.
 
+   --------------------- j67, 2026-11-16: THE RESIDUE IS PROVABLY UNREACHABLE
+
+   Re-measured unchanged: 81 of 81 words, 13 aligndiff rows, and `ovlverify`
+   says **11 differing** -- the honest positional figure, because the residue
+   is one permutation of block 0's words 4..14 and aligndiff's LCS scores the
+   same permutation as 13.  Quote 11 to the next reader.
+
+   WHAT sched2 ACTUALLY DOES HERE (read out of the compiler, not guessed:
+   scratch/gcc-src/cdk-gcc-b18/sched.c, which IS cc1psx's scheduler):
+
+   * `rank_for_schedule` (sched.c:2429) is priority, then dependence class
+     against `last_scheduled_insn`, then `INSN_LUID (tmp) - INSN_LUID (tmp2)`
+     with `tmp = *y` -- i.e. DESCENDING LUID, best first.
+   * `schedule_select` (sched.c:2663) then scans the WHOLE first priority
+     group -- and all of block 0 is priority 1, so that is every ready insn --
+     and promotes the one with the largest `potential_hazard` (sched.c:1349).
+     That is nonzero only for a unit with `max_blockage > 1`, and mips.md has
+     exactly two units, "memory" and "imuldiv".  So a ready LOAD or STORE
+     beats every ALU insn and nothing else ever ties.
+   * Scheduling runs BACKWARD, so "take the highest-LUID ready insn" picks
+     the last unscheduled insn of the chain every time.
+
+   THEREFORE, for a block whose dependences agree with its chain order,
+   **sched2's output IS the chain order, with every memory insn sunk to the
+   latest legal slot**.  That is the whole of block 0: each `sw $sN` sits
+   immediately before the insn that first writes $sN (its anti-dependence
+   partner), and the three saves with no partner in this block -- $ra, $s6,
+   $s0 -- sink to the end as $ra, $s6, $s0.  Both streams do that; the target
+   does it too.  The candidate's whole block-0 trace was re-derived from the
+   `sched.py` dump insn by insn and comes out exactly as emitted, so the
+   model is not a hypothesis.
+
+   SO BLOCK 0 IS NOT A TIE-BREAK TO BE NUDGED -- IT IS A PRINTOUT OF THE INSN
+   CHAIN, and the target's order reads back as the chain
+
+       mv_a  <  mv_p  <  li $a0  <  lui $a1  <  addiu $a1  <  mv_d  <  mv_c
+       (and mv_b somewhere after li $a0)
+
+   against the candidate's a, b, c, d, p=NULL, li $a0, lui/addiu $a1.  Two
+   inequalities have to reverse: the copies of parameters 2, 3 and 4 must come
+   AFTER the call's own argument setup, and parameter 3's copy after
+   parameter 4's.
+
+   NEITHER IS REACHABLE FROM C, and docs/matching-levers.md already says so
+   under "A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER":
+   `conversion_insns` is flushed by `emit_insns (conversion_insns)` at
+   function.c:4093, INSIDE `assign_parms`, so every parameter insn precedes
+   every body insn unconditionally -- a parameter copy's LUID cannot be beaten
+   by a body statement.  `li $a0` and the `%hi/%lo` pair are body insns (the
+   call's own argument setup, `load_register_parameters`, a0 then a1), and the
+   call ENDS basic block 0 (the sched2 dump's block 0 runs 179..39, 39 being
+   the jal), so there is no source position between the argument setup and the
+   call to put anything in.  Nothing later moves a parameter copy either:
+   local-alloc's `update_equiv_regs` is the only pass that relocates an
+   initialization down to its use (local-alloc.c:1199), and it fires only for
+   a pseudo carrying a REG_EQUIV, which is minted here only for a CONSTANT or
+   a MEM source (local-alloc.c:1085-1092) -- never for a copy out of a hard
+   register.  And the declaration order is nailed down by the ABI plus the
+   target's own stores: the 4th parameter is the `sh` at m+0xA, the 3rd is the
+   `sb` at r+0x25.
+
+   The one freedom that lever does grant -- make the copy you want scheduled
+   LAST into a conversion insn -- is already spent on this function.
+   PROMOTE_PROTOTYPES is defined (config/mips/mips.h:1325), so a prototyped
+   `s16`/`u8` parameter has DECL_ARG_TYPE `int` and takes the conversion path
+   at function.c:3813 (`nominal_mode != passed_mode`); `a`, `b` and `d` are
+   ALL already conversion parameters -- `a`'s surviving pair is exactly the
+   two pseudos $s4/$s6 this park already calls load-bearing.  Only `c` is
+   plain, and `c` cannot be narrowed: it is the long-lived host of the
+   `c = (s32)p;` merge that is worth most of the 21 -> 13.  Even if it could
+   be, the model says the order would become
+   a, b, d, c, p, li, lui, addiu -- still 11 differing, a c/d swap inside the
+   same residue.  (Model prediction, NOT measured; the spelling does not
+   exist.)
+
+   CONCLUSION: leave it at 81/81 and 11.  **Do not spend the permuter on it**
+   -- the permuter rewrites C, and no C reaches this order.  Closing it needs
+   a different insn SET for block 0, i.e. a different function, and the body
+   below is already correct instruction for instruction and register for
+   register everywhere else.
+
    ------------------------------------------ what took it from 21 to 13
 
    TWO THINGS, and both were read out of `-da` dumps rather than guessed.
