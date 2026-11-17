@@ -1,97 +1,215 @@
 /* func_8009A8C0 (ovl_dungeon) -- PARK, best candidate so far.
-   target 184 words, candidate 184 words, 43 aligned differences
-   (ovlverify masked: 60 differing).
+   target 184 words, candidate 184 words, 12 ALIGNED DIFFERENCES.
+   (ovlverify masked: 12 differing.)  Was 184 / 43 before 2026-11-16 (j87).
 
-   Template: the landed func_8009A66C (csrc/ovl_dungeon.c), which is the same
-   probe one layer in.  Structure is believed right: every opcode and
-   displacement matches except the ones listed below.
+   Template: the landed func_8009A66C (csrc/ovl_dungeon.c), the same probe
+   one layer in.  EVERY INSTRUCTION IS NOW IN THE RIGHT SLOT: the 12 rows are
+   two opcodes and one register rotation, nothing structural, and both are
+   diagnosed to the compiler pass and the line of compiler source below.
 
-   RESIDUE
-   * Register assignment: candidate k=$s4 h=$s5 wz=$s6, target k=$s5 h=$s6
-     wz=$s4.  Everything downstream of that is an R (register-only) row.
-   * words 24/28: the candidate materialises `%lo(D_8008333C)` one slot early
-     and fills the first `beqz`'s delay slot with `addiu $v0,-1`; the target
-     fills it with the `addiu %lo` and sends that branch to a shared
-     `j epilogue / addiu $v0,-1` block (.L8009AB30) instead.
-   * words 55-66: the candidate reloads `d` into $a2 once and reads
-     `0x88($a2)`; the target reloads `d` into $t0 at the point of use.
-   * words 155/156: the target duplicates `sll $v1, $s2, 16` into the
-     `beqz`'s delay slot; the candidate cross-jumps it into the shared tail
-     and pays a `nop`.
+   THE RESIDUE, IN FULL (this is the entire diff)
 
-   MEASURED AND REJECTED
-   * x/ax and z/az as SEPARATE locals: 180 words (4 short), 102 aligned.
-     Sharing one local for x/ax and one for z/az is what gives the target's
-     $s1 / $s0 reuse and -- because x then needs a callee-saved register --
-     what pushes `y` out of a register and into the 0x18($sp) spill the
-     target has.  Worth 4 words.
-   * without `(void)&d;`: 180 words / 102 aligned, with `d` living in $s8
-     instead of its incoming home slot 0x50($sp).  Worth 2 words (the
-     `sw $a2, 0x50($sp)` plus the reloads).
-   * 4th argument of func_8009B25C as an `s16 hh` local assigned in an `if`:
-     182 words, 48 aligned -- the load comes out `lhu` + `sll`/`sra` instead
-     of the target's bare `lh`.  The ternary IN the argument is what gives
-     `lh $a3, 0x88($t0)`.
-   * tail written `if ((s16)t < 0x201) return 1; return -1;`: 182 words,
-     48 aligned.  Inverted (`>= 0x201 -> return -1` first) it is 184/43.
+      row  candidate                 target
+        5  sw   $s6, 0x38($sp)       sw   $s5, 0x34($sp)      <- rotation
+        6  andi $s6, $a0, 0xFF       addu $s5, $a0, $zero     <- (A)
+       10  sll  $s3, $s6, 1          sll  $s3, $s5, 1         <- rotation
+       15  sw   $s5, 0x34($sp)       sw   $s6, 0x38($sp)      <- rotation
+       22  andi $a0, $a0, 0xFFFF     addu $a0, $s5, $zero     <- (A)
+       61  lhu  $s4, 0x88($t0)       lhu  $s6, 0x88($t0)      <- rotation
+       62  addiu $s5, $v0, 0x20      addiu $s4, $v0, 0x20     <- rotation
+       63  subu $a3, $s4, $a3        subu $a3, $s6, $a3       <- rotation
+       69  addu $a2, $s6, $zero      addu $a2, $s5, $zero     <- rotation
+       83  addu $s0, $v0, $s5        addu $s0, $v0, $s4       <- rotation
+      137  subu $a2, $s4, $t0        subu $a2, $s6, $t0       <- rotation
+      160  subu $a2, $s4, $t0        subu $a2, $s6, $t0       <- rotation
 
-   A BROAD PLATEAU AT 43: every one of the following compiles to the SAME
-   bytes (md5 of the emitted word column identical to the base), so none of
-   them is the variable that matters --
-     the position of `h = *(u16 *)(d + 0x88);` (before px / after pz /
-     after wz); `h` as u16 instead of s32; `h` read as `((u16 *)d)[0x44]`;
-     the position of `(void)&d;` (top / before the h read / at the end);
-     `u8 **pd = &d;` instead of `(void)&d;`; `w` declared last;
-     `u32 k`; `(f >> 9) & 7` written inline at the two call sites;
-     `s32 kk = (f >> 9) & 7; k = kk;`; `u16 f` for the first parameter.
-   Also measured: `k = f >> 9; k &= 7;` is 60 aligned, `k = (f & 0xE00) >> 9`
-   is 45, `sh` declared at its first use is 45, `((s16 *)D_8008333C)[10]`
-   inline is 45.  All 24 permutations of the `wx/wz/k/h` declaration order
-   were measured: every order with `wx` before `wz` is 43, every order with
-   `wz` before `wx` is 182 words / 81 aligned.
+   (A) THE TWO `andi`s THAT SHOULD BE MOVES.  The target computes
+   `(f >> 9) & 7` into $a0 (a block-local pseudo, call it kx), then copies it
+   to $s5 (k) at word 6, and copies THAT to $a0 again at word 22, where it
+   waits twenty-odd words and four conditional branches for the
+   `jal func_8009A540`.  Three pseudos, two surviving MOVES.
+   A plain `k = kx;` / `k2 = k;` can never survive: cse.c make_regs_eqv puts
+   the destination of a reg-to-reg copy into the SOURCE's quantity, and
+   canon_reg then rewrites every use of the destination back to
+   qty_first_reg, so the copy goes dead and flow deletes it.  The one escape
+   in make_regs_eqv is that NEW becomes canonical when it "will live longer
+   than any other reg of the same qty, and that is beyond the current basic
+   block" -- true for `k = kx` but NOT for `k2 = k`, because k (last used at
+   func_8009A350's argument, word 69) outlives k2 (last used at word 65).
+   So at most one of the two can be a plain copy, and measuring every
+   combination confirms it (see the kx table below).
+   What DOES survive is a widened recomputation: cse cannot hash
+   `(and kx 0xFF)` into kx's class, so it gets its own quantity.  The cost is
+   that the surviving insn is an `andi` rather than an `addu`.  combine would
+   fold the mask away -- nonzero_bits(kx) = 7 -- but its LOG_LINKS do not
+   cross a basic block and kx has two uses, so neither fold is reachable.
+   A HImode copy (`s16 k = kx;`) IS emitted as a bare `move`, but then every
+   use of k needs a sign/zero extension the target does not have.
+   SO: the thing to find is a third SImode-valued expression of kx that
+   cse will not hash into kx's class and that costs one `addu`.  Nothing in
+   C obviously spells that; this is the better half of the permuter's job.
 
-   WHAT THE RESIDUE REDUCES TO, and it is ONE cause.  The target evaluates
-   func_8009A540's first argument (`addu $a0, $s5, $zero`) in the FIRST basic
-   block, at word 22, twenty-odd words and four conditional branches before
-   the `jal`; the candidate emits it at word 53, in the call's own block.
-   That makes $a0 busy for the whole head of the target, so the constant 1
-   lands in $a1 and the `(s16 *)D_8008333C` base in $a2 -- which clobbers the
-   incoming $a2 and forces the target to RELOAD `d` from 0x50($sp) at the
-   `0x88` read, where the candidate still has it in $a2 and cse forwards it.
-   Every remaining R row downstream is that one register rotation
-   (candidate k=$s4 h=$s5 wz=$s6 against target k=$s5 h=$s6 wz=$s4).
-   The target also carries an extra `addu $s5, $a0, $zero` copy at word 6
-   that the candidate coalesces away.  Nothing tried reproduces the hoist.
-   PERMUTER FOOD: this is a placement, not a pure allocation tie.
+   (B) THE ROTATION IS ARITHMETIC, AND HERE IS THE EXACT CONDITION.
+   global.c:587 allocno_compare:
+       pri = floor_log2(n_refs) * n_refs / live_length * 10000
+   and `.lreg` prints both numbers ("Register N used R times across L insns").
+   find_reg (global.c:907) then scans hard regs 0..31 -- MIPS defines no
+   REG_ALLOC_ORDER -- and "never allocates a register for the first time in
+   pass 0", so pass 0 only REUSES a register already in use (that is how wx
+   gets $s0: its range is disjoint from az's second incarnation) and pass 1
+   takes the lowest free one.  For this body:
+       az  5/43 = 2325   ax  5/45 = 2222   c 10/150 = 2000   k<<1 5/56 = 1785
+       h   4/67 = 1194   wx  2/18 = 1111   wz  2/18 = 1111   k    3/50 =  600
+       &D_8006CCE8[k] 3/52 = 576   &D_8006CCD8[k] 3/67 = 447
+       d   5/238 = 420   y   3/98 = 306            (d and y both spill)
+   which allocates az=$s0 ax=$s1 c=$s2 k<<1=$s3 h=$s4 wx=$s0(reused)
+   wz=$s5 k=$s6 &E8=$s7 &D8=$fp.
+   THE TARGET'S ORDER MUST BE ... k<<1, wz, k, h, so that wz=$s4, k=$s5,
+   h=$s6.  With h at 1194 that needs
+       pri(wz) >= pri(k) > 1194
+   and the only cell that fits without disturbing k<<1 (1785) is
+       wz at 3 refs / length 18 = 1666, with k back at 4 refs / 50 = 1600.
+   Equivalently wz at 2 refs with length <= 12.  k is at 4 refs whenever the
+   func_8009A540 argument is `k` rather than a second copy of kx (see the kx
+   table), so the ONE missing fact is a third reference to wz.
+   flow.c:2122 ("this counts a register twice if it is modified, but that is
+   correct") says an IN-PLACE modify counts twice, and flow runs BEFORE
+   combine, so a reference combine later deletes is free.  flow.c:2122 also
+   weights each reference by `loop_depth`.  Everything tried for that third
+   reference is in the rejected list.
 
-   ALSO MEASURED AND REJECTED, all aimed at that one placement:
-   * `s16 k2 = k;` (and u16/s8/u8/s32) used as func_8009A540's first argument,
-     to give the copy a source position of its own: identical bytes to the
-     base for s16/s8/s32, 43 with a different allocation for u16/u8.  cse
-     propagates the copy away in every case.
-   * `register s32 k2 __asm__("$4");` for that same local DOES put the
-     `addu $a0, $sN, $zero` at word 21 where the target has it at 22 -- but
-     the `(s16 *)D_8008333C` base then lands in $t0 rather than $a2, `d` is
-     still live in $a2, and the function is still 184/43.  So $a0 being busy
-     is NOT what pushes the base into $a2, and the one-cause story above is
-     incomplete.
-   * `do { } while (0);` after `k = (f >> 9) & 7;` (the loop-NOTE lever that
-     blocks optimize_reg_copy_1) is 184/56; wrapping the copy in one is 56 too.
-   * `u8 *volatile d` as the third parameter -- which is the other
-     `assign_parms` condition for the home slot, and which also blocks cse's
-     forwarding -- is 185 words / 46, and 186/46 with `(void)&d;` as well.
-     Every read of `d` becomes a load, which is one more than the target.
-   PERMUTED 2026-11-16, 30 minutes, 6 jobs: REJECTED.  It reported
-   2125 -> 1205 on its own metric and its best output measures 186 words
-   against the target's 184 with 88 aligned rows -- worse than this body's
-   184 / 43 -- AND it is semantically wrong: it deletes a `return -1' from
-   the `ax == 0' arm (six returns in the output against seven here) and
-   duplicates another.  Nothing in the tool's output flags that.
+   THE FIVE LEVERS THAT TOOK THIS FROM 43 ROWS TO 12.  Each was measured on
+   top of the previous; all five are needed, and the first three were each
+   worth more than every spelling sweep in the old park put together.
 
-   Do not re-run it from this body without a different idea; and see
-   docs/matching-levers.md, "THE FOUR OUTCOMES, AFTER SIX RUNS ON THIS
-   BLOCK", for why the diff has to be read line by line rather than trusted
-   because the score moved.
+   1. `u8 *d` PLAIN -- NO `volatile`, NO `(void)&d;`.  The target's
+      `lw $t0, 0x50($sp)` at words 55, 118, 148 and `lw $a0, 0x50($sp)` at
+      8009AB1C are RELOAD reloads of a SPILLED PSEUDO, not reads of an
+      addressable variable: reload picks $t0 for them, and local-alloc would
+      have picked $v0/$v1.  `d` spills because this body finally puts nine
+      pseudos in $s0..$s7/$fp, which is every callee-saved register, leaving
+      d and y as the two lowest-priority allocnos with nowhere to go -- and
+      y spills too, to 0x18($sp), exactly as the target does.
+      Measured, on top of levers 2-4:  plain d, no (void)&d  183w/14 rows;
+      volatile d, no (void)&d 183w/25;  volatile d + (void)&d 184w/26;
+      plain d + (void)&d 182w/33.  The old park's `(void)&d;` was holding
+      `d` in a register and letting cse forward the incoming $a2 into the
+      first `*(u16 *)(d + 0x88)`, which is what kept $a2 away from the
+      `(s16 *)D_8008333C` base and suppressed all four reloads.
+
+   2. `kx` / `k` / `k2` -- THREE pseudos for the facing index, with the
+      func_8009A540 argument taken from its OWN copy in the FIRST basic
+      block.  This is what puts a copy of k in $a0 at word 22, which the old
+      park called a hoist nothing could reproduce.  It is not a hoist: the
+      insn is a source-level copy in block 1, and global_alloc gives its
+      pseudo $a0 (free, no call in its range), after which the call's own
+      `(set (reg a0) k2)` is a no-op move that flow deletes.
+      The kx table, all with levers 1, 3, 4, 5:
+        k = (u8)kx;  k2 = (u16)kx;   184 words, 12 rows   <- THIS BODY
+        k = (u16)kx; k2 = kx;        183 words, 12 rows
+        k = kx;      k2 = (u16)kx;   183 words, 14 rows
+        no kx, k2 = (u16)k;          183 words, 14 rows
+        no kx, k2 = (u8)k;           183 words, 14 rows
+        no kx, k2 = (f >> 9) & 0xF;  183 words, 14 rows
+        no kx, u16 k2 = k;           183 words, 14 rows
+        k = (u16)kx; k2 = (u16)kx;   183 words, 25 rows
+        no kx, k2 = k & 0xF;         183 words, 25 rows
+        no kx, k2 = k (plain);       183 words, 36 rows   (copy dies)
+        k2 assigned after `wz =`;    184 words, 36 rows
+      `s16/s8/s32/u32 k2 = k` all die the same way.
+
+   3. `if (ax == 0 || (1 << sh[10]) - 1 < ax) return -1;` -- THE FIRST TWO
+      TESTS JOINED WITH `||`, AND THE SAME FOR THE az PAIR.  Worth 10 rows
+      and 2 words.  With separate `if`s, reorg's fill_slots_from_thread
+      owns the first test's `return -1` block, steals `addiu $v0, -1` into
+      the branch's delay slot and redirects the branch to the epilogue; the
+      `%lo(D_8008333C)` then has to be materialised a word early and the
+      SECOND test comes out inverted as `beqz` + `j` + `addiu -1`.  Joining
+      them makes the -1 block shared, so reorg cannot own it, and
+      fill_simple_delay_slots puts `addiu $a2, %lo(D_8008333C)` in the slot
+      instead -- which is the target's word 28.
+      Grid (24 cells, rows/words), with volatile d at the time:
+        or + or  + k2   26/184     or + sep + k2   28/182
+        or + or  + no k2 36/183    sep + * + k2    38/185
+        sep + * + no k2  43/184  <- the old park
+   4. The ternary IN func_8009B25C's fourth argument, and the inverted tail
+      (`(s16)t >= 0x201 -> return -1` first).  Both inherited from the old
+      park and re-confirmed: the tail written the other way round is
+      183 words / 43 rows here.
+   5. x/ax and z/az SHARING one local each (inherited, not re-measured:
+      separate locals were 180 words / 102 rows).
+
+   ALSO MEASURED IN THIS BASIN AND REJECTED
+   * all 24 declaration orders of wx/wz/k/h: every order with wx before wz
+     is identical bytes; every order with wz before wx is 183 words / 92.
+     It is NOT a priority tie-break -- the priorities above are equal for
+     wx and wz and the tie goes to the lower pseudo number either way.
+   * all 30 legal statement orders of the {h, px, pz, wx, wz} group
+     (px before wx, pz before wz): every one is identical bytes.
+   * all four placements of the kx/k2 declarations: identical bytes.
+   * types: u16/u32 wx and wz, u16/u32 h, u16/u32 k, u32 kx, u32 k2, u32 t,
+     s32 px/pz, `h = *(s16 *)(d + 0x88)`, `wz = (u16)(pz + 0x20)` -- all
+     identical bytes.  ONLY ax/az matter: `s32`/`u32` for them is
+     178 words / 70 rows, so they must stay 16-bit.
+   * everything aimed at wz's third reference:
+       `wz = pz; wz += 0x20;`                 183w/92
+       `wz = pz + 0x10; wz += 0x10;`          identical bytes -- cse's
+          fold_rtx associates the two constants, and `.lreg` confirms wz is
+          still 2 refs / 18.
+       `wz &= 0xFFFF;` after the set          182w/74 -- this DOES work
+          (`.lreg`: wz becomes 4 refs / 19 = 4210) but overshoots: wz is then
+          allocated before az/ax/c and takes $s0.  3 refs is the target,
+          4 is too many.
+       `wz = (u16)wz;`, `wx &= 0xFFFF` too    182w/74 (same cause)
+       `do { wz = pz + 0x20; } while (0);`    178w/75; around both
+          assignments 184w/45; around the ax/az pair 183w/31; around the
+          whole {h,px,pz,wx,wz} group 178w/65.  The loop NOTE does give wx
+          and wz 3 refs (`.lreg`: 3 refs each) -- flow weights a reference by
+          loop_depth -- but it also grows their live_length from 18 to 25,
+          so 3/25 = 1200 is still under k's 1600.  A loop note that does not
+          lengthen the range would be the whole answer.
+       `__asm__ __volatile__("" : "+r"(wz));` 177w/59 -- the asm is a
+          scheduling barrier and wrecks the pre-call block.
+   * swapping the `ax =` / `az =` statements: 182 words / 74 rows.  It is
+     the right LEVER (`.lreg`: wz's length moves 18 -> 17 and wx's 18 -> 19)
+     but the wrong direction, and the target needs the ax-then-az order
+     because `az` sits in `jal func_8009A350`'s delay slot.
+   * precomputing func_8009A540's arguments into locals (`hy = h - y`,
+     `qx = px >> 6`, `qz = pz >> 6`) to shorten wz's range: identical bytes,
+     cse removes the locals and wz stays at 18.
+   * `sh` moved after the `ax` assignment: identical bytes.
+     `((s16 *)D_8008333C)[10]` inline: 41 rows.
+   * `t = 0;` before the `(w & 0x40)` test: identical bytes.
+   * cc1psx's SN-only `shorten_lifetimes` pass (between sched1 and
+     local_alloc) is NOT the mechanism behind the word-22 copy: the
+     `.shorten` dump has the same 126 insns in the same order as `.sched`.
+
+   FROM THE OLD PARK, STILL TRUE AND NOT RE-MEASURED IN THIS BASIN
+   * the 4th argument of func_8009B25C as an `s16 hh` local assigned in an
+     `if`: 182 words, 48 -- the load comes out `lhu` + `sll`/`sra` instead
+     of the target's bare `lh`.
+   * `k = f >> 9; k &= 7;` 60 rows; `k = (f & 0xE00) >> 9` 45 rows;
+     `u16 f`, `(f >> 9) & 7` inline at the call sites: identical bytes.
+   * PERMUTED 2026-11-16 from the OLD 43-row body, 30 min, 6 jobs:
+     REJECTED -- its best output was 186 words / 88 rows AND semantically
+     wrong (it dropped a `return -1` from the `ax == 0` arm).  THIS IS A
+     DIFFERENT BASIN and is worth permuting again; the two things to permute
+     for are named above, and both are small and local:
+       (A) a third SImode expression of kx that costs one `addu` and that
+           cse will not hash into kx's class;
+       (B) a third reference to wz that costs no instruction and does not
+           lengthen its live range past 18.
+
+   TOOL NOTE, worth the five minutes it costs: a ONE-FUNCTION FILE -- this
+   body plus the eleven externs and the one typedef it needs, in a file
+   NAMED ovl_dungeon.c in its own directory -- reproduces the unit's
+   measurement for this function EXACTLY (184 words, 12 rows, same stream)
+   in 0.1 SECONDS instead of 30, so ovlverify/aligndiff become a sweep loop
+   rather than a decision.  Every table above came out of one.  And
+   `tools/decomp/dump.sh` on that file gives the `.lreg` refs/length numbers
+   the allocation arithmetic is read off, and `greg`'s first line
+   (";; N regs to allocate: ...") is literally allocno_order -- the order
+   find_reg will be called in.
  */
 s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
 {
@@ -107,25 +225,20 @@ s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
     s32 h;
     s32 t;
     s16 n;
+    s32 k2;
+    s32 kx;
 
-    (void)&d;
-    k = (f >> 9) & 7;
+    kx = (f >> 9) & 7;
+    k = (u8)kx;
+    k2 = (u16)kx;
     sh = (s16 *)D_8008333C;
     ax = c[0x24] + (u16)D_8006CCD8[k];
-    if (ax == 0)
-    {
-        return -1;
-    }
-    if ((1 << sh[10]) - 1 < ax)
+    if (ax == 0 || (1 << sh[10]) - 1 < ax)
     {
         return -1;
     }
     az = c[0x25] + (u16)D_8006CCE8[k];
-    if (az == 0)
-    {
-        return -1;
-    }
-    if ((1 << sh[11]) - 1 < az)
+    if (az == 0 || (1 << sh[11]) - 1 < az)
     {
         return -1;
     }
@@ -134,7 +247,7 @@ s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
     pz = c[0x25] << 6;
     wx = px + 0x20;
     wz = pz + 0x20;
-    if ((s16)func_8009A540(k, px >> 6, pz >> 6, h - y) == 0)
+    if ((s16)func_8009A540(k2, px >> 6, pz >> 6, h - y) == 0)
     {
         return 0;
     }

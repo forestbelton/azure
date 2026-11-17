@@ -383,6 +383,21 @@ the copy" when the answer was a statement position.
 byte-identical is a claim to re-check; one such note cost a park an entire
 unexplored basin.
 
+**EXPORT `TMPDIR` AS WELL AS `AZURE_SCRATCH`.** `cpp` writes its `.i` files to
+`TMPDIR`, not to `AZURE_SCRATCH`, so a full `/tmp` breaks your compiles even
+with a private scratch directory. On 2026-11-16 the tmpfs user quota filled
+(25629 of 25630 MB, with single agent directories at 1.6 G and 1.0 G), a
+`cpp` run failed with `Disk quota exceeded`, and **a shell redirect in the
+same failed command truncated a saved candidate file to zero bytes** -- caught
+only because `parkcheck` noticed the park had lost its definition line. Set
+both, on a filesystem with room:
+
+    export AZURE_SCRATCH=/var/tmp/@ID@/sp
+    export TMPDIR=/var/tmp/@ID@
+
+And after any command that fails on disk space, **re-run `parkcheck.py` and
+check your saved files are not empty** before trusting anything.
+
 **BUILD A STANDALONE ONE-FUNCTION FILE. IT IS THE CHEAPEST THING YOU CAN DO.**
 
 A file containing the unit's declaration block (or just the handful of externs
@@ -403,6 +418,16 @@ That makes the compiler's own dumps affordable:
     which turns an allocation residue into arithmetic.
   * `tools/decomp/dump.sh` wraps this; `tools/decomp/sched.py <file> FUNC
     [--sched1]` reads the scheduler dump.
+
+**AND `ovlverify.py`/`aligndiff.py` RUN DIRECTLY ON THAT STANDALONE FILE** --
+name it `ovl_dungeon.c` in its own directory with its own `AZURE_SCRATCH` and
+they measure it exactly as they measure the unit. A file holding only
+`#include "common.h"`, the typedefs the body needs, its callee prototypes and
+the body measured **0.08 s** per candidate against ~30 s for a unit copy, and
+reproduced the unit's numbers byte for byte. Agents on 2026-11-16 reported
+~400x, and it is what made sweeps of 45, 70 and 90 spellings affordable in
+single runs. **Re-measure your final body in a real unit copy before
+reporting it**, but do the search in the small file.
 
 Do this BEFORE sweeping spellings. Nearly every result on this unit came from
 reading a dump, and nearly every wasted budget came from guessing instead.
