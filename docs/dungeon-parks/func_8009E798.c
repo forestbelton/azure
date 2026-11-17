@@ -77,7 +77,59 @@
      s32 for the sign-block locals                        356 words (`lb`)
      chained `sp->unk_80 = sp->unk_70 = a = ...`          no change
      `u8 flag`                                            359 words
-     the `|= 0x100` moved first or last in its group      no change */
+     the `|= 0x100` moved first or last in its group      no change 
+   ---------------------------------------------------------------- 2026-11-16
+
+   THE UnkDungeonSPB TYPEDEF WAS LOST.  It existed only in its author's
+   hand-back, so this park had not compiled from the repo at all and was
+   invisible to parkresidue's ranking.  Recovered below from the target's own
+   listing, which writes down every offset and every width:
+
+     python3 - <<'EOF'
+     grep -oE '(lw|lh|lhu|lb|lbu|sw|sh|sb) +\$[a-z0-9]+, \(0x1F800[0-9A-F]{3} & 0xFFFF\)' \
+         asm/nonmatchings/ovl_dungeon/func_8009E798.s
+     EOF
+
+   offset  instructions seen        conclusion
+     0x00  lh, lhu, sh              halfword, read BOTH ways -- see below
+     0x02  lhu, sh                  u16
+     0x08  lw, sw, lhu              UnkDungeonSPW (word written, halfword read)
+     0x0C  lw, sw, lhu              UnkDungeonSPW
+     0x10  lw, sw, lhu              UnkDungeonSPW
+     0x14  lw, sw, lhu              UnkDungeonSPW
+     0x20  lw, sw                   the OT base, a pointer
+     0x24  sh                       written only; signedness unobservable
+     0x28, 0x2A, 0x2C   sh          written only
+     0x30, 0x34, 0x38   sw          s32
+     0x48  sw                       s32
+     0x70..0x8C         sh          the six screen pairs, written only
+     0x98, 0x9A, 0x9C   sh          written only
+     0xE4, 0xE8, 0xEC   sw          s32
+     0x100, 0x102       lhu, sh     u16
+
+   DECLARATIONS
+   typedef struct UnkDungeonSPB { s16 unk_00; u16 unk_02; u8 pad_04[0x4]; UnkDungeonSPW unk_08; UnkDungeonSPW unk_0C; UnkDungeonSPW unk_10; UnkDungeonSPW unk_14; u8 pad_18[0x8]; u8 *unk_20; s16 unk_24; u8 pad_26[0x2]; s16 unk_28; s16 unk_2A; s16 unk_2C; u8 pad_2E[0x2]; s32 unk_30; s32 unk_34; s32 unk_38; u8 pad_3C[0xC]; s32 unk_48; u8 pad_4C[0x24]; s16 unk_70; s16 unk_72; s16 unk_74; u8 pad_76[0x2]; s16 unk_78; s16 unk_7A; s16 unk_7C; u8 pad_7E[0x2]; s16 unk_80; s16 unk_82; s16 unk_84; u8 pad_86[0x2]; s16 unk_88; s16 unk_8A; s16 unk_8C; u8 pad_8E[0xA]; s16 unk_98; s16 unk_9A; s16 unk_9C; u8 pad_9E[0x46]; s32 unk_E4; s32 unk_E8; s32 unk_EC; u8 pad_F0[0x10]; u16 unk_100; u16 unk_102; } UnkDungeonSPB;
+   s32 func_8009E798(u8 *, UnkVec *, UnkSlot *);
+   END DECLARATIONS
+
+   (Written on one line because the DECLARATIONS block is read a line at a
+   time.  Total size 0x104; every pad is derived, not guessed -- check the
+   arithmetic before changing a field width.)
+
+   WHAT IS STILL OPEN, and it is only the SPELLING, not the layout:
+
+   `unk_00` is read `lh` at 8009E8A0 and `lhu` at 8009E914, so one face of it
+   is wrong whichever way it is declared.  As `s16` the second read needs a
+   `(u16)` cast; as `u16` the first needs `(s16)`.  Note that the body already
+   writes `(s16)sp->unk_02` for a field the listing only ever reads `lhu`, so
+   the cast does NOT fold to `lh` in this compiler -- which argues for `s16`
+   here and a `(u16)` cast at the subtraction.  ONE COMPILE SETTLES IT; do
+   that before anything else and record which way it went.
+
+   The fields marked "written only" have no observable signedness.  s16 is the
+   assumption; if a residue lands on one of them, that is the first thing to
+   vary and it costs nothing.
+*/
 s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
 {
     Unk80083160 *g = &D_80083160;

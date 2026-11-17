@@ -44,7 +44,10 @@ DECL_RE = re.compile(
 # token rule would reject it anyway. func_800B6AC4 used one and declared it
 # nowhere, which cost the park its measurement twice over.
 DECL_LINE = re.compile(
-    r"^\s*(typedef\s+[^;]+;"
+    # `.+;` and not `[^;]+;`: a one-line struct typedef has semicolons
+    # INSIDE it, one per field, and stopping at the first means the line never
+    # matches at all.
+    r"^\s*(typedef\s+.+;"
     r"|extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;"
     r"|\w+[\w \*]*\s+\**\w+\s*\([^;{]*\)\s*(__asm__\s*\([^)]*\))?\s*;)\s*$")
 
