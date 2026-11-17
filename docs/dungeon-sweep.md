@@ -841,3 +841,75 @@ register's last use and last set, kind 0, then `flush_pending_lists`), so
 every placement that buys the reference weight also reorders the block. The
 allocation flip IS reachable -- one such placement produced the target's
 register for the first time -- but at the wrong instruction order, 8 rows.
+
+
+## 2026-11-16, END OF SESSION: THE FRONTIER, MEASURED
+
+**828 of 863 landed, 35 stubs, 28 parks.** `build/dungeon.bin` byte-identical
+on a forced rebuild; a sweep of all 922 defined functions is 0 differing;
+`clang-format` clean; `parkcheck` 28/28.
+
+Nine landed this session: `func_800A504C`, `func_800B84E4`, `func_800B835C`,
+`func_800C0404`, `func_800CE4E8`, `func_8009A540`, `func_800CF8E4`,
+`func_8009C93C`, and the three that fell to one lever together --
+`func_80096384`, `func_8008EAC8`, `func_8008ACDC`.
+
+Every park below reproduces its number from the repo alone:
+`python3 tools/decomp/parksplice.py FUNC <dir>/ovl_dungeon.c` prints it.
+
+| rows | words | function | the state of it |
+|---|---|---|---|
+| **1** | 153/153 | `func_800CA1E0` | **one opcode.** A named fork: one body has the front exact, another the back, and they contend for `$a0` |
+| 4 | 176/176 | `func_800AAF00` | **no longer blocked** -- its whole residue is the `\|= 0x80000000` gate, which now has a free cure |
+| 4 | 438/438 | `func_800A1D4C` | one reference short of a known-correct shape; the formula names four alternative wins |
+| 6 | 189/189 | `func_800A08A0` | all six in one four-insn window |
+| 6 | 208/208 | `func_8008E700` | new basin, every register correct; park carries a split-RMW alternative never permuted |
+| 9 | 269/269 | `func_8009DAD8` | one register pair; needs one depth-1 reference flow sees and combine removes |
+| 12 | 184/184 | `func_8009A8C0` | a three-way rotation plus two `andi`; both reduced to one missing fact each |
+| 15 | 92/92 | `func_8009A3D0` | fifteen register names, stream aligns 1:1; cause is `optimize_reg_copy_1` |
+| 19 | 95/95 | `func_800B8FC8` | **proved floor** -- two live-length inversions that are mutually exclusive on this shape |
+| 31 | 180/181 | `func_8008FA7C` | the target's exact instruction stream but one relocated address pair |
+| 38 | 234/234 | `func_800B1768` | one named cause; the near miss moves the copy two slots instead of one |
+
+Then `func_800B6AC4` 46, `func_800C5FA8` 49, `func_800A05A4` 59,
+`func_800D92C0` 62, `func_800D13B8` 66, `func_8009E798` 71, `func_800A94A0`
+76, `func_80089588` 80, `func_80094988` 81, `func_80089AA0` 87 (1165/1165
+exact, rebuilt from the record), `func_800A0E6C` 93, `func_800CEA44` 128,
+`func_800AFBFC` 149, `func_800ADE74` 256, `func_800B51C8` 262.
+
+### STILL BLOCKED, AND ONLY THESE
+
+* **Seven 4-mod-8 jump-table functions** -- `func_8009F644`, `func_800B45E0`,
+  `func_800B490C`, `func_800C2824`, `func_800C4F20`, `func_800D50FC`,
+  `func_800D81D4`. They need the unit carved in the same change.
+* **`func_800AD6FC`** (31 rows) -- needs one pseudo to lose 21% of its
+  priority with nine real uses in the target's own assembly.
+* **`func_800B23F8`** (13 rows) -- proved from `sched.c`, `function.c` and
+  `local-alloc.c`: the target demands a parameter copy after a call's own
+  argument setup, and `emit_insns (conversion_insns)` is inside
+  `assign_parms`.
+
+`func_800AAF00` was on this list and is not any more.
+
+### WHAT CHANGED ABOUT HOW TO WORK ON IT
+
+Read `tools/decomp/dungeon-brief-park.txt`'s **START HERE** section first. In
+short: build a standalone one-function file (`ovlverify`/`aligndiff` run on
+it directly, 0.08 s a candidate against 30 s), read the compiler's own dumps
+rather than sweeping spellings, and derive the inequalities where the formula
+gives you one. Nine landings came out of that and almost every wasted budget
+came from guessing.
+
+**Two "permanent" verdicts in this document and the catalogue were overturned
+in one day**, and both failed the same way: a correct account of why ONE
+route is closed, read as a proof that all routes are. The `%lo`-load alias
+claim said no store spelling could ever conflict -- true of the load's side,
+and the store's side was wide open. The `|= 0x80000000` gate said to stop --
+and the cure is to assign the constant one basic block earlier, for nothing.
+**Treat an unreachability argument as a claim about the routes someone
+thought of.**
+
+Two smaller cautions, each of which cost a park real work: **"same score" is
+not "same stream"** (a park note claiming two spellings byte-identical hid a
+whole basin), and **a rejected spelling may have been only half applied** (a
+change that could go in two loops had been made in one).
