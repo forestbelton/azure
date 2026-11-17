@@ -1,8 +1,8 @@
 /* func_800CE4E8 (ovl_dungeon) -- PARK, best so far.
 
-   target 109 words, candidate 109 words, 8 differing (masked);
-   aligndiff: 109 built / 109 target, 8 ALIGNED DIFFERENCES.
-   Was 14/12 before j48, 11/9 before j56.
+   target 109 words, candidate 109 words, 3 differing (masked);
+   aligndiff: 109 built / 109 target, 4 ALIGNED DIFFERENCES.
+   Was 14/12 before j48, 11/9 before j56, 109 / 8 aligned before j62.
 
    WHAT IT IS.  The 0x202-style grid spawner for func_800CE028's node: a 5x5
    sweep that fills the view's +0x04 row of negated func_800BCA68 heights and
@@ -155,7 +155,117 @@
 
    Permuter note: the word counts match and every difference is a register
    number or a two-insn order, which docs/dungeon-sweep.md's triage rule calls
-   NOT permuter food.  .greg/.sched work is the route. */
+   NOT permuter food.  .greg/.sched work is the route.
+
+   -------------------------------------------------- WHAT j62 ADDED: 8 -> 4
+
+   RESIDUE (a) IS CLOSED.  TWO statements at the TOP of the `if' body, IN
+   THIS ORDER, put the block's first five insns in the target's order:
+
+       if (n != NULL)
+       {
+           j = 0;             <- hoisted out of the outer `for' header
+           s = t;             <- NEW `s32 s'; the loop test becomes `s != 0'
+           p = (u8 *)n + 0x20;
+           q = p;
+           ...
+
+   Measured, all 109 words:
+     j = 0 and s = t, in that order      109 /  4   <- this candidate
+     s = t and j = 0, in that order      109 /  6
+     s = t alone, `for (j = 0; ...)'     109 /  7
+     j = 0 alone, no `s', `if (t != 0)'  109 /  8   (the j56 candidate's score
+                                                     with different rows: p/q
+                                                     land right, sll/sra move
+                                                     down to where p/q were)
+
+   WHY NEITHER HALF ALONE IS ENOUGH, and why no statement order could ever
+   have reached this.  The `sll $v0,$s0,16 / sra $s7,$v0,16' in the old
+   candidate was NOT an ordinary source insn: it was loop.c's INVARIANT HOIST
+   of `(s16)t' for the inner `if (t != 0)'.  `move_movables' emits a hoisted
+   insn immediately before `loop_start' -- i.e. AFTER everything already in
+   the preheader block -- so the sign extension was pinned to the END of that
+   block no matter how the six head statements were permuted.  That is why
+   j48's and j56's 90-order sweeps both bottomed out: the insn they needed to
+   move was not one of the statements they were moving.  Writing `s32 s = t;'
+   as a real statement makes the sll/sra an ordinary pair with an ordinary
+   LUID, and sched2 (every insn in this block is priority 1, so
+   `rank_for_schedule' falls straight through to `INSN_LUID') then leaves the
+   block in source order.  `j = 0' has to be hoisted as well because the
+   target's first insn in the block is `addu $s4, $zero, $zero'; inside the
+   `for' header it is emitted after the two stores.
+
+   NOTE FOR THE MERGE: `s' is a new `s32' local and the inner test is now
+   `if (s != 0)', not `if (t != 0)'.  `t' is still the `s16' that is spilled
+   to 0x10($sp) and stored to +0x6E -- do not collapse the two.
+
+   -------------------------------------- RESIDUE (b), 4 rows, UNCHANGED
+
+   candidate                         target
+     sll   $a2, $s2, 1                 addiu $a2, $s6, 0x4
+     addiu $v1, $s6, 4                 sll   $v1, $s2, 1
+     addu  $s1, $a2, $v1               addu  $s1, $v1, $a2
+
+   j62 read the dumps for this one and the diagnosis is now exact, which is
+   worth more than the four rows:
+
+   * THE RTL IS IDENTICAL IN BOTH.  The `addu' is `(plus <sll result>
+     <addiu result>)' either way -- candidate `addu $s1,$a2,$v1' has
+     $a2 = sll, target `addu $s1,$v1,$a2' has $v1 = sll.  So the tree is the
+     same and `fold' is not the lever.
+   * ONLY THE EMISSION ORDER OF THE TWO PRODUCERS DIFFERS, and the hard
+     registers follow it: in BOTH streams the first-emitted producer gets
+     $a2 and the second gets $v1.  One source fact has to flip the order of
+     two insns whose RTL must stay as it is.
+   * IT IS NOT A sched TIE THAT SOURCE ORDER CAN REACH.  In the sched1 dump
+     (tools/decomp/sched.py <src> func_800CE4E8 --sched1, basic block 3) the
+     two insns are 130 (`sll') and 132 (`addiu'), BOTH bumped to priority
+     0x7f000001 by `adjust_priority'/`birthing_insn_p' when the `addu'
+     releases them, so `rank_for_schedule' ties on priority, ties on class
+     (both ALU, `insn_cost' 1), and decides on INSN_LUID -- i.e. on the order
+     `expand_expr' emitted them.  Un-bumping either one with a second set
+     does NOT help: the other three insns in that ready group are the call's
+     `li $a0,1' / `li $a1,3' at priority 2 with HIGHER LUIDs, so an un-bumped
+     producer sorts below them and comes out before the `li' pair, which the
+     target does not do.  Worked through in both directions; neither reaches
+     the target order.
+   * AND `expand_expr' ALWAYS EMITS op0 FIRST (expr.c, the `binop:' label:
+     two separate statements, op0 then op1), so the only way to emit the
+     `addiu' first is to make `(s32)r + 4' op0 -- and then the `addu' comes
+     out `(plus <addiu> <sll>)', which is the wrong operand order AND
+     re-triggers lever 1's giv fold.  `expand_binop''s commutative swap
+     (optabs.c:412) cannot rescue it: it fires only when op1 is a REG and op0
+     is NOT, or op0 is a CONST_INT, or `target == op1'; both operands here
+     are pseudos.  (The `target == op1' clause IS reachable -- it is what
+     makes `c = (u8 *)(i * 2 + (s32)c);' come out `(plus c <sll>)' -- but it
+     needs op1 to be a bare decl that is also the destination, which cannot
+     be arranged for the operand we need swapped.)
+
+   SO: either a pass between expand and reload moves the `addiu' up, or the
+   original is not this expression.  Everything source-level that j62 could
+   see has been tried.
+
+   New spellings j62 measured and rejected (all on top of the new 4-row
+   candidate, so these supersede nothing in lever 1 -- they confirm it):
+     `(u8 *)((s32)r + 4) + i * 2'          110 words / 36 aligned  (giv fold)
+     `(u8 *)&((s16 *)r)[i + 2]'            110 / 36  (giv fold)
+     the address inlined at BOTH uses, no
+       `c' variable at all                 106 / 59  (cse+loop reduce the
+                                                      whole address to a giv
+                                                      and a register is freed,
+                                                      so the frame shrinks too)
+     `c = (u8 *)((s32)r + 4);' then
+       `c = (u8 *)(i * 2 + (s32)c);'       109 / 16  -- the split DOES get the
+       `addiu' emitted first, but loop.c hoists it into the inner preheader
+       and the `addu' comes out `(plus c <sll>)' via the `target == op1'
+       swap, so the operand order is wrong in the other direction.
+
+   Permuter note: unchanged in kind but much smaller -- 109/109 words with
+   exactly three differing words, all of them one transposed producer pair
+   and the two register numbers that follow it.  docs/dungeon-sweep.md's
+   triage rule calls that NOT permuter food, but at three words it is cheap
+   to try, and no hand spelling j48, j56 or j62 found moves it.
+*/
 s32 func_800CE4E8(s32 x, s32 y, s32 ang, u8 *e, s32 f)
 {
     UnkNode *n;
@@ -166,6 +276,7 @@ s32 func_800CE4E8(s32 x, s32 y, s32 ang, u8 *e, s32 f)
     u8 *c;
     u8 *g;
     s16 t;
+    s32 s;
     s32 w;
     s32 a;
     s32 b;
@@ -177,12 +288,14 @@ s32 func_800CE4E8(s32 x, s32 y, s32 ang, u8 *e, s32 f)
     t = f;
     if (n != NULL)
     {
+        j = 0;
+        s = t;
         p = (u8 *)n + 0x20;
         q = p;
         n->unk_10 = (u32)func_800CE028;
         *(s16 *)p = x - 2;
         *(s16 *)(p + 0x2) = y - 2;
-        for (j = 0; j < 5; j++)
+        for (; j < 5; j++)
         {
             i = 0;
             r = q;
@@ -196,7 +309,7 @@ s32 func_800CE4E8(s32 x, s32 y, s32 ang, u8 *e, s32 f)
                 *(s16 *)c = -v;
                 w = (u16)func_800A6DA4(1, 3) << 5;
                 *(s16 *)u = w;
-                if (t != 0)
+                if (s != 0)
                 {
                     *(s16 *)u = -w;
                 }
