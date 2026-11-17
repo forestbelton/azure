@@ -30938,7 +30938,115 @@ s32 func_800C0230(u8 *p, u8 *q, s16 k, s32 r)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800C0404);
+void func_800C0404(u8 *p, UnkVec *v, UnkSlot *r)
+{
+    u32 w[2];
+    UnkDungeonRect q;
+    Unk80083160 *g;
+    u8 *tag;
+    u8 *e;
+    u8 *c;
+    u8 *t;
+    u8 *z;
+    s32 lean;
+    s32 i;
+    s32 n;
+    s32 k;
+    s32 m;
+    s16 h;
+
+    w[0] = 0x1800340;
+    w[1] = 0x400040;
+    g = &D_80083160;
+    lean = g->unk_00 != D_801C9E40;
+    e = *(u8 **)(g->unk_00 + 0x8D0);
+    tag = g->unk_00 + 0x8B0;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0xC);
+    func_80067E2C(e, g->unk_00);
+    func_8006658C(tag, e);
+    for (i = 0; i < *(s16 *)(p + 0x52); i++)
+    {
+        e = *(u8 **)(g->unk_00 + 0x8D0);
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0x10);
+        n = (func_80069EF8() & 0x3F) + 0x340;
+        *(s16 *)(e + 0xC) = n;
+        *(s16 *)(e + 0x8) = n;
+        k = func_80069EF8() & 0x3F;
+        *(s16 *)(e + 0xA) = 0x180 - k;
+        *(s16 *)(e + 0xE) = 0x1BF - k;
+        do
+        {
+            if (lean)
+            {
+                *(u16 *)(e + 0xA) -= 0xE0;
+                *(u16 *)(e + 0xE) -= 0xE0;
+            }
+        } while (0);
+        *(u32 *)(e + 0x4) = 0;
+        func_800667BC(e);
+        func_8006658C(tag, e);
+    }
+    if (*(s16 *)(p + 0x52) < 0x60)
+    {
+        *(s16 *)(p + 0x52) = *(u16 *)(p + 0x52) + 1;
+    }
+    e = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0xC);
+    func_80067E2C(e, w);
+    func_8006658C(tag, e);
+    q.v[0] = 0x360;
+    q.v[1] = 0x1B8;
+    func_800B8FC8(*(u8 **)(p + 0x68), w, q.v, 1, 0);
+    *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+    m = *(s16 *)(p + 0x4A);
+    if (m == 0)
+    {
+        if (*(s16 *)(p + 0x4C) <= 0x20)
+        {
+            return;
+        }
+        c = *(u8 **)(p + 0x68);
+        if (c[0x13] == 0)
+        {
+            func_80091934((UnkDungeonActor *)c, D_80083780, D_80082E80, NULL);
+            D_800E3D7C[0x9B] = 0x11;
+            z = D_800E3D7C;
+            t = D_800DD0F8;
+            e = D_80082E80;
+            *(u8 **)(e + 0x2C) = t;
+            func_80048A44(e, t[((D_80083228 + *(s16 *)(z + 0x2A) + 0x100) >> 9) & 7],
+                          1, 1);
+        }
+        *(s16 *)(p + 0x4A) = *(u16 *)(p + 0x4A) + 1;
+    }
+    else if (m == 1)
+    {
+        r->unk_0C[0] -= r->unk_0C[0] >> 3;
+        r->unk_0C[1] -= r->unk_0C[1] >> 3;
+        r->unk_0C[2] -= r->unk_0C[2] >> 3;
+        r->unk_1C += (0x400 - r->unk_1C) >> 2;
+        c = *(u8 **)(p - 0x18);
+        v->unk_08 += v->unk_14;
+        *(s32 *)(c + 0x8) = v->unk_08;
+        v->unk_14 -= 0x40000;
+        if ((*(u8 **)(p + 0x68))[0x13] != 0)
+        {
+            return;
+        }
+        if (!(*(u16 *)(*(u8 **)(D_800E3D7C - 0x14) + 0x14) & 0x6000))
+        {
+            return;
+        }
+        h = func_8003F794(6, 0x20);
+        D_800814E8 = h;
+        D_80083120[h].unk_06 = 1;
+        func_800945E8(D_800E3D7C);
+        func_800948BC();
+        D_80082E76 = 0x8000;
+        func_80041094(6, 0, 0, 0, 0x8000);
+        *(s16 *)(p + 0x4A) = *(u16 *)(p + 0x4A) + 1;
+    }
+}
 
 /* Re-home the engine node that carries `p`. THE COLOUR WORD IS STORED BEFORE
    THE TWO 0x1000 SCALES: that one statement swap is the whole residue -- with
