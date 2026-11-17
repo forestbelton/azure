@@ -2069,6 +2069,24 @@ extern u8 D_800DD138[];
 /* func_800B3D10's speed divisor, a declared SCALAR -- the `%lo` sits inside
    the `lbu`, the same reading D_800E3E40 below carries. */
 extern u8 D_800E3D68;
+/* func_800B348C's nine per-state skin tables, read one byte per facing the
+   same way D_800DD030 above is, plus the two the +0xCC slot is loaded with
+   when the record's +0x4C is set and when it is not. */
+extern u8 D_800DD068[];
+extern u8 D_800DD070[];
+extern u8 D_800DD078[];
+extern u8 D_800DD080[];
+extern u8 D_800DD088[];
+extern u8 D_800DD090[];
+extern u8 D_800DD098[];
+extern u8 D_800DD0A0[];
+extern u8 D_800DD0A8[];
+extern u8 D_800DD0B0[];
+/* func_800B348C's two engine globals: the saved +0x14 fall rate it parks
+   across the knock-back, and the state-5 flag it sets and the state-10 tail
+   tests.  Both are declared SCALARS -- the `%lo` sits inside the `sw`/`lh`. */
+extern s32 D_800DF244;
+extern s16 D_800DF248;
 extern u8 D_800E3E40;
 /* Resident helpers func_80095A10 needs; prototypes copied from their
    definitions in csrc/unk_1AF38.c and csrc/unk_154BC.c. */
@@ -24237,7 +24255,333 @@ void func_800B341C(u8 *a, void *b, s16 c)
 
 INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089118);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B348C);
+/* The torch/lantern cast's state machine over the actor's +0x9B, sixteen
+   entries in jtbl_800891C0 with 11..14 falling to the default. States 0..2
+   open the effect (D_800DD030/D_800DD068 skins, func_800C77D0 on the
+   record's -0x20), 3..6 run the knock-back -- the eight-way D_8006CCD8/E8
+   step into the mover, the saved +0x14 fall rate parked in D_800DF244 and
+   func_800B341C/func_800B3D10 on the way out -- 7..9 close on
+   func_8009C12C's message node, and 10 hands the actor back to
+   func_8008ACDC. The table is at rodata offset 0xA60, 0 mod 8, so cc1psx's
+   `.align 3` is a no-op: NOT one of the seven at 4 mod 8.
+   545 words, 0 differing.
+
+   THREE LEVERS, and the function went 106 -> 39 -> 18 -> 4 -> 0 aligned
+   differences on them, with no register work at all.
+
+   (1) ONE POINTER LOCAL PER ARM, func_800974DC's rule, and it applies to
+   the SCRATCH INTEGERS too. One shared `t` over the ten skin-table arms is
+   a global allocno and comes out in $a3 where the target has $a1 in every
+   arm: 106 differences. Ten per-arm locals: 39. The same rule on the ONE
+   eight-way index shared by case 3 and case 6 -- `k` and `k2`, each
+   written once -- is worth another FIVE (23 -> 18), because a local
+   written in two arms is never deferred by sched1 (:26241) and its `lhu`
+   outranks the table's `high` in the ready list. With the index split, the
+   `lui %hi(D_8006CCD8)` lands ahead of the `lhu 0x2A(d)` and its `addiu`
+   fills the load-delay slot, exactly as func_800974DC's landed case 0 does.
+
+   (2) THE THREE MOVER STORES ARE IN SOURCE ORDER +0x0C, +0x10, +0x14 IN
+   BOTH ARMS, and the order is worth 14 of the last 18. All six
+   permutations were measured at 545 words with the index split: case 3
+   gives 18 (C,A,B... i.e. 0x0C/0x14/0x10), 18, 20, 10, 20 and **8** for
+   0x0C/0x10/0x14; case 6 gives 14 for the same order and 28/35 at 544
+   words -- one SHORT -- for the two that put +0x14 first or last-but-one.
+   Both arms at 0x0C/0x10/0x14 together: 4. The +0x14 store is the only
+   insn in the block with no consumer, so wherever it sits in the source it
+   eats whichever load-delay hole is open there.
+
+   (3) THE `-8` MASK IN CASE 10 MUST BE ITS OWN STATEMENT, worth the last
+   four. `*(s32 *)(d + 0x14) &= -8;` emits `li $a0,-8` after the
+   `lhu 0x2(&D_80083460)`, where the target has it before; `m = -8;` ahead
+   of the D_800DF248 read swaps the two and the function is byte-exact.
+   `&= ~7`, `&= 0xFFFFFFF8`, `(u32 *)`, a `d + 0x14` pointer local and the
+   expanded `x = x & -8` form are all still 4.
+
+   `v2 = D_800DF248;` as its own statement before the mask is the lever
+   this file already records for this function at :27577 -- without it the
+   `lui`/`lh` pair falls after the `and` and three nops appear: 547 words.
+
+   All 24 orderings of the case-10 tail's four statements were measured;
+   none beats the one here, and six of them cost words (546 or 548).
+
+   func_800B3D10, func_800B4194 and func_800C77D0 are called IMPLICITLY and
+   must stay that way: all three are defined BELOW this function, and a
+   declaration at the top of the unit would reach every other call site. */
+void func_800B348C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *t1;
+    u8 *t2;
+    u8 *t3;
+    u8 *t4;
+    u8 *t5;
+    u8 *t6;
+    u8 *t7;
+    u8 *t8;
+    u8 *t9;
+    u8 *t10;
+    u8 *e1;
+    u8 *e2;
+    u8 *e;
+    u8 *g;
+    u8 *f;
+    u8 *h;
+    s32 x;
+    s32 y;
+    s32 fall;
+    s16 n;
+    s32 k;
+    s32 k2;
+    s32 v2;
+    s32 m;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        *(s32 *)(d + 0x14) &= -8;
+        p[0x9B]++;
+        D_800DF248 = 0;
+        break;
+    case 1:
+        if (*(u16 *)(p + 0xA6) != 0)
+        {
+            t1 = D_800DD030;
+            *(u8 **)(c + 0x2C) = t1;
+            func_80048A44(c, t1[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            *(s32 *)(p + 0xCC) = 0;
+            if (*(u16 *)(p + 0xA6) >= 2)
+            {
+                break;
+            }
+        }
+        else
+        {
+            *(s32 *)(p + 0xF4) = 0;
+        }
+        *(u16 *)(p + 0x98) &= 0xDFFF;
+        p[0x9B]++;
+        /* fall through */
+    case 2:
+        if (*(u16 *)(p + 0xA6) != 0)
+        {
+            break;
+        }
+        func_800C77D0(d - 0x20, b, 8, 0x300);
+        t2 = D_800DD068;
+        *(u8 **)(c + 0x2C) = t2;
+        func_80048A44(c, t2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(s32 *)(p + 0xCC) = 0;
+        p[0x9B]++;
+        break;
+    case 3:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        k = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        b->unk_0C = D_8006CCD8[k] << 17;
+        b->unk_10 = D_8006CCE8[k] << 17;
+        b->unk_14 = 0xFFEBC000;
+        t3 = D_800DD070;
+        *(u8 **)(c + 0x2C) = t3;
+        func_80048A44(c, t3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        if (*(s32 *)(d + 0x4C) != 0)
+        {
+            e1 = D_800DD078;
+        }
+        else
+        {
+            e1 = D_800DD0A8;
+        }
+        *(u8 **)(p + 0xCC) = e1;
+        *(u16 *)(p + 0x98) &= 0xFFF7;
+        p[0x9B]++;
+        break;
+    case 4:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        t4 = *(u8 **)(p + 0xCC);
+        *(u8 **)(c + 0x2C) = t4;
+        func_80048A44(c, t4[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        if (*(s32 *)(d + 0x4C) != 0)
+        {
+            e2 = D_800DD080;
+        }
+        else
+        {
+            e2 = D_800DD0B0;
+        }
+        *(u8 **)(p + 0xCC) = e2;
+        p[0x9B]++;
+        break;
+    case 5:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        if (p[0xA8] != 0)
+        {
+            D_800DF248 = 1;
+            p[0x9B]++;
+            break;
+        }
+        *(s16 *)(p + 0x96) = 4;
+        p[0x9B] += 0xA;
+        break;
+    case 15:
+        if (--*(s16 *)(p + 0x96) > 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            break;
+        }
+        func_800A56E0(*(s32 *)(d + 0x4C) != 0 ? 0x605 : 0x606);
+        t5 = *(u8 **)(p + 0xCC);
+        *(u8 **)(c + 0x2C) = t5;
+        func_80048A44(c, t5[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(u8 **)(p + 0xCC) = D_800DD088;
+        *(s16 *)(p + 0x96) = 2;
+        p[0x9B] = 7;
+        break;
+    case 6:
+        *(u16 *)(c + 0x14) |= 0x800;
+        *(u16 *)(p + 0x98) |= 0x8;
+        fall = b->unk_14;
+        b->unk_0C = 0;
+        b->unk_10 = 0;
+        b->unk_14 = 0;
+        n = --*(s16 *)(p + 0x96);
+        D_800DF244 = fall;
+        if (n >= 0)
+        {
+            break;
+        }
+        k2 = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        b->unk_0C = D_8006CCD8[k2] << 17;
+        b->unk_10 = D_8006CCE8[k2] << 17;
+        b->unk_14 = fall;
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        *(s16 *)(p + 0x96) = 4;
+        *(u16 *)(p + 0x98) &= 0xFFF7;
+        p[0x9B]++;
+        func_800B341C(p - 0x20, *(void **)(p + 0xF4), 0x40);
+        t6 = *(u8 **)(p + 0xCC);
+        *(u8 **)(c + 0x2C) = t6;
+        func_80048A44(c, t6[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(u8 **)(p + 0xCC) = D_800DD088;
+        func_800B3D10(p[0xA8], *(s32 *)(d + 0x60), d);
+        break;
+    case 7:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        }
+        if (*(s16 *)(p + 0x96) == 0)
+        {
+            if (p[0x102] == 0)
+            {
+                e = func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+                if (e != NULL)
+                {
+                    func_800B4194(p[0xA8], e, d);
+                    p[0xA8] = 0;
+                }
+                else
+                {
+                    e = *(u8 **)(d + 0x60);
+                    if (e != NULL)
+                    {
+                        *(s32 *)(d + 0x60) = 0;
+                        *(s32 *)(e + 0x1C) &= 0xEFFFFFFF;
+                        g = *(u8 **)(e - 0x14);
+                        *(s32 *)(g + 0xC) = 0x808080;
+                    }
+                }
+            }
+            else
+            {
+                f = *(u8 **)(d + 0x60);
+                if (f != NULL)
+                {
+                    *(s32 *)(f + 0x14) |= 0x1000000;
+                }
+            }
+        }
+        if (*(s16 *)(p + 0x96) <= 0 && (*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            t7 = D_800DD088;
+            *(u8 **)(c + 0x2C) = t7;
+            func_80048A44(c, t7[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            *(u8 **)(p + 0xCC) = D_800DD090;
+            p[0x9B]++;
+        }
+        /* fall through */
+    case 8:
+        if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        if (p[0xA8] != 0)
+        {
+            p[0xA8] = 0;
+        }
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            break;
+        }
+        t8 = D_800DD090;
+        *(u8 **)(c + 0x2C) = t8;
+        func_80048A44(c, t8[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(u8 **)(p + 0xCC) = D_800DD098;
+        p[0x9B] = 9;
+        break;
+    case 9:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        t9 = D_800DD098;
+        *(u8 **)(c + 0x2C) = t9;
+        func_80048A44(c, t9[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        *(s16 *)(p + 0x96) = 2;
+        b->unk_0C = (((c[0x24] << 6) - (x = *(s16 *)((u8 *)b + 0x2) - 0x20)) << 16) / *(s16 *)(p + 0x96);
+        b->unk_10 = (((c[0x25] << 6) - (y = *(s16 *)((u8 *)b + 0x6) - 0x20)) << 16) / *(s16 *)(p + 0x96);
+        p[0x9B]++;
+        break;
+    case 10:
+        if (--*(s16 *)(p + 0x96) > 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        t10 = D_800DD0A0;
+        *(u8 **)(c + 0x2C) = t10;
+        func_80048A44(c, t10[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        func_80099F04(*(u8 **)(d + 0x5C));
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0x2) |= 0x412;
+        *(void **)(p + 0x8C) = func_8008ACDC;
+        m = -8;
+        v2 = D_800DF248;
+        *(s32 *)(d + 0x14) &= m;
+        if (v2 == 0)
+        {
+            *(s32 *)(h + 0xC) = 0;
+        }
+        *(s16 *)(p + 0x96) = 0;
+        break;
+    }
+}
 
 /* The weapon-element speed table: look the slot's kind up with
    func_800A9400 and, per element, raise one of the renderable's three
