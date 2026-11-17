@@ -90,7 +90,99 @@
    correctly -- `kk` is still live, but the copy's own source is dead.
 
    Word-exact with every remaining difference a register name or a two-insn
-   swap: `.greg`/`.sched` work by the triage rule, not another search. */
+   swap: `.greg`/`.sched` work by the triage rule, not another search.
+
+   ---------------------------------------------- 2026-11-16, j60: RTL read,
+   residue reduced to ONE instruction, and the lever ruled out by mechanism
+
+   Reproduced 153/6 exactly before touching anything.  The body below is
+   unchanged; what follows is why it does not move.
+
+   THE WHOLE RESIDUE IS ONE INSTRUCTION.  Delete `one` (and write `return -1;`
+   twice) and the body is 152 words / 5 rows, and the only row that goes away
+   is the li/nop pair.  So `one`'s entire contribution is to move
+   `addiu $a1, $zero, 0x1` out of block 1 -- where it naturally lands at word
+   30 and fills the `lh`/`sllv` load-use slot -- into block 0, which costs a
+   `nop` at 30.  It buys the word COUNT and nothing else.  The one honest
+   missing instruction is the target's
+
+       0x800CA238  addu $a0, $s5, $zero          (entry block, word 22)
+
+   WHY IT IS MISSING, FROM THE DUMPS (tools/decomp/dump.sh, .cse2/.combine/
+   .regmove/.lreg/.greg).  The body compiles to exactly TWO pseudos for the
+   index and they survive to allocation:
+
+       (insn 19  (set (reg/v:SI 92) (and:SI (reg:SI 99) (const_int 7))))
+       (insn 25  (set (reg/v:SI 93) (reg/v:SI 92)))                  <- kk = k
+       (insn 34  (set (reg:SI 105) (ashift:SI (reg/v:SI 93) 1)))     <- k*2 base
+       (insn 140 (set (reg:SI 4 a0) (reg/v:SI 93)))                  <- A540 arg
+       (insn 208 (set (reg:SI 6 a2) (reg/v:SI 92)))                  <- A350 arg
+
+   92 crosses the func_8009A540 call, so global alloc must give it a callee-
+   saved register (`92 in 21` = $s5).  93 crosses nothing and carries
+   `;; 93 preferences: 4`, so it gets $a0 -- and insn 140 becomes
+   `(set a0 a0)` and is deleted.  THAT deleted insn is the missing word.
+
+   THE TARGET NEEDS THREE LIVE RANGES, NOT TWO, and no assignment of two
+   pseudos can produce it:  A = the `andi` destination, in $a0, dead at word
+   6;  B = the copy, in $s5, used by the `sll` at word 10 and by the $a2 arg
+   at word 71;  C = a third value in $a0, DEFINED IN THE ENTRY BLOCK at word
+   22 and dying at the call 43 instructions later.  If the `andi` writes $a0
+   then the `sll` reads $s5, so A is not B; and word 22 rewrites $a0 after A
+   is already dead, so C is neither.
+
+   WHICH OF THE TWO PSEUDOS GETS WHICH USE IS NOT A SOURCE DECISION.  It is
+   cse's `make_regs_eqv` in-block/out-of-block test applied over its extended
+   basic-block traversals: in the short traversal (`;; Processing block from
+   2 to 72`) 93's range leaves the traversal and 92's does not, so 93 becomes
+   canonical and every block-0 use is rewritten to 93; in the long ones
+   (`from 2 to 312`) 93's whole range is inside, the test fails, 92 stays
+   canonical and the late uses are rewritten to 92.  Swapping every index use
+   between `k` and `kk` in the source therefore changes nothing -- confirmed
+   not just by the byte count but by diffing the `.regmove` dumps of the
+   swapped and unswapped sources, which are identical insn for insn.
+
+   MEASURED AND REJECTED by j60 (all BYTE-IDENTICAL to the 152/5 body unless
+   a score is given -- that is 21 spellings on top of the list above):
+
+     * a third index local used only as func_8009A540's argument, as
+       `k3 = kk;` and as `k3 = k;`, each placed right after `kk = k;`
+     * `kq = kk & 7;` in the entry block with `func_8009A540(kq, ...)`.  cse
+       folds the AND outright: there is no kq pseudo left in `.cse2`.
+     * the argument written inline as `kk & 7`
+     * the parameter as host -- `f = kk;` and `f = k;` in the entry block with
+       `func_8009A540(f, ...)`, with and without the early `D_8006CCD8` read
+       also moved onto `f`
+     * `register s32 kk`
+     * embedded assignments (the shape the permuter liked):
+       `D_8006CCD8[kq = kk]`, `D_8006CCD8[kk = k]`, `func_8009A540(kq = kk, ...)`
+     * `kk = k;` written twice
+     * `k` declared `u32`
+     * ALL uses moved onto `kk` (the rename taken to completion, including
+       `D_800DCEAC[kk]`, `D_800DCEBC[kk]` and func_8009A350's third argument)
+     * early uses on `k` with late uses on `kk`, and the reverse
+     * `k = f >> 9; k &= 7;` ON TOP OF the rename: 153 words / **16 rows** --
+       the two sets renumber $s3/$s4/$s5 through the whole body.  Worse.
+     * `volatile s32 k3` as the third local: 154 / 113
+     * `kk` declared `s16`/`u16`/`u8`/`s8`: 152 / 105 (the frame shrinks by 8)
+     * `k` declared `s16`/`u16`/`u8`: 151 / 148
+     * `one = 1;` moved ahead of `k` or ahead of `m`: 153 words / **11 rows**
+       (the constant lands in $a2 and D_8008333C's base in $a1).  Moved to
+       just before `kk = k;` it is 153/6, the same as below -- so what matters
+       is only that it is in the entry block, not where in it.
+
+   SO THE LEVER IS NOT A SPELLING.  This is the catalogue's "A SOURCE-LEVEL
+   COPY CANNOT REPRODUCE AN ALLOCATOR COPY" with one more turn of the screw:
+   the RENAME form (original left with no uses) buys the SECOND pseudo and
+   has a ceiling there -- it has never bought a third, and the third is what
+   is missing.  gcc 2.7.2 has no pass that would insert it either: this tree's
+   regmove.c has no `copy_src_to_dest`, and shorten-life.c runs only under
+   `-fshorten-lifetimes`, which is off.
+
+   FOR THE PERMUTER, TWO BODIES ARE WORTH FEEDING: the one below (153/6,
+   word-exact) and the same body with `one`, `s32 one;` and `return -one;`
+   removed, which is 152 words / 5 rows and whose CONTENT is strictly closer
+   -- its only fault is the one deleted `(set a0 a0)`. */
 
 s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
 {
