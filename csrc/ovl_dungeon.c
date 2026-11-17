@@ -355,6 +355,7 @@ extern s16 D_8008346A;
 /* The kill handlers' callees and tables. D_80082E80 is csrc/ovl_town.c's
    UnkTownScene; only its address is wanted. */
 extern u8 D_80082E80[];
+u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
 extern u8 D_800245A8[];
 extern void (*D_800DD830[])(void);
 extern u8 D_80050CAC[];
@@ -13576,7 +13577,139 @@ u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k)
     return o;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009C93C);
+u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
+{
+    s16 k;
+    s32 i;
+    s32 sh;
+    s32 cc2;
+    s32 r;
+    s32 r1;
+    s32 t;
+    s32 t3;
+    s32 t2;
+    s32 m;
+    register u8 *zz __asm__("$4");
+    u8 *g;
+    u8 *p;
+    u16 w;
+
+    w = ang;
+    if (e == NULL)
+    {
+        if ((*(s32 *)(a + 0x1C) & 0x400) != 0)
+        {
+            cc2 = 0x80000000;
+            if (*(s32 *)(a + 0x14) >= 0)
+            {
+                *(s32 *)(a + 0x14) |= cc2;
+                __asm__("" ::"r"(cc2));
+                w = ang + ((func_800A6D30() & 7) << 9);
+                *(s16 *)(a + 0x2A) = w;
+            }
+        }
+    }
+    sh = w >> 8;
+    p = (u8 *)D_800DCEAC;
+    i = sh & 0xE;
+    func_800C78A0(a - 0x20, b[0x24] * 64 + (*(s16 *)(p + i) >> 1) + 0x20,
+                  b[0x25] * 64 + (*(s16 *)((u8 *)D_800DCEBC + i) >> 1) + 0x20,
+                  *(s16 *)(a + 0x88), 8, 0x300);
+    *(u8 **)(a + 0x60) = e;
+    *(s32 *)(a + 0x14) &= ~0x4000000;
+    if (e == NULL)
+    {
+        if (func_8009A540((*(u16 *)(a + 0x2A) >> 9) & 7, b[0x24], b[0x25],
+                          *(u16 *)(a + 0x88) - 0x20) == 0)
+        {
+            return NULL;
+        }
+        e = func_8009B25C(a, b[0x24] + *(u16 *)((u8 *)D_8006CCD8 + i) * dist,
+                          b[0x25] + *(u16 *)((u8 *)D_8006CCE8 + i) * dist,
+                          *(s16 *)(a + 0x88));
+        *(u8 **)(a + 0x60) = e;
+        if (e == NULL)
+        {
+            return NULL;
+        }
+    }
+    *(u16 *)(e + 0x6A) = *(u16 *)(a + 0x2A);
+    if (e[0x13] != 0)
+    {
+        if ((*(s32 *)(e + 0x1C) & 0x238) == 0 && (*(u16 *)(e + 0x46) & 0x8000) == 0)
+        {
+            *(u16 *)(e + 0x2A) = *(u16 *)(a + 0x2A) + 0x800;
+        }
+    }
+    *(s32 *)(a + 0x14) |= 0x4000000;
+    *(s32 *)(e + 0x14) = (*(s32 *)(e + 0x14) | 0x20000) & ~0x1000000;
+    k = a[0x84];
+    t = k;
+    __asm__("" ::"r"(k));
+    r1 = func_800A6D30();
+    __asm__("" ::"r"(r1));
+    k = t;
+    if (a[3] != 0)
+    {
+        k = t + (r1 % a[3]) * 4;
+    }
+    if (e[0x13] == 0 && *(u8 **)(e + 0x50) != NULL && **(u8 **)(e + 0x50) == 2)
+    {
+        k -= k >> 2;
+    }
+    if ((*(s32 *)(e + 0x1C) & 0x238) == 0 && k < 0x80)
+    {
+        return e;
+    }
+    k = func_800A6D30();
+    zz = a;
+    __asm__("" : "=r"(zz) : "0"(zz));
+    t2 = (k & 1) + ((m = k & 2) != 0);
+    t2 += (a[0x26] + func_800981F8(zz)) * 2;
+    *(s16 *)(a + 0x20) = t2;
+    if ((*(s32 *)(a + 0x1C) & 0x1000) != 0)
+    {
+        k = a[3] >> 1;
+    }
+    else
+    {
+        k = a[3] >> 6;
+    }
+    t3 = k;
+    if (t3 >= (s32)(func_800A6D30() & 0x7F))
+    {
+        *(s32 *)(a + 0x1C) |= 0x1000000;
+    }
+    else
+    {
+        *(s32 *)(a + 0x1C) &= ~0x1000000;
+    }
+    if ((*(s32 *)(e + 0x1C) & 0x238) != 0)
+    {
+        r = func_800A6D30();
+        if (e[3] != 0)
+        {
+            k = r % e[3];
+        }
+        else
+        {
+            k = 0;
+        }
+        if ((s16)(k + e[0x70]) >> 7 > 0)
+        {
+            return e;
+        }
+    }
+    *(s32 *)(a + 0x14) &= ~0x4000000;
+    g = D_800E3D7C;
+    *(s32 *)(e + 0x14) &= ~0x20000;
+    if (a == g)
+    {
+        func_8003E188(e[0x13], 0);
+    }
+    __asm__("" ::"r"(k));
+    return e;
+}
 
 /* Mask the renderable's +0x14 flags with the caller's and add one more bit
    when the actor's held record names the right kind. The nine

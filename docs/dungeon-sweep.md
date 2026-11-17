@@ -626,8 +626,14 @@ limit, or anything else.
 Two functions are now believed **unclosable for a reason in the compiler**,
 separately from the seven 4-mod-8 jump-table functions.
 
-**`func_800AAF00` -- 176/176 words, 4 aligned rows, and all four are the
-`|= 0x80000000` gate** this project already catalogued as proved-unreachable.
+**`func_800AAF00` -- 176/176 words, 4 aligned rows, all four the
+`|= 0x80000000` gate. SUPERSEDED 2026-11-16: THAT GATE IS SOLVED AND THIS
+FUNCTION IS NO LONGER BLOCKED.** `func_8009C93C` landed with the same gate
+closed by assigning the constant one basic block earlier, which costs
+nothing; see `docs/matching-levers.md`, "THE `|= 0x80000000` GATE IS A
+LOCALITY PROBLEM, NOT UNREACHABLE". The paragraph below was written when the
+catalogue still said the gate was permanent -- the measurements in it stand,
+the verdict does not.
 An agent took it from 21 rows to 4 and then measured four more spellings of
 the gate itself: hoisting the `|` out of the inner `if` is 175/11, a
 matched-operand `asm` on the loaded value 177/11, the `|` through a local
@@ -644,8 +650,16 @@ the target's own assembly**, so 7 references is unreachable, and its last use
 is word 128 of 174, so 113 is unreachable. Eleven device and structure
 combinations measured, all at 31 or worse.
 
-Both parks record the exact arithmetic, so a permuter run can be aimed rather
-than hoped. Neither should be re-dispatched as ordinary park-closing work.
+Both parks record the exact arithmetic. **`func_800AD6FC`'s verdict stands;
+`func_800AAF00`'s does not** -- its whole residue was the gate, and the gate
+now has a cure, so it should be re-dispatched as ordinary park-closing work.
+
+That is two "permanent" verdicts overturned in one day, both of them mine to
+relay: this one, and the catalogue's claim that no store spelling can conflict
+with a `%lo` load. **A residue argued unreachable from a mechanism is only as
+good as the completeness of the mechanism**, and both failures were the same
+shape -- a correct account of why one route is closed, read as a proof that
+all routes are.
 
 
 ## 2026-11-16: THE PARK RANKING WAS WRONG, AND IT WAS WRONG TOWARDS THE TOP
