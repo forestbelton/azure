@@ -196,7 +196,110 @@
    tie shows as priority 1 / ref_count 1, sitting in the ready list from T-2
    to T-21.  Solve for the reference count rather than sweeping spellings --
    that is the route docs/matching-levers.md prescribes for exactly this
-   class. */
+   class.
+
+   ------------------------- THE READY-LIST SLOTS, SOLVED (agent j65, 2026-11-16)
+
+   Reproduced first: parksplice + aligndiff gives 234 of 234 / 2 aligned,
+   ovlverify gives 3 differing (masked).  A STANDALONE FILE of the unit's
+   declaration block (csrc lines 1..2249 as of today) plus this body alone
+   reproduces it exactly and compiles in half a second; every number below
+   came from that file, so none of it needed a splice or the verifier.
+
+   THE WHOLE RESIDUE IS WHICH CYCLE sched1 PICKS ONE INSN AT.  Naming block
+   9's insns by their sched1 numbers for THIS body:
+
+       322 high D_800E3D7C      325 lw1        327 li 17       329 sb 0x9B
+       331 high D_800DD0F8      332 lo_sum D_800DD0F8 (this is `t')
+       337 sw 0x2C              341 high D_80083228
+       346 lh %lo(D_80083228)   350 lw2        354 lh 0x2A
+       365 addu $a0,$s0,$zero
+
+   sched1 schedules BACKWARD and the insn picked at the LARGEST T is emitted
+   FIRST.  This body picks 329 at T-17, 331 at T-16, 332 at T-15, 337 at
+   T-14, 341 at T-13, 350 at T-12, 346 at T-11, 354 at T-10 -- so 337 is
+   emitted before 350.  The target needs exactly one change to that list:
+   350 at T-14, 337 at T-13, 341 at T-12.  Everything else, including
+   sched2's later swap of 337 and 341, already matches.
+
+   UN-BOOSTING THE SECOND LOAD IS NECESSARY BUT NOT SUFFICIENT, AND ALONE IT
+   OVERSHOOTS BY TWO SLOTS.  Give 350 reg_n_sets >= 2 and it drops from
+   LAUNCH_PRIORITY to priority 2.  It then loses T-12 to the boosted 341,
+   loses T-13 to the store -- sched1 prints `insn 337 has a greater
+   potential hazard', so a store outranks a load inside one priority group
+   -- and then loses T-14 to 332, because `t's lo_sum IS ITSELF A BIRTHING
+   INSN and becomes ready the cycle after the store is picked.  350 falls
+   through to T-16 and comes out ABOVE `t's lui/addiu instead of below
+   them.  Measured 10, four of those rows being the D_800DD0F8 pair moving.
+
+   UN-BOOSTING BOTH 350 AND `t' PUTS 350 AT T-14 -- AND THEN THE MEMORY UNIT
+   BLOCKS IT.  With `t' also at reg_n_sets >= 2, T-14's ready list is
+   350(2) 365(1) 332(1) and sched1 prints `blocking insn 350 for 1 cycles':
+   the store picked at T-13 holds the memory unit for one cycle, 365 takes
+   T-14 instead, and 332/331 are flung to T-20/T-21, i.e. to the very top of
+   the block.  Measured 12.  SO THE TARGET'S SCHEDULE CANNOT BE REACHED WITH
+   THE STORE PICKED AT T-13; the store and the second load must not be
+   picked in adjacent cycles.
+
+   WHICH LEAVES EXACTLY ONE SHAPE: 350 BOOSTED (reg_n_sets == 1, i.e. this
+   body's spelling, untouched) AND READY AT T-14 INSTEAD OF T-12.  Then it
+   wins T-14 from 332 on potential_hazard (load beats lo_sum), 332 takes
+   T-15, 331 T-16, 329 T-17, and the block comes out right.  350's readiness
+   is (the cycle 354 is picked) + 2, the load latency; 354 is picked at T-10
+   because the chain 354 -> add -> add -> sra -> and -> add -> lbu -> call
+   is six insns long.  Nothing reorders that chain without changing the
+   instruction count: the two operand orders that keep 234 words were
+   already measured at 5 and 15 by j54, and both leave 354 at T-10.
+
+   THE ALLOCATION HALF OF j54'S BLOCKER IS SOLVED, so the note above that
+   the two requirements are "contradictory under this compiler" is too
+   strong.  A two-set `z' CAN hold $v1: put its SECOND set in the m==1 arm
+   at a site the target already keeps in $v1 and whose range conflicts with
+   $v0/$a0 but not $v1 -- `z = v->unk_14;' inside `v->unk_08 += v->unk_14;'
+   does it.  Then `z' is global, takes $v1, the first load stays local and
+   also takes $v1, and only the schedule is wrong.  j54's `z' took $a2 only
+   because merging BOTH loads into it freed $v1 for the `%hi' base; keeping
+   the first load in its own pseudo keeps $v1 occupied and the base at $a2.
+
+   THE ALIAS ROUTE IS CLOSED FOR GOOD, so do not spend anything on spelling
+   the store differently in the hope of a dependence.  sched.c:629
+   `memrefs_conflict_p' strips a LO_SUM to its symbol_ref before anything
+   else, so a `%lo' load's address is ALWAYS a constant to the alias
+   checker, and the function's constant-vs-constant tail returns 0 for two
+   different symbols.  No store spelling can ever conflict with this load.
+
+   MEASURED AND REJECTED by j65, all against this body, all 234 words
+   unless noted.  `z' below always means a NEW local holding only the
+   SECOND D_800E3D7C read, with a second set elsewhere to kill the boost:
+
+     z 2nd set `z = v->unk_14' in the m==1 arm ..................... 10
+         -- the best of this family; block 9 costs 8 rows (`t's lui/addiu
+            move below the load, which also lets the `%hi' base take $a1),
+            the m==1 arm costs 2
+     the same, `z = (s32)D_800E3D7C' written before the store ...... 10
+     the same, plus `t = D_800DD0F8' hoisted above the sb .......... 10
+     the same, with `t[i]' written `*(u8 *)(t + i)' ................ 10
+     the same, plus the store hoisted above the sb ................. 17
+     the same, plus `(*(s16 *)(z + 0x2A) + D_80083228 + 0x100)' .... 15
+     z 2nd set = the `r->unk_1C' load .............................. 14
+     z 2nd set = the `r->unk_1C' result ........... 233 words / 42 (SHORT)
+     z 2nd set = the `r->unk_0C[1]' load ........................... 22
+     z 2nd set = the `r->unk_0C[1]' result ......................... 24
+     z 2nd set = the `v->unk_14 - 0x40000' result .................. 12
+         -- z does take $v1 here, but the m==1 arm pays 4 rows for it
+     z as above AND `t' two-set via `t = D_80083780' before
+         func_80091934 ............................................. 16
+     z as above AND `t' two-set by replacing `c' in the m==1 arm ... 12
+         -- this is the "both un-boosted" case: `t' keeps $a1 and `z'
+            keeps $v1 in BOTH arms, the second load lands exactly where
+            the target has it, and the whole cost is the memory-unit
+            blockage described above plus 4 rows in the m==1 arm
+     that last one plus the operand swap ........................... 19
+
+   NEXT MOVE, if anyone spends more on it: the question is now narrow
+   enough to state in one line -- find a spelling that delays insn 354's
+   sched1 slot from T-10 to T-12 without adding a word.  Everything else
+   about this function is understood and measured. */
 
 void func_800C0404(u8 *p, UnkVec *v, UnkSlot *r)
 {
