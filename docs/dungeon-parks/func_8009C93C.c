@@ -1,8 +1,10 @@
-/* PARK -- func_8009C93C (ovl_dungeon).  263 of 263 words, 9 ALIGNED
-   DIFFERENCES (ovlverify reports 10 masked; one row is a transposed pair
-   and misses twice).  Agent j64, 2026-11-16, rewriting j55's park (15 rows);
-   j55 rewrote j49's (33 rows).  j55's 15 was reproduced EXACTLY before
-   anything here was changed.
+/* PARK -- func_8009C93C (ovl_dungeon).  263 of 263 words, 4 ALIGNED
+   DIFFERENCES, and ALL FOUR ARE THE PROVED-UNREACHABLE `|= 0x80000000'
+   GATE.  Agent j85, 2026-11-16, rewriting j64's park (9 rows); j64 rewrote
+   j55's (15), j55 rewrote j49's (33).  j64's 9 was reproduced EXACTLY
+   before anything here was changed, and j64's whole write-up below is
+   kept because every table in it is still a valid measurement -- except
+   where section (1) of the j85 notes says otherwise.
 
    SIGNATURE (unchanged from j55, and NOT changed further here):
      u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
@@ -115,75 +117,207 @@
      `register s16 k __asm__("$17")' pin alone         33
      the pin plus either copy device                33 / 36
      site 1 split into its own `s32 r1'               14
-     ... pinned to $v1, no fence                      14
-     ... pinned to $v1 WITH the fence                 10 -- see below
-     ... that, plus `r1 %= a[3]; k = t + r1 * 4;'     10
+     ... pinned to $v1   ======================================== WHAT J85 ADDED, 9 ROWS -> 4
+
+   FIVE OF J64'S NINE ROWS LAND: words 33, 35, 140, 144 and 145.  Four
+   changes.  (1)+(2)+(3) are one unit -- any subset of them is 90 rows --
+   and (4) only works on top of them.
+
+   (1) THE DELAY-SLOT COPY AT WORD 144 IS AN UNCONDITIONAL `k = t;' JUST
+   BEFORE THE `if'.  j64's cse analysis is right that no *conditional*
+   `k = t' survives, but it is the wrong question.  cc1psx fills MIPS
+   delay slots itself, in `reorg', FROM THE INSN THAT PRECEDES THE BRANCH;
+   `out.s' reads
+
+       andi $4,$2,0xffff ; lbu $2,3($19)
+       .set noreorder
+       beq $2,$0,$L16    ; move $17,$16
+       .set macro
+
+   so word 144 is simply the statement written before the `if'.  It is
+   also why word 142 is a `nop': once the copy is pulled into the slot,
+   `lbu $v0, 0x3($s3)' is immediately followed by `beqz $v0' and the
+   load-hazard nop appears.  No cse or scheduling argument is involved.
+   READ THE `.set noreorder' BLOCKS IN out.s BEFORE THEORISING ABOUT A
+   DELAY SLOT -- they say outright which insn the compiler put there.
+
+   (2) BUT `k = t;' MAKES `k = a[0x84]' A DEAD STORE, so word 137's `lbu'
+   moves into `t' and word 139 becomes a `nop'.  An input-only
+   `__asm__("" ::"r"(k));' between `t = k;' and the call keeps it live for
+   zero words, and then words 137..149 are the target's own insns, every
+   remaining row register-only.
+
+   (3) THE PRICE IS ONE EXTRA REFERENCE ON `k', PAID WITH A TRAILING
+   FENCE.  With (1)+(2) alone the residue is 90 rows of pure register
+   permutation: `a'/`b'/`e' 3-cycle around $s1/$s2/$s3 and `k' lands in
+   $a1.  `allocno_compare' ranks by floor_log2(refs)*refs/live_length, so
+   one extra reference lifts `k' past the three parameters.
+   `__asm__("" ::"r"(k));' immediately before the FINAL `return e;'
+   lengthens `k's live range to the end of the function -- the denominator
+   grows faster than the numerator -- and `k' drops back below them:
+   a=$s3, b=$s1, e=$s2, t=$s0, k=$s1 (sharing with `b', disjoint ranges).
+   THE FENCE MUST BE ON `k', AT THE END.  A fence on `a', `b' or `e'
+   leaves the 3-cycle untouched and any fence on `t' costs a word.  -> 8.
+
+   (4) SITE 1'S CALL RESULT NEEDS ITS OWN `r1' *AND* A FENCE ON IT.  READ
+   THE ASSEMBLER MACRO, NOT THE MNEMONIC: cc1psx emits `rem $3,$4,$2' for
+   `r % a[3]' and gas expands it to `div $zero,$4,$2 / mfhi $3'.  The
+   target's words 145/146 are `div $zero,$v1,$v0 / mfhi $v1', i.e.
+   `rem $3,$3,$2' -- THE MASK AND THE REMAINDER SHARE $v1.  The shared `r'
+   can never get $v1, because at SITE 3 the target itself puts e[3] in $v1
+   (word 218, `lbu $v1, 0x3($s2)') while the mask is live; the `greg' dump
+   records `88 conflicts: ... 2 3 ...' for exactly that reason.  Site 3's
+   mask IS $a0 in the target (word 221), so the two call sites have
+   different holders and one variable cannot be both.
+
+   A BARE SPLIT IS 14 ROWS AND A WORD LONG, and the reason is worth
+   keeping: it moves the `andi' AFTER the `lbu'/`beqz' pair, the call's
+   return value is then live across the a[3] load, that load loses $v0 to
+   $v1, and the SECOND a[3] load -- expand really emits two, insns 340 and
+   345 in `.sched', and they collapse only when both get $v0 -- survives
+   as `move $v0, $v1'.  An input-only `__asm__("" ::"r"(r1));' IMMEDIATELY
+   AFTER `r1 = func_800A6D30();' holds the `andi' in front of the load,
+   everything re-shares $v0, and 140/145 land.  -> 6.
+
+   (5) WORDS 33-35 ARE A SOURCE-ORDER PROBLEM, NOT A sched2 TIE.  j64's
+   LUID reading is right about the mechanism and wrong about the cure: the
+   `andi' needs the HIGHER luid, and the way to give it one is to put two
+   statements in front of it, in this order.  The target emits
+   `srl $v0, $a1, 8' / `lui %hi' / `addiu %lo' / `andi $s0, $v0, 0xE', so
+   the shift must be its own statement into a FRESH short-lived local
+   (which local_alloc gives $v0, as the target has), the first symbol must
+   be materialised into a user pointer local between the two halves, and
+   the `andi' is what is left:
+
+       sh = w >> 8;
+       p = (u8 *)D_800DCEAC;
+       i = sh & 0xE;
+       func_800C78A0(a - 0x20, b[0x24] * 64 + (*(s16 *)(p + i) >> 1) + 0x20,
+                     b[0x25] * 64 + (*(s16 *)((u8 *)D_800DCEBC + i) >> 1) ...
+
+   Each of the three parts is load-bearing.  `i = w >> 8; p = ...;
+   i &= 0xE;' reuses one pseudo for both halves and gives
+   `andi $s0, $s0, 0xE' (13 rows); the SECOND symbol must stay inline,
+   because it is already after the `andi' in both streams and hoisting it
+   too is 14 rows.  -> 4.
+
+   ---- measured and rejected, on j64's 9-row base ----
+     `k = t;' before the `if', no fence                 263 / 90
+     + `__asm__("" ::"r"(k));' before the call          263 / 90
+     + the trailing fence on `k'                        263 /  8   <== (3)
+     `k = t;' INSIDE the `if', before the add           263 /  9
+       -- combine merges it; byte-identical to the base
+     `if'/`else' arms for `k', with the `k' fence       265 / 96
+     one fence `__asm__("" ::"r"(k), "r"(t));'          265 / 93
+     a fence on `t' after the copy / twice              264 / 91 both
+     a fence on `t' before `k = a[0x84]'                265 / 103
+     a fence on `a' / on `b' / on `e'                   263 / 90 each
+   ---- on the 8-row base, for words 140/145 ----
+     a different HOLDER for site 1 in place of `r':
+       `t2' 13,  `t3' 15,  `m' 10,  `i' 17
+     a fresh `r1', declared in each of the 11 slots  264 / 12 -- IDENTICAL
+       in all eleven: declaration position is not a tie-break here either
+     SITE 3 split to a fresh `r2' instead, 4 slots   264 / 12 all
+     site 3 split to `t2' / `t3' / `i' / `m'    264 / 16/18/20/17
+     mask and remainder one variable, `r %= a[3]':
+       shared `r' 11,  own `r1' 264/12,  `r' + site 3 split 264/12,
+       `t2' 15,  `t3' 17,  `m' 12,  `i' 19
+     one a[3] local `q = a[3]' with `if (q != 0)':
+       shared `r' 11,  split `r1' 13,  split + fence 13,
+       split + `r1 %= q' 13
+     a fence on `r' after site 1's set, once / twice    263 /  8 both
+     a fence on `r' at site 3                           262 / 17
+     a trailing fence on `r'                            263 / 10
+   ---- on the 6-row base, for words 33/35 ----
+     `p = (u8 *)D_800DCEAC;' before `i', `p + i'        263 /  6
+       -- lui/addiu precede the andi, but the `srl' goes with them
+     the same, reusing `g' as the base local                  11
+     `__asm__("" ::"r"((u8 *)D_800DCEAC));' before `i' 265 / 13
+     ... both symbols that way                         267 / 15
+     both symbols in pointer locals                    263 / 14
+     then, on that `p' base:
+     `i = w >> 8; p = ...; i &= 0xE;'                   263 / 13
+     the same with `i = i & 0xE'                              13
+     `m = w >> 8; p = ...; i = m & 0xE;'                      12
+     `sh = w >> 8; p = ...; i = sh & 0xE;' FRESH LOCAL  263 /  4  <== (5)
+       -- all four declaration slots tried: 4 rows in every one
+     drop `i', inline `(w >> 8) & 0xE' at all four uses         6
 
    ---------------------------------------------------------------- residue
 
-   FOUR OF THE 9 ARE THE PROVED-UNREACHABLE `|= 0x80000000' GATE, words
-   19/21/22/23 -- docs/matching-levers.md, "A PROVED-UNREACHABLE RESIDUE:
-   THE `|= 0x80000000' GATE'S `$v0'/`$v1' SWAP".  Not re-measured here;
-   j55 spent four byte-identical spellings on it.
+   FOUR ROWS, ALL ONE CLUSTER: words 19/21/22/23, the `|= 0x80000000'
+   gate, a straight `$v0'/`$v1' swap on the loaded value and the constant
+   (`lw $v1' + `lui $v0' + `or $v0,$v1,$v0' where the target has `lw $v0'
+   + `lui $v1' + `or $v0,$v0,$v1').  docs/matching-levers.md's "A
+   PROVED-UNREACHABLE RESIDUE: THE `|= 0x80000000' GATE'S `$v0'/`$v1'
+   SWAP" says treat it as permanent "unless someone finds a
+   zero-instruction `$v0' occupant".  J85 DID NOT FIND ONE, BUT DID FIND
+   THE SPELLING THAT PRODUCES THE TARGET'S REGISTERS, AND IT COSTS ONE
+   WORD -- which sharpens the entry considerably:
 
-   TWO are words 33-35: the target emits `lui %hi(D_800DCEAC)' / `addiu
-   %lo' and THEN `andi $s0, $v0, 0xE'; this emits the `andi' first.  IT IS
-   NOT A sched1 TRANSPOSITION, as j55's park said.  `sched.py' shows sched2
-   reproducing the order it was handed: in basic block 4, the ready list at
-   T-32 is {84 (the `lo_sum'), 75 (the `andi'), 134} with equal priority
-   AND equal ref_count, so `rank_for_schedule' falls through to INSN_LUID,
-   whose inverted comparator picks the HIGHER luid first and places it
-   LAST.  The `andi' has the lower luid because expand emits `i = ...'
-   before it materialises the symbol address.  To match, the `andi' would
-   need the HIGHER luid.  Measured and rejected here, all byte-identical:
-   inlining the index into the first subscript; `(i = (w >> 8) & 0xE)'
-   assigned INSIDE the subscript; dropping `i' entirely and writing
-   `(w >> 8) & 0xE' at all four uses.  j55 measured `i = (w & 0xE00) >> 8'
-   at 22 and a separate `g = (u8 *)D_800DCEAC' pointer local at 23.  This
-   is the same family as the argument-copy tie that (4) above cures, so the
-   fix is probably a fence device on the `andi', not a rephrasing.
+       if ((*(s32 *)(a + 0x1C) & 0x400) != 0
+           && *(volatile s32 *)(a + 0x14) >= 0)
 
-   THREE are words 140/144/145: the target's mask lands in `$v1' and an
-   extra `k = t' copy fills the `beqz $v0, .L8009CB94' delay slot, where
-   this body leaves a `nop' and puts the mask in `$a0'.  AN EXPLICIT
-   REDUNDANT `k = t;' IS DELETED BY cse -- after `t = k' the two pseudos
-   are in one equivalence class, and the CALL between them does not break
-   it, because `invalidate_for_call' invalidates hard registers and memory,
-   not pseudos.  So every placement of it is an allocation change and never
-   the wanted copy: 27/28 on j55's base (four placements), 96 on this one;
-   `if'/`else' arms for the assignment are 96.  The target has THREE insns
-   here -- `lbu $s1, 0x84($s3)', `addu $s0, $s1' in the jal slot, `addu
-   $s1, $s0' in the beqz slot -- and every spelling with only TWO (lbu plus
-   one copy) leaves the beqz slot a nop, which is what this body does.
-   The copy device `__asm__("" : "=r"(k) : "0"(t))' DOES produce the copy
-   and cse cannot delete it, but it also drags `k' into $a1 and costs 94.
+   A VOLATILE MEM IS `do_not_record' IN cse, so the `|='s own read is NOT
+   folded into the test's pseudo.  Both loads are then BLOCK-LOCAL, both
+   get $v0, `block_alloc' ties the `ior's destination to the body's load
+   instead of to the constant, the constant is pushed to $v1, and words
+   19/21/22/23 ALL MATCH -- `lw $v0,20($19) / nop / bltz $v0 / nop /
+   lui $v1 / or $v0,$v0,$v1'.  THE ONE EXTRA WORD IS THE `bltz' DELAY
+   SLOT: with the duplicate load first in the fall-through thread, reorg
+   emits no `.set noreorder' block at all for this branch (confirmed in
+   out.s), gas then has only the volatile `lw' -- which sets the register
+   the branch reads -- as a slot candidate and emits a `nop', and the
+   duplicate load is removed later.  264 words / 7 rows.
 
-   THE MASK HALF OF THIS CLUSTER IS SOLVED AND THE SOLUTION COSTS MORE THAN
-   IT SAVES, which is worth knowing before anyone spends a run on it.
-   Splitting site 1's call result into its own `register s32 r1
-   __asm__("$3")' with a `__asm__("" : "=r"(r1) : "0"(r1))' fence puts the
-   mask in `$v1' and the `div' reads `$v1' -- words 140 and 145 both match
-   -- but `$v1' is then still r1's when `mfhi' runs, the quotient goes to
-   `$v0', and words 146/148/149 break instead.  Net 10, one worse than this
-   body.  Reusing r1 for the quotient (`r1 %= a[3]') does not free it
-   either: also 10.
+   So the missing piece is EXACTLY ONE THING: a way to keep the body's
+   read a separate block-local pseudo without a trapping insn at the head
+   of the fall-through thread.  Measured and rejected here:
+     `*(volatile s32 *)(a + 0x14) >= 0' in the test       264 /  7
+       -- registers all correct; the slot is the only loss
+     + `cc = 0x80000000;' hoisted before the `|='         264 /  7
+     + the same with a matched-operand fence on `cc'      265 / 11
+     + `m = 0x80000000;'                                  264 / 11
+     `0x80000000 | *(s32 *)(a + 0x14)' with the volatile  264 /  7
+     `*(volatile s32 *)(a + 0x14) |= 0x80000000;'         266 / 11
+     `= *(volatile s32 *)(a+0x14) | 0x80000000'           265 /  8
+     `*(volatile s32 *)(a+0x14) = *(s32 *)(a+0x14) | ...' 264 /  9
+   and, all NON-volatile, all byte-identical to this body at 4 rows:
+     nested `if's in place of the `&&'
+     `= *(s32 *)(a + 0x14) | 0x80000000' as a plain store
+     `0x80000000 | *(s32 *)(a + 0x14)'
+     `do { } while (0)' around the `|=', and around the whole inner `if'
+     a `vv' local for the test's value, with nested `if's
+     `vv' + an input-only fence on `vv'
+     `cc = 0x80000000;' with a matched-operand fence on `cc'
+     `cc = 0x80000000;' with an input-only fence on `cc'
+   and worse:
+     `__asm__("" ::: "memory");' before the `|='          265 /  8
+     `__asm__("" ::"r"(a));' before the `|='              264 /  7
+     `vv' + a MATCHED-OPERAND fence on `vv', nested ifs   265 /  8
+       -- two `lw's both survive here; only the volatile form collapses
+     a `pp = a' copy with a matched-operand fence, test
+       through `pp + 0x14'                                265 /  7
+     `cc = 0x80000000; *(s32*)(a+0x14) |= cc;' (folded)   263 /  4
+     the same holding the constant in `m' / in `r'        263 /  6 both
 
-   TRIAGE: 9 rows, four of them documented permanent.  The other five are
-   two independent single-decision ties -- one sched2 LUID order, one cse
-   deletion -- inside blocks whose instruction streams already match
-   exactly.  Permuter food. */
+   Permuter food, and a narrow target: four rows in one five-insn block
+   whose instruction stream is already exact. */
 
 u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
 {
     s16 k;
     s32 i;
+    s32 sh;
     s32 r;
+    s32 r1;
     s32 t;
     s32 t3;
     s32 t2;
     s32 m;
     register u8 *zz __asm__("$4");
     u8 *g;
+    u8 *p;
     u16 w;
 
     w = ang;
@@ -196,8 +330,10 @@ u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
             *(s16 *)(a + 0x2A) = w;
         }
     }
-    i = (w >> 8) & 0xE;
-    func_800C78A0(a - 0x20, b[0x24] * 64 + (*(s16 *)((u8 *)D_800DCEAC + i) >> 1) + 0x20,
+    sh = w >> 8;
+    p = (u8 *)D_800DCEAC;
+    i = sh & 0xE;
+    func_800C78A0(a - 0x20, b[0x24] * 64 + (*(s16 *)(p + i) >> 1) + 0x20,
                   b[0x25] * 64 + (*(s16 *)((u8 *)D_800DCEBC + i) >> 1) + 0x20,
                   *(s16 *)(a + 0x88), 8, 0x300);
     *(u8 **)(a + 0x60) = e;
@@ -230,10 +366,13 @@ u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
     *(s32 *)(e + 0x14) = (*(s32 *)(e + 0x14) | 0x20000) & ~0x1000000;
     k = a[0x84];
     t = k;
-    r = func_800A6D30();
+    __asm__("" ::"r"(k));
+    r1 = func_800A6D30();
+    __asm__("" ::"r"(r1));
+    k = t;
     if (a[3] != 0)
     {
-        k = t + (r % a[3]) * 4;
+        k = t + (r1 % a[3]) * 4;
     }
     if (e[0x13] == 0 && *(u8 **)(e + 0x50) != NULL && **(u8 **)(e + 0x50) == 2)
     {
@@ -289,5 +428,6 @@ u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
     {
         func_8003E188(e[0x13], 0);
     }
+    __asm__("" ::"r"(k));
     return e;
 }
