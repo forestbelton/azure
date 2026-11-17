@@ -41,11 +41,11 @@
    `if (func_800A0548(...))' between them ends the block.  All three fail, the
    insn is not a movable, and the `lhu' stays in the loop:
 
-       s32 ii;                 (* declared */
+       s32 ii;                 (* declared 
        ...
-       ii = i;                 /* after the `if (r != NULL)' block */
-       if (func_800A0548(...) != 0) { ... return 0; }     /* ends the block */
-       ... func_800A44E0(..., ii << 9) ...                /* the use */
+       ii = i;                  after the `if (r != NULL)' block 
+       if (func_800A0548(...) != 0) { ... return 0; }      ends the block 
+       ... func_800A44E0(..., ii << 9) ...                 the use 
 
    139 words.  138 -> 139 and 42 -> 59 aligned rows, and the preheader copy
    appears at the same word the target has it.
@@ -173,6 +173,7 @@
      `k' onto `r' (both are 0 there) and gives the target's
      `slt $v0, $s4, $v0'; writing the guard as `if (0 < lim)' gives a `blez'
      and is one word short. *)
+ */
 
 s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n)
 {

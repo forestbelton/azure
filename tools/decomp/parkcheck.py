@@ -45,7 +45,36 @@ def check(path):
             depth = 0
     if depth:
         return "unterminated comment"
+
     name = os.path.basename(path)[:-2]
+
+    # The header must be ONE comment. On 2026-11-16 my own repair of the
+    # inner-"/*" bug rewrote each inner opener to "(*" but left its matching
+    # "*/", which closed the OUTER comment early and dropped the rest of the
+    # header to top level as bare prose -- and this check, which then only
+    # looked for a nested "/*", passed all three files. clang-format had
+    # already mangled one of them before anyone noticed.
+    m = None
+    for mm in re.finditer(r"^[A-Za-z_][\w \*]*\b%s\s*\(" % re.escape(name), s, re.M):
+        m = mm
+    if m:
+        head = s[:m.start()].strip()
+        if head.startswith("/*"):
+            # Strip EVERY well-formed comment, not just the first. A park may
+            # legitimately follow its header with a second commented block of
+            # declarations and typedefs, and checking only after the first
+            # "*/" reported that block's prose as orphaned.
+            rest = re.sub(r"/\*.*?\*/", "", head, flags=re.S)
+            for n, ln in enumerate(rest.split("\n")):
+                t = ln.strip()
+                if not t or t.startswith(("#", "/*", "*", "}", "{", "//")):
+                    continue
+                if t.endswith((";", "{", "}", ")", ":", "*/", ",")):
+                    continue
+                if len(t.split()) >= 4:          # a sentence, not C
+                    return ("prose OUTSIDE the header comment: %r -- the "
+                            "header closed early" % t[:50])
+                break
     if not re.search(r"^[A-Za-z_][\w \*]*\b%s\s*\(" % re.escape(name), s, re.M):
         return ("no line defining %s at column 0 -- the merge scripts find the "
                 "body by that line" % name)

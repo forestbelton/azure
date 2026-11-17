@@ -1,105 +1,126 @@
-/* func_8009C93C (ovl_dungeon) -- 261 of 263 words, 33 ALIGNED DIFFERENCES.
-   Agent j49, 2026-11-16.  Cold start; no park existed.
+/* PARK -- func_8009C93C (ovl_dungeon).  263 of 263 words, 15 ALIGNED
+   DIFFERENCES (ovlverify reports 16 masked; one row is a transposed pair and
+   misses twice).  Agent j55, 2026-11-16, rewriting j49's park: the word
+   count is now EXACT and the residue is down from 33 aligned rows.
 
-   SIGNATURE, settled from the three landed callers and the listing:
-     u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, s32 dist, u8 *e);
-   The fifth argument arrives at 0x40($sp).  The three landed call sites
-   (csrc/ovl_dungeon.c:2909, :8026, :8826, :33379) ride an IMPLICIT
-   declaration today, so landing this needs the forward declaration above
-   added to the unit's declaration block AND those four callers re-measured.
+   SIGNATURE, corrected here:
+     u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
+   The FOURTH parameter is a u16, not the s32 j49 assumed -- see the prologue
+   lever below, which is worth 5 rows.  The fifth argument arrives at
+   0x40($sp).  The five call sites ride an IMPLICIT declaration today, and
+   every one passes a constant 0 or 1 for `dist'.  THE DECLARATION HAS BEEN
+   MEASURED AGAINST ALL FIVE ENCLOSING FUNCTIONS and none of them moves:
+   with `u8 *func_8009C93C(u8 *, u8 *, s32, u16, u8 *);' added to the
+   declaration block, func_8008C8BC 121/121, func_800973F0 59/59,
+   func_80098864 47/47, func_800AC010 284/284 and func_800CA788 109/109 are
+   all still 0 differing (2026-11-16, agent j55, against csrc at f196f77).
 
-   FOUR of the 33 are the PROVED-UNREACHABLE `|= 0x80000000` gate
-   (docs/dungeon-sweep.md, "A PROVED-UNREACHABLE RESIDUE EXISTS IN THIS
-   BLOCK"), at candidate words 18/20/21/22:
+   ---------------------------------------------------------------- residue
 
-       mine    lw $v1, 0x14($s3) / bltz $v1 / lui $v0, 0x8000 / or $v0,$v1,$v0
-       target  lw $v0, 0x14($s3) / bltz $v0 / lui $v1, 0x8000 / or $v0,$v0,$v1
+   FOUR OF THE 15 ARE THE PROVED-UNREACHABLE `|= 0x80000000' GATE, words
+   19/21/22/23 -- docs/matching-levers.md, "A PROVED-UNREACHABLE RESIDUE:
+   THE `|= 0x80000000' GATE'S `$v0'/`$v1' SWAP".  Re-confirmed here, nothing
+   spent beyond four spellings that are all byte-identical to this body:
+   `0x80000000 | *(s32 *)(a + 0x14)', `*(u32 *)(a + 0x14) |= 0x80000000',
+   `*(s32 *)(a + 0x14) &= ~0x7FFFFFFF', and the two-condition `if' flattened
+   into one.  Hoisting the load into a local (`(t3 = *(s32 *)(a + 0x14)) >= 0'
+   then `t3 | 0x80000000') is 265 words / 263 differing.
 
-   Nothing was spent on those four.
+   THREE are words 33-35, a sched1 transposition: the target emits
+   `lui %hi(D_800DCEAC)' / `addiu %lo' and THEN `andi $s0, $v0, 0xE', this
+   emits the `andi' first.  Byte-identical spellings tried: `i' inlined into
+   its first use inside the call's argument list, `(s32)(w >> 8) & 0xE',
+   `u32 i', `i' declared first.  `i = (w & 0xE00) >> 8' is 22 differing and
+   a separate `g = (u8 *)D_800DCEAC' pointer local is 23.
 
-   THE TWO MISSING WORDS ARE ONE THING: the target keeps the re-aimed angle
-   in a SECOND pseudo and the candidate coalesces it into the parameter.
-   Target words 9 and 29 are `addu $a1, $s0, $zero` (w = ang, before the
-   `bnez $s2` gate) and `addu $a1, $v0, $zero` (w = the new angle, before the
-   `sh`); `$s0` stays the parameter and is read at word 28 as the addend,
-   `$a1` is read at word 32 by `srl $v0, $a1, 8`.  Every spelling measured
-   lets the two share one register: `addu $s0, $s0, $v0` then
-   `srl $v0, $s0, 8`, and both copies disappear.  Measured, all against the
-   261-word base below unless noted:
+   THREE are words 140/144/145: the target's mask lands in `$v1' and its
+   `k = t' copy fills the `beqz $v0, .L8009CB94' delay slot, where this body
+   leaves a `nop' and puts the mask in `$a0'.  The target has THREE copies
+   around `k'/`t' (`lbu $s1, 0x84($s3)', `addu $s0, $s1, $zero' in the jal
+   slot, `addu $s1, $s0, $zero' in the beqz slot); this body produces the
+   first two exactly.  Every placement of a redundant third `k = t;' was
+   measured: before `r = func_800A6D30()' 28, after it 28, with the load
+   written `t = a[0x84]; k = t;' 28 -- all WORSE than the 16 below.
+   `if (a[3])' for `if (a[3] != 0)' is byte-identical.
 
-     w = ang; ... w = ang + ((f() & 7) << 9);        261 / 33  (the body)
-     the same with a temp: v = ang + ...; w = v;     263 / 47  (the two words
-                                                     come back as a tail nop
-                                                     and a stray `move`, NOT
-                                                     as the $a1 copies)
-     w = ((f() & 7) << 9) + ang;  (operand order)    261 / 33, identical md5
-     a duplicated `if (b != NULL)` arm around the
-       `|= 0x80000000` store, as a cse-region
-       boundary (func_8009704C's device)             262 / 37  -- it DOES buy
-                                                     one of the two words, so
-                                                     the cause really is cse
-                                                     carrying `w == ang` into
-                                                     the inner block, but it
-                                                     costs four elsewhere
+   SIX are words 175-181, the second draw.  Target:
+     addu $s1, $v0, $zero / addu $a0, $s3, $zero / andi $s0, $s1, 0x1 /
+     andi $v0, $s1, 0x2 / sltu $v0, $zero, $v0 / addu $s0, $s0, $v0
+   i.e. the call result is copied into a callee-saved register with a PLAIN
+   MOVE -- no `andi 0xFFFF' -- and `(r & 2) != 0' stays a `sltu'.  With
+   `u16 func_800A6D30()' (the unit's declaration, pinned by 62 call sites)
+   assigned to an `s32', the zero-extension is a real insn, and combine then
+   rewrites `(r & 2) != 0' as `(r >> 1) & 1' because the masked value's
+   nonzero_bits make the ZERO_EXTRACT form cheaper.  Measured on this base:
+   a separate `u16'/`s16 r2' DOES delete the mask but also coalesces the
+   move away -- 262 words / 105 differing; `s32'/`u32 r2' and `!!(r & 2)',
+   `(0 != (r & 2))', `((r & 2) != 0 ? 1 : 0)', `((r & 2) != 0) + (r & 1)'
+   are all byte-identical to this body; reusing `k' 30, reusing `t' 30,
+   `r = func_800A6D30() & 3' 262/99, computing the func_800981F8 half first
+   85 and 266 words, `(r & 2) >> 1' / `(r >> 1) & 1' / a split `t +=' 38.
+   WHAT IS WANTED IS A SECOND PSEUDO that the mask-free move cannot be
+   coalesced into -- the same shape as the `w' lever below, but the HImode
+   trick does not work here because the HImode copy IS the mask.
 
-   THE REST, in order, each already reduced as far as hand spellings reached:
+   --------------------------------------------------- WHAT J55 ADDED, 33 -> 15
 
-   * words 135-145, the +0x84 draw.  Target: `lbu $s1, 0x84($s3)`,
-     `addu $s0, $s1, $zero`, `andi $v1, $v0, 0xFFFF`, `beqz`,
-     `addu $s1, $s0, $zero` (delay), `div $zero, $v1, $v0`.  The candidate
-     gets the two copies the right way round but leaves a `nop` in the beqz
-     delay slot where the target has the second copy.  Adding a redundant
-     `k = t;` before the `if` DOES fill that slot but moves the
-     `andi 0xFFFF` one word later: 263 / 47 as a whole, no net gain.
-     `s16 k` + `s32 t` reused across the function is what fixed this block
-     from 11 differences to 5 -- see below.
+   * `u16 w;' AND NOT `u32 w;'.  Worth THE TWO MISSING WORDS, and it is the
+     general lever.  The target keeps the re-aimed angle in a SECOND pseudo:
+     `$s0' stays the parameter `ang' and is read at word 28 as the addend,
+     while `$a1' is `w' -- written at word 9 (`addu $a1, $s0, $zero') and at
+     word 29 (`addu $a1, $v0, $zero') and read at word 32 by
+     `srl $v0, $a1, 8'.  With `u32 w' (or any SImode `w') cse.c's
+     `insert_regs' finds a same-mode REG in the equivalence class, calls
+     `make_regs_eqv', and the two share one register: `addu $s0, $s0, $v0'
+     then `srl $v0, $s0, 8', and both copies vanish -- 261 words.  An `s16'
+     or `u16' `w' is a DIFFERENT MODE, `insert_regs' finds no same-mode REG,
+     `w' gets a quantity of its own and both copies survive.  `(w >> 8) & 0xE'
+     still compiles to the target's bare `srl'/`andi' because the `& 0xE'
+     kills everything the truncation would have.  (The same mechanism landed
+     func_800BB2E4 on 2026-11-16; see its comment in csrc/ovl_dungeon.c.)
+     j49 measured a plain `s32' temp instead and got 263/47, with the two
+     words coming back as a tail nop and a stray `move'.
 
-   * words 173-181, the second draw.  Target copies the u16 result into a
-     callee-saved register with a plain `addu $s1, $v0, $zero` and then
-     `andi $s0,$s1,1` / `andi $v0,$s1,2` / `sltu $v0,$zero,$v0`.  With an
-     `s32` local the assignment costs the `andi $v0, $v0, 0xFFFF` widening
-     and combine then rewrites `(r & 2) != 0` as `(r >> 1) & 1`: same word
-     count, 6 differing.  Measured: `u16` local 262 / 57 (the copy vanishes
-     entirely), `s16` local 262 / 57, reusing `k` 263 / 57.  The `s32` form
-     below is the best of the four.
+   * `u16 dist' IN THE SIGNATURE.  Worth 5 rows -- the whole prologue
+     cluster, words 7-11.  With `s32 dist' the scheduler emits the `$s4'
+     save-and-copy pair BEFORE the `$s2' pair, so the stack argument is
+     loaded fifth instead of fourth and `addu $a1, $s0, $zero' lands two
+     words late; with `u16 dist' the order is the target's exactly.
+     `u8 dist' is 25, `s16 dist' is 264 words / 190, `s16 ang' and
+     `u32 ang' are byte-identical to this body.
 
-   * words 196-203, the +0x03 clamp: register numbers only.
+   * `k = a[0x84]; t = k;' AND NOT `t = a[0x84]; k = t;'.  Worth 2 rows
+     (words 137 and 139): the target loads into `k's register and copies
+     DOWN to `t', not the other way round.
 
-   * the prologue, words 1-12: the candidate loads the stack argument FIRST
-     and the target loads it fourth, so the five `sw $sN` saves interleave
-     with the parameter copies in a different order.  sched1 output; no
-     source spelling reached it.
+   * A SEPARATE `s32 t3' FOR THE FINAL `t3 = k; if (t3 >= ...)' COMPARE.
+     Worth 4 rows (words 198-203, the whole `sll'/`sra'/`slt'/`bnez' block):
+     sharing `t' with the two earlier roles is one global allocno and one
+     hard register, and the target plainly uses `$s0' throughout there.
+     Splitting the MIDDLE role (`t2' for the `(r & 1) + ...' block) instead
+     is 36, and splitting both is 96 -- it is this role specifically.
 
-   WHAT GOT IT FROM 117 TO 33, and these all generalise:
+   ------------------------------------- what j49 established and still holds
 
-   * TWO SCRATCH LOCALS, `s16 k` and `s32 t`, REUSED FOR ALL FOUR BLOCKS.
-     The target's $s1/$s0 pair carries (a[0x84], its copy), then
-     (a[3]>>1|a[3]>>6, its widening), then the remainder.  The s16->s32
-     direction is what emits `sll $s0,$s1,16` / `sra $s0,$s0,16` at word
-     198: with `s32 n` holding the shift and `s16 m = n` the extension is
-     folded away and the function is a word short there.  Worth 3 words.
-   * `k = t;` BEFORE the `if`, not an `else` arm: an `if`/`else` emits a `j`
-     the target does not have.  Worth 2 words.
-   * `g = D_800E3D7C;` READ INTO A LOCAL BETWEEN the two `&=` stores of the
-     tail.  Read inline in the compare, the `lui`/`lw` pair sits after both
-     read-modify-writes, the load-delay `nop` survives and reorg fills the
-     `bne`'s delay slot with a `move` instead of the `sw $v0, 0x14($s2)`
-     the target puts there: 14 aligned differences across words 232-249.
-     Read before BOTH stores instead, it is 261 / 47.  This is
-     docs/matching-levers.md's "WHERE A GLOBAL IS READ DECIDES A DELAY-SLOT
-     FILL" with the read site one statement later than that entry's.
+   * TWO SCRATCH LOCALS, `s16 k' and `s32 t', reused across the blocks: the
+     s16->s32 direction is what emits `sll $s0,$s1,16' / `sra $s0,$s0,16'.
+   * `k = t;' BEFORE the `if', not an `else' arm (an `if'/`else' emits a `j').
+   * `g = D_800E3D7C;' READ INTO A LOCAL BETWEEN the two `&=' stores of the
+     tail.  Read inline in the compare it is 14 aligned rows across words
+     232-249; read before BOTH stores, 261/47.
 
-   TRIAGE: the counts differ by two inside ONE identified block and the
-   structure either side of it is proved, so this is permuter food by
-   docs/dungeon-sweep.md's rule, not a .greg job.  Queue it. */
-u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, s32 dist, u8 *e)
+   TRIAGE: 15 rows, 4 of them documented permanent, and the three live
+   clusters are all register-name ties inside blocks whose instruction
+   streams match.  Permuter food. */
+u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e)
 {
     s16 k;
     s32 i;
     s32 r;
     s32 t;
+    s32 t3;
     u8 *g;
-    u32 w;
+    u16 w;
 
     w = ang;
     if (e == NULL)
@@ -143,8 +164,8 @@ u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, s32 dist, u8 *e)
     }
     *(s32 *)(a + 0x14) |= 0x4000000;
     *(s32 *)(e + 0x14) = (*(s32 *)(e + 0x14) | 0x20000) & ~0x1000000;
-    t = a[0x84];
-    k = t;
+    k = a[0x84];
+    t = k;
     r = func_800A6D30();
     if (a[3] != 0)
     {
@@ -170,8 +191,8 @@ u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, s32 dist, u8 *e)
     {
         k = a[3] >> 6;
     }
-    t = k;
-    if (t >= (s32)(func_800A6D30() & 0x7F))
+    t3 = k;
+    if (t3 >= (s32)(func_800A6D30() & 0x7F))
     {
         *(s32 *)(a + 0x1C) |= 0x1000000;
     }

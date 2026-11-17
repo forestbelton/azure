@@ -73,8 +73,19 @@ def decls_of(path):
         line = line.strip()
         if line.startswith("*"):
             line = line[1:].strip()
-        if DECL_LINE.match(line) and line not in out:
-            out.append(line)
+        if not DECL_LINE.match(line) or line in out:
+            continue
+        if not line.startswith("extern") and "(" in line:
+            # A prototype is "<type> <name>(" -- two or three tokens before
+            # the paren. Without this cap an ordinary English sentence that
+            # ends in "(...);" parses as one; a park's prose line "Its third
+            # parameter is the one it uses (UnkSlot *s, spilled to ...);"
+            # was extracted and re-declared, and the compile failed on the
+            # word "spilled".
+            lead = line.split("(")[0].split()
+            if not 2 <= len(lead) <= 3:
+                continue
+        out.append(line)
     return "".join(l + "\n" for l in out)
 
 

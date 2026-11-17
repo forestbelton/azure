@@ -1,8 +1,8 @@
 /* func_800CE4E8 (ovl_dungeon) -- PARK, best so far.
 
-   target 109 words, candidate 109 words, 11 differing (masked);
-   aligndiff: 109 built / 109 target, 9 ALIGNED DIFFERENCES.
-   Was 14 masked / 12 aligned before batch j48.
+   target 109 words, candidate 109 words, 8 differing (masked);
+   aligndiff: 109 built / 109 target, 8 ALIGNED DIFFERENCES.
+   Was 14/12 before j48, 11/9 before j56.
 
    WHAT IT IS.  The 0x202-style grid spawner for func_800CE028's node: a 5x5
    sweep that fills the view's +0x04 row of negated func_800BCA68 heights and
@@ -10,6 +10,57 @@
    func_800419EC(0x20, 8) / D_800E296C flag / D_80083460+0xA counter close.
    Parameters 3 and 4 (`ang`, the record pointer) are never read; the fifth is
    the 0/1 the two call sites at :34604 and :34620 pass.
+
+
+   -------------------------------------------------- WHAT j56 ADDED: 9 -> 8
+
+   `t = f;' IS NOT INSIDE THE `if (n != NULL)' AT ALL.  It goes between
+   `n = func_8003FC64(2);' and the `if', so the `s16' local's spill
+   `sh $s0, 0x10($sp)' is emitted in the ENTRY block, before the `beqz'.
+   reorg's `fill_simple_delay_slots' then takes it straight out of the block
+   it is already in, which is what the target does -- the old header read the
+   target as reorg reaching into the fall-through, and that reading is what
+   made residue (a) look unreachable.  Worth 4 of the 9 rows, at the same 109
+   words.  Before the CALL instead (`t = f; n = func_8003FC64(2);') is
+   109 / 12: the spill is then above the `jal' and $s0 has to be set up
+   earlier.
+
+   j56 also re-ran the head-statement sweep on top of that hoist -- the five
+   remaining head statements in the orders p,q,H,X,Y / P,H,X,Y,Q /
+   P,H,Q,X,Y and the `j = 0' hoist out of the outer `for' header are ALL
+   109 / 8, byte-identical; P,X,Y,H,Q / P,Q,X,Y,H / P,X,Y,Q,H are 109 / 14.
+   The 8-plateau is as wide as the 9-plateau was.
+
+   Three devices on `t', all WORSE and all for the same reason -- an "m"
+   constraint forces the local into memory and deletes the `$s7'
+   sign-extended copy the loop test needs:
+     `__asm__("" ::"m"(t));' after `t = f'      107 words / 44 aligned
+     `__asm__("" : "=m"(t) : "m"(t));'          107 / 44
+     the same before `func_800419EC'            108 / 47
+     the same before `*(s16 *)(p + 0x6E) = t'   107 / 47
+     the same before the outer `for'            107 / 54
+     `__asm__("" ::"r"(t));' after `t = f'      110 / 10
+   And a bare `__asm__("");' after `t = f' is 110 / 10: it DOES put the spill
+   first in the block, but reorg then has nothing it may use before the
+   branch and `fill_eager_delay_slots' duplicates the branch target's
+   `addu $v0, $fp, $zero' into the delay slot instead -- one word over.
+
+   Four more cell-address spellings, against lever 1 below:
+     `4 + (s32)r + i * 2'        110 words / 35 aligned
+     `i * 2 + ((s32)r + 4)'      110 / 35
+     `(s32)r + (4 + i * 2)'      109 / 29
+     `4 + i * 2 + (s32)r'        109 / 8  -- on the plateau, byte-identical
+   So the rule holds exactly as written: the giv fold fires iff the `+ 4'
+   term is associated onto `r' before the index is added.
+
+   THE RESIDUE IS NOW 8 ROWS, and only two facts are left:
+     a) `p' and `q' (`addiu $s3, $fp, 0x20' / `addu $s5, $s3, $zero') come
+        FIRST in this block and should come after the `t' sign-extension and
+        the `j = 0' -- the target's order is spill, `addu $s4, $zero, $zero',
+        `sll'/`sra', `p', `q'.  4 rows.  Nothing in the head-order sweep
+        moves them; they are the two insns with the smallest LUIDs that have
+        dependents, and sched2 picks them last in its backward pass.
+     b) residue (b) below, unchanged, 3 rows.
 
    ------------------------------------------------- WHAT j48 ADDED: 12 -> 9
 
@@ -123,9 +174,9 @@ s32 func_800CE4E8(s32 x, s32 y, s32 ang, u8 *e, s32 f)
     s32 j;
 
     n = func_8003FC64(2);
+    t = f;
     if (n != NULL)
     {
-        t = f;
         p = (u8 *)n + 0x20;
         q = p;
         n->unk_10 = (u32)func_800CE028;
