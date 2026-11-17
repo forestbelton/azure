@@ -300,6 +300,26 @@ and reproduce its stated measurement FIRST -- if you cannot, say so
 immediately and stop, because something has drifted and nothing after that
 point is trustworthy.
 
+**SPLICE WITH THE TOOL, NOT WITH A REGEX.**
+
+    python3 tools/decomp/parksplice.py FUNC /tmp/claude-1000/agent-@ID@/ovl_dungeon.c
+
+That writes the current unit with the park's live body and its declarations
+already placed -- byte for byte the splice `parkresidue.py` ranks, so you
+start at the stated residue instead of re-deriving it. It also knows two
+things a hand splice does not: a park's `#if 0` alternative is not the live
+body, and a park's typedefs may have to go immediately above the body rather
+than in the unit's top block (pass `--alt` for the second placement). If a
+park re-declares a function the unit already declares, it adopts the park's
+spelling rather than adding a conflicting second one.
+
+On 2026-11-16 an agent hand-spliced with `^s32 FUNC\(.*?\n\}\n` and the
+pattern matched the FORWARD DECLARATION rather than the definition, eating
+~37000 lines. The symptom was a wall of `undeclared` and `syntax error` in
+unrelated functions -- exactly the misleading class this brief warns about
+above, and nothing like a defect in the body. If you ever do splice by hand,
+anchor on the parameter list and assert the match length.
+
 Two tools that matter here specifically:
 
   python3 tools/decomp/parkcheck.py         # run after ANY header edit
