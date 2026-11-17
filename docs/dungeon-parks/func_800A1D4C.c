@@ -64,8 +64,8 @@
    extern u8 D_800E09BB[];
    void func_800A1D4C(u8 *, s16);
    END DECLARATIONS
-   PROTOTYPE CHANGE ON LANDING: `s32 func_800A2424(u8 *, s32);' narrows to
-   `s32 func_800A2424(u8 *, s16);'. Six landed callers re-measured at 0.
+   PROTOTYPE ALREADY DONE: `s32 func_800A2424(u8 *, s16);' is in the unit as
+   of 2026-11-16, landed with its twin func_800A2424. Nothing to change.
 */
 void func_800A1D4C(u8 *p, s16 f)
 {

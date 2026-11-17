@@ -415,7 +415,12 @@ extern u8 D_800E0E9B[];
 extern u8 D_800E0EE1[];
 extern u8 D_800E0F07[];
 void func_800997FC(u8 *);
-s32 func_800A2424(u8 *, s32);
+s32 func_800A2424(u8 *, s16);
+s32 func_800647A0(s32);
+extern u8 D_800E098B[];
+extern u8 D_800E099A[];
+extern u8 D_800E09B2[];
+extern u8 D_800E09BB[];
 extern u8 D_800E173A[];
 extern u8 D_800E1827[];
 s32 func_800C8A3C(u8 *, s16, s16);
@@ -14959,7 +14964,243 @@ s16 func_800A1C58(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A1D4C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A2424);
+/* The dungeon "level down" twin of func_800A1D4C. 432 words, 0 differing.
+   The second parameter is a SHORT (`sll $v0, $s6, 16' + `beqz'), not the
+   s32 the unit declared.
+
+   FOUR LEVERS, all allocation and scheduling rather than shape:
+
+   * THE `t[x] * q[x]' PRODUCT HAS TO SHARE THE MESSAGE LOOP'S COUNTER `i'.
+     The target holds it in `$s0' although it crosses no call; as its own
+     `s32 r' it is a short allocno and global.c's find_reg takes $a0/$v1
+     from the call-clobbered end of reg_alloc_order. Written into `i', which
+     crosses twelve calls, find_reg goes to the callee-saved end. 36 -> 17
+     aligned differences. Six rewrites of the expression could not move it
+     (fully inlined 42, product and high half reordered 56, explicit r1/r2
+     temporaries +16 words, one whole-difference expression 86).
+
+   * THE SPELL LOOP'S RULE INDEX IS A LOCAL OF ITS OWN THAT IS ALSO READ IN
+     THE MESSAGE LOOP (`k = p[i * 3 + 8]; h = func_80099194(d[k].unk_00, h);'
+     in place of the inlined subscript). 2 -> 0. This is the whole residue
+     the park was left on: the target loads it into `$a0' and loop.c's
+     induction pointer into `$a1', and this candidate had them the other way
+     round. The reason is a hard-register conflict, read out of `.greg':
+     with the index written into the class local `c' the allocno is live
+     across the `sll $a0, $v1, 11' that sets up func_800647A0's argument at
+     word 38, so `c' conflicts with hard reg 4 and find_reg skips to $a1;
+     with a fresh local used only in the spell loop the allocno conflicts
+     with $v0 alone and find_reg takes $v1, which shifts every register in
+     the loop. Reading the SAME local in the message loop adds the $v1
+     conflict without adding an $a0 one -- `k' dies building the argument
+     address, so it crosses no call -- and $a0 is the first register left.
+     Measured with the index in `c' 10, `hi' 14 (and `hi' then takes $a0 in
+     all six stat blocks, 12 rows), a fresh local used only in the spell
+     loop 17, `u' 17 / 30 asm lines, `w'/`n'/`hp'/a second fresh local 17,
+     `lvl' and `lo' over 100.
+
+   * `i = 0;' BEFORE `d = (UnkDungeonName0 *)D_8006DE24;', with the message
+     loop then written `for (; i < 3; i++)'. 2 -> 0, and the last two words.
+     `addu $s0, $zero, $zero' and `addiu $s2, $v0, %lo(D_8006DE24)' are
+     independent, so sched1 orders them by INSN_LUID and nothing downstream
+     can recover the swap. Assigning `d' inside the loop body and letting
+     loop.c hoist it measures the same.
+
+   * `(*(u16 *)0x80013714 & 1) == 0' FOR THE FIRST OF THE TWO TESTS. The
+     declared `D_80013714' lets reorg lift the `lui %hi' into the
+     `beqz $v0, .L800A2AB8' delay slot; the target's slot holds the
+     `addiu $v0, $zero, 0x1' reorg COPIES out of the shared `return 1'
+     block, which a constant address's single rtl insn leaves it free to
+     take. 431 -> 432 words and 149 -> 36 differing. The SECOND test
+     measures identically either way, so it is left as the symbol.
+
+   Also measured and rejected: the p[0..3] loads read after the `hi' line
+   (431/202), `lo' used as the product with `hi' computed first (432/56),
+   the product fully inlined twice (432/42), explicit product temporaries
+   (448 words), the whole difference as one expression with no lo/hi locals
+   (432/86), and five spellings of the `return 1' itself (all 431 words --
+   the delay slot is the only control there is). */
+s32 func_800A2424(u8 *p, s16 f)
+{
+    u8 *t;
+    u8 *q;
+    u8 *g;
+    void *m;
+    void *h;
+    UnkDungeonName0 *d;
+    s32 lvl;
+    s32 c;
+    s32 k;
+    s32 i;
+    s32 w;
+    s32 u;
+    s32 lo;
+    s32 hi;
+    s32 n;
+    u32 hp;
+    u8 e[3];
+
+    if (p[0x11] < 2)
+    {
+        return 0;
+    }
+    p[0x11] -= 1;
+    lvl = p[0x11];
+    c = p[0x13];
+    *(u32 *)(p + 0x18) = D_800835E8[lvl] - 1;
+    t = D_800DDCBC[c];
+    q = (u8 *)&D_8006D168[c];
+    lo = q[5] + t[5] * (lvl - 1) / 16 + t[5] * func_800647A0(((lvl - 1) * t[5]) << 11) / 32768;
+    hi = q[5] + t[5] * lvl / 16 + t[5] * func_800647A0((lvl * t[5]) << 11) / 32768;
+    n = p[5] + (lo - hi);
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[5] = n;
+
+    i = t[4] * q[4];
+    lo = q[4] + i * (lvl - 1) / 1024;
+    hi = q[4] + i * lvl / 1024;
+    n = p[4] + (lo - hi);
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[4] = n;
+
+    i = t[0] * q[0];
+    n = p[0];
+    lo = q[0] + i * (lvl - 1) / 64;
+    hi = q[0] + i * lvl / 64;
+    n += lo - hi;
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[0] = n;
+
+    i = t[1] * q[1];
+    n = p[1];
+    lo = q[1] + i * (lvl - 1) / 64;
+    hi = q[1] + i * lvl / 64;
+    n += lo - hi;
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[1] = n;
+
+    i = t[2] * q[2];
+    n = p[2];
+    lo = q[2] + i * (lvl - 1) / 64;
+    hi = q[2] + i * lvl / 64;
+    n += lo - hi;
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[2] = n;
+
+    i = t[3] * q[3];
+    n = p[3];
+    lo = q[3] + i * (lvl - 1) / 1024;
+    hi = q[3] + i * lvl / 1024;
+    n += lo - hi;
+    if (n == 0)
+    {
+        n = 1;
+    }
+    p[3] = n;
+
+    w = *(s16 *)(q + 6);
+    hp = w + lvl * w + lvl * lvl * (w + t[6] * lvl) / 512;
+    if (hp > 0xFFFF)
+    {
+        hp = 0xFFFF;
+    }
+    *(u16 *)(p + 6) = hp;
+    if (p[0x13] != 0)
+    {
+        for (i = 2; i >= 0; i--)
+        {
+            e[i] = 0;
+            k = p[i * 3 + 8];
+            if (k != 0)
+            {
+                u = D_8006DE24[k].unk_10 >> 4;
+                if ((u & *(u32 *)(p + 0x14)) != 0)
+                {
+                    if (p[i * 3 + 0xA] >= 2)
+                    {
+                        p[i * 3 + 0xA] -= 1;
+                        e[i] = 1;
+                    }
+                }
+            }
+        }
+    }
+    func_80041E70(p);
+    if (p[0x29] < p[0x28])
+    {
+        p[0x28] = p[0x29];
+    }
+    if (p[0x66] < p[0x25])
+    {
+        p[0x25] = p[0x66];
+        p[0x24] = 0xFF;
+    }
+    if (p[0x68] < p[0x26])
+    {
+        p[0x26] = p[0x68];
+    }
+    if (p[0x69] < p[0x27])
+    {
+        p[0x27] = p[0x69];
+    }
+    if (f != 0)
+    {
+        if ((*(u16 *)0x80013714 & 1) == 0)
+        {
+            D_800DCF4F = 1;
+            g = (u8 *)&D_80083460;
+            *(u16 *)(g + 0xA) += 1;
+        }
+        func_800B4C7C(0x8003, p, -3, 1);
+        func_800A56E0(0x615);
+        m = func_800990FC();
+        h = func_80099194(D_800E098B, m);
+        h = (void *)func_8009929C(0xA, h);
+        h = func_80099734(p, h);
+        h = func_80099194(D_800E099A, h);
+        h = func_8003AD08(p[0x11], h);
+        h = func_80099194(D_80089000, h);
+        if (p[0x13] != 0 && (*(u32 *)(p + 0x14) & 0x4000) != 0)
+        {
+            i = 0;
+            d = (UnkDungeonName0 *)D_8006DE24;
+            for (; i < 3; i++)
+            {
+                if (e[i] != 0)
+                {
+                    h = (void *)func_8009929C(0xA, h);
+                    k = p[i * 3 + 8];
+                    h = func_80099194(d[k].unk_00, h);
+                    h = func_80099194(D_800E09B2, h);
+                    h = func_80099194(D_800E09BB, h);
+                }
+            }
+        }
+        if ((D_80013714 & 1) == 0)
+        {
+            h = (void *)func_8009929C(0x11, h);
+            h = (void *)func_8009929C(0x4C, h);
+            h = (void *)func_80099254(D_800E0458, h);
+        }
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    return 1;
+}
 
 /* 8 words, 0 differing. */
 void func_800A2AE4(void)
