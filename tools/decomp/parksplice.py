@@ -22,6 +22,8 @@ back to build/town.bin.elf.  This script refuses another name rather than let
 that happen quietly.
 """
 import os
+import re
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -57,16 +59,47 @@ def main():
     # permimport --source compiles, so a splice that differs from the one the
     # ranking measured hands them a different function to work on.
     cands = list(pr.splices(unit, stub, body, decls))
-    text = cands[-1] if alt else cands[0]
+    if alt:
+        cands = cands[-1:]
     d = os.path.dirname(os.path.abspath(out))
     if d:
         os.makedirs(d, exist_ok=True)
-    open(out, "w").write(text)
-    print("%s: spliced into %s (%d declaration line(s); %d placement(s) "
-          "available -- if it does not compile, try %s --alt)"
-          % (func, out, len(decls.strip().split("\n")) if decls else 0,
-             len(cands), os.path.basename(__file__)))
-    return 0
+
+    # TRY EACH PLACEMENT AND KEEP THE ONE THAT COMPILES, rather than writing
+    # the first and leaving the caller to discover it does not. On 2026-11-16
+    # an agent was handed the default placement for a park whose typedefs
+    # build on UnkDungeonSPXY -- declared ~900 lines below the top block -- and
+    # had to work out for itself that `--alt` was the one that worked.
+    # The measurement is worth having anyway: it hands the caller a verified
+    # starting residue instead of a file and a promise.
+    env = dict(os.environ)
+    env.setdefault("AZURE_SCRATCH", os.path.join(d or ".", "sp"))
+    os.makedirs(env["AZURE_SCRATCH"], exist_ok=True)
+    last = None
+    for i, text in enumerate(cands):
+        open(out, "w").write(text)
+        r = subprocess.run(
+            [sys.executable, "tools/decomp/aligndiff.py", out, func],
+            capture_output=True, text=True, env=env, cwd=pr.PROJ)
+        m = re.search(r"built (\d+) words, target (\d+) words, (\d+) aligned",
+                      r.stdout)
+        if m:
+            print("%s: spliced into %s (%d declaration line(s), placement %d "
+                  "of %d) -- %s words, %s aligned differences"
+                  % (func, out, len(decls.strip().split("\n")) if decls else 0,
+                     i + 1, len(cands), m.group(1), m.group(3)))
+            if m.group(1) != m.group(2):
+                print("  NOTE: target is %s words; this body is %s."
+                      % (m.group(2), m.group(1)))
+            return 0
+        err = [l for l in (r.stderr or r.stdout).strip().split("\n")
+               if "error" in l.lower() or "undeclared" in l.lower()]
+        last = err[-1][:200] if err else "did not compile"
+    print("%s: NO placement compiles. Last error:\n  %s" % (func, last))
+    print("The park needs its DECLARATIONS block repaired before it can be "
+          "measured; see docs/dungeon-parks/README.md.")
+    return 1
+
 
 
 if __name__ == "__main__":
