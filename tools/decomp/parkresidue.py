@@ -38,8 +38,14 @@ DECL_RE = re.compile(
 # A prototype needs a RETURN TYPE -- at least two words before the "(".
 # Without that rule this also matched `func_80094270(p, b, c, u, j);` quoted
 # in a park's prose, i.e. a CALL, which then re-declared the callee wrongly.
+# A one-line `typedef` is its own case: a function-POINTER typedef such as
+# `typedef u8 *(*UnkDungeonSpawner)(s32, u8, u8, s16);` has a paren before the
+# name, so the prototype alternative below cannot match it and the two-or-three
+# token rule would reject it anyway. func_800B6AC4 used one and declared it
+# nowhere, which cost the park its measurement twice over.
 DECL_LINE = re.compile(
-    r"^\s*(extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;"
+    r"^\s*(typedef\s+[^;]+;"
+    r"|extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;"
     r"|\w+[\w \*]*\s+\**\w+\s*\([^;{]*\)\s*(__asm__\s*\([^)]*\))?\s*;)\s*$")
 
 
@@ -75,7 +81,7 @@ def decls_of(path):
             line = line[1:].strip()
         if not DECL_LINE.match(line) or line in out:
             continue
-        if not line.startswith("extern") and "(" in line:
+        if not line.startswith(("extern", "typedef")) and "(" in line:
             # A prototype is "<type> <name>(" -- two or three tokens before
             # the paren. Without this cap an ordinary English sentence that
             # ends in "(...);" parses as one; a park's prose line "Its third
@@ -89,15 +95,171 @@ def decls_of(path):
     return "".join(l + "\n" for l in out)
 
 
-def body_of(path, func):
+def preamble_of(path, func):
+    """Top-level text a park puts BETWEEN its header comment and its body.
+
+    `decls_of` reads declaration-SHAPED lines out of the header comment, one
+    per line. That cannot carry a multi-line construct, so a park needing a
+    `typedef struct { ... } Unk...;` writes it at top level below the comment
+    instead and says "needs the typedef below" -- which is the natural place
+    for it, and was silently dropped.
+
+    The cost of dropping it is misleading: old gcc treats `UnkFoo *w;` with
+    UnkFoo unknown as a syntax error and then DISCARDS THE REST OF THE
+    DECLARATION BLOCK, so the first complaint is `c undeclared` about a local
+    three lines further down that is declared perfectly well. func_8009A3D0
+    skipped for that reason, and the error named the wrong line and the wrong
+    identifier.
+
+    Anything inside an `#if 0` alternative is left behind with it.
+    """
     s = open(path, encoding="utf-8").read()
-    m = None
-    for mm in re.finditer(r"^[A-Za-z_][\w \*]*\b%s\s*\([^;]*\)\s*$" % re.escape(func),
-                          s, re.M):
-        m = mm
-    if not m:
+    end = s.find("*/")
+    start = s.find("*/") + 2 if end > 0 else 0
+    stop = _body_offset(s, func)
+    if stop is None:
+        return ""
+    cond = re.compile(r"^\s*#\s*(if|ifdef|ifndef|endif)\b")
+    depth, out = 0, []
+    for line in s[start:stop].splitlines():
+        c = cond.match(line)
+        if c:
+            depth += -1 if c.group(1) == "endif" else 1
+            continue
+        if depth == 0 and line.strip():
+            out.append(line)
+    return "".join(l + "\n" for l in out)
+
+
+def _body_offset(s, func):
+    """Offset of the LIVE definition of FUNC in park text S, or None."""
+    defn = re.compile(r"^[A-Za-z_][\w \*]*\b%s\s*\([^;]*\)\s*$" % re.escape(func))
+    cond = re.compile(r"^\s*#\s*(if|ifdef|ifndef|endif)\b")
+    depth, m, off = 0, None, 0
+    for line in s.splitlines(keepends=True):
+        c = cond.match(line)
+        if c:
+            depth += -1 if c.group(1) == "endif" else 1
+        elif depth == 0 and defn.match(line.rstrip("\n")):
+            m = off
+        off += len(line)
+    return m
+
+
+def body_of(path, func):
+    """The park's LIVE definition of FUNC -- the last one OUTSIDE any #if 0.
+
+    A park records rejected and alternative spellings under `#if 0`, and those
+    blocks come AFTER the live body.  Taking the last definition in the file
+    therefore grabbed the alternative, and spliced it together with its
+    trailing `#endif` and no opener: `unbalanced #endif`, which is how
+    func_8008E700 and func_800C0404 both stopped measuring on 2026-11-16.
+    Taking the FIRST would be wrong too -- a park may lead with an older body
+    under `#if 0` -- so track conditional depth and take the last at depth 0.
+    """
+    s = open(path, encoding="utf-8").read()
+    m = _body_offset(s, func)
+    if m is None:
         return None
-    return s[m.start():]
+    return s[m:]
+
+
+# A prototype, and ONLY a prototype. Two traps, both of which fired:
+#
+#   * `typedef` is excluded outright. Without that, a function-pointer typedef
+#     is a prototype-shaped line and `adopt` happily rewrites it.
+#   * the parameter list may not itself contain parentheses. With `[^;{]*`
+#     there, `extern void (*D_800DD830[])(void);` matched with the captured
+#     NAME equal to `void` -- the lazy prefix ate `xtern `, `(\w+)` took
+#     `void`, and the `[^;{]*` swallowed `*D_800DD830[])(void`. `adopt` then
+#     looked for "the unit's prototype for void", found
+#     `typedef void (*UnkDungeonStep)(u8 *, UnkVec *, u8 *, u8 *);` and
+#     replaced it. Two parks that had measured fine stopped compiling, at a
+#     line 30000 away from anything either of them touched.
+#
+# The cost is that a prototype with a function-pointer PARAMETER is no longer
+# recognised as one. That is the safe direction: it is then inserted verbatim
+# instead of adopted.
+PROTO = re.compile(
+    r"^(?!typedef\b)[A-Za-z_][\w \*]*?\**(\w+)\s*\([^;{()]*\)\s*;\s*$")
+
+
+def reproto(text):
+    """Drop duplicate prototypes, keeping the LAST spelling of each name."""
+    keep, seen = [], {}
+    for line in text.split("\n"):
+        m = PROTO.match(line.strip())
+        if not m:
+            if line.strip():
+                keep.append(line)
+            continue
+        seen[m.group(1)] = line
+    return "".join(l + "\n" for l in keep) + "".join(
+        l + "\n" for l in seen.values())
+
+
+def adopt(unit, decls):
+    """REPLACE the unit's own prototype for any name the park re-declares.
+
+    A park body whose signature differs from the unit's declaration is a
+    PROTOTYPE CHANGE, not a missing declaration, and inserting a second
+    spelling gets `conflicting types for func_...` rather than a measurement.
+    Two parks were invisible to the ranking for this reason: the unit carries
+    `void func_800AFBFC();` and `void func_800B51C8();` -- empty-parameter,
+    void-returning -- while both bodies return s32 and take three arguments.
+
+    Returns (unit with those lines rewritten, the declarations still to
+    insert). A prototype change is real work the CALLERS have to be measured
+    against; this only makes the park measurable so the size of the prize is
+    known before an agent is sent.
+    """
+    out = []
+    for line in decls.split("\n"):
+        m = PROTO.match(line.strip())
+        if not m:
+            if line.strip():
+                out.append(line)
+            continue
+        name = m.group(1)
+        here = re.compile(r"^[A-Za-z_][\w \*]*?\**%s\s*\([^;{]*\)\s*;[^\n]*$"
+                          % re.escape(name), re.M)
+        if here.search(unit):
+            unit = here.sub(line.strip().replace("\\", "\\\\"), unit, count=1)
+        else:
+            out.append(line)
+    return unit, "".join(l + "\n" for l in out)
+
+
+def splices(unit, stub, body, decls):
+    """The unit with BODY spliced in, once per declaration PLACEMENT to try.
+
+    There is no single right place to put a park's declarations.
+
+      * The top block (after `extern u8 D_80082E80[];`, around line 358) is
+        right for a callee PROTOTYPE, which has to precede the unit's own
+        earlier calls to that callee or gcc reports "type mismatch with
+        previous implicit declaration" against a definition hundreds of lines
+        above.
+      * That same place is WRONG for a typedef built on one of the unit's own
+        structs -- `UnkDungeonSPXY` is declared around line 1260, so a park
+        struct with a `UnkDungeonSPXY unk_70;` field cannot go at 358. Those
+        belong immediately above the body.
+
+    func_800AFBFC and func_800B84E4 each failed for the second reason while
+    the first placement is what most parks need, so try the top block and fall
+    back to just-above-the-body rather than choosing.
+    """
+    sig = body.split("\n", 1)[0].strip()
+    decls = reproto(decls + sig.rstrip("{ ") + ";\n")
+    unit, decls = adopt(unit, decls)
+    spliced = unit.replace(stub, body.rstrip() + "\n")
+    if not decls:
+        yield spliced
+        return
+    anchor = "extern u8 D_80082E80[];\n"
+    if anchor in spliced:
+        yield spliced.replace(anchor, anchor + decls, 1)
+    yield unit.replace(stub, decls + "\n" + body.rstrip() + "\n")
 
 
 def measure(func):
@@ -111,24 +273,21 @@ def measure(func):
         return func, None, "not a stub in the unit (landed already?)"
     d = tempfile.mkdtemp(prefix="parkres-")
     src = os.path.join(d, "ovl_dungeon.c")
-    text = unit.replace(stub, body.rstrip() + "\n")
-    decls = decls_of(park)
-    if decls:
-        anchor = "extern u8 D_80082E80[];\n"
-        if anchor in text:
-            text = text.replace(anchor, anchor + decls, 1)
-    open(src, "w").write(text)
+    decls = decls_of(park) + preamble_of(park, func)
     env = dict(os.environ, AZURE_SCRATCH=os.path.join(d, "sp"))
     os.makedirs(env["AZURE_SCRATCH"], exist_ok=True)
-    r = subprocess.run([sys.executable, "tools/decomp/aligndiff.py", src, func],
-                       capture_output=True, text=True, env=env, cwd=PROJ)
-    m = re.search(r"built (\d+) words, target (\d+) words, (\d+) aligned", r.stdout)
-    if not m:
-        err = (r.stderr or r.stdout).strip().split("\n")
-        err = [l for l in err if "error" in l.lower() or "undeclared" in l.lower()]
-        return func, None, (err[-1][:90] if err else "did not compile")
-    built, tgt, nd = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    return func, (nd, built, tgt), None
+    err = None
+    for text in splices(unit, stub, body, decls):
+        open(src, "w").write(text)
+        r = subprocess.run([sys.executable, "tools/decomp/aligndiff.py", src, func],
+                           capture_output=True, text=True, env=env, cwd=PROJ)
+        m = re.search(r"built (\d+) words, target (\d+) words, (\d+) aligned", r.stdout)
+        if m:
+            return func, (int(m.group(3)), int(m.group(1)), int(m.group(2))), None
+        lines = (r.stderr or r.stdout).strip().split("\n")
+        lines = [l for l in lines if "error" in l.lower() or "undeclared" in l.lower()]
+        err = (lines[-1][:90] if lines else "did not compile")
+    return func, None, err
 
 
 def main():

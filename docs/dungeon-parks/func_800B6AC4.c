@@ -114,7 +114,28 @@
 
    Target 812 words = 0xCB0 bytes.  jtbl_80089310 is at rodata 0x89310,
    0 mod 8, so this function is safe to land (func_80095538 is the
-   precedent). */
+   precedent). 
+   DECLARATIONS (added 2026-11-16: this park did not compile from the repo
+   alone -- seven symbols it uses were declared only in its author's
+   transcript, so parkresidue could not measure it at all.)
+     extern u32 D_800835E4[];
+     extern u8 D_800DD108[];
+     extern u8 D_800DD110[];
+     extern u8 D_800DD118[];
+     extern u8 D_800E0A2A[];
+     extern u8 D_800E0A33[];
+     extern u8 D_800E2968;
+     typedef u8 *(*UnkDungeonSpawner)(s32, u8, u8, s16);
+   END DECLARATIONS
+   UnkDungeonSpawner was used by the body and defined nowhere -- reconstructed
+   2026-11-16 from the `jalr $v0` at 800B7140: four arguments in $a0..$a3 as
+   int / lbu c[0x24] / lbu c[0x25] / a halfword sign-extended by the sll+sra
+   pair at 800B713C, and $v0 used as a pointer immediately after
+   (`lbu 0x13($s0)`, `lw -0x14($s0)`).
+   Shapes read off asm/nonmatchings/ovl_dungeon/func_800B6AC4.s: the six
+   arrays are lui/addiu address pairs, D_800E2968 is lui + `sb %lo(..)` and
+   so is a scalar byte, not an array.
+*/
 void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     Unk80083160 *q;

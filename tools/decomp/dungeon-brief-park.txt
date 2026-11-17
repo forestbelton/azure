@@ -1,0 +1,317 @@
+You are decompiling PSX game code in /home/case/projects/azure. Work ONLY in that
+repo. Your job: land the functions listed at the bottom of this brief, byte-exact,
+in your OWN PRIVATE COPY of the unit.
+
+## Setup (do this first, exactly)
+
+    cd /home/case/projects/azure
+    mkdir -p /tmp/claude-1000/agent-@ID@
+    cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-@ID@/ovl_dungeon.c
+
+**AND SET `AZURE_SCRATCH`.** `asmlib.compile_asm` derives its intermediate
+`.s`/`.o` path from the source file's BASENAME inside `$AZURE_SCRATCH`
+(default `/tmp/azure-decomp`). Because the basename has to be `ovl_dungeon.c`
+(see below), every agent otherwise shares one `ovl_dungeon.s`, and concurrent
+compiles corrupt each other. Export a private one before anything else:
+
+    export AZURE_SCRATCH=/tmp/claude-1000/agent-@ID@/sp
+
+The failures are loud and misleading -- `unrecognized opcode 'macro'`, `junk
+at end of line`, `symbol already defined` on a run of unrelated functions --
+and they look like a defect in your source. They are not.
+
+**THE BASENAME MATTERS.** `ovlverify.py` picks which container ELF to resolve
+landed functions against FROM THE SOURCE FILE'S BASENAME. A copy called
+`agent-foo.c` falls back to `build/town.bin.elf`, which is invisible for a
+single named function that still has a listing but produces dozens of bogus
+`NO TARGET` lines and at least one plausible-looking false failure in a
+whole-unit sweep. Keep your copy named `ovl_dungeon.c`, in its own directory.
+
+**KEEP EVERY WORKING FILE INSIDE `/tmp/claude-1000/agent-@ID@/`.** Your unit
+copy, your splice scripts, your scratch bodies -- all of it. If you delegate
+any part of this to sub-agents, give each one its own SUBDIRECTORY as well as
+its own `AZURE_SCRATCH`, because two agents writing `splice.py` and `body.c`
+into one shared directory clobber each other. That happened on batch j7: one
+agent spliced its own body into another's working copy four times, and the
+symptom was the same misleading `unrecognized opcode` / `already defined`
+class described above, with a shared DIRECTORY rather than a shared
+`AZURE_SCRATCH` as the cause.
+
+**BUT /tmp IS NOT DURABLE, AND THAT HAS ALREADY COST THIS SWEEP FOUR LANDED
+FUNCTIONS.** On 2026-11-16 a routine cleanup wiped everything under
+`/tmp/claude-1000` -- five agents' unit copies, every saved candidate, and the
+agents' own transcripts -- between one working day and the next. One agent had
+closed four parked functions and had not yet reported them; the measurements
+and the bodies both went with the directory. **So anything you would be sad to
+lose goes in the REPO, where git protects it, and it goes there as soon as it
+exists rather than at the end of your run.** See "If a function will not land"
+below for exactly where.
+
+**COPY csrc/ovl_dungeon.c AS YOUR FIRST ACTION, NOT DURING SETUP READING.**
+I merge other agents' batches into it continuously -- it moved by 571 lines
+under one agent's four-hour run. A stale copy still measures correctly (the
+listings are what you verify against), but `provision.py`'s line numbers will
+disagree with it, a function you are told is a stub may already be landed, and
+your declarations may collide at merge time. If you notice the drift
+mid-run, re-copy and re-apply your bodies rather than reasoning about it.
+
+From here on, @SRC@ is `/tmp/claude-1000/agent-@ID@/ovl_dungeon.c`. Every edit you make goes
+there. **NEVER touch csrc/ovl_dungeon.c** -- other agents are editing their own
+copies of it concurrently and I merge all of you at the end.
+
+**NEVER run `make`, `make splat`, `make containers` or any build.** `make`
+regenerates asm/nonmatchings/ and DELETES the listing of every landed function;
+the verifier then measures past a function's end and reports plausible-looking
+garbage. If you run make you destroy the measurements for every agent including
+yourself. The verifier compiles your file itself; you do not need a build.
+
+## The verifier is the only thing that counts
+
+    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-@ID@/ovl_dungeon.c func_XXXXXXXX
+
+It prints `target N words, candidate M words, K differing`. **A function is
+landed only at `0 differing` with candidate words == target words.** It takes
+several function names at once; use that to re-check the whole batch cheaply.
+`--raw` shows unmasked bytes (useful to prove a `%hi/%lo` the verifier masked is
+really a relocation and not a constant address).
+
+The ground truth for each function is its listing:
+
+    asm/nonmatchings/ovl_dungeon/func_XXXXXXXX.s
+
+Read it before writing anything. The header line `nonmatching func_X, 0xNN`
+gives the byte length; /4 is the word count.
+
+**ON ANYTHING OVER ~200 WORDS, SIZE THE RESIDUE WITH `aligndiff.py`, NOT WITH
+`ovlverify`'s COUNT.** `ovlverify` compares word N against word N, so a single
+TRANSPOSED pair misses twice and inflates the number: on one function this
+session it reported 169 where the honest figure was 85.
+
+    python3 tools/decomp/aligndiff.py <your copy> FUNC
+
+aligns the two streams first. The difference decides whether you keep going or
+park, so get it right before you spend context on either.
+
+An aligndiff row is a claim about TEXT and an ovlverify word count is a claim
+about BYTES. Before spending effort on a reported difference in a relocated
+operand (`%hi`/`%lo`), confirm it with `ovlverify.py --raw`.
+
+## Your first search is the unit's own comment corpus
+
+The landed bodies in `csrc/ovl_dungeon.c` each carry a comment giving the one
+spelling fact that made them land, and for a function in the same family those
+comments are line-for-line templates. Two things to run before anything else:
+
+    python3 tools/decomp/leverindex.py --grep func_XXXXXXXX     <-- FIRST
+    grep -n 'THE D_80083160 BASE IS A LOCAL OF ITS OWN' csrc/ovl_dungeon.c
+    python3 tools/decomp/leverindex.py --grep <the opcode or idiom you see>
+
+**GREP FOR YOUR FUNCTION'S OWN NAME BEFORE ANYTHING ELSE.** Many catalogue
+entries are written against the specific function that produced them, so an
+entry about yours may already exist and name the exact lever. Entries are
+TITLED BY MECHANISM, so the function name is almost always in the body --
+`--grep` searches both now, but if you want certainty use the file directly
+as well:
+
+    grep -n 'func_XXXXXXXX' docs/matching-levers.md
+
+On batch j43 an agent spent about fifteen compiles rediscovering "A SECOND
+SET IS WHAT KEEPS A SIGN EXTENSION ALIVE", an entry written against the very
+function it was working on and worth 6 words. On batch j50 another found
+three such entries only by grepping the file, because `--grep` matched
+headings only at the time; one of them was worth most of that function's
+landing on the first compile. That is the cheapest search in this procedure.
+
+On batch j31 the typedef grep below returned **nothing usable** for either
+function -- both take `u8 *`/`UnkVec *`, which is most of this block -- while
+those two commands pointed straight at a measured mechanism, and the landed
+`func_8008B9FC`/`func_8008C13C` turned out to be line-for-line templates for
+the prologue, tail and `&D_80083460` handling of the function being written.
+
+**THEN GREP ITS PARAMETER TYPES FOR A NAMED TEMPLATE.** `include/structs.h`'s
+typedefs carry hand-written field comments, and several of them name the
+resident function that reads the struct -- in prose, where no tool looks.
+`provision.py` has no route that reads those comments or keys on a target's
+parameter types. One such sentence was the ENTIRE landing of a 334-word
+function on its first compile, after four provision.py routes returned nothing
+usable. For each parameter type in the signature you have decoded:
+
+    awk '/typedef struct UnkSlot/,/} UnkSlot;/' include/structs.h | grep -o 'func_[0-9A-F]*'
+
+then check whether each name it prints is already landed, and read it.
+
+**AND ON ANYTHING OVER ~400 WORDS, CONDENSE THE LISTING FIRST.** It roughly
+halves what the listing costs you to read:
+
+    sed -e 's|/\* [0-9A-F]* \([0-9A-F]*\) [0-9A-F]* \*/|\1|' \
+        asm/nonmatchings/ovl_dungeon/FUNC.s | sed -e 's/  */ /g'
+
+## Read these before you start
+
+* `docs/town-sweep.md` -- THE OPERATING PROCEDURE. The nine-step loop, the agent
+  contract, and about sixty traps that have each already cost someone something.
+  Read it properly; do not re-derive it.
+* `docs/dungeon-sweep.md` -- this block specifically.
+* `docs/matching-levers.md` -- a catalogue of ~820 measured compiler behaviours,
+  with a generated index at the top. **Search the index before sweeping
+  spellings by hand.** `python3 tools/decomp/leverindex.py --grep <word>` finds
+  entries. Most of what you will hit is already in there.
+* `docs/landing-a-function.md` -- the contract for one function.
+* `docs/overlays.md` -- the `-G0` facts.
+
+## House rules
+
+* C style: Allman braces, 4 spaces, `(u8 *)p` with no space after the cast.
+  Before reporting, run
+  `clang-format -style=file:/home/case/projects/azure/.clang-format -i /tmp/claude-1000/agent-@ID@/ovl_dungeon.c`
+  and confirm a re-run reports no replacements.
+* New extern/function declarations go in the declaration block at the TOP of
+  the file, before the first `INCLUDE_ASM`. Check whether a name is already
+  declared before adding it.
+* Keep types honest. If a struct field's offset and width are all you know,
+  a cast through `u8 *` is fine; do not invent a struct you cannot witness.
+* **A NEW TYPEDEF NAME MUST NOT COLLIDE WITH ONE ANOTHER AGENT IS INVENTING
+  RIGHT NOW.** You cannot see the other batches' names, and nothing fails
+  until the second one lands. Before naming a scratchpad or primitive
+  struct, check BOTH places:
+
+      grep -o 'UnkDungeon[A-Za-z0-9_]*' csrc/ovl_dungeon.c | sort -u
+      grep -ho 'UnkDungeon[A-Za-z0-9_]*' docs/dungeon-parks/*.c | sort -u
+
+  On 2026-11-16 two agents independently defined `UnkDungeonSP9` for two
+  DIFFERENT layouts of the 0x1F800000 scratchpad -- both correct for their
+  own function -- and only the merge caught it. Prefer a name that says
+  which function it belongs to if you are unsure.
+* Put a short comment above each landed function giving its word count,
+  `0 differing`, and -- when you had to fight for it -- the ONE spelling fact
+  that made it land and what the wrong spellings cost. Those comments are the
+  most valuable thing you produce after the code. Measured numbers only; never
+  write a mechanism you did not verify.
+* If a prototype you need differs from one already in the file, say so loudly
+  in your report: it may change code that is already landed. This happens
+  often and the changes are usually right -- on 2026-11-16 `func_800BBA40`
+  had three parameters too wide, `func_800C5BBC` was declared `void` and
+  returns a value, and `func_800BABA8` needed a return type -- so report the
+  change AND the list of landed callers you re-measured with it, because that
+  list is what lets me make it. A call site that
+  disagrees with a landed definition's arity is fixed with the unit's alias
+  spelling, which leaves the definition alone:
+  `s32 func_80096100_4(u8 *, UnkVec *, u8 *, u8 *) __asm__("func_80096100");`
+
+## If a function will not land
+
+Spend your effort where it pays. If a function resists after a genuine attempt
+(you have read its listing, searched the lever index, and tried the handful of
+spellings the index suggests), **leave it as INCLUDE_ASM and move on** -- then
+tell me in your report what the residue was (word delta, which instructions
+differ, which register assignment is wrong). A precise failure is worth more
+than a stalled agent.
+
+**AND WRITE YOUR BEST CANDIDATE INTO THE REPO, THE MOMENT IT IS YOUR BEST:**
+
+    docs/dungeon-parks/func_XXXXXXXX.c
+
+the body alone, with the residue written at the top as a comment: the word
+counts, the aligned difference count, which instructions differ, and every
+spelling you measured and rejected with its score. One file per function, so
+no two agents ever write the same path. **Do not wait until you report** --
+rewrite that file each time your best improves, because a candidate that only
+exists in `/tmp` is a candidate that can vanish overnight, and one already
+has. Do not `git add` or commit it; I do that.
+
+I run decomp-permuter over the residues you leave there; on 2026-11-14 it took
+a 4-differing residue that had survived thirty-three hand spellings to 0 in two
+minutes. A residue with no saved candidate cannot be permuted.
+
+**DO NOT RUN THE PERMUTER YOURSELF.** `permrun.py`'s jobs are a machine-wide
+budget of 20 and only one search may run at a time; with several agents
+working, that budget is mine to spend. Report the residue and the file.
+
+**WHEN YOU MESSAGE ME ABOUT A LANDING, SEND FOUR THINGS IN THAT ONE
+MESSAGE:** the body, its comment block, any new typedefs or extern/function
+declarations it needs, and any prototype you had to change. Each of those has
+cost a round trip or worse on a real run:
+
+* a body whose two new typedefs were not reported did not compile on my side,
+  and I had to dig them out of the agent's own working copy;
+* a body sent without its comment block went into `csrc/` bare, and the
+  write-up -- the most valuable thing you produce after the code -- had to be
+  restored afterwards from the final report;
+* a body I lifted verbatim carried the agent's own
+  `/* ===AGENT func_X BEGIN=== */` splice markers into `csrc/` and I committed
+  them. **Strip your markers before you send a body.**
+
+**AND IF YOU LAND SOMETHING, SAY SO AS SOON AS IT LANDS.** Do not hold four
+finished bodies until the end of the run. A one-line interim message naming
+the function and its `0 differing` costs you almost nothing and is the only
+thing that survives if your run is cut off -- on 2026-11-16 an agent finished
+four and reported none, and all four were lost.
+
+## What to report back
+
+1. The exact new declarations to add, as a code block.
+2. Every landed body, as code blocks, in the order they appear in the file,
+   each with its comment.
+3. For each one: word count and `0 differing`, confirmed by a final verifier run
+   over the whole batch.
+4. The levers that mattered, and what the wrong spellings cost in words/differing.
+   If you found something not in docs/matching-levers.md, say so explicitly --
+   I will add it to the catalogue.
+5. Anything you did NOT land, with its residue and the path of its park file.
+
+Also confirm in your report: your copy's path, that csrc/ovl_dungeon.c is
+unmodified, and that clang-format leaves your copy untouched.
+
+## SEVEN FUNCTIONS IN THIS UNIT CANNOT BE LANDED YET, AND NONE OF THEM IS IN YOUR LIST
+
+`func_8009F644`, `func_800B45E0`, `func_800B490C`, `func_800C2824`,
+`func_800C4F20`, `func_800D50FC` and `func_800D81D4` each own a jump table
+at a 4-mod-8 address. While they are `INCLUDE_ASM` that costs nothing, but
+`cc1psx` writes `.align 3` before a table it compiles, so landing one adds
+padding the original build does not have and the container comes out eight
+bytes long -- see `docs/dungeon-sweep.md`, "SEVEN of the 28 jump tables are
+at 4 mod 8". They need the unit carved in the same change.
+
+I screen your list against those seven before I write it, so they will not
+appear. **But if you find yourself reading one of them for any reason --
+as a sibling, a caller or a template -- do not land it.** A function that
+owns ANY other jump table is fine: `func_80095538` landed one on
+2026-11-15 and the container is byte-identical.
+
+## Your functions (word counts in parentheses)
+
+@FUNCS@
+
+
+## THIS BATCH: PARK-CLOSING, NOT FRESH DECOMPILATION
+
+Each function below ALREADY HAS A CANDIDATE in docs/dungeon-parks/<func>.c:
+a body under a header comment recording its residue, its diagnosis, and every
+spelling already measured and rejected, with scores.
+
+**READ THAT HEADER BEFORE ANYTHING ELSE, AND DO NOT RE-MEASURE WHAT IT
+ALREADY RULES OUT.** Those scores cost another agent its whole budget. The
+park also records structure that is ALREADY CORRECT -- treat that as fixed
+and do not "simplify" it; several parks say explicitly which spellings must
+not be disturbed.
+
+Your job is the residue that is left. Splice the park's body into your copy
+and reproduce its stated measurement FIRST -- if you cannot, say so
+immediately and stop, because something has drifted and nothing after that
+point is trustworthy.
+
+Two tools that matter here specifically:
+
+  python3 tools/decomp/parkcheck.py         # run after ANY header edit
+  python3 tools/decomp/sched.py <file> FUNC [--sched1] [--insn N]
+
+`sched.py` was worth more than `.lreg`/`.greg` on three of four residues in
+the last batch, because scheduler ties and allocation ties look identical in
+the diff and are fixed by completely different levers. Decide which you have
+before you spend compiles.
+
+If you close a park: delete the park file, and send the body, the comment
+block, the declarations and any prototype change IN ONE message.
+If you do not: UPDATE the park header with everything you measured, so the
+next agent does not repeat it. A park that comes back with new rejected
+spellings and a sharper diagnosis is a good outcome, not a failure.
