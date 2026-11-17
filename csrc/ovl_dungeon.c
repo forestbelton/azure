@@ -355,6 +355,8 @@ extern s16 D_8008346A;
 /* The kill handlers' callees and tables. D_80082E80 is csrc/ovl_town.c's
    UnkTownScene; only its address is wanted. */
 extern u8 D_80082E80[];
+extern u8 D_800DCF5C;
+extern s16 D_800DCF5E;
 extern u8 D_800E0C34[];
 extern u8 D_800DD260;
 extern s16 D_800DD262;
@@ -17132,7 +17134,244 @@ bad:
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A504C);
+/* 401 words, 0 differing.  Park closed by j63; the park header's own
+   diagnosis of the stuck 6-row group was right and is what pointed here.
+
+   TWO LEVERS, BOTH FROM docs/matching-levers.md.
+
+   1. `d = 0;` AT THE END OF THE ELSE-BRANCH CASE 2 IS A DEAD STORE FLOW
+   DELETES, AND IT BUYS cse CANONICALITY FOR THE COPY WITHOUT BUYING A
+   REFERENCE ("CANONICALITY IS PAID AT cse1, THE REFERENCE COUNT AT flow").
+   The target wants the call result in the 71-reference pseudo ($s0) and the
+   COPY in the ten-reference one ($s2), with the block-move destination and
+   the two pre-loop 0x5C/0x58 reads ON THE COPY.  cse1 only leaves those
+   reads on `d` if `d` is qty_first_reg at the `d = q` insn, which
+   make_regs_eqv (cse.c:865) grants only when regno_last_uid[d] >
+   regno_last_uid[q] -- and `q` is reused by the other switch cases, so it
+   always dies later.  The dead `d = 0;` is the latest reference to `d` in
+   the function, survives cse1 and cse2, and is deleted at flow
+   (flow.c:1539), so `d` is canonical with exactly the target's ten
+   references and still scores 0.409, between `w` (0.551) and `p` (0.3105):
+   q $s0, w $s1, d $s2, p $s3, g $s4.  Without it, the same spelling is
+   48 aligned rows -- cse puts the pre-loop reads back on `q`, `d` falls to
+   seven references (0.222), and `p` and the gate pseudo swap $s2/$s3.
+   Inverting the copy instead (`d = <call>; q = d;`) is 10 rows.
+
+   2. THE FIVE `goto out;` ARE WHAT KEEPS A `v0 = 0` OUT OF THE SHARED
+   `D_800DCF5E++` BLOCK.  Written as `return 0;`, each of those four tails
+   is `[lhu][set v0 0][addu][sh][jump]` already at sched1 -- sched1 fills
+   the load-delay slot with the return value (visible in the .sched dump),
+   so local-alloc gives the increment $v1 and jump2's cross-jump can no
+   longer peel the `set` off the end: 4 rows.  Jumping to a shared
+   `out: return 0;` leaves the set in its own block, the slot a nop, the
+   increment in $v0 and the `j` pointing at .L800A5668.  The fifth goto,
+   on the else-branch case 2's `q == NULL` exit, is what makes reorg fill
+   that branch's delay slot from the fall-through (`addu $a0, $s3, $zero`)
+   instead of stealing `addu $v0, $zero, $zero` from .L800A5668: 3 rows
+   without it.  Making EVERY `return 0` a `goto out` is 400 words.
+
+   Other spellings the park measured and rejected: a separate local for
+   q-0x20 (404w), a separate `s` local for the 0x8C-field source (+6),
+   a `s16 n` gate local with `D_800DCF5C = n` (402w / 397), `g = p; d = q;`
+   moved down beside the field copies (399w, cse kills both copies),
+   `d = q - 0x20` as the tail (27), `d = q; if (d == NULL)` (64). */
+s32 func_800A504C(u8 *a, u8 *p)
+{
+    u8 *g;
+    u8 *q;
+    u8 *w;
+    u8 *d;
+    u8 *e;
+    u8 *z;
+    s16 k;
+    s16 i;
+    u16 m;
+    s32 r;
+    u8 id;
+    s32 x;
+    s32 y;
+    s32 f;
+    u32 ab;
+    g = (u8 *)(&D_80083460);
+    if ((*((s16 *)(g + 0xA))) != 1)
+    {
+        return 0;
+    }
+    if (func_8003FA44(8) == 0)
+    {
+        return 0;
+    }
+    if (((*((u32 *)(p + 0x14))) & 0x4000) != 0)
+    {
+        switch (D_800DCF5E)
+        {
+        case 0:
+            if (func_80053EF0(4) != 0)
+            {
+                return 0;
+            }
+            q = func_800A1618(p[0x13], 2);
+            if (q == 0)
+            {
+                return 0;
+            }
+            D_80081488 = (u32)func_80047DB8(p[0x13]);
+            func_800A0B94(p[0x13], q, 0);
+            D_800E3E40 = 0;
+            func_8003E4FC(0xFF, D_8003E140, (s32)(&D_800E3E40));
+            D_800DCF5E++;
+            goto out;
+
+        case 1:
+            if (D_800E3E40 == 0)
+            {
+                return 0;
+            }
+            func_80047E30();
+            D_800DCF5E++;
+            goto out;
+
+        case 2:
+            q = func_800A1618(p[0x13], 2);
+            if (q == 0)
+            {
+                return 0;
+            }
+            w = *((u8 **)(p - 0x14));
+            q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(6, w[0x24], w[0x25], (s16)((*((u16 *)(p + 0x88))) - 0x20));
+            if (q == 0)
+            {
+                return 0;
+            }
+            g = p;
+            d = q;
+            x = *((s32 *)(d + 0x5C));
+            y = *((s32 *)(d + 0x58));
+            *((Unk42710 *)d) = *((Unk42710 *)p);
+            *((s32 *)(q + 0x4C)) = 0;
+            *((s32 *)(q + 0x50)) = 0;
+            *((s32 *)(q + 0x5C)) = x;
+            *((s32 *)(q + 0x58)) = y;
+            func_80042640((Unk42710 *)q, q[0x13]);
+            w = *((u8 **)(q - 0x14));
+            *((s16 *)(w + 0x1E)) = 0x1000;
+            *((s16 *)(w + 0x1C)) = 0x1000;
+            *((u32 *)(q + 0x14)) &= ~7;
+            *((u32 *)(q + 0x1C)) &= ~7;
+            *((u32 *)(q + 0x14)) |= (*((u32 *)(p + 0x14))) & 7;
+            *((u32 *)(q + 0x1C)) |= (*((u32 *)(p + 0x1C))) & 7;
+            func_800424E0(q, q[0x13], 0);
+            func_80042710((Unk42710 *)q, (Unk42710 *)p);
+            *((u32 *)(q + 0x14)) &= ~0x4000;
+            *((u32 *)(d + 0x8C)) = *((u32 *)(g + 0x8C));
+            *((u32 *)(d + 0x90)) = *((u32 *)(g + 0x90));
+            *((u16 *)(d + 0x94)) = *((u16 *)(g + 0x94));
+            *((u16 *)(d + 0x98)) = *((u16 *)(g + 0x98));
+            d[0x9A] = g[0x9A];
+            d[0x9B] = g[0x9B];
+            k = (s16)func_800A1BD0(p);
+            ab = D_800814A8;
+            *((s32 *)((ab + (k * 4)) + 0xAC)) = (s32)q;
+            func_8009A3D0(w[0x24], w[0x25], 0x300);
+            func_8009A028(q);
+            q -= 0x20;
+            func_80044A50((UnkNode *)q);
+            *((u32 *)(q + 0x10)) |= 0x80000000;
+            *((u16 *)(p - 0x2)) |= 0x8000;
+            D_800DCF5E = 0;
+            D_800814A0 |= 0x8000;
+            return 0;
+        }
+
+        return 0;
+    }
+    switch (D_800DCF5E)
+    {
+    case 0:
+        q = func_800A1618(p[0x13] - 1, 3);
+        if (q != 0)
+        {
+            p[0x13]--;
+            func_8003E188(p[0x13], 0);
+            D_80080A90 = D_80023000;
+            D_80081488 = func_80048118(p[0x13], D_8008149C);
+            func_800A0B94(p[0x13], q, 0);
+            D_800E3E40 = 0;
+            func_8003E4FC(0xFF, D_8003E140, (s32)(&D_800E3E40));
+        }
+        D_800DCF5E++;
+        goto out;
+
+    case 1:
+        if (D_800E3E40 == 0)
+        {
+            return 0;
+        }
+        if (D_80081488 != 0)
+        {
+            func_80047FF4(p[0x13], D_80081488);
+        }
+        D_800DCF5E++;
+        goto out;
+
+    case 2:
+        q = func_800A1618(p[0x13], 3);
+        if (q == 0)
+        {
+            return 0;
+        }
+        w = *((u8 **)(p - 0x14));
+        q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(p[0x13], q, 1))(1, w[0x24], w[0x25], (s16)((*((u16 *)(p + 0x88))) - 0x20));
+        if (q == 0)
+        {
+            goto out;
+        }
+        *((u32 *)(q + 0x14)) |= 0x4000;
+        k = (s16)func_800A1BD0(p);
+        ab = D_800814A8;
+        e = *((u8 **)((ab + (k * 4)) + 0xD0));
+        *((s32 *)((ab + (k * 4)) + 0xAC)) = (s32)q;
+        i = e[3] & 0x1F;
+        e[0] = p[0x13];
+        D_800E3DF0[i] = (s32)q;
+        w = *((u8 **)(q - 0x14));
+        *((s16 *)(w + 0x1E)) = 0x1000;
+        *((s16 *)(w + 0x1C)) = 0x1000;
+        func_80042640((Unk42710 *)q, q[0x13]);
+        *((u32 *)(q + 0x14)) &= ~7;
+        *((u32 *)(q + 0x1C)) &= ~7;
+        *((u32 *)(q + 0x14)) |= (*((u32 *)(p + 0x14))) & 7;
+        *((u32 *)(q + 0x1C)) |= (*((u32 *)(p + 0x1C))) & 7;
+        func_800424E0(q, q[0x13], 0);
+        func_80042710((Unk42710 *)q, (Unk42710 *)p);
+        if (q[0x43] < 0x40)
+        {
+            z = (u8 *)0x80010000;
+            r = q[0x43];
+            id = q[0x13];
+            *((u8 *)((z + (r * 0x54)) + 0xA93)) = id;
+            *((u8 *)((z + (r * 4)) + 0x980)) = id;
+        }
+        func_800A152C(q[0x13], 3);
+        func_80042560((s8 *)q);
+        m = *((u16 *)(p + 0x2A));
+        *((u16 *)(q + 0x2A)) = m;
+        func_80047738(w, (*((u8 **)(w + 0x2C)))[(((D_80083228 + ((s16)m)) + 0x100) >> 9) & 7], *((s8 *)(w + 0x4)));
+        ((u16 *)w)[0xA] &= 0xFFFE;
+        D_80080A90 = D_8014A000;
+        ((u16 *)g)[5] -= 1;
+        D_800DCF5C = 1;
+        *((u16 *)(p - 0x2)) |= 0x8000;
+        f = D_800814A0;
+        *((s32 *)(p + 0x90)) = 0;
+        D_800814A0 = f | 0x8000;
+        d = 0;
+        break;
+    }
+
+out:
+    return 0;
+}
 
 /* The bound test reads the counter SIGNED (`lh`) and the increment reads it
    UNSIGNED (`lhu`) off the same `lui`; that pair is what `s16` plus a bare
