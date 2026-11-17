@@ -1073,6 +1073,8 @@ void func_800AA53C(u8 *);
 extern u8 *D_800DD72C[];
 extern u8 *D_800DD784[];
 s32 func_80064584(s32);
+/* func_800B84E4's per-primitive hand-off, beside func_8006658C's. */
+void func_8006671C(void *);
 void func_800A5828();
 extern u8 D_800DD854[];
 extern u8 D_800DD860[];
@@ -1264,6 +1266,58 @@ typedef union UnkDungeonSPXY
     s32 w;
     u16 h[2];
 } UnkDungeonSPXY;
+
+/* A scratchpad word written whole and read back as its low BYTE and as the
+   signed word -- the byte-wide face of the slot UnkDungeonSPW gives a
+   halfword face to. */
+typedef union UnkDungeonSPUV
+{
+    s32 w;
+    u8 b;
+} UnkDungeonSPUV;
+
+/* The 0x1F800000 scratchpad as func_800B84E4 lays it out: the four UV
+   scalars at +0x08..+0x17 and two packed screen pairs at +0x70 and +0x78,
+   each the XY half of an 8-byte slot whose Z halfword is zeroed. */
+typedef struct UnkDungeonSPF
+{
+    u8 pad_00[0x8];
+    UnkDungeonSPUV unk_08;
+    UnkDungeonSPUV unk_0C;
+    UnkDungeonSPUV unk_10;
+    UnkDungeonSPUV unk_14;
+    u8 pad_18[0x58];
+    UnkDungeonSPXY unk_70;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    UnkDungeonSPXY unk_78;
+    s16 unk_7C;
+} UnkDungeonSPF;
+
+/* The same 0x34-byte POLY_GT4 as UnkDungeonGT4 above with its four screen
+   pairs under their WORD face and ALL FOUR u/v pairs byte-addressed:
+   func_800B84E4 copies each screen pair in with one `sw' and reads its own
+   u0/v0 back a byte at a time. */
+typedef struct UnkDungeonGT4W
+{
+    u32 unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    Unk453E0UV unk_0C;
+    u16 unk_0E;
+    u32 unk_10;
+    s32 unk_14;
+    Unk453E0UV unk_18;
+    u16 unk_1A;
+    u32 unk_1C;
+    s32 unk_20;
+    Unk453E0UV unk_24;
+    u16 unk_26;
+    u32 unk_28;
+    s32 unk_2C;
+    Unk453E0UV unk_30;
+    u16 unk_32;
+} UnkDungeonGT4W;
 /* The 0x1F800000 scratchpad as func_800B06F0 lays it out: the OT base at
    +0x20, ScaleMatrix's vector at +0x30, the quad's four corners at +0x70,
    RotTransPers4's two out-parameters at +0x90/+0x94, the projection's screen
@@ -26269,7 +26323,107 @@ UnkNode *func_800B8228(u32 x, u32 y, u32 z, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B835C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B84E4);
+/* 211 words, 0 differing.  The fan/arc emitter: one POLY_GT4 per step of a
+   `*(u16 *)(p + 0xE)'-step sweep, each quad spanning the previous step's
+   screen point and the current one.  Three spellings carry it, and every one
+   of them is about WHERE AN INSN IS BORN, not what it computes.
+
+   (1) THE SWEEP ANGLE IS NOT A VARIABLE.  $s1 is loop.c's giv for
+       `i * 0x1000'.  Its initialiser `addu $s1, $s5, $zero' is emitted by
+       strength_reduce before `loop_start', i.e. AFTER the `addiu $s0, $s4,
+       0x7' giv -- the only way that pair can come out in that order, because
+       every source statement in the preheader has a SMALLER INSN_LUID than
+       anything loop.c inserts there and sched2's tie-break is LUID order.
+       Written as a second counter with `ang += 0x1000', those two words
+       transpose and no ordering of the preheader's own statements moves
+       them: 211 words / 5 aligned.  loop.c emits `ang = 0'; cse2
+       copy-propagates `i' into it, which is where the `move' comes from.
+
+   (2) `dd = (u16)d;' BELONGS INSIDE THE LOOP.  As a statement before the
+       loop its `andi' sits in the entry block, where sched2 sinks it to the
+       end and reorg takes it for the guard's delay slot instead of `i = 0'
+       (211 / 5).  Inside the loop it is a move_movables invariant, hoisted
+       into the preheader AHEAD of both givs -- movables are moved before
+       strength_reduce runs, and each `emit_insn_before (..., loop_start)'
+       lands after the previous one.
+
+   (3) THE LOOP IS A `for', NOT AN `if' + `do'/`while'.  Both shapes emit the
+       same `lhu'/`beqz' guard, but jump.c's `duplicate_loop_exit_test'
+       COPIES the test, and that copy is one more REG_N_REFS for `i' -- 8
+       against `dd''s 7.  global.c's priority is
+       `floor_log2 (refs) * refs / live_length' and `i''s live range strictly
+       contains `dd''s (118 insns against 113), so without that eighth
+       reference `dd' is allocated first and takes $s5: `i' and `dd' swap
+       registers and seven words change (42, 43, 66, 159, 162, 179, 190).
+       With the `if' + `do'/`while' and everything else as below: 211 / 8,
+       all eight rows that swap.
+
+   The `__asm__("")' after the loop-top copy stays load-bearing: it makes
+   sched.c flush every pending read and write list, so
+   `sp->unk_70.w = sp->unk_78.w' comes out as the target's serial
+   `lw'/`nop'/`sw' instead of being interleaved into the first UV chain's
+   load-delay slots.  Removing it: 210 words / 7. */
+void func_800B84E4(s16 *a, u8 *p, u8 *ot, s32 d)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDungeonSPF *sp = (UnkDungeonSPF *)0x1F800000;
+    UnkDungeonGT4W *q;
+    s32 i;
+    s32 dd;
+    s32 t;
+    s32 tp;
+
+    q = *(UnkDungeonGT4W **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_74 = 0;
+    sp->unk_7C = 0;
+    sp->unk_78.h[0] = *(u16 *)a + p[0xC];
+    sp->unk_78.h[1] = *((u16 *)a + 1);
+    sp->unk_08.w = p[0x8];
+    sp->unk_0C.w = p[0x9];
+    sp->unk_10.w = p[0xA];
+    sp->unk_14.w = p[0xB];
+    for (i = 0; i < *(u16 *)(p + 0xE);)
+    {
+        dd = (u16)d;
+        sp->unk_70.w = sp->unk_78.w;
+        __asm__("");
+        t = sp->unk_08.b + (sp->unk_10.w >> 1);
+        q->unk_18.b[0] = t;
+        q->unk_0C.b[0] = t;
+        t = sp->unk_0C.b + (sp->unk_14.w >> 1);
+        q->unk_18.b[1] = t;
+        q->unk_0C.b[1] = t;
+        q->unk_30.b[0] = q->unk_0C.b[0] + ((sp->unk_10.w * func_80064584(i * 0x1000 / *(u16 *)(p + 0xE))) >> 13);
+        q->unk_30.b[1] = q->unk_0C.b[1] + ((sp->unk_14.w * func_800644B8(i * 0x1000 / *(u16 *)(p + 0xE))) >> 13);
+        i++;
+        sp->unk_78.h[0] = *(u16 *)a + ((p[0xC] * func_80064584(i * 0x1000 / *(u16 *)(p + 0xE))) >> 12);
+        sp->unk_78.h[1] = *((u16 *)a + 1) + ((p[0xD] * func_800644B8(i * 0x1000 / *(u16 *)(p + 0xE))) >> 12);
+        q->unk_08 = q->unk_14 = *(s32 *)a;
+        q->unk_20 = sp->unk_78.w;
+        q->unk_2C = sp->unk_70.w;
+        q->unk_24.b[0] = q->unk_0C.b[0] + ((sp->unk_10.w * func_80064584(i * 0x1000 / *(u16 *)(p + 0xE))) >> 13);
+        q->unk_24.b[1] = q->unk_0C.b[1] + ((sp->unk_14.w * func_800644B8(i * 0x1000 / *(u16 *)(p + 0xE))) >> 13);
+        q->unk_0E = *(u16 *)(p + 0x6);
+        tp = *(u16 *)(p + 0x4);
+        q->unk_1A = tp;
+        if (dd != 0)
+        {
+            q->unk_1A = (tp & 0xFF9F) | ((dd - 1) << 5);
+        }
+        q->unk_04 = *(u32 *)(p + 0x10);
+        q->unk_10 = *(u32 *)(p + 0x10);
+        q->unk_1C = *(u32 *)(p + 0x14);
+        q->unk_28 = *(u32 *)(p + 0x14);
+        func_8006671C(q);
+        if (dd != 0)
+        {
+            *((u8 *)q + 0x7) |= 2;
+        }
+        func_8006658C(ot, q);
+        q++;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* The 0x12 tag node's +0x10 step, a three-state machine on the view's +0x20.
    State 0 paints the renderable white at scale 0x1000, installs the
