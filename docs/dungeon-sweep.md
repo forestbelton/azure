@@ -527,13 +527,17 @@ residue as a failing one.
 
 Open parks at the time of writing, both with saved candidates:
 
-* `func_8008ACDC`, **739 of 741 words, 19 aligned differences.** The whole
-  residue is two words at `0x8008AFB0` in the facing compare: a missing
-  `andi $v0, $v0, 0xFF` and a missing `addu $v0, $a0, $zero`. Twenty spellings
-  of that one expression were measured (the best, `u8 i; want = i << 9`, is
-  the saved body); `s32 i` costs 229, `i = n[1]; i &= 7;` costs 243. Queued
-  for the permuter -- one word off in one 40-word block is the shape that
-  wins.
+* `func_8008ACDC` -- **SUPERSEDED 2026-11-16; see below.** It read: 739 of 741
+  words, 19 aligned differences, the residue two words at `0x8008AFB0` in the
+  facing compare (a missing `andi $v0, $v0, 0xFF` and a missing
+  `addu $v0, $a0, $zero`), best spelling `u8 i; want = i << 9`.
+
+  **Both of those words are present in the current body and the diagnosis is
+  gone.** They come free from `s16 want` + `want = (m[0x1] & 7) << 9` +
+  `*(s16 *)(d + 0x2A) &= 0xFFF` -- `func_8008EAC8`'s spelling verbatim. The
+  park is now **741 of 741 words at 2 aligned rows**, and the twenty measured
+  spellings of that expression were all answering a question that no longer
+  exists.
 * `func_800CF8E4`, **932 of 932 words, 8 differing**, a register swap of two
   hoisted constants. Word counts match and every difference is a register
   number, so by the rule above this is NOT permuter food; it needs `.greg`
@@ -731,3 +735,57 @@ That makes **three** functions blocked for compiler reasons -- `func_800AAF00`,
 `func_800AD6FC`, `func_800B23F8` -- beside the seven 4-mod-8 jump-table
 functions. Ten of the unit's remaining stubs are now accounted for as
 unreachable without carving the unit.
+
+
+## 2026-11-16: THE THREE "NEVER ATTEMPTED" FUNCTIONS WERE ALL ATTEMPTED
+
+I recorded earlier today that `func_8008ACDC`, `func_800CF8E4` and
+`func_80089AA0` were the only functions in the unit with no candidate of any
+kind, and dispatched one of them as a cold start. **That was wrong.** All
+three were worked on 2026-11-15 and reached good residues; their BODIES died
+in the `/tmp` cleanup, while the record of the work survived here and in
+`docs/matching-levers.md`.
+
+    func_8008ACDC   739/741 words, 19 rows   (this doc, superseded above)
+    func_800CF8E4   932/932 words,  8 differing -- a register swap
+    func_80089AA0   161 -> 144 -> 95 rows, plus two other entries
+
+So they are **reconstructions from a recorded diagnosis, not cold starts**,
+and they are much cheaper than their assembly line counts suggest. The agent
+sent at `func_8008ACDC` as a "fresh decompilation" reached **741/741 words
+and 2 aligned rows** in one run, because seven catalogue entries are written
+against that function and it could read them.
+
+**The lesson is about what a park file is for.** A function with no park
+looks untouched, and the catalogue entries written against it do not announce
+themselves from the stub. Before calling anything a cold start, grep the
+catalogue and this document for its name -- `tools/decomp/leverindex.py
+--grep func_XXXXXXXX` searches headings and bodies.
+
+## 2026-11-16: ONE TWO-ROW RESIDUE NOW BLOCKS THREE PARKS
+
+`func_80096384` (rows 136-137), `func_8008EAC8` (202-203) and
+`func_8008ACDC` (200-201) each end at the **same two instructions**:
+
+    sll v0,a0,0x10    vs   sll $v1, $a0, 16
+    sra a1,v0,0x10    vs   sra $a1, $v1, 16
+
+-- the SImode temp holding `want << 16` on the way to a sign extension takes
+`$v0` where the target has `$v1`. Three agents reached it independently, from
+three different directions, and ten spellings re-measured on the third
+function behaved exactly as the first two parks record. **The residue belongs
+to the construct, not to any of the functions.**
+
+Two incompatible diagnoses are on record and one of them must be wrong:
+
+* a **local-alloc qty inversion**, decided by the two spans and therefore by
+  the post-sched1 order, which would make it reachable by putting one insn
+  between the `sll` and the `lh`;
+* a **globalness requirement** -- the temp must be a global allocno, which
+  needs a basic-block boundary between the `sll` and the `sra`, and the
+  sign-extension expander emits those two as one unit, which would close the
+  route entirely.
+
+Settling this is worth three functions at once, and it is the single most
+valuable open question in the unit. It should be settled from the RTL dumps
+and `scratch/gcc-src/cdk-gcc-b18/`, not by trying spellings.
