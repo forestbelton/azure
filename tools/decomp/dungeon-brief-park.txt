@@ -332,6 +332,57 @@ unrelated functions -- exactly the misleading class this brief warns about
 above, and nothing like a defect in the body. If you ever do splice by hand,
 anchor on the parameter list and assert the match length.
 
+## START HERE: THE MECHANISMS THAT PAID ON 2026-11-16
+
+Nine functions landed that day and every one of them turned on reading
+`scratch/gcc-src/cdk-gcc-b18/` rather than sweeping spellings. Find these in
+`docs/matching-levers.md` (its index is at the top; `leverindex.py --grep`
+searches bodies too) before you measure anything.
+
+**The `reg_n_sets == 1` family.** Four passes gate on how many times a pseudo
+is set, with four different payoffs, and a DEAD second set is free in all but
+the last because flow deletes it:
+
+  * `init_alias_analysis` (`sched.c:440`) -- one set + `REG_EQUAL` makes a
+    store's address constant, so it conflicts with nothing and sched1 floats
+    it. A second set gives it real dependences.
+  * `scan_loop` (`loop.c:804`) -- a second, NON-CONSECUTIVE set stops a loop
+    invariant being hoisted, keeping it at the source position you wrote it.
+  * `local_alloc` (`local-alloc.c:472`) -- a second set takes the pseudo out
+    of local-alloc entirely.
+  * `flow` (`flow.c:2561`) -- a pseudo referenced in two blocks is global,
+    and this one needs a REAL reference. But `flow_analysis` runs ONCE,
+    before `combine` (`toplev.c:3463` vs `:3488`), so a second-block
+    reference that **combine later deletes** is free.
+  * The counter-case: `birthing_insn_p` bumps an insn's sched priority only
+    when its `SET_DEST` has `reg_n_sets == 1`, so a second set COSTS you that.
+
+**Make a C variable BE a compiler temp.** A zero-extending widening, split
+over two statements, lets a named variable be the `sll` temp -- worth 1348
+words across three functions. But check `.greg` first: it only helps when
+something actually PREFERS the register you want vacated, because `find_reg`
+pass 0 skips `regs_someone_prefers`. MIPS defines no `REG_ALLOC_ORDER`, so a
+non-conflicting block-local quantity always gets `$v0`. And a **redundant
+recomputation** is a copy that survives where a plain copy does not, because
+cse cannot hash the widened form into the original's class.
+
+**Derive, do not sweep.** sched1 priority takes only two values, and
+`rank_for_schedule` prefers the HIGHER `INSN_LUID` on a tie. A required
+instruction order therefore gives a solvable system of inequalities -- on one
+function that proved a whole spelling family could never reach the target,
+which a 25-spelling sweep had missed. Likewise `find_free_reg` scans a
+half-open `[birth, death)`, so two DISJOINT local quantities in one block get
+the same register whatever the priorities say.
+
+**Read the emitted `.set noreorder` block before theorising about a delay
+slot.** `cc1psx` fills them itself and prints what it put there, from the
+insn PRECEDING the branch. Two parks had a residue explained as "cse deletes
+the copy" when the answer was a statement position.
+
+**"Same score" is not "same stream".** A park note claiming two spellings are
+byte-identical is a claim to re-check; one such note cost a park an entire
+unexplored basin.
+
 **BUILD A STANDALONE ONE-FUNCTION FILE. IT IS THE CHEAPEST THING YOU CAN DO.**
 
 A file containing the unit's declaration block (or just the handful of externs
