@@ -332,6 +332,30 @@ unrelated functions -- exactly the misleading class this brief warns about
 above, and nothing like a defect in the body. If you ever do splice by hand,
 anchor on the parameter list and assert the match length.
 
+**BUILD A STANDALONE ONE-FUNCTION FILE. IT IS THE CHEAPEST THING YOU CAN DO.**
+
+A file containing the unit's declaration block (or just the handful of externs
+and typedefs your body needs) plus the body alone, compiled with asmlib's
+CFLAGS at `-G0`, reproduces the unit's assembly for that function
+**byte-for-byte apart from label numbering** -- and it compiles in about half
+a second instead of thirty. Three agents built one independently on
+2026-11-16 and each called it the most valuable thing in its run.
+
+That makes the compiler's own dumps affordable:
+
+    tools/cdkgcc ... -dL -ds -dl -dg one.c     # -> one.c.loop/.sched/.lreg/.greg
+
+  * `-dL` prints **loop.c's per-insn verdicts** -- `life N, savings N, moved
+    to ...`, `not desirable`, `forces` -- which is the only way to see why an
+    invariant was or was not hoisted.
+  * `-dg` prints `;; NN conflicts: ... 2 3 29` and the register dispositions,
+    which turns an allocation residue into arithmetic.
+  * `tools/decomp/dump.sh` wraps this; `tools/decomp/sched.py <file> FUNC
+    [--sched1]` reads the scheduler dump.
+
+Do this BEFORE sweeping spellings. Nearly every result on this unit came from
+reading a dump, and nearly every wasted budget came from guessing instead.
+
 Two tools that matter here specifically:
 
   python3 tools/decomp/parkcheck.py         # run after ANY header edit
