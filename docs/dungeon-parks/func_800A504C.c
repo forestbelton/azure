@@ -93,6 +93,11 @@
    case 2 tail, and is REUSED as the 0x8C-field source pointer inside the
    first branch's case 2 (disjoint paths). That reuse is worth 6 differing
    against a separate `s` local.
+
+   DECLARATIONS
+   extern u8 D_800DCF5C;
+   extern s16 D_800DCF5E;
+   END DECLARATIONS
 */
 
 s32 func_800A504C(u8 *a, u8 *p)

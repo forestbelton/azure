@@ -35,6 +35,34 @@ anything over ~200 words; `ovlverify` compares word N against word N, so one
 transposed pair misses twice. A function is landed only at `0 differing` with
 the word counts equal.
 
+## Every park states its own DECLARATIONS, and `parkresidue.py` measures it
+
+    python3 tools/decomp/parkresidue.py              # all parks, ranked by residue
+    python3 tools/decomp/parkresidue.py func_X       # one
+
+**A park body is not self-contained.** It needs externs, typedefs and callee
+prototypes that live in the unit's top declaration block, and those were
+historically reported only in the agent's hand-back message -- which is a
+transcript, not the repo. On 2026-11-16 that meant **19 of 34 parks could not
+be compiled from the repo alone**: the bodies were safe, the declarations
+were not. Put them in the header, inside the comment:
+
+    DECLARATIONS
+    extern u8 D_800E0979[];
+    void func_80067E2C(void *, void *);
+    END DECLARATIONS
+
+`parkresidue.py` splices the body into the CURRENT `csrc/ovl_dungeon.c`,
+inserts that block, and runs `aligndiff` -- so the ranking is a measurement
+rather than a number scraped from prose. **Do not rank parks by reading their
+headers.** I did that once and told an agent a park was at 6 differing when
+it was at 33.
+
+A park that needs a PROTOTYPE CHANGE to an existing declaration cannot be
+auto-measured, because the change has to replace a line rather than be added.
+State it under the DECLARATIONS block as `PROTOTYPE CHANGE ON LANDING:` with
+the callers you re-measured, and expect `parkresidue` to skip that park.
+
 ## Run `parkcheck.py` after editing a header
 
     python3 tools/decomp/parkcheck.py        # exit 1 if any park is malformed

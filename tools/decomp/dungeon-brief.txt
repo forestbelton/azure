@@ -281,3 +281,33 @@ owns ANY other jump table is fine: `func_80095538` landed one on
 ## Your functions (word counts in parentheses)
 
 @FUNCS@
+
+
+## IF YOU PARK A FUNCTION, STATE ITS DECLARATIONS IN THE HEADER
+
+A park body is NOT self-contained -- it needs externs, typedefs and callee
+prototypes from the unit's top block. Reporting those only in your final
+message is not enough: that message is a transcript, not the repo. On
+2026-11-16 nineteen of thirty-four parks could not be compiled from the repo
+alone for exactly this reason.
+
+Put them in the park header, inside the comment, in this exact form, because
+a tool reads it:
+
+    DECLARATIONS
+    extern u8 D_800E0979[];
+    void func_80067E2C(void *, void *);
+    END DECLARATIONS
+
+If landing the function would CHANGE an existing declaration rather than add
+one, say so underneath as `PROTOTYPE CHANGE ON LANDING:` together with the
+landed callers you re-measured against it.
+
+Then check your work with:
+
+    python3 tools/decomp/parkcheck.py            # header is valid C
+    python3 tools/decomp/parkresidue.py func_X   # body reproduces its residue
+
+`parkresidue.py` splices your body into the CURRENT unit and measures it. If
+it cannot reproduce the number in your header, your park is not yet usable by
+the next agent -- fix that before you report.

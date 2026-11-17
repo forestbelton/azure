@@ -79,7 +79,13 @@
 
        extern s16 D_8006CD02;
 
-   Everything else it calls or reads is already declared. */
+   Everything else it calls or reads is already declared. 
+   DECLARATIONS
+   extern s16 D_8006CD02;
+   END DECLARATIONS
+   PROTOTYPE NOTE ON LANDING: the second parameter is s16. Its only call
+   site, in the landed func_800CA444, re-measures at 209/209, 0 differing.
+*/
 
 s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
 {
